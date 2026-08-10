@@ -1284,7 +1284,7 @@ def hdiv_vim(topic: str = "overview") -> str:
 
 
 @mcp.tool()
-def hdiv_vim_demag_eval(vol_path: str, mu_r: float = 1000.0,
+def hdiv_vim_demag_eval(vol_path: str, mu_r: str = "1000.0",
                         h_ext: str = "0,0,1e5", order: int = 1,
                         tol: float = 1e-9) -> str:
     """Air-mesh-free HDiv-MMM demagnetization solve of a body-only `.vol`.
@@ -1306,10 +1306,18 @@ def hdiv_vim_demag_eval(vol_path: str, mu_r: float = 1000.0,
     Set RADIA_HDIV_HEX_CACHE_STATS=1 before starting the server to also
     get the hex fill branch profile via `radia.vim` gram stats.
 
+    MULTI-MATERIAL: the mesh side (`cubit_vfrac_to_vol` on a multi-material
+    volume-fraction Exodus) writes one named material region per Sculpt
+    block with a conformal interface; pass `mu_r` as
+    "core=1000,shell=50" to give each its own permeability (the underlying
+    `vim.Solve` takes the same `{material: mu_r}` mapping).  A scalar
+    applies to every region.
+
     Args:
         vol_path: solver-ready `.vol` (run `cubit_check_vol` first per
             the driving policy; the mesh should contain the body only).
-        mu_r: relative permeability of the (single) material region.
+        mu_r: scalar relative permeability ("1000"), or per-region
+            "name=value,name=value" covering every material in the mesh.
         h_ext: uniform external field "Hx,Hy,Hz" in A/m.
         order: HDiv order (1 = BDM1 production default).
         tol: CG tolerance of the material solve.
@@ -1329,6 +1337,30 @@ def hdiv_vim_demag_eval(vol_path: str, mu_r: float = 1000.0,
         return _json.dumps({"status": "error", "kind": "input",
                             "error": f"h_ext must be 'Hx,Hy,Hz', got "
                                      f"{h_ext!r}"})
+    # scalar, or per-region "name=value,name=value"
+    spec = str(mu_r).strip()
+    if "=" in spec:
+        mu_arg = {}
+        for item in spec.split(","):
+            if item.count("=") != 1:
+                return _json.dumps({"status": "error", "kind": "input",
+                                    "error": f"mu_r entry {item!r} is not "
+                                             "'name=value'"})
+            key, raw = item.split("=")
+            try:
+                mu_arg[key.strip()] = float(raw)
+            except ValueError:
+                return _json.dumps({"status": "error", "kind": "input",
+                                    "error": f"mu_r value {raw!r} for "
+                                             f"{key.strip()!r} is not a "
+                                             "number"})
+    else:
+        try:
+            mu_arg = float(spec)
+        except ValueError:
+            return _json.dumps({"status": "error", "kind": "input",
+                                "error": f"mu_r must be a number or "
+                                         f"'name=value,...', got {mu_r!r}"})
     try:
         import ngsolve as ng
         from radia import vim
@@ -1340,12 +1372,40 @@ def hdiv_vim_demag_eval(vol_path: str, mu_r: float = 1000.0,
     try:
         with ng.TaskManager():
             mesh = ng.Mesh(vol_path)
-            result = vim.Solve(mesh, mu_r=float(mu_r),
+            present = sorted(set(mesh.GetMaterials()))
+            if isinstance(mu_arg, dict):
+                missing = [m for m in present if m not in mu_arg]
+                unknown = [m for m in mu_arg if m not in present]
+                if missing or unknown:
+                    return _json.dumps({
+                        "status": "error", "kind": "input",
+                        "error": "per-region mu_r must name every mesh "
+                                 f"material exactly once; missing="
+                                 f"{missing} unknown={unknown} "
+                                 f"mesh_materials={present}"})
+            result = vim.Solve(mesh, mu_r=mu_arg,
                                H_ext=ng.CF(tuple(h_vec)),
                                order=int(order), tol=float(tol))
             volumes = {mat: float(ng.Integrate(
                 ng.CF(1.0), mesh, definedon=mesh.Materials(mat)))
-                for mat in set(mesh.GetMaterials())}
+                for mat in present}
+            # Per-region mean magnetization: the demag factor is a
+            # GEOMETRIC quantity of the whole body (a sphere reads 1/3
+            # whatever the permeability), so it cannot show that a
+            # per-region mu_r actually took effect -- <M> per material
+            # can, and it is the physically meaningful multi-material
+            # output.
+            magnetization = {}
+            gfM = result.get("gfM") if isinstance(result, dict) else None
+            if gfM is not None:
+                for mat in present:
+                    region = mesh.Materials(mat)
+                    vol_mat = volumes[mat]
+                    if vol_mat <= 0.0:
+                        continue
+                    magnetization[mat] = [
+                        float(ng.Integrate(gfM[i], mesh, definedon=region))
+                        / vol_mat for i in range(3)]
     except (ValueError, RuntimeError) as exc:
         return _json.dumps({"status": "error", "kind": "input",
                             "error": str(exc)[:800]})
@@ -1354,9 +1414,10 @@ def hdiv_vim_demag_eval(vol_path: str, mu_r: float = 1000.0,
         "status": "ok",
         "vol": str(vol_path),
         "ne": int(mesh.ne),
-        "materials": sorted(set(mesh.GetMaterials())),
+        "materials": present,
         "material_volumes": volumes,
-        "mu_r": float(mu_r),
+        "mean_magnetization": magnetization,
+        "mu_r": mu_arg,
         "h_ext": h_vec,
         "demag_factor": float(result.get("demag"))
         if result.get("demag") is not None else None,

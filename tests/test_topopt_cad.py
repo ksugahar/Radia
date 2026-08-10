@@ -238,3 +238,101 @@ def test_vfrac_exodus_rejects_bad_input(ball, tmp_path):
     with pytest.raises(ValueError, match="zero volume"):
         write_vfrac_exodus(ball, np.zeros(ball.nv), tmp_path / "empty",
                            level=0.5)
+
+
+def _two_material_ball_fields(mesh):
+    """core r<=0.3 / shell 0.3<r<=0.6 as two P1 nodal fields."""
+    import ngsolve as ngs
+    vols = np.asarray(Integrate(ngs.CoefficientFunction(1.0), mesh, ngs.VOL,
+                                element_wise=True), float)
+    cx = np.asarray(Integrate(ngs.x, mesh, ngs.VOL, element_wise=True),
+                    float) / vols
+    cy = np.asarray(Integrate(ngs.y, mesh, ngs.VOL, element_wise=True),
+                    float) / vols
+    cz = np.asarray(Integrate(ngs.z, mesh, ngs.VOL, element_wise=True),
+                    float) / vols
+    r = np.sqrt(cx ** 2 + cy ** 2 + cz ** 2)
+    return (nodal_from_element_density(mesh, (r <= 0.30).astype(float)),
+            nodal_from_element_density(mesh,
+                                       ((r > 0.30) & (r <= 0.60)).astype(float)))
+
+
+@pytest.fixture(scope="module")
+def fine_ball():
+    with TaskManager():
+        return Mesh(OCCGeometry(Sphere(Pnt(0, 0, 0), 1.0))
+                    .GenerateMesh(maxh=0.15))
+
+
+def test_vfrac_exodus_multi_material_partition(fine_ball, tmp_path):
+    pytest.importorskip("netCDF4")
+    pytest.importorskip("scipy")
+    from netCDF4 import Dataset, chartostring
+
+    core, shell = _two_material_ball_fields(fine_ball)
+    info = write_vfrac_exodus(fine_ball, {"core": core, "shell": shell},
+                              tmp_path / "two", level=0.5, cells=24,
+                              supersample=3)
+    rows = info["materials"]
+    assert [row["name"] for row in rows] == ["core", "shell"]
+    assert [row["id"] for row in rows] == [1, 2]
+    # the partition is exhaustive: material integrals sum to the total
+    np.testing.assert_allclose(sum(row["v_vfrac"] for row in rows),
+                               info["v_vfrac"], rtol=1e-12)
+    # same one-layer P0->P1 bias band as the single-material sibling
+    v_core = 4.0 / 3.0 * np.pi * 0.30 ** 3
+    v_shell = 4.0 / 3.0 * np.pi * (0.60 ** 3 - 0.30 ** 3)
+    assert abs(rows[0]["v_vfrac"] / v_core - 1.0) < 0.35
+    assert abs(rows[1]["v_vfrac"] / v_shell - 1.0) < 0.25
+
+    ds = Dataset(str(tmp_path / "two.e.1.0"))
+    try:
+        names = [str(s).strip() for s in
+                 chartostring(ds.variables["name_elem_var"][:])]
+        assert names == ["VOID", "MAT_1", "MAT_2"]
+        gnames = [str(s).strip() for s in
+                  chartostring(ds.variables["name_glo_var"][:])]
+        assert gnames[-3:] == ["num_mats", "mat[00]", "mat[01]"]
+        gvals = dict(zip(gnames, np.asarray(ds.variables["vals_glo_var"][0])))
+        assert gvals["num_mats"] == 2
+        void = np.asarray(ds.variables["vals_elem_var1eb1"][0])
+        m1 = np.asarray(ds.variables["vals_elem_var2eb1"][0])
+        m2 = np.asarray(ds.variables["vals_elem_var3eb1"][0])
+        # a PARTITION: no cell is over-filled and void takes the rest
+        np.testing.assert_allclose(void + m1 + m2, 1.0, rtol=0, atol=1e-15)
+        assert m1.min() >= 0.0 and m2.min() >= 0.0
+        assert (m1 * m2 > 0).any(), "no cell straddles the interface"
+        # the NetCDF global attributes are required by psculpt (absent ->
+        # integer divide-by-zero crash, measured 2026-08-10)
+        assert ds.getncattr("floating_point_word_size") == 8
+        assert "api_version" in ds.ncattrs()
+    finally:
+        ds.close()
+
+
+def test_vfrac_exodus_multi_material_rejects_bad_requests(fine_ball, tmp_path):
+    pytest.importorskip("netCDF4")
+    pytest.importorskip("scipy")
+    core, shell = _two_material_ball_fields(fine_ball)
+    with pytest.raises(ValueError, match="duplicate material names"):
+        write_vfrac_exodus(fine_ball, [("core", core), ("core", shell)],
+                           tmp_path / "dup")
+    with pytest.raises(ValueError, match="1..32 characters"):
+        write_vfrac_exodus(fine_ball, {"x" * 33: core}, tmp_path / "long")
+    # a material that loses every sub-sample to the partition would create
+    # an empty Sculpt block -- fail loudly instead
+    with pytest.raises(ValueError, match="own no sub-sample"):
+        write_vfrac_exodus(fine_ball,
+                           {"core": core, "ghost": np.zeros(fine_ball.nv)},
+                           tmp_path / "ghost", cells=24, supersample=2)
+
+
+def test_vfrac_single_material_name_reaches_the_report(fine_ball, tmp_path):
+    pytest.importorskip("netCDF4")
+    pytest.importorskip("scipy")
+    core, _ = _two_material_ball_fields(fine_ball)
+    info = write_vfrac_exodus(fine_ball, core, tmp_path / "one",
+                              cells=20, supersample=2, material_name="yoke")
+    assert [row["name"] for row in info["materials"]] == ["yoke"]
+    np.testing.assert_allclose(info["materials"][0]["v_vfrac"],
+                               info["v_vfrac"], rtol=1e-12)

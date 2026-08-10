@@ -433,7 +433,8 @@ def iso_stl_from_grid(mesh, nodal, out_stl, *, level=0.5, resolution=64,
 # ----------------------------------------------------------------------
 
 def write_vfrac_exodus(mesh, nodal, path, *, level=0.5, cells=48,
-                       supersample=4, pad_cells=2, cutoff_factor=2.0):
+                       supersample=4, pad_cells=2, cutoff_factor=2.0,
+                       material_name="iron"):
     """Cartesian volume-fraction Exodus of the body ``{nodal >= level}``
     for Sculpt's ``--input_vfrac`` reader.
 
@@ -454,17 +455,36 @@ def write_vfrac_exodus(mesh, nodal, path, *, level=0.5, cells=48,
     sub-cell centers per Cartesian cell, so the two routes regenerate the
     same design and stay A/B comparable.
 
+    MULTI-MATERIAL: pass ``nodal`` as a mapping ``{material_name: field}``
+    (or a sequence of ``(name, field)`` pairs, which fixes the material
+    order).  Every sub-sample is assigned to the material with the LARGEST
+    field value there, and only if that value clears ``level``; the result
+    is a partition, so the per-cell fractions sum to at most 1 and the
+    materials meet on a shared interface.  Sculpt then builds a CONFORMAL
+    hex interface between them -- the thing an STL route cannot do without
+    booleaning two surfaces -- and the names ride through
+    ``cubit_vfrac_to_vol`` into the ``.vol`` material labels, which is
+    exactly what per-region ``vim.Solve(mesh, mu_r={name: value})``
+    consumes.  Measured on a concentric two-material sphere: core -1.0 %,
+    shell -0.02 % against the closed-form volumes, conformal (shared
+    interface nodes).
+
     File layout (verified against Sculpt's own ``--volfrac_file`` dump,
     Coreform Cubit 2025.12): NETCDF3 Exodus, one HEX8 block on the
     Cartesian lattice in PHYSICAL coordinates, element fields ``VOID`` +
-    ``MAT_1`` summing to 1, and the 22 global variables (grid bounds,
-    intervals, material table, serial parallel bookkeeping) its reader
-    requires.  Sculpt resolves the file from ``<base>.e.1.0``; ``path``
-    may be either the base name or the full ``.e.1.0`` name.
+    ``MAT_1..MAT_N`` summing to at most 1, and ``21 + N`` global variables
+    (grid bounds, intervals, material table, serial parallel bookkeeping)
+    its reader requires.  Sculpt resolves the file from ``<base>.e.1.0``;
+    ``path`` may be either the base name or the full ``.e.1.0`` name.
+    The NetCDF global ATTRIBUTES are not decoration: writing the file
+    without them crashes ``psculpt`` with an integer divide-by-zero
+    (0xC0000094) instead of a diagnosable error -- measured 2026-08-10.
 
     Args:
         mesh: straight (non-curved) 3D NGSolve design mesh.
-        nodal: P1 nodal field (``nodal_from_element_density`` output).
+        nodal: P1 nodal field (``nodal_from_element_density`` output), or
+            a ``{material_name: field}`` mapping / ``(name, field)``
+            sequence for the multi-material partition.
         path: output base name or full ``.e.1.0`` path.
         level: body threshold (the iso contract's 0.5 default).
         cells: Cartesian cells along the LONGEST bbox axis (cells are
@@ -473,11 +493,15 @@ def write_vfrac_exodus(mesh, nodal, path, *, level=0.5, cells=48,
         pad_cells: empty guard cells added around the bbox on each side.
         cutoff_factor: void beyond this multiple of the median mesh edge
             from the nearest design vertex (matches ``iso_stl_from_grid``).
+        material_name: name of the single material (ignored when ``nodal``
+            is a mapping/sequence, which carries its own names).
 
     Returns:
         Dict with the resolved ``path``, per-axis cell counts, cell size,
-        grid bounds, and the volume-fraction integral ``v_vfrac`` (the
-        closure reference for the downstream mesh gate).
+        grid bounds, the total volume-fraction integral ``v_vfrac`` (the
+        closure reference for the downstream mesh gate), and
+        ``materials``: one ``{"id", "name", "v_vfrac"}`` row per material
+        in Sculpt's ``MAT_<id>`` order.
     """
     nc = _require("netCDF4", "netCDF4")
     import ngsolve as ng
@@ -497,14 +521,39 @@ def write_vfrac_exodus(mesh, nodal, path, *, level=0.5, cells=48,
     cutoff_factor = _finite_float("write_vfrac_exodus: cutoff_factor",
                                   cutoff_factor, positive=True)
     level = _finite_float("write_vfrac_exodus: level", level)
-    nod = np.asarray(nodal, dtype=float).ravel()
-    if nod.size != mesh.nv:
-        raise ValueError(
-            f"write_vfrac_exodus: nodal field has {nod.size} entries, "
-            f"mesh has {mesh.nv} vertices")
-    if not np.isfinite(nod).all():
-        raise ValueError("write_vfrac_exodus: nodal field has non-finite "
-                         "entries")
+    # single field -> one material; mapping/sequence -> partition
+    if isinstance(nodal, dict):
+        entries = list(nodal.items())
+    elif (isinstance(nodal, (list, tuple)) and nodal
+            and all(isinstance(item, (list, tuple)) and len(item) == 2
+                    and isinstance(item[0], str) for item in nodal)):
+        entries = list(nodal)
+    else:
+        entries = [(str(material_name), nodal)]
+    if not entries:
+        raise ValueError("write_vfrac_exodus: no materials supplied")
+    if len(entries) > 50:
+        raise ValueError("write_vfrac_exodus: Sculpt supports at most ~50 "
+                         f"materials, got {len(entries)}")
+    names = [str(name) for name, _ in entries]
+    if len(set(names)) != len(names):
+        raise ValueError(f"write_vfrac_exodus: duplicate material names "
+                         f"{names}")
+    for name in names:
+        if not name or len(name) > 32:
+            raise ValueError("write_vfrac_exodus: material names must be "
+                             f"1..32 characters, got {name!r}")
+    fields = []
+    for name, field in entries:
+        nod = np.asarray(field, dtype=float).ravel()
+        if nod.size != mesh.nv:
+            raise ValueError(
+                f"write_vfrac_exodus: nodal field {name!r} has {nod.size} "
+                f"entries, mesh has {mesh.nv} vertices")
+        if not np.isfinite(nod).all():
+            raise ValueError(f"write_vfrac_exodus: nodal field {name!r} has "
+                             "non-finite entries")
+        fields.append(nod)
 
     pts = np.array([list(v.point) for v in mesh.vertices], dtype=float)
     if pts.shape != (mesh.nv, 3) or not np.isfinite(pts).all():
@@ -542,24 +591,48 @@ def write_vfrac_exodus(mesh, nodal, path, *, level=0.5, cells=48,
     # occupancy at supersampled sub-cell centers (i fastest, matching the
     # exodus lattice ordering below)
     ss = supersample
-    frac = None
     axes_fine = [gmin[i] + (np.arange(nel[i] * ss) + 0.5) * (h_c / ss)
                  for i in range(3)]
     Xf, Yf, Zf = np.meshgrid(*axes_fine, indexing="ij")
     fine_pts = np.stack([Xf.ravel(), Yf.ravel(), Zf.ravel()], axis=1)
-    interp = LinearNDInterpolator(pts, nod)
-    vals = interp(fine_pts)
     dist, _ = tree.query(fine_pts)
-    vals[~np.isfinite(vals)] = 0.0
-    vals[dist > cutoff] = 0.0
-    inside = (vals >= level).astype(float).reshape(
-        nel[0], ss, nel[1], ss, nel[2], ss)
-    frac = inside.mean(axis=(1, 3, 5))
-    v_vfrac = float(frac.sum()) * h_c ** 3
+    outside = dist > cutoff
+    sampled = []
+    for nod in fields:
+        vals = LinearNDInterpolator(pts, nod)(fine_pts)
+        vals[~np.isfinite(vals)] = 0.0
+        vals[outside] = 0.0
+        sampled.append(vals)
+    stacked = np.stack(sampled, axis=0)          # [material, sub-sample]
+    # PARTITION: the largest field owns the sub-sample, and only if it
+    # clears the level.  With one material this is exactly the previous
+    # `field >= level` occupancy; with several it makes the fractions sum
+    # to <= 1 so the materials share one conformal interface instead of
+    # overlapping (which Sculpt would resolve arbitrarily).
+    winner = np.argmax(stacked, axis=0)
+    best = np.take_along_axis(stacked, winner[None, :], axis=0)[0]
+    body = best >= level
+    fracs = []
+    for index in range(len(fields)):
+        owned = (body & (winner == index)).astype(float).reshape(
+            nel[0], ss, nel[1], ss, nel[2], ss)
+        fracs.append(owned.mean(axis=(1, 3, 5)))
+    cell_volume = h_c ** 3
+    materials = [{"id": index + 1, "name": names[index],
+                  "v_vfrac": float(fracs[index].sum()) * cell_volume}
+                 for index in range(len(fields))]
+    frac_total = np.sum(fracs, axis=0)
+    v_vfrac = float(frac_total.sum()) * cell_volume
     if v_vfrac <= 0.0:
         raise ValueError(
             "write_vfrac_exodus: the thresholded body has zero volume on "
             "the sampling grid -- inspect the density/level")
+    empty = [m["name"] for m in materials if m["v_vfrac"] <= 0.0]
+    if empty:
+        raise ValueError(
+            f"write_vfrac_exodus: material(s) {empty} own no sub-sample "
+            "after the partition -- they would produce empty Sculpt blocks; "
+            "check the field levels or drop them from the request")
 
     out = Path(path)
     if not out.name.endswith(".e.1.0"):
@@ -570,8 +643,12 @@ def write_vfrac_exodus(mesh, nodal, path, *, level=0.5, cells=48,
     nx, ny, nz = nel
     nn = (nx + 1) * (ny + 1) * (nz + 1)
     ne = nx * ny * nz
+    n_mat = len(fields)
     ds = nc.Dataset(str(out), "w", format="NETCDF3_64BIT_OFFSET")
     try:
+        # NOT decoration: psculpt divides by zero (0xC0000094, no
+        # diagnostic) when these global attributes are absent -- measured
+        # 2026-08-10 while bringing up the multi-material path.
         ds.setncatts({"api_version": np.float32(8.25),
                       "version": np.float32(8.25),
                       "floating_point_word_size": np.int32(8),
@@ -581,7 +658,8 @@ def write_vfrac_exodus(mesh, nodal, path, *, level=0.5, cells=48,
                            ("num_dim", 3), ("num_nodes", nn),
                            ("num_elem", ne), ("num_el_blk", 1),
                            ("num_el_in_blk1", ne), ("num_nod_per_el1", 8),
-                           ("num_elem_var", 2), ("num_glo_var", 22)):
+                           ("num_elem_var", n_mat + 1),
+                           ("num_glo_var", 21 + n_mat)):
             ds.createDimension(name, size)
 
         def chararr(var, strings, width=256):
@@ -632,29 +710,32 @@ def write_vfrac_exodus(mesh, nodal, path, *, level=0.5, cells=48,
                  "neighbor_plus_k", "neighbor_negative_k",
                  "xmin", "ymin", "zmin", "xmax", "ymax", "zmax",
                  "xint", "yint", "zint", "gxint", "gyint", "gzint",
-                 "num_mats", "mat[00]"])
+                 "num_mats"]
+                + [f"mat[{index:02d}]" for index in range(n_mat)])
         var = ds.createVariable("vals_glo_var", "f8",
                                 ("time_step", "num_glo_var"))
         var[:] = [[1, 0, -1, -1, -1, -1, -1, -1,
                    gmin[0], gmin[1], gmin[2], gmax[0], gmax[1], gmax[2],
-                   nx, ny, nz, nx, ny, nz, 1, 1]]
+                   nx, ny, nz, nx, ny, nz, n_mat]
+                  + [float(index + 1) for index in range(n_mat)]]
         chararr(ds.createVariable("name_elem_var", "S1",
                                   ("num_elem_var", "len_name")),
-                ["VOID", "MAT_1"])
+                ["VOID"] + [f"MAT_{index + 1}" for index in range(n_mat)])
         var = ds.createVariable("elem_var_tab", "i4",
                                 ("num_el_blk", "num_elem_var"))
-        var[:] = [[1, 1]]
-        mat = flat(frac)
+        var[:] = [[1] * (n_mat + 1)]
+        for index, owned in enumerate(fracs):
+            var = ds.createVariable(f"vals_elem_var{index + 2}eb1", "f8",
+                                    ("time_step", "num_el_in_blk1"))
+            var[:] = flat(owned)[None, :]
         var = ds.createVariable("vals_elem_var1eb1", "f8",
                                 ("time_step", "num_el_in_blk1"))
-        var[:] = (1.0 - mat)[None, :]
-        var = ds.createVariable("vals_elem_var2eb1", "f8",
-                                ("time_step", "num_el_in_blk1"))
-        var[:] = mat[None, :]
+        var[:] = (1.0 - flat(frac_total))[None, :]
     finally:
         ds.close()
     return {"path": str(out), "nel": [nx, ny, nz], "cell_size": h_c,
             "bounds_min": gmin, "bounds_max": gmax,
             "v_vfrac": v_vfrac, "supersample": ss,
+            "materials": materials,
             "median_edge_length": h_med, "cutoff": cutoff,
-            "occupied_cells": int((frac > 0).sum())}
+            "occupied_cells": int((frac_total > 0).sum())}
