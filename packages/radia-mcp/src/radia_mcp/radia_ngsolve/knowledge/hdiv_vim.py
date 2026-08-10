@@ -490,8 +490,14 @@ Profile a build by setting `RADIA_HDIV_HEX_CACHE_STATS=1` and reading
 general_far}` are computed-block counts, `hex_s_*` the matching thread-summed
 wall seconds, `hex_general_shared_{lookups,hits,misses}` the shared-cache
 behavior.  The dominant remaining term on distorted meshes is
-`general_near` (self + touching pairs); its glin=5 site-radial inner is
-spectrum-gated -- do not lower it to chase build time.
+`general_near` (self ~68 ms, touching-neighbor ~19 ms per sym block); its
+glin=5 radial inner is spectrum-gated -- do not lower it to chase build
+time.  Measured 2026-08-10: glin=4 leaks the physical eig(M^-1 N) <= 1 band
+to 1.0122 on a 27-hex 5%-warp lattice (glin=5: 0.9968) and moves the Sculpt
+design-mesh mu_max 1.020 -> 1.092 for only -16% build; glin=3 leaks to
+1.095.  The far tensor product's per-host point rule is cached on the
+instance (bit-identical; construction O(hosts) instead of O(pairs)), so at
+production sizes the far cost is the kernel double sum alone.
 """
 
 _VERIFICATION = r"""
