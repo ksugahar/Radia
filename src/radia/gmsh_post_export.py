@@ -3013,8 +3013,59 @@ _TRACK_SCHEMA_PREFIX = "radia-time-domain-lorentz-track/"
 _JOULE_PER_EV = 1.602176634e-19
 
 
+def _beam_animation_views(values, t_mid, *, n_frames, mode, comet_window,
+                          view_name):
+    """Multi-step "beam" view whose visible extent grows with time.
+
+    The trick (MEASURED on gmsh 4.15.2, locked by tests): rendered with
+    a FIXED colour range and ``SaturateValues = 0``, gmsh does NOT DRAW
+    an element whose value falls outside that range.  So step ``k``
+    carries the real quantity on the segments the beam has already
+    reached and a far out-of-range SENTINEL everywhere else -- the
+    trail grows while the colour scale stays put, unlike sweeping the
+    range itself (which rescales the colours every frame).
+
+    NaN is NOT usable as the sentinel: gmsh writes the literal ``nan``
+    into the .pos/.msh and its own parser then rejects the file
+    ("Unknown variable 'nan'").  The sentinel is finite by necessity.
+    """
+    import numpy as np
+
+    lo = float(values.min())
+    hi = float(values.max())
+    # The sentinel must be far outside on the scale of the VALUES, not
+    # of their spread: a monoenergetic beam coloured by energy has a
+    # spread of ~1e-13 eV, and a sentinel one spread above the maximum
+    # would be the same colour as the beam -- i.e. not hidden at all.
+    scale = max(hi - lo, abs(lo), abs(hi), 1.0)
+    if hi - lo < 1e-12 * scale:
+        hi = lo + 1e-3 * scale          # a colour bar needs a real span
+    sentinel = hi + 10.0 * scale
+
+    t0 = float(t_mid.min())
+    t1 = float(t_mid.max())
+    if t1 <= t0:
+        raise ValueError(
+            "animation needs a nonzero time span across the tracks")
+    window = comet_window * (t1 - t0) if mode == "comet" else None
+
+    views = []
+    for k in range(n_frames):
+        head = t0 + (t1 - t0) * (k + 1) / n_frames
+        visible = t_mid <= head
+        if window is not None:
+            visible &= t_mid >= head - window
+        views.append({"name": view_name, "ncomp": 1, "step": k,
+                      "time": head,
+                      "values": np.where(visible, values, sentinel)})
+    return views, lo, hi, sentinel
+
+
 def export_particle_tracks_msh(tracks, output_msh, *, label="track",
-                               stride=1):
+                               stride=1, animation_frames=0,
+                               animation_color="energy",
+                               animation_mode="trail",
+                               comet_window=0.15):
     """Export time-domain Lorentz particle tracks as GMSH line elements.
 
     Bridges ``radia.particle_tracking.track_lorentz_ivp`` (and the
@@ -3033,6 +3084,14 @@ def export_particle_tracks_msh(tracks, output_msh, *, label="track",
     overlay the source geometry with
     ``gmsh_render(..., merge_files=["coil.step"])``.
 
+    ``animation_frames > 0`` adds a multi-step ``beam`` view: the
+    particles FLY along their trajectories, one time step per frame,
+    ready for ``gmsh_export_animation``.  It only renders correctly
+    with the fixed colour range returned in ``animation`` (see
+    ``_beam_animation_views`` for the measured mechanism) -- the
+    returned ``render_hint`` is exactly the ``color=`` argument to
+    pass.
+
     Args:
         tracks: one track dict, or a sequence of them.  A track is the
             return value of ``track_lorentz_ivp`` (schema
@@ -3044,12 +3103,22 @@ def export_particle_tracks_msh(tracks, output_msh, *, label="track",
         stride: keep every ``stride``-th time sample (the final sample
             is always kept).  The DOP853 ``t_eval`` grid is often much
             denser than a rendering needs.
+        animation_frames: number of animation steps (0 = no beam view).
+        animation_color: quantity carried by the beam view --
+            ``"energy"`` (default; separates a momentum scan into
+            distinct constant colours), ``"speed"``, or ``"time"``.
+        animation_mode: ``"trail"`` (default -- the track accumulates
+            behind the particle) or ``"comet"`` (only a moving window
+            around the particle stays lit).
+        comet_window: comet window as a fraction of the total flight
+            time (ignored in ``"trail"`` mode).
 
     Returns:
         dict with ``n_tracks`` / ``n_nodes`` / ``n_elements`` /
         ``views`` / per-track segment counts / the count of skipped
         zero-length segments (repeated positions never become
-        degenerate line elements).
+        degenerate line elements), plus ``animation`` +
+        ``render_hint`` when a beam view was written.
     """
     import numpy as np
 
@@ -3067,6 +3136,24 @@ def export_particle_tracks_msh(tracks, output_msh, *, label="track",
         raise ValueError(f"stride must be >= 1, got {stride}")
     if not str(label).strip():
         raise ValueError("label must not be empty")
+    animation_frames = int(animation_frames)
+    if animation_frames < 0:
+        raise ValueError(
+            f"animation_frames must be >= 0, got {animation_frames}")
+    if animation_frames and animation_mode not in ("trail", "comet"):
+        raise ValueError(
+            f"animation_mode must be 'trail' or 'comet', got "
+            f"{animation_mode!r}")
+    if animation_frames and animation_color not in ("energy", "speed",
+                                                    "time"):
+        raise ValueError(
+            f"animation_color must be 'energy', 'speed' or 'time', got "
+            f"{animation_color!r}")
+    comet_window = float(comet_window)
+    if animation_frames and animation_mode == "comet" and not (
+            0.0 < comet_window <= 1.0):
+        raise ValueError(
+            f"comet_window must be in (0, 1], got {comet_window}")
 
     segments = []
     groups = []
@@ -3144,6 +3231,26 @@ def export_particle_tracks_msh(tracks, output_msh, *, label="track",
          "values": np.concatenate(tang_all, axis=0)},
     ]
 
+    animation = None
+    if animation_frames:
+        source = {"energy": views[2], "speed": views[1],
+                  "time": views[0]}[animation_color]
+        beam_views, lo, hi, sentinel = _beam_animation_views(
+            source["values"], views[0]["values"],
+            n_frames=animation_frames, mode=animation_mode,
+            comet_window=comet_window,
+            view_name=f"beam ({source['name']})")
+        views.extend(beam_views)
+        animation = {
+            "view": beam_views[0]["name"],
+            "n_steps": animation_frames,
+            "mode": animation_mode,
+            "color_range": [lo, hi],
+            "sentinel": sentinel,
+            "render_hint": {"color": {"range": [lo, hi],
+                                      "saturate": False}},
+        }
+
     info = _write_line_element_msh(output_msh, segments, groups, names,
                                    views)
     summary = {
@@ -3152,9 +3259,17 @@ def export_particle_tracks_msh(tracks, output_msh, *, label="track",
         "n_elements": info["n_elements"],
         "per_track_segments": per_track_segments,
         "n_degenerate_skipped": n_degenerate,
-        "views": [v["name"] for v in views],
+        "views": list(dict.fromkeys(v["name"] for v in views)),
     }
+    if animation is not None:
+        summary["animation"] = animation
+        summary["render_hint"] = animation["render_hint"]
     print(f"export_particle_tracks_msh: {output_msh}")
     print(f"  {len(tracks)} tracks, {info['n_elements']} segments, "
           f"{info['n_nodes']} nodes, views: {summary['views']}")
+    if animation is not None:
+        print(f"  beam animation: {animation_frames} steps "
+              f"({animation_mode}), render with color range "
+              f"[{animation['color_range'][0]:.6g}, "
+              f"{animation['color_range'][1]:.6g}] and saturate=False")
     return summary

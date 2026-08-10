@@ -111,6 +111,92 @@ def test_gmsh_round_trip_geometry_and_views(tmp_path):
         gmsh.finalize()
 
 
+def _beam_steps(msh_path):
+    """Per-step (visible, hidden) element counts of the beam view.
+
+    Parsed straight from the text so the check does not depend on gmsh:
+    a hidden segment carries the far out-of-range sentinel.
+    """
+    blocks = []
+    lines = msh_path.read_text().splitlines()
+    i = 0
+    while i < len(lines):
+        if lines[i] == "$ElementData":
+            # 1 / "name" / 1 / time / 3 / step / ncomp / n_elems / data
+            name = lines[i + 2].strip('"')
+            step = int(lines[i + 6])
+            n = int(lines[i + 8])
+            vals = [float(lines[i + 9 + k].split()[1]) for k in range(n)]
+            if name.startswith("beam"):
+                blocks.append((step, vals))
+            i += 9 + n
+        else:
+            i += 1
+    blocks.sort()
+    sentinel = max(max(v) for _s, v in blocks)
+    return [(sum(1 for x in v if x < sentinel),
+             sum(1 for x in v if x >= sentinel)) for _s, v in blocks]
+
+
+def test_trail_animation_grows_monotonically(tmp_path):
+    track = _circle_track(n=41)
+    out = tmp_path / "beam.msh"
+    summary = export_particle_tracks_msh(track, out, animation_frames=8,
+                                         animation_color="energy")
+    anim = summary["animation"]
+    assert anim["n_steps"] == 8
+    assert anim["mode"] == "trail"
+    lo, hi = anim["color_range"]
+    # the sentinel MUST sit outside the rendered range -- that is the
+    # whole hiding mechanism (a NaN cannot be used: gmsh writes the
+    # literal "nan" and its own parser then rejects the file)
+    assert anim["sentinel"] > hi
+    assert math.isfinite(anim["sentinel"])
+    assert summary["render_hint"]["color"] == {"range": [lo, hi],
+                                               "saturate": False}
+    assert "beam (kinetic energy [eV])" in summary["views"]
+
+    steps = _beam_steps(out)
+    assert len(steps) == 8
+    visible = [v for v, _h in steps]
+    assert visible == sorted(visible)              # monotone growth
+    assert visible[-1] == summary["n_elements"]    # ends fully drawn
+    assert visible[0] < visible[-1]
+    assert all(v + h == summary["n_elements"] for v, h in steps)
+
+
+def test_comet_animation_keeps_a_moving_window(tmp_path):
+    track = _circle_track(n=101)
+    out = tmp_path / "comet.msh"
+    summary = export_particle_tracks_msh(
+        track, out, animation_frames=10, animation_mode="comet",
+        comet_window=0.2, animation_color="time")
+    steps = _beam_steps(out)
+    visible = [v for v, _h in steps]
+    # a comet never lights the whole track: the window stays bounded
+    assert max(visible) < summary["n_elements"]
+    assert max(visible) <= 0.35 * summary["n_elements"]
+    # ... and it does not shrink to nothing either
+    assert min(visible[1:]) > 0
+
+
+def test_animation_rejects_invalid_controls(tmp_path):
+    track = _circle_track(n=11)
+    out = tmp_path / "bad.msh"
+    with pytest.raises(ValueError, match="animation_frames"):
+        export_particle_tracks_msh(track, out, animation_frames=-1)
+    with pytest.raises(ValueError, match="animation_mode"):
+        export_particle_tracks_msh(track, out, animation_frames=4,
+                                   animation_mode="warp")
+    with pytest.raises(ValueError, match="animation_color"):
+        export_particle_tracks_msh(track, out, animation_frames=4,
+                                   animation_color="charge")
+    with pytest.raises(ValueError, match="comet_window"):
+        export_particle_tracks_msh(track, out, animation_frames=4,
+                                   animation_mode="comet",
+                                   comet_window=1.5)
+
+
 def test_rejects_non_track_inputs(tmp_path):
     out = tmp_path / "bad.msh"
     with pytest.raises(ValueError, match="track dict"):

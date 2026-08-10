@@ -692,11 +692,11 @@ try:
                     "reason": reason,
                 })
                 if len(pts) > 1:
-                    polylines.append((pts, cols, vels))
+                    polylines.append((pts, cols, vels, dt))
 
             sl_data = []
             n_segments = 0
-            for pts, cols, _vels in polylines:
+            for pts, cols, _vels, _dt in polylines:
                 for i in range(len(pts) - 1):
                     a, b = pts[i], pts[i + 1]
                     sl_data += [a[0], b[0], a[1], b[1], a[2], b[2],
@@ -707,10 +707,68 @@ try:
                 gmsh.view.addListData(out_tag, "SL", n_segments, sl_data)
             gmsh.view.write(out_tag, cfg["out_file"])
 
+            # Beam animation: a MULTI-STEP copy whose step k shows only
+            # the part of each orbit the particle has already flown.
+            # Rendered with a FIXED colour range and SaturateValues=0,
+            # gmsh does not draw an element whose value is outside the
+            # range, so a far out-of-range SENTINEL hides the future
+            # while the colour scale stays put (sweeping the range
+            # instead would rescale the colours every frame).  The
+            # sentinel must be FINITE: gmsh writes a NaN as the literal
+            # "nan" and its own parser then rejects the file.
+            n_anim = int(cfg.get("animation_frames", 0))
+            animation = None
+            if n_anim and n_segments:
+                # Gate on ABSOLUTE flight time, not on the fraction of
+                # each track: seeds sitting in different |B| get
+                # different time steps, and only a shared clock makes
+                # the frames a physical snapshot of the whole beam.
+                flat = []          # (p_a, p_b, colour, t_mid)
+                for pts, cols, _v, dt_track in polylines:
+                    for i in range(len(pts) - 1):
+                        flat.append((pts[i], pts[i + 1],
+                                     0.5 * (cols[i] + cols[i + 1]),
+                                     (i + 0.5) * dt_track))
+                c_vals = [row[2] for row in flat]
+                lo, hi = min(c_vals), max(c_vals)
+                # Far outside on the scale of the VALUES, not of their
+                # spread: a monoenergetic beam coloured by energy has a
+                # spread of ~1e-13, and a sentinel one spread above the
+                # maximum would carry the beam's own colour.
+                scale = max(hi - lo, abs(lo), abs(hi), 1.0)
+                if hi - lo < 1e-12 * scale:
+                    hi = lo + 1e-3 * scale
+                sentinel = hi + 10.0 * scale
+                t_end = max(row[3] for row in flat)
+                mode = cfg.get("animation_mode", "trail")
+                window = float(cfg.get("comet_window", 0.15)) * t_end
+                anim_data = []
+                for a, b, cval, t_mid in flat:
+                    row = [a[0], b[0], a[1], b[1], a[2], b[2]]
+                    for k in range(n_anim):
+                        head = t_end * (k + 1) / n_anim
+                        vis = t_mid <= head
+                        if mode == "comet":
+                            vis = vis and t_mid >= head - window
+                        v = cval if vis else sentinel
+                        row += [v, v]
+                    anim_data += row
+                anim_name = f"beam ({color_by})"
+                anim_tag = gmsh.view.add(anim_name)
+                gmsh.view.addListData(anim_tag, "SL", len(flat), anim_data)
+                gmsh.view.write(anim_tag, cfg["out_file"], append=True)
+                animation = {
+                    "view": anim_name, "n_steps": n_anim, "mode": mode,
+                    "flight_time_s": t_end,
+                    "color_range": [lo, hi], "sentinel": sentinel,
+                    "render_hint": {"color": {"range": [lo, hi],
+                                              "saturate": False}},
+                }
+
             n_arrows = 0
             if arrows_every > 0:
                 vp_data = []
-                for pts, _cols, vels in polylines:
+                for pts, _cols, vels, _dt in polylines:
                     for i in range(0, len(pts), arrows_every):
                         vn = _math.sqrt(sum(c * c for c in vels[i]))
                         if vn < 1e-30:
@@ -736,10 +794,11 @@ try:
                 "skipped_seeds": skipped_seeds,
                 "reasons": reason_counts,
                 "color_by": color_by,
+                "animation": animation,
                 "tracks": tracks_out,
                 "polylines": [
                     {"points": pts, "colors": cols}
-                    for pts, cols, _v in polylines
+                    for pts, cols, _v, _dt in polylines
                 ] if cfg.get("return_points") else None,
             })
 
@@ -1684,6 +1743,9 @@ def particle_trace(path: str | Path, seeds: list[list[float]],
                    max_time_s: float | None = None,
                    color_by: str = "time",
                    arrows_every: int = 0,
+                   animation_frames: int = 0,
+                   animation_mode: str = "trail",
+                   comet_window: float = 0.15,
                    return_points: bool = False,
                    out_file: str | Path | None = None,
                    timeout_s: float = 600.0) -> dict[str, Any]:
@@ -1710,6 +1772,17 @@ def particle_trace(path: str | Path, seeds: list[list[float]],
     seed gyroradius and ``speed_change_rel`` -- in a pure magnetic
     field the Boris rotation conserves speed exactly, so a nonzero
     value there measures integrator health, not physics.
+
+    ``animation_frames > 0`` adds a multi-step ``beam (...)`` view: the
+    particles FLY along their orbits on a SHARED clock (absolute flight
+    time, so seeds with different gyration periods stay in step), ready
+    for ``gmsh_export_animation``.  ``animation_mode="trail"`` leaves
+    the flown path behind; ``"comet"`` lights only a moving window of
+    ``comet_window`` x the flight time.  The beam view renders
+    correctly ONLY with the fixed colour range returned in
+    ``animation["render_hint"]`` -- future segments are hidden by an
+    out-of-range sentinel value, which an autoscaled colour bar would
+    fold back into the picture.
     """
     err = _check_input(path)
     if err:
@@ -1765,6 +1838,18 @@ def particle_trace(path: str | Path, seeds: list[list[float]],
         return {"ok": False, "error": "arrows_every must be non-negative"}
     if int(time_step) < 0:
         return {"ok": False, "error": "time_step must be non-negative"}
+    if int(animation_frames) < 0:
+        return {"ok": False,
+                "error": "animation_frames must be non-negative"}
+    if animation_mode not in ("trail", "comet"):
+        return {"ok": False,
+                "error": "animation_mode must be 'trail' or 'comet'"}
+    try:
+        clean_window = _finite_float(comet_window, "comet_window")
+    except ValueError as exc:
+        return {"ok": False, "error": str(exc)}
+    if not 0.0 < clean_window <= 1.0:
+        return {"ok": False, "error": "comet_window must be in (0, 1]"}
     return _run_post({"op": "particle_trace", "path": str(path),
                       "view": view, "e_view": e_view,
                       "seeds": clean_seeds, "direction": clean_dir,
@@ -1777,6 +1862,9 @@ def particle_trace(path: str | Path, seeds: list[list[float]],
                       "max_time_s": clean_tmax,
                       "color_by": color_by,
                       "arrows_every": int(arrows_every),
+                      "animation_frames": int(animation_frames),
+                      "animation_mode": animation_mode,
+                      "comet_window": clean_window,
                       "return_points": bool(return_points),
                       "out_file": _default_out(path, out_file, "tracks")},
                      timeout_s)
