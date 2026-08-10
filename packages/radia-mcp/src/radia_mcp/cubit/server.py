@@ -209,6 +209,15 @@ solver half of the combination lives on the radia-ngsolve server:
 `hdiv_vim_demag_eval` runs the air-mesh-free charge-Gram demag solve on
 the body-only `.vol` (sphere reads ~1/3; the vfrac-route lane locks the
 whole chain against that closed form).
+
+MULTI-MATERIAL is the vfrac route's own capability: a partitioned
+`write_vfrac_exodus({name: field, ...})` yields `MAT_1..MAT_N`, Sculpt
+meshes them with a CONFORMAL interface (shared nodes), and
+`cubit_vfrac_to_vol(material_names="core,shell")` labels the `.vol`
+regions for per-region `hdiv_vim_demag_eval(mu_r="core=1000,shell=50")`.
+A multi-material `.vol` carries interface faces in ADDITION to the outer
+skin, so the boundary gate compares the OUTER faces against the
+topological skin rather than the raw total.
 """
 
 # Create MCP server
@@ -4277,6 +4286,53 @@ def _vol_surface_element_count(vol_path: Path) -> int:
 	return -1
 
 
+def _vol_surface_element_stats(vol_path: Path) -> dict:
+	"""Split a Netgen `.vol` surface section into OUTER and INTERFACE faces.
+
+	Each `surfaceelements` row is `surfnr bcnr domin domout np p1 ...`.
+	A face with one zero domain bounds the model (outer skin); a face with
+	two nonzero domains is a MATERIAL INTERFACE, which a multi-material
+	Sculpt mesh legitimately carries in addition to the skin.  Comparing
+	the raw total against the topological skin therefore only works for a
+	single material -- the outer count is the portable quantity.
+
+	When the rows cannot be classified (an unexpected layout), the result
+	falls back to ``outer == total`` with ``classified=False``, which
+	reproduces the historical single-material comparison rather than
+	inventing a split.  ``total`` is -1 when the section is missing.
+	"""
+	total = _vol_surface_element_count(vol_path)
+	fallback = {"total": total, "outer": total, "interface": 0,
+	            "classified": False}
+	if total <= 0:
+		return fallback
+	tokens = ("surfaceelements", "surfaceelementsgi", "surfaceelementsuv")
+	with open(vol_path, "r", encoding="utf-8", errors="replace") as f:
+		for line in f:
+			if line.strip() not in tokens:
+				continue
+			next(f)                      # the count line
+			outer = interface = 0
+			for _ in range(total):
+				try:
+					parts = next(f).split()
+				except StopIteration:
+					return fallback
+				if len(parts) < 4:
+					return fallback
+				try:
+					domin, domout = int(parts[2]), int(parts[3])
+				except ValueError:
+					return fallback
+				if domin and domout:
+					interface += 1
+				else:
+					outer += 1
+			return {"total": total, "outer": outer,
+			        "interface": interface, "classified": True}
+	return fallback
+
+
 def _collect_mesh_gates(msh: Path, vol: Path, v_reference: float,
                         closure_tolerance: float) -> tuple[dict, dict]:
 	"""Shared solver-mesh gates: closure vs a reference volume, inversion,
@@ -4303,20 +4359,31 @@ def _collect_mesh_gates(msh: Path, vol: Path, v_reference: float,
 	closure = abs(v_mesh - v_reference) / v_reference
 	negative = int(quality.get("total_negative") or 0)
 	min_det = vol_report.get("min_jacobian_det")
-	vol_boundary = _vol_surface_element_count(vol)
+	surf = _vol_surface_element_stats(vol)
+	vol_boundary = surf["total"]
 	skin_faces = (quality.get("mesh_stats") or {}).get("n_boundary_faces")
 	gates = {
 		"closure_ok": bool(closure <= closure_tolerance),
 		"no_inverted_elements": negative == 0 and (min_det or 0.0) > 0.0,
+		# The OUTER faces must reproduce the topological skin exactly (this
+		# is the silent-no-surface-charge guard).  A multi-material mesh
+		# additionally carries its material-interface faces, so the raw
+		# total legitimately exceeds the skin -- compare the split, not the
+		# total (measured 2026-08-10: 894 skin + 190 interface on a
+		# two-material Sculpt sphere).
 		"boundary_faces_ok": bool(
-			vol_boundary > 0 and skin_faces is not None
-			and vol_boundary == int(skin_faces)),
+			surf["outer"] > 0 and skin_faces is not None
+			and surf["outer"] == int(skin_faces)),
 	}
 	metrics = {
 		"mesh_volume": v_mesh, "closure": closure,
 		"closure_tolerance": closure_tolerance,
 		"total_negative": negative, "min_jacobian_det": min_det,
-		"vol_boundary_faces": vol_boundary, "msh_skin_faces": skin_faces,
+		"vol_boundary_faces": vol_boundary,
+		"vol_outer_faces": surf["outer"],
+		"vol_interface_faces": surf["interface"],
+		"vol_faces_classified": surf["classified"],
+		"msh_skin_faces": skin_faces,
 		"by_type": [
 			{"element": bt.get("name"), "n": bt.get("n_elements"),
 			 "min": bt.get("min_quality"), "mean": bt.get("mean_quality")}
@@ -4581,6 +4648,7 @@ def cubit_stl_to_vol(stl_path: str,
 def cubit_vfrac_to_vol(vfrac_path: str,
                        out_vol: str = "",
                        out_msh: str = "",
+                       material_names: str = "",
                        closure_tolerance: float = 0.01,
                        smooth_method: int = 0,
                        gq_iters: int = 0,
@@ -4610,9 +4678,19 @@ def cubit_vfrac_to_vol(vfrac_path: str,
 	``export gmsh`` -> the same gates as ``cubit_stl_to_vol`` (closure
 	vs the vfrac integral, inversion, exported-skin match).
 
+	MULTI-MATERIAL: a vfrac Exodus carrying ``MAT_1..MAT_N`` produces one
+	Sculpt block per material with a CONFORMAL hex interface between them
+	(shared nodes -- an STL route would have to boolean two surfaces).
+	``material_names`` labels them in ``MAT_<id>`` order; the labels ride
+	through ``export netgen`` into the ``.vol`` material names, which is
+	what per-region ``vim.Solve(mesh, mu_r={name: value})`` and
+	``hdiv_vim_demag_eval(mu_r="core=1000,shell=50")`` consume.
+
 	Args:
 	    vfrac_path: the ``.e.1.0`` file or its base name.
 	    out_vol/out_msh: output paths (default: beside the input).
+	    material_names: comma-separated block labels in ``MAT_<id>`` order
+	        (default: "iron" for one material, ``mat_1..mat_N`` otherwise).
 	    closure_tolerance: relative volume gate vs the vfrac integral.
 	    smooth_method: Sculpt ``--smooth`` override (0 = Sculpt default;
 	        8 projects to the interpolated interface surface per the
@@ -4647,11 +4725,14 @@ def cubit_vfrac_to_vol(vfrac_path: str,
 		try:
 			names = [str(s).strip() for s in
 			         nc.chartostring(ds.variables["name_elem_var"][:])]
-			if names != ["VOID", "MAT_1"]:
+			expected = ["VOID"] + [f"MAT_{i + 1}"
+			                       for i in range(len(names) - 1)]
+			if len(names) < 2 or names != expected:
 				return json.dumps(_error_payload(
 					"input", f"vfrac Exodus element variables {names} != "
-					"['VOID', 'MAT_1'] -- this tool speaks the "
-					"single-material write_vfrac_exodus contract"))
+					f"{expected} -- this tool speaks the "
+					"write_vfrac_exodus VOID + MAT_1..MAT_N contract"))
+			n_mat = len(names) - 1
 			gnames = [str(s).strip() for s in
 			          nc.chartostring(ds.variables["name_glo_var"][:])]
 			gvals = {k: float(v) for k, v in
@@ -4661,8 +4742,14 @@ def cubit_vfrac_to_vol(vfrac_path: str,
 			hx = (gvals["xmax"] - gvals["xmin"]) / nx
 			hy = (gvals["ymax"] - gvals["ymin"]) / ny
 			hz = (gvals["zmax"] - gvals["zmin"]) / nz
-			frac = ds.variables["vals_elem_var2eb1"][0]
-			v_vfrac = float(frac.sum()) * hx * hy * hz
+			cell = hx * hy * hz
+			per_material = [
+				{"id": index + 1,
+				 "v_vfrac": float(
+					 ds.variables[f"vals_elem_var{index + 2}eb1"][0].sum())
+				 * cell}
+				for index in range(n_mat)]
+			v_vfrac = float(sum(m["v_vfrac"] for m in per_material))
 		finally:
 			ds.close()
 	except (KeyError, OSError, ValueError) as exc:
@@ -4671,6 +4758,19 @@ def cubit_vfrac_to_vol(vfrac_path: str,
 	if v_vfrac <= 0.0:
 		return json.dumps(_error_payload(
 			"input", "vfrac Exodus carries zero material volume"))
+	labels = [s.strip() for s in str(material_names).split(",") if s.strip()]
+	if labels and len(labels) != n_mat:
+		return json.dumps(_error_payload(
+			"input", f"material_names has {len(labels)} entries but the "
+			f"vfrac Exodus carries {n_mat} material(s)"))
+	if not labels:
+		labels = ["iron"] if n_mat == 1 else [f"mat_{i + 1}"
+		                                      for i in range(n_mat)]
+	if len(set(labels)) != len(labels):
+		return json.dumps(_error_payload(
+			"input", f"material_names must be distinct, got {labels}"))
+	for index, name in enumerate(labels):
+		per_material[index]["name"] = name
 
 	from .session import get_cubit_bin_dir
 	bin_dir = get_cubit_bin_dir()
@@ -4700,6 +4800,8 @@ def cubit_vfrac_to_vol(vfrac_path: str,
 
 	cli = [str(sculpt_exe), "-ivf", str(base), "-e", str(sculpt_out),
 	       "-SS", "2", "-cv"]
+	for entry in per_material:
+		cli += ["-mn", str(entry["id"]), str(entry["name"])]
 	if smooth_method:
 		cli += ["--smooth", str(int(smooth_method))]
 	cli += _sculpt_quality_keywords(gq_iters, gq_threshold,
@@ -4719,12 +4821,16 @@ def cubit_vfrac_to_vol(vfrac_path: str,
 			"console_tail": sculpt_tail}, default=str)
 
 	exo_fwd = str(sculpt_exo).replace("\\", "/")
-	cmds = [f'import mesh geometry "{exo_fwd}" feature_angle 135 merge',
-	        'block 1 name "iron"',
-	        f'export netgen "{str(vol).replace(chr(92), "/")}" '
-	        f"order 1 overwrite",
-	        f'export gmsh "{str(msh).replace(chr(92), "/")}" '
-	        f"dimension 3 order 1 overwrite"]
+	# Sculpt's --material_name already labels the Exodus blocks, so the
+	# names arrive with the import; re-assert them by block id so the
+	# `.vol` materials are the requested ones even on an older Sculpt.
+	cmds = [f'import mesh geometry "{exo_fwd}" feature_angle 135 merge']
+	cmds += [f'block {entry["id"]} name "{entry["name"]}"'
+	         for entry in per_material]
+	cmds += [f'export netgen "{str(vol).replace(chr(92), "/")}" '
+	         f"order 1 overwrite",
+	         f'export gmsh "{str(msh).replace(chr(92), "/")}" '
+	         f"dimension 3 order 1 overwrite"]
 	r = _cs.run_headless_journal(
 		cmds, timeout_s=timeout_s, working_directory=vol.parent)
 	if r.get("status") == "error":
@@ -4746,6 +4852,7 @@ def cubit_vfrac_to_vol(vfrac_path: str,
 		"vfrac": str(p), "vol": str(vol), "msh": str(msh),
 		"sculpt_exodus": str(sculpt_exo),
 		"vfrac_volume": v_vfrac,
+		"materials": per_material,
 		"grid": {"nel": [nx, ny, nz], "cell": [hx, hy, hz]},
 		**metrics,
 		"sculpt": {"exit_code": run.returncode, "command": cli,
