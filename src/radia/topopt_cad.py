@@ -434,7 +434,7 @@ def iso_stl_from_grid(mesh, nodal, out_stl, *, level=0.5, resolution=64,
 
 def write_vfrac_exodus(mesh, nodal, path, *, level=0.5, cells=48,
                        supersample=4, pad_cells=2, cutoff_factor=2.0,
-                       material_name="iron"):
+                       material_name="iron", bounds=None):
     """Cartesian volume-fraction Exodus of the body ``{nodal >= level}``
     for Sculpt's ``--input_vfrac`` reader.
 
@@ -495,6 +495,13 @@ def write_vfrac_exodus(mesh, nodal, path, *, level=0.5, cells=48,
             from the nearest design vertex (matches ``iso_stl_from_grid``).
         material_name: name of the single material (ignored when ``nodal``
             is a mapping/sequence, which carries its own names).
+        bounds: optional ``((xmin, ymin, zmin), (xmax, ymax, zmax))`` that
+            REPLACES the derived bounding box, with ``pad_cells`` forced to
+            0 and the cell size taken from the longest requested edge.
+            This is what Sculpt's PERIODIC mode needs: it requires the grid
+            to span exactly one period of a periodic geometry, so a guard
+            ring or a shrink-wrapped box would break the periodicity (see
+            ``cubit_vfrac_to_vol(periodic=True)``).
 
     Returns:
         Dict with the resolved ``path``, per-axis cell counts, cell size,
@@ -577,16 +584,50 @@ def write_vfrac_exodus(mesh, nodal, path, *, level=0.5, cells=48,
                          "edge length")
     cutoff = cutoff_factor * h_med
 
-    lo = pts.min(axis=0)
-    hi = pts.max(axis=0)
-    span = hi - lo
-    if not np.all(np.isfinite(span)) or not np.all(span > 0.0):
-        raise ValueError("write_vfrac_exodus: mesh bounding box is "
-                         "degenerate")
-    h_c = float(span.max()) / cells
-    nel = [int(np.ceil(span[i] / h_c)) + 2 * pad_cells for i in range(3)]
-    gmin = [float(lo[i]) - pad_cells * h_c for i in range(3)]
-    gmax = [gmin[i] + nel[i] * h_c for i in range(3)]
+    if bounds is None:
+        lo = pts.min(axis=0)
+        hi = pts.max(axis=0)
+        span = hi - lo
+        if not np.all(np.isfinite(span)) or not np.all(span > 0.0):
+            raise ValueError("write_vfrac_exodus: mesh bounding box is "
+                             "degenerate")
+        h_c = float(span.max()) / cells
+        nel = [int(np.ceil(span[i] / h_c)) + 2 * pad_cells
+               for i in range(3)]
+        gmin = [float(lo[i]) - pad_cells * h_c for i in range(3)]
+        gmax = [gmin[i] + nel[i] * h_c for i in range(3)]
+    else:
+        try:
+            lo_req, hi_req = bounds
+            lo = np.asarray(lo_req, dtype=float).ravel()
+            hi = np.asarray(hi_req, dtype=float).ravel()
+        except (TypeError, ValueError) as exc:
+            raise ValueError(
+                "write_vfrac_exodus: bounds must be ((xmin, ymin, zmin), "
+                "(xmax, ymax, zmax))") from exc
+        if lo.size != 3 or hi.size != 3:
+            raise ValueError(
+                "write_vfrac_exodus: bounds must be ((xmin, ymin, zmin), "
+                "(xmax, ymax, zmax))")
+        span = hi - lo
+        if not np.all(np.isfinite(span)) or not np.all(span > 0.0):
+            raise ValueError("write_vfrac_exodus: bounds box is degenerate")
+        # Exactly the requested box, no guard ring: the periodic mode
+        # requires the grid to span one period.  Cells stay cubic, so the
+        # box edges must be commensurate with the cell derived from the
+        # longest edge.
+        h_c = float(span.max()) / cells
+        nel = [int(round(span[i] / h_c)) for i in range(3)]
+        for i in range(3):
+            if nel[i] < 1 or abs(nel[i] * h_c - span[i]) > 1e-9 * h_c:
+                raise ValueError(
+                    "write_vfrac_exodus: bounds edge "
+                    f"{span[i]:.12g} on axis {i} is not an integer multiple "
+                    f"of the cubic cell {h_c:.12g} derived from the longest "
+                    "edge / `cells`; pick `cells` so every edge divides "
+                    "exactly (a periodic grid must land on the period)")
+        gmin = [float(lo[i]) for i in range(3)]
+        gmax = [float(hi[i]) for i in range(3)]
 
     # occupancy at supersampled sub-cell centers (i fastest, matching the
     # exodus lattice ordering below)
