@@ -1207,6 +1207,10 @@ def _build_charge_gram_hex(fes, glout_n=None, glin_n=None, near_grade=0.5, far_i
     of the REF-frame RADIAL near/self inner (the PhiAtHO_Duffy port
     -- robust on distorted/curved hexes, where graded clouds left eig > 1 on the real cylinder mesh);
     eig(M_mass^-1 N) <= 1 gated on box AND cylinder meshes; block-memo build (~59x vs naive per-entry).
+    Do NOT lower glin_n to chase build time -- measured 2026-08-10 on Sculpt-regime meshes: glin=4 leaks
+    the physical eig <= 1 band to 1.0122 on a 27-hex 5%%-warp lattice (glin=5: 0.9968) and moves the
+    Sculpt design-mesh mu_max 1.020 -> 1.092, while buying only -16%% build (self entries shift 1.7e-3
+    RELATIVE -- 70x coarser than the accepted distorted-far switch); glin=3 leaks to 1.095.
     far_inner = the PER-OUTER-POINT radial reach: an outer point farther than far_inner*size from a source
     sub-simplex integrates it with the cheap CACHED far cloud instead of the per-point radial rule.  1.0
     keeps the radial on self / genuinely touching near geometry while moving smooth shell points onto the
