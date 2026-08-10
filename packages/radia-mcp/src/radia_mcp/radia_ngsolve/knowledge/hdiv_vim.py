@@ -511,6 +511,30 @@ fallback) -> this server's `hdiv_vim_demag_eval` (uniform-field demag
 factor + iterations + timings on the body-only `.vol`).  The vfrac-route
 validation lane locks the whole chain against the sphere's closed-form
 demag factor 1/3.
+
+### Multi-material
+
+`write_vfrac_exodus` accepts `{material_name: nodal_field}`: every
+sub-sample goes to the largest field that clears the level, so the
+fractions PARTITION the body and Sculpt builds a CONFORMAL hex interface
+between the regions (shared nodes -- an STL route would have to boolean
+two surfaces).  `cubit_vfrac_to_vol(material_names="core,shell")` carries
+the labels into the `.vol` materials, and `hdiv_vim_demag_eval(
+mu_r="core=1000,shell=50")` feeds the per-region mapping that
+`vim.Solve` already understands.
+
+Two measurement facts for interpreting multi-material results
+(2026-08-10):
+
+- The DEMAG FACTOR is a geometric property of the whole body -- on a
+  two-material sphere it read 0.32734 for BOTH a uniform mu_r and a 200x
+  core/shell contrast, identical to five digits.  Use the per-region
+  `mean_magnetization` returned by the tool to see that a per-region
+  mu_r took effect (measured ratios: 1.001 uniform, 0.006 contrast).
+- The exported `.vol` legitimately carries MATERIAL-INTERFACE faces on
+  top of the outer skin (measured 894 skin + 190 interface), so the
+  boundary gate compares the OUTER faces against the topological skin,
+  not the raw total.
 """
 
 _VERIFICATION = r"""
