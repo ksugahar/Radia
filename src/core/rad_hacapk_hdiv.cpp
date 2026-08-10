@@ -3779,6 +3779,49 @@ void RadHACApKChargeGram::PhiInnerHexAffineFaceVec(int hS, const double p[3],
 // NOT affine-only despite the name: points are placed by the full Q2 map (HexQ2MapX/QuadQ2MapX) and the
 // Piola reference charge measure makes the Jacobian drop out, so the same rule serves well-separated
 // DISTORTED/curved pairs too (the HexDistortedFarFactor dispatch in QuadBlockHex, C-4 fill speedup).
+const RadHACApKChargeGram::HexFarRule& RadHACApKChargeGram::GetHexFarRule(int kind, int host) const
+{
+    const unsigned long long key =
+        (unsigned long long)(kind != 0) | ((unsigned long long)(unsigned)host << 1);
+    {
+        std::shared_lock<std::shared_mutex> rl(m_hexFarRuleMutex);
+        auto it = m_hexFarRuleCache.find(key);
+        if (it != m_hexFarRuleCache.end()) return it->second;
+    }
+    const std::vector<int>& charges = (kind == 0) ? m_cellCharges[host] : m_faceCharges[host];
+    HexFarRule rule;
+    const bool cell = (kind == 0);
+    const int n1 = (int)m_glOut.size();
+    const int np = cell ? n1*n1*n1 : n1*n1;
+    const double* nodes = cell ? &m_hexNodes[(size_t)host*81]
+                               : &m_quadNodes[(size_t)host*27];
+    rule.np = np;
+    rule.n_local = (int)charges.size();
+    rule.x.resize((size_t)np*3);
+    rule.w.resize(np);
+    rule.values.resize((size_t)np*charges.size());
+    int q = 0;
+    for (int iz = 0; iz < (cell ? n1 : 1); ++iz)
+        for (int iy = 0; iy < n1; ++iy)
+            for (int ix = 0; ix < n1; ++ix, ++q) {
+                const double xi[3] = {
+                    m_glOut[ix], m_glOut[iy], cell ? m_glOut[iz] : 0.0};
+                if (cell) HexQ2MapX(nodes, xi, &rule.x[(size_t)3*q]);
+                else {
+                    const double uv[2] = {xi[0], xi[1]};
+                    QuadQ2MapX(nodes, uv, &rule.x[(size_t)3*q]);
+                }
+                rule.w[q] = m_gwOut[ix]*m_gwOut[iy]
+                          * (cell ? m_gwOut[iz] : 1.0);
+                for (int local = 0; local < (int)charges.size(); ++local)
+                    rule.values[(size_t)q*charges.size() + local] =
+                        HexMonoEval(charges[local], xi);
+            }
+    std::unique_lock<std::shared_mutex> wl(m_hexFarRuleMutex);
+    auto it = m_hexFarRuleCache.emplace(key, std::move(rule)).first;   // racing first insert wins
+    return it->second;
+}
+
 std::vector<double> RadHACApKChargeGram::QuadBlockHexAffineFarProduct(
     int kindT, int hT, int kindS, int hS, int mask) const
 {
@@ -3788,44 +3831,10 @@ std::vector<double> RadHACApKChargeGram::QuadBlockHexAffineFarProduct(
     std::vector<double> block((size_t)nT*nS, 0.0);
     if (nT == 0 || nS == 0) return block;
 
-    struct PointRule {
-        std::vector<double> x, values;
-        std::vector<double> w;
-    };
-    auto make_rule = [&](int kind, int host, const std::vector<int>& charges) {
-        PointRule rule;
-        const bool cell = (kind == 0);
-        const int n1 = (int)m_glOut.size();
-        const int np = cell ? n1*n1*n1 : n1*n1;
-        const double* nodes = cell ? &m_hexNodes[(size_t)host*81]
-                                   : &m_quadNodes[(size_t)host*27];
-        rule.x.resize((size_t)np*3);
-        rule.w.resize(np);
-        rule.values.resize((size_t)np*charges.size());
-        int q = 0;
-        for (int iz = 0; iz < (cell ? n1 : 1); ++iz)
-            for (int iy = 0; iy < n1; ++iy)
-                for (int ix = 0; ix < n1; ++ix, ++q) {
-                    const double xi[3] = {
-                        m_glOut[ix], m_glOut[iy], cell ? m_glOut[iz] : 0.0};
-                    if (cell) HexQ2MapX(nodes, xi, &rule.x[(size_t)3*q]);
-                    else {
-                        const double uv[2] = {xi[0], xi[1]};
-                        QuadQ2MapX(nodes, uv, &rule.x[(size_t)3*q]);
-                    }
-                    rule.w[q] = m_gwOut[ix]*m_gwOut[iy]
-                              * (cell ? m_gwOut[iz] : 1.0);
-                    for (int local = 0; local < (int)charges.size(); ++local)
-                        rule.values[(size_t)q*charges.size() + local] =
-                            HexMonoEval(charges[local], xi);
-                }
-        return rule;
-    };
-
-    PointRule target = make_rule(kindT, hT, tgtG);
-    PointRule source = make_rule(kindS, hS, srcG);
+    const HexFarRule& target = GetHexFarRule(kindT, hT);
+    const HexFarRule& source = GetHexFarRule(kindS, hS);
     std::vector<double> inner((size_t)nS, 0.0);
-    const int nqT = (int)target.w.size(), nqS = (int)source.w.size();
+    const int nqT = target.np, nqS = source.np;
     for (int qt = 0; qt < nqT; ++qt) {
         const double reflected[3] = {
             (mask & 1) ? -target.x[(size_t)3*qt]     : target.x[(size_t)3*qt],
