@@ -695,7 +695,20 @@ MEASURED (2026-08-11, LAB):
   mirror path to `< 1e-10` on the same mesh;
 - physical ring (4-fold, tet, maxh 7 mm) -- `<Mz>` full ring `3.2157743e+05`,
   lone sector `3.6013978e+05` (`+11.99 %`), cyclic reduced `3.2157792e+05`
-  (`+0.0002 %`): the reduction closes 100.00 % of the gap.
+  (`+0.0002 %`): the reduction closes 100.00 % of the gap;
+- independent confirmation on Sculpt HEX meshes (6-fold ring of annular-sector
+  poles, ne 9955 vs 1692) -- `<Mz>` full ring `2.222323e+05`, lone sector
+  `2.559368e+05` (`+15.166 %`), cyclic reduced `2.222664e+05` (`+0.0154 %`).
+  The no-image sector reproduced its recorded value exactly, so the direct path
+  is untouched.
+
+COST -- know what you are buying.  The reduction removes DOFs, not fill work: the
+reduced model carries `1/N` of the unknowns but its Gram costs roughly `N` image
+folds, so a BUILD-dominated problem gains little wall time.  Measured on the
+6-fold Sculpt ring: 730.7 s reduced vs 1129.9 s full = **1.55x**, far below the
+5.88x element-count ratio.  The win is in memory and in the SOLVE (`n` vs `N*n`
+unknowns), and it grows with `N` and with solve-dominated problems; do not quote
+the element-count ratio as a speedup.
 
 Gates: `tests/feec/test_hdiv_vim_cyclic_image.py` (fast kernel anchor +
 fail-loud contract) and `validation_test/feec/test_hdiv_vim_cyclic_ring.py`
