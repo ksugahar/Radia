@@ -535,6 +535,38 @@ Two measurement facts for interpreting multi-material results
   top of the outer skin (measured 894 skin + 190 interface), so the
   boundary gate compares the OUTER faces against the topological skin,
   not the raw total.
+
+### Periodic cells and what IMA can (and cannot) reduce
+
+`cubit_vfrac_to_vol(periodic=True)` builds a periodic RVE: the node set
+becomes invariant under the period, so one cell TILES conformally
+(measured seam fill rate 1.000 against 0.061 for the same input without
+`--periodic`).  On the Cartesian volume-fraction route the periodicity is
+TRANSLATIONAL in all three axes; `--periodic_axis` /
+`--periodic_nodesets` (rotational) belong to Sculpt's unstructured
+`--input_mesh` route.
+
+Do NOT assume a periodic mesh is what an IMA reduced model needs -- they
+are different symmetries and different requirements:
+
+- IMA (`image_masks` / `image_signs`) applies MIRROR reflections about
+  the coordinate planes through the origin.  It reduces a mirror-
+  symmetric body and needs no node matching at all: the images are
+  ANALYTIC transforms of the source geometry inside the Gram.
+- A periodic cell needs matched nodes, which is what FEM periodic
+  boundary conditions (NGSolve `Periodic` / identifications) and exact
+  array tiling consume -- not the integral operator.
+
+So the periodic mesh is the building block for (a) FEM-coupled periodic
+models and (b) assembling an array without re-meshing.  A genuine
+periodic REDUCED model in the charge Gram would need translated or
+rotated images, which the current image machinery does not carry.  Note
+also which of those is well posed: a FINITE N-fold ROTATIONAL array (a
+motor) is an exact finite image sum, whereas an INFINITE translational
+array is a conditionally convergent dipole lattice sum whose value
+depends on the summation shape -- that shape dependence IS the
+demagnetizing-factor phenomenon, so such a reduction must state its
+truncation rather than claim "the infinite array".
 """
 
 _VERIFICATION = r"""
