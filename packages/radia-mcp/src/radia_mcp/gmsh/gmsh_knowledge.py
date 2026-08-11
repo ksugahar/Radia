@@ -1046,6 +1046,12 @@ python -m radia_mcp.gmsh.msh_inspect docs                   # directory audit
 | `gmsh_harmonic_to_time` | re/im two-step view -> n-step time animation (AC phasor -> rotating-field GIF together with gmsh_export_animation). |
 | `gmsh_streamlines` | Field lines by probe-driven arc-length RK4 (both directions, field magnitude as line color, polyline coords returnable). This build's Plugin(StreamLines) only re-emits seeds -- do not use it. |
 | `gmsh_particle_trace` | Charged-particle ORBITS (relativistic Boris pusher on dp/dt = q(E + v x B)) through the probed B [T] (+ optional E [V/m]) views: species presets or charge_e/mass_amu, auto time step from the seed gyration period, termination reasons, and per-track diagnostics (gyroradius, speed_change_rel = integrator health in pure B). |
+| `gmsh_poincare` | Where those orbits PIERCE a plane: segment-wise crossing detection with linear interpolation (so the answer is not limited to integrator samples), returned as in-plane (u,v) + flight time with the axes reported. A closed orbit gives a finite point set; a drifting one fills a curve. |
+| `gmsh_flux_integral` | int B.n dA through a bounded rect or disc patch -- what "how much flux crosses this window?" means. NOT `gmsh_integrate` (which integrates a view over its OWN elements). Fails loud if any sample leaves the mesh. |
+| `gmsh_line_integral` | int H.dl circulation along a circle / polyline, with `expected_ni` for a direct Ampere-law check. Integrates in PARAMETER space against the analytic tangent. |
+| `gmsh_maxwell_force` | Force + torque on everything inside an axis-aligned box, by the Maxwell stress tensor T = (B B^T - |B|^2 I/2)/mu0. The standard accelerator/motor recipe: needs nothing about the body, only vacuum around it. |
+| `gmsh_gap_harmonics` | Space harmonics around a circle (motor air gap): endpoint-EXCLUDED sampling, local (e_r, e_theta, e_axis) projection, cos/sin coefficients + amplitude/phase per order. |
+| `gmsh_compare_fields` | Cross-mesh field comparison for solver cross-validation (FEM vs HDiv-VIM, coarse vs fine): probes BOTH files at the SAME points and reports L2/Linf of norm(B_a - B_b). `gmsh_diff_msh` is the SAME-mesh regression verb and cannot do this. |
 | `gmsh_exec` | Stateful evaluate in a PERSISTENT headless gmsh worker (matlab-mcp-core-server style): open a model once, interrogate it across calls; `result` variable + stdout come back. |
 | `gmsh_session_status` / `gmsh_session_shutdown` | Session lifecycle (lazy start on first exec; crash/hang kills only the worker and fails loudly). |
 
@@ -1782,6 +1788,12 @@ tests (test_gmsh_paraview_parity.py, test_gmsh_post_process.py).
 | Stream Tracer | gmsh_streamlines | adaptive RK4 + CLOSED-LOOP detection + termination reasons (Plugin StreamLines is broken on this build) |
 | Evenly Spaced Streamlines 2D | gmsh_streamlines_2d | Jobard-Lefer on ANY plane slice of 3D data (ParaView: native-2D datasets only) |
 | Particle Tracer / ParticlePath | gmsh_particle_trace | BEYOND parity: ParaView advects massless tracers along a velocity field; this integrates the relativistic LORENTZ DYNAMICS dp/dt = q(E + v x B) (Boris pusher), which ParaView has no native filter for |
+| (no ParaView filter) | gmsh_poincare | BEYOND parity: plane-piercing section of the orbits, interpolated between samples |
+| Integrate Variables (surface) | gmsh_flux_integral | ParaView integrates a dataset over ITS OWN cells; this integrates n.B over a patch YOU specify (rect/disc) |
+| (no ParaView filter) | gmsh_line_integral | BEYOND parity: circulation with the analytic tangent in parameter space + an Ampere-law NI check |
+| (no ParaView filter) | gmsh_maxwell_force | BEYOND parity: Maxwell stress force/torque on a box -- ParaView has no EM stress tensor |
+| (no ParaView filter) | gmsh_gap_harmonics | BEYOND parity: space-harmonic FFT around the machine air gap |
+| (no ParaView filter) | gmsh_compare_fields | BEYOND parity: CROSS-MESH solution comparison (ParaView's Resample With Dataset is the nearest, without the norms) |
 | (FEMM-style 2D flux plot) | gmsh_flux_lines | contours of A_z / psi = EXACT equal-flux field lines, no integration |
 | Glyph (vector arrows) | gmsh_render options | View.VectorType=4 (3D arrow), View.GlyphLocation, View.ArrowSizeMax/ArrowSizeMin |
 | Plot Over Line | gmsh_line_profile | straight line + PNG graph |
@@ -1870,6 +1882,47 @@ decreasing exactness -- always prefer the highest one that applies:
    interactive 3D and PRINT an envelope plot with the transverse axis
    magnified AND the magnification stated -- see
    docs/gmsh_post/em_particle_orbits.ipynb.
+
+## EM-native reductions: the number, not the picture (all measured)
+
+Everything above turns a field into an IMAGE.  These five turn it into
+the NUMBER an electromagnetics engineer actually reports, each locked
+by a closed form:
+
+| Verb | Golden (MEASURED on the 6-tet Kuhn cube unless noted) |
+|---|---|
+| `gmsh_flux_integral` | uniform B = 2 T through a 0.4 x 0.4 rect tilted 30 deg: `\|B\| A cos30 = 0.27712812921102`, rel 2.4e-14; disc r = 0.2 normal z: `2 pi (0.04) = 0.2513274122871834`, rel 1.1e-15 |
+| `gmsh_line_integral` | H = (-y, x, 0), circle r = 0.3: `2 pi r^2 = 0.565486677646163`, rel 3.9e-16 on the parametric route |
+| `gmsh_maxwell_force` | uniform B = 2 T, box half 0.4: EVERY face `B^2/(2 mu0) A = 1.018592e6 N` (rel 1.0e-14) and the total EXACTLY zero -- a real cancellation of megaNewton terms. Nonzero case: `B = (a x, 0, 0)` has `div B = a`, so `F_x = a^2 c_x V / mu0`, rel 9.1e-16 |
+| `gmsh_gap_harmonics` | scalar `S = x + 2y` on r = 0.25, N = 64: `a_1 = 0.25`, `b_1 = 0.5`, leakage over every other bin 7.2e-17 |
+| `gmsh_compare_fields` | two DIFFERENT meshings of one cube: a LINEAR field agrees to 5.6e-16 (P1 is exact on both), a QUADRATIC one shows real interpolation error that falls 0.245 -> 0.0622 under refinement, ratio 3.95 vs the O(h^2) 4 |
+
+Traps these verbs are built around, each MEASURED:
+
+1. **A partially-sampled locus is refused, not averaged.**  All of them
+   return `ok: False` with `n_outside` when a sample point leaves the
+   mesh.  A "flux" quoted over the part of a patch that happened to be
+   inside is exactly the unauditable number this lane exists to
+   prevent.
+2. **Read `per_face` before believing a small force.**  In a uniform
+   field each face of the box carries ~1e6 N and they cancel to
+   machine zero.  A near-zero TOTAL is evidence of correct
+   cancellation only if the per-face terms are large.
+3. **The air-gap circle must EXCLUDE its endpoint.**  Sampling
+   `theta` over a closed `[0, 2pi]` double-counts `theta = 0` and
+   contaminates every coefficient; `gmsh_curve_profile` samples the
+   closed interval, which is why reusing it for harmonics is wrong.
+4. **THD can legitimately be `None`.**  It is referenced to order
+   n = 1, and a p-pole-pair machine sampled over a full revolution has
+   its fundamental at n = p.  A THD computed against a roundoff-level
+   n = 1 (MEASURED: 2.86 for a pure DC field) is noise dressed as a
+   result, so it is refused instead.
+5. **`gmsh_diff_msh` cannot compare across meshes.**  It compares
+   counts and per-view statistics: MEASURED, two meshings of one cube
+   carrying a bit-identical field come back
+   `fields_match=False, count mismatch=True`.  Correct for its
+   same-mesh regression contract, useless for FEM-vs-HDiv-VIM --
+   that is `gmsh_compare_fields`.
 
 ## Beautiful isosurfaces: the four levers (all measured)
 
