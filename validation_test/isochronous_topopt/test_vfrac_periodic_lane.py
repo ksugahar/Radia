@@ -175,3 +175,57 @@ def test_plain_route_reports_no_rve_labels(artifacts):
     assert report.get("rve_sideset_names") is None
     assert report.get("rve_boundary_labels") is None
     assert "rve_labels_ok" not in report["gates"]
+
+
+@pytest.fixture(scope="module")
+def two_material_rve(tmp_path_factory):
+    """A two-phase periodic cell: a corner-centred inclusion (so the body
+    wraps every face) inside a matrix filling the rest."""
+    root = tmp_path_factory.mktemp("vfrac_mm_periodic")
+    with TaskManager():
+        cell = MakeStructured3DMesh(
+            nx=18, ny=18, nz=18,
+            mapping=lambda x, y, z: (PERIOD * x, PERIOD * y, PERIOD * z))
+    pts = np.array([list(v.point) for v in cell.vertices])
+    corner = np.sqrt(((np.minimum(pts, PERIOD - pts)) ** 2).sum(axis=1))
+    inclusion = (corner <= RADIUS).astype(float)
+    vf = write_vfrac_exodus(
+        cell, {"core": inclusion, "matrix": 1.0 - inclusion},
+        root / "rve2", cells=24, supersample=3,
+        bounds=((0.0, 0.0, 0.0), (PERIOD, PERIOD, PERIOD)))
+    from radia_mcp.cubit.server import cubit_vfrac_to_vol
+    report = json.loads(cubit_vfrac_to_vol(
+        vf["path"], out_vol=str(root / "rve2.vol"),
+        out_msh=str(root / "rve2.msh"),
+        material_names="core,matrix", periodic=True))
+    return {"vf": vf, "report": report}
+
+
+def test_multimaterial_and_periodic_compose(two_material_rve):
+    """periodic=True with several materials: the two feature sets were
+    developed separately and their sideset modes differ (Sculpt's `-SS`
+    switches from `variable` to `rve`), so the combination is gated
+    explicitly rather than assumed.
+
+    MEASURED 2026-08-11: all six gates green; the classifier still finds
+    the six period faces; per-region closure core 1.9e-3 / matrix 3.4e-3;
+    seam fill 1.000 on every axis.
+    """
+    report = two_material_rve["report"]
+    assert report.get("status") == "ok", report.get("gates", report)
+    for gate in ("closure_ok", "no_inverted_elements", "boundary_faces_ok",
+                 "per_material_closure_ok", "periodic_nodes_match",
+                 "rve_labels_ok"):
+        assert report["gates"][gate] is True, (gate, report["gates"])
+    assert set(report["per_material_closure"]) == {"core", "matrix"}
+    names = set((report.get("rve_sideset_names") or {}).values())
+    assert {"rve_xmin", "rve_xmax", "rve_ymin", "rve_ymax",
+            "rve_zmin", "rve_zmax"} <= names
+    # the interface must still be conformal in the periodic mode
+    mesh = ng.Mesh(str(report["vol"]))
+    material_of = mesh.GetMaterials()
+    nodes = {"core": set(), "matrix": set()}
+    for el in mesh.Elements(ng.VOL):
+        nodes[material_of[el.index]].update(v.nr for v in el.vertices)
+    assert nodes["core"] & nodes["matrix"], (
+        "no shared nodes -- the periodic-mode interface is not conformal")

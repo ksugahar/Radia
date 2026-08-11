@@ -4535,6 +4535,51 @@ def _classify_rve_sidesets(exodus_path: Path, lo: list, hi: list,
 	return names, ""
 
 
+def _closure_miss_diagnosis(nel: list, closure: float,
+                            tolerance: float) -> dict:
+	"""Explain a closure miss WITHOUT prescribing a fix.
+
+	The gate compares the mesh against the VOLUME-FRACTION INTEGRAL, so it
+	certifies the MESHER, not the geometry.  Measured 2026-08-11 on a
+	6-pole ring whose analytic volume is known (design mesh nz=10):
+
+	    cells=56  gate 1.27e-2 FAIL  mesh-vs-analytic 1.6e-3
+	    cells=92  gate 3.7e-3  pass  mesh-vs-analytic 1.8e-2
+
+	Refining the lattice made the gate pass while moving the mesh an order
+	of magnitude FURTHER from the true geometry -- the fraction field was
+	itself the inaccurate quantity (its own error vs analytic went
+	1.1e-2 -> 1.4e-2), because sampling an under-resolved design field on
+	a finer lattice aliases rather than resolves.  So this names both
+	candidate knobs and recommends neither.
+	"""
+	ratio = float(closure) / float(tolerance)
+	return {
+		"lattice_cells": [int(v) for v in nel],
+		"cells_if_mesher_limited": min(
+			512, int(_math.ceil(max(nel) * 1.2 * max(ratio, 1.0)))),
+		"note": (
+			"This gate compares the mesh against the volume-fraction "
+			"integral, so a miss means the MESHER did not reproduce the "
+			"fractions -- it does NOT mean the mesh is far from your "
+			"geometry, and a finer lattice is not automatically the fix. "
+			"Two knobs can be limiting: (1) the Sculpt lattice (raise "
+			"write_vfrac_exodus(cells=...) toward "
+			"cells_if_mesher_limited); (2) the DESIGN MESH the occupancy "
+			"field lives on -- if its element size is coarser than the "
+			"lattice cell, a finer lattice samples the same "
+			"under-resolved field and can make the mesh WORSE while "
+			"making this gate pass (measured on a thin-gap pole ring: "
+			"cells 56 -> 92 turned a 1.27 % failure into a 0.37 % pass "
+			"while the error against the ANALYTIC volume grew from "
+			"0.16 % to 1.8 %). Refine the design mesh first when the body "
+			"has features thinner than a few design elements, and confirm "
+			"a new geometry family against an independent reference "
+			"(analytic volume, or a converged run) rather than against "
+			"this gate alone."),
+	}
+
+
 def _vol_bcname_face_stats(vol_path: Path) -> dict:
 	"""Per-boundary-NAME face-node statistics of a Netgen ``.vol``.
 
@@ -5030,9 +5075,19 @@ def cubit_vfrac_to_vol(vfrac_path: str,
 	so a region-level regeneration error would otherwise be invisible to
 	the per-region ``mu_r`` solve); a PERIODIC mesh gates the seam
 	bijection/fill (``periodic_nodes_match``) and the boundary labels
-	(``rve_labels_ok``).  On a closure miss the report computes
-	``suggested_cells`` from the ~O(h) error scaling so the retry is a
-	calculated lattice, not a guess.
+	(``rve_labels_ok``).
+
+	WHAT THE CLOSURE GATE MEANS: it compares the mesh against the
+	VOLUME-FRACTION INTEGRAL, i.e. it certifies the MESHER, not the
+	geometry.  A miss emits ``closure_miss_diagnosis`` naming BOTH
+	candidate knobs (the Sculpt lattice and the DESIGN MESH the occupancy
+	field lives on) precisely because raising ``cells`` is not
+	automatically the fix -- measured on a thin-gap pole ring, going
+	cells 56 -> 92 turned a 1.27 % gate failure into a 0.37 % pass while
+	moving the mesh from 0.16 % to 1.8 % away from the ANALYTIC volume.
+	When the design field is under-resolved, a finer lattice aliases it
+	rather than resolving it.  Validate a new geometry family against an
+	independent reference once, not against this gate alone.
 
 	Sculpt ADAPTIVITY is deliberately NOT exposed: measured on Cubit
 	2025.12 (2026-08-11, 6-pole ring), ``--adapt_type vfrac_average``
@@ -5040,7 +5095,7 @@ def cubit_vfrac_to_vol(vfrac_path: str,
 	threshold settings) or silently loses 97 % of the material volume
 	(fine grids), and ``vfrac_difference`` never triggers refinement --
 	resolution control on this route is the lattice ``cells`` plus the
-	``suggested_cells`` feedback above.
+	``closure_miss_diagnosis`` feedback above.
 	"""
 	import subprocess as sp
 
@@ -5249,18 +5304,9 @@ def cubit_vfrac_to_vol(vfrac_path: str,
 		msh, vol, v_vfrac, closure_tolerance)
 	if verification_error is not None:
 		return json.dumps(verification_error, default=str)
-	# Under-resolution self-diagnosis: interface-reconstruction closure
-	# error scales ~O(h) on thin-feature bodies (the 6-pole-ring failure
-	# signature), so on a closure miss the report computes the lattice
-	# that should pass instead of leaving the operator to guess-and-rerun
-	# (measured incident: cells=56 missed the 1 % gate at 1.27 %).
 	if not gates.get("closure_ok", True) and closure_tolerance > 0.0:
-		ratio = float(metrics["closure"]) / closure_tolerance
-		metrics["suggested_cells"] = min(
-			512, int(_math.ceil(max(nx, ny, nz) * 1.2 * max(ratio, 1.0))))
-		metrics["suggested_cells_note"] = (
-			"closure error scales ~O(h); rewrite the vfrac Exodus with "
-			"cells=suggested_cells and re-run (the writer caps at 512)")
+		metrics["closure_miss_diagnosis"] = _closure_miss_diagnosis(
+			[nx, ny, nz], metrics["closure"], closure_tolerance)
 	per_material_report = None
 	if n_mat > 1:
 		# The total-volume closure conserves a partition bias (core
@@ -7732,7 +7778,7 @@ _WRITING_TOOLS = {
 	"cubit_mesh_race_review_async", "cubit_curate_learned_recipes",
 	"cubit_examples_refresh", "cubit_check_vol", "cubit_scaffold_toolbar",
 	"cubit_session_journal", "cubit_netgen_quality_compare",
-	"cubit_stl_to_vol",
+	"cubit_stl_to_vol", "cubit_vfrac_to_vol",
 }
 # Read-only tools that may reach the network.
 _WEB_TOOLS = {"cubit_web_docs", "cubit_examples"}
