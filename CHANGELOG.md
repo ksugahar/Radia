@@ -5,15 +5,16 @@ All notable changes to the `radia` package.  Format: each release lists
 
 ## Unreleased
 
-## 4.95.51 - Native beam transfer, nonlinear reactor, and integrated LTspice
+## 4.95.51 - Native beam dynamics, nonlinear reactor, and integrated LTspice
 
 Released 2026-08-11.
 
-- Added a C++ charged-particle transfer engine that evaluates a live NGSolve
-  `GridFunction`/`CoefficientFunction` without a field-map detour, propagates
-  reference, first-order, and second-order variational states, and attributes
-  distributed R/T/U transfer contributions along the orbit. The same kernel is
-  exposed through pybind11 and standalone MATLAB MEX entry points.
+- Added a C++ charged-particle foundation with SI particle/state contracts,
+  inspectable field sampling, relativistic Lorentz equations, RK4 and Boris
+  steps, transparent fixed-step trajectories, and distributed R/T/U transfer
+  attribution. Live NGSolve `GridFunction`/`CoefficientFunction` transfer
+  analysis avoids a field-map detour, and pybind11 and standalone MATLAB MEX
+  call the same native kernels.
 - Added a production nonlinear HDiv-MMM reactor block with a readable Level-2
   MATLAB S-Function, checked native MEX object handles, snapshot/restore and
   lifecycle diagnostics, a tracked Simulink model, and registration in the
@@ -22,11 +23,15 @@ Released 2026-08-11.
   a complete ring, with Python bindings, focused unit coverage, and an
   independent ring-validation lane.
 - Added charged-particle orbit and flying-beam Gmsh post-processing together
-  with electromagnetic field overlays and checked rendering contracts.
+  with electromagnetic field overlays and checked rendering contracts, and
+  exposed field comparison, flux/line integrals, Maxwell force, gap harmonics,
+  and Poincare reductions as first-class MCP tools.
 - Strengthened HDiv-MMM topology optimization with periodic RVE,
   multi-material, volume-fraction, band-edge, sheet-metal, and FFAG
   multi-momentum workflows, including analytic transfer-map derivatives and
-  whole-HEX add/remove optimization.
+  whole-HEX add/remove optimization. Fixed-orbit FFAG design now relinearizes
+  the optics inverse after each accepted material batch, while Cubit closure
+  misses distinguish the Sculpt lattice from an under-resolved design field.
 
 - Integrated the former source-only `radia-spice-lab` package into Radia as
   `radia.ltspice`, including its conversion APIs, CLI, MCP server, circuit
