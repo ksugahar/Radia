@@ -8,6 +8,8 @@ if ~isfolder(options.OutputDirectory),mkdir(options.OutputDirectory);end
 name="radia_simulink_library"; libraryPath=fullfile(options.OutputDirectory,name+".slx");
 if bdIsLoaded(name),close_system(name,0);end
 assignin("base","radia_ih_config",radia.simulink.makeIHNativeSmokeConfig());
+assignin("base","radia_nonlinear_reactor_config", ...
+    radia.simulink.makeNonlinearReactorDemoConfig());
 assignin("base","radia_bh_config",struct("mode","formula", ...
     "reference_temperature_K",293.15,"mu_r_ref",1,"mu_r_temperature_slope",0));
 defaultMaterials=struct("air",radia.simulink.makeMaterialSpec());
@@ -101,6 +103,8 @@ addFieldStudyBlock(coupling,"Field Study Configuration",[45 125 285 195]);
 reducedModels=addEmptySubsystem(name,"Reduced Models",[470 435 760 535]);
 addMotorAngleFamilyLibraryBlock(reducedModels,"Motor Angle Family", ...
     [45 35 285 105]);
+radia.simulink.addNonlinearReactorBlock(reducedModels, ...
+    BlockName="Nonlinear HDiv-MMM Reactor",Position=[45 135 315 235]);
 optimization=addEmptySubsystem(name,"Optimization",[70 435 430 560]);
 addOptunaLibraryBlock(optimization,"Optuna Optimization",[45 35 240 105]);
 addSheetMetalLibraryBlock(optimization,"Sheet Metal Optimization", ...

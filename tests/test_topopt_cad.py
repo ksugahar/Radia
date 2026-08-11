@@ -14,8 +14,11 @@ from netgen.occ import OCCGeometry, Pnt, Sphere
 from ngsolve import Integrate, Mesh, TaskManager
 
 from radia.topopt_cad import (
+    exact_surface_stl_from_mesh,
     iso_stl_from_grid,
     nodal_from_element_density,
+    relabel_straight_mesh,
+    rescale_netgen_vol_points,
     write_levelset_exodus,
     write_vfrac_exodus,
 )
@@ -49,6 +52,48 @@ def test_nodal_average_rejects_bad_input(ball):
     bad[0] = np.nan
     with pytest.raises(ValueError, match="non-finite"):
         nodal_from_element_density(ball, bad)
+
+
+def test_exact_deformed_hex_surface_and_anisotropic_sculpt_scaling(tmp_path):
+    pytest.importorskip("trimesh")
+    from ngsolve.meshes import MakeStructured3DMesh
+
+    mesh = MakeStructured3DMesh(hexes=True, nx=2, ny=3, nz=2)
+    fes = ng.VectorH1(mesh, order=1)
+    deformation = ng.GridFunction(fes)
+    deformation.Set(ng.CF((0.0, 0.1 * ng.y, 0.0)))
+    report = exact_surface_stl_from_mesh(
+        mesh, tmp_path / "deformed_scaled.stl", deformation=deformation,
+        coordinate_scale=(1.0, 0.2, 1.0))
+    assert report["watertight"] and report["winding_consistent"]
+    assert report["n_boundary_faces"] == 32
+    assert report["physical_volume"] == pytest.approx(1.1, rel=2e-7)
+    assert report["scaled_volume"] == pytest.approx(0.22, rel=2e-7)
+
+
+def test_relabel_and_rescale_sculpt_vol_roundtrip(tmp_path):
+    from ngsolve.meshes import MakeStructured3DMesh
+
+    mesh = MakeStructured3DMesh(hexes=True, nx=2, ny=2, nz=2)
+
+    def classify(center, normal):
+        if center[2] < 1.0e-12:
+            return "sym_z"
+        if center[2] > 1.0 - 1.0e-12:
+            return "edge"
+        return "fixed"
+
+    labeled = relabel_straight_mesh(mesh, classify, material_name="iron")
+    assert set(labeled.GetMaterials()) == {"iron"}
+    assert set(labeled.GetBoundaries()) == {"edge", "fixed", "sym_z"}
+    source = tmp_path / "labeled.vol"
+    scaled = tmp_path / "physical.vol"
+    labeled.ngmesh.Save(str(source))
+    report = rescale_netgen_vol_points(source, scaled, (1.0, 2.0, 1.0))
+    restored = ng.Mesh(str(scaled))
+    assert report["point_count"] == labeled.nv
+    assert set(restored.GetBoundaries()) == {"edge", "fixed", "sym_z"}
+    assert float(Integrate(1.0, restored)) == pytest.approx(2.0, rel=2e-12)
 
 
 def test_levelset_exodus_roundtrip(ball, tmp_path):

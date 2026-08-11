@@ -149,6 +149,27 @@ def test_binary_generation_lp_enforces_mutually_exclusive_terminal_states():
     assert update.predicted_max_band_ratio>=0.8-1e-10
 
 
+def test_binary_generation_lp_separates_net_volume_from_flip_trust_region():
+    unrestricted=solve_element_generation_lp(
+        current_response=[2.0,3.0],response_target=[0.0,0.0],
+        response_band=[1.0,1.0],
+        candidate_response_delta=[[-2.0,0.0],[0.0,-3.0]],
+        candidate_volumes=[1.0,1.0],volume_budget=0.0,
+        candidate_volume_change=[1.0,-1.0])
+    np.testing.assert_array_equal(unrestricted.selected,[True,True])
+    assert unrestricted.predicted_max_band_ratio==pytest.approx(0.0)
+
+    trusted=solve_element_generation_lp(
+        current_response=[2.0,3.0],response_target=[0.0,0.0],
+        response_band=[1.0,1.0],
+        candidate_response_delta=[[-2.0,0.0],[0.0,-3.0]],
+        candidate_volumes=[1.0,1.0],volume_budget=0.0,
+        candidate_volume_change=[1.0,-1.0],
+        maximum_changed_volume=1.0)
+    np.testing.assert_array_equal(trusted.selected,[False,True])
+    assert trusted.predicted_max_band_ratio==pytest.approx(2.0)
+
+
 def test_ngsolve_hdiv_linear_form_shape_tangent_includes_spatial_kernel_motion():
     import ngsolve as ng
     from ngsolve.meshes import MakeStructured3DMesh
@@ -722,6 +743,17 @@ def test_all_candidate_tsvd_reports_unreachable_response_component():
         update.linearized_reachability_residual,[0.0,-1.0],atol=1e-12)
 
 
+def test_tsvd_secondary_cost_breaks_physics_tie_without_filtering_columns():
+    update=select_tsvd_element_candidates(
+        current_response=[1.0],response_target=[0.0],response_band=[1.0],
+        candidate_elements=[10,11],candidate_response_delta=[[-1.0,-1.0]],
+        candidate_volumes=[1.0,1.0],volume_budget=2.0,
+        maximum_changed_volume=1.0,candidate_secondary_cost=[1.0,-1.0],
+        relative_tolerance=1e-10,improvement_capture=1.0)
+    np.testing.assert_array_equal(update.selected_elements,[11])
+    np.testing.assert_allclose(update.predicted_response,[0.0],atol=1e-12)
+
+
 def test_tsvd_magnetization_sign_selects_addition_or_removal():
     elements=np.array([10,11],dtype=np.int64)
     volumes=np.ones(2)
@@ -742,6 +774,40 @@ def test_tsvd_magnetization_sign_selects_addition_or_removal():
     np.testing.assert_array_equal(remove.selected_elements,[11])
     np.testing.assert_array_equal(remove.selected_directions,[-1])
     assert remove.added_volume==-1.0
+
+
+def test_abe_murata_tsvd_reports_equivalent_material_volume_predictor():
+    response=np.array([[2.0,0.1,0.3],[0.2,1.0,0.4]])
+    target=np.array([1.9,-0.8])
+    volumes=np.array([3.0,5.0,7.0])
+    update=select_tsvd_element_candidates(
+        current_response=[0.0,0.0],response_target=target,
+        response_band=[1.0,1.0],candidate_elements=[40,41,42],
+        candidate_response_delta=response,candidate_volumes=volumes,
+        volume_budget=3.0,candidate_material_active=[False,True,True],
+        relative_tolerance=1e-10,
+        improvement_capture=1.0)
+    diagnostics=update.abe_murata_diagnostics
+    assert diagnostics is not None and diagnostics.retained_rank==2
+    np.testing.assert_array_equal(diagnostics.candidate_elements,[40,41,42])
+    np.testing.assert_array_equal(
+        diagnostics.candidate_material_active,[False,True,True])
+    expected_fractions=np.linalg.pinv(response,rcond=1e-10)@target
+    np.testing.assert_allclose(
+        diagnostics.signed_material_fractions,expected_fractions,atol=1e-12)
+    np.testing.assert_allclose(
+        diagnostics.equivalent_volume_changes,
+        expected_fractions*volumes,atol=1e-12)
+    np.testing.assert_allclose(
+        diagnostics.projected_normalized_correction,[1.9,-0.8],atol=1e-12)
+    reconstructed=(
+        np.asarray(update.abe_murata_diagnostics.signed_material_fractions))
+    np.testing.assert_allclose(
+        response@reconstructed,target,atol=1e-12)
+    assert diagnostics.signed_material_fractions[0]>0.0
+    assert np.all(diagnostics.signed_material_fractions[1:]<0.0)
+    np.testing.assert_array_equal(
+        update.representative_directions,[1,-1])
 
 
 def test_clustered_tsvd_removal_front_preserves_spatial_modes():
@@ -881,6 +947,158 @@ def test_hdiv_mmm_generation_driver_accepts_purely_collaborative_pair():
     assert result.history[0].collaborative_bundles_evaluated==3
     assert result.history[0].superposed_max_band_ratio>=9e7
     np.testing.assert_allclose(result.response,[current+1.0],atol=3e-11)
+
+
+def test_hdiv_mmm_graph_front_finds_connected_tsvd_seed_collaboration(
+        monkeypatch):
+    import ngsolve as ng
+    import radia.topology_optimization as topopt
+    from ngsolve.meshes import MakeStructured3DMesh
+    from radia.vim._vim import build_charge_gram
+
+    mesh=MakeStructured3DMesh(hexes=True,nx=3,ny=1,nz=1)
+    fes=ng.HDiv(mesh,order=0,discontinuous=True)
+    with ng.TaskManager():
+        _,gram,mass=build_charge_gram(
+            fes,eps=1e-10,leafsize=256,eta=2.0,
+            internal_interfaces=True)
+    rng=np.random.default_rng(20260811)
+    rhs=np.asarray(mass@rng.normal(size=fes.ndof))
+    zero_response=np.zeros((1,fes.ndof))
+    masks=[]
+    for selected in ((1,),(0,1),(1,2),(0,1,2)):
+        mask=np.zeros(mesh.ne,dtype=bool);mask[list(selected)]=True
+        masks.append(mask)
+    states=[topopt.solve_hdiv_mmm_active_elements(
+        charge_gram=gram,fes=fes,inv_chi=.2,rhs=rhs,
+        response_matrix=zero_response,active_elements=mask,
+        solve_tolerance=1e-11)[0] for mask in masks]
+    state_deltas=np.vstack((states[1]-states[0],states[2]-states[0],
+                            states[3]-states[0]))
+    response_row=np.linalg.lstsq(
+        state_deltas,np.array([0.0,0.0,1.0]),rcond=None)[0][None,:]
+    current=float((response_row@states[0]).item())
+
+    def force_empty_global_but_keep_qr_seeds(**kwargs):
+        elements=np.asarray(kwargs["candidate_elements"],dtype=np.int64)
+        material=np.asarray(kwargs["candidate_material_active"],dtype=bool)
+        seeds=np.sort(elements[~material])
+        coefficients=np.ones(len(elements))
+        return topopt.TSVDElementCandidateSelection(
+            selected_elements=np.empty(0,dtype=np.int64),
+            selected_directions=np.empty(0,dtype=np.int8),
+            representative_elements=seeds,
+            representative_directions=np.ones(len(seeds),dtype=np.int8),
+            predicted_response=np.asarray(kwargs["current_response"],dtype=float),
+            predicted_max_band_ratio=float(np.max(np.abs((
+                np.asarray(kwargs["current_response"])-
+                np.asarray(kwargs["response_target"]))/
+                np.asarray(kwargs["response_band"])))),
+            added_volume=0.0,numerical_rank=1,aca_rank=1,
+            singular_values=np.ones(1),signed_coefficients=coefficients,
+            relative_truncation_error=0.0,
+            status="forced empty global proposal with QR seeds")
+
+    monkeypatch.setattr(topopt,"select_tsvd_element_candidates",
+                        force_empty_global_but_keep_qr_seeds)
+    volumes=np.asarray(ng.Integrate(1.0,mesh,element_wise=True))
+    result=topopt.grow_hdiv_mmm_by_superposition(
+        charge_gram=gram,fes=fes,inv_chi=.2,rhs=rhs,
+        response_matrix=response_row,active_elements=masks[0],
+        element_volumes=volumes,response_target=[current+1.0],
+        response_band=[1e-8],volume_max=float(np.sum(volumes))+1e-14,
+        maximum_batch_elements=2,max_iterations=1,solve_tolerance=1e-11,
+        graph_front_maximum_components=2,
+        graph_front_proposal_limit=8)
+    assert result.converged and len(result.history)==1
+    np.testing.assert_array_equal(result.active_elements,masks[-1])
+    assert result.history[0].selection_model==(
+        "aca-qr-tsvd-connected-graph-front-full-resolve")
+    assert result.history[0].graph_front_proposals_evaluated>=3
+
+
+def test_hdiv_mmm_exact_beam_crosses_one_worsening_lego_state(monkeypatch):
+    import ngsolve as ng
+    import radia.topology_optimization as topopt
+    from ngsolve.meshes import MakeStructured3DMesh
+    from radia.vim._vim import build_charge_gram
+
+    mesh=MakeStructured3DMesh(hexes=True,nx=3,ny=1,nz=1)
+    fes=ng.HDiv(mesh,order=0,discontinuous=True)
+    with ng.TaskManager():
+        _,gram,mass=build_charge_gram(
+            fes,eps=1e-10,leafsize=256,eta=2.0,
+            internal_interfaces=True)
+    rng=np.random.default_rng(20260812)
+    rhs=np.asarray(mass@rng.normal(size=fes.ndof))
+    zero_response=np.zeros((1,fes.ndof))
+    masks=[]
+    for selected in ((0,),(0,1),(0,1,2)):
+        mask=np.zeros(mesh.ne,dtype=bool);mask[list(selected)]=True
+        masks.append(mask)
+    states=[topopt.solve_hdiv_mmm_active_elements(
+        charge_gram=gram,fes=fes,inv_chi=.2,rhs=rhs,
+        response_matrix=zero_response,active_elements=mask,
+        solve_tolerance=1e-11)[0] for mask in masks]
+    state_deltas=np.vstack((states[1]-states[0],states[2]-states[0]))
+    response_row=np.linalg.lstsq(
+        state_deltas,np.array([-0.2,1.0]),rcond=None)[0][None,:]
+    realized=state_deltas@response_row[0]
+    np.testing.assert_allclose(realized,[-0.2,1.0],atol=3e-11)
+    current=float((response_row@states[0]).item())
+
+    def force_next_addition(**kwargs):
+        elements=np.asarray(kwargs["candidate_elements"],dtype=np.int64)
+        material=np.asarray(kwargs["candidate_material_active"],dtype=bool)
+        additions=np.sort(elements[~material])
+        assert additions.size
+        wanted=int(additions[0])
+        coefficients=np.zeros(len(elements))
+        coefficients[np.flatnonzero(elements==wanted)[0]]=1.0
+        return topopt.TSVDElementCandidateSelection(
+            selected_elements=np.array([wanted],dtype=np.int64),
+            selected_directions=np.array([1],dtype=np.int8),
+            representative_elements=np.array([wanted],dtype=np.int64),
+            representative_directions=np.array([1],dtype=np.int8),
+            predicted_response=np.asarray(kwargs["response_target"],dtype=float),
+            predicted_max_band_ratio=0.0,
+            added_volume=float(np.asarray(kwargs["candidate_volumes"])[
+                np.flatnonzero(elements==wanted)[0]]),
+            numerical_rank=1,aca_rank=1,singular_values=np.ones(1),
+            signed_coefficients=coefficients,relative_truncation_error=0.0,
+            status="forced next outward addition")
+
+    monkeypatch.setattr(topopt,"select_tsvd_element_candidates",
+                        force_next_addition)
+    volumes=np.asarray(ng.Integrate(1.0,mesh,element_wise=True))
+    result=topopt.grow_hdiv_mmm_by_superposition(
+        charge_gram=gram,fes=fes,inv_chi=.2,rhs=rhs,
+        response_matrix=response_row,active_elements=masks[0],
+        element_volumes=volumes,response_target=[current+1.0],
+        response_band=[1e-8],volume_max=float(np.sum(volumes))+1e-14,
+        fixed_active_elements=masks[0],
+        predecessor_elements=np.array([-1,0,1],dtype=np.int64),
+        max_iterations=1,solve_tolerance=1e-11,
+        exact_beam_width=2,exact_beam_depth=2,
+        exact_beam_barrier_fraction=0.25)
+    assert result.converged and len(result.history)==1
+    np.testing.assert_array_equal(result.active_elements,masks[-1])
+    assert result.history[0].nonmonotone_search_depth==1
+    np.testing.assert_allclose(result.response,[current+1.0],atol=3e-11)
+
+    blocked=topopt.grow_hdiv_mmm_by_superposition(
+        charge_gram=gram,fes=fes,inv_chi=.2,rhs=rhs,
+        response_matrix=response_row,active_elements=masks[0],
+        element_volumes=volumes,response_target=[current+1.0],
+        response_band=[1e-8],volume_max=float(np.sum(volumes))+1e-14,
+        fixed_active_elements=masks[0],
+        predecessor_elements=np.array([-1,0,1],dtype=np.int64),
+        max_iterations=1,solve_tolerance=1e-11,
+        exact_beam_width=2,exact_beam_depth=2,
+        exact_beam_barrier_fraction=0.1)
+    assert not blocked.converged and len(blocked.history)==0
+    np.testing.assert_array_equal(blocked.active_elements,masks[0])
+    assert blocked.stop_reason=="exact_nonmonotone_beam_exhausted"
 
 
 def test_hdiv_mmm_generation_checks_global_addition_proposal_before_dense_schur(
@@ -1030,7 +1248,9 @@ def test_hdiv_mmm_generation_shrinks_all_candidate_volume_trust_region(
         material=np.asarray(kwargs["candidate_material_active"],dtype=bool)
         additions=elements[~material]
         wanted=int(additions[additions==0][0])
-        selected=(additions if float(kwargs["volume_budget"])>
+        trust=kwargs.get("maximum_changed_volume")
+        trust=first_budget if trust is None else float(trust)
+        selected=(additions if trust>
                   .75*first_budget else np.array([wanted],dtype=np.int64))
         coefficients=np.zeros(len(elements))
         coefficients[np.isin(elements,selected)]=1.0
@@ -1088,9 +1308,11 @@ def test_hdiv_mmm_generation_driver_commits_exact_whole_element_batch():
         active_elements=active,element_volumes=volumes,
         response_target=target,response_band=np.full(2,1e-8),
         volume_max=volumes[0]+volumes[wanted]+1e-14,
-        maximum_batch_elements=1,max_iterations=2,solve_tolerance=1e-11)
+        maximum_batch_elements=1,max_iterations=2,solve_tolerance=1e-11,
+        graph_interface_weight=0.02)
     assert result.converged and len(result.history)==1
     assert result.stop_reason=="target_met"
+    assert "aca-qr-tsvd" in result.history[0].selection_model
     assert result.history[0].added_elements.tolist()==[wanted]
     assert result.active_elements[wanted] and np.count_nonzero(result.active_elements)==2
     np.testing.assert_allclose(result.response,target,rtol=0,atol=3e-12)
@@ -1130,6 +1352,13 @@ def test_hdiv_mmm_generation_removes_negative_magnetization_candidate():
         "all-candidate-aca-qr-tsvd-direct-full-resolve"
     assert result.history[0].candidate_coupling_rank==0
     assert result.history[0].native_reduction_timings["solve_s"]==0.0
+    diagnostics=result.history[0].abe_murata_diagnostics
+    assert diagnostics is not None
+    assert diagnostics.retained_rank==result.history[0].tsvd_rank
+    assert diagnostics.candidate_elements.size==(
+        result.history[0].addition_candidate_count+
+        result.history[0].removal_candidate_count)
+    assert np.any(diagnostics.equivalent_volume_changes<0.0)
     np.testing.assert_array_equal(result.active_elements,target_active)
     np.testing.assert_allclose(result.response,target,rtol=0,atol=4e-11)
 
@@ -1243,7 +1472,7 @@ def test_hdiv_mmm_generation_exactly_checks_alternate_removal_after_bad_tsvd(
         element_volumes=volumes,response_target=target,
         response_band=np.full(3,1e-8),volume_max=float(np.sum(volumes)),
         fixed_active_elements=fixed_active,max_iterations=1,
-        solve_tolerance=1e-11)
+        solve_tolerance=1e-11,graph_front_proposal_limit=0)
     assert result.converged and len(result.history)==1
     np.testing.assert_array_equal(result.active_elements,target_active)
     np.testing.assert_array_equal(result.history[0].added_elements,[])
@@ -2074,6 +2303,45 @@ def test_native_production_tet_complete_gram_and_piola_product_derivative():
                                rtol=2e-11,atol=2e-13)
 
 
+def test_native_tet_cluster_contractions_many_matches_across_thread_counts():
+    import ngsolve as ng
+    from ngsolve.meshes import MakeStructured3DMesh
+    from radia.vim._vim import _charge_basis,build_charge_gram
+
+    mesh=MakeStructured3DMesh(hexes=False,nx=2,ny=2,nz=1,
+        mapping=lambda x,y,z:(x+.03*y*z,y+.02*x*z,z+.01*x*y))
+    fes=ng.HDiv(mesh,order=1)
+    ng.SetNumThreads(4)
+    with ng.TaskManager():
+        cb=_charge_basis(fes,4)
+        _,gram,_=build_charge_gram(
+            fes,eps=1e-7,leafsize=8,eta=2.0)
+    assert gram.stats()["n_lowrank"]>0
+    cells=np.asarray(cb["vV"]);faces=np.asarray(cb["bV"])
+    velocity=lambda x:np.stack((
+        .02*x[...,0]-.01*x[...,1],
+        .015*x[...,1]+.005*x[...,2],
+        -.012*x[...,0]+.008*x[...,2]),axis=-1)
+    cell_velocity=velocity(cells);face_velocity=velocity(faces)
+    cell_modes=np.ascontiguousarray(np.stack((
+        cell_velocity,1.7*cell_velocity)))
+    face_modes=np.ascontiguousarray(np.stack((
+        face_velocity,1.7*face_velocity)))
+    n=int(gram.stats()["n_dof"])
+    right=np.ascontiguousarray(np.cos(np.arange(n)))
+    left=np.ascontiguousarray(np.stack((
+        np.linspace(-.4,.7,n),np.sin(np.arange(n)))))
+    ng.SetNumThreads(1)
+    with ng.TaskManager():
+        serial=np.asarray(gram.directional_derivative_contractions_many(
+            "tet",cell_modes,face_modes,left,right))
+    ng.SetNumThreads(4)
+    with ng.TaskManager():
+        parallel=np.asarray(gram.directional_derivative_contractions_many(
+            "tet",cell_modes,face_modes,left,right))
+    np.testing.assert_allclose(parallel,serial,rtol=2e-12,atol=2e-12)
+
+
 def test_native_tet_configured_field_rows_directional_derivative_matches_fd():
     import ngsolve as ng
     from ngsolve.meshes import MakeStructured3DMesh
@@ -2199,9 +2467,9 @@ def test_tet_streaming_shape_jacobian_uses_exact_configured_field_derivative():
         state=np.asarray(gram.solve_configured_linear_material_auto_prec_many(
             inv_chi,np.ascontiguousarray(rhs[None,:]),tol=1e-12,
             maxit=5000,mass_riesz=True)["m"])[0]
-        return C@state,(mesh,fes,basis,B,gram,rhs,C)
+        return C@state,(mesh,fes,basis,B,gram,rhs,C,state)
 
-    value,data=build(0.0);mesh,fes,basis,B,gram,rhs,C=data
+    value,data=build(0.0);mesh,fes,basis,B,gram,rhs,C,state=data
     space=ng.VectorH1(mesh,order=1);mode=ng.GridFunction(space)
     mode.Set(ng.CF(tuple(
         gradient@np.array([ng.x,ng.y,ng.z],dtype=object)+shift)))
@@ -2213,7 +2481,19 @@ def test_tet_streaming_shape_jacobian_uses_exact_configured_field_derivative():
             charge_gram=gram,charge_map=B,inv_chi=inv_chi,rhs=rhs,
             response_matrix=C,rhs_jacobian=drhs,
             response_observations=observations,response_weights=weights,
-            family="tet",solve_tolerance=1e-12)
+            family="tet",solve_tolerance=1e-12,
+            mass_riesz=False,
+            cluster_coarse_size=8,cluster_deflation_size=2,
+            recycle_size=2)
+        reused=production_vim_functional_shape_jacobian_streaming(
+            fes=fes,deformation_modes=[mode],charge_basis=basis,
+            charge_gram=gram,charge_map=B,inv_chi=inv_chi,rhs=rhs,
+            response_matrix=C,rhs_jacobian=drhs,
+            response_observations=observations,response_weights=weights,
+            family="tet",solve_tolerance=1e-12,
+            mass_riesz=False,
+            cluster_coarse_size=8,cluster_deflation_size=2,
+            recycle_size=2,state=state,state_iterations=123)
     epsilon=2e-6;plus,_=build(epsilon);minus,_=build(-epsilon)
     finite_difference=(plus-minus)/(2*epsilon)
 
@@ -2221,6 +2501,13 @@ def test_tet_streaming_shape_jacobian_uses_exact_configured_field_derivative():
     np.testing.assert_allclose(
         analytic.response_jacobian[:,0],finite_difference,
         rtol=3e-4,atol=3e-7)
+    np.testing.assert_allclose(reused.state,state,rtol=0,atol=0)
+    np.testing.assert_allclose(reused.response,analytic.response,
+                               rtol=2e-12,atol=2e-12)
+    np.testing.assert_allclose(reused.response_jacobian,
+                               analytic.response_jacobian,
+                               rtol=2e-11,atol=2e-11)
+    assert reused.state_iterations==123
 
 
 def test_native_tet_ima_directional_derivative_matches_geometry_regression():

@@ -22,6 +22,8 @@
 #include "rad_equivalence_source.h"
 #include "rad_stream_function.h"
 #include "radia_ih_mex_commands.h"
+#include "radia_reactor_mex_commands.h"
+#include "radia_beam_mex_commands.h"
 
 #include <core/taskmanager.hpp>
 #include <bdbequations.hpp>
@@ -811,6 +813,7 @@ void CheckRadia(int error_code) {
 
 void Cleanup() {
     CleanupIHHandles();
+    CleanupReactorHandles();
     std::lock_guard<std::mutex> guard(registry_mutex);
     energy_registry.clear();
     bem_registry.clear();
@@ -1428,6 +1431,16 @@ mxArray* Commands() {
         "ih.thermal.update",
         "ih.thermal.reset",
         "ih.thermal.destroy",
+        "reactor.create",
+        "reactor.output",
+        "reactor.update",
+        "reactor.snapshot",
+        "reactor.restore",
+        "reactor.reset",
+        "reactor.info",
+        "reactor.destroy",
+        "beam.transfer.propagate_variational",
+        "beam.transfer.from_grid_function",
         "hcurl.eddy_cln.native_basis",
         "hcurl.topopt.operator.create", "hcurl.topopt.operator.destroy",
         "hcurl.topopt.operator.info", "hcurl.topopt.operator.matvec",
@@ -1836,8 +1849,8 @@ void ApiInfo(int nlhs, mxArray* plhs[], int nrhs) {
     CheckArity(nrhs, 1, nlhs, 1, "info = radia_mex('api.info')");
     const char* fields[] = {
         "api_version", "handle_count", "ih_handle_count",
-        "taskmanager_max_threads"};
-    plhs[0] = mxCreateStructMatrix(1, 1, 4, fields);
+        "reactor_handle_count", "taskmanager_max_threads"};
+    plhs[0] = mxCreateStructMatrix(1, 1, 5, fields);
     mxSetField(plhs[0], 0, "api_version", mxCreateDoubleScalar(1.0));
     std::size_t base_count = 0;
     {
@@ -1855,10 +1868,13 @@ void ApiInfo(int nlhs, mxArray* plhs[], int nrhs) {
             state_space_registry.size();
     }
     const std::size_t ih_count = IHHandleCount();
+    const std::size_t reactor_count = ReactorHandleCount();
     mxSetField(plhs[0], 0, "handle_count", mxCreateDoubleScalar(
-        static_cast<double>(base_count + ih_count)));
+        static_cast<double>(base_count + ih_count + reactor_count)));
     mxSetField(plhs[0], 0, "ih_handle_count",
                mxCreateDoubleScalar(static_cast<double>(ih_count)));
+    mxSetField(plhs[0], 0, "reactor_handle_count",
+               mxCreateDoubleScalar(static_cast<double>(reactor_count)));
     mxSetField(plhs[0], 0, "taskmanager_max_threads",
                mxCreateDoubleScalar(ngcore::TaskManager::GetMaxThreads()));
 }
@@ -10127,6 +10143,20 @@ bool DispatchChargeGramCreate(const std::string& command, int nlhs,
 void Dispatch(const std::string& command, int nlhs, mxArray* plhs[], int nrhs,
               const mxArray* prhs[]) {
     if (DispatchIHCommand(command, nlhs, plhs, nrhs, prhs))
+        return;
+    if (DispatchReactorCommand(command, nlhs, plhs, nrhs, prhs))
+        return;
+    if (command == "beam.transfer.from_grid_function") {
+        if (nrhs != 3)
+            BadArgument(
+                "result = radia_mex('beam.transfer.from_grid_function', "
+                "grid_function_handle, config)");
+        auto field = GridFunction(Handle(prhs[1])).gridfunction;
+        BeamTransferFromGridFunction(
+            std::move(field), nlhs, plhs, nrhs, prhs);
+        return;
+    }
+    if (DispatchBeamCommand(command, nlhs, plhs, nrhs, prhs))
         return;
     if (command == "axifem.q1_magnetic_element_matrices") {
         AxiFEMQ1MagneticElementMatrices(nlhs, plhs, nrhs, prhs);

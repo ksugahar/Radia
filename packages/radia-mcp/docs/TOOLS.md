@@ -646,7 +646,7 @@ Module: `radia_mcp.electromagnet.server`
 | `electromagnet_coil_field_audit` | Cross-check CoilBuilder solid-current and FE filament field sources. |
 | `electromagnet_coil_yoke_clearance_audit` | Reject coil/yoke overlap and insufficient manufacturing clearance. |
 | `electromagnet_status` | (no description) |
-| `electromagnet_topics` | Authoritative list of topics accepted by this server's dispatcher tool. Returns 23 topics. |
+| `electromagnet_topics` | Authoritative list of topics accepted by this server's dispatcher tool. Returns 24 topics. |
 | `electromagnet_usage` | Get accelerator electromagnet analysis documentation. |
 
 ## `mcp-server-motor`

@@ -19,7 +19,7 @@ import math
 
 import pytest
 from radia_mcp.gmsh import post_process
-from radia_mcp.gmsh.post_process import particle_trace
+from radia_mcp.gmsh.post_process import particle_trace, poincare
 
 _GMSH_AVAILABLE = importlib.util.find_spec("gmsh") is not None
 
@@ -411,3 +411,300 @@ def test_max_time_terminates_at_the_requested_flight_time(tmp_path):
     assert track["reason"] == "max_time"
     assert track["n_steps"] == 10
     assert track["time_s"] == pytest.approx(10.0 * dt, rel=1e-12)
+
+
+# ----------------------------------------------------------------------
+# Regressions for the audited defects (each FAILS against the old code)
+# ----------------------------------------------------------------------
+
+@pytestmark_gmsh
+def test_time_step_past_the_last_step_is_a_clean_error_not_a_crash(
+        tmp_path):
+    """E1: gmsh.view.probe(step=N >= NbTimeStep) FAULTS the child.
+
+    Old behaviour (MEASURED gmsh 4.15.2): "OSError: exception: access
+    violation reading 0xFFFFFFFFFFFFFFFF" -- a native out-of-bounds read
+    with no Python traceback.  The step must be validated against
+    NbTimeStep before the first probe.
+    """
+    msh = _write(tmp_path, _uniform_b(), "uniform_b.msh")
+    result = particle_trace(msh, [[0.0, 0.0, 0.0]], [1.0, 0.0, 0.0],
+                            KE_EV, time_step=3, max_steps=4,
+                            out_file=tmp_path / "oob.pos")
+    assert result["ok"] is False
+    assert "access violation" not in result["error"]
+    assert "time_step 3 out of range" in result["error"]
+    assert "1 step(s) (0..0)" in result["error"]
+
+
+@pytestmark_gmsh
+def test_scalar_b_view_is_rejected_not_reported_as_seed_outside_data(
+        tmp_path):
+    """LENSA-02: a scalar view used to yield ok=true / 0 tracks.
+
+    The probe returns fewer than 3 components at every sample, which the
+    tracer read as "outside the data" -- a diagnosis pointing at the
+    geometry instead of at the view the caller picked (MEASURED:
+    n_tracks 0, reasons {"seed_outside_data": 1}).
+    """
+    scalar = _CUBE + _nodedata("S", 1, [(i, [1.0]) for i in _P])
+    msh = _write(tmp_path, scalar, "scalar.msh")
+    result = particle_trace(msh, [[0.0, 0.0, 0.0]], [1.0, 0.0, 0.0],
+                            KE_EV, dt_s=1e-11, max_steps=8,
+                            out_file=tmp_path / "scalar.pos")
+    assert result["ok"] is False
+    assert "view 'S' has 1 component(s)" in result["error"]
+    assert "3-component vector view" in result["error"]
+
+
+@pytestmark_gmsh
+def test_scalar_e_view_is_rejected_too(tmp_path):
+    mixed = (_CUBE
+             + _nodedata("B", 3, [(i, [0.0, 0.0, B0]) for i in _P])
+             + _nodedata("phi", 1, [(i, [1.0]) for i in _P]))
+    msh = _write(tmp_path, mixed, "mixed.msh")
+    result = particle_trace(msh, [[0.0, 0.0, 0.0]], [1.0, 0.0, 0.0],
+                            KE_EV, view="B", e_view="phi", max_steps=8,
+                            out_file=tmp_path / "mixed.pos")
+    assert result["ok"] is False
+    assert "view 'phi' has 1 component(s)" in result["error"]
+    assert "the E field must be" in result["error"]
+
+
+@pytestmark_gmsh
+def test_beam_sentinel_scales_with_the_data_not_an_absolute_one(tmp_path):
+    """LENSA-01: the sentinel floor must be RELATIVE to the values.
+
+    A time-coloured trace carries values in SECONDS.  The old floor
+    max(span, |lo|, |hi|, 1.0) took the 1.0 branch and put the sentinel
+    at exactly 10.0 -- MEASURED lo=1.67949e-10, hi=6.71778e-06, so
+    1.5e6x the data, which poisons every stats verb reading the view.
+    The relative floor gives 7.38939e-05, i.e. 11x the data.
+    """
+    msh = _write(tmp_path, _uniform_b(), "uniform_b.msh")
+    out = tmp_path / "long.pos"
+    result = particle_trace(msh, [[0.0, 0.0, 0.0]], [1.0, 0.0, 0.0],
+                            KE_EV, max_steps=20000, animation_frames=8,
+                            out_file=out)
+    assert result["ok"] is True, result.get("error")
+    anim = result["animation"]
+    lo, hi = anim["color_range"]
+    assert lo == pytest.approx(1.67949e-10, rel=1e-4)
+    assert hi == pytest.approx(6.71778e-06, rel=1e-4)
+    # the old code produced exactly 10.0 here
+    assert anim["sentinel"] != pytest.approx(10.0, rel=1e-9)
+    assert anim["sentinel"] == pytest.approx(7.38939e-05, rel=1e-4)
+    # relative floor => a fixed 11x the range maximum, for any unit
+    assert anim["sentinel"] / hi == pytest.approx(11.0, rel=1e-3)
+    # ... and hiding still works: it is far outside the colour range
+    counts, n_el = _beam_steps(out, anim)
+    assert counts == sorted(counts)
+    assert counts[0] < counts[-1] == n_el
+
+
+@pytestmark_gmsh
+def test_flat_colour_sentinel_keeps_its_measured_absolute_value(tmp_path):
+    """The monoenergetic case pins the OTHER end of the same formula."""
+    msh = _write(tmp_path, _uniform_b(), "uniform_b.msh")
+    result = particle_trace(msh, [[0.0, 0.0, 0.0]], [1.0, 0.0, 0.0],
+                            KE_EV, max_steps=32, color_by="energy",
+                            animation_frames=4,
+                            out_file=tmp_path / "flat2.pos")
+    assert result["ok"] is True, result.get("error")
+    lo, hi = result["animation"]["color_range"]
+    # scale = 1e-3 * 1e4 = 10 -> hi = lo + 0.01, sentinel = hi + 100
+    assert hi - lo == pytest.approx(0.01, rel=1e-6)
+    assert result["animation"]["sentinel"] == pytest.approx(1.0100e4,
+                                                            rel=1e-6)
+
+
+@pytest.fixture
+def forbid_gmsh_launch(monkeypatch):
+    """Patch the ACTUAL subprocess boundary, not the _run_post wrapper.
+
+    The list-data out_file gate lives inside _run_post (it is keyed on
+    the op name), so the coarser forbid_subprocess fixture would mask
+    the very thing under test.
+    """
+    def unexpected(*_args, **_kwargs):
+        raise AssertionError("invalid input reached the Gmsh subprocess")
+
+    monkeypatch.setattr(post_process, "run_gmsh_json_subprocess",
+                        unexpected)
+
+
+def test_list_data_out_file_must_be_pos(input_file, forbid_gmsh_launch):
+    """LENSA-03: particle_trace(out_file="x.msh") silently wrote v2.2.
+
+    MEASURED: the file began "$MeshFormat / 2.2 0 8" and this lane's own
+    field_histogram then rejected it with "MSH v2.2 is not supported
+    (ASCII v4.x only)" -- a silent breach of the v4.1-only policy.  The
+    rejection happens before gmsh is ever launched.
+    """
+    result = particle_trace(input_file, [[0.0, 0.0, 0.0]],
+                            [1.0, 0.0, 0.0], 1.0e3,
+                            out_file=input_file.parent / "tracks.msh")
+    assert result["ok"] is False
+    assert "must end in '.pos'" in result["error"]
+    assert "tracks.msh" in result["error"]
+    assert "v2.2" in result["error"]
+
+
+# ----------------------------------------------------------------------
+# poincare: the section of the analytic gyration circle
+# ----------------------------------------------------------------------
+
+SPG_POINCARE = 256
+DT_POINCARE = T_GYRO / SPG_POINCARE
+# The Boris pusher advances the position with the velocity AFTER the
+# magnetic rotation, so the sampled polygon runs half a step ahead of
+# the analytic circle.  Along the motion that is dt*v/2 -- MEASURED
+# 2.454369e-03 m for this launch state.  Every section coordinate below
+# carries exactly that offset; it is a known, explainable discretization
+# bias, NOT an error.
+HALF_STEP_M = DT_POINCARE * V0 / 2.0
+
+
+def _section(tmp_path, **kwargs):
+    msh = _write(tmp_path, _uniform_b(), "uniform_b.msh")
+    return poincare(msh, [[0.0, 0.0, 0.0]], [1.0, 0.0, 0.0], KE_EV,
+                    [0.0, R_GYRO, 0.0], [0.0, 1.0, 0.0],
+                    steps_per_gyration=SPG_POINCARE,
+                    max_steps=int(2.2 * SPG_POINCARE),
+                    out_file=tmp_path / "poinc.pos", **kwargs)
+
+
+@pytestmark_gmsh
+def test_poincare_section_of_the_gyration_circle_is_analytic(tmp_path):
+    """10 keV electron, r_gyro = 0.2 m, section plane y = +0.2.
+
+    The plane runs through the gyrocentre, so the circle pierces it
+    twice per turn at x = +-r.  Tracking 2.2 gyroperiods from phase 0
+    (the bottom of the circle) puts crossings at phases 0.25, 0.75,
+    1.25, 1.75 -- EXACTLY 4, with the 5th at 2.25 falling outside.
+    MEASURED u = +0.19754563 and -0.20245437, v = 0 exactly; both are
+    the analytic +-0.2 shifted by the half-step bias (u + dt*v/2 =
+    +-0.2 to 6e-8).
+    """
+    res = _section(tmp_path)
+    assert res["ok"] is True, res.get("error")
+    # frame convention: n = +y picks the least-aligned world axis (x,
+    # lowest index on the x/z tie), so u = +x and v = n x u = -z
+    assert res["u_axis"] == [1.0, 0.0, 0.0]
+    assert res["v_axis"] == [0.0, 0.0, -1.0]
+    assert res["plane_normal"] == [0.0, 1.0, 0.0]
+
+    assert res["n_per_seed"] == [4]
+    hits = res["crossings"][0]
+    assert len(hits) == 4
+    assert [h["direction"] for h in hits] == [
+        "positive", "negative", "positive", "negative"]
+
+    # the orbit is planar: the out-of-plane section coordinate is 0
+    for h in hits:
+        assert abs(h["v"]) < 1e-12
+
+    # |u| = r_gyro, up to the half-step bias (symmetric: the whole
+    # circle is shifted by -dt*v/2 in x, so the +x crossing moves IN
+    # and the -x crossing moves OUT by the same amount)
+    for h in hits:
+        assert (R_GYRO - HALF_STEP_M - 1e-4
+                <= abs(h["u"]) <= R_GYRO + HALF_STEP_M + 1e-4)
+    # the sharper statement: undo the bias and the analytic radius is back
+    assert hits[0]["u"] + HALF_STEP_M == pytest.approx(R_GYRO, abs=1e-7)
+    assert hits[1]["u"] + HALF_STEP_M == pytest.approx(-R_GYRO, abs=1e-7)
+    assert hits[0]["u"] == pytest.approx(0.19754563, abs=1e-7)
+    assert hits[1]["u"] == pytest.approx(-0.20245437, abs=1e-7)
+
+    # crossing times: the first pierce is a quarter turn in, minus the
+    # same half step (MEASURED 5.33264e-09 s vs T/4 - dt/2 = 5.33237e-09)
+    assert hits[0]["t_s"] == pytest.approx(
+        T_GYRO / 4.0 - DT_POINCARE / 2.0, rel=1e-3)
+    # ... and they are half a gyroperiod apart
+    for a, b in zip(hits, hits[1:]):
+        assert b["t_s"] - a["t_s"] == pytest.approx(T_GYRO / 2.0, rel=1e-3)
+    # a half turn is exactly SPG/2 samples
+    assert [h["index"] for h in hits] == [63, 191, 319, 447]
+
+
+@pytestmark_gmsh
+def test_poincare_orbit_closes_on_the_next_turn(tmp_path):
+    """Closure: crossings one full gyration apart must coincide.
+
+    MEASURED drift over one turn: |u0 - u2| = 1.49e-08 m and
+    |u1 - u3| = 2.49e-08 m (the Boris polygon's per-turn radius drift on
+    a 256-step gyration).  The tolerance below is that measurement with
+    margin -- a tighter 1e-9 does NOT hold at this step count.
+    """
+    hits = _section(tmp_path)["crossings"][0]
+    assert abs(hits[0]["u"] - hits[2]["u"]) < 1e-7
+    assert abs(hits[1]["u"] - hits[3]["u"]) < 1e-7
+    assert abs(hits[0]["v"] - hits[2]["v"]) < 1e-12
+
+
+@pytestmark_gmsh
+def test_poincare_crossing_direction_splits_the_section(tmp_path):
+    both = _section(tmp_path)["crossings"][0]
+    pos = _section(tmp_path, crossing_direction="positive")["crossings"][0]
+    neg = _section(tmp_path, crossing_direction="negative")["crossings"][0]
+    assert len(pos) == 2 and len(neg) == 2
+    assert len(both) == len(pos) + len(neg)
+    # +y-going pierces are the +x side, -y-going the -x side
+    assert all(h["u"] > 0.0 for h in pos)
+    assert all(h["u"] < 0.0 for h in neg)
+    assert [h["u"] for h in pos] == [h["u"] for h in both[0::2]]
+
+
+@pytestmark_gmsh
+def test_poincare_plane_missing_the_orbit_yields_no_crossings(tmp_path):
+    """The circle spans y in [0, 0.4]; a plane at y = 0.45 is missed."""
+    msh = _write(tmp_path, _uniform_b(), "uniform_b.msh")
+    res = poincare(msh, [[0.0, 0.0, 0.0]], [1.0, 0.0, 0.0], KE_EV,
+                   [0.0, 0.45, 0.0], [0.0, 1.0, 0.0],
+                   steps_per_gyration=64, max_steps=140,
+                   out_file=tmp_path / "miss.pos")
+    assert res["ok"] is True, res.get("error")
+    assert res["n_per_seed"] == [0]
+    assert res["n_crossings"] == 0
+
+
+@pytestmark_gmsh
+def test_poincare_writes_a_scatter_png(tmp_path):
+    png = tmp_path / "section.png"
+    res = _section(tmp_path, png_out=png)
+    assert res["ok"] is True, res.get("error")
+    assert res.get("plot_error") is None
+    assert png.is_file() and png.stat().st_size > 0
+
+
+@pytestmark_gmsh
+def test_poincare_forwards_the_tracer_failure_verbatim(tmp_path):
+    """A bad tracer argument must not be masked by the section layer."""
+    msh = _write(tmp_path, _uniform_b(), "uniform_b.msh")
+    res = poincare(msh, [[0.0, 0.0, 0.0]], [1.0, 0.0, 0.0], KE_EV,
+                   [0.0, 0.2, 0.0], [0.0, 1.0, 0.0], time_step=3,
+                   out_file=tmp_path / "bad.pos")
+    assert res["ok"] is False
+    assert "time_step 3 out of range" in res["error"]
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "message"),
+    [
+        ({"crossing_direction": "up"}, "crossing_direction must be one of"),
+        ({"plane_normal": [0.0, 0.0, 0.0]}, "plane_normal must be nonzero"),
+        ({"plane_normal": [0.0, 1.0]}, "plane_normal needs exactly 3"),
+        ({"plane_point": [0.0, math.nan, 0.0]},
+         "plane_point must be a finite number"),
+    ],
+)
+def test_poincare_rejects_bad_planes(input_file, forbid_subprocess,
+                                     kwargs, message):
+    args = {"plane_point": [0.0, 0.0, 0.0], "plane_normal": [0.0, 1.0, 0.0]}
+    args.update(kwargs)
+    result = poincare(input_file, [[0.0, 0.0, 0.0]], [1.0, 0.0, 0.0],
+                      1.0e3, args["plane_point"], args["plane_normal"],
+                      **{k: v for k, v in kwargs.items()
+                         if k not in ("plane_point", "plane_normal")})
+    assert result["ok"] is False
+    assert message in result["error"]

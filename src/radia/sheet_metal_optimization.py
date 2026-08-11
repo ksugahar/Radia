@@ -8,6 +8,7 @@ refinement is required, and when a topology-changing Cubit rebuild is required.
 from __future__ import annotations
 
 from dataclasses import dataclass
+import json
 from pathlib import Path
 import subprocess
 
@@ -120,6 +121,9 @@ class TopologyPreservingShapeIteration:
     minimum_jacobian: float
     maximum_condition: float
     nonlinear_resolves: int
+    remesh_attempted: bool = False
+    remesh_accepted: bool = False
+    remesh_reason: str = ""
 
 
 @dataclass(frozen=True)
@@ -135,6 +139,15 @@ class CubitShapeRemeshRequest:
     shape_parameters: np.ndarray
     journal_path: Path
     mesh_path: Path
+    source_mesh: object = None
+    source_deformation: object = None
+
+
+@dataclass(frozen=True)
+class CubitShapeRemeshResult:
+    """Mesh plus the machine-readable Cubit/Sculpt validation report."""
+    mesh: object
+    report: object = None
 
 
 @dataclass(frozen=True)
@@ -158,6 +171,172 @@ class CubitHexRemeshBackend:
             raise RuntimeError(f"Cubit remesh failed ({completed.returncode}):\n{tail}")
         if not output.is_file(): raise RuntimeError(f"Cubit did not create mesh: {output}")
         return self.load_mesh(output)
+
+
+@dataclass(frozen=True)
+class CubitSculptShapeRemeshBackend:
+    """Anisotropic Sculpt checkpoint backend for long topology-fixed magnets.
+
+    ``sculpt`` is normally ``radia_mcp.cubit.server.cubit_stl_to_vol``.  It is
+    injected so the numerical Radia package keeps the Cubit execution layer
+    optional and testable.  The accepted GetTrafo exterior is compressed by
+    ``coordinate_scale`` before isotropic Sculpt and expanded afterwards.
+    """
+    sculpt: object
+    boundary_classifier: object
+    coordinate_scale: tuple[float, float, float] = (1.0, 0.16, 1.0)
+    sculpt_size: float = 0.039
+    closure_tolerance: float = 0.03
+    material_name: str = "iron"
+    required_boundaries: tuple[str, ...] = ("edge", "fixed", "sym_z")
+    timeout_s: int = 900
+    gq_iters: int = 0
+    gq_threshold: float = 0.2
+    mesh_check: object = None
+    tetrahedralize_for_analysis: bool = False
+
+    def rebuild(self, request: CubitShapeRemeshRequest):
+        from .topopt_cad import (exact_surface_stl_from_mesh,
+                                 nearest_boundary_label_classifier,
+                                 relabel_straight_mesh,
+                                 rescale_netgen_vol_points)
+        import ngsolve as ng
+
+        if request.source_mesh is None:
+            raise ValueError(
+                "Sculpt shape rebuild requires request.source_mesh")
+        scale = np.asarray(self.coordinate_scale, dtype=float).reshape(-1)
+        if (scale.shape != (3,) or not np.all(np.isfinite(scale))
+                or np.any(scale <= 0.0)):
+            raise ValueError(
+                "Sculpt coordinate_scale must have three positive entries")
+        size = float(self.sculpt_size)
+        closure = float(self.closure_tolerance)
+        if (not np.isfinite(size) or size <= 0.0
+                or not np.isfinite(closure) or closure < 0.0):
+            raise ValueError("invalid Sculpt size or closure tolerance")
+        output = Path(request.mesh_path)
+        output.parent.mkdir(parents=True, exist_ok=True)
+        stem = output.with_suffix("")
+        surface_path = stem.with_name(stem.name + "_scaled.stl")
+        scaled_vol = stem.with_name(stem.name + "_scaled.vol")
+        scaled_msh = stem.with_name(stem.name + "_scaled.msh")
+        physical_unlabeled = stem.with_name(stem.name + "_physical_raw.vol")
+        surface = exact_surface_stl_from_mesh(
+            request.source_mesh, surface_path,
+            deformation=request.source_deformation,
+            coordinate_scale=scale)
+        raw = self.sculpt(
+            stl_path=str(surface_path), scheme="hex", size=size,
+            closure_tolerance=closure, out_vol=str(scaled_vol),
+            out_msh=str(scaled_msh), timeout_s=int(self.timeout_s),
+            gq_iters=int(self.gq_iters),
+            gq_threshold=float(self.gq_threshold))
+        report = json.loads(raw) if isinstance(raw, str) else dict(raw)
+        if report.get("status") != "ok" or not scaled_vol.is_file():
+            raise RuntimeError(
+                "Cubit Sculpt did not pass its scaled-mesh gates: "
+                + json.dumps({"status": report.get("status"),
+                              "gates": report.get("gates")},
+                             ensure_ascii=False))
+        rescale_netgen_vol_points(
+            scaled_vol, physical_unlabeled, 1.0 / scale)
+        raw_mesh = ng.Mesh(str(physical_unlabeled))
+        transferred_classifier = nearest_boundary_label_classifier(
+            request.source_mesh, deformation=request.source_deformation,
+            fallback=self.boundary_classifier)
+        labeled = relabel_straight_mesh(
+            raw_mesh, transferred_classifier,
+            material_name=self.material_name)
+        sculpt_elements = tuple(labeled.Elements(ng.VOL))
+        sculpt_families = {
+            {4: "tet", 6: "wedge", 8: "hex"}.get(len(element.vertices),
+                                                     "unsupported")
+            for element in sculpt_elements
+        }
+        if bool(self.tetrahedralize_for_analysis):
+            if sculpt_families != {"hex"}:
+                raise RuntimeError(
+                    "tetrahedralize_for_analysis requires a pure Sculpt HEX "
+                    f"mesh, got {sorted(sculpt_families)}")
+            # Netgen owns the conforming six-TET split, including consistent
+            # diagonals on shared and boundary quadrilaterals.  Sculpt still
+            # owns the accepted exterior; this is only the one-time handoff
+            # to the topology-fixed exact TET HDiv-MMM/Trafo path.
+            labeled.ngmesh.Split2Tets()
+            labeled = ng.Mesh(labeled.ngmesh)
+        labeled.ngmesh.Save(str(output))
+        mesh = ng.Mesh(str(output))
+        analysis_elements = tuple(mesh.Elements(ng.VOL))
+        analysis_families = sorted({
+            {4: "tet", 6: "wedge", 8: "hex"}.get(len(element.vertices),
+                                                     "unsupported")
+            for element in analysis_elements
+        })
+        boundaries = sorted(set(map(str, mesh.GetBoundaries())))
+        materials = sorted(set(map(str, mesh.GetMaterials())))
+        missing_boundaries = sorted(
+            set(map(str, self.required_boundaries)) - set(boundaries))
+        labels_ok = (not missing_boundaries
+                     and self.material_name in materials)
+        physical_volume = float(ng.Integrate(1.0, mesh))
+        physical_closure = abs(
+            physical_volume - float(surface["physical_volume"])) / max(
+                float(surface["physical_volume"]), 1.0e-300)
+        physical_closure_ok = bool(physical_closure <= closure)
+        external_check = None
+        check_ok = True
+        if self.mesh_check is not None:
+            external_check = self.mesh_check(str(output))
+            if isinstance(external_check, str):
+                external_check = json.loads(external_check)
+            check_ok = bool(external_check.get("passed", False))
+        original_gates = dict(report.get("gates") or {})
+        gates = {
+            **original_gates,
+            "closure_ok": bool(
+                original_gates.get("closure_ok") is True
+                and physical_closure_ok),
+            "no_inverted_elements": bool(
+                original_gates.get("no_inverted_elements") is True),
+            "boundary_faces_ok": bool(
+                original_gates.get("boundary_faces_ok") is True
+                and labels_ok and check_ok),
+            "labels_ok": labels_ok,
+            "external_check_ok": check_ok,
+        }
+        combined = {
+            "schema": "radia.cubit-sculpt-shape-remesh/v1",
+            "status": "ok" if all(gates.values()) else "gate_failed",
+            "gates": gates,
+            "surface": surface,
+            "coordinate_scale": scale.tolist(),
+            "physical_target_sizes": (size / scale).tolist(),
+            "sculpt": report,
+            "sculpt_element_families": sorted(sculpt_families),
+            "sculpt_element_count": len(sculpt_elements),
+            "tetrahedralized_for_analysis": bool(
+                self.tetrahedralize_for_analysis),
+            "analysis_element_families": analysis_families,
+            "analysis_element_count": len(analysis_elements),
+            "physical_vol": str(output),
+            "physical_volume": physical_volume,
+            "physical_closure": physical_closure,
+            "boundaries": boundaries,
+            "materials": materials,
+            "missing_boundaries": missing_boundaries,
+            "external_check": external_check,
+        }
+        manifest = stem.with_name(stem.name + "_sculpt.json")
+        manifest.write_text(
+            json.dumps(combined, indent=2, ensure_ascii=False),
+            encoding="utf-8")
+        combined["manifest"] = str(manifest)
+        if combined["status"] != "ok":
+            raise RuntimeError(
+                "physical Sculpt mesh failed postprocessing gates: "
+                + json.dumps(gates, ensure_ascii=False))
+        return CubitShapeRemeshResult(mesh, combined)
 
 
 def elastic_normal_deformation_modes(mesh, scalar_boundary_modes, *,
@@ -559,12 +738,74 @@ def _accept_perturbative_shape_trial(
     return float(trial.objective) <= allowed, current_ratio, trial_ratio
 
 
+def _normalize_cubit_shape_result(value):
+    """Accept the new report-bearing result without breaking old backends."""
+    if isinstance(value, CubitShapeRemeshResult):
+        return value
+    return CubitShapeRemeshResult(value, None)
+
+
+def _default_cubit_shape_gate(result):
+    """Require the three solver-facing Sculpt gates when a report is present."""
+    report = result.report
+    if report is None:
+        return True, "legacy backend supplied no mesh report"
+    if not isinstance(report, dict):
+        return False, "Cubit remesh report is not a mapping"
+    if report.get("status") not in (None, "ok"):
+        return False, f"Cubit remesh status is {report.get('status')!r}"
+    gates = report.get("gates")
+    if gates is None:
+        return False, "Cubit remesh report has no gates"
+    required = ("closure_ok", "no_inverted_elements", "boundary_faces_ok")
+    failed = [name for name in required if gates.get(name) is not True]
+    if failed:
+        return False, "failed Cubit remesh gates: " + ", ".join(failed)
+    return True, "Cubit remesh gates passed"
+
+
+def _cubit_shape_equivalence(trial, remeshed, linearization, *,
+                             response_tolerance, objective_tolerance):
+    """Check that remeshing preserved the already accepted physical shape."""
+    if response_tolerance is not None:
+        tolerance = float(response_tolerance)
+        if not np.isfinite(tolerance) or tolerance < 0.0:
+            raise ValueError(
+                "cubit_response_equivalence_tolerance must be nonnegative")
+        response_delta = np.asarray(remeshed.response, dtype=float) - np.asarray(
+            trial.response, dtype=float)
+        if response_delta.size:
+            ratio = float(np.max(np.abs(
+                response_delta / np.asarray(
+                    linearization.response_band, dtype=float))))
+            if not np.isfinite(ratio) or ratio > tolerance:
+                return False, (
+                    "Sculpt response changed by "
+                    f"{ratio:.6g} response-band units")
+    if objective_tolerance is not None:
+        tolerance = float(objective_tolerance)
+        if not np.isfinite(tolerance) or tolerance < 0.0:
+            raise ValueError(
+                "cubit_objective_equivalence_tolerance must be nonnegative")
+        relative = abs(float(remeshed.objective) - float(trial.objective)) / max(
+            abs(float(trial.objective)), 1.0e-300)
+        if not np.isfinite(relative) or relative > tolerance:
+            return False, (
+                "Sculpt objective changed by relative "
+                f"{relative:.6g}")
+    return True, "Sculpt physical equivalence gates passed"
+
+
 def optimize_topology_preserving_shape(
         initial_state: TopologyPreservingShapeState, *, linearize_step,
         deformation_factory, rebuild_model, evaluate_model, move_limit,
         parameter_bounds=None, laplacian=None, curvature_limit=None,
         A_ub=None, b_ub=None, cubit_backend=None,
         cubit_work_directory=None, max_iterations=20,
+        cubit_batch_interval=None, cubit_batch_parameter_change=None,
+        cubit_remesh_gate=None,
+        cubit_response_equivalence_tolerance=None,
+        cubit_objective_equivalence_tolerance=None,
         parameter_tolerance=1e-4, objective_tolerance=1e-10,
         armijo=1e-4, band_tolerance=1e-8, minimum_scale=1/64,
         contraction=0.5, minimum_jacobian_ratio=0.2,
@@ -575,7 +816,11 @@ def optimize_topology_preserving_shape(
 
     Every trial is fully re-solved.  Safe steps stay as an NGSolve
     deformation; a quality-limit crossing requests one application-owned
-    Cubit rebuild without changing the accepted iron topology.
+    Cubit rebuild without changing the accepted iron topology.  Optional
+    interval/displacement batching checkpoints several accepted GetTrafo
+    steps in one Sculpt rebuild.  A scheduled checkpoint that fails its mesh
+    or physical-equivalence gates leaves the accepted GetTrafo shape intact;
+    a quality-mandated rebuild still backtracks.
     """
     from .topology_optimization import solve_shape_lp
 
@@ -594,6 +839,22 @@ def optimize_topology_preserving_shape(
             "invalid topology-preserving shape backtracking controls")
     if not (0 < armijo <= 1):
         raise ValueError("armijo must be in (0,1]")
+    if cubit_batch_interval is not None:
+        interval_value = float(cubit_batch_interval)
+        if (not np.isfinite(interval_value) or interval_value < 1.0
+                or interval_value != np.floor(interval_value)):
+            raise ValueError("cubit_batch_interval must be a positive integer")
+        cubit_batch_interval = int(interval_value)
+    if cubit_batch_parameter_change is not None:
+        cubit_batch_parameter_change = float(cubit_batch_parameter_change)
+        if (not np.isfinite(cubit_batch_parameter_change)
+                or cubit_batch_parameter_change <= 0.0):
+            raise ValueError(
+                "cubit_batch_parameter_change must be finite and positive")
+    if ((cubit_batch_interval is not None
+         or cubit_batch_parameter_change is not None)
+            and cubit_backend is None):
+        raise ValueError("Cubit batching controls require cubit_backend")
     state = initial_state
     history = []
     converged = False
@@ -607,6 +868,7 @@ def optimize_topology_preserving_shape(
             else Path(cubit_work_directory))
     if work is not None:
         work.mkdir(parents=True, exist_ok=True)
+    accepted_since_cubit = 0
 
     for iteration in range(int(max_iterations_value)):
         linearization = linearize_step(state)
@@ -671,7 +933,18 @@ def optimize_topology_preserving_shape(
             next_model = trial_model
             next_evaluation = trial_evaluation
             next_reference = qref.copy()
-            if needs_cubit:
+            scheduled_cubit = bool(
+                cubit_backend is not None and not needs_cubit and (
+                    (cubit_batch_interval is not None
+                     and accepted_since_cubit + 1 >= cubit_batch_interval)
+                    or (cubit_batch_parameter_change is not None
+                        and float(np.max(np.abs(candidate - qref)))
+                        >= cubit_batch_parameter_change)))
+            attempt_cubit = bool(needs_cubit or scheduled_cubit)
+            remesh_attempted = False
+            remesh_accepted = False
+            remesh_reason = ""
+            if attempt_cubit:
                 mesh.UnsetDeformation()
                 if work is None:
                     raise ValueError(
@@ -679,27 +952,69 @@ def optimize_topology_preserving_shape(
                 request = CubitShapeRemeshRequest(
                     iteration, candidate.copy(),
                     work / f"shape_{iteration:04d}.jou",
-                    work / f"shape_{iteration:04d}.vol")
-                next_mesh = cubit_backend.rebuild(request)
-                next_model = rebuild_model(
-                    next_mesh, candidate, "cubit_rebuild")
-                next_evaluation = evaluate_model(next_model)
-                nonlinear_resolves += 1
-                remesh_ok, before_ratio, after_ratio = (
-                    _accept_perturbative_shape_trial(
-                        state.evaluation, next_evaluation, linearization,
-                        update.delta, scale, armijo=armijo,
-                        objective_tolerance=objective_tolerance,
-                        band_tolerance=band_tolerance))
-                if not remesh_ok:
-                    scale *= contraction
-                    continue
-                next_reference = candidate.copy()
-                route = "cubit_rebuild"
+                    work / f"shape_{iteration:04d}.vol",
+                    source_mesh=mesh, source_deformation=deformation)
+                remesh_attempted = True
+                try:
+                    result = _normalize_cubit_shape_result(
+                        cubit_backend.rebuild(request))
+                    gate = (cubit_remesh_gate or
+                            _default_cubit_shape_gate)(result)
+                    if isinstance(gate, tuple):
+                        mesh_gate_ok, remesh_reason = bool(gate[0]), str(gate[1])
+                    else:
+                        mesh_gate_ok = bool(gate)
+                        remesh_reason = (
+                            "application Cubit remesh gate passed"
+                            if mesh_gate_ok else
+                            "application Cubit remesh gate failed")
+                except Exception as exc:
+                    if not scheduled_cubit:
+                        raise
+                    mesh_gate_ok = False
+                    remesh_reason = f"scheduled Sculpt failed: {exc}"
+                if mesh_gate_ok:
+                    remeshed_mesh = result.mesh
+                    remeshed_model = rebuild_model(
+                        remeshed_mesh, candidate, "cubit_rebuild")
+                    remeshed_evaluation = evaluate_model(remeshed_model)
+                    nonlinear_resolves += 1
+                    remesh_ok, remesh_before_ratio, remesh_after_ratio = (
+                        _accept_perturbative_shape_trial(
+                            state.evaluation, remeshed_evaluation,
+                            linearization, update.delta, scale, armijo=armijo,
+                            objective_tolerance=objective_tolerance,
+                            band_tolerance=band_tolerance))
+                    equivalent, equivalence_reason = _cubit_shape_equivalence(
+                        trial_evaluation, remeshed_evaluation, linearization,
+                        response_tolerance=
+                            cubit_response_equivalence_tolerance,
+                        objective_tolerance=
+                            cubit_objective_equivalence_tolerance)
+                    remesh_ok = bool(remesh_ok and equivalent)
+                    remesh_reason = remesh_reason + "; " + equivalence_reason
+                    if remesh_ok:
+                        next_mesh = remeshed_mesh
+                        next_model = remeshed_model
+                        next_evaluation = remeshed_evaluation
+                        next_reference = candidate.copy()
+                        before_ratio = remesh_before_ratio
+                        after_ratio = remesh_after_ratio
+                        route = "cubit_rebuild"
+                        remesh_accepted = True
+                if not remesh_accepted:
+                    if needs_cubit:
+                        scale *= contraction
+                        continue
+                    # A scheduled checkpoint is an optimization accelerator,
+                    # not a reason to discard an already accepted physical
+                    # GetTrafo step.  Restore that exact deformation/model.
+                    mesh.SetDeformation(deformation)
             accepted = (
                 candidate, next_mesh, next_model, next_evaluation,
                 next_reference, decision, before_ratio, after_ratio,
-                scale, route)
+                scale, route, remesh_attempted, remesh_accepted,
+                remesh_reason)
             break
         if accepted is None:
             current_deformation = deformation_factory(mesh, qref, q)
@@ -707,7 +1022,8 @@ def optimize_topology_preserving_shape(
                 mesh.SetDeformation(current_deformation)
             break
         (candidate, next_mesh, next_model, next_evaluation, next_reference,
-         decision, before_ratio, after_ratio, accepted_scale, route) = accepted
+         decision, before_ratio, after_ratio, accepted_scale, route,
+         remesh_attempted, remesh_accepted, remesh_reason) = accepted
         change = float(np.max(np.abs(candidate - q)))
         objective_before = float(state.evaluation.objective)
         state = TopologyPreservingShapeState(
@@ -717,11 +1033,14 @@ def optimize_topology_preserving_shape(
             iteration, objective_before, float(next_evaluation.objective),
             before_ratio, after_ratio, float(accepted_scale), change, route,
             decision.minimum_jacobian, decision.maximum_condition,
-            nonlinear_resolves))
+            nonlinear_resolves, remesh_attempted, remesh_accepted,
+            remesh_reason))
         if iteration_callback is not None:
             iteration_callback(history[-1], state)
         q = candidate.copy()
         qref = next_reference.copy()
+        accepted_since_cubit = (
+            0 if remesh_accepted else accepted_since_cubit + 1)
         if change <= float(parameter_tolerance):
             converged = True
             break
@@ -807,9 +1126,11 @@ def optimize_hex_sheet_topology(initial_state: HexSheetTopologyState, *,
 __all__=["SheetMetalUpdate","MeshUpdateDecision","DeformationAcceptance",
          "AffineGetTrafoCells","HexSheetTopologyState","HexSheetTopologyIteration",
          "HexSheetTopologyResult","CubitHexRemeshRequest","CubitHexRemeshBackend",
+         "CubitSculptShapeRemeshBackend",
          "ShapeModelEvaluation","TopologyPreservingShapeState",
          "TopologyPreservingShapeIteration","TopologyPreservingShapeResult",
-         "CubitShapeRemeshRequest","elastic_normal_deformation_modes",
+         "CubitShapeRemeshRequest","CubitShapeRemeshResult",
+         "elastic_normal_deformation_modes",
          "combine_deformation_modes","relative_gettrafo_displacements",
          "reference_aware_condition_limit",
          "optimize_topology_preserving_shape",

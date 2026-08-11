@@ -3037,8 +3037,20 @@ def _beam_animation_views(values, t_mid, *, n_frames, mode, comet_window,
     # of their spread: a monoenergetic beam coloured by energy has a
     # spread of ~1e-13 eV, and a sentinel one spread above the maximum
     # would be the same colour as the beam -- i.e. not hidden at all.
-    scale = max(hi - lo, abs(lo), abs(hi), 1.0)
-    if hi - lo < 1e-12 * scale:
+    # The floor is RELATIVE (1e-3 of the magnitude), never an absolute
+    # 1.0: an absolute floor poisons every downstream stats verb on a
+    # small-valued quantity.  MEASURED on the time-coloured beam
+    # (lo=1.68e-10, hi=6.72e-6): absolute floor -> sentinel 10.0, i.e.
+    # 1.5e6x the data (field_stats then reported max 10.0 for a view
+    # whose physics tops out at 6.72e-6); relative floor -> sentinel
+    # 7.39e-5, 11x the data.  Hiding is unaffected -- monoenergetic
+    # 1e4 eV still gives hi=1e4+0.01 and sentinel=1.01e4, far outside
+    # the colour range.
+    span = hi - lo
+    scale = max(span, 1e-3 * max(abs(lo), abs(hi)))
+    if scale <= 0.0:
+        scale = 1.0                     # degenerate all-zero data, last resort
+    if span < 1e-12 * scale:
         hi = lo + 1e-3 * scale          # a colour bar needs a real span
     sentinel = hi + 10.0 * scale
 

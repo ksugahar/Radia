@@ -24,6 +24,10 @@ REQUIRED_MATLAB_SFUNCTIONS = (
     "+radia/+simulink/ihEddySFunction.m",
     "+radia/+simulink/ihThermalSFunction.m",
 )
+FULL_REQUIRED_MATLAB_SFUNCTIONS = REQUIRED_MATLAB_SFUNCTIONS + (
+    "radia_nonlinear_reactor_sfun.m",
+    "+radia/+simulink/nonlinearReactorSFunction.m",
+)
 REQUIRED_MODELS = ("radia_ih.slx",)
 FULL_REQUIRED_MEX = REQUIRED_MEX
 FULL_REQUIRED_MODELS = (
@@ -31,6 +35,7 @@ FULL_REQUIRED_MODELS = (
     "radia_electromagnet.slx",
     "radia_ih.slx",
     "radia_maglev.slx",
+    "radia_nonlinear_reactor.slx",
     "radia_streamfunction_optimization.slx",
 )
 FULL_RUNTIME_DLLS = (
@@ -168,6 +173,11 @@ def build_package(
     matlab_source = ROOT / "matlab"
     required_models = FULL_REQUIRED_MODELS if full_library else REQUIRED_MODELS
     required_mex = FULL_REQUIRED_MEX if full_library else REQUIRED_MEX
+    required_sfunctions = (
+        FULL_REQUIRED_MATLAB_SFUNCTIONS
+        if full_library
+        else REQUIRED_MATLAB_SFUNCTIONS
+    )
     for model in required_models:
         if not (matlab_source / model).is_file():
             raise FileNotFoundError(f"Required Simulink model is missing: {model}")
@@ -244,7 +254,7 @@ def build_package(
             ),
             "required_mex": [f"matlab/{name}" for name in required_mex],
             "required_matlab_sfunctions": [
-                f"matlab/{name}" for name in REQUIRED_MATLAB_SFUNCTIONS
+                f"matlab/{name}" for name in required_sfunctions
             ],
             "required_runtime_dll": [
                 f"matlab/{name}" for name in FULL_RUNTIME_DLLS
@@ -258,6 +268,10 @@ def build_package(
         }
         if full_library:
             manifest["maglev_backend"] = "matlab-level2-common-basis-cln"
+            manifest["reactor_backend"] = (
+                "matlab-level2+radia-mex-handle"
+            )
+            manifest["reactor_surrogate"] = False
             manifest["application_batch_backend"] = (
                 "python-headless-or-native-as-declared-by-block"
             )
@@ -302,7 +316,7 @@ def build_package(
         }
         required.update(f"matlab/{name}" for name in FULL_RUNTIME_DLLS)
         required.update(
-            f"matlab/{name}" for name in REQUIRED_MATLAB_SFUNCTIONS
+            f"matlab/{name}" for name in required_sfunctions
         )
         if full_library:
             required.update(

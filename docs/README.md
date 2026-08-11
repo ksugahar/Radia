@@ -64,6 +64,7 @@ directory; interactive WebGUI scenes remain the notebook explanation layer.
 - [PEEC_SHIELD_CONDUCTOR.md](peec/PEEC_SHIELD_CONDUCTOR.md) - Shield conductor modeling (`peec_shield.py`)
 - [PEEC_SURFACE_IMPEDANCE.md](peec/PEEC_SURFACE_IMPEDANCE.md) - Surface impedance formulation and SPICE export
 - [NPORT_BLOCK_LANCZOS_SPICE.md](peec/NPORT_BLOCK_LANCZOS_SPICE.md) - N-port Block Lanczos algorithm for SPICE-compatible circuit extraction
+- [ltspice/README.md](ltspice/README.md) - Built-in `radia.ltspice` conversion, topology gates, CLI, MCP, and MATLAB bridge
 - [peec_bema_convergence/peec_bema_convergence.ipynb](peec_bema_convergence/peec_bema_convergence.ipynb) - Result-bearing 3turnCoil PEEC vs BEM-A convergence record with synchronized JSON.
 - [solver_benchmarks/peec_solver_benchmarks.ipynb](solver_benchmarks/peec_solver_benchmarks.ipynb) - Result-bearing dense Ruehli vs HACApK PEEC benchmark notebook synchronized with committed JSON and `validation_test/solver_benchmarks/` drivers.
 

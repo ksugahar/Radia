@@ -1,5 +1,6 @@
 import numpy as np
 import pytest
+from pathlib import Path
 from types import SimpleNamespace
 
 from radia.sheet_metal_optimization import (apply_ngsolve_mesh_route,
@@ -9,7 +10,9 @@ from radia.sheet_metal_optimization import (apply_ngsolve_mesh_route,
     route_mesh_update, sample_trafo_quality,
     sample_affine_gettrafo_cells, solve_sheet_metal_lp, local_trust_region)
 from radia.sheet_metal_optimization import (
-    ShapeModelEvaluation, TopologyPreservingShapeState)
+    CubitSculptShapeRemeshBackend, CubitShapeRemeshRequest,
+    CubitShapeRemeshResult, ShapeModelEvaluation,
+    TopologyPreservingShapeState)
 from radia.topology_optimization import ShapeLinearization
 
 
@@ -132,6 +135,193 @@ def test_topology_preserving_shape_clears_deformation_after_solver_error(
             evaluate_model=lambda model: None, move_limit=0.1,
             max_iterations=1)
     assert mesh.deformation is None
+
+
+def test_topology_preserving_shape_batches_sculpt_and_checks_equivalence(
+        monkeypatch, tmp_path):
+    import radia.sheet_metal_optimization as sm
+
+    class Mesh:
+        def __init__(self, name):
+            self.name = name
+            self.deformation = None
+
+        def SetDeformation(self, value):
+            self.deformation = value
+
+        def UnsetDeformation(self):
+            self.deformation = None
+
+    mesh = Mesh("gettrafo")
+    monkeypatch.setattr(
+        sm, "sample_trafo_quality",
+        lambda mesh, **kwargs: (np.ones(1), np.ones(1)))
+    monkeypatch.setattr(
+        sm, "relative_gettrafo_displacements",
+        lambda mesh, deformation: np.full(1, .02))
+    initial = TopologyPreservingShapeState(
+        mesh, {"q": 0.0}, np.array([0.]), np.array([0.]),
+        ShapeModelEvaluation(1.0, np.array([1.0])))
+
+    def linearize(state):
+        q = float(state.parameters[0])
+        return ShapeLinearization(
+            (q - 1.)**2, np.array([2 * (q - 1.)]), np.array([1. - q]),
+            np.array([[-1.]]), np.array([0.]), np.array([1.]))
+
+    calls = {"sculpt": 0}
+
+    class Backend:
+        def rebuild(self, request):
+            calls["sculpt"] += 1
+            assert request.source_mesh is mesh
+            assert request.source_deformation == pytest.approx(.5)
+            return CubitShapeRemeshResult(Mesh("sculpt"), {
+                "status": "ok", "gates": {
+                    "closure_ok": True,
+                    "no_inverted_elements": True,
+                    "boundary_faces_ok": True,
+                }})
+
+    def rebuild(active_mesh, parameters, route):
+        return {"mesh": active_mesh, "q": float(parameters[0]),
+                "route": route}
+
+    result = optimize_topology_preserving_shape(
+        initial, linearize_step=linearize,
+        deformation_factory=lambda mesh, reference, candidate: float(
+            candidate[0] - reference[0]),
+        rebuild_model=rebuild,
+        evaluate_model=lambda model: ShapeModelEvaluation(
+            (model["q"] - 1.)**2, np.array([1. - model["q"]])),
+        move_limit=.25, parameter_bounds=([-1.], [1.]), max_iterations=2,
+        cubit_backend=Backend(), cubit_work_directory=tmp_path,
+        cubit_batch_interval=2,
+        cubit_response_equivalence_tolerance=0.0,
+        cubit_objective_equivalence_tolerance=0.0)
+    assert calls["sculpt"] == 1
+    assert [row.route for row in result.history] == [
+        "ngsolve_deform", "cubit_rebuild"]
+    assert [row.remesh_attempted for row in result.history] == [False, True]
+    assert [row.remesh_accepted for row in result.history] == [False, True]
+    assert result.state.mesh.name == "sculpt"
+    np.testing.assert_allclose(
+        result.state.reference_parameters, result.state.parameters)
+
+
+def test_scheduled_sculpt_gate_failure_keeps_accepted_gettrafo(
+        monkeypatch, tmp_path):
+    import radia.sheet_metal_optimization as sm
+
+    class Mesh:
+        deformation = None
+
+        def SetDeformation(self, value):
+            self.deformation = value
+
+        def UnsetDeformation(self):
+            self.deformation = None
+
+    mesh = Mesh()
+    monkeypatch.setattr(
+        sm, "sample_trafo_quality",
+        lambda mesh, **kwargs: (np.ones(1), np.ones(1)))
+    monkeypatch.setattr(
+        sm, "relative_gettrafo_displacements",
+        lambda mesh, deformation: np.full(1, .02))
+    initial = TopologyPreservingShapeState(
+        mesh, {"q": 0.}, np.array([0.]), np.array([0.]),
+        ShapeModelEvaluation(1., np.empty(0)))
+    linearization = ShapeLinearization(
+        1., np.array([-1.]), np.empty(0), np.zeros((0, 1)),
+        np.empty(0), np.empty(0))
+    calls = {"trial": 0}
+
+    class Backend:
+        def rebuild(self, request):
+            return CubitShapeRemeshResult(Mesh(), {
+                "status": "gate_failed", "gates": {
+                    "closure_ok": False,
+                    "no_inverted_elements": True,
+                    "boundary_faces_ok": True,
+                }})
+
+    def rebuild(active_mesh, parameters, route):
+        calls["trial"] += 1
+        return {"q": float(parameters[0]), "route": route}
+
+    result = optimize_topology_preserving_shape(
+        initial, linearize_step=lambda state: linearization,
+        deformation_factory=lambda mesh, reference, candidate: float(
+            candidate[0] - reference[0]),
+        rebuild_model=rebuild,
+        evaluate_model=lambda model: ShapeModelEvaluation(
+            1. - model["q"], np.empty(0)),
+        move_limit=.25, max_iterations=1, cubit_backend=Backend(),
+        cubit_work_directory=tmp_path, cubit_batch_interval=1)
+    assert calls["trial"] == 1
+    assert len(result.history) == 1
+    row = result.history[0]
+    assert row.route == "ngsolve_deform"
+    assert row.remesh_attempted and not row.remesh_accepted
+    assert "status" in row.remesh_reason
+    assert result.state.mesh is mesh and mesh.deformation is not None
+    np.testing.assert_allclose(result.state.reference_parameters, [0.])
+
+
+def test_anisotropic_sculpt_backend_restores_scale_labels_and_report(tmp_path):
+    import ngsolve as ng
+    from ngsolve.meshes import MakeStructured3DMesh
+    from radia.topopt_cad import (relabel_straight_mesh,
+                                  rescale_netgen_vol_points)
+
+    source_raw = MakeStructured3DMesh(hexes=True, nx=2, ny=2, nz=2)
+
+    def fake_sculpt(**kwargs):
+        temporary = tmp_path / "unit.vol"
+        source.ngmesh.Save(str(temporary))
+        rescale_netgen_vol_points(
+            temporary, kwargs["out_vol"], (1.0, 0.5, 1.0))
+        Path(kwargs["out_msh"]).write_text("fake", encoding="utf-8")
+        return {"status": "ok", "gates": {
+            "closure_ok": True,
+            "no_inverted_elements": True,
+            "boundary_faces_ok": True,
+        }}
+
+    def classify(center, normal):
+        if center[2] < 1.0e-12:
+            return "sym_z"
+        if center[2] > 1.0 - 1.0e-12:
+            return "edge"
+        return "fixed"
+
+    source = relabel_straight_mesh(source_raw, classify)
+
+    backend = CubitSculptShapeRemeshBackend(
+        sculpt=fake_sculpt, boundary_classifier=classify,
+        coordinate_scale=(1.0, 0.5, 1.0), sculpt_size=.04,
+        mesh_check=lambda path: {"passed": True},
+        tetrahedralize_for_analysis=True)
+    request = CubitShapeRemeshRequest(
+        3, np.array([.01]), tmp_path / "shape.jou",
+        tmp_path / "shape.vol", source_mesh=source,
+        source_deformation=None)
+    result = backend.rebuild(request)
+    assert isinstance(result, CubitShapeRemeshResult)
+    assert result.report["status"] == "ok"
+    assert result.report["gates"]["labels_ok"] is True
+    assert result.report["physical_target_sizes"] == [.04, .08, .04]
+    assert result.report["sculpt_element_families"] == ["hex"]
+    assert result.report["sculpt_element_count"] == 8
+    assert result.report["tetrahedralized_for_analysis"] is True
+    assert result.report["analysis_element_families"] == ["tet"]
+    assert result.report["analysis_element_count"] == 48
+    assert result.report["physical_closure"] == pytest.approx(0.0, abs=1e-13)
+    assert set(result.mesh.GetMaterials()) == {"iron"}
+    assert set(result.mesh.GetBoundaries()) == {"edge", "fixed", "sym_z"}
+    assert {len(element.vertices) for element in result.mesh.Elements(ng.VOL)} == {4}
+    assert float(ng.Integrate(1.0, result.mesh)) == pytest.approx(1.0)
 
 
 def test_hex_topology_driver_prefers_deformation_then_uses_cubit(monkeypatch,tmp_path):

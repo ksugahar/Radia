@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import io
 import json
 import re
 import subprocess
@@ -52,12 +53,18 @@ FULL_REQUIRED_MEMBERS = {
     "matlab/radia_electromagnet.slx",
     "matlab/radia_ih.slx",
     "matlab/radia_maglev.slx",
+    "matlab/radia_nonlinear_reactor.slx",
     "matlab/radia_streamfunction_optimization.slx",
     "matlab/radia_mex.mexw64",
     "matlab/radia_ih_eddy_sfun.m",
     "matlab/radia_ih_thermal_sfun.m",
+    "matlab/radia_nonlinear_reactor_sfun.m",
     "matlab/+radia/+simulink/ihEddySFunction.m",
     "matlab/+radia/+simulink/ihThermalSFunction.m",
+    "matlab/+radia/+simulink/nonlinearReactorSFunction.m",
+    "matlab/+radia/+simulink/makeNonlinearReactorConfig.m",
+    "matlab/+radia/+simulink/makeNonlinearReactorDemoConfig.m",
+    "matlab/+radia/+simulink/validateNonlinearReactorConfig.m",
     "matlab/mkl_avx2.2.dll",
     "matlab/mkl_core.2.dll",
     "matlab/mkl_def.2.dll",
@@ -96,6 +103,34 @@ def _safe_member(name: str) -> bool:
     return not path.is_absolute() and ".." not in path.parts and "\\" not in name
 
 
+def _verify_slx_text_integrity(payload: bytes, member: str) -> None:
+    """Reject damaged public text embedded in a native SLX archive."""
+    try:
+        model = zipfile.ZipFile(io.BytesIO(payload))
+    except zipfile.BadZipFile as error:
+        raise RuntimeError(f"Invalid SLX archive: {member}") from error
+    with model:
+        for nested_name in model.namelist():
+            if PurePosixPath(nested_name).suffix.lower() not in {
+                    ".xml", ".rels", ".json"}:
+                continue
+            try:
+                text = model.read(nested_name).decode("utf-8")
+            except UnicodeDecodeError as error:
+                raise RuntimeError(
+                    f"Invalid UTF-8 in {member}!/{nested_name}"
+                ) from error
+            if "\ufffd" in text:
+                raise RuntimeError(
+                    f"Replacement glyph in {member}!/{nested_name}"
+                )
+            if re.search(r"\?{3,}", text):
+                raise RuntimeError(
+                    f"Suspicious question-mark run in "
+                    f"{member}!/{nested_name}"
+                )
+
+
 def verify_archive(archive: Path) -> dict:
     if not archive.is_file():
         raise FileNotFoundError(f"Simulink release archive does not exist: {archive}")
@@ -127,6 +162,8 @@ def verify_archive(archive: Path) -> dict:
             raise RuntimeError(
                 f"Simulink release archive is incomplete: {', '.join(missing)}"
             )
+        for name in sorted(item for item in names if item.lower().endswith(".slx")):
+            _verify_slx_text_integrity(bundle.read(name), name)
         if manifest.get("matlab_release") != "R2026a" or \
                 manifest.get("platform") != "win64" or \
                 manifest.get("mex_extension") != "mexw64":
@@ -208,13 +245,27 @@ def _verify_level2_ih_contract(manifest: dict) -> None:
         "matlab/radia_mex.mexw64",
     }:
         raise RuntimeError("The IH standalone MEX inventory is invalid")
-    if set(manifest.get("required_matlab_sfunctions", [])) != {
+    expected_sfunctions = {
         "matlab/radia_ih_eddy_sfun.m",
         "matlab/radia_ih_thermal_sfun.m",
         "matlab/+radia/+simulink/ihEddySFunction.m",
         "matlab/+radia/+simulink/ihThermalSFunction.m",
-    }:
-        raise RuntimeError("The IH Level-2 S-Function inventory is invalid")
+    }
+    if manifest.get("schema") == \
+            "radia.simulink.library-release-manifest.v2":
+        expected_sfunctions.update({
+            "matlab/radia_nonlinear_reactor_sfun.m",
+            "matlab/+radia/+simulink/nonlinearReactorSFunction.m",
+        })
+        if manifest.get("reactor_backend") != \
+                "matlab-level2+radia-mex-handle" or \
+                manifest.get("reactor_surrogate") is not False:
+            raise RuntimeError(
+                "The nonlinear reactor production backend contract is invalid"
+            )
+    if set(manifest.get("required_matlab_sfunctions", [])) != \
+            expected_sfunctions:
+        raise RuntimeError("The Level-2 S-Function inventory is invalid")
     if manifest.get("standalone_mex_debug_api") is not True:
         raise RuntimeError("The IH standalone MEX debug contract is invalid")
     if manifest.get("python_runtime_required_for_native_mex") is not True or \

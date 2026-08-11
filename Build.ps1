@@ -129,6 +129,11 @@ if (-not (Test-Path $CMAKE_EXE)) {
     Write-Host "ERROR: CMake not found. Install VS workload with CMake or pip install cmake." -ForegroundColor Red
     exit 1
 }
+$CTEST_EXE = Join-Path (Split-Path -Parent $CMAKE_EXE) "ctest.exe"
+if (-not (Test-Path $CTEST_EXE)) {
+    Write-Host "ERROR: CTest not found beside CMake: $CTEST_EXE" -ForegroundColor Red
+    exit 1
+}
 
 # Ninja generator backend.  Pass the long path explicitly so stale CMake
 # short-path cache entries do not break after Python install path changes.
@@ -228,6 +233,7 @@ set INCLUDE=$INTEL_MKL\include;%INCLUDE%
 set MKLROOT=$INTEL_MKL
 set RADIA_ONLY=$RadiaOnly
 set MATLAB_MEX_ONLY=$MatlabMexOnly
+set RUN_CPP_TESTS=$Test
 
 cd /d "$BUILD_DIR"
 
@@ -270,6 +276,23 @@ echo ========================================
 if errorlevel 1 (
     echo ERROR: _radia_pybind build failed
     exit /b 1
+)
+
+if /I "%RUN_CPP_TESTS%"=="True" (
+    echo.
+    echo ========================================
+    echo   Running fast C++ kernel tests
+    echo ========================================
+    "$CMAKE_EXE" --build . --config Release --target test_rad_beam_transfer -j
+    if errorlevel 1 (
+        echo ERROR: beam-transfer C++ test build failed
+        exit /b 1
+    )
+    "$CTEST_EXE" --test-dir . -C Release --output-on-failure -R "radia.beam_transfer.cpp"
+    if errorlevel 1 (
+        echo ERROR: beam-transfer C++ test failed
+        exit /b 1
+    )
 )
 
 if /I "%RADIA_ONLY%"=="True" (

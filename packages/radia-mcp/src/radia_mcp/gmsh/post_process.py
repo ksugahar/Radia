@@ -72,6 +72,63 @@ def _view_name(tag):
     return gmsh.option.getString(f"View[{idx}].Name")
 
 
+def _require_step(tag, step, label="time_step"):
+    # gmsh.view.probe(step=N) with N >= NbTimeStep reads past the end of
+    # the step vector and KILLS the child process -- MEASURED gmsh
+    # 4.15.2 on a single-step view: "OSError: exception: access violation
+    # reading 0xFFFFFFFFFFFFFFFF" (probe step=7), and a garbage address
+    # such as 0x00007265766C6F53 elsewhere, i.e. it is a genuine native
+    # out-of-bounds read, not a checked error.  There is no Python
+    # traceback and no way to catch it, so EVERY probing branch must
+    # validate the requested step against NbTimeStep BEFORE the first
+    # probe.  (The plugin-driven branches -- threshold / warp /
+    # math_eval -- are NOT affected: they raise "Unknown plugin or
+    # plugin action" instead of faulting.)
+    n = _n_steps(tag)
+    if step < -1:
+        raise RuntimeError(
+            f"{label} must be -1 (all steps) or non-negative, got {step}")
+    if step >= n:
+        raise RuntimeError(
+            f"{label} {step} out of range; view {_view_name(tag)!r} has "
+            f"{n} step(s) (0..{n - 1})")
+
+
+def _require_complex_pair(tag, cfg, what):
+    # Plugin(ModulusPhase) and Plugin(HarmonicToTime) both need a
+    # TWO-step re/im view.  Handed a single-step view gmsh 4.15.2
+    # rejects the RUN with the useless "Unknown plugin or plugin action"
+    # (MEASURED) -- it names neither the view nor the step count -- so
+    # gate on NbTimeStep here instead.  Returns a warning string or None.
+    n = _n_steps(tag)
+    name = _view_name(tag)
+    if n < 2:
+        raise RuntimeError(
+            f"view {name!r} has {n} time step; {what} needs a two-step "
+            "re/im view (pass real_step / imag_step)")
+    re_s = int(cfg.get("real_step", 0))
+    im_s = int(cfg.get("imag_step", 1))
+    for label, s in (("real_step", re_s), ("imag_step", im_s)):
+        if not 0 <= s < n:
+            raise RuntimeError(
+                f"{label} {s} out of range; view {name!r} has {n} "
+                f"step(s) (0..{n - 1})")
+    if n > 2 and (re_s, im_s) == (0, 1):
+        # More than 2 steps AND the caller kept the defaults: a legit
+        # multi-step file may still carry re/im at 0/1, so this is a
+        # WARNING, not a failure.  It matters because the beam-animation
+        # views this lane mints are many-step but are NOT a re/im pair,
+        # and re-interpreting them as one produces silent nonsense.
+        # (Detected by VALUE, not by a sentinel default: the MCP layer
+        # always forwards real_step / imag_step as explicit ints, so a
+        # sentinel would never fire on the tool path.)
+        return (f"view {name!r} has {n} time steps and real_step / "
+                "imag_step were left at the 0 / 1 defaults; assuming "
+                "step 0 = real part and step 1 = imaginary part -- pass "
+                "them explicitly if this view is not a re/im pair")
+    return None
+
+
 def _view_ncomp(tag):
     # Storage-kind dispatch: list-based views encode the component count
     # in the data-type letter (S/V/T); model-based views report it via
@@ -162,6 +219,7 @@ try:
             dmax = float(cfg.get("distance_max", 0.0))
             views_out = []
             for tag in targets:
+                _require_step(tag, step, "step")
                 n_steps = _n_steps(tag)
                 per_point = []
                 for pt in cfg["points"]:
@@ -310,6 +368,7 @@ try:
 
         elif op == "harmonic_to_time":
             tag = _view_tag_by_selector(tags, cfg.get("view"))
+            warning = _require_complex_pair(tag, cfg, "harmonic_to_time")
             gmsh.plugin.setNumber("HarmonicToTime", "View",
                                   gmsh.view.getIndex(tag))
             gmsh.plugin.setNumber("HarmonicToTime", "RealPart",
@@ -323,6 +382,8 @@ try:
             result.update({"ok": True, "ran": True,
                            "out_file": cfg["out_file"],
                            "n_steps": _n_steps(out_tag)})
+            if warning:
+                result["warning"] = warning
 
         elif op == "streamlines":
             # Probe-driven arc-length tracer with curvature-ADAPTIVE RK4
@@ -334,6 +395,7 @@ try:
             import math as _math
             tag = _view_tag_by_selector(tags, cfg.get("view"))
             step = int(cfg.get("time_step", 0))
+            _require_step(tag, step)
             ds0 = cfg.get("step_size")
             if ds0 is None:
                 bb = gmsh.model.getBoundingBox(-1, -1)
@@ -559,6 +621,23 @@ try:
             e_tag = (None if cfg.get("e_view") is None else
                      _view_tag_by_selector(tags, cfg["e_view"]))
             step = int(cfg.get("time_step", 0))
+            # A SCALAR (or 9-component tensor) view is not a field this
+            # pusher can integrate.  Without this gate _probe_vec sees
+            # len(vals) < 3 at every sample and the run reports
+            # ok=true / 0 tracks with reason "seed_outside_data"
+            # (MEASURED) -- a wrong diagnosis pointing the user at the
+            # geometry instead of at the view they picked.
+            for key, tag_, role in (("view", b_tag, "B"),
+                                    ("e_view", e_tag, "E")):
+                if tag_ is None:
+                    continue
+                ncomp = _view_ncomp(tag_)
+                if ncomp != 3:
+                    raise RuntimeError(
+                        f"view {_view_name(tag_)!r} has {ncomp} "
+                        f"component(s); the {role} field must be a "
+                        f"3-component vector view ({key})")
+                _require_step(tag_, step)
             q = float(cfg["charge_c"])
             m = float(cfg["mass_kg"])
             ke0_j = float(cfg["kinetic_energy_ev"]) * J_PER_EV
@@ -731,13 +810,28 @@ try:
                                      (i + 0.5) * dt_track))
                 c_vals = [row[2] for row in flat]
                 lo, hi = min(c_vals), max(c_vals)
-                # Far outside on the scale of the VALUES, not of their
-                # spread: a monoenergetic beam coloured by energy has a
-                # spread of ~1e-13, and a sentinel one spread above the
-                # maximum would carry the beam's own colour.
-                scale = max(hi - lo, abs(lo), abs(hi), 1.0)
-                if hi - lo < 1e-12 * scale:
-                    hi = lo + 1e-3 * scale
+                # Far outside the colour range, on a RELATIVE floor.
+                # The floor exists because a monoenergetic beam coloured
+                # by energy has a ~1e-13 spread and a sentinel one spread
+                # above the maximum would carry the beam's own colour.
+                # It must be relative to the DATA, never an absolute 1.0:
+                # with the old max(span, |lo|, |hi|, 1.0) a time-coloured
+                # trace (values in SECONDS, ~1e-6) took the 1.0 branch
+                # and the sentinel landed at 10.0 -- MEASURED
+                # lo=1.67949e-10, hi=6.71778e-06 -> sentinel 10.0, i.e.
+                # 1.5e6x the data, which poisons every downstream stats
+                # verb that reads the written view.  With the relative
+                # floor the same trace gives sentinel 7.38939e-05 = 11x
+                # the data, still far outside the colour range, so the
+                # hiding behaviour is unchanged.  Monoenergetic 1e4 eV
+                # coloured by energy: hi = 1e4 + 0.01, sentinel 1.0100e4
+                # (MEASURED) -- still 1e4 spreads clear of the beam.
+                span = hi - lo
+                scale = max(span, 1e-3 * max(abs(lo), abs(hi)))
+                if scale <= 0.0:
+                    scale = 1.0              # all-zero data, last resort
+                if span < 1e-12 * scale:
+                    hi = lo + 1e-3 * scale   # a colour bar needs a span
                 sentinel = hi + 10.0 * scale
                 t_end = max(row[3] for row in flat)
                 mode = cfg.get("animation_mode", "trail")
@@ -976,6 +1070,7 @@ try:
 
         elif op == "modulus_phase":
             tag = _view_tag_by_selector(tags, cfg.get("view"))
+            warning = _require_complex_pair(tag, cfg, "modulus/phase")
             gmsh.plugin.setNumber("ModulusPhase", "View",
                                   gmsh.view.getIndex(tag))
             gmsh.plugin.setNumber("ModulusPhase", "RealPart",
@@ -987,6 +1082,8 @@ try:
             result.update({"ok": True, "ran": True,
                            "out_file": cfg["out_file"],
                            "n_steps": _n_steps(tag)})
+            if warning:
+                result["warning"] = warning
 
         elif op == "min_max":
             tag = _view_tag_by_selector(tags, cfg.get("view"))
@@ -1141,6 +1238,7 @@ try:
             import collections as _collections
             tag = _view_tag_by_selector(tags, cfg.get("view"))
             step = int(cfg.get("time_step", 0))
+            _require_step(tag, step)
             o = cfg["origin"]
             u_vec = [cfg["u_point"][k] - o[k] for k in range(3)]
             v_raw = [cfg["v_point"][k] - o[k] for k in range(3)]
@@ -1430,7 +1528,45 @@ with open(out_path, "w", encoding="utf-8") as f:
 """
 
 
+# Ops whose out_file is a LIST-DATA view -- anything a gmsh plugin
+# returns, or that the worker builds with view.add + addListData.
+# MEASURED (gmsh 4.15.2, one probe per verb into a ".msh" target): every
+# op below wrote "$MeshFormat / 2.2 0 8", i.e. gmsh silently downgrades a
+# list-data export to LEGACY MSH v2.2, which this lane's own v4.1-only
+# readers then reject ("MSH v2.2 is not supported (ASCII v4.x only)") --
+# a silent violation of the repo-wide v4.1-only policy.  The three verbs
+# NOT listed (warp, smooth, modulus_phase) rewrite the original
+# MODEL-based view in place and correctly produced v4.1, so a ".msh"
+# target is legitimate for them.
+_LIST_DATA_OPS = frozenset({
+    "math_eval", "isosurface", "cut_plane", "harmonic_to_time",
+    "streamlines", "particle_trace", "flux_lines", "streamlines_2d",
+    "derived", "threshold", "skin", "mirror_expand", "transform_affine",
+    "curve_profile", "resample_grid",
+})
+
+
+def _check_list_data_out(cfg: dict[str, Any]) -> dict[str, Any] | None:
+    out_file = cfg.get("out_file")
+    if not out_file or cfg.get("op") not in _LIST_DATA_OPS:
+        return None
+    suffix = Path(out_file).suffix.lower()
+    if suffix == ".pos":
+        return None
+    return {"ok": False, "error": (
+        f"out_file for {cfg['op']} must end in '.pos', got "
+        f"{Path(out_file).name!r}: this verb writes a LIST-DATA view, "
+        "which gmsh exports to a '.msh' target as legacy MSH v2.2 -- a "
+        "format the v4.1-only readers in this lane (field_stats, "
+        "field_histogram, inspect_msh) reject.  Write '.pos' and merge "
+        "it alongside the mesh in gmsh.")}
+
+
 def _run_post(cfg: dict[str, Any], timeout_s: float) -> dict[str, Any]:
+    bad_out = _check_list_data_out(cfg)
+    if bad_out is not None:
+        bad_out.setdefault("input", cfg.get("path"))
+        return bad_out
     with tempfile.TemporaryDirectory(prefix="radia_mcp_gmsh_post_") as work:
         cfg_path = Path(work) / "post.json"
         cfg_path.write_text(json.dumps(cfg), encoding="utf-8")
@@ -1868,6 +2004,176 @@ def particle_trace(path: str | Path, seeds: list[list[float]],
                       "return_points": bool(return_points),
                       "out_file": _default_out(path, out_file, "tracks")},
                      timeout_s)
+
+
+def _plane_axes(normal: list[float]) -> tuple[list[float], list[float],
+                                              list[float]]:
+    """Deterministic orthonormal in-plane axes for a section plane.
+
+    Convention (returned to the caller so a scatter can be read):
+    pick the WORLD axis LEAST aligned with n -- smallest |n.e_k|, the
+    LOWEST index winning a tie -- Gram-Schmidt it against n to get u,
+    then v = n x u, so (u, v, n) is right-handed.  A tie-break by index
+    is what makes the frame reproducible: for n = +y both e_x and e_z
+    are equally unaligned, and the rule picks e_x, giving u = +x and
+    v = n x u = y x x = -z.
+    """
+    nrm = math.sqrt(sum(c * c for c in normal))
+    n_hat = [c / nrm for c in normal]
+    k = min(range(3), key=lambda i: (abs(n_hat[i]), i))
+    e = [0.0, 0.0, 0.0]
+    e[k] = 1.0
+    dot = sum(a * b for a, b in zip(e, n_hat))
+    u = [e[i] - dot * n_hat[i] for i in range(3)]
+    u_len = math.sqrt(sum(c * c for c in u))
+    u = [c / u_len for c in u]
+    v = [n_hat[1] * u[2] - n_hat[2] * u[1],
+         n_hat[2] * u[0] - n_hat[0] * u[2],
+         n_hat[0] * u[1] - n_hat[1] * u[0]]
+    return u, v, n_hat
+
+
+def poincare(path: str | Path, seeds: list[list[float]],
+             direction: list[float], kinetic_energy_ev: float,
+             plane_point: list[float], plane_normal: list[float], *,
+             crossing_direction: str = "both",
+             species: str = "electron",
+             charge_e: float | None = None,
+             mass_amu: float | None = None,
+             view: str | int | None = None,
+             e_view: str | int | None = None,
+             time_step: int = 0,
+             dt_s: float | None = None,
+             steps_per_gyration: int = 64,
+             max_steps: int = 20000,
+             max_time_s: float | None = None,
+             png_out: str | Path | None = None,
+             out_file: str | Path | None = None,
+             timeout_s: float = 600.0) -> dict[str, Any]:
+    """Poincare section of particle orbits through a cutting plane.
+
+    Runs ``particle_trace`` (same Boris pusher, same B/E views) and
+    records where each orbit pierces the plane through ``plane_point``
+    with normal ``plane_normal``: the classical way to read a 3-D orbit
+    as a 2-D point pattern -- a closed orbit gives a few repeating
+    points, a drifting one a curve, a chaotic one a scattered cloud.
+
+    A crossing is detected per polyline SEGMENT from the sign change of
+    ``dot(p - plane_point, n)`` and is placed by LINEAR interpolation
+    along the segment (the same first-order placement the tracer's own
+    samples carry); its time is interpolated the same way.  A sample
+    lying exactly on the plane is counted once, not twice.
+    ``crossing_direction`` keeps only ``"positive"`` (n-ward),
+    ``"negative"``, or ``"both"`` pierces.
+
+    The in-plane coordinates ``u``/``v`` use the deterministic frame
+    described in ``_plane_axes`` and are RETURNED as ``u_axis`` /
+    ``v_axis`` so the scatter can be interpreted; ``(u, v, n)`` is
+    right-handed.
+
+    Note on placement bias: the Boris pusher advances the position with
+    the velocity AFTER the rotation, so the sampled polygon sits half a
+    step ahead of the analytic orbit.  A pure-gyration section is
+    therefore offset by dt*v/2 along the motion -- a known, explainable
+    discretization bias (locked by the tests), not an error.
+    """
+    if crossing_direction not in ("both", "positive", "negative"):
+        return {"ok": False, "error":
+                "crossing_direction must be one of: both, positive, "
+                f"negative (got {crossing_direction!r})"}
+    try:
+        p0 = _finite_vector(plane_point, "plane_point", 3)
+        nrm = _finite_vector(plane_normal, "plane_normal", 3)
+    except (TypeError, ValueError) as exc:
+        return {"ok": False, "error": str(exc)}
+    if not any(nrm):
+        return {"ok": False, "error": "plane_normal must be nonzero"}
+
+    # color_by="time" is FORCED: the tracer returns the colour array
+    # next to the points, so with time as the colour every polyline
+    # carries its own absolute clock and the crossing time needs no
+    # index-matching back to the per-seed track record (which skips
+    # seeds outside the data and would therefore not line up).
+    traced = particle_trace(
+        path, seeds, direction, kinetic_energy_ev, species=species,
+        charge_e=charge_e, mass_amu=mass_amu, view=view, e_view=e_view,
+        time_step=time_step, dt_s=dt_s,
+        steps_per_gyration=steps_per_gyration, max_steps=max_steps,
+        max_time_s=max_time_s, color_by="time", return_points=True,
+        out_file=out_file, timeout_s=timeout_s)
+    if not traced.get("ok"):
+        return traced
+
+    u_axis, v_axis, n_hat = _plane_axes(nrm)
+    crossings: list[list[dict[str, float]]] = []
+    for line in traced.get("polylines") or []:
+        pts = line["points"]
+        times = line["colors"]
+        hits: list[dict[str, float]] = []
+        s_a = sum((pts[0][i] - p0[i]) * n_hat[i] for i in range(3))
+        for i in range(len(pts) - 1):
+            s_b = sum((pts[i + 1][j] - p0[j]) * n_hat[j] for j in range(3))
+            # "<= 0 < " / ">= 0 > " counts a sample sitting EXACTLY on
+            # the plane once: it matches as the START of its segment and
+            # cannot match as the END of the previous one.
+            up = s_a <= 0.0 < s_b
+            down = s_a >= 0.0 > s_b
+            if up or down:
+                sign = "positive" if up else "negative"
+                if (crossing_direction == "both"
+                        or crossing_direction == sign):
+                    f = s_a / (s_a - s_b)
+                    hit = [pts[i][j] + f * (pts[i + 1][j] - pts[i][j])
+                           for j in range(3)]
+                    rel = [hit[j] - p0[j] for j in range(3)]
+                    hits.append({
+                        "u": sum(rel[j] * u_axis[j] for j in range(3)),
+                        "v": sum(rel[j] * v_axis[j] for j in range(3)),
+                        "t_s": times[i] + f * (times[i + 1] - times[i]),
+                        "index": i,
+                        "direction": sign,
+                    })
+            s_a = s_b
+        crossings.append(hits)
+
+    result: dict[str, Any] = {
+        "ok": True,
+        "crossings": crossings,
+        "n_per_seed": [len(h) for h in crossings],
+        "n_crossings": sum(len(h) for h in crossings),
+        "n_tracks": traced.get("n_tracks"),
+        "skipped_seeds": traced.get("skipped_seeds"),
+        "reasons": traced.get("reasons"),
+        "tracks": traced.get("tracks"),
+        "u_axis": u_axis,
+        "v_axis": v_axis,
+        "plane_point": p0,
+        "plane_normal": n_hat,
+        "crossing_direction": crossing_direction,
+        "out_file": traced.get("out_file"),
+        "png": None,
+    }
+    if png_out is not None:
+        out = Path(png_out)
+        out.parent.mkdir(parents=True, exist_ok=True)
+        series = [{"x": [h["u"] for h in hits],
+                   "y": [h["v"] for h in hits],
+                   "label": f"track {k}"}
+                  for k, hits in enumerate(crossings) if hits]
+        cfg = {"kind": "scatter", "series": series,
+               "xlabel": "u (in-plane)", "ylabel": "v (in-plane)",
+               "png": str(out)}
+        with tempfile.TemporaryDirectory(
+                prefix="radia_mcp_gmsh_plot_") as work:
+            cfg_path = Path(work) / "plot.json"
+            cfg_path.write_text(json.dumps(cfg), encoding="utf-8")
+            plot = run_gmsh_json_subprocess(
+                _PLOT_SCRIPT, [str(cfg_path)],
+                timeout_s=120.0, prefix="radia_mcp_gmsh_plot_")
+        result["png"] = plot.get("png")
+        if not plot.get("ok"):
+            result["plot_error"] = plot.get("error")
+    return result
 
 
 def flux_lines(path: str | Path, *, n_levels: int = 20,
@@ -2413,6 +2719,15 @@ try:
     if cfg["kind"] == "bar":
         centers, counts, width = cfg["centers"], cfg["counts"], cfg["width"]
         ax.bar(centers, counts, width=width * 0.95, align="center")
+    elif cfg["kind"] == "scatter":
+        # Poincare sections are a GEOMETRIC picture of the section
+        # plane: an unequal aspect ratio would turn a circular orbit
+        # footprint into an ellipse and misread as a real distortion.
+        for s in cfg["series"]:
+            ax.scatter(s["x"], s["y"], s=12, label=s.get("label"))
+        ax.set_aspect("equal", adjustable="datalim")
+        if 1 < len(cfg["series"]) <= 8:
+            ax.legend(fontsize=8)
     else:
         for s in cfg["series"]:
             xs, ys = s["x"], s["y"]
@@ -2540,6 +2855,32 @@ def field_histogram(path: str | Path, *, view: str | None = None,
     src = Path(path)
     if not src.is_file():
         return {"ok": False, "error": f"file not found: {src}"}
+    # A reversed or degenerate USER range used to be silently rewritten
+    # to [lo, lo + 1], which returned ok=true with all-zero counts
+    # (MEASURED: value_range=[5.0, 1.0] -> bin_edges 5.0..6.0, every
+    # count 0).  The raster lane already rejects the same mistake, so
+    # reject it here too instead of inventing a range nobody asked for.
+    clean_range: tuple[float, float] | None = None
+    if value_range is not None:
+        try:
+            bounds = [float(v) for v in value_range]
+        except (TypeError, ValueError):
+            return {"ok": False,
+                    "error": f"value_range must be [lo, hi] numbers, got "
+                             f"{value_range!r}"}
+        if len(bounds) != 2:
+            return {"ok": False,
+                    "error": f"value_range must be [lo, hi], got "
+                             f"{len(bounds)} value(s)"}
+        if not all(math.isfinite(v) for v in bounds):
+            return {"ok": False,
+                    "error": f"value_range must be finite, got "
+                             f"[{bounds[0]}, {bounds[1]}]"}
+        if bounds[1] <= bounds[0]:
+            return {"ok": False,
+                    "error": f"value_range must be increasing, got "
+                             f"[{bounds[0]}, {bounds[1]}]"}
+        clean_range = (bounds[0], bounds[1])
     try:
         data = read_msh_data(src)
     except ValueError as exc:
@@ -2576,10 +2917,17 @@ def field_histogram(path: str | Path, *, view: str | None = None,
     finite = [s for s in samples if math.isfinite(s)]
     if not finite:
         return {"ok": False, "error": "view contains no finite samples"}
-    lo, hi = ((float(value_range[0]), float(value_range[1]))
-              if value_range else (min(finite), max(finite)))
-    if hi <= lo:
-        hi = lo + 1.0
+    degenerate_data = False
+    if clean_range is not None:
+        lo, hi = clean_range
+    else:
+        lo, hi = min(finite), max(finite)
+        if hi <= lo:
+            # A CONSTANT field: a zero-width range would divide by zero
+            # when binning.  This is a property of the DATA, not of a
+            # user argument, so widen it and REPORT the widening.
+            degenerate_data = True
+            hi = lo + 1.0
     bins = max(1, int(bins))
     width = (hi - lo) / bins
     counts = [0] * bins
@@ -2599,6 +2947,10 @@ def field_histogram(path: str | Path, *, view: str | None = None,
         "stats": {"min": min(finite), "max": max(finite), "mean": mean,
                   "std": var ** 0.5},
     }
+    if degenerate_data:
+        result["note"] = (
+            f"every sample equals {lo!r}: the automatic bin range was "
+            "widened to [v, v + 1] so the histogram has a finite width")
     if plot_png is not None:
         out = Path(plot_png)
         out.parent.mkdir(parents=True, exist_ok=True)

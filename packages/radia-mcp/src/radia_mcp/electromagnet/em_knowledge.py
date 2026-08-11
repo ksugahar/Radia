@@ -109,6 +109,8 @@ For the upstream beam-physics contract, start with:
   and the lattice-to-magnet handoff;
 - `electromagnet_usage("beam_optics_contract")` for Twiss, dispersion,
   chromaticity, integrated strengths, and tracking artifacts;
+- `electromagnet_usage("enge_fringe_integrals")` for the Enge `I1` reference-
+  orbit shift, `I2` effective edge focusing, and FFAG soft-edge use;
 - `electromagnet_usage("accelerator_magnet_design")` for the complete
   engineering and acceptance sequence.
 
@@ -1041,7 +1043,8 @@ def get_electromagnet_documentation(topic: str = "overview") -> str:
         topic: One of: overview, coilbuilder, kelvin_workflow, hantila,
                hysteresis, ima, harmonics, clebsch_hodograph,
                symmetry_reductions, accelerator_fundamentals,
-               beam_optics_contract, accelerator_magnet_types,
+               beam_optics_contract, enge_fringe_integrals,
+               accelerator_magnet_types,
                accelerator_magnet_design, rapid_cycling_magnets,
                superconducting_accelerator_magnets,
                accelerator_magnet_measurement, accelerator_model_boundaries,

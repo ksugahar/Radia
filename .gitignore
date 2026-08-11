@@ -45,7 +45,6 @@ build*/
 dist/
 radia-*/
 !packages/radia-mcp/
-!packages/radia-spice-lab/
 *.egg-info/
 .eggs/
 
@@ -317,6 +316,8 @@ validation_test/cubit/kelvin_1_4_p_convergence/p_convergence.json
 # Test fixtures: hand-curated STEP files checked into the repo as
 # regression inputs (e.g. keiko's 1turn_coil_loft_outsideline.step).
 !tests/**/fixtures/*.step
+# Minimal solver meshes used as deterministic regression inputs.
+!tests/fixtures/**/*.vol
 
 # Transient launcher config written by RadiaComp.cpp next to the .jou
 # (auto-Kelvin dialog state handed to auto_kelvin_entry.py)
