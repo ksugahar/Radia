@@ -130,6 +130,7 @@ def run(args):
         build_ffag_cell_target_family,
         optimize_ffag_hdiv_mmm_from_fixed_design_orbits,
     )
+    from radia.topology_optimization import ngsolve_growth_topology
     from radia.vim._vim import build_charge_gram
 
     ng.SetNumThreads(args.threads)
@@ -150,10 +151,14 @@ def run(args):
         coils, n_arc=args.coil_arc_segments)
     centers = _element_centroids(mesh)
     radius = np.linalg.norm(centers[:, :2], axis=1)
-    active = np.ones(mesh.ne, dtype=bool)
     fixed_active = radius >= args.fixed_return_radius_m
     if not np.any(fixed_active) or np.all(fixed_active):
         raise RuntimeError("fixed return-yoke selection is empty or complete")
+    active = fixed_active.copy()
+    initial_topology = ngsolve_growth_topology(mesh, active)
+    if not initial_topology.valid:
+        raise RuntimeError(
+            "fixed return-yoke seed violates the binary topology gate")
     volumes = np.asarray(
         ng.Integrate(1.0, mesh, element_wise=True), dtype=float)
     family = build_ffag_cell_target_family(
@@ -186,7 +191,8 @@ def run(args):
             active_elements=active, element_volumes=volumes,
             volume_max=float(np.sum(volumes)),
             gradient_offset=args.gradient_offset,
-            max_iterations=args.material_iterations,
+            max_optics_iterations=args.material_iterations,
+            material_iterations_per_optics=1,
             initial_material_move_fraction=args.move_fraction,
             maximum_material_move_fraction=args.move_fraction,
             proposal_trust_region_trials=args.proposal_trust_region_trials,
@@ -203,6 +209,9 @@ def run(args):
             proposal_adjoint_count=args.proposal_adjoint_count,
             graph_front_proposal_limit=0,
             exact_candidate_limit=args.exact_candidate_limit,
+            exact_beam_width=args.exact_beam_width,
+            exact_beam_depth=args.exact_beam_depth,
+            exact_beam_barrier_fraction=args.exact_beam_barrier_fraction,
         )
     finished = time.perf_counter()
     print(
@@ -211,13 +220,14 @@ def run(args):
 
     topology_result = result.topology_result
     initial_ratio = float(
-        topology_result.field_correction.current_max_band_ratio)
-    material_history = topology_result.generation.history
+        result.optics_history[0].field_correction.current_max_band_ratio)
+    material_history = result.history
     gates = {
         "coil_yoke_clearance": bool(clearance["passed"]),
         "air_volume_elements_are_zero": True,
         "fixed_design_orbits_used": True,
         "periodic_closed_orbit_search_disabled": True,
+        "initial_return_yoke_seed_is_valid": bool(initial_topology.valid),
         "binary_topology_is_valid": bool(result.topology.valid),
         "no_gray_material": result.active_elements.dtype == np.bool_,
         "transfer_matrix_inverse_precedes_material_inverse": (
@@ -276,6 +286,7 @@ def run(args):
         "optimization": {
             "requested_material_iterations": args.material_iterations,
             "completed_material_iterations": len(material_history),
+            "completed_optics_iterations": len(result.optics_history),
             "converged": result.converged,
             "stop_reason": result.stop_reason,
             "initial_max_band_ratio": initial_ratio,
@@ -286,12 +297,34 @@ def run(args):
                 args.field_inverse_max_step),
             "field_inverse_line_search_steps": (
                 args.field_inverse_line_search_steps),
+            "proposal_adjoint_count": args.proposal_adjoint_count,
+            "proposal_trust_region_trials": (
+                args.proposal_trust_region_trials),
+            "exact_candidate_limit": args.exact_candidate_limit,
+            "exact_beam_width": args.exact_beam_width,
+            "exact_beam_depth": args.exact_beam_depth,
+            "exact_beam_barrier_fraction": (
+                args.exact_beam_barrier_fraction),
             "transfer_matrix_to_field": _field_inverse_diagnostics(
                 topology_result),
             "abe_murata_ducas": _abe_murata_diagnostics(
                 topology_result),
+            "optics_history": [{
+                "iteration": index,
+                "active_element_count": int(
+                    item.active_elements.sum()),
+                "orbit_field_max_band_ratios": (
+                    item.orbit_field_max_band_ratios.tolist()),
+                "transfer_matrix_max_band_ratios": (
+                    item.transfer_matrix_max_band_ratios.tolist()),
+                "transfer_matrix_to_field": (
+                    _field_inverse_diagnostics(item)),
+                "abe_murata_ducas": _abe_murata_diagnostics(item),
+                "material_stop_reason": item.generation.stop_reason,
+            } for index, item in enumerate(result.optics_history)],
             "history": [{
-                "iteration": item.iteration,
+                "iteration": index,
+                "batch_iteration": item.iteration,
                 "candidate_count": item.candidate_count,
                 "added_elements": item.added_elements.tolist(),
                 "removed_elements": (
@@ -303,10 +336,13 @@ def run(args):
                 "active_element_count": item.active_element_count,
                 "solve_iterations": item.solve_iterations,
                 "selection_model": item.selection_model,
+                "exact_bundles_evaluated": (
+                    item.collaborative_bundles_evaluated),
+                "nonmonotone_search_depth": item.nonmonotone_search_depth,
                 "tsvd_rank": item.tsvd_rank,
                 "tsvd_aca_rank": item.tsvd_aca_rank,
                 "material_changed_volume": item.material_changed_volume,
-            } for item in material_history],
+            } for index, item in enumerate(material_history)],
         },
         "hmatrix": {
             "eps": args.hmatrix_eps,
@@ -358,7 +394,7 @@ def parse_args(argv=None):
     parser.add_argument("--coil-arc-segments", type=int, default=96)
     parser.add_argument("--minimum-coil-yoke-clearance-m", type=float,
                         default=0.02)
-    parser.add_argument("--fixed-return-radius-m", type=float, default=7.65)
+    parser.add_argument("--fixed-return-radius-m", type=float, default=7.0)
     parser.add_argument("--mu-r", type=float, default=1000.0)
     parser.add_argument("--gradient-offset", type=float, default=0.015)
     parser.add_argument("--bend-band", type=float, default=0.10)
@@ -376,12 +412,16 @@ def parse_args(argv=None):
         "--proposal-trust-region-trials", "--outer-trust-trials",
         dest="proposal_trust_region_trials", type=int, default=3)
     parser.add_argument("--field-inverse-tolerance", type=float,
-                        default=1e-6)
+                        default=1e-3)
     parser.add_argument("--field-inverse-max-step", type=float, default=1.0)
     parser.add_argument("--field-inverse-line-search-steps", type=int,
                         default=8)
     parser.add_argument("--proposal-adjoint-count", type=int, default=6)
     parser.add_argument("--exact-candidate-limit", type=int, default=64)
+    parser.add_argument("--exact-beam-width", type=int, default=0)
+    parser.add_argument("--exact-beam-depth", type=int, default=0)
+    parser.add_argument("--exact-beam-barrier-fraction", type=float,
+                        default=0.25)
     args = parser.parse_args(argv)
     if (len(args.energies) < 2 or args.segments < 16
             or args.material_iterations < 1 or args.threads < 1
@@ -389,6 +429,12 @@ def parse_args(argv=None):
             or not 0.0 < args.field_inverse_tolerance < 1.0
             or not 0.0 < args.field_inverse_max_step <= 1.0
             or args.field_inverse_line_search_steps < 1
+            or args.proposal_adjoint_count < 0
+            or args.proposal_trust_region_trials < 1
+            or args.exact_candidate_limit < 1
+            or args.exact_beam_width < 0
+            or args.exact_beam_depth < 0
+            or args.exact_beam_barrier_fraction < 0.0
             or min(args.cluster_coarse_size,
                    args.cluster_deflation_size,
                    args.recycle_size) < 0

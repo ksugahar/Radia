@@ -319,8 +319,9 @@ class TransferMatrixFieldCorrection:
 
     This is the explicit boundary between accelerator optics and the
     Abe--Murata DUCAS material step.  The small dense TSVD acts only on the
-    design-orbit field coordinates.  HDiv-MMM candidate columns do not enter
-    this solve.
+    design-orbit field coordinates, and a Chebyshev LP in its retained
+    subspace aligns the update with the maximum engineering-band metric.
+    HDiv-MMM candidate columns do not enter this solve.
     """
 
     current_field_response: np.ndarray
@@ -506,7 +507,7 @@ class MultiMomentumTransferMatrixObjective:
 
 def solve_transfer_matrix_field_correction(
         objective, current_field_response, *, field_basis=None,
-        relative_tolerance=1.0e-6, maximum_step_scale=1.0,
+        relative_tolerance=1.0e-3, maximum_step_scale=1.0,
         line_search_steps=8) -> TransferMatrixFieldCorrection:
     """Invert transfer-matrix error to a target orbit-field correction.
 
@@ -516,7 +517,8 @@ def solve_transfer_matrix_field_correction(
 
     ``diag(1/band) dF/dB field_basis dq = diag(1/band) (target-F(B))``
 
-    by dense TSVD.  A cheap nonlinear line search evaluates ``F`` itself; it
+    by dense TSVD followed by a Chebyshev minimax solve in the retained modal
+    subspace.  A cheap nonlinear line search evaluates ``F`` itself; it
     performs no particle tracking and no HDiv-MMM candidate solve.  The
     returned field target is subsequently passed to the separate
     ACA--QR--TSVD DUCAS material inverse.

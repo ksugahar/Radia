@@ -785,6 +785,8 @@ class FFAGFixedOrbitHDivMMMTopologyResult:
     target_family: FFAGCellTargetFamily
     source_scale: float
     topology_result: MultiMomentumAcceleratorMagnetTopologyResult
+    optics_history: tuple[MultiMomentumAcceleratorMagnetTopologyResult, ...]
+    termination_reason: str
 
     @property
     def active_elements(self) -> np.ndarray:
@@ -816,7 +818,10 @@ class FFAGFixedOrbitHDivMMMTopologyResult:
 
     @property
     def history(self):
-        return self.topology_result.generation.history
+        return tuple(
+            item
+            for result in self.optics_history
+            for item in result.generation.history)
 
     @property
     def converged(self) -> bool:
@@ -824,7 +829,7 @@ class FFAGFixedOrbitHDivMMMTopologyResult:
 
     @property
     def stop_reason(self) -> str:
-        return self.topology_result.generation.stop_reason
+        return self.termination_reason
 
     @property
     def max_band_ratio(self) -> float:
@@ -838,7 +843,8 @@ def optimize_ffag_hdiv_mmm_from_fixed_design_orbits(
         charge_gram, fes, inv_chi, active_elements, element_volumes,
         volume_max, gradient_offset=1.0e-3, source_scale=1.0,
         optimize_source_scale=True,
-        field_inverse_relative_tolerance=1.0e-6,
+        max_optics_iterations=1, material_iterations_per_optics=1,
+        field_inverse_relative_tolerance=1.0e-3,
         field_inverse_basis=None,
         field_inverse_maximum_step_scale=1.0,
         field_inverse_line_search_steps=8,
@@ -864,10 +870,18 @@ def optimize_ffag_hdiv_mmm_from_fixed_design_orbits(
     active = np.asarray(active_elements, dtype=bool).reshape(-1).copy()
     volumes = np.asarray(element_volumes, dtype=float).reshape(-1)
     scale = float(source_scale)
+    optics_count = int(max_optics_iterations)
+    material_count = int(material_iterations_per_optics)
     if (active.shape != volumes.shape or not np.any(active)
             or not np.all(np.isfinite(volumes)) or np.any(volumes <= 0.0)
             or not np.isfinite(scale) or scale <= 0.0):
         raise ValueError("invalid fixed-design-orbit topology settings")
+    if optics_count < 1 or material_count < 1:
+        raise ValueError(
+            "fixed-design-orbit iteration counts must be positive")
+    if "max_iterations" in generation_options:
+        raise TypeError(
+            "use material_iterations_per_optics instead of max_iterations")
 
     objective = target_family.objective
     source_rhs = source.assemble_hdiv_rhs(fes)
@@ -921,30 +935,48 @@ def optimize_ffag_hdiv_mmm_from_fixed_design_orbits(
         charge_gram, objective, gradient_offset=gradient_offset)
     incident = scale * source.incident_orbit_field_response(
         objective, gradient_offset=gradient_offset)
-    current_raw_field = np.asarray(
-        response_matrix @ state + incident, dtype=float)
-    field_correction = solve_transfer_matrix_field_correction(
-        objective, current_raw_field,
-        field_basis=field_inverse_basis,
-        relative_tolerance=field_inverse_relative_tolerance,
-        maximum_step_scale=field_inverse_maximum_step_scale,
-        line_search_steps=field_inverse_line_search_steps)
-    topology_result = optimize_hdiv_mmm_magnet_from_transfer_matrices(
-        objective.orbits, objective.target_matrices,
-        transfer_matrix_band=objective.transfer_matrix_band,
-        bend_field_band=objective.bend_field_band,
-        charge_gram=charge_gram, fes=fes, inv_chi=inv_chi,
-        rhs=rhs, field_response_matrix=response_matrix,
-        incident_field_response=incident,
-        field_correction=field_correction,
-        active_elements=active, element_volumes=volumes,
-        volume_max=volume_max,
-        response_entries=objective.response_entries,
-        curvature_sign=objective.curvature_sign,
-        gradient_sign=objective.gradient_sign,
-        **generation_options)
+    optics_history = []
+    termination_reason = "maximum fixed-orbit optics iterations reached"
+    for _ in range(optics_count):
+        current_raw_field = np.asarray(
+            response_matrix @ state + incident, dtype=float)
+        field_correction = solve_transfer_matrix_field_correction(
+            objective, current_raw_field,
+            field_basis=field_inverse_basis,
+            relative_tolerance=field_inverse_relative_tolerance,
+            maximum_step_scale=field_inverse_maximum_step_scale,
+            line_search_steps=field_inverse_line_search_steps)
+        topology_result = optimize_hdiv_mmm_magnet_from_transfer_matrices(
+            objective.orbits, objective.target_matrices,
+            transfer_matrix_band=objective.transfer_matrix_band,
+            bend_field_band=objective.bend_field_band,
+            charge_gram=charge_gram, fes=fes, inv_chi=inv_chi,
+            rhs=rhs, field_response_matrix=response_matrix,
+            incident_field_response=incident,
+            field_correction=field_correction,
+            active_elements=active, element_volumes=volumes,
+            volume_max=volume_max,
+            response_entries=objective.response_entries,
+            curvature_sign=objective.curvature_sign,
+            gradient_sign=objective.gradient_sign,
+            max_iterations=material_count,
+            **generation_options)
+        optics_history.append(topology_result)
+        next_active = np.asarray(
+            topology_result.active_elements, dtype=bool).copy()
+        state = topology_result.generation.state.copy()
+        if topology_result.converged:
+            termination_reason = "fixed one-pass transfer bands reached"
+            active = next_active
+            break
+        if np.array_equal(next_active, active):
+            termination_reason = topology_result.generation.stop_reason
+            active = next_active
+            break
+        active = next_active
     return FFAGFixedOrbitHDivMMMTopologyResult(
-        target_family, scale, topology_result)
+        target_family, scale, topology_result, tuple(optics_history),
+        termination_reason)
 
 
 def optimize_ffag_hdiv_mmm_from_transfer_matrices(
@@ -955,7 +987,7 @@ def optimize_ffag_hdiv_mmm_from_transfer_matrices(
         hdiv_order=1, orbit_segments=None, max_outer_iterations=8,
         inner_iterations=1, outer_initial_material_move_fraction=0.10,
         outer_trust_region_trials=3, outer_ratio_tolerance=1.0e-8,
-        field_inverse_relative_tolerance=1.0e-6,
+        field_inverse_relative_tolerance=1.0e-3,
         field_inverse_basis=None,
         field_inverse_maximum_step_scale=1.0,
         field_inverse_line_search_steps=8,
