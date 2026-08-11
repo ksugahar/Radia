@@ -911,12 +911,22 @@ def _compute_overhang_px(fig) -> dict:
 # 6x more pixels for the same physical layout, but the "label is too
 # close to the edge" decision should be the same).
 #
-# 2% of figure width = ~85 px on a 7-in IEEE 2-column @ 600 dpi
-# 3% of figure height accommodates tick labels naturally drifting
-# down as the bottom margin shrinks (the label hangs ~1 char-height
-# below its anchor).
-_OVERHANG_TOL_X_FRAC = 0.02
-_OVERHANG_TOL_Y_FRAC = 0.03
+# The tolerance absorbs sub-millimetre bbox drift on top of the
+# BASELINE snapshot (which already accounts for matplotlib reporting
+# tick-label bboxes a few dozen pixels outside an untouched figure).
+# It MUST stay well below the size of a text label: a tolerance wider
+# than the label itself lets auto_tighten push a whole axis label off
+# the canvas and still call it "within tolerance".
+#
+# MEASURED 2026-08-10, and the reason these were cut from 0.02/0.03:
+# on a 181 mm 2x1 ieee_double_column with y labels, the old 2%-of-width
+# tolerance was 85 px @600 dpi = 3.6 mm -- LARGER than a 10 pt label --
+# so auto_tighten(0.78) shrank left 0.080 -> 0.040 and left BOTH y
+# labels 46-65 px OUTSIDE the canvas while every gate reported clean.
+# 0.4% of width = 0.72 mm on that figure: enough for bbox rounding,
+# far too little to lose a label.
+_OVERHANG_TOL_X_FRAC = 0.004
+_OVERHANG_TOL_Y_FRAC = 0.006
 
 
 def auto_tighten(

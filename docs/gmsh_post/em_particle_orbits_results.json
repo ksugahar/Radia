@@ -1,5 +1,5 @@
 {
- "generated_at_utc": "2026-08-10T23:18:29.301598+00:00",
+ "generated_at_utc": "2026-08-11T02:15:29.593050+00:00",
  "radia_version": "4.95.50",
  "python_version": "3.12.10",
  "platform": "Windows-2022Server-10.0.20348-SP0",
@@ -91,7 +91,12 @@
     "exit_slope_mrad": 29.950045219530338,
     "crossing_z_m": NaN
    }
-  ]
+  ],
+  "figure": {
+   "profile": "ieee_double_column",
+   "transverse_magnification": 19.089985204933136,
+   "axes_area_fraction": 0.7003131991051456
+  }
  },
  "edge_focusing": {
   "rho_m": 1.0,
@@ -203,7 +208,10 @@
     0.004,
     0.008
    ],
-   "z_exit_max_m": 0.006397619843528054
+   "z_exit_max_m": 0.006397619843528054,
+   "profile": "ieee_double_column",
+   "transverse_magnification": 14.130643885742629,
+   "axes_area_fraction": 0.7275280898876404
   }
  },
  "versions": {
@@ -211,5 +219,5 @@
   "gmsh": "4.15.2"
  },
  "notebook": "em_particle_orbits.ipynb",
- "notebook_sha256": "154490c38ca815feb48bd329647957743d6c4cb8853879f6cd563a0cbb5cd6b7"
+ "notebook_sha256": "24fcca5d735ed7b848eaf4f1787111361e2ba0bc37f8d75a52f36e62ecc33538"
 }
