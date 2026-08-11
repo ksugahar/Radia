@@ -2,7 +2,7 @@
 
 **Date:** 2026-08-11
 
-**Status:** Native transfer kernel and direct NGSolve GridFunction linear map implemented
+**Status:** Native tracking foundation, transfer kernel, and direct NGSolve GridFunction linear map implemented
 
 **Scope:** Target contract for migrating the useful EarlyTimes concepts into
 the Radia C++ core, with pybind11 and standalone MEX bindings over the same
@@ -10,7 +10,7 @@ implementation.
 
 ## Implementation Status
 
-Two implementation phases are now complete in `radia::beam`:
+Three implementation slices are now available in `radia::beam`:
 
 1. A canonical six-dimensional, piecewise-constant variational kernel
    propagates `R`, `T`, and `U` through third order, preserves the public
@@ -25,16 +25,28 @@ Two implementation phases are now complete in `radia::beam`:
    gradient, normal/skew quadrupole profiles, divergence/curl diagnostics,
    fit rank/condition/residuals, local `A`, and accumulated `R`. It never
    constructs a regular-grid field map.
+3. A dependency-free native tracking foundation provides validated SI
+   `ParticleSpecies`, `ReferenceParticle`, and `CartesianState` values;
+   inspectable zero and uniform electromagnetic fields; a relativistic
+   Lorentz right-hand side with time, path length, or azimuth as the explicit
+   independent variable; individually callable classical RK4 and relativistic
+   Boris steps; and a fixed-step tracker returning every state, step, field
+   sample, and invariant report. The Python and standalone MEX surfaces call
+   this same C++ implementation. Pure-magnetic Boris tracking preserves
+   momentum magnitude to roundoff in the analytic uniform-field gate.
 
 Thin pybind11 and standalone MEX boundaries call these same C++ sources of
 truth through `radia.beam.propagate_grid_function_linear_map` and
-`radia.beam.propagateGridFunctionLinearMap`, respectively. The direct
+`radia.beam.propagateGridFunctionLinearMap`, respectively. Native field
+sampling, `LorentzEquation.rhs`, one-step integration, and trajectory building
+are likewise available independently in both languages. The direct
 GridFunction entry is deliberately first order; it returns zero `T` and `U`
 rather than inventing nonlinear dynamics from a spatial affine fit.
 
-Reference-trajectory construction, higher-order moving-frame multipoles and
-their physical `F2/F3` equations, real design-parameter derivatives including
-edge boundary terms, closed-orbit search, and ray-based map-validity checks
+Lattice composition, events, adaptive and Lie stepping, direct tracking through
+a solved `GridFunction`, closed/reference-orbit search, higher-order moving-
+frame multipoles and their physical `F2/F3` equations, real design-parameter
+derivatives including edge boundary terms, and ray-based map-validity checks
 remain later phases. No current API claims that a local quadrupole profile
 alone identifies an edge-angle recommendation.
 
@@ -774,25 +786,40 @@ The caller supplies one exact reference position and tangent per constant
 segment. Reference-orbit construction is intentionally not hidden inside this
 first adapter.
 
+The implemented inspectable tracking foundation is:
+
 ```python
 from radia import beam
 
 species = beam.ParticleSpecies.proton()
 reference = beam.ReferenceParticle.from_kinetic_energy_ev(species, 220e6)
+field = beam.UniformField(magnetic_t=[0.0, 0.0, 0.7])
+initial_state = beam.CartesianState(
+    position_m=[0.0, 0.0, 0.0],
+    kinetic_momentum_kg_m_s=[reference.momentum_kg_m_s, 0.0, 0.0],
+)
+sample = field.evaluate([0.0, 0.0, 1.2])
+equation = beam.LorentzEquation(species, field, independent="time")
+rhs = equation.rhs(0.0, initial_state)
 
+stepper = beam.Boris2()
+one_step = stepper.step(equation, 0.0, initial_state, 1e-12)
+tracker = beam.Tracker(equation, stepper)
+plan = beam.TrackPlan()
+plan.start = 0.0
+plan.stop = 1e-8
+plan.maximum_step = 1e-11
+trajectory = tracker.track(initial_state, plan)
+```
+
+The following remains the target composition once general field/lattice and
+closed-orbit objects are implemented:
+
+```python
 field = beam.SumField([
     beam.GridFunctionField(solved_b),
     beam.TransformedField(error_b, alignment),
 ])
-
-sample = field.evaluate([0.0, 0.0, 1.2], source_breakdown=True)
-equation = beam.LorentzEquation(reference, field, independent="path_length")
-rhs = equation.rhs(0.0, initial_state)
-
-stepper = beam.Boris2()
-one_step = stepper.step(equation, 0.0, initial_state, 1e-3)
-tracker = beam.Tracker(equation, stepper)
-trajectory = tracker.track(initial_state, plan)
 
 problem = beam.ClosedOrbitProblem(tracker, lattice, frame)
 residual = problem.residual(initial_guess)

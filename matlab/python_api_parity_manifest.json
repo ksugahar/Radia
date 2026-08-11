@@ -21,9 +21,19 @@
       "classification": "native-mex",
       "matlab": [
         "matlab/+radia/+beam/propagateVariationalMap.m",
-        "matlab/+radia/+beam/propagateGridFunctionLinearMap.m"
+        "matlab/+radia/+beam/propagateGridFunctionLinearMap.m",
+        "matlab/+radia/+beam/proton.m",
+        "matlab/+radia/+beam/electron.m",
+        "matlab/+radia/+beam/referenceParticle.m",
+        "matlab/+radia/+beam/cartesianState.m",
+        "matlab/+radia/+beam/uniformField.m",
+        "matlab/+radia/+beam/zeroField.m",
+        "matlab/+radia/+beam/sampleField.m",
+        "matlab/+radia/+beam/lorentzRHS.m",
+        "matlab/+radia/+beam/step.m",
+        "matlab/+radia/+beam/track.m"
       ],
-      "notes": "Python and MATLAB share the C++ canonical R/T/U variational-map kernel. Both also pass an NGSolve GridFunction directly to the same native nine-point local-field linearization and combined-function R-map adapter without constructing a regular-grid field map."
+      "notes": "Python and MATLAB share the C++ canonical R/T/U variational-map kernel. Both also pass an NGSolve GridFunction directly to the same native nine-point local-field linearization and combined-function R-map adapter without constructing a regular-grid field map. The EarlyTimes migration foundation adds shared native SI particle/reference/state values, zero/uniform field sampling, relativistic Lorentz RHS evaluation, individually callable RK4/Boris steps, and transparent fixed-step trajectory records."
     },
     {
       "id": "ltspice-tooling",

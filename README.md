@@ -274,10 +274,12 @@ an optimizer produced it.
 
 ### Accelerator fields and particle trajectories
 
-Radia can hand solved magnetic fields to CERN Xsuite for accelerator-coordinate
-tracking or integrate physical-time Lorentz trajectories for orbit studies,
-electrostatic acceleration, and stop-event accounting. Gmsh exports preserve
-the trajectory quantities and can animate a beam through the solved field.
+Radia's C++ core provides inspectable SI field sampling, relativistic Lorentz
+equations, RK4/Boris steps, fixed-step trajectories, and distributed R/T/U
+transfer attribution. It can also hand solved magnetic fields to CERN Xsuite
+for accelerator-coordinate tracking or use SciPy for adaptive trajectories,
+event handling, and closed-orbit workflows. Gmsh exports preserve trajectory
+quantities and can animate a beam through the solved field.
 
 <p align="center">
   <img src="docs/gmsh_post/output/saddle_beam.gif"
@@ -286,6 +288,7 @@ the trajectory quantities and can animate a beam through the solved field.
 </p>
 
 - [Executed particle-orbit notebook](docs/gmsh_post/em_particle_orbits.ipynb)
+- [Native beam and transfer API design](docs/api/EARLY_TIMES_CPP_API_DESIGN.md)
 - [Gmsh post-processing guide](docs/gmsh_post/README.md)
 
 ## Interfaces

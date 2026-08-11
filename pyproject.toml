@@ -92,9 +92,9 @@ build123d = [
     "build123d>=0.9",
 ]
 beam = [
-    # Xsuite owns accelerator-coordinate Boris tracking. SciPy owns adaptive
-    # physical-time integration for closed orbits, electrostatic acceleration,
-    # and stop-event accounting. Radia only supplies SI field adapters.
+    # Radia owns inspectable native SI Lorentz/RK4/Boris and transfer kernels.
+    # Xsuite adds accelerator-coordinate workflows; SciPy adds adaptive
+    # integration, event handling, and closed-orbit orchestration.
     "xtrack>=0.109.1",
     "scipy>=1.11",
 ]

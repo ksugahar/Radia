@@ -1,4 +1,4 @@
-"""Canonical six-dimensional transfer-map analysis.
+"""Native charged-particle tracking and six-dimensional transfer maps.
 
 The numerical implementation lives in the Radia C++ core.  This module only
 normalizes NumPy inputs and exposes the checked pybind11 boundary.
@@ -11,6 +11,30 @@ from collections.abc import Sequence
 import numpy as np
 
 from . import _radia_pybind as _native
+
+# Thin owners of the native C++ tracking objects.  These aliases intentionally
+# keep all equations, field evaluation, stepping, and trajectory construction
+# below the pybind11 boundary.
+ParticleSpecies = _native.BeamParticleSpecies
+ReferenceParticle = _native.BeamReferenceParticle
+CartesianState = _native.BeamCartesianState
+Field = _native.BeamField
+FieldSample = _native.BeamFieldSample
+ZeroField = _native.BeamZeroField
+UniformField = _native.BeamUniformField
+StateDerivative = _native.BeamStateDerivative
+InvariantReport = _native.BeamInvariantReport
+Equation = _native.BeamEquation
+LorentzEquation = _native.BeamLorentzEquation
+Stepper = _native.BeamStepper
+ClassicalRK4 = _native.BeamClassicalRK4
+Boris2 = _native.BeamBoris2
+StepResult = _native.BeamStepResult
+TrackPlan = _native.BeamTrackPlan
+StepRecord = _native.BeamStepRecord
+TrajectorySummary = _native.BeamTrajectorySummary
+Trajectory = _native.BeamTrajectory
+Tracker = _native.BeamTracker
 
 
 def _real_finite_array(value, name: str) -> np.ndarray:
@@ -178,6 +202,26 @@ def propagate_grid_function_linear_map(
 
 
 __all__ = [
+    "Boris2",
+    "CartesianState",
+    "ClassicalRK4",
+    "Equation",
+    "Field",
+    "FieldSample",
+    "InvariantReport",
+    "LorentzEquation",
+    "ParticleSpecies",
+    "ReferenceParticle",
+    "StateDerivative",
+    "StepRecord",
+    "StepResult",
+    "Stepper",
+    "TrackPlan",
+    "Tracker",
+    "Trajectory",
+    "TrajectorySummary",
+    "UniformField",
+    "ZeroField",
     "propagate_grid_function_linear_map",
     "propagate_variational_map",
 ]
