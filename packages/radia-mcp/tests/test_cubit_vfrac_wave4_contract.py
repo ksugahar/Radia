@@ -262,6 +262,34 @@ def test_sculpt_timeout_is_reported_as_a_cubit_stage_error(tmp_path,
 # ----------------------------------------------------------------------
 # report helpers
 # ----------------------------------------------------------------------
+def test_closure_miss_diagnosis_names_both_knobs_and_prescribes_neither():
+    """A closure miss must NOT be reported as 'raise cells and retry'.
+
+    Measured 2026-08-11 (6-pole ring, analytic volume known, design mesh
+    nz=10): cells 56 -> 92 turned a 1.27 % gate FAILURE into a 0.37 %
+    pass while moving the mesh from 0.16 % to 1.8 % away from the true
+    volume -- the fraction field was the inaccurate quantity, and the
+    finer lattice aliased an under-resolved design field.  The report
+    therefore has to name the design mesh as a candidate too.
+    """
+    report = server._closure_miss_diagnosis([56, 56, 20], 0.0127, 0.01)
+    assert report["lattice_cells"] == [56, 56, 20]
+    # a miss by 1.27x asks for a proportionally finer lattice IF the
+    # mesher is what is limiting -- strictly larger, and capped
+    assert 56 < report["cells_if_mesher_limited"] <= 512
+    note = report["note"]
+    assert "DESIGN MESH" in note, "the second knob must be named"
+    assert "WORSE" in note, (
+        "the note must state that a finer lattice can make the mesh "
+        "worse, otherwise it reads as a prescription")
+    assert "independent reference" in note
+
+    # the suggestion must saturate at the writer's own cap rather than
+    # emitting a lattice write_vfrac_exodus would reject
+    huge = server._closure_miss_diagnosis([400, 400, 400], 0.9, 0.01)
+    assert huge["cells_if_mesher_limited"] == 512
+
+
 def test_bcname_face_stats_groups_faces_by_name(tmp_path):
     """A hand-written .vol: two named boundaries on opposite z planes."""
     vol = tmp_path / "toy.vol"
