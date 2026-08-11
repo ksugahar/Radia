@@ -15,8 +15,12 @@ crystallized as its own package.
   diagnostics.
 - Added Gmsh electromagnetic post-processing for charged-particle trajectories
   and flying-beam views, with bounded inputs and public-safe artifact metadata.
+  Field comparison, flux and line integrals, Maxwell force, gap harmonics, and
+  Poincare reductions are now registered first-class tools.
 - Extended Cubit/Gmsh contracts for topology-optimization material fractions
-  and the integrated Radia LTspice operating surface.
+  and the integrated Radia LTspice operating surface. A closure miss now names
+  both the Sculpt lattice and the source design mesh without prescribing a
+  misleading automatic refinement.
 
 - Added an electromagnet knowledge contract for Enge fringe-field form factors:
   `I1` reference-orbit displacement, `I2` effective edge focusing, pole-face
