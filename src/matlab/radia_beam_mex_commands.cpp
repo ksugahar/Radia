@@ -1,6 +1,7 @@
 #include "radia_beam_mex_commands.h"
 
 #include "rad_beam_ngsolve.h"
+#include "rad_beam_dynamics.h"
 #include "rad_beam_transfer.h"
 
 #include <algorithm>
@@ -21,7 +22,7 @@ const mxArray* Field(const mxArray* value, const char* name) {
 void RequireScalarStruct(const mxArray* value) {
     if (!value || !mxIsStruct(value) || mxGetNumberOfElements(value) != 1)
         throw std::invalid_argument(
-            "beam variational map requires a scalar configuration struct");
+            "beam command requires a scalar configuration struct");
 }
 
 std::string Text(const mxArray* value, const char* name) {
@@ -584,6 +585,392 @@ mxArray* GridFunctionReport(
     return output;
 }
 
+radia::beam::Vec3 BeamVec3(const mxArray* value, const char* name) {
+    const double* data = RealData(value, name);
+    if (mxGetNumberOfElements(value) != 3)
+        throw std::invalid_argument(std::string(name) +
+                                    " must contain three entries");
+    return {data[0], data[1], data[2]};
+}
+
+mxArray* BeamVec3Array(const radia::beam::Vec3& value) {
+    mxArray* output = mxCreateDoubleMatrix(1, 3, mxREAL);
+    double* data = mxGetPr(output);
+    data[0] = value.x;
+    data[1] = value.y;
+    data[2] = value.z;
+    return output;
+}
+
+radia::beam::ParticleSpecies ParseSpecies(const mxArray* value) {
+    RequireScalarStruct(value);
+    radia::beam::ParticleSpecies output;
+    output.charge_c = Scalar(
+        Field(value, "charge_c"), "species.charge_c", 0.0, false);
+    output.rest_mass_kg = Scalar(
+        Field(value, "rest_mass_kg"), "species.rest_mass_kg", 0.0,
+        false);
+    const mxArray* name = Field(value, "name");
+    output.name = name ? Text(name, "species.name") : "custom";
+    // Reuse the C++ factory as the canonical validation boundary.
+    (void)radia::beam::ReferenceParticle::FromKineticEnergyEV(output, 0.0);
+    return output;
+}
+
+radia::beam::CartesianState ParseState(const mxArray* value) {
+    RequireScalarStruct(value);
+    radia::beam::CartesianState output;
+    output.position_m = BeamVec3(
+        Field(value, "position_m"), "state.position_m");
+    output.kinetic_momentum_kg_m_s = BeamVec3(
+        Field(value, "kinetic_momentum_kg_m_s"),
+        "state.kinetic_momentum_kg_m_s");
+    output.time_s = Scalar(
+        Field(value, "time_s"), "state.time_s", 0.0, true);
+    output.path_length_m = Scalar(
+        Field(value, "path_length_m"), "state.path_length_m", 0.0,
+        true);
+    return output;
+}
+
+radia::beam::IndependentVariable ParseIndependent(const mxArray* value) {
+    const std::string name = value ? Text(value, "independent") : "time";
+    if (name == "time") return radia::beam::IndependentVariable::time;
+    if (name == "path_length")
+        return radia::beam::IndependentVariable::path_length;
+    if (name == "azimuth")
+        return radia::beam::IndependentVariable::azimuth;
+    throw std::invalid_argument(
+        "independent must be 'time', 'path_length', or 'azimuth'");
+}
+
+std::shared_ptr<radia::beam::Field> ParseFieldObject(const mxArray* value) {
+    RequireScalarStruct(value);
+    const mxArray* type_value = Field(value, "type");
+    const std::string type = type_value ? Text(type_value, "field.type")
+                                        : "uniform";
+    if (type == "zero") return std::make_shared<radia::beam::ZeroField>();
+    if (type != "uniform")
+        throw std::invalid_argument(
+            "field.type must be 'zero' or 'uniform'");
+    const mxArray* magnetic = Field(value, "magnetic_t");
+    const mxArray* electric = Field(value, "electric_v_m");
+    return std::make_shared<radia::beam::UniformField>(
+        magnetic ? BeamVec3(magnetic, "field.magnetic_t")
+                 : radia::beam::Vec3{},
+        electric ? BeamVec3(electric, "field.electric_v_m")
+                 : radia::beam::Vec3{});
+}
+
+mxArray* SpeciesStruct(const radia::beam::ParticleSpecies& value) {
+    const char* fields[] = {"charge_c", "rest_mass_kg", "name"};
+    mxArray* output = mxCreateStructMatrix(1, 1, 3, fields);
+    mxSetField(output, 0, fields[0], mxCreateDoubleScalar(value.charge_c));
+    mxSetField(output, 0, fields[1],
+               mxCreateDoubleScalar(value.rest_mass_kg));
+    mxSetField(output, 0, fields[2], mxCreateString(value.name.c_str()));
+    return output;
+}
+
+mxArray* ReferenceParticleStruct(
+        const radia::beam::ReferenceParticle& value) {
+    const char* fields[] = {
+        "species", "kinetic_energy_j", "momentum_kg_m_s",
+        "magnetic_rigidity_t_m", "backend"};
+    mxArray* output = mxCreateStructMatrix(1, 1, 5, fields);
+    mxSetField(output, 0, fields[0], SpeciesStruct(value.species));
+    mxSetField(output, 0, fields[1],
+               mxCreateDoubleScalar(value.kinetic_energy_j));
+    mxSetField(output, 0, fields[2],
+               mxCreateDoubleScalar(value.momentum_kg_m_s));
+    mxSetField(output, 0, fields[3],
+               mxCreateDoubleScalar(value.magnetic_rigidity_t_m));
+    mxSetField(output, 0, fields[4], mxCreateString("native-cpp-mex"));
+    return output;
+}
+
+mxArray* StateStruct(const radia::beam::CartesianState& value) {
+    const char* fields[] = {
+        "position_m", "kinetic_momentum_kg_m_s", "time_s",
+        "path_length_m"};
+    mxArray* output = mxCreateStructMatrix(1, 1, 4, fields);
+    mxSetField(output, 0, fields[0], BeamVec3Array(value.position_m));
+    mxSetField(output, 0, fields[1],
+               BeamVec3Array(value.kinetic_momentum_kg_m_s));
+    mxSetField(output, 0, fields[2], mxCreateDoubleScalar(value.time_s));
+    mxSetField(output, 0, fields[3],
+               mxCreateDoubleScalar(value.path_length_m));
+    return output;
+}
+
+const char* DomainStatusText(radia::beam::DomainStatus value) {
+    switch (value) {
+    case radia::beam::DomainStatus::inside:
+        return "inside";
+    case radia::beam::DomainStatus::outside:
+        return "outside";
+    case radia::beam::DomainStatus::boundary:
+        return "boundary";
+    case radia::beam::DomainStatus::invalid:
+        return "invalid";
+    }
+    return "invalid";
+}
+
+mxArray* FieldSampleStruct(const radia::beam::FieldSample& value) {
+    const char* fields[] = {"electric_v_m", "magnetic_t", "domain_status"};
+    mxArray* output = mxCreateStructMatrix(1, 1, 3, fields);
+    mxSetField(output, 0, fields[0], BeamVec3Array(value.electric_v_m));
+    mxSetField(output, 0, fields[1], BeamVec3Array(value.magnetic_t));
+    mxSetField(output, 0, fields[2],
+               mxCreateString(DomainStatusText(value.domain_status)));
+    return output;
+}
+
+mxArray* DerivativeStruct(const radia::beam::StateDerivative& value) {
+    const char* fields[] = {
+        "dposition_m", "dkinetic_momentum_kg_m_s", "dtime_s",
+        "dpath_length_m", "field"};
+    mxArray* output = mxCreateStructMatrix(1, 1, 5, fields);
+    mxSetField(output, 0, fields[0], BeamVec3Array(value.dposition_m));
+    mxSetField(output, 0, fields[1],
+               BeamVec3Array(value.dkinetic_momentum_kg_m_s));
+    mxSetField(output, 0, fields[2], mxCreateDoubleScalar(value.dtime_s));
+    mxSetField(output, 0, fields[3],
+               mxCreateDoubleScalar(value.dpath_length_m));
+    mxSetField(output, 0, fields[4], FieldSampleStruct(value.field));
+    return output;
+}
+
+mxArray* InvariantStruct(const radia::beam::InvariantReport& value) {
+    const char* fields[] = {
+        "momentum_kg_m_s", "relativistic_gamma", "kinetic_energy_j",
+        "speed_m_s", "domain_status"};
+    mxArray* output = mxCreateStructMatrix(1, 1, 5, fields);
+    mxSetField(output, 0, fields[0],
+               mxCreateDoubleScalar(value.momentum_kg_m_s));
+    mxSetField(output, 0, fields[1],
+               mxCreateDoubleScalar(value.relativistic_gamma));
+    mxSetField(output, 0, fields[2],
+               mxCreateDoubleScalar(value.kinetic_energy_j));
+    mxSetField(output, 0, fields[3],
+               mxCreateDoubleScalar(value.speed_m_s));
+    mxSetField(output, 0, fields[4],
+               mxCreateString(DomainStatusText(value.domain_status)));
+    return output;
+}
+
+mxArray* StepStruct(const radia::beam::StepResult& value) {
+    const char* fields[] = {
+        "independent_before", "independent_after", "accepted_step",
+        "state_before", "state_after", "rhs_before",
+        "invariants_before", "invariants_after", "backend"};
+    mxArray* output = mxCreateStructMatrix(1, 1, 9, fields);
+    mxSetField(output, 0, fields[0],
+               mxCreateDoubleScalar(value.independent_before));
+    mxSetField(output, 0, fields[1],
+               mxCreateDoubleScalar(value.independent_after));
+    mxSetField(output, 0, fields[2],
+               mxCreateDoubleScalar(value.accepted_step));
+    mxSetField(output, 0, fields[3], StateStruct(value.state_before));
+    mxSetField(output, 0, fields[4], StateStruct(value.state_after));
+    mxSetField(output, 0, fields[5], DerivativeStruct(value.rhs_before));
+    mxSetField(output, 0, fields[6],
+               InvariantStruct(value.invariants_before));
+    mxSetField(output, 0, fields[7],
+               InvariantStruct(value.invariants_after));
+    mxSetField(output, 0, fields[8], mxCreateString("native-cpp-mex"));
+    return output;
+}
+
+mxArray* StepRecordStruct(const radia::beam::StepRecord& value) {
+    const char* fields[] = {
+        "independent_value", "attempted_step", "accepted_step",
+        "accepted", "state_before", "state_after", "rhs_before",
+        "invariants_before", "invariants_after"};
+    mxArray* output = mxCreateStructMatrix(1, 1, 9, fields);
+    mxSetField(output, 0, fields[0],
+               mxCreateDoubleScalar(value.independent_value));
+    mxSetField(output, 0, fields[1],
+               mxCreateDoubleScalar(value.attempted_step));
+    mxSetField(output, 0, fields[2],
+               mxCreateDoubleScalar(value.accepted_step));
+    mxSetField(output, 0, fields[3], mxCreateLogicalScalar(value.accepted));
+    mxSetField(output, 0, fields[4], StateStruct(value.state_before));
+    mxSetField(output, 0, fields[5], StateStruct(value.state_after));
+    mxSetField(output, 0, fields[6], DerivativeStruct(value.rhs_before));
+    mxSetField(output, 0, fields[7],
+               InvariantStruct(value.invariants_before));
+    mxSetField(output, 0, fields[8],
+               InvariantStruct(value.invariants_after));
+    return output;
+}
+
+mxArray* TrajectoryStruct(const radia::beam::Trajectory& value) {
+    const char* fields[] = {"schema", "backend", "samples", "steps",
+                            "summary"};
+    mxArray* output = mxCreateStructMatrix(1, 1, 5, fields);
+    mxSetField(output, 0, fields[0],
+               mxCreateString("radia.beam.trajectory.result.v1"));
+    mxSetField(output, 0, fields[1], mxCreateString("native-cpp-mex"));
+
+    mxArray* samples = mxCreateCellMatrix(value.Samples().size(), 1);
+    for (std::size_t index = 0; index < value.Samples().size(); ++index)
+        mxSetCell(samples, index, StateStruct(value.Samples()[index]));
+    mxSetField(output, 0, fields[2], samples);
+
+    mxArray* steps = mxCreateCellMatrix(value.Steps().size(), 1);
+    for (std::size_t index = 0; index < value.Steps().size(); ++index)
+        mxSetCell(steps, index, StepRecordStruct(value.Steps()[index]));
+    mxSetField(output, 0, fields[3], steps);
+
+    const auto& summary = value.Summary();
+    const char* summary_fields[] = {
+        "accepted_steps", "independent_start", "independent_stop",
+        "path_length_change_m", "momentum_conservation_applicable",
+        "maximum_relative_momentum_error"};
+    mxArray* summary_output = mxCreateStructMatrix(
+        1, 1, 6, summary_fields);
+    mxSetField(summary_output, 0, summary_fields[0],
+               mxCreateDoubleScalar(
+                   static_cast<double>(summary.accepted_steps)));
+    mxSetField(summary_output, 0, summary_fields[1],
+               mxCreateDoubleScalar(summary.independent_start));
+    mxSetField(summary_output, 0, summary_fields[2],
+               mxCreateDoubleScalar(summary.independent_stop));
+    mxSetField(summary_output, 0, summary_fields[3],
+               mxCreateDoubleScalar(summary.path_length_change_m));
+    mxSetField(summary_output, 0, summary_fields[4],
+               mxCreateLogicalScalar(
+                   summary.momentum_conservation_applicable));
+    mxSetField(summary_output, 0, summary_fields[5],
+               mxCreateDoubleScalar(
+                   summary.maximum_relative_momentum_error));
+    mxSetField(output, 0, fields[4], summary_output);
+    return output;
+}
+
+struct TrackingInput {
+    radia::beam::ParticleSpecies species;
+    radia::beam::CartesianState state;
+    std::shared_ptr<radia::beam::Field> field;
+    radia::beam::IndependentVariable independent;
+};
+
+TrackingInput ParseTrackingInput(const mxArray* config) {
+    RequireScalarStruct(config);
+    const mxArray* schema = Field(config, "schema");
+    if (schema && Text(schema, "schema") != "radia.beam.tracking.v1")
+        throw std::invalid_argument("unsupported beam tracking schema");
+    TrackingInput output;
+    output.species = ParseSpecies(Field(config, "species"));
+    output.state = ParseState(Field(config, "state"));
+    output.field = ParseFieldObject(Field(config, "field"));
+    output.independent = ParseIndependent(Field(config, "independent"));
+    return output;
+}
+
+std::shared_ptr<radia::beam::Stepper> ParseStepper(const mxArray* value) {
+    const std::string name = value ? Text(value, "stepper") : "boris2";
+    if (name == "boris2") return std::make_shared<radia::beam::Boris2>();
+    if (name == "classical-rk4")
+        return std::make_shared<radia::beam::ClassicalRK4>();
+    throw std::invalid_argument(
+        "stepper must be 'boris2' or 'classical-rk4'");
+}
+
+void ReferenceParticle(int nlhs, mxArray* plhs[], int nrhs,
+                       const mxArray* prhs[]) {
+    if (nrhs != 3 || nlhs != 1)
+        throw std::invalid_argument(
+            "reference = radia_mex('beam.reference_particle.from_kinetic_energy_ev', species, kinetic_energy_ev)");
+    const auto species = ParseSpecies(prhs[1]);
+    const double energy = Scalar(
+        prhs[2], "kinetic_energy_ev", 0.0, false);
+    plhs[0] = ReferenceParticleStruct(
+        radia::beam::ReferenceParticle::FromKineticEnergyEV(
+            species, energy));
+}
+
+void ParticleSpeciesPreset(const std::string& command, int nlhs,
+                           mxArray* plhs[], int nrhs) {
+    if (nrhs != 1 || nlhs != 1)
+        throw std::invalid_argument(
+            "species = radia_mex('beam.species.proton|electron')");
+    plhs[0] = SpeciesStruct(
+        command == "beam.species.proton"
+            ? radia::beam::ParticleSpecies::Proton()
+            : radia::beam::ParticleSpecies::Electron());
+}
+
+void BeamFieldSample(int nlhs, mxArray* plhs[], int nrhs,
+                     const mxArray* prhs[]) {
+    if (nrhs != 3 && nrhs != 4)
+        throw std::invalid_argument(
+            "sample = radia_mex('beam.field.sample', field, position_m [, time_s])");
+    if (nlhs != 1)
+        throw std::invalid_argument("beam.field.sample returns one result");
+    auto field = ParseFieldObject(prhs[1]);
+    const auto position = BeamVec3(prhs[2], "position_m");
+    const double time = nrhs == 4
+        ? Scalar(prhs[3], "time_s", 0.0, false) : 0.0;
+    plhs[0] = FieldSampleStruct(field->Evaluate(position, time));
+}
+
+void LorentzRHS(int nlhs, mxArray* plhs[], int nrhs,
+                const mxArray* prhs[]) {
+    if (nrhs != 2 || nlhs != 1)
+        throw std::invalid_argument(
+            "rhs = radia_mex('beam.equation.rhs', config)");
+    TrackingInput input = ParseTrackingInput(prhs[1]);
+    radia::beam::LorentzEquation equation(
+        input.species, input.field, input.independent);
+    const double independent_value = Scalar(
+        Field(prhs[1], "independent_value"), "independent_value", 0.0,
+        true);
+    plhs[0] = DerivativeStruct(
+        equation.RHS(independent_value, input.state));
+}
+
+void BeamStep(int nlhs, mxArray* plhs[], int nrhs,
+              const mxArray* prhs[]) {
+    if (nrhs != 2 || nlhs != 1)
+        throw std::invalid_argument(
+            "result = radia_mex('beam.step', config)");
+    TrackingInput input = ParseTrackingInput(prhs[1]);
+    auto equation = std::make_shared<radia::beam::LorentzEquation>(
+        input.species, input.field, input.independent);
+    auto stepper = ParseStepper(Field(prhs[1], "stepper"));
+    const double independent_value = Scalar(
+        Field(prhs[1], "independent_value"), "independent_value", 0.0,
+        true);
+    const double step = Scalar(Field(prhs[1], "step"), "step", 0.0,
+                               false);
+    plhs[0] = StepStruct(
+        stepper->Step(*equation, independent_value, input.state, step));
+}
+
+void BeamTrack(int nlhs, mxArray* plhs[], int nrhs,
+               const mxArray* prhs[]) {
+    if (nrhs != 2 || nlhs != 1)
+        throw std::invalid_argument(
+            "trajectory = radia_mex('beam.track', config)");
+    TrackingInput input = ParseTrackingInput(prhs[1]);
+    auto equation = std::make_shared<radia::beam::LorentzEquation>(
+        input.species, input.field, input.independent);
+    auto stepper = ParseStepper(Field(prhs[1], "stepper"));
+    radia::beam::TrackPlan plan;
+    plan.start = Scalar(Field(prhs[1], "start"), "start", 0.0, false);
+    plan.stop = Scalar(Field(prhs[1], "stop"), "stop", 0.0, false);
+    plan.maximum_step = Scalar(
+        Field(prhs[1], "maximum_step"), "maximum_step", 0.0, false);
+    plan.maximum_steps = PositiveInteger(
+        Field(prhs[1], "maximum_steps"), "maximum_steps", 1000000,
+        true);
+    plhs[0] = TrajectoryStruct(
+        radia::beam::Tracker(equation, stepper).Track(input.state, plan));
+}
+
 void Propagate(int nlhs, mxArray* plhs[], int nrhs,
                const mxArray* prhs[]) {
     if (nrhs != 2 || nlhs != 1)
@@ -631,9 +1018,36 @@ void PropagateGridFunction(std::shared_ptr<ngcomp::GridFunction> field,
 bool DispatchBeamCommand(const std::string& command, int nlhs,
                          mxArray* plhs[], int nrhs,
                          const mxArray* prhs[]) {
-    if (command != "beam.transfer.propagate_variational") return false;
-    Propagate(nlhs, plhs, nrhs, prhs);
-    return true;
+    if (command == "beam.species.proton" ||
+        command == "beam.species.electron") {
+        ParticleSpeciesPreset(command, nlhs, plhs, nrhs);
+        return true;
+    }
+    if (command == "beam.reference_particle.from_kinetic_energy_ev") {
+        ReferenceParticle(nlhs, plhs, nrhs, prhs);
+        return true;
+    }
+    if (command == "beam.field.sample") {
+        BeamFieldSample(nlhs, plhs, nrhs, prhs);
+        return true;
+    }
+    if (command == "beam.equation.rhs") {
+        LorentzRHS(nlhs, plhs, nrhs, prhs);
+        return true;
+    }
+    if (command == "beam.step") {
+        BeamStep(nlhs, plhs, nrhs, prhs);
+        return true;
+    }
+    if (command == "beam.track") {
+        BeamTrack(nlhs, plhs, nrhs, prhs);
+        return true;
+    }
+    if (command == "beam.transfer.propagate_variational") {
+        Propagate(nlhs, plhs, nrhs, prhs);
+        return true;
+    }
+    return false;
 }
 
 void BeamTransferFromGridFunction(

@@ -108,6 +108,7 @@ extern "C" {
 #include "rad_planar_charges.h"  // Shared 2D planar exterior field + Maxwell torque
 #include "rad_parallel.h"        // NGSolve TaskManager thread policy
 #include "rad_beam_transfer_pybind.h" // Distributed R/T/U transfer attribution
+#include "rad_beam_dynamics_pybind.h" // Native fields, Lorentz RHS, RK4/Boris tracking
 #include <core/taskmanager.hpp>  // ngcore::ParallelFor / TaskManager (HDiv-VIM batched field, obs-parallel)
 
 namespace py = pybind11;
@@ -2338,6 +2339,7 @@ PYBIND11_MODULE(_radia_pybind, m) {
     py::module_::import("ngsolve.comp");
 
     ExportBeamTransfer(m);
+    ExportBeamDynamics(m);
 
     // Version info
     m.attr("__version__") = "1.4.0";
