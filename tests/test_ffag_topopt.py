@@ -1,4 +1,5 @@
 import numpy as np
+import pytest
 
 from radia.accelerator_magnet_topopt import (
     MultiMomentumTransferMatrixObjective,
@@ -370,10 +371,15 @@ def test_fixed_design_orbit_path_never_runs_periodic_orbit_recovery(
     active_candidate=np.array([True,True])
     dummy_topology=SimpleNamespace(valid=True)
     correction_calls=[]
+    active_calls=[]
+    material_iteration_calls=[]
 
     def fake_optimize(orbits,matrices,**kwargs):
         correction=kwargs["field_correction"]
         correction_calls.append(correction)
+        active_calls.append(np.asarray(kwargs["active_elements"]).copy())
+        material_iteration_calls.append(kwargs["max_iterations"])
+        ratio=2.0 if len(correction_calls)==1 else 1.0
         generation=topopt.HDivMMMGenerationResult(
             active_candidate.copy(),np.ones(2),
             correction.target_field_response.copy(),tuple(),False,1.0,
@@ -385,7 +391,7 @@ def test_fixed_design_orbit_path_never_runs_periodic_orbit_recovery(
         split=objective.split_raw_response(correction.target_field_response)
         return MultiMomentumAcceleratorMagnetTopologyResult(
             objective,generation,split,np.asarray(matrices),
-            np.ones(len(orbits)),np.ones(len(orbits)),
+            np.full(len(orbits),ratio),np.zeros(len(orbits)),
             np.zeros(len(orbits)),np.zeros(len(orbits)),
             dummy_topology,correction)
 
@@ -418,9 +424,25 @@ def test_fixed_design_orbit_path_never_runs_periodic_orbit_recovery(
     result=ffag.optimize_ffag_hdiv_mmm_from_fixed_design_orbits(
         family,source=source,charge_gram=object(),fes=fes,inv_chi=0.1,
         active_elements=active_initial,element_volumes=np.ones(2),
-        volume_max=2.0,optimize_source_scale=False,max_iterations=1)
+        volume_max=2.0,optimize_source_scale=False,
+        max_optics_iterations=2,material_iterations_per_optics=1)
 
     np.testing.assert_array_equal(result.active_elements,active_candidate)
-    assert result.field_correction is correction_calls[0]
+    assert result.field_correction is correction_calls[1]
     assert result.source_scale==1.0
-    assert result.stop_reason=="one fixed-orbit batch"
+    assert len(result.optics_history)==2
+    np.testing.assert_array_equal(active_calls[0],active_initial)
+    np.testing.assert_array_equal(active_calls[1],active_candidate)
+    assert material_iteration_calls==[1,1]
+    assert result.stop_reason=="fixed one-pass transfer bands reached"
+
+    common=dict(
+        source=source,charge_gram=object(),fes=fes,inv_chi=0.1,
+        active_elements=active_initial,element_volumes=np.ones(2),
+        volume_max=2.0,optimize_source_scale=False)
+    with pytest.raises(TypeError,match="material_iterations_per_optics"):
+        ffag.optimize_ffag_hdiv_mmm_from_fixed_design_orbits(
+            family,max_iterations=1,**common)
+    with pytest.raises(ValueError,match="iteration counts must be positive"):
+        ffag.optimize_ffag_hdiv_mmm_from_fixed_design_orbits(
+            family,max_optics_iterations=0,**common)

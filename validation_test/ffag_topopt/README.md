@@ -34,20 +34,30 @@ iteration records singular values, normalized modal field strengths, modal
 material amplitudes, and the dominant equivalent-volume changes.
 
 Transfer-matrix error is not sent directly to those material candidates.  On
-each fixed design orbit, a separate small dense TSVD first inverts the
-analytic field-to-map Jacobian and produces a target correction of the sampled
-binormal field and normal gradient.  Only that field target enters the
-HDiv-MMM material inverse.  Candidate screening therefore performs no particle
-tracking or closed-orbit root solve.  The one-pass transfer matrices are
-recomputed on the same frozen paths after a binary batch has passed the exact
-active-system solve.  The validation history stores both TSVD layers
-independently.
+each fixed design orbit, a separate small dense TSVD first identifies the
+reachable field-to-map subspace.  A Chebyshev LP inside that retained subspace
+minimizes the largest engineering-band error and produces a target correction
+of the sampled binormal field and normal gradient.  The default relative TSVD
+cutoff is 1e-3 so near-null optics modes do not create unbounded field steps.
+Only that field target enters the HDiv-MMM material inverse.  Candidate
+screening therefore performs no particle tracking or closed-orbit root solve.
+After each accepted binary batch, the one-pass transfer matrices are
+recomputed on the same frozen paths and the optics inverse is relinearized.
+The validation history stores both TSVD layers independently.
 
 The original method required a suitable stochastic initial shape because a
 large continuous volume update could diverge.  This lane instead uses a fixed
 return-yoke seed, a physical changed-volume trust region, connectivity gates,
 and exact re-solves.  Nonlocal graph/beam exploration is a separate discrete
 search layer; it does not alter the DUCAS material predictor.
+
+The all-candidate ACA--QR--TSVD screen remains global.  The
+`--exact-candidate-limit` option bounds only the costly conditional
+block-Schur representative front after that screen.  A positive
+`--exact-beam-width` and `--exact-beam-depth` retain fully resolved,
+topology-valid states across a shallow objective barrier.  The returned design
+is always the best fully solved incumbent, never an intermediate worsening
+state.
 
 `validation_ffag_hdiv_mmm_poc.py` is the next, study-scale lane.  It places a
 structured BDM1 HEX candidate pole slab beside the unmeshed orbit aperture,
