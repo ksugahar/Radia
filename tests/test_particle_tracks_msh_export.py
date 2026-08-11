@@ -165,6 +165,43 @@ def test_trail_animation_grows_monotonically(tmp_path):
     assert all(v + h == summary["n_elements"] for v, h in steps)
 
 
+def test_time_coloured_beam_sentinel_scales_with_the_data(tmp_path):
+    """The hide-the-future sentinel floor is RELATIVE, never absolute 1.
+
+    Regression on the silent-wrong-number incident: a time-valued beam
+    view holds ~1e-8 s, and the old ``scale = max(span, |lo|, |hi|, 1)``
+    floored at the absolute 1.0, so the sentinel landed at 10.0 -- ~1e8
+    times the data.  Every stats verb then reported "max 10 s" for a
+    35 ns flight (MEASURED on the committed saddle_beam.msh: the beam
+    view read max 2.75e8 eV / rms 1.907e8 eV against a static kinetic
+    energy that tops out at 2.5e7 eV, with nan=0 and inf=0 to flag it).
+    The sentinel must sit a FEW physical spans above the colour range:
+    far enough that gmsh does not draw it, close enough that it cannot
+    be mistaken for -- or drown -- the physics.
+    """
+    track = _circle_track(n=41)
+    out = tmp_path / "beam_time.msh"
+    summary = export_particle_tracks_msh(track, out, animation_frames=6,
+                                         animation_color="time")
+    anim = summary["animation"]
+    lo, hi = anim["color_range"]
+    span = hi - lo
+    sentinel = anim["sentinel"]
+
+    assert hi < 1e-6                       # a gyration is tens of ns
+    assert span > 0.0
+    assert hi + 5.0 * span <= sentinel <= hi + 50.0 * span
+    assert sentinel > hi                   # hiding still works
+    assert sentinel < 1.0                  # NOT the old absolute 10.0
+    assert math.isfinite(sentinel)
+
+    # and the file really carries it: hidden segments are >= sentinel
+    steps = _beam_steps(out)
+    visible = [v for v, _h in steps]
+    assert visible == sorted(visible) and visible[-1] == summary["n_elements"]
+    assert steps[0][1] > 0                 # the first frame hides most of it
+
+
 def test_comet_animation_keeps_a_moving_window(tmp_path):
     track = _circle_track(n=101)
     out = tmp_path / "comet.msh"

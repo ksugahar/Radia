@@ -4,3 +4,4 @@
 - [IH Simulink native-only contract](memory/docs_cruft_prune_2026_06_28.md#ih-simulink-native-only-contract-2026-07-23): Level-2 MATLAB wrappers own checked MEX handles; retire LUT/lumped IH paths.
 - [MATLAB Optuna MOTPE Parzen migration](memory/matlab_optuna_motpe_parzen.md): use weighted shared Parzen mixtures and retire the scalar KDE candidate path.
 - [HDiv-MMM topopt native CG](memory/hdiv_mmm_topopt_native_cg.md): use native Jacobi-PCG, verify true residuals, and do not restore the slower Python MultiVector attempt.
+- [HDiv-MMM topopt without BESO](memory/hdiv_mmm_topopt_no_beso.md): keep raw Schur responses; put geometry regularization in the discrete master and use graph cut only for submodular backends.

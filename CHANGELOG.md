@@ -5,6 +5,41 @@ All notable changes to the `radia` package.  Format: each release lists
 
 ## Unreleased
 
+## 4.95.51 - Native beam transfer, nonlinear reactor, and integrated LTspice
+
+Released 2026-08-11.
+
+- Added a C++ charged-particle transfer engine that evaluates a live NGSolve
+  `GridFunction`/`CoefficientFunction` without a field-map detour, propagates
+  reference, first-order, and second-order variational states, and attributes
+  distributed R/T/U transfer contributions along the orbit. The same kernel is
+  exposed through pybind11 and standalone MATLAB MEX entry points.
+- Added a production nonlinear HDiv-MMM reactor block with a readable Level-2
+  MATLAB S-Function, checked native MEX object handles, snapshot/restore and
+  lifecycle diagnostics, a tracked Simulink model, and registration in the
+  single Radia library.
+- Added cyclic N-fold HDiv-VIM rotational images so a modeled sector reproduces
+  a complete ring, with Python bindings, focused unit coverage, and an
+  independent ring-validation lane.
+- Added charged-particle orbit and flying-beam Gmsh post-processing together
+  with electromagnetic field overlays and checked rendering contracts.
+- Strengthened HDiv-MMM topology optimization with periodic RVE,
+  multi-material, volume-fraction, band-edge, sheet-metal, and FFAG
+  multi-momentum workflows, including analytic transfer-map derivatives and
+  whole-HEX add/remove optimization.
+
+- Integrated the former source-only `radia-spice-lab` package into Radia as
+  `radia.ltspice`, including its conversion APIs, CLI, MCP server, circuit
+  gates, fixtures, and regression suite. The canonical commands are now
+  `radia-ltspice` and `mcp-server-radia-ltspice`; former imports and command
+  names remain thin compatibility aliases with no duplicate implementation.
+- Replaced the broken external `radia-spice-lab` extras dependency with the
+  built-in `radia[ltspice]` extra for optional schemdraw execution.
+- Added an air-volume-mesh-free FFAG topology-optimization PoC: periodic
+  multi-momentum soft-edge targets, sampled Enge I1/I2 diagnostics, analytic
+  transfer-map Frechet Jacobians, and fused BDM1 HDiv-MMM whole-HEX
+  add/remove optimization across all requested rigidities.
+
 ## 4.95.50 - Gmsh comparative visualization and file-series analysis
 
 Released 2026-08-08.

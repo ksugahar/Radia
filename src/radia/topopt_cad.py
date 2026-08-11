@@ -34,8 +34,12 @@ from pathlib import Path
 import numpy as np
 
 __all__ = [
+    "exact_surface_stl_from_mesh",
     "iso_stl_from_grid",
+    "nearest_boundary_label_classifier",
     "nodal_from_element_density",
+    "relabel_straight_mesh",
+    "rescale_netgen_vol_points",
     "write_levelset_exodus",
     "write_vfrac_exodus",
 ]
@@ -73,6 +77,316 @@ def _finite_float(name, value, *, positive=False):
         qualifier = "finite and positive" if positive else "finite"
         raise ValueError(f"{name} must be {qualifier}, got {value!r}")
     return parsed
+
+
+def exact_surface_stl_from_mesh(mesh, out_stl, *, deformation=None,
+                                active=None, coordinate_scale=(1.0, 1.0, 1.0)):
+    """Export the exact exterior of a straight TET/HEX/WEDGE iron mesh.
+
+    Unlike a density-grid marching-cubes surface, this route introduces no
+    smoothing or iso-level volume drift.  ``deformation`` is evaluated by
+    NGSolve at the mesh vertices; callers pass the accepted GetTrafo field
+    explicitly after temporarily unsetting it from ``mesh``.  A positive
+    ``coordinate_scale`` supports the preconditioned Sculpt construction used
+    for long magnets (compress the longitudinal coordinate before Sculpt and
+    restore it in the resulting Netgen ``.vol``).
+    """
+    import ngsolve as ng
+
+    if mesh.dim != 3 or mesh.GetCurveOrder() >= 2:
+        raise ValueError(
+            "exact_surface_stl_from_mesh requires a straight 3D mesh")
+    elements = tuple(mesh.Elements(ng.VOL))
+    keep = (np.ones(len(elements), dtype=bool) if active is None else
+            np.asarray(active, dtype=bool).reshape(-1))
+    if keep.shape != (len(elements),) or not np.any(keep):
+        raise ValueError("active mask must select at least one volume element")
+    scale = np.asarray(coordinate_scale, dtype=float).reshape(-1)
+    if (scale.shape != (3,) or not np.all(np.isfinite(scale))
+            or np.any(scale <= 0.0)):
+        raise ValueError("coordinate_scale must contain three positive values")
+
+    base = np.asarray([tuple(vertex.point) for vertex in mesh.vertices],
+                      dtype=float)
+    if deformation is None:
+        displacement = np.zeros_like(base)
+    else:
+        displacement = np.asarray([
+            np.asarray(deformation(mesh(*point)), dtype=float)
+            for point in base], dtype=float)
+        if displacement.shape != base.shape or not np.all(np.isfinite(
+                displacement)):
+            raise RuntimeError(
+                "GetTrafo deformation did not evaluate to finite vertex vectors")
+    physical_points = base + displacement
+
+    occurrences = {}
+    for element, selected in zip(elements, keep):
+        if not selected:
+            continue
+        cell_vertices = [int(vertex.nr) for vertex in element.vertices]
+        cell_center = np.mean(physical_points[cell_vertices], axis=0)
+        for facet in element.facets:
+            vertices = [int(vertex.nr)
+                        for vertex in mesh.faces[facet.nr].vertices]
+            if len(vertices) not in (3, 4):
+                raise NotImplementedError(
+                    "exact surface supports triangular/quadrilateral facets")
+            coordinates = physical_points[vertices]
+            center = np.mean(coordinates, axis=0)
+            normal = np.cross(coordinates[1] - coordinates[0],
+                              coordinates[2] - coordinates[0])
+            if float(normal @ (center - cell_center)) < 0.0:
+                vertices = [vertices[0], *reversed(vertices[1:])]
+            occurrences.setdefault(tuple(sorted(vertices)), []).append(vertices)
+    boundary = []
+    for rows in occurrences.values():
+        if len(rows) == 1:
+            boundary.append(rows[0])
+        elif len(rows) != 2:
+            raise RuntimeError(
+                f"non-manifold exterior facet has {len(rows)} owners")
+    if not boundary:
+        raise RuntimeError("selected iron mesh has no exterior surface")
+    triangles = []
+    for vertices in boundary:
+        if len(vertices) == 3:
+            triangles.append(vertices)
+        else:
+            triangles.extend((vertices[:3],
+                              [vertices[0], vertices[2], vertices[3]]))
+
+    _require("trimesh", "trimesh")
+    import trimesh
+
+    physical = trimesh.Trimesh(
+        vertices=physical_points,
+        faces=np.asarray(triangles, dtype=np.int64), process=True)
+    physical.merge_vertices()
+    physical.update_faces(physical.nondegenerate_faces())
+    physical.remove_unreferenced_vertices()
+    physical.fix_normals()
+    if not physical.is_watertight or not physical.is_winding_consistent:
+        raise RuntimeError("exact mesh exterior is not a closed oriented surface")
+    physical_volume = float(abs(physical.volume))
+    surface = physical.copy()
+    surface.vertices = np.asarray(surface.vertices) * scale[None, :]
+    surface.fix_normals()
+    scaled_volume = float(abs(surface.volume))
+    if (not np.isfinite(physical_volume) or physical_volume <= 0.0
+            or not np.isfinite(scaled_volume) or scaled_volume <= 0.0):
+        raise RuntimeError("exact mesh exterior has invalid volume")
+    path = Path(out_stl)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    surface.export(str(path))
+    return {
+        "path": str(path),
+        "route": "exact-mesh-exterior",
+        "n_boundary_faces": int(len(boundary)),
+        "n_triangles": int(len(surface.faces)),
+        "n_vertices": int(len(surface.vertices)),
+        "physical_volume": physical_volume,
+        "scaled_volume": scaled_volume,
+        "coordinate_scale": scale.tolist(),
+        "watertight": True,
+        "winding_consistent": True,
+    }
+
+
+def rescale_netgen_vol_points(source, destination, coordinate_scale):
+    """Apply a diagonal coordinate map to only the point rows of a ``.vol``."""
+    scale = np.asarray(coordinate_scale, dtype=float).reshape(-1)
+    if (scale.shape != (3,) or not np.all(np.isfinite(scale))
+            or np.any(scale <= 0.0)):
+        raise ValueError("coordinate_scale must contain three positive values")
+    source = Path(source)
+    destination = Path(destination)
+    lines = source.read_text(encoding="utf-8").splitlines()
+    matches = [index for index, line in enumerate(lines)
+               if line.strip().lower() == "points"]
+    if len(matches) != 1:
+        raise ValueError("Netgen .vol must contain exactly one points section")
+    header = matches[0]
+    count = int(lines[header + 1].strip())
+    for index in range(header + 2, header + 2 + count):
+        xyz = np.asarray([float(value) for value in lines[index].split()],
+                         dtype=float)
+        if xyz.shape != (3,) or not np.all(np.isfinite(xyz)):
+            raise ValueError(f"invalid Netgen point row {index + 1}")
+        lines[index] = " ".join(
+            f"{value:.17g}" for value in xyz * scale)
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    destination.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return {"source": str(source), "destination": str(destination),
+            "point_count": count, "coordinate_scale": scale.tolist()}
+
+
+def relabel_straight_mesh(mesh, boundary_classifier, *,
+                          material_name="iron"):
+    """Rebuild a straight mesh with one material and classified outer skin.
+
+    Sculpt free-mesh sidesets prove that a complete skin was exported, but
+    application names such as ``edge``, ``fixed`` and ``sym_z`` are geometric
+    semantics.  This post-Sculpt reconstruction assigns those names from
+    ``boundary_classifier(center, outward_normal)`` while preserving every
+    TET/HEX/WEDGE volume element and its connectivity.
+    """
+    import ngsolve as ng
+    import netgen.meshing as nm
+
+    if mesh.dim != 3 or mesh.GetCurveOrder() >= 2:
+        raise ValueError("relabel_straight_mesh requires a straight 3D mesh")
+    if not callable(boundary_classifier):
+        raise TypeError("boundary_classifier must be callable")
+    material_name = str(material_name)
+    if not material_name:
+        raise ValueError("material_name must not be empty")
+    points = list(mesh.ngmesh.Points())
+    volume_elements = list(mesh.ngmesh.Elements3D())
+    ng_elements = tuple(mesh.Elements(ng.VOL))
+    if len(volume_elements) != len(ng_elements) or not volume_elements:
+        raise ValueError("mesh volume-element inventories are inconsistent")
+    new = nm.Mesh(3)
+    new.SetMaterial(1, material_name)
+    point_map = {}
+
+    def mapped_point(number):
+        if number not in point_map:
+            point = points[number - 1].p
+            point_map[number] = new.Add(nm.MeshPoint(
+                nm.Pnt(float(point[0]), float(point[1]), float(point[2]))))
+        return point_map[number]
+
+    occurrences = {}
+    for ng_element, volume_element in zip(ng_elements, volume_elements):
+        vertices = [int(vertex.nr) for vertex in volume_element.vertices]
+        if len(vertices) not in (4, 6, 8):
+            raise NotImplementedError(
+                "relabel_straight_mesh supports TET/HEX/WEDGE only")
+        new.Add(nm.Element3D(1, [mapped_point(value) for value in vertices]))
+        cell = np.asarray([points[value - 1].p for value in vertices],
+                          dtype=float)
+        cell_center = np.mean(cell, axis=0)
+        for facet in ng_element.facets:
+            face = [int(vertex.nr) + 1
+                    for vertex in mesh.faces[facet.nr].vertices]
+            coordinates = np.asarray([points[value - 1].p for value in face],
+                                     dtype=float)
+            center = np.mean(coordinates, axis=0)
+            normal = np.cross(coordinates[1] - coordinates[0],
+                              coordinates[2] - coordinates[0])
+            if float(normal @ (center - cell_center)) < 0.0:
+                face = [face[0], *reversed(face[1:])]
+                coordinates = np.asarray(
+                    [points[value - 1].p for value in face], dtype=float)
+                normal = np.cross(coordinates[1] - coordinates[0],
+                                  coordinates[2] - coordinates[0])
+            norm = float(np.linalg.norm(normal))
+            if norm <= 0.0:
+                raise RuntimeError("relabel_straight_mesh found a degenerate face")
+            occurrences.setdefault(tuple(sorted(face)), []).append(
+                (face, center, normal / norm))
+    boundary = []
+    for rows in occurrences.values():
+        if len(rows) == 1:
+            boundary.append(rows[0])
+        elif len(rows) != 2:
+            raise RuntimeError(
+                f"non-manifold mesh face has {len(rows)} owners")
+    classified = []
+    for vertices, center, normal in boundary:
+        name = str(boundary_classifier(center.copy(), normal.copy()))
+        if not name:
+            raise ValueError("boundary_classifier returned an empty name")
+        classified.append((name, vertices))
+    names = sorted({name for name, _ in classified})
+    descriptors = {}
+    for boundary_number, name in enumerate(names, start=1):
+        descriptors[name] = new.Add(nm.FaceDescriptor(
+            surfnr=boundary_number, domin=1, domout=0, bc=boundary_number))
+        new.SetBCName(boundary_number - 1, name)
+    for name, vertices in classified:
+        new.Add(nm.Element2D(
+            descriptors[name], [mapped_point(value) for value in vertices]))
+    return ng.Mesh(new)
+
+
+def nearest_boundary_label_classifier(mesh, *, deformation=None,
+                                      fallback=None, candidates=16):
+    """Transfer named source boundaries to a nearby remeshed exterior.
+
+    Sculpt's overlay boundary is intentionally ragged, so exact coordinate or
+    axis-normal tests lose labels such as a symmetry plane or a thin pole end.
+    This classifier samples the already named accepted GetTrafo boundary and
+    selects among nearby source-face centroids with only a numerical-scale
+    normal-alignment tie-break.  Sculpt normals can rotate strongly when an
+    anisotropically pre-scaled mesh is expanded, so normal mismatch must not
+    erase a thin source label.  It transfers application semantics; it does not infer them
+    from the new mesh.
+    """
+    import ngsolve as ng
+
+    count = int(candidates)
+    if count < 1:
+        raise ValueError("candidates must be positive")
+    base = np.asarray([tuple(vertex.point) for vertex in mesh.vertices],
+                      dtype=float)
+    if deformation is None:
+        points = base
+    else:
+        values = np.asarray([
+            np.asarray(deformation(mesh(*point)), dtype=float)
+            for point in base], dtype=float)
+        if values.shape != base.shape or not np.all(np.isfinite(values)):
+            raise RuntimeError("source boundary deformation is invalid")
+        points = base + values
+    centers = []
+    normals = []
+    labels = []
+    lengths = []
+    for element in mesh.Elements(ng.BND):
+        vertices = [int(vertex.nr) for vertex in element.vertices]
+        coordinates = points[vertices]
+        if len(vertices) < 3:
+            continue
+        normal = np.cross(coordinates[1] - coordinates[0],
+                          coordinates[2] - coordinates[0])
+        norm = float(np.linalg.norm(normal))
+        if norm <= 0.0:
+            continue
+        centers.append(np.mean(coordinates, axis=0))
+        normals.append(normal / norm)
+        labels.append(str(element.mat))
+        lengths.append(float(np.sqrt(0.5 * norm)))
+    if not centers:
+        if fallback is None:
+            raise ValueError("source mesh has no labeled boundary elements")
+        return fallback
+    centers = np.asarray(centers, dtype=float)
+    normals = np.asarray(normals, dtype=float)
+    labels = np.asarray(labels, dtype=object)
+    normal_weight = float(np.median(lengths))
+
+    def classify(center, normal):
+        center = np.asarray(center, dtype=float).reshape(3)
+        normal = np.asarray(normal, dtype=float).reshape(3)
+        norm = float(np.linalg.norm(normal))
+        if not np.all(np.isfinite(np.r_[center, normal])) or norm <= 0.0:
+            raise ValueError("target boundary sample is invalid")
+        distances = np.linalg.norm(centers - center[None, :], axis=1)
+        width = min(count, distances.size)
+        indices = np.argpartition(distances, width - 1)[:width]
+        alignment = np.abs(normals[indices] @ (normal / norm))
+        score = (distances[indices]
+                 + 1.0e-6 * normal_weight * (1.0 - alignment))
+        name = str(labels[indices[int(np.argmin(score))]])
+        if name:
+            return name
+        if fallback is not None:
+            return str(fallback(center, normal))
+        raise ValueError("nearest source boundary has an empty label")
+
+    return classify
 
 
 # ----------------------------------------------------------------------

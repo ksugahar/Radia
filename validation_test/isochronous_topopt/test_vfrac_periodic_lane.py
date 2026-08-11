@@ -124,3 +124,54 @@ def test_periodic_cell_still_passes_the_solver_gates(artifacts):
     assert report["gates"]["boundary_faces_ok"] is True
     # the ragged periodic boundary costs nothing in volume fidelity
     assert report["closure"] < 5e-3, report["closure"]
+
+
+def test_period_faces_arrive_as_named_boundaries(artifacts):
+    """The six period faces must reach the `.vol` as NAMED boundaries.
+
+    Sculpt leaves the periodic boundary deliberately ragged, so a
+    downstream coordinate filter cannot separate a period face from the
+    interior -- carrying Sculpt's own sideset knowledge through as
+    ``rve_xmin`` .. ``rve_zmax`` is the only reliable handle for periodic
+    BCs and for a strict-label contract on an RVE mesh.
+    """
+    report = artifacts["reports"]["periodic"]
+    assert report["gates"]["rve_labels_ok"] is True
+    names = set((report.get("rve_sideset_names") or {}).values())
+    expected = {"rve_xmin", "rve_xmax", "rve_ymin", "rve_ymax",
+                "rve_zmin", "rve_zmax"}
+    assert expected <= names, names
+    assert "skin" in names, "the interior material surface must stay named"
+
+    # the labels must survive INTO the .vol, not just the report
+    text = Path(report["vol"]).read_text(encoding="utf-8", errors="replace")
+    marker = text.find("bcnames")
+    assert marker >= 0, "the exported .vol carries no bcnames section"
+    lines = text[marker:].splitlines()
+    count = int(lines[1])
+    in_vol = {parts[1] for parts in
+              (line.split() for line in lines[2:2 + count])
+              if len(parts) >= 2}
+    assert expected <= in_vol, in_vol
+
+    # ... and each named face must actually HUG its plane (the report's
+    # own gate re-verified here from the geometry, independently of the
+    # Exodus-side classification that produced the names)
+    labels = report["rve_boundary_labels"]
+    cell = artifacts["vf"]["cell_size"]
+    for axis, low, high in ((0, "rve_xmin", "rve_xmax"),
+                            (1, "rve_ymin", "rve_ymax"),
+                            (2, "rve_zmin", "rve_zmax")):
+        assert labels[low]["hi"][axis] <= 1.5 * cell, labels[low]
+        assert labels[high]["lo"][axis] >= PERIOD - 1.5 * cell, labels[high]
+        # opposite faces, not the same one twice
+        assert labels[low]["n_faces"] > 0 and labels[high]["n_faces"] > 0
+
+
+def test_plain_route_reports_no_rve_labels(artifacts):
+    """The negative control: without --periodic there are no period faces
+    to name, and the tool must not invent them."""
+    report = artifacts["reports"]["plain"]
+    assert report.get("rve_sideset_names") is None
+    assert report.get("rve_boundary_labels") is None
+    assert "rve_labels_ok" not in report["gates"]

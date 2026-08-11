@@ -13,6 +13,16 @@ Use these blocks for signal processing blocks.
 - Use when: user needs periodic motor rom with native mex interpolation, state update, and torque evaluation..
 - Metadata quality: medium
 
+### Nonlinear HDiv-MMM Reactor
+
+- Block: [[blocks/Nonlinear_HDiv-MMM_Reactor]]
+- Library: radia_simulink_library
+- ReferenceBlock: radia_simulink_library/Reduced Models/Nonlinear HDiv-MMM Reactor
+- Description: Native nonlinear HDiv-MMM reactor. Input is winding current; outputs are terminal voltage, flux linkage, differential...
+- Use when: user needs native nonlinear hdiv-mmm reactor. input is winding current; outputs are terminal voltage, flux linkage, d...
+- Avoid when: user asks only for a primitive nonlinear hdiv-mmm reactor experiment.
+- Metadata quality: high
+
 ## Low-Confidence Blocks
 
 ### Field Stats

@@ -157,6 +157,29 @@ production interface for Radia applications is a masked block in the single
 **Rules**:
 - Keep this entire policy section synchronized verbatim with the corresponding
   section in the other agent-policy file in the same change.
+- A tracked production `.slx` MUST be created, structurally edited, checked,
+  and saved through MathWorks' official Simulink Agentic Toolkit. The required
+  sequence is `model_read` before editing, `model_edit` for model operations,
+  `model_check` after editing, then save and reopen the exact tracked path.
+  Direct ZIP/XML patching is forbidden. A MATLAB `new_system` / `add_block` /
+  `save_system` builder remains useful for temporary reconstruction and
+  regression tests, but its raw output MUST NOT be promoted directly to the
+  tracked production `.slx` without the official-agent open/check/save lane.
+- A production-model acceptance check MUST start by closing every scratch,
+  harness, and deleted-on-disk test model. Reopen the exact tracked `.slx` in a
+  clean model state, verify its resolved `FileName`, and exercise the same
+  open path a user gets by double-clicking the file. Tests and agent trials that
+  create a temporary model MUST close it with `onCleanup` / teardown before
+  deleting its file, including error and missing-toolbox paths. Never leave an
+  orphaned in-memory model visible to the user.
+- Simulink visual QA MUST inspect the complete application window, not only a
+  cropped model canvas. The title bar, left and right dock strips, status bar,
+  block labels, masks, and confirmation/error dialogs are all in scope. Public
+  model-authored UI text is English. Any replacement glyph, square-box text,
+  mojibake, or suspicious `???` is a release-blocking failure: discard or
+  regenerate the affected artifact through the official agent; do not blame
+  Qt, patch fonts, or repair the `.slx` archive by hand. Also scan embedded SLX
+  XML for U+FFFD and suspicious question-mark runs before acceptance.
 - Publish application blocks through one **Radia** library. The production
   application grouping covers Electromagnet, PCB/PEEC, Motor, Stream Function,
   and Induction Heating. Additional validated MEX/ROM, LTspice, optimization,

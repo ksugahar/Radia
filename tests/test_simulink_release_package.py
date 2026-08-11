@@ -1,4 +1,5 @@
 from pathlib import Path
+import io
 import zipfile
 
 import pytest
@@ -18,6 +19,11 @@ def test_package_builder_requires_native_ih_assets():
         "radia_ih_thermal_sfun.m",
         "+radia/+simulink/ihEddySFunction.m",
         "+radia/+simulink/ihThermalSFunction.m",
+    }
+    assert set(module.FULL_REQUIRED_MATLAB_SFUNCTIONS) == {
+        *module.REQUIRED_MATLAB_SFUNCTIONS,
+        "radia_nonlinear_reactor_sfun.m",
+        "+radia/+simulink/nonlinearReactorSFunction.m",
     }
     assert "radia_ih.slx" in module.REQUIRED_MODELS
     assert any(
@@ -127,6 +133,9 @@ def test_full_library_package_includes_mex_models_and_runtime(tmp_path):
     assert manifest["backend"] == "application-specific"
     assert manifest["ih_backend"] == "matlab-level2+radia-mex-handles"
     assert manifest["maglev_backend"] == "matlab-level2-common-basis-cln"
+    assert manifest["reactor_backend"] == \
+        "matlab-level2+radia-mex-handle"
+    assert manifest["reactor_surrogate"] is False
     assert manifest["required_mex"] == ["matlab/radia_mex.mexw64"]
     assert manifest["required_matlab_products"] == ["MATLAB", "Simulink"]
     assert manifest["feature_toolbox_requirements"] == {
@@ -144,6 +153,11 @@ def test_full_library_package_includes_mex_models_and_runtime(tmp_path):
     assert verify_module.FULL_REQUIRED_MEMBERS <= names
     assert "matlab/radia_electromagnet.slx" in names
     assert "matlab/radia_maglev.slx" in names
+    assert "matlab/radia_nonlinear_reactor.slx" in names
+    assert "matlab/radia_nonlinear_reactor_sfun.m" in names
+    assert (
+        "matlab/+radia/+simulink/nonlinearReactorSFunction.m" in names
+    )
     assert "matlab/+radia/+simulink/motorAngleFamilyMexSFunction.m" in names
     assert "matlab/python_api_parity_manifest.json" in names
 
@@ -222,6 +236,37 @@ def test_matlab_smoke_decodes_utf8_without_cp932(monkeypatch, tmp_path):
     output = verify_module.run_matlab_smoke(archive, matlab)
     assert "RADIA_IH_RELEASE_OK" in output
     assert verify_module._console_safe("bad:\ufffd", "cp932") == "bad:\\ufffd"
+
+
+@pytest.mark.parametrize("damaged", ["bad \ufffd text", "bad ??? text"])
+def test_slx_text_integrity_rejects_mojibake(damaged):
+    verify_module = load_module(
+        "verify_simulink_release_mojibake",
+        ROOT / "tools" / "verify_simulink_release.py",
+    )
+    payload = io.BytesIO()
+    with zipfile.ZipFile(payload, "w") as model:
+        model.writestr("simulink/blockdiagram.xml", damaged)
+    with pytest.raises(RuntimeError, match="Replacement glyph|question-mark run"):
+        verify_module._verify_slx_text_integrity(
+            payload.getvalue(), "matlab/damaged.slx"
+        )
+
+
+def test_slx_text_integrity_accepts_valid_utf8_and_single_question_mark():
+    verify_module = load_module(
+        "verify_simulink_release_valid_text",
+        ROOT / "tools" / "verify_simulink_release.py",
+    )
+    payload = io.BytesIO()
+    with zipfile.ZipFile(payload, "w") as model:
+        model.writestr(
+            "simulink/blockdiagram.xml",
+            '<?xml version="1.0" encoding="utf-8"?><P>Ready?</P>',
+        )
+    verify_module._verify_slx_text_integrity(
+        payload.getvalue(), "matlab/valid.slx"
+    )
 
 
 def load_module(name, path):

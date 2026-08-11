@@ -7,6 +7,25 @@ crystallized as its own package.
 
 ## [Unreleased]
 
+## [1.4.36] - 2026-08-11
+
+- Added accelerator-magnet knowledge for distributed transfer-matrix and
+  nonlinear-map attribution directly over solved electromagnetic fields,
+  including Enge fringe integrals, edge focusing, and multi-momentum FFAG
+  diagnostics.
+- Added Gmsh electromagnetic post-processing for charged-particle trajectories
+  and flying-beam views, with bounded inputs and public-safe artifact metadata.
+- Extended Cubit/Gmsh contracts for topology-optimization material fractions
+  and the integrated Radia LTspice operating surface.
+
+- Added an electromagnet knowledge contract for Enge fringe-field form factors:
+  `I1` reference-orbit displacement, `I2` effective edge focusing, pole-face
+  geometry, and momentum-indexed soft-edge diagnostics for FFAG magnets.  The
+  guidance distinguishes these integrals from Enge profile coefficients and
+  scopes HDiv-MMM as air-volume-mesh-free rather than vacuum-computation-free;
+  it also names the executable multi-momentum target, native-row, and
+  whole-element optimization APIs.
+
 ## [1.4.35] - 2026-08-08
 
 - Added six Gmsh workflow tools for cross-file field ranges, comparable panel

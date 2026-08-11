@@ -66,6 +66,38 @@ try:
         n_views = len(view_tags)
         result["n_views"] = n_views
 
+        # ---- view selector (hide-others) ----------------------------
+        # Resolved HERE, not in the wrapper: views contributed by
+        # merge_files exist only after the merges above, so a
+        # pre-read of the primary file (read_msh_data) cannot see them.
+        sel = cfg.get("view_select")
+        if sel is not None:
+            names = [gmsh.option.getString(f"View[{i}].Name")
+                     for i in range(n_views)]
+            result["view_names"] = names
+            chosen = []
+            for want in sel:
+                if isinstance(want, str):
+                    hits = [i for i, nm in enumerate(names) if nm == want]
+                    if not hits:
+                        raise ValueError(
+                            f"unknown view name {want!r} "
+                            f"(available: {names})")
+                    chosen.extend(hits)
+                else:
+                    if want < 0 or want >= n_views:
+                        raise ValueError(
+                            f"view index {want} outside [0, {n_views}) "
+                            f"(available: {names})")
+                    chosen.append(want)
+            chosen = sorted(set(chosen))
+            result["view_selected"] = chosen
+            for i in range(n_views):
+                # applied BEFORE the raw option passthrough below, so an
+                # explicit options={"View[2].Visible": 1} still wins
+                gmsh.option.setNumber(f"View[{i}].Visible",
+                                      1.0 if i in chosen else 0.0)
+
         if cfg.get("auto_mesh_display") and n_views == 0:
             gmsh.option.setNumber("Mesh.SurfaceFaces", 1)
             gmsh.option.setNumber("Mesh.ColorCarousel", 2)
@@ -348,6 +380,10 @@ try:
             else:
                 targets = cfg.get("view_indices")
                 if targets is None:
+                    # a `view` selector doubles as the animation target:
+                    # stepping a hidden view only costs time
+                    targets = result.get("view_selected")
+                if targets is None:
                     targets = list(range(n_views))
                 if not targets:
                     raise RuntimeError(
@@ -378,6 +414,12 @@ try:
                                "frames": frames, "view_indices": targets})
             gif_out = cfg.get("gif_out")
             if gif_out:
+                if not frames:
+                    # Pillow would die on images[0] with a bare
+                    # IndexError; say what actually went wrong instead.
+                    raise RuntimeError(
+                        "no frames were written, so there is nothing to "
+                        "assemble into a GIF")
                 try:
                     from PIL import Image
                 except ImportError:
@@ -396,6 +438,14 @@ try:
     finally:
         gmsh.finalize()
 except Exception as exc:
+    # Every mode sets ok=True BEFORE its last work item (GIF assembly,
+    # the blank check, gmsh.finalize), so an exception raised after that
+    # point used to be reported as a SUCCESS carrying an error string.
+    # MEASURED on gmsh 4.15.2 before this line existed:
+    # export_animation(num_steps=0) returned
+    # {"ok": True, "error": "IndexError: list index out of range"} and
+    # wrote no GIF.  ok is the caller's only gate -- clear it here.
+    result["ok"] = False
     result["error"] = f"{type(exc).__name__}: {exc}"
 with open(out_path, "w", encoding="utf-8") as f:
     json.dump(result, f)
@@ -616,6 +666,42 @@ def _build_annotations(annotations) -> list[dict[str, Any]]:
     return out
 
 
+def _build_view_select(view) -> list[Any] | None:
+    """Normalize a ``view`` selector into a list of names / indices.
+
+    Only the SHAPE is checked here.  Name and index resolution happens
+    inside the render worker, after every ``merge_files`` entry has been
+    merged: a merged file contributes views that a pre-read of the
+    primary file cannot see, which is why ``render_panels``' pre-read
+    (``read_msh_data``) selector could not be reused for this.
+    """
+    if view is None:
+        return None
+    items = list(view) if isinstance(view, (list, tuple)) else [view]
+    if not items:
+        raise ValueError(
+            "view selector is empty; pass view=None to show every view")
+    out: list[Any] = []
+    for v in items:
+        if isinstance(v, bool):
+            raise TypeError(
+                f"view must be a view name or a non-negative index, "
+                f"got {v!r}")
+        if isinstance(v, str):
+            if not v:
+                raise ValueError("view name must not be empty")
+            out.append(v)
+        elif isinstance(v, int):
+            if v < 0:
+                raise ValueError(f"view index must be >= 0, got {v}")
+            out.append(int(v))
+        else:
+            raise TypeError(
+                f"view must be a view name or a non-negative index, "
+                f"got {v!r}")
+    return out
+
+
 def _figure_cfg(color, glyphs, clip, axes, annotations) -> dict[str, Any]:
     return {"color": _build_color(color),
             "glyphs": _build_glyphs(glyphs),
@@ -690,6 +776,7 @@ def render_png(path: str | Path,
                camera_preset: str | None = None,
                rotation: list[float] | None = None,
                time_step: int | None = None,
+               view: str | int | list[str | int] | None = None,
                cut_plane: dict[str, Any] | None = None,
                merge_files: list[str | Path] | None = None,
                geometry_display: bool | None = None,
@@ -712,6 +799,15 @@ def render_png(path: str | Path,
     named axis points AT the camera, so ``"+y"`` shows the x-z plane
     face-on.  (Guessing raw ``rotation`` angles is how a plane ends up
     rendered edge-on as a single line.)
+
+    ``view`` -- isolate one (or a few) post views by NAME or index:
+    ``view="B_magnitude"``, ``view=2``, ``view=["B", "coil"]``.  Every
+    other view is hidden, which is what a figure of one quantity needs
+    -- a second visible view keeps drawing over the picture and adds a
+    second colour bar.  It replaces the hand-written
+    ``options={"View[0].Visible": 1, "View[1].Visible": 0, ...}`` block:
+    an explicit ``View[i].Visible`` in ``options`` still overrides the
+    selector.  An unknown name fails with the available names listed.
 
     ``color`` -- ``{"range": [lo, hi] | "shared", "log": bool,
     "intervals": n, "style": "continuous|iso|discrete|numeric",
@@ -777,6 +873,7 @@ def render_png(path: str | Path,
         "numsubedges": int(numsubedges),
         "rotation": _resolve_rotation(camera_preset, rotation),
         "time_step": time_step,
+        "view_select": _build_view_select(view),
         **_figure_cfg(color, glyphs, clip, axes, annotations),
         "options": merged_options,
         "string_options": string_options or {},
@@ -814,6 +911,7 @@ def render_png(path: str | Path,
 def export_animation(path: str | Path,
                      gif_out: str | Path | None = None, *,
                      keep_frames: bool = False,
+                     view: str | int | list[str | int] | None = None,
                      view_indices: list[int] | None = None,
                      num_steps: int | None = None,
                      delay_ms: int = 40,
@@ -846,6 +944,13 @@ def export_animation(path: str | Path,
     the subprocess.  ``keep_frames=True`` retains the per-step PNGs in a
     ``<gif stem>_frames`` directory next to the GIF.
 
+    ``view`` isolates post views by NAME or index (``view="B"``,
+    ``view=2``, ``view=["B", "coil"]``); every other view is hidden, and
+    an explicit ``options={"View[i].Visible": ...}`` still wins.  When
+    ``view_indices`` is not given it defaults to the views ``view``
+    resolved to, so one argument replaces the usual
+    ``view_indices=[4]`` + a wall of ``View[i].Visible`` entries.
+
     ``orbit_axis`` switches to a CAMERA-ORBIT animation instead: the
     data stays at ``time_step`` while the camera sweeps
     ``orbit_degrees`` around the axis in ``orbit_frames`` frames (the
@@ -857,6 +962,21 @@ def export_animation(path: str | Path,
     if orbit_axis is not None and orbit_axis not in ("x", "y", "z"):
         return {"ok": False,
                 "error": f"orbit_axis must be x|y|z, got {orbit_axis!r}"}
+    if num_steps is not None:
+        # A non-positive count produced ZERO frames, and the empty frame
+        # list then died inside GIF assembly -- reported (MEASURED) as
+        # ok=True with "IndexError: list index out of range" and no GIF.
+        # Reject it here, where the offending value is still in hand.
+        if isinstance(num_steps, bool) or not isinstance(num_steps, int):
+            return {"ok": False,
+                    "error": f"num_steps must be an integer >= 1, or None "
+                             f"to animate every time step, got "
+                             f"{num_steps!r}"}
+        if num_steps < 1:
+            return {"ok": False,
+                    "error": f"num_steps must be >= 1, or None to animate "
+                             f"every time step in the target views, got "
+                             f"{num_steps}"}
     resolved = _resolve_merge_files(merge_files)
     if isinstance(resolved, dict):
         return resolved
@@ -886,6 +1006,7 @@ def export_animation(path: str | Path,
         "height": int(height),
         "numsubedges": int(numsubedges),
         "rotation": _resolve_rotation(camera_preset, rotation),
+        "view_select": _build_view_select(view),
         "view_indices": view_indices,
         "num_steps": num_steps,
         "delay_ms": int(delay_ms),

@@ -16,6 +16,39 @@
       "notes": "The public top-level pybind surface is checked against the radia_mex command table."
     },
     {
+      "id": "beam-transfer-attribution",
+      "patterns": ["beam.py"],
+      "classification": "native-mex",
+      "matlab": [
+        "matlab/+radia/+beam/propagateVariationalMap.m",
+        "matlab/+radia/+beam/propagateGridFunctionLinearMap.m"
+      ],
+      "notes": "Python and MATLAB share the C++ canonical R/T/U variational-map kernel. Both also pass an NGSolve GridFunction directly to the same native nine-point local-field linearization and combined-function R-map adapter without constructing a regular-grid field map."
+    },
+    {
+      "id": "ltspice-tooling",
+      "patterns": ["ltspice/_shared.py", "ltspice/cli.py", "ltspice/mcp_server.py"],
+      "classification": "private/not-applicable",
+      "matlab": [],
+      "notes": "CLI and MCP adapters are delivery layers above the canonical Radia LTspice APIs and do not require separate MATLAB counterparts."
+    },
+    {
+      "id": "ltspice-conversion",
+      "patterns": ["ltspice/__init__.py", "ltspice/conversion.py", "ltspice/topology.py", "ltspice/parser/*.py"],
+      "classification": "python-fallback",
+      "backend_contract": "in-process-python",
+      "matlab": ["matlab/+radia/+python/ltspiceConversion.m"],
+      "notes": "Netlist, ASC, and schemdraw conversion APIs have a named MATLAB batch boundary; LTspice execution and RAW handling remain native MATLAB surfaces."
+    },
+    {
+      "id": "ltspice-circuit-gates",
+      "patterns": ["ltspice/*.py"],
+      "classification": "python-fallback",
+      "backend_contract": "in-process-python",
+      "matlab": ["matlab/+radia/+python/ltspiceGate.m"],
+      "notes": "Circuit quality gates, measurements, knowledge, and learning helpers are callable from a checked MATLAB batch boundary and are not used per Simulink step."
+    },
+    {
       "id": "acoustic-native",
       "patterns": ["acoustics/__init__.py", "acoustics/scattering.py"],
       "classification": "native-mex",
@@ -116,6 +149,22 @@
       "backend_contract": "in-process-python",
       "matlab": ["matlab/+radia/+python/isochronousTopopt.m"],
       "notes": "Density-adjoint HDiv-MMM topology optimization for isochronous magnets: NGSolve CG/adjoint composition above the native charge-Gram kernels; design-loop promotion decides any later native surface."
+    },
+    {
+      "id": "accelerator-magnet-topopt",
+      "patterns": ["accelerator_magnet_topopt.py"],
+      "classification": "python-fallback",
+      "backend_contract": "in-process-python",
+      "matlab": ["matlab/+radia/+python/acceleratorMagnetTopopt.m"],
+      "notes": "Design-orbit and transfer-matrix HDiv-MMM optimization composes NGSolve and Python topology objects at an explicit batch boundary; it is not a Simulink step-time backend."
+    },
+    {
+      "id": "ffag-topopt",
+      "patterns": ["ffag_topopt.py"],
+      "classification": "python-fallback",
+      "backend_contract": "in-process-python",
+      "matlab": ["matlab/+radia/+python/ffagTopopt.m"],
+      "notes": "FFAG orbit-family, fringe, and transfer-target orchestration remains Python-owned and is exposed to MATLAB only at an explicit optimization or artifact-generation boundary."
     },
     {
       "id": "topopt-cad-bridge",
