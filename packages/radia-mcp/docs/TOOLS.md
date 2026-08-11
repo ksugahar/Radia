@@ -2,13 +2,13 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **970 tools** across 48 MCP servers.
+Total: **976 tools** across 48 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
 | [`mcp-server-cubit`](#mcp-server-cubit) | `radia_mcp.cubit` | 88 |
 | [`mcp-server-build123d`](#mcp-server-build123d) | `radia_mcp.build123d` | 78 |
-| [`mcp-server-gmsh`](#mcp-server-gmsh) | `radia_mcp.gmsh` | 63 |
+| [`mcp-server-gmsh`](#mcp-server-gmsh) | `radia_mcp.gmsh` | 69 |
 | [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 143 |
 | [`mcp-server-radia-matlab`](#mcp-server-radia-matlab) | `radia_mcp.matlab` | 15 |
 | [`mcp-server-acoustic-fembem`](#mcp-server-acoustic-fembem) | `radia_mcp.acoustic_fembem` | 4 |
@@ -250,6 +250,7 @@ Module: `radia_mcp.gmsh.server`
 | `get_gmsh_lint_rules` | List all available GMSH lint rules with descriptions. |
 | `gmsh_audit_msh_directory` | Validate every .msh under a directory and summarize the health. |
 | `gmsh_audit_summary` | Return a machine-readable GMSH lint audit summary. |
+| `gmsh_compare_fields` | Compare two solutions on DIFFERENT meshes (solver cross-validation). |
 | `gmsh_curve_profile` | Sample a view along a parametric curve x(u), y(u), z(u). |
 | `gmsh_cut_plane_extract` | Cut a view with the plane A*x+B*y+C*z+D=0 and save the section DATA. |
 | `gmsh_derived_field` | Derive gradient, curl, divergence, or tensor eigenvalues of a view. |
@@ -264,20 +265,25 @@ Module: `radia_mcp.gmsh.server`
 | `gmsh_field_range` | Union colour range across several .msh files -- the prerequisite for |
 | `gmsh_field_stats` | Per-view, per-time-step field statistics for an MSH v4.1 file. |
 | `gmsh_flow_texture` | Dense evenly-spaced streamline texture -- the LIC alternative. |
+| `gmsh_flux_integral` | Flux of a vector view through a bounded patch: int B.n dA. |
 | `gmsh_flux_lines` | Equally spaced isolines of a scalar view, merged into ONE view. |
+| `gmsh_gap_harmonics` | Space harmonics of a field around a circle (motor air gap). |
 | `gmsh_harmonic_to_time` | Expand a complex (re/im) view into a time-domain animation view. |
 | `gmsh_inspect_msh` | Inspect an MSH v4.1 file and summarize its structure. |
 | `gmsh_integrate` | Integrate a view over its elements (per time step). |
 | `gmsh_isosurface` | Extract the isosurface of a scalar view (e.g. the saturation front). |
 | `gmsh_lic` | TRUE line integral convolution on a section plane. |
+| `gmsh_line_integral` | Circulation of a vector view along a path: int H.dl (Ampere check). |
 | `gmsh_line_profile` | Sample a view along a straight line; optionally plot a PNG graph. |
 | `gmsh_math_eval` | Create a derived view with Plugin(MathEval) and save it. |
+| `gmsh_maxwell_force` | Force (and torque) on everything inside a box, by Maxwell stress. |
 | `gmsh_mesh_generation_remediation_plan` | List scripts that still use GMSH as a mesh generator. |
 | `gmsh_mesh_quality` | Gmsh minSICN shape-quality distribution for all 3D elements. |
 | `gmsh_mirror_expand` | Expand a half/quarter/eighth symmetric model view by mirroring. |
 | `gmsh_modulus_phase` | Convert a complex re/im two-step view to modulus and phase steps. |
 | `gmsh_numsubedges_remediation_plan` | List scripts that need high-order GMSH display settings. |
 | `gmsh_particle_trace` | Trace charged-particle ORBITS through the B (and E) field views. |
+| `gmsh_poincare` | Poincare section: where particle orbits pierce a plane. |
 | `gmsh_point_history` | Value of a view at one point across ALL time steps. |
 | `gmsh_post_display_contract` | Return the shared .geo/.geo.opt/.msh.opt contract for Gmsh post artifacts. |
 | `gmsh_post_display_gate` | Validate a Radia/Gypsilab Gmsh post-display manifest. |
