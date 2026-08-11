@@ -2,7 +2,7 @@
 
 Lock in:
   - Per-profile baseline efficiency (no profile drift)
-  - auto_tighten gains >= 5 efficiency points on a representative layout
+  - auto_tighten gains efficiency WITHOUT pushing labels off canvas
   - auto_tighten does NOT introduce clipping past the per-side
     tolerance vs. baseline
   - emit_paper_figure() gate behaviour: raise / warn / auto_tighten
@@ -100,34 +100,86 @@ def test_baseline_efficiency_in_band(prof_name):
 # --------------------------------------------------------------------
 
 
-def test_auto_tighten_gains_at_least_5pt_ieee_1x2():
-    """The canonical use-case (IEEE 2-column 1x2) gains >= 5 efficiency
-    points after auto_tighten.
+def test_auto_tighten_gains_without_clipping_ieee_1x2():
+    """The canonical use-case (IEEE 2-column 1x2) gains efficiency AND
+    keeps every axis label on the canvas.
 
-    If this drops, either the per-layout margin defaults already drove
-    efficiency too high to gain (in which case the default deltas
-    should be loosened so the gate hint is more visible), or
-    auto_tighten regressed.  Either way: investigate.
+    History (2026-08-10): this asserted >= 5 points and passed with a
+    9.4-point gain -- bought by pushing the left y label 39 px and both
+    x labels 12 px OFF the canvas, because the overhang tolerance was
+    2% of the figure width (3.6 mm at 181 mm), i.e. wider than a 10 pt
+    label.  With the tolerance cut to a sub-millimetre 0.4% the same
+    layout gains 3.6 points and clips nothing.  A smaller honest gain
+    beats a bigger one that eats the labels, so the floor is now 3
+    points AND the no-clipping invariant is asserted here directly.
     """
     fig, axes = paper_figure("ieee_double_column", nrows=1, ncols=2)
     _populate(axes)
     pre = measure_figure_efficiency(fig)["axes_area_fraction"]
     res = auto_tighten(fig, target_axes_fraction=0.80, max_iter=24)
+    escaped = _labels_outside_canvas(fig)
     plt.close(fig)
     gain_pts = (res["final_efficiency"] - pre) * 100
-    assert gain_pts >= 5.0, (
+    assert gain_pts >= 3.0, (
         f"IEEE 1x2 auto_tighten gained only {gain_pts:.1f} pts "
-        f"({pre:.3f} -> {res['final_efficiency']:.3f}); expected >= 5"
+        f"({pre:.3f} -> {res['final_efficiency']:.3f}); expected >= 3"
     )
+    assert not escaped, (
+        "auto_tighten bought efficiency by clipping labels: "
+        + "; ".join(escaped))
+
+
+def _labels_outside_canvas(fig, tol_px: float = 0.5):
+    """Axis labels whose bbox leaves the figure canvas.
+
+    The PHYSICAL invariant, deliberately independent of the tolerance
+    constants: an axis label that was drawn inside the canvas must
+    still be inside after tightening.  A test that re-derives the
+    tolerance from the same module constants can never catch a
+    tolerance that is itself too loose (that is exactly how the
+    2%-of-width overhang tolerance survived until 2026-08-10).
+    """
+    fig.canvas.draw()
+    renderer = fig.canvas.get_renderer()
+    fb = fig.bbox
+    escaped = []
+    for k, ax in enumerate(fig.get_axes()):
+        for name, artist in (("ylabel", ax.yaxis.label),
+                             ("xlabel", ax.xaxis.label)):
+            if not artist.get_text():
+                continue
+            bb = artist.get_window_extent(renderer=renderer)
+            out = max(fb.x0 - bb.x0, fb.y0 - bb.y0,
+                      bb.x1 - fb.x1, bb.y1 - fb.y1)
+            if out > tol_px:
+                escaped.append(f"axis {k} {name} out by {out:.0f} px")
+    return escaped
+
+
+def test_auto_tighten_keeps_stacked_y_labels_on_canvas():
+    """2x1 with y labels -- the layout that exposed the loose tolerance.
+
+    MEASURED before the fix: auto_tighten(0.78) drove left 0.080 ->
+    0.040 and left BOTH y labels 46 and 65 px outside the canvas, with
+    emit_paper_figure reporting every gate clean.  The figure looked
+    fine in a thumbnail and shipped without its axis labels.
+    """
+    fig, axes = paper_figure("ieee_double_column", nrows=2, ncols=1,
+                             sharex=True)
+    _populate(axes)
+    auto_tighten(fig, target_axes_fraction=0.78)
+    escaped = _labels_outside_canvas(fig)
+    plt.close(fig)
+    assert not escaped, "; ".join(escaped)
 
 
 def test_auto_tighten_no_new_clipping():
     """auto_tighten must not push any side overhang past baseline + tol.
 
-    The per-side overhang tolerance is 2% of figure width / 3% of
-    figure height (see _OVERHANG_TOL_* in _paper_figure.py).  After
-    auto_tighten, the final overhang on each side must be <=
-    baseline + tolerance.  Locks in the safety invariant.
+    This checks the guard against ITS OWN constants, so it is only a
+    consistency check -- it cannot detect a tolerance that is too loose
+    to protect a label.  The physical invariant lives in
+    `_labels_outside_canvas`; keep both.
     """
     fig, axes = paper_figure("ieee_double_column", nrows=1, ncols=2)
     _populate(axes)
@@ -135,10 +187,12 @@ def test_auto_tighten_no_new_clipping():
     baseline = _compute_overhang_px(fig)
     res = auto_tighten(fig, target_axes_fraction=0.85, max_iter=30)
     final_over = _compute_overhang_px(fig)
+    from radia_mcp.figure._paper_figure import (
+        _OVERHANG_TOL_X_FRAC, _OVERHANG_TOL_Y_FRAC)
     fb_w = fig.bbox.width
     fb_h = fig.bbox.height
-    tol_x = 0.02 * fb_w
-    tol_y = 0.03 * fb_h
+    tol_x = _OVERHANG_TOL_X_FRAC * fb_w
+    tol_y = _OVERHANG_TOL_Y_FRAC * fb_h
     plt.close(fig)
     for side, tol in [("left", tol_x), ("right", tol_x),
                        ("top", tol_y), ("bottom", tol_y)]:
