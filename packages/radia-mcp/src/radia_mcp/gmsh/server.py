@@ -47,6 +47,13 @@ from .post_display import (
     gmsh_post_display_manifest_gate,
     write_gmsh_post_launch_artifact,
 )
+from .compare import compare_fields
+from .em_post import (
+    flux_integral,
+    gap_harmonics,
+    line_integral,
+    maxwell_force,
+)
 from .post_process import (
     curve_profile,
     cut_plane_extract,
@@ -66,6 +73,7 @@ from .post_process import (
     modulus_phase,
     particle_trace,
     point_history,
+    poincare,
     probe_field,
     resample_grid,
     select,
@@ -787,6 +795,7 @@ def gmsh_render(path: str,
                 numsubedges: int = 4,
                 camera_preset: str | None = None,
                 time_step: int | None = None,
+                view: str | int | list | None = None,
                 cut_plane: dict | None = None,
                 options: dict | None = None,
                 string_options: dict | None = None,
@@ -863,6 +872,11 @@ def gmsh_render(path: str,
         annotations: 2D text overlays, ["text"] or [{"text":, "x":,
                      "y":, "align": "Left|Center|Right", "size": pt}];
                      window pixels, negative counts from the far edge.
+        view: Draw ONLY these views and hide the rest -- a view name, an
+              index, or a list of either. Resolved AFTER merge_files, so
+              it sees merged views too; an unknown name fails loudly
+              listing what is available. Explicit
+              options={"View[i].Visible": ...} still wins.
     """
     p = Path(path)
     if not p.is_absolute():
@@ -877,7 +891,7 @@ def gmsh_render(path: str,
         merged = [_abs_path(str(m)) for m in merge_files]
     return render_png(p, out, width=width, height=height,
                       numsubedges=numsubedges, camera_preset=camera_preset,
-                      time_step=time_step, cut_plane=cut_plane,
+                      time_step=time_step, view=view, cut_plane=cut_plane,
                       options=options, string_options=string_options,
                       adapt_views=adapt_views,
                       smooth_normals=smooth_normals,
@@ -899,6 +913,9 @@ def gmsh_export_animation(path: str,
                           orbit_degrees: float = 360.0,
                           orbit_frames: int = 36,
                           time_step: int | None = None,
+                          view: str | int | list | None = None,
+                          view_indices: list | None = None,
+                          numsubedges: int = 4,
                           cut_plane: dict | None = None,
                           options: dict | None = None,
                           string_options: dict | None = None,
@@ -972,6 +989,14 @@ def gmsh_export_animation(path: str,
         annotations: 2D text overlays, ["text"] or [{"text":, "x":,
                      "y":, "align": "Left|Center|Right", "size": pt}];
                      window pixels, negative counts from the far edge.
+        view: Animate ONLY these views and hide the rest -- a view name,
+              an index, or a list of either. Resolved AFTER merge_files.
+              When given without view_indices it also selects which
+              views get stepped, so one argument replaces the old
+              view_indices + View[N].Visible pair.
+        view_indices: Which view indices to step (default: all). Prefer
+                      `view`, which also handles visibility.
+        numsubedges: Curved-edge subdivision for high-order rendering.
     """
     p = Path(path)
     if not p.is_absolute():
@@ -985,6 +1010,8 @@ def gmsh_export_animation(path: str,
     if merge_files is not None:
         merged = [_abs_path(str(m)) for m in merge_files]
     return export_animation(p, out, keep_frames=keep_frames,
+                            view=view, view_indices=view_indices,
+                            numsubedges=numsubedges,
                             num_steps=num_steps, delay_ms=delay_ms,
                             width=width, height=height,
                             camera_preset=camera_preset,
@@ -1098,7 +1125,8 @@ def gmsh_verify(path: str, check_jacobians: bool = True,
 @mcp.tool()
 def gmsh_probe(msh_path: str, points: list,
                view_name: str | None = None,
-               step: int = -1) -> dict:
+               step: int = -1,
+               distance_max: float = 0.0) -> dict:
     """
     Probe post-processing views at arbitrary points (interpolated).
 
@@ -1116,7 +1144,8 @@ def gmsh_probe(msh_path: str, points: list,
     p = Path(msh_path)
     if not p.is_absolute():
         p = PROJECT_ROOT / p
-    return probe_field(p, points, view=view_name, step=step)
+    return probe_field(p, points, view=view_name, step=step,
+                       distance_max=distance_max)
 
 
 @mcp.tool()
@@ -1324,6 +1353,7 @@ def gmsh_streamlines(msh_path: str, seed_start: list, seed_end: list,
                      both_directions: bool = True,
                      adaptive: bool = True, closure: bool = True,
                      max_turn_deg: float = 10.0, arrows_every: int = 0,
+                     time_step: int = 0,
                      return_points: bool = False,
                      out_file: str | None = None) -> dict:
     """
@@ -1368,6 +1398,7 @@ def gmsh_streamlines(msh_path: str, seed_start: list, seed_end: list,
                        max_steps=max_steps, both_directions=both_directions,
                        adaptive=adaptive, closure=closure,
                        max_turn_deg=max_turn_deg, arrows_every=arrows_every,
+                       time_step=time_step,
                        return_points=return_points, out_file=out)
 
 
@@ -1387,6 +1418,7 @@ def gmsh_particle_trace(msh_path: str, seeds: list, direction: list,
                         mass_amu: float | None = None,
                         view_name: str | None = None,
                         e_view_name: str | None = None,
+                        time_step: int = 0,
                         dt_s: float | None = None,
                         steps_per_gyration: int = 64,
                         max_steps: int = 20000,
@@ -1449,6 +1481,7 @@ def gmsh_particle_trace(msh_path: str, seeds: list, direction: list,
                           kinetic_energy_ev, species=species,
                           charge_e=charge_e, mass_amu=mass_amu,
                           view=view_name, e_view=e_view_name,
+                          time_step=time_step,
                           dt_s=dt_s,
                           steps_per_gyration=steps_per_gyration,
                           max_steps=max_steps, max_time_s=max_time_s,
@@ -1458,6 +1491,250 @@ def gmsh_particle_trace(msh_path: str, seeds: list, direction: list,
                           comet_window=comet_window,
                           return_points=return_points,
                           out_file=_abs_path(out_file))
+
+
+@mcp.tool()
+def gmsh_poincare(msh_path: str, seeds: list, direction: list,
+                  kinetic_energy_ev: float,
+                  plane_point: list, plane_normal: list,
+                  crossing_direction: str = "both",
+                  species: str = "electron",
+                  charge_e: float | None = None,
+                  mass_amu: float | None = None,
+                  view_name: str | None = None,
+                  e_view_name: str | None = None,
+                  time_step: int = 0,
+                  dt_s: float | None = None,
+                  steps_per_gyration: int = 64,
+                  max_steps: int = 20000,
+                  max_time_s: float | None = None,
+                  png_out: str | None = None,
+                  out_file: str | None = None) -> dict:
+    """
+    Poincare section: where particle orbits pierce a plane.
+
+    The standard nonlinear-dynamics view of a beam. Runs
+    gmsh_particle_trace internally, then finds every segment that
+    crosses the plane and linearly interpolates the crossing, so the
+    answer is not limited to the integrator's sample points. Crossings
+    come back as in-plane (u, v) coordinates plus the flight time, with
+    the (u, v) axes returned so the scatter is interpretable: a
+    deterministic right-handed frame seeded from the world axis least
+    aligned with the normal.
+
+    A closed orbit shows a finite point set; a drifting or chaotic one
+    fills a curve or an area -- which is the whole reason to draw it.
+
+    Args:
+        msh_path: .msh with a vector B view [T] (mesh in meters).
+        seeds: Launch points [[x, y, z], ...] in meters.
+        direction: Shared launch direction [dx, dy, dz].
+        kinetic_energy_ev: Kinetic energy in eV (> 0).
+        plane_point: A point on the section plane [x, y, z].
+        plane_normal: The plane normal [nx, ny, nz].
+        crossing_direction: "both" | "positive" | "negative" -- keep
+            only crossings going along / against the normal.
+        species: Particle preset; ignored when charge_e/mass_amu given.
+        charge_e: Custom charge in elementary charges (with mass_amu).
+        mass_amu: Custom mass in atomic mass units (with charge_e).
+        view_name: B view (default: first view in the file).
+        e_view_name: Optional E view [V/m].
+        time_step: Time step of the field views to trace in.
+        dt_s: Explicit time step (overrides steps_per_gyration).
+        steps_per_gyration: Auto time-step resolution (>= 4).
+        max_steps: Maximum steps per particle.
+        max_time_s: Stop after this physical flight time.
+        png_out: Optional scatter PNG of the section.
+        out_file: Track output path (default: <stem>_tracks.pos).
+    """
+    return poincare(_abs_path(msh_path), seeds, direction,
+                    kinetic_energy_ev, plane_point, plane_normal,
+                    crossing_direction=crossing_direction,
+                    species=species, charge_e=charge_e,
+                    mass_amu=mass_amu, view=view_name,
+                    e_view=e_view_name, time_step=time_step, dt_s=dt_s,
+                    steps_per_gyration=steps_per_gyration,
+                    max_steps=max_steps, max_time_s=max_time_s,
+                    png_out=_abs_path(png_out),
+                    out_file=_abs_path(out_file))
+
+
+@mcp.tool()
+def gmsh_flux_integral(msh_path: str, surface: dict,
+                       view_name: str | None = None,
+                       n_grid: int = 32,
+                       time_step: int = 0) -> dict:
+    """
+    Flux of a vector view through a bounded patch: int B.n dA.
+
+    gmsh_integrate integrates a view over its OWN elements; this
+    integrates the NORMAL COMPONENT over a patch you specify, which is
+    what "how much flux crosses this window?" actually means.
+    Midpoint sampling; the disc uses a polar grid with dA = r dr dtheta
+    so the rim is not over-weighted. If any sample point falls outside
+    the mesh the call FAILS (ok=False) and reports n_outside -- a flux
+    quoted over a partially-sampled patch is exactly the unauditable
+    number this lane refuses to produce.
+
+    Args:
+        msh_path: .msh/.pos with a vector view.
+        surface: Exactly one of
+            {"rect": {"center": [3], "u_vec": [3], "v_vec": [3]}} --
+                the patch spans center +- u/2 +- v/2, normal = u x v;
+            {"circle": {"center": [3], "normal": [3], "radius": r}}.
+        view_name: Vector view (default: first).
+        n_grid: Samples per direction (rect) or radial rings (circle).
+        time_step: Time step of a multi-step view.
+    """
+    return flux_integral(_abs_path(msh_path), surface, view=view_name,
+                         n_grid=n_grid, time_step=time_step)
+
+
+@mcp.tool()
+def gmsh_line_integral(msh_path: str, path_spec: dict,
+                       view_name: str | None = None,
+                       n: int = 512,
+                       expected_ni: float | None = None,
+                       time_step: int = 0) -> dict:
+    """
+    Circulation of a vector view along a path: int H.dl (Ampere check).
+
+    Integrates in PARAMETER space against the analytic tangent, not
+    along chords: MEASURED, the parametric route on a circle is exact
+    to 4e-16 while a 256-segment inscribed polygon sits 1.0e-4 low --
+    that gap is the polygon-vs-arc geometry, not integration error.
+    Pass expected_ni (the enclosed ampere-turns) to get the Ampere-law
+    discrepancy directly.
+
+    Args:
+        msh_path: .msh/.pos with a vector view (H in A/m for Ampere).
+        path_spec: Exactly one of
+            {"circle": {"center": [3], "normal": [3], "radius": r}} --
+                positive circulation follows the right-hand rule about
+                the normal;
+            {"polyline": {"points": [[x, y, z], ...], "closed": bool}}.
+        view_name: Vector view (default: first).
+        n: Samples along the path.
+        expected_ni: Enclosed NI [A] to compare against.
+        time_step: Time step of a multi-step view.
+    """
+    return line_integral(_abs_path(msh_path), path_spec, view=view_name,
+                         n=n, expected_ni=expected_ni,
+                         time_step=time_step)
+
+
+@mcp.tool()
+def gmsh_maxwell_force(msh_path: str, box: dict,
+                       view_name: str | None = None,
+                       n_grid: int = 24,
+                       torque_about: list | None = None,
+                       mu0: float = 1.25663706212e-6,
+                       time_step: int = 0) -> dict:
+    """
+    Force (and torque) on everything inside a box, by Maxwell stress.
+
+    Integrates T.n dA over the 6 faces of an axis-aligned box with
+    T = (B B^T - |B|^2 I / 2) / mu0 and analytic outward normals. The
+    box must enclose the body and lie in vacuum/air; nothing about the
+    body itself is needed, which is why this is the standard
+    accelerator/motor force recipe.
+
+    Read per_face before trusting a small total: in a uniform field
+    every face carries a large force and they cancel exactly (MEASURED:
+    +-1.0186e6 N per face, total 0 to 1e-14 relative), so a near-zero
+    total is a real cancellation, not a zero integrand.
+
+    Args:
+        msh_path: .msh/.pos with a vector B view [T] (mesh in meters).
+        box: {"center": [x, y, z], "half": [hx, hy, hz]} in meters.
+        view_name: Vector view (default: first).
+        n_grid: Samples per direction on each face.
+        torque_about: Optional [x, y, z] pivot for the torque [N.m].
+        mu0: Permeability of the surrounding medium [H/m].
+        time_step: Time step of a multi-step view.
+    """
+    return maxwell_force(_abs_path(msh_path), box=box, view=view_name,
+                         n_grid=n_grid, torque_about=torque_about,
+                         mu0=mu0, time_step=time_step)
+
+
+@mcp.tool()
+def gmsh_gap_harmonics(msh_path: str, center: list, axis: list,
+                       radius: float,
+                       view_name: str | None = None,
+                       n_samples: int = 360,
+                       component: str = "auto",
+                       max_harmonic: int | None = None,
+                       time_step: int = 0) -> dict:
+    """
+    Space harmonics of a field around a circle (motor air gap).
+
+    Samples an ENDPOINT-EXCLUDED circle (theta = 2 pi k / N; including
+    both ends double-counts theta = 0, which is the trap when reusing
+    gmsh_curve_profile for this) and returns the cos/sin coefficients
+    per harmonic order with amplitude and phase.
+
+    THD is referenced to order n = 1 and comes back None when there is
+    no n = 1 content -- a p-pole-pair machine sampled over a full
+    revolution has its fundamental at n = p, so either sample one pole
+    pair or read `harmonics` directly rather than trusting a THD built
+    on a roundoff-level fundamental.
+
+    Args:
+        msh_path: .msh/.pos with the field view.
+        center: Circle center [x, y, z] (the machine axis point).
+        axis: Machine axis [ax, ay, az]; the circle lies normal to it.
+        radius: Sampling radius in meters (mid-gap).
+        view_name: Source view (default: first).
+        n_samples: Samples around the circle; sets the Nyquist order.
+        component: "auto" | "radial" | "tangential" | "axial" |
+            "magnitude" for vector views, "scalar" for 1-component
+            views. "auto" = radial for vectors, scalar for scalars.
+        max_harmonic: Trim the reported list (THD still uses all bins).
+        time_step: Time step of a multi-step view.
+    """
+    return gap_harmonics(_abs_path(msh_path), center, axis, radius,
+                         view=view_name, n_samples=n_samples,
+                         component=component, max_harmonic=max_harmonic,
+                         time_step=time_step)
+
+
+@mcp.tool()
+def gmsh_compare_fields(msh_path_a: str, msh_path_b: str,
+                        view_a: str | None = None,
+                        view_b: str | None = None,
+                        n_points: int = 1000,
+                        seed: int = 0,
+                        sample: str = "random",
+                        bbox: list | None = None,
+                        out_file: str | None = None) -> dict:
+    """
+    Compare two solutions on DIFFERENT meshes (solver cross-validation).
+
+    gmsh_diff_msh is the same-mesh regression verb: it compares counts
+    and per-view statistics, so two meshings of one problem carrying a
+    bit-identical field are reported as different. This verb probes
+    BOTH files at the SAME sample points and reports L2/Linf norms of
+    the difference -- the FEM-vs-HDiv-VIM, coarse-vs-fine question.
+
+    Vector views are compared as norm(B_a - B_b), never |B_a| - |B_b|:
+    magnitude agreement with a direction error is not agreement.
+
+    Args:
+        msh_path_a: First .msh/.pos.
+        msh_path_b: Second .msh/.pos (different mesh is the point).
+        view_a: View in A (default: first).
+        view_b: View in B (default: same name as A, else first).
+        n_points: Sample count.
+        seed: RNG seed -- the sampling is deterministic.
+        sample: "random" (uniform in the shared bbox) or "grid".
+        bbox: Optional explicit [[xmin,ymin,zmin], [xmax,ymax,zmax]].
+        out_file: Optional .pos point cloud of the difference.
+    """
+    return compare_fields(_abs_path(msh_path_a), _abs_path(msh_path_b),
+                          view_a=view_a, view_b=view_b,
+                          n_points=n_points, seed=seed, sample=sample,
+                          bbox=bbox, out_file=_abs_path(out_file))
 
 
 @mcp.tool()

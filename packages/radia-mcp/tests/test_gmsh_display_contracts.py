@@ -3,6 +3,14 @@
 Image generation, STEP meshing, ray casting, and LIC numerical evidence live
 under ``validation_test/radia_mcp``.  This package test intentionally imports
 no solver.
+
+CI VISIBILITY (2026-08-11): ``radia_mcp.gmsh.raster`` pulls in numpy, and the
+minimal-dep matrix has no numpy, so conftest's ``collect_ignore`` drops any
+test MODULE that imports it -- which silently hid every pure-python contract
+below from CI.  It hid a real red test for two commits: the committed
+assertion still expected the pre-8d64df1f0 clip target.  The raster import is
+therefore local to the one test that needs it, so the numpy-free contracts
+keep running everywhere.
 """
 from __future__ import annotations
 
@@ -11,7 +19,6 @@ import inspect
 import pytest
 
 from radia_mcp.gmsh.post_display import CAMERA_PRESETS
-from radia_mcp.gmsh.raster import lic, volume_raycast
 from radia_mcp.gmsh.render import (
     _build_annotations,
     _build_axes,
@@ -49,7 +56,13 @@ def test_glyph_clip_axes_and_annotation_options_are_validated():
         "normal": [1, 0, 0], "offset": -0.01, "apply_to": ["views"],
     }])
     assert clip[0]["plane"] == [1.0, 0.0, 0.0, -0.01]
-    assert clip[0]["targets"] == ["View[0].Clip"]
+    # "views" is a SENTINEL the worker expands to every loaded view
+    # (render.py: `... if target == "__all_views__" else [target]`).
+    # It replaced the literal "View[0].Clip" in 8d64df1f0 so that a clip
+    # applies to all views, not only the first; this assertion was left
+    # stale by that commit and CI could not see it (see the module
+    # docstring).
+    assert clip[0]["targets"] == ["__all_views__"]
     with pytest.raises(ValueError, match="clip target"):
         _build_clip([{"normal": [1, 0, 0], "apply_to": ["walls"]}])
 
@@ -75,6 +88,9 @@ def test_camera_preset_names_remain_stable():
 
 
 def test_raster_public_signatures_keep_core_controls():
+    pytest.importorskip("numpy", reason="raster is the numpy lane")
+    from radia_mcp.gmsh.raster import lic, volume_raycast
+
     raycast = inspect.signature(volume_raycast).parameters
     streamline = inspect.signature(lic).parameters
     assert {"view", "view_dir", "image_size", "n_steps", "step_files"} \
@@ -84,6 +100,9 @@ def test_raster_public_signatures_keep_core_controls():
 
 
 def test_raster_missing_input_fails_before_solver_io(tmp_path):
+    pytest.importorskip("numpy", reason="raster is the numpy lane")
+    from radia_mcp.gmsh.raster import lic, volume_raycast
+
     missing = tmp_path / "missing.msh"
     raycast = volume_raycast(missing, grid=4)
     streamline = lic(missing, resolution=32)

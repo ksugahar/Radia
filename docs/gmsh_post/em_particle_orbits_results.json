@@ -1,6 +1,6 @@
 {
- "generated_at_utc": "2026-08-11T02:15:29.593050+00:00",
- "radia_version": "4.95.50",
+ "generated_at_utc": "2026-08-11T10:53:40.721483+00:00",
+ "radia_version": "4.95.51",
  "python_version": "3.12.10",
  "platform": "Windows-2022Server-10.0.20348-SP0",
  "dispersion": {
@@ -41,7 +41,7 @@
    14999999.999925163,
    25000000.000701446
   ],
-  "sentinel": 275000000.0077159,
+  "sentinel": 125000000.00846428,
   "gif_bytes": 160768
  },
  "quadrupole": {
@@ -219,5 +219,5 @@
   "gmsh": "4.15.2"
  },
  "notebook": "em_particle_orbits.ipynb",
- "notebook_sha256": "24fcca5d735ed7b848eaf4f1787111361e2ba0bc37f8d75a52f36e62ecc33538"
+ "notebook_sha256": "531e1d7fbab557d9aba179aa483fe725d0fa011bbd8b2edb71738cc3c55edac7"
 }
