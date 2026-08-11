@@ -111,6 +111,7 @@ class VIMFunctionalShapeJacobian:
     response_jacobian: np.ndarray
     state_iterations: int
     adjoint_iterations: tuple[int, ...]
+    timings_s: dict[str, float] | None = None
 
 
 def sample_production_gettrafo_displacements(fes, displacement_modes, charge_basis,
@@ -549,7 +550,9 @@ def production_vim_functional_shape_jacobian_streaming(*, fes,
         dresponse_matrix=None, response_observations=None,
         response_weights=None, family=None, incident_response=None,
         dincident_response=None, solve_tolerance=1e-9,
-        solve_max_iterations=5000, mass_riesz=True):
+        solve_max_iterations=5000, mass_riesz=True,
+        cluster_coarse_size=0, cluster_deflation_size=0, recycle_size=0,
+        state=None, state_iterations=None):
     """Differentiate many linear accelerator-field functionals at once.
 
     The state and all response adjoints share one row-major native solve.
@@ -559,8 +562,16 @@ def production_vim_functional_shape_jacobian_streaming(*, fes,
     ``response_observations`` and row-major vector ``response_weights`` route
     ``dC`` through the exact native configured-field derivative.  An explicit
     ``dresponse_matrix`` remains available for other element families.
+    Optional cluster coarse, deflation, and recycle dimensions are forwarded
+    to the shared native multi-RHS solve; their zero defaults preserve the
+    measured cluster-free baseline.
+    A caller that already owns a converged state may pass ``state`` and its
+    optional ``state_iterations``.  Only response adjoints are then solved at
+    ``solve_tolerance``; the high-accuracy state is reused exactly.
     """
+    import time
     import scipy.sparse as sp
+    total_started=time.perf_counter()
     modes=tuple(deformation_modes);q=len(modes)
     if q==0: raise ValueError("at least one deformation mode is required")
     B=sp.csr_matrix(charge_map);n=B.shape[1]
@@ -599,8 +610,10 @@ def production_vim_functional_shape_jacobian_streaming(*, fes,
     # Geometry sampling is independent of the state/adjoint solutions.  Do it
     # before the expensive multi-RHS solve so an invalid resumed GetTrafo
     # mapping fails immediately instead of after a long Krylov run.
+    geometry_started=time.perf_counter()
     geometry=sample_production_gettrafo_displacements(
         fes,modes,charge_basis,family=family)
+    geometry_s=time.perf_counter()-geometry_started
     cells=np.stack(geometry.cell,axis=1)
     if geometry.family=="wedge":
         faces=np.zeros((q,len(geometry.face),9,3))
@@ -608,18 +621,42 @@ def production_vim_functional_shape_jacobian_streaming(*, fes,
             faces[:,host,:values.shape[1]]=values
     else: faces=np.stack(geometry.face,axis=1)
 
+    reused_state=None if state is None else np.asarray(
+        state,dtype=float).reshape(-1)
+    if reused_state is not None and (
+            reused_state.shape!=(n,) or not np.all(np.isfinite(reused_state))):
+        raise ValueError("reused functional shape state must be finite and match fes.ndof")
     charge_gram.restore_geometry_mass_matrix()
-    right_hand_sides=np.ascontiguousarray(np.vstack((b,C)),dtype=np.float64)
+    right_hand_sides=np.ascontiguousarray(
+        C if reused_state is not None else np.vstack((b,C)),dtype=np.float64)
+    cluster_coarse_size=int(cluster_coarse_size)
+    cluster_deflation_size=int(cluster_deflation_size)
+    recycle_size=int(recycle_size)
+    if min(cluster_coarse_size,cluster_deflation_size,recycle_size)<0:
+        raise ValueError("cluster solver dimensions must be non-negative")
+    solve_started=time.perf_counter()
     solved=charge_gram.solve_configured_linear_material_auto_prec_many(
         float(inv_chi),right_hand_sides,tol=float(solve_tolerance),
-        maxit=int(solve_max_iterations),cluster_coarse_size=0,
-        cluster_deflation_size=0,recycle_size=0,
+        maxit=int(solve_max_iterations),
+        cluster_coarse_size=cluster_coarse_size,
+        cluster_deflation_size=cluster_deflation_size,
+        recycle_size=min(recycle_size,len(right_hand_sides)),
         mass_riesz=bool(mass_riesz))
+    solve_s=time.perf_counter()-solve_started
     solutions=np.asarray(solved["m"],dtype=float)
     iterations=tuple(int(value) for value in solved["iters"])
-    if solutions.shape!=(nout+1,n) or len(iterations)!=nout+1:
+    expected_solutions=nout if reused_state is not None else nout+1
+    if solutions.shape!=(expected_solutions,n) or len(iterations)!=expected_solutions:
         raise RuntimeError("native functional shape solve returned invalid shapes")
-    state=solutions[0];adjoints=solutions[1:]
+    if reused_state is None:
+        state=solutions[0];adjoints=solutions[1:]
+        state_iteration_count=int(iterations[0])
+        adjoint_iteration_counts=tuple(iterations[1:])
+    else:
+        state=reused_state;adjoints=solutions
+        state_iteration_count=(0 if state_iterations is None else
+                               int(state_iterations))
+        adjoint_iteration_counts=tuple(iterations)
     response=C@state+incident
 
     bx=np.asarray(B@state).reshape(-1)
@@ -627,6 +664,7 @@ def production_vim_functional_shape_jacobian_streaming(*, fes,
     badjoints=[np.asarray(B@value).reshape(-1) for value in adjoints]
     cell_velocities=np.ascontiguousarray(cells)
     face_velocities=np.ascontiguousarray(faces)
+    response_derivative_started=time.perf_counter()
     if native_response:
         if geometry.family!="tet":
             raise ValueError("native configured-field response derivatives require TET geometry")
@@ -642,7 +680,9 @@ def production_vim_functional_shape_jacobian_streaming(*, fes,
             cell_velocities,face_velocities),dtype=float)
         if dC.shape!=(q,nout,n) or not np.all(np.isfinite(dC)):
             raise RuntimeError("native configured-field response derivative returned invalid data")
+    response_derivative_s=time.perf_counter()-response_derivative_started
     left_matrix=np.ascontiguousarray(np.stack(badjoints),dtype=float)
+    gram_started=time.perf_counter()
     if hasattr(charge_gram,"directional_derivative_contractions_many"):
         gram_terms=np.asarray(
             charge_gram.directional_derivative_contractions_many(
@@ -654,8 +694,12 @@ def production_vim_functional_shape_jacobian_streaming(*, fes,
                 geometry.family,cell_velocities,face_velocities,
                 np.ascontiguousarray(left),np.ascontiguousarray(bx)),dtype=float)
             for left in badjoints],axis=0)
+    gram_s=time.perf_counter()-gram_started
+    mass_started=time.perf_counter()
     mass_terms=assemble_ngsolve_hdiv_mass_shape_contractions(
         fes,modes,adjoints,state)
+    mass_s=time.perf_counter()-mass_started
+    post_started=time.perf_counter()
     jacobian=np.empty((nout,q),dtype=float)
     for k in range(q):
         if geometry.family=="tet":
@@ -670,8 +714,18 @@ def production_vim_functional_shape_jacobian_streaming(*, fes,
         jacobian[:,k]=(adjoints@db[k]-float(inv_chi)*mass_terms[:,k]
             -dbadjoints@Gbx-left_matrix@Gdbx-gram_terms[:,k]
             +dC[k]@state+dincident[k])
+    post_s=time.perf_counter()-post_started
+    timings={
+        "geometry":geometry_s,
+        "solve":solve_s,
+        "response_derivative":response_derivative_s,
+        "gram_contractions":gram_s,
+        "mass_contractions":mass_s,
+        "postprocess":post_s,
+        "total":time.perf_counter()-total_started,
+    }
     return VIMFunctionalShapeJacobian(state,response,jacobian,
-        int(iterations[0]),tuple(iterations[1:]))
+        state_iteration_count,adjoint_iteration_counts,timings)
 
 
 def linearize_laplace_pair_gram(points, weights, displacement_modes,
@@ -1040,6 +1094,35 @@ class CollaborativeElementBatchUpdate:
 
 
 @dataclass(frozen=True)
+class AbeMurataEquivalentMaterialDiagnostics:
+    """Continuous DUCAS/TSVD predictor behind a binary material proposal.
+
+    Murata and Abe compute a magnetizing-current distribution for the error
+    field, convert it to an equivalent ferromagnetic volume, update the mesh,
+    and repeat the field solve.  Here one source column is one complete
+    candidate element (or one coupled removal group).  The continuous TSVD
+    coefficients are therefore fractions of those material columns and
+    ``equivalent_volume_changes`` is their signed physical-volume analogue.
+
+    The response rows are divided by their engineering bands before the SVD,
+    because an accelerator objective mixes field and transfer-map units.
+    Consequently ``normalized_mode_field_strengths`` is Abe's per-mode field
+    strength applied to this dimensionless, band-normalized error field.
+    The values are a proposal diagnostic; committed geometry remains binary
+    and is accepted only after an exact active-system re-solve.
+    """
+    candidate_elements: np.ndarray
+    candidate_material_active: np.ndarray
+    retained_rank: int
+    singular_values: np.ndarray
+    normalized_mode_field_strengths: np.ndarray
+    mode_material_amplitudes: np.ndarray
+    signed_material_fractions: np.ndarray
+    equivalent_volume_changes: np.ndarray
+    projected_normalized_correction: np.ndarray
+
+
+@dataclass(frozen=True)
 class TSVDElementCandidateSelection:
     """Global whole-element proposal obtained from every candidate response."""
     selected_elements: np.ndarray
@@ -1059,6 +1142,7 @@ class TSVDElementCandidateSelection:
     linearized_reachability_max_band_ratio: float = float("inf")
     linearized_reachability_relative_residual: float = float("inf")
     linearized_reachable: bool = False
+    abe_murata_diagnostics: AbeMurataEquivalentMaterialDiagnostics | None = None
 
 
 @dataclass(frozen=True)
@@ -1096,6 +1180,12 @@ class HDivMMMGenerationIteration:
     linearized_reachability_max_band_ratio: float = float("inf")
     linearized_reachability_relative_residual: float = float("inf")
     linearized_reachable: bool = False
+    material_trust_volume_before: float | None = None
+    material_trust_volume_after: float | None = None
+    material_changed_volume: float = 0.0
+    graph_front_proposals_evaluated: int = 0
+    nonmonotone_search_depth: int = 0
+    abe_murata_diagnostics: AbeMurataEquivalentMaterialDiagnostics | None = None
 
 
 @dataclass(frozen=True)
@@ -1108,6 +1198,19 @@ class HDivMMMGenerationResult:
     source_scale: float = 1.0
     objective_response: np.ndarray | None = None
     stop_reason: str = "unknown"
+
+
+@dataclass(frozen=True)
+class _HDivMMMExactBeamState:
+    active: np.ndarray
+    state: np.ndarray
+    response: np.ndarray
+    objective_response: np.ndarray
+    ratio: float
+    source_scale: float
+    solve_iterations: int
+    depth: int
+    path: tuple[tuple[tuple[int, int], ...], ...]
 
 
 @dataclass(frozen=True)
@@ -1971,7 +2074,8 @@ def select_tsvd_element_candidates(*, current_response, response_target,
         predecessor_elements=None, relative_tolerance=1e-3,
         improvement_capture=0.9, ratio_tolerance=1e-12,
         candidate_volume_changes=None, candidate_material_active=None,
-        candidate_exclusion_groups=None
+        candidate_exclusion_groups=None, maximum_changed_volume=None,
+        maximum_changed_elements=None, candidate_secondary_cost=None
         ) -> TSVDElementCandidateSelection:
     """Select a global binary proposal from the TSVD of *all* candidates.
 
@@ -1980,9 +2084,11 @@ def select_tsvd_element_candidates(*, current_response, response_target,
     units.  TSVD removes response directions below ``relative_tolerance``.  A
     first 0--1 minimax solve finds the best truncated response under the volume
     and predecessor constraints; a second solve chooses the minimum-volume
-    set that captures ``improvement_capture`` of that best reduction.  No
-    element-count constraint is imposed here: proposal cardinality is a result
-    of the numerical response rank, target, volume budget, and binary LP.
+    set that captures ``improvement_capture`` of that best reduction.
+    ``maximum_changed_volume`` is the TOBS/SAIP trust radius on total material
+    flipped, distinct from the signed net ``volume_budget``.  It prevents a
+    large addition and a large removal from cancelling in the volume row while
+    producing a physically remote, poorly predicted proposal.
     When ``candidate_material_active`` is supplied, the retained TSVD
     pseudoinverse estimates signed material coefficients: positive coefficients
     activate currently inactive candidates and negative coefficients deactivate
@@ -2009,6 +2115,8 @@ def select_tsvd_element_candidates(*, current_response, response_target,
                      np.asarray(candidate_material_active,dtype=bool).reshape(-1))
     exclusion_groups=(None if candidate_exclusion_groups is None else
                       np.asarray(candidate_exclusion_groups,dtype=np.int64).reshape(-1))
+    secondary_cost=(None if candidate_secondary_cost is None else
+                    np.asarray(candidate_secondary_cost,dtype=float).reshape(-1))
     if (current.shape!=target.shape or target.shape!=band.shape or
             target.size==0 or np.any(band<=0.0)):
         raise ValueError("TSVD response, target, and band vectors must match")
@@ -2018,13 +2126,17 @@ def select_tsvd_element_candidates(*, current_response, response_target,
                                   material_active.shape!=elements.shape) or
             (exclusion_groups is not None and
              exclusion_groups.shape!=elements.shape) or
+            (secondary_cost is not None and
+             secondary_cost.shape!=elements.shape) or
             np.unique(elements).size!=elements.size or np.any(volumes<=0.0)):
         raise ValueError("TSVD candidate arrays have incompatible shapes")
     relative_tolerance=float(relative_tolerance)
     improvement_capture=float(improvement_capture)
     if (not 0.0<relative_tolerance<1.0 or
             not 0.0<improvement_capture<=1.0 or
-            not np.all(np.isfinite(delta))):
+            not np.all(np.isfinite(delta)) or
+            (secondary_cost is not None and
+             not np.all(np.isfinite(secondary_cost)))):
         raise ValueError("TSVD tolerances and candidate responses must be finite")
 
     normalized=np.ascontiguousarray(delta/band[:,None])
@@ -2041,9 +2153,47 @@ def select_tsvd_element_candidates(*, current_response, response_target,
     U=np.asarray(factor.U,dtype=float)
     singular=np.asarray(factor.S,dtype=float)
     V=np.asarray(factor.V,dtype=float)
+    correction=(target-current)/band
+    mode_projection=U.T@correction
+    normalized_mode_field_strengths=(mode_projection/
+        np.sqrt(float(correction.size)))
+    diagnostic_material_active=(
+        np.zeros(elements.size,dtype=bool) if material_active is None else
+        material_active.copy())
+
+    def abe_murata_diagnostics(retained_rank):
+        retained_rank=int(retained_rank)
+        mode_material_amplitudes=np.zeros_like(mode_projection)
+        if retained_rank:
+            mode_material_amplitudes[:retained_rank]=(
+                mode_projection[:retained_rank]/singular[:retained_rank])
+            signed_material_fractions=(
+                V[:,:retained_rank]@mode_material_amplitudes[:retained_rank])
+            projected=(
+                U[:,:retained_rank]@mode_projection[:retained_rank])
+        else:
+            signed_material_fractions=np.zeros(elements.size,dtype=float)
+            projected=np.zeros_like(correction)
+        return AbeMurataEquivalentMaterialDiagnostics(
+            candidate_elements=elements.copy(),
+            candidate_material_active=diagnostic_material_active.copy(),
+            retained_rank=retained_rank,
+            singular_values=np.asarray(singular,dtype=float).copy(),
+            normalized_mode_field_strengths=np.asarray(
+                normalized_mode_field_strengths,dtype=float).copy(),
+            mode_material_amplitudes=np.asarray(
+                mode_material_amplitudes,dtype=float).copy(),
+            signed_material_fractions=np.asarray(
+                signed_material_fractions,dtype=float).copy(),
+            equivalent_volume_changes=np.asarray(
+                signed_material_fractions*volumes,dtype=float),
+            projected_normalized_correction=np.asarray(
+                projected,dtype=float).copy())
+
     residual_scale=max(1.0,float(np.linalg.norm((current-target)/band)))
     if (singular.size==0 or not np.isfinite(singular[0]) or
             singular[0]<=relative_tolerance*residual_scale):
+        diagnostics=abe_murata_diagnostics(0)
         reachability_residual=current-target
         reachability_ratio=float(np.max(np.abs(reachability_residual/band)))
         reachability_relative=float(np.linalg.norm(reachability_residual/band)/
@@ -2057,11 +2207,11 @@ def select_tsvd_element_candidates(*, current_response, response_target,
             np.zeros(elements.size),0.0,
             "all normalized candidate responses are zero",
             reachability_residual,reachability_ratio,reachability_relative,
-            reachability_ratio<=1.0+float(ratio_tolerance))
+            reachability_ratio<=1.0+float(ratio_tolerance),
+            abe_murata_diagnostics=diagnostics)
     rank=max(1,int(np.count_nonzero(
         singular>=relative_tolerance*singular[0])))
     retained=(U[:,:rank]*singular[:rank])@V[:,:rank].T
-    correction=(target-current)/band
     projected_correction=U[:,:rank]@(U[:,:rank].T@correction)
     normalized_reachability_residual=projected_correction-correction
     reachability_residual=band*normalized_reachability_residual
@@ -2070,7 +2220,8 @@ def select_tsvd_element_candidates(*, current_response, response_target,
         normalized_reachability_residual)/max(
             np.finfo(float).tiny,float(np.linalg.norm(correction))))
     linearized_reachable=reachability_ratio<=1.0+float(ratio_tolerance)
-    coefficients=V[:,:rank]@((U[:,:rank].T@correction)/singular[:rank])
+    diagnostics=abe_murata_diagnostics(rank)
+    coefficients=diagnostics.signed_material_fractions
     truncated_delta=band[:,None]*retained
     discarded=float(np.linalg.norm(normalized-retained))
     total=float(np.linalg.norm(normalized))
@@ -2098,7 +2249,7 @@ def select_tsvd_element_candidates(*, current_response, response_target,
             int(factor.k_aca),np.asarray(singular,dtype=float),coefficients,
             relative_error,"TSVD magnetization signs admit no feasible boundary move",
             reachability_residual,reachability_ratio,reachability_relative,
-            linearized_reachable)
+            linearized_reachable,abe_murata_diagnostics=diagnostics)
     from scipy.linalg import qr
     feasible_v=V[feasible_columns,:rank]
     _,_,pivots=qr(feasible_v.T,mode="economic",pivoting=True)
@@ -2118,6 +2269,8 @@ def select_tsvd_element_candidates(*, current_response, response_target,
     move_volume_changes=volume_changes[feasible_columns]*move_directions
     move_exclusion_groups=(None if exclusion_groups is None else
                            exclusion_groups[feasible_columns])
+    move_secondary_cost=(None if secondary_cost is None else
+                         secondary_cost[feasible_columns])
 
     predecessor_pairs=None
     if predecessor_elements is not None:
@@ -2134,10 +2287,13 @@ def select_tsvd_element_candidates(*, current_response, response_target,
 
     best=solve_element_generation_lp(
         current,target,band,move_delta,move_volumes,
-        volume_budget=float(volume_budget),maximum_new_elements=None,
+        volume_budget=float(volume_budget),
+        maximum_new_elements=maximum_changed_elements,
         whole_elements=True,predecessor_pairs=predecessor_pairs,
+        candidate_objective_change=move_secondary_cost,
         candidate_volume_change=move_volume_changes,
-        candidate_exclusion_groups=move_exclusion_groups)
+        candidate_exclusion_groups=move_exclusion_groups,
+        maximum_changed_volume=maximum_changed_volume)
     current_ratio=float(np.max(np.abs((current-target)/band)))
     if (not np.any(best.selected) or
             best.predicted_max_band_ratio>=current_ratio-float(ratio_tolerance)):
@@ -2148,16 +2304,19 @@ def select_tsvd_element_candidates(*, current_response, response_target,
             relative_error,
             "TSVD global binary model found no improving insertion",
             reachability_residual,reachability_ratio,reachability_relative,
-            linearized_reachable)
+            linearized_reachable,abe_murata_diagnostics=diagnostics)
     capture_ratio=(current_ratio-improvement_capture*
                    (current_ratio-best.predicted_max_band_ratio))
     compact=solve_element_generation_lp(
         current,target,band,move_delta,move_volumes,
-        volume_budget=float(volume_budget),maximum_new_elements=None,
+        volume_budget=float(volume_budget),
+        maximum_new_elements=maximum_changed_elements,
         whole_elements=True,predecessor_pairs=predecessor_pairs,
+        candidate_objective_change=move_secondary_cost,
         predicted_ratio_cap=capture_ratio,
         candidate_volume_change=move_volume_changes,
-        candidate_exclusion_groups=move_exclusion_groups)
+        candidate_exclusion_groups=move_exclusion_groups,
+        maximum_changed_volume=maximum_changed_volume)
     selected_columns=feasible_columns[np.asarray(compact.selected,dtype=bool)]
     selected=elements[selected_columns]
     return TSVDElementCandidateSelection(
@@ -2168,7 +2327,7 @@ def select_tsvd_element_candidates(*, current_response, response_target,
         int(factor.k_aca),np.asarray(singular,dtype=float),coefficients,relative_error,
         "all-candidate band-normalized TSVD plus binary LP",
         reachability_residual,reachability_ratio,reachability_relative,
-        linearized_reachable)
+        linearized_reachable,abe_murata_diagnostics=diagnostics)
 
 
 def _interpolate_screened_response_correction(
@@ -2515,7 +2674,8 @@ def select_tsvd_exact_block_batch(*, current_response, response_target,
 
 def solve_hdiv_mmm_active_elements(*, charge_gram, fes, inv_chi, rhs,
         response_matrix, active_elements, incident_response=None,
-        solve_tolerance=1e-9, solve_max_iterations=5000, mass_riesz=True):
+        solve_tolerance=1e-9, solve_max_iterations=5000, mass_riesz=True,
+        cluster_coarse_size=0, cluster_deflation_size=0, recycle_size=0):
     """Solve one exact whole-element active iron set on the fixed superset mesh.
 
     The native Krylov routine uses periodically refreshed true residuals, but
@@ -2538,10 +2698,17 @@ def solve_hdiv_mmm_active_elements(*, charge_gram, fes, inv_chi, rhs,
     charge_gram.set_configured_constraints(np.flatnonzero(mask).astype(np.int32),
                                            preserve_existing=False)
     active_rhs=rhs_full.copy();active_rhs[mask]=0.0
+    cluster_coarse_size=int(cluster_coarse_size)
+    cluster_deflation_size=int(cluster_deflation_size)
+    recycle_size=int(recycle_size)
+    if min(cluster_coarse_size,cluster_deflation_size,recycle_size)<0:
+        raise ValueError("cluster solve sizes must be nonnegative")
     result=charge_gram.solve_configured_linear_material_auto_prec_many(
         float(inv_chi),np.ascontiguousarray(active_rhs[None,:]),
         tol=float(solve_tolerance),maxit=int(solve_max_iterations),
-        cluster_coarse_size=0,cluster_deflation_size=0,recycle_size=0,
+        cluster_coarse_size=cluster_coarse_size,
+        cluster_deflation_size=cluster_deflation_size,
+        recycle_size=recycle_size,
         mass_riesz=bool(mass_riesz))
     state=np.asarray(result["m"],dtype=float)[0]
     applied=np.asarray(
@@ -2594,6 +2761,15 @@ def grow_hdiv_mmm_by_superposition(*, charge_gram, fes, inv_chi, rhs,
         proposal_solve_tolerance=1e-5,
         minimum_model_agreement=0.1,
         proposal_trust_region_trials=4,
+        initial_material_move_fraction=None,
+        maximum_material_move_fraction=0.25,
+        graph_interface_weight=0.0,
+        graph_front_maximum_components=2,
+        graph_front_beam_width=64,
+        graph_front_proposal_limit=8,
+        exact_beam_width=0,
+        exact_beam_depth=0,
+        exact_beam_barrier_fraction=0.25,
         removal_cluster_count=0,
         iteration_callback=None) -> HDivMMMGenerationResult:
     """Grow connected whole iron elements by Schur superposition and 0-1 LP.
@@ -2667,6 +2843,34 @@ def grow_hdiv_mmm_by_superposition(*, charge_gram, fes, inv_chi, rhs,
     boolean active mask and must return truth for an admissible shape.  This is
     intended for exact rules such as a one-cell Lipschitz bound on neighbouring
     pole-end columns; it is never a density penalty or finite-difference model.
+
+    ``initial_material_move_fraction`` enables a TOBS/SAIP-style trust region
+    on the *total physical volume flipped* by one signed add/remove proposal.
+    This is deliberately independent of the net iron-volume constraint: a
+    large addition and a large deletion may have zero net volume but remain a
+    remote, poorly predicted binary state.  Accepted physical re-solves expand,
+    hold, or shrink the radius from their actual/predicted reduction ratio.
+
+    ``graph_interface_weight`` adds a physical facet-area regularizer to the
+    lexicographic binary master after the best response-band reduction has been
+    fixed.  Analytic signed Schur response columns are never filtered or
+    averaged across iterations.
+
+    The same face graph also supplies a connected-front challenge when
+    ``graph_front_proposal_limit`` is positive.  ACA/QR/TSVD representatives
+    seed each component; every subsequent move must touch that component.
+    Its maximum cardinality is derived from the current physical-volume trust
+    radius (or, without one, from the retained response rank), never from a
+    fixed ``try N elements`` batch.
+
+    A positive ``exact_beam_width`` and ``exact_beam_depth`` enable a bounded
+    nonmonotone Lego search.  Rejected graph-front states that have already
+    passed a complete HDiv-MMM solve may be retained inside
+    ``exact_beam_barrier_fraction`` of the best incumbent.  They are
+    relinearized as ordinary binary states, but are never returned unless a
+    descendant improves the incumbent.  Thus the beam can cross a shallow
+    discrete barrier without accepting a worse final design or using a design
+    finite difference.
     """
     active=np.asarray(active_elements,dtype=bool).reshape(-1).copy()
     volumes=np.asarray(element_volumes,dtype=float).reshape(-1)
@@ -2695,6 +2899,34 @@ def grow_hdiv_mmm_by_superposition(*, charge_gram, fes, inv_chi, rhs,
     if (not 0.0<float(batch_improvement_capture)<=1.0 or
             not 0.0<float(tsvd_relative_tolerance)<1.0):
         raise ValueError("TSVD selection parameters are invalid")
+    move_fraction=(None if initial_material_move_fraction is None else
+                   float(initial_material_move_fraction))
+    maximum_move_fraction=float(maximum_material_move_fraction)
+    if ((move_fraction is not None and
+         (not np.isfinite(move_fraction) or not 0.0<move_fraction<=1.0)) or
+            not np.isfinite(maximum_move_fraction) or
+            not 0.0<maximum_move_fraction<=1.0 or
+            (move_fraction is not None and
+             maximum_move_fraction<move_fraction)):
+        raise ValueError(
+            "material move fractions must satisfy 0 < initial <= maximum <= 1")
+    graph_interface_weight=float(graph_interface_weight)
+    graph_front_maximum_components=int(graph_front_maximum_components)
+    graph_front_beam_width=int(graph_front_beam_width)
+    graph_front_proposal_limit=int(graph_front_proposal_limit)
+    exact_beam_width=int(exact_beam_width)
+    exact_beam_depth=int(exact_beam_depth)
+    exact_beam_barrier_fraction=float(exact_beam_barrier_fraction)
+    if (not np.isfinite(graph_interface_weight) or
+            graph_interface_weight<0.0 or
+            graph_front_maximum_components<1 or
+            graph_front_beam_width<1 or graph_front_proposal_limit<0 or
+            exact_beam_width<0 or exact_beam_depth<0 or
+            not np.isfinite(exact_beam_barrier_fraction) or
+            exact_beam_barrier_fraction<0.0):
+        raise ValueError("graph-front parameters are invalid")
+    if exact_beam_width==0 or exact_beam_depth==0:
+        exact_beam_width=0;exact_beam_depth=0
     calibration=(None if source_calibration_rows is None else
                  np.asarray(source_calibration_rows,dtype=np.int64).reshape(-1))
     if response_transform_jacobian is not None and response_transform is None:
@@ -2764,6 +2996,38 @@ def grow_hdiv_mmm_by_superposition(*, charge_gram, fes, inv_chi, rhs,
     if (removal_groups.shape!=active.shape or np.any(removal_groups<-1)):
         raise ValueError(
             "removal_coupling_groups must contain group ids or -1")
+    movable=~(fixed|fixed_active)
+    if not np.any(movable):
+        raise ValueError("HDiv-MMM generation needs movable material elements")
+    movable_volume=float(np.sum(volumes[movable]))
+    minimum_material_move=float(np.min(volumes[movable]))
+    maximum_material_move=max(
+        minimum_material_move,maximum_move_fraction*movable_volume)
+    material_trust_volume=(None if move_fraction is None else min(
+        maximum_material_move,max(
+            minimum_material_move,move_fraction*movable_volume)))
+    graph_enabled=bool(
+        graph_front_proposal_limit>0 or graph_interface_weight>0.0)
+    if graph_enabled:
+        from ._topopt_graph import ngsolve_facet_measure_graph
+        (element_graph,element_exterior,
+         element_interface_weights)=ngsolve_facet_measure_graph(fes.mesh)
+    else:
+        element_graph=None;element_exterior=None
+        element_interface_weights=None
+    graph_front_data=None
+    graph_front_budget=None
+
+    def update_material_trust(before,changed,agreement):
+        if before is None:
+            return None
+        before=float(before);changed=float(changed);agreement=float(agreement)
+        if agreement<0.25:
+            return max(minimum_material_move,0.5*before)
+        if agreement>0.75 and changed>=0.8*before:
+            return min(maximum_material_move,max(
+                before+minimum_material_move,1.5*before))
+        return before
 
     def valid_active_set(mask):
         values=np.asarray(mask,dtype=bool).reshape(-1)
@@ -2771,6 +3035,11 @@ def grow_hdiv_mmm_by_superposition(*, charge_gram, fes, inv_chi, rhs,
             return False
         if not np.any(values):
             return False
+        if predecessors is not None:
+            dependent=np.flatnonzero(values&(predecessors>=0))
+            if (dependent.size and
+                    np.any(~values[predecessors[dependent]])):
+                return False
         if not ngsolve_growth_topology(fes.mesh,values).valid:
             return False
         if active_set_validator is None:
@@ -2830,7 +3099,10 @@ def grow_hdiv_mmm_by_superposition(*, charge_gram, fes, inv_chi, rhs,
         charge_gram=charge_gram,fes=fes,inv_chi=inv_chi,rhs=rhs,
         response_matrix=response_matrix,active_elements=active,
         incident_response=incident_response,solve_tolerance=solve_tolerance,
-        solve_max_iterations=solve_max_iterations,mass_riesz=mass_riesz)
+        solve_max_iterations=solve_max_iterations,mass_riesz=mass_riesz,
+        cluster_coarse_size=cluster_coarse_size,
+        cluster_deflation_size=cluster_deflation_size,
+        recycle_size=recycle_size)
     state,response,source_scale=calibrate_source(state,response)
     element_blocks=ngsolve_discontinuous_element_dof_blocks(fes)
     ratio=lambda values:float(np.max(np.abs((np.asarray(values)-target)/band)))
@@ -2838,9 +3110,79 @@ def grow_hdiv_mmm_by_superposition(*, charge_gram, fes, inv_chi, rhs,
     current_ratio=ratio(objective_response);history=[]
     converged=current_ratio<=1.0+ratio_tolerance
     stop_reason="target_met" if converged else "max_iterations"
-    for iteration in range(int(max_iterations)):
+    search_depth=0
+    search_path=()
+    pending_exact_states=[]
+    visited_exact_states={np.packbits(active).tobytes()}
+
+    def exact_snapshot(*,active_value,state_value,response_value,
+                       objective_value,ratio_value,scale_value,
+                       iterations_value,depth_value,path_value):
+        return _HDivMMMExactBeamState(
+            np.asarray(active_value,dtype=bool).copy(),
+            np.asarray(state_value,dtype=float).copy(),
+            np.asarray(response_value,dtype=float).copy(),
+            np.asarray(objective_value,dtype=float).copy(),float(ratio_value),
+            float(scale_value),int(iterations_value),int(depth_value),
+            tuple(path_value))
+
+    incumbent=exact_snapshot(
+        active_value=active,state_value=state,response_value=response,
+        objective_value=objective_response,ratio_value=current_ratio,
+        scale_value=source_scale,iterations_value=solve_iterations,
+        depth_value=0,path_value=())
+
+    def next_nonmonotone_state(trials):
+        """Queue exact, topology-valid barrier states and pop one beam node."""
+        nonlocal pending_exact_states
+        if not exact_beam_width or search_depth>=exact_beam_depth:
+            return None
+        barrier=incumbent.ratio*(1.0+exact_beam_barrier_fraction)
+        for trial in trials:
+            key=np.packbits(trial.active).tobytes()
+            if (trial.depth<=exact_beam_depth and
+                    trial.ratio<=barrier+ratio_tolerance and
+                    key not in visited_exact_states):
+                visited_exact_states.add(key);pending_exact_states.append(trial)
+
+        # Preserve the best exact ratio at every depth, then use normalized
+        # response-space novelty.  This prevents a beam from spending all its
+        # width on near-identical Lego states from one terminal station.
+        pruned=[]
+        for depth in sorted({value.depth for value in pending_exact_states}):
+            pool=sorted((value for value in pending_exact_states
+                         if value.depth==depth),
+                        key=lambda value:(value.ratio,value.path))
+            if not pool:
+                continue
+            chosen=[pool.pop(0)]
+            while pool and len(chosen)<exact_beam_width:
+                def diversity(value):
+                    novelty=min(float(np.linalg.norm(
+                        (value.objective_response-other.objective_response)/band))
+                        for other in chosen)
+                    return (novelty/max(value.ratio,1.0),-value.ratio)
+                index=max(range(len(pool)),key=lambda value:diversity(pool[value]))
+                chosen.append(pool.pop(index))
+            pruned.extend(chosen)
+        pending_exact_states=pruned
+        if not pending_exact_states:
+            return None
+        pending_exact_states.sort(
+            key=lambda value:(value.depth,value.ratio,value.path))
+        return pending_exact_states.pop(0)
+
+    maximum_improvements=max(0,int(max_iterations))
+    expansion_limit=maximum_improvements*(
+        1+exact_beam_width*exact_beam_depth)
+    expansion=0
+    while expansion<expansion_limit and len(history)<maximum_improvements:
+        iteration=len(history);expansion+=1
         if converged:
             stop_reason="target_met";break
+        material_trust_before=material_trust_volume
+        graph_front_data=None
+        exact_trial_states=[]
         remaining=float(volume_max)-float(volumes@active)
         candidates=ngsolve_boundary_growth_candidates(
             fes.mesh,active,fixed_inactive_elements=fixed,
@@ -2879,7 +3221,9 @@ def grow_hdiv_mmm_by_superposition(*, charge_gram, fes, inv_chi, rhs,
                 candidate_material_active=np.ones(len(removal_candidates),dtype=bool),
                 relative_tolerance=float(tsvd_relative_tolerance),
                 improvement_capture=float(batch_improvement_capture),
-                ratio_tolerance=ratio_tolerance)
+                ratio_tolerance=ratio_tolerance,
+                maximum_changed_volume=material_trust_volume,
+                maximum_changed_elements=maximum_cap)
             selected_remove=np.asarray(removal_tsvd.selected_elements,dtype=np.int64)[
                 np.asarray(removal_tsvd.selected_directions)<0]
             if selected_remove.size==0:
@@ -2953,7 +3297,10 @@ def grow_hdiv_mmm_by_superposition(*, charge_gram, fes, inv_chi, rhs,
                         incident_response=incident_response,
                         solve_tolerance=solve_tolerance,
                         solve_max_iterations=solve_max_iterations,
-                        mass_riesz=mass_riesz)
+                        mass_riesz=mass_riesz,
+                        cluster_coarse_size=cluster_coarse_size,
+                        cluster_deflation_size=cluster_deflation_size,
+                        recycle_size=recycle_size)
                 try:
                     trial_state,trial_response,trial_scale=calibrate_source(
                         trial_state,trial_response)
@@ -2961,6 +3308,15 @@ def grow_hdiv_mmm_by_superposition(*, charge_gram, fes, inv_chi, rhs,
                 except (RuntimeError,ValueError):
                     continue
                 trial_ratio=ratio(trial_objective)
+                exact_trial_states.append(exact_snapshot(
+                    active_value=trial_active,state_value=trial_state,
+                    response_value=trial_response,
+                    objective_value=trial_objective,ratio_value=trial_ratio,
+                    scale_value=trial_scale,
+                    iterations_value=trial_iterations,
+                    depth_value=search_depth+1,
+                    path_value=search_path+(tuple(
+                        (int(element),-1) for element in bundle),)))
                 if (trial_ratio<current_ratio-ratio_tolerance and
                         (best is None or trial_ratio<best[0])):
                     best=(trial_ratio,bundle,expanded,trial_active,trial_state,
@@ -2974,9 +3330,39 @@ def grow_hdiv_mmm_by_superposition(*, charge_gram, fes, inv_chi, rhs,
                     # only when all earlier global/nested proposals fail.
                     break
             if best is None:
-                stop_reason="conditional_exact_rejected_removal_front";break
+                branch=next_nonmonotone_state(exact_trial_states)
+                if branch is not None:
+                    active=branch.active;state=branch.state
+                    response=branch.response
+                    objective_response=branch.objective_response
+                    current_ratio=branch.ratio
+                    source_scale=branch.source_scale
+                    solve_iterations=branch.solve_iterations
+                    search_depth=branch.depth;search_path=branch.path
+                    stop_reason="exact_nonmonotone_beam_in_progress"
+                    continue
+                stop_reason=("exact_nonmonotone_beam_exhausted" if
+                    exact_beam_width else
+                    "conditional_exact_rejected_removal_front")
+                break
             (actual,selected_remove,removed_physical,trial_active,trial_state,trial_response,
              trial_iterations,trial_scale,trial_objective)=best
+            if (search_depth>0 and
+                    actual>=incumbent.ratio-ratio_tolerance):
+                branch=next_nonmonotone_state(exact_trial_states)
+                if branch is not None:
+                    active=branch.active;state=branch.state
+                    response=branch.response
+                    objective_response=branch.objective_response
+                    current_ratio=branch.ratio
+                    source_scale=branch.source_scale
+                    solve_iterations=branch.solve_iterations
+                    search_depth=branch.depth;search_path=branch.path
+                    stop_reason="exact_nonmonotone_beam_in_progress"
+                    continue
+                stop_reason="exact_nonmonotone_beam_exhausted"
+                break
+            accepted_search_depth=search_depth
             selected_columns=np.asarray([
                 removal_lookup[int(element)] for element in selected_remove],
                 dtype=np.int64)
@@ -2984,6 +3370,9 @@ def grow_hdiv_mmm_by_superposition(*, charge_gram, fes, inv_chi, rhs,
                             np.sum(material_matrix[:,selected_columns],axis=1))
             agreement=((current_ratio-actual)/(current_ratio-predicted)
                        if predicted<current_ratio-ratio_tolerance else 0.0)
+            changed_volume=float(np.sum(volumes[removed_physical]))
+            material_trust_volume=update_material_trust(
+                material_trust_before,changed_volume,agreement)
             active=trial_active;state=trial_state;response=trial_response
             solve_iterations=trial_iterations;source_scale=trial_scale
             objective_response=trial_objective;current_ratio=actual
@@ -3006,9 +3395,22 @@ def grow_hdiv_mmm_by_superposition(*, charge_gram, fes, inv_chi, rhs,
                     removal_tsvd.linearized_reachability_max_band_ratio),
                 linearized_reachability_relative_residual=float(
                     removal_tsvd.linearized_reachability_relative_residual),
-                linearized_reachable=bool(removal_tsvd.linearized_reachable))
+                linearized_reachable=bool(removal_tsvd.linearized_reachable),
+                material_trust_volume_before=material_trust_before,
+                material_trust_volume_after=material_trust_volume,
+                material_changed_volume=changed_volume,
+                nonmonotone_search_depth=int(accepted_search_depth),
+                abe_murata_diagnostics=(
+                    removal_tsvd.abe_murata_diagnostics))
             history.append(row)
             if iteration_callback is not None: iteration_callback(row)
+            incumbent=exact_snapshot(
+                active_value=active,state_value=state,response_value=response,
+                objective_value=objective_response,ratio_value=current_ratio,
+                scale_value=source_scale,iterations_value=solve_iterations,
+                depth_value=0,path_value=())
+            search_depth=0;search_path=();pending_exact_states=[]
+            visited_exact_states={np.packbits(active).tobytes()}
             converged=current_ratio<=1.0+ratio_tolerance
             if converged: stop_reason="target_met"
             continue
@@ -3070,6 +3472,7 @@ def grow_hdiv_mmm_by_superposition(*, charge_gram, fes, inv_chi, rhs,
                                     approximate_state,approximate_response):
             nonlocal tsvd_proposal,tsvd_material_data
             nonlocal fallback_addition_elements,removal_cluster_front
+            nonlocal graph_front_data
             elements=np.asarray(elements,dtype=np.int64).reshape(-1)
             if objective_projection is None:
                 _,base_calibrated,_=calibrate_source(
@@ -3099,6 +3502,8 @@ def grow_hdiv_mmm_by_superposition(*, charge_gram, fes, inv_chi, rhs,
             material_elements=list(map(int,valid_elements))
             material_is_active=[False]*len(material_elements)
             material_volumes=list(map(float,volumes[valid_elements]))
+            material_members=[np.asarray([int(element)],dtype=np.int64)
+                              for element in valid_elements]
             removal_blocks=tuple(np.concatenate([
                 element_blocks[int(member)]
                 for member in removal_members[int(element)]])
@@ -3134,10 +3539,40 @@ def grow_hdiv_mmm_by_superposition(*, charge_gram, fes, inv_chi, rhs,
                 material_is_active.append(True)
                 material_volumes.append(float(np.sum(
                     volumes[removal_members[int(element)]])))
+                material_members.append(np.asarray(
+                    removal_members[int(element)],dtype=np.int64))
             material_elements=np.asarray(material_elements,dtype=np.int64)
             material_matrix=np.column_stack(material_effective)
             material_is_active=np.asarray(material_is_active,dtype=bool)
             material_volumes=np.asarray(material_volumes,dtype=float)
+            secondary_cost=None
+            if graph_enabled:
+                from ._topopt_graph import (
+                    binary_graph_interface_energy,
+                    candidate_face_adjacency,
+                )
+                directions=np.where(material_is_active,-1,1).astype(np.int8)
+                signed_matrix=material_matrix*directions[None,:]
+                candidate_graph=candidate_face_adjacency(
+                    material_members,element_graph)
+                base_interface=binary_graph_interface_energy(
+                    active,element_graph,exterior_degree=element_exterior,
+                    edge_weights=element_interface_weights)
+                interface_delta=[]
+                for direction,members in zip(directions,material_members):
+                    trial=active.copy();trial[members]=(direction>0)
+                    interface_delta.append(binary_graph_interface_energy(
+                        trial,element_graph,
+                        exterior_degree=element_exterior,
+                        edge_weights=element_interface_weights)-base_interface)
+                interface_delta=np.asarray(interface_delta,dtype=float)
+                interface_scale=max(
+                    1.0,float(np.max(np.abs(interface_delta))))
+                volume_scale=max(
+                    1.0e-300,float(np.max(material_volumes)))
+                secondary_cost=(
+                    0.05*material_volumes/volume_scale
+                    +graph_interface_weight*interface_delta/interface_scale)
             tsvd_material_data=(
                 np.asarray(base_objective,dtype=float).copy(),
                 material_elements.copy(),material_matrix.copy(),
@@ -3152,7 +3587,23 @@ def grow_hdiv_mmm_by_superposition(*, charge_gram, fes, inv_chi, rhs,
                 candidate_material_active=material_is_active,
                 relative_tolerance=float(tsvd_relative_tolerance),
                 improvement_capture=float(batch_improvement_capture),
-                ratio_tolerance=ratio_tolerance)
+                ratio_tolerance=ratio_tolerance,
+                maximum_changed_volume=material_trust_volume,
+                maximum_changed_elements=maximum_cap,
+                candidate_secondary_cost=secondary_cost)
+            if graph_enabled and graph_front_proposal_limit:
+                graph_front_data=dict(
+                    base=np.asarray(base_objective,dtype=float).copy(),
+                    elements=material_elements.copy(),
+                    directions=np.where(
+                        material_is_active,-1,1).astype(np.int8),
+                    signed_matrix=(material_matrix*np.where(
+                        material_is_active,-1,1)[None,:]),
+                    volumes=material_volumes.copy(),
+                    members=tuple(value.copy() for value in material_members),
+                    adjacency=candidate_graph,
+                    secondary=(None if secondary_cost is None else
+                               np.asarray(secondary_cost,dtype=float).copy()))
             removal_material_columns=np.flatnonzero(material_is_active)
             if removal_material_columns.size:
                 requested=(removal_cluster_count if removal_cluster_count>0
@@ -3354,6 +3805,7 @@ def grow_hdiv_mmm_by_superposition(*, charge_gram, fes, inv_chi, rhs,
             move_elements,representative_elements)))
         removed_elements=np.empty(0,dtype=np.int64)
         mixed_accepted=False
+        graph_proposal_count=0
 
         # The global signed proposal -- additions, removals, or both -- is
         # tested by one complete re-solve.  Poor model agreement shrinks a
@@ -3362,26 +3814,27 @@ def grow_hdiv_mmm_by_superposition(*, charge_gram, fes, inv_chi, rhs,
         # still determines membership and cardinality, while the physical
         # re-solve controls only the admissible size of the material move.
         # No finite difference or gray material is introduced.
-        if move_elements.size:
+        if move_elements.size or graph_front_data is not None:
             exact_evaluated=0
             trust_proposals=[tsvd_proposal]
-            if (trust_region_trials>1 and tsvd_material_data is not None and
-                    proposed_additions.size):
+            if trust_region_trials>1 and tsvd_material_data is not None:
                 (material_base,material_elements,material_matrix,
                  material_volumes,material_is_active)=tsvd_material_data
                 volume_lookup={int(element):float(material_volumes[column])
                     for column,element in enumerate(material_elements)}
-                positive_volume=float(sum(
+                proposed_changed_volume=float(sum(
                     volume_lookup[int(element)]
-                    for element in proposed_additions))
-                inactive_volumes=material_volumes[~material_is_active]
-                minimum_volume=float(np.min(inactive_volumes))
+                    for element in move_elements))
+                minimum_volume=float(np.min(material_volumes))
+                initial_trust=(proposed_changed_volume if
+                    material_trust_volume is None else
+                    float(material_trust_volume))
                 seen={tuple(sorted(zip(
                     map(int,move_elements),map(int,move_directions))))}
                 for shrink in range(1,trust_region_trials):
                     trust_budget=max(
-                        minimum_volume,positive_volume*(0.5**shrink))
-                    if trust_budget>=positive_volume-ratio_tolerance:
+                        minimum_volume,initial_trust*(0.5**shrink))
+                    if trust_budget>=proposed_changed_volume-ratio_tolerance:
                         continue
                     alternate=select_tsvd_element_candidates(
                         current_response=material_base,
@@ -3389,13 +3842,15 @@ def grow_hdiv_mmm_by_superposition(*, charge_gram, fes, inv_chi, rhs,
                         candidate_elements=material_elements,
                         candidate_response_delta=material_matrix,
                         candidate_volumes=material_volumes,
-                        volume_budget=min(max(0.0,remaining),trust_budget),
+                        volume_budget=max(0.0,remaining),
                         active_elements=active,
                         predecessor_elements=predecessors,
                         candidate_material_active=material_is_active,
                         relative_tolerance=float(tsvd_relative_tolerance),
                         improvement_capture=float(batch_improvement_capture),
-                        ratio_tolerance=ratio_tolerance)
+                        ratio_tolerance=ratio_tolerance,
+                        maximum_changed_volume=trust_budget,
+                        maximum_changed_elements=maximum_cap)
                     alternate_elements=np.asarray(
                         alternate.selected_elements,dtype=np.int64)
                     alternate_directions=np.asarray(
@@ -3407,12 +3862,135 @@ def grow_hdiv_mmm_by_superposition(*, charge_gram, fes, inv_chi, rhs,
                     if trust_budget<=minimum_volume+ratio_tolerance:
                         break
 
+            if graph_front_data is not None:
+                from ._topopt_graph import (
+                    connected_graph_front_beam,minimax_driving_potential)
+                graph_elements=graph_front_data["elements"]
+                graph_directions=graph_front_data["directions"]
+                graph_volumes=graph_front_data["volumes"]
+                graph_members=graph_front_data["members"]
+                graph_lookup={(int(element),int(direction)):column
+                    for column,(element,direction) in enumerate(zip(
+                        graph_elements,graph_directions))}
+                seed_indices=[]
+                for element,direction in zip(
+                        np.r_[tsvd_proposal.selected_elements,
+                              tsvd_proposal.representative_elements],
+                        np.r_[tsvd_proposal.selected_directions,
+                              tsvd_proposal.representative_directions]):
+                    column=graph_lookup.get((int(element),int(direction)))
+                    if column is not None and column not in seed_indices:
+                        seed_indices.append(column)
+                if not seed_indices:
+                    raw_drive,_=minimax_driving_potential(
+                        graph_front_data["base"],target,band,
+                        graph_front_data["signed_matrix"])
+                    seed_indices=[int(np.argmax(raw_drive))]
+
+                physical_max=len(graph_elements)
+                if material_trust_before is not None:
+                    cumulative=np.cumsum(np.sort(graph_volumes))
+                    physical_max=max(1,int(np.count_nonzero(
+                        cumulative<=material_trust_before+ratio_tolerance)))
+                if maximum_cap is not None:
+                    physical_max=min(physical_max,maximum_cap)
+                rank_budget=max(1,int(tsvd_proposal.numerical_rank)+1,
+                    int(len(tsvd_proposal.selected_elements)))
+                if graph_front_budget is None:
+                    graph_front_budget=min(physical_max,rank_budget)
+                else:
+                    graph_front_budget=min(physical_max,
+                                           max(1,int(graph_front_budget)))
+
+                def graph_bundle_mask(bundle):
+                    trial=active.copy()
+                    for column in bundle:
+                        trial[graph_members[int(column)]]=(
+                            graph_directions[int(column)]>0)
+                    return trial
+
+                def graph_bundle_valid(bundle):
+                    columns=np.asarray(bundle,dtype=np.int64)
+                    if (material_trust_before is not None and
+                            float(np.sum(graph_volumes[columns]))>
+                            material_trust_before+ratio_tolerance):
+                        return False
+                    trial=graph_bundle_mask(bundle)
+                    return (float(volumes@trial)<=float(volume_max)+1e-14 and
+                            valid_active_set(trial))
+
+                secondary=graph_front_data["secondary"]
+                secondary_scale=(1.0 if secondary is None else
+                    max(1.0,float(np.max(np.abs(secondary)))))
+                def graph_regularization(bundle):
+                    if secondary is None:
+                        return 0.0
+                    # Strictly a near-tie regularizer; raw response columns
+                    # and the exact physical acceptance ratio remain unchanged.
+                    return (1.0e-9/secondary_scale)*float(
+                        np.sum(secondary[np.asarray(bundle,dtype=np.int64)]))
+
+                graph_proposals=connected_graph_front_beam(
+                    current_response=graph_front_data["base"],
+                    response_target=target,response_band=band,
+                    candidate_response_delta=graph_front_data["signed_matrix"],
+                    adjacency=graph_front_data["adjacency"],
+                    seed_indices=seed_indices,
+                    maximum_size=graph_front_budget,
+                    maximum_components=graph_front_maximum_components,
+                    beam_width=graph_front_beam_width,
+                    proposal_limit=graph_front_proposal_limit,
+                    regularization_change=graph_regularization,
+                    is_valid=graph_bundle_valid)
+                seen_proposals={tuple(sorted(zip(
+                    map(int,proposal.selected_elements),
+                    map(int,proposal.selected_directions))))
+                    for proposal in trust_proposals}
+                for graph_proposal in graph_proposals:
+                    columns=np.asarray(
+                        graph_proposal.candidate_indices,dtype=np.int64)
+                    key=tuple(sorted(zip(
+                        map(int,graph_elements[columns]),
+                        map(int,graph_directions[columns]))))
+                    if not key or key in seen_proposals:
+                        continue
+                    seen_proposals.add(key)
+                    trust_proposals.append(TSVDElementCandidateSelection(
+                        graph_elements[columns].copy(),
+                        graph_directions[columns].copy(),
+                        np.asarray(tsvd_proposal.representative_elements,
+                                   dtype=np.int64).copy(),
+                        np.asarray(tsvd_proposal.representative_directions,
+                                   dtype=np.int8).copy(),
+                        np.asarray(graph_proposal.predicted_response,
+                                   dtype=float).copy(),
+                        float(graph_proposal.predicted_max_band_ratio),
+                        float(np.sum(graph_volumes[columns]*
+                                     graph_directions[columns])),
+                        int(tsvd_proposal.numerical_rank),
+                        int(tsvd_proposal.aca_rank),
+                        np.asarray(tsvd_proposal.singular_values,
+                                   dtype=float).copy(),
+                        np.asarray(tsvd_proposal.signed_coefficients,
+                                   dtype=float).copy(),
+                        float(tsvd_proposal.relative_truncation_error),
+                        "connected ACA/QR/TSVD-seeded graph-front",
+                        tsvd_proposal.linearized_reachability_residual,
+                        tsvd_proposal.linearized_reachability_max_band_ratio,
+                        tsvd_proposal.linearized_reachability_relative_residual,
+                        tsvd_proposal.linearized_reachable))
+                    graph_proposal_count+=1
+
             best_trial=None
+            meaningful_ratio_tolerance=(
+                ratio_tolerance*max(1.0,float(current_ratio)))
             for proposal_index,proposal in enumerate(trust_proposals):
                 trial_elements=np.asarray(
                     proposal.selected_elements,dtype=np.int64)
                 trial_directions=np.asarray(
                     proposal.selected_directions,dtype=np.int8)
+                if trial_elements.size==0:
+                    continue
                 trial_additions=trial_elements[trial_directions>0]
                 trial_removals=trial_elements[trial_directions<0]
                 trial_active=active.copy();trial_active[trial_additions]=True
@@ -3432,7 +4010,10 @@ def grow_hdiv_mmm_by_superposition(*, charge_gram, fes, inv_chi, rhs,
                         incident_response=incident_response,
                         solve_tolerance=solve_tolerance,
                         solve_max_iterations=solve_max_iterations,
-                        mass_riesz=mass_riesz)
+                        mass_riesz=mass_riesz,
+                        cluster_coarse_size=cluster_coarse_size,
+                        cluster_deflation_size=cluster_deflation_size,
+                        recycle_size=recycle_size)
                 try:
                     trial_state,trial_response,trial_scale=calibrate_source(
                         trial_state,trial_response)
@@ -3441,27 +4022,45 @@ def grow_hdiv_mmm_by_superposition(*, charge_gram, fes, inv_chi, rhs,
                 except (RuntimeError,ValueError):
                     continue
                 predicted_ratio=float(proposal.predicted_max_band_ratio)
+                exact_trial_states.append(exact_snapshot(
+                    active_value=trial_active,state_value=trial_state,
+                    response_value=trial_response,
+                    objective_value=trial_objective,ratio_value=actual,
+                    scale_value=trial_scale,
+                    iterations_value=trial_iterations,
+                    depth_value=search_depth+1,
+                    path_value=search_path+(tuple(sorted(zip(
+                        map(int,trial_elements),map(int,trial_directions)))),)))
                 predicted_reduction=current_ratio-predicted_ratio
                 model_agreement=((current_ratio-actual)/predicted_reduction
                     if predicted_reduction>ratio_tolerance else 0.0)
-                if (actual<current_ratio-ratio_tolerance and
+                if (actual<current_ratio-meaningful_ratio_tolerance and
                         (best_trial is None or actual<best_trial[0])):
                     best_trial=(
                         actual,trial_additions,expanded_removals,trial_active,
                         trial_state,trial_response,trial_iterations,trial_scale,
                         trial_objective,predicted_ratio,proposal_index,
                         model_agreement)
-                if (actual<current_ratio-ratio_tolerance and
-                        model_agreement>=minimum_model_agreement):
+                # A locally well-predicted singleton must not hide a
+                # collaborative bundle that is needed to enter the response
+                # band.  The proposal list is deliberately bounded, so keep
+                # resolving it until one proposal satisfies every band; only
+                # then is an early exit lossless for the feasibility goal.
+                if actual<=1.0+ratio_tolerance:
                     break
             if best_trial is not None:
                 (actual,selected,removed_elements,trial_active,trial_state,
                  trial_response,trial_iterations,trial_scale,trial_objective,
                  predicted_ratio,proposal_index,_)=best_trial
-                selection_model=(
-                    "all-candidate-aca-qr-tsvd-direct-full-resolve"
-                    if proposal_index==0 else
-                    "all-candidate-aca-qr-tsvd-adaptive-trust-full-resolve")
+                accepted_proposal=trust_proposals[int(proposal_index)]
+                if accepted_proposal.status.startswith("connected"):
+                    selection_model=(
+                        "aca-qr-tsvd-connected-graph-front-full-resolve")
+                else:
+                    selection_model=(
+                        "all-candidate-aca-qr-tsvd-direct-full-resolve"
+                        if proposal_index==0 else
+                        "all-candidate-aca-qr-tsvd-adaptive-trust-full-resolve")
                 mixed_accepted=True
 
             if not mixed_accepted:
@@ -3489,7 +4088,8 @@ def grow_hdiv_mmm_by_superposition(*, charge_gram, fes, inv_chi, rhs,
                         removal_volumes,volume_budget=max(0.0,remaining),
                         maximum_new_elements=maximum_cap,
                         whole_elements=True,
-                        candidate_volume_change=-removal_volumes)
+                        candidate_volume_change=-removal_volumes,
+                        maximum_changed_volume=material_trust_before)
                     initial_count=int(np.count_nonzero(unrestricted.selected))
                     if initial_count==0:
                         initial_count=1
@@ -3512,7 +4112,8 @@ def grow_hdiv_mmm_by_superposition(*, charge_gram, fes, inv_chi, rhs,
                                 volume_budget=max(0.0,remaining),
                                 maximum_new_elements=count,
                                 whole_elements=True,
-                                candidate_volume_change=-removal_volumes))
+                                candidate_volume_change=-removal_volumes,
+                                maximum_changed_volume=material_trust_before))
                         selected_groups=available_removals[
                             np.asarray(proposal.selected,dtype=bool)]
                         if selected_groups.size==0:
@@ -3538,7 +4139,10 @@ def grow_hdiv_mmm_by_superposition(*, charge_gram, fes, inv_chi, rhs,
                             incident_response=incident_response,
                             solve_tolerance=solve_tolerance,
                             solve_max_iterations=solve_max_iterations,
-                            mass_riesz=mass_riesz)
+                            mass_riesz=mass_riesz,
+                            cluster_coarse_size=cluster_coarse_size,
+                            cluster_deflation_size=cluster_deflation_size,
+                            recycle_size=recycle_size)
                         try:
                             (alternate_state,alternate_response,
                              alternate_scale)=calibrate_source(
@@ -3585,7 +4189,21 @@ def grow_hdiv_mmm_by_superposition(*, charge_gram, fes, inv_chi, rhs,
             # block-Schur fallback remains available for tiny/full-adjoint
             # fronts where its cost is explicitly bounded.
             if proposal_adjoint_rows.size!=target.size:
-                stop_reason="adaptive_trust_region_proposals_rejected";break
+                branch=next_nonmonotone_state(exact_trial_states)
+                if branch is not None:
+                    active=branch.active;state=branch.state
+                    response=branch.response
+                    objective_response=branch.objective_response
+                    current_ratio=branch.ratio
+                    source_scale=branch.source_scale
+                    solve_iterations=branch.solve_iterations
+                    search_depth=branch.depth;search_path=branch.path
+                    stop_reason="exact_nonmonotone_beam_in_progress"
+                    continue
+                stop_reason=("exact_nonmonotone_beam_exhausted" if
+                    exact_beam_width else
+                    "adaptive_trust_region_proposals_rejected")
+                break
             if fallback_addition_elements.size==0:
                 stop_reason=(
                     "no_insertion_front_after_removal_rejection")
@@ -3646,7 +4264,10 @@ def grow_hdiv_mmm_by_superposition(*, charge_gram, fes, inv_chi, rhs,
                                    else exact_representatives),
                 representative_elements=exact_representatives,
                 evaluate_bundle_response=evaluate_bundle,
-                volume_budget=max(0.0,remaining),active_elements=active,
+                volume_budget=(max(0.0,remaining) if
+                    material_trust_before is None else min(
+                        max(0.0,remaining),material_trust_before)),
+                active_elements=active,
                 predecessor_elements=predecessors,
                 maximum_new_elements=maximum_cap,
                 improvement_capture=float(batch_improvement_capture),
@@ -3658,7 +4279,20 @@ def grow_hdiv_mmm_by_superposition(*, charge_gram, fes, inv_chi, rhs,
             exact_evaluated=exact.evaluated_bundles
             selection_model="all-candidate-aca-qr-tsvd-exact-conditional"
             if selected.size==0 or predicted_ratio>=current_ratio-ratio_tolerance:
-                stop_reason="no_improving_exact_bundle";break
+                branch=next_nonmonotone_state(exact_trial_states)
+                if branch is not None:
+                    active=branch.active;state=branch.state
+                    response=branch.response
+                    objective_response=branch.objective_response
+                    current_ratio=branch.ratio
+                    source_scale=branch.source_scale
+                    solve_iterations=branch.solve_iterations
+                    search_depth=branch.depth;search_path=branch.path
+                    stop_reason="exact_nonmonotone_beam_in_progress"
+                    continue
+                stop_reason=("exact_nonmonotone_beam_exhausted" if
+                    exact_beam_width else "no_improving_exact_bundle")
+                break
             # Block Schur is exact for the current active set, but acceptance
             # remains tied to a fresh full solve and the topology gate.
             trial_active=active.copy();trial_active[selected]=True
@@ -3672,7 +4306,10 @@ def grow_hdiv_mmm_by_superposition(*, charge_gram, fes, inv_chi, rhs,
                     incident_response=incident_response,
                     solve_tolerance=solve_tolerance,
                     solve_max_iterations=solve_max_iterations,
-                    mass_riesz=mass_riesz)
+                    mass_riesz=mass_riesz,
+                    cluster_coarse_size=cluster_coarse_size,
+                    cluster_deflation_size=cluster_deflation_size,
+                    recycle_size=recycle_size)
             try:
                 trial_state,trial_response,trial_scale=calibrate_source(
                     trial_state,trial_response)
@@ -3680,12 +4317,66 @@ def grow_hdiv_mmm_by_superposition(*, charge_gram, fes, inv_chi, rhs,
             except (RuntimeError,ValueError):
                 stop_reason="source_calibration_rejected_exact_bundle";break
             actual=ratio(trial_objective)
+            exact_trial_states.append(exact_snapshot(
+                active_value=trial_active,state_value=trial_state,
+                response_value=trial_response,
+                objective_value=trial_objective,ratio_value=actual,
+                scale_value=trial_scale,iterations_value=trial_iterations,
+                depth_value=search_depth+1,
+                path_value=search_path+(tuple(
+                    (int(element),1) for element in selected),)))
             if actual>=current_ratio-ratio_tolerance:
-                stop_reason="full_solve_rejected_exact_bundle";break
+                branch=next_nonmonotone_state(exact_trial_states)
+                if branch is not None:
+                    active=branch.active;state=branch.state
+                    response=branch.response
+                    objective_response=branch.objective_response
+                    current_ratio=branch.ratio
+                    source_scale=branch.source_scale
+                    solve_iterations=branch.solve_iterations
+                    search_depth=branch.depth;search_path=branch.path
+                    stop_reason="exact_nonmonotone_beam_in_progress"
+                    continue
+                stop_reason=("exact_nonmonotone_beam_exhausted" if
+                    exact_beam_width else "full_solve_rejected_exact_bundle")
+                break
+        if (search_depth>0 and
+                actual>=incumbent.ratio-ratio_tolerance):
+            branch=next_nonmonotone_state(exact_trial_states)
+            if branch is not None:
+                active=branch.active;state=branch.state
+                response=branch.response
+                objective_response=branch.objective_response
+                current_ratio=branch.ratio
+                source_scale=branch.source_scale
+                solve_iterations=branch.solve_iterations
+                search_depth=branch.depth;search_path=branch.path
+                stop_reason="exact_nonmonotone_beam_in_progress"
+                continue
+            stop_reason="exact_nonmonotone_beam_exhausted"
+            break
+
+        accepted_search_depth=search_depth
         predicted_improvement=current_ratio-predicted_ratio
         actual_improvement=current_ratio-actual
         agreement=(actual_improvement/predicted_improvement
                    if predicted_improvement>ratio_tolerance else 0.0)
+        changed_volume=float(
+            np.sum(volumes[np.asarray(selected,dtype=np.int64)])+
+            np.sum(volumes[np.asarray(removed_elements,dtype=np.int64)]))
+        if graph_front_data is not None and graph_front_budget is not None:
+            from ._topopt_graph import update_graph_front_trust
+            graph_trust=update_graph_front_trust(
+                budget=graph_front_budget,minimum_budget=1,
+                maximum_budget=max(1,int(physical_max)),
+                predicted_ratio=predicted_ratio,actual_ratio=actual,
+                current_ratio=current_ratio,
+                selected_size=max(1,int(len(selected)+len(removed_elements))),
+                interface_weight=graph_interface_weight)
+            graph_front_budget=graph_trust.budget_after
+            graph_interface_weight=graph_trust.interface_weight_after
+        material_trust_volume=update_material_trust(
+            material_trust_before,changed_volume,agreement)
         active=trial_active;state=trial_state;response=trial_response
         solve_iterations=trial_iterations;source_scale=trial_scale
         objective_response=trial_objective;current_ratio=actual
@@ -3714,11 +4405,36 @@ def grow_hdiv_mmm_by_superposition(*, charge_gram, fes, inv_chi, rhs,
              np.asarray(tsvd_proposal.linearized_reachability_residual,dtype=float)),
             float(tsvd_proposal.linearized_reachability_max_band_ratio),
             float(tsvd_proposal.linearized_reachability_relative_residual),
-            bool(tsvd_proposal.linearized_reachable)))
+             bool(tsvd_proposal.linearized_reachable),
+             material_trust_volume_before=material_trust_before,
+             material_trust_volume_after=material_trust_volume,
+             material_changed_volume=changed_volume,
+             graph_front_proposals_evaluated=int(graph_proposal_count),
+             nonmonotone_search_depth=int(accepted_search_depth),
+             abe_murata_diagnostics=(
+                 tsvd_proposal.abe_murata_diagnostics)))
         if iteration_callback is not None:
             iteration_callback(history[-1])
+        incumbent=exact_snapshot(
+            active_value=active,state_value=state,response_value=response,
+            objective_value=objective_response,ratio_value=current_ratio,
+            scale_value=source_scale,iterations_value=solve_iterations,
+            depth_value=0,path_value=())
+        search_depth=0;search_path=();pending_exact_states=[]
+        visited_exact_states={np.packbits(active).tobytes()}
         converged=current_ratio<=1.0+ratio_tolerance
         if converged: stop_reason="target_met"
+    if exact_beam_width:
+        # Exploratory barrier states are never a deliverable design.  Return
+        # only the best fully solved incumbent, even when the expansion budget
+        # ends while the beam is away from it.
+        active=incumbent.active;state=incumbent.state
+        response=incumbent.response
+        objective_response=incumbent.objective_response
+        current_ratio=incumbent.ratio;source_scale=incumbent.source_scale
+        converged=current_ratio<=1.0+ratio_tolerance
+        if stop_reason=="exact_nonmonotone_beam_in_progress":
+            stop_reason="exact_nonmonotone_beam_budget_exhausted"
     return HDivMMMGenerationResult(
         active,state,response,tuple(history),converged,source_scale,
         objective_response,stop_reason)
@@ -3731,13 +4447,18 @@ def solve_element_generation_lp(current_response, response_target,
         relative_mip_gap=0.0, predecessor_pairs=None,
         predicted_ratio_cap=None,
         candidate_volume_change=None,
-        candidate_exclusion_groups=None) -> ElementGenerationLPUpdate:
+        candidate_exclusion_groups=None,
+        maximum_changed_volume=None) -> ElementGenerationLPUpdate:
     """Select a small full-strength element-growth batch by a 0-1 LP.
 
     Single-element Schur responses are superposed only for the selection model;
     the committed batch must subsequently be solved as one exact HDiv-MMM
     problem.  With ``whole_elements=True`` (the default), HiGHS receives binary
     element variables, so no gray material can enter the physical model.
+    ``candidate_volume_change`` owns the signed net-volume constraint, whereas
+    ``maximum_changed_volume`` bounds the positive total flipped volume.  The
+    latter is the discrete trust region required when additions and removals
+    coexist.
     """
     from scipy.optimize import Bounds, LinearConstraint, milp
 
@@ -3765,6 +4486,12 @@ def solve_element_generation_lp(current_response, response_target,
     nc=volumes.size
     maximum=nc if maximum_new_elements is None else int(maximum_new_elements)
     if maximum<0: raise ValueError("maximum_new_elements must be nonnegative")
+    changed_volume=(None if maximum_changed_volume is None else
+                    float(maximum_changed_volume))
+    if (changed_volume is not None and
+            (not np.isfinite(changed_volume) or changed_volume<0.0)):
+        raise ValueError(
+            "maximum_changed_volume must be finite and nonnegative")
     if predicted_ratio_cap is not None:
         predicted_ratio_cap=float(predicted_ratio_cap)
         if not np.isfinite(predicted_ratio_cap) or predicted_ratio_cap<0.0:
@@ -3780,6 +4507,9 @@ def solve_element_generation_lp(current_response, response_target,
           np.r_[np.ones(nc),0.0][None,:]]
     upper_parts=[-normalized,normalized,np.array([float(volume_budget)]),
                  np.array([float(maximum)])]
+    if changed_volume is not None:
+        rows.append(np.r_[volumes,0.0][None,:])
+        upper_parts.append(np.array([changed_volume]))
     if predecessor_pairs is not None:
         pairs=np.asarray(predecessor_pairs,dtype=np.int64)
         if pairs.size:
@@ -4032,6 +4762,7 @@ __all__=["VIMLinearization","VIMOperatorLinearization","ChargeGramLinearization"
          "ShapeLinearization","ShapeLPUpdate","solve_shape_lp",
          "ElementInsertionResponse","ElementGenerationLPUpdate",
          "HDivMMMElementGenerationLinearization",
+         "AbeMurataEquivalentMaterialDiagnostics",
          "TSVDElementCandidateSelection",
          "HDivMMMGenerationIteration","HDivMMMGenerationResult",
          "GrowthTopologyReport","ngsolve_growth_topology",

@@ -4480,16 +4480,19 @@ std::vector<double> RadHACApKChargeGram::DirectionalDerivativeContractionsMany(
         return result;
     }
 
-    // Keep the multi-left contraction batched, but traverse direction chunks
-    // serially so exact-entry kernels never reenter the shared parent Gram.
-    // Each chunk keeps a private sum and no derivative H-matrix is materialised.
+    // Keep the multi-left contraction batched.  Flat-TET exact-entry kernels
+    // read only immutable parent geometry, while every directional derivative
+    // owns a mutex-protected host-pair cache.  Their leaf chunks can therefore
+    // run concurrently without materialising a derivative H-matrix.  Retain
+    // the historical serial traversal for HEX/WEDGE: those kernels still use
+    // shared parent caches whose re-entrancy is not part of this contract.
     const int nLeaves=leaves->nlf;
     const int targetTasks=std::max(1,4*radia::GetMaxThreads());
     const int chunksPerDirection=std::min(nLeaves,
         std::max(1,(targetTasks+nDirections-1)/nDirections));
     const int nTasks=nDirections*chunksPerDirection;
     std::vector<long double> partial((size_t)nTasks*nLeft,0.0L);
-    for(size_t task=0;task<(size_t)nTasks;++task){
+    auto contractTask=[&](size_t task){
         const int kk=(int)task/chunksPerDirection;
         const int chunk=(int)task%chunksPerDirection;
         const int first=1+(int)((long long)chunk*nLeaves/chunksPerDirection);
@@ -4550,6 +4553,14 @@ std::vector<double> RadHACApKChargeGram::DirectionalDerivativeContractionsMany(
             }
         }
         for(int ll=0;ll<nLeft;++ll)partial[task*(size_t)nLeft+ll]=sums[ll];
+    };
+    if(family==ChargeDerivativeFamily::Tet&&nTasks>1){
+        ngcore::RegionTaskManager task_manager;
+        ngcore::ParallelFor(ngcore::IntRange(nTasks),[&](int task){
+            contractTask((size_t)task);
+        });
+    }else{
+        for(size_t task=0;task<(size_t)nTasks;++task)contractTask(task);
     }
     for(int kk=0;kk<nDirections;++kk)for(int chunk=0;chunk<chunksPerDirection;++chunk){
         const size_t task=(size_t)kk*chunksPerDirection+chunk;

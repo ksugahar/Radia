@@ -16,6 +16,10 @@ TOPICS: dict[str, str] = {
         "Transfer matrices, Twiss parameters, emittance, dispersion, tune, "
         "chromaticity, and the field quantities a magnet solver must deliver"
     ),
+    "enge_fringe_integrals": (
+        "Enge reference-orbit form factors I1/I2, effective pole-face maps, "
+        "and momentum-indexed soft-edge diagnostics for FFAG magnets"
+    ),
     "accelerator_magnet_types": (
         "Dipole, quadrupole, sextupole, combined-function, corrector, solenoid, "
         "kicker, septum, undulator, and wiggler roles"
@@ -213,6 +217,10 @@ effective-field-boundary slope is not a universal substitute for the Lorentz
 kick through a finite fringe.  Evaluate edge focusing from the trajectory or
 the appropriate field integral in the declared frame.
 
+For the Enge reference-orbit displacement and effective edge map, including
+the distinction between Enge profile coefficients and the form factors
+`I1`/`I2`, use `electromagnet_usage("enge_fringe_integrals")`.
+
 ## Field-quality interpretation
 
 The useful distinction is:
@@ -227,6 +235,183 @@ allowed families are `n = 1,3,5,...` for a dipole, `n = 2,6,10,...` for a
 quadrupole, and `n = 3,9,15,...` for a sextupole.  Manufacturing and alignment
 errors generate forbidden and skew terms.  Always state the complex-field,
 normal/skew, normalization, reference-radius, and integration conventions.
+"""
+
+
+ENGE_FRINGE_INTEGRALS = r"""
+# Enge Fringe Integrals for Reference Orbits and Edge Maps
+
+## Do not confuse two different Enge parameter families
+
+1. **Enge profile coefficients** `a_i` describe a fitted longitudinal falloff,
+   for example
+
+       S(z) = 1 / (1 + exp(2*p(z/epsilon)))
+       p(u) = a1 + a2*u + ... + ak*u^(k-1).
+
+2. **Enge form factors** `I1` and `I2` are integrals of the realized fringe
+   field.  `I1` changes the reference trajectory; `I2` changes the effective
+   vertical edge focusing.  They can be evaluated from an Enge fit, but they
+   are not the polynomial coefficients and should normally be evaluated from
+   the computed or measured field profile.
+
+In this topic `g` is the **full vertical pole gap**.  A code using `HGAP` may
+instead define `HGAP = g/2`.  Some references use a dimensional coordinate
+normal to the pole face rather than the dimensionless `sigma` below; factors
+of `g` then move between the coordinate and the integrals.  Never exchange an
+`I1` or `I2` value without its coordinate, gap, field-normalization, entry/exit,
+charge-sign, and pole-angle conventions.
+
+## Effective field boundary and dimensionless coordinate
+
+For a rectangular dipole exit, let `beta` be the pole-face rotation, `rho` the
+body reference-orbit radius, `(xi,zeta)` a rectilinear frame at the face, and
+
+    sigma = (zeta*cos(beta) + xi*sin(beta)) / g.
+
+Let `By(sigma)` be the soft-edge mid-plane bending field, `B0` its body value,
+and `By0(sigma)` the equivalent sharp-cutoff field.  Place `sigma=0` so the
+soft and sharp profiles have the same field integral:
+
+    integral(By d sigma) = integral(By0 d sigma).
+
+With bounds in the constant-field and zero-field regions, define
+
+    I1 = integral integral ((By0 - By)/B0) d sigma d sigma_star
+    I2 = integral (By*(B0 - By)/B0^2) d sigma.
+
+These are dimensionless under the `sigma` convention above.  The first-order
+pure-dipole exit result is
+
+    delta_x_Enge = g^2 * I1 / (rho*cos(beta)^2)
+    tan(beta_v) = tan(beta)
+                  - (g/rho)*(1 + sin(beta)^2)/cos(beta)^3 * I2
+
+and the reduced map is
+
+    x  = x0 + delta_x_Enge
+    x' = x0' + x0*tan(beta)/rho
+    y  = y0
+    y' = y0' - y0*tan(beta_v)/rho.
+
+Thus `I1` is the Enge reference-orbit correction: an extended pure-dipole
+fringe gives the same net bend as the equal-integral hard edge but shifts the
+reference trajectory parallel to it.  `I2` modifies the effective vertical
+pole-face angle and therefore the `R43`-type focusing term.  Apply the entry
+map in its own local frame and sign convention; do not copy the exit signs by
+inspection.
+
+## Relation to pole-face geometry
+
+For a rectangular-bend geometry represented as an `SBEND`, keep the orbit
+geometry separate from the fringe correction.  With bend angle `phi`, pole
+angles `E1,E2`, and straight magnetic length `Lmag`, the convention used in
+CERN-ACC-NOTE-2018-0059 gives
+
+    E1 + E2 = phi
+    rho = Lmag / (sin(E1) + sin(E2))
+    Larc = rho * phi.
+
+`E1/E2` or `beta` describe the pole-face geometry.  `I1/I2` describe the
+soft-edge field about that geometry.  `Larc` is the design-orbit path length,
+not the physical yoke length and not automatically the straight magnetic
+length.
+
+## FFAG use: make the form factors orbit dependent
+
+Bell and Abell's non-scaling FFAG example uses a mid-plane combined-function
+field
+
+    By(x,0,z) = T(x)*S(z),       T(x) = B0 + G*x,
+
+over 31--250 MeV proton closed orbits with about 0.2 m radial excursion.
+Entrance/exit angles change with momentum, adjacent magnet fringes can overlap,
+and the soft-edge model materially changes tunes and resonance-crossing loss.
+Consequently a single magnet-wide `I1,I2,beta` tuple is not an adequate FFAG
+contract.  For momentum samples `p_j`, record at every entrance and exit:
+
+    orbit_j, beta_j, rho_j, B0_j, g, I1_j, I2_j,
+    delta_x_Enge_j, beta_v_j, and the local frame.
+
+The recommended design loop is:
+
+1. recover the closed orbit for every required momentum;
+2. evaluate the field along the local pole-face normal and locate the
+   equal-integral effective field boundary;
+3. integrate `I1_j` and `I2_j` as orbit-indexed diagnostics/reduced maps;
+4. compute the full Lorentz trajectory and transfer map through the combined
+   3-D field, including overlapping fringes;
+5. optimize orbit closure, tune/transfer-map targets, aperture, and resonance
+   margins jointly across momentum; then repeat the closed-orbit solve.
+
+For a combined-function field the Enge displacement moves the particle into a
+different `T(x)`, so the final deflection need not remain parallel to the
+hard-edge orbit.  In that case `I1/I2` are valuable initialization and
+diagnostic quantities, but detailed ray tracking through the realized field is
+the acceptance calculation.
+
+## HDiv-MMM connection and the air-mesh-free claim
+
+HDiv-MMM is well matched to this FFAG loop when the design variables are
+ferromagnetic yoke/pole elements:
+
+- mesh only the magnetic material with an HDiv space (BDM1 for production
+  accelerator work); do not create a vacuum/air volume mesh or a Kelvin shell;
+- represent coils by the audited Biot-Savart source and evaluate the resulting
+  field at closed-orbit and fringe quadrature points in otherwise unmeshed air;
+- reuse the compressed Laplace interaction operator while changing active iron
+  elements or deforming the material mesh;
+- batch the many momentum/orbit observation rows and adjoint contractions.
+
+This is a real advantage for FFAGs because the good-field region spans the full
+orbit excursion and because repeated pole/yoke topology changes would otherwise
+force repeated remeshing of a large 3-D air volume.  The accurate claim is
+**air-volume-mesh-free magnet optimization**, not "no vacuum computation":
+field observations, closed-orbit recovery, Lorentz tracking, and tune/map
+evaluation in the vacuum remain mandatory.
+
+Do not overclaim the reduced map.  If particles are tracked through the full
+soft-edge field, its Enge shift and focusing are already present; multiplying
+an additional `I1/I2` edge map double counts them.  Also retain a full-field
+check for saturation, combined-function gradients, overlapping fringes, large
+incidence angles, and off-mid-plane motion.
+
+## Executable Python PoC
+
+The reduced target family is available without an air volume mesh:
+
+    from radia.ffag_topopt import (
+        FFAGSoftEdgeCellSpec,
+        build_ffag_cell_target_family,
+    )
+
+    spec = FFAGSoftEdgeCellSpec.bell_abell(full_gap_m=0.10)
+    family = build_ffag_cell_target_family(
+        [31.0, 140.0, 250.0], spec=spec, n_segments=256,
+        bend_field_band=2e-3, transfer_matrix_band=2e-3)
+
+`family.references` records the periodic reduced orbit, rigidity, transverse
+offset, sampled soft-edge field, and cell map at every energy.
+`family.fringe_integrals` records the declared-gap `I1/I2` diagnostic.
+`family.objective` is a `MultiMomentumTransferMatrixObjective` and supplies the
+analytic `transform` and `transform_jacobian` consumed by the binary master.
+
+For a BDM1 iron candidate mesh, build all physical vacuum rows with
+`build_multi_orbit_field_response_matrix(...)`, then call
+`optimize_hdiv_mmm_magnet_from_transfer_matrices(...)`.  The latter sends one
+fused multi-momentum contract to the existing whole-element Schur,
+ACA--QR--TSVD, and 0--1 LP driver.  The optimizer does not finite-difference a
+design variable.  A completed design must still recover the full-field closed
+orbits and recompute the maps around those recovered orbits.
+
+## Sources
+
+- G. I. Bell and D. T. Abell, "Fringe field simulations of a non-scaling FFAG
+  accelerator," arXiv:1202.0805.
+- R. Molloy and S. Blitz, "Fringe Field Effects on Bending Magnets, Derived for
+  TRANSPORT/TURTLE," arXiv:1310.8630.
+- O. E. Berrig, "Review of path-length calculations for rectangular bending
+  magnets with arbitrary pole-face angles," CERN-ACC-NOTE-2018-0059.
 """
 
 
@@ -733,6 +918,7 @@ def get_accelerator_source_guide(query: str = "") -> str:
 DOCUMENTS: dict[str, str] = {
     "accelerator_fundamentals": ACCELERATOR_FUNDAMENTALS,
     "beam_optics_contract": BEAM_OPTICS_CONTRACT,
+    "enge_fringe_integrals": ENGE_FRINGE_INTEGRALS,
     "accelerator_magnet_types": ACCELERATOR_MAGNET_TYPES,
     "accelerator_magnet_design": ACCELERATOR_MAGNET_DESIGN,
     "rapid_cycling_magnets": RAPID_CYCLING_MAGNETS,

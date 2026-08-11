@@ -107,6 +107,7 @@ extern "C" {
 #include "rad_ngsolve_radia_field.h" // Shared Radia-backed CoefficientFunction
 #include "rad_planar_charges.h"  // Shared 2D planar exterior field + Maxwell torque
 #include "rad_parallel.h"        // NGSolve TaskManager thread policy
+#include "rad_beam_transfer_pybind.h" // Distributed R/T/U transfer attribution
 #include <core/taskmanager.hpp>  // ngcore::ParallelFor / TaskManager (HDiv-VIM batched field, obs-parallel)
 
 namespace py = pybind11;
@@ -2335,6 +2336,8 @@ PYBIND11_MODULE(_radia_pybind, m) {
     // and CoefficientFunction subclasses from this extension.
     py::module_::import("ngsolve.la");
     py::module_::import("ngsolve.comp");
+
+    ExportBeamTransfer(m);
 
     // Version info
     m.attr("__version__") = "1.4.0";

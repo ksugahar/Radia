@@ -4447,6 +4447,191 @@ def _periodic_node_match(vol_path: Path, period: list, cell: list) -> dict:
 	                  "-period: the seam is not a bijection"}
 
 
+def _classify_rve_sidesets(exodus_path: Path, lo: list, hi: list,
+                           cell: list) -> tuple[dict, str]:
+	"""Classify a Sculpt RVE Exodus' sidesets against the six period faces.
+
+	Returns ``(names_by_sideset_id, error)``.  Per the Probe-Don't-Guess
+	policy the face assignment is DERIVED from the data, never assumed
+	from the id order: each sideset's mean ELEMENT CENTROID is compared
+	against the six box-face planes -- the first hex layer hugs its plane
+	within ~1.5 cells while every other candidate is >= half the box away,
+	so the discrimination is unambiguous or loudly not.  Sidesets matching
+	no face (the material skin, and material interfaces under multi-
+	material RVE modes) are named ``skin``, ``skin_2``, ...  The caller
+	must still verify the FINAL ``.vol`` labels geometrically
+	(`_vol_bcname_face_stats`) -- the Exodus-side classification and the
+	.vol-side verification are independent, so a Cubit import re-numbering
+	or an Exodus side-map surprise cannot slip through silently.
+	"""
+	import numpy as np
+
+	try:
+		import netCDF4 as nc
+	except ImportError:
+		return {}, "netCDF4 is required to classify RVE sidesets"
+	try:
+		ds = nc.Dataset(str(exodus_path))
+	except OSError as exc:
+		return {}, f"cannot open Sculpt Exodus {exodus_path.name}: {exc}"
+	try:
+		coords = np.column_stack([
+			np.asarray(ds.variables[name][:], dtype=float)
+			for name in ("coordx", "coordy", "coordz")])
+		block_ids = [int(v) for v in np.asarray(ds.variables["eb_prop1"][:])]
+		conn = []
+		for index in range(len(block_ids)):
+			conn.append(np.asarray(
+				ds.variables[f"connect{index + 1}"][:], dtype=int))
+		# global element order = blocks concatenated in eb_prop1 order
+		centroids = np.concatenate([
+			coords[c - 1].mean(axis=1) for c in conn], axis=0)
+		sideset_ids = ([int(v) for v in
+		                np.asarray(ds.variables["ss_prop1"][:])]
+		               if "ss_prop1" in ds.variables else [])
+		per_sideset = {}
+		for index, sid in enumerate(sideset_ids):
+			elems = np.asarray(
+				ds.variables[f"elem_ss{index + 1}"][:], dtype=int)
+			if elems.size == 0:
+				return {}, f"sideset {sid} in the Sculpt Exodus is empty"
+			per_sideset[sid] = centroids[elems - 1].mean(axis=0)
+	except (KeyError, IndexError, ValueError) as exc:
+		return {}, f"cannot read sideset topology from the Sculpt " \
+		           f"Exodus: {exc}"
+	finally:
+		ds.close()
+	if len(per_sideset) < 6:
+		return {}, (f"periodic RVE expects at least the six period-face "
+		            f"sidesets, got {sorted(per_sideset)} -- Sculpt's "
+		            "rve sideset mode did not fire")
+	# nearest-plane score per (face, sideset); accept only a clear winner
+	faces = [("rve_xmin", 0, lo[0], +1), ("rve_xmax", 0, hi[0], -1),
+	         ("rve_ymin", 1, lo[1], +1), ("rve_ymax", 1, hi[1], -1),
+	         ("rve_zmin", 2, lo[2], +1), ("rve_zmax", 2, hi[2], -1)]
+	names = {}
+	for name, axis, plane, sign in faces:
+		best, second = None, None
+		for sid, c in per_sideset.items():
+			score = abs(c[axis] - (plane + sign * 0.5 * cell[axis]))
+			if best is None or score < best[1]:
+				best, second = (sid, score), best
+			elif second is None or score < second[1]:
+				second = (sid, score)
+		if best is None or best[1] > 2.0 * cell[axis]:
+			return {}, (f"no sideset lies on the {name} plane "
+			            f"(best distance {best[1] if best else 'n/a'})")
+		if best[0] in names:
+			return {}, (f"sideset {best[0]} classified as both "
+			            f"{names[best[0]]} and {name} -- ambiguous RVE "
+			            "face layout")
+		names[best[0]] = name
+	skin_index = 0
+	for sid in sorted(per_sideset):
+		if sid in names:
+			continue
+		skin_index += 1
+		names[sid] = "skin" if skin_index == 1 else f"skin_{skin_index}"
+	return names, ""
+
+
+def _vol_bcname_face_stats(vol_path: Path) -> dict:
+	"""Per-boundary-NAME face-node statistics of a Netgen ``.vol``.
+
+	Maps ``bcnames`` (surface nr -> name) onto the ``surfaceelements``
+	rows and aggregates the referenced node coordinates per NAME:
+	``{name: {n_faces, mean[3], lo[3], hi[3]}}``.  This is the
+	.vol-side verifier for RVE boundary labels -- a ``rve_xmin`` whose
+	faces do not hug the x-min plane means the naming went to the wrong
+	sideset, whatever the Exodus-side classification believed.
+	"""
+	import numpy as np
+
+	points = _vol_points(vol_path)
+	if points is None:
+		return {}
+	bcnames = {}
+	rows = []
+	tokens = ("surfaceelements", "surfaceelementsgi", "surfaceelementsuv")
+	with open(vol_path, "r", encoding="utf-8", errors="replace") as f:
+		lines = iter(f)
+		for line in lines:
+			stripped = line.strip()
+			if stripped == "bcnames":
+				try:
+					count = int(next(lines).strip())
+					for _ in range(count):
+						parts = next(lines).split()
+						if len(parts) >= 2:
+							bcnames[int(parts[0])] = parts[1]
+				except (StopIteration, ValueError):
+					return {}
+			elif stripped in tokens:
+				try:
+					count = int(next(lines).strip())
+					for _ in range(count):
+						parts = next(lines).split()
+						if len(parts) < 5:
+							return {}
+						np_nodes = int(parts[4])
+						rows.append((int(parts[1]),
+						             [int(v) for v in
+						              parts[5:5 + np_nodes]]))
+				except (StopIteration, ValueError, IndexError):
+					return {}
+	stats = {}
+	for bcnr, nodes in rows:
+		name = bcnames.get(bcnr, f"bc_{bcnr}")
+		entry = stats.setdefault(name, {"n_faces": 0, "node_ids": []})
+		entry["n_faces"] += 1
+		entry["node_ids"].extend(nodes)
+	for entry in stats.values():
+		ids = np.unique(np.asarray(entry.pop("node_ids"), dtype=int)) - 1
+		block = points[ids]
+		entry["mean"] = [float(v) for v in block.mean(axis=0)]
+		entry["lo"] = [float(v) for v in block.min(axis=0)]
+		entry["hi"] = [float(v) for v in block.max(axis=0)]
+	return stats
+
+
+def _per_material_closure(vol_path: Path, per_material: list,
+                          tolerance: float) -> tuple[dict, str]:
+	"""Gate each material block's meshed volume against its OWN vfrac
+	integral.  The total-volume closure cannot see a partition bias (core
+	over-meshed at the shell's expense conserves the sum), yet the
+	per-region ``mu_r`` solve is only as trustworthy as the per-region
+	geometry.  NGSolve is the authority (ordering-safe hex volumes);
+	it is a hard dependency of every consumer of this mesh anyway.
+	Returns ``({name: {...}}, error)``.
+	"""
+	try:
+		import ngsolve as ng
+	except ImportError:
+		return {}, ("ENVIRONMENT: ngsolve is required for the "
+		            "per-material closure gate of a multi-material mesh")
+	try:
+		with ng.TaskManager():
+			mesh = ng.Mesh(str(vol_path))
+			report = {}
+			for entry in per_material:
+				name = entry["name"]
+				v_mesh = float(ng.Integrate(
+					ng.CF(1.0), mesh,
+					definedon=mesh.Materials(name)))
+				v_ref = float(entry["v_vfrac"])
+				if v_ref <= 0.0:
+					return {}, (f"material {name!r} carries no vfrac "
+					            "volume; cannot gate its closure")
+				closure = abs(v_mesh - v_ref) / v_ref
+				report[name] = {
+					"mesh_volume": v_mesh, "vfrac_volume": v_ref,
+					"closure": closure,
+					"ok": bool(closure <= tolerance)}
+	except Exception as exc:                      # noqa: BLE001
+		return {}, f"per-material closure evaluation failed: {exc}"
+	return report, ""
+
+
 def _collect_mesh_gates(msh: Path, vol: Path, v_reference: float,
                         closure_tolerance: float) -> tuple[dict, dict]:
 	"""Shared solver-mesh gates: closure vs a reference volume, inversion,
@@ -4819,7 +5004,15 @@ def cubit_vfrac_to_vol(vfrac_path: str,
 	        one period.  The mesh boundary comes out deliberately RAGGED --
 	        it is not projected onto the box planes, which is what lets
 	        opposite faces carry matching nodes.  The report then measures
-	        that matching (`periodic_node_match`).
+	        that matching (`periodic_node_match`).  The six period-face
+	        sidesets are additionally CLASSIFIED (probed against the grid
+	        box, never assumed from the id order) and NAMED, so the `.vol`
+	        arrives with contract-grade boundary labels ``rve_xmin`` ..
+	        ``rve_zmax`` plus ``skin`` for the interior surface -- the
+	        ragged faces are unidentifiable by coordinate filters, so this
+	        is the only reliable handle for periodic BCs and strict label
+	        contracts on an RVE mesh.  Gate ``rve_labels_ok`` re-verifies
+	        the final labels geometrically from the `.vol` itself.
 	    smooth_method: Sculpt ``--smooth`` override (0 = Sculpt default;
 	        8 projects to the interpolated interface surface per the
 	        Coreform docs -- try it when boundary fidelity matters more
@@ -4830,6 +5023,24 @@ def cubit_vfrac_to_vol(vfrac_path: str,
 	    defeature/min_vol_cells: automatic defeaturing stage / minimum
 	        cells per disconnected component (drops topopt debris).
 	    timeout_s: per-stage subprocess timeout.
+
+	Gates beyond the shared trio: a MULTI-material mesh additionally
+	gates EACH block against its own vfrac integral
+	(``per_material_closure_ok`` -- the total conserves a partition bias,
+	so a region-level regeneration error would otherwise be invisible to
+	the per-region ``mu_r`` solve); a PERIODIC mesh gates the seam
+	bijection/fill (``periodic_nodes_match``) and the boundary labels
+	(``rve_labels_ok``).  On a closure miss the report computes
+	``suggested_cells`` from the ~O(h) error scaling so the retry is a
+	calculated lattice, not a guess.
+
+	Sculpt ADAPTIVITY is deliberately NOT exposed: measured on Cubit
+	2025.12 (2026-08-11, 6-pole ring), ``--adapt_type vfrac_average``
+	either exits "No elements created" (coarse base grids, all level/
+	threshold settings) or silently loses 97 % of the material volume
+	(fine grids), and ``vfrac_difference`` never triggers refinement --
+	resolution control on this route is the lattice ``cells`` plus the
+	``suggested_cells`` feedback above.
 	"""
 	import subprocess as sp
 
@@ -4842,12 +5053,44 @@ def cubit_vfrac_to_vol(vfrac_path: str,
 		return json.dumps(_error_payload(
 			"input", f"vfrac Exodus not found: {p} (write it with "
 			"radia.topopt_cad.write_vfrac_exodus)"))
+	# Numeric contract BEFORE any subprocess -- the same bf8ab4c0b
+	# hardening the STL sibling carries; without it a NaN timeout_s
+	# reaches subprocess.run (a comparison that is always False, i.e. a
+	# run that may never time out) and a non-numeric tolerance explodes
+	# deep inside the gate helper instead of failing as a clean input
+	# error.
+	try:
+		closure_tolerance = float(closure_tolerance)
+		timeout_s = float(timeout_s)
+		smooth_method = int(smooth_method)
+		gq_iters = int(gq_iters)
+		gq_threshold = float(gq_threshold)
+		defeature = int(defeature)
+		min_vol_cells = int(min_vol_cells)
+	except (TypeError, ValueError) as exc:
+		return json.dumps(_error_payload(
+			"input", f"numeric argument is invalid: {exc}"))
+	if not _math.isfinite(closure_tolerance) or closure_tolerance < 0.0:
+		return json.dumps(_error_payload(
+			"input", "closure_tolerance must be finite and nonnegative"))
+	if not _math.isfinite(timeout_s) or timeout_s <= 0.0:
+		return json.dumps(_error_payload(
+			"input", "timeout_s must be finite and positive"))
+	if not _math.isfinite(gq_threshold):
+		return json.dumps(_error_payload(
+			"input", "gq_threshold must be finite"))
 	try:
 		import netCDF4 as nc
 	except ImportError:
+		# kind= is explicit: the needle scan classifies on the MESSAGE, and
+		# "netCDF4 is required" hits no needle, so it would otherwise be
+		# reported as kind="input" -- telling an agent to fix its
+		# arguments and retry a MISSING INSTALL (the server instructions
+		# route on kind, not stage).
 		return json.dumps(_error_payload(
 			"environment", "netCDF4 is required to validate the vfrac "
-			"Exodus; install it with `pip install netCDF4`"))
+			"Exodus; install it with `pip install netCDF4`",
+			kind="environment"))
 	try:
 		ds = nc.Dataset(str(p))
 		try:
@@ -4907,7 +5150,7 @@ def cubit_vfrac_to_vol(vfrac_path: str,
 		return json.dumps(_error_payload(
 			"environment", "sculpt.exe not found in the Cubit bin "
 			f"directory ({bin_dir}); Sculpt ships with Coreform Cubit "
-			"2025.12+ on Windows"))
+			"2025.12+ on Windows", kind="environment"))
 
 	base = p.with_name(p.name[:-len(".e.1.0")])
 	vol = Path(out_vol) if out_vol else base.with_suffix(".hex.vol")
@@ -4918,6 +5161,12 @@ def cubit_vfrac_to_vol(vfrac_path: str,
 		msh = PROJECT_ROOT / msh
 	sculpt_out = vol.with_suffix("").with_name(vol.stem + "_sculpt")
 	sculpt_exo = sculpt_out.with_name(sculpt_out.name + ".e.1.0")
+	path_keys = [os.path.normcase(str(path))
+	             for path in (p, vol, msh, sculpt_exo)]
+	if len(set(path_keys)) != len(path_keys):
+		return json.dumps(_error_payload(
+			"input", "vfrac input, out_vol, out_msh, and the derived "
+			"Sculpt Exodus must all be distinct paths"))
 	for output in (vol, msh, sculpt_exo):
 		output.parent.mkdir(parents=True, exist_ok=True)
 		try:
@@ -4959,6 +5208,28 @@ def cubit_vfrac_to_vol(vfrac_path: str,
 	cmds = [f'import mesh geometry "{exo_fwd}" feature_angle 135 merge']
 	cmds += [f'block {entry["id"]} name "{entry["name"]}"'
 	         for entry in per_material]
+	sideset_names = {}
+	if periodic:
+		# RVE boundary labels: classify the six period-face sidesets from
+		# the Sculpt Exodus (probed, never assumed from the id order) and
+		# name them, so `export netgen` writes contract-grade bcnames
+		# (rve_xmin..rve_zmax + skin) instead of generated Surface_N.
+		# Without this the ragged period faces are UNIDENTIFIABLE
+		# downstream -- a coordinate filter cannot separate a ragged face
+		# from the interior, so carrying Sculpt's own sideset knowledge
+		# into the .vol is the only reliable route to periodic BCs and
+		# strict label contracts on an RVE mesh.
+		box_lo = [gvals["xmin"], gvals["ymin"], gvals["zmin"]]
+		box_hi = [gvals["xmax"], gvals["ymax"], gvals["zmax"]]
+		sideset_names, classify_error = _classify_rve_sidesets(
+			sculpt_exo, box_lo, box_hi, [hx, hy, hz])
+		if classify_error:
+			return json.dumps({**_error_payload(
+				"cubit", f"RVE sideset classification failed: "
+				f"{classify_error}"),
+				"sculpt_exodus": str(sculpt_exo)}, default=str)
+		cmds += [f'sideset {sid} name "{name}"'
+		         for sid, name in sorted(sideset_names.items())]
 	cmds += [f'export netgen "{str(vol).replace(chr(92), "/")}" '
 	         f"order 1 overwrite",
 	         f'export gmsh "{str(msh).replace(chr(92), "/")}" '
@@ -4978,6 +5249,36 @@ def cubit_vfrac_to_vol(vfrac_path: str,
 		msh, vol, v_vfrac, closure_tolerance)
 	if verification_error is not None:
 		return json.dumps(verification_error, default=str)
+	# Under-resolution self-diagnosis: interface-reconstruction closure
+	# error scales ~O(h) on thin-feature bodies (the 6-pole-ring failure
+	# signature), so on a closure miss the report computes the lattice
+	# that should pass instead of leaving the operator to guess-and-rerun
+	# (measured incident: cells=56 missed the 1 % gate at 1.27 %).
+	if not gates.get("closure_ok", True) and closure_tolerance > 0.0:
+		ratio = float(metrics["closure"]) / closure_tolerance
+		metrics["suggested_cells"] = min(
+			512, int(_math.ceil(max(nx, ny, nz) * 1.2 * max(ratio, 1.0))))
+		metrics["suggested_cells_note"] = (
+			"closure error scales ~O(h); rewrite the vfrac Exodus with "
+			"cells=suggested_cells and re-run (the writer caps at 512)")
+	per_material_report = None
+	if n_mat > 1:
+		# The total-volume closure conserves a partition bias (core
+		# over-meshed at the shell's expense sums to the same total), so a
+		# multi-material mesh gates EACH block against its own vfrac
+		# integral -- the per-region mu_r solve is only as trustworthy as
+		# the per-region geometry.
+		per_material_report, pm_error = _per_material_closure(
+			vol, per_material, closure_tolerance)
+		if pm_error:
+			env = pm_error.startswith("ENVIRONMENT: ")
+			return json.dumps({**_error_payload(
+				"environment" if env else "verification",
+				pm_error.removeprefix("ENVIRONMENT: "),
+				kind="environment" if env else None),
+				"vol": str(vol)}, default=str)
+		gates["per_material_closure_ok"] = bool(
+			all(entry["ok"] for entry in per_material_report.values()))
 	period_report = None
 	if periodic:
 		period = [(gvals["xmax"] - gvals["xmin"]),
@@ -4995,6 +5296,32 @@ def cubit_vfrac_to_vol(vfrac_path: str,
 			period_report.get("ok") and period_report["axes"] and all(
 				entry["seam_fill_rate"] >= 0.98
 				for entry in period_report["axes"]))
+	label_report = None
+	if periodic and sideset_names:
+		# .vol-side verification of the RVE labels, INDEPENDENT of the
+		# Exodus-side classification: each rve_* boundary's face nodes
+		# must hug its period plane (within ~1.5 cells of raggedness) and
+		# span the box in the in-plane directions.  A Cubit import
+		# re-numbering or an Exodus topology surprise fails here loudly
+		# instead of shipping silently mislabeled periodic faces.
+		label_report = _vol_bcname_face_stats(vol)
+		box_lo = [gvals["xmin"], gvals["ymin"], gvals["zmin"]]
+		box_hi = [gvals["xmax"], gvals["ymax"], gvals["zmax"]]
+		cell_by_axis = [hx, hy, hz]
+		labels_ok = True
+		expected = {"rve_xmin": (0, box_lo[0]), "rve_xmax": (0, box_hi[0]),
+		            "rve_ymin": (1, box_lo[1]), "rve_ymax": (1, box_hi[1]),
+		            "rve_zmin": (2, box_lo[2]), "rve_zmax": (2, box_hi[2])}
+		for name, (axis, plane) in expected.items():
+			entry = label_report.get(name)
+			if not entry or entry["n_faces"] == 0:
+				labels_ok = False
+				continue
+			span = max(abs(entry["lo"][axis] - plane),
+			           abs(entry["hi"][axis] - plane))
+			if span > 1.5 * cell_by_axis[axis]:
+				labels_ok = False
+		gates["rve_labels_ok"] = bool(labels_ok)
 	return json.dumps({
 		"status": "ok" if all(gates.values()) else "gate_failed",
 		"gates": gates,
@@ -5002,7 +5329,12 @@ def cubit_vfrac_to_vol(vfrac_path: str,
 		"sculpt_exodus": str(sculpt_exo),
 		"vfrac_volume": v_vfrac,
 		"materials": per_material,
+		"per_material_closure": per_material_report,
 		"periodic": bool(periodic),
+		"rve_sideset_names": ({str(k): v for k, v in
+		                       sorted(sideset_names.items())}
+		                      if sideset_names else None),
+		"rve_boundary_labels": label_report,
 		"periodic_node_match": period_report,
 		"grid": {"nel": [nx, ny, nz], "cell": [hx, hy, hz]},
 		**metrics,

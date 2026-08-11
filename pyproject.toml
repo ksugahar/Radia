@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "radia"
-version = "4.95.50"
+version = "4.95.51"
 description = "Radia 3D Magnetostatics with NGSolve Integration and TaskManager Parallelization"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -16,7 +16,7 @@ authors = [
 maintainers = [
     {name = "Radia Development Team"},
 ]
-keywords = ["magnetostatics", "magnetic field", "radia", "ngsolve", "fem", "synchrotron", "cubit", "mesh", "export", "gmsh", "nastran", "vtk", "netgen"]
+keywords = ["magnetostatics", "magnetic field", "radia", "ngsolve", "fem", "synchrotron", "cubit", "mesh", "export", "gmsh", "nastran", "vtk", "netgen", "spice", "ltspice", "simulink"]
 classifiers = [
     "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Science/Research",
@@ -79,10 +79,10 @@ topopt-cad = [
     "fast-simplification>=0.1",
 ]
 spice = [
-    "radia-spice-lab>=0.4.0",
+    "schemdraw>=0.18",
 ]
 ltspice = [
-    "radia-spice-lab>=0.4.0",
+    "schemdraw>=0.18",
 ]
 build123d = [
     # Pythonic OCCT front-end used by PEEC coil-from-shape helpers
@@ -110,6 +110,7 @@ test = [
     "pytest-cov>=4.0",
     "pytest-rerunfailures>=12.0",
     "mcp>=1.0.0",
+    "schemdraw>=0.18",
 ]
 dev = [
     "pytest>=7.0",
@@ -117,6 +118,7 @@ dev = [
     "pytest-rerunfailures>=12.0",
     "pyvista>=0.40",
     "matplotlib>=3.5",
+    "schemdraw>=0.18",
 ]
 
 [project.urls]
@@ -134,6 +136,16 @@ Issues = "https://github.com/ksugahar/Radia/issues"
 # association so no console window flashes on double-click.
 radia-vol-viewer = "radia.tools.vol_sol_viewer:main"
 radia-ih-assemble = "radia.simulink.ih_operator_assembly:main"
+# Circuit/SPICE integration is part of Radia. The shorter canonical names are
+# preferred; legacy names remain wired to the same implementation.
+radia-ltspice = "radia.ltspice.cli:main"
+mcp-server-radia-ltspice = "radia.ltspice.mcp_server:main"
+radia-spice-lab = "radia.ltspice.cli:main"
+mcp-server-radia-spice-lab = "radia.ltspice.mcp_server:main"
+spice-circuit-lab = "radia.ltspice.cli:main"
+mcp-spice-circuit-lab = "radia.ltspice.mcp_server:main"
+ltspice-convert = "radia.ltspice.cli:main"
+mcp-ltspice = "radia.ltspice.mcp_server:main"
 # Desktop PySide and notebook-workbench entry points are retired. Human
 # production operation uses the Radia Simulink library. Python/MCP use the
 # headless calc_*.py and DesignSpec contracts.
@@ -176,6 +188,8 @@ radia = [
     "simulink/*.cpp",
     "simulink/*.md",
     "simulink/contracts/*.json",
+    "ltspice/LICENSE",
+    "ltspice/py.typed",
     "CONVENTIONS.md",
 ]
 
@@ -235,6 +249,7 @@ norecursedirs = [
     "build",
     "*.egg",
     "__pycache__",
+    "fixtures",
 ]
 
 [tool.coverage.run]

@@ -74,7 +74,8 @@ def test_multimaterial_bridge_gates_and_labels(artifacts):
     assert report.get("status") == "ok", report.get("gates", report)
     assert report["gates"] == {"closure_ok": True,
                                "no_inverted_elements": True,
-                               "boundary_faces_ok": True}
+                               "boundary_faces_ok": True,
+                               "per_material_closure_ok": True}
     assert [row["name"] for row in report["materials"]] == ["core", "shell"]
     # a multi-material mesh carries interface faces ON TOP of the skin;
     # the OUTER count is what must match the topological skin
@@ -82,6 +83,24 @@ def test_multimaterial_bridge_gates_and_labels(artifacts):
     assert report["vol_interface_faces"] > 0, (
         "no material-interface faces exported -- the regions are not "
         "sharing an interface")
+
+
+def test_each_region_closes_against_its_own_volume_fraction(artifacts):
+    """The TOTAL closure conserves a partition bias -- core over-meshed at
+    the shell's expense sums to the same number -- yet the per-region
+    ``mu_r`` solve is only as trustworthy as the per-region geometry.  So
+    every block is gated against its OWN fraction integral.
+    """
+    report = artifacts["mesh_report"]
+    per_material = report["per_material_closure"]
+    assert set(per_material) == {"core", "shell"}
+    for name, entry in per_material.items():
+        assert entry["ok"] is True, (name, entry)
+        assert entry["closure"] <= report["closure_tolerance"], (name, entry)
+    # the per-region volumes must reconstitute the total the shared gate
+    # used, otherwise the two closures are measuring different meshes
+    total = sum(entry["mesh_volume"] for entry in per_material.values())
+    assert total == pytest.approx(report["mesh_volume"], rel=1e-6)
 
 
 def test_multimaterial_interface_is_conformal(artifacts):

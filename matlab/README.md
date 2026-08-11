@@ -214,6 +214,31 @@ retains its GridFunction until the view is deleted. This is a native MEX path
 and does not start a Python process. The current pip-provided NGSolve DLL
 still requires the Python runtime DLL at load time.
 
+### Direct GridFunction beam transfer map
+
+The accelerator optics adapter consumes that native GridFunction handle
+directly. NGSolve performs element search, mapped-point construction, and field
+evaluation at nine transverse points per supplied reference station; MATLAB
+does not receive a sampled field map or reconstruct finite-element basis data.
+
+```matlab
+result = radia.beam.propagateGridFunctionLinearMap( ...
+    solvedB, segmentLengthsM, referencePositionsM, referenceTangents, ...
+    magneticRigidityTM, SampleRadiusM=1e-3, ...
+    InitialHorizontal=[1 0 0], Names=regionNames);
+
+R = result.R;
+k1 = result.normal_gradient_per_m2;
+k1s = result.skew_gradient_per_m2;
+```
+
+The returned native diagnostics include the transported frame, center field,
+full local field gradient, normal/skew quadrupole strengths, divergence/curl
+checks, fit rank/condition/residuals, and one local 6-by-6 generator per
+segment. This entry is intentionally first order; nonlinear `T/U` propagation
+uses `radia.beam.propagateVariationalMap` once physical `F2/F3` equation jets
+are available.
+
 ### Persistent mesh, space, form, and matrix handles
 
 For workflows that assemble once and iterate many times, MATLAB can retain the
@@ -445,6 +470,30 @@ the production route for HCurl/HDiv and curved high-order elements.
 
 The MEX boundary uses MATLAB column-major arrays externally and converts them
 to Radia's row-major `[target][source]` convention internally.
+
+## Nonlinear HDiv-MMM reactor
+
+Open the tracked native demonstration with:
+
+```matlab
+addpath("<radia-release>\matlab")
+radia.setup()
+radia.simulink.openNonlinearReactor()
+```
+
+`radia_nonlinear_reactor.slx` drives a toroidal retained HDiv magnetic-moment
+model with a 20 A, 50 Hz current. A readable Level-2 MATLAB S-Function owns
+sample time, `Outputs`/`Update`, custom simulation state, and deterministic
+termination. The standalone `reactor.*` commands in `radia_mex` own the
+nonlinear Newton state through a checked `uint64` handle.
+
+The preassembled numeric contract contains the demagnetizing operator,
+divergence-free magnetization modes, quadrature weights, winding excitation,
+sample points, and a monotone BH table. Each accepted step emits terminal
+voltage, flux linkage, tangent differential inductance, peak B, magnetic
+energy, nonlinear iteration count, relative residual, and distributed B
+samples. The public toroid uses 288 samples and intentionally contains no LUT,
+lumped-state surrogate, or Python call per simulation step.
 
 ## Simulink and induction heating
 
@@ -714,7 +763,7 @@ Simulink model. The `.kicad_sch` file remains the design/PCB source of truth;
 generated `.cir` and `.asc` files are analysis artifacts and ASC edits are not
 written back to KiCad.
 `radia.ltspice.netlistToSchematic("circuit.cir")` is the thin MATLAB wrapper
-over the canonical `radia-spice-lab` Python converter. By default it converts
+over the canonical `radia.ltspice` Python converter. By default it converts
 back with hidden LTspice and rejects the result unless the node-rename-invariant
 Python topology check proves connectivity equivalence.
 Use `runNoise`, `analyzeFFT`, and `runIntervals` for noise spectra, transient

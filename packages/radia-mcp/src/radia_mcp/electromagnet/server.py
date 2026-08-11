@@ -67,6 +67,8 @@ def electromagnet_usage(topic: str = "overview") -> str:
                                   to accelerator pole-face design topics
             "accelerator_fundamentals" - Magnetic rigidity and requirements
             "beam_optics_contract" - Twiss/dispersion/tune field handoff
+            "enge_fringe_integrals" - Enge I1/I2 orbit and edge corrections,
+                                       including FFAG soft-edge use
             "accelerator_magnet_types" - Magnet roles and technology choice
             "accelerator_magnet_design" - End-to-end engineering workflow
             "rapid_cycling_magnets" - Eddy current and power-supply design
@@ -207,6 +209,7 @@ def new_electromagnet_simulation(magnet_type: str = "dipole") -> str:
         "0. Translate lattice requirements through magnetic rigidity\n"
         "   - electromagnet_usage('accelerator_fundamentals')\n"
         "   - electromagnet_usage('beam_optics_contract')\n"
+        "   - electromagnet_usage('enge_fringe_integrals') for bend ends\n"
         "1. Define coil with CoilBuilder (no coil mesh needed)\n"
         "   - electromagnet_usage('coilbuilder') for API reference\n"
         "2. Export the yoke STEP and run the coil/yoke clearance audit\n"
@@ -287,6 +290,7 @@ def main():
             "hantila", "hysteresis", "ima", "harmonics",
             "clebsch_hodograph",
             "accelerator_fundamentals", "beam_optics_contract",
+            "enge_fringe_integrals",
             "accelerator_magnet_types", "accelerator_magnet_design",
             "rapid_cycling_magnets", "superconducting_accelerator_magnets",
             "accelerator_magnet_measurement", "accelerator_model_boundaries",

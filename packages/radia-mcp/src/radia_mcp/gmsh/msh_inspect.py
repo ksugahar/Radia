@@ -18,7 +18,7 @@ import math
 import re
 import tempfile
 from collections import Counter
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from pathlib import Path
 from typing import Any
 
@@ -72,6 +72,28 @@ ELEMENT_TYPES: dict[int, tuple[str, int, int, int]] = {
 
 _DATA_SECTIONS = ("NodeData", "ElementData", "ElementNodeData")
 _MAX_DETAIL = 20  # cap per-issue detail strings so huge files stay readable
+
+# Beam-animation views are minted by this package (radia.gmsh_post_export
+# .export_particle_tracks_msh and gmsh particle_trace) with exactly this
+# name prefix, so detecting them is deterministic -- no heuristic on the
+# data.  Every step of such a view carries an out-of-range SENTINEL on
+# the segments the beam has not reached yet; the raw max of the view is
+# therefore that sentinel, not physics (MEASURED on the committed
+# docs/gmsh_post/output/saddle_beam.msh: static "kinetic energy [eV]"
+# max 2.5e7 eV, beam view max 2.75e8 eV and rms 1.907e8 eV, with
+# nan=0/inf=0 -- an 11x kinetic-energy "gain" from a magnetic field,
+# which does no work).
+_BEAM_VIEW_PREFIX = "beam ("
+# The sentinel is built as hi + 10*scale with scale >= (hi - lo), so it
+# sits at least 10 physical spans above the physical maximum.  Half that
+# is the detection gate: comfortably above any spacing inside real data
+# of the same view, comfortably below the construction guarantee.
+_SENTINEL_GAP_FACTOR = 5.0
+
+
+def _is_beam_animation_view(name: str) -> bool:
+    """True for the multi-step hide-the-future 'beam (<quantity>)' view."""
+    return name.startswith(_BEAM_VIEW_PREFIX)
 
 # Known-bad options for .geo validation.  These do not exist in GMSH 4.x and
 # crash or error on merge; each maps to the correct replacement.
@@ -284,13 +306,22 @@ def _parse_elements(body: list[str]) -> tuple[dict[str, Any], list[str]]:
 
 
 def _parse_data_section(kind: str, body: list[str], start_line: int,
-                        parse_values: bool = False) -> tuple[dict[str, Any], list[str]]:
+                        parse_values: bool = False,
+                        collect_values_for: Callable[[str], bool] | None = None
+                        ) -> tuple[dict[str, Any], list[str]]:
+    """Parse one $NodeData/$ElementData/$ElementNodeData block.
+
+    ``collect_values_for`` is an optional ``name -> bool`` predicate; when
+    it accepts this block's view name the per-sample metrics are kept in
+    ``view["values"]``.  Only the sentinel-aware beam-animation report
+    needs the raw samples, so nothing else pays the memory.
+    """
     errors: list[str] = []
     view: dict[str, Any] = {
         "section": kind, "start_line": start_line, "name": "",
         "time": None, "step": None, "components": None,
         "declared": None, "data_rows": 0, "tags": [],
-        "header_ok": True, "value_stats": None,
+        "header_ok": True, "value_stats": None, "values": None,
     }
     rows = [ln.strip() for ln in body if ln.strip()]
     idx = 0
@@ -326,6 +357,10 @@ def _parse_data_section(kind: str, body: list[str], start_line: int,
             f"needs >=3 entries (step, components, count), got {len(ints)}")
 
     ncomp = view["components"]
+    collected: list[float] | None = None
+    if parse_values and collect_values_for is not None \
+            and collect_values_for(view["name"]):
+        collected = []
     stats: dict[str, Any] | None = None
     if parse_values:
         stats = {"nan": 0, "inf": 0, "bad_width_rows": 0,
@@ -388,8 +423,11 @@ def _parse_data_section(kind: str, body: list[str], start_line: int,
             stats["s1"] += metric
             stats["s2"] += metric * metric
             stats["n_finite_samples"] += 1
+            if collected is not None:
+                collected.append(metric)
 
     view["value_stats"] = stats
+    view["values"] = collected
     return view, errors
 
 
@@ -397,7 +435,9 @@ def _parse_data_section(kind: str, body: list[str], start_line: int,
 # Whole-file parse
 # ======================================================================
 
-def _parse_msh(path: Path, parse_values: bool = False) -> dict[str, Any]:
+def _parse_msh(path: Path, parse_values: bool = False,
+               collect_values_for: Callable[[str], bool] | None = None
+               ) -> dict[str, Any]:
     """Parse an MSH file into an internal structure (ASCII v4.x only)."""
     text = path.read_text(encoding="utf-8", errors="replace")
     lines = text.splitlines()
@@ -456,8 +496,9 @@ def _parse_msh(path: Path, parse_values: bool = False) -> dict[str, Any]:
             parsed["elements"], errs = _parse_elements(body)
             parsed["errors"].extend(errs)
         elif name in _DATA_SECTIONS:
-            view, errs = _parse_data_section(name, body, start_line,
-                                             parse_values=parse_values)
+            view, errs = _parse_data_section(
+                name, body, start_line, parse_values=parse_values,
+                collect_values_for=collect_values_for)
             parsed["views_raw"].append(view)
             parsed["errors"].extend(errs)
     return parsed
@@ -1137,6 +1178,34 @@ def _run_jacobian_check(msh_path: Path, quadrature: str,
 # Public API: field statistics
 # ======================================================================
 
+def _detect_animation_sentinel(values: list[float]) -> float | None:
+    """The hide-the-future sentinel of a beam view, or None if absent.
+
+    The sentinel is CONSTRUCTED as ``hi + 10*scale`` with
+    ``scale >= hi - lo``, so it sits at least ten physical spans above
+    the physical maximum and every hidden entity carries the identical
+    float.  Detection therefore tests that structural gap rather than
+    guessing: the top value counts as the sentinel when it is more than
+    ``_SENTINEL_GAP_FACTOR`` physical spans above the next value down.
+    A fully visible view (last frame of a trail, or a one-frame
+    animation) has no sentinel at all and returns None.
+    """
+    if not values:
+        return None
+    top = max(values)
+    below = [v for v in values if v < top]
+    if not below:
+        return None                      # one single value: nothing hidden
+    second = max(below)
+    gap = top - second
+    physical_span = second - min(below)
+    if gap <= 0.0:
+        return None
+    if gap <= _SENTINEL_GAP_FACTOR * physical_span:
+        return None
+    return top
+
+
 def field_stats(msh_path: str | Path,
                 view_name: str | None = None) -> dict[str, Any]:
     """Per-view, per-time-step field value statistics for an MSH file.
@@ -1144,13 +1213,25 @@ def field_stats(msh_path: str | Path,
     Scalars report signed min/max/mean/rms; vectors and tensors report
     Euclidean-magnitude statistics plus the pooled per-component
     min/max.  NaN/Inf values are counted (and excluded from the stats).
+
+    Beam-animation views (``beam (<quantity>)``, minted by
+    ``export_particle_tracks_msh`` / ``particle_trace``) hide the
+    not-yet-flown segments behind an out-of-range sentinel, so their raw
+    max is a rendering artefact and NOT physics.  Such a view is
+    reported with ``beam_animation: true``, the detected ``sentinel``,
+    the sentinel-free ``physical_min``/``physical_max``/``physical_rms``,
+    and a loud ``warning`` (also collected in the top-level
+    ``warnings``).  The raw min/max/mean/rms stay exactly as they are in
+    the file -- the sentinel is never silently dropped from the headline
+    numbers.
     """
     path = Path(msh_path)
     if not path.is_file():
         return {"ok": False, "path": str(path),
                 "error": f"file not found: {path}"}
 
-    parsed = _parse_msh(path, parse_values=True)
+    parsed = _parse_msh(path, parse_values=True,
+                        collect_values_for=_is_beam_animation_view)
     if parsed["version"] is None or not str(parsed["version"]).startswith("4") \
             or parsed["ascii"] is False:
         return {"ok": False, "path": str(path),
@@ -1170,6 +1251,7 @@ def field_stats(msh_path: str | Path,
                              f"available: {names}"}
 
     views_out = []
+    warnings: list[str] = []
     for (section, name), sections in grouped.items():
         sections.sort(key=lambda v: (v["step"] if v["step"] is not None
                                      else v["start_line"]))
@@ -1235,15 +1317,78 @@ def field_stats(msh_path: str | Path,
         if (sections[0]["components"] or 1) > 1:
             overall["comp_min"] = overall_comp_min
             overall["comp_max"] = overall_comp_max
-        views_out.append({
+        entry_view: dict[str, Any] = {
             "section": section, "name": name,
             "components": sections[0]["components"],
             "steps": len(sections),
             "per_step": per_step,
             "overall": overall,
-        })
+        }
+        if _is_beam_animation_view(name):
+            entry_view.update(
+                _beam_animation_report(name, sections, per_step, overall))
+            if entry_view.get("warning"):
+                warnings.append(entry_view["warning"])
+        views_out.append(entry_view)
 
-    return {"ok": True, "path": str(path), "views": views_out}
+    return {"ok": True, "path": str(path), "views": views_out,
+            "warnings": warnings}
+
+
+def _beam_animation_report(name: str, sections: list[dict[str, Any]],
+                           per_step: list[dict[str, Any]],
+                           overall: dict[str, Any]) -> dict[str, Any]:
+    """Sentinel-aware extra keys for one beam-animation view.
+
+    The raw statistics in ``overall`` stay untouched -- the caller must
+    SEE that the headline max is the sentinel, so this only adds the
+    detected sentinel, the per-step hidden counts, and the physical
+    statistics taken over the non-sentinel entries.
+    """
+    pooled: list[float] = []
+    for view in sections:
+        pooled.extend(view.get("values") or [])
+    sentinel = _detect_animation_sentinel(pooled)
+    static_hint = name[len(_BEAM_VIEW_PREFIX):].rstrip(")")
+    report: dict[str, Any] = {"beam_animation": True, "sentinel": sentinel}
+    if sentinel is None:
+        report["warning"] = (
+            f"view {name!r} is a beam-animation view (its steps hide the "
+            f"not-yet-flown segments behind an out-of-range sentinel), but "
+            f"no sentinel value was found in the data -- every entity is "
+            f"visible in every step. The statistics below are physical.")
+        return report
+
+    # A detected sentinel always has values strictly below it (that gap
+    # IS the detection), so the physical set is never empty here.
+    physical = [v for v in pooled if v != sentinel]
+    n_sentinel = len(pooled) - len(physical)
+    for step_entry, view in zip(per_step, sections):
+        vals = view.get("values") or []
+        step_entry["sentinel_entities"] = sum(1 for v in vals if v == sentinel)
+    n = len(physical)
+    raw_max = overall["max"]
+    raw_rms = overall["rms"]
+    report["sentinel_entities"] = n_sentinel
+    report["physical_min"] = min(physical)
+    report["physical_max"] = max(physical)
+    report["physical_mean"] = math.fsum(physical) / n
+    report["physical_rms"] = math.sqrt(math.fsum(v * v for v in physical) / n)
+    report["physical_samples"] = n
+    # (the message is assembled from plain locals: nested same-type
+    # quotes inside an f-string need Python 3.12, and this package
+    # supports 3.10)
+    view_repr = repr(name)
+    static_repr = repr(static_hint)
+    n_total = len(pooled)
+    report["warning"] = (
+        f"view {view_repr} is a beam animation: its raw max {raw_max!r} and "
+        f"rms {raw_rms!r} are dominated by the out-of-range SENTINEL "
+        f"{sentinel!r} that hides the not-yet-flown segments in "
+        f"{n_sentinel} of {n_total} entries -- NOT physics. Read "
+        f"physical_min/physical_max/physical_rms here, or better the static "
+        f"per-track view {static_repr}.")
+    return report
 
 
 # ======================================================================
@@ -1736,6 +1881,13 @@ def diff_msh(msh_a: str | Path, msh_b: str | Path,
     and, for common views, the relative drift of min/max/mean/rms both
     overall and per time step.
     Field values are compared through statistics, not tag-by-tag.
+
+    It does NOT compare values across DIFFERENT meshes: two meshings of
+    the same geometry carrying a bit-identical analytic field differ in
+    node/element counts and are correctly reported here as structurally
+    different.  For solver-vs-solver or coarse-vs-fine cross-validation
+    use ``radia_mcp.gmsh.compare.compare_fields``, which probes both
+    files at one shared point cloud.
     """
     results = {}
     for key, p in (("a", Path(msh_a)), ("b", Path(msh_b))):

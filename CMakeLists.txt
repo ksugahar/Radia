@@ -240,7 +240,25 @@ set(RADIA_CORE_SOURCES
 	${CORE_DIR}/rad_evrs_tmethod.cpp          # EVRS/T-method algebra kernel (T --curl--> J, reduced VIM/CLN projection)
 	${CORE_DIR}/rad_hybrid_vim_schur.cpp      # Complex Schur/SIBC helper kernels for hybrid VIM / mixed Galerkin reduction
 	${CORE_DIR}/rad_motor_rom_c.cpp           # Angle-periodic motor ROM C ABI
+	${CORE_DIR}/rad_beam_transfer.cpp         # Distributed canonical R/T/U transfer attribution
 )
+
+# Fast analytic regression for the dependency-free beam-transfer kernel.
+# Solver-heavy accelerator validation remains under validation_test/.
+include(CTest)
+if(BUILD_TESTING)
+	add_executable(test_rad_beam_transfer
+		${CMAKE_CURRENT_SOURCE_DIR}/tests/cpp/test_rad_beam_transfer.cpp
+		${CORE_DIR}/rad_beam_transfer.cpp
+	)
+	target_include_directories(test_rad_beam_transfer PRIVATE ${CORE_DIR})
+	if(MSVC)
+		target_compile_options(test_rad_beam_transfer PRIVATE /W4 /permissive-)
+	else()
+		target_compile_options(test_rad_beam_transfer PRIVATE -Wall -Wextra -Wpedantic)
+	endif()
+	add_test(NAME radia.beam_transfer.cpp COMMAND test_rad_beam_transfer)
+endif()
 
 # Acoustic application kernels are deliberately separate from Radia's
 # Laplace-only MQS core. The same source is linked into pybind11 and MEX.
@@ -570,6 +588,8 @@ message(STATUS "cln_core module configured")
 
 set(RADIA_PYBIND_SOURCES
 	${CMAKE_CURRENT_SOURCE_DIR}/src/lib/radia_pybind.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/src/lib/rad_beam_transfer_pybind.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/src/lib/rad_beam_ngsolve.cpp
 )
 
 pybind11_add_module(_radia_pybind
@@ -687,9 +707,13 @@ if(RADIA_BUILD_MATLAB_MEX)
 		SRC
 			${CMAKE_CURRENT_SOURCE_DIR}/src/matlab/radia_mex.cpp
 			${CMAKE_CURRENT_SOURCE_DIR}/src/matlab/radia_ih_mex_commands.cpp
+			${CMAKE_CURRENT_SOURCE_DIR}/src/matlab/radia_reactor_mex_commands.cpp
+			${CMAKE_CURRENT_SOURCE_DIR}/src/matlab/radia_beam_mex_commands.cpp
+			${CMAKE_CURRENT_SOURCE_DIR}/src/lib/rad_beam_ngsolve.cpp
 			${CMAKE_CURRENT_SOURCE_DIR}/src/radia/simulink/radia_ih_runtime.cpp
 			${CMAKE_CURRENT_SOURCE_DIR}/src/radia/simulink/radia_ih_transport.cpp
 			${CMAKE_CURRENT_SOURCE_DIR}/src/radia/simulink/radia_ih_thermal.cpp
+			${CMAKE_CURRENT_SOURCE_DIR}/src/radia/simulink/radia_nonlinear_reactor_runtime.cpp
 			${CORE_DIR}/rad_cln.cpp
 			${RADIA_CORE_SOURCES}
 			${RADIA_ACOUSTIC_SOURCES}

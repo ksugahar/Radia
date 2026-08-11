@@ -23,6 +23,7 @@ from radia_mcp.electromagnet.server import (
 EXPECTED_TOPICS = {
     "accelerator_fundamentals",
     "beam_optics_contract",
+    "enge_fringe_integrals",
     "accelerator_magnet_types",
     "accelerator_magnet_design",
     "rapid_cycling_magnets",
@@ -65,6 +66,27 @@ def test_foundations_preserve_the_lattice_to_field_contract() -> None:
     assert "Delta Q_x,y = xi_x,y * delta" in optics
     assert "integrated multipoles" in optics
     assert "Maxwell-consistent 3-D map" in optics
+
+
+def test_enge_form_factors_preserve_orbit_and_ffag_contract() -> None:
+    enge = electromagnet_usage("enge_fringe_integrals")
+
+    assert "Enge profile coefficients" in enge
+    assert "Enge form factors" in enge
+    assert "delta_x_Enge = g^2 * I1 / (rho*cos(beta)^2)" in enge
+    assert "tan(beta_v) = tan(beta)" in enge
+    assert "`I1` is the Enge reference-orbit correction" in enge
+    assert "`I2` modifies the effective vertical" in enge
+    assert "E1 + E2 = phi" in enge
+    assert "31--250 MeV" in enge
+    assert "single magnet-wide `I1,I2,beta` tuple is not an adequate FFAG" in enge
+    assert "air-volume-mesh-free magnet optimization" in enge
+    assert "BDM1" in enge
+    assert "double counts" in enge
+    assert "build_ffag_cell_target_family" in enge
+    assert "MultiMomentumTransferMatrixObjective" in enge
+    assert "build_multi_orbit_field_response_matrix" in enge
+    assert "optimize_hdiv_mmm_magnet_from_transfer_matrices" in enge
 
 
 def test_engineering_topics_cover_static_ramped_and_superconducting_magnets() -> None:
