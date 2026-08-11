@@ -239,6 +239,35 @@ segment. This entry is intentionally first order; nonlinear `T/U` propagation
 uses `radia.beam.propagateVariationalMap` once physical `F2/F3` equation jets
 are available.
 
+### Native beam tracking foundation
+
+The first EarlyTimes migration slice exposes field sampling, the relativistic
+Lorentz right-hand side, one named integration step, and complete fixed-step
+trajectory records as separate calls. MATLAB and Python use the same C++
+kernel.
+
+```matlab
+species = radia.beam.proton();
+reference = radia.beam.referenceParticle(species,220e6);
+field = radia.beam.uniformField([0 0 0.7]);
+state = radia.beam.cartesianState( ...
+    [0 0 0],[reference.momentum_kg_m_s 0 0]);
+
+sample = radia.beam.sampleField(field,[0 0 0]);
+rhs = radia.beam.lorentzRHS(species,state,field);
+oneStep = radia.beam.step( ...
+    species,state,field,1e-12,Stepper="classical-rk4");
+trajectory = radia.beam.track( ...
+    species,state,field,0,1e-8,1e-11,Stepper="boris2");
+```
+
+All values are SI. `time`, `path_length`, and `azimuth` are explicit
+independent-variable choices. The current Boris implementation is the
+time-domain relativistic electromagnetic step; path-length and azimuth
+tracking use classical RK4. Returned records retain the accepted state,
+sampled field, RHS, kinetic energy, momentum magnitude, speed, and domain
+status for inspection.
+
 ### Persistent mesh, space, form, and matrix handles
 
 For workflows that assemble once and iterate many times, MATLAB can retain the

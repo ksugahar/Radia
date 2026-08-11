@@ -241,6 +241,7 @@ set(RADIA_CORE_SOURCES
 	${CORE_DIR}/rad_hybrid_vim_schur.cpp      # Complex Schur/SIBC helper kernels for hybrid VIM / mixed Galerkin reduction
 	${CORE_DIR}/rad_motor_rom_c.cpp           # Angle-periodic motor ROM C ABI
 	${CORE_DIR}/rad_beam_transfer.cpp         # Distributed canonical R/T/U transfer attribution
+	${CORE_DIR}/rad_beam_dynamics.cpp         # Native EarlyTimes migration: fields, Lorentz RHS, RK4/Boris tracking
 )
 
 # Fast analytic regression for the dependency-free beam-transfer kernel.
@@ -258,6 +259,18 @@ if(BUILD_TESTING)
 		target_compile_options(test_rad_beam_transfer PRIVATE -Wall -Wextra -Wpedantic)
 	endif()
 	add_test(NAME radia.beam_transfer.cpp COMMAND test_rad_beam_transfer)
+
+	add_executable(test_rad_beam_dynamics
+		${CMAKE_CURRENT_SOURCE_DIR}/tests/cpp/test_rad_beam_dynamics.cpp
+		${CORE_DIR}/rad_beam_dynamics.cpp
+	)
+	target_include_directories(test_rad_beam_dynamics PRIVATE ${CORE_DIR})
+	if(MSVC)
+		target_compile_options(test_rad_beam_dynamics PRIVATE /W4 /permissive-)
+	else()
+		target_compile_options(test_rad_beam_dynamics PRIVATE -Wall -Wextra -Wpedantic)
+	endif()
+	add_test(NAME radia.beam_dynamics.cpp COMMAND test_rad_beam_dynamics)
 endif()
 
 # Acoustic application kernels are deliberately separate from Radia's
@@ -589,6 +602,7 @@ message(STATUS "cln_core module configured")
 set(RADIA_PYBIND_SOURCES
 	${CMAKE_CURRENT_SOURCE_DIR}/src/lib/radia_pybind.cpp
 	${CMAKE_CURRENT_SOURCE_DIR}/src/lib/rad_beam_transfer_pybind.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/src/lib/rad_beam_dynamics_pybind.cpp
 	${CMAKE_CURRENT_SOURCE_DIR}/src/lib/rad_beam_ngsolve.cpp
 )
 

@@ -288,9 +288,14 @@ if /I "%RUN_CPP_TESTS%"=="True" (
         echo ERROR: beam-transfer C++ test build failed
         exit /b 1
     )
-    "$CTEST_EXE" --test-dir . -C Release --output-on-failure -R "radia.beam_transfer.cpp"
+    "$CMAKE_EXE" --build . --config Release --target test_rad_beam_dynamics -j
     if errorlevel 1 (
-        echo ERROR: beam-transfer C++ test failed
+        echo ERROR: beam-dynamics C++ test build failed
+        exit /b 1
+    )
+    "$CTEST_EXE" --test-dir . -C Release --output-on-failure -R "radia.beam_(transfer|dynamics).cpp"
+    if errorlevel 1 (
+        echo ERROR: beam C++ test failed
         exit /b 1
     )
 )
