@@ -8,7 +8,8 @@ optimizer.  The electromagnetic problem supplies row-major response rows
 
 The orbit fixes the required dipole field through ``B rho * curvature``.  The
 same field response is converted to a 6-by-6 combined-function transfer map,
-including its analytic Frechet Jacobian.  No design finite difference, density
+including its forward-mode AD Jacobian.  The matrix exponential is an exact
+Frechet-differentiated primitive.  No design finite difference, density
 interpolation, or gray material is used.
 """
 from __future__ import annotations
@@ -25,8 +26,10 @@ from .isochronous_topopt import (
 from .topology_optimization import (
     HDivMMMGenerationResult,
     GrowthTopologyReport,
+    TSVDElementCandidateSelection,
     grow_hdiv_mmm_by_superposition,
     ngsolve_growth_topology,
+    select_tsvd_element_candidates,
 )
 
 
@@ -343,6 +346,57 @@ class TransferMatrixFieldCorrection:
     linearized_max_band_ratio: float
     nonlinear_max_band_ratio: float
     status: str
+    derivative_backend: str = "forward-mode-expm-frechet-ad"
+    field_to_design_jacobian: np.ndarray | None = None
+
+
+@dataclass(frozen=True)
+class TransferMatrixAutomaticDifferentiation:
+    """Forward-mode derivative from sampled magnetic field to optics rows.
+
+    ``field_basis`` is the seed matrix.  The full Jacobian differentiates the
+    bend-field rows and selected transfer-matrix entries with respect to every
+    raw ``[B..., dB/dx...]`` sample.  ``directional_jacobian`` is the same
+    derivative after applying an optional smooth-field basis.
+    """
+
+    backend: str
+    current_field_response: np.ndarray
+    field_basis: np.ndarray
+    design_response: np.ndarray
+    full_jacobian: np.ndarray
+    directional_jacobian: np.ndarray
+
+
+@dataclass(frozen=True)
+class TransferMatrixMaterialInversePipelineResult:
+    """Auditable field -> map -> field error -> material proposal chain."""
+
+    objective: object
+    field_distribution: np.ndarray
+    realized_transfer_matrices: np.ndarray
+    target_transfer_matrices: np.ndarray
+    transfer_matrix_difference: np.ndarray
+    normalized_transfer_matrix_difference: np.ndarray
+    automatic_differentiation: TransferMatrixAutomaticDifferentiation
+    field_correction: TransferMatrixFieldCorrection
+    material_selection: TSVDElementCandidateSelection
+    stage_order: tuple[str, ...] = (
+        "magnetic-field-distribution",
+        "forward-ad-transfer-matrix",
+        "target-transfer-matrix-difference",
+        "tsvd-minimax-field-correction",
+        "aca-thin-qr-tsvd-material-inverse",
+    )
+
+    @property
+    def proposed_field_distribution(self) -> np.ndarray:
+        return np.asarray(
+            self.material_selection.predicted_response, dtype=float)
+
+    @property
+    def status(self) -> str:
+        return self.material_selection.status
 
 
 @dataclass(frozen=True)
@@ -385,7 +439,7 @@ class MultiMomentumTransferMatrixObjective:
     ``[B_binormal..., dB_binormal/dnormal...]``.  The transformed response is
     the corresponding concatenation of
     :class:`PlanarTransferMatrixObjective` responses.  Its Jacobian is block
-    diagonal and uses the same analytic matrix-exponential Frechet chain; no
+    diagonal and uses the same forward-mode matrix-exponential AD chain; no
     momentum or design finite difference is introduced.
     """
 
@@ -505,6 +559,60 @@ class MultiMomentumTransferMatrixObjective:
         return jacobian
 
 
+def differentiate_transfer_matrix_field_response(
+        objective, current_field_response, *, field_basis=None
+        ) -> TransferMatrixAutomaticDifferentiation:
+    """Differentiate sampled field -> selected optics response by AD.
+
+    The objective seeds every raw field coordinate and propagates those
+    tangents through its declared map.  An optional ``field_basis`` is
+    composed with that full Jacobian afterward.  The first-order combined-
+    function objective uses forward scalar rules and a Fréchet-differentiated
+    matrix exponential; higher-order objectives may declare another exact AD
+    backend through ``derivative_backend``.  This is algorithmic
+    differentiation of the optics model, not a design finite difference.
+    """
+    required = (
+        "raw_field_response_size", "transform", "transform_jacobian")
+    if any(not hasattr(objective, name) for name in required):
+        raise TypeError(
+            "objective must expose the planar transfer-matrix field contract")
+    raw_size = int(objective.raw_field_response_size)
+    current = _finite_array(
+        current_field_response, name="current_field_response").reshape(-1)
+    if current.shape != (raw_size,):
+        raise ValueError(
+            "current_field_response must match the objective raw-field size")
+    if field_basis is None:
+        basis = np.eye(raw_size)
+    else:
+        basis = _finite_array(field_basis, name="field_basis")
+        if basis.ndim != 2 or basis.shape[0] != raw_size or basis.shape[1] == 0:
+            raise ValueError(
+                "field_basis must have shape "
+                "(raw_field_response_size,n_mode)")
+    design = _finite_array(
+        objective.transform(current), name="current_design_response"
+    ).reshape(-1)
+    jacobian = _finite_array(
+        objective.transform_jacobian(current),
+        name="field_to_transfer_jacobian")
+    if jacobian.shape != (design.size, raw_size):
+        raise RuntimeError(
+            "transfer objective returned an incompatible AD Jacobian")
+    backend = str(getattr(
+        objective, "derivative_backend",
+        "forward-mode-expm-frechet-ad"))
+    return TransferMatrixAutomaticDifferentiation(
+        backend=backend,
+        current_field_response=current.copy(),
+        field_basis=np.asarray(basis, dtype=float).copy(),
+        design_response=design.copy(),
+        full_jacobian=np.asarray(jacobian, dtype=float).copy(),
+        directional_jacobian=np.asarray(
+            jacobian @ basis, dtype=float))
+
+
 def solve_transfer_matrix_field_correction(
         objective, current_field_response, *, field_basis=None,
         relative_tolerance=1.0e-3, maximum_step_scale=1.0,
@@ -545,13 +653,9 @@ def solve_transfer_matrix_field_correction(
         raise ValueError(
             "field response and positive design-response bands must match "
             "the transfer-matrix objective")
-    if field_basis is None:
-        basis = np.eye(raw_size)
-    else:
-        basis = _finite_array(field_basis, name="field_basis")
-        if basis.ndim != 2 or basis.shape[0] != raw_size or basis.shape[1] == 0:
-            raise ValueError(
-                "field_basis must have shape (raw_field_response_size,n_mode)")
+    automatic = differentiate_transfer_matrix_field_response(
+        objective, current, field_basis=field_basis)
+    basis = automatic.field_basis
     tolerance = float(relative_tolerance)
     maximum_scale = float(maximum_step_scale)
     line_search_steps = int(line_search_steps)
@@ -563,18 +667,14 @@ def solve_transfer_matrix_field_correction(
             "field inverse requires 0<tolerance<1, 0<step<=1, and a "
             "positive line-search count")
 
-    current_design = _finite_array(
-        objective.transform(current), name="current_design_response"
-    ).reshape(-1)
-    jacobian = _finite_array(
-        objective.transform_jacobian(current),
-        name="field_to_transfer_jacobian")
+    current_design = automatic.design_response
+    jacobian = automatic.full_jacobian
     if (current_design.shape != target.shape
             or jacobian.shape != (target.size, raw_size)):
         raise RuntimeError(
             "transfer objective returned an incompatible response or Jacobian")
     normalized_residual = (target - current_design) / band
-    normalized_operator = (jacobian @ basis) / band[:, None]
+    normalized_operator = automatic.directional_jacobian / band[:, None]
     U, singular, Vh = np.linalg.svd(
         normalized_operator, full_matrices=False)
     if singular.size and singular[0] > 0.0:
@@ -690,7 +790,103 @@ def solve_transfer_matrix_field_correction(
         current_max_band_ratio=current_ratio,
         linearized_max_band_ratio=linearized_ratio,
         nonlinear_max_band_ratio=nonlinear_ratio,
-        status=status)
+        status=status,
+        derivative_backend=automatic.backend,
+        field_to_design_jacobian=automatic.full_jacobian.copy())
+
+
+def run_transfer_matrix_material_inverse_pipeline(
+        objective, current_field_response, *, candidate_elements,
+        candidate_field_response_delta, candidate_volumes, volume_budget,
+        field_basis=None, field_inverse_relative_tolerance=1.0e-3,
+        field_inverse_maximum_step_scale=1.0,
+        field_inverse_line_search_steps=8,
+        material_relative_tolerance=1.0e-3,
+        material_improvement_capture=0.9,
+        ratio_tolerance=1.0e-12, active_elements=None,
+        predecessor_elements=None, candidate_volume_changes=None,
+        candidate_material_active=None, candidate_exclusion_groups=None,
+        maximum_changed_volume=None, maximum_changed_elements=None,
+        candidate_secondary_cost=None
+        ) -> TransferMatrixMaterialInversePipelineResult:
+    """Run the complete field-to-binary-material inverse pipeline.
+
+    The five explicit stages are:
+
+    1. accept the sampled ``[B..., dB/dx...]`` magnetic-field distribution;
+    2. build the realized transfer matrix and its forward-mode AD Jacobian;
+    3. form the target-minus-realized transfer-matrix difference;
+    4. solve a band-normalized optics TSVD/minimax inverse for ``delta B``;
+    5. approximate all candidate ``delta B`` columns with ACA -> thin QR ->
+       TSVD and solve the whole-element binary material proposal.
+
+    The returned proposal is a screening result.  A production topology loop
+    must still evaluate its exact Schur block, completely re-solve the active
+    HDiv-MMM system, rebuild the transfer matrix, and accept only an improving
+    exact result.
+    """
+    if not isinstance(
+            objective,
+            (PlanarTransferMatrixObjective,
+             MultiMomentumTransferMatrixObjective)):
+        raise TypeError(
+            "objective must be PlanarTransferMatrixObjective or "
+            "MultiMomentumTransferMatrixObjective")
+    current = _finite_array(
+        current_field_response, name="current_field_response").reshape(-1)
+    automatic = differentiate_transfer_matrix_field_response(
+        objective, current, field_basis=field_basis)
+    correction = solve_transfer_matrix_field_correction(
+        objective, current, field_basis=automatic.field_basis,
+        relative_tolerance=field_inverse_relative_tolerance,
+        maximum_step_scale=field_inverse_maximum_step_scale,
+        line_search_steps=field_inverse_line_search_steps)
+
+    if isinstance(objective, PlanarTransferMatrixObjective):
+        raw_by_objective = (current,)
+        objectives = (objective,)
+        targets = objective.target_matrix[None, :, :]
+        matrix_bands = objective.transfer_matrix_band[None, :, :]
+    else:
+        raw_by_objective = objective.split_raw_response(current)
+        objectives = objective.objectives
+        targets = objective.target_matrices
+        matrix_bands = objective.transfer_matrix_band
+    realized = np.asarray([
+        item.evaluate_transfer_map(raw).matrix
+        for item, raw in zip(objectives, raw_by_objective)], dtype=float)
+    difference = np.asarray(targets - realized, dtype=float)
+    normalized_difference = difference / matrix_bands
+
+    selection = select_tsvd_element_candidates(
+        current_response=current,
+        response_target=correction.target_field_response,
+        response_band=correction.field_response_band,
+        candidate_elements=candidate_elements,
+        candidate_response_delta=candidate_field_response_delta,
+        candidate_volumes=candidate_volumes,
+        volume_budget=volume_budget,
+        active_elements=active_elements,
+        predecessor_elements=predecessor_elements,
+        relative_tolerance=material_relative_tolerance,
+        improvement_capture=material_improvement_capture,
+        ratio_tolerance=ratio_tolerance,
+        candidate_volume_changes=candidate_volume_changes,
+        candidate_material_active=candidate_material_active,
+        candidate_exclusion_groups=candidate_exclusion_groups,
+        maximum_changed_volume=maximum_changed_volume,
+        maximum_changed_elements=maximum_changed_elements,
+        candidate_secondary_cost=candidate_secondary_cost)
+    return TransferMatrixMaterialInversePipelineResult(
+        objective=objective,
+        field_distribution=current.copy(),
+        realized_transfer_matrices=realized,
+        target_transfer_matrices=np.asarray(targets, dtype=float).copy(),
+        transfer_matrix_difference=difference,
+        normalized_transfer_matrix_difference=normalized_difference,
+        automatic_differentiation=automatic,
+        field_correction=correction,
+        material_selection=selection)
 
 
 def build_multi_orbit_field_response_matrix(
@@ -1051,8 +1247,9 @@ def optimize_hdiv_mmm_magnet_from_transfer_matrices(
     This is the FFAG operating-point fusion API.  The field-response matrix
     contains all momentum-indexed vacuum observation rows, while the physical
     solve and whole-element add/remove proposal remain shared.  The nonlinear
-    optics transform and its exact Frechet Jacobian are block-assembled before
-    the existing batched adjoint contraction and ACA--QR--TSVD master step.
+    optics transform and its forward-mode AD Jacobian are block-assembled
+    before the existing batched adjoint contraction and ACA--QR--TSVD master
+    step.
     """
     entries = (_ALL_TRANSFER_ENTRIES if response_entries is None else
                tuple(response_entries))
@@ -1164,12 +1361,16 @@ __all__ = [
     "MultiMomentumTransferMatrixObjective",
     "PlanarDesignOrbit",
     "PlanarTransferMatrixObjective",
+    "TransferMatrixAutomaticDifferentiation",
     "TransferMatrixFieldCorrection",
+    "TransferMatrixMaterialInversePipelineResult",
     "build_multi_orbit_field_response_matrix",
     "build_planar_orbit_field_response_matrix",
     "optimize_hdiv_mmm_magnet_from_transfer_matrix",
     "optimize_hdiv_mmm_magnet_from_transfer_matrices",
     "planar_orbit_field_observations",
+    "differentiate_transfer_matrix_field_response",
+    "run_transfer_matrix_material_inverse_pipeline",
     "solve_transfer_matrix_field_correction",
     "static_magnet_symplectic_residual",
 ]

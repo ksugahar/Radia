@@ -7,7 +7,7 @@ All notable changes to the `radia` package.  Format: each release lists
 
 ## 4.95.51 - Native beam dynamics, nonlinear reactor, and integrated LTspice
 
-Released 2026-08-11.
+Released 2026-08-14.
 
 - Added a C++ charged-particle foundation with SI particle/state contracts,
   inspectable field sampling, relativistic Lorentz equations, RK4 and Boris
@@ -15,6 +15,11 @@ Released 2026-08-11.
   attribution. Live NGSolve `GridFunction`/`CoefficientFunction` transfer
   analysis avoids a field-map detour, and pybind11 and standalone MATLAB MEX
   call the same native kernels.
+- Extended direct NGSolve `GridFunction` optics to source-free transverse
+  multipoles through octupole, region-attributed `R/T/U` maps, direct native
+  tracking, and shared pybind11/MEX entry points. Added canonical body-field
+  Hamiltonian jets through fourth degree and formally symplectic Dragt--Finn
+  `f3/f4` analysis within the declared piecewise-constant body-field scope.
 - Added a production nonlinear HDiv-MMM reactor block with a readable Level-2
   MATLAB S-Function, checked native MEX object handles, snapshot/restore and
   lifecycle diagnostics, a tracked Simulink model, and registration in the
@@ -44,6 +49,10 @@ Released 2026-08-11.
   multi-momentum soft-edge targets, sampled Enge I1/I2 diagnostics, analytic
   transfer-map Frechet Jacobians, and fused BDM1 HDiv-MMM whole-HEX
   add/remove optimization across all requested rigidities.
+- Added second- and third-order Taylor and Lie-map HDiv-MMM optimization with
+  analytic forward-mode derivatives, local TSVD reachability certificates,
+  response-diverse connected graph fronts, exact active-system acceptance,
+  and MATLAB batch entry points over the same native map kernels.
 
 ## 4.95.50 - Gmsh comparative visualization and file-series analysis
 

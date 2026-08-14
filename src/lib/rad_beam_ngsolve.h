@@ -1,5 +1,6 @@
 #pragma once
 
+#include "rad_beam_dynamics.h"
 #include "rad_beam_transfer.h"
 
 #include <gridfunction.hpp>
@@ -19,6 +20,8 @@ struct GridFunctionLinearizationOptions {
     Vector3 initial_horizontal{1.0, 0.0, 0.0};
     double curvature_sign = 1.0;
     double gradient_sign = 1.0;
+    unsigned multipole_order = 1;
+    unsigned maximum_map_order = 1;
     double maximum_step_m = 1.0e-3;
     std::size_t maximum_steps = 1000000;
 };
@@ -45,12 +48,19 @@ struct GridFunctionSegmentLinearization {
     double maximum_fit_residual_t = 0.0;
     std::size_t fit_rank = 3;
     double scaled_design_condition = 1.5;
+    TransverseMagneticMultipoleExpansion multipoles;
+    double multipole_rms_fit_residual_t = 0.0;
+    double multipole_maximum_fit_residual_t = 0.0;
+    std::size_t multipole_fit_rank = 2;
+    double multipole_scaled_design_condition = 1.0;
+    DynamicsJet6 dynamics_jet;
     Matrix6 a_per_m;
 };
 
 struct GridFunctionTransferReport6 {
     double magnetic_rigidity_t_m = 0.0;
     double sample_radius_m = 0.0;
+    unsigned multipole_order = 1;
     VariationalReport6 transfer;
     std::vector<GridFunctionSegmentLinearization> linearizations;
 };
@@ -67,5 +77,29 @@ GridFunctionTransferReport6 PropagateGridFunctionLinearMap(
     const std::vector<Vector3>& reference_tangents,
     const std::vector<std::string>& names,
     const GridFunctionLinearizationOptions& options);
+
+GridFunctionTransferReport6 PropagateGridFunctionMultipoleMap(
+    const std::shared_ptr<ngcomp::GridFunction>& field,
+    const std::vector<double>& segment_lengths_m,
+    const std::vector<Vector3>& reference_positions_m,
+    const std::vector<Vector3>& reference_tangents,
+    const std::vector<std::string>& names,
+    const GridFunctionLinearizationOptions& options);
+
+// Direct point-evaluation field for validating an expansion-based map against
+// the solved NGSolve field. NGSolve retains point search and mapped evaluation.
+class NGSolveGridFunctionField final : public Field {
+public:
+    explicit NGSolveGridFunctionField(
+        std::shared_ptr<ngcomp::GridFunction> field);
+
+    FieldSample Evaluate(const Vec3& position_m, double time_s,
+                         const FieldRequest& request = {}) const override;
+    std::string TypeName() const override;
+    const std::shared_ptr<ngcomp::GridFunction>& GridFunction() const;
+
+private:
+    std::shared_ptr<ngcomp::GridFunction> field_;
+};
 
 }  // namespace radia::beam

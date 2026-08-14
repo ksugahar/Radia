@@ -108,6 +108,84 @@ def _element_centroids(mesh) -> np.ndarray:
     return centers
 
 
+def _restart_active_elements(path, *, fixed_active, mesh_elements, dofs,
+                             energies, _seen=None):
+    """Rebuild a checked binary incumbent from an accepted-result history."""
+    if path is None:
+        return np.asarray(fixed_active, dtype=bool).copy(), None
+    source = Path(path).resolve()
+    seen = set() if _seen is None else set(_seen)
+    if source in seen:
+        raise RuntimeError("restart result chain contains a cycle")
+    seen.add(source)
+    report = json.loads(source.read_text(encoding="utf-8"))
+    if report.get("schema") != "radia.ffag-fixed-one-pass-c-yoke/v1":
+        raise RuntimeError("restart result has an incompatible schema")
+    mesh = report.get("mesh", {})
+    optics = report.get("optics", {})
+    if (int(mesh.get("elements", -1)) != int(mesh_elements)
+            or int(mesh.get("dofs", -1)) != int(dofs)
+            or list(map(float, optics.get("energies_mev", [])))
+            != list(map(float, energies))):
+        raise RuntimeError(
+            "restart result does not match mesh DoFs or energy family")
+    saved_ids = mesh.get("final_active_element_ids")
+    if saved_ids is not None:
+        if (not isinstance(saved_ids, list)
+                or any(isinstance(value, bool)
+                       or not isinstance(value, int) for value in saved_ids)
+                or len(set(saved_ids)) != len(saved_ids)):
+            raise RuntimeError(
+                "restart result has an invalid explicit active set")
+        element_ids = np.asarray(saved_ids, dtype=np.int64)
+        if (np.any(element_ids < 0)
+                or np.any(element_ids >= int(mesh_elements))):
+            raise RuntimeError("restart result contains an invalid element id")
+        active = np.zeros(int(mesh_elements), dtype=bool)
+        active[element_ids] = True
+        active_set_contract = "explicit-final-elements"
+    else:
+        parent_path = (report.get("restart") or {}).get("path")
+        if parent_path:
+            active, _ = _restart_active_elements(
+                parent_path, fixed_active=fixed_active,
+                mesh_elements=mesh_elements, dofs=dofs,
+                energies=energies, _seen=seen)
+            active_set_contract = "parent-restart-plus-history"
+        else:
+            active = np.asarray(fixed_active, dtype=bool).copy()
+            active_set_contract = "accepted-history-replay"
+        for row in report.get("optimization", {}).get("history", []):
+            added = np.asarray(row.get("added_elements", []), dtype=np.int64)
+            removed = np.asarray(
+                row.get("removed_elements", []), dtype=np.int64)
+            if (np.any(added < 0) or np.any(added >= len(active))
+                    or np.any(removed < 0)
+                    or np.any(removed >= len(active))):
+                raise RuntimeError(
+                    "restart result contains an invalid element id")
+            active[added] = True
+            active[removed] = False
+    expected = int(mesh.get("final_active_elements", -1))
+    if int(np.count_nonzero(active)) != expected:
+        raise RuntimeError(
+            "restart active count does not match the saved final count")
+    if not np.all(active[np.asarray(fixed_active, dtype=bool)]):
+        raise RuntimeError("restart result removed a fixed return-yoke element")
+    restart_scale = float(
+        report.get("coil", {}).get("optimized_source_scale", np.nan))
+    if not np.isfinite(restart_scale) or restart_scale <= 0.0:
+        raise RuntimeError("restart result has an invalid source scale")
+    return active, {
+        "path": str(source),
+        "source_final_active_elements": expected,
+        "source_final_max_band_ratio": float(
+            report["optimization"]["final_max_band_ratio"]),
+        "source_scale": restart_scale,
+        "active_set_contract": active_set_contract,
+    }
+
+
 def _coil_pair(args):
     from radia.coil_builder import CoilBuilder
 
@@ -154,7 +232,9 @@ def run(args):
     fixed_active = radius >= args.fixed_return_radius_m
     if not np.any(fixed_active) or np.all(fixed_active):
         raise RuntimeError("fixed return-yoke selection is empty or complete")
-    active = fixed_active.copy()
+    active, restart = _restart_active_elements(
+        args.restart_result, fixed_active=fixed_active,
+        mesh_elements=mesh.ne, dofs=fes.ndof, energies=args.energies)
     initial_topology = ngsolve_growth_topology(mesh, active)
     if not initial_topology.valid:
         raise RuntimeError(
@@ -190,6 +270,9 @@ def run(args):
             inv_chi=1.0 / (args.mu_r - 1.0),
             active_elements=active, element_volumes=volumes,
             volume_max=float(np.sum(volumes)),
+            source_scale=(1.0 if restart is None else
+                          restart["source_scale"]),
+            optimize_source_scale=restart is None,
             gradient_offset=args.gradient_offset,
             max_optics_iterations=args.material_iterations,
             material_iterations_per_optics=1,
@@ -200,6 +283,15 @@ def run(args):
             field_inverse_maximum_step_scale=args.field_inverse_max_step,
             field_inverse_line_search_steps=(
                 args.field_inverse_line_search_steps),
+            map_trust_region_trials=args.map_trust_region_trials,
+            map_ratio_tolerance=args.map_ratio_tolerance,
+            direct_map_oracle_fallback=args.direct_map_oracle_fallback,
+            direct_map_oracle_exact_beam_width=(
+                args.direct_map_exact_beam_width),
+            direct_map_oracle_exact_beam_depth=(
+                args.direct_map_exact_beam_depth),
+            direct_map_oracle_graph_front_proposal_limit=(
+                args.direct_map_graph_front_proposal_limit),
             fixed_active_elements=fixed_active,
             solve_tolerance=args.solve_tolerance,
             solve_max_iterations=args.solve_max_iterations,
@@ -219,8 +311,7 @@ def run(args):
         f"{finished - hmatrix_done:.3f} s", flush=True)
 
     topology_result = result.topology_result
-    initial_ratio = float(
-        result.optics_history[0].field_correction.current_max_band_ratio)
+    initial_ratio = result.initial_max_band_ratio
     material_history = result.history
     gates = {
         "coil_yoke_clearance": bool(clearance["passed"]),
@@ -230,8 +321,11 @@ def run(args):
         "initial_return_yoke_seed_is_valid": bool(initial_topology.valid),
         "binary_topology_is_valid": bool(result.topology.valid),
         "no_gray_material": result.active_elements.dtype == np.bool_,
-        "transfer_matrix_inverse_precedes_material_inverse": (
-            topology_result.field_correction is not None),
+        "analytic_transfer_map_derivative_precedes_material_inverse": (
+            topology_result.field_correction is not None or any(
+                item.accepted
+                and item.proposal_model == "direct-map-jacobian"
+                for item in result.map_trust_history)),
         "all_material_batches_exactly_resolved": all(
             item.solve_iterations > 0 for item in material_history),
     }
@@ -254,10 +348,14 @@ def run(args):
             "elements": int(mesh.ne),
             "dofs": int(fes.ndof),
             "air_volume_elements": 0,
+            "seed_active_elements": int(fixed_active.sum()),
             "initial_active_elements": int(active.sum()),
             "fixed_return_elements": int(fixed_active.sum()),
             "final_active_elements": int(result.active_elements.sum()),
+            "final_active_element_ids": np.flatnonzero(
+                result.active_elements).tolist(),
         },
+        "restart": restart,
         "coil": {
             "coil_count": 2,
             "finite_filament_segments": source.segment_count,
@@ -300,6 +398,15 @@ def run(args):
             "proposal_adjoint_count": args.proposal_adjoint_count,
             "proposal_trust_region_trials": (
                 args.proposal_trust_region_trials),
+            "map_trust_region_trials": args.map_trust_region_trials,
+            "map_ratio_tolerance": args.map_ratio_tolerance,
+            "direct_map_oracle_fallback": args.direct_map_oracle_fallback,
+            "direct_map_oracle_exact_beam_width": (
+                args.direct_map_exact_beam_width),
+            "direct_map_oracle_exact_beam_depth": (
+                args.direct_map_exact_beam_depth),
+            "direct_map_oracle_graph_front_proposal_limit": (
+                args.direct_map_graph_front_proposal_limit),
             "exact_candidate_limit": args.exact_candidate_limit,
             "exact_beam_width": args.exact_beam_width,
             "exact_beam_depth": args.exact_beam_depth,
@@ -322,6 +429,34 @@ def run(args):
                 "abe_murata_ducas": _abe_murata_diagnostics(item),
                 "material_stop_reason": item.generation.stop_reason,
             } for index, item in enumerate(result.optics_history)],
+            "map_trust_history": [{
+                "optics_iteration": item.optics_iteration,
+                "trial_index": item.trial_index,
+                "material_move_fraction": item.material_move_fraction,
+                "active_count_before": item.active_count_before,
+                "active_count_after": item.active_count_after,
+                "max_band_ratio_before": item.max_band_ratio_before,
+                "max_band_ratio_after": item.max_band_ratio_after,
+                "accepted": item.accepted,
+                "reason": item.reason,
+                "proposal_model": item.proposal_model,
+                "exact_search_trace": [{
+                    "depth": trial.depth,
+                    "objective_space": (
+                        "original-map" if item.proposal_model ==
+                        "direct-map-jacobian" else "field-target"),
+                    "parent_max_band_ratio": (
+                        trial.parent_max_band_ratio),
+                    "incumbent_max_band_ratio": (
+                        trial.incumbent_max_band_ratio),
+                    "max_band_ratio": trial.max_band_ratio,
+                    "added_elements": trial.added_elements.tolist(),
+                    "removed_elements": trial.removed_elements.tolist(),
+                    "solve_iterations": trial.solve_iterations,
+                    "path": [[list(move) for move in step]
+                             for step in trial.path],
+                } for trial in item.exact_search_trace],
+            } for item in result.map_trust_history],
             "history": [{
                 "iteration": index,
                 "batch_iteration": item.iteration,
@@ -379,6 +514,7 @@ def parse_args(argv=None):
     parser.add_argument("--mesh", type=Path, required=True)
     parser.add_argument("--yoke-step", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--restart-result", type=Path)
     parser.add_argument("--energies", type=float, nargs="+",
                         default=[31.0, 140.0, 250.0])
     parser.add_argument("--segments", type=int, default=32)
@@ -411,6 +547,15 @@ def parse_args(argv=None):
     parser.add_argument(
         "--proposal-trust-region-trials", "--outer-trust-trials",
         dest="proposal_trust_region_trials", type=int, default=3)
+    parser.add_argument("--map-trust-region-trials", type=int, default=3)
+    parser.add_argument("--map-ratio-tolerance", type=float, default=1e-8)
+    parser.add_argument(
+        "--direct-map-oracle-fallback",
+        action=argparse.BooleanOptionalAction, default=False)
+    parser.add_argument("--direct-map-exact-beam-width", type=int, default=0)
+    parser.add_argument("--direct-map-exact-beam-depth", type=int, default=0)
+    parser.add_argument(
+        "--direct-map-graph-front-proposal-limit", type=int, default=0)
     parser.add_argument("--field-inverse-tolerance", type=float,
                         default=1e-3)
     parser.add_argument("--field-inverse-max-step", type=float, default=1.0)
@@ -431,6 +576,13 @@ def parse_args(argv=None):
             or args.field_inverse_line_search_steps < 1
             or args.proposal_adjoint_count < 0
             or args.proposal_trust_region_trials < 1
+            or args.map_trust_region_trials < 1
+            or args.map_ratio_tolerance < 0.0
+            or args.direct_map_exact_beam_width < 0
+            or args.direct_map_exact_beam_depth < 0
+            or ((args.direct_map_exact_beam_width == 0)
+                != (args.direct_map_exact_beam_depth == 0))
+            or args.direct_map_graph_front_proposal_limit < 0
             or args.exact_candidate_limit < 1
             or args.exact_beam_width < 0
             or args.exact_beam_depth < 0

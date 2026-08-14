@@ -35,6 +35,142 @@ def _one_segment_arc(*, radius=10.0, angle=0.1, rigidity=1.5):
         bend_axis=np.array([0.0, 0.0, 1.0]))
 
 
+def test_ffag_validation_restart_replays_accepted_binary_history(tmp_path):
+    import importlib.util
+    import json
+    from pathlib import Path
+
+    runner_path=(Path(__file__).parents[1]/"validation_test"/"ffag_topopt"/
+                 "validation_ffag_full_field_c_yoke.py")
+    spec=importlib.util.spec_from_file_location("ffag_restart_runner",runner_path)
+    runner=importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(runner)
+    saved={
+        "schema":"radia.ffag-fixed-one-pass-c-yoke/v1",
+        "mesh":{"elements":4,"dofs":12,"final_active_elements":3},
+        "coil":{"optimized_source_scale":2.25},
+        "optics":{"energies_mev":[31.0,250.0]},
+        "optimization":{
+            "final_max_band_ratio":3.5,
+            "history":[
+                {"added_elements":[1,2],"removed_elements":[]},
+                {"added_elements":[3],"removed_elements":[1]},
+            ],
+        },
+    }
+    result_path=tmp_path/"restart.json"
+    result_path.write_text(json.dumps(saved),encoding="utf-8")
+
+    active,metadata=runner._restart_active_elements(
+        result_path,fixed_active=np.array([True,False,False,False]),
+        mesh_elements=4,dofs=12,energies=[31.0,250.0])
+
+    np.testing.assert_array_equal(active,[True,False,True,True])
+    assert metadata["source_final_active_elements"]==3
+    assert metadata["source_final_max_band_ratio"]==3.5
+    assert metadata["source_scale"]==2.25
+    assert metadata["active_set_contract"]=="accepted-history-replay"
+    saved["mesh"]["final_active_elements"]=2
+    result_path.write_text(json.dumps(saved),encoding="utf-8")
+    with pytest.raises(RuntimeError,match="saved final count"):
+        runner._restart_active_elements(
+            result_path,fixed_active=np.array([True,False,False,False]),
+            mesh_elements=4,dofs=12,energies=[31.0,250.0])
+
+
+def test_ffag_validation_restart_prefers_explicit_final_active_set(tmp_path):
+    import importlib.util
+    import json
+    from pathlib import Path
+
+    runner_path=(Path(__file__).parents[1]/"validation_test"/"ffag_topopt"/
+                 "validation_ffag_full_field_c_yoke.py")
+    spec=importlib.util.spec_from_file_location(
+        "ffag_explicit_restart_runner",runner_path)
+    runner=importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(runner)
+    saved={
+        "schema":"radia.ffag-fixed-one-pass-c-yoke/v1",
+        "mesh":{
+            "elements":5,
+            "dofs":15,
+            "final_active_elements":4,
+            "final_active_element_ids":[0,1,3,4],
+        },
+        "coil":{"optimized_source_scale":2.25},
+        "optics":{"energies_mev":[31.0,250.0]},
+        "optimization":{
+            "final_max_band_ratio":3.5,
+            # This history is intentionally relative to an earlier restart and
+            # therefore cannot reconstruct the complete incumbent by itself.
+            "history":[{"added_elements":[4],"removed_elements":[2]}],
+        },
+    }
+    result_path=tmp_path/"restart-explicit.json"
+    result_path.write_text(json.dumps(saved),encoding="utf-8")
+
+    active,metadata=runner._restart_active_elements(
+        result_path,fixed_active=np.array([True,True,False,False,False]),
+        mesh_elements=5,dofs=15,energies=[31.0,250.0])
+
+    np.testing.assert_array_equal(active,[True,True,False,True,True])
+    assert metadata["active_set_contract"]=="explicit-final-elements"
+    saved["mesh"]["final_active_element_ids"]=[0,1,1,4]
+    result_path.write_text(json.dumps(saved),encoding="utf-8")
+    with pytest.raises(RuntimeError,match="explicit active set"):
+        runner._restart_active_elements(
+            result_path,fixed_active=np.array([True,True,False,False,False]),
+            mesh_elements=5,dofs=15,energies=[31.0,250.0])
+
+
+def test_ffag_validation_restart_chains_delta_histories(tmp_path):
+    import importlib.util
+    import json
+    from pathlib import Path
+
+    runner_path=(Path(__file__).parents[1]/"validation_test"/"ffag_topopt"/
+                 "validation_ffag_full_field_c_yoke.py")
+    spec=importlib.util.spec_from_file_location(
+        "ffag_chained_restart_runner",runner_path)
+    runner=importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(runner)
+    common={
+        "schema":"radia.ffag-fixed-one-pass-c-yoke/v1",
+        "coil":{"optimized_source_scale":2.25},
+        "optics":{"energies_mev":[31.0,250.0]},
+    }
+    parent={**common,
+        "mesh":{"elements":5,"dofs":15,"final_active_elements":3},
+        "restart":None,
+        "optimization":{
+            "final_max_band_ratio":4.0,
+            "history":[{"added_elements":[2],"removed_elements":[]}],
+        },
+    }
+    parent_path=tmp_path/"parent.json"
+    parent_path.write_text(json.dumps(parent),encoding="utf-8")
+    child={**common,
+        "mesh":{"elements":5,"dofs":15,"final_active_elements":3},
+        "restart":{"path":str(parent_path)},
+        "optimization":{
+            "final_max_band_ratio":3.5,
+            "history":[{"added_elements":[4],"removed_elements":[2]}],
+        },
+    }
+    child_path=tmp_path/"child.json"
+    child_path.write_text(json.dumps(child),encoding="utf-8")
+
+    active,metadata=runner._restart_active_elements(
+        child_path,fixed_active=np.array([True,True,False,False,False]),
+        mesh_elements=5,dofs=15,energies=[31.0,250.0])
+
+    np.testing.assert_array_equal(active,[True,True,False,False,True])
+    assert metadata["active_set_contract"]=="parent-restart-plus-history"
+
+
 def test_relativistic_proton_rigidity_and_tanh_enge_integrals():
     np.testing.assert_allclose(
         magnetic_rigidity_from_kinetic_energy([31.0, 250.0]),
@@ -379,7 +515,8 @@ def test_fixed_design_orbit_path_never_runs_periodic_orbit_recovery(
         correction_calls.append(correction)
         active_calls.append(np.asarray(kwargs["active_elements"]).copy())
         material_iteration_calls.append(kwargs["max_iterations"])
-        ratio=2.0 if len(correction_calls)==1 else 1.0
+        ratio=(1.0e12 if len(correction_calls)==1 else
+               (2.0 if len(correction_calls)==2 else 1.0))
         generation=topopt.HDivMMMGenerationResult(
             active_candidate.copy(),np.ones(2),
             correction.target_field_response.copy(),tuple(),False,1.0,
@@ -425,15 +562,22 @@ def test_fixed_design_orbit_path_never_runs_periodic_orbit_recovery(
         family,source=source,charge_gram=object(),fes=fes,inv_chi=0.1,
         active_elements=active_initial,element_volumes=np.ones(2),
         volume_max=2.0,optimize_source_scale=False,
-        max_optics_iterations=2,material_iterations_per_optics=1)
+        max_optics_iterations=2,material_iterations_per_optics=1,
+        map_trust_region_trials=2,initial_material_move_fraction=1.0,
+        maximum_material_move_fraction=1.0)
 
     np.testing.assert_array_equal(result.active_elements,active_candidate)
-    assert result.field_correction is correction_calls[1]
+    assert result.field_correction is correction_calls[2]
     assert result.source_scale==1.0
     assert len(result.optics_history)==2
     np.testing.assert_array_equal(active_calls[0],active_initial)
-    np.testing.assert_array_equal(active_calls[1],active_candidate)
-    assert material_iteration_calls==[1,1]
+    np.testing.assert_array_equal(active_calls[1],active_initial)
+    np.testing.assert_array_equal(active_calls[2],active_candidate)
+    assert material_iteration_calls==[1,1,1]
+    assert [trial.accepted for trial in result.map_trust_history]==[
+        False,True,True]
+    assert [trial.material_move_fraction
+            for trial in result.map_trust_history]==[1.0,0.5,1.0]
     assert result.stop_reason=="fixed one-pass transfer bands reached"
 
     common=dict(
@@ -446,3 +590,109 @@ def test_fixed_design_orbit_path_never_runs_periodic_orbit_recovery(
     with pytest.raises(ValueError,match="iteration counts must be positive"):
         ffag.optimize_ffag_hdiv_mmm_from_fixed_design_orbits(
             family,max_optics_iterations=0,**common)
+    with pytest.raises(ValueError,match="map_ratio_tolerance"):
+        ffag.optimize_ffag_hdiv_mmm_from_fixed_design_orbits(
+            family,map_ratio_tolerance=np.inf,**common)
+    with pytest.raises(ValueError,match="beam width and depth"):
+        ffag.optimize_ffag_hdiv_mmm_from_fixed_design_orbits(
+            family,direct_map_oracle_exact_beam_width=2,**common)
+    with pytest.raises(ValueError,match="graph-front proposal limit"):
+        ffag.optimize_ffag_hdiv_mmm_from_fixed_design_orbits(
+            family,direct_map_oracle_graph_front_proposal_limit=-1,**common)
+
+    reject_calls=[]
+
+    def fake_reject(orbits,matrices,**kwargs):
+        correction=kwargs["field_correction"]
+        incumbent=np.asarray(kwargs["active_elements"],dtype=bool).copy()
+        is_baseline=kwargs["max_iterations"]==0
+        returned_active=(incumbent if is_baseline else
+                         active_candidate.copy())
+        ratio=5.0 if is_baseline else 1.0e12
+        reject_calls.append((kwargs["max_iterations"],returned_active.copy()))
+        generation=topopt.HDivMMMGenerationResult(
+            returned_active,np.ones(2),
+            correction.target_field_response.copy(),tuple(),False,1.0,
+            correction.target_field_response.copy(),
+            "baseline" if is_baseline else "rejected proposal")
+        objective=MultiMomentumTransferMatrixObjective(
+            tuple(orbits),np.asarray(matrices),
+            kwargs["transfer_matrix_band"],kwargs["bend_field_band"],
+            kwargs["response_entries"])
+        split=objective.split_raw_response(correction.target_field_response)
+        return MultiMomentumAcceleratorMagnetTopologyResult(
+            objective,generation,split,np.asarray(matrices),
+            np.full(len(orbits),ratio),np.zeros(len(orbits)),
+            np.zeros(len(orbits)),np.zeros(len(orbits)),
+            dummy_topology,correction)
+
+    monkeypatch.setattr(
+        ffag,"optimize_hdiv_mmm_magnet_from_transfer_matrices",fake_reject)
+    rejected=ffag.optimize_ffag_hdiv_mmm_from_fixed_design_orbits(
+        family,source=source,charge_gram=object(),fes=fes,inv_chi=0.1,
+        active_elements=active_initial,element_volumes=np.ones(2),
+        volume_max=2.0,optimize_source_scale=False,
+        max_optics_iterations=1,material_iterations_per_optics=1,
+        map_trust_region_trials=2,initial_material_move_fraction=1.0,
+        maximum_material_move_fraction=1.0)
+
+    np.testing.assert_array_equal(rejected.active_elements,active_initial)
+    assert rejected.stop_reason=="map-level trust-region proposals rejected"
+    assert rejected.optics_history==tuple()
+    assert [trial.accepted for trial in rejected.map_trust_history]==[
+        False,False]
+    assert [trial.material_move_fraction
+            for trial in rejected.map_trust_history]==[1.0,0.5]
+    assert [call[0] for call in reject_calls]==[1,1,0]
+
+    oracle_calls=[]
+
+    def fake_oracle(orbits,matrices,**kwargs):
+        correction=kwargs.get("field_correction")
+        incumbent=np.asarray(kwargs["active_elements"],dtype=bool).copy()
+        direct=correction is None
+        returned_active=active_candidate.copy() if direct else incumbent
+        ratio=10.0 if direct else 1.0e12
+        oracle_calls.append((
+            "direct-map-jacobian" if direct else "field-target",
+            kwargs.get("exact_beam_width"),
+            kwargs.get("exact_beam_depth"),
+            kwargs.get("graph_front_proposal_limit")))
+        raw=(current_raw.copy() if correction is None else
+             correction.target_field_response.copy())
+        generation=topopt.HDivMMMGenerationResult(
+            returned_active,np.ones(2),raw.copy(),tuple(),False,1.0,
+            raw.copy(),"direct oracle" if direct else "rejected field target")
+        objective=MultiMomentumTransferMatrixObjective(
+            tuple(orbits),np.asarray(matrices),
+            kwargs["transfer_matrix_band"],kwargs["bend_field_band"],
+            kwargs["response_entries"])
+        split=objective.split_raw_response(raw)
+        return MultiMomentumAcceleratorMagnetTopologyResult(
+            objective,generation,split,np.asarray(matrices),
+            np.full(len(orbits),ratio),np.zeros(len(orbits)),
+            np.zeros(len(orbits)),np.zeros(len(orbits)),
+            dummy_topology,correction)
+
+    monkeypatch.setattr(
+        ffag,"optimize_hdiv_mmm_magnet_from_transfer_matrices",fake_oracle)
+    oracle=ffag.optimize_ffag_hdiv_mmm_from_fixed_design_orbits(
+        family,source=source,charge_gram=object(),fes=fes,inv_chi=0.1,
+        active_elements=active_initial,element_volumes=np.ones(2),
+        volume_max=2.0,optimize_source_scale=False,
+        max_optics_iterations=1,material_iterations_per_optics=1,
+        map_trust_region_trials=1,initial_material_move_fraction=1.0,
+        maximum_material_move_fraction=1.0,
+        direct_map_oracle_fallback=True,
+        direct_map_oracle_exact_beam_width=4,
+        direct_map_oracle_exact_beam_depth=2,
+        direct_map_oracle_graph_front_proposal_limit=3)
+
+    np.testing.assert_array_equal(oracle.active_elements,active_candidate)
+    assert oracle_calls==[("field-target",None,None,None),
+                          ("direct-map-jacobian",4,2,3)]
+    assert [trial.proposal_model for trial in oracle.map_trust_history]==[
+        "field-target","direct-map-jacobian"]
+    assert [trial.accepted for trial in oracle.map_trust_history]==[
+        False,True]
+    assert oracle.topology_result.field_correction is None

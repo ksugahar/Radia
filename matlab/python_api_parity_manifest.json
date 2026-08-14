@@ -21,7 +21,9 @@
       "classification": "native-mex",
       "matlab": [
         "matlab/+radia/+beam/propagateVariationalMap.m",
+        "matlab/+radia/+beam/canonicalBodyHamiltonianJet.m",
         "matlab/+radia/+beam/propagateGridFunctionLinearMap.m",
+        "matlab/+radia/+beam/propagateGridFunctionMultipoleMap.m",
         "matlab/+radia/+beam/proton.m",
         "matlab/+radia/+beam/electron.m",
         "matlab/+radia/+beam/referenceParticle.m",
@@ -31,9 +33,10 @@
         "matlab/+radia/+beam/sampleField.m",
         "matlab/+radia/+beam/lorentzRHS.m",
         "matlab/+radia/+beam/step.m",
-        "matlab/+radia/+beam/track.m"
+        "matlab/+radia/+beam/track.m",
+        "matlab/+radia/+beam/trackGridFunction.m"
       ],
-      "notes": "Python and MATLAB share the C++ canonical R/T/U variational-map kernel. Both also pass an NGSolve GridFunction directly to the same native nine-point local-field linearization and combined-function R-map adapter without constructing a regular-grid field map. The EarlyTimes migration foundation adds shared native SI particle/reference/state values, zero/uniform field sampling, relativistic Lorentz RHS evaluation, individually callable RK4/Boris steps, and transparent fixed-step trajectory records."
+      "notes": "Python and MATLAB share the C++ R/T/U variational-map kernel and the canonical fourth-degree H2/H3/H4 body-Hamiltonian builder. Both pass an NGSolve GridFunction directly to the same native nine-point moving-frame multipole fit and paraxial A/F2/F3 map adapter without constructing a regular-grid field map, and both expose direct GridFunction Lorentz tracking as the independent point-evaluation path. The EarlyTimes migration foundation also adds shared native SI particle/reference/state values, zero/uniform field sampling, relativistic Lorentz RHS evaluation, individually callable RK4/Boris steps, and transparent fixed-step trajectory records."
     },
     {
       "id": "ltspice-tooling",
@@ -169,12 +172,36 @@
       "notes": "Design-orbit and transfer-matrix HDiv-MMM optimization composes NGSolve and Python topology objects at an explicit batch boundary; it is not a Simulink step-time backend."
     },
     {
+      "id": "accelerator-taylor-topopt",
+      "patterns": ["accelerator_taylor_topopt.py"],
+      "classification": "python-fallback",
+      "backend_contract": "in-process-python",
+      "matlab": ["matlab/+radia/+python/acceleratorTaylorTopopt.m"],
+      "notes": "Second- and third-order R/T/U topology optimization composes native C++ Taylor-map values, Python forward-mode AD through octupole and lower-order cascade terms, local TSVD reachability certificates, NGSolve multipole observations, and HDiv-MMM binary material updates at an explicit batch boundary; it is not a Simulink step-time backend."
+    },
+    {
+      "id": "accelerator-lie-topopt",
+      "patterns": ["accelerator_lie_topopt.py"],
+      "classification": "python-fallback",
+      "backend_contract": "in-process-python",
+      "matlab": ["matlab/+radia/+python/acceleratorLieTopopt.m"],
+      "notes": "Canonical body-field Lie topology optimization uses the native C++ H2/H3/H4 and A/F2/F3 value kernel, Python rank-five forward-mode analytic tangents, Dragt-Finn f3/f4/f5 factorization with formal-symplectic R/T/U/V reconstruction, an RK-tracked planar moving-frame bridge, and the shared TSVD plus ACA/QR/TSVD HDiv-MMM batch pipeline. The direct H5/decapole term remains an explicit boundary. Mathematica owns an independent tracked symbolic golden and is not a runtime dependency."
+    },
+    {
       "id": "ffag-topopt",
       "patterns": ["ffag_topopt.py"],
       "classification": "python-fallback",
       "backend_contract": "in-process-python",
       "matlab": ["matlab/+radia/+python/ffagTopopt.m"],
       "notes": "FFAG orbit-family, fringe, and transfer-target orchestration remains Python-owned and is exposed to MATLAB only at an explicit optimization or artifact-generation boundary."
+    },
+    {
+      "id": "ffag-taylor-topopt",
+      "patterns": ["ffag_taylor_topopt.py"],
+      "classification": "python-fallback",
+      "backend_contract": "in-process-python",
+      "matlab": ["matlab/+radia/+python/ffagTaylorTopopt.m"],
+      "notes": "Multi-momentum fixed-orbit R/T objective fusion and HDiv-MMM material optimization remain Python-owned and are exposed only at an explicit batch boundary."
     },
     {
       "id": "topopt-cad-bridge",
