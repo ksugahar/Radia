@@ -656,6 +656,63 @@ For reduced models, record:
 - whether `rad.Fld` was evaluated through the reduced model or a materialized
   full model;
 - max/mean field difference at probes.
+
+## Cyclic (N-fold rotational) images -- the machine-sector reduction
+
+`vim.Solve(..., image_cyclic=N)` folds the other `N-1` poles of a rotationally
+symmetric machine in as ROTATED images about `+z`, so ONE sector reproduces the
+whole ring.  `image_cyclic_alternating=True` gives the alternating N/S pattern
+(even `N` only) -- alternation rides `image_signs` as `(-1)^k` because the surface
+charge `sigma = M.n` is a SCALAR under a rotation that carries the magnetization
+along with the geometry.
+
+Use ROTATIONAL, not translational, periodicity for a reduced model.  A finite
+N-fold rotational array is an exact FINITE image sum; an infinite translational
+array is a conditionally convergent dipole lattice sum whose value depends on the
+summation shape -- that shape dependence IS the demagnetizing-factor phenomenon.
+Sculpt's `--periodic` mesh (a conformal, node-matched RVE) is for FEM periodic
+boundary conditions and for tiling an array without re-meshing; the image method
+transforms geometry analytically inside the Gram and needs no node matching at all.
+
+Contract points worth knowing:
+
+- The Gram symmetrizes each image with its transpose, i.e. it evaluates
+  `0.5*(G_T + G_{T^-1})`.  That reproduces the intended `sum_i s_i G_{T_i}` ONLY
+  when the image set is closed under inversion with matching signs.  A complete
+  cyclic group is closed automatically; a partial or one-sided rotation list is
+  REJECTED rather than silently symmetrized into different physics.
+- An image with mask 0 and angle 0 is the identity and would double the direct
+  term; it is rejected.
+- 2D planar FIELD evaluation does not implement rotations yet (the 2D charge Gram
+  does) and raises rather than dropping them.
+- Mirrors are unaffected: with no rotation angles every path is byte-identical
+  (verified -- the `10 eps` curved-IMA round-off number is bit-for-bit unchanged).
+
+MEASURED (2026-08-11, LAB):
+
+- kernel anchor -- a `pi` rotation about `+z` is exactly the x-mirror composed
+  with the y-mirror (IMA mask 3), and the rotation path reproduces the golden
+  mirror path to `< 1e-10` on the same mesh;
+- physical ring (4-fold, tet, maxh 7 mm) -- `<Mz>` full ring `3.2157743e+05`,
+  lone sector `3.6013978e+05` (`+11.99 %`), cyclic reduced `3.2157792e+05`
+  (`+0.0002 %`): the reduction closes 100.00 % of the gap;
+- independent confirmation on Sculpt HEX meshes (6-fold ring of annular-sector
+  poles, ne 9955 vs 1692) -- `<Mz>` full ring `2.222323e+05`, lone sector
+  `2.559368e+05` (`+15.166 %`), cyclic reduced `2.222664e+05` (`+0.0154 %`).
+  The no-image sector reproduced its recorded value exactly, so the direct path
+  is untouched.
+
+COST -- know what you are buying.  The reduction removes DOFs, not fill work: the
+reduced model carries `1/N` of the unknowns but its Gram costs roughly `N` image
+folds, so a BUILD-dominated problem gains little wall time.  Measured on the
+6-fold Sculpt ring: 730.7 s reduced vs 1129.9 s full = **1.55x**, far below the
+5.88x element-count ratio.  The win is in memory and in the SOLVE (`n` vs `N*n`
+unknowns), and it grows with `N` and with solve-dominated problems; do not quote
+the element-count ratio as a speedup.
+
+Gates: `tests/feec/test_hdiv_vim_cyclic_image.py` (fast kernel anchor +
+fail-loud contract) and `validation_test/feec/test_hdiv_vim_cyclic_ring.py`
+(reduced-vs-full ring).
 """
 
 _CROSS_METHOD = r"""
