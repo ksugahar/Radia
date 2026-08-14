@@ -1891,7 +1891,7 @@ by a closed form:
 
 | Verb | Golden (MEASURED on the 6-tet Kuhn cube unless noted) |
 |---|---|
-| `gmsh_flux_integral` | uniform B = 2 T through a 0.4 x 0.4 rect tilted 30 deg: `\|B\| A cos30 = 0.27712812921102`, rel 2.4e-14; disc r = 0.2 normal z: `2 pi (0.04) = 0.2513274122871834`, rel 1.1e-15 |
+| `gmsh_flux_integral` | uniform B = 2 T through a 0.4 x 0.4 rect tilted 30 deg: `\\|B\\| A cos30 = 0.27712812921102`, rel 2.4e-14; disc r = 0.2 normal z: `2 pi (0.04) = 0.2513274122871834`, rel 1.1e-15 |
 | `gmsh_line_integral` | H = (-y, x, 0), circle r = 0.3: `2 pi r^2 = 0.565486677646163`, rel 3.9e-16 on the parametric route |
 | `gmsh_maxwell_force` | uniform B = 2 T, box half 0.4: EVERY face `B^2/(2 mu0) A = 1.018592e6 N` (rel 1.0e-14) and the total EXACTLY zero -- a real cancellation of megaNewton terms. Nonzero case: `B = (a x, 0, 0)` has `div B = a`, so `F_x = a^2 c_x V / mu0`, rel 9.1e-16 |
 | `gmsh_gap_harmonics` | scalar `S = x + 2y` on r = 0.25, N = 64: `a_1 = 0.25`, `b_1 = 0.5`, leakage over every other bin 7.2e-17 |
