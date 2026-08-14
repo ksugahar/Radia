@@ -16,7 +16,8 @@ def test_streaming_contractions_serialize_shared_charge_gram_modes():
     source=(Path(__file__).resolve().parents[1]/"src"/"core"/
             "rad_hacapk_hdiv.cpp").read_text(encoding="utf-8")
     start=source.index("RadHACApKChargeGram::DirectionalDerivativeContractions(")
-    end=source.index("// The whole DIRECTED host-pair block",start)
+    end=source.index(
+        "RadHACApKChargeGram::DirectionalDerivativeContractionsMany(", start)
     implementation=source[start:end]
     assert "ParallelFor" not in implementation
     assert "for(int kk=0;kk<nDirections;++kk)" in implementation

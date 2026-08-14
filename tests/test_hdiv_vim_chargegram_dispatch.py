@@ -119,6 +119,7 @@ def test_chargegram_hex_shortcut_forwards_image_params(monkeypatch):
         "eta": 1.75,
         "image_masks": [1],
         "image_signs": [-1],
+        "image_rot_angle": [],
         "materialize_mass": True,
         "build_hmatrix": True,
         "internal_interfaces": False,
