@@ -53,6 +53,49 @@ def _find_ltspice_exe() -> Optional[str]:
     return None
 
 
+def _has_interactive_windows_desktop() -> bool:
+    """Return whether this process can interact with the Windows desktop.
+
+    LTspice documents ``-netlist`` as a batch conversion, but the executable
+    still creates Windows UI objects.  A service-hosted process (for example a
+    self-hosted CI runner in session 0) can therefore hang until timeout even
+    for a valid schematic.  Detect that environment before launching LTspice;
+    callers can then use the deterministic pure-Python extractor immediately.
+    """
+    import sys
+
+    if sys.platform != "win32":
+        return True
+
+    try:
+        import ctypes
+        from ctypes import wintypes
+
+        kernel32 = ctypes.windll.kernel32
+        session_id = wintypes.DWORD()
+        if not kernel32.ProcessIdToSessionId(
+            os.getpid(), ctypes.byref(session_id)
+        ):
+            return False
+        if session_id.value == 0:
+            return False
+
+        user32 = ctypes.windll.user32
+        user32.OpenInputDesktop.argtypes = [
+            wintypes.DWORD, wintypes.BOOL, wintypes.DWORD
+        ]
+        user32.OpenInputDesktop.restype = wintypes.HANDLE
+        desktop = user32.OpenInputDesktop(
+            0, False, 0x0001 | 0x0040  # DESKTOP_READOBJECTS | ENUMERATE
+        )
+        if not desktop:
+            return False
+        user32.CloseDesktop(desktop)
+        return True
+    except Exception:
+        return False
+
+
 def _dismiss_ltspice_dialogs(pid: int) -> int:
     """Dismiss visible modal dialogs owned by process ``pid``,
     non-destructively. Windows-only; a no-op (returns 0) elsewhere.
@@ -170,6 +213,11 @@ def _ltspice_emit_netlist(asc_path: str, ltspice_exe: str,
     on failure (the caller falls back to the pure-Python extractor).
     """
     import threading
+
+    if not _has_interactive_windows_desktop():
+        raise RuntimeError(
+            "LTspice -netlist requires an interactive Windows desktop"
+        )
 
     asc = Path(asc_path).resolve()
     if not asc.exists():
