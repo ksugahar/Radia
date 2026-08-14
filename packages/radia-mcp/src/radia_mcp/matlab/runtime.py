@@ -225,6 +225,8 @@ _PYBIND_CLASS_COMMANDS = {
         "hacapk.charge_gram.create_hex", "hacapk.charge_gram.create_wedge",
         "hacapk.charge_gram.create_planar_2d"),
     "_ChargeGramHMatrix.ndof": ("hacapk.charge_gram.info",),
+    "_ChargeGramHMatrix.set_image_rotations": ("hacapk.charge_gram.set_image_rotations",),
+    "_ChargeGramHMatrix.build_hmatrix": ("hacapk.charge_gram.build",),
     "_ChargeGramHMatrix.matvec": ("hacapk.charge_gram.matvec",),
     "_ChargeGramHMatrix.matvec_transpose": ("hacapk.charge_gram.matvec_transpose",),
     "_ChargeGramHMatrix.matvec_sym": ("hacapk.charge_gram.matvec_sym",),

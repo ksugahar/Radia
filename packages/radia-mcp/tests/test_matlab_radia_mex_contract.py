@@ -16,7 +16,7 @@ def test_radia_mex_contract_reads_the_cpp_command_inventory():
     contract = matlab_radia_mex_contract("mex")
 
     assert contract["status"] == "ready"
-    assert contract["command_count"] == 337
+    assert contract["command_count"] == 358
     assert contract["matlab_wrapper_count"] >= 133
     assert contract["matlab_optuna_class_count"] == 12
     assert {"TPESampler", "MOTPESampler", "CmaEsSampler", "NSGAIISampler", "LiveMonitor"}.issubset(
@@ -46,6 +46,7 @@ def test_radia_mex_contract_reads_the_cpp_command_inventory():
     }.issubset(contract["command_names"])
     assert "hdiv.field_evaluator.from_cloud" in contract["command_names"]
     assert "hacapk.charge_gram.configure_charge_map" in contract["command_names"]
+    assert "hacapk.charge_gram.set_image_rotations" in contract["command_names"]
     assert "hacapk.charge_gram.configured_linear_material_element_blocks" in contract["command_names"]
     assert "hacapk.charge_gram.configured_linear_material_candidate_clusters" in contract["command_names"]
     assert "hlu.set_trunc_tol" in contract["command_names"]
@@ -63,8 +64,9 @@ def test_radia_mex_contract_reads_the_cpp_command_inventory():
     assert "axifem.q2_magnetic_element_matrices" in contract["command_names"]
     # _ChargeGramHMatrix.charge_sigma (the sigma-normalization diagnostic
     # from the roundoff-amplification fix) is EXCLUDED with a reason, and
-    # exclusions leave the relevant surface -- so the count stays 121
-    assert contract["pybind_class_surface_count"] == 121
+    # exclusions leave the relevant surface; cyclic image setup expands the
+    # covered stateful surface to 123 entries.
+    assert contract["pybind_class_surface_count"] == 123
     assert ("_ChargeGramHMatrix.charge_sigma"
             in contract["pybind_class_exclusions"])
     assert contract["pybind_class_covered_count"] == contract["pybind_class_surface_count"]
@@ -209,14 +211,14 @@ def test_root_readme_publishes_native_topology_mex_parity():
     matlab_readme = " ".join(
         (root / "matlab" / "README.md").read_text(encoding="utf-8").split()
     )
-    assert "121 stateful class members" in matlab_readme
-    assert "All 242 entries are covered by the current 337-command gateway" in matlab_readme
+    assert "123 stateful class members" in matlab_readme
+    assert "All 244 entries are covered by the current 358-command gateway" in matlab_readme
 
     parity_doc = (root / "docs" / "api" / "MATLAB_MEX_NGSOLVE_PARITY.md").read_text(
         encoding="utf-8"
     )
-    assert "| Stateful pybind11 class surface | 121 / 121 covered |" in parity_doc
-    assert "| MEX gateway commands | 337 |" in parity_doc
+    assert "| Stateful pybind11 class surface | 123 / 123 covered |" in parity_doc
+    assert "| MEX gateway commands | 358 |" in parity_doc
 
 
 def test_server_registers_bridge_tools():

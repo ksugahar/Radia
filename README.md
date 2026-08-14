@@ -329,6 +329,11 @@ performance before a Simulink block depends on it. MATLAB wrappers use an
 explicit Python-DLL boundary only where no stable native object boundary is
 practical; Python is never silently called once per simulation time step.
 
+HCurl-based reduced and topology workflows use the same standalone native
+boundary. HCurl multifrequency topology gradients, activation derivatives,
+and repeated reduced-state operations are available as independently testable
+MEX commands before they are composed into Simulink blocks.
+
 - [MATLAB integration and MEX contracts](matlab/README.md)
 - [NGSolve/MEX parity map](docs/api/MATLAB_MEX_NGSOLVE_PARITY.md)
 
