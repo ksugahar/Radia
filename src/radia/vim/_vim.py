@@ -1192,6 +1192,7 @@ def _charge_basis_hex(fes, cob_quad=3, *, materialize_mass=True,
 
 def _build_charge_gram_hex(fes, glout_n=None, glin_n=None, near_grade=0.5, far_inner=1.0,
                            eps=1e-12, leafsize=64, eta=2.0, image_masks=None, image_signs=None,
+                           image_rot_angle=(),
                            materialize_mass=True, build_hmatrix=True,
                            internal_interfaces=False):
     """Pure-hex BDM1/BDM2 charge Gram via the hex-mode C++ _ChargeGramHMatrix.  FLAT and CURVED (mesh.Curve(2))
@@ -1245,7 +1246,10 @@ def _build_charge_gram_hex(fes, glout_n=None, glin_n=None, near_grade=0.5, far_i
         near_grade=near_grade, far_inner_factor=far_inner,
         image_masks=(_EMPTY_I32 if image_masks is None else _i32_buffer(image_masks)),
         image_signs=(_EMPTY_F64 if image_signs is None else _f64_buffer(image_signs)),
-        eps=eps, leaf=leafsize, eta=eta, build=bool(build_hmatrix))
+        eps=eps, leaf=leafsize, eta=eta,
+        build=bool(build_hmatrix) and not len(image_rot_angle))
+    _finish_image_rotations(G, image_rot_angle, eps=eps, leafsize=leafsize, eta=eta,
+                            build_hmatrix=bool(build_hmatrix))
     t2 = time.perf_counter()
     chk = G.hex_state_check()
     t3 = time.perf_counter()
@@ -1401,7 +1405,8 @@ def _prod_tri01(n):
 
 def _build_charge_gram_2d(fes, outer_n=None, glin_n=None, gledge_n=None, near_grade=0.6, far_inner=1.5,
                           eps=1e-12, leafsize=64, eta=2.0,
-                          image_masks=None, image_signs=None, materialize_mass=True,
+                          image_masks=None, image_signs=None, image_rot_angle=(),
+                          materialize_mass=True,
                           build_hmatrix=True):
     """2D planar charge Gram via the C++ dim2 _ChargeGramHMatrix (kernel -ln(r)/(2pi)).  Regular
     (ungraded) outer everywhere -- but it MUST be the PRODUCT-GAUSS rule (outer_n^2/sub-tri), NOT a
@@ -1440,7 +1445,10 @@ def _build_charge_gram_2d(fes, outer_n=None, glin_n=None, gledge_n=None, near_gr
         # Small BDM2 reduced models must remain dense: an ACA leaf can amplify a
         # nominal 1e-12 block error through high-mu solves and destroy the IMA
         # roundoff contract.  Larger models still split/compress normally.
-        eps=eps, leaf=max(64, int(leafsize)), eta=eta, build=bool(build_hmatrix))
+        eps=eps, leaf=max(64, int(leafsize)), eta=eta,
+        build=bool(build_hmatrix) and not len(image_rot_angle))
+    _finish_image_rotations(G, image_rot_angle, eps=eps, leafsize=max(64, int(leafsize)), eta=eta,
+                            build_hmatrix=bool(build_hmatrix))
     chk = G.hex_state_check()
     if chk["ctor"] != chk["now"]:
         raise RuntimeError(
@@ -1652,6 +1660,7 @@ def _charge_basis_wedge(fes, *, materialize_mass=True):
 
 def _build_charge_gram_wedge(fes, glout_n=None, glin_n=None, near_grade=0.6, far_inner=1.5,
                              eps=1e-12, leafsize=64, eta=2.0, image_masks=None, image_signs=None,
+                             image_rot_angle=(),
                              materialize_mass=True, build_hmatrix=True):
     """Pure-prism BDM1/BDM2 charge Gram via the wedge-mode C++ _ChargeGramHMatrix (mirror of _build_charge_gram_hex;
     FLAT + Curve(2) share ONE path).  numpy de-risk eig(M_mass^-1 N) in [0,1]: 0.989 @ n=2, 0.997 @ n=3;
@@ -1683,7 +1692,10 @@ def _build_charge_gram_wedge(fes, glout_n=None, glin_n=None, near_grade=0.6, far
         near_grade=near_grade, far_inner_factor=far_inner,
         image_masks=(_EMPTY_I32 if image_masks is None else _i32_buffer(image_masks)),
         image_signs=(_EMPTY_F64 if image_signs is None else _f64_buffer(image_signs)),
-        eps=eps, leaf=leafsize, eta=eta, build=bool(build_hmatrix))
+        eps=eps, leaf=leafsize, eta=eta,
+        build=bool(build_hmatrix) and not len(image_rot_angle))
+    _finish_image_rotations(G, image_rot_angle, eps=eps, leafsize=leafsize, eta=eta,
+                            build_hmatrix=bool(build_hmatrix))
     t2 = time.perf_counter()
     chk = G.hex_state_check()
     t3 = time.perf_counter()
@@ -1701,6 +1713,21 @@ def _build_charge_gram_wedge(fes, glout_n=None, glin_n=None, near_grade=0.6, far
     return cb["B"], G, cb["M_mass"], cb["M_mass_ngsolve"]
 
 
+def _finish_image_rotations(G, image_rot_angle, *, eps, leafsize, eta, build_hmatrix):
+    """Attach cyclic image rotations between construction and the H-matrix fill.
+
+    The rotation angles must be known before the fill (they change every Gram entry), and the C++
+    constructors build the H-matrix themselves.  Callers therefore construct with build=False when
+    rotations are present and finish here.  No rotations => the caller already built => no-op.
+    """
+    if not len(image_rot_angle):
+        return G
+    G.set_image_rotations(_f64_buffer(image_rot_angle))
+    if build_hmatrix:
+        G.build_hmatrix(eps=eps, leaf=leafsize, eta=eta)
+    return G
+
+
 def _configure_cpp_operator(B, G, M_mass, M_mass_ngsolve):
     """Pin geometry/FESpace sparse topology in the persistent C++ operator."""
     B = sp.csr_matrix(B)
@@ -1715,7 +1742,8 @@ def _configure_cpp_operator(B, G, M_mass, M_mass_ngsolve):
 
 def build_charge_gram(fes, intorder=None, eps=1e-7, leafsize=16, eta=2.0, far_quad=3, ho_far_factor=2.0,
                       inner_quad=None, curve_order=None, curve_gauss=8, nonlinear=False,
-                      image_masks=None, image_signs=None, _materialize_mass=True,
+                      image_masks=None, image_signs=None, image_rot_angle=None,
+                      _materialize_mass=True,
                       _build_hmatrix=True, internal_interfaces=False):
     """From an HDiv FESpace (order p, the order from the fes), build the monomial charge-density map
     B (scipy CSR, n_charge x ndof), the C++ charge-Gram H-matrix G, and the HDiv mass M_mass (CSR).
@@ -1779,8 +1807,12 @@ def build_charge_gram(fes, intorder=None, eps=1e-7, leafsize=16, eta=2.0, far_qu
             % (int(curve_order), int(curve_order), int(mesh.GetCurveOrder())))
     image_masks = [] if image_masks is None else list(image_masks)   # robust for NumPy arrays (truth-value)
     image_signs = [] if image_signs is None else list(image_signs)
+    image_rot_angle = [] if image_rot_angle is None else list(image_rot_angle)
     if len(image_masks) != len(image_signs):
         raise ValueError("vim.ChargeGram: image_masks and image_signs must have the same length")
+    if image_rot_angle and len(image_rot_angle) != len(image_masks):
+        raise ValueError(
+            "vim.ChargeGram: image_rot_angle must have the same length as image_masks")
     if image_masks:
         # IMA (mirror-image charge folding): wired for flat/Curve(2) pure-TET (C++ m_highorder QuadDotRefl->PhiInner)
         # AND pure-HEX / pure-WEDGE (the QuadBlockHex/Wedge(mask) reflected block), plus the planar log kernel.
@@ -1801,6 +1833,7 @@ def build_charge_gram(fes, intorder=None, eps=1e-7, leafsize=16, eta=2.0, far_qu
             *_build_charge_gram_2d(
                 fes, eps=eps, leafsize=leafsize, eta=eta,
                 image_masks=image_masks, image_signs=image_signs,
+                image_rot_angle=image_rot_angle,
                 materialize_mass=_materialize_mass, build_hmatrix=_build_hmatrix))
     if _vtypes == {8}:
         # PURE-HEX BDM1/BDM2: tensor Qp charge basis + Q2 geometry; FLAT or Curve(2) one path.
@@ -1809,6 +1842,7 @@ def build_charge_gram(fes, intorder=None, eps=1e-7, leafsize=16, eta=2.0, far_qu
         return _configure_cpp_operator(*_build_charge_gram_hex(
             fes, eps=eps, leafsize=leafsize, eta=eta,
             image_masks=image_masks, image_signs=image_signs,
+            image_rot_angle=image_rot_angle,
             materialize_mass=_materialize_mass, build_hmatrix=_build_hmatrix,
             internal_interfaces=bool(internal_interfaces)))
     if _vtypes == {6}:
@@ -1818,6 +1852,7 @@ def build_charge_gram(fes, intorder=None, eps=1e-7, leafsize=16, eta=2.0, far_qu
         return _configure_cpp_operator(*_build_charge_gram_wedge(
             fes, eps=eps, leafsize=leafsize, eta=eta,
             image_masks=image_masks, image_signs=image_signs,
+            image_rot_angle=image_rot_angle,
             materialize_mass=_materialize_mass, build_hmatrix=_build_hmatrix))
     if _vtypes != {4}:
         raise ValueError(
@@ -1871,7 +1906,8 @@ def build_charge_gram(fes, intorder=None, eps=1e-7, leafsize=16, eta=2.0, far_qu
             ref_tri_pts=_f64_buffer(rsp), ref_tri_w=_f64_buffer(rsw),
             curve_gl=_f64_buffer(gx), curve_gw=_f64_buffer(gw),
             image_masks=_i32_buffer(image_masks), image_signs=_f64_buffer(image_signs),
-            eps=eps, leaf=leafsize, eta=eta, build=bool(_build_hmatrix))
+            eps=eps, leaf=leafsize, eta=eta,
+            build=bool(_build_hmatrix) and not image_rot_angle)
         # Keep a permutation-invariant low rule for smooth, well-separated Gram blocks.  The persistent
         # field evaluator retains curved P2 elements directly and does not reuse this approximation.
         rtp_lo, rtw_lo = _outer_tet(far_quad)
@@ -1880,6 +1916,8 @@ def build_charge_gram(fes, intorder=None, eps=1e-7, leafsize=16, eta=2.0, far_qu
                   ref_tri_pts_lo=_f64_buffer(rsp_lo), ref_tri_w_lo=_f64_buffer(rsw_lo),
                   ho_far_factor=ho_far_factor)
         G = _rp._ChargeGramHMatrix(**kw)
+        _finish_image_rotations(G, image_rot_angle, eps=eps, leafsize=leafsize, eta=eta,
+                                build_hmatrix=bool(_build_hmatrix))
         return _configure_cpp_operator(
             cbk["B"], G, cbk["M_mass"], cbk["M_mass_ngsolve"])
     # INNER subtraction quad (B2 speedup): the subtraction remainder (m_src(y)-m_src(p)) is SMOOTH (the
@@ -1917,8 +1955,10 @@ def build_charge_gram(fes, intorder=None, eps=1e-7, leafsize=16, eta=2.0, far_qu
                   ref_tri_pts_in=_f64_buffer(rsp_in), ref_tri_w_in=_f64_buffer(rsw_in))
     if image_masks:
         kw.update(image_masks=_i32_buffer(image_masks), image_signs=_f64_buffer(image_signs))
-    kw["build"] = bool(_build_hmatrix)
+    kw["build"] = bool(_build_hmatrix) and not image_rot_angle
     G = _rp._ChargeGramHMatrix(**kw)
+    _finish_image_rotations(G, image_rot_angle, eps=eps, leafsize=leafsize, eta=eta,
+                            build_hmatrix=bool(_build_hmatrix))
     return _configure_cpp_operator(B, G, M_mass, cb["M_mass_ngsolve"])
 
 
