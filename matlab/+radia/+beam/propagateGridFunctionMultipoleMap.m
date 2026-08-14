@@ -1,19 +1,24 @@
-function result = propagateGridFunctionLinearMap( ...
+function result = propagateGridFunctionMultipoleMap( ...
     field, lengthsM, referencePositionsM, referenceTangents, ...
     magneticRigidityTM, options)
-%PROPAGATEGRIDFUNCTIONLINEARMAP Transfer map from an NGSolve GridFunction.
-%   RESULT = radia.beam.propagateGridFunctionLinearMap(FIELD, LENGTHS,
-%   POSITIONS, TANGENTS, BRHO) evaluates the real three-component FIELD
-%   directly through NGSolve at nine transverse points per reference station.
-%   POSITIONS and TANGENTS are N-by-3, with one row per positive segment
-%   length. No regular-grid field map is created.
+%PROPAGATEGRIDFUNCTIONMULTIPOLEMAP Moving-frame nonlinear beam map.
+%   RESULT = radia.beam.propagateGridFunctionMultipoleMap(FIELD, LENGTHS,
+%   POSITIONS, TANGENTS, BRHO) evaluates the live real three-component
+%   NGSolve FIELD at the center and eight angles of a transverse ring at each
+%   reference station. The shared C++ kernel fits
 %
-%   The native C++ result exposes the transported local frame, center field,
-%   fitted field gradient, curvature, normal/skew quadrupole strengths,
-%   Maxwell-residual diagnostics, local generators, and accumulated 6-by-6 R
-%   map. This entry point is first order; T and U are identically zero. Use
-%   radia.beam.propagateGridFunctionMultipoleMap for the declared paraxial
-%   A/F2/F3 expansion and region-attributed R/T/U map.
+%       By + i*Bx = sum(Cn*(x + i*y)^n)
+%
+%   through MultipoleOrder, builds the paraxial A/F2/F3 jet in
+%   (x,px/p0,y,py/p0,sigma,delta), and propagates the region-attributed R/T/U
+%   map through MaximumMapOrder. Raw samples, transported frames, multipole
+%   coefficients, fit residuals, and local jets remain in RESULT.
+%
+%   This is a local source-free transverse body-field approximation with a
+%   piecewise-constant jet per supplied segment. It is not a complete curved-
+%   coordinate Hamiltonian and does not add longitudinal fringe/edge
+%   derivatives, closed-orbit finding, or a general symplectic Lie map. Use
+%   radia.beam.trackGridFunction as the independent point-evaluation check.
 
 arguments
     field (1,1) radia.ngsolve.GridFunction
@@ -26,6 +31,10 @@ arguments
     options.Names = strings(0,1)
     options.CurvatureSign (1,1) double {mustBeFinite} = 1
     options.GradientSign (1,1) double {mustBeFinite} = 1
+    options.MultipoleOrder (1,1) double {mustBeInteger, ...
+        mustBeMember(options.MultipoleOrder,[1 2 3])} = 3
+    options.MaximumMapOrder (1,1) double {mustBeInteger, ...
+        mustBeMember(options.MaximumMapOrder,[1 2 3])} = 3
     options.MaximumStepM (1,1) double {mustBeFinite,mustBePositive} = 1e-3
     options.MaximumSteps (1,1) double {mustBeInteger,mustBePositive} = 1e6
 end
@@ -54,7 +63,7 @@ if numel(initialHorizontal) ~= 3 || norm(initialHorizontal) == 0
         "InitialHorizontal must contain a nonzero three-vector.");
 end
 
-config.schema = 'radia.beam.grid-function-linear-map.v1';
+config.schema = 'radia.beam.grid-function-multipole-map.v1';
 config.lengths_m = lengthsM;
 config.reference_positions_m = double(referencePositionsM);
 config.reference_tangents = double(referenceTangents);
@@ -71,9 +80,12 @@ if ~isempty(options.Names)
 end
 config.curvature_sign = options.CurvatureSign;
 config.gradient_sign = options.GradientSign;
+config.multipole_order = options.MultipoleOrder;
+config.maximum_map_order = options.MaximumMapOrder;
 config.maximum_step_m = options.MaximumStepM;
 config.maximum_steps = options.MaximumSteps;
 
 result = radia.internal.callMex( ...
-    'beam.transfer.from_grid_function',field.nativeHandle(),config);
+    'beam.transfer.multipole_from_grid_function', ...
+    field.nativeHandle(),config);
 end

@@ -32,6 +32,22 @@ class GraphFrontTrustUpdate:
     action: str
 
 
+@dataclass(frozen=True)
+class GraphFrontDiversityDiagnostics:
+    proposal_count: int
+    numerical_rank: int
+    duplicate_pair_fraction: float
+    maximum_absolute_correlation: float
+    minimum_subspace_novelty: float
+
+
+@dataclass(frozen=True)
+class GraphFrontBeamResult:
+    proposals: tuple[GraphFrontProposal, ...]
+    pool_diagnostics: GraphFrontDiversityDiagnostics
+    selected_diagnostics: GraphFrontDiversityDiagnostics
+
+
 def best_admissible_singleton(representatives, predicted_ratios, *,
                               current_ratio, is_valid,
                               improvement_tolerance=1.0e-8):
@@ -252,10 +268,110 @@ def _selected_components(selected, adjacency):
     return count
 
 
+def _response_subspace_novelty(units, index, selected):
+    """Return the residual norm after projection on selected directions."""
+    vector=units[:,int(index)]
+    if np.linalg.norm(vector)<=64.0*np.finfo(float).eps:
+        return 0.0
+    if not selected:
+        return 1.0
+    basis=np.column_stack([units[:,int(value)] for value in selected])
+    left,singular,_=np.linalg.svd(basis,full_matrices=False)
+    if singular.size==0 or singular[0]==0.0:
+        return 1.0
+    rank=int(np.count_nonzero(
+        singular>1.0e-12*singular[0]))
+    if rank==0:
+        return 1.0
+    projection=left[:,:rank].T@vector
+    return float(np.sqrt(max(0.0,1.0-float(projection@projection))))
+
+
+def graph_front_response_diversity(proposals, current_response,
+                                   response_band, *,
+                                   relative_tolerance=1.0e-3,
+                                   duplicate_correlation=0.995):
+    """Measure rank and directional duplication of graph-front responses."""
+    values=tuple(proposals)
+    current=np.asarray(current_response,dtype=float).reshape(-1)
+    band=np.asarray(response_band,dtype=float).reshape(-1)
+    tolerance=float(relative_tolerance)
+    duplicate=float(duplicate_correlation)
+    if (band.shape!=current.shape or np.any(band<=0.0) or
+            not 0.0<tolerance<1.0 or not 0.0<=duplicate<=1.0):
+        raise ValueError("graph-front diversity settings are invalid")
+    if not values:
+        return GraphFrontDiversityDiagnostics(0,0,0.0,0.0,0.0)
+    columns=np.column_stack([
+        (np.asarray(item.predicted_response,dtype=float).reshape(-1)-current)
+        /band for item in values])
+    if columns.shape[0]!=current.size or not np.all(np.isfinite(columns)):
+        raise ValueError("graph-front proposal response is invalid")
+    singular=np.linalg.svd(columns,compute_uv=False)
+    rank=(0 if singular.size==0 or singular[0]==0.0 else int(
+        np.count_nonzero(singular>tolerance*singular[0])))
+    norms=np.linalg.norm(columns,axis=0)
+    units=np.zeros_like(columns)
+    nonzero=norms>64.0*np.finfo(float).eps
+    units[:,nonzero]=columns[:,nonzero]/norms[nonzero]
+    correlation=np.abs(units.T@units)
+    pair=np.triu_indices(len(values),k=1)
+    pair_values=correlation[pair]
+    duplicate_fraction=(0.0 if pair_values.size==0 else float(
+        np.mean(pair_values>=duplicate)))
+    maximum=(0.0 if pair_values.size==0 else float(np.max(pair_values)))
+    sequential_novelty=[
+        _response_subspace_novelty(units,index,tuple(range(index)))
+        for index in range(1,len(values))]
+    minimum_novelty=(1.0 if not sequential_novelty else float(
+        np.min(sequential_novelty)))
+    return GraphFrontDiversityDiagnostics(
+        len(values),rank,duplicate_fraction,maximum,minimum_novelty)
+
+
+def _select_response_diverse_proposals(proposals, current_response,
+                                       response_target, response_band, *, proposal_limit,
+                                       novelty_weight):
+    ranked=tuple(proposals);limit=min(len(ranked),int(proposal_limit))
+    weight=float(novelty_weight)
+    if limit<=0:
+        return ()
+    if weight<=0.0:
+        return ranked[:limit]
+    current=np.asarray(current_response,dtype=float).reshape(-1)
+    target=np.asarray(response_target,dtype=float).reshape(-1)
+    band=np.asarray(response_band,dtype=float).reshape(-1)
+    current_ratio=float(np.max(np.abs((current-target)/band)))
+    improvements=np.asarray([
+        current_ratio-float(item.predicted_max_band_ratio)
+        for item in ranked],dtype=float)
+    improvement_scale=max(float(np.max(np.maximum(improvements,0.0))),
+                          np.finfo(float).eps)
+    quality=np.clip(improvements/improvement_scale,0.0,1.0)
+    columns=np.column_stack([
+        (np.asarray(item.predicted_response,dtype=float).reshape(-1)-current)
+        /band for item in ranked])
+    norms=np.linalg.norm(columns,axis=0)
+    units=np.zeros_like(columns)
+    nonzero=norms>64.0*np.finfo(float).eps
+    units[:,nonzero]=columns[:,nonzero]/norms[nonzero]
+    selected=[0];available=set(range(1,len(ranked)))
+    while available and len(selected)<limit:
+        def merit(index):
+            novelty=_response_subspace_novelty(units,index,selected)
+            score=(1.0-weight)*quality[index]+weight*novelty
+            return (score,-float(ranked[index].predicted_max_band_ratio),
+                    -len(ranked[index].candidate_indices),-index)
+        chosen=max(available,key=merit)
+        selected.append(chosen);available.remove(chosen)
+    return tuple(ranked[index] for index in selected)
+
+
 def connected_graph_front_beam(*, current_response, response_target,
         response_band, candidate_response_delta, adjacency, seed_indices,
         exclusion_groups=None, maximum_size, maximum_components=2,
         beam_width=64, proposal_limit=8,
+        response_novelty_weight=0.0, return_result=False,
         regularization_change: Callable[[tuple[int, ...]],float] | None=None,
         is_valid: Callable[[tuple[int, ...]],bool] | None=None):
     """Rank connected, QR-seeded binary front clusters without exact solves.
@@ -283,8 +399,11 @@ def connected_graph_front_beam(*, current_response, response_target,
         raise ValueError("connected graph-front exclusions must match candidates")
     maximum_size=min(nc,int(maximum_size));maximum_components=int(maximum_components)
     beam_width=int(beam_width);proposal_limit=int(proposal_limit)
+    novelty_weight=float(response_novelty_weight)
     if min(maximum_size,maximum_components,beam_width,proposal_limit)<1:
         raise ValueError("connected graph-front limits must be positive")
+    if not 0.0<=novelty_weight<=1.0:
+        raise ValueError("response_novelty_weight must lie in [0, 1]")
     ratio=lambda value:float(np.max(np.abs((value-target)/band)))
 
     def compatible(bundle):
@@ -343,7 +462,16 @@ def connected_graph_front_beam(*, current_response, response_target,
     proposals.sort(key=lambda value:(
         value.predicted_max_band_ratio+value.regularization_change,
         len(value.candidate_indices),tuple(value.candidate_indices)))
-    return tuple(proposals[:proposal_limit])
+    pool=tuple(proposals)
+    selected=_select_response_diverse_proposals(
+        pool,current,target,band,proposal_limit=proposal_limit,
+        novelty_weight=novelty_weight)
+    if not return_result:
+        return selected
+    return GraphFrontBeamResult(
+        selected,
+        graph_front_response_diversity(pool,current,band),
+        graph_front_response_diversity(selected,current,band))
 
 
 def update_graph_front_trust(*, budget, minimum_budget, maximum_budget,
@@ -370,10 +498,13 @@ def update_graph_front_trust(*, budget, minimum_budget, maximum_budget,
 
 
 __all__=[
-    "GraphFrontProposal","GraphFrontTrustUpdate","best_admissible_singleton",
+    "GraphFrontProposal","GraphFrontTrustUpdate",
+    "GraphFrontDiversityDiagnostics","GraphFrontBeamResult",
+    "best_admissible_singleton",
     "minimax_driving_potential","candidate_face_adjacency",
     "binary_graph_interface_energy",
     "ngsolve_facet_measure_graph",
-    "terminal_l1_curvature_energy","connected_graph_front_beam",
+    "terminal_l1_curvature_energy","graph_front_response_diversity",
+    "connected_graph_front_beam",
     "update_graph_front_trust",
 ]

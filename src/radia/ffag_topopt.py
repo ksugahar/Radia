@@ -772,6 +772,23 @@ class FFAGHDivMMMTopologyResult:
 
 
 @dataclass(frozen=True)
+class FFAGFixedOrbitMapTrial:
+    """One exactly resolved material proposal checked against the one-pass map."""
+
+    optics_iteration: int
+    trial_index: int
+    material_move_fraction: float | None
+    active_count_before: int
+    active_count_after: int
+    max_band_ratio_before: float
+    max_band_ratio_after: float
+    accepted: bool
+    reason: str
+    proposal_model: str = "field-target"
+    exact_search_trace: tuple = ()
+
+
+@dataclass(frozen=True)
 class FFAGFixedOrbitHDivMMMTopologyResult:
     """One-pass FFAG result about caller-supplied design orbits.
 
@@ -787,6 +804,8 @@ class FFAGFixedOrbitHDivMMMTopologyResult:
     topology_result: MultiMomentumAcceleratorMagnetTopologyResult
     optics_history: tuple[MultiMomentumAcceleratorMagnetTopologyResult, ...]
     termination_reason: str
+    initial_max_band_ratio: float
+    map_trust_history: tuple[FFAGFixedOrbitMapTrial, ...]
 
     @property
     def active_elements(self) -> np.ndarray:
@@ -825,7 +844,7 @@ class FFAGFixedOrbitHDivMMMTopologyResult:
 
     @property
     def converged(self) -> bool:
-        return self.topology_result.converged
+        return self.max_band_ratio <= 1.0
 
     @property
     def stop_reason(self) -> str:
@@ -848,6 +867,11 @@ def optimize_ffag_hdiv_mmm_from_fixed_design_orbits(
         field_inverse_basis=None,
         field_inverse_maximum_step_scale=1.0,
         field_inverse_line_search_steps=8,
+        map_trust_region_trials=3, map_ratio_tolerance=1.0e-8,
+        direct_map_oracle_fallback=False,
+        direct_map_oracle_exact_beam_width=0,
+        direct_map_oracle_exact_beam_depth=0,
+        direct_map_oracle_graph_front_proposal_limit=0,
         **generation_options) -> FFAGFixedOrbitHDivMMMTopologyResult:
     """Optimize one magnet about fixed entrance-to-exit design orbits.
 
@@ -856,7 +880,9 @@ def optimize_ffag_hdiv_mmm_from_fixed_design_orbits(
     closure and periodic-orbit recovery.  The optics TSVD first maps the
     transfer-matrix error to a sampled field target on those frozen paths;
     the independent Abe--Murata ACA--QR--TSVD material inverse then selects
-    binary HDiv-MMM element additions/removals.
+    binary HDiv-MMM element additions/removals.  The field-to-map Jacobian is
+    propagated by forward-mode AD with an exact Frechet matrix-exponential
+    primitive.
 
     The caller owns ``ngsolve.TaskManager``.  No design finite difference,
     density interpolation, air volume mesh, or tracking root solve is used.
@@ -872,13 +898,32 @@ def optimize_ffag_hdiv_mmm_from_fixed_design_orbits(
     scale = float(source_scale)
     optics_count = int(max_optics_iterations)
     material_count = int(material_iterations_per_optics)
+    map_trial_count = int(map_trust_region_trials)
+    map_ratio_tolerance = float(map_ratio_tolerance)
+    oracle_beam_width = int(direct_map_oracle_exact_beam_width)
+    oracle_beam_depth = int(direct_map_oracle_exact_beam_depth)
+    oracle_graph_limit = int(
+        direct_map_oracle_graph_front_proposal_limit)
     if (active.shape != volumes.shape or not np.any(active)
             or not np.all(np.isfinite(volumes)) or np.any(volumes <= 0.0)
             or not np.isfinite(scale) or scale <= 0.0):
         raise ValueError("invalid fixed-design-orbit topology settings")
-    if optics_count < 1 or material_count < 1:
+    if optics_count < 1 or material_count < 1 or map_trial_count < 1:
         raise ValueError(
             "fixed-design-orbit iteration counts must be positive")
+    if not np.isfinite(map_ratio_tolerance) or map_ratio_tolerance < 0.0:
+        raise ValueError(
+            "map_ratio_tolerance must be nonnegative and finite")
+    if (oracle_beam_width < 0 or oracle_beam_depth < 0
+            or ((oracle_beam_width == 0)
+                != (oracle_beam_depth == 0))):
+        raise ValueError(
+            "direct map oracle beam width and depth must both be zero or "
+            "both be positive")
+    if oracle_graph_limit < 0:
+        raise ValueError(
+            "direct map oracle graph-front proposal limit must be "
+            "nonnegative")
     if "max_iterations" in generation_options:
         raise TypeError(
             "use material_iterations_per_optics instead of max_iterations")
@@ -936,17 +981,165 @@ def optimize_ffag_hdiv_mmm_from_fixed_design_orbits(
     incident = scale * source.incident_orbit_field_response(
         objective, gradient_offset=gradient_offset)
     optics_history = []
+    map_trust_history = []
+    accepted_result = None
+    initial_max_band_ratio = None
     termination_reason = "maximum fixed-orbit optics iterations reached"
-    for _ in range(optics_count):
+    for optics_iteration in range(optics_count):
         current_raw_field = np.asarray(
             response_matrix @ state + incident, dtype=float)
+        current_ratio = float(np.max(np.abs(
+            (objective.transform(current_raw_field)
+             - objective.response_target) / objective.response_band)))
+        if initial_max_band_ratio is None:
+            initial_max_band_ratio = current_ratio
         field_correction = solve_transfer_matrix_field_correction(
             objective, current_raw_field,
             field_basis=field_inverse_basis,
             relative_tolerance=field_inverse_relative_tolerance,
             maximum_step_scale=field_inverse_maximum_step_scale,
             line_search_steps=field_inverse_line_search_steps)
-        topology_result = optimize_hdiv_mmm_magnet_from_transfer_matrices(
+        requested_initial = generation_options.get(
+            "initial_material_move_fraction")
+        requested_maximum = generation_options.get(
+            "maximum_material_move_fraction")
+        trial_fraction = (None if requested_initial is None else
+                          float(requested_initial))
+        accepted = False
+        last_attempt = None
+        for trial_index in range(map_trial_count):
+            trial_options = dict(generation_options)
+            if trial_fraction is not None:
+                trial_options["initial_material_move_fraction"] = trial_fraction
+                trial_options["maximum_material_move_fraction"] = min(
+                    trial_fraction,
+                    trial_fraction if requested_maximum is None else
+                    float(requested_maximum))
+            last_attempt = optimize_hdiv_mmm_magnet_from_transfer_matrices(
+                objective.orbits, objective.target_matrices,
+                transfer_matrix_band=objective.transfer_matrix_band,
+                bend_field_band=objective.bend_field_band,
+                charge_gram=charge_gram, fes=fes, inv_chi=inv_chi,
+                rhs=rhs, field_response_matrix=response_matrix,
+                incident_field_response=incident,
+                field_correction=field_correction,
+                active_elements=active, element_volumes=volumes,
+                volume_max=volume_max,
+                response_entries=objective.response_entries,
+                curvature_sign=objective.curvature_sign,
+                gradient_sign=objective.gradient_sign,
+                max_iterations=material_count,
+                **trial_options)
+            next_active = np.asarray(
+                last_attempt.active_elements, dtype=bool).copy()
+            candidate_ratio = float(max(
+                np.max(last_attempt.orbit_field_max_band_ratios),
+                np.max(last_attempt.transfer_matrix_max_band_ratios)))
+            changed = not np.array_equal(next_active, active)
+            accepted = bool(
+                candidate_ratio <= 1.0 + map_ratio_tolerance or
+                (changed and candidate_ratio
+                 < current_ratio - map_ratio_tolerance))
+            if accepted:
+                reason = "accepted by exact fixed one-pass map gate"
+            elif not changed:
+                reason = "material inverse proposed no active-set change"
+            else:
+                reason = "rejected by exact fixed one-pass map gate"
+            map_trust_history.append(FFAGFixedOrbitMapTrial(
+                optics_iteration, trial_index, trial_fraction,
+                int(np.count_nonzero(active)),
+                int(np.count_nonzero(next_active)), current_ratio,
+                candidate_ratio, accepted, reason, "field-target",
+                tuple(last_attempt.generation.exact_search_trace)))
+            if accepted:
+                accepted_result = last_attempt
+                optics_history.append(last_attempt)
+                active = next_active
+                state = last_attempt.generation.state.copy()
+                break
+            if trial_fraction is None:
+                break
+            trial_fraction *= 0.5
+        if not accepted and direct_map_oracle_fallback:
+            # The two-stage transfer->field->material inverse can stall when
+            # its reachable field target is a poor local surrogate for the
+            # original map norm.  Reuse the same forward-mode AD field-to-map
+            # Jacobian directly in the all-candidate material contraction as
+            # a bounded fallback.  This is still an exact chain rule, not a
+            # design finite difference or a density relaxation.
+            oracle_options = dict(generation_options)
+            oracle_fraction = (None if requested_initial is None else
+                               float(requested_initial))
+            if oracle_fraction is not None:
+                oracle_options["initial_material_move_fraction"] = (
+                    oracle_fraction)
+                oracle_options["maximum_material_move_fraction"] = min(
+                    oracle_fraction,
+                    oracle_fraction if requested_maximum is None else
+                    float(requested_maximum))
+            # The default remains one bounded global all-candidate proposal.
+            # A caller may explicitly enable shallow nonmonotone look-ahead
+            # for the direct oracle after the primary field-target lane stalls.
+            oracle_options["exact_beam_width"] = oracle_beam_width
+            oracle_options["exact_beam_depth"] = oracle_beam_depth
+            oracle_options["graph_front_proposal_limit"] = (
+                oracle_graph_limit)
+            last_attempt = optimize_hdiv_mmm_magnet_from_transfer_matrices(
+                objective.orbits, objective.target_matrices,
+                transfer_matrix_band=objective.transfer_matrix_band,
+                bend_field_band=objective.bend_field_band,
+                charge_gram=charge_gram, fes=fes, inv_chi=inv_chi,
+                rhs=rhs, field_response_matrix=response_matrix,
+                incident_field_response=incident,
+                active_elements=active, element_volumes=volumes,
+                volume_max=volume_max,
+                response_entries=objective.response_entries,
+                curvature_sign=objective.curvature_sign,
+                gradient_sign=objective.gradient_sign,
+                max_iterations=material_count,
+                **oracle_options)
+            next_active = np.asarray(
+                last_attempt.active_elements, dtype=bool).copy()
+            candidate_ratio = float(max(
+                np.max(last_attempt.orbit_field_max_band_ratios),
+                np.max(last_attempt.transfer_matrix_max_band_ratios)))
+            changed = not np.array_equal(next_active, active)
+            accepted = bool(
+                candidate_ratio <= 1.0 + map_ratio_tolerance or
+                (changed and candidate_ratio
+                 < current_ratio - map_ratio_tolerance))
+            reason = (
+                "accepted by direct analytic map-Jacobian oracle"
+                if accepted else
+                ("direct map oracle proposed no active-set change"
+                 if not changed else
+                 "rejected by exact fixed one-pass map gate"))
+            map_trust_history.append(FFAGFixedOrbitMapTrial(
+                optics_iteration, map_trial_count, oracle_fraction,
+                int(np.count_nonzero(active)),
+                int(np.count_nonzero(next_active)), current_ratio,
+                candidate_ratio, accepted, reason,
+                "direct-map-jacobian",
+                tuple(last_attempt.generation.exact_search_trace)))
+            if accepted:
+                accepted_result = last_attempt
+                optics_history.append(last_attempt)
+                active = next_active
+                state = last_attempt.generation.state.copy()
+        if not accepted:
+            termination_reason = "map-level trust-region proposals rejected"
+            break
+        if candidate_ratio <= 1.0 + map_ratio_tolerance:
+            termination_reason = "fixed one-pass transfer bands reached"
+            break
+
+    if accepted_result is None:
+        # Preserve the incumbent when every material proposal is rejected.
+        # This fallback performs one exact active solve only on that failure
+        # path; it never returns the last rejected topology as the design.
+        baseline_options = dict(generation_options)
+        accepted_result = optimize_hdiv_mmm_magnet_from_transfer_matrices(
             objective.orbits, objective.target_matrices,
             transfer_matrix_band=objective.transfer_matrix_band,
             bend_field_band=objective.bend_field_band,
@@ -959,24 +1152,11 @@ def optimize_ffag_hdiv_mmm_from_fixed_design_orbits(
             response_entries=objective.response_entries,
             curvature_sign=objective.curvature_sign,
             gradient_sign=objective.gradient_sign,
-            max_iterations=material_count,
-            **generation_options)
-        optics_history.append(topology_result)
-        next_active = np.asarray(
-            topology_result.active_elements, dtype=bool).copy()
-        state = topology_result.generation.state.copy()
-        if topology_result.converged:
-            termination_reason = "fixed one-pass transfer bands reached"
-            active = next_active
-            break
-        if np.array_equal(next_active, active):
-            termination_reason = topology_result.generation.stop_reason
-            active = next_active
-            break
-        active = next_active
+            max_iterations=0, **baseline_options)
     return FFAGFixedOrbitHDivMMMTopologyResult(
-        target_family, scale, topology_result, tuple(optics_history),
-        termination_reason)
+        target_family, scale, accepted_result, tuple(optics_history),
+        termination_reason, float(initial_max_band_ratio),
+        tuple(map_trust_history))
 
 
 def optimize_ffag_hdiv_mmm_from_transfer_matrices(
@@ -999,9 +1179,10 @@ def optimize_ffag_hdiv_mmm_from_transfer_matrices(
     outer iteration the realized coil-plus-magnet field is tracked to recover
     every momentum-dependent periodic orbit.  A small dense optics TSVD first
     converts transfer-matrix error to a target correction of the sampled orbit
-    field.  Native HDiv rows are then rebuilt on those orbits and the separate
-    Abe--Murata DUCAS ACA--QR--TSVD material inverse proposes exactly one (by
-    default) Lego update.  HDiv candidates never enter the optics inverse.
+    field using the forward-mode AD field-to-map Jacobian.  Native HDiv rows
+    are then rebuilt on those orbits and the separate Abe--Murata DUCAS
+    ACA--QR--TSVD material inverse proposes exactly one (by default) Lego
+    update.  HDiv candidates never enter the optics inverse.
     The topology is accepted only if a complete
     active-set solve, full-field orbit recovery, and transfer-map rebuild
     improve the actual band-normalized objective.  A rejected update shrinks
@@ -1262,6 +1443,7 @@ __all__ = [
     "FFAGHDivMMMOuterIteration",
     "FFAGHDivMMMTopologyResult",
     "FFAGFixedOrbitHDivMMMTopologyResult",
+    "FFAGFixedOrbitMapTrial",
     "FFAGSoftEdgeCellSpec",
     "FullFieldClosedOrbit",
     "GEV_C_PER_TESLA_METRE",

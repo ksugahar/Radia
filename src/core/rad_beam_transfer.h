@@ -70,6 +70,30 @@ struct DynamicsJet6 {
     Tensor4Map6 f3_per_m;
 };
 
+// Canonical curvilinear body-field Hamiltonian through degree four:
+//   H = 1/2 H2[z,z] + 1/6 H3[z,z,z]
+//       + 1/24 H4[z,z,z,z] + O(z^5),
+// in coordinates (x, px/p0, y, py/p0, ell, delta).  The longitudinal
+// canonical pair has Poisson sign -1.  The dynamics tensors are J*Hn.
+struct HamiltonianJet6 {
+    Matrix6 h2_per_m;
+    Tensor3Map6 h3_per_m;
+    Tensor4Map6 h4_per_m;
+    DynamicsJet6 dynamics;
+    double reference_beta = 1.0;
+};
+
+// Source-free transverse magnetic expansion in a right-handed moving frame:
+//   By + i Bx = sum_n (normal[n] + i skew[n]) (x + i y)^n.
+// Coefficient n has units T/m^n. The generated paraxial jet uses
+// (x, px/p0, y, py/p0, sigma, delta) and expands 1/(1+delta) through the
+// requested order, so quadrupole/sextupole chromatic terms are retained.
+struct TransverseMagneticMultipoleExpansion {
+    unsigned order = 0;
+    std::array<double, 4> normal_t_per_m_power{};
+    std::array<double, 4> skew_t_per_m_power{};
+};
+
 struct DynamicsSegment6 {
     double length_m = 0.0;
     DynamicsJet6 jet;
@@ -136,6 +160,16 @@ TaylorMap6 ComposeTaylorMaps(const TaylorMap6& outer,
 
 TaylorMap6 IntegrateConstantJet(const DynamicsJet6& jet, double length_m,
                                 unsigned maximum_order = 3);
+
+DynamicsJet6 BuildParaxialMagneticDynamicsJet(
+    const TransverseMagneticMultipoleExpansion& expansion,
+    double magnetic_rigidity_t_m, double curvature_sign = 1.0,
+    double gradient_sign = 1.0, unsigned maximum_order = 3);
+
+HamiltonianJet6 BuildCanonicalBodyHamiltonianJet(
+    const TransverseMagneticMultipoleExpansion& expansion,
+    double magnetic_rigidity_t_m, double curvature_sign = 1.0,
+    double gradient_sign = 1.0, double reference_beta = 1.0);
 
 VariationalReport6 PropagateVariationalMap(
     const std::vector<DynamicsSegment6>& segments,

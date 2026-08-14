@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <complex>
 #include <limits>
 #include <map>
 #include <stdexcept>
@@ -193,6 +194,115 @@ struct StepDescriptor {
     double length_m = 0.0;
 };
 
+double SmallFactorial(std::size_t value) {
+    if (value < 2) return 1.0;
+    if (value == 2) return 2.0;
+    if (value == 3) return 6.0;
+    if (value == 4) return 24.0;
+    throw std::invalid_argument("beam Taylor monomial degree exceeds four");
+}
+
+void AddHamiltonianMonomial(HamiltonianJet6& jet,
+                            const std::array<std::size_t, 6>& powers,
+                            double coefficient) {
+    std::size_t degree = 0;
+    double derivative = coefficient;
+    for (std::size_t power : powers) {
+        degree += power;
+        derivative *= SmallFactorial(power);
+    }
+    if (coefficient == 0.0) return;
+    if (degree < 2 || degree > 4)
+        throw std::invalid_argument(
+            "Hamiltonian monomial degree must be two, three, or four");
+    const auto matches = [&](const std::array<std::size_t, 4>& inputs,
+                             std::size_t count) {
+        std::array<std::size_t, 6> actual{};
+        for (std::size_t index = 0; index < count; ++index)
+            ++actual[inputs[index]];
+        return actual == powers;
+    };
+    if (degree == 2) {
+        for (std::size_t i = 0; i < 6; ++i)
+            for (std::size_t j = 0; j < 6; ++j)
+                if (matches({i, j, 0, 0}, 2))
+                    jet.h2_per_m(i, j) += derivative;
+        return;
+    }
+    if (degree == 3) {
+        for (std::size_t i = 0; i < 6; ++i)
+            for (std::size_t j = 0; j < 6; ++j)
+                for (std::size_t k = 0; k < 6; ++k)
+                    if (matches({i, j, k, 0}, 3))
+                        jet.h3_per_m(i, j, k) += derivative;
+        return;
+    }
+    for (std::size_t i = 0; i < 6; ++i)
+        for (std::size_t j = 0; j < 6; ++j)
+            for (std::size_t k = 0; k < 6; ++k)
+                for (std::size_t l = 0; l < 6; ++l)
+                    if (matches({i, j, k, l}, 4))
+                        jet.h4_per_m(i, j, k, l) += derivative;
+}
+
+double CanonicalPoissonEntry(std::size_t row, std::size_t column) {
+    if (row == 0 && column == 1) return 1.0;
+    if (row == 1 && column == 0) return -1.0;
+    if (row == 2 && column == 3) return 1.0;
+    if (row == 3 && column == 2) return -1.0;
+    if (row == 4 && column == 5) return -1.0;
+    if (row == 5 && column == 4) return 1.0;
+    return 0.0;
+}
+
+void AddMonomialDerivative(DynamicsJet6& jet, std::size_t output,
+                           const std::array<std::size_t, 6>& powers,
+                           double coefficient, unsigned maximum_order) {
+    std::size_t degree = 0;
+    double derivative = coefficient;
+    for (std::size_t power : powers) {
+        degree += power;
+        derivative *= SmallFactorial(power);
+    }
+    if (degree == 0 || degree > maximum_order || coefficient == 0.0)
+        return;
+    const auto matches = [&](const std::array<std::size_t, 3>& inputs,
+                             std::size_t count) {
+        std::array<std::size_t, 6> actual{};
+        for (std::size_t index = 0; index < count; ++index)
+            ++actual[inputs[index]];
+        return actual == powers;
+    };
+    if (degree == 1) {
+        for (std::size_t i = 0; i < 6; ++i)
+            if (powers[i] == 1) jet.a_per_m(output, i) += derivative;
+        return;
+    }
+    if (degree == 2) {
+        for (std::size_t i = 0; i < 6; ++i)
+            for (std::size_t j = 0; j < 6; ++j)
+                if (matches({i, j, 0}, 2))
+                    jet.f2_per_m(output, i, j) += derivative;
+        return;
+    }
+    for (std::size_t i = 0; i < 6; ++i)
+        for (std::size_t j = 0; j < 6; ++j)
+            for (std::size_t k = 0; k < 6; ++k)
+                if (matches({i, j, k}, 3))
+                    jet.f3_per_m(output, i, j, k) += derivative;
+}
+
+double Binomial(std::size_t order, std::size_t selected) {
+    static constexpr double values[5][5] = {
+        {1.0, 0.0, 0.0, 0.0, 0.0},
+        {1.0, 1.0, 0.0, 0.0, 0.0},
+        {1.0, 2.0, 1.0, 0.0, 0.0},
+        {1.0, 3.0, 3.0, 1.0, 0.0},
+        {1.0, 4.0, 6.0, 4.0, 1.0},
+    };
+    return values[order][selected];
+}
+
 void ValidateJet(const DynamicsJet6& jet, unsigned maximum_order,
                  double symmetry_tolerance) {
     RequireFinite(jet.a_per_m, "A");
@@ -302,6 +412,195 @@ TaylorMap6 IntegrateConstantJet(const DynamicsJet6& jet, double length_m,
         throw std::invalid_argument("maximum_order must be 1, 2, or 3");
     ValidateJet(jet, maximum_order, 1.0e-12);
     return IntegrateConstantJetUnchecked(jet, length_m, maximum_order);
+}
+
+DynamicsJet6 BuildParaxialMagneticDynamicsJet(
+        const TransverseMagneticMultipoleExpansion& expansion,
+        double magnetic_rigidity_t_m, double curvature_sign,
+        double gradient_sign, unsigned maximum_order) {
+    if (expansion.order > 3)
+        throw std::invalid_argument("multipole order must not exceed three");
+    if (maximum_order < 1 || maximum_order > 3)
+        throw std::invalid_argument("maximum_order must be 1, 2, or 3");
+    if (!std::isfinite(magnetic_rigidity_t_m) ||
+        magnetic_rigidity_t_m == 0.0)
+        throw std::invalid_argument(
+            "magnetic_rigidity_t_m must be finite and nonzero");
+    if (!std::isfinite(curvature_sign) || !std::isfinite(gradient_sign))
+        throw std::invalid_argument(
+            "curvature_sign and gradient_sign must be finite");
+    for (double coefficient : expansion.normal_t_per_m_power)
+        if (!std::isfinite(coefficient))
+            throw std::invalid_argument(
+                "normal multipole coefficients must be finite");
+    for (double coefficient : expansion.skew_t_per_m_power)
+        if (!std::isfinite(coefficient))
+            throw std::invalid_argument(
+                "skew multipole coefficients must be finite");
+
+    DynamicsJet6 jet;
+    const double curvature = curvature_sign *
+        expansion.normal_t_per_m_power[0] / magnetic_rigidity_t_m;
+    jet.a_per_m(0, 1) = 1.0;
+    jet.a_per_m(1, 0) = -curvature * curvature;
+    jet.a_per_m(1, 5) = curvature;
+    jet.a_per_m(2, 3) = 1.0;
+    jet.a_per_m(4, 0) = curvature;
+
+    // x' = px/(1+delta), y' = py/(1+delta), through cubic order.
+    AddMonomialDerivative(jet, 0, {0, 1, 0, 0, 0, 1}, -1.0,
+                          maximum_order);
+    AddMonomialDerivative(jet, 0, {0, 1, 0, 0, 0, 2}, 1.0,
+                          maximum_order);
+    AddMonomialDerivative(jet, 2, {0, 0, 0, 1, 0, 1}, -1.0,
+                          maximum_order);
+    AddMonomialDerivative(jet, 2, {0, 0, 0, 1, 0, 2}, 1.0,
+                          maximum_order);
+
+    const std::complex<double> imaginary(0.0, 1.0);
+    const unsigned field_order = std::min(expansion.order, maximum_order);
+    for (unsigned order = 1; order <= field_order; ++order) {
+        const std::complex<double> multipole(
+            expansion.normal_t_per_m_power[order],
+            expansion.skew_t_per_m_power[order]);
+        for (unsigned y_power = 0; y_power <= order; ++y_power) {
+            const std::complex<double> polynomial =
+                multipole * Binomial(order, y_power) *
+                std::pow(imaginary, static_cast<int>(y_power));
+            for (unsigned delta_power = 0;
+                 delta_power + order <= maximum_order; ++delta_power) {
+                std::array<std::size_t, 6> powers{};
+                powers[0] = order - y_power;
+                powers[2] = y_power;
+                powers[5] = delta_power;
+                const double chromatic = delta_power % 2 == 0 ? 1.0 : -1.0;
+                AddMonomialDerivative(
+                    jet, 1, powers,
+                    -gradient_sign * chromatic * polynomial.real() /
+                        magnetic_rigidity_t_m,
+                    maximum_order);
+                AddMonomialDerivative(
+                    jet, 3, powers,
+                    gradient_sign * chromatic * polynomial.imag() /
+                        magnetic_rigidity_t_m,
+                    maximum_order);
+            }
+        }
+    }
+    ValidateJet(jet, maximum_order, 1.0e-12);
+    return jet;
+}
+
+HamiltonianJet6 BuildCanonicalBodyHamiltonianJet(
+        const TransverseMagneticMultipoleExpansion& expansion,
+        double magnetic_rigidity_t_m, double curvature_sign,
+        double gradient_sign, double reference_beta) {
+    if (expansion.order > 3)
+        throw std::invalid_argument("multipole order must not exceed three");
+    if (!std::isfinite(magnetic_rigidity_t_m) ||
+        magnetic_rigidity_t_m == 0.0)
+        throw std::invalid_argument(
+            "magnetic_rigidity_t_m must be finite and nonzero");
+    if (!std::isfinite(curvature_sign) || !std::isfinite(gradient_sign))
+        throw std::invalid_argument(
+            "curvature_sign and gradient_sign must be finite");
+    if (!std::isfinite(reference_beta) || reference_beta <= 0.0 ||
+        reference_beta > 1.0)
+        throw std::invalid_argument(
+            "reference_beta must be finite and in (0, 1]");
+    for (double coefficient : expansion.normal_t_per_m_power)
+        if (!std::isfinite(coefficient))
+            throw std::invalid_argument(
+                "normal multipole coefficients must be finite");
+    for (double coefficient : expansion.skew_t_per_m_power)
+        if (!std::isfinite(coefficient))
+            throw std::invalid_argument(
+                "skew multipole coefficients must be finite");
+
+    HamiltonianJet6 result;
+    result.reference_beta = reference_beta;
+    const double curvature = curvature_sign *
+        expansion.normal_t_per_m_power[0] / magnetic_rigidity_t_m;
+
+    // Exact parent:
+    // -(1+h*x)*sqrt((1+delta)^2-px^2-py^2) - a_s + H_ref.
+    AddHamiltonianMonomial(result, {0, 2, 0, 0, 0, 0}, 0.5);
+    AddHamiltonianMonomial(result, {0, 0, 0, 2, 0, 0}, 0.5);
+    AddHamiltonianMonomial(result, {2, 0, 0, 0, 0, 0},
+                           0.5 * curvature * curvature);
+    AddHamiltonianMonomial(result, {1, 0, 0, 0, 0, 1}, -curvature);
+    AddHamiltonianMonomial(
+        result, {0, 0, 0, 0, 0, 2},
+        0.5 * (1.0 - reference_beta * reference_beta));
+
+    for (std::size_t momentum : {std::size_t{1}, std::size_t{3}}) {
+        std::array<std::size_t, 6> powers{};
+        powers[momentum] = 2;
+        powers[5] = 1;
+        AddHamiltonianMonomial(result, powers, -0.5);
+        powers[5] = 0;
+        powers[0] = 1;
+        AddHamiltonianMonomial(result, powers, 0.5 * curvature);
+    }
+    AddHamiltonianMonomial(
+        result, {0, 0, 0, 0, 0, 3},
+        -0.5 * reference_beta * reference_beta *
+            (1.0 - reference_beta * reference_beta));
+
+    for (std::size_t momentum : {std::size_t{1}, std::size_t{3}}) {
+        std::array<std::size_t, 6> powers{};
+        powers[momentum] = 2;
+        powers[5] = 2;
+        AddHamiltonianMonomial(result, powers, 0.5);
+        powers[5] = 1;
+        powers[0] = 1;
+        AddHamiltonianMonomial(result, powers, -0.5 * curvature);
+    }
+    AddHamiltonianMonomial(result, {0, 4, 0, 0, 0, 0}, 0.125);
+    AddHamiltonianMonomial(result, {0, 0, 0, 4, 0, 0}, 0.125);
+    AddHamiltonianMonomial(result, {0, 2, 0, 2, 0, 0}, 0.25);
+    const double beta2 = reference_beta * reference_beta;
+    AddHamiltonianMonomial(
+        result, {0, 0, 0, 0, 0, 4},
+        beta2 * (1.0 - beta2) * (5.0 * beta2 - 1.0) / 8.0);
+
+    const std::complex<double> imaginary(0.0, 1.0);
+    for (unsigned order = 1; order <= expansion.order; ++order) {
+        const unsigned degree = order + 1;
+        const std::complex<double> normalized = gradient_sign *
+            std::complex<double>(
+                expansion.normal_t_per_m_power[order],
+                expansion.skew_t_per_m_power[order]) /
+            magnetic_rigidity_t_m;
+        for (unsigned y_power = 0; y_power <= degree; ++y_power) {
+            std::array<std::size_t, 6> powers{};
+            powers[0] = degree - y_power;
+            powers[2] = y_power;
+            const std::complex<double> polynomial = normalized *
+                Binomial(degree, y_power) *
+                std::pow(imaginary, static_cast<int>(y_power)) /
+                static_cast<double>(degree);
+            AddHamiltonianMonomial(result, powers, polynomial.real());
+        }
+    }
+
+    for (std::size_t i = 0; i < 6; ++i)
+        for (std::size_t a = 0; a < 6; ++a) {
+            const double poisson = CanonicalPoissonEntry(i, a);
+            for (std::size_t j = 0; j < 6; ++j) {
+                result.dynamics.a_per_m(i, j) +=
+                    poisson * result.h2_per_m(a, j);
+                for (std::size_t k = 0; k < 6; ++k) {
+                    result.dynamics.f2_per_m(i, j, k) +=
+                        poisson * result.h3_per_m(a, j, k);
+                    for (std::size_t l = 0; l < 6; ++l)
+                        result.dynamics.f3_per_m(i, j, k, l) +=
+                            poisson * result.h4_per_m(a, j, k, l);
+                }
+            }
+        }
+    ValidateJet(result.dynamics, 3, 1.0e-12);
+    return result;
 }
 
 VariationalReport6 PropagateVariationalMap(

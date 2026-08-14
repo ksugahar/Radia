@@ -1009,12 +1009,18 @@ def test_hdiv_mmm_graph_front_finds_connected_tsvd_seed_collaboration(
         response_band=[1e-8],volume_max=float(np.sum(volumes))+1e-14,
         maximum_batch_elements=2,max_iterations=1,solve_tolerance=1e-11,
         graph_front_maximum_components=2,
-        graph_front_proposal_limit=8)
+        graph_front_proposal_limit=8,
+        graph_front_response_novelty_weight=0.5)
     assert result.converged and len(result.history)==1
     np.testing.assert_array_equal(result.active_elements,masks[-1])
     assert result.history[0].selection_model==(
         "aca-qr-tsvd-connected-graph-front-full-resolve")
     assert result.history[0].graph_front_proposals_evaluated>=3
+    assert result.graph_front_diagnostics
+    diagnostics=result.graph_front_diagnostics[0]
+    assert diagnostics.novelty_weight==0.5
+    assert diagnostics.pool_proposal_count>=3
+    assert diagnostics.selected_response_rank==1
 
 
 def test_hdiv_mmm_exact_beam_crosses_one_worsening_lego_state(monkeypatch):
@@ -1083,8 +1089,21 @@ def test_hdiv_mmm_exact_beam_crosses_one_worsening_lego_state(monkeypatch):
         exact_beam_barrier_fraction=0.25)
     assert result.converged and len(result.history)==1
     np.testing.assert_array_equal(result.active_elements,masks[-1])
+    np.testing.assert_array_equal(result.history[0].added_elements,[1,2])
+    assert result.history[0].removed_elements.size==0
     assert result.history[0].nonmonotone_search_depth==1
     np.testing.assert_allclose(result.response,[current+1.0],atol=3e-11)
+    assert [trial.depth for trial in result.exact_search_trace]==[1,2]
+    assert result.exact_search_trace[0].parent_max_band_ratio==(
+        result.exact_search_trace[0].incumbent_max_band_ratio)
+    assert result.exact_search_trace[0].max_band_ratio>(
+        result.exact_search_trace[0].parent_max_band_ratio)
+    np.testing.assert_array_equal(
+        result.exact_search_trace[0].added_elements,[1])
+    np.testing.assert_array_equal(
+        result.exact_search_trace[1].added_elements,[1,2])
+    assert all(trial.solve_iterations>0
+               for trial in result.exact_search_trace)
 
     blocked=topopt.grow_hdiv_mmm_by_superposition(
         charge_gram=gram,fes=fes,inv_chi=.2,rhs=rhs,
@@ -1099,6 +1118,21 @@ def test_hdiv_mmm_exact_beam_crosses_one_worsening_lego_state(monkeypatch):
     assert not blocked.converged and len(blocked.history)==0
     np.testing.assert_array_equal(blocked.active_elements,masks[0])
     assert blocked.stop_reason=="exact_nonmonotone_beam_exhausted"
+    assert [trial.depth for trial in blocked.exact_search_trace]==[1]
+
+    depth_one=topopt.grow_hdiv_mmm_by_superposition(
+        charge_gram=gram,fes=fes,inv_chi=.2,rhs=rhs,
+        response_matrix=response_row,active_elements=masks[0],
+        element_volumes=volumes,response_target=[current+1.0],
+        response_band=[1e-8],volume_max=float(np.sum(volumes))+1e-14,
+        fixed_active_elements=masks[0],
+        predecessor_elements=np.array([-1,0,1],dtype=np.int64),
+        max_iterations=1,solve_tolerance=1e-11,
+        exact_beam_width=2,exact_beam_depth=1,
+        exact_beam_barrier_fraction=0.25)
+    assert not depth_one.converged and len(depth_one.history)==0
+    assert depth_one.stop_reason=="exact_nonmonotone_beam_exhausted"
+    assert [trial.depth for trial in depth_one.exact_search_trace]==[1]
 
 
 def test_hdiv_mmm_generation_checks_global_addition_proposal_before_dense_schur(
@@ -1673,6 +1707,31 @@ def test_hdiv_mmm_generation_recalibrates_linear_coil_source_after_batch():
     np.testing.assert_allclose(result.source_scale,1.7,rtol=0,atol=2e-11)
     np.testing.assert_allclose(result.history[0].source_scale,1.7,
                                rtol=0,atol=2e-11)
+
+
+def test_positive_minimax_source_scale_has_piecewise_analytic_gradient():
+    from radia.topology_optimization import (
+        _positive_minimax_source_scale_and_gradient,
+    )
+
+    response=np.array([1.0,1.0,0.4])
+    target=np.array([1.0,3.0,0.6])
+    band=np.array([1.0,0.1,2.0])
+    scale,gradient=_positive_minimax_source_scale_and_gradient(
+        response,target,band)
+    np.testing.assert_allclose(scale,31.0/11.0,rtol=0,atol=2e-14)
+    ratios=np.abs((scale*response-target)/band)
+    np.testing.assert_allclose(ratios[:2],[20.0/11.0]*2,
+                               rtol=0,atol=2e-14)
+    direction=np.array([0.3,-0.2,0.1])
+    step=2e-7
+    upper,_=_positive_minimax_source_scale_and_gradient(
+        response+step*direction,target,band)
+    lower,_=_positive_minimax_source_scale_and_gradient(
+        response-step*direction,target,band)
+    regression=(upper-lower)/(2.0*step)
+    np.testing.assert_allclose(
+        gradient@direction,regression,rtol=2e-7,atol=2e-9)
 
 
 def test_hdiv_mmm_generation_contracts_raw_rows_before_metric_adjoints():

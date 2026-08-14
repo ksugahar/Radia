@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <complex>
 #include <limits>
 #include <stdexcept>
 #include <string>
@@ -135,9 +136,8 @@ Vector3 LocalComponents(const Vector3& field, const Vector3& horizontal,
             Dot(field, tangent)};
 }
 
-void BuildGenerator(GridFunctionSegmentLinearization& output,
-                    double magnetic_rigidity_t_m,
-                    double curvature_sign, double gradient_sign) {
+void BuildDynamicsJet(GridFunctionSegmentLinearization& output,
+                      const GridFunctionLinearizationOptions& options) {
     const double d_bx_dx = output.field_gradient_local_t_per_m[0];
     const double d_bx_dy = output.field_gradient_local_t_per_m[1];
     const double d_by_dx = output.field_gradient_local_t_per_m[2];
@@ -147,28 +147,81 @@ void BuildGenerator(GridFunctionSegmentLinearization& output,
     const double skew_gradient_t_per_m =
         0.5 * (d_bx_dx - d_by_dy);
 
-    output.curvature_per_m = curvature_sign *
-        output.center_field_local_t[1] / magnetic_rigidity_t_m;
-    output.normal_gradient_per_m2 = gradient_sign *
-        normal_gradient_t_per_m / magnetic_rigidity_t_m;
-    output.skew_gradient_per_m2 = gradient_sign *
-        skew_gradient_t_per_m / magnetic_rigidity_t_m;
+    output.curvature_per_m = options.curvature_sign *
+        output.center_field_local_t[1] /
+        options.magnetic_rigidity_t_m;
+    output.normal_gradient_per_m2 = options.gradient_sign *
+        output.multipoles.normal_t_per_m_power[1] /
+        options.magnetic_rigidity_t_m;
+    output.skew_gradient_per_m2 = options.gradient_sign *
+        output.multipoles.skew_t_per_m_power[1] /
+        options.magnetic_rigidity_t_m;
     output.transverse_divergence_t_per_m = d_bx_dx + d_by_dy;
     output.transverse_curl_mismatch_t_per_m =
         0.5 * (d_by_dx - d_bx_dy);
 
-    const double h = output.curvature_per_m;
-    const double k1 = output.normal_gradient_per_m2;
-    const double k1s = output.skew_gradient_per_m2;
-    Matrix6& a = output.a_per_m;
-    a(0, 1) = 1.0;
-    a(1, 0) = -(h * h + k1);
-    a(1, 2) = k1s;
-    a(1, 5) = h;
-    a(2, 3) = 1.0;
-    a(3, 0) = k1s;
-    a(3, 2) = k1;
-    a(4, 0) = h;
+    // Keep the affine Maxwell diagnostics independently inspectable. The map
+    // itself is generated from the harmonic multipole fit below.
+    (void)normal_gradient_t_per_m;
+    (void)skew_gradient_t_per_m;
+    output.dynamics_jet = BuildParaxialMagneticDynamicsJet(
+        output.multipoles, options.magnetic_rigidity_t_m,
+        options.curvature_sign, options.gradient_sign,
+        options.maximum_map_order);
+    output.a_per_m = output.dynamics_jet.a_per_m;
+}
+
+void FitTransverseMultipoles(
+        GridFunctionSegmentLinearization& output,
+        const std::array<std::array<double, 2>, kSampleCount>& offsets,
+        const std::array<Vector3, kSampleCount>& local_fields,
+        unsigned order, double radius) {
+    output.multipoles.order = order;
+    output.multipoles.normal_t_per_m_power[0] = local_fields[0][1];
+    output.multipoles.skew_t_per_m_power[0] = local_fields[0][0];
+    for (unsigned degree = 1; degree <= order; ++degree) {
+        std::complex<double> moment{};
+        for (std::size_t sample = 1; sample < kSampleCount; ++sample) {
+            const std::complex<double> normalized(
+                offsets[sample][0] / radius,
+                offsets[sample][1] / radius);
+            const std::complex<double> field(
+                local_fields[sample][1], local_fields[sample][0]);
+            moment += field * std::conj(std::pow(
+                normalized, static_cast<int>(degree)));
+        }
+        const std::complex<double> coefficient =
+            moment / (8.0 * std::pow(radius, static_cast<int>(degree)));
+        output.multipoles.normal_t_per_m_power[degree] =
+            coefficient.real();
+        output.multipoles.skew_t_per_m_power[degree] =
+            coefficient.imag();
+    }
+
+    double residual_squared = 0.0;
+    double maximum_residual = 0.0;
+    for (std::size_t sample = 0; sample < kSampleCount; ++sample) {
+        const std::complex<double> coordinate(
+            offsets[sample][0], offsets[sample][1]);
+        std::complex<double> predicted{};
+        for (unsigned degree = 0; degree <= order; ++degree) {
+            const std::complex<double> coefficient(
+                output.multipoles.normal_t_per_m_power[degree],
+                output.multipoles.skew_t_per_m_power[degree]);
+            predicted += coefficient * std::pow(
+                coordinate, static_cast<int>(degree));
+        }
+        const std::complex<double> actual(
+            local_fields[sample][1], local_fields[sample][0]);
+        const double residual = std::abs(actual - predicted);
+        residual_squared += residual * residual;
+        maximum_residual = std::max(maximum_residual, residual);
+    }
+    output.multipole_rms_fit_residual_t = std::sqrt(
+        residual_squared / static_cast<double>(kSampleCount));
+    output.multipole_maximum_fit_residual_t = maximum_residual;
+    output.multipole_fit_rank = order + 1;
+    output.multipole_scaled_design_condition = 1.0;
 }
 
 GridFunctionSegmentLinearization LinearizeSegment(
@@ -254,14 +307,15 @@ GridFunctionSegmentLinearization LinearizeSegment(
     output.center_fit_bias_t = Norm(Subtract(
         output.fitted_center_field_local_t,
         output.center_field_local_t));
-    BuildGenerator(output, options.magnetic_rigidity_t_m,
-                   options.curvature_sign, options.gradient_sign);
+    FitTransverseMultipoles(output, offsets, local_fields,
+                            options.multipole_order, radius);
+    BuildDynamicsJet(output, options);
     return output;
 }
 
 }  // namespace
 
-GridFunctionTransferReport6 PropagateGridFunctionLinearMap(
+GridFunctionTransferReport6 PropagateGridFunctionMultipoleMap(
         const std::shared_ptr<ngcomp::GridFunction>& field,
         const std::vector<double>& segment_lengths_m,
         const std::vector<Vector3>& reference_positions_m,
@@ -287,7 +341,9 @@ GridFunctionTransferReport6 PropagateGridFunctionLinearMap(
         options.sample_radius_m <= 0.0)
         throw std::invalid_argument(
             "sample_radius_m must be finite and positive");
-    if (!Finite(options.initial_horizontal) ||
+    if (options.multipole_order < 1 || options.multipole_order > 3 ||
+        options.maximum_map_order < 1 || options.maximum_map_order > 3 ||
+        !Finite(options.initial_horizontal) ||
         !std::isfinite(options.curvature_sign) ||
         !std::isfinite(options.gradient_sign) ||
         !std::isfinite(options.maximum_step_m) ||
@@ -318,6 +374,7 @@ GridFunctionTransferReport6 PropagateGridFunctionLinearMap(
     GridFunctionTransferReport6 output;
     output.magnetic_rigidity_t_m = options.magnetic_rigidity_t_m;
     output.sample_radius_m = options.sample_radius_m;
+    output.multipole_order = options.multipole_order;
     output.linearizations.reserve(count);
     std::vector<DynamicsSegment6> dynamics(count);
 
@@ -338,18 +395,81 @@ GridFunctionTransferReport6 PropagateGridFunctionLinearMap(
             horizontal, vertical, options, local_heap, index));
 
         dynamics[index].length_m = segment_lengths_m[index];
-        dynamics[index].jet.a_per_m = output.linearizations.back().a_per_m;
+        dynamics[index].jet = output.linearizations.back().dynamics_jet;
         dynamics[index].name = names.empty()
             ? "segment_" + std::to_string(index + 1)
             : names[index];
     }
 
     VariationalOptions variational;
-    variational.maximum_order = 1;
+    variational.maximum_order = options.maximum_map_order;
     variational.maximum_step_m = options.maximum_step_m;
     variational.maximum_steps = options.maximum_steps;
     output.transfer = PropagateVariationalMap(dynamics, variational);
     return output;
+}
+
+GridFunctionTransferReport6 PropagateGridFunctionLinearMap(
+        const std::shared_ptr<ngcomp::GridFunction>& field,
+        const std::vector<double>& segment_lengths_m,
+        const std::vector<Vector3>& reference_positions_m,
+        const std::vector<Vector3>& reference_tangents,
+        const std::vector<std::string>& names,
+        const GridFunctionLinearizationOptions& options) {
+    GridFunctionLinearizationOptions linear_options = options;
+    linear_options.multipole_order = 1;
+    linear_options.maximum_map_order = 1;
+    return PropagateGridFunctionMultipoleMap(
+        field, segment_lengths_m, reference_positions_m,
+        reference_tangents, names, linear_options);
+}
+
+NGSolveGridFunctionField::NGSolveGridFunctionField(
+        std::shared_ptr<ngcomp::GridFunction> field)
+    : field_(std::move(field)) {
+    if (!field_)
+        throw std::invalid_argument("field GridFunction must not be null");
+    const auto mesh = field_->GetMeshAccess();
+    if (!mesh || mesh->GetDimension() != 3)
+        throw std::invalid_argument(
+            "beam GridFunction must belong to a three-dimensional mesh");
+    ngcomp::GridFunctionCoefficientFunction coefficient(field_);
+    if (coefficient.IsComplex())
+        throw std::invalid_argument(
+            "beam GridFunction must be real-valued");
+    if (coefficient.Dimension() != 3)
+        throw std::invalid_argument(
+            "beam GridFunction must have exactly three field components");
+}
+
+FieldSample NGSolveGridFunctionField::Evaluate(
+        const Vec3& position_m, double time_s,
+        const FieldRequest& request) const {
+    if (!std::isfinite(position_m.x) || !std::isfinite(position_m.y) ||
+        !std::isfinite(position_m.z))
+        throw std::invalid_argument(
+            "position_m must contain finite values");
+    if (!std::isfinite(time_s))
+        throw std::invalid_argument("time_s must be finite");
+    FieldSample output;
+    if (!request.magnetic) return output;
+    ngcore::RegionTaskManager task_manager;
+    ngstd::LocalHeap local_heap(1 << 16, "radia_beam_direct_gridfunction");
+    ngcomp::GridFunctionCoefficientFunction coefficient(field_);
+    const Vector3 point{position_m.x, position_m.y, position_m.z};
+    const Vector3 field = EvaluateField(
+        coefficient, field_->GetMeshAccess(), point, local_heap, 0, 0);
+    output.magnetic_t = {field[0], field[1], field[2]};
+    return output;
+}
+
+std::string NGSolveGridFunctionField::TypeName() const {
+    return "ngsolve-grid-function-magnetic";
+}
+
+const std::shared_ptr<ngcomp::GridFunction>&
+NGSolveGridFunctionField::GridFunction() const {
+    return field_;
 }
 
 }  // namespace radia::beam

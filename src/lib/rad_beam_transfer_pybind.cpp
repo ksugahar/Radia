@@ -247,15 +247,19 @@ std::vector<radia::beam::Vector3> Vector3Rows(
 py::dict GridFunctionReportDictionary(
         const radia::beam::GridFunctionTransferReport6& report) {
     py::dict output = ReportDictionary(report.transfer);
-    output["schema"] =
-        "radia.beam.grid-function-linear-map.result.v1";
+    const bool linear_schema = report.multipole_order == 1 &&
+        report.transfer.maximum_order == 1;
+    output["schema"] = linear_schema
+        ? "radia.beam.grid-function-linear-map.result.v1"
+        : "radia.beam.grid-function-multipole-map.result.v1";
     output["backend"] = "native-cpp-ngsolve-gridfunction";
     output["field_source"] = "ngsolve.GridFunction";
-    output["linearization_order"] = 1;
+    output["linearization_order"] = report.multipole_order;
     output["magnetic_rigidity_t_m"] = report.magnetic_rigidity_t_m;
     output["sample_radius_m"] = report.sample_radius_m;
     output["fit_model"] =
-        "nine-point transverse least-squares affine field jet";
+        "nine-point transverse harmonic multipole expansion through order " +
+        std::to_string(report.multipole_order);
     output["frame_convention"] =
         "right-handed parallel transport seeded by initial_horizontal";
 
@@ -289,6 +293,14 @@ py::dict GridFunctionReportDictionary(
     py::array_t<double> maximum_residual(count);
     py::array_t<std::int64_t> fit_rank(count);
     py::array_t<double> fit_condition(count);
+    py::array_t<double> normal_multipoles(
+        std::vector<py::ssize_t>{count, 4});
+    py::array_t<double> skew_multipoles(
+        std::vector<py::ssize_t>{count, 4});
+    py::array_t<double> multipole_rms_residual(count);
+    py::array_t<double> multipole_maximum_residual(count);
+    py::array_t<std::int64_t> multipole_fit_rank(count);
+    py::array_t<double> multipole_fit_condition(count);
 
     for (py::ssize_t index = 0; index < count; ++index) {
         const auto& value = report.linearizations[
@@ -337,6 +349,22 @@ py::dict GridFunctionReportDictionary(
             value.fit_rank);
         fit_condition.mutable_data()[index] =
             value.scaled_design_condition;
+        for (py::ssize_t order = 0; order < 4; ++order) {
+            normal_multipoles.mutable_data()[index * 4 + order] =
+                value.multipoles.normal_t_per_m_power[
+                    static_cast<std::size_t>(order)];
+            skew_multipoles.mutable_data()[index * 4 + order] =
+                value.multipoles.skew_t_per_m_power[
+                    static_cast<std::size_t>(order)];
+        }
+        multipole_rms_residual.mutable_data()[index] =
+            value.multipole_rms_fit_residual_t;
+        multipole_maximum_residual.mutable_data()[index] =
+            value.multipole_maximum_fit_residual_t;
+        multipole_fit_rank.mutable_data()[index] =
+            static_cast<std::int64_t>(value.multipole_fit_rank);
+        multipole_fit_condition.mutable_data()[index] =
+            value.multipole_scaled_design_condition;
     }
     output["reference_positions_m"] = std::move(positions);
     output["frame_horizontal"] = std::move(horizontal);
@@ -359,17 +387,102 @@ py::dict GridFunctionReportDictionary(
     output["maximum_fit_residual_t"] = std::move(maximum_residual);
     output["fit_rank"] = std::move(fit_rank);
     output["scaled_design_condition"] = std::move(fit_condition);
+    output["multipole_normal_t_per_m_power"] =
+        std::move(normal_multipoles);
+    output["multipole_skew_t_per_m_power"] =
+        std::move(skew_multipoles);
+    output["multipole_rms_fit_residual_t"] =
+        std::move(multipole_rms_residual);
+    output["multipole_maximum_fit_residual_t"] =
+        std::move(multipole_maximum_residual);
+    output["multipole_fit_rank"] = std::move(multipole_fit_rank);
+    output["multipole_scaled_design_condition"] =
+        std::move(multipole_fit_condition);
     output["local_A_per_m"] = StackValues<radia::beam::Matrix6>(
         report.linearizations.size(), {6, 6},
         [&](std::size_t index) -> const radia::beam::Matrix6& {
             return report.linearizations[index].a_per_m;
         });
+    output["local_F2_per_m"] =
+        StackValues<radia::beam::Tensor3Map6>(
+            report.linearizations.size(), {6, 6, 6},
+            [&](std::size_t index)
+                -> const radia::beam::Tensor3Map6& {
+                return report.linearizations[index]
+                    .dynamics_jet.f2_per_m;
+            });
+    output["local_F3_per_m"] =
+        StackValues<radia::beam::Tensor4Map6>(
+            report.linearizations.size(), {6, 6, 6, 6},
+            [&](std::size_t index)
+                -> const radia::beam::Tensor4Map6& {
+                return report.linearizations[index]
+                    .dynamics_jet.f3_per_m;
+            });
     return output;
 }
 
 }  // namespace
 
 void ExportBeamTransfer(py::module_& module) {
+    py::class_<radia::beam::NGSolveGridFunctionField,
+               radia::beam::Field,
+               std::shared_ptr<radia::beam::NGSolveGridFunctionField>>(
+        module, "BeamNGSolveGridFunctionField")
+        .def(py::init<std::shared_ptr<ngcomp::GridFunction>>(),
+             py::arg("grid_function"));
+
+    module.def(
+        "_beam_canonical_hamiltonian_jet",
+        [](F64Array coefficients, double magnetic_rigidity_t_m,
+           double curvature_sign, double gradient_sign,
+           double reference_beta) {
+            const auto buffer = coefficients.request();
+            RequireShape(buffer, {7}, "coefficients");
+            const double* values = static_cast<const double*>(buffer.ptr);
+            radia::beam::TransverseMagneticMultipoleExpansion expansion;
+            expansion.order = 3;
+            expansion.normal_t_per_m_power = {
+                values[0], values[1], values[3], values[5]};
+            expansion.skew_t_per_m_power = {
+                0.0, values[2], values[4], values[6]};
+            const auto result =
+                radia::beam::BuildCanonicalBodyHamiltonianJet(
+                    expansion, magnetic_rigidity_t_m, curvature_sign,
+                    gradient_sign, reference_beta);
+            py::dict output;
+            output["schema"] =
+                "radia.beam.canonical-hamiltonian-jet.result.v1";
+            output["backend"] = "native-cpp";
+            output["coordinate_order"] = py::make_tuple(
+                "x", "px_over_p0", "y", "py_over_p0", "ell", "delta");
+            output["poisson_pair_signs"] = py::make_tuple(1, 1, -1);
+            output["reference_beta"] = result.reference_beta;
+            output["H2_per_m"] = ValueArray(result.h2_per_m, {6, 6});
+            output["H3_per_m"] =
+                ValueArray(result.h3_per_m, {6, 6, 6});
+            output["H4_per_m"] =
+                ValueArray(result.h4_per_m, {6, 6, 6, 6});
+            output["A_per_m"] =
+                ValueArray(result.dynamics.a_per_m, {6, 6});
+            output["F2_per_m"] =
+                ValueArray(result.dynamics.f2_per_m, {6, 6, 6});
+            output["F3_per_m"] = ValueArray(
+                result.dynamics.f3_per_m, {6, 6, 6, 6});
+            return output;
+        },
+        py::arg("coefficients"), py::arg("magnetic_rigidity_t_m"),
+        py::arg("curvature_sign") = 1.0,
+        py::arg("gradient_sign") = 1.0,
+        py::arg("reference_beta") = 1.0,
+        R"pbdoc(
+Build the native fourth-degree canonical body-multipole Hamiltonian jet.
+
+The seven coefficients are dipole, normal/skew quadrupole,
+normal/skew sextupole, and normal/skew octupole.  The result contains
+symmetric H2/H3/H4 tensors and the corresponding J*H dynamics A/F2/F3.
+)pbdoc");
+
     module.def(
         "_beam_variational_map",
         [](F64Array lengths, F64Array a, py::object f2, py::object f3,
@@ -481,5 +594,83 @@ The C++ adapter samples nine transverse points at each reference station via
 NGSolve's mapped GridFunction evaluation. It reports the local field fit,
 normal/skew quadrupole profiles, residual diagnostics, and the accumulated
 six-dimensional R map without constructing a regular-grid field map.
+)pbdoc");
+
+    module.def(
+        "_beam_grid_function_multipole_map",
+        [](py::object field_object, F64Array lengths,
+           F64Array reference_positions, F64Array reference_tangents,
+           double magnetic_rigidity_t_m, F64Array initial_horizontal,
+           double sample_radius_m, py::object names_object,
+           double curvature_sign, double gradient_sign,
+           unsigned multipole_order, unsigned maximum_map_order,
+           double maximum_step_m, std::size_t maximum_steps) {
+            const auto lengths_buffer = lengths.request();
+            if (lengths_buffer.ndim != 1 || lengths_buffer.shape[0] <= 0)
+                throw std::invalid_argument(
+                    "lengths_m must have shape (n_segment,)");
+            const py::ssize_t count = lengths_buffer.shape[0];
+            const double* length_data = static_cast<const double*>(
+                lengths_buffer.ptr);
+            std::vector<double> segment_lengths(
+                length_data, length_data + count);
+            auto positions = Vector3Rows(
+                reference_positions, count, "reference_positions_m");
+            auto tangents = Vector3Rows(
+                reference_tangents, count, "reference_tangents");
+            const auto horizontal_buffer = initial_horizontal.request();
+            RequireShape(horizontal_buffer, {3}, "initial_horizontal");
+            const double* horizontal_data = static_cast<const double*>(
+                horizontal_buffer.ptr);
+            std::vector<std::string> names;
+            if (!names_object.is_none()) {
+                names = names_object.cast<std::vector<std::string>>();
+                if (names.size() != static_cast<std::size_t>(count))
+                    throw std::invalid_argument(
+                        "names must contain one string per segment");
+            }
+            auto field = field_object.cast<
+                std::shared_ptr<ngcomp::GridFunction>>();
+            radia::beam::GridFunctionLinearizationOptions options;
+            options.magnetic_rigidity_t_m = magnetic_rigidity_t_m;
+            options.sample_radius_m = sample_radius_m;
+            std::copy(horizontal_data, horizontal_data + 3,
+                      options.initial_horizontal.begin());
+            options.curvature_sign = curvature_sign;
+            options.gradient_sign = gradient_sign;
+            options.multipole_order = multipole_order;
+            options.maximum_map_order = maximum_map_order;
+            options.maximum_step_m = maximum_step_m;
+            options.maximum_steps = maximum_steps;
+
+            radia::beam::GridFunctionTransferReport6 report;
+            {
+                py::gil_scoped_release release;
+                report = radia::beam::PropagateGridFunctionMultipoleMap(
+                    field, segment_lengths, positions, tangents, names,
+                    options);
+            }
+            return GridFunctionReportDictionary(report);
+        },
+        py::arg("field"), py::arg("lengths_m"),
+        py::arg("reference_positions_m"),
+        py::arg("reference_tangents"),
+        py::arg("magnetic_rigidity_t_m"),
+        py::arg("initial_horizontal"),
+        py::arg("sample_radius_m") = 1.0e-3,
+        py::arg("names") = py::none(),
+        py::arg("curvature_sign") = 1.0,
+        py::arg("gradient_sign") = 1.0,
+        py::arg("multipole_order") = 3,
+        py::arg("maximum_map_order") = 3,
+        py::arg("maximum_step_m") = 1.0e-3,
+        py::arg("maximum_steps") = 1000000,
+        R"pbdoc(
+Fit a moving-frame transverse multipole expansion from an NGSolve field.
+
+The native adapter evaluates the solved GridFunction on an eight-angle ring
+plus its reference center, fits By+iBx through cubic order, builds the declared
+paraxial A/F2/F3 jet including chromatic 1/(1+delta) terms, and propagates the
+canonical R/T/U map with region-resolved nonlinear attribution.
 )pbdoc");
 }
