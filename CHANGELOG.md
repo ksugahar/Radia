@@ -25,8 +25,8 @@ Released 2026-08-14.
   lifecycle diagnostics, a tracked Simulink model, and registration in the
   single Radia library.
 - Added cyclic N-fold HDiv-VIM rotational images so a modeled sector reproduces
-  a complete ring, with Python bindings, focused unit coverage, and an
-  independent ring-validation lane.
+  a complete ring, with Python and MATLAB/MEX parity, focused unit coverage,
+  and an independent ring-validation lane.
 - Added charged-particle orbit and flying-beam Gmsh post-processing together
   with electromagnetic field overlays and checked rendering contracts, and
   exposed field comparison, flux/line integrals, Maxwell force, gap harmonics,

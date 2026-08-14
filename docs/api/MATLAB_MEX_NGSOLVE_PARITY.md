@@ -20,8 +20,8 @@ silently dropped from the count.
 | Public top-level pybind11 names | 94 |
 | Covered mapped MEX names | 94 |
 | Underscore numerical kernels | 27 / 27 covered |
-| Stateful pybind11 class surface | 121 / 121 covered |
-| MEX gateway commands | 337 |
+| Stateful pybind11 class surface | 123 / 123 covered |
+| MEX gateway commands | 358 |
 | MATLAB Optuna classes | 12 |
 | MATLAB Optuna factory functions | 3 |
 
