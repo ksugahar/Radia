@@ -1189,6 +1189,36 @@ class HDivMMMGenerationIteration:
 
 
 @dataclass(frozen=True)
+class HDivMMMGraphFrontDiagnostics:
+    iteration: int
+    search_depth: int
+    candidate_count: int
+    novelty_weight: float
+    pool_proposal_count: int
+    pool_response_rank: int
+    pool_duplicate_pair_fraction: float
+    pool_maximum_absolute_correlation: float
+    selected_proposal_count: int
+    selected_response_rank: int
+    selected_duplicate_pair_fraction: float
+    selected_minimum_subspace_novelty: float
+
+
+@dataclass(frozen=True)
+class HDivMMMExactSearchTrial:
+    """One topology-valid beam state evaluated by a complete active solve."""
+
+    depth: int
+    parent_max_band_ratio: float
+    incumbent_max_band_ratio: float
+    max_band_ratio: float
+    added_elements: np.ndarray
+    removed_elements: np.ndarray
+    solve_iterations: int
+    path: tuple[tuple[tuple[int, int], ...], ...]
+
+
+@dataclass(frozen=True)
 class HDivMMMGenerationResult:
     active_elements: np.ndarray
     state: np.ndarray
@@ -1198,6 +1228,8 @@ class HDivMMMGenerationResult:
     source_scale: float = 1.0
     objective_response: np.ndarray | None = None
     stop_reason: str = "unknown"
+    exact_search_trace: tuple[HDivMMMExactSearchTrial, ...] = ()
+    graph_front_diagnostics: tuple[HDivMMMGraphFrontDiagnostics, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -2735,6 +2767,92 @@ def solve_hdiv_mmm_active_elements(*, charge_gram, fes, inv_chi, rhs,
     return state,response,int(result["iters"][0])
 
 
+def _positive_minimax_source_scale_and_gradient(response,target,band):
+    """Solve ``min_{alpha>0} max(abs(alpha*y-t)/b)`` analytically.
+
+    The scalar convex objective is the upper envelope of two affine lines per
+    observation.  An interior minimum is therefore an intersection of an
+    active negative- and positive-slope line.  Enumerating those intersections
+    is exact for the small source-calibration row set and also identifies the
+    active pair whose implicit derivative gives ``d alpha / d response``.
+    """
+    values=np.asarray(response,dtype=float).reshape(-1)
+    targets=np.asarray(target,dtype=float).reshape(-1)
+    bands=np.asarray(band,dtype=float).reshape(-1)
+    if (values.shape!=targets.shape or values.shape!=bands.shape or
+            values.size==0 or np.any(~np.isfinite(values)) or
+            np.any(~np.isfinite(targets)) or
+            np.any(~np.isfinite(bands)) or np.any(bands<=0.0)):
+        raise ValueError(
+            "minimax source calibration arrays must be finite, non-empty, "
+            "shape matched, and have positive bands")
+    rows=np.r_[np.arange(values.size,dtype=np.int64),
+               np.arange(values.size,dtype=np.int64)]
+    signs=np.r_[np.ones(values.size),-np.ones(values.size)]
+    slopes=signs*values[rows]/bands[rows]
+    intercepts=-signs*targets[rows]/bands[rows]
+    best_alpha=None;best_value=np.inf
+    slope_scale=max(1.0,float(np.max(np.abs(slopes))))
+    slope_tolerance=64.0*np.finfo(float).eps*slope_scale
+    for left in range(len(slopes)):
+        for right in range(left+1,len(slopes)):
+            denominator=float(slopes[left]-slopes[right])
+            if abs(denominator)<=slope_tolerance:
+                continue
+            alpha=float(
+                (intercepts[right]-intercepts[left])/denominator)
+            if not np.isfinite(alpha) or alpha<=0.0:
+                continue
+            value=float(np.max(slopes*alpha+intercepts))
+            tie_tolerance=64.0*np.finfo(float).eps*max(
+                1.0,abs(value),abs(best_value) if np.isfinite(best_value)
+                else 1.0)
+            if (value<best_value-tie_tolerance or
+                    (abs(value-best_value)<=tie_tolerance and
+                     (best_alpha is None or alpha<best_alpha))):
+                best_alpha=alpha;best_value=value
+    if best_alpha is None:
+        raise RuntimeError(
+            "source calibration has no finite positive minimax scale")
+    boundary_value=float(np.max(intercepts))
+    objective_tolerance=128.0*np.finfo(float).eps*max(
+        1.0,abs(boundary_value),abs(best_value))
+    if boundary_value<best_value-objective_tolerance:
+        raise RuntimeError(
+            "positive source calibration is minimized only at zero scale")
+    line_values=slopes*best_alpha+intercepts
+    active_tolerance=512.0*np.finfo(float).eps*max(
+        1.0,abs(best_value))
+    active=np.flatnonzero(
+        np.abs(line_values-best_value)<=active_tolerance)
+    if active.size<2:
+        raise RuntimeError(
+            "minimax source calibration did not expose an active pair")
+    left=int(active[np.argmin(slopes[active])])
+    right=int(active[np.argmax(slopes[active])])
+    denominator=float(slopes[left]-slopes[right])
+    if (slopes[left]>slope_tolerance or
+            slopes[right]<-slope_tolerance or
+            abs(denominator)<=slope_tolerance):
+        raise RuntimeError(
+            "minimax source calibration active slopes do not bracket zero")
+    numerator=float(
+        signs[left]*targets[rows[left]]/bands[rows[left]]-
+        signs[right]*targets[rows[right]]/bands[rows[right]])
+    alpha=numerator/denominator
+    if (not np.isfinite(alpha) or alpha<=0.0 or
+            not np.isclose(alpha,best_alpha,rtol=2e-11,
+                           atol=2e-13*max(1.0,abs(best_alpha)))):
+        raise RuntimeError(
+            "minimax source calibration active-pair reconstruction failed")
+    gradient=np.zeros(values.size,dtype=float)
+    np.add.at(gradient,rows[left],
+              -alpha*signs[left]/(bands[rows[left]]*denominator))
+    np.add.at(gradient,rows[right],
+              alpha*signs[right]/(bands[rows[right]]*denominator))
+    return float(alpha),gradient
+
+
 def grow_hdiv_mmm_by_superposition(*, charge_gram, fes, inv_chi, rhs,
         response_matrix, active_elements, element_volumes,
         response_target, response_band, volume_max,
@@ -2751,6 +2869,8 @@ def grow_hdiv_mmm_by_superposition(*, charge_gram, fes, inv_chi, rhs,
         active_set_validator=None,
         source_calibration_rows=None,
         source_calibration_target=None,
+        source_calibration_band=None,
+        source_calibration_norm="mean",
         response_transform=None,
         response_transform_jacobian=None,
         include_predecessor_descendants=False,
@@ -2767,6 +2887,7 @@ def grow_hdiv_mmm_by_superposition(*, charge_gram, fes, inv_chi, rhs,
         graph_front_maximum_components=2,
         graph_front_beam_width=64,
         graph_front_proposal_limit=8,
+        graph_front_response_novelty_weight=0.0,
         exact_beam_width=0,
         exact_beam_depth=0,
         exact_beam_barrier_fraction=0.25,
@@ -2794,9 +2915,12 @@ def grow_hdiv_mmm_by_superposition(*, charge_gram, fes, inv_chi, rhs,
     collaboration, and neither substitutes for the accepted physical solve.
     When ``source_calibration_rows`` is supplied, the RHS and incident response
     define a reference coil current.  The linear source amplitude is then
-    recalibrated after every candidate insertion so the mean response on those
-    rows equals the corresponding mean target.  This eliminates coil current
-    analytically while the 0-1 LP remains responsible only for iron geometry.
+    recalibrated after every candidate insertion.  ``source_calibration_norm``
+    may retain the legacy ``"mean"`` match, or select ``"linf"`` to solve the
+    exact positive one-variable Chebyshev problem in the supplied
+    ``source_calibration_band``.  The active pair of affine residuals supplies
+    its piecewise-analytic scale gradient.  This eliminates coil current while
+    the 0-1 LP remains responsible only for iron geometry.
     ``response_transform`` may map the raw linear field response to nonlinear
     design metrics.  It is evaluated on every exact one-element Schur response
     and exact accepted batch, so the LP sees finite metric changes rather than
@@ -2862,6 +2986,10 @@ def grow_hdiv_mmm_by_superposition(*, charge_gram, fes, inv_chi, rhs,
     Its maximum cardinality is derived from the current physical-volume trust
     radius (or, without one, from the retained response rank), never from a
     fixed ``try N elements`` batch.
+    ``graph_front_response_novelty_weight`` greedily retains response-space
+    independent proposals after the best predicted proposal.  Zero preserves
+    pure minimax ranking; positive values trade a bounded amount of predicted
+    quality for band-normalized subspace novelty before any exact solve.
 
     A positive ``exact_beam_width`` and ``exact_beam_depth`` enable a bounded
     nonmonotone Lego search.  Rejected graph-front states that have already
@@ -2914,6 +3042,8 @@ def grow_hdiv_mmm_by_superposition(*, charge_gram, fes, inv_chi, rhs,
     graph_front_maximum_components=int(graph_front_maximum_components)
     graph_front_beam_width=int(graph_front_beam_width)
     graph_front_proposal_limit=int(graph_front_proposal_limit)
+    graph_front_response_novelty_weight=float(
+        graph_front_response_novelty_weight)
     exact_beam_width=int(exact_beam_width)
     exact_beam_depth=int(exact_beam_depth)
     exact_beam_barrier_fraction=float(exact_beam_barrier_fraction)
@@ -2921,6 +3051,7 @@ def grow_hdiv_mmm_by_superposition(*, charge_gram, fes, inv_chi, rhs,
             graph_interface_weight<0.0 or
             graph_front_maximum_components<1 or
             graph_front_beam_width<1 or graph_front_proposal_limit<0 or
+            not 0.0<=graph_front_response_novelty_weight<=1.0 or
             exact_beam_width<0 or exact_beam_depth<0 or
             not np.isfinite(exact_beam_barrier_fraction) or
             exact_beam_barrier_fraction<0.0):
@@ -2929,6 +3060,10 @@ def grow_hdiv_mmm_by_superposition(*, charge_gram, fes, inv_chi, rhs,
         exact_beam_width=0;exact_beam_depth=0
     calibration=(None if source_calibration_rows is None else
                  np.asarray(source_calibration_rows,dtype=np.int64).reshape(-1))
+    calibration_norm=str(source_calibration_norm).lower()
+    if calibration_norm not in ("mean","linf"):
+        raise ValueError(
+            "source_calibration_norm must be 'mean' or 'linf'")
     if response_transform_jacobian is not None and response_transform is None:
         raise ValueError(
             "response_transform_jacobian requires response_transform")
@@ -2944,9 +3079,56 @@ def grow_hdiv_mmm_by_superposition(*, charge_gram, fes, inv_chi, rhs,
                 source_calibration_target,dtype=float).reshape(-1)
             if calibration_values.shape!=calibration.shape:
                 raise ValueError("source_calibration_target must match source_calibration_rows")
+        if np.any(~np.isfinite(calibration_values)):
+            raise ValueError("source calibration target must be finite")
         calibration_target=float(np.mean(calibration_values))
-        if not np.isfinite(calibration_target) or calibration_target==0.0:
-            raise ValueError("source calibration target mean must be finite and nonzero")
+        if (calibration_norm=="mean" and
+                (not np.isfinite(calibration_target) or
+                 calibration_target==0.0)):
+            raise ValueError(
+                "mean source calibration target must have a finite, "
+                "nonzero mean")
+        if source_calibration_band is None:
+            calibration_band=np.ones(calibration.size,dtype=float)
+        else:
+            calibration_band=np.asarray(
+                source_calibration_band,dtype=float).reshape(-1)
+            if (calibration_band.shape!=calibration.shape or
+                    np.any(~np.isfinite(calibration_band)) or
+                    np.any(calibration_band<=0.0)):
+                raise ValueError(
+                    "source_calibration_band must be positive and match "
+                    "source_calibration_rows")
+        if calibration_norm=="linf" and source_calibration_band is None:
+            raise ValueError(
+                "linf source calibration requires source_calibration_band")
+
+    def source_scale_and_gradient(base_response):
+        values=np.asarray(base_response,dtype=float).reshape(-1)
+        if calibration is None:
+            return 1.0,np.zeros(values.size,dtype=float)
+        if np.any(calibration>=values.size):
+            raise ValueError(
+                "source_calibration_rows index outside the raw response")
+        selected=values[calibration]
+        gradient=np.zeros(values.size,dtype=float)
+        if calibration_norm=="mean":
+            denominator=float(np.mean(selected))
+            if not np.isfinite(denominator) or denominator==0.0:
+                raise RuntimeError(
+                    "source calibration response mean is zero or invalid")
+            scale=calibration_target/denominator
+            local_gradient=np.full(
+                calibration.size,
+                -scale/(float(calibration.size)*denominator),dtype=float)
+        else:
+            scale,local_gradient=_positive_minimax_source_scale_and_gradient(
+                selected,calibration_values,calibration_band)
+        if not np.isfinite(scale) or scale<=0.0:
+            raise RuntimeError(
+                "source calibration requires a positive finite source scale")
+        np.add.at(gradient,calibration,local_gradient)
+        return float(scale),gradient
 
     def transform_response(raw_response):
         raw=np.asarray(raw_response,dtype=float).reshape(-1)
@@ -2973,14 +3155,7 @@ def grow_hdiv_mmm_by_superposition(*, charge_gram, fes, inv_chi, rhs,
         response_value=np.asarray(base_response,dtype=float)
         if calibration is None:
             return state_value,response_value,1.0
-        if np.any(calibration>=response_value.size):
-            raise ValueError("source_calibration_rows index outside the raw response")
-        denominator=float(np.mean(response_value[calibration]))
-        if not np.isfinite(denominator) or denominator==0.0:
-            raise RuntimeError("source calibration response mean is zero or invalid")
-        scale=calibration_target/denominator
-        if not np.isfinite(scale) or scale<=0.0:
-            raise RuntimeError("source calibration requires a positive finite source scale")
+        scale,_=source_scale_and_gradient(response_value)
         return state_value*scale,response_value*scale,float(scale)
     fixed=(np.zeros_like(active) if fixed_inactive_elements is None else
            np.asarray(fixed_inactive_elements,dtype=bool).reshape(-1))
@@ -3108,6 +3283,8 @@ def grow_hdiv_mmm_by_superposition(*, charge_gram, fes, inv_chi, rhs,
     ratio=lambda values:float(np.max(np.abs((np.asarray(values)-target)/band)))
     objective_response=transform_response(response)
     current_ratio=ratio(objective_response);history=[]
+    exact_search_trace=[]
+    graph_front_diagnostics=[]
     converged=current_ratio<=1.0+ratio_tolerance
     stop_reason="target_met" if converged else "max_iterations"
     search_depth=0
@@ -3132,18 +3309,34 @@ def grow_hdiv_mmm_by_superposition(*, charge_gram, fes, inv_chi, rhs,
         scale_value=source_scale,iterations_value=solve_iterations,
         depth_value=0,path_value=())
 
+    def record_exact_trial(snapshot):
+        exact_search_trace.append(HDivMMMExactSearchTrial(
+            depth=int(snapshot.depth),
+            parent_max_band_ratio=float(current_ratio),
+            incumbent_max_band_ratio=float(incumbent.ratio),
+            max_band_ratio=float(snapshot.ratio),
+            added_elements=np.flatnonzero(
+                snapshot.active & ~incumbent.active),
+            removed_elements=np.flatnonzero(
+                incumbent.active & ~snapshot.active),
+            solve_iterations=int(snapshot.solve_iterations),
+            path=snapshot.path))
+        return snapshot
+
     def next_nonmonotone_state(trials):
         """Queue exact, topology-valid barrier states and pop one beam node."""
         nonlocal pending_exact_states
-        if not exact_beam_width or search_depth>=exact_beam_depth:
+        if not exact_beam_width:
             return None
-        barrier=incumbent.ratio*(1.0+exact_beam_barrier_fraction)
-        for trial in trials:
-            key=np.packbits(trial.active).tobytes()
-            if (trial.depth<=exact_beam_depth and
-                    trial.ratio<=barrier+ratio_tolerance and
-                    key not in visited_exact_states):
-                visited_exact_states.add(key);pending_exact_states.append(trial)
+        if search_depth<exact_beam_depth:
+            barrier=incumbent.ratio*(1.0+exact_beam_barrier_fraction)
+            for trial in trials:
+                key=np.packbits(trial.active).tobytes()
+                if (trial.depth<=exact_beam_depth and
+                        trial.ratio<=barrier+ratio_tolerance and
+                        key not in visited_exact_states):
+                    visited_exact_states.add(key)
+                    pending_exact_states.append(trial)
 
         # Preserve the best exact ratio at every depth, then use normalized
         # response-space novelty.  This prevents a beam from spending all its
@@ -3180,6 +3373,24 @@ def grow_hdiv_mmm_by_superposition(*, charge_gram, fes, inv_chi, rhs,
         iteration=len(history);expansion+=1
         if converged:
             stop_reason="target_met";break
+        if exact_beam_width and search_depth>=exact_beam_depth:
+            # Depth is a strict solve budget: a state at the maximum depth may
+            # be retained as a diagnostic barrier node, but it must never be
+            # expanded into an unrequested depth+1 active solve.  Prefer any
+            # shallower queued branch before declaring the beam exhausted.
+            branch=next_nonmonotone_state(())
+            if branch is None:
+                stop_reason="exact_nonmonotone_beam_exhausted"
+                break
+            active=branch.active;state=branch.state
+            response=branch.response
+            objective_response=branch.objective_response
+            current_ratio=branch.ratio
+            source_scale=branch.source_scale
+            solve_iterations=branch.solve_iterations
+            search_depth=branch.depth;search_path=branch.path
+            stop_reason="exact_nonmonotone_beam_in_progress"
+            continue
         material_trust_before=material_trust_volume
         graph_front_data=None
         exact_trial_states=[]
@@ -3308,7 +3519,7 @@ def grow_hdiv_mmm_by_superposition(*, charge_gram, fes, inv_chi, rhs,
                 except (RuntimeError,ValueError):
                     continue
                 trial_ratio=ratio(trial_objective)
-                exact_trial_states.append(exact_snapshot(
+                exact_trial_states.append(record_exact_trial(exact_snapshot(
                     active_value=trial_active,state_value=trial_state,
                     response_value=trial_response,
                     objective_value=trial_objective,ratio_value=trial_ratio,
@@ -3316,7 +3527,7 @@ def grow_hdiv_mmm_by_superposition(*, charge_gram, fes, inv_chi, rhs,
                     iterations_value=trial_iterations,
                     depth_value=search_depth+1,
                     path_value=search_path+(tuple(
-                        (int(element),-1) for element in bundle),)))
+                        (int(element),-1) for element in bundle),))))
                 if (trial_ratio<current_ratio-ratio_tolerance and
                         (best is None or trial_ratio<best[0])):
                     best=(trial_ratio,bundle,expanded,trial_active,trial_state,
@@ -3370,14 +3581,20 @@ def grow_hdiv_mmm_by_superposition(*, charge_gram, fes, inv_chi, rhs,
                             np.sum(material_matrix[:,selected_columns],axis=1))
             agreement=((current_ratio-actual)/(current_ratio-predicted)
                        if predicted<current_ratio-ratio_tolerance else 0.0)
-            changed_volume=float(np.sum(volumes[removed_physical]))
+            accepted_added=np.flatnonzero(
+                trial_active & ~incumbent.active)
+            accepted_removed=np.flatnonzero(
+                incumbent.active & ~trial_active)
+            changed_volume=float(
+                np.sum(volumes[accepted_added])+np.sum(
+                    volumes[accepted_removed]))
             material_trust_volume=update_material_trust(
                 material_trust_before,changed_volume,agreement)
             active=trial_active;state=trial_state;response=trial_response
             solve_iterations=trial_iterations;source_scale=trial_scale
             objective_response=trial_objective;current_ratio=actual
             row=HDivMMMGenerationIteration(
-                iteration,len(removal_candidates),np.empty(0,dtype=np.int64),
+                iteration,len(removal_candidates),accepted_added,
                 predicted,current_ratio,int(np.count_nonzero(active)),
                 float(volumes@active),batch_trials,solve_iterations,source_scale,
                 predicted,"signed-magnetization-aca-qr-tsvd-conditional-exact",
@@ -3385,7 +3602,7 @@ def grow_hdiv_mmm_by_superposition(*, charge_gram, fes, inv_chi, rhs,
                 len(selected_remove),float(agreement),
                 int(removal_tsvd.numerical_rank),int(removal_tsvd.aca_rank),
                 float(removal_tsvd.relative_truncation_error),
-                int(len(removal_tsvd.selected_elements)),removed_physical,0,
+                int(len(removal_tsvd.selected_elements)),accepted_removed,0,
                 int(len(removal_candidates)),
                 linearized_reachability_residual=(None if
                     removal_tsvd.linearized_reachability_residual is None else
@@ -3416,11 +3633,10 @@ def grow_hdiv_mmm_by_superposition(*, charge_gram, fes, inv_chi, rhs,
             continue
 
         # Contract field observations to the actual design metrics before the
-        # state/adjoint batch.  If coil amplitude alpha=t/(a^T y) is eliminated,
-        # d(alpha*y)/dy = alpha*(I-y*a^T/(a^T y)); this complete derivative is
-        # composed with the analytic optics Jacobian.  The projection is only
-        # a proposal model.  Accepted active sets are still solved and scored
-        # with the full raw response above.
+        # state/adjoint batch.  The complete derivative of the selected mean or
+        # Chebyshev source elimination is composed with the analytic optics
+        # Jacobian.  The projection is only a proposal model.  Accepted active
+        # sets are still solved and scored with the full raw response above.
         objective_projection=None
         linear_response_matrix=np.asarray(response_matrix,dtype=float)
         linear_incident_response=incident_response
@@ -3432,14 +3648,15 @@ def grow_hdiv_mmm_by_superposition(*, charge_gram, fes, inv_chi, rhs,
             calibrated_jacobian=transform_jacobian(response)
             calibration_jacobian=float(source_scale)*np.eye(raw_base.size)
             if calibration is not None:
-                averaging=np.zeros(raw_base.size,dtype=float)
-                np.add.at(averaging,calibration,1.0/float(calibration.size))
-                denominator=float(averaging@raw_base)
-                if not np.isfinite(denominator) or denominator==0.0:
+                projection_scale,scale_gradient=source_scale_and_gradient(
+                    raw_base)
+                if not np.isclose(
+                        projection_scale,float(source_scale),rtol=2e-12,
+                        atol=2e-14*max(1.0,abs(float(source_scale)))):
                     raise RuntimeError(
-                        "source-calibrated response projection has zero denominator")
-                calibration_jacobian-=float(source_scale)*np.outer(
-                    raw_base,averaging)/denominator
+                        "source-calibrated response projection scale drifted")
+                calibration_jacobian+=np.outer(
+                    raw_base,scale_gradient)
             objective_projection=np.ascontiguousarray(
                 calibrated_jacobian@calibration_jacobian,dtype=float)
             linear_response_matrix=np.ascontiguousarray(
@@ -3930,7 +4147,7 @@ def grow_hdiv_mmm_by_superposition(*, charge_gram, fes, inv_chi, rhs,
                     return (1.0e-9/secondary_scale)*float(
                         np.sum(secondary[np.asarray(bundle,dtype=np.int64)]))
 
-                graph_proposals=connected_graph_front_beam(
+                graph_result=connected_graph_front_beam(
                     current_response=graph_front_data["base"],
                     response_target=target,response_band=band,
                     candidate_response_delta=graph_front_data["signed_matrix"],
@@ -3940,8 +4157,27 @@ def grow_hdiv_mmm_by_superposition(*, charge_gram, fes, inv_chi, rhs,
                     maximum_components=graph_front_maximum_components,
                     beam_width=graph_front_beam_width,
                     proposal_limit=graph_front_proposal_limit,
+                    response_novelty_weight=(
+                        graph_front_response_novelty_weight),
+                    return_result=True,
                     regularization_change=graph_regularization,
                     is_valid=graph_bundle_valid)
+                graph_proposals=graph_result.proposals
+                pool_diag=graph_result.pool_diagnostics
+                selected_diag=graph_result.selected_diagnostics
+                graph_front_diagnostics.append(
+                    HDivMMMGraphFrontDiagnostics(
+                        int(iteration),int(search_depth),
+                        int(len(graph_elements)),
+                        float(graph_front_response_novelty_weight),
+                        int(pool_diag.proposal_count),
+                        int(pool_diag.numerical_rank),
+                        float(pool_diag.duplicate_pair_fraction),
+                        float(pool_diag.maximum_absolute_correlation),
+                        int(selected_diag.proposal_count),
+                        int(selected_diag.numerical_rank),
+                        float(selected_diag.duplicate_pair_fraction),
+                        float(selected_diag.minimum_subspace_novelty)))
                 seen_proposals={tuple(sorted(zip(
                     map(int,proposal.selected_elements),
                     map(int,proposal.selected_directions))))
@@ -4022,7 +4258,7 @@ def grow_hdiv_mmm_by_superposition(*, charge_gram, fes, inv_chi, rhs,
                 except (RuntimeError,ValueError):
                     continue
                 predicted_ratio=float(proposal.predicted_max_band_ratio)
-                exact_trial_states.append(exact_snapshot(
+                exact_trial_states.append(record_exact_trial(exact_snapshot(
                     active_value=trial_active,state_value=trial_state,
                     response_value=trial_response,
                     objective_value=trial_objective,ratio_value=actual,
@@ -4030,7 +4266,7 @@ def grow_hdiv_mmm_by_superposition(*, charge_gram, fes, inv_chi, rhs,
                     iterations_value=trial_iterations,
                     depth_value=search_depth+1,
                     path_value=search_path+(tuple(sorted(zip(
-                        map(int,trial_elements),map(int,trial_directions)))),)))
+                        map(int,trial_elements),map(int,trial_directions)))),))))
                 predicted_reduction=current_ratio-predicted_ratio
                 model_agreement=((current_ratio-actual)/predicted_reduction
                     if predicted_reduction>ratio_tolerance else 0.0)
@@ -4317,14 +4553,14 @@ def grow_hdiv_mmm_by_superposition(*, charge_gram, fes, inv_chi, rhs,
             except (RuntimeError,ValueError):
                 stop_reason="source_calibration_rejected_exact_bundle";break
             actual=ratio(trial_objective)
-            exact_trial_states.append(exact_snapshot(
+            exact_trial_states.append(record_exact_trial(exact_snapshot(
                 active_value=trial_active,state_value=trial_state,
                 response_value=trial_response,
                 objective_value=trial_objective,ratio_value=actual,
                 scale_value=trial_scale,iterations_value=trial_iterations,
                 depth_value=search_depth+1,
                 path_value=search_path+(tuple(
-                    (int(element),1) for element in selected),)))
+                    (int(element),1) for element in selected),))))
             if actual>=current_ratio-ratio_tolerance:
                 branch=next_nonmonotone_state(exact_trial_states)
                 if branch is not None:
@@ -4361,9 +4597,10 @@ def grow_hdiv_mmm_by_superposition(*, charge_gram, fes, inv_chi, rhs,
         actual_improvement=current_ratio-actual
         agreement=(actual_improvement/predicted_improvement
                    if predicted_improvement>ratio_tolerance else 0.0)
+        accepted_added=np.flatnonzero(trial_active & ~incumbent.active)
+        accepted_removed=np.flatnonzero(incumbent.active & ~trial_active)
         changed_volume=float(
-            np.sum(volumes[np.asarray(selected,dtype=np.int64)])+
-            np.sum(volumes[np.asarray(removed_elements,dtype=np.int64)]))
+            np.sum(volumes[accepted_added])+np.sum(volumes[accepted_removed]))
         if graph_front_data is not None and graph_front_budget is not None:
             from ._topopt_graph import update_graph_front_trust
             graph_trust=update_graph_front_trust(
@@ -4371,7 +4608,8 @@ def grow_hdiv_mmm_by_superposition(*, charge_gram, fes, inv_chi, rhs,
                 maximum_budget=max(1,int(physical_max)),
                 predicted_ratio=predicted_ratio,actual_ratio=actual,
                 current_ratio=current_ratio,
-                selected_size=max(1,int(len(selected)+len(removed_elements))),
+                selected_size=max(
+                    1,int(len(accepted_added)+len(accepted_removed))),
                 interface_weight=graph_interface_weight)
             graph_front_budget=graph_trust.budget_after
             graph_interface_weight=graph_trust.interface_weight_after
@@ -4380,10 +4618,10 @@ def grow_hdiv_mmm_by_superposition(*, charge_gram, fes, inv_chi, rhs,
         active=trial_active;state=trial_state;response=trial_response
         solve_iterations=trial_iterations;source_scale=trial_scale
         objective_response=trial_objective;current_ratio=actual
-        batch_limit_after=len(selected)+len(removed_elements)
+        batch_limit_after=len(accepted_added)+len(accepted_removed)
         history.append(HDivMMMGenerationIteration(iteration,
             lin.available_candidate_count+len(removal_candidates),
-            np.asarray(selected,dtype=np.int64),predicted_ratio,
+            accepted_added,predicted_ratio,
             current_ratio,int(np.count_nonzero(active)),float(volumes@active),
             1,solve_iterations,source_scale,
             tsvd_proposal.predicted_max_band_ratio,selection_model,
@@ -4395,7 +4633,7 @@ def grow_hdiv_mmm_by_superposition(*, charge_gram, fes, inv_chi, rhs,
             int(tsvd_proposal.aca_rank),
             float(tsvd_proposal.relative_truncation_error),
             int(len(tsvd_proposal.selected_elements)),
-            np.asarray(removed_elements,dtype=np.int64),
+            accepted_removed,
             int(lin.available_candidate_count),int(len(removal_candidates)),
             int(lin.candidate_coupling_rank),
             float(lin.candidate_coupling_relative_truncation_error),
@@ -4437,7 +4675,8 @@ def grow_hdiv_mmm_by_superposition(*, charge_gram, fes, inv_chi, rhs,
             stop_reason="exact_nonmonotone_beam_budget_exhausted"
     return HDivMMMGenerationResult(
         active,state,response,tuple(history),converged,source_scale,
-        objective_response,stop_reason)
+        objective_response,stop_reason,tuple(exact_search_trace),
+        tuple(graph_front_diagnostics))
 
 
 def solve_element_generation_lp(current_response, response_target,
@@ -4764,7 +5003,9 @@ __all__=["VIMLinearization","VIMOperatorLinearization","ChargeGramLinearization"
          "HDivMMMElementGenerationLinearization",
          "AbeMurataEquivalentMaterialDiagnostics",
          "TSVDElementCandidateSelection",
-         "HDivMMMGenerationIteration","HDivMMMGenerationResult",
+         "HDivMMMGenerationIteration","HDivMMMGraphFrontDiagnostics",
+         "HDivMMMExactSearchTrial",
+         "HDivMMMGenerationResult",
          "GrowthTopologyReport","ngsolve_growth_topology",
          "finite_element_insertion_response","ngsolve_boundary_growth_candidates",
          "ngsolve_boundary_removal_candidates",

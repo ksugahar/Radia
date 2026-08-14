@@ -214,7 +214,7 @@ retains its GridFunction until the view is deleted. This is a native MEX path
 and does not start a Python process. The current pip-provided NGSolve DLL
 still requires the Python runtime DLL at load time.
 
-### Direct GridFunction beam transfer map
+### Direct GridFunction beam maps and tracking
 
 The accelerator optics adapter consumes that native GridFunction handle
 directly. NGSolve performs element search, mapped-point construction, and field
@@ -230,14 +230,78 @@ result = radia.beam.propagateGridFunctionLinearMap( ...
 R = result.R;
 k1 = result.normal_gradient_per_m2;
 k1s = result.skew_gradient_per_m2;
+
+nonlinear = radia.beam.propagateGridFunctionMultipoleMap( ...
+    solvedB, segmentLengthsM, referencePositionsM, referenceTangents, ...
+    magneticRigidityTM, MultipoleOrder=3, MaximumMapOrder=3);
+T = nonlinear.T;
+U = nonlinear.U;
+
+trajectory = radia.beam.trackGridFunction( ...
+    species, initialState, solvedB, 0, totalLengthM, 1e-4, ...
+    Independent="path_length", Stepper="classical-rk4");
 ```
 
 The returned native diagnostics include the transported frame, center field,
-full local field gradient, normal/skew quadrupole strengths, divergence/curl
-checks, fit rank/condition/residuals, and one local 6-by-6 generator per
-segment. This entry is intentionally first order; nonlinear `T/U` propagation
-uses `radia.beam.propagateVariationalMap` once physical `F2/F3` equation jets
-are available.
+full local field gradient, normal/skew dipole through octupole coefficients,
+divergence/curl checks, fit rank/condition/residuals, and local `A/F2/F3` jets.
+The compatibility `propagateGridFunctionLinearMap` entry remains first order.
+`propagateGridFunctionMultipoleMap` builds the higher-order paraxial jet and
+region-attributed `R/T/U`; `trackGridFunction` evaluates the live field at each
+native Lorentz-integration stage and is the independent direct-field check.
+
+The multipole map is a local source-free transverse body-field approximation
+with a piecewise-constant jet per supplied segment. It is not a complete
+curved-coordinate Hamiltonian and does not add longitudinal fringe/edge
+derivatives or closed-orbit finding. Those omitted effects must be assessed
+with direct tracking or a richer model.
+
+The matching second- and third-order topology API is available at an explicit
+Python batch boundary:
+
+```matlab
+result = radia.python.acceleratorTaylorTopopt( ...
+    "optimize_hdiv_mmm_magnet_from_third_order_taylor_map", ...
+    {objective}, Keywords=optimizationInputs);
+```
+
+It controls selected native `R/T/U` entries from normal/skew multipole HDiv
+rows through octupole, using forward-mode AD for direct, chromatic, and
+lower-order cascade terms. A local TSVD certificate separates the reachable
+target component from the residual outside the declared field basis before
+the binary material inverse. Complete active-system re-solves provide final
+acceptance. It is intended for setup and batch optimization, never per-step
+Simulink execution.
+
+For a formally symplectic objective through fourth map order, use the canonical
+Lie batch boundary:
+
+```matlab
+result = radia.python.acceleratorLieTopopt( ...
+    "optimize_hdiv_mmm_magnet_from_fourth_order_lie_map", ...
+    {objective}, Keywords=optimizationInputs);
+```
+
+This route builds the fourth-degree curvilinear body Hamiltonian in the native
+C++ kernel, propagates rank-five forward-AD derivatives, and factorizes the
+map as `R o exp(:f3:) o exp(:f4:) o exp(:f5:)`. It rejects non-symplectic
+`R/T/U/V` targets, reports the
+formal residual and unreachable TSVD component, and provides a finite-amplitude
+implicit-midpoint application of the Lie factors. Its declared physical scope
+is piecewise-constant source-free body multipoles through octupole and the
+`H2/H3/H4` cascade. The Python boundary can consume a DOP853-tracked
+`PlanarDesignOrbit`, form its planar Frenet--Serret moving frame, and fit the
+live field. It does not silently add direct `H5`/decapole or fringe/edge terms,
+nonplanar torsion, or arbitrary-order normal forms. Wolfram Language produces the tracked symbolic
+derivation golden but is not a runtime dependency.
+
+The shared native Hamiltonian kernel is also callable without Python:
+
+```matlab
+jet = radia.beam.canonicalBodyHamiltonianJet( ...
+    [dipole,nq,sq,ns,ss,no,so],magneticRigidityTM, ...
+    ReferenceBeta=referenceBeta);
+```
 
 ### Native beam tracking foundation
 

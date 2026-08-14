@@ -7,7 +7,7 @@ crystallized as its own package.
 
 ## [Unreleased]
 
-## [1.4.36] - 2026-08-11
+## [1.4.36] - 2026-08-14
 
 - Added accelerator-magnet knowledge for distributed transfer-matrix and
   nonlinear-map attribution directly over solved electromagnetic fields,

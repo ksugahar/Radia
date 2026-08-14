@@ -188,10 +188,14 @@ struct GridFunctionInput {
 GridFunctionInput ParseGridFunctionInput(const mxArray* config) {
     RequireScalarStruct(config);
     const mxArray* schema = Field(config, "schema");
-    if (schema && Text(schema, "schema") !=
+    const std::string schema_name = schema ? Text(schema, "schema")
+        : "radia.beam.grid-function-linear-map.v1";
+    const bool multipole = schema_name ==
+        "radia.beam.grid-function-multipole-map.v1";
+    if (!multipole && schema_name !=
             "radia.beam.grid-function-linear-map.v1")
         throw std::invalid_argument(
-            "unsupported beam GridFunction linear-map schema");
+            "unsupported beam GridFunction map schema");
     const mxArray* lengths_value = Field(config, "lengths_m");
     const double* lengths = RealData(lengths_value, "lengths_m");
     const std::size_t count = mxGetNumberOfElements(lengths_value);
@@ -220,6 +224,12 @@ GridFunctionInput ParseGridFunctionInput(const mxArray* config) {
         Field(config, "curvature_sign"), "curvature_sign", 1.0, true);
     output.options.gradient_sign = Scalar(
         Field(config, "gradient_sign"), "gradient_sign", 1.0, true);
+    output.options.multipole_order = static_cast<unsigned>(PositiveInteger(
+        Field(config, "multipole_order"), "multipole_order",
+        multipole ? 3 : 1, true));
+    output.options.maximum_map_order = static_cast<unsigned>(PositiveInteger(
+        Field(config, "maximum_map_order"), "maximum_map_order",
+        multipole ? 3 : 1, true));
     output.options.maximum_step_m = Scalar(
         Field(config, "maximum_step_m"), "maximum_step_m", 1.0e-3, true);
     output.options.maximum_steps = PositiveInteger(
@@ -413,6 +423,36 @@ mxArray* Report(const radia::beam::VariationalReport6& value) {
     return output;
 }
 
+mxArray* CanonicalHamiltonianJetResult(
+        const radia::beam::HamiltonianJet6& value) {
+    const char* fields[] = {
+        "schema", "backend", "coordinate_order", "poisson_pair_signs",
+        "reference_beta", "H2_per_m", "H3_per_m", "H4_per_m",
+        "A_per_m", "F2_per_m", "F3_per_m"};
+    mxArray* output = mxCreateStructMatrix(1, 1, 11, fields);
+    mxSetField(output, 0, fields[0], mxCreateString(
+        "radia.beam.canonical-hamiltonian-jet.result.v1"));
+    mxSetField(output, 0, fields[1], mxCreateString("native-cpp-mex"));
+    mxSetField(output, 0, fields[2], StringCell(
+        {"x", "px_over_p0", "y", "py_over_p0", "ell", "delta"}));
+    mxArray* signs = mxCreateDoubleMatrix(1, 3, mxREAL);
+    mxGetPr(signs)[0] = 1.0;
+    mxGetPr(signs)[1] = 1.0;
+    mxGetPr(signs)[2] = -1.0;
+    mxSetField(output, 0, fields[3], signs);
+    mxSetField(output, 0, fields[4],
+               mxCreateDoubleScalar(value.reference_beta));
+    mxSetField(output, 0, fields[5], MatrixArray(value.h2_per_m));
+    mxSetField(output, 0, fields[6], Tensor3Array(value.h3_per_m));
+    mxSetField(output, 0, fields[7], Tensor4Array(value.h4_per_m));
+    mxSetField(output, 0, fields[8], MatrixArray(value.dynamics.a_per_m));
+    mxSetField(output, 0, fields[9],
+               Tensor3Array(value.dynamics.f2_per_m));
+    mxSetField(output, 0, fields[10],
+               Tensor4Array(value.dynamics.f3_per_m));
+    return output;
+}
+
 void ReplaceStructField(mxArray* output, const char* name, mxArray* value) {
     mxArray* previous = mxGetField(output, 0, name);
     mxSetField(output, 0, name, value);
@@ -483,22 +523,41 @@ mxArray* SampleStack(std::size_t count, Selector selector) {
     return output;
 }
 
+template <typename Selector>
+mxArray* MultipoleRows(std::size_t count, Selector selector) {
+    mxArray* output = mxCreateDoubleMatrix(count, 4, mxREAL);
+    double* data = mxGetPr(output);
+    for (std::size_t item = 0; item < count; ++item) {
+        const auto& value = selector(item);
+        for (std::size_t order = 0; order < 4; ++order)
+            data[item + count * order] = value[order];
+    }
+    return output;
+}
+
 mxArray* GridFunctionReport(
         const radia::beam::GridFunctionTransferReport6& value) {
     mxArray* output = Report(value.transfer);
+    const bool linear_schema = value.multipole_order == 1 &&
+        value.transfer.maximum_order == 1;
     ReplaceStructField(output, "schema", mxCreateString(
-        "radia.beam.grid-function-linear-map.result.v1"));
+        linear_schema
+            ? "radia.beam.grid-function-linear-map.result.v1"
+            : "radia.beam.grid-function-multipole-map.result.v1"));
     ReplaceStructField(output, "backend", mxCreateString(
         "native-cpp-ngsolve-gridfunction-mex"));
     AddStructField(output, "field_source",
                    mxCreateString("ngsolve.GridFunction"));
-    AddStructField(output, "linearization_order", mxCreateDoubleScalar(1.0));
+    AddStructField(output, "linearization_order", mxCreateDoubleScalar(
+        static_cast<double>(value.multipole_order)));
     AddStructField(output, "magnetic_rigidity_t_m",
                    mxCreateDoubleScalar(value.magnetic_rigidity_t_m));
     AddStructField(output, "sample_radius_m",
                    mxCreateDoubleScalar(value.sample_radius_m));
-    AddStructField(output, "fit_model", mxCreateString(
-        "nine-point transverse least-squares affine field jet"));
+    const std::string fit_model =
+        "nine-point transverse harmonic multipole expansion through order " +
+        std::to_string(value.multipole_order);
+    AddStructField(output, "fit_model", mxCreateString(fit_model.c_str()));
     AddStructField(output, "frame_convention", mxCreateString(
         "right-handed parallel transport seeded by initial_horizontal"));
 
@@ -578,9 +637,41 @@ mxArray* GridFunctionReport(
         count, [&](std::size_t index) {
             return samples[index].scaled_design_condition;
         }));
+    AddStructField(output, "multipole_normal_t_per_m_power", MultipoleRows(
+        count, [&](std::size_t index) -> const auto& {
+            return samples[index].multipoles.normal_t_per_m_power;
+        }));
+    AddStructField(output, "multipole_skew_t_per_m_power", MultipoleRows(
+        count, [&](std::size_t index) -> const auto& {
+            return samples[index].multipoles.skew_t_per_m_power;
+        }));
+    AddStructField(output, "multipole_rms_fit_residual_t", ScalarColumn(
+        count, [&](std::size_t index) {
+            return samples[index].multipole_rms_fit_residual_t;
+        }));
+    AddStructField(output, "multipole_maximum_fit_residual_t", ScalarColumn(
+        count, [&](std::size_t index) {
+            return samples[index].multipole_maximum_fit_residual_t;
+        }));
+    AddStructField(output, "multipole_fit_rank", ScalarColumn(
+        count, [&](std::size_t index) {
+            return static_cast<double>(samples[index].multipole_fit_rank);
+        }));
+    AddStructField(output, "multipole_scaled_design_condition", ScalarColumn(
+        count, [&](std::size_t index) {
+            return samples[index].multipole_scaled_design_condition;
+        }));
     AddStructField(output, "local_A_per_m", MatrixStack(
         count, [&](std::size_t index) -> const auto& {
             return samples[index].a_per_m;
+        }));
+    AddStructField(output, "local_F2_per_m", Tensor3Stack(
+        count, [&](std::size_t index) -> const auto& {
+            return samples[index].dynamics_jet.f2_per_m;
+        }));
+    AddStructField(output, "local_F3_per_m", Tensor4Stack(
+        count, [&](std::size_t index) -> const auto& {
+            return samples[index].dynamics_jet.f3_per_m;
         }));
     return output;
 }
@@ -999,6 +1090,45 @@ void Propagate(int nlhs, mxArray* plhs[], int nrhs,
     plhs[0] = Report(radia::beam::PropagateVariationalMap(segments, options));
 }
 
+void CanonicalHamiltonianJet(int nlhs, mxArray* plhs[], int nrhs,
+                             const mxArray* prhs[]) {
+    if (nrhs != 2 || nlhs != 1)
+        throw std::invalid_argument(
+            "result = radia_mex('beam.hamiltonian.canonical_body_jet', config)");
+    const mxArray* config = prhs[1];
+    RequireScalarStruct(config);
+    const mxArray* schema = Field(config, "schema");
+    if (schema && Text(schema, "schema") !=
+            "radia.beam.canonical-hamiltonian-jet.v1")
+        throw std::invalid_argument(
+            "unsupported beam canonical-Hamiltonian schema");
+    const mxArray* coefficients_value = Field(config, "coefficients");
+    const double* coefficients = RealData(
+        coefficients_value, "coefficients");
+    if (mxGetNumberOfElements(coefficients_value) != 7)
+        throw std::invalid_argument(
+            "coefficients must contain seven entries");
+    radia::beam::TransverseMagneticMultipoleExpansion expansion;
+    expansion.order = 3;
+    expansion.normal_t_per_m_power = {
+        coefficients[0], coefficients[1], coefficients[3], coefficients[5]};
+    expansion.skew_t_per_m_power = {
+        0.0, coefficients[2], coefficients[4], coefficients[6]};
+    const double rigidity = Scalar(
+        Field(config, "magnetic_rigidity_t_m"),
+        "magnetic_rigidity_t_m", 0.0, false);
+    const double curvature_sign = Scalar(
+        Field(config, "curvature_sign"), "curvature_sign", 1.0, true);
+    const double gradient_sign = Scalar(
+        Field(config, "gradient_sign"), "gradient_sign", 1.0, true);
+    const double reference_beta = Scalar(
+        Field(config, "reference_beta"), "reference_beta", 1.0, true);
+    plhs[0] = CanonicalHamiltonianJetResult(
+        radia::beam::BuildCanonicalBodyHamiltonianJet(
+            expansion, rigidity, curvature_sign, gradient_sign,
+            reference_beta));
+}
+
 void PropagateGridFunction(std::shared_ptr<ngcomp::GridFunction> field,
                            int nlhs, mxArray* plhs[], int nrhs,
                            const mxArray* prhs[]) {
@@ -1008,7 +1138,7 @@ void PropagateGridFunction(std::shared_ptr<ngcomp::GridFunction> field,
             "grid_function_handle, config)");
     GridFunctionInput input = ParseGridFunctionInput(prhs[2]);
     plhs[0] = GridFunctionReport(
-        radia::beam::PropagateGridFunctionLinearMap(
+        radia::beam::PropagateGridFunctionMultipoleMap(
             field, input.lengths_m, input.positions_m, input.tangents,
             input.names, input.options));
 }
@@ -1047,6 +1177,10 @@ bool DispatchBeamCommand(const std::string& command, int nlhs,
         Propagate(nlhs, plhs, nrhs, prhs);
         return true;
     }
+    if (command == "beam.hamiltonian.canonical_body_jet") {
+        CanonicalHamiltonianJet(nlhs, plhs, nrhs, prhs);
+        return true;
+    }
     return false;
 }
 
@@ -1054,4 +1188,38 @@ void BeamTransferFromGridFunction(
         std::shared_ptr<ngcomp::GridFunction> field, int nlhs,
         mxArray* plhs[], int nrhs, const mxArray* prhs[]) {
     PropagateGridFunction(std::move(field), nlhs, plhs, nrhs, prhs);
+}
+
+void BeamTrackGridFunction(
+        std::shared_ptr<ngcomp::GridFunction> field, int nlhs,
+        mxArray* plhs[], int nrhs, const mxArray* prhs[]) {
+    if (nrhs != 3 || nlhs != 1)
+        throw std::invalid_argument(
+            "trajectory = radia_mex('beam.track.grid_function', "
+            "grid_function_handle, config)");
+    const mxArray* config = prhs[2];
+    RequireScalarStruct(config);
+    const mxArray* schema = Field(config, "schema");
+    if (schema && Text(schema, "schema") != "radia.beam.tracking.v1")
+        throw std::invalid_argument("unsupported beam tracking schema");
+    const auto species = ParseSpecies(Field(config, "species"));
+    const auto state = ParseState(Field(config, "state"));
+    const auto independent = ParseIndependent(Field(config, "independent"));
+    auto equation = std::make_shared<radia::beam::LorentzEquation>(
+        species,
+        std::make_shared<radia::beam::NGSolveGridFunctionField>(
+            std::move(field)),
+        independent);
+    auto stepper = ParseStepper(Field(config, "stepper"));
+    radia::beam::TrackPlan plan;
+    plan.start = Scalar(Field(config, "start"), "start", 0.0, false);
+    plan.stop = Scalar(Field(config, "stop"), "stop", 0.0, false);
+    plan.maximum_step = Scalar(
+        Field(config, "maximum_step"), "maximum_step", 0.0, false);
+    plan.maximum_steps = PositiveInteger(
+        Field(config, "maximum_steps"), "maximum_steps", 1000000, true);
+    plhs[0] = TrajectoryStruct(
+        radia::beam::Tracker(equation, stepper).Track(state, plan));
+    ReplaceStructField(plhs[0], "backend", mxCreateString(
+        "native-cpp-ngsolve-gridfunction-mex"));
 }

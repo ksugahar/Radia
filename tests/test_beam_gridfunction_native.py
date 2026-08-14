@@ -12,7 +12,19 @@ from netgen.occ import Box, Pnt
 from ngsolve import CF, GridFunction, Mesh, TaskManager, VectorH1, x, y, z
 from scipy.linalg import expm
 
-from radia.beam import propagate_grid_function_linear_map
+from radia.beam import (
+    CartesianState,
+    ClassicalRK4,
+    GridFunctionField,
+    LorentzEquation,
+    ParticleSpecies,
+    Tracker,
+    TrackPlan,
+    propagate_grid_function_linear_map,
+    propagate_grid_function_multipole_map,
+)
+from radia.accelerator_lie_topopt import fourth_order_lie_map_from_tracked_orbit
+from radia.accelerator_magnet_topopt import PlanarDesignOrbit
 
 
 @pytest.fixture(scope="module")
@@ -35,6 +47,34 @@ def affine_combined_function_field():
     with TaskManager():
         field.Set(coefficient)
     return field, bend_t, normal_gradient_t_per_m, skew_gradient_t_per_m
+
+
+@pytest.fixture(scope="module")
+def cubic_multipole_field():
+    geometry = Box(Pnt(-0.05, -0.05, 0.0), Pnt(0.05, 0.05, 1.0))
+    mesh = geometry.GenerateMesh(maxh=0.1)
+    field = GridFunction(VectorH1(mesh, order=3))
+    normal = np.array([0.0, 2.4, 15.0, -80.0])
+    skew = np.array([0.0, -0.6, -4.0, 20.0])
+    by = (
+        normal[1] * x
+        - skew[1] * y
+        + normal[2] * (x * x - y * y)
+        - 2 * skew[2] * x * y
+        + normal[3] * (x**3 - 3 * x * y * y)
+        - skew[3] * (3 * x * x * y - y**3)
+    )
+    bx = (
+        skew[1] * x
+        + normal[1] * y
+        + skew[2] * (x * x - y * y)
+        + 2 * normal[2] * x * y
+        + skew[3] * (x**3 - 3 * x * y * y)
+        + normal[3] * (3 * x * x * y - y**3)
+    )
+    with TaskManager():
+        field.Set(CF((bx, by, 0.0)))
+    return field, normal, skew
 
 
 def test_grid_function_field_is_linearized_and_accumulated_in_cpp(
@@ -117,6 +157,14 @@ def test_grid_function_sampling_fails_loudly_outside_mesh(
         )
 
 
+def test_direct_grid_function_field_rejects_nonfinite_position(
+    affine_combined_function_field,
+):
+    field = GridFunctionField(affine_combined_function_field[0])
+    with pytest.raises(ValueError, match="position_m must contain finite"):
+        field.evaluate([np.nan, 0.0, 0.0])
+
+
 def test_python_binding_matches_the_matlab_fixture_contract():
     fixture = (
         Path(__file__).parent / "fixtures" / "beam" / "affine_field_tetra.vol"
@@ -159,3 +207,158 @@ def test_python_binding_matches_the_matlab_fixture_contract():
     np.testing.assert_allclose(
         result["R"], expm(generator * lengths.sum()), atol=2e-11
     )
+
+
+def test_cubic_grid_function_builds_multipoles_and_nonlinear_map(
+    cubic_multipole_field,
+):
+    field, normal, skew = cubic_multipole_field
+    lengths = np.array([0.03, 0.04])
+    result = propagate_grid_function_multipole_map(
+        field,
+        lengths,
+        [[0.0, 0.0, 0.3], [0.0, 0.0, 0.7]],
+        [[0.0, 0.0, 1.0], [0.0, 0.0, 1.0]],
+        3.0,
+        sample_radius_m=0.01,
+        names=["sextupole_body", "octupole_body"],
+        maximum_step_m=5e-4,
+    )
+
+    assert result["schema"] == (
+        "radia.beam.grid-function-multipole-map.result.v1"
+    )
+    assert result["maximum_order"] == 3
+    assert result["linearization_order"] == 3
+    np.testing.assert_allclose(
+        result["multipole_normal_t_per_m_power"],
+        np.tile(normal, (2, 1)),
+        rtol=2e-10,
+        atol=2e-10,
+    )
+    np.testing.assert_allclose(
+        result["multipole_skew_t_per_m_power"],
+        np.tile(skew, (2, 1)),
+        rtol=2e-10,
+        atol=2e-10,
+    )
+    assert np.max(result["multipole_maximum_fit_residual_t"]) < 2e-11
+    np.testing.assert_allclose(result["local_A_per_m"][:, 1, 0], -0.8)
+    np.testing.assert_allclose(
+        result["local_F2_per_m"][:, 1, 0, 0], -10.0
+    )
+    np.testing.assert_allclose(
+        result["local_F3_per_m"][:, 1, 0, 0, 0], 160.0
+    )
+    assert np.max(np.abs(result["T"])) > 0.0
+    assert np.max(np.abs(result["U"])) > 0.0
+    assert result["diagnostics"]["T_reconstruction_error"] < 2e-11
+    assert result["diagnostics"]["U_reconstruction_error"] < 2e-10
+
+
+def test_rk_orbit_moving_frame_feeds_fourth_order_lie_map(cubic_multipole_field):
+    field, normal, skew = cubic_multipole_field
+    orbit = PlanarDesignOrbit(
+        positions=np.array(
+            [[0.0, 0.0, 0.3], [0.0, 0.0, 0.5], [0.0, 0.0, 0.7]]
+        ),
+        tangents=np.tile([0.0, 0.0, 1.0], (3, 1)),
+        magnetic_rigidity=3.0,
+        bend_axis=np.array([0.0, 1.0, 0.0]),
+    )
+    with TaskManager():
+        result = fourth_order_lie_map_from_tracked_orbit(
+            field,
+            orbit,
+            sample_radius_m=0.01,
+            maximum_step_m=0.01,
+        )
+
+    expected = np.vstack(
+        (
+            np.full(2, normal[0]),
+            np.full(2, normal[1]),
+            np.full(2, skew[1]),
+            np.full(2, normal[2]),
+            np.full(2, skew[2]),
+            np.full(2, normal[3]),
+            np.full(2, skew[3]),
+        )
+    ).reshape(-1)
+    np.testing.assert_allclose(result.multipole_response, expected, atol=2e-9)
+    assert result.transfer.V.shape == (6, 6, 6, 6, 6)
+    assert result.transfer.f5.shape == (6, 6, 6, 6, 6)
+    assert np.max(np.abs(result.transfer.V)) > 0.0
+    assert result.transfer.factorization.reconstructed_symplectic_residual.maximum < 1e-12
+
+
+def test_multipole_schema_and_fit_model_do_not_depend_on_map_order(
+    cubic_multipole_field,
+):
+    result = propagate_grid_function_multipole_map(
+        cubic_multipole_field[0],
+        [0.02],
+        [[0.0, 0.0, 0.3]],
+        [[0.0, 0.0, 1.0]],
+        3.0,
+        sample_radius_m=0.01,
+        multipole_order=2,
+        maximum_map_order=1,
+    )
+    assert result["schema"] == (
+        "radia.beam.grid-function-multipole-map.result.v1"
+    )
+    assert result["maximum_order"] == 1
+    assert result["linearization_order"] == 2
+    assert result["fit_model"].endswith("through order 2")
+
+
+def test_multipole_map_agrees_with_direct_grid_function_tracking(
+    cubic_multipole_field,
+):
+    field = cubic_multipole_field[0]
+    rigidity = 3.0
+    length = 0.02
+    map_result = propagate_grid_function_multipole_map(
+        field,
+        [length],
+        [[0.0, 0.0, 0.3]],
+        [[0.0, 0.0, 1.0]],
+        rigidity,
+        sample_radius_m=0.01,
+        maximum_step_m=1e-4,
+    )
+    initial = np.array([2e-4, 3e-4, -1e-4, -2e-4, 0.0, 0.0])
+    predicted = (
+        map_result["R"] @ initial
+        + 0.5 * np.einsum("ijk,j,k->i", map_result["T"], initial, initial)
+        + (1.0 / 6.0)
+        * np.einsum("ijkl,j,k,l->i", map_result["U"], initial, initial, initial)
+    )
+
+    species = ParticleSpecies.proton()
+    momentum = species.charge_c * rigidity
+    px = momentum * initial[1]
+    py = momentum * initial[3]
+    pz = np.sqrt(momentum * momentum - px * px - py * py)
+    state = CartesianState([initial[0], initial[2], 0.3], [px, py, pz])
+    equation = LorentzEquation(
+        species, GridFunctionField(field), independent="path_length"
+    )
+    plan = TrackPlan()
+    plan.start = 0.0
+    plan.stop = length
+    plan.maximum_step = 1e-4
+    with TaskManager():
+        trajectory = Tracker(equation, ClassicalRK4()).track(state, plan)
+    final = trajectory.samples[-1]
+    direct = np.array(
+        [
+            final.position_m[0],
+            final.kinetic_momentum_kg_m_s[0] / momentum,
+            final.position_m[1],
+            final.kinetic_momentum_kg_m_s[1] / momentum,
+        ]
+    )
+    np.testing.assert_allclose(predicted[:4], direct, atol=3e-8, rtol=2e-5)
+    assert trajectory.summary.momentum_conservation_applicable

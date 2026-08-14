@@ -14,7 +14,10 @@ end
 
 function testCommandIsPublished(testCase)
 commands = string(radia.internal.callMex("api.commands"));
-verifyTrue(testCase,any(commands == "beam.transfer.from_grid_function"));
+expected = ["beam.transfer.from_grid_function"; ...
+    "beam.transfer.multipole_from_grid_function"; ...
+    "beam.track.grid_function"];
+verifyTrue(testCase,all(ismember(expected,commands)));
 end
 
 function testCoordinateGridFunctionFeedsNativeLinearMap(testCase)
@@ -78,4 +81,60 @@ verifyError(testCase,@() radia.beam.propagateGridFunctionLinearMap( ...
     field,0.1,[0 0 4],[0 0 1],2),"radia:mex:Exception");
 
 clear fieldCleanup coordinateCleanup
+end
+
+function testMultipoleWrapperPublishesRequestedFitAndMapOrder(testCase)
+field = radia.ngsolve.GridFunction.create( ...
+    string(testCase.TestData.VolPath),"vectorh1",1);
+fieldCleanup = onCleanup(@() delete(field));
+constantField = radia.ngsolve.CoefficientFunction.constant([0;0.2;0]);
+constantCleanup = onCleanup(@() delete(constantField));
+field.interpolate(constantField);
+
+result = radia.beam.propagateGridFunctionMultipoleMap( ...
+    field,0.02,[0 0.2 0.25],[0 0 1],2, ...
+    SampleRadiusM=0.02,MultipoleOrder=2,MaximumMapOrder=1);
+verifyEqual(testCase,string(result.schema), ...
+    "radia.beam.grid-function-multipole-map.result.v1");
+verifyEqual(testCase,result.maximum_order,1);
+verifyEqual(testCase,result.linearization_order,2);
+verifyEqual(testCase,string(result.fit_model), ...
+    "nine-point transverse harmonic multipole expansion through order 2");
+verifyEqual(testCase,result.multipole_normal_t_per_m_power(1,1),0.2, ...
+    "AbsTol",1e-12);
+
+nonlinear = radia.beam.propagateGridFunctionMultipoleMap( ...
+    field,0.02,[0 0.2 0.25],[0 0 1],2, ...
+    SampleRadiusM=0.02,MultipoleOrder=3,MaximumMapOrder=3, ...
+    MaximumStepM=1e-3);
+verifyEqual(testCase,nonlinear.maximum_order,3);
+verifyGreaterThan(testCase,max(abs(nonlinear.T(:))),0);
+verifyGreaterThan(testCase,max(abs(nonlinear.U(:))),0);
+
+clear fieldCleanup constantCleanup
+end
+
+function testGridFunctionTrackingUsesNativePointEvaluation(testCase)
+field = radia.ngsolve.GridFunction.create( ...
+    string(testCase.TestData.VolPath),"vectorh1",1);
+fieldCleanup = onCleanup(@() delete(field));
+constantField = radia.ngsolve.CoefficientFunction.constant([0;0.2;0]);
+constantCleanup = onCleanup(@() delete(constantField));
+field.interpolate(constantField);
+
+species = radia.beam.proton();
+reference = radia.beam.referenceParticle(species,220e6);
+state = radia.beam.cartesianState( ...
+    [0 0.2 0.25],[0 0 reference.momentum_kg_m_s]);
+trajectory = radia.beam.trackGridFunction( ...
+    species,state,field,0,0.005,5e-4);
+
+verifyEqual(testCase,string(trajectory.backend), ...
+    "native-cpp-ngsolve-gridfunction-mex");
+verifyGreaterThan(testCase,trajectory.summary.accepted_steps,0);
+finalState = trajectory.samples{end};
+verifyEqual(testCase,finalState.path_length_m,0.005,"AbsTol",1e-14);
+verifyLessThan(testCase,finalState.position_m(1),0);
+
+clear fieldCleanup constantCleanup
 end

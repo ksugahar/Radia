@@ -1446,8 +1446,11 @@ mxArray* Commands() {
         "beam.equation.rhs",
         "beam.step",
         "beam.track",
+        "beam.track.grid_function",
+        "beam.hamiltonian.canonical_body_jet",
         "beam.transfer.propagate_variational",
         "beam.transfer.from_grid_function",
+        "beam.transfer.multipole_from_grid_function",
         "hcurl.eddy_cln.native_basis",
         "hcurl.topopt.operator.create", "hcurl.topopt.operator.destroy",
         "hcurl.topopt.operator.info", "hcurl.topopt.operator.matvec",
@@ -10153,13 +10156,24 @@ void Dispatch(const std::string& command, int nlhs, mxArray* plhs[], int nrhs,
         return;
     if (DispatchReactorCommand(command, nlhs, plhs, nrhs, prhs))
         return;
-    if (command == "beam.transfer.from_grid_function") {
+    if (command == "beam.transfer.from_grid_function" ||
+        command == "beam.transfer.multipole_from_grid_function") {
         if (nrhs != 3)
             BadArgument(
                 "result = radia_mex('beam.transfer.from_grid_function', "
                 "grid_function_handle, config)");
         auto field = GridFunction(Handle(prhs[1])).gridfunction;
         BeamTransferFromGridFunction(
+            std::move(field), nlhs, plhs, nrhs, prhs);
+        return;
+    }
+    if (command == "beam.track.grid_function") {
+        if (nrhs != 3)
+            BadArgument(
+                "trajectory = radia_mex('beam.track.grid_function', "
+                "grid_function_handle, config)");
+        auto field = GridFunction(Handle(prhs[1])).gridfunction;
+        BeamTrackGridFunction(
             std::move(field), nlhs, plhs, nrhs, prhs);
         return;
     }

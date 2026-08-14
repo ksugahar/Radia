@@ -112,6 +112,46 @@ def test_connected_beam_respects_exclusion_and_raw_response_prediction():
         np.array([4.0,0.0])+delta[:,best.candidate_indices].sum(axis=1))
 
 
+def test_connected_beam_can_select_response_independent_fronts():
+    current=np.array([4.0,4.0,0.0])
+    delta=np.array([
+        [-1.0,-1.1,-1.2,0.0],
+        [0.0,0.0,0.0,-1.0],
+        [0.0,0.0,0.0,0.0],
+    ])
+    result=connected_graph_front_beam(
+        current_response=current,response_target=np.zeros(3),
+        response_band=np.ones(3),candidate_response_delta=delta,
+        adjacency=chain(4),seed_indices=np.arange(4),maximum_size=1,
+        maximum_components=1,beam_width=8,proposal_limit=2,
+        response_novelty_weight=0.5,return_result=True)
+    selected=[int(item.candidate_indices[0]) for item in result.proposals]
+    assert selected==[0,3]
+    assert result.pool_diagnostics.proposal_count==4
+    assert result.pool_diagnostics.duplicate_pair_fraction==0.5
+    assert result.selected_diagnostics.numerical_rank==2
+    assert result.selected_diagnostics.duplicate_pair_fraction==0.0
+
+
+def test_connected_beam_novelty_uses_selected_response_span():
+    current=np.array([3.0,3.0,3.0])
+    delta=np.array([
+        [-1.0,0.0,-1.0,0.0],
+        [0.0,-1.0,-1.0,0.0],
+        [0.0,0.0,0.0,-1.0],
+    ])
+    result=connected_graph_front_beam(
+        current_response=current,response_target=np.zeros(3),
+        response_band=np.ones(3),candidate_response_delta=delta,
+        adjacency=chain(4),seed_indices=np.arange(4),maximum_size=1,
+        maximum_components=1,beam_width=8,proposal_limit=3,
+        response_novelty_weight=1.0,return_result=True)
+    selected=[int(item.candidate_indices[0]) for item in result.proposals]
+    assert selected==[0,1,3]
+    assert result.selected_diagnostics.numerical_rank==3
+    assert result.selected_diagnostics.minimum_subspace_novelty==1.0
+
+
 def test_trust_update_shrinks_holds_and_expands_from_exact_agreement():
     shrink=update_graph_front_trust(
         budget=8,minimum_budget=1,maximum_budget=20,

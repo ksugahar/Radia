@@ -16,3 +16,7 @@ bool DispatchBeamCommand(const std::string& command, int nlhs,
 void BeamTransferFromGridFunction(
     std::shared_ptr<ngcomp::GridFunction> field, int nlhs,
     mxArray* plhs[], int nrhs, const mxArray* prhs[]);
+
+void BeamTrackGridFunction(
+    std::shared_ptr<ngcomp::GridFunction> field, int nlhs,
+    mxArray* plhs[], int nrhs, const mxArray* prhs[]);

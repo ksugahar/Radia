@@ -2338,8 +2338,8 @@ PYBIND11_MODULE(_radia_pybind, m) {
     py::module_::import("ngsolve.la");
     py::module_::import("ngsolve.comp");
 
-    ExportBeamTransfer(m);
     ExportBeamDynamics(m);
+    ExportBeamTransfer(m);
 
     // Version info
     m.attr("__version__") = "1.4.0";

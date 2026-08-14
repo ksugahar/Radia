@@ -39,6 +39,40 @@ verifyEqual(testCase, result.backend, "python-fallback");
 verifyEqual(testCase, result.python.execution_mode, "InProcess");
 end
 
+function testAcceleratorTaylorTopoptHasCubicNamedFallback(testCase)
+result = radia.python.acceleratorTaylorTopopt( ...
+    "third_order_taylor_map_from_multipoles", ...
+    {[0, 0, 0, 0, 0, 0, 3], 0.08, 3}, ...
+    Keywords=struct("maximum_step_m", 0.01));
+verifyEqual(testCase, result.backend, "python-fallback");
+verifyEqual(testCase, result.module, "radia.accelerator_taylor_topopt");
+transfer = result.value;
+verifyEqual(testCase, size(double(transfer.R)), [6, 6]);
+U = double(transfer.U);
+verifyEqual(testCase, size(U), [6, 6, 6, 6]);
+verifyGreaterThan(testCase, abs(U(2, 1, 1, 3)), 0.4);
+end
+
+function testAcceleratorLieTopoptHasCanonicalNamedFallback(testCase)
+result = radia.python.acceleratorLieTopopt( ...
+    "fourth_order_lie_map_from_multipoles", ...
+    {[0, 0, 0, 0, 0, 0, 3], 0.08, 3}, ...
+    Keywords=struct("maximum_step_m", 0.01));
+verifyEqual(testCase, result.backend, "python-fallback");
+verifyEqual(testCase, result.module, "radia.accelerator_lie_topopt");
+transfer = result.value;
+verifyEqual(testCase, size(double(transfer.R)), [6, 6]);
+verifyEqual(testCase, size(double(transfer.f3)), [6, 6, 6]);
+verifyEqual(testCase, size(double(transfer.f4)), [6, 6, 6, 6]);
+verifyEqual(testCase, size(double(transfer.V)), [6, 6, 6, 6, 6]);
+verifyEqual(testCase, size(double(transfer.f5)), [6, 6, 6, 6, 6]);
+verifyLessThan(testCase, ...
+    double(transfer.factorization.relative_reconstruction_error), 1e-10);
+verifyLessThan(testCase, ...
+    double(transfer.factorization.reconstructed_symplectic_residual.maximum), ...
+    1e-10);
+end
+
 function testStreamFunctionHasNamedFallback(testCase)
 result = radia.python.streamFunction( ...
     "abe_reduce_node_potential_scales", ...

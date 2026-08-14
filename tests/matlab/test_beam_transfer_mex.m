@@ -14,6 +14,8 @@ function testCommandCatalogAndNonlinearAttribution(testCase)
 commands = string(radia.internal.callMex("api.commands"));
 verifyTrue(testCase,ismember( ...
     "beam.transfer.propagate_variational",commands));
+verifyTrue(testCase,ismember( ...
+    "beam.hamiltonian.canonical_body_jet",commands));
 
 config = nonlinearConfig();
 actual = runConfig(config);
@@ -52,6 +54,24 @@ verifyLessThan(testCase,actual.diagnostics.T_reconstruction_error,3e-14);
 verifyLessThan(testCase,actual.diagnostics.U_reconstruction_error,4e-14);
 verifyLessThan(testCase,actual.diagnostics.T_symmetry_defect,1e-14);
 verifyLessThan(testCase,actual.diagnostics.U_symmetry_defect,1e-14);
+end
+
+function testCanonicalBodyHamiltonianJet(testCase)
+actual = radia.beam.canonicalBodyHamiltonianJet( ...
+    [0.2,2.4,-0.6,5,1.5,-7,2],3,ReferenceBeta=0.8);
+verifyEqual(testCase,actual.schema, ...
+    'radia.beam.canonical-hamiltonian-jet.result.v1');
+verifyEqual(testCase,actual.backend,'native-cpp-mex');
+verifyEqual(testCase,string(actual.coordinate_order), ...
+    ["x";"px_over_p0";"y";"py_over_p0";"ell";"delta"]);
+verifyEqual(testCase,actual.poisson_pair_signs,[1,1,-1]);
+verifySize(testCase,actual.H2_per_m,[6,6]);
+verifySize(testCase,actual.H3_per_m,[6,6,6]);
+verifySize(testCase,actual.H4_per_m,[6,6,6,6]);
+verifyEqual(testCase,actual.H2_per_m(1,6),-1/15,"AbsTol",2e-15);
+verifyEqual(testCase,actual.A_per_m(2,6),1/15,"AbsTol",2e-15);
+verifyEqual(testCase,actual.F2_per_m(2,1,1),-10/3,"AbsTol",2e-14);
+verifyEqual(testCase,actual.F3_per_m(2,1,1,1),14,"AbsTol",2e-14);
 end
 
 function testNormalQuadrupoleMatchesAnalyticMatrix(testCase)

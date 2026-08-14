@@ -211,7 +211,7 @@ def test_combined_function_transfer_map_matches_uniform_sector():
     assert result.response_jacobian.shape == (13, 0)
 
 
-def test_transfer_map_field_chain_uses_analytic_frechet_jacobian():
+def test_transfer_map_field_chain_uses_forward_ad_jacobian():
     lengths = np.array([0.4, 0.6, 0.5])
     rigidity = 2.0
     field = np.array([-0.10, -0.14, -0.11, 3.0, -2.0, 0.5])
@@ -219,15 +219,18 @@ def test_transfer_map_field_chain_uses_analytic_frechet_jacobian():
         [0.2, -0.1], [0.1, 0.3], [-0.05, 0.12],
         [1.0, -2.0], [-0.5, 0.4], [0.3, 0.8],
     ])
-    analytic = combined_function_transfer_map_from_field_response(
+    differentiated = combined_function_transfer_map_from_field_response(
         field, lengths, rigidity,
         field_response_jacobian=field_jacobian,
         curvature_sign=-1.0, gradient_sign=-1.0)
+    assert differentiated.derivative_backend==(
+        "forward-mode-expm-frechet-ad")
 
     # Finite differences are a regression oracle only; production topology
-    # sensitivities are the Frechet derivatives returned above.
+    # sensitivities are forward-mode AD tangents. The matrix exponential is
+    # differentiated by its exact Frechet derivative primitive.
     step = 1.0e-6
-    finite_difference = np.empty_like(analytic.response_jacobian)
+    finite_difference = np.empty_like(differentiated.response_jacobian)
     for parameter in range(field_jacobian.shape[1]):
         plus = combined_function_transfer_map_from_field_response(
             field + step * field_jacobian[:, parameter], lengths, rigidity,
@@ -238,7 +241,7 @@ def test_transfer_map_field_chain_uses_analytic_frechet_jacobian():
         finite_difference[:, parameter] = (
             plus.response - minus.response) / (2.0 * step)
     np.testing.assert_allclose(
-        analytic.response_jacobian, finite_difference,
+        differentiated.response_jacobian, finite_difference,
         rtol=3.0e-8, atol=3.0e-10)
 
 

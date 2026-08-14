@@ -249,7 +249,7 @@ class CombinedFunctionLinearOptics:
 
 @dataclass(frozen=True)
 class CombinedFunctionTransferMap:
-    """First-order bend map and analytic field/design sensitivities.
+    """First-order bend map and forward-mode AD field sensitivities.
 
     The state ordering is ``(x, x', y, y', ell, delta)``.  The returned
     6-by-6 matrix contains the horizontal and vertical betatron blocks, the
@@ -262,7 +262,9 @@ class CombinedFunctionTransferMap:
     this is the row-major numerical contract consumed by the HDiv-MMM
     add/remove LP.  The default entries are the two complete 2-by-2 blocks and
     ``R16, R26, R51, R52, R56``.  No particle or design finite difference is
-    used.
+    used.  The derivative backend treats the matrix exponential as an exact
+    differentiable primitive through its Fréchet derivative, then applies
+    forward-mode product rules across the segment chain.
     """
     matrix: np.ndarray
     matrix_jacobian: np.ndarray
@@ -270,6 +272,7 @@ class CombinedFunctionTransferMap:
     response_jacobian: np.ndarray
     response_entries: tuple[tuple[int, int], ...]
     optics: CombinedFunctionLinearOptics
+    derivative_backend: str = "forward-mode-expm-frechet-ad"
 
 
 @dataclass(frozen=True)
@@ -562,6 +565,94 @@ _DEFAULT_TRANSFER_RESPONSE_ENTRIES = (
 )
 
 
+@dataclass(frozen=True)
+class _ForwardADScalar:
+    """Small forward-mode scalar used only by the transfer-map generator."""
+
+    value: float
+    tangent: np.ndarray
+
+    def _coerce(self, other):
+        if isinstance(other, _ForwardADScalar):
+            if other.tangent.shape != self.tangent.shape:
+                raise ValueError("forward-AD tangent dimensions must match")
+            return other
+        return _ForwardADScalar(
+            float(other), np.zeros_like(self.tangent, dtype=float))
+
+    def __add__(self, other):
+        other = self._coerce(other)
+        return _ForwardADScalar(
+            self.value + other.value, self.tangent + other.tangent)
+
+    __radd__ = __add__
+
+    def __neg__(self):
+        return _ForwardADScalar(-self.value, -self.tangent)
+
+    def __sub__(self, other):
+        return self + (-self._coerce(other))
+
+    def __rsub__(self, other):
+        return self._coerce(other) - self
+
+    def __mul__(self, other):
+        other = self._coerce(other)
+        return _ForwardADScalar(
+            self.value * other.value,
+            self.tangent * other.value + other.tangent * self.value)
+
+    __rmul__ = __mul__
+
+
+def _forward_ad_matrix(rows, parameter_count):
+    """Convert a scalar/AD expression matrix to value and tangent arrays."""
+    row_count = len(rows)
+    column_count = len(rows[0])
+    value = np.empty((row_count, column_count), dtype=float)
+    tangent = np.zeros(
+        (int(parameter_count), row_count, column_count), dtype=float)
+    for row, entries in enumerate(rows):
+        if len(entries) != column_count:
+            raise ValueError("forward-AD matrix rows must have equal length")
+        for column, entry in enumerate(entries):
+            if isinstance(entry, _ForwardADScalar):
+                value[row, column] = entry.value
+                tangent[:, row, column] = entry.tangent
+            else:
+                value[row, column] = float(entry)
+    return value, tangent
+
+
+def _forward_ad_expm(generator, generator_tangent, length):
+    """Differentiate one matrix exponential in every seeded direction."""
+    from scipy.linalg import expm, expm_frechet
+
+    scaled = np.asarray(generator, dtype=float) * float(length)
+    propagator = expm(scaled)
+    tangent = np.empty_like(generator_tangent, dtype=float)
+    for parameter, direction in enumerate(generator_tangent):
+        if np.any(direction):
+            tangent[parameter] = expm_frechet(
+                scaled, direction * float(length), compute_expm=False)
+        else:
+            tangent[parameter].fill(0.0)
+    return propagator, tangent
+
+
+def _forward_ad_left_compose(
+        local_value, local_tangent, accumulated_value,
+        accumulated_tangent):
+    """Apply the forward-mode product rule to ``local @ accumulated``."""
+    value = local_value @ accumulated_value
+    tangent = np.empty_like(accumulated_tangent, dtype=float)
+    for parameter in range(tangent.shape[0]):
+        tangent[parameter] = (
+            local_value @ accumulated_tangent[parameter]
+            + local_tangent[parameter] @ accumulated_value)
+    return value, tangent
+
+
 def combined_function_transfer_map(
         curvature, normalized_gradient, segment_lengths, *,
         curvature_jacobian=None, gradient_jacobian=None,
@@ -573,14 +664,14 @@ def combined_function_transfer_map(
     ``x' = px``, ``px' = -(h**2+k1)x + h*delta``,
     ``ell' = h*x``, ``delta' = 0``.
 
-    Exact matrix exponentials are multiplied in traversal order.  Their
-    derivatives use ``expm_frechet`` and therefore form an analytic chain from
-    HDiv-MMM field/gradient response rows to every selected transfer-matrix
-    entry.  ``response_entries`` uses zero-based ``(row, column)`` pairs in the
-    standard state order ``(x,x',y,y',ell,delta)``.
+    Exact matrix exponentials are multiplied in traversal order.  A compact
+    forward-mode AD engine seeds the supplied curvature/gradient tangents,
+    differentiates scalar generator expressions automatically, uses
+    ``expm_frechet`` as the exact matrix-exponential primitive, and applies the
+    product rule across all segments.  ``response_entries`` uses zero-based
+    ``(row, column)`` pairs in the standard state order
+    ``(x,x',y,y',ell,delta)``.
     """
-    from scipy.linalg import expm, expm_frechet
-
     h = np.asarray(curvature, dtype=float).reshape(-1)
     k = np.asarray(normalized_gradient, dtype=float).reshape(-1)
     ds = np.asarray(segment_lengths, dtype=float).reshape(-1)
@@ -636,34 +727,31 @@ def combined_function_transfer_map(
     # propagator by the geometric path-length equation ell' = h*x.
     horizontal = np.eye(4)
     dhorizontal = np.zeros((n_parameter, 4, 4))
+    vertical = np.eye(2)
+    dvertical = np.zeros((n_parameter, 2, 2))
     for segment, (hi, ki, length) in enumerate(zip(h, k, ds)):
-        generator = np.array([
+        h_ad = _ForwardADScalar(hi, dh[segment].copy())
+        k_ad = _ForwardADScalar(ki, dk[segment].copy())
+        generator, generator_tangent = _forward_ad_matrix([
             [0.0, 1.0, 0.0, 0.0],
-            [-(hi * hi + ki), 0.0, 0.0, hi],
-            [hi, 0.0, 0.0, 0.0],
+            [-(h_ad * h_ad + k_ad), 0.0, 0.0, h_ad],
+            [h_ad, 0.0, 0.0, 0.0],
             [0.0, 0.0, 0.0, 0.0],
-        ])
-        scaled = generator * length
-        propagator = expm(scaled)
-        old_horizontal = horizontal
-        old_dhorizontal = dhorizontal.copy()
-        horizontal = propagator @ old_horizontal
-        for parameter in range(n_parameter):
-            dhi = dh[segment, parameter]
-            dki = dk[segment, parameter]
-            if dhi == 0.0 and dki == 0.0:
-                dhorizontal[parameter] = (
-                    propagator @ old_dhorizontal[parameter])
-                continue
-            derivative = np.zeros((4, 4))
-            derivative[1, 0] = -(2.0 * hi * dhi + dki)
-            derivative[1, 3] = dhi
-            derivative[2, 0] = dhi
-            dpropagator = expm_frechet(
-                scaled, derivative * length, compute_expm=False)
-            dhorizontal[parameter] = (
-                propagator @ old_dhorizontal[parameter]
-                + dpropagator @ old_horizontal)
+        ], n_parameter)
+        propagator, dpropagator = _forward_ad_expm(
+            generator, generator_tangent, length)
+        horizontal, dhorizontal = _forward_ad_left_compose(
+            propagator, dpropagator, horizontal, dhorizontal)
+
+        vertical_generator, vertical_generator_tangent = _forward_ad_matrix([
+            [0.0, 1.0],
+            [k_ad, 0.0],
+        ], n_parameter)
+        vertical_propagator, dvertical_propagator = _forward_ad_expm(
+            vertical_generator, vertical_generator_tangent, length)
+        vertical, dvertical = _forward_ad_left_compose(
+            vertical_propagator, dvertical_propagator,
+            vertical, dvertical)
 
     optics = combined_function_linear_optics(
         h, k, ds,
@@ -674,13 +762,12 @@ def combined_function_transfer_map(
     matrix_jacobian = np.zeros((n_parameter, 6, 6))
     horizontal_indices = np.array([0, 1, 4, 5], dtype=np.int64)
     matrix[np.ix_(horizontal_indices, horizontal_indices)] = horizontal
-    matrix[2:4, 2:4] = optics.vertical_matrix
+    matrix[2:4, 2:4] = vertical
     for parameter in range(n_parameter):
         matrix_jacobian[parameter][
             np.ix_(horizontal_indices, horizontal_indices)
         ] = dhorizontal[parameter]
-        matrix_jacobian[parameter, 2:4, 2:4] = (
-            optics.vertical_matrix_jacobian[parameter])
+        matrix_jacobian[parameter, 2:4, 2:4] = dvertical[parameter]
     response = np.asarray(
         [matrix[row, column] for row, column in entries], dtype=float)
     response_jacobian = np.asarray(

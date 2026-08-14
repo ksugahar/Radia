@@ -1,5 +1,6 @@
 #include "rad_beam_transfer.h"
 
+#include <algorithm>
 #include <cmath>
 #include <iostream>
 #include <iomanip>
@@ -12,8 +13,10 @@ namespace {
 
 using radia::beam::DynamicsJet6;
 using radia::beam::DynamicsSegment6;
+using radia::beam::HamiltonianJet6;
 using radia::beam::Matrix6;
 using radia::beam::PropagateVariationalMap;
+using radia::beam::TransverseMagneticMultipoleExpansion;
 using radia::beam::VariationalOptions;
 
 void RequireClose(double actual, double expected, double tolerance,
@@ -173,6 +176,124 @@ void TestRejectsNonsymmetricJet() {
         throw std::runtime_error("nonsymmetric F2 was not rejected");
 }
 
+void TestMultipoleExpansionBuildsChromaticDynamicsJet() {
+    TransverseMagneticMultipoleExpansion expansion;
+    expansion.order = 3;
+    expansion.normal_t_per_m_power = {0.0, 2.4, 5.0, -7.0};
+    expansion.skew_t_per_m_power = {0.0, -0.6, 1.5, 2.0};
+    const double rigidity = 3.0;
+    const auto jet = radia::beam::BuildParaxialMagneticDynamicsJet(
+        expansion, rigidity, 1.0, 1.0, 3);
+
+    RequireClose(jet.a_per_m(1, 0), -0.8, 1.0e-15,
+                 "multipole normal quadrupole");
+    RequireClose(jet.a_per_m(1, 2), -0.2, 1.0e-15,
+                 "multipole skew quadrupole");
+    RequireClose(jet.a_per_m(3, 0), -0.2, 1.0e-15,
+                 "multipole skew vertical force");
+    RequireClose(jet.a_per_m(3, 2), 0.8, 1.0e-15,
+                 "multipole normal vertical force");
+    RequireClose(jet.f2_per_m(1, 0, 0), -10.0 / 3.0, 1.0e-15,
+                 "normal sextupole xx");
+    RequireClose(jet.f2_per_m(1, 0, 2), 1.0, 1.0e-15,
+                 "skew sextupole xy");
+    RequireClose(jet.f2_per_m(1, 0, 5), 0.8, 1.0e-15,
+                 "quadrupole chromatic term");
+    RequireClose(jet.f2_per_m(0, 1, 5), -1.0, 1.0e-15,
+                 "horizontal drift chromatic term");
+    RequireClose(jet.f3_per_m(1, 0, 0, 0), 14.0, 1.0e-14,
+                 "normal octupole xxx");
+    RequireClose(jet.f3_per_m(1, 0, 0, 5), 10.0 / 3.0, 1.0e-14,
+                 "sextupole chromatic term");
+    RequireClose(jet.f3_per_m(1, 0, 5, 5), -1.6, 1.0e-14,
+                 "quadrupole second chromatic term");
+    RequireClose(jet.f3_per_m(0, 1, 5, 5), 2.0, 1.0e-15,
+                 "drift second chromatic term");
+}
+
+double Poisson(std::size_t row, std::size_t column) {
+    if (row == 0 && column == 1) return 1.0;
+    if (row == 1 && column == 0) return -1.0;
+    if (row == 2 && column == 3) return 1.0;
+    if (row == 3 && column == 2) return -1.0;
+    if (row == 4 && column == 5) return -1.0;
+    if (row == 5 && column == 4) return 1.0;
+    return 0.0;
+}
+
+void TestCanonicalHamiltonianJet() {
+    TransverseMagneticMultipoleExpansion expansion;
+    expansion.order = 3;
+    expansion.normal_t_per_m_power = {0.2, 2.4, 5.0, -7.0};
+    expansion.skew_t_per_m_power = {0.0, -0.6, 1.5, 2.0};
+    const double rigidity = 3.0;
+    const double beta = 0.8;
+    const double curvature = 0.2 / rigidity;
+    const HamiltonianJet6 jet =
+        radia::beam::BuildCanonicalBodyHamiltonianJet(
+            expansion, rigidity, 1.0, 1.0, beta);
+
+    RequireClose(jet.h2_per_m(1, 1), 1.0, 1.0e-15,
+                 "canonical H2 px px");
+    RequireClose(jet.h2_per_m(0, 0),
+                 curvature * curvature + 0.8, 1.0e-15,
+                 "canonical H2 x x");
+    RequireClose(jet.h2_per_m(0, 5), -curvature, 1.0e-15,
+                 "canonical H2 x delta");
+    RequireClose(jet.h2_per_m(5, 5), 1.0 - beta * beta, 1.0e-15,
+                 "canonical H2 delta delta");
+    RequireClose(jet.h3_per_m(0, 0, 0), 10.0 / 3.0, 1.0e-14,
+                 "canonical H3 sextupole xxx");
+    RequireClose(jet.h4_per_m(0, 0, 0, 0), -14.0, 1.0e-14,
+                 "canonical H4 octupole xxxx");
+    RequireClose(jet.dynamics.a_per_m(1, 5), curvature, 1.0e-15,
+                 "canonical A horizontal dispersion");
+    RequireClose(jet.dynamics.a_per_m(4, 0), curvature, 1.0e-15,
+                 "canonical A path coupling");
+    RequireClose(jet.dynamics.f2_per_m(1, 0, 0), -10.0 / 3.0,
+                 1.0e-14, "canonical F2 sextupole xxx");
+    RequireClose(jet.dynamics.f3_per_m(1, 0, 0, 0), 14.0,
+                 1.0e-14, "canonical F3 octupole xxxx");
+
+    // A^T J + J A = 0 and -J*Fn recovers the symmetric Hamiltonian.
+    double linear_defect = 0.0;
+    double cubic_defect = 0.0;
+    double quartic_defect = 0.0;
+    for (std::size_t i = 0; i < 6; ++i)
+        for (std::size_t j = 0; j < 6; ++j) {
+            double residual = 0.0;
+            for (std::size_t a = 0; a < 6; ++a)
+                residual += jet.dynamics.a_per_m(a, i) * Poisson(a, j) +
+                            Poisson(i, a) * jet.dynamics.a_per_m(a, j);
+            linear_defect = std::max(linear_defect, std::abs(residual));
+            for (std::size_t k = 0; k < 6; ++k) {
+                double recovered_h3 = 0.0;
+                for (std::size_t a = 0; a < 6; ++a)
+                    recovered_h3 -=
+                        Poisson(i, a) * jet.dynamics.f2_per_m(a, j, k);
+                cubic_defect = std::max(
+                    cubic_defect,
+                    std::abs(recovered_h3 - jet.h3_per_m(i, j, k)));
+                for (std::size_t l = 0; l < 6; ++l) {
+                    double recovered_h4 = 0.0;
+                    for (std::size_t a = 0; a < 6; ++a)
+                        recovered_h4 -= Poisson(i, a) *
+                            jet.dynamics.f3_per_m(a, j, k, l);
+                    quartic_defect = std::max(
+                        quartic_defect,
+                        std::abs(recovered_h4 -
+                                 jet.h4_per_m(i, j, k, l)));
+                }
+            }
+        }
+    RequireClose(linear_defect, 0.0, 2.0e-15,
+                 "canonical linear Hamiltonian identity");
+    RequireClose(cubic_defect, 0.0, 2.0e-15,
+                 "canonical cubic generator identity");
+    RequireClose(quartic_defect, 0.0, 2.0e-14,
+                 "canonical quartic generator identity");
+}
+
 }  // namespace
 
 int main() {
@@ -182,6 +303,8 @@ int main() {
         TestNonlinearAttribution();
         TestSingleRegionCascadeAcrossSubsteps();
         TestRejectsNonsymmetricJet();
+        TestMultipoleExpansionBuildsChromaticDynamicsJet();
+        TestCanonicalHamiltonianJet();
         std::cout << "rad_beam_transfer: all tests passed\n";
         return 0;
     } catch (const std::exception& error) {
