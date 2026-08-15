@@ -11,7 +11,9 @@ classdef ParetoSupport
             params=study.ParamTable; rows=params.Name==string(name) & params.Kind=="categorical";
             raw=params.ValueText(rows); numeric=params.ValueNumeric(rows);
             for k=1:numel(raw)
-                if isfinite(numeric(k)), raw(k)="numeric:"+string(numeric(k),"%.17g"); end
+                if isfinite(numeric(k))
+                    raw(k)=append("numeric:",jsonencode(double(numeric(k))));
+                end
             end
             [tokens,values,trialNumbers]=radia.optuna.internal.ParetoSupport.collect( ...
                 study,params.TrialNumber(rows),raw);
@@ -272,6 +274,64 @@ classdef ParetoSupport
             [rank,crowding]=radia.optuna.internal.ParetoSupport.rankAndCrowding(values,directions);
             finiteCrowding=crowding; finiteCrowding(isinf(finiteCrowding))=realmax;
             [~,order]=sortrows([rank,-finiteCrowding],[1 2]);
+        end
+
+        function volume = computeHypervolume(points,reference)
+            %COMPUTEHYPERVOLUME Public internal contract for GP acquisition.
+            volume=radia.optuna.internal.ParetoSupport. ...
+                hypervolume(points,reference);
+        end
+
+        function improvement = hypervolumeImprovement2D( ...
+                samples,front,reference)
+            %HYPERVOLUMEIMPROVEMENT2D Vector contract for GP Monte Carlo.
+            samples=double(samples);
+            front=double(front);
+            reference=reshape(double(reference),1,[]);
+            if size(samples,2)~=2 || size(front,2)~=2 || ...
+                    numel(reference)~=2
+                error("radia:optuna:HypervolumeDimension", ...
+                    "Two-objective samples, front, and reference are required.");
+            end
+            front=front(all(isfinite(front),2),:);
+            front=front(front(:,1)<=reference(1) & ...
+                front(:,2)<=reference(2),:);
+            front=sortrows(front,1);
+            keep=false(size(front,1),1);
+            bestY=Inf;
+            for row=1:size(front,1)
+                if front(row,2)<bestY
+                    keep(row)=true;
+                    bestY=front(row,2);
+                end
+            end
+            front=front(keep,:);
+            improvement=zeros(size(samples,1),1);
+            for sample=1:size(samples,1)
+                point=samples(sample,:);
+                if any(~isfinite(point)) || ...
+                        point(1)>=reference(1) || point(2)>=reference(2)
+                    continue
+                end
+                left=point(1);
+                existingY=reference(2);
+                for row=1:size(front,1)
+                    if front(row,1)<=left
+                        existingY=min(existingY,front(row,2));
+                        continue
+                    end
+                    right=min(front(row,1),reference(1));
+                    improvement(sample)=improvement(sample)+ ...
+                        max(0,right-left)*max(0,existingY-point(2));
+                    left=right;
+                    existingY=min(existingY,front(row,2));
+                    if left>=reference(1), break, end
+                end
+                if left<reference(1)
+                    improvement(sample)=improvement(sample)+ ...
+                        (reference(1)-left)*max(0,existingY-point(2));
+                end
+            end
         end
     end
 

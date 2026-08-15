@@ -119,6 +119,19 @@ classdef QMCSampler < handle
             end
             obj.recordState(study,trial.Number);
         end
+
+        function points=unitPoints(obj,dimension,count,options)
+            %UNITPOINTS Generate a contiguous QMC block without a Study.
+            arguments
+                obj
+                dimension (1,1) double {mustBeInteger,mustBePositive}
+                count (1,1) double {mustBeInteger,mustBeNonnegative}
+                options.StartIndex (1,1) double ...
+                    {mustBeInteger,mustBeNonnegative} = 0
+            end
+            sampleIds=options.StartIndex+(0:count-1);
+            points=obj.generatePoints(dimension,sampleIds);
+        end
     end
 
     methods (Access=private)
@@ -162,73 +175,155 @@ classdef QMCSampler < handle
         end
 
         function point=generatePoint(obj,dimension,sampleId)
-            if obj.QMCType=="sobol"
-                point=obj.sobolPoint(dimension,sampleId);
-            else
-                point=obj.haltonPoint(dimension,sampleId);
-            end
-            if obj.Scramble
-                stream=RandStream("mt19937ar","Seed",obj.Seed);
-                point=mod(point+rand(stream,1,dimension),1);
-            end
+            point=obj.generatePoints(dimension,sampleId);
         end
 
-        function point=sobolPoint(~,dimension,sampleId)
+        function points=generatePoints(obj,dimension,sampleIds)
+            sampleIds=reshape(double(sampleIds),[],1);
+            points=zeros(numel(sampleIds),dimension);
+            if obj.QMCType~="sobol"
+                for row=1:numel(sampleIds)
+                    points(row,:)=obj.haltonPoint( ...
+                        dimension,sampleIds(row),obj.Scramble,obj.Seed);
+                end
+                return
+            end
             if dimension>32
                 error("radia:optuna:QMCDimension", ...
                     "The MATLAB-native Sobol implementation supports at most 32 dimensions.");
             end
             [polynomials,initialValues]= ...
                 radia.optuna.QMCSampler.sobolParameters();
+            directions=obj.sobolDirections( ...
+                dimension,polynomials,initialValues);
+            shift=zeros(1,dimension,"uint32");
+            if obj.Scramble
+                [directions,shift]=obj.scrambleSobolDirections( ...
+                    directions,obj.Seed);
+            end
+            for row=1:numel(sampleIds)
+                gray=bitxor(uint32(sampleIds(row)), ...
+                    bitshift(uint32(sampleIds(row)),-1));
+                for dim=1:dimension
+                    integer=shift(dim);
+                    for bit=1:32
+                        if bitget(gray,bit)
+                            integer=bitxor(integer,directions(dim,bit));
+                        end
+                    end
+                    points(row,dim)=double(integer)/2^32;
+                end
+            end
+        end
+
+        function point=sobolPoint(obj,dimension,sampleId,scrambled,seed)
+            if dimension>32
+                error("radia:optuna:QMCDimension", ...
+                    "The MATLAB-native Sobol implementation supports at most 32 dimensions.");
+            end
+            [polynomials,initialValues]= ...
+                radia.optuna.QMCSampler.sobolParameters();
+            directions=obj.sobolDirections( ...
+                dimension,polynomials,initialValues);
+            shift=zeros(1,dimension,"uint32");
+            if scrambled
+                [directions,shift]=obj.scrambleSobolDirections( ...
+                    directions,seed);
+            end
             gray=bitxor(uint32(sampleId),bitshift(uint32(sampleId),-1));
             point=zeros(1,dimension);
             for dim=1:dimension
-                directions=zeros(1,32,"uint32");
-                if dim==1
-                    for bit=1:32
-                        directions(bit)=bitshift(uint32(1),32-bit);
-                    end
-                else
-                    polynomial=uint32(polynomials(dim));
-                    degree=floor(log2(double(polynomial)));
-                    initial=uint32(initialValues{dim});
-                    for bit=1:degree
-                        directions(bit)=bitshift(initial(bit),32-bit);
-                    end
-                    coefficients=bitand(bitshift(polynomial,-1), ...
-                        uint32(2^(degree-1)-1));
-                    for bit=(degree+1):32
-                        value=bitxor(directions(bit-degree), ...
-                            bitshift(directions(bit-degree),-degree));
-                        for offset=1:(degree-1)
-                            mask=bitshift(uint32(1),degree-1-offset);
-                            if bitand(coefficients,mask)~=0
-                                value=bitxor(value,directions(bit-offset));
-                            end
-                        end
-                        directions(bit)=value;
-                    end
-                end
-                integer=uint32(0);
+                integer=shift(dim);
                 for bit=1:32
                     if bitget(gray,bit)
-                        integer=bitxor(integer,directions(bit));
+                        integer=bitxor(integer,directions(dim,bit));
                     end
                 end
                 point(dim)=double(integer)/2^32;
             end
         end
 
-        function point=haltonPoint(~,dimension,sampleId)
+        function directions=sobolDirections(~,dimension,polynomials,initialValues)
+            directions=zeros(dimension,32,"uint32");
+            for bit=1:32
+                directions(1,bit)=bitshift(uint32(1),32-bit);
+            end
+            for dim=2:dimension
+                polynomial=uint32(polynomials(dim));
+                degree=floor(log2(double(polynomial)));
+                initial=uint32(initialValues{dim});
+                for bit=1:degree
+                    directions(dim,bit)=bitshift(initial(bit),32-bit);
+                end
+                coefficients=bitand(bitshift(polynomial,-1), ...
+                    uint32(2^(degree-1)-1));
+                for bit=(degree+1):32
+                    value=bitxor(directions(dim,bit-degree), ...
+                        bitshift(directions(dim,bit-degree),-degree));
+                    for offset=1:(degree-1)
+                        mask=bitshift(uint32(1),degree-1-offset);
+                        if bitand(coefficients,mask)~=0
+                            value=bitxor(value,directions(dim,bit-offset));
+                        end
+                    end
+                    directions(dim,bit)=value;
+                end
+            end
+        end
+
+        function [directions,shift]=scrambleSobolDirections(~,directions,seed)
+            % Matousek linear-matrix scramble plus a digital XOR shift.
+            dimension=size(directions,1);
+            stream=RandStream("mt19937ar","Seed",seed);
+            shift=zeros(1,dimension,"uint32");
+            for dim=1:dimension
+                shiftBits=rand(stream,1,32)>=0.5;
+                shift(dim)=radia.optuna.QMCSampler.packBits(shiftBits);
+                lower=false(32,32);
+                for row=1:32
+                    lower(row,1:row)=rand(stream,1,row)>=0.5;
+                    lower(row,row)=true;
+                end
+                for column=1:32
+                    % LMS is triangular in significance order (MSB first).
+                    input=logical(bitget( ...
+                        directions(dim,column),32:-1:1));
+                    output=false(1,32);
+                    for row=1:32
+                        output(row)=mod(sum( ...
+                            lower(row,1:row) & input(1:row)),2)==1;
+                    end
+                    directions(dim,column)= ...
+                        radia.optuna.QMCSampler.packBits(fliplr(output));
+                end
+            end
+        end
+
+        function point=haltonPoint(~,dimension,sampleId,scrambled,seed)
             bases=radia.optuna.QMCSampler.firstPrimes(dimension);
             point=zeros(1,dimension);
+            stream=RandStream("mt19937ar","Seed",seed);
             for dim=1:dimension
+                permutations=cell(1,0);
+                if scrambled
+                    count=ceil(54/log2(bases(dim)))-1;
+                    permutations=cell(1,count);
+                    for digit=1:count
+                        permutations{digit}=randperm(stream,bases(dim))-1;
+                    end
+                end
                 index=sampleId;
                 factor=1/bases(dim);
-                while index>0
-                    point(dim)=point(dim)+factor*mod(index,bases(dim));
+                digit=1;
+                while index>0 || (scrambled && digit<=numel(permutations))
+                    remainder=mod(index,bases(dim));
+                    if scrambled
+                        remainder=permutations{digit}(remainder+1);
+                    end
+                    point(dim)=point(dim)+factor*remainder;
                     index=floor(index/bases(dim));
                     factor=factor/bases(dim);
+                    digit=digit+1;
                 end
             end
         end
@@ -324,6 +419,15 @@ classdef QMCSampler < handle
                     primes(found)=candidate;
                 end
                 candidate=candidate+1;
+            end
+        end
+
+        function value=packBits(bits)
+            value=uint32(0);
+            for bit=1:min(32,numel(bits))
+                if bits(bit)
+                    value=bitor(value,bitshift(uint32(1),bit-1));
+                end
             end
         end
     end

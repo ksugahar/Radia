@@ -179,7 +179,8 @@ block.Dwork(16).Data = 0;
 end
 
 function spec = normalizeSamplerSpec(value)
-choices = ["auto","random","tpe","cmaes","motpe","nsgaii"];
+choices = ["auto","random","tpe","cmaes","motpe","nsgaii", ...
+    "gp","nsgaiii","bruteforce","qmc"];
 spec = struct( ...
     "name", "auto", ...
     "fixed_numeric", false, ...
@@ -229,30 +230,35 @@ end
 end
 
 function [sampler, selectedName, decision] = makeSampler(spec, directions, nTrials)
-choices = ["auto","random","tpe","cmaes","motpe","nsgaii"];
+choices = ["auto","random","tpe","cmaes","motpe","nsgaii", ...
+    "gp","nsgaiii","bruteforce","qmc"];
 if ~isscalar(spec.name) || ~ismember(spec.name, choices)
     error('radia:simulink:OptunaSampler', ...
-        'Sampler must be auto, random, tpe, cmaes, motpe, or nsgaii.');
+        ['Sampler must be auto, random, tpe, cmaes, gp, motpe, ' ...
+        'nsgaii, nsgaiii, bruteforce, or qmc.']);
 end
 isMultiObjective = numel(directions) > 1;
 selectedName = spec.name;
 reason = "explicit_sampler";
 if selectedName == "auto"
     [selectedName, reason] = chooseAutoSampler( ...
-        spec, isMultiObjective, nTrials);
+        spec, numel(directions), nTrials);
 end
 if spec.has_constraints && selectedName == "cmaes"
     error('radia:simulink:OptunaSampler', ...
         ['This MATLAB sampler does not implement constrained ranking; ' ...
-        'use TPE, MOTPE, or NSGA-II.']);
+        'use GP, TPE, MOTPE, NSGA-II, or NSGA-III.']);
 end
 if isMultiObjective && ismember(selectedName, ["tpe","cmaes"])
     error('radia:simulink:OptunaSampler', ...
-        'Use random, motpe, or nsgaii for multiple objectives.');
+        ['Use random, gp, motpe, nsgaii, nsgaiii, bruteforce, ' ...
+        'or qmc for multiple objectives.']);
 end
-if ~isMultiObjective && ismember(selectedName, ["motpe","nsgaii"])
+if ~isMultiObjective && ismember(selectedName, ...
+        ["motpe","nsgaii","nsgaiii"])
     error('radia:simulink:OptunaSampler', ...
-        'Use random, tpe, or cmaes for a single objective.');
+        ['Use random, tpe, cmaes, gp, bruteforce, or qmc for ' ...
+        'a single objective.']);
 end
 switch selectedName
     case "random"
@@ -261,13 +267,23 @@ switch selectedName
         sampler = radia.optuna.TPESampler(Seed=0, NStartupTrials=10);
     case "cmaes"
         sampler = radia.optuna.CmaEsSampler(Seed=0, NStartupTrials=1);
+    case "gp"
+        sampler = radia.optuna.GPSampler(Seed=0,NStartupTrials=10, ...
+            DeterministicObjective=true);
     case "motpe"
         sampler = radia.optuna.MOTPESampler(Seed=0, NStartupTrials=20);
     case "nsgaii"
         sampler = radia.optuna.NSGAIISampler(Seed=0, PopulationSize=24);
+    case "nsgaiii"
+        sampler = radia.optuna.NSGAIIISampler(Seed=0,PopulationSize=24);
+    case "bruteforce"
+        sampler = radia.optuna.BruteForceSampler(Seed=0);
+    case "qmc"
+        sampler = radia.optuna.QMCSampler( ...
+            QMCType="sobol",Scramble=true,Seed=0);
 end
 decision = struct( ...
-    "schema", "radia.optuna.auto-sampler-lite.v1", ...
+    "schema", "radia.optuna.auto-sampler-lite.v2", ...
     "requested", spec.name, ...
     "selected", selectedName, ...
     "reason", reason, ...
@@ -281,48 +297,9 @@ decision = struct( ...
     "is_conditional", spec.is_conditional);
 end
 
-function [name, reason] = chooseAutoSampler(spec, isMultiObjective, nTrials)
-if isMultiObjective
-    if spec.has_constraints || spec.has_categorical || spec.is_conditional
-        name = "motpe";
-        reason = "multiobjective_mixed_conditional_or_constrained";
-    elseif spec.fixed_numeric && spec.constraints_declared && ...
-            ~spec.has_constraints && nTrials > 250
-        name = "nsgaii";
-        reason = "declared_unconstrained_numeric_population_budget";
-    elseif nTrials <= 250
-        name = "motpe";
-        reason = "multiobjective_small_budget";
-    else
-        name = "motpe";
-        reason = "multiobjective_unknown_space_safe_default";
-    end
-    return
-end
-
-minimumCmaTrials = Inf;
-if isfinite(spec.dimensions)
-    minimumCmaTrials = max(40, 8 * spec.dimensions);
-end
-cmaEligible = spec.fixed_numeric && spec.dimensions >= 2 && ...
-    spec.constraints_declared && ~spec.has_constraints && ...
-    nTrials >= minimumCmaTrials;
-if cmaEligible
-    name = "cmaes";
-    reason = "declared_fixed_numeric_correlated_budget";
-elseif spec.has_constraints
-    name = "tpe";
-    reason = "constrained_space";
-elseif spec.has_categorical || spec.is_conditional
-    name = "tpe";
-    reason = "categorical_or_conditional_space";
-elseif spec.fixed_numeric
-    name = "tpe";
-    reason = "fixed_numeric_budget_or_metadata_insufficient_for_cmaes";
-else
-    name = "tpe";
-    reason = "unknown_space_safe_default";
-end
+function [name, reason] = chooseAutoSampler(spec, nObjectives, nTrials)
+[name,reason]=radia.optuna.internal.AutoSamplerPolicy. ...
+    choose(spec,nObjectives,nTrials);
 end
 
 function value = metadataLogical(metadata, names, fallback)
