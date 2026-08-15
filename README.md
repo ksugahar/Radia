@@ -286,8 +286,9 @@ MATLAB adapters.
 
 Radia supports global, local, and gradient-based design loops:
 
-- TPE and CMA-ES for global, conditional, integer, and mixed search spaces;
-- MATLAB-native Optuna-style Study/Trial workflows and live Pareto monitoring;
+- TPE, CMA-ES, GP, NSGA-II/III, QMC, and finite define-by-run search;
+- MATLAB-native Optuna 4.9-style Study/Trial workflows, table-backed resume,
+  automatic sampler routing, and live Pareto monitoring;
 - analytic-adjoint MMA and SQP for continuous field optimization;
 - HDiv-VIM and HCurl material topology;
 - stream-function, sheet-metal, and electromagnet topology optimization;

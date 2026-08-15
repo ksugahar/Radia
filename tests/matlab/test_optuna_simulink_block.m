@@ -69,7 +69,7 @@ clear cleanup; closeModel(m);
 end
 function testSheetMetalOptimizationBlockUsesNativeRunner(testCase)
 m="radia_sheet_metal_optuna_block_test"; cleanup=onCleanup(@()closeModel(m)); new_system(m);
-runner=radia.optuna.SheetMetalRunner(@(trial)struct()); %#ok<NASGU,INUSD>
+runner=radia.optuna.SheetMetalRunner(@(trial)struct());
 [path,monitor]=radia.simulink.buildSheetMetalOptimizationBlock(m, ...
  RunnerVariable="radia_sheet_metal_runner_test",Runner=runner, ...
  NumTrials=7,Directions=["minimize","minimize"],Save=false);
@@ -185,5 +185,22 @@ end
 verifyEqual(testCase,monitor.UpdateCount,6);
 verifyEqual(testCase,height(study.paretoFront()),3);
 clear cleanup; delete(monitor);
+end
+function testBuilderExposesLargeNativeSamplerChoices(testCase)
+m="radia_optuna_large_sampler_choices";
+cleanup=onCleanup(@()closeModel(m));
+new_system(m);
+for choice=["gp","nsgaiii","bruteforce","qmc"]
+    path=radia.simulink.buildOptunaBlock(m, ...
+        ObjectiveFcn="radia_optuna_quadratic",NumTrials=2, ...
+        Sampler=choice,Save=false);
+    verifyEqual(testCase,string(get_param(path,"sampler_name")),choice);
+    parameter=Simulink.Mask.get(path).getParameter("sampler_name");
+    options=string(parameter.TypeOptions);
+    verifyTrue(testCase,all(ismember( ...
+        ["gp","nsgaiii","bruteforce","qmc"],options)));
+    delete_block(path);
+end
+clear cleanup; closeModel(m);
 end
 function closeModel(m), if bdIsLoaded(m), close_system(m,0); end, end

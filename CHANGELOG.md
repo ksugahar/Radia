@@ -5,6 +5,23 @@ All notable changes to the `radia` package.  Format: each release lists
 
 ## Unreleased
 
+## 4.95.53 - MATLAB Optuna 4.9 sampler parity
+
+Released 2026-08-16.
+
+- Added MATLAB-native Gaussian-process, NSGA-III, and finite define-by-run
+  brute-force samplers with table-backed state, seeded resume, constraints,
+  pending-trial handling, and multi-objective acquisition or niching where
+  applicable.
+- Replaced shifted scrambled QMC with seeded linear-matrix Sobol scrambling
+  and per-digit Owen-style Halton permutations while retaining exact
+  unscrambled Optuna/SciPy prefixes through the supported 32 Sobol dimensions.
+- Extended the Simulink Optuna block with explicit GP, NSGA-III, brute-force,
+  and QMC choices plus a persisted automatic-sampler decision for numeric,
+  mixed, conditional, constrained, and many-objective budgets.
+- Added differential quality, lifecycle, persistence, conditional-tree,
+  hypervolume, and Simulink regression gates against Optuna 4.9 fixtures.
+
 ## 4.95.52 - Curvilinear EarlyTimes, electromagnetic force, and MATLAB optimization
 
 Released 2026-08-16.

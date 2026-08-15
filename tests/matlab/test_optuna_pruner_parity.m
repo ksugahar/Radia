@@ -2,6 +2,22 @@ function tests=test_optuna_pruner_parity
 tests=functiontests(localfunctions);
 end
 
+function setupOnce(testCase)
+root=fileparts(fileparts(fileparts(mfilename("fullpath"))));
+matlabDirectory=fullfile(root,"matlab");
+entries=string(strsplit(path,pathsep));
+testCase.TestData.RemovePath= ...
+    ~any(strcmpi(entries,string(matlabDirectory)));
+if testCase.TestData.RemovePath, addpath(matlabDirectory); end
+testCase.TestData.MatlabDirectory=matlabDirectory;
+end
+
+function teardownOnce(testCase)
+if testCase.TestData.RemovePath
+    rmpath(testCase.TestData.MatlabDirectory);
+end
+end
+
 function testReportMatchesOptunaSemantics(testCase)
 study=radia.optuna.Study(Pruner=radia.optuna.NopPruner(),AutoSave=false);
 trial=study.ask();
