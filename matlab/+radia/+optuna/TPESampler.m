@@ -5,9 +5,13 @@ classdef TPESampler < handle
     %   set capped at 25 trials, 24 expected-improvement candidates,
     %   observation-specific truncated-normal kernels, history weights,
     %   an explicit prior, and magic clipping.
+    %   Constraint-aware splits use c <= 0 as feasible, rank infeasible
+    %   trials by total positive violation, and rank missing/nonfinite
+    %   constraint records last.
 
     properties (SetAccess=private)
         Stream
+        Seed (1,1) double = 0
         NStartupTrials (1,1) double = 10
         Gamma (1,1) double = 0.1
         MaxGoodTrials (1,1) double = 25
@@ -18,6 +22,16 @@ classdef TPESampler < handle
         Multivariate (1,1) logical = false
         ConstantLiar (1,1) logical = false
         ConstraintsFcn = []
+    end
+
+    properties (Access=private)
+        AttachedStudy = []
+        Restored (1,1) logical = false
+    end
+
+    properties (Constant, Access=private)
+        StateSchema = "radia.optuna.tpe-sampler-state.v1"
+        SamplerName = "tpe"
     end
 
     methods
@@ -58,7 +72,8 @@ classdef TPESampler < handle
                 error("radia:optuna:TPEPriorWeight", ...
                     "PriorWeight must be finite and nonnegative.");
             end
-            obj.Stream = RandStream("mt19937ar", "Seed", double(options.Seed));
+            obj.Seed = double(options.Seed);
+            obj.Stream = RandStream("mt19937ar", "Seed", obj.Seed);
             obj.NStartupTrials = options.NStartupTrials;
             obj.Gamma = options.Gamma;
             obj.MaxGoodTrials = options.MaxGoodTrials;
@@ -76,26 +91,33 @@ classdef TPESampler < handle
             obj.ConstraintsFcn = options.ConstraintsFcn;
         end
 
-        function value = sampleFloat(obj, study, trial, name, low, high, options) %#ok<INUSD>
+        function value = sampleFloat(obj, study, trial, name, low, high, options)
+            obj.attach(study);
             obj.validateBounds(low, high, options.Log, options.Step);
             if low == high
                 value = low;
                 return
             end
-            [x, y] = obj.numericObservations(study, name);
+            [x, y, trialNumbers, pending] = ...
+                obj.numericObservations(study, name);
             valid = isfinite(x) & isfinite(y) & x >= low & x <= high;
             if options.Log
                 valid = valid & x > 0;
             end
             x = x(valid);
             y = y(valid);
-            if isempty(y) || numel(y) < obj.NStartupTrials
-                value = obj.uniform(low, high, options.Log);
-                value = obj.quantize(value, low, high, options.Step);
+            trialNumbers = trialNumbers(valid);
+            pending = pending(valid);
+            finishedCount = sum(~pending);
+            if finishedCount == 0 || finishedCount < obj.NStartupTrials
+                value = obj.randomNumerical( ...
+                    low, high, options.Log, options.Step);
+                obj.recordState(study, trial.Number);
                 return
             end
 
-            [good, bad] = obj.splitObservations(x, y, study.Directions(1));
+            [good, bad] = obj.splitObservations( ...
+                x, y, study.Directions(1), study, trialNumbers, pending);
             estimatorOptions = { ...
                 "Log", options.Log, ...
                 "Step", options.Step, ...
@@ -116,6 +138,7 @@ classdef TPESampler < handle
                 above, candidates);
             [~, best] = max(acquisition);
             value = candidates(best);
+            obj.recordState(study, trial.Number);
         end
 
         function value = sampleInteger(obj, study, trial, name, low, high)
@@ -132,12 +155,14 @@ classdef TPESampler < handle
             value = min(max(round(value), low), high);
         end
 
-        function value = sampleCategorical(obj, study, trial, name, choices) %#ok<INUSD>
+        function value = sampleCategorical(obj, study, trial, name, choices)
+            obj.attach(study);
             if isempty(choices)
                 error("radia:optuna:Choices", ...
                     "Categorical choices must not be empty.");
             end
-            [tokens, y] = obj.categoricalObservations(study, name);
+            [tokens, y, trialNumbers, pending] = ...
+                obj.categoricalObservations(study, name);
             choiceTokens = obj.choiceTokens(choices);
             observed = zeros(numel(tokens), 1);
             valid = isfinite(y);
@@ -151,15 +176,20 @@ classdef TPESampler < handle
             end
             observed = observed(valid);
             y = y(valid);
+            trialNumbers = trialNumbers(valid);
+            pending = pending(valid);
             count = numel(choiceTokens);
-            if numel(y) < obj.NStartupTrials
+            finishedCount = sum(~pending);
+            if finishedCount == 0 || finishedCount < obj.NStartupTrials
                 index = 1 + floor(rand(obj.Stream, 1, 1) * count);
                 value = obj.choiceAt(choices, index);
+                obj.recordState(study, trial.Number);
                 return
             end
 
             [good, bad] = obj.splitObservations( ...
-                observed, y, study.Directions(1));
+                observed, y, study.Directions(1), study, ...
+                trialNumbers, pending);
             below = radia.optuna.internal.ParzenEstimator.categorical( ...
                 good, count, PriorWeight=obj.PriorWeight);
             above = radia.optuna.internal.ParzenEstimator.categorical( ...
@@ -174,10 +204,12 @@ classdef TPESampler < handle
                 above, candidates);
             [~, best] = max(acquisition);
             value = obj.choiceAt(choices, candidates(best));
+            obj.recordState(study, trial.Number);
         end
 
-        function values = sampleJoint(obj, study, ~, names, lows, highs, options)
+        function values = sampleJoint(obj, study, trial, names, lows, highs, options)
             %SAMPLEJOINT Multivariate TPE with a shared mixture component.
+            obj.attach(study);
             template = struct( ...
                 "name", "", ...
                 "distribution", ...
@@ -195,6 +227,7 @@ classdef TPESampler < handle
             for index = 1:numel(sampled)
                 values(index) = double(sampled{index});
             end
+            obj.recordState(study, trial.Number);
         end
 
         function searchSpace = inferRelativeSearchSpace(obj, study, trial) %#ok<INUSD>
@@ -213,6 +246,7 @@ classdef TPESampler < handle
         end
 
         function beforeTrial(obj, study, trial)
+            obj.attach(study);
             if ~obj.Multivariate || numel(study.Directions) ~= 1
                 return
             end
@@ -227,6 +261,7 @@ classdef TPESampler < handle
             end
             values = obj.sampleRelativeSpace(study, searchSpace);
             trial.setRelativeParameters(searchSpace, values);
+            obj.recordState(study, trial.Number);
         end
 
         function afterTrial(obj, study, trial)
@@ -237,17 +272,17 @@ classdef TPESampler < handle
     end
 
     methods (Access=private)
-        function [good, bad] = splitObservations(obj, values, objectives, direction)
-            if direction == "minimize"
-                [~, order] = sort(objectives, "ascend");
-            else
-                [~, order] = sort(objectives, "descend");
-            end
+        function [good, bad] = splitObservations(obj, values, objectives, ...
+                direction, study, trialNumbers, pending)
             % Match Optuna's _split_complete_trials: n_below may equal the
             % number of observations.  In that case the above density is
             % represented by its prior component only.
-            nGood = min(obj.MaxGoodTrials, ceil(obj.Gamma * numel(values)));
-            nGood = max(1, min(numel(values), nGood));
+            finishedCount = sum(~pending);
+            nGood = min(obj.MaxGoodTrials, ...
+                ceil(obj.Gamma * finishedCount));
+            nGood = max(1, min(finishedCount, nGood));
+            order = obj.rankObservations( ...
+                objectives, direction, study, trialNumbers, pending);
             isGood = false(numel(values), 1);
             isGood(order(1:nGood)) = true;
             % Keep chronological order so Optuna's history weights attach to
@@ -256,42 +291,74 @@ classdef TPESampler < handle
             bad = values(~isGood);
         end
 
-        function [x, y] = numericObservations(~, study, name)
+        function [x, y, trialNumbers, pending] = ...
+                numericObservations(obj, study, name)
             p = study.ParamTable;
             t = study.TrialTable;
             rows = p.Name == string(name) & isfinite(p.ValueNumeric);
             indices = find(rows);
             x = zeros(0, 1);
             y = zeros(0, 1);
+            trialNumbers = zeros(0, 1);
+            pending = false(0, 1);
+            liar = obj.liarObjective(study);
             for index = reshape(indices, 1, [])
-                trialRow = t.TrialNumber == p.TrialNumber(index) & ...
-                    t.State == "COMPLETE" & isfinite(t.Value);
-                if any(trialRow)
-                    x(end+1, 1) = p.ValueNumeric(index); %#ok<AGROW>
-                    y(end+1, 1) = t.Value(find(trialRow, 1)); %#ok<AGROW>
+                trialRow = find(t.TrialNumber == p.TrialNumber(index), 1);
+                if isempty(trialRow)
+                    continue
                 end
+                state = t.State(trialRow);
+                if state == "COMPLETE" && isfinite(t.Value(trialRow))
+                    objective = t.Value(trialRow);
+                    isPending = false;
+                elseif state == "RUNNING" && obj.ConstantLiar
+                    objective = liar;
+                    isPending = true;
+                else
+                    continue
+                end
+                x(end+1, 1) = p.ValueNumeric(index); %#ok<AGROW>
+                y(end+1, 1) = objective; %#ok<AGROW>
+                trialNumbers(end+1, 1) = p.TrialNumber(index); %#ok<AGROW>
+                pending(end+1, 1) = isPending; %#ok<AGROW>
             end
         end
 
-        function [tokens, y] = categoricalObservations(obj, study, name)
+        function [tokens, y, trialNumbers, pending] = ...
+                categoricalObservations(obj, study, name)
             p = study.ParamTable;
             t = study.TrialTable;
             rows = p.Name == string(name) & p.Kind == "categorical";
             indices = find(rows);
             tokens = strings(0, 1);
             y = zeros(0, 1);
+            trialNumbers = zeros(0, 1);
+            pending = false(0, 1);
+            liar = obj.liarObjective(study);
             for index = reshape(indices, 1, [])
-                trialRow = t.TrialNumber == p.TrialNumber(index) & ...
-                    t.State == "COMPLETE" & isfinite(t.Value);
-                if any(trialRow)
-                    if isfinite(p.ValueNumeric(index))
-                        tokens(end+1, 1) = ...
-                            obj.token(p.ValueNumeric(index)); %#ok<AGROW>
-                    else
-                        tokens(end+1, 1) = p.ValueText(index); %#ok<AGROW>
-                    end
-                    y(end+1, 1) = t.Value(find(trialRow, 1)); %#ok<AGROW>
+                trialRow = find(t.TrialNumber == p.TrialNumber(index), 1);
+                if isempty(trialRow)
+                    continue
                 end
+                state = t.State(trialRow);
+                if state == "COMPLETE" && isfinite(t.Value(trialRow))
+                    objective = t.Value(trialRow);
+                    isPending = false;
+                elseif state == "RUNNING" && obj.ConstantLiar
+                    objective = liar;
+                    isPending = true;
+                else
+                    continue
+                end
+                if isfinite(p.ValueNumeric(index))
+                    tokens(end+1, 1) = ...
+                        obj.token(p.ValueNumeric(index)); %#ok<AGROW>
+                else
+                    tokens(end+1, 1) = p.ValueText(index); %#ok<AGROW>
+                end
+                y(end+1, 1) = objective; %#ok<AGROW>
+                trialNumbers(end+1, 1) = p.TrialNumber(index); %#ok<AGROW>
+                pending(end+1, 1) = isPending; %#ok<AGROW>
             end
         end
 
@@ -327,9 +394,11 @@ classdef TPESampler < handle
         end
 
         function values = sampleRelativeSpace(obj, study, searchSpace)
-            [observations, objectives] = ...
+            [observations, objectives, trialNumbers, pending] = ...
                 obj.relativeObservations(study, searchSpace);
-            if size(observations, 1) < obj.NStartupTrials || ...
+            finishedCount = sum(~pending);
+            if finishedCount == 0 || ...
+                    finishedCount < obj.NStartupTrials || ...
                     isempty(objectives)
                 values = cell(1, numel(searchSpace));
                 for index = 1:numel(searchSpace)
@@ -340,7 +409,8 @@ classdef TPESampler < handle
             end
 
             [good, bad] = obj.splitJointObservations( ...
-                observations, objectives, study.Directions(1));
+                observations, objectives, study.Directions(1), study, ...
+                trialNumbers, pending);
             dimension = numel(searchSpace);
             below = cell(1, dimension);
             above = cell(1, dimension);
@@ -417,7 +487,8 @@ classdef TPESampler < handle
             end
         end
 
-        function [x, y] = relativeObservations(obj, study, searchSpace)
+        function [x, y, observationTrialNumbers, pending] = ...
+                relativeObservations(obj, study, searchSpace)
             states = study.TrialTable.State;
             usable = states == "COMPLETE" | states == "PRUNED" | ...
                 (states == "RUNNING" & obj.ConstantLiar);
@@ -433,6 +504,8 @@ classdef TPESampler < handle
             end
             x = zeros(0, numel(searchSpace));
             y = zeros(0, 1);
+            observationTrialNumbers = zeros(0, 1);
+            pending = false(0, 1);
             for number = reshape(trialNumbers, 1, [])
                 row = study.TrialTable.TrialNumber == number;
                 state = study.TrialTable.State(find(row,1));
@@ -478,6 +551,8 @@ classdef TPESampler < handle
                 if valid
                     x(end+1,:) = values; %#ok<AGROW>
                     y(end+1,1) = objectiveValue; %#ok<AGROW>
+                    observationTrialNumbers(end+1,1) = number; %#ok<AGROW>
+                    pending(end+1,1) = state == "RUNNING"; %#ok<AGROW>
                 end
             end
         end
@@ -525,18 +600,131 @@ classdef TPESampler < handle
             end
         end
 
-        function [good, bad] = splitJointObservations(obj, values, objectives, direction)
-            if direction == "minimize"
-                [~, order] = sort(objectives, "ascend");
-            else
-                [~, order] = sort(objectives, "descend");
-            end
-            nGood = min(obj.MaxGoodTrials, ceil(obj.Gamma * size(values,1)));
-            nGood = max(1, min(size(values,1), nGood));
+        function [good, bad] = splitJointObservations(obj, values, ...
+                objectives, direction, study, trialNumbers, pending)
+            finishedCount = sum(~pending);
+            nGood = min(obj.MaxGoodTrials, ...
+                ceil(obj.Gamma * finishedCount));
+            nGood = max(1, min(finishedCount, nGood));
+            order = obj.rankObservations( ...
+                objectives, direction, study, trialNumbers, pending);
             mask = false(size(values,1),1);
             mask(order(1:nGood)) = true;
             good = values(mask,:);
             bad = values(~mask,:);
+        end
+
+        function order = rankObservations(obj, objectives, direction, ...
+                study, trialNumbers, pending)
+            % Feasible completed/pruned trials rank before infeasible ones;
+            % infeasible trials rank by total positive violation. Missing or
+            % nonfinite constraint data is deliberately worst (Inf). Pending
+            % constant-liar observations can shape only the above density.
+            violations = obj.constraintViolations(study, trialNumbers);
+            objectiveRank = reshape(double(objectives), [], 1);
+            if direction == "maximize"
+                objectiveRank = -objectiveRank;
+            end
+            sequence = (1:numel(objectiveRank))';
+            rankKeys = [double(reshape(pending, [], 1)), ...
+                double(violations > 0), violations, objectiveRank, sequence];
+            [~, order] = sortrows(rankKeys, 1:size(rankKeys, 2));
+        end
+
+        function violations = constraintViolations(obj, study, trialNumbers)
+            trialNumbers = reshape(double(trialNumbers), [], 1);
+            violations = zeros(size(trialNumbers));
+            constraintsEnabled = ~isempty(obj.ConstraintsFcn) || ...
+                study.hasConstraintRecords();
+            if ~constraintsEnabled
+                return
+            end
+            for index = 1:numel(trialNumbers)
+                [present,constraintValues] = ...
+                    study.constraintRecord(trialNumbers(index));
+                if ~present
+                    violations(index) = Inf;
+                    continue
+                end
+                violations(index) = sum(max(constraintValues, 0));
+            end
+        end
+
+        function value = liarObjective(~, study)
+            complete = study.TrialTable.State == "COMPLETE" & ...
+                isfinite(study.TrialTable.Value);
+            finished = study.TrialTable.Value(complete);
+            if isempty(finished)
+                value = 0;
+            elseif study.Directions(1) == "minimize"
+                value = max(finished);
+            else
+                value = min(finished);
+            end
+        end
+
+        function value = randomNumerical(obj, low, high, logScale, step)
+            if isfinite(step) && ~logScale
+                count = floor((high - low) / step + 1e-12) + 1;
+                index = floor(rand(obj.Stream, 1, 1) * count);
+                value = low + index * step;
+                value = min(value, high);
+                return
+            end
+            value = obj.uniform(low, high, logScale);
+            value = obj.quantize(value, low, high, step);
+        end
+
+        function attach(obj, study)
+            changed = isempty(obj.AttachedStudy) || ...
+                ~isequal(obj.AttachedStudy, study);
+            if changed
+                obj.AttachedStudy = study;
+                obj.Stream = RandStream("mt19937ar", "Seed", obj.Seed);
+                obj.Restored = false;
+            end
+            if obj.Restored
+                return
+            end
+            state = study.samplerState(obj.SamplerName, obj.StateSchema);
+            if ~isempty(state)
+                obj.restoreState(state);
+            end
+            obj.Restored = true;
+        end
+
+        function restoreState(obj, state)
+            required = ["schema", "seed", "random_state"];
+            if ~isstruct(state) || ~isscalar(state) || ...
+                    any(~isfield(state, required)) || ...
+                    string(state.schema) ~= obj.StateSchema
+                error("radia:optuna:TPEState", ...
+                    "Stored TPE sampler state is invalid or unsupported.");
+            end
+            if ~isnumeric(state.seed) || ~isscalar(state.seed) || ...
+                    ~isfinite(double(state.seed)) || ...
+                    double(state.seed) ~= obj.Seed
+                error("radia:optuna:TPEStateSeed", ...
+                    "Stored TPE sampler seed (%g) does not match the " + ...
+                    "configured seed (%g).", double(state.seed), obj.Seed);
+            end
+            try
+                obj.Stream.State = state.random_state;
+            catch exception
+                error("radia:optuna:TPEState", ...
+                    "Stored TPE random state is invalid: %s", ...
+                    exception.message);
+            end
+        end
+
+        function recordState(obj, study, trialNumber)
+            state = struct( ...
+                "schema", obj.StateSchema, ...
+                "seed", obj.Seed, ...
+                "random_state", obj.Stream.State);
+            generation = sum(study.TrialTable.State == "COMPLETE");
+            study.recordSamplerState(obj.SamplerName, obj.StateSchema, ...
+                trialNumber, generation, state);
         end
 
         function value = quantize(~, value, low, high, step)

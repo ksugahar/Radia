@@ -22,8 +22,8 @@ silently dropped from the count.
 | Underscore numerical kernels | 27 / 27 covered |
 | Stateful pybind11 class surface | 121 / 121 covered |
 | MEX gateway commands | 337 |
-| MATLAB Optuna classes | 12 |
-| MATLAB Optuna factory functions | 3 |
+| MATLAB Optuna classes | 30 |
+| MATLAB Optuna factory functions | 7 |
 
 Seven acoustic commands share their implementation with the pybind11
 scattering/CQ bindings: four real-wavenumber sphere models, complex-wavenumber
@@ -285,13 +285,53 @@ bestParams = study.bestParams();
 bestSnapshot = study.bestSolution();
 ```
 
-The MATLAB implementation provides `ask`, `tell`, define-by-run suggestions,
-intermediate reporting, pruning, table-backed persistence, TPE, CMA-ES, and
-Simulink execution. `bestValue`, `bestParams`, and `bestSolution` expose the
+The MATLAB implementation provides `ask`, `tell`, FIFO `enqueueTrial`,
+define-by-run suggestions, intermediate reporting, table-backed persistence,
+and Simulink execution. `Study.optimize` supports timeout, callbacks,
+selective exception catching, and callback/objective `stop`; `FrozenTrial`,
+`createTrial`, `addTrial`, study/trial attributes, and metric names cover the
+corresponding Optuna lifecycle surfaces. `bestValue`, `bestParams`, and `bestSolution` expose the
 persisted single-objective best for warm starts and downstream Simulink setup;
 multi-objective studies use `paretoFront`. The workflow and table schema are compatible with Optuna;
 sampler random streams and optimizer internals are not promised to reproduce
 Python Optuna bit for bit.
+
+The native sampler set includes Random, TPE/MOTPE, CMA-ES, constrained joint
+NSGA-II and NSGA-III, `GPSampler`, finite `GridSampler`, define-by-run
+`BruteForceSampler`, `PartialFixedSampler`, and numeric Sobol/Halton
+`QMCSampler`. Unscrambled QMC uses the same leading Sobol/Halton points as the
+Optuna/SciPy definitions. `Scramble=true` applies a seeded lower-triangular
+linear-matrix scramble plus digital shift for Sobol and seeded per-digit Owen
+permutations for Halton. The algorithms match the SciPy scrambling families,
+although MATLAB and SciPy random streams are intentionally not bit-identical;
+the embedded Joe-Kuo Sobol direction table is currently bounded to 32
+dimensions. The pruner set includes Median, Percentile, Threshold, Patient,
+Nop, asynchronous Successive Halving, Hyperband, and paired Wilcoxon. Rung,
+QMC sequence, GP hyperparameter, and evolutionary sampler state is persisted.
+
+`GPSampler` fits toolbox-free Matérn-5/2 ARD Gaussian processes over the
+stable intersection search space. It supports numeric and categorical
+variables, expected improvement, Monte-Carlo expected hypervolume
+improvement, `c_i <= 0` feasibility probability, pending-trial repulsion,
+deterministic/noisy objectives, Cholesky jitter recovery, and seeded resume.
+Kernel hyperparameters use Optuna 4.9's default inverse-length-scale, kernel,
+and noise priors. Acquisition search uses 2048 scrambled Sobol preliminary
+points, ten bounded local starts, and 128 Monte-Carlo EHVI samples by default.
+The local optimizer and random stream remain MATLAB-native counterparts of
+Optuna's L-BFGS-B/Torch implementation, not numerical or random-stream bit
+parity. Differential gates use identical Sobol startup trials for Branin,
+Hartmann6, constrained search, multi-objective hypervolume, and pending batches;
+they also compare deterministic kernel-fit and NSGA-III transform fixtures to
+Optuna 4.9. `NSGAIIISampler` retains the constrained joint
+NSGA-II generation/crossover contract and replaces cutoff-front crowding with
+Optuna-style extreme-point normalization, reference-line association, and
+niche preservation. `BruteForceSampler` exhausts finite conditional
+define-by-run trees and prevents duplicate RUNNING branches by default.
+The Simulink auto-policy uses GP for declared fixed-numeric budgets up to 250
+trials, CMA-ES beyond that for unconstrained single-objective searches,
+NSGA-II/III for larger multi-objective populations, and TPE/MOTPE for
+categorical, conditional, or otherwise unknown spaces. The selected rule is
+stored with the study as `auto_sampler_decision`.
 
 Three optimizer hot kernels are native: `optuna.pareto.rank_crowding`,
 `optuna.parzen.log_pdf_numerical`, and
@@ -306,6 +346,17 @@ The resulting vectors are persisted in `Study.ConstraintTable`. Multi-objective
 TPE prioritizes feasible trials, ranks infeasible trials by summed positive
 violation, and uses hypervolume contribution for boundary selection and good
 density weights.
+
+`NSGAIISampler` matches the Optuna 4.9 algorithm contract rather than the
+former parameter-wise approximation. It uses joint parents, COMPLETE-only
+generations, fixed parent caches, constrained dominance, cutoff-front crowding,
+categorical uniform crossover, omission-based random mutation, and the six
+built-in Optuna crossover families. `ConstraintCountTable` preserves the
+semantic difference between an explicitly empty (feasible) constraint vector
+and a missing vector. Sampler state schema v3 persists the crossover,
+probabilities, strategy identities, generation assignments, parent caches, and
+random state. Seeded replay is deterministic within MATLAB; it does not claim
+NumPy `RandomState` bit parity.
 
 `radia.optuna.SheetMetalRunner` connects this lifecycle to the native
 `optimizeHexSheetTopology`, `optimizeHCurlEddyBubbleHexSheet`, and
