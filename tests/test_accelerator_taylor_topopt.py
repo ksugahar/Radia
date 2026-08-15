@@ -1,13 +1,18 @@
 import numpy as np
+import pytest
 
 from radia.accelerator_magnet_topopt import PlanarDesignOrbit
 from radia.accelerator_taylor_topopt import (
     SECOND_ORDER_MULTIPOLE_COMPONENTS,
+    DecoupledFirstOrderTarget,
     PlanarSecondOrderTaylorMapObjective,
+    Symplectic2x2KAN,
+    certify_decoupled_first_order_reachability,
     optimize_hdiv_mmm_magnet_from_second_order_taylor_map,
     planar_orbit_multipole_observations,
     run_second_order_taylor_material_inverse_pipeline,
     second_order_taylor_map_from_multipoles,
+    solve_decoupled_first_order_continuation,
 )
 
 
@@ -113,6 +118,153 @@ def test_second_order_R_T_forward_ad_matches_centered_difference():
             rtol=2.0e-7,
             atol=5.0e-10,
         )
+
+
+def test_kan_parameterization_covers_random_symplectic_blocks_and_target_gate():
+    rng = np.random.default_rng(20260816)
+    for _ in range(32):
+        parameters = rng.uniform(
+            [-4.0 * np.pi, -1.5, -3.0],
+            [4.0 * np.pi, 1.5, 3.0],
+        )
+        original = Symplectic2x2KAN(*parameters)
+        recovered = Symplectic2x2KAN.from_matrix(original.matrix)
+        assert np.linalg.det(original.matrix) == pytest.approx(1.0, abs=2.0e-14)
+        np.testing.assert_allclose(recovered.matrix, original.matrix, atol=3.0e-14)
+
+    target = DecoupledFirstOrderTarget(
+        Symplectic2x2KAN(0.4, -0.2, 0.7),
+        Symplectic2x2KAN(-0.3, 0.1, -0.5),
+        0.08,
+    )
+    recovered = DecoupledFirstOrderTarget.from_matrix(target.matrix)
+    np.testing.assert_allclose(recovered.matrix, target.matrix, atol=3.0e-15)
+
+    nonsymplectic = target.matrix.copy()
+    nonsymplectic[0, 0] *= 1.1
+    with pytest.raises(ValueError, match="determinant one"):
+        DecoupledFirstOrderTarget.from_matrix(nonsymplectic)
+    coupled = target.matrix.copy()
+    coupled[0, 2] = 0.01
+    with pytest.raises(ValueError, match="must decouple"):
+        DecoupledFirstOrderTarget.from_matrix(coupled)
+    rf_block = target.matrix.copy()
+    rf_block[5, 4] = 0.02
+    with pytest.raises(ValueError, match="magnetostatic longitudinal"):
+        DecoupledFirstOrderTarget.from_matrix(rf_block)
+
+
+def test_decoupled_first_order_rank_certificate_rejects_drift_and_accepts_seed():
+    count = 8
+    lengths = np.full(count, 0.08)
+    drift = np.zeros((5, count))
+    drift_certificate = certify_decoupled_first_order_reachability(
+        drift.reshape(-1),
+        lengths,
+        3.0,
+        maximum_step_m=0.008,
+    )
+    assert drift_certificate.transverse_numerical_rank == 3
+    assert not drift_certificate.full_transverse_rank
+
+    seeded = drift.copy()
+    seeded[1] = np.asarray(
+        [70.5, -123.0, 0.0, -157.0, -8.33, 106.0, 131.0, 0.1]
+    )
+    seeded_certificate = certify_decoupled_first_order_reachability(
+        seeded.reshape(-1),
+        lengths,
+        3.0,
+        maximum_step_m=0.008,
+    )
+    assert seeded_certificate.transverse_numerical_rank == 6
+    assert seeded_certificate.full_transverse_rank
+    assert seeded_certificate.decoupling_residual == 0.0
+    # The current piecewise RK4 value path is not a symplectic integrator;
+    # this residual is its checked step-size error, not a target defect.
+    assert seeded_certificate.symplectic_residual < 5.0e-9
+
+    for direction in (1, 6):
+        step = 1.0e-4
+        plus = seeded.copy()
+        minus = seeded.copy()
+        plus[1, direction] += step
+        minus[1, direction] -= step
+        plus_parameters = certify_decoupled_first_order_reachability(
+            plus.reshape(-1), lengths, 3.0, maximum_step_m=0.008
+        ).parameters
+        minus_parameters = certify_decoupled_first_order_reachability(
+            minus.reshape(-1), lengths, 3.0, maximum_step_m=0.008
+        ).parameters
+        finite_difference = (plus_parameters - minus_parameters) / (2.0 * step)
+        np.testing.assert_allclose(
+            seeded_certificate.directional_parameter_jacobian[:, direction],
+            finite_difference,
+            rtol=8.0e-6,
+            atol=3.0e-9,
+        )
+
+    drift_target = DecoupledFirstOrderTarget.from_matrix(
+        drift_certificate.transfer_matrix
+    )
+    rejected = solve_decoupled_first_order_continuation(
+        drift.reshape(-1),
+        lengths,
+        3.0,
+        drift_target,
+        maximum_step_m=0.008,
+    )
+    assert not rejected.converged
+    assert rejected.final_transverse_rank == 3
+    assert "rank 3" in rejected.status
+
+
+def test_rank6_continuation_reaches_random_nearby_decoupled_targets():
+    count = 8
+    lengths = np.full(count, 0.08)
+    seeded = np.zeros((5, count))
+    seeded[1] = np.asarray(
+        [70.5, -123.0, 0.0, -157.0, -8.33, 106.0, 131.0, 0.1]
+    )
+    certificate = certify_decoupled_first_order_reachability(
+        seeded.reshape(-1),
+        lengths,
+        3.0,
+        maximum_step_m=0.008,
+    )
+    assert certificate.full_transverse_rank
+
+    rng = np.random.default_rng(20260817)
+    for _ in range(2):
+        wanted = certificate.parameters.copy()
+        wanted[:6] += rng.uniform(-3.0e-4, 3.0e-4, 6)
+        target = DecoupledFirstOrderTarget(
+            Symplectic2x2KAN(*wanted[:3]),
+            Symplectic2x2KAN(*wanted[3:6]),
+            wanted[6],
+        )
+        result = solve_decoupled_first_order_continuation(
+            seeded.reshape(-1),
+            lengths,
+            3.0,
+            target,
+            maximum_target_step=1.5e-4,
+            minimum_target_step=1.0e-7,
+            stage_tolerance=2.0e-8,
+            final_tolerance=3.0e-8,
+            maximum_stage_evaluations=100,
+            maximum_step_m=0.008,
+        )
+
+        assert result.converged, result.status
+        assert result.final_transverse_rank == 6
+        assert result.stages
+        assert all(stage.accepted for stage in result.stages)
+        assert all(stage.transverse_numerical_rank == 6 for stage in result.stages)
+        assert result.final_maximum_normalized_parameter_error < 3.0e-8
+        assert result.final_matrix_error < 2.0e-7
+        assert result.final_decoupling_residual < 2.0e-13
+        assert result.final_symplectic_residual < 5.0e-9
 
 
 def test_second_order_pipeline_selects_skew_xy_material_column():

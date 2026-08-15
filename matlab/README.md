@@ -60,6 +60,33 @@ Native MEX remains an optional promotion for the four batch application
 blocks. It is mandatory for the IH runtime. Every promoted path must pass error
 propagation, object lifecycle, repeated-run, and long-run stability tests.
 
+## Shared Force and Torque Post-processing
+
+The solver-independent `radia.force` MATLAB package mirrors the NumPy API for
+solved SI samples. It covers static and peak/RMS phasor Lorentz integration,
+air-side Maxwell stress, force and torque about an explicit pivot, virtual
+work/coenergy derivatives, cylindrical air-gap pressure and shear torque, and
+the `radia.force-result/v1` result struct. Field solution, finite-element
+quadrature, rotor/stator selection, and MagLev motion remain solver- or
+application-owned.
+
+```matlab
+[force_N, torque_Nm] = radia.force.integrateLorentzForceTorque( ...
+    currentDensity, fluxDensity, volumeWeights, samplePoints, pivot);
+phasorForce_N = radia.force.integrateTimeAverageMaxwellSurface( ...
+    complexFluxDensity, outwardNormals, areaWeights, [], "peak");
+torqueSweep_Nm = radia.force.coenergyTorque(angles_rad, coenergy_J);
+```
+
+The planar HDiv Motor angle sweep records Maxwell-surface,
+magnetization-volume, and virtual-work torque through this schema at every
+angle. The transient Motor runner records its final Arkkio torque in the same
+form. MagLev's Foster Lorentz adapter records the conductor/source reaction
+pair and residual, while its CLN position-force curve can emit a normalized
+operating-point result. These application outputs can therefore use the same
+method-agreement, action-reaction, and lift/weight gates without duplicating
+their numerical definitions.
+
 ## Optional MEX Interface
 
 `radia_mex` exposes Radia C++ kernels directly to MATLAB without routing
@@ -216,14 +243,16 @@ still requires the Python runtime DLL at load time.
 
 ### Direct GridFunction beam maps and tracking
 
-The accelerator optics adapter consumes that native GridFunction handle
-directly. NGSolve performs element search, mapped-point construction, and field
-evaluation at nine transverse points per supplied reference station; MATLAB
-does not receive a sampled field map or reconstruct finite-element basis data.
+The accelerator optics adapter consumes a real `HCurl(order=p)` vector-
+potential GridFunction handle directly. NGSolve performs element search,
+mapped-point construction, and native `curl(A)` evaluation at nine transverse
+points per supplied reference station; MATLAB does not receive a sampled field
+map, an HDiv projection, or reconstructed finite-element basis data. The order
+`p` is read from the GridFunction's FESpace and returned in the diagnostics.
 
 ```matlab
 result = radia.beam.propagateGridFunctionLinearMap( ...
-    solvedB, segmentLengthsM, referencePositionsM, referenceTangents, ...
+    solvedA, segmentLengthsM, referencePositionsM, referenceTangents, ...
     magneticRigidityTM, SampleRadiusM=1e-3, ...
     InitialHorizontal=[1 0 0], Names=regionNames);
 
@@ -232,23 +261,33 @@ k1 = result.normal_gradient_per_m2;
 k1s = result.skew_gradient_per_m2;
 
 nonlinear = radia.beam.propagateGridFunctionMultipoleMap( ...
-    solvedB, segmentLengthsM, referencePositionsM, referenceTangents, ...
+    solvedA, segmentLengthsM, referencePositionsM, referenceTangents, ...
     magneticRigidityTM, MultipoleOrder=3, MaximumMapOrder=3);
 T = nonlinear.T;
 U = nonlinear.U;
 
 trajectory = radia.beam.trackGridFunction( ...
-    species, initialState, solvedB, 0, totalLengthM, 1e-4, ...
+    species, initialState, solvedA, 0, totalLengthM, 1e-4, ...
     Independent="path_length", Stepper="classical-rk4");
 ```
 
 The returned native diagnostics include the transported frame, center field,
-full local field gradient, normal/skew dipole through octupole coefficients,
+full local field gradient, normal/skew dipole through decapole coefficients,
 divergence/curl checks, fit rank/condition/residuals, and local `A/F2/F3` jets.
 The compatibility `propagateGridFunctionLinearMap` entry remains first order.
 `propagateGridFunctionMultipoleMap` builds the higher-order paraxial jet and
 region-attributed `R/T/U`; `trackGridFunction` evaluates the live field at each
 native Lorentz-integration stage and is the independent direct-field check.
+The default `FieldRepresentation` is `"hcurl_vector_potential"`. Existing
+HDiv/VectorH1 magnetic-flux-density GridFunctions are retained only as the
+explicit compatibility path
+`FieldRepresentation="magnetic_flux_density"`.
+
+Both map adapters transport the transverse axes with the fourth-order
+Bishop/RMF double-reflection method. Pass `PeriodicFrame=true` only when the
+stations cover one complete closed trajectory; the returned
+`frame_holonomy_correction_rad` is then distributed as a periodic
+constant-twist minimal-twist frame.
 
 The multipole map is a local source-free transverse body-field approximation
 with a piecewise-constant jet per supplied segment. It is not a complete
@@ -273,6 +312,14 @@ the binary material inverse. Complete active-system re-solves provide final
 acceptance. It is intended for setup and batch optimization, never per-step
 Simulink execution.
 
+Decoupled first-order targets use `Symplectic2x2KAN` for each transverse
+`Sp(2,R)` block and `DecoupledFirstOrderTarget` for
+`diag(Rx,Ry,[[1,R56],[0,1]])`. The batch function
+`solve_decoupled_first_order_continuation` advances along that KAN target path
+only while all six transverse AD/TSVD modes remain present. A drift-only
+rank-three seed and an unreachable longitudinal target fail loudly; arbitrary
+longitudinal phase-space rotation still requires an RF/electric energy kick.
+
 For a formally symplectic objective through fourth map order, use the canonical
 Lie batch boundary:
 
@@ -282,18 +329,22 @@ result = radia.python.acceleratorLieTopopt( ...
     {objective}, Keywords=optimizationInputs);
 ```
 
-This route builds the fourth-degree curvilinear body Hamiltonian in the native
+This route builds the fifth-degree curvilinear body Hamiltonian in the native
 C++ kernel, propagates rank-five forward-AD derivatives, and factorizes the
 map as `R o exp(:f3:) o exp(:f4:) o exp(:f5:)`. It rejects non-symplectic
 `R/T/U/V` targets, reports the
 formal residual and unreachable TSVD component, and provides a finite-amplitude
 implicit-midpoint application of the Lie factors. Its declared physical scope
-is piecewise-constant source-free body multipoles through octupole and the
-`H2/H3/H4` cascade. The Python boundary can consume a DOP853-tracked
-`PlanarDesignOrbit`, form its planar Frenet--Serret moving frame, and fit the
-live field. It does not silently add direct `H5`/decapole or fringe/edge terms,
-nonplanar torsion, or arbitrary-order normal forms. Wolfram Language produces the tracked symbolic
-derivation golden but is not a runtime dependency.
+is piecewise-constant source-free body multipoles through decapole and the
+`H2/H3/H4/H5` Hamiltonian. The Python boundary can consume a DOP853-tracked
+`PlanarDesignOrbit`, form its planar Bishop/RMF moving frame, and fit the live
+field. The general HCurl route samples the full upper/lower transverse patch,
+retains all fifth-degree xy cross terms in `A_y/A_s`, reports independent
+left/right jet mismatch, and chains sampled-field responses to scalar-objective
+gradients. The Hamiltonian `H1` response is returned as the fixed-design-orbit
+equality constraint. It does not silently add fringe/edge terms, nonplanar
+torsion, or arbitrary-order normal forms. Wolfram Language produces the tracked
+symbolic derivation golden but is not a runtime dependency.
 
 The shared native Hamiltonian kernel is also callable without Python:
 
@@ -760,10 +811,23 @@ bestSnapshot = study.bestSolution();
 it cannot become stale when a study is reloaded.
 
 `Trial.suggest_float`, `suggest_int`, and `suggest_categorical` are compatible
-spellings for the MATLAB camelCase methods. `Trial.report` and
-`Trial.should_prune` support intermediate-value pruning through
-`radia.optuna.MedianPruner`. `RandomSampler`, `TPESampler`, and
-`CmaEsSampler` share the same ask/tell lifecycle. TPE uses the persisted
+spellings for the MATLAB camelCase methods. FIFO `enqueueTrial`, immutable
+`FrozenTrial` snapshots, `createTrial`/`addTrial`, callbacks, timeout,
+selective exception catching, `stop`, attributes, and metric names follow the
+same Study/Trial lifecycle. Duplicate intermediate steps are ignored rather
+than overwritten, while NaN reports remain available to pruners.
+
+`MedianPruner`, `PercentilePruner`, `ThresholdPruner`, `PatientPruner`,
+`NopPruner`, `SuccessiveHalvingPruner`, `HyperbandPruner`, and
+`WilcoxonPruner` implement the corresponding Optuna pruning contracts.
+Successive-halving rung attributes persist with the study, and Hyperband uses
+Optuna's CRC32 bracket allocation. `RandomSampler`, `TPESampler`,
+`CmaEsSampler`, `GridSampler`, `PartialFixedSampler`, and `QMCSampler` share
+the same ask/tell lifecycle. Grid search stops `Study.optimize` after the
+Cartesian product is exhausted. Unscrambled Sobol/Halton prefixes match the
+Optuna/SciPy definitions; the native Sobol table supports 32 dimensions and
+scrambled QMC uses a deterministic MATLAB random shift rather than claiming
+SciPy bit parity. TPE uses the persisted
 MATLAB tables for good/bad density proposals. CMA-ES infers the numeric
 intersection search space, samples a full population jointly, and applies
 full-covariance rank-one/rank-mu adaptation with cumulative evolution paths;
@@ -818,7 +882,14 @@ remains the plant and dynamic-system evaluator. For multiple objectives, pass
 `radia.optuna.LiveMonitor` through `ProgressFcn`. Use
 `radia.optuna.MOTPESampler` for Pareto-ranked multi-objective TPE or
 `radia.optuna.NSGAIISampler` for non-dominated sorting, crowding, crossover,
-and mutation. Use
+and mutation. The NSGA-II implementation follows the Optuna 4.9 contract:
+population size 50 by default, COMPLETE-only generational parent caches,
+constraint-aware tournament and elite selection, categorical uniform
+crossover, random-fallback mutation, and Uniform, BLX-alpha, SPX, SBX, vSBX,
+and UNDX numerical crossovers under `radia.optuna.nsgaii`. Empty constraint
+vectors remain distinguishable from missing constraint data across storage
+reloads. MATLAB and NumPy random streams are intentionally not bit-identical.
+Use
 `SimulinkRunner.optimizeParallel` (`parsim`) or
 `LTspiceRunner.optimizeParallel` (`parfeval`) for parallel engineering trials.
 

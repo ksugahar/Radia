@@ -13,6 +13,7 @@ and an air volume mesh are not used.  The caller owns ``ngsolve.TaskManager``.
 """
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 
 import numpy as np
@@ -83,6 +84,38 @@ class MultiMomentumSecondOrderTaylorMapObjective:
     def response_band(self) -> np.ndarray:
         return np.concatenate([item.response_band
                                for item in self.objectives])
+
+    def response_group_indices(self, groups) -> np.ndarray:
+        """Return global design-response rows for selected metric groups."""
+        requested = tuple(groups)
+        allowed = ("normal_dipole", "R", "T")
+        if (not requested or len(set(requested)) != len(requested)
+                or any(name not in allowed for name in requested)):
+            raise ValueError(
+                "response groups must be a non-empty unique subset of "
+                "('normal_dipole', 'R', 'T')")
+        wanted = set(requested)
+        rows = []
+        offset = 0
+        for item in self.objectives:
+            for name, response_slice in item.response_slices:
+                if name in wanted:
+                    rows.extend(offset + np.arange(
+                        response_slice.start, response_slice.stop,
+                        dtype=np.int64))
+            offset += item.response_target.size
+        return np.asarray(rows, dtype=np.int64)
+
+    def group_max_band_ratio(self, design_response, group) -> float:
+        """Evaluate one response group's global multi-momentum minimax ratio."""
+        values = _finite_array(
+            design_response, name="multi-momentum design response").reshape(-1)
+        if values.shape != self.response_target.shape:
+            raise ValueError("design response does not match the objective")
+        rows = self.response_group_indices((group,))
+        return float(np.max(np.abs(
+            (values[rows] - self.response_target[rows])
+            / self.response_band[rows])))
 
     @property
     def source_calibration_rows(self) -> np.ndarray:
@@ -247,6 +280,10 @@ class FFAGSecondOrderTaylorTopologyResult:
     R_max_band_ratios: np.ndarray
     T_max_band_ratios: np.ndarray
     topology: GrowthTopologyReport
+    primary_response_groups: tuple[str, ...] = (
+        "normal_dipole", "R", "T")
+    primary_max_band_ratio: float = np.nan
+    maximum_group_band_ratios: tuple[tuple[str, float], ...] = ()
 
     @property
     def active_elements(self) -> np.ndarray:
@@ -270,12 +307,21 @@ def optimize_ffag_hdiv_mmm_from_second_order_taylor_maps(
         volume_max, sample_radius, source_scale=1.0,
         optimize_source_scale=True, multipole_response_matrix=None,
         incident_multipole_response=None,
+        primary_response_groups=None,
+        maximum_group_band_ratios=None,
         **generation_options) -> FFAGSecondOrderTaylorTopologyResult:
     """Optimize one binary magnet directly against multi-momentum ``R/T``.
 
     Source amplitude is eliminated on every exact active solve when
     ``optimize_source_scale`` is true.  The derivative of that elimination is
     composed with the Taylor-map Jacobian inside the material contraction.
+    ``primary_response_groups`` may select the rows minimized by ACA/QR/TSVD,
+    LP, and exact acceptance.  ``maximum_group_band_ratios`` supplies absolute
+    group-wise physics guards evaluated only after the calibrated complete
+    active-set solve.  For example, primary ``('R',)`` with a
+    ``normal_dipole`` limit minimizes the transfer matrix without allowing the
+    bend-field profile to deteriorate.  Defaults preserve the original joint
+    minimax objective.
     """
     if not isinstance(objective, MultiMomentumSecondOrderTaylorMapObjective):
         raise TypeError(
@@ -307,6 +353,42 @@ def optimize_ffag_hdiv_mmm_from_second_order_taylor_maps(
     if incident.shape != (objective.raw_field_response_size,):
         raise ValueError(
             "incident_multipole_response must match the objective")
+    primary_groups = (("normal_dipole", "R", "T")
+                      if primary_response_groups is None else
+                      tuple(primary_response_groups))
+    primary_rows = objective.response_group_indices(primary_groups)
+    if (maximum_group_band_ratios is not None
+            and not isinstance(maximum_group_band_ratios, Mapping)):
+        raise TypeError("maximum_group_band_ratios must be a mapping")
+    guards = ({} if maximum_group_band_ratios is None else
+              dict(maximum_group_band_ratios))
+    for name, value in guards.items():
+        objective.response_group_indices((name,))
+        limit = float(value)
+        if not np.isfinite(limit) or limit < 0.0:
+            raise ValueError("group band-ratio limits must be finite and nonnegative")
+        guards[name] = limit
+    full_target = objective.response_target
+    full_band = objective.response_band
+
+    def primary_transform(raw_response):
+        return objective.transform(raw_response)[primary_rows]
+
+    def primary_transform_jacobian(raw_response):
+        return objective.transform_jacobian(raw_response)[primary_rows, :]
+
+    def exact_group_guard(raw_response, primary_response):
+        del primary_response
+        design_response = objective.transform(raw_response)
+        for name, limit in guards.items():
+            rows = objective.response_group_indices((name,))
+            ratio = float(np.max(np.abs(
+                (design_response[rows] - full_target[rows])
+                / full_band[rows])))
+            tolerance = 1.0e-10 * max(1.0, limit)
+            if ratio > limit + tolerance:
+                return False
+        return True
     source_rhs = source.assemble_hdiv_rhs(fes)
     rhs = scale * source_rhs
     incident = scale * incident
@@ -316,6 +398,7 @@ def optimize_ffag_hdiv_mmm_from_second_order_taylor_maps(
         "incident_response", "source_calibration_rows",
         "source_calibration_target", "source_calibration_band",
         "source_calibration_norm",
+        "exact_response_validator",
     }
     overlap = reserved.intersection(generation_options)
     if overlap:
@@ -327,12 +410,16 @@ def optimize_ffag_hdiv_mmm_from_second_order_taylor_maps(
         response_matrix=np.ascontiguousarray(response_matrix),
         active_elements=active_elements,
         element_volumes=element_volumes,
-        response_target=objective.response_target,
-        response_band=objective.response_band,
+        response_target=full_target[primary_rows],
+        response_band=full_band[primary_rows],
         volume_max=volume_max,
         incident_response=np.ascontiguousarray(incident),
-        response_transform=objective.transform,
-        response_transform_jacobian=objective.transform_jacobian,
+        response_transform=(objective.transform if
+            primary_rows.size == full_target.size else primary_transform),
+        response_transform_jacobian=(objective.transform_jacobian if
+            primary_rows.size == full_target.size else
+            primary_transform_jacobian),
+        exact_response_validator=(exact_group_guard if guards else None),
         source_calibration_rows=(
             objective.source_calibration_rows
             if optimize_source_scale else None),
@@ -376,7 +463,13 @@ def optimize_ffag_hdiv_mmm_from_second_order_taylor_maps(
         normal_dipole_max_band_ratios=np.asarray(dipole_ratios),
         R_max_band_ratios=np.asarray(R_ratios),
         T_max_band_ratios=np.asarray(T_ratios),
-        topology=topology)
+        topology=topology,
+        primary_response_groups=tuple(primary_groups),
+        primary_max_band_ratio=float(np.max(np.abs(
+            (generation.objective_response - full_target[primary_rows])
+            / full_band[primary_rows]))),
+        maximum_group_band_ratios=tuple(
+            (str(name), float(value)) for name, value in guards.items()))
 
 
 __all__ = [

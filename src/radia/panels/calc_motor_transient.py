@@ -519,6 +519,19 @@ def solve_motor_transient(
             )
             post.write(gmsh_file)
 
+    final_force_torque_result = None
+    if history["T_em"]:
+        from radia.force import force_torque_result
+
+        final_force_torque_result = force_torque_result(
+            None,
+            [0.0, 0.0, history["T_em"][-1]],
+            method="arkkio_air_gap_stress",
+            frame="global_cartesian",
+            pivot_m=[0.0, 0.0, 0.0],
+            dimensionality="2d_planar",
+        )
+
     return {
         "method": method,
         "vol_file": vol_file,
@@ -535,6 +548,8 @@ def solve_motor_transient(
         "final_i": state[:nbr_phases].tolist(),
         "final_theta_rad": float(state[nbr_phases]),
         "final_omega_rad_s": float(state[nbr_phases + 1]),
+        "force_result_schema": "radia.force-result/v1",
+        "final_force_torque_result": final_force_torque_result,
         "gmsh_file": gmsh_file,
         "method_paper": "Lange-Henrotte-Hameyer, IEEE TMAG 45(3) 2009",
         "e_bemf_history": history["e_bemf"],

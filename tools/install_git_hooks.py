@@ -29,7 +29,8 @@ SRC = os.path.join(REPO, "tools", "git-hooks")
 
 def _hooks_dir():
     """The real hooks directory (handles worktrees via --git-common-dir)."""
-    r = subprocess.run(["git", "rev-parse", "--git-common-dir"],
+    r = subprocess.run(["git", "-c", "safe.directory=*", "rev-parse",
+                        "--git-common-dir"],
                        cwd=REPO, capture_output=True, text=True)
     if r.returncode == 0 and r.stdout.strip():
         gd = r.stdout.strip()

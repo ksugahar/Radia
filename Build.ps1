@@ -61,8 +61,8 @@ if ($CubitInstallDir) {
     Write-Host "Cubit: NOT FOUND -- Cubit-plugin .pyd build will be skipped" -ForegroundColor Yellow
 }
 
-# Intel MKL (required for BLAS/LAPACK).  Accept both a full oneAPI install and
-# the pip mkl-devel layout under Python's Library directory.
+# Intel MKL 2026 (required for BLAS/LAPACK and HACApK/PARDISO). Accept both a
+# full oneAPI install and the pip mkl-devel layout under Python's Library.
 $MklCandidates = @()
 if ($env:MKLROOT -and (Test-Path $env:MKLROOT)) {
     $MklCandidates += $env:MKLROOT
@@ -76,14 +76,16 @@ $INTEL_MKL = $MklCandidates | Where-Object { Test-Path "$_\lib\mkl_rt.lib" } | S
 if (-not $INTEL_MKL) {
     $INTEL_MKL = $MklCandidates | Select-Object -First 1
 }
-if (-not (Test-Path "$INTEL_MKL\lib\mkl_rt.lib")) {
+$MklImportLibrary = "$INTEL_MKL\lib\mkl_rt.lib"
+$MklRuntime = "$INTEL_MKL\bin\mkl_rt.3.dll"
+if (-not (Test-Path $MklImportLibrary) -or -not (Test-Path $MklRuntime)) {
     if ($AxiFemOnly) {
         # axifem does NOT link MKL, and an incremental configure on a
         # populated build dir reuses the cached MKL paths -- so warn, don't exit.
         Write-Host "WARNING: Intel MKL not found at $INTEL_MKL -- continuing (-AxiFemOnly does not need MKL)" -ForegroundColor Yellow
     } else {
-        Write-Host "ERROR: Intel MKL not found at $INTEL_MKL" -ForegroundColor Red
-        Write-Host "Install Intel oneAPI Base Toolkit (MKL component)" -ForegroundColor Yellow
+        Write-Host "ERROR: Intel MKL 2026 not found at $INTEL_MKL" -ForegroundColor Red
+        Write-Host 'Install with: python -m pip install "mkl-devel>=2026,<2027"' -ForegroundColor Yellow
         exit 1
     }
 }
@@ -155,7 +157,7 @@ Write-Host "========================================" -ForegroundColor Cyan
 Write-Host "  Radia Build (MSVC + MKL + NGSolve)" -ForegroundColor Cyan
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host ""
-Write-Host "MKL:   $INTEL_MKL" -ForegroundColor Gray
+Write-Host "MKL:   $INTEL_MKL (mkl_rt.3.dll)" -ForegroundColor Gray
 Write-Host "Build: $BUILD_DIR" -ForegroundColor Gray
 Write-Host ""
 

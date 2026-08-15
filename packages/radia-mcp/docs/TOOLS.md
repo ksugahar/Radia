@@ -2,7 +2,7 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **976 tools** across 48 MCP servers.
+Total: **1004 tools** across 49 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
@@ -10,6 +10,7 @@ Total: **976 tools** across 48 MCP servers.
 | [`mcp-server-build123d`](#mcp-server-build123d) | `radia_mcp.build123d` | 78 |
 | [`mcp-server-gmsh`](#mcp-server-gmsh) | `radia_mcp.gmsh` | 69 |
 | [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 143 |
+| [`mcp-server-force`](#mcp-server-force) | `radia_mcp.force` | 21 |
 | [`mcp-server-radia-matlab`](#mcp-server-radia-matlab) | `radia_mcp.matlab` | 15 |
 | [`mcp-server-acoustic-fembem`](#mcp-server-acoustic-fembem) | `radia_mcp.acoustic_fembem` | 4 |
 | [`mcp-server-radia-acoustic`](#mcp-server-radia-acoustic) | `radia_mcp.radia_acoustic` | 5 |
@@ -21,7 +22,7 @@ Total: **976 tools** across 48 MCP servers.
 | [`mcp-server-ih`](#mcp-server-ih) | `radia_mcp.ih` | 6 |
 | [`mcp-server-peec`](#mcp-server-peec) | `radia_mcp.peec` | 4 |
 | [`mcp-server-electromagnet`](#mcp-server-electromagnet) | `radia_mcp.electromagnet` | 6 |
-| [`mcp-server-motor`](#mcp-server-motor) | `radia_mcp.motor` | 55 |
+| [`mcp-server-motor`](#mcp-server-motor) | `radia_mcp.motor` | 56 |
 | [`mcp-server-accelerator`](#mcp-server-accelerator) | `radia_mcp.accelerator` | 4 |
 | [`mcp-server-fusion-reactor`](#mcp-server-fusion-reactor) | `radia_mcp.fusion_reactor` | 3 |
 | [`mcp-server-magnetic-materials`](#mcp-server-magnetic-materials) | `radia_mcp.magnetic_materials` | 8 |
@@ -37,13 +38,13 @@ Total: **976 tools** across 48 MCP servers.
 | [`mcp-server-ndt`](#mcp-server-ndt) | `radia_mcp.ndt` | 4 |
 | [`mcp-server-metamaterial`](#mcp-server-metamaterial) | `radia_mcp.metamaterial` | 4 |
 | [`mcp-server-nmr-mri`](#mcp-server-nmr-mri) | `radia_mcp.nmr_mri` | 2 |
-| [`mcp-server-maglev`](#mcp-server-maglev) | `radia_mcp.maglev` | 5 |
+| [`mcp-server-maglev`](#mcp-server-maglev) | `radia_mcp.maglev` | 7 |
 | [`mcp-server-team-benchmark`](#mcp-server-team-benchmark) | `radia_mcp.team_benchmark` | 7 |
 | [`mcp-server-differential-forms`](#mcp-server-differential-forms) | `radia_mcp.differential_forms` | 15 |
 | [`mcp-server-mathematica`](#mcp-server-mathematica) | `radia_mcp.mathematica` | 14 |
 | [`mcp-server-md2html`](#mcp-server-md2html) | `radia_mcp.md2html` | 2 |
 | [`mcp-server-chart2d`](#mcp-server-chart2d) | `radia_mcp.chart2d` | 24 |
-| [`mcp-server-paper-writing`](#mcp-server-paper-writing) | `radia_mcp.paper_writing` | 179 |
+| [`mcp-server-paper-writing`](#mcp-server-paper-writing) | `radia_mcp.paper_writing` | 183 |
 | [`mcp-server-grant-writing`](#mcp-server-grant-writing) | `radia_mcp.grant_writing` | 28 |
 | [`mcp-server-poster`](#mcp-server-poster) | `radia_mcp.poster` | 32 |
 | [`mcp-server-literature-index`](#mcp-server-literature-index) | `radia_mcp.literature_index` | 9 |
@@ -469,6 +470,36 @@ Module: `radia_mcp.radia_ngsolve.server`
 | `urn_fit` | Fit a complex frequency response with a Universal Relaxation Network and |
 | `voice_coil_force_flux_sweep_gate` | Gate a PM voice-coil current sweep by force, flux, symmetry, and mesh evidence. |
 
+## `mcp-server-force`
+
+_Shared electromagnetic-force and torque method selection, static/phasor sample integration, virtual work, air-gap torque, and validation gates_
+
+Module: `radia_mcp.force.server`
+
+| Tool | Description |
+|---|---|
+| `force` | Common EM-force overview and routing; call `force_topics` for topics. |
+| `force_action_reaction_gate` | Gate Newton action-reaction closure for force and common-pivot torque. |
+| `force_air_gap_torque` | Compute uniform cylindrical air-gap Maxwell shear torque. |
+| `force_air_gap_torque_samples` | Integrate sampled cylindrical air-gap Maxwell shear torque. |
+| `force_coenergy_torque` | Differentiate fixed-current coenergy versus angle into torque samples. |
+| `force_extras` | PM, energy/coenergy, shape-derivative, Lorentz, and Meissner guidance. |
+| `force_lorentz` | Integrate static Lorentz force and optional torque from SI samples. |
+| `force_maxwell_surface` | Integrate static Maxwell surface force and optional torque. |
+| `force_method_agreement_gate` | Gate two independent force/torque result records for agreement. |
+| `force_method_selection_gate` | Select and gate a robust primary force-extraction method. |
+| `force_methods` | Unified theory: Maxwell stress, eggshell, Arkkio, nodal, and Lorentz. |
+| `force_recipe` | Practical method choice, high-order setup, pitfalls, and examples. |
+| `force_result` | Normalize solver-owned resultants to ``radia.force-result/v1``. |
+| `force_status` | (no description) |
+| `force_time_average_air_gap_torque_samples` | Integrate sampled peak/RMS phasor air-gap Maxwell shear torque. |
+| `force_time_average_lorentz` | Integrate cycle-averaged phasor Lorentz force and optional torque. |
+| `force_time_average_maxwell_surface` | Integrate cycle-averaged phasor Maxwell force and optional torque. |
+| `force_topics` | Authoritative list of topics accepted by this server's dispatcher tool. Returns 8 topics. |
+| `force_validation_guide` | Force method map, cross-checks, eggshell guidance, and evidence contract. |
+| `force_virtual_work` | Differentiate energy/coenergy versus displacement into force samples. |
+| `force_weight_equilibrium_gate` | Gate levitation or bearing lift against weight. |
+
 ## `mcp-server-radia-matlab`
 
 _Official MATLAB MCP composition, Radia/NGSolve MEX capability contract, table-backed Optuna-like optimization, and 43 generic ML/RL gates_
@@ -678,12 +709,13 @@ Module: `radia_mcp.motor.server`
 | `motor_dual_lane_training_route` | Route a motor prompt to one catalog case and both radia-motor lanes. |
 | `motor_dual_torque_method_curve_gate` | Gate two independently evaluated static-torque curves. |
 | `motor_electrothermal_result_chain_gate` | Gate a four-stage motor electrothermal result handoff. |
-| `motor_em_force_extras` | Forward to `differential_forms_em_force_extras` -- advanced EM force |
+| `motor_em_force_extras` | Compatibility alias for `force_extras` in `radia_mcp.force` -- advanced |
 | `motor_em_force_recipe` | Practical NGSolve EM-force recipe for motor analysis. |
 | `motor_femm_transient` | FEMM newbuild transient solver — Lange-Henrotte-Hameyer 2009 |
 | `motor_field_quick_check` | First-order 2D magnetic-circuit/BEM-like motor quick check. |
 | `motor_force_report_method_metadata_gate` | Gate a force report using independent methods and action-reaction. |
 | `motor_force_rotation_covariance_gate` | Check that a planar force vector follows a rotated excitation/geometry. |
+| `motor_force_torque_method_agreement_gate` | Apply the shared ``radia_mcp.force`` agreement gate to motor results. |
 | `motor_hdiv_hex_torque_gate` | Gate converged BDM1-lane HDiv-MMM motor torque on HEX meshes. |
 | `motor_henrotte_lineage` | The Henrotte–Hameyer–RWTH research arc (energy-consistent E&M FE). |
 | `motor_hollaus_eddy` | Karl Hollaus / TU Wien MSFEM for laminated-iron eddy currents. |
@@ -924,6 +956,8 @@ Module: `radia_mcp.maglev.server`
 | Tool | Description |
 |---|---|
 | `maglev` | Magnetic levitation knowledge -- maglev systems + levitation force physics. |
+| `maglev_force_torque_method_agreement_gate` | Apply the shared Force agreement gate to MagLev force/torque results. |
+| `maglev_force_weight_equilibrium_gate` | Gate MagLev lift against weight through the shared Force layer. |
 | `maglev_status` | (no description) |
 | `maglev_topics` | Authoritative list of topics accepted by this server's dispatcher tool. Returns 20 topics. |
 | `rotating_conductor_periodic_settling_gate` | Gate full-turn convergence of a rotating-conductor eddy response. |
@@ -1065,6 +1099,7 @@ Module: `radia_mcp.paper_writing.server`
 | `paper_writing_check_abstract_background_ratio` | Abstract 内で background (導入文) が占める割合を推定。 |
 | `paper_writing_check_abstract_no_math_no_citation` | Abstract 内に数式 (math), citation, domain acronym が混入していないか検出。 |
 | `paper_writing_check_citation_usage` | TeX 本文中の \cite{} キーと bib file の entries を突合。 |
+| `paper_writing_check_conclusion_first_use` | 結論で初出となる技術語・変数・数値・引用を検出。 |
 | `paper_writing_check_digest_human_review_triggers` | Detect one-page digest issues learned from Sugahara human review. |
 | `paper_writing_check_english_redflags` | 英文論文の典型的 red flag を検出 (冠詞、時制、自動詞/他動詞 の混同)。 |
 | `paper_writing_check_equation_numbering` | 方程式番号 (1), (2), ... の連番欠落 / 重複をチェック。 |
@@ -1164,6 +1199,7 @@ Module: `radia_mcp.paper_writing.server`
 | `presentation_check_color_count_per_slide` | 宮野『研究発表のためのスライドデザイン』S12: 3 色使い原則の検査 (v0.9.0)。 |
 | `presentation_check_hedge_on_key_slides` | pptx で Result / Conclusion / Summary スライドに弱気修飾語が |
 | `presentation_check_image_text_ratio` | 1 slide の image 面積比が min 未満を検出 (Zen style). |
+| `presentation_check_japanese_copy_style` | 和文スライド本文の文節改行と体言止めを点検。 |
 | `presentation_check_kanji_ratio` | スライド台本の漢字比率 check (re-export)。 |
 | `presentation_check_logo_on_every_slide` | 全スライドに同じロゴ画像が繰り返し配置されているかを検出。 |
 | `presentation_check_misuse_japanese` | 台本の現代誤用検出 (re-export)。 |
@@ -1171,13 +1207,15 @@ Module: `radia_mcp.paper_writing.server`
 | `presentation_check_over_politeness` | 学会発表で過剰に丁寧な言い回しを検出。木下 p.235。 |
 | `presentation_check_overfull_hbox` | beamer ログ中の Overfull \hbox をカウント。スライドでは致命的。 |
 | `presentation_check_pie_3d_charts` | pptx 内の chart shape を走査し、pie / doughnut / 3D chart を NG 検出。 |
-| `presentation_check_pptx_font_size` | pptx font size < 下限を検出。 |
+| `presentation_check_pptx_font_size` | pptx audience-facing font size < 下限を検出。 |
 | `presentation_check_progress_indicator` | outline / section-header slides for progress indication を検出。 |
 | `presentation_check_qa_backup_slides` | pptx に Q&A backup slide (hidden or named) が N 枚以上あるか確認. |
 | `presentation_check_script_paragraph_length` | 発表原稿の 1 パラグラフが 200-300 字目安から大きく外れていないか。 |
 | `presentation_check_slide_density` | 1 スライドあたりの文字密度チェック (テキストを直接渡す)。 |
 | `presentation_check_slide_line_count` | pptx の各 slide で text 行数が木下推奨の範囲内か検証。 |
-| `presentation_check_slide_title_verb` | 各 slide の title が claim 形式か名詞句止まりか。 |
+| `presentation_check_slide_message_hierarchy` | 各 content slide の伝達意図 title と下端の知見を位置ベースで点検。 |
+| `presentation_check_slide_title_specificity` | 各 slide title が短く具体的な「対象＋観点」になっているか点検。 |
+| `presentation_check_slide_title_verb` | 後方互換 alias。title の動詞化ではなく具体性・簡潔性を点検。 |
 | `presentation_check_takehome_slide` | pptx 最終 3 枚以内に Take-home / Summary / まとめ slide があるか確認。 |
 | `presentation_check_time_13_rule` | 木下 1/3 則 — 前半で全員わかる話、中盤で大半が分かった気、 |
 | `presentation_check_time_14_rule` | 木下 1/4 則 — 10 分講演を 4 等分 (intro/method/result/discussion) した |
@@ -1219,7 +1257,7 @@ Module: `radia_mcp.paper_writing.server`
 | `presentation_talk_feedback_lookup` | Query the learned conference-talk field-note catalog. |
 | `presentation_talk_feedback_stats` | Counts of the conference-talk field-note catalog (by venue / status |
 | `presentation_text_density_per_slide_western_style` | 欧米式 text-heavy slide を検出し、日本理系向けに修正提案。 |
-| `presentation_title_body_alignment_check` | Title が body の主張を要約しているかを per slide 診断。 |
+| `presentation_title_body_alignment_check` | Title の対象・観点が body の内容と対応しているかを診断。 |
 | `presentation_usage` | 学会発表スライド (IEEJ SA / IEEE conference / セミナー) の作文技術ガイド全体。 |
 | `presentation_validate_pdf_pages` | スライド PDF のページ数を実測。発表時間 / slot との整合を検証。 |
 | `presentation_visual_text_ratio_score` | per-slide visual/text ratio の distribution を score 化。 |

@@ -5,6 +5,29 @@ All notable changes to the `radia` package.  Format: each release lists
 
 ## Unreleased
 
+## 4.95.52 - Curvilinear EarlyTimes, electromagnetic force, and MATLAB optimization
+
+Released 2026-08-16.
+
+- Added the EarlyTimes design-orbit-centred Bishop/RMF loft chain and a
+  conforming HCurl vector-potential workflow. The fourth-order Lie-map route
+  now carries fifth-degree Hamiltonian terms and decapole response, supports
+  independent reference curvature, and reports separate Lie truncation and
+  A/B field-route discrepancies without constructing a regular field map.
+- Added electromagnetic force and torque contracts across Python and MATLAB,
+  including Lorentz volume integrals, Maxwell surface traction, air-gap shear,
+  coenergy/virtual-work routes, time-average phasor forms, and application
+  result integration for MagLev, Motor, and topology optimization.
+- Expanded the MATLAB Optuna-compatible layer with distribution and frozen
+  trial objects, NSGA-II joint sampling, grid/QMC/fixed samplers, production
+  pruners, table-backed persistence, and more robust Simulink execution and
+  recovery behavior.
+- Migrated the native build and wheel dependency contract to the oneMKL 2026
+  runtime ABI while retaining NGSolve's OpenBLAS-owned finite-element runtime.
+- Preserved the refined TEAM 36 v11 induction-heating validation result and
+  strengthened beam, force, MATLAB/MEX, MCP, and release-package regression
+  coverage.
+
 ## 4.95.51 - Native beam dynamics, nonlinear reactor, and integrated LTspice
 
 Released 2026-08-14.

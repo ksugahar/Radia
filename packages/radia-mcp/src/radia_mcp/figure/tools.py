@@ -142,14 +142,17 @@ _PROFILES = {
     },
     "presentation_slide": {
         "embed_width_cm": 25.0,
-        "font_pt": 22,
-        "legend_pt_min": 18,
+        "font_pt": 24,
+        "tick_pt": 24,
+        "legend_pt_min": 24,
+        "min_font_pt": 24,
         "linewidth_pt": 2.0,
         "axes_linewidth_pt": 1.5,
         "marker_size_pt": 12,
         "notes": (
-            "Slide deck (PowerPoint / Beamer). Big fonts so the back row "
-            "can read; thicker line widths so contrast survives projector."
+            "16:9 slide deck (PowerPoint / Beamer). Every visible figure "
+            "label, tick, legend, and annotation must be at least 24 pt; "
+            "thicker line widths preserve contrast on a projector."
         ),
     },
 }
@@ -221,6 +224,11 @@ Lab style — graph rules (Sugahara Lab):
 
     Use `figure_matlab2tikz_recipe` MCP tool for a ready-to-paste
     recipe tuned to a given lab profile.
+12. *** 16:9 SLIDE FIGURES: EVERY VISIBLE FONT >= 24 pt ***:
+    For PowerPoint / Beamer 16:9 slides, use `presentation_slide` or a
+    `beamer_169_*` profile.  Axis labels, tick labels, legends, panel labels,
+    and free annotations all have a 24 pt floor.  Simplify the plot or give it
+    more slide area instead of shrinking any text below 24 pt.
 """
 
 
@@ -697,8 +705,8 @@ def apply_lab_style(target: str = "digest_double_column_side_by_side",
         "font.size": prof["font_pt"],
         "axes.labelsize": prof["font_pt"],
         "axes.titlesize": prof["font_pt"],
-        "xtick.labelsize": prof["font_pt"] - 1,
-        "ytick.labelsize": prof["font_pt"] - 1,
+        "xtick.labelsize": prof.get("tick_pt", prof["font_pt"] - 1),
+        "ytick.labelsize": prof.get("tick_pt", prof["font_pt"] - 1),
         "legend.fontsize": prof["legend_pt_min"],
         "axes.linewidth": prof["axes_linewidth_pt"],
         "lines.linewidth": prof["linewidth_pt"],

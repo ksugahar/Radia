@@ -20,6 +20,25 @@ namespace {
 using F64Array = py::array_t<double, py::array::c_style |
                                      py::array::forcecast>;
 
+radia::beam::GridFunctionMagneticInput GridFunctionMagneticInput(
+        const std::string& value) {
+    if (value == "magnetic_flux_density")
+        return radia::beam::GridFunctionMagneticInput::MagneticFluxDensity;
+    if (value == "hcurl_vector_potential")
+        return radia::beam::GridFunctionMagneticInput::HCurlVectorPotential;
+    throw std::invalid_argument(
+        "field_representation must be 'magnetic_flux_density' or "
+        "'hcurl_vector_potential'");
+}
+
+const char* GridFunctionMagneticInputName(
+        radia::beam::GridFunctionMagneticInput value) {
+    return value ==
+        radia::beam::GridFunctionMagneticInput::HCurlVectorPotential
+        ? "hcurl_vector_potential"
+        : "magnetic_flux_density";
+}
+
 void RequireShape(const py::buffer_info& buffer,
                   const std::vector<py::ssize_t>& expected,
                   const char* name) {
@@ -254,14 +273,30 @@ py::dict GridFunctionReportDictionary(
         : "radia.beam.grid-function-multipole-map.result.v1";
     output["backend"] = "native-cpp-ngsolve-gridfunction";
     output["field_source"] = "ngsolve.GridFunction";
+    output["field_representation"] =
+        GridFunctionMagneticInputName(report.magnetic_input);
+    output["magnetic_evaluation"] = report.magnetic_input ==
+            radia::beam::GridFunctionMagneticInput::HCurlVectorPotential
+        ? "ngsolve-native-curl(A)"
+        : "direct-B";
+    output["grid_function_space_class"] =
+        report.grid_function_space_class;
+    output["grid_function_space_order"] =
+        report.grid_function_space_order;
     output["linearization_order"] = report.multipole_order;
     output["magnetic_rigidity_t_m"] = report.magnetic_rigidity_t_m;
     output["sample_radius_m"] = report.sample_radius_m;
     output["fit_model"] =
         "nine-point transverse harmonic multipole expansion through order " +
         std::to_string(report.multipole_order);
-    output["frame_convention"] =
-        "right-handed parallel transport seeded by initial_horizontal";
+    output["frame_convention"] = report.periodic_frame
+        ? "right-handed periodic minimal-twist frame from Bishop/RMF "
+          "holonomy correction"
+        : "right-handed Bishop/RMF double reflection seeded by "
+          "initial_horizontal";
+    output["periodic_frame"] = report.periodic_frame;
+    output["frame_holonomy_correction_rad"] =
+        report.frame_holonomy_correction_rad;
 
     const py::ssize_t count = static_cast<py::ssize_t>(
         report.linearizations.size());
@@ -293,10 +328,12 @@ py::dict GridFunctionReportDictionary(
     py::array_t<double> maximum_residual(count);
     py::array_t<std::int64_t> fit_rank(count);
     py::array_t<double> fit_condition(count);
+    const py::ssize_t multipole_columns = static_cast<py::ssize_t>(
+        report.multipole_order + 1);
     py::array_t<double> normal_multipoles(
-        std::vector<py::ssize_t>{count, 4});
+        std::vector<py::ssize_t>{count, multipole_columns});
     py::array_t<double> skew_multipoles(
-        std::vector<py::ssize_t>{count, 4});
+        std::vector<py::ssize_t>{count, multipole_columns});
     py::array_t<double> multipole_rms_residual(count);
     py::array_t<double> multipole_maximum_residual(count);
     py::array_t<std::int64_t> multipole_fit_rank(count);
@@ -349,11 +386,13 @@ py::dict GridFunctionReportDictionary(
             value.fit_rank);
         fit_condition.mutable_data()[index] =
             value.scaled_design_condition;
-        for (py::ssize_t order = 0; order < 4; ++order) {
-            normal_multipoles.mutable_data()[index * 4 + order] =
+        for (py::ssize_t order = 0; order < multipole_columns; ++order) {
+            normal_multipoles.mutable_data()[
+                index * multipole_columns + order] =
                 value.multipoles.normal_t_per_m_power[
                     static_cast<std::size_t>(order)];
-            skew_multipoles.mutable_data()[index * 4 + order] =
+            skew_multipoles.mutable_data()[
+                index * multipole_columns + order] =
                 value.multipoles.skew_t_per_m_power[
                     static_cast<std::size_t>(order)];
         }
@@ -429,27 +468,44 @@ void ExportBeamTransfer(py::module_& module) {
                radia::beam::Field,
                std::shared_ptr<radia::beam::NGSolveGridFunctionField>>(
         module, "BeamNGSolveGridFunctionField")
-        .def(py::init<std::shared_ptr<ngcomp::GridFunction>>(),
-             py::arg("grid_function"));
+        .def(py::init([](
+                std::shared_ptr<ngcomp::GridFunction> field,
+                const std::string& field_representation) {
+            return std::make_shared<
+                radia::beam::NGSolveGridFunctionField>(
+                    std::move(field),
+                    GridFunctionMagneticInput(field_representation));
+        }), py::arg("grid_function"),
+            py::arg("field_representation") = "hcurl_vector_potential");
 
     module.def(
         "_beam_canonical_hamiltonian_jet",
         [](F64Array coefficients, double magnetic_rigidity_t_m,
            double curvature_sign, double gradient_sign,
-           double reference_beta) {
+           double reference_beta, py::object reference_curvature) {
             const auto buffer = coefficients.request();
-            RequireShape(buffer, {7}, "coefficients");
+            if (buffer.ndim != 1 ||
+                (buffer.shape[0] != 7 && buffer.shape[0] != 9))
+                throw std::invalid_argument(
+                    "coefficients must have shape (7,) or (9,)");
             const double* values = static_cast<const double*>(buffer.ptr);
             radia::beam::TransverseMagneticMultipoleExpansion expansion;
-            expansion.order = 3;
+            expansion.order = buffer.shape[0] == 9 ? 4 : 3;
             expansion.normal_t_per_m_power = {
-                values[0], values[1], values[3], values[5]};
+                values[0], values[1], values[3], values[5],
+                buffer.shape[0] == 9 ? values[7] : 0.0};
             expansion.skew_t_per_m_power = {
-                0.0, values[2], values[4], values[6]};
+                0.0, values[2], values[4], values[6],
+                buffer.shape[0] == 9 ? values[8] : 0.0};
+            std::optional<double> reference_curvature_per_m;
+            if (!reference_curvature.is_none())
+                reference_curvature_per_m =
+                    py::cast<double>(reference_curvature);
             const auto result =
                 radia::beam::BuildCanonicalBodyHamiltonianJet(
                     expansion, magnetic_rigidity_t_m, curvature_sign,
-                    gradient_sign, reference_beta);
+                    gradient_sign, reference_beta,
+                    reference_curvature_per_m);
             py::dict output;
             output["schema"] =
                 "radia.beam.canonical-hamiltonian-jet.result.v1";
@@ -458,29 +514,39 @@ void ExportBeamTransfer(py::module_& module) {
                 "x", "px_over_p0", "y", "py_over_p0", "ell", "delta");
             output["poisson_pair_signs"] = py::make_tuple(1, 1, -1);
             output["reference_beta"] = result.reference_beta;
+            output["reference_curvature_per_m"] =
+                result.reference_curvature_per_m;
+            output["field_curvature_per_m"] =
+                result.field_curvature_per_m;
             output["H2_per_m"] = ValueArray(result.h2_per_m, {6, 6});
             output["H3_per_m"] =
                 ValueArray(result.h3_per_m, {6, 6, 6});
             output["H4_per_m"] =
                 ValueArray(result.h4_per_m, {6, 6, 6, 6});
+            output["H5_per_m"] =
+                ValueArray(result.h5_per_m, {6, 6, 6, 6, 6});
             output["A_per_m"] =
                 ValueArray(result.dynamics.a_per_m, {6, 6});
             output["F2_per_m"] =
                 ValueArray(result.dynamics.f2_per_m, {6, 6, 6});
             output["F3_per_m"] = ValueArray(
                 result.dynamics.f3_per_m, {6, 6, 6, 6});
+            output["F4_per_m"] = ValueArray(
+                result.dynamics.f4_per_m, {6, 6, 6, 6, 6});
             return output;
         },
         py::arg("coefficients"), py::arg("magnetic_rigidity_t_m"),
         py::arg("curvature_sign") = 1.0,
         py::arg("gradient_sign") = 1.0,
         py::arg("reference_beta") = 1.0,
+        py::arg("reference_curvature_per_m") = py::none(),
         R"pbdoc(
-Build the native fourth-degree canonical body-multipole Hamiltonian jet.
+Build the native fifth-degree canonical body-multipole Hamiltonian jet.
 
-The seven coefficients are dipole, normal/skew quadrupole,
-normal/skew sextupole, and normal/skew octupole.  The result contains
-symmetric H2/H3/H4 tensors and the corresponding J*H dynamics A/F2/F3.
+Seven coefficients stop at octupole; nine add normal/skew decapole.  The
+result contains symmetric H2/H3/H4/H5 tensors and J*H dynamics A/F2/F3/F4.
+When reference_curvature_per_m is supplied, h(s) is independent of the
+dipole field curvature B0/(B rho); omitting it retains the legacy equality.
 )pbdoc");
 
     module.def(
@@ -528,8 +594,9 @@ u_out = R*u + 1/2*T[u,u] + 1/6*U[u,u,u].
            F64Array reference_positions, F64Array reference_tangents,
            double magnetic_rigidity_t_m, F64Array initial_horizontal,
            double sample_radius_m, py::object names_object,
-           double curvature_sign, double gradient_sign,
-           double maximum_step_m, std::size_t maximum_steps) {
+           double curvature_sign, double gradient_sign, bool periodic_frame,
+           double maximum_step_m, std::size_t maximum_steps,
+           const std::string& field_representation) {
             const auto lengths_buffer = lengths.request();
             if (lengths_buffer.ndim != 1 || lengths_buffer.shape[0] <= 0)
                 throw std::invalid_argument(
@@ -564,8 +631,11 @@ u_out = R*u + 1/2*T[u,u] + 1/6*U[u,u,u].
                       options.initial_horizontal.begin());
             options.curvature_sign = curvature_sign;
             options.gradient_sign = gradient_sign;
+            options.periodic_frame = periodic_frame;
             options.maximum_step_m = maximum_step_m;
             options.maximum_steps = maximum_steps;
+            options.magnetic_input =
+                GridFunctionMagneticInput(field_representation);
 
             radia::beam::GridFunctionTransferReport6 report;
             {
@@ -585,8 +655,10 @@ u_out = R*u + 1/2*T[u,u] + 1/6*U[u,u,u].
         py::arg("names") = py::none(),
         py::arg("curvature_sign") = 1.0,
         py::arg("gradient_sign") = 1.0,
+        py::arg("periodic_frame") = false,
         py::arg("maximum_step_m") = 1.0e-3,
         py::arg("maximum_steps") = 1000000,
+        py::arg("field_representation") = "hcurl_vector_potential",
         R"pbdoc(
 Build a first-order transfer map by evaluating an NGSolve GridFunction directly.
 
@@ -604,7 +676,9 @@ six-dimensional R map without constructing a regular-grid field map.
            double sample_radius_m, py::object names_object,
            double curvature_sign, double gradient_sign,
            unsigned multipole_order, unsigned maximum_map_order,
-           double maximum_step_m, std::size_t maximum_steps) {
+           bool periodic_frame, double maximum_step_m,
+           std::size_t maximum_steps,
+           const std::string& field_representation) {
             const auto lengths_buffer = lengths.request();
             if (lengths_buffer.ndim != 1 || lengths_buffer.shape[0] <= 0)
                 throw std::invalid_argument(
@@ -640,8 +714,11 @@ six-dimensional R map without constructing a regular-grid field map.
             options.gradient_sign = gradient_sign;
             options.multipole_order = multipole_order;
             options.maximum_map_order = maximum_map_order;
+            options.periodic_frame = periodic_frame;
             options.maximum_step_m = maximum_step_m;
             options.maximum_steps = maximum_steps;
+            options.magnetic_input =
+                GridFunctionMagneticInput(field_representation);
 
             radia::beam::GridFunctionTransferReport6 report;
             {
@@ -663,8 +740,10 @@ six-dimensional R map without constructing a regular-grid field map.
         py::arg("gradient_sign") = 1.0,
         py::arg("multipole_order") = 3,
         py::arg("maximum_map_order") = 3,
+        py::arg("periodic_frame") = false,
         py::arg("maximum_step_m") = 1.0e-3,
         py::arg("maximum_steps") = 1000000,
+        py::arg("field_representation") = "hcurl_vector_potential",
         R"pbdoc(
 Fit a moving-frame transverse multipole expansion from an NGSolve field.
 

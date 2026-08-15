@@ -408,25 +408,26 @@ IGTE_DIGEST_SINGLE = PaperProfile(
 # --- Beamer 16:9 talk slides (CEFC / IGTE oral) --------------------------
 # A beamer ``aspectratio=169`` paper is 160 x 90 mm; the usable text width
 # is ~150 mm (full) or ~72 mm (a half-width column inside a two-column
-# frame).  Slide figures follow the SAME lab rules as paper figures:
-#   * Times New Roman, 10 pt body (the on-page 10 pt @ 8 cm rule -- a
-#     slide is read like a page), Okabe-Ito palette.
+# frame).  Slide figures use a viewing-distance rule distinct from papers:
+#   * Times New Roman, >= 24 pt for every visible label, tick, legend, and
+#     annotation.  A projected slide is not read at paper distance.
 #   * NO in-figure title.  The beamer frametitle / slide caption carries
 #     it; emit_paper_figure()'s no-title gate fires for these profiles too.
-#   * Strokes / markers a touch heavier than the paper default for
-#     projector legibility (this does NOT change the font rule).
+#   * Strokes / markers are heavier than the paper default for projector
+#     legibility.
 # IMPORTANT: author the figure at the width it will OCCUPY on the slide
 # (apply_lab_style(embed_width_cm=...) or these profiles' width_mm) and
 # \includegraphics[width=<that width>] at 100%.  Do NOT let
 # \includegraphics scale a 150 mm figure into an 8 cm column -- that
-# shrinks the on-page font below 10 pt (the v4 mistake).
+# shrinks the visible font below the 24 pt slide floor.
 
 BEAMER_169_FULL = PaperProfile.from_base(
     name="beamer_169_full",
     full_name="Beamer 16:9 slide, full text width",
     width_mm=150.0,
     column="page",
-    base_pt=10.0,                 # on-page 10 pt, same as paper
+    base_pt=24.0,                 # projected-slide readability floor
+    small_offset=0.0,             # ticks must not drop below 24 pt
     linewidth_pt=1.3,             # heavier strokes read better on screen
     axes_linewidth_pt=0.9,
     marker_size_pt=5.0,
@@ -442,7 +443,8 @@ BEAMER_169_HALF = PaperProfile.from_base(
     full_name="Beamer 16:9 slide, half column (two-column frame)",
     width_mm=72.0,
     column="single",
-    base_pt=10.0,
+    base_pt=24.0,
+    small_offset=0.0,
     linewidth_pt=1.3,
     axes_linewidth_pt=0.9,
     marker_size_pt=5.0,
@@ -1533,6 +1535,8 @@ def emit_paper_figure(
     check_font_embedding: bool = True,
     check_no_japanese: bool = True,
     check_times_new_roman: bool = True,
+    check_min_font_size: bool = True,
+    min_font_pt: Optional[float] = None,
     check_text_overflow: bool = True,
     text_overflow_tol_pt: float = 0.5,
     dpi: int = 600,
@@ -1577,6 +1581,12 @@ def emit_paper_figure(
         check_times_new_roman: when True (default), require matplotlib
             rcParams to request Times New Roman and reject saved PDFs
             that contain common serif fallback fonts.
+        check_min_font_size: when True (default), enforce the 24 pt floor
+            for every visible text artist in ``beamer_169_*`` profiles.
+            Paper profiles retain their existing publication font rules.
+        min_font_pt: optional explicit visible-font floor.  When omitted,
+            the 16:9 slide profiles use 24 pt and paper profiles do not add
+            a separate artist-level minimum gate.
         check_text_overflow: when True (default), reject free diagram
             labels created with ``ax.text`` / ``fig.text`` if their
             rendered bbox extends past the fixed figure canvas.  Axis
@@ -1704,6 +1714,38 @@ def emit_paper_figure(
                 "paper_figure(..., use_times_roman=True) or set:\n"
                 "  plt.rcParams['font.family'] = 'serif'\n"
                 "  plt.rcParams['font.serif'] = ['Times New Roman']"
+            )
+            if on_fail == "warn":
+                import warnings
+                warnings.warn(msg)
+            elif on_fail in ("raise", "auto_tighten"):
+                raise ValueError(msg)
+
+    # --- Pre-flight (1e): projected 16:9 figures have a 24 pt floor ---
+    # rcParams set the default, but a later ax.text(..., fontsize=16) or a
+    # hand-sized legend can silently reintroduce unreadable slide text.  Audit
+    # every visible Text artist immediately before saving.
+    effective_min_font_pt = min_font_pt
+    if effective_min_font_pt is None and prof.name.startswith("beamer_169_"):
+        effective_min_font_pt = 24.0
+    font_size_violations = []
+    if check_min_font_size and effective_min_font_pt is not None:
+        from .tools import check_min_font
+        font_size_violations = check_min_font(
+            fig, min_pt=float(effective_min_font_pt), embed_scale=1.0
+        )
+        if font_size_violations:
+            lines = [
+                f"  {v['kind']} {v['text']!r}: {v['visible_pt']:.1f} pt"
+                for v in font_size_violations
+            ]
+            msg = (
+                "emit_paper_figure: visible text below the slide font floor.\n"
+                + "\n".join(lines) + "\n"
+                f"16:9 slide figures require every label, tick, legend, and "
+                f"annotation to be at least {float(effective_min_font_pt):g} pt.\n"
+                "Fix the individual fontsize override or simplify the figure; "
+                "do not shrink text to make content fit."
             )
             if on_fail == "warn":
                 import warnings
@@ -1904,6 +1946,8 @@ def emit_paper_figure(
     final["auto_tightened"] = auto_tightened
     final["profile"] = prof.name
     final["font_violations"] = font_violations
+    final["font_size_violations"] = font_size_violations
+    final["min_font_pt"] = effective_min_font_pt
     final["times_new_roman_violations"] = times_new_roman_violations
     final["japanese_font_violations"] = japanese_font_violations
 

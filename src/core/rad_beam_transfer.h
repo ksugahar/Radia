@@ -2,6 +2,7 @@
 
 #include <array>
 #include <cstddef>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -54,6 +55,28 @@ struct Tensor4Map6 {
     }
 };
 
+// One output index followed by four symmetric input indices.
+struct Tensor5Map6 {
+    std::array<double, 7776> values{};
+
+    double& operator()(std::size_t output, std::size_t first,
+                       std::size_t second, std::size_t third,
+                       std::size_t fourth) {
+        return values[(((output * kPhaseSpaceDimension + first) *
+                        kPhaseSpaceDimension + second) *
+                       kPhaseSpaceDimension + third) *
+                      kPhaseSpaceDimension + fourth];
+    }
+    double operator()(std::size_t output, std::size_t first,
+                      std::size_t second, std::size_t third,
+                      std::size_t fourth) const {
+        return values[(((output * kPhaseSpaceDimension + first) *
+                        kPhaseSpaceDimension + second) *
+                       kPhaseSpaceDimension + third) *
+                      kPhaseSpaceDimension + fourth];
+    }
+};
+
 // Factorial convention:
 //   u_out = R u + 1/2 T[u,u] + 1/6 U[u,u,u] + O(u^4).
 struct TaylorMap6 {
@@ -68,19 +91,23 @@ struct DynamicsJet6 {
     Matrix6 a_per_m;
     Tensor3Map6 f2_per_m;
     Tensor4Map6 f3_per_m;
+    Tensor5Map6 f4_per_m;
 };
 
-// Canonical curvilinear body-field Hamiltonian through degree four:
+// Canonical curvilinear body-field Hamiltonian through degree five:
 //   H = 1/2 H2[z,z] + 1/6 H3[z,z,z]
-//       + 1/24 H4[z,z,z,z] + O(z^5),
+//       + 1/24 H4[z,z,z,z] + 1/120 H5[z,z,z,z,z] + O(z^6),
 // in coordinates (x, px/p0, y, py/p0, ell, delta).  The longitudinal
 // canonical pair has Poisson sign -1.  The dynamics tensors are J*Hn.
 struct HamiltonianJet6 {
     Matrix6 h2_per_m;
     Tensor3Map6 h3_per_m;
     Tensor4Map6 h4_per_m;
+    Tensor5Map6 h5_per_m;
     DynamicsJet6 dynamics;
     double reference_beta = 1.0;
+    double reference_curvature_per_m = 0.0;
+    double field_curvature_per_m = 0.0;
 };
 
 // Source-free transverse magnetic expansion in a right-handed moving frame:
@@ -90,8 +117,8 @@ struct HamiltonianJet6 {
 // requested order, so quadrupole/sextupole chromatic terms are retained.
 struct TransverseMagneticMultipoleExpansion {
     unsigned order = 0;
-    std::array<double, 4> normal_t_per_m_power{};
-    std::array<double, 4> skew_t_per_m_power{};
+    std::array<double, 5> normal_t_per_m_power{};
+    std::array<double, 5> skew_t_per_m_power{};
 };
 
 struct DynamicsSegment6 {
@@ -169,7 +196,8 @@ DynamicsJet6 BuildParaxialMagneticDynamicsJet(
 HamiltonianJet6 BuildCanonicalBodyHamiltonianJet(
     const TransverseMagneticMultipoleExpansion& expansion,
     double magnetic_rigidity_t_m, double curvature_sign = 1.0,
-    double gradient_sign = 1.0, double reference_beta = 1.0);
+    double gradient_sign = 1.0, double reference_beta = 1.0,
+    std::optional<double> reference_curvature_per_m = std::nullopt);
 
 VariationalReport6 PropagateVariationalMap(
     const std::vector<DynamicsSegment6>& segments,

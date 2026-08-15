@@ -4,24 +4,25 @@ from __future__ import annotations
 import json
 import math
 import os
-from pathlib import Path
 import subprocess
 import sys
+from pathlib import Path
 
 import numpy as np
 import pytest
 
 ng = pytest.importorskip("ngsolve")
 pytest.importorskip("netgen.occ")
-from netgen.occ import OCCGeometry, WorkPlane  # noqa: E402
+from netgen.occ import OCCGeometry, WorkPlane
+from radia_mcp.force.gates import force_torque_method_agreement_gate
 
-from radia.motor_design import (  # noqa: E402
+from radia.motor_design import (
     ANALYSIS_HDIV_REDUCED,
     ANALYSIS_LAMINATION,
     ANALYSIS_TRANSIENT,
     MotorDesignSpec,
 )
-from radia.motor_hdiv import HDivReducedMotor  # noqa: E402
+from radia.motor_hdiv import HDivReducedMotor
 
 
 def test_motor_design_builds_hdiv_reduced_cli_command():
@@ -151,6 +152,27 @@ def test_hdiv_reduced_cli_round_trip(tmp_path):
     assert result["gram_build_count"] == 1
     assert len(result["angles"]) == 3
     assert max(row["torque_spread_relative"] for row in result["angles"]) < 1e-4
+    assert result["force_result_schema"] == "radia.force-result/v1"
+    assert result["independent_torque_methods"] == [
+        "maxwell_surface_stress_air",
+        "magnetization_volume_moment",
+        "coenergy_virtual_work",
+    ]
+    for row in result["angles"]:
+        common = row["force_torque_results"]
+        assert set(common) == {
+            "maxwell_surface",
+            "magnetization_volume",
+            "virtual_work",
+        }
+        assert all(item["schema"] == "radia.force-result/v1" for item in common.values())
+        assert all(item["pivot_m"] == [0.0, 0.0, 0.0] for item in common.values())
+        assert all(item["dimensionality"] == "2d_planar" for item in common.values())
+        assert all(item["per_unit_depth"] is False for item in common.values())
+        agreement = force_torque_method_agreement_gate(
+            common["maxwell_surface"], common["virtual_work"]
+        )
+        assert agreement["status"] == "ok"
     assert os.path.normcase(result["gmsh_file"]) == os.path.normcase(
         str(msh.resolve())
     )

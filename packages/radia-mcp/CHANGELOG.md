@@ -7,6 +7,45 @@ crystallized as its own package.
 
 ## [Unreleased]
 
+## [1.4.37] - 2026-08-16
+
+- Corrected the presentation message hierarchy: slide titles use the shortest
+  practical concrete "target + viewpoint" phrase (for example, "Model 1
+  accuracy evaluation"), while the bottom line states what was learned from
+  the slide evidence. Added `presentation_check_slide_title_specificity` and
+  retained the former title-verb tool name as a compatibility alias. The title
+  check now uses a five-axis, 10-point acceptance rubric: concrete target,
+  explicit viewpoint, concise one-line form, no result claim, and deck-level
+  uniqueness.
+- Re-audited the 12-book writing corpus under the lab's `09_作文技術`
+  shelf and documented routing boundaries between paper, figure,
+  presentation, and grant guidance.  Added the Kinoshita goal-statement
+  workflow and `paper_writing_check_conclusion_first_use`, which distinguishes
+  legitimate new synthesis in a conclusion from technical terms, symbols,
+  numbers, and citations introduced there without body support.
+- Operationalized Miyano's Japanese slide-copy guidance with
+  `presentation_check_japanese_copy_style`: the PPTX audit now identifies
+  hard line breaks that split dependent phrases, estimates the body-text
+  nominal-ending ratio, and flags screen-only lead-ins such as
+  `そこで本研究では`.
+- Strengthened presentation message hierarchy: each content slide should state
+  its most important claim in the title and place a one-sentence interpretation
+  of the evidence above the footer.  Added
+  `presentation_check_slide_message_hierarchy` to audit both requirements.
+- Raised the presentation audience-content floor to 24 pt for body text,
+  captions, annotations, tables, and chart labels.  Titles remain 32 pt or
+  larger; footer, page-number, date, and source chrome are explicit exceptions.
+- Strengthened the 16:9 figure profiles: `beamer_169_full`,
+  `beamer_169_half`, and `presentation_slide` now use a 24 pt minimum for
+  labels, ticks, legends, panel labels, and annotations.  The export gate
+  rejects smaller per-artist overrides before saving.
+- Added the electromagnetic force/torque MCP family and synchronized its
+  Lorentz, Maxwell-stress, air-gap, coenergy, and virtual-work contracts with
+  the Radia Python and MATLAB APIs.
+- Extended accelerator knowledge for the HCurl EarlyTimes Bishop/RMF loft
+  chain, fifth-degree canonical Hamiltonian, independent reference-curvature
+  control, and separately reported Lie, A-map, and direct B-map errors.
+
 ## [1.4.36] - 2026-08-14
 
 - Added accelerator-magnet knowledge for distributed transfer-matrix and

@@ -9,13 +9,14 @@ Callers own the surrounding ``ngsolve.TaskManager`` region.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
 import math
 import time
+from dataclasses import dataclass
 
 import ngsolve as ng
 import numpy as np
 
+from .force import force_torque_result
 from .vim import PlanarDemagBody, maxwell_torque_circle
 
 MU0 = 4.0e-7 * np.pi
@@ -169,6 +170,33 @@ class HDivReducedMotor:
                 float(angle), field_global, delta_angle=energy_delta_angle)
             scale = max(abs(torque_maxwell), abs(torque_energy),
                         abs(state.torque_volume_Nm), 1e-30)
+            pivot = [float(self.center[0]), float(self.center[1]), 0.0]
+            force_torque_results = {
+                "maxwell_surface": force_torque_result(
+                    None,
+                    [0.0, 0.0, torque_maxwell],
+                    method="maxwell_surface_stress_air",
+                    frame="global_cartesian",
+                    pivot_m=pivot,
+                    dimensionality="2d_planar",
+                ),
+                "magnetization_volume": force_torque_result(
+                    None,
+                    [0.0, 0.0, state.torque_volume_Nm],
+                    method="magnetization_volume_moment",
+                    frame="global_cartesian",
+                    pivot_m=pivot,
+                    dimensionality="2d_planar",
+                ),
+                "virtual_work": force_torque_result(
+                    None,
+                    [0.0, 0.0, torque_energy],
+                    method="coenergy_virtual_work",
+                    frame="global_cartesian",
+                    pivot_m=pivot,
+                    dimensionality="2d_planar",
+                ),
+            }
             rows.append({
                 "rotor_angle_rad": float(angle),
                 "rotor_angle_deg": math.degrees(float(angle)),
@@ -179,6 +207,7 @@ class HDivReducedMotor:
                 "torque_maxwell_Nm": torque_maxwell,
                 "torque_volume_Nm": state.torque_volume_Nm,
                 "torque_virtual_work_Nm": torque_energy,
+                "force_torque_results": force_torque_results,
                 "torque_spread_relative": (
                     max(torque_maxwell, torque_energy, state.torque_volume_Nm)
                     - min(torque_maxwell, torque_energy, state.torque_volume_Nm)) / scale,
@@ -201,6 +230,13 @@ class HDivReducedMotor:
             "maxwell_radius_m": float(maxwell_radius),
             "circle_points": int(circle_points),
             "energy_delta_angle_rad": float(energy_delta_angle),
+            "force_result_schema": "radia.force-result/v1",
+            "torque_axis": [0.0, 0.0, 1.0],
+            "independent_torque_methods": [
+                "maxwell_surface_stress_air",
+                "magnetization_volume_moment",
+                "coenergy_virtual_work",
+            ],
             "angles": rows,
             "elapsed_s": time.perf_counter()-started,
         }

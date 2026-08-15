@@ -1832,6 +1832,68 @@ weak-form assembly, and `CoefficientFunction` / `GridFunction` evaluation.
 - Python FE callers own `with ngsolve.TaskManager():`; C++ kernels follow the
   TaskManager self-wrap policy below.
 
+### EarlyTimes Curvilinear Field-Map and Loft-Chain Policy (2026-08-15)
+
+**POLICY**: EarlyTimes consumes an NGSolve HCurl finite-element A field on a
+design-orbit-centred Bishop/RMF loft chain.  HDiv-MMM owns the continuous source
+fields, NGSolve owns the conforming A projection, and the Lie-map and independent
+Runge--Kutta routes remain separate enough to cross-check one another.
+
+- The HDiv-MMM boundary supplies vector-potential and magnetic-flux-density
+  `CoefficientFunction` objects.  Project A to an `HCurl` `GridFunction`
+  before EarlyTimes Lie or canonical A-map tracking.  Independent Cartesian
+  B-map Runge--Kutta may evaluate the original HDiv-MMM B
+  `CoefficientFunction` directly; an `HDiv(order=4)` `GridFunction` remains
+  an optional conforming-projection cross-check, not the source-field truth.
+  The fourth-order Lie-map baseline is `HCurl(order=5)` for A.
+- Treat measured median-plane B only as an HDiv-MMM inverse-design objective.
+  Build observation rows at the physical probe locations and vary the pole
+  topology/shape until complete three-dimensional field re-solves match the
+  measured components within their bands.  Never use B-splines or a polynomial
+  continuation of measured plane data to fabricate off-plane B or an A-map.
+  Generate the HCurl A-map and independent B-map from the accepted physical
+  magnet solution; unused measurement samples remain validation observations.
+- The Lie route accepts only the constrained HCurl A-map and inserts A itself
+  into the canonical Hamiltonian; it never substitutes `curl(A)`.  Canonical
+  A-map Runge--Kutta evaluates `A_s,A_y` from that same HCurl field directly.
+  Independent Cartesian B-map Runge--Kutta evaluates the HDiv-MMM B source
+  directly.  Treat order 6 as a convergence check, not as the truth field or a
+  substitute for the independent B-map route.
+- Build each transverse section from four orthogonal quadrilateral strips split
+  only in x, with symmetric nodes such as `[-a, -c, 0, c, a]`; each strip spans
+  the full `[-b, b]` y interval.  Loft matching section nodes along the
+  Bishop/RMF frame to form four HEX elements per longitudinal cell.  Thus the
+  median plane `y=0` lies inside the elements, while the design orbit lies on the
+  central `x=0` face.  On that face, `A_s` and `A_y` are tangential HCurl traces
+  and therefore single-valued; `A_x` is normal and is removed by the gauge.
+- Do not use a 2-by-2 quadrant split that places `y=0` on an internal face when
+  the direct median-plane value of `A_y` is required.  In particular, never
+  define `A_y` by naively averaging two HCurl normal traces.  If vertical
+  refinement is needed, add symmetric y layers while keeping `y=0` inside a
+  central layer.
+- Use the full upper and lower volume in the source symmetrisation and conforming
+  projection.  In a median-plane-symmetric gauge, enforce the reflection parity
+  `A_x,A_s` even and `A_y` odd; correspondingly, `B_y` is even and `B_x,B_s` are
+  odd.  Fit or extract `A_s` with even-y terms and `A_y` with odd-y terms so that
+  off-plane derivative information is retained.  This parity-aware projection,
+  not an upper/lower trace average, is the accuracy-improving operation.
+- Apply the local gauge before projection: require `A_x=0` and
+  `A_s=A_y=0` on the design orbit, using a gauge scalar even in y so the symmetry
+  parity is preserved.  For a complete closed orbit, explicitly check the
+  longitudinal circulation obstruction before claiming that a single-valued
+  global gauge can set `A_s=0` around the entire ring.
+- Keep the section axes `(e_x,e_y,t)` orthonormal and use
+  `R(x,y,s)=r_0(s)+x e_x(s)+y e_y(s)`.  Use curved geometry of sufficient order
+  for the order-5 field and refine the s subdivision until both geometry and
+  field-map observables converge; do not select the longitudinal count from a
+  fixed rule of thumb alone.
+- Certify the usable order-5 Lie-map aperture against the independent HDiv-MMM
+  B `CoefficientFunction` Cartesian Runge--Kutta result, with an HDiv
+  GridFunction as an optional projection check.  Report separately the Lie
+  truncation error
+  (Lie versus unexpanded canonical A-map RK), the A/B field-route discrepancy,
+  and the total Lie-versus-B-map discrepancy.
+
 ### Reduce Proprietary API Surface — Plumbing to netgen/ngsolve, Methods Stay (2026-06-19)
 
 **POLICY**: Extend "Complement NGSolve" to the **API surface itself**:

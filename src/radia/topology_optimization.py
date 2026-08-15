@@ -2873,6 +2873,7 @@ def grow_hdiv_mmm_by_superposition(*, charge_gram, fes, inv_chi, rhs,
         source_calibration_norm="mean",
         response_transform=None,
         response_transform_jacobian=None,
+        exact_response_validator=None,
         include_predecessor_descendants=False,
         exact_candidate_limit=64,
         batch_improvement_capture=0.9,
@@ -2967,6 +2968,13 @@ def grow_hdiv_mmm_by_superposition(*, charge_gram, fes, inv_chi, rhs,
     boolean active mask and must return truth for an admissible shape.  This is
     intended for exact rules such as a one-cell Lipschitz bound on neighbouring
     pole-end columns; it is never a density penalty or finite-difference model.
+
+    ``exact_response_validator`` may impose an application-specific physics
+    guard after source calibration and a complete active-set solve.  It receives
+    copies of the calibrated raw response and transformed design response and
+    must return one boolean.  Guard-rejected states are neither accepted nor
+    retained as nonmonotone beam parents.  Proposal linearization remains
+    unchanged; the complete solve is the single source of truth for the guard.
 
     ``initial_material_move_fraction`` enables a TOBS/SAIP-style trust region
     on the *total physical volume flipped* by one signed add/remove proposal.
@@ -3150,6 +3158,18 @@ def grow_hdiv_mmm_by_superposition(*, charge_gram, fes, inv_chi, rhs,
                 "with shape (n_design_response,n_raw_response)")
         return jacobian
 
+    def exact_response_is_valid(raw_response,design_response):
+        if exact_response_validator is None:
+            return True
+        verdict=exact_response_validator(
+            np.asarray(raw_response,dtype=float).copy(),
+            np.asarray(design_response,dtype=float).copy())
+        result=np.asarray(verdict)
+        if result.ndim!=0:
+            raise ValueError(
+                "exact_response_validator must return one boolean")
+        return bool(result)
+
     def calibrate_source(base_state,base_response):
         state_value=np.asarray(base_state,dtype=float)
         response_value=np.asarray(base_response,dtype=float)
@@ -3282,6 +3302,8 @@ def grow_hdiv_mmm_by_superposition(*, charge_gram, fes, inv_chi, rhs,
     element_blocks=ngsolve_discontinuous_element_dof_blocks(fes)
     ratio=lambda values:float(np.max(np.abs((np.asarray(values)-target)/band)))
     objective_response=transform_response(response)
+    if not exact_response_is_valid(response,objective_response):
+        raise ValueError("initial exact response violates exact_response_validator")
     current_ratio=ratio(objective_response);history=[]
     exact_search_trace=[]
     graph_front_diagnostics=[]
@@ -3516,6 +3538,9 @@ def grow_hdiv_mmm_by_superposition(*, charge_gram, fes, inv_chi, rhs,
                     trial_state,trial_response,trial_scale=calibrate_source(
                         trial_state,trial_response)
                     trial_objective=transform_response(trial_response)
+                    if not exact_response_is_valid(
+                            trial_response,trial_objective):
+                        continue
                 except (RuntimeError,ValueError):
                     continue
                 trial_ratio=ratio(trial_objective)
@@ -4254,6 +4279,9 @@ def grow_hdiv_mmm_by_superposition(*, charge_gram, fes, inv_chi, rhs,
                     trial_state,trial_response,trial_scale=calibrate_source(
                         trial_state,trial_response)
                     trial_objective=transform_response(trial_response)
+                    if not exact_response_is_valid(
+                            trial_response,trial_objective):
+                        continue
                     actual=ratio(trial_objective)
                 except (RuntimeError,ValueError):
                     continue
@@ -4385,6 +4413,9 @@ def grow_hdiv_mmm_by_superposition(*, charge_gram, fes, inv_chi, rhs,
                                 alternate_state,alternate_response)
                             alternate_objective=transform_response(
                                 alternate_response)
+                            if not exact_response_is_valid(
+                                    alternate_response,alternate_objective):
+                                continue
                             alternate_ratio=ratio(alternate_objective)
                         except (RuntimeError,ValueError):
                             continue
@@ -4552,6 +4583,20 @@ def grow_hdiv_mmm_by_superposition(*, charge_gram, fes, inv_chi, rhs,
                 trial_objective=transform_response(trial_response)
             except (RuntimeError,ValueError):
                 stop_reason="source_calibration_rejected_exact_bundle";break
+            if not exact_response_is_valid(trial_response,trial_objective):
+                stop_reason="response_guard_rejected_exact_bundle"
+                branch=next_nonmonotone_state(exact_trial_states)
+                if branch is not None:
+                    active=branch.active;state=branch.state
+                    response=branch.response
+                    objective_response=branch.objective_response
+                    current_ratio=branch.ratio
+                    source_scale=branch.source_scale
+                    solve_iterations=branch.solve_iterations
+                    search_depth=branch.depth;search_path=branch.path
+                    stop_reason="exact_nonmonotone_beam_in_progress"
+                    continue
+                break
             actual=ratio(trial_objective)
             exact_trial_states.append(record_exact_trial(exact_snapshot(
                 active_value=trial_active,state_value=trial_state,

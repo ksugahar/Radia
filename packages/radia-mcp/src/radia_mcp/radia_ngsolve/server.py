@@ -300,7 +300,7 @@ from .knowledge.peec_inductance import get_peec_inductance_documentation
 from .knowledge.esim import get_esim_documentation
 from .knowledge.panel_gui_pitfalls import get_panel_gui_pitfalls
 from .knowledge.analytical_formulas import get_analytical_formulas_documentation
-from .knowledge.force_validation import get_force_validation_documentation
+from ..force.knowledge import get_force_validation
 from .knowledge.technical_reports import get_technical_reports_documentation
 from .knowledge.install_deploy import get_install_deploy_documentation
 from .knowledge.release_workflow import get_release_workflow_documentation
@@ -1840,7 +1840,7 @@ def force_validation(topic: str = "all") -> str:
     Args:
         topic: all (default) | method_map | eggshell | cross_validation | reference_note
     """
-    return get_force_validation_documentation(topic)
+    return get_force_validation(topic)
 
 
 @mcp.tool()
@@ -4940,7 +4940,7 @@ register_status_tool(
     server_name='mcp-server-radia-ngsolve',
     description='Radia + NGSolve: Kelvin / sparsesolv / CLN / PEEC / analytical formulas / lint',
     subpackage='radia_mcp.radia_ngsolve',
-    related_servers=["fem", "bem", "matrix-solvers"],
+    related_servers=["fem", "bem", "force", "matrix-solvers"],
     optional_deps=["radia", "ngsolve"],
 )
 

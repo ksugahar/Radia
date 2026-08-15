@@ -588,11 +588,47 @@ save_system(name,file); close_system(name,0);
 time=(0:0.1:0.2)'; input=[time,10*ones(size(time))];
 runner=radia.optuna.SimulinkRunner(file, ...
     ConfigureFcn=@(simInput,trial)configureRunnerInput(simInput,trial,input), ...
-    ScoreFcn=@(simOut,trial)simOut.get("yout").getElement(1).Values.Data(end));
+    ScoreFcn=@(simOut,trial)simOut.get("yout").getElement(1).Values.Data(end), ...
+    UseFastRestart=true);
 study=radia.optuna.createStudy(AutoSave=false);
 result=runner.optimizeParallel(study,2,ShowProgress=false);
 verifyEqual(testCase,result.State,["COMPLETE";"COMPLETE"]);
 clear cleanup; closeAndDelete(name,file);
+end
+
+function testSimulinkRunnerSteadyStateFailuresLeaveNoRunningTrials(testCase)
+if isempty(ver("parallel"))
+    testCase.assumeFail("Parallel Computing Toolbox is unavailable.");
+end
+pool = gcp();
+if isa(pool, "parallel.ThreadPool")
+    testCase.assumeFail("Steady-state Simulink execution requires a process pool.");
+end
+name = "radia_optuna_parallel_failure_gate";
+file = "C:\temp\radia_optuna_parallel_failure_gate.slx";
+cleanup = onCleanup(@()closeAndDelete(name, file));
+buildRunnerFixture(name, 0.1);
+save_system(name, file);
+close_system(name, 0);
+time = (0:0.1:0.1)';
+input = [time, 10 * ones(size(time))];
+runner = radia.optuna.SimulinkRunner(file, ...
+    ConfigureFcn=@(simInput, trial)configureRunnerInput( ...
+        simInput, trial, input), ...
+    ScoreFcn=@runnerMeshFailure);
+study = radia.optuna.createStudy(AutoSave=false);
+result = runner.optimizeParallel(study, 3, BatchSize=2, ...
+    ShowProgress=false, ExecutionMode="steady_state");
+
+verifyEqual(testCase, result.State, repmat("FAIL", 3, 1));
+verifyEqual(testCase, sum(result.State == "RUNNING"), 0);
+contract = study.UserAttrs.cae_execution_contract;
+verifyEqual(testCase, contract.execution_mode, ...
+    "parfeval-steady-state");
+verifyEqual(testCase, contract.parallel_decision.selected, ...
+    "steady_state");
+clear cleanup
+closeAndDelete(name, file);
 end
 
 function testMOTPEAndNSGAIIMultiObjectiveSamplers(testCase)
@@ -765,9 +801,9 @@ result=struct("role","simulation-output", ...
 end
 
 function value=runnerMeshFailure(simOut,trial) %#ok<INUSD>
+value=NaN; %#ok<NASGU>
 error("radia:test:MeshQuality", ...
     "Mesh element quality is invalid for this CAE trial.");
-value=NaN;
 end
 
 function closeIfLoaded(modelName)

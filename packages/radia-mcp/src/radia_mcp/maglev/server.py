@@ -19,6 +19,7 @@ Cross-references:
 - `radia_mcp.mor` (mor_cln) — Cauer Ladder Network MOR theory
 - `radia_mcp.fem` (potential_formulations) — A-phi / T-Omega / A-T gauges
 - `radia_mcp.team_benchmark.force_motion.problem_28` — TEAM 28 levitation benchmark
+- `radia_mcp.force` — shared force methods, sample integration, validation
 - `radia_mcp.motor` — analogous rotary motor knowledge
 
 Usage:
@@ -27,9 +28,11 @@ Usage:
 """
 import json
 import sys
+
 from mcp.server.fastmcp import FastMCP
+
 from ..common import register_status_tool, register_topics_tool
-from .knowledge import get_knowledge, TOPICS
+from .knowledge import TOPICS, get_knowledge
 from .periodic_settling_gate import (
     rotating_conductor_periodic_settling_gate as _rotating_conductor_periodic_settling_gate,
 )
@@ -127,6 +130,62 @@ def team28_cycle_averaged_motion_gate(
     return json.dumps(result, indent=2, sort_keys=True)
 
 
+@mcp.tool()
+def maglev_force_torque_method_agreement_gate(
+    primary: dict,
+    independent: dict,
+    maximum_force_relative_difference: float = 5.0e-2,
+    maximum_torque_relative_difference: float = 5.0e-2,
+) -> str:
+    """Apply the shared Force agreement gate to MagLev force/torque results."""
+
+    from ..force.gates import force_torque_method_agreement_gate
+
+    try:
+        result = force_torque_method_agreement_gate(
+            primary,
+            independent,
+            maximum_force_relative_difference=maximum_force_relative_difference,
+            maximum_torque_relative_difference=maximum_torque_relative_difference,
+        )
+    except (TypeError, ValueError) as exc:
+        result = {
+            "policy": "radia.force-torque-method-agreement/v1",
+            "status": "invalid_input",
+            "error": str(exc),
+        }
+    return json.dumps(result, indent=2, sort_keys=True)
+
+
+@mcp.tool()
+def maglev_force_weight_equilibrium_gate(
+    force_n: list[float],
+    mass_kg: float,
+    lift_axis: int = 2,
+    gravity_m_per_s2: float = 9.80665,
+    maximum_relative_residual: float = 2.0e-2,
+) -> str:
+    """Gate MagLev lift against weight through the shared Force layer."""
+
+    from ..force.gates import force_weight_equilibrium_gate
+
+    try:
+        result = force_weight_equilibrium_gate(
+            force_n,
+            mass_kg,
+            lift_axis=lift_axis,
+            gravity_m_per_s2=gravity_m_per_s2,
+            maximum_relative_residual=maximum_relative_residual,
+        )
+    except (TypeError, ValueError) as exc:
+        result = {
+            "policy": "radia.force-weight-equilibrium/v1",
+            "status": "invalid_input",
+            "error": str(exc),
+        }
+    return json.dumps(result, indent=2, sort_keys=True)
+
+
 
 
 register_status_tool(
@@ -134,7 +193,7 @@ register_status_tool(
     server_name='mcp-server-maglev',
     description='Magnetic levitation, UNIFIED: maglev systems (EMS/EDS/PM/SC/Halbach) + levitation FORCE physics (induction/EML/AMB/superconducting/diamagnetic/Earnshaw/force-computation). Lab research line: Radia IEM<->FEM weak coupling + Cauer Ladder Network MOR for control-coupled maglev (Yano, CAE-AI).',
     subpackage='radia_mcp.maglev',
-    related_servers=["mor", "motor", "ih"],
+    related_servers=["force", "mor", "motor", "ih"],
 )
 
 

@@ -540,10 +540,10 @@ rad.CndSolve(cond)
 **Required DLLs** (auto-copied by Build.ps1):
 | DLL | Purpose |
 |-----|---------|
-| `mkl_rt.2.dll` | MKL runtime (single dynamic library) |
-| `mkl_core.2.dll` | MKL core |
-| `mkl_intel_thread.2.dll` | MKL threading |
-| `mkl_def.2.dll`, `mkl_avx2.dll` | CPU-specific kernels |
+| `mkl_rt.3.dll` | MKL runtime (single dynamic library) |
+| `mkl_core.3.dll` | MKL core |
+| `mkl_intel_thread.3.dll` | MKL threading |
+| `mkl_def.3.dll`, `mkl_avx2.3.dll` | CPU-specific kernels |
 
 ### macOS
 

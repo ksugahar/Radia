@@ -261,6 +261,14 @@ def test_full_field_periodic_orbit_recovers_uniform_field_circle():
     np.testing.assert_allclose(result.entrance_radius_m, radius, atol=3e-10)
     np.testing.assert_allclose(result.path_length_m, radius * angle,
                                atol=3e-10)
+    np.testing.assert_allclose(
+        result.orbit.path_length_stations,
+        np.linspace(0.0, radius * angle, 33),
+        atol=3e-10,
+    )
+    np.testing.assert_allclose(
+        result.orbit.signed_curvature, 1.0 / radius, atol=2e-11
+    )
     assert abs(result.entrance_incidence_angle_rad) < 2e-10
     assert result.periodic_position_residual_m < 3e-10
     assert result.periodic_tangent_residual < 3e-10

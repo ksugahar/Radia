@@ -6,7 +6,14 @@ function result = propagateGridFunctionLinearMap( ...
 %   POSITIONS, TANGENTS, BRHO) evaluates the real three-component FIELD
 %   directly through NGSolve at nine transverse points per reference station.
 %   POSITIONS and TANGENTS are N-by-3, with one row per positive segment
-%   length. No regular-grid field map is created.
+%   length. By default FIELD is an HCurl(order=p) vector potential; NGSolve
+%   evaluates native curl(A) as B without an HDiv projection or regular-grid
+%   field map. Direct-B GridFunctions require the explicit compatibility mode
+%   FieldRepresentation="magnetic_flux_density".
+%   The transverse axes use the fourth-order Bishop/RMF double-reflection
+%   method. Set PeriodicFrame=true only for stations covering a complete
+%   closed loop; the one-turn holonomy is then distributed as a periodic
+%   constant-twist minimal-twist frame.
 %
 %   The native C++ result exposes the transported local frame, center field,
 %   fitted field gradient, curvature, normal/skew quadrupole strengths,
@@ -26,6 +33,10 @@ arguments
     options.Names = strings(0,1)
     options.CurvatureSign (1,1) double {mustBeFinite} = 1
     options.GradientSign (1,1) double {mustBeFinite} = 1
+    options.PeriodicFrame (1,1) logical = false
+    options.FieldRepresentation (1,1) string {mustBeMember( ...
+        options.FieldRepresentation,["magnetic_flux_density", ...
+        "hcurl_vector_potential"])} = "hcurl_vector_potential"
     options.MaximumStepM (1,1) double {mustBeFinite,mustBePositive} = 1e-3
     options.MaximumSteps (1,1) double {mustBeInteger,mustBePositive} = 1e6
 end
@@ -71,6 +82,8 @@ if ~isempty(options.Names)
 end
 config.curvature_sign = options.CurvatureSign;
 config.gradient_sign = options.GradientSign;
+config.periodic_frame = options.PeriodicFrame;
+config.field_representation = char(options.FieldRepresentation);
 config.maximum_step_m = options.MaximumStepM;
 config.maximum_steps = options.MaximumSteps;
 

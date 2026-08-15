@@ -22,6 +22,10 @@ classdef Trial < handle
     properties (Access=private)
         RelativeParams struct = struct()
         RelativeDistributions struct = struct()
+        ParameterNames struct = struct()
+        ParameterDistributions struct = struct()
+        FixedParameterNames string = strings(0,1)
+        FixedParameterValues cell = cell(0,1)
     end
 
     methods (Hidden=true)
@@ -59,13 +63,39 @@ classdef Trial < handle
             names = strings(1, numel(searchSpace));
             for index = 1:numel(searchSpace)
                 names(index) = searchSpace(index).name;
-                key = matlab.lang.makeValidName(searchSpace(index).name);
+                key = obj.claimParameterName(searchSpace(index).name);
                 obj.RelativeParams.(key) = values{index};
                 obj.RelativeDistributions.(key) = searchSpace(index).distribution;
             end
             attribute = matlab.lang.makeValidName( ...
                 string(source) + "_relative_search_space");
-            obj.SystemAttrs.(attribute) = names;
+            obj.setSystemAttr(attribute,names);
+        end
+
+        function setFixedParameters(obj,names,values)
+            names=reshape(string(names),[],1);
+            values=reshape(values,[],1);
+            if numel(names)~=numel(values) || ...
+                    numel(unique(names))~=numel(names)
+                error("radia:optuna:FixedParameter", ...
+                    "Fixed parameter names and values must align and be unique.");
+            end
+            obj.FixedParameterNames=names;
+            obj.FixedParameterValues=values;
+            obj.setSystemAttr("fixed_params",names);
+        end
+
+        function removeRelativeParameters(obj,names)
+            for name=reshape(string(names),1,[])
+                key=matlab.lang.makeValidName(name);
+                if isfield(obj.RelativeParams,key)
+                    obj.RelativeParams=rmfield(obj.RelativeParams,key);
+                end
+                if isfield(obj.RelativeDistributions,key)
+                    obj.RelativeDistributions= ...
+                        rmfield(obj.RelativeDistributions,key);
+                end
+            end
         end
     end
 
@@ -80,19 +110,24 @@ classdef Trial < handle
                 options.Step (1,1) double = NaN
             end
             obj.ensureRunning();
-            key = matlab.lang.makeValidName(name);
-            if isfield(obj.Params, key)
-                value = obj.Params.(key);
-                return;
-            end
             spec = radia.optuna.internal.DistributionCodec.float( ...
                 low, high, options.Log, options.Step);
-            [isRelative, value] = obj.relativeValue(name, spec);
-            if ~isRelative
+            [exists, value, key] = obj.existingParameter(name, spec);
+            if exists
+                return;
+            end
+            [isFixed,value] = obj.fixedValue(name,spec);
+            [isRelative,relativeValue] = obj.relativeValue(name, spec);
+            if isFixed
+                % Enqueued values override sampler-relative proposals.
+            elseif isRelative
+                value=relativeValue;
+            else
                 value = obj.Study.sampleFloat(obj, name, low, high, ...
                     struct("Log", options.Log, "Step", options.Step));
             end
             obj.Params.(key) = value;
+            obj.ParameterDistributions.(key) = spec;
             obj.Distributions.(key) = struct( ...
                 "name", "FloatDistribution", "low", low, "high", high, ...
                 "log", options.Log, "step", options.Step);
@@ -107,24 +142,7 @@ classdef Trial < handle
                 low (1,1) double
                 high (1,1) double
             end
-            obj.ensureRunning();
-            key = matlab.lang.makeValidName(name);
-            if isfield(obj.Params, key)
-                value = obj.Params.(key);
-                return;
-            end
-            spec = radia.optuna.internal.DistributionCodec.integer( ...
-                low, high, false, 1);
-            [isRelative, value] = obj.relativeValue(name, spec);
-            if ~isRelative
-                value = obj.Study.sampleInteger(obj, name, low, high);
-            end
-            obj.Params.(key) = value;
-            obj.Distributions.(key) = struct( ...
-                "name", "IntDistribution", "low", low, "high", high, ...
-                "log", false, "step", 1);
-            obj.Study.recordParameter(obj, name, "integer", value, ...
-                radia.optuna.internal.DistributionCodec.encode(spec));
+            value = obj.suggestIntegerImpl(name, low, high, 1, false);
         end
 
         function value = suggestCategorical(obj, name, choices)
@@ -134,18 +152,23 @@ classdef Trial < handle
                 choices
             end
             obj.ensureRunning();
-            key = matlab.lang.makeValidName(name);
-            if isfield(obj.Params, key)
-                value = obj.Params.(key);
-                return;
-            end
             spec = ...
                 radia.optuna.internal.DistributionCodec.categorical(choices);
-            [isRelative, value] = obj.relativeValue(name, spec);
-            if ~isRelative
+            [exists, value, key] = obj.existingParameter(name, spec);
+            if exists
+                return;
+            end
+            [isFixed,value] = obj.fixedValue(name,spec);
+            [isRelative,relativeValue] = obj.relativeValue(name, spec);
+            if isFixed
+                % Enqueued values override sampler-relative proposals.
+            elseif isRelative
+                value=relativeValue;
+            else
                 value = obj.Study.sampleCategorical(obj, name, choices);
             end
             obj.Params.(key) = value;
+            obj.ParameterDistributions.(key) = spec;
             obj.Distributions.(key) = struct( ...
                 "name", "CategoricalDistribution", "choices", choices);
             obj.Study.recordParameter(obj, name, "categorical", value, ...
@@ -170,10 +193,17 @@ classdef Trial < handle
                 error("radia:optuna:JointShape", ...
                     "Joint names and bounds must have the same length.");
             end
-            keys = matlab.lang.makeValidName(names);
+            specs = repmat( ...
+                radia.optuna.internal.DistributionCodec.float(0, 1, false, NaN), ...
+                1, numel(names));
+            keys = strings(1, numel(names));
             already = false(1, numel(keys));
             for index = 1:numel(keys)
-                already(index) = isfield(obj.Params, keys(index));
+                specs(index) = ...
+                    radia.optuna.internal.DistributionCodec.float( ...
+                    lows(index), highs(index), options.Log(index), NaN);
+                [already(index), ~, keys(index)] = ...
+                    obj.existingParameter(names(index), specs(index));
             end
             if any(already) && ~all(already)
                 error("radia:optuna:JointState", ...
@@ -186,25 +216,28 @@ classdef Trial < handle
                 end
                 return;
             end
-            specs = repmat( ...
-                radia.optuna.internal.DistributionCodec.float(0, 1, false, NaN), ...
-                1, numel(names));
             values = zeros(1, numel(names));
-            allRelative = true;
+            available = false(1,numel(names));
             for index = 1:numel(names)
-                specs(index) = ...
-                    radia.optuna.internal.DistributionCodec.float( ...
-                    lows(index), highs(index), options.Log(index), NaN);
-                [available, values(index)] = ...
+                [fixed,fixedValue] = obj.fixedValue(names(index),specs(index));
+                [relative,relativeValue] = ...
                     obj.relativeValue(names(index), specs(index));
-                allRelative = allRelative && available;
+                if fixed
+                    values(index)=fixedValue;
+                    available(index)=true;
+                elseif relative
+                    values(index)=relativeValue;
+                    available(index)=true;
+                end
             end
-            if ~allRelative
-                values = obj.Study.sampleJoint(obj, names, lows, highs, ...
+            if ~all(available)
+                proposed = obj.Study.sampleJoint(obj, names, lows, highs, ...
                     Log=options.Log);
+                values(~available)=proposed(~available);
             end
             for index = 1:numel(keys)
                 obj.Params.(keys(index)) = values(index);
+                obj.ParameterDistributions.(keys(index)) = specs(index);
                 obj.Distributions.(keys(index)) = struct( ...
                     "name", "FloatDistribution", "low", lows(index), ...
                     "high", highs(index), "log", options.Log(index), ...
@@ -240,6 +273,18 @@ classdef Trial < handle
                 Log=options.Log, Step=options.Step);
         end
 
+        function value=suggest_uniform(obj,name,low,high)
+            value=obj.suggestFloat(name,low,high);
+        end
+
+        function value=suggest_loguniform(obj,name,low,high)
+            value=obj.suggestFloat(name,low,high,Log=true);
+        end
+
+        function value=suggest_discrete_uniform(obj,name,low,high,q)
+            value=obj.suggestFloat(name,low,high,Step=q);
+        end
+
         function value = suggest_int(obj, name, low, high, options)
             %SUGGEST_INT Optuna-compatible integer suggestion.
             arguments
@@ -250,37 +295,8 @@ classdef Trial < handle
                 options.Step (1,1) double = 1
                 options.Log (1,1) logical = false
             end
-            if options.Step ~= 1
-                error("radia:optuna:IntegerDistribution", ...
-                    "Integer step values other than one are not supported yet.");
-            end
-            if options.Log
-                if low <= 0
-                    error("radia:optuna:LogBounds", ...
-                        "Log integer bounds must be positive.");
-                end
-                key = matlab.lang.makeValidName(name);
-                if isfield(obj.Params, key)
-                    value = obj.Params.(key);
-                    return
-                end
-                spec = radia.optuna.internal.DistributionCodec.integer( ...
-                    low, high, true, 1);
-                [isRelative, value] = obj.relativeValue(name, spec);
-                if ~isRelative
-                    value = obj.Study.sampleFloat(obj, name, low, high, ...
-                        struct("Log", true, "Step", 1));
-                    value = min(max(round(value), low), high);
-                end
-                obj.Params.(key) = value;
-                obj.Distributions.(key) = struct( ...
-                    "name", "IntDistribution", "low", low, "high", high, ...
-                    "log", true, "step", 1);
-                obj.Study.recordParameter(obj, name, "integer", value, ...
-                    radia.optuna.internal.DistributionCodec.encode(spec));
-            else
-                value = obj.suggestInteger(name, low, high);
-            end
+            value = obj.suggestIntegerImpl( ...
+                name, low, high, options.Step, options.Log);
         end
 
         function value = suggest_categorical(obj, name, choices)
@@ -295,11 +311,21 @@ classdef Trial < handle
                 step (1,1) double
             end
             obj.ensureRunning();
-            if ~isfinite(value) || ~isfinite(step) || step ~= floor(step)
-                error("radia:optuna:Report", "value must be finite and step must be an integer.");
+            if numel(obj.Study.Directions) ~= 1
+                error("radia:optuna:ReportMultiObjective", ...
+                    "Trial.report is not supported for multi-objective studies.");
+            end
+            if ~isfinite(step) || step ~= floor(step) || step < 0
+                error("radia:optuna:Report", ...
+                    "step must be a nonnegative integer.");
             end
             row = obj.IntermediateValues.Step == step;
-            obj.IntermediateValues(row,:) = [];
+            if any(row)
+                warning("radia:optuna:DuplicateReport", ...
+                    "The reported value is ignored because step %d was already reported.", ...
+                    step);
+                return
+            end
             obj.IntermediateValues(end+1,:) = {step, value, ...
                 datetime("now", "TimeZone", "local")};
             obj.IntermediateValues = sortrows(obj.IntermediateValues, "Step");
@@ -308,6 +334,10 @@ classdef Trial < handle
         end
 
         function decision = shouldPrune(obj)
+            if numel(obj.Study.Directions) ~= 1
+                error("radia:optuna:PrunerMultiObjective", ...
+                    "Trial.shouldPrune is not supported for multi-objective studies.");
+            end
             decision = obj.Study.Pruner.shouldPrune(obj.Study, obj);
         end
 
@@ -343,6 +373,7 @@ classdef Trial < handle
             end
             obj.ensureRunning();
             obj.SystemAttrs.(matlab.lang.makeValidName(name)) = value;
+            obj.Study.recordSystemAttribute(obj,name,value);
         end
 
         function set_system_attr(obj, name, value)
@@ -367,8 +398,94 @@ classdef Trial < handle
     end
 
     methods (Access=private)
+        function value = suggestIntegerImpl(obj, name, low, high, step, logScale)
+            obj.ensureRunning();
+            if ~(isfinite(low) && isfinite(high) && isfinite(step)) || ...
+                    low ~= floor(low) || high ~= floor(high) || ...
+                    step ~= floor(step) || low > high || step <= 0
+                error("radia:optuna:IntegerDistribution", ...
+                    "Integer bounds and Step must be finite integers with " + ...
+                    "low <= high and Step > 0.");
+            end
+            if logScale && step ~= 1
+                error("radia:optuna:IntegerDistribution", ...
+                    "Log integer distributions require Step=1.");
+            end
+            effectiveHigh = low + floor((high - low) / step) * step;
+            spec = radia.optuna.internal.DistributionCodec.integer( ...
+                low, effectiveHigh, logScale, step);
+            [exists, value, key] = obj.existingParameter(name, spec);
+            if exists
+                return
+            end
+            [isFixed,value] = obj.fixedValue(name,spec);
+            [isRelative,relativeValue] = obj.relativeValue(name, spec);
+            if isFixed
+                % Enqueued values override sampler-relative proposals.
+            elseif isRelative
+                value=relativeValue;
+            else
+                if ~logScale && step == 1
+                    value = obj.Study.sampleInteger( ...
+                        obj, name, low, effectiveHigh);
+                elseif low == effectiveHigh
+                    value = low;
+                else
+                    value = obj.Study.sampleFloat(obj, name, low, ...
+                        effectiveHigh, struct("Log", logScale, "Step", step));
+                end
+            end
+            value = low + round((double(value) - low) / step) * step;
+            value = min(max(value, low), effectiveHigh);
+            obj.Params.(key) = value;
+            obj.ParameterDistributions.(key) = spec;
+            obj.Distributions.(key) = struct( ...
+                "name", "IntDistribution", "low", low, ...
+                "high", effectiveHigh, "log", logScale, "step", step);
+            obj.Study.recordParameter(obj, name, "integer", value, ...
+                radia.optuna.internal.DistributionCodec.encode(spec));
+        end
+
+        function [exists, value, key] = ...
+                existingParameter(obj, name, distribution)
+            key = obj.claimParameterName(name);
+            exists = isfield(obj.Params, key);
+            value = [];
+            if ~exists
+                return
+            end
+            if ~isfield(obj.ParameterDistributions, key)
+                error("radia:optuna:DistributionState", ...
+                    "Parameter '%s' has no registered distribution.", name);
+            end
+            stored = obj.ParameterDistributions.(key);
+            if ~radia.optuna.internal.DistributionCodec.equivalent( ...
+                    stored, distribution)
+                error("radia:optuna:IncompatibleDistribution", ...
+                    "Parameter '%s' was already suggested with a different " + ...
+                    "distribution.", name);
+            end
+            value = obj.Params.(key);
+        end
+
+        function key = claimParameterName(obj, name)
+            original = string(name);
+            key = matlab.lang.makeValidName(original);
+            if isfield(obj.ParameterNames, key)
+                previous = string(obj.ParameterNames.(key));
+                if previous ~= original
+                    error("radia:optuna:ParameterNameCollision", ...
+                        "Parameter names '%s' and '%s' map to the same MATLAB " + ...
+                        "field key '%s'. Rename one parameter.", ...
+                        previous, original, key);
+                end
+                return
+            end
+            obj.ParameterNames.(key) = original;
+        end
+
         function [available, value] = relativeValue(obj, name, distribution)
-            key = matlab.lang.makeValidName(name);
+            key = obj.claimParameterName(name);
             available = isfield(obj.RelativeParams, key) && ...
                 isfield(obj.RelativeDistributions, key) && ...
                 radia.optuna.internal.DistributionCodec.equivalent( ...
@@ -391,6 +508,42 @@ classdef Trial < handle
                 end
             else
                 value = NaN;
+            end
+        end
+
+        function [available,value] = fixedValue(obj,name,distribution)
+            index=find(obj.FixedParameterNames==string(name),1);
+            if isempty(index)
+                available=false;
+                value=[];
+                return
+            end
+            value=obj.FixedParameterValues{index};
+            available=obj.distributionContains(distribution,value);
+            if ~available
+                warning("radia:optuna:FixedParameter", ...
+                    "Enqueued value for '%s' is outside the requested distribution; sampling normally.", ...
+                    name);
+            end
+        end
+
+        function result = distributionContains(~,distribution,value)
+            if distribution.kind=="categorical"
+                token=radia.optuna.internal.DistributionCodec.choiceToken(value);
+                result=ismember(token, ...
+                    radia.optuna.internal.DistributionCodec.choiceTokens( ...
+                    distribution.choices));
+                return
+            end
+            result=isnumeric(value) && isscalar(value) && isfinite(value) && ...
+                value>=distribution.low && value<=distribution.high && ...
+                (~distribution.log || value>0);
+            if result && isfinite(distribution.step)
+                grid=(double(value)-distribution.low)/distribution.step;
+                result=abs(grid-round(grid))<=1e-10*max(1,abs(grid));
+            end
+            if result && distribution.kind=="integer"
+                result=double(value)==round(double(value));
             end
         end
 
