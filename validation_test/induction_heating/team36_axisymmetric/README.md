@@ -11,9 +11,9 @@ conductivity, and heat capacity; the field- and temperature-dependent
 permeability law; convection; radiation; and the 250 s coupling history.
 
 The electromagnetic and thermal meshes are independently generated and saved
-as Netgen `.vol` files in `C:\temp`.  They intentionally use different radial
-partitions.  Temperature is mapped from the thermal mesh to the electromagnetic
-mesh, while volumetric Joule loss is mapped back and normalized by the full
+as Netgen `.vol` files under the runner's `--workdir`.  They intentionally use
+different radial partitions.  Temperature is mapped from the thermal mesh to
+the electromagnetic mesh, while volumetric Joule loss is mapped back and normalized by the full
 axisymmetric `2*pi*r` integral.  The result artifact records both topology
 hashes and the mapping power error.
 
@@ -32,8 +32,23 @@ python validation_test\induction_heating\team36_axisymmetric\run_radia_ih.py `
 ```
 
 Use `--mesh-profile refined` for the refinement companion run.  Long retained
-runs belong on an MDX or Hibino worker; the 25 s smoke is suitable for a local
+runs belong on a compute worker; the 25 s smoke is suitable for a local
 development machine.
+
+The refined 250 s run is a retained validation, not a unit or CI test.  It is
+not collected by `pytest`; invoke the runner explicitly and archive the result
+under this directory only after the full solver gate passes.  The retained v11
+result is `results_refined_validation_v11.json` (first-order noncoincident EM
+and thermal meshes, internal `dt=0.25 s`, output every `5 s`).  Its source run
+took roughly 16 hours, so routine regressions should use the focused gate tests
+and the 25 s smoke instead of recomputing it.
+
+Repository convention: heavyweight solver evidence lives under
+`validation_test/`; `packages/radia-mcp/tests/` contains only fast artifact
+schema, identity, positive-control, and negative-control checks.  Independent
+commercial-solver references and machine-specific execution metadata remain in
+the private cross-validation archive and are not copied into this public
+result.
 
 The result has two distinct gates:
 
