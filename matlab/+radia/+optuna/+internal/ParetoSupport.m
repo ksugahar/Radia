@@ -11,7 +11,9 @@ classdef ParetoSupport
             params=study.ParamTable; rows=params.Name==string(name) & params.Kind=="categorical";
             raw=params.ValueText(rows); numeric=params.ValueNumeric(rows);
             for k=1:numel(raw)
-                if isfinite(numeric(k)), raw(k)="numeric:"+string(numeric(k),"%.17g"); end
+                if isfinite(numeric(k))
+                    raw(k)=append("numeric:",jsonencode(double(numeric(k))));
+                end
             end
             [tokens,values,trialNumbers]=radia.optuna.internal.ParetoSupport.collect( ...
                 study,params.TrialNumber(rows),raw);
@@ -22,12 +24,12 @@ classdef ParetoSupport
             goodMask=false(count,1); goodWeights=zeros(count,1);
             if nBelow==0, return, end
             violations=zeros(count,1); feasible=true(count,1);
-            if ~isempty(study.ConstraintTable)
+            if study.hasConstraintRecords()
                 for k=1:count
-                    constraints=study.constraintsForTrial(trialNumbers(k));
-                    if any(isnan(constraints))
+                    [present,constraints]=study.constraintRecord(trialNumbers(k));
+                    if ~present
                         feasible(k)=false; violations(k)=Inf;
-                    elseif ~isempty(constraints)
+                    else
                         positive=max(constraints,0); feasible(k)=all(positive<=0);
                         violations(k)=sum(positive);
                     end
@@ -111,10 +113,225 @@ classdef ParetoSupport
             end
         end
 
+        function [feasible,violation,rank,crowding,order,missing] = ...
+                constrainedRankAndCrowding(study,trialNumbers,values)
+            %CONSTRAINEDRANKANDCROWDING Optuna 4.9 elite rank groups.
+            trialNumbers=reshape(double(trialNumbers),[],1);
+            values=double(values);
+            count=numel(trialNumbers);
+            if size(values,1)~=count || ...
+                    size(values,2)~=numel(study.Directions) || ...
+                    any(~isfinite(values),"all")
+                error("radia:optuna:NSGAIIObservations", ...
+                    "Trial numbers and finite objective values must align.");
+            end
+
+            feasible=true(count,1);
+            violation=zeros(count,1);
+            missing=false(count,1);
+            constrained=study.hasConstraintRecords();
+            if constrained
+                feasible(:)=false;
+                violation(:)=Inf;
+                expectedCount=NaN;
+                for index=1:count
+                    [present,constraints]=study.constraintRecord( ...
+                        trialNumbers(index));
+                    if ~present
+                        missing(index)=true;
+                        continue
+                    end
+                    if isnan(expectedCount)
+                        expectedCount=numel(constraints);
+                    elseif numel(constraints)~=expectedCount
+                        error("radia:optuna:ConstraintShape", ...
+                            "Trials with different numbers of constraints cannot be compared.");
+                    end
+                    positive=max(constraints,0);
+                    feasible(index)=all(positive<=0);
+                    violation(index)=sum(positive);
+                end
+            end
+
+            rank=inf(count,1);
+            crowding=zeros(count,1);
+            feasibleIndices=find(feasible);
+            if ~isempty(feasibleIndices)
+                [localRank,crowding(feasibleIndices)]= ...
+                    radia.optuna.internal.ParetoSupport.rankAndCrowding( ...
+                    values(feasibleIndices,:),study.Directions);
+                rank(feasibleIndices)=localRank;
+            end
+            nextRank=max([0;rank(isfinite(rank))])+1;
+            infeasibleIndices=find(~feasible & ~missing);
+            if ~isempty(infeasibleIndices)
+                uniqueViolation=unique(violation(infeasibleIndices),"sorted");
+                for index=1:numel(uniqueViolation)
+                    rank(infeasibleIndices( ...
+                        violation(infeasibleIndices)==uniqueViolation(index)))= ...
+                        nextRank+index-1;
+                end
+                nextRank=nextRank+numel(uniqueViolation);
+            end
+            missingIndices=find(missing);
+            if ~isempty(missingIndices)
+                [localRank,crowding(missingIndices)]= ...
+                    radia.optuna.internal.ParetoSupport.rankAndCrowding( ...
+                    values(missingIndices,:),study.Directions);
+                rank(missingIndices)=nextRank+localRank-1;
+            end
+            [~,order]=sortrows([rank,(1:count)'],[1 2]);
+        end
+
+        function order = eliteSelectionOrder(study,trialNumbers,values,count)
+            %ELITESELECTIONORDER Front-wise selection used by Optuna NSGA-II.
+            [~,~,rank,~,~,~]= ...
+                radia.optuna.internal.ParetoSupport. ...
+                constrainedRankAndCrowding(study,trialNumbers,values);
+            order=zeros(0,1);
+            for level=reshape(unique(rank,"sorted"),1,[])
+                front=find(rank==level);
+                remaining=count-numel(order);
+                if remaining<=0
+                    break
+                end
+                if numel(front)<remaining
+                    order=[order;front]; %#ok<AGROW>
+                    continue
+                end
+                distance=radia.optuna.internal.ParetoSupport. ...
+                    crowdingDistance(values(front,:));
+                % _calc_crowding_distance leaves the working population
+                % sorted by the final objective. Python then performs a
+                % stable ascending distance sort and reverses the result.
+                [~,workingOrder]=sort(values(front,end),"ascend");
+                [~,distanceOrder]=sort(distance(workingOrder),"ascend");
+                cutoff=flipud(workingOrder(distanceOrder));
+                order=[order;front(cutoff(1:min(remaining,numel(front))))]; %#ok<AGROW>
+                break
+            end
+        end
+
+        function result = constrainedDominates(study,leftNumber,leftValues, ...
+                rightNumber,rightValues)
+            [leftPresent,leftConstraints]=study.constraintRecord(leftNumber);
+            [rightPresent,rightConstraints]=study.constraintRecord(rightNumber);
+            if leftPresent~=rightPresent
+                result=leftPresent;
+                return
+            end
+            if leftPresent
+                if numel(leftConstraints)~=numel(rightConstraints)
+                    error("radia:optuna:ConstraintShape", ...
+                        "Trials with different numbers of constraints cannot be compared.");
+                end
+                leftViolation=sum(max(leftConstraints,0));
+                rightViolation=sum(max(rightConstraints,0));
+                leftFeasible=leftViolation<=0;
+                rightFeasible=rightViolation<=0;
+                if leftFeasible~=rightFeasible
+                    result=leftFeasible;
+                    return
+                end
+                if ~leftFeasible
+                    result=leftViolation<rightViolation;
+                    return
+                end
+            end
+            signs=ones(1,numel(study.Directions));
+            signs(study.Directions=="maximize")=-1;
+            left=reshape(double(leftValues),1,[]).*signs;
+            right=reshape(double(rightValues),1,[]).*signs;
+            result=all(left<=right) && any(left<right);
+        end
+
+        function distance = crowdingDistance(values)
+            values=double(values);
+            count=size(values,1);
+            distance=zeros(count,1);
+            if count==0
+                return
+            end
+            for objective=1:size(values,2)
+                [sorted,indices]=sort(values(:,objective),"ascend");
+                finite=sorted(isfinite(sorted));
+                if isempty(finite)
+                    width=0;
+                else
+                    width=finite(end)-finite(1);
+                end
+                padded=[-Inf;sorted;Inf];
+                if width<=0
+                    gaps=zeros(count,1);
+                else
+                    gaps=(padded(3:end)-padded(1:end-2))/width;
+                end
+                distance(indices)=distance(indices)+gaps;
+            end
+        end
+
         function order = preferenceOrder(values,directions)
             [rank,crowding]=radia.optuna.internal.ParetoSupport.rankAndCrowding(values,directions);
             finiteCrowding=crowding; finiteCrowding(isinf(finiteCrowding))=realmax;
             [~,order]=sortrows([rank,-finiteCrowding],[1 2]);
+        end
+
+        function volume = computeHypervolume(points,reference)
+            %COMPUTEHYPERVOLUME Public internal contract for GP acquisition.
+            volume=radia.optuna.internal.ParetoSupport. ...
+                hypervolume(points,reference);
+        end
+
+        function improvement = hypervolumeImprovement2D( ...
+                samples,front,reference)
+            %HYPERVOLUMEIMPROVEMENT2D Vector contract for GP Monte Carlo.
+            samples=double(samples);
+            front=double(front);
+            reference=reshape(double(reference),1,[]);
+            if size(samples,2)~=2 || size(front,2)~=2 || ...
+                    numel(reference)~=2
+                error("radia:optuna:HypervolumeDimension", ...
+                    "Two-objective samples, front, and reference are required.");
+            end
+            front=front(all(isfinite(front),2),:);
+            front=front(front(:,1)<=reference(1) & ...
+                front(:,2)<=reference(2),:);
+            front=sortrows(front,1);
+            keep=false(size(front,1),1);
+            bestY=Inf;
+            for row=1:size(front,1)
+                if front(row,2)<bestY
+                    keep(row)=true;
+                    bestY=front(row,2);
+                end
+            end
+            front=front(keep,:);
+            improvement=zeros(size(samples,1),1);
+            for sample=1:size(samples,1)
+                point=samples(sample,:);
+                if any(~isfinite(point)) || ...
+                        point(1)>=reference(1) || point(2)>=reference(2)
+                    continue
+                end
+                left=point(1);
+                existingY=reference(2);
+                for row=1:size(front,1)
+                    if front(row,1)<=left
+                        existingY=min(existingY,front(row,2));
+                        continue
+                    end
+                    right=min(front(row,1),reference(1));
+                    improvement(sample)=improvement(sample)+ ...
+                        max(0,right-left)*max(0,existingY-point(2));
+                    left=right;
+                    existingY=min(existingY,front(row,2));
+                    if left>=reference(1), break, end
+                end
+                if left<reference(1)
+                    improvement(sample)=improvement(sample)+ ...
+                        (reference(1)-left)*max(0,existingY-point(2));
+                end
+            end
         end
     end
 
