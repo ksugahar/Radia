@@ -14,6 +14,7 @@ interpolation, or gray material is used.
 """
 from __future__ import annotations
 
+import itertools
 from dataclasses import dataclass
 
 import numpy as np
@@ -24,14 +25,13 @@ from .isochronous_topopt import (
     combined_function_transfer_map_from_field_response,
 )
 from .topology_optimization import (
-    HDivMMMGenerationResult,
     GrowthTopologyReport,
+    HDivMMMGenerationResult,
     TSVDElementCandidateSelection,
     grow_hdiv_mmm_by_superposition,
     ngsolve_growth_topology,
     select_tsvd_element_candidates,
 )
-
 
 _ALL_TRANSFER_ENTRIES = tuple(
     (row, column) for row in range(6) for column in range(6))
@@ -51,6 +51,9 @@ class PlanarDesignOrbit:
     """Piecewise-smooth planar design orbit used by the magnet objective.
 
     ``positions`` and ``tangents`` contain the same ``n+1`` orbit stations.
+    ``path_length_stations`` optionally preserves the RK independent variable;
+    when present it is the source of truth for each ``Delta s``.  Otherwise
+    chord lengths are used for backward-compatible manually supplied orbits.
     ``bend_axis`` is the constant plane normal and defines the positive signed
     turning angle.  The tangent rotation divided by the chord length supplies
     one signed curvature per electromagnetic response segment.
@@ -64,6 +67,7 @@ class PlanarDesignOrbit:
     tangents: np.ndarray
     magnetic_rigidity: float
     bend_axis: np.ndarray
+    path_length_stations: np.ndarray | None = None
 
     def __post_init__(self):
         positions = _finite_array(self.positions, name="orbit positions")
@@ -84,18 +88,30 @@ class PlanarDesignOrbit:
                 "magnetic_rigidity must be positive")
         tangents = tangents / tangent_norm[:, None]
         axis = axis / axis_norm
-        segment_lengths = np.linalg.norm(np.diff(positions, axis=0), axis=1)
+        chord_lengths = np.linalg.norm(np.diff(positions, axis=0), axis=1)
         scale = max(1.0, float(np.max(np.linalg.norm(
             positions - positions[0], axis=1))))
-        if np.any(segment_lengths <= 1.0e-14 * scale):
+        if np.any(chord_lengths <= 1.0e-14 * scale):
             raise ValueError("consecutive design-orbit stations must differ")
+        path_stations = self.path_length_stations
+        if path_stations is not None:
+            path_stations = _finite_array(
+                path_stations,
+                shape=(len(positions),),
+                name="path_length_stations",
+            )
+            path_stations = path_stations - path_stations[0]
+            if np.any(np.diff(path_stations) <= 0.0):
+                raise ValueError(
+                    "path_length_stations must be strictly increasing"
+                )
         planar_error = np.max(np.abs((positions - positions[0]) @ axis))
         tangent_error = np.max(np.abs(tangents @ axis))
         if planar_error > 1.0e-9 * scale or tangent_error > 1.0e-9:
             raise ValueError(
                 "design orbit and tangents must lie in the plane normal to "
                 "bend_axis")
-        chord = np.diff(positions, axis=0) / segment_lengths[:, None]
+        chord = np.diff(positions, axis=0) / chord_lengths[:, None]
         alignment = np.einsum(
             "ij,ij->i", chord, tangents[:-1] + tangents[1:])
         if np.any(alignment <= 0.0):
@@ -105,14 +121,44 @@ class PlanarDesignOrbit:
         object.__setattr__(self, "tangents", tangents.copy())
         object.__setattr__(self, "bend_axis", axis.copy())
         object.__setattr__(self, "magnetic_rigidity", rigidity)
+        object.__setattr__(
+            self,
+            "path_length_stations",
+            None if path_stations is None else path_stations.copy(),
+        )
 
     @property
     def segment_lengths(self) -> np.ndarray:
+        if self.path_length_stations is not None:
+            return np.diff(self.path_length_stations)
+        return self.chord_lengths
+
+    @property
+    def arc_length_stations(self) -> np.ndarray:
+        """Return the design-orbit station coordinates in metres."""
+        if self.path_length_stations is not None:
+            return self.path_length_stations.copy()
+        return np.r_[0.0, np.cumsum(self.chord_lengths)]
+
+    @property
+    def length_m(self) -> float:
+        """Return the represented design-orbit length."""
+        return float(self.arc_length_stations[-1])
+
+    @property
+    def chord_lengths(self) -> np.ndarray:
         return np.linalg.norm(np.diff(self.positions, axis=0), axis=1)
 
     @property
     def sample_positions(self) -> np.ndarray:
-        return 0.5 * (self.positions[:-1] + self.positions[1:])
+        # Cubic-Hermite midpoint stays on the tracked curve much more closely
+        # than a chord midpoint, while remaining exact on straight segments.
+        return (
+            0.5 * (self.positions[:-1] + self.positions[1:])
+            + self.segment_lengths[:, None]
+            * (self.tangents[:-1] - self.tangents[1:])
+            / 8.0
+        )
 
     @property
     def signed_curvature(self) -> np.ndarray:
@@ -123,6 +169,88 @@ class PlanarDesignOrbit:
         cosine = np.einsum("ij,ij->i", left, right)
         turning = np.arctan2(sine, cosine)
         return turning / self.segment_lengths
+
+    def _segment_coordinates(self, s_m):
+        raw = np.asarray(s_m)
+        if np.iscomplexobj(raw):
+            raise ValueError("s_m must contain finite real arc lengths")
+        query = np.asarray(raw, dtype=float)
+        if not np.all(np.isfinite(query)):
+            raise ValueError("s_m must contain finite real arc lengths")
+        stations = self.arc_length_stations
+        tolerance = 64.0 * np.finfo(float).eps * max(1.0, self.length_m)
+        if np.any(query < -tolerance) or np.any(query > self.length_m + tolerance):
+            raise ValueError("s_m is outside the represented design orbit")
+        clipped = np.clip(query, 0.0, self.length_m)
+        segment = np.searchsorted(stations, clipped, side="right") - 1
+        segment = np.clip(segment, 0, len(stations) - 2)
+        local = (clipped - stations[segment]) / self.segment_lengths[segment]
+        return query.ndim == 0, segment, local
+
+    def position_at(self, s_m) -> np.ndarray:
+        """Evaluate global ``(X(s), Y(s), Z(s))`` by cubic Hermite interpolation."""
+        scalar, segment, local = self._segment_coordinates(s_m)
+        u = np.asarray(local, dtype=float).reshape(-1)
+        indices = np.asarray(segment, dtype=np.int64).reshape(-1)
+        ds = self.segment_lengths[indices]
+        p0 = self.positions[indices]
+        p1 = self.positions[indices + 1]
+        t0 = self.tangents[indices]
+        t1 = self.tangents[indices + 1]
+        h00 = 2.0 * u**3 - 3.0 * u**2 + 1.0
+        h10 = u**3 - 2.0 * u**2 + u
+        h01 = -2.0 * u**3 + 3.0 * u**2
+        h11 = u**3 - u**2
+        result = (
+            h00[:, None] * p0
+            + (h10 * ds)[:, None] * t0
+            + h01[:, None] * p1
+            + (h11 * ds)[:, None] * t1
+        )
+        return result[0] if scalar else result.reshape(np.shape(s_m) + (3,))
+
+    def tangent_at(self, s_m) -> np.ndarray:
+        """Evaluate the unit design-orbit tangent at arc length ``s_m``."""
+        scalar, segment, local = self._segment_coordinates(s_m)
+        u = np.asarray(local, dtype=float).reshape(-1)
+        indices = np.asarray(segment, dtype=np.int64).reshape(-1)
+        ds = self.segment_lengths[indices]
+        p0 = self.positions[indices]
+        p1 = self.positions[indices + 1]
+        t0 = self.tangents[indices]
+        t1 = self.tangents[indices + 1]
+        derivative = (
+            ((6.0 * u**2 - 6.0 * u) / ds)[:, None] * p0
+            + (3.0 * u**2 - 4.0 * u + 1.0)[:, None] * t0
+            + ((-6.0 * u**2 + 6.0 * u) / ds)[:, None] * p1
+            + (3.0 * u**2 - 2.0 * u)[:, None] * t1
+        )
+        derivative /= np.linalg.norm(derivative, axis=1)[:, None]
+        return derivative[0] if scalar else derivative.reshape(np.shape(s_m) + (3,))
+
+    def signed_curvature_at(self, s_m) -> np.ndarray | float:
+        """Evaluate the segment-averaged design curvature ``h(s)``."""
+        scalar, segment, _ = self._segment_coordinates(s_m)
+        result = self.signed_curvature[np.asarray(segment, dtype=np.int64)]
+        return float(result) if scalar else np.asarray(result, dtype=float)
+
+    def frame_at(self, s_m) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """Return local ``(horizontal, vertical, tangent)`` axes in global xyz."""
+        tangent = self.tangent_at(s_m)
+        horizontal = np.cross(self.bend_axis, tangent)
+        horizontal /= np.linalg.norm(horizontal, axis=-1, keepdims=True)
+        vertical = np.broadcast_to(self.bend_axis, np.shape(horizontal)).copy()
+        return horizontal, vertical, tangent
+
+    def local_to_global(self, s_m, x_m=0.0, y_m=0.0) -> np.ndarray:
+        """Map planar moving-frame coordinates ``(s,x,y)`` to global xyz."""
+        position = self.position_at(s_m)
+        horizontal, vertical, _ = self.frame_at(s_m)
+        x = np.asarray(x_m, dtype=float)
+        y = np.asarray(y_m, dtype=float)
+        if not np.all(np.isfinite(x)) or not np.all(np.isfinite(y)):
+            raise ValueError("x_m and y_m must be finite")
+        return position + x[..., None] * horizontal + y[..., None] * vertical
 
 
 def planar_orbit_field_observations(
@@ -181,6 +309,150 @@ def build_planar_orbit_field_response_matrix(
             or not np.all(np.isfinite(rows))):
         raise RuntimeError(
             "native configured-field API returned invalid orbit rows")
+    return np.ascontiguousarray(rows)
+
+
+@dataclass(frozen=True)
+class MeasuredMedianPlaneFieldTarget:
+    """Measured local B samples used only as an HDiv-MMM inverse target.
+
+    The data contain the local components named by ``components`` at physical
+    ``(s,x,y=0)`` points.  A full ``(B_x,B_y,B_s)`` last axis is also accepted
+    and reduced to the selected components.  The values are never interpolated
+    into an off-plane field and never converted into a vector potential.
+    Instead, HDiv-MMM observation rows compare a three-dimensional magnet solve
+    with these samples while the optimizer changes the pole topology.
+    """
+
+    orbit: PlanarDesignOrbit
+    s_m: np.ndarray
+    x_m: np.ndarray
+    measured_B_local_t: np.ndarray
+    measurement_band_t: np.ndarray | float
+    components: tuple[str, ...] = ("x", "y", "s")
+
+    def __post_init__(self):
+        if not isinstance(self.orbit, PlanarDesignOrbit):
+            raise TypeError("orbit must be a PlanarDesignOrbit")
+        s = _finite_array(self.s_m, name="s_m").reshape(-1)
+        x = _finite_array(self.x_m, name="x_m").reshape(-1)
+        if s.size == 0 or x.size == 0 or np.any(np.diff(s) <= 0.0):
+            raise ValueError("s_m must increase strictly and x_m must not be empty")
+        components = tuple(str(value).lower() for value in self.components)
+        allowed = {"x", "y", "s"}
+        if (
+            not components
+            or len(set(components)) != len(components)
+            or any(value not in allowed for value in components)
+        ):
+            raise ValueError(
+                "components must be a non-empty unique subset of ('x','y','s')"
+            )
+        indices = tuple({"x": 0, "y": 1, "s": 2}[value] for value in components)
+        measured_raw = _finite_array(
+            self.measured_B_local_t, name="measured_B_local_t"
+        )
+        selected_shape = (len(s), len(x), len(components))
+        full_shape = (len(s), len(x), 3)
+        if measured_raw.shape == full_shape:
+            measured = measured_raw[:, :, indices]
+        elif measured_raw.shape == selected_shape:
+            measured = measured_raw
+        else:
+            raise ValueError(
+                "measured_B_local_t must have shape (n_s,n_x,n_component) "
+                "or (n_s,n_x,3)"
+            )
+        band_raw = np.asarray(self.measurement_band_t, dtype=float)
+        try:
+            band = np.broadcast_to(band_raw, measured.shape).copy()
+        except ValueError:
+            try:
+                band = np.broadcast_to(band_raw, full_shape)[:, :, indices].copy()
+            except ValueError as exc:
+                raise ValueError(
+                    "measurement_band_t must broadcast to the selected or "
+                    "full local-component shape"
+                ) from exc
+        if not np.all(np.isfinite(band)) or np.any(band <= 0.0):
+            raise ValueError("measurement_band_t must be finite and positive")
+        # This also rejects stations outside the orbit interpolation domain.
+        self.orbit.position_at(s)
+        object.__setattr__(self, "s_m", np.ascontiguousarray(s))
+        object.__setattr__(self, "x_m", np.ascontiguousarray(x))
+        object.__setattr__(self, "measured_B_local_t", measured.copy())
+        object.__setattr__(self, "measurement_band_t", band)
+        object.__setattr__(self, "components", components)
+
+    @property
+    def component_indices(self) -> tuple[int, ...]:
+        lookup = {"x": 0, "y": 1, "s": 2}
+        return tuple(lookup[value] for value in self.components)
+
+    @property
+    def observation_points_m(self) -> np.ndarray:
+        s, x = np.meshgrid(self.s_m, self.x_m, indexing="ij")
+        return np.ascontiguousarray(
+            self.orbit.local_to_global(s.reshape(-1), x.reshape(-1), 0.0)
+        )
+
+    @property
+    def observation_weights(self) -> np.ndarray:
+        horizontal, vertical, tangent = self.orbit.frame_at(self.s_m)
+        local_basis = np.stack((horizontal, vertical, tangent), axis=1)
+        point_basis = np.repeat(local_basis, len(self.x_m), axis=0)
+        indices = self.component_indices
+        point_count = len(point_basis)
+        weights = np.zeros((point_count * len(indices), point_count, 3))
+        for point in range(point_count):
+            for local, component in enumerate(indices):
+                weights[point * len(indices) + local, point] = point_basis[
+                    point, component
+                ]
+        return np.ascontiguousarray(weights)
+
+    @property
+    def response_target(self) -> np.ndarray:
+        return np.ascontiguousarray(self.measured_B_local_t.reshape(-1))
+
+    @property
+    def response_band(self) -> np.ndarray:
+        return np.ascontiguousarray(self.measurement_band_t.reshape(-1))
+
+    @property
+    def raw_field_response_size(self) -> int:
+        return int(self.response_target.size)
+
+
+def build_measured_median_plane_field_response_matrix(
+    charge_gram,
+    target: MeasuredMedianPlaneFieldTarget,
+    *,
+    field_scale=MU0,
+) -> np.ndarray:
+    """Build native HDiv-MMM rows at the actual measurement locations."""
+    if not isinstance(target, MeasuredMedianPlaneFieldTarget):
+        raise TypeError("target must be a MeasuredMedianPlaneFieldTarget")
+    native = getattr(charge_gram, "configured_field_functional_rows", None)
+    if native is None:
+        raise TypeError(
+            "charge_gram must expose configured_field_functional_rows"
+        )
+    scale = float(field_scale)
+    if not np.isfinite(scale) or scale == 0.0:
+        raise ValueError("field_scale must be finite and nonzero")
+    rows = scale * np.asarray(
+        native(target.observation_points_m, target.observation_weights),
+        dtype=float,
+    )
+    if (
+        rows.ndim != 2
+        or rows.shape[0] != target.raw_field_response_size
+        or not np.all(np.isfinite(rows))
+    ):
+        raise RuntimeError(
+            "native configured-field API returned invalid measurement rows"
+        )
     return np.ascontiguousarray(rows)
 
 
@@ -430,6 +702,28 @@ class AcceleratorMagnetTopologyResult:
 
 
 @dataclass(frozen=True)
+class MeasuredMedianPlaneTopologyResult:
+    """Pole-topology result re-solved against measured median-plane B."""
+
+    target: MeasuredMedianPlaneFieldTarget
+    generation: HDivMMMGenerationResult
+    realized_field_response_t: np.ndarray
+    maximum_measurement_band_ratio: float
+    topology: GrowthTopologyReport
+
+    @property
+    def active_elements(self) -> np.ndarray:
+        return self.generation.active_elements
+
+    @property
+    def converged(self) -> bool:
+        return bool(
+            self.generation.converged
+            and self.maximum_measurement_band_ratio <= 1.0
+        )
+
+
+@dataclass(frozen=True)
 class MultiMomentumTransferMatrixObjective:
     """Joint orbit/map contract at several magnetic rigidities.
 
@@ -535,7 +829,7 @@ class MultiMomentumTransferMatrixObjective:
                 "contract")
         offsets = self.raw_offsets
         return tuple(values[left:right]
-                     for left, right in zip(offsets[:-1], offsets[1:]))
+                     for left, right in itertools.pairwise(offsets))
 
     def transform(self, field_response) -> np.ndarray:
         return np.concatenate([
@@ -1128,6 +1422,94 @@ class MultiMomentumAcceleratorMagnetTopologyResult:
         return self.generation.converged
 
 
+def optimize_hdiv_mmm_magnet_to_measured_median_plane(
+    target: MeasuredMedianPlaneFieldTarget,
+    *,
+    charge_gram,
+    fes,
+    inv_chi,
+    rhs,
+    field_response_matrix,
+    active_elements,
+    element_volumes,
+    volume_max,
+    incident_field_response=None,
+    **generation_options,
+) -> MeasuredMedianPlaneTopologyResult:
+    """Adjust whole pole elements so the 3-D solution matches measured B.
+
+    The measured samples are used only in the band-normalized topology
+    objective.  Every accepted candidate is a complete HDiv-MMM re-solve;
+    this routine does not form an interpolated field, an off-plane B-spline,
+    or an A-map from the measurements.  The accepted 3-D magnet must be solved
+    separately for its HCurl A-map and independent direct B-map before Lie/RK
+    validation.
+    """
+    if not isinstance(target, MeasuredMedianPlaneFieldTarget):
+        raise TypeError("target must be a MeasuredMedianPlaneFieldTarget")
+    response_matrix = _finite_array(
+        field_response_matrix, name="field_response_matrix"
+    )
+    expected_shape = (target.raw_field_response_size, int(fes.ndof))
+    if response_matrix.ndim != 2 or response_matrix.shape != expected_shape:
+        raise ValueError(
+            f"field_response_matrix must have shape {expected_shape}"
+        )
+    incident = (
+        np.zeros(target.raw_field_response_size)
+        if incident_field_response is None
+        else _finite_array(
+            incident_field_response, name="incident_field_response"
+        ).reshape(-1)
+    )
+    if incident.shape != (target.raw_field_response_size,):
+        raise ValueError(
+            "incident_field_response must match the measurement response size"
+        )
+    reserved = {
+        "response_matrix",
+        "response_target",
+        "response_band",
+        "response_transform",
+        "response_transform_jacobian",
+        "incident_response",
+    }
+    overlap = reserved.intersection(generation_options)
+    if overlap:
+        raise TypeError(
+            "generation_options cannot override the measured-field contract: "
+            + ", ".join(sorted(overlap))
+        )
+    generation = grow_hdiv_mmm_by_superposition(
+        charge_gram=charge_gram,
+        fes=fes,
+        inv_chi=inv_chi,
+        rhs=rhs,
+        response_matrix=response_matrix,
+        active_elements=active_elements,
+        element_volumes=element_volumes,
+        response_target=target.response_target,
+        response_band=target.response_band,
+        volume_max=volume_max,
+        incident_response=incident,
+        **generation_options,
+    )
+    realized = response_matrix @ generation.state + incident
+    ratio = float(
+        np.max(
+            np.abs((realized - target.response_target) / target.response_band),
+            initial=0.0,
+        )
+    )
+    return MeasuredMedianPlaneTopologyResult(
+        target=target,
+        generation=generation,
+        realized_field_response_t=np.ascontiguousarray(realized),
+        maximum_measurement_band_ratio=ratio,
+        topology=ngsolve_growth_topology(fes.mesh, generation.active_elements),
+    )
+
+
 def optimize_hdiv_mmm_magnet_from_transfer_matrix(
         design_orbit: PlanarDesignOrbit, target_transfer_matrix, *,
         transfer_matrix_band, bend_field_band,
@@ -1357,6 +1739,8 @@ __all__ = [
     "AcceleratorMagnetTopologyResult",
     "CoilBuilderHDivSource",
     "CoilHDivTotalField",
+    "MeasuredMedianPlaneFieldTarget",
+    "MeasuredMedianPlaneTopologyResult",
     "MultiMomentumAcceleratorMagnetTopologyResult",
     "MultiMomentumTransferMatrixObjective",
     "PlanarDesignOrbit",
@@ -1364,12 +1748,14 @@ __all__ = [
     "TransferMatrixAutomaticDifferentiation",
     "TransferMatrixFieldCorrection",
     "TransferMatrixMaterialInversePipelineResult",
+    "build_measured_median_plane_field_response_matrix",
     "build_multi_orbit_field_response_matrix",
     "build_planar_orbit_field_response_matrix",
-    "optimize_hdiv_mmm_magnet_from_transfer_matrix",
-    "optimize_hdiv_mmm_magnet_from_transfer_matrices",
-    "planar_orbit_field_observations",
     "differentiate_transfer_matrix_field_response",
+    "optimize_hdiv_mmm_magnet_from_transfer_matrices",
+    "optimize_hdiv_mmm_magnet_from_transfer_matrix",
+    "optimize_hdiv_mmm_magnet_to_measured_median_plane",
+    "planar_orbit_field_observations",
     "run_transfer_matrix_material_inverse_pipeline",
     "solve_transfer_matrix_field_correction",
     "static_magnet_symplectic_residual",

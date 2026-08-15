@@ -18,20 +18,24 @@ k2 = 2/3;
 ks2 = 7/30;
 k3 = 4/3;
 ks3 = -1;
+k4 = 5/4;
+ks4 = -2/5;
 
 coordinate = x + I y;
 potential = h x + h^2 x^2/2 +
   ComplexExpand[Re[(k1 + I ks1) coordinate^2/2]] +
   ComplexExpand[Re[(k2 + I ks2) coordinate^3/3]] +
-  ComplexExpand[Re[(k3 + I ks3) coordinate^4/4]];
+  ComplexExpand[Re[(k3 + I ks3) coordinate^4/4]] +
+  ComplexExpand[Re[(k4 + I ks4) coordinate^5/5]];
 massSquare = 1/beta^2 - 1;
 hamiltonian = -(1 + h x) Sqrt[(1 + delta)^2 - px^2 - py^2] +
   potential + Sqrt[(1 + delta)^2 + massSquare]/beta;
 scaled = hamiltonian /. Thread[variables -> epsilon variables];
-series = Normal[Series[scaled, {epsilon, 0, 4}]] // Expand;
+series = Normal[Series[scaled, {epsilon, 0, 5}]] // Expand;
 H2 = Coefficient[series, epsilon, 2];
 H3 = Coefficient[series, epsilon, 3];
 H4 = Coefficient[series, epsilon, 4];
+H5 = Coefficient[series, epsilon, 5];
 
 tensorEntry[polynomial_, indices_List] :=
   Fold[D[#1, #2] &, polynomial, variables[[indices]]];
@@ -58,7 +62,15 @@ checkDifferences = {
   tensorEntry[H4, {1, 1, 1, 1}] - 6 k3,
   tensorEntry[H4, {1, 1, 1, 3}] - (-6 ks3),
   tensorEntry[H4, {6, 6, 6, 6}] -
-    3 beta^2 (1 - beta^2) (5 beta^2 - 1)
+    3 beta^2 (1 - beta^2) (5 beta^2 - 1),
+  tensorEntry[H5, {2, 2, 6, 6, 6}] - (-6),
+  tensorEntry[H5, {2, 2, 2, 2, 6}] - (-9),
+  tensorEntry[H5, {1, 2, 2, 2, 2}] - 3 h,
+  tensorEntry[H5, {2, 2, 4, 4, 6}] - (-3),
+  tensorEntry[H5, {1, 1, 1, 1, 1}] - 24 k4,
+  tensorEntry[H5, {1, 1, 1, 1, 3}] - (-24 ks4),
+  tensorEntry[H5, {6, 6, 6, 6, 6}] -
+    15 beta^4 (1 - beta^2) (3 - 7 beta^2)
 };
 If[!And @@ (TrueQ[Simplify[#] == 0] & /@ checkDifferences),
   Print["Hamiltonian coefficient check failed"];
@@ -99,7 +111,8 @@ data = <|
     "curvature" -> numeric[h], "reference_beta" -> numeric[beta],
     "normal_quadrupole" -> numeric[k1], "skew_quadrupole" -> numeric[ks1],
     "normal_sextupole" -> numeric[k2], "skew_sextupole" -> numeric[ks2],
-    "normal_octupole" -> numeric[k3], "skew_octupole" -> numeric[ks3]
+    "normal_octupole" -> numeric[k3], "skew_octupole" -> numeric[ks3],
+    "normal_decapole" -> numeric[k4], "skew_decapole" -> numeric[ks4]
   |>,
   "hamiltonian_tensor_entries" -> <|
     "H2_xx" -> numeric[tensorEntry[H2, {1, 1}]],
@@ -115,7 +128,14 @@ data = <|
     "H4_x_px_px_delta" -> numeric[tensorEntry[H4, {1, 2, 2, 6}]],
     "H4_x_x_x_x" -> numeric[tensorEntry[H4, {1, 1, 1, 1}]],
     "H4_x_x_x_y" -> numeric[tensorEntry[H4, {1, 1, 1, 3}]],
-    "H4_delta_delta_delta_delta" -> numeric[tensorEntry[H4, {6, 6, 6, 6}]]
+    "H4_delta_delta_delta_delta" -> numeric[tensorEntry[H4, {6, 6, 6, 6}]],
+    "H5_px_px_delta_delta_delta" -> numeric[tensorEntry[H5, {2, 2, 6, 6, 6}]],
+    "H5_px_px_px_px_delta" -> numeric[tensorEntry[H5, {2, 2, 2, 2, 6}]],
+    "H5_x_px_px_px_px" -> numeric[tensorEntry[H5, {1, 2, 2, 2, 2}]],
+    "H5_px_px_py_py_delta" -> numeric[tensorEntry[H5, {2, 2, 4, 4, 6}]],
+    "H5_x_x_x_x_x" -> numeric[tensorEntry[H5, {1, 1, 1, 1, 1}]],
+    "H5_x_x_x_x_y" -> numeric[tensorEntry[H5, {1, 1, 1, 1, 3}]],
+    "H5_delta_delta_delta_delta_delta" -> numeric[tensorEntry[H5, {6, 6, 6, 6, 6}]]
   |>,
   "linear_generator_entries" -> <|
     "A_x_px" -> numeric[linearGenerator[[1, 2]]],

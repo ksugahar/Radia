@@ -6,6 +6,7 @@ classdef MOTPESampler < handle
 
     properties (SetAccess=private)
         Stream
+        Seed (1,1) double = 0
         NStartupTrials (1,1) double = 10
         Gamma (1,1) double = 0.1
         MaxGoodTrials (1,1) double = 25
@@ -14,6 +15,16 @@ classdef MOTPESampler < handle
         ConsiderMagicClip (1,1) logical = true
         ConsiderEndpoints (1,1) logical = false
         ConstraintsFcn = []
+    end
+
+    properties (Access=private)
+        AttachedStudy = []
+        Restored (1,1) logical = false
+    end
+
+    properties (Constant, Access=private)
+        StateSchema = "radia.optuna.motpe-sampler-state.v1"
+        SamplerName = "motpe"
     end
 
     methods
@@ -45,7 +56,8 @@ classdef MOTPESampler < handle
                 error("radia:optuna:ConstraintsFcn", ...
                     "ConstraintsFcn must be a function handle.");
             end
-            obj.Stream = RandStream("mt19937ar", "Seed", options.Seed);
+            obj.Seed = double(options.Seed);
+            obj.Stream = RandStream("mt19937ar", "Seed", obj.Seed);
             obj.NStartupTrials = options.NStartupTrials;
             obj.Gamma = options.Gamma;
             obj.MaxGoodTrials = options.MaxGoodTrials;
@@ -56,7 +68,7 @@ classdef MOTPESampler < handle
             obj.ConstraintsFcn = options.ConstraintsFcn;
         end
 
-        function value = sampleFloat(obj, study, trial, name, low, high, options) %#ok<INUSD>
+        function value = sampleFloat(obj, study, trial, name, low, high, options)
             obj.validate(low, high, options);
             if low == high
                 value = low;
@@ -77,6 +89,7 @@ classdef MOTPESampler < handle
                 value = obj.quantize( ...
                     obj.uniform(low, high, options.Log), ...
                     low, high, options.Step);
+                obj.recordState(study, trial.Number);
                 return
             end
 
@@ -105,6 +118,7 @@ classdef MOTPESampler < handle
                 above, candidates);
             [~, best] = max(acquisition);
             value = candidates(best);
+            obj.recordState(study, trial.Number);
         end
 
         function value = sampleInteger(obj, study, trial, name, low, high)
@@ -122,7 +136,7 @@ classdef MOTPESampler < handle
         end
 
         function value = sampleCategorical( ...
-                obj, study, trial, name, choices) %#ok<INUSD>
+                obj, study, trial, name, choices)
             if isempty(choices)
                 error("radia:optuna:Choices", ...
                     "Categorical choices must not be empty.");
@@ -148,6 +162,7 @@ classdef MOTPESampler < handle
             if numel(observed) < obj.NStartupTrials
                 index = 1 + floor(rand(obj.Stream, 1, 1) * count);
                 value = obj.choiceAt(choices, index);
+                obj.recordState(study, trial.Number);
                 return
             end
 
@@ -170,19 +185,59 @@ classdef MOTPESampler < handle
                 above, candidates);
             [~, best] = max(acquisition);
             value = obj.choiceAt(choices, candidates(best));
+            obj.recordState(study, trial.Number);
         end
 
         function beforeTrial(obj, study, trial) %#ok<INUSD>
+            obj.attach(study);
         end
 
         function afterTrial(obj, study, trial)
             if trial.State == "COMPLETE" && ~isempty(obj.ConstraintsFcn)
                 study.recordConstraints(trial, obj.ConstraintsFcn(trial));
             end
+            obj.recordState(study, trial.Number);
         end
     end
 
     methods (Access=private)
+        function attach(obj, study)
+            changed = isempty(obj.AttachedStudy) || ...
+                ~isequal(obj.AttachedStudy, study);
+            if changed
+                obj.AttachedStudy = study;
+                obj.Stream = RandStream("mt19937ar", "Seed", obj.Seed);
+                obj.Restored = false;
+            end
+            if obj.Restored
+                return
+            end
+            state = study.samplerState(obj.SamplerName, obj.StateSchema);
+            if ~isempty(state)
+                if ~isstruct(state) || ~isscalar(state) || ...
+                        ~isfield(state, "schema") || ...
+                        ~isfield(state, "seed") || ...
+                        ~isfield(state, "random_state") || ...
+                        string(state.schema) ~= obj.StateSchema || ...
+                        double(state.seed) ~= obj.Seed
+                    error("radia:optuna:MOTPEState", ...
+                        "Stored MOTPE sampler state is invalid or incompatible.");
+                end
+                obj.Stream.State = state.random_state;
+            end
+            obj.Restored = true;
+        end
+
+        function recordState(obj, study, trialNumber)
+            obj.attach(study);
+            state = struct( ...
+                "schema", obj.StateSchema, ...
+                "seed", obj.Seed, ...
+                "random_state", obj.Stream.State);
+            study.recordSamplerState(obj.SamplerName, obj.StateSchema, ...
+                trialNumber, 0, state);
+        end
+
         function validate(~, low, high, options)
             if ~(isfinite(low) && isfinite(high) && low <= high)
                 error("radia:optuna:Bounds", ...

@@ -37,6 +37,14 @@ if [ "${CI_PREFLIGHT_SKIP:-}" != "1" ] && [ -f tools/ci_preflight.py ]; then
             # Pytest creates temporary git repos; inherited hook-local GIT_*
             # variables make those repos mutate this clone's .git/config.
             unset $(git rev-parse --local-env-vars)
+            # The release worktree can be reached through a NAS drive mapping
+            # that Git canonicalizes to UNC.  Preserve the isolation above but
+            # allow child git archive/status probes to inspect this invocation's
+            # already-approved repository without adding persistent global
+            # safe.directory entries for every release worktree.
+            export GIT_CONFIG_COUNT=1
+            export GIT_CONFIG_KEY_0=safe.directory
+            export GIT_CONFIG_VALUE_0='*'
             python tools/ci_preflight.py "${SINCE[@]}"
         ); then
             echo "" >&2

@@ -51,7 +51,9 @@ from radia_mcp.figure import (  # noqa: E402
     emit_paper_figure,
     add_panel_labels,
     audit_text_overflow,
+    apply_lab_style,
 )
+from radia_mcp.figure.tools import figure_style_guide  # noqa: E402
 
 
 # --------------------------------------------------------------------
@@ -449,10 +451,13 @@ def test_emit_raises_when_times_new_roman_not_requested(tmp_path):
 # --------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("prof_name", sorted(PROFILES.keys()))
+@pytest.mark.parametrize(
+    "prof_name",
+    sorted(name for name in PROFILES if not name.startswith("beamer_169_")),
+)
 def test_profile_uses_10pt_body_font(prof_name):
     """Sugahara Lab absolute font rule: 10 pt body, 10 pt legend, 9 pt
-    ticks for every profile regardless of column width.
+    ticks for every paper profile regardless of column width.
 
     Catches regressions where someone tries to shrink the font to fit
     more axes or to bump it up for wider columns.  The 10 pt is an
@@ -471,6 +476,47 @@ def test_profile_uses_10pt_body_font(prof_name):
         f"{prof_name}.tick_pt = {prof.tick_pt} != 9.0 "
         f"(IEEE/IEEJ convention: 1 pt below body)"
     )
+
+
+@pytest.mark.parametrize("prof_name", ["beamer_169_full", "beamer_169_half"])
+def test_beamer_169_profiles_use_24pt_floor(prof_name):
+    """Every default visible font in a 16:9 slide figure is at least 24 pt."""
+    prof = PROFILES[prof_name]
+    assert prof.font_pt == 24.0
+    assert prof.legend_pt == 24.0
+    assert prof.tick_pt == 24.0
+
+
+def test_presentation_slide_style_uses_24pt_floor():
+    """The legacy style-guide route must agree with beamer_169 profiles."""
+    apply_lab_style("presentation_slide")
+    assert plt.rcParams["font.size"] == 24.0
+    assert plt.rcParams["xtick.labelsize"] == 24.0
+    assert plt.rcParams["ytick.labelsize"] == 24.0
+    assert plt.rcParams["legend.fontsize"] == 24.0
+    guide = figure_style_guide("presentation_slide")
+    assert "EVERY VISIBLE FONT >= 24 pt" in guide
+
+
+def test_emit_rejects_small_text_in_beamer_169_profile(tmp_path):
+    """A local fontsize override cannot bypass the 16:9 profile defaults."""
+    fig, axes = paper_figure("beamer_169_full", nrows=1, ncols=1)
+    _populate(axes)
+    axes[0, 0].text(0.5, 0.5, "too small", fontsize=20)
+    with pytest.raises(ValueError, match=r"below the slide font floor"):
+        emit_paper_figure(
+            fig,
+            str(tmp_path / "small_slide_text"),
+            "beamer_169_full",
+            min_axes_fraction=0.40,
+            on_fail="raise",
+            verbose=False,
+            save_pdf=False,
+            save_png=False,
+            check_colorblind_safe=False,
+            check_legend_overlap=False,
+        )
+    plt.close(fig)
 
 
 def test_paper_figure_rcparams_have_10pt_body_font():

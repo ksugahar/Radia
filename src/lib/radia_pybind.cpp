@@ -30,6 +30,7 @@
 #include <pybind11/functional.h>
 #include <pybind11/complex.h>
 
+#include <algorithm>
 #include <vector>
 #include <array>
 #include <atomic>
@@ -2860,6 +2861,40 @@ PYBIND11_MODULE(_radia_pybind, m) {
                 const radia::ngsolve_bridge::HDivFieldCoefficient& field) {
             return std::string(field.AlgorithmName());
         });
+
+    py::class_<radia::ngsolve_bridge::HDivVectorPotentialCoefficient,
+               std::shared_ptr<
+                   radia::ngsolve_bridge::HDivVectorPotentialCoefficient>,
+               ngfem::CoefficientFunction>(
+                   m, "_HDivVectorPotentialCoefficient")
+        .def(py::init([](F64Array source_points,
+                         F64Array integrated_magnetization) {
+                 auto points = source_points.request();
+                 auto moments = integrated_magnetization.request();
+                 if (points.ndim != 2 || points.shape[1] != 3
+                     || moments.ndim != 2 || moments.shape[1] != 3
+                     || points.shape[0] != moments.shape[0])
+                     throw std::invalid_argument(
+                         "source_points and integrated_magnetization must "
+                         "have matching shape (n,3)");
+                 return std::make_shared<
+                     radia::ngsolve_bridge::HDivVectorPotentialCoefficient>(
+                         std::vector<double>(
+                             static_cast<const double*>(points.ptr),
+                             static_cast<const double*>(points.ptr)
+                                 + points.size),
+                         std::vector<double>(
+                             static_cast<const double*>(moments.ptr),
+                             static_cast<const double*>(moments.ptr)
+                                 + moments.size));
+             }),
+             py::arg("source_points"),
+             py::arg("integrated_magnetization"),
+             "Native exterior vector-potential CoefficientFunction from "
+             "NGSolve-mapped HDiv magnetization quadrature.")
+        .def_property_readonly(
+            "source_count",
+            &radia::ngsolve_bridge::HDivVectorPotentialCoefficient::SourceCount);
 
     py::class_<radia::ngsolve_bridge::PlanarHDivFieldCoefficient,
                std::shared_ptr<radia::ngsolve_bridge::PlanarHDivFieldCoefficient>,
@@ -5886,6 +5921,69 @@ PYBIND11_MODULE(_radia_pybind, m) {
         return counts;
     }, py::arg("mesh"),
        "Return unique volume-element vertex counts via the native NGSolve MeshAccess.");
+
+    m.def(
+        "_evaluate_ngsolve_coefficient_at_point",
+        [](const std::shared_ptr<ngfem::CoefficientFunction>& coefficient,
+           const std::shared_ptr<ngcomp::MeshAccess>& mesh,
+           py::array_t<double, py::array::c_style | py::array::forcecast> point,
+           std::size_t heap_bytes) {
+            if (!coefficient)
+                throw std::invalid_argument(
+                    "coefficient must be an NGSolve CoefficientFunction");
+            if (!mesh || mesh->GetDimension() != 3)
+                throw std::invalid_argument(
+                    "mesh must be a three-dimensional NGSolve mesh");
+            if (coefficient->IsComplex())
+                throw std::invalid_argument(
+                    "coefficient point evaluation requires a real field");
+            if (point.ndim() != 1 || point.shape(0) != 3)
+                throw std::invalid_argument("point must have shape (3,)");
+            if (heap_bytes < (1u << 16))
+                throw std::invalid_argument(
+                    "heap_bytes must be at least 65536");
+
+            const auto input = point.unchecked<1>();
+            std::array<double, 3> physical_storage{
+                input(0), input(1), input(2)};
+            if (!std::all_of(
+                    physical_storage.begin(), physical_storage.end(),
+                    [](double value) { return std::isfinite(value); }))
+                throw std::invalid_argument("point must be finite");
+
+            ngstd::LocalHeap local_heap(
+                heap_bytes, "radia_ngsolve_coefficient_point");
+            ngbla::FlatVector<double> physical_point(
+                3, physical_storage.data());
+            ngfem::IntegrationPoint integration_point;
+            const ngfem::ElementId element = mesh->FindElementOfPoint(
+                physical_point, integration_point, true);
+            if (element.IsInvalid() || !element.IsVolume())
+                throw std::runtime_error(
+                    "NGSolve coefficient point is outside the volume mesh");
+            auto& transformation = mesh->GetTrafo(element, local_heap);
+            ngfem::MappedIntegrationPoint<3, 3> mapped_point(
+                integration_point, transformation);
+            const std::size_t dimension = static_cast<std::size_t>(
+                coefficient->Dimension());
+            py::array_t<double> output(
+                static_cast<py::ssize_t>(dimension));
+            auto output_buffer = output.request();
+            ngbla::FlatVector<double> value(
+                dimension, static_cast<double*>(output_buffer.ptr));
+            coefficient->Evaluate(mapped_point, value);
+            for (std::size_t index = 0; index < dimension; ++index) {
+                if (!std::isfinite(value[index]))
+                    throw std::runtime_error(
+                        "NGSolve coefficient point evaluation returned a "
+                        "non-finite value");
+            }
+            return output;
+        },
+        py::arg("coefficient"), py::arg("mesh"), py::arg("point"),
+        py::arg("heap_bytes") = std::size_t{1u << 22},
+        "Evaluate a real NGSolve CoefficientFunction with a caller-sized "
+        "native LocalHeap.");
 
     // ========================================================================
     // HACApK PEEC adapter sanity check (Step 3 of HACApK-PEEC integration)

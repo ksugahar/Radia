@@ -4,7 +4,9 @@ function trajectory = trackGridFunction( ...
 %   TRAJECTORY = radia.beam.trackGridFunction(SPECIES, STATE, FIELD, START,
 %   STOP, MAXSTEP) keeps FIELD inside NGSolve and evaluates it at every
 %   native integration stage. No regular-grid field map or MATLAB callback is
-%   introduced. FIELD must be a real three-component magnetic GridFunction.
+%   introduced. By default FIELD is an HCurl(order=p) vector potential and
+%   NGSolve evaluates native curl(A) at every RK stage. Direct-B GridFunctions
+%   require FieldRepresentation="magnetic_flux_density".
 %
 %   This direct Lorentz path is the independent check for the local
 %   multipole-map approximation returned by propagateGridFunctionMultipoleMap.
@@ -20,6 +22,9 @@ arguments
         ["time","path_length","azimuth"])} = "path_length"
     options.Stepper (1,1) string {mustBeMember(options.Stepper, ...
         ["boris2","classical-rk4"])} = "classical-rk4"
+    options.FieldRepresentation (1,1) string {mustBeMember( ...
+        options.FieldRepresentation,["magnetic_flux_density", ...
+        "hcurl_vector_potential"])} = "hcurl_vector_potential"
     options.MaximumSteps (1,1) double {mustBeInteger,mustBePositive} = 1e6
 end
 
@@ -34,6 +39,7 @@ config.stop = double(stopValue);
 config.maximum_step = double(maximumStep);
 config.maximum_steps = double(options.MaximumSteps);
 config.stepper = char(options.Stepper);
+config.field_representation = char(options.FieldRepresentation);
 trajectory = radia.internal.callMex( ...
     'beam.track.grid_function',field.nativeHandle(),config);
 end

@@ -96,6 +96,164 @@ def _checked_entries(entries, *, rank, name):
     return result
 
 
+@dataclass(frozen=True)
+class Symplectic2x2KAN:
+    """Global KAN coordinates for one real two-dimensional symplectic map.
+
+    The convention is ``M = K(rotation) A(log_scale) N(shear)`` with
+
+    ``K = [[cos, sin],[-sin, cos]]``, ``A = diag(exp(e), exp(-e))``, and
+    ``N = [[1, shear],[0, 1]]``.  Iwasawa/KAN coordinates cover every real
+    ``2 x 2`` matrix of determinant one; the rotation is periodic modulo
+    ``2*pi``.
+    """
+
+    rotation_rad: float = 0.0
+    log_scale: float = 0.0
+    shear: float = 0.0
+
+    def __post_init__(self):
+        values = np.asarray(
+            [self.rotation_rad, self.log_scale, self.shear], dtype=float
+        )
+        if not np.all(np.isfinite(values)):
+            raise ValueError("KAN parameters must be finite")
+        object.__setattr__(self, "rotation_rad", float(values[0]))
+        object.__setattr__(self, "log_scale", float(values[1]))
+        object.__setattr__(self, "shear", float(values[2]))
+
+    @property
+    def parameters(self) -> np.ndarray:
+        return np.asarray(
+            [self.rotation_rad, self.log_scale, self.shear], dtype=float
+        )
+
+    @property
+    def matrix(self) -> np.ndarray:
+        cosine = np.cos(self.rotation_rad)
+        sine = np.sin(self.rotation_rad)
+        expansion = np.exp(self.log_scale)
+        contraction = np.exp(-self.log_scale)
+        return np.asarray(
+            [
+                [
+                    cosine * expansion,
+                    cosine * expansion * self.shear + sine * contraction,
+                ],
+                [
+                    -sine * expansion,
+                    -sine * expansion * self.shear + cosine * contraction,
+                ],
+            ],
+            dtype=float,
+        )
+
+    @classmethod
+    def from_matrix(cls, matrix, *, tolerance=1.0e-10):
+        """Recover KAN coordinates after checking ``det(matrix) == 1``."""
+        value = _finite_array(matrix, shape=(2, 2), name="symplectic block")
+        tolerance = float(tolerance)
+        if not np.isfinite(tolerance) or tolerance < 0.0:
+            raise ValueError("symplectic tolerance must be finite and nonnegative")
+        determinant = float(np.linalg.det(value))
+        scale = max(1.0, float(np.max(np.abs(value))) ** 2)
+        if abs(determinant - 1.0) > tolerance * scale:
+            raise ValueError(
+                "symplectic 2x2 block must have determinant one; "
+                f"residual={abs(determinant - 1.0):.3e}"
+            )
+        first_column_squared = float(value[0, 0] ** 2 + value[1, 0] ** 2)
+        if first_column_squared <= np.finfo(float).tiny:
+            raise ValueError("symplectic block has a degenerate first column")
+        rotation = float(np.arctan2(-value[1, 0], value[0, 0]))
+        log_scale = 0.5 * float(np.log(first_column_squared))
+        shear = float(
+            (value[0, 0] * value[0, 1] + value[1, 0] * value[1, 1])
+            / first_column_squared
+        )
+        return cls(rotation, log_scale, shear)
+
+
+@dataclass(frozen=True)
+class DecoupledFirstOrderTarget:
+    """Physical block-diagonal first-order target for ``(x,px,y,py,ell,delta)``.
+
+    Static magnetic optics preserve ``delta``.  The longitudinal block is
+    therefore the one-parameter shear ``[[1, R56], [0, 1]]``; an arbitrary
+    longitudinal ``Sp(2,R)`` block needs an RF/electric energy kick and is not
+    represented by this target type.
+    """
+
+    horizontal: Symplectic2x2KAN
+    vertical: Symplectic2x2KAN
+    longitudinal_shear: float = 0.0
+
+    def __post_init__(self):
+        if not isinstance(self.horizontal, Symplectic2x2KAN) or not isinstance(
+            self.vertical, Symplectic2x2KAN
+        ):
+            raise TypeError("horizontal and vertical must be Symplectic2x2KAN")
+        shear = float(self.longitudinal_shear)
+        if not np.isfinite(shear):
+            raise ValueError("longitudinal_shear must be finite")
+        object.__setattr__(self, "longitudinal_shear", shear)
+
+    @property
+    def parameters(self) -> np.ndarray:
+        return np.r_[
+            self.horizontal.parameters,
+            self.vertical.parameters,
+            self.longitudinal_shear,
+        ]
+
+    @property
+    def matrix(self) -> np.ndarray:
+        result = np.zeros((6, 6), dtype=float)
+        result[0:2, 0:2] = self.horizontal.matrix
+        result[2:4, 2:4] = self.vertical.matrix
+        result[4:6, 4:6] = np.asarray(
+            [[1.0, self.longitudinal_shear], [0.0, 1.0]]
+        )
+        return result
+
+    @classmethod
+    def from_matrix(cls, matrix, *, tolerance=1.0e-10):
+        """Validate and parameterize a decoupled magnetostatic ``6 x 6`` map."""
+        value = _finite_array(
+            matrix, shape=(6, 6), name="decoupled first-order target"
+        )
+        tolerance = float(tolerance)
+        if not np.isfinite(tolerance) or tolerance < 0.0:
+            raise ValueError("target tolerance must be finite and nonnegative")
+        scale = max(1.0, float(np.max(np.abs(value))))
+        off_block = value.copy()
+        for begin in (0, 2, 4):
+            off_block[begin : begin + 2, begin : begin + 2] = 0.0
+        off_block_residual = float(np.max(np.abs(off_block), initial=0.0))
+        if off_block_residual > tolerance * scale:
+            raise ValueError(
+                "first-order target must decouple x, y, and longitudinal blocks; "
+                f"residual={off_block_residual:.3e}"
+            )
+        longitudinal = value[4:6, 4:6]
+        expected_longitudinal = np.asarray(
+            [[1.0, longitudinal[0, 1]], [0.0, 1.0]]
+        )
+        longitudinal_residual = float(
+            np.max(np.abs(longitudinal - expected_longitudinal), initial=0.0)
+        )
+        if longitudinal_residual > tolerance * scale:
+            raise ValueError(
+                "magnetostatic longitudinal target must be [[1,R56],[0,1]]; "
+                f"residual={longitudinal_residual:.3e}"
+            )
+        return cls(
+            Symplectic2x2KAN.from_matrix(value[0:2, 0:2], tolerance=tolerance),
+            Symplectic2x2KAN.from_matrix(value[2:4, 2:4], tolerance=tolerance),
+            float(longitudinal[0, 1]),
+        )
+
+
 def _unpack_multipoles(response, segment_count):
     values = _finite_array(response, name="multipole response").reshape(-1)
     expected = len(SECOND_ORDER_MULTIPOLE_COMPONENTS) * int(segment_count)
@@ -120,8 +278,8 @@ def _planar_orbit_multipole_observations(
     orbit: PlanarDesignOrbit, *, sample_radius, maximum_degree
 ) -> tuple[np.ndarray, np.ndarray]:
     """Return the shared nine-point harmonic stencil through ``maximum_degree``."""
-    if maximum_degree not in (2, 3):
-        raise ValueError("maximum_degree must be two or three")
+    if maximum_degree not in (2, 3, 4):
+        raise ValueError("maximum_degree must be two, three, or four")
     if not isinstance(orbit, PlanarDesignOrbit):
         raise TypeError("orbit must be a PlanarDesignOrbit")
     radius = float(sample_radius)
@@ -1183,6 +1341,555 @@ def certify_taylor_map_reachability(
     )
 
 
+def _kan_parameters_and_entry_jacobian(block):
+    """Return KAN coordinates and their analytic derivative by block entry."""
+    value = _finite_array(block, shape=(2, 2), name="transverse map block")
+    first, second = value[0]
+    third, fourth = value[1]
+    column_norm_squared = float(first * first + third * third)
+    if column_norm_squared <= np.finfo(float).tiny:
+        raise ValueError("transverse map block has a degenerate first column")
+    shear = float(
+        (first * second + third * fourth) / column_norm_squared
+    )
+    parameters = np.asarray(
+        [
+            np.arctan2(-third, first),
+            0.5 * np.log(column_norm_squared),
+            shear,
+        ],
+        dtype=float,
+    )
+    entry_jacobian = np.asarray(
+        [
+            [third / column_norm_squared, 0.0,
+             -first / column_norm_squared, 0.0],
+            [first / column_norm_squared, 0.0,
+             third / column_norm_squared, 0.0],
+            [
+                (second - 2.0 * shear * first) / column_norm_squared,
+                first / column_norm_squared,
+                (fourth - 2.0 * shear * third) / column_norm_squared,
+                third / column_norm_squared,
+            ],
+        ],
+        dtype=float,
+    )
+    return parameters, entry_jacobian
+
+
+def _canonical_linear_symplectic_residual(matrix):
+    value = _finite_array(matrix, shape=(6, 6), name="first-order map")
+    poisson = np.zeros((6, 6), dtype=float)
+    for coordinate in (0, 2, 4):
+        poisson[coordinate, coordinate + 1] = 1.0
+        poisson[coordinate + 1, coordinate] = -1.0
+    return float(np.max(np.abs(value.T @ poisson @ value - poisson), initial=0.0))
+
+
+_DECOUPLED_OFF_BLOCK_ENTRIES = tuple(
+    (row, column)
+    for row in range(6)
+    for column in range(6)
+    if row // 2 != column // 2
+)
+
+
+def _default_normal_quadrupole_basis(segment_count):
+    count = int(segment_count)
+    basis = np.zeros((len(SECOND_ORDER_MULTIPOLE_COMPONENTS) * count, count))
+    basis[count : 2 * count] = np.eye(count)
+    return basis
+
+
+def _decoupled_first_order_differential(transfer, field_basis):
+    matrix = _finite_array(transfer.R, shape=(6, 6), name="first-order map")
+    raw_jacobian = _finite_array(
+        transfer.R_jacobian, name="first-order map Jacobian"
+    )
+    basis = _finite_array(field_basis, name="field_basis")
+    if (
+        raw_jacobian.ndim != 3
+        or raw_jacobian.shape[1:] != (6, 6)
+        or basis.ndim != 2
+        or basis.shape[0] != raw_jacobian.shape[0]
+    ):
+        raise ValueError("first-order Jacobian and field_basis shapes do not match")
+
+    parameters = []
+    directional_rows = []
+    for rows, entries in (
+        ((0, 1), ((0, 0), (0, 1), (1, 0), (1, 1))),
+        ((2, 3), ((2, 2), (2, 3), (3, 2), (3, 3))),
+    ):
+        block_parameters, entry_jacobian = _kan_parameters_and_entry_jacobian(
+            matrix[np.ix_(rows, rows)]
+        )
+        entry_field_jacobian = np.asarray(
+            [raw_jacobian[:, row, column] for row, column in entries]
+        )
+        parameters.extend(block_parameters)
+        directional_rows.append(entry_jacobian @ entry_field_jacobian @ basis)
+
+    parameters.append(float(matrix[4, 5]))
+    directional_rows.append((raw_jacobian[:, 4, 5] @ basis)[None, :])
+    off_block_values = np.asarray(
+        [matrix[index] for index in _DECOUPLED_OFF_BLOCK_ENTRIES], dtype=float
+    )
+    off_block_jacobian = np.asarray(
+        [raw_jacobian[:, index[0], index[1]] @ basis
+         for index in _DECOUPLED_OFF_BLOCK_ENTRIES],
+        dtype=float,
+    )
+    return (
+        np.asarray(parameters, dtype=float),
+        np.vstack(directional_rows),
+        off_block_values,
+        off_block_jacobian,
+        _canonical_linear_symplectic_residual(matrix),
+    )
+
+
+@dataclass(frozen=True)
+class DecoupledFirstOrderReachabilityCertificate:
+    """Local AD rank certificate in ``KAN_x + KAN_y + R56`` coordinates."""
+
+    multipole_response: np.ndarray
+    transfer_matrix: np.ndarray
+    parameters: np.ndarray
+    field_basis: np.ndarray
+    directional_parameter_jacobian: np.ndarray
+    transverse_singular_values: np.ndarray
+    response_singular_values: np.ndarray
+    transverse_numerical_rank: int
+    response_numerical_rank: int
+    full_transverse_rank: bool
+    decoupling_residual: float
+    symplectic_residual: float
+    relative_tolerance: float
+
+
+def certify_decoupled_first_order_reachability(
+    multipole_response,
+    segment_lengths,
+    magnetic_rigidity,
+    *,
+    field_basis=None,
+    relative_tolerance=1.0e-9,
+    decoupling_tolerance=1.0e-10,
+    maximum_step_m=1.0e-3,
+    maximum_steps=1_000_000,
+) -> DecoupledFirstOrderReachabilityCertificate:
+    """Certify the six transverse ``Sp(2,R) x Sp(2,R)`` directions locally.
+
+    The default field basis varies one normal-quadrupole coefficient per
+    segment and leaves dipole, skew, and nonlinear multipoles unchanged.
+    ``full_transverse_rank`` is true only when all six independent transverse
+    KAN directions survive TSVD at the requested relative tolerance.
+    """
+    lengths = _finite_array(segment_lengths, name="segment_lengths").reshape(-1)
+    if lengths.size == 0 or np.any(lengths <= 0.0):
+        raise ValueError("segment_lengths must be non-empty and positive")
+    response = _finite_array(
+        multipole_response, name="multipole_response"
+    ).reshape(-1)
+    expected = len(SECOND_ORDER_MULTIPOLE_COMPONENTS) * lengths.size
+    if response.shape != (expected,):
+        raise ValueError("multipole_response must contain five blocks per segment")
+    basis = (
+        _default_normal_quadrupole_basis(lengths.size)
+        if field_basis is None
+        else _finite_array(field_basis, name="field_basis")
+    )
+    if basis.ndim != 2 or basis.shape[0] != response.size:
+        raise ValueError("field_basis must have one row per multipole response")
+    tolerance = float(relative_tolerance)
+    decoupling_tolerance = float(decoupling_tolerance)
+    if (
+        not np.isfinite(tolerance)
+        or tolerance < 0.0
+        or not np.isfinite(decoupling_tolerance)
+        or decoupling_tolerance < 0.0
+    ):
+        raise ValueError("rank and decoupling tolerances must be nonnegative")
+
+    transfer = second_order_taylor_map_from_multipoles(
+        response,
+        lengths,
+        magnetic_rigidity,
+        maximum_step_m=maximum_step_m,
+        maximum_steps=maximum_steps,
+    )
+    parameters, jacobian, off_block, _, symplectic = (
+        _decoupled_first_order_differential(transfer, basis)
+    )
+    decoupling = float(np.max(np.abs(off_block), initial=0.0))
+    scale = max(1.0, float(np.max(np.abs(transfer.R))))
+    if decoupling > decoupling_tolerance * scale:
+        raise ValueError(
+            "current first-order map is not x/y/longitudinal decoupled; "
+            f"residual={decoupling:.3e}"
+        )
+    transverse_singular = np.linalg.svd(jacobian[:6], compute_uv=False)
+    response_singular = np.linalg.svd(jacobian, compute_uv=False)
+    transverse_threshold = (
+        tolerance * transverse_singular[0] if transverse_singular.size else 0.0
+    )
+    response_threshold = (
+        tolerance * response_singular[0] if response_singular.size else 0.0
+    )
+    transverse_rank = int(np.count_nonzero(
+        transverse_singular > transverse_threshold
+    ))
+    response_rank = int(np.count_nonzero(response_singular > response_threshold))
+    return DecoupledFirstOrderReachabilityCertificate(
+        multipole_response=response.copy(),
+        transfer_matrix=np.asarray(transfer.R, dtype=float).copy(),
+        parameters=parameters.copy(),
+        field_basis=np.asarray(basis, dtype=float).copy(),
+        directional_parameter_jacobian=jacobian.copy(),
+        transverse_singular_values=np.asarray(
+            transverse_singular, dtype=float
+        ),
+        response_singular_values=np.asarray(response_singular, dtype=float),
+        transverse_numerical_rank=transverse_rank,
+        response_numerical_rank=response_rank,
+        full_transverse_rank=bool(transverse_rank == 6),
+        decoupling_residual=decoupling,
+        symplectic_residual=symplectic,
+        relative_tolerance=tolerance,
+    )
+
+
+@dataclass(frozen=True)
+class DecoupledFirstOrderContinuationStage:
+    """One accepted or rejected rank-monitored homotopy attempt."""
+
+    attempt: int
+    start_progress: float
+    requested_progress: float
+    accepted: bool
+    maximum_normalized_residual: float
+    decoupling_residual: float
+    transverse_numerical_rank: int
+    response_numerical_rank: int
+    transverse_singular_values: np.ndarray
+    achieved_parameters: np.ndarray
+    function_evaluations: int
+    optimizer_status: str
+
+
+@dataclass(frozen=True)
+class DecoupledFirstOrderContinuationResult:
+    """Auditable rank-6 continuation result for a decoupled first-order map."""
+
+    target: DecoupledFirstOrderTarget
+    initial_multipole_response: np.ndarray
+    achieved_multipole_response: np.ndarray
+    field_basis: np.ndarray
+    basis_coefficients: np.ndarray
+    initial_transfer_matrix: np.ndarray
+    achieved_transfer_matrix: np.ndarray
+    initial_parameters: np.ndarray
+    target_parameters: np.ndarray
+    achieved_parameters: np.ndarray
+    stages: tuple[DecoupledFirstOrderContinuationStage, ...]
+    converged: bool
+    status: str
+    final_maximum_normalized_parameter_error: float
+    final_matrix_error: float
+    final_decoupling_residual: float
+    final_symplectic_residual: float
+    final_transverse_rank: int
+
+
+def solve_decoupled_first_order_continuation(
+    initial_multipole_response,
+    segment_lengths,
+    magnetic_rigidity,
+    target,
+    *,
+    field_basis=None,
+    parameter_band=1.0,
+    relative_rank_tolerance=1.0e-9,
+    decoupling_tolerance=1.0e-9,
+    maximum_target_step=5.0e-4,
+    minimum_target_step=1.0e-6,
+    stage_tolerance=5.0e-8,
+    final_tolerance=1.0e-7,
+    maximum_stage_evaluations=80,
+    maximum_stages=512,
+    maximum_step_m=1.0e-3,
+    maximum_steps=1_000_000,
+) -> DecoupledFirstOrderContinuationResult:
+    """Follow a symplectic KAN homotopy while retaining transverse rank six.
+
+    This is deliberately a *local-to-global attempt*, not an unconditional
+    controllability claim.  The starting lattice must already have rank six;
+    a drift-only rank-three seed is returned as a loud non-converged result.
+    Every accepted stage satisfies the nonlinear KAN/off-block residual and
+    retains all six transverse TSVD modes.  A target outside the declared
+    field basis, including an unsupported ``R56`` change, terminates with an
+    auditable non-converged result.
+    """
+    from scipy.optimize import least_squares
+
+    lengths = _finite_array(segment_lengths, name="segment_lengths").reshape(-1)
+    if lengths.size == 0 or np.any(lengths <= 0.0):
+        raise ValueError("segment_lengths must be non-empty and positive")
+    initial = _finite_array(
+        initial_multipole_response, name="initial_multipole_response"
+    ).reshape(-1)
+    expected = len(SECOND_ORDER_MULTIPOLE_COMPONENTS) * lengths.size
+    if initial.shape != (expected,):
+        raise ValueError("initial multipoles must contain five blocks per segment")
+    target_value = (
+        target
+        if isinstance(target, DecoupledFirstOrderTarget)
+        else DecoupledFirstOrderTarget.from_matrix(target)
+    )
+    basis = (
+        _default_normal_quadrupole_basis(lengths.size)
+        if field_basis is None
+        else _finite_array(field_basis, name="field_basis")
+    )
+    if basis.ndim != 2 or basis.shape[0] != initial.size or basis.shape[1] == 0:
+        raise ValueError("field_basis must have shape (5*n_segment,n_control)")
+    bands = np.broadcast_to(
+        np.asarray(parameter_band, dtype=float), (7,)
+    ).copy()
+    rank_tolerance = float(relative_rank_tolerance)
+    decoupling_tolerance = float(decoupling_tolerance)
+    maximum_target_step = float(maximum_target_step)
+    minimum_target_step = float(minimum_target_step)
+    stage_tolerance = float(stage_tolerance)
+    final_tolerance = float(final_tolerance)
+    maximum_stage_evaluations = int(maximum_stage_evaluations)
+    maximum_stages = int(maximum_stages)
+    if (
+        not np.all(np.isfinite(bands))
+        or np.any(bands <= 0.0)
+        or not np.isfinite(rank_tolerance)
+        or rank_tolerance < 0.0
+        or not np.isfinite(decoupling_tolerance)
+        or decoupling_tolerance <= 0.0
+        or not 0.0 < minimum_target_step <= maximum_target_step
+        or not np.isfinite(maximum_target_step)
+        or not np.isfinite(stage_tolerance)
+        or stage_tolerance <= 0.0
+        or not np.isfinite(final_tolerance)
+        or final_tolerance <= 0.0
+        or maximum_stage_evaluations < 1
+        or maximum_stages < 1
+    ):
+        raise ValueError("continuation tolerances, steps, and bands are invalid")
+
+    cache = {}
+
+    def evaluate(coefficients):
+        coefficients = np.asarray(coefficients, dtype=float)
+        key = coefficients.tobytes()
+        if cache.get("key") == key:
+            return cache["value"]
+        response = initial + basis @ coefficients
+        transfer = second_order_taylor_map_from_multipoles(
+            response,
+            lengths,
+            magnetic_rigidity,
+            maximum_step_m=maximum_step_m,
+            maximum_steps=maximum_steps,
+        )
+        differential = _decoupled_first_order_differential(transfer, basis)
+        value = (response, transfer) + differential
+        cache["key"] = key
+        cache["value"] = value
+        return value
+
+    coefficients = np.zeros(basis.shape[1], dtype=float)
+    initial_data = evaluate(coefficients)
+    initial_parameters = initial_data[2].copy()
+    initial_off_block = initial_data[4]
+    initial_scale = max(1.0, float(np.max(np.abs(initial_data[1].R))))
+    if float(np.max(np.abs(initial_off_block), initial=0.0)) > (
+        decoupling_tolerance * initial_scale
+    ):
+        raise ValueError("continuation requires an initially decoupled map")
+    # This also validates the magnetostatic longitudinal block and both
+    # transverse determinants at the starting point.
+    DecoupledFirstOrderTarget.from_matrix(
+        initial_data[1].R, tolerance=max(decoupling_tolerance, 1.0e-10)
+    )
+    target_parameters = target_value.parameters.copy()
+    for rotation_index in (0, 3):
+        difference = target_parameters[rotation_index] - initial_parameters[
+            rotation_index
+        ]
+        target_parameters[rotation_index] = initial_parameters[rotation_index] + (
+            np.arctan2(np.sin(difference), np.cos(difference))
+        )
+    stages = []
+
+    def ranks(parameter_jacobian):
+        transverse = np.linalg.svd(
+            parameter_jacobian[:6] / bands[:6, None], compute_uv=False
+        )
+        response = np.linalg.svd(
+            parameter_jacobian / bands[:, None], compute_uv=False
+        )
+        transverse_threshold = (
+            rank_tolerance * transverse[0] if transverse.size else 0.0
+        )
+        response_threshold = rank_tolerance * response[0] if response.size else 0.0
+        return (
+            int(np.count_nonzero(transverse > transverse_threshold)),
+            int(np.count_nonzero(response > response_threshold)),
+            np.asarray(transverse, dtype=float),
+        )
+
+    def parameter_difference(parameters, wanted):
+        difference = np.asarray(parameters - wanted, dtype=float)
+        for rotation_index in (0, 3):
+            difference[rotation_index] = np.arctan2(
+                np.sin(difference[rotation_index]),
+                np.cos(difference[rotation_index]),
+            )
+        return difference
+
+    def finish(status, requested_converged):
+        data = evaluate(coefficients)
+        response, transfer, parameters, jacobian, off_block, _, symplectic = data
+        normalized_error = parameter_difference(
+            parameters, target_parameters
+        ) / bands
+        parameter_error = float(np.max(np.abs(normalized_error), initial=0.0))
+        matrix_error = float(
+            np.max(np.abs(transfer.R - target_value.matrix), initial=0.0)
+        )
+        decoupling = float(np.max(np.abs(off_block), initial=0.0))
+        transverse_rank, _, _ = ranks(jacobian)
+        converged = bool(
+            requested_converged
+            and parameter_error <= final_tolerance
+            and decoupling <= decoupling_tolerance
+            and transverse_rank == 6
+        )
+        if requested_converged and not converged:
+            status = "continuation reached the endpoint but failed the final gate"
+        return DecoupledFirstOrderContinuationResult(
+            target=target_value,
+            initial_multipole_response=initial.copy(),
+            achieved_multipole_response=np.asarray(response, dtype=float).copy(),
+            field_basis=np.asarray(basis, dtype=float).copy(),
+            basis_coefficients=np.asarray(coefficients, dtype=float).copy(),
+            initial_transfer_matrix=np.asarray(initial_data[1].R, dtype=float).copy(),
+            achieved_transfer_matrix=np.asarray(transfer.R, dtype=float).copy(),
+            initial_parameters=initial_parameters.copy(),
+            target_parameters=target_parameters.copy(),
+            achieved_parameters=np.asarray(parameters, dtype=float).copy(),
+            stages=tuple(stages),
+            converged=converged,
+            status=status,
+            final_maximum_normalized_parameter_error=parameter_error,
+            final_matrix_error=matrix_error,
+            final_decoupling_residual=decoupling,
+            final_symplectic_residual=float(symplectic),
+            final_transverse_rank=transverse_rank,
+        )
+
+    initial_transverse_rank, _, _ = ranks(initial_data[3])
+    if initial_transverse_rank < 6:
+        return finish(
+            "initial lattice has transverse rank "
+            f"{initial_transverse_rank}; provide a non-singular rank-6 seed",
+            False,
+        )
+
+    total_change = float(np.max(np.abs(
+        (target_parameters - initial_parameters) / bands
+    ), initial=0.0))
+    if total_change <= final_tolerance:
+        return finish("target already reached by the rank-6 seed", True)
+    progress = 0.0
+    progress_step = min(1.0, maximum_target_step / total_change)
+    minimum_progress_step = min(1.0, minimum_target_step / total_change)
+
+    for attempt in range(1, maximum_stages + 1):
+        if progress >= 1.0 - 8.0 * np.finfo(float).eps:
+            return finish("rank-6 KAN continuation converged", True)
+        requested_progress = min(1.0, progress + progress_step)
+        desired = initial_parameters + requested_progress * (
+            target_parameters - initial_parameters
+        )
+
+        def residual(trial_coefficients, wanted=desired):
+            data = evaluate(trial_coefficients)
+            parameter_residual = parameter_difference(data[2], wanted) / bands
+            off_block_residual = data[4] / decoupling_tolerance
+            return np.r_[parameter_residual, off_block_residual]
+
+        def residual_jacobian(trial_coefficients):
+            data = evaluate(trial_coefficients)
+            return np.vstack(
+                (data[3] / bands[:, None], data[5] / decoupling_tolerance)
+            )
+
+        trial = least_squares(
+            residual,
+            coefficients,
+            jac=residual_jacobian,
+            method="trf",
+            x_scale="jac",
+            ftol=1.0e-12,
+            xtol=1.0e-12,
+            gtol=1.0e-12,
+            max_nfev=maximum_stage_evaluations,
+        )
+        trial_data = evaluate(trial.x)
+        maximum_residual = float(
+            np.max(np.abs(parameter_difference(
+                trial_data[2], desired
+            ) / bands), initial=0.0)
+        )
+        trial_decoupling = float(
+            np.max(np.abs(trial_data[4]), initial=0.0)
+        )
+        transverse_rank, response_rank, transverse_singular = ranks(trial_data[3])
+        accepted = bool(
+            maximum_residual <= stage_tolerance
+            and trial_decoupling <= decoupling_tolerance
+            and transverse_rank == 6
+        )
+        stages.append(
+            DecoupledFirstOrderContinuationStage(
+                attempt=attempt,
+                start_progress=progress,
+                requested_progress=requested_progress,
+                accepted=accepted,
+                maximum_normalized_residual=maximum_residual,
+                decoupling_residual=trial_decoupling,
+                transverse_numerical_rank=transverse_rank,
+                response_numerical_rank=response_rank,
+                transverse_singular_values=transverse_singular.copy(),
+                achieved_parameters=np.asarray(trial_data[2], dtype=float).copy(),
+                function_evaluations=int(trial.nfev),
+                optimizer_status=str(trial.message),
+            )
+        )
+        if accepted:
+            coefficients = np.asarray(trial.x, dtype=float).copy()
+            progress = requested_progress
+            progress_step = min(1.0 - progress, 1.5 * progress_step)
+        else:
+            progress_step *= 0.5
+            if progress_step < minimum_progress_step:
+                return finish(
+                    "rank-6 continuation could not accept the minimum target step",
+                    False,
+                )
+
+    return finish("rank-6 continuation exceeded maximum_stages", False)
+
+
 @dataclass(frozen=True)
 class SecondOrderTaylorMaterialInversePipelineResult:
     """Auditable multipole -> ``R/T`` -> material screening chain."""
@@ -1741,17 +2448,23 @@ def optimize_hdiv_mmm_magnet_from_third_order_taylor_map(
 __all__ = [
     "SECOND_ORDER_MULTIPOLE_COMPONENTS",
     "THIRD_ORDER_MULTIPOLE_COMPONENTS",
+    "DecoupledFirstOrderContinuationResult",
+    "DecoupledFirstOrderContinuationStage",
+    "DecoupledFirstOrderReachabilityCertificate",
+    "DecoupledFirstOrderTarget",
     "PlanarSecondOrderTaylorMapObjective",
     "PlanarThirdOrderTaylorMapObjective",
     "SecondOrderTaylorMap",
     "SecondOrderTaylorMaterialInversePipelineResult",
     "SecondOrderTaylorTopologyResult",
+    "Symplectic2x2KAN",
     "TaylorMapReachabilityCertificate",
     "ThirdOrderTaylorMap",
     "ThirdOrderTaylorMaterialInversePipelineResult",
     "ThirdOrderTaylorTopologyResult",
     "build_planar_orbit_cubic_multipole_response_matrix",
     "build_planar_orbit_multipole_response_matrix",
+    "certify_decoupled_first_order_reachability",
     "certify_taylor_map_reachability",
     "differentiate_second_order_taylor_field_response",
     "differentiate_third_order_taylor_field_response",
@@ -1762,5 +2475,6 @@ __all__ = [
     "run_second_order_taylor_material_inverse_pipeline",
     "run_third_order_taylor_material_inverse_pipeline",
     "second_order_taylor_map_from_multipoles",
+    "solve_decoupled_first_order_continuation",
     "third_order_taylor_map_from_multipoles",
 ]

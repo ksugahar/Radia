@@ -36,7 +36,15 @@
         "matlab/+radia/+beam/track.m",
         "matlab/+radia/+beam/trackGridFunction.m"
       ],
-      "notes": "Python and MATLAB share the C++ R/T/U variational-map kernel and the canonical fourth-degree H2/H3/H4 body-Hamiltonian builder. Both pass an NGSolve GridFunction directly to the same native nine-point moving-frame multipole fit and paraxial A/F2/F3 map adapter without constructing a regular-grid field map, and both expose direct GridFunction Lorentz tracking as the independent point-evaluation path. The EarlyTimes migration foundation also adds shared native SI particle/reference/state values, zero/uniform field sampling, relativistic Lorentz RHS evaluation, individually callable RK4/Boris steps, and transparent fixed-step trajectory records."
+      "notes": "Python and MATLAB share the C++ R/T/U variational-map kernel and the canonical fifth-degree H2/H3/H4/H5 body-Hamiltonian builder with A/F2/F3/F4. The canonical EarlyTimes input in both languages is a real NGSolve HCurl(order=p) vector-potential GridFunction; NGSolve evaluates native curl(A) for the same nine-point moving-frame multipole fit through decapole, using the fourth-order Bishop/RMF double-reflection frame and optional periodic minimal-twist holonomy correction, without an HDiv projection or regular-grid field map. The FESpace order is discovered and reported, while explicit magnetic_flux_density mode retains direct-B compatibility. Both expose direct GridFunction Lorentz tracking as the independent point-evaluation path. The EarlyTimes migration foundation also adds shared native SI particle/reference/state values, zero/uniform field sampling, relativistic Lorentz RHS evaluation, individually callable RK4/Boris steps, and transparent fixed-step trajectory records."
+    },
+    {
+      "id": "beam-curvilinear",
+      "patterns": ["beam_curvilinear.py"],
+      "classification": "python-fallback",
+      "backend_contract": "in-process-python",
+      "matlab": ["matlab/+radia/+python/beamCurvilinear.m"],
+      "notes": "EarlyTimes Bishop/RMF loft-chain construction, conforming HCurl/HDiv projection, full upper/lower transverse A sampling, triangular fifth-degree xy jet recovery, left/right jet diagnostics, and the exact linear sample-to-coefficient response remain NGSolve/Python-owned and are exposed to MATLAB through an explicit initialization or artifact-generation boundary; this fallback is not a Simulink step-time backend."
     },
     {
       "id": "ltspice-tooling",
@@ -91,6 +99,42 @@
       "backend_contract": "in-process-python",
       "matlab": ["matlab/+radia/+python/analysis.m"],
       "notes": "MATLAB has focused CLN primitives, but the complete Python orchestration surface is not one-to-one."
+    },
+    {
+      "id": "electromagnetic-force-postprocessing",
+      "patterns": ["force.py"],
+      "classification": "matlab-native",
+      "matlab": [
+        "matlab/+radia/+force/airGapHoldingForce.m",
+        "matlab/+radia/+force/airGapMaxwellPressure.m",
+        "matlab/+radia/+force/airGapShearStress.m",
+        "matlab/+radia/+force/airGapShearTorque.m",
+        "matlab/+radia/+force/airGapShearTorqueFromAngleSamples.m",
+        "matlab/+radia/+force/coenergyTorque.m",
+        "matlab/+radia/+force/forceTorqueResult.m",
+        "matlab/+radia/+force/lorentzDensity.m",
+        "matlab/+radia/+force/integrateLorentz.m",
+        "matlab/+radia/+force/integrateLorentzForceTorque.m",
+        "matlab/+radia/+force/integrateLorentzTorque.m",
+        "matlab/+radia/+force/maxwellStressAir.m",
+        "matlab/+radia/+force/maxwellTractionAir.m",
+        "matlab/+radia/+force/integrateMaxwellSurface.m",
+        "matlab/+radia/+force/integrateMaxwellSurfaceForceTorque.m",
+        "matlab/+radia/+force/integrateMaxwellSurfaceTorque.m",
+        "matlab/+radia/+force/timeAverageAirGapShearStress.m",
+        "matlab/+radia/+force/timeAverageAirGapShearTorqueFromAngleSamples.m",
+        "matlab/+radia/+force/timeAverageLorentzDensity.m",
+        "matlab/+radia/+force/integrateTimeAverageLorentz.m",
+        "matlab/+radia/+force/integrateTimeAverageLorentzForceTorque.m",
+        "matlab/+radia/+force/integrateTimeAverageLorentzTorque.m",
+        "matlab/+radia/+force/timeAverageMaxwellStressAir.m",
+        "matlab/+radia/+force/timeAverageMaxwellTractionAir.m",
+        "matlab/+radia/+force/integrateTimeAverageMaxwellSurface.m",
+        "matlab/+radia/+force/integrateTimeAverageMaxwellSurfaceForceTorque.m",
+        "matlab/+radia/+force/integrateTimeAverageMaxwellSurfaceTorque.m",
+        "matlab/+radia/+force/virtualWorkForce.m"
+      ],
+      "notes": "Python/NumPy and MATLAB implement the same SI contracts for static and peak/RMS phasor Lorentz/Maxwell force and torque, virtual work/coenergy, air-gap estimates, and result metadata; field solution and quadrature remain solver-owned."
     },
     {
       "id": "bem-peec",
@@ -177,7 +221,7 @@
       "classification": "python-fallback",
       "backend_contract": "in-process-python",
       "matlab": ["matlab/+radia/+python/acceleratorTaylorTopopt.m"],
-      "notes": "Second- and third-order R/T/U topology optimization composes native C++ Taylor-map values, Python forward-mode AD through octupole and lower-order cascade terms, local TSVD reachability certificates, NGSolve multipole observations, and HDiv-MMM binary material updates at an explicit batch boundary; it is not a Simulink step-time backend."
+      "notes": "Second- and third-order R/T/U topology optimization composes native C++ Taylor-map values, Python forward-mode AD through octupole and lower-order cascade terms, global KAN parameterization of decoupled Sp(2,R) transverse targets, rank-6 monitored continuation with an explicit magnetostatic R56 boundary, local TSVD reachability certificates, NGSolve multipole observations, and HDiv-MMM binary material updates at an explicit batch boundary; it is not a Simulink step-time backend."
     },
     {
       "id": "accelerator-lie-topopt",
@@ -185,7 +229,7 @@
       "classification": "python-fallback",
       "backend_contract": "in-process-python",
       "matlab": ["matlab/+radia/+python/acceleratorLieTopopt.m"],
-      "notes": "Canonical body-field Lie topology optimization uses the native C++ H2/H3/H4 and A/F2/F3 value kernel, Python rank-five forward-mode analytic tangents, Dragt-Finn f3/f4/f5 factorization with formal-symplectic R/T/U/V reconstruction, an RK-tracked planar moving-frame bridge, and the shared TSVD plus ACA/QR/TSVD HDiv-MMM batch pipeline. The direct H5/decapole term remains an explicit boundary. Mathematica owns an independent tracked symbolic golden and is not a runtime dependency."
+      "notes": "Canonical body-field Lie topology optimization uses the native C++ H2/H3/H4/H5 and A/F2/F3/F4 value kernel through normal/skew decapole, Python rank-five forward-mode analytic tangents, Dragt-Finn f3/f4/f5 factorization with formal-symplectic R/T/U/V reconstruction, a full HCurl(order=5) transverse A-jet bridge with xy cross terms, sample-response-to-objective gradients and reference-orbit H1 constraints, an independent B-map RK check, and the shared TSVD plus ACA/QR/TSVD HDiv-MMM batch pipeline. Mathematica owns an independent tracked symbolic golden and is not a runtime dependency."
     },
     {
       "id": "ffag-topopt",

@@ -49,6 +49,17 @@ double Scalar(const mxArray* value, const char* name, double fallback,
     return result;
 }
 
+bool OptionalBoolean(const mxArray* value, const char* name,
+                     bool fallback) {
+    if (!value) return fallback;
+    if (mxIsLogicalScalar(value)) return mxIsLogicalScalarTrue(value);
+    const double number = Scalar(value, name, fallback ? 1.0 : 0.0, false);
+    if (number != 0.0 && number != 1.0)
+        throw std::invalid_argument(std::string(name) +
+                                    " must be logical or 0/1");
+    return number != 0.0;
+}
+
 std::size_t PositiveInteger(const mxArray* value, const char* name,
                             std::size_t fallback, bool optional) {
     const double number = Scalar(
@@ -185,6 +196,28 @@ struct GridFunctionInput {
     radia::beam::GridFunctionLinearizationOptions options;
 };
 
+radia::beam::GridFunctionMagneticInput ParseGridFunctionMagneticInput(
+        const mxArray* value) {
+    if (!value)
+        return radia::beam::GridFunctionMagneticInput::HCurlVectorPotential;
+    const std::string name = Text(value, "field_representation");
+    if (name == "magnetic_flux_density")
+        return radia::beam::GridFunctionMagneticInput::MagneticFluxDensity;
+    if (name == "hcurl_vector_potential")
+        return radia::beam::GridFunctionMagneticInput::HCurlVectorPotential;
+    throw std::invalid_argument(
+        "field_representation must be 'magnetic_flux_density' or "
+        "'hcurl_vector_potential'");
+}
+
+const char* GridFunctionMagneticInputName(
+        radia::beam::GridFunctionMagneticInput value) {
+    return value ==
+        radia::beam::GridFunctionMagneticInput::HCurlVectorPotential
+        ? "hcurl_vector_potential"
+        : "magnetic_flux_density";
+}
+
 GridFunctionInput ParseGridFunctionInput(const mxArray* config) {
     RequireScalarStruct(config);
     const mxArray* schema = Field(config, "schema");
@@ -220,6 +253,8 @@ GridFunctionInput ParseGridFunctionInput(const mxArray* config) {
     output.options.initial_horizontal = OptionalVector3(
         Field(config, "initial_horizontal"), "initial_horizontal",
         {1.0, 0.0, 0.0});
+    output.options.periodic_frame = OptionalBoolean(
+        Field(config, "periodic_frame"), "periodic_frame", false);
     output.options.curvature_sign = Scalar(
         Field(config, "curvature_sign"), "curvature_sign", 1.0, true);
     output.options.gradient_sign = Scalar(
@@ -234,6 +269,8 @@ GridFunctionInput ParseGridFunctionInput(const mxArray* config) {
         Field(config, "maximum_step_m"), "maximum_step_m", 1.0e-3, true);
     output.options.maximum_steps = PositiveInteger(
         Field(config, "maximum_steps"), "maximum_steps", 1000000, true);
+    output.options.magnetic_input = ParseGridFunctionMagneticInput(
+        Field(config, "field_representation"));
     return output;
 }
 
@@ -268,6 +305,21 @@ mxArray* Tensor4Array(const radia::beam::Tensor4Map6& value) {
             for (std::size_t k = 0; k < 6; ++k)
                 for (std::size_t l = 0; l < 6; ++l)
                     data[i + 6 * (j + 6 * (k + 6 * l))] = value(i, j, k, l);
+    return output;
+}
+
+mxArray* Tensor5Array(const radia::beam::Tensor5Map6& value) {
+    const mwSize dimensions[] = {6, 6, 6, 6, 6};
+    mxArray* output = mxCreateNumericArray(5, dimensions, mxDOUBLE_CLASS,
+                                           mxREAL);
+    double* data = mxGetPr(output);
+    for (std::size_t i = 0; i < 6; ++i)
+        for (std::size_t j = 0; j < 6; ++j)
+            for (std::size_t k = 0; k < 6; ++k)
+                for (std::size_t l = 0; l < 6; ++l)
+                    for (std::size_t m = 0; m < 6; ++m)
+                        data[i + 6 * (j + 6 * (k + 6 * (l + 6 * m)))] =
+                            value(i, j, k, l, m);
     return output;
 }
 
@@ -427,9 +479,10 @@ mxArray* CanonicalHamiltonianJetResult(
         const radia::beam::HamiltonianJet6& value) {
     const char* fields[] = {
         "schema", "backend", "coordinate_order", "poisson_pair_signs",
-        "reference_beta", "H2_per_m", "H3_per_m", "H4_per_m",
-        "A_per_m", "F2_per_m", "F3_per_m"};
-    mxArray* output = mxCreateStructMatrix(1, 1, 11, fields);
+        "reference_beta", "reference_curvature_per_m",
+        "field_curvature_per_m", "H2_per_m", "H3_per_m", "H4_per_m",
+        "H5_per_m", "A_per_m", "F2_per_m", "F3_per_m", "F4_per_m"};
+    mxArray* output = mxCreateStructMatrix(1, 1, 15, fields);
     mxSetField(output, 0, fields[0], mxCreateString(
         "radia.beam.canonical-hamiltonian-jet.result.v1"));
     mxSetField(output, 0, fields[1], mxCreateString("native-cpp-mex"));
@@ -442,14 +495,21 @@ mxArray* CanonicalHamiltonianJetResult(
     mxSetField(output, 0, fields[3], signs);
     mxSetField(output, 0, fields[4],
                mxCreateDoubleScalar(value.reference_beta));
-    mxSetField(output, 0, fields[5], MatrixArray(value.h2_per_m));
-    mxSetField(output, 0, fields[6], Tensor3Array(value.h3_per_m));
-    mxSetField(output, 0, fields[7], Tensor4Array(value.h4_per_m));
-    mxSetField(output, 0, fields[8], MatrixArray(value.dynamics.a_per_m));
-    mxSetField(output, 0, fields[9],
+    mxSetField(output, 0, fields[5],
+               mxCreateDoubleScalar(value.reference_curvature_per_m));
+    mxSetField(output, 0, fields[6],
+               mxCreateDoubleScalar(value.field_curvature_per_m));
+    mxSetField(output, 0, fields[7], MatrixArray(value.h2_per_m));
+    mxSetField(output, 0, fields[8], Tensor3Array(value.h3_per_m));
+    mxSetField(output, 0, fields[9], Tensor4Array(value.h4_per_m));
+    mxSetField(output, 0, fields[10], Tensor5Array(value.h5_per_m));
+    mxSetField(output, 0, fields[11], MatrixArray(value.dynamics.a_per_m));
+    mxSetField(output, 0, fields[12],
                Tensor3Array(value.dynamics.f2_per_m));
-    mxSetField(output, 0, fields[10],
+    mxSetField(output, 0, fields[13],
                Tensor4Array(value.dynamics.f3_per_m));
+    mxSetField(output, 0, fields[14],
+               Tensor5Array(value.dynamics.f4_per_m));
     return output;
 }
 
@@ -524,12 +584,13 @@ mxArray* SampleStack(std::size_t count, Selector selector) {
 }
 
 template <typename Selector>
-mxArray* MultipoleRows(std::size_t count, Selector selector) {
-    mxArray* output = mxCreateDoubleMatrix(count, 4, mxREAL);
+mxArray* MultipoleRows(std::size_t count, std::size_t columns,
+                       Selector selector) {
+    mxArray* output = mxCreateDoubleMatrix(count, columns, mxREAL);
     double* data = mxGetPr(output);
     for (std::size_t item = 0; item < count; ++item) {
         const auto& value = selector(item);
-        for (std::size_t order = 0; order < 4; ++order)
+        for (std::size_t order = 0; order < columns; ++order)
             data[item + count * order] = value[order];
     }
     return output;
@@ -548,6 +609,17 @@ mxArray* GridFunctionReport(
         "native-cpp-ngsolve-gridfunction-mex"));
     AddStructField(output, "field_source",
                    mxCreateString("ngsolve.GridFunction"));
+    AddStructField(output, "field_representation", mxCreateString(
+        GridFunctionMagneticInputName(value.magnetic_input)));
+    AddStructField(output, "magnetic_evaluation", mxCreateString(
+        value.magnetic_input ==
+            radia::beam::GridFunctionMagneticInput::HCurlVectorPotential
+            ? "ngsolve-native-curl(A)"
+            : "direct-B"));
+    AddStructField(output, "grid_function_space_class", mxCreateString(
+        value.grid_function_space_class.c_str()));
+    AddStructField(output, "grid_function_space_order",
+        mxCreateDoubleScalar(value.grid_function_space_order));
     AddStructField(output, "linearization_order", mxCreateDoubleScalar(
         static_cast<double>(value.multipole_order)));
     AddStructField(output, "magnetic_rigidity_t_m",
@@ -559,7 +631,16 @@ mxArray* GridFunctionReport(
         std::to_string(value.multipole_order);
     AddStructField(output, "fit_model", mxCreateString(fit_model.c_str()));
     AddStructField(output, "frame_convention", mxCreateString(
-        "right-handed parallel transport seeded by initial_horizontal"));
+        value.periodic_frame
+            ? "right-handed periodic minimal-twist frame from Bishop/RMF "
+              "holonomy correction"
+            : "right-handed Bishop/RMF double reflection seeded by "
+              "initial_horizontal"));
+    AddStructField(output, "periodic_frame",
+                   mxCreateLogicalScalar(value.periodic_frame));
+    AddStructField(output, "frame_holonomy_correction_rad",
+                   mxCreateDoubleScalar(
+                       value.frame_holonomy_correction_rad));
 
     const auto& samples = value.linearizations;
     const std::size_t count = samples.size();
@@ -638,11 +719,13 @@ mxArray* GridFunctionReport(
             return samples[index].scaled_design_condition;
         }));
     AddStructField(output, "multipole_normal_t_per_m_power", MultipoleRows(
-        count, [&](std::size_t index) -> const auto& {
+        count, value.multipole_order + 1,
+        [&](std::size_t index) -> const auto& {
             return samples[index].multipoles.normal_t_per_m_power;
         }));
     AddStructField(output, "multipole_skew_t_per_m_power", MultipoleRows(
-        count, [&](std::size_t index) -> const auto& {
+        count, value.multipole_order + 1,
+        [&](std::size_t index) -> const auto& {
             return samples[index].multipoles.skew_t_per_m_power;
         }));
     AddStructField(output, "multipole_rms_fit_residual_t", ScalarColumn(
@@ -1105,15 +1188,19 @@ void CanonicalHamiltonianJet(int nlhs, mxArray* plhs[], int nrhs,
     const mxArray* coefficients_value = Field(config, "coefficients");
     const double* coefficients = RealData(
         coefficients_value, "coefficients");
-    if (mxGetNumberOfElements(coefficients_value) != 7)
+    const std::size_t coefficient_count =
+        mxGetNumberOfElements(coefficients_value);
+    if (coefficient_count != 7 && coefficient_count != 9)
         throw std::invalid_argument(
-            "coefficients must contain seven entries");
+            "coefficients must contain seven or nine entries");
     radia::beam::TransverseMagneticMultipoleExpansion expansion;
-    expansion.order = 3;
+    expansion.order = coefficient_count == 9 ? 4 : 3;
     expansion.normal_t_per_m_power = {
-        coefficients[0], coefficients[1], coefficients[3], coefficients[5]};
+        coefficients[0], coefficients[1], coefficients[3], coefficients[5],
+        coefficient_count == 9 ? coefficients[7] : 0.0};
     expansion.skew_t_per_m_power = {
-        0.0, coefficients[2], coefficients[4], coefficients[6]};
+        0.0, coefficients[2], coefficients[4], coefficients[6],
+        coefficient_count == 9 ? coefficients[8] : 0.0};
     const double rigidity = Scalar(
         Field(config, "magnetic_rigidity_t_m"),
         "magnetic_rigidity_t_m", 0.0, false);
@@ -1123,10 +1210,14 @@ void CanonicalHamiltonianJet(int nlhs, mxArray* plhs[], int nrhs,
         Field(config, "gradient_sign"), "gradient_sign", 1.0, true);
     const double reference_beta = Scalar(
         Field(config, "reference_beta"), "reference_beta", 1.0, true);
+    std::optional<double> reference_curvature_per_m;
+    if (const mxArray* value = Field(config, "reference_curvature_per_m"))
+        reference_curvature_per_m = Scalar(
+            value, "reference_curvature_per_m", 0.0, false);
     plhs[0] = CanonicalHamiltonianJetResult(
         radia::beam::BuildCanonicalBodyHamiltonianJet(
             expansion, rigidity, curvature_sign, gradient_sign,
-            reference_beta));
+            reference_beta, reference_curvature_per_m));
 }
 
 void PropagateGridFunction(std::shared_ptr<ngcomp::GridFunction> field,
@@ -1208,7 +1299,8 @@ void BeamTrackGridFunction(
     auto equation = std::make_shared<radia::beam::LorentzEquation>(
         species,
         std::make_shared<radia::beam::NGSolveGridFunctionField>(
-            std::move(field)),
+            std::move(field), ParseGridFunctionMagneticInput(
+                Field(config, "field_representation"))),
         independent);
     auto stepper = ParseStepper(Field(config, "stepper"));
     radia::beam::TrackPlan plan;

@@ -165,6 +165,62 @@ def _walk_shapes(shape_collection):
             yield s
 
 
+def _shape_is_slide_title(shape, slide) -> bool:
+    """Return whether *shape* is the audience-facing slide title."""
+    try:
+        if shape.is_placeholder and shape.placeholder_format.idx == 0:
+            return True
+    except Exception:
+        pass
+    try:
+        if not shape.has_text_frame or not shape.text_frame.text.strip():
+            return False
+        first_line = shape.text_frame.text.splitlines()[0].strip()
+        if first_line != _slide_title(slide).strip():
+            return False
+        slide_h = float(slide.part.package.presentation_part.presentation.slide_height)
+        return float(shape.top) < 0.20 * slide_h
+    except Exception:
+        return False
+
+
+def _is_footer_or_page_chrome(shape, slide,
+                              footer_start_fraction: float = 0.90) -> bool:
+    """Exclude footer/page/source chrome from audience-content font limits."""
+    try:
+        from pptx.enum.shapes import PP_PLACEHOLDER
+        chrome_types = {
+            getattr(PP_PLACEHOLDER, "FOOTER", None),
+            getattr(PP_PLACEHOLDER, "DATE", None),
+            getattr(PP_PLACEHOLDER, "SLIDE_NUMBER", None),
+            getattr(PP_PLACEHOLDER, "HEADER", None),
+        }
+        if shape.is_placeholder and shape.placeholder_format.type in chrome_types:
+            return True
+    except Exception:
+        pass
+    try:
+        if not shape.has_text_frame:
+            return False
+        text_value = " ".join(shape.text_frame.text.split()).strip()
+        if not text_value:
+            return False
+        slide_h = float(slide.part.package.presentation_part.presentation.slide_height)
+        if float(shape.top) < footer_start_fraction * slide_h:
+            return False
+        return bool(
+            re.fullmatch(r"[\d\s/.-]+", text_value)
+            or re.search(
+                r"(?:大学|研究所|株式会社|University|Institute|©|"
+                r"https?://|www\.|doi\s*:|^\[?sources?\]?|^出典)",
+                text_value,
+                re.IGNORECASE,
+            )
+        )
+    except Exception:
+        return False
+
+
 # A namespace map used when scanning SmartArt / diagram XML for ``a:t``
 # text nodes. (Bug H7)
 _PPTX_A_NS = "http://schemas.openxmlformats.org/drawingml/2006/main"
@@ -371,8 +427,11 @@ def presentation_usage() -> str:
     - presentation_check_slide_density / check_slide_line_count
     - presentation_check_time_13_rule / check_time_14_rule
     - presentation_check_script_paragraph_length / check_takehome_slide
-    - presentation_check_slide_title_verb / check_pptx_font_size
+    - presentation_check_slide_title_specificity / check_slide_message_hierarchy
+      (check_slide_title_verb は後方互換 alias)
+    - presentation_check_pptx_font_size
     - presentation_check_bullet_count_per_slide / check_bullet_ending_style
+    - presentation_check_japanese_copy_style
     - presentation_check_qa_backup_slides / check_image_text_ratio
     - presentation_check_color_count_per_slide / check_color_accessibility
     - presentation_estimate_per_slide_time / check_over_politeness
@@ -1036,8 +1095,17 @@ def presentation_check_takehome_slide(pptx_path: str) -> dict:
     }
 
 
-def presentation_check_slide_title_verb(pptx_path: str) -> dict:
-    """各 slide の title が claim 形式か名詞句止まりか。"""
+def presentation_check_slide_title_specificity(
+        pptx_path: str,
+        max_title_chars: int = 28,
+        min_title_chars: int = 5) -> dict:
+    """各 slide title が短く具体的な「対象＋観点」になっているか点検。
+
+    title は結果を言い切る場所ではない。「結果」「数値計算結果」のような
+    汎用見出しではなく、「モデル1の計算精度評価」のように、何について
+    何を示す slide かを少ない文字数で特定する。結果から分かったことは
+    slide 最下部に置く。
+    """
     try:
         import pptx as _pptx
     except ImportError:
@@ -1046,46 +1114,394 @@ def presentation_check_slide_title_verb(pptx_path: str) -> dict:
     if not p.exists():
         return {"error": f"file not found: {pptx_path}"}
     prs = _pptx.Presentation(str(p))
-    weak_titles = {
+    if min_title_chars < 1 or max_title_chars < min_title_chars:
+        return {"error": "Require 1 <= min_title_chars <= max_title_chars."}
+    generic_titles = {
         "results", "result", "methodology", "method", "methods",
         "introduction", "background", "discussion", "conclusion",
-        "overview", "summary", "analysis",
+        "overview", "summary", "analysis", "simulation results",
         "結果", "手法", "方法", "背景", "はじめに", "序論", "結論", "考察",
+        "計算結果", "解析結果", "数値計算結果", "実験結果", "精度評価",
+        "計算精度評価", "検証", "評価", "解析", "実験", "まとめ",
     }
-    claim_verbs = re.compile(
+    sentence_ending = re.compile(
+        r"(?:した|する|なる|できる|可能|必要|示す|残る|進む|選ぶ|測る|"
+        r"低減|削減|改善|向上|一致|整合|達成|実現)[。.!！]?$|"
         r"\b(?:is|are|was|were|shows?|achieves?|reduces?|increases?|"
-        r"enables?|improves?|outperforms?|solves?|demonstrates?)\b",
-        re.IGNORECASE)
-    weak_count = 0
-    claim_count = 0
-    weak_examples = []
+        r"enables?|improves?|outperforms?|demonstrates?)\b[^.]*[.]?$",
+        re.IGNORECASE,
+    )
+    numeric_result = re.compile(
+        r"\d+(?:\.\d+)?\s*(?:%|％|倍|分の|GiB|MiB|GB|MB|ms|s|秒|(?:万)?自由度)",
+        re.IGNORECASE,
+    )
+    viewpoint_terms = re.compile(
+        r"(?:評価|検証|比較|条件|モデル|依存|分解|対応|性能|精度|閉包|"
+        r"感度|頑健|高速化|適用|展開|限界|課題|定義|設計|測定|同定|"
+        r"解析|原理|機構|構造|実装|停止則|モード|"
+        r"evaluation|validation|comparison|condition|model|dependence|"
+        r"decomposition|performance|accuracy|closure|sensitivity|robustness|"
+        r"acceleration|application|limitation|design|measurement|identification|"
+        r"analysis|principle|mechanism|structure|implementation|loop[- ]?free)",
+        re.IGNORECASE,
+    )
+    structural_title = re.compile(
+        r"^(?:title|agenda|contents?|references?|acknowledg(?:e)?ments?|"
+        r"appendix|q\s*&\s*a|目次|参考文献|謝辞|付録|質疑)\s*$",
+        re.IGNORECASE,
+    )
+    reports = []
     for i, s in enumerate(prs.slides, 1):
-        # Bug H3 fix: use shared `_slide_title` (title placeholder wins).
         title = _slide_title(s).strip()
-        if not title:
+        if not title or i == 1 or structural_title.match(title):
+            reports.append({
+                "slide": i,
+                "title": title,
+                "skipped": True,
+                "reason": "title/structural slide",
+            })
             continue
-        t_low = title.lower().strip("：:。.!?")
-        has_claim = bool(claim_verbs.search(title)) or \
-                     any(k in title for k in ("倍", "速", "削", "改善", "向上"))
-        is_weak = (t_low in weak_titles) and not has_claim
-        if is_weak:
-            weak_count += 1
-            weak_examples.append({"slide": i, "title": title})
-        else:
-            claim_count += 1
+        compact = re.sub(r"\s+", "", title)
+        normalized = title.lower().strip(" ：:。.!?！\t\r\n")
+        issues = []
+        has_target = len(compact) >= min_title_chars and normalized not in generic_titles
+        has_viewpoint = bool(viewpoint_terms.search(title))
+        is_concise = len(compact) <= max_title_chars and "\n" not in title
+        numeric_values = numeric_result.findall(title)
+        numeric_result_marker = re.search(
+            r"(?:最大|最小|以内|以上|以下|誤差|差|へ|→|で解析|で求解|"
+            r"低減|削減|改善|向上|一致|整合)",
+            title,
+        )
+        is_result_sentence = bool(
+            sentence_ending.search(title)
+            or len(numeric_values) >= 2
+            or (numeric_values and numeric_result_marker)
+        )
+        if not has_target:
+            issues.append("title_not_specific")
+        if not has_viewpoint:
+            issues.append("viewpoint_not_explicit")
+        if not is_concise:
+            issues.append("title_too_long")
+        if is_result_sentence:
+            issues.append("title_is_result_sentence")
+        reports.append({
+            "slide": i,
+            "title": title,
+            "skipped": False,
+            "char_count": len(compact),
+            "normalized_title": normalized,
+            "criteria": {
+                "target_is_specific": has_target,
+                "viewpoint_is_explicit": has_viewpoint,
+                "concise_one_line": is_concise,
+                "not_a_result_sentence": not is_result_sentence,
+                "unique_in_deck": True,
+            },
+            "issues": issues,
+        })
+    title_counts: dict[str, int] = {}
+    for item in reports:
+        if item.get("skipped"):
+            continue
+        key = item["normalized_title"]
+        title_counts[key] = title_counts.get(key, 0) + 1
+    for item in reports:
+        if item.get("skipped"):
+            continue
+        unique = title_counts[item["normalized_title"]] == 1
+        item["criteria"]["unique_in_deck"] = unique
+        if not unique:
+            item["issues"].append("duplicate_title")
+        item["score"] = 2 * sum(item["criteria"].values())
+        item["score_max"] = 10
+        item["passed"] = all(item["criteria"].values())
+    evaluated = [item for item in reports if not item.get("skipped")]
+    failed = [item for item in evaluated if not item["passed"]]
     return {
-        "total_titled_slides": weak_count + claim_count,
-        "weak_title_count": weak_count,
-        "claim_title_count": claim_count,
-        "weak_examples": weak_examples[:15],
-        "hint": "Slide title は主張。名詞句止まりは弱い。",
+        "passed": not failed,
+        "slides_checked": len(evaluated),
+        "slides_passing": len(evaluated) - len(failed),
+        "issue_count": len(failed),
+        "issues": failed[:20],
+        "slides": reports,
+        "rule": (
+            "Title = 少ない文字数で具体化した対象＋観点。"
+            "Bottom = 図表・式・比較から分かったこと。"
+        ),
+        "acceptance_criteria": {
+            "target_is_specific": "何について扱うかが特定できる。",
+            "viewpoint_is_explicit": "評価・比較・条件・構造など、何を見るかが分かる。",
+            "concise_one_line": f"一行かつ {max_title_chars} 文字以内を目安とする。",
+            "not_a_result_sentence": "結果の数値や結論を言い切らない。",
+            "unique_in_deck": "他 slide の title と区別できる。",
+            "pass_condition": "5項目すべてを満たす。各2点、10点満点。",
+        },
+        "examples": {
+            "bad": ["結果", "数値計算結果", "精度評価"],
+            "good": ["モデル1の計算精度評価", "C型鉄心のメッシュ依存性"],
+        },
+    }
+
+
+def presentation_check_slide_title_verb(pptx_path: str) -> dict:
+    """後方互換 alias。title の動詞化ではなく具体性・簡潔性を点検。"""
+    result = presentation_check_slide_title_specificity(pptx_path)
+    if "error" not in result:
+        result["deprecated_name"] = (
+            "presentation_check_slide_title_verb is retained for compatibility; "
+            "use presentation_check_slide_title_specificity."
+        )
+    return result
+
+
+def presentation_check_slide_message_hierarchy(
+        pptx_path: str,
+        bottom_start_fraction: float = 0.68,
+        footer_start_fraction: float = 0.94,
+        min_takeaway_chars: int = 8,
+        max_title_chars: int = 28) -> dict:
+    """各 content slide の伝達意図 title と下端の知見を位置ベースで点検。
+
+    title は「このスライドで何を伝えるか」を、短い「対象＋観点」で示す。
+    「結果」「数値計算結果」のような汎用語や、結果の長い言い切りは避ける。
+    takeaway は中央の図表・式・比較から「何が分かったか」を示す。
+    footer、page number、URL、citation、所属は takeaway として数えない。
+    """
+    try:
+        import pptx as _pptx
+        from pptx.enum.shapes import PP_PLACEHOLDER
+    except ImportError:
+        return {"error": "python-pptx not installed."}
+    p = pathlib.Path(pptx_path)
+    if not p.exists():
+        return {"error": f"file not found: {pptx_path}"}
+    if not 0.0 < bottom_start_fraction < footer_start_fraction < 1.0:
+        return {
+            "error": (
+                "Require 0 < bottom_start_fraction < "
+                "footer_start_fraction < 1."
+            )
+        }
+    if min_takeaway_chars < 1:
+        return {"error": "min_takeaway_chars must be >= 1."}
+    if max_title_chars < 5:
+        return {"error": "max_title_chars must be >= 5."}
+
+    prs = _pptx.Presentation(str(p))
+    slide_h = float(prs.slide_height)
+    structural_title = re.compile(
+        r"^(?:title|agenda|contents?|references?|acknowledg(?:e)?ments?|"
+        r"appendix|q\s*&\s*a|目次|参考文献|謝辞|付録|質疑|補足)\s*$",
+        re.IGNORECASE,
+    )
+    generic_title = {
+        "results", "result", "methodology", "method", "methods",
+        "introduction", "background", "discussion", "conclusion",
+        "overview", "summary", "analysis", "future work",
+        "結果", "手法", "方法", "背景", "はじめに", "序論", "結論",
+        "考察", "概要", "まとめ", "今後の課題", "解析", "実験",
+        "計算結果", "解析結果", "数値計算結果", "実験結果", "精度評価",
+        "計算精度評価", "検証", "評価",
+    }
+    claim_terms = re.compile(
+        r"(?:\b(?:is|are|was|were|shows?|achieves?|reduces?|increases?|"
+        r"enables?|improves?|outperforms?|solves?|demonstrates?|supports?|"
+        r"requires?|remains?|preserves?)\b|"
+        r"できる|可能|示す|示した|なる|保つ|維持|残る|減らす|低減|削減|"
+        r"向上|改善|実現|達成|収束|一致|対応|整合|選べる|選択|主役|中核|"
+        r"有効|高速|強い|優れる|必要|支配|保証|継承|適用|進む)",
+        re.IGNORECASE,
+    )
+    result_sentence = re.compile(
+        r"(?:した|する|なる|できる|可能|必要|示す|残る|進む|選ぶ|測る|"
+        r"低減|削減|改善|向上|一致|整合|達成|実現)[。.!！]?$|"
+        r"\b(?:is|are|was|were|shows?|achieves?|reduces?|increases?|"
+        r"enables?|improves?|outperforms?|demonstrates?)\b[^.]*[.]?$",
+        re.IGNORECASE,
+    )
+    numeric_result = re.compile(
+        r"\d+(?:\.\d+)?\s*(?:%|％|倍|分の|GiB|MiB|GB|MB|ms|s|秒|(?:万)?自由度)",
+        re.IGNORECASE,
+    )
+    viewpoint_terms = re.compile(
+        r"(?:評価|検証|比較|条件|モデル|依存|分解|対応|性能|精度|閉包|"
+        r"感度|頑健|高速化|適用|展開|限界|課題|定義|設計|測定|同定|"
+        r"解析|原理|機構|構造|実装|停止則|モード|"
+        r"evaluation|validation|comparison|condition|model|dependence|"
+        r"decomposition|performance|accuracy|closure|sensitivity|robustness|"
+        r"acceleration|application|limitation|design|measurement|identification|"
+        r"analysis|principle|mechanism|structure|implementation|loop[- ]?free)",
+        re.IGNORECASE,
+    )
+    takeaway_cue = re.compile(
+        r"^(?:分かったこと|結論|示唆|要点|まとめ|以上より|したがって|"
+        r"take.?away)\s*[：:]",
+        re.IGNORECASE,
+    )
+    chrome_types = {
+        getattr(PP_PLACEHOLDER, "FOOTER", None),
+        getattr(PP_PLACEHOLDER, "DATE", None),
+        getattr(PP_PLACEHOLDER, "SLIDE_NUMBER", None),
+        getattr(PP_PLACEHOLDER, "HEADER", None),
+    }
+
+    def _placeholder_type(shape):
+        try:
+            if not shape.is_placeholder:
+                return None
+            return shape.placeholder_format.type
+        except Exception:
+            return None
+
+    def _is_title_shape(shape) -> bool:
+        try:
+            return bool(shape.is_placeholder and shape.placeholder_format.idx == 0)
+        except Exception:
+            return False
+
+    def _is_footer_like(text: str) -> bool:
+        t = " ".join(text.split()).strip()
+        if not t:
+            return True
+        if re.fullmatch(r"[\d\s/.-]+", t):
+            return True
+        if re.search(r"(?:https?://|www\.|doi\s*:|^\[?sources?\]?|^出典)",
+                     t, re.IGNORECASE):
+            return True
+        if re.search(r"(?:大学|研究所|株式会社|University|Institute|©)", t,
+                     re.IGNORECASE) and not claim_terms.search(t):
+            return True
+        return False
+
+    reports = []
+    checked = 0
+    passed = 0
+    title_failures = 0
+    takeaway_failures = 0
+    for index, slide in enumerate(prs.slides, 1):
+        title = _slide_title(slide).strip()
+        if index == 1 or structural_title.match(title):
+            reports.append({
+                "slide": index,
+                "title": title,
+                "skipped": True,
+                "reason": "title/structural slide",
+            })
+            continue
+
+        checked += 1
+        title_norm = title.lower().strip(" ：:。.!?\t\r\n")
+        title_content_chars = len(re.sub(r"\s+", "", title))
+        title_is_specific = bool(
+            title and title_norm not in generic_title and title_content_chars >= 5
+        )
+        title_is_concise = title_content_chars <= max_title_chars
+        numeric_values = numeric_result.findall(title)
+        numeric_result_marker = re.search(
+            r"(?:最大|最小|以内|以上|以下|誤差|差|へ|→|で解析|で求解|"
+            r"低減|削減|改善|向上|一致|整合)",
+            title,
+        )
+        title_is_result_sentence = bool(
+            result_sentence.search(title)
+            or len(numeric_values) >= 2
+            or (numeric_values and numeric_result_marker)
+        )
+        title_is_message = bool(
+            title_is_specific and title_is_concise and not title_is_result_sentence
+        )
+
+        candidates = []
+        for shape in _walk_shapes(slide.shapes):
+            try:
+                if not shape.has_text_frame or _is_title_shape(shape):
+                    continue
+                if _placeholder_type(shape) in chrome_types:
+                    continue
+                text_value = " ".join(shape.text_frame.text.split()).strip()
+                if len(text_value) < min_takeaway_chars or _is_footer_like(text_value):
+                    continue
+                top_fraction = float(shape.top) / slide_h
+                bottom_fraction = float(shape.top + shape.height) / slide_h
+                if bottom_start_fraction <= top_fraction < footer_start_fraction:
+                    candidates.append({
+                        "text": text_value[:180],
+                        "top_fraction": round(top_fraction, 3),
+                    })
+                elif bottom_fraction >= bottom_start_fraction:
+                    lines = [line.strip() for line in shape.text_frame.text.splitlines()
+                             if line.strip()]
+                    if lines and takeaway_cue.search(lines[-1]):
+                        candidates.append({
+                            "text": lines[-1][:180],
+                            "top_fraction": "last-line-in-bottom-spanning-box",
+                        })
+            except Exception:
+                continue
+
+        has_takeaway = bool(candidates)
+        issues = []
+        if not title_is_message:
+            title_failures += 1
+            if not title_is_specific:
+                issues.append("title_not_specific")
+            if not title_is_concise:
+                issues.append("title_too_long")
+            if title_is_result_sentence:
+                issues.append("title_is_result_sentence")
+        if not has_takeaway:
+            takeaway_failures += 1
+            issues.append("bottom_takeaway_missing")
+        if not issues:
+            passed += 1
+        reports.append({
+            "slide": index,
+            "title": title,
+            "skipped": False,
+            "title_is_message": title_is_message,
+            "title_char_count": title_content_chars,
+            "title_is_specific": title_is_specific,
+            "title_is_concise": title_is_concise,
+            "title_is_result_sentence": title_is_result_sentence,
+            "bottom_takeaway": candidates[0]["text"] if candidates else "",
+            "has_bottom_takeaway": has_takeaway,
+            "issues": issues,
+        })
+
+    checks = checked * 2
+    failed_checks = title_failures + takeaway_failures
+    score = 10.0 if checks == 0 else 10.0 * (checks - failed_checks) / checks
+    return {
+        "score": round(score, 1),
+        "slides_checked": checked,
+        "slides_passing": passed,
+        "title_message_failures": title_failures,
+        "bottom_takeaway_failures": takeaway_failures,
+        "slides": reports,
+        "rule": {
+            "title": (
+                "最上部に、そのスライドで伝えたい対象＋観点を短い具体語句で置く。"
+                "『結果』『数値計算結果』や、結果の長い言い切りは避ける。"
+            ),
+            "bottom": "最下部に、中央の図表・式・比較から分かったことを一文で置く。",
+        },
+        "hint": (
+            "title は短い具体的な伝達項目、下端文は得られた知見。下端文は title の"
+            "同語反復ではなく、中央の証拠の解釈または含意にする。"
+        ),
     }
 
 
 def presentation_check_pptx_font_size(pptx_path: str,
-                                        min_body_pt: int = 20,
-                                        min_title_pt: int = 32) -> dict:
-    """pptx font size < 下限を検出。"""
+                                        min_body_pt: int = 24,
+                                        min_title_pt: int = 32,
+                                        exclude_chrome: bool = True) -> dict:
+    """pptx audience-facing font size < 下限を検出。
+
+    footer、page number、date、source/citation chrome は既定で除外する。
+    """
     try:
         import pptx as _pptx
     except ImportError:
@@ -1096,17 +1512,19 @@ def presentation_check_pptx_font_size(pptx_path: str,
     prs = _pptx.Presentation(str(p))
     violations = []
     unresolved = 0
+    excluded_chrome_runs = 0
     for i, slide in enumerate(prs.slides, 1):
         # Bug H7 fix: descend into grouped shapes while iterating.
         for shape in _walk_shapes(slide.shapes):
             if not shape.has_text_frame:
                 continue
-            is_title = False
-            try:
-                is_title = (shape.placeholder_format is not None
-                             and shape.placeholder_format.idx == 0)
-            except Exception:
-                pass
+            if exclude_chrome and _is_footer_or_page_chrome(shape, slide):
+                excluded_chrome_runs += sum(
+                    1 for para in shape.text_frame.paragraphs
+                    for run in para.runs if run.text.strip()
+                )
+                continue
+            is_title = _shape_is_slide_title(shape, slide)
             limit = min_title_pt if is_title else min_body_pt
             for para in shape.text_frame.paragraphs:
                 for run in para.runs:
@@ -1129,7 +1547,12 @@ def presentation_check_pptx_font_size(pptx_path: str,
         "min_body_pt": min_body_pt, "min_title_pt": min_title_pt,
         "violations": violations[:20],
         "unresolved_runs": unresolved,
-        "hint": ("body >= 20pt, title >= 32pt (木下 p.227). "
+        "excluded_chrome_runs": excluded_chrome_runs,
+        "exclude_chrome": exclude_chrome,
+        "hint": ("Audience-facing body/caption/annotation/table/chart text "
+                 ">= 24pt, title >= 32pt. Footer, page number, date, and "
+                 "source/citation chrome are excluded by default. Text baked "
+                 "into raster images cannot be audited from PPTX runs. "
                  "unresolved_runs = number of text runs whose effective "
                  "font size could not be determined via run / paragraph "
                  "/ layout / master inheritance."),
@@ -1484,6 +1907,181 @@ def presentation_check_bullet_ending_style(pptx_path: str) -> dict:
         "mixed": with_period > 0 and without_period > 0,
         "examples": examples,
         "recommendation": "bullet 末尾句点なしに統一推奨。",
+    }
+
+
+def presentation_check_japanese_copy_style(
+        pptx_path: str,
+        nominal_ratio_target: float = 0.60,
+        min_prose_chars: int = 10) -> dict:
+    """和文スライド本文の文節改行と体言止めを点検。
+
+    宮野『研究発表のためのスライドデザイン』の「文脈を優先し、
+    違和感のない位置で改行」と「長い説明文は体言止めで簡潔化」を
+    PPTX 上で補助診断する。タイトル、footer/page chrome、数式、URL、
+    疑問文は体言止め比率から除外する。日本語形態素解析を伴わない
+    heuristic であり、自動修正ではなく読み上げ前の候補抽出に用いる。
+    """
+    try:
+        import pptx as _pptx
+    except ImportError:
+        return {"error": "python-pptx not installed."}
+    p = pathlib.Path(pptx_path)
+    if not p.exists():
+        return {"error": f"file not found: {pptx_path}"}
+    if not 0.0 <= nominal_ratio_target <= 1.0:
+        return {"error": "nominal_ratio_target must be between 0 and 1."}
+    if min_prose_chars < 1:
+        return {"error": "min_prose_chars must be >= 1."}
+
+    prs = _pptx.Presentation(str(p))
+    structural_title = re.compile(
+        r"^(?:title|references?|acknowledg(?:e)?ments?|appendix|q\s*&\s*a|"
+        r"参考文献|謝辞|付録|質疑|補足)\s*$",
+        re.IGNORECASE,
+    )
+    dependent_line_end = re.compile(
+        r"(?:について|によって|により|による|として|"
+        r"および|及び|ならびに|または|又は|"
+        r"から|まで|より|ため|の|を|に|が|は|へ|と|で|や|も)$"
+    )
+    dependent_line_start = re.compile(
+        r"^(?:を|が|は|に|へ|と|で|も|の)(?=[^\s、。，．])"
+    )
+    verbal_ending = re.compile(
+        r"(?:です|ます|ました|ません|でした|である|であった|"
+        r"となる|になる|となった|になった|している|"
+        r"される|された|できる|行う|示す|示した|確認した|"
+        r"比較した|評価した|検討した|用いる|用いた|"
+        r"得られた|考えられる|認められる|必要がある|"
+        r"可能である|重要である|望ましい|難しい|新しい|"
+        r"高い|低い|大きい|小さい|等しい|異なる|"
+        r"一致する|対応する|維持する|低減する|向上する|"
+        r"改善する|実現する|保証する|抑制する|支配する|"
+        r"働く|含む|持つ|保つ|残る|進む|優れる|分かる|わかる|"
+        r"ある|ない|する|した)$"
+    )
+    screen_only_lead_in = re.compile(
+        r"^(?:そこで本研究では|本研究では|ここでは|次に)[、，,\s]*"
+    )
+
+    awkward_breaks = []
+    verbal_examples = []
+    lead_in_examples = []
+    paragraphs_checked = 0
+    nominal_like_count = 0
+    verbal_sentence_count = 0
+    skipped_paragraphs = 0
+    slides_checked = 0
+
+    def _is_prose_candidate(text_value: str) -> bool:
+        compact = re.sub(r"\s+", "", text_value)
+        if len(compact) < min_prose_chars:
+            return False
+        if text_value.rstrip().endswith(("?", "？")):
+            return False
+        if re.search(r"(?:https?://|www\.|doi\s*:)", text_value, re.IGNORECASE):
+            return False
+        if re.fullmatch(r"[\d\s.,:+\-*/=()\[\]{}<>%％×·・〜～]+", text_value):
+            return False
+        japanese_chars = len(re.findall(r"[ぁ-ゟ゠-ヿ㐀-鿿]", text_value))
+        return japanese_chars >= 3
+
+    for slide_index, slide in enumerate(prs.slides, 1):
+        title = _slide_title(slide).strip()
+        if slide_index == 1 or structural_title.match(title):
+            continue
+        slides_checked += 1
+        for shape in _walk_shapes(slide.shapes):
+            try:
+                if (not shape.has_text_frame
+                        or _shape_is_slide_title(shape, slide)
+                        or _is_footer_or_page_chrome(shape, slide)):
+                    continue
+            except Exception:
+                continue
+
+            shape_name = getattr(shape, "name", "")
+            for paragraph in shape.text_frame.paragraphs:
+                raw = paragraph.text.replace("\r\n", "\n").replace("\r", "\n")
+                lines = [line.strip() for line in re.split(r"[\n\v]", raw)
+                         if line.strip()]
+                for line_index in range(len(lines) - 1):
+                    before = lines[line_index]
+                    after = lines[line_index + 1]
+                    reason = ""
+                    if dependent_line_end.search(before):
+                        reason = "助詞または連体修飾の直後で改行"
+                    elif dependent_line_start.search(after):
+                        reason = "改行後の行が従属的な助詞で開始"
+                    elif (re.search(r"[A-Za-z0-9-]$", before)
+                          and re.match(r"^[a-z0-9]", after)):
+                        reason = "英単語または識別子の途中で改行した可能性"
+                    elif re.search(r"[\(（「『【]$", before):
+                        reason = "開き括弧が行末に孤立"
+                    elif re.match(r"^[\)）」』】、。，．]", after):
+                        reason = "閉じ括弧または句読点が行頭に孤立"
+                    if reason:
+                        awkward_breaks.append({
+                            "slide": slide_index,
+                            "shape": shape_name,
+                            "before": before[:100],
+                            "after": after[:100],
+                            "reason": reason,
+                        })
+
+                text_value = "".join(lines).strip()
+                if not _is_prose_candidate(text_value):
+                    skipped_paragraphs += 1
+                    continue
+                paragraphs_checked += 1
+                if screen_only_lead_in.search(text_value):
+                    lead_in_examples.append({
+                        "slide": slide_index,
+                        "shape": shape_name,
+                        "text": text_value[:140],
+                    })
+                ending = text_value.rstrip("　 \t、，,;:；：。．.!\uff01")
+                if verbal_ending.search(ending):
+                    verbal_sentence_count += 1
+                    verbal_examples.append({
+                        "slide": slide_index,
+                        "shape": shape_name,
+                        "text": text_value[:140],
+                    })
+                else:
+                    nominal_like_count += 1
+
+    ratio = (nominal_like_count / paragraphs_checked
+             if paragraphs_checked else 1.0)
+    ratio_passed = ratio >= nominal_ratio_target
+    return {
+        "passed": ratio_passed and not awkward_breaks and not lead_in_examples,
+        "slides_checked": slides_checked,
+        "paragraphs_checked": paragraphs_checked,
+        "skipped_paragraphs": skipped_paragraphs,
+        "nominal_like_count": nominal_like_count,
+        "verbal_sentence_count": verbal_sentence_count,
+        "nominal_like_ratio": round(ratio, 3),
+        "nominal_ratio_target": nominal_ratio_target,
+        "nominal_ratio_passed": ratio_passed,
+        "awkward_line_break_count": len(awkward_breaks),
+        "awkward_line_breaks": awkward_breaks[:50],
+        "screen_only_lead_in_count": len(lead_in_examples),
+        "screen_only_lead_ins": lead_in_examples[:30],
+        "verbal_sentence_examples": verbal_examples[:30],
+        "rule": {
+            "line_break": "文字数でなく文脈・文節を優先し、違和感のない位置で改行。",
+            "ending": "長い本文は体言止めを主とし、不要な接続句を画面から削除。",
+        },
+        "source": (
+            "宮野公樹『研究発表のためのスライドデザイン』"
+            "p.50-52, p.102"
+        ),
+        "hint": (
+            "形態素解析なしの補助診断。指摘候補は声に出して確認し、"
+            "タイトルの主張文や自然な説明文まで無理に体言止めにしない。"
+        ),
     }
 
 

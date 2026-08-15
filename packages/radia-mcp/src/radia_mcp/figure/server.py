@@ -219,6 +219,7 @@ def paper_figure_quality_rules(query: str = "all") -> str:
         'multipanel'      - 1x2 / 2x1 / 2x2 layout tactics
         'side_by_side'    - two figures in 8 cm -> each <= 4 cm,
                             font 10 pt, legend 8-9 pt, no overlap
+        'slide_169'       - 16:9 slide figures: every visible font >= 24 pt
         'tikz_export'     - MATLAB -> matlab2tikz -> LaTeX TikZ:
                             preferred over PDF includegraphics for
                             LaTeX papers (font / math matches body)
@@ -309,6 +310,24 @@ EXCEPTION -- two panels side-by-side in 8 cm (each ~4 cm wide):
   The legend must still NOT overlap the graph (see no_legend_overlap).
   See the `side_by_side` topic and the
   'digest_double_column_side_by_side' profile.
+""",
+        "slide_169": """\
+[slide_169]
+
+SUGAHARA LAB 16:9 SLIDE FIGURE RULE:
+
+  Every visible font must be at least 24 pt.
+
+This floor applies to axis labels, tick labels, legends, panel labels, and
+free annotations.  Use `beamer_169_full`, `beamer_169_half`, or the
+`presentation_slide` style profile.  These profiles set every default to
+24 pt.  `emit_paper_figure()` also audits individual text artists so a later
+`fontsize=16` override is rejected before save.
+
+If 24 pt text does not fit, simplify the plot, reduce the number of panels,
+or allocate more slide area.  Do not solve density by shrinking the text.
+The no-in-figure-title rule still applies: the title belongs in the slide
+title band or Beamer frame title.
 """,
         "font_family": """\
 [font_family]

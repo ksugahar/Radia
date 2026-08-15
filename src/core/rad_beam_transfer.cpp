@@ -199,7 +199,8 @@ double SmallFactorial(std::size_t value) {
     if (value == 2) return 2.0;
     if (value == 3) return 6.0;
     if (value == 4) return 24.0;
-    throw std::invalid_argument("beam Taylor monomial degree exceeds four");
+    if (value == 5) return 120.0;
+    throw std::invalid_argument("beam Taylor monomial degree exceeds five");
 }
 
 void AddHamiltonianMonomial(HamiltonianJet6& jet,
@@ -212,10 +213,10 @@ void AddHamiltonianMonomial(HamiltonianJet6& jet,
         derivative *= SmallFactorial(power);
     }
     if (coefficient == 0.0) return;
-    if (degree < 2 || degree > 4)
+    if (degree < 2 || degree > 5)
         throw std::invalid_argument(
-            "Hamiltonian monomial degree must be two, three, or four");
-    const auto matches = [&](const std::array<std::size_t, 4>& inputs,
+            "Hamiltonian monomial degree must be between two and five");
+    const auto matches = [&](const std::array<std::size_t, 5>& inputs,
                              std::size_t count) {
         std::array<std::size_t, 6> actual{};
         for (std::size_t index = 0; index < count; ++index)
@@ -225,7 +226,7 @@ void AddHamiltonianMonomial(HamiltonianJet6& jet,
     if (degree == 2) {
         for (std::size_t i = 0; i < 6; ++i)
             for (std::size_t j = 0; j < 6; ++j)
-                if (matches({i, j, 0, 0}, 2))
+                if (matches({i, j, 0, 0, 0}, 2))
                     jet.h2_per_m(i, j) += derivative;
         return;
     }
@@ -233,16 +234,26 @@ void AddHamiltonianMonomial(HamiltonianJet6& jet,
         for (std::size_t i = 0; i < 6; ++i)
             for (std::size_t j = 0; j < 6; ++j)
                 for (std::size_t k = 0; k < 6; ++k)
-                    if (matches({i, j, k, 0}, 3))
+                    if (matches({i, j, k, 0, 0}, 3))
                         jet.h3_per_m(i, j, k) += derivative;
+        return;
+    }
+    if (degree == 4) {
+        for (std::size_t i = 0; i < 6; ++i)
+            for (std::size_t j = 0; j < 6; ++j)
+                for (std::size_t k = 0; k < 6; ++k)
+                    for (std::size_t l = 0; l < 6; ++l)
+                        if (matches({i, j, k, l, 0}, 4))
+                            jet.h4_per_m(i, j, k, l) += derivative;
         return;
     }
     for (std::size_t i = 0; i < 6; ++i)
         for (std::size_t j = 0; j < 6; ++j)
             for (std::size_t k = 0; k < 6; ++k)
                 for (std::size_t l = 0; l < 6; ++l)
-                    if (matches({i, j, k, l}, 4))
-                        jet.h4_per_m(i, j, k, l) += derivative;
+                    for (std::size_t m = 0; m < 6; ++m)
+                        if (matches({i, j, k, l, m}, 5))
+                            jet.h5_per_m(i, j, k, l, m) += derivative;
 }
 
 double CanonicalPoissonEntry(std::size_t row, std::size_t column) {
@@ -293,12 +304,13 @@ void AddMonomialDerivative(DynamicsJet6& jet, std::size_t output,
 }
 
 double Binomial(std::size_t order, std::size_t selected) {
-    static constexpr double values[5][5] = {
-        {1.0, 0.0, 0.0, 0.0, 0.0},
-        {1.0, 1.0, 0.0, 0.0, 0.0},
-        {1.0, 2.0, 1.0, 0.0, 0.0},
-        {1.0, 3.0, 3.0, 1.0, 0.0},
-        {1.0, 4.0, 6.0, 4.0, 1.0},
+    static constexpr double values[6][6] = {
+        {1.0, 0.0, 0.0, 0.0, 0.0, 0.0},
+        {1.0, 1.0, 0.0, 0.0, 0.0, 0.0},
+        {1.0, 2.0, 1.0, 0.0, 0.0, 0.0},
+        {1.0, 3.0, 3.0, 1.0, 0.0, 0.0},
+        {1.0, 4.0, 6.0, 4.0, 1.0, 0.0},
+        {1.0, 5.0, 10.0, 10.0, 5.0, 1.0},
     };
     return values[order][selected];
 }
@@ -418,8 +430,8 @@ DynamicsJet6 BuildParaxialMagneticDynamicsJet(
         const TransverseMagneticMultipoleExpansion& expansion,
         double magnetic_rigidity_t_m, double curvature_sign,
         double gradient_sign, unsigned maximum_order) {
-    if (expansion.order > 3)
-        throw std::invalid_argument("multipole order must not exceed three");
+    if (expansion.order > 4)
+        throw std::invalid_argument("multipole order must not exceed four");
     if (maximum_order < 1 || maximum_order > 3)
         throw std::invalid_argument("maximum_order must be 1, 2, or 3");
     if (!std::isfinite(magnetic_rigidity_t_m) ||
@@ -494,9 +506,10 @@ DynamicsJet6 BuildParaxialMagneticDynamicsJet(
 HamiltonianJet6 BuildCanonicalBodyHamiltonianJet(
         const TransverseMagneticMultipoleExpansion& expansion,
         double magnetic_rigidity_t_m, double curvature_sign,
-        double gradient_sign, double reference_beta) {
-    if (expansion.order > 3)
-        throw std::invalid_argument("multipole order must not exceed three");
+        double gradient_sign, double reference_beta,
+        std::optional<double> reference_curvature_per_m) {
+    if (expansion.order > 4)
+        throw std::invalid_argument("multipole order must not exceed four");
     if (!std::isfinite(magnetic_rigidity_t_m) ||
         magnetic_rigidity_t_m == 0.0)
         throw std::invalid_argument(
@@ -508,6 +521,10 @@ HamiltonianJet6 BuildCanonicalBodyHamiltonianJet(
         reference_beta > 1.0)
         throw std::invalid_argument(
             "reference_beta must be finite and in (0, 1]");
+    if (reference_curvature_per_m.has_value() &&
+        !std::isfinite(*reference_curvature_per_m))
+        throw std::invalid_argument(
+            "reference_curvature_per_m must be finite when supplied");
     for (double coefficient : expansion.normal_t_per_m_power)
         if (!std::isfinite(coefficient))
             throw std::invalid_argument(
@@ -519,15 +536,19 @@ HamiltonianJet6 BuildCanonicalBodyHamiltonianJet(
 
     HamiltonianJet6 result;
     result.reference_beta = reference_beta;
-    const double curvature = curvature_sign *
+    const double field_curvature = curvature_sign *
         expansion.normal_t_per_m_power[0] / magnetic_rigidity_t_m;
+    const double curvature = reference_curvature_per_m.value_or(
+        field_curvature);
+    result.reference_curvature_per_m = curvature;
+    result.field_curvature_per_m = field_curvature;
 
     // Exact parent:
     // -(1+h*x)*sqrt((1+delta)^2-px^2-py^2) - a_s + H_ref.
     AddHamiltonianMonomial(result, {0, 2, 0, 0, 0, 0}, 0.5);
     AddHamiltonianMonomial(result, {0, 0, 0, 2, 0, 0}, 0.5);
     AddHamiltonianMonomial(result, {2, 0, 0, 0, 0, 0},
-                           0.5 * curvature * curvature);
+                           0.5 * curvature * field_curvature);
     AddHamiltonianMonomial(result, {1, 0, 0, 0, 0, 1}, -curvature);
     AddHamiltonianMonomial(
         result, {0, 0, 0, 0, 0, 2},
@@ -564,6 +585,31 @@ HamiltonianJet6 BuildCanonicalBodyHamiltonianJet(
         result, {0, 0, 0, 0, 0, 4},
         beta2 * (1.0 - beta2) * (5.0 * beta2 - 1.0) / 8.0);
 
+    // Fifth-degree kinematic terms from the same exact square roots.
+    for (std::size_t momentum : {std::size_t{1}, std::size_t{3}}) {
+        std::array<std::size_t, 6> powers{};
+        powers[momentum] = 2;
+        powers[5] = 3;
+        AddHamiltonianMonomial(result, powers, -0.5);
+        powers[5] = 2;
+        powers[0] = 1;
+        AddHamiltonianMonomial(result, powers, 0.5 * curvature);
+
+        powers = {};
+        powers[momentum] = 4;
+        powers[5] = 1;
+        AddHamiltonianMonomial(result, powers, -3.0 / 8.0);
+        powers[5] = 0;
+        powers[0] = 1;
+        AddHamiltonianMonomial(result, powers, curvature / 8.0);
+    }
+    AddHamiltonianMonomial(result, {0, 2, 0, 2, 0, 1}, -3.0 / 4.0);
+    AddHamiltonianMonomial(
+        result, {1, 2, 0, 2, 0, 0}, curvature / 4.0);
+    AddHamiltonianMonomial(
+        result, {0, 0, 0, 0, 0, 5},
+        beta2 * beta2 * (1.0 - beta2) * (3.0 - 7.0 * beta2) / 8.0);
+
     const std::complex<double> imaginary(0.0, 1.0);
     for (unsigned order = 1; order <= expansion.order; ++order) {
         const unsigned degree = order + 1;
@@ -593,9 +639,13 @@ HamiltonianJet6 BuildCanonicalBodyHamiltonianJet(
                 for (std::size_t k = 0; k < 6; ++k) {
                     result.dynamics.f2_per_m(i, j, k) +=
                         poisson * result.h3_per_m(a, j, k);
-                    for (std::size_t l = 0; l < 6; ++l)
+                    for (std::size_t l = 0; l < 6; ++l) {
                         result.dynamics.f3_per_m(i, j, k, l) +=
                             poisson * result.h4_per_m(a, j, k, l);
+                        for (std::size_t m = 0; m < 6; ++m)
+                            result.dynamics.f4_per_m(i, j, k, l, m) +=
+                                poisson * result.h5_per_m(a, j, k, l, m);
+                    }
                 }
             }
         }

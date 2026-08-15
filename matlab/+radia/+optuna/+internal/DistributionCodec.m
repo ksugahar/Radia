@@ -194,6 +194,10 @@ classdef DistributionCodec
                 error("radia:optuna:LogBounds", ...
                     "Log-distribution bounds must be positive.");
             end
+            if kind == "float" && logScale && isfinite(step)
+                error("radia:optuna:Step", ...
+                    "Float log distributions cannot use a finite step.");
+            end
             if isfinite(step) && step <= 0
                 error("radia:optuna:Step", "Step must be positive.");
             end

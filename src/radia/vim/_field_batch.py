@@ -21,6 +21,7 @@ leaves retain P2 geometry and integrate the BDM1/BDM2 charge polynomial directly
 import time
 
 import numpy as np
+
 import radia._radia_pybind as _rp
 
 MU0 = 4.0e-7 * np.pi
@@ -41,8 +42,7 @@ def _create_field_evaluator(gram, coefficients, order):
         _FIELD_TREE_MIN_SOURCES, _FIELD_TREE_AUTO_MIN_WORK,
         _FIELD_TREE_RELATIVE_TOLERANCE, _FIELD_TREE_PROBE_COUNT)
     stats = dict(evaluator.stats())
-    stats["source_kind"] = "%s-bdm%d" % (
-        stats.pop("source_representation"), int(order))
+    stats["source_kind"] = f"{stats.pop('source_representation')}-bdm{int(order)}"
     stats["build_wall_s"] = time.perf_counter()-started
     return evaluator, stats
 
@@ -59,7 +59,7 @@ def _materialize_field_evaluator(res):
     if int(res.get("order", -1)) not in (1, 2):
         raise NotImplementedError(
             "vim.FieldFromSolution: production supports HDiv order in {1,2} "
-            "(got order=%r)." % (res.get("order"),))
+            f"(got order={res.get('order')!r}).")
     cached = res.get("_field_evaluator")
     if cached is not None:
         return cached
@@ -113,6 +113,144 @@ def field_coefficient_from_solution(res, algorithm="direct"):
             "vim.FieldCoefficientFromSolution: algorithm must be 'direct' or 'tree'")
     evaluator = _materialize_field_evaluator(res)
     return _rp._HDivFieldCoefficient(evaluator, str(algorithm))
+
+
+def _mapped_vector_values(value, mapped_rule, count, label):
+    sampled = np.asarray(value(mapped_rule), dtype=float)
+    if sampled.shape == (3, count):
+        sampled = sampled.T
+    sampled = sampled.reshape(count, 3)
+    if not np.all(np.isfinite(sampled)):
+        raise RuntimeError(f"{label} contains non-finite values")
+    return np.ascontiguousarray(sampled)
+
+
+def vector_potential_coefficient_from_solution(
+    res, integration_order=8, *, reflection_normal=None
+):
+    """Return exterior ``A`` integrated directly from the solved HDiv ``M``.
+
+    The NGSolve ``GridFunction`` is evaluated on mapped element quadrature
+    rules, including its native HDiv orientation and Piola transform.  The
+    immutable native coefficient then evaluates
+
+    ``A(r) = mu0/(4*pi) * integral M(r') x (r-r') / |r-r'|^3 dV'``.
+
+    This is a source integral, not a reconstruction from ``curl(A)`` or from
+    median-plane samples.  It is deliberately an *exterior* coefficient: all
+    EarlyTimes beam-tube points must remain outside the iron.  The caller owns
+    the surrounding :class:`ngsolve.TaskManager`.
+
+    ``reflection_normal`` optionally applies full-volume median-plane
+    symmetrisation.  Source points are reflected as polar positions, while
+    magnetization is transformed as an axial vector.  The original and
+    reflected source clouds receive one-half weight each; this retains all
+    upper/lower volume information without averaging HCurl traces.
+
+    ``integration_order`` is an explicit convergence control.  Order 8 is the
+    production baseline for BDM1/BDM2 on affine iron elements; a C-type map is
+    accepted only after the order-10 result changes the HCurl/Lie observables
+    by less than their declared tolerances.
+    """
+    if not isinstance(res, dict):
+        raise TypeError("vim vector potential requires Solve's result dict")
+    gfM = res.get("gfM")
+    if gfM is None:
+        raise ValueError(
+            "vim.VectorPotentialCoefficientFromSolution: res carries no "
+            "'gfM' GridFunction -- pass the dict returned by vim.Solve/"
+            "rad.Solve unmodified."
+        )
+    order = int(integration_order)
+    if isinstance(integration_order, bool) or order != integration_order or order < 1:
+        raise ValueError("integration_order must be a positive integer")
+    normal = None
+    if reflection_normal is not None:
+        normal = np.asarray(reflection_normal, dtype=float)
+        if normal.shape != (3,) or not np.all(np.isfinite(normal)):
+            raise ValueError("reflection_normal must be a finite three-vector")
+        norm = float(np.linalg.norm(normal))
+        if norm <= 0.0:
+            raise ValueError("reflection_normal must be nonzero")
+        normal = normal / norm
+    cache_key = (
+        order
+        if normal is None
+        else (order, tuple(np.round(normal, decimals=15)))
+    )
+    cache = res.setdefault("_vector_potential_coefficients", {})
+    if cache_key in cache:
+        return cache[cache_key]
+
+    import ngsolve as ng
+
+    mesh = gfM.space.mesh
+    coordinate = ng.CoefficientFunction((ng.x, ng.y, ng.z))
+    rules = {}
+    source_points = []
+    integrated_magnetization = []
+    integrated_volume = 0.0
+    for element in mesh.Elements(ng.VOL):
+        rule = rules.get(element.type)
+        if rule is None:
+            rule = ng.IntegrationRule(element.type, order)
+            rules[element.type] = rule
+        transformation = mesh.GetTrafo(element)
+        mapped = transformation(rule)
+        count = len(rule)
+        points = _mapped_vector_values(
+            coordinate, mapped, count, "mapped quadrature points"
+        )
+        magnetization = _mapped_vector_values(
+            gfM, mapped, count, "HDiv magnetization samples"
+        )
+        weights = np.fromiter(
+            (
+                float(point.weight) * float(transformation(point).measure)
+                for point in rule
+            ),
+            dtype=np.float64,
+            count=count,
+        )
+        if not np.all(np.isfinite(weights)) or np.any(weights <= 0.0):
+            raise RuntimeError(
+                "HDiv vector-potential quadrature has a non-positive mapped weight"
+            )
+        source_points.append(points)
+        integrated_magnetization.append(magnetization * weights[:, None])
+        integrated_volume += float(np.sum(weights))
+    if not source_points or integrated_volume <= 0.0:
+        raise ValueError("HDiv vector-potential source mesh contains no volume")
+
+    points = np.ascontiguousarray(np.vstack(source_points), dtype=np.float64)
+    moments = np.ascontiguousarray(
+        np.vstack(integrated_magnetization), dtype=np.float64
+    )
+    if normal is not None:
+        reflected_points = points - 2.0 * (points @ normal)[:, None] * normal
+        # An axial vector transforms under a reflection R as det(R) R M = -R M.
+        reflected_moments = (
+            -moments + 2.0 * (moments @ normal)[:, None] * normal
+        )
+        points = np.ascontiguousarray(
+            np.vstack((points, reflected_points)), dtype=np.float64
+        )
+        moments = np.ascontiguousarray(
+            0.5 * np.vstack((moments, reflected_moments)), dtype=np.float64
+        )
+    coefficient = _rp._HDivVectorPotentialCoefficient(points, moments)
+    res.setdefault("vector_potential_coefficient_stats", {})[cache_key] = {
+        "construction": "ngsolve-mapped-hdiv-magnetization-volume-integral",
+        "integration_order": order,
+        "source_count": len(points),
+        "element_count": int(mesh.ne),
+        "integrated_volume_m3": integrated_volume,
+        "integrated_magnetic_moment_A_m2": np.sum(moments, axis=0).tolist(),
+        "reflection_normal": None if normal is None else normal.tolist(),
+        "full_volume_reflection_symmetrized": normal is not None,
+    }
+    cache[cache_key] = coefficient
+    return coefficient
 
 
 def magnetization_from_solution(res, points):

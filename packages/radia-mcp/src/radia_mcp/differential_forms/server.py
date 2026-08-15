@@ -39,10 +39,7 @@ from ..common import register_status_tool
 from .basics_knowledge import get_basics_documentation
 from .bibliography_knowledge import get_bibliography_documentation
 from .de_rham_knowledge import get_de_rham_documentation
-from .em_force_extras_knowledge import get_em_force_extras
-from .em_force_ngsolve_recipe_knowledge import get_em_force_ngsolve_recipe
 from .feec_knowledge import get_feec_documentation
-from .forces_knowledge import get_forces_documentation
 from .gauge_invariance_gate import gauge_invariance_gate as build_gauge_invariance_gate
 from .homology_knowledge import get_homology_documentation
 from .mathematica_recipes_knowledge import get_mathematica_recipes_documentation
@@ -50,6 +47,11 @@ from .maxwell_knowledge import get_maxwell_documentation
 from .visual_geometry_gate import visual_geometry_gate as build_visual_geometry_gate
 from .visual_geometry_knowledge import get_visual_geometry_documentation
 from .whitney_knowledge import get_whitney_documentation
+from ..force.knowledge import (
+    get_force_extras,
+    get_force_methods,
+    get_force_recipe,
+)
 
 mcp = FastMCP("mcp-server-differential-forms")
 
@@ -256,7 +258,7 @@ def differential_forms_forces(topic: str = "all") -> str:
                                on differential-form representation of
                                shear stress / shear strain
     """
-    return get_forces_documentation(topic)
+    return get_force_methods(topic)
 
 
 @mcp.tool()
@@ -292,7 +294,7 @@ def differential_forms_em_force_recipe(topic: str = "all") -> str:
     Cross-reference: `differential_forms_forces` (theory),
     `motor_henrotte_lineage` (Henrotte 1993-2018 papers).
     """
-    return get_em_force_ngsolve_recipe(topic)
+    return get_force_recipe(topic)
 
 
 @mcp.tool()
@@ -328,7 +330,7 @@ def differential_forms_em_force_extras(topic: str = "all") -> str:
     Cross-reference: `differential_forms_em_force_recipe` for the
     practical NGSolve implementation status of each method.
     """
-    return get_em_force_extras(topic)
+    return get_force_extras(topic)
 
 
 @mcp.tool()
@@ -535,7 +537,7 @@ register_status_tool(
     server_name='mcp-server-differential-forms',
     description='Visual differential geometry / exterior calculus for EM: Cartan, de Rham, cohomology, EM forces theory',
     subpackage='radia_mcp.differential_forms',
-    related_servers=["fem", "mathematica"],
+    related_servers=["fem", "force", "mathematica"],
 )
 
 
