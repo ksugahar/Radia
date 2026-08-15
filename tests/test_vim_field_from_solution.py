@@ -32,12 +32,32 @@ def test_uniform_box_matches_radia_cpp():
     pts = np.array([[0.10, 0.03, 0.02], [-0.05, 0.02, 0.04],
                     [0.02, 0.12, -0.04], [0.08, -0.04, 0.09]])
     H_rad = np.asarray(rad.Fld(box, "h", pts))
-    H_rt = vim.FieldFromSolution(
-        {"gfM": gfM, "order": 1, "curve_order": None,
-         "_charge_gram": gram,
-         "_m_coefficients": np.ascontiguousarray(gfM.vec.FV().NumPy())}, pts)
+    solution = {
+        "gfM": gfM,
+        "order": 1,
+        "curve_order": None,
+        "_charge_gram": gram,
+        "_m_coefficients": np.ascontiguousarray(gfM.vec.FV().NumPy()),
+    }
+    H_rt = vim.FieldFromSolution(solution, pts)
     rel = (np.linalg.norm(H_rt - H_rad, axis=1)
            / np.maximum(np.linalg.norm(H_rad, axis=1), 1e-30))
+    A_rad = np.asarray(rad.Fld(box, "a", pts))
+    with ng.TaskManager():
+        A_coefficient = vim.VectorPotentialCoefficientFromSolution(
+            solution, integration_order=8
+        )
+        target = ng.Mesh(
+            OCCGeometry(
+                Box(Pnt(-0.08, -0.08, -0.08), Pnt(0.22, 0.22, 0.22))
+            ).GenerateMesh(maxh=0.08)
+        )
+        A_hdiv = np.asarray(
+            [A_coefficient(target(*point)) for point in pts], dtype=float
+        )
+    A_scale = np.maximum(np.linalg.norm(A_rad, axis=1), 1e-30)
+    A_relative_error = np.linalg.norm(A_hdiv - A_rad, axis=1) / A_scale
+    A_stats = solution["vector_potential_coefficient_stats"][8]
     mixed = np.array([[0.01, 0.02, 0.01], [0.20, 0.20, 0.20],
                       [0.03, 0.01, 0.02]])
     got_m = fb.magnetization_from_solution(
@@ -45,6 +65,11 @@ def test_uniform_box_matches_radia_cpp():
     expected_m = np.array([M0, [0.0, 0.0, 0.0], M0])
     rad.UtiDelAll()
     assert rel.max() < 2e-8
+    assert A_relative_error.max() < 2e-7
+    assert A_stats["source_count"] == A_coefficient.source_count
+    assert A_stats["construction"] == (
+        "ngsolve-mapped-hdiv-magnetization-volume-integral"
+    )
     assert np.allclose(got_m, expected_m, rtol=2e-14, atol=2e-10)
 
 

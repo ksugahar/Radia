@@ -18,7 +18,8 @@ def test_radia_mex_contract_reads_the_cpp_command_inventory():
     assert contract["status"] == "ready"
     assert contract["command_count"] == 358
     assert contract["matlab_wrapper_count"] >= 133
-    assert contract["matlab_optuna_class_count"] == 12
+    assert contract["matlab_optuna_class_count"] == 23
+    assert contract["matlab_optuna_function_count"] == 7
     assert {"TPESampler", "MOTPESampler", "CmaEsSampler", "NSGAIISampler", "LiveMonitor"}.issubset(
         contract["matlab_optuna_classes"]
     )
@@ -54,7 +55,7 @@ def test_radia_mex_contract_reads_the_cpp_command_inventory():
     assert contract["pybind_public_count"] == 94
     assert contract["pybind_covered_count"] == 94
     assert contract["pybind_missing"] == []
-    assert contract["pybind_internal_numerical_count"] == 27
+    assert contract["pybind_internal_numerical_count"] == 28
     assert contract["pybind_internal_missing"] == []
     assert contract["pybind_internal_unclassified"] == []
     assert contract["command_groups"]["acoustic"] == 7

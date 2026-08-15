@@ -174,7 +174,7 @@ def presentation_text_density_per_slide_western_style(
                     f"limit ≤{char_limit}); "
                     "日本理系プレゼンとしては text-heavy。"
                     "1 主張に絞り、bullet level を 1-2 に抑え、"
-                    "段落型は箇条書きに分解、font ≥20pt。"
+                    "段落型は箇条書きに分解、font ≥24pt。"
                 ),
             })
 
