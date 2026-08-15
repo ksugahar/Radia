@@ -18,9 +18,18 @@ def test_radia_mex_contract_reads_the_cpp_command_inventory():
     assert contract["status"] == "ready"
     assert contract["command_count"] == 358
     assert contract["matlab_wrapper_count"] >= 133
-    assert contract["matlab_optuna_class_count"] == 23
+    assert contract["matlab_optuna_class_count"] == 26
     assert contract["matlab_optuna_function_count"] == 7
-    assert {"TPESampler", "MOTPESampler", "CmaEsSampler", "NSGAIISampler", "LiveMonitor"}.issubset(
+    assert {
+        "TPESampler",
+        "MOTPESampler",
+        "CmaEsSampler",
+        "GPSampler",
+        "NSGAIISampler",
+        "NSGAIIISampler",
+        "BruteForceSampler",
+        "LiveMonitor",
+    }.issubset(
         contract["matlab_optuna_classes"]
     )
     assert "ngsolve.matrix_dump" in contract["command_names"]

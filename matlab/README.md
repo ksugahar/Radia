@@ -822,12 +822,15 @@ than overwritten, while NaN reports remain available to pruners.
 `WilcoxonPruner` implement the corresponding Optuna pruning contracts.
 Successive-halving rung attributes persist with the study, and Hyperband uses
 Optuna's CRC32 bracket allocation. `RandomSampler`, `TPESampler`,
-`CmaEsSampler`, `GridSampler`, `PartialFixedSampler`, and `QMCSampler` share
-the same ask/tell lifecycle. Grid search stops `Study.optimize` after the
-Cartesian product is exhausted. Unscrambled Sobol/Halton prefixes match the
-Optuna/SciPy definitions; the native Sobol table supports 32 dimensions and
-scrambled QMC uses a deterministic MATLAB random shift rather than claiming
-SciPy bit parity. TPE uses the persisted
+`CmaEsSampler`, `GPSampler`, `NSGAIISampler`, `NSGAIIISampler`,
+`GridSampler`, `BruteForceSampler`, `PartialFixedSampler`, and `QMCSampler`
+share the same ask/tell lifecycle. Grid search stops `Study.optimize` after
+the Cartesian product is exhausted, while brute-force search exhausts finite
+conditional define-by-run trees. Unscrambled Sobol/Halton prefixes match the
+Optuna/SciPy definitions through the supported 32 Sobol dimensions.
+`Scramble=true` uses a seeded lower-triangular linear-matrix scramble plus
+digital shift for Sobol and seeded per-digit Owen permutations for Halton;
+MATLAB and SciPy random streams are intentionally not bit-identical. TPE uses the persisted
 MATLAB tables for good/bad density proposals. CMA-ES infers the numeric
 intersection search space, samples a full population jointly, and applies
 full-covariance rank-one/rank-mu adaptation with cumulative evolution paths;
@@ -836,6 +839,14 @@ size, evolution paths, partial population, and random state are retained in
 `Study.SamplerStateTable` and survive MAT-file reloads. The workflow and tables are
 compatible with Optuna, while sampler random streams and optimizer internals
 are not promised to be bit-for-bit identical to Python Optuna.
+
+`GPSampler` fits a toolbox-free Matern-5/2 ARD Gaussian process over the
+stable intersection search space. It supports numeric and categorical
+variables, constrained feasibility, pending-trial repulsion, expected
+improvement, and Monte-Carlo expected hypervolume improvement. GP
+hyperparameters and random state survive MAT-file reloads. `NSGAIIISampler`
+adds Optuna-style extreme-point normalization, reference-line association,
+and niche preservation for many-objective populations.
 
 Set `Multivariate=true` to let TPE infer the intersection search space from
 the persisted COMPLETE and PRUNED trials. Ordinary `suggestFloat`,
@@ -856,12 +867,13 @@ independent proposal. This preserves define-by-run conditional spaces across
 study reloads. `suggestVector` remains available as an explicit numeric
 convenience, but it is not required for multivariate TPE.
 
-For electromagnetic CAE, multivariate TPE and CMA-ES are the primary
-production samplers. TPE owns mixed, conditional, and discrete search spaces;
-CMA-ES owns continuous correlated geometry and control variables. Random
-sampling remains the quality baseline, while NSGA-II and the separate MOTPE
-entry point remain alternative multi-objective validation routes rather than
-additional production defaults.
+For electromagnetic CAE, TPE owns mixed, conditional, and discrete search
+spaces; GP targets fixed numeric small-budget studies; CMA-ES owns larger
+continuous correlated single-objective geometry and control searches; and
+NSGA-II/III own population-scale multi- and many-objective studies. The
+Simulink `auto` policy records which rule selected the sampler. Random and QMC
+remain quality baselines, while finite brute-force search is useful for small
+conditional design trees.
 
 Simulink is evaluated through `radia.optuna.SimulinkRunner`. Its
 `ConfigureFcn` receives a `Simulink.SimulationInput` and a Trial, so the same
@@ -880,9 +892,11 @@ This keeps optimization history queryable as MATLAB tables while Simulink
 remains the plant and dynamic-system evaluator. For multiple objectives, pass
 `directions=["minimize","maximize"]`, inspect `study.paretoFront()`, and attach
 `radia.optuna.LiveMonitor` through `ProgressFcn`. Use
-`radia.optuna.MOTPESampler` for Pareto-ranked multi-objective TPE or
-`radia.optuna.NSGAIISampler` for non-dominated sorting, crowding, crossover,
-and mutation. The NSGA-II implementation follows the Optuna 4.9 contract:
+`radia.optuna.MOTPESampler` for Pareto-ranked multi-objective TPE,
+`radia.optuna.GPSampler` for small fixed-numeric budgets,
+`radia.optuna.NSGAIISampler` for non-dominated sorting and crowding, or
+`radia.optuna.NSGAIIISampler` for reference-line niching. The NSGA-II
+implementation follows the Optuna 4.9 contract:
 population size 50 by default, COMPLETE-only generational parent caches,
 constraint-aware tournament and elite selection, categorical uniform
 crossover, random-fallback mutation, and Uniform, BLX-alpha, SPX, SBX, vSBX,

@@ -169,7 +169,7 @@ classdef DistributionCodec
 
         function token = choiceToken(value)
             if isnumeric(value) && isscalar(value)
-                token = "numeric:" + string(value, "%.17g");
+                token = append("numeric:", jsonencode(double(value)));
             else
                 token = string(jsonencode(value));
             end
