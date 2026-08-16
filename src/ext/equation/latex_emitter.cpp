@@ -1,0 +1,676 @@
+/*
+ * latex_emitter.cpp -- Node tree → LaTeX text conversion
+ *
+ * Phase 4: Ports convert_char, convert_tmpl, convert_line, convert_pile,
+ * convert_node from mtef2tex.c into the C++ unified node hierarchy.
+ *
+ * NOTE: This is an initial port. The 7-pass system (Pass 0a through Pass 3)
+ * is NOT yet implemented here — those passes operate on the OLD MtefNode
+ * tree in mtef2tex.c. This emitter handles the TYPED node tree from
+ * MtefParser, which already has structural information in the node types.
+ */
+#include "latex_emitter.h"
+#include <cstring>
+#include <cstdio>
+
+namespace mtef {
+
+/* ============================================================
+ * Symbol lookup tables (subset — full tables in mtef2tex.c)
+ * ============================================================ */
+struct MapEntry { uint16_t key; const char* val; };
+
+static const MapEntry SYMBOL_MAP[] = {
+    {0x0021, "!"}, {0x0022, "\""}, {0x0023, "#"}, {0x0025, "\\%"},
+    {0x0026, "\\&"}, {0x0028, "("}, {0x0029, ")"}, {0x002A, "*"},
+    {0x002B, "+"}, {0x002C, ","}, {0x002D, "-"}, {0x002E, "."},
+    {0x002F, "/"}, {0x003A, ":"}, {0x003B, ";"}, {0x003C, "<"},
+    {0x003D, " = "}, {0x003E, ">"}, {0x003F, "?"}, {0x0040, "@"},
+    {0x005B, "["}, {0x005D, "]"}, {0x005E, " \\wedge "},
+    {0x007B, "\\{"}, {0x007C, "|"}, {0x007D, "\\}"},
+    {0x007E, " \\sim "},
+    {0x00AC, " \\neg "}, {0x00B0, "^{\\circ }"}, {0x00B1, " \\pm "},
+    {0x00B7, " \\cdot "}, {0x00D7, " \\times "}, {0x00F7, " \\div "},
+};
+#define SYMBOL_MAP_N (sizeof(SYMBOL_MAP)/sizeof(SYMBOL_MAP[0]))
+
+static const MapEntry UNICODE_MAP[] = {
+    {0x0393, "\\Gamma "}, {0x0394, "\\Delta "}, {0x0398, "\\Theta "},
+    {0x039B, "\\Lambda "}, {0x039E, "\\Xi "}, {0x03A0, "\\Pi "},
+    {0x03A3, "\\Sigma "}, {0x03A5, "\\Upsilon "}, {0x03A6, "\\Phi "},
+    {0x03A8, "\\Psi "}, {0x03A9, "\\Omega "},
+    {0x03B1, "\\alpha "}, {0x03B2, "\\beta "}, {0x03B3, "\\gamma "},
+    {0x03B4, "\\delta "}, {0x03B5, "\\varepsilon "}, {0x03B6, "\\zeta "},
+    {0x03B7, "\\eta "}, {0x03B8, "\\theta "}, {0x03B9, "\\iota "},
+    {0x03BA, "\\kappa "}, {0x03BB, "\\lambda "}, {0x03BC, "\\mu "},
+    {0x03BD, "\\nu "}, {0x03BE, "\\xi "}, {0x03C0, "\\pi "},
+    {0x03C1, "\\rho "}, {0x03C2, "\\varsigma "}, {0x03C3, "\\sigma "},
+    {0x03C4, "\\tau "}, {0x03C5, "\\upsilon "}, {0x03C6, "\\phi "},
+    {0x03C7, "\\chi "}, {0x03C8, "\\psi "}, {0x03C9, "\\omega "},
+    {0x2019, "'"}, {0x2032, "'"}, {0x2033, "''"}, {0x2034, "'''"},
+    {0x2102, "\\mathbb{C}"}, {0x210D, "\\mathbb{H}"},
+    {0x2111, "\\Im "}, {0x2113, "\\ell "},
+    {0x2115, "\\mathbb{N}"}, {0x2118, "\\wp "}, {0x2119, "\\mathbb{P}"},
+    {0x211A, "\\mathbb{Q}"}, {0x211C, "\\Re "}, {0x211D, "\\mathbb{R}"},
+    {0x2124, "\\mathbb{Z}"},
+    {0x2135, "\\aleph "}, {0x2190, "\\leftarrow "},
+    {0x2191, "\\uparrow "}, {0x2192, "\\rightarrow "},
+    {0x2193, "\\downarrow "}, {0x2194, "\\leftrightarrow "},
+    {0x2195, "\\updownarrow "}, {0x2196, "\\nwarrow "},
+    {0x2197, "\\nearrow "}, {0x2198, "\\searrow "},
+    {0x2199, "\\swarrow "}, {0x21D0, "\\Leftarrow "},
+    {0x21D2, "\\Rightarrow "}, {0x21D4, "\\Leftrightarrow "},
+    {0x2200, " \\forall "}, {0x2202, "\\partial "},
+    {0x2203, " \\exists "}, {0x2205, "\\emptyset "},
+    {0x2207, "\\nabla "}, {0x2208, " \\in "},
+    {0x2209, " \\notin "}, {0x220B, " \\ni "},
+    {0x2210, " \\coprod "}, {0x2211, "\\sum "},
+    {0x2212, " - "}, {0x2213, " \\mp "},
+    {0x2215, "/"}, {0x2216, " \\setminus "},
+    {0x2217, " * "}, {0x2218, " \\circ "},
+    {0x221A, "\\sqrt{}"}, {0x221D, " \\propto "},
+    {0x221E, "\\infty "}, {0x2220, "\\angle "},
+    {0x2223, " \\mid "}, {0x2225, " \\| "},
+    {0x2227, " \\wedge "}, {0x2228, " \\vee "},
+    {0x2229, " \\cap "}, {0x222A, " \\cup "},
+    {0x222B, "\\int "}, {0x222C, "\\iint "},
+    {0x222D, "\\iiint "}, {0x222E, "\\oint "},
+    {0x222F, "\\oiint "}, {0x2230, "\\oiiint "},
+    {0x2234, " \\therefore "}, {0x2235, " \\because "},
+    {0x223C, " \\sim "}, {0x2243, " \\simeq "},
+    {0x2245, " \\cong "}, {0x2248, " \\approx "},
+    {0x2260, " \\neq "}, {0x2261, " \\equiv "},
+    {0x2264, " \\leq "}, {0x2265, " \\geq "},
+    {0x226A, " \\ll "}, {0x226B, " \\gg "},
+    {0x2282, " \\subset "}, {0x2283, " \\supset "},
+    {0x2286, " \\subseteq "}, {0x2287, " \\supseteq "},
+    {0x2295, " \\oplus "}, {0x2296, " \\ominus "},
+    {0x2297, " \\otimes "}, {0x2299, " \\odot "},
+    {0x22A5, " \\perp "}, {0x22C5, " \\cdot "},
+    {0x22EE, "\\vdots "}, {0x22EF, "\\cdots "},
+    {0x22F0, "\\iddots "}, {0x22F1, "\\ddots "},
+    {0x2329, "\\langle "}, {0x232A, "\\rangle"},
+};
+#define UNICODE_MAP_N (sizeof(UNICODE_MAP)/sizeof(UNICODE_MAP[0]))
+
+static const char* map_lookup(const MapEntry* map, int n, uint16_t key) {
+    int lo = 0, hi = n - 1;
+    while (lo <= hi) {
+        int mid = (lo + hi) / 2;
+        if (map[mid].key == key) return map[mid].val;
+        if (map[mid].key < key) lo = mid + 1;
+        else hi = mid - 1;
+    }
+    return nullptr;
+}
+
+/* Embellishment format table */
+struct EmbellFmt { const char* prefix; const char* suffix; };
+static const EmbellFmt EMBELL_MAP[] = {
+    /* 0 */ {nullptr, nullptr}, /* 1 */ {nullptr, nullptr},
+    /* EM_DOT    2 */ {"\\dot{", "}"},
+    /* EM_DDOT   3 */ {"\\ddot{", "}"},
+    /* EM_TDOT   4 */ {"\\dddot{", "}"},
+    /* EM_PRIME  5 */ {nullptr, "'"},
+    /* EM_DPRIME 6 */ {nullptr, "''"},
+    /* EM_BPRIME 7 */ {nullptr, "'''"},
+    /* EM_TILDE  8 */ {"\\tilde{", "}"},
+    /* EM_HAT    9 */ {"\\hat{", "}"},
+    /* EM_NOT   10 */ {"\\not{", "}"},
+    /* EM_RARROW 11 */ {"\\vec{", "}"},
+    /* EM_LARROW 12 */ {"\\overleftarrow{", "}"},
+    /* EM_BARROW 13 */ {"\\overleftrightarrow{", "}"},
+    /* EM_R1ARROW 14 */ {"\\overset{\\rightharpoonup}{", "}"},
+    /* EM_L1ARROW 15 */ {"\\overset{\\leftharpoonup}{", "}"},
+    /* EM_MBAR  16 */ {"\\cancel{", "}"},
+    /* EM_OBAR  17 */ {"\\overline{", "}"},
+    /* EM_TPRIME 18 */ {nullptr, "'''"},
+    /* EM_FROWN 19 */ {"\\overset{\\frown}{", "}"},
+    /* EM_SMILE 20 */ {"\\overset{\\smile}{", "}"},
+};
+#define EMBELL_MAP_N (sizeof(EMBELL_MAP)/sizeof(EMBELL_MAP[0]))
+
+/* ============================================================
+ * Constructor
+ * ============================================================ */
+LaTeXEmitter::LaTeXEmitter(int prodVer, bool run_passes)
+    : prodVer_(prodVer), runPasses_(run_passes) {}
+
+/* ============================================================
+ * Emit NodeList → string
+ * ============================================================ */
+std::string LaTeXEmitter::emitNodes(const NodeList& nodes) {
+    std::string s;
+    for (auto& n : nodes) emitNode(n.get(), s);
+    return s;
+}
+
+/* ============================================================
+ * Main entry point
+ * ============================================================ */
+std::string LaTeXEmitter::emit(const LineNode& root) {
+    std::string raw;
+    depth_ = 0;
+    emitLine(root, raw);
+    return postProcess(raw);
+}
+
+/* ============================================================
+ * LINE emission (simplified — no 7-pass system yet)
+ * ============================================================ */
+void LaTeXEmitter::emitLine(const LineNode& line, std::string& out) {
+    if (line.isNull) return;
+
+    /* Run pass pipeline on a mutable copy of children.
+     * The pipeline resolves EQNEDT32 patterns:
+     *   Pass 1: fence/decoration empty-slot → merge sibling content
+     *   Pass 2: BigOp display data (SIZE_SUB path) → set displayLower/Upper
+     *   Pass 2b: BigOp display data (no SIZE_SUB) → set displayLower/Upper */
+    NodeList& mutableChildren = const_cast<NodeList&>(line.children);
+    if (runPasses_) pipeline_.process(mutableChildren, depth_, prodVer_);
+
+    depth_++;
+
+    /* Output phase with text/function grouping.
+     * Consecutive TF_TEXT chars → \text{...}
+     * Consecutive TF_FUNCTION chars → \sin, \cos, \operatorname{...} */
+    std::string textBuf;
+    std::string funcBuf;
+    int funcEmbell = -1;  /* embellishment on function group */
+
+    auto flushText = [&]() {
+        if (!textBuf.empty()) {
+            out += "\\text{"; out += textBuf; out += "}";
+            textBuf.clear();
+        }
+    };
+    auto flushFunc = [&]() {
+        if (funcBuf.empty()) return;
+        /* Known LaTeX function names */
+        static const char* KNOWN_FUNCS[] = {
+            "arccos","arcsin","arctan","arg","cos","cosh","cot","coth",
+            "csc","deg","det","dim","exp","gcd","hom","inf",
+            "ker","lg","lim","liminf","limsup","ln","log","max",
+            "min","Pr","sec","sin","sinh","sup","tan","tanh",NULL
+        };
+        static const char* KNOWN_OPS[] = {
+            "rot","curl","div","grad","sgn","tr","diag","mod",
+            "Re","Im","Res","const",NULL
+        };
+        /* Longest-prefix matching */
+        std::string remaining = funcBuf;
+        while (!remaining.empty()) {
+            bool matched = false;
+            /* Try known funcs */
+            for (int i = 0; KNOWN_FUNCS[i]; i++) {
+                size_t len = strlen(KNOWN_FUNCS[i]);
+                if (remaining.substr(0, len) == KNOWN_FUNCS[i]) {
+                    out += "\\"; out += KNOWN_FUNCS[i]; out += " ";
+                    remaining = remaining.substr(len);
+                    matched = true; break;
+                }
+            }
+            if (matched) continue;
+            /* Try known operators */
+            for (int i = 0; KNOWN_OPS[i]; i++) {
+                size_t len = strlen(KNOWN_OPS[i]);
+                if (remaining.substr(0, len) == KNOWN_OPS[i]) {
+                    out += "\\operatorname{"; out += KNOWN_OPS[i]; out += "}";
+                    remaining = remaining.substr(len);
+                    matched = true; break;
+                }
+            }
+            if (matched) continue;
+            /* No match: output single char */
+            out += remaining[0];
+            remaining = remaining.substr(1);
+        }
+        if (funcEmbell >= 0 && funcEmbell < (int)EMBELL_MAP_N) {
+            /* Wrap the entire function output with embellishment */
+        }
+        funcBuf.clear();
+        funcEmbell = -1;
+    };
+
+    for (auto& child : line.children) {
+        if (!child) continue;
+        if (child->tag() == Node::kChar) {
+            auto* ch = static_cast<const CharNode*>(child.get());
+            if (ch->typeface == TF_TEXT) {
+                flushFunc();
+                if (ch->charCode >= 0x20 && ch->charCode < 0x7F)
+                    textBuf += (char)ch->charCode;
+                continue;
+            }
+            if (ch->typeface == TF_FUNCTION) {
+                flushText();
+                if (ch->charCode >= 0x20 && ch->charCode < 0x7F)
+                    funcBuf += (char)ch->charCode;
+                continue;
+            }
+        }
+        /* Non-text/func node: flush buffers and emit */
+        flushText();
+        flushFunc();
+        emitNode(child.get(), out);
+    }
+    flushText();
+    flushFunc();
+
+    depth_--;
+}
+
+/* ============================================================
+ * Node dispatch
+ * ============================================================ */
+void LaTeXEmitter::emitNode(const Node* node, std::string& out) {
+    if (!node) return;
+    switch (node->tag()) {
+    case Node::kLine:
+        emitLine(*static_cast<const LineNode*>(node), out);
+        break;
+    case Node::kChar:
+        emitChar(*static_cast<const CharNode*>(node), out);
+        break;
+    case Node::kFence:
+        emitFence(*static_cast<const FenceNode*>(node), out);
+        break;
+    case Node::kFrac:
+        emitFrac(*static_cast<const FracNode*>(node), out);
+        break;
+    case Node::kSqrt:
+        emitSqrt(*static_cast<const SqrtNode*>(node), out);
+        break;
+    case Node::kScript:
+        emitScript(*static_cast<const ScriptNode*>(node), out);
+        break;
+    case Node::kIntegral:
+        emitIntegral(*static_cast<const IntegralNode*>(node), out);
+        break;
+    case Node::kBigOp:
+        emitBigOp(*static_cast<const BigOpNode*>(node), out);
+        break;
+    case Node::kDecoration:
+        emitDecoration(*static_cast<const DecorationNode*>(node), out);
+        break;
+    case Node::kBraceDeco:
+        emitBraceDeco(*static_cast<const BraceDecoNode*>(node), out);
+        break;
+    case Node::kDirac:
+        emitDirac(*static_cast<const DiracNode*>(node), out);
+        break;
+    case Node::kLim:
+        emitLim(*static_cast<const LimNode*>(node), out);
+        break;
+    case Node::kPile:
+        emitPile(*static_cast<const PileNode*>(node), out);
+        break;
+    case Node::kMatrix:
+        emitMatrix(*static_cast<const MatrixNode*>(node), out);
+        break;
+    case Node::kSize:
+        /* SIZE nodes are consumed by passes, not emitted directly */
+        break;
+    case Node::kEmbell:
+        /* Standalone EMBELL — rare, usually attached to CHAR */
+        break;
+    case Node::kFont:
+        /* FONT records ignored in output */
+        break;
+    default:
+        break;
+    }
+}
+
+/* ============================================================
+ * CHAR emission
+ * ============================================================ */
+void LaTeXEmitter::emitChar(const CharNode& ch, std::string& out) {
+    uint16_t code = ch.charCode;
+    int tf = ch.typeface;
+
+    /* Apply embellishments (prefix) */
+    for (auto it = ch.embells.rbegin(); it != ch.embells.rend(); ++it) {
+        int et = *it;
+        if (et >= 0 && et < (int)EMBELL_MAP_N && EMBELL_MAP[et].prefix)
+            out += EMBELL_MAP[et].prefix;
+    }
+
+    /* Symbol typeface */
+    if (tf == TF_SYMBOL) {
+        const char* s = map_lookup(SYMBOL_MAP, SYMBOL_MAP_N, code);
+        if (s) { out += s; }
+        else {
+            s = map_lookup(UNICODE_MAP, UNICODE_MAP_N, code);
+            if (s) out += s;
+            else {
+                char buf[32];
+                snprintf(buf, sizeof(buf), "\\symbol{%d}", code);
+                out += buf;
+            }
+        }
+    }
+    /* Greek lowercase */
+    else if (tf == TF_LCGREEK) {
+        const char* s = map_lookup(UNICODE_MAP, UNICODE_MAP_N, code);
+        if (s) out += s;
+        else { char c = (code < 128) ? (char)code : '?'; out += c; }
+    }
+    /* Greek uppercase */
+    else if (tf == TF_UCGREEK) {
+        const char* s = map_lookup(UNICODE_MAP, UNICODE_MAP_N, code);
+        if (s) out += s;
+        else { char c = (code < 128) ? (char)code : '?'; out += c; }
+    }
+    /* Vector (bold) */
+    else if (tf == TF_VECTOR) {
+        if ((code >= 'A' && code <= 'Z') || (code >= 'a' && code <= 'z')) {
+            out += "\\mathbf{";
+            out += (char)code;
+            out += '}';
+        } else if (code >= 0x20 && code < 0x7F) {
+            out += (char)code;
+        }
+    }
+    /* Function */
+    else if (tf == TF_FUNCTION) {
+        if (code >= 0x20 && code < 0x7F) out += (char)code;
+    }
+    /* Text */
+    else if (tf == TF_TEXT) {
+        if (code >= 0x20 && code < 0x7F) out += (char)code;
+    }
+    /* Number */
+    else if (tf == TF_NUMBER) {
+        if (code >= 0x20 && code < 0x7F) out += (char)code;
+    }
+    /* Variable (italic) */
+    else if (tf == TF_VARIABLE) {
+        if (code >= 0x20 && code < 0x7F) out += (char)code;
+        else {
+            const char* s = map_lookup(UNICODE_MAP, UNICODE_MAP_N, code);
+            if (s) out += s;
+        }
+    }
+    /* Display (fence brackets) */
+    else if (tf == (TF_DISPLAY & 0x7F)) {
+        /* Display chars are handled by fence/pass system, not emitted directly */
+    }
+    /* Fallback */
+    else {
+        if (code >= 0x20 && code < 0x7F) out += (char)code;
+        else {
+            const char* s = map_lookup(UNICODE_MAP, UNICODE_MAP_N, code);
+            if (s) out += s;
+        }
+    }
+
+    /* Apply embellishments (suffix) */
+    for (auto et : ch.embells) {
+        if (et >= 0 && et < (int)EMBELL_MAP_N && EMBELL_MAP[et].suffix)
+            out += EMBELL_MAP[et].suffix;
+    }
+}
+
+/* ============================================================
+ * Template emission — typed nodes
+ * ============================================================ */
+
+void LaTeXEmitter::emitFence(const FenceNode& fence, std::string& out) {
+    static const char* leftBrackets[] = {
+        "\\langle ", "(", "\\{", "[", "|", "\\|",
+        "\\lfloor ", "\\lceil ", "[", "]", "]", "[", "("
+    };
+    static const char* rightBrackets[] = {
+        "\\rangle ", ")", "\\}", "]", "|", "\\|",
+        "\\rfloor ", "\\rceil ", "[", "]", "[", ")", "]"
+    };
+
+    int sel = fence.selector;
+    if (sel < 0 || sel > 12) sel = 1; /* default to parens */
+
+    std::string content = emitNodes(fence.content);
+
+    if (fence.variation == 0) {
+        out += "\\left";
+        out += leftBrackets[sel];
+        out += " ";
+        out += content;
+        out += " \\right";
+        out += rightBrackets[sel];
+    } else if (fence.variation == 1) {
+        out += "\\left";
+        out += leftBrackets[sel];
+        out += " ";
+        out += content;
+        out += " \\right.";
+    } else {
+        out += "\\left. ";
+        out += content;
+        out += " \\right";
+        out += rightBrackets[sel];
+    }
+}
+
+void LaTeXEmitter::emitFrac(const FracNode& frac, std::string& out) {
+    std::string n = emitNodes(frac.numer);
+    std::string d = emitNodes(frac.denom);
+    if (frac.slashed) {
+        out += "{}^{"; out += n; out += "}/{}_{"; out += d; out += "}";
+    } else {
+        out += (frac.display ? "\\dfrac{" : "\\frac{");
+        out += n; out += "}{"; out += d; out += "}";
+    }
+}
+
+void LaTeXEmitter::emitSqrt(const SqrtNode& sq, std::string& out) {
+    std::string content = emitNodes(sq.content);
+    if (sq.hasIndex && !sq.index.empty()) {
+        std::string idx = emitNodes(sq.index);
+        out += "\\sqrt["; out += idx; out += "]{"; out += content; out += "}";
+    } else {
+        out += "\\sqrt{"; out += content; out += "}";
+    }
+}
+
+void LaTeXEmitter::emitScript(const ScriptNode& script, std::string& out) {
+    std::string base = emitNodes(script.base);
+    out += base;
+    if (script.hasSub) {
+        std::string sub = emitNodes(script.sub);
+        out += "_{"; out += sub; out += "}";
+    }
+    if (script.hasSup) {
+        std::string sup = emitNodes(script.sup);
+        out += "^{"; out += sup; out += "}";
+    }
+}
+
+void LaTeXEmitter::emitIntegral(const IntegralNode& integ, std::string& out) {
+    /* Symbol name based on selector */
+    const char* sym = "\\int ";
+    if (integ.selector == tmDINT) sym = "\\iint ";
+    else if (integ.selector == tmTINT) sym = "\\iiint ";
+    else if (integ.selector == tmSSINT) sym = "\\oint ";
+    else if (integ.selector == tmDSINT) sym = "\\oiint ";
+    else if (integ.selector == tmTSINT) sym = "\\oiiint ";
+
+    out += sym;
+
+    /* Display data limits (populated by Pass 2 — from old pipeline) */
+    if (integ.displayLower || integ.displayUpper) {
+        if (integ.displayLower) {
+            out += "\\limits_{";
+            emitNode(integ.displayLower.get(), out);
+            out += "}";
+        }
+        if (integ.displayUpper) {
+            out += "^{";
+            emitNode(integ.displayUpper.get(), out);
+            out += "}";
+        }
+    }
+    /* Slot-based limits (from MTEF binary variation bits) */
+    else if (integ.hasLower || integ.hasUpper) {
+        if (integ.hasLower) {
+            std::string lo = emitNodes(integ.lower);
+            out += "_{"; out += lo; out += "}";
+        }
+        if (integ.hasUpper) {
+            std::string hi = emitNodes(integ.upper);
+            out += "^{"; out += hi; out += "}";
+        }
+    }
+
+    /* Body */
+    std::string body = emitNodes(integ.body);
+    out += body;
+}
+
+void LaTeXEmitter::emitBigOp(const BigOpNode& bigop, std::string& out) {
+    const char* sym = "\\sum ";
+    int sel = bigop.selector;
+    if (sel == tmSUM || sel == tmISUM) sym = "\\sum ";
+    else if (sel == tmPROD || sel == tmIPROD) sym = "\\prod ";
+    else if (sel == tmCOPROD || sel == tmICOPROD) sym = "\\coprod ";
+    else if (sel == tmUNION || sel == tmIUNION) sym = "\\bigcup ";
+    else if (sel == tmINTER || sel == tmIINTER) sym = "\\bigcap ";
+
+    out += sym;
+
+    /* Display data limits */
+    if (bigop.displayLower || bigop.displayUpper) {
+        out += "\\limits";
+        if (bigop.displayLower) {
+            out += "_{";
+            emitNode(bigop.displayLower.get(), out);
+            out += "}";
+        }
+        if (bigop.displayUpper) {
+            out += "^{";
+            emitNode(bigop.displayUpper.get(), out);
+            out += "}";
+        }
+        out += " ";
+    }
+    /* Slot-based limits */
+    else if (bigop.hasLower || bigop.hasUpper) {
+        if (bigop.hasLower) {
+            std::string lo = emitNodes(bigop.lower);
+            out += "_{"; out += lo; out += "}";
+        }
+        if (bigop.hasUpper) {
+            std::string hi = emitNodes(bigop.upper);
+            out += "^{"; out += hi; out += "}";
+        }
+        out += " ";
+    }
+
+    std::string body = emitNodes(bigop.body);
+    out += body;
+}
+
+void LaTeXEmitter::emitDecoration(const DecorationNode& deco, std::string& out) {
+    std::string content = emitNodes(deco.content);
+    switch (deco.selector) {
+    case tmOBAR: out += "\\overline{"; out += content; out += "}"; break;
+    case tmUBAR: out += "\\underline{"; out += content; out += "}"; break;
+    case tmRARROW: out += "\\overrightarrow{"; out += content; out += "}"; break;
+    case tmLARROW: out += "\\overleftarrow{"; out += content; out += "}"; break;
+    case tmBARROW: out += "\\overleftrightarrow{"; out += content; out += "}"; break;
+    default: out += content; break;
+    }
+}
+
+void LaTeXEmitter::emitBraceDeco(const BraceDecoNode& bd, std::string& out) {
+    std::string content = emitNodes(bd.content);
+    std::string label = emitNodes(bd.label);
+    if (bd.selector == tmUHBRACE) {
+        out += "\\overbrace{"; out += content; out += "}^{"; out += label; out += "}";
+    } else {
+        out += "\\underbrace{"; out += content; out += "}_{"; out += label; out += "}";
+    }
+}
+
+void LaTeXEmitter::emitDirac(const DiracNode& dirac, std::string& out) {
+    std::string bra = emitNodes(dirac.bra);
+    std::string ket = emitNodes(dirac.ket);
+    if (dirac.variation == 0) {
+        out += "\\left\\langle "; out += bra;
+        out += " \\middle| "; out += ket;
+        out += " \\right\\rangle ";
+    } else {
+        out += "\\left\\langle "; out += bra; out += " \\right|";
+    }
+}
+
+void LaTeXEmitter::emitLim(const LimNode& lim, std::string& out) {
+    out += "\\lim";
+    std::string content = emitNodes(lim.content);
+    if (!content.empty()) {
+        out += "_{"; out += content; out += "}";
+    }
+    out += " ";
+}
+
+void LaTeXEmitter::emitPile(const PileNode& pile, std::string& out) {
+    const char* envName = "gathered";
+    if (pile.halign == 1 || pile.kind == 1) envName = "aligned";
+    if (pile.halign >= 20) envName = "matrix"; /* bmatrix/pmatrix handled by fence wrapper */
+
+    out += "\\begin{"; out += envName; out += "}\n";
+    for (size_t i = 0; i < pile.lines.size(); i++) {
+        if (i > 0) out += " \\\\\n";
+        emitNode(pile.lines[i].get(), out);
+    }
+    out += "\n\\end{"; out += envName; out += "}";
+}
+
+void LaTeXEmitter::emitMatrix(const MatrixNode& mat, std::string& out) {
+    out += "\\begin{matrix}\n";
+    for (int r = 0; r < mat.rows; r++) {
+        for (int c = 0; c < mat.cols; c++) {
+            if (c > 0) out += " & ";
+            int idx = r * mat.cols + c;
+            if (idx < (int)mat.elements.size())
+                emitNode(mat.elements[idx].get(), out);
+        }
+        if (r < mat.rows - 1) out += " \\\\\n";
+    }
+    out += "\n\\end{matrix}";
+}
+
+/* ============================================================
+ * Post-processing
+ * ============================================================ */
+std::string LaTeXEmitter::postProcess(const std::string& raw) {
+    std::string s = raw;
+    /* Trim trailing whitespace */
+    while (!s.empty() && (s.back() == ' ' || s.back() == '\n'))
+        s.pop_back();
+    return s;
+}
+
+/* ============================================================
+ * Symbol lookup helpers (delegating to map_lookup)
+ * ============================================================ */
+const char* LaTeXEmitter::lookupSymbol(uint16_t code) const {
+    const char* s = map_lookup(SYMBOL_MAP, SYMBOL_MAP_N, code);
+    if (s) return s;
+    return map_lookup(UNICODE_MAP, UNICODE_MAP_N, code);
+}
+
+const char* LaTeXEmitter::lookupGreekLower(uint16_t code) const {
+    return map_lookup(UNICODE_MAP, UNICODE_MAP_N, code);
+}
+
+const char* LaTeXEmitter::lookupGreekUpper(uint16_t code) const {
+    return map_lookup(UNICODE_MAP, UNICODE_MAP_N, code);
+}
+
+std::string tree_to_latex(const LineNode& root) {
+    LaTeXEmitter em(3, /*run_passes=*/false);
+    return em.emit(root);
+}
+
+} /* namespace mtef */
