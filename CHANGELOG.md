@@ -5,6 +5,20 @@ All notable changes to the `radia` package.  Format: each release lists
 
 ## Unreleased
 
+- Added `radia.equation`: equations stored as LaTeX, put into Word and
+  PowerPoint as **native Office math**. An equation pasted this way is an
+  equation -- Office's own tools edit it, it follows the theme font and colour,
+  and the reader needs nothing installed -- rather than a picture or an OLE
+  object. `MarkdownDoc` says which spans of a `.md` are math and reproduces an
+  untouched file byte for byte; `markdown_to_docx` writes a note out with its
+  equations intact. `Equation` is the editing model an equation front end needs
+  (an insertion point inside the structure, templates reached with Tab, a
+  backspace that unwraps rather than swallows) with Equation Editor 3.0's key
+  chords carried along as `(chord, command, label)`. `tex_to_svg` renders
+  through a layout with TeX inter-atom spacing and per-glyph boxes. MTEF, the
+  Equation Editor 3.x binary format, is supported only to read equations out of
+  documents that already contain them. See `docs/equation/README.md`.
+
 ## 4.95.55 - Native Lie-map pipeline and 3D reference-orbit tracker
 
 Released 2026-08-19.

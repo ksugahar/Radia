@@ -968,3 +968,68 @@ add_custom_command(TARGET axifem POST_BUILD
 )
 
 message(STATUS "axifem module configured (Henrotte axisymmetric FE)")
+
+# ========================================
+# _equation module (LaTeX equations: edit, render, put into Office)
+# ========================================
+# Source: src/ext/equation/.  Imported as `radia.equation`, which re-exports
+# this .pyd plus the Office writers in src/radia/equation/office.py.
+#
+# An equation is stored as LaTeX, usually inside a Markdown file, and every
+# output is produced from that: OMML for Word and PowerPoint (a native,
+# editable equation, so nothing has to be installed on the reader's machine),
+# SVG for a picture, and a layout the editor draws with.  MTEF, the Equation
+# Editor 3.x binary format, is here only to read equations out of documents
+# that already contain them.
+#
+# No NGSolve and no MKL: this is text and font metrics, not numerics.  GDI
+# supplies the glyph boxes the layout needs.
+
+set(EQUATION_DIR "${EXT_DIR}/equation")
+
+pybind11_add_module(_equation
+	${EQUATION_DIR}/equation_pybind.cpp
+	${EQUATION_DIR}/mtef_node.cpp
+	${EQUATION_DIR}/mtef_parser.cpp
+	${EQUATION_DIR}/line_pass.cpp
+	${EQUATION_DIR}/latex_emitter.cpp
+	${EQUATION_DIR}/mtef2tex.cpp
+	${EQUATION_DIR}/tex2mtef.cpp
+	${EQUATION_DIR}/tex_parser.cpp
+	${EQUATION_DIR}/mtef_omml.cpp
+	${EQUATION_DIR}/mtef_svg.cpp
+	${EQUATION_DIR}/mtef_dump.cpp
+	${EQUATION_DIR}/eq_edit.cpp
+	${EQUATION_DIR}/md_doc.cpp
+)
+
+target_include_directories(_equation PRIVATE
+	${EQUATION_DIR}
+)
+
+target_compile_definitions(_equation PRIVATE
+	_CRT_SECURE_NO_WARNINGS
+	$<$<CONFIG:Debug>:_DEBUG>
+	$<$<CONFIG:Release>:NDEBUG>
+	$<$<PLATFORM_ID:Windows>:WIN32>
+)
+
+if(WIN32)
+	# Glyph metrics come from GDI: the ink box of each glyph, not the font's
+	# global ascent and descent, is what a script has to clear.
+	target_link_libraries(_equation PRIVATE gdi32 user32)
+endif()
+
+if(MSVC)
+	target_compile_options(_equation PRIVATE /O2 /W0 /wd4244 /wd4267)
+endif()
+
+# Post-build: Copy to src/radia
+add_custom_command(TARGET _equation POST_BUILD
+	COMMAND ${CMAKE_COMMAND} -E copy_if_different
+		"$<TARGET_FILE:_equation>"
+		"${CMAKE_SOURCE_DIR}/src/radia/_equation.pyd"
+	COMMENT "Copying _equation.pyd to src/radia"
+)
+
+message(STATUS "_equation module configured (LaTeX equations -> OMML / SVG)")
