@@ -1442,6 +1442,79 @@ PATTERNS: list[dict] = [
                     "validation_test/radia_mcp/mesh_quality_study/run_vector_elements.py",
                     "memory/mesh_quality_min_is_chaotic.md"],
     },
+    {
+        "id": "raw-math-markup-survives-on-the-slide",
+        "title": "Equation source form (`X_y`, `int_{S_f}`) stays on the "
+                 "slide; every text lint scores it as ordinary prose.",
+        "topics": ["presentation", "pptx", "figure", "review"],
+        "severity": "medium",
+        "first_seen": "2026-08-16",
+        "last_seen": "2026-08-16",
+        "what": "An equation copied from the manuscript renders on the "
+                "slide as `sigma_f(x) = Sum_j B_fj(x) a_j` and "
+                "`M_ij = Sum_f int_{S_f} phi_i(d) B_fj(x) dS` -- the "
+                "audience reads underscores and braces. Measured on the "
+                "MMPM SA-26-069 deck: 7 paragraphs across 2 slides, none "
+                "flagged by any of the ~90 presentation_* lints.",
+        "root_cause": "Character-count / line-count / density / font-size "
+                      "lints all treat the markup as normal characters, "
+                      "and the PDF export renders it 'correctly', so "
+                      "there is no failing artifact to notice. A "
+                      "run-local repair then misses half of it: "
+                      "PowerPoint splits a formula at every font change, "
+                      "so `Sigma_f` is stored as a run ending in `_` plus "
+                      "a run starting with `f`, and the dangling `_` "
+                      "survives while the rest is fixed.",
+        "detection": "presentation_check_raw_math_markup (paragraph-level, "
+                     "so cross-run tokens are caught). Single symbols and "
+                     "numbers are the only accepted bases, so snake_case "
+                     "identifiers and report numbers like SA-26-069 are "
+                     "not false positives.",
+        "prevention": "Run the check before every deck freeze and repair "
+                      "with presentation_apply_math_subscripts (splits "
+                      "runs, sets the PowerPoint baseline, keeps the run "
+                      "formatting). LaTeX macros are reported as manual "
+                      "work -- if the formula needs \\frac, paste it as a "
+                      "figure instead.",
+        "related": ["packages/radia-mcp/src/radia_mcp/presentation/_deck_integrity.py",
+                    "packages/radia-mcp/tests/test_presentation_deck_integrity.py"],
+    },
+    {
+        "id": "slide-figure-pasted-off-its-authored-width",
+        "title": "A figure authored at W cm but pasted at another size "
+                 "silently rescales its text below the 20 pt slide floor.",
+        "topics": ["presentation", "pptx", "figure", "matplotlib"],
+        "severity": "medium",
+        "first_seen": "2026-08-16",
+        "last_seen": "2026-08-16",
+        "what": "MMPM SA-26-069: the mode figure was authored at 16.49 cm "
+                "with 24 pt labels but pasted at 13.97 cm on one slide "
+                "and 14.64 cm on the next -- the same artwork at two "
+                "scales, its labels displayed at 20.3 and 21.3 pt. The "
+                "C-type model figure was pasted at 81.6%, i.e. 19.6 pt, "
+                "BELOW the floor. Two manuscript figures authored for an "
+                "8 cm column were upscaled 2.5x on the slide (117 dpi).",
+        "root_cause": "lab_savefig(embed_width_cm=...) records the "
+                      "INTENDED width in the LaTeX snippet, but the "
+                      "raster is what PowerPoint scales, and it is sized "
+                      "by the figure canvas. Authoring at one width and "
+                      "declaring another leaves no failing artifact: the "
+                      "save gate passes (it checks the declared width) "
+                      "and the slide merely looks slightly small.",
+        "detection": "figure_audit_pptx_figures: authored width from "
+                     "pixels / DPI (crop removed) vs the shape geometry; "
+                     "reports paste scale, displayed figure-font size, "
+                     "effective DPI, aspect stretch, and missing DPI "
+                     "metadata as UNVERIFIABLE rather than a pass.",
+        "prevention": "Author AT the paste width -- pass the same width "
+                      "to apply_lab_style/lab_figure and to lab_savefig "
+                      "(the MMPM slide figure script had them differ). "
+                      "For vector artwork inherited from a manuscript, "
+                      "rasterise with slide_png_from_pdf(paste_width_pt=), "
+                      "which also stamps the DPI metadata the audit needs.",
+        "related": ["packages/radia-mcp/src/radia_mcp/figure/_pptx_audit.py",
+                    "packages/radia-mcp/tests/test_figure_pptx_audit.py"],
+    },
 ]
 
 

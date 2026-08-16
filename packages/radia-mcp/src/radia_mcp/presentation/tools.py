@@ -83,6 +83,18 @@ from ._citations import (  # noqa: F401
     presentation_add_citation_footer,
     presentation_citation_audit,
 )
+from ._figure_text_repair import (  # noqa: F401
+    presentation_replace_embedded_figure_text,
+)
+
+# Deck integrity (2026-08-16, MMPM SA-26-069): unrendered math markup left on
+# the slide (`X_y`, `int_{S_f}`) and the same artwork reused across slides --
+# two classes every text/layout lint above walked past.
+from ._deck_integrity import (  # noqa: F401
+    presentation_check_raw_math_markup,
+    presentation_apply_math_subscripts,
+    presentation_check_duplicate_slide_images,
+)
 
 
 _HERE = pathlib.Path(__file__).resolve().parent
