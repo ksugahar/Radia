@@ -105,6 +105,14 @@ from ._lab_api import (  # noqa: F401
     _assert_times_new_roman,
 )
 
+# The same "author AT the embed width" gate on the SLIDE side: recover the
+# authored width of every pasted picture and report the paste scale
+# (2026-08-16).
+from ._pptx_audit import (  # noqa: F401
+    audit_pptx_figures,
+    slide_png_from_pdf,
+)
+
 # One-call publication-figure builders (return fig+axes via lab_figure):
 #   from radia_mcp.figure import scaling_loglog, grouped_bars, convergence, ...
 from ._builders import (  # noqa: F401

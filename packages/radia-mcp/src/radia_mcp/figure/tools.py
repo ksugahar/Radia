@@ -33,6 +33,12 @@ Lab style standards (Sugahara Lab, Kindai University):
 """
 from __future__ import annotations
 
+# PPTX paste-scale audit (2026-08-16): the slide analogue of
+# figure_audit_embeds -- a figure authored at W cm must be PASTED at W cm or its
+# 24 pt text is rescaled silently.  Registered as an MCP tool via the
+# `figure_*` name scan in radia_mcp.figure.register().
+from ._pptx_audit import figure_audit_pptx_figures  # noqa: F401
+
 
 # ----- Style profile registry -----------------------------------------------
 

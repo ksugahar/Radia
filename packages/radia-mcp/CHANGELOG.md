@@ -7,6 +7,31 @@ crystallized as its own package.
 
 ## [Unreleased]
 
+- Added `presentation_check_raw_math_markup` and its repair pass
+  `presentation_apply_math_subscripts`. Equations copied from a manuscript keep
+  their source form on the slide (`sigma_f(x) = Sum_j B_fj(x) a_j`,
+  `int_{S_f}`, `H(x_c)`, `r_nl`), and every text/layout lint scored those
+  slides as ordinary prose. Detection and repair both work per PARAGRAPH, not
+  per run: PowerPoint splits a formula at each font change, so a token
+  routinely lands as a run ending in `_` plus a run starting with the
+  subscript. The repair splits runs and sets the PowerPoint baseline, keeping
+  the original run formatting; LaTeX macros are reported as manual work.
+- Added `presentation_check_duplicate_slide_images`: byte-identical artwork
+  reused across slides (small repeated marks such as logos excluded by area),
+  which reads to an audience as "the talk did not move on". Reports whether the
+  reuse is on adjacent slides and whether the copies are even pasted at the
+  same scale.
+- Added `figure_audit_pptx_figures` (helper `audit_pptx_figures`) -- the slide
+  analogue of `figure_audit_embeds`. A figure authored at W cm carries 24 pt
+  text only while it is PASTED at W cm; the authored width is recovered from
+  the embedded image (pixels / DPI, crop removed) and compared with the shape
+  geometry. Reports the paste scale, the resulting displayed figure-font size
+  against the 20 pt slide floor, effective DPI, aspect stretch, and missing DPI
+  metadata (unverifiable, never a silent pass).
+- Added `slide_png_from_pdf`: rasterise a vector figure (CAD export, inherited
+  manuscript drawing) so its authored width equals the slide paste width, and
+  stamp the PNG DPI metadata so the audit above can recover it.
+
 ## [1.4.36] - 2026-08-14
 
 - Added accelerator-magnet knowledge for distributed transfer-matrix and
