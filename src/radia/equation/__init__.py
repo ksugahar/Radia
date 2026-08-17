@@ -26,6 +26,11 @@ contain them.  `mtef_to_tex` and `mtef_to_omml` are the import path;
 """
 
 from radia._equation import (  # noqa: F401
+    DocBlockBox,
+    DocLayout,
+    DocMath,
+    DocRun,
+    DocStyle,
     Equation,
     MarkdownDoc,
     MathMLOptions,
@@ -35,6 +40,7 @@ from radia._equation import (  # noqa: F401
     RtfOptions,
     SvgStyle,
     dump_tree,
+    layout_markdown,
     md_blocks,
     mtef_to_mathml,
     mtef_to_omml,
@@ -62,6 +68,11 @@ from radia.equation.office import (  # noqa: F401
 )
 
 __all__ = [
+    "DocBlockBox",
+    "DocLayout",
+    "DocMath",
+    "DocRun",
+    "DocStyle",
     "Equation",
     "MarkdownDoc",
     "MathMLOptions",
@@ -72,6 +83,7 @@ __all__ = [
     "SvgStyle",
     "copy_to_clipboard",
     "dump_tree",
+    "layout_markdown",
     "markdown_to_docx",
     "md_blocks",
     "mtef_to_mathml",
