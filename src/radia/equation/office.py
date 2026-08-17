@@ -62,7 +62,7 @@ def split_math(markdown: str) -> list[Piece]:
             pieces.append(Piece(latex=seg.body.strip(),
                                 display=(seg.kind == MdSegment.DisplayMath)))
         elif seg.kind == MdSegment.CodeSpan:
-            pieces.append(Piece(text=seg.body.strip("`")))
+            pieces.append(Piece(text=seg.body))
         else:
             pieces.append(Piece(text=seg.source))
     return pieces
