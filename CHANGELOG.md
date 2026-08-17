@@ -51,6 +51,13 @@ All notable changes to the `radia` package.  Format: each release lists
   index of an nth root was never drawn at all, and the vinculum was placed above
   the radicand rather than joined to the radical's arm, with no stretch, so a
   tall radicand left the bar floating over a short sign.
+- `radia.equation.md_blocks` gives the block structure of a Markdown file --
+  headings, paragraphs, list items, fenced code -- with the same exact-round-trip
+  guarantee `MarkdownDoc` gives for spans. In C++ because a viewer cannot afford
+  Python: importing the package costs ~1.4 s against 4 ms for the module itself,
+  nearly all of it `radia/__init__.py` setting up DLL paths and MKL.
+  `markdown_to_docx` now calls it instead of its own copy, so there is one
+  scanner and a document cannot mean two different things.
 
 ## 4.95.51 - Native beam dynamics, nonlinear reactor, and integrated LTspice
 
