@@ -52,14 +52,8 @@ uint32_t next_cp(const std::string& s, size_t& i) {
     return cp;
 }
 
-bool is_cjk(uint32_t c) {
-    return (c >= 0x3000 && c <= 0x30FF) ||    /* punctuation, kana        */
-           (c >= 0x3400 && c <= 0x4DBF) ||    /* ideographs ext A         */
-           (c >= 0x4E00 && c <= 0x9FFF) ||    /* ideographs               */
-           (c >= 0xF900 && c <= 0xFAFF) ||    /* compatibility            */
-           (c >= 0xFF00 && c <= 0xFF60) ||    /* fullwidth forms          */
-           (c >= 0xFFE0 && c <= 0xFFE6);
-}
+/* is_cjk comes from math_layout.h -- one answer about what is CJK, shared with
+ * the face selection, rather than a second copy that could disagree. */
 
 bool in_set(uint32_t c, const uint32_t* set, size_t n) {
     for (size_t i = 0; i < n; ++i) if (set[i] == c) return true;

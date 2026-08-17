@@ -31,6 +31,9 @@ struct SvgStyle {
      * lacks the first still finds the glyph. */
     std::string serif = "Times New Roman, Times, serif";
     std::string symbol = "Cambria Math, Symbol, Segoe UI Symbol, serif";
+    /* Neither of the two above contains a single kana, so Japanese needs a
+     * face of its own rather than whatever a viewer happens to substitute. */
+    std::string cjk = "Yu Mincho, MS Mincho, serif";
 
     double padding = 1.0;   /* pt of white space around the equation */
 };

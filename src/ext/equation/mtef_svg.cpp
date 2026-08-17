@@ -30,6 +30,18 @@
 #endif
 
 namespace mtef {
+
+/* Pure arithmetic, so it sits outside the Windows-only metric layer: every
+ * backend needs the same answer about which face a character belongs to. */
+bool is_cjk(uint32_t c) {
+    return (c >= 0x3000 && c <= 0x30FF) ||    /* punctuation, kana        */
+           (c >= 0x3400 && c <= 0x4DBF) ||    /* ideographs ext A         */
+           (c >= 0x4E00 && c <= 0x9FFF) ||    /* ideographs               */
+           (c >= 0xF900 && c <= 0xFAFF) ||    /* compatibility            */
+           (c >= 0xFF00 && c <= 0xFF60) ||    /* fullwidth forms          */
+           (c >= 0xFFE0 && c <= 0xFFE6);
+}
+
 namespace {
 
 /* ------------------------------------------------------------------ */
@@ -72,7 +84,7 @@ std::string xml_escape(const std::string& s) {
  * it resolves the same family. */
 constexpr int kEm = 1000;
 
-HFONT make_font(bool italic, bool symbol) {
+HFONT make_font(bool italic, bool symbol, bool cjk) {
     LOGFONTW lf = {};
     lf.lfHeight = -kEm;
     lf.lfItalic = italic ? TRUE : FALSE;
@@ -82,7 +94,11 @@ HFONT make_font(bool italic, bool symbol) {
      * U+2264 is not found at all.  That single flag was behind the spurious
      * gap after "(" and the relation overlapping the fraction bar. */
     lf.lfCharSet = DEFAULT_CHARSET;
-    const wchar_t* face = symbol ? L"Cambria Math" : L"Times New Roman";
+    /* Yu Mincho is the serif that sits beside Times without looking borrowed;
+     * neither Times nor Cambria Math has a single kana. */
+    const wchar_t* face = cjk      ? L"Yu Mincho"
+                        : symbol   ? L"Cambria Math"
+                                   : L"Times New Roman";
     wcscpy_s(lf.lfFaceName, face);
     return CreateFontIndirectW(&lf);
 }
@@ -101,12 +117,17 @@ struct MetricCache {
     HFONT font(int key) {
         auto it = fonts.find(key);
         if (it != fonts.end()) return it->second;
-        HFONT f = make_font((key & 1) != 0, (key & 2) != 0);
+        HFONT f = make_font((key & 1) != 0, (key & 2) != 0, (key & 4) != 0);
         fonts[key] = f;
         return f;
     }
+    /* The face follows the character, so a caller cannot measure with one font
+     * and have the renderer draw with another. */
+    static int face_key(uint32_t cp, bool italic, bool symbol) {
+        return (italic ? 1 : 0) | (symbol ? 2 : 0) | (is_cjk(cp) ? 4 : 0);
+    }
     double width_em(uint32_t cp, bool italic, bool symbol) {
-        int key = (italic ? 1 : 0) | (symbol ? 2 : 0);
+        int key = face_key(cp, italic, symbol);
         auto k = std::make_pair(key, cp);
         auto it = widths.find(k);
         if (it != widths.end()) return it->second;
@@ -150,7 +171,7 @@ struct MetricCache {
     struct Box { double asc = 0, desc = 0, ink_w = 0; };
 
     Box glyph_box(uint32_t cp, bool italic, bool symbol) {
-        int key = (italic ? 1 : 0) | (symbol ? 2 : 0);
+        int key = face_key(cp, italic, symbol);
         auto k = std::make_pair(key, cp);
         auto it = boxes.find(k);
         if (it != boxes.end()) return it->second;
@@ -377,7 +398,7 @@ private:
         glyph_vmetrics(cp, sizePt, italic, symbol, L.asc, L.desc);
         Glyph g;
         g.x = 0; g.y = 0; g.size = sizePt;
-        g.italic = italic; g.symbol = symbol;
+        g.italic = italic; g.symbol = symbol; g.cjk = is_cjk(cp);
         g.text = utf8_of(cp);
         L.glyphs.push_back(g);
         return L;
@@ -836,7 +857,9 @@ std::string render_svg(const LineNode& root, const SvgStyle& style) {
           << "\" fill=\"currentColor\"/>\n";
     }
     for (const auto& g : L.glyphs) {
-        const std::string& family = g.symbol ? style.symbol : style.serif;
+        const std::string& family = g.cjk    ? style.cjk
+                                  : g.symbol ? style.symbol
+                                             : style.serif;
         o << "  <text x=\"" << (g.x + pad) << "\" y=\"" << (g.y + baseline)
           << "\" font-family=\"" << xml_escape(family) << "\""
           << " font-size=\"" << g.size << "\"";

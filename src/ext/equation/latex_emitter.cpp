@@ -10,6 +10,7 @@
  * MtefParser, which already has structural information in the node types.
  */
 #include "latex_emitter.h"
+#include "math_layout.h"      /* is_cjk: the same rule that picks the face */
 #include <cstring>
 #include <cstdio>
 
@@ -343,6 +344,21 @@ void LaTeXEmitter::emitChar(const CharNode& ch, std::string& out) {
         else {
             s = map_lookup(UNICODE_MAP, UNICODE_MAP_N, code);
             if (s) out += s;
+            else if (is_cjk(uint32_t(code))) {
+                /* Japanese is written as itself.  \symbol{30913} is the right
+                 * answer for an unmapped MATHS symbol and the wrong one for a
+                 * character the author typed: it does not round trip, and no
+                 * one can read it.  The same is_cjk that picks the face
+                 * decides this, so one rule governs both. */
+                const uint32_t cp = uint32_t(code);
+                if (cp < 0x800) {
+                    out += char(0xC0 | (cp >> 6));
+                } else {
+                    out += char(0xE0 | (cp >> 12));
+                    out += char(0x80 | ((cp >> 6) & 0x3F));
+                }
+                out += char(0x80 | (cp & 0x3F));
+            }
             else {
                 char buf[32];
                 snprintf(buf, sizeof(buf), "\\symbol{%d}", code);
