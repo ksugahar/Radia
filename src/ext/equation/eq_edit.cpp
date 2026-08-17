@@ -143,6 +143,7 @@ void Equation::load_latex(const std::string& latex) {
     if (!root_) root_ = std::make_unique<LineNode>();
     path_.clear();
     index_ = int(root_->children.size());
+    anchor_ = -1;
     undo_.clear();
     redo_.clear();
 }
@@ -229,10 +230,14 @@ void Equation::set_caret_text(const std::string& s) {
 
 std::string Equation::caret() const { return caret_text(); }
 
-void Equation::move_home() { index_ = 0; }
-void Equation::move_end()  { index_ = int(here().size()); }
+/* A plain move drops the selection.  Shift is what keeps it, and a caret that
+ * wandered off while a range stayed highlighted would delete something other
+ * than what is shown. */
+void Equation::move_home() { clear_selection(); index_ = 0; }
+void Equation::move_end()  { clear_selection(); index_ = int(here().size()); }
 
 bool Equation::move_out() {
+    clear_selection();
     if (path_.empty()) return false;
     int child = path_.back().child;
     path_.pop_back();
@@ -242,6 +247,7 @@ bool Equation::move_out() {
 }
 
 bool Equation::move_left() {
+    clear_selection();
     NodeList& l = here();
     if (index_ > 0) {
         Node* prev = l[index_ - 1].get();
@@ -270,6 +276,7 @@ bool Equation::move_left() {
 }
 
 bool Equation::move_right() {
+    clear_selection();
     NodeList& l = here();
     if (size_t(index_) < l.size()) {
         Node* next = l[index_].get();
@@ -298,6 +305,7 @@ bool Equation::move_right() {
 }
 
 bool Equation::next_slot() {
+    clear_selection();
     if (path_.empty()) return false;
     for (;;) {
         CaretStep st = path_.back();
@@ -315,6 +323,7 @@ bool Equation::next_slot() {
 }
 
 bool Equation::prev_slot() {
+    clear_selection();
     if (path_.empty()) return false;
     CaretStep st = path_.back();
     if (st.slot > 0) {
@@ -326,6 +335,118 @@ bool Equation::prev_slot() {
     index_ = st.child;
     clamp();
     return true;
+}
+
+/* ----------------------------------------------------------- selection */
+
+bool Equation::has_selection() const {
+    return anchor_ >= 0 && anchor_ != index_;
+}
+
+void Equation::clear_selection() { anchor_ = -1; }
+
+void Equation::select_all() {
+    anchor_ = 0;
+    index_ = int(here().size());
+}
+
+/* Shift+move starts a selection at wherever the caret was. */
+bool Equation::extend_left() {
+    if (anchor_ < 0) anchor_ = index_;
+    if (index_ <= 0) return false;      /* stop at the slot edge */
+    --index_;
+    return true;
+}
+
+bool Equation::extend_right() {
+    if (anchor_ < 0) anchor_ = index_;
+    if (size_t(index_) >= here().size()) return false;
+    ++index_;
+    return true;
+}
+
+void Equation::extend_home() {
+    if (anchor_ < 0) anchor_ = index_;
+    index_ = 0;
+}
+
+void Equation::extend_end() {
+    if (anchor_ < 0) anchor_ = index_;
+    index_ = int(here().size());
+}
+
+bool Equation::extend_to_point(double x, double y, const SvgStyle& style) {
+    const int keep = (anchor_ < 0) ? index_ : anchor_;
+    const std::vector<CaretStep> keep_path = path_;
+    if (!move_to_point(x, y, style)) return false;
+    /* Dragging out of the slot the selection started in would silently change
+     * what is anchored, so the anchor holds and the caret is clamped back. */
+    if (path_ != keep_path) {
+        path_ = keep_path;
+        clamp();
+        index_ = (index_ < keep) ? 0 : int(here().size());
+    }
+    anchor_ = keep;
+    return true;
+}
+
+std::string Equation::selected_latex() {
+    if (!has_selection()) return std::string();
+    NodeList& l = here();
+    const int lo = std::min(anchor_, index_);
+    const int hi = std::max(anchor_, index_);
+
+    /* Borrow the nodes into a line, write it, and put them back.  Teaching
+     * every node type to clone itself would be a lot of code for one caller,
+     * and a clone that fell behind a new node type would silently drop it. */
+    LineNode tmp;
+    for (int i = lo; i < hi; ++i) tmp.children.push_back(std::move(l[size_t(i)]));
+    std::string out = tree_to_latex(tmp);
+    for (int i = lo; i < hi; ++i)
+        l[size_t(i)] = std::move(tmp.children[size_t(i - lo)]);
+    return out;
+}
+
+NodeList Equation::take_selection() {
+    NodeList taken;
+    if (!has_selection()) return taken;
+    NodeList& l = here();
+    const int lo = std::min(anchor_, index_);
+    const int hi = std::max(anchor_, index_);
+    for (int i = lo; i < hi; ++i) taken.push_back(std::move(l[size_t(i)]));
+    l.erase(l.begin() + lo, l.begin() + hi);
+    index_ = lo;
+    anchor_ = -1;
+    clamp();
+    return taken;
+}
+
+bool Equation::delete_selection() {
+    if (!has_selection()) return false;
+    checkpoint();
+    take_selection();
+    return true;
+}
+
+Equation::SelectionBox Equation::selection_geometry(const SvgStyle& style) const {
+    SelectionBox box;
+    if (!has_selection()) return box;
+
+    Layout L = layout_math(*root_, style);
+    std::string ct = caret_text();
+    size_t colon = ct.rfind(':');
+    std::string path = (colon == std::string::npos) ? ct : ct.substr(0, colon);
+
+    const CaretStop* a = find_stop(L, path, std::min(anchor_, index_));
+    const CaretStop* b = find_stop(L, path, std::max(anchor_, index_));
+    if (!a || !b) return box;
+
+    box.found = true;
+    box.x0 = a->x;
+    box.x1 = b->x;
+    box.top = std::min(a->top, b->top);
+    box.bottom = std::max(a->bottom, b->bottom);
+    return box;
 }
 
 /* ------------------------------------------------------------ geometry */
@@ -349,6 +470,7 @@ Equation::CaretGeometry Equation::caret_geometry(const SvgStyle& style) const {
 }
 
 bool Equation::move_to_point(double x, double y, const SvgStyle& style) {
+    clear_selection();
     Layout L = layout_math(*root_, style);
     const CaretStop* s = nearest_stop(L, x, y);
     if (!s) return false;
@@ -404,6 +526,7 @@ bool Equation::redo() {
 
 void Equation::insert_text(const std::string& utf8) {
     checkpoint();
+    take_selection();          /* typing replaces what is highlighted */
     NodeList& l = here();
     clamp();
     /* One character, one node -- and a character may be several bytes.  What
@@ -438,6 +561,7 @@ bool Equation::insert_symbol(const std::string& cmd) {
     int code = tex_command_to_unicode(cmd.c_str());
     if (code < 0) return false;
     checkpoint();
+    take_selection();
     NodeList& l = here();
     clamp();
     auto ch = make_char(typeface_for_code(uint16_t(code)), uint16_t(code));
@@ -475,7 +599,26 @@ void Equation::enter_first_empty_slot(Node& n) {
     }
 }
 
+bool Equation::insert_latex(const std::string& latex) {
+    std::unique_ptr<LineNode> parsed = parse_latex(latex);
+    if (!parsed || parsed->children.empty()) return false;
+
+    checkpoint();
+    take_selection();
+    NodeList& l = here();
+    clamp();
+    const int n = int(parsed->children.size());
+    for (int i = 0; i < n; ++i)
+        l.insert(l.begin() + index_ + i, std::move(parsed->children[size_t(i)]));
+    index_ += n;
+    return true;
+}
+
 bool Equation::insert_template(const std::string& kind) {
+    /* A selection is what the template WRAPS.  Select B, press the vector
+     * chord, get \vec{B} -- which is how a vector actually gets written, and
+     * the reason selection had to come before the Style menu. */
+    NodeList wrapped = take_selection();
     NodePtr node;
 
     auto fence = [](int sel) {
@@ -499,9 +642,11 @@ bool Equation::insert_template(const std::string& kind) {
         s->hasSub = (kind != "sup");
         s->hasSup = (kind != "sub");
         /* The character just typed is the natural base, exactly as pressing
-         * Ctrl+L after `x` gives `x` a subscript rather than an empty box. */
+         * Ctrl+L after `x` gives `x` a subscript rather than an empty box --
+         * unless a selection was made, which is a more explicit statement of
+         * the same intent and takes precedence. */
         NodeList& l = here();
-        if (index_ > 0) {
+        if (wrapped.empty() && index_ > 0) {
             s->base.push_back(std::move(l[index_ - 1]));
             l.erase(l.begin() + index_ - 1);
             --index_;
@@ -559,12 +704,26 @@ bool Equation::insert_template(const std::string& kind) {
     NodeList& l = here();
     clamp();
     Node* raw = node.get();
+
+    /* What was selected goes into the template's first slot -- the numerator
+     * of a fraction, the body of a root, the base of a script, the thing an
+     * accent sits over.  That is the slot node_slots() reports first, so no
+     * table of "which slot wraps" is needed and none can fall behind a new
+     * node type. */
+    if (!wrapped.empty()) {
+        auto slots = node_slots(*raw);
+        if (!slots.empty()) {
+            for (auto& n : wrapped) slots[0]->push_back(std::move(n));
+        }
+    }
+
     l.insert(l.begin() + index_, std::move(node));
     enter_first_empty_slot(*raw);
     return true;
 }
 
 bool Equation::backspace() {
+    if (has_selection()) return delete_selection();
     NodeList& l = here();
     clamp();
     if (index_ > 0) {
@@ -603,6 +762,7 @@ bool Equation::backspace() {
 }
 
 bool Equation::erase() {
+    if (has_selection()) return delete_selection();
     NodeList& l = here();
     clamp();
     if (size_t(index_) >= l.size()) return false;
@@ -784,6 +944,15 @@ const std::vector<Equation::Binding>& Equation::shortcuts() {
         {"Delete",       "edit.delete",        "delete forwards"},
         {"Ctrl+Z",       "edit.undo",          "undo"},
         {"Ctrl+Y",       "edit.redo",          "redo"},
+        /* Selection.  Equation Editor's Edit menu is Select All, Cut, Copy,
+         * Paste and Clear; there is no menu bar here, so these are the whole
+         * of it.  Shift stops at the slot edge rather than jumping out, so a
+         * selection never silently changes what it is anchored to. */
+        {"Shift+Left",   "select.left",        "extend selection left"},
+        {"Shift+Right",  "select.right",       "extend selection right"},
+        {"Shift+Home",   "select.home",        "extend to start of slot"},
+        {"Shift+End",    "select.end",         "extend to end of slot"},
+        {"Ctrl+A",       "select.all",         "select all"},
     };
     return kBindings;
 }
@@ -800,6 +969,11 @@ bool Equation::command(const std::string& name) {
     if (name == "caret.end")        { move_end();  return true; }
     if (name == "edit.backspace")   return backspace();
     if (name == "edit.delete")      return erase();
+    if (name == "select.left")      return extend_left();
+    if (name == "select.right")     return extend_right();
+    if (name == "select.home")      { extend_home(); return true; }
+    if (name == "select.end")       { extend_end();  return true; }
+    if (name == "select.all")       { select_all();  return true; }
     if (name == "edit.undo")        return undo();
     if (name == "edit.redo")        return redo();
     return false;
