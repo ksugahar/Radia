@@ -54,7 +54,40 @@ __all__ = [
     "CanonicalHCurlElement",
     "CanonicalHCurlChain",
     "CanonicalHCurlFit",
+    "graded_breaks",
 ]
+
+
+def graded_breaks(s_nodes_m, weight, element_count, *, strength=1.0):
+    """Element boundaries equidistributing the monitor ``1 + strength*w``.
+
+    ``weight`` are non-negative monitor samples at ``s_nodes_m`` (e.g.
+    ``|dB_y/ds|`` on the design orbit, normalized or not -- it is rescaled
+    to unit maximum).  ``strength`` sets how much the fringe attracts
+    elements: 0 reproduces the uniform split, larger values shrink elements
+    where the monitor is large.  Returns ``element_count + 1`` strictly
+    increasing breaks spanning ``[s_nodes[0], s_nodes[-1]]``.
+    """
+    s = np.asarray(s_nodes_m, dtype=float).reshape(-1)
+    w = np.asarray(weight, dtype=float).reshape(-1)
+    if s.size != w.size or s.size < 2 or not np.all(np.diff(s) > 0.0):
+        raise ValueError("s_nodes_m must be strictly increasing and match w")
+    if np.any(w < 0.0) or not np.all(np.isfinite(w)):
+        raise ValueError("weight must be finite and non-negative")
+    count = int(element_count)
+    if count < 1:
+        raise ValueError("element_count must be positive")
+    peak = float(np.max(w))
+    density = 1.0 + float(strength) * (w / peak if peak > 0.0 else w)
+    cdf = np.concatenate(([0.0], np.cumsum(
+        0.5 * (density[1:] + density[:-1]) * np.diff(s))))
+    targets = np.linspace(0.0, cdf[-1], count + 1)
+    breaks = np.interp(targets, cdf, s)
+    breaks[0] = s[0]
+    breaks[-1] = s[-1]
+    if not np.all(np.diff(breaks) > 0.0):
+        raise ValueError("monitor produced degenerate breaks; lower strength")
+    return breaks
 
 
 def _monomials(order_x, order_y, order_s, parity):
@@ -445,21 +478,31 @@ class CanonicalHCurlChain:
     contract (a_y trace + b_m values) collapses ``order_s = 1`` chains to a
     globally linear ``b_m``.  A single element accepts any ``order_s``.
 
-    Ring closure (periodic chain) is NOT implemented here: it needs the
-    periodic spline parameterization plus ONE global cohomology DOF for the
-    orbit-linked flux (the centre gauge forces the on-orbit circulation of
-    ``a_s`` to vanish, which a closed orbit cannot satisfy in general).
+    ``periodic=True`` closes the chain into a ring: the L1 contract also
+    couples the last element's exit face to the first element's entrance
+    face, and the fixed-dimension target becomes the periodic spline count
+    ``p_x * E`` per the maximal-smoothness spline dimension.  The ring's
+    cohomology obstruction -- the design orbit links a flux, so the
+    on-orbit circulation of ``a_s`` cannot vanish although the centre gauge
+    forces it to -- is carried by ONE explicit global DOF: a constant
+    covariant ``a_s`` (a zero-field harmonic 1-form) set through
+    :meth:`set_ring_circulation` from the gauge-invariant loop integral.
+    It never enters the Lie/A-RK dynamics (a constant in ``H`` exerts no
+    force); it only restores the flux observable.
     """
 
     def __init__(self, s_breaks_m, half_width_m, half_height_m, *,
-                 order_x, order_s, curvature_per_m=None):
+                 order_x, order_s, curvature_per_m=None, periodic=False):
         breaks = np.asarray(s_breaks_m, dtype=float).reshape(-1)
         if breaks.size < 2 or not np.all(np.diff(breaks) > 0.0):
             raise ValueError("s_breaks_m must be strictly increasing, >= 2")
-        if int(order_s) < 2 and breaks.size > 2:
+        self.periodic = bool(periodic)
+        if int(order_s) < 2 and (breaks.size > 2 or self.periodic):
             raise ValueError(
                 "chained CanonicalHCurl requires order_s >= 2 (the L1 "
                 "interface contract degenerates order_s=1 chains)")
+        if self.periodic and breaks.size < 3:
+            raise ValueError("a periodic chain needs at least 2 elements")
         self.s_breaks_m = breaks
         self.elements = []
         for e in range(breaks.size - 1):
@@ -487,6 +530,7 @@ class CanonicalHCurlChain:
         self.interface_defect_scale = 1.0
         self._reduced = self._interface_null_space()
         self._fit = None
+        self.ring_circulation_t_m = 0.0
 
     # -- chain structure -------------------------------------------------
     @property
@@ -501,21 +545,27 @@ class CanonicalHCurlChain:
     def chain_dimension(self) -> int:
         return self._reduced.shape[1]
 
+    def _interface_pairs(self):
+        pairs = [(e, e + 1) for e in range(self.element_count - 1)]
+        if self.periodic:
+            pairs.append((self.element_count - 1, 0))
+        return pairs
+
     def _interface_constraint_rows(self):
         offsets = np.concatenate(([0], np.cumsum(
             [el.dimension for el in self.elements])))
         total = offsets[-1]
         rows = []
-        for e in range(self.element_count - 1):
-            left, right = self.elements[e], self.elements[e + 1]
+        for e_left, e_right in self._interface_pairs():
+            left, right = self.elements[e_left], self.elements[e_right]
             for maker in ("ay_trace_matrix", "b_value_trace_matrix"):
                 Tp = getattr(left, maker)(+1)
                 Tm = getattr(right, maker)(-1)
                 if Tp.shape[0] != Tm.shape[0]:
                     raise AssertionError("trace row layouts must match")
                 block = np.zeros((Tp.shape[0], total))
-                block[:, offsets[e]:offsets[e + 1]] = Tp
-                block[:, offsets[e + 1]:offsets[e + 2]] = -Tm
+                block[:, offsets[e_left]:offsets[e_left + 1]] = Tp
+                block[:, offsets[e_right]:offsets[e_right + 1]] = -Tm
                 rows.append(block)
         return (np.vstack(rows) if rows else np.zeros((0, total)))
 
@@ -534,7 +584,11 @@ class CanonicalHCurlChain:
         total = constraint.shape[1]
         order_x = self.elements[0].order_x
         order_s = self.elements[0].order_s
-        target = order_x * (self.element_count + order_s)
+        if self.periodic:
+            # Maximal-smoothness periodic spline dimension per multipole.
+            target = order_x * self.element_count
+        else:
+            target = order_x * (self.element_count + order_s)
         if constraint.shape[0] == 0:
             return np.eye(total)[:, :target]
         _, s, vt = np.linalg.svd(constraint, full_matrices=True)
@@ -584,6 +638,15 @@ class CanonicalHCurlChain:
                 "required for an honest aperture certificate")
 
         index, zeta = self._locate(s)
+        counts = np.bincount(index, minlength=self.element_count)
+        starved = [int(e) for e in range(self.element_count)
+                   if counts[e] < self.elements[e].dimension]
+        if starved:
+            raise ValueError(
+                "sample starvation: elements "
+                f"{starved} hold fewer samples than their dimension "
+                f"({self.elements[0].dimension}); distribute the cloud per "
+                "element (thin graded elements need their own stations)")
         offsets = np.concatenate(([0], np.cumsum(
             [el.dimension for el in self.elements])))
         design = np.zeros((3 * x.size, offsets[-1]))
@@ -628,14 +691,28 @@ class CanonicalHCurlChain:
         offsets = np.concatenate(([0], np.cumsum(
             [el.dimension for el in self.elements])))
         worst = 0.0
-        for e in range(self.element_count - 1):
-            left = getattr(self.elements[e], maker)(+1) @ \
-                coefficients[offsets[e]:offsets[e + 1]]
-            right = getattr(self.elements[e + 1], maker)(-1) @ \
-                coefficients[offsets[e + 1]:offsets[e + 2]]
+        for e_left, e_right in self._interface_pairs():
+            left = getattr(self.elements[e_left], maker)(+1) @ \
+                coefficients[offsets[e_left]:offsets[e_left + 1]]
+            right = getattr(self.elements[e_right], maker)(-1) @ \
+                coefficients[offsets[e_right]:offsets[e_right + 1]]
             if left.size:
                 worst = max(worst, float(np.max(np.abs(left - right))))
         return worst
+
+    def set_ring_circulation(self, circulation_t_m2):
+        """Set the ring's cohomology DOF from the gauge-invariant loop flux.
+
+        ``circulation_t_m2`` is the design-orbit loop integral of the source
+        vector potential (= the flux linked by the closed orbit, in T*m^2);
+        the stored constant covariant ``a_s`` is that value divided by the
+        circumference.  Zero-field mode: it never affects B, the fit, or
+        the tracking dynamics -- only the ``loop-integral A`` observable.
+        """
+        if not self.periodic:
+            raise ValueError("ring circulation applies to periodic chains")
+        length = float(self.s_breaks_m[-1] - self.s_breaks_m[0])
+        self.ring_circulation_t_m = float(circulation_t_m2) / length
 
     def _require_fit(self):
         if self._fit is None:
@@ -663,6 +740,7 @@ class CanonicalHCurlChain:
             c = coefficients[offsets[e]:offsets[e + 1]]
             out[mask, 1] = ay_cols @ c
             out[mask, 2] = as_cols @ c
+        out[:, 2] += self.ring_circulation_t_m
         return out
 
     def vector_potential_and_gradient_frame(self, x_m, y_m, s_m):
@@ -723,6 +801,7 @@ class CanonicalHCurlChain:
             a[mask, 2] = as_v
             gradient[mask, 1, :] = day
             gradient[mask, 2, :] = das
+        a[:, 2] += self.ring_circulation_t_m
         return a, gradient
 
     def magnetic_flux_density_frame(self, x_m, y_m, s_m):

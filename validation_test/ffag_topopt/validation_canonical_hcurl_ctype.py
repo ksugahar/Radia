@@ -41,7 +41,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import ngsolve as ng  # noqa: E402
 import radia as rad  # noqa: E402
 from radia import vim  # noqa: E402
-from radia.beam_canonical_hcurl import CanonicalHCurlChain  # noqa: E402
+from radia.beam_canonical_hcurl import (  # noqa: E402
+    CanonicalHCurlChain,
+    graded_breaks,
+)
 from radia.accelerator_lie_topopt import (  # noqa: E402
     _fourth_order_lie_map_from_vector_potential_polynomials,
     apply_dragt_finn_map,
@@ -75,6 +78,16 @@ def parser():
                         help="htilde = sign * signed_curvature (metric "
                              "g = 1 + htilde*x); the Hamiltonian-linear "
                              "gate pins the correct convention")
+    result.add_argument("--grade-fringe", type=float, default=0.0,
+                        help="graded_breaks strength on the |dBy/ds| orbit "
+                             "monitor (0 = uniform elements)")
+    result.add_argument("--include-cross-routes", action="store_true",
+                        help="also run the exact-source canonical A-RK "
+                             "(raw analytic A, FD gradients) and the native "
+                             "Cartesian mechanical B-RK, compared in frame "
+                             "mechanical variables at the exit plane")
+    result.add_argument("--cross-scale", type=float, default=0.5)
+    result.add_argument("--fd-step", type=float, default=1.0e-6)
     result.add_argument("--track-scales", type=float, nargs="+",
                         default=[0.25, 0.5, 1.0])
     result.add_argument("--rk-tolerance", type=float, default=1.0e-12)
@@ -83,8 +96,22 @@ def parser():
 
 
 def sample_frame_cloud(orbit, b_batch, s_range, half_width, half_height,
-                       rng, n_s, n_xy):
-    s_values = rng.uniform(s_range[0], s_range[1], n_s)
+                       rng, n_s, n_xy, breaks=None):
+    """Frame-component B cloud; with ``breaks``, stations are allocated per
+    element (proportional with a floor) so thin graded elements never
+    starve -- uniform-in-s sampling under grading leaves near-empty
+    elements whose DOFs the LS drives wild (caught by the fit guard)."""
+    if breaks is None:
+        s_values = rng.uniform(s_range[0], s_range[1], n_s)
+    else:
+        sizes = np.diff(np.asarray(breaks, dtype=float))
+        floor = 4
+        allocation = np.maximum(
+            floor, np.round(n_s * sizes / sizes.sum()).astype(int))
+        s_values = np.concatenate([
+            rng.uniform(breaks[e], breaks[e + 1], allocation[e])
+            for e in range(len(sizes))
+        ])
     xs, ys, ss, bxl, byl, bsl = [], [], [], [], [], []
     for s_value in s_values:
         sv = np.array([s_value])
@@ -104,6 +131,111 @@ def sample_frame_cloud(orbit, b_batch, s_range, half_width, half_height,
         bsl.append(b @ tangent)
     return (np.concatenate(xs), np.concatenate(ys), np.concatenate(ss),
             np.concatenate(bxl), np.concatenate(byl), np.concatenate(bsl))
+
+
+def frame_axes(orbit, s_value):
+    horizontal, vertical, tangent = (np.asarray(w[0], dtype=float)
+                                     for w in orbit.frame_at(
+                                         np.array([s_value])))
+    return horizontal, vertical, tangent
+
+
+def make_frame_a(a_of_point, orbit, htilde_of_s):
+    """Covariant frame components of a raw global vector potential."""
+
+    def frame_a(x_value, y_value, s_value):
+        horizontal, vertical, tangent = frame_axes(orbit, s_value)
+        point = (orbit.position_at(np.array([s_value]))[0]
+                 + x_value * horizontal + y_value * vertical)
+        value = np.asarray(a_of_point(point), dtype=float)
+        metric = 1.0 + htilde_of_s(s_value) * x_value
+        return np.array([value @ horizontal, value @ vertical,
+                         metric * (value @ tangent)])
+
+    return frame_a
+
+
+def track_exact_source_a_rk(frame_a, htilde_of_s, rigidity, state,
+                            s_span, rk_tolerance, fd_step):
+    """Canonical A-map RK on the RAW analytic A (no projection, no gauge).
+
+    ``frame_a`` returns the covariant frame components at ``(x, y, s)``;
+    transverse gradients use central finite differences (the established
+    exact-A route floor).  ``a_x != 0`` here -- the canonical machinery
+    accepts it and the mechanical conversion removes the gauge.
+    """
+    evaluations = 0
+
+    def rhs(s_value, z):
+        nonlocal evaluations
+        x_value, y_value = float(z[0]), float(z[2])
+        centre = frame_a(x_value, y_value, s_value)
+        gradient = np.empty((3, 2))
+        gradient[:, 0] = (frame_a(x_value + fd_step, y_value, s_value)
+                          - frame_a(x_value - fd_step, y_value, s_value)) \
+            / (2.0 * fd_step)
+        gradient[:, 1] = (frame_a(x_value, y_value + fd_step, s_value)
+                          - frame_a(x_value, y_value - fd_step, s_value)) \
+            / (2.0 * fd_step)
+        evaluations += 5
+        return canonical_vector_potential_hamiltonian_rhs(
+            z, centre / rigidity, gradient / rigidity,
+            reference_curvature_per_m=float(htilde_of_s(s_value)))
+
+    solution = solve_ivp(
+        rhs, s_span, np.asarray(state, dtype=float), method="DOP853",
+        rtol=rk_tolerance, atol=rk_tolerance)
+    if not solution.success:
+        raise RuntimeError(f"exact-source A-RK failed: {solution.message}")
+    return solution.y[:, -1], evaluations
+
+
+def track_mechanical_b_rk(b_point, orbit, rigidity, mechanical, s_span,
+                          rk_tolerance):
+    """Native Cartesian mechanical RK on the symmetrized HDiv-MMM B.
+
+    Integrates ``dr/dtau = u``, ``du/dtau = u x B / (B rho (1+delta))``
+    (path-length parameterization, unit direction ``u``) from the entrance
+    frame mechanical state and stops at the exit plane through
+    ``orbit(s_end)`` perpendicular to the exit tangent.  Fully independent
+    of every A representation.
+    """
+    x0, pxm0, y0, pym0, _, delta = (float(v) for v in mechanical)
+    h_entry, v_entry, t_entry = frame_axes(orbit, s_span[0])
+    r_entry = (orbit.position_at(np.array([s_span[0]]))[0]
+               + x0 * h_entry + y0 * v_entry)
+    w0 = np.sqrt((1.0 + delta) ** 2 - pxm0**2 - pym0**2)
+    u0 = (pxm0 * h_entry + pym0 * v_entry + w0 * t_entry) / (1.0 + delta)
+    h_exit, v_exit, t_exit = frame_axes(orbit, s_span[1])
+    r_exit_ref = orbit.position_at(np.array([s_span[1]]))[0]
+    inverse_bend = 1.0 / (rigidity * (1.0 + delta))
+
+    def rhs(_tau, state):
+        r = state[:3]
+        u = state[3:]
+        b = np.asarray(b_point(r), dtype=float)
+        return np.concatenate((u, np.cross(u, b) * inverse_bend))
+
+    def exit_plane(_tau, state):
+        return float((state[:3] - r_exit_ref) @ t_exit)
+
+    exit_plane.terminal = True
+    exit_plane.direction = 1.0
+    length = s_span[1] - s_span[0]
+    solution = solve_ivp(
+        rhs, (0.0, 1.5 * length), np.concatenate((r_entry, u0)),
+        method="DOP853", rtol=rk_tolerance, atol=rk_tolerance,
+        events=exit_plane)
+    if not solution.success or not len(solution.t_events[0]):
+        raise RuntimeError("mechanical B-RK did not reach the exit plane")
+    final = solution.y_events[0][0]
+    r_end, u_end = final[:3], final[3:]
+    return np.array([
+        (r_end - r_exit_ref) @ h_exit,
+        (1.0 + delta) * (u_end @ h_exit),
+        (r_end - r_exit_ref) @ v_exit,
+        (1.0 + delta) * (u_end @ v_exit),
+    ]), int(solution.nfev)
 
 
 def track_chain_a_rk(chain, curvature_of_s, rigidity, state, s_span,
@@ -157,8 +289,23 @@ def main(argv=None):
         return float(options.htilde_sign) * float(
             np.interp(s_value, segment_mids, orbit.signed_curvature))
 
+    if float(options.grade_fringe) > 0.0:
+        monitor_s = np.linspace(0.0, s_total, 401)
+        by_orbit = np.array([
+            float(np.asarray(b_point(orbit.position_at(np.array([sv]))[0]))
+                  @ frame_axes(orbit, sv)[1])
+            for sv in monitor_s
+        ])
+        monitor = np.abs(np.gradient(by_orbit, monitor_s))
+        breaks = graded_breaks(monitor_s, monitor, int(options.elements),
+                               strength=float(options.grade_fringe))
+        sizes = np.diff(breaks)
+        print(f"graded breaks (strength {float(options.grade_fringe):g}): "
+              f"element sizes {1e3*sizes.min():.2f}..{1e3*sizes.max():.2f} mm")
+    else:
+        breaks = np.linspace(0.0, s_total, int(options.elements) + 1)
     chain = CanonicalHCurlChain(
-        np.linspace(0.0, s_total, int(options.elements) + 1),
+        breaks,
         float(options.half_width), float(options.half_height),
         order_x=int(options.order_x), order_s=int(options.order_s),
         curvature_per_m=htilde_of_s)
@@ -180,12 +327,12 @@ def main(argv=None):
     fit_cloud = sample_frame_cloud(
         orbit, b_batch, (0.0, s_total), float(options.half_width),
         float(options.half_height), rng, int(options.fit_stations),
-        int(options.fit_points_per_station))
+        int(options.fit_points_per_station), breaks=breaks)
     fit = chain.fit_frame_samples(*fit_cloud)
     audit_cloud = sample_frame_cloud(
         orbit, b_batch, (0.0, s_total), float(options.half_width),
         float(options.half_height), rng, int(options.fit_stations) // 2,
-        int(options.fit_points_per_station))
+        int(options.fit_points_per_station), breaks=breaks)
     audit_b = chain.magnetic_flux_density_frame(*audit_cloud[:3])
     audit_ref = np.column_stack(audit_cloud[3:])
     audit_max = float(np.max(np.linalg.norm(audit_b - audit_ref, axis=1)))
@@ -247,6 +394,110 @@ def main(argv=None):
     import platform
     from datetime import datetime, timezone
 
+    cross_record = None
+    if options.include_cross_routes:
+        cross_started = time.perf_counter()
+        from radia.beam import build_curvilinear_beam_mesh
+        margin = 0.0005
+        extended_orbit = track_reference_orbit(
+            b_point, float(options.magnetic_rigidity), station_count=65,
+            entrance_x_m=-0.040 - margin, exit_x_m=0.040 + margin)
+        with ng.TaskManager():
+            tube = build_curvilinear_beam_mesh(
+                extended_orbit, half_width_m=float(options.half_width),
+                half_height_m=float(options.half_height),
+                maxh_m=0.02, vertical_layers=3, curve_order=2)
+            demag_a = vim.VectorPotentialCoefficientFromSolution(
+                solution, construction="exact",
+                reflection_normal=orbit.bend_axis)
+            coil_a = rad.RadiaField(coil, "a")
+            reflected_coil_a = rad.RadiaField(
+                coil, "a", origin=[0.0, 0.0, 0.0],
+                u_axis=[1.0, 0.0, 0.0], v_axis=[0.0, 1.0, 0.0],
+                w_axis=[0.0, 0.0, -1.0])
+            current_a = demag_a + 0.5 * (coil_a + reflected_coil_a)
+
+        def a_of_point(point):
+            return np.asarray(current_a(tube.mesh(*point)), dtype=float)
+
+        rigidity = float(options.magnetic_rigidity)
+        scale = float(options.cross_scale)
+        mechanical0 = scale * np.array(
+            [1.0e-3, 1.0e-3, 1.0e-3, 1.0e-3, 0.0, 1.0e-3])
+        delta = mechanical0[5]
+
+        def chain_a_normalized(x_value, y_value, s_value):
+            value = chain.vector_potential_frame(
+                np.array([x_value]), np.array([y_value]),
+                np.array([s_value]))[0]
+            return value / rigidity
+
+        def exact_a_normalized(frame_a, x_value, y_value, s_value):
+            return frame_a(x_value, y_value, s_value) / rigidity
+
+        # Chain-canonical entrance state (chain's own gauge).
+        a_entry_chain = chain_a_normalized(mechanical0[0], mechanical0[2], 0.0)
+        chain_entry = mechanical0.copy()
+        chain_entry[1] += a_entry_chain[0]
+        chain_entry[3] += a_entry_chain[1]
+
+        lie_exit = apply_dragt_finn_map(
+            lie.transfer.factorization, chain_entry, generator_substeps=8)
+        chain_exit, chain_nfev = track_chain_a_rk(
+            chain, htilde_of_s, rigidity, chain_entry, (0.0, s_total),
+            float(options.rk_tolerance))
+
+        def chain_mechanical(state):
+            a_exit = chain_a_normalized(state[0], state[2], s_total)
+            return np.array([state[0], state[1] - a_exit[0],
+                             state[2], state[3] - a_exit[1]])
+
+        exact_frame_a = make_frame_a(a_of_point, orbit, htilde_of_s)
+        # Entrance conversion for the exact-source route (its own raw A).
+        a_entry_exact = exact_a_normalized(
+            exact_frame_a, mechanical0[0], mechanical0[2], 0.0)
+        exact_entry = mechanical0.copy()
+        exact_entry[1] += a_entry_exact[0]
+        exact_entry[3] += a_entry_exact[1]
+        exact_state, exact_evaluations = track_exact_source_a_rk(
+            exact_frame_a, htilde_of_s, rigidity,
+            exact_entry, (0.0, s_total), 1.0e-11, float(options.fd_step))
+        a_exit_exact = exact_a_normalized(
+            exact_frame_a, exact_state[0], exact_state[2], s_total)
+        exact_mech = np.array([
+            exact_state[0], exact_state[1] - a_exit_exact[0],
+            exact_state[2], exact_state[3] - a_exit_exact[1]])
+
+        b_mech, b_nfev = track_mechanical_b_rk(
+            b_point, orbit, rigidity, mechanical0, (0.0, s_total),
+            float(options.rk_tolerance))
+
+        lie_mech = chain_mechanical(lie_exit)
+        chain_mech = chain_mechanical(chain_exit)
+        pairs = {
+            "lie_vs_chain_a_rk": lie_mech - chain_mech,
+            "chain_a_rk_vs_exact_a_rk": chain_mech - exact_mech,
+            "chain_a_rk_vs_b_rk": chain_mech - b_mech,
+            "exact_a_rk_vs_b_rk": exact_mech - b_mech,
+        }
+        print(f"\ncross-route mechanical comparison (scale {scale:g}, "
+              f"[x, px_mech, y, py_mech], {time.perf_counter() - cross_started:.0f} s):")
+        for name, difference in pairs.items():
+            print(f"  {name:26s}: max {float(np.max(np.abs(difference))):.3e}"
+                  f"  {np.array2string(difference, precision=2)}")
+        print(f"  [exact-source A evals {exact_evaluations}, "
+              f"B-RK nfev {b_nfev}]")
+        cross_record = {
+            "scale": scale,
+            "mechanical_initial": mechanical0.tolist(),
+            "lie_mechanical": lie_mech.tolist(),
+            "chain_a_rk_mechanical": chain_mech.tolist(),
+            "exact_a_rk_mechanical": exact_mech.tolist(),
+            "b_rk_mechanical": b_mech.tolist(),
+            "pairwise_max": {name: float(np.max(np.abs(value)))
+                             for name, value in pairs.items()},
+        }
+
     result = {
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
         "hostname": platform.node(),
@@ -264,6 +515,7 @@ def main(argv=None):
         "interface_b_value_jump": fit.maximum_interface_b_value_jump,
         "hamiltonian_linear_max": linear_max,
         "lie_vs_a_rk": records,
+        "cross_routes": cross_record,
         "solve_wall_s": solve_wall,
     }
     if options.output:

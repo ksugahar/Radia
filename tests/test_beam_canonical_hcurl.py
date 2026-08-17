@@ -13,6 +13,7 @@ import pytest
 from radia.beam_canonical_hcurl import (
     CanonicalHCurlChain,
     CanonicalHCurlElement,
+    graded_breaks,
 )
 
 HW, HH = 0.010, 0.0035
@@ -141,6 +142,20 @@ def test_chain_fit_interfaces_are_hard():
     assert float(check) < 4.0 * fit.maximum_residual_t + 1e-15
 
 
+def test_sample_starvation_rejected():
+    # One thin element with (almost) no samples must fail loud, not fit.
+    chain = CanonicalHCurlChain(
+        np.array([0.0, 0.001, 0.04]), HW, HH, order_x=6, order_s=2)
+    rng = np.random.default_rng(9)
+    n = 4 * chain.chain_dimension + 400
+    x = rng.uniform(-HW, HW, n)
+    y = rng.uniform(-HH, HH, n)
+    s = rng.uniform(0.002, 0.04, n)   # never inside the thin first element
+    with pytest.raises(ValueError, match="sample starvation"):
+        chain.fit_frame_samples(x, y, s, np.zeros(n), np.ones(n),
+                                np.zeros(n))
+
+
 def test_midplane_only_cloud_rejected():
     chain = CanonicalHCurlChain(
         np.array([0.0, 0.01]), HW, HH, order_x=4, order_s=0)
@@ -151,6 +166,23 @@ def test_midplane_only_cloud_rejected():
     s = rng.uniform(0.0, 0.01, n)
     with pytest.raises(ValueError, match="midplane-only"):
         chain.fit_frame_samples(x, y, s, np.zeros(n), np.ones(n), np.zeros(n))
+
+
+def test_graded_breaks_equidistribute_monitor():
+    s = np.linspace(0.0, 1.0, 401)
+    # Two fringe bumps near 0.2 and 0.8.
+    w = np.exp(-((s - 0.2) / 0.03) ** 2) + np.exp(-((s - 0.8) / 0.03) ** 2)
+    uniform = graded_breaks(s, np.zeros_like(s), 10)
+    assert np.allclose(uniform, np.linspace(0.0, 1.0, 11))
+    graded = graded_breaks(s, w, 10, strength=8.0)
+    assert graded[0] == 0.0 and graded[-1] == 1.0
+    sizes = np.diff(graded)
+    def local_size(position):
+        index = int(np.clip(np.searchsorted(graded, position) - 1, 0, 9))
+        return sizes[index]
+    # Elements shrink at the bumps relative to the flat middle.
+    assert local_size(0.2) < 0.4 * local_size(0.5)
+    assert local_size(0.8) < 0.4 * local_size(0.5)
 
 
 def test_gradient_matches_finite_difference():
@@ -178,6 +210,86 @@ def test_gradient_matches_finite_difference():
             np.array([ps_]))
         fd = (plus - minus)[0] / (2.0 * step)
         assert float(np.max(np.abs(grad[0, :, axis] - fd))) < 1.0e-8
+
+
+def test_curl_of_a_matches_b_evaluator_in_curved_chart():
+    # Internal consistency lock: the B evaluator IS the exact polynomial
+    # curl of the fitted A in the curved chart.  Reconstruct curl A by
+    # chart finite differences (Bx=(dAs/dy-dAy/ds)/g, By=-dAs/dx/g,
+    # Bs=dAy/dx with covariant As) and compare.
+    h = 0.125
+    chain = CanonicalHCurlChain(
+        np.array([-0.01, 0.01]), HW, HH, order_x=6, order_s=2,
+        curvature_per_m=lambda s: h)
+    rng = np.random.default_rng(41)
+    n = 4 * chain.chain_dimension + 300
+    x = rng.uniform(-HW, HW, n)
+    y = rng.uniform(-HH, HH, n)
+    s = rng.uniform(-0.01, 0.01, n)
+    z = x + 1j * y
+    chain.fit_frame_samples(x, y, s, np.imag(z**3) / HW**3,
+                            np.real(z**3) / HW**3, np.zeros(n))
+    probes = np.column_stack((
+        rng.uniform(-0.5 * HW, 0.5 * HW, 20),
+        rng.uniform(-0.5 * HH, 0.5 * HH, 20),
+        rng.uniform(-0.008, 0.008, 20),
+    ))
+    step = 1.0e-6
+
+    def a_at(px_, py_, ps_):
+        return chain.vector_potential_frame(px_, py_, ps_)
+
+    b_eval = chain.magnetic_flux_density_frame(
+        probes[:, 0], probes[:, 1], probes[:, 2])
+    for row, (px_, py_, ps_) in enumerate(probes):
+        d_dx = (a_at([px_ + step], [py_], [ps_])
+                - a_at([px_ - step], [py_], [ps_]))[0] / (2 * step)
+        d_dy = (a_at([px_], [py_ + step], [ps_])
+                - a_at([px_], [py_ - step], [ps_]))[0] / (2 * step)
+        d_ds = (a_at([px_], [py_], [ps_ + step])
+                - a_at([px_], [py_], [ps_ - step]))[0] / (2 * step)
+        g = 1.0 + h * px_
+        curl_fd = np.array([
+            (d_dy[2] - d_ds[1]) / g,
+            -d_dx[2] / g,
+            d_dx[1],
+        ])
+        assert float(np.max(np.abs(curl_fd - b_eval[row]))) < 1.0e-7
+
+
+def test_periodic_chain_spline_dimension_and_cohomology():
+    for order_s in (2, 3):
+        ring = CanonicalHCurlChain(
+            np.linspace(0.0, 0.08, 9), HW, HH, order_x=6, order_s=order_s,
+            periodic=True)
+        # Maximal-smoothness periodic spline: E DOFs per multipole family.
+        assert ring.chain_dimension == 6 * 8
+
+    ring = CanonicalHCurlChain(
+        np.linspace(0.0, 0.08, 9), HW, HH, order_x=6, order_s=2,
+        periodic=True)
+    rng = np.random.default_rng(31)
+    n = 4 * ring.chain_dimension + 400
+    x = rng.uniform(-HW, HW, n)
+    y = rng.uniform(-HH, HH, n)
+    s = rng.uniform(0.0, 0.08, n)
+    fit = ring.fit_frame_samples(x, y, s, np.zeros(n), np.full(n, 0.2),
+                                 np.zeros(n))
+    b_before = ring.magnetic_flux_density_frame(x, y, s)
+    a_before = ring.vector_potential_frame(x, y, s)
+    ring.set_ring_circulation(1.6e-4)      # linked flux, T*m^2
+    b_after = ring.magnetic_flux_density_frame(x, y, s)
+    a_after = ring.vector_potential_frame(x, y, s)
+    # Cohomology mode: pure circulation, zero field.
+    assert float(np.max(np.abs(b_after - b_before))) == 0.0
+    assert np.allclose(a_after[:, 2] - a_before[:, 2], 1.6e-4 / 0.08)
+    assert float(np.max(np.abs(a_after[:, 1] - a_before[:, 1]))) == 0.0
+    assert fit.maximum_residual_t < 1.0e-12
+
+    with pytest.raises(ValueError, match="periodic"):
+        open_chain = CanonicalHCurlChain(
+            np.linspace(0.0, 0.08, 9), HW, HH, order_x=6, order_s=2)
+        open_chain.set_ring_circulation(1.0e-4)
 
 
 def test_lie_segment_arrays_contract():
