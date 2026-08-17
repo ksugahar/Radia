@@ -328,7 +328,16 @@ AtomClass class_of_char(uint32_t cp) {
  * kept unconditionally here: equations in a document are set in text style or
  * larger, and dropping them inside scripts costs more than it saves. */
 int space_mu(AtomClass l, AtomClass r) {
-    static const int kThin = 3, kMed = 4, kThick = 5;
+    /* Equation Editor 3.1's spacing, which is TeX's less one eighteenth of an
+     * em at every step.  Measured off its own screen at four times size: it
+     * leaves 0.219 em around a relation, 0.156 around a binary operator and
+     * 0.109 after a comma, against four, three and two eighteenths of 0.222,
+     * 0.167 and 0.111 -- a fit of three thousandths of an em.
+     *
+     * TeX's own 3/4/5 set mathematics a little more openly.  This is the
+     * editor being imitated, and the whole point of imitating it is how the
+     * result feels to read. */
+    static const int kThin = 2, kMed = 3, kThick = 4;
     switch (l) {
         case kOrd:
             if (r == kOp) return kThin;
@@ -936,6 +945,9 @@ private:
         Layout out;
         double x = 0;
 
+        const mtef::MathFont& mf = mtef::MathFont::cambria();
+        const mtef::MathConstants& mc = mf.constants();
+
         if (stacked) {
             /* Limits above and below the operator, everything centred on the
              * widest of the three.  Centring the limits on the operator alone
@@ -948,16 +960,28 @@ private:
             if (hasUpper) w = std::max(w, up.w);
             if (hasLower) w = std::max(w, lo.w);
 
+            /* The font states both the clearance and how far the limit's own
+             * baseline must travel; the larger wins, so a deep limit is not
+             * pushed into the operator by a rule that only counted the gap. */
+            const double upGap  = mc.upperLimitGapMin * sizePt;
+            const double loGap  = mc.lowerLimitGapMin * sizePt;
+            const double upRise = mc.upperLimitBaselineRiseMin * sizePt;
+            const double loDrop = mc.lowerLimitBaselineDropMin * sizePt;
+
             out.absorb(op, (w - op.w) / 2.0, 0);
             out.asc = op.asc;
             out.desc = op.desc;
             if (hasUpper) {
-                out.absorb(up, (w - up.w) / 2.0, -(op.asc + 0.15 * sizePt + up.desc));
-                out.asc = std::max(out.asc, op.asc + 0.15 * sizePt + up.desc + up.asc);
+                const double lift = std::max(op.asc + upGap + up.desc,
+                                             op.asc + upRise);
+                out.absorb(up, (w - up.w) / 2.0, -lift);
+                out.asc = std::max(out.asc, lift + up.asc);
             }
             if (hasLower) {
-                out.absorb(lo, (w - lo.w) / 2.0, op.desc + 0.15 * sizePt + lo.asc);
-                out.desc = std::max(out.desc, op.desc + 0.15 * sizePt + lo.asc + lo.desc);
+                const double drop = std::max(op.desc + loGap + lo.asc,
+                                             op.desc + loDrop);
+                out.absorb(lo, (w - lo.w) / 2.0, drop);
+                out.desc = std::max(out.desc, drop + lo.desc);
             }
             x = w;
         } else {
@@ -966,17 +990,37 @@ private:
             out.asc = op.asc;
             out.desc = op.desc;
             x = op.w;
+            /* An integral is tall and slanted, and both of those matter here.
+             *
+             * Tall: shifting the limits by a fixed fraction of the TYPE size
+             * put them inside an operator set at the symbol size, so they came
+             * out lying across the integral's own stroke.  TeX hangs a script
+             * off the box it belongs to -- the operator's height less a drop
+             * the font states -- and takes whichever is further.
+             *
+             * Slanted: the top of the integral leans right of its foot, so the
+             * upper limit must follow it.  That is what a font's italic
+             * correction is for, and Cambria Math gives a large one here. */
+            const double supShift = std::max(
+                mc.superscriptShiftUp * sizePt,
+                op.asc - mc.superscriptBaselineDropMax * sizePt);
+            const double subShift = std::max(
+                mc.subscriptShiftDown * sizePt,
+                op.desc + mc.subscriptBaselineDropMin * sizePt);
+            const uint16_t opGid = mf.ok() ? mf.glyph_for(glyph) : 0;
+            const double ic = opGid ? mf.italics_correction(opGid) * opSize : 0.0;
+
             double wsub = 0, wsup = 0;
             if (hasUpper) {
                 Layout up = layout_list(upper, ss, slot_path(lp, c, upperSlot));
-                out.absorb(up, x, -0.45 * sizePt);
-                out.asc = std::max(out.asc, 0.45 * sizePt + up.asc);
-                wsup = up.w;
+                out.absorb(up, x + ic, -supShift);
+                out.asc = std::max(out.asc, supShift + up.asc);
+                wsup = ic + up.w;
             }
             if (hasLower) {
                 Layout lo = layout_list(lower, ss, slot_path(lp, c, lowerSlot));
-                out.absorb(lo, x, 0.22 * sizePt);
-                out.desc = std::max(out.desc, 0.22 * sizePt + lo.desc);
+                out.absorb(lo, x, subShift);
+                out.desc = std::max(out.desc, subShift + lo.desc);
                 wsub = lo.w;
             }
             x += std::max(wsub, wsup);

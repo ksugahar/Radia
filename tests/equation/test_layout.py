@@ -84,11 +84,14 @@ def test_a_parenthesis_measures_like_a_parenthesis():
 
 
 def test_a_binary_operator_gets_two_medium_spaces():
+    """Three eighteenths on each side, not TeX's four: Equation Editor 3.1
+    measures 0.156 em around a binary operator, and the whole spacing table is
+    one eighteenth tighter than TeX's to match it."""
     style = equation.SvgStyle()
     mu = style.full / 18.0
     plus = Rendered("+", style).ink_width
     gained = Rendered("a+b", style).width - Rendered("ab", style).width - plus
-    assert abs(gained - 2 * 4 * mu) <= 1.5 * mu
+    assert abs(gained - 2 * 3 * mu) <= 1.5 * mu
 
 
 def test_a_leading_minus_is_unary():

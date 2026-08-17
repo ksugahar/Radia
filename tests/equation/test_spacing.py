@@ -28,7 +28,9 @@ K = equation.AtomKind
 kind = equation.atom_kind
 space = equation.atom_space_mu
 
-THIN, MED, THICK = 3, 4, 5
+# Equation Editor 3.1's amounts, measured: one eighteenth tighter than TeX's
+# 3/4/5 at every step.
+THIN, MED, THICK = 2, 3, 4
 
 
 # ---- what a character is ----------------------------------------------------
@@ -61,8 +63,8 @@ def test_the_keyboard_form_is_classed_like_the_typographic_one(ascii_form,
 # ---- how much room goes between two of them ---------------------------------
 
 def test_a_relation_gets_more_room_than_a_binary_operator():
-    """Five eighteenths against four.  Equation Editor measures 0.219 against
-    0.156 -- the same ordering, about three quarters the size."""
+    """Four eighteenths against three, which is what Equation Editor measures:
+    0.219 em against 0.156."""
     assert space(K.Ord, K.Rel) > space(K.Ord, K.Bin) > 0
 
 
@@ -84,8 +86,8 @@ def test_nothing_at_a_parenthesis():
 
 
 def test_punctuation_is_asymmetric():
-    """Nothing before a comma, a thin space after it.  Equation Editor measures
-    0.016 before and 0.109 after -- the same shape."""
+    """Nothing before a comma, a thin space after it: 0.016 and 0.109 em
+    measured, against nothing and two eighteenths."""
     assert space(K.Ord, K.Punct) == 0
     assert space(K.Punct, K.Ord) == THIN
 
