@@ -32,6 +32,7 @@
 #include "tex_parser.h"
 #include "latex_emitter.h"
 #include "eq_chords.h"
+#include "math_font.h"
 #include "eq_edit.h"
 #include "md_doc.h"
 #include "md_blocks.h"
@@ -354,6 +355,75 @@ PYBIND11_MODULE(_equation, m) {
         .def("__repr__", [](const mtef::Equation& e) {
             return "<Equation " + e.latex() + " caret=" + e.caret() + ">";
         });
+
+    /* The typesetting parameters the math font itself carries.  The layout
+     * used to guess these; exposing them is what lets a test say the guess is
+     * gone and the font is being read. */
+    m.def("math_constants", []() {
+        const mtef::MathFont& f = mtef::MathFont::cambria();
+        if (!f.ok()) throw std::runtime_error(f.why_not());
+        const mtef::MathConstants& c = f.constants();
+        py::dict d;
+        d["script_percent"] = c.scriptPercentScaleDown;
+        d["script_script_percent"] = c.scriptScriptPercentScaleDown;
+        d["axis_height"] = c.axisHeight;
+        d["fraction_rule_thickness"] = c.fractionRuleThickness;
+        d["fraction_numerator_gap_min"] = c.fractionNumeratorGapMin;
+        d["fraction_num_display_gap_min"] = c.fractionNumDisplayStyleGapMin;
+        d["fraction_num_display_shift_up"] = c.fractionNumeratorDisplayStyleShiftUp;
+        d["fraction_denom_display_shift_down"] = c.fractionDenominatorDisplayStyleShiftDown;
+        d["radical_vertical_gap"] = c.radicalVerticalGap;
+        d["radical_display_vertical_gap"] = c.radicalDisplayStyleVerticalGap;
+        d["radical_rule_thickness"] = c.radicalRuleThickness;
+        d["radical_extra_ascender"] = c.radicalExtraAscender;
+        d["radical_kern_before_degree"] = c.radicalKernBeforeDegree;
+        d["radical_kern_after_degree"] = c.radicalKernAfterDegree;
+        d["radical_degree_bottom_raise"] = c.radicalDegreeBottomRaisePercent;
+        d["overbar_rule_thickness"] = c.overbarRuleThickness;
+        d["overbar_vertical_gap"] = c.overbarVerticalGap;
+        d["accent_base_height"] = c.accentBaseHeight;
+        d["superscript_shift_up"] = c.superscriptShiftUp;
+        d["subscript_shift_down"] = c.subscriptShiftDown;
+        d["upem"] = 1.0;   /* everything above is already in em */
+        return d;
+    }, "Cambria Math's MATH constants, in em.");
+
+    m.def("math_glyph", [](uint32_t codepoint) {
+        const mtef::MathFont& f = mtef::MathFont::cambria();
+        if (!f.ok()) throw std::runtime_error(f.why_not());
+        return f.glyph_for(codepoint);
+    }, py::arg("codepoint"), "Glyph id, or 0 when the font has no such glyph.");
+
+    m.def("math_stretch", [](uint32_t codepoint) {
+        const mtef::MathFont& f = mtef::MathFont::cambria();
+        if (!f.ok()) throw std::runtime_error(f.why_not());
+        const uint16_t g = f.glyph_for(codepoint);
+        py::dict d;
+        d["glyph"] = g;
+        py::list variants, assembly;
+        if (const mtef::Stretch* s = f.vertical(g)) {
+            for (const auto& v : s->variants)
+                variants.append(py::make_tuple(v.first, v.second));
+            for (const mtef::GlyphPart& p : s->assembly)
+                assembly.append(py::make_tuple(p.glyph, p.fullAdvance,
+                                               p.extender));
+        }
+        d["variants"] = variants;
+        d["assembly"] = assembly;
+        d["min_overlap"] = f.min_connector_overlap();
+        return d;
+    }, py::arg("codepoint"),
+       "How a character grows: the font's ready-made taller drawings, and the "
+       "parts to assemble one taller than any of them.");
+
+    m.def("math_variant_for_height", [](uint32_t codepoint, double em) {
+        const mtef::MathFont& f = mtef::MathFont::cambria();
+        if (!f.ok()) throw std::runtime_error(f.why_not());
+        double got = 0;
+        const uint16_t g = f.vertical_variant(f.glyph_for(codepoint), em, &got);
+        return py::make_tuple(g, got);
+    }, py::arg("codepoint"), py::arg("em"),
+       "The smallest drawing at least that tall, and how tall it is.");
 
     py::class_<mtef::MdSegment> seg(m, "MdSegment",
         "One span of a Markdown file: prose, code, or an equation.");
