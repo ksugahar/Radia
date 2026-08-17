@@ -259,6 +259,15 @@ PYBIND11_MODULE(_equation, m) {
           py::arg("run_passes") = true,
           "Indented text dump of the parsed node tree (diagnostic).");
 
+    py::class_<mtef::Equation::SelectionBox>(m, "SelectionBox",
+        "The rectangle an editor highlights.  `found` is false when nothing "
+        "is selected.")
+        .def_readonly("found", &mtef::Equation::SelectionBox::found)
+        .def_readonly("x0", &mtef::Equation::SelectionBox::x0)
+        .def_readonly("x1", &mtef::Equation::SelectionBox::x1)
+        .def_readonly("top", &mtef::Equation::SelectionBox::top)
+        .def_readonly("bottom", &mtef::Equation::SelectionBox::bottom);
+
     py::class_<mtef::Equation>(m, "Equation",
         "The editing model: an insertion point that lives inside the structure, "
         "templates you tab through, backspace that unwraps.  LaTeX in, LaTeX out.")
@@ -294,8 +303,29 @@ PYBIND11_MODULE(_equation, m) {
         .def("insert_text", &mtef::Equation::insert_text, py::arg("text"))
         .def("insert_symbol", &mtef::Equation::insert_symbol, py::arg("command"))
         .def("insert_template", &mtef::Equation::insert_template, py::arg("kind"))
+        .def("insert_latex", &mtef::Equation::insert_latex, py::arg("latex"),
+             "Paste: parse LaTeX and put it in at the caret, replacing any "
+             "selection, in one undo step.")
         .def("backspace", &mtef::Equation::backspace)
         .def("erase", &mtef::Equation::erase)
+        /* Selection: a range within one slot.  Equation Editor's Select All,
+         * Cut, Copy and Clear all rest on these. */
+        .def("has_selection", &mtef::Equation::has_selection)
+        .def("clear_selection", &mtef::Equation::clear_selection)
+        .def("select_all", &mtef::Equation::select_all)
+        .def("extend_left", &mtef::Equation::extend_left)
+        .def("extend_right", &mtef::Equation::extend_right)
+        .def("extend_home", &mtef::Equation::extend_home)
+        .def("extend_end", &mtef::Equation::extend_end)
+        .def("extend_to_point", &mtef::Equation::extend_to_point,
+             py::arg("x"), py::arg("y"), py::arg("style") = mtef::SvgStyle(),
+             "Drag the selection to a point, keeping the anchor.")
+        .def("selected_latex", &mtef::Equation::selected_latex,
+             "The selected nodes as LaTeX, or an empty string.")
+        .def("delete_selection", &mtef::Equation::delete_selection)
+        .def("selection_geometry", &mtef::Equation::selection_geometry,
+             py::arg("style") = mtef::SvgStyle(),
+             "The box an editor highlights.")
         .def("undo", &mtef::Equation::undo)
         .def("redo", &mtef::Equation::redo)
         .def("command", &mtef::Equation::command, py::arg("name"))
