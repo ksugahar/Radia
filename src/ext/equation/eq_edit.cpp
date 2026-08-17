@@ -364,6 +364,10 @@ void Equation::extents(double& w, double& asc, double& desc,
     desc = L.desc;
 }
 
+Layout Equation::layout(const SvgStyle& style) const {
+    return layout_math(*root_, style);
+}
+
 /* ------------------------------------------------------------- history */
 
 void Equation::checkpoint() {
@@ -402,13 +406,29 @@ void Equation::insert_text(const std::string& utf8) {
     checkpoint();
     NodeList& l = here();
     clamp();
-    for (char c : utf8) {
+    /* One character, one node -- and a character may be several bytes.  What
+     * an IME hands the window is a composed character, so walking bytes here
+     * would turn every Japanese keystroke into three nodes the same way the
+     * parser once did. */
+    for (size_t i = 0; i < utf8.size(); ) {
+        const char c = utf8[i];
         std::unique_ptr<CharNode> node;
-        if (is_digit(c))       node = make_char(TF_NUMBER,   uint16_t(c), c);
-        else if (is_letter(c)) node = make_char(TF_VARIABLE, uint16_t(c), c);
-        else if (c == '-')     node = make_char(TF_SYMBOL,   0x2212, c);
-        else                   node = make_char(TF_SYMBOL,
-                                                uint16_t((unsigned char)c), c);
+        if ((unsigned char)c >= 0x80) {
+            const int extra = ((unsigned char)c >= 0xF0) ? 3 :
+                              ((unsigned char)c >= 0xE0) ? 2 : 1;
+            uint32_t cp = uint32_t((unsigned char)c) & uint32_t(0x3F >> extra);
+            ++i;
+            for (int k = 0; k < extra && i < utf8.size(); ++k, ++i)
+                cp = (cp << 6) | (uint32_t((unsigned char)utf8[i]) & 0x3Fu);
+            node = make_char(TF_SYMBOL, uint16_t(cp > 0xFFFF ? 0xFFFD : cp));
+        } else {
+            ++i;
+            if (is_digit(c))       node = make_char(TF_NUMBER,   uint16_t(c), c);
+            else if (is_letter(c)) node = make_char(TF_VARIABLE, uint16_t(c), c);
+            else if (c == '-')     node = make_char(TF_SYMBOL,   0x2212, c);
+            else                   node = make_char(TF_SYMBOL,
+                                                    uint16_t((unsigned char)c), c);
+        }
         l.insert(l.begin() + index_, std::move(node));
         ++index_;
     }

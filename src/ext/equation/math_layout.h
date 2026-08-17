@@ -28,9 +28,17 @@ struct Glyph {
     double size = 0;            /* pt */
     bool italic = false;
     bool symbol = false;        /* draw with the maths face rather than the text one */
+    bool cjk = false;           /* draw with the Japanese face                       */
     double stretchY = 1.0;      /* vertical scale, for a fence grown to its content */
     std::string text;           /* UTF-8 */
 };
+
+/* True for the ranges a Latin font has no glyphs for.  `symbol` and `cjk` are
+ * mutually exclusive and both are decided from the character's own code point,
+ * so a glyph's face is a property of the character rather than something a
+ * caller chooses -- and the width it is measured with is the width it is drawn
+ * with.  Getting that wrong drew Japanese as correctly spaced blank paper. */
+bool is_cjk(uint32_t cp);
 
 struct Rule { double x = 0, y = 0, w = 0, h = 0; };   /* y is the TOP edge */
 
