@@ -13,6 +13,8 @@
  * content so nothing silently disappears.
  */
 #include "mtef_svg.h"
+
+#include "math_font.h"
 #include "math_layout.h"
 #include "math_writer.h"      /* accent_drawing_char: one table, two spellings */
 #include "mtef_parser.h"
@@ -200,7 +202,34 @@ struct MetricCache {
         return b;
     }
 
+    /* The same measurement for a glyph the font names rather than a character
+     * it maps: a radical variant has no codepoint of its own. */
+    Box glyph_box_index(uint16_t gid) {
+        auto it = index_boxes.find(gid);
+        if (it != index_boxes.end()) return it->second;
+
+        const int key = 2;                       /* the maths face */
+        HGDIOBJ old = SelectObject(hdc, font(key));
+        Box b;
+        int adv = 0;
+        if (GetCharWidthI(hdc, gid, 1, nullptr, &adv)) b.ink_w = adv / kEm;
+        GLYPHMETRICS gm = {};
+        MAT2 id = {{0, 1}, {0, 0}, {0, 0}, {0, 1}};
+        DWORD r = GetGlyphOutlineW(hdc, gid, GGO_METRICS | GGO_GLYPH_INDEX,
+                                   &gm, 0, nullptr, &id);
+        SelectObject(hdc, old);
+        if (r != GDI_ERROR && gm.gmBlackBoxY > 0) {
+            b.asc = double(gm.gmptGlyphOrigin.y) / kEm;
+            b.desc = double(int(gm.gmBlackBoxY) - gm.gmptGlyphOrigin.y) / kEm;
+            if (b.ink_w <= 0)
+                b.ink_w = double(gm.gmptGlyphOrigin.x + int(gm.gmBlackBoxX)) / kEm;
+        }
+        index_boxes[gid] = b;
+        return b;
+    }
+
     std::map<std::pair<int, uint32_t>, Box> boxes;
+    std::map<uint16_t, Box> index_boxes;
 };
 
 MetricCache& metrics() {
@@ -736,22 +765,49 @@ private:
     Layout layout_sqrt(const SqrtNode& s, double sizePt,
                        const std::string& lp, int c) {
         Layout inner = layout_list(s.content, sizePt, slot_path(lp, c, 0));
-        const double thick = std::max(0.6, 0.04 * sizePt);
-        const double clearance = 0.18 * sizePt;
-        Layout sign = glyph_layout(0x221A, sizePt, false, true);
 
-        /* The sign grows to the radicand, as a fence does.  Without it a tall
-         * radicand leaves the vinculum floating above a short radical, joined
-         * to nothing -- which is what a radical sign is for. */
-        {
-            const double need = inner.asc + inner.desc + clearance + thick;
-            const double have = std::max(sign.asc + sign.desc, 1e-6);
-            const double stretch = std::max(1.0, need / have);
-            if (stretch > 1.0) {
-                for (auto& g : sign.glyphs) g.stretchY = stretch;
-                sign.asc *= stretch;
-                sign.desc *= stretch;
-            }
+        /* The font states all four of these; they used to be 0.04 and 0.18 of
+         * the type size, picked by eye. */
+        const mtef::MathFont& mf = mtef::MathFont::cambria();
+        const mtef::MathConstants& mc = mf.constants();
+        const double gap   = mc.radicalVerticalGap  * sizePt;
+        const double thick = mc.radicalRuleThickness * sizePt;
+        const double extra = mc.radicalExtraAscender * sizePt;
+
+        /* A radical is not a character scaled up.  The font draws one at six
+         * heights, so ask for the one that reaches -- the stroke stays the
+         * weight the designer drew and the hook still meets the bar. */
+        const double need = inner.asc + inner.desc + gap + thick;
+        Layout sign;
+        double got_em = 0;
+        const uint16_t variant =
+            mf.ok() ? mf.vertical_variant(mf.glyph_for(0x221A), need / sizePt,
+                                          &got_em)
+                    : 0;
+        if (variant) {
+            const MetricCache::Box b = metrics().glyph_box_index(variant);
+            Glyph g;
+            g.size = sizePt;
+            g.symbol = true;
+            g.glyph_id = variant;
+            g.text = utf8_of(0x221A);
+            sign.glyphs.push_back(g);
+            sign.w = b.ink_w * sizePt;
+            sign.asc = b.asc * sizePt;
+            sign.desc = b.desc * sizePt;
+        } else {
+            sign = glyph_layout(0x221A, sizePt, false, true);
+        }
+
+        /* Past the tallest drawing the font offers, the remainder is taken by
+         * scaling.  The font also ships parts to assemble one of any height;
+         * until that is wired, this at least covers the radicand rather than
+         * stopping short of it. */
+        if (variant && got_em * sizePt < need) {
+            const double k = need / std::max(got_em * sizePt, 1e-6);
+            for (auto& g : sign.glyphs) g.stretchY = k;
+            sign.asc *= k;
+            sign.desc *= k;
         }
 
         /* The index sits above the radical's left arm, at script size.  It is
@@ -766,21 +822,28 @@ private:
 
         Layout out;
         const double signX = idxW;
-        out.absorb(sign, signX, 0);
-        out.absorb(inner, signX + sign.w, 0);
-        out.asc = std::max(sign.asc, inner.asc + clearance + thick);
-        out.desc = std::max(sign.desc, inner.desc);
 
-        /* The vinculum starts where the radical's arm ends, so the two read as
-         * one stroke. */
+        /* Everything hangs off the bar: it sits one gap above the radicand,
+         * and the sign is placed so its own top lands on it. */
+        const double barTop = -(inner.asc + gap + thick);
+        const double signBaseline = barTop + sign.asc;
+
+        out.absorb(sign, signX, signBaseline);
+        out.absorb(inner, signX + sign.w, 0);
+        out.asc = std::max(-barTop + extra, inner.asc);
+        out.desc = std::max(sign.desc - signBaseline, inner.desc);
+
         Rule bar;
         bar.x = signX + sign.w;
-        bar.y = -out.asc;
+        bar.y = barTop;
         bar.w = inner.w;
         bar.h = thick;
         out.rules.push_back(bar);
+
         if (s.hasIndex) {
-            const double lift = 0.55 * out.asc;
+            /* The font says how far up the degree sits, as a fraction of the
+             * radical's own height. */
+            const double lift = mc.radicalDegreeBottomRaisePercent * (-barTop);
             out.absorb(idx, 0, -lift);
             out.asc = std::max(out.asc, lift + idx.asc);
         }
