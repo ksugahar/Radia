@@ -72,6 +72,13 @@ def parser():
     result.add_argument("--fit-points-per-station", type=int, default=120)
     result.add_argument("--lie-segments", type=int, default=64)
     result.add_argument("--lie-degree", type=int, default=5)
+    result.add_argument("--lie-staging",
+                        choices=("midpoint", "element-spoly"),
+                        default="midpoint",
+                        help="midpoint: piecewise-constant segments; "
+                             "element-spoly: one Lie segment per chain "
+                             "element consuming its zeta-polynomial "
+                             "directly (nonautonomous stage-jet RK4)")
     result.add_argument("--reference-orbit-tolerance", type=float,
                         default=2.0e-3)
     result.add_argument("--htilde-sign", type=float, default=-1.0,
@@ -347,8 +354,14 @@ def main(argv=None):
 
     # ---- fourth-order Lie map from the chain ---------------------------
     lie_started = time.perf_counter()
-    Ay, As, lengths, curvatures = chain.lie_segment_arrays(
-        int(options.lie_segments), degree=int(options.lie_degree))
+    if options.lie_staging == "element-spoly":
+        Ay, As, lengths, curvatures = chain.lie_element_spoly_arrays(
+            degree=int(options.lie_degree))
+        staging_note = f"{chain.element_count} element-spoly segments"
+    else:
+        Ay, As, lengths, curvatures = chain.lie_segment_arrays(
+            int(options.lie_segments), degree=int(options.lie_degree))
+        staging_note = f"{int(options.lie_segments)} midpoint segments"
     lie = _fourth_order_lie_map_from_vector_potential_polynomials(
         Ay, As, lengths, float(options.magnetic_rigidity),
         reference_curvature_per_m=curvatures,
@@ -360,7 +373,7 @@ def main(argv=None):
     )
     lie_wall = time.perf_counter() - lie_started
     linear_max = float(np.max(np.abs(lie.hamiltonian_linear), initial=0.0))
-    print(f"LIE map ({int(options.lie_segments)} segments, {lie_wall:.1f} s): "
+    print(f"LIE map ({staging_note}, {lie_wall:.1f} s): "
           f"max |hamiltonian linear| {linear_max:.2e} "
           f"(orbit-consistency gate)")
 
