@@ -1005,6 +1005,7 @@ pybind11_add_module(_equation
 	${EQUATION_DIR}/mtef_dump.cpp
 	${EQUATION_DIR}/eq_edit.cpp
 	${EQUATION_DIR}/eq_chords.cpp
+	${EQUATION_DIR}/math_font.cpp
 	${EQUATION_DIR}/md_doc.cpp
 	${EQUATION_DIR}/md_blocks.cpp
 	${EQUATION_DIR}/md_layout.cpp
