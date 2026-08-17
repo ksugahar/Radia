@@ -58,7 +58,7 @@ end
 
 function testCanonicalBodyHamiltonianJet(testCase)
 actual = radia.beam.canonicalBodyHamiltonianJet( ...
-    [0.2,2.4,-0.6,5,1.5,-7,2],3,ReferenceBeta=0.8);
+    [0.2,2.4,-0.6,5,1.5,-7,2,9,-3],3,ReferenceBeta=0.8);
 verifyEqual(testCase,actual.schema, ...
     'radia.beam.canonical-hamiltonian-jet.result.v1');
 verifyEqual(testCase,actual.backend,'native-cpp-mex');
@@ -68,10 +68,24 @@ verifyEqual(testCase,actual.poisson_pair_signs,[1,1,-1]);
 verifySize(testCase,actual.H2_per_m,[6,6]);
 verifySize(testCase,actual.H3_per_m,[6,6,6]);
 verifySize(testCase,actual.H4_per_m,[6,6,6,6]);
+verifySize(testCase,actual.H5_per_m,[6,6,6,6,6]);
 verifyEqual(testCase,actual.H2_per_m(1,6),-1/15,"AbsTol",2e-15);
 verifyEqual(testCase,actual.A_per_m(2,6),1/15,"AbsTol",2e-15);
 verifyEqual(testCase,actual.F2_per_m(2,1,1),-10/3,"AbsTol",2e-14);
 verifyEqual(testCase,actual.F3_per_m(2,1,1,1),14,"AbsTol",2e-14);
+verifyEqual(testCase,actual.H5_per_m(1,1,1,1,1),72,"AbsTol",2e-13);
+verifyEqual(testCase,actual.F4_per_m(2,1,1,1,1),-72,"AbsTol",2e-13);
+
+geometric = radia.beam.canonicalBodyHamiltonianJet( ...
+    [0.3,0,0,0,0,0,0],3,ReferenceCurvaturePerM=0.25);
+verifyEqual(testCase,geometric.reference_curvature_per_m,0.25, ...
+    "AbsTol",2e-15);
+verifyEqual(testCase,geometric.field_curvature_per_m,0.1, ...
+    "AbsTol",2e-15);
+verifyEqual(testCase,geometric.H2_per_m(1,6),-0.25, ...
+    "AbsTol",2e-15);
+verifyEqual(testCase,geometric.H2_per_m(1,1),0.025, ...
+    "AbsTol",2e-15);
 end
 
 function testNormalQuadrupoleMatchesAnalyticMatrix(testCase)

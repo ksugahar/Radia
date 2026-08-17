@@ -19,6 +19,8 @@ Gates run at save (each RAISES on violation):
     (findfont, no fallback) AND post (scan the saved PDF bytes),
   * TrueType font embedding (pdf.fonttype == 42),
   * no Japanese text / no CJK font in the PDF.
+  * every visible text item >=10 pt on paper or >=20 pt in a slide after
+    scaling to the actual embed/paste width.
 
 The embed width is stashed on the figure so save_lab_figure can emit the
 exact ``\\includegraphics[width=<cm>]`` snippet -- embed at 100% and the
@@ -106,30 +108,46 @@ def _check_tnr_in_pdf(pdf_path: str) -> list:
 # ------------------------------------------------------------------
 # Misuse-proof figure creation + save
 # ------------------------------------------------------------------
-def lab_figure(embed_width_cm, aspect: float = 0.62, nrows: int = 1, ncols: int = 1,
-               use_times_roman: bool = True, legend_small=None):
-    """Create ``(fig, axes)`` authored AT the on-page embed width with verified
-    Times New Roman + 10 pt.
+def lab_figure(
+    embed_width_cm,
+    aspect: float = 0.62,
+    nrows: int = 1,
+    ncols: int = 1,
+    use_times_roman: bool = True,
+    legend_small=None,
+    medium: str = "paper",
+):
+    """Create ``(fig, axes)`` at the final width with lab typography.
 
     Embed the result with ``\\includegraphics[width=<embed_width_cm>cm]`` at
-    100% and the on-page body font is exactly 10 pt at that width -- the
-    lab rule.  Do NOT scale with ``width=\\linewidth`` unless \\linewidth
-    equals ``embed_width_cm``.
+    100%. Paper defaults are 10 pt. Presentation defaults are authored at
+    24 pt and checked against a 20 pt displayed floor. Do NOT scale with
+    ``width=\\linewidth`` unless its physical width equals ``embed_width_cm``.
 
     Args:
         embed_width_cm: width the figure will OCCUPY on the page / slide.
         aspect: height / width.   nrows, ncols: subplot grid.
         use_times_roman: enforce TNR (raises if unavailable).
-        legend_small: shrink legend to 8 pt (default True for ncols >= 2).
+        legend_small: select the compact multi-panel layout. Font size is
+            never reduced below the medium's final-size floor.
+        medium: ``'paper'`` for 10 pt visible text or ``'presentation'``
+            for 24 pt authored defaults and a 20 pt final-size save gate.
 
     Raises RuntimeError (No-Fallback) if TNR is requested but unavailable.
     """
     from .tools import apply_lab_style
     plt, _ = _get_mpl()
+    medium_key = str(medium).strip().lower()
+    if medium_key not in {"paper", "presentation"}:
+        raise ValueError("medium must be 'paper' or 'presentation'.")
     if legend_small is None:
         legend_small = ncols >= 2
-    target = ("digest_double_column_side_by_side" if legend_small
+    target = (
+        "presentation_slide"
+        if medium_key == "presentation"
+        else ("digest_double_column_side_by_side" if legend_small
               else "digest_single_column")
+    )
     w_in, h_in = apply_lab_style(target=target, embed_width_cm=float(embed_width_cm),
                                  aspect=aspect, use_times_roman=use_times_roman)
     if use_times_roman:
@@ -138,6 +156,8 @@ def lab_figure(embed_width_cm, aspect: float = 0.62, nrows: int = 1, ncols: int 
     # Stash the embed width so save_lab_figure can emit the exact LaTeX width.
     try:
         fig._lab_embed_width_cm = float(embed_width_cm)
+        fig._lab_authored_width_cm = float(embed_width_cm)
+        fig._lab_medium = medium_key
     except Exception:
         pass
     return fig, axes
@@ -148,7 +168,9 @@ def save_lab_figure(fig, path_no_ext, embed_width_cm=None, *,
                     save_pdf: bool = True, save_png: bool = True, dpi: int = 300,
                     tighten=True, check_label_overflow: bool = True,
                     label_overflow_tol_pt: float = 0.5,
-                    check_times_new_roman: bool = True) -> dict:
+                    check_times_new_roman: bool = True,
+                    medium: str | None = None,
+                    min_visible_font_pt: float | None = None) -> dict:
     """Save a figure with FAIL-LOUD lab gates; return a dict whose ``latex``
     key is the exact ``\\includegraphics`` snippet (embed at 100% -> 10 pt)
     and whose ``axes_fraction`` reports how much of the figure the axes fill.
@@ -156,7 +178,8 @@ def save_lab_figure(fig, path_no_ext, embed_width_cm=None, *,
     Gates (each raises on violation): no in-figure title (unless
     ``allow_in_figure_title``), Times New Roman requested and actually
     used (pre + post),
-    TrueType embedding, no Japanese, and optionally CVD-safe colors.
+    TrueType embedding, no Japanese, final-size text >=10 pt for paper or
+    >=20 pt for presentations, and optionally CVD-safe colors.
 
     ``tighten`` (True / a float target, default 0.80): push the axes box to
     the limit WITHIN the fixed figure size (``auto_tighten`` -- overhang-safe,
@@ -167,6 +190,9 @@ def save_lab_figure(fig, path_no_ext, embed_width_cm=None, *,
     """
     plt, _ = _get_mpl()
     ew = embed_width_cm if embed_width_cm is not None else getattr(fig, "_lab_embed_width_cm", None)
+    if ew is None:
+        ew = float(fig.get_size_inches()[0]) * 2.54
+    resolved_medium = medium or getattr(fig, "_lab_medium", "paper")
     base = os.path.basename(path_no_ext)
 
     # ---- pre-save gates ----
@@ -190,6 +216,25 @@ def save_lab_figure(fig, path_no_ext, embed_width_cm=None, *,
             raise ValueError(
                 "save_lab_figure: non-colorblind-safe colors:\n  "
                 + "\n  ".join(str(x) for x in cv))
+    from .tools import check_min_font, minimum_visible_font_pt
+    floor = (
+        float(min_visible_font_pt)
+        if min_visible_font_pt is not None
+        else minimum_visible_font_pt(resolved_medium)
+    )
+    font_bad = check_min_font(fig, min_pt=floor, embed_width_cm=float(ew))
+    if font_bad:
+        items = "\n  ".join(
+            f"{v['kind']} {v['text']!r}: {v['render_pt']:.1f} pt source -> "
+            f"{v['visible_pt']:.1f} pt displayed"
+            for v in font_bad
+        )
+        raise ValueError(
+            "save_lab_figure: visible text below the final-size font floor:\n  "
+            + items
+            + f"\nRequired for {resolved_medium}: >= {floor:g} pt at "
+            f"{float(ew):g} cm."
+        )
 
     # ---- maximize the axes within the FIXED figure size (push the bbox to
     #     the limit, overhang-safe).  Deliberately NOT bbox_inches='tight',
@@ -254,7 +299,8 @@ def save_lab_figure(fig, path_no_ext, embed_width_cm=None, *,
                  r"unknown -- pass embed_width_cm to guarantee 10 pt @ width" % base)
     plt.close(fig)
     return {"wrote": wrote, "embed_width_cm": ew, "latex": latex,
-            "axes_fraction": eff, "gates": "passed"}
+            "axes_fraction": eff, "gates": "passed",
+            "medium": resolved_medium, "min_visible_font_pt": floor}
 
 
 def _label_overflow(fig, tol_pt: float = 0.5, include_ticklabels: bool = False):

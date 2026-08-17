@@ -130,8 +130,8 @@ set(PYTHON_DIR "${CMAKE_CURRENT_SOURCE_DIR}/src/radia")
 # FFTW directory removed - using MKL DFTI via fftw.h compatibility layer
 
 
-# BLAS/LAPACK: Intel MKL only
-# Requires Intel oneAPI to be installed
+# BLAS/LAPACK: Intel MKL 2026 only
+# Use either a full oneAPI installation or the pip mkl-devel package.
 
 # Detect Intel compiler
 if(CMAKE_CXX_COMPILER_ID MATCHES "IntelLLVM" OR CMAKE_C_COMPILER_ID MATCHES "IntelLLVM")
@@ -169,6 +169,25 @@ if(WIN32)
 	set(MKL_INCLUDE_DIR "${MKL_DIR}/include")
 	set(MKL_LIB_DIR "${MKL_DIR}/lib")
 	set(MKL_BIN_DIR "${MKL_DIR}/bin")
+	set(MKL_RUNTIME_ABI "3")
+	set(MKL_RT_DLL "${MKL_BIN_DIR}/mkl_rt.${MKL_RUNTIME_ABI}.dll")
+	set(MKL_RUNTIME_DLLS)
+	foreach(_MKL_RUNTIME_NAME IN ITEMS
+		mkl_rt
+		mkl_core
+		mkl_intel_thread
+		mkl_avx2
+		mkl_def
+	)
+		set(_MKL_RUNTIME_DLL
+			"${MKL_BIN_DIR}/${_MKL_RUNTIME_NAME}.${MKL_RUNTIME_ABI}.dll")
+		if(NOT EXISTS "${_MKL_RUNTIME_DLL}")
+			message(FATAL_ERROR
+				"Intel MKL 2026 runtime not found: ${_MKL_RUNTIME_DLL}. "
+				"Install pip package mkl-devel>=2026,<2027.")
+		endif()
+		list(APPEND MKL_RUNTIME_DLLS "${_MKL_RUNTIME_DLL}")
+	endforeach()
 
 	# Intel compiler runtime directory
 	set(INTEL_COMPILER_DIR "C:/Program Files (x86)/Intel/oneAPI/compiler/latest")
@@ -177,12 +196,13 @@ if(WIN32)
 	# Use mkl_rt.lib (dynamic linking) - works with both Intel and MSVC compilers
 	set(MKL_LIB "${MKL_LIB_DIR}/mkl_rt.lib")
 	if(EXISTS ${MKL_LIB})
-		message(STATUS "Intel MKL found: ${MKL_LIB}")
+		message(STATUS "Intel MKL 2026 found: ${MKL_LIB}")
+		message(STATUS "Intel MKL runtime: ${MKL_RT_DLL}")
 		set(BLAS_LIB ${MKL_LIB})
 		set(BLAS_INCLUDE_DIR ${MKL_INCLUDE_DIR})
 		set(USE_MKL_FOUND TRUE)
 	else()
-		message(FATAL_ERROR "Intel MKL not found. Install Intel oneAPI Base Toolkit or pip package mkl-devel.")
+		message(FATAL_ERROR "Intel MKL not found. Install pip package mkl-devel>=2026,<2027.")
 	endif()
 endif()
 
@@ -501,9 +521,9 @@ endif()
 if(WIN32 AND USE_MKL_FOUND)
 	add_custom_command(TARGET peec_matrices POST_BUILD
 		COMMAND ${CMAKE_COMMAND} -E copy_if_different
-			"${MKL_BIN_DIR}/mkl_rt.2.dll"
+			"${MKL_RT_DLL}"
 			"$<TARGET_FILE_DIR:peec_matrices>"
-		COMMENT "Copying mkl_rt.2.dll for peec_matrices"
+		COMMENT "Copying mkl_rt.3.dll for peec_matrices"
 	)
 endif()
 
@@ -585,9 +605,9 @@ endif()
 if(WIN32 AND USE_MKL_FOUND)
 	add_custom_command(TARGET cln_core POST_BUILD
 		COMMAND ${CMAKE_COMMAND} -E copy_if_different
-			"${MKL_BIN_DIR}/mkl_rt.2.dll"
+			"${MKL_RT_DLL}"
 			"$<TARGET_FILE_DIR:cln_core>"
-		COMMENT "Copying mkl_rt.2.dll for cln_core"
+		COMMENT "Copying mkl_rt.3.dll for cln_core"
 	)
 endif()
 
@@ -802,24 +822,15 @@ if(RADIA_BUILD_MATLAB_MEX)
 		# oneMKL dispatch DLLs beside radia_mex so it does not depend on the
 		# host Python installation.  Do not copy libiomp5md.dll: MATLAB already
 		# owns an OpenMP runtime and loading a second copy aborts the process.
-		add_custom_command(TARGET radia_mex POST_BUILD
-			COMMAND ${CMAKE_COMMAND} -E copy_if_different
-				"${MKL_BIN_DIR}/mkl_rt.2.dll"
-				"${CMAKE_SOURCE_DIR}/matlab/mkl_rt.2.dll"
-			COMMAND ${CMAKE_COMMAND} -E copy_if_different
-				"${MKL_BIN_DIR}/mkl_core.2.dll"
-				"${CMAKE_SOURCE_DIR}/matlab/mkl_core.2.dll"
-			COMMAND ${CMAKE_COMMAND} -E copy_if_different
-				"${MKL_BIN_DIR}/mkl_intel_thread.2.dll"
-				"${CMAKE_SOURCE_DIR}/matlab/mkl_intel_thread.2.dll"
-			COMMAND ${CMAKE_COMMAND} -E copy_if_different
-				"${MKL_BIN_DIR}/mkl_avx2.2.dll"
-				"${CMAKE_SOURCE_DIR}/matlab/mkl_avx2.2.dll"
-			COMMAND ${CMAKE_COMMAND} -E copy_if_different
-				"${MKL_BIN_DIR}/mkl_def.2.dll"
-				"${CMAKE_SOURCE_DIR}/matlab/mkl_def.2.dll"
-			COMMENT "Copying oneMKL runtime beside radia_mex"
-		)
+		foreach(_MKL_RUNTIME_DLL IN LISTS MKL_RUNTIME_DLLS)
+			get_filename_component(_MKL_RUNTIME_FILENAME "${_MKL_RUNTIME_DLL}" NAME)
+			add_custom_command(TARGET radia_mex POST_BUILD
+				COMMAND ${CMAKE_COMMAND} -E copy_if_different
+					"${_MKL_RUNTIME_DLL}"
+					"${CMAKE_SOURCE_DIR}/matlab/${_MKL_RUNTIME_FILENAME}"
+				COMMENT "Copying ${_MKL_RUNTIME_FILENAME} beside radia_mex"
+			)
+		endforeach()
 	endif()
 	message(STATUS "radia_mex configured (MATLAB R2018a interleaved complex API)")
 endif()

@@ -153,6 +153,39 @@ class PositionForceCurve:
         values = np.interp(positions, self.positions_m, self.force_N)
         return float(values) if values.ndim == 0 else values
 
+    def force_result_at(
+        self,
+        position_m: float,
+        *,
+        lift_axis: int = 2,
+        method: str = "cln_interpolated_lorentz_force",
+        frame: str = "global_cartesian",
+    ) -> dict[str, object]:
+        """Return one interpolated force as ``radia.force-result/v1``."""
+
+        from radia.force import force_torque_result
+
+        axis = int(lift_axis)
+        if axis not in (0, 1, 2):
+            raise ValueError("lift_axis must be 0, 1, or 2")
+        position = float(position_m)
+        force = [0.0, 0.0, 0.0]
+        force[axis] = self.at(position)
+        result = force_torque_result(
+            force,
+            None,
+            method=method,
+            frame=frame,
+        )
+        result.update(
+            {
+                "position_m": position,
+                "force_curve": self.name,
+                "lift_axis": axis,
+            }
+        )
+        return result
+
     def crossings(self, target_force_N: float) -> np.ndarray:
         """Return all linearly interpolated positions where force reaches target."""
 
@@ -177,7 +210,7 @@ class PositionForceCurve:
             roots.append(float(self.positions_m[-1]))
         return np.asarray(roots, dtype=float)
 
-    def compare(self, reference: "PositionForceCurve") -> dict[str, float | int | str]:
+    def compare(self, reference: PositionForceCurve) -> dict[str, float | int | str]:
         """Compare this curve to a reference on this curve's sample positions."""
 
         if not isinstance(reference, PositionForceCurve):

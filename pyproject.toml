@@ -27,25 +27,20 @@ classifiers = [
 
 dependencies = [
     "numpy>=1.20",
-    # MKL upper-capped at <2026 because mkl-2026.0.0 ships `mkl_rt.3.dll`
-    # instead of `mkl_rt.2.dll`, breaking radia binaries built against
-    # the 2024.x/2025.x DLL set (2026-05-27 incident: LAB rebuild was
-    # against MKL 2025.0.1).  Bump the upper bound when we rebuild
-    # radia against MKL 2026's new .dll naming.
-    "mkl>=2024.2.0,<2026",
-    "intel-cmplr-lib-rt>=2024.2.0",
+    # Radia/HACApK intentionally uses oneMKL rather than NGSolve's OpenBLAS:
+    # PARDISO and the dense HACApK kernels are performance-critical. MKL 2026
+    # uses the mkl_rt.3.dll ABI, so keep runtime and build packages in 2026.x.
+    "mkl>=2026,<2027",
+    "intel-cmplr-lib-rt>=2026,<2027",
     # NGSolve + Netgen-mesher pinned to 6.2.2604 (2026-05-27 radia 4.79.0).
     # Bumped from 6.2.2603 because cubit-mesh-export 0.10.2's transitive
     # deps auto-upgraded the lab machines to 2604, leaving radia 4.78.1
     # (2603 ABI) unrunnable.  Bump consequences:
     #   * BLAS backend: 2604 ships `ngsolve-openblas` (mandatory dep) and
     #     NGSolve uses OpenBLAS exclusively — `libngsolve.dll` links
-    #     `openblas.dll`, NOT `mkl_rt.*`.  So ngsolve itself is
-    #     mkl-version-agnostic.  The `mkl>=2024.2.0,<2026` cap is purely
-    #     RADIA's own requirement: `_radia_pybind.pyd` links `mkl_rt.2.dll`
-    #     for its BLAS/LAPACK (CLAUDE.md "Intel MKL only").  mkl-2026.0.0
-    #     ships `mkl_rt.3.dll` (renamed from `mkl_rt.2.dll`), which would
-    #     break `_radia_pybind.pyd`'s DLL load — hence the `<2026` cap.
+    #     `openblas.dll`, NOT `mkl_rt.*`. Radia intentionally keeps a separate
+    #     MKL 2026 runtime and `_radia_pybind.pyd` links `mkl_rt.3.dll` for
+    #     HACApK/PARDISO and dense BLAS/LAPACK performance.
     #     (Verified 2026-05-28: `pip show ngsolve` Requires = netgen-mesher,
     #     ngsolve-openblas; no mkl.  libngsolve.dll BLAS string = openblas.dll.)
     #   * ABI change: `ngfem::CoefficientFunction` ABI moved between

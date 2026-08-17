@@ -4,6 +4,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 from scipy.integrate import solve_ivp
+from scipy.linalg import expm
 
 from radia.accelerator_lie_topopt import (
     PlanarFourthOrderLieMapObjective,
@@ -12,14 +13,23 @@ from radia.accelerator_lie_topopt import (
     canonical_body_hamiltonian_jet,
     canonical_body_hamiltonian_rhs,
     canonical_poisson_matrix,
+    canonical_vector_potential_hamiltonian_rhs,
     dragt_finn_factorize_fourth_order,
     dragt_finn_factorize_third_order,
     formal_fourth_order_symplectic_residual,
     fourth_order_lie_map_from_multipoles,
     optimize_hdiv_mmm_magnet_from_third_order_lie_map,
+    planar_orbit_quartic_multipole_observations,
     run_fourth_order_lie_material_inverse_pipeline,
     run_third_order_lie_material_inverse_pipeline,
     third_order_lie_map_from_multipoles,
+    track_canonical_hamiltonian_s,
+)
+from radia.accelerator_lie_topopt import (
+    _canonical_vector_potential_hamiltonian_jet as _internal_hcurl_jet,
+)
+from radia.accelerator_lie_topopt import (
+    _fourth_order_lie_map_from_vector_potential_polynomials as _internal_lie_from_jet,
 )
 from radia.accelerator_magnet_topopt import PlanarDesignOrbit
 
@@ -78,6 +88,8 @@ def test_mathematica_fourth_degree_hamiltonian_golden_matches_python():
             parameters["skew_sextupole"],
             parameters["normal_octupole"],
             parameters["skew_octupole"],
+            parameters["normal_decapole"],
+            parameters["skew_decapole"],
         ],
         1.0,
         reference_beta=parameters["reference_beta"],
@@ -98,6 +110,13 @@ def test_mathematica_fourth_degree_hamiltonian_golden_matches_python():
         "H4_x_x_x_x": jet.H4[0, 0, 0, 0],
         "H4_x_x_x_y": jet.H4[0, 0, 0, 2],
         "H4_delta_delta_delta_delta": jet.H4[5, 5, 5, 5],
+        "H5_px_px_delta_delta_delta": jet.H5[1, 1, 5, 5, 5],
+        "H5_px_px_px_px_delta": jet.H5[1, 1, 1, 1, 5],
+        "H5_x_px_px_px_px": jet.H5[0, 1, 1, 1, 1],
+        "H5_px_px_py_py_delta": jet.H5[1, 1, 3, 3, 5],
+        "H5_x_x_x_x_x": jet.H5[0, 0, 0, 0, 0],
+        "H5_x_x_x_x_y": jet.H5[0, 0, 0, 0, 2],
+        "H5_delta_delta_delta_delta_delta": jet.H5[5, 5, 5, 5, 5],
     }
     for name, expected in entries.items():
         assert actual[name] == pytest.approx(expected, abs=3.0e-15)
@@ -116,6 +135,316 @@ def test_mathematica_fourth_degree_hamiltonian_golden_matches_python():
     }
     for name, expected in generator_entries.items():
         assert actual_generator[name] == pytest.approx(expected, abs=3.0e-15)
+
+
+def test_design_orbit_curvature_is_independent_of_dipole_field_curvature():
+    coefficients = np.array([0.3, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
+    rigidity = 3.0
+    field_curvature = coefficients[0] / rigidity
+    design_curvature = 0.25
+    jet = canonical_body_hamiltonian_jet(
+        coefficients,
+        rigidity,
+        reference_curvature_per_m=design_curvature,
+    )
+    rhs = canonical_body_hamiltonian_rhs(
+        np.zeros(6),
+        coefficients,
+        rigidity,
+        reference_curvature_per_m=design_curvature,
+    )
+
+    assert jet.H2[0, 5] == pytest.approx(-design_curvature, abs=2.0e-15)
+    assert jet.H2[0, 0] == pytest.approx(
+        design_curvature * field_curvature, abs=2.0e-15
+    )
+    assert rhs[1] == pytest.approx(
+        design_curvature - field_curvature, abs=2.0e-15
+    )
+    np.testing.assert_array_equal(rhs[[0, 2, 3, 4, 5]], 0.0)
+
+
+def test_direct_As_Ay_hamiltonian_reduces_to_body_multipole_rhs():
+    coefficients = np.array(
+        [0.42, 1.3, -0.4, 7.0, 2.0, -15.0, 6.0, 25.0, -9.0]
+    )
+    rigidity = 2.8
+    curvature = 0.17
+    beta = 0.91
+    state = np.array([2.0e-3, 1.5e-2, -1.2e-3, -8.0e-3, 0.0, 3.0e-2])
+    x_value, y_value = state[0], state[2]
+    coordinate = complex(x_value, y_value)
+    field_curvature = coefficients[0] / rigidity
+    potential_x = field_curvature + curvature * field_curvature * x_value
+    potential_y = 0.0
+    for order in range(1, 5):
+        coefficient = complex(
+            coefficients[2 * order - 1], coefficients[2 * order]
+        ) / rigidity
+        field = coefficient * coordinate**order
+        potential_x += field.real
+        potential_y -= field.imag
+    gradient = np.zeros((3, 2))
+    gradient[2] = [-potential_x, -potential_y]
+
+    direct = canonical_vector_potential_hamiltonian_rhs(
+        state,
+        np.zeros(3),
+        gradient,
+        reference_curvature_per_m=curvature,
+        reference_beta=beta,
+    )
+    body = canonical_body_hamiltonian_rhs(
+        state,
+        coefficients,
+        rigidity,
+        reference_curvature_per_m=curvature,
+        reference_beta=beta,
+    )
+
+    np.testing.assert_allclose(direct, body, rtol=2.0e-15, atol=2.0e-15)
+
+
+def test_direct_As_Ay_polynomial_jet_has_forward_ad_and_canonical_coupling():
+    rigidity = 2.0
+    Ay = np.zeros((3, 3))
+    As = np.zeros((3, 3))
+    Ay[1, 0] = 0.7
+    normal_gradient = 1.6
+    As[2, 0] = -0.5 * normal_gradient
+
+    result = _internal_hcurl_jet(
+        Ay,
+        As,
+        rigidity,
+        reference_curvature_per_m=0.0,
+        longitudinal_component="physical",
+    )
+    jet = result.jet
+    normalized_Ay = Ay[1, 0] / rigidity
+
+    assert result.parameter_names[:5] == (
+        "Ay_x1_y0",
+        "Ay_x0_y1",
+        "Ay_x2_y0",
+        "Ay_x1_y1",
+        "Ay_x0_y2",
+    )
+    assert result.constant == pytest.approx(0.0, abs=2.0e-15)
+    np.testing.assert_allclose(result.linear, 0.0, atol=2.0e-15)
+    assert jet.H2[0, 3] == pytest.approx(-normalized_Ay, abs=2.0e-15)
+    assert jet.H2[0, 0] == pytest.approx(
+        normalized_Ay**2 + normal_gradient / rigidity,
+        abs=2.0e-15,
+    )
+    assert jet.H2[1, 1] == pytest.approx(1.0, abs=2.0e-15)
+    assert jet.H2[3, 3] == pytest.approx(1.0, abs=2.0e-15)
+    assert jet.H2_jacobian[0, 0, 3] == pytest.approx(
+        -1.0 / rigidity, abs=2.0e-15
+    )
+    assert jet.H2_jacobian[0, 0, 0] == pytest.approx(
+        2.0 * normalized_Ay / rigidity, abs=2.0e-15
+    )
+
+
+def test_direct_As_Ay_polynomials_generate_fourth_order_lie_map_with_ad():
+    rigidity = 2.0
+    length = 0.06
+    Ay = np.zeros((1, 3, 3))
+    As = np.zeros((1, 3, 3))
+    Ay[0, 1, 0] = 0.7
+    As[0, 2, 0] = -0.8
+    result = _internal_lie_from_jet(
+        Ay,
+        As,
+        [length],
+        rigidity,
+        reference_curvature_per_m=[0.0],
+        maximum_step_m=5.0e-4,
+    )
+    expected_jet = _internal_hcurl_jet(
+        Ay[0],
+        As[0],
+        rigidity,
+        reference_curvature_per_m=0.0,
+    ).jet
+
+    np.testing.assert_allclose(
+        result.transfer.raw_R,
+        expm(expected_jet.A * length),
+        rtol=2.0e-12,
+        atol=2.0e-13,
+    )
+    assert result.transfer.factorization.reconstructed_symplectic_residual.maximum < (
+        2.0e-12
+    )
+    assert result.transfer.V.shape == (6, 6, 6, 6, 6)
+    assert np.max(np.abs(result.transfer.T)) > 0.0
+    assert np.max(np.abs(result.transfer.U)) > 0.0
+
+    step = 2.0e-5
+    plus = Ay.copy()
+    minus = Ay.copy()
+    plus[0, 1, 0] += step
+    minus[0, 1, 0] -= step
+    plus_map = _internal_lie_from_jet(
+        plus,
+        As,
+        [length],
+        rigidity,
+        reference_curvature_per_m=[0.0],
+        maximum_step_m=5.0e-4,
+    )
+    minus_map = _internal_lie_from_jet(
+        minus,
+        As,
+        [length],
+        rigidity,
+        reference_curvature_per_m=[0.0],
+        maximum_step_m=5.0e-4,
+    )
+    regression = (plus_map.transfer.R - minus_map.transfer.R) / (2.0 * step)
+    np.testing.assert_allclose(
+        result.transfer.R_jacobian[0],
+        regression,
+        rtol=1.0e-6,
+        atol=5.0e-10,
+    )
+
+
+def test_direct_A_lie_map_rejects_a_nonreference_design_orbit():
+    Ay = np.zeros((1, 3, 3))
+    As = np.zeros_like(Ay)
+    As[0, 1, 0] = 0.2
+
+    with pytest.raises(ValueError, match="reference orbit is not"):
+        _internal_lie_from_jet(
+            Ay,
+            As,
+            [0.05],
+            2.0,
+            reference_curvature_per_m=[0.0],
+            reference_orbit_tolerance=1.0e-10,
+        )
+
+
+def test_design_orbit_exposes_continuous_global_xyz_frame_and_h_of_s():
+    radius = 2.4
+    angles = np.linspace(0.0, 0.3, 7)
+    positions = np.column_stack(
+        (radius * np.sin(angles), np.zeros_like(angles), radius * np.cos(angles))
+    )
+    tangents = np.column_stack(
+        (np.cos(angles), np.zeros_like(angles), -np.sin(angles))
+    )
+    stations = radius * angles
+    orbit = PlanarDesignOrbit(
+        positions,
+        tangents,
+        magnetic_rigidity=1.8,
+        bend_axis=np.array([0.0, 1.0, 0.0]),
+        path_length_stations=stations,
+    )
+
+    np.testing.assert_allclose(orbit.arc_length_stations, stations, atol=0.0)
+    np.testing.assert_allclose(orbit.position_at(stations), positions, atol=2.0e-15)
+    np.testing.assert_allclose(orbit.tangent_at(stations), tangents, atol=2.0e-15)
+    np.testing.assert_allclose(
+        orbit.signed_curvature_at(0.5 * (stations[:-1] + stations[1:])),
+        1.0 / radius,
+        atol=2.0e-15,
+    )
+    horizontal, vertical, evaluated_tangent = orbit.frame_at(stations)
+    np.testing.assert_allclose(evaluated_tangent, tangents, atol=2.0e-15)
+    np.testing.assert_allclose(
+        vertical, np.broadcast_to(orbit.bend_axis, vertical.shape), atol=0.0
+    )
+    np.testing.assert_allclose(
+        np.einsum("ij,ij->i", horizontal, evaluated_tangent), 0.0, atol=2.0e-15
+    )
+    np.testing.assert_allclose(
+        orbit.local_to_global(stations, np.zeros_like(stations), np.zeros_like(stations)),
+        positions,
+        atol=2.0e-15,
+    )
+
+    prescribed = orbit.geometric_signed_curvature + np.linspace(
+        -2.0e-5, 3.0e-5, len(orbit.segment_lengths)
+    )
+    collocated = PlanarDesignOrbit(
+        positions,
+        tangents,
+        magnetic_rigidity=1.8,
+        bend_axis=np.array([0.0, 1.0, 0.0]),
+        path_length_stations=stations,
+        signed_curvature_per_m=prescribed,
+    )
+    np.testing.assert_array_equal(collocated.signed_curvature, prescribed)
+    np.testing.assert_allclose(
+        collocated.geometric_signed_curvature,
+        orbit.signed_curvature,
+        atol=0.0,
+        rtol=0.0,
+    )
+    with pytest.raises(ValueError, match="signed_curvature_per_m"):
+        PlanarDesignOrbit(
+            positions,
+            tangents,
+            magnetic_rigidity=1.8,
+            bend_axis=np.array([0.0, 1.0, 0.0]),
+            path_length_stations=stations,
+            signed_curvature_per_m=np.zeros(len(orbit.segment_lengths) - 1),
+        )
+
+
+def test_s_runge_kutta_keeps_matched_uniform_field_design_orbit():
+    radius = 3.2
+    rigidity = 1.7
+    angles = np.linspace(0.0, 0.25, 9)
+    stations = radius * angles
+    orbit = PlanarDesignOrbit(
+        positions=np.column_stack(
+            (
+                radius * np.sin(angles),
+                np.zeros_like(angles),
+                radius * np.cos(angles),
+            )
+        ),
+        tangents=np.column_stack(
+            (np.cos(angles), np.zeros_like(angles), -np.sin(angles))
+        ),
+        magnetic_rigidity=rigidity,
+        bend_axis=np.array([0.0, 1.0, 0.0]),
+        path_length_stations=stations,
+    )
+    coefficients = np.zeros((9, len(orbit.segment_lengths)))
+    coefficients[0] = rigidity / radius
+
+    fixed = track_canonical_hamiltonian_s(
+        orbit,
+        coefficients.reshape(-1),
+        np.zeros(6),
+        integrator="RK4",
+        maximum_step_m=0.004,
+    )
+    adaptive = track_canonical_hamiltonian_s(
+        orbit,
+        coefficients.reshape(-1),
+        np.zeros(6),
+        integrator="DOP853",
+        maximum_step_m=0.004,
+    )
+
+    assert fixed.accepted_steps > len(orbit.segment_lengths)
+    assert adaptive.accepted_steps > len(orbit.segment_lengths)
+    np.testing.assert_allclose(fixed.canonical_states, 0.0, atol=2.0e-15)
+    np.testing.assert_allclose(adaptive.canonical_states, 0.0, atol=2.0e-15)
+    np.testing.assert_allclose(
+        fixed.global_positions_m, fixed.reference_positions_m, atol=2.0e-15
+    )
+    np.testing.assert_allclose(
+        fixed.reference_curvature_per_m, 1.0 / radius, atol=2.0e-15
+    )
 
 
 def test_dragt_finn_recovers_mathematica_self_cascade_and_quartic_kick():
@@ -393,7 +722,7 @@ def test_whole_hex_topology_controls_canonical_skew_octupole_lie_term():
 
 
 def test_fourth_order_lie_map_f5_and_forward_ad_match_centered_difference():
-    raw = np.array([0.2, 1.0, 0.3, 2.0, 0.7, 4.0, -3.0])
+    raw = np.array([0.2, 1.0, 0.3, 2.0, 0.7, 4.0, -3.0, 5.0, -2.0])
     options = {
         "segment_lengths": [0.02],
         "magnetic_rigidity": 3.0,
@@ -410,8 +739,8 @@ def test_fourth_order_lie_map_f5_and_forward_ad_match_centered_difference():
         differentiated.factorization.reconstructed_symplectic_residual.maximum
         < 5e-15
     )
-    for parameter in (0, 3, 6):
-        step = 1.0e-6 * max(1.0, abs(raw[parameter]))
+    for parameter in (0, 3, 6, 8):
+        step = 1.0e-5 * max(1.0, abs(raw[parameter]))
         direction = np.zeros_like(raw)
         direction[parameter] = step
         plus = fourth_order_lie_map_from_multipoles(raw + direction, **options)
@@ -424,12 +753,12 @@ def test_fourth_order_lie_map_f5_and_forward_ad_match_centered_difference():
                 getattr(differentiated, name + "_jacobian")[parameter],
                 finite_difference,
                 rtol=1.0e-6,
-                atol=8.0e-11,
+                atol=2.0e-10,
             )
 
 
 def test_fourth_order_dragt_finn_application_and_formal_gate_are_symplectic():
-    raw = np.array([0.2, 1.0, 0.3, 2.0, 0.7, 4.0, -3.0])
+    raw = np.array([0.2, 1.0, 0.3, 2.0, 0.7, 4.0, -3.0, 5.0, -2.0])
     transfer = fourth_order_lie_map_from_multipoles(
         raw, [0.03], 3.0, reference_beta=0.8, maximum_step_m=0.003
     )
@@ -459,8 +788,8 @@ def test_fourth_order_dragt_finn_application_and_formal_gate_are_symplectic():
     ).cubic > 1.0e-3
 
 
-def test_fourth_order_map_has_fifth_order_error_against_truncated_hamiltonian():
-    raw = np.array([0.2, 1.0, 0.3, 2.0, 0.7, 4.0, -3.0])
+def test_fourth_order_map_has_fifth_order_error_against_exact_hamiltonian():
+    raw = np.array([0.2, 1.0, 0.3, 2.0, 0.7, 4.0, -3.0, 5.0, -2.0])
     length = 0.08
     transfer = fourth_order_lie_map_from_multipoles(
         raw,
@@ -469,19 +798,13 @@ def test_fourth_order_map_has_fifth_order_error_against_truncated_hamiltonian():
         reference_beta=0.8,
         maximum_step_m=0.002,
     )
-    jet = canonical_body_hamiltonian_jet(raw, 3.0, reference_beta=0.8)
     base = np.array([0.7, 0.2, -0.5, 0.1, 0.3, 0.15])
     errors = []
     for scale in (0.04, 0.02, 0.01):
         initial = scale * base
         exact = solve_ivp(
-            lambda _, state: (
-                jet.A @ state
-                + 0.5 * np.einsum("ijk,j,k->i", jet.F2, state, state)
-                + np.einsum(
-                    "ijkl,j,k,l->i", jet.F3, state, state, state
-                )
-                / 6.0
+            lambda _, state: canonical_body_hamiltonian_rhs(
+                state, raw, 3.0, reference_beta=0.8
             ),
             (0.0, length),
             initial,
@@ -512,8 +835,8 @@ def test_fourth_order_map_has_fifth_order_error_against_truncated_hamiltonian():
 
 def test_fourth_order_lie_objective_and_material_pipeline_control_v_term():
     orbit = _straight_orbit(length=0.02)
-    current = np.zeros(7)
-    wanted = np.array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 3.0])
+    current = np.zeros(9)
+    wanted = np.array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 3.0])
     target = fourth_order_lie_map_from_multipoles(
         wanted, orbit.segment_lengths, orbit.magnetic_rigidity, maximum_step_m=0.004
     )
@@ -531,11 +854,14 @@ def test_fourth_order_lie_objective_and_material_pipeline_control_v_term():
         R_entries=((0, 0),),
         T_entries=((0, 1, 5),),
         U_entries=((1, 0, 0, 2),),
-        V_entries=((1, 0, 0, 3, 5),),
+        V_entries=((1, 0, 0, 0, 2),),
         maximum_step_m=0.004,
     )
     candidates = np.column_stack(
-        (wanted, np.array([0.0, 0.0, 0.0, 0.0, 0.0, 3.0, 0.0]))
+        (
+            wanted,
+            np.array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 3.0, 0.0]),
+        )
     )
     result = run_fourth_order_lie_material_inverse_pipeline(
         objective,
@@ -556,6 +882,23 @@ def test_fourth_order_lie_objective_and_material_pipeline_control_v_term():
     np.testing.assert_array_equal(result.material_selection.selected_elements, [10])
     assert result.proposed_exact_max_band_ratio < 1.0e-7
     np.testing.assert_allclose(result.proposed_V, target.V, atol=2.0e-12)
-    formal_fourth_order_symplectic_residual,
-    fourth_order_lie_map_from_multipoles,
-    run_fourth_order_lie_material_inverse_pipeline,
+
+
+def test_quartic_orbit_observations_recover_normal_and_skew_decapole():
+    orbit = _straight_orbit(length=0.02)
+    points, weights = planar_orbit_quartic_multipole_observations(
+        orbit, sample_radius=0.004
+    )
+    coordinate = points[:, 0] + 1.0j * points[:, 1]
+    coefficient = 5.0 - 2.0j
+    field_complex = coefficient * coordinate**4
+    field = np.column_stack(
+        (field_complex.imag, field_complex.real, np.zeros(points.shape[0]))
+    )
+    response = np.einsum("rpc,pc->r", weights, field)
+
+    assert points.shape == (9, 3)
+    assert response.shape == (9,)
+    np.testing.assert_allclose(response[:7], 0.0, atol=2.0e-12)
+    assert response[7] == pytest.approx(coefficient.real, abs=2.0e-12)
+    assert response[8] == pytest.approx(coefficient.imag, abs=2.0e-12)

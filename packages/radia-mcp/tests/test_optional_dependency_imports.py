@@ -6,7 +6,7 @@ import textwrap
 from pathlib import Path
 
 
-def test_fem_and_motor_servers_import_without_solver_dependencies() -> None:
+def test_fem_force_and_motor_servers_import_without_solver_dependencies() -> None:
     script = textwrap.dedent(
         """
         import importlib.abc
@@ -27,6 +27,7 @@ def test_fem_and_motor_servers_import_without_solver_dependencies() -> None:
 
         sys.meta_path.insert(0, OptionalDependencyBlocker())
         import radia_mcp.fem.server
+        import radia_mcp.force.server
         import radia_mcp.motor.server
         """
     )

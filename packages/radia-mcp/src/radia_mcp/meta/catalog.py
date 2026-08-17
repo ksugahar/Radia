@@ -77,6 +77,7 @@ CATALOG: dict[str, dict[str, Any]] = {
             "build123d",
             "cubit",
             "fem",
+            "force",
             "gmsh",
             "radia-acoustic",
             "radia-matlab",
@@ -88,6 +89,34 @@ CATALOG: dict[str, dict[str, Any]] = {
             "radia-streamfunction",
         ],
         "tags": ["fem", "solver"],
+    },
+    "force": {
+        "subpackage": "radia_mcp.force",
+        "entry_point": "mcp-server-force",
+        "description": "Shared electromagnetic-force and torque method "
+                       "selection, static/phasor sample integration, virtual "
+                       "work, air-gap torque, and validation gates",
+        "primary_tools": [
+            "force",
+            "force_result",
+            "force_recipe",
+            "force_lorentz",
+            "force_maxwell_surface",
+            "force_time_average_lorentz",
+            "force_time_average_maxwell_surface",
+            "force_coenergy_torque",
+            "force_air_gap_torque_samples",
+            "force_method_agreement_gate",
+            "force_validation_guide",
+        ],
+        "related": [
+            "differential-forms",
+            "maglev",
+            "motor",
+            "radia-ngsolve",
+            "team-benchmark",
+        ],
+        "tags": ["solver", "theory"],
     },
     "radia-matlab": {
         "subpackage": "radia_mcp.matlab",
@@ -254,6 +283,7 @@ CATALOG: dict[str, dict[str, Any]] = {
         "primary_tools": ["motor_usage"],
         "related": [
             "electromagnet",
+            "force",
             "maglev",
             "magnetic-materials",
             "panel-review",
@@ -438,7 +468,7 @@ CATALOG: dict[str, dict[str, Any]] = {
                        "IEM<->FEM weak coupling + Cauer Ladder Network MOR "
                        "for control-coupled maglev (Yano, CAE-AI).",
         "primary_tools": ["maglev"],
-        "related": ["motor", "pcb"],
+        "related": ["force", "motor", "pcb"],
         "tags": ["application"],
     },
     # ============================================================
@@ -450,7 +480,7 @@ CATALOG: dict[str, dict[str, Any]] = {
         "description": "TEAM Workshop benchmark problems reference layer "
                        "(30 problems × physics class). ★ Lab core: 13, 20, 23, 32, 33b",
         "primary_tools": ["team_benchmark"],
-        "related": ["fem", "bem", "motor"],
+        "related": ["fem", "bem", "force", "motor"],
         "tags": ["application"],
     },
     "differential-forms": {
@@ -461,7 +491,7 @@ CATALOG: dict[str, dict[str, Any]] = {
         "primary_tools": ["differential_forms_visual_geometry",
                           "differential_forms_geometry_gate",
                           "differential_forms_maxwell"],
-        "related": ["fem", "mathematica"],
+        "related": ["fem", "force", "mathematica"],
         "tags": ["theory"],
     },
     "mathematica": {

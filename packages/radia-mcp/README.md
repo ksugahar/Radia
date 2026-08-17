@@ -190,16 +190,16 @@ the lab deployment roles.  Public-safe quality records live in
 
 Before calling any specific server, ask **`mcp-server-radia-meta`** which
 server has the knowledge you need. It is the authoritative cross-server
-catalog of all 38 radia-mcp servers and answers "which tool covers
+catalog of all 49 radia-mcp servers and answers "which tool covers
 concept X?" without trial-and-error.
 
 ```python
 # catalog, health, golden-gate, and bug-pattern tools
-radia_mcp_overview()                  # all 38 servers + live tags
+radia_mcp_overview()                  # all 49 servers + live tags
 radia_mcp_get("bayesian-opt")         # full info for one server
 radia_mcp_by_tag("optimization")      # filter optimization/theory servers
 radia_mcp_related("bayesian-opt")     # cross-link map for optimization servers
-radia_mcp_health()                    # importability probe of all 38
+radia_mcp_health()                    # importability probe of all 49
 radia_mcp_golden_gate()               # catalog/discovery/public-boundary gate
 ```
 
@@ -221,7 +221,7 @@ radia_mcp_by_tag("optimization")
 ## MCP servers
 
 The catalog is the **source of truth** — call `radia_mcp_overview()` for
-the full 38-server live list. The historically primary servers are
+the full 49-server live list. The historically primary servers are
 shown below for reference; everything else is discoverable via meta.
 
 ### Standalone (no Radia core dependency — `pip install radia-mcp`)
@@ -233,6 +233,7 @@ shown below for reference; everything else is discoverable via meta.
 | **Cubit** | `mcp-server-cubit` | 45 | `cubit_mesh_auto`, `cubit_exec_safely`, `cubit_ask`, scheme ladder + geometry split, .cub5 checkpoint/restore, scrape index over Coreform forum + S:\\CoreformCubit lab archive (787 files) + YouTube + Coreform training |
 | **build123d** | `mcp-server-build123d` | 29 | `build123d_to_cubit_hex`, `lint_build123d_script`, `build123d_try` (subprocess isolation), `build123d_inspect_step`, `build123d_heal`, `build123d_api`, Radia/general templates, CadQuery + bd_warehouse interop |
 | **GMSH** | `mcp-server-gmsh` | 10 | `lint_gmsh_script`, `gmsh_audit_summary`, `gmsh_numsubedges_remediation_plan`, `gmsh_mesh_generation_remediation_plan`, references + examples |
+| **Force** | `mcp-server-force` | 21 | Common Motor/MagLev force layer: shared result normalization; static and peak/RMS phasor Lorentz/Maxwell force and torque; virtual work, coenergy and uniform/sampled air-gap torque; method selection, independent-method/action-reaction/lift-weight gates; and validation guidance (numerical tools require the `radia` extra). |
 | **differential-forms** | `mcp-server-differential-forms` | 15 | Visual differential geometry for computational EM: intrinsic metric, curvature/holonomy, Cartan moving frames, k-forms, exterior derivative, **Hodge star, Whitney complex, de Rham, tree-cotree, FEEC**, and executable geometry/gauge gates. Distilled from Needham 2021/2026, Bossavit 1998, Whitney 1957, Kameari 2011, Arnold-Falk-Winther 2006, 新しい計算電磁気学 2003, and Codecasa 2010. |
 | **mathematica** | `mcp-server-mathematica` | 13 | Wolfram Mathematica subprocess bridge: evaluate expressions, execute tracked verification scripts with JSON reports, batch named identities in one kernel, and select a course/differential-forms/paper verification workflow, plus simplify, TeX, vector calculus, units, solve, integrate, differentiate, and status helpers. Pairs with `differential-forms` for symbolic verification of d²=0, Stokes, Whitney elements, Kelvin transform, Maxwell identities. Requires `wolframscript` on PATH. |
 
@@ -260,6 +261,7 @@ Continue, …):
     "cubit":               {"command": "mcp-server-cubit"},
     "build123d":           {"command": "mcp-server-build123d"},
     "gmsh":                {"command": "mcp-server-gmsh"},
+    "force":               {"command": "mcp-server-force"},
     "differential-forms":  {"command": "mcp-server-differential-forms"},
     "mathematica":         {"command": "mcp-server-mathematica"},
     "optuna": {
@@ -270,9 +272,9 @@ Continue, …):
 }
 ```
 
-Registering more than the 8 above is rarely necessary — once you have
+Registering more than the 9 above is rarely necessary — once you have
 **meta**, `radia_mcp_get(name)` returns the entry point for any of the
-38 servers and you can register them on demand. The full list of
+49 servers and you can register them on demand. The full list of
 catalog-driven server names is in
 `radia_mcp.meta.catalog.CATALOG`.
 

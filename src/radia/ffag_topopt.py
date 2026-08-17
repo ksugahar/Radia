@@ -278,7 +278,8 @@ def _periodic_planar_orbit(curvature, segment_lengths, rigidity, bend_axis):
     tangents = np.column_stack((tangent_2d, np.zeros(len(angle))))
     return PlanarDesignOrbit(
         positions, tangents, magnetic_rigidity=float(rigidity),
-        bend_axis=np.asarray(bend_axis, dtype=float))
+        bend_axis=np.asarray(bend_axis, dtype=float),
+        path_length_stations=np.r_[0.0, np.cumsum(lengths)])
 
 
 @dataclass(frozen=True)
@@ -611,7 +612,7 @@ def recover_periodic_planar_closed_orbit(
     tangents /= np.linalg.norm(tangents, axis=1)[:, None]
     orbit = PlanarDesignOrbit(
         states[:, :3], tangents, magnetic_rigidity=rigidity,
-        bend_axis=axis)
+        bend_axis=axis, path_length_stations=path_stations)
     response = sample_planar_orbit_field_response(
         field, orbit, gradient_offset=gradient_offset)
     transfer = combined_function_transfer_map_from_field_response(
