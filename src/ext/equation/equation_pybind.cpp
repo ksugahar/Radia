@@ -392,6 +392,14 @@ PYBIND11_MODULE(_equation, m) {
           py::return_value_policy::reference,
           "The template row of the palette bar.");
 
+    m.def("tex_to_dib", [](const std::string& latex, const mtef::SvgStyle& st,
+                           double scale) {
+              return py::bytes(mtef::tex_to_dib(latex, st, scale));
+          }, py::arg("latex"), py::arg("style") = mtef::SvgStyle(),
+             py::arg("scale") = 4.0,
+             "The equation as a packed DIB, for CF_DIB -- the image format an "
+             "application reads when it pastes a picture.");
+
     m.def("md_blocks", &mtef::md_blocks, py::arg("markdown"),
           "Split Markdown into blocks.  Concatenating every source rebuilds "
           "the file exactly.");

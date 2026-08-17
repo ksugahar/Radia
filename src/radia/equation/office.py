@@ -20,6 +20,12 @@ from typing import Iterable, Sequence
 from radia._equation import (MarkdownDoc, MdBlock, MdSegment, md_blocks,
                              tex_to_mathml, tex_to_omml, tex_to_rtf)
 
+# The raster the clipboard carries.  Google Slides has no equation object and
+# rejects SVG on upload, so for a slide the picture IS the equation and stays
+# one -- it has to be print quality, not screen quality.  Equation Editor's era
+# could not have afforded this; here it is a few tens of kilobytes.
+PASTE_DPI = 600.0
+
 W_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
 A_NS = "http://schemas.openxmlformats.org/drawingml/2006/main"
 A14_NS = "http://schemas.microsoft.com/office/drawing/2010/main"
@@ -207,7 +213,7 @@ def copy_to_clipboard(latex: str, display: bool = False,
     import win32clipboard as cb          # pywin32, Windows only
 
     from radia._equation import (MathMLOptions, RtfOptions, SvgStyle,
-                                 tex_to_emf, tex_to_png)
+                                 tex_to_dib, tex_to_emf, tex_to_png)
 
     rtf_opt = RtfOptions()
     rtf_opt.display = display
@@ -221,10 +227,11 @@ def copy_to_clipboard(latex: str, display: bool = False,
     ]
 
     style = SvgStyle()
-    emf_bytes = png_bytes = b""
+    emf_bytes = png_bytes = dib_bytes = b""
     if pictures:
         emf_bytes = tex_to_emf(latex, style)
-        png_bytes = tex_to_png(latex, style, 4.0)
+        png_bytes = tex_to_png(latex, style, PASTE_DPI / 72.0)
+        dib_bytes = tex_to_dib(latex, style, PASTE_DPI / 72.0)
 
     cb.OpenClipboard()
     try:
@@ -245,6 +252,14 @@ def copy_to_clipboard(latex: str, display: bool = False,
         if png_bytes:
             cb.SetClipboardData(cb.RegisterClipboardFormat("PNG"), png_bytes)
             placed.append("PNG")
+        if dib_bytes:
+            # CF_DIB is what an application takes when it pastes a picture, and
+            # the only image format a browser finds here: Windows synthesises
+            # it from a bitmap but not from a metafile.  Without it an equation
+            # dropped into Google Slides -- which has no equation object and
+            # takes raster only -- arrived as its LaTeX.
+            cb.SetClipboardData(8, dib_bytes)          # CF_DIB
+            placed.append("CF_DIB")
 
         cb.SetClipboardData(cb.CF_UNICODETEXT, latex)
         placed.append("CF_UNICODETEXT")

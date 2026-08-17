@@ -38,6 +38,11 @@ namespace mtef {
 namespace {
 
 const wchar_t* kClassName = L"Eqnedt64Window";
+
+/* The raster the clipboard carries.  Equation Editor's era could not have
+ * afforded this; an equation at 600 dpi is a few tens of kilobytes and takes
+ * milliseconds, so the picture is print quality rather than screen quality. */
+const double kPasteDpi = 600.0;
 const double kZoom = 2.0;          /* the equation is shown larger than life,
                                     * as the old editor did at 200% */
 const int kMargin = 24;            /* device-independent pixels */
@@ -351,10 +356,11 @@ bool copy_equation_to_clipboard(const std::string& latex, bool display,
     const std::string mml_bytes = tex_to_mathml(latex, mml);
 
     SvgStyle style;
-    std::string emf_bytes, png_bytes;
+    std::string emf_bytes, png_bytes, dib_bytes;
     if (pictures) {
         emf_bytes = tex_to_emf(latex, style);
-        png_bytes = tex_to_png(latex, style, 4.0);
+        png_bytes = tex_to_png(latex, style, kPasteDpi / 72.0);
+        dib_bytes = tex_to_dib(latex, style, kPasteDpi / 72.0);
     }
 
     if (!OpenClipboard(nullptr)) return false;
@@ -372,6 +378,11 @@ bool copy_equation_to_clipboard(const std::string& latex, bool display,
     }
     if (!png_bytes.empty())
         put(RegisterClipboardFormatW(L"PNG"), png_bytes);
+    /* CF_DIB is what an application takes when it pastes a picture, and it is
+     * the only image format a browser will find here -- Windows synthesises it
+     * from a bitmap but not from a metafile. */
+    if (!dib_bytes.empty())
+        put(CF_DIB, dib_bytes);
 
     /* The LaTeX itself, for Markdown, Jupyter, and any plain editor. */
     std::wstring text = widen(latex);
