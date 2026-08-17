@@ -425,6 +425,20 @@ PYBIND11_MODULE(_equation, m) {
     }, py::arg("codepoint"), py::arg("em"),
        "The smallest drawing at least that tall, and how tall it is.");
 
+    py::enum_<mtef::AtomKind>(m, "AtomKind", "TeX's atom classes.")
+        .value("Ord", mtef::AtomOrd).value("Op", mtef::AtomOp)
+        .value("Bin", mtef::AtomBin).value("Rel", mtef::AtomRel)
+        .value("Open", mtef::AtomOpen).value("Close", mtef::AtomClose)
+        .value("Punct", mtef::AtomPunct).value("Inner", mtef::AtomInner);
+
+    m.def("atom_kind", [](uint32_t cp) { return mtef::atom_kind(cp); },
+          py::arg("codepoint"),
+          "Which class a character belongs to.  What decides whether \"a*b\" "
+          "reads as a product or as three letters.");
+    m.def("atom_space_mu", &mtef::atom_space_mu, py::arg("left"),
+          py::arg("right"),
+          "Space between two atoms, in eighteenths of an em.");
+
     py::class_<mtef::MdSegment> seg(m, "MdSegment",
         "One span of a Markdown file: prose, code, or an equation.");
     py::enum_<mtef::MdSegment::Kind>(seg, "Kind")
