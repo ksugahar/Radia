@@ -292,6 +292,37 @@ def test_periodic_chain_spline_dimension_and_cohomology():
         open_chain.set_ring_circulation(1.0e-4)
 
 
+def test_lie_element_spoly_arrays_match_pointwise_coefficients():
+    chain = CanonicalHCurlChain(
+        np.array([0.0, 0.01, 0.02]), HW, HH, order_x=5, order_s=2,
+        curvature_per_m=lambda s: 0.1 + 3.0 * s)
+    rng = np.random.default_rng(53)
+    n = 4 * chain.chain_dimension + 400
+    x = rng.uniform(-HW, HW, n)
+    y = rng.uniform(-HH, HH, n)
+    s = rng.uniform(0.0, 0.02, n)
+    z = x + 1j * y
+    chain.fit_frame_samples(x, y, s, np.imag(z**2) / HW**2,
+                            np.real(z**2) / HW**2, np.zeros(n))
+    Ay, As, lengths, curvature_polys = chain.lie_element_spoly_arrays(5)
+    assert Ay.shape == (2, 3, 6, 6) and np.allclose(lengths, 0.01)
+    # Collapsing the zeta-polynomial must reproduce the midpoint-staging
+    # coefficient extraction at any zeta.
+    offsets = [0, chain.elements[0].dimension]
+    for e, zeta in ((0, -0.3), (1, 0.7)):
+        powers = zeta ** np.arange(3)
+        Ay_z = np.tensordot(powers, Ay[e], 1)
+        As_z = np.tensordot(powers, As[e], 1)
+        Ay_map, As_map = chain.elements[e].transverse_coefficients(zeta, 5)
+        c = chain._fit.coefficients[
+            offsets[e]:offsets[e] + chain.elements[e].dimension]
+        assert np.allclose(Ay_z, Ay_map @ c, atol=1e-15)
+        assert np.allclose(As_z, As_map @ c, atol=1e-15)
+        h_z = float(powers @ curvature_polys[e])
+        expected = 0.1 + 3.0 * (0.005 + 0.01 * e + 0.005 * zeta)
+        assert abs(h_z - expected) < 1e-9
+
+
 def test_lie_segment_arrays_contract():
     h = 0.1
     chain = CanonicalHCurlChain(

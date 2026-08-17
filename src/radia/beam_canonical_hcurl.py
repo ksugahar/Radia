@@ -828,6 +828,45 @@ class CanonicalHCurlChain:
             out[mask, 2] = bs_cols @ c
         return out
 
+    def lie_element_spoly_arrays(self, degree=5):
+        """Per-ELEMENT s-polynomial transverse arrays for the Lie kernel.
+
+        Returns ``(Ay, As_covariant, lengths, curvature_polys)`` with
+        shapes ``(E, p_s+1, d+1, d+1)`` (entry ``[e, k, i, j]`` multiplies
+        ``zeta**k * x**i * y**j`` on element ``e``'s normalized
+        ``zeta in [-1, 1]``), ``(E,)`` and ``(E, p_s+1)``.  One Lie
+        segment per chain element then consumes the ``p_s`` dependence
+        DIRECTLY through the kernel's nonautonomous stage-jet RK4 --
+        the in-segment alternative to midpoint staging.
+        """
+        coefficients = self._require_fit()
+        degree = int(degree)
+        if degree < 1:
+            raise ValueError("degree must be at least 1")
+        order_s = self.elements[0].order_s
+        count = self.element_count
+        offsets = np.concatenate(([0], np.cumsum(
+            [el.dimension for el in self.elements])))
+        Ay = np.zeros((count, order_s + 1, degree + 1, degree + 1))
+        As = np.zeros((count, order_s + 1, degree + 1, degree + 1))
+        curvature_polys = np.zeros((count, order_s + 1))
+        for e, element in enumerate(self.elements):
+            c = coefficients[offsets[e]:offsets[e + 1]]
+            modal = element.basis @ c
+            n_ay = len(element.ay_exponents)
+            ax, ay_scale, _ = element.scales
+            for idx, (i, j, k) in enumerate(element.ay_exponents):
+                if i <= degree and j <= degree and i + j <= degree:
+                    Ay[e, k, i, j] += modal[idx] / (ax**i * ay_scale**j)
+            for idx, (i, j, k) in enumerate(element.as_exponents):
+                if i <= degree and j <= degree and i + j <= degree:
+                    As[e, k, i, j] += modal[n_ay + idx] \
+                        / (ax**i * ay_scale**j)
+            poly = element.curvature_poly_per_m
+            curvature_polys[e, :len(poly)] = poly
+        lengths = np.diff(self.s_breaks_m)
+        return Ay, As, lengths, curvature_polys
+
     def lie_segment_arrays(self, segment_count, degree=5):
         """Per-segment transverse coefficient arrays for the Lie kernel.
 
