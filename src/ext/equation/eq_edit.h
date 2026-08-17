@@ -86,6 +86,15 @@ public:
     void extents(double& w, double& asc, double& desc,
                  const SvgStyle& style = SvgStyle()) const;
 
+    /* The display list, for a window that draws the equation being edited.
+     * The same layout the caret geometry and the pictures come from, so the
+     * editor cannot show something the paste does not contain.
+     *
+     * Recomputed on every call rather than cached and patched.  Equation
+     * Editor 3.0 needed a Redraw command because its display could go stale;
+     * a layout derived fresh from the tree has nothing to go stale. */
+    Layout layout(const SvgStyle& style = SvgStyle()) const;
+
     /* ---- history ----------------------------------------------------- */
     bool undo();
     bool redo();
