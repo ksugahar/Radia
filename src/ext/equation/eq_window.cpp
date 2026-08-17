@@ -19,6 +19,7 @@
 #define NOMINMAX
 #include <windows.h>
 #include <windowsx.h>          /* GET_X_LPARAM */
+#include <commdlg.h>           /* the open / save dialogs */
 
 #include "eq_window.h"
 
@@ -118,6 +119,10 @@ struct Editor {
     int dpi = 96;
     std::vector<Step> pending;      /* a chord waiting for its second key */
     bool swallow_char = false;      /* this press was a chord, not typing */
+
+    std::wstring path;              /* where Ctrl+S writes; empty until asked */
+    std::string saved;              /* the equation as last written or read */
+    std::wstring title_shown;       /* so the bar is not rewritten per key */
 
     bool dragging = false;          /* the mouse is selecting a range */
     std::vector<Button> bar;
@@ -395,18 +400,126 @@ void paint(HWND hwnd, Editor& ed) {
 
 void redraw(HWND hwnd) { InvalidateRect(hwnd, nullptr, FALSE); }
 
-/* The title carries the build and the zoom.  The build because an install
- * pointing at a stale tree has bitten this repository repeatedly; the zoom
- * because the wheel is continuous, and a magnification you cannot read off is
- * one you cannot get back to. */
-void update_title(HWND hwnd, const Editor& ed) {
+/* ---- the file ----------------------------------------------------------- */
+
+/* UTF-8 with a BOM.  The equation may hold Japanese, and without the mark
+ * every editor on this machine reads the file as cp932 and shows nothing but
+ * mojibake.  It is stripped again on load. */
+const char kBom[] = "\xEF\xBB\xBF";
+
+bool modified(const Editor& ed) { return ed.eq.latex() != ed.saved; }
+
+std::wstring file_name(const std::wstring& path) {
+    const size_t cut = path.find_last_of(L"\\/");
+    return cut == std::wstring::npos ? path : path.substr(cut + 1);
+}
+
+std::wstring ask_for_path(HWND hwnd, bool saving) {
+    wchar_t buf[MAX_PATH] = L"";
+    OPENFILENAMEW ofn{};
+    ofn.lStructSize = sizeof(ofn);
+    ofn.hwndOwner   = hwnd;
+    ofn.lpstrFilter = L"LaTeX equation\0*.tex\0All files\0*.*\0";
+    ofn.lpstrFile   = buf;
+    ofn.nMaxFile    = MAX_PATH;
+    ofn.lpstrDefExt = L"tex";
+    ofn.Flags = OFN_PATHMUSTEXIST | OFN_NOCHANGEDIR
+              | (saving ? OFN_OVERWRITEPROMPT : OFN_FILEMUSTEXIST);
+    const BOOL ok = saving ? GetSaveFileNameW(&ofn) : GetOpenFileNameW(&ofn);
+    return ok ? std::wstring(buf) : std::wstring();
+}
+
+bool write_file(const std::wstring& path, const std::string& text) {
+    HANDLE h = CreateFileW(path.c_str(), GENERIC_WRITE, 0, nullptr,
+                           CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+    if (h == INVALID_HANDLE_VALUE) return false;
+    DWORD wrote = 0;
+    const BOOL ok = WriteFile(h, text.data(), DWORD(text.size()), &wrote,
+                              nullptr);
+    CloseHandle(h);
+    return ok && wrote == text.size();
+}
+
+bool read_file(const std::wstring& path, std::string& out) {
+    HANDLE h = CreateFileW(path.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr,
+                           OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
+    if (h == INVALID_HANDLE_VALUE) return false;
+    LARGE_INTEGER size{};
+    if (!GetFileSizeEx(h, &size) || size.QuadPart > (1 << 20)) {
+        CloseHandle(h);
+        return false;
+    }
+    out.resize(size_t(size.QuadPart));
+    DWORD got = 0;
+    const BOOL ok = out.empty() ? TRUE
+                  : ReadFile(h, &out[0], DWORD(out.size()), &got, nullptr);
+    CloseHandle(h);
+    if (!ok) return false;
+    out.resize(got);
+    if (out.compare(0, 3, kBom) == 0) out.erase(0, 3);
+    while (!out.empty() && (out.back() == '\n' || out.back() == '\r'))
+        out.pop_back();
+    return true;
+}
+
+/* The title carries the build, the file and the zoom.  The build because an
+ * install pointing at a stale tree has bitten this repository repeatedly; the
+ * file and its unsaved mark because an editor that cannot tell you whether
+ * your work is on disk is one you cannot trust it to; the zoom because the
+ * wheel is continuous, and a magnification you cannot read off is one you
+ * cannot get back to.
+ *
+ * Called from WM_PAINT, so the mark tracks every edit without a flag threaded
+ * through each of them.  It writes only on a change: the title bar flickers
+ * otherwise, once per keystroke. */
+void update_title(HWND hwnd, Editor& ed) {
 #ifdef EQNEDT64_VERSION
     std::wstring t = L"EQNEDT64 " + widen(EQNEDT64_VERSION);
 #else
     std::wstring t = L"EQNEDT64 (development build)";
 #endif
+    t += L"  -  " + (ed.path.empty() ? std::wstring(L"untitled")
+                                     : file_name(ed.path));
+    if (modified(ed)) t += L" *";
     t += L"  -  " + std::to_wstring(int(std::lround(ed.zoom * 100))) + L"%";
+    if (t == ed.title_shown) return;
+    ed.title_shown = t;
     SetWindowTextW(hwnd, t.c_str());
+}
+
+/* Ctrl+S, and Ctrl+Shift+S to choose a new name.  False when the user backed
+ * out of the dialog, so closing can be called off too. */
+bool save_equation(HWND hwnd, Editor& ed, bool ask_where) {
+    if (ask_where || ed.path.empty()) {
+        std::wstring chosen = ask_for_path(hwnd, true);
+        if (chosen.empty()) return false;
+        ed.path = chosen;
+    }
+    if (!write_file(ed.path, kBom + ed.eq.latex() + "\n")) {
+        MessageBoxW(hwnd, L"The file could not be written.", L"EQNEDT64",
+                    MB_OK | MB_ICONERROR);
+        return false;
+    }
+    ed.saved = ed.eq.latex();
+    update_title(hwnd, ed);
+    return true;
+}
+
+void open_equation(HWND hwnd, Editor& ed) {
+    const std::wstring chosen = ask_for_path(hwnd, false);
+    if (chosen.empty()) return;
+    std::string text;
+    if (!read_file(chosen, text)) {
+        MessageBoxW(hwnd, L"The file could not be read.", L"EQNEDT64",
+                    MB_OK | MB_ICONERROR);
+        return;
+    }
+    ed.eq.load_latex(text);
+    ed.eq.move_end();
+    ed.path  = chosen;
+    ed.saved = ed.eq.latex();
+    update_title(hwnd, ed);
+    InvalidateRect(hwnd, nullptr, TRUE);
 }
 
 /* Ctrl+V.  The editor was a one-way door without this: an equation could be
@@ -475,7 +588,7 @@ LRESULT CALLBACK proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             return 0;
 
         case WM_PAINT:
-            if (ed) paint(hwnd, *ed);
+            if (ed) { update_title(hwnd, *ed); paint(hwnd, *ed); }
             return 0;
 
         case WM_ERASEBKGND:
@@ -567,7 +680,13 @@ LRESULT CALLBACK proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
              * the user asked to make bold. */
             const bool ctrl = (GetKeyState(VK_CONTROL) & 0x8000) != 0
                            && (GetKeyState(VK_SHIFT)   & 0x8000) == 0;
-            if (wp == VK_ESCAPE) { DestroyWindow(hwnd); return 0; }
+            const bool ctrl_shift = (GetKeyState(VK_CONTROL) & 0x8000) != 0
+                                 && (GetKeyState(VK_SHIFT)   & 0x8000) != 0;
+            if (wp == VK_ESCAPE) { PostMessageW(hwnd, WM_CLOSE, 0, 0); return 0; }
+
+            if (ctrl       && wp == 'S') { save_equation(hwnd, *ed, false); return 0; }
+            if (ctrl_shift && wp == 'S') { save_equation(hwnd, *ed, true);  return 0; }
+            if (ctrl       && wp == 'O') { open_equation(hwnd, *ed);        return 0; }
 
             /* Copy takes the selection when there is one and the whole
              * equation otherwise, which is what every editor does and what
@@ -615,6 +734,20 @@ LRESULT CALLBACK proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             redraw(hwnd);
             return 0;
         }
+
+        /* Escape used to destroy the window outright, so an afternoon's
+         * equation left with it.  Ask first. */
+        case WM_CLOSE:
+            if (ed && modified(*ed)) {
+                const int answer = MessageBoxW(
+                    hwnd, L"Save the changes to this equation?", L"EQNEDT64",
+                    MB_YESNOCANCEL | MB_ICONWARNING);
+                if (answer == IDCANCEL) return 0;
+                if (answer == IDYES && !save_equation(hwnd, *ed, false))
+                    return 0;          /* the save dialog was cancelled */
+            }
+            DestroyWindow(hwnd);
+            return 0;
 
         case WM_DESTROY:
             KillTimer(hwnd, 1);
@@ -693,15 +826,19 @@ bool copy_equation_to_clipboard(const std::string& latex, bool display,
     return ok;
 }
 
-EditorResult run_equation_window(const std::string& latex) {
+EditorResult run_equation_window(const std::string& latex,
+                                 const std::wstring& path) {
     /* Per-monitor aware, so the equation is sharp on a 4K screen.  It fails
      * harmlessly when the host process already chose its awareness -- which is
      * the normal case when this is called from Python. */
     SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
 
     Editor ed;
-    ed.eq.load_latex(latex);
+    std::string start = latex;
+    if (!path.empty() && read_file(path, start)) ed.path = path;
+    ed.eq.load_latex(start);
     ed.eq.move_end();
+    ed.saved = ed.eq.latex();   /* a file just opened is not modified */
 
     WNDCLASSEXW wc = {};
     wc.cbSize = sizeof(wc);
