@@ -46,8 +46,10 @@ uint32_t nary_char(int selector) {
     }
 }
 
-/* MTEF embellishment code -> the combining accent to draw.  0 is the default
- * circumflex. */
+}  // namespace
+
+/* MTEF embellishment code -> the combining accent, for markup that positions
+ * the accent itself. */
 uint32_t accent_char(int embellType) {
     switch (embellType) {
         case 2:  return 0x0307;   /* dot         */
@@ -62,6 +64,30 @@ uint32_t accent_char(int embellType) {
         default: return 0;
     }
 }
+
+/* The same accents as SPACING characters, for a renderer that has to place
+ * them itself.  Handing a combining character to TextOut gives it nothing to
+ * combine with, so it lands as a stray mark or as nothing at all -- which is
+ * how every vector came to draw as a bare letter.
+ *
+ * A bar returns 0: it is a rule the width of what it covers, not a glyph, and
+ * a fixed-width macron over a wide expression looks wrong. */
+uint32_t accent_drawing_char(int embellType) {
+    switch (embellType) {
+        case 2:  return 0x02D9;   /* dot          */
+        case 3:  return 0x00A8;   /* double dot   */
+        case 4:  return 0x2234;   /* triple dot   */
+        case 8:  return 0x02DC;   /* tilde        */
+        case 9:  return 0x02C6;   /* hat          */
+        case 11: return 0x2192;   /* right arrow  */
+        case 12: return 0x2190;   /* left arrow   */
+        case 13: return 0x2194;   /* both arrows  */
+        case 17: return 0;        /* bar: a rule  */
+        default: return 0;
+    }
+}
+
+namespace {
 
 /* MTEF marks style by typeface; every output marks it per run.
  * 0 upright, 1 italic, 2 bold italic. */

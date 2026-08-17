@@ -89,6 +89,17 @@ public:
 std::string write_math(const LineNode& root, const MathSyntax& syntax,
                        bool display, bool run_passes);
 
+/* An embellishment's accent, in the two spellings it is needed in.
+ *
+ * Markup wants the COMBINING character, because Office and MathML position it
+ * themselves.  Drawing wants the SPACING one, because a combining character
+ * handed to TextOut has nowhere to combine with and lands as a stray mark or
+ * as nothing.  Both live here so they cannot come to disagree about which
+ * accent an embellishment is; 0 means "no glyph", which for a bar means draw a
+ * rule instead. */
+uint32_t accent_char(int embellType);          /* combining, for markup  */
+uint32_t accent_drawing_char(int embellType);  /* spacing, for a picture */
+
 }  // namespace mtef
 
 #endif /* MATH_WRITER_H */

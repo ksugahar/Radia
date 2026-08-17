@@ -313,7 +313,7 @@ void LaTeXEmitter::emitNode(const Node* node, std::string& out) {
         /* SIZE nodes are consumed by passes, not emitted directly */
         break;
     case Node::kEmbell:
-        /* Standalone EMBELL — rare, usually attached to CHAR */
+        emitEmbell(*static_cast<const EmbellNode*>(node), out);
         break;
     case Node::kFont:
         /* FONT records ignored in output */
@@ -477,6 +477,29 @@ void LaTeXEmitter::emitFrac(const FracNode& frac, std::string& out) {
         out += (frac.display ? "\\dfrac{" : "\\frac{");
         out += n; out += "}{"; out += d; out += "}";
     }
+}
+
+/* A standalone embellishment: \vec{B}, \hat{n}, \bar{A}, \dot{x}.
+ *
+ * This case used to emit nothing, on the reasoning that an embellishment is
+ * "usually attached to CHAR".  That is true of a tree read from MTEF, where
+ * Equation Editor hangs the accent off the character -- and false of a tree
+ * from the LaTeX parser, which builds a node of its own.  So every vector an
+ * author typed was silently dropped on the way back out to LaTeX: the picture
+ * and the Office paste were right and the saved file had lost the arrow.
+ *
+ * An assumption that held for one producer and not the other, which is why it
+ * survived: the MTEF corpus tests never exercised this path. */
+void LaTeXEmitter::emitEmbell(const EmbellNode& em, std::string& out) {
+    const EmbellFmt* fmt =
+        (em.embellType >= 0 && em.embellType < (int)EMBELL_MAP_N)
+            ? &EMBELL_MAP[em.embellType] : nullptr;
+
+    /* A prime is a suffix with no prefix (x'), an accent is both (\hat{x}),
+     * and an unknown type still has to keep its content rather than lose it. */
+    if (fmt && fmt->prefix) out += fmt->prefix;
+    for (const auto& child : em.content) emitNode(child.get(), out);
+    if (fmt && fmt->suffix) out += fmt->suffix;
 }
 
 void LaTeXEmitter::emitSqrt(const SqrtNode& sq, std::string& out) {
