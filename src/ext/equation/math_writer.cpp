@@ -13,27 +13,11 @@
 namespace mtef {
 namespace {
 
-std::string utf8_of(uint32_t cp) {
-    std::string s;
-    if (cp < 0x80) {
-        s += char(cp);
-    } else if (cp < 0x800) {
-        s += char(0xC0 | (cp >> 6));
-        s += char(0x80 | (cp & 0x3F));
-    } else {
-        s += char(0xE0 | (cp >> 12));
-        s += char(0x80 | ((cp >> 6) & 0x3F));
-        s += char(0x80 | (cp & 0x3F));
-    }
-    return s;
-}
-
-/* Delimiters.  Office defaults to parentheses, so only other shapes are
- * spelled out. */
+/* Delimiters.  A null pair means the default parentheses. */
 struct Fence { const char* beg; const char* end; };
 Fence fence_chars(int selector) {
     switch (selector) {
-        case tmPAREN: return {nullptr, nullptr};
+        case tmPAREN: return {"(", ")"};
         case tmBRACK: return {"[", "]"};
         case tmBRACE: return {"{", "}"};
         case tmANGLE: return {"\xE2\x9F\xA8", "\xE2\x9F\xA9"};   /* U+27E8/9 */
@@ -41,7 +25,7 @@ Fence fence_chars(int selector) {
         case tmDBAR:  return {"\xE2\x80\x96", "\xE2\x80\x96"};   /* U+2016 */
         case tmFLOOR: return {"\xE2\x8C\x8A", "\xE2\x8C\x8B"};   /* U+230A/B */
         case tmCEIL:  return {"\xE2\x8C\x88", "\xE2\x8C\x89"};   /* U+2308/9 */
-        default:      return {nullptr, nullptr};
+        default:      return {"(", ")"};
     }
 }
 
@@ -62,8 +46,8 @@ uint32_t nary_char(int selector) {
     }
 }
 
-/* MTEF embellishment code -> the combining accent Office draws.  0 leaves the
- * default (a circumflex). */
+/* MTEF embellishment code -> the combining accent to draw.  0 is the default
+ * circumflex. */
 uint32_t accent_char(int embellType) {
     switch (embellType) {
         case 2:  return 0x0307;   /* dot         */
@@ -79,12 +63,27 @@ uint32_t accent_char(int embellType) {
     }
 }
 
-/* MTEF marks style by typeface; Office marks it per run.  0 upright,
- * 1 italic, 2 bold italic. */
+/* MTEF marks style by typeface; every output marks it per run.
+ * 0 upright, 1 italic, 2 bold italic. */
 int run_style(int tf) {
     if (tf == TF_VECTOR) return 2;
     if (tf == TF_VARIABLE || tf == TF_LCGREEK || tf == TF_UCGREEK) return 1;
     return 0;
+}
+
+std::string utf8_of(uint32_t cp) {
+    std::string s;
+    if (cp < 0x80) {
+        s += char(cp);
+    } else if (cp < 0x800) {
+        s += char(0xC0 | (cp >> 6));
+        s += char(0x80 | (cp & 0x3F));
+    } else {
+        s += char(0xE0 | (cp >> 12));
+        s += char(0x80 | ((cp >> 6) & 0x3F));
+        s += char(0x80 | (cp & 0x3F));
+    }
+    return s;
 }
 
 class Walker {
@@ -166,32 +165,14 @@ private:
     }
 
     std::string list_of(const NodeList& l) { return seq(l); }
-
-    /* A slot always has to be present, even when empty, or Office treats the
-     * equation as malformed. */
-    std::string slot(const char* name, const NodeList& l) {
-        return syn_.group(name, list_of(l));
-    }
-    std::string slot_raw(const char* name, const std::string& inner) {
-        return syn_.group(name, inner);
-    }
-    std::string props(const char* name, const std::string& inner = std::string()) {
-        return syn_.group(name, inner + syn_.ctrl());
-    }
+    std::string slot(const NodeList& l) { return syn_.row(seq(l)); }
 
     /* ---- individual nodes ---------------------------------------------- */
 
     std::string script(const ScriptNode& s, const std::string& base) {
-        if (s.hasSub && s.hasSup)
-            return syn_.group("sSubSup", props("sSubSupPr") + slot_raw("e", base) +
-                                         slot("sub", s.sub) + slot("sup", s.sup));
-        if (s.hasSub)
-            return syn_.group("sSub", props("sSubPr") + slot_raw("e", base) +
-                                      slot("sub", s.sub));
-        if (s.hasSup)
-            return syn_.group("sSup", props("sSupPr") + slot_raw("e", base) +
-                                      slot("sup", s.sup));
-        return base;
+        if (!s.hasSub && !s.hasSup) return base;
+        return syn_.script(syn_.row(base), slot(s.sub), slot(s.sup),
+                           s.hasSub, s.hasSup);
     }
 
     std::string nary_body(const Node& n) {
@@ -235,16 +216,9 @@ private:
             if (limits->hasSub) lower = list_of(limits->sub);
             if (limits->hasSup) upper = list_of(limits->sup);
         }
-
-        std::string pr = syn_.prop("chr", utf8_of(nary_char(selector))) +
-                         syn_.prop("limLoc", stacked ? "undOvr" : "subSup");
-        if (lower.empty()) pr += syn_.flag("subHide");
-        if (upper.empty()) pr += syn_.flag("supHide");
-
-        return syn_.group("nary", props("naryPr", pr) +
-                                  slot_raw("sub", lower) +
-                                  slot_raw("sup", upper) +
-                                  slot_raw("e", body));
+        return syn_.nary(nary_char(selector), syn_.row(lower), syn_.row(upper),
+                         syn_.row(body), stacked,
+                         !lower.empty(), !upper.empty());
     }
 
     std::string node(const Node& n) {
@@ -268,28 +242,19 @@ private:
             }
             case Node::kFrac: {
                 const auto& f = static_cast<const FracNode&>(n);
-                std::string pr = f.slashed ? syn_.prop("type", "skw") : std::string();
-                return syn_.group("f", props("fPr", pr) + slot("num", f.numer) +
-                                       slot("den", f.denom));
+                return syn_.fraction(slot(f.numer), slot(f.denom), f.slashed);
             }
             case Node::kSqrt: {
                 const auto& s = static_cast<const SqrtNode&>(n);
-                std::string pr = s.hasIndex ? std::string() : syn_.flag("degHide");
-                std::string deg = s.hasIndex ? slot("deg", s.index)
-                                             : syn_.group("deg", std::string());
-                return syn_.group("rad", props("radPr", pr) + deg +
-                                         slot("e", s.content));
+                return syn_.radical(slot(s.content), slot(s.index), s.hasIndex);
             }
             case Node::kFence: {
                 const auto& f = static_cast<const FenceNode&>(n);
                 Fence ch = fence_chars(f.selector);
-                std::string pr;
                 /* variation 1 = left delimiter only, 2 = right only */
-                if (f.variation == 2)      pr += syn_.prop("begChr", "");
-                else if (ch.beg)           pr += syn_.prop("begChr", ch.beg);
-                if (f.variation == 1)      pr += syn_.prop("endChr", "");
-                else if (ch.end)           pr += syn_.prop("endChr", ch.end);
-                return syn_.group("d", props("dPr", pr) + slot("e", f.content));
+                const char* beg = (f.variation == 2) ? "" : ch.beg;
+                const char* end = (f.variation == 1) ? "" : ch.end;
+                return syn_.fence(slot(f.content), beg, end);
             }
             case Node::kIntegral:
             case Node::kBigOp:
@@ -297,43 +262,31 @@ private:
 
             case Node::kMatrix: {
                 const auto& m = static_cast<const MatrixNode&>(n);
-                std::string cols = syn_.prop("count", std::to_string(m.cols)) +
-                                   syn_.prop("mcJc", "center");
-                std::string mpr = syn_.group("mcs",
-                                     syn_.group("mc", syn_.group("mcPr", cols)));
-                std::string body = props("mPr", mpr);
-                for (int r = 0; r < m.rows; ++r) {
-                    std::string row;
+                std::vector<std::string> cells;
+                for (int r = 0; r < m.rows; ++r)
                     for (int c = 0; c < m.cols; ++c) {
                         size_t idx = size_t(r) * size_t(m.cols) + size_t(c);
                         std::string cell;
                         if (idx < m.elements.size() && m.elements[idx])
                             cell = node(*m.elements[idx]);
-                        row += syn_.group("e", cell);
+                        cells.push_back(syn_.row(cell));
                     }
-                    body += syn_.group("mr", row);
-                }
-                return syn_.group("m", body);
+                return syn_.matrix(m.rows, m.cols, cells);
             }
             case Node::kPile: {
                 const auto& p = static_cast<const PileNode&>(n);
-                std::string body = props("eqArrPr");
+                std::vector<std::string> lines;
                 for (const auto& ln : p.lines)
-                    body += syn_.group("e", ln ? node(*ln) : std::string());
-                return syn_.group("eqArr", body);
+                    lines.push_back(syn_.row(ln ? node(*ln) : std::string()));
+                return syn_.stack(lines);
             }
             case Node::kEmbell: {
                 const auto& e = static_cast<const EmbellNode&>(n);
-                std::string pr;
-                if (uint32_t g = accent_char(e.embellType))
-                    pr = syn_.prop("chr", utf8_of(g));
-                return syn_.group("acc", props("accPr", pr) + slot("e", e.content));
+                return syn_.accent(accent_char(e.embellType), slot(e.content));
             }
             case Node::kDecoration: {
                 const auto& d = static_cast<const DecorationNode&>(n);
-                std::string pr = syn_.prop("pos",
-                                     d.selector == tmOBAR ? "top" : "bot");
-                return syn_.group("bar", props("barPr", pr) + slot("e", d.content));
+                return syn_.bar(slot(d.content), d.selector == tmOBAR);
             }
             case Node::kBraceDeco:
                 return list_of(static_cast<const BraceDecoNode&>(n).content);

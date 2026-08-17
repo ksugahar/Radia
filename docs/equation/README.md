@@ -20,29 +20,49 @@ tools edit it, it follows the theme font and colour, it scales with the text,
 and the reader needs nothing installed. A picture is none of those things, and
 an OLE object needs Equation Editor on the reader's machine.
 
-## Two spellings, one walk
+## Three spellings, one walk
 
-Office writes the same structure two ways. In a file it is OMML,
-`<m:f><m:num/><m:den/></m:f>`; on the clipboard it is RTF, where the element
-names are control words:
+Office takes an equation in three spellings, and which one is needed depends on
+where it is going. All three were measured by copying an equation out of Word
+and reading the clipboard, rather than inferred:
 
-```
-{\mf{\mfPr{\mctrlPr}}{\mnum{\mr\mscr0\msty2 a}}{\mden{\mr\mscr0\msty2 b}}}
-```
+| | | |
+|---|---|---|
+| OMML | inside a `.docx` / `.pptx` | `<m:f><m:num/><m:den/></m:f>` |
+| RTF | clipboard, **Word only** | `{\mf{\mfPr{\mctrlPr}}{\mnum ...}{\mden ...}}` |
+| MathML | clipboard, **PowerPoint and Excel** | `<mfrac><mi>a</mi><mi>b</mi></mfrac>` |
 
-That correspondence was measured -- by copying each construct out of Word and
-reading the clipboard -- rather than inferred, and because the structures
-coincide the interesting part is written once in `math_writer.cpp`. Each output
-supplies only a `MathSyntax` saying how to spell an element, a property and a
-run. Duplicating the walk would guarantee the two drift apart, and the walk is
+The split is not a preference, it is measured. Offering Word's formats to
+PowerPoint one at a time: with only `MathML` present PowerPoint produces a
+native equation; with only `Rich Text Format` it produces a **text box**. Word
+is the other way round -- it reads our RTF and refuses our MathML alone.
+
+That is why `copy_to_clipboard` puts both on at once. The Windows clipboard
+holds many formats and each application takes the richest thing it understands,
+so one Copy serves every target with no mode switch.
+
+Since the structure is the same in every case and only the spelling differs, the
+interesting part is written once in `math_writer.cpp` and each output supplies a
+`MathSyntax`. The interface names *meanings* (fraction, radical, script) rather
+than element names: OMML and RTF happen to share names, but MathML does not --
+its root takes its arguments the other way round, its delimiters are ordinary
+operators inside a row, and its runs split into identifier / number / operator.
+
+Duplicating the walk would guarantee the outputs drift apart, and the walk is
 where the judgement lives: MTEF stores a script's base as the *preceding*
 sibling and a big operator's operand as the *following* run, so both have to be
 absorbed or Office draws a placeholder box.
 
 `validation_test/equation/test_paste_into_word.py` is the acceptance test:
-clipboard -> Word -> save -> read back `<m:oMath>`. An equation that arrives as
-text runs is a picture at best, and no amount of correct-looking markup would
-show that.
+clipboard -> paste -> save -> read back `<m:oMath>`, for Word and PowerPoint.
+An equation that arrives as text runs is a picture at best, and no amount of
+correct-looking markup would show that.
+
+**Excel is not verified.** Its equations live in shapes, and pasting into a
+shape's text is a UI operation its object model does not expose -- Shape.Select
+plus Paste, TextRange.Select plus Paste, and PasteSpecial are all refused. The
+payload is the same one PowerPoint accepts and Excel uses the same equation
+object, so it is likely to work; that is not the same as measured.
 
 ## Layout
 
@@ -51,7 +71,8 @@ show that.
 | `src/ext/equation/tex_parser.cpp` | LaTeX → node tree |
 | `src/ext/equation/math_writer.cpp` | the tree walk every Office output shares |
 | `src/ext/equation/mtef_omml.cpp` | OMML spelling (inside a .docx / .pptx) |
-| `src/ext/equation/mtef_rtf.cpp` | RTF spelling (on the clipboard) |
+| `src/ext/equation/mtef_rtf.cpp` | RTF spelling (clipboard, Word) |
+| `src/ext/equation/mtef_mathml.cpp` | MathML spelling (clipboard, PowerPoint / Excel) |
 | `src/ext/equation/mtef_svg.cpp` | node tree → layout → SVG |
 | `src/ext/equation/eq_edit.cpp` | the editing model |
 | `src/ext/equation/md_doc.cpp` | which spans of a `.md` are math |
