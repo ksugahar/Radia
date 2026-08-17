@@ -992,6 +992,7 @@ pybind11_add_module(_equation
 	${EQUATION_DIR}/eq_edit.cpp
 	${EQUATION_DIR}/md_doc.cpp
 	${EQUATION_DIR}/md_blocks.cpp
+	${EQUATION_DIR}/md_layout.cpp
 )
 
 target_include_directories(_equation PRIVATE
