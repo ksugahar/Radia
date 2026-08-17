@@ -106,6 +106,7 @@ than ours. The missing piece is the paste target, not the format.
 | `src/ext/equation/mtef_gdi.cpp` | layout → EMF and PNG, through GDI |
 | `src/ext/equation/eq_edit.cpp` | the editing model |
 | `src/ext/equation/md_doc.cpp` | which spans of a `.md` are math |
+| `src/ext/equation/md_blocks.cpp` | what a `.md` is made of: headings, lists, code |
 | `src/radia/equation/office.py` | Word and PowerPoint writers |
 
 ## Caret geometry
@@ -181,6 +182,28 @@ Pandoc's — no space just inside the delimiters, no digit after the closing one
 — and inline math may not span a backtick. Without that last rule, a sentence
 like *prices $5 and $6, where `$HOME` is set* has its second dollar open a span
 that closes on the dollar inside the code span.
+
+## Block structure
+
+`md_blocks` says what the file is made of -- headings, paragraphs, list items,
+fenced code, blank runs -- where `MarkdownDoc` says which spans of it are maths.
+Concatenating every block's `source` rebuilds the file exactly, the same
+guarantee and for the same reason.
+
+It is deliberately shallow: tables, block quotes, footnotes and images are not
+modelled, and their source passes through as ordinary text. Guessing at more
+structure than is really understood gives a viewer that quietly shows something
+other than what the file says.
+
+It lives in C++ because a viewer cannot afford Python. Importing the package
+costs about **1.4 s**; the module itself loads in **4 ms**, and nearly all of
+that second and a half is `radia/__init__.py` setting up DLL paths and MKL,
+which has nothing to do with equations. An editor that takes a second and a half
+to open is not the tool this is trying to be.
+
+Keeping it here also keeps *one* implementation: `markdown_to_docx` calls the
+same scanner rather than carrying its own copy, so a document cannot mean two
+different things depending on which path reads it.
 
 ## MTEF
 
