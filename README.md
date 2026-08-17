@@ -286,8 +286,9 @@ MATLAB adapters.
 
 Radia supports global, local, and gradient-based design loops:
 
-- TPE and CMA-ES for global, conditional, integer, and mixed search spaces;
-- MATLAB-native Optuna-style Study/Trial workflows and live Pareto monitoring;
+- TPE, CMA-ES, GP, NSGA-II/III, QMC, and finite define-by-run search;
+- MATLAB-native Optuna 4.9-style Study/Trial workflows, table-backed resume,
+  automatic sampler routing, and live Pareto monitoring;
 - analytic-adjoint MMA and SQP for continuous field optimization;
 - HDiv-VIM and HCurl material topology;
 - stream-function, sheet-metal, and electromagnet topology optimization;
@@ -354,6 +355,11 @@ tested independently for numerical parity, error propagation, lifecycle, and
 performance before a Simulink block depends on it. MATLAB wrappers use an
 explicit Python-DLL boundary only where no stable native object boundary is
 practical; Python is never silently called once per simulation time step.
+
+HCurl-based reduced and topology workflows use the same standalone native
+boundary. HCurl multifrequency topology gradients, activation derivatives,
+and repeated reduced-state operations are available as independently testable
+MEX commands before they are composed into Simulink blocks.
 
 - [MATLAB integration and MEX contracts](matlab/README.md)
 - [NGSolve/MEX parity map](docs/api/MATLAB_MEX_NGSOLVE_PARITY.md)

@@ -5,6 +5,46 @@ All notable changes to the `radia` package.  Format: each release lists
 
 ## Unreleased
 
+## 4.95.53 - MATLAB Optuna 4.9 sampler parity
+
+Released 2026-08-16.
+
+- Added MATLAB-native Gaussian-process, NSGA-III, and finite define-by-run
+  brute-force samplers with table-backed state, seeded resume, constraints,
+  pending-trial handling, and multi-objective acquisition or niching where
+  applicable.
+- Replaced shifted scrambled QMC with seeded linear-matrix Sobol scrambling
+  and per-digit Owen-style Halton permutations while retaining exact
+  unscrambled Optuna/SciPy prefixes through the supported 32 Sobol dimensions.
+- Extended the Simulink Optuna block with explicit GP, NSGA-III, brute-force,
+  and QMC choices plus a persisted automatic-sampler decision for numeric,
+  mixed, conditional, constrained, and many-objective budgets.
+- Added differential quality, lifecycle, persistence, conditional-tree,
+  hypervolume, and Simulink regression gates against Optuna 4.9 fixtures.
+
+## 4.95.52 - Curvilinear EarlyTimes, electromagnetic force, and MATLAB optimization
+
+Released 2026-08-16.
+
+- Added the EarlyTimes design-orbit-centred Bishop/RMF loft chain and a
+  conforming HCurl vector-potential workflow. The fourth-order Lie-map route
+  now carries fifth-degree Hamiltonian terms and decapole response, supports
+  independent reference curvature, and reports separate Lie truncation and
+  A/B field-route discrepancies without constructing a regular field map.
+- Added electromagnetic force and torque contracts across Python and MATLAB,
+  including Lorentz volume integrals, Maxwell surface traction, air-gap shear,
+  coenergy/virtual-work routes, time-average phasor forms, and application
+  result integration for MagLev, Motor, and topology optimization.
+- Expanded the MATLAB Optuna-compatible layer with distribution and frozen
+  trial objects, NSGA-II joint sampling, grid/QMC/fixed samplers, production
+  pruners, table-backed persistence, and more robust Simulink execution and
+  recovery behavior.
+- Migrated the native build and wheel dependency contract to the oneMKL 2026
+  runtime ABI while retaining NGSolve's OpenBLAS-owned finite-element runtime.
+- Preserved the refined TEAM 36 v11 induction-heating validation result and
+  strengthened beam, force, MATLAB/MEX, MCP, and release-package regression
+  coverage.
+
 ## 4.95.51 - Native beam dynamics, nonlinear reactor, and integrated LTspice
 
 Released 2026-08-14.
@@ -25,8 +65,8 @@ Released 2026-08-14.
   lifecycle diagnostics, a tracked Simulink model, and registration in the
   single Radia library.
 - Added cyclic N-fold HDiv-VIM rotational images so a modeled sector reproduces
-  a complete ring, with Python bindings, focused unit coverage, and an
-  independent ring-validation lane.
+  a complete ring, with Python and MATLAB/MEX parity, focused unit coverage,
+  and an independent ring-validation lane.
 - Added charged-particle orbit and flying-beam Gmsh post-processing together
   with electromagnetic field overlays and checked rendering contracts, and
   exposed field comparison, flux/line integrals, Maxwell force, gap harmonics,
