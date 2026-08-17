@@ -52,6 +52,24 @@ std::string mtef_to_svg(const uint8_t* data, size_t len,
 std::string tex_to_svg(const std::string& latex,
                        const SvgStyle& style = SvgStyle());
 
+
+/* TeX's atom classes, and the space it puts between two of them.
+ *
+ * The class is what decides whether "a*b" reads as a product or as three
+ * letters, and a missing entry is invisible in every other test -- an ASCII
+ * asterisk was classed as ordinary for exactly that reason.  So the table is
+ * reachable on its own, rather than only through a rendered width, where the
+ * glyph's own advance drowns out the space around it.
+ */
+enum AtomKind { AtomOrd, AtomOp, AtomBin, AtomRel,
+                AtomOpen, AtomClose, AtomPunct, AtomInner };
+
+/* The class of a single character. */
+AtomKind atom_kind(uint32_t codepoint);
+
+/* Space between two atoms, in eighteenths of an em. */
+int atom_space_mu(AtomKind left, AtomKind right);
+
 }  // namespace mtef
 
 #endif  /* MTEF_SVG_H */
