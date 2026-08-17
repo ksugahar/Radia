@@ -14,6 +14,7 @@
  */
 #include "mtef_svg.h"
 #include "math_layout.h"
+#include "math_writer.h"      /* accent_drawing_char: one table, two spellings */
 #include "mtef_parser.h"
 #include "tex_parser.h"
 
@@ -404,6 +405,78 @@ private:
         return L;
     }
 
+    /* An accent over an expression: \vec{B}, \hat{n}, \dot{x}.
+     *
+     * This used to fall through to the default and produce nothing, so a
+     * vector rendered as a bare letter -- the picture of \vec{B} was byte for
+     * byte the picture of B.  The markup path was always right, which is why
+     * it went unnoticed: Office drew the arrow, we did not. */
+    Layout layout_embell(const EmbellNode& em, double sizePt,
+                         const std::string& listPath, int child) {
+        /* node_slots(kEmbell) = { content } */
+        Layout body = layout_list(em.content, sizePt,
+                                  slot_path(listPath, child, 0));
+        const uint32_t acc = accent_drawing_char(em.embellType);
+
+        Layout out;
+        out.absorb(body, 0, 0);
+        out.w = body.w;
+        out.asc = body.asc;
+        out.desc = body.desc;
+
+        /* A bar is a rule the width of what it covers; a fixed-width macron
+         * over a wide expression would look wrong. */
+        const double gap = sizePt * 0.08;
+        if (!acc) {
+            Rule r;
+            r.x = 0;
+            r.y = -(body.asc + gap + sizePt * 0.05);
+            r.w = body.w;
+            r.h = std::max(0.5, sizePt * 0.05);
+            out.rules.push_back(r);
+            out.asc = body.asc + gap + r.h + sizePt * 0.05;
+            return out;
+        }
+
+        /* An accent is set smaller than what it sits over.  At full size an
+         * arrow is as heavy as the letter and reads as a second symbol rather
+         * than as a mark on the first. */
+        const double markPt = sizePt * 0.62;
+        Layout mark = glyph_layout(acc, markPt, false, needs_math_face(acc));
+        const double dx = (body.w - mark.w) / 2;
+        const double dy = -(body.asc + gap + mark.desc);
+        out.absorb(mark, dx, dy);
+        out.asc = std::max(out.asc, body.asc + gap + mark.asc + mark.desc);
+        return out;
+    }
+
+    /* \overline / \underline: a rule above or below, spanning the content. */
+    Layout layout_bar(const NodeList& content, bool above, double sizePt,
+                      const std::string& listPath, int child) {
+        Layout body = layout_list(content, sizePt,
+                                  slot_path(listPath, child, 0));
+        Layout out;
+        out.absorb(body, 0, 0);
+        out.w = body.w;
+        out.asc = body.asc;
+        out.desc = body.desc;
+
+        const double gap = sizePt * 0.10;
+        Rule r;
+        r.x = 0;
+        r.w = body.w;
+        r.h = std::max(0.5, sizePt * 0.05);
+        if (above) {
+            r.y = -(body.asc + gap + r.h);
+            out.asc = body.asc + gap + r.h;
+        } else {
+            r.y = body.desc + gap;
+            out.desc = body.desc + gap + r.h;
+        }
+        out.rules.push_back(r);
+        return out;
+    }
+
     /* The atom class a node contributes to the spacing between its
      * neighbours.  A structure is Inner; a character carries its own class. */
     static AtomClass class_of(const Node& n) {
@@ -513,6 +586,15 @@ private:
                 if (!cp) return Layout();
                 return glyph_layout(cp, sizePt, typeface_is_italic(c.typeface),
                                     needs_math_face(cp));
+            }
+            case Node::kEmbell:
+                return layout_embell(static_cast<const EmbellNode&>(n), sizePt,
+                                     listPath, child);
+            case Node::kDecoration: {
+                const auto& d = static_cast<const DecorationNode&>(n);
+                /* \overline / \underline: a rule the width of what it covers. */
+                return layout_bar(d.content, d.selector == tmOBAR, sizePt,
+                                  listPath, child);
             }
             case Node::kScript:
                 return layout_script(static_cast<const ScriptNode&>(n), sizePt,
