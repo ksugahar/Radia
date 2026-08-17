@@ -17,7 +17,8 @@ import re
 import zipfile
 from typing import Iterable, Sequence
 
-from radia._equation import MarkdownDoc, MdSegment, tex_to_omml
+from radia._equation import (MarkdownDoc, MdSegment, tex_to_mathml,
+                             tex_to_omml, tex_to_rtf)
 
 W_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
 A_NS = "http://schemas.openxmlformats.org/drawingml/2006/main"
@@ -230,3 +231,46 @@ def count_equations(path: str) -> int:
         for part in parts:
             n += len(re.findall(r"<m:oMath[ >]", z.read(part).decode("utf-8")))
     return n
+
+
+def copy_to_clipboard(latex: str, display: bool = False) -> list[str]:
+    """Put one equation on the Windows clipboard for every target at once.
+
+    The clipboard holds many formats and each application takes the richest
+    thing it understands, so a single Copy serves every target with no mode
+    switch.  Which format each one needs was measured, not assumed:
+
+      Rich Text Format   Word reads it as maths; PowerPoint reads it as text
+      MathML             PowerPoint and Excel read it as maths; Word refuses it
+      CF_UNICODETEXT     the LaTeX itself, for Markdown, Jupyter, any editor
+
+    Returns the format names actually placed, so a caller can report what a
+    given paste target will find.  Windows only.
+    """
+    import win32clipboard as cb          # pywin32, Windows only
+
+    from radia._equation import MathMLOptions, RtfOptions
+
+    rtf_opt = RtfOptions()
+    rtf_opt.display = display
+    mml_opt = MathMLOptions()
+    mml_opt.display = display
+
+    payload = [
+        ("Rich Text Format",
+         tex_to_rtf(latex, rtf_opt).encode("latin-1", "replace")),
+        ("MathML", tex_to_mathml(latex, mml_opt).encode("utf-8")),
+    ]
+
+    cb.OpenClipboard()
+    try:
+        cb.EmptyClipboard()
+        placed = []
+        for name, data in payload:
+            cb.SetClipboardData(cb.RegisterClipboardFormat(name), data)
+            placed.append(name)
+        cb.SetClipboardData(cb.CF_UNICODETEXT, latex)
+        placed.append("CF_UNICODETEXT")
+    finally:
+        cb.CloseClipboard()
+    return placed

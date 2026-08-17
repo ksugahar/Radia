@@ -24,9 +24,17 @@ All notable changes to the `radia` package.  Format: each release lists
   measured by copying each construct out of Word rather than inferred. Because
   the structures coincide, the tree walk is now written once in
   `math_writer.cpp` and each output supplies only its spelling.
-  `validation_test/equation/test_paste_into_word.py` pastes all 13 probe
-  equations into Word through COM and reads `<m:oMath>` back out of the saved
-  .docx.
+  `validation_test/equation/test_paste_into_word.py` pastes the probe equations
+  into Word and PowerPoint through COM and reads `<m:oMath>` back out of the
+  saved file.
+- `radia.equation.tex_to_mathml` covers PowerPoint and Excel, which read our
+  RTF as a text box rather than as maths. Offering Word's own clipboard formats
+  to PowerPoint one at a time showed `MathML` alone produces a native equation,
+  at 142 bytes against Word's 42 KB of HTML and without reverse-engineering
+  DrawingML. One Copy carries RTF and MathML together and each application
+  takes what it understands: Word 10/10 and PowerPoint 10/10 native equations
+  from the same clipboard. Excel is unverified -- pasting into a shape is a UI
+  operation its object model does not expose.
 
 ## 4.95.55 - Native Lie-map pipeline and 3D reference-orbit tracker
 
