@@ -25,6 +25,7 @@
 #include "tex2mtef.h"
 #include "mtef_svg.h"
 #include "mtef_omml.h"
+#include "mtef_rtf.h"
 #include "mtef_dump.h"
 #include "tex_parser.h"
 #include "latex_emitter.h"
@@ -92,6 +93,20 @@ std::string tex_to_omml_py(const std::string& latex, const mtef::OmmlOptions& op
     std::string omml = mtef::tex_to_omml(latex, opt);
     if (omml.empty()) throw std::runtime_error("tex_to_omml: emit failed for: " + latex);
     return omml;
+}
+
+std::string tex_to_rtf_py(const std::string& latex, const mtef::RtfOptions& opt) {
+    std::string rtf = mtef::tex_to_rtf(latex, opt);
+    if (rtf.empty()) throw std::runtime_error("tex_to_rtf: emit failed for: " + latex);
+    return rtf;
+}
+
+std::string mtef_to_rtf_py(const py::bytes& data, const mtef::RtfOptions& opt) {
+    std::string buf = data;
+    std::string rtf = mtef::mtef_to_rtf(
+        reinterpret_cast<const uint8_t*>(buf.data()), buf.size(), opt);
+    if (rtf.empty()) throw std::runtime_error("mtef_to_rtf: parse failed");
+    return rtf;
 }
 
 std::string tex_dump_tree_py(const std::string& latex) {
@@ -166,6 +181,19 @@ PYBIND11_MODULE(_equation, m) {
     m.def("tex_to_omml", &tex_to_omml_py, py::arg("latex"),
           py::arg("options") = mtef::OmmlOptions(),
           "LaTeX -> OMML (Office-native, editable equation).");
+
+    py::class_<mtef::RtfOptions>(m, "RtfOptions",
+        "How an equation is written into RTF, the clipboard form Office takes.")
+        .def(py::init<>())
+        .def_readwrite("display", &mtef::RtfOptions::display)
+        .def_readwrite("font_size_pt", &mtef::RtfOptions::font_size_pt);
+
+    m.def("tex_to_rtf", &tex_to_rtf_py, py::arg("latex"),
+          py::arg("options") = mtef::RtfOptions(),
+          "LaTeX -> a complete RTF document carrying one native equation.");
+    m.def("mtef_to_rtf", &mtef_to_rtf_py, py::arg("data"),
+          py::arg("options") = mtef::RtfOptions(),
+          "MTEF binary -> a complete RTF document carrying one equation.");
 
     m.def("tex_normalize", &tex_normalize_py, py::arg("latex"),
           "LaTeX -> tree -> LaTeX (the shape an edited equation is saved in).");
