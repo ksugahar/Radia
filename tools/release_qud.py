@@ -1665,8 +1665,14 @@ def cmd_evidence_motor(args):
         warn("pin drift: " + rel + " — regenerating")
 
     # 1) fresh MEX from current source
-    p = run(["powershell.exe", "-ExecutionPolicy", "Bypass",
-             "-File", str(REPO / "Build.ps1"), "-MatlabMexOnly"], check=False)
+    # Preserve the caller's mapped-drive spelling on Windows. Path.resolve()
+    # expands S:/W: to a UNC path, which cmd.exe cannot use as the working
+    # directory of the CMake/Ninja post-build copy commands.
+    build_script = Path.cwd() / "Build.ps1"
+    if not build_script.is_file():
+        build_script = REPO / "Build.ps1"
+    p = run(["pwsh", "-NoProfile", "-ExecutionPolicy", "Bypass",
+             "-File", str(build_script), "-MatlabMexOnly"], check=False)
     if p.returncode != 0:
         fail("Build.ps1 -MatlabMexOnly failed")
         return 3

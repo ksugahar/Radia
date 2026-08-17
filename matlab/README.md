@@ -825,12 +825,12 @@ Optuna's CRC32 bracket allocation. `RandomSampler`, `TPESampler`,
 `CmaEsSampler`, `GPSampler`, `NSGAIISampler`, `NSGAIIISampler`,
 `GridSampler`, `BruteForceSampler`, `PartialFixedSampler`, and `QMCSampler`
 share the same ask/tell lifecycle. Grid search stops `Study.optimize` after
-the Cartesian product is exhausted; BruteForce exhausts a finite conditional
-define-by-run tree. Unscrambled Sobol/Halton prefixes match the Optuna/SciPy
-definitions. Scrambled Sobol uses a seeded lower-triangular linear-matrix
-scramble plus digital shift, and scrambled Halton uses seeded per-digit Owen
-permutations. The native Sobol direction table supports 32 dimensions and
-MATLAB/SciPy random streams are not claimed to be bit-identical. TPE uses the persisted
+the Cartesian product is exhausted, while brute-force search exhausts finite
+conditional define-by-run trees. Unscrambled Sobol/Halton prefixes match the
+Optuna/SciPy definitions through the supported 32 Sobol dimensions.
+`Scramble=true` uses a seeded lower-triangular linear-matrix scramble plus
+digital shift for Sobol and seeded per-digit Owen permutations for Halton;
+MATLAB and SciPy random streams are intentionally not bit-identical. TPE uses the persisted
 MATLAB tables for good/bad density proposals. CMA-ES infers the numeric
 intersection search space, samples a full population jointly, and applies
 full-covariance rank-one/rank-mu adaptation with cumulative evolution paths;
@@ -839,6 +839,14 @@ size, evolution paths, partial population, and random state are retained in
 `Study.SamplerStateTable` and survive MAT-file reloads. The workflow and tables are
 compatible with Optuna, while sampler random streams and optimizer internals
 are not promised to be bit-for-bit identical to Python Optuna.
+
+`GPSampler` fits a toolbox-free Matern-5/2 ARD Gaussian process over the
+stable intersection search space. It supports numeric and categorical
+variables, constrained feasibility, pending-trial repulsion, expected
+improvement, and Monte-Carlo expected hypervolume improvement. GP
+hyperparameters and random state survive MAT-file reloads. `NSGAIIISampler`
+adds Optuna-style extreme-point normalization, reference-line association,
+and niche preservation for many-objective populations.
 
 Set `Multivariate=true` to let TPE infer the intersection search space from
 the persisted COMPLETE and PRUNED trials. Ordinary `suggestFloat`,
@@ -859,25 +867,13 @@ independent proposal. This preserves define-by-run conditional spaces across
 study reloads. `suggestVector` remains available as an explicit numeric
 convenience, but it is not required for multivariate TPE.
 
-For electromagnetic CAE, multivariate TPE and CMA-ES are the primary
-production samplers. TPE owns mixed, conditional, and discrete search spaces;
-CMA-ES owns continuous correlated geometry and control variables. Random
-sampling remains the quality baseline. For expensive, stable low-dimensional
-spaces, `GPSampler` provides toolbox-free Matérn-5/2 ARD models, expected
-improvement, Monte-Carlo expected hypervolume improvement, feasibility
-probability, and pending-trial repulsion. Its Optuna 4.9-aligned defaults use
-the same GP hyperparameter priors, 2048 scrambled Sobol preliminary points,
-ten local starts, and 128 EHVI samples. The local optimizer and random stream
-remain MATLAB-native, so deterministic contract/quality parity is tested but
-Python bit parity is not claimed. NSGA-II, NSGA-III, and the separate
-MOTPE entry point remain explicit multi-objective routes rather than automatic
-defaults.
-When a Simulink optimization block receives explicit search-space metadata,
-its `auto` policy selects GP for fixed-numeric budgets up to 250 trials,
-CMA-ES for larger unconstrained single-objective budgets, NSGA-II/III for
-larger multi-objective populations, and TPE/MOTPE for categorical,
-conditional, or unknown spaces. The decision and reason are stored in the
-study attribute `auto_sampler_decision`.
+For electromagnetic CAE, TPE owns mixed, conditional, and discrete search
+spaces; GP targets fixed numeric small-budget studies; CMA-ES owns larger
+continuous correlated single-objective geometry and control searches; and
+NSGA-II/III own population-scale multi- and many-objective studies. The
+Simulink `auto` policy records which rule selected the sampler. Random and QMC
+remain quality baselines, while finite brute-force search is useful for small
+conditional design trees.
 
 Simulink is evaluated through `radia.optuna.SimulinkRunner`. Its
 `ConfigureFcn` receives a `Simulink.SimulationInput` and a Trial, so the same
@@ -896,20 +892,17 @@ This keeps optimization history queryable as MATLAB tables while Simulink
 remains the plant and dynamic-system evaluator. For multiple objectives, pass
 `directions=["minimize","maximize"]`, inspect `study.paretoFront()`, and attach
 `radia.optuna.LiveMonitor` through `ProgressFcn`. Use
-`radia.optuna.MOTPESampler` for Pareto-ranked multi-objective TPE or
-`radia.optuna.NSGAIISampler` for non-dominated sorting, crowding, crossover,
-and mutation. Use `radia.optuna.NSGAIIISampler` when four or more objectives
-or deliberate reference-direction coverage make NSGA-III niching preferable.
-The NSGA-II implementation follows the Optuna 4.9 contract:
+`radia.optuna.MOTPESampler` for Pareto-ranked multi-objective TPE,
+`radia.optuna.GPSampler` for small fixed-numeric budgets,
+`radia.optuna.NSGAIISampler` for non-dominated sorting and crowding, or
+`radia.optuna.NSGAIIISampler` for reference-line niching. The NSGA-II
+implementation follows the Optuna 4.9 contract:
 population size 50 by default, COMPLETE-only generational parent caches,
 constraint-aware tournament and elite selection, categorical uniform
 crossover, random-fallback mutation, and Uniform, BLX-alpha, SPX, SBX, vSBX,
 and UNDX numerical crossovers under `radia.optuna.nsgaii`. Empty constraint
 vectors remain distinguishable from missing constraint data across storage
 reloads. MATLAB and NumPy random streams are intentionally not bit-identical.
-NSGA-III shares those generation, constraint, crossover, mutation, and resume
-contracts, then applies extreme-point normalization, reference-line
-association, and niche preservation at the elite cutoff front.
 Use
 `SimulinkRunner.optimizeParallel` (`parsim`) or
 `LTspiceRunner.optimizeParallel` (`parfeval`) for parallel engineering trials.
@@ -1173,8 +1166,8 @@ materialized in the optimization loop.
 
 The executable parity audit compares three pybind11 surfaces with the
 `radia_mex` command table: 94 public top-level names, 27 underscore-prefixed
-numerical kernels, and 121 stateful class members. All 242 entries are covered
-by the current 337-command gateway. Three internal mesh/test helpers are
+numerical kernels, and 123 stateful class members. All 244 entries are covered
+by the current 358-command gateway. Three internal mesh/test helpers are
 classified explicitly rather than silently omitted. The remaining `radentry`
 C ABI is not a backward-compatibility contract: dead or unsafe entries are
 deleted rather than retained. These families are represented as follows:

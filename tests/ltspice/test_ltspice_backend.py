@@ -17,7 +17,10 @@ from radia.ltspice import (
     asc_to_netlist, netlist_to_asc, topology_equivalent,
 )
 from radia.ltspice._shared import decode_asc_bytes
-from radia.ltspice.parser.asc_parser import _find_ltspice_exe
+from radia.ltspice.parser.asc_parser import (
+    _find_ltspice_exe,
+    _has_interactive_windows_desktop,
+)
 
 
 def _running_ltspice_pids() -> set[int]:
@@ -42,8 +45,15 @@ def _running_ltspice_pids() -> set[int]:
     return pids
 
 
+_ltspice_exe = _find_ltspice_exe()
+_ltspice_unavailable_reason = (
+    "LTspice.exe not installed"
+    if _ltspice_exe is None
+    else "LTspice requires an interactive Windows desktop"
+)
 ltspice = pytest.mark.skipif(
-    _find_ltspice_exe() is None, reason="LTspice.exe not installed"
+    _ltspice_exe is None or not _has_interactive_windows_desktop(),
+    reason=_ltspice_unavailable_reason,
 )
 
 RC_NETLIST = ("V1 in 0 AC 1\nR1 in out 1k\nC1 out 0 1u\n"
@@ -79,6 +89,21 @@ def test_pure_python_backend_is_deterministic():
     a = asc_to_netlist(RC_ASC, use_ltspice=False)
     b = asc_to_netlist(RC_ASC, use_ltspice=False)
     assert a == b
+
+
+def test_noninteractive_desktop_falls_back_without_launch(monkeypatch):
+    """A service-hosted runner must not wait for an unavailable desktop."""
+    from radia.ltspice.parser import asc_parser
+
+    monkeypatch.setattr(
+        asc_parser, "_has_interactive_windows_desktop", lambda: False
+    )
+    monkeypatch.setattr(
+        asc_parser, "_find_ltspice_exe", lambda: r"C:\fake\LTspice.exe"
+    )
+
+    net = asc_to_netlist(RC_ASC, use_ltspice=True)
+    assert net.startswith("* Extracted from ASC")
 
 
 # Two resistors at the exact same position -> LTspice pops a blocking
