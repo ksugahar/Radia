@@ -3139,6 +3139,38 @@ python tests/cubit/test_ho_volume_all_formats.py  # Order=2 volume accuracy (sph
 
 ---
 
+## Agent Division of Labor: Claude Owns Push + CI; Codex Owns Release (2026-08-17)
+
+**POLICY**: Split of work between AI agents on this repo.  Kept in sync with the
+same section in CLAUDE.md; a change to one is a change to both.
+
+- **Claude carries its own work to green CI on `main`.** Claude implements,
+  tests locally, commits (this-session files BY NAME), runs
+  `python tools/ci_preflight.py`, pushes to `main`, and watches GitHub Actions
+  to green with `python tools/check_ci.py --watch`.  A red CI on Claude's own
+  commit is Claude's to fix-forward, not to hand over.
+- **Release is codex's job.** codex cuts tags, runs the PyPI publish, drives the
+  `release-qud` four-machine verification, and deploys (100号機 / mdx / hibino).
+
+Claude does **NOT** push tags, invoke `release-qud`, publish to PyPI, or deploy
+to remote machines.  When Claude finishes, the work is committed, pushed and
+CI-green; codex takes it from the tag onwards.
+
+**Why the line moved (2026-08-17, Sugahara)**: an author who stops at the local
+commit cannot tell whether the work builds anywhere but their own machine, and a
+handoff at that point makes the person who fixes the breakage someone who did
+not write it.  Push and CI are part of finishing a change.  Release is genuinely
+different work -- version numbers, four machines, PyPI propagation -- and stays
+where it was.
+
+**What this does not license**: pushing to `main` with a red preflight,
+force-pushing, or pushing another agent's uncommitted work.  The codex<->Claude
+source-edit mutex still applies: when the shared tree has in-flight work from
+another agent, do the change in a worktree and push the branch rather than
+reaching into `main`.
+
+---
+
 **Last Updated**: 2026-04-02
 **For**: Codex AI Assistant
 **Project**: Radia Magnetic Field Computation
