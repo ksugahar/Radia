@@ -328,16 +328,19 @@ AtomClass class_of_char(uint32_t cp) {
  * kept unconditionally here: equations in a document are set in text style or
  * larger, and dropping them inside scripts costs more than it saves. */
 int space_mu(AtomClass l, AtomClass r) {
-    /* Equation Editor 3.1's spacing, which is TeX's less one eighteenth of an
-     * em at every step.  Measured off its own screen at four times size: it
-     * leaves 0.219 em around a relation, 0.156 around a binary operator and
-     * 0.109 after a comma, against four, three and two eighteenths of 0.222,
-     * 0.167 and 0.111 -- a fit of three thousandths of an em.
+    /* TeX's thin, medium and thick spaces.
      *
-     * TeX's own 3/4/5 set mathematics a little more openly.  This is the
-     * editor being imitated, and the whole point of imitating it is how the
-     * result feels to read. */
-    static const int kThin = 2, kMed = 3, kThick = 4;
+     * Equation Editor 3.1 sets tighter: measured off its screen it leaves
+     * 0.219 em around a relation, 0.156 around a binary operator and 0.109
+     * after a comma, which are 4, 3 and 2 eighteenths -- one less than TeX's
+     * at every step, and a fit within three thousandths of an em.  This was
+     * briefly set to those.
+     *
+     * It is back to TeX's because appearance follows TeX here and usability
+     * follows Equation Editor.  Nearly everyone who reads an equation has
+     * read TeX's spacing far more often than Equation Editor's, and the
+     * openness is most of why TeX-set mathematics reads as it does. */
+    static const int kThin = 3, kMed = 4, kThick = 5;
     switch (l) {
         case kOrd:
             if (r == kOp) return kThin;
@@ -812,10 +815,21 @@ private:
          * "Numerator height 35%" and "Denominator depth 100%" against its own
          * reference; the font states it as a target shift plus a floor, which
          * is the same idea with the floor made explicit. */
-        double shiftUp   = mc.fractionNumeratorDisplayStyleShiftUp * sizePt;
-        double shiftDown = mc.fractionDenominatorDisplayStyleShiftDown * sizePt;
-        const double gapNum = mc.fractionNumDisplayStyleGapMin * sizePt;
-        const double gapDen = mc.fractionDenomDisplayStyleGapMin * sizePt;
+        /* Display style for the fraction a reader meets first, text style for
+         * any inside it.  TeX makes the same distinction, and the font carries
+         * two sets of numbers for it: the display gap is nearly twice the text
+         * one.  Using the display set at every level was what still left a
+         * fraction inside a fraction a fifth taller than TeX sets it, even
+         * after its contents were stepped down in size. */
+        const bool display = (fracDepth_ == 0);
+        double shiftUp = (display ? mc.fractionNumeratorDisplayStyleShiftUp
+                                  : mc.fractionNumeratorShiftUp) * sizePt;
+        double shiftDown = (display ? mc.fractionDenominatorDisplayStyleShiftDown
+                                    : mc.fractionDenominatorShiftDown) * sizePt;
+        const double gapNum = (display ? mc.fractionNumDisplayStyleGapMin
+                                       : mc.fractionNumeratorGapMin) * sizePt;
+        const double gapDen = (display ? mc.fractionDenomDisplayStyleGapMin
+                                       : mc.fractionDenominatorGapMin) * sizePt;
 
         shiftUp   = std::max(shiftUp,   axis + thick / 2.0 + gapNum + num.desc);
         shiftDown = std::max(shiftDown, -axis + thick / 2.0 + gapDen + den.asc);
@@ -909,7 +923,13 @@ private:
         out.absorb(sign, signX, signBaseline);
         out.absorb(inner, signX + sign.w, 0);
         out.asc = std::max(-barTop + extra, inner.asc);
-        out.desc = std::max(sign.desc - signBaseline, inner.desc);
+        /* The sign is set with its baseline BELOW the equation's, so that its
+         * top reaches the bar; how far below is exactly how much of it hangs
+         * under the line, and that has to be added to its own depth rather
+         * than subtracted from it.  Getting the sign wrong made the box a
+         * sixth shallower than the radical drawn in it -- measured against
+         * TeX, which puts 0.86 pt of a 12 pt root below the baseline. */
+        out.desc = std::max(signBaseline + sign.desc, inner.desc);
 
         Rule bar;
         bar.x = signX + sign.w;
@@ -939,14 +959,45 @@ private:
         const int upperSlot = hasLower ? 1 : 0;
         const int bodySlot = (hasLower ? 1 : 0) + (hasUpper ? 1 : 0);
         const double opSize = st_.sym * (sizePt / std::max(st_.full, 1e-6));
-        Layout op = glyph_layout(glyph, opSize, false, true);
-        op.w = std::max(op.w, glyph_ink_width(glyph, opSize, false, true));
         double ss = script_size(sizePt);
         Layout out;
         double x = 0;
 
         const mtef::MathFont& mf = mtef::MathFont::cambria();
         const mtef::MathConstants& mc = mf.constants();
+
+        /* A summation or an integral set for display is not the text glyph at
+         * a larger size: the font draws a taller one, and states in
+         * displayOperatorMinHeight how tall it must be.  Asking for it is the
+         * same move the radical makes, and it is why an integral came out a
+         * seventh shorter than TeX sets one. */
+        Layout op;
+        const uint16_t baseGid = mf.ok() ? mf.glyph_for(glyph) : 0;
+        double gotEm = 0;
+        /* How tall: Equation Editor sets its symbols at 18 point against a
+         * 12 point body, and those two are its own Size dialog's Symbol and
+         * Full.  So the target is that ratio, floored by what the font itself
+         * says a display operator must reach. */
+        const double opTargetEm = std::max(
+            mc.displayOperatorMinHeight,
+            st_.sym / std::max(st_.full, 1e-6));
+        const uint16_t bigGid =
+            baseGid ? mf.vertical_variant(baseGid, opTargetEm, &gotEm) : 0;
+        if (bigGid && bigGid != baseGid) {
+            const MetricCache::Box b = metrics().glyph_box_index(bigGid);
+            Glyph g;
+            g.size = sizePt;
+            g.symbol = true;
+            g.glyph_id = bigGid;
+            g.text = utf8_of(glyph);
+            op.glyphs.push_back(g);
+            op.w = b.ink_w * sizePt;
+            op.asc = b.asc * sizePt;
+            op.desc = b.desc * sizePt;
+        } else {
+            op = glyph_layout(glyph, opSize, false, true);
+            op.w = std::max(op.w, glyph_ink_width(glyph, opSize, false, true));
+        }
 
         if (stacked) {
             /* Limits above and below the operator, everything centred on the
@@ -1158,6 +1209,15 @@ std::string tex_to_svg(const std::string& latex, const SvgStyle& style) {
     return render_svg(*root, style);
 }
 
+
+bool tex_box(const std::string& latex, const SvgStyle& style,
+             double& w, double& asc, double& desc) {
+    std::unique_ptr<LineNode> root = parse_latex(latex);
+    if (!root) return false;
+    Layout L = layout_math(*root, style);
+    w = L.w; asc = L.asc; desc = L.desc;
+    return true;
+}
 
 AtomKind atom_kind(uint32_t cp) {
     return AtomKind(int(class_of_char(cp)));

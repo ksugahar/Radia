@@ -61,6 +61,13 @@ std::string tex_to_svg(const std::string& latex,
  * reachable on its own, rather than only through a rendered width, where the
  * glyph's own advance drowns out the space around it.
  */
+/* The box an equation occupies: width, height above the baseline, depth
+ * below.  The rendered SVG only reports its overall size, which cannot say
+ * where the baseline falls -- and where a fraction sits about the baseline is
+ * exactly the sort of thing worth checking against TeX. */
+bool tex_box(const std::string& latex, const SvgStyle& style,
+             double& w, double& asc, double& desc);
+
 enum AtomKind { AtomOrd, AtomOp, AtomBin, AtomRel,
                 AtomOpen, AtomClose, AtomPunct, AtomInner };
 
