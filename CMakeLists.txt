@@ -1001,6 +1001,7 @@ pybind11_add_module(_equation
 	${EQUATION_DIR}/mtef_rtf.cpp
 	${EQUATION_DIR}/mtef_mathml.cpp
 	${EQUATION_DIR}/mtef_svg.cpp
+	${EQUATION_DIR}/mtef_gdi.cpp
 	${EQUATION_DIR}/mtef_dump.cpp
 	${EQUATION_DIR}/eq_edit.cpp
 	${EQUATION_DIR}/md_doc.cpp
@@ -1020,7 +1021,7 @@ target_compile_definitions(_equation PRIVATE
 if(WIN32)
 	# Glyph metrics come from GDI: the ink box of each glyph, not the font's
 	# global ascent and descent, is what a script has to clear.
-	target_link_libraries(_equation PRIVATE gdi32 user32)
+	target_link_libraries(_equation PRIVATE gdi32 user32 gdiplus ole32)
 endif()
 
 if(MSVC)
