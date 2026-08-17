@@ -99,9 +99,32 @@ struct GdiPlusOnce {
 
 void draw_layout(HDC hdc, const Layout& L, const SvgStyle& style,
                  double units_per_pt, int originX, int originY,
-                 COLORREF colour) {
+                 COLORREF colour, bool show_empty_slots) {
     (void)style;
     SetBkMode(hdc, TRANSPARENT);
+
+    /* Empty slots are drawn for the editor and never for a picture: the boxes
+     * exist to show where a template still needs typing, and pasting them into
+     * a slide would put dotted rectangles in a finished equation. */
+    if (show_empty_slots && !L.empty_slots.empty()) {
+        LOGBRUSH lb = {BS_SOLID, colour, 0};
+        HPEN dotted = ExtCreatePen(PS_GEOMETRIC | PS_DOT | PS_ENDCAP_FLAT,
+                                   std::max(1, int(units_per_pt * 0.6)),
+                                   &lb, 0, nullptr);
+        HGDIOBJ oldPen = SelectObject(hdc, dotted);
+        HGDIOBJ oldBrush = SelectObject(hdc, GetStockObject(NULL_BRUSH));
+        for (const SlotBox& b : L.empty_slots) {
+            Rectangle(hdc,
+                      originX + int(std::lround(b.x * units_per_pt)),
+                      originY + int(std::lround(b.y * units_per_pt)),
+                      originX + int(std::lround((b.x + b.w) * units_per_pt)),
+                      originY + int(std::lround((b.y + b.h) * units_per_pt)));
+        }
+        SelectObject(hdc, oldBrush);
+        SelectObject(hdc, oldPen);
+        DeleteObject(dotted);
+    }
+
     SetTextColor(hdc, colour);
     SetTextAlign(hdc, TA_LEFT | TA_BASELINE);
 

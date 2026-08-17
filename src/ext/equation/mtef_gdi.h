@@ -54,7 +54,7 @@ namespace mtef {
  * paste are drawn by the same code and cannot disagree about the equation. */
 void draw_layout(HDC hdc, const Layout& layout, const SvgStyle& style,
                  double units_per_pt, int originX, int originY,
-                 COLORREF colour);
+                 COLORREF colour, bool show_empty_slots = false);
 #endif
 
 /* An enhanced metafile of the equation, as bytes.  Empty on failure. */

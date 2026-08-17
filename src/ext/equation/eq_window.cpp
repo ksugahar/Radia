@@ -250,12 +250,15 @@ Editor* editor_of(HWND hwnd) {
 /* Centre a laid-out equation in a rectangle and draw it. */
 void draw_centred(HDC dc, const Layout& L, const RECT& rc, double upp,
                   COLORREF colour) {
-    if (L.glyphs.empty() && L.rules.empty()) return;
+    if (L.glyphs.empty() && L.rules.empty() && L.empty_slots.empty()) return;
     SvgStyle st;
     const int x = rc.left + int(((rc.right - rc.left) - L.w * upp) / 2);
     const int y = rc.top + int(((rc.bottom - rc.top) +
                                 (L.asc - L.desc) * upp) / 2);
-    draw_layout(dc, L, st, upp, x, y, colour);
+    /* Slot boxes on: a palette cell for a template is ALL empty slots, so
+     * without them the button for scripts, matrices and accents is blank --
+     * which is exactly how those three buttons came to look broken. */
+    draw_layout(dc, L, st, upp, x, y, colour, true);
 }
 
 void close_popup(Editor& ed) {
@@ -430,7 +433,7 @@ void paint(HWND hwnd, Editor& ed) {
         int(((H - bar_h) + L.asc * upp - L.desc * upp) / 2);
 
     draw_layout(mem, L, ed.style, upp, originX, originY,
-                GetSysColor(COLOR_WINDOWTEXT));
+                GetSysColor(COLOR_WINDOWTEXT), true);
 
     if (ed.caret_on) {
         Equation::CaretGeometry g = ed.eq.caret_geometry(ed.style);
