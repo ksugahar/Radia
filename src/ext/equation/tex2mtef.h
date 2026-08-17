@@ -51,6 +51,19 @@ void strip_dollar_delimiters(char *text);
  */
 int tex_command_to_unicode(const char *cmd);
 
+/*
+ * Walk the same table.  The palette is BUILT from this rather than listed by
+ * hand, so a symbol added to the table appears in the palette without anyone
+ * remembering to put it there -- and the palette can never offer something the
+ * editor cannot actually insert.
+ *
+ * `tex_command_name` returns the command with its leading backslash;
+ * `tex_command_code_at` the code point.  Both return 0 / -1 out of range.
+ */
+int tex_command_count(void);
+const char *tex_command_name(int index);
+int tex_command_code_at(int index);
+
 #ifdef __cplusplus
 }
 #endif
