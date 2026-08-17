@@ -349,7 +349,9 @@ class Renderer {
 public:
     explicit Renderer(const SvgStyle& s) : st_(s) {}
 
-    Layout run(const LineNode& root) { return layout_list(root.children, st_.full); }
+    Layout run(const LineNode& root) {
+        return layout_list(root.children, st_.full, std::string());
+    }
 
 private:
     const SvgStyle& st_;
@@ -410,11 +412,23 @@ private:
         }
     }
 
-    Layout layout_list(const NodeList& list, double sizePt) {
+    /* One step down: into child `child` of the current slot, then into that
+     * child's slot `slot` -- the same spelling Equation::caret() uses. */
+    static std::string slot_path(const std::string& listPath, int child, int slot) {
+        std::string step = std::to_string(child) + "." + std::to_string(slot);
+        return listPath.empty() ? step : listPath + "/" + step;
+    }
+
+    Layout layout_list(const NodeList& list, double sizePt,
+                       const std::string& path) {
         Layout out;
         double x = 0, cur = sizePt;
         bool have_prev = false;
         AtomClass prev = kOrd;
+        int child = 0;
+        size_t own_first = 0;               /* the stops this call records */
+
+        out.stops.push_back({path, 0, 0.0, 0.0, 0.0});
 
         for (const auto& n : list) {
             if (!n) continue;
@@ -433,24 +447,44 @@ private:
             if (have_prev)
                 x += space_mu(prev, cls) * cur / 18.0;
 
-            Layout piece = layout_node(*n, cur);
+            Layout piece = layout_node(*n, cur, path, child);
             out.absorb(piece, x, 0);
             x += piece.w;
             out.asc = std::max(out.asc, piece.asc);
             out.desc = std::max(out.desc, piece.desc);
             prev = cls;
             have_prev = true;
+            ++child;
+            out.stops.push_back({path, child, x, 0.0, 0.0});
         }
         out.w = x;
+
+        /* The caret spans the slot, which is only known now.  An empty slot has
+         * no extent at all, so it gets the current type size -- otherwise the
+         * caret in a fresh template would be invisible, which is exactly where
+         * it is most needed. */
+        double top = -out.asc, bottom = out.desc;
+        if (out.asc <= 0 && out.desc <= 0) {
+            top = -0.70 * sizePt;
+            bottom = 0.20 * sizePt;
+        }
+        for (size_t k = own_first; k < out.stops.size(); ++k)
+            if (out.stops[k].path == path) {
+                out.stops[k].top = top;
+                out.stops[k].bottom = bottom;
+            }
         return out;
     }
 
-    Layout layout_node(const Node& n, double sizePt) {
+    Layout layout_node(const Node& n, double sizePt,
+                       const std::string& listPath, int child) {
         switch (n.tag()) {
             case Node::kLine: {
                 const auto& ln = static_cast<const LineNode&>(n);
                 if (ln.isNull) return Layout();
-                return layout_list(ln.children, sizePt);
+                /* node_slots(kLine) = { children } */
+                return layout_list(ln.children, sizePt,
+                                   slot_path(listPath, child, 0));
             }
             case Node::kChar: {
                 const auto& c = static_cast<const CharNode&>(n);
@@ -459,27 +493,41 @@ private:
                 return glyph_layout(cp, sizePt, typeface_is_italic(c.typeface),
                                     needs_math_face(cp));
             }
-            case Node::kScript:   return layout_script(static_cast<const ScriptNode&>(n), sizePt);
-            case Node::kFence:    return layout_fence(static_cast<const FenceNode&>(n), sizePt);
-            case Node::kFrac:     return layout_frac(static_cast<const FracNode&>(n), sizePt);
-            case Node::kSqrt:     return layout_sqrt(static_cast<const SqrtNode&>(n), sizePt);
+            case Node::kScript:
+                return layout_script(static_cast<const ScriptNode&>(n), sizePt,
+                                     listPath, child);
+            case Node::kFence:
+                return layout_fence(static_cast<const FenceNode&>(n), sizePt,
+                                    listPath, child);
+            case Node::kFrac:
+                return layout_frac(static_cast<const FracNode&>(n), sizePt,
+                                   listPath, child);
+            case Node::kSqrt:
+                return layout_sqrt(static_cast<const SqrtNode&>(n), sizePt,
+                                   listPath, child);
             case Node::kIntegral: {
                 const auto& i = static_cast<const IntegralNode&>(n);
                 return layout_bigop(bigop_glyph(i.selector), i.body, i.lower, i.upper,
-                                    i.hasLower, i.hasUpper, i.hasLimits, sizePt);
+                                    i.hasLower, i.hasUpper, i.hasLimits, sizePt,
+                                    listPath, child);
             }
             case Node::kBigOp: {
                 const auto& b = static_cast<const BigOpNode&>(n);
                 return layout_bigop(bigop_glyph(b.selector), b.body, b.lower, b.upper,
-                                    b.hasLower, b.hasUpper, b.hasLimits, sizePt);
+                                    b.hasLower, b.hasUpper, b.hasLimits, sizePt,
+                                    listPath, child);
             }
             default:
-                return layout_fallback(n, sizePt);
+                return layout_fallback(n, sizePt, listPath, child);
         }
     }
 
-    Layout layout_script(const ScriptNode& s, double sizePt) {
-        Layout base = layout_list(s.base, sizePt);
+    /* node_slots(kScript) = { base } + (hasSub ? sub) + (hasSup ? sup) */
+    Layout layout_script(const ScriptNode& s, double sizePt,
+                         const std::string& lp, int c) {
+        const int subSlot = 1;
+        const int supSlot = s.hasSub ? 2 : 1;
+        Layout base = layout_list(s.base, sizePt, slot_path(lp, c, 0));
         double ss = script_size(sizePt);
         Layout out = base;
         double x = base.w;
@@ -490,13 +538,13 @@ private:
         const double subShift = std::max(0.22 * sizePt, base.desc + 0.12 * ss);
         double wsub = 0, wsup = 0;
         if (s.hasSup) {
-            Layout sup = layout_list(s.sup, ss);
+            Layout sup = layout_list(s.sup, ss, slot_path(lp, c, supSlot));
             out.absorb(sup, x, -supShift);
             out.asc = std::max(out.asc, supShift + sup.asc);
             wsup = sup.w;
         }
         if (s.hasSub) {
-            Layout sub = layout_list(s.sub, ss);
+            Layout sub = layout_list(s.sub, ss, slot_path(lp, c, subSlot));
             out.absorb(sub, x, subShift);
             out.desc = std::max(out.desc, subShift + sub.desc);
             wsub = sub.w;
@@ -505,8 +553,10 @@ private:
         return out;
     }
 
-    Layout layout_fence(const FenceNode& f, double sizePt) {
-        Layout inner = layout_list(f.content, sizePt);
+    /* node_slots(kFence) = { content } */
+    Layout layout_fence(const FenceNode& f, double sizePt,
+                        const std::string& lp, int c) {
+        Layout inner = layout_list(f.content, sizePt, slot_path(lp, c, 0));
         auto gl = fence_glyphs(f.selector);
         /* Grow the fence to the content, keeping a plain glyph when it fits. */
         double need = inner.asc + inner.desc;
@@ -544,9 +594,11 @@ private:
         return out;
     }
 
-    Layout layout_frac(const FracNode& f, double sizePt) {
-        Layout num = layout_list(f.numer, sizePt);
-        Layout den = layout_list(f.denom, sizePt);
+    /* node_slots(kFrac) = { numer, denom } */
+    Layout layout_frac(const FracNode& f, double sizePt,
+                       const std::string& lp, int c) {
+        Layout num = layout_list(f.numer, sizePt, slot_path(lp, c, 0));
+        Layout den = layout_list(f.denom, sizePt, slot_path(lp, c, 1));
         const double gap = 0.20 * sizePt;      /* baseline of the bar to each part */
         const double axis = 0.28 * sizePt;     /* math axis above the baseline */
         const double thick = std::max(0.6, 0.045 * sizePt);
@@ -564,28 +616,71 @@ private:
         return out;
     }
 
-    Layout layout_sqrt(const SqrtNode& s, double sizePt) {
-        Layout inner = layout_list(s.content, sizePt);
+    /* node_slots(kSqrt) = { content } + (hasIndex ? index) */
+    Layout layout_sqrt(const SqrtNode& s, double sizePt,
+                       const std::string& lp, int c) {
+        Layout inner = layout_list(s.content, sizePt, slot_path(lp, c, 0));
         const double thick = std::max(0.6, 0.04 * sizePt);
         const double clearance = 0.18 * sizePt;
         Layout sign = glyph_layout(0x221A, sizePt, false, true);
-        double signW = sign.w;
+
+        /* The sign grows to the radicand, as a fence does.  Without it a tall
+         * radicand leaves the vinculum floating above a short radical, joined
+         * to nothing -- which is what a radical sign is for. */
+        {
+            const double need = inner.asc + inner.desc + clearance + thick;
+            const double have = std::max(sign.asc + sign.desc, 1e-6);
+            const double stretch = std::max(1.0, need / have);
+            if (stretch > 1.0) {
+                for (auto& g : sign.glyphs) g.stretchY = stretch;
+                sign.asc *= stretch;
+                sign.desc *= stretch;
+            }
+        }
+
+        /* The index sits above the radical's left arm, at script size.  It is
+         * given its own width rather than being tucked under the sign, which
+         * keeps a two-digit index from colliding with the radicand. */
+        Layout idx;
+        double idxW = 0;
+        if (s.hasIndex) {
+            idx = layout_list(s.index, script_size(sizePt), slot_path(lp, c, 1));
+            idxW = idx.w;
+        }
 
         Layout out;
-        out.absorb(sign, 0, 0);
-        out.absorb(inner, signW, 0);
-        Rule bar;
-        bar.x = signW; bar.y = -(inner.asc + clearance); bar.w = inner.w; bar.h = thick;
-        out.rules.push_back(bar);
-        out.w = signW + inner.w;
+        const double signX = idxW;
+        out.absorb(sign, signX, 0);
+        out.absorb(inner, signX + sign.w, 0);
         out.asc = std::max(sign.asc, inner.asc + clearance + thick);
         out.desc = std::max(sign.desc, inner.desc);
+
+        /* The vinculum starts where the radical's arm ends, so the two read as
+         * one stroke. */
+        Rule bar;
+        bar.x = signX + sign.w;
+        bar.y = -out.asc;
+        bar.w = inner.w;
+        bar.h = thick;
+        out.rules.push_back(bar);
+        if (s.hasIndex) {
+            const double lift = 0.55 * out.asc;
+            out.absorb(idx, 0, -lift);
+            out.asc = std::max(out.asc, lift + idx.asc);
+        }
+        out.w = signX + sign.w + inner.w;
         return out;
     }
 
+    /* node_slots(kIntegral / kBigOp) =
+     *     (hasLower ? lower) + (hasUpper ? upper) + { body } */
     Layout layout_bigop(uint32_t glyph, const NodeList& body,
                         const NodeList& lower, const NodeList& upper,
-                        bool hasLower, bool hasUpper, bool stacked, double sizePt) {
+                        bool hasLower, bool hasUpper, bool stacked, double sizePt,
+                        const std::string& lp, int c) {
+        const int lowerSlot = 0;
+        const int upperSlot = hasLower ? 1 : 0;
+        const int bodySlot = (hasLower ? 1 : 0) + (hasUpper ? 1 : 0);
         const double opSize = st_.sym * (sizePt / std::max(st_.full, 1e-6));
         Layout op = glyph_layout(glyph, opSize, false, true);
         op.w = std::max(op.w, glyph_ink_width(glyph, opSize, false, true));
@@ -599,8 +694,8 @@ private:
              * lets a wide limit hang left of the origin and overlap whatever
              * precedes the operator, because the reported width never sees it. */
             Layout up, lo;
-            if (hasUpper) up = layout_list(upper, ss);
-            if (hasLower) lo = layout_list(lower, ss);
+            if (hasUpper) up = layout_list(upper, ss, slot_path(lp, c, upperSlot));
+            if (hasLower) lo = layout_list(lower, ss, slot_path(lp, c, lowerSlot));
             double w = op.w;
             if (hasUpper) w = std::max(w, up.w);
             if (hasLower) w = std::max(w, lo.w);
@@ -625,13 +720,13 @@ private:
             x = op.w;
             double wsub = 0, wsup = 0;
             if (hasUpper) {
-                Layout up = layout_list(upper, ss);
+                Layout up = layout_list(upper, ss, slot_path(lp, c, upperSlot));
                 out.absorb(up, x, -0.45 * sizePt);
                 out.asc = std::max(out.asc, 0.45 * sizePt + up.asc);
                 wsup = up.w;
             }
             if (hasLower) {
-                Layout lo = layout_list(lower, ss);
+                Layout lo = layout_list(lower, ss, slot_path(lp, c, lowerSlot));
                 out.absorb(lo, x, 0.22 * sizePt);
                 out.desc = std::max(out.desc, 0.22 * sizePt + lo.desc);
                 wsub = lo.w;
@@ -648,7 +743,7 @@ private:
             break;
         }
 
-        Layout bodyL = layout_list(body, sizePt);
+        Layout bodyL = layout_list(body, sizePt, slot_path(lp, c, bodySlot));
         out.absorb(bodyL, x, 0);
         out.asc = std::max(out.asc, bodyL.asc);
         out.desc = std::max(out.desc, bodyL.desc);
@@ -657,14 +752,20 @@ private:
     }
 
     /* Unhandled templates still show their content rather than vanishing. */
-    Layout layout_fallback(const Node& n, double sizePt) {
+    Layout layout_fallback(const Node& n, double sizePt,
+                           const std::string& lp, int c) {
+        /* Each of these has { content } as its first slot. */
+        const std::string p = slot_path(lp, c, 0);
         switch (n.tag()) {
             case Node::kDecoration:
-                return layout_list(static_cast<const DecorationNode&>(n).content, sizePt);
+                return layout_list(static_cast<const DecorationNode&>(n).content,
+                                   sizePt, p);
             case Node::kBraceDeco:
-                return layout_list(static_cast<const BraceDecoNode&>(n).content, sizePt);
+                return layout_list(static_cast<const BraceDecoNode&>(n).content,
+                                   sizePt, p);
             case Node::kEmbell:
-                return layout_list(static_cast<const EmbellNode&>(n).content, sizePt);
+                return layout_list(static_cast<const EmbellNode&>(n).content,
+                                   sizePt, p);
             default:
                 return Layout();
         }
@@ -679,6 +780,40 @@ private:
 Layout layout_math(const LineNode& root, const SvgStyle& style) {
     Renderer r(style);
     return r.run(root);
+}
+
+const CaretStop* find_stop(const Layout& layout, const std::string& path,
+                           int index) {
+    for (const CaretStop& s : layout.stops)
+        if (s.index == index && s.path == path) return &s;
+    return nullptr;
+}
+
+const CaretStop* nearest_stop(const Layout& layout, double x, double y) {
+    const CaretStop* best = nullptr;
+    double best_d = 0;
+    int best_depth = -1;
+    for (const CaretStop& s : layout.stops) {
+        /* Vertical distance dominates: a click in a fraction's denominator
+         * means the denominator, however close the numerator is horizontally. */
+        double dy = 0;
+        if (y < s.top) dy = s.top - y;
+        else if (y > s.bottom) dy = y - s.bottom;
+        double d = dy * 4.0 + std::fabs(x - s.x);
+
+        /* Positions genuinely coincide -- the end of an integrand and the end
+         * of the integral are the same point -- so the tie is broken towards
+         * the innermost, where typing continues what is already there rather
+         * than starting something after it. */
+        int depth = 0;
+        for (char ch : s.path) if (ch == '/') ++depth;
+        if (!s.path.empty()) ++depth;
+
+        const bool better = !best || d < best_d - 1e-9 ||
+                            (std::fabs(d - best_d) <= 1e-9 && depth > best_depth);
+        if (better) { best = &s; best_d = d; best_depth = depth; }
+    }
+    return best;
 }
 
 std::string render_svg(const LineNode& root, const SvgStyle& style) {

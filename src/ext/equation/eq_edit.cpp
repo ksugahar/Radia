@@ -10,6 +10,7 @@
 #include "tex_parser.h"
 #include "latex_emitter.h"
 #include "tex2mtef.h"
+#include "math_layout.h"
 #include "mtef_common.h"
 
 #include <cstdio>
@@ -325,6 +326,42 @@ bool Equation::prev_slot() {
     index_ = st.child;
     clamp();
     return true;
+}
+
+/* ------------------------------------------------------------ geometry */
+
+Equation::CaretGeometry Equation::caret_geometry(const SvgStyle& style) const {
+    CaretGeometry g;
+    Layout L = layout_math(*root_, style);
+    /* caret_text() is "path:index"; the layout keys stops on the path alone. */
+    std::string ct = caret_text();
+    size_t colon = ct.rfind(':');
+    std::string path = (colon == std::string::npos) ? ct : ct.substr(0, colon);
+    int index = (colon == std::string::npos) ? 0 : atoi(ct.c_str() + colon + 1);
+
+    const CaretStop* s = find_stop(L, path, index);
+    if (!s) return g;
+    g.found = true;
+    g.x = s->x;
+    g.top = s->top;
+    g.bottom = s->bottom;
+    return g;
+}
+
+bool Equation::move_to_point(double x, double y, const SvgStyle& style) {
+    Layout L = layout_math(*root_, style);
+    const CaretStop* s = nearest_stop(L, x, y);
+    if (!s) return false;
+    set_caret_text(s->path + ":" + std::to_string(s->index));
+    return true;
+}
+
+void Equation::extents(double& w, double& asc, double& desc,
+                       const SvgStyle& style) const {
+    Layout L = layout_math(*root_, style);
+    w = L.w;
+    asc = L.asc;
+    desc = L.desc;
 }
 
 /* ------------------------------------------------------------- history */

@@ -44,6 +44,13 @@ All notable changes to the `radia` package.  Format: each release lists
   editor will draw on screen with. `copy_to_clipboard` now offers them after
   the equation formats; Word and PowerPoint were re-measured with the pictures
   present and still produce native equations, 5/5 each.
+- Caret geometry: `Equation.caret_geometry()`, `move_to_point()` and
+  `extents()` join the editing model's `(child, slot)` paths to the layout, the
+  last piece a front end needs before it can draw a caret or act on a click.
+  Writing it surfaced two rendering defects that nothing else would have: the
+  index of an nth root was never drawn at all, and the vinculum was placed above
+  the radicand rather than joined to the radical's arm, with no stretch, so a
+  tall radicand left the bar floating over a short sign.
 
 ## 4.95.51 - Native beam dynamics, nonlinear reactor, and integrated LTspice
 
