@@ -59,16 +59,30 @@ struct CaretStop {
     double bottom = 0;
 };
 
+/* An empty slot: the numerator of a fraction nobody has typed into yet.
+ *
+ * Such a slot has no extent of its own, so a renderer that draws only what is
+ * there shows a fresh fraction as a bare bar floating in space, and gives no
+ * clue where Tab is about to go.  Equation Editor drew these as dotted boxes,
+ * and that is most of what made its structure legible.
+ *
+ * The layout REPORTS them and leaves the drawing to the caller, because the two
+ * callers want opposite things: the editor must show them, and a picture on its
+ * way to a slide must not. */
+struct SlotBox { double x = 0, y = 0, w = 0, h = 0; };   /* y is the TOP edge */
+
 struct Layout {
     double w = 0, asc = 0, desc = 0;
     std::vector<Glyph> glyphs;
     std::vector<Rule> rules;
+    std::vector<SlotBox> empty_slots;
 
     std::vector<CaretStop> stops;
 
     void translate(double dx, double dy) {
         for (auto& g : glyphs) { g.x += dx; g.y += dy; }
         for (auto& r : rules)  { r.x += dx; r.y += dy; }
+        for (auto& b : empty_slots) { b.x += dx; b.y += dy; }
         for (auto& s : stops)  { s.x += dx; s.top += dy; s.bottom += dy; }
     }
     void absorb(const Layout& other, double dx, double dy) {
@@ -76,6 +90,8 @@ struct Layout {
         t.translate(dx, dy);
         glyphs.insert(glyphs.end(), t.glyphs.begin(), t.glyphs.end());
         rules.insert(rules.end(), t.rules.begin(), t.rules.end());
+        empty_slots.insert(empty_slots.end(),
+                           t.empty_slots.begin(), t.empty_slots.end());
         stops.insert(stops.end(), t.stops.begin(), t.stops.end());
     }
 };
