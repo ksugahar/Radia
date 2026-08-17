@@ -18,6 +18,7 @@
 #include "mtef_node.h"
 #include "mtef_svg.h"          /* SvgStyle: the type sizes, shared by all backends */
 
+#include <cstdint>
 #include <string>
 #include <vector>
 
@@ -31,6 +32,13 @@ struct Glyph {
     bool cjk = false;           /* draw with the Japanese face                       */
     double stretchY = 1.0;      /* vertical scale, for a fence grown to its content */
     std::string text;           /* UTF-8 */
+    /* When set, the math font has a drawing of exactly this size and the
+     * backend should ask for that glyph rather than scale the character: a
+     * stretched radical thins its own stroke and bends its hook, which is how
+     * a bar comes to float above a sign it no longer meets.  `text` still
+     * holds the character, so a backend that cannot address glyphs directly
+     * has something to draw and the geometry stays the same either way. */
+    uint16_t glyph_id = 0;
 };
 
 /* True for the ranges a Latin font has no glyphs for.  `symbol` and `cjk` are
