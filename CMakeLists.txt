@@ -1025,3 +1025,86 @@ add_custom_command(TARGET _equation POST_BUILD
 )
 
 message(STATUS "_equation module configured (LaTeX equations -> OMML / SVG)")
+
+# ---------------------------------------------------------------------------
+# EQNEDT64 -- the editor window, as a standalone executable
+#
+# Not a Python entry point, deliberately.  Importing the radia package costs
+# about 1.4 s against 4 ms for the equation module itself, and an equation
+# editor that takes a second and a half to open is not the tool this is trying
+# to be.  So the window links the same C++ directly and starts on its own.
+#
+# It ships inside the radia wheel next to the .pyd files, which means it
+# follows whatever install a machine already has -- editable on LAB and 100,
+# PyPI on mdx and hibino -- rather than needing a distribution of its own.  The
+# binary itself stays out of git, like every other one here.
+# ---------------------------------------------------------------------------
+if(WIN32)
+	# project() carries no VERSION, so PROJECT_VERSION is empty and stamping it
+	# produced a window that said "EQNEDT64 " and nothing else.  pyproject.toml
+	# is where the release bump happens, so read it rather than repeat it: a
+	# second copy of the number is a copy that can be left behind.
+	file(READ "${CMAKE_SOURCE_DIR}/pyproject.toml" _radia_pyproject)
+	string(REGEX MATCH "\nversion[ \t]*=[ \t]*\"([0-9]+\\.[0-9]+\\.[0-9]+)\""
+	       _radia_version_match "${_radia_pyproject}")
+	set(RADIA_VERSION "${CMAKE_MATCH_1}")
+	if(NOT RADIA_VERSION)
+		message(FATAL_ERROR "could not read version from pyproject.toml")
+	endif()
+
+	add_executable(eqnedt64 WIN32
+		${EQUATION_DIR}/eqnedt64_main.cpp
+		${EQUATION_DIR}/eq_window.cpp
+		${EQUATION_DIR}/eq_edit.cpp
+		${EQUATION_DIR}/mtef_node.cpp
+		${EQUATION_DIR}/mtef_parser.cpp
+		${EQUATION_DIR}/line_pass.cpp
+		${EQUATION_DIR}/latex_emitter.cpp
+		${EQUATION_DIR}/tex2mtef.cpp
+		${EQUATION_DIR}/tex_parser.cpp
+		${EQUATION_DIR}/math_writer.cpp
+		${EQUATION_DIR}/mtef_omml.cpp
+		${EQUATION_DIR}/mtef_rtf.cpp
+		${EQUATION_DIR}/mtef_mathml.cpp
+		${EQUATION_DIR}/mtef_svg.cpp
+		${EQUATION_DIR}/mtef_gdi.cpp
+	)
+
+	target_include_directories(eqnedt64 PRIVATE ${EQUATION_DIR})
+
+	# The window says which build it is in its title bar.  Without that there
+	# is no way to tell whether a fix is actually in the thing on screen --
+	# and an install pointing at a stale tree has bitten this repository
+	# repeatedly.
+	target_compile_definitions(eqnedt64 PRIVATE
+		_CRT_SECURE_NO_WARNINGS
+		UNICODE _UNICODE
+		EQNEDT64_VERSION="${RADIA_VERSION}"
+	)
+
+	target_link_libraries(eqnedt64 PRIVATE gdi32 user32 gdiplus ole32)
+
+	if(MSVC)
+		# /utf-8: MSVC reads an unmarked source in the ANSI code page, which on
+		# a Japanese machine turns literals into mojibake at compile time.
+		target_compile_options(eqnedt64 PRIVATE /O2 /W3 /utf-8)
+
+		# Static CRT, unlike the .pyd next to it.  The .pyd shares a process
+		# with Python and must share its runtime; this is its own process and
+		# gains nothing from the dependency.  Linking it in costs a couple of
+		# hundred kilobytes and buys a single file that runs on a bare Windows
+		# -- no redistributable, no Python, nothing to install.  That is what
+		# makes "give someone the editor" a matter of handing over one file.
+		set_property(TARGET eqnedt64 PROPERTY
+			MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+	endif()
+
+	add_custom_command(TARGET eqnedt64 POST_BUILD
+		COMMAND ${CMAKE_COMMAND} -E copy_if_different
+			"$<TARGET_FILE:eqnedt64>"
+			"${CMAKE_SOURCE_DIR}/src/radia/eqnedt64.exe"
+		COMMENT "Copying eqnedt64.exe to src/radia"
+	)
+
+	message(STATUS "eqnedt64 configured (the equation editor window)")
+endif()

@@ -170,8 +170,15 @@ radia-vol-viewer-gui = "radia.tools.vol_sol_viewer:main"
 # cubit_mesh_curver.pyd is excluded below (the "*.pyd" glob ships only
 # _radia_pybind.pyd / cln_core.pyd / peec_matrices.pyd /
 # sparsesolv_ngsolve.pyd).
+# "*.exe" carries eqnedt64.exe, the equation editor window.  It is a native
+# executable rather than a Python entry point because importing this package
+# costs about 1.4 s against 4 ms for the equation module itself, and an editor
+# that takes a second and a half to open is not the tool it is trying to be.
+# Shipping it here means it follows whatever install a machine already has --
+# editable on LAB and 100, PyPI on mdx and hibino -- instead of needing a
+# distribution of its own.
 radia = [
-    "*.pyd", "*.dll", "*.so", "*.dylib", "*.pyi", "*.png", "*.ico",
+    "*.pyd", "*.dll", "*.so", "*.dylib", "*.pyi", "*.png", "*.ico", "*.exe",
     "resources/*.png", "resources/*.ico",
     "panels/samples/*.jou",
     "panels/samples/*.sol",
