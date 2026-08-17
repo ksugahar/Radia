@@ -267,6 +267,21 @@ PYBIND11_MODULE(_equation, m) {
              py::arg("options") = mtef::OmmlOptions())
         .def("svg", &mtef::Equation::svg, py::arg("style") = mtef::SvgStyle())
         .def("caret", &mtef::Equation::caret)
+        .def("caret_geometry", [](const mtef::Equation& e, const mtef::SvgStyle& st) {
+                 auto g = e.caret_geometry(st);
+                 return py::make_tuple(g.found, g.x, g.top, g.bottom);
+             }, py::arg("style") = mtef::SvgStyle(),
+             "Where to draw the caret: (found, x, top, bottom), in points "
+             "relative to the equation's origin.")
+        .def("move_to_point", &mtef::Equation::move_to_point,
+             py::arg("x"), py::arg("y"), py::arg("style") = mtef::SvgStyle(),
+             "Put the caret where a click landed.")
+        .def("extents", [](const mtef::Equation& e, const mtef::SvgStyle& st) {
+                 double w = 0, a = 0, d = 0;
+                 e.extents(w, a, d, st);
+                 return py::make_tuple(w, a, d);
+             }, py::arg("style") = mtef::SvgStyle(),
+             "The equation's box: (width, ascent, descent) in points.")
         .def("move_left", &mtef::Equation::move_left)
         .def("move_right", &mtef::Equation::move_right)
         .def("next_slot", &mtef::Equation::next_slot)

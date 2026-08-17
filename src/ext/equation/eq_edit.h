@@ -21,6 +21,7 @@
 
 #include "mtef_node.h"
 #include "mtef_omml.h"
+#include "math_layout.h"
 #include "mtef_svg.h"
 
 #include <memory>
@@ -64,6 +65,26 @@ public:
     bool insert_template(const std::string& kind);  /* "frac", "sqrt", ... */
     bool backspace();
     bool erase();                                    /* forward delete */
+
+    /* ---- geometry ---------------------------------------------------- */
+    /* Where the caret is, in points relative to the equation's own origin
+     * (on the baseline at its left edge).  `found` is false when the layout
+     * has no position for the current caret, which happens inside a construct
+     * the layout does not draw yet -- an editor should leave the caret where it
+     * was rather than pretend. */
+    struct CaretGeometry {
+        bool found = false;
+        double x = 0, top = 0, bottom = 0;
+    };
+    CaretGeometry caret_geometry(const SvgStyle& style = SvgStyle()) const;
+
+    /* Put the caret where a click landed.  Coordinates are relative to the same
+     * origin.  False when the equation is empty. */
+    bool move_to_point(double x, double y, const SvgStyle& style = SvgStyle());
+
+    /* The equation's own box, so a caller can place it and convert a click. */
+    void extents(double& w, double& asc, double& desc,
+                 const SvgStyle& style = SvgStyle()) const;
 
     /* ---- history ----------------------------------------------------- */
     bool undo();
