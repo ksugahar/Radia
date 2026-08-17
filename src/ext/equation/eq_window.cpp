@@ -22,6 +22,7 @@
 
 #include "eq_window.h"
 
+#include "eq_chords.h"
 #include "eq_edit.h"
 #include "mtef_gdi.h"
 #include "mtef_mathml.h"
@@ -70,94 +71,6 @@ std::string narrow(const std::wstring& w) {
     return s;
 }
 
-/* ---- chords ------------------------------------------------------------- */
-
-struct Step {
-    UINT vk = 0;
-    bool ctrl = false, shift = false, alt = false;
-    bool operator==(const Step& o) const {
-        return vk == o.vk && ctrl == o.ctrl && shift == o.shift && alt == o.alt;
-    }
-};
-
-struct Chord {
-    std::vector<Step> steps;
-    std::string command;
-};
-
-UINT named_key(const std::string& name) {
-    if (name == "Tab")       return VK_TAB;
-    if (name == "Left")      return VK_LEFT;
-    if (name == "Right")     return VK_RIGHT;
-    if (name == "Up")        return VK_UP;
-    if (name == "Down")      return VK_DOWN;
-    if (name == "Home")      return VK_HOME;
-    if (name == "End")       return VK_END;
-    if (name == "Backspace") return VK_BACK;
-    if (name == "Delete")    return VK_DELETE;
-    if (name == "Escape")    return VK_ESCAPE;
-    if (name == "Enter")     return VK_RETURN;
-    return 0;
-}
-
-/* "Ctrl+T, S" -> two steps; "Shift+Tab" -> one.  Parsing the published table
- * rather than restating it keeps one source for the chords. */
-bool parse_chord(const std::string& text, Chord& out) {
-    size_t pos = 0;
-    while (pos <= text.size()) {
-        size_t comma = text.find(", ", pos);
-        std::string part = text.substr(
-            pos, comma == std::string::npos ? std::string::npos : comma - pos);
-
-        Step st;
-        size_t i = 0;
-        for (;;) {
-            size_t plus = part.find('+', i);
-            /* A lone '+' at the end is the key itself, not a separator. */
-            if (plus == std::string::npos || plus + 1 >= part.size()) break;
-            std::string mod = part.substr(i, plus - i);
-            if (mod == "Ctrl")       st.ctrl = true;
-            else if (mod == "Shift") st.shift = true;
-            else if (mod == "Alt")   st.alt = true;
-            else return false;
-            i = plus + 1;
-        }
-        std::string key = part.substr(i);
-        if (key.empty()) return false;
-
-        if (UINT vk = named_key(key)) {
-            st.vk = vk;
-        } else if (key.size() == 1) {
-            /* Ask the layout, so "Ctrl+[" and "Ctrl+{" resolve to the same
-             * physical key with and without shift. */
-            SHORT r = VkKeyScanW(wchar_t((unsigned char)key[0]));
-            if (r == -1) return false;
-            st.vk = LOBYTE(r);
-            if (HIBYTE(r) & 1) st.shift = true;
-        } else {
-            return false;
-        }
-        out.steps.push_back(st);
-
-        if (comma == std::string::npos) break;
-        pos = comma + 2;
-    }
-    return !out.steps.empty();
-}
-
-const std::vector<Chord>& chords() {
-    static const std::vector<Chord> table = [] {
-        std::vector<Chord> v;
-        for (const Equation::Binding& b : Equation::shortcuts()) {
-            Chord c;
-            c.command = b.command;
-            if (parse_chord(b.chord, c)) v.push_back(c);
-        }
-        return v;
-    }();
-    return table;
-}
-
 /* ---- the palette bar ---------------------------------------------------- */
 
 const wchar_t* kPopupClass = L"Eqnedt64Palette";
@@ -204,6 +117,7 @@ struct Editor {
     bool caret_on = true;
     int dpi = 96;
     std::vector<Step> pending;      /* a chord waiting for its second key */
+    bool swallow_char = false;      /* this press was a chord, not typing */
 
     bool dragging = false;          /* the mouse is selecting a range */
     std::vector<Button> bar;
@@ -647,7 +561,12 @@ LRESULT CALLBACK proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
 
         case WM_KEYDOWN: {
             if (!ed) return 0;
-            const bool ctrl = (GetKeyState(VK_CONTROL) & 0x8000) != 0;
+            /* These are PLAIN ctrl bindings, so they must not answer to a
+             * chord that adds shift: Ctrl+Shift+X is the matrix-vector style,
+             * and cutting the selection instead would delete the very thing
+             * the user asked to make bold. */
+            const bool ctrl = (GetKeyState(VK_CONTROL) & 0x8000) != 0
+                           && (GetKeyState(VK_SHIFT)   & 0x8000) == 0;
             if (wp == VK_ESCAPE) { DestroyWindow(hwnd); return 0; }
 
             /* Copy takes the selection when there is one and the whole
@@ -675,7 +594,10 @@ LRESULT CALLBACK proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
                 redraw(hwnd);
                 return 0;
             }
-            if (handle_key(hwnd, *ed, UINT(wp))) return 0;
+            /* WM_CHAR follows its own WM_KEYDOWN, so clearing here and setting
+             * it below cannot leak into the next key. */
+            ed->swallow_char = false;
+            if (handle_key(hwnd, *ed, UINT(wp))) ed->swallow_char = true;
             return 0;
         }
 
@@ -684,6 +606,10 @@ LRESULT CALLBACK proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             const wchar_t ch = wchar_t(wp);
             if (ch < 0x20) return 0;                       /* control keys */
             if (GetKeyState(VK_CONTROL) & 0x8000) return 0; /* a chord, not text */
+            /* The second key of "Ctrl+T, S" is pressed WITHOUT ctrl, so the
+             * test above lets it through and the S would be typed on top of
+             * the summation the chord just built. */
+            if (ed->swallow_char) { ed->swallow_char = false; return 0; }
             ed->eq.insert_text(narrow(std::wstring(1, ch)));
             ed->caret_on = true;
             redraw(hwnd);
