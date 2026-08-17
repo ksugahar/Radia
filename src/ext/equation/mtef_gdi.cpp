@@ -41,55 +41,31 @@ std::wstring widen(const std::string& utf8) {
     return w;
 }
 
-HFONT make_font(double sizePt, bool italic, bool symbol, double scale) {
+HFONT make_font(double sizePt, bool italic, bool symbol, bool cjk,
+                double units_per_pt) {
     LOGFONTW lf = {};
-    lf.lfHeight = -LONG(std::lround(sizePt * kUnitsPerPt * scale));
+    lf.lfHeight = -LONG(std::lround(sizePt * units_per_pt));
     lf.lfItalic = italic ? TRUE : FALSE;
     /* Never SYMBOL_CHARSET: Cambria Math is a Unicode font, and the legacy
      * Symbol code page mangles ASCII and loses anything past it. */
     lf.lfCharSet = DEFAULT_CHARSET;
     lf.lfQuality = ANTIALIASED_QUALITY;
-    wcscpy_s(lf.lfFaceName, symbol ? L"Cambria Math" : L"Times New Roman");
+    /* The same three faces the metric layer measures with, or the drawing
+     * would not match the widths the layout was built from. */
+    wcscpy_s(lf.lfFaceName, cjk    ? L"Yu Mincho"
+                          : symbol ? L"Cambria Math"
+                                   : L"Times New Roman");
     return CreateFontIndirectW(&lf);
 }
 
-/* Draw the display list.  `scale` multiplies everything, so the same routine
- * records a metafile at 1x and rasterises at whatever a slide needs. */
+/* The metafile and bitmap writers both put the equation one padding in from
+ * the top left; a window places it wherever it likes. */
 void draw(HDC hdc, const Layout& L, const SvgStyle& style, double scale) {
-    const double pad = style.padding * kUnitsPerPt * scale;
-    const double baseline = pad + L.asc * kUnitsPerPt * scale;
-
-    SetBkMode(hdc, TRANSPARENT);
-    SetTextColor(hdc, RGB(0, 0, 0));
-    SetTextAlign(hdc, TA_LEFT | TA_BASELINE);
-
-    HBRUSH black = CreateSolidBrush(RGB(0, 0, 0));
-    for (const Rule& r : L.rules) {
-        RECT rc;
-        rc.left   = LONG(std::lround(r.x * kUnitsPerPt * scale + pad));
-        rc.top    = LONG(std::lround(r.y * kUnitsPerPt * scale + baseline));
-        rc.right  = LONG(std::lround((r.x + r.w) * kUnitsPerPt * scale + pad));
-        rc.bottom = LONG(std::lround((r.y + r.h) * kUnitsPerPt * scale + baseline));
-        if (rc.bottom <= rc.top) rc.bottom = rc.top + 1;   /* never vanish */
-        FillRect(hdc, &rc, black);
-    }
-    DeleteObject(black);
-
-    for (const Glyph& g : L.glyphs) {
-        /* A stretched fence is the one thing GDI cannot do with a font size
-         * alone, so it gets a taller font rather than a transform -- keeping
-         * the metafile free of world transforms that some readers ignore. */
-        HFONT f = make_font(g.size * (g.stretchY > 1.0 ? g.stretchY : 1.0),
-                            g.italic, g.symbol, scale);
-        HGDIOBJ old = SelectObject(hdc, f);
-        std::wstring w = widen(g.text);
-        TextOutW(hdc,
-                 int(std::lround(g.x * kUnitsPerPt * scale + pad)),
-                 int(std::lround(g.y * kUnitsPerPt * scale + baseline)),
-                 w.c_str(), int(w.size()));
-        SelectObject(hdc, old);
-        DeleteObject(f);
-    }
+    const double upp = kUnitsPerPt * scale;
+    const double pad = style.padding * upp;
+    draw_layout(hdc, L, style, upp,
+                int(std::lround(pad)),
+                int(std::lround(pad + L.asc * upp)), RGB(0, 0, 0));
 }
 
 int gdiplus_encoder(const wchar_t* mime, CLSID* out) {
@@ -120,6 +96,43 @@ struct GdiPlusOnce {
 }  // namespace
 
 #ifdef _WIN32
+
+void draw_layout(HDC hdc, const Layout& L, const SvgStyle& style,
+                 double units_per_pt, int originX, int originY,
+                 COLORREF colour) {
+    (void)style;
+    SetBkMode(hdc, TRANSPARENT);
+    SetTextColor(hdc, colour);
+    SetTextAlign(hdc, TA_LEFT | TA_BASELINE);
+
+    HBRUSH brush = CreateSolidBrush(colour);
+    for (const Rule& r : L.rules) {
+        RECT rc;
+        rc.left   = originX + LONG(std::lround(r.x * units_per_pt));
+        rc.top    = originY + LONG(std::lround(r.y * units_per_pt));
+        rc.right  = originX + LONG(std::lround((r.x + r.w) * units_per_pt));
+        rc.bottom = originY + LONG(std::lround((r.y + r.h) * units_per_pt));
+        if (rc.bottom <= rc.top) rc.bottom = rc.top + 1;   /* never vanish */
+        FillRect(hdc, &rc, brush);
+    }
+    DeleteObject(brush);
+
+    for (const Glyph& g : L.glyphs) {
+        /* A stretched fence is the one thing GDI cannot do with a font size
+         * alone, so it gets a taller font rather than a transform -- keeping
+         * the metafile free of world transforms that some readers ignore. */
+        HFONT f = make_font(g.size * (g.stretchY > 1.0 ? g.stretchY : 1.0),
+                            g.italic, g.symbol, g.cjk, units_per_pt);
+        HGDIOBJ old = SelectObject(hdc, f);
+        std::wstring w = widen(g.text);
+        TextOutW(hdc,
+                 originX + int(std::lround(g.x * units_per_pt)),
+                 originY + int(std::lround(g.y * units_per_pt)),
+                 w.c_str(), int(w.size()));
+        SelectObject(hdc, old);
+        DeleteObject(f);
+    }
+}
 
 std::string render_emf(const Layout& layout, const SvgStyle& style) {
     const double w_pt = layout.w + 2 * style.padding;
