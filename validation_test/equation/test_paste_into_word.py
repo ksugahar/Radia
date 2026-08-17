@@ -1,13 +1,23 @@
-"""End-to-end: does Word accept our clipboard RTF as a real equation?
+"""End-to-end: does each Office application take our clipboard as maths?
 
-The unit tests assert the control words; this asserts the only thing that
-finally matters -- put the RTF on the clipboard, paste it into Word, save as
-.docx, and read back what Word made of it.  An equation that arrives as text
-runs instead of <m:oMath> is a picture of an equation at best, and no amount of
-correct-looking markup would reveal that.
+The unit tests assert the markup; this asserts the only thing that finally
+matters -- put it on the clipboard, paste, save, and read back what the
+application made of it.  An equation that arrives as text runs instead of
+<m:oMath> is a picture of an equation at best, and no amount of correct-looking
+markup would reveal that.
 
-Needs Word installed and drives it through COM, so it lives here rather than in
-tests/: it is slow, it is a real application, and it cannot run on CI.
+One Copy carries both formats and each application takes what it understands:
+Word reads the RTF as maths and ignores the MathML, PowerPoint does the
+opposite.  Measured by offering them one at a time.
+
+Excel is not covered.  Its equations live in shapes, and pasting into a shape's
+text is a UI operation its object model does not expose -- all three COM routes
+(Shape.Select + Paste, TextRange.Select + Paste, PasteSpecial) are refused.  The
+clipboard payload is the same one PowerPoint accepts, so it is likely to work,
+but that is not measured and is not claimed here.
+
+Needs Office installed and drives it through COM, so it lives here rather than
+in tests/: it is slow, it is a real application, and it cannot run on CI.
 
 Run:  python -m pytest validation_test/equation -q
 """
@@ -41,8 +51,10 @@ CASES = [
 ]
 
 
-def _put_rtf(rtf: str) -> None:
-    fmt = cb.RegisterClipboardFormat("Rich Text Format")
+def _put(latex: str) -> None:
+    """Everything an Office application might want, in one go."""
+    rtf_fmt = cb.RegisterClipboardFormat("Rich Text Format")
+    mml_fmt = cb.RegisterClipboardFormat("MathML")
     for _ in range(12):
         try:
             cb.OpenClipboard()
@@ -53,7 +65,9 @@ def _put_rtf(rtf: str) -> None:
         pytest.skip("the clipboard stayed busy")
     try:
         cb.EmptyClipboard()
-        cb.SetClipboardData(fmt, rtf.encode("latin-1", "replace"))
+        cb.SetClipboardData(rtf_fmt,
+                            equation.tex_to_rtf(latex).encode("latin-1", "replace"))
+        cb.SetClipboardData(mml_fmt, equation.tex_to_mathml(latex).encode("utf-8"))
     finally:
         cb.CloseClipboard()
 
@@ -66,10 +80,18 @@ def word():
     app.Quit()
 
 
+@pytest.fixture(scope="module")
+def powerpoint():
+    app = com.Dispatch("PowerPoint.Application")
+    app.Visible = True          # PowerPoint refuses its paste path when hidden
+    yield app
+    app.Quit()
+
+
 @pytest.mark.validation
 @pytest.mark.parametrize("latex", CASES)
 def test_word_pastes_it_as_an_equation(word, latex, tmp_path):
-    _put_rtf(equation.tex_to_rtf(latex))
+    _put(latex)
     doc = word.Documents.Add()
     try:
         doc.Content.Paste()
@@ -85,4 +107,27 @@ def test_word_pastes_it_as_an_equation(word, latex, tmp_path):
     if not n:
         text = "".join(re.findall(r"<w:t[^>]*>([^<]*)</w:t>", xml))
         pytest.fail(f"{latex} arrived as text, not maths: {text[:80]!r}")
+    assert n == 1
+
+
+@pytest.mark.validation
+@pytest.mark.parametrize("latex", CASES)
+def test_powerpoint_pastes_it_as_an_equation(powerpoint, latex, tmp_path):
+    _put(latex)
+    pres = powerpoint.Presentations.Add(True)
+    slide = pres.Slides.Add(1, 12)              # ppLayoutBlank
+    time.sleep(0.35)
+    try:
+        slide.Shapes.Paste()
+        out = str(tmp_path / "pasted.pptx")
+        pres.SaveAs(out)
+    finally:
+        pres.Close()
+
+    with zipfile.ZipFile(out) as z:
+        xml = z.read("ppt/slides/slide1.xml").decode("utf-8")
+
+    n = len(re.findall(r"<m:oMath[ >]", xml))
+    if not n:
+        pytest.fail(f"{latex} arrived in PowerPoint as something other than maths")
     assert n == 1

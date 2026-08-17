@@ -28,11 +28,13 @@ contain them.  `mtef_to_tex` and `mtef_to_omml` are the import path;
 from radia._equation import (  # noqa: F401
     Equation,
     MarkdownDoc,
+    MathMLOptions,
     MdSegment,
     OmmlOptions,
     RtfOptions,
     SvgStyle,
     dump_tree,
+    mtef_to_mathml,
     mtef_to_omml,
     mtef_to_rtf,
     mtef_to_svg,
@@ -40,6 +42,7 @@ from radia._equation import (  # noqa: F401
     read_eqn,
     tex_dump_tree,
     tex_normalize,
+    tex_to_mathml,
     tex_to_mtef,
     tex_to_omml,
     tex_to_rtf,
@@ -48,6 +51,7 @@ from radia._equation import (  # noqa: F401
 )
 
 from radia.equation.office import (  # noqa: F401
+    copy_to_clipboard,
     markdown_to_docx,
     omml_paragraph,
     split_math,
@@ -56,12 +60,15 @@ from radia.equation.office import (  # noqa: F401
 __all__ = [
     "Equation",
     "MarkdownDoc",
+    "MathMLOptions",
     "MdSegment",
     "OmmlOptions",
     "RtfOptions",
     "SvgStyle",
+    "copy_to_clipboard",
     "dump_tree",
     "markdown_to_docx",
+    "mtef_to_mathml",
     "mtef_to_omml",
     "mtef_to_rtf",
     "mtef_to_svg",
@@ -71,6 +78,7 @@ __all__ = [
     "split_math",
     "tex_dump_tree",
     "tex_normalize",
+    "tex_to_mathml",
     "tex_to_mtef",
     "tex_to_omml",
     "tex_to_rtf",

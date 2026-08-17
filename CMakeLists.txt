@@ -985,6 +985,7 @@ pybind11_add_module(_equation
 	${EQUATION_DIR}/math_writer.cpp
 	${EQUATION_DIR}/mtef_omml.cpp
 	${EQUATION_DIR}/mtef_rtf.cpp
+	${EQUATION_DIR}/mtef_mathml.cpp
 	${EQUATION_DIR}/mtef_svg.cpp
 	${EQUATION_DIR}/mtef_dump.cpp
 	${EQUATION_DIR}/eq_edit.cpp
