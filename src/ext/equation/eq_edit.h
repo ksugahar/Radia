@@ -35,6 +35,10 @@ namespace mtef {
 struct CaretStep {
     int child;
     int slot;
+    bool operator==(const CaretStep& o) const {
+        return child == o.child && slot == o.slot;
+    }
+    bool operator!=(const CaretStep& o) const { return !(*this == o); }
 };
 
 class Equation {
@@ -59,9 +63,54 @@ public:
     void move_home();
     void move_end();
 
+    /* ---- selection ----------------------------------------------------- */
+    /* A range within ONE slot.
+     *
+     * A template is a single item in its parent's slot, so selecting a whole
+     * fraction is the same operation as selecting a run of characters -- which
+     * means the useful cases are covered without a model that spans levels of
+     * the tree.  Shift at a slot boundary stops there rather than jumping out,
+     * because a selection that silently changes what it is anchored to is
+     * worse than one that will not grow.
+     *
+     * The anchor is where the selection started; the caret is its other end.
+     * They may be in either order. */
+    bool has_selection() const;
+    void clear_selection();
+    void select_all();                  /* everything in the current slot */
+
+    bool extend_left();                 /* Shift+Left      */
+    bool extend_right();                /* Shift+Right     */
+    void extend_home();                 /* Shift+Home      */
+    void extend_end();                  /* Shift+End       */
+    bool extend_to_point(double x, double y, const SvgStyle& style = SvgStyle());
+
+    /* The selected nodes as LaTeX.  Not const: it borrows the nodes out of the
+     * tree to write them and puts them back, which is cheaper and less
+     * error-prone than teaching every node type to clone itself. */
+    std::string selected_latex();
+    bool delete_selection();
+
+    /* What to highlight.  `found` is false when nothing is selected. */
+    struct SelectionBox {
+        bool found = false;
+        double x0 = 0, x1 = 0, top = 0, bottom = 0;
+    };
+    SelectionBox selection_geometry(const SvgStyle& style = SvgStyle()) const;
+
     /* ---- editing ----------------------------------------------------- */
+    /* Every one of these replaces the selection when there is one, which is
+     * what typing over a highlighted range has to do. */
     void insert_text(const std::string& utf8);      /* literal characters */
     bool insert_symbol(const std::string& cmd);     /* "\\alpha", "\\nabla" */
+
+    /* Paste: parse LaTeX and put it in at the caret.
+     *
+     * Goes through the model rather than replacing the document, so it lands
+     * inside whatever slot the caret is in, replaces a selection, and undoes
+     * in one step.  Surrounding $...$ are stripped by the parser, so an
+     * equation copied out of a Markdown file arrives as an equation. */
+    bool insert_latex(const std::string& latex);
     bool insert_template(const std::string& kind);  /* "frac", "sqrt", ... */
     bool backspace();
     bool erase();                                    /* forward delete */
@@ -140,6 +189,7 @@ private:
     std::unique_ptr<LineNode> root_;
     std::vector<CaretStep> path_;
     int index_ = 0;
+    int anchor_ = -1;        /* where a selection started; -1 for none */
 
     struct Snapshot { std::string latex; std::string caret; };
     std::vector<Snapshot> undo_, redo_;
@@ -147,6 +197,11 @@ private:
     NodeList* slot_at(const std::vector<CaretStep>& path) const;
     NodeList& here();
     Node* parent_node(const std::vector<CaretStep>& path) const;
+
+    /* Remove the selected nodes without pushing an undo step, so replacing a
+     * selection is ONE undo rather than two.  Returns them, because a template
+     * wraps what was selected instead of discarding it. */
+    NodeList take_selection();
 
     void checkpoint();                  /* push the current state for undo */
     void restore(const Snapshot& s);

@@ -200,6 +200,7 @@ struct Editor {
     int dpi = 96;
     std::vector<Step> pending;      /* a chord waiting for its second key */
 
+    bool dragging = false;          /* the mouse is selecting a range */
     std::vector<Button> bar;
     HWND popup = nullptr;
     std::vector<Cell> cells;        /* what the open popup is showing */
@@ -432,10 +433,25 @@ void paint(HWND hwnd, Editor& ed) {
     const int originY = bar_h +
         int(((H - bar_h) + L.asc * upp - L.desc * upp) / 2);
 
+    /* The highlight goes down first so the equation draws over it, which keeps
+     * the glyphs their own colour instead of inverting them. */
+    Equation::SelectionBox sel = ed.eq.selection_geometry(ed.style);
+    if (sel.found) {
+        RECT r;
+        r.left   = originX + int(std::min(sel.x0, sel.x1) * upp);
+        r.right  = originX + int(std::max(sel.x0, sel.x1) * upp);
+        r.top    = originY + int(sel.top * upp);
+        r.bottom = originY + int(sel.bottom * upp);
+        if (r.right <= r.left) r.right = r.left + 1;
+        HBRUSH hl = CreateSolidBrush(GetSysColor(COLOR_HIGHLIGHT));
+        FillRect(mem, &r, hl);
+        DeleteObject(hl);
+    }
+
     draw_layout(mem, L, ed.style, upp, originX, originY,
                 GetSysColor(COLOR_WINDOWTEXT), true);
 
-    if (ed.caret_on) {
+    if (ed.caret_on && !sel.found) {
         Equation::CaretGeometry g = ed.eq.caret_geometry(ed.style);
         if (g.found) {
             RECT c;
@@ -458,6 +474,26 @@ void paint(HWND hwnd, Editor& ed) {
 }
 
 void redraw(HWND hwnd) { InvalidateRect(hwnd, nullptr, FALSE); }
+
+/* Ctrl+V.  The editor was a one-way door without this: an equation could be
+ * written and sent out, and nothing could be brought back in.
+ *
+ * The clipboard's plain text is taken as LaTeX, which is the format this
+ * editor stores anyway -- so what it copied out is exactly what it reads back,
+ * and so is anything from a paper, a note, or another tool. */
+void paste_from_clipboard(HWND hwnd, Editor& ed) {
+    if (!OpenClipboard(hwnd)) return;
+    std::string latex;
+    if (HANDLE h = GetClipboardData(CF_UNICODETEXT)) {
+        if (const wchar_t* w = static_cast<const wchar_t*>(GlobalLock(h))) {
+            latex = narrow(w);
+            GlobalUnlock(h);
+        }
+    }
+    CloseClipboard();
+    if (latex.empty()) return;
+    if (ed.eq.insert_latex(latex)) redraw(hwnd);
+}
 
 bool handle_key(HWND hwnd, Editor& ed, UINT vk) {
     Step cur;
@@ -538,12 +574,40 @@ LRESULT CALLBACK proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             const int originX = ed->scaled(kMargin);
             const int originY = bar_h +
                 int(((rc.bottom - bar_h) + L.asc * upp - L.desc * upp) / 2);
-            ed->eq.move_to_point((p.x - originX) / upp,
-                                 (p.y - originY) / upp, ed->style);
+            const double ex = (p.x - originX) / upp;
+            const double ey = (p.y - originY) / upp;
+
+            /* Shift+click extends from where the caret already is, the way it
+             * does in every text editor. */
+            if (GetKeyState(VK_SHIFT) & 0x8000) ed->eq.extend_to_point(ex, ey, ed->style);
+            else                                ed->eq.move_to_point(ex, ey, ed->style);
+
+            ed->dragging = true;
+            SetCapture(hwnd);
             ed->caret_on = true;
             redraw(hwnd);
             return 0;
         }
+
+        case WM_MOUSEMOVE: {
+            if (!ed || !ed->dragging) return 0;
+            RECT rc;
+            GetClientRect(hwnd, &rc);
+            const int bar_h = ed->bar_height();
+            const Layout L = ed->eq.layout(ed->style);
+            const double upp = ed->units_per_pt();
+            const int originX = ed->scaled(kMargin);
+            const int originY = bar_h +
+                int(((rc.bottom - bar_h) + L.asc * upp - L.desc * upp) / 2);
+            ed->eq.extend_to_point((GET_X_LPARAM(lp) - originX) / upp,
+                                   (GET_Y_LPARAM(lp) - originY) / upp, ed->style);
+            redraw(hwnd);
+            return 0;
+        }
+
+        case WM_LBUTTONUP:
+            if (ed && ed->dragging) { ed->dragging = false; ReleaseCapture(); }
+            return 0;
 
         case WM_SIZE:
             if (ed) { build_bar(*ed); redraw(hwnd); }
@@ -553,10 +617,23 @@ LRESULT CALLBACK proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             if (!ed) return 0;
             const bool ctrl = (GetKeyState(VK_CONTROL) & 0x8000) != 0;
             if (wp == VK_ESCAPE) { DestroyWindow(hwnd); return 0; }
-            if (ctrl && (wp == 'C' || wp == VK_RETURN)) {
-                ed->copied = copy_equation_to_clipboard(ed->eq.latex());
+
+            /* Copy takes the selection when there is one and the whole
+             * equation otherwise, which is what every editor does and what
+             * makes "copy this bit into a slide" possible at all. */
+            if (ctrl && (wp == 'C' || wp == 'X' || wp == VK_RETURN)) {
+                const bool cut = (wp == 'X');
+                const std::string what = ed->eq.has_selection()
+                                       ? ed->eq.selected_latex()
+                                       : ed->eq.latex();
+                ed->copied = copy_equation_to_clipboard(what);
+                if (cut && ed->eq.has_selection()) {
+                    ed->eq.delete_selection();
+                    redraw(hwnd);
+                }
                 return 0;
             }
+            if (ctrl && wp == 'V') { paste_from_clipboard(hwnd, *ed); return 0; }
             if (handle_key(hwnd, *ed, UINT(wp))) return 0;
             return 0;
         }
