@@ -43,6 +43,7 @@ private:
     void emitIntegral(const IntegralNode& integ, std::string& out);
     void emitBigOp(const BigOpNode& bigop, std::string& out);
     void emitDecoration(const DecorationNode& deco, std::string& out);
+    void emitEmbell(const EmbellNode& em, std::string& out);
     void emitBraceDeco(const BraceDecoNode& bd, std::string& out);
     void emitDirac(const DiracNode& dirac, std::string& out);
     void emitLim(const LimNode& lim, std::string& out);
