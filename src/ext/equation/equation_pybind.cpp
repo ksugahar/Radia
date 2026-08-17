@@ -31,6 +31,7 @@
 #include "mtef_dump.h"
 #include "tex_parser.h"
 #include "latex_emitter.h"
+#include "eq_chords.h"
 #include "eq_edit.h"
 #include "md_doc.h"
 #include "md_blocks.h"
@@ -340,6 +341,16 @@ PYBIND11_MODULE(_equation, m) {
                 out.append(py::make_tuple(b.chord, b.command, b.label));
             return out;
         }, "Equation Editor 3.0 key chords as (chord, command, label).")
+        .def_static("chord_steps", [](const std::string& chord) {
+            mtef::Chord c;
+            py::list out;
+            if (!mtef::parse_chord(chord, c)) return out;
+            for (const mtef::Step& s : c.steps)
+                out.append(py::make_tuple(s.vk, s.ctrl, s.shift, s.alt));
+            return out;
+        }, py::arg("chord"),
+           "What the window will actually watch for, as (vk, ctrl, shift, alt) "
+           "per key press.  Empty if the chord names no key this knows.")
         .def("__repr__", [](const mtef::Equation& e) {
             return "<Equation " + e.latex() + " caret=" + e.caret() + ">";
         });

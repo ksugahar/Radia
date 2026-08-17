@@ -1004,6 +1004,7 @@ pybind11_add_module(_equation
 	${EQUATION_DIR}/mtef_gdi.cpp
 	${EQUATION_DIR}/mtef_dump.cpp
 	${EQUATION_DIR}/eq_edit.cpp
+	${EQUATION_DIR}/eq_chords.cpp
 	${EQUATION_DIR}/md_doc.cpp
 	${EQUATION_DIR}/md_blocks.cpp
 	${EQUATION_DIR}/md_layout.cpp
@@ -1070,6 +1071,7 @@ if(WIN32)
 		${EQUATION_DIR}/eqnedt64_main.cpp
 		${EQUATION_DIR}/eq_window.cpp
 		${EQUATION_DIR}/eq_edit.cpp
+		${EQUATION_DIR}/eq_chords.cpp
 		${EQUATION_DIR}/mtef_node.cpp
 		${EQUATION_DIR}/mtef_parser.cpp
 		${EQUATION_DIR}/line_pass.cpp
