@@ -168,7 +168,10 @@ std::string render_emf(const Layout& layout, const SvgStyle& style) {
     return out;
 }
 
-std::string render_png(const Layout& layout, const SvgStyle& style, double scale) {
+/* One rasterisation, two payloads: the PNG an application asks for by name and
+ * the packed DIB it reads when it pastes a picture. */
+static std::string rasterize(const Layout& layout, const SvgStyle& style,
+                             double scale, bool as_dib) {
     const double w_pt = layout.w + 2 * style.padding;
     const double h_pt = layout.asc + layout.desc + 2 * style.padding;
     if (w_pt <= 0 || h_pt <= 0) return std::string();
@@ -207,7 +210,23 @@ std::string render_png(const Layout& layout, const SvgStyle& style, double scale
     draw(mem, layout, style, scale);
 
     std::string out;
-    {
+    if (as_dib) {
+        /* A packed DIB: header, then the pixels bottom-up.  CF_DIB is what an
+         * application reads when it pastes an image, and Windows does NOT
+         * synthesise it from a metafile -- without it a paste into a browser
+         * lands as text, which is what Google Slides was doing. */
+        BITMAPINFOHEADER h = bi.bmiHeader;
+        h.biHeight = H;                        /* positive: bottom-up */
+        h.biSizeImage = DWORD(W) * DWORD(H) * 4;
+        out.resize(sizeof(h) + h.biSizeImage);
+        memcpy(&out[0], &h, sizeof(h));
+        const uint8_t* src = static_cast<const uint8_t*>(bits);
+        uint8_t* dst = reinterpret_cast<uint8_t*>(&out[sizeof(h)]);
+        const size_t stride = size_t(W) * 4;
+        for (int y = 0; y < H; ++y)            /* flip: our DIB is top-down */
+            memcpy(dst + size_t(y) * stride,
+                   src + size_t(H - 1 - y) * stride, stride);
+    } else {
         Gdiplus::Bitmap image(bmp, nullptr);
         CLSID png;
         if (gdiplus_encoder(L"image/png", &png)) {
@@ -232,10 +251,21 @@ std::string render_png(const Layout& layout, const SvgStyle& style, double scale
     return out;
 }
 
+std::string render_png(const Layout& layout, const SvgStyle& style,
+                       double scale) {
+    return rasterize(layout, style, scale, false);
+}
+
+std::string render_dib(const Layout& layout, const SvgStyle& style,
+                       double scale) {
+    return rasterize(layout, style, scale, true);
+}
+
 #else   /* not Windows */
 
 std::string render_emf(const Layout&, const SvgStyle&) { return std::string(); }
 std::string render_png(const Layout&, const SvgStyle&, double) { return std::string(); }
+std::string render_dib(const Layout&, const SvgStyle&, double) { return std::string(); }
 
 #endif
 
@@ -250,6 +280,13 @@ std::string tex_to_png(const std::string& latex, const SvgStyle& style,
     std::unique_ptr<LineNode> root = parse_latex(latex);
     if (!root) return std::string();
     return render_png(layout_math(*root, style), style, scale);
+}
+
+std::string tex_to_dib(const std::string& latex, const SvgStyle& style,
+                       double scale) {
+    std::unique_ptr<LineNode> root = parse_latex(latex);
+    if (!root) return std::string();
+    return render_dib(layout_math(*root, style), style, scale);
 }
 
 }  // namespace mtef

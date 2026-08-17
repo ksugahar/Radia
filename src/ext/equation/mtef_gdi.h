@@ -65,6 +65,19 @@ std::string render_emf(const Layout& layout, const SvgStyle& style);
 std::string render_png(const Layout& layout, const SvgStyle& style,
                        double scale = 4.0);
 
+/* The same raster as a packed device-independent bitmap: a BITMAPINFOHEADER
+ * followed by bottom-up pixels, which is what CF_DIB wants.
+ *
+ * Needed because Windows synthesises CF_DIB from a bitmap but NOT from a
+ * metafile, and an application pasting a picture reads CF_DIB.  Offering only
+ * the named "PNG" format left a paste into a browser taking the plain text
+ * instead -- so an equation dropped into Google Slides, which has no equation
+ * object and takes raster only, arrived as its LaTeX. */
+std::string render_dib(const Layout& layout, const SvgStyle& style,
+                       double scale = 4.0);
+std::string tex_to_dib(const std::string& latex,
+                       const SvgStyle& style = SvgStyle(), double scale = 4.0);
+
 std::string tex_to_emf(const std::string& latex,
                        const SvgStyle& style = SvgStyle());
 std::string tex_to_png(const std::string& latex,
