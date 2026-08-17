@@ -239,11 +239,10 @@ EarlyTimes should follow the useful parts of the NGSolve object model:
    differentiated when supported, and inspected as an expression tree.
 2. **Mesh and field stay distinct.** The production Lie/A-RK input is a real
    NGSolve `GridFunction` in `HCurl(order=p)`, representing the vector
-   potential `A`.  The independent B-RK input is a real `HDiv(order=4)`
-   `GridFunction` projected from the HDiv-MMM magnetic-flux-density source.
-   The reflection-parity-conditioned B `CoefficientFunction` is retained only
-   for design-orbit recovery and projection diagnostics.  NGSolve owns point location and field
-   evaluation; Radia never reconstructs finite-element basis data.
+   potential `A`.  The independent validation input is preferably the original
+   HDiv-MMM magnetic-flux-density `CoefficientFunction`; an `HDiv`
+   GridFunction is an optional projection check.  NGSolve owns point location
+   and field evaluation; Radia never reconstructs finite-element basis data.
 3. **Operators are explicit.** The equation of motion, one-step operator,
    one-turn map, closed-orbit residual, and transfer map are separate objects.
 4. **State is visible.** Particle state, reference frames, accepted steps,
@@ -308,25 +307,22 @@ The production A input is a three-component real NGSolve `HCurl(order=p)`
 `GridFunction` whose value is the vector potential in tesla-metres.  The Lie
 and canonical A-RK routes evaluate A itself; they do not replace it with
 `curl(A)`.  HDiv-MMM generates continuous A and B source
-`CoefficientFunction` objects. A is conformingly projected to HCurl p=5 and B
-is conformingly projected to HDiv p=4 on the same loft-chain mesh.  The
-independent Cartesian B-RK route accepts that HDiv GridFunction; it rejects the
-unprojected B CoefficientFunction.  The latter remains the physical source
-reference used to quantify the projection error.  The field spaces, mesh
-transformations, orientation, and evaluation remain owned by NGSolve. The beam
-API does not build or consume a regular-grid field map.  For a median-plane
-reflection, the B/H source is symmetrised as an axial vector,
-`det(R) R B = -R B`, before HDiv projection.
+`CoefficientFunction` objects. A is conformingly projected to HCurl p=5.  The
+independent Cartesian B-RK route may evaluate the original B CoefficientFunction
+directly, while HDiv p=4 remains an optional projected-field comparison.  The
+field spaces, mesh transformations, orientation, and evaluation remain owned
+by NGSolve. The beam API does not build or consume a regular-grid field map.
 
 Lie point evaluation locates the containing element with the HCurl
 GridFunction's mesh and evaluates the vector potential itself at the mapped
 point.  `track_hcurl_vector_potential_canonical_s` does the same for `A_s,A_y`
-and uses NGSolve's element-interior `Grad(A)` in the exact unexpanded
-Hamiltonian.  `track_hdiv_b_map_cartesian_s` independently evaluates the
-projected HDiv-MMM B GridFunction in Cartesian Lorentz RK.  The public HDiv
-entry point rejects an unprojected CoefficientFunction and requires A and B to
-share the loft-chain mesh.  `curl(A)` is a diagnostic consistency quantity,
-never the B-map validation substitute.
+and recovers transverse derivatives from fourth-order centred differences of
+those NGSolve-owned point values in the exact unexpanded Hamiltonian. It does
+not ask HCurl for a nonconforming element-interior `Grad(A)` field.
+`track_b_coefficient_cartesian_s` independently evaluates
+HDiv-MMM's supplied B CoefficientFunction in Cartesian Lorentz RK, or an
+HDiv GridFunction when explicitly testing that projection.  `curl(A)` is a
+diagnostic consistency quantity, never the B-map validation substitute.
 `compare_hcurl_lie_map_to_direct_rk` records Lie-versus-A truncation,
 A-versus-B field-route discrepancy, and total Lie-versus-B discrepancy as
 separate arrays.  The B route consults the A gauge only when converting
@@ -491,10 +487,8 @@ Required concrete fields:
 - `IdealRadialSectorFFAGField`
 - `NGSolveGridFunctionField` retaining a three-component native
   `ngcomp::GridFunction` in `HCurl(order=p)` and its native curl coefficient;
-  its space and mesh are retained through shared ownership. The independent
-  B-RK route accepts an HDiv GridFunction on the same mesh; generic
-  VectorH1/direct-CoefficientFunction compatibility is not a certification
-  route.
+  its space and mesh are retained through shared ownership. An explicit
+  direct-B mode supports independent HDiv/VectorH1 comparisons.
 - `SumField`, `ScaledField`, `TransformedField`, and `RegionField`
 - `ErrorField` for alignment, strength, and measured-error terms
 
@@ -996,25 +990,19 @@ The preferred path is an in-process native vector-potential `GridFunction`:
 ```python
 p = 5
 A = ngsolve.GridFunction(ngsolve.HCurl(mesh, order=p), name="A")
-# B_coefficient is already axial-reflection-symmetrised about the median plane.
-# Project the gauge-constrained A source and the independent B source.
-maps = project_earlytimes_grid_function_maps(
-    A_coefficient,
-    mesh,
-    magnetic_flux_density_coefficient=B_coefficient,
-    project_magnetic_flux_density=True,
-)
+# Project only the gauge-constrained HDiv-MMM A CoefficientFunction.
+maps = project_earlytimes_grid_function_maps(A_coefficient, mesh)
 A = maps.vector_potential
-B = maps.magnetic_flux_density
+# Keep B_coefficient as the independent HDiv-MMM direct-B RK source.
 ```
 
 The `GridFunction` retains its `FESpace`, and the space retains its mesh.
 Python therefore does not pass a raw DoF vector, separately declared order, or
 sampled regular field to the tracker.  The independent B-map tracker evaluates
-the projected HDiv GridFunction and never derives B from A.  The parity-
-conditioned B CoefficientFunction remains the source-field reference used for
-design-orbit recovery and source-to-HDiv projection diagnostics, not a B-RK
-input.  A raw unsymmetrised source is diagnostic-only.
+the original B CoefficientFunction and never derives it from A.  An optional
+HDiv projection is requested explicitly with
+`project_magnetic_flux_density=True`; it is a projection check, not the B
+source of truth.
 
 For a process or language boundary, `.sol` is supported as part of a checked
 solution bundle, not as a standalone field file:
@@ -1137,11 +1125,10 @@ filename and must be migrated.
 7. **Validity domain:** direct tracking over the declared amplitude/momentum
    box agrees with the truncated map within its reported tolerance and fails
    closed outside the accepted domain.
-8. **Field parity:** analytic magnetic fields, native NGSolve `curl(A)` from
-   `HCurl(order=p)` GridFunctions, and independent projected
-   `HDiv(order=4)` B maps, including FESpace-class/order metadata and checked
-   `.sol` bundle round trips in Python and MATLAB. The B-map route never derives
-   B from A.
+8. **Field parity:** analytic magnetic fields and native NGSolve `curl(A)` from
+   `HCurl(order=p)` GridFunctions, including FESpace-class/order metadata and
+   checked `.sol` bundle round trips in Python and MATLAB. Explicit direct-B
+   mode remains an independent comparison path.
 9. **Integrator parity:** recorded canonical EarlyTimes trajectories for RK4
    and Lie routes, plus convergence-order tests.
 10. **Orbit and map parity:** closed orbit, first/second-order map coefficients,

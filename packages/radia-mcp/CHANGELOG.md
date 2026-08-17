@@ -7,52 +7,8 @@ crystallized as its own package.
 
 ## [Unreleased]
 
-- Added `presentation_check_raw_math_markup` and its repair pass
-  `presentation_apply_math_subscripts`. Equations copied from a manuscript keep
-  their source form on the slide (`sigma_f(x) = Sum_j B_fj(x) a_j`,
-  `int_{S_f}`, `H(x_c)`, `r_nl`), and every text/layout lint scored those
-  slides as ordinary prose. Detection and repair both work per PARAGRAPH, not
-  per run: PowerPoint splits a formula at each font change, so a token
-  routinely lands as a run ending in `_` plus a run starting with the
-  subscript. The repair splits runs and sets the PowerPoint baseline, keeping
-  the original run formatting; LaTeX macros are reported as manual work.
-- Added `presentation_check_duplicate_slide_images`: byte-identical artwork
-  reused across slides (small repeated marks such as logos excluded by area),
-  which reads to an audience as "the talk did not move on". Reports whether the
-  reuse is on adjacent slides and whether the copies are even pasted at the
-  same scale.
-- Added `figure_audit_pptx_figures` (helper `audit_pptx_figures`) -- the slide
-  analogue of `figure_audit_embeds`. A figure authored at W cm carries 24 pt
-  text only while it is PASTED at W cm; the authored width is recovered from
-  the embedded image (pixels / DPI, crop removed) and compared with the shape
-  geometry. Reports the paste scale, the resulting displayed figure-font size
-  against the 20 pt slide floor, effective DPI, aspect stretch, and missing DPI
-  metadata (unverifiable, never a silent pass).
-- Added `slide_png_from_pdf`: rasterise a vector figure (CAD export, inherited
-  manuscript drawing) so its authored width equals the slide paste width, and
-  stamp the PNG DPI metadata so the audit above can recover it.
-- Added a 20 pt minimum for text baked into pasted presentation figures,
-  distinct from the existing 24 pt native-slide-text floor. The new
-  `presentation_check_embedded_figure_text_size` gate converts OCR word boxes
-  to displayed slide points, accounts for picture scaling and cropping, and
-  treats both sub-20 pt text and unresolved pictures as failures. Cloud OCR is
-  explicit opt-in; reproducible OCR manifests are also supported.
-- Added `presentation_replace_embedded_figure_text`, a non-destructive fallback
-  for source-less raster figures. It inpaints selected OCR word pixels and
-  restores them as editable `FIGURE_TEXT::` PowerPoint text at 20 pt or larger,
-  while preserving the original deck and writing a revised OCR manifest.
-  Candidate writing is blocked unless source unavailability is explicitly
-  confirmed; regenerating an available Python/MATLAB/vector source remains the
-  mandatory first choice.
-- Added a one-canonical-deck finalization policy for presentations. Useful
-  content from superseded drafts now moves into titled Q&A slides at the end
-  of the same PPTX; duplicate slides are consolidated and old deck copies are
-  deleted. `presentation_check_final_deck_directory` enforces one top-level
-  PPTX, no archived revision decks, and no exact duplicate slides.
-- Prohibited non-uniform stretching of figures and images in presentation
-  decks. Added the crop-aware `presentation_check_image_aspect_ratio` gate,
-  which compares each picture frame against the embedded source image and
-  treats any mismatch beyond OOXML rounding tolerance as a violation.
+## [1.4.37] - 2026-08-16
+
 - Corrected the presentation message hierarchy: slide titles use the shortest
   practical concrete "target + viewpoint" phrase (for example, "Model 1
   accuracy evaluation"), while the bottom line states what was learned from
@@ -83,6 +39,12 @@ crystallized as its own package.
   `beamer_169_half`, and `presentation_slide` now use a 24 pt minimum for
   labels, ticks, legends, panel labels, and annotations.  The export gate
   rejects smaller per-artist overrides before saving.
+- Added the electromagnetic force/torque MCP family and synchronized its
+  Lorentz, Maxwell-stress, air-gap, coenergy, and virtual-work contracts with
+  the Radia Python and MATLAB APIs.
+- Extended accelerator knowledge for the HCurl EarlyTimes Bishop/RMF loft
+  chain, fifth-degree canonical Hamiltonian, independent reference-curvature
+  control, and separately reported Lie, A-map, and direct B-map errors.
 
 ## [1.4.36] - 2026-08-14
 

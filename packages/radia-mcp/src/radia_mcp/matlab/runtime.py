@@ -145,6 +145,9 @@ _PYBIND_INTERNAL_NUMERICAL_COMMANDS = {
     "_EquivalenceSourceHarmonic": ("equivalence.harmonic",),
     "_average_B_in_box": ("radia.AverageBInBox",),
     "_average_demag_tensor": ("radia.AverageDemagTensor",),
+    "_evaluate_ngsolve_coefficient_at_point": (
+        "ngsolve.coefficient_function.evaluate",
+    ),
     "_stream_aca_tsvd": ("stream.aca_tsvd",),
 }
 
@@ -170,6 +173,45 @@ _PYBIND_CLASS_EXCLUSIONS = {
     "_PEECBuilderInternal.__binding__": "implementation holder",
     "_HACApKPEECManagerInternal.__binding__": "implementation holder",
     "_HACApKBEMManagerInternal.__binding__": "implementation holder",
+    "_HDivVectorPotentialCoefficient.__binding__": (
+        "private radia.vim adapter that materializes an NGSolve-owned Python "
+        "CoefficientFunction; MATLAB uses the declared vim-public Python "
+        "boundary for construction and the projected HCurl .sol beam MEX "
+        "contract for native tracking"),
+    "_HDivVectorPotentialCoefficient.__init__": (
+        "private radia.vim adapter that materializes an NGSolve-owned Python "
+        "CoefficientFunction; MATLAB uses the declared vim-public Python "
+        "boundary for construction and the projected HCurl .sol beam MEX "
+        "contract for native tracking"),
+    "_HDivVectorPotentialCoefficient.source_count": (
+        "diagnostic on the private NGSolve CoefficientFunction adapter; source "
+        "construction remains in the declared vim-public Python boundary"),
+    "_HDivExactVectorPotentialCoefficient.__binding__": (
+        "private radia.vim adapter for the analytic equivalent-current A "
+        "source (construction=\"exact\"); it materializes an NGSolve-owned "
+        "Python CoefficientFunction, so MATLAB uses the declared vim-public "
+        "Python boundary for construction and the projected HCurl .sol beam "
+        "MEX contract for native tracking"),
+    "_HDivExactVectorPotentialCoefficient.__init__": (
+        "private radia.vim adapter for the analytic equivalent-current A "
+        "source; same vim-public Python / projected-HCurl MEX boundary as "
+        "_HDivVectorPotentialCoefficient"),
+    "_HDivExactVectorPotentialCoefficient.tetrahedron_count": (
+        "diagnostic on the private analytic equivalent-current adapter; the "
+        "source statistics are already reported through the vim-public "
+        "vector_potential_coefficient_stats result entry"),
+    "_HDivExactVectorPotentialCoefficient.triangle_count": (
+        "diagnostic on the private analytic equivalent-current adapter; the "
+        "source statistics are already reported through the vim-public "
+        "vector_potential_coefficient_stats result entry"),
+    "_HDivFieldCoefficient.reflection_normal": (
+        "introspection-only mirror of the FieldCoefficientFromSolution "
+        "reflection_normal argument on the private NGSolve adapter; the "
+        "physical field MATLAB consumes flows through the projected .sol "
+        "beam MEX contract"),
+    "_HDivFieldCoefficient.reflection_symmetrized": (
+        "introspection-only flag on the private NGSolve adapter; same "
+        "projected-.sol MEX boundary as reflection_normal"),
     "_ChargeGramHMatrix.charge_sigma": (
         "sigma-normalization diagnostic for the roundoff-amplification "
         "regression tests (empty before BuildHMatrix; every public apply "
@@ -225,6 +267,8 @@ _PYBIND_CLASS_COMMANDS = {
         "hacapk.charge_gram.create_hex", "hacapk.charge_gram.create_wedge",
         "hacapk.charge_gram.create_planar_2d"),
     "_ChargeGramHMatrix.ndof": ("hacapk.charge_gram.info",),
+    "_ChargeGramHMatrix.set_image_rotations": ("hacapk.charge_gram.set_image_rotations",),
+    "_ChargeGramHMatrix.build_hmatrix": ("hacapk.charge_gram.build",),
     "_ChargeGramHMatrix.matvec": ("hacapk.charge_gram.matvec",),
     "_ChargeGramHMatrix.matvec_transpose": ("hacapk.charge_gram.matvec_transpose",),
     "_ChargeGramHMatrix.matvec_sym": ("hacapk.charge_gram.matvec_sym",),

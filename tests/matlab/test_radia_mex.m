@@ -1239,6 +1239,28 @@ verifyEqual(testCase, highOrder.matvec(x), highOrderGram * x, "AbsTol", 2e-12);
 clear localCleanup highOrderCleanup
 end
 
+function testHACApKCyclicImageRotations(testCase)
+cellVerts = [0, 0, 0; 0.7, 0.1, 0; 0.1, 0.8, 0.05; 0.05, 0.2, 0.9];
+exponents = int32([0, 0, 0; 1, 0, 0; 0, 1, 0; 0, 0, 1]);
+a = 0.5854101966249685;
+b = 0.1381966011250105;
+tetPoints = [a, b, b; b, a, b; b, b, a; b, b, b];
+tetWeights = ones(4, 1) / 24;
+trianglePoints = [1/6, 1/6; 2/3, 1/6; 1/6, 2/3];
+triangleWeights = ones(3, 1) / 6;
+manager = radia.HACApKChargeGram.from_high_order_tet( ...
+    cellVerts, zeros(0,3), 1, int32(zeros(4,1)), int32(zeros(4,1)), ...
+    exponents, tetPoints, tetWeights, trianglePoints, triangleWeights, ...
+    InnerTetPoints=tetPoints, InnerTetWeights=tetWeights, ...
+    InnerTrianglePoints=trianglePoints, InnerTriangleWeights=triangleWeights, ...
+    ImageMasks=int32([0; 0; 0]), ImageSigns=ones(3,1), Build=false);
+cleanup = onCleanup(@() delete(manager));
+manager.setImageRotations([pi/2; pi; 3*pi/2]);
+verifyTrue(testCase, manager.build(AcaEps=1e-12, LeafSize=8));
+verifyTrue(testCase, all(isfinite(manager.matvec(ones(4,1)))));
+clear cleanup
+end
+
 function testHACApKCurvedHighOrderTetReferenceDensity(testCase)
 vertices = [0, 0, 0; 2, 0, 0; 0, 3, 0; 0, 0, 4];
 cellNodes = [vertices; ...

@@ -1500,7 +1500,8 @@ mxArray* Commands() {
         "hacapk.charge_gram.create_wedge",
         "hacapk.charge_gram.create_planar_2d",
         "hacapk.charge_gram.create_curved_polytope",
-        "hacapk.charge_gram.destroy", "hacapk.charge_gram.build",
+        "hacapk.charge_gram.destroy", "hacapk.charge_gram.set_image_rotations",
+        "hacapk.charge_gram.build",
         "hacapk.charge_gram.matvec", "hacapk.charge_gram.matvec_transpose",
         "hacapk.charge_gram.matvec_sym", "hacapk.charge_gram.entry",
         "hacapk.charge_gram.hex_volume_self_block_directional_derivative",
@@ -6313,6 +6314,15 @@ void ChargeGramBuild(int nlhs, mxArray* plhs[], int nrhs,
     plhs[0] = mxCreateLogicalScalar(holder.manager->BuildHMatrix(params));
 }
 
+void ChargeGramSetImageRotations(int nlhs, mxArray*[], int nrhs,
+                                 const mxArray* prhs[]) {
+    CheckArity(nrhs, 3, nlhs, 0,
+        "radia_mex('hacapk.charge_gram.set_image_rotations', handle, angles_rad)");
+    ChargeGramHandle& holder = ChargeGram(Handle(prhs[1]));
+    holder.manager->SetImageRotations(
+        RealVector(prhs[2], "image_rot_angle"));
+}
+
 void ChargeGramMatVec(const std::string& command, int nlhs, mxArray* plhs[],
                       int nrhs, const mxArray* prhs[]) {
     CheckArity(nrhs, 3, nlhs, 1,
@@ -10797,8 +10807,13 @@ void Dispatch(const std::string& command, int nlhs, mxArray* plhs[], int nrhs,
         CheckArity(nrhs, 2, nlhs, 0,
                    "radia_mex('hacapk.charge_gram.destroy', handle)");
         DestroyChargeGram(Handle(prhs[1]));
-    } else if (command == "hacapk.charge_gram.build")
-        ChargeGramBuild(nlhs, plhs, nrhs, prhs);
+    } else if (command == "hacapk.charge_gram.set_image_rotations" ||
+               command == "hacapk.charge_gram.build") {
+        if (command == "hacapk.charge_gram.set_image_rotations")
+            ChargeGramSetImageRotations(nlhs, plhs, nrhs, prhs);
+        else
+            ChargeGramBuild(nlhs, plhs, nrhs, prhs);
+    }
     else if (command == "hacapk.charge_gram.matvec" ||
              command == "hacapk.charge_gram.matvec_transpose" ||
              command == "hacapk.charge_gram.matvec_sym")

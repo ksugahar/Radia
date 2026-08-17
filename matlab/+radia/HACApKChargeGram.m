@@ -40,6 +40,17 @@ classdef HACApKChargeGram < handle
             end
         end
 
+        function setImageRotations(obj, anglesRad)
+            arguments
+                obj
+                anglesRad (:,1) double
+            end
+            obj.assertAlive();
+            radia.internal.callMex( ...
+                'hacapk.charge_gram.set_image_rotations', ...
+                obj.NativeHandle, anglesRad);
+        end
+
         function y = matvec(obj, x)
             y = obj.apply('hacapk.charge_gram.matvec', x);
         end
