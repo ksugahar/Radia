@@ -13,6 +13,7 @@
  * content so nothing silently disappears.
  */
 #include "mtef_svg.h"
+#include "math_layout.h"
 #include "mtef_parser.h"
 #include "tex_parser.h"
 
@@ -30,37 +31,6 @@
 
 namespace mtef {
 namespace {
-
-/* ------------------------------------------------------------------ */
-/* Display list                                                        */
-/* ------------------------------------------------------------------ */
-struct Glyph {
-    double x = 0, y = 0;        /* y is the baseline */
-    double size = 0;            /* pt */
-    bool italic = false;
-    bool symbol = false;        /* pick the symbol font family */
-    double stretchY = 1.0;      /* vertical scale for grown fences */
-    std::string text;           /* UTF-8 */
-};
-
-struct Rule { double x = 0, y = 0, w = 0, h = 0; };   /* y is the TOP edge */
-
-struct Layout {
-    double w = 0, asc = 0, desc = 0;
-    std::vector<Glyph> glyphs;
-    std::vector<Rule> rules;
-
-    void translate(double dx, double dy) {
-        for (auto& g : glyphs) { g.x += dx; g.y += dy; }
-        for (auto& r : rules)  { r.x += dx; r.y += dy; }
-    }
-    void absorb(const Layout& other, double dx, double dy) {
-        Layout t = other;
-        t.translate(dx, dy);
-        glyphs.insert(glyphs.end(), t.glyphs.begin(), t.glyphs.end());
-        rules.insert(rules.end(), t.rules.begin(), t.rules.end());
-    }
-};
 
 /* ------------------------------------------------------------------ */
 /* UTF-8 / UTF-16 helpers                                              */
@@ -706,9 +676,13 @@ private:
 /* ------------------------------------------------------------------ */
 /* Public API                                                          */
 /* ------------------------------------------------------------------ */
-std::string render_svg(const LineNode& root, const SvgStyle& style) {
+Layout layout_math(const LineNode& root, const SvgStyle& style) {
     Renderer r(style);
-    Layout L = r.run(root);
+    return r.run(root);
+}
+
+std::string render_svg(const LineNode& root, const SvgStyle& style) {
+    Layout L = layout_math(root, style);
 
     const double pad = style.padding;
     const double width = L.w + 2 * pad;
