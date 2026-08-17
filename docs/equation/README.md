@@ -7,7 +7,8 @@ an SVG picture, and a layout an editor can draw with and position a caret from.
 ```python
 import radia.equation as eq
 
-eq.tex_to_omml(r"\frac{a+b}{c}")     # Office-native math, editable in Word
+eq.tex_to_omml(r"\frac{a+b}{c}")     # Office-native math, for a .docx / .pptx
+eq.tex_to_rtf(r"\frac{a+b}{c}")      # the same equation, for the clipboard
 eq.tex_to_svg(r"\frac{a+b}{c}")      # a picture
 eq.markdown_to_docx(open("note.md", encoding="utf-8").read(), "note.docx")
 ```
@@ -19,12 +20,38 @@ tools edit it, it follows the theme font and colour, it scales with the text,
 and the reader needs nothing installed. A picture is none of those things, and
 an OLE object needs Equation Editor on the reader's machine.
 
+## Two spellings, one walk
+
+Office writes the same structure two ways. In a file it is OMML,
+`<m:f><m:num/><m:den/></m:f>`; on the clipboard it is RTF, where the element
+names are control words:
+
+```
+{\mf{\mfPr{\mctrlPr}}{\mnum{\mr\mscr0\msty2 a}}{\mden{\mr\mscr0\msty2 b}}}
+```
+
+That correspondence was measured -- by copying each construct out of Word and
+reading the clipboard -- rather than inferred, and because the structures
+coincide the interesting part is written once in `math_writer.cpp`. Each output
+supplies only a `MathSyntax` saying how to spell an element, a property and a
+run. Duplicating the walk would guarantee the two drift apart, and the walk is
+where the judgement lives: MTEF stores a script's base as the *preceding*
+sibling and a big operator's operand as the *following* run, so both have to be
+absorbed or Office draws a placeholder box.
+
+`validation_test/equation/test_paste_into_word.py` is the acceptance test:
+clipboard -> Word -> save -> read back `<m:oMath>`. An equation that arrives as
+text runs is a picture at best, and no amount of correct-looking markup would
+show that.
+
 ## Layout
 
 | | |
 |---|---|
 | `src/ext/equation/tex_parser.cpp` | LaTeX → node tree |
-| `src/ext/equation/mtef_omml.cpp` | node tree → OMML |
+| `src/ext/equation/math_writer.cpp` | the tree walk every Office output shares |
+| `src/ext/equation/mtef_omml.cpp` | OMML spelling (inside a .docx / .pptx) |
+| `src/ext/equation/mtef_rtf.cpp` | RTF spelling (on the clipboard) |
 | `src/ext/equation/mtef_svg.cpp` | node tree → layout → SVG |
 | `src/ext/equation/eq_edit.cpp` | the editing model |
 | `src/ext/equation/md_doc.cpp` | which spans of a `.md` are math |
