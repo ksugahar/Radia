@@ -30,7 +30,32 @@
 #include <cstdint>
 #include <string>
 
+#ifdef _WIN32
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#ifndef NOMINMAX
+#define NOMINMAX      /* windows.h defines min/max as macros and breaks std:: */
+#endif
+#include <windows.h>
+#endif
+
 namespace mtef {
+
+#ifdef _WIN32
+/* Draw the display list onto a device context.
+ *
+ * `units_per_pt` says how many device units go to a point -- a metafile records
+ * at its own fixed rate, a bitmap at that times its scale, and a window passes
+ * its DPI over 72 to get pixels.  The equation's left edge, on its baseline,
+ * lands at (originX, originY).
+ *
+ * This is the routine the metafile and bitmap writers use, so a window and a
+ * paste are drawn by the same code and cannot disagree about the equation. */
+void draw_layout(HDC hdc, const Layout& layout, const SvgStyle& style,
+                 double units_per_pt, int originX, int originY,
+                 COLORREF colour);
+#endif
 
 /* An enhanced metafile of the equation, as bytes.  Empty on failure. */
 std::string render_emf(const Layout& layout, const SvgStyle& style);
