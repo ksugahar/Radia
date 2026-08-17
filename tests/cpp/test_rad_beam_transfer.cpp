@@ -223,9 +223,9 @@ double Poisson(std::size_t row, std::size_t column) {
 
 void TestCanonicalHamiltonianJet() {
     TransverseMagneticMultipoleExpansion expansion;
-    expansion.order = 3;
-    expansion.normal_t_per_m_power = {0.2, 2.4, 5.0, -7.0};
-    expansion.skew_t_per_m_power = {0.0, -0.6, 1.5, 2.0};
+    expansion.order = 4;
+    expansion.normal_t_per_m_power = {0.2, 2.4, 5.0, -7.0, 9.0};
+    expansion.skew_t_per_m_power = {0.0, -0.6, 1.5, 2.0, -3.0};
     const double rigidity = 3.0;
     const double beta = 0.8;
     const double curvature = 0.2 / rigidity;
@@ -246,6 +246,10 @@ void TestCanonicalHamiltonianJet() {
                  "canonical H3 sextupole xxx");
     RequireClose(jet.h4_per_m(0, 0, 0, 0), -14.0, 1.0e-14,
                  "canonical H4 octupole xxxx");
+    RequireClose(jet.h5_per_m(0, 0, 0, 0, 0), 72.0, 1.0e-13,
+                 "canonical H5 decapole xxxxx");
+    RequireClose(jet.h5_per_m(1, 1, 1, 1, 5), -9.0, 1.0e-14,
+                 "canonical H5 px4 delta");
     RequireClose(jet.dynamics.a_per_m(1, 5), curvature, 1.0e-15,
                  "canonical A horizontal dispersion");
     RequireClose(jet.dynamics.a_per_m(4, 0), curvature, 1.0e-15,
@@ -254,6 +258,24 @@ void TestCanonicalHamiltonianJet() {
                  1.0e-14, "canonical F2 sextupole xxx");
     RequireClose(jet.dynamics.f3_per_m(1, 0, 0, 0), 14.0,
                  1.0e-14, "canonical F3 octupole xxxx");
+    RequireClose(jet.dynamics.f4_per_m(1, 0, 0, 0, 0), -72.0,
+                 1.0e-13, "canonical F4 decapole xxxxx");
+
+    const double design_curvature = 0.25;
+    const HamiltonianJet6 geometric =
+        radia::beam::BuildCanonicalBodyHamiltonianJet(
+            expansion, rigidity, 1.0, 1.0, beta,
+            design_curvature);
+    RequireClose(geometric.reference_curvature_per_m,
+                 design_curvature, 1.0e-15,
+                 "design-orbit reference curvature");
+    RequireClose(geometric.field_curvature_per_m, curvature, 1.0e-15,
+                 "dipole field curvature");
+    RequireClose(geometric.h2_per_m(0, 5), -design_curvature,
+                 1.0e-15, "geometric H2 x delta");
+    RequireClose(geometric.h2_per_m(0, 0),
+                 design_curvature * curvature + 0.8, 1.0e-15,
+                 "independent geometric and field curvature H2 x x");
 
     // A^T J + J A = 0 and -J*Fn recovers the symmetric Hamiltonian.
     double linear_defect = 0.0;

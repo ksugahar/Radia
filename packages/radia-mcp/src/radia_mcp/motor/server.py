@@ -600,8 +600,7 @@ def motor_em_force_recipe(topic: str = "method_choice") -> str:
     """
     Practical NGSolve EM-force recipe for motor analysis.
 
-    Forwards to `differential_forms_em_force_recipe` (radia_mcp.
-    differential_forms.em_force_ngsolve_recipe_knowledge).  Tells you
+    Compatibility alias for `force_recipe` in `radia_mcp.force`.  Tells you
     which method to use for motor torque / Maxwell stress on stator
     teeth / Lorentz on coil ends / etc.
 
@@ -619,17 +618,16 @@ def motor_em_force_recipe(topic: str = "method_choice") -> str:
             "full_example"          - Working code template
             "all"                   - Everything
     """
-    # Lazy import to keep cross-package dependency soft
-    from radia_mcp.differential_forms.em_force_ngsolve_recipe_knowledge \
-        import get_em_force_ngsolve_recipe
-    return get_em_force_ngsolve_recipe(topic)
+    # Lazy import keeps the application server independent at import time.
+    from radia_mcp.force.knowledge import get_force_recipe
+    return get_force_recipe(topic)
 
 
 @mcp.tool()
 def motor_em_force_extras(topic: str = "all") -> str:
     """
-    Forward to `differential_forms_em_force_extras` -- advanced EM force
-    topics beyond the 7-method catalog.
+    Compatibility alias for `force_extras` in `radia_mcp.force` -- advanced
+    EM-force topics beyond the seven-method catalog.
 
     Args:
         topic: One of:
@@ -644,9 +642,8 @@ def motor_em_force_extras(topic: str = "all") -> str:
             "meissner_force"          - Type-I superconductor mu_r -> 0
             "all"                     - Everything
     """
-    from radia_mcp.differential_forms.em_force_extras_knowledge \
-        import get_em_force_extras
-    return get_em_force_extras(topic)
+    from radia_mcp.force.knowledge import get_force_extras
+    return get_force_extras(topic)
 
 
 @mcp.tool()
@@ -1403,6 +1400,38 @@ def motor_force_report_method_metadata_gate(
 
 
 @mcp.tool()
+def motor_force_torque_method_agreement_gate(
+    primary: dict,
+    independent: dict,
+    maximum_force_relative_difference: float = 5.0e-2,
+    maximum_torque_relative_difference: float = 5.0e-2,
+) -> str:
+    """Apply the shared ``radia_mcp.force`` agreement gate to motor results.
+
+    Motor-specific solvers remain responsible for rotor/stator selection and
+    periodic angle sampling.  The comparison of two result records, including
+    frame, pivot, force, and torque, is owned by the common Force layer.
+    """
+
+    from ..force.gates import force_torque_method_agreement_gate
+
+    try:
+        result = force_torque_method_agreement_gate(
+            primary,
+            independent,
+            maximum_force_relative_difference=maximum_force_relative_difference,
+            maximum_torque_relative_difference=maximum_torque_relative_difference,
+        )
+    except (TypeError, ValueError) as exc:
+        result = {
+            "policy": "radia.force-torque-method-agreement/v1",
+            "status": "invalid_input",
+            "error": str(exc),
+        }
+    return json.dumps(result, indent=2, sort_keys=True)
+
+
+@mcp.tool()
 def motor_phase_flux_park_alignment_gate(
     mechanical_angles_deg_json: str,
     phase_flux_wb_json: str,
@@ -1508,7 +1537,7 @@ register_status_tool(
     server_name='mcp-server-motor',
     description='Motor analysis: ONELAB transient, Hollaus effective material (lamination), Wakao autoencoder topology, Kaimori-Mifune Darwin TD',
     subpackage='radia_mcp.motor',
-    related_servers=["electromagnet", "topology-optimization", "magnetic-materials"],
+    related_servers=["electromagnet", "force", "topology-optimization", "magnetic-materials"],
     optional_deps=["radia", "ngsolve"],
 )
 

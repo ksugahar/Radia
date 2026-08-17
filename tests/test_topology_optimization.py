@@ -1120,6 +1120,27 @@ def test_hdiv_mmm_exact_beam_crosses_one_worsening_lego_state(monkeypatch):
     assert blocked.stop_reason=="exact_nonmonotone_beam_exhausted"
     assert [trial.depth for trial in blocked.exact_search_trace]==[1]
 
+    guard_calls=[]
+    guarded=topopt.grow_hdiv_mmm_by_superposition(
+        charge_gram=gram,fes=fes,inv_chi=.2,rhs=rhs,
+        response_matrix=response_row,active_elements=masks[0],
+        element_volumes=volumes,response_target=[current+1.0],
+        response_band=[1e-8],volume_max=float(np.sum(volumes))+1e-14,
+        fixed_active_elements=masks[0],
+        predecessor_elements=np.array([-1,0,1],dtype=np.int64),
+        max_iterations=1,solve_tolerance=1e-11,
+        exact_beam_width=2,exact_beam_depth=2,
+        exact_beam_barrier_fraction=0.25,
+        exact_response_validator=lambda raw,objective: (
+            guard_calls.append((raw.copy(),objective.copy())) or
+            bool(raw[0]>=current-1e-10)))
+    assert not guarded.converged and len(guarded.history)==0
+    assert guarded.stop_reason=="exact_nonmonotone_beam_exhausted"
+    assert guarded.exact_search_trace==()
+    assert len(guard_calls)>=2
+    np.testing.assert_allclose(guard_calls[0][0],[current],atol=3e-11)
+    np.testing.assert_allclose(guard_calls[0][1],[current],atol=3e-11)
+
     depth_one=topopt.grow_hdiv_mmm_by_superposition(
         charge_gram=gram,fes=fes,inv_chi=.2,rhs=rhs,
         response_matrix=response_row,active_elements=masks[0],

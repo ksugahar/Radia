@@ -87,7 +87,7 @@ TOPICS: dict[str, str] = {
     "superconducting": "Superconducting levitation: Meissner (unstable) vs flux pinning (stable 3D), HTS bulk YBCO, field-cooled vs ZFC, frozen-image force model, hysteresis",
     "diamagnetic": "Diamagnetic levitation: f = (chi/2mu0)*grad(B^2), pyrolytic graphite over PM array, Geim water/frog, the passive+static Earnshaw loophole",
     "earnshaw_stability": "Earnshaw's theorem + its 5 loopholes (diamagnet/eddy/feedback/spin/SC-pinning); Braunbek limit; stability stiffness matrix",
-    "force_computation": "Compute levitation force in Radia/PEEC/NGSolve: Maxwell stress tensor, virtual work dW/dz, time-average <J x B>",
+    "force_computation": "MagLev-specific lift conventions layered on shared radia_mcp.force methods: Maxwell stress, virtual work dW/dz, time-average <J x B>",
     "benchmarks": "Validation references: TEAM 28 electrodynamic levitation, jumping-ring analytic, sphere-over-coil, EML lift coefficient",
     "all": "Concatenation of every topic above",
 }
@@ -2205,8 +2205,18 @@ def get_knowledge(topic: str = "overview") -> str:
                  "loopholes", "braunbek"):
         return EARNSHAW_STABILITY
     if topic in ("force_computation", "force", "stress_tensor",
-                 "maxwell_stress", "virtual_work", "lorentz", "compute"):
-        return FORCE_COMPUTATION
+                  "maxwell_stress", "virtual_work", "lorentz", "compute"):
+        # General method selection and validation belong to radia_mcp.force;
+        # retain this document only for MagLev-specific lift conventions.
+        from radia_mcp.force.knowledge import (
+            get_force_knowledge,
+            get_force_recipe,
+        )
+        return "\n\n".join([
+            get_force_knowledge("maglev"),
+            get_force_recipe("method_choice"),
+            FORCE_COMPUTATION,
+        ])
     if topic in ("benchmarks", "benchmark", "validation", "team28",
                  "team_28", "team", "verify"):
         return BENCHMARKS
@@ -2229,7 +2239,7 @@ def get_knowledge(topic: str = "overview") -> str:
             SUPERCONDUCTING,
             DIAMAGNETIC,
             EARNSHAW_STABILITY,
-            FORCE_COMPUTATION,
+            get_knowledge("force_computation"),
             BENCHMARKS,
         ])
 

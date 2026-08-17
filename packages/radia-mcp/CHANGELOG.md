@@ -31,6 +31,58 @@ crystallized as its own package.
 - Added `slide_png_from_pdf`: rasterise a vector figure (CAD export, inherited
   manuscript drawing) so its authored width equals the slide paste width, and
   stamp the PNG DPI metadata so the audit above can recover it.
+- Added a 20 pt minimum for text baked into pasted presentation figures,
+  distinct from the existing 24 pt native-slide-text floor. The new
+  `presentation_check_embedded_figure_text_size` gate converts OCR word boxes
+  to displayed slide points, accounts for picture scaling and cropping, and
+  treats both sub-20 pt text and unresolved pictures as failures. Cloud OCR is
+  explicit opt-in; reproducible OCR manifests are also supported.
+- Added `presentation_replace_embedded_figure_text`, a non-destructive fallback
+  for source-less raster figures. It inpaints selected OCR word pixels and
+  restores them as editable `FIGURE_TEXT::` PowerPoint text at 20 pt or larger,
+  while preserving the original deck and writing a revised OCR manifest.
+  Candidate writing is blocked unless source unavailability is explicitly
+  confirmed; regenerating an available Python/MATLAB/vector source remains the
+  mandatory first choice.
+- Added a one-canonical-deck finalization policy for presentations. Useful
+  content from superseded drafts now moves into titled Q&A slides at the end
+  of the same PPTX; duplicate slides are consolidated and old deck copies are
+  deleted. `presentation_check_final_deck_directory` enforces one top-level
+  PPTX, no archived revision decks, and no exact duplicate slides.
+- Prohibited non-uniform stretching of figures and images in presentation
+  decks. Added the crop-aware `presentation_check_image_aspect_ratio` gate,
+  which compares each picture frame against the embedded source image and
+  treats any mismatch beyond OOXML rounding tolerance as a violation.
+- Corrected the presentation message hierarchy: slide titles use the shortest
+  practical concrete "target + viewpoint" phrase (for example, "Model 1
+  accuracy evaluation"), while the bottom line states what was learned from
+  the slide evidence. Added `presentation_check_slide_title_specificity` and
+  retained the former title-verb tool name as a compatibility alias. The title
+  check now uses a five-axis, 10-point acceptance rubric: concrete target,
+  explicit viewpoint, concise one-line form, no result claim, and deck-level
+  uniqueness.
+- Re-audited the 12-book writing corpus under the lab's `09_作文技術`
+  shelf and documented routing boundaries between paper, figure,
+  presentation, and grant guidance.  Added the Kinoshita goal-statement
+  workflow and `paper_writing_check_conclusion_first_use`, which distinguishes
+  legitimate new synthesis in a conclusion from technical terms, symbols,
+  numbers, and citations introduced there without body support.
+- Operationalized Miyano's Japanese slide-copy guidance with
+  `presentation_check_japanese_copy_style`: the PPTX audit now identifies
+  hard line breaks that split dependent phrases, estimates the body-text
+  nominal-ending ratio, and flags screen-only lead-ins such as
+  `そこで本研究では`.
+- Strengthened presentation message hierarchy: each content slide should state
+  its most important claim in the title and place a one-sentence interpretation
+  of the evidence above the footer.  Added
+  `presentation_check_slide_message_hierarchy` to audit both requirements.
+- Raised the presentation audience-content floor to 24 pt for body text,
+  captions, annotations, tables, and chart labels.  Titles remain 32 pt or
+  larger; footer, page-number, date, and source chrome are explicit exceptions.
+- Strengthened the 16:9 figure profiles: `beamer_169_full`,
+  `beamer_169_half`, and `presentation_slide` now use a 24 pt minimum for
+  labels, ticks, legends, panel labels, and annotations.  The export gate
+  rejects smaller per-artist overrides before saving.
 
 ## [1.4.36] - 2026-08-14
 

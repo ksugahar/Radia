@@ -2,6 +2,7 @@
 
 #include <core/taskmanager.hpp>
 #include <elementtransformation.hpp>
+#include <hcurlhofespace.hpp>
 #include <meshaccess.hpp>
 
 #include <algorithm>
@@ -69,17 +70,11 @@ Vector3 ProjectNormal(const Vector3& value, const Vector3& tangent,
                      name);
 }
 
-Vector3 TransportHorizontal(const Vector3& preferred,
-                            const Vector3& initial,
-                            const Vector3& tangent) {
+Vector3 SeedHorizontal(const Vector3& initial, const Vector3& tangent) {
     const auto projected_norm = [&](const Vector3& candidate) {
         return Norm(Subtract(
             candidate, Scale(tangent, Dot(candidate, tangent))));
     };
-    if (projected_norm(preferred) > 64.0 *
-            std::numeric_limits<double>::epsilon())
-        return ProjectNormal(preferred, tangent,
-                             "transported horizontal axis");
     if (projected_norm(initial) > 64.0 *
             std::numeric_limits<double>::epsilon())
         return ProjectNormal(initial, tangent,
@@ -98,6 +93,94 @@ Vector3 TransportHorizontal(const Vector3& preferred,
         });
     return ProjectNormal(*least_aligned, tangent,
                          "fallback horizontal axis");
+}
+
+Vector3 ReflectInPlane(const Vector3& value, const Vector3& plane_normal,
+                       double normal_squared) {
+    return Subtract(value, Scale(
+        plane_normal, 2.0 * Dot(plane_normal, value) / normal_squared));
+}
+
+Vector3 TransportHorizontalDoubleReflection(
+        const Vector3& previous_position, const Vector3& position,
+        const Vector3& previous_tangent, const Vector3& tangent,
+        const Vector3& previous_horizontal) {
+    // Wang, Juttler, Zheng, and Liu, ACM TOG 27(1), 2008,
+    // DOI 10.1145/1330511.1330513.  The two Householder reflections give a
+    // fourth-order discrete approximation of the Bishop/RMF initial-value
+    // problem without differentiating the tracked orbit.  In particular it
+    // remains defined through zero-curvature stations where Frenet framing
+    // has no normal.
+    const Vector3 chord = Subtract(position, previous_position);
+    const double chord_squared = Dot(chord, chord);
+    const double position_scale = std::max({
+        1.0, Norm(previous_position), Norm(position)});
+    const double chord_tolerance = 64.0 *
+        std::numeric_limits<double>::epsilon() * position_scale;
+    if (chord_squared <= chord_tolerance * chord_tolerance)
+        throw std::invalid_argument(
+            "consecutive reference positions must be distinct for the "
+            "Bishop double-reflection frame");
+
+    const Vector3 reflected_horizontal = ReflectInPlane(
+        previous_horizontal, chord, chord_squared);
+    const Vector3 reflected_tangent = ReflectInPlane(
+        previous_tangent, chord, chord_squared);
+    const Vector3 tangent_difference = Subtract(tangent, reflected_tangent);
+    const double difference_squared = Dot(
+        tangent_difference, tangent_difference);
+    Vector3 horizontal = reflected_horizontal;
+    const double tangent_tolerance = 64.0 *
+        std::numeric_limits<double>::epsilon();
+    if (difference_squared > tangent_tolerance * tangent_tolerance)
+        horizontal = ReflectInPlane(
+            reflected_horizontal, tangent_difference, difference_squared);
+
+    // Reflections preserve the ideal constraints.  Reproject only to remove
+    // floating-point drift accumulated along long RK trajectories.
+    return ProjectNormal(horizontal, tangent,
+                         "Bishop transported horizontal axis");
+}
+
+Vector3 RotateNormalAboutTangent(const Vector3& normal,
+                                 const Vector3& tangent, double angle) {
+    return ProjectNormal(Add(
+        Scale(normal, std::cos(angle)),
+        Scale(Cross(tangent, normal), std::sin(angle))),
+        tangent, "minimal-twist horizontal axis");
+}
+
+std::shared_ptr<ngcomp::GridFunctionCoefficientFunction>
+MagneticCoefficient(
+        const std::shared_ptr<ngcomp::GridFunction>& field,
+        GridFunctionMagneticInput magnetic_input) {
+    if (!field)
+        throw std::invalid_argument("field GridFunction must not be null");
+    const auto space = field->GetFESpace();
+    if (!space)
+        throw std::invalid_argument(
+            "beam GridFunction must own an NGSolve FESpace");
+
+    std::shared_ptr<ngcomp::GridFunctionCoefficientFunction> coefficient;
+    if (magnetic_input ==
+            GridFunctionMagneticInput::HCurlVectorPotential) {
+        if (!std::dynamic_pointer_cast<ngcomp::HCurlHighOrderFESpace>(space))
+            throw std::invalid_argument(
+                "HCurl vector-potential input requires a GridFunction on "
+                "an NGSolve HCurl space");
+        coefficient = field->Deriv();
+    } else {
+        coefficient = std::make_shared<
+            ngcomp::GridFunctionCoefficientFunction>(field);
+    }
+    if (!coefficient || coefficient->IsComplex())
+        throw std::invalid_argument(
+            "beam GridFunction magnetic input must be real-valued");
+    if (coefficient->Dimension() != 3)
+        throw std::invalid_argument(
+            "beam GridFunction magnetic input must produce exactly three "
+            "components");
+    return coefficient;
 }
 
 Vector3 EvaluateField(
@@ -341,7 +424,7 @@ GridFunctionTransferReport6 PropagateGridFunctionMultipoleMap(
         options.sample_radius_m <= 0.0)
         throw std::invalid_argument(
             "sample_radius_m must be finite and positive");
-    if (options.multipole_order < 1 || options.multipole_order > 3 ||
+    if (options.multipole_order < 1 || options.multipole_order > 4 ||
         options.maximum_map_order < 1 || options.maximum_map_order > 3 ||
         !Finite(options.initial_horizontal) ||
         !std::isfinite(options.curvature_sign) ||
@@ -363,36 +446,72 @@ GridFunctionTransferReport6 PropagateGridFunctionMultipoleMap(
     if (!mesh || mesh->GetDimension() != 3)
         throw std::invalid_argument(
             "beam GridFunction must belong to a three-dimensional mesh");
-    ngcomp::GridFunctionCoefficientFunction coefficient(field);
-    if (coefficient.IsComplex())
-        throw std::invalid_argument(
-            "beam GridFunction must be real-valued");
-    if (coefficient.Dimension() != 3)
-        throw std::invalid_argument(
-            "beam GridFunction must have exactly three field components");
+    auto coefficient = MagneticCoefficient(field, options.magnetic_input);
 
     GridFunctionTransferReport6 output;
+    output.magnetic_input = options.magnetic_input;
+    output.grid_function_space_class = field->GetFESpace()->GetClassName();
+    output.grid_function_space_order = field->GetFESpace()->GetOrder();
     output.magnetic_rigidity_t_m = options.magnetic_rigidity_t_m;
     output.sample_radius_m = options.sample_radius_m;
     output.multipole_order = options.multipole_order;
+    output.periodic_frame = options.periodic_frame;
     output.linearizations.reserve(count);
     std::vector<DynamicsSegment6> dynamics(count);
 
+    std::vector<Vector3> tangents(count);
+    std::vector<Vector3> horizontal(count);
+    std::vector<Vector3> vertical(count);
+    for (std::size_t index = 0; index < count; ++index) {
+        tangents[index] = Normalize(
+            reference_tangents[index], "reference tangent");
+        horizontal[index] = index == 0
+            ? SeedHorizontal(options.initial_horizontal, tangents[index])
+            : TransportHorizontalDoubleReflection(
+                reference_positions_m[index - 1],
+                reference_positions_m[index], tangents[index - 1],
+                tangents[index], horizontal[index - 1]);
+    }
+
+    if (options.periodic_frame) {
+        if (count < 3)
+            throw std::invalid_argument(
+                "periodic Bishop frame needs at least three reference "
+                "stations");
+        const Vector3 closure_horizontal =
+            TransportHorizontalDoubleReflection(
+                reference_positions_m.back(), reference_positions_m.front(),
+                tangents.back(), tangents.front(), horizontal.back());
+        const double correction = std::atan2(
+            Dot(tangents.front(), Cross(
+                closure_horizontal, horizontal.front())),
+            Dot(closure_horizontal, horizontal.front()));
+        std::vector<double> cumulative(count, 0.0);
+        for (std::size_t index = 1; index < count; ++index)
+            cumulative[index] = cumulative[index - 1] + Norm(Subtract(
+                reference_positions_m[index],
+                reference_positions_m[index - 1]));
+        const double total_length = cumulative.back() + Norm(Subtract(
+            reference_positions_m.front(), reference_positions_m.back()));
+        if (!std::isfinite(total_length) || total_length <= 0.0)
+            throw std::invalid_argument(
+                "periodic Bishop frame needs a nondegenerate closed path");
+        for (std::size_t index = 1; index < count; ++index)
+            horizontal[index] = RotateNormalAboutTangent(
+                horizontal[index], tangents[index],
+                correction * cumulative[index] / total_length);
+        output.frame_holonomy_correction_rad = correction;
+    }
+    for (std::size_t index = 0; index < count; ++index)
+        vertical[index] = Normalize(
+            Cross(tangents[index], horizontal[index]), "vertical axis");
+
     ngcore::RegionTaskManager task_manager;
     ngstd::LocalHeap local_heap(1 << 20, "radia_beam_gridfunction");
-    Vector3 previous_horizontal{};
     for (std::size_t index = 0; index < count; ++index) {
-        const Vector3 tangent = Normalize(
-            reference_tangents[index], "reference tangent");
-        const Vector3 horizontal = TransportHorizontal(
-            index == 0 ? options.initial_horizontal : previous_horizontal,
-            options.initial_horizontal, tangent);
-        const Vector3 vertical = Normalize(
-            Cross(tangent, horizontal), "vertical axis");
-        previous_horizontal = horizontal;
         output.linearizations.push_back(LinearizeSegment(
-            coefficient, mesh, reference_positions_m[index], tangent,
-            horizontal, vertical, options, local_heap, index));
+            *coefficient, mesh, reference_positions_m[index], tangents[index],
+            horizontal[index], vertical[index], options, local_heap, index));
 
         dynamics[index].length_m = segment_lengths_m[index];
         dynamics[index].jet = output.linearizations.back().dynamics_jet;
@@ -425,21 +544,16 @@ GridFunctionTransferReport6 PropagateGridFunctionLinearMap(
 }
 
 NGSolveGridFunctionField::NGSolveGridFunctionField(
-        std::shared_ptr<ngcomp::GridFunction> field)
-    : field_(std::move(field)) {
+        std::shared_ptr<ngcomp::GridFunction> field,
+        GridFunctionMagneticInput magnetic_input)
+    : field_(std::move(field)), magnetic_input_(magnetic_input) {
     if (!field_)
         throw std::invalid_argument("field GridFunction must not be null");
     const auto mesh = field_->GetMeshAccess();
     if (!mesh || mesh->GetDimension() != 3)
         throw std::invalid_argument(
             "beam GridFunction must belong to a three-dimensional mesh");
-    ngcomp::GridFunctionCoefficientFunction coefficient(field_);
-    if (coefficient.IsComplex())
-        throw std::invalid_argument(
-            "beam GridFunction must be real-valued");
-    if (coefficient.Dimension() != 3)
-        throw std::invalid_argument(
-            "beam GridFunction must have exactly three field components");
+    magnetic_coefficient_ = MagneticCoefficient(field_, magnetic_input_);
 }
 
 FieldSample NGSolveGridFunctionField::Evaluate(
@@ -455,10 +569,10 @@ FieldSample NGSolveGridFunctionField::Evaluate(
     if (!request.magnetic) return output;
     ngcore::RegionTaskManager task_manager;
     ngstd::LocalHeap local_heap(1 << 16, "radia_beam_direct_gridfunction");
-    ngcomp::GridFunctionCoefficientFunction coefficient(field_);
     const Vector3 point{position_m.x, position_m.y, position_m.z};
     const Vector3 field = EvaluateField(
-        coefficient, field_->GetMeshAccess(), point, local_heap, 0, 0);
+        *magnetic_coefficient_, field_->GetMeshAccess(), point,
+        local_heap, 0, 0);
     output.magnetic_t = {field[0], field[1], field[2]};
     return output;
 }
@@ -470,6 +584,11 @@ std::string NGSolveGridFunctionField::TypeName() const {
 const std::shared_ptr<ngcomp::GridFunction>&
 NGSolveGridFunctionField::GridFunction() const {
     return field_;
+}
+
+GridFunctionMagneticInput
+NGSolveGridFunctionField::MagneticInput() const {
+    return magnetic_input_;
 }
 
 }  // namespace radia::beam

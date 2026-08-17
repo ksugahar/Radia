@@ -1,13 +1,13 @@
 """Plan B T14: Title-body alignment check
 (presentation_title_body_alignment_check).
 
-各 slide で **タイトル行が本文の最強主張になっているか** を診断。
-既存 `check_slide_title_verb` は title が動詞形か (claim 形式か) のみ判定、
+各 slide で **タイトルの対象・観点が本文内容と対応しているか** を診断。
+`check_slide_title_specificity` は title 単体の具体性・簡潔性を判定し、
 本ツールは **title vs body の内容対応** を見る。
 
 検出する 3 軸 per slide:
   1. **title_body_overlap** — title token と body token の overlap
-  2. **title_summarizes_body** — title が body の要約文か (主張一致)
+  2. **title_summarizes_body** — title の対象・観点が body と一致するか
   3. **title_alone_understandable** — title 単独で意味が取れるか (5W1H)
 
 設計方針:
@@ -99,7 +99,7 @@ def _has_5w1h_signal(title: str) -> dict:
 
 
 def presentation_title_body_alignment_check(pptx_path: str) -> dict:
-    """Title が body の主張を要約しているかを per slide 診断。
+    """Title の対象・観点が body の内容と対応しているかを診断。
 
     Args:
         pptx_path: .pptx ファイルパス
@@ -196,7 +196,7 @@ def presentation_title_body_alignment_check(pptx_path: str) -> dict:
                 "title": title[:80],
                 "alignment_score": slide_score,
                 "reason": (
-                    "title が body の主張を反映していない"
+                    "title の対象・観点が body の内容と対応していない"
                     if summarize_status == "WEAK"
                     else "title 単独で意味が取れない"
                     if not title_understandable
@@ -230,7 +230,7 @@ def presentation_title_body_alignment_check(pptx_path: str) -> dict:
     if n_misaligned >= 1:
         comments.append(
             f"⚠ {n_misaligned} 枚で title-body alignment が weak。"
-            "聴衆は title だけ見て slide の主張を取るので、"
+            "聴衆は title から slide の対象・観点を取るので、"
             "title が body と一致しないと混乱を生む。"
         )
         for m in misaligned[:5]:
@@ -259,14 +259,14 @@ def presentation_title_body_alignment_check(pptx_path: str) -> dict:
 
     if score >= 8:
         comments.append(
-            f"Title-body alignment {score}/10 — title が body の主張を "
-            "良く要約している。聴衆の認知負荷低い。"
+            f"Title-body alignment {score}/10 — title の対象・観点が body と "
+            "良く対応している。聴衆の認知負荷低い。"
         )
 
     comments = comments[:8]
 
     hint = (
-        "既存 check_slide_title_verb は title の verb 形式のみ check、"
+        "check_slide_title_specificity は title 単体の具体性・簡潔性を check、"
         "T14 は title vs body 内容対応を見る点で相補。"
         "alignment_score 5+ 推奨、低い slide は title 書き直し。"
         "title だけ見て slide の核が分かるかが reviewer 視点。"
@@ -286,7 +286,7 @@ def presentation_title_body_alignment_check(pptx_path: str) -> dict:
             "Reynolds『Presentation Zen』Ch.6 (one slide = one message) + "
             "宮野『研究発表のためのスライドデザイン』S4 (slide structure) + "
             "Tufte『Cognitive Style of PowerPoint』(2003) — title-body coupling "
-            "の重要性。既存 check_slide_title_verb と相補。"
+            "の重要性。check_slide_title_specificity と相補。"
             "(presentation 2026-04 採用)。"
         ),
     }

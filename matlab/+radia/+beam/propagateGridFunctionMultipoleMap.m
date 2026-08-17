@@ -5,7 +5,10 @@ function result = propagateGridFunctionMultipoleMap( ...
 %   RESULT = radia.beam.propagateGridFunctionMultipoleMap(FIELD, LENGTHS,
 %   POSITIONS, TANGENTS, BRHO) evaluates the live real three-component
 %   NGSolve FIELD at the center and eight angles of a transverse ring at each
-%   reference station. The shared C++ kernel fits
+%   reference station. By default FIELD is required to be an HCurl(order=p)
+%   vector potential, and the samples are NGSolve's native curl(A). Direct-B
+%   GridFunctions require FieldRepresentation="magnetic_flux_density". The
+%   shared C++ kernel fits
 %
 %       By + i*Bx = sum(Cn*(x + i*y)^n)
 %
@@ -13,6 +16,9 @@ function result = propagateGridFunctionMultipoleMap( ...
 %   (x,px/p0,y,py/p0,sigma,delta), and propagates the region-attributed R/T/U
 %   map through MaximumMapOrder. Raw samples, transported frames, multipole
 %   coefficients, fit residuals, and local jets remain in RESULT.
+%   The frame is the fourth-order Bishop/RMF double-reflection construction.
+%   PeriodicFrame=true distributes its one-turn holonomy as a periodic
+%   constant-twist minimal-twist frame for a complete sampled closed loop.
 %
 %   This is a local source-free transverse body-field approximation with a
 %   piecewise-constant jet per supplied segment. It is not a complete curved-
@@ -31,8 +37,12 @@ arguments
     options.Names = strings(0,1)
     options.CurvatureSign (1,1) double {mustBeFinite} = 1
     options.GradientSign (1,1) double {mustBeFinite} = 1
+    options.PeriodicFrame (1,1) logical = false
+    options.FieldRepresentation (1,1) string {mustBeMember( ...
+        options.FieldRepresentation,["magnetic_flux_density", ...
+        "hcurl_vector_potential"])} = "hcurl_vector_potential"
     options.MultipoleOrder (1,1) double {mustBeInteger, ...
-        mustBeMember(options.MultipoleOrder,[1 2 3])} = 3
+        mustBeMember(options.MultipoleOrder,[1 2 3 4])} = 3
     options.MaximumMapOrder (1,1) double {mustBeInteger, ...
         mustBeMember(options.MaximumMapOrder,[1 2 3])} = 3
     options.MaximumStepM (1,1) double {mustBeFinite,mustBePositive} = 1e-3
@@ -80,6 +90,8 @@ if ~isempty(options.Names)
 end
 config.curvature_sign = options.CurvatureSign;
 config.gradient_sign = options.GradientSign;
+config.periodic_frame = options.PeriodicFrame;
+config.field_representation = char(options.FieldRepresentation);
 config.multipole_order = options.MultipoleOrder;
 config.maximum_map_order = options.MaximumMapOrder;
 config.maximum_step_m = options.MaximumStepM;

@@ -205,7 +205,7 @@ def paper_figure_quality_rules(query: str = "all") -> str:
     Returns text on what 'axes-area / total-area fraction' is, why the
     paper-quality floor is around 0.78, what aspects to watch (units in
     parentheses not brackets, no in-figure title, TrueType font embed
-    pdf.fonttype=42, 8-9 pt font for IEEE/IEEJ figure text), and how
+    pdf.fonttype=42, 10 pt minimum visible text for IEEE/IEEJ figures), and how
     auto_tighten + emit_paper_figure compose to make the workflow
     refuse to ship a wasteful figure.
 
@@ -218,7 +218,8 @@ def paper_figure_quality_rules(query: str = "all") -> str:
         'font_embedding'  - Type 42 requirement
         'multipanel'      - 1x2 / 2x1 / 2x2 layout tactics
         'side_by_side'    - two figures in 8 cm -> each <= 4 cm,
-                            font 10 pt, legend 8-9 pt, no overlap
+                            every visible font >= 10 pt, no overlap
+        'slide_169'       - author at 24 pt; actual slide display >= 20 pt
         'tikz_export'     - MATLAB -> matlab2tikz -> LaTeX TikZ:
                             preferred over PDF includegraphics for
                             LaTeX papers (font / math matches body)
@@ -293,22 +294,36 @@ MATLAB (authored OVERSIZED, then \\includegraphics-DOWNSCALED):
 LEGEND / TICK FONT:
   legend = 10 pt (same as body, never shrunk -- legends are
                   data, not afterthoughts)
-  tick   = 9  pt (one pt below body; IEEE / IEEJ convention)
+  tick   = 10 pt (the 10 pt floor applies to every visible text item)
 
 This rule pins every paper_figure profile's font_pt to 10.0 regardless
 of column width.  If you find yourself wanting smaller text "to make
 the axes fit", the answer is to use a wider column or simplify the
 plot -- never to shrink font below 10 pt.
 
-EXCEPTION -- two panels side-by-side in 8 cm (each ~4 cm wide):
-  When you place TWO graphs in an 8 cm width (1 row x 2 cols, each
-  sub-panel <= 4 cm), the BODY / AXIS font stays 10 pt, but the
-  LEGEND drops to 8-9 pt.  A 10 pt legend physically crowds a 4 cm
-  panel; 8-9 pt keeps it readable without stealing data area.  This
-  is the ONE sanctioned place to shrink the legend below body size.
-  The legend must still NOT overlap the graph (see no_legend_overlap).
-  See the `side_by_side` topic and the
-  'digest_double_column_side_by_side' profile.
+There is no small-legend exception. For two panels side-by-side in an
+8 cm figure, legends and annotations also remain >=10 pt. If they do
+not fit, simplify the content, use direct labels, or allocate more width.
+""",
+        "slide_169": """\
+[slide_169]
+
+SUGAHARA LAB 16:9 SLIDE FIGURE RULE:
+
+  Author at 24 pt where practical; every font must be at least 20 pt
+  after scaling to the actual pasted width.
+
+This floor applies to axis labels, tick labels, legends, panel labels, and
+free annotations.  Use `beamer_169_full`, `beamer_169_half`, or the
+`presentation_slide` style profile.  These profiles set every default to
+24 pt. `emit_paper_figure(..., embed_width_cm=<actual pasted width>)`
+audits every text artist after scaling, so a 24 pt source that becomes
+19 pt in PowerPoint is rejected before save.
+
+If the 20 pt displayed floor does not fit, simplify the plot, reduce the
+number of panels, or allocate more slide area.
+The no-in-figure-title rule still applies: the title belongs in the slide
+title band or Beamer frame title.
 """,
         "font_family": """\
 [font_family]
@@ -597,9 +612,8 @@ GEOMETRY:
 FONTS:
   - body / axis label / tick: 10 pt  (the absolute lab font rule -- do
                               NOT shrink it for the narrow 4 cm panel)
-  - legend                  : 8-9 pt (REDUCED from 10 pt; a 10 pt
-                              legend crowds a 4 cm panel).  This is the
-                              ONE sanctioned exception to "legend = body".
+  - legend / annotation      : >= 10 pt. There is no small-text exception.
+                              Simplify or move content if it does not fit.
 
 LEGEND PLACEMENT:
   - the legend MUST NOT overlap the graph (curves / markers).
@@ -616,12 +630,12 @@ HOW TO BUILD IT:
                             panel_labels=True)
   for ax in axes.ravel():
       ax.legend(loc=find_best_legend_loc(ax)[0], frameon=False,
-                fontsize=8)            # 8-9 pt, not 10
+                fontsize=10)
   emit_paper_figure(fig, 'out', 'ieee_double_column', on_fail='raise')
 
 Or use the size/font recipe directly:
   figure_size_for_target('digest_double_column_side_by_side')
-  # -> 8 cm wide, font 10 pt, legend 8-9 pt
+  # -> 8 cm wide, every visible font >= 10 pt
 """,
         "tikz_export": """\
 [tikz_export]
@@ -684,9 +698,8 @@ GETTING THE EXACT LAB-PROFILE RECIPE:
         -> double-column (181 mm) wide figure.
 
     figure_matlab2tikz_recipe(target='digest_double_column_side_by_side')
-        -> two-panel-in-8cm digest layout; remember to clip the
-           legend font down to 8-9 pt for 4 cm sub-panels
-           (see `side_by_side` topic).
+        -> two-panel-in-8cm digest layout; keep legend and annotation
+           text at least 10 pt (see `side_by_side` topic).
 
 PRE-FLIGHT one-time install:
 
@@ -1088,7 +1101,7 @@ TikZ; figure_tikz_recipe has no auto-layout).
     digraph G {
       rankdir=TB;                                  // TB top-down | LR left-right
       node [shape=box, style=rounded, fontname="Times", fontsize=10];
-      edge [fontname="Times", fontsize=9];
+      edge [fontname="Times", fontsize=10];
       start [shape=stadium, label="start"];
       read  [shape=parallelogram, label="read .vol"];
       asm   [label="assemble DtN"];

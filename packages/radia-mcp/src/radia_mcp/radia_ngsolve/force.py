@@ -3182,11 +3182,9 @@ def air_gap_maxwell_pressure(B_T, mu=MU0):
     estimate before running a full weighted-stress FEM extraction.
     """
 
-    B = float(B_T)
-    mu = float(mu)
-    if mu <= 0.0:
-        raise ValueError("mu must be > 0")
-    return B * B / (2.0 * mu)
+    from radia.force import air_gap_maxwell_pressure as pressure
+
+    return pressure(B_T, permeability_H_per_m=mu)
 
 
 def air_gap_holding_force(B_T, area_m2, faces=1, mu=MU0):
@@ -3197,13 +3195,14 @@ def air_gap_holding_force(B_T, area_m2, faces=1, mu=MU0):
     gaps; keep ``faces=1`` for a single plunger or one pole face.
     """
 
-    area = float(area_m2)
-    faces = int(faces)
-    if area < 0.0:
-        raise ValueError("area_m2 must be >= 0")
-    if faces < 1:
-        raise ValueError("faces must be >= 1")
-    return air_gap_maxwell_pressure(B_T, mu=mu) * area * faces
+    from radia.force import air_gap_holding_force as holding_force
+
+    return holding_force(
+        B_T,
+        area_m2,
+        faces=faces,
+        permeability_H_per_m=mu,
+    )
 
 
 def air_gap_force_summary(B_T, area_m2, faces=1, mu=MU0):
@@ -3237,10 +3236,13 @@ def air_gap_shear_stress(B_radial_T, B_tangential_T, mu=MU0):
     torque estimates and by FE Maxwell-stress post-processing.
     """
 
-    mu = float(mu)
-    if mu <= 0.0:
-        raise ValueError("mu must be > 0")
-    return float(B_radial_T) * float(B_tangential_T) / mu
+    from radia.force import air_gap_shear_stress as shear_stress
+
+    return shear_stress(
+        B_radial_T,
+        B_tangential_T,
+        permeability_H_per_m=mu,
+    )
 
 
 def air_gap_shear_torque(
@@ -3259,17 +3261,16 @@ def air_gap_shear_torque(
     by the sector count.
     """
 
-    radius = float(radius_m)
-    length = float(axial_length_m)
-    angle = float(angle_rad)
-    if radius < 0.0:
-        raise ValueError("radius_m must be >= 0")
-    if length < 0.0:
-        raise ValueError("axial_length_m must be >= 0")
-    if angle < 0.0:
-        raise ValueError("angle_rad must be >= 0")
-    shear = air_gap_shear_stress(B_radial_T, B_tangential_T, mu=mu)
-    return shear * radius * radius * angle * length
+    from radia.force import air_gap_shear_torque as shear_torque
+
+    return shear_torque(
+        B_radial_T,
+        B_tangential_T,
+        radius_m,
+        axial_length_m=axial_length_m,
+        angle_rad=angle_rad,
+        permeability_H_per_m=mu,
+    )
 
 
 def air_gap_shear_torque_summary(
@@ -3320,102 +3321,22 @@ def air_gap_shear_torque_from_angle_samples(
     period_rad=2.0 * math.pi,
     mu=MU0,
 ):
-    """Integrate sampled air-gap Maxwell shear stress into machine torque.
+    """Compatibility adapter to the canonical :mod:`radia.force` kernel."""
 
-    Electric-machine solvers often export air-gap samples around a cylindrical
-    contour.  For each angle sample,
+    from radia.force import air_gap_shear_torque_from_angle_samples as integrate
 
-        tau(theta) = Br(theta) Bt(theta) / mu
-
-    and the torque is
-
-        T = r^2 L integral tau(theta) dtheta.
-
-    If ``periodic=True`` the last segment wraps from the last sample to the
-    first sample plus ``period_rad``; omit a duplicate endpoint.  If
-    ``periodic=False`` only the provided angular span is integrated.  The
-    returned rows are segment contributions, useful for teaching and for
-    checking sector-model scaling before comparing whole-machine torque.
-    """
-
-    angles = [float(value) for value in angles_rad]
-    br = [float(value) for value in B_radial_T]
-    bt = [float(value) for value in B_tangential_T]
-    if len(angles) != len(br) or len(angles) != len(bt):
-        raise ValueError("angles_rad, B_radial_T, and B_tangential_T must have the same length")
-    if len(angles) < 2:
-        raise ValueError("at least two angle samples are required")
-    if any(angles[i + 1] <= angles[i] for i in range(len(angles) - 1)):
-        raise ValueError("angles_rad must be strictly increasing")
-    radius = float(radius_m)
-    length = float(axial_length_m)
-    if radius < 0.0:
-        raise ValueError("radius_m must be >= 0")
-    if length < 0.0:
-        raise ValueError("axial_length_m must be >= 0")
-    mu = float(mu)
-    if mu <= 0.0:
-        raise ValueError("mu must be > 0")
-    period = float(period_rad)
-    if periodic and period <= 0.0:
-        raise ValueError("period_rad must be > 0")
-
-    shear = [
-        air_gap_shear_stress(bri, bti, mu=mu)
-        for bri, bti in zip(br, bt)
-    ]
-    n = len(angles)
-    segment_count = n if periodic else n - 1
-    rows = []
-    integral_shear = 0.0
-    for i in range(segment_count):
-        j = (i + 1) % n
-        theta0 = angles[i]
-        theta1 = angles[j]
-        if periodic and j == 0:
-            theta1 += period
-        dtheta = theta1 - theta0
-        if dtheta <= 0.0:
-            raise ValueError("angle segment width must be > 0")
-        shear_avg = 0.5 * (shear[i] + shear[j])
-        tangential_force = shear_avg * radius * length * dtheta
-        torque = tangential_force * radius
-        integral_shear += shear_avg * dtheta
-        rows.append({
-            "segment_index": i + 1,
-            "angle_start_rad": theta0,
-            "angle_end_rad": theta1,
-            "angle_width_rad": dtheta,
-            "B_radial_start_T": br[i],
-            "B_radial_end_T": br[j],
-            "B_tangential_start_T": bt[i],
-            "B_tangential_end_T": bt[j],
-            "shear_start_Pa": shear[i],
-            "shear_end_Pa": shear[j],
-            "shear_average_Pa": shear_avg,
-            "tangential_force_N": tangential_force,
-            "torque_Nm": torque,
-        })
-
-    torque_total = radius * radius * length * integral_shear
-    force_total = radius * length * integral_shear
-    integrated_angle = sum(row["angle_width_rad"] for row in rows)
-    return {
-        "n_samples": n,
-        "n_segments": len(rows),
-        "periodic": bool(periodic),
-        "period_rad": period,
-        "radius_m": radius,
-        "axial_length_m": length,
-        "mu": mu,
-        "integrated_angle_rad": integrated_angle,
-        "integral_shear_dtheta_Pa_rad": integral_shear,
-        "average_shear_stress_Pa": integral_shear / integrated_angle if integrated_angle > 0.0 else math.nan,
-        "tangential_force_N": force_total,
-        "torque_Nm": torque_total,
-        "torque_per_axial_length_N": torque_total / length if length > 0.0 else math.inf,
-        "rows": rows,
-    }
+    result = integrate(
+        angles_rad,
+        B_radial_T,
+        B_tangential_T,
+        radius_m,
+        axial_length_m=axial_length_m,
+        periodic=periodic,
+        period_rad=period_rad,
+        permeability_H_per_m=mu,
+    )
+    result["mu"] = result["permeability_H_per_m"]
+    return result
 
 
 def coenergy_torque_from_angle_samples(
@@ -3450,6 +3371,15 @@ def coenergy_torque_from_angle_samples(
     if periodic and period <= 0.0:
         raise ValueError("period_rad must be > 0")
 
+    from radia.force import coenergy_torque_from_angle_samples as differentiate
+
+    torque_values = differentiate(
+        angles,
+        values,
+        periodic=periodic,
+        period_rad=period,
+    )
+
     rows = []
     n = len(angles)
     for i, (angle, value) in enumerate(zip(angles, values)):
@@ -3482,7 +3412,7 @@ def coenergy_torque_from_angle_samples(
         denom = angle_plus - angle_minus
         if denom <= 0.0:
             raise ValueError("finite-difference angle denominator must be > 0")
-        torque = (values[ip] - values[im]) / denom
+        torque = float(torque_values[i])
         rows.append({
             "index": i + 1,
             "angle_rad": angle,
@@ -3689,6 +3619,13 @@ def virtual_work_force_from_displacement_samples(
         raise ValueError("positions_m must be strictly increasing")
     normalized_kind, sign, identity = _virtual_work_energy_sign(energy_kind)
 
+    from radia.force import virtual_work_force_from_displacement_samples as differentiate
+
+    force_values = differentiate(
+        positions,
+        values,
+        energy_kind=normalized_kind,
+    )
     rows = []
     n = len(positions)
     for i, (position, value) in enumerate(zip(positions, values)):
@@ -3705,8 +3642,8 @@ def virtual_work_force_from_displacement_samples(
         denom = positions[ip] - positions[im]
         if denom <= 0.0:
             raise ValueError("finite-difference displacement denominator must be > 0")
-        derivative = (values[ip] - values[im]) / denom
-        force = sign * derivative
+        force = float(force_values[i])
+        derivative = force / sign
         rows.append({
             "index": i + 1,
             "position_m": position,

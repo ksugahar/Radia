@@ -1,5 +1,101 @@
 # FFAG HDiv-MMM topology-optimization validation
 
+## EarlyTimes C-type A/B route convergence
+
+`validation_earlytimes_ctype_ab.py` isolates the field-route side of the
+EarlyTimes error triangle before any Lie map is built.  It solves a compact
+C-type magnet and first evaluates three representations at identical global
+aperture points: the `HDiv(order=4)` B GridFunction, NGSolve-native
+`curl(HCurl(order=5) A)`, and the independent axial-reflection-symmetrised
+HDiv-MMM plus `rad.Fld` B source.  `curl(A)` is a boundary-consistency
+diagnostic only; it is not substituted into either the canonical A Hamiltonian
+or the independent B-RK route.  Only after this three-way field comparison is
+acceptable may the script proceed to A-RK/B-RK or optional A-RK/Lie studies.
+
+Both HDiv-MMM source fields are analytic.  `--a-construction exact` (the
+default) integrates the equivalent-current identity
+`A = mu0/(4 pi) [INT (curl M)/R dV + INT (M x n)/R dS]` in closed form, matching
+the analytic charge kernels the B route already used; `--a-construction
+quadrature` restores the point-dipole cloud that the recorded q14/q20/q24
+studies used.  The distinction is decisive rather than cosmetic here: the beam
+tube stands 1.5 mm from 30 mm iron elements, so a point-dipole cloud is deep in
+their near field.  On the same 45-point set the quadrature source left
+`curl(A) - source B` at 1.1e-2 T even at order 24, while the analytic
+construction reaches 3.6e-7 T, which is the probe's own central-difference
+truncation.  With the source exact, the residual gate error is the loft-chain
+FE representation of each field, which is what the mesh/order settings control.
+
+That representation error now converges as a finite-element error should.  On
+the same 45-point set, with `HCurl(order=5)` A and `HDiv(order=4)` B, the
+measured gate is
+
+| beam loft chain | HEX | HDiv B - source B | curl(HCurl A) - source B |
+|---|---|---|---|
+| 1 layer, 5.0 mm, 1 subdivision | 128 | 5.26e-5 T | 1.18e-5 T |
+| 3 layers, 5.0 mm, 1 subdivision | 384 | 1.40e-6 T | 2.31e-6 T |
+| 5 layers, 2.5 mm, 2 subdivisions | 2560 | 1.53e-7 T | 5.06e-8 T |
+
+against a peak source field of 0.390 T, i.e. 3.9e-7 and 1.3e-7 relative on the
+refined chain.  Raising `--curve-order` from 2 to 4 changes neither column at
+all: this orbit bends by roughly 1e-7 m of sagitta per longitudinal cell, so
+geometric order is not the limit here.  The finite-difference curl of the raw
+exact A source stays at 1.43e-6 T at a 4e-5 m step and 3.58e-7 T at 2e-5 m --
+exactly second order, and independent of the beam mesh -- confirming that the
+probe, not the source, sets that floor.  On the refined chain the projected
+fields already agree more closely than that probe can resolve.
+
+The three-way record retains every sampled point, all three Cartesian B
+arrays, all pairwise differences, componentwise maxima, and maximum vector
+norms.  The default 5-by-3-by-3 set spans longitudinal position, both x sides,
+and the lower/median/upper y layers.  The parity-conditioned B
+`CoefficientFunction` is also used to recover the design orbit and report the
+source-to-HDiv projection error; the raw unsymmetrised source remains a
+separate symmetry diagnostic.
+
+The durable result JSON separates the zero-orbit A/B bias from the centered
+first-order transfer-matrix difference for `x,px,y,py,delta`.  It also records
+transverse derivative-step convergence, aperture-amplitude convergence, source
+quadrature statistics, source-to-HDiv projection discrepancy, gauge residuals,
+exact settings, hostname, and runtime.
+Heavy mesh and aperture sweeps run on an idle compute host; the script refuses
+to overwrite a result unless `--overwrite` is explicit.
+
+The production aperture target is conservatively interpreted as
+`x,y in [-20,20] mm`.  The loft-chain builder supports this without asking one
+high-order element to represent the full 40 mm span: the four x macro-strips
+remain fixed topology boundaries and may each be uniformly subdivided, while
+vertical refinement uses an odd symmetric layer count so `y=0` stays inside
+the central layer.  The initial order-6 hp smoke configuration uses two
+subdivisions per x macro-strip and nine y layers, giving 72 HEX elements per
+longitudinal cell and local transverse widths no larger than 5.0 mm by
+4.44 mm.  This proves mesh/space support, not field accuracy; the usable
+20 mm aperture is certified only after three-way field and Lie/RK convergence.
+The convergence script exposes the matching physical C-yoke as
+`--wide-20mm`: it sets a 50 mm full pole gap, 60 mm pole width, the
+`+/-20 mm` beam mesh, order 6, 8 x strips, 9 y layers, and an 18 mm sampled
+fit aperture.  The legacy small-gap defaults remain available solely so the
+recorded q14/q20/q24 studies remain reproducible.
+
+After the field gate, the script's `gauge_invariance_triangle` compares three
+tracks in mechanical exit variables, converting each route's canonical momenta
+with its OWN vector potential: the gauged-A fourth-order Lie map, the exact
+canonical A-RK on the UNGAUGED (axial-only) field, and the HDiv B-map
+Cartesian RK.  The ungauged-versus-gauged A-RK difference is a pure gauge
+invariance check of the whole canonical machinery and reached 4.8e-10 on the
+C-type fixture.  The two independent field routes differ through the
+piecewise-constant `h(s)` orbit discretization, first order in the station
+spacing (1.15e-6 at 33 stations, 5.4e-7 at 65).  The Lie-versus-A-RK leg is
+dominated by the vertical plane and is the measured aperture truncation of the
+declared degree-five transverse jet contract: it is insensitive to segment
+count and to amplitude, halves with the fit aperture, and matches the jet fit
+residual.  The maps and tracks consume a `trim_orbit` interior orbit while the
+loft tube is built from an extended track (`--orbit-margin-stations`), because
+a fit section on a tube boundary face samples the least-controlled one-sided
+derivative content of the discrete fields; the interior fitted-Hamiltonian
+floor (about 8e-6, mesh-converged) is genuine jet-contract content, which the
+`--lie-reference-orbit-tolerance` gate prices at an exit-coordinate effect of
+order `H1*L^2/2 ~ 3e-8 m`.
+
 `validation_ffag_cell_targets.py` builds the Bell--Abell non-scaling FFAG
 soft-edge one-cell target family at seven proton energies from 31 to 250 MeV.
 It checks the three prerequisites for each reduced closed orbit (cell bend,
@@ -93,6 +189,20 @@ skew-sextupole `T_xy` control on one two-HEX problem and skew-octupole `U_xxy`
 control on another.  The 42k FFAG model has not yet been rerun with either
 high-order objective.
 
+For a decoupled first-order target, `Symplectic2x2KAN` gives global Iwasawa
+coordinates for each transverse `Sp(2,R)` block, while
+`DecoupledFirstOrderTarget` restricts the static-magnetic longitudinal block
+to `[[1,R56],[0,1]]`.  `certify_decoupled_first_order_reachability` measures
+the six independent transverse KAN directions rather than treating eight
+ABCD entries as independent.  A drift-only seed has rank three; a generic
+segmented normal-quadrupole seed reaches rank six.
+`solve_decoupled_first_order_continuation` follows a staged KAN homotopy and
+rejects any step that loses rank six, violates the nonlinear target band, or
+introduces x-y-longitudinal coupling.  It is an auditable continuation attempt,
+not a global theorem: distant targets, restricted material-response bases, and
+an `R56` change outside the available controls can still return unreachable.
+Committed random-target tests exercise nearby targets from a rank-six seed.
+
 ## Canonical Lie completion through f5
 
 `radia.accelerator_lie_topopt` supplies the formal-symplectic path missing from
@@ -111,26 +221,29 @@ AD Lie map, target difference, local TSVD reachability/correction,
 ACA--thin-QR--TSVD material inverse, whole-HEX proposal, full active-system
 solve, and exact Lie-map acceptance.  The target itself must satisfy the
 formal symplectic tolerance.  Skew quadrupole, skew sextupole, and skew
-octupole rows expose first-, second-, third-, and cascade-generated
-fourth-order x-y/chromatic control respectively.
+octupole and decapole rows expose first-, second-, third-, and direct plus
+cascade-generated fourth-order x-y/chromatic control respectively.
 The tracked Wolfram Language derivation emits an independent symbolic golden
-for `H2/H3/H4`, the `f3` self-cascade, `f4`, their fourth-order cross, and an
+for `H2/H3/H4/H5`, the `f3` self-cascade, `f4`, their fourth-order cross, and an
 independent `f5` kick; it is not a runtime dependency.
 The complete convention, equations, and deliberate physical boundary are in
 [`LIE_MAP.md`](LIE_MAP.md).
 
 The full-field reference path is first recovered by the existing DOP853
 periodic-orbit solver.  `fourth_order_lie_map_from_tracked_orbit` now carries
-that `PlanarDesignOrbit` into the planar Frenet--Serret moving frame, samples
-normal/skew multipoles through octupole, and builds the fourth-order Lie map.
+that `PlanarDesignOrbit` into the Bishop/RMF double-reflection moving frame,
+accepts a real `HCurl(order=p)` vector-potential GridFunction, samples NGSolve's
+native `curl(A)` without an HDiv projection, fits normal/skew multipoles through
+decapole, and builds the fourth-order Lie map. The retained FESpace supplies
+`p`; it is not duplicated as a beam-input setting.
 The later variational RK therefore tracks deviations, not the reference orbit
 again.
 
 This Lie completion is deliberately bounded to source-free,
-piecewise-constant body multipoles through octupole and an `H2/H3/H4`
-Hamiltonian.  Direct `H5` kinematic/decapole terms, longitudinal fringe/edge
-vector potentials, nonplanar torsion, and arbitrary-order normal forms remain
-separate work; they are not approximated silently.
+piecewise-constant body multipoles through decapole and an `H2/H3/H4/H5`
+Hamiltonian.  Longitudinal fringe/edge vector potentials, nonplanar torsion,
+and arbitrary-order normal forms remain separate work; they are not
+approximated silently.
 
 Focused regression tests cover the symbolic coefficients, native and
 forward-AD map agreement, formal-symplectic gates, direct GridFunction paths,

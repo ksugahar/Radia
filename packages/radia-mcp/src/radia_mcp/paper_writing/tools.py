@@ -106,6 +106,7 @@ def paper_writing_usage() -> str:
     - paper_writing_validate_abstract_length
     - paper_writing_check_citation_usage / check_abstract_background_ratio
     - paper_writing_check_paragraph_length / check_paragraph_opener
+    - paper_writing_check_conclusion_first_use
     - paper_writing_check_passive_voice_ratio / check_tense_consistency
     - paper_writing_check_english_redflags / check_strong_adjective_budget
     - paper_writing_check_figure_caption_showing / check_figure_forward_reference
@@ -799,6 +800,216 @@ def paper_writing_check_paragraph_length(text: str,
         "single_giant_paragraph": too_few_paragraphs,
         "per_paragraph": stats[:20],
         "source": "Wallwork §14.9",
+    }
+
+
+def _paper_writing_split_conclusion(src: str) -> tuple[str, str, str]:
+    """Return text before conclusion, conclusion body, and detected heading."""
+    tex_heading = re.compile(
+        r"\\section\*?\s*\{([^{}]+)\}",
+        re.IGNORECASE,
+    )
+    heading_name = re.compile(
+        r"^(?:\d+(?:[.\u30fb・]\d+)*[.\u30fb　 ]*)?"
+        r"(?:conclusions?|summary|closing remarks|結論|まとめ|結語)\s*$",
+        re.IGNORECASE,
+    )
+    matches = list(tex_heading.finditer(src))
+    for index, match in enumerate(matches):
+        title = _paper_writing_plain_text(match.group(1)).strip()
+        if not heading_name.match(title):
+            continue
+        end = matches[index + 1].start() if index + 1 < len(matches) else len(src)
+        for boundary in (
+                r"\begin{thebibliography}",
+                r"\bibliographystyle",
+                r"\bibliography",
+                r"\end{document}"):
+            boundary_at = src.find(boundary, match.end(), end)
+            if boundary_at >= 0:
+                end = min(end, boundary_at)
+        return src[:match.start()], src[match.end():end], title
+
+    line_heading = re.compile(
+        r"(?im)^(?:#{1,4}\s*)?"
+        r"((?:\d+(?:\.\d+)*[.\s]*)?"
+        r"(?:conclusions?|summary|closing remarks|結論|まとめ|結語))"
+        r"\s*$"
+    )
+    match = line_heading.search(src)
+    if match:
+        next_heading = re.search(r"(?m)^#{1,4}\s+.+$", src[match.end():])
+        end = (match.end() + next_heading.start()
+               if next_heading else len(src))
+        return src[:match.start()], src[match.end():end], match.group(1).strip()
+    return src, "", ""
+
+
+def _paper_writing_conclusion_technical_tokens(src: str) -> set[str]:
+    """Extract acronym-like and mixed-case technical names."""
+    plain = _paper_writing_plain_text(src)
+    patterns = (
+        r"\b[A-Z]{2,}[A-Za-z0-9-]*\b",
+        r"\b[A-Z][a-z]+(?:[A-Z][A-Za-z0-9]*)+\b",
+        r"\b[A-Za-z]+\d+[A-Za-z0-9-]*\b",
+    )
+    return {
+        token
+        for pattern in patterns
+        for token in re.findall(pattern, plain)
+    }
+
+
+def _paper_writing_conclusion_numeric_claims(src: str) -> set[str]:
+    """Extract decimals/exponents and integers carrying a unit or ratio."""
+    plain = _paper_writing_plain_text(src)
+    unit = (
+        r"(?:%|％|倍|×|[munpkMGTµμ]?(?:s|Hz|A|V|W|K|T|H|F|m|g|Pa|"
+        r"Ω|ohm)(?:/[A-Za-z]+)?)"
+    )
+    pattern = re.compile(
+        rf"(?<![A-Za-z0-9_.])(?:[-+]?\d+\.\d+(?:[eE][-+]?\d+)?"
+        rf"|[-+]?\d+(?:[eE][-+]?\d+)|[-+]?\d+\s*{unit})"
+    )
+    return {re.sub(r"\s+", "", m.group(0)) for m in pattern.finditer(plain)}
+
+
+def _paper_writing_conclusion_symbols(src: str) -> set[str]:
+    """Extract subscripted Latin symbols from inline/display mathematics."""
+    math_parts = re.findall(r"\$([^$]+)\$|\\\((.+?)\\\)|\\\[(.+?)\\\]", src,
+                            flags=re.DOTALL)
+    joined = " ".join(part for group in math_parts for part in group if part)
+    symbols = re.findall(r"\b[A-Za-z]+_\{?[A-Za-z0-9]+\}?", joined)
+    return {re.sub(r"[{}\s]", "", symbol) for symbol in symbols}
+
+
+def _paper_writing_citation_keys(src: str) -> set[str]:
+    keys: set[str] = set()
+    for match in re.finditer(
+            r"\\cite[a-zA-Z]*\*?(?:\[[^\]]*\])?\{([^{}]+)\}", src):
+        keys.update(key.strip() for key in match.group(1).split(",") if key.strip())
+    return keys
+
+
+def paper_writing_check_conclusion_first_use(
+        text_or_path: str,
+        whitelist: str = "",
+        max_report: int = 30) -> dict:
+    """結論で初出となる技術語・変数・数値・引用を検出。
+
+    結論には、本文を統合して得た新しい洞察・含意・展望を記載
+    できる。一方、手法名、略語、数式記号、定量値、参考文献が結論で
+    初めて現れる場合は、本文で説明していない証拠・方法・主張を
+    結論に持ち込んだ可能性がある。本ツールはその候補を抽出する。
+    """
+    src, source_path = _paper_writing_text_or_path(text_or_path)
+    src = _paper_writing_strip_comments(src)
+    before, conclusion, heading = _paper_writing_split_conclusion(src)
+    if not conclusion.strip():
+        return {
+            "score": None,
+            "conclusion_found": False,
+            "source_path": source_path,
+            "comments": [
+                "Conclusion/結論/まとめ section を検出できない。"
+                "LaTeX \\section{} または Markdown heading を明示。"
+            ],
+        }
+
+    default_whitelist = {
+        "AC", "DC", "SI", "IEEE", "IEEJ", "Fig", "Figs", "Eq", "Eqs",
+        "Table", "Tables", "Section", "Sections", "RMSE", "CPU", "GPU",
+    }
+    user_whitelist = {
+        item.strip().lower() for item in re.split(r"[,\s]+", whitelist)
+        if item.strip()
+    }
+    allowed = {item.lower() for item in default_whitelist} | user_whitelist
+
+    before_tokens = {
+        token.lower() for token in _paper_writing_conclusion_technical_tokens(before)
+    }
+    conclusion_tokens = _paper_writing_conclusion_technical_tokens(conclusion)
+    new_terms = sorted(
+        token for token in conclusion_tokens
+        if token.lower() not in before_tokens
+        and token.lower() not in allowed
+        and token.lower().split("-", 1)[0] not in allowed
+    )
+
+    before_symbols = {
+        symbol.lower() for symbol in _paper_writing_conclusion_symbols(before)
+    }
+    new_symbols = sorted(
+        symbol for symbol in _paper_writing_conclusion_symbols(conclusion)
+        if symbol.lower() not in before_symbols
+    )
+
+    before_numbers = _paper_writing_conclusion_numeric_claims(before)
+    new_numbers = sorted(
+        number for number in _paper_writing_conclusion_numeric_claims(conclusion)
+        if number not in before_numbers
+    )
+
+    before_citations = _paper_writing_citation_keys(before)
+    new_citations = sorted(_paper_writing_citation_keys(conclusion) - before_citations)
+
+    issue_count = len(new_terms) + len(new_symbols) + len(new_numbers) + len(new_citations)
+    score = max(
+        0.0,
+        10.0
+        - 1.5 * (len(new_terms) + len(new_symbols))
+        - 1.0 * (len(new_numbers) + len(new_citations)),
+    )
+    comments = []
+    if new_terms:
+        comments.append(
+            f"結論で初出の技術語候補: {new_terms[:max_report]}"
+        )
+    if new_symbols:
+        comments.append(
+            f"結論で初出の数式記号候補: {new_symbols[:max_report]}"
+        )
+    if new_numbers:
+        comments.append(
+            f"結論で初出の定量値候補: {new_numbers[:max_report]}"
+        )
+    if new_citations:
+        comments.append(
+            f"結論で初出の citation key: {new_citations[:max_report]}"
+        )
+    if not comments:
+        comments.append(
+            "結論の技術語・数式記号・定量値・引用は本文で導入済み。"
+        )
+
+    return {
+        "score": round(score, 1),
+        "score_max": 10,
+        "passed": issue_count == 0,
+        "conclusion_found": True,
+        "conclusion_heading": heading,
+        "source_path": source_path,
+        "issue_count": issue_count,
+        "new_technical_terms": new_terms[:max_report],
+        "new_math_symbols": new_symbols[:max_report],
+        "new_numeric_claims": new_numbers[:max_report],
+        "new_citation_keys": new_citations[:max_report],
+        "comments": comments,
+        "policy": (
+            "結論で新しくすべきなのは、本文の結果から導く統合的な洞察・"
+            "含意・展望。新しい手法、データ、変数、定量結果、引用は"
+            "本文で先に導入。"
+        ),
+        "hint": (
+            "文字列による補助診断。一般的な略語や意図的な将来展望は "
+            "whitelist または目視で除外。"
+        ),
+        "source": (
+            "Wallwork『日本人研究者のための論文の書き方・"
+            "アクセプト術』第19章, 木下『理科系の作文技術』"
+            "目標規定文"
+        ),
     }
 
 
@@ -2347,8 +2558,9 @@ def paper_writing_check_figure_uses_pdf(tex_path: str) -> dict:
     ``.tif``, ``.tiff``.  Allowed: ``.pdf``, ``.eps``, no extension
     (lets pdflatex pick the vector copy).
 
-    The intended pattern is ``lab_savefig(fig, "name")`` (emits both
-    ``name.pdf`` and ``name.png``) plus
+    The intended pattern is ``lab_savefig(fig, "name", medium="paper",
+    embed_width_cm=<actual width>)`` (emits both ``name.pdf`` and
+    ``name.png`` while checking the 10 pt final-size floor) plus
     ``\\includegraphics{name.pdf}`` -- the PNG is the
     quick-preview / GitHub-README copy, the PDF is what the typesetter
     consumes.

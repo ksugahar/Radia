@@ -52,11 +52,11 @@ def scaling_loglog(x, series, ylabel, *, xlabel="DOF", embed_width_cm=7.6,
     if ram_line_gb:
         ax.axhline(ram_line_gb, color="0.45", ls="--", lw=0.9)
         ax.text(x[0] * 1.05, ram_line_gb * 1.15, f"{ram_line_gb:g} GB RAM",
-                fontsize=8, color="0.35")
+                fontsize=10, color="0.35")
     ax.set_xlabel(xlabel)
     ax.set_ylabel(ylabel)
     ax.grid(True, which="both", ls=":", lw=0.5, alpha=0.55)
-    legend_no_overlap(ax, fontsize=8)
+    legend_no_overlap(ax, fontsize=10)
     return fig, ax
 
 
@@ -81,7 +81,7 @@ def grouped_bars(group_labels, series, ylabel, *, embed_width_cm=8.4,
     ax.set_xticks(x)
     ax.set_xticklabels(group_labels)
     ax.grid(axis="y", which="both", ls=":", lw=0.5, alpha=0.6, zorder=0)
-    legend_no_overlap(ax, fontsize=8)
+    legend_no_overlap(ax, fontsize=10)
     return fig, ax
 
 

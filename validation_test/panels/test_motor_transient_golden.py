@@ -97,6 +97,13 @@ def test_purely_inductive_no_pm(pmsm_mesh):
     # T_em should be tiny (no PM, no resulting torque pattern)
     assert all(abs(T) < 1e-3 for T in result["T_em_history"]), \
         f"unexpected torque without PMs: max={max(result['T_em_history'])}"
+    assert result["force_result_schema"] == "radia.force-result/v1"
+    assert result["final_force_torque_result"]["schema"] == "radia.force-result/v1"
+    assert result["final_force_torque_result"]["method"] == "arkkio_air_gap_stress"
+    assert result["final_force_torque_result"]["dimensionality"] == "2d_planar"
+    assert result["final_force_torque_result"]["torque_Nm"][2] == pytest.approx(
+        result["T_em_history"][-1]
+    )
     # Back-EMF should be exactly zero (omega=0 default + no PMs)
     for e in result["e_bemf_history"]:
         assert all(abs(ej) == 0.0 for ej in e)

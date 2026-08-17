@@ -32,7 +32,7 @@ for the derivation.
 |--------|---------|
 | `radia.maglev.mixed_galerkin.alpha` | Bulk Foster spectrum (NGSolve eigsh) + W(alpha) edge + Schur composition -> alpha(s) for any .vol |
 | `radia.maglev.mixed_galerkin.cad_edges` | IGA-style CAD-direct edge extraction (12 edges exact for cuboid, mesh-independent) |
-| `radia.maglev.ecb.lorentz` | F = integral J x B dV via Foster reconstruction, drag + lift on PM/coil source |
+| `radia.maglev.ecb.lorentz` | F = integral J x B dV via Foster reconstruction, drag + lift on PM/coil source, plus common force-result records |
 | `radia.maglev.ecb.plate_response` | alpha(s) frequency sweep + drag/lift crossover identification for plate ECB design |
 | `radia.maglev.simulink.export` | State-space (A, B, C, D) export to MATLAB .mat + helper .m for Simulink LTI block |
 
@@ -109,6 +109,12 @@ Reasons:
 
 So the package defaults to Lorentz.  Maxwell stress is available
 (`radia.maglev.ecb.maxwell_stress`) for cross-validation.
+
+`compute_lorentz_force_result_via_foster` preserves the existing Foster solve
+while packaging both conductor and source reactions as
+`radia.force-result/v1`. The returned pair also records the exact
+action-reaction residual, so the common `radia.force` / `radia_mcp.force`
+validation gates can assess MagLev results without reimplementing the solver.
 
 ## Simulink integration
 

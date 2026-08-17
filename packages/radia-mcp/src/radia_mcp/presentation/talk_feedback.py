@@ -534,7 +534,8 @@ FIELD_NOTES: list[dict] = [
                 "lesson": "When measurement IS the ground truth, judge the "
                           "method by curve-fit fidelity to the measured loops "
                           "and self-consistency of the regenerated data; keep "
-                          "the dense fit machinery in a backup deck.",
+                          "useful dense fit machinery as Q&A slides at the end "
+                          "of the same final deck.",
             },
         ],
         "chair_audience_feedback": [],
@@ -555,7 +556,8 @@ FIELD_NOTES: list[dict] = [
             "Credit the originator of borrowed measurement data on its own "
             "slide.",
             "Keep dense data-conditioning math (rational envelope, 17th-order "
-            "polynomial, synthetic generation) in a separate backup deck.",
+            "polynomial, synthetic generation) in Q&A slides at the end of "
+            "the same final deck.",
         ],
     },
     # =====================================================

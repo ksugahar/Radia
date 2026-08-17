@@ -123,6 +123,32 @@ This first example needs no air mesh. Move to NGSolve when the problem needs
 finite-element spaces, material domains, weak forms, or coupled field
 equations.
 
+Turn solved SI field samples into electromagnetic force and torque through
+Lorentz volume integration, air-side Maxwell stress, time-averaged complex
+phasors, virtual work/coenergy, or a cylindrical air-gap shear estimate:
+
+```python
+from radia.force import integrate_lorentz_force
+
+# One quadrature sample: J = 2 MA/m^2 in +z, B = 0.3 T in +y,
+# with 2.5 cm^3 of physical volume. The force points in -x.
+force_n = integrate_lorentz_force(
+    [0.0, 0.0, 2.0e6],
+    [0.0, 0.3, 0.0],
+    2.5e-6,
+)
+print(force_n)  # [-1.5, 0.0, 0.0] N
+```
+
+Supplying quadrature positions and a pivot to
+`integrate_lorentz_force_and_torque` returns both resultants. The same
+contracts are available in MATLAB under `radia.force`, including
+`integrateLorentzForceTorque`, `integrateTimeAverageMaxwellSurfaceForceTorque`,
+`virtualWorkForce`, and `coenergyTorque`.
+The [force validation notebook](docs/force_validation/force_validation.ipynb)
+shows the Lorentz, Maxwell-stress, and virtual-work identities used to check
+signs and force extraction before attaching them to a production field solve.
+
 Install only the integrations you need:
 
 ```powershell

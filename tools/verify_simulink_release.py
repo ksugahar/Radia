@@ -29,11 +29,11 @@ REQUIRED_MEMBERS = {
     "matlab/+radia/+simulink/ihThermalSFunction.m",
     "matlab/+radia/+simulink/validateIHNativeConfig.m",
     "matlab/radia_mex.mexw64",
-    "matlab/mkl_avx2.2.dll",
-    "matlab/mkl_core.2.dll",
-    "matlab/mkl_def.2.dll",
-    "matlab/mkl_intel_thread.2.dll",
-    "matlab/mkl_rt.2.dll",
+    "matlab/mkl_avx2.3.dll",
+    "matlab/mkl_core.3.dll",
+    "matlab/mkl_def.3.dll",
+    "matlab/mkl_intel_thread.3.dll",
+    "matlab/mkl_rt.3.dll",
 }
 LEGACY_REQUIRED_MEMBERS = {
     "manifest.json",
@@ -65,11 +65,11 @@ FULL_REQUIRED_MEMBERS = {
     "matlab/+radia/+simulink/makeNonlinearReactorConfig.m",
     "matlab/+radia/+simulink/makeNonlinearReactorDemoConfig.m",
     "matlab/+radia/+simulink/validateNonlinearReactorConfig.m",
-    "matlab/mkl_avx2.2.dll",
-    "matlab/mkl_core.2.dll",
-    "matlab/mkl_def.2.dll",
-    "matlab/mkl_intel_thread.2.dll",
-    "matlab/mkl_rt.2.dll",
+    "matlab/mkl_avx2.3.dll",
+    "matlab/mkl_core.3.dll",
+    "matlab/mkl_def.3.dll",
+    "matlab/mkl_intel_thread.3.dll",
+    "matlab/mkl_rt.3.dll",
 }
 LEGACY_FULL_REQUIRED_MEMBERS = {
     "manifest.json",
@@ -81,11 +81,11 @@ LEGACY_FULL_REQUIRED_MEMBERS = {
     "matlab/radia_mex.mexw64",
     "matlab/radia_ih_eddy_sfun.mexw64",
     "matlab/radia_ih_thermal_sfun.mexw64",
-    "matlab/mkl_avx2.2.dll",
-    "matlab/mkl_core.2.dll",
-    "matlab/mkl_def.2.dll",
-    "matlab/mkl_intel_thread.2.dll",
-    "matlab/mkl_rt.2.dll",
+    "matlab/mkl_avx2.3.dll",
+    "matlab/mkl_core.3.dll",
+    "matlab/mkl_def.3.dll",
+    "matlab/mkl_intel_thread.3.dll",
+    "matlab/mkl_rt.3.dll",
 }
 
 

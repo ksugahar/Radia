@@ -87,6 +87,7 @@ from ._hysteresis import (  # noqa: F401  (B-input hysteresis stepping: ONE Gram
 from ._field_batch import (  # noqa: F401  (batch exterior field of the BDM1/BDM2 solution)
     field_coefficient_from_solution as _field_coefficient_from_solution_impl,
     field_from_solution as _field_from_solution_impl,
+    vector_potential_coefficient_from_solution as _vector_potential_coefficient_from_solution_impl,
 )
 from ._magnetization_source import MagnetizationSource  # noqa: F401
 from ._coupled import (  # noqa: F401
@@ -295,8 +296,18 @@ def FieldFromSolution(*args, **kwargs):
 
 
 def FieldCoefficientFromSolution(*args, **kwargs):
-    """Persistent NGSolve demagnetizing-field CoefficientFunction."""
+    """Persistent NGSolve demagnetizing-field CoefficientFunction.
+
+    Pass ``reflection_normal=[nx, ny, nz]`` to enforce plane-reflection
+    symmetry with the correct axial-vector transformation before projecting B
+    or H into an independent HDiv space.
+    """
     return _field_coefficient_from_solution_impl(*args, **kwargs)
+
+
+def VectorPotentialCoefficientFromSolution(*args, **kwargs):
+    """Exterior vector-potential CF integrated from the solved HDiv field."""
+    return _vector_potential_coefficient_from_solution_impl(*args, **kwargs)
 
 
 def SolveCoupled(*args, **kwargs):
@@ -328,6 +339,7 @@ for _new, _old in [
     (PlanarSolve, _solve_planar_demag),
     (FieldFromSolution, _field_from_solution_impl),
     (FieldCoefficientFromSolution, _field_coefficient_from_solution_impl),
+    (VectorPotentialCoefficientFromSolution, _vector_potential_coefficient_from_solution_impl),
     (SolveCoupled, _solve_coupled_impl),
     (FieldFromCoupledSolution, _field_from_coupled_solution_impl),
     (SolveCoupledHysteresis, _solve_coupled_hysteresis_impl),
@@ -346,7 +358,8 @@ __all__ = [
     "soft_iron_box", "soft_iron_hex",
     "magnet_box", "magnet_hex",
     "SolveHysteresis", "EnergyStopMaterial", "PlayHysteresisMaterial",
-    "FieldFromSolution", "FieldCoefficientFromSolution", "MagnetizationSource",
+    "FieldFromSolution", "FieldCoefficientFromSolution",
+    "VectorPotentialCoefficientFromSolution", "MagnetizationSource",
     "CoupledBody", "SolveCoupled", "FieldFromCoupledSolution",
     "CoupledHistoryBody", "SolveCoupledHysteresis", "FieldFromCoupledHysteresis",
     "HDivCapability", "hdiv_capabilities",

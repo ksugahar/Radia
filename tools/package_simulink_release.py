@@ -39,11 +39,11 @@ FULL_REQUIRED_MODELS = (
     "radia_streamfunction_optimization.slx",
 )
 FULL_RUNTIME_DLLS = (
-    "mkl_avx2.2.dll",
-    "mkl_core.2.dll",
-    "mkl_def.2.dll",
-    "mkl_intel_thread.2.dll",
-    "mkl_rt.2.dll",
+    "mkl_avx2.3.dll",
+    "mkl_core.3.dll",
+    "mkl_def.3.dll",
+    "mkl_intel_thread.3.dll",
+    "mkl_rt.3.dll",
 )
 PACKAGE_FILES = (
     "IH_RELEASE.md",

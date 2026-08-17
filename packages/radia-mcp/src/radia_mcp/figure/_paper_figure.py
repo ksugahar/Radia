@@ -198,7 +198,7 @@ class PaperProfile:
 
     @classmethod
     def from_base(cls, *, name, full_name, width_mm, column,
-                  base_pt=10.0, small_offset=1.0,
+                  base_pt=10.0, small_offset=0.0,
                   linewidth_pt=1.0, axes_linewidth_pt=0.7,
                   marker_size_pt=4.5,
                   margin_left=0.165, margin_right=0.98,
@@ -208,13 +208,15 @@ class PaperProfile:
         """tueplots-style derivation: declare ONE base font; derive
         legend_pt = base_pt and tick_pt = base_pt - small_offset.
 
-        This pins the font-derivation rule (IEEE / IEEJ convention:
-        ticks 1 pt below body) so that hand-edits to a profile cannot
-        accidentally desync the legend or tick sizes.
+        This pins the font-derivation rule so hand-edits to a profile cannot
+        accidentally desync the legend or tick sizes. The lab production
+        default keeps ``small_offset=0`` because every visible paper label
+        must remain at least 10 pt after embedding.
 
         Args:
             base_pt: body text size (lab rule: 10 pt @ 8 cm).
-            small_offset: tick label size = base_pt - small_offset.
+            small_offset: tick label size = base_pt - small_offset. Keep zero
+                for production paper and presentation figures.
             ... (other args mirror the dataclass fields)
         """
         return cls(
@@ -222,7 +224,7 @@ class PaperProfile:
             column=column,
             font_pt=base_pt,
             legend_pt=base_pt,                # ALWAYS match body
-            tick_pt=base_pt - small_offset,   # 1 pt below body
+            tick_pt=base_pt - small_offset,
             linewidth_pt=linewidth_pt,
             axes_linewidth_pt=axes_linewidth_pt,
             marker_size_pt=marker_size_pt,
@@ -275,7 +277,7 @@ IEEE_SINGLE_COLUMN = PaperProfile(
     legend_pt=10.0,               # Same as body — legends must be
                                   #   readable at print scale, not a
                                   #   shrunken afterthought.
-    tick_pt=9.0,                  # 1 pt below body is the IEEE convention.
+    tick_pt=10.0,
     linewidth_pt=1.0,
     axes_linewidth_pt=0.7,
     marker_size_pt=4.5,
@@ -303,7 +305,7 @@ IEEE_DOUBLE_COLUMN = PaperProfile(
                                   #   figure size.  Wider axes, same
                                   #   readable text.
     legend_pt=10.0,
-    tick_pt=9.0,
+    tick_pt=10.0,
     linewidth_pt=1.0,
     axes_linewidth_pt=0.7,
     marker_size_pt=4.5,
@@ -328,7 +330,7 @@ IEEJ_SINGLE_COLUMN = PaperProfile(
     column="single",
     font_pt=10.0,                 # LAB STANDARD: 10 pt @ 8 cm column.
     legend_pt=10.0,
-    tick_pt=9.0,
+    tick_pt=10.0,
     linewidth_pt=1.0,
     axes_linewidth_pt=0.7,
     marker_size_pt=4.5,
@@ -348,7 +350,7 @@ IEEJ_DOUBLE_COLUMN = PaperProfile(
     column="double",
     font_pt=10.0,                 # SAME 10 pt; font is absolute.
     legend_pt=10.0,
-    tick_pt=9.0,
+    tick_pt=10.0,
     linewidth_pt=1.0,
     axes_linewidth_pt=0.7,
     marker_size_pt=4.5,
@@ -370,7 +372,7 @@ IGTE_DIGEST_DOUBLE = PaperProfile(
     column="page",
     font_pt=10.0,                 # SAME 10 pt absolute.
     legend_pt=10.0,
-    tick_pt=9.0,
+    tick_pt=10.0,
     linewidth_pt=1.0,
     axes_linewidth_pt=0.7,
     marker_size_pt=4.5,
@@ -390,7 +392,7 @@ IGTE_DIGEST_SINGLE = PaperProfile(
     column="single",
     font_pt=10.0,                 # SAME 10 pt absolute.
     legend_pt=10.0,
-    tick_pt=9.0,
+    tick_pt=10.0,
     linewidth_pt=1.0,
     axes_linewidth_pt=0.7,
     marker_size_pt=4.5,
@@ -408,25 +410,26 @@ IGTE_DIGEST_SINGLE = PaperProfile(
 # --- Beamer 16:9 talk slides (CEFC / IGTE oral) --------------------------
 # A beamer ``aspectratio=169`` paper is 160 x 90 mm; the usable text width
 # is ~150 mm (full) or ~72 mm (a half-width column inside a two-column
-# frame).  Slide figures follow the SAME lab rules as paper figures:
-#   * Times New Roman, 10 pt body (the on-page 10 pt @ 8 cm rule -- a
-#     slide is read like a page), Okabe-Ito palette.
+# frame).  Slide figures use a viewing-distance rule distinct from papers:
+#   * Times New Roman, authored at 24 pt so every visible label, tick,
+#     legend, and annotation remains >=20 pt after actual slide scaling.
 #   * NO in-figure title.  The beamer frametitle / slide caption carries
 #     it; emit_paper_figure()'s no-title gate fires for these profiles too.
-#   * Strokes / markers a touch heavier than the paper default for
-#     projector legibility (this does NOT change the font rule).
+#   * Strokes / markers are heavier than the paper default for projector
+#     legibility.
 # IMPORTANT: author the figure at the width it will OCCUPY on the slide
 # (apply_lab_style(embed_width_cm=...) or these profiles' width_mm) and
 # \includegraphics[width=<that width>] at 100%.  Do NOT let
 # \includegraphics scale a 150 mm figure into an 8 cm column -- that
-# shrinks the on-page font below 10 pt (the v4 mistake).
+# can shrink the 24 pt authored target below the 20 pt displayed floor.
 
 BEAMER_169_FULL = PaperProfile.from_base(
     name="beamer_169_full",
     full_name="Beamer 16:9 slide, full text width",
     width_mm=150.0,
     column="page",
-    base_pt=10.0,                 # on-page 10 pt, same as paper
+    base_pt=24.0,                 # projected-slide readability floor
+    small_offset=0.0,             # ticks must not drop below 24 pt
     linewidth_pt=1.3,             # heavier strokes read better on screen
     axes_linewidth_pt=0.9,
     marker_size_pt=5.0,
@@ -442,7 +445,8 @@ BEAMER_169_HALF = PaperProfile.from_base(
     full_name="Beamer 16:9 slide, half column (two-column frame)",
     width_mm=72.0,
     column="single",
-    base_pt=10.0,
+    base_pt=24.0,
+    small_offset=0.0,
     linewidth_pt=1.3,
     axes_linewidth_pt=0.9,
     marker_size_pt=5.0,
@@ -621,6 +625,11 @@ def paper_figure(
         squeeze=False,            # always return 2D ndarray
         dpi=600,
     )
+    fig._lab_medium = (
+        "presentation" if prof.name.startswith("beamer_169_") else "paper"
+    )
+    fig._lab_authored_width_cm = float(figsize_in[0]) * 2.54
+    fig._lab_embed_width_cm = float(figsize_in[0]) * 2.54
     # axes is already 2D thanks to squeeze=False.
 
     # --- subplots_adjust per profile + layout delta ---
@@ -1533,6 +1542,9 @@ def emit_paper_figure(
     check_font_embedding: bool = True,
     check_no_japanese: bool = True,
     check_times_new_roman: bool = True,
+    check_min_font_size: bool = True,
+    min_font_pt: Optional[float] = None,
+    embed_width_cm: Optional[float] = None,
     check_text_overflow: bool = True,
     text_overflow_tol_pt: float = 0.5,
     dpi: int = 600,
@@ -1577,6 +1589,16 @@ def emit_paper_figure(
         check_times_new_roman: when True (default), require matplotlib
             rcParams to request Times New Roman and reject saved PDFs
             that contain common serif fallback fonts.
+        check_min_font_size: when True (default), inspect every visible text
+            artist after scaling to the final paper/slide width.
+        min_font_pt: optional final-size font floor.  When omitted, paper
+            profiles require 10 pt and 16:9 slide profiles require 20 pt.
+            Slide profiles still author at 24 pt by default to leave scaling
+            margin before the 20 pt final-size gate.
+        embed_width_cm: actual width at which the output will be embedded in
+            the paper or pasted into PowerPoint.  Defaults to the profile
+            width (100% scale).  Passing the real pasted width is mandatory
+            when the slide layout scales the generated figure.
         check_text_overflow: when True (default), reject free diagram
             labels created with ``ax.text`` / ``fig.text`` if their
             rendered bbox extends past the fixed figure canvas.  Axis
@@ -1704,6 +1726,55 @@ def emit_paper_figure(
                 "paper_figure(..., use_times_roman=True) or set:\n"
                 "  plt.rcParams['font.family'] = 'serif'\n"
                 "  plt.rcParams['font.serif'] = ['Times New Roman']"
+            )
+            if on_fail == "warn":
+                import warnings
+                warnings.warn(msg)
+            elif on_fail in ("raise", "auto_tighten"):
+                raise ValueError(msg)
+
+    # --- Pre-flight (1e): audit every Text artist at FINAL embed scale ---
+    # rcParams only describe authored text.  PowerPoint / LaTeX may scale the
+    # generated figure, so a 24 pt source label can become <20 pt on a slide.
+    # Paper figures similarly require every item to remain >=10 pt at the
+    # actual printed width, including ticks, legends, and annotations.
+    effective_min_font_pt = min_font_pt
+    is_slide_profile = prof.name.startswith("beamer_169_")
+    if effective_min_font_pt is None:
+        effective_min_font_pt = 20.0 if is_slide_profile else 10.0
+    intended_embed_width_cm = (
+        float(embed_width_cm)
+        if embed_width_cm is not None
+        else float(prof.width_mm) / 10.0
+    )
+    if intended_embed_width_cm <= 0:
+        raise ValueError("embed_width_cm must be positive.")
+    authored_width_cm = float(prof.width_mm) / 10.0
+    embed_scale = intended_embed_width_cm / authored_width_cm
+    font_size_violations = []
+    if check_min_font_size and effective_min_font_pt is not None:
+        from .tools import check_min_font
+        font_size_violations = check_min_font(
+            fig,
+            min_pt=float(effective_min_font_pt),
+            embed_width_cm=intended_embed_width_cm,
+            authored_width_cm=authored_width_cm,
+        )
+        if font_size_violations:
+            lines = [
+                f"  {v['kind']} {v['text']!r}: {v['render_pt']:.1f} pt "
+                f"source -> {v['visible_pt']:.1f} pt displayed"
+                for v in font_size_violations
+            ]
+            msg = (
+                "emit_paper_figure: visible text below the final-size font floor.\n"
+                + "\n".join(lines) + "\n"
+                f"Source width {authored_width_cm:g} cm -> final width "
+                f"{intended_embed_width_cm:g} cm ({embed_scale:.3f}x).\n"
+                f"Every label, tick, legend, panel label, and annotation must "
+                f"be at least {float(effective_min_font_pt):g} pt after scaling.\n"
+                "Increase source font sizes, enlarge the final figure, or "
+                "simplify it; do not shrink text to make content fit."
             )
             if on_fail == "warn":
                 import warnings
@@ -1904,6 +1975,11 @@ def emit_paper_figure(
     final["auto_tightened"] = auto_tightened
     final["profile"] = prof.name
     final["font_violations"] = font_violations
+    final["font_size_violations"] = font_size_violations
+    final["min_font_pt"] = effective_min_font_pt
+    final["authored_width_cm"] = authored_width_cm
+    final["embed_width_cm"] = intended_embed_width_cm
+    final["embed_scale"] = embed_scale
     final["times_new_roman_violations"] = times_new_roman_violations
     final["japanese_font_violations"] = japanese_font_violations
 

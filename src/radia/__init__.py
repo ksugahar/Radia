@@ -19,7 +19,7 @@ COMPAT_CUBIT_MESH_EXPORT_MIN = "0.5.0"
 COMPAT_CUBIT_MESH_EXPORT_MAX = "0.999.999"  # bumped on next radia minor
 
 # DLL loader for Windows
-# MKL DLLs are installed via pip dependency (mkl>=2024.2.0)
+# MKL DLLs are installed via pip dependency (mkl>=2026,<2027)
 # at {sys.prefix}/Library/bin/ (following NGSolve pattern)
 import os
 import sys
@@ -58,7 +58,7 @@ if sys.platform == 'win32':
     except ImportError:
         pass
 
-    # 3. MKL DLLs from pip install mkl (mkl_rt.2.dll, etc.)
+    # 3. MKL 2026 DLLs from pip install mkl (mkl_rt.3.dll, etc.)
     _mkl_bin = os.path.join(sys.prefix, "Library", "bin")
     if os.path.isdir(_mkl_bin):
         _dirs_to_add.append(_mkl_bin)

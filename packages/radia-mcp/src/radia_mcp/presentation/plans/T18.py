@@ -8,7 +8,7 @@ Reynolds『Presentation Zen』の minimalism は corporate / TED 寄りで
   - **caption / 軸ラベル / 単位** が必須 (corporate プレゼンでは省略可)
   - **数値 1+ per slide** (理系 evidence-based culture)
   - **bullet ≤ 4 per slide** (高橋メソッド より緩和: 理系は補足必要)
-  - **font ≥ 20pt (本文) / 32pt (title)**
+  - **font ≥ 24pt (本文・注釈・図表 label) / 32pt (title)**
 
 設計方針:
 - 理系 minimalism の 5 軸を per slide で評価
@@ -122,19 +122,33 @@ def _bullet_count(slide) -> int:
     return n
 
 
-def _check_font_size(slide, min_body_pt=20, min_title_pt=28) -> bool:
+def _check_font_size(slide, min_body_pt=24, min_title_pt=32) -> bool:
     """全 run が下限を充たすか (理系学会標準)。"""
+    try:
+        from radia_mcp.presentation.tools import (
+            _is_footer_or_page_chrome,
+            _shape_is_slide_title,
+        )
+    except Exception:
+        _is_footer_or_page_chrome = None
+        _shape_is_slide_title = None
     for shape in _iter_all_shapes(slide.shapes):
         try:
-            is_title = False
-            try:
-                pf = shape.placeholder_format
-                if pf is not None and pf.idx == 0:
-                    is_title = True
-            except Exception:
-                pass
             if not shape.has_text_frame:
                 continue
+            if (_is_footer_or_page_chrome is not None
+                    and _is_footer_or_page_chrome(shape, slide)):
+                continue
+            if _shape_is_slide_title is not None:
+                is_title = _shape_is_slide_title(shape, slide)
+            else:
+                is_title = False
+                try:
+                    pf = shape.placeholder_format
+                    if pf is not None and pf.idx == 0:
+                        is_title = True
+                except Exception:
+                    pass
             for para in shape.text_frame.paragraphs:
                 for run in para.runs:
                     sz = _resolve_size(run, para, shape, slide)
@@ -263,7 +277,7 @@ def presentation_rikei_minimalism_score(pptx_path: str) -> dict:
             f"⚠ {n_non} 枚で理系 minimalism 不充足。"
             "理系プレゼンの evidence-based 文化として: "
             "数値 1+ / 出典明記 / figure 持つ slide は軸ラベル+単位 / "
-            "bullet ≤4 / font ≥20pt が core 基準。"
+            "bullet ≤4 / font ≥24pt が core 基準。"
         )
         for nc in non_compliant[:5]:
             comments.append(
