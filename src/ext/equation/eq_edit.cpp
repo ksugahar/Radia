@@ -337,6 +337,103 @@ bool Equation::prev_slot() {
     return true;
 }
 
+/* --------------------------------------------------------------- style */
+
+/* The Adobe Symbol keyboard, which is the one Equation Editor's Greek style
+ * types on: `a` gives alpha, `q` gives theta.  Greek is not a font here -- the
+ * character itself changes -- because restyling a Latin `a` would leave it a
+ * Latin `a` in the OMML, and Word would set it in a Latin font. */
+static uint32_t greek_of(uint32_t c) {
+    switch (c) {
+        case 'a': return 0x3B1; case 'b': return 0x3B2; case 'c': return 0x3C7;
+        case 'd': return 0x3B4; case 'e': return 0x3B5; case 'f': return 0x3C6;
+        case 'g': return 0x3B3; case 'h': return 0x3B7; case 'i': return 0x3B9;
+        case 'j': return 0x3D5; case 'k': return 0x3BA; case 'l': return 0x3BB;
+        case 'm': return 0x3BC; case 'n': return 0x3BD; case 'o': return 0x3BF;
+        case 'p': return 0x3C0; case 'q': return 0x3B8; case 'r': return 0x3C1;
+        case 's': return 0x3C3; case 't': return 0x3C4; case 'u': return 0x3C5;
+        case 'v': return 0x3D6; case 'w': return 0x3C9; case 'x': return 0x3BE;
+        case 'y': return 0x3C8; case 'z': return 0x3B6;
+        case 'A': return 0x391; case 'B': return 0x392; case 'C': return 0x3A7;
+        case 'D': return 0x394; case 'E': return 0x395; case 'F': return 0x3A6;
+        case 'G': return 0x393; case 'H': return 0x397; case 'I': return 0x399;
+        case 'J': return 0x3D1; case 'K': return 0x39A; case 'L': return 0x39B;
+        case 'M': return 0x39C; case 'N': return 0x39D; case 'O': return 0x39F;
+        case 'P': return 0x3A0; case 'Q': return 0x398; case 'R': return 0x3A1;
+        case 'S': return 0x3A3; case 'T': return 0x3A4; case 'U': return 0x3A5;
+        case 'V': return 0x3C2; case 'W': return 0x3A9; case 'X': return 0x39E;
+        case 'Y': return 0x3A8; case 'Z': return 0x396;
+        default:  return 0;
+    }
+}
+
+/* Walk everything, not just the immediate children: a selection may hold a
+ * whole fraction, and restyling only its top level would leave the numerator
+ * in the old face. */
+static void apply_style(NodeList& list, const std::string& name);
+
+static void style_one(Node& n, const std::string& name) {
+    if (n.tag() == Node::kChar) {
+        auto& c = static_cast<CharNode&>(n);
+        uint32_t cp = c.charCode ? c.charCode : uint32_t(uint8_t(c.ch));
+
+        if (name == "greek") {
+            if (uint32_t g = greek_of(cp)) {
+                c.charCode = uint16_t(g);
+                c.ch = 0;
+                c.latex.clear();
+                c.typeface = (g >= 0x3B1) ? TF_LCGREEK : TF_UCGREEK;
+            }
+            return;
+        }
+        if (name == "text")     { c.typeface = TF_TEXT;     return; }
+        if (name == "function") { c.typeface = TF_FUNCTION; return; }
+        if (name == "variable") { c.typeface = TF_VARIABLE; return; }
+        if (name == "vector")   { c.typeface = TF_VECTOR;   return; }
+        if (name == "math") {
+            /* Back to what the parser would have chosen: a letter is a
+             * variable, a digit is a number, anything else is a symbol. */
+            if (cp >= '0' && cp <= '9')                          c.typeface = TF_NUMBER;
+            else if ((cp >= 'a' && cp <= 'z') ||
+                     (cp >= 'A' && cp <= 'Z'))                   c.typeface = TF_VARIABLE;
+            else if (cp >= 0x3B1 && cp <= 0x3C9)                 c.typeface = TF_LCGREEK;
+            else if (cp >= 0x391 && cp <= 0x3A9)                 c.typeface = TF_UCGREEK;
+            else                                                 c.typeface = TF_SYMBOL;
+            return;
+        }
+        return;
+    }
+    for (NodeList* slot : node_slots(n))
+        if (slot) apply_style(*slot, name);
+}
+
+static void apply_style(NodeList& list, const std::string& name) {
+    for (auto& n : list) if (n) style_one(*n, name);
+}
+
+const std::vector<std::string>& Equation::styles() {
+    /* Equation Editor's Style menu, minus Other... and Define..., which are
+     * dialogs over a font list rather than styles in their own right. */
+    static const std::vector<std::string> kAll = {
+        "math", "text", "function", "variable", "vector", "greek",
+    };
+    return kAll;
+}
+
+bool Equation::set_style(const std::string& name) {
+    const std::vector<std::string>& all = styles();
+    if (std::find(all.begin(), all.end(), name) == all.end()) return false;
+    if (!has_selection()) return false;      /* nothing to restyle */
+
+    checkpoint();
+    NodeList& l = here();
+    const int lo = std::min(anchor_, index_);
+    const int hi = std::max(anchor_, index_);
+    for (int i = lo; i < hi; ++i)
+        if (l[size_t(i)]) style_one(*l[size_t(i)], name);
+    return true;
+}
+
 /* ----------------------------------------------------------- selection */
 
 bool Equation::has_selection() const {
@@ -953,6 +1050,16 @@ const std::vector<Equation::Binding>& Equation::shortcuts() {
         {"Shift+Home",   "select.home",        "extend to start of slot"},
         {"Shift+End",    "select.end",         "extend to end of slot"},
         {"Ctrl+A",       "select.all",         "select all"},
+        /* Style, applied to the selection.  The letters are Equation Editor's
+         * own menu mnemonics -- &Math, &Text, &Function, &Variable, &Greek,
+         * Matri&x-Vector -- so the muscle memory carries over even though
+         * there is no menu bar to press Alt+S in. */
+        {"Ctrl+Shift+M", "style.math",         "math style"},
+        {"Ctrl+Shift+T", "style.text",         "text style"},
+        {"Ctrl+Shift+F", "style.function",     "function style"},
+        {"Ctrl+Shift+V", "style.variable",     "variable style"},
+        {"Ctrl+Shift+X", "style.vector",       "matrix-vector (bold)"},
+        {"Ctrl+Shift+G", "style.greek",        "greek"},
     };
     return kBindings;
 }
@@ -974,6 +1081,7 @@ bool Equation::command(const std::string& name) {
     if (name == "select.home")      { extend_home(); return true; }
     if (name == "select.end")       { extend_end();  return true; }
     if (name == "select.all")       { select_all();  return true; }
+    if (name.compare(0, 6, "style.") == 0) return set_style(name.substr(6));
     if (name == "edit.undo")        return undo();
     if (name == "edit.redo")        return redo();
     return false;

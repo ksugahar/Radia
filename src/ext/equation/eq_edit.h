@@ -63,6 +63,21 @@ public:
     void move_home();
     void move_end();
 
+    /* ---- style --------------------------------------------------------- */
+    /* Equation Editor's Style menu, applied to the selection.
+     *
+     * The tree has carried these typefaces all along and nothing could set
+     * them, so a bold vector -- most of what this lab writes -- was
+     * unreachable from the editor.
+     *
+     * "greek" is not a typeface but a keyboard: Equation Editor's Greek style
+     * maps the Latin letters onto Greek ones, so `a` becomes alpha.  Treating
+     * it as a font would leave the letter Latin and merely restyle it.
+     *
+     * Names: math, text, function, variable, vector, greek. */
+    bool set_style(const std::string& name);
+    static const std::vector<std::string>& styles();
+
     /* ---- selection ----------------------------------------------------- */
     /* A range within ONE slot.
      *

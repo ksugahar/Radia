@@ -310,6 +310,10 @@ PYBIND11_MODULE(_equation, m) {
         .def("erase", &mtef::Equation::erase)
         /* Selection: a range within one slot.  Equation Editor's Select All,
          * Cut, Copy and Clear all rest on these. */
+        .def("set_style", &mtef::Equation::set_style, py::arg("name"),
+             "Equation Editor's Style menu, applied to the selection: math, "
+             "text, function, variable, vector (bold), greek.")
+        .def_static("styles", &mtef::Equation::styles)
         .def("has_selection", &mtef::Equation::has_selection)
         .def("clear_selection", &mtef::Equation::clear_selection)
         .def("select_all", &mtef::Equation::select_all)

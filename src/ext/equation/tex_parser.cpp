@@ -300,7 +300,12 @@ private:
             /* A character node holds 16 bits, which covers every Japanese
              * character.  Anything above the BMP is shown as U+FFFD rather
              * than silently truncated into a different glyph. */
-            return make_char(TF_SYMBOL, uint16_t(cp > 0xFFFF ? 0xFFFD : cp));
+            const uint16_t code = uint16_t(cp > 0xFFFF ? 0xFFFD : cp);
+            /* Classify it, rather than calling everything non-ASCII a symbol.
+             * A bare Greek letter read back in has to come out Greek again:
+             * as TF_SYMBOL the writer had no command for Beta and fell back to
+             * \symbol{914}, so a round trip lost it. */
+            return make_char(typeface_for_code(code), code);
         }
 
         ++p_;
