@@ -18,6 +18,15 @@ All notable changes to the `radia` package.  Format: each release lists
   through a layout with TeX inter-atom spacing and per-glyph boxes. MTEF, the
   Equation Editor 3.x binary format, is supported only to read equations out of
   documents that already contain them. See `docs/equation/README.md`.
+- `radia.equation.tex_to_rtf` puts an equation on the clipboard in the form
+  Word accepts. Word's RTF spells OMML as control words -- `<m:f>` is `{\mf`,
+  `<m:num>` is `{\mnum`, a run's style is `\msty0` or `\msty2` -- which was
+  measured by copying each construct out of Word rather than inferred. Because
+  the structures coincide, the tree walk is now written once in
+  `math_writer.cpp` and each output supplies only its spelling.
+  `validation_test/equation/test_paste_into_word.py` pastes all 13 probe
+  equations into Word through COM and reads `<m:oMath>` back out of the saved
+  .docx.
 
 ## 4.95.55 - Native Lie-map pipeline and 3D reference-orbit tracker
 
