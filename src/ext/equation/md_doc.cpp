@@ -119,7 +119,12 @@ void MarkdownDoc::load(const std::string& s) {
                 flush();
                 MdSegment seg;
                 seg.kind = MdSegment::kCodeSpan;
-                seg.body = s.substr(i, close + n - i);
+                /* Split as the header promises -- delimiters in open/close,
+                 * content in body -- so a viewer can render the content
+                 * without the fences and source() still rebuilds the span. */
+                seg.open = s.substr(i, n);
+                seg.body = s.substr(i + n, close - (i + n));
+                seg.close = s.substr(close, n);
                 segs_.push_back(seg);
                 i = close + n;
                 continue;

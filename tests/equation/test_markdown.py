@@ -16,6 +16,7 @@ import pytest
 
 equation = pytest.importorskip("radia.equation")
 MarkdownDoc = equation.MarkdownDoc
+MdSegment = equation.MdSegment
 
 
 DETECTION = [
@@ -83,3 +84,30 @@ def test_delimiters_are_preserved_not_normalised():
     doc.load(r"\(x\)")
     doc.set_math_latex(0, "y")
     assert doc.text() == r"\(y\)"
+
+
+def test_a_code_span_keeps_its_backticks_out_of_the_body():
+    """open/body/close means what the header says it means.
+
+    A viewer renders `body`, so leaving the fences in it prints them on the
+    page; every caller having to strip them is the same defect repeated.
+    """
+    doc = MarkdownDoc()
+    doc.load("set `x = 1` here")
+    span = next(s for s in doc.segments() if s.kind == MdSegment.CodeSpan)
+    assert span.open == "`"
+    assert span.body == "x = 1"
+    assert span.close == "`"
+
+
+@pytest.mark.parametrize("markdown", [
+    "a `b` c",
+    "``a ` b``",
+    "`` ` ``",
+    "`unclosed",
+    "`a`\n`b`",
+])
+def test_splitting_a_code_span_still_rebuilds_the_file(markdown):
+    doc = MarkdownDoc()
+    doc.load(markdown)
+    assert doc.text() == markdown
