@@ -26,6 +26,7 @@
 #include "mtef_svg.h"
 #include "mtef_omml.h"
 #include "mtef_rtf.h"
+#include "mtef_mathml.h"
 #include "mtef_dump.h"
 #include "tex_parser.h"
 #include "latex_emitter.h"
@@ -107,6 +108,21 @@ std::string mtef_to_rtf_py(const py::bytes& data, const mtef::RtfOptions& opt) {
         reinterpret_cast<const uint8_t*>(buf.data()), buf.size(), opt);
     if (rtf.empty()) throw std::runtime_error("mtef_to_rtf: parse failed");
     return rtf;
+}
+
+std::string tex_to_mathml_py(const std::string& latex,
+                             const mtef::MathMLOptions& opt) {
+    std::string m = mtef::tex_to_mathml(latex, opt);
+    if (m.empty()) throw std::runtime_error("tex_to_mathml: emit failed for: " + latex);
+    return m;
+}
+
+std::string mtef_to_mathml_py(const py::bytes& data, const mtef::MathMLOptions& opt) {
+    std::string buf = data;
+    std::string m = mtef::mtef_to_mathml(
+        reinterpret_cast<const uint8_t*>(buf.data()), buf.size(), opt);
+    if (m.empty()) throw std::runtime_error("mtef_to_mathml: parse failed");
+    return m;
 }
 
 std::string tex_dump_tree_py(const std::string& latex) {
@@ -194,6 +210,20 @@ PYBIND11_MODULE(_equation, m) {
     m.def("mtef_to_rtf", &mtef_to_rtf_py, py::arg("data"),
           py::arg("options") = mtef::RtfOptions(),
           "MTEF binary -> a complete RTF document carrying one equation.");
+
+    py::class_<mtef::MathMLOptions>(m, "MathMLOptions",
+        "How an equation is written as MathML -- the one clipboard format the "
+        "whole of Office reads as maths.")
+        .def(py::init<>())
+        .def_readwrite("display", &mtef::MathMLOptions::display)
+        .def_readwrite("declare_namespace", &mtef::MathMLOptions::declare_namespace);
+
+    m.def("tex_to_mathml", &tex_to_mathml_py, py::arg("latex"),
+          py::arg("options") = mtef::MathMLOptions(),
+          "LaTeX -> MathML (Word, PowerPoint and Excel all read it as maths).");
+    m.def("mtef_to_mathml", &mtef_to_mathml_py, py::arg("data"),
+          py::arg("options") = mtef::MathMLOptions(),
+          "MTEF binary -> MathML.");
 
     m.def("tex_normalize", &tex_normalize_py, py::arg("latex"),
           "LaTeX -> tree -> LaTeX (the shape an edited equation is saved in).");
