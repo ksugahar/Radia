@@ -346,6 +346,23 @@ if errorlevel 1 ( echo WARNING: axifem build failed )
 
 echo.
 echo ========================================
+echo   Building _equation (LaTeX equations)
+echo ========================================
+"$CMAKE_EXE" --build . --config Release --target _equation -j
+if errorlevel 1 ( echo WARNING: _equation build failed )
+
+echo.
+echo ========================================
+echo   Building eqnedt64 (the equation editor)
+echo ========================================
+rem A standalone window rather than a Python entry point: importing the radia
+rem package costs about 1.4 s against 4 ms for the equation module itself.
+rem Statically linked, so the result is one file that runs on a bare Windows.
+"$CMAKE_EXE" --build . --config Release --target eqnedt64 -j
+if errorlevel 1 ( echo WARNING: eqnedt64 build failed )
+
+echo.
+echo ========================================
 echo   Building cubit_mesh_curver (Cubit plugin .pyd)
 echo ========================================
 set "CUBIT_PLUGIN_SRC=$PROJECT_DIR\src\cubit_plugin"
