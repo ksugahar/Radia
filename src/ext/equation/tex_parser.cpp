@@ -285,6 +285,24 @@ private:
         if (c == '\\') return parse_command(ctx);
         if (c == '_' || c == '^') return nullptr;   /* handled by the caller */
 
+        /* A byte past ASCII begins a UTF-8 sequence, and one character has to
+         * become one node.  Advancing a byte at a time made every Japanese
+         * character three nodes, which the renderer then drew as three Latin-1
+         * glyphs -- the classic mojibake, invisible until someone typed
+         * something that was not ASCII. */
+        if ((unsigned char)c >= 0x80) {
+            const int extra = ((unsigned char)c >= 0xF0) ? 3 :
+                              ((unsigned char)c >= 0xE0) ? 2 : 1;
+            uint32_t cp = uint32_t((unsigned char)c) & uint32_t(0x3F >> extra);
+            ++p_;
+            for (int k = 0; k < extra && p_ < s_.size(); ++k, ++p_)
+                cp = (cp << 6) | (uint32_t((unsigned char)s_[p_]) & 0x3Fu);
+            /* A character node holds 16 bits, which covers every Japanese
+             * character.  Anything above the BMP is shown as U+FFFD rather
+             * than silently truncated into a different glyph. */
+            return make_char(TF_SYMBOL, uint16_t(cp > 0xFFFF ? 0xFFFD : cp));
+        }
+
         ++p_;
         if (is_digit(c))  return make_char(TF_NUMBER,   uint16_t(c), c);
         if (is_letter(c)) return make_char(TF_VARIABLE, uint16_t(c), c);
