@@ -744,20 +744,55 @@ private:
                        const std::string& lp, int c) {
         Layout num = layout_list(f.numer, sizePt, slot_path(lp, c, 0));
         Layout den = layout_list(f.denom, sizePt, slot_path(lp, c, 1));
-        const double gap = 0.20 * sizePt;      /* baseline of the bar to each part */
-        const double axis = 0.28 * sizePt;     /* math axis above the baseline */
-        const double thick = std::max(0.6, 0.045 * sizePt);
-        double w = std::max(num.w, den.w) + 0.4 * sizePt;
+
+        const mtef::MathFont& mf = mtef::MathFont::cambria();
+        const mtef::MathConstants& mc = mf.constants();
+
+        /* The axis is where a fraction bar sits and where a minus sign is
+         * centred, so everything else hangs off it.  The guess this replaces
+         * was 0.28 of the type size against the font's 0.2856 -- close enough
+         * that nothing moves, which is the point: it is now a fact. */
+        const double axis  = mc.axisHeight * sizePt;
+        const double thick = mc.fractionRuleThickness * sizePt;
+
+        /* Equation Editor 3.1 extends the bar past the wider of the two parts
+         * by ONE POINT on each side (Format > Spacing, "Fraction bar
+         * overhang"); the OpenType MATH table has no such notion and MathML
+         * Core draws the bar exactly as wide as the parts.  The overhang is
+         * part of how a fraction reads, so keep Equation Editor's -- but note
+         * that this replaces 0.4 of the type size, which at 12 pt was two and
+         * a half times wider on each side than the editor being imitated. */
+        const double overhang = 1.0;
+
+        /* Then the two parts are pushed apart until they clear the bar by at
+         * least the font's minimum gap.  Equation Editor states this as
+         * "Numerator height 35%" and "Denominator depth 100%" against its own
+         * reference; the font states it as a target shift plus a floor, which
+         * is the same idea with the floor made explicit. */
+        double shiftUp   = mc.fractionNumeratorDisplayStyleShiftUp * sizePt;
+        double shiftDown = mc.fractionDenominatorDisplayStyleShiftDown * sizePt;
+        const double gapNum = mc.fractionNumDisplayStyleGapMin * sizePt;
+        const double gapDen = mc.fractionDenomDisplayStyleGapMin * sizePt;
+
+        shiftUp   = std::max(shiftUp,   axis + thick / 2.0 + gapNum + num.desc);
+        shiftDown = std::max(shiftDown, -axis + thick / 2.0 + gapDen + den.asc);
+
+        const double w = std::max(num.w, den.w) + 2.0 * overhang;
 
         Layout out;
         out.w = w;
-        out.absorb(num, (w - num.w) / 2.0, -(axis + gap + num.desc));
-        out.absorb(den, (w - den.w) / 2.0, -axis + gap + den.asc);
+        out.absorb(num, (w - num.w) / 2.0, -shiftUp);
+        out.absorb(den, (w - den.w) / 2.0, shiftDown);
+
         Rule bar;
-        bar.x = 0; bar.y = -axis - thick / 2.0; bar.w = w; bar.h = thick;
+        bar.x = 0;
+        bar.y = -axis - thick / 2.0;
+        bar.w = w;
+        bar.h = thick;
         out.rules.push_back(bar);
-        out.asc = axis + gap + num.desc + num.asc;
-        out.desc = -axis + gap + den.asc + den.desc;
+
+        out.asc  = shiftUp + num.asc;
+        out.desc = shiftDown + den.desc;
         return out;
     }
 

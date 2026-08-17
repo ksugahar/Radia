@@ -178,13 +178,27 @@ void draw_centred(HDC dc, const Layout& L, const RECT& rc, double upp,
                   COLORREF colour) {
     if (L.glyphs.empty() && L.rules.empty() && L.empty_slots.empty()) return;
     SvgStyle st;
-    const int x = rc.left + int(((rc.right - rc.left) - L.w * upp) / 2);
-    const int y = rc.top + int(((rc.bottom - rc.top) +
-                                (L.asc - L.desc) * upp) / 2);
+
+    /* Shrink to fit before centring.  A palette cell is a fixed rectangle and
+     * what goes in it is a real equation laid out by the real layout, so its
+     * size is not ours to choose -- a radical that now asks the font for a
+     * taller drawing, or a matrix with more rows, will simply be bigger than
+     * the button.  Centring alone let it spill over the neighbours. */
+    const double availW = std::max(1.0, double(rc.right - rc.left) - 2.0);
+    const double availH = std::max(1.0, double(rc.bottom - rc.top) - 2.0);
+    const double needW = L.w * upp;
+    const double needH = (L.asc + L.desc) * upp;
+    double fit = 1.0;
+    if (needW > availW) fit = std::min(fit, availW / needW);
+    if (needH > availH) fit = std::min(fit, availH / needH);
+    const double u = upp * fit;
+
+    const int x = rc.left + int(((rc.right - rc.left) - L.w * u) / 2);
+    const int y = rc.top + int(((rc.bottom - rc.top) + (L.asc - L.desc) * u) / 2);
     /* Slot boxes on: a palette cell for a template is ALL empty slots, so
      * without them the button for scripts, matrices and accents is blank --
      * which is exactly how those three buttons came to look broken. */
-    draw_layout(dc, L, st, upp, x, y, colour, true);
+    draw_layout(dc, L, st, u, x, y, colour, true);
 }
 
 void close_popup(Editor& ed) {
