@@ -561,6 +561,19 @@ private:
         if (out.asc <= 0 && out.desc <= 0) {
             top = -0.70 * sizePt;
             bottom = 0.20 * sizePt;
+
+            /* An empty slot takes up room and says so.  Without a width a
+             * fresh fraction is a bar with nothing above or below it, and the
+             * editor gives no sign that there are two places to type. */
+            out.w = 0.55 * sizePt;
+            out.asc = -top;
+            out.desc = bottom;
+            SlotBox b;
+            b.x = 0;
+            b.y = top;
+            b.w = out.w;
+            b.h = bottom - top;
+            out.empty_slots.push_back(b);
         }
         for (size_t k = own_first; k < out.stops.size(); ++k)
             if (out.stops[k].path == path) {

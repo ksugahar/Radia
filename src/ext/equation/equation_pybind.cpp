@@ -392,6 +392,19 @@ PYBIND11_MODULE(_equation, m) {
           py::return_value_policy::reference,
           "The template row of the palette bar.");
 
+    m.def("tex_empty_slots", [](const std::string& latex,
+                                const mtef::SvgStyle& st) {
+              auto root = mtef::parse_latex(latex);
+              mtef::Layout L = mtef::layout_math(*root, st);
+              py::list out;
+              for (const mtef::SlotBox& b : L.empty_slots)
+                  out.append(py::make_tuple(b.x, b.y, b.w, b.h));
+              return out;
+          }, py::arg("latex"), py::arg("style") = mtef::SvgStyle(),
+             "Where the empty slots of a half-typed equation are, as "
+             "(x, y, w, h) in points.  The editor draws these as dotted boxes "
+             "so the structure is visible; a picture must not.");
+
     m.def("tex_to_dib", [](const std::string& latex, const mtef::SvgStyle& st,
                            double scale) {
               return py::bytes(mtef::tex_to_dib(latex, st, scale));
