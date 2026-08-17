@@ -30,6 +30,7 @@
 #include "mtef_svg.h"
 
 #include <algorithm>
+#include <cmath>
 #include <cstring>
 #include <string>
 #include <vector>
@@ -43,8 +44,12 @@ const wchar_t* kClassName = L"Eqnedt64Window";
  * afforded this; an equation at 600 dpi is a few tens of kilobytes and takes
  * milliseconds, so the picture is print quality rather than screen quality. */
 const double kPasteDpi = 600.0;
-const double kZoom = 2.0;          /* the equation is shown larger than life,
-                                    * as the old editor did at 200% */
+/* The equation is shown larger than life, as the old editor did at 200%.
+ * Equation Editor offers 100/200/400 and a custom value; the wheel covers the
+ * same ground continuously and the two ends just keep it usable. */
+const double kZoomDefault = 2.0;
+const double kZoomMin = 0.5;
+const double kZoomMax = 8.0;
 const int kMargin = 24;            /* device-independent pixels */
 
 std::wstring widen(const std::string& s) {
@@ -206,7 +211,8 @@ struct Editor {
     std::vector<Cell> cells;        /* what the open popup is showing */
     int hot_cell = -1;
 
-    double units_per_pt() const { return dpi / 72.0 * kZoom; }
+    double zoom = kZoomDefault;
+    double units_per_pt() const { return dpi / 72.0 * zoom; }
     int scaled(int dip) const { return MulDiv(dip, dpi, 96); }
     int bar_height() const { return scaled(kBtnH) * 2 + scaled(kBarPad) * 3; }
 };
@@ -475,6 +481,20 @@ void paint(HWND hwnd, Editor& ed) {
 
 void redraw(HWND hwnd) { InvalidateRect(hwnd, nullptr, FALSE); }
 
+/* The title carries the build and the zoom.  The build because an install
+ * pointing at a stale tree has bitten this repository repeatedly; the zoom
+ * because the wheel is continuous, and a magnification you cannot read off is
+ * one you cannot get back to. */
+void update_title(HWND hwnd, const Editor& ed) {
+#ifdef EQNEDT64_VERSION
+    std::wstring t = L"EQNEDT64 " + widen(EQNEDT64_VERSION);
+#else
+    std::wstring t = L"EQNEDT64 (development build)";
+#endif
+    t += L"  -  " + std::to_wstring(int(std::lround(ed.zoom * 100))) + L"%";
+    SetWindowTextW(hwnd, t.c_str());
+}
+
 /* Ctrl+V.  The editor was a one-way door without this: an equation could be
  * written and sent out, and nothing could be brought back in.
  *
@@ -613,6 +633,18 @@ LRESULT CALLBACK proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             if (ed) { build_bar(*ed); redraw(hwnd); }
             return 0;
 
+        case WM_MOUSEWHEEL: {
+            if (!ed) return 0;
+            /* There is nothing to scroll -- one equation, always fully
+             * visible -- so the wheel is free to do the useful thing. */
+            const int notches = GET_WHEEL_DELTA_WPARAM(wp) / WHEEL_DELTA;
+            ed->zoom *= std::pow(1.15, notches);
+            ed->zoom = std::max(kZoomMin, std::min(kZoomMax, ed->zoom));
+            update_title(hwnd, *ed);
+            redraw(hwnd);
+            return 0;
+        }
+
         case WM_KEYDOWN: {
             if (!ed) return 0;
             const bool ctrl = (GetKeyState(VK_CONTROL) & 0x8000) != 0;
@@ -634,6 +666,15 @@ LRESULT CALLBACK proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
                 return 0;
             }
             if (ctrl && wp == 'V') { paste_from_clipboard(hwnd, *ed); return 0; }
+
+            /* Equation Editor's View menu offers 100 / 200 / 400; the digits
+             * are the same, without a menu to put them in. */
+            if (ctrl && (wp == '1' || wp == '2' || wp == '4')) {
+                ed->zoom = (wp == '1') ? 1.0 : (wp == '2') ? 2.0 : 4.0;
+                update_title(hwnd, *ed);
+                redraw(hwnd);
+                return 0;
+            }
             if (handle_key(hwnd, *ed, UINT(wp))) return 0;
             return 0;
         }
@@ -769,6 +810,7 @@ EditorResult run_equation_window(const std::string& latex) {
 
     ed.dpi = int(GetDpiForWindow(hwnd));
     build_bar(ed);
+    update_title(hwnd, ed);
     ShowWindow(hwnd, SW_SHOW);
     SetFocus(hwnd);
 
