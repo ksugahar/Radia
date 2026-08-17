@@ -27,6 +27,7 @@
 #include "mtef_omml.h"
 #include "mtef_rtf.h"
 #include "mtef_mathml.h"
+#include "mtef_gdi.h"
 #include "mtef_dump.h"
 #include "tex_parser.h"
 #include "latex_emitter.h"
@@ -123,6 +124,19 @@ std::string mtef_to_mathml_py(const py::bytes& data, const mtef::MathMLOptions& 
         reinterpret_cast<const uint8_t*>(buf.data()), buf.size(), opt);
     if (m.empty()) throw std::runtime_error("mtef_to_mathml: parse failed");
     return m;
+}
+
+py::bytes tex_to_emf_py(const std::string& latex, const mtef::SvgStyle& style) {
+    std::string emf = mtef::tex_to_emf(latex, style);
+    if (emf.empty()) throw std::runtime_error("tex_to_emf: render failed for: " + latex);
+    return py::bytes(emf);
+}
+
+py::bytes tex_to_png_py(const std::string& latex, const mtef::SvgStyle& style,
+                        double scale) {
+    std::string png = mtef::tex_to_png(latex, style, scale);
+    if (png.empty()) throw std::runtime_error("tex_to_png: render failed for: " + latex);
+    return py::bytes(png);
 }
 
 std::string tex_dump_tree_py(const std::string& latex) {
@@ -224,6 +238,14 @@ PYBIND11_MODULE(_equation, m) {
     m.def("mtef_to_mathml", &mtef_to_mathml_py, py::arg("data"),
           py::arg("options") = mtef::MathMLOptions(),
           "MTEF binary -> MathML.");
+
+    m.def("tex_to_emf", &tex_to_emf_py, py::arg("latex"),
+          py::arg("style") = mtef::SvgStyle(),
+          "LaTeX -> an enhanced metafile, the vector picture Office and "
+          "Google Drawings both take.");
+    m.def("tex_to_png", &tex_to_png_py, py::arg("latex"),
+          py::arg("style") = mtef::SvgStyle(), py::arg("scale") = 4.0,
+          "LaTeX -> a PNG, for the targets that accept nothing else.");
 
     m.def("tex_normalize", &tex_normalize_py, py::arg("latex"),
           "LaTeX -> tree -> LaTeX (the shape an edited equation is saved in).");

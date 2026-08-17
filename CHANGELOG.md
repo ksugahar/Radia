@@ -35,6 +35,15 @@ All notable changes to the `radia` package.  Format: each release lists
   takes what it understands: Word 10/10 and PowerPoint 10/10 native equations
   from the same clipboard. Excel is unverified -- pasting into a shape is a UI
   operation its object model does not expose.
+- `radia.equation.tex_to_emf` / `tex_to_png` draw the equation as a picture,
+  for the targets with no equation object: Google Slides has none, rejects SVG
+  on upload and takes raster, and Excel keeps a metafile beside the bitmap when
+  it takes a picture. Both come from one GDI routine over one layout -- in GDI a
+  metafile, a bitmap and a window are all device contexts -- so there is no
+  second renderer and no separate PNG encoder, and the same routine is what an
+  editor will draw on screen with. `copy_to_clipboard` now offers them after
+  the equation formats; Word and PowerPoint were re-measured with the pictures
+  present and still produce native equations, 5/5 each.
 
 ## 4.95.55 - Native Lie-map pipeline and 3D reference-orbit tracker
 

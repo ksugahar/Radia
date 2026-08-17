@@ -233,23 +233,37 @@ def count_equations(path: str) -> int:
     return n
 
 
-def copy_to_clipboard(latex: str, display: bool = False) -> list[str]:
+def copy_to_clipboard(latex: str, display: bool = False,
+                      pictures: bool = True) -> list[str]:
     """Put one equation on the Windows clipboard for every target at once.
 
-    The clipboard holds many formats and each application takes the richest
-    thing it understands, so a single Copy serves every target with no mode
-    switch.  Which format each one needs was measured, not assumed:
+    The clipboard holds many formats and each application takes the one it
+    understands best, so a single Copy serves every target with no mode switch.
+    Which format each one needs was measured, not assumed:
 
       Rich Text Format   Word reads it as maths; PowerPoint reads it as text
-      MathML             PowerPoint and Excel read it as maths; Word refuses it
+      MathML             PowerPoint reads it as maths; Word refuses it alone
+      CF_ENHMETAFILE     a vector picture, for anywhere without an equation
+                         object -- Excel keeps the metafile beside the bitmap,
+                         and it is how a vector reaches Google Slides via
+                         Google Drawings
+      PNG                the picture that always works; Google Slides rejects
+                         SVG on upload and takes raster only
       CF_UNICODETEXT     the LaTeX itself, for Markdown, Jupyter, any editor
 
-    Returns the format names actually placed, so a caller can report what a
-    given paste target will find.  Windows only.
+    The pictures are offered *after* the equation formats deliberately: Word and
+    PowerPoint were re-checked with them present and still produce native
+    equations, but an application that prefers a picture would silently
+    downgrade, so `pictures=False` is there to take them away.
+
+    Returns the format names actually placed.  Windows only.
     """
+    import ctypes
+
     import win32clipboard as cb          # pywin32, Windows only
 
-    from radia._equation import MathMLOptions, RtfOptions
+    from radia._equation import (MathMLOptions, RtfOptions, SvgStyle,
+                                 tex_to_emf, tex_to_png)
 
     rtf_opt = RtfOptions()
     rtf_opt.display = display
@@ -262,6 +276,12 @@ def copy_to_clipboard(latex: str, display: bool = False) -> list[str]:
         ("MathML", tex_to_mathml(latex, mml_opt).encode("utf-8")),
     ]
 
+    style = SvgStyle()
+    emf_bytes = png_bytes = b""
+    if pictures:
+        emf_bytes = tex_to_emf(latex, style)
+        png_bytes = tex_to_png(latex, style, 4.0)
+
     cb.OpenClipboard()
     try:
         cb.EmptyClipboard()
@@ -269,6 +289,19 @@ def copy_to_clipboard(latex: str, display: bool = False) -> list[str]:
         for name, data in payload:
             cb.SetClipboardData(cb.RegisterClipboardFormat(name), data)
             placed.append(name)
+
+        if emf_bytes:
+            # CF_ENHMETAFILE wants a metafile handle, not bytes, and the system
+            # owns it once it is on the clipboard -- it must not be deleted.
+            gdi = ctypes.windll.gdi32
+            handle = gdi.SetEnhMetaFileBits(len(emf_bytes), emf_bytes)
+            if handle:
+                cb.SetClipboardData(14, handle)      # CF_ENHMETAFILE
+                placed.append("CF_ENHMETAFILE")
+        if png_bytes:
+            cb.SetClipboardData(cb.RegisterClipboardFormat("PNG"), png_bytes)
+            placed.append("PNG")
+
         cb.SetClipboardData(cb.CF_UNICODETEXT, latex)
         placed.append("CF_UNICODETEXT")
     finally:
