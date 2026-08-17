@@ -179,6 +179,17 @@ static std::string rasterize(const Layout& layout, const SvgStyle& style,
     const int W = std::max(1, int(std::lround(w_pt * kUnitsPerPt * scale / kUnitsPerPt)));
     const int H = std::max(1, int(std::lround(h_pt * kUnitsPerPt * scale / kUnitsPerPt)));
 
+    /* How big the picture SAYS it is.  Without this a 600 dpi equation pastes
+     * at 600/96 = 6.25 times its proper size, because an application with no
+     * physical size to go on assumes screen pixels.  Declaring the resolution
+     * is what makes "finely sampled" different from "enormous": a 12 pt
+     * equation stays 12 pt and simply has more pixels in it.
+     *
+     * The metafile has carried its physical size all along -- that is what a
+     * vector format is -- so only the raster needed telling. */
+    const double dpi = scale * 72.0;
+    const LONG pels_per_metre = LONG(std::lround(dpi / 0.0254));
+
     GdiPlusOnce gdip;
 
     HDC screen = GetDC(nullptr);
@@ -190,6 +201,8 @@ static std::string rasterize(const Layout& layout, const SvgStyle& style,
     bi.bmiHeader.biPlanes = 1;
     bi.bmiHeader.biBitCount = 32;
     bi.bmiHeader.biCompression = BI_RGB;
+    bi.bmiHeader.biXPelsPerMeter = pels_per_metre;
+    bi.bmiHeader.biYPelsPerMeter = pels_per_metre;
     void* bits = nullptr;
     HBITMAP bmp = CreateDIBSection(mem, &bi, DIB_RGB_COLORS, &bits, nullptr, 0);
     ReleaseDC(nullptr, screen);
@@ -228,6 +241,9 @@ static std::string rasterize(const Layout& layout, const SvgStyle& style,
                    src + size_t(H - 1 - y) * stride, stride);
     } else {
         Gdiplus::Bitmap image(bmp, nullptr);
+        /* Writes the PNG pHYs chunk, so a reader that honours it places the
+         * equation at its real size rather than at 6.25 times. */
+        image.SetResolution(Gdiplus::REAL(dpi), Gdiplus::REAL(dpi));
         CLSID png;
         if (gdiplus_encoder(L"image/png", &png)) {
             IStream* stream = nullptr;
