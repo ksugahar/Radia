@@ -672,8 +672,17 @@ EditorResult run_equation_window(const std::string& latex) {
     pc.lpszClassName = kPopupClass;
     RegisterClassExW(&pc);
 
+    /* The title says which build this is.  An install pointing at a stale
+     * tree has bitten this repository repeatedly, and "is the fix actually in
+     * the thing on screen" has to be answerable by looking at it. */
+#ifdef EQNEDT64_VERSION
+    const std::wstring title = L"EQNEDT64 " + widen(EQNEDT64_VERSION);
+#else
+    const std::wstring title = L"EQNEDT64 (development build)";
+#endif
+
     HWND hwnd = CreateWindowExW(
-        0, kClassName, L"EQNEDT64",
+        0, kClassName, title.c_str(),
         WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT, 760, 260,
         nullptr, nullptr, wc.hInstance, &ed);
     if (!hwnd) return EditorResult{};
