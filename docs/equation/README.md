@@ -58,11 +58,37 @@ clipboard -> paste -> save -> read back `<m:oMath>`, for Word and PowerPoint.
 An equation that arrives as text runs is a picture at best, and no amount of
 correct-looking markup would show that.
 
+### Pictures, and where they are needed
+
+| target | what it takes |
+|---|---|
+| Word | RTF, a native equation. No picture. |
+| PowerPoint | MathML, a native equation. No picture. |
+| Excel | equations live in a floating object; a pasted Word equation lands as a picture, and Excel keeps the **metafile** beside the bitmap |
+| Google Slides | no equation object at all. SVG upload is rejected; raster only. EMF reaches it as vector through Google Drawings. |
+
+`tex_to_emf` and `tex_to_png` come from one GDI drawing routine over one
+layout -- the same layout an editor will draw on screen with and position its
+caret from. In GDI a metafile, a bitmap and a window are all device contexts,
+so there is no second renderer and no separate PNG encoder to keep in step.
+
+The pictures are on the clipboard *after* the equation formats deliberately.
+"The richest format wins" is not a rule -- each application picks by its own
+priority list, so an equation format can lose to a metafile. Word and
+PowerPoint were re-measured with the pictures present and still produce native
+equations (5/5 each), but `copy_to_clipboard(..., pictures=False)` exists for
+an application that would rather have the picture.
+
 **Excel is not verified.** Its equations live in shapes, and pasting into a
 shape's text is a UI operation its object model does not expose -- Shape.Select
 plus Paste, TextRange.Select plus Paste, and PasteSpecial are all refused. The
 payload is the same one PowerPoint accepts and Excel uses the same equation
 object, so it is likely to work; that is not the same as measured.
+
+Going "via Word" does not help, and that *is* measured: copying an equation in
+Word and pasting into Excel produces a picture (`image1.png` + `image2.emf`),
+not an equation, even though Word's clipboard carries strictly more formats
+than ours. The missing piece is the paste target, not the format.
 
 ## Layout
 
@@ -73,7 +99,9 @@ object, so it is likely to work; that is not the same as measured.
 | `src/ext/equation/mtef_omml.cpp` | OMML spelling (inside a .docx / .pptx) |
 | `src/ext/equation/mtef_rtf.cpp` | RTF spelling (clipboard, Word) |
 | `src/ext/equation/mtef_mathml.cpp` | MathML spelling (clipboard, PowerPoint / Excel) |
-| `src/ext/equation/mtef_svg.cpp` | node tree → layout → SVG |
+| `src/ext/equation/math_layout.h` | the display list every way of drawing shares |
+| `src/ext/equation/mtef_svg.cpp` | node tree → layout, and layout → SVG |
+| `src/ext/equation/mtef_gdi.cpp` | layout → EMF and PNG, through GDI |
 | `src/ext/equation/eq_edit.cpp` | the editing model |
 | `src/ext/equation/md_doc.cpp` | which spans of a `.md` are math |
 | `src/radia/equation/office.py` | Word and PowerPoint writers |
