@@ -105,6 +105,27 @@ static const char* map_lookup(const MapEntry* map, int n, uint16_t key) {
     return nullptr;
 }
 
+/* Write a code point as UTF-8.
+ *
+ * The fallback for a character with no LaTeX command has to be the character
+ * itself.  '?' loses it outright, and \symbol{N} neither round trips nor reads
+ * -- both are the same defect that dropped every \vec and every kanji: an
+ * output path that quietly discards what the author typed.
+ *
+ * Uppercase Greek is where this bites in practice.  Beta, Eta, Rho and the
+ * rest look like Latin letters, so LaTeX has no \Beta to write them with, and
+ * they were coming out as '?'. */
+void emit_utf8(uint32_t cp, std::string& out) {
+    if (cp < 0x80) { out += char(cp); return; }
+    if (cp < 0x800) {
+        out += char(0xC0 | (cp >> 6));
+    } else {
+        out += char(0xE0 | (cp >> 12));
+        out += char(0x80 | ((cp >> 6) & 0x3F));
+    }
+    out += char(0x80 | (cp & 0x3F));
+}
+
 /* Embellishment format table */
 struct EmbellFmt { const char* prefix; const char* suffix; };
 static const EmbellFmt EMBELL_MAP[] = {
@@ -350,14 +371,16 @@ void LaTeXEmitter::emitChar(const CharNode& ch, std::string& out) {
                  * character the author typed: it does not round trip, and no
                  * one can read it.  The same is_cjk that picks the face
                  * decides this, so one rule governs both. */
-                const uint32_t cp = uint32_t(code);
-                if (cp < 0x800) {
-                    out += char(0xC0 | (cp >> 6));
-                } else {
-                    out += char(0xE0 | (cp >> 12));
-                    out += char(0x80 | ((cp >> 6) & 0x3F));
-                }
-                out += char(0x80 | (cp & 0x3F));
+                emit_utf8(uint32_t(code), out);
+            }
+            else if (code >= 0x80) {
+                /* Any character with no command is written as itself.
+                 * \symbol{977} is not an escape hatch -- the parser does not
+                 * read it back, so it loses the character just as surely as
+                 * '?' did.  This was the last hole of the three: \vec, kanji,
+                 * and now the Greek variants like theta-symbol that fall
+                 * outside the plain alphabet ranges. */
+                emit_utf8(uint32_t(code), out);
             }
             else {
                 char buf[32];
@@ -370,13 +393,15 @@ void LaTeXEmitter::emitChar(const CharNode& ch, std::string& out) {
     else if (tf == TF_LCGREEK) {
         const char* s = map_lookup(UNICODE_MAP, UNICODE_MAP_N, code);
         if (s) out += s;
-        else { char c = (code < 128) ? (char)code : '?'; out += c; }
+        else if (code < 128) out += char(code);
+        else emit_utf8(uint32_t(code), out);   /* see emit_utf8: never '?' */
     }
     /* Greek uppercase */
     else if (tf == TF_UCGREEK) {
         const char* s = map_lookup(UNICODE_MAP, UNICODE_MAP_N, code);
         if (s) out += s;
-        else { char c = (code < 128) ? (char)code : '?'; out += c; }
+        else if (code < 128) out += char(code);
+        else emit_utf8(uint32_t(code), out);   /* see emit_utf8: never '?' */
     }
     /* Vector (bold) */
     else if (tf == TF_VECTOR) {
