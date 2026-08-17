@@ -8,8 +8,10 @@ an SVG picture, and a layout an editor can draw with and position a caret from.
 import radia.equation as eq
 
 eq.tex_to_omml(r"\frac{a+b}{c}")     # Office-native math, for a .docx / .pptx
-eq.tex_to_rtf(r"\frac{a+b}{c}")      # the same equation, for the clipboard
+eq.copy_to_clipboard(r"\frac{a+b}{c}")   # every format at once, one Copy
 eq.tex_to_svg(r"\frac{a+b}{c}")      # a picture
+eq.tex_to_emf(r"\frac{a+b}{c}")      # a vector picture
+eq.tex_to_png(r"\frac{a+b}{c}")      # a bitmap, where nothing else works
 eq.markdown_to_docx(open("note.md", encoding="utf-8").read(), "note.docx")
 ```
 
@@ -105,6 +107,31 @@ than ours. The missing piece is the paste target, not the format.
 | `src/ext/equation/eq_edit.cpp` | the editing model |
 | `src/ext/equation/md_doc.cpp` | which spans of a `.md` are math |
 | `src/radia/equation/office.py` | Word and PowerPoint writers |
+
+## Caret geometry
+
+The editing model addresses the caret as a path of `(child, slot)` steps; the
+layout knows where things are. `caret_geometry()` and `move_to_point()` join
+the two, which is what lets a front end draw the caret and turn a click into a
+position.
+
+```python
+e = eq.Equation()
+e.load_latex(r"\frac{a}{b}")
+found, x, top, bottom = e.caret_geometry()   # where to draw it, in points
+e.move_to_point(x, y)                        # where a click means
+w, asc, desc = e.extents()                   # the equation's own box
+```
+
+Slot numbering in the layout must match `node_slots()` exactly. A mismatch puts
+the cursor somewhere other than where it was clicked -- which produces perfectly
+correct LaTeX, so nothing else catches it. `tests/equation/test_caret_geometry.py`
+does: it walks the caret through every position, clicks where it is, and
+requires the click to land at the same horizontal position in a slot covering
+that height. Not "the same path": several positions genuinely share a point (the
+end of an integrand and the end of the integral are the same place), and a tall
+caret's middle can lie inside a subscript, where a click *should* go. Ties are
+broken towards the innermost slot, where typing continues what is there.
 
 ## The editing model
 
