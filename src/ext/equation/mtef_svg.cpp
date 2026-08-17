@@ -422,6 +422,30 @@ private:
         return st_.sub2;
     }
 
+    /* What a fraction sets its numerator and denominator in.
+     *
+     * TeX steps display and text style down to script, and script down to
+     * script-script, so the first fraction stays full size and every fraction
+     * inside one is set smaller.  Without that a fraction of a fraction just
+     * grows taller and taller, which is what this editor did.
+     *
+     * Equation Editor 3.1 does NOT do this.  Its palette carries TWO fraction
+     * templates side by side -- "Full-size vertical fraction" and
+     * "Reduced-size vertical fraction" -- and the person writing picks which.
+     * That works when the input is a template chosen by hand; it cannot work
+     * here, where the input is LaTeX and rac is one command.  So the size
+     * has to come from the nesting, and TeX's rule is the one that does. */
+    double frac_child_size(double cur) const {
+        return fracDepth_ == 0 ? cur : script_size(cur);
+    }
+
+    /* How many fractions enclose the one being laid out.  The step has to be
+     * counted, not inferred from the type size: display and text style are the
+     * SAME size in TeX, so an inner fraction at full size is indistinguishable
+     * from the outer one by size alone -- which is how a first attempt at this
+     * left every level full-sized. */
+    int fracDepth_ = 0;
+
     Layout glyph_layout(uint32_t cp, double sizePt, bool italic, bool symbol) {
         Layout L;
         L.w = char_width(cp, sizePt, italic, symbol);
@@ -742,8 +766,11 @@ private:
     /* node_slots(kFrac) = { numer, denom } */
     Layout layout_frac(const FracNode& f, double sizePt,
                        const std::string& lp, int c) {
-        Layout num = layout_list(f.numer, sizePt, slot_path(lp, c, 0));
-        Layout den = layout_list(f.denom, sizePt, slot_path(lp, c, 1));
+        const double kidPt = frac_child_size(sizePt);
+        ++fracDepth_;
+        Layout num = layout_list(f.numer, kidPt, slot_path(lp, c, 0));
+        Layout den = layout_list(f.denom, kidPt, slot_path(lp, c, 1));
+        --fracDepth_;
 
         const mtef::MathFont& mf = mtef::MathFont::cambria();
         const mtef::MathConstants& mc = mf.constants();
