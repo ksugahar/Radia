@@ -425,6 +425,17 @@ PYBIND11_MODULE(_equation, m) {
     }, py::arg("codepoint"), py::arg("em"),
        "The smallest drawing at least that tall, and how tall it is.");
 
+    m.def("tex_metrics", [](const std::string& latex,
+                            const mtef::SvgStyle& style) {
+        double w = 0, asc = 0, desc = 0;
+        if (!mtef::tex_box(latex, style, w, asc, desc))
+            throw std::runtime_error("tex_metrics: render failed for: " + latex);
+        return py::make_tuple(w, asc, desc);
+    }, py::arg("latex"), py::arg("style"),
+       "Width, height above the baseline and depth below it, in points -- the "
+       "same three numbers TeX reports for a box, so the two can be compared "
+       "without measuring a picture.");
+
     py::enum_<mtef::AtomKind>(m, "AtomKind", "TeX's atom classes.")
         .value("Ord", mtef::AtomOrd).value("Op", mtef::AtomOp)
         .value("Bin", mtef::AtomBin).value("Rel", mtef::AtomRel)

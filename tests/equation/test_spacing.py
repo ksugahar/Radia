@@ -28,9 +28,9 @@ K = equation.AtomKind
 kind = equation.atom_kind
 space = equation.atom_space_mu
 
-# Equation Editor 3.1's amounts, measured: one eighteenth tighter than TeX's
-# 3/4/5 at every step.
-THIN, MED, THICK = 2, 3, 4
+# TeX's amounts.  Equation Editor 3.1 measures one eighteenth tighter at
+# every step -- 4, 3 and 2 -- but appearance follows TeX here.
+THIN, MED, THICK = 3, 4, 5
 
 
 # ---- what a character is ----------------------------------------------------
