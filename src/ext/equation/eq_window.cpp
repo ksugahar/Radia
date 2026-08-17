@@ -153,6 +153,43 @@ const std::vector<Chord>& chords() {
     return table;
 }
 
+/* ---- the palette bar ---------------------------------------------------- */
+
+const wchar_t* kPopupClass = L"Eqnedt64Palette";
+const int kBtnW = 46, kBtnH = 24;      /* device-independent pixels */
+const int kCellW = 34, kCellH = 30;
+const int kBarPad = 3;
+const double kBarPt = 9.0;             /* type size inside a button   */
+const double kCellPt = 12.0;           /* type size inside a cell     */
+
+/* What a cell shows is what inserting it produces: the sample is rendered by
+ * actually performing the insertion into a scratch equation.  A hand-written
+ * table of sample LaTeX would drift from what the templates really are. */
+Layout sample_layout(const Equation::PaletteItem& item, double sizePt) {
+    SvgStyle st;
+    const double k = sizePt / 12.0;
+    st.full = 12.0 * k; st.sub = 7.0 * k; st.sub2 = 5.0 * k;
+    st.sym = 18.0 * k;  st.subsym = 12.0 * k;
+    st.padding = 0.0;
+
+    Equation e;
+    if (item.is_template) e.insert_template(item.command);
+    else                  e.insert_symbol(item.command);
+    return e.layout(st);
+}
+
+struct Cell {
+    Equation::PaletteItem item;
+    Layout layout;
+    RECT rc{};
+};
+
+struct Button {
+    const Equation::PaletteGroup* group = nullptr;
+    Layout sample;                      /* a few of its members, drawn small */
+    RECT rc{};
+};
+
 /* ---- the window --------------------------------------------------------- */
 
 struct Editor {
@@ -163,12 +200,194 @@ struct Editor {
     int dpi = 96;
     std::vector<Step> pending;      /* a chord waiting for its second key */
 
+    std::vector<Button> bar;
+    HWND popup = nullptr;
+    std::vector<Cell> cells;        /* what the open popup is showing */
+    int hot_cell = -1;
+
     double units_per_pt() const { return dpi / 72.0 * kZoom; }
     int scaled(int dip) const { return MulDiv(dip, dpi, 96); }
+    int bar_height() const { return scaled(kBtnH) * 2 + scaled(kBarPad) * 3; }
 };
+
+/* Two rows, symbols above templates -- Equation Editor's arrangement. */
+void build_bar(Editor& ed) {
+    ed.bar.clear();
+    const int w = ed.scaled(kBtnW), h = ed.scaled(kBtnH), pad = ed.scaled(kBarPad);
+    const std::vector<Equation::PaletteGroup>* rows[2] = {
+        &Equation::symbol_palettes(), &Equation::template_palettes()};
+
+    for (int r = 0; r < 2; ++r) {
+        int x = pad;
+        const int y = pad + r * (h + pad);
+        for (const Equation::PaletteGroup& g : *rows[r]) {
+            Button b;
+            b.group = &g;
+            b.rc = {x, y, x + w, y + h};
+            /* The button wears its own contents: the first few members, drawn
+             * by the same routine that will draw them once inserted. */
+            SvgStyle st;
+            const double k = kBarPt / 12.0;
+            st.full = 12.0 * k; st.sub = 7.0 * k; st.sub2 = 5.0 * k;
+            st.sym = 18.0 * k;  st.subsym = 12.0 * k;
+            st.padding = 0.0;
+            Equation e;
+            for (size_t i = 0; i < g.items.size() && i < 3; ++i) {
+                if (g.items[i].is_template) e.insert_template(g.items[i].command);
+                else                        e.insert_symbol(g.items[i].command);
+            }
+            b.sample = e.layout(st);
+            ed.bar.push_back(b);
+            x += w + pad;
+        }
+    }
+}
 
 Editor* editor_of(HWND hwnd) {
     return reinterpret_cast<Editor*>(GetWindowLongPtrW(hwnd, GWLP_USERDATA));
+}
+
+/* Centre a laid-out equation in a rectangle and draw it. */
+void draw_centred(HDC dc, const Layout& L, const RECT& rc, double upp,
+                  COLORREF colour) {
+    if (L.glyphs.empty() && L.rules.empty()) return;
+    SvgStyle st;
+    const int x = rc.left + int(((rc.right - rc.left) - L.w * upp) / 2);
+    const int y = rc.top + int(((rc.bottom - rc.top) +
+                                (L.asc - L.desc) * upp) / 2);
+    draw_layout(dc, L, st, upp, x, y, colour);
+}
+
+void close_popup(Editor& ed) {
+    if (ed.popup) { DestroyWindow(ed.popup); ed.popup = nullptr; }
+    ed.cells.clear();
+    ed.hot_cell = -1;
+}
+
+LRESULT CALLBACK popup_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp);
+
+/* Open the grid for one button, laid out under it. */
+void open_popup(HWND owner, Editor& ed, const Button& b) {
+    close_popup(ed);
+    const int n = int(b.group->items.size());
+    if (n == 0) return;
+
+    int cols = 1;
+    while (cols * cols < n) ++cols;
+    if (cols > 10) cols = 10;
+    const int rows = (n + cols - 1) / cols;
+
+    const int cw = ed.scaled(kCellW), ch = ed.scaled(kCellH);
+    const double upp = ed.dpi / 72.0;
+
+    ed.cells.clear();
+    for (int i = 0; i < n; ++i) {
+        Cell c;
+        c.item = b.group->items[size_t(i)];
+        c.layout = sample_layout(c.item, kCellPt);
+        const int cx = (i % cols) * cw, cy = (i / cols) * ch;
+        c.rc = {cx, cy, cx + cw, cy + ch};
+        ed.cells.push_back(c);
+    }
+    (void)upp;
+
+    POINT at = {b.rc.left, b.rc.bottom};
+    ClientToScreen(owner, &at);
+    ed.popup = CreateWindowExW(
+        WS_EX_TOOLWINDOW | WS_EX_TOPMOST, kPopupClass, L"",
+        WS_POPUP | WS_BORDER, at.x, at.y, cols * cw + 2, rows * ch + 2,
+        owner, nullptr, GetModuleHandleW(nullptr), &ed);
+    if (ed.popup) {
+        ShowWindow(ed.popup, SW_SHOWNOACTIVATE);
+        SetCapture(ed.popup);
+    }
+}
+
+int cell_at(const Editor& ed, POINT p) {
+    for (size_t i = 0; i < ed.cells.size(); ++i)
+        if (PtInRect(&ed.cells[i].rc, p)) return int(i);
+    return -1;
+}
+
+LRESULT CALLBACK popup_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
+    Editor* ed = editor_of(hwnd);
+    switch (msg) {
+        case WM_CREATE: {
+            auto* cs = reinterpret_cast<CREATESTRUCTW*>(lp);
+            SetWindowLongPtrW(hwnd, GWLP_USERDATA,
+                              reinterpret_cast<LONG_PTR>(cs->lpCreateParams));
+            return 0;
+        }
+        case WM_PAINT: {
+            if (!ed) return 0;
+            PAINTSTRUCT ps;
+            HDC hdc = BeginPaint(hwnd, &ps);
+            RECT all;
+            GetClientRect(hwnd, &all);
+            HDC mem = CreateCompatibleDC(hdc);
+            HBITMAP bmp = CreateCompatibleBitmap(hdc, all.right, all.bottom);
+            HGDIOBJ old = SelectObject(mem, bmp);
+
+            HBRUSH bg = CreateSolidBrush(GetSysColor(COLOR_WINDOW));
+            FillRect(mem, &all, bg);
+            DeleteObject(bg);
+
+            for (size_t i = 0; i < ed->cells.size(); ++i) {
+                if (int(i) == ed->hot_cell) {
+                    HBRUSH hot = CreateSolidBrush(GetSysColor(COLOR_HIGHLIGHT));
+                    FillRect(mem, &ed->cells[i].rc, hot);
+                    DeleteObject(hot);
+                }
+                draw_centred(mem, ed->cells[i].layout, ed->cells[i].rc,
+                             ed->dpi / 72.0,
+                             int(i) == ed->hot_cell
+                                 ? GetSysColor(COLOR_HIGHLIGHTTEXT)
+                                 : GetSysColor(COLOR_WINDOWTEXT));
+            }
+            BitBlt(hdc, 0, 0, all.right, all.bottom, mem, 0, 0, SRCCOPY);
+            SelectObject(mem, old);
+            DeleteObject(bmp);
+            DeleteDC(mem);
+            EndPaint(hwnd, &ps);
+            return 0;
+        }
+        case WM_ERASEBKGND:
+            return 1;
+        case WM_MOUSEMOVE: {
+            if (!ed) return 0;
+            POINT p = {GET_X_LPARAM(lp), GET_Y_LPARAM(lp)};
+            const int hit = cell_at(*ed, p);
+            if (hit != ed->hot_cell) {
+                ed->hot_cell = hit;
+                InvalidateRect(hwnd, nullptr, FALSE);
+            }
+            return 0;
+        }
+        case WM_LBUTTONDOWN: {
+            if (!ed) return 0;
+            POINT p = {GET_X_LPARAM(lp), GET_Y_LPARAM(lp)};
+            const int hit = cell_at(*ed, p);
+            HWND owner = GetWindow(hwnd, GW_OWNER);
+            if (hit >= 0) {
+                const Equation::PaletteItem item = ed->cells[size_t(hit)].item;
+                if (item.is_template) ed->eq.insert_template(item.command);
+                else                  ed->eq.insert_symbol(item.command);
+            }
+            ReleaseCapture();
+            close_popup(*ed);
+            if (owner) {
+                InvalidateRect(owner, nullptr, FALSE);
+                SetFocus(owner);      /* typing continues where it left off */
+            }
+            return 0;
+        }
+        case WM_CAPTURECHANGED:
+            return 0;
+        case WM_DESTROY:
+            if (GetCapture() == hwnd) ReleaseCapture();
+            return 0;
+    }
+    return DefWindowProcW(hwnd, msg, wp, lp);
 }
 
 void paint(HWND hwnd, Editor& ed) {
@@ -189,10 +408,26 @@ void paint(HWND hwnd, Editor& ed) {
     FillRect(mem, &rc, bg);
     DeleteObject(bg);
 
+    /* ---- the palette bar ---- */
+    const int bar_h = ed.bar_height();
+    RECT bar_rc = {0, 0, W, bar_h};
+    HBRUSH bar_bg = CreateSolidBrush(GetSysColor(COLOR_BTNFACE));
+    FillRect(mem, &bar_rc, bar_bg);
+    DeleteObject(bar_bg);
+    for (const Button& b : ed.bar) {
+        HBRUSH face = CreateSolidBrush(GetSysColor(COLOR_WINDOW));
+        FillRect(mem, &b.rc, face);
+        DeleteObject(face);
+        FrameRect(mem, &b.rc, HBRUSH(GetStockObject(GRAY_BRUSH)));
+        draw_centred(mem, b.sample, b.rc, ed.dpi / 72.0,
+                     GetSysColor(COLOR_WINDOWTEXT));
+    }
+
     const Layout L = ed.eq.layout(ed.style);
     const double upp = ed.units_per_pt();
     const int originX = ed.scaled(kMargin);
-    const int originY = int((H + L.asc * upp - L.desc * upp) / 2);
+    const int originY = bar_h +
+        int(((H - bar_h) + L.asc * upp - L.desc * upp) / 2);
 
     draw_layout(mem, L, ed.style, upp, originX, originY,
                 GetSysColor(COLOR_WINDOWTEXT));
@@ -274,7 +509,7 @@ LRESULT CALLBACK proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             return 1;              /* the back buffer already covers it */
 
         case WM_DPICHANGED: {
-            if (ed) ed->dpi = HIWORD(wp);
+            if (ed) { ed->dpi = HIWORD(wp); build_bar(*ed); }
             const RECT* want = reinterpret_cast<const RECT*>(lp);
             SetWindowPos(hwnd, nullptr, want->left, want->top,
                          want->right - want->left, want->bottom - want->top,
@@ -285,18 +520,31 @@ LRESULT CALLBACK proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
 
         case WM_LBUTTONDOWN: {
             if (!ed) return 0;
+            const POINT p = {GET_X_LPARAM(lp), GET_Y_LPARAM(lp)};
+
+            for (const Button& b : ed->bar) {
+                if (PtInRect(&b.rc, p)) { open_popup(hwnd, *ed, b); return 0; }
+            }
+            if (p.y < ed->bar_height()) return 0;   /* bar background */
+
             RECT rc;
             GetClientRect(hwnd, &rc);
+            const int bar_h = ed->bar_height();
             const Layout L = ed->eq.layout(ed->style);
             const double upp = ed->units_per_pt();
             const int originX = ed->scaled(kMargin);
-            const int originY = int((rc.bottom + L.asc * upp - L.desc * upp) / 2);
-            ed->eq.move_to_point((GET_X_LPARAM(lp) - originX) / upp,
-                                 (GET_Y_LPARAM(lp) - originY) / upp, ed->style);
+            const int originY = bar_h +
+                int(((rc.bottom - bar_h) + L.asc * upp - L.desc * upp) / 2);
+            ed->eq.move_to_point((p.x - originX) / upp,
+                                 (p.y - originY) / upp, ed->style);
             ed->caret_on = true;
             redraw(hwnd);
             return 0;
         }
+
+        case WM_SIZE:
+            if (ed) { build_bar(*ed); redraw(hwnd); }
+            return 0;
 
         case WM_KEYDOWN: {
             if (!ed) return 0;
@@ -416,6 +664,14 @@ EditorResult run_equation_window(const std::string& latex) {
     wc.lpszClassName = kClassName;
     RegisterClassExW(&wc);
 
+    WNDCLASSEXW pc = {};
+    pc.cbSize = sizeof(pc);
+    pc.lpfnWndProc = popup_proc;
+    pc.hInstance = wc.hInstance;
+    pc.hCursor = LoadCursorW(nullptr, IDC_ARROW);
+    pc.lpszClassName = kPopupClass;
+    RegisterClassExW(&pc);
+
     HWND hwnd = CreateWindowExW(
         0, kClassName, L"EQNEDT64",
         WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT, 760, 260,
@@ -423,6 +679,7 @@ EditorResult run_equation_window(const std::string& latex) {
     if (!hwnd) return EditorResult{};
 
     ed.dpi = int(GetDpiForWindow(hwnd));
+    build_bar(ed);
     ShowWindow(hwnd, SW_SHOW);
     SetFocus(hwnd);
 
