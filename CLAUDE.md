@@ -2676,17 +2676,16 @@ editable には反映される**。mdx / hibino の PyPI install には反映さ
 
 CI が通っても Cubit テストに通らなければリリースしない。
 
-### CI Preflight Policy: commit → CI check → push (2026-06-05; ownership 2026-06-21)
+### CI Preflight Policy: commit → CI check → push (2026-06-05; ownership 2026-08-17)
 
-**OWNERSHIP (2026-06-21): `ci_preflight` is CODEX's job — Claude does NOT run it.**
-Per *Agent Division of Labor: Claude Commits; Codex Runs CI + Release*, Claude
-implements → tests locally → commits this-session files by name → STOPS at the
-local `git commit` and reports the SHA.  Claude does **NOT** run
-`tools/ci_preflight.py`, and does **NOT** push (a push would trigger ci_preflight
-via the pre-push hook — that path is codex's too).  The rest of this section
-documents what ci_preflight does, for **codex's** reference.
+**OWNERSHIP (2026-08-17): every agent that pushes runs `ci_preflight` first —
+Claude included.**  Per *Agent Division of Labor: Claude Owns Push + CI; Codex
+Owns Release*, Claude implements → tests locally → commits this-session files by
+name → runs `tools/ci_preflight.py` → pushes → watches CI to green.  The
+pre-push hook runs the preflight anyway; running it deliberately means finding
+the breakage before the push rather than being stopped by it.
 
-**POLICY (codex)**: Run the CI gates **LOCALLY before every push to `main`**, not
+**POLICY**: Run the CI gates **LOCALLY before every push to `main`**, not
 after.  CI must not be the FIRST place a catchable error surfaces.  The
 single command is:
 
@@ -4247,29 +4246,34 @@ python tests/cubit/test_ho_volume_all_formats.py  # Order=2 volume accuracy (sph
 
 ---
 
-## Agent Division of Labor: Claude Commits; Codex Runs CI + Release (2026-06-21)
+## Agent Division of Labor: Claude Owns Push + CI; Codex Owns Release (2026-08-17)
 
 **POLICY**: Split of work between AI agents on this repo.
 
-- **Claude's responsibility ENDS at the local `git commit`.** Claude implements,
-  tests locally, and commits (this-session files BY NAME, per the existing commit
-  hygiene), then STOPS and reports the commit SHA.
-- **CI and release are codex's job — NOT Claude's.** codex pushes, watches CI to
-  green, fixes CI infrastructure, cuts tags, runs the PyPI publish, and deploys
-  (100号機 / mdx).
+- **Claude carries its own work to green CI on `main`.** Claude implements,
+  tests locally, commits (this-session files BY NAME, per the existing commit
+  hygiene), runs `python tools/ci_preflight.py`, pushes to `main`, and then
+  watches GitHub Actions to green with `python tools/check_ci.py --watch`. A red
+  CI on Claude's own commit is Claude's to fix-forward, not to hand over.
+- **Release is codex's job.** codex cuts tags, runs the PyPI publish, drives the
+  `release-qud` four-machine verification, and deploys (100号機 / mdx / hibino).
 
-Claude does **NOT**: push for release, monitor/poll GitHub Actions CI, wait for
-CI-green, run `tools/check_ci.py` watch-loops, push tags, invoke the
-`release-qud` flow, or publish to PyPI. If asked to "release", Claude prepares
-and commits the work, then hands off to codex.
+Claude does **NOT**: push tags, invoke the `release-qud` flow, publish to PyPI,
+or deploy to remote machines. If asked to "release", Claude gets the work
+committed, pushed and CI-green, then hands off to codex for the tag and publish.
 
-**Why**: CI monitoring and release driving (queue watching, tag/publish, remote
-deploy) is long-running, polling-heavy work that does not need Claude's
-reasoning and wasted Claude turns. Keep Claude on implement → test → commit;
-codex owns CI + release.
+**Why the line moved (2026-08-17, Sugahara)**: an author who stops at the local
+commit cannot tell whether the work actually builds anywhere but their own
+machine, and a handoff at that point makes the person who fixes the breakage
+someone who did not write it. Push and CI are part of finishing a change.
+Release is genuinely different work — version numbers, four machines, PyPI
+propagation — and stays where it was.
 
-**Exception**: only if the user EXPLICITLY asks Claude to push / handle CI /
-release in a specific task does Claude do it. The default is **commit-and-stop**.
+**What this does not license**: pushing to `main` while a red preflight is
+outstanding, force-pushing, or pushing another agent's uncommitted work. The
+codex↔Claude source-edit mutex still applies: when the shared tree has
+in-flight work from another agent, do the change in a worktree and push the
+branch rather than reaching into `main`.
 
 ---
 
