@@ -39,6 +39,18 @@ verifyEqual(testCase, result.backend, "python-fallback");
 verifyEqual(testCase, result.python.execution_mode, "InProcess");
 end
 
+function testBeamCurvilinearHasNamedFallback(testCase)
+result = radia.python.beamCurvilinear( ...
+    "bishop_rmf_frame", ...
+    {[0, 0, 0; 0, 0, 1], [0, 0, 1; 0, 0, 1]});
+verifyEqual(testCase, result.backend, "python-fallback");
+verifyEqual(testCase, result.module, "radia.beam_curvilinear");
+verifyEqual(testCase, double(result.value.arc_length_m), [0, 1], ...
+    "AbsTol", 0);
+verifyEqual(testCase, double(result.value.horizontal), ...
+    [1, 0, 0; 1, 0, 0], "AbsTol", 2e-15);
+end
+
 function testAcceleratorTaylorTopoptHasCubicNamedFallback(testCase)
 result = radia.python.acceleratorTaylorTopopt( ...
     "third_order_taylor_map_from_multipoles", ...
@@ -51,6 +63,15 @@ verifyEqual(testCase, size(double(transfer.R)), [6, 6]);
 U = double(transfer.U);
 verifyEqual(testCase, size(U), [6, 6, 6, 6]);
 verifyGreaterThan(testCase, abs(U(2, 1, 1, 3)), 0.4);
+end
+
+function testAcceleratorTaylorTopoptHasSymplecticKANFallback(testCase)
+result = radia.python.acceleratorTaylorTopopt( ...
+    "Symplectic2x2KAN", {0.4, -0.2, 0.7});
+verifyEqual(testCase, result.backend, "python-fallback");
+block = double(result.value.matrix);
+verifyEqual(testCase, size(block), [2, 2]);
+verifyEqual(testCase, det(block), 1, "AbsTol", 2e-14);
 end
 
 function testAcceleratorLieTopoptHasCanonicalNamedFallback(testCase)
@@ -71,6 +92,26 @@ verifyLessThan(testCase, ...
 verifyLessThan(testCase, ...
     double(transfer.factorization.reconstructed_symplectic_residual.maximum), ...
     1e-10);
+end
+
+function testAcceleratorLieTopoptAcceptsFullXYVectorPotentialJet(testCase)
+Ay = zeros(6, 6);
+As = zeros(6, 6);
+Ay(2, 2) = 0.7;
+As(3, 1) = -0.4;
+result = radia.python.acceleratorLieTopopt( ...
+    "fourth_order_lie_map_from_hcurl_transverse", ...
+    {Ay, As, 0.02, 3}, ...
+    Keywords=struct( ...
+        "reference_curvature_per_m", 0, ...
+        "maximum_step_m", 0.01));
+verifyEqual(testCase, result.backend, "python-fallback");
+verifyEqual(testCase, result.module, "radia.accelerator_lie_topopt");
+map = result.value.transfer;
+verifyEqual(testCase, size(double(map.V)), [6, 6, 6, 6, 6]);
+verifyGreaterThan(testCase, max(abs(double(map.V)), [], "all"), 0);
+verifyEqual(testCase, double(result.value.hamiltonian_linear), ...
+    zeros(1, 6), "AbsTol", 1e-12);
 end
 
 function testStreamFunctionHasNamedFallback(testCase)

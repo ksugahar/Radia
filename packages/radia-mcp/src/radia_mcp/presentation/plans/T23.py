@@ -50,12 +50,12 @@ ROOT_CAUSE_PATTERNS: list[dict] = [
     },
     {
         "name": "title_body_drift",
-        "label": "Title が body の主張を反映していない",
+        "label": "Title の対象・観点が body の内容と対応していない",
         "tool_signals": ["T14"],
         "threshold_avg_below": 5.0,
         "remediation": (
             "T14 title_body_alignment で title-body overlap 確認、"
-            "verb + 数値形の claim title に書き換え。"
+            "対象＋観点の短い具体語句に書き換え。"
         ),
     },
     {

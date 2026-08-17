@@ -55,11 +55,11 @@ v0.12.0 以降、Plan B Tier 1/Tier 2 の実測ツールで段階的にカバー
 - **OK**: 予期せぬ数値 / ビジュアル / ビフォーアフター を最初に出す
 
 ### T2. One-slide-one-message → 🟡 部分的 `presentation_check_bullet_count_per_slide` + 新規 T3 チャート検出
-bullet 数で 1 主張違反を粗く判定 (bullet >= 4 で warn)。スライドタイトルの
-動詞明示は `presentation_check_slide_title_verb` を補助利用。
+bullet 数で 1 メッセージ違反を粗く判定 (bullet >= 4 で warn)。スライドタイトルの
+具体性・簡潔性は `presentation_check_slide_title_specificity` を補助利用。
 - 目標: スライドタイトルを並べたら目次にして筋が通る
-- **NG**: "結果と考察" (2 topic)、"○○について" (主張不明)
-- **OK**: "Method X is 4× faster than FEM" (主張が動詞で明示)
+- **NG**: 「結果」「数値計算結果」「精度評価」(対象・観点が不明)
+- **OK**: 「モデル1の計算精度評価」(対象＋評価観点が短く具体的)
 
 ### T3. Slide density → ✅ `presentation_check_slide_density` + v0.13.0 追加
 `presentation_slide_density_balance` で deck 全体のバランス評価。
@@ -118,15 +118,15 @@ suggest_redundancy_fixes
 
 ### Plan B Tier 3 (v0.21.0) — outline / message / 欧米 vs 日本 / 構造
 
-skill.md 既述だが未実装だった「タイトルだけ並べたら筋が通る」「タイトルに
-最強主張」を実装 + 欧米 PPT text-heavy への日本理系 adaptation。
+skill.md 既述だが未実装だった「タイトルだけ並べたら筋が通る」「タイトルで
+対象＋観点を短く具体化」を実装 + 欧米 PPT text-heavy への日本理系 adaptation。
 
 #### `presentation_slide_titles_outline_coherence(pptx_path)` — タイトル並びの論理整合
 全 slide の title を抽出し並べた時に **目次として筋が通るか** を 5 軸で診断
 (title_density / claim_density / 4 phase 出現 / 隣接 overlap / outline 完全性)。
 extracted_outline で人間が音読判定可能。
 
-#### `presentation_title_body_alignment_check(pptx_path)` — title が本文の最強主張か
+#### `presentation_title_body_alignment_check(pptx_path)` — title の対象・観点が本文と対応するか
 既存 `check_slide_title_verb` が title の verb 形式のみ check に対し、本ツールは
 **title vs body の内容対応** (token overlap + 数値裏付け + 5W1H) を per-slide で評価。
 
@@ -146,7 +146,7 @@ Duarte sparkline (corporate / TED) ではなく、**理系プレゼンの mini-I
 
 #### `presentation_rikei_minimalism_score(pptx_path)` — 理系 minimalism (TED とは違う)
 Reynolds Presentation Zen (TED 風) ではなく、**理系プレゼン特化の minimalism**
-5 軸: figure or chart / axis label + unit / 定量 evidence / 出典 / bullet ≤4 + font ≥20pt。
+5 軸: figure or chart / axis label + unit / 定量 evidence / 出典 / bullet ≤4 + font ≥24pt。
 domain peer 前提なので citation / 軸単位 必須。
 
 #### `presentation_chart_simplification_check(pptx_path)` — Knaflic style
@@ -219,7 +219,48 @@ A4 紙に手書きで筋を書く:
 スライドタイトル等の公開済み情報を安易に変えない。
 
 ### Phase 3: ✍️ **draft** — セリフに合わせてスライド化
-- タイトル行: 動詞句で主張 ("PEEC is 4× faster", "Fig shows X")
+- タイトル行: そのスライドで伝えたい **対象＋観点** を、できる限り少ない文字数の具体語句で書く。
+  「結果」「数値計算結果」「精度評価」だけでは対象が不明。「モデル1の計算精度評価」のように特定する。
+- 最下部: 中央の図表・式・比較から分かったことを、20--40 字の一文で書く。
+  タイトルと同語反復にせず、証拠の解釈または設計上の含意を示す。
+
+#### タイトルの正解基準
+
+正解は一つの語句に固定しない。次の5条件をすべて満たす title を正解とする。
+
+1. **対象が具体的**: 「何について」が title 単独で特定できる。
+2. **観点が明示的**: 評価、比較、条件、構造、分解、依存性など「何を見るか」が分かる。
+3. **一行で簡潔**: 意味を失わない最短表現。目安28文字以内で、説明文にしない。
+4. **結果を先取りしない**: 数値、優劣、達成結果、結論の言い切りは最下部へ置く。
+5. **deck内で一意**: 他 slide と区別でき、title一覧だけで発表の流れが追える。
+
+判定質問は「titleだけで何について何を見るslideか分かるか」。
+推奨形は「対象＋観点」の名詞句であり、「モデル1の計算精度評価」
+「C型鉄心のメッシュ依存性」「6面磁荷の低次モード分解」など。
+`presentation_check_slide_title_specificity` は各条件を2点、合計10点で診断し、
+5条件をすべて満たす場合だけ pass とする。
+- フォント: 聴衆が読む本文、caption、注釈、表、chart label は **24 pt以上**。
+  タイトルは32 pt以上とする。footer、page number、date、出典欄だけは例外とする。
+- 図・画像: 埋め込み元画像のアスペクト比を変更しない。幅と高さを独立指定して
+  引き伸ばす、または押しつぶす操作は違反とする。枠に合わせる場合は、元画像寸法へ
+  戻してから縦横比を固定し、一辺だけを変更する。必要なら等方拡大と crop / contain を用いる。
+- **貼り付けた図中文字は、実際のスライド表示寸法で20 pt以上**とする。
+  軸目盛、軸名、legend、注釈、panel label、数式、スクリーンショット内文字を含む。
+  元図は24 pt以上を標準とし、貼付後の縮小率を掛けても20 ptを下回らないことを確認する。
+  OCRまたは元図設定で確認できない画像は合格扱いにしない。小さい文字は図を拡大するのでなく、
+  元図を再生成するか、不要な文字を削除してPowerPointのネイティブ文字24 pt以上で置き直す。
+- **元図を作り直せる場合は必ず元図を修正する。** Python、MATLAB、SVG、PDF、
+  PowerPoint図形、作図ソフトのprojectを探し、文字を24 pt以上へ設定して再出力する。
+  raster画像をOCR分解するより、線、数式、色、配置、再現性を正確に保てる。
+- 元図を再生成できない場合だけfallbackとして、
+  `presentation_replace_embedded_figure_text(...)` を使用できる。OCR word box内の文字画素だけを
+  inpaintingし、同位置へ編集可能な `FIGURE_TEXT::` テキストを20 pt以上で置く。
+  元PPTXは上書きせず候補版を作り、数式、添字、回転文字、色、plot線との交差を画像で確認する。
+  OCR修復は元図再生成の代替標準ではなく、sourceを失った図の救済手段とする。
+  実際に候補PPTXを書き出すには `source_unavailable_confirmed=true` を明示する。
+  20 ptへ置換した文字が相互または本文と重なる場合、fontを20 pt未満へ戻して解決しない。
+  panel数を減らす、図を複数slideへ分割する、captionを図外へ移す、本文を次slideへ送る。
+  修復ツールの `overlap_warning_count` が0であることを候補採用条件とする。
 - 本文: 画像 > グラフ > 表 > bullet > 本文 の優先順位
 - 1 枚 1 主張。要素が 2 つ以上あるなら分ける。
 - セリフに出てこない図・単語・箇条書きは原則削る。
@@ -231,6 +272,16 @@ A4 紙に手書きで筋を書く:
 - `presentation_check_slide_density(text)` で密度
 - `presentation_count_weak_expressions(text)` で弱気修飾
 - `presentation_check_overfull_hbox(log)` (beamer のみ)
+- `presentation_check_image_aspect_ratio(path)` で元画像比を照合し、違反0件を確認する。
+  `passed=false` のPPTXは修正前に納品しない。
+- `presentation_check_embedded_figure_text_size(path)` で画像内文字を検査する。
+  外部送信しない既定動作では未確認画像を列挙する。承認済み資料だけを
+  `ocr_backend="gcv"` でOCRするか、再現可能なmanifestを指定する。manifestには
+  OCR結果に加えて、元図の最小フォントサイズと作図幅
+  (`source_evidence.minimum_source_font_pt` と `source_width_cm` / `source_width_pt`)
+  を記録できる。検査器はPowerPoint上の表示幅、トリミング、元図幅から貼付後の
+  実効フォントサイズを算定する。
+  20 pt未満と未確認画像はともに0件を納品条件とする。
 - **重複・逆戻りチェック**: slideごとに「この slide で初めて言う新情報」を
   1 行で書き出す。前 slide と同じ利点・背景・課題を再説明していたら削るか、
   役割を変える。いったん比較・定式化・結果へ進んだ後に、導入済みのメリット説明へ
@@ -245,11 +296,30 @@ A4 紙に手書きで筋を書く:
 - 他人に見せる。難しければ録音・録画を見返す。
 
 ### Phase 6: 🛡️ **prepare Q&A** — 想定問答
-- 主張ごとに「なぜそう言える?」を書き出し backup スライド
+- 主張ごとに「なぜそう言える?」を書き出し、**同じ最終PPTXの末尾**へ
+  質問対策・補足スライドとして置く。別のbackup deckは作らない。
 - Limitation は先手で言及 (反撃を誘う)
 - 「この論文知ってる?」の可能性 → 主要 3 本 + 比較 1 枚
 
-### Phase 7: 🎬 **deliver** — 本番
+### Phase 7: 🧹 **finalize** — 正本1本へ集約
+
+1. 最終発表資料を正本として確定し、同じ発表の旧版PPTXをすべて比較する。
+2. 旧版にしかなく、質問対応に有用な式、追加検証、失敗条件、計算量、限界だけを、
+   同じ正本PPTX末尾の質問対策・補足スライドへ移す。別ファイルには残さない。
+3. 重複スライドは、主張の具体性、証拠の強さ、24 pt可読性、図の非変形、情報量、
+   発表時の説明しやすさを比較し、良い一枚だけを残す。
+4. 正本の表示、リンク、ネイティブ文字24 pt、図中文字20 pt、画像比、重複、
+   質問対策スライドを検査する。
+5. 検査合格後、旧版PPTX、`inspect.ndjson`等の旧版専用ログ、旧版保管フォルダを削除する。
+   `final2`、`修正版`、`最新版`を並存させず、発表資料直下のPPTXを正本1本にする。
+6. `presentation_check_final_deck_directory(path, ...)` を実行する。この最終化検査は
+   図中文字20 pt検査も含むため、OCR manifest、承認済みOCR、文字なし確認のいずれかを
+   渡し、`passed=true` を納品条件とする。
+
+Git履歴やクラウドの版履歴がある場合も、発表資料フォルダへ旧版コピーを残す理由にはしない。
+再利用する過去発表は「今回の旧版」ではなく、出典を明示したreferenceとして分離する。
+
+### Phase 8: 🎬 **deliver** — 本番
 - 最初 30 秒は話せることを暗記
 - Slide 送り遅れ防止: clicker 左手、lab pointer 右手
 - 時間超過は **致命的** (座長の評価が下がる)
@@ -316,7 +386,7 @@ presentation_embed_tts_audio_in_pptx(
 | 1 スライド字数 (高橋) | <=20 字 | >=40 字 |
 | 1 スライド箇条書き | <=5 項目 | >=7 項目 |
 | 1 スライド図表 | 1 個 | >=3 個 |
-| フォントサイズ (本文) | >=20 pt | <18 pt |
+| フォントサイズ (本文・caption・注釈・表・chart label) | >=24 pt | <24 pt |
 | フォントサイズ (タイトル) | >=32 pt | <28 pt |
 | 文中の弱気修飾 | 0 | >=2 / slide |
 | Overfull hbox (beamer) | 0 | >=1 |
@@ -345,10 +415,14 @@ presentation_embed_tts_audio_in_pptx(
 
 ### B. スライドの情報階層 (top-down)
 
-1. **タイトル** (画面上部): このスライドの **主張 1 文**
+1. **タイトル** (画面上部): このスライドで伝えたい **対象＋観点の短い具体語句**
 2. **キービジュアル** (中央): 図 / グラフ / 式。面積 50%以上
-3. **説明文** (下部): 20-40 字で何が重要か補足
+3. **結論文** (最下部): 図表・式・比較から **分かったこと** を20--40字で示す
 4. **footer** (画面下部): 発表題 / 発表者 / ページ番号 (印刷時 必須)
+
+タイトルは短く具体的な伝達項目、最下部の結論文は中央の根拠から得た知見を担う。
+両者を単純に繰り返さず、「伝えたいこと → 根拠 → 分かったこと」の順に読む。
+`presentation_check_slide_message_hierarchy` で位置と語句を補助点検する。
 
 ### C. 20-minute talk の黄金配分
 
@@ -484,7 +558,8 @@ presentation_embed_tts_audio_in_pptx(
 ## ✅ 完成検証チェックリスト
 
 ### Storyboard
-- [ ] 1 行 take-home message が slide 末尾に 1 つ
+- [ ] 各 content slide のタイトルが、対象＋観点を少ない文字数で具体的に示している
+- [ ] 各 content slide の最下部に、図表・式・比較から分かったことが1文ある
 - [ ] Problem slide で数値的痛み
 - [ ] Result slide で数値的 key
 
@@ -494,7 +569,8 @@ presentation_embed_tts_audio_in_pptx(
 - [ ] 1 スライド 1 主張
 
 ### Typography
-- [ ] タイトル >= 32 pt, 本文 >= 20 pt
+- [ ] タイトル >= 32 pt, 本文・caption・注釈・表・chart label >= 24 pt
+- [ ] 24 pt未満は footer / page number / date / 出典欄だけ
 - [ ] 太字 / 下線 は key number のみ
 - [ ] 弱気修飾語 ゼロ (contribution / result)
 
@@ -883,7 +959,7 @@ colorblind-safe・font 埋込）でカバー済みの規則はここでは繰り
 
 | 原則 | 対応 tool |
 |---|---|
-| S11. 40pt body | `presentation_check_pptx_font_size(min_body_pt=20)` ← 宮野基準なら 40pt に上げる |
+| S11. 40pt body | `presentation_check_pptx_font_size(min_body_pt=24)` ← 宮野基準なら 40pt に上げる |
 | S12. 色数制限 | **`presentation_check_color_count_per_slide`** (v0.9.0 新規、3-5 色推奨) |
 | S14. 下線密度 | `presentation_count_underlines` (tex 向け、slide の下線は目視) |
 | S7. 行頭記号過多 | `presentation_check_bullet_count_per_slide(max_bullets=5)` |
@@ -921,6 +997,7 @@ storyboard → draft の間に figure 作成の正式プロセス:
 - **ハイライト (強調色) は画面面積の 10% 以下。** 色付け・太字・下線の合計が 10% を超えると、かえって何も目立たなくなる。超えたら強調対象を厳選。(宮野 b01 p.92 / p.79) — 既存「太字/下線は key number のみ」の**定量版**。
 - **空白 (余白) を無理に埋めない。** 埋めようと不要なイラスト・背景写真を足すと逆効果。余白は読みやすさの一部。(宮野 b01 p.79, p.136)
 - **改行位置は文字数を揃えるより文脈 (文節) で。** 文字数優先で単語の途中や中途半端な位置で切らない。(宮野 b01 p.102 図A)
+- PPTX では `presentation_check_japanese_copy_style` により、助詞・連体修飾の直後など文節途中の強制改行を候補抽出。改行そのものは禁止せず、文脈上自然な切れ目を優先。
 - **写真上のテキストは文字枠に背景を付けない。** 枠が写真より目立ち情報を隠す。背景なし + 写真と十分コントラストのある文字色で読みを確保。(宮野 b01 p.132)
 - **漢字二文字熟語は前後に半角スペース。** 「科学」等が他語と続くと境界が見えにくい。半角アキで語の切れ目を明確化。(宮野 b01 p.102 図B / 本多 b08 と同趣旨)
 
@@ -933,6 +1010,7 @@ storyboard → draft の間に figure 作成の正式プロセス:
 - **イラストレーション 5 ステップ**: ①伝えたい内容を文章化 → ②キーワード抽出 → ③分類 → ④相互関係を表現 → ⑤可視化。いきなり作図せず、キーワードを抽出・分類・関係付けしてから可視化する。(宮野 b01 p.70-73)
 - **内容の型に図の型を対応させる**: 流れ → プロセス図 / 論理展開 → 分岐・合体・要素分解 / 分布・拡散 → サテライト・マッピング / 複数の軸 → マトリクス (2軸)・バブルチャート (3軸)。(宮野 b01 p.75-78)
 - **長い説明文は体言止めで簡潔化** + **不要な接続句 (「そこで本研究では」「次に」) を画面から削除**。繋ぎ言葉は口頭で言えば足り、スライド上では情報価値ゼロ。(宮野 b01 p.50-52)
+- `presentation_check_japanese_copy_style` はタイトル、数式、疑問文、footer を除く本文の体言止め比率と不要な導入句を点検。体言止めは「なるべく」であり、タイトルや自然な説明まで一律に変形しない。
 
 ---
 
@@ -950,7 +1028,7 @@ storyboard → draft の間に figure 作成の正式プロセス:
 
 - **表中の指差し (人差指) / 矢印による強い注目誘導は、プレゼンの投影 (スライド/OHP) でのみ可。** 掲載論文の表では「ふざけた表」と取られうる。(作図力学 b02 §5.3 表5.7) — 既存「視線誘導 (矢印/枠)」の媒体限定条件。
 - **コロン後の名詞列挙 (`Processes include: oxidation, hydration, ...`) はプレゼンスライドで機能するが、論文では声に出して不自然なので避け**、`Several processes occur, including ...` の自然文に直す。(b05 §16.11)
-- **学会発表は「タイトルだけ読めば内容が分かる」+「データ提示と同時に解釈を示す」**。発表は制限時間があり聴衆が自分で解釈する時間がないので、論文以上に解釈を踏まえた提示にする。タイトルをそのスライドの結論メッセージにする。(b04 Q31)
+- **学会発表は「タイトルだけ読めば各スライドの対象＋観点が分かる」+「データ提示と同時に、下端で分かったことを示す」**。タイトルは「結果」「数値計算結果」ではなく「モデル1の計算精度評価」のように短く具体化する。結果の言い切りや数値は下端へ置き、タイトルと役割を分ける。(b04 Q31を本研究室様式へ具体化)
 - **学会発表では Discussion (考察) を薄く (スライド 1-2 枚)。** 入れるなら過去文献との特に重要な比較か研究の limitation に絞る。Result に解釈が織り込まれるため独立 Discussion の比重は小さい。(b04 Q31)
 - **導入 (Introduction) を全体時間に対し過大にしない。** 10 分発表に 8 分の導入は不要 (20 分インタビューで 10 分前置きがあったら離れる)。導入が長いほど中身が乏しいと見抜かれる。(b04 Q25 / b05 §14.4)
 
@@ -1176,9 +1254,10 @@ or progress decks, not podium orals.
 - **Working/backup decks underpinning an oral:** new09 (ヒスフィッティング
   curve-fit pipeline), new12 (energy-Stop status), new13 (its sibling) are
   Japanese data-conditioning/status decks that *feed* a polished English
-  oral. Convention: **keep the dense fit machinery (17th-order polynomial,
-  rational envelope) in a separate backup deck; present only the
-  measure→fit→generate storyline in the oral.**
+  oral. Historical examples used separate working decks, but the current
+  finalization rule is: **move only useful dense fit material (17th-order
+  polynomial, rational envelope) to titled Q&A slides after the Summary in
+  the same final PPTX, then delete the superseded working-deck copies.**
 
 #### 4. One-line additions to drop into the existing checklist
 

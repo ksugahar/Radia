@@ -1,8 +1,8 @@
 # EarlyTimes C++ API Design
 
-**Date:** 2026-08-11
+**Date:** 2026-08-15
 
-**Status:** Native tracking foundation, transfer kernel, and direct NGSolve GridFunction linear map implemented
+**Status:** Native tracking, transfer/Lie kernels, and HCurl GridFunction vector-potential input implemented
 
 **Scope:** Target contract for migrating the useful EarlyTimes concepts into
 the Radia C++ core, with pybind11 and standalone MEX bindings over the same
@@ -17,14 +17,14 @@ Three implementation slices are now available in `radia::beam`:
    factorial convention, and attributes quadratic terms, direct cubic terms,
    local cubic cascades, and ordered upstream-to-downstream region-pair
    cascades.
-2. A shared NGSolve adapter accepts a live real three-component
-   `GridFunction`, evaluates nine transverse points per supplied reference
-   station through NGSolve mapped points, fits an affine local field jet, and
-   sends the resulting combined-function generator directly to the native
-   first-order map. It returns the transported frame, center field, full local
-   gradient, normal/skew quadrupole profiles, divergence/curl diagnostics,
-   fit rank/condition/residuals, local `A`, and accumulated `R`. It never
-   constructs a regular-grid field map.
+2. A shared NGSolve adapter accepts a live real three-component vector
+   potential `A` in `HCurl(order=p)`. NGSolve evaluates its native `curl(A)`
+   at the center and eight transverse ring points per supplied reference
+   station; Radia never projects it to HDiv and never constructs a regular-grid
+   field map. The adapter fits source-free normal/skew multipoles, reports the
+   retained FESpace class and order `p`, and feeds the native linear or
+   higher-order map. Direct magnetic-flux-density GridFunctions remain an
+   explicit `magnetic_flux_density` compatibility mode, not the default.
 3. A dependency-free native tracking foundation provides validated SI
    `ParticleSpecies`, `ReferenceParticle`, and `CartesianState` values;
    inspectable zero and uniform electromagnetic fields; a relativistic
@@ -39,16 +39,14 @@ Thin pybind11 and standalone MEX boundaries call these same C++ sources of
 truth through `radia.beam.propagate_grid_function_linear_map` and
 `radia.beam.propagateGridFunctionLinearMap`, respectively. Native field
 sampling, `LorentzEquation.rhs`, one-step integration, and trajectory building
-are likewise available independently in both languages. The direct
-GridFunction entry is deliberately first order; it returns zero `T` and `U`
-rather than inventing nonlinear dynamics from a spatial affine fit.
+are likewise available independently in both languages. The compatibility
+linear entry returns only `R`; the multipole entry fits through the requested
+field order and propagates the declared nonlinear map.
 
-Lattice composition, events, adaptive and Lie stepping, direct tracking through
-a solved `GridFunction`, closed/reference-orbit search, higher-order moving-
-frame multipoles and their physical `F2/F3` equations, real design-parameter
-derivatives including edge boundary terms, and ray-based map-validity checks
-remain later phases. No current API claims that a local quadrupole profile
-alone identifies an edge-angle recommendation.
+General lattice composition, event handling, adaptive/Lie particle stepping,
+real CAD design-parameter derivatives including edge boundary terms, and
+ray-based map-validity checks remain later phases. No current API claims that
+a local multipole profile alone identifies an edge-angle recommendation.
 
 ## Decision
 
@@ -127,10 +125,21 @@ derivative. This distinction is what turns a plot into a design decision such
 as "increase the entrance edge angle" rather than merely noting a large field
 gradient.
 
-The default moving frame is a right-handed parallel-transport frame seeded by
-an explicit design normal. Frenet framing is available as an explicit option.
+The default moving frame is a right-handed Bishop rotation-minimizing frame
+seeded by an explicit design normal. Its discrete implementation is the
+fourth-order double-reflection method of Wang, Juttler, Zheng, and Liu,
+*ACM TOG* 27(1), 2008, DOI 10.1145/1330511.1330513, rather than repeated
+normal-plane projection. Frenet framing is available as an explicit option.
 The selected convention is stored in every result so frame rotation is not
 misidentified as physical skew quadrupole or coupling.
+
+For stations sampling a complete closed trajectory, the explicit periodic
+mode converts the open-path RMF to the periodic constant-twist minimal-twist
+frame by distributing the measured one-turn holonomy in chord arc length.
+This follows the boundary-frame distinction of Farouki and Moon (2018), DOI
+10.1007/s10444-018-9599-3.  It is not enabled implicitly: a symmetry-reduced
+cell needs its known spatial symmetry in the closure map rather than a direct
+last-to-first chord.
 
 The existing planar machinery in `radia.isochronous_topopt` and
 `radia.accelerator_magnet_topopt` is the first reusable specialization: it
@@ -228,10 +237,13 @@ EarlyTimes should follow the useful parts of the NGSolve object model:
 1. **Composable fields.** A magnetic field behaves like a vector-valued
    `CoefficientFunction`: it can be evaluated, composed, transformed, scaled,
    differentiated when supported, and inspected as an expression tree.
-2. **Mesh and field stay distinct.** The production field is an NGSolve
-   `GridFunction`. It already owns its `FESpace` and `MeshAccess`; the tracker
-   asks NGSolve to locate and evaluate points and never reconstructs
-   finite-element basis data.
+2. **Mesh and field stay distinct.** The production Lie/A-RK input is a real
+   NGSolve `GridFunction` in `HCurl(order=p)`, representing the vector
+   potential `A`.  The independent B-RK input is a real `HDiv(order=4)`
+   `GridFunction` projected from the HDiv-MMM magnetic-flux-density source.
+   The reflection-parity-conditioned B `CoefficientFunction` is retained only
+   for design-orbit recovery and projection diagnostics.  NGSolve owns point location and field
+   evaluation; Radia never reconstructs finite-element basis data.
 3. **Operators are explicit.** The equation of motion, one-step operator,
    one-turn map, closed-orbit residual, and transfer map are separate objects.
 4. **State is visible.** Particle state, reference frames, accepted steps,
@@ -245,9 +257,12 @@ EarlyTimes should follow the useful parts of the NGSolve object model:
    evaluation. Radia owns beam dynamics and field-to-beam attribution.
 
 NGSolve requires a mapped integration point for mesh-dependent fields.
-Therefore `NGSolveGridFunctionField` retains the native `GridFunction`, obtains
-the mesh through its `FESpace`, and reports a clear outside-mesh status instead
-of silently extrapolating.
+Therefore `NGSolveGridFunctionField` retains the native HCurl `GridFunction`,
+obtains the mesh through its `FESpace`, and reports a clear outside-mesh status
+instead of silently extrapolating. Its default magnetic coefficient is the
+NGSolve `GridFunctionCoefficientFunction::Deriv()` result. The input order is
+read from the FESpace; the beam API does not accept a second, possibly
+inconsistent `p` argument.
 
 ## Layering
 
@@ -282,21 +297,70 @@ All core values use SI units.
 | time | s |
 | kinetic momentum | kg m/s |
 | electric field | V/m |
+| magnetic vector potential | T m |
 | magnetic flux density | T |
 | charge | C |
 | rest mass | kg |
 | angle | rad |
 | kinetic energy at API boundary | eV or J, named explicitly |
 
-The production magnetic field is a three-component NGSolve `GridFunction`
-whose evaluated value is in tesla. The field space, order, mesh, transformations,
-and orientation remain owned by NGSolve. The beam API does not build or consume
-a sampled regular-grid field map.
+The production A input is a three-component real NGSolve `HCurl(order=p)`
+`GridFunction` whose value is the vector potential in tesla-metres.  The Lie
+and canonical A-RK routes evaluate A itself; they do not replace it with
+`curl(A)`.  HDiv-MMM generates continuous A and B source
+`CoefficientFunction` objects. A is conformingly projected to HCurl p=5 and B
+is conformingly projected to HDiv p=4 on the same loft-chain mesh.  The
+independent Cartesian B-RK route accepts that HDiv GridFunction; it rejects the
+unprojected B CoefficientFunction.  The latter remains the physical source
+reference used to quantify the projection error.  The field spaces, mesh
+transformations, orientation, and evaluation remain owned by NGSolve. The beam
+API does not build or consume a regular-grid field map.  For a median-plane
+reflection, the B/H source is symmetrised as an axial vector,
+`det(R) R B = -R B`, before HDiv projection.
 
-Point evaluation has exactly the same meaning as the native Python expression
-`B(mesh(x, y, z))`: locate the containing element with the `GridFunction`'s
-mesh, construct the mapped integration point, and ask NGSolve to evaluate the
-`GridFunction`. The beam tracker adds no interpolation layer of its own.
+Lie point evaluation locates the containing element with the HCurl
+GridFunction's mesh and evaluates the vector potential itself at the mapped
+point.  `track_hcurl_vector_potential_canonical_s` does the same for `A_s,A_y`
+and uses NGSolve's element-interior `Grad(A)` in the exact unexpanded
+Hamiltonian.  `track_hdiv_b_map_cartesian_s` independently evaluates the
+projected HDiv-MMM B GridFunction in Cartesian Lorentz RK.  The public HDiv
+entry point rejects an unprojected CoefficientFunction and requires A and B to
+share the loft-chain mesh.  `curl(A)` is a diagnostic consistency quantity,
+never the B-map validation substitute.
+`compare_hcurl_lie_map_to_direct_rk` records Lie-versus-A truncation,
+A-versus-B field-route discrepancy, and total Lie-versus-B discrepancy as
+separate arrays.  The B route consults the A gauge only when converting
+canonical to mechanical momentum at the entrance/exit.
+
+Measured median-plane magnetic fields enter one stage earlier.  They define
+`MeasuredMedianPlaneFieldTarget` rows for HDiv-MMM pole-topology optimization
+at the physical probe locations.  Every accepted pole change is followed by a
+complete three-dimensional field re-solve.  No B-spline/polynomial continuation
+of a measured plane is accepted as off-plane B, HCurl A, Lie input, or RK input.
+Only the A and B fields generated from the accepted physical magnet solution
+cross the EarlyTimes boundary; held-out measurements may independently check
+that solution.
+
+For a fourth-order A-map, `sample_transverse_vector_potential` evaluates the
+HCurl GridFunction on the full upper/lower local `(x,y)` patch.
+The public `fourth_order_lie_map_from_hcurl_transverse` boundary certifies
+HCurl order, `A_x=0`, design-orbit `A_s=A_y=0`, and the declared normal/skew
+symmetry before its private degree-five jet recovery.  Arbitrary polynomial
+coefficients are not a field-map input. Separate left/right patch fits expose
+a derivative mismatch at the central `x=0` face without defining `A_y` by a
+two-trace average. The Lie engine differentiates the complete six-dimensional
+`R/T/U/V` and `f3/f4/f5` tensors in forward mode. Under normal median-plane
+symmetry the first-order horizontal/vertical blocks vanish, while all
+symmetry-allowed second- through fourth-order xy and momentum-offset cross
+terms remain available for zero or nonzero optimization targets;
+`differentiate_hcurl_transverse_lie_map` chains any supplied HCurl-DOF or
+topology response through the complete fit-and-map calculation.
+
+The map builder requires the Hamiltonian linear term to vanish within a
+declared tolerance.  It returns the derivative of that term as the fixed-orbit
+constraint Jacobian.  Optimization must either remain in this constraint's
+null space or recompute and differentiate the design orbit; silently dropping
+the affine orbit displacement is forbidden.
 
 Two state types are public and must not be conflated:
 
@@ -406,14 +470,15 @@ public:
 };
 ```
 
-For `NGSolveGridFunctionField`, `Evaluate` is conceptually:
+For the default `NGSolveGridFunctionField`, `Evaluate` is conceptually:
 
 ```cpp
 auto mesh = grid_function->GetMeshAccess();
+auto magnetic_flux_density = grid_function->Deriv(); // native HCurl curl(A)
 auto element = mesh->FindElementOfPoint(position, integration_point, true);
 auto& transformation = mesh->GetTrafo(element, local_heap);
 MappedIntegrationPoint<3, 3> mapped(integration_point, transformation);
-grid_function->Evaluate(mapped, result);
+magnetic_flux_density->Evaluate(mapped, result);
 ```
 
 An invalid element search returns `DomainStatus::outside`. No nearest-cell,
@@ -425,8 +490,11 @@ Required concrete fields:
 - `UniformField`
 - `IdealRadialSectorFFAGField`
 - `NGSolveGridFunctionField` retaining a three-component native
-  `ngcomp::GridFunction`; its space and mesh are retained through shared
-  ownership
+  `ngcomp::GridFunction` in `HCurl(order=p)` and its native curl coefficient;
+  its space and mesh are retained through shared ownership. The independent
+  B-RK route accepts an HDiv GridFunction on the same mesh; generic
+  VectorH1/direct-CoefficientFunction compatibility is not a certification
+  route.
 - `SumField`, `ScaledField`, `TransformedField`, and `RegionField`
 - `ErrorField` for alignment, strength, and measured-error terms
 
@@ -434,7 +502,7 @@ Composition remains inspectable:
 
 ```cpp
 auto field = SumField({
-    std::make_shared<NGSolveGridFunctionField>(solved_b),
+    std::make_shared<NGSolveGridFunctionField>(solved_vector_potential),
     std::make_shared<TransformedField>(measured_error, alignment),
 });
 
@@ -763,11 +831,11 @@ score.
 The public Python package is `radia.beam`. C++ bindings may remain internal in
 `_radia_pybind`, but Python classes must be thin owners of the native objects.
 
-The implemented direct-field entry is:
+The implemented HCurl vector-potential entry is:
 
 ```python
 result = radia.beam.propagate_grid_function_linear_map(
-    solved_b,
+    solved_a,
     lengths_m,
     reference_positions_m,
     reference_tangents,
@@ -817,7 +885,7 @@ closed-orbit objects are implemented:
 
 ```python
 field = beam.SumField([
-    beam.GridFunctionField(solved_b),
+    beam.GridFunctionField(solved_a),  # HCurl A; native curl(A) is B
     beam.TransformedField(error_b, alignment),
 ])
 
@@ -923,18 +991,30 @@ infrastructure, not the EarlyTimes migration's principal beam-dynamics result.
 The transfer-attribution API consumes a live field object and is independent of
 whether that object was solved in-process or restored from a checked bundle.
 
-The preferred path is an in-process native `GridFunction`:
+The preferred path is an in-process native vector-potential `GridFunction`:
 
 ```python
-B = ngsolve.GridFunction(field_space, name="B")
-# Solve or interpolate B through NGSolve.
-field = radia.beam.GridFunctionField(B)
-B_at_point = B(mesh(x, y, z))
+p = 5
+A = ngsolve.GridFunction(ngsolve.HCurl(mesh, order=p), name="A")
+# B_coefficient is already axial-reflection-symmetrised about the median plane.
+# Project the gauge-constrained A source and the independent B source.
+maps = project_earlytimes_grid_function_maps(
+    A_coefficient,
+    mesh,
+    magnetic_flux_density_coefficient=B_coefficient,
+    project_magnetic_flux_density=True,
+)
+A = maps.vector_potential
+B = maps.magnetic_flux_density
 ```
 
-The C++ field wrapper retains the `GridFunction`; the `GridFunction` retains its
-`FESpace`, and the space retains its mesh. Python therefore does not pass a raw
-DoF vector or sampled field to the tracker.
+The `GridFunction` retains its `FESpace`, and the space retains its mesh.
+Python therefore does not pass a raw DoF vector, separately declared order, or
+sampled regular field to the tracker.  The independent B-map tracker evaluates
+the projected HDiv GridFunction and never derives B from A.  The parity-
+conditioned B CoefficientFunction remains the source-field reference used for
+design-orbit recovery and source-to-HDiv projection diagnostics, not a B-RK
+input.  A raw unsymmetrised source is diagnostic-only.
 
 For a process or language boundary, `.sol` is supported as part of a checked
 solution bundle, not as a standalone field file:
@@ -942,34 +1022,35 @@ solution bundle, not as a standalone field file:
 ```text
 beam_field/
   mesh.vol
-  B.sol
+  A.sol
   space.json
   bundle.json
 ```
 
 `space.json` records the NGSolve space type, order, dimension, vector dimension,
 real/complex type, `definedon`, relevant flags, and expected DoF count.
-`bundle.json` records the NGSolve and Radia versions, unit (`T`), mesh and file
-digests, coordinate convention, field name, and bundle schema version.
+`bundle.json` records the NGSolve and Radia versions, vector-potential unit
+(`T m`), derived magnetic-field unit (`T`), mesh and file digests, coordinate
+convention, field name, and bundle schema version.
 
 Python uses native NGSolve operations:
 
 ```python
 mesh = ngsolve.Mesh("mesh.vol")
-space = make_space_from_checked_spec(mesh, "space.json")
-B = ngsolve.GridFunction(space, name="B")
-B.Load("B.sol")
-field = radia.beam.GridFunctionField(B)
+space = make_space_from_checked_spec(mesh, "space.json")  # HCurl(order=p)
+A = ngsolve.GridFunction(space, name="A")
+A.Load("A.sol")
+field = radia.beam.GridFunctionField(A)
 ```
 
 MATLAB uses the same native C++ path without Python:
 
 ```matlab
-space = radia.ngsolve.FESpace.create("mesh.vol", "hdiv", order);
-B = radia.ngsolve.GridFunction.fromFESpace(space, Name="B");
-B.load("B.sol", "space.json", "bundle.json");
-B_at_points = B.evaluate(points);
-field = radia.beam.GridFunctionField(B);
+space = radia.ngsolve.FESpace.create("mesh.vol", "hcurl", order);
+A = radia.ngsolve.GridFunction.fromFESpace(space, Name="A");
+A.load("A.sol", "space.json", "bundle.json");
+result = radia.beam.propagateGridFunctionMultipoleMap( ...
+    A, lengthsM, positionsM, tangents, magneticRigidityTM);
 ```
 
 The required MEX additions are:
@@ -986,10 +1067,9 @@ beam.field.from_grid_function
 data when the mesh digest, FESpace signature, DoF count, value type, vector
 dimension, units, or supported NGSolve version differs.
 
-`ngsolve.grid_function.evaluate` uses the mesh already retained by the native
-`GridFunction` handle. It is the MATLAB equivalent of Python's
-`B(mesh(x, y, z))`; it does not require a second mesh path and does not copy the
-DoF vector into MATLAB.
+The beam commands use the mesh already retained by the native `GridFunction`
+handle and evaluate its HCurl derivative directly. They do not require a
+second mesh path and do not copy the DoF vector into MATLAB.
 
 NGSolve `.sol` data does not by itself define the mesh or finite-element space.
 This is why a bare `.sol` path is not accepted by `GridFunctionField`. For
@@ -1057,9 +1137,11 @@ filename and must be migrated.
 7. **Validity domain:** direct tracking over the declared amplitude/momentum
    box agrees with the truncated map within its reported tolerance and fails
    closed outside the accepted domain.
-8. **Field parity:** analytic FFAG fields and NGSolve `GridFunction` point
-   evaluation, including checked `.sol` bundle round trips in Python and
-   MATLAB.
+8. **Field parity:** analytic magnetic fields, native NGSolve `curl(A)` from
+   `HCurl(order=p)` GridFunctions, and independent projected
+   `HDiv(order=4)` B maps, including FESpace-class/order metadata and checked
+   `.sol` bundle round trips in Python and MATLAB. The B-map route never derives
+   B from A.
 9. **Integrator parity:** recorded canonical EarlyTimes trajectories for RK4
    and Lie routes, plus convergence-order tests.
 10. **Orbit and map parity:** closed orbit, first/second-order map coefficients,

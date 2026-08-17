@@ -6,6 +6,9 @@ Layout:
   radia_mcp.gmsh          — standalone gmsh MSH v4.1 inspect/validate +
                             post-display launch artifacts + policy lint
   radia_mcp.radia_ngsolve — Radia + NGSolve general FEM/BEM/Kelvin/PEEC/MSH knowledge
+  radia_mcp.force         — Shared electromagnetic-force method selection,
+                            solver-independent sample integration, and validation;
+                            common to Motor and MagLev
   radia_mcp.ih            — Induction Heating workflow (workpiece SIBC, ESIM,
                             Karl iteration, screening physics) — promoted from
                             legacy private source tree on 2026-04-24

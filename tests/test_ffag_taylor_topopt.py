@@ -52,6 +52,10 @@ def test_multi_momentum_taylor_objective_has_block_ad_jacobian():
 
     assert objective.raw_offsets.tolist() == [0, 5, 10]
     assert objective.source_calibration_rows.tolist() == [0, 5]
+    assert objective.response_group_indices(("R",)).tolist() == [1, 2, 3, 7, 8, 9]
+    assert objective.response_group_indices(("normal_dipole", "T")).tolist() == [
+        0, 4, 5, 6, 10, 11]
+    assert objective.group_max_band_ratio(objective.transform(raw), "R") == 0.0
     assert jacobian.shape == (2 * first_rows, 10)
     np.testing.assert_allclose(jacobian[:first_rows, 5:], 0.0)
     np.testing.assert_allclose(jacobian[first_rows:, :5], 0.0)
@@ -133,7 +137,7 @@ def test_ffag_taylor_optimizer_eliminates_source_scale_on_every_solve(
             active_elements=active.copy(), state=np.ones(4),
             response=response, history=tuple(), converged=False,
             source_scale=0.5,
-            objective_response=objective.transform(response),
+            objective_response=kwargs["response_transform"](response),
             stop_reason="contract regression")
 
     monkeypatch.setattr(fusion, "grow_hdiv_mmm_by_superposition", fake_grow)
@@ -163,6 +167,43 @@ def test_ffag_taylor_optimizer_eliminates_source_scale_on_every_solve(
     assert captured["response_transform"].__self__ is objective
     assert captured["response_transform_jacobian"].__self__ is objective
     np.testing.assert_array_equal(result.active_elements, active)
+
+    captured.clear()
+    response = np.r_[raw_a, raw_b]
+    dipole_limit = (
+        objective.group_max_band_ratio(objective.transform(response),
+                                       "normal_dipole") + 0.1)
+    hierarchical = fusion.optimize_ffag_hdiv_mmm_from_second_order_taylor_maps(
+        objective, source=source, charge_gram=object(), fes=fes,
+        inv_chi=0.1, active_elements=active,
+        element_volumes=np.ones(3), volume_max=3.0,
+        sample_radius=1e-3, source_scale=2.0,
+        multipole_response_matrix=np.zeros((10, 4)),
+        incident_multipole_response=np.zeros(10),
+        primary_response_groups=("R",),
+        maximum_group_band_ratios={"normal_dipole": dipole_limit},
+        fixed_active_elements=np.asarray([True, False, False]))
+    R_rows = objective.response_group_indices(("R",))
+    np.testing.assert_allclose(
+        captured["response_target"], objective.response_target[R_rows])
+    np.testing.assert_allclose(
+        captured["response_band"], objective.response_band[R_rows])
+    primary = captured["response_transform"](response)
+    assert primary.shape == (len(R_rows),)
+    assert captured["response_transform_jacobian"](response).shape == (
+        len(R_rows), response.size)
+    guard = captured["exact_response_validator"]
+    assert guard(response, primary)
+    bad = response.copy()
+    bad[0] = (
+        objective.objectives[0].required_normal_dipole[0]
+        + (dipole_limit + 1.0)
+        * objective.objectives[0].normal_dipole_band[0])
+    assert not guard(bad, captured["response_transform"](bad))
+    assert hierarchical.primary_response_groups == ("R",)
+    assert hierarchical.primary_max_band_ratio == 0.0
+    assert hierarchical.maximum_group_band_ratios == (
+        ("normal_dipole", dipole_limit),)
 
 
 def test_ffag_target_lift_preserves_requested_R_and_uses_loose_T_band():

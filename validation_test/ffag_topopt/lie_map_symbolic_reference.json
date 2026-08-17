@@ -17,7 +17,9 @@
 		"normal_sextupole":0.66666666666666667,
 		"skew_sextupole":0.23333333333333333,
 		"normal_octupole":1.3333333333333333,
-		"skew_octupole":-1.0000000000000000
+		"skew_octupole":-1.0000000000000000,
+		"normal_decapole":1.2500000000000000,
+		"skew_decapole":-0.40000000000000000
 	},
 	"hamiltonian_tensor_entries":{
 		"H2_xx":0.33777777777777778,
@@ -33,7 +35,14 @@
 		"H4_x_px_px_delta":-0.066666666666666667,
 		"H4_x_x_x_x":8.0000000000000000,
 		"H4_x_x_x_y":6.0000000000000000,
-		"H4_delta_delta_delta_delta":1.5206400000000000
+		"H4_delta_delta_delta_delta":1.5206400000000000,
+		"H5_px_px_delta_delta_delta":-6.0000000000000000,
+		"H5_px_px_px_px_delta":-9.0000000000000000,
+		"H5_x_px_px_px_px":0.20000000000000000,
+		"H5_px_px_py_py_delta":-3.0000000000000000,
+		"H5_x_x_x_x_x":30.000000000000000,
+		"H5_x_x_x_x_y":9.6000000000000000,
+		"H5_delta_delta_delta_delta_delta":-3.2735232000000000
 	},
 	"linear_generator_entries":{
 		"A_x_px":1.0000000000000000,

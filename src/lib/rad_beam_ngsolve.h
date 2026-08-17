@@ -14,10 +14,21 @@ namespace radia::beam {
 
 using Vector3 = std::array<double, 3>;
 
+// The canonical EarlyTimes migration input is an HCurl vector-potential
+// GridFunction.  The legacy/direct-field mode remains available for
+// independent comparisons and existing HDiv/VectorH1 callers.
+enum class GridFunctionMagneticInput {
+    MagneticFluxDensity,
+    HCurlVectorPotential,
+};
+
 struct GridFunctionLinearizationOptions {
+    GridFunctionMagneticInput magnetic_input =
+        GridFunctionMagneticInput::HCurlVectorPotential;
     double magnetic_rigidity_t_m = 0.0;
     double sample_radius_m = 1.0e-3;
     Vector3 initial_horizontal{1.0, 0.0, 0.0};
+    bool periodic_frame = false;
     double curvature_sign = 1.0;
     double gradient_sign = 1.0;
     unsigned multipole_order = 1;
@@ -58,18 +69,26 @@ struct GridFunctionSegmentLinearization {
 };
 
 struct GridFunctionTransferReport6 {
+    GridFunctionMagneticInput magnetic_input =
+        GridFunctionMagneticInput::HCurlVectorPotential;
+    std::string grid_function_space_class;
+    int grid_function_space_order = -1;
     double magnetic_rigidity_t_m = 0.0;
     double sample_radius_m = 0.0;
     unsigned multipole_order = 1;
+    bool periodic_frame = false;
+    double frame_holonomy_correction_rad = 0.0;
     VariationalReport6 transfer;
     std::vector<GridFunctionSegmentLinearization> linearizations;
 };
 
-// Evaluate a real three-component NGSolve GridFunction directly at nine
-// transverse points per reference station. The local least-squares field jet
-// is converted to the same combined-function linear generator used by the
+// Evaluate either a real three-component magnetic-field GridFunction or the
+// native curl of a real three-component HCurl vector-potential GridFunction at
+// nine transverse points per reference station. The local least-squares field
+// jet is converted to the same combined-function linear generator used by the
 // Radia accelerator-design APIs. NGSolve remains responsible for point search,
-// element transformations, orientation, and GridFunction evaluation.
+// element transformations, orientation, curl/Piola evaluation, and
+// GridFunction evaluation.
 GridFunctionTransferReport6 PropagateGridFunctionLinearMap(
     const std::shared_ptr<ngcomp::GridFunction>& field,
     const std::vector<double>& segment_lengths_m,
@@ -91,15 +110,22 @@ GridFunctionTransferReport6 PropagateGridFunctionMultipoleMap(
 class NGSolveGridFunctionField final : public Field {
 public:
     explicit NGSolveGridFunctionField(
-        std::shared_ptr<ngcomp::GridFunction> field);
+        std::shared_ptr<ngcomp::GridFunction> field,
+        GridFunctionMagneticInput magnetic_input =
+            GridFunctionMagneticInput::HCurlVectorPotential);
 
     FieldSample Evaluate(const Vec3& position_m, double time_s,
                          const FieldRequest& request = {}) const override;
     std::string TypeName() const override;
     const std::shared_ptr<ngcomp::GridFunction>& GridFunction() const;
+    GridFunctionMagneticInput MagneticInput() const;
 
 private:
     std::shared_ptr<ngcomp::GridFunction> field_;
+    std::shared_ptr<ngcomp::GridFunctionCoefficientFunction>
+        magnetic_coefficient_;
+    GridFunctionMagneticInput magnetic_input_ =
+        GridFunctionMagneticInput::HCurlVectorPotential;
 };
 
 }  // namespace radia::beam

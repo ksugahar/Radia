@@ -19,8 +19,8 @@ details.
 from __future__ import annotations
 
 import math
-import numpy as np
 
+import numpy as np
 
 MU_0 = 4 * math.pi * 1e-7
 
@@ -80,10 +80,17 @@ def compute_lorentz_force_via_foster(
     F_z_conductor : float
         Time-averaged z-force on the conductor (lift on PM is opposite).
     """
-    from ngsolve import (Integrate, CoefficientFunction, GridFunction, H1,
-                          BilinearForm, dx)
-    from ngsolve import x as xC, y as yC, z as zC
     import scipy.sparse as sp
+    from ngsolve import (
+        H1,
+        BilinearForm,
+        GridFunction,
+        Integrate,
+        dx,
+    )
+    from ngsolve import x as xC
+    from ngsolve import y as yC
+    from ngsolve import z as zC
 
     fes = H1(mesh, order=2, dirichlet="outer")
     Bz_cf = (MU_0 / (4*math.pi)) * (
@@ -136,3 +143,58 @@ def compute_lorentz_force_via_foster(
     Fz_conductor = +0.5 * Integrate(Jy_re * Bx_cf, mesh)
 
     return float(Fx_conductor), float(Fz_conductor)
+
+
+def compute_lorentz_force_result_via_foster(
+    mesh,
+    lam,
+    vecs_free,
+    free_mask,
+    sigma,
+    mu,
+    s,
+    m_pm,
+    z_pm_center,
+    x_pm,
+    *,
+    frame="global_cartesian",
+    pivot_m=None,
+):
+    """Return conductor/PM Lorentz forces using the shared result contract.
+
+    The underlying Foster/NGSolve solve remains application-owned. This
+    adapter records the peak-phasor convention and both sides of Newton's
+    third-law pair without changing the legacy tuple-returning function.
+    """
+
+    from radia.force import force_torque_result
+
+    force_x, force_z = compute_lorentz_force_via_foster(
+        mesh,
+        lam,
+        vecs_free,
+        free_mask,
+        sigma,
+        mu,
+        s,
+        m_pm,
+        z_pm_center,
+        x_pm,
+    )
+    conductor_force = [force_x, 0.0, force_z]
+    source_force = [-force_x, 0.0, -force_z]
+    common = {
+        "method": "time_average_lorentz_body_force",
+        "frame": frame,
+        "pivot_m": pivot_m,
+        "field_convention": "time_average_phasor",
+        "amplitude": "peak",
+    }
+    return {
+        "schema": "radia.maglev-force-pair/v1",
+        "conductor": force_torque_result(conductor_force, None, **common),
+        "source_pm": force_torque_result(source_force, None, **common),
+        "action_reaction_residual_N": [
+            conductor_force[index] + source_force[index] for index in range(3)
+        ],
+    }

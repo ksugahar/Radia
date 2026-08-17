@@ -19,13 +19,16 @@ Lab style standards (Sugahara Lab, Kindai University):
     - Choose the **physical width at which the figure will be embedded**
       in the document, then back-out the font sizes so that text
       appears the right point size **at the embedded width**.
-    - Double-column digest, side-by-side panels, embedded width 8 cm:
-        font 10 pt, legend 8 pt minimum.
+    - Paper figure embedded at 8 cm:
+        every visible font is at least 10 pt, including ticks, legends,
+        panel labels, and free annotations.
     - Double-column digest / IEEJ research meeting full-width spanning,
       embedded width 16.5 cm:
         font 10 pt when authored at the embed width.  The wider box gives
         more drawing area, not larger text.
-    - Single-column journal paper, embedded width 8.4 cm: font 8-9 pt.
+    - PowerPoint / Beamer figure:
+        author at 24 pt where practical and require at least 20 pt after
+        scaling to the actual pasted width.
 
   Output
     - Save at >= 300 DPI (use 600 DPI for line-art with thin strokes).
@@ -46,8 +49,8 @@ _PROFILES = {
     "digest_double_column_side_by_side": {
         "embed_width_cm": 8.0,
         "font_pt": 10,
-        "legend_pt_min": 8,
-        "legend_pt_max": 9,
+        "tick_pt": 10,
+        "legend_pt_min": 10,
         "linewidth_pt": 1.0,
         "axes_linewidth_pt": 0.8,
         "marker_size_pt": 6,
@@ -57,9 +60,8 @@ _PROFILES = {
             "be <= 4 cm wide (8 cm / 2 = 4 cm; account for the inter-panel "
             "gap so each is slightly under 4 cm, ~3.5-4 cm). Body/axis "
             "font stays 10 pt (the lab absolute font rule -- do NOT shrink "
-            "it for the narrow panel). Legend is REDUCED to 8-9 pt (not "
-            "10 pt) because a 10 pt legend eats too much of a 4 cm panel; "
-            "8-9 pt keeps it readable without crowding. The legend MUST "
+            "it for the narrow panel). The legend also stays at least 10 pt; "
+            "if it crowds the panel, simplify or move it. The legend MUST "
             "NOT overlap the graph (curves/markers) -- use "
             "find_best_legend_loc() or label_curve_endpoints(), and "
             "emit_paper_figure() will reject an overlapping legend. Keep "
@@ -68,23 +70,20 @@ _PROFILES = {
     },
     "digest_single_column": {
         "embed_width_cm": 8.0,
-        "font_pt": 9,
-        "legend_pt_min": 8,
+        "font_pt": 10,
+        "tick_pt": 10,
+        "legend_pt_min": 10,
         "linewidth_pt": 1.0,
         "axes_linewidth_pt": 0.8,
         "marker_size_pt": 5,
-        "inline_label_pt": 7.5,    # direct-line / endpoint labels
-        "annotation_pt": 7.5,      # f_N, slope-guide labels, arrows
+        "inline_label_pt": 10,
+        "annotation_pt": 10,
         "notes": (
             "Single panel filling one column of a 2-column digest, "
             "embedded at 8 cm via \\begin{figure}.  Use when the figure "
             "has ONE axes (not subplots) -- the panel gets the full "
-            "column width so axis-label / tick fonts can match IEEE "
-            "single-column convention (9 pt).  Inline annotations "
-            "(curve labels at line endpoints, slope-guide labels, "
-            "f_N text) target ~7.5 pt -- larger than the 6 pt typical "
-            "for the side-by-side 2-panel layout, since each axes is "
-            "now twice as wide and supports bigger annotations.  "
+            "column width. Every visible text artist, including inline "
+            "annotations and legends, remains at least 10 pt. "
             "Aspect ratio 0.45-0.55 typical (vertical height fits "
             "1-page digest with text wrapping around)."
         ),
@@ -92,11 +91,12 @@ _PROFILES = {
     "digest_double_column_full_width": {
         "embed_width_cm": 16.5,
         "font_pt": 10,
-        "legend_pt_min": 8,
+        "tick_pt": 10,
+        "legend_pt_min": 10,
         "linewidth_pt": 1.0,
         "axes_linewidth_pt": 0.8,
         "marker_size_pt": 6,
-        "subfigure_label_pt": 8,
+        "subfigure_label_pt": 10,
         "notes": (
             "Single graph spanning both columns of the digest, embedded "
             "at 165 mm. Use figure* in LaTeX. Fonts stay at body size "
@@ -107,21 +107,22 @@ _PROFILES = {
     "matlab_oversized_for_8cm_embed": {
         "embed_width_cm": 8.5,
         "font_pt": 30,
-        "legend_pt_min": 24,
+        "legend_pt_min": 30,
         "linewidth_pt": 2.0,
         "axes_linewidth_pt": 1.5,
         "marker_size_pt": 12,
         "notes": (
             "MATLAB-specific work-around: render at 24 cm x 9 cm with "
-            "30 pt fonts (MATLAB layout breaks at small physical sizes), "
+            "30 pt fonts for every visible text item (MATLAB layout breaks at small physical sizes), "
             "then LaTeX scales down by 8.5/24 to embed at single-column "
-            "8.5 cm width. Visible font ~ 10.6 pt, legend ~ 8.5 pt."
+            "8.5 cm width. Visible font is ~10.6 pt for every text item."
         ),
     },
     "paper_single_column": {
         "embed_width_cm": 8.89,   # IEEE 3.5 in = 88.9 mm exactly
-        "font_pt": 9,
-        "legend_pt_min": 8,
+        "font_pt": 10,
+        "tick_pt": 10,
+        "legend_pt_min": 10,
         "linewidth_pt": 1.0,
         "axes_linewidth_pt": 0.8,
         "marker_size_pt": 5,
@@ -134,11 +135,12 @@ _PROFILES = {
     "paper_double_column": {
         "embed_width_cm": 18.2,   # IEEE 7.16 in = 182 mm exactly
         "font_pt": 10,
-        "legend_pt_min": 8,
+        "tick_pt": 10,
+        "legend_pt_min": 10,
         "linewidth_pt": 1.0,
         "axes_linewidth_pt": 0.8,
         "marker_size_pt": 6,
-        "subfigure_label_pt": 8,
+        "subfigure_label_pt": 10,
         "notes": (
             "Full-page width spanning both columns of IEEE / IEEJ "
             "Transactions: 7.16 in = 182 mm = 43 picas (canonical "
@@ -148,14 +150,17 @@ _PROFILES = {
     },
     "presentation_slide": {
         "embed_width_cm": 25.0,
-        "font_pt": 22,
-        "legend_pt_min": 18,
+        "font_pt": 24,
+        "tick_pt": 24,
+        "legend_pt_min": 24,
+        "min_font_pt": 24,
         "linewidth_pt": 2.0,
         "axes_linewidth_pt": 1.5,
         "marker_size_pt": 12,
         "notes": (
-            "Slide deck (PowerPoint / Beamer). Big fonts so the back row "
-            "can read; thicker line widths so contrast survives projector."
+            "16:9 slide deck (PowerPoint / Beamer). Every visible figure "
+            "label, tick, legend, and annotation must be at least 24 pt; "
+            "thicker line widths preserve contrast on a projector."
         ),
     },
 }
@@ -184,9 +189,8 @@ Lab style — graph rules (Sugahara Lab):
     (8 cm / 2; leave a small inter-panel gap so each is ~3.5-4 cm).
     - Body / axis-label font: 10 pt (the absolute lab rule -- do NOT
       shrink it just because the panel is narrow).
-    - Legend font: 8-9 pt (REDUCED from 10 pt; a 10 pt legend crowds a
-      4 cm panel).  This is the ONE sanctioned exception to the
-      "legend matches body" rule.
+    - Legend font: at least 10 pt. If it crowds a 4 cm panel, simplify
+      the legend, use direct labels, or allocate more width.
     - Legend MUST NOT overlap the graph -- place it in an empty corner
       ('Box','off') or use direct endpoint labels; verify with
       find_best_legend_loc() / emit_paper_figure()'s overlap gate.
@@ -227,6 +231,12 @@ Lab style — graph rules (Sugahara Lab):
 
     Use `figure_matlab2tikz_recipe` MCP tool for a ready-to-paste
     recipe tuned to a given lab profile.
+12. *** 16:9 SLIDE FIGURES: AUTHOR AT 24 pt; DISPLAY >= 20 pt ***:
+    For PowerPoint / Beamer 16:9 slides, use `presentation_slide` or a
+    `beamer_169_*` profile.  Axis labels, tick labels, legends, panel labels,
+    and free annotations are authored at 24 pt where practical. At the actual
+    pasted width, every visible item must remain at least 20 pt. Simplify the
+    plot or give it more slide area instead of shrinking text.
 """
 
 
@@ -340,7 +350,8 @@ def figure_size_for_target(target: str = "digest_double_column_side_by_side",
         f"    'legend.fontsize': {legend},\n"
         "})\n"
         "# ax.set_title('')   # NO title in figure\n"
-        "# fig.savefig('out.png', dpi=300, bbox_inches='tight')"
+        "# lab_savefig(fig, 'out', medium='paper', "
+        f"embed_width_cm={w_cm:.1f})"
     )
 
     return (
@@ -490,8 +501,8 @@ def figure_everyday_recipe(embed_width_cm: float = 8.0,
     (extracted 2026-06 from the lab's everyday matplotlib analysis
     scripts): a compact, often PORTRAIT (3:4) figure with a subtle
     two-level light-gray ('gainsboro') grid, minor ticks ON, Times New
-    Roman 10 pt, a small 6 pt frameless legend, inward ticks on all four
-    sides, and PNG output at 400 dpi for quick review / slides / Word.
+    Roman 10 pt, a 10 pt frameless legend, inward ticks on all four
+    sides, and PNG output at 400 dpi for quick review / Word.
 
     It deliberately DIFFERS from the paper_figure() profiles (which are
     camera-ready submission figures):
@@ -513,11 +524,12 @@ def figure_everyday_recipe(embed_width_cm: float = 8.0,
     w_in = embed_width_cm / 2.54
     h_in = w_in * aspect
     body = "\n".join([
-        "# Lab EVERYDAY analysis figure (matplotlib) -- review / slide / Word.",
+        "# Lab EVERYDAY analysis figure (matplotlib) -- review / Word.",
         "# NOT camera-ready: re-render via paper_figure_recipe() (vector PDF)",
         "# before submitting.  From the lab's everyday analysis scripts.",
         "import matplotlib",
         "import matplotlib.pyplot as plt",
+        "from radia_mcp.figure import lab_savefig",
         "",
         "matplotlib.rc('mathtext', rm='serif', it='serif:italic',",
         "              bf='serif:bold', fontset='cm')   # serif math (lab)",
@@ -525,7 +537,7 @@ def figure_everyday_recipe(embed_width_cm: float = 8.0,
         "    'font.family': 'Times New Roman',",
         "    'font.size': 10, 'axes.labelsize': 10,",
         "    'xtick.labelsize': 10, 'ytick.labelsize': 10,",
-        "    'legend.fontsize': 6,                       # small everyday legend",
+        "    'legend.fontsize': 10,                      # final-size floor",
         "    'axes.linewidth': 0.8, 'lines.linewidth': 0.8,",
         "    'xtick.direction': 'in', 'ytick.direction': 'in',",
         "    'xtick.top': True, 'ytick.right': True,",
@@ -545,14 +557,15 @@ def figure_everyday_recipe(embed_width_cm: float = 8.0,
         "# ax.legend(loc='best', framealpha=0.0, edgecolor='none')  # frameless",
         "# NO ax.set_title(...) -- the caption goes in the document.",
         "",
-        f"fig.savefig('out.png', dpi={dpi}, bbox_inches='tight')",
+        f"lab_savefig(fig, 'out.png', dpi={dpi}, medium='paper', ",
+        f"            embed_width_cm={embed_width_cm:.1f})",
     ])
     return (
         "Lab everyday analysis figure (matplotlib)\n"
         f"  width   : {embed_width_cm:.1f} cm  "
         f"(figsize {w_in:.2f} x {h_in:.2f} in, aspect h/w {aspect:.2f})\n"
-        "  font    : 10 pt body / 6 pt legend   grid: gainsboro 2-level\n"
-        f"  output  : PNG @ {dpi} dpi (review/slide/Word -- NOT a paper figure)\n"
+        "  font    : every visible item >= 10 pt   grid: gainsboro 2-level\n"
+        f"  output  : PNG @ {dpi} dpi (review/Word -- NOT a paper figure)\n"
         "  papers  : use paper_figure_recipe(profile=...) for vector PDF\n"
         "\n" + body
     )
@@ -677,8 +690,8 @@ def apply_lab_style(target: str = "digest_double_column_side_by_side",
           * call ``ax.set_title('')`` to remove any default title (lab
             style forbids in-figure titles; description goes in LaTeX
             caption only).
-          * call ``fig.savefig(..., dpi=300, bbox_inches='tight')`` for
-            production output.
+          * call ``lab_savefig(..., medium=..., embed_width_cm=...)`` so
+            final-size font scaling is validated before production output.
 
     Example:
         >>> import matplotlib.pyplot as plt
@@ -703,8 +716,8 @@ def apply_lab_style(target: str = "digest_double_column_side_by_side",
         "font.size": prof["font_pt"],
         "axes.labelsize": prof["font_pt"],
         "axes.titlesize": prof["font_pt"],
-        "xtick.labelsize": prof["font_pt"] - 1,
-        "ytick.labelsize": prof["font_pt"] - 1,
+        "xtick.labelsize": prof.get("tick_pt", prof["font_pt"] - 1),
+        "ytick.labelsize": prof.get("tick_pt", prof["font_pt"] - 1),
         "legend.fontsize": prof["legend_pt_min"],
         "axes.linewidth": prof["axes_linewidth_pt"],
         "lines.linewidth": prof["linewidth_pt"],
@@ -769,8 +782,33 @@ def apply_lab_style(target: str = "digest_double_column_side_by_side",
     return lab_figsize(target, embed_width_cm=embed_width_cm, aspect=aspect)
 
 
-def lab_savefig(fig, path: str, dpi: int = 300, **kwargs) -> None:
-    """Save a figure using lab-style defaults: dpi=300, bbox_inches='tight'.
+PAPER_MIN_VISIBLE_FONT_PT = 10.0
+PRESENTATION_MIN_VISIBLE_FONT_PT = 20.0
+
+
+def minimum_visible_font_pt(medium: str) -> float:
+    """Return the lab floor for text at the final displayed size."""
+    key = str(medium).strip().lower()
+    if key in {"paper", "manuscript", "publication"}:
+        return PAPER_MIN_VISIBLE_FONT_PT
+    if key in {"presentation", "slide", "powerpoint", "beamer"}:
+        return PRESENTATION_MIN_VISIBLE_FONT_PT
+    raise ValueError(
+        f"Unknown figure medium {medium!r}; use 'paper' or 'presentation'."
+    )
+
+
+def lab_savefig(
+    fig,
+    path: str,
+    dpi: int = 300,
+    *,
+    medium: str | None = None,
+    embed_width_cm: float | None = None,
+    min_visible_font_pt: float | None = None,
+    **kwargs,
+) -> None:
+    """Save a figure after checking text at its final displayed width.
 
     Convenience wrapper around ``fig.savefig(...)``.  Saves both .pdf and
     .png if path ends in either extension; saves only the requested
@@ -780,15 +818,58 @@ def lab_savefig(fig, path: str, dpi: int = 300, **kwargs) -> None:
         fig: matplotlib Figure.
         path: Output filename (with or without extension).
         dpi: DPI for raster output (default 300).
+        medium: ``'paper'`` (default) or ``'presentation'``.  The visible
+            font floor is respectively 10 pt or 20 pt.
+        embed_width_cm: actual width in the paper or PowerPoint slide.  When
+            omitted, the authored figure width is used (100% embedding).
+        min_visible_font_pt: explicit final-size floor; normally omit it.
         **kwargs: Forwarded to fig.savefig.
 
     Example:
-        >>> lab_savefig(fig, "circle_warburg")     # saves both .pdf and .png
-        >>> lab_savefig(fig, "out.png", dpi=600)   # saves only the .png
+        >>> lab_savefig(fig, "paper", medium="paper", embed_width_cm=8.0)
+        >>> lab_savefig(fig, "slide.png", medium="presentation",
+        ...             embed_width_cm=14.0)
     """
     from pathlib import Path
+
+    resolved_medium = medium or getattr(fig, "_lab_medium", "paper")
+    floor = (
+        float(min_visible_font_pt)
+        if min_visible_font_pt is not None
+        else minimum_visible_font_pt(resolved_medium)
+    )
+    display_width = (
+        float(embed_width_cm)
+        if embed_width_cm is not None
+        else getattr(fig, "_lab_embed_width_cm", None)
+    )
+    violations = check_min_font(
+        fig,
+        min_pt=floor,
+        embed_width_cm=display_width,
+    )
+    if violations:
+        lines = [
+            f"  {v['kind']} {v['text']!r}: {v['visible_pt']:.1f} pt "
+            f"after {v['embed_scale']:.3f}x scaling"
+            for v in violations
+        ]
+        raise ValueError(
+            "lab_savefig: visible text is below the final-size font floor.\n"
+            + "\n".join(lines)
+            + f"\nRequired for {resolved_medium}: >= {floor:g} pt at the "
+            "actual embed/paste width. Increase source font sizes, enlarge "
+            "the pasted figure, or simplify the figure."
+        )
+
+    if kwargs.get("bbox_inches") not in (None,):
+        raise ValueError(
+            "lab_savefig: bbox_inches changes the physical source width and "
+            "invalidates the font-scale guarantee. Use bbox_inches=None and "
+            "adjust the fixed canvas margins instead."
+        )
     p = Path(path)
-    common = {"dpi": dpi, "bbox_inches": "tight", **kwargs}
+    common = {"dpi": dpi, "bbox_inches": None, **kwargs}
     if p.suffix == "":
         fig.savefig(p.with_suffix(".pdf"), **common)
         fig.savefig(p.with_suffix(".png"), **common)
@@ -796,8 +877,14 @@ def lab_savefig(fig, path: str, dpi: int = 300, **kwargs) -> None:
         fig.savefig(p, **common)
 
 
-def check_min_font(fig, min_pt: float = 8.0,
-                   embed_scale: float = 1.0) -> list[dict]:
+def check_min_font(
+    fig,
+    min_pt: float = PAPER_MIN_VISIBLE_FONT_PT,
+    embed_scale: float | None = None,
+    *,
+    embed_width_cm: float | None = None,
+    authored_width_cm: float | None = None,
+) -> list[dict]:
     """Return visible text objects whose on-page font is below ``min_pt``.
 
     ``apply_lab_style`` authors figures at a known render size, but some
@@ -808,13 +895,36 @@ def check_min_font(fig, min_pt: float = 8.0,
     Args:
         fig: matplotlib Figure to audit.
         min_pt: Minimum allowed on-page point size.
-        embed_scale: ``includegraphics width / authored figure width``.
+        embed_scale: ``final display width / authored figure width``.
+            Mutually exclusive with ``embed_width_cm``.
+        embed_width_cm: actual width in the paper or PowerPoint slide.  The
+            scale is computed from the figure's authored physical width.
+        authored_width_cm: override the figure's authored physical width;
+            useful when auditing a figure before loading its source object.
 
     Returns:
         List of dictionaries with ``kind``, ``text``, ``render_pt`` and
         ``visible_pt``.  Empty list means the figure passes the threshold.
     """
     import matplotlib.text as mtext
+
+    if embed_scale is not None and embed_width_cm is not None:
+        raise ValueError("Pass either embed_scale or embed_width_cm, not both.")
+    source_width_cm = (
+        float(authored_width_cm)
+        if authored_width_cm is not None
+        else float(fig.get_size_inches()[0]) * 2.54
+    )
+    if source_width_cm <= 0:
+        raise ValueError("The authored figure width must be positive.")
+    if embed_width_cm is not None:
+        if float(embed_width_cm) <= 0:
+            raise ValueError("embed_width_cm must be positive.")
+        scale = float(embed_width_cm) / source_width_cm
+    else:
+        scale = 1.0 if embed_scale is None else float(embed_scale)
+    if scale <= 0:
+        raise ValueError("embed_scale must be positive.")
 
     fig.canvas.draw()
     bad: list[dict] = []
@@ -825,13 +935,16 @@ def check_min_font(fig, min_pt: float = 8.0,
         if s is None or str(s).strip() == "":
             continue
         render_pt = float(txt.get_fontsize())
-        visible_pt = render_pt * float(embed_scale)
+        visible_pt = render_pt * scale
         if visible_pt + 1e-9 < float(min_pt):
             bad.append({
                 "kind": txt.__class__.__name__,
                 "text": str(s),
                 "render_pt": round(render_pt, 3),
                 "visible_pt": round(visible_pt, 3),
+                "authored_width_cm": round(source_width_cm, 3),
+                "embed_width_cm": round(source_width_cm * scale, 3),
+                "embed_scale": round(scale, 6),
             })
     return bad
 
@@ -932,7 +1045,7 @@ def tighten_margins(fig, preset: str = "default", *,
 def label_curve_endpoints(ax, labels, *,
                           side: str = "right",
                           offset_axes_frac: float = 0.015,
-                          fontsize: float = 7.5,
+                          fontsize: float = 10.0,
                           va: str = "center",
                           clip_on: bool = False):
     """Place curve labels JUST OUTSIDE the axes — no overlap with data.
@@ -963,8 +1076,7 @@ def label_curve_endpoints(ax, labels, *,
             ``"left"`` places past the left edge with ``ha="right"``.
         offset_axes_frac: distance past the axes edge to anchor the
             label (axes-fraction units; default 0.015 = 1.5%).
-        fontsize: default fontsize in pt (default 7.5, matching the
-            ``digest_single_column`` profile ``inline_label_pt`` value).
+        fontsize: default fontsize in pt (10 pt paper floor).
         va: vertical alignment ("center", "top", "bottom"; default
             "center").
         clip_on: whether the text gets clipped at the axes boundary
@@ -975,7 +1087,7 @@ def label_curve_endpoints(ax, labels, *,
         >>> label_curve_endpoints(ax, [
         ...     {"y_data": 141, "text": "CLN (R-term)", "color": "C1"},
         ...     {"y_data":  27, "text": r"$K/\\sqrt{\\omega}$",
-        ...      "color": "k", "alpha": 0.7, "fontsize_override": 7.0},
+        ...      "color": "k", "alpha": 0.7},
         ...     {"y_data": 8.5, "text": r"Schur-F = $Y$",
         ...      "color": "C3", "fontweight": "bold"},
         ...     {"y_data": 0.55, "text": "CLN (L-term)", "color": "C0"},
@@ -1013,7 +1125,7 @@ def add_slope_guide(ax, x_center, y_center, slope: float, *,
                     lw: float = 0.6,
                     label: str | None = None,
                     label_offset: tuple[float, float] = (0.0, -0.15),
-                    label_fontsize: float = 5.5):
+                    label_fontsize: float = 10.0):
     """Draw a slope-indicator triangle on a log-log axis.
 
     On a log-log plot, a curve segment with power-law $y\\propto x^\\alpha$
@@ -1035,7 +1147,7 @@ def add_slope_guide(ax, x_center, y_center, slope: float, *,
         label: optional text label (e.g. r"$-1/2$").  None to omit.
         label_offset: (dx_decades, dy_decades) offset of label from
             (x_center, y_center) in log10 units.
-        label_fontsize: fontsize of the label (default 5.5 pt).
+        label_fontsize: fontsize of the label (default 10 pt paper floor).
 
     Example:
         >>> ax.loglog(f, y_exact)

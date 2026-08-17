@@ -15,7 +15,8 @@ matplotlib.use("Agg")
 
 from radia_mcp.figure import (
     lab_figure, save_lab_figure, legend_no_overlap, audit_tex_figures,
-    audit_label_overflow, scaling_loglog, bh_curve,
+    audit_label_overflow, scaling_loglog, bh_curve, check_min_font,
+    lab_savefig,
 )
 
 
@@ -35,6 +36,72 @@ requires_tnr = pytest.mark.skipif(
 # ------------------------------------------------------------------
 # fail-loud gates
 # ------------------------------------------------------------------
+def test_font_gate_rejects_paper_annotation_below_10pt():
+    import matplotlib.pyplot as plt
+    fig, ax = plt.subplots(figsize=(8.0 / 2.54, 2.0))
+    ax.text(0.5, 0.5, "small annotation", fontsize=9.9)
+    bad = check_min_font(fig, min_pt=10.0, embed_width_cm=8.0)
+    assert len(bad) == 1
+    assert bad[0]["text"] == "small annotation"
+    assert bad[0]["visible_pt"] == pytest.approx(9.9)
+    plt.close(fig)
+
+
+def test_font_gate_uses_actual_powerpoint_paste_width():
+    import matplotlib.pyplot as plt
+    fig, ax = plt.subplots(figsize=(25.0 / 2.54, 4.0))
+    ax.set_axis_off()
+    ax.text(0.5, 0.5, "source 24 pt", fontsize=24.0)
+    bad = check_min_font(fig, min_pt=20.0, embed_width_cm=20.0)
+    assert len(bad) == 1
+    assert bad[0]["embed_scale"] == pytest.approx(0.8)
+    assert bad[0]["visible_pt"] == pytest.approx(19.2)
+    plt.close(fig)
+
+
+def test_font_gate_accepts_exact_20pt_after_powerpoint_scaling():
+    import matplotlib.pyplot as plt
+    fig, ax = plt.subplots(figsize=(25.0 / 2.54, 4.0))
+    ax.set_axis_off()
+    ax.text(0.5, 0.5, "source 25 pt", fontsize=25.0)
+    assert check_min_font(fig, min_pt=20.0, embed_width_cm=20.0) == []
+    plt.close(fig)
+
+
+def test_lab_savefig_rejects_downscaled_slide_text(tmp_path):
+    import matplotlib.pyplot as plt
+    fig, ax = plt.subplots(figsize=(25.0 / 2.54, 4.0))
+    ax.set_axis_off()
+    ax.text(0.5, 0.5, "source 24 pt", fontsize=24.0)
+    with pytest.raises(ValueError, match="Required for presentation: >= 20 pt"):
+        lab_savefig(
+            fig,
+            str(tmp_path / "bad_slide.png"),
+            medium="presentation",
+            embed_width_cm=20.0,
+        )
+    plt.close(fig)
+
+
+def test_save_lab_figure_rejects_downscaled_slide_text(tmp_path):
+    import matplotlib.pyplot as plt
+    fig, ax = plt.subplots(figsize=(25.0 / 2.54, 4.0))
+    ax.set_axis_off()
+    ax.text(0.5, 0.5, "source 24 pt", fontsize=24.0)
+    with pytest.raises(ValueError, match="Required for presentation: >= 20 pt"):
+        save_lab_figure(
+            fig,
+            str(tmp_path / "bad_slide"),
+            embed_width_cm=20.0,
+            medium="presentation",
+            save_pdf=False,
+            save_png=False,
+            check_times_new_roman=False,
+            check_label_overflow=False,
+        )
+    plt.close(fig)
+
+
 @requires_tnr
 def test_lab_figure_authors_at_embed_width():
     import matplotlib.pyplot as plt

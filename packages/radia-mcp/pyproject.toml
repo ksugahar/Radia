@@ -90,6 +90,7 @@ document = [
     "pymupdf>=1.24",
     "python-pptx>=1.0",
     "Pillow>=10.0",
+    "opencv-python-headless>=4.8",
     "matplotlib>=3.8",
     "requests>=2.0",
     "edge-tts>=6.1",
@@ -114,6 +115,7 @@ mcp-server-gmsh = "radia_mcp.gmsh.server:main"
 # mcp-server-elf moved to standalone package: pip install mcp-server-elf
 # (https://github.com/ksugahar/mcp-server-elf, https://pypi.org/project/mcp-server-elf/)
 mcp-server-radia-ngsolve = "radia_mcp.radia_ngsolve.server:main"
+mcp-server-force = "radia_mcp.force.server:main"
 mcp-server-radia-acoustic = "radia_mcp.radia_acoustic.server:main"
 mcp-server-radia-matlab = "radia_mcp.matlab.server:main"
 mcp-server-acoustic-fembem = "radia_mcp.acoustic_fembem.server:main"

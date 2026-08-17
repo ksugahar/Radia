@@ -2,8 +2,9 @@ function result = acceleratorTaylorTopopt(functionName, positional, options)
 %ACCELERATORTAYLORTOPOPT Call the Python high-order R/T/U topology API.
 %   This explicit batch boundary exposes normal/skew multipole observation,
 %   forward-AD Taylor-map objectives through octupole, local TSVD
-%   reachability certificates, and HDiv-MMM optimization. It is not a
-%   Simulink step-time backend.
+%   reachability certificates, global KAN parameterization of decoupled
+%   first-order symplectic targets, rank-6 continuation, and HDiv-MMM
+%   optimization. It is not a Simulink step-time backend.
 arguments
     functionName (1,1) string
     positional (1,:) cell = {}
