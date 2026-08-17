@@ -1098,7 +1098,7 @@ if(WIN32)
 		EQNEDT64_VERSION="${RADIA_VERSION}"
 	)
 
-	target_link_libraries(eqnedt64 PRIVATE gdi32 user32 gdiplus ole32)
+	target_link_libraries(eqnedt64 PRIVATE gdi32 user32 gdiplus ole32 comdlg32)
 
 	if(MSVC)
 		# /utf-8: MSVC reads an unmarked source in the ANSI code page, which on
