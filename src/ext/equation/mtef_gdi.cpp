@@ -147,11 +147,18 @@ void draw_layout(HDC hdc, const Layout& L, const SvgStyle& style,
         HFONT f = make_font(g.size * (g.stretchY > 1.0 ? g.stretchY : 1.0),
                             g.italic, g.symbol, g.cjk, units_per_pt);
         HGDIOBJ old = SelectObject(hdc, f);
-        std::wstring w = widen(g.text);
-        TextOutW(hdc,
-                 originX + int(std::lround(g.x * units_per_pt)),
-                 originY + int(std::lround(g.y * units_per_pt)),
-                 w.c_str(), int(w.size()));
+        const int px = originX + int(std::lround(g.x * units_per_pt));
+        const int py = originY + int(std::lround(g.y * units_per_pt));
+        if (g.glyph_id) {
+            /* The font named this drawing rather than mapping it, so address
+             * it directly; a radical variant has no character of its own. */
+            const WORD gi = g.glyph_id;
+            ExtTextOutW(hdc, px, py, ETO_GLYPH_INDEX, nullptr,
+                        reinterpret_cast<LPCWSTR>(&gi), 1, nullptr);
+        } else {
+            std::wstring w = widen(g.text);
+            TextOutW(hdc, px, py, w.c_str(), int(w.size()));
+        }
         SelectObject(hdc, old);
         DeleteObject(f);
     }
