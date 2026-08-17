@@ -25,7 +25,9 @@ struct EditorResult {
 };
 
 /* Open the window on `latex` and run it until the user closes it.  Blocks. */
-EditorResult run_equation_window(const std::string& latex);
+/* `path` opens that file instead, and becomes where Ctrl+S writes. */
+EditorResult run_equation_window(const std::string& latex,
+                                 const std::wstring& path = std::wstring());
 
 /* Put one equation on the clipboard for every target at once.
  *
