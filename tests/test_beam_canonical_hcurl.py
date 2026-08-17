@@ -86,12 +86,19 @@ def test_two_dimensional_multipoles_machine_precision():
 
 
 def test_chain_dimension_matches_spline_law():
-    for order_s, extra in ((2, 2), (3, 3)):
+    # Verified through p_s=5: the L1-contract strict kernel at h=0 equals
+    # the fixed-dimension target exactly (machine-zero interface defects),
+    # so the spline law p_x*(E+p_s) is the measured truth, not a guess.
+    for order_s in (2, 3, 4, 5):
         chain = CanonicalHCurlChain(
             np.linspace(0.0, 0.08, 9), HW, HH, order_x=8, order_s=order_s)
         assert chain.element_count == 8
-        # Per multipole: E*(p_s+1) - (E-1)*conditions = E + extra.
-        assert chain.chain_dimension == 8 * (8 + extra)
+        # Per multipole: E*(p_s+1) - (E-1)*conditions = E + p_s.
+        assert chain.chain_dimension == 8 * (8 + order_s)
+        if chain.interface_defects.size:
+            relative = float(np.max(chain.interface_defects)) \
+                / chain.interface_defect_scale
+            assert relative < 1.0e-12
 
 
 def test_chain_dimension_law_survives_varying_curvature():
@@ -258,7 +265,7 @@ def test_curl_of_a_matches_b_evaluator_in_curved_chart():
 
 
 def test_periodic_chain_spline_dimension_and_cohomology():
-    for order_s in (2, 3):
+    for order_s in (2, 3, 4, 5):
         ring = CanonicalHCurlChain(
             np.linspace(0.0, 0.08, 9), HW, HH, order_x=6, order_s=order_s,
             periodic=True)
