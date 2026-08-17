@@ -34,6 +34,7 @@
 #include "eq_edit.h"
 #include "md_doc.h"
 #include "md_blocks.h"
+#include "md_layout.h"
 
 namespace py = pybind11;
 
@@ -368,6 +369,89 @@ PYBIND11_MODULE(_equation, m) {
     m.def("md_blocks", &mtef::md_blocks, py::arg("markdown"),
           "Split Markdown into blocks.  Concatenating every source rebuilds "
           "the file exactly.");
+
+    /* ---- the document, laid out ----------------------------------------- */
+
+    py::class_<mtef::DocStyle>(m, "DocStyle",
+        "Point sizes, fonts and spacing a Markdown document is set in.")
+        .def(py::init<>())
+        .def_readwrite("body", &mtef::DocStyle::body)
+        .def_readwrite("mono", &mtef::DocStyle::mono)
+        .def_readwrite("line_spacing", &mtef::DocStyle::line_spacing)
+        .def_readwrite("para_gap", &mtef::DocStyle::para_gap)
+        .def_readwrite("list_indent", &mtef::DocStyle::list_indent)
+        .def_readwrite("margin", &mtef::DocStyle::margin)
+        .def_readwrite("text_font", &mtef::DocStyle::text_font)
+        .def_readwrite("mono_font", &mtef::DocStyle::mono_font)
+        .def_readwrite("math_scale", &mtef::DocStyle::math_scale)
+        .def_property("heading",
+            [](const mtef::DocStyle& s) {
+                return std::vector<double>(s.heading, s.heading + 6);
+            },
+            [](mtef::DocStyle& s, const std::vector<double>& v) {
+                for (size_t i = 0; i < 6 && i < v.size(); ++i) s.heading[i] = v[i];
+            },
+            "Point size of each heading level, 1 to 6.");
+
+    py::class_<mtef::DocRun>(m, "DocRun", "A run of text at a position.")
+        .def_readonly("text", &mtef::DocRun::text)
+        .def_readonly("x", &mtef::DocRun::x)
+        .def_readonly("baseline", &mtef::DocRun::baseline)
+        .def_readonly("size", &mtef::DocRun::size)
+        .def_readonly("bold", &mtef::DocRun::bold)
+        .def_readonly("italic", &mtef::DocRun::italic)
+        .def_readonly("mono", &mtef::DocRun::mono)
+        .def("__repr__", [](const mtef::DocRun& r) {
+            return "<DocRun " + r.text.substr(0, 30) + ">";
+        });
+
+    py::class_<mtef::DocMath>(m, "DocMath",
+        "An equation placed in the document, carrying its own math layout so "
+        "the same layout serves the screen and the Office paste.")
+        .def_readonly("x", &mtef::DocMath::x)
+        .def_readonly("baseline", &mtef::DocMath::baseline)
+        .def_readonly("latex", &mtef::DocMath::latex)
+        .def_readonly("block", &mtef::DocMath::block)
+        .def_readonly("index", &mtef::DocMath::index)
+        .def_readonly("display", &mtef::DocMath::display)
+        .def_property_readonly("width",
+            [](const mtef::DocMath& d) { return d.layout.w; })
+        .def_property_readonly("ascent",
+            [](const mtef::DocMath& d) { return d.layout.asc; })
+        .def_property_readonly("descent",
+            [](const mtef::DocMath& d) { return d.layout.desc; })
+        .def("__repr__", [](const mtef::DocMath& d) {
+            return "<DocMath " + d.latex.substr(0, 30) + ">";
+        });
+
+    py::class_<mtef::DocBlockBox>(m, "DocBlockBox",
+        "Where a block ended up, so a click can select it.")
+        .def_readonly("block", &mtef::DocBlockBox::block)
+        .def_readonly("kind", &mtef::DocBlockBox::kind)
+        .def_readonly("top", &mtef::DocBlockBox::top)
+        .def_readonly("bottom", &mtef::DocBlockBox::bottom);
+
+    py::class_<mtef::DocLayout>(m, "DocLayout",
+        "A Markdown document laid out to a width, in points.")
+        .def_readonly("width", &mtef::DocLayout::width)
+        .def_readonly("height", &mtef::DocLayout::height)
+        .def_readonly("runs", &mtef::DocLayout::runs)
+        .def_readonly("maths", &mtef::DocLayout::maths)
+        .def_readonly("blocks", &mtef::DocLayout::blocks)
+        .def("block_at", [](const mtef::DocLayout& d, double x, double y) {
+                 return mtef::block_at(d, x, y);
+             }, py::arg("x"), py::arg("y"),
+             "Which block a point falls in, or -1.")
+        .def("math_at", [](const mtef::DocLayout& d, double x, double y) {
+                 return mtef::math_at(d, x, y);
+             }, py::arg("x"), py::arg("y"),
+             "Which equation a point falls in, or -1 -- the test for opening "
+             "the equation widget rather than the text editor.");
+
+    m.def("layout_markdown", &mtef::layout_markdown,
+          py::arg("markdown"), py::arg("width"),
+          py::arg("style") = mtef::DocStyle(),
+          "Lay a Markdown document out to a width in points.");
 
     m.def("read_eqn", &read_eqn_py, py::arg("path"),
           "Read a .eqn file (raw MTEF, no OLE header).");
