@@ -2285,6 +2285,7 @@ def _fourth_order_lie_map_from_vector_potential_polynomials(
     maximum_steps=1_000_000,
     factorization_tolerance=1.0e-8,
     reference_orbit_tolerance=1.0e-8,
+    parameter_jacobians=True,
 ) -> VectorPotentialFourthOrderLieMap:
     """Internal Lie kernel for a jet recovered from a certified HCurl field.
 
@@ -2295,6 +2296,13 @@ def _fourth_order_lie_map_from_vector_potential_polynomials(
     reserved for independent Runge--Kutta comparison.  A homogeneous map about
     the supplied design orbit exists only when the Hamiltonian linear term
     vanishes; ``reference_orbit_tolerance`` therefore gates every segment.
+
+    ``parameter_jacobians=False`` skips the per-coefficient design-derivative
+    accumulation (the topology-optimization adjoint over ``40 * n_segment``
+    parameters, whose tangent tensor compositions dominate the runtime and
+    scale superlinearly in the segment count).  The map tensors follow the
+    identical numerical path; only the ``*_jacobian`` outputs become
+    zero-width.  Verification and tracking callers should pass ``False``.
     """
     lengths = _finite_array(segment_lengths, name="segment_lengths").reshape(-1)
     if lengths.size == 0 or np.any(lengths <= 0.0):
@@ -2350,7 +2358,10 @@ def _fourth_order_lie_map_from_vector_potential_polynomials(
     )
     parameter_names = first.parameter_names
     local_parameter_count = len(parameter_names)
-    parameter_count = local_parameter_count * lengths.size
+    track_jacobians = bool(parameter_jacobians)
+    parameter_count = (
+        local_parameter_count * lengths.size if track_jacobians else 0
+    )
     accumulated = _identity_fourth_order(parameter_count)
     linear = np.empty((lengths.size, 6))
     linear_jacobian = np.zeros((parameter_count, lengths.size, 6))
@@ -2382,37 +2393,56 @@ def _fourth_order_lie_map_from_vector_potential_polynomials(
             )
         jet = result.jet
         linear[segment] = result.linear
-        indexes = np.asarray(
-            [
-                parameter * lengths.size + segment
-                for parameter in range(local_parameter_count)
-            ],
-            dtype=np.int64,
-        )
-        linear_jacobian[indexes, segment] = result.linear_jacobian
         step_count = int(np.ceil(float(length) / step_limit))
         total_steps += step_count
         if total_steps > step_cap:
             raise ValueError("A-map LIE integration exceeds maximum_steps")
-        step = _fourth_order_rk4_step(
-            jet.A,
-            jet.F2,
-            jet.F3,
-            jet.F4,
-            jet.A_jacobian,
-            jet.F2_jacobian,
-            jet.F3_jacobian,
-            jet.F4_jacobian,
-            float(length) / step_count,
-        )
-        local = _identity_fourth_order(local_parameter_count)
-        for _ in range(step_count):
-            local = _compose_fourth_order(step, local)
-        embedded = list(_identity_fourth_order(parameter_count))
-        embedded[:4] = local[:4]
-        for derivative_index in range(4):
-            embedded[4 + derivative_index][indexes] = local[4 + derivative_index]
-        accumulated = _compose_fourth_order(tuple(embedded), accumulated)
+        if track_jacobians:
+            indexes = np.asarray(
+                [
+                    parameter * lengths.size + segment
+                    for parameter in range(local_parameter_count)
+                ],
+                dtype=np.int64,
+            )
+            linear_jacobian[indexes, segment] = result.linear_jacobian
+            step = _fourth_order_rk4_step(
+                jet.A,
+                jet.F2,
+                jet.F3,
+                jet.F4,
+                jet.A_jacobian,
+                jet.F2_jacobian,
+                jet.F3_jacobian,
+                jet.F4_jacobian,
+                float(length) / step_count,
+            )
+            local = _identity_fourth_order(local_parameter_count)
+            for _ in range(step_count):
+                local = _compose_fourth_order(step, local)
+            embedded = list(_identity_fourth_order(parameter_count))
+            embedded[:4] = local[:4]
+            for derivative_index in range(4):
+                embedded[4 + derivative_index][indexes] = (
+                    local[4 + derivative_index]
+                )
+            accumulated = _compose_fourth_order(tuple(embedded), accumulated)
+        else:
+            step = _fourth_order_rk4_step(
+                jet.A,
+                jet.F2,
+                jet.F3,
+                jet.F4,
+                jet.A_jacobian[:0],
+                jet.F2_jacobian[:0],
+                jet.F3_jacobian[:0],
+                jet.F4_jacobian[:0],
+                float(length) / step_count,
+            )
+            local = _identity_fourth_order(0)
+            for _ in range(step_count):
+                local = _compose_fourth_order(step, local)
+            accumulated = _compose_fourth_order(local, accumulated)
 
     factorization = dragt_finn_factorize_fourth_order(
         accumulated[0],

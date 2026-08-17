@@ -354,6 +354,9 @@ def main(argv=None):
         reference_curvature_per_m=curvatures,
         longitudinal_component="covariant",
         reference_orbit_tolerance=float(options.reference_orbit_tolerance),
+        # Verification consumes only the map; the topopt adjoint over
+        # 40*n_segment parameters is the measured 264x runtime hog.
+        parameter_jacobians=False,
     )
     lie_wall = time.perf_counter() - lie_started
     linear_max = float(np.max(np.abs(lie.hamiltonian_linear), initial=0.0))
