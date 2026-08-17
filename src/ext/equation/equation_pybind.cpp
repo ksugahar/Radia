@@ -33,6 +33,7 @@
 #include "latex_emitter.h"
 #include "eq_edit.h"
 #include "md_doc.h"
+#include "md_blocks.h"
 
 namespace py = pybind11;
 
@@ -342,6 +343,31 @@ PYBIND11_MODULE(_equation, m) {
              py::arg("index"), py::arg("latex"))
         .def("math_segment_index", &mtef::MarkdownDoc::math_segment_index,
              py::arg("index"));
+
+    py::class_<mtef::MdBlock> blk(m, "MdBlock",
+        "One block of a Markdown file: a heading, a paragraph, a list item, "
+        "fenced code, or a run of blank lines.");
+    py::enum_<mtef::MdBlock::Kind>(blk, "Kind")
+        .value("Paragraph", mtef::MdBlock::kParagraph)
+        .value("Heading", mtef::MdBlock::kHeading)
+        .value("Bullet", mtef::MdBlock::kBullet)
+        .value("Numbered", mtef::MdBlock::kNumbered)
+        .value("Code", mtef::MdBlock::kCode)
+        .value("Blank", mtef::MdBlock::kBlank)
+        .export_values();
+    blk.def_readonly("kind", &mtef::MdBlock::kind)
+       .def_readonly("level", &mtef::MdBlock::level)
+       .def_readonly("text", &mtef::MdBlock::text)
+       .def_readonly("info", &mtef::MdBlock::info)
+       .def_readonly("source", &mtef::MdBlock::source)
+       .def("__repr__", [](const mtef::MdBlock& b) {
+           return "<MdBlock " + std::to_string(int(b.kind)) + " " +
+                  b.text.substr(0, 40) + ">";
+       });
+
+    m.def("md_blocks", &mtef::md_blocks, py::arg("markdown"),
+          "Split Markdown into blocks.  Concatenating every source rebuilds "
+          "the file exactly.");
 
     m.def("read_eqn", &read_eqn_py, py::arg("path"),
           "Read a .eqn file (raw MTEF, no OLE header).");

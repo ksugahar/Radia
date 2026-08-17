@@ -1005,6 +1005,7 @@ pybind11_add_module(_equation
 	${EQUATION_DIR}/mtef_dump.cpp
 	${EQUATION_DIR}/eq_edit.cpp
 	${EQUATION_DIR}/md_doc.cpp
+	${EQUATION_DIR}/md_blocks.cpp
 )
 
 target_include_directories(_equation PRIVATE

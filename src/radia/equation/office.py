@@ -17,18 +17,13 @@ import re
 import zipfile
 from typing import Iterable, Sequence
 
-from radia._equation import (MarkdownDoc, MdSegment, tex_to_mathml,
-                             tex_to_omml, tex_to_rtf)
+from radia._equation import (MarkdownDoc, MdBlock, MdSegment, md_blocks,
+                             tex_to_mathml, tex_to_omml, tex_to_rtf)
 
 W_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
 A_NS = "http://schemas.openxmlformats.org/drawingml/2006/main"
 A14_NS = "http://schemas.microsoft.com/office/drawing/2010/main"
 M_NS = "http://schemas.openxmlformats.org/officeDocument/2006/math"
-
-_FENCE = re.compile(r"^(\s*)(`{3,}|~{3,})")
-_HEADING = re.compile(r"^(#{1,6})\s+(.*)$")
-_BULLET = re.compile(r"^(\s*)[-*+]\s+(.*)$")
-_NUMBER = re.compile(r"^(\s*)\d+[.)]\s+(.*)$")
 
 
 class Piece:
@@ -120,57 +115,6 @@ def omml_paragraph(paragraph, pieces: Iterable[Piece], powerpoint: bool = False)
     return paragraph
 
 
-def _blocks(markdown: str):
-    """Yield (kind, text) blocks.  Fenced code is kept whole and verbatim."""
-    lines = markdown.splitlines()
-    i = 0
-    while i < len(lines):
-        m = _FENCE.match(lines[i])
-        if m:
-            fence = m.group(2)
-            body = [lines[i]]
-            i += 1
-            while i < len(lines):
-                body.append(lines[i])
-                if lines[i].strip().startswith(fence[0] * len(fence)):
-                    i += 1
-                    break
-                i += 1
-            yield ("code", "\n".join(body))
-            continue
-
-        if not lines[i].strip():
-            i += 1
-            continue
-
-        h = _HEADING.match(lines[i])
-        if h:
-            yield (f"h{len(h.group(1))}", h.group(2))
-            i += 1
-            continue
-
-        b = _BULLET.match(lines[i])
-        if b:
-            yield ("bullet", b.group(2))
-            i += 1
-            continue
-
-        n = _NUMBER.match(lines[i])
-        if n:
-            yield ("number", n.group(2))
-            i += 1
-            continue
-
-        para = [lines[i]]
-        i += 1
-        while i < len(lines) and lines[i].strip() and not _HEADING.match(lines[i]) \
-                and not _BULLET.match(lines[i]) and not _NUMBER.match(lines[i]) \
-                and not _FENCE.match(lines[i]):
-            para.append(lines[i])
-            i += 1
-        yield ("para", "\n".join(para))
-
-
 def markdown_to_docx(markdown: str, out_path: str) -> str:
     """Write Markdown to a .docx, equations included as native Office math.
 
@@ -184,33 +128,33 @@ def markdown_to_docx(markdown: str, out_path: str) -> str:
     from lxml import etree
 
     doc = Document()
-    for kind, body in _blocks(markdown):
-        if kind == "code":
-            lines = body.splitlines()
-            if lines and _FENCE.match(lines[0]):
-                lines = lines[1:]
-            if lines and _FENCE.match(lines[-1]):
-                lines = lines[:-1]
+    # The same block scanner the viewer uses.  A second copy here would drift
+    # from it, and the two would disagree about what a file says.
+    for block in md_blocks(markdown):
+        if block.kind == MdBlock.Blank:
+            continue
+
+        if block.kind == MdBlock.Code:
             para = doc.add_paragraph()
-            run = para.add_run("\n".join(lines))
+            run = para.add_run(block.text)
             run.font.name = "Consolas"
             run.font.size = Pt(9)
             continue
 
-        if kind.startswith("h") and kind[1:].isdigit():
-            para = doc.add_heading(level=min(int(kind[1:]), 4))
+        if block.kind == MdBlock.Heading:
+            para = doc.add_heading(level=min(block.level, 4))
             # add_heading seeds a run with the text; start from an empty one
             for r in list(para._p):
                 if etree.QName(r).localname == "r":
                     para._p.remove(r)
-        elif kind == "bullet":
+        elif block.kind == MdBlock.Bullet:
             para = doc.add_paragraph(style="List Bullet")
-        elif kind == "number":
+        elif block.kind == MdBlock.Numbered:
             para = doc.add_paragraph(style="List Number")
         else:
             para = doc.add_paragraph()
 
-        omml_paragraph(para, split_math(body))
+        omml_paragraph(para, split_math(block.text))
 
     doc.save(out_path)
     return out_path
