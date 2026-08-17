@@ -113,6 +113,29 @@ public:
     /* Template names this build understands, for a palette or a test. */
     static const std::vector<std::string>& templates();
 
+    /* The palette bar, following Equation Editor 3.0's arrangement: a row of
+     * symbol palettes above a row of template palettes.
+     *
+     * The contents are BUILT from the shared command table and the template
+     * list, never written out again here.  A palette listed by hand drifts:
+     * it starts offering symbols the editor cannot insert, and stops showing
+     * ones that were added.  This is the same reason the key chords come from
+     * shortcuts() rather than from the window.
+     *
+     * A group with nothing in it is not returned at all -- an empty dropdown
+     * is worse than an absent one. */
+    struct PaletteItem {
+        std::string command;      /* "\\alpha", or a template name    */
+        uint32_t code = 0;        /* the glyph to show on the button  */
+        bool is_template = false;
+    };
+    struct PaletteGroup {
+        std::string name;
+        std::vector<PaletteItem> items;
+    };
+    static const std::vector<PaletteGroup>& symbol_palettes();
+    static const std::vector<PaletteGroup>& template_palettes();
+
 private:
     std::unique_ptr<LineNode> root_;
     std::vector<CaretStep> path_;
