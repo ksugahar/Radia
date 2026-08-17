@@ -193,7 +193,9 @@ static const CmdEntry LATEX_TO_UNICODE[] = {
     {"\\forall", 0x2200}, {"\\frown", 0x2322},
     {"\\gamma", 0x03B3}, {"\\geq", 0x2265}, {"\\gg", 0x226B},
     {"\\heartsuit", 0x2665},
-    {"\\hookrightarrow", 0x21AA}, {"\\hookleftarrow", 0x21A9},
+    /* Sorted: bsearch walks past anything out of order, and these two were
+     * swapped, so \hookleftarrow was in the table and unreachable. */
+    {"\\hookleftarrow", 0x21A9}, {"\\hookrightarrow", 0x21AA},
     {"\\imath", 0x0131}, {"\\in", 0x2208}, {"\\infty", 0x221E},
     {"\\iota", 0x03B9},
     {"\\kappa", 0x03BA},
@@ -262,6 +264,20 @@ static int lookup_latex_unicode(const char *cmd) {
 
 int tex_command_to_unicode(const char *cmd) {
     return lookup_latex_unicode(cmd);
+}
+
+int tex_command_count(void) {
+    return (int)LATEX_TO_UNICODE_N;
+}
+
+const char *tex_command_name(int index) {
+    if (index < 0 || index >= (int)LATEX_TO_UNICODE_N) return 0;
+    return LATEX_TO_UNICODE[index].cmd;
+}
+
+int tex_command_code_at(int index) {
+    if (index < 0 || index >= (int)LATEX_TO_UNICODE_N) return -1;
+    return (int)LATEX_TO_UNICODE[index].code;
 }
 
 /* Greek LC code set */

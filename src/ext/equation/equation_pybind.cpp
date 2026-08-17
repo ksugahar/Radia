@@ -366,6 +366,32 @@ PYBIND11_MODULE(_equation, m) {
                   b.text.substr(0, 40) + ">";
        });
 
+    py::class_<mtef::Equation::PaletteItem>(m, "PaletteItem",
+        "One cell of a palette: a symbol command, or a template name.")
+        .def_readonly("command", &mtef::Equation::PaletteItem::command)
+        .def_readonly("code", &mtef::Equation::PaletteItem::code)
+        .def_readonly("is_template", &mtef::Equation::PaletteItem::is_template)
+        .def("__repr__", [](const mtef::Equation::PaletteItem& i) {
+            return "<PaletteItem " + i.command + ">";
+        });
+
+    py::class_<mtef::Equation::PaletteGroup>(m, "PaletteGroup",
+        "One button on the palette bar and what its popup holds.")
+        .def_readonly("name", &mtef::Equation::PaletteGroup::name)
+        .def_readonly("items", &mtef::Equation::PaletteGroup::items)
+        .def("__repr__", [](const mtef::Equation::PaletteGroup& g) {
+            return "<PaletteGroup " + g.name + " n=" +
+                   std::to_string(g.items.size()) + ">";
+        });
+
+    m.def("symbol_palettes", &mtef::Equation::symbol_palettes,
+          py::return_value_policy::reference,
+          "The symbol row of the palette bar, built from the shared command "
+          "table so it cannot offer what the editor will not insert.");
+    m.def("template_palettes", &mtef::Equation::template_palettes,
+          py::return_value_policy::reference,
+          "The template row of the palette bar.");
+
     m.def("md_blocks", &mtef::md_blocks, py::arg("markdown"),
           "Split Markdown into blocks.  Concatenating every source rebuilds "
           "the file exactly.");

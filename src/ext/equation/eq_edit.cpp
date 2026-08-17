@@ -634,6 +634,132 @@ const std::vector<std::string>& Equation::templates() {
 /* Equation Editor 3.0's chords.  Only the ones that are unambiguous in the
  * editor's own Help are listed; everything else in templates() is reachable
  * from a palette and is deliberately left unbound rather than invented. */
+/* Which palette a symbol belongs to, decided from its code point.  Equation
+ * Editor 3.0's arrangement, reimplemented -- the grouping is observable from
+ * using it, which is all we take. */
+static int palette_of(uint32_t c) {
+    enum { kRelation, kEllipsis, kOperator, kArrow, kLogic, kSet, kMisc,
+           kGreekLower, kGreekUpper };
+    if (c >= 0x03B1 && c <= 0x03C9) return kGreekLower;
+    if (c >= 0x0391 && c <= 0x03A9) return kGreekUpper;
+    if ((c >= 0x2190 && c <= 0x21FF) || (c >= 0x27F8 && c <= 0x27FA))
+        return kArrow;
+
+    switch (c) {
+        case 0x2026: case 0x22EF: case 0x22EE: case 0x22F1: case 0x22F0:
+            return kEllipsis;
+        default:
+            break;
+    }
+
+    switch (c) {
+        case 0x2264: case 0x2265: case 0x2260: case 0x2248: case 0x2261:
+        case 0x221D: case 0x223C: case 0x2245: case 0x226A: case 0x226B:
+        case 0x2250: case 0x2243:
+            return kRelation;
+
+        case 0x00B1: case 0x2213: case 0x00D7: case 0x00F7: case 0x2217:
+        case 0x2218: case 0x2219: case 0x2295: case 0x2297: case 0x2299:
+        case 0x22C5: case 0x2216:
+            return kOperator;
+
+        case 0x2200: case 0x2203: case 0x2234: case 0x2235: case 0x00AC:
+        case 0x2227: case 0x2228: case 0x22A2: case 0x22A8:
+            return kLogic;
+
+        case 0x2208: case 0x2209: case 0x220B: case 0x2282: case 0x2283:
+        case 0x2286: case 0x2287: case 0x222A: case 0x2229: case 0x2205:
+        case 0x2284:
+            return kSet;
+
+        default:
+            break;
+    }
+    /* Miscellaneous is the catch-all, and it is TOTAL: every entry in the
+     * table lands somewhere.  Classifying only the ranges I thought of left
+     * \ldots, \cdots, \dagger and \bullet insertable from the keyboard but
+     * absent from the bar -- the palette was quietly hiding part of the
+     * editor, which is the one thing a generated palette exists to prevent. */
+    return kMisc;
+}
+
+const std::vector<Equation::PaletteGroup>& Equation::symbol_palettes() {
+    static const std::vector<PaletteGroup> kGroups = [] {
+        /* This array is indexed by palette_of()'s enum.  Keep the two in step:
+         * adding a group to one and not the other silently relabels every
+         * palette after it, which is how "Greek" came to hold arrows. */
+        static const char* kNames[] = {
+            "Relations", "Ellipses", "Operators", "Arrows", "Logic",
+            "Set theory", "Miscellaneous", "Greek", "Greek capitals",
+        };
+        const int n = int(sizeof(kNames) / sizeof(kNames[0]));
+        std::vector<PaletteGroup> groups;
+        for (int i = 0; i < n; ++i) groups.push_back({kNames[i], {}});
+
+        for (int i = 0; i < tex_command_count(); ++i) {
+            const int code = tex_command_code_at(i);
+            if (code < 0) continue;
+            const int g = palette_of(uint32_t(code));
+            if (g < 0 || g >= n) continue;
+            PaletteItem it;
+            it.command = tex_command_name(i);
+            it.code = uint32_t(code);
+            groups[size_t(g)].items.push_back(it);
+        }
+
+        /* Embellishments are templates, not table symbols, but Equation
+         * Editor keeps them on the symbol row and so do we. */
+        PaletteGroup emb{"Embellishments", {}};
+        for (const char* t : {"hat", "vec", "bar", "tilde", "dot",
+                              "overline", "underline"}) {
+            PaletteItem it;
+            it.command = t;
+            it.is_template = true;
+            emb.items.push_back(it);
+        }
+        groups.insert(groups.begin() + 2, emb);
+
+        groups.erase(std::remove_if(groups.begin(), groups.end(),
+                         [](const PaletteGroup& g) { return g.items.empty(); }),
+                     groups.end());
+        return groups;
+    }();
+    return kGroups;
+}
+
+const std::vector<Equation::PaletteGroup>& Equation::template_palettes() {
+    static const std::vector<PaletteGroup> kGroups = [] {
+        struct Def { const char* name; std::vector<const char*> items; };
+        static const Def kDefs[] = {
+            {"Fences",        {"paren", "bracket", "brace", "abs", "angle"}},
+            {"Fractions",     {"frac", "sqrt", "nthroot"}},
+            {"Scripts",       {"sub", "sup", "subsup"}},
+            {"Summation",     {"sum"}},
+            {"Integrals",     {"int", "iint", "oint"}},
+            {"Products",      {"prod"}},
+            {"Matrices",      {"matrix2x2", "matrix3x3", "cases"}},
+        };
+        /* Equation Editor also has a labelled-arrow palette.  This build has
+         * no such template, so the button is absent rather than empty. */
+        const std::vector<std::string>& known = templates();
+        std::vector<PaletteGroup> groups;
+        for (const Def& d : kDefs) {
+            PaletteGroup g{d.name, {}};
+            for (const char* t : d.items) {
+                if (std::find(known.begin(), known.end(), t) == known.end())
+                    continue;          /* never offer what cannot be inserted */
+                PaletteItem it;
+                it.command = t;
+                it.is_template = true;
+                g.items.push_back(it);
+            }
+            if (!g.items.empty()) groups.push_back(g);
+        }
+        return groups;
+    }();
+    return kGroups;
+}
+
 const std::vector<Equation::Binding>& Equation::shortcuts() {
     static const std::vector<Binding> kBindings = {
         {"Ctrl+F",       "template.frac",      "fraction"},
