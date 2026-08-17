@@ -92,3 +92,78 @@ def test_type_sizes_reach_the_picture():
     w_small, _ = _png_size(equation.tex_to_png("x", small, 1.0))
     w_big, _ = _png_size(equation.tex_to_png("x", big, 1.0))
     assert w_big > w_small
+
+
+# ---- how big the picture says it is ----------------------------------------
+#
+# Sampling finely and being enormous are different things, and only the second
+# is a bug.  Without a declared resolution an application has nothing but pixels
+# to go on and assumes screen dots, so a 600 dpi equation pastes at 600/96 =
+# 6.25 times its proper size.  The metafile has always carried its physical size
+# -- that is what a vector format is -- so only the raster needed telling.
+
+
+def _png_phys(data):
+    """(x, y) pixels per metre from the pHYs chunk, or None."""
+    i = 8
+    while i + 8 <= len(data):
+        length = struct.unpack(">I", data[i:i + 4])[0]
+        if data[i + 4:i + 8] == b"pHYs":
+            x, y, _unit = struct.unpack(">IIB", data[i + 8:i + 17])
+            return x, y
+        i += 12 + length
+    return None
+
+
+def _dib_header(data):
+    keys = ("size", "w", "h", "planes", "bits", "compression",
+            "image_size", "xppm", "yppm", "used", "important")
+    return dict(zip(keys, struct.unpack("<IiiHHIIiiII", data[:40])))
+
+
+@pytest.mark.parametrize("dpi", [96.0, 288.0, 600.0])
+def test_the_png_declares_the_resolution_it_was_rendered_at(dpi):
+    png = equation.tex_to_png("x", equation.SvgStyle(), dpi / 72.0)
+    phys = _png_phys(png)
+    assert phys is not None, "no pHYs chunk: the picture pastes oversized"
+    assert abs(phys[0] * 0.0254 - dpi) < 1.0
+    assert phys[0] == phys[1]
+
+
+@pytest.mark.parametrize("dpi", [96.0, 288.0, 600.0])
+def test_the_dib_declares_the_resolution_it_was_rendered_at(dpi):
+    h = _dib_header(equation.tex_to_dib("x", equation.SvgStyle(), dpi / 72.0))
+    assert abs(h["xppm"] * 0.0254 - dpi) < 1.0
+    assert h["xppm"] == h["yppm"]
+
+
+def test_raising_the_resolution_does_not_change_the_declared_size():
+    """The whole point: more pixels, same equation."""
+    st = equation.SvgStyle()
+    sizes = []
+    for dpi in (96.0, 288.0, 600.0):
+        h = _dib_header(equation.tex_to_dib(r"E = mc^{2}", st, dpi / 72.0))
+        sizes.append(h["w"] / h["xppm"])          # metres across
+    for s in sizes[1:]:
+        assert abs(s - sizes[0]) / sizes[0] < 0.02
+
+
+def test_the_dib_is_bottom_up_as_a_pasted_bitmap_must_be():
+    h = _dib_header(equation.tex_to_dib("x"))
+    assert h["h"] > 0
+    assert h["bits"] == 32
+    assert h["compression"] == 0                  # BI_RGB
+
+
+def test_the_dib_carries_all_of_its_pixels():
+    data = equation.tex_to_dib("x")
+    h = _dib_header(data)
+    assert len(data) == 40 + h["w"] * h["h"] * 4
+
+
+def test_the_two_rasters_are_pictures_of_the_same_equation():
+    """PNG and DIB come from one rasterisation, so they cannot disagree."""
+    st = equation.SvgStyle()
+    png_w, png_h = _png_size(equation.tex_to_png(r"\frac{a}{b}", st, 4.0))
+    h = _dib_header(equation.tex_to_dib(r"\frac{a}{b}", st, 4.0))
+    assert (h["w"], h["h"]) == (png_w, png_h)
