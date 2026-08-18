@@ -90,7 +90,7 @@ MathFont MathFont::load(const std::string& path, int face) {
         if (!at(b, base + 6, 2)) continue;
         const uint16_t numTables = rd16(&b[base + 4]);
 
-        uint32_t mathOff = 0, mathLen = 0, headOff = 0, cmapOff = 0;
+        uint32_t mathOff = 0, mathLen = 0, headOff = 0, cmapOff = 0, gsubOff = 0;
         for (uint16_t i = 0; i < numTables; ++i) {
             const size_t rec = base + 12 + size_t(i) * 16;
             if (!at(b, rec, 16)) break;
@@ -99,6 +99,7 @@ MathFont MathFont::load(const std::string& path, int face) {
             if (t == tag("MATH")) { mathOff = off; mathLen = len; }
             else if (t == tag("head")) headOff = off;
             else if (t == tag("cmap")) cmapOff = off;
+            else if (t == tag("GSUB")) gsubOff = off;
         }
         if (!mathOff && face < 0) continue;      /* keep looking for a math face */
 
@@ -112,6 +113,7 @@ MathFont MathFont::load(const std::string& path, int face) {
         }
         m.parse_math(b, mathOff);
         if (cmapOff) m.parse_cmap(b, cmapOff);
+        if (gsubOff) m.parse_ssty(b, gsubOff);
         m.ok_ = true;
         return m;
     }
@@ -309,6 +311,80 @@ double MathFont::top_accent_attachment(uint16_t g, double dflt) const {
             return a.first < v;
         });
     return (it != topAccent_.end() && it->first == g) ? it->second : dflt;
+}
+
+/* ---- GSUB, for one feature only ----------------------------------------- */
+
+/* `ssty` -- the alternates a maths font draws for script and scriptscript
+ * sizes.  It is an ordinary GSUB feature, and this reads just enough of GSUB
+ * to find it: the feature list for the tag, the lookups it names, and the
+ * Alternate Substitution subtables in them, whose alternate set is exactly
+ * { script, scriptscript } by convention.
+ *
+ * Nothing else in GSUB is wanted.  Ligatures, kerning and the rest belong to
+ * text layout, which GDI is doing; this is the one feature that changes what
+ * a MATHS layout must measure. */
+void MathFont::parse_ssty(const std::vector<uint8_t>& b, uint32_t off) {
+    if (!at(b, off, 10)) return;
+    const uint32_t featureList = off + rd16(&b[off + 6]);
+    const uint32_t lookupList  = off + rd16(&b[off + 8]);
+    if (!at(b, featureList, 2) || !at(b, lookupList, 2)) return;
+
+    std::vector<uint16_t> wanted;
+    const uint16_t nFeat = rd16(&b[featureList]);
+    for (uint16_t i = 0; i < nFeat; ++i) {
+        const size_t rec = featureList + 2 + size_t(i) * 6;
+        if (!at(b, rec, 6)) break;
+        if (rd32(&b[rec]) != tag("ssty")) continue;
+        const uint32_t feat = featureList + rd16(&b[rec + 4]);
+        if (!at(b, feat, 4)) continue;
+        const uint16_t nLk = rd16(&b[feat + 2]);
+        for (uint16_t k = 0; k < nLk; ++k) {
+            if (!at(b, feat + 4 + size_t(k) * 2, 2)) break;
+            wanted.push_back(rd16(&b[feat + 4 + size_t(k) * 2]));
+        }
+    }
+    if (wanted.empty()) return;
+
+    const uint16_t nLook = rd16(&b[lookupList]);
+    for (uint16_t li : wanted) {
+        if (li >= nLook) continue;
+        if (!at(b, lookupList + 2 + size_t(li) * 2, 2)) continue;
+        const uint32_t lk = lookupList + rd16(&b[lookupList + 2 + size_t(li) * 2]);
+        if (!at(b, lk, 6)) continue;
+        if (rd16(&b[lk]) != 3) continue;              /* AlternateSubst only */
+        const uint16_t nSub = rd16(&b[lk + 4]);
+        for (uint16_t si = 0; si < nSub; ++si) {
+            if (!at(b, lk + 6 + size_t(si) * 2, 2)) break;
+            const uint32_t sub = lk + rd16(&b[lk + 6 + size_t(si) * 2]);
+            if (!at(b, sub, 6) || rd16(&b[sub]) != 1) continue;
+            const uint32_t cov = sub + rd16(&b[sub + 2]);
+            const uint16_t nSet = rd16(&b[sub + 4]);
+            std::vector<uint16_t> glyphs;
+            read_coverage(b, cov, glyphs);
+            for (uint16_t i = 0; i < nSet && i < glyphs.size(); ++i) {
+                if (!at(b, sub + 6 + size_t(i) * 2, 2)) break;
+                const uint32_t set = sub + rd16(&b[sub + 6 + size_t(i) * 2]);
+                if (!at(b, set, 2)) continue;
+                const uint16_t n = rd16(&b[set]);
+                if (!n || !at(b, set + 2, size_t(n) * 2)) continue;
+                const uint16_t a1 = rd16(&b[set + 2]);
+                const uint16_t a2 = (n > 1) ? rd16(&b[set + 4]) : a1;
+                ssty_.emplace_back(glyphs[i], std::make_pair(a1, a2));
+            }
+        }
+    }
+    std::sort(ssty_.begin(), ssty_.end());
+}
+
+uint16_t MathFont::script_variant(uint16_t g, int level) const {
+    if (level <= 0 || ssty_.empty()) return 0;
+    auto it = std::lower_bound(
+        ssty_.begin(), ssty_.end(), g,
+        [](const std::pair<uint16_t, std::pair<uint16_t, uint16_t>>& a,
+           uint16_t v) { return a.first < v; });
+    if (it == ssty_.end() || it->first != g) return 0;
+    return (level == 1) ? it->second.first : it->second.second;
 }
 
 /* ---- cmap --------------------------------------------------------------- */
