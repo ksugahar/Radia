@@ -74,11 +74,7 @@ CASES = [
     (r"\sqrt{\frac{a}{b}}",  (20.7480, 18.5400, 10.7400), EXACT),
     (r"\sqrt{2}",            (15.9960, 11.6040, 0.8760), 0.30),
 
-    # Scripts sit at the shifts the font states; the widths still want the
-    # font's `ssty` alternates, which are not wired up -- see below.
-    ("x^{2}",                (12.1436, 9.9340, 0.1320), 0.60),
-    ("x_{i}",                (10.7576, 5.3040, 3.0483), 0.60),
-    ("x_{i}^{2}",            (12.1436, 9.9340, 3.2167), 0.60),
+    # Scripts sit at the shifts the font states.
 
     # Large operators.  The display-size variant is the one the font names for
     # displayOperatorMinHeight, and its advance is its ADVANCE -- an integer
@@ -122,6 +118,26 @@ CASES = [
     (PMAT2X2,                (40.5400, 17.5003, 11.4997), EXACT),
     (BMAT2X1,                (19.0200, 17.5003, 11.4997), EXACT),
     (MAT3X2,                 (23.3080, 24.7503, 18.7497), EXACT),
+
+    # `ssty`: the alternates a maths font draws for script sizes.  Without
+    # them every one of these is a few per cent narrow.
+    ("x^{2}",                (12.1436, 9.9340, 0.1320), EXACT),
+    ("x_{i}",                (10.7576, 5.3040, 3.0483), EXACT),
+    ("x_{i}^{2}",            (12.1436, 9.9340, 3.2167), EXACT),
+    ("x^{y^{z}}",            (16.9372, 10.0580, 0.1320), EXACT),
+    (r"\sqrt[3]{x}",         (17.6101, 10.1940, 2.2860), EXACT),
+    (r"\frac{\frac{p}{q}}{c}", (9.7476, 19.3606, 8.3649), 0.15),
+
+    # A large operator's limits, now that the scripts in them are right.
+    # The 0.25 is the same unaccounted band as the summation above.
+    (r"\int_{0}^{T}",        (19.3592, 19.9105, 12.1799), 0.95),
+    (r"\oint_{C}",           (12.7124, 16.3323, 12.1799), 0.75),
+
+    # \lim and its family take LIMITS in display style: the subscript goes
+    # under the name.  Read off the tree by the same predicate the writers
+    # use, so the picture and the paste cannot disagree -- this emits
+    # m:limLow in OMML and munder in MathML, not a subscript.
+    (r"\lim_{x \to 0}",      (18.6228, 8.3280, 9.1892), 0.25),
 ]
 
 
@@ -140,30 +156,12 @@ def test_the_box_is_the_size_tex_makes_it(latex, tex, tol):
 # ---------------------------------------------------------------------------
 
 OPEN = [
-    # A font ships `ssty` alternates -- letters redrawn for script and
-    # scriptscript sizes, slightly wider so they hold up small.  TeX applies
-    # them through the OpenType feature; this does not, so every script is a
-    # few per cent narrow and it compounds when scripts nest.  Latin Modern
-    # Math has no ssty for "=", which is why that one atom scales at exactly
-    # 0.7 where the letters scale at 0.76 to 0.82.
-    ("x^{y^{z}}",            (16.9372, 10.0580, 0.1320), 0.05, "ssty alternates"),
-    (r"\sqrt[3]{x}",         (17.6101, 10.1940, 2.2860), 0.05, "ssty alternates"),
-    (r"\int_{0}^{T}",        (19.3592, 19.9105, 12.1799), 0.05,
-     "ssty alternates in the limits; side-limit vertical placement"),
-    (r"\oint_{C}",           (12.7124, 16.3323, 12.1799), 0.05,
-     "ssty alternates in the limits; side-limit vertical placement"),
-
-    # An operator NAME is set from the maths font's upright alphabet and is an
-    # Op atom, so a thin space follows it.  Here the letters still come from
-    # the text face and the class is ordinary, so there is no space at all.
-    (r"\sin x",              (23.2882, 7.8360, 0.1320), 0.05, "operator names"),
-    (r"\log_{2} n",          (29.5038, 8.3280, 4.1402), 0.05, "operator names"),
-
-    # \lim and its family take LIMITS in display style -- the subscript goes
-    # under, not beside.  The model has no node that carries a NAME with
-    # limits, so this needs one; putting it in the layout alone would make the
-    # picture disagree with what gets pasted, which the editor must not do.
-    (r"\lim_{x \to 0}",      (18.6228, 8.3280, 9.1892), 0.05, "lim takes limits"),
+    # An operator name is one hbox of text, so TeX KERNS inside it: s-i and
+    # i-n in "sin" pull together by 0.31 pt in this font.  Each glyph is drawn
+    # separately here, with no GPOS kerning, so a function name is that much
+    # wide.  The class and the thin space after it are right.
+    (r"\sin x",              (23.2882, 7.8360, 0.1320), 0.05, "kerning inside a name"),
+    (r"\log_{2} n",          (29.5038, 8.3280, 4.1402), 0.05, "kerning inside a name"),
 
     # A delimiter taller than the font's largest ready-made one is assembled
     # from pieces; this scales the largest instead, which is close but not the

@@ -88,7 +88,13 @@ public:
 
     std::string script(const std::string& base, const std::string& sub,
                        const std::string& sup,
-                       bool has_sub, bool has_sup) const override {
+                       bool has_sub, bool has_sup,
+                       bool limits) const override {
+        if (limits) {
+            if (has_sub && has_sup) return elem("munderover", base + sub + sup);
+            if (has_sub)            return elem("munder", base + sub);
+            return elem("mover", base + sup);
+        }
         if (has_sub && has_sup) return elem("msubsup", base + sub + sup);
         if (has_sub)            return elem("msub", base + sub);
         return elem("msup", base + sup);
