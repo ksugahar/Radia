@@ -643,7 +643,337 @@ MapState Compose(const MapState& outer, const MapState& inner) {
     return result;
 }
 
+// ---------------------------------------------------------------------------
+// Dragt-Finn factorization helpers (value path).
+// ---------------------------------------------------------------------------
+
+double MaxAbs(const double* values, int count) {
+    double result = 0.0;
+    for (int index = 0; index < count; ++index)
+        result = std::max(result, std::fabs(values[index]));
+    return result;
+}
+
+// Gauss-Jordan inverse of a 6x6 matrix with partial pivoting.
+void Inverse6(const double* matrix, double* inverse) {
+    double work[kDim][2*kDim];
+    for (int row = 0; row < kDim; ++row) {
+        for (int column = 0; column < kDim; ++column) {
+            work[row][column] = matrix[row*kDim + column];
+            work[row][kDim + column] = (row == column) ? 1.0 : 0.0;
+        }
+    }
+    for (int column = 0; column < kDim; ++column) {
+        int pivot = column;
+        for (int row = column+1; row < kDim; ++row)
+            if (std::fabs(work[row][column]) > std::fabs(work[pivot][column]))
+                pivot = row;
+        if (!(std::fabs(work[pivot][column]) > 0.0))
+            throw std::invalid_argument(
+                "Dragt-Finn factorization: the linear map R is singular");
+        if (pivot != column)
+            for (int entry = 0; entry < 2*kDim; ++entry)
+                std::swap(work[pivot][entry], work[column][entry]);
+        const double inverse_pivot = 1.0 / work[column][column];
+        for (int entry = 0; entry < 2*kDim; ++entry)
+            work[column][entry] *= inverse_pivot;
+        for (int row = 0; row < kDim; ++row) {
+            if (row == column) continue;
+            const double factor = work[row][column];
+            if (factor == 0.0) continue;
+            for (int entry = 0; entry < 2*kDim; ++entry)
+                work[row][entry] -= factor * work[column][entry];
+        }
+    }
+    for (int row = 0; row < kDim; ++row)
+        for (int column = 0; column < kDim; ++column)
+            inverse[row*kDim + column] = work[row][kDim + column];
+}
+
+// Average a rank-`degree` tensor over every permutation of its axes.
+void SymmetrizeTensor(const double* value, int degree, double* out) {
+    int size = 1;
+    for (int axis = 0; axis < degree; ++axis) size *= kDim;
+    std::vector<int> axes(degree);
+    for (int axis = 0; axis < degree; ++axis) axes[axis] = axis;
+    std::fill(out, out + size, 0.0);
+    int permutation_count = 0;
+    std::vector<int> digits(degree);
+    do {
+        ++permutation_count;
+        for (int flat = 0; flat < size; ++flat) {
+            int remainder = flat;
+            for (int axis = degree-1; axis >= 0; --axis) {
+                digits[axis] = remainder % kDim;
+                remainder /= kDim;
+            }
+            int source = 0;
+            for (int axis = 0; axis < degree; ++axis)
+                source = source * kDim + digits[axes[axis]];
+            out[flat] += value[source];
+        }
+    } while (std::next_permutation(axes.begin(), axes.end()));
+    const double scale = 1.0 / static_cast<double>(permutation_count);
+    for (int flat = 0; flat < size; ++flat) out[flat] *= scale;
+}
+
+// out = A^T P B for 6x6 matrices.
+void MatTPB(const double* A, const double* P, const double* B, double* out) {
+    double PB[kR];
+    for (int row = 0; row < kDim; ++row)
+        for (int column = 0; column < kDim; ++column) {
+            double sum = 0.0;
+            for (int inner = 0; inner < kDim; ++inner)
+                sum += P[row*kDim + inner] * B[inner*kDim + column];
+            PB[row*kDim + column] = sum;
+        }
+    for (int row = 0; row < kDim; ++row)
+        for (int column = 0; column < kDim; ++column) {
+            double sum = 0.0;
+            for (int inner = 0; inner < kDim; ++inner)
+                sum += A[inner*kDim + row] * PB[inner*kDim + column];
+            out[row*kDim + column] = sum;
+        }
+}
+
+// Extract the last-index slice X[:,:,index] of a (6,6,rest) tensor.
+void LastSlice(const double* tensor, int trailing, int index, double* out) {
+    for (int row = 0; row < kDim; ++row)
+        for (int column = 0; column < kDim; ++column)
+            out[row*kDim + column] =
+                tensor[(row*kDim + column)*trailing + index];
+}
+
+// Formal symplectic residual coefficients (constant, linear, quadratic,
+// cubic) of the factorial R/T/U/V map.
+void FourthOrderSymplecticResidual(
+    const double* R, const double* T, const double* U, const double* V,
+    const double* poisson, double residual[4]) {
+    double RtPR[kR];
+    MatTPB(R, poisson, R, RtPR);
+    for (int index = 0; index < kR; ++index) RtPR[index] -= poisson[index];
+    residual[0] = MaxAbs(RtPR, kR);
+    double linear_max = 0.0;
+    double quadratic_max = 0.0;
+    double cubic_max = 0.0;
+    double T_first[kR], T_second[kR], T_third[kR];
+    double U_pair[kR], U_first_third[kR], U_second_third[kR];
+    double V_triple[kR];
+    double left[kR], right[kR], term[kR];
+    for (int first = 0; first < kDim; ++first) {
+        LastSlice(T, kDim, first, T_first);
+        MatTPB(R, poisson, T_first, left);
+        MatTPB(T_first, poisson, R, right);
+        for (int index = 0; index < kR; ++index)
+            linear_max = std::max(linear_max,
+                                  std::fabs(left[index] + right[index]));
+        for (int second = 0; second < kDim; ++second) {
+            LastSlice(T, kDim, second, T_second);
+            LastSlice(U, kR, first*kDim + second, U_pair);
+            double accumulate[kR];
+            MatTPB(R, poisson, U_pair, left);
+            MatTPB(U_pair, poisson, R, right);
+            for (int index = 0; index < kR; ++index)
+                accumulate[index] = 0.5 * (left[index] + right[index]);
+            MatTPB(T_first, poisson, T_second, left);
+            MatTPB(T_second, poisson, T_first, right);
+            for (int index = 0; index < kR; ++index) {
+                accumulate[index] += 0.5 * (left[index] + right[index]);
+                quadratic_max = std::max(quadratic_max,
+                                         std::fabs(accumulate[index]));
+            }
+            for (int third = 0; third < kDim; ++third) {
+                LastSlice(T, kDim, third, T_third);
+                LastSlice(U, kR, first*kDim + third, U_first_third);
+                LastSlice(U, kR, second*kDim + third, U_second_third);
+                LastSlice(V, kT, (first*kDim + second)*kDim + third,
+                          V_triple);
+                double sum[kR] = {};
+                MatTPB(R, poisson, V_triple, term);
+                for (int index = 0; index < kR; ++index) sum[index] += term[index];
+                MatTPB(V_triple, poisson, R, term);
+                for (int index = 0; index < kR; ++index) sum[index] += term[index];
+                MatTPB(T_first, poisson, U_second_third, term);
+                for (int index = 0; index < kR; ++index) sum[index] += term[index];
+                MatTPB(T_second, poisson, U_first_third, term);
+                for (int index = 0; index < kR; ++index) sum[index] += term[index];
+                MatTPB(T_third, poisson, U_pair, term);
+                for (int index = 0; index < kR; ++index) sum[index] += term[index];
+                MatTPB(U_pair, poisson, T_third, term);
+                for (int index = 0; index < kR; ++index) sum[index] += term[index];
+                MatTPB(U_first_third, poisson, T_second, term);
+                for (int index = 0; index < kR; ++index) sum[index] += term[index];
+                MatTPB(U_second_third, poisson, T_first, term);
+                for (int index = 0; index < kR; ++index) sum[index] += term[index];
+                for (int index = 0; index < kR; ++index)
+                    cubic_max = std::max(cubic_max,
+                                         std::fabs(sum[index] / 6.0));
+            }
+        }
+    }
+    residual[1] = linear_max;
+    residual[2] = quadratic_max;
+    residual[3] = cubic_max;
+}
+
 }  // namespace
+
+void CanonicalPoissonMatrix6(double* out) {
+    if (!out)
+        throw std::invalid_argument("CanonicalPoissonMatrix6: null pointer");
+    std::fill(out, out + kR, 0.0);
+    const int pairs[3][2] = {{0, 1}, {2, 3}, {4, 5}};
+    const double signs[3] = {1.0, 1.0, -1.0};
+    for (int block = 0; block < 3; ++block) {
+        out[pairs[block][0]*kDim + pairs[block][1]] = signs[block];
+        out[pairs[block][1]*kDim + pairs[block][0]] = -signs[block];
+    }
+}
+
+void DragtFinnFactorizeFourthOrder(
+    const double* R,
+    const double* T,
+    const double* U,
+    const double* V,
+    const double* poisson,
+    double* f3_out,
+    double* f4_out,
+    double* f5_out,
+    double* T_reconstructed_out,
+    double* U_reconstructed_out,
+    double* V_reconstructed_out,
+    DragtFinnDiagnostics* diagnostics) {
+    if (!R || !T || !U || !V || !poisson || !f3_out || !f4_out || !f5_out
+        || !T_reconstructed_out || !U_reconstructed_out
+        || !V_reconstructed_out || !diagnostics)
+        throw std::invalid_argument(
+            "Dragt-Finn factorization: null array pointer");
+
+    double inverse[kR];
+    Inverse6(R, inverse);
+    double identity[kR] = {};
+    for (int index = 0; index < kDim; ++index)
+        identity[index*kDim + index] = 1.0;
+
+    // --- third-order part -------------------------------------------------
+    std::vector<double> normalized_T(kT), normalized_U(kU), scratch_T(kT);
+    ApplyFirstAxis(inverse, T, normalized_T.data(), kR);
+    ApplyFirstAxis(inverse, U, normalized_U.data(), kT);
+    ApplyFirstAxis(poisson, normalized_T.data(), scratch_T.data(), kR);
+    for (int index = 0; index < kT; ++index) scratch_T[index] = -scratch_T[index];
+    SymmetrizeTensor(scratch_T.data(), 3, f3_out);
+    const double f3_scale = std::max(1.0, MaxAbs(scratch_T.data(), kT));
+    double f3_defect = 0.0;
+    for (int index = 0; index < kT; ++index)
+        f3_defect = std::max(f3_defect,
+                             std::fabs(scratch_T[index] - f3_out[index]));
+    diagnostics->f3_symmetry_defect = f3_defect / f3_scale;
+
+    std::vector<double> quadratic_flow(kT);
+    ApplyFirstAxis(poisson, f3_out, quadratic_flow.data(), kR);
+    std::vector<double> self_cubic(kU, 0.0);
+    AddCrossSecond(quadratic_flow.data(), identity, quadratic_flow.data(),
+                   self_cubic.data());
+    for (int index = 0; index < kU; ++index) self_cubic[index] *= 0.5;
+    std::vector<double> cubic_residual(kU, 0.0);
+    AddCrossSecond(quadratic_flow.data(), identity, normalized_T.data(),
+                   cubic_residual.data());
+    for (int index = 0; index < kU; ++index)
+        cubic_residual[index] = normalized_U[index] - cubic_residual[index]
+            + self_cubic[index];
+    std::vector<double> scratch_U(kU);
+    ApplyFirstAxis(poisson, cubic_residual.data(), scratch_U.data(), kT);
+    for (int index = 0; index < kU; ++index) scratch_U[index] = -scratch_U[index];
+    SymmetrizeTensor(scratch_U.data(), 4, f4_out);
+    const double f4_scale = std::max(1.0, MaxAbs(scratch_U.data(), kU));
+    double f4_defect = 0.0;
+    for (int index = 0; index < kU; ++index)
+        f4_defect = std::max(f4_defect,
+                             std::fabs(scratch_U[index] - f4_out[index]));
+    diagnostics->f4_symmetry_defect = f4_defect / f4_scale;
+
+    std::vector<double> cubic_flow(kU);
+    ApplyFirstAxis(poisson, f4_out, cubic_flow.data(), kT);
+    std::vector<double> normalized_reconstructed_U(kU);
+    for (int index = 0; index < kU; ++index)
+        normalized_reconstructed_U[index] = cubic_flow[index]
+            + self_cubic[index];
+    ApplyFirstAxis(R, quadratic_flow.data(), T_reconstructed_out, kR);
+    ApplyFirstAxis(R, normalized_reconstructed_U.data(),
+                   U_reconstructed_out, kT);
+
+    // --- fourth-order part ------------------------------------------------
+    std::vector<double> normalized_V(kV);
+    ApplyFirstAxis(inverse, V, normalized_V.data(), kU);
+    std::vector<double> cubic_cascade(kU, 0.0);
+    AddCrossSecond(quadratic_flow.data(), identity, quadratic_flow.data(),
+                   cubic_cascade.data());
+    std::vector<double> known_fourth(kV, 0.0);
+    {
+        std::vector<double> term(kV, 0.0);
+        AddCrossFourthSecond(quadratic_flow.data(), identity,
+                             cubic_cascade.data(), term.data());
+        for (int index = 0; index < kV; ++index)
+            known_fourth[index] += term[index] / 6.0;
+        std::fill(term.begin(), term.end(), 0.0);
+        AddPairFourthSecond(quadratic_flow.data(), quadratic_flow.data(),
+                            term.data());
+        for (int index = 0; index < kV; ++index)
+            known_fourth[index] += term[index] / 3.0;
+        std::fill(term.begin(), term.end(), 0.0);
+        AddCrossFourthSecond(quadratic_flow.data(), identity,
+                             cubic_flow.data(), term.data());
+        for (int index = 0; index < kV; ++index)
+            known_fourth[index] += term[index];
+    }
+    std::vector<double> fourth_residual(kV);
+    for (int index = 0; index < kV; ++index)
+        fourth_residual[index] = normalized_V[index] - known_fourth[index];
+    std::vector<double> scratch_V(kV);
+    ApplyFirstAxis(poisson, fourth_residual.data(), scratch_V.data(), kU);
+    for (int index = 0; index < kV; ++index) scratch_V[index] = -scratch_V[index];
+    SymmetrizeTensor(scratch_V.data(), 5, f5_out);
+    const double f5_scale = std::max(1.0, MaxAbs(scratch_V.data(), kV));
+    double f5_defect = 0.0;
+    for (int index = 0; index < kV; ++index)
+        f5_defect = std::max(f5_defect,
+                             std::fabs(scratch_V[index] - f5_out[index]));
+    diagnostics->f5_symmetry_defect = f5_defect / f5_scale;
+
+    std::vector<double> quartic_flow(kV);
+    ApplyFirstAxis(poisson, f5_out, quartic_flow.data(), kU);
+    std::vector<double> normalized_reconstructed_V(kV);
+    for (int index = 0; index < kV; ++index)
+        normalized_reconstructed_V[index] = known_fourth[index]
+            + quartic_flow[index];
+    ApplyFirstAxis(R, normalized_reconstructed_V.data(),
+                   V_reconstructed_out, kU);
+
+    const double reconstruction_scale = std::max(
+        {1.0, MaxAbs(T, kT), MaxAbs(U, kU), MaxAbs(V, kV)});
+    double reconstruction_error = 0.0;
+    for (int index = 0; index < kT; ++index)
+        reconstruction_error = std::max(
+            reconstruction_error,
+            std::fabs(T_reconstructed_out[index] - T[index]));
+    for (int index = 0; index < kU; ++index)
+        reconstruction_error = std::max(
+            reconstruction_error,
+            std::fabs(U_reconstructed_out[index] - U[index]));
+    for (int index = 0; index < kV; ++index)
+        reconstruction_error = std::max(
+            reconstruction_error,
+            std::fabs(V_reconstructed_out[index] - V[index]));
+    diagnostics->relative_reconstruction_error =
+        reconstruction_error / reconstruction_scale;
+
+    FourthOrderSymplecticResidual(R, T, U, V, poisson,
+                                  diagnostics->raw_residual);
+    FourthOrderSymplecticResidual(R, T_reconstructed_out,
+                                  U_reconstructed_out, V_reconstructed_out,
+                                  poisson,
+                                  diagnostics->reconstructed_residual);
+}
 
 // ---------------------------------------------------------------------------
 // Public entry: the per-segment stage-jet integration loop.

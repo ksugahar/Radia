@@ -1832,6 +1832,54 @@ def dragt_finn_factorize_fourth_order(
         dU = np.zeros((0, 6, 6, 6, 6))
         dV = np.zeros((0, 6, 6, 6, 6, 6))
 
+    if parameter_count == 0:
+        # Native value path (rad_lie_map_kernel.cpp): the whole
+        # factorization -- generator extraction, symmetrization,
+        # symplectic reconstruction, and the residual audit -- runs in
+        # C++; the forward-AD branch below remains the co-valid
+        # jacobian path.
+        native = _native.lie_dragt_finn_factorize(R, T, U, V, _POISSON)
+        raw_values = tuple(float(v) for v in native["raw_residual"])
+        reconstructed_values = tuple(
+            float(v) for v in native["reconstructed_residual"])
+        return DragtFinnFourthOrderFactorization(
+            R=np.ascontiguousarray(R),
+            f3=np.ascontiguousarray(native["f3"]),
+            f4=np.ascontiguousarray(native["f4"]),
+            f5=np.ascontiguousarray(native["f5"]),
+            T=np.ascontiguousarray(native["T"]),
+            U=np.ascontiguousarray(native["U"]),
+            V=np.ascontiguousarray(native["V"]),
+            R_jacobian=dR,
+            f3_jacobian=np.zeros((0, 6, 6, 6)),
+            f4_jacobian=np.zeros((0, 6, 6, 6, 6)),
+            f5_jacobian=np.zeros((0, 6, 6, 6, 6, 6)),
+            T_jacobian=dT,
+            U_jacobian=dU,
+            V_jacobian=dV,
+            f3_symmetry_defect=float(native["f3_symmetry_defect"]),
+            f4_symmetry_defect=float(native["f4_symmetry_defect"]),
+            f5_symmetry_defect=float(native["f5_symmetry_defect"]),
+            relative_reconstruction_error=float(
+                native["relative_reconstruction_error"]),
+            raw_symplectic_residual=FormalFourthOrderSymplecticResidual(
+                constant=raw_values[0],
+                linear=raw_values[1],
+                quadratic=raw_values[2],
+                cubic=raw_values[3],
+                maximum=max(raw_values),
+            ),
+            reconstructed_symplectic_residual=(
+                FormalFourthOrderSymplecticResidual(
+                    constant=reconstructed_values[0],
+                    linear=reconstructed_values[1],
+                    quadratic=reconstructed_values[2],
+                    cubic=reconstructed_values[3],
+                    maximum=max(reconstructed_values),
+                )
+            ),
+        )
+
     lower = dragt_finn_factorize_third_order(
         R,
         T,
