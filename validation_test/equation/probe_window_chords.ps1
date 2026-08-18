@@ -110,9 +110,15 @@ Probe "Ctrl+9  parentheses" @("^9","x","^c")                         '\left( x \
 Probe "Ctrl+T,S summation"  @("^t","s","n","^c")                     '\sum _{n}^{} '
 Probe "Ctrl+T,P product"    @("^t","p","k","^c")                     '\prod _{k}^{} '
 
-# Selection, and the styles that act on it.  Ctrl+Shift+X shares a key with cut.
+# Up and down, which no arrow reached before: into a fraction, then out of the
+# denominator to the numerator and back.
+Probe "Up/Down in a fraction" @("^f","a","{TAB}","b","{UP}","x","^c")  '\frac{ax}{b}'
+Probe "Insert is a second Tab" @("^f","a","{INSERT}","b","^c")         '\frac{a}{b}'
+
+# Selection, and the styles that act on it.  Equation Editor names each
+# style by its effect: B for bold gives Matrix-Vector, G gives Greek.
 Probe "Ctrl+A  select all"  @("a","b","c","^a","^c")                 'abc'
-Probe "Ctrl+Shift+X vector" @("B","+{LEFT}","^+x","^c")              '\mathbf{B}'
+Probe "Ctrl+Shift+B vector" @("B","+{LEFT}","^+b","^c")              '\mathbf{B}'
 Probe "Ctrl+Shift+G greek"  @("a","+{LEFT}","^+g","^c")              '\alpha '
 
 # The plain-ctrl editing keys still do their own job.
