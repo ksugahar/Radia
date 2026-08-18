@@ -46,13 +46,18 @@ def test_an_unknown_style_is_refused():
     assert not e.set_style("bogus")
 
 
-def test_style_needs_a_selection():
-    """Nothing highlighted means nothing to restyle -- silently restyling the
-    whole equation would be a surprise."""
+def test_without_a_selection_it_sets_the_mode_instead():
+    """It used to refuse, so a style could only ever be applied to something
+    already typed -- one Greek letter for three operations.  Equation Editor's
+    Style menu is a mode, so with nothing highlighted this changes what comes
+    NEXT rather than doing nothing.  What it must never do is silently restyle
+    the whole equation."""
     e = Equation()
     e.load_latex("B")
     e.move_end()
-    assert not e.set_style("vector")
+    assert e.set_style("vector")
+    assert e.style() == "vector"
+    assert e.latex() == "B"          # what was already there is untouched
 
 
 # ---- what the lab writes ----------------------------------------------------

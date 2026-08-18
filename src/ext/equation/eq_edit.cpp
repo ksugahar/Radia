@@ -423,7 +423,13 @@ const std::vector<std::string>& Equation::styles() {
 bool Equation::set_style(const std::string& name) {
     const std::vector<std::string>& all = styles();
     if (std::find(all.begin(), all.end(), name) == all.end()) return false;
-    if (!has_selection()) return false;      /* nothing to restyle */
+
+    /* The mode changes either way.  Requiring a selection made one Greek
+     * letter cost three operations -- type it, select it, restyle it -- where
+     * the editor being imitated costs one, because there the style is
+     * something you are IN. */
+    style_ = name;
+    if (!has_selection()) return true;
 
     checkpoint();
     NodeList& l = here();
@@ -649,6 +655,7 @@ void Equation::insert_text(const std::string& utf8) {
             else                   node = make_char(TF_SYMBOL,
                                                     uint16_t((unsigned char)c), c);
         }
+        if (style_ != "math" && node) style_one(*node, style_);
         l.insert(l.begin() + index_, std::move(node));
         ++index_;
     }

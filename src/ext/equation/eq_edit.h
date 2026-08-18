@@ -75,7 +75,12 @@ public:
      * it as a font would leave the letter Latin and merely restyle it.
      *
      * Names: math, text, function, variable, vector, greek. */
+    /* Equation Editor's Style menu is a MODE, not an operation on what is
+     * highlighted: its status bar reads "Style: Math" and stays that way, so
+     * picking Greek and carrying on typing gives Greek.  With a selection this
+     * also restyles it, which is the other half of what the menu does. */
     bool set_style(const std::string& name);
+    const std::string& style() const { return style_; }
     static const std::vector<std::string>& styles();
 
     /* ---- selection ----------------------------------------------------- */
@@ -204,7 +209,8 @@ private:
     std::unique_ptr<LineNode> root_;
     std::vector<CaretStep> path_;
     int index_ = 0;
-    int anchor_ = -1;        /* where a selection started; -1 for none */
+    int anchor_ = -1;              /* where a selection started; -1 for none */
+    std::string style_ = "math";   /* the style typing goes in */
 
     struct Snapshot { std::string latex; std::string caret; };
     std::vector<Snapshot> undo_, redo_;
