@@ -49,11 +49,14 @@ from validation_earlytimes_ctype_ab import (
 )
 
 import radia as rad
+from radia import _radia_pybind as _native
 from radia import vim
 from radia.accelerator_lie_topopt import (
     _fourth_order_lie_map_from_vector_potential_polynomials,
     apply_dragt_finn_map,
 )
+from radia.accelerator_magnet_topopt import PlanarDesignOrbit
+from radia.vim import _field_batch as _vim_field_batch
 from radia.beam_canonical_hcurl import (
     CanonicalHCurlChain,
     graded_breaks,
@@ -134,11 +137,14 @@ def parser():
     return result
 
 
-def run_orbit(offset_m, options, b_point, b_batch, rng):
+def run_orbit(offset_m, options, b_point, b_batch, iron_evaluator, coil,
+              rng, cross_gate=False):
     """``b_batch`` is the verified TREE batch (fit/audit/monitor); the
-    exact ``b_point`` drives the FULL-3D orbit tracker and the B-RK
-    certificate route (tracking is 3D -- Sugahara ruling 2026-08-18; the
-    tracker measures planarity instead of assuming it)."""
+    NATIVE 3D tracker (rad_orbit_tracker.cpp: exact iron evaluator + coil
+    + z-mirror composite, measured planarity gate) defines the reference
+    curve, and the exact ``b_point`` keeps the B-RK certificate route
+    source-exact.  ``cross_gate`` additionally re-tracks with the scipy
+    DOP853 reference and gates the native curve against it."""
     timings = {}
 
     def clock(label):
@@ -148,15 +154,44 @@ def run_orbit(offset_m, options, b_point, b_batch, rng):
         timings[label] = time.perf_counter() - timings[label]
 
     clock("orbit_track")
-    # The reference curve is a DEFINITION shared by all routes, so the
-    # relaxed integration controls only move it by micrometres (absorbed
-    # by the H1 gate); the source stays the exact 3D kernel.
-    orbit = track_reference_orbit(
-        b_point, float(options.magnetic_rigidity), station_count=65,
-        entrance_x_m=-0.040, exit_x_m=0.040,
-        entrance_offset_m=float(offset_m),
-        relative_tolerance=1.0e-8, maximum_step_m=1.0e-2)
+    rigidity = float(options.magnetic_rigidity)
+    # The raw evaluator output carries NO 1/(4 pi) (its docstring contract);
+    # field_from_solution divides by 4 pi, so B_iron = MU0/(4 pi) * raw.
+    (positions, tangents, stations, curvature, _length, oop_m, oop_t) = (
+        _native.track_reference_orbit_native(
+            iron_evaluator, MU0 / (4.0 * np.pi), int(coil), True, rigidity,
+            np.array([-0.040, float(offset_m), 0.0]),
+            np.array([1.0, 0.0, 0.0]),
+            0.040, 1.0e-3, 0.14, 1.0e-6, 65))
+    orbit = PlanarDesignOrbit(
+        positions=positions,
+        tangents=tangents,
+        magnetic_rigidity=rigidity,
+        bend_axis=np.array([0.0, 0.0, 1.0]),
+        path_length_stations=stations,
+        signed_curvature_per_m=curvature,
+    )
     lap("orbit_track")
+    if cross_gate:
+        started = time.perf_counter()
+        reference = track_reference_orbit(
+            b_point, rigidity, station_count=65,
+            entrance_x_m=-0.040, exit_x_m=0.040,
+            entrance_offset_m=float(offset_m),
+            relative_tolerance=1.0e-8, maximum_step_m=1.0e-2)
+        common = np.linspace(0.0, min(
+            float(stations[-1]),
+            float(reference.arc_length_stations[-1])), stations.size)
+        gap = float(np.max(np.linalg.norm(
+            reference.position_at(common) - orbit.position_at(common),
+            axis=1)))
+        print(f"orbit cross gate: native vs scipy max |dr| {gap:.2e} m, "
+              f"out-of-plane {oop_m:.1e} m "
+              f"({time.perf_counter() - started:.1f} s)")
+        if gap > 2.0e-6:
+            raise RuntimeError(
+                f"native orbit tracker failed the scipy cross gate: "
+                f"{gap:.2e} > 2.0e-6 m")
     s_total = float(orbit.arc_length_stations[-1])
     seg_mids = 0.5 * (orbit.arc_length_stations[:-1]
                       + orbit.arc_length_stations[1:])
@@ -301,11 +336,13 @@ def main(argv=None):
             f"relaxed tree failed the accuracy gate: {tree_error:.2e} > "
             f"{float(options.tree_gate):.2e}")
 
+    iron_evaluator = _vim_field_batch._materialize_field_evaluator(solution)
     records = []
-    for offset_mm in options.orbit_offsets_mm:
+    for orbit_index, offset_mm in enumerate(options.orbit_offsets_mm):
         orbit_started = time.perf_counter()
         record = run_orbit(float(offset_mm) * 1e-3, options, b_point,
-                           b_batch_tree, rng)
+                           b_batch_tree, iron_evaluator, coil, rng,
+                           cross_gate=orbit_index == 0)
         record["runtime_s"] = time.perf_counter() - orbit_started
         records.append(record)
         print(f"orbit {record['offset_mm']:+5.1f} mm "
