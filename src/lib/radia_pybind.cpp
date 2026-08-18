@@ -104,6 +104,7 @@ extern "C" {
 #include "rad_hdiv_field_evaluator.h" // Persistent BDM1 field source + target tree
 #include "rad_lie_map_batch.h"        // Batched Dragt-Finn Lie-map ensemble tracking
 #include "rad_lie_map_kernel.h"       // Fourth-order Lie-map construction kernel
+#include "rad_orbit_tracker.h"        // Native 3D reference-orbit tracker
 #include "rad_hacapk_hdiv.h"     // HACApK H-matrix for the HDiv-type VIM demag operator
 #include "rad_ngsolve_field_coefficients.h" // Shared evaluator CoefficientFunctions
 #include "rad_ngsolve_operators.h" // Shared native matrices for pybind11 and MATLAB MEX
@@ -2831,6 +2832,79 @@ PYBIND11_MODULE(_radia_pybind, m) {
        "segmented s-polynomial vector-potential Hamiltonian (per-segment "
        "degree-5 jets, nonautonomous stage RK4, sequential composition); "
        "returns (R, T, U, V, per-segment worst-stage H1, max |H1|).");
+
+    m.def("track_reference_orbit_native", [](
+            py::object iron_evaluator,
+            double iron_scale,
+            int radia_object,
+            bool mirror_z,
+            double magnetic_rigidity,
+            py::array_t<double, py::array::c_style | py::array::forcecast>
+                entrance_point,
+            py::array_t<double, py::array::c_style | py::array::forcecast>
+                entrance_direction,
+            double exit_x_m,
+            double step_m,
+            double maximum_path_m,
+            double planarity_tolerance_m,
+            std::size_t station_count) {
+        std::shared_ptr<rad_hdiv::HDivFieldEvaluator> iron;
+        if (!iron_evaluator.is_none())
+            iron = py::cast<std::shared_ptr<rad_hdiv::HDivFieldEvaluator>>(
+                iron_evaluator);
+        auto point_info = entrance_point.request();
+        auto direction_info = entrance_direction.request();
+        if (point_info.ndim != 1 || point_info.shape[0] != 3
+                || direction_info.ndim != 1 || direction_info.shape[0] != 3)
+            throw std::runtime_error(
+                "track_reference_orbit_native: entrance point/direction must "
+                "have shape (3,)");
+        if (station_count < 2)
+            throw std::runtime_error(
+                "track_reference_orbit_native: station_count must be >= 2");
+        py::array_t<double> positions(
+            {static_cast<py::ssize_t>(station_count), py::ssize_t(3)});
+        py::array_t<double> tangents(
+            {static_cast<py::ssize_t>(station_count), py::ssize_t(3)});
+        py::array_t<double> stations(
+            {static_cast<py::ssize_t>(station_count)});
+        py::array_t<double> curvature(
+            {static_cast<py::ssize_t>(station_count - 1)});
+        double* positions_ptr = static_cast<double*>(positions.request().ptr);
+        double* tangents_ptr = static_cast<double*>(tangents.request().ptr);
+        double* stations_ptr = static_cast<double*>(stations.request().ptr);
+        double* curvature_ptr = static_cast<double*>(curvature.request().ptr);
+        const double* point_ptr = static_cast<const double*>(point_info.ptr);
+        const double* direction_ptr =
+            static_cast<const double*>(direction_info.ptr);
+        rad_orbit::OrbitTrackResult tracked;
+        {
+            py::gil_scoped_release release;
+            tracked = rad_orbit::TrackReferenceOrbit3D(
+                iron.get(), iron_scale, radia_object, mirror_z ? 1 : 0,
+                magnetic_rigidity, point_ptr, direction_ptr, exit_x_m,
+                step_m, maximum_path_m, planarity_tolerance_m,
+                station_count, positions_ptr, tangents_ptr, stations_ptr,
+                curvature_ptr);
+        }
+        return py::make_tuple(positions, tangents, stations, curvature,
+                              tracked.length_m, tracked.out_of_plane_m,
+                              tracked.out_of_plane_slope);
+    }, py::arg("iron_evaluator") = py::none(), py::arg("iron_scale") = 1.0,
+       py::arg("radia_object") = -1, py::arg("mirror_z") = false,
+       py::arg("magnetic_rigidity") = 1.0,
+       py::arg("entrance_point") = py::none(),
+       py::arg("entrance_direction") = py::none(),
+       py::arg("exit_x_m") = 0.0, py::arg("step_m") = 1.0e-3,
+       py::arg("maximum_path_m") = 0.14,
+       py::arg("planarity_tolerance_m") = 1.0e-6,
+       py::arg("station_count") = 65,
+       "Fixed-step RK4 3D reference-orbit tracker on the composite field "
+       "(optional iron HDiv evaluator * iron_scale + optional Radia object, "
+       "optional z-mirror symmetrization); Hermite exit-plane crossing, "
+       "measured planarity gate, batched midpoint curvature.  Returns "
+       "(positions, tangents, stations, curvature, length, out_of_plane_m, "
+       "out_of_plane_slope).");
 
     using FieldEvaluator = rad_hdiv::HDivFieldEvaluator;
     py::class_<FieldEvaluator, std::shared_ptr<FieldEvaluator>>(m, "_HDivFieldEvaluator")
