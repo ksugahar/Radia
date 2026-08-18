@@ -1454,7 +1454,9 @@ ulldelimiterspace, 1.2 pt -- so the BOX is wider than the parts,
         if (rows <= 0 || cols <= 0) return out;
 
         const double pitch  = (14.5 / 12.0) * sizePt;
-        const double colGap = (10.0 / 12.0) * sizePt;
+        /* A matrix separates its columns; an alignment does not -- the & is a
+         * seam, and "a" and "= b" must meet there or the equals sign floats. */
+        const double colGap = (halign == 1) ? 0.0 : (10.0 / 12.0) * sizePt;
         const double axis =
             mtef::MathFont::math().constants().axisHeight * sizePt;
 
@@ -1502,8 +1504,13 @@ ulldelimiterspace, 1.2 pt -- so the BOX is wider than the parts,
         /* Where a cell sits in its column.  A matrix centres; a stack of
          * lines can be asked for flush left or flush right, which is the
          * Format menu's Align Left / Center / Right. */
-        auto offset = [&](double colWidth, double cellWidth) {
+        auto offset = [&](int col, double colWidth, double cellWidth) {
             switch (halign) {
+                case 1:
+                    /* An alignment: odd columns flush right, even flush left,
+                     * so the & falls on one vertical line and the = beside it
+                     * lines up down the page.  That is what align does. */
+                    return (col % 2 == 0) ? colWidth - cellWidth : 0.0;
                 case 2:  return 0.0;                            /* left  */
                 case 3:  return colWidth - cellWidth;           /* right */
                 default: return (colWidth - cellWidth) / 2.0;   /* centre */
@@ -1514,7 +1521,7 @@ ulldelimiterspace, 1.2 pt -- so the BOX is wider than the parts,
             double x = 0;
             for (int k = 0; k < cols; ++k) {
                 const size_t i = size_t(r) * cols + k;
-                out.absorb(cell[i], x + offset(colW[k], cell[i].w),
+                out.absorb(cell[i], x + offset(k, colW[k], cell[i].w),
                            top + rowY[r]);
                 x += colW[k] + colGap;
             }

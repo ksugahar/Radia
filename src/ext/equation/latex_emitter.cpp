@@ -9,6 +9,7 @@
  * tree in mtef2tex.c. This emitter handles the TYPED node tree from
  * MtefParser, which already has structural information in the node types.
  */
+#include <algorithm>
 #include "latex_emitter.h"
 #include "math_layout.h"      /* is_cjk: the same rule that picks the face */
 #include <cstring>
@@ -330,9 +331,21 @@ void LaTeXEmitter::emitNode(const Node* node, std::string& out) {
     case Node::kMatrix:
         emitMatrix(*static_cast<const MatrixNode*>(node), out);
         break;
-    case Node::kSize:
-        /* SIZE nodes are consumed by passes, not emitted directly */
+    case Node::kSize: {
+        /* A size marker is a SWITCH -- everything after it in the group is set
+         * at that size -- and that is exactly what TeX's \scriptstyle is, so
+         * the two map onto each other and the setting survives a save.
+         *
+         * Only three of Equation Editor's five sizes are written.  Its Symbol
+         * and Sub-Symbol sizes exist to say how big a summation sign should
+         * be, and that is now read from the font (displayOperatorMinHeight),
+         * so a marker for them would say nothing the layout would act on. */
+        const int t = static_cast<const SizeNode*>(node)->sizeType;
+        if (t == SIZETYPE_SUB)       out += "\\scriptstyle ";
+        else if (t == SIZETYPE_SUB2) out += "\\scriptscriptstyle ";
+        else if (t == SIZETYPE_FULL) out += "\\displaystyle ";
         break;
+    }
     case Node::kEmbell:
         emitEmbell(*static_cast<const EmbellNode*>(node), out);
         break;
@@ -691,8 +704,14 @@ void LaTeXEmitter::emitPile(const PileNode& pile, std::string& out) {
     if (pile.halign >= 20) envName = "matrix"; /* bmatrix/pmatrix handled by fence wrapper */
 
     out += "\\begin{"; out += envName; out += "}\n";
+    /* A real alignment holds its cells in row-major order, so the & goes
+     * between them and the row break every ncols. */
+    const int cols = (pile.halign == 1) ? std::max(1, pile.ncols) : 1;
     for (size_t i = 0; i < pile.lines.size(); i++) {
-        if (i > 0) out += " \\\\\n";
+        if (i > 0) {
+            if (int(i) % cols == 0) out += " \\\\\n";
+            else                    out += " & ";
+        }
         if (left) out += "&";
         emitNode(pile.lines[i].get(), out);
         if (right) out += "&";

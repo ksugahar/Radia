@@ -247,6 +247,94 @@ bool Equation::move_out() {
  * edge of a slot it does NOT jump out -- the same reasoning as the selection,
  * that a motion which silently changes which slot you are in is worse than one
  * that stops. */
+/* One slot of the ENCLOSING node, up or down.
+ *
+ * Not the same as Up and Down, which read the drawing and can land inside
+ * whatever happens to be above: this walks the structure -- numerator to
+ * denominator, upper limit to lower, cell to cell -- and lands at the start.
+ *
+ * Equation Editor puts these on Ctrl+Up and Ctrl+Down, in the same command
+ * group as the Ctrl+Left and Ctrl+Right that move by a whole item: 8,1 to 8,4
+ * in its key table, the four arrows, consecutive.  What that group DOES is an
+ * inference from the grouping; the dispatch itself has not been decoded. */
+bool Equation::move_slot(int dir) {
+    if (path_.empty()) return false;
+    Node* parent = parent_node(path_);
+    if (!parent) return false;
+    const int n = int(node_slots(*parent).size());
+    const int want = path_.back().slot + (dir < 0 ? -1 : +1);
+    if (want < 0 || want >= n) return false;
+    clear_selection();
+    path_.back().slot = want;
+    index_ = 0;
+    clamp();
+    return true;
+}
+
+/* Is this the character a line should be aligned ON?
+ *
+ * Equation Editor calls the command "Align at =", and means it literally: the
+ * mark goes before the relation.  Anything that reads as one will do -- an
+ * inequality lines up as usefully as an equals sign -- so the test is the atom
+ * class, not the character. */
+static bool is_relation(const Node& n) {
+    if (n.tag() != Node::kChar) return false;
+    const CharNode& c = static_cast<const CharNode&>(n);
+    const uint32_t cp = c.charCode ? c.charCode : uint32_t((unsigned char)c.ch);
+    switch (cp) {
+        case '=': case '<': case '>':
+        case 0x2260: case 0x2264: case 0x2265: case 0x2248: case 0x2261:
+        case 0x223C: case 0x2243: case 0x2245: case 0x221D: case 0x2192:
+        case 0x2190: case 0x2194: case 0x21D2: case 0x21D0: case 0x21D4:
+            return true;
+        default:
+            return false;
+    }
+}
+
+/* Put the alignment mark before the first relation of every line.
+ *
+ * The lines become cells, two per row: what comes before the relation, and the
+ * relation with everything after it.  Set flush right and flush left by the
+ * layout, that puts every equals sign on one vertical line -- which is the
+ * whole point of the command, and is what \begin{align} does with its &. */
+static void split_at_relation(PileNode& pile) {
+    NodeList cells;
+    for (auto& line : pile.lines) {
+        if (!line || line->tag() != Node::kLine) continue;
+        NodeList& src = static_cast<LineNode&>(*line).children;
+        size_t at = src.size();
+        for (size_t i = 0; i < src.size(); ++i)
+            if (src[i] && is_relation(*src[i])) { at = i; break; }
+        auto lhs = std::make_unique<LineNode>();
+        auto rhs = std::make_unique<LineNode>();
+        for (size_t i = 0; i < src.size(); ++i)
+            (i < at ? lhs : rhs)->children.push_back(std::move(src[i]));
+        cells.push_back(std::move(lhs));
+        cells.push_back(std::move(rhs));
+    }
+    pile.lines = std::move(cells);
+    pile.ncols = 2;
+}
+
+/* And back: the cells of a row run together into one line again. */
+static void join_cells(PileNode& pile) {
+    const int cols = pile.ncols > 1 ? pile.ncols : 1;
+    NodeList rows;
+    for (size_t i = 0; i < pile.lines.size(); i += size_t(cols)) {
+        auto row = std::make_unique<LineNode>();
+        for (int k = 0; k < cols && i + size_t(k) < pile.lines.size(); ++k) {
+            Node* n = pile.lines[i + size_t(k)].get();
+            if (!n || n->tag() != Node::kLine) continue;
+            for (auto& child : static_cast<LineNode&>(*n).children)
+                row->children.push_back(std::move(child));
+        }
+        rows.push_back(std::move(row));
+    }
+    pile.lines = std::move(rows);
+    pile.ncols = 1;
+}
+
 /* Enter: break the line here.
  *
  * The slot the caret is in becomes two lines of a stack, split at the caret --
@@ -1206,10 +1294,27 @@ const std::vector<Equation::Binding>& Equation::shortcuts() {
         {"Ctrl+Shift+L", "format.left",        "align left"},
         {"Ctrl+Shift+C", "format.center",      "align centre"},
         {"Ctrl+Shift+R", "format.right",       "align right"},
+        {"Ctrl+Shift+Left",  "format.center",  "align centre"},
+        {"Ctrl+Shift+Right", "format.at_eq",   "align at ="},
+
+        /* One slot up or down, in the same group as the two above. */
+        {"Ctrl+Up",      "caret.slot_up",      "previous slot"},
+        {"Ctrl+Down",    "caret.slot_down",    "next slot"},
+
+        /* Size.  Equation Editor's menu has five entries and no accelerator
+         * for any of them, so these three chords are ours -- and three, not
+         * five: its Symbol and Sub-Symbol sizes say how big an operator sign
+         * should be, and that is now read from the font. */
+        {"Ctrl+Shift+1", "size.full",          "full size"},
+        {"Ctrl+Shift+2", "size.sub",           "subscript size"},
+        {"Ctrl+Shift+3", "size.sub2",          "sub-subscript size"},
+        {"Ctrl+Shift+Right", "format.at_eq",   "align at ="},
         {"Ctrl+Left",    "caret.left_item",    "left one item"},
         {"Ctrl+Right",   "caret.right_item",   "right one item"},
-        {"Ctrl+Shift+Left",  "select.left_item",  "select left one item"},
-        {"Ctrl+Shift+Right", "select.right_item", "select right one item"},
+        /* Selecting by item keeps its commands but loses its chords: the
+         * table gives Ctrl+Shift+Left to Align Center (3,1) and
+         * Ctrl+Shift+Right to Align at = (3,3), and usability follows
+         * Equation Editor.  They were mine to begin with. */
     };
 
     /* Ctrl+K and a letter: one SYMBOL.
@@ -1298,7 +1403,8 @@ bool Equation::command(const std::string& name) {
         const std::string how = name.substr(7);
         const int want = (how == "left")   ? 2
                        : (how == "right")  ? 3
-                       : (how == "center") ? 0 : -1;
+                       : (how == "center") ? 0
+                       : (how == "at_eq")  ? 1 : -1;
         if (want < 0) return false;
         /* The nearest enclosing stack, which is what the Format menu acts on.
          * Nothing to align outside one, and saying so is better than silently
@@ -1309,12 +1415,43 @@ bool Equation::command(const std::string& name) {
                 path_.begin(), path_.begin() + depth + 1));
             if (n && n->tag() == Node::kPile) {
                 checkpoint();
-                static_cast<PileNode&>(*n).halign = want;
+                PileNode& pile = static_cast<PileNode&>(*n);
+                if (want == 1) split_at_relation(pile);
+                else if (pile.halign == 1) join_cells(pile);
+                pile.halign = want;
                 return true;
             }
         }
         return false;
     }
+    if (name.compare(0, 5, "size.") == 0) {
+        const std::string how = name.substr(5);
+        const int t = (how == "full") ? SIZETYPE_FULL
+                    : (how == "sub")  ? SIZETYPE_SUB
+                    : (how == "sub2") ? SIZETYPE_SUB2 : -1;
+        if (t < 0) return false;
+        checkpoint();
+        NodeList held = take_selection();
+        NodeList& l = here();
+        clamp();
+        auto mark = std::make_unique<SizeNode>();
+        mark->sizeType = t;
+        l.insert(l.begin() + index_, std::move(mark));
+        ++index_;
+        if (!held.empty()) {
+            /* With something highlighted the size applies to THAT and stops:
+             * the run goes back in after the marker and a full-size marker
+             * closes it.  With nothing highlighted the marker is a mode, and
+             * what gets typed after it is at the new size. */
+            for (auto& n : held) l.insert(l.begin() + index_++, std::move(n));
+            auto back = std::make_unique<SizeNode>();
+            back->sizeType = SIZETYPE_FULL;
+            l.insert(l.begin() + index_, std::move(back));
+        }
+        return true;
+    }
+    if (name == "caret.slot_up")    return move_slot(-1);
+    if (name == "caret.slot_down")  return move_slot(+1);
     if (name == "edit.newline")     return newline();
     if (name == "caret.left_item")  return move_item(-1, false);
     if (name == "caret.right_item") return move_item(+1, false);
