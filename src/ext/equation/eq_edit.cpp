@@ -247,6 +247,57 @@ bool Equation::move_out() {
  * edge of a slot it does NOT jump out -- the same reasoning as the selection,
  * that a motion which silently changes which slot you are in is worse than one
  * that stops. */
+/* Enter: break the line here.
+ *
+ * The slot the caret is in becomes two lines of a stack, split at the caret --
+ * or, if it already IS one line of a stack, a new line is opened after it.
+ * That is the operation Equation Editor binds to Enter, and it is only
+ * possible now that a pile has a layout: before, a second line would have been
+ * stored and drawn as nothing.
+ *
+ * It splits rather than merely appending because that is what Enter does
+ * everywhere else -- pressing it in the middle of a line takes the rest of the
+ * line with it. */
+bool Equation::newline() {
+    checkpoint();
+    delete_selection();
+    clear_selection();
+
+    Node* parent = parent_node(path_);
+    if (parent && parent->tag() == Node::kPile) {
+        auto& pile = static_cast<PileNode&>(*parent);
+        const int which = path_.back().slot;
+        NodeList& cur = here();
+        auto fresh = std::make_unique<LineNode>();
+        for (size_t i = size_t(index_); i < cur.size(); ++i)
+            fresh->children.push_back(std::move(cur[i]));
+        cur.resize(size_t(index_));
+        pile.lines.insert(pile.lines.begin() + which + 1, std::move(fresh));
+        path_.back().slot = which + 1;
+        index_ = 0;
+        return true;
+    }
+
+    /* Not in a stack yet: wrap what is here in one. */
+    NodeList& cur = here();
+    auto first = std::make_unique<LineNode>();
+    auto second = std::make_unique<LineNode>();
+    for (size_t i = 0; i < cur.size(); ++i) {
+        if (int(i) < index_) first->children.push_back(std::move(cur[i]));
+        else                 second->children.push_back(std::move(cur[i]));
+    }
+    cur.clear();
+    auto pile = std::make_unique<PileNode>();
+    pile->halign = 0;               /* gathered, which is what Enter means */
+    pile->ncols = 1;
+    pile->lines.push_back(std::move(first));
+    pile->lines.push_back(std::move(second));
+    cur.push_back(std::move(pile));
+    path_.push_back({0, 1});        /* into the pile, its second line */
+    index_ = 0;
+    return true;
+}
+
 bool Equation::move_item(int dir, bool extend) {
     if (extend) {
         if (anchor_ < 0) anchor_ = index_;
@@ -1146,10 +1197,32 @@ const std::vector<Equation::Binding>& Equation::shortcuts() {
          * it: from the left of \frac{a}{b} it takes four presses to get past
          * it and Ctrl+Right takes one.  Equation Editor binds the same keys
          * to the same idea. */
+        /* Enter breaks the line, which a stack can now be drawn for. */
+        {"Enter",        "edit.newline",       "new line"},
         {"Ctrl+Left",    "caret.left_item",    "left one item"},
         {"Ctrl+Right",   "caret.right_item",   "right one item"},
         {"Ctrl+Shift+Left",  "select.left_item",  "select left one item"},
         {"Ctrl+Shift+Right", "select.right_item", "select right one item"},
+    };
+
+    /* Ctrl+K and a letter: one SYMBOL.
+     *
+     * Read out of Equation Editor's own key table rather than remembered.
+     * The table stores these as "kind 4" records whose command number is the
+     * code point itself -- 8706 is U+2202, 8734 is U+221E -- which is how the
+     * pairing can be recovered at all: the label column in that resource is
+     * unusable, but the numbers are not. */
+    static const struct { const char* key; uint32_t cp; const char* name; } kSymbols[] = {
+        {"T",       0x00D7, "times"},
+        {"A",       0x2192, "right arrow"},
+        {"D",       0x2202, "partial"},
+        {"E",       0x2208, "element of"},
+        {"Shift+E", 0x2209, "not an element of"},
+        {"I",       0x221E, "infinity"},
+        {"<",       0x2264, "less than or equal"},
+        {">",       0x2265, "greater than or equal"},
+        {"C",       0x2282, "subset of"},
+        {"Shift+C", 0x2284, "not a subset of"},
     };
 
     /* Ctrl+G and a letter: ONE Greek letter, without changing the style.
@@ -1166,8 +1239,16 @@ const std::vector<Equation::Binding>& Equation::shortcuts() {
     static const std::vector<Binding>& kAll = [&]() -> const std::vector<Binding>& {
         static std::vector<std::string> pool;
         static std::vector<Binding> all;
-        pool.reserve(52 * 3);
+        pool.reserve(62 * 3);
         all = kBindings;
+        for (const auto& sym : kSymbols) {
+            pool.push_back(std::string("Ctrl+K, ") + sym.key);
+            pool.push_back("symbol." + std::to_string(sym.cp));
+            pool.push_back(sym.name);
+            const size_t i = pool.size() - 3;
+            all.push_back({pool[i].c_str(), pool[i + 1].c_str(),
+                           pool[i + 2].c_str()});
+        }
         for (int upper = 0; upper < 2; ++upper) {
             for (char c = 'A'; c <= 'Z'; ++c) {
                 const char latin = upper ? c : char(c - 'A' + 'a');
@@ -1206,10 +1287,23 @@ bool Equation::command(const std::string& name) {
     if (name == "select.end")       { extend_end();  return true; }
     if (name == "select.all")       { select_all();  return true; }
     if (name.compare(0, 6, "style.") == 0) return set_style(name.substr(6));
+    if (name == "edit.newline")     return newline();
     if (name == "caret.left_item")  return move_item(-1, false);
     if (name == "caret.right_item") return move_item(+1, false);
     if (name == "select.left_item") return move_item(-1, true);
     if (name == "select.right_item")return move_item(+1, true);
+    if (name.compare(0, 7, "symbol.") == 0) {
+        const uint32_t cp = uint32_t(std::strtoul(name.c_str() + 7, nullptr, 10));
+        if (!cp) return false;
+        checkpoint();
+        take_selection();
+        NodeList& l = here();
+        clamp();
+        l.insert(l.begin() + index_,
+                 make_char(typeface_for_code(uint16_t(cp)), uint16_t(cp)));
+        ++index_;
+        return true;
+    }
     if (name.compare(0, 6, "greek.") == 0 && name.size() == 7) {
         const uint32_t g = greek_of(uint32_t((unsigned char)name[6]));
         if (!g) return false;
