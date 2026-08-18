@@ -316,6 +316,23 @@ bool typeface_is_italic(int tf) { return tf == 3 || tf == 4; }   /* VARIABLE, LC
  * belongs in the text face, while anything past Latin-1 needs the math face. */
 bool needs_math_face(uint32_t cp) { return cp > 0xFF; }
 
+/* Which face a character belongs to, given what it IS as well as what it is.
+ *
+ * Everything in an equation comes from the maths font -- digits and upright
+ * function names included -- because that is where TeX takes them from, and
+ * because it is the only face that carries the `ssty` alternates a script
+ * size wants.  Only TF_TEXT, which is prose the author asked for with \text,
+ * belongs in the text face.
+ *
+ * A digit was the last thing still coming from the text face, and it showed:
+ * the i in x_{i} picked up its script alternate and the 2 in x^{2} did not,
+ * leaving that one a half point narrow where its neighbour was exact. */
+bool math_face_for(uint32_t cp, int typeface) {
+    if (typeface == TF_TEXT) return false;
+    if (is_cjk(cp)) return false;
+    return true;
+}
+
 /* The Mathematical Alphanumeric Symbols block: where a maths font keeps its
  * italic letters.  Returns 0 for anything that is not one, which leaves
  * digits, punctuation and text upright alone.
@@ -499,6 +516,14 @@ private:
         }
     }
     /* One step down for scripts, floored at the sub-subscript size. */
+    /* 0 for full size, 1 for script, 2 for scriptscript -- which of the
+     * font's three drawings of a character is wanted. */
+    int script_level(double pt) const {
+        if (pt > script_pt() + 1e-9) return 0;
+        if (pt > script_script_pt() + 1e-9) return 1;
+        return 2;
+    }
+
     double script_size(double cur) const {
         if (cur > script_pt() + 1e-9) return script_pt();
         return script_script_pt();
@@ -544,25 +569,48 @@ private:
         }
 
         Layout L;
-        L.w = char_width(cp, sizePt, italic, symbol);
-        glyph_vmetrics(cp, sizePt, italic, symbol, L.asc, L.desc);
+        Glyph g;
+        g.x = 0; g.y = 0; g.size = sizePt;
+        g.italic = italic; g.symbol = symbol; g.cjk = is_cjk(cp);
+        g.text = utf8_of(cp);
+
+        const mtef::MathFont& mf = mtef::MathFont::math();
+        uint16_t gid = (symbol && mf.ok()) ? mf.glyph_for(cp) : 0;
+
+        /* At a script size the font would rather draw a different letter.
+         *
+         * `ssty` is what every maths font ships for this: the same character
+         * redrawn wider and heavier so it holds up small.  Simply shrinking
+         * the full-size drawing, which is what this did, leaves every
+         * subscript and superscript a few per cent narrow, and it compounds
+         * when scripts nest -- TeX sets x^{y^{z}} a tenth wider than this
+         * managed.  The tell was that "=" scaled at exactly 0.7 where every
+         * letter scaled at 0.76 to 0.82: Latin Modern Math has no ssty
+         * alternate for "=", so that one atom really is just shrunk. */
+        if (gid) {
+            const int level = script_level(sizePt);
+            if (const uint16_t alt = mf.script_variant(gid, level)) gid = alt;
+        }
+
+        if (gid && gid != mf.glyph_for(cp)) {
+            /* A named alternate has no character of its own, so it is drawn
+             * and measured by index. */
+            const MetricCache::Box b = metrics().glyph_box_index(gid);
+            g.glyph_id = gid;
+            L.w = b.ink_w * sizePt;
+            L.asc = b.asc * sizePt;
+            L.desc = b.desc * sizePt;
+        } else {
+            L.w = char_width(cp, sizePt, italic, symbol);
+            glyph_vmetrics(cp, sizePt, italic, symbol, L.asc, L.desc);
+        }
 
         /* The same table states the italic correction, and TeX appends it
          * after every maths character (Appendix G / TeX 755).  It is what
          * makes "ab" 11.664 pt rather than 11.496: 0.168 of it is the kern
          * after the b. */
-        if (symbol) {
-            const mtef::MathFont& mf = mtef::MathFont::math();
-            if (mf.ok()) {
-                if (const uint16_t gid = mf.glyph_for(cp))
-                    L.w += mf.italics_correction(gid) * sizePt;
-            }
-        }
+        if (gid) L.w += mf.italics_correction(gid) * sizePt;
 
-        Glyph g;
-        g.x = 0; g.y = 0; g.size = sizePt;
-        g.italic = italic; g.symbol = symbol; g.cjk = is_cjk(cp);
-        g.text = utf8_of(cp);
         L.glyphs.push_back(g);
         return L;
     }
@@ -827,7 +875,7 @@ private:
                 uint32_t cp = c.charCode ? c.charCode : uint32_t(uint8_t(c.ch));
                 if (!cp) return Layout();
                 return glyph_layout(cp, sizePt, typeface_is_italic(c.typeface),
-                                    needs_math_face(cp));
+                                    math_face_for(cp, c.typeface));
             }
             case Node::kEmbell:
                 return layout_embell(static_cast<const EmbellNode&>(n), sizePt,
