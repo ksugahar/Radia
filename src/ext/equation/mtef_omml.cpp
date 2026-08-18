@@ -71,7 +71,19 @@ public:
 
     std::string script(const std::string& base, const std::string& sub,
                        const std::string& sup,
-                       bool has_sub, bool has_sup) const override {
+                       bool has_sub, bool has_sup,
+                       bool limits) const override {
+        if (limits) {
+            /* Word draws \lim_{x \to 0} as a lower limit, not a subscript. */
+            std::string out = base;
+            if (has_sub)
+                out = elem("limLow", elem("limLowPr", "") + elem("e", out) +
+                                     elem("lim", sub));
+            if (has_sup)
+                out = elem("limUpp", elem("limUppPr", "") + elem("e", out) +
+                                     elem("lim", sup));
+            return out;
+        }
         if (has_sub && has_sup)
             return elem("sSubSup", elem("sSubSupPr", "") + elem("e", base) +
                                    elem("sub", sub) + elem("sup", sup));

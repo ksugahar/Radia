@@ -125,7 +125,18 @@ public:
 
     std::string script(const std::string& base, const std::string& sub,
                        const std::string& sup,
-                       bool has_sub, bool has_sup) const override {
+                       bool has_sub, bool has_sup,
+                       bool limits) const override {
+        if (limits) {
+            std::string out = base;
+            if (has_sub)
+                out = cw("limLow", cw("limLowPr", kCtrl) + cw("e", out) +
+                                   cw("lim", sub));
+            if (has_sup)
+                out = cw("limUpp", cw("limUppPr", kCtrl) + cw("e", out) +
+                                   cw("lim", sup));
+            return out;
+        }
         if (has_sub && has_sup)
             return cw("sSubSup", cw("sSubSupPr", kCtrl) + cw("e", base) +
                                  cw("sub", sub) + cw("sup", sup));
