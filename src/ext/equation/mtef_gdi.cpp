@@ -7,6 +7,8 @@
  * than emit a picture format directly.
  */
 #include "mtef_gdi.h"
+
+#include "math_font.h"
 #include "tex_parser.h"
 
 #include <algorithm>
@@ -41,20 +43,29 @@ std::wstring widen(const std::string& utf8) {
     return w;
 }
 
+
 HFONT make_font(double sizePt, bool italic, bool symbol, bool cjk,
                 double units_per_pt) {
+    load_private_fonts();
     LOGFONTW lf = {};
     lf.lfHeight = -LONG(std::lround(sizePt * units_per_pt));
     lf.lfItalic = italic ? TRUE : FALSE;
-    /* Never SYMBOL_CHARSET: Cambria Math is a Unicode font, and the legacy
-     * Symbol code page mangles ASCII and loses anything past it. */
+    /* Never SYMBOL_CHARSET: these are Unicode fonts, and the legacy Symbol
+     * code page mangles ASCII and loses anything past it. */
     lf.lfCharSet = DEFAULT_CHARSET;
     lf.lfQuality = ANTIALIASED_QUALITY;
-    /* The same three faces the metric layer measures with, or the drawing
-     * would not match the widths the layout was built from. */
+    /* Latin Modern is Computer Modern, so an equation set here looks like one
+     * TeX set -- which is the whole reason for choosing it.  The same three
+     * faces the metric layer measures with, or the drawing would not match the
+     * widths the layout was built from.
+     *
+     * "LM Roman 10" is what GDI calls the text face -- Latin Modern names its
+     * optical sizes, and asking for "Latin Modern Roman" resolves to nothing
+     * and lands silently on whatever the system offers instead.  It landed on
+     * a Japanese face, and every measurement moved. */
     wcscpy_s(lf.lfFaceName, cjk    ? L"Yu Mincho"
-                          : symbol ? L"Cambria Math"
-                                   : L"Times New Roman");
+                          : symbol ? L"Latin Modern Math"
+                                   : L"LM Roman 10");
     return CreateFontIndirectW(&lf);
 }
 
@@ -94,6 +105,35 @@ struct GdiPlusOnce {
 #endif  /* _WIN32 */
 
 }  // namespace
+
+/* The two Latin Modern faces, loaded into THIS PROCESS only.
+ *
+ * AddFontResourceEx with FR_PRIVATE installs nothing, needs no administrator
+ * and leaves the machine exactly as it was; the fonts are simply visible to
+ * this program by name while it runs.  Installing them system-wide to draw one
+ * window would be a change to somebody's computer that nobody asked for.
+ *
+ * The text face sits beside the maths one in the same TeX tree. */
+void load_private_fonts() {
+    static const bool once = [] {
+        const std::string& math = mtef::math_font_path();
+        if (math.empty()) return false;
+        AddFontResourceExA(math.c_str(), FR_PRIVATE, nullptr);
+        /* .../opentype/public/lm-math/latinmodern-math.otf
+           .../opentype/public/lm/lmroman10-regular.otf   */
+        const size_t cut = math.rfind("lm-math");
+        if (cut != std::string::npos) {
+            const std::string text =
+                math.substr(0, cut) + "lm/lmroman10-regular.otf";
+            AddFontResourceExA(text.c_str(), FR_PRIVATE, nullptr);
+            const std::string italic =
+                math.substr(0, cut) + "lm/lmroman10-italic.otf";
+            AddFontResourceExA(italic.c_str(), FR_PRIVATE, nullptr);
+        }
+        return true;
+    }();
+    (void)once;
+}
 
 #ifdef _WIN32
 

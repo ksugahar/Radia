@@ -119,8 +119,8 @@ public:
     /* Reads a font file.  A .ttc holds several faces; `face` picks one. */
     static MathFont load(const std::string& path, int face = -1);
 
-    /* Cambria Math, which is what this editor draws with.  Read once. */
-    static const MathFont& cambria();
+    /* The font this editor sets mathematics in, read once. */
+    static const MathFont& math();
 
     bool ok() const { return ok_; }
     const std::string& why_not() const { return why_; }
@@ -168,6 +168,9 @@ private:
     std::vector<std::pair<uint16_t, Stretch>> vert_, horiz_;   /* by glyph */
     std::vector<std::pair<uint16_t, double>> italics_;
 };
+
+/* Where that font lives, empty when it could not be found. */
+const std::string& math_font_path();
 
 }  // namespace mtef
 

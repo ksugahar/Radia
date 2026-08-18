@@ -360,7 +360,7 @@ PYBIND11_MODULE(_equation, m) {
      * used to guess these; exposing them is what lets a test say the guess is
      * gone and the font is being read. */
     m.def("math_constants", []() {
-        const mtef::MathFont& f = mtef::MathFont::cambria();
+        const mtef::MathFont& f = mtef::MathFont::math();
         if (!f.ok()) throw std::runtime_error(f.why_not());
         const mtef::MathConstants& c = f.constants();
         py::dict d;
@@ -389,13 +389,13 @@ PYBIND11_MODULE(_equation, m) {
     }, "Cambria Math's MATH constants, in em.");
 
     m.def("math_glyph", [](uint32_t codepoint) {
-        const mtef::MathFont& f = mtef::MathFont::cambria();
+        const mtef::MathFont& f = mtef::MathFont::math();
         if (!f.ok()) throw std::runtime_error(f.why_not());
         return f.glyph_for(codepoint);
     }, py::arg("codepoint"), "Glyph id, or 0 when the font has no such glyph.");
 
     m.def("math_stretch", [](uint32_t codepoint) {
-        const mtef::MathFont& f = mtef::MathFont::cambria();
+        const mtef::MathFont& f = mtef::MathFont::math();
         if (!f.ok()) throw std::runtime_error(f.why_not());
         const uint16_t g = f.glyph_for(codepoint);
         py::dict d;
@@ -417,7 +417,7 @@ PYBIND11_MODULE(_equation, m) {
        "parts to assemble one taller than any of them.");
 
     m.def("math_variant_for_height", [](uint32_t codepoint, double em) {
-        const mtef::MathFont& f = mtef::MathFont::cambria();
+        const mtef::MathFont& f = mtef::MathFont::math();
         if (!f.ok()) throw std::runtime_error(f.why_not());
         double got = 0;
         const uint16_t g = f.vertical_variant(f.glyph_for(codepoint), em, &got);

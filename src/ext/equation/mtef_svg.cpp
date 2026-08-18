@@ -15,6 +15,7 @@
 #include "mtef_svg.h"
 
 #include "math_font.h"
+#include "mtef_gdi.h"
 #include "math_layout.h"
 #include "math_writer.h"      /* accent_drawing_char: one table, two spellings */
 #include "mtef_parser.h"
@@ -91,17 +92,17 @@ HFONT make_font(bool italic, bool symbol, bool cjk) {
     LOGFONTW lf = {};
     lf.lfHeight = -kEm;
     lf.lfItalic = italic ? TRUE : FALSE;
-    /* DEFAULT_CHARSET, never SYMBOL_CHARSET.  Cambria Math is a Unicode font;
+    /* DEFAULT_CHARSET, never SYMBOL_CHARSET.  Latin Modern Math is a Unicode font;
      * asking for the symbol charset makes GDI apply the legacy Symbol code
      * page, so U+0028 is measured as whatever sits at 0x28 in that page and
      * U+2264 is not found at all.  That single flag was behind the spurious
      * gap after "(" and the relation overlapping the fraction bar. */
     lf.lfCharSet = DEFAULT_CHARSET;
     /* Yu Mincho is the serif that sits beside Times without looking borrowed;
-     * neither Times nor Cambria Math has a single kana. */
+     * neither Latin Modern face has a single kana. */
     const wchar_t* face = cjk      ? L"Yu Mincho"
-                        : symbol   ? L"Cambria Math"
-                                   : L"Times New Roman";
+                        : symbol   ? L"Latin Modern Math"
+                                   : L"LM Roman 10";
     wcscpy_s(lf.lfFaceName, face);
     return CreateFontIndirectW(&lf);
 }
@@ -112,7 +113,12 @@ struct MetricCache {
     std::map<std::pair<int, uint32_t>, double> widths;
     std::map<int, std::pair<double, double>> vmetrics;  /* asc, desc per em */
 
-    MetricCache() { hdc = CreateCompatibleDC(nullptr); }
+    /* The faces are loaded into this process rather than installed, so they
+     * have to be there before anything is measured with them. */
+    MetricCache() {
+        load_private_fonts();
+        hdc = CreateCompatibleDC(nullptr);
+    }
     ~MetricCache() {
         for (auto& kv : fonts) DeleteObject(kv.second);
         if (hdc) DeleteDC(hdc);
@@ -166,7 +172,7 @@ struct MetricCache {
     }
 
     /* Per-glyph ink box, which is what a script has to clear.  The font's own
-     * ascent and descent are the wrong measure: Cambria Math reserves room for
+     * ascent and descent are the wrong measure: Latin Modern Math reserves room for
      * extensible brackets and integral signs, so using its global descent puts
      * the subscript of a sigma a third of a line too low, while the subscript
      * of a Times "B" sits correctly.  TeX has always used per-glyph height and
@@ -791,7 +797,7 @@ private:
         Layout den = layout_list(f.denom, kidPt, slot_path(lp, c, 1));
         --fracDepth_;
 
-        const mtef::MathFont& mf = mtef::MathFont::cambria();
+        const mtef::MathFont& mf = mtef::MathFont::math();
         const mtef::MathConstants& mc = mf.constants();
 
         /* The axis is where a fraction bar sits and where a minus sign is
@@ -860,7 +866,7 @@ private:
 
         /* The font states all four of these; they used to be 0.04 and 0.18 of
          * the type size, picked by eye. */
-        const mtef::MathFont& mf = mtef::MathFont::cambria();
+        const mtef::MathFont& mf = mtef::MathFont::math();
         const mtef::MathConstants& mc = mf.constants();
         const double gap   = mc.radicalVerticalGap  * sizePt;
         const double thick = mc.radicalRuleThickness * sizePt;
@@ -963,7 +969,7 @@ private:
         Layout out;
         double x = 0;
 
-        const mtef::MathFont& mf = mtef::MathFont::cambria();
+        const mtef::MathFont& mf = mtef::MathFont::math();
         const mtef::MathConstants& mc = mf.constants();
 
         /* A summation or an integral set for display is not the text glyph at
@@ -1051,7 +1057,7 @@ private:
              *
              * Slanted: the top of the integral leans right of its foot, so the
              * upper limit must follow it.  That is what a font's italic
-             * correction is for, and Cambria Math gives a large one here. */
+             * correction is for, and the font gives a large one here. */
             const double supShift = std::max(
                 mc.superscriptShiftUp * sizePt,
                 op.asc - mc.superscriptBaselineDropMax * sizePt);
