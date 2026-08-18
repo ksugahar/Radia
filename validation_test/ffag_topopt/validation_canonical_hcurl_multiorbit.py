@@ -44,7 +44,6 @@ from validation_earlytimes_ctype_ab import (
     build_coil,
     build_iron,
     load_bh_table,
-    make_midplane_bz_field,
     make_symmetric_b_field,
     track_reference_orbit,
 )
@@ -131,21 +130,15 @@ def parser():
     result.add_argument("--tree-gate", type=float, default=5.0e-3,
                         help="maximum allowed tree-vs-direct relative "
                              "error on the probe cloud")
-    result.add_argument("--orbit-spline-gate", type=float, default=2.0e-3,
-                        help="maximum allowed midplane-Bz-spline vs exact "
-                             "relative error on orbit-corridor probes; the "
-                             "orbit is a shared CURVE DEFINITION, so this "
-                             "moves it by micrometres at most (absorbed by "
-                             "the H1 gate and re-proven by the "
-                             "certificates)")
     result.add_argument("--output", type=str, default=None)
     return result
 
 
-def run_orbit(offset_m, options, b_point, b_batch, b_orbit, rng):
-    """``b_batch`` is the verified TREE batch (fit/audit/monitor);
-    ``b_orbit`` is the gated midplane-Bz spline (orbit definition only);
-    the exact ``b_point`` keeps the B-RK certificate route source-exact."""
+def run_orbit(offset_m, options, b_point, b_batch, rng):
+    """``b_batch`` is the verified TREE batch (fit/audit/monitor); the
+    exact ``b_point`` drives the FULL-3D orbit tracker and the B-RK
+    certificate route (tracking is 3D -- Sugahara ruling 2026-08-18; the
+    tracker measures planarity instead of assuming it)."""
     timings = {}
 
     def clock(label):
@@ -156,11 +149,10 @@ def run_orbit(offset_m, options, b_point, b_batch, b_orbit, rng):
 
     clock("orbit_track")
     # The reference curve is a DEFINITION shared by all routes, so the
-    # gated spline source only moves the curve by micrometres (absorbed by
-    # the H1 gate); its evaluations cost microseconds instead of the
-    # ~700 x 16.7 ms exact-kernel calls per orbit.
+    # relaxed integration controls only move it by micrometres (absorbed
+    # by the H1 gate); the source stays the exact 3D kernel.
     orbit = track_reference_orbit(
-        b_orbit, float(options.magnetic_rigidity), station_count=65,
+        b_point, float(options.magnetic_rigidity), station_count=65,
         entrance_x_m=-0.040, exit_x_m=0.040,
         entrance_offset_m=float(offset_m),
         relative_tolerance=1.0e-8, maximum_step_m=1.0e-2)
@@ -309,30 +301,11 @@ def main(argv=None):
             f"relaxed tree failed the accuracy gate: {tree_error:.2e} > "
             f"{float(options.tree_gate):.2e}")
 
-    # One gridded midplane-Bz spline serves every orbit's CURVE definition;
-    # gate it against the exact kernel on orbit-corridor probes before use.
-    spline_started = time.perf_counter()
-    b_orbit = make_midplane_bz_field(b_batch_tree)
-    corridor = np.column_stack((rng.uniform(-0.042, 0.042, 40),
-                                rng.uniform(-0.011, 0.011, 40),
-                                np.zeros(40)))
-    exact_bz = b_batch_exact(corridor)[:, 2]
-    spline_bz = np.array([b_orbit(point)[2] for point in corridor])
-    bz_scale = float(np.max(np.abs(exact_bz)))
-    spline_error = float(np.max(np.abs(spline_bz - exact_bz)) / bz_scale)
-    print(f"orbit spline gate: max rel {spline_error:.2e} vs exact on "
-          f"40 corridor probes ({time.perf_counter() - spline_started:.1f} s"
-          " incl. grid)")
-    if spline_error > float(options.orbit_spline_gate):
-        raise RuntimeError(
-            f"midplane orbit spline failed the accuracy gate: "
-            f"{spline_error:.2e} > {float(options.orbit_spline_gate):.2e}")
-
     records = []
     for offset_mm in options.orbit_offsets_mm:
         orbit_started = time.perf_counter()
         record = run_orbit(float(offset_mm) * 1e-3, options, b_point,
-                           b_batch_tree, b_orbit, rng)
+                           b_batch_tree, rng)
         record["runtime_s"] = time.perf_counter() - orbit_started
         records.append(record)
         print(f"orbit {record['offset_mm']:+5.1f} mm "

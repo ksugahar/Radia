@@ -27,7 +27,6 @@ import ngsolve as ng
 import numpy as np
 from netgen.occ import Face, OCCGeometry, Pnt, Segment, Vec, Wire
 from scipy.integrate import solve_ivp
-from scipy.interpolate import RectBivariateSpline
 
 import radia as rad
 from radia import vim
@@ -144,42 +143,6 @@ def reflection_axes(normal):
     return tuple(reflection[:, index].tolist() for index in range(3))
 
 
-def make_midplane_bz_field(
-    b_batch,
-    *,
-    x_range=(-0.045, 0.045),
-    y_range=(-0.014, 0.014),
-    x_count=101,
-    y_count=31,
-):
-    """Cubic-spline ``B_z(x, y)`` on the ``z=0`` median plane from ONE batch.
-
-    The median-plane orbit ODE of :func:`track_reference_orbit` consumes
-    only ``B_z`` on ``z=0``, so a per-sweep gridded spline replaces the
-    ~700 sequential single-point kernel evaluations each orbit costs.  This
-    interpolates the MIDPLANE TRACE for the reference-CURVE definition only
-    -- it is not a 3D field reconstruction (the map fit still samples the
-    full volume) -- and callers must gate the returned field against the
-    exact source on corridor probes before consuming it.
-    """
-    xs = np.linspace(float(x_range[0]), float(x_range[1]), int(x_count))
-    ys = np.linspace(float(y_range[0]), float(y_range[1]), int(y_count))
-    grid_x, grid_y = np.meshgrid(xs, ys, indexing="ij")
-    points = np.column_stack(
-        (grid_x.reshape(-1), grid_y.reshape(-1), np.zeros(grid_x.size)))
-    bz = np.asarray(b_batch(points))[:, 2].reshape(xs.size, ys.size)
-    spline = RectBivariateSpline(xs, ys, bz)
-
-    def field(point):
-        return np.array([
-            0.0,
-            0.0,
-            float(spline(float(point[0]), float(point[1]))[0, 0]),
-        ])
-
-    return field
-
-
 def track_reference_orbit(
     magnetic_flux_density,
     magnetic_rigidity,
@@ -190,27 +153,33 @@ def track_reference_orbit(
     entrance_offset_m=0.0,
     relative_tolerance=2.0e-11,
     maximum_step_m=1.0e-3,
+    planarity_tolerance_m=1.0e-6,
 ):
-    """Track the median-plane design orbit with the independent B source.
+    """Track the design orbit with the FULL 3D independent B source.
 
     ``entrance_offset_m`` displaces the entrance point transversely (global
     y) with the same +x heading: a family of parallel-entry design orbits
     sampling different horizontal slices of the gap field.  The orbit is a
-    REFERENCE-CURVE definition, so callers may relax the integration
-    controls (and even supply an accuracy-gated tree source): every route
-    shares the same curve and the Hamiltonian-linear gate absorbs the
-    consistency question.
+    REFERENCE-CURVE definition shared by every route; integration-control
+    relaxations move it by micrometres only (absorbed by the H1 gate).
+
+    Tracking is 3D (Sugahara ruling 2026-08-18): the Lorentz force uses all
+    three field components with no median-plane projection and no post-hoc
+    z forcing.  Planarity is a MEASURED gate, not an assumption -- for a
+    midplane-symmetric (symmetrized) source the out-of-plane excursion is
+    integrator noise, and the planar frame machinery downstream is valid
+    only under that measurement; a rolled/gantry-class field trips the gate
+    loudly instead of being silently flattened.
     """
     start = np.array([float(entrance_x_m), float(entrance_offset_m), 0.0])
     direction = np.array([1.0, 0.0, 0.0])
 
     def rhs(_path, state):
         tangent = state[3:]
-        field = magnetic_flux_density(state[:3])
-        median_plane_field = np.array([0.0, 0.0, field[2]])
+        field = np.asarray(magnetic_flux_density(state[:3]), dtype=float)
         return np.r_[
             tangent,
-            np.cross(tangent, median_plane_field) / float(magnetic_rigidity),
+            np.cross(tangent, field) / float(magnetic_rigidity),
         ]
 
     def exit_plane(_path, state):
@@ -234,8 +203,16 @@ def track_reference_orbit(
     length = float(solved.t_events[0][0])
     stations = np.linspace(0.0, length, int(station_count))
     states = solved.sol(stations).T
-    states[:, 2] = 0.0
-    states[:, 5] = 0.0
+    out_of_plane_m = float(np.max(np.abs(states[:, 2])))
+    out_of_plane_slope = float(np.max(np.abs(states[:, 5])))
+    if max(out_of_plane_m, out_of_plane_slope * length) > float(
+            planarity_tolerance_m):
+        raise RuntimeError(
+            "design orbit left the bend plane: max |z| = "
+            f"{out_of_plane_m:.3e} m, max |t_z| = {out_of_plane_slope:.3e} "
+            f"(gate {float(planarity_tolerance_m):.1e} m); the planar frame "
+            "machinery does not apply -- a 3D (Bishop-frame) orbit chain is "
+            "required for this field")
     tangents = states[:, 3:]
     tangents /= np.linalg.norm(tangents, axis=1)[:, None]
     geometric_orbit = PlanarDesignOrbit(
