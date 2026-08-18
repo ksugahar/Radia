@@ -51,11 +51,20 @@ from dataclasses import dataclass, field
 import numpy as np
 
 __all__ = [
-    "CanonicalHCurlElement",
     "CanonicalHCurlChain",
+    "CanonicalHCurlElement",
     "CanonicalHCurlFit",
     "graded_breaks",
 ]
+
+
+def _matching_finite_vectors(values, *, label):
+    arrays = tuple(np.asarray(value, dtype=float).reshape(-1) for value in values)
+    if len({array.size for array in arrays}) != 1:
+        raise ValueError(f"{label} arrays must share one length")
+    if not all(np.all(np.isfinite(array)) for array in arrays):
+        raise ValueError(f"{label} arrays must contain only finite values")
+    return arrays
 
 
 def graded_breaks(s_nodes_m, weight, element_count, *, strength=1.0):
@@ -70,15 +79,23 @@ def graded_breaks(s_nodes_m, weight, element_count, *, strength=1.0):
     """
     s = np.asarray(s_nodes_m, dtype=float).reshape(-1)
     w = np.asarray(weight, dtype=float).reshape(-1)
-    if s.size != w.size or s.size < 2 or not np.all(np.diff(s) > 0.0):
+    if (
+        s.size != w.size
+        or s.size < 2
+        or not np.all(np.isfinite(s))
+        or not np.all(np.diff(s) > 0.0)
+    ):
         raise ValueError("s_nodes_m must be strictly increasing and match w")
     if np.any(w < 0.0) or not np.all(np.isfinite(w)):
         raise ValueError("weight must be finite and non-negative")
     count = int(element_count)
     if count < 1:
         raise ValueError("element_count must be positive")
+    strength = float(strength)
+    if not np.isfinite(strength) or strength < 0.0:
+        raise ValueError("strength must be finite and non-negative")
     peak = float(np.max(w))
-    density = 1.0 + float(strength) * (w / peak if peak > 0.0 else w)
+    density = 1.0 + strength * (w / peak if peak > 0.0 else w)
     cdf = np.concatenate(([0.0], np.cumsum(
         0.5 * (density[1:] + density[:-1]) * np.diff(s))))
     targets = np.linspace(0.0, cdf[-1], count + 1)
@@ -645,14 +662,9 @@ class CanonicalHCurlChain:
         vacuum-constrained fit "solves" from midplane data while
         under-reporting the true aperture error by an order of magnitude.
         """
-        x = np.asarray(x_m, dtype=float).reshape(-1)
-        y = np.asarray(y_m, dtype=float).reshape(-1)
-        s = np.asarray(s_m, dtype=float).reshape(-1)
-        bx = np.asarray(bx_t, dtype=float).reshape(-1)
-        by = np.asarray(by_t, dtype=float).reshape(-1)
-        bs = np.asarray(bs_t, dtype=float).reshape(-1)
-        if not (x.size == y.size == s.size == bx.size == by.size == bs.size):
-            raise ValueError("sample arrays must share one length")
+        x, y, s, bx, by, bs = _matching_finite_vectors(
+            (x_m, y_m, s_m, bx_t, by_t, bs_t), label="sample"
+        )
         if x.size < 4 * self.chain_dimension:
             raise ValueError("need at least 4 samples per chain DOF")
         half_height = self.elements[0].half_height_m
@@ -735,8 +747,11 @@ class CanonicalHCurlChain:
         """
         if not self.periodic:
             raise ValueError("ring circulation applies to periodic chains")
+        circulation = float(circulation_t_m2)
+        if not np.isfinite(circulation):
+            raise ValueError("ring circulation must be finite")
         length = float(self.s_breaks_m[-1] - self.s_breaks_m[0])
-        self.ring_circulation_t_m = float(circulation_t_m2) / length
+        self.ring_circulation_t_m = circulation / length
 
     def _require_fit(self):
         if self._fit is None:
@@ -747,9 +762,9 @@ class CanonicalHCurlChain:
     def vector_potential_frame(self, x_m, y_m, s_m):
         """``(a_x, a_y, a_s_covariant)`` at frame points, in T*m."""
         coefficients = self._require_fit()
-        x = np.asarray(x_m, dtype=float).reshape(-1)
-        y = np.asarray(y_m, dtype=float).reshape(-1)
-        s = np.asarray(s_m, dtype=float).reshape(-1)
+        x, y, s = _matching_finite_vectors(
+            (x_m, y_m, s_m), label="x/y/s"
+        )
         index, zeta = self._locate(s)
         offsets = np.concatenate(([0], np.cumsum(
             [el.dimension for el in self.elements])))
@@ -777,9 +792,9 @@ class CanonicalHCurlChain:
         ``accelerator_lie_topopt.canonical_vector_potential_hamiltonian_rhs``.
         """
         coefficients = self._require_fit()
-        x = np.asarray(x_m, dtype=float).reshape(-1)
-        y = np.asarray(y_m, dtype=float).reshape(-1)
-        s = np.asarray(s_m, dtype=float).reshape(-1)
+        x, y, s = _matching_finite_vectors(
+            (x_m, y_m, s_m), label="x/y/s"
+        )
         index, zeta = self._locate(s)
         offsets = np.concatenate(([0], np.cumsum(
             [el.dimension for el in self.elements])))
@@ -817,9 +832,9 @@ class CanonicalHCurlChain:
     def magnetic_flux_density_frame(self, x_m, y_m, s_m):
         """Physical frame ``(Bx, By, Bs)`` of the fitted field, in T."""
         coefficients = self._require_fit()
-        x = np.asarray(x_m, dtype=float).reshape(-1)
-        y = np.asarray(y_m, dtype=float).reshape(-1)
-        s = np.asarray(s_m, dtype=float).reshape(-1)
+        x, y, s = _matching_finite_vectors(
+            (x_m, y_m, s_m), label="x/y/s"
+        )
         index, zeta = self._locate(s)
         offsets = np.concatenate(([0], np.cumsum(
             [el.dimension for el in self.elements])))
@@ -891,6 +906,9 @@ class CanonicalHCurlChain:
         count = int(segment_count)
         if count < 1:
             raise ValueError("segment_count must be positive")
+        degree = int(degree)
+        if degree < 1:
+            raise ValueError("degree must be at least 1")
         edges = np.linspace(self.s_breaks_m[0], self.s_breaks_m[-1],
                             count + 1)
         mids = 0.5 * (edges[:-1] + edges[1:])

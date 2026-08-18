@@ -94,24 +94,22 @@ verifyLessThan(testCase, ...
     1e-10);
 end
 
-function testAcceleratorLieTopoptAcceptsFullXYVectorPotentialJet(testCase)
-Ay = zeros(6, 6);
-As = zeros(6, 6);
-Ay(2, 2) = 0.7;
-As(3, 1) = -0.4;
+function testAcceleratorLieTopoptAcceptsIndependentReferenceCurvature(testCase)
 result = radia.python.acceleratorLieTopopt( ...
-    "fourth_order_lie_map_from_hcurl_transverse", ...
-    {Ay, As, 0.02, 3}, ...
+    "canonical_body_hamiltonian_jet", ...
+    {[0.4, 0, 0, 0, 0, 0, 0], 3}, ...
     Keywords=struct( ...
-        "reference_curvature_per_m", 0, ...
-        "maximum_step_m", 0.01));
+        "reference_curvature_per_m", 0.03));
 verifyEqual(testCase, result.backend, "python-fallback");
 verifyEqual(testCase, result.module, "radia.accelerator_lie_topopt");
-map = result.value.transfer;
-verifyEqual(testCase, size(double(map.V)), [6, 6, 6, 6, 6]);
-verifyGreaterThan(testCase, max(abs(double(map.V)), [], "all"), 0);
-verifyEqual(testCase, double(result.value.hamiltonian_linear), ...
-    zeros(1, 6), "AbsTol", 1e-12);
+jet = result.value;
+verifyEqual(testCase, size(double(jet.H5)), [6, 6, 6, 6, 6]);
+H2 = double(jet.H2);
+fieldCurvature = 0.4 / 3;
+verifyEqual(testCase, H2(1, 1), 0.03 * fieldCurvature, ...
+    "AbsTol", 2e-15);
+verifyEqual(testCase, H2(1, 6), -0.03, "AbsTol", 2e-15);
+verifyEqual(testCase, H2(6, 1), -0.03, "AbsTol", 2e-15);
 end
 
 function testStreamFunctionHasNamedFallback(testCase)
