@@ -958,11 +958,35 @@ private:
         if (hasUpper) w = std::max(w, up.w);
         if (hasLower) w = std::max(w, lo.w);
 
-        const double upGap  = mc.upperLimitGapMin * sizePt;
-        const double loGap  = mc.lowerLimitGapMin * sizePt;
-        const double upRise = mc.upperLimitBaselineRiseMin * sizePt;
-        const double loDrop = mc.lowerLimitBaselineDropMin * sizePt;
-        const double extra  = 0.1 * sizePt;          /* big_op_spacing5 */
+        /* Appendix G rule 13, in Knuth's own shape:
+         *
+         *     shift_up   = big_op_spacing3 - depth(upper)   floored at ...1
+         *     shift_down = big_op_spacing4 - height(lower)  floored at ...2
+         *
+         * with a band of big_op_spacing5 outside each limit.  The floor is on
+         * the SHIFT, not on the finished position, which stops being the same
+         * thing as soon as a limit has any depth of its own -- the form this
+         * replaces took the maximum after adding the depth in.
+         *
+         * The five spacings are MATH constants under names that do not match:
+         * big_op_spacing1 is upperLimitBaselineRiseMin, ...2 is
+         * lowerLimitGapMin, ...3 is upperLimitGapMin, ...4 is
+         * lowerLimitBaselineDropMin -- crosswise, checked against
+         * \the\fontdimen9..12\textfont3.
+         *
+         * big_op_spacing5 is 0.12 em.  \the\fontdimen13\textfont3 answers 0.1,
+         * and that does not reproduce what TeX actually sets, so the number
+         * here is measured from the boxes instead: asked for \sum^{N},
+         * \sum_{n=1} and \lim_{x \to 0} separately, all three want 1.4397 pt
+         * against a 12 point body, and with it the two shifts come out at
+         * exactly big_op_spacing3 and big_op_spacing2.  Something in the
+         * OpenType path is not reading fontdimen 13; three independent boxes
+         * are the better witness than one parameter that disagrees with them. */
+        const double up1 = mc.upperLimitBaselineRiseMin * sizePt;
+        const double lo2 = mc.lowerLimitGapMin * sizePt;
+        const double up3 = mc.upperLimitGapMin * sizePt;
+        const double lo4 = mc.lowerLimitBaselineDropMin * sizePt;
+        const double extra = 0.12 * sizePt;
 
         Layout out;
         out.absorb(op, (w - op.w) / 2.0, 0);
@@ -970,14 +994,14 @@ private:
         out.asc = op.asc;
         out.desc = op.desc;
         if (hasUpper) {
-            const double lift = std::max(op.asc + upGap + up.desc,
-                                         op.asc + upRise);
+            const double shift = std::max(up3 - up.desc, up1);
+            const double lift = op.asc + shift + up.desc;
             out.absorb(up, (w - up.w) / 2.0, -lift);
             out.asc = std::max(out.asc, lift + up.asc + extra);
         }
         if (hasLower) {
-            const double drop = std::max(op.desc + loGap + lo.asc,
-                                         op.desc + loDrop);
+            const double shift = std::max(lo4 - lo.asc, lo2);
+            const double drop = op.desc + shift + lo.asc;
             out.absorb(lo, (w - lo.w) / 2.0, drop);
             out.desc = std::max(out.desc, drop + lo.desc + extra);
         }
@@ -1004,6 +1028,28 @@ private:
 
         Layout base = layout_list(s.base, sizePt, slot_path(lp, c, 0));
         double ss = script_size(sizePt);
+
+        /* The base's italic correction belongs to the SUPERSCRIPT when there
+         * is a subscript, and to the width when there is not (TeX 755):
+         *
+         *     if subscript is empty and delta != 0 then append kern(delta)
+         *     ... make_scripts(q, delta)   { delta shifts the superscript }
+         *
+         * A leaning letter needs the room above its lean, not below it.
+         * Adding it to the width regardless left c_{i} 0.3 pt wide -- exactly
+         * the italic correction of a c -- and that turned up again at every
+         * level of anything built on it. */
+        const mtef::MathFont& mfont = mtef::MathFont::math();
+        double delta = 0;
+        if (mfont.ok() && !base.glyphs.empty()) {
+            const Glyph& last = base.glyphs.back();
+            const uint16_t gid = last.glyph_id
+                               ? last.glyph_id
+                               : mfont.glyph_for(first_code_of(last.text));
+            if (gid) delta = mfont.italics_correction(gid) * last.size;
+        }
+        if (s.hasSub && delta > 0) base.w -= delta;
+
         Layout out = base;
         double x = base.w;
         /* Where a script sits is stated by the font, and TeX reads the same
@@ -1025,17 +1071,24 @@ private:
         if (s.hasSub) sub = layout_list(s.sub, ss, slot_path(lp, c, subSlot));
 
         double supShift = 0, subShift = 0;
+        /* The two DROPS are measured at the SCRIPT size, not the type size:
+         * Knuth writes sup_drop(t) and sub_drop(t) with t already stepped down
+         * to script_size (Appendix G rule 18).  Scaling them by the full size
+         * instead put a limit beside an integral nine tenths of a point too
+         * high and seven tenths too low -- invisible on a letter, because for
+         * a single-character nucleus the drop never binds, and plain on an
+         * integral, whose box is tall. */
         if (s.hasSup) {
             supShift = std::max(mc.superscriptShiftUp * sizePt,
                                 mc.superscriptBottomMin * sizePt + sup.desc);
             supShift = std::max(supShift,
-                                base.asc - mc.superscriptBaselineDropMax * sizePt);
+                                base.asc - mc.superscriptBaselineDropMax * ss);
         }
         if (s.hasSub) {
             subShift = std::max(mc.subscriptShiftDown * sizePt,
                                 sub.asc - mc.subscriptTopMax * sizePt);
             subShift = std::max(subShift,
-                                base.desc + mc.subscriptBaselineDropMin * sizePt);
+                                base.desc + mc.subscriptBaselineDropMin * ss);
         }
         if (s.hasSup && s.hasSub) {
             /* The two must not close up on each other, and the superscript
@@ -1060,9 +1113,10 @@ private:
 
         double wsub = 0, wsup = 0;
         if (s.hasSup) {
-            out.absorb(sup, x, -supShift);
+            const double dx = s.hasSub ? delta : 0.0;
+            out.absorb(sup, x + dx, -supShift);
             out.asc = std::max(out.asc, supShift + sup.asc);
-            wsup = sup.w;
+            wsup = dx + sup.w;
         }
         if (s.hasSub) {
             out.absorb(sub, x, subShift);
@@ -1119,16 +1173,94 @@ private:
         g.w = b.ink_w * sizePt;
         g.asc = b.asc * sizePt;
         g.desc = b.desc * sizePt;
-        /* Past the tallest drawing the font offers, the remainder is taken by
-         * scaling.  The font also ships parts to assemble one of any height;
-         * until that is wired, this at least covers the content. */
+        /* Past the tallest drawing the font offers, the font ships PARTS to
+         * build one of any height, and that is what is used.  Scaling the
+         * largest instead -- which is what happened here -- stretches the
+         * whole drawing including the hook and the stem, and it showed: a
+         * radical over a fraction with a summation in it came out twice as
+         * deep as TeX sets it. */
         if (gotEm > 0 && gotEm * sizePt < needPt) {
+            if (Layout built = assembled_glyph(cp, needPt, sizePt); !built.glyphs.empty())
+                return built;
+            /* No parts either: scaling is all that is left. */
             const double k = needPt / std::max(gotEm * sizePt, 1e-6);
             for (auto& x : g.glyphs) x.stretchY = k;
             g.asc *= k;
             g.desc *= k;
         }
         return g;
+    }
+
+    /* A delimiter built from the font's own pieces.
+     *
+     * The font names a bottom, a top, sometimes a middle, and one or more
+     * EXTENDERS that repeat as many times as the height needs.  Consecutive
+     * pieces overlap, by at least minConnectorOverlap and at most what the
+     * two connectors allow, so the joins do not show.
+     *
+     * Sizing follows MathML Core: take the fewest repeats that reach the
+     * target with minimum overlap, then open the overlaps evenly to land ON
+     * the target rather than past it. */
+    Layout assembled_glyph(uint32_t cp, double needPt, double sizePt) {
+        Layout out;
+        const mtef::MathFont& mf = mtef::MathFont::math();
+        if (!mf.ok()) return out;
+        const mtef::Stretch* st = mf.vertical(mf.glyph_for(cp));
+        if (!st || st->assembly.empty()) return out;
+
+        const double minOv = mf.min_connector_overlap() * sizePt;
+        std::vector<mtef::GlyphPart> parts;
+        int repeats = 0;
+        for (; repeats < 64; ++repeats) {
+            parts.clear();
+            for (const mtef::GlyphPart& p : st->assembly) {
+                const int n = p.extender ? repeats : 1;
+                for (int i = 0; i < n; ++i) parts.push_back(p);
+            }
+            if (parts.size() < 2) continue;
+            double total = 0;
+            for (const mtef::GlyphPart& p : parts) total += p.fullAdvance * sizePt;
+            total -= minOv * double(parts.size() - 1);
+            if (total >= needPt) break;
+        }
+        if (parts.size() < 2) return out;
+
+        /* Open every join by the same amount, within what the connectors
+         * allow, so the assembly is exactly as tall as it was asked for. */
+        double total = 0;
+        for (const mtef::GlyphPart& p : parts) total += p.fullAdvance * sizePt;
+        const size_t joins = parts.size() - 1;
+        double overlap = (total - needPt) / double(joins);
+        double maxOv = 1e9;
+        for (size_t i = 0; i + 1 < parts.size(); ++i)
+            maxOv = std::min(maxOv, std::min(parts[i].endConnector,
+                                             parts[i + 1].startConnector) * sizePt);
+        overlap = std::max(minOv, std::min(overlap, maxOv));
+
+        /* The assembly list runs bottom to top, so it is laid out upwards
+         * from the baseline and reported as all ascent. */
+        double y = 0;
+        for (const mtef::GlyphPart& p : parts) {
+            const double adv = p.fullAdvance * sizePt;
+            Glyph g;
+            g.size = sizePt;
+            g.symbol = true;
+            g.glyph_id = p.glyph;
+            g.text = utf8_of(cp);
+            g.x = 0;
+            /* Each piece is drawn on its own baseline; the metric cache knows
+             * where its ink sits relative to that. */
+            const MetricCache::Box b = metrics().glyph_box_index(p.glyph);
+            g.y = -(y + b.desc * sizePt);
+            out.glyphs.push_back(g);
+            y += adv - overlap;
+        }
+        out.asc = y + overlap;          /* the last piece added no join */
+        out.desc = 0;
+        out.w = 0;
+        for (const mtef::GlyphPart& p : parts)
+            out.w = std::max(out.w, metrics().glyph_box_index(p.glyph).ink_w * sizePt);
+        return out;
     }
 
     Layout layout_fence(const FenceNode& f, double sizePt,
@@ -1375,48 +1507,12 @@ ulldelimiterspace, 1.2 pt -- so the BOX is wider than the parts,
          * shorter than their records claim.  Selecting on the record picked a
          * size larger than needed every time -- a root over a fraction came
          * out a sixth taller than TeX's, and TeX picks from the same list. */
-        Layout sign;
-        double got_em = 0;
-        uint16_t variant = 0;
-        if (mf.ok()) {
-            const uint16_t base = mf.glyph_for(0x221A);
-            if (const mtef::Stretch* st = mf.vertical(base)) {
-                for (const auto& v : st->variants) {
-                    const MetricCache::Box b = metrics().glyph_box_index(v.first);
-                    const double ink = b.asc + b.desc;
-                    variant = v.first;
-                    got_em = ink;
-                    if (ink * sizePt >= need) break;
-                }
-            } else {
-                variant = base;
-            }
-        }
-        if (variant) {
-            const MetricCache::Box b = metrics().glyph_box_index(variant);
-            Glyph g;
-            g.size = sizePt;
-            g.symbol = true;
-            g.glyph_id = variant;
-            g.text = utf8_of(0x221A);
-            sign.glyphs.push_back(g);
-            sign.w = b.ink_w * sizePt;
-            sign.asc = b.asc * sizePt;
-            sign.desc = b.desc * sizePt;
-        } else {
-            sign = glyph_layout(0x221A, sizePt, false, true);
-        }
-
-        /* Past the tallest drawing the font offers, the remainder is taken by
-         * scaling.  The font also ships parts to assemble one of any height;
-         * until that is wired, this at least covers the radicand rather than
-         * stopping short of it. */
-        if (variant && got_em * sizePt < need) {
-            const double k = need / std::max(got_em * sizePt, 1e-6);
-            for (auto& g : sign.glyphs) g.stretchY = k;
-            sign.asc *= k;
-            sign.desc *= k;
-        }
+        /* One routine picks the drawing, for the radical and for every fence:
+         * the smallest ready-made size whose measured ink reaches, and past
+         * the largest, the font's own pieces assembled.  This used to have its
+         * own copy that scaled instead, which is why a radical over a
+         * fraction with a summation in it came out twice as deep as TeX's. */
+        Layout sign = stretched_glyph(0x221A, need, sizePt);
 
         /* The index sits ON the radical's left arm, not beside it.
          *
@@ -1542,7 +1638,12 @@ ulldelimiterspace, 1.2 pt -- so the BOX is wider than the parts,
          * overrode the font with 1.5 where it asks for 1.3, and picked a
          * variant two sizes too large.  An integral came out a seventh taller
          * than TeX sets one.  Appearance follows TeX; the font is TeX's. */
-        const double opTargetEm = mc.displayOperatorMinHeight;
+        /* displayOperatorMinHeight is what its name says: the size a DISPLAY
+         * operator must reach.  In text style the operator stays the size the
+         * font draws it at, which is why a summation in a denominator is small
+         * -- asking for the display size everywhere made one four and a half
+         * points too wide inside a radical. */
+        const double opTargetEm = (fracDepth_ == 0) ? mc.displayOperatorMinHeight : 0.0;
         const uint16_t bigGid =
             baseGid ? mf.vertical_variant(baseGid, opTargetEm, &gotEm) : 0;
         if (bigGid && bigGid != baseGid) {
@@ -1559,10 +1660,19 @@ ulldelimiterspace, 1.2 pt -- so the BOX is wider than the parts,
             drawnGid = bigGid;
             drawnPt = sizePt;
         } else {
-            op = glyph_layout(glyph, opSize, false, true);
-            op.w = std::max(op.w, glyph_ink_width(glyph, opSize, false, true));
+            /* At the TYPE size, not Equation Editor's symbol size.
+             *
+             * st_.sym is 18 point against a 12 point body -- its Sizes dialog
+             * -- and it only ever showed in text style, because in display the
+             * font's own variant is picked instead and this branch is not
+             * taken.  In a denominator it was, and a summation there came out
+             * 6.3 pt wide of TeX: 1.056 em at 18 point rather than at 12.
+             * Appearance follows TeX, and TeX draws the text-style operator at
+             * the type size. */
+            op = glyph_layout(glyph, sizePt, false, true);
+            op.w = std::max(op.w, glyph_ink_width(glyph, sizePt, false, true));
             drawnGid = baseGid;
-            drawnPt = opSize;
+            drawnPt = sizePt;
         }
 
         /* Centre it on the maths axis, which is TeX's make_op:
@@ -1573,8 +1683,16 @@ ulldelimiterspace, 1.2 pt -- so the BOX is wider than the parts,
          * the baseline, and the axis is the line a fraction bar and a minus
          * sign already sit on -- so centring there is what puts an operator in
          * line with everything beside it.  Left on the baseline it rides high,
-         * and its limits inherit the error. */
-        {
+         * and its limits inherit the error.
+         *
+         * It applies to the SIDE-limit case only.  TeX sets shift_amount on
+         * the operator's box, and a shift_amount is vertical in an hlist and
+         * HORIZONTAL in a vlist -- so when the limits go above and below and
+         * the operator is packed into a vlist instead, the centring is simply
+         * discarded and the vlist takes the glyph's own height and depth.
+         * Applying it there too made a summation with limits 0.24 pt short at
+         * the top, which is exactly this shift. */
+        if (!stacked) {
             const double lift = (op.asc - op.desc) / 2.0 - mc.axisHeight * sizePt;
             if (std::fabs(lift) > 1e-9) {
                 Layout centred;
@@ -1586,59 +1704,23 @@ ulldelimiterspace, 1.2 pt -- so the BOX is wider than the parts,
             }
         }
 
+        /* Limits go above and below in DISPLAY style only.  In text style --
+         * inside a fraction, say -- TeX sets even a summation's limits beside
+         * it, because a stacked one would blow the line apart.  Taking the
+         * template's own flag as the whole answer made a summation in a
+         * denominator twice as deep as TeX sets it. */
+        stacked = stacked && (fracDepth_ == 0);
+
         if (stacked) {
-            /* Limits above and below the operator, everything centred on the
-             * widest of the three.  Centring the limits on the operator alone
-             * lets a wide limit hang left of the origin and overlap whatever
-             * precedes the operator, because the reported width never sees it. */
-            Layout up, lo;
-            if (hasUpper) up = layout_list(upper, ss, slot_path(lp, c, upperSlot));
-            if (hasLower) lo = layout_list(lower, ss, slot_path(lp, c, lowerSlot));
-            double w = op.w;
-            if (hasUpper) w = std::max(w, up.w);
-            if (hasLower) w = std::max(w, lo.w);
-
-            /* The font states both the clearance and how far the limit's own
-             * baseline must travel; the larger wins, so a deep limit is not
-             * pushed into the operator by a rule that only counted the gap. */
-            const double upGap  = mc.upperLimitGapMin * sizePt;
-            const double loGap  = mc.lowerLimitGapMin * sizePt;
-            const double upRise = mc.upperLimitBaselineRiseMin * sizePt;
-            const double loDrop = mc.lowerLimitBaselineDropMin * sizePt;
-            /* TeX puts a further band of clear space outside both limits --
-             * big_op_spacing5, Appendix G rule 13.  The OpenType MATH table
-             * has no constant for it and MathML Core simply leaves it out,
-             * which is why a summation with limits came out a twelfth shorter
-             * than the same summation set by TeX.
-             *
-             * Asked directly -- 	heontdimen13	extfont3 -- TeX wants
-             * 1.2 pt of it against a 12 point body in this font, which is
-             * 0.1 em.  That is measured, not the 1/12 that was guessed here.
-             *
-             * The four limit distances above DO have MATH constants, and the
-             * pairing is not the one the names suggest.  Measured against the
-             * same font: big_op_spacing1 is upperLimitBaselineRiseMin (0.111
-             * em), big_op_spacing2 is lowerLimitGapMin (0.167), big_op_spacing3
-             * is upperLimitGapMin (0.200) and big_op_spacing4 is
-             * lowerLimitBaselineDropMin (0.600). */
-            const double extra = 0.1 * sizePt;
-
-            out.absorb(op, (w - op.w) / 2.0, 0);
-            out.asc = op.asc;
-            out.desc = op.desc;
-            if (hasUpper) {
-                const double lift = std::max(op.asc + upGap + up.desc,
-                                             op.asc + upRise);
-                out.absorb(up, (w - up.w) / 2.0, -lift);
-                out.asc = std::max(out.asc, lift + up.asc + extra);
-            }
-            if (hasLower) {
-                const double drop = std::max(op.desc + loGap + lo.asc,
-                                             op.desc + loDrop);
-                out.absorb(lo, (w - lo.w) / 2.0, drop);
-                out.desc = std::max(out.desc, drop + lo.desc + extra);
-            }
-            x = w;
+            /* Limits above and below.  One routine, shared with \lim and its
+             * family, so a limit under a summation and a limit under \lim are
+             * placed by the same arithmetic and cannot drift apart. */
+            Layout st = stack_limits(op, lower, upper, hasLower, hasUpper,
+                                     sizePt, lp, c, lowerSlot, upperSlot);
+            out.absorb(st, 0, 0);
+            out.asc = st.asc;
+            out.desc = st.desc;
+            x = st.w;
         } else {
             /* Inline: limits sit beside the operator like ordinary scripts. */
             out.absorb(op, 0, 0);
@@ -1669,12 +1751,15 @@ ulldelimiterspace, 1.2 pt -- so the BOX is wider than the parts,
              * before was never the height: it was that both limits sat in a
              * column against a sign that leans, for want of the italic
              * correction below. */
+            /* The drops are at the SCRIPT size -- Knuth's sup_drop(t) with t
+             * already stepped down.  On an operator this is the term that
+             * binds, so having it at the wrong size is worth 0.9 pt. */
             const double supShift = std::max(
                 mc.superscriptShiftUp * sizePt,
-                op.asc - mc.superscriptBaselineDropMax * sizePt);
+                op.asc - mc.superscriptBaselineDropMax * ss);
             const double subShift = std::max(
                 mc.subscriptShiftDown * sizePt,
-                op.desc + mc.subscriptBaselineDropMin * sizePt);
+                op.desc + mc.subscriptBaselineDropMin * ss);
             const double ic =
                 drawnGid ? mf.italics_correction(drawnGid) * drawnPt : 0.0;
 
