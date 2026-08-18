@@ -240,6 +240,27 @@ bool Equation::move_out() {
     return true;
 }
 
+/* One whole item left or right, without stepping inside it.
+ *
+ * move_left/move_right descend into a template because that is how you get at
+ * the letters in it.  This is the other motion: past the template.  At the
+ * edge of a slot it does NOT jump out -- the same reasoning as the selection,
+ * that a motion which silently changes which slot you are in is worse than one
+ * that stops. */
+bool Equation::move_item(int dir, bool extend) {
+    if (extend) {
+        if (anchor_ < 0) anchor_ = index_;
+    } else {
+        clear_selection();
+    }
+    NodeList& l = here();
+    const int want = index_ + (dir < 0 ? -1 : +1);
+    if (want < 0 || want > int(l.size())) return false;
+    index_ = want;
+    if (extend && anchor_ == index_) clear_selection();
+    return true;
+}
+
 bool Equation::move_left() {
     clear_selection();
     NodeList& l = here();
@@ -1118,8 +1139,51 @@ const std::vector<Equation::Binding>& Equation::shortcuts() {
         {"Ctrl+Shift+I", "style.variable",     "variable style"},
         {"Ctrl+Shift+B", "style.vector",       "matrix-vector (bold)"},
         {"Ctrl+Shift+G", "style.greek",        "greek"},
+
+        /* Move and select by WHOLE ITEM.  Left and Right walk into a
+         * template, which is what you want for correcting a letter and not
+         * what you want for stepping past a fraction to get at what follows
+         * it: from the left of \frac{a}{b} it takes four presses to get past
+         * it and Ctrl+Right takes one.  Equation Editor binds the same keys
+         * to the same idea. */
+        {"Ctrl+Left",    "caret.left_item",    "left one item"},
+        {"Ctrl+Right",   "caret.right_item",   "right one item"},
+        {"Ctrl+Shift+Left",  "select.left_item",  "select left one item"},
+        {"Ctrl+Shift+Right", "select.right_item", "select right one item"},
     };
-    return kBindings;
+
+    /* Ctrl+G and a letter: ONE Greek letter, without changing the style.
+     *
+     * Equation Editor has both, and they are not the same thing.  Ctrl+Shift+G
+     * is the STYLE -- everything typed after it is Greek, which is what you
+     * want for a run of them.  Ctrl+G is a prefix for a single letter, which
+     * is what you want for the mu in a line of otherwise Latin algebra, and is
+     * the one people actually use.  Only the style existed here.
+     *
+     * The 52 chords are generated rather than written out: a hand-written
+     * table of them would be 52 chances to typo a letter, and the mapping is
+     * already in greek_of, where the style gets it. */
+    static const std::vector<Binding>& kAll = [&]() -> const std::vector<Binding>& {
+        static std::vector<std::string> pool;
+        static std::vector<Binding> all;
+        pool.reserve(52 * 3);
+        all = kBindings;
+        for (int upper = 0; upper < 2; ++upper) {
+            for (char c = 'A'; c <= 'Z'; ++c) {
+                const char latin = upper ? c : char(c - 'A' + 'a');
+                if (!greek_of(uint32_t((unsigned char)latin))) continue;
+                pool.push_back(std::string("Ctrl+G, ") +
+                               (upper ? "Shift+" : "") + c);
+                pool.push_back(std::string("greek.") + latin);
+                pool.push_back(std::string("greek ") + latin);
+                const size_t i = pool.size() - 3;
+                all.push_back({pool[i].c_str(), pool[i + 1].c_str(),
+                               pool[i + 2].c_str()});
+            }
+        }
+        return all;
+    }();
+    return kAll;
 }
 
 bool Equation::command(const std::string& name) {
@@ -1142,6 +1206,22 @@ bool Equation::command(const std::string& name) {
     if (name == "select.end")       { extend_end();  return true; }
     if (name == "select.all")       { select_all();  return true; }
     if (name.compare(0, 6, "style.") == 0) return set_style(name.substr(6));
+    if (name == "caret.left_item")  return move_item(-1, false);
+    if (name == "caret.right_item") return move_item(+1, false);
+    if (name == "select.left_item") return move_item(-1, true);
+    if (name == "select.right_item")return move_item(+1, true);
+    if (name.compare(0, 6, "greek.") == 0 && name.size() == 7) {
+        const uint32_t g = greek_of(uint32_t((unsigned char)name[6]));
+        if (!g) return false;
+        checkpoint();
+        take_selection();
+        NodeList& l = here();
+        clamp();
+        l.insert(l.begin() + index_,
+                 make_char(typeface_for_code(uint16_t(g)), uint16_t(g)));
+        ++index_;
+        return true;
+    }
     if (name == "edit.undo")        return undo();
     if (name == "edit.redo")        return redo();
     return false;
