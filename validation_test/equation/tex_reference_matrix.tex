@@ -1,0 +1,24 @@
+\documentclass[12pt]{article}
+\usepackage{unicode-math}
+\usepackage{amsmath}
+\setmathfont{Latin Modern Math}
+\pagestyle{empty}
+\begin{document}
+\newwrite\out
+\immediate\openout\out=mat.txt
+\def\M#1#2{\setbox0=\hbox{$\displaystyle#2$}%
+  \immediate\write\out{#1 \the\wd0\space \the\ht0\space \the\dp0}}
+\M{r1c1}{\begin{matrix} a \end{matrix}}
+\M{r2c1}{\begin{matrix} a \\ b \end{matrix}}
+\M{r3c1}{\begin{matrix} a \\ b \\ c \end{matrix}}
+\M{r1c2}{\begin{matrix} a & b \end{matrix}}
+\M{r2c2}{\begin{matrix} a & b \\ c & d \end{matrix}}
+\M{r3c2}{\begin{matrix} a & b \\ c & d \\ e & f \end{matrix}}
+\M{pm2}{\begin{pmatrix} a & b \\ c & d \end{pmatrix}}
+\M{bm1}{\begin{bmatrix} a \\ b \end{bmatrix}}
+\M{tall}{\begin{matrix} \frac{a}{b} \\ c \end{matrix}}
+\M{a}{a}
+\M{ab}{ab}
+\immediate\closeout\out
+\mbox{}
+\end{document}
