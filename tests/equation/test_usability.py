@@ -108,18 +108,20 @@ def test_item_motion_stops_at_the_edge_rather_than_leaving_the_slot():
 
 
 def test_the_item_chords_are_bound():
-    """Ctrl+Left and Ctrl+Right only.
+    """All four, and Ctrl+Shift with them selects.
 
-    Ctrl+Shift with them was mine, and the key table wants those two keys for
-    the Format menu -- Ctrl+Shift+Left is Align Center (3,1) and
-    Ctrl+Shift+Right is Align at = (3,3).  Usability follows Equation Editor,
-    so they went back.  Selecting by item keeps its commands and loses its
-    chords rather than colliding."""
+    These were briefly given away to the Format menu on a misreading: the key
+    table's records group by command pair, which merges records of different
+    KINDS, and read that way Ctrl+Shift+Left looked like Align Center.  Record
+    by record it is kind 6 -- navigation -- in group 3, beside group 1 (bare
+    arrows, move by character), group 2 (Shift+arrows, select by character)
+    and group 8 (Ctrl+arrows, move by item).  Align lives on Ctrl+Shift+L, C
+    and R, which are kind 1."""
     c = chords()
     assert c["Ctrl+Left"] == "caret.left_item"
     assert c["Ctrl+Right"] == "caret.right_item"
-    assert c["Ctrl+Shift+Left"] == "format.center"
-    assert c["Ctrl+Shift+Right"] == "format.at_eq"
+    assert c["Ctrl+Shift+Left"] == "select.left_item"
+    assert c["Ctrl+Shift+Right"] == "select.right_item"
 
 
 def test_selecting_by_item_still_works_from_its_command():
@@ -307,8 +309,11 @@ def two_equations():
     return e
 
 
-def test_align_at_equals_is_bound_where_the_table_puts_it():
-    assert chords()["Ctrl+Shift+Right"] == "format.at_eq"
+def test_align_at_equals_has_a_chord_of_our_own():
+    """Equation Editor binds none: the Format menu's fourth item is command
+    3,3 and no record in the key table names it.  With no menu bar here, a
+    command with no chord is a command nobody can reach."""
+    assert chords()["Ctrl+Shift+A"] == "format.at_eq"
 
 
 def test_align_at_equals_puts_the_signs_on_one_line():

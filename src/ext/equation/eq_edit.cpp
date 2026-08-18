@@ -1294,8 +1294,9 @@ const std::vector<Equation::Binding>& Equation::shortcuts() {
         {"Ctrl+Shift+L", "format.left",        "align left"},
         {"Ctrl+Shift+C", "format.center",      "align centre"},
         {"Ctrl+Shift+R", "format.right",       "align right"},
-        {"Ctrl+Shift+Left",  "format.center",  "align centre"},
-        {"Ctrl+Shift+Right", "format.at_eq",   "align at ="},
+        /* Align at = has NO chord in Equation Editor: the Format menu's fourth
+         * item is command 3,3 and no record binds it.  This one is ours. */
+        {"Ctrl+Shift+A", "format.at_eq",       "align at ="},
 
         /* One slot up or down, in the same group as the two above. */
         {"Ctrl+Up",      "caret.slot_up",      "previous slot"},
@@ -1311,10 +1312,20 @@ const std::vector<Equation::Binding>& Equation::shortcuts() {
         {"Ctrl+Shift+Right", "format.at_eq",   "align at ="},
         {"Ctrl+Left",    "caret.left_item",    "left one item"},
         {"Ctrl+Right",   "caret.right_item",   "right one item"},
-        /* Selecting by item keeps its commands but loses its chords: the
-         * table gives Ctrl+Shift+Left to Align Center (3,1) and
-         * Ctrl+Shift+Right to Align at = (3,3), and usability follows
-         * Equation Editor.  They were mine to begin with. */
+        /* Select by item.
+         *
+         * These went away for one commit on a misreading.  The key table
+         * groups its records by the command pair, which merges records of
+         * DIFFERENT kinds -- and read that way Ctrl+Shift+Left looked like
+         * Format's Align Center.  Read record by record it is kind 6, the
+         * navigation kind, in group 3; and group 2 is Shift+arrows selecting
+         * by character, group 1 is the bare arrows moving by character, and
+         * group 8 is Ctrl+arrows moving by item.  Group 3 is what it looks
+         * like beside those three: selecting by item.  The Align commands are
+         * kind 1 on Ctrl+Shift+L, C and R, which is a different set of keys
+         * entirely. */
+        {"Ctrl+Shift+Left",  "select.left_item",  "select left one item"},
+        {"Ctrl+Shift+Right", "select.right_item", "select right one item"},
     };
 
     /* Ctrl+K and a letter: one SYMBOL.
