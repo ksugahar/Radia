@@ -46,7 +46,7 @@ public:
         /* Templates — decorations */
         kDecoration, kBraceDeco,
         /* Templates — special */
-        kDirac, kLim,
+        kDirac, kLim, kPhantom,
         /* LaTeX-specific (only produced by LaTeX parser) */
         kFunction, kText, kMathbf, kGroup, kPrime, kDegree, kOverset,
         /* Sentinel for RM char */
@@ -249,6 +249,21 @@ public:
     void accept(NodeVisitor& v) override;
 };
 
+/* \phantom: the room something would take, with nothing in it.
+ *
+ * Used to line one line of an equation up with another, and to reserve space
+ * beside a tall thing so a script clears it.  \hphantom keeps only the width
+ * and \vphantom only the height, which is what each is for. */
+class PhantomNode : public Node {
+public:
+    NodeList content;
+    bool keepWidth = true;
+    bool keepHeight = true;
+
+    PhantomNode() : Node(kPhantom) {}
+    void accept(NodeVisitor& v) override;
+};
+
 class BraceDecoNode : public Node {
 public:
     int selector = 0;       /* tmUHBRACE or tmLHBRACE */
@@ -371,6 +386,7 @@ public:
     virtual void visit(BigOpNode&) = 0;
     virtual void visit(DecorationNode&) = 0;
     virtual void visit(BraceDecoNode&) = 0;
+    virtual void visit(PhantomNode&) = 0;
     virtual void visit(DiracNode&) = 0;
     virtual void visit(LimNode&) = 0;
     virtual void visit(FunctionNode&) = 0;

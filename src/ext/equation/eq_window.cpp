@@ -75,11 +75,25 @@ std::string narrow(const std::wstring& w) {
 /* ---- the palette bar ---------------------------------------------------- */
 
 const wchar_t* kPopupClass = L"Eqnedt64Palette";
-const int kBtnW = 46, kBtnH = 24;      /* device-independent pixels */
-const int kCellW = 34, kCellH = 30;
-const int kBarPad = 3;
-const double kBarPt = 9.0;             /* type size inside a button   */
-const double kCellPt = 12.0;           /* type size inside a cell     */
+
+/* Half again the size Equation Editor drew its bar at.
+ *
+ * Its palette was designed for a 96 dpi CRT and a 14-inch screen, and the
+ * samples in it are EQUATIONS -- a fraction with two slots, a matrix with
+ * four -- drawn at 9 and 12 point in a 34-pixel cell.  On a modern display
+ * that is a smudge you have to lean towards.  Everything about the bar scales
+ * together, the type inside the buttons with the buttons, so the proportions
+ * are the ones that were there and only the reading distance changes.
+ *
+ * This multiplies the DPI scaling rather than replacing it: a 150 % display
+ * still gets 150 % of this. */
+const double kPaletteScale = 1.5;
+
+const int kBtnW = int(46 * kPaletteScale), kBtnH = int(24 * kPaletteScale);
+const int kCellW = int(34 * kPaletteScale), kCellH = int(30 * kPaletteScale);
+const int kBarPad = int(3 * kPaletteScale);
+const double kBarPt = 9.0 * kPaletteScale;    /* type size inside a button */
+const double kCellPt = 12.0 * kPaletteScale;  /* type size inside a cell   */
 
 /* How much room an empty slot takes on screen.  A template nobody has typed
  * into has no extent of its own, so without this a fresh fraction is a bar
