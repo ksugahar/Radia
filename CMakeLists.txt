@@ -1085,6 +1085,11 @@ if(WIN32)
 		${EQUATION_DIR}/mtef_mathml.cpp
 		${EQUATION_DIR}/mtef_svg.cpp
 		${EQUATION_DIR}/mtef_gdi.cpp
+		# The OpenType MATH table reader.  The layout has read the font's own
+		# constants since it stopped guessing at them, so leaving this out of
+		# the window's own target made the window the one thing that would not
+		# link -- and the .pyd next to it, which does list it, kept building.
+		${EQUATION_DIR}/math_font.cpp
 	)
 
 	target_include_directories(eqnedt64 PRIVATE ${EQUATION_DIR})
