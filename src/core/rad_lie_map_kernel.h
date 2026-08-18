@@ -41,6 +41,42 @@ namespace rad_lie {
 // Throws std::invalid_argument on malformed inputs, on a reference-orbit
 // gate violation ("reference orbit is not a Hamiltonian fixed trajectory
 // ..."), and on the step-cap overflow, mirroring the Python messages.
+// Fill the (6,6) row-major canonical Poisson matrix of the Radia
+// static-magnet convention: {x,px}=+1, {y,py}=+1, {zeta,delta}=-1.
+void CanonicalPoissonMatrix6(double* out);
+
+// Diagnostics of the fourth-order Dragt-Finn factorization: generator
+// symmetry defects, the relative reconstruction error, and the formal
+// symplectic residuals (constant/linear/quadratic/cubic coefficients of
+// D M^T J D M - J) of the raw and the reconstructed map.
+struct DragtFinnDiagnostics {
+    double f3_symmetry_defect = 0.0;
+    double f4_symmetry_defect = 0.0;
+    double f5_symmetry_defect = 0.0;
+    double relative_reconstruction_error = 0.0;
+    double raw_residual[4] = {0.0, 0.0, 0.0, 0.0};
+    double reconstructed_residual[4] = {0.0, 0.0, 0.0, 0.0};
+};
+
+// Value path of dragt_finn_factorize_fourth_order: extract the f3/f4/f5
+// generators of the factorial R/T/U/V map, symplectically reconstruct
+// T/U/V, and report the diagnostics.  All arrays are row-major; R (6,6),
+// T (6,6,6), U (6^4), V (6^5), poisson (6,6).  Throws
+// std::invalid_argument when R is singular.
+void DragtFinnFactorizeFourthOrder(
+    const double* R,
+    const double* T,
+    const double* U,
+    const double* V,
+    const double* poisson,
+    double* f3_out,
+    double* f4_out,
+    double* f5_out,
+    double* T_reconstructed_out,
+    double* U_reconstructed_out,
+    double* V_reconstructed_out,
+    DragtFinnDiagnostics* diagnostics);
+
 void LieMapTensorsFromSpolyArrays(
     const double* Ay,
     const double* As,

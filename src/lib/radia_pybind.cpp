@@ -2833,6 +2833,88 @@ PYBIND11_MODULE(_radia_pybind, m) {
        "degree-5 jets, nonautonomous stage RK4, sequential composition); "
        "returns (R, T, U, V, per-segment worst-stage H1, max |H1|).");
 
+    m.def("lie_dragt_finn_factorize", [](
+            py::array_t<double, py::array::c_style | py::array::forcecast> R,
+            py::array_t<double, py::array::c_style | py::array::forcecast> T,
+            py::array_t<double, py::array::c_style | py::array::forcecast> U,
+            py::array_t<double, py::array::c_style | py::array::forcecast> V,
+            py::array_t<double, py::array::c_style | py::array::forcecast> poisson) {
+        auto expect_rank = [](const py::buffer_info& info, int rank,
+                              const char* name) {
+            if (info.ndim != rank)
+                throw std::runtime_error(
+                    std::string("lie_dragt_finn_factorize: ") + name
+                    + " has the wrong rank");
+            for (py::ssize_t axis = 0; axis < info.ndim; ++axis)
+                if (info.shape[axis] != 6)
+                    throw std::runtime_error(
+                        std::string("lie_dragt_finn_factorize: ") + name
+                        + " axes must all have extent 6");
+        };
+        auto R_info = R.request();        expect_rank(R_info, 2, "R");
+        auto T_info = T.request();        expect_rank(T_info, 3, "T");
+        auto U_info = U.request();        expect_rank(U_info, 4, "U");
+        auto V_info = V.request();        expect_rank(V_info, 5, "V");
+        auto poisson_info = poisson.request();
+        expect_rank(poisson_info, 2, "poisson");
+        py::array_t<double> f3({py::ssize_t(6), py::ssize_t(6), py::ssize_t(6)});
+        py::array_t<double> f4(
+            {py::ssize_t(6), py::ssize_t(6), py::ssize_t(6), py::ssize_t(6)});
+        py::array_t<double> f5(
+            {py::ssize_t(6), py::ssize_t(6), py::ssize_t(6), py::ssize_t(6),
+             py::ssize_t(6)});
+        py::array_t<double> T_recon(
+            {py::ssize_t(6), py::ssize_t(6), py::ssize_t(6)});
+        py::array_t<double> U_recon(
+            {py::ssize_t(6), py::ssize_t(6), py::ssize_t(6), py::ssize_t(6)});
+        py::array_t<double> V_recon(
+            {py::ssize_t(6), py::ssize_t(6), py::ssize_t(6), py::ssize_t(6),
+             py::ssize_t(6)});
+        double* f3_ptr = static_cast<double*>(f3.request().ptr);
+        double* f4_ptr = static_cast<double*>(f4.request().ptr);
+        double* f5_ptr = static_cast<double*>(f5.request().ptr);
+        double* T_ptr = static_cast<double*>(T_recon.request().ptr);
+        double* U_ptr = static_cast<double*>(U_recon.request().ptr);
+        double* V_ptr = static_cast<double*>(V_recon.request().ptr);
+        rad_lie::DragtFinnDiagnostics diagnostics;
+        {
+            py::gil_scoped_release release;
+            rad_lie::DragtFinnFactorizeFourthOrder(
+                static_cast<const double*>(R_info.ptr),
+                static_cast<const double*>(T_info.ptr),
+                static_cast<const double*>(U_info.ptr),
+                static_cast<const double*>(V_info.ptr),
+                static_cast<const double*>(poisson_info.ptr),
+                f3_ptr, f4_ptr, f5_ptr, T_ptr, U_ptr, V_ptr, &diagnostics);
+        }
+        py::dict result;
+        result["f3"] = f3;
+        result["f4"] = f4;
+        result["f5"] = f5;
+        result["T"] = T_recon;
+        result["U"] = U_recon;
+        result["V"] = V_recon;
+        result["f3_symmetry_defect"] = diagnostics.f3_symmetry_defect;
+        result["f4_symmetry_defect"] = diagnostics.f4_symmetry_defect;
+        result["f5_symmetry_defect"] = diagnostics.f5_symmetry_defect;
+        result["relative_reconstruction_error"] =
+            diagnostics.relative_reconstruction_error;
+        result["raw_residual"] = py::make_tuple(
+            diagnostics.raw_residual[0], diagnostics.raw_residual[1],
+            diagnostics.raw_residual[2], diagnostics.raw_residual[3]);
+        result["reconstructed_residual"] = py::make_tuple(
+            diagnostics.reconstructed_residual[0],
+            diagnostics.reconstructed_residual[1],
+            diagnostics.reconstructed_residual[2],
+            diagnostics.reconstructed_residual[3]);
+        return result;
+    }, py::arg("R"), py::arg("T"), py::arg("U"), py::arg("V"),
+       py::arg("poisson"),
+       "Value path of the fourth-order Dragt-Finn factorization: f3/f4/f5 "
+       "generators, symplectically reconstructed T/U/V, generator symmetry "
+       "defects, relative reconstruction error, and the formal symplectic "
+       "residual coefficients of the raw and reconstructed maps.");
+
     m.def("track_reference_orbit_native", [](
             py::object iron_evaluator,
             double iron_scale,

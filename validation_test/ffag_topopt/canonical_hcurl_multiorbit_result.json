@@ -12,16 +12,16 @@
       "a_rk_vs_b_rk": 8.506189737359643e-06,
       "lie_vs_b_rk": 3.6763007862772703e-06,
       "stage_timings_s": {
-        "orbit_track": 10.64,
-        "monitor_chain": 1.7,
-        "fit_cloud": 5.02,
+        "orbit_track": 10.79,
+        "monitor_chain": 1.67,
+        "fit_cloud": 5.04,
         "fit_ls": 0.06,
-        "audit": 5.03,
-        "lie": 0.12,
-        "a_rk": 1.74,
+        "audit": 5.09,
+        "lie": 0.1,
+        "a_rk": 1.75,
         "b_rk": 7.97
       },
-      "runtime_s": 46.237422599995625
+      "runtime_s": 46.59713859999465
     },
     {
       "offset_mm": -4.0,
@@ -34,16 +34,16 @@
       "a_rk_vs_b_rk": 7.668177790698622e-06,
       "lie_vs_b_rk": 1.5823467442897202e-07,
       "stage_timings_s": {
-        "orbit_track": 10.68,
-        "monitor_chain": 1.77,
-        "fit_cloud": 5.12,
+        "orbit_track": 10.7,
+        "monitor_chain": 1.78,
+        "fit_cloud": 5.16,
         "fit_ls": 0.06,
-        "audit": 5.17,
-        "lie": 0.12,
-        "a_rk": 1.85,
-        "b_rk": 6.23
+        "audit": 5.28,
+        "lie": 0.1,
+        "a_rk": 1.88,
+        "b_rk": 6.34
       },
-      "runtime_s": 31.01048529999389
+      "runtime_s": 31.30513780000183
     },
     {
       "offset_mm": 0.0,
@@ -56,16 +56,16 @@
       "a_rk_vs_b_rk": 1.9153902907848366e-06,
       "lie_vs_b_rk": 7.091913197790258e-08,
       "stage_timings_s": {
-        "orbit_track": 10.72,
+        "orbit_track": 11.09,
         "monitor_chain": 1.82,
-        "fit_cloud": 5.24,
+        "fit_cloud": 5.26,
         "fit_ls": 0.06,
-        "audit": 5.28,
-        "lie": 0.11,
-        "a_rk": 1.78,
-        "b_rk": 7.17
+        "audit": 5.26,
+        "lie": 0.1,
+        "a_rk": 1.77,
+        "b_rk": 7.22
       },
-      "runtime_s": 32.19184040000255
+      "runtime_s": 32.58862229999795
     },
     {
       "offset_mm": 4.0,
@@ -78,16 +78,16 @@
       "a_rk_vs_b_rk": 1.17001016127047e-06,
       "lie_vs_b_rk": 1.5864970284284324e-07,
       "stage_timings_s": {
-        "orbit_track": 10.71,
-        "monitor_chain": 1.89,
-        "fit_cloud": 5.38,
+        "orbit_track": 10.84,
+        "monitor_chain": 1.97,
+        "fit_cloud": 5.37,
         "fit_ls": 0.06,
-        "audit": 5.4,
-        "lie": 0.12,
-        "a_rk": 1.83,
-        "b_rk": 7.24
+        "audit": 5.45,
+        "lie": 0.1,
+        "a_rk": 1.84,
+        "b_rk": 7.21
       },
-      "runtime_s": 32.61470089999784
+      "runtime_s": 32.85110909999639
     },
     {
       "offset_mm": 8.0,
@@ -100,19 +100,19 @@
       "a_rk_vs_b_rk": 1.029523888258256e-05,
       "lie_vs_b_rk": 3.74656942730094e-06,
       "stage_timings_s": {
-        "orbit_track": 10.79,
-        "monitor_chain": 1.89,
-        "fit_cloud": 5.5,
+        "orbit_track": 10.99,
+        "monitor_chain": 2.03,
+        "fit_cloud": 5.67,
         "fit_ls": 0.06,
-        "audit": 5.49,
-        "lie": 0.12,
-        "a_rk": 1.66,
+        "audit": 5.99,
+        "lie": 0.1,
+        "a_rk": 1.71,
         "b_rk": 6.75
       },
-      "runtime_s": 32.25551980000455
+      "runtime_s": 33.304813199996715
     }
   ],
-  "generated_at_utc": "2026-08-18T13:02:12.862142+00:00",
+  "generated_at_utc": "2026-08-18T14:41:32.594124+00:00",
   "hostname": "lab",
   "arguments": {
     "iron_maxh": 0.02,
