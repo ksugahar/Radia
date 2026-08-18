@@ -1,0 +1,58 @@
+% Ask TeX for the exact size of each box it sets, so the comparison is against
+% numbers rather than against a picture of numbers.
+%
+% lmodern, because that is what this editor now sets in: comparing against
+% symbols; Computer Modern would make every width differ for a reason that has
+% nothing to do with layout.
+\documentclass[12pt]{article}
+\usepackage{unicode-math}
+\setmathfont{Latin Modern Math}
+\usepackage{amsmath}
+\pagestyle{empty}
+\begin{document}
+
+\newwrite\out
+\immediate\openout\out=dims.txt
+
+% name, then the maths.  wd/ht/dp are width, height above the baseline and
+% depth below it, in points.
+\def\M#1#2{%
+  \setbox0=\hbox{$\displaystyle#2$}%
+  \immediate\write\out{#1 \the\wd0\space \the\ht0\space \the\dp0}%
+}
+
+\M{x}{x}
+\M{ab}{ab}
+\M{abc}{abc}
+
+\M{frac}{\frac{a}{b}}
+\M{frac_wide}{\frac{abc}{d}}
+\M{frac_nested}{\frac{\frac{p}{q}}{c}}
+\M{frac_nested2}{\frac{\frac{\frac{1}{2}}{3}}{4}}
+
+\M{sqrt2}{\sqrt{2}}
+\M{sqrt_frac}{\sqrt{\frac{a}{b}}}
+\M{sqrt_deep}{\sqrt{\frac{\frac{a}{b}}{c}}}
+\M{root3}{\sqrt[3]{x}}
+
+\M{sup}{x^{2}}
+\M{sub}{x_{i}}
+\M{subsup}{x_{i}^{2}}
+\M{sup_sup}{x^{y^{z}}}
+
+\M{int}{\int_{0}^{T}}
+\M{int_f}{\int_{0}^{T}f}
+\M{sum}{\sum_{n=1}^{N}}
+\M{oint}{\oint_{C}}
+
+\M{plus}{a+b}
+\M{eq}{a=b}
+\M{comma}{a,b}
+\M{paren}{a(b)}
+\M{times}{a*b}
+
+\immediate\closeout\out
+\mbox{}
+\end{document}
+
+
