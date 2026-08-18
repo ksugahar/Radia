@@ -327,10 +327,22 @@ private:
         size_t save = p_;
         std::string cmd = read_command();
 
+        /* A style switch IS a size marker: everything after it in the group is
+         * set at that size, which is what SizeNode means.  Reading them back
+         * is what lets the Size menu survive a save. */
+        if (cmd == "\\scriptstyle" || cmd == "\\scriptscriptstyle" ||
+            cmd == "\\displaystyle") {
+            auto sz = std::make_unique<SizeNode>();
+            sz->sizeType = (cmd == "\\scriptstyle") ? SIZETYPE_SUB
+                         : (cmd == "\\displaystyle") ? SIZETYPE_FULL
+                                                                : SIZETYPE_SUB2;
+            return sz;
+        }
+
         /* Spacing and layout commands carry no glyph. */
         if (cmd == "\\," || cmd == "\\;" || cmd == "\\:" || cmd == "\\!" ||
             cmd == "\\ " || cmd == "\\quad" || cmd == "\\qquad" ||
-            cmd == "\\displaystyle" || cmd == "\\textstyle" ||
+            cmd == "\\textstyle" ||
             cmd == "\\limits" || cmd == "\\nolimits" || cmd == "\\left" ||
             cmd == "\\right") {
             if (cmd == "\\left")  { p_ = save; return parse_fence(); }
@@ -587,11 +599,27 @@ private:
             else                                       pile->halign = 1;
             if (pile->halign != 1) pile->ncols = 1;
         }
-        for (auto& r : rows) {
-            auto line = std::make_unique<LineNode>();
-            for (auto& cell : r)
-                for (auto& n : cell) line->children.push_back(std::move(n));
-            pile->lines.push_back(std::move(line));
+        if (env == "aligned" && pile->halign == 1) {
+            /* A real two-column alignment keeps its cells: `lines` is the
+             * grid in row-major order, which is the shape the layout already
+             * reads it in, and it means Tab walks the cells the way it walks a
+             * matrix's.  Flattening each row into one line -- which is what
+             * happened before -- threw the alignment point away and left the
+             * & with nothing to line up. */
+            for (auto& r : rows) {
+                for (size_t c = 0; c < cols; ++c) {
+                    auto cell = std::make_unique<LineNode>();
+                    if (c < r.size()) cell->children = std::move(r[c]);
+                    pile->lines.push_back(std::move(cell));
+                }
+            }
+        } else {
+            for (auto& r : rows) {
+                auto line = std::make_unique<LineNode>();
+                for (auto& cell : r)
+                    for (auto& n : cell) line->children.push_back(std::move(n));
+                pile->lines.push_back(std::move(line));
+            }
         }
         if (env != "cases") return pile;
         auto f = std::make_unique<FenceNode>();

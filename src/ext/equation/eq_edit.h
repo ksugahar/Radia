@@ -66,6 +66,8 @@ public:
     /* Enter: break the line here, making a stack of two if there is not one
      * already. */
     bool newline();
+    /* One slot of the enclosing node: Ctrl+Up / Ctrl+Down. */
+    bool move_slot(int dir);
     void move_home();
     void move_end();
 
