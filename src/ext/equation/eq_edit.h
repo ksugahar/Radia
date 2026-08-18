@@ -60,6 +60,9 @@ public:
     bool next_slot();      /* Tab      */
     bool prev_slot();      /* Shift+Tab */
     bool move_out();       /* leave the innermost slot */
+    /* One whole item, without stepping inside it: Ctrl+Left and Ctrl+Right.
+     * `extend` makes it a selection instead. */
+    bool move_item(int dir, bool extend);
     void move_home();
     void move_end();
 

@@ -104,12 +104,29 @@ def test_a_two_step_chord_is_two_presses():
                                   (VK["S"], False, False, False)]
 
 
-def test_the_two_step_chords_share_a_prefix():
-    """Summation, product and matrix all hang off Ctrl+T, so the window has to
-    hold that first press and wait rather than act on it."""
+def test_the_two_step_chords_hang_off_a_small_number_of_prefixes():
+    """Templates hang off Ctrl+T and the Greek alphabet off Ctrl+G, so the
+    window has to hold either first press and wait rather than act on it.
+
+    Two prefixes, not one: this test used to pin Ctrl+T as the only one, which
+    was true when the only two-step chords were summation, product and matrix.
+    Keeping the set small is the thing worth guarding -- every prefix is a key
+    that does nothing on its own, and a person who presses it by accident is
+    left waiting."""
     prefixes = {steps(c)[0] for c, _cmd, _lbl in Equation.shortcuts()
                 if ", " in c}
-    assert prefixes == {(VK["T"], True, False, False)}
+    assert prefixes == {(VK["T"], True, False, False),
+                        (VK["G"], True, False, False)}
+
+
+def test_the_second_key_of_a_greek_chord_carries_the_shift():
+    """Ctrl+G then A is alpha; Ctrl+G then Shift+A is capital alpha.  The
+    shift belongs to the SECOND press, which is the part a chord table can get
+    wrong without anything else noticing."""
+    assert steps("Ctrl+G, A") == [(VK["G"], True, False, False),
+                                  (VK["A"], False, False, False)]
+    assert steps("Ctrl+G, Shift+A") == [(VK["G"], True, False, False),
+                                        (VK["A"], False, True, False)]
 
 
 # ---- named keys --------------------------------------------------------------
