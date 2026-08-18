@@ -34,14 +34,7 @@ std::string elem(const char* name, const std::string& inner) {
     return std::string("<") + name + '>' + inner + "</" + name + '>';
 }
 
-std::string utf8_of(uint32_t cp) {
-    std::string s;
-    if (cp < 0x80) s += char(cp);
-    else if (cp < 0x800) { s += char(0xC0 | (cp >> 6)); s += char(0x80 | (cp & 0x3F)); }
-    else { s += char(0xE0 | (cp >> 12)); s += char(0x80 | ((cp >> 6) & 0x3F));
-           s += char(0x80 | (cp & 0x3F)); }
-    return s;
-}
+std::string utf8_of(uint32_t cp) { return mtef_utf8_of(cp); }
 
 bool all_digits(const std::string& s) {
     if (s.empty()) return false;

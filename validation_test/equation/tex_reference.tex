@@ -1,13 +1,16 @@
 % Ask TeX for the exact size of each box it sets, so the comparison is against
 % numbers rather than against a picture of numbers.
 %
-% lmodern, because that is what this editor now sets in: comparing against
-% symbols; Computer Modern would make every width differ for a reason that has
-% nothing to do with layout.
+% XeLaTeX with unicode-math and Latin Modern Math, because that is the FONT
+% this editor sets in -- the same OpenType file, read through the same MATH
+% table.  \usepackage{lmodern} looks like the same typeface and is not: it
+% sends TeX to the Type1 lmex10 extension font, whose radicals and large
+% operators are built from different pieces at different sizes.  Comparing
+% against it reported an 18.5% error in the radical that was the reference's,
+% not ours, and a "correction" made from that number had to be undone.
 \documentclass[12pt]{article}
 \usepackage{unicode-math}
 \setmathfont{Latin Modern Math}
-\usepackage{amsmath}
 \pagestyle{empty}
 \begin{document}
 
@@ -50,9 +53,25 @@
 \M{comma}{a,b}
 \M{paren}{a(b)}
 \M{times}{a*b}
+\M{fence}{\left(\frac{1}{2}\right)}
 
+% --- the pieces, so a disagreement can be attributed rather than guessed at --
+\M{s2}{\scriptstyle 2}
+\M{si}{\scriptstyle i}
+\M{sn1}{\scriptstyle n=1}
+\M{sN}{\scriptstyle N}
+\M{ssz}{\scriptscriptstyle z}
+\M{intg}{\int}
+\M{sumg}{\sum}
+\M{ointg}{\oint}
+\M{sqrtg}{\sqrt{\vphantom{2}}}
+
+\immediate\write\out{QUADtext 	heontdimen6	extfont2\space 0pt 0pt}
+\immediate\write\out{QUADscript 	heontdimen6\scriptfont2\space 0pt 0pt}
+\immediate\write\out{QUADss 	heontdimen6\scriptscriptfont2\space 0pt 0pt}
+\immediate\write\out{SCRIPTSPACE 	he\scriptspace\space 0pt 0pt}
+\immediate\write\out{NULLDELIM 	he
+ulldelimiterspace\space 0pt 0pt}
 \immediate\closeout\out
 \mbox{}
 \end{document}
-
-

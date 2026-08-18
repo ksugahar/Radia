@@ -234,6 +234,37 @@ static inline int mtef_is_decoration(int sel) {
 
 #ifdef __cplusplus
 } /* extern "C" */
+
+#include <string>
+
+/* One code point as UTF-8.
+ *
+ * There were five copies of this, in the SVG, MathML, RTF, OMML and editing
+ * layers, and every one of them stopped at three bytes.  That was invisible
+ * for as long as nothing past U+FFFF was set -- and then the letters started
+ * coming from the maths font, whose italic alphabet lives at U+1D400, and
+ * every variable in every output format became three bytes of nonsense at
+ * once.  Five copies of a function is five places for the same bug to hide,
+ * so there is now one. */
+inline std::string mtef_utf8_of(unsigned int cp) {
+    std::string s;
+    if (cp < 0x80) {
+        s += char(cp);
+    } else if (cp < 0x800) {
+        s += char(0xC0 | (cp >> 6));
+        s += char(0x80 | (cp & 0x3F));
+    } else if (cp < 0x10000) {
+        s += char(0xE0 | (cp >> 12));
+        s += char(0x80 | ((cp >> 6) & 0x3F));
+        s += char(0x80 | (cp & 0x3F));
+    } else {
+        s += char(0xF0 | (cp >> 18));
+        s += char(0x80 | ((cp >> 12) & 0x3F));
+        s += char(0x80 | ((cp >> 6) & 0x3F));
+        s += char(0x80 | (cp & 0x3F));
+    }
+    return s;
+}
 #endif
 
 #endif /* MTEF_COMMON_H */
