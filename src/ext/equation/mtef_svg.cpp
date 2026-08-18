@@ -936,7 +936,7 @@ private:
                 const int cols = std::max(1, pl.ncols);
                 const int rows = int((pl.lines.size() + cols - 1) / cols);
                 return layout_grid(pl.lines, rows, cols, sizePt,
-                                   listPath, child);
+                                   listPath, child, pl.halign);
             }
             case Node::kDecoration: {
                 const auto& d = static_cast<const DecorationNode&>(n);
@@ -1448,7 +1448,8 @@ ulldelimiterspace, 1.2 pt -- so the BOX is wider than the parts,
      * its row and collide with the next, which is a well-known wart of array
      * and not worth reproducing. */
     Layout layout_grid(const NodeList& cells, int rows, int cols,
-                       double sizePt, const std::string& lp, int c) {
+                       double sizePt, const std::string& lp, int c,
+                       int halign = 0) {
         Layout out;
         if (rows <= 0 || cols <= 0) return out;
 
@@ -1498,11 +1499,22 @@ ulldelimiterspace, 1.2 pt -- so the BOX is wider than the parts,
         double w = 0;
         for (int k = 0; k < cols; ++k) w += colW[k] + (k ? colGap : 0.0);
 
+        /* Where a cell sits in its column.  A matrix centres; a stack of
+         * lines can be asked for flush left or flush right, which is the
+         * Format menu's Align Left / Center / Right. */
+        auto offset = [&](double colWidth, double cellWidth) {
+            switch (halign) {
+                case 2:  return 0.0;                            /* left  */
+                case 3:  return colWidth - cellWidth;           /* right */
+                default: return (colWidth - cellWidth) / 2.0;   /* centre */
+            }
+        };
+
         for (int r = 0; r < rows; ++r) {
             double x = 0;
             for (int k = 0; k < cols; ++k) {
                 const size_t i = size_t(r) * cols + k;
-                out.absorb(cell[i], x + (colW[k] - cell[i].w) / 2.0,
+                out.absorb(cell[i], x + offset(colW[k], cell[i].w),
                            top + rowY[r]);
                 x += colW[k] + colGap;
             }

@@ -201,3 +201,75 @@ def test_the_stack_is_taller_than_one_line():
 
 def test_enter_is_bound():
     assert chords()["Enter"] == "edit.newline"
+
+
+# ---- Format > Align ---------------------------------------------------------
+#
+# The chords are Equation Editor's own, read off the same key table: command
+# 3,0 is Ctrl+Shift+L, 3,1 is Ctrl+Shift+C, 3,2 is Ctrl+Shift+R, and group 3
+# is the Format menu.  The group numbering was confirmed independently -- the
+# Style menu matches all six of its chords and the Edit menu all four of its.
+
+
+def two_lines():
+    e = equation.Equation()
+    e.insert_text("a+b")
+    e.command("edit.newline")
+    e.insert_text("c")
+    return e
+
+
+def first_x_of_each_line(latex):
+    import re
+    st = equation.SvgStyle()
+    st.padding = 0.0
+    svg = equation.tex_to_svg(latex, st)
+    return [float(m) for m in re.findall(r'<text[^>]*x="([-0-9.]+)"', svg)]
+
+
+def test_the_three_align_chords_are_bound():
+    c = chords()
+    assert c["Ctrl+Shift+L"] == "format.left"
+    assert c["Ctrl+Shift+C"] == "format.center"
+    assert c["Ctrl+Shift+R"] == "format.right"
+
+
+@pytest.mark.parametrize("how,env", [
+    ("center", "gathered"), ("left", "aligned"), ("right", "aligned"),
+])
+def test_aligning_a_stack_reaches_the_latex(how, env):
+    e = two_lines()
+    assert e.command("format." + how)
+    assert env in e.latex()
+
+
+def test_left_and_right_survive_being_saved_and_read_back():
+    """Flush left and flush right have no environment of their own, so they
+    are written as an `aligned` with the content in one column.  A `gathered`
+    would come back centred, which is the whole reason for doing it that way."""
+    for how in ("left", "center", "right"):
+        e = two_lines()
+        e.command("format." + how)
+        text = e.latex()
+        back = equation.Equation()
+        back.load_latex(text)
+        assert back.latex() == text, how
+
+
+def test_the_short_line_actually_moves():
+    """Not just the markup -- the drawing."""
+    pos = {}
+    for how in ("left", "center", "right"):
+        e = two_lines()
+        e.command("format." + how)
+        pos[how] = first_x_of_each_line(e.latex())[-1]
+    assert pos["left"] < pos["center"] < pos["right"], pos
+    assert pos["left"] == 0.0
+
+
+def test_aligning_outside_a_stack_says_so():
+    """There is nothing to align, and returning false is better than silently
+    doing nothing to the whole equation."""
+    e = equation.Equation()
+    e.insert_text("a+b")
+    assert not e.command("format.left")
