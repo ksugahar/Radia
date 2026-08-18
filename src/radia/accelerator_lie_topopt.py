@@ -27,7 +27,7 @@ are not fabricated by this module.
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
-from itertools import permutations
+from itertools import permutations, product
 from math import factorial
 
 import numpy as np
@@ -41,6 +41,7 @@ from .accelerator_magnet_topopt import (
 from .accelerator_taylor_topopt import (
     THIRD_ORDER_MULTIPOLE_COMPONENTS,
     PlanarThirdOrderTaylorMapObjective,
+    _cached_einsum,
     _compose_third_order,
     _cross_second_order,
     _cross_second_order_tangent,
@@ -80,6 +81,53 @@ def canonical_poisson_matrix() -> np.ndarray:
 
 
 _POISSON = canonical_poisson_matrix()
+
+_DEGREE5_BASIS_CACHE: list = []
+
+
+def _degree5_monomial_basis():
+    """Monomial basis of total degree <= 5 in the six phase-space variables.
+
+    Returns ``(exponent_keys, exponent_index, exponent_degrees, pair_left,
+    pair_right, pair_out, basis_size)`` where the pair arrays enumerate every
+    ordered product of basis monomials whose total degree stays within five
+    (the same truncation the Hamiltonian jet applies).  Computed once per
+    process; the truncated polynomial engine of
+    :func:`_canonical_vector_potential_hamiltonian_jet` gathers and
+    ``bincount``-scatters through these tables instead of looping over
+    monomial dictionaries in Python.
+    """
+    if _DEGREE5_BASIS_CACHE:
+        return _DEGREE5_BASIS_CACHE[0]
+    exponent_keys = tuple(sorted(
+        (key for key in product(range(6), repeat=6) if sum(key) <= 5),
+        key=lambda key: (sum(key), key),
+    ))
+    exponent_index = {key: index for index, key in enumerate(exponent_keys)}
+    exponent_degrees = np.array([sum(key) for key in exponent_keys])
+    pair_left = []
+    pair_right = []
+    pair_out = []
+    for left_index, left_key in enumerate(exponent_keys):
+        left_degree = sum(left_key)
+        for right_index, right_key in enumerate(exponent_keys):
+            if left_degree + sum(right_key) > 5:
+                continue
+            pair_left.append(left_index)
+            pair_right.append(right_index)
+            pair_out.append(exponent_index[tuple(
+                a + b for a, b in zip(left_key, right_key))])
+    tables = (
+        exponent_keys,
+        exponent_index,
+        exponent_degrees,
+        np.asarray(pair_left),
+        np.asarray(pair_right),
+        np.asarray(pair_out),
+        len(exponent_keys),
+    )
+    _DEGREE5_BASIS_CACHE.append(tables)
+    return tables
 
 
 def _unpack_fourth_order_multipoles(
@@ -163,6 +211,7 @@ def _canonical_vector_potential_hamiltonian_jet(
     curvature_sign=1.0,
     reference_beta=1.0,
     longitudinal_component="physical",
+    with_parameter_tangents=True,
 ) -> CanonicalVectorPotentialHamiltonianJet:
     """Internal exact ``s``-Hamiltonian expansion of a certified HCurl jet.
 
@@ -227,51 +276,52 @@ def _canonical_vector_potential_hamiltonian_jet(
         for name in ("Ay", "As")
         for x_power, y_power in powers
     )
-    parameter_count = len(parameter_names)
-    zero_key = (0, 0, 0, 0, 0, 0)
+    local_parameter_count = len(parameter_names)
+    parameter_count = local_parameter_count if with_parameter_tangents else 0
+    (
+        exponent_keys,
+        exponent_index,
+        exponent_degrees,
+        pair_left,
+        pair_right,
+        pair_out,
+        basis_size,
+    ) = _degree5_monomial_basis()
+
+    # Truncated polynomials in the six phase-space variables live on the
+    # shared monomial basis as (values, tangents) array pairs; products go
+    # through the precomputed pair tables (identical degree-5 truncation to
+    # the historical monomial-dictionary engine, ~300x faster).  With
+    # with_parameter_tangents=False the tangent width is zero and the
+    # forward-AD arithmetic vanishes entirely.
 
     def polynomial_constant(value):
-        return {zero_key: (float(value), np.zeros(parameter_count))}
+        values = np.zeros(basis_size)
+        values[0] = float(value)
+        return values, np.zeros((basis_size, parameter_count))
 
     def polynomial_add(left, right):
-        result = {
-            key: (value, tangent.copy())
-            for key, (value, tangent) in left.items()
-        }
-        for key, (value, tangent) in right.items():
-            if key in result:
-                old_value, old_tangent = result[key]
-                result[key] = (old_value + value, old_tangent + tangent)
-            else:
-                result[key] = (value, tangent.copy())
-        return result
+        return left[0] + right[0], left[1] + right[1]
 
     def polynomial_scale(polynomial, scale):
-        return {
-            key: (float(scale) * value, float(scale) * tangent)
-            for key, (value, tangent) in polynomial.items()
-        }
+        return float(scale) * polynomial[0], float(scale) * polynomial[1]
 
     def polynomial_multiply(left, right):
-        result = {}
-        for left_key, (left_value, left_tangent) in left.items():
-            for right_key, (right_value, right_tangent) in right.items():
-                key = tuple(a + b for a, b in zip(left_key, right_key, strict=True))
-                if sum(key) > 5:
-                    continue
-                value = left_value * right_value
-                tangent = (
-                    left_tangent * right_value + left_value * right_tangent
-                )
-                if key in result:
-                    old_value, old_tangent = result[key]
-                    result[key] = (old_value + value, old_tangent + tangent)
-                else:
-                    result[key] = (value, tangent.copy())
-        return result
+        products = left[0][pair_left] * right[0][pair_right]
+        values = np.bincount(pair_out, weights=products, minlength=basis_size)
+        if parameter_count:
+            tangent_products = (
+                left[1][pair_left] * right[0][pair_right, None]
+                + left[0][pair_left, None] * right[1][pair_right]
+            )
+            tangents = np.zeros((basis_size, parameter_count))
+            np.add.at(tangents, pair_out, tangent_products)
+        else:
+            tangents = np.zeros((basis_size, 0))
+        return values, tangents
 
     def polynomial_sqrt(polynomial):
-        constant = polynomial[zero_key][0]
+        constant = polynomial[0][0]
         if constant <= 0.0:
             raise ValueError("Hamiltonian square-root expansion point must be positive")
         remainder = polynomial_add(polynomial, polynomial_constant(-constant))
@@ -292,27 +342,25 @@ def _canonical_vector_potential_hamiltonian_jet(
     for coordinate in range(6):
         key = [0] * 6
         key[coordinate] = 1
-        variables.append({tuple(key): (1.0, np.zeros(parameter_count))})
+        values = np.zeros(basis_size)
+        values[exponent_index[tuple(key)]] = 1.0
+        variables.append((values, np.zeros((basis_size, parameter_count))))
     x_polynomial, px_polynomial, _, py_polynomial, _, delta_polynomial = variables
 
     normalization = sign / rigidity
 
-    def input_polynomial(values, parameter_offset):
-        result = polynomial_constant(0.0)
+    def input_polynomial(values_t_m, parameter_offset):
+        values = np.zeros(basis_size)
+        tangents = np.zeros((basis_size, parameter_count))
         for local_parameter, (x_power, y_power) in enumerate(powers):
-            key = (x_power, 0, y_power, 0, 0, 0)
-            tangent = np.zeros(parameter_count)
-            tangent[parameter_offset + local_parameter] = normalization
-            result = polynomial_add(
-                result,
-                {
-                    key: (
-                        normalization * float(values[x_power, y_power]),
-                        tangent,
-                    )
-                },
-            )
-        return result
+            flat_index = exponent_index[(x_power, 0, y_power, 0, 0, 0)]
+            values[flat_index] += normalization * float(
+                values_t_m[x_power, y_power])
+            if parameter_count:
+                tangents[flat_index, parameter_offset + local_parameter] = (
+                    normalization
+                )
+        return values, tangents
 
     Ay_polynomial = input_polynomial(Ay_values, 0)
     As_polynomial = input_polynomial(As_values, len(powers))
@@ -359,15 +407,25 @@ def _canonical_vector_potential_hamiltonian_jet(
             np.zeros((parameter_count, 6, 6, 6, 6, 6)),
         ),
     }
-    constant, constant_tangent = hamiltonian.get(
-        zero_key, (0.0, np.zeros(parameter_count))
-    )
+    hamiltonian_values, hamiltonian_tangents = hamiltonian
+    constant = float(hamiltonian_values[0])
+    constant_tangent = hamiltonian_tangents[0]
     if np.max(np.abs(constant_tangent), initial=0.0) > 1.0e-14:
         raise RuntimeError("gauge constants leaked into Hamiltonian AD")
     linear = np.zeros(6)
     linear_jacobian = np.zeros((parameter_count, 6))
-    for key, (coefficient, tangent) in hamiltonian.items():
-        degree = sum(key)
+    if parameter_count:
+        active = np.nonzero(
+            (hamiltonian_values != 0.0)
+            | np.any(hamiltonian_tangents != 0.0, axis=1)
+        )[0]
+    else:
+        active = np.nonzero(hamiltonian_values)[0]
+    for flat_index in active:
+        key = exponent_keys[flat_index]
+        degree = int(exponent_degrees[flat_index])
+        coefficient = float(hamiltonian_values[flat_index])
+        tangent = hamiltonian_tangents[flat_index]
         if degree == 1:
             coordinate = key.index(1)
             linear[coordinate] += coefficient
@@ -385,14 +443,14 @@ def _canonical_vector_potential_hamiltonian_jet(
     H3, dH3 = tensors[3]
     H4, dH4 = tensors[4]
     H5, dH5 = tensors[5]
-    A = np.einsum("ia,aj->ij", _POISSON, H2, optimize=True)
-    F2 = np.einsum("ia,ajk->ijk", _POISSON, H3, optimize=True)
-    F3 = np.einsum("ia,ajkl->ijkl", _POISSON, H4, optimize=True)
-    F4 = np.einsum("ia,ajklm->ijklm", _POISSON, H5, optimize=True)
-    dA = np.einsum("ia,paj->pij", _POISSON, dH2, optimize=True)
-    dF2 = np.einsum("ia,pajk->pijk", _POISSON, dH3, optimize=True)
-    dF3 = np.einsum("ia,pajkl->pijkl", _POISSON, dH4, optimize=True)
-    dF4 = np.einsum("ia,pajklm->pijklm", _POISSON, dH5, optimize=True)
+    A = _cached_einsum("ia,aj->ij", _POISSON, H2, optimize=True)
+    F2 = _cached_einsum("ia,ajk->ijk", _POISSON, H3, optimize=True)
+    F3 = _cached_einsum("ia,ajkl->ijkl", _POISSON, H4, optimize=True)
+    F4 = _cached_einsum("ia,ajklm->ijklm", _POISSON, H5, optimize=True)
+    dA = _cached_einsum("ia,paj->pij", _POISSON, dH2, optimize=True)
+    dF2 = _cached_einsum("ia,pajk->pijk", _POISSON, dH3, optimize=True)
+    dF3 = _cached_einsum("ia,pajkl->pijkl", _POISSON, dH4, optimize=True)
+    dF4 = _cached_einsum("ia,pajklm->pijklm", _POISSON, dH5, optimize=True)
     return CanonicalVectorPotentialHamiltonianJet(
         jet=CanonicalHamiltonianJet(
             H2=H2,
@@ -643,14 +701,14 @@ def canonical_body_hamiltonian_jet(
                 polynomial_tangent.real,
             )
 
-    A = np.einsum("ia,aj->ij", _POISSON, H2, optimize=True)
-    F2 = np.einsum("ia,ajk->ijk", _POISSON, H3, optimize=True)
-    F3 = np.einsum("ia,ajkl->ijkl", _POISSON, H4, optimize=True)
-    F4 = np.einsum("ia,ajklm->ijklm", _POISSON, H5, optimize=True)
-    dA = np.einsum("ia,paj->pij", _POISSON, dH2, optimize=True)
-    dF2 = np.einsum("ia,pajk->pijk", _POISSON, dH3, optimize=True)
-    dF3 = np.einsum("ia,pajkl->pijkl", _POISSON, dH4, optimize=True)
-    dF4 = np.einsum("ia,pajklm->pijklm", _POISSON, dH5, optimize=True)
+    A = _cached_einsum("ia,aj->ij", _POISSON, H2, optimize=True)
+    F2 = _cached_einsum("ia,ajk->ijk", _POISSON, H3, optimize=True)
+    F3 = _cached_einsum("ia,ajkl->ijkl", _POISSON, H4, optimize=True)
+    F4 = _cached_einsum("ia,ajklm->ijklm", _POISSON, H5, optimize=True)
+    dA = _cached_einsum("ia,paj->pij", _POISSON, dH2, optimize=True)
+    dF2 = _cached_einsum("ia,pajk->pijk", _POISSON, dH3, optimize=True)
+    dF3 = _cached_einsum("ia,pajkl->pijkl", _POISSON, dH4, optimize=True)
+    dF4 = _cached_einsum("ia,pajklm->pijklm", _POISSON, dH5, optimize=True)
 
     # C++ is the runtime numerical source of truth; the Python construction
     # above owns the analytic parameter tangents and is checked against it.
@@ -1023,18 +1081,18 @@ class DragtFinnFourthOrderFactorization:
 def _homogeneous_generator_gradient_hessian(tensor, state):
     degree = tensor.ndim
     if degree == 3:
-        gradient = 0.5 * np.einsum("ijk,j,k->i", tensor, state, state)
-        hessian = np.einsum("ijk,k->ij", tensor, state)
+        gradient = 0.5 * _cached_einsum("ijk,j,k->i", tensor, state, state)
+        hessian = _cached_einsum("ijk,k->ij", tensor, state)
     elif degree == 4:
-        gradient = np.einsum("ijkl,j,k,l->i", tensor, state, state, state) / 6.0
-        hessian = 0.5 * np.einsum("ijkl,k,l->ij", tensor, state, state)
+        gradient = _cached_einsum("ijkl,j,k,l->i", tensor, state, state, state) / 6.0
+        hessian = 0.5 * _cached_einsum("ijkl,k,l->ij", tensor, state, state)
     elif degree == 5:
         gradient = (
-            np.einsum("ijklm,j,k,l,m->i", tensor, state, state, state, state)
+            _cached_einsum("ijklm,j,k,l,m->i", tensor, state, state, state, state)
             / 24.0
         )
         hessian = (
-            np.einsum("ijklm,k,l,m->ij", tensor, state, state, state) / 6.0
+            _cached_einsum("ijklm,k,l,m->ij", tensor, state, state, state) / 6.0
         )
     else:
         raise ValueError("Lie generator tensor must have degree three, four, or five")
@@ -1223,24 +1281,24 @@ def dragt_finn_factorize_third_order(
         dU = np.zeros((0, 6, 6, 6, 6))
 
     inverse = np.linalg.inv(R)
-    dinverse = -np.einsum("ia,pab,bj->pij", inverse, dR, inverse, optimize=True)
-    normalized_T = np.einsum("ia,ajk->ijk", inverse, T, optimize=True)
-    normalized_U = np.einsum("ia,ajkl->ijkl", inverse, U, optimize=True)
-    dnormalized_T = np.einsum("pia,ajk->pijk", dinverse, T, optimize=True) + np.einsum(
+    dinverse = -_cached_einsum("ia,pab,bj->pij", inverse, dR, inverse, optimize=True)
+    normalized_T = _cached_einsum("ia,ajk->ijk", inverse, T, optimize=True)
+    normalized_U = _cached_einsum("ia,ajkl->ijkl", inverse, U, optimize=True)
+    dnormalized_T = _cached_einsum("pia,ajk->pijk", dinverse, T, optimize=True) + _cached_einsum(
         "ia,pajk->pijk", inverse, dT, optimize=True
     )
-    dnormalized_U = np.einsum(
+    dnormalized_U = _cached_einsum(
         "pia,ajkl->pijkl", dinverse, U, optimize=True
-    ) + np.einsum("ia,pajkl->pijkl", inverse, dU, optimize=True)
+    ) + _cached_einsum("ia,pajkl->pijkl", inverse, dU, optimize=True)
 
-    raw_f3 = -np.einsum("ai,ijk->ajk", _POISSON, normalized_T, optimize=True)
-    draw_f3 = -np.einsum("ai,pijk->pajk", _POISSON, dnormalized_T, optimize=True)
+    raw_f3 = -_cached_einsum("ai,ijk->ajk", _POISSON, normalized_T, optimize=True)
+    draw_f3 = -_cached_einsum("ai,pijk->pajk", _POISSON, dnormalized_T, optimize=True)
     f3 = _symmetrize_tensor(raw_f3, 3)
     df3 = _symmetrize_tensor(draw_f3, 3, parameter_axis=True)
     f3_scale = max(1.0, float(np.max(np.abs(raw_f3), initial=0.0)))
     f3_defect = float(np.max(np.abs(raw_f3 - f3), initial=0.0) / f3_scale)
-    quadratic_flow = np.einsum("ia,ajk->ijk", _POISSON, f3, optimize=True)
-    dquadratic_flow = np.einsum("ia,pajk->pijk", _POISSON, df3, optimize=True)
+    quadratic_flow = _cached_einsum("ia,ajk->ijk", _POISSON, f3, optimize=True)
+    dquadratic_flow = _cached_einsum("ia,pajk->pijk", _POISSON, df3, optimize=True)
     identity = np.eye(6)
     zero_dR = np.zeros((parameter_count, 6, 6))
     self_cubic = 0.5 * _cross_second_order(quadratic_flow, identity, quadratic_flow)
@@ -1269,26 +1327,26 @@ def dragt_finn_factorize_third_order(
         )
         + dself_cubic
     )
-    raw_f4 = -np.einsum("ai,ijkl->ajkl", _POISSON, cubic_residual, optimize=True)
-    draw_f4 = -np.einsum("ai,pijkl->pajkl", _POISSON, dcubic_residual, optimize=True)
+    raw_f4 = -_cached_einsum("ai,ijkl->ajkl", _POISSON, cubic_residual, optimize=True)
+    draw_f4 = -_cached_einsum("ai,pijkl->pajkl", _POISSON, dcubic_residual, optimize=True)
     f4 = _symmetrize_tensor(raw_f4, 4)
     df4 = _symmetrize_tensor(draw_f4, 4, parameter_axis=True)
     f4_scale = max(1.0, float(np.max(np.abs(raw_f4), initial=0.0)))
     f4_defect = float(np.max(np.abs(raw_f4 - f4), initial=0.0) / f4_scale)
-    cubic_flow = np.einsum("ia,ajkl->ijkl", _POISSON, f4, optimize=True)
-    dcubic_flow = np.einsum("ia,pajkl->pijkl", _POISSON, df4, optimize=True)
+    cubic_flow = _cached_einsum("ia,ajkl->ijkl", _POISSON, f4, optimize=True)
+    dcubic_flow = _cached_einsum("ia,pajkl->pijkl", _POISSON, df4, optimize=True)
 
     normalized_reconstructed_U = cubic_flow + self_cubic
-    reconstructed_T = np.einsum("ia,ajk->ijk", R, quadratic_flow, optimize=True)
-    reconstructed_U = np.einsum(
+    reconstructed_T = _cached_einsum("ia,ajk->ijk", R, quadratic_flow, optimize=True)
+    reconstructed_U = _cached_einsum(
         "ia,ajkl->ijkl", R, normalized_reconstructed_U, optimize=True
     )
-    dreconstructed_T = np.einsum(
+    dreconstructed_T = _cached_einsum(
         "pia,ajk->pijk", dR, quadratic_flow, optimize=True
-    ) + np.einsum("ia,pajk->pijk", R, dquadratic_flow, optimize=True)
-    dreconstructed_U = np.einsum(
+    ) + _cached_einsum("ia,pajk->pijk", R, dquadratic_flow, optimize=True)
+    dreconstructed_U = _cached_einsum(
         "pia,ajkl->pijkl", dR, normalized_reconstructed_U, optimize=True
-    ) + np.einsum(
+    ) + _cached_einsum(
         "ia,pajkl->pijkl",
         R,
         dcubic_flow + dself_cubic,
@@ -1399,9 +1457,9 @@ def _exact_linear_map_with_tangent(A_values, dA_values, lengths):
         embedded = np.zeros((parameter_count, 6, 6))
         indexes = [block * segment_count + segment for block in range(7)]
         embedded[indexes] = dlocal
-        daccumulated = np.einsum(
+        daccumulated = _cached_einsum(
             "pia,aj->pij", embedded, accumulated, optimize=True
-        ) + np.einsum("ia,paj->pij", local, daccumulated, optimize=True)
+        ) + _cached_einsum("ia,paj->pij", local, daccumulated, optimize=True)
         accumulated = local @ accumulated
     return accumulated, daccumulated
 
@@ -1409,10 +1467,10 @@ def _exact_linear_map_with_tangent(A_values, dA_values, lengths):
 def _cross_fourth_second(F2, R, U):
     """Fourth derivative from one linear and one cubic inner-map block."""
     return (
-        np.einsum("iab,aj,bklm->ijklm", F2, R, U, optimize=True)
-        + np.einsum("iab,ak,bjlm->ijklm", F2, R, U, optimize=True)
-        + np.einsum("iab,al,bjkm->ijklm", F2, R, U, optimize=True)
-        + np.einsum("iab,am,bjkl->ijklm", F2, R, U, optimize=True)
+        _cached_einsum("iab,aj,bklm->ijklm", F2, R, U, optimize=True)
+        + _cached_einsum("iab,ak,bjlm->ijklm", F2, R, U, optimize=True)
+        + _cached_einsum("iab,al,bjkm->ijklm", F2, R, U, optimize=True)
+        + _cached_einsum("iab,am,bjkl->ijklm", F2, R, U, optimize=True)
     )
 
 
@@ -1431,9 +1489,9 @@ def _cross_fourth_second_tangent(F2, R, U, dF2, dR, dU):
 def _pair_fourth_second(F2, T):
     """Fourth derivative from the three pairings of two quadratic blocks."""
     return (
-        np.einsum("iab,ajk,blm->ijklm", F2, T, T, optimize=True)
-        + np.einsum("iab,ajl,bkm->ijklm", F2, T, T, optimize=True)
-        + np.einsum("iab,ajm,bkl->ijklm", F2, T, T, optimize=True)
+        _cached_einsum("iab,ajk,blm->ijklm", F2, T, T, optimize=True)
+        + _cached_einsum("iab,ajl,bkm->ijklm", F2, T, T, optimize=True)
+        + _cached_einsum("iab,ajm,bkl->ijklm", F2, T, T, optimize=True)
     )
 
 
@@ -1443,42 +1501,42 @@ def _pair_fourth_second_tangent(F2, T, dF2, dT):
     for parameter in range(parameter_count):
         result[parameter] = (
             _pair_fourth_second(dF2[parameter], T)
-            + np.einsum(
+            + _cached_einsum(
                 "iab,ajk,blm->ijklm",
                 F2,
                 dT[parameter],
                 T,
                 optimize=True,
             )
-            + np.einsum(
+            + _cached_einsum(
                 "iab,ajk,blm->ijklm",
                 F2,
                 T,
                 dT[parameter],
                 optimize=True,
             )
-            + np.einsum(
+            + _cached_einsum(
                 "iab,ajl,bkm->ijklm",
                 F2,
                 dT[parameter],
                 T,
                 optimize=True,
             )
-            + np.einsum(
+            + _cached_einsum(
                 "iab,ajl,bkm->ijklm",
                 F2,
                 T,
                 dT[parameter],
                 optimize=True,
             )
-            + np.einsum(
+            + _cached_einsum(
                 "iab,ajm,bkl->ijklm",
                 F2,
                 dT[parameter],
                 T,
                 optimize=True,
             )
-            + np.einsum(
+            + _cached_einsum(
                 "iab,ajm,bkl->ijklm",
                 F2,
                 T,
@@ -1492,12 +1550,12 @@ def _pair_fourth_second_tangent(F2, T, dF2, dT):
 def _cross_fourth_third(F3, R, T):
     """Fourth derivative from the six ``T,R,R`` set partitions."""
     return (
-        np.einsum("iabc,ajk,bl,cm->ijklm", F3, T, R, R, optimize=True)
-        + np.einsum("iabc,ajl,bk,cm->ijklm", F3, T, R, R, optimize=True)
-        + np.einsum("iabc,ajm,bk,cl->ijklm", F3, T, R, R, optimize=True)
-        + np.einsum("iabc,akl,bj,cm->ijklm", F3, T, R, R, optimize=True)
-        + np.einsum("iabc,akm,bj,cl->ijklm", F3, T, R, R, optimize=True)
-        + np.einsum("iabc,alm,bj,ck->ijklm", F3, T, R, R, optimize=True)
+        _cached_einsum("iabc,ajk,bl,cm->ijklm", F3, T, R, R, optimize=True)
+        + _cached_einsum("iabc,ajl,bk,cm->ijklm", F3, T, R, R, optimize=True)
+        + _cached_einsum("iabc,ajm,bk,cl->ijklm", F3, T, R, R, optimize=True)
+        + _cached_einsum("iabc,akl,bj,cm->ijklm", F3, T, R, R, optimize=True)
+        + _cached_einsum("iabc,akm,bj,cl->ijklm", F3, T, R, R, optimize=True)
+        + _cached_einsum("iabc,alm,bj,ck->ijklm", F3, T, R, R, optimize=True)
     )
 
 
@@ -1510,7 +1568,7 @@ def _cross_fourth_third_tangent(F3, R, T, dF3, dR, dT):
         value = _cross_fourth_third(dF3[parameter], R, T)
         value += _cross_fourth_third(F3, R, dT[parameter])
         value += (
-            np.einsum(
+            _cached_einsum(
                 "iabc,ajk,pbl,cm->pijklm",
                 F3,
                 T,
@@ -1518,7 +1576,7 @@ def _cross_fourth_third_tangent(F3, R, T, dF3, dR, dT):
                 R,
                 optimize=True,
             )[0]
-            + np.einsum(
+            + _cached_einsum(
                 "iabc,ajk,bl,pcm->pijklm",
                 F3,
                 T,
@@ -1526,7 +1584,7 @@ def _cross_fourth_third_tangent(F3, R, T, dF3, dR, dT):
                 dR[parameter : parameter + 1],
                 optimize=True,
             )[0]
-            + np.einsum(
+            + _cached_einsum(
                 "iabc,ajl,pbk,cm->pijklm",
                 F3,
                 T,
@@ -1534,7 +1592,7 @@ def _cross_fourth_third_tangent(F3, R, T, dF3, dR, dT):
                 R,
                 optimize=True,
             )[0]
-            + np.einsum(
+            + _cached_einsum(
                 "iabc,ajl,bk,pcm->pijklm",
                 F3,
                 T,
@@ -1542,7 +1600,7 @@ def _cross_fourth_third_tangent(F3, R, T, dF3, dR, dT):
                 dR[parameter : parameter + 1],
                 optimize=True,
             )[0]
-            + np.einsum(
+            + _cached_einsum(
                 "iabc,ajm,pbk,cl->pijklm",
                 F3,
                 T,
@@ -1550,7 +1608,7 @@ def _cross_fourth_third_tangent(F3, R, T, dF3, dR, dT):
                 R,
                 optimize=True,
             )[0]
-            + np.einsum(
+            + _cached_einsum(
                 "iabc,ajm,bk,pcl->pijklm",
                 F3,
                 T,
@@ -1558,7 +1616,7 @@ def _cross_fourth_third_tangent(F3, R, T, dF3, dR, dT):
                 dR[parameter : parameter + 1],
                 optimize=True,
             )[0]
-            + np.einsum(
+            + _cached_einsum(
                 "iabc,akl,pbj,cm->pijklm",
                 F3,
                 T,
@@ -1566,7 +1624,7 @@ def _cross_fourth_third_tangent(F3, R, T, dF3, dR, dT):
                 R,
                 optimize=True,
             )[0]
-            + np.einsum(
+            + _cached_einsum(
                 "iabc,akl,bj,pcm->pijklm",
                 F3,
                 T,
@@ -1574,7 +1632,7 @@ def _cross_fourth_third_tangent(F3, R, T, dF3, dR, dT):
                 dR[parameter : parameter + 1],
                 optimize=True,
             )[0]
-            + np.einsum(
+            + _cached_einsum(
                 "iabc,akm,pbj,cl->pijklm",
                 F3,
                 T,
@@ -1582,7 +1640,7 @@ def _cross_fourth_third_tangent(F3, R, T, dF3, dR, dT):
                 R,
                 optimize=True,
             )[0]
-            + np.einsum(
+            + _cached_einsum(
                 "iabc,akm,bj,pcl->pijklm",
                 F3,
                 T,
@@ -1590,7 +1648,7 @@ def _cross_fourth_third_tangent(F3, R, T, dF3, dR, dT):
                 dR[parameter : parameter + 1],
                 optimize=True,
             )[0]
-            + np.einsum(
+            + _cached_einsum(
                 "iabc,alm,pbj,ck->pijklm",
                 F3,
                 T,
@@ -1598,7 +1656,7 @@ def _cross_fourth_third_tangent(F3, R, T, dF3, dR, dT):
                 R,
                 optimize=True,
             )[0]
-            + np.einsum(
+            + _cached_einsum(
                 "iabc,alm,bj,pck->pijklm",
                 F3,
                 T,
@@ -1612,7 +1670,7 @@ def _cross_fourth_third_tangent(F3, R, T, dF3, dR, dT):
 
 
 def _transform_quartic(F4, R):
-    return np.einsum(
+    return _cached_einsum(
         "iabcd,aj,bk,cl,dm->ijklm", F4, R, R, R, R, optimize=True
     )
 
@@ -1625,7 +1683,7 @@ def _transform_quartic_tangent(F4, R, dF4, dR):
         for slot in range(4):
             inputs = [R, R, R, R]
             inputs[slot] = dR[parameter]
-            value += np.einsum(
+            value += _cached_einsum(
                 "iabcd,aj,bk,cl,dm->ijklm", F4, *inputs, optimize=True
             )
         result[parameter] = value
@@ -1652,15 +1710,15 @@ def _fourth_order_rhs(
     lower = _third_order_rhs(A, F2, F3, dA, dF2, dF3, R, T, U, dR, dT, dU)
     R_dot, T_dot, U_dot, dR_dot, dT_dot, dU_dot = lower
     V_dot = (
-        np.einsum("ia,ajklm->ijklm", A, V, optimize=True)
+        _cached_einsum("ia,ajklm->ijklm", A, V, optimize=True)
         + _cross_fourth_second(F2, R, U)
         + _pair_fourth_second(F2, T)
         + _cross_fourth_third(F3, R, T)
         + _transform_quartic(F4, R)
     )
     dV_dot = (
-        np.einsum("ia,pajklm->pijklm", A, dV, optimize=True)
-        + np.einsum("pia,ajklm->pijklm", dA, V, optimize=True)
+        _cached_einsum("ia,pajklm->pijklm", A, dV, optimize=True)
+        + _cached_einsum("pia,ajklm->pijklm", dA, V, optimize=True)
         + _cross_fourth_second_tangent(F2, R, U, dF2, dR, dU)
         + _pair_fourth_second_tangent(F2, T, dF2, dT)
         + _cross_fourth_third_tangent(F3, R, T, dF3, dR, dT)
@@ -1724,15 +1782,15 @@ def _compose_fourth_order(outer, inner):
         (Ri, Ti, Ui, dRi, dTi, dUi),
     )
     V = (
-        np.einsum("ia,ajklm->ijklm", Ro, Vi, optimize=True)
+        _cached_einsum("ia,ajklm->ijklm", Ro, Vi, optimize=True)
         + _cross_fourth_second(To, Ri, Ui)
         + _pair_fourth_second(To, Ti)
         + _cross_fourth_third(Uo, Ri, Ti)
         + _transform_quartic(Vo, Ri)
     )
     dV = (
-        np.einsum("pia,ajklm->pijklm", dRo, Vi, optimize=True)
-        + np.einsum("ia,pajklm->pijklm", Ro, dVi, optimize=True)
+        _cached_einsum("pia,ajklm->pijklm", dRo, Vi, optimize=True)
+        + _cached_einsum("ia,pajklm->pijklm", Ro, dVi, optimize=True)
         + _cross_fourth_second_tangent(To, Ri, Ui, dTo, dRi, dUi)
         + _pair_fourth_second_tangent(To, Ti, dTo, dTi)
         + _cross_fourth_third_tangent(Uo, Ri, Ti, dUo, dRi, dTi)
@@ -1795,18 +1853,18 @@ def dragt_finn_factorize_fourth_order(
         U_jacobian=dU,
     )
     inverse = np.linalg.inv(R)
-    dinverse = -np.einsum("ia,pab,bj->pij", inverse, dR, inverse, optimize=True)
-    normalized_V = np.einsum("ia,ajklm->ijklm", inverse, V, optimize=True)
-    dnormalized_V = np.einsum(
+    dinverse = -_cached_einsum("ia,pab,bj->pij", inverse, dR, inverse, optimize=True)
+    normalized_V = _cached_einsum("ia,ajklm->ijklm", inverse, V, optimize=True)
+    dnormalized_V = _cached_einsum(
         "pia,ajklm->pijklm", dinverse, V, optimize=True
-    ) + np.einsum("ia,pajklm->pijklm", inverse, dV, optimize=True)
+    ) + _cached_einsum("ia,pajklm->pijklm", inverse, dV, optimize=True)
 
-    quadratic_flow = np.einsum("ia,ajk->ijk", _POISSON, lower.f3, optimize=True)
-    dquadratic_flow = np.einsum(
+    quadratic_flow = _cached_einsum("ia,ajk->ijk", _POISSON, lower.f3, optimize=True)
+    dquadratic_flow = _cached_einsum(
         "ia,pajk->pijk", _POISSON, lower.f3_jacobian, optimize=True
     )
-    cubic_flow = np.einsum("ia,ajkl->ijkl", _POISSON, lower.f4, optimize=True)
-    dcubic_flow = np.einsum(
+    cubic_flow = _cached_einsum("ia,ajkl->ijkl", _POISSON, lower.f4, optimize=True)
+    dcubic_flow = _cached_einsum(
         "ia,pajkl->pijkl", _POISSON, lower.f4_jacobian, optimize=True
     )
     identity = np.eye(6)
@@ -1866,26 +1924,26 @@ def dragt_finn_factorize_fourth_order(
     fourth_residual = normalized_V - known_fourth
     dfourth_residual = dnormalized_V - dknown_fourth
 
-    raw_f5 = -np.einsum("ai,ijklm->ajklm", _POISSON, fourth_residual, optimize=True)
-    draw_f5 = -np.einsum(
+    raw_f5 = -_cached_einsum("ai,ijklm->ajklm", _POISSON, fourth_residual, optimize=True)
+    draw_f5 = -_cached_einsum(
         "ai,pijklm->pajklm", _POISSON, dfourth_residual, optimize=True
     )
     f5 = _symmetrize_tensor(raw_f5, 5)
     df5 = _symmetrize_tensor(draw_f5, 5, parameter_axis=True)
     f5_scale = max(1.0, float(np.max(np.abs(raw_f5), initial=0.0)))
     f5_defect = float(np.max(np.abs(raw_f5 - f5), initial=0.0) / f5_scale)
-    quartic_flow = np.einsum("ia,ajklm->ijklm", _POISSON, f5, optimize=True)
-    dquartic_flow = np.einsum(
+    quartic_flow = _cached_einsum("ia,ajklm->ijklm", _POISSON, f5, optimize=True)
+    dquartic_flow = _cached_einsum(
         "ia,pajklm->pijklm", _POISSON, df5, optimize=True
     )
     normalized_reconstructed_V = known_fourth + quartic_flow
     dnormalized_reconstructed_V = dknown_fourth + dquartic_flow
-    reconstructed_V = np.einsum(
+    reconstructed_V = _cached_einsum(
         "ia,ajklm->ijklm", R, normalized_reconstructed_V, optimize=True
     )
-    dreconstructed_V = np.einsum(
+    dreconstructed_V = _cached_einsum(
         "pia,ajklm->pijklm", dR, normalized_reconstructed_V, optimize=True
-    ) + np.einsum(
+    ) + _cached_einsum(
         "ia,pajklm->pijklm", R, dnormalized_reconstructed_V, optimize=True
     )
     reconstruction_scale = max(
@@ -2334,7 +2392,7 @@ class HCurlTransverseFourthOrderLieMapJacobian:
                 raise ValueError(
                     f"{name} objective weight must have shape {response.shape[1:]}"
                 )
-            gradient += np.einsum(
+            gradient += _cached_einsum(
                 "m...,...->m",
                 response,
                 cotangent,
@@ -2478,6 +2536,7 @@ def _fourth_order_lie_map_from_vector_potential_polynomials(
             curvature_sign=curvature_sign,
             reference_beta=reference_beta,
             longitudinal_component=longitudinal_component,
+            with_parameter_tangents=track_jacobians,
         )
 
     first = _segment_jet(0, -1.0)
@@ -2774,7 +2833,7 @@ def differentiate_hcurl_transverse_lie_map(
 
     def contract(jacobian):
         return np.ascontiguousarray(
-            np.einsum(
+            _cached_einsum(
                 "p...,pm->m...",
                 jacobian,
                 parameter_response,
@@ -5064,9 +5123,9 @@ def _fourth_order_polynomial_state(transfer: FourthOrderLieMap, state) -> np.nda
     value = _finite_array(state, shape=(6,), name="initial state")
     return np.asarray(
         transfer.R @ value
-        + 0.5 * np.einsum("ijk,j,k->i", transfer.T, value, value)
-        + np.einsum("ijkl,j,k,l->i", transfer.U, value, value, value) / 6.0
-        + np.einsum(
+        + 0.5 * _cached_einsum("ijk,j,k->i", transfer.T, value, value)
+        + _cached_einsum("ijkl,j,k,l->i", transfer.U, value, value, value) / 6.0
+        + _cached_einsum(
             "ijklm,j,k,l,m->i",
             transfer.V,
             value,
