@@ -342,6 +342,9 @@ PYBIND11_MODULE(_equation, m) {
                 out.append(py::make_tuple(b.chord, b.command, b.label));
             return out;
         }, "Equation Editor 3.0 key chords as (chord, command, label).")
+        .def("style", &mtef::Equation::style,
+             "The style typing goes in.  Equation Editor's Style menu is a "
+             "mode, not an operation on what is highlighted.")
         .def_static("chord_steps", [](const std::string& chord) {
             mtef::Chord c;
             py::list out;

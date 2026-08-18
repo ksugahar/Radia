@@ -134,6 +134,7 @@ struct Editor {
     double units_per_pt() const { return dpi / 72.0 * zoom; }
     int scaled(int dip) const { return MulDiv(dip, dpi, 96); }
     int bar_height() const { return scaled(kBtnH) * 2 + scaled(kBarPad) * 3; }
+    int status_height() const { return scaled(22); }
 };
 
 /* Two rows, symbols above templates -- Equation Editor's arrangement. */
@@ -199,6 +200,57 @@ void draw_centred(HDC dc, const Layout& L, const RECT& rc, double upp,
      * without them the button for scripts, matrices and accents is blank --
      * which is exactly how those three buttons came to look broken. */
     draw_layout(dc, L, st, u, x, y, colour, true);
+}
+
+/* The strip along the bottom, the way Equation Editor has one.
+ *
+ * A mode you cannot see is a trap: after Ctrl+Shift+G everything typed comes
+ * out Greek, and without somewhere saying so the only way to find out is to
+ * type something and be surprised.  Equation Editor solved this by reading
+ * "Style: Math" along the bottom at all times, so this does too. */
+std::wstring pretty_style(const std::string& s) {
+    if (s == "math")     return L"Math";
+    if (s == "text")     return L"Text";
+    if (s == "function") return L"Function";
+    if (s == "variable") return L"Variable";
+    if (s == "vector")   return L"Matrix-Vector";
+    if (s == "greek")    return L"Greek";
+    return widen(s);
+}
+
+void paint_status(HDC dc, Editor& ed, const RECT& rc) {
+    FillRect(dc, &rc, GetSysColorBrush(COLOR_BTNFACE));
+    HPEN pen = CreatePen(PS_SOLID, 1, GetSysColor(COLOR_BTNSHADOW));
+    HGDIOBJ oldPen = SelectObject(dc, pen);
+    MoveToEx(dc, rc.left, rc.top, nullptr);
+    LineTo(dc, rc.right, rc.top);
+    SelectObject(dc, oldPen);
+    DeleteObject(pen);
+
+    LOGFONTW lf = {};
+    lf.lfHeight = -ed.scaled(11);
+    lf.lfCharSet = DEFAULT_CHARSET;
+    lf.lfQuality = ANTIALIASED_QUALITY;
+    wcscpy_s(lf.lfFaceName, L"Segoe UI");
+    HFONT f = CreateFontIndirectW(&lf);
+    HGDIOBJ oldFont = SelectObject(dc, f);
+    SetBkMode(dc, TRANSPARENT);
+    SetTextColor(dc, GetSysColor(COLOR_BTNTEXT));
+
+    const std::wstring cells[3] = {
+        L"Style: " + pretty_style(ed.eq.style()),
+        L"Size: Full",
+        L"Zoom: " + std::to_wstring(int(std::lround(ed.zoom * 100))) + L"%",
+    };
+    const int w = (rc.right - rc.left) / 4;
+    for (int i = 0; i < 3; ++i) {
+        RECT cell = {rc.left + ed.scaled(6) + i * w, rc.top,
+                     rc.left + (i + 1) * w, rc.bottom};
+        DrawTextW(dc, cells[i].c_str(), -1, &cell,
+                  DT_LEFT | DT_SINGLELINE | DT_VCENTER);
+    }
+    SelectObject(dc, oldFont);
+    DeleteObject(f);
 }
 
 void close_popup(Editor& ed) {
@@ -370,7 +422,7 @@ void paint(HWND hwnd, Editor& ed) {
     const double upp = ed.units_per_pt();
     const int originX = ed.scaled(kMargin);
     const int originY = bar_h +
-        int(((H - bar_h) + L.asc * upp - L.desc * upp) / 2);
+        int(((H - bar_h - ed.status_height()) + L.asc * upp - L.desc * upp) / 2);
 
     /* The highlight goes down first so the equation draws over it, which keeps
      * the glyphs their own colour instead of inverting them. */
@@ -404,6 +456,10 @@ void paint(HWND hwnd, Editor& ed) {
             DeleteObject(caret);
         }
     }
+
+    /* ---- the status strip ---- */
+    RECT st_rc = {0, H - ed.status_height(), W, H};
+    paint_status(mem, ed, st_rc);
 
     BitBlt(hdc, 0, 0, W, H, mem, 0, 0, SRCCOPY);
     SelectObject(mem, oldBmp);
@@ -634,7 +690,8 @@ LRESULT CALLBACK proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             const double upp = ed->units_per_pt();
             const int originX = ed->scaled(kMargin);
             const int originY = bar_h +
-                int(((rc.bottom - bar_h) + L.asc * upp - L.desc * upp) / 2);
+                int(((rc.bottom - bar_h - ed->status_height())
+                     + L.asc * upp - L.desc * upp) / 2);
             const double ex = (p.x - originX) / upp;
             const double ey = (p.y - originY) / upp;
 
@@ -659,7 +716,8 @@ LRESULT CALLBACK proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             const double upp = ed->units_per_pt();
             const int originX = ed->scaled(kMargin);
             const int originY = bar_h +
-                int(((rc.bottom - bar_h) + L.asc * upp - L.desc * upp) / 2);
+                int(((rc.bottom - bar_h - ed->status_height())
+                     + L.asc * upp - L.desc * upp) / 2);
             ed->eq.extend_to_point((GET_X_LPARAM(lp) - originX) / upp,
                                    (GET_Y_LPARAM(lp) - originY) / upp, ed->style);
             redraw(hwnd);
