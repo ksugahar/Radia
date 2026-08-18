@@ -102,6 +102,7 @@ extern "C" {
 #include "rad_hdiv_vim.h"        // Symmetric HDiv-type VIM demag operator (N = B^T G B)
 #include "rad_hdiv_hysteresis.h" // Energy-based B-input vector Stop material
 #include "rad_hdiv_field_evaluator.h" // Persistent BDM1 field source + target tree
+#include "rad_lie_map_batch.h"        // Batched Dragt-Finn Lie-map ensemble tracking
 #include "rad_hacapk_hdiv.h"     // HACApK H-matrix for the HDiv-type VIM demag operator
 #include "rad_ngsolve_field_coefficients.h" // Shared evaluator CoefficientFunctions
 #include "rad_ngsolve_operators.h" // Shared native matrices for pybind11 and MATLAB MEX
@@ -2688,6 +2689,63 @@ PYBIND11_MODULE(_radia_pybind, m) {
         .def_property_readonly("gamma", [](const EnergyStopMaterial& material) {
             return to_numpy_1d(material.Gamma());
         });
+
+    m.def("lie_apply_dragt_finn_batch", [](
+            py::array_t<double, py::array::c_style | py::array::forcecast> R,
+            py::array_t<double, py::array::c_style | py::array::forcecast> f3,
+            py::array_t<double, py::array::c_style | py::array::forcecast> f4,
+            py::array_t<double, py::array::c_style | py::array::forcecast> poisson,
+            py::array_t<double, py::array::c_style | py::array::forcecast> states,
+            py::object f5,
+            int substeps, double newton_tolerance, int maximum_newton_iterations) {
+        auto expect = [](const py::buffer_info& info, int rank, const char* name) {
+            if (info.ndim != rank)
+                throw std::runtime_error(std::string("lie_apply_dragt_finn_batch: ")
+                    + name + " has the wrong rank");
+            for (py::ssize_t axis = 0; axis < info.ndim; ++axis)
+                if (info.shape[axis] != 6)
+                    throw std::runtime_error(std::string("lie_apply_dragt_finn_batch: ")
+                        + name + " axes must all have extent 6");
+        };
+        auto R_info = R.request();          expect(R_info, 2, "R");
+        auto f3_info = f3.request();        expect(f3_info, 3, "f3");
+        auto f4_info = f4.request();        expect(f4_info, 4, "f4");
+        auto poisson_info = poisson.request();  expect(poisson_info, 2, "poisson");
+        const double* f5_data = nullptr;
+        py::array_t<double, py::array::c_style | py::array::forcecast> f5_array;
+        if (!f5.is_none()) {
+            f5_array = py::cast<py::array_t<double,
+                py::array::c_style | py::array::forcecast>>(f5);
+            auto f5_info = f5_array.request();  expect(f5_info, 5, "f5");
+            f5_data = static_cast<const double*>(f5_info.ptr);
+        }
+        auto states_info = states.request();
+        if (states_info.ndim != 2 || states_info.shape[1] != 6)
+            throw std::runtime_error(
+                "lie_apply_dragt_finn_batch: states must have shape (n,6)");
+        const std::size_t count = static_cast<std::size_t>(states_info.shape[0]);
+        py::array_t<double> output({static_cast<py::ssize_t>(count), py::ssize_t(6)});
+        auto output_info = output.request();
+        {
+            py::gil_scoped_release release;
+            rad_lie::ApplyDragtFinnMapBatch(
+                static_cast<const double*>(R_info.ptr),
+                static_cast<const double*>(f3_info.ptr),
+                static_cast<const double*>(f4_info.ptr),
+                f5_data,
+                static_cast<const double*>(poisson_info.ptr),
+                static_cast<const double*>(states_info.ptr),
+                static_cast<double*>(output_info.ptr),
+                count, substeps, newton_tolerance, maximum_newton_iterations);
+        }
+        return output;
+    }, py::arg("R"), py::arg("f3"), py::arg("f4"), py::arg("poisson"),
+       py::arg("states"), py::arg("f5") = py::none(),
+       py::arg("substeps") = 1, py::arg("newton_tolerance") = 1.0e-13,
+       py::arg("maximum_newton_iterations") = 20,
+       "Advance a (n,6) ensemble through Dragt-Finn factors exp(:f5:)exp(:f4:)"
+       "exp(:f3:) then R with particle-parallel implicit-midpoint flows; "
+       "mirrors apply_dragt_finn_map to roundoff.");
 
     using FieldEvaluator = rad_hdiv::HDivFieldEvaluator;
     py::class_<FieldEvaluator, std::shared_ptr<FieldEvaluator>>(m, "_HDivFieldEvaluator")
