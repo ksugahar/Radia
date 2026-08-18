@@ -35,6 +35,12 @@ def synthetic_arrays(n_seg, degree=5):
 
 
 def test_no_jacobian_mode_matches_and_zero_width():
+    # parameter_jacobians=False runs the NATIVE C++ construction kernel
+    # (rad_lie_map_kernel.cpp); parameter_jacobians=True runs the Python
+    # forward-AD engine.  The two implementations must agree to roundoff
+    # (cross-implementation lock; exact bit equality is not expected since
+    # the contraction orders differ), and the no-jacobian result carries
+    # zero-width jacobian arrays.
     Ay, As, lengths, curvatures = synthetic_arrays(4)
     kwargs = dict(
         reference_curvature_per_m=curvatures,
@@ -49,9 +55,12 @@ def test_no_jacobian_mode_matches_and_zero_width():
     for name in ("R", "T", "U", "V", "f3", "f4", "f5"):
         a = getattr(with_jac.transfer, name)
         b = getattr(without.transfer, name)
-        assert np.array_equal(a, b), f"tensor {name} changed"
-    assert np.array_equal(with_jac.hamiltonian_linear,
-                          without.hamiltonian_linear)
+        scale = max(1.0, float(np.max(np.abs(a))))
+        gap = float(np.max(np.abs(a - b)))
+        assert gap <= 1.0e-12 * scale, f"tensor {name}: {gap:.3e}"
+    assert np.allclose(with_jac.hamiltonian_linear,
+                       without.hamiltonian_linear, rtol=0.0, atol=1.0e-14)
+    assert with_jac.parameter_names == without.parameter_names
     assert without.transfer.R_jacobian.shape[0] == 0
     assert without.transfer.f3_jacobian.shape[0] == 0
     assert without.hamiltonian_linear_jacobian.shape[0] == 0

@@ -12,16 +12,16 @@
       "a_rk_vs_b_rk": 8.510451739096472e-06,
       "lie_vs_b_rk": 3.676914618463685e-06,
       "stage_timings_s": {
-        "orbit_track": 14.72,
-        "monitor_chain": 1.97,
-        "fit_cloud": 5.61,
+        "orbit_track": 14.07,
+        "monitor_chain": 1.68,
+        "fit_cloud": 5.09,
         "fit_ls": 0.06,
-        "audit": 5.3,
-        "lie": 1.69,
-        "a_rk": 2.02,
-        "b_rk": 8.14
+        "audit": 5.06,
+        "lie": 0.12,
+        "a_rk": 2.01,
+        "b_rk": 8.05
       },
-      "runtime_s": 39.51811280000038
+      "runtime_s": 36.15236890000233
     },
     {
       "offset_mm": -4.0,
@@ -29,21 +29,21 @@
       "htilde_mid_per_m": -0.12266889384048192,
       "fit_relative_residual": 0.09427907305153141,
       "audit_honesty_ratio": 0.9655187415043845,
-      "hamiltonian_linear_max": 0.001387002082522737,
+      "hamiltonian_linear_max": 0.001387002082522723,
       "lie_vs_a_rk": 7.5250132613626365e-06,
       "a_rk_vs_b_rk": 7.643123805503766e-06,
       "lie_vs_b_rk": 1.5823468261860155e-07,
       "stage_timings_s": {
-        "orbit_track": 12.64,
-        "monitor_chain": 1.94,
-        "fit_cloud": 5.34,
+        "orbit_track": 12.34,
+        "monitor_chain": 1.79,
+        "fit_cloud": 5.17,
         "fit_ls": 0.06,
-        "audit": 5.66,
-        "lie": 1.63,
+        "audit": 5.2,
+        "lie": 0.12,
         "a_rk": 1.81,
-        "b_rk": 8.44
+        "b_rk": 6.32
       },
-      "runtime_s": 37.5231844000009
+      "runtime_s": 32.812799899998936
     },
     {
       "offset_mm": 0.0,
@@ -56,16 +56,16 @@
       "a_rk_vs_b_rk": 1.8978691942344358e-06,
       "lie_vs_b_rk": 7.091908155621319e-08,
       "stage_timings_s": {
-        "orbit_track": 12.56,
+        "orbit_track": 12.49,
         "monitor_chain": 1.86,
-        "fit_cloud": 5.35,
+        "fit_cloud": 5.51,
         "fit_ls": 0.06,
-        "audit": 5.38,
-        "lie": 1.57,
-        "a_rk": 1.79,
-        "b_rk": 7.44
+        "audit": 5.79,
+        "lie": 0.11,
+        "a_rk": 1.76,
+        "b_rk": 7.2
       },
-      "runtime_s": 36.0163257000022
+      "runtime_s": 34.79045770000084
     },
     {
       "offset_mm": 4.0,
@@ -78,16 +78,16 @@
       "a_rk_vs_b_rk": 1.1695220243221815e-06,
       "lie_vs_b_rk": 1.5912054010221513e-07,
       "stage_timings_s": {
-        "orbit_track": 13.24,
-        "monitor_chain": 1.92,
-        "fit_cloud": 5.6,
+        "orbit_track": 13.02,
+        "monitor_chain": 1.89,
+        "fit_cloud": 5.42,
         "fit_ls": 0.06,
-        "audit": 5.7,
-        "lie": 1.64,
-        "a_rk": 1.63,
-        "b_rk": 7.32
+        "audit": 5.47,
+        "lie": 0.12,
+        "a_rk": 1.62,
+        "b_rk": 7.3
       },
-      "runtime_s": 37.13052389999939
+      "runtime_s": 34.911214499999915
     },
     {
       "offset_mm": 8.0,
@@ -100,19 +100,19 @@
       "a_rk_vs_b_rk": 1.0260736517714113e-05,
       "lie_vs_b_rk": 3.746569763486067e-06,
       "stage_timings_s": {
-        "orbit_track": 12.66,
-        "monitor_chain": 1.98,
-        "fit_cloud": 5.62,
+        "orbit_track": 12.37,
+        "monitor_chain": 1.92,
+        "fit_cloud": 5.56,
         "fit_ls": 0.06,
-        "audit": 5.62,
-        "lie": 1.63,
-        "a_rk": 1.64,
-        "b_rk": 6.84
+        "audit": 5.58,
+        "lie": 0.12,
+        "a_rk": 1.63,
+        "b_rk": 6.87
       },
-      "runtime_s": 36.044417500001146
+      "runtime_s": 34.11070579999796
     }
   ],
-  "generated_at_utc": "2026-08-18T12:22:11.561498+00:00",
+  "generated_at_utc": "2026-08-18T12:48:29.923118+00:00",
   "hostname": "lab",
   "arguments": {
     "iron_maxh": 0.02,
