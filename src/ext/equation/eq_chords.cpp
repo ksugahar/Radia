@@ -92,4 +92,45 @@ const std::vector<Chord>& chords() {
     return table;
 }
 
+KeyResult press_key(Equation& eq, KeyState& st, unsigned vk,
+                    bool ctrl, bool shift, bool alt) {
+    Step cur;
+    cur.vk = vk;
+    cur.ctrl = ctrl;
+    cur.shift = shift;
+    cur.alt = alt;
+
+    if (!st.pending.empty()) {
+        std::vector<Step> want = st.pending;
+        want.push_back(cur);
+        st.pending.clear();
+        for (const Chord& c : chords()) {
+            if (c.steps == want) {
+                eq.command(c.command);
+                /* The second key of "Ctrl+T, S" is pressed WITHOUT ctrl, so
+                 * nothing else stops it being typed as well -- which is how
+                 * summation once came out as \sum_{sn}. */
+                st.swallow_char = true;
+                return KeyResult::Consumed;
+            }
+        }
+        st.swallow_char = true;      /* the prefix is spent either way */
+        return KeyResult::Consumed;
+    }
+
+    for (const Chord& c : chords()) {
+        if (c.steps.empty() || !(c.steps[0] == cur)) continue;
+        if (c.steps.size() == 1) {
+            eq.command(c.command);
+            st.swallow_char = true;
+            return KeyResult::Consumed;
+        }
+        st.pending.push_back(cur);
+        st.swallow_char = true;
+        return KeyResult::Pending;
+    }
+    st.swallow_char = false;
+    return KeyResult::Ignored;
+}
+
 }  // namespace mtef

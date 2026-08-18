@@ -18,6 +18,7 @@
 #include <cstring>
 #include <fstream>
 #include <stdexcept>
+#include <map>
 #include <string>
 #include <vector>
 
@@ -345,6 +346,21 @@ PYBIND11_MODULE(_equation, m) {
         .def("style", &mtef::Equation::style,
              "The style typing goes in.  Equation Editor's Style menu is a "
              "mode, not an operation on what is highlighted.")
+        .def("press", [](mtef::Equation& e, unsigned vk, bool ctrl,
+                         bool shift, bool alt) {
+            /* One press per call is not enough for a two-step chord, so the
+             * state that remembers a pending prefix lives with the equation
+             * for as long as Python holds it. */
+            static std::map<mtef::Equation*, mtef::KeyState> states;
+            mtef::KeyState& st = states[&e];
+            const mtef::KeyResult r = mtef::press_key(e, st, vk, ctrl, shift, alt);
+            return r == mtef::KeyResult::Ignored ? "ignored"
+                 : r == mtef::KeyResult::Pending ? "pending" : "consumed";
+        }, py::arg("vk"), py::arg("ctrl") = false, py::arg("shift") = false,
+           py::arg("alt") = false,
+           "Press a key, the way the window does -- but with the modifiers "
+           "passed rather than read from the thread's input state, so this "
+           "needs no window and no keyboard.")
         .def_static("chord_steps", [](const std::string& chord) {
             mtef::Chord c;
             py::list out;

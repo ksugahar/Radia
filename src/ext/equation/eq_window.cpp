@@ -117,7 +117,7 @@ struct Editor {
     bool copied = false;
     bool caret_on = true;
     int dpi = 96;
-    std::vector<Step> pending;      /* a chord waiting for its second key */
+    KeyState keys;                  /* a chord waiting for its second key */
     bool swallow_char = false;      /* this press was a chord, not typing */
 
     std::wstring path;              /* where Ctrl+S writes; empty until asked */
@@ -612,34 +612,19 @@ void paste_from_clipboard(HWND hwnd, Editor& ed) {
     if (ed.eq.insert_latex(latex)) redraw(hwnd);
 }
 
+/* The window's whole part in this: read the modifier state, which only a
+ * window can, and hand the press to the table.  Everything that DECIDES
+ * anything lives in press_key, where it can be tested by calling it. */
 bool handle_key(HWND hwnd, Editor& ed, UINT vk) {
-    Step cur;
-    cur.vk = vk;
-    cur.ctrl  = (GetKeyState(VK_CONTROL) & 0x8000) != 0;
-    cur.shift = (GetKeyState(VK_SHIFT)   & 0x8000) != 0;
-    cur.alt   = (GetKeyState(VK_MENU)    & 0x8000) != 0;
+    const bool ctrl  = (GetKeyState(VK_CONTROL) & 0x8000) != 0;
+    const bool shift = (GetKeyState(VK_SHIFT)   & 0x8000) != 0;
+    const bool alt   = (GetKeyState(VK_MENU)    & 0x8000) != 0;
 
-    if (!ed.pending.empty()) {
-        std::vector<Step> want = ed.pending;
-        want.push_back(cur);
-        ed.pending.clear();
-        for (const Chord& c : chords()) {
-            if (c.steps == want) { ed.eq.command(c.command); redraw(hwnd); return true; }
-        }
-        return true;         /* the prefix was consumed either way */
-    }
-
-    for (const Chord& c : chords()) {
-        if (c.steps.empty() || !(c.steps[0] == cur)) continue;
-        if (c.steps.size() == 1) {
-            ed.eq.command(c.command);
-            redraw(hwnd);
-        } else {
-            ed.pending.push_back(cur);
-        }
-        return true;
-    }
-    return false;
+    const KeyResult r = press_key(ed.eq, ed.keys, vk, ctrl, shift, alt);
+    ed.swallow_char = ed.keys.swallow_char;
+    if (r == KeyResult::Ignored) return false;
+    if (r == KeyResult::Consumed) redraw(hwnd);
+    return true;
 }
 
 LRESULT CALLBACK proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
@@ -788,7 +773,7 @@ LRESULT CALLBACK proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             /* WM_CHAR follows its own WM_KEYDOWN, so clearing here and setting
              * it below cannot leak into the next key. */
             ed->swallow_char = false;
-            if (handle_key(hwnd, *ed, UINT(wp))) ed->swallow_char = true;
+            handle_key(hwnd, *ed, UINT(wp));
             return 0;
         }
 
