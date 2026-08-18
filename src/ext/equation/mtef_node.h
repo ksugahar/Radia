@@ -394,6 +394,14 @@ std::unique_ptr<T> make_node(Args&&... args) {
     return std::make_unique<T>(std::forward<Args>(args)...);
 }
 
+/* The function name a list spells, or empty when it is not one.
+ *
+ * A name arrives as a run of TF_FUNCTION characters -- the parser builds
+ * "sin" as three of them -- so reading it back is how both the layout and the
+ * writers recognise \lim without a node type of its own, and why they cannot
+ * disagree about it. */
+std::string function_name_of(const NodeList& list);
+
 } /* namespace mtef */
 
 #endif /* MTEF_NODE_H */

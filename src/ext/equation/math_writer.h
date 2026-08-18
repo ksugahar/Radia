@@ -52,9 +52,12 @@ public:
     virtual std::string radical(const std::string& body,
                                 const std::string& index, bool has_index) const = 0;
 
+    /* `limits` puts the scripts UNDER and OVER the base instead of beside
+     * it, which is what \lim and its family do in display style. */
     virtual std::string script(const std::string& base, const std::string& sub,
                                const std::string& sup,
-                               bool has_sub, bool has_sup) const = 0;
+                               bool has_sub, bool has_sup,
+                               bool limits = false) const = 0;
 
     /* `beg` / `end` may be null for the default parentheses, or empty for a
      * one-sided fence. */

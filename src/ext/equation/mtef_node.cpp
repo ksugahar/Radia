@@ -31,4 +31,23 @@ void DegreeNode::accept(NodeVisitor& v) { v.visit(*this); }
 void OversetNode::accept(NodeVisitor& v) { v.visit(*this); }
 void RMNode::accept(NodeVisitor& v) { v.visit(*this); }
 
+std::string function_name_of(const NodeList& list) {
+    std::string name;
+    for (const auto& n : list) {
+        if (!n || n->tag() == Node::kSize) continue;
+        if (n->tag() == Node::kLine) {
+            if (!name.empty()) return std::string();
+            name = function_name_of(static_cast<const LineNode&>(*n).children);
+            continue;
+        }
+        if (n->tag() != Node::kChar) return std::string();
+        const CharNode& c = static_cast<const CharNode&>(*n);
+        if (c.typeface != TF_FUNCTION) return std::string();
+        const uint32_t cp = c.charCode ? c.charCode : uint32_t((unsigned char)c.ch);
+        if (cp > 0x7F) return std::string();
+        name += char(cp);
+    }
+    return name;
+}
+
 } /* namespace mtef */

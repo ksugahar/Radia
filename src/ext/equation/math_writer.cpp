@@ -194,7 +194,15 @@ private:
     std::string script(const ScriptNode& s, const std::string& base) {
         if (!s.hasSub && !s.hasSup) return base;
         return syn_.script(syn_.row(base), slot(s.sub), slot(s.sup),
-                           s.hasSub, s.hasSup);
+                           s.hasSub, s.hasSup, base_takes_limits(s.base));
+    }
+
+    /* Whether the thing being scripted is a function name that wants its
+     * scripts UNDER and OVER: \lim, \max, \sup and their family.  Read off
+     * the tree the same way the layout reads it, so a picture and a paste
+     * cannot disagree about where the limit goes. */
+    static bool base_takes_limits(const NodeList& base) {
+        return mtef_name_takes_limits(function_name_of(base));
     }
 
     std::string nary_body(const Node& n) {

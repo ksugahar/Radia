@@ -763,8 +763,18 @@ private:
                 /* A group takes the class of its first atom, so \sin(x)
                  * spaces like a function and not like a bare group. */
                 const auto& l = static_cast<const LineNode&>(n);
-                for (const auto& c : l.children)
-                    if (c && c->tag() != Node::kSize) return class_of(*c);
+                for (const auto& c : l.children) {
+                    if (!c || c->tag() == Node::kSize) continue;
+                    /* A function NAME is an operator, and the class belongs to
+                     * the whole name rather than to its letters: TeX leaves a
+                     * thin space after \sin and none between the s and the i.
+                     * Classing the letters individually would space the name
+                     * apart from the inside. */
+                    if (c->tag() == Node::kChar &&
+                        static_cast<const CharNode&>(*c).typeface == TF_FUNCTION)
+                        return kOp;
+                    return class_of(*c);
+                }
                 return kOrd;
             }
             default:
@@ -931,10 +941,67 @@ private:
     }
 
     /* node_slots(kScript) = { base } + (hasSub ? sub) + (hasSup ? sup) */
+    /* Limits above and below, everything centred on the widest of the three.
+     * The same arithmetic the large operators use -- Appendix G rule 13 --
+     * so a limit under \lim sits where a limit under \sum does. */
+    Layout stack_limits(const Layout& op, const NodeList& lower,
+                        const NodeList& upper, bool hasLower, bool hasUpper,
+                        double sizePt, const std::string& lp, int c,
+                        int lowerSlot, int upperSlot) {
+        const mtef::MathConstants& mc = mtef::MathFont::math().constants();
+        const double ss = script_size(sizePt);
+        Layout up, lo;
+        if (hasUpper) up = layout_list(upper, ss, slot_path(lp, c, upperSlot));
+        if (hasLower) lo = layout_list(lower, ss, slot_path(lp, c, lowerSlot));
+
+        double w = op.w;
+        if (hasUpper) w = std::max(w, up.w);
+        if (hasLower) w = std::max(w, lo.w);
+
+        const double upGap  = mc.upperLimitGapMin * sizePt;
+        const double loGap  = mc.lowerLimitGapMin * sizePt;
+        const double upRise = mc.upperLimitBaselineRiseMin * sizePt;
+        const double loDrop = mc.lowerLimitBaselineDropMin * sizePt;
+        const double extra  = 0.1 * sizePt;          /* big_op_spacing5 */
+
+        Layout out;
+        out.absorb(op, (w - op.w) / 2.0, 0);
+        out.w = w;
+        out.asc = op.asc;
+        out.desc = op.desc;
+        if (hasUpper) {
+            const double lift = std::max(op.asc + upGap + up.desc,
+                                         op.asc + upRise);
+            out.absorb(up, (w - up.w) / 2.0, -lift);
+            out.asc = std::max(out.asc, lift + up.asc + extra);
+        }
+        if (hasLower) {
+            const double drop = std::max(op.desc + loGap + lo.asc,
+                                         op.desc + loDrop);
+            out.absorb(lo, (w - lo.w) / 2.0, drop);
+            out.desc = std::max(out.desc, drop + lo.desc + extra);
+        }
+        return out;
+    }
+
     Layout layout_script(const ScriptNode& s, double sizePt,
                          const std::string& lp, int c) {
         const int subSlot = 1;
         const int supSlot = s.hasSub ? 2 : 1;
+
+        /* \lim and its family put their scripts UNDER and OVER in display
+         * style, not beside.  The name is already in the tree as a run of
+         * TF_FUNCTION characters, so both this and the writers read it back
+         * through the same two functions -- there is no node for it, and no
+         * way for the picture and the paste to disagree about where the limit
+         * went. */
+        if (fracDepth_ == 0 &&
+            mtef_name_takes_limits(function_name_of(s.base))) {
+            Layout base = layout_list(s.base, sizePt, slot_path(lp, c, 0));
+            return stack_limits(base, s.sub, s.sup, s.hasSub, s.hasSup,
+                                sizePt, lp, c, subSlot, supSlot);
+        }
+
         Layout base = layout_list(s.base, sizePt, slot_path(lp, c, 0));
         double ss = script_size(sizePt);
         Layout out = base;

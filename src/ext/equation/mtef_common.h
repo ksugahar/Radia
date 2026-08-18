@@ -246,6 +246,22 @@ static inline int mtef_is_decoration(int sel) {
  * every variable in every output format became three bytes of nonsense at
  * once.  Five copies of a function is five places for the same bug to hide,
  * so there is now one. */
+/* Function names that take LIMITS: the subscript goes UNDER the name rather
+ * than beside it, in display style.  TeX's list, from plain.tex's \limits
+ * group -- \sin and \log are the other kind and keep their scripts beside.
+ *
+ * One predicate, consulted by the layout AND by every writer, because the
+ * picture and what gets pasted must not disagree about it. */
+inline bool mtef_name_takes_limits(const std::string& name) {
+    static const char* kNames[] = {
+        "det", "gcd", "inf", "lim", "liminf", "limsup", "max", "min",
+        "Pr", "sup", "injlim", "projlim", nullptr
+    };
+    for (int i = 0; kNames[i]; ++i)
+        if (name == kNames[i]) return true;
+    return false;
+}
+
 inline std::string mtef_utf8_of(unsigned int cp) {
     std::string s;
     if (cp < 0x80) {
