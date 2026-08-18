@@ -980,13 +980,13 @@ private:
         Layout op;
         const uint16_t baseGid = mf.ok() ? mf.glyph_for(glyph) : 0;
         double gotEm = 0;
-        /* How tall: Equation Editor sets its symbols at 18 point against a
-         * 12 point body, and those two are its own Size dialog's Symbol and
-         * Full.  So the target is that ratio, floored by what the font itself
-         * says a display operator must reach. */
-        const double opTargetEm = std::max(
-            mc.displayOperatorMinHeight,
-            st_.sym / std::max(st_.full, 1e-6));
+        /* How tall the font says a display operator must be, and nothing
+         * else.  This was floored at Equation Editor's own ratio -- its Size
+         * dialog sets symbols at 18 point against a 12 point body -- which
+         * overrode the font with 1.5 where it asks for 1.3, and picked a
+         * variant two sizes too large.  An integral came out a seventh taller
+         * than TeX sets one.  Appearance follows TeX; the font is TeX's. */
+        const double opTargetEm = mc.displayOperatorMinHeight;
         const uint16_t bigGid =
             baseGid ? mf.vertical_variant(baseGid, opTargetEm, &gotEm) : 0;
         if (bigGid && bigGid != baseGid) {
@@ -1024,6 +1024,13 @@ private:
             const double loGap  = mc.lowerLimitGapMin * sizePt;
             const double upRise = mc.upperLimitBaselineRiseMin * sizePt;
             const double loDrop = mc.lowerLimitBaselineDropMin * sizePt;
+            /* TeX puts a further band of clear space outside both limits --
+             * big_op_spacing5, Appendix G rule 13.  The OpenType MATH table
+             * has no constant for it and MathML Core simply leaves it out,
+             * which is why a summation with limits came out a twelfth shorter
+             * than the same summation set by TeX.  Asked directly, TeX wants
+             * 1 pt of it against a 12 point body in this font. */
+            const double extra = (1.0 / 12.0) * sizePt;
 
             out.absorb(op, (w - op.w) / 2.0, 0);
             out.asc = op.asc;
@@ -1032,13 +1039,13 @@ private:
                 const double lift = std::max(op.asc + upGap + up.desc,
                                              op.asc + upRise);
                 out.absorb(up, (w - up.w) / 2.0, -lift);
-                out.asc = std::max(out.asc, lift + up.asc);
+                out.asc = std::max(out.asc, lift + up.asc + extra);
             }
             if (hasLower) {
                 const double drop = std::max(op.desc + loGap + lo.asc,
                                              op.desc + loDrop);
                 out.absorb(lo, (w - lo.w) / 2.0, drop);
-                out.desc = std::max(out.desc, drop + lo.desc);
+                out.desc = std::max(out.desc, drop + lo.desc + extra);
             }
             x = w;
         } else {
@@ -1058,12 +1065,21 @@ private:
              * Slanted: the top of the integral leans right of its foot, so the
              * upper limit must follow it.  That is what a font's italic
              * correction is for, and the font gives a large one here. */
-            const double supShift = std::max(
-                mc.superscriptShiftUp * sizePt,
-                op.asc - mc.superscriptBaselineDropMax * sizePt);
-            const double subShift = std::max(
-                mc.subscriptShiftDown * sizePt,
-                op.desc + mc.subscriptBaselineDropMin * sizePt);
+            /* The plain script shifts, NOT hung off the operator's height.
+             *
+             * TeX's rule 18a: when the nucleus is a single character -- which
+             * a large operator glyph is -- the scripts are not pushed out to
+             * clear it.  They sit at the ordinary superscript and subscript
+             * heights and overlap its vertical extent, which is exactly how
+             * an integral with limits looks when TeX sets one.
+             *
+             * Hanging them off op.asc and op.desc instead made the box a
+             * sixth taller than TeX's.  The thing that had looked wrong
+             * before was never the height: it was that both limits sat in a
+             * column against a sign that leans, for want of the italic
+             * correction below. */
+            const double supShift = mc.superscriptShiftUp * sizePt;
+            const double subShift = mc.subscriptShiftDown * sizePt;
             const uint16_t opGid = mf.ok() ? mf.glyph_for(glyph) : 0;
             const double ic = opGid ? mf.italics_correction(opGid) * opSize : 0.0;
 

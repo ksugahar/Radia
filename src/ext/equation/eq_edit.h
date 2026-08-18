@@ -217,6 +217,17 @@ private:
     int anchor_ = -1;              /* where a selection started; -1 for none */
     std::string style_ = "math";   /* the style typing goes in */
 
+public:
+    /* A chord half-entered.  It lives here rather than beside the window
+     * because a two-step chord is part of what the EQUATION is in the middle
+     * of, and because a table keyed on the object's address hands one
+     * equation's pending prefix to whatever is allocated there next -- which
+     * is exactly what happened. */
+    struct PendingChord { std::vector<int> vk, mods; };
+    PendingChord& pending_chord() { return pending_; }
+private:
+    PendingChord pending_;
+
     struct Snapshot { std::string latex; std::string caret; };
     std::vector<Snapshot> undo_, redo_;
 
