@@ -262,6 +262,62 @@ static inline int mtef_is_decoration(int sel) {
  *
  * They were being DROPPED -- a\,b came out the same width as ab -- which for
  * a lab that writes "5\,mm" all day is not a small thing. */
+/* The double-struck and script alphabets.
+ *
+ * Unicode put most of each in the Mathematical Alphanumeric block and left
+ * HOLES where a letter already had a code point of its own in Letterlike
+ * Symbols -- so double-struck R is U+211D and not U+1D549, and script L is
+ * U+2112 and not U+1D4C1.  A font has the glyph at the assigned place and
+ * nowhere else, so arithmetic on the block start alone draws nothing for
+ * exactly the letters people use most: R for the reals, L for a Lagrangian.
+ *
+ * The model holds the real character, which is what Word wants, and what
+ * reads back as \mathbb{R} on the way out. */
+inline unsigned int mtef_double_struck_of(unsigned int cp) {
+    switch (cp) {
+        case 'C': return 0x2102; case 'H': return 0x210D;
+        case 'N': return 0x2115; case 'P': return 0x2119;
+        case 'Q': return 0x211A; case 'R': return 0x211D;
+        case 'Z': return 0x2124;
+        default: break;
+    }
+    if (cp >= 'A' && cp <= 'Z') return 0x1D538 + (cp - 'A');
+    if (cp >= 'a' && cp <= 'z') return 0x1D552 + (cp - 'a');
+    if (cp >= '0' && cp <= '9') return 0x1D7D8 + (cp - '0');
+    return 0;
+}
+
+inline unsigned int mtef_script_of(unsigned int cp) {
+    switch (cp) {
+        case 'B': return 0x212C; case 'E': return 0x2130;
+        case 'F': return 0x2131; case 'H': return 0x210B;
+        case 'I': return 0x2110; case 'L': return 0x2112;
+        case 'M': return 0x2133; case 'R': return 0x211B;
+        case 'e': return 0x212F; case 'g': return 0x210A;
+        case 'o': return 0x2134;
+        default: break;
+    }
+    if (cp >= 'A' && cp <= 'Z') return 0x1D49C + (cp - 'A');
+    if (cp >= 'a' && cp <= 'z') return 0x1D4B6 + (cp - 'a');
+    return 0;
+}
+
+/* And back, for writing the command out again.  Returns 0 when the character
+ * belongs to neither alphabet. */
+inline unsigned int mtef_plain_of_alphabet(unsigned int cp, bool* doubleStruck) {
+    for (unsigned int c = 'A'; c <= 'Z'; ++c) {
+        if (mtef_double_struck_of(c) == cp) { *doubleStruck = true;  return c; }
+        if (mtef_script_of(c) == cp)        { *doubleStruck = false; return c; }
+    }
+    for (unsigned int c = 'a'; c <= 'z'; ++c) {
+        if (mtef_double_struck_of(c) == cp) { *doubleStruck = true;  return c; }
+        if (mtef_script_of(c) == cp)        { *doubleStruck = false; return c; }
+    }
+    for (unsigned int c = '0'; c <= '9'; ++c)
+        if (mtef_double_struck_of(c) == cp) { *doubleStruck = true;  return c; }
+    return 0;
+}
+
 inline double mtef_space_em(unsigned int cp) {
     switch (cp) {
         case 0x2006: return 3.0 / 18.0;   /* \, thin        (six-per-em)  */
