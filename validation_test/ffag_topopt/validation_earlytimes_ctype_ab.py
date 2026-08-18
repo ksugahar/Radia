@@ -27,6 +27,7 @@ import ngsolve as ng
 import numpy as np
 from netgen.occ import Face, OCCGeometry, Pnt, Segment, Vec, Wire
 from scipy.integrate import solve_ivp
+from scipy.interpolate import RectBivariateSpline
 
 import radia as rad
 from radia import vim
@@ -141,6 +142,42 @@ def reflection_axes(normal):
     unit /= np.linalg.norm(unit)
     reflection = np.eye(3) - 2.0 * np.outer(unit, unit)
     return tuple(reflection[:, index].tolist() for index in range(3))
+
+
+def make_midplane_bz_field(
+    b_batch,
+    *,
+    x_range=(-0.045, 0.045),
+    y_range=(-0.014, 0.014),
+    x_count=101,
+    y_count=31,
+):
+    """Cubic-spline ``B_z(x, y)`` on the ``z=0`` median plane from ONE batch.
+
+    The median-plane orbit ODE of :func:`track_reference_orbit` consumes
+    only ``B_z`` on ``z=0``, so a per-sweep gridded spline replaces the
+    ~700 sequential single-point kernel evaluations each orbit costs.  This
+    interpolates the MIDPLANE TRACE for the reference-CURVE definition only
+    -- it is not a 3D field reconstruction (the map fit still samples the
+    full volume) -- and callers must gate the returned field against the
+    exact source on corridor probes before consuming it.
+    """
+    xs = np.linspace(float(x_range[0]), float(x_range[1]), int(x_count))
+    ys = np.linspace(float(y_range[0]), float(y_range[1]), int(y_count))
+    grid_x, grid_y = np.meshgrid(xs, ys, indexing="ij")
+    points = np.column_stack(
+        (grid_x.reshape(-1), grid_y.reshape(-1), np.zeros(grid_x.size)))
+    bz = np.asarray(b_batch(points))[:, 2].reshape(xs.size, ys.size)
+    spline = RectBivariateSpline(xs, ys, bz)
+
+    def field(point):
+        return np.array([
+            0.0,
+            0.0,
+            float(spline(float(point[0]), float(point[1]))[0, 0]),
+        ])
+
+    return field
 
 
 def track_reference_orbit(
