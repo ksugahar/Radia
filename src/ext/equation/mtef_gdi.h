@@ -42,6 +42,11 @@
 
 namespace mtef {
 
+/* Make the Latin Modern faces visible to this process.  They are loaded, not
+ * installed: nothing about the machine changes. */
+void load_private_fonts();
+
+
 #ifdef _WIN32
 /* Draw the display list onto a device context.
  *
