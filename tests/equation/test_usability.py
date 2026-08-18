@@ -440,3 +440,83 @@ def test_the_slot_chords_are_bound():
     c = chords()
     assert c["Ctrl+Up"] == "caret.slot_up"
     assert c["Ctrl+Down"] == "caret.slot_down"
+
+
+# ---- explicit space ---------------------------------------------------------
+#
+# These were being DROPPED: a\\,b came out the same width as ab.  For a lab that
+# writes "5\\,mm" all day that is not a small thing.
+#
+# They are carried as the Unicode spaces that mean the same thing, so they are
+# ordinary characters everywhere -- the tree holds one, the writers emit one,
+# Word receives one -- rather than a node type every writer would need a case
+# for to say what a character already says.
+
+import pytest as _pytest
+
+
+def width(latex):
+    st = equation.SvgStyle()
+    st.padding = 0.0
+    return equation.tex_metrics(latex, st)[0]
+
+
+@_pytest.mark.parametrize("latex,em", [
+    (r"a\,b", 3.0 / 18.0),
+    (r"a\:b", 4.0 / 18.0),
+    (r"a\;b", 5.0 / 18.0),
+    (r"a\quad b", 1.0),
+])
+def test_a_space_is_as_wide_as_tex_makes_it(latex, em):
+    """At 12 point: 2, 2.667, 3.333 and 12 pt."""
+    assert width(latex) - width("ab") == _pytest.approx(em * 12.0, abs=0.01)
+
+
+@_pytest.mark.parametrize("latex", [r"a\,b", r"a\:b", r"a\;b", r"a\quad b"])
+def test_a_space_reads_back_as_what_was_typed(latex):
+    e = equation.Equation()
+    e.load_latex(latex)
+    back = equation.Equation()
+    back.load_latex(e.latex())
+    assert back.latex() == e.latex()
+    assert chr(92) in e.latex(), "the space came back as a raw character"
+
+
+def test_the_four_space_chords_are_bound():
+    """Equation Editor keeps them in one command group, on these four keys."""
+    c = chords()
+    assert c["Shift+Space"] == "symbol.8198"        # U+2006, thin
+    assert c["Ctrl+Space"] == "symbol.8287"         # U+205F, medium
+    assert c["Ctrl+Shift+Space"] == "symbol.8197"   # U+2005, thick
+    assert c["Ctrl+Alt+Space"] == "symbol.8195"     # U+2003, quad
+
+
+def test_typing_a_unit_the_way_a_physicist_does():
+    e = equation.Equation()
+    e.insert_text("5")
+    assert e.command("symbol.8198")
+    e.insert_text("mm")
+    assert chr(92) + "," in e.latex()
+    assert width(e.latex()) > width("5mm")
+
+
+# ---- the templates that have two ways in -----------------------------------
+
+@_pytest.mark.parametrize("second,cmd", [
+    ("F", "template.frac"), ("R", "template.sqrt"), ("H", "template.sup"),
+    ("L", "template.sub"), ("J", "template.subsup"), ("I", "template.int"),
+    ("N", "template.nthroot"), ("S", "template.sum"), ("P", "template.prod"),
+    ("M", "template.matrix2x2"),
+])
+def test_ctrl_t_reaches_the_template_too(second, cmd):
+    """Equation Editor carries each of these twice -- once as a direct chord
+    and once as a second key after the prefix, with the same command pair
+    either way -- so F reaches the fraction whether it follows Ctrl+T or Ctrl.
+    Only one half of that was here."""
+    assert chords()["Ctrl+T, " + second] == cmd
+
+
+def test_both_bracket_keys_reach_parentheses():
+    c = chords()
+    assert c["Ctrl+9"] == "template.paren"
+    assert c["Ctrl+0"] == "template.paren"

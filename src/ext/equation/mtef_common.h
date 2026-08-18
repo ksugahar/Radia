@@ -252,6 +252,26 @@ static inline int mtef_is_decoration(int sel) {
  *
  * One predicate, consulted by the layout AND by every writer, because the
  * picture and what gets pasted must not disagree about it. */
+/* Explicit space, as a fraction of an em -- 0 for anything that is not one.
+ *
+ * TeX's four, carried as the Unicode spaces that mean the same thing, so they
+ * are ordinary characters everywhere: the tree holds one, the writers emit
+ * one, Word receives one.  A dedicated node would have needed a case in every
+ * writer and a visit() in the interface, to say something a character already
+ * says.
+ *
+ * They were being DROPPED -- a\,b came out the same width as ab -- which for
+ * a lab that writes "5\,mm" all day is not a small thing. */
+inline double mtef_space_em(unsigned int cp) {
+    switch (cp) {
+        case 0x2006: return 3.0 / 18.0;   /* \, thin        (six-per-em)  */
+        case 0x205F: return 4.0 / 18.0;   /* \: medium      (medium math) */
+        case 0x2005: return 5.0 / 18.0;   /* \; thick       (four-per-em) */
+        case 0x2003: return 1.0;          /* \quad          (em)          */
+        default:     return 0.0;
+    }
+}
+
 inline bool mtef_name_takes_limits(const std::string& name) {
     static const char* kNames[] = {
         "det", "gcd", "inf", "lim", "liminf", "limsup", "max", "min",

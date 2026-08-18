@@ -339,6 +339,19 @@ private:
             return sz;
         }
 
+        /* An explicit space is a character, not nothing.  These were dropped
+         * along with the layout switches below, so "5\\,mm" set as "5mm". */
+        {
+            const uint32_t sp = (cmd == "\\,")          ? 0x2006u
+                              : (cmd == "\\:")          ? 0x205Fu
+                              : (cmd == "\\;")          ? 0x2005u
+                              : (cmd == "\\quad")       ? 0x2003u
+                              : (cmd == "\\thinspace")  ? 0x2006u
+                              : (cmd == "\\medspace")   ? 0x205Fu
+                              : (cmd == "\\thickspace") ? 0x2005u : 0u;
+            if (sp) return make_char(TF_SYMBOL, uint16_t(sp));
+        }
+
         /* Spacing and layout commands carry no glyph. */
         if (cmd == "\\," || cmd == "\\;" || cmd == "\\:" || cmd == "\\!" ||
             cmd == "\\ " || cmd == "\\quad" || cmd == "\\qquad" ||

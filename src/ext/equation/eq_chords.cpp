@@ -22,6 +22,7 @@ unsigned named_key(const std::string& name) {
     if (name == "Insert")    return VK_INSERT;
     if (name == "PageUp")    return VK_PRIOR;
     if (name == "PageDown")  return VK_NEXT;
+    if (name == "Space")     return VK_SPACE;
     if (name == "Escape")    return VK_ESCAPE;
     if (name == "Enter")     return VK_RETURN;
     return 0;

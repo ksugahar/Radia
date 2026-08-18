@@ -49,7 +49,13 @@ static const MapEntry UNICODE_MAP[] = {
     {0x03C1, "\\rho "}, {0x03C2, "\\varsigma "}, {0x03C3, "\\sigma "},
     {0x03C4, "\\tau "}, {0x03C5, "\\upsilon "}, {0x03C6, "\\phi "},
     {0x03C7, "\\chi "}, {0x03C8, "\\psi "}, {0x03C9, "\\omega "},
+    /* The explicit spaces, so they read back as what was typed.  The
+     * table is binary-searched, so these sit in numeric order like
+     * everything else -- put at the top they were simply never found. */
+    {0x2003, "\\quad "}, {0x2005, "\\; "},
+    {0x2006, "\\, "},
     {0x2019, "'"}, {0x2032, "'"}, {0x2033, "''"}, {0x2034, "'''"},
+    {0x205F, "\\: "},
     {0x2102, "\\mathbb{C}"}, {0x210D, "\\mathbb{H}"},
     {0x2111, "\\Im "}, {0x2113, "\\ell "},
     {0x2115, "\\mathbb{N}"}, {0x2118, "\\wp "}, {0x2119, "\\mathbb{P}"},
