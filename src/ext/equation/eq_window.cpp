@@ -81,6 +81,17 @@ const int kBarPad = 3;
 const double kBarPt = 9.0;             /* type size inside a button   */
 const double kCellPt = 12.0;           /* type size inside a cell     */
 
+/* How much room an empty slot takes on screen.  A template nobody has typed
+ * into has no extent of its own, so without this a fresh fraction is a bar
+ * floating in space and Tab appears to go nowhere. */
+const double kEmptySlotEm = 0.55;
+
+SvgStyle editing_style() {
+    SvgStyle st;
+    st.empty_slot_em = kEmptySlotEm;
+    return st;
+}
+
 /* What a cell shows is what inserting it produces: the sample is rendered by
  * actually performing the insertion into a scratch equation.  A hand-written
  * table of sample LaTeX would drift from what the templates really are. */
@@ -90,6 +101,7 @@ Layout sample_layout(const Equation::PaletteItem& item, double sizePt) {
     st.full = 12.0 * k; st.sub = 7.0 * k; st.sub2 = 5.0 * k;
     st.sym = 18.0 * k;  st.subsym = 12.0 * k;
     st.padding = 0.0;
+    st.empty_slot_em = kEmptySlotEm;   /* on screen: show there is a slot */
 
     Equation e;
     if (item.is_template) e.insert_template(item.command);
@@ -113,7 +125,10 @@ struct Button {
 
 struct Editor {
     Equation eq;
-    SvgStyle style;
+    /* The editing view, which is the one that shows empty slots.  What gets
+     * pasted out is laid out with a plain SvgStyle, so a picture on a slide is
+     * the equation and nothing else. */
+    SvgStyle style = editing_style();
     bool copied = false;
     bool caret_on = true;
     int dpi = 96;
@@ -158,6 +173,7 @@ void build_bar(Editor& ed) {
             st.full = 12.0 * k; st.sub = 7.0 * k; st.sub2 = 5.0 * k;
             st.sym = 18.0 * k;  st.subsym = 12.0 * k;
             st.padding = 0.0;
+            st.empty_slot_em = kEmptySlotEm;
             Equation e;
             for (size_t i = 0; i < g.items.size() && i < 3; ++i) {
                 if (g.items[i].is_template) e.insert_template(g.items[i].command);
