@@ -1,0 +1,51 @@
+\documentclass[12pt]{article}
+\usepackage{unicode-math}
+\usepackage{amsmath}
+\setmathfont{Latin Modern Math}
+\pagestyle{empty}
+\begin{document}
+\newwrite\out
+\immediate\openout\out=wide.txt
+\def\M#1#2{\setbox0=\hbox{$\displaystyle#2$}%
+  \immediate\write\out{#1 \the\wd0\space \the\ht0\space \the\dp0}}
+
+% already checked -- carried over as a control
+\M{x}{x}
+\M{frac}{\frac{a}{b}}
+\M{sum}{\sum_{n=1}^{N}}
+
+% fences: the whole point is that they grow with what is inside
+\M{paren_plain}{(x)}
+\M{fence_frac}{\left(\frac{1}{2}\right)}
+\M{fence_big}{\left(\frac{\frac{a}{b}}{c}\right)}
+\M{fence_brack}{\left[\frac{1}{2}\right]}
+\M{fence_brace}{\left\{\frac{1}{2}\right\}}
+\M{abs}{\left|\frac{a}{b}\right|}
+
+% accents
+\M{vec}{\vec{B}}
+\M{hat}{\hat{n}}
+\M{bar}{\bar{x}}
+\M{dot}{\dot{x}}
+\M{tilde}{\tilde{f}}
+
+% bars over and under
+\M{overline}{\overline{a+b}}
+\M{underline}{\underline{a+b}}
+
+% matrices
+\M{pmat}{\begin{pmatrix} a & b \ c & d \end{pmatrix}}
+\M{bmat}{\begin{bmatrix} a \ b \end{bmatrix}}
+
+% operators with names, and text
+\M{sin}{\sin x}
+\M{log}{\log_{2} n}
+\M{lim}{\lim_{x \to 0}}
+
+% nesting that stacks several rules at once
+\M{deep}{\sqrt{\frac{a+b}{\sum_{i=1}^{n} c_{i}}}}
+\M{cont}{\frac{\partial B}{\partial t}}
+
+\immediate\closeout\out
+\mbox{}
+\end{document}

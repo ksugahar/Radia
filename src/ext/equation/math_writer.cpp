@@ -73,16 +73,25 @@ uint32_t accent_char(int embellType) {
  * A bar returns 0: it is a rule the width of what it covers, not a glyph, and
  * a fixed-width macron over a wide expression looks wrong. */
 uint32_t accent_drawing_char(int embellType) {
+    /* The COMBINING forms, which is what TeX sets and what Word writes in an
+     * OMML m:chr.  The spacing forms that were here are a different drawing:
+     * a spacing circumflex is 8.30 pt where the combining one is 8.81, and a
+     * spacing dot 7.88 where the combining one is 8.12 -- so every accented
+     * letter came out a little short, and \vec, which had been an ordinary
+     * rightwards arrow, came out two and a quarter points short.
+     *
+     * A combining mark carries no advance of its own; where it sits is the
+     * font's MathTopAccentAttachment, which is read for exactly this. */
     switch (embellType) {
-        case 2:  return 0x02D9;   /* dot          */
-        case 3:  return 0x00A8;   /* double dot   */
-        case 4:  return 0x2234;   /* triple dot   */
-        case 8:  return 0x02DC;   /* tilde        */
-        case 9:  return 0x02C6;   /* hat          */
-        case 11: return 0x2192;   /* right arrow  */
-        case 12: return 0x2190;   /* left arrow   */
-        case 13: return 0x2194;   /* both arrows  */
-        case 17: return 0;        /* bar: a rule  */
+        case 2:  return 0x0307;   /* dot           */
+        case 3:  return 0x0308;   /* double dot    */
+        case 4:  return 0x20DB;   /* triple dot    */
+        case 8:  return 0x0303;   /* tilde         */
+        case 9:  return 0x0302;   /* hat           */
+        case 11: return 0x20D7;   /* right arrow   */
+        case 12: return 0x20D6;   /* left arrow    */
+        case 13: return 0x20E1;   /* both arrows   */
+        case 17: return 0;        /* bar: a rule   */
         default: return 0;
     }
 }

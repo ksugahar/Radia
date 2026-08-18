@@ -143,6 +143,12 @@ public:
     /* Extra advance a slanted glyph needs before a following script. */
     double italics_correction(uint16_t glyph) const;
 
+    /* Where an accent hangs from, and where a letter wants one hung: the
+     * point, measured from the glyph's origin, that the two are aligned by.
+     * Returns `dflt` for a glyph the font says nothing about -- normally half
+     * its width, which is what centring means when nothing is stated. */
+    double top_accent_attachment(uint16_t glyph, double dflt) const;
+
     /* The minimum overlap the font asks for between assembled parts. */
     double min_connector_overlap() const { return minOverlap_; }
 
@@ -154,6 +160,7 @@ private:
     void parse_construction(const std::vector<uint8_t>& b, uint32_t off,
                             Stretch& s);
     void parse_italics(const std::vector<uint8_t>& b, uint32_t off);
+    void parse_top_accent(const std::vector<uint8_t>& b, uint32_t off);
     void parse_cmap(const std::vector<uint8_t>& b, uint32_t off);
     void read_coverage(const std::vector<uint8_t>& b, uint32_t off,
                        std::vector<uint16_t>& out);
@@ -167,6 +174,7 @@ private:
     std::vector<uint16_t> cmapGlyphs_;
     std::vector<std::pair<uint16_t, Stretch>> vert_, horiz_;   /* by glyph */
     std::vector<std::pair<uint16_t, double>> italics_;
+    std::vector<std::pair<uint16_t, double>> topAccent_;
 };
 
 /* Where that font lives, empty when it could not be found. */
