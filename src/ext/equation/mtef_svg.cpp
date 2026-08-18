@@ -363,6 +363,13 @@ bool math_face_for(uint32_t cp, int typeface) {
  * already had U+210E.  A font has the glyph there and nowhere else, so a
  * naive a + (c - 'a') draws nothing for h. */
 uint32_t math_italic_of(uint32_t cp) {
+    /* TeX sets \partial from the italic block too -- U+1D715, not the
+     * upright U+2202 on the character table.  They are different drawings:
+     * 6.372 pt of advance and 0.756 of italic correction against 7.032 and
+     * none, so a partial-derivative fraction came out 0.096 pt narrow.  The
+     * model keeps U+2202, which is what Word wants in an OMML; only the
+     * drawing changes, exactly as it does for a letter. */
+    if (cp == 0x2202) return 0x1D715;
     if (cp >= 'A' && cp <= 'Z') return 0x1D434 + (cp - 'A');
     if (cp == 'h')              return 0x210E;
     if (cp >= 'a' && cp <= 'z') return 0x1D44E + (cp - 'a');
@@ -585,7 +592,7 @@ private:
          *
          * Digits and punctuation stay where they are -- upright, and the same
          * width in both faces. */
-        if (italic) {
+        if (italic || cp == 0x2202) {
             const uint32_t m = math_italic_of(cp);
             if (m) { cp = m; italic = false; symbol = true; }
         }
@@ -1026,15 +1033,24 @@ private:
         out.w = w;
         out.asc = op.asc;
         out.desc = op.desc;
+        /* The two constants are a GAP and a BASELINE distance, and the larger
+         * wins -- MathML Core's reading, not Knuth's "target minus the depth".
+         *
+         * The two agree whenever the limit has no depth, which is why an N
+         * over a summation could not tell them apart.  An n can: it descends
+         * 0.084 pt at script size, and Knuth's form spends that against the
+         * gap where TeX does not.  Asked directly, TeX puts \sum_{i=1}^{n} at
+         * 19.0283 pt, which is the gap form; the other gives 18.944.
+         *
+         * (This was the gap form, was changed to Knuth's on the strength of
+         * the N, and is changed back on the strength of the n.) */
         if (hasUpper) {
-            const double shift = std::max(up3 - up.desc, up1);
-            const double lift = op.asc + shift + up.desc;
+            const double lift = op.asc + std::max(up3 + up.desc, up1);
             out.absorb(up, (w - up.w) / 2.0, -lift);
             out.asc = std::max(out.asc, lift + up.asc + extra);
         }
         if (hasLower) {
-            const double shift = std::max(lo4 - lo.asc, lo2);
-            const double drop = op.desc + shift + lo.asc;
+            const double drop = op.desc + std::max(lo2 + lo.asc, lo4);
             out.absorb(lo, (w - lo.w) / 2.0, drop);
             out.desc = std::max(out.desc, drop + lo.desc + extra);
         }

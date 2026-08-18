@@ -91,7 +91,13 @@ uint32_t accent_drawing_char(int embellType) {
         case 11: return 0x20D7;   /* right arrow   */
         case 12: return 0x20D6;   /* left arrow    */
         case 13: return 0x20E1;   /* both arrows   */
-        case 17: return 0;        /* bar: a rule   */
+        /* A bar over ONE letter is the combining macron, which is what TeX
+         * sets for ar -- a fixed drawing, centred, narrower than the
+         * letter.  A rule the width of what it covers is \overline, and
+         * that is a different construct with its own node.  Drawing this
+         * one as a rule too made it 0.024 pt tall and, more to the point,
+         * as wide as whatever it sat on. */
+        case 17: return 0x0304;   /* bar: combining macron */
         default: return 0;
     }
 }
