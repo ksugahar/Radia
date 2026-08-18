@@ -1102,6 +1102,111 @@ def apply_homogeneous_lie_generator(
     return value
 
 
+def _homogeneous_generator_gradient_hessian_batch(tensor, states):
+    degree = tensor.ndim
+    if degree == 3:
+        gradient = 0.5 * np.einsum("ijk,nj,nk->ni", tensor, states, states,
+                                   optimize=True)
+        hessian = np.einsum("ijk,nk->nij", tensor, states, optimize=True)
+    elif degree == 4:
+        gradient = np.einsum("ijkl,nj,nk,nl->ni", tensor, states, states,
+                             states, optimize=True) / 6.0
+        hessian = 0.5 * np.einsum("ijkl,nk,nl->nij", tensor, states, states,
+                                  optimize=True)
+    elif degree == 5:
+        gradient = np.einsum("ijklm,nj,nk,nl,nm->ni", tensor, states, states,
+                             states, states, optimize=True) / 24.0
+        hessian = np.einsum("ijklm,nk,nl,nm->nij", tensor, states, states,
+                            states, optimize=True) / 6.0
+    else:
+        raise ValueError("Lie generator tensor must have degree three, four, or five")
+    return gradient, hessian
+
+
+def apply_homogeneous_lie_generator_batch(
+    generator,
+    states,
+    *,
+    substeps=1,
+    newton_tolerance=1.0e-13,
+    maximum_newton_iterations=20,
+):
+    """Ensemble version of :func:`apply_homogeneous_lie_generator`.
+
+    ``states`` has shape ``(n_particles, 6)``; the implicit-midpoint flow
+    runs on the whole ensemble with batched Newton solves, matching the
+    single-state result to roundoff.  This is the tracking-side hot path:
+    the map application cost per particle drops from the per-call Python
+    overhead to a few vectorized tensor contractions.
+    """
+    tensor = _finite_array(generator, name="generator")
+    if tensor.shape not in ((6, 6, 6), (6, 6, 6, 6), (6, 6, 6, 6, 6)):
+        raise ValueError("generator must be a symmetric rank-three/four/five tensor")
+    values = np.array(states, dtype=float, copy=True)
+    if values.ndim != 2 or values.shape[1] != 6 or not np.all(np.isfinite(values)):
+        raise ValueError("states must be a finite (n_particles, 6) array")
+    count = int(substeps)
+    tolerance = float(newton_tolerance)
+    iteration_cap = int(maximum_newton_iterations)
+    if count < 1 or not np.isfinite(tolerance) or tolerance <= 0.0 or iteration_cap < 1:
+        raise ValueError("Lie-flow integration controls are invalid")
+    step = 1.0 / count
+    identity = np.eye(6)
+    for _ in range(count):
+        initial = values.copy()
+        gradient, _ = _homogeneous_generator_gradient_hessian_batch(
+            tensor, initial)
+        trial = initial + step * (gradient @ _POISSON.T)
+        converged = False
+        for _ in range(iteration_cap):
+            midpoint = 0.5 * (initial + trial)
+            gradient, hessian = _homogeneous_generator_gradient_hessian_batch(
+                tensor, midpoint)
+            residual = trial - initial - step * (gradient @ _POISSON.T)
+            system = identity[None, :, :] - 0.5 * step * np.einsum(
+                "ij,njk->nik", _POISSON, hessian, optimize=True)
+            update = np.linalg.solve(system, residual[..., None])[..., 0]
+            trial -= update
+            worst = float(np.max(np.abs(update)))
+            reference = max(1.0, float(np.max(np.abs(trial))))
+            if worst <= tolerance * reference:
+                converged = True
+                break
+        if not converged:
+            raise RuntimeError("implicit-midpoint Lie flow did not converge")
+        values = trial
+    return values
+
+
+def apply_dragt_finn_map_batch(
+    factorization,
+    states,
+    *,
+    generator_substeps=1,
+):
+    """Apply the Dragt--Finn factors to a particle ENSEMBLE ``(n, 6)``.
+
+    Identical factor order to :func:`apply_dragt_finn_map`; the tracking
+    promise of the map route lives here -- one map build, then the whole
+    ensemble advances through vectorized tensor contractions.
+    """
+    if not isinstance(
+        factorization, (DragtFinnFactorization, DragtFinnFourthOrderFactorization)
+    ):
+        raise TypeError("factorization must be a Dragt-Finn factorization")
+    values = np.array(states, dtype=float, copy=True)
+    if values.ndim != 2 or values.shape[1] != 6:
+        raise ValueError("states must be a (n_particles, 6) array")
+    if isinstance(factorization, DragtFinnFourthOrderFactorization):
+        values = apply_homogeneous_lie_generator_batch(
+            factorization.f5, values, substeps=generator_substeps)
+    values = apply_homogeneous_lie_generator_batch(
+        factorization.f4, values, substeps=generator_substeps)
+    values = apply_homogeneous_lie_generator_batch(
+        factorization.f3, values, substeps=generator_substeps)
+    return values @ factorization.R.T
+
+
 def apply_dragt_finn_map(
     factorization: DragtFinnFactorization | DragtFinnFourthOrderFactorization,
     state,

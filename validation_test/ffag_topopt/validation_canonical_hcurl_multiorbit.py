@@ -143,18 +143,16 @@ def run_orbit(offset_m, options, b_point, b_batch, rng):
         timings[label] = time.perf_counter() - timings[label]
 
     clock("orbit_track")
-    # The reference curve is a DEFINITION shared by all routes: the
-    # accuracy-gated tree source and relaxed integration controls shift it
-    # by O(tree error) only, which the H1 gate absorbs (measured
-    # contribution ~6e-5, far under the 1.5e-3 fit-quality level).
-    def b_point_tree(point):
-        return b_batch(np.asarray(point, dtype=float).reshape(1, 3))[0]
-
+    # The reference curve is a DEFINITION shared by all routes, so relaxed
+    # integration controls only move the curve by nanometers (absorbed by
+    # the H1 gate).  With the atom-parallel single-point evaluator the
+    # EXACT source costs the same as the tree here, so the tracker keeps
+    # full source purity.
     orbit = track_reference_orbit(
-        b_point_tree, float(options.magnetic_rigidity), station_count=65,
+        b_point, float(options.magnetic_rigidity), station_count=65,
         entrance_x_m=-0.040, exit_x_m=0.040,
         entrance_offset_m=float(offset_m),
-        relative_tolerance=1.0e-9, maximum_step_m=5.0e-3)
+        relative_tolerance=1.0e-8, maximum_step_m=1.0e-2)
     lap("orbit_track")
     s_total = float(orbit.arc_length_stations[-1])
     seg_mids = 0.5 * (orbit.arc_length_stations[:-1]
