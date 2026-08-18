@@ -161,6 +161,21 @@ CASES = [
 
     # A maths asterisk is \ast, on the axis, not the raised one on the key.
     ("a*b", (22.9979, 8.3280, 0.1320), EXACT),
+
+    # A limit's placement is a GAP plus the limit's own depth, not a baseline
+    # target minus it.  The two agree whenever the limit has no depth, which
+    # is why an N over a summation could not tell them apart; an n descends
+    # 0.084 pt at script size and can.
+    (r"\sum_{i=1}^{n} c_{i}", (28.4178, 19.0283, 14.5049), EXACT),
+
+    # \partial is set from the italic block, U+1D715 -- a different drawing
+    # from the upright U+2202, by 0.096 pt of advance and correction.
+    (r"\frac{\partial B}{\partial t}", (18.9360, 16.7169, 8.4969), EXACT),
+
+    # A bar over one letter is the combining macron, a fixed drawing centred
+    # on the letter.  A rule the width of what it covers is \overline, which
+    # is a different construct with its own node.
+    (r"\bar{x}", (6.8640, 7.6800, 0.1320), EXACT),
 ]
 
 
@@ -179,13 +194,22 @@ def test_the_box_is_the_size_tex_makes_it(latex, tex, tol):
 # ---------------------------------------------------------------------------
 
 OPEN = [
-    # A fraction inside a fraction is 0.14 pt taller than TeX's, a summation
-    # with an operand 0.08 pt shorter, a partial-derivative fraction 0.10 pt
-    # narrower, and a macron 0.02 pt taller.  Every term of each is checked
-    # against TeX and agrees; these four residues are not traced.
-    (r"\frac{\frac{p}{q}}{c}", (9.7476, 19.3606, 8.3649), 0.05, "nested-style residue"),
-    (r"\frac{\partial B}{\partial t}", (18.9360, 16.7169, 8.4969), 0.05, "partial residue"),
-    (r"\bar{x}", (6.8640, 7.6800, 0.1320), 0.01, "macron height residue"),
+    # One residue left, and it is a real disagreement rather than a rounding.
+    #
+    # A TEXT-style fraction sits 0.1437 pt higher here than TeX sets it: TeX
+    # puts \textstyle\frac{p}{q} at 8.91028 pt tall and this makes it 9.0533.
+    # The numerator shift is the term at issue -- ours 5.3496 against TeX's
+    # 5.20589 -- and Knuth's make_fraction gives 5.3496 no matter what num2
+    # is, because delta1 cancels it:
+    #
+    #     shift_up = num2 + (clr - ((num2 - depth) - (axis + delta)))
+    #              = clr + depth + axis + delta
+    #
+    # so whatever the OpenType path is doing there, it is not that formula.
+    # Every other term of the fraction is checked against TeX and agrees, and
+    # a DISPLAY fraction is exact at every nesting depth.
+    (r"\frac{\frac{p}{q}}{c}", (9.7476, 19.3606, 8.3649), 0.05,
+     "text-style numerator shift"),
 ]
 
 
