@@ -6,6 +6,7 @@
  * what lets arrow keys walk *into* a fraction the way Equation Editor's do
  * instead of skipping over it as one opaque object.
  */
+#include <cmath>
 #include "eq_edit.h"
 #include "tex_parser.h"
 #include "latex_emitter.h"
@@ -572,6 +573,48 @@ Equation::CaretGeometry Equation::caret_geometry(const SvgStyle& style) const {
     return g;
 }
 
+/* Up and down, which the arrow keys had no answer for at all.
+ *
+ * Equation Editor's own key table says these are ordinary caret motion -- the
+ * same command group as left and right -- so a person expects Up inside a
+ * denominator to reach the numerator.  There is no way to know that from the
+ * tree: a numerator is not "above" a denominator in any structural sense, only
+ * on the page.  So the page is what is asked.
+ *
+ * Among the stops whose band lies clear of this one in the wanted direction,
+ * take the nearest band; within it, the nearest column.  That is what every
+ * text editor does with a wrapped line, and it gives the right answer here for
+ * fractions, scripts, limits and matrix rows without any of them being named. */
+bool Equation::move_vertical(int dir, const SvgStyle& style) {
+    Layout L = layout_math(*root_, style);
+    std::string ct = caret_text();
+    const size_t colon = ct.rfind(':');
+    const std::string path = (colon == std::string::npos) ? ct : ct.substr(0, colon);
+    const int index = (colon == std::string::npos) ? 0
+                                                  : atoi(ct.c_str() + colon + 1);
+    const CaretStop* cur = find_stop(L, path, index);
+    if (!cur) return false;
+
+    const double eps = 0.5;
+    const CaretStop* best = nullptr;
+    double bestGap = 0, bestDx = 0;
+    for (const CaretStop& s : L.stops) {
+        if (s.path == path) continue;              /* same slot is sideways */
+        const double gap = (dir < 0) ? (cur->top - s.bottom)
+                                     : (s.top - cur->bottom);
+        if (gap < -eps) continue;                  /* not clear of us */
+        const double dx = std::fabs(s.x - cur->x);
+        if (!best || gap < bestGap - eps ||
+            (std::fabs(gap - bestGap) <= eps && dx < bestDx)) {
+            best = &s; bestGap = gap; bestDx = dx;
+        }
+    }
+    if (!best) return false;
+    clear_selection();
+    set_caret_text(best->path + ":" + std::to_string(best->index));
+    return true;
+}
+
 bool Equation::move_to_point(double x, double y, const SvgStyle& style) {
     clear_selection();
     Layout L = layout_math(*root_, style);
@@ -1035,13 +1078,23 @@ const std::vector<Equation::Binding>& Equation::shortcuts() {
         {"Ctrl+[",       "template.bracket",   "brackets"},
         {"Ctrl+{",       "template.brace",     "braces"},
         {"Ctrl+I",       "template.int",       "integral"},
+        {"Ctrl+/",       "template.frac",      "fraction (skewed)"},
         {"Ctrl+T, S",    "template.sum",       "summation"},
         {"Ctrl+T, P",    "template.prod",      "product"},
         {"Ctrl+T, M",    "template.matrix2x2", "matrix"},
+        /* Equation Editor keeps its bindings in a resource, not in code, and
+         * the table below is what that resource says -- read out rather than
+         * remembered.  Insert really is a second Tab there, and up and down
+         * really are ordinary caret motion in the same command group as left
+         * and right, which is why they belong here and not in some other
+         * mode. */
         {"Tab",          "caret.next_slot",    "next slot"},
+        {"Insert",       "caret.next_slot",    "next slot"},
         {"Shift+Tab",    "caret.prev_slot",    "previous slot"},
         {"Left",         "caret.left",         "left"},
         {"Right",        "caret.right",        "right"},
+        {"Up",           "caret.up",           "up"},
+        {"Down",         "caret.down",         "down"},
         {"Home",         "caret.home",         "start of slot"},
         {"End",          "caret.end",          "end of slot"},
         {"Backspace",    "edit.backspace",     "delete backwards / unwrap"},
@@ -1061,11 +1114,16 @@ const std::vector<Equation::Binding>& Equation::shortcuts() {
          * own menu mnemonics -- &Math, &Text, &Function, &Variable, &Greek,
          * Matri&x-Vector -- so the muscle memory carries over even though
          * there is no menu bar to press Alt+S in. */
-        {"Ctrl+Shift+M", "style.math",         "math style"},
-        {"Ctrl+Shift+T", "style.text",         "text style"},
+        /* Equation Editor's, from the same resource.  Four of these were
+         * guessed and four were wrong: it uses the letter that names the
+         * EFFECT -- I for italic gives Variable, B for bold gives
+         * Matrix-Vector -- and "=" for going back to plain Math.  Only Greek
+         * and Function happened to match. */
+        {"Ctrl+Shift+=", "style.math",         "math style"},
+        {"Ctrl+Shift+E", "style.text",         "text style"},
         {"Ctrl+Shift+F", "style.function",     "function style"},
-        {"Ctrl+Shift+V", "style.variable",     "variable style"},
-        {"Ctrl+Shift+X", "style.vector",       "matrix-vector (bold)"},
+        {"Ctrl+Shift+I", "style.variable",     "variable style"},
+        {"Ctrl+Shift+B", "style.vector",       "matrix-vector (bold)"},
         {"Ctrl+Shift+G", "style.greek",        "greek"},
     };
     return kBindings;
@@ -1076,6 +1134,8 @@ bool Equation::command(const std::string& name) {
         return insert_template(name.substr(9));
     if (name == "caret.left")       return move_left();
     if (name == "caret.right")      return move_right();
+    if (name == "caret.up")         return move_vertical(-1);
+    if (name == "caret.down")       return move_vertical(+1);
     if (name == "caret.next_slot")  return next_slot();
     if (name == "caret.prev_slot")  return prev_slot();
     if (name == "caret.out")        return move_out();

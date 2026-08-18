@@ -151,6 +151,11 @@ public:
      * origin.  False when the equation is empty. */
     bool move_to_point(double x, double y, const SvgStyle& style = SvgStyle());
 
+    /* Up (-1) and down (+1).  Structural motion cannot answer this -- a
+     * numerator is not above a denominator in the tree, only on the page --
+     * so it is decided from the laid-out geometry. */
+    bool move_vertical(int dir, const SvgStyle& style = SvgStyle());
+
     /* The equation's own box, so a caller can place it and convert a click. */
     void extents(double& w, double& asc, double& desc,
                  const SvgStyle& style = SvgStyle()) const;
