@@ -414,6 +414,27 @@ private:
             e->content = parse_arg();
             return e;
         }
+        if (cmd == "\\mathbb" || cmd == "\\mathcal" ||
+            cmd == "\\mathscr") {
+            /* The letter itself changes, rather than a typeface being noted
+             * beside it: Unicode has these alphabets, Word wants the real
+             * character, and the emitter reads the command back off it. */
+            /* The TYPEFACE is what is recorded, and the letter stays the
+             * letter -- exactly as a variable stays an "a" and is DRAWN from
+             * the italic alphabet.  It has to be that way round here: the
+             * double-struck and script alphabets live past U+FFFF and a
+             * CharNode holds sixteen bits. */
+            return styled_group((cmd == "\\mathbb") ? TF_USER1 : TF_USER2);
+        }
+        if (cmd == "\\phantom" || cmd == "\\hphantom" ||
+            cmd == "\\vphantom") {
+            auto ph = std::make_unique<PhantomNode>();
+            ph->keepWidth  = (cmd != "\\vphantom");
+            ph->keepHeight = (cmd != "\\hphantom");
+            ph->content = parse_arg();
+            return ph;
+        }
+
         if (cmd == "\\overbrace" || cmd == "\\underbrace") {
             /* The node existed and nothing produced it: an \overbrace fell
              * through to the unknown branch and set as the word "overbrace"

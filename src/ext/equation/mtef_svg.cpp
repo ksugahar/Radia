@@ -933,6 +933,16 @@ private:
                 const auto& c = static_cast<const CharNode&>(n);
                 uint32_t cp = c.charCode ? c.charCode : uint32_t(uint8_t(c.ch));
                 if (!cp) return Layout();
+                /* The double-struck and script alphabets are DRAWN from the
+                 * Mathematical Alphanumeric block; the tree keeps the plain
+                 * letter and the typeface, because those code points are past
+                 * U+FFFF and a CharNode holds sixteen bits. */
+                if (c.typeface == TF_USER1 || c.typeface == TF_USER2) {
+                    const unsigned int m = (c.typeface == TF_USER1)
+                                         ? mtef_double_struck_of(cp)
+                                         : mtef_script_of(cp);
+                    if (m) return glyph_layout(m, sizePt, false, true);
+                }
                 return glyph_layout(cp, sizePt, typeface_is_italic(c.typeface),
                                     math_face_for(cp, c.typeface));
             }
@@ -963,6 +973,22 @@ private:
             case Node::kBraceDeco:
                 return layout_brace_deco(static_cast<const BraceDecoNode&>(n),
                                          sizePt, listPath, child);
+            case Node::kPhantom: {
+                /* Laid out in full and then emptied: the room it takes has to
+                 * be the room the thing itself would take, which is the whole
+                 * point of it, and that is only true if it goes through the
+                 * same layout. */
+                const auto& ph = static_cast<const PhantomNode&>(n);
+                Layout inner = layout_list(ph.content, sizePt,
+                                           slot_path(listPath, child, 0));
+                Layout out;
+                out.stops = inner.stops;
+                out.empty_slots = inner.empty_slots;
+                out.w = ph.keepWidth ? inner.w : 0.0;
+                out.asc = ph.keepHeight ? inner.asc : 0.0;
+                out.desc = ph.keepHeight ? inner.desc : 0.0;
+                return out;
+            }
             case Node::kScript:
                 return layout_script(static_cast<const ScriptNode&>(n), sizePt,
                                      listPath, child);

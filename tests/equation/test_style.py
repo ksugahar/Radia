@@ -29,8 +29,16 @@ def styled(latex, style):
 # ---- the styles exist and apply ---------------------------------------------
 
 def test_the_style_list_is_the_old_editors_menu():
+    """Its six, plus two of ours.
+
+    Equation Editor's Style menu is a list of FONTS -- Math, Text, Function,
+    Variable, Greek, Matrix-Vector -- so blackboard bold and script were never
+    on it: they are alphabets, not faces.  They belong beside Greek for the
+    same reason Greek does, which is that what they change is which letter
+    gets drawn."""
     assert set(Equation.styles()) == {
-        "math", "text", "function", "variable", "vector", "greek"}
+        "math", "text", "function", "variable", "vector", "greek",
+        "blackboard", "script"}
 
 
 @pytest.mark.parametrize("style", ["math", "text", "function",

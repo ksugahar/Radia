@@ -322,6 +322,14 @@ void LaTeXEmitter::emitNode(const Node* node, std::string& out) {
     case Node::kDecoration:
         emitDecoration(*static_cast<const DecorationNode*>(node), out);
         break;
+    case Node::kPhantom: {
+        const PhantomNode& ph = *static_cast<const PhantomNode*>(node);
+        out += ph.keepWidth ? (ph.keepHeight ? "\\phantom{" : "\\hphantom{")
+                            : "\\vphantom{";
+        out += emitNodes(ph.content);
+        out += "}";
+        break;
+    }
     case Node::kBraceDeco:
         emitBraceDeco(*static_cast<const BraceDecoNode*>(node), out);
         break;
@@ -369,6 +377,17 @@ void LaTeXEmitter::emitNode(const Node* node, std::string& out) {
 void LaTeXEmitter::emitChar(const CharNode& ch, std::string& out) {
     uint16_t code = ch.charCode;
     int tf = ch.typeface;
+
+    /* The double-struck and script alphabets are recorded as a typeface on an
+     * ordinary letter, so the command is read back off the typeface.  One per
+     * letter rather than one per run: \mathbb{R}\mathbb{C} says the same
+     * thing as \mathbb{RC} and needs no state carried between characters. */
+    if (tf == TF_USER1 || tf == TF_USER2) {
+        out += (tf == TF_USER1) ? "\\mathbb{" : "\\mathcal{";
+        emit_utf8(uint32_t(code ? code : (unsigned char)ch.ch), out);
+        out += "}";
+        return;
+    }
 
     /* Apply embellishments (prefix) */
     for (auto it = ch.embells.rbegin(); it != ch.embells.rend(); ++it) {

@@ -29,6 +29,7 @@ void GroupNode::accept(NodeVisitor& v) { v.visit(*this); }
 void PrimeNode::accept(NodeVisitor& v) { v.visit(*this); }
 void DegreeNode::accept(NodeVisitor& v) { v.visit(*this); }
 void OversetNode::accept(NodeVisitor& v) { v.visit(*this); }
+void PhantomNode::accept(NodeVisitor& v) { v.visit(*this); }
 void RMNode::accept(NodeVisitor& v) { v.visit(*this); }
 
 std::string function_name_of(const NodeList& list) {

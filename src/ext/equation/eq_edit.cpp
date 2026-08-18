@@ -72,6 +72,10 @@ std::vector<NodeList*> node_slots(Node& n) {
             auto& d = static_cast<DecorationNode&>(n);
             return {&d.content};
         }
+        case Node::kPhantom: {
+            auto& p = static_cast<PhantomNode&>(n);
+            return {&p.content};
+        }
         case Node::kBraceDeco: {
             auto& b = static_cast<BraceDecoNode&>(n);
             return {&b.content, &b.label};
@@ -544,6 +548,11 @@ static void style_one(Node& n, const std::string& name) {
         if (name == "function") { c.typeface = TF_FUNCTION; return; }
         if (name == "variable") { c.typeface = TF_VARIABLE; return; }
         if (name == "vector")   { c.typeface = TF_VECTOR;   return; }
+        /* The letter stays the letter; the typeface says which alphabet it is
+         * DRAWN from.  It has to be that way round: the double-struck and
+         * script alphabets live past U+FFFF and a CharNode holds sixteen. */
+        if (name == "blackboard") { c.typeface = TF_USER1; c.latex.clear(); return; }
+        if (name == "script")     { c.typeface = TF_USER2; c.latex.clear(); return; }
         if (name == "math") {
             /* Back to what the parser would have chosen: a letter is a
              * variable, a digit is a number, anything else is a symbol. */
@@ -570,6 +579,10 @@ const std::vector<std::string>& Equation::styles() {
      * dialogs over a font list rather than styles in their own right. */
     static const std::vector<std::string> kAll = {
         "math", "text", "function", "variable", "vector", "greek",
+        /* Not on Equation Editor's menu, because its Style list is a list of
+         * FONTS and these are alphabets.  They belong here for the same
+         * reason Greek does: what they change is which letter gets drawn. */
+        "blackboard", "script",
     };
     return kAll;
 }
@@ -957,10 +970,18 @@ bool Equation::insert_template(const std::string& kind) {
     else if (kind == "brace")     { node = fence(tmBRACE); }
     else if (kind == "abs")       { node = fence(tmBAR); }
     else if (kind == "angle")     { node = fence(tmANGLE); }
-    else if (kind == "int" || kind == "oint" || kind == "iint") {
+    else if (kind == "int" || kind == "oint" || kind == "iint" ||
+             kind == "iiint" || kind == "oiint" || kind == "oiiint") {
+        /* All six the model already names.  Equation Editor offers single,
+         * double and triple integrals and the contour, surface and volume
+         * forms of each; three of the six had no way in, and a surface
+         * integral is not an exotic thing in this lab. */
         auto i = std::make_unique<IntegralNode>();
-        i->selector = (kind == "oint") ? tmSSINT
-                    : (kind == "iint") ? tmDINT : tmSINT;
+        i->selector = (kind == "oint")   ? tmSSINT
+                    : (kind == "oiint")  ? tmDSINT
+                    : (kind == "oiiint") ? tmTSINT
+                    : (kind == "iint")   ? tmDINT
+                    : (kind == "iiint")  ? tmTINT : tmSINT;
         i->hasLower = i->hasUpper = true;
         node = std::move(i);
     } else if (kind == "sum" || kind == "prod" || kind == "coprod" ||
@@ -977,6 +998,19 @@ bool Equation::insert_template(const std::string& kind) {
         b->hasLower = b->hasUpper = true;
         b->hasLimits = true;
         node = std::move(b);
+    } else if (kind == "binom") {
+        auto f = std::make_unique<FracNode>();
+        f->ruled = false;
+        auto fence = std::make_unique<FenceNode>();
+        fence->selector = tmPAREN;
+        fence->content.push_back(std::move(f));
+        node = std::move(fence);
+    } else if (kind == "overbrace" || kind == "underbrace") {
+        auto b = std::make_unique<BraceDecoNode>();
+        b->selector = (kind == "overbrace") ? tmUHBRACE : tmLHBRACE;
+        node = std::move(b);
+    } else if (kind == "phantom") {
+        node = std::make_unique<PhantomNode>();
     } else if (kind == "overline" || kind == "underline") {
         auto d = std::make_unique<DecorationNode>();
         d->selector = (kind == "overline") ? tmOBAR : tmUBAR;
@@ -989,11 +1023,18 @@ bool Equation::insert_template(const std::string& kind) {
                       : (kind == "bar")   ? 17
                       : (kind == "tilde") ? 8 : 2;
         node = std::move(e);
-    } else if (kind == "matrix2x2" || kind == "matrix3x3") {
-        const int n = (kind == "matrix2x2") ? 2 : 3;
+    } else if (kind.compare(0, 6, "matrix") == 0 && kind.size() > 6) {
+        /* Any size, read off the name: "matrix3x4" is three rows of four.
+         * Equation Editor has eleven fixed sizes on its palette and a dialog
+         * for the rest; two of the eleven were all that could be reached. */
+        char* end = nullptr;
+        const long rows = std::strtol(kind.c_str() + 6, &end, 10);
+        const long cols = (end && *end == 'x') ? std::strtol(end + 1, nullptr, 10) : 0;
+        if (rows < 1 || cols < 1 || rows > 16 || cols > 16) return false;
         auto m = std::make_unique<MatrixNode>();
-        m->rows = m->cols = n;
-        for (int i = 0; i < n * n; ++i)
+        m->rows = int(rows);
+        m->cols = int(cols);
+        for (long i = 0; i < rows * cols; ++i)
             m->elements.push_back(std::make_unique<LineNode>());
         node = std::move(m);
     } else if (kind == "cases") {
@@ -1092,7 +1133,10 @@ const std::vector<std::string>& Equation::templates() {
         "frac", "sqrt", "nthroot",
         "sub", "sup", "subsup",
         "paren", "bracket", "brace", "abs", "angle",
-        "int", "iint", "oint", "sum", "prod", "coprod", "bigcup", "bigcap",
+        "int", "iint", "iiint", "oint", "oiint", "oiiint",
+        "sum", "prod", "coprod", "bigcup", "bigcap",
+        "binom", "overbrace", "underbrace", "phantom",
+        "matrix1x2", "matrix2x1", "matrix1x3", "matrix3x1", "matrix4x4",
         "overline", "underline", "hat", "vec", "bar", "tilde", "dot",
         "matrix2x2", "matrix3x3", "cases",
     };
@@ -1200,12 +1244,16 @@ const std::vector<Equation::PaletteGroup>& Equation::template_palettes() {
         struct Def { const char* name; std::vector<const char*> items; };
         static const Def kDefs[] = {
             {"Fences",        {"paren", "bracket", "brace", "abs", "angle"}},
-            {"Fractions",     {"frac", "sqrt", "nthroot"}},
+            {"Fractions",     {"frac", "sqrt", "nthroot", "binom"}},
             {"Scripts",       {"sub", "sup", "subsup"}},
-            {"Summation",     {"sum"}},
-            {"Integrals",     {"int", "iint", "oint"}},
-            {"Products",      {"prod"}},
-            {"Matrices",      {"matrix2x2", "matrix3x3", "cases"}},
+            {"Large operators", {"sum", "prod", "coprod", "bigcup", "bigcap"}},
+            {"Integrals",     {"int", "iint", "iiint",
+                               "oint", "oiint", "oiiint"}},
+            {"Braces",        {"overbrace", "underbrace"}},
+            {"Matrices",      {"matrix1x2", "matrix2x1", "matrix2x2",
+                               "matrix1x3", "matrix3x1", "matrix3x3",
+                               "matrix4x4", "cases"}},
+            {"Spacing",       {"phantom"}},
         };
         /* Equation Editor also has a labelled-arrow palette.  This build has
          * no such template, so the button is absent rather than empty. */
@@ -1303,6 +1351,9 @@ const std::vector<Equation::Binding>& Equation::shortcuts() {
         {"Ctrl+Shift+I", "style.variable",     "variable style"},
         {"Ctrl+Shift+B", "style.vector",       "matrix-vector (bold)"},
         {"Ctrl+Shift+G", "style.greek",        "greek"},
+        /* Ours: Equation Editor has no such style, its list being fonts. */
+        {"Ctrl+Shift+D", "style.blackboard",   "blackboard bold"},
+        {"Ctrl+Shift+S", "style.script",       "script"},
 
         /* Move and select by WHOLE ITEM.  Left and Right walk into a
          * template, which is what you want for correcting a letter and not
