@@ -35,6 +35,20 @@
 
 namespace mtef {
 
+/* The first code point of a UTF-8 string, 0 for an empty one.  Wanted where a
+ * glyph is known only by the text it draws. */
+uint32_t first_code_of(const std::string& s) {
+    if (s.empty()) return 0;
+    const unsigned char c0 = (unsigned char)s[0];
+    auto tail = [&](size_t i) -> uint32_t {
+        return i < s.size() ? ((unsigned char)s[i] & 0x3F) : 0;
+    };
+    if (c0 < 0x80) return c0;
+    if ((c0 & 0xE0) == 0xC0) return ((c0 & 0x1Fu) << 6) | tail(1);
+    if ((c0 & 0xF0) == 0xE0) return ((c0 & 0x0Fu) << 12) | (tail(1) << 6) | tail(2);
+    return ((c0 & 0x07u) << 18) | (tail(1) << 12) | (tail(2) << 6) | tail(3);
+}
+
 /* Pure arithmetic, so it sits outside the Windows-only metric layer: every
  * backend needs the same answer about which face a character belongs to. */
 bool is_cjk(uint32_t c) {
@@ -572,29 +586,75 @@ private:
         out.asc = body.asc;
         out.desc = body.desc;
 
+        const mtef::MathConstants& mc = mtef::MathFont::math().constants();
+
         /* A bar is a rule the width of what it covers; a fixed-width macron
          * over a wide expression would look wrong. */
-        const double gap = sizePt * 0.08;
         if (!acc) {
+            const double gap   = mc.overbarVerticalGap * sizePt;
+            const double thick = mc.overbarRuleThickness * sizePt;
+            const double extra = mc.overbarExtraAscender * sizePt;
             Rule r;
             r.x = 0;
-            r.y = -(body.asc + gap + sizePt * 0.05);
+            r.y = -(body.asc + gap + thick);
             r.w = body.w;
-            r.h = std::max(0.5, sizePt * 0.05);
+            r.h = thick;
             out.rules.push_back(r);
-            out.asc = body.asc + gap + r.h + sizePt * 0.05;
+            out.asc = body.asc + gap + thick + extra;
             return out;
         }
 
-        /* An accent is set smaller than what it sits over.  At full size an
-         * arrow is as heavy as the letter and reads as a second symbol rather
-         * than as a mark on the first. */
-        const double markPt = sizePt * 0.62;
-        Layout mark = glyph_layout(acc, markPt, false, needs_math_face(acc));
-        const double dx = (body.w - mark.w) / 2;
-        const double dy = -(body.asc + gap + mark.desc);
+        /* TeX's make_math_accent, which is not what was here.
+         *
+         *     delta = min(height(nucleus), accent_base_height)
+         *     the accent is set at FULL size, its advance discarded, and
+         *     lowered onto the nucleus by delta
+         *
+         * so the mark OVERLAPS what it sits on rather than standing clear
+         * above it, and how far down it comes is capped at the font's
+         * accentBaseHeight -- 0.45 em here.  That cap is the idea: over a
+         * short letter the accent follows the letter, over a tall one it
+         * stops, so a dot over an x and a dot over a B end up the same
+         * distance apart as the letters are tall, up to a limit.
+         *
+         * Setting it at 0.62 of the size with a fixed 0.08 em of clear air, as
+         * this did, made a dot over an x more than a third too tall.
+         *
+         * Checked against TeX: a dot over an x comes to 8.124 pt, which is the
+         * dot's own 8.124 less delta 5.304 plus the x's 5.304. */
+        Layout mark = glyph_layout(acc, sizePt, false, needs_math_face(acc));
+        const double delta = std::min(body.asc, mc.accentBaseHeight * sizePt);
+
+        /* Line the accent's attachment point up with the base's, which is
+         * what the MATH table's two entries are for.  Half the width is only
+         * the right answer when the font says nothing -- and it is never the
+         * right answer for a combining mark, whose ink sits a quarter of an em
+         * to the LEFT of an origin it advances nothing from.
+         *
+         * Using the base's own attachment rather than half its width is also
+         * what leans the accent over an italic letter, which is the "skew" in
+         * TeX's make_math_accent. */
+        const mtef::MathFont& mf = mtef::MathFont::math();
+        double baseAttach = body.w / 2.0;
+        if (mf.ok() && body.glyphs.size() == 1) {
+            const Glyph& only = body.glyphs.front();
+            uint16_t g = only.glyph_id;
+            if (!g) g = mf.glyph_for(first_code_of(only.text));
+            if (g)
+                baseAttach = mf.top_accent_attachment(g, body.w / 2.0 / sizePt)
+                           * sizePt;
+        }
+        double markAttach = 0.0;
+        if (mf.ok()) {
+            if (const uint16_t g = mf.glyph_for(acc))
+                markAttach = mf.top_accent_attachment(g, mark.w / 2.0 / sizePt)
+                           * sizePt;
+        }
+        const double dx = baseAttach - markAttach;
+        /* The mark's ink foot lands (body.asc - delta) above the baseline. */
+        const double dy = -(body.asc - delta + mark.desc);
         out.absorb(mark, dx, dy);
-        out.asc = std::max(out.asc, body.asc + gap + mark.asc + mark.desc);
+        out.asc = std::max(out.asc, mark.asc + mark.desc - delta + body.asc);
         return out;
     }
 
@@ -609,17 +669,27 @@ private:
         out.asc = body.asc;
         out.desc = body.desc;
 
-        const double gap = sizePt * 0.10;
+        /* The font states the gap, the rule and the band of clear space
+         * outside it, separately for over and under.  These were 0.10 and 0.05
+         * of the type size, picked by eye, and left the under case nearly a
+         * fifth shallower than TeX sets it. */
+        const mtef::MathConstants& mc = mtef::MathFont::math().constants();
+        const double gap   = (above ? mc.overbarVerticalGap
+                                    : mc.underbarVerticalGap) * sizePt;
+        const double thick = (above ? mc.overbarRuleThickness
+                                    : mc.underbarRuleThickness) * sizePt;
+        const double extra = (above ? mc.overbarExtraAscender
+                                    : mc.underbarExtraDescender) * sizePt;
         Rule r;
         r.x = 0;
         r.w = body.w;
-        r.h = std::max(0.5, sizePt * 0.05);
+        r.h = thick;
         if (above) {
-            r.y = -(body.asc + gap + r.h);
-            out.asc = body.asc + gap + r.h;
+            r.y = -(body.asc + gap + thick);
+            out.asc = body.asc + gap + thick + extra;
         } else {
             r.y = body.desc + gap;
-            out.desc = body.desc + gap + r.h;
+            out.desc = body.desc + gap + thick + extra;
         }
         out.rules.push_back(r);
         return out;
@@ -762,6 +832,21 @@ private:
             case Node::kEmbell:
                 return layout_embell(static_cast<const EmbellNode&>(n), sizePt,
                                      listPath, child);
+            case Node::kMatrix: {
+                const auto& m = static_cast<const MatrixNode&>(n);
+                return layout_grid(m.elements, m.rows, m.cols, sizePt,
+                                   listPath, child);
+            }
+            case Node::kPile: {
+                /* A gathered or aligned stack is a grid one column wide (or
+                 * ncols wide when it is aligned), so it lays out the same
+                 * way. */
+                const auto& pl = static_cast<const PileNode&>(n);
+                const int cols = std::max(1, pl.ncols);
+                const int rows = int((pl.lines.size() + cols - 1) / cols);
+                return layout_grid(pl.lines, rows, cols, sizePt,
+                                   listPath, child);
+            }
             case Node::kDecoration: {
                 const auto& d = static_cast<const DecorationNode&>(n);
                 /* \overline / \underline: a rule the width of what it covers. */
@@ -878,42 +963,107 @@ private:
     }
 
     /* node_slots(kFence) = { content } */
+    /* A delimiter at the height the content needs.
+     *
+     * The font draws parentheses at a series of ready-made sizes and, past the
+     * largest, ships pieces to assemble one of any height.  Scaling the small
+     * one instead -- which is what this did -- thickens the stem in proportion
+     * and, worse, keeps the SMALL glyph's advance: a parenthesis round a
+     * fraction was drawn 25 pt tall and 4.5 pt wide, where TeX gives the same
+     * delimiter 7.8 pt of width because the tall drawing IS wider.  That is
+     * the same mistake the summation had, and the lesson the radical had
+     * already learned. */
+    Layout stretched_glyph(uint32_t cp, double needPt, double sizePt) {
+        const mtef::MathFont& mf = mtef::MathFont::math();
+        uint16_t chosen = 0;
+        double gotEm = 0;
+        if (mf.ok()) {
+            const uint16_t base = mf.glyph_for(cp);
+            if (const mtef::Stretch* st = mf.vertical(base)) {
+                for (const auto& v : st->variants) {
+                    const MetricCache::Box b = metrics().glyph_box_index(v.first);
+                    chosen = v.first;
+                    gotEm = b.asc + b.desc;      /* measured, not the record */
+                    if (gotEm * sizePt >= needPt) break;
+                }
+            } else {
+                chosen = base;
+            }
+        }
+        if (!chosen)
+            return glyph_layout(cp, sizePt, false, needs_math_face(cp));
+
+        const MetricCache::Box b = metrics().glyph_box_index(chosen);
+        Layout g;
+        Glyph gg;
+        gg.size = sizePt;
+        gg.symbol = true;
+        gg.glyph_id = chosen;
+        gg.text = utf8_of(cp);
+        g.glyphs.push_back(gg);
+        g.w = b.ink_w * sizePt;
+        g.asc = b.asc * sizePt;
+        g.desc = b.desc * sizePt;
+        /* Past the tallest drawing the font offers, the remainder is taken by
+         * scaling.  The font also ships parts to assemble one of any height;
+         * until that is wired, this at least covers the content. */
+        if (gotEm > 0 && gotEm * sizePt < needPt) {
+            const double k = needPt / std::max(gotEm * sizePt, 1e-6);
+            for (auto& x : g.glyphs) x.stretchY = k;
+            g.asc *= k;
+            g.desc *= k;
+        }
+        return g;
+    }
+
     Layout layout_fence(const FenceNode& f, double sizePt,
                         const std::string& lp, int c) {
         Layout inner = layout_list(f.content, sizePt, slot_path(lp, c, 0));
         auto gl = fence_glyphs(f.selector);
-        /* Grow the fence to the content, keeping a plain glyph when it fits. */
-        double need = inner.asc + inner.desc;
-        double plainAsc, plainDesc;
-        char_vmetrics(sizePt, false, false, plainAsc, plainDesc);
-        double stretch = std::max(1.0, need / std::max(plainAsc + plainDesc, 1e-6));
+
+        const mtef::MathFont& mf = mtef::MathFont::math();
+        const mtef::MathConstants& mc = mf.constants();
+        const double axis = mc.axisHeight * sizePt;
+
+        /* TeX's make_left_right decides the size from how far the content
+         * reaches past the AXIS, not from its total height, because a
+         * delimiter is set symmetrically about the axis and has to cover the
+         * worse of the two sides on both:
+         *
+         *     delta2 = max(height - axis, depth + axis)
+         *     delta  = max(delta2 * delimiterfactor / 500,
+         *                  delta2 * 2 - delimitershortfall)
+         *
+         * with \delimiterfactor 901 and \delimitershortfall 5 pt.  The second
+         * term is what stops a very tall content asking for a delimiter far
+         * bigger than the font has: it may fall short, by up to 5 pt. */
+        const double delta2 = std::max(inner.asc - axis, inner.desc + axis);
+        const double need = std::max(delta2 * (901.0 / 500.0), delta2 * 2.0 - 5.0);
 
         Layout out;
         double x = 0;
-        bool left = (f.variation == 0 || f.variation == 1);
-        bool right = (f.variation == 0 || f.variation == 2);
-        if (left) {
-            Layout g = glyph_layout(gl.first, sizePt, false, needs_math_face(gl.first));
-            for (auto& gg : g.glyphs) gg.stretchY = stretch;
-            g.asc *= stretch; g.desc *= stretch;
-            out.absorb(g, x, 0);
-            out.asc = std::max(out.asc, g.asc);
-            out.desc = std::max(out.desc, g.desc);
+        const bool left = (f.variation == 0 || f.variation == 1);
+        const bool right = (f.variation == 0 || f.variation == 2);
+
+        /* Centred on the axis, which is what makes a bracket look upright
+         * beside a fraction instead of sitting a little low. */
+        auto place = [&](uint32_t cp) {
+            Layout g = stretched_glyph(cp, need, sizePt);
+            const double half = (g.asc + g.desc) / 2.0;
+            const double shift = g.asc - (half + axis);
+            out.absorb(g, x, shift);
+            out.asc = std::max(out.asc, g.asc - shift);
+            out.desc = std::max(out.desc, g.desc + shift);
             x += g.w;
-        }
+        };
+
+        if (left) place(gl.first);
         out.absorb(inner, x, 0);
         out.asc = std::max(out.asc, inner.asc);
         out.desc = std::max(out.desc, inner.desc);
         x += inner.w;
-        if (right) {
-            Layout g = glyph_layout(gl.second, sizePt, false, needs_math_face(gl.second));
-            for (auto& gg : g.glyphs) gg.stretchY = stretch;
-            g.asc *= stretch; g.desc *= stretch;
-            out.absorb(g, x, 0);
-            out.asc = std::max(out.asc, g.asc);
-            out.desc = std::max(out.desc, g.desc);
-            x += g.w;
-        }
+        if (right) place(gl.second);
+
         out.w = x;
         return out;
     }
@@ -992,6 +1142,89 @@ ulldelimiterspace, 1.2 pt -- so the BOX is wider than the parts,
 
         out.asc  = shiftUp + num.asc;
         out.desc = shiftDown + den.desc;
+        return out;
+    }
+
+    /* Rows on a fixed pitch, columns as wide as their widest cell, the whole
+     * grid centred on the axis.
+     *
+     * Measured against TeX, which reports the same three numbers for a matrix
+     * of any width: one row 14.5 pt tall, two 29.0, three 43.5 -- a pitch of
+     * 14.5 pt against a 12 point body, which is the array strut, and the box
+     * always centred so that height minus depth is twice the axis.  The
+     * columns are separated by 10 pt, which is 2\arraycolsep, checked on
+     * "a & b & c": 17.16 pt of letters plus two gaps makes TeX's 37.16.
+     *
+     * Both are written here as fractions of the type size rather than as the
+     * fixed dimensions TeX uses, so a matrix inside a script does not carry
+     * full-size gaps.  At 12 point they are TeX's numbers exactly.
+     *
+     * The pitch is a floor, not a fixed step: TeX lets a tall cell overflow
+     * its row and collide with the next, which is a well-known wart of array
+     * and not worth reproducing. */
+    Layout layout_grid(const NodeList& cells, int rows, int cols,
+                       double sizePt, const std::string& lp, int c) {
+        Layout out;
+        if (rows <= 0 || cols <= 0) return out;
+
+        const double pitch  = (14.5 / 12.0) * sizePt;
+        const double colGap = (10.0 / 12.0) * sizePt;
+        const double axis =
+            mtef::MathFont::math().constants().axisHeight * sizePt;
+
+        std::vector<Layout> cell(size_t(rows) * cols);
+        std::vector<double> colW(cols, 0.0);
+        std::vector<double> rowAsc(rows, 0.0), rowDesc(rows, 0.0);
+        for (int r = 0; r < rows; ++r) {
+            for (int k = 0; k < cols; ++k) {
+                const size_t i = size_t(r) * cols + k;
+                if (i < cells.size() && cells[i]) {
+                    NodeList one;                    /* layout_list wants a list */
+                    const Node& n = *cells[i];
+                    if (n.tag() == Node::kLine) {
+                        /* A cell is set in TEXT style, not display: TeX's
+                         * array does that, and it is why a fraction in a
+                         * matrix is a size smaller than the same fraction
+                         * standing on its own. */
+                        ++fracDepth_;
+                        cell[i] = layout_list(
+                            static_cast<const LineNode&>(n).children, sizePt,
+                            slot_path(lp, c, int(i)));
+                        --fracDepth_;
+                    }
+                }
+                colW[k] = std::max(colW[k], cell[i].w);
+                rowAsc[r] = std::max(rowAsc[r], cell[i].asc);
+                rowDesc[r] = std::max(rowDesc[r], cell[i].desc);
+            }
+        }
+
+        double total = 0;
+        std::vector<double> rowY(rows, 0.0);
+        for (int r = 0; r < rows; ++r) {
+            const double step = std::max(pitch, rowAsc[r] + rowDesc[r]);
+            rowY[r] = total + std::max(rowAsc[r], step - rowDesc[r] -
+                                                  (step - rowAsc[r] - rowDesc[r]) / 2.0);
+            total += step;
+        }
+        /* Put the middle of the stack on the axis. */
+        const double top = -(total / 2.0 + axis);
+
+        double w = 0;
+        for (int k = 0; k < cols; ++k) w += colW[k] + (k ? colGap : 0.0);
+
+        for (int r = 0; r < rows; ++r) {
+            double x = 0;
+            for (int k = 0; k < cols; ++k) {
+                const size_t i = size_t(r) * cols + k;
+                out.absorb(cell[i], x + (colW[k] - cell[i].w) / 2.0,
+                           top + rowY[r]);
+                x += colW[k] + colGap;
+            }
+        }
+        out.w = w;
+        out.asc = total / 2.0 + axis;
+        out.desc = total / 2.0 - axis;
         return out;
     }
 

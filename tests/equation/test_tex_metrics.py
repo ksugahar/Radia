@@ -41,6 +41,17 @@ def measure(latex):
 # figures, so the last digit is its own rounding, not a disagreement.
 EXACT = 0.01
 
+# A LaTeX row break is two backslashes, built rather than written: it has been
+# eaten by a shell heredoc more than once while gathering these numbers, and a
+# reference measured from a matrix whose rows had silently merged is worse than
+# no reference at all -- it reported the matrix layout as 84 % wrong when the
+# fault was in the file the reference had been generated from.
+ROW = chr(92) * 2
+MAT2X2 = r"\begin{matrix} a & b " + ROW + r" c & d \end{matrix}"
+MAT3X2 = r"\begin{matrix} a & b " + ROW + r" c & d " + ROW + r" e & f \end{matrix}"
+PMAT2X2 = r"\begin{pmatrix} a & b " + ROW + r" c & d \end{pmatrix}"
+BMAT2X1 = r"\begin{bmatrix} a " + ROW + r" b \end{bmatrix}"
+
 CASES = [
     # Plain text, which is where the fonts have to agree at all.
     ("x",                    (6.8640,  5.3040, 0.1320), EXACT),
@@ -85,6 +96,32 @@ CASES = [
     # sum is checked term by term against TeX and agrees, so the residue is
     # named rather than absorbed into a rounder tolerance.
     (r"\sum_{n=1}^{N}",      (17.3280, 20.9771, 14.5049), 0.25),
+
+    # Fences take the size the font draws, and their ADVANCE with it: a
+    # parenthesis round a fraction is 7.8 pt wide where the plain one is 4.7,
+    # because the tall drawing is a different glyph and not a stretched one.
+    ("(x)",                  (16.2000, 8.9760, 2.9760), 0.03),
+    (r"\left(\frac{1}{2}\right)",     (24.3120, 16.1169, 9.5517), EXACT),
+    (r"\left[\frac{1}{2}\right]",     (20.3760, 16.1169, 9.5997), EXACT),
+    (r"\left\{\frac{1}{2}\right\}",   (25.3680, 16.1169, 9.5997), EXACT),
+    (r"\left|\frac{a}{b}\right|",     (15.4200, 13.4289, 8.3649), EXACT),
+
+    # Accents are the COMBINING marks at full size, lowered onto the letter by
+    # min(its height, accentBaseHeight) so the mark overlaps what it sits on.
+    (r"\vec{B}",             (9.4080, 11.3280, 0.0000), EXACT),
+    (r"\hat{n}",             (7.2000, 8.8080, 0.1320), EXACT),
+    (r"\dot{x}",             (6.8640, 8.1240, 0.1320), EXACT),
+    (r"\tilde{f}",           (6.9600, 12.0120, 2.4600), EXACT),
+    (r"\bar{x}",             (6.8640, 7.6800, 0.1320), 0.03),
+    (r"\overline{a+b}",      (26.3339, 10.7278, 0.9960), EXACT),
+    (r"\underline{a+b}",     (26.3339, 8.3280, 3.3958), EXACT),
+
+    # Matrices: rows on the array pitch, columns as wide as their widest cell,
+    # the grid centred on the axis, cells in text style.
+    (MAT2X2,                 (22.8760, 17.5003, 11.4997), EXACT),
+    (PMAT2X2,                (40.5400, 17.5003, 11.4997), EXACT),
+    (BMAT2X1,                (19.0200, 17.5003, 11.4997), EXACT),
+    (MAT3X2,                 (23.3080, 24.7503, 18.7497), EXACT),
 ]
 
 
@@ -115,6 +152,24 @@ OPEN = [
      "ssty alternates in the limits; side-limit vertical placement"),
     (r"\oint_{C}",           (12.7124, 16.3323, 12.1799), 0.05,
      "ssty alternates in the limits; side-limit vertical placement"),
+
+    # An operator NAME is set from the maths font's upright alphabet and is an
+    # Op atom, so a thin space follows it.  Here the letters still come from
+    # the text face and the class is ordinary, so there is no space at all.
+    (r"\sin x",              (23.2882, 7.8360, 0.1320), 0.05, "operator names"),
+    (r"\log_{2} n",          (29.5038, 8.3280, 4.1402), 0.05, "operator names"),
+
+    # \lim and its family take LIMITS in display style -- the subscript goes
+    # under, not beside.  The model has no node that carries a NAME with
+    # limits, so this needs one; putting it in the layout alone would make the
+    # picture disagree with what gets pasted, which the editor must not do.
+    (r"\lim_{x \to 0}",      (18.6228, 8.3280, 9.1892), 0.05, "lim takes limits"),
+
+    # A delimiter taller than the font's largest ready-made one is assembled
+    # from pieces; this scales the largest instead, which is close but not the
+    # same width.
+    (r"\left(\frac{\frac{a}{b}}{c}\right)", (27.6720, 17.3523, 11.3517), 0.05,
+     "delimiter assembly from parts"),
 ]
 
 

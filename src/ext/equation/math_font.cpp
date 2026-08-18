@@ -129,7 +129,10 @@ void MathFont::parse_math(const std::vector<uint8_t>& b, uint32_t off) {
 
     if (constantsOff) parse_constants(b, off + constantsOff);
     if (variantsOff)  parse_variants(b, off + variantsOff);
-    if (glyphInfoOff) parse_italics(b, off + glyphInfoOff);
+    if (glyphInfoOff) {
+        parse_italics(b, off + glyphInfoOff);
+        parse_top_accent(b, off + glyphInfoOff);
+    }
 }
 
 void MathFont::parse_constants(const std::vector<uint8_t>& b, uint32_t off) {
@@ -275,6 +278,37 @@ void MathFont::parse_italics(const std::vector<uint8_t>& b, uint32_t off) {
         italics_.emplace_back(glyphs[i], rs16(&b[rec]) / m_upem());
     }
     std::sort(italics_.begin(), italics_.end());
+}
+
+/* MathTopAccentAttachment: the second subtable of MathGlyphInfo, read the same
+ * way as the italics.  Without it an accent whose glyph carries no advance --
+ * which is every COMBINING accent, and those are the ones TeX sets -- has
+ * nothing to centre by, and lands a quarter of an em to the left. */
+void MathFont::parse_top_accent(const std::vector<uint8_t>& b, uint32_t off) {
+    if (!at(b, off + 2, 2)) return;
+    const uint16_t accentOff = rd16(&b[off + 2]);
+    if (!accentOff) return;
+    const uint32_t t = off + accentOff;
+    if (!at(b, t, 4)) return;
+    const uint16_t cov = rd16(&b[t]);
+    const uint16_t n = rd16(&b[t + 2]);
+    std::vector<uint16_t> glyphs;
+    read_coverage(b, t + cov, glyphs);
+    for (uint16_t i = 0; i < n && i < glyphs.size(); ++i) {
+        const size_t rec = t + 4 + size_t(i) * 4;
+        if (!at(b, rec, 4)) break;
+        topAccent_.emplace_back(glyphs[i], rs16(&b[rec]) / m_upem());
+    }
+    std::sort(topAccent_.begin(), topAccent_.end());
+}
+
+double MathFont::top_accent_attachment(uint16_t g, double dflt) const {
+    auto it = std::lower_bound(
+        topAccent_.begin(), topAccent_.end(), g,
+        [](const std::pair<uint16_t, double>& a, uint16_t v) {
+            return a.first < v;
+        });
+    return (it != topAccent_.end() && it->first == g) ? it->second : dflt;
 }
 
 /* ---- cmap --------------------------------------------------------------- */
