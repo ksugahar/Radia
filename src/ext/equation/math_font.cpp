@@ -405,19 +405,45 @@ double MathFont::italics_correction(uint16_t g) const {
     return (it != italics_.end() && it->first == g) ? it->second : 0.0;
 }
 
-const MathFont& MathFont::cambria() {
-    static const MathFont f = [] {
+const std::string& math_font_path() {
+    static const std::string path = [] {
+        /* Latin Modern Math is Computer Modern in OpenType, and its MATH table
+         * IS TeX's: an axis at 250/1000 and a rule at 40 are the very numbers
+         * TeX reports as axis_height and default_rule_thickness.  Setting in
+         * it does not approximate TeX's appearance, it reproduces the figures
+         * TeX lays out from.
+         *
+         * It ships with TeX Live, which every machine here has because that is
+         * what the papers are written in.  If it is missing that is worth
+         * saying out loud rather than quietly setting in something else: the
+         * whole point of naming a font is that the reader can tell. */
+        /* Forward slashes: Windows takes them, and a backslash inside a C
+         * string is an escape waiting to be miscounted -- this path spent a
+         * build being read as a tab, a formfeed and an octal constant, and
+         * the font simply went missing. */
         const char* const roots[] = {
-            "C:\\Windows\\Fonts\\cambria.ttc",
-            "C:\\Windows\\Fonts\\CAMBRIA.TTC",
+            "C:/texlive/2026/texmf-dist/fonts/opentype/public/lm-math/latinmodern-math.otf",
+            "C:/texlive/2025/texmf-dist/fonts/opentype/public/lm-math/latinmodern-math.otf",
+            "C:/texlive/2024/texmf-dist/fonts/opentype/public/lm-math/latinmodern-math.otf",
         };
-        for (const char* p : roots) {
-            MathFont m = MathFont::load(p);
-            if (m.ok()) return m;
+        for (const char* r : roots) {
+            FILE* f = nullptr;
+            if (fopen_s(&f, r, "rb") == 0 && f) { std::fclose(f); return std::string(r); }
         }
-        MathFont bad;
-        bad.why_ = "Cambria Math not found";
-        return bad;
+        return std::string();
+    }();
+    return path;
+}
+
+const MathFont& MathFont::math() {
+    static const MathFont f = [] {
+        const std::string& p = math_font_path();
+        if (p.empty()) {
+            MathFont bad;
+            bad.why_ = "Latin Modern Math not found; install TeX Live";
+            return bad;
+        }
+        return MathFont::load(p);
     }();
     return f;
 }
