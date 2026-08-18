@@ -63,6 +63,9 @@ public:
     /* One whole item, without stepping inside it: Ctrl+Left and Ctrl+Right.
      * `extend` makes it a selection instead. */
     bool move_item(int dir, bool extend);
+    /* Enter: break the line here, making a stack of two if there is not one
+     * already. */
+    bool newline();
     void move_home();
     void move_end();
 

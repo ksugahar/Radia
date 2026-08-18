@@ -113,3 +113,91 @@ def test_the_four_item_chords_are_bound():
     assert c["Ctrl+Right"] == "caret.right_item"
     assert c["Ctrl+Shift+Left"] == "select.left_item"
     assert c["Ctrl+Shift+Right"] == "select.right_item"
+
+
+# ---- one symbol, from Equation Editor's own table ---------------------------
+#
+# Ctrl+K and a letter.  The pairing was read out of the binary, not recalled:
+# the key resource stores these as records whose command number IS the code
+# point -- 8706 is U+2202, 8734 is U+221E -- which is the only part of that
+# resource still legible, since its label column is mis-joined.
+
+@pytest.mark.parametrize("key,cp,latex", [
+    ("T", 0x00D7, r"\times"),
+    ("A", 0x2192, r"\rightarrow"),
+    ("D", 0x2202, r"\partial"),
+    ("E", 0x2208, r"\in"),
+    ("I", 0x221E, r"\infty"),
+    ("C", 0x2282, r"\subset"),
+])
+def test_ctrl_k_inserts_the_symbol_the_table_names(key, cp, latex):
+    c = chords()
+    assert c["Ctrl+K, " + key] == "symbol.%d" % cp
+    e = equation.Equation()
+    assert e.command("symbol.%d" % cp)
+    assert latex in e.latex()
+
+
+def test_the_shifted_pairs_are_the_negated_ones():
+    """Shift+E is "not an element of" and Shift+C "not a subset of" -- the
+    table pairs them with the plain letters deliberately."""
+    c = chords()
+    assert c["Ctrl+K, Shift+E"] == "symbol.%d" % 0x2209
+    assert c["Ctrl+K, Shift+C"] == "symbol.%d" % 0x2284
+
+
+def test_ctrl_k_and_ctrl_g_are_separate_prefixes():
+    c = chords()
+    assert c["Ctrl+K, D"].startswith("symbol.")
+    assert c["Ctrl+G, D"].startswith("greek.")
+
+
+# ---- Enter breaks the line --------------------------------------------------
+#
+# Only possible now that a stack has a layout.  Before, a second line would
+# have been stored, written out, read back -- and drawn as nothing.
+
+def test_enter_makes_a_second_line():
+    e = equation.Equation()
+    e.insert_text("a+b")
+    assert e.command("edit.newline")
+    e.insert_text("c=d")
+    latex = e.latex()
+    assert "gathered" in latex
+    assert "a+b" in latex and "c = d" in latex
+
+
+def test_enter_takes_the_rest_of_the_line_with_it():
+    """It splits at the caret, which is what Enter does everywhere else."""
+    e = equation.Equation()
+    e.insert_text("xy")
+    e.move_home()
+    e.move_right()
+    e.command("edit.newline")
+    latex = e.latex()
+    assert "x" in latex.split(chr(92) * 2)[0]
+    assert "y" in latex.split(chr(92) * 2)[1]
+
+
+def test_a_third_line_goes_after_the_second_not_around_it():
+    e = equation.Equation()
+    e.insert_text("a")
+    e.command("edit.newline"); e.insert_text("b")
+    e.command("edit.newline"); e.insert_text("c")
+    assert e.latex().count(chr(92) * 2) == 2, e.latex()
+
+
+def test_the_stack_is_taller_than_one_line():
+    """The layout draws it -- which is the thing that was missing."""
+    st = equation.SvgStyle()
+    st.padding = 0.0
+    one = equation.Equation(); one.insert_text("a")
+    two = equation.Equation(); two.insert_text("a")
+    two.command("edit.newline"); two.insert_text("b")
+    h1 = sum(equation.tex_metrics(one.latex(), st)[1:])
+    h2 = sum(equation.tex_metrics(two.latex(), st)[1:])
+    assert h2 > h1 * 1.5, "two lines drew no taller than one (%.2f vs %.2f)" % (h2, h1)
+
+
+def test_enter_is_bound():
+    assert chords()["Enter"] == "edit.newline"

@@ -105,8 +105,9 @@ def test_a_two_step_chord_is_two_presses():
 
 
 def test_the_two_step_chords_hang_off_a_small_number_of_prefixes():
-    """Templates hang off Ctrl+T and the Greek alphabet off Ctrl+G, so the
-    window has to hold either first press and wait rather than act on it.
+    """Templates hang off Ctrl+T, the Greek alphabet off Ctrl+G and the symbols
+    off Ctrl+K -- Equation Editor's own three -- so the window has to hold any
+    of those first presses and wait rather than act on it.
 
     Two prefixes, not one: this test used to pin Ctrl+T as the only one, which
     was true when the only two-step chords were summation, product and matrix.
@@ -116,7 +117,8 @@ def test_the_two_step_chords_hang_off_a_small_number_of_prefixes():
     prefixes = {steps(c)[0] for c, _cmd, _lbl in Equation.shortcuts()
                 if ", " in c}
     assert prefixes == {(VK["T"], True, False, False),
-                        (VK["G"], True, False, False)}
+                        (VK["G"], True, False, False),
+                        (VK["K"], True, False, False)}
 
 
 def test_the_second_key_of_a_greek_chord_carries_the_shift():
