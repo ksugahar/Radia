@@ -1228,6 +1228,9 @@ const std::vector<Equation::Binding>& Equation::shortcuts() {
         {"Ctrl+L",       "template.sub",       "subscript (low)"},
         {"Ctrl+J",       "template.subsup",    "subscript and superscript"},
         {"Ctrl+9",       "template.paren",     "parentheses"},
+        /* Both keys of the pair reach it, which is what the table says: Ctrl+9
+         * and Ctrl+0 are one command. */
+        {"Ctrl+0",       "template.paren",     "parentheses"},
         {"Ctrl+[",       "template.bracket",   "brackets"},
         {"Ctrl+{",       "template.brace",     "braces"},
         {"Ctrl+I",       "template.int",       "integral"},
@@ -1235,6 +1238,18 @@ const std::vector<Equation::Binding>& Equation::shortcuts() {
         {"Ctrl+T, S",    "template.sum",       "summation"},
         {"Ctrl+T, P",    "template.prod",      "product"},
         {"Ctrl+T, M",    "template.matrix2x2", "matrix"},
+        {"Ctrl+T, N",    "template.nthroot",   "nth root"},
+        /* The templates that also have a chord of their own.  Equation Editor
+         * carries both: the same command appears once as a direct chord (its
+         * kind 3) and once as a second key after a prefix (kind 5), with the
+         * same command pair either way, so F reaches the fraction whether it
+         * follows Ctrl+T or Ctrl.  Only the direct half was here. */
+        {"Ctrl+T, F",    "template.frac",      "fraction"},
+        {"Ctrl+T, R",    "template.sqrt",      "square root"},
+        {"Ctrl+T, H",    "template.sup",       "superscript"},
+        {"Ctrl+T, L",    "template.sub",       "subscript"},
+        {"Ctrl+T, J",    "template.subsup",    "subscript and superscript"},
+        {"Ctrl+T, I",    "template.int",       "integral"},
         /* Equation Editor keeps its bindings in a resource, not in code, and
          * the table below is what that resource says -- read out rather than
          * remembered.  Insert really is a second Tab there, and up and down
@@ -1309,6 +1324,17 @@ const std::vector<Equation::Binding>& Equation::shortcuts() {
         {"Ctrl+Shift+1", "size.full",          "full size"},
         {"Ctrl+Shift+2", "size.sub",           "subscript size"},
         {"Ctrl+Shift+3", "size.sub2",          "sub-subscript size"},
+
+        /* Explicit space.  Equation Editor keeps four in one command group
+         * -- 24, with the four low bits of the command number set one apiece
+         * -- on Shift+Space, Ctrl+Space, Ctrl+Shift+Space and Ctrl+Alt+Space.
+         * The KEYS are read from the table; that the four run narrow to wide
+         * in the order of those bits is an inference.  The widths are TeX's
+         * own: three, four and five eighteenths of an em, and the quad. */
+        {"Shift+Space",      "symbol.8198", "thin space"},
+        {"Ctrl+Space",       "symbol.8287", "medium space"},
+        {"Ctrl+Shift+Space", "symbol.8197", "thick space"},
+        {"Ctrl+Alt+Space",   "symbol.8195", "quad"},
         {"Ctrl+Shift+Right", "format.at_eq",   "align at ="},
         {"Ctrl+Left",    "caret.left_item",    "left one item"},
         {"Ctrl+Right",   "caret.right_item",   "right one item"},
