@@ -7,6 +7,20 @@ crystallized as its own package.
 
 ## [Unreleased]
 
+## [1.4.38] - 2026-08-18
+
+- Added PPTX figure auditing for authored width, paste scale, final visible
+  text size, clipping, and duplicate slide images, plus deterministic PDF-page
+  rasterization for presentation workflows.
+- Added presentation integrity checks for raw math markup and embedded figure
+  text, together with a repair path that preserves placement and reports
+  unsupported crops or rotations explicitly.
+- Synchronized accelerator and MATLAB parity knowledge with the exact
+  equivalent-current vector-potential source, reflection-conditioned field
+  diagnostics, and the CanonicalHCurl initialization boundary.
+- Added the headless OpenCV dependency to the document extra used by figure and
+  presentation inspection without introducing a desktop GUI dependency.
+
 ## [1.4.37] - 2026-08-16
 
 - Corrected the presentation message hierarchy: slide titles use the shortest
