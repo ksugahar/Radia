@@ -143,6 +143,15 @@ public:
     /* Extra advance a slanted glyph needs before a following script. */
     double italics_correction(uint16_t glyph) const;
 
+    /* The glyph a font would rather draw at a small size.
+     *
+     * `ssty` is the OpenType feature every maths font ships for this: the
+     * same letter redrawn a little wider and a little heavier so it holds up
+     * as a subscript.  TeX applies it; it is why TeX's x in a superscript is
+     * 5.44 pt where a simply-shrunk x would be 4.80.  `level` is 1 for script
+     * and 2 for scriptscript; 0 comes back when the font offers nothing. */
+    uint16_t script_variant(uint16_t glyph, int level) const;
+
     /* Where an accent hangs from, and where a letter wants one hung: the
      * point, measured from the glyph's origin, that the two are aligned by.
      * Returns `dflt` for a glyph the font says nothing about -- normally half
@@ -161,6 +170,7 @@ private:
                             Stretch& s);
     void parse_italics(const std::vector<uint8_t>& b, uint32_t off);
     void parse_top_accent(const std::vector<uint8_t>& b, uint32_t off);
+    void parse_ssty(const std::vector<uint8_t>& b, uint32_t off);
     void parse_cmap(const std::vector<uint8_t>& b, uint32_t off);
     void read_coverage(const std::vector<uint8_t>& b, uint32_t off,
                        std::vector<uint16_t>& out);
@@ -175,6 +185,8 @@ private:
     std::vector<std::pair<uint16_t, Stretch>> vert_, horiz_;   /* by glyph */
     std::vector<std::pair<uint16_t, double>> italics_;
     std::vector<std::pair<uint16_t, double>> topAccent_;
+    /* glyph -> { script, scriptscript } */
+    std::vector<std::pair<uint16_t, std::pair<uint16_t, uint16_t>>> ssty_;
 };
 
 /* Where that font lives, empty when it could not be found. */
