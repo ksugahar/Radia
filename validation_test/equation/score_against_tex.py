@@ -39,7 +39,7 @@ import radia.equation as eq          # noqa: E402
 from PIL import Image, ImageChops    # noqa: E402
 import fitz                          # noqa: E402  (PyMuPDF)
 
-PDFLATEX = r"C:\texlive\2026\bin\windows\pdflatex.exe"
+PDFLATEX = r"C:\texlive\2026\bin\windows\xelatex.exe"
 WORK = "C:/temp/ee3/_score"          # NOT the system temp: its short form
 DPI = 300                            # holds a "~", which TeX reads as active
 
@@ -47,6 +47,7 @@ DPI = 300                            # holds a "~", which TeX reads as active
 def tex_png(latex, out):
     doc = (r"\documentclass[12pt]{article}"
            r"\usepackage[paperwidth=40cm,paperheight=14cm,margin=1cm]{geometry}"
+           r"\usepackage{unicode-math}\setmathfont{Latin Modern Math}"
            r"\usepackage{amsmath}\pagestyle{empty}"
            r"\begin{document}\noindent$\displaystyle " + latex +
            r"$\end{document}")

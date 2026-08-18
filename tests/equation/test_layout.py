@@ -31,6 +31,21 @@ _RECT = re.compile(r'<rect x="([-\d.]+)" y="([-\d.]+)" '
                    r'width="([\d.]+)" height="([\d.]+)"')
 
 
+def _math_italic(ch):
+    """The Mathematical Alphanumeric Symbols form of a letter, matching
+    math_italic_of() in mtef_svg.cpp.  U+1D455 is unassigned -- italic small h
+    is U+210E, Planck's constant -- so h is spelt out separately."""
+    if len(ch) != 1:
+        return ch
+    if "A" <= ch <= "Z":
+        return chr(0x1D434 + ord(ch) - ord("A"))
+    if ch == "h":
+        return "ℎ"
+    if "a" <= ch <= "z":
+        return chr(0x1D44E + ord(ch) - ord("a"))
+    return ch
+
+
 class Rendered:
     def __init__(self, latex, style=None):
         self.style = style or equation.SvgStyle()
@@ -42,10 +57,16 @@ class Rendered:
         self.rects = [tuple(float(v) for v in r) for r in _RECT.findall(self.svg)]
 
     def glyph(self, ch):
+        """Find a drawn glyph.  A LETTER is looked up as the maths-italic form
+        the renderer actually uses: a variable is set from the maths font's own
+        alphabet at U+1D434, not as the ASCII letter in a text italic, because
+        that is where TeX takes it from and the two fonts are different widths.
+        Tests say `glyph("B")` and mean the B they can see."""
+        wanted = _math_italic(ch)
         for g in self.glyphs:
-            if g[3] == ch:
+            if g[3] == wanted:
                 return g
-        raise AssertionError(f"{ch!r} was not drawn")
+        raise AssertionError(f"{ch!r} (drawn as {wanted!r}) was not drawn")
 
     @property
     def ink_width(self):

@@ -51,20 +51,7 @@ namespace {
 /* ------------------------------------------------------------------ */
 /* UTF-8 / UTF-16 helpers                                              */
 /* ------------------------------------------------------------------ */
-std::string utf8_of(uint32_t cp) {
-    std::string s;
-    if (cp < 0x80) {
-        s += char(cp);
-    } else if (cp < 0x800) {
-        s += char(0xC0 | (cp >> 6));
-        s += char(0x80 | (cp & 0x3F));
-    } else {
-        s += char(0xE0 | (cp >> 12));
-        s += char(0x80 | ((cp >> 6) & 0x3F));
-        s += char(0x80 | (cp & 0x3F));
-    }
-    return s;
-}
+std::string utf8_of(uint32_t cp) { return mtef_utf8_of(cp); }
 
 std::string xml_escape(const std::string& s) {
     std::string out;
@@ -190,11 +177,25 @@ struct MetricCache {
         b.asc = v.first;
         b.desc = v.second;
         b.ink_w = width_em(cp, italic, symbol);
-        if (cp < 0x10000) {
+        /* Past U+FFFF, GetGlyphOutlineW takes a glyph index rather than a
+         * character -- and the maths font is exactly where the characters
+         * past U+FFFF are, since that is the block an italic alphabet lives
+         * in.  Skipping the per-glyph box for them left every letter carrying
+         * the font's own ascent and descent, which Latin Modern Math sizes for
+         * an extensible integral: a plain x came out three and a half ems
+         * tall. */
+        uint32_t which = cp;
+        UINT ggo = GGO_METRICS;
+        if (cp >= 0x10000) {
+            const mtef::MathFont& mf = mtef::MathFont::math();
+            const uint16_t gid = mf.ok() ? mf.glyph_for(cp) : 0;
+            if (gid) { which = gid; ggo = GGO_METRICS | GGO_GLYPH_INDEX; }
+        }
+        if (which < 0x10000) {
             HGDIOBJ old = SelectObject(hdc, font(key));
             GLYPHMETRICS gm = {};
             MAT2 id = {{0, 1}, {0, 0}, {0, 0}, {0, 1}};
-            DWORD r = GetGlyphOutlineW(hdc, cp, GGO_METRICS, &gm, 0, nullptr, &id);
+            DWORD r = GetGlyphOutlineW(hdc, which, ggo, &gm, 0, nullptr, &id);
             SelectObject(hdc, old);
             if (r != GDI_ERROR && gm.gmBlackBoxY > 0) {
                 b.asc = std::max(double(gm.gmptGlyphOrigin.y) / kEm, 0.0);
@@ -292,6 +293,21 @@ bool typeface_is_italic(int tf) { return tf == 3 || tf == 4; }   /* VARIABLE, LC
  * of the MTEF typeface: a TF_SYMBOL "(" is still an ordinary parenthesis and
  * belongs in the text face, while anything past Latin-1 needs the math face. */
 bool needs_math_face(uint32_t cp) { return cp > 0xFF; }
+
+/* The Mathematical Alphanumeric Symbols block: where a maths font keeps its
+ * italic letters.  Returns 0 for anything that is not one, which leaves
+ * digits, punctuation and text upright alone.
+ *
+ * U+1D455 -- italic small h -- was never assigned, because Planck's constant
+ * already had U+210E.  A font has the glyph there and nowhere else, so a
+ * naive a + (c - 'a') draws nothing for h. */
+uint32_t math_italic_of(uint32_t cp) {
+    if (cp >= 'A' && cp <= 'Z') return 0x1D434 + (cp - 'A');
+    if (cp == 'h')              return 0x210E;
+    if (cp >= 'a' && cp <= 'z') return 0x1D44E + (cp - 'a');
+    if (cp >= 0x3B1 && cp <= 0x3C9) return 0x1D6FC + (cp - 0x3B1);  /* alpha..omega */
+    return 0;
+}
 
 /* ------------------------------------------------------------------ */
 /* TeX atom classes and the spacing between them                       */
@@ -418,6 +434,11 @@ std::pair<uint32_t, uint32_t> fence_glyphs(int selector) {
     }
 }
 
+/* TeX's \scriptspace: the padding after a subscript or superscript.  A
+ * length, not a proportion -- it does not scale with the type size, because
+ * what it protects against is two pieces of ink touching. */
+const double kScriptSpace = 0.5;
+
 /* ------------------------------------------------------------------ */
 /* Renderer                                                            */
 /* ------------------------------------------------------------------ */
@@ -432,10 +453,24 @@ public:
 private:
     const SvgStyle& st_;
 
+    /* A script is set at the percentage the FONT states, not at the size the
+     * Equation Editor dialog happens to default to.  Latin Modern Math says 70
+     * and 50; the dialog said 58 and 42, which is where a superscript came out
+     * an eighth too small against TeX -- and TeX reads the same two numbers.
+     * (Style follows the font; the dialog stays as it is for usability.) */
+    double script_pt() const {
+        const mtef::MathConstants& mc = mtef::MathFont::math().constants();
+        return st_.full * mc.scriptPercentScaleDown;
+    }
+    double script_script_pt() const {
+        const mtef::MathConstants& mc = mtef::MathFont::math().constants();
+        return st_.full * mc.scriptScriptPercentScaleDown;
+    }
+
     double size_of(int sizeType) const {
         switch (sizeType) {
-            case SIZETYPE_SUB:    return st_.sub;
-            case SIZETYPE_SUB2:   return st_.sub2;
+            case SIZETYPE_SUB:    return script_pt();
+            case SIZETYPE_SUB2:   return script_script_pt();
             case SIZETYPE_SYM:    return st_.sym;
             case SIZETYPE_SUBSYM: return st_.subsym;
             default:              return st_.full;
@@ -443,8 +478,8 @@ private:
     }
     /* One step down for scripts, floored at the sub-subscript size. */
     double script_size(double cur) const {
-        if (cur > st_.sub + 1e-9) return st_.sub;
-        return st_.sub2;
+        if (cur > script_pt() + 1e-9) return script_pt();
+        return script_script_pt();
     }
 
     /* What a fraction sets its numerator and denominator in.
@@ -472,9 +507,36 @@ private:
     int fracDepth_ = 0;
 
     Layout glyph_layout(uint32_t cp, double sizePt, bool italic, bool symbol) {
+        /* A variable is set in the MATHS font's own italic alphabet, not in
+         * the text italic that happens to look like it.  They are different
+         * fonts with different widths, and the difference is not small: TeX
+         * sets x at 6.864 pt where the text italic advances 5.570, because
+         * TeX takes the letter from latinmodern-math.otf like everything else
+         * and this took it from LM Roman 10 Italic.
+         *
+         * Digits and punctuation stay where they are -- upright, and the same
+         * width in both faces. */
+        if (italic) {
+            const uint32_t m = math_italic_of(cp);
+            if (m) { cp = m; italic = false; symbol = true; }
+        }
+
         Layout L;
         L.w = char_width(cp, sizePt, italic, symbol);
         glyph_vmetrics(cp, sizePt, italic, symbol, L.asc, L.desc);
+
+        /* The same table states the italic correction, and TeX appends it
+         * after every maths character (Appendix G / TeX 755).  It is what
+         * makes "ab" 11.664 pt rather than 11.496: 0.168 of it is the kern
+         * after the b. */
+        if (symbol) {
+            const mtef::MathFont& mf = mtef::MathFont::math();
+            if (mf.ok()) {
+                if (const uint16_t gid = mf.glyph_for(cp))
+                    L.w += mf.italics_correction(gid) * sizePt;
+            }
+        }
+
         Glyph g;
         g.x = 0; g.y = 0; g.size = sizePt;
         g.italic = italic; g.symbol = symbol; g.cjk = is_cjk(cp);
@@ -616,8 +678,19 @@ private:
                                 prev == kRel || prev == kOpen || prev == kPunct))
                 cls = kOrd;
 
-            if (have_prev)
-                x += space_mu(prev, cls) * cur / 18.0;
+            if (have_prev) {
+                int mu = space_mu(prev, cls);
+                /* TeX 766: the medium and thick spaces are inserted only in
+                 * display and text styles -- in script and scriptscript they
+                 * are dropped, and only the thin space survives.  Scaling
+                 * them down with the type size instead, which is what this
+                 * did, is not the same thing: it made the limits under a
+                 * summation wider than the summation sign, where TeX sets
+                 * them narrower, and put the whole construct a third too
+                 * wide. */
+                if (mu > 3 && cur < st_.full - 1e-9) mu = 0;
+                x += mu * cur / 18.0;
+            }
 
             Layout piece = layout_node(*n, cur, path, child);
             out.absorb(piece, x, 0);
@@ -725,25 +798,74 @@ private:
         double ss = script_size(sizePt);
         Layout out = base;
         double x = base.w;
-        /* Scripts hang off the base's own extents, not off a fixed offset:
-         * the exponent of a tall base has to clear that base, and the
-         * subscript of a deep one has to sit below it. */
-        const double supShift = std::max(0.45 * sizePt, base.asc - 0.35 * ss);
-        const double subShift = std::max(0.22 * sizePt, base.desc + 0.12 * ss);
+        /* Where a script sits is stated by the font, and TeX reads the same
+         * two numbers: 0.363 em up and 0.247 em down here.  Measured against
+         * TeX, its superscript sits at exactly superscriptShiftUp and its
+         * subscript at exactly subscriptShiftDown -- so the guesses this
+         * replaces (0.45 of the type size, and the base's own extents scaled
+         * by 0.35) were near enough to look right and wrong by a tenth.
+         *
+         * The rest is clearance, in the order MathML Core applies it: a
+         * script starts at the font's shift, is pushed further by a tall or
+         * deep base, and is pushed further again if it would otherwise reach
+         * past the limits the font sets. */
+        const mtef::MathFont& mf = mtef::MathFont::math();
+        const mtef::MathConstants& mc = mf.constants();
+
+        Layout sup, sub;
+        if (s.hasSup) sup = layout_list(s.sup, ss, slot_path(lp, c, supSlot));
+        if (s.hasSub) sub = layout_list(s.sub, ss, slot_path(lp, c, subSlot));
+
+        double supShift = 0, subShift = 0;
+        if (s.hasSup) {
+            supShift = std::max(mc.superscriptShiftUp * sizePt,
+                                mc.superscriptBottomMin * sizePt + sup.desc);
+            supShift = std::max(supShift,
+                                base.asc - mc.superscriptBaselineDropMax * sizePt);
+        }
+        if (s.hasSub) {
+            subShift = std::max(mc.subscriptShiftDown * sizePt,
+                                sub.asc - mc.subscriptTopMax * sizePt);
+            subShift = std::max(subShift,
+                                base.desc + mc.subscriptBaselineDropMin * sizePt);
+        }
+        if (s.hasSup && s.hasSub) {
+            /* The two must not close up on each other, and the superscript
+             * must not ride so high that the pair looks unattached. */
+            const double gap = (supShift - sup.desc) - (sub.asc - subShift);
+            const double want = mc.subSuperscriptGapMin * sizePt;
+            if (gap < want) {
+                subShift += want - gap;
+                /* Opening that gap by lowering the subscript alone drops the
+                 * pair away from the base.  The font caps how low the
+                 * superscript's foot may sit, so whatever room is left under
+                 * that cap is taken by raising BOTH -- the gap is kept and the
+                 * pair stays attached. */
+                const double room = mc.superscriptBottomMaxWithSubscript * sizePt
+                                  - (supShift - sup.desc);
+                if (room > 0) {
+                    supShift += room;
+                    subShift -= room;
+                }
+            }
+        }
+
         double wsub = 0, wsup = 0;
         if (s.hasSup) {
-            Layout sup = layout_list(s.sup, ss, slot_path(lp, c, supSlot));
             out.absorb(sup, x, -supShift);
             out.asc = std::max(out.asc, supShift + sup.asc);
             wsup = sup.w;
         }
         if (s.hasSub) {
-            Layout sub = layout_list(s.sub, ss, slot_path(lp, c, subSlot));
             out.absorb(sub, x, subShift);
             out.desc = std::max(out.desc, subShift + sub.desc);
             wsub = sub.w;
         }
-        out.w = x + std::max(wsub, wsup);
+        /* TeX pads a script by \scriptspace so the next thing along does not
+         * touch it -- 0.5 pt, added to the script box itself (Appendix G,
+         * make_scripts).  Every x^2 in the comparison was exactly this much
+         * narrower than TeX's. */
+        out.w = x + std::max(wsub, wsup) + (s.hasSub || s.hasSup ? kScriptSpace : 0.0);
         return out;
     }
 
@@ -807,14 +929,19 @@ private:
         const double axis  = mc.axisHeight * sizePt;
         const double thick = mc.fractionRuleThickness * sizePt;
 
-        /* Equation Editor 3.1 extends the bar past the wider of the two parts
-         * by ONE POINT on each side (Format > Spacing, "Fraction bar
-         * overhang"); the OpenType MATH table has no such notion and MathML
-         * Core draws the bar exactly as wide as the parts.  The overhang is
-         * part of how a fraction reads, so keep Equation Editor's -- but note
-         * that this replaces 0.4 of the type size, which at 12 pt was two and
-         * a half times wider on each side than the editor being imitated. */
-        const double overhang = 1.0;
+        /* TeX puts a null delimiter on each side of a fraction --
+         * 
+ulldelimiterspace, 1.2 pt -- so the BOX is wider than the parts,
+         * but make_fraction sets the rule itself to width(x), exactly as wide
+         * as the wider part.  The two are separate numbers and were conflated
+         * here: widening the rule as well drew a bar that stuck out a point
+         * past its own numerator, which is a fifth more black than TeX puts on
+         * the page and the single largest disagreement the ink comparison
+         * found on a plain fraction.
+         *
+         * (Equation Editor 3.1 does overhang, by one point on each side, and
+         * that is what this used to imitate.  Appearance follows TeX.) */
+        const double sidebearing = 1.2;
 
         /* Then the two parts are pushed apart until they clear the bar by at
          * least the font's minimum gap.  Equation Editor states this as
@@ -840,7 +967,8 @@ private:
         shiftUp   = std::max(shiftUp,   axis + thick / 2.0 + gapNum + num.desc);
         shiftDown = std::max(shiftDown, -axis + thick / 2.0 + gapDen + den.asc);
 
-        const double w = std::max(num.w, den.w) + 2.0 * overhang;
+        const double inner = std::max(num.w, den.w);
+        const double w = inner + 2.0 * sidebearing;
 
         Layout out;
         out.w = w;
@@ -848,9 +976,9 @@ private:
         out.absorb(den, (w - den.w) / 2.0, shiftDown);
 
         Rule bar;
-        bar.x = 0;
+        bar.x = sidebearing;
         bar.y = -axis - thick / 2.0;
-        bar.w = w;
+        bar.w = inner;
         bar.h = thick;
         out.rules.push_back(bar);
 
@@ -934,18 +1062,31 @@ private:
             sign.desc *= k;
         }
 
-        /* The index sits above the radical's left arm, at script size.  It is
-         * given its own width rather than being tucked under the sign, which
-         * keeps a two-digit index from colliding with the radicand. */
+        /* The index sits ON the radical's left arm, not beside it.
+         *
+         * plain.tex's \root builds its box at \scriptscriptstyle -- two steps
+         * down, not one -- and then pulls it back over the sign with two
+         * kerns:  \mkern-5mu <index> \mkern-4mu <radical>.  A font states the
+         * same two kerns in its MATH table, and this one does
+         * (radicalKernBeforeDegree, radicalKernAfterDegree); they were read
+         * and then never used.
+         *
+         * Giving the index its own full width at script size instead, which is
+         * what this did, put a cube root a quarter wider than TeX sets one and
+         * left the 3 stranded in clear space to the left of the arm it belongs
+         * on -- by far the worst equation in the ink comparison. */
         Layout idx;
-        double idxW = 0;
+        double idxX = 0, signX = 0;
         if (s.hasIndex) {
-            idx = layout_list(s.index, script_size(sizePt), slot_path(lp, c, 1));
-            idxW = idx.w;
+            idx = layout_list(s.index, script_size(script_size(sizePt)),
+                              slot_path(lp, c, 1));
+            const double before = mc.radicalKernBeforeDegree * sizePt;
+            const double after  = mc.radicalKernAfterDegree * sizePt;
+            idxX  = std::max(0.0, before);
+            signX = std::max(0.0, idxX + idx.w + after);
         }
 
         Layout out;
-        const double signX = idxW;
 
         /* The sign's FOOT sits with the radicand's, and the bar follows its
          * top.
@@ -995,14 +1136,16 @@ private:
         bar.h = thick;
         out.rules.push_back(bar);
 
+        out.w = signX + sign.w + inner.w;
         if (s.hasIndex) {
             /* The font says how far up the degree sits, as a fraction of the
              * radical's own height. */
             const double lift = mc.radicalDegreeBottomRaisePercent * (-barTop);
-            out.absorb(idx, 0, -lift);
+            out.absorb(idx, idxX, -lift);
             out.asc = std::max(out.asc, lift + idx.asc);
+            /* A long index can reach past the sign it is kerned onto. */
+            out.w = std::max(out.w, idxX + idx.w);
         }
-        out.w = signX + sign.w + inner.w;
         return out;
     }
 
@@ -1054,6 +1197,27 @@ private:
         } else {
             op = glyph_layout(glyph, opSize, false, true);
             op.w = std::max(op.w, glyph_ink_width(glyph, opSize, false, true));
+        }
+
+        /* Centre it on the maths axis, which is TeX's make_op:
+         *
+         *     shift_amount(x) = half(height(x) - depth(x)) - axis_height
+         *
+         * A summation or an integral is drawn about its own middle, not about
+         * the baseline, and the axis is the line a fraction bar and a minus
+         * sign already sit on -- so centring there is what puts an operator in
+         * line with everything beside it.  Left on the baseline it rides high,
+         * and its limits inherit the error. */
+        {
+            const double lift = (op.asc - op.desc) / 2.0 - mc.axisHeight * sizePt;
+            if (std::fabs(lift) > 1e-9) {
+                Layout centred;
+                centred.absorb(op, 0, lift);
+                centred.w = op.w;
+                centred.asc = op.asc - lift;
+                centred.desc = op.desc + lift;
+                op = centred;
+            }
         }
 
         if (stacked) {
