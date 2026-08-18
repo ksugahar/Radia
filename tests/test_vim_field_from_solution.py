@@ -13,12 +13,50 @@ import pytest
 ng = pytest.importorskip("ngsolve")
 rad = pytest.importorskip("radia")
 
-from radia.vim import _field_batch as fb
 from radia import vim
+from radia.vim import _field_batch as fb
+
+
+def test_custom_tree_options_are_validated_and_cached_by_configuration():
+    class FakeGram:
+        def __init__(self):
+            self.calls = []
+
+        def create_field_evaluator(self, *args):
+            self.calls.append(args)
+            return object()
+
+    gram = FakeGram()
+    result = {
+        "gfM": object(),
+        "order": 1,
+        "_charge_gram": gram,
+        "_m_coefficients": np.array([1.0]),
+    }
+    first = fb._materialize_field_evaluator(
+        result, {"theta": 0.2, "leaf_size": 16})
+    second = fb._materialize_field_evaluator(
+        result, {"leaf_size": 16.0, "theta": 0.2})
+
+    assert first is second
+    assert len(gram.calls) == 1
+    assert all(isinstance(key, str) for key in result)
+    assert isinstance(result["_field_evaluator_custom"], dict)
+
+    with pytest.raises(TypeError, match="must be a dict"):
+        fb._materialize_field_evaluator(result, [("theta", 0.2)])
+    with pytest.raises(ValueError, match="unknown"):
+        fb._materialize_field_evaluator(result, {"opening_angle": 0.2})
+    with pytest.raises(ValueError, match="leaf_size"):
+        fb._materialize_field_evaluator(result, {"leaf_size": 1.5})
+    with pytest.raises(ValueError, match="theta"):
+        fb._materialize_field_evaluator(result, {"theta": np.nan})
+    with pytest.raises(ValueError, match="probe_count"):
+        fb._materialize_field_evaluator(result, {"probe_count": 0})
 
 
 def test_uniform_box_matches_radia_cpp():
-    from netgen.occ import Box, Pnt, OCCGeometry
+    from netgen.occ import Box, OCCGeometry, Pnt
     rad.UtiDelAll()
     dims = np.array([0.04, 0.05, 0.03])
     center = 0.5 * dims
@@ -160,7 +198,7 @@ def test_exact_vector_potential_equivalent_current():
     identity closes the integral analytically, so ``curl A`` must reproduce the
     exact charge-kernel H right next to the body, not only in the far field.
     """
-    from netgen.occ import Box, Pnt, OCCGeometry
+    from netgen.occ import Box, OCCGeometry, Pnt
     rad.UtiDelAll()
     mu0 = 4.0e-7 * np.pi
     lower, upper = np.array([0.0, 0.0, 0.0]), np.array([0.04, 0.03, 0.02])
@@ -254,7 +292,7 @@ def test_exact_vector_potential_equivalent_current():
 
 def test_exact_vector_potential_fails_loud_on_non_affine_space():
     """A quadratic (BDM2) magnetization is not an affine source -- raise."""
-    from netgen.occ import Box, Pnt, OCCGeometry
+    from netgen.occ import Box, OCCGeometry, Pnt
     rad.UtiDelAll()
     with ng.TaskManager():
         mesh = ng.Mesh(
@@ -273,7 +311,7 @@ def test_exact_vector_potential_fails_loud_on_non_affine_space():
 
 
 def test_sphere_end_to_end_and_fail_loud():
-    from netgen.occ import OCCGeometry, Sphere, Pnt
+    from netgen.occ import OCCGeometry, Pnt, Sphere
     rng = np.random.default_rng(3)
     rad.UtiDelAll()
     with ng.TaskManager():
