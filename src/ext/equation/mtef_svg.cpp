@@ -868,7 +868,14 @@ private:
          * the type size, picked by eye. */
         const mtef::MathFont& mf = mtef::MathFont::math();
         const mtef::MathConstants& mc = mf.constants();
-        const double gap   = mc.radicalVerticalGap  * sizePt;
+        /* Display style takes the wider clearance.  TeX: clr is
+         * default_rule_thickness + x_height/4 in display and 1.25 *
+         * default_rule_thickness otherwise, and the font's two radical gaps
+         * are those same two quantities -- 0.148 em against 0.050.  Only the
+         * narrow one was ever used, so a displayed root sat a tenth of an em
+         * too close to what it covers. */
+        const double gap   = (fracDepth_ == 0 ? mc.radicalDisplayStyleVerticalGap
+                                              : mc.radicalVerticalGap) * sizePt;
         const double thick = mc.radicalRuleThickness * sizePt;
         const double extra = mc.radicalExtraAscender * sizePt;
 
@@ -876,12 +883,31 @@ private:
          * heights, so ask for the one that reaches -- the stroke stays the
          * weight the designer drew and the hook still meets the bar. */
         const double need = inner.asc + inner.desc + gap + thick;
+
+        /* Choose the variant by what it MEASURES, not by what it advertises.
+         *
+         * A variant record states an advance along the stretch axis, which is
+         * not the same as the glyph's ink: measured, this font's radicals are
+         * shorter than their records claim.  Selecting on the record picked a
+         * size larger than needed every time -- a root over a fraction came
+         * out a sixth taller than TeX's, and TeX picks from the same list. */
         Layout sign;
         double got_em = 0;
-        const uint16_t variant =
-            mf.ok() ? mf.vertical_variant(mf.glyph_for(0x221A), need / sizePt,
-                                          &got_em)
-                    : 0;
+        uint16_t variant = 0;
+        if (mf.ok()) {
+            const uint16_t base = mf.glyph_for(0x221A);
+            if (const mtef::Stretch* st = mf.vertical(base)) {
+                for (const auto& v : st->variants) {
+                    const MetricCache::Box b = metrics().glyph_box_index(v.first);
+                    const double ink = b.asc + b.desc;
+                    variant = v.first;
+                    got_em = ink;
+                    if (ink * sizePt >= need) break;
+                }
+            } else {
+                variant = base;
+            }
+        }
         if (variant) {
             const MetricCache::Box b = metrics().glyph_box_index(variant);
             Glyph g;
@@ -921,9 +947,34 @@ private:
         Layout out;
         const double signX = idxW;
 
-        /* Everything hangs off the bar: it sits one gap above the radicand,
-         * and the sign is placed so its own top lands on it. */
-        const double barTop = -(inner.asc + gap + thick);
+        /* The sign's FOOT sits with the radicand's, and the bar follows its
+         * top.
+         *
+         * A font offers a radical at a few ready-made heights -- 1.0, 1.2,
+         * 1.8, 2.4 em here -- so the one that reaches is usually taller than
+         * needed.  Placing its top on the bar sent all of that excess below
+         * the line: over a fraction the box came out two thirds deeper than
+         * TeX's, and the sign dangled past what it was covering.
+         *
+         * TeX puts the excess above instead (Appendix G rule 11 widens the
+         * clearance by it), which is why its root over a fraction is only a
+         * fifteenth of a point deeper than the fraction alone.  Measured on
+         * the same equation: TeX 8.43 against the fraction's own 8.36. */
+        /* TeX's make_radical, which settles what happens to the slack.
+         *
+         *     delta = depth(y) - (height(x) + depth(x) + clr)
+         *     if delta > 0 then clr = clr + half(delta)
+         *
+         * The font offers a radical at a few fixed heights, so the one that
+         * reaches is nearly always taller than needed.  HALF that excess goes
+         * into the clearance, widening the gap above the radicand; the other
+         * half is left to hang below the line.  Sending all of it one way --
+         * either way -- was a guess, and both guesses were wrong. */
+        const double slack = (sign.asc + sign.desc)
+                           - (inner.asc + inner.desc + gap + thick);
+        const double clr = gap + (slack > 0 ? slack / 2.0 : 0.0);
+
+        const double barTop = -(inner.asc + clr + thick);
         const double signBaseline = barTop + sign.asc;
 
         out.absorb(sign, signX, signBaseline);
@@ -1078,8 +1129,12 @@ private:
              * before was never the height: it was that both limits sat in a
              * column against a sign that leans, for want of the italic
              * correction below. */
-            const double supShift = mc.superscriptShiftUp * sizePt;
-            const double subShift = mc.subscriptShiftDown * sizePt;
+            const double supShift = std::max(
+                mc.superscriptShiftUp * sizePt,
+                op.asc - mc.superscriptBaselineDropMax * sizePt);
+            const double subShift = std::max(
+                mc.subscriptShiftDown * sizePt,
+                op.desc + mc.subscriptBaselineDropMin * sizePt);
             const uint16_t opGid = mf.ok() ? mf.glyph_for(glyph) : 0;
             const double ic = opGid ? mf.italics_correction(opGid) * opSize : 0.0;
 
