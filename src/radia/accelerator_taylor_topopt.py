@@ -38,6 +38,28 @@ from .topology_optimization import (
     select_tsvd_element_candidates,
 )
 
+_EINSUM_PATHS: dict = {}
+
+
+def _cached_einsum(subscripts, *operands, optimize=True, **kwargs):
+    """``np.einsum`` with the contraction path cached per (subscripts, shapes).
+
+    The Taylor/Lie map machinery issues tens of thousands of einsum calls over
+    a handful of small fixed-shape tensor contractions; numpy re-plans the
+    greedy path on every call, which costs more than the contractions
+    themselves.  The first call per signature computes the exact path
+    ``optimize=True`` would have used and every later call replays it, so
+    results stay bit-identical while the planning cost vanishes.  The
+    ``optimize`` argument is accepted for signature compatibility and ignored.
+    """
+    del optimize
+    key = (subscripts, tuple(np.shape(operand) for operand in operands))
+    path = _EINSUM_PATHS.get(key)
+    if path is None:
+        path = np.einsum_path(subscripts, *operands, optimize=True)[0]
+        _EINSUM_PATHS[key] = path
+    return np.einsum(subscripts, *operands, optimize=path, **kwargs)
+
 SECOND_ORDER_MULTIPOLE_COMPONENTS = (
     "normal_dipole",
     "normal_quadrupole",
@@ -567,19 +589,19 @@ def _paraxial_third_order_jet(
 
 
 def _second_order_rhs(A, F2, dA, dF2, R, T, dR, dT):
-    R_dot = np.einsum("ia,aj->ij", A, R, optimize=True)
-    T_dot = np.einsum("ia,ajk->ijk", A, T, optimize=True) + np.einsum(
+    R_dot = _cached_einsum("ia,aj->ij", A, R, optimize=True)
+    T_dot = _cached_einsum("ia,ajk->ijk", A, T, optimize=True) + _cached_einsum(
         "iab,aj,bk->ijk", F2, R, R, optimize=True
     )
-    dR_dot = np.einsum("ia,paj->pij", A, dR, optimize=True) + np.einsum(
+    dR_dot = _cached_einsum("ia,paj->pij", A, dR, optimize=True) + _cached_einsum(
         "pia,aj->pij", dA, R, optimize=True
     )
     dT_dot = (
-        np.einsum("ia,pajk->pijk", A, dT, optimize=True)
-        + np.einsum("pia,ajk->pijk", dA, T, optimize=True)
-        + np.einsum("piab,aj,bk->pijk", dF2, R, R, optimize=True)
-        + np.einsum("iab,paj,bk->pijk", F2, dR, R, optimize=True)
-        + np.einsum("iab,aj,pbk->pijk", F2, R, dR, optimize=True)
+        _cached_einsum("ia,pajk->pijk", A, dT, optimize=True)
+        + _cached_einsum("pia,ajk->pijk", dA, T, optimize=True)
+        + _cached_einsum("piab,aj,bk->pijk", dF2, R, R, optimize=True)
+        + _cached_einsum("iab,paj,bk->pijk", F2, dR, R, optimize=True)
+        + _cached_einsum("iab,aj,pbk->pijk", F2, R, dR, optimize=True)
     )
     return R_dot, T_dot, dR_dot, dT_dot
 
@@ -613,18 +635,18 @@ def _compose_second_order(outer, inner):
     Ro, To, dRo, dTo = outer
     Ri, Ti, dRi, dTi = inner
     R = Ro @ Ri
-    T = np.einsum("ia,ajk->ijk", Ro, Ti, optimize=True) + np.einsum(
+    T = _cached_einsum("ia,ajk->ijk", Ro, Ti, optimize=True) + _cached_einsum(
         "iab,aj,bk->ijk", To, Ri, Ri, optimize=True
     )
-    dR = np.einsum("pia,aj->pij", dRo, Ri, optimize=True) + np.einsum(
+    dR = _cached_einsum("pia,aj->pij", dRo, Ri, optimize=True) + _cached_einsum(
         "ia,paj->pij", Ro, dRi, optimize=True
     )
     dT = (
-        np.einsum("pia,ajk->pijk", dRo, Ti, optimize=True)
-        + np.einsum("ia,pajk->pijk", Ro, dTi, optimize=True)
-        + np.einsum("piab,aj,bk->pijk", dTo, Ri, Ri, optimize=True)
-        + np.einsum("iab,paj,bk->pijk", To, dRi, Ri, optimize=True)
-        + np.einsum("iab,aj,pbk->pijk", To, Ri, dRi, optimize=True)
+        _cached_einsum("pia,ajk->pijk", dRo, Ti, optimize=True)
+        + _cached_einsum("ia,pajk->pijk", Ro, dTi, optimize=True)
+        + _cached_einsum("piab,aj,bk->pijk", dTo, Ri, Ri, optimize=True)
+        + _cached_einsum("iab,paj,bk->pijk", To, dRi, Ri, optimize=True)
+        + _cached_einsum("iab,aj,pbk->pijk", To, Ri, dRi, optimize=True)
     )
     return R, T, dR, dT
 
@@ -640,49 +662,49 @@ def _identity_second_order(parameter_count):
 
 def _cross_second_order(F2, R, T):
     return (
-        np.einsum("iab,aj,bkl->ijkl", F2, R, T, optimize=True)
-        + np.einsum("iab,ak,bjl->ijkl", F2, R, T, optimize=True)
-        + np.einsum("iab,al,bjk->ijkl", F2, R, T, optimize=True)
+        _cached_einsum("iab,aj,bkl->ijkl", F2, R, T, optimize=True)
+        + _cached_einsum("iab,ak,bjl->ijkl", F2, R, T, optimize=True)
+        + _cached_einsum("iab,al,bjk->ijkl", F2, R, T, optimize=True)
     )
 
 
 def _cross_second_order_tangent(F2, R, T, dF2, dR, dT):
     return (
-        np.einsum("piab,aj,bkl->pijkl", dF2, R, T, optimize=True)
-        + np.einsum("piab,ak,bjl->pijkl", dF2, R, T, optimize=True)
-        + np.einsum("piab,al,bjk->pijkl", dF2, R, T, optimize=True)
-        + np.einsum("iab,paj,bkl->pijkl", F2, dR, T, optimize=True)
-        + np.einsum("iab,pak,bjl->pijkl", F2, dR, T, optimize=True)
-        + np.einsum("iab,pal,bjk->pijkl", F2, dR, T, optimize=True)
-        + np.einsum("iab,aj,pbkl->pijkl", F2, R, dT, optimize=True)
-        + np.einsum("iab,ak,pbjl->pijkl", F2, R, dT, optimize=True)
-        + np.einsum("iab,al,pbjk->pijkl", F2, R, dT, optimize=True)
+        _cached_einsum("piab,aj,bkl->pijkl", dF2, R, T, optimize=True)
+        + _cached_einsum("piab,ak,bjl->pijkl", dF2, R, T, optimize=True)
+        + _cached_einsum("piab,al,bjk->pijkl", dF2, R, T, optimize=True)
+        + _cached_einsum("iab,paj,bkl->pijkl", F2, dR, T, optimize=True)
+        + _cached_einsum("iab,pak,bjl->pijkl", F2, dR, T, optimize=True)
+        + _cached_einsum("iab,pal,bjk->pijkl", F2, dR, T, optimize=True)
+        + _cached_einsum("iab,aj,pbkl->pijkl", F2, R, dT, optimize=True)
+        + _cached_einsum("iab,ak,pbjl->pijkl", F2, R, dT, optimize=True)
+        + _cached_einsum("iab,al,pbjk->pijkl", F2, R, dT, optimize=True)
     )
 
 
 def _transform_cubic(F3, R):
-    return np.einsum("iabc,aj,bk,cl->ijkl", F3, R, R, R, optimize=True)
+    return _cached_einsum("iabc,aj,bk,cl->ijkl", F3, R, R, R, optimize=True)
 
 
 def _transform_cubic_tangent(F3, R, dF3, dR):
     return (
-        np.einsum("piabc,aj,bk,cl->pijkl", dF3, R, R, R, optimize=True)
-        + np.einsum("iabc,paj,bk,cl->pijkl", F3, dR, R, R, optimize=True)
-        + np.einsum("iabc,aj,pbk,cl->pijkl", F3, R, dR, R, optimize=True)
-        + np.einsum("iabc,aj,bk,pcl->pijkl", F3, R, R, dR, optimize=True)
+        _cached_einsum("piabc,aj,bk,cl->pijkl", dF3, R, R, R, optimize=True)
+        + _cached_einsum("iabc,paj,bk,cl->pijkl", F3, dR, R, R, optimize=True)
+        + _cached_einsum("iabc,aj,pbk,cl->pijkl", F3, R, dR, R, optimize=True)
+        + _cached_einsum("iabc,aj,bk,pcl->pijkl", F3, R, R, dR, optimize=True)
     )
 
 
 def _third_order_rhs(A, F2, F3, dA, dF2, dF3, R, T, U, dR, dT, dU):
     R_dot, T_dot, dR_dot, dT_dot = _second_order_rhs(A, F2, dA, dF2, R, T, dR, dT)
     U_dot = (
-        np.einsum("ia,ajkl->ijkl", A, U, optimize=True)
+        _cached_einsum("ia,ajkl->ijkl", A, U, optimize=True)
         + _cross_second_order(F2, R, T)
         + _transform_cubic(F3, R)
     )
     dU_dot = (
-        np.einsum("ia,pajkl->pijkl", A, dU, optimize=True)
-        + np.einsum("pia,ajkl->pijkl", dA, U, optimize=True)
+        _cached_einsum("ia,pajkl->pijkl", A, dU, optimize=True)
+        + _cached_einsum("pia,ajkl->pijkl", dA, U, optimize=True)
         + _cross_second_order_tangent(F2, R, T, dF2, dR, dT)
         + _transform_cubic_tangent(F3, R, dF3, dR)
     )
@@ -713,27 +735,27 @@ def _compose_third_order(outer, inner):
     Ro, To, Uo, dRo, dTo, dUo = outer
     Ri, Ti, Ui, dRi, dTi, dUi = inner
     R = Ro @ Ri
-    T = np.einsum("ia,ajk->ijk", Ro, Ti, optimize=True) + np.einsum(
+    T = _cached_einsum("ia,ajk->ijk", Ro, Ti, optimize=True) + _cached_einsum(
         "iab,aj,bk->ijk", To, Ri, Ri, optimize=True
     )
     U = (
-        np.einsum("ia,ajkl->ijkl", Ro, Ui, optimize=True)
+        _cached_einsum("ia,ajkl->ijkl", Ro, Ui, optimize=True)
         + _cross_second_order(To, Ri, Ti)
         + _transform_cubic(Uo, Ri)
     )
-    dR = np.einsum("pia,aj->pij", dRo, Ri, optimize=True) + np.einsum(
+    dR = _cached_einsum("pia,aj->pij", dRo, Ri, optimize=True) + _cached_einsum(
         "ia,paj->pij", Ro, dRi, optimize=True
     )
     dT = (
-        np.einsum("pia,ajk->pijk", dRo, Ti, optimize=True)
-        + np.einsum("ia,pajk->pijk", Ro, dTi, optimize=True)
-        + np.einsum("piab,aj,bk->pijk", dTo, Ri, Ri, optimize=True)
-        + np.einsum("iab,paj,bk->pijk", To, dRi, Ri, optimize=True)
-        + np.einsum("iab,aj,pbk->pijk", To, Ri, dRi, optimize=True)
+        _cached_einsum("pia,ajk->pijk", dRo, Ti, optimize=True)
+        + _cached_einsum("ia,pajk->pijk", Ro, dTi, optimize=True)
+        + _cached_einsum("piab,aj,bk->pijk", dTo, Ri, Ri, optimize=True)
+        + _cached_einsum("iab,paj,bk->pijk", To, dRi, Ri, optimize=True)
+        + _cached_einsum("iab,aj,pbk->pijk", To, Ri, dRi, optimize=True)
     )
     dU = (
-        np.einsum("pia,ajkl->pijkl", dRo, Ui, optimize=True)
-        + np.einsum("ia,pajkl->pijkl", Ro, dUi, optimize=True)
+        _cached_einsum("pia,ajkl->pijkl", dRo, Ui, optimize=True)
+        + _cached_einsum("ia,pajkl->pijkl", Ro, dUi, optimize=True)
         + _cross_second_order_tangent(To, Ri, Ti, dTo, dRi, dTi)
         + _transform_cubic_tangent(Uo, Ri, dUo, dRi)
     )
