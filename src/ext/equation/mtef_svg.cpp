@@ -219,7 +219,15 @@ struct MetricCache {
         HGDIOBJ old = SelectObject(hdc, font(key));
         Box b;
         int adv = 0;
-        if (GetCharWidthI(hdc, gid, 1, nullptr, &adv)) b.ink_w = adv / kEm;
+        /* double(adv), not adv: both were int, so this was integer division.
+         * A glyph wider than one em came back as exactly 1.0 -- which is why a
+         * summation's display variant measured 12.0 pt against the 17.328 the
+         * font gives it -- and anything narrower came back as 0, fell through
+         * to the black box below, and got its INK where its ADVANCE was
+         * wanted.  Every glyph measured by index went through here: the
+         * radical variants, the fences, the large operators. */
+        if (GetCharWidthI(hdc, gid, 1, nullptr, &adv))
+            b.ink_w = double(adv) / kEm;
         GLYPHMETRICS gm = {};
         MAT2 id = {{0, 1}, {0, 0}, {0, 0}, {0, 1}};
         DWORD r = GetGlyphOutlineW(hdc, gid, GGO_METRICS | GGO_GLYPH_INDEX,
@@ -716,7 +724,7 @@ private:
             /* An empty slot takes up room and says so.  Without a width a
              * fresh fraction is a bar with nothing above or below it, and the
              * editor gives no sign that there are two places to type. */
-            out.w = 0.55 * sizePt;
+            out.w = st_.empty_slot_em * sizePt;
             out.asc = -top;
             out.desc = bottom;
             SlotBox b;
@@ -1174,6 +1182,12 @@ ulldelimiterspace, 1.2 pt -- so the BOX is wider than the parts,
         Layout op;
         const uint16_t baseGid = mf.ok() ? mf.glyph_for(glyph) : 0;
         double gotEm = 0;
+        /* Which drawing was used, and the size it was drawn at.  The italic
+         * correction below belongs to THAT glyph: an integral's display
+         * variant leans further than the text one, and states 7.09 pt of
+         * correction against the text glyph's 3.98. */
+        uint16_t drawnGid = 0;
+        double drawnPt = sizePt;
         /* How tall the font says a display operator must be, and nothing
          * else.  This was floored at Equation Editor's own ratio -- its Size
          * dialog sets symbols at 18 point against a 12 point body -- which
@@ -1194,9 +1208,13 @@ ulldelimiterspace, 1.2 pt -- so the BOX is wider than the parts,
             op.w = b.ink_w * sizePt;
             op.asc = b.asc * sizePt;
             op.desc = b.desc * sizePt;
+            drawnGid = bigGid;
+            drawnPt = sizePt;
         } else {
             op = glyph_layout(glyph, opSize, false, true);
             op.w = std::max(op.w, glyph_ink_width(glyph, opSize, false, true));
+            drawnGid = baseGid;
+            drawnPt = opSize;
         }
 
         /* Centre it on the maths axis, which is TeX's make_op:
@@ -1243,9 +1261,19 @@ ulldelimiterspace, 1.2 pt -- so the BOX is wider than the parts,
              * big_op_spacing5, Appendix G rule 13.  The OpenType MATH table
              * has no constant for it and MathML Core simply leaves it out,
              * which is why a summation with limits came out a twelfth shorter
-             * than the same summation set by TeX.  Asked directly, TeX wants
-             * 1 pt of it against a 12 point body in this font. */
-            const double extra = (1.0 / 12.0) * sizePt;
+             * than the same summation set by TeX.
+             *
+             * Asked directly -- 	heontdimen13	extfont3 -- TeX wants
+             * 1.2 pt of it against a 12 point body in this font, which is
+             * 0.1 em.  That is measured, not the 1/12 that was guessed here.
+             *
+             * The four limit distances above DO have MATH constants, and the
+             * pairing is not the one the names suggest.  Measured against the
+             * same font: big_op_spacing1 is upperLimitBaselineRiseMin (0.111
+             * em), big_op_spacing2 is lowerLimitGapMin (0.167), big_op_spacing3
+             * is upperLimitGapMin (0.200) and big_op_spacing4 is
+             * lowerLimitBaselineDropMin (0.600). */
+            const double extra = 0.1 * sizePt;
 
             out.absorb(op, (w - op.w) / 2.0, 0);
             out.asc = op.asc;
@@ -1299,8 +1327,27 @@ ulldelimiterspace, 1.2 pt -- so the BOX is wider than the parts,
             const double subShift = std::max(
                 mc.subscriptShiftDown * sizePt,
                 op.desc + mc.subscriptBaselineDropMin * sizePt);
-            const uint16_t opGid = mf.ok() ? mf.glyph_for(glyph) : 0;
-            const double ic = opGid ? mf.italics_correction(opGid) * opSize : 0.0;
+            const double ic =
+                drawnGid ? mf.italics_correction(drawnGid) * drawnPt : 0.0;
+
+            /* TeX's make_op, for an operator whose limits go at its side:
+             *
+             *     if (subscript is not empty) and (not \limits) then
+             *         width(x) <- width(x) - delta   { remove ic }
+             *     ...
+             *     shift_amount(superscript) <- delta
+             *
+             * The correction is taken OUT of the operator's own width and
+             * spent shifting the superscript right instead -- it is the lean
+             * of the integral, not extra advance.  Keeping it in as well put
+             * the limits a whole correction too far out: an integral came out
+             * half again as wide as TeX's, a contour integral nearly twice.
+             *
+             * The check is exact, in points:  \oint_C is
+             * (11.988 - 7.092) + 7.3164 + 0.5 = 12.7124, which is what TeX
+             * reports to the last digit. */
+            const bool sideScripts = hasLower || hasUpper;
+            if (sideScripts) x -= ic;
 
             double wsub = 0, wsup = 0;
             if (hasUpper) {
@@ -1316,6 +1363,7 @@ ulldelimiterspace, 1.2 pt -- so the BOX is wider than the parts,
                 wsub = lo.w;
             }
             x += std::max(wsub, wsup);
+            if (sideScripts) x += kScriptSpace;
         }
 
         /* The operand joins the operator here rather than through the atom

@@ -36,6 +36,17 @@ struct SvgStyle {
     std::string cjk = "Yu Mincho, MS Mincho, serif";
 
     double padding = 1.0;   /* pt of white space around the equation */
+
+    /* How much room an EMPTY slot takes, as a fraction of the type size.
+     *
+     * The editor needs room: a template nobody has typed into has no extent,
+     * so without this a fresh fraction is a bar floating in space with no sign
+     * that there are two places to type.  A PICTURE needs none -- TeX has no
+     * such notion, and reserving it made a summation with no operand measure
+     * 6.6 pt wider than the summation.  So the default is TeX's and the editor
+     * asks for the other one.  (The dotted boxes are reported eitherway; who
+     * draws them was already the caller's choice.) */
+    double empty_slot_em = 0.0;
 };
 
 /* Render a parsed equation to a standalone SVG document. */

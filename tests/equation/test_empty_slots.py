@@ -24,6 +24,16 @@ equation = pytest.importorskip("radia.equation")
 slots = equation.tex_empty_slots
 
 
+def _style(em):
+    st = equation.SvgStyle()
+    st.empty_slot_em = em
+    return st
+
+
+EDITING = _style(0.55)      # on screen: an untyped slot must be visible
+PICTURE = equation.SvgStyle()   # on a slide: it must not take up room
+
+
 # ---- what has an empty slot ------------------------------------------------
 
 @pytest.mark.parametrize("latex,count", [
@@ -40,10 +50,28 @@ def test_the_layout_reports_the_slots_that_are_empty(latex, count):
 
 
 def test_an_empty_slot_has_room_to_type_in():
-    """Zero width would put the caret on top of the fraction bar."""
-    for x, y, w, h in slots(r"\dfrac{}{}"):
+    """Zero width would put the caret on top of the fraction bar.
+
+    Asked for explicitly, because the two callers want opposite things here as
+    well.  A PICTURE reserves nothing for an empty slot -- TeX has no such
+    notion, and reserving it made a summation with no operand measure 6.6 pt
+    wider than the summation -- so that is the default.  The editor asks for
+    the room it needs."""
+    for x, y, w, h in slots(r"\dfrac{}{}", EDITING):
         assert w > 0
         assert h > 0
+
+
+def test_a_picture_reserves_nothing_for_an_empty_slot():
+    """The box is still reported, so the editor can find it; it just has no
+    width.  An equation on a slide is the equation, not the equation plus room
+    for something nobody typed."""
+    for x, y, w, h in slots(r"\dfrac{}{}"):
+        assert w == 0
+    empty = equation.tex_metrics(r"\dfrac{a}{}", PICTURE)[0]
+    filled = equation.tex_metrics(r"\dfrac{a}{a}", PICTURE)[0]
+    assert empty == pytest.approx(filled), (
+        "an empty denominator widened the fraction by %.3f pt" % (empty - filled))
 
 
 def test_the_two_slots_of_a_fraction_are_at_different_heights():
