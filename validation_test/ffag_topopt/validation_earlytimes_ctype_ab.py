@@ -48,7 +48,6 @@ from radia.beam import (
     sample_transverse_vector_potential,
 )
 
-
 MU0 = 4.0e-7 * math.pi
 COMPARABLE_INDICES = (0, 1, 2, 3, 5)
 COMPONENT_NAMES = ("x", "px", "y", "py", "ell", "delta")
@@ -614,7 +613,7 @@ def run_case(options, iron_maxh):
                 )
             three_way_b_record = {
                 "runtime_s": time.perf_counter() - three_way_started,
-                "point_count": int(len(three_way_points)),
+                "point_count": len(three_way_points),
                 "longitudinal_indices": s_indices,
                 "x_indices": x_indices,
                 "y_indices": y_indices,
