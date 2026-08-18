@@ -148,15 +148,7 @@ public:
 private:
     const OmmlOptions& opt_;
 
-    static std::string utf8_of(uint32_t cp) {
-        std::string s;
-        if (cp < 0x80) s += char(cp);
-        else if (cp < 0x800) { s += char(0xC0 | (cp >> 6));
-                               s += char(0x80 | (cp & 0x3F)); }
-        else { s += char(0xE0 | (cp >> 12)); s += char(0x80 | ((cp >> 6) & 0x3F));
-               s += char(0x80 | (cp & 0x3F)); }
-        return s;
-    }
+    static std::string utf8_of(uint32_t cp) { return mtef_utf8_of(cp); }
 };
 
 }  // namespace
