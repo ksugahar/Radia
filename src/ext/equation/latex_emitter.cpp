@@ -489,6 +489,21 @@ void LaTeXEmitter::emitFence(const FenceNode& fence, std::string& out) {
     int sel = fence.selector;
     if (sel < 0 || sel > 12) sel = 1; /* default to parens */
 
+    /* Parentheses round a ruleless fraction and nothing else IS \\binom, and
+     * writing it that way is what makes it read back.  The parts on their own
+     * would go out as {n \\atop k}, and \\atop is infix -- the parser has no way
+     * to take it, so the equation came back with the word "atop" in it. */
+    if (sel == tmPAREN && fence.variation == 0 && fence.content.size() == 1) {
+        const Node* only = fence.content.front().get();
+        if (only && only->tag() == Node::kFrac &&
+            !static_cast<const FracNode*>(only)->ruled) {
+            const FracNode& f = *static_cast<const FracNode*>(only);
+            out += "\\binom{"; out += emitNodes(f.numer);
+            out += "}{";       out += emitNodes(f.denom); out += "}";
+            return;
+        }
+    }
+
     std::string content = emitNodes(fence.content);
 
     if (fence.variation == 0) {
@@ -515,7 +530,12 @@ void LaTeXEmitter::emitFence(const FenceNode& fence, std::string& out) {
 void LaTeXEmitter::emitFrac(const FracNode& frac, std::string& out) {
     std::string n = emitNodes(frac.numer);
     std::string d = emitNodes(frac.denom);
-    if (frac.slashed) {
+    if (!frac.ruled) {
+        /* A ruleless fraction is a binomial; the parentheses round it are
+         * the fence node outside, so \binom would double them.  {a \atop b}
+         * is the ruleless fraction on its own, which is what this is. */
+        out += "{"; out += n; out += " \\atop "; out += d; out += "}";
+    } else if (frac.slashed) {
         out += "{}^{"; out += n; out += "}/{}_{"; out += d; out += "}";
     } else {
         out += (frac.display ? "\\dfrac{" : "\\frac{");
