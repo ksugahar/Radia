@@ -11,6 +11,44 @@ the binary.
 The point of writing it down is that the alternative is discovering the gaps
 one at a time while debugging, which is expensive and leaves holes.
 
+## Two references, and which one settles a question
+
+There are two models here, and they answer different questions.
+
+**Appearance follows TeX.** Type sizes, the space around an operator, where a
+fraction sits about the baseline, how tall a radical grows -- these go to TeX.
+Nearly everyone who reads an equation has read far more mathematics set by TeX
+than by Equation Editor, so TeX's look is the one that reads as ordinary.
+
+The font is part of that: Latin Modern Math, which is Computer Modern in
+OpenType.  Its MATH table does not approximate TeX's parameters, it *is* them
+-- TeX reports a display numerator shift of 8.12389 pt at 12 point and the
+table says 677 per thousand, which is 8.124.  Setting in it uses the same
+numbers TeX lays out from rather than imitating the result.
+
+**Usability follows Equation Editor 3.0.** Key chords, what the caret does,
+how the palettes are arranged, that Ctrl+S saves -- these come from the program
+this replaces, because that is what the hands using it already know.
+
+**The file format follows neither.**  MTEF is Equation Editor's storage, not
+its behaviour, and nothing here needs to be shaped by it.
+
+Where the two references disagree, the split above decides.  Two worked
+examples:
+
+* Equation Editor leaves one point of bar past a fraction's contents
+  ("Fraction bar overhang"), and the OpenType MATH table has no such notion.
+  Appearance -- but TeX has no opinion either, so Equation Editor's is kept.
+* A fraction inside a fraction is set smaller by TeX and not by Equation
+  Editor, which instead offers two templates and lets the writer choose.  That
+  design cannot cross over: the input here is LaTeX, where `rac` is one
+  command, so the size must come from the nesting.  TeX's rule.
+
+Differences are settled by measurement, not by eye.  TeX will state the width,
+height and depth of any box it sets, and `radia.equation.tex_metrics` returns
+the same three numbers, so the comparison is arithmetic and needs no window --
+which also means it can be re-run from a script.
+
 ## The complete menu, as observed
 
     File    Save (Ctrl+S) | Exit
