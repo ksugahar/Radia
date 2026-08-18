@@ -68,6 +68,23 @@ CASES = [
     ("x^{2}",                (12.1436, 9.9340, 0.1320), 0.60),
     ("x_{i}",                (10.7576, 5.3040, 3.0483), 0.60),
     ("x_{i}^{2}",            (12.1436, 9.9340, 3.2167), 0.60),
+
+    # Large operators.  The display-size variant is the one the font names for
+    # displayOperatorMinHeight, and its advance is its ADVANCE -- an integer
+    # division had been handing back 1.0 em for anything wider than an em,
+    # which is what made a summation 12.0 pt against TeX's 17.328.
+    (r"\sum",                (17.3280, 11.4003, 5.3997), EXACT),
+    (r"\int",                (11.9880, 16.3323, 10.3317), EXACT),
+    (r"\oint",               (11.9880, 16.3323, 10.3317), EXACT),
+
+    # Limits stacked over and under: the box is as wide as the widest of the
+    # three, and the limits are narrower than the sign because TeX drops the
+    # medium and thick spaces in script styles.  The WIDTH is exact; the box
+    # is 0.24 pt short above and 0.21 pt below, which Appendix G rule 13 as
+    # implemented here does not account for -- everything else in the vertical
+    # sum is checked term by term against TeX and agrees, so the residue is
+    # named rather than absorbed into a rounder tolerance.
+    (r"\sum_{n=1}^{N}",      (17.3280, 20.9771, 14.5049), 0.25),
 ]
 
 
@@ -88,21 +105,16 @@ def test_the_box_is_the_size_tex_makes_it(latex, tex, tol):
 OPEN = [
     # A font ships `ssty` alternates -- letters redrawn for script and
     # scriptscript sizes, slightly wider so they hold up small.  TeX applies
-    # them; this does not, so every script is a few per cent narrow, and it
-    # compounds when scripts nest.  Latin Modern Math has no ssty for "=",
-    # which is why that one atom scales at exactly 0.7 and the letters do not.
+    # them through the OpenType feature; this does not, so every script is a
+    # few per cent narrow and it compounds when scripts nest.  Latin Modern
+    # Math has no ssty for "=", which is why that one atom scales at exactly
+    # 0.7 where the letters scale at 0.76 to 0.82.
     ("x^{y^{z}}",            (16.9372, 10.0580, 0.1320), 0.05, "ssty alternates"),
-
-    # A large operator with limits at its side: TeX takes the italic
-    # correction OUT of the operator's own width and uses it to shift the
-    # superscript right (Appendix G, make_op).  Here it is still in the width,
-    # so the operator is about 7 pt too wide before the limits are placed.
-    (r"\int_{0}^{T}",        (19.3592, 19.9105, 12.1799), 0.05, "operator italic correction"),
-    (r"\oint_{C}",           (12.7124, 16.3323, 12.1799), 0.05, "operator italic correction"),
-
-    # A summation is not getting the display-size variant the font offers, and
-    # an empty operand slot still reserves the editor's caret placeholder.
-    (r"\sum_{n=1}^{N}",      (17.3280, 20.9771, 14.5049), 0.05, "display variant + empty-slot placeholder"),
+    (r"\sqrt[3]{x}",         (17.6101, 10.1940, 2.2860), 0.05, "ssty alternates"),
+    (r"\int_{0}^{T}",        (19.3592, 19.9105, 12.1799), 0.05,
+     "ssty alternates in the limits; side-limit vertical placement"),
+    (r"\oint_{C}",           (12.7124, 16.3323, 12.1799), 0.05,
+     "ssty alternates in the limits; side-limit vertical placement"),
 ]
 
 

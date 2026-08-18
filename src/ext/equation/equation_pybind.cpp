@@ -189,6 +189,11 @@ PYBIND11_MODULE(_equation, m) {
         .def_readwrite("serif", &mtef::SvgStyle::serif)
         .def_readwrite("symbol", &mtef::SvgStyle::symbol)
         .def_readwrite("padding", &mtef::SvgStyle::padding)
+        .def_readwrite("empty_slot_em", &mtef::SvgStyle::empty_slot_em,
+                       "Room an EMPTY slot takes, as a fraction of the type "
+                       "size.  0 -- the default -- is what TeX does, and is "
+                       "what a picture wants.  The editor sets 0.55 so a "
+                       "template nobody has typed into is visible.")
         .def("__repr__", [](const mtef::SvgStyle& s) {
             return "<SvgStyle full=" + std::to_string(s.full) +
                    " sub=" + std::to_string(s.sub) +
