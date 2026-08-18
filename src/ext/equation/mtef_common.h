@@ -262,6 +262,31 @@ inline bool mtef_name_takes_limits(const std::string& name) {
     return false;
 }
 
+/* Which cut of Latin Modern Roman a size wants.
+ *
+ * Latin Modern is drawn at eight optical sizes, and they are not the same
+ * letter scaled: the small ones are wider and lighter-cut so they hold up.
+ * TeX picks between them by the size being set -- the ranges are lmodern.sty's
+ * -- and the difference is not decorative.  Setting everything from the 10 pt
+ * cut left \sin 0.31 pt wide at 12 point, which looked like kerning inside
+ * the name until the two cuts were measured side by side: lmroman12 gives
+ * 14.4240, which is TeX's number exactly, and lmroman10 gives 14.7360. */
+inline int mtef_optical_size(double pt) {
+    if (pt < 5.5)  return 5;
+    if (pt < 6.5)  return 6;
+    if (pt < 7.5)  return 7;
+    if (pt < 8.5)  return 8;
+    if (pt < 9.5)  return 9;
+    if (pt < 11.0) return 10;
+    if (pt < 15.0) return 12;
+    return 17;
+}
+
+/* The GDI family name for that cut: "LM Roman 12", and so on. */
+inline std::string mtef_roman_face(double pt) {
+    return "LM Roman " + std::to_string(mtef_optical_size(pt));
+}
+
 inline std::string mtef_utf8_of(unsigned int cp) {
     std::string s;
     if (cp < 0x80) {

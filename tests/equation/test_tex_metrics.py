@@ -150,6 +150,17 @@ CASES = [
     # subscript.  Every component is exact and so is the whole.
     (r"\sqrt{\frac{a+b}{\sum_{i=1}^{n} c_{i}}}", (53.3702, 20.8104, 15.6696), EXACT),
     (r"\frac{a+b}{\sum_{i=1}^{n} c_{i}}", (41.3702, 16.4529, 14.0480), EXACT),
+
+    # Operator names are set in the TEXT roman -- \operator@font, which reads
+    # as \mathrm -- and at the optical cut the size asks for.  A scripted one
+    # is still an operator and still takes a thin space before its operand.
+    (r"\sin", (14.4240, 7.8360, 0.1200), EXACT),
+    (r"\log", (15.0240, 8.3280, 2.4600), EXACT),
+    (r"\sin x", (23.2882, 7.8360, 0.1320), EXACT),
+    (r"\log_{2} n", (29.5038, 8.3280, 4.1402), EXACT),
+
+    # A maths asterisk is \ast, on the axis, not the raised one on the key.
+    ("a*b", (22.9979, 8.3280, 0.1320), EXACT),
 ]
 
 
@@ -168,17 +179,13 @@ def test_the_box_is_the_size_tex_makes_it(latex, tex, tol):
 # ---------------------------------------------------------------------------
 
 OPEN = [
-    # An operator name is one hbox of TEXT, so TeX kerns inside it: s-i and
-    # i-n in "sin" pull together by 0.31 pt in this font.  Each glyph is drawn
-    # separately here, with no GPOS kerning, so a function name stays that
-    # much wide.  The class, the thin space after it and the limits are right.
-    (r"\sin x",              (23.2882, 7.8360, 0.1320), 0.05, "kerning inside a name"),
-    (r"\log_{2} n",          (29.5038, 8.3280, 4.1402), 0.05, "kerning inside a name"),
-
-    # A fraction inside a fraction is 0.14 pt taller than TeX's, and a
-    # summation with an operand 0.08 pt shorter.  Every term of both is
-    # checked against TeX and agrees; the residue is not traced.
+    # A fraction inside a fraction is 0.14 pt taller than TeX's, a summation
+    # with an operand 0.08 pt shorter, a partial-derivative fraction 0.10 pt
+    # narrower, and a macron 0.02 pt taller.  Every term of each is checked
+    # against TeX and agrees; these four residues are not traced.
     (r"\frac{\frac{p}{q}}{c}", (9.7476, 19.3606, 8.3649), 0.05, "nested-style residue"),
+    (r"\frac{\partial B}{\partial t}", (18.9360, 16.7169, 8.4969), 0.05, "partial residue"),
+    (r"\bar{x}", (6.8640, 7.6800, 0.1320), 0.01, "macron height residue"),
 ]
 
 
