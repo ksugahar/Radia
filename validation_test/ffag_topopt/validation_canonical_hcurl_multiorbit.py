@@ -31,24 +31,32 @@ REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO / "src"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-import ngsolve as ng  # noqa: E402
-import radia as rad  # noqa: E402
-from radia import vim  # noqa: E402
-from radia.beam_canonical_hcurl import (  # noqa: E402
-    CanonicalHCurlChain,
-    graded_breaks,
+from datetime import UTC
+
+import ngsolve as ng
+from validation_canonical_hcurl_ctype import (
+    frame_axes,
+    sample_frame_cloud,
+    track_chain_a_rk,
+    track_mechanical_b_rk,
 )
-from radia.accelerator_lie_topopt import (  # noqa: E402
+from validation_earlytimes_ctype_ab import (
+    build_coil,
+    build_iron,
+    load_bh_table,
+    make_symmetric_b_field,
+    track_reference_orbit,
+)
+
+import radia as rad
+from radia import vim
+from radia.accelerator_lie_topopt import (
     _fourth_order_lie_map_from_vector_potential_polynomials,
     apply_dragt_finn_map,
 )
-
-from validation_earlytimes_ctype_ab import (  # noqa: E402
-    build_iron, build_coil, load_bh_table, make_symmetric_b_field,
-    track_reference_orbit,
-)
-from validation_canonical_hcurl_ctype import (  # noqa: E402
-    frame_axes, sample_frame_cloud, track_chain_a_rk, track_mechanical_b_rk,
+from radia.beam_canonical_hcurl import (
+    CanonicalHCurlChain,
+    graded_breaks,
 )
 
 MU0 = 4.0e-7 * np.pi
@@ -319,9 +327,9 @@ def main(argv=None):
     }
     if options.output:
         import platform
-        from datetime import datetime, timezone
+        from datetime import datetime
         result["generated_at_utc"] = datetime.now(
-            timezone.utc).isoformat()
+            UTC).isoformat()
         result["hostname"] = platform.node()
         result["arguments"] = dict(vars(options))
         Path(options.output).write_text(

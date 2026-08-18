@@ -38,22 +38,27 @@ REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO / "src"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-import ngsolve as ng  # noqa: E402
-import radia as rad  # noqa: E402
-from radia import vim  # noqa: E402
-from radia.beam_canonical_hcurl import (  # noqa: E402
-    CanonicalHCurlChain,
-    graded_breaks,
+from datetime import UTC
+
+import ngsolve as ng
+from validation_earlytimes_ctype_ab import (
+    build_coil,
+    build_iron,
+    load_bh_table,
+    make_symmetric_b_field,
+    track_reference_orbit,
 )
-from radia.accelerator_lie_topopt import (  # noqa: E402
+
+import radia as rad
+from radia import vim
+from radia.accelerator_lie_topopt import (
     _fourth_order_lie_map_from_vector_potential_polynomials,
     apply_dragt_finn_map,
     canonical_vector_potential_hamiltonian_rhs,
 )
-
-from validation_earlytimes_ctype_ab import (  # noqa: E402
-    build_iron, build_coil, load_bh_table, make_symmetric_b_field,
-    track_reference_orbit,
+from radia.beam_canonical_hcurl import (
+    CanonicalHCurlChain,
+    graded_breaks,
 )
 
 
@@ -418,11 +423,11 @@ def main(argv=None):
               for i in range(1, len(records))]
     if ratios:
         print(f"  amplitude scaling of the truncation error: "
-              f"{['%.1f' % value for value in ratios]} "
+              f"{[f'{value:.1f}' for value in ratios]} "
               f"(degree-5 jet => ~2^5=32 per doubling)")
 
     import platform
-    from datetime import datetime, timezone
+    from datetime import datetime
 
     cross_record = None
     if options.include_cross_routes:
@@ -454,7 +459,6 @@ def main(argv=None):
         scale = float(options.cross_scale)
         mechanical0 = scale * np.array(
             [1.0e-3, 1.0e-3, 1.0e-3, 1.0e-3, 0.0, 1.0e-3])
-        delta = mechanical0[5]
 
         def chain_a_normalized(x_value, y_value, s_value):
             value = chain.vector_potential_frame(
@@ -473,7 +477,7 @@ def main(argv=None):
 
         lie_exit = apply_dragt_finn_map(
             lie.transfer.factorization, chain_entry, generator_substeps=8)
-        chain_exit, chain_nfev = track_chain_a_rk(
+        chain_exit, _chain_nfev = track_chain_a_rk(
             chain, htilde_of_s, rigidity, chain_entry, (0.0, s_total),
             float(options.rk_tolerance))
 
@@ -529,7 +533,7 @@ def main(argv=None):
         }
 
     result = {
-        "generated_at_utc": datetime.now(timezone.utc).isoformat(),
+        "generated_at_utc": datetime.now(UTC).isoformat(),
         "hostname": platform.node(),
         "arguments": {key: value for key, value in vars(options).items()},
         "iron_maxh": float(options.iron_maxh),

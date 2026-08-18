@@ -33,6 +33,53 @@ _FIELD_TREE_AUTO_MIN_WORK = 500_000_000
 _FIELD_TREE_RELATIVE_TOLERANCE = 1.0e-5
 _FIELD_TREE_PROBE_COUNT = 16
 
+_FIELD_TREE_DEFAULTS = {
+    "leaf_size": _FIELD_TREE_LEAF,
+    "theta": _FIELD_TREE_THETA,
+    "tree_min_sources": _FIELD_TREE_MIN_SOURCES,
+    "auto_min_work": _FIELD_TREE_AUTO_MIN_WORK,
+    "tree_relative_tolerance": _FIELD_TREE_RELATIVE_TOLERANCE,
+    "probe_count": _FIELD_TREE_PROBE_COUNT,
+}
+_FIELD_TREE_INTEGER_OPTIONS = {
+    "leaf_size": 1,
+    "tree_min_sources": 1,
+    "auto_min_work": 0,
+    "probe_count": 1,
+}
+
+
+def _normalized_tree_options(tree_options):
+    if not isinstance(tree_options, dict):
+        raise TypeError("field-evaluator tree_options must be a dict")
+    unknown = set(tree_options) - set(_FIELD_TREE_DEFAULTS)
+    if unknown:
+        raise ValueError(
+            f"unknown field-evaluator tree options: {sorted(unknown)}")
+
+    merged = dict(_FIELD_TREE_DEFAULTS)
+    merged.update(tree_options)
+    for name, minimum in _FIELD_TREE_INTEGER_OPTIONS.items():
+        value = merged[name]
+        numeric = float(value)
+        if (isinstance(value, (bool, np.bool_)) or not np.isfinite(numeric)
+                or not numeric.is_integer() or numeric < minimum):
+            raise ValueError(
+                f"field-evaluator {name} must be an integer >= {minimum}")
+        merged[name] = int(numeric)
+    for name, minimum, inclusive in (
+        ("theta", 0.0, False),
+        ("tree_relative_tolerance", 0.0, True),
+    ):
+        value = float(merged[name])
+        valid_range = value >= minimum if inclusive else value > minimum
+        if not np.isfinite(value) or not valid_range:
+            relation = ">=" if inclusive else ">"
+            raise ValueError(
+                f"field-evaluator {name} must be finite and {relation} {minimum}")
+        merged[name] = value
+    return merged
+
 
 def _create_field_evaluator(gram, coefficients, order):
     """Materialize one immutable C++ source evaluator from configured geometry."""
@@ -70,16 +117,14 @@ def _materialize_field_evaluator(res, tree_options=None):
         raise NotImplementedError(
             "vim.FieldFromSolution: production supports HDiv order in {1,2} "
             f"(got order={res.get('order')!r}).")
-    if tree_options:
-        unknown = set(tree_options) - {
-            "leaf_size", "theta", "tree_min_sources", "auto_min_work",
-            "tree_relative_tolerance", "probe_count"}
-        if unknown:
-            raise ValueError(
-                f"unknown field-evaluator tree options: {sorted(unknown)}")
-        key = ("_field_evaluator_custom",
-               tuple(sorted((k, float(v)) for k, v in tree_options.items())))
-        cached = res.get(key)
+    if tree_options is not None:
+        merged = _normalized_tree_options(tree_options)
+        key = tuple(sorted(merged.items()))
+        cache = res.setdefault("_field_evaluator_custom", {})
+        if not isinstance(cache, dict):
+            raise TypeError(
+                "vim.FieldFromSolution: custom field-evaluator cache is invalid")
+        cached = cache.get(key)
         if cached is not None:
             return cached
         gram = res.get("_charge_gram")
@@ -88,22 +133,13 @@ def _materialize_field_evaluator(res, tree_options=None):
             raise ValueError(
                 "vim.FieldFromSolution: result does not carry the configured "
                 "C++ operator and solution vector.")
-        merged = {
-            "leaf_size": _FIELD_TREE_LEAF,
-            "theta": _FIELD_TREE_THETA,
-            "tree_min_sources": _FIELD_TREE_MIN_SOURCES,
-            "auto_min_work": _FIELD_TREE_AUTO_MIN_WORK,
-            "tree_relative_tolerance": _FIELD_TREE_RELATIVE_TOLERANCE,
-            "probe_count": _FIELD_TREE_PROBE_COUNT,
-        }
-        merged.update(tree_options)
         evaluator = gram.create_field_evaluator(
             np.ascontiguousarray(coefficients, dtype=np.float64),
             int(merged["leaf_size"]), float(merged["theta"]),
             int(merged["tree_min_sources"]), int(merged["auto_min_work"]),
             float(merged["tree_relative_tolerance"]),
             int(merged["probe_count"]))
-        res[key] = evaluator
+        cache[key] = evaluator
         return evaluator
     cached = res.get("_field_evaluator")
     if cached is not None:
@@ -528,8 +564,8 @@ def vector_potential_coefficient_from_solution(
         res.setdefault("vector_potential_coefficient_stats", {})[cache_key] = {
             "construction": "analytic-equivalent-current-tet-triangle",
             "requested_construction": construction,
-            "tetrahedron_count": int(len(sources["tetrahedron_current"])),
-            "triangle_count": int(len(sources["triangle_current"])),
+            "tetrahedron_count": len(sources["tetrahedron_current"]),
+            "triangle_count": len(sources["triangle_current"]),
             "element_count": int(gfM.space.mesh.ne),
             "reflection_normal": None if normal is None else normal.tolist(),
             "full_volume_reflection_symmetrized": normal is not None,
