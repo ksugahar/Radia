@@ -151,9 +151,21 @@ def track_reference_orbit(
     station_count,
     entrance_x_m=-0.040,
     exit_x_m=0.040,
+    entrance_offset_m=0.0,
+    relative_tolerance=2.0e-11,
+    maximum_step_m=1.0e-3,
 ):
-    """Track the median-plane design orbit with the independent B source."""
-    start = np.array([float(entrance_x_m), 0.0, 0.0])
+    """Track the median-plane design orbit with the independent B source.
+
+    ``entrance_offset_m`` displaces the entrance point transversely (global
+    y) with the same +x heading: a family of parallel-entry design orbits
+    sampling different horizontal slices of the gap field.  The orbit is a
+    REFERENCE-CURVE definition, so callers may relax the integration
+    controls (and even supply an accuracy-gated tree source): every route
+    shares the same curve and the Hamiltonian-linear gate absorbs the
+    consistency question.
+    """
+    start = np.array([float(entrance_x_m), float(entrance_offset_m), 0.0])
     direction = np.array([1.0, 0.0, 0.0])
 
     def rhs(_path, state):
@@ -175,9 +187,9 @@ def track_reference_orbit(
         (0.0, 0.14),
         np.r_[start, direction],
         method="DOP853",
-        rtol=2.0e-11,
-        atol=2.0e-13,
-        max_step=1.0e-3,
+        rtol=float(relative_tolerance),
+        atol=float(relative_tolerance) * 1.0e-2,
+        max_step=float(maximum_step_m),
         events=exit_plane,
         dense_output=True,
     )
