@@ -829,6 +829,59 @@ class CanonicalHCurlChain:
         a[:, 2] += self.ring_circulation_t_m
         return a, gradient
 
+    def curvature_frame(self, s_m):
+        """``htilde(s)`` evaluated from the per-element curvature polynomials."""
+        s = np.asarray(s_m, dtype=float).reshape(-1)
+        index, zeta = self._locate(s)
+        out = np.zeros(s.size)
+        for e, element in enumerate(self.elements):
+            mask = index == e
+            if not np.any(mask):
+                continue
+            value = np.zeros(int(np.count_nonzero(mask)))
+            for k, c in enumerate(element.curvature_poly_per_m):
+                value += c * zeta[mask] ** k
+            out[mask] = value
+        return out
+
+    def ay_y_antiderivative_frame(self, x_m, y_m, s_m):
+        """``(G, dG/dx)`` with ``G = integral_0^y a_y(x, eta, s) d eta``.
+
+        This is the closed-form generator integral of the Yoshida split's
+        exact H2 factor (Ishi 2016: ``f = -int a_y dy'``); the polynomial
+        y-antiderivative shifts every ``eta^j`` to ``eta^{j+1}/(j+1)`` and
+        the gauge-rigid basis guarantees ``G(y=0) = 0``.
+        """
+        coefficients = self._require_fit()
+        x = np.asarray(x_m, dtype=float).reshape(-1)
+        y = np.asarray(y_m, dtype=float).reshape(-1)
+        s = np.asarray(s_m, dtype=float).reshape(-1)
+        index, zeta = self._locate(s)
+        offsets = np.concatenate(([0], np.cumsum(
+            [el.dimension for el in self.elements])))
+        value = np.zeros(x.size)
+        gradient_x = np.zeros(x.size)
+        for e, element in enumerate(self.elements):
+            mask = index == e
+            if not np.any(mask):
+                continue
+            xi = x[mask] / element.half_width_m
+            eta = y[mask] / element.half_height_m
+            zl = zeta[mask]
+            c = coefficients[offsets[e]:offsets[e + 1]]
+            basis_ay, _ = element._basis_blocks()
+            modal_ay = basis_ay @ c
+            (ay_i, ay_j, ay_k), _ = element._exponent_arrays()
+            ax_scale, ay_scale, _ = element.scales
+            x_val, x_der = element._monomials_and_derivative(xi, ay_i)
+            # Antiderivative in PHYSICAL y: eta^j -> ay_scale*eta^{j+1}/(j+1).
+            y_val, _ = element._monomials_and_derivative(eta, ay_j + 1)
+            y_anti = y_val * (ay_scale / (ay_j + 1.0))
+            z_val, _ = element._monomials_and_derivative(zl, ay_k)
+            value[mask] = (x_val * y_anti * z_val) @ modal_ay
+            gradient_x[mask] = ((x_der * y_anti * z_val) @ modal_ay) / ax_scale
+        return value, gradient_x
+
     def magnetic_flux_density_frame(self, x_m, y_m, s_m):
         """Physical frame ``(Bx, By, Bs)`` of the fitted field, in T."""
         coefficients = self._require_fit()
