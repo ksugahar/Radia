@@ -89,7 +89,7 @@ std::string xml_escape(const std::string& s) {
  * it resolves the same family. */
 constexpr int kEm = 1000;
 
-HFONT make_font(bool italic, bool symbol, bool cjk) {
+HFONT make_font(bool italic, bool symbol, bool cjk, int optical) {
     LOGFONTW lf = {};
     lf.lfHeight = -kEm;
     lf.lfItalic = italic ? TRUE : FALSE;
@@ -101,10 +101,19 @@ HFONT make_font(bool italic, bool symbol, bool cjk) {
     lf.lfCharSet = DEFAULT_CHARSET;
     /* Yu Mincho is the serif that sits beside Times without looking borrowed;
      * neither Latin Modern face has a single kana. */
-    const wchar_t* face = cjk      ? L"Yu Mincho"
-                        : symbol   ? L"Latin Modern Math"
-                                   : L"LM Roman 10";
-    wcscpy_s(lf.lfFaceName, face);
+    if (cjk) {
+        wcscpy_s(lf.lfFaceName, L"Yu Mincho");
+    } else if (symbol) {
+        wcscpy_s(lf.lfFaceName, L"Latin Modern Math");
+    } else {
+        /* The optical cut the size asks for -- "LM Roman 12" at 12 point, "LM
+         * Roman 8" for a script.  They are separate drawings and TeX picks
+         * between them the same way; setting everything from the 10 pt cut
+         * left an operator name 0.3 pt wide. */
+        const std::string face = mtef_roman_face(double(optical));
+        std::wstring w(face.begin(), face.end());
+        wcscpy_s(lf.lfFaceName, w.c_str());
+    }
     return CreateFontIndirectW(&lf);
 }
 
@@ -124,20 +133,24 @@ struct MetricCache {
         for (auto& kv : fonts) DeleteObject(kv.second);
         if (hdc) DeleteDC(hdc);
     }
+    /* The key carries the optical size as well as the face, because the text
+     * face is EIGHT drawings and which one is wanted depends on the size. */
     HFONT font(int key) {
         auto it = fonts.find(key);
         if (it != fonts.end()) return it->second;
-        HFONT f = make_font((key & 1) != 0, (key & 2) != 0, (key & 4) != 0);
+        HFONT f = make_font((key & 1) != 0, (key & 2) != 0, (key & 4) != 0,
+                            key >> 3);
         fonts[key] = f;
         return f;
     }
     /* The face follows the character, so a caller cannot measure with one font
      * and have the renderer draw with another. */
-    static int face_key(uint32_t cp, bool italic, bool symbol) {
-        return (italic ? 1 : 0) | (symbol ? 2 : 0) | (is_cjk(cp) ? 4 : 0);
+    static int face_key(uint32_t cp, bool italic, bool symbol, double pt) {
+        return (italic ? 1 : 0) | (symbol ? 2 : 0) | (is_cjk(cp) ? 4 : 0) |
+               (mtef_optical_size(pt) << 3);
     }
-    double width_em(uint32_t cp, bool italic, bool symbol) {
-        int key = face_key(cp, italic, symbol);
+    double width_em(uint32_t cp, bool italic, bool symbol, double pt) {
+        int key = face_key(cp, italic, symbol, pt);
         auto k = std::make_pair(key, cp);
         auto it = widths.find(k);
         if (it != widths.end()) return it->second;
@@ -158,8 +171,8 @@ struct MetricCache {
         widths[k] = w;
         return w;
     }
-    std::pair<double, double> vmetric(bool italic, bool symbol) {
-        int key = (italic ? 1 : 0) | (symbol ? 2 : 0);
+    std::pair<double, double> vmetric(bool italic, bool symbol, double pt) {
+        int key = (italic ? 1 : 0) | (symbol ? 2 : 0) | (mtef_optical_size(pt) << 3);
         auto it = vmetrics.find(key);
         if (it != vmetrics.end()) return it->second;
         HGDIOBJ old = SelectObject(hdc, font(key));
@@ -180,17 +193,17 @@ struct MetricCache {
      * depth for exactly this reason. */
     struct Box { double asc = 0, desc = 0, ink_w = 0; };
 
-    Box glyph_box(uint32_t cp, bool italic, bool symbol) {
-        int key = face_key(cp, italic, symbol);
+    Box glyph_box(uint32_t cp, bool italic, bool symbol, double pt) {
+        int key = face_key(cp, italic, symbol, pt);
         auto k = std::make_pair(key, cp);
         auto it = boxes.find(k);
         if (it != boxes.end()) return it->second;
 
-        auto v = vmetric(italic, symbol);
+        auto v = vmetric(italic, symbol, pt);
         Box b;
         b.asc = v.first;
         b.desc = v.second;
-        b.ink_w = width_em(cp, italic, symbol);
+        b.ink_w = width_em(cp, italic, symbol, pt);
         /* Past U+FFFF, GetGlyphOutlineW takes a glyph index rather than a
          * character -- and the maths font is exactly where the characters
          * past U+FFFF are, since that is the block an italic alphabet lives
@@ -267,20 +280,20 @@ MetricCache& metrics() {
 }
 
 double char_width(uint32_t cp, double sizePt, bool italic, bool symbol) {
-    return metrics().width_em(cp, italic, symbol) * sizePt;
+    return metrics().width_em(cp, italic, symbol, sizePt) * sizePt;
 }
 /* The font's own extent, for things sized against the face rather than
  * against one glyph (fence stretching, the fallback line height). */
 void char_vmetrics(double sizePt, bool italic, bool symbol,
                    double& asc, double& desc) {
-    auto v = metrics().vmetric(italic, symbol);
+    auto v = metrics().vmetric(italic, symbol, sizePt);
     asc = v.first * sizePt;
     desc = v.second * sizePt;
 }
 /* The ink box of one glyph, which is what neighbours and scripts must clear. */
 void glyph_vmetrics(uint32_t cp, double sizePt, bool italic, bool symbol,
                     double& asc, double& desc) {
-    auto b = metrics().glyph_box(cp, italic, symbol);
+    auto b = metrics().glyph_box(cp, italic, symbol, sizePt);
     asc = b.asc * sizePt;
     desc = b.desc * sizePt;
 }
@@ -288,7 +301,7 @@ void glyph_vmetrics(uint32_t cp, double sizePt, bool italic, bool symbol,
  * it advances, so laying the next atom out at the advance alone lets a sigma
  * touch the symbol after it. */
 double glyph_ink_width(uint32_t cp, double sizePt, bool italic, bool symbol) {
-    return metrics().glyph_box(cp, italic, symbol).ink_w * sizePt;
+    return metrics().glyph_box(cp, italic, symbol, sizePt).ink_w * sizePt;
 }
 #else
 /* Portable fallback: enough to keep the tree walking and the tests honest
@@ -328,7 +341,16 @@ bool needs_math_face(uint32_t cp) { return cp > 0xFF; }
  * the i in x_{i} picked up its script alternate and the 2 in x^{2} did not,
  * leaving that one a half point narrow where its neighbour was exact. */
 bool math_face_for(uint32_t cp, int typeface) {
+    /* Prose the author asked for with \text. */
     if (typeface == TF_TEXT) return false;
+    /* An operator NAME is set in the text roman, not in the maths font's own
+     * upright.  LaTeX spells this \operator@font and it reads as \mathrm: TeX
+     * sets \sin at 14.424 pt, which is \mathrm{sin} exactly, where the maths
+     * font's own upright -- \symup{sin} -- comes to 14.820.  Sending names to
+     * the maths face along with the digits made every function name that much
+     * wide, and it looked like kerning inside the name until the two were
+     * measured side by side. */
+    if (typeface == TF_FUNCTION) return false;
     if (is_cjk(cp)) return false;
     return true;
 }
@@ -684,7 +706,7 @@ private:
          * TeX's make_math_accent. */
         const mtef::MathFont& mf = mtef::MathFont::math();
         double baseAttach = body.w / 2.0;
-        if (mf.ok() && body.glyphs.size() == 1) {
+        if (mf.ok() && body.glyphs.size() == 1 && body.glyphs.front().symbol) {
             const Glyph& only = body.glyphs.front();
             uint16_t g = only.glyph_id;
             if (!g) g = mf.glyph_for(first_code_of(only.text));
@@ -755,6 +777,17 @@ private:
             case Node::kIntegral:
             case Node::kBigOp:
                 return kOp;
+            case Node::kScript: {
+                /* A scripted atom keeps the class of what is being scripted:
+                 * \log_{2} is still an operator and still takes a thin space
+                 * before its operand, and \sum_{i} beside its limits is still
+                 * an operator.  Treating the whole thing as ordinary lost
+                 * exactly one thin space from \log_{2} n. */
+                const auto& sc = static_cast<const ScriptNode&>(n);
+                for (const auto& b : sc.base)
+                    if (b && b->tag() != Node::kSize) return class_of(*b);
+                return kOrd;
+            }
             case Node::kFence:
                 return kInner;
             case Node::kFrac:
@@ -1041,7 +1074,12 @@ private:
          * level of anything built on it. */
         const mtef::MathFont& mfont = mtef::MathFont::math();
         double delta = 0;
-        if (mfont.ok() && !base.glyphs.empty()) {
+        if (mfont.ok() && !base.glyphs.empty() && base.glyphs.back().symbol) {
+            /* Only a glyph actually taken from the MATHS font has an italic
+             * correction there.  Looking one up for a text-face letter finds
+             * the maths font's own drawing of the same character and takes
+             * ITS correction, which is not the same letter: that quietly
+             * shortened \log_{2} by the 0.156 pt correction of a maths g. */
             const Glyph& last = base.glyphs.back();
             const uint16_t gid = last.glyph_id
                                ? last.glyph_id

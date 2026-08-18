@@ -63,9 +63,16 @@ HFONT make_font(double sizePt, bool italic, bool symbol, bool cjk,
      * optical sizes, and asking for "Latin Modern Roman" resolves to nothing
      * and lands silently on whatever the system offers instead.  It landed on
      * a Japanese face, and every measurement moved. */
-    wcscpy_s(lf.lfFaceName, cjk    ? L"Yu Mincho"
-                          : symbol ? L"Latin Modern Math"
-                                   : L"LM Roman 10");
+    if (cjk) {
+        wcscpy_s(lf.lfFaceName, L"Yu Mincho");
+    } else if (symbol) {
+        wcscpy_s(lf.lfFaceName, L"Latin Modern Math");
+    } else {
+        /* The optical cut the size asks for. */
+        const std::string face = mtef_roman_face(sizePt);
+        std::wstring w(face.begin(), face.end());
+        wcscpy_s(lf.lfFaceName, w.c_str());
+    }
     return CreateFontIndirectW(&lf);
 }
 
@@ -121,14 +128,18 @@ void load_private_fonts() {
         AddFontResourceExA(math.c_str(), FR_PRIVATE, nullptr);
         /* .../opentype/public/lm-math/latinmodern-math.otf
            .../opentype/public/lm/lmroman10-regular.otf   */
+        /* Every optical size, not just the 10 pt cut.  They are separate
+         * drawings, and TeX chooses between them by the size being set. */
         const size_t cut = math.rfind("lm-math");
         if (cut != std::string::npos) {
-            const std::string text =
-                math.substr(0, cut) + "lm/lmroman10-regular.otf";
-            AddFontResourceExA(text.c_str(), FR_PRIVATE, nullptr);
-            const std::string italic =
-                math.substr(0, cut) + "lm/lmroman10-italic.otf";
-            AddFontResourceExA(italic.c_str(), FR_PRIVATE, nullptr);
+            const std::string dir = math.substr(0, cut) + "lm/";
+            for (int sz : {5, 6, 7, 8, 9, 10, 12, 17}) {
+                const std::string n = std::to_string(sz);
+                AddFontResourceExA((dir + "lmroman" + n + "-regular.otf").c_str(),
+                                   FR_PRIVATE, nullptr);
+                AddFontResourceExA((dir + "lmroman" + n + "-italic.otf").c_str(),
+                                   FR_PRIVATE, nullptr);
+            }
         }
         return true;
     }();

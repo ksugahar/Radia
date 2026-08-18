@@ -313,6 +313,11 @@ private:
         if (is_letter(c)) return make_char(TF_VARIABLE, uint16_t(c), c);
         /* Office sets a binary minus as U+2212, not the hyphen on the key. */
         if (c == '-')     return make_char(TF_SYMBOL, 0x2212, c);
+        /* And a maths asterisk is \ast, U+2217, which sits ON the axis.  The
+         * one on the keyboard is a raised typographic asterisk meant for
+         * footnote marks: a*b came out with its middle where TeX puts its top,
+         * two thirds of a point above the line the b sits on. */
+        if (c == '*')     return make_char(TF_SYMBOL, 0x2217, c);
         return make_char(TF_SYMBOL, uint16_t((unsigned char)c), c);
     }
 
