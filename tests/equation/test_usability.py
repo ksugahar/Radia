@@ -107,12 +107,27 @@ def test_item_motion_stops_at_the_edge_rather_than_leaving_the_slot():
     assert e.caret().split(":")[0] == inside.split(":")[0]
 
 
-def test_the_four_item_chords_are_bound():
+def test_the_item_chords_are_bound():
+    """Ctrl+Left and Ctrl+Right only.
+
+    Ctrl+Shift with them was mine, and the key table wants those two keys for
+    the Format menu -- Ctrl+Shift+Left is Align Center (3,1) and
+    Ctrl+Shift+Right is Align at = (3,3).  Usability follows Equation Editor,
+    so they went back.  Selecting by item keeps its commands and loses its
+    chords rather than colliding."""
     c = chords()
     assert c["Ctrl+Left"] == "caret.left_item"
     assert c["Ctrl+Right"] == "caret.right_item"
-    assert c["Ctrl+Shift+Left"] == "select.left_item"
-    assert c["Ctrl+Shift+Right"] == "select.right_item"
+    assert c["Ctrl+Shift+Left"] == "format.center"
+    assert c["Ctrl+Shift+Right"] == "format.at_eq"
+
+
+def test_selecting_by_item_still_works_from_its_command():
+    e = equation.Equation()
+    e.load_latex(r"\frac{a}{b}c")
+    e.move_home()
+    assert e.command("select.right_item")
+    assert e.selected_latex() == r"\frac{a}{b}"
 
 
 # ---- one symbol, from Equation Editor's own table ---------------------------
@@ -273,3 +288,150 @@ def test_aligning_outside_a_stack_says_so():
     e = equation.Equation()
     e.insert_text("a+b")
     assert not e.command("format.left")
+
+
+# ---- Align at = -------------------------------------------------------------
+#
+# Command 3,3 in the key table, on Ctrl+Shift+Right.  It splits each line at
+# its first relation into two cells; the layout then sets the first flush right
+# and the second flush left, which puts every equals sign on one vertical line.
+# That is what \begin{align} does with its &, and the LaTeX written out is
+# exactly that.
+
+
+def two_equations():
+    e = equation.Equation()
+    e.insert_text("a+b=c")
+    e.command("edit.newline")
+    e.insert_text("x=y+z")
+    return e
+
+
+def test_align_at_equals_is_bound_where_the_table_puts_it():
+    assert chords()["Ctrl+Shift+Right"] == "format.at_eq"
+
+
+def test_align_at_equals_puts_the_signs_on_one_line():
+    import re
+    e = two_equations()
+    assert e.command("format.at_eq")
+    st = equation.SvgStyle()
+    st.padding = 0.0
+    svg = equation.tex_to_svg(e.latex(), st)
+    xs = [float(x) for x, t in
+          re.findall(r'<text[^>]*x="([-0-9.]+)"[^>]*>([^<]*)</text>', svg)
+          if t == "="]
+    assert len(xs) == 2, xs
+    assert abs(xs[0] - xs[1]) < 0.01, "the two = did not line up: %s" % xs
+
+
+def test_align_at_equals_writes_a_real_aligned():
+    e = two_equations()
+    e.command("format.at_eq")
+    latex = e.latex()
+    assert "aligned" in latex
+    assert "&" in latex
+
+
+def test_align_at_equals_survives_a_save():
+    e = two_equations()
+    e.command("format.at_eq")
+    text = e.latex()
+    back = equation.Equation()
+    back.load_latex(text)
+    assert back.latex() == text
+
+
+def test_going_back_to_centre_rejoins_the_cells():
+    e = two_equations()
+    before = e.latex()
+    e.command("format.at_eq")
+    e.command("format.center")
+    assert e.latex() == before
+
+
+# ---- Size -------------------------------------------------------------------
+#
+# Equation Editor's Size menu, minus the two entries that no longer mean
+# anything here: its Symbol and Sub-Symbol sizes exist to say how big a
+# summation sign should be, and that is now read from the font.  A size marker
+# is a SWITCH, which is exactly what TeX's \scriptstyle is, so the two map
+# onto each other and the setting survives a save.
+
+
+@pytest.mark.parametrize("cmd,chord", [
+    ("size.full", "Ctrl+Shift+1"),
+    ("size.sub", "Ctrl+Shift+2"),
+    ("size.sub2", "Ctrl+Shift+3"),
+])
+def test_the_size_chords_are_bound(cmd, chord):
+    assert chords()[chord] == cmd
+
+
+def test_a_size_is_a_mode_for_what_follows():
+    st = equation.SvgStyle()
+    st.padding = 0.0
+    e = equation.Equation()
+    e.insert_text("A")
+    assert e.command("size.sub")
+    e.insert_text("bc")
+    small = equation.tex_metrics(e.latex(), st)[0]
+    plain = equation.tex_metrics("Abc", st)[0]
+    assert small < plain, "the marker changed nothing (%.2f vs %.2f)" % (small, plain)
+
+
+def test_a_size_on_a_selection_stops_at_its_end():
+    e = equation.Equation()
+    e.insert_text("abc")
+    e.select_all()
+    assert e.command("size.sub")
+    latex = e.latex()
+    assert latex.startswith(chr(92) + "scriptstyle")
+    assert latex.endswith(chr(92) + "displaystyle")
+
+
+def test_a_size_survives_a_save():
+    for cmd in ("size.sub", "size.sub2"):
+        e = equation.Equation()
+        e.insert_text("A")
+        e.command(cmd)
+        e.insert_text("b")
+        text = e.latex()
+        back = equation.Equation()
+        back.load_latex(text)
+        assert back.latex() == text, cmd
+
+
+# ---- one slot up or down ----------------------------------------------------
+
+def test_ctrl_down_goes_from_numerator_to_denominator():
+    """Not the same as Down, which reads the drawing: this walks the
+    structure and lands at the start of the next slot."""
+    e = equation.Equation()
+    e.insert_template("frac")
+    e.insert_text("p")
+    assert e.command("caret.slot_down")
+    e.insert_text("q")
+    assert e.latex() == chr(92) + "frac{p}{q}"
+
+
+def test_ctrl_up_comes_back():
+    e = equation.Equation()
+    e.insert_template("frac")
+    e.command("caret.slot_down")
+    assert e.command("caret.slot_up")
+    e.insert_text("n")
+    assert "frac{n}" in e.latex()
+
+
+def test_it_stops_at_the_last_slot_rather_than_leaving():
+    e = equation.Equation()
+    e.insert_template("frac")
+    assert e.command("caret.slot_down")
+    assert not e.command("caret.slot_down")
+
+
+def test_the_slot_chords_are_bound():
+    c = chords()
+    assert c["Ctrl+Up"] == "caret.slot_up"
+    assert c["Ctrl+Down"] == "caret.slot_down"
