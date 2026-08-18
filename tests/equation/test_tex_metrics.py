@@ -91,7 +91,7 @@ CASES = [
     # implemented here does not account for -- everything else in the vertical
     # sum is checked term by term against TeX and agrees, so the residue is
     # named rather than absorbed into a rounder tolerance.
-    (r"\sum_{n=1}^{N}",      (17.3280, 20.9771, 14.5049), 0.25),
+    (r"\sum_{n=1}^{N}",      (17.3280, 20.9771, 14.5049), EXACT),
 
     # Fences take the size the font draws, and their ADVANCE with it: a
     # parenthesis round a fraction is 7.8 pt wide where the plain one is 4.7,
@@ -130,14 +130,26 @@ CASES = [
 
     # A large operator's limits, now that the scripts in them are right.
     # The 0.25 is the same unaccounted band as the summation above.
-    (r"\int_{0}^{T}",        (19.3592, 19.9105, 12.1799), 0.95),
-    (r"\oint_{C}",           (12.7124, 16.3323, 12.1799), 0.75),
+    (r"\int_{0}^{T}",        (19.3592, 19.9105, 12.1799), EXACT),
+    (r"\oint_{C}",           (12.7124, 16.3323, 12.1799), EXACT),
 
     # \lim and its family take LIMITS in display style: the subscript goes
     # under the name.  Read off the tree by the same predicate the writers
     # use, so the picture and the paste cannot disagree -- this emits
     # m:limLow in OMML and munder in MathML, not a subscript.
-    (r"\lim_{x \to 0}",      (18.6228, 8.3280, 9.1892), 0.25),
+    (r"\lim_{x \to 0}",      (18.6228, 8.3280, 9.1892), EXACT),
+
+    # A delimiter taller than the font's largest ready-made size is ASSEMBLED
+    # from the pieces it ships -- a foot, a top, and an extender repeated.
+    (r"\left(\frac{\frac{a}{b}}{c}\right)", (27.6720, 17.3523, 11.3517), EXACT),
+
+    # The compound that found four faults at once: limits stack in display
+    # style only, a text-style operator is the size the font draws it at, the
+    # fallback branch was using Equation Editor's 18 pt symbol size, and a
+    # base's italic correction belongs to the superscript when there is a
+    # subscript.  Every component is exact and so is the whole.
+    (r"\sqrt{\frac{a+b}{\sum_{i=1}^{n} c_{i}}}", (53.3702, 20.8104, 15.6696), EXACT),
+    (r"\frac{a+b}{\sum_{i=1}^{n} c_{i}}", (41.3702, 16.4529, 14.0480), EXACT),
 ]
 
 
@@ -156,18 +168,17 @@ def test_the_box_is_the_size_tex_makes_it(latex, tex, tol):
 # ---------------------------------------------------------------------------
 
 OPEN = [
-    # An operator name is one hbox of text, so TeX KERNS inside it: s-i and
+    # An operator name is one hbox of TEXT, so TeX kerns inside it: s-i and
     # i-n in "sin" pull together by 0.31 pt in this font.  Each glyph is drawn
-    # separately here, with no GPOS kerning, so a function name is that much
-    # wide.  The class and the thin space after it are right.
+    # separately here, with no GPOS kerning, so a function name stays that
+    # much wide.  The class, the thin space after it and the limits are right.
     (r"\sin x",              (23.2882, 7.8360, 0.1320), 0.05, "kerning inside a name"),
     (r"\log_{2} n",          (29.5038, 8.3280, 4.1402), 0.05, "kerning inside a name"),
 
-    # A delimiter taller than the font's largest ready-made one is assembled
-    # from pieces; this scales the largest instead, which is close but not the
-    # same width.
-    (r"\left(\frac{\frac{a}{b}}{c}\right)", (27.6720, 17.3523, 11.3517), 0.05,
-     "delimiter assembly from parts"),
+    # A fraction inside a fraction is 0.14 pt taller than TeX's, and a
+    # summation with an operand 0.08 pt shorter.  Every term of both is
+    # checked against TeX and agrees; the residue is not traced.
+    (r"\frac{\frac{p}{q}}{c}", (9.7476, 19.3606, 8.3649), 0.05, "nested-style residue"),
 ]
 
 
