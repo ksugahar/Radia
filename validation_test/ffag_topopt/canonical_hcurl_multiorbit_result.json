@@ -1,0 +1,146 @@
+{
+  "half_height_m": 0.004,
+  "orbits": [
+    {
+      "offset_mm": -8.0,
+      "arc_length_m": 0.08000085216911551,
+      "htilde_mid_per_m": -0.12397511689672934,
+      "fit_relative_residual": 0.10133146832195802,
+      "audit_honesty_ratio": 0.8985349235179451,
+      "hamiltonian_linear_max": 0.0017035053725233396,
+      "lie_vs_a_rk": 1.0065761664589709e-05,
+      "a_rk_vs_b_rk": 5.138602759649556e-06,
+      "lie_vs_b_rk": 4.927158904940152e-06,
+      "stage_timings_s": {
+        "orbit_track": 17.84,
+        "monitor_chain": 1.77,
+        "fit_cloud": 10.47,
+        "fit_ls": 0.07,
+        "audit": 11.39,
+        "lie": 10.11,
+        "a_rk": 1.7,
+        "b_rk": 30.95
+      },
+      "runtime_s": 84.30242810002528
+    },
+    {
+      "offset_mm": -4.0,
+      "arc_length_m": 0.08000083633261638,
+      "htilde_mid_per_m": -0.12270087572500406,
+      "fit_relative_residual": 0.10760532691692871,
+      "audit_honesty_ratio": 0.9245370216722155,
+      "hamiltonian_linear_max": 0.0012313131533628618,
+      "lie_vs_a_rk": 3.7785165554933835e-06,
+      "a_rk_vs_b_rk": 2.99579711017956e-06,
+      "lie_vs_b_rk": 7.827194453138234e-07,
+      "stage_timings_s": {
+        "orbit_track": 25.16,
+        "monitor_chain": 1.8,
+        "fit_cloud": 10.54,
+        "fit_ls": 0.08,
+        "audit": 10.42,
+        "lie": 9.96,
+        "a_rk": 1.84,
+        "b_rk": 24.18
+      },
+      "runtime_s": 83.98792540002614
+    },
+    {
+      "offset_mm": 0.0,
+      "arc_length_m": 0.0800008301594903,
+      "htilde_mid_per_m": -0.12267651865871838,
+      "fit_relative_residual": 0.09799971314856391,
+      "audit_honesty_ratio": 1.1679422707996585,
+      "hamiltonian_linear_max": 0.0015261488023896597,
+      "lie_vs_a_rk": 5.57601945458115e-06,
+      "a_rk_vs_b_rk": 4.8842307665346e-06,
+      "lie_vs_b_rk": 6.917886880465499e-07,
+      "stage_timings_s": {
+        "orbit_track": 16.93,
+        "monitor_chain": 1.9,
+        "fit_cloud": 10.8,
+        "fit_ls": 0.07,
+        "audit": 10.84,
+        "lie": 9.74,
+        "a_rk": 1.77,
+        "b_rk": 27.59
+      },
+      "runtime_s": 79.64730250003049
+    },
+    {
+      "offset_mm": 4.0,
+      "arc_length_m": 0.0800008389745936,
+      "htilde_mid_per_m": -0.12285869345305914,
+      "fit_relative_residual": 0.10608876006954109,
+      "audit_honesty_ratio": 1.0290027764026592,
+      "hamiltonian_linear_max": 0.0015460297634447978,
+      "lie_vs_a_rk": 2.095442588679491e-06,
+      "a_rk_vs_b_rk": 2.9763249401279935e-07,
+      "lie_vs_b_rk": 1.8696330409665894e-06,
+      "stage_timings_s": {
+        "orbit_track": 25.3,
+        "monitor_chain": 1.88,
+        "fit_cloud": 10.85,
+        "fit_ls": 0.08,
+        "audit": 11.04,
+        "lie": 9.94,
+        "a_rk": 1.69,
+        "b_rk": 27.62
+      },
+      "runtime_s": 88.41378449997865
+    },
+    {
+      "offset_mm": 8.0,
+      "arc_length_m": 0.08000085537300934,
+      "htilde_mid_per_m": -0.12414543735346568,
+      "fit_relative_residual": 0.09031816604179997,
+      "audit_honesty_ratio": 1.1978758409643289,
+      "hamiltonian_linear_max": 0.0012835653472948183,
+      "lie_vs_a_rk": 1.0521126318773573e-05,
+      "a_rk_vs_b_rk": 4.334013693394932e-06,
+      "lie_vs_b_rk": 6.33123442838994e-06,
+      "stage_timings_s": {
+        "orbit_track": 20.85,
+        "monitor_chain": 1.94,
+        "fit_cloud": 11.78,
+        "fit_ls": 0.07,
+        "audit": 11.77,
+        "lie": 10.0,
+        "a_rk": 1.86,
+        "b_rk": 26.06
+      },
+      "runtime_s": 84.34603030001745
+    }
+  ],
+  "generated_at_utc": "2026-08-18T01:00:21.294224+00:00",
+  "hostname": "lab",
+  "arguments": {
+    "iron_maxh": 0.02,
+    "threads": 8,
+    "current": 3000.0,
+    "magnetic_rigidity": 3.0,
+    "orbit_offsets_mm": [
+      -8.0,
+      -4.0,
+      0.0,
+      4.0,
+      8.0
+    ],
+    "half_width": 0.01,
+    "half_height": 0.004,
+    "order_x": 5,
+    "order_s": 2,
+    "elements": 24,
+    "grade_fringe": 6.0,
+    "fit_stations": 24,
+    "fit_points_per_station": 40,
+    "lie_degree": 5,
+    "reference_orbit_tolerance": 0.005,
+    "track_scale": 0.5,
+    "rk_tolerance": 1e-10,
+    "b_rk_tolerance": 1e-08,
+    "tree_theta": 0.5,
+    "tree_gate": 0.005,
+    "output": "S:\\Radia\\01_GitHub\\validation_test\\ffag_topopt\\canonical_hcurl_multiorbit_result.json"
+  }
+}

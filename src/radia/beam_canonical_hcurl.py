@@ -334,25 +334,61 @@ class CanonicalHCurlElement:
             h = h + c * np.asarray(zeta, dtype=float) ** k
         return 1.0 + h * (np.asarray(xi, dtype=float) * self.half_width_m), h
 
+    def _exponent_arrays(self):
+        """Cached integer exponent arrays for vectorized evaluation."""
+        cached = getattr(self, "_exponents_cache", None)
+        if cached is None:
+            cached = tuple(
+                tuple(np.asarray(axis, dtype=np.int64) for axis in zip(*exps))
+                for exps in (self.ay_exponents, self.as_exponents)
+            )
+            object.__setattr__(self, "_exponents_cache", cached)
+        return cached
+
+    @staticmethod
+    def _monomials_and_derivative(coordinate, exponent):
+        """``coordinate**exponent`` and its derivative, vectorized.
+
+        Returns ``(value, derivative)`` of shapes ``(n_points, n_terms)``.
+        The per-term Python loops these matrices replace were the measured
+        bottleneck of every chain evaluation (A-RK rhs, fit design build).
+        """
+        maximum = int(exponent.max(initial=0))
+        powers = np.empty((coordinate.size, maximum + 1))
+        powers[:, 0] = 1.0
+        for degree in range(1, maximum + 1):
+            powers[:, degree] = powers[:, degree - 1] * coordinate
+        value = powers[:, exponent]
+        derivative = np.zeros_like(value)
+        positive = exponent > 0
+        derivative[:, positive] = (
+            exponent[positive]
+            * powers[:, np.maximum(exponent[positive] - 1, 0)]
+        )
+        return value, derivative
+
+    def _basis_blocks(self):
+        n_ay = len(self.ay_exponents)
+        return self.basis[:n_ay], self.basis[n_ay:]
+
     def component_columns(self, xi, eta, zeta):
         """Value columns of (a_y, covariant a_s) at normalized points."""
-        xi = np.asarray(xi, dtype=float)
-        eta = np.asarray(eta, dtype=float)
-        zeta = np.asarray(zeta, dtype=float)
-        n_ay = len(self.ay_exponents)
-        ay_cols = np.zeros((xi.size, self.dimension))
-        as_cols = np.zeros((xi.size, self.dimension))
-        for col in range(self.dimension):
-            coeffs = self.basis[:, col]
-            for idx, (i, j, k) in enumerate(self.ay_exponents):
-                c = coeffs[idx]
-                if c != 0.0:
-                    ay_cols[:, col] += c * xi**i * eta**j * zeta**k
-            for idx, (i, j, k) in enumerate(self.as_exponents):
-                c = coeffs[n_ay + idx]
-                if c != 0.0:
-                    as_cols[:, col] += c * xi**i * eta**j * zeta**k
-        return ay_cols, as_cols
+        xi = np.asarray(xi, dtype=float).reshape(-1)
+        eta = np.asarray(eta, dtype=float).reshape(-1)
+        zeta = np.asarray(zeta, dtype=float).reshape(-1)
+        (ay_i, ay_j, ay_k), (as_i, as_j, as_k) = self._exponent_arrays()
+        basis_ay, basis_as = self._basis_blocks()
+        ay_monomials = (
+            self._monomials_and_derivative(xi, ay_i)[0]
+            * self._monomials_and_derivative(eta, ay_j)[0]
+            * self._monomials_and_derivative(zeta, ay_k)[0]
+        )
+        as_monomials = (
+            self._monomials_and_derivative(xi, as_i)[0]
+            * self._monomials_and_derivative(eta, as_j)[0]
+            * self._monomials_and_derivative(zeta, as_k)[0]
+        )
+        return ay_monomials @ basis_ay, as_monomials @ basis_as
 
     def b_row_columns(self, xi, eta, zeta):
         """Columns of the POLYNOMIAL row quantities (g*Bx, g*By, Bs).
@@ -360,34 +396,22 @@ class CanonicalHCurlElement:
         The fit contract multiplies the sampled physical ``Bx, By`` by the
         metric ``g`` pointwise so both sides stay polynomial.
         """
-        xi = np.asarray(xi, dtype=float)
-        eta = np.asarray(eta, dtype=float)
-        zeta = np.asarray(zeta, dtype=float)
+        xi = np.asarray(xi, dtype=float).reshape(-1)
+        eta = np.asarray(eta, dtype=float).reshape(-1)
+        zeta = np.asarray(zeta, dtype=float).reshape(-1)
         ax, ay_scale, as_scale = self.scales
-        n_ay = len(self.ay_exponents)
-        gbx = np.zeros((xi.size, self.dimension))
-        gby = np.zeros((xi.size, self.dimension))
-        bs = np.zeros((xi.size, self.dimension))
-        for col in range(self.dimension):
-            coeffs = self.basis[:, col]
-            for idx, (i, j, k) in enumerate(self.ay_exponents):
-                c = coeffs[idx]
-                if c == 0.0:
-                    continue
-                if k > 0:      # -dAy/ds contributes to g*Bx (metric-free leg)
-                    gbx[:, col] -= c * k * xi**i * eta**j * zeta**(k - 1) \
-                        / as_scale
-                if i > 0:      # dAy/dx = Bs
-                    bs[:, col] += c * i * xi**(i - 1) * eta**j * zeta**k / ax
-            for idx, (i, j, k) in enumerate(self.as_exponents):
-                c = coeffs[n_ay + idx]
-                if c == 0.0:
-                    continue
-                if j > 0:      # dAs/dy contributes to g*Bx
-                    gbx[:, col] += c * j * xi**i * eta**(j - 1) * zeta**k \
-                        / ay_scale
-                if i > 0:      # -dAs/dx = g*By
-                    gby[:, col] -= c * i * xi**(i - 1) * eta**j * zeta**k / ax
+        (ay_i, ay_j, ay_k), (as_i, as_j, as_k) = self._exponent_arrays()
+        basis_ay, basis_as = self._basis_blocks()
+        ay_x, ay_dx = self._monomials_and_derivative(xi, ay_i)
+        ay_y, _ = self._monomials_and_derivative(eta, ay_j)
+        ay_z, ay_dz = self._monomials_and_derivative(zeta, ay_k)
+        as_x, as_dx = self._monomials_and_derivative(xi, as_i)
+        as_y, as_dy = self._monomials_and_derivative(eta, as_j)
+        as_z, _ = self._monomials_and_derivative(zeta, as_k)
+        gbx = (as_x * as_dy * as_z / ay_scale) @ basis_as \
+            - (ay_x * ay_y * ay_dz / as_scale) @ basis_ay
+        gby = -(as_dx * as_y * as_z / ax) @ basis_as
+        bs = (ay_dx * ay_y * ay_z / ax) @ basis_ay
         return gbx, gby, bs
 
     # -- interface traces (graded L1 contract) ---------------------------
@@ -769,38 +793,24 @@ class CanonicalHCurlChain:
             eta = y[mask] / element.half_height_m
             zl = zeta[mask]
             c = coefficients[offsets[e]:offsets[e + 1]]
-            n_ay = len(element.ay_exponents)
             ax_scale, ay_scale, _ = element.scales
-            modal_ay = element.basis[:n_ay] @ c
-            modal_as = element.basis[n_ay:] @ c
-            ay_v = np.zeros(xi.size)
-            as_v = np.zeros(xi.size)
-            day = np.zeros((xi.size, 2))
-            das = np.zeros((xi.size, 2))
-            for idx, (i, j, k) in enumerate(element.ay_exponents):
-                coef = modal_ay[idx]
-                if coef == 0.0:
-                    continue
-                zk = zl**k
-                ay_v += coef * xi**i * eta**j * zk
-                if i > 0:
-                    day[:, 0] += coef * i * xi**(i - 1) * eta**j * zk / ax_scale
-                if j > 0:
-                    day[:, 1] += coef * j * xi**i * eta**(j - 1) * zk / ay_scale
-            for idx, (i, j, k) in enumerate(element.as_exponents):
-                coef = modal_as[idx]
-                if coef == 0.0:
-                    continue
-                zk = zl**k
-                as_v += coef * xi**i * eta**j * zk
-                if i > 0:
-                    das[:, 0] += coef * i * xi**(i - 1) * eta**j * zk / ax_scale
-                if j > 0:
-                    das[:, 1] += coef * j * xi**i * eta**(j - 1) * zk / ay_scale
-            a[mask, 1] = ay_v
-            a[mask, 2] = as_v
-            gradient[mask, 1, :] = day
-            gradient[mask, 2, :] = das
+            basis_ay, basis_as = element._basis_blocks()
+            modal_ay = basis_ay @ c
+            modal_as = basis_as @ c
+            (ay_i, ay_j, ay_k), (as_i, as_j, as_k) = \
+                element._exponent_arrays()
+            ay_x, ay_dx = element._monomials_and_derivative(xi, ay_i)
+            ay_y, ay_dy = element._monomials_and_derivative(eta, ay_j)
+            ay_z, _ = element._monomials_and_derivative(zl, ay_k)
+            as_x, as_dx = element._monomials_and_derivative(xi, as_i)
+            as_y, as_dy = element._monomials_and_derivative(eta, as_j)
+            as_z, _ = element._monomials_and_derivative(zl, as_k)
+            a[mask, 1] = (ay_x * ay_y * ay_z) @ modal_ay
+            a[mask, 2] = (as_x * as_y * as_z) @ modal_as
+            gradient[mask, 1, 0] = (ay_dx * ay_y * ay_z) @ modal_ay / ax_scale
+            gradient[mask, 1, 1] = (ay_x * ay_dy * ay_z) @ modal_ay / ay_scale
+            gradient[mask, 2, 0] = (as_dx * as_y * as_z) @ modal_as / ax_scale
+            gradient[mask, 2, 1] = (as_x * as_dy * as_z) @ modal_as / ay_scale
         a[:, 2] += self.ring_circulation_t_m
         return a, gradient
 

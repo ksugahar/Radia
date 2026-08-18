@@ -107,35 +107,49 @@ def sample_frame_cloud(orbit, b_batch, s_range, half_width, half_height,
     """Frame-component B cloud; with ``breaks``, stations are allocated per
     element (proportional with a floor) so thin graded elements never
     starve -- uniform-in-s sampling under grading leaves near-empty
-    elements whose DOFs the LS drives wild (caught by the fit guard)."""
+    elements whose DOFs the LS drives wild (caught by the fit guard).
+
+    ALL points go through ONE ``b_batch`` call: per-station mini-batches
+    paid the Python->C++ marshalling and thread-pool standup ~70 times per
+    cloud and dominated the whole pipeline (~500 s/orbit measured); the
+    single batched call evaluates the same exact kernels in seconds.
+    """
     if breaks is None:
         s_values = rng.uniform(s_range[0], s_range[1], n_s)
     else:
         sizes = np.diff(np.asarray(breaks, dtype=float))
-        floor = 4
+        floor = 3
         allocation = np.maximum(
             floor, np.round(n_s * sizes / sizes.sum()).astype(int))
         s_values = np.concatenate([
             rng.uniform(breaks[e], breaks[e + 1], allocation[e])
             for e in range(len(sizes))
         ])
-    xs, ys, ss, bxl, byl, bsl = [], [], [], [], [], []
+    xs, ys, ss, points_list, frames = [], [], [], [], []
     for s_value in s_values:
         sv = np.array([s_value])
         centre = orbit.position_at(sv)[0]
         horizontal, vertical, tangent = (np.asarray(w[0], dtype=float)
                                          for w in orbit.frame_at(sv))
         x = rng.uniform(-half_width, half_width, n_xy)
-        y = rng.uniform(-half_height, half_height, n_xy)
-        points = centre[None, :] + x[:, None] * horizontal[None, :] \
-            + y[:, None] * vertical[None, :]
-        b = b_batch(points)
+        # The basis parity is exact and the source is symmetrized, so the
+        # y<0 half of the cloud carries no independent information; the
+        # upper half alone halves the dominant source-evaluation cost.
+        y = rng.uniform(0.0, half_height, n_xy)
+        points_list.append(
+            centre[None, :] + x[:, None] * horizontal[None, :]
+            + y[:, None] * vertical[None, :])
+        frames.append((horizontal, vertical, tangent))
         xs.append(x)
         ys.append(y)
         ss.append(np.full(n_xy, s_value))
-        bxl.append(b @ horizontal)
-        byl.append(b @ vertical)
-        bsl.append(b @ tangent)
+    b = b_batch(np.vstack(points_list))
+    bxl, byl, bsl = [], [], []
+    for station, (horizontal, vertical, tangent) in enumerate(frames):
+        block = b[station * n_xy:(station + 1) * n_xy]
+        bxl.append(block @ horizontal)
+        byl.append(block @ vertical)
+        bsl.append(block @ tangent)
     return (np.concatenate(xs), np.concatenate(ys), np.concatenate(ss),
             np.concatenate(bxl), np.concatenate(byl), np.concatenate(bsl))
 

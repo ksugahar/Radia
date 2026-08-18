@@ -48,8 +48,17 @@ def _create_field_evaluator(gram, coefficients, order):
     return evaluator, stats
 
 
-def _materialize_field_evaluator(res):
-    """Build and cache the immutable C++ source evaluator exactly once."""
+def _materialize_field_evaluator(res, tree_options=None):
+    """Build and cache the immutable C++ source evaluator.
+
+    ``tree_options`` optionally overrides the Barnes-Hut controls
+    ``(leaf_size, theta, tree_min_sources, auto_min_work,
+    tree_relative_tolerance, probe_count)`` as a dict; each distinct
+    override set is cached separately.  The strict default
+    ``theta=0.05`` effectively disables far-field grouping (measured:
+    tree == direct to 4e-15 on the C-type), which is the safe default;
+    batch consumers that VERIFY the tree against direct may relax it.
+    """
     if not isinstance(res, dict):
         raise TypeError("vim field evaluator requires Solve's result dict")
     gfM = res.get("gfM")
@@ -61,6 +70,41 @@ def _materialize_field_evaluator(res):
         raise NotImplementedError(
             "vim.FieldFromSolution: production supports HDiv order in {1,2} "
             f"(got order={res.get('order')!r}).")
+    if tree_options:
+        unknown = set(tree_options) - {
+            "leaf_size", "theta", "tree_min_sources", "auto_min_work",
+            "tree_relative_tolerance", "probe_count"}
+        if unknown:
+            raise ValueError(
+                f"unknown field-evaluator tree options: {sorted(unknown)}")
+        key = ("_field_evaluator_custom",
+               tuple(sorted((k, float(v)) for k, v in tree_options.items())))
+        cached = res.get(key)
+        if cached is not None:
+            return cached
+        gram = res.get("_charge_gram")
+        coefficients = res.get("_m_coefficients")
+        if gram is None or coefficients is None:
+            raise ValueError(
+                "vim.FieldFromSolution: result does not carry the configured "
+                "C++ operator and solution vector.")
+        merged = {
+            "leaf_size": _FIELD_TREE_LEAF,
+            "theta": _FIELD_TREE_THETA,
+            "tree_min_sources": _FIELD_TREE_MIN_SOURCES,
+            "auto_min_work": _FIELD_TREE_AUTO_MIN_WORK,
+            "tree_relative_tolerance": _FIELD_TREE_RELATIVE_TOLERANCE,
+            "probe_count": _FIELD_TREE_PROBE_COUNT,
+        }
+        merged.update(tree_options)
+        evaluator = gram.create_field_evaluator(
+            np.ascontiguousarray(coefficients, dtype=np.float64),
+            int(merged["leaf_size"]), float(merged["theta"]),
+            int(merged["tree_min_sources"]), int(merged["auto_min_work"]),
+            float(merged["tree_relative_tolerance"]),
+            int(merged["probe_count"]))
+        res[key] = evaluator
+        return evaluator
     cached = res.get("_field_evaluator")
     if cached is not None:
         return cached
@@ -78,7 +122,7 @@ def _materialize_field_evaluator(res):
     return evaluator
 
 
-def field_from_solution(res, points, algorithm="auto"):
+def field_from_solution(res, points, algorithm="auto", *, tree_options=None):
     """Demagnetizing field H_demag (A/m) of a solved HDiv-VIM magnetization at
     ``points`` (N,3), evaluated from the BDM1/BDM2 solution directly -- no per-element
     constant-M collapse, hence none of the near-surface piecewise-constant ripple of
@@ -98,7 +142,7 @@ def field_from_solution(res, points, algorithm="auto"):
     must satisfy the configured direct-reference tolerance and show a measured
     speed benefit before the full batch uses the tree."""
     pts = np.ascontiguousarray(np.asarray(points, float).reshape(-1, 3))
-    evaluator = _materialize_field_evaluator(res)
+    evaluator = _materialize_field_evaluator(res, tree_options)
     return np.asarray(evaluator.field(pts, str(algorithm)), float)/(4.0*np.pi)
 
 
