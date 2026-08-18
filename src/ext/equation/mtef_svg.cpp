@@ -960,6 +960,9 @@ private:
                 return layout_bar(d.content, d.selector == tmOBAR, sizePt,
                                   listPath, child);
             }
+            case Node::kBraceDeco:
+                return layout_brace_deco(static_cast<const BraceDecoNode&>(n),
+                                         sizePt, listPath, child);
             case Node::kScript:
                 return layout_script(static_cast<const ScriptNode&>(n), sizePt,
                                      listPath, child);
@@ -1326,6 +1329,95 @@ private:
         return out;
     }
 
+    /* A brace ACROSS what it covers, with its label beyond it.
+     *
+     * The font draws horizontal braces at eight widths and ships parts for
+     * any wider, the same way it does the vertical delimiters -- so the same
+     * two ideas apply, only along the other axis.  This node existed and its
+     * layout returned the CONTENT and nothing else, so an \overbrace drew as
+     * the expression with no brace on it and no sign that anything was
+     * missing. */
+    Layout stretched_horizontal(uint32_t cp, double needPt, double sizePt) {
+        const mtef::MathFont& mf = mtef::MathFont::math();
+        uint16_t chosen = 0;
+        double gotEm = 0;
+        if (mf.ok()) {
+            const uint16_t base = mf.glyph_for(cp);
+            if (const mtef::Stretch* st = mf.horizontal(base)) {
+                for (const auto& v : st->variants) {
+                    chosen = v.first;
+                    gotEm = metrics().glyph_box_index(v.first).ink_w;
+                    if (gotEm * sizePt >= needPt) break;
+                }
+            } else {
+                chosen = base;
+            }
+        }
+        if (!chosen) return glyph_layout(cp, sizePt, false, true);
+
+        const MetricCache::Box b = metrics().glyph_box_index(chosen);
+        Layout g;
+        Glyph gg;
+        gg.size = sizePt;
+        gg.symbol = true;
+        gg.glyph_id = chosen;
+        gg.text = utf8_of(cp);
+        g.glyphs.push_back(gg);
+        g.w = b.ink_w * sizePt;
+        g.asc = b.asc * sizePt;
+        g.desc = b.desc * sizePt;
+        if (gotEm > 0 && gotEm * sizePt < needPt) {
+            const double k = needPt / std::max(gotEm * sizePt, 1e-6);
+            for (auto& x : g.glyphs) x.stretchX = k;
+            g.w = needPt;
+        }
+        return g;
+    }
+
+    Layout layout_brace_deco(const BraceDecoNode& b, double sizePt,
+                             const std::string& lp, int c) {
+        Layout body = layout_list(b.content, sizePt, slot_path(lp, c, 0));
+        const bool above = (b.selector != tmLHBRACE);
+        const mtef::MathConstants& mc = mtef::MathFont::math().constants();
+        const double gap = mc.overbarVerticalGap * sizePt;
+
+        Layout brace = stretched_horizontal(above ? 0x23DE : 0x23DF,
+                                            body.w, sizePt);
+        Layout label;
+        if (!b.label.empty())
+            label = layout_list(b.label, script_size(sizePt),
+                                slot_path(lp, c, 1));
+
+        Layout out;
+        const double w = std::max(body.w, brace.w);
+        out.absorb(body, (w - body.w) / 2.0, 0);
+        out.w = w;
+        out.asc = body.asc;
+        out.desc = body.desc;
+
+        const double bh = brace.asc + brace.desc;
+        if (above) {
+            const double top = body.asc + gap;
+            out.absorb(brace, (w - brace.w) / 2.0, -(top + brace.asc));
+            out.asc = top + bh;
+            if (!label.glyphs.empty() || label.w > 0) {
+                out.absorb(label, (w - label.w) / 2.0,
+                           -(out.asc + gap + label.desc));
+                out.asc += gap + label.asc + label.desc;
+            }
+        } else {
+            const double top = body.desc + gap;
+            out.absorb(brace, (w - brace.w) / 2.0, top + brace.asc);
+            out.desc = top + bh;
+            if (!label.glyphs.empty() || label.w > 0) {
+                out.absorb(label, (w - label.w) / 2.0,
+                           out.desc + gap + label.asc);
+                out.desc += gap + label.asc + label.desc;
+            }
+        }
+        return out;
+    }
+
     Layout layout_fence(const FenceNode& f, double sizePt,
                         const std::string& lp, int c) {
         Layout inner = layout_list(f.content, sizePt, slot_path(lp, c, 0));
@@ -1443,12 +1535,14 @@ ulldelimiterspace, 1.2 pt -- so the BOX is wider than the parts,
         out.absorb(num, (w - num.w) / 2.0, -shiftUp);
         out.absorb(den, (w - den.w) / 2.0, shiftDown);
 
-        Rule bar;
-        bar.x = sidebearing;
-        bar.y = -axis - thick / 2.0;
-        bar.w = inner;
-        bar.h = thick;
-        out.rules.push_back(bar);
+        if (f.ruled) {
+            Rule bar;
+            bar.x = sidebearing;
+            bar.y = -axis - thick / 2.0;
+            bar.w = inner;
+            bar.h = thick;
+            out.rules.push_back(bar);
+        }
 
         out.asc  = shiftUp + num.asc;
         out.desc = shiftDown + den.desc;
@@ -1990,9 +2084,10 @@ std::string render_svg(const LineNode& root, const SvgStyle& style) {
           << "\" font-family=\"" << xml_escape(family) << "\""
           << " font-size=\"" << g.size << "\"";
         if (g.italic) o << " font-style=\"italic\"";
-        if (std::fabs(g.stretchY - 1.0) > 1e-6) {
+        if (std::fabs(g.stretchY - 1.0) > 1e-6 ||
+            std::fabs(g.stretchX - 1.0) > 1e-6) {
             o << " transform=\"translate(" << (g.x + pad) << ',' << (g.y + baseline)
-              << ") scale(1," << g.stretchY << ") translate("
+              << ") scale(" << g.stretchX << "," << g.stretchY << ") translate("
               << -(g.x + pad) << ',' << -(g.y + baseline) << ")\"";
         }
         o << ">" << xml_escape(g.text) << "</text>\n";

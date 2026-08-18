@@ -195,6 +195,9 @@ void draw_layout(HDC hdc, const Layout& L, const SvgStyle& style,
         /* A stretched fence is the one thing GDI cannot do with a font size
          * alone, so it gets a taller font rather than a transform -- keeping
          * the metafile free of world transforms that some readers ignore. */
+        /* A horizontal stretch is lfWidth, which GDI applies on top of the
+         * height -- so a brace grown across an expression widens without
+         * getting taller. */
         HFONT f = make_font(g.size * (g.stretchY > 1.0 ? g.stretchY : 1.0),
                             g.italic, g.symbol, g.cjk, units_per_pt);
         HGDIOBJ old = SelectObject(hdc, f);

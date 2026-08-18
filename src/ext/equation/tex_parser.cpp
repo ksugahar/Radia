@@ -363,6 +363,23 @@ private:
             return nullptr;
         }
 
+        if (cmd == "\\binom" || cmd == "\\dbinom" ||
+            cmd == "\\tbinom") {
+            /* A binomial is a fraction with NO RULE inside parentheses,
+             * which is what inom is defined as and what the layout draws
+             * as soon as the rule is asked not to be there.  Without it the
+             * command fell through to the unknown branch and set as the word
+             * "binom" followed by its two arguments. */
+            auto f = std::make_unique<FracNode>();
+            f->ruled = false;
+            f->numer = parse_arg();
+            f->denom = parse_arg();
+            auto fence = std::make_unique<FenceNode>();
+            fence->selector = tmPAREN;
+            fence->content.push_back(std::move(f));
+            return fence;
+        }
+
         if (cmd == "\\frac" || cmd == "\\dfrac" || cmd == "\\tfrac" ||
             cmd == "\\cfrac") {
             auto f = std::make_unique<FracNode>();
@@ -397,6 +414,20 @@ private:
             e->content = parse_arg();
             return e;
         }
+        if (cmd == "\\overbrace" || cmd == "\\underbrace") {
+            /* The node existed and nothing produced it: an \overbrace fell
+             * through to the unknown branch and set as the word "overbrace"
+             * with its contents beside it. */
+            auto b = std::make_unique<BraceDecoNode>();
+            b->selector = (cmd == "\\overbrace") ? tmUHBRACE : tmLHBRACE;
+            b->content = parse_arg();
+            /* ^{...} over a brace, _{...} under one, is its label. */
+            skip_space();
+            const char want = (cmd == "\\overbrace") ? '^' : '_';
+            if (peek() == want) { ++p_; b->label = parse_arg(); }
+            return b;
+        }
+
         if (cmd == "\\overline" || cmd == "\\underline") {
             auto d = std::make_unique<DecorationNode>();
             d->selector = (cmd == "\\overline") ? tmOBAR : tmUBAR;
@@ -441,8 +472,19 @@ private:
         if (cmd.size() == 2 && !is_letter(cmd[1]))
             return make_char(TF_SYMBOL, uint16_t((unsigned char)cmd[1]), cmd[1]);
 
-        /* Unknown: show the name rather than losing the equation. */
+        /* Unknown: show the name WITH its backslash.
+         *
+         * Dropping the backslash and setting the rest as text made an
+         * unhandled command indistinguishable from prose the author meant:
+         * \binom{n}{k} drew as the word "binom" followed by an n and a k, and
+         * looked like a finished equation.  Keeping the backslash says what
+         * has actually happened, which is the difference between a loud
+         * failure and a quiet wrong answer.
+         *
+         * The arguments that follow are still parsed as ordinary groups, so
+         * nothing the author typed is lost. */
         auto line = std::make_unique<LineNode>();
+        line->children.push_back(make_char(TF_TEXT, uint16_t('\\'), '\\'));
         for (size_t i = 1; i < cmd.size(); ++i)
             line->children.push_back(make_char(TF_TEXT, uint16_t(cmd[i]), cmd[i]));
         return line;

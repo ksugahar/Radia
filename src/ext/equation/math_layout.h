@@ -31,6 +31,7 @@ struct Glyph {
     bool symbol = false;        /* draw with the maths face rather than the text one */
     bool cjk = false;           /* draw with the Japanese face                       */
     double stretchY = 1.0;      /* vertical scale, for a fence grown to its content */
+    double stretchX = 1.0;      /* horizontal, for a brace grown across one */
     std::string text;           /* UTF-8 */
     /* When set, the math font has a drawing of exactly this size and the
      * backend should ask for that glyph rather than scale the character: a
