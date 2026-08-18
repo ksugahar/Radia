@@ -103,6 +103,7 @@ extern "C" {
 #include "rad_hdiv_hysteresis.h" // Energy-based B-input vector Stop material
 #include "rad_hdiv_field_evaluator.h" // Persistent BDM1 field source + target tree
 #include "rad_lie_map_batch.h"        // Batched Dragt-Finn Lie-map ensemble tracking
+#include "rad_lie_map_kernel.h"       // Fourth-order Lie-map construction kernel
 #include "rad_hacapk_hdiv.h"     // HACApK H-matrix for the HDiv-type VIM demag operator
 #include "rad_ngsolve_field_coefficients.h" // Shared evaluator CoefficientFunctions
 #include "rad_ngsolve_operators.h" // Shared native matrices for pybind11 and MATLAB MEX
@@ -2746,6 +2747,90 @@ PYBIND11_MODULE(_radia_pybind, m) {
        "Advance a (n,6) ensemble through Dragt-Finn factors exp(:f5:)exp(:f4:)"
        "exp(:f3:) then R with particle-parallel implicit-midpoint flows; "
        "mirrors apply_dragt_finn_map to roundoff.");
+
+    m.def("lie_map_tensors_spoly", [](
+            py::array_t<double, py::array::c_style | py::array::forcecast> Ay,
+            py::array_t<double, py::array::c_style | py::array::forcecast> As,
+            py::array_t<double, py::array::c_style | py::array::forcecast> lengths,
+            py::array_t<double, py::array::c_style | py::array::forcecast> curvature,
+            py::array_t<double, py::array::c_style | py::array::forcecast> poisson,
+            double magnetic_rigidity, double curvature_sign,
+            double reference_beta, bool longitudinal_covariant,
+            double maximum_step_m, long long maximum_steps,
+            double reference_orbit_tolerance) {
+        auto Ay_info = Ay.request();
+        auto As_info = As.request();
+        if (Ay_info.ndim != 4 || As_info.ndim != 4)
+            throw std::runtime_error(
+                "lie_map_tensors_spoly: Ay/As must have shape (n,k+1,d+1,d+1)");
+        for (int axis = 0; axis < 4; ++axis)
+            if (Ay_info.shape[axis] != As_info.shape[axis])
+                throw std::runtime_error(
+                    "lie_map_tensors_spoly: Ay/As shapes must match");
+        if (Ay_info.shape[2] != Ay_info.shape[3])
+            throw std::runtime_error(
+                "lie_map_tensors_spoly: transverse blocks must be square");
+        const std::size_t n_segments = static_cast<std::size_t>(Ay_info.shape[0]);
+        auto lengths_info = lengths.request();
+        if (lengths_info.ndim != 1
+                || static_cast<std::size_t>(lengths_info.shape[0]) != n_segments)
+            throw std::runtime_error(
+                "lie_map_tensors_spoly: lengths must have shape (n,)");
+        auto curvature_info = curvature.request();
+        if (curvature_info.ndim != 2
+                || static_cast<std::size_t>(curvature_info.shape[0]) != n_segments)
+            throw std::runtime_error(
+                "lie_map_tensors_spoly: curvature must have shape (n,k_c+1)");
+        auto poisson_info = poisson.request();
+        if (poisson_info.ndim != 2 || poisson_info.shape[0] != 6
+                || poisson_info.shape[1] != 6)
+            throw std::runtime_error(
+                "lie_map_tensors_spoly: poisson must have shape (6,6)");
+        py::array_t<double> R_out({py::ssize_t(6), py::ssize_t(6)});
+        py::array_t<double> T_out({py::ssize_t(6), py::ssize_t(6), py::ssize_t(6)});
+        py::array_t<double> U_out(
+            {py::ssize_t(6), py::ssize_t(6), py::ssize_t(6), py::ssize_t(6)});
+        py::array_t<double> V_out(
+            {py::ssize_t(6), py::ssize_t(6), py::ssize_t(6), py::ssize_t(6),
+             py::ssize_t(6)});
+        py::array_t<double> linear_out(
+            {static_cast<py::ssize_t>(n_segments), py::ssize_t(6)});
+        double worst_linear = 0.0;
+        // Buffer handles must be taken while the GIL is still held.
+        double* R_ptr = static_cast<double*>(R_out.request().ptr);
+        double* T_ptr = static_cast<double*>(T_out.request().ptr);
+        double* U_ptr = static_cast<double*>(U_out.request().ptr);
+        double* V_ptr = static_cast<double*>(V_out.request().ptr);
+        double* linear_ptr = static_cast<double*>(linear_out.request().ptr);
+        {
+            py::gil_scoped_release release;
+            rad_lie::LieMapTensorsFromSpolyArrays(
+                static_cast<const double*>(Ay_info.ptr),
+                static_cast<const double*>(As_info.ptr),
+                n_segments,
+                static_cast<std::size_t>(Ay_info.shape[1]),
+                static_cast<std::size_t>(Ay_info.shape[2]),
+                static_cast<const double*>(lengths_info.ptr),
+                static_cast<const double*>(curvature_info.ptr),
+                static_cast<std::size_t>(curvature_info.shape[1]),
+                magnetic_rigidity, curvature_sign, reference_beta,
+                longitudinal_covariant ? 1 : 0,
+                static_cast<const double*>(poisson_info.ptr),
+                maximum_step_m, maximum_steps, reference_orbit_tolerance,
+                R_ptr, T_ptr, U_ptr, V_ptr, linear_ptr,
+                &worst_linear);
+        }
+        return py::make_tuple(R_out, T_out, U_out, V_out, linear_out,
+                              worst_linear);
+    }, py::arg("Ay"), py::arg("As"), py::arg("lengths"), py::arg("curvature"),
+       py::arg("poisson"), py::arg("magnetic_rigidity"),
+       py::arg("curvature_sign"), py::arg("reference_beta"),
+       py::arg("longitudinal_covariant"), py::arg("maximum_step_m"),
+       py::arg("maximum_steps"), py::arg("reference_orbit_tolerance"),
+       "Integrate the factorial fourth-order R/T/U/V map tensors of a "
+       "segmented s-polynomial vector-potential Hamiltonian (per-segment "
+       "degree-5 jets, nonautonomous stage RK4, sequential composition); "
+       "returns (R, T, U, V, per-segment worst-stage H1, max |H1|).");
 
     using FieldEvaluator = rad_hdiv::HDivFieldEvaluator;
     py::class_<FieldEvaluator, std::shared_ptr<FieldEvaluator>>(m, "_HDivFieldEvaluator")

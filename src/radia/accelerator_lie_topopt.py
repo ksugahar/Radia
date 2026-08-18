@@ -202,6 +202,20 @@ class CanonicalVectorPotentialHamiltonianJet:
     longitudinal_component: str
 
 
+def _ay_as_parameter_names(degree_limit):
+    """The (Ay, As) triangular-coefficient name layout of the jet builder."""
+    powers = tuple(
+        (x_power, total_degree - x_power)
+        for total_degree in range(1, int(degree_limit) + 1)
+        for x_power in range(total_degree, -1, -1)
+    )
+    return tuple(
+        f"{name}_x{x_power}_y{y_power}"
+        for name in ("Ay", "As")
+        for x_power, y_power in powers
+    )
+
+
 def _canonical_vector_potential_hamiltonian_jet(
     Ay_coefficients_t_m,
     As_coefficients_t_m,
@@ -1748,32 +1762,6 @@ def _fourth_order_rk4_step(A, F2, F3, F4, dA, dF2, dF3, dF4, length):
     )
 
 
-def _fourth_order_rk4_step_stages(start, middle, end, length):
-    """One RK4 flow step of the s-DEPENDENT fourth-order map ODE.
-
-    ``start``/``middle``/``end`` are the stage jets
-    ``(A, F2, F3, F4, dA, dF2, dF3, dF4)`` evaluated at the step's begin,
-    midpoint, and end abscissae -- the classical nonautonomous RK4, fourth
-    order in the step length for an in-segment s-polynomial Hamiltonian.
-    """
-    state = _identity_fourth_order(start[4].shape[0])
-
-    def rhs(stage, value):
-        return _fourth_order_rhs(*stage, *value)
-
-    def shifted(value, derivative, scale):
-        return tuple(item + scale * rate for item, rate in zip(value, derivative))
-
-    k1 = rhs(start, state)
-    k2 = rhs(middle, shifted(state, k1, 0.5 * length))
-    k3 = rhs(middle, shifted(state, k2, 0.5 * length))
-    k4 = rhs(end, shifted(state, k3, length))
-    return tuple(
-        item + length * (first + 2.0 * second + 2.0 * third + fourth) / 6.0
-        for item, first, second, third, fourth in zip(state, k1, k2, k3, k4)
-    )
-
-
 def _compose_fourth_order(outer, inner):
     Ro, To, Uo, Vo, dRo, dTo, dUo, dVo = outer
     Ri, Ti, Ui, Vi, dRi, dTi, dUi, dVi = inner
@@ -2539,49 +2527,88 @@ def _fourth_order_lie_map_from_vector_potential_polynomials(
             with_parameter_tangents=track_jacobians,
         )
 
-    first = _segment_jet(0, -1.0)
-    parameter_names = first.parameter_names
-    local_parameter_count = len(parameter_names)
-    parameter_count = (
-        local_parameter_count * lengths.size if track_jacobians else 0
-    )
-    accumulated = _identity_fourth_order(parameter_count)
-    linear = np.empty((lengths.size, 6))
-    linear_jacobian = np.zeros((parameter_count, lengths.size, 6))
-    total_steps = 0
-    def _gate_reference_orbit(segment, result):
-        if result.parameter_names != parameter_names:
-            raise RuntimeError(
-                "A-map segments produced inconsistent parameter layouts"
-            )
-        maximum_linear = float(np.max(np.abs(result.linear), initial=0.0))
-        if maximum_linear > orbit_tolerance:
+    if not track_jacobians:
+        # Native value path (Sugahara ruling 2026-08-18 "implementations in
+        # C++"): rad_lie_map_kernel.cpp owns the per-segment stage jets,
+        # the nonautonomous stage-RK4 flow, and the sequential composition
+        # behind a MEX-able plain-array ABI.  Python keeps the Dragt-Finn
+        # factorization, its gate, and the packaging below.  The forward-AD
+        # branch underneath stays the co-valid topopt jacobian path.
+        component = str(longitudinal_component)
+        if component not in {"physical", "covariant"}:
             raise ValueError(
-                "reference orbit is not a Hamiltonian fixed trajectory at "
-                f"segment {segment}: max |H1|={maximum_linear:.6e} exceeds "
-                f"{orbit_tolerance:.6e}; "
-                "H1[x,px,y,py,zeta,delta]="
-                + np.array2string(result.linear, precision=9, separator=",")
+                "longitudinal_component must be 'physical' or 'covariant'"
             )
-        return maximum_linear
-
-    def _stage_tensors(jet):
-        return (
-            jet.A, jet.F2, jet.F3, jet.F4,
-            jet.A_jacobian[:0], jet.F2_jacobian[:0],
-            jet.F3_jacobian[:0], jet.F4_jacobian[:0],
+        parameter_names = _ay_as_parameter_names(
+            int(Ay_values.shape[-1]) - 1)
+        R_value, T_value, U_value, V_value, linear, _worst_linear = (
+            _native.lie_map_tensors_spoly(
+                np.ascontiguousarray(
+                    Ay_values if spoly else Ay_values[:, None], dtype=float),
+                np.ascontiguousarray(
+                    As_values if spoly else As_values[:, None], dtype=float),
+                np.ascontiguousarray(lengths, dtype=float),
+                np.ascontiguousarray(
+                    curvature if curvature.ndim == 2 else curvature[:, None],
+                    dtype=float),
+                _POISSON,
+                float(magnetic_rigidity),
+                float(curvature_sign),
+                float(reference_beta),
+                component == "covariant",
+                step_limit,
+                step_cap,
+                orbit_tolerance,
+            )
         )
+        accumulated = (
+            R_value,
+            T_value,
+            U_value,
+            V_value,
+            np.zeros((0, 6, 6)),
+            np.zeros((0, 6, 6, 6)),
+            np.zeros((0, 6, 6, 6, 6)),
+            np.zeros((0, 6, 6, 6, 6, 6)),
+        )
+        linear_jacobian = np.zeros((0, lengths.size, 6))
+    else:
+        first = _segment_jet(0, -1.0)
+        parameter_names = first.parameter_names
+        local_parameter_count = len(parameter_names)
+        parameter_count = local_parameter_count * lengths.size
+        accumulated = _identity_fourth_order(parameter_count)
+        linear = np.empty((lengths.size, 6))
+        linear_jacobian = np.zeros((parameter_count, lengths.size, 6))
+        total_steps = 0
 
-    for segment, length in enumerate(lengths):
-        result = first if segment == 0 else _segment_jet(segment, -1.0)
-        worst_linear = _gate_reference_orbit(segment, result)
-        jet = result.jet
-        linear[segment] = result.linear
-        step_count = int(np.ceil(float(length) / step_limit))
-        total_steps += step_count
-        if total_steps > step_cap:
-            raise ValueError("A-map LIE integration exceeds maximum_steps")
-        if track_jacobians:
+        def _gate_reference_orbit(segment, result):
+            if result.parameter_names != parameter_names:
+                raise RuntimeError(
+                    "A-map segments produced inconsistent parameter layouts"
+                )
+            maximum_linear = float(np.max(np.abs(result.linear), initial=0.0))
+            if maximum_linear > orbit_tolerance:
+                raise ValueError(
+                    "reference orbit is not a Hamiltonian fixed trajectory at "
+                    f"segment {segment}: max |H1|={maximum_linear:.6e} "
+                    f"exceeds {orbit_tolerance:.6e}; "
+                    "H1[x,px,y,py,zeta,delta]="
+                    + np.array2string(result.linear, precision=9,
+                                      separator=",")
+                )
+            return maximum_linear
+
+        for segment, length in enumerate(lengths):
+            result = first if segment == 0 else _segment_jet(segment, -1.0)
+            _gate_reference_orbit(segment, result)
+            jet = result.jet
+            linear[segment] = result.linear
+            step_count = int(np.ceil(float(length) / step_limit))
+            total_steps += step_count
+            if total_steps > step_cap:
+                raise ValueError(
+                    "A-map LIE integration exceeds maximum_steps")
             indexes = np.asarray(
                 [
                     parameter * lengths.size + segment
@@ -2611,48 +2638,6 @@ def _fourth_order_lie_map_from_vector_potential_polynomials(
                     local[4 + derivative_index]
                 )
             accumulated = _compose_fourth_order(tuple(embedded), accumulated)
-        elif not spoly:
-            step = _fourth_order_rk4_step(
-                jet.A,
-                jet.F2,
-                jet.F3,
-                jet.F4,
-                jet.A_jacobian[:0],
-                jet.F2_jacobian[:0],
-                jet.F3_jacobian[:0],
-                jet.F4_jacobian[:0],
-                float(length) / step_count,
-            )
-            local = _identity_fourth_order(0)
-            for _ in range(step_count):
-                local = _compose_fourth_order(step, local)
-            accumulated = _compose_fourth_order(local, accumulated)
-        else:
-            # Nonautonomous RK4: stage jets re-evaluated along the segment
-            # (zeta in [-1, 1]); the end jet of one step is the start jet
-            # of the next.  Every stage passes the reference-orbit gate.
-            step_length = float(length) / step_count
-            local = _identity_fourth_order(0)
-            start = _stage_tensors(jet)
-            for sub_step in range(step_count):
-                zeta_mid = -1.0 + 2.0 * (sub_step + 0.5) / step_count
-                zeta_end = -1.0 + 2.0 * (sub_step + 1.0) / step_count
-                middle_result = _segment_jet(segment, zeta_mid)
-                end_result = _segment_jet(segment, min(zeta_end, 1.0))
-                for stage_result in (middle_result, end_result):
-                    stage_linear = _gate_reference_orbit(segment, stage_result)
-                    if stage_linear > worst_linear:
-                        worst_linear = stage_linear
-                        linear[segment] = stage_result.linear
-                step = _fourth_order_rk4_step_stages(
-                    start,
-                    _stage_tensors(middle_result.jet),
-                    _stage_tensors(end_result.jet),
-                    step_length,
-                )
-                local = _compose_fourth_order(step, local)
-                start = _stage_tensors(end_result.jet)
-            accumulated = _compose_fourth_order(local, accumulated)
 
     factorization = dragt_finn_factorize_fourth_order(
         accumulated[0],
