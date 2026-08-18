@@ -39,6 +39,14 @@
       "notes": "Python and MATLAB share the C++ R/T/U variational-map kernel and the canonical fifth-degree H2/H3/H4/H5 body-Hamiltonian builder with A/F2/F3/F4. The canonical EarlyTimes input in both languages is a real NGSolve HCurl(order=p) vector-potential GridFunction; NGSolve evaluates native curl(A) for the same nine-point moving-frame multipole fit through decapole, using the fourth-order Bishop/RMF double-reflection frame and optional periodic minimal-twist holonomy correction, without an HDiv projection or regular-grid field map. The FESpace order is discovered and reported, while explicit magnetic_flux_density mode retains direct-B compatibility. Both expose direct GridFunction Lorentz tracking as the independent point-evaluation path. The EarlyTimes migration foundation also adds shared native SI particle/reference/state values, zero/uniform field sampling, relativistic Lorentz RHS evaluation, individually callable RK4/Boris steps, and transparent fixed-step trajectory records."
     },
     {
+      "id": "beam-yoshida-split",
+      "patterns": ["beam_yoshida_split.py"],
+      "classification": "python-fallback",
+      "backend_contract": "in-process-python",
+      "matlab": ["matlab/+radia/+python/beamYoshidaSplit.m"],
+      "notes": "Yoshida split-operator tracking on CanonicalHCurl chain polynomials: the original EarlyTimes symmetric factorization (exact H1 rotation, exact H2 generator-integral drift, nilpotent H3 kick, ps end caps evaluating fields at step midpoints) with order-2/4 composition; exact symplectic factors at any amplitude, paraxial Hamiltonian with the measured p^2 gap against the exact-sqrt A-RK. Exposed to MATLAB through the explicit initialization/verification boundary; not a Simulink step-time backend."
+    },
+    {
       "id": "beam-canonical-hcurl",
       "patterns": ["beam_canonical_hcurl.py"],
       "classification": "python-fallback",
