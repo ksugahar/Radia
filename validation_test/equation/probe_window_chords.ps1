@@ -1,32 +1,37 @@
 # Drive the real EQNEDT64 window with real key presses.
 #
-# tests/equation/ drives the model directly, which is why 619 of them passed
-# while every keyboard shortcut in the editor was dead.  Nothing below the
-# Python binding can see a key press: the window is a WIN32 executable, and the
-# path from "the user pressed Ctrl+F" to "a fraction appeared" runs through
-# WM_KEYDOWN, WM_CHAR and GetKeyState, none of which a unit test touches.
+# LAST RESORT.  Almost everything this checks is now checked by
+# tests/equation/test_key_dispatch.py, which presses the same keys through
+# Equation.press() -- no window, no keyboard, no foreground.  That became
+# possible once the window stopped deciding anything: it reads the modifier
+# state, which only a window can, and hands the press to a function that takes
+# the modifiers as arguments.
 #
-# So this presses the keys.  Each case starts a clean editor, sends a chord,
-# copies the result to the clipboard and compares the LaTeX.  It found two bugs
-# that tests/equation/test_chords.py structurally cannot:
+# Taking over somebody's keyboard is what you do when there is no seam.  There
+# is one now, so reach for the headless tests first and keep this for the two
+# things they genuinely cannot see:
 #
-#   * the second key of "Ctrl+T, S" was ALSO typed as text, so summation came
-#     out as \sum_{sn} -- the chord consumed the key, WM_CHAR delivered it again
-#   * Ctrl+Shift+X CUT the selection instead of making it a bold vector, because
-#     the built-in Ctrl+X binding never checked whether shift was down
+#   * that the window is wired to the dispatcher at all
+#   * the clipboard round trip, which needs a real clipboard
 #
-# It is not a pytest: it needs a desktop session, it steals the foreground, and
-# it types into whatever holds focus if that steal fails -- so it checks the
-# window title first and refuses to send anything otherwise.  Run it by hand
-# after touching eq_window.cpp or the shortcut table.
-#
-#   pwsh -File validation_test/equation/probe_window_chords.ps1
-#
-# Do not run it while you are using the machine; it takes the keyboard.
+# It refuses to run without -IAmNotUsingThisMachine, because it was being run
+# without asking the person sitting at the machine.
 
 param(
-    [string]$Exe = "$PSScriptRoot\..\..\build_eq\eqnedt64.exe"
+    [string]$Exe = "$PSScriptRoot\..\..\build_eq\eqnedt64.exe",
+    # It refuses to run without this.  The probe takes the keyboard and the
+    # foreground for about a minute, which is intolerable if somebody is at
+    # the machine -- and it was being run without asking them.
+    [switch]$IAmNotUsingThisMachine
 )
+
+if (-not $IAmNotUsingThisMachine) {
+    Write-Host "This probe takes over the keyboard and the foreground for about a"
+    Write-Host "minute.  Do not run it while you are working at this machine."
+    Write-Host ""
+    Write-Host "  pwsh -File `"$PSCommandPath`" -IAmNotUsingThisMachine"
+    exit 2
+}
 
 Add-Type @"
 using System;
