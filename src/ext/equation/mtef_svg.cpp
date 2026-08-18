@@ -583,6 +583,15 @@ private:
     int fracDepth_ = 0;
 
     Layout glyph_layout(uint32_t cp, double sizePt, bool italic, bool symbol) {
+        /* An explicit space has a width and no ink.  Measuring it through the
+         * font would ask GDI for whatever it happens to draw for U+2006, which
+         * is not TeX's three eighteenths of an em. */
+        if (const double em = mtef_space_em(cp)) {
+            Layout sp;
+            sp.w = em * sizePt;
+            return sp;
+        }
+
         /* A variable is set in the MATHS font's own italic alphabet, not in
          * the text italic that happens to look like it.  They are different
          * fonts with different widths, and the difference is not small: TeX
