@@ -12,6 +12,8 @@ import numpy as np
 
 from radia.accelerator_lie_topopt import (
     _fourth_order_lie_map_from_vector_potential_polynomials,
+    apply_dragt_finn_map,
+    apply_dragt_finn_map_batch,
 )
 
 RIGIDITY = 3.0
@@ -74,6 +76,29 @@ def test_spoly_constant_matches_constant_path():
         a = getattr(constant.transfer, name)
         b = getattr(spoly.transfer, name)
         assert np.allclose(a, b, rtol=0.0, atol=1.0e-14), name
+
+
+def test_batch_map_application_matches_single_state():
+    # The ensemble apply is the tracking hot path: it must reproduce the
+    # single-state factor flow to roundoff across a spread of amplitudes.
+    Ay, As, lengths, curvatures = synthetic_arrays(6)
+    lie = _fourth_order_lie_map_from_vector_potential_polynomials(
+        Ay, As, lengths, RIGIDITY,
+        reference_curvature_per_m=curvatures,
+        longitudinal_component="covariant",
+        reference_orbit_tolerance=1.0e-6,
+        parameter_jacobians=False)
+    rng = np.random.default_rng(11)
+    states = 5.0e-3 * rng.standard_normal((64, 6))
+    states[:, 4] = 0.0
+    batch = apply_dragt_finn_map_batch(
+        lie.transfer.factorization, states, generator_substeps=2)
+    singles = np.vstack([
+        apply_dragt_finn_map(lie.transfer.factorization, states[i],
+                             generator_substeps=2)
+        for i in range(states.shape[0])
+    ])
+    assert float(np.max(np.abs(batch - singles))) < 1.0e-13
 
 
 def test_spoly_fourth_order_in_segment_s_dependence():

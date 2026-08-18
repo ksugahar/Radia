@@ -649,6 +649,63 @@ struct HDivFieldEvaluator::Impl {
         accumulated.Store(out);
     }
 
+    // Atom-parallel direct sum for SMALL observation batches.  The
+    // point-parallel Evaluate leaves the pool idle when n_observations is
+    // below the thread count (measured on the production C-type: a
+    // single-point exact call cost ~90 ms serial while the large-batch
+    // throughput was 11.5 ms/point at 8 threads), so the parallelism moves
+    // INSIDE the source sum.  The chunked compensated reduction changes
+    // the summation order, so a small-batch result may differ from the
+    // same point evaluated inside a large batch at the last-ULP level.
+    void EvaluateBaseDirectParallel(const double r[3], double out[3]) const {
+        const std::size_t total = atoms.size();
+        const std::size_t threads = static_cast<std::size_t>(
+            std::max(1, ngcore::TaskManager::GetMaxThreads()));
+        const std::size_t chunk_count = std::min<std::size_t>(total, 4*threads);
+        if (chunk_count <= 1) {
+            EvaluateBase(r, out, HDivFieldEvaluator::Algorithm::Direct);
+            return;
+        }
+        std::vector<std::array<double, 3>> partial(chunk_count);
+        ngcore::ParallelFor(ngcore::IntRange(chunk_count), [&](std::size_t chunk) {
+            const std::size_t begin = chunk*total/chunk_count;
+            const std::size_t end = (chunk+1)*total/chunk_count;
+            CompensatedVec3 accumulated;
+            for (std::size_t index = begin; index < end; ++index) {
+                double value[3] = {0.0, 0.0, 0.0};
+                AddExact(atoms[index], r, value);
+                accumulated.Add(value);
+            }
+            accumulated.Store(partial[chunk].data());
+        });
+        CompensatedVec3 accumulated;
+        for (const auto& value : partial) accumulated.Add(value.data());
+        accumulated.Store(out);
+    }
+
+    void EvaluatePhysicalParallel(const double r[3], double out[3],
+                                  HDivFieldEvaluator::Algorithm algorithm) const {
+        if (algorithm == HDivFieldEvaluator::Algorithm::Tree) {
+            // Tree traversal per point is already cheap; no inner region.
+            EvaluatePhysical(r, out, algorithm);
+            return;
+        }
+        double base[3];
+        EvaluateBaseDirectParallel(r, base);
+        CompensatedVec3 accumulated;
+        accumulated.Add(base);
+        for (const ImageTerm& image : images) {
+            double reflected[3];
+            ImageInversePoint(image, r, reflected);
+            double value[3], mapped[3];
+            EvaluateBaseDirectParallel(reflected, value);
+            ImageForwardVector(image, value, mapped);
+            for (int axis = 0; axis < 3; ++axis)
+                accumulated.Add(axis, image.sign*mapped[axis]);
+        }
+        accumulated.Store(out);
+    }
+
     bool TreePassesProbe(const double* observations, std::size_t n_observations) const {
         const std::size_t count = std::min<std::size_t>(
             n_observations, static_cast<std::size_t>(options.probe_count));
@@ -886,6 +943,22 @@ void HDivFieldEvaluator::Evaluate(const double* observations, std::size_t n_obse
         return;
     }
     ngcore::RegionTaskManager task_manager;
+    const std::size_t worker_count = static_cast<std::size_t>(
+        std::max(1, ngcore::TaskManager::GetMaxThreads()));
+    if (n_observations < worker_count) {
+        // Too few points to occupy the pool point-parallel (the dominant
+        // cost of orbit trackers and per-step RK consumers); parallelize
+        // over the source atoms inside each point instead.
+        for (std::size_t index = 0; index < n_observations; ++index) {
+            const double* r = observations+3*index;
+            double total[3];
+            m_impl->EvaluatePhysicalParallel(r, total, algorithm);
+            output[3*index] = total[0];
+            output[3*index+1] = total[1];
+            output[3*index+2] = total[2];
+        }
+        return;
+    }
     ngcore::ParallelFor(ngcore::IntRange(n_observations), [&](std::size_t index) {
         const double* r = observations+3*index;
         double total[3];
