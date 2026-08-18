@@ -348,12 +348,29 @@ PYBIND11_MODULE(_equation, m) {
              "mode, not an operation on what is highlighted.")
         .def("press", [](mtef::Equation& e, unsigned vk, bool ctrl,
                          bool shift, bool alt) {
-            /* One press per call is not enough for a two-step chord, so the
-             * state that remembers a pending prefix lives with the equation
-             * for as long as Python holds it. */
-            static std::map<mtef::Equation*, mtef::KeyState> states;
-            mtef::KeyState& st = states[&e];
-            const mtef::KeyResult r = mtef::press_key(e, st, vk, ctrl, shift, alt);
+            /* The half-entered chord is carried by the equation itself.  A
+             * static table keyed on its address gave one equation's pending
+             * prefix to whatever was allocated at that address next, which
+             * showed up as a test that passed alone and failed in a run. */
+            mtef::KeyState st;
+            mtef::Equation::PendingChord& p = e.pending_chord();
+            for (size_t i = 0; i < p.vk.size(); ++i) {
+                mtef::Step s2;
+                s2.vk = unsigned(p.vk[i]);
+                s2.ctrl  = (p.mods[i] & 1) != 0;
+                s2.shift = (p.mods[i] & 2) != 0;
+                s2.alt   = (p.mods[i] & 4) != 0;
+                st.pending.push_back(s2);
+            }
+            const mtef::KeyResult r =
+                mtef::press_key(e, st, vk, ctrl, shift, alt);
+            p.vk.clear();
+            p.mods.clear();
+            for (const mtef::Step& s2 : st.pending) {
+                p.vk.push_back(int(s2.vk));
+                p.mods.push_back((s2.ctrl ? 1 : 0) | (s2.shift ? 2 : 0) |
+                                 (s2.alt ? 4 : 0));
+            }
             return r == mtef::KeyResult::Ignored ? "ignored"
                  : r == mtef::KeyResult::Pending ? "pending" : "consumed";
         }, py::arg("vk"), py::arg("ctrl") = false, py::arg("shift") = false,
@@ -403,6 +420,8 @@ PYBIND11_MODULE(_equation, m) {
         d["accent_base_height"] = c.accentBaseHeight;
         d["superscript_shift_up"] = c.superscriptShiftUp;
         d["subscript_shift_down"] = c.subscriptShiftDown;
+        d["display_operator_min_height"] = c.displayOperatorMinHeight;
+        d["math_leading"] = c.mathLeading;
         d["upem"] = 1.0;   /* everything above is already in em */
         return d;
     }, "Cambria Math's MATH constants, in em.");
