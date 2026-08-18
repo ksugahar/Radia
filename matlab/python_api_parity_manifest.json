@@ -234,10 +234,15 @@
     {
       "id": "accelerator-lie-topopt",
       "patterns": ["accelerator_lie_topopt.py"],
-      "classification": "python-fallback",
-      "backend_contract": "in-process-python",
-      "matlab": ["matlab/+radia/+python/acceleratorLieTopopt.m"],
-      "notes": "Canonical body-field Lie topology optimization uses the native C++ H2/H3/H4/H5 and A/F2/F3/F4 value kernel through normal/skew decapole, Python rank-five forward-mode analytic tangents, Dragt-Finn f3/f4/f5 factorization with formal-symplectic R/T/U/V reconstruction, a full HCurl(order=5) transverse A-jet bridge with xy cross terms, sample-response-to-objective gradients and reference-orbit H1 constraints, an independent B-map RK check, and the shared TSVD plus ACA/QR/TSVD HDiv-MMM batch pipeline. Mathematica owns an independent tracked symbolic golden and is not a runtime dependency."
+      "classification": "native-mex",
+      "matlab": [
+        "matlab/+radia/+python/acceleratorLieTopopt.m",
+        "matlab/+radia/+beam/lieMapTensorsSpoly.m",
+        "matlab/+radia/+beam/lieDragtFinnFactorize.m",
+        "matlab/+radia/+beam/lieApplyDragtFinnBatch.m",
+        "matlab/+radia/+beam/trackReferenceOrbit3D.m"
+      ],
+      "notes": "The production Lie-map value pipeline is native end to end and shared verbatim between pybind and radia_mex: rad_lie_map_kernel (degree-5 Hamiltonian jets on the 462-monomial basis, nonautonomous stage RK4, segment composition, and the Dragt-Finn f3/f4/f5 factorization with the formal-symplectic reconstruction audit), rad_lie_map_batch (particle-parallel ensemble application), and rad_orbit_tracker (full-3D reference-orbit RK4 with the measured planarity gate; the MEX route drives Radia-object sources, and the pybind route additionally accepts the HDiv iron evaluator handle).  MATLAB reaches them through beam.lie.map_tensors_spoly / beam.lie.dragt_finn_factorize / beam.lie.apply_dragt_finn_batch / beam.orbit.track_reference_3d with cross-language golden tests in test_radia_mex.m.  Deliberately retained Python boundaries: the forward-mode topopt parameter tangents (rank-five analytic AD) and the CanonicalHCurl chain fit that produces the spoly coefficient arrays (see beam-canonical-hcurl); Mathematica owns an independent tracked symbolic golden and is not a runtime dependency."
     },
     {
       "id": "ffag-topopt",
