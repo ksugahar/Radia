@@ -192,6 +192,12 @@ def test_graded_breaks_equidistribute_monitor():
     assert local_size(0.8) < 0.4 * local_size(0.5)
 
 
+@pytest.mark.parametrize("strength", [-1.0, np.nan, np.inf])
+def test_graded_breaks_rejects_invalid_strength(strength):
+    with pytest.raises(ValueError, match="strength must be finite"):
+        graded_breaks([0.0, 1.0], [0.0, 1.0], 2, strength=strength)
+
+
 def test_gradient_matches_finite_difference():
     chain = CanonicalHCurlChain(
         np.array([-0.01, 0.01]), HW, HH, order_x=6, order_s=2,
@@ -205,7 +211,7 @@ def test_gradient_matches_finite_difference():
     chain.fit_frame_samples(x, y, s, np.imag(z**2) / HW**2,
                             np.real(z**2) / HW**2, np.zeros(n))
     px_, py_, ps_ = 0.004, 0.001, 0.003
-    a0, grad = chain.vector_potential_and_gradient_frame(
+    _a, grad = chain.vector_potential_and_gradient_frame(
         np.array([px_]), np.array([py_]), np.array([ps_]))
     step = 1.0e-6
     for axis, offset in ((0, (step, 0.0)), (1, (0.0, step))):
@@ -297,6 +303,8 @@ def test_periodic_chain_spline_dimension_and_cohomology():
         open_chain = CanonicalHCurlChain(
             np.linspace(0.0, 0.08, 9), HW, HH, order_x=6, order_s=2)
         open_chain.set_ring_circulation(1.0e-4)
+    with pytest.raises(ValueError, match="circulation must be finite"):
+        ring.set_ring_circulation(np.nan)
 
 
 def test_lie_element_spoly_arrays_match_pointwise_coefficients():
@@ -360,3 +368,33 @@ def test_lie_segment_arrays_contract():
     as_from_coef = As[:, 0, :] @ powers
     assert float(np.max(np.abs(a_eval[:, 1] - ay_from_coef))) < 1.0e-12
     assert float(np.max(np.abs(a_eval[:, 2] - as_from_coef))) < 1.0e-12
+
+
+def test_public_sample_and_evaluation_boundaries_fail_loudly():
+    chain = CanonicalHCurlChain(
+        np.array([0.0, 0.01]), HW, HH, order_x=4, order_s=0)
+    n = 4 * chain.chain_dimension
+    x = np.linspace(-HW, HW, n)
+    y = np.linspace(-HH, HH, n)
+    s = np.linspace(0.0, 0.01, n)
+
+    with pytest.raises(ValueError, match="sample arrays must share one length"):
+        chain.fit_frame_samples(x[:-1], y, s, np.zeros(n), np.ones(n),
+                                np.zeros(n))
+    with pytest.raises(ValueError, match="sample arrays must contain only finite"):
+        chain.fit_frame_samples(x, y, s, np.zeros(n), np.full(n, np.nan),
+                                np.zeros(n))
+
+    chain.fit_frame_samples(x, y, s, np.zeros(n), np.ones(n), np.zeros(n))
+    evaluators = (
+        chain.vector_potential_frame,
+        chain.vector_potential_and_gradient_frame,
+        chain.magnetic_flux_density_frame,
+    )
+    for evaluate in evaluators:
+        with pytest.raises(ValueError, match="x/y/s arrays must share one length"):
+            evaluate([0.0], [0.0, 0.0], [0.005])
+        with pytest.raises(ValueError, match="x/y/s arrays must contain only finite"):
+            evaluate([np.nan], [0.0], [0.005])
+    with pytest.raises(ValueError, match="degree must be at least 1"):
+        chain.lie_segment_arrays(1, degree=0)

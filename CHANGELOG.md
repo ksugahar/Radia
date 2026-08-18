@@ -5,6 +5,26 @@ All notable changes to the `radia` package.  Format: each release lists
 
 ## Unreleased
 
+## 4.95.54 - Canonical HCurl EarlyTimes and field-route verification
+
+Released 2026-08-18.
+
+- Added the tracking-specialized CanonicalHCurl vacuum chain with full-volume
+  three-component field fitting, adaptive longitudinal grading, hard interface
+  contracts, periodic ring closure, and an explicit cohomology circulation
+  degree of freedom.
+- Added in-segment longitudinal vector-potential polynomials to the fourth-order
+  Lie-map kernel. A nonautonomous stage-jet RK4 now retains fringe variation
+  within each element, while callers that do not need design derivatives can
+  omit parameter Jacobians without changing the map tensors.
+- Strengthened the NGSolve-owned HCurl/HDiv field boundary with exact
+  equivalent-current vector-potential sources, discrete orbit-gauge handling,
+  reflection-parity diagnostics, and independent Lie, canonical A-map RK, and
+  projected B-map RK verification routes.
+- Added fail-loud finite-value and shape checks to CanonicalHCurl fitting and
+  evaluation APIs, with focused regression coverage through longitudinal order
+  five.
+
 ## 4.95.53 - MATLAB Optuna 4.9 sampler parity
 
 Released 2026-08-16.

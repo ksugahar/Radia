@@ -308,6 +308,14 @@ for accelerator-coordinate tracking or use SciPy for adaptive trajectories,
 event handling, and closed-orbit workflows. Gmsh exports preserve trajectory
 quantities and can animate a beam through the solved field.
 
+For high-order map analysis, NGSolve remains the source of truth for conforming
+HCurl/HDiv projection and curved finite-element evaluation. Radia adds a
+tracking-specialized CanonicalHCurl vacuum chain fitted from full-volume field
+samples, with adaptive fringe grading, periodic ring closure, and direct
+longitudinal-polynomial coupling to a nonautonomous fourth-order Lie-map
+integrator. Independent canonical A-map and projected B-map Runge--Kutta routes
+keep field-projection error separate from Lie truncation error.
+
 <p align="center">
   <img src="docs/gmsh_post/output/saddle_beam.gif"
        alt="Charged particles flying through a saddle-coil magnetic field"
@@ -316,6 +324,7 @@ quantities and can animate a beam through the solved field.
 
 - [Executed particle-orbit notebook](docs/gmsh_post/em_particle_orbits.ipynb)
 - [Native beam and transfer API design](docs/api/EARLY_TIMES_CPP_API_DESIGN.md)
+- [Canonical HCurl and Lie-map validation](validation_test/ffag_topopt/README.md)
 - [Gmsh post-processing guide](docs/gmsh_post/README.md)
 
 ## Interfaces
