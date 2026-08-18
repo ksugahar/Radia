@@ -122,7 +122,9 @@ public:
 
 class PileNode : public Node {
 public:
-    int halign = 0;         /* 0=gathered, 1=aligned, 20-24=matrix types */
+    /* 0=centred (gathered), 1=aligned at &, 2=flush left, 3=flush right,
+     * 20-24=matrix types.  The Format menu's Align Left / Center / Right. */
+    int halign = 0;
     int kind = 0;           /* ND_ENVIRONMENT: 0=gathered,1=aligned,2..7=matrix variants */
     int ncols = 0;          /* for aligned/matrix */
     NodeList lines;         /* each is a LineNode */

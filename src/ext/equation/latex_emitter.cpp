@@ -680,12 +680,22 @@ void LaTeXEmitter::emitLim(const LimNode& lim, std::string& out) {
 void LaTeXEmitter::emitPile(const PileNode& pile, std::string& out) {
     const char* envName = "gathered";
     if (pile.halign == 1 || pile.kind == 1) envName = "aligned";
+    /* Flush left and flush right need no environment of their own: an
+     * `aligned` row whose content is all in the SECOND column is flush left,
+     * and all in the first is flush right.  Writing them that way means the
+     * alignment survives being saved and read back, where a `gathered` would
+     * come back centred. */
+    const bool left  = (pile.halign == 2);
+    const bool right = (pile.halign == 3);
+    if (left || right) envName = "aligned";
     if (pile.halign >= 20) envName = "matrix"; /* bmatrix/pmatrix handled by fence wrapper */
 
     out += "\\begin{"; out += envName; out += "}\n";
     for (size_t i = 0; i < pile.lines.size(); i++) {
         if (i > 0) out += " \\\\\n";
+        if (left) out += "&";
         emitNode(pile.lines[i].get(), out);
+        if (right) out += "&";
     }
     out += "\n\\end{"; out += envName; out += "}";
 }

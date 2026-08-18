@@ -571,6 +571,22 @@ private:
         /* cases / aligned / gathered -- one stacked line per row. */
         auto pile = std::make_unique<PileNode>();
         pile->ncols = int(cols);
+        /* An `aligned` whose rows are ALL empty in one column is a flush
+         * alignment, not a real two-column one: everything in the second
+         * column is flush left and everything in the first is flush right.
+         * That is how Align Left and Align Right are written out, so it is
+         * how they have to be read back. */
+        if (env == "aligned" && cols == 2 && !rows.empty()) {
+            bool allFirstEmpty = true, allSecondEmpty = true;
+            for (auto& r : rows) {
+                if (r.size() > 0 && !r[0].empty()) allFirstEmpty = false;
+                if (r.size() > 1 && !r[1].empty()) allSecondEmpty = false;
+            }
+            if (allFirstEmpty && !allSecondEmpty)      pile->halign = 2;
+            else if (allSecondEmpty && !allFirstEmpty) pile->halign = 3;
+            else                                       pile->halign = 1;
+            if (pile->halign != 1) pile->ncols = 1;
+        }
         for (auto& r : rows) {
             auto line = std::make_unique<LineNode>();
             for (auto& cell : r)
