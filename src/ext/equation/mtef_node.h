@@ -163,6 +163,8 @@ public:
 class FracNode : public Node {
 public:
     bool slashed = false;   /* tmSLFRACT */
+    /* False for inom: the parts stack with no rule between them. */
+    bool ruled = true;
     bool display = false;   /* display fraction (Pass 0a) */
     NodeList numer;
     NodeList denom;

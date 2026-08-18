@@ -520,3 +520,96 @@ def test_both_bracket_keys_reach_parentheses():
     c = chords()
     assert c["Ctrl+9"] == "template.paren"
     assert c["Ctrl+0"] == "template.paren"
+
+
+# ---- what an unknown command does ------------------------------------------
+#
+# It used to drop the backslash and set the rest as text, so inom{n}{k} drew
+# as the word "binom" followed by an n and a k and looked like a finished
+# equation.  That is the quiet-wrong-answer failure this repository has a
+# policy against.  It keeps the backslash now, which says what has happened.
+
+
+def test_an_unknown_command_keeps_its_backslash():
+    e = equation.Equation()
+    e.load_latex(chr(92) + "xrightarrow{f}")
+    assert chr(92) + chr(92) not in e.latex()[:2]
+    assert "xrightarrow" in e.latex()
+    assert chr(92) + "text{" + chr(92) in e.latex(), (
+        "an unhandled command must not read as prose: " + e.latex())
+
+
+def test_its_arguments_are_not_lost():
+    e = equation.Equation()
+    e.load_latex(chr(92) + "boxed{abc}")
+    assert "abc" in e.latex()
+
+
+# ---- the constructs added here ---------------------------------------------
+
+def test_binom_is_a_ruleless_fraction_in_parentheses():
+    """It is built as one -- a FracNode with the rule turned off, inside a
+    paren fence -- and written back out as \binom, because the parts alone
+    would go out as {n \atop k} and \atop is infix: the parser has no way to
+    take it, so the equation came back with the word "atop" in it."""
+    e = equation.Equation()
+    e.load_latex(chr(92) + "binom{n}{k}")
+    assert e.latex() == chr(92) + "binom{n}{k}"
+    assert width(chr(92) + "binom{n}{k}") > width("nk")
+
+
+def test_a_binomial_has_no_rule_and_a_fraction_does():
+    import re
+    st = equation.SvgStyle()
+    st.padding = 0.0
+    rules = lambda t: equation.tex_to_svg(t, st).count("<rect")
+    assert rules(chr(92) + "frac{n}{k}") > rules(chr(92) + "binom{n}{k}")
+
+
+@_pytest.mark.parametrize("latex,taller", [
+    (chr(92) + "overbrace{a+b}", True),
+    (chr(92) + "overbrace{a+b}^{n}", True),
+])
+def test_an_overbrace_is_drawn(latex, taller):
+    """The node existed and its layout returned the CONTENT and nothing else,
+    so the brace was simply absent with no sign that anything was missing."""
+    st = equation.SvgStyle()
+    st.padding = 0.0
+    plain = equation.tex_metrics("a+b", st)[1]
+    braced = equation.tex_metrics(latex, st)[1]
+    assert braced > plain + 2.0, "no brace was drawn (%.2f vs %.2f)" % (braced, plain)
+
+
+def test_an_underbrace_goes_below():
+    st = equation.SvgStyle()
+    st.padding = 0.0
+    plain = equation.tex_metrics("x+y", st)[2]
+    braced = equation.tex_metrics(chr(92) + "underbrace{x+y}_{m}", st)[2]
+    assert braced > plain + 2.0
+
+
+@_pytest.mark.parametrize("latex", [
+    chr(92) + "overbrace{a+b}^{n}",
+    chr(92) + "underbrace{x+y}_{m}",
+    chr(92) + "binom{n}{k}",
+])
+def test_the_new_constructs_survive_a_save(latex):
+    e = equation.Equation()
+    e.load_latex(latex)
+    once = e.latex()
+    back = equation.Equation()
+    back.load_latex(once)
+    assert back.latex() == once
+
+
+@_pytest.mark.parametrize("kind", ["bigcup", "bigcap", "coprod"])
+def test_the_remaining_large_operators_are_offered(kind):
+    """The layout could always draw them; there was no way in."""
+    assert kind in equation.Equation.templates()
+    e = equation.Equation()
+    assert e.insert_template(kind)
+
+
+def test_ctrl_t_u_reaches_the_union():
+    """Command 39,1 in the key table, which had no template to reach."""
+    assert chords()["Ctrl+T, U"] == "template.bigcup"

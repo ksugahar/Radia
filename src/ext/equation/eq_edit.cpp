@@ -963,9 +963,17 @@ bool Equation::insert_template(const std::string& kind) {
                     : (kind == "iint") ? tmDINT : tmSINT;
         i->hasLower = i->hasUpper = true;
         node = std::move(i);
-    } else if (kind == "sum" || kind == "prod") {
+    } else if (kind == "sum" || kind == "prod" || kind == "coprod" ||
+               kind == "bigcup" || kind == "bigcap") {
+        /* Every large operator the layout can already draw.  Only the two
+         * commonest were offered; the rest were reachable by typing the LaTeX
+         * and not by any chord, which for \bigcup is the difference between
+         * being in the editor and not. */
         auto b = std::make_unique<BigOpNode>();
-        b->selector = (kind == "sum") ? tmSUM : tmPROD;
+        b->selector = (kind == "sum")    ? tmSUM
+                    : (kind == "prod")   ? tmPROD
+                    : (kind == "coprod") ? tmCOPROD
+                    : (kind == "bigcup") ? tmUNION : tmINTER;
         b->hasLower = b->hasUpper = true;
         b->hasLimits = true;
         node = std::move(b);
@@ -1084,7 +1092,7 @@ const std::vector<std::string>& Equation::templates() {
         "frac", "sqrt", "nthroot",
         "sub", "sup", "subsup",
         "paren", "bracket", "brace", "abs", "angle",
-        "int", "iint", "oint", "sum", "prod",
+        "int", "iint", "oint", "sum", "prod", "coprod", "bigcup", "bigcap",
         "overline", "underline", "hat", "vec", "bar", "tilde", "dot",
         "matrix2x2", "matrix3x3", "cases",
     };
@@ -1239,6 +1247,8 @@ const std::vector<Equation::Binding>& Equation::shortcuts() {
         {"Ctrl+T, P",    "template.prod",      "product"},
         {"Ctrl+T, M",    "template.matrix2x2", "matrix"},
         {"Ctrl+T, N",    "template.nthroot",   "nth root"},
+        /* Command 39,1 in the table, which had no template to reach. */
+        {"Ctrl+T, U",    "template.bigcup",    "union"},
         /* The templates that also have a chord of their own.  Equation Editor
          * carries both: the same command appears once as a direct chord (its
          * kind 3) and once as a second key after a prefix (kind 5), with the
