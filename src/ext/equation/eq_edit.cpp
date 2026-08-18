@@ -1199,6 +1199,13 @@ const std::vector<Equation::Binding>& Equation::shortcuts() {
          * to the same idea. */
         /* Enter breaks the line, which a stack can now be drawn for. */
         {"Enter",        "edit.newline",       "new line"},
+        /* Format > Align.  Equation Editor's own three chords, read off the
+         * same key table: Ctrl+Shift+L is command 3,0, Ctrl+Shift+C is 3,1 and
+         * Ctrl+Shift+R is 3,2, and group 3 is the Format menu -- confirmed by
+         * the Style group matching all six of its chords. */
+        {"Ctrl+Shift+L", "format.left",        "align left"},
+        {"Ctrl+Shift+C", "format.center",      "align centre"},
+        {"Ctrl+Shift+R", "format.right",       "align right"},
         {"Ctrl+Left",    "caret.left_item",    "left one item"},
         {"Ctrl+Right",   "caret.right_item",   "right one item"},
         {"Ctrl+Shift+Left",  "select.left_item",  "select left one item"},
@@ -1287,6 +1294,27 @@ bool Equation::command(const std::string& name) {
     if (name == "select.end")       { extend_end();  return true; }
     if (name == "select.all")       { select_all();  return true; }
     if (name.compare(0, 6, "style.") == 0) return set_style(name.substr(6));
+    if (name.compare(0, 7, "format.") == 0) {
+        const std::string how = name.substr(7);
+        const int want = (how == "left")   ? 2
+                       : (how == "right")  ? 3
+                       : (how == "center") ? 0 : -1;
+        if (want < 0) return false;
+        /* The nearest enclosing stack, which is what the Format menu acts on.
+         * Nothing to align outside one, and saying so is better than silently
+         * doing nothing to the whole equation. */
+        for (size_t depth = path_.size(); depth-- > 0; ) {
+            std::vector<CaretStep> upto(path_.begin(), path_.begin() + depth);
+            Node* n = parent_node(std::vector<CaretStep>(
+                path_.begin(), path_.begin() + depth + 1));
+            if (n && n->tag() == Node::kPile) {
+                checkpoint();
+                static_cast<PileNode&>(*n).halign = want;
+                return true;
+            }
+        }
+        return false;
+    }
     if (name == "edit.newline")     return newline();
     if (name == "caret.left_item")  return move_item(-1, false);
     if (name == "caret.right_item") return move_item(+1, false);
