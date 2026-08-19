@@ -931,6 +931,65 @@ def test_kaken_review_format_runs_in_health_report():
     assert "kaken_review_format" in report["detailed_scores"]
 
 
+ORIGINALITY_QUESTION_DRAFT = (
+    "本研究の中心の問いは、異種の電磁界解析モジュールを内部形式のまま結合したとき、"
+    "設計候補の順位を確定できる条件をどのように定量化できるか、である。"
+    "既往研究では、個々の手法の高精度化・高速化が進められてきた。"
+    "一方、手法間の差が設計量へ及ぼす影響を定量化する枠組みは体系化されていない。"
+    "本研究の独自性は、精度を一律に高めず性能差に応じて解析経路を選ぶ点にある。"
+)
+
+
+def test_question_originality_accepts_a_contrastive_pair():
+    # Real proposals split the contrast across two sentences joined by 一方.
+    # Requiring the single-sentence form would fail correct Japanese.
+    result = gw.grant_writing_question_originality_check(
+        ORIGINALITY_QUESTION_DRAFT
+    )
+
+    assert result["applicable"]
+    assert result["score"] == 10.0
+    assert result["gap_statements"][0]["form"] == "contrastive_pair"
+    assert result["originality_markers"]
+
+
+def test_question_originality_accepts_a_single_sentence_contrast():
+    result = gw.grant_writing_question_originality_check(
+        "本研究の中心の問いは、異種解析を結合したとき設計候補の順位を確定できる"
+        "条件をどのように定量化できるか、である。"
+        "既往研究は個々の手法の高速化を進めてきたが、その差を設計量へ伝播させる"
+        "方法は確立していない。本研究の新規性はこの伝播則にある。"
+    )
+
+    assert result["score"] == 10.0
+    assert result["gap_statements"][0]["form"] == "single_sentence"
+
+
+def test_question_originality_flags_a_question_with_no_position():
+    # The review item three of five reviewers marked down: the question is
+    # stated, but nothing says what is new or what prior work leaves open.
+    result = gw.grant_writing_question_originality_check(
+        "本研究の中心の問いは、異種の電磁界解析モジュールを内部形式のまま結合"
+        "したとき、設計候補の順位を確定できる条件をどのように定量化できるか、"
+        "である。誘導加熱と加速器電磁石の二課題で検証し、結果を公開する。"
+    )
+
+    assert result["applicable"]
+    types = {r["type"] for r in result["risks"]}
+    assert "no_originality_claim" in types
+    assert "no_gap_against_prior_work" in types
+    assert result["score"] < 6
+
+
+def test_question_originality_is_not_applicable_without_a_question():
+    result = gw.grant_writing_question_originality_check(
+        "誘導加熱の発熱量を評価し、損失分布を求める。"
+    )
+
+    assert not result["applicable"]
+    assert result["score"] is None
+
+
 def test_template_residue_check_flags_unfilled_placeholders():
     # Measured on a real 2026 draft: the money boxes still read ○○○○千円 when
     # it reached the co-investigator. A form office sends this back before any
