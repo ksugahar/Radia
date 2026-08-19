@@ -6,6 +6,7 @@
  */
 #include "line_pass.h"
 #include <iterator>
+#include <vector>
 #include <cstring>
 
 namespace mtef {
@@ -354,7 +355,15 @@ void BigOpDisplayPass::run(NodeList& children, SkipSet& skip, int depth, int pro
             }
         }
 
-        if (!targetTmpl) continue;
+        if (!targetTmpl) {
+            /* No owner.  If the block carries no limits either -- Equation
+             * Editor repeats it at the enclosing level with both lines empty
+             * -- it can draw nothing, so it goes.  A block with real limits
+             * and no owner stays: that is a fault, and it should show. */
+            if (limitLines.empty())
+                for (int bi : block) skip[bi] = true;
+            continue;
+        }
 
         /* Merge content LINE into template body -- but not when the target was
          * found INSIDE that line: the line is the enclosing operator's body,
@@ -569,6 +578,122 @@ static bool hasOpenFence(const NodeList& list, int prodVer) {
     return open;
 }
 
+
+/* ============================================================
+ * Pass 0: Integral/BigOp slot splitting
+ * ============================================================ */
+
+/* The line's children, or the node itself if it is not a line. */
+static void appendFlat(NodeList& into, NodePtr node) {
+    if (node && node->tag() == Node::kLine) {
+        auto* ln = static_cast<LineNode*>(node.get());
+        if (!ln->isNull) {
+            for (auto& c : ln->children) into.push_back(std::move(c));
+            return;
+        }
+    }
+    if (node) into.push_back(std::move(node));
+}
+
+/* Split one slot that holds "integrand, SUB, lower, upper, SYM, signs".
+ * Returns false and touches nothing when the slot is not that shape. */
+static bool splitDisplaySlot(NodeList& slot, NodeList& body,
+                             NodeList& lower, bool& hasLower,
+                             NodeList& upper, bool& hasUpper) {
+    int subIdx = -1;
+    for (size_t i = 0; i < slot.size(); ++i) {
+        Node* n = slot[i].get();
+        if (n && n->tag() == Node::kSize &&
+            static_cast<SizeNode*>(n)->sizeType == SIZETYPE_SUB) {
+            subIdx = int(i);
+            break;
+        }
+    }
+    if (subIdx <= 0) return false;          /* no marker, or nothing before it */
+
+    /* The slot is one of the fields about to be written -- the variation sent
+     * the content to `upper`, so `upper` and `slot` are the same list.  Take
+     * it out first; writing the limits and THEN clearing the slot cleared the
+     * limit with it. */
+    NodeList src = std::move(slot);
+    slot.clear();
+
+    NodeList newBody;
+    for (int i = 0; i < subIdx; ++i) {
+        if (src[i] && src[i]->tag() == Node::kSize) continue;
+        appendFlat(newBody, std::move(src[i]));
+    }
+    if (newBody.empty()) {                  /* nothing to be a body: undo */
+        slot = std::move(src);
+        return false;
+    }
+
+    /* After the marker: the limit lines, lower first, until symbol size. */
+    NodeList lines[2];
+    int seen = 0;
+    for (size_t i = size_t(subIdx) + 1; i < src.size(); ++i) {
+        Node* n = src[i].get();
+        if (!n) continue;
+        if (n->tag() == Node::kSize) {
+            if (static_cast<SizeNode*>(n)->sizeType == SIZETYPE_SYM) break;
+            continue;
+        }
+        if (n->tag() != Node::kLine) break;
+        auto* ln = static_cast<LineNode*>(n);
+        if (seen < 2) {
+            if (!ln->isNull)
+                for (auto& c : ln->children) lines[seen].push_back(std::move(c));
+            ++seen;
+        }
+    }
+
+    /* The body goes back as a LINE.  A slot is a plain list and the pass
+     * pipeline runs on a line's children, so left loose nothing would run on
+     * it -- and a second integral nested in the first needs the same repair
+     * this one just had. */
+    auto wrap = std::make_unique<LineNode>();
+    wrap->children = std::move(newBody);
+    body.clear();
+    body.push_back(std::move(wrap));
+
+    lower = std::move(lines[0]);
+    hasLower = !lower.empty();
+    upper = std::move(lines[1]);
+    hasUpper = !upper.empty();
+    return true;
+}
+
+void IntegralSlotPass::run(NodeList& children, SkipSet& skip,
+                           int /*depth*/, int /*prodVer*/) {
+    for (size_t idx = 0; idx < children.size(); ++idx) {
+        if (skip[idx] || !children[idx]) continue;
+        Node* n = children[idx].get();
+
+        if (n->tag() == Node::kIntegral) {
+            auto* ig = static_cast<IntegralNode*>(n);
+            /* Whichever slot the variation sent it to. */
+            NodeList* cand[3] = {&ig->body, &ig->upper, &ig->lower};
+            for (NodeList* sl : cand) {
+                if (sl->empty()) continue;
+                if (splitDisplaySlot(*sl, ig->body, ig->lower, ig->hasLower,
+                                     ig->upper, ig->hasUpper))
+                    break;
+            }
+        } else if (n->tag() == Node::kBigOp) {
+            auto* b = static_cast<BigOpNode*>(n);
+            NodeList* cand[3] = {&b->body, &b->upper, &b->lower};
+            for (NodeList* sl : cand) {
+                if (sl->empty()) continue;
+                if (splitDisplaySlot(*sl, b->body, b->lower, b->hasLower,
+                                     b->upper, b->hasUpper)) {
+                    b->hasLimits = true;
+                    break;
+                }
+            }
+        }
+    }
+}
+
 /* ============================================================
  * Pass 0a: Display-fraction reassembly
  * ============================================================ */
@@ -716,6 +841,7 @@ PassPipeline::PassPipeline() {
     /* Order matters: Pass 0a → Pass 1 → Pass 2 → Pass 2b.  The display
      * fraction goes first: it puts the fence back inside the denominator,
      * where Pass 1 can then fill it from its own siblings. */
+    passes_.push_back(std::make_unique<IntegralSlotPass>());
     passes_.push_back(std::make_unique<DisplayFractionPass>());
     passes_.push_back(std::make_unique<FenceMergePass>());
     passes_.push_back(std::make_unique<BigOpDisplayPass>());
@@ -774,6 +900,85 @@ static bool awaitsContent(const Node* n) {
     }
 }
 
+/* The slots of a node, for walking into.  Not every kind has one; the ones
+ * that do are the templates whose contents a pass may need to see. */
+static void collectSlots(Node* n, std::vector<NodeList*>& out) {
+    if (!n) return;
+    switch (n->tag()) {
+        case Node::kFence: {
+            auto* f = static_cast<FenceNode*>(n);
+            out.push_back(&f->content);
+            if (f->hasMiddle) out.push_back(&f->content2);
+            break;
+        }
+        case Node::kFrac: {
+            auto* f = static_cast<FracNode*>(n);
+            out.push_back(&f->numer);
+            out.push_back(&f->denom);
+            break;
+        }
+        case Node::kSqrt: {
+            auto* q = static_cast<SqrtNode*>(n);
+            out.push_back(&q->content);
+            if (q->hasIndex) out.push_back(&q->index);
+            break;
+        }
+        case Node::kScript: {
+            auto* sc = static_cast<ScriptNode*>(n);
+            out.push_back(&sc->base);
+            if (sc->hasSub) out.push_back(&sc->sub);
+            if (sc->hasSup) out.push_back(&sc->sup);
+            break;
+        }
+        case Node::kIntegral: {
+            auto* ig = static_cast<IntegralNode*>(n);
+            out.push_back(&ig->body);
+            if (ig->hasLower) out.push_back(&ig->lower);
+            if (ig->hasUpper) out.push_back(&ig->upper);
+            break;
+        }
+        case Node::kBigOp: {
+            auto* b = static_cast<BigOpNode*>(n);
+            out.push_back(&b->body);
+            if (b->hasLower) out.push_back(&b->lower);
+            if (b->hasUpper) out.push_back(&b->upper);
+            break;
+        }
+        case Node::kEmbell:
+            out.push_back(&static_cast<EmbellNode*>(n)->content);
+            break;
+        case Node::kDecoration:
+            out.push_back(&static_cast<DecorationNode*>(n)->content);
+            break;
+        case Node::kBraceDeco: {
+            auto* b = static_cast<BraceDecoNode*>(n);
+            out.push_back(&b->content);
+            out.push_back(&b->label);
+            break;
+        }
+        case Node::kOverset: {
+            auto* o = static_cast<OversetNode*>(n);
+            out.push_back(&o->over);
+            out.push_back(&o->base);
+            break;
+        }
+        case Node::kPhantom:
+            out.push_back(&static_cast<PhantomNode*>(n)->content);
+            break;
+        default:
+            break;
+    }
+}
+
+/* A slot that is one LINE is walked by whoever walks that line; anything else
+ * has to be walked here or no pass ever sees it. */
+static bool slotNeedsWalking(const NodeList& slot) {
+    if (slot.empty()) return false;
+    if (slot.size() == 1 && slot[0] && slot[0]->tag() == Node::kLine)
+        return false;
+    return true;
+}
+
 void PassPipeline::process(NodeList& children, int depth, int prodVer) {
     if (children.empty()) return;
 
@@ -820,6 +1025,52 @@ void PassPipeline::process(NodeList& children, int depth, int prodVer) {
     for (auto& pass : passes_)
         pass->run(children, skip, depth, prodVer);
 
+    /* A drop to script size that opens nothing but an empty line, and never
+     * reaches a symbol-size switch, is not a display block -- it is the
+     * remains of one, and left alone it sets the rest of the equation small. */
+    for (size_t i = 0; i + 1 < children.size(); ++i) {
+        if (skip[i] || !children[i]) continue;
+        if (children[i]->tag() != Node::kSize) continue;
+        if (static_cast<SizeNode*>(children[i].get())->sizeType != SIZETYPE_SUB)
+            continue;
+        std::vector<size_t> empties;
+        bool block = false, ok = true;
+        for (size_t j = i + 1; j < children.size(); ++j) {
+            if (skip[j] || !children[j]) continue;
+            Node* n = children[j].get();
+            if (n->tag() == Node::kSize) {
+                if (static_cast<SizeNode*>(n)->sizeType == SIZETYPE_SYM)
+                    block = true;
+                break;
+            }
+            if (n->tag() != Node::kLine) break;
+            auto* ln = static_cast<LineNode*>(n);
+            if (ln->isNull || ln->children.empty()) { empties.push_back(j); continue; }
+            ok = false;                     /* a real limit: leave it alone */
+            break;
+        }
+        if (block || !ok || empties.empty()) continue;
+        skip[i] = true;
+        for (size_t j : empties) skip[j] = true;
+    }
+
+    /* A size marker at the very end switches a style nothing follows, and an
+     * empty line at the end sets nothing: both are the remains of a display
+     * block whose operator turned out to be elsewhere.  Drop them, while
+     * something else is left to keep. */
+    for (int i = int(children.size()) - 1; i > 0; --i) {
+        if (skip[size_t(i)]) continue;
+        Node* n = children[size_t(i)].get();
+        if (!n) continue;
+        const bool dead =
+            n->tag() == Node::kSize ||
+            (n->tag() == Node::kLine &&
+             (static_cast<LineNode*>(n)->isNull ||
+              static_cast<LineNode*>(n)->children.empty()));
+        if (!dead) break;
+        skip[size_t(i)] = true;
+    }
+
     /* Remove skipped children */
     NodeList filtered;
     for (size_t i = 0; i < children.size(); i++) {
@@ -827,6 +1078,17 @@ void PassPipeline::process(NodeList& children, int depth, int prodVer) {
             filtered.push_back(std::move(children[i]));
     }
     children = std::move(filtered);
+
+    /* And into the slots, which nothing else walks. */
+    if (depth < 32) {
+        for (auto& child : children) {
+            std::vector<NodeList*> slots;
+            collectSlots(child.get(), slots);
+            for (NodeList* sl : slots)
+                if (slotNeedsWalking(*sl))
+                    process(*sl, depth + 1, prodVer);
+        }
+    }
 }
 
 } /* namespace mtef */
