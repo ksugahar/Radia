@@ -33,6 +33,22 @@ public:
 };
 
 /* ============================================================
+ * Pass 0a: Display-fraction reassembly
+ *
+ * EQNEDT32 writes a DISPLAY fraction across the template boundary: slot[1]
+ * holds only the first line of the numerator, and the rest of it -- and the
+ * denominator -- follow as siblings, separated by full-size records.  Read
+ * straight that gives \dfrac{first}{} with the remainder beside it.
+ *
+ * Does nothing unless the shape is unmistakable: a fraction with a numerator
+ * and NO denominator, a separator, and a terminator.
+ * ============================================================ */
+class DisplayFractionPass : public LinePass {
+public:
+    void run(NodeList& children, SkipSet& skip, int depth, int prodVer) override;
+};
+
+/* ============================================================
  * Pass 1: Fence/Decoration empty-slot merging
  *
  * EQNEDT32 pattern: TMPL(fence/deco, slot[0]=empty) followed by

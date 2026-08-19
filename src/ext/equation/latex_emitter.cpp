@@ -66,7 +66,15 @@ static const MapEntry UNICODE_MAP[] = {
     {0x2193, "\\downarrow "}, {0x2194, "\\leftrightarrow "},
     {0x2195, "\\updownarrow "}, {0x2196, "\\nwarrow "},
     {0x2197, "\\nearrow "}, {0x2198, "\\searrow "},
-    {0x2199, "\\swarrow "}, {0x21D0, "\\Leftarrow "},
+    {0x2199, "\\swarrow "},
+    /* Harpoons.  Equation Editor draws its vector arrow as one, so these turn
+     * up in every converted document; without a name they came out as the
+     * bare character.  In order: the table is searched by halving. */
+    {0x21BC, "\\leftharpoonup "}, {0x21BD, "\\leftharpoondown "},
+    {0x21C0, "\\rightharpoonup "}, {0x21C1, "\\rightharpoondown "},
+    /* 0x21CC is deliberately absent: it is the base character of
+     * \xrightleftharpoons, and naming it here took that name away. */
+    {0x21D0, "\\Leftarrow "},
     {0x21D2, "\\Rightarrow "}, {0x21D4, "\\Leftrightarrow "},
     {0x2200, " \\forall "}, {0x2202, "\\partial "},
     {0x2203, " \\exists "}, {0x2205, "\\emptyset "},
@@ -398,9 +406,15 @@ void LaTeXEmitter::emitNode(const Node* node, std::string& out) {
          * be, and that is now read from the font (displayOperatorMinHeight),
          * so a marker for them would say nothing the layout would act on. */
         const int t = static_cast<const SizeNode*>(node)->sizeType;
-        if (t == SIZETYPE_SUB)       out += "\\scriptstyle ";
-        else if (t == SIZETYPE_SUB2) out += "\\scriptscriptstyle ";
-        else if (t == SIZETYPE_FULL) out += "\\displaystyle ";
+        /* Equation Editor writes one of these between the parts of every
+         * display construct, so most of them repeat the size already in
+         * force.  Writing them anyway put a dozen no-op \displaystyle into a
+         * converted lecture file, in front of a person who then has to read
+         * it. */
+        if (t == sizeStyle_) break;
+        if (t == SIZETYPE_SUB)       { out += "\\scriptstyle ";       sizeStyle_ = t; }
+        else if (t == SIZETYPE_SUB2) { out += "\\scriptscriptstyle "; sizeStyle_ = t; }
+        else if (t == SIZETYPE_FULL) { out += "\\displaystyle ";      sizeStyle_ = t; }
         break;
     }
     case Node::kEmbell:

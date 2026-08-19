@@ -32,6 +32,8 @@ private:
      * it was DRAWN: \dfrac outermost, rac inside.  LaTeX's own rule then
      * agrees at every level and the paste matches the picture. */
     int fracDepth_ = 0;
+    /* The style in force, so a marker that repeats it writes nothing. */
+    int sizeStyle_ = 0;                 /* SIZETYPE_FULL */
     static const char* arrow_command(unsigned cp);
     bool runPasses_ = true;
     int depth_ = 0;
