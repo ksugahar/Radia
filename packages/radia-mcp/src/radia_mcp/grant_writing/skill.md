@@ -57,6 +57,12 @@ servers:
     monochrome printing. A draft that even a non-specialist reads smoothly,
     with monochrome-safe figures, identifiable publications, an explicit
     human-rights/legal box, and a complete funding-overlap box, wins.
+13. State the central question once, and restate it with the same decisive
+    nouns. A summary promising a 「境界」 and a body promising a 「条件」 read
+    as two questions even when they mean one. Fix the wording, not the reader.
+14. A lint score is not a quality score. These checks see mechanical defects;
+    they cannot see whether the argument holds. Read the failures, ignore the
+    number, and never edit a draft to satisfy a keyword list.
 
 ## Literature Evidence and the Academic Gap
 
@@ -214,6 +220,61 @@ issue、試験、科学レビュー、採否、来歴を管理する。MCP等の
 共同研究歴や共著論文は体制の根拠になるが、中心実証の予備結果とは区別する。単なる
 利用者数、スター数、リンク、リポジトリ数を、科学的な大学間実証の代用にしない。
 
+## One Question, Stated Once
+
+申請書は中心の問いを概要と本文の二か所に書く。このとき、同じ問いを別の語彙で
+言い直すと、審査者には二つの問いに見える。実測例（2027-2030年度 基盤C、
+2026-08-19）では、概要が「順位が変わる**境界**を**定量化**し」と書き、本文1.1が
+「優劣を覆さない**条件**を**記述・検証**できるか」と書いていた。意味は同じだが、
+答えの形を表す名詞（境界／条件）も、行う操作の名詞（定量化／記述）も食い違って
+いた。しかも本文側には、概要では曖昧だとして除いたはずの指示語「その差」が残って
+いた。
+
+規則は三つである。
+
+1. **答えの形を表す名詞を一語に固定する。** 条件、境界、範囲、領域、基準、指標、
+   選択則のうち何を与えるのかを決め、言い直しでも同じ語を使う。
+2. **行う操作の名詞も一語に固定する。** 定量化するのか、記述するのか、検証するの
+   かを決める。三つ並べると、どれが必達か読めない。
+3. **概要と本文で役割を分ける。** 概要は研究全体の要約、本文は問いを導く論証と
+   定義である。同じ文を二度置かない。本文の問いは、その節が固有に導入した定義
+   （例: 解析モジュール）から導く形にする。
+
+`grant_writing_central_claim_consistency_check` がこの食い違いを検出する。語彙
+カバレッジ型の検査はこの欠陥を見つけられない。必要な語はすべて文書のどこかに
+存在しており、欠陥は語同士が食い違っている点にあるからである。
+
+Bad: 概要「順位が変わる境界を定量化する」／本文「優劣を覆さない条件を記述・検証
+する」
+
+Better: 概要「順位を確定できる条件をどのように定量化するか」／本文「こうして定義
+した解析モジュールについて、順位を確定できる条件をどのように定量化できるか」
+
+## What These Checks Can and Cannot Judge
+
+この診断群は**機械的欠陥**に強く、**論証の欠陥**に弱い。2026-08-19に実申請書で
+両者を突き合わせた結果は次のとおりである。
+
+| 欠陥の種類 | 検査 | 人手の通読 |
+|---|---|---|
+| 逆茂木文、二重ハ、単調な文末、90字超 | 検出（12件の二重ハまで数える） | 読めてしまい見逃す |
+| 色だけで区別した図、根拠なき「該当なし」、特定不能な業績 | 検出 | 見落としやすい |
+| 中心の問いが二重・語彙不一致 | 専用検査を足すまで沈黙（10.0/10） | 検出 |
+| 指示語の指示対象が不明 | 弱い | 検出 |
+| 節構成の不整合（並列でないものを並列に置く） | 検出できない | 検出 |
+
+したがって、**高得点は「機械的欠陥がない」ことしか意味しない**。学術的重要性、
+方法の妥当性、遂行能力という三つの審査基準そのものは、語の有無では判定できない。
+
+運用上の含意は二つある。
+
+1. **点数を上げるための編集をしない。** 語彙リストに合わせて語を足す行為は、
+   審査者から見れば無意味な水増しである。検査が挙げた個々の失敗だけを読む。
+2. **節に無い根拠を要求されたら、それは検査の適用ミスである。** 研究目的節に
+   予算の積算は存在しない。適用対象でない検査は `applicable: False` を返すよう
+   になっており、点数にも入らない。それでも要求が出るなら、渡した文書と
+   `program` の組合せを疑う。
+
 ## KAKENHI Review Realities (in-house call briefing)
 
 科研費の審査基準は3つである: (1)研究課題の学術的重要性、(2)研究方法の
@@ -331,6 +392,7 @@ GPU等の機種名を予算化するときは、アクセラレータ名とホ�
 - `grant_writing_reviewer_vocabulary_check(text)`
 - `grant_writing_persuasion_quality_check(text)`
 - `grant_writing_kaken_review_format_check(text)`
+- `grant_writing_central_claim_consistency_check(text)`
 - `grant_writing_literature_gap_evidence_check(text)`
 - `grant_writing_collaborative_integration_risk_check(text)`
 - `grant_writing_budget_alignment_check(text)`
@@ -440,6 +502,24 @@ nearby symbol definitions, missing post-equation interpretation, defensive
 paragraphs, optional branches in the core plan, and acronym piles. The target
 is a positive claim followed by its bounded verification, not confidence
 created by deleting caveats.
+
+Whenever a draft states its question in more than one place -- which every
+KAKENHI proposal does, in the summary and again in the body -- run
+`grant_writing_central_claim_consistency_check(text)`. It locates the claim
+statements, compares their technical nouns, and reports HIGH when two
+statements share a topic but promise different answer-shape nouns
+(境界 versus 条件), MEDIUM when the operation nouns diverge (定量化 versus
+記述), and LOW when the two are near-verbatim, which wastes the summary. It
+is not applicable to a fragment carrying fewer than two claim statements.
+The integrated health report runs it for every program.
+
+Budget guidance is judged only where budget content exists.
+`grant_writing_budget_alignment_check` reports `applicable: False` for a
+research-plan or feasibility section, and the health report leaves it out of
+the average, because such a section carries no itemization by design. Where
+it does apply, a resource keyword counts only when a money token sits in the
+same sentence: 評価 and AI appear throughout ordinary methods prose without
+anything being costed.
 
 For any KAKENHI draft (and most other Japanese proposals), run
 `grant_writing_kaken_review_format_check(text)`. It encodes the in-house
