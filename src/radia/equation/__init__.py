@@ -78,6 +78,7 @@ from radia._equation import (  # noqa: F401
 from radia.equation.office import (  # noqa: F401
     copy_to_clipboard,
     markdown_to_docx,
+    markdown_to_pptx,
     omml_paragraph,
     split_math,
 )
@@ -102,6 +103,7 @@ __all__ = [
     "dump_tree",
     "layout_markdown",
     "markdown_to_docx",
+    "markdown_to_pptx",
     "md_blocks",
     "symbol_palettes",
     "template_palettes",
