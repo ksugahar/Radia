@@ -51,6 +51,12 @@ servers:
     not establish inter-organizational feasibility. A preliminary pilot should
     name the artifact and organizations, show a bounded independent action and
     observed result, and state what remains unproven.
+12. Write for the actual reviewing conditions: three KAKENHI criteria
+    (academic importance, method validity, feasibility/environment), up to
+    ~100 proposals read per reviewer in about a month, and possible
+    monochrome printing. A draft that even a non-specialist reads smoothly,
+    with monochrome-safe figures, identifiable publications, an explicit
+    human-rights/legal box, and a complete funding-overlap box, wins.
 
 ## Literature Evidence and the Academic Gap
 
@@ -208,6 +214,66 @@ issue、試験、科学レビュー、採否、来歴を管理する。MCP等の
 共同研究歴や共著論文は体制の根拠になるが、中心実証の予備結果とは区別する。単なる
 利用者数、スター数、リンク、リポジトリ数を、科学的な大学間実証の代用にしない。
 
+## KAKENHI Review Realities (in-house call briefing)
+
+科研費の審査基準は3つである: (1)研究課題の学術的重要性、(2)研究方法の
+妥当性、(3)研究遂行能力及び研究環境の適切性。各セクションがどの基準で
+読まれるかを意識して書く。
+
+審査委員は約1ヶ月の審査期間に、多い場合で100件程度の計画調書を読む。
+研究支援部門が毎年全調書を確認してきた実感として、専門外の読者でも
+読みやすい調書が圧倒的に採択されやすい。効果的にアンダーライン・太字・
+ゴシック体・図表を使い、一読で主張が追える構成にする。
+
+カラーの図や写真は、審査時に白黒印刷される種目がある。色の違いだけで
+系列を区別した折れ線グラフは、白黒では何も伝わらない。線種・マーカー・
+直接ラベル・濃淡で区別し、白黒でも成立する図を作る(figureサーバの
+モノクロ安全則と同じ)。
+
+審査ではresearchmapが研究者番号で参照される。業績を羅列する専用欄は
+なくなったが、実行可能性の根拠として調書に業績を書くことはできる。
+その場合は業績を特定できる十分な情報(著者、誌名、年など)を添える。
+応募前にresearchmapの更新と研究者番号の登録を確認する。
+
+「人権の保護及び法令等の遵守への対応」欄は、例年審査委員からの指摘が
+非常に多い。アンケート調査・動物実験・個人情報等を扱うなら、講じる
+対策・措置(倫理審査、同意、匿名化等)を具体的に書く。該当がない場合も
+「該当なし」と明記した上で、そう判断した根拠を一文添える。
+
+## KAKENHI Program Strategy (充足率と重複応募)
+
+基盤研究等の多くの種目では、採択されても申請額の約7割程度に減額されて
+内定する(充足率)。上限近くまで申請する方針は維持しつつ、減額後も検証
+ループが成立する経費の優先順位を設計しておく。挑戦的研究は原則満額支給
+(充足率ほぼ100%)だが採択率が非常に低いため、基盤研究との重複応募を
+併用する。39歳以下は挑戦的研究(萌芽)と基盤研究の重複制限が緩和されて
+いる。萌芽の最終年度前年度には開拓へ応募できるが、採択時は萌芽の残額を
+返還する。開拓の審査は合議審査から2段階書面審査へ移行しており、書面
+だけで伝わる調書の重要性がさらに増した。補助金種目は単年度会計(繰越
+原則不可)、基金種目は研究期間トータルで執行できるため、年度をまたぐ
+計算資源・PoC経費は基金種目で組みやすい。
+
+## KAKENHI Compliance Layer (DMP / OA / 共用 / インテグリティ)
+
+- 研究インテグリティ: e-Radで所属機関への誓約状況を登録していないと
+  応募できない。研究倫理教育の受講修了も応募要件である。
+- 応募・受入状況欄: 国内の競争的研究費だけでなく、国外資金、民間財団の
+  助成金、企業からの受託研究費・共同研究費も全て記載する。2件目以降は
+  本応募課題との相違点と応募する理由を書き、所属組織・役職
+  (例: ○○大学教授)を添える。代表課題は分担者を含む金額、分担課題は
+  自身の研究経費のみを書く。
+- エフォートは、研究専従時間の割合ではなく、教育活動等を含む年間の
+  全仕事時間を100%としたときの本研究への配分比率で書く。
+- 研究データマネジメント: 原則全種目でDMP(研究データマネジメント
+  プラン)の作成が求められ、公開した研究データの情報を実施状況報告書・
+  実績報告書で報告する。
+- 即時オープンアクセス: 学術雑誌掲載後、即時に機関リポジトリ等へ掲載
+  する義務がある。成果公開計画にリポジトリ公開を織り込む。
+- 設備共用: 直接経費で購入した研究設備・機器のうち条件を満たすものは、
+  検索システムへの登録等により機関内外への共用が求められる。
+- 経費細目: 設備備品費は単価10万円以上の物品。英文校閲は人件費・謝金の
+  明細に計上する(「その他」ではない)。
+
 ## Budget Policy
 
 予算はほぼ上限いっぱいで申請してよい。重要なのは、上限近くであることを
@@ -244,6 +310,11 @@ GPU等の機種名を予算化するときは、アクセラレータ名とホ�
 高速化の成功そのものより、異機種間で保存すべき残差、物理量、設計判断と、不一致を
 適用境界として扱う手順を示す。
 
+科研費の基盤系種目では、採択されても申請額の約7割程度に減額されて内定する
+場合が多い(充足率)。ほぼ上限で申請する方針は維持しつつ、減額された場合に
+どの経費から削るか、削っても検証ループが成立する優先順位を設計時に用意して
+おく。挑戦的研究は原則満額支給であり、満額前提の計画を組める。
+
 ## Useful Tools
 
 - `grant_writing_usage()`
@@ -259,6 +330,7 @@ GPU等の機種名を予算化するときは、アクセラレータ名とホ�
 - `grant_writing_named_software_abstraction_check(text)`
 - `grant_writing_reviewer_vocabulary_check(text)`
 - `grant_writing_persuasion_quality_check(text)`
+- `grant_writing_kaken_review_format_check(text)`
 - `grant_writing_literature_gap_evidence_check(text)`
 - `grant_writing_collaborative_integration_risk_check(text)`
 - `grant_writing_budget_alignment_check(text)`
@@ -368,3 +440,17 @@ nearby symbol definitions, missing post-equation interpretation, defensive
 paragraphs, optional branches in the core plan, and acronym piles. The target
 is a positive claim followed by its bounded verification, not confidence
 created by deleting caveats.
+
+For any KAKENHI draft (and most other Japanese proposals), run
+`grant_writing_kaken_review_format_check(text)`. It encodes the in-house
+KAKENHI call briefing: color-only figure discrimination (some categories are
+reviewed as monochrome prints), missing safeguards when surveys, animal
+experiments, or personal data appear, a bare 「該当なし」 without a stated
+rationale in the human-rights/legal box (the box reviewers flag most often),
+publication mentions that cannot be identified in the researchmap era, and an
+incomplete funding-overlap box (相違点・応募理由・所属組織役職). For full
+drafts it also checks coverage of the three review criteria and the presence
+of emphasis and figure references, because reviewers read up to ~100
+proposals in about a month. The result carries `briefing_notes` with the
+review-reality reminders. The integrated health report runs this check for
+every program.

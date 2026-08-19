@@ -7,6 +7,24 @@ crystallized as its own package.
 
 ## [Unreleased]
 
+- grant-writing: encoded the R9 (FY2027) in-house KAKENHI call briefing.
+  New `grant_writing_kaken_review_format_check` catches color-only figure
+  discrimination (some categories are reviewed as monochrome prints),
+  missing safeguards when surveys / animal experiments / personal data
+  appear, a bare 「該当なし」 without a rationale in the human-rights/legal
+  box (the box reviewers flag most often), unidentifiable publication
+  mentions in the researchmap era, and an incomplete funding-overlap box
+  (相違点・応募理由・所属組織役職); full drafts are additionally checked
+  for three-review-criteria coverage and emphasis/figure use (reviewers
+  read up to ~100 proposals in about a month). The integrated health
+  report now runs the check for every program, `skill.md` gained
+  review-reality / program-strategy (充足率, 重複応募, 開拓の2段階書面
+  審査化, 補助金 vs 基金) / compliance-layer (research integrity via
+  e-Rad, funding-overlap disclosure incl. foreign and private funds,
+  effort definition, DMP, immediate open access, equipment sharing,
+  cost-item rules) sections, and the budget policy now states the ~70%
+  award rate of 基盤 categories versus full funding of 挑戦的研究.
+
 - md2html: replaced the hand-rolled math-protection regexes with
   `pymdownx.arithmatex` (new `pymdown-extensions` dependency in the
   `[md2html]` extra) and repaired seven defect classes found by a full
