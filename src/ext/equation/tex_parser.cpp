@@ -672,7 +672,7 @@ private:
             const std::string mid = read_delimiter();
             f->hasMiddle = true;
             f->middle = mid.empty() ? '|'
-                      : (mid == "\|" || mid == "\\Vert") ? 0x2016
+                      : (mid == "\\|" || mid == "\\Vert") ? 0x2016
                       : (mid == "|" || mid == "\\vert") ? '|'
                       : (unsigned char)mid[mid.size() - 1];
             f->content2 = parse_seq(kBrace);
