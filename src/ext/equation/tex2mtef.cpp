@@ -382,6 +382,7 @@ static int is_known_command(const char *cmd) {
     static const char *known[] = {
         "\\dfrac", "\\tfrac", "\\frac", "\\sqrt", "\\left", "\\right", "\\middle",
         "\\begin", "\\end", "\\operatorname", "\\text", "\\mathbf", "\\mathop",
+        "\\bm", "\\boldsymbol", "\\underset", "\\stackrel",
         "\\overset", "\\limits", "\\nolimits",
         "\\overbrace", "\\underbrace", "\\overline", "\\underline",
         "\\overleftarrow", "\\overrightarrow", "\\overleftrightarrow",
@@ -1255,8 +1256,13 @@ static AstNode *parse_group(Parser *p) {
             return n;
         }
 
-        /* \mathbf{...} */
-        if (strcmp(cmd, "\\mathbf") == 0) {
+        /* \mathbf{...}, and the vector face \bm / \boldsymbol.
+         * MTEF has a single bold typeface for both; \bm used to reach
+         * the unknown-command path and be written as an operator called
+         * "bm", so saving an equation could lose its vectors. */
+        if (strcmp(cmd, "\\mathbf") == 0 ||
+            strcmp(cmd, "\\bm") == 0 ||
+            strcmp(cmd, "\\boldsymbol") == 0) {
             advance(p);
             AstNode *n = alloc_node(&p->alloc, ND_MATHBF);
             nl_init(&n->u.mathbf.content);
