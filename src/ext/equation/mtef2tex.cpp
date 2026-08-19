@@ -1297,7 +1297,7 @@ static void char_to_latex(int typeface, uint16_t code, int prod_ver, StringBuild
     /* Vector (bold) */
     if (typeface == TF_VECTOR) {
         if ((code >= 'A' && code <= 'Z') || (code >= 'a' && code <= 'z')) {
-            sb_append(sb, "\\mathbf{");
+            sb_append(sb, "\\bm{");
             sb_append_char(sb, (char)code);
             sb_append_char(sb, '}');
             return;

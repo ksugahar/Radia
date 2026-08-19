@@ -17,6 +17,9 @@
 #include <cstdlib>
 #include <cstring>
 #include <fstream>
+#ifdef _WIN32
+#include <windows.h>
+#endif
 #include <stdexcept>
 #include <map>
 #include <string>
@@ -156,8 +159,28 @@ std::string dump_tree_py(const py::bytes& data, bool run_passes) {
                            buf.size(), run_passes);
 }
 
+/* A path arrives from Python as UTF-8.  Handing that to a narrow ifstream on
+ * Windows reads it in the ANSI code page instead, so every file whose name is
+ * not ASCII was unreachable -- which in this lab is most of them.  Widen it
+ * and use the wide overload MSVC provides. */
+#ifdef _WIN32
+std::wstring widen(const std::string& utf8) {
+    if (utf8.empty()) return std::wstring();
+    const int n = MultiByteToWideChar(CP_UTF8, 0, utf8.data(),
+                                      int(utf8.size()), nullptr, 0);
+    std::wstring out(size_t(n > 0 ? n : 0), L'\0');
+    if (n > 0)
+        MultiByteToWideChar(CP_UTF8, 0, utf8.data(), int(utf8.size()),
+                            &out[0], n);
+    return out;
+}
+#define EQ_PATH(p) widen(p)
+#else
+#define EQ_PATH(p) (p)
+#endif
+
 py::bytes read_eqn_py(const std::string& path) {
-    std::ifstream f(path, std::ios::binary);
+    std::ifstream f(EQ_PATH(path), std::ios::binary);
     if (!f) throw std::runtime_error("read_eqn: cannot open " + path);
     std::string data((std::istreambuf_iterator<char>(f)),
                      std::istreambuf_iterator<char>());
@@ -166,7 +189,7 @@ py::bytes read_eqn_py(const std::string& path) {
 
 void write_eqn_py(const std::string& path, const py::bytes& data) {
     std::string buf = data;
-    std::ofstream f(path, std::ios::binary);
+    std::ofstream f(EQ_PATH(path), std::ios::binary);
     if (!f) throw std::runtime_error("write_eqn: cannot write " + path);
     f.write(buf.data(), std::streamsize(buf.size()));
 }
