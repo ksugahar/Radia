@@ -7,6 +7,24 @@ crystallized as its own package.
 
 ## [Unreleased]
 
+## [1.4.41] - 2026-08-20
+
+- presentation: `presentation_script_vs_slide_coverage` could not read
+  Japanese prose, so every acronym in a deck came back as never spoken --
+  a report that names specific words, looks precise, and is confidently
+  false. `\b` does not work next to a CJK character (Python's `\w` matches
+  Japanese, so "のHACApK" has no word boundary before the H): a slide puts
+  the acronym in a box of its own where a boundary exists, a script says it
+  mid-sentence where one does not. Also fixed: deck furniture such as the
+  affiliation in the corner of every slide was scored as unspoken content
+  (tokens on 80%+ of slides are now set aside, and listed in the report so
+  the exclusion is auditable); exact segmentation was required, so saying
+  "Gram二重積分" where the slide says "二重積分" counted as saying less; and
+  the cover slide, whose formal title need not be read aloud, is no longer
+  scored. Measured on a real deck: average coverage 46.9% -> 58.9%, with the
+  false "HACApK / Jacobi / Richardson are never spoken" verdict gone and the
+  remaining flags genuine.
+
 ## [1.4.40] - 2026-08-19
 
 - presentation: recorded the script-first authoring format. The skill has
