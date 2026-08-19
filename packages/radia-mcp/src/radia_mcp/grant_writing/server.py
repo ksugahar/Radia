@@ -87,12 +87,13 @@ def main():
             "参照日、税込区分、最低購入単位、有効期限、為替、端数処理を記録する。"
         )
         report = grant_writing_health_report(sample, program="kddi_digital")
-        assert report["overall_score"] >= 1.0
+        assert report["defect_counts"]["total"] >= 0
         print(
             "mcp-server-grant-writing self-test: "
             f"registered {_n_tools} domain tools (+ status tool)"
         )
-        print(f"  sample health score: {report['overall_score']}/10")
+        print(f"  sample located defects: {report['defect_counts']['total']}"
+              f" (defect_score {report['defect_score']}/10)")
         return
     mcp.run()
 

@@ -299,6 +299,18 @@ Better: 「両モデルを巻線電流と誘起電圧を介して双方向に連
 したがって、**高得点は「機械的欠陥がない」ことしか意味しない**。学術的重要性、
 方法の妥当性、遂行能力という三つの審査基準そのものは、語の有無では判定できない。
 
+この区別は出力構造そのものになっている。`grant_writing_health_report` は
+**findings**（位置を指せる欠陥、重要度付き）と **questions**（著者が判断する
+問い、重要度も点数もなし）を分けて返し、`defect_counts` が正直な要約である。
+`defect_score` は findings のみから計算し、**機械的欠陥の密度**だけを表す。
+研究の良し悪しではないので、これを上げるための編集は無駄である。
+
+検査を追加するときは、まずどちらに属するか決める。判定基準は上の一文である。
+2026-08-20 の実例では、様式説明文の検出規則を作ったが、経験ある研究代表者が
+6件を削除して13件を意図的に残しており、文面だけでは区別できなかった。
+そこで欠陥報告から外し、件数を返す問いへ降格した。**区別できない規則は
+検出器にしない。**
+
 運用上の含意は二つある。
 
 1. **点数を上げるための編集をしない。** 語彙リストに合わせて語を足す行為は、
@@ -452,6 +464,7 @@ GPU等の機種名を予算化するときは、アクセラレータ名とホ�
 - `grant_writing_kaken_review_format_check(text)`
 - `grant_writing_central_claim_consistency_check(text)`
 - `grant_writing_vague_claim_verb_check(text)`
+- `grant_writing_template_residue_check(text)`
 - `grant_writing_literature_gap_evidence_check(text)`
 - `grant_writing_collaborative_integration_risk_check(text)`
 - `grant_writing_budget_alignment_check(text)`

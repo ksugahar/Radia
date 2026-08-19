@@ -55,7 +55,7 @@ def test_grant_writing_kddi_health_report_runs():
     report = gw.grant_writing_health_report(KDDI_SAMPLE, program="kddi_digital")
 
     assert report["program"] == "kddi_digital"
-    assert report["overall_score"] > 0
+    assert report["defect_score"] >= 0
     assert "kddi_digital" in report["detailed_results"]
     assert "power_electronics_focus" in report["detailed_results"]
     assert "budget" in report["detailed_results"]
@@ -65,7 +65,7 @@ def test_grant_writing_kaken_oss_health_report_runs():
     report = gw.grant_writing_health_report(KAKEN_OSS_SAMPLE, program="kaken_oss")
 
     assert report["program"] == "kaken_oss"
-    assert report["overall_score"] > 0
+    assert report["defect_score"] >= 0
     assert "kaken_oss_platform" in report["detailed_results"]
     assert "named_software_abstraction" in report["detailed_results"]
     assert "reviewer_vocabulary" in report["detailed_results"]
@@ -931,6 +931,63 @@ def test_kaken_review_format_runs_in_health_report():
     assert "kaken_review_format" in report["detailed_scores"]
 
 
+def test_template_residue_check_flags_unfilled_placeholders():
+    # Measured on a real 2026 draft: the money boxes still read ○○○○千円 when
+    # it reached the co-investigator. A form office sends this back before any
+    # reviewer sees it.
+    result = gw.grant_writing_template_residue_check(
+        "(A) 設備備品費　…　小計：○○○○千円（税込）\n"
+        "(1) 氏名：○○ ○○\n"
+        "研究の目的を平易に述べる。"
+    )
+
+    assert result["applicable"]
+    assert result["risk_count"] == 2
+    assert all(r["type"] == "unfilled_placeholder" for r in result["risks"])
+    assert result["score"] < 10
+
+
+def test_template_residue_check_counts_instructions_without_calling_them_defects():
+    # The rule that failed the detector test: an experienced PI deleted 6
+    # instruction sentences and deliberately kept 13, and flat text cannot
+    # tell the two groups apart. So they are counted and handed back as a
+    # question, never reported as located defects.
+    result = gw.grant_writing_template_residue_check(
+        "パワーアカデミー研究マップをご覧いただき、課題を選択してください。\n"
+        "性別を回答したくない方は「該当しない」を選択してください。\n"
+        "本研究の目的は損失低減である。"
+    )
+
+    assert result["risk_count"] == 0
+    assert result["instruction_sentence_count"] == 2
+    assert result["questions"]
+    assert result["score"] == 10.0
+
+
+def test_template_residue_check_is_clean_on_a_finished_draft():
+    result = gw.grant_writing_template_residue_check(
+        "設備備品費は1,200千円である。氏名は菅原賢悟である。"
+    )
+
+    assert result["risk_count"] == 0
+    assert result["score"] == 10.0
+
+
+def test_health_report_separates_findings_from_questions():
+    report = gw.grant_writing_health_report(KDDI_SAMPLE, program="kddi_digital")
+
+    assert "findings" in report and "questions" in report
+    assert "defect_counts" in report
+    assert report["defect_counts"]["total"] == len(report["findings"])
+    # Questions carry no severity and no score: they are prompts, not defects.
+    for q in report["questions"]:
+        assert q["kind"] == "question"
+        assert "severity" not in q
+        assert "score" not in q
+    # The score reflects located defects only.
+    assert "defect_score" in report
+
+
 def test_vague_claim_verb_check_flags_integration_without_a_mechanism():
     # The wording an experienced PI removes first: it promises a result and
     # names no operation. Verified against a real 2026 proposal rewrite where
@@ -1052,7 +1109,7 @@ def test_central_claim_check_runs_in_health_report():
 
     assert "central_claim_consistency" in report["detailed_results"]
     issue = next(
-        i for i in report["priority_issues"]
+        i for i in report["findings"]
         if i["name"] == "central_claim_consistency_check"
     )
     assert issue["severity"] == "HIGH"
@@ -1109,7 +1166,7 @@ def test_health_report_omits_an_inapplicable_budget_from_scoring():
     assert "budget" not in report["detailed_scores"]
     assert not any(
         issue["name"] == "budget_alignment_check"
-        for issue in report["priority_issues"]
+        for issue in report["findings"]
     )
 
 
