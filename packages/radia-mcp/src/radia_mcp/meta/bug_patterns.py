@@ -864,6 +864,46 @@ PATTERNS: list[dict] = [
                     "tests/mcp_server/test_tools_doc.py"],
     },
     {
+        "id": "new-src-module-unclassified-in-parity-manifest",
+        "title": "A new module under src/radia lands without an entry in "
+                 "matlab/python_api_parity_manifest.json -- ci_preflight is "
+                 "GREEN and the self-hosted CI 'Run simple tests' goes red.",
+        "topics": ["ci", "matlab", "parity", "test-infrastructure"],
+        "severity": "high",
+        "first_seen": "2026-08-19",
+        "last_seen": "2026-08-19",
+        "what": "tests/test_matlab_python_parity_manifest.py fails with "
+                "\"unclassified Python module: <path>\".  The Python-to-MATLAB "
+                "Capability Parity policy requires EVERY production .py under "
+                "src/radia to carry a checked classification (native-mex, "
+                "matlab-native, python-fallback, or private/not-applicable); "
+                "the audit walks src/radia/**/*.py and reports anything no "
+                "rule pattern matches.  Seen 2026-08-19 when radia.equation "
+                "(equation/__init__.py, equation/office.py) shipped: 3708 of "
+                "3709 CI tests passed and that one failed.",
+        "root_cause": "ci_preflight's top-level gate is COLLECT-ONLY, so it "
+                      "sees import breakage but not a test that fails on a "
+                      "manifest lookup.  Adding a module is precisely the "
+                      "change that gate cannot see -- the new file imports "
+                      "fine, it is simply unaccounted for.  The full suite "
+                      "(ci_preflight --full) does catch it, and so does CI.",
+        "detection": "python tools/check_matlab_python_parity.py; "
+                     "python -m pytest tests/test_matlab_python_parity_manifest.py "
+                     "(about 5 s); python tools/ci_preflight.py --full.",
+        "prevention": "When a change adds any .py under src/radia, add its "
+                      "manifest rule in the SAME commit and run the parity "
+                      "test -- it is seconds, and the default preflight will "
+                      "not remind you.  Classify honestly: private/not-"
+                      "applicable is for code with no numerical meaning for a "
+                      "MATLAB caller to agree with, and its note should record "
+                      "what would change the answer, not merely assert the "
+                      "classification.",
+        "related": ["matlab/python_api_parity_manifest.json",
+                    "tools/check_matlab_python_parity.py",
+                    "tests/test_matlab_python_parity_manifest.py",
+                    "tools/ci_preflight.py"],
+    },
+    {
         "id": "heavy-import-collection-break-minimal-dep-matrix",
         "title": "A new radia-mcp test imports ngsolve/netgen at MODULE level "
                  "-> pytest COLLECTION fails on the minimal-dep ubuntu matrix "
