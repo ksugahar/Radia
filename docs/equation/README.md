@@ -13,7 +13,13 @@ eq.tex_to_svg(r"\frac{a+b}{c}")      # a picture
 eq.tex_to_emf(r"\frac{a+b}{c}")      # a vector picture
 eq.tex_to_png(r"\frac{a+b}{c}")      # a bitmap, where nothing else works
 eq.markdown_to_docx(open("note.md", encoding="utf-8").read(), "note.docx")
+eq.markdown_to_pptx(open("talk.md", encoding="utf-8").read(), "talk.pptx")
 ```
+
+A deck is written script-first: a heading starts a slide, a `>` blockquote is
+what you SAY and goes into the speaker notes, and everything else is what the
+audience sees.  One file holds both halves, which is what lets the talk's own
+checks compare them -- see the `radia_mcp.presentation` skill.
 
 ## What it writes
 

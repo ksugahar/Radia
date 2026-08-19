@@ -39,10 +39,31 @@ $$E = mc^{2}$$
 """
 
 
+SCRIPT_SOURCE = """# Kelvin transformation
+
+> Here I explain how the exterior is mapped onto a finite region.
+
+- exterior $\\Omega^{E}$ maps to $\\Omega'$
+
+# What it costs
+
+> One extra region, and a matched interface.
+
+Nothing else.
+"""
+
+
 def slides(path):
     with zipfile.ZipFile(path) as z:
         return [z.read(n).decode("utf-8") for n in sorted(z.namelist())
                 if re.match(r"ppt/slides/slide\d+\.xml$", n)]
+
+
+def notes(path):
+    """The speaker notes, one string per notes slide that exists."""
+    with zipfile.ZipFile(path) as z:
+        return {n: z.read(n).decode("utf-8") for n in sorted(z.namelist())
+                if re.match(r"ppt/notesSlides/notesSlide\d+\.xml$", n)}
 
 
 def test_every_equation_arrives_as_an_equation(tmp_path):
@@ -101,6 +122,54 @@ def test_literal_dollars_are_not_equations(tmp_path):
     equation.markdown_to_pptx("# S\n\nPrices are $5 and $6.\n", out)
     from radia.equation.office import count_equations
     assert count_equations(out) == 0
+
+
+def test_the_script_lands_in_the_notes_not_on_the_slide(tmp_path):
+    r"""A blockquote is what you SAY; the slide holds what is SHOWN.
+
+    Writing the script onto the slide is the failure this rule exists to
+    prevent -- the audience then reads the talk instead of hearing it.
+    """
+    out = str(tmp_path / "deck.pptx")
+    equation.markdown_to_pptx(SCRIPT_SOURCE, out)
+    spoken = "Here I explain how the exterior is mapped"
+    assert spoken not in "".join(slides(out))
+    assert any(spoken in xml for xml in notes(out).values())
+
+
+def test_each_script_belongs_to_the_slide_it_follows(tmp_path):
+    out = str(tmp_path / "deck.pptx")
+    equation.markdown_to_pptx(SCRIPT_SOURCE, out)
+    got = notes(out)
+    assert len(got) == 2, sorted(got)
+    first, second = [got[k] for k in sorted(got)]
+    assert "exterior is mapped" in first
+    assert "One extra region" in second
+    assert "One extra region" not in first
+
+
+def test_the_quote_marker_is_not_spoken(tmp_path):
+    r"""``>`` marks the script; it is not part of it."""
+    out = str(tmp_path / "deck.pptx")
+    equation.markdown_to_pptx("# S\n\n> Say this.\n", out)
+    text = "".join(notes(out).values())
+    assert "Say this." in text
+    assert "&gt; Say this." not in text
+
+
+def test_a_slide_with_no_script_has_no_notes(tmp_path):
+    r"""An empty notes page is not the same as a slide nobody scripted --
+    the coverage check has to be able to see the difference."""
+    out = str(tmp_path / "deck.pptx")
+    equation.markdown_to_pptx("# S\n\nJust shown text.\n", out)
+    assert notes(out) == {}
+
+
+def test_the_script_may_carry_equations(tmp_path):
+    r"""You say the formula out loud too; it should read as one."""
+    out = str(tmp_path / "deck.pptx")
+    equation.markdown_to_pptx("# S\n\n> recall that $E = mc^{2}$ holds.\n", out)
+    assert "m:oMath" in "".join(notes(out).values())
 
 
 def test_a_note_with_no_heading_still_makes_a_slide(tmp_path):

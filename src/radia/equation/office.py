@@ -166,6 +166,25 @@ def markdown_to_docx(markdown: str, out_path: str) -> str:
     return out_path
 
 
+def _script_text(block):
+    """The spoken line in this block, or None if the block is not one.
+
+    A blockquote is the script.  The scanner has no blockquote kind -- the
+    marker arrives at the front of the text -- so it is read here rather than
+    by teaching the shared scanner a rule only slides use.
+    """
+    if block.kind not in (MdBlock.Paragraph, MdBlock.Bullet):
+        return None
+    lines = block.text.split("\n")
+    if not lines or not lines[0].lstrip().startswith(">"):
+        return None
+    out = []
+    for line in lines:
+        stripped = line.lstrip()
+        out.append(stripped[1:].lstrip() if stripped.startswith(">") else line)
+    return "\n".join(out).strip()
+
+
 def _no_bullet(paragraph, centre: bool = False):
     """Turn the bullet off for this paragraph, and optionally centre it.
 
@@ -203,10 +222,15 @@ def markdown_to_pptx(markdown: str, out_path: str, title: str = "",
                      font_pt: int = 20) -> str:
     """Write Markdown to a .pptx, equations included as native Office math.
 
-    A heading starts a slide and becomes its title; everything under it goes
-    into the body.  That is the whole layout rule: a slide deck built from a
-    note follows the note's own headings rather than a second structure
-    invented here.
+    A heading starts a slide and becomes its title.  Under it:
+
+        > a blockquote is the SCRIPT -- what you say -- and goes into the
+          speaker notes, not onto the slide
+        everything else is what the audience SEES
+
+    That is the whole layout rule: a deck built from a note follows the note's
+    own headings rather than a second structure invented here, and script and
+    slide live in one file so they can be compared.
 
     Equations become real PowerPoint equations, so they follow the theme font,
     scale with the text, and can be edited in PowerPoint's own editor.  A
@@ -221,9 +245,24 @@ def markdown_to_pptx(markdown: str, out_path: str, title: str = "",
 
     slide = None
     body = None
+    script: list[str] = []
+
+    def flush_script():
+        """Put what has been said into this slide's notes."""
+        nonlocal script
+        if slide is not None and script:
+            notes = slide.notes_slide.notes_text_frame
+            notes.clear()
+            first = True
+            for para_text in script:
+                para = notes.paragraphs[0] if first else notes.add_paragraph()
+                first = False
+                omml_paragraph(para, split_math(para_text), powerpoint=True)
+        script = []
 
     def new_slide(heading):
         nonlocal slide, body
+        flush_script()
         slide = prs.slides.add_slide(body_layout)
         slide.shapes.title.text = heading
         body = slide.placeholders[1].text_frame
@@ -246,6 +285,11 @@ def markdown_to_pptx(markdown: str, out_path: str, title: str = "",
         if block.kind == MdBlock.Heading:
             new_slide(block.text.strip())
             first_para = True
+            continue
+
+        spoken = _script_text(block)
+        if spoken is not None:
+            script.append(spoken)
             continue
 
         if body is None:
@@ -276,6 +320,7 @@ def markdown_to_pptx(markdown: str, out_path: str, title: str = "",
 
         omml_paragraph(para, pieces, powerpoint=True)
 
+    flush_script()
     prs.save(out_path)
     return out_path
 
