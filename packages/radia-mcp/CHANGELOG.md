@@ -7,6 +7,21 @@ crystallized as its own package.
 
 ## [Unreleased]
 
+- grant-writing: added `grant_writing_question_originality_check`, which
+  implements the review item three of five reviewers marked down in the
+  2025 disclosure: whether the central question is clear AND shows academic
+  originality. The consistency check already covered clarity; this covers
+  the rest by requiring a named novelty claim standing on a stated limit of
+  prior work. It accepts both Japanese forms of that contrast -- one
+  sentence joined by が, or two joined by 一方 -- because demanding the
+  single-sentence form would fail correct prose, as the current 基盤(C)
+  draft demonstrated.
+- grant-writing: `skill.md` notes that reference proposals have a shelf
+  life. Five of seven adopted proposals on hand predate the 2018 review
+  reform and cannot be copied as templates for the current form; the one
+  post-reform example is also the only one that uses the word 「問い」 and
+  cites heavily.
+
 - grant-writing: recorded a real KAKENHI review disclosure in `skill.md`.
   A 2025 基盤(B) rejection in 電力工学関連 scored 1.60 on academic
   importance against an adopted average of 2.83, and three of five

@@ -429,6 +429,47 @@ Better: 「CLN法の提案者の一人であり、CLN法の拡張に関する研
 使えるのは、審査項目の文言そのもの（上表の左列）と、どの項目が実際に
 低評価を受けたかという事実である。
 
+## Writing the Question So Originality Is Recognisable
+
+上表で最も減点された項目は「研究課題の核心をなす学術的『問い』は明確であり、
+学術的独自性や創造性が認められるか」である。前半（明確さ）は
+`grant_writing_central_claim_consistency_check`、後半（独自性）は
+`grant_writing_question_originality_check` が扱う。
+
+後半には三つが揃い、かつ**接続している**必要がある。
+
+1. 問いが述べられていること
+2. 何が新しいかを名指しする語（独自、独創、新規、初めて 等）
+3. その主張が立つ**既往研究の限界**
+
+3が無い独自性の主張は、根拠のない断言である。逆に、限界だけ書いて問いに
+繋がっていなければ、それは他人の申請書の背景である。
+
+限界の書き方は二通りあり、どちらも正しい。
+
+一文で対比する:
+
+> 既往研究は個々の手法の高速化を進めてきた**が**、その差を設計量へ伝播させる
+> 方法は確立していない。
+
+二文を接続詞で繋ぐ:
+
+> 既往研究では、個々の手法の高精度化・高速化が進められてきた。**一方**、
+> 手法間の差が設計量へ及ぼす影響を定量化する枠組みは体系化されていない。
+
+検査は両形を受理する。一文形だけを要求すると、正しい日本語を不合格にする。
+
+## Reference Proposals Have a Shelf Life
+
+他者の採択申請書を型の参考にするときは、**その申請書がいつの様式か**を先に
+確認する。科研費は平成30年度から審査システム改革を実施しており、評定要素も
+調書様式も変わっている。手元の採択参考書類7件のうち5件は改革前（2012–2014年）
+であり、現行様式の型としてはそのまま使えない。
+
+改革後の採択例は、学術的「問い」という語を明示的に用い、文献引用が桁違いに
+多い（1件で39件）という特徴を示した。改革前の例にはこの傾向がない。参考に
+するなら、まず年度で分け、改革後のものを優先する。
+
 ## Where the Reviewer's Own Words Are
 
 不採択の場合、**科研費電子申請システムで審査結果（所見）を確認できる**。
@@ -576,6 +617,7 @@ GPU等の機種名を予算化するときは、アクセラレータ名とホ�
 - `grant_writing_central_claim_consistency_check(text)`
 - `grant_writing_vague_claim_verb_check(text)`
 - `grant_writing_template_residue_check(text)`
+- `grant_writing_question_originality_check(text)`
 - `grant_writing_literature_gap_evidence_check(text)`
 - `grant_writing_collaborative_integration_risk_check(text)`
 - `grant_writing_budget_alignment_check(text)`

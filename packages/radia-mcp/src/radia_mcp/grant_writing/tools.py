@@ -2532,6 +2532,140 @@ _MECHANISM_MARKERS = (
 )
 
 
+# The review criterion this check implements, quoted from a 2025 KAKENHI
+# review disclosure: 「研究課題の核心をなす学術的『問い』は明確であり、学術的
+# 独自性や創造性が認められるか」. Three of five reviewers marked that single
+# item down, and it drove the academic-importance score to 1.60 against an
+# adopted average of 2.83 -- the largest gap on the sheet.
+_ORIGINALITY_MARKERS = (
+    "独自", "独創", "新規", "初めて", "初の", "従来にない", "既存手法にない",
+    "本研究に固有", "他に例をみない",
+)
+
+# A gap statement: prior work did X, but Y is not established. Without one,
+# an originality word is an assertion rather than a position.
+_PRIOR_WORK_MARKERS = (
+    "既往研究", "既存研究", "先行研究", "従来手法", "従来法", "従来の",
+    "これまで", "既報",
+)
+_GAP_MARKERS = (
+    "確立していない", "確立されていない", "体系化されていない",
+    "明らかでない", "明らかにされていない", "得られていない",
+    "十分でない", "十分ではない", "扱えない", "扱われていない",
+    "できていない", "限られている", "残されている",
+    "未解決", "至っていない", "困難である", "難しい",
+)
+
+
+def grant_writing_question_originality_check(text: str) -> dict:
+    """Check that the central question carries an originality position.
+
+    The criterion has two halves and this suite already covers the first:
+    the question must be clear (see the central-claim consistency check).
+    This one covers the second half -- that originality and creativity are
+    recognisable -- which needs three things present and connected: a stated
+    question, a claim of what is new, and a gap in prior work that the claim
+    stands against. An originality adjective with no gap behind it is an
+    assertion; a gap with no question attached belongs to somebody else's
+    proposal.
+    """
+    text = _prose_for_lint(_read_text_if_path(text))
+    statements = _claim_statements(text)
+    if not statements:
+        return {
+            "applicable": False,
+            "score": None,
+            "risks": [],
+            "comments": [],
+            "target": (
+                "the central question states what is new and what prior work "
+                "leaves unresolved"
+            ),
+            "source": "question-originality check (2025 review disclosure)",
+        }
+
+    sentences = [s for s in re.split(r"(?<=[。．!?！？])", text) if s.strip()]
+    originality_hits = [m for m in _ORIGINALITY_MARKERS if m in text]
+    prior_hits = [m for m in _PRIOR_WORK_MARKERS if m in text]
+    gap_hits = [m for m in _GAP_MARKERS if m in text]
+
+    # A gap statement is a position only when prior work and the gap are
+    # joined. Either in one sentence -- 「既往研究は…進めてきたが、…は確立
+    # していない」 -- or across two that a contrastive connective ties
+    # together: 「既往研究では…進められてきた。一方、…は体系化されていない」.
+    # Both are ordinary Japanese; requiring the single-sentence form only
+    # would fail correct prose.
+    contrastive = ("一方", "しかし", "だが", "ところが", "他方", "これに対し")
+    gap_sentences = []
+    for i, sentence in enumerate(sentences):
+        has_prior = any(p in sentence for p in _PRIOR_WORK_MARKERS)
+        has_gap = any(g in sentence for g in _GAP_MARKERS)
+        if has_prior and has_gap:
+            gap_sentences.append({
+                "sentence_index": i + 1,
+                "form": "single_sentence",
+                "excerpt": re.sub(r"\s+", " ", sentence).strip()[:220],
+            })
+            continue
+        if not has_prior:
+            continue
+        nxt = sentences[i + 1] if i + 1 < len(sentences) else ""
+        if any(g in nxt for g in _GAP_MARKERS) and any(
+            c in nxt for c in contrastive
+        ):
+            gap_sentences.append({
+                "sentence_index": i + 1,
+                "form": "contrastive_pair",
+                "excerpt": re.sub(r"\s+", " ", sentence + nxt).strip()[:260],
+            })
+
+    risks: list[dict] = []
+    if not originality_hits:
+        risks.append({
+            "type": "no_originality_claim",
+            "severity": "HIGH",
+            "comment": "何が新しいのかを述べた語がない。",
+            "recommendation": (
+                "独自性・新規性を一語で名指しする。審査項目は「学術的独自性や"
+                "創造性が認められるか」であり、読み取れなければ低評価になる。"
+            ),
+        })
+    if not gap_sentences:
+        risks.append({
+            "type": "no_gap_against_prior_work",
+            "severity": "HIGH",
+            "comment": (
+                "既往研究の限界を一文で述べていない。"
+                if not (prior_hits and gap_hits)
+                else "既往研究への言及と未解決の指摘が別々の文に散っている。"
+            ),
+            "recommendation": (
+                "「既往研究は〜を進めてきたが、〜は確立していない」の形で、"
+                "先行研究と未解決点を同一文に置く。独自性はこの対比の上に立つ。"
+            ),
+        })
+
+    deductions = sum(3.0 for _ in risks)
+    score = max(0.0, round(10.0 - deductions, 1))
+    return {
+        "applicable": True,
+        "score": score,
+        "risk_count": len(risks),
+        "risks": risks,
+        "statement_count": len(statements),
+        "originality_markers": originality_hits[:8],
+        "prior_work_markers": prior_hits[:8],
+        "gap_statements": gap_sentences[:5],
+        "comments": [r["comment"] for r in risks],
+        "recommendations": [r["recommendation"] for r in risks],
+        "target": (
+            "the central question states what is new and what prior work "
+            "leaves unresolved, in one contrast"
+        ),
+        "source": "question-originality check (2025 review disclosure)",
+    }
+
+
 def grant_writing_template_residue_check(text: str) -> dict:
     """Find unfilled placeholders and leftover form instructions.
 
@@ -3551,6 +3685,7 @@ _DETECTOR_TOOLS = frozenset({
     "abstraction",
     "literature",
     "residue",
+    "originality",
 })
 
 _DETECTOR_RESULT_KEYS = frozenset({
@@ -3565,6 +3700,7 @@ _DETECTOR_RESULT_KEYS = frozenset({
     "named_software_abstraction",
     "literature_gap_evidence",
     "template_residue",
+    "question_originality",
 })
 
 
@@ -3720,6 +3856,20 @@ def grant_writing_health_report(
                     "severity": "MEDIUM",
                     "score": vague["score"],
                     "comments": vague["comments"][:5],
+                })
+
+    if "originality" not in skip_set:
+        originality = grant_writing_question_originality_check(text)
+        detailed_results["question_originality"] = originality
+        if originality["applicable"]:
+            detailed_scores["question_originality"] = originality["score"]
+            if originality["risks"]:
+                priority_issues.append({
+                    "tool": "originality",
+                    "name": "question_originality_check",
+                    "severity": "HIGH",
+                    "score": originality["score"],
+                    "comments": originality["comments"][:5],
                 })
 
     if "claim" not in skip_set:

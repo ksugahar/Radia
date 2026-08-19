@@ -2,7 +2,7 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **1016 tools** across 49 MCP servers.
+Total: **1017 tools** across 49 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
@@ -45,7 +45,7 @@ Total: **1016 tools** across 49 MCP servers.
 | [`mcp-server-md2html`](#mcp-server-md2html) | `radia_mcp.md2html` | 2 |
 | [`mcp-server-chart2d`](#mcp-server-chart2d) | `radia_mcp.chart2d` | 24 |
 | [`mcp-server-paper-writing`](#mcp-server-paper-writing) | `radia_mcp.paper_writing` | 191 |
-| [`mcp-server-grant-writing`](#mcp-server-grant-writing) | `radia_mcp.grant_writing` | 32 |
+| [`mcp-server-grant-writing`](#mcp-server-grant-writing) | `radia_mcp.grant_writing` | 33 |
 | [`mcp-server-poster`](#mcp-server-poster) | `radia_mcp.poster` | 32 |
 | [`mcp-server-literature-index`](#mcp-server-literature-index) | `radia_mcp.literature_index` | 9 |
 | [`mcp-server-document-meta`](#mcp-server-document-meta) | `radia_mcp.document_meta` | 11 |
@@ -1302,6 +1302,7 @@ Module: `radia_mcp.grant_writing.server`
 | `grant_writing_literature_gap_evidence_check` | Check whether literature-survey evidence supports the claimed gap. |
 | `grant_writing_named_software_abstraction_check` | Check whether named software is used at the right proposal level. |
 | `grant_writing_persuasion_quality_check` | Check reviewer-facing hierarchy, equations, and defensive prose. |
+| `grant_writing_question_originality_check` | Check that the central question carries an originality position. |
 | `grant_writing_recommendation_letter_template` | Return a one-page recommendation-letter draft template. |
 | `grant_writing_reviewer_vocabulary_check` | Check whether proposal vocabulary is accessible to the likely reviewer. |
 | `grant_writing_section_presence` | Check whether a proposal draft contains the expected review axes. |
