@@ -586,6 +586,9 @@ CATALOG: dict[str, dict[str, Any]] = {
                        "abstraction, reviewer vocabulary, benchmark role, "
                        "persuasion hierarchy, equation introductions, and "
                        "internal-memo shorthand, "
+                       "KAKENHI review-format realities (monochrome "
+                       "printing, human-rights box, researchmap-era "
+                       "publication identification, funding-overlap box), "
                        "recommendation-letter "
                        "template, and KDDI Digital Innovation and KAKENHI "
                        "OSS-platform checks.",
@@ -593,6 +596,7 @@ CATALOG: dict[str, dict[str, Any]] = {
                             "grant_writing_health_report",
                             "grant_writing_kddi_digital_check",
                             "grant_writing_kaken_oss_platform_check",
+                            "grant_writing_kaken_review_format_check",
                             "grant_writing_internal_evidence_to_external_scale_check",
                             "grant_writing_domain_outcome_chain_check",
                             "grant_writing_derived_metric_validation_check",
