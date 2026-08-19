@@ -7,6 +7,17 @@ crystallized as its own package.
 
 ## [Unreleased]
 
+- grant-writing: recorded a real KAKENHI review disclosure in `skill.md`.
+  A 2025 基盤(B) rejection in 電力工学関連 scored 1.60 on academic
+  importance against an adopted average of 2.83, and three of five
+  reviewers marked down the single item "the academic question at the core
+  is clear and shows originality". International evaluation scored 1.60
+  against 2.70. Not one reviewer found a problem with the budget. That
+  disclosure independently confirms both directions this suite took on
+  2026-08-20: the central-question work targets the item reviewers actually
+  penalise, and scoring budget rationale on every document was aimed at the
+  one axis nobody criticised.
+
 - grant-writing: `skill.md` gained the shape of an adopted proposal, taken
   from two funded Power Academy applications: a publication list dense
   enough to verify (formal citations, dated awards, funding with amounts),
