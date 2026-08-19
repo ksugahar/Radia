@@ -22,6 +22,12 @@ crystallized as its own package.
   rather than pictures. The header's "AI cannot make the slide body" caveat is
   retired with it -- that was true when a deck could only be built by hand.
 
+- meta: catalogued `new-src-module-unclassified-in-parity-manifest`. A module
+  added under `src/radia` without a rule in the MATLAB parity manifest leaves
+  `ci_preflight` green and CI red, because the preflight's top-level gate is
+  collect-only: the new file imports fine, it is simply unaccounted for.
+  Adding a module is exactly the change that gate cannot see.
+
 ## [1.4.39] - 2026-08-19
 
 - matlab: mapped the four beam Lie-map / orbit pybind names onto their
