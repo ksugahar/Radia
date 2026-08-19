@@ -130,6 +130,53 @@ private:
                 if (b.displayUpper) line(*b.displayUpper, d + 1, "displayUpper");
                 break;
             }
+            case Node::kPile: {
+                const auto& p = static_cast<const PileNode&>(*n);
+                pad(d); o_ << "PILE n=" << p.lines.size()
+                           << " ncols=" << p.ncols
+                           << " halign=" << p.halign << "\n";
+                for (const auto& l : p.lines) node(l.get(), d + 1);
+                break;
+            }
+            case Node::kMatrix: {
+                const auto& m = static_cast<const MatrixNode&>(*n);
+                pad(d); o_ << "MATRIX " << m.rows << "x" << m.cols << "\n";
+                for (const auto& e : m.elements) node(e.get(), d + 1);
+                break;
+            }
+            case Node::kEmbell: {
+                const auto& e = static_cast<const EmbellNode&>(*n);
+                pad(d); o_ << "EMBELL type=" << e.embellType << "\n";
+                slot(e.content, d + 1, "content");
+                break;
+            }
+            case Node::kDecoration: {
+                const auto& dn = static_cast<const DecorationNode&>(*n);
+                pad(d); o_ << "DECO sel=" << dn.selector << "\n";
+                slot(dn.content, d + 1, "content");
+                break;
+            }
+            case Node::kBraceDeco: {
+                const auto& b = static_cast<const BraceDecoNode&>(*n);
+                pad(d); o_ << "BRACEDECO sel=" << b.selector << "\n";
+                slot(b.content, d + 1, "content");
+                slot(b.label, d + 1, "label");
+                break;
+            }
+            case Node::kOverset: {
+                const auto& o = static_cast<const OversetNode&>(*n);
+                pad(d); o_ << "OVERSET under=" << (o.under ? 1 : 0) << "\n";
+                slot(o.over, d + 1, "over");
+                slot(o.base, d + 1, "base");
+                break;
+            }
+            case Node::kPhantom: {
+                const auto& p = static_cast<const PhantomNode&>(*n);
+                pad(d); o_ << "PHANTOM w=" << (p.keepWidth ? 1 : 0)
+                           << " h=" << (p.keepHeight ? 1 : 0) << "\n";
+                slot(p.content, d + 1, "content");
+                break;
+            }
             case Node::kSize:
                 pad(d); o_ << "SIZE\n"; break;
             case Node::kFont:

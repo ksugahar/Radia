@@ -691,9 +691,20 @@ MtefParser::Result MtefParser::parse(const uint8_t* data, size_t len) {
     if (mtefVer < 0) return result;
     result.prodVer = prodMaj;
 
-    /* Parse the body as a root LINE's children */
+    /* Parse the body as a root LINE's children.
+     *
+     * Not ONE object list: Equation Editor closes a list with END and carries
+     * on, so a document is a run of them.  Taking the first and stopping read
+     * 86 bytes of an 1805-byte lecture file and returned a short equation
+     * rather than a truncated one -- a wrong answer with no error in it. */
     auto root = std::make_unique<LineNode>();
-    root->children = parser.parseObjectList();
+    while (parser.pos_ < len) {
+        const size_t before = parser.pos_;
+        NodeList more = parser.parseObjectList();
+        for (auto& n : more)
+            if (n) root->children.push_back(std::move(n));
+        if (parser.pos_ == before) break;   /* no progress: stop, do not spin */
+    }
     result.root = std::move(root);
 
     return result;

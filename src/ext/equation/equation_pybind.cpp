@@ -28,6 +28,7 @@
 #include "mtef2tex.h"
 #include "tex2mtef.h"
 #include "mtef_svg.h"
+#include "mtef_parser.h"
 #include "mtef_omml.h"
 #include "mtef_rtf.h"
 #include "mtef_mathml.h"
@@ -67,6 +68,18 @@ std::string mtef_to_tex_py(const py::bytes& data) {
     std::string result(out);
     free(out);
     return result;
+}
+
+/* MTEF -> the editor's tree -> LaTeX.  mtef_to_tex answers with the legacy
+ * converter's reading; this answers with the editor's, which is the one that
+ * will be drawn and edited. */
+std::string mtef_to_latex_py(const py::bytes& data) {
+    std::string buf = data;
+    mtef::MtefParser::Result res = mtef::MtefParser::parse(
+        reinterpret_cast<const uint8_t*>(buf.data()), buf.size());
+    if (!res.root) throw std::runtime_error("mtef_to_latex: parse failed");
+    mtef::LaTeXEmitter em(res.prodVer, true);
+    return em.emit(*res.root);
 }
 
 std::string mtef_to_svg_py(const py::bytes& data, const mtef::SvgStyle& style) {
@@ -227,6 +240,10 @@ PYBIND11_MODULE(_equation, m) {
           "LaTeX -> MTEF binary.");
     m.def("mtef_to_tex", &mtef_to_tex_py, py::arg("data"),
           "MTEF binary -> LaTeX.");
+    m.def("mtef_to_latex", &mtef_to_latex_py, py::arg("data"),
+          "MTEF binary -> LaTeX, through the EDITOR's parser and emitter -- "
+          "the reading that will actually be drawn and edited.  mtef_to_tex "
+          "answers with the legacy standalone converter instead.");
     m.def("mtef_to_svg", &mtef_to_svg_py, py::arg("data"),
           py::arg("style") = mtef::SvgStyle(), "MTEF binary -> SVG.");
     m.def("tex_to_svg", &tex_to_svg_py, py::arg("latex"),
