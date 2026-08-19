@@ -62,6 +62,13 @@
       "notes": "CLI and MCP adapters are delivery layers above the canonical Radia LTspice APIs and do not require separate MATLAB counterparts."
     },
     {
+      "id": "equation-authoring",
+      "patterns": ["equation/*.py", "equation/**/*.py"],
+      "classification": "private/not-applicable",
+      "matlab": [],
+      "notes": "radia.equation (with its _equation.pyd) is document authoring, not a numerical API: LaTeX in, and an Office equation, an SVG, or a caret position out. It carries no field, mesh, solver state, or result artifact, so there is nothing for a MATLAB counterpart to agree with numerically -- the same reason the LTspice CLI/MCP adapters above are not mirrored. The limitation is deliberate and bounded: if a MATLAB caller ever needs to write an equation into a document, this becomes a python-fallback rule with a named .m owner rather than staying here."
+    },
+    {
       "id": "ltspice-conversion",
       "patterns": ["ltspice/__init__.py", "ltspice/conversion.py", "ltspice/topology.py", "ltspice/parser/*.py"],
       "classification": "python-fallback",
