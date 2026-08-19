@@ -27,14 +27,19 @@ def _iter_shapes(shape_collection):
             yield s
 
 
+# A Latin token bounded by ASCII, NOT by \b.  Python's \w matches CJK, so
+# "のHACApK" has no word boundary before the H and \b[A-Z] never fires --
+# which made every acronym spoken inside a Japanese sentence invisible.
+_LATIN = re.compile(r"(?<![A-Za-z0-9])[A-Z][A-Za-z0-9]{2,}(?![A-Za-z0-9])")
+_KANJI = re.compile(r"[一-鿿]{2,}")
+_KATAKANA = re.compile(r"[ァ-ヴー]{3,}")
+
+
 def _extract_tokens(text: str) -> set[str]:
     tokens: set[str] = set()
-    for m in re.finditer(r"[一-鿿]{2,}", text):
-        tokens.add(m.group(0))
-    for m in re.finditer(r"[ァ-ヴー]{3,}", text):
-        tokens.add(m.group(0))
-    for m in re.finditer(r"\b[A-Z][A-Za-z0-9]{2,}\b", text):
-        tokens.add(m.group(0))
+    for pattern in (_KANJI, _KATAKANA, _LATIN):
+        for m in pattern.finditer(text):
+            tokens.add(m.group(0))
     return tokens
 
 
@@ -84,7 +89,28 @@ def presentation_script_vs_slide_coverage(pptx_path: str) -> dict:
     per_slide: list[dict] = []
     low_coverage_slides: list[dict] = []
 
-    for i, slide in enumerate(prs.slides, 1):
+    # Deck furniture -- the affiliation in the corner, a running section label
+    # -- appears on nearly every slide and is not spoken.  Scoring it against
+    # the script marks every slide down for the same non-omission.
+    slides = list(prs.slides)
+    seen: dict[str, int] = {}
+    for slide in slides:
+        for token in _extract_tokens(_get_slide_body(slide)):
+            seen[token] = seen.get(token, 0) + 1
+    boilerplate = {t for t, n in seen.items()
+                   if len(slides) >= 4 and n >= 0.8 * len(slides)}
+
+    for i, slide in enumerate(slides, 1):
+        if i == 1:
+            # The cover carries the formal title, the English subtitle and the
+            # author list.  skill.md says the speaker need not read the formal
+            # title aloud, so scoring it as unspoken content is a false alarm --
+            # the title checkers skip slide 1 for the same reason.
+            per_slide.append({
+                "slide_no": i, "coverage": None,
+                "skip_reason": "cover_slide",
+            })
+            continue
         body = _get_slide_body(slide).strip()
         notes = _get_notes(slide).strip()
         body_tokens = _extract_tokens(body)
@@ -121,8 +147,19 @@ def presentation_script_vs_slide_coverage(pptx_path: str) -> dict:
             })
             continue
 
-        covered = body_tokens & notes_tokens
-        missing = body_tokens - notes_tokens
+        body_tokens = body_tokens - boilerplate
+        if not body_tokens:
+            per_slide.append({
+                "slide_no": i, "coverage": None,
+                "skip_reason": "only_deck_furniture",
+            })
+            continue
+
+        # A token counts as spoken if the script contains it at all -- saying
+        # "Gram二重積分" is saying "二重積分".  Set intersection alone required
+        # the two segmentations to agree, so a longer phrase read as a gap.
+        covered = {t for t in body_tokens if t in notes_tokens or t in notes}
+        missing = body_tokens - covered
         extra = notes_tokens - body_tokens
         coverage = len(covered) / len(body_tokens)
 
@@ -195,6 +232,7 @@ def presentation_script_vs_slide_coverage(pptx_path: str) -> dict:
         "avg_coverage_pct": round(avg_coverage * 100, 1),
         "n_slides_evaluated": len(valid_coverages),
         "n_low_coverage_slides": n_low,
+        "deck_boilerplate_ignored": sorted(boilerplate),
         "low_coverage_slides": low_coverage_slides,
         "per_slide": per_slide[:30],
         "comments": comments,
