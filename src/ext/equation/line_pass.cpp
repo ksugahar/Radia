@@ -237,6 +237,51 @@ void FenceMergePass::run(NodeList& children, SkipSet& skip, int depth, int prodV
  * Reverse-scans to find the owning template and sets
  * displayLower/displayUpper.
  * ============================================================ */
+/* The deepest operator in here that has no limits yet.
+ *
+ * Equation Editor writes the display blocks innermost-last, so when a block
+ * turns up with only a LINE before it, the operator it belongs to is the
+ * deepest one inside that line that is still bare. */
+/* Both shapes of display block end with a switch to symbol size, so an
+ * operator with one after it in its own list has its limits coming and must
+ * not be given somebody else's. */
+static bool symFollows(const NodeList& list, size_t from) {
+    for (size_t j = from + 1; j < list.size(); ++j) {
+        const Node* n = list[j].get();
+        if (n && n->tag() == Node::kSize &&
+            static_cast<const SizeNode*>(n)->sizeType == SIZETYPE_SYM)
+            return true;
+    }
+    return false;
+}
+
+static Node* deepestBareBigOp(NodeList& list) {
+    Node* found = nullptr;
+    for (size_t i = 0; i < list.size(); ++i) {
+        Node* n = list[i].get();
+        if (!n) continue;
+        Node* deeper = nullptr;
+        if (n->tag() == Node::kLine) {
+            auto* ln = static_cast<LineNode*>(n);
+            if (!ln->isNull) deeper = deepestBareBigOp(ln->children);
+        } else if (n->tag() == Node::kBigOp) {
+            auto* b = static_cast<BigOpNode*>(n);
+            deeper = deepestBareBigOp(b->body);
+            if (!deeper && !b->displayLower && !b->displayUpper &&
+                !b->hasLower && !b->hasUpper && !symFollows(list, i))
+                deeper = n;
+        } else if (n->tag() == Node::kIntegral) {
+            auto* ig = static_cast<IntegralNode*>(n);
+            deeper = deepestBareBigOp(ig->body);
+            if (!deeper && !ig->displayLower && !ig->displayUpper &&
+                !ig->hasLower && !ig->hasUpper && !symFollows(list, i))
+                deeper = n;
+        }
+        if (deeper) found = deeper;      /* the last one is the innermost */
+    }
+    return found;
+}
+
 void BigOpDisplayPass::run(NodeList& children, SkipSet& skip, int depth, int prodVer) {
     int n = (int)children.size();
 
@@ -299,10 +344,22 @@ void BigOpDisplayPass::run(NodeList& children, SkipSet& skip, int depth, int pro
             }
         }
 
+        /* Nothing but a LINE before the block: the operator is inside it. */
+        bool targetInsideLine = false;
+        if (!targetTmpl && contentIdx >= 0 && !skip[contentIdx]) {
+            auto* ln = static_cast<LineNode*>(children[contentIdx].get());
+            if (!ln->isNull) {
+                targetTmpl = deepestBareBigOp(ln->children);
+                targetInsideLine = (targetTmpl != nullptr);
+            }
+        }
+
         if (!targetTmpl) continue;
 
-        /* Merge content LINE into template body */
-        if (contentIdx >= 0 && !skip[contentIdx]) {
+        /* Merge content LINE into template body -- but not when the target was
+         * found INSIDE that line: the line is the enclosing operator's body,
+         * and folding it into the operator it contains would swallow it. */
+        if (!targetInsideLine && contentIdx >= 0 && !skip[contentIdx]) {
             auto contentLine = std::move(children[contentIdx]);
             auto* ln = static_cast<LineNode*>(contentLine.get());
 
@@ -674,7 +731,11 @@ static bool continuedBy(const NodeList& list, size_t i, int prodVer) {
     for (size_t j = i + 1; j < list.size(); ++j) {
         const Node* n = list[j].get();
         if (!n) continue;
-        if (n->tag() == Node::kSize) continue;      /* markers say nothing */
+        /* Markers say nothing either way.  A block of remote limits was
+         * briefly treated as a continuation here, which spliced the line open
+         * and took the outer operator apart to reach the inner one; the block
+         * is found by reading INTO the line instead (Pass 2). */
+        if (n->tag() == Node::kSize) continue;
         if (FenceMergePass::isFenceDisplayChar(n, prodVer)) return true;
         if (n->tag() == Node::kScript)
             return static_cast<const ScriptNode*>(n)->base.empty();

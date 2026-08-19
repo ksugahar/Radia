@@ -28,6 +28,13 @@ import os
 import re
 import sys
 from collections import Counter
+from pathlib import Path
+
+# Run against the tree this file lives in, before any installed copy.
+for _p in Path(__file__).resolve().parents:
+    if (_p / "src" / "radia").exists():
+        sys.path.insert(0, str(_p / "src"))
+        break
 
 B = chr(92)
 
