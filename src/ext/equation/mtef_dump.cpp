@@ -177,8 +177,18 @@ private:
                 slot(p.content, d + 1, "content");
                 break;
             }
-            case Node::kSize:
-                pad(d); o_ << "SIZE\n"; break;
+            case Node::kSize: {
+                /* FULL/SUB/SUB2/SYM/SUBSYM -- which one is the point. */
+                static const char* kNames[] = {
+                    "FULL", "SUB", "SUB2", "SYM", "SUBSYM"
+                };
+                const auto& sz = static_cast<const SizeNode&>(*n);
+                const int t = sz.sizeType;
+                pad(d); o_ << "SIZE "
+                           << ((t >= 0 && t < 5) ? kNames[t] : "?")
+                           << "(" << t << ")\n";
+                break;
+            }
             case Node::kFont:
                 pad(d); o_ << "FONT\n"; break;
             default:
