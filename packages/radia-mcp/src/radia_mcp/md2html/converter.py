@@ -6,7 +6,9 @@ module-level template instead of a CLI script).
 
 Features:
     - MathJax v3 (CDN) for LaTeX math: inline ``$..$``, display ``$$..$$``,
-      and GitHub-style ``` ```math ``` ``` blocks
+      GitHub-style ``` ```math ``` ``` blocks, and bare ``\\begin{..}``
+      environments (math detection delegated to ``pymdownx.arithmatex``,
+      2026-08-19)
     - Markdown tables, fenced code, codehilite syntax highlighting
     - Auto-conversion of ``||x||`` to ``\\Vert x \\Vert`` to avoid the
       Markdown table column-separator ``|`` clash
@@ -37,65 +39,138 @@ import re
 # ---------------------------------------------------------------------------
 
 def _convert_norm_notation(math_content: str) -> str:
-    """``||x||`` -> ``\\Vert x \\Vert`` to avoid Markdown table conflict."""
-    result = re.sub(r'\\\|\\\|([^|]+)\\\|\\\|', r'\\Vert \1 \\Vert', math_content)
-    result = re.sub(r'\|\|([^|]+)\|\|', r'\\Vert \1 \\Vert', result)
+    """``||x||`` -> ``\\Vert x \\Vert`` to avoid Markdown table conflict.
+
+    The inner group is non-greedy rather than "anything but a pipe", so a
+    conditional norm such as ``||A|B||`` is converted too.  The old
+    ``[^|]+`` form silently left those as ``||``, which then split the
+    surrounding table row on the ``|`` characters.
+    """
+    result = re.sub(r'\\\|\\\|(.+?)\\\|\\\|', r'\\Vert \1 \\Vert', math_content)
+    result = re.sub(r'\|\|(.+?)\|\|', r'\\Vert \1 \\Vert', result)
     return result
 
 
-def _protect_math(md_content: str) -> tuple[str, list[str]]:
-    """Replace math expressions with placeholders so Markdown leaves them alone."""
-    math_blocks: list[str] = []
+def _normalize_math_fences(md_content: str) -> str:
+    """GitHub-style ```` ```math ```` fences -> ``$$..$$``.
 
-    def save_math(match: re.Match) -> str:
-        converted = _convert_norm_notation(match.group(0))
-        math_blocks.append(converted)
-        return f"%%MATH_BLOCK_{len(math_blocks)-1}%%"
-
-    def save_math_codeblock(match: re.Match) -> str:
-        math_content = match.group(1).strip()
-        converted = _convert_norm_notation(f"$$\n{math_content}\n$$")
-        math_blocks.append(converted)
-        return f"%%MATH_BLOCK_{len(math_blocks)-1}%%"
-
-    # ```math ``` (GitHub style) first, then $$..$$, then $..$
-    content = re.sub(r'```math\s*\n([\s\S]*?)\n```', save_math_codeblock, md_content)
-    content = re.sub(r'\$\$[\s\S]*?\$\$', save_math, content)
-    content = re.sub(r'\$[^\$\n]+?\$', save_math, content)
-    return content, math_blocks
+    arithmatex has no notion of the GitHub ``math`` fence, and leaving it
+    alone would hand the block to ``fenced_code`` instead.  Rewriting it to
+    a display-math span keeps the GitHub input syntax working.
+    """
+    return re.sub(r'```math\s*\n([\s\S]*?)\n```',
+                  lambda m: f"$$\n{m.group(1).strip()}\n$$",
+                  md_content)
 
 
-def _restore_math(html_content: str, math_blocks: list[str]) -> str:
-    for i, math in enumerate(math_blocks):
-        html_content = html_content.replace(f"%%MATH_BLOCK_{i}%%", math)
-    return html_content
+# Fenced code blocks and inline code in the *raw* Markdown.  The math
+# pre-pass must never look inside these: a shell snippet like
+# ``awk '{print $1 | $2}'`` contains both dollars and pipes and is not math.
+_RAW_CODE_RE = re.compile(
+    r'(^(?:```|~~~)[^\n]*\n[\s\S]*?^(?:```|~~~)[ \t]*$'
+    r'|`[^`\n]+`)',
+    re.MULTILINE,
+)
+
+
+def _sanitize_math_spans(md_content: str) -> str:
+    """Neutralize ``|`` inside math spans before Markdown runs.
+
+    ``tables`` is a block processor and splits a row on every raw ``|`` long
+    before arithmatex -- an inline processor -- ever sees the math, so a
+    table cell holding ``$|H_t|$`` used to lose both the math and the row.
+    Two rewrites, applied only inside ``$..$`` / ``$$..$$`` spans outside
+    code regions:
+
+    - ``||x||`` -> ``\\Vert x \\Vert`` (lab norm notation), then
+    - every remaining ``|`` -> ``&#124;``.  The browser decodes the entity
+      back to ``|`` in DOM text before MathJax runs, so the math MathJax
+      sees is byte-identical to the source; the table parser just never
+      encounters a raw pipe.
+
+    A miss here is cosmetic (the pipe stays as written) instead of dropping
+    the expression out of math mode entirely, which is what the placeholder
+    scheme this replaced did on partial matches.
+    """
+    def fix_math(match: re.Match) -> str:
+        return _convert_norm_notation(match.group(0)).replace('|', '&#124;')
+
+    def fix_segment(segment: str) -> str:
+        segment = re.sub(r'\$\$[\s\S]*?\$\$', fix_math, segment)
+        segment = re.sub(r'\$[^\$\n]+?\$', fix_math, segment)
+        return segment
+
+    parts = _RAW_CODE_RE.split(md_content)
+    # Even indices are outside code; odd indices are the code regions.
+    for i in range(0, len(parts), 2):
+        parts[i] = fix_segment(parts[i])
+    return ''.join(parts)
 
 
 # ---------------------------------------------------------------------------
 # Reference linking
 # ---------------------------------------------------------------------------
 
+# Regions of the generated HTML that must never be rewritten by the citation
+# pass: source code, math handed to MathJax, and anchors Markdown already
+# built.  Without this, ``sys.argv[1]`` inside <code> became a citation link,
+# and so did the subscript of ``$A[1]$``.
+_NO_CITE_RE = re.compile(
+    r'(<pre\b[\s\S]*?</pre>'
+    r'|<code\b[\s\S]*?</code>'
+    r'|<a\b[\s\S]*?</a>'
+    r'|<span class="arithmatex">[\s\S]*?</span>'
+    r'|<div class="arithmatex">[\s\S]*?</div>)',
+    re.IGNORECASE,
+)
+
+# ``[0]`` is an array index, never a citation: reference lists start at 1.
+_CITE_RE = re.compile(r'\[([1-9]\d*)\]')
+
+
 def _convert_reference_links(html_content: str) -> str:
-    """``[N]`` -> ``<a href="#refN" class="ref-link">[N]</a>``."""
-    html_content = re.sub(
-        r'((?:<[^>]*>|[^<])*)(\[\d+\])',
-        lambda m: m.group(1) + re.sub(
-            r'\[(\d+)\]', r'<a href="#ref\1" class="ref-link">[\1]</a>', m.group(2)
-        ) if 'href=' not in m.group(0) and '#ref' not in m.group(0) else m.group(0),
-        html_content,
-    )
-    html_content = re.sub(
-        r'(?<!href="#ref)(?<!">)\[(\d+)\](?!</a>)',
-        r'<a href="#ref\1" class="ref-link">[\1]</a>',
-        html_content,
-    )
-    return html_content
+    """``[N]`` -> ``<a href="#refN" class="ref-link">[N]</a>``.
+
+    Only prose is rewritten.  Code blocks, inline code, existing anchors and
+    math spans are split out first and passed through untouched.
+    """
+    parts = _NO_CITE_RE.split(html_content)
+    # re.split with one capturing group yields [text, sep, text, sep, ..., text]
+    # so the even indices are the stretches outside any protected region.
+    for i in range(0, len(parts), 2):
+        parts[i] = _CITE_RE.sub(
+            r'<a href="#ref\1" class="ref-link">[\1]</a>', parts[i])
+    return ''.join(parts)
 
 
 def _add_reference_ids(html_content: str) -> str:
-    """``id="refN"`` on each <li> in the References / 参考文献 section."""
-    ref_section_match = re.search(r'(参考文献|References)', html_content, re.IGNORECASE)
-    if not ref_section_match:
+    """``id="refN"`` on each <li> in the References / 参考文献 section.
+
+    The section is located by a heading whose text *is* the word, allowing
+    only a section number and punctuation around it.  Two weaker rules were
+    tried and rejected: matching the bare word anywhere anchored on prose
+    ("see the References below") and then numbered whatever ordered list came
+    next -- usually a procedure -- while matching any heading *containing*
+    the word still caught headings like "3. 参考文献の書き方".
+    """
+    ref_section_match = None
+    for m in re.finditer(r'<h[1-6][^>]*>([^<]*)</h[1-6]>', html_content):
+        text = m.group(1)
+        # Strip a leading section number: digits ("4", "4.1", "(4)") or a
+        # single letter ("A."), each followed by punctuation/space.  The
+        # token must NOT be a general alphanumeric word -- an earlier
+        # ``[0-9A-Za-z]+`` here swallowed the word "References" itself and
+        # the bibliography silently lost its ids.
+        text = re.sub(r'^\s*(?:\(?\d+(?:\.\d+)*\)?|[A-Za-z])[.):]?\s+', '', text)
+        text = text.strip(' 　.:：-–—').lower()
+        if (text in ('参考文献', '文献', '引用文献', '参照文献',
+                     'references', 'reference', 'bibliography')
+                or text.endswith(' references')
+                or text.endswith('参考文献')
+                or text.endswith('引用文献')):
+            ref_section_match = m
+            break
+    if ref_section_match is None:
         return html_content
 
     ref_pos = ref_section_match.end()
@@ -278,14 +353,27 @@ def md_to_html(md_file: str, output_file: str | None = None,
 
     md_content = _read_file_with_fallback(md_file)
 
-    protected_content, math_blocks = _protect_math(md_content)
+    md_content = _normalize_math_fences(md_content)
+    md_content = _sanitize_math_spans(md_content)
 
+    # arithmatex owns math detection.  The hand-rolled placeholder scheme it
+    # replaces only knew ```math / $$..$$ / $..$, so a bare \begin{align}
+    # block reached Markdown and had its "\\" row separators collapsed to a
+    # single backslash, and a `$PATH` in inline code was mistaken for the
+    # opening delimiter of a formula.
     html_body = markdown.markdown(
-        protected_content,
-        extensions=['tables', 'fenced_code', 'codehilite'],
+        md_content,
+        extensions=['tables', 'fenced_code', 'codehilite',
+                    'pymdownx.arithmatex'],
+        extension_configs={
+            # generic=True emits \(..\) and \[..\], which the MathJax v3
+            # config in _HTML_TEMPLATE already accepts alongside $..$.
+            'pymdownx.arithmatex': {'generic': True, 'smart_dollar': True},
+        },
     )
 
-    html_body = _restore_math(html_body, math_blocks)
+    math_blocks = re.findall(r'class="arithmatex"', html_body)
+
     html_body = _add_reference_ids(html_body)
     html_body = _convert_reference_links(html_body)
 

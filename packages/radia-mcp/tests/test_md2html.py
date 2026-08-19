@@ -140,3 +140,140 @@ def test_title_explicit_override(tmp_path):
     assert "<title>Override Title</title>" in html
     # The H1 still says the original
     assert "<h1>Auto Title</h1>" in html
+
+
+# ---------------------------------------------------------------------------
+# 2026-08-19 hardening: seven defect classes found by the full audit.
+# Each test locks one repaired behaviour; see converter.py comments.
+# ---------------------------------------------------------------------------
+
+def _read(tmp_path, name):
+    return (tmp_path / name).read_text(encoding="utf-8-sig")
+
+
+def test_bare_align_row_separator_survives(tmp_path):
+    r"""Defect 1: \begin{align} outside $$..$$ kept its \\ row separators.
+
+    The old placeholder scheme only protected ```math / $$..$$ / $..$, so
+    Markdown collapsed '\\' to '\' and the align block broke in MathJax.
+    """
+    src = _write(tmp_path / "a.md",
+                 "# t\n\n\\begin{align}\n"
+                 "\\nabla \\times E &= -B_t \\\\\n"
+                 "\\nabla \\cdot B &= 0\n"
+                 "\\end{align}\n")
+    md2html_convert(src)
+    html = _read(tmp_path, "a.html")
+    body = html[html.find("\\begin{align}"):html.find("\\end{align}")]
+    assert "\\\\" in body, "align row separator \\\\ was collapsed"
+
+
+def test_dollar_in_inline_code_not_math(tmp_path):
+    """Defect 2: `$PATH` in inline code was mistaken for a math opener."""
+    src = _write(tmp_path / "c.md",
+                 "# t\n\nuse `$PATH` here, and math $E=mc^2$ there\n")
+    md2html_convert(src)
+    html = _read(tmp_path, "c.html")
+    assert "<code>$PATH</code>" in html
+    assert "arithmatex" in html          # the real math still renders
+
+
+def test_code_index_not_citation_linked(tmp_path):
+    """Defect 3: [N] inside code became <a href="#refN"> citation links."""
+    src = _write(tmp_path / "d.md",
+                 "# t\n\nrun `sys.argv[1]`:\n\n"
+                 "```python\nx = data[0] + data[2]\n```\n\n"
+                 "cite [1]\n\n## References\n\n1. Author.\n")
+    md2html_convert(src)
+    html = _read(tmp_path, "d.html")
+    import re
+    for block in re.findall(r"<code>[\s\S]*?</code>|<pre>[\s\S]*?</pre>", html):
+        assert 'href="#ref' not in block, f"citation link inside code: {block[:80]}"
+    assert 'href="#ref1"' in html         # prose citation still works
+
+
+def test_math_subscript_not_citation_linked(tmp_path):
+    """Defect 4: the [1] in $A[1]$ became a citation link."""
+    src = _write(tmp_path / "e.md",
+                 "# t\n\nmatrix entry $A[1]$, cite [1]\n\n"
+                 "## References\n\n1. Author.\n")
+    md2html_convert(src)
+    html = _read(tmp_path, "e.html")
+    assert 'A<a href="#ref1"' not in html
+
+
+def test_norm_with_inner_pipe_in_table(tmp_path):
+    """Defect 5: $||A|B||$ in a table split the row and stayed unconverted."""
+    src = _write(tmp_path / "f.md",
+                 "# t\n\n| sym | meaning |\n|---|---|\n"
+                 "| $||A|B||$ | conditional norm |\n")
+    md2html_convert(src)
+    html = _read(tmp_path, "f.html")
+    import html as h
+    import re
+    decoded = h.unescape(html)
+    assert "\\Vert" in decoded
+    # the row must still have exactly 2 cells
+    assert len(re.findall(r"<td>", html)) == 2
+
+
+def test_reference_ids_require_reference_heading(tmp_path):
+    """Defect 6: the word 参考文献 in prose/heading text hijacked id numbering.
+
+    A heading merely *containing* the word (『参考文献の書き方』) must not
+    match; the actual References heading must, even when it is the plain
+    English word (which an earlier prefix-strip regex swallowed whole).
+    """
+    src = _write(tmp_path / "g.md",
+                 "# t\n\n## 3. 参考文献の書き方\n\n1. step one\n2. step two\n\n"
+                 "cite [1]\n\n## References\n\n1. Real Author.\n")
+    md2html_convert(src)
+    html = _read(tmp_path, "g.html")
+    import re
+    ols = re.findall(r"<ol[^>]*>[\s\S]*?</ol>", html)
+    with_ids = [o for o in ols if 'id="ref1"' in o]
+    assert len(with_ids) == 1
+    assert "Real Author" in with_ids[0]
+    assert "step one" not in with_ids[0]
+
+
+def test_less_than_in_math_survives(tmp_path):
+    """Defect 7: $\\xi < 0.5$ was injected raw; the browser ate '< 0.5...'
+    as a tag opening and the text vanished from the page."""
+    src = _write(tmp_path / "h.md", "# t\n\nFor $\\xi < 0.5$: expand.\n")
+    md2html_convert(src)
+    html = _read(tmp_path, "h.html")
+    import html as h
+    assert "< 0.5" in h.unescape(html)
+    assert "&lt;" in html or "\\lt" in html   # must be escaped, never raw <
+
+
+def test_single_pipe_math_in_table(tmp_path):
+    """Regression guard: $|H_t|$ inside a table cell (single pipes) must not
+    split the row -- pipes are neutralised as &#124; before Markdown."""
+    src = _write(tmp_path / "i.md",
+                 "# t\n\n| script | what |\n|---|---|\n"
+                 "| run.py | sweeps $|H_t|\\in[1,10^5]$ A/m |\n")
+    md2html_convert(src)
+    html = _read(tmp_path, "i.html")
+    import html as h
+    import re
+    assert len(re.findall(r"<td>", html)) == 2
+    assert "|H_t|" in h.unescape(html)
+
+
+def test_code_fence_with_dollars_and_pipes_untouched(tmp_path):
+    """The pre-Markdown math pass must skip code regions: a shell one-liner
+    with two $ on a line is not math, and its pipes are not table pipes."""
+    src = _write(tmp_path / "j.md",
+                 "# t\n\n```bash\nawk '{print $1 | \"sort\"}' f > $2\n```\n")
+    md2html_convert(src)
+    html = _read(tmp_path, "j.html")
+    import html as h
+    import re
+    # codehilite wraps each token in <span>; compare tag-stripped text.
+    pre = re.search(r"<pre>[\s\S]*?</pre>", html).group(0)
+    text = h.unescape(re.sub(r"<[^>]+>", "", pre))
+    text = re.sub(r"\s+", " ", text).strip()
+    assert 'awk \'{print $1 | "sort"}\' f > $2' == text
+    assert "arithmatex" not in html
