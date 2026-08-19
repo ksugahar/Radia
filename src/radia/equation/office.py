@@ -166,6 +166,120 @@ def markdown_to_docx(markdown: str, out_path: str) -> str:
     return out_path
 
 
+def _no_bullet(paragraph, centre: bool = False):
+    """Turn the bullet off for this paragraph, and optionally centre it.
+
+    A display equation is its own line, not an item in a list -- PowerPoint
+    puts a bullet in front of every paragraph until told otherwise.
+    """
+    from lxml import etree
+
+    pPr = paragraph._p.find(f"{{{A_NS}}}pPr")
+    if pPr is None:
+        pPr = etree.SubElement(paragraph._p, f"{{{A_NS}}}pPr")
+        paragraph._p.insert(0, pPr)
+    if centre:
+        pPr.set("algn", "ctr")
+    for tag in ("buChar", "buAutoNum", "buNone"):
+        for e in pPr.findall(f"{{{A_NS}}}{tag}"):
+            pPr.remove(e)
+    etree.SubElement(pPr, f"{{{A_NS}}}buNone")
+
+
+def _shrink_to_fit(text_frame):
+    """Ask PowerPoint to shrink the text rather than run off the slide."""
+    from lxml import etree
+
+    bodyPr = text_frame._txBody.find(f"{{{A_NS}}}bodyPr")
+    if bodyPr is None:
+        return
+    for tag in ("normAutofit", "spAutoFit", "noAutofit"):
+        for e in bodyPr.findall(f"{{{A_NS}}}{tag}"):
+            bodyPr.remove(e)
+    etree.SubElement(bodyPr, f"{{{A_NS}}}normAutofit")
+
+
+def markdown_to_pptx(markdown: str, out_path: str, title: str = "",
+                     font_pt: int = 20) -> str:
+    """Write Markdown to a .pptx, equations included as native Office math.
+
+    A heading starts a slide and becomes its title; everything under it goes
+    into the body.  That is the whole layout rule: a slide deck built from a
+    note follows the note's own headings rather than a second structure
+    invented here.
+
+    Equations become real PowerPoint equations, so they follow the theme font,
+    scale with the text, and can be edited in PowerPoint's own editor.  A
+    picture would be none of those things.
+    """
+    from pptx import Presentation
+    from pptx.util import Pt
+
+    prs = Presentation()
+    title_layout = prs.slide_layouts[0]
+    body_layout = prs.slide_layouts[1]
+
+    slide = None
+    body = None
+
+    def new_slide(heading):
+        nonlocal slide, body
+        slide = prs.slides.add_slide(body_layout)
+        slide.shapes.title.text = heading
+        body = slide.placeholders[1].text_frame
+        body.clear()
+        body.word_wrap = True
+        _shrink_to_fit(body)
+        return body
+
+    if title:
+        cover = prs.slides.add_slide(title_layout)
+        cover.shapes.title.text = title
+        if len(cover.placeholders) > 1:
+            cover.placeholders[1].text = ""
+
+    first_para = True
+    for block in md_blocks(markdown):
+        if block.kind == MdBlock.Blank:
+            continue
+
+        if block.kind == MdBlock.Heading:
+            new_slide(block.text.strip())
+            first_para = True
+            continue
+
+        if body is None:
+            body = new_slide(title or "")
+            first_para = True
+
+        para = body.paragraphs[0] if first_para else body.add_paragraph()
+        first_para = False
+
+        if block.kind == MdBlock.Code:
+            run = para.add_run()
+            run.text = block.text
+            run.font.name = "Consolas"
+            run.font.size = Pt(14)
+            continue
+
+        if block.kind == MdBlock.Bullet:
+            para.level = 1
+        elif block.kind == MdBlock.Numbered:
+            para.level = 1
+
+        pieces = split_math(block.text)
+        display_only = (len(pieces) == 1 and pieces[0].is_math
+                        and pieces[0].display)
+        if display_only or block.kind == MdBlock.Paragraph:
+            _no_bullet(para, centre=display_only)
+        para.font.size = Pt(font_pt)
+
+        omml_paragraph(para, pieces, powerpoint=True)
+
+    prs.save(out_path)
+    return out_path
+
+
 def count_equations(path: str) -> int:
     """Count native Office equations in a .docx or .pptx.
 
