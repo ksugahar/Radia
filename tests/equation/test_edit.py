@@ -35,14 +35,14 @@ TYPING = [
     ("Ctrl+J gives both scripts, Tab moves between them",
      ["x", "template.subsup", "i", "caret.next_slot", "2"], "x_{i}^{2}"),
     ("fraction: numerator, Tab, denominator",
-     ["template.frac", "a", "caret.next_slot", "b"], r"\frac{a}{b}"),
+     ["template.frac", "a", "caret.next_slot", "b"], r"\dfrac{a}{b}"),
     ("leave the fraction and keep typing",
      ["template.frac", "1", "caret.next_slot", "2", "caret.next_slot", "+", "3"],
-     r"\frac{1}{2}+3"),
+     r"\dfrac{1}{2}+3"),
     ("square root", ["template.sqrt", "2"], r"\sqrt{2}"),
     ("a fraction inside a square root",
      ["template.sqrt", "template.frac", "a", "caret.next_slot", "b"],
-     r"\sqrt{\frac{a}{b}}"),
+     r"\sqrt{\dfrac{a}{b}}"),
     ("parentheses", ["template.paren", "x", "+", "1"], r"\left( x+1 \right)"),
     # LaTeX has nowhere to record "limits are stacked"; display style stacks
     # them anyway.
@@ -73,7 +73,7 @@ def test_walking_the_caret_never_changes_the_equation():
         eq.move_left()
     for _ in range(40):
         eq.move_right()
-    assert eq.latex().strip() == r"\frac{a}{b}"
+    assert eq.latex().strip() == r"\dfrac{a}{b}"
 
 
 @pytest.mark.parametrize("kind", Equation.templates())

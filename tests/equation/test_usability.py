@@ -91,7 +91,7 @@ def test_ctrl_shift_right_selects_the_whole_item():
     e.move_home()
     assert e.command("select.right_item")
     assert e.has_selection()
-    assert e.selected_latex() == r"\frac{a}{b}"
+    assert e.selected_latex() == r"\dfrac{a}{b}"
 
 
 def test_item_motion_stops_at_the_edge_rather_than_leaving_the_slot():
@@ -129,7 +129,7 @@ def test_selecting_by_item_still_works_from_its_command():
     e.load_latex(r"\frac{a}{b}c")
     e.move_home()
     assert e.command("select.right_item")
-    assert e.selected_latex() == r"\frac{a}{b}"
+    assert e.selected_latex() == r"\dfrac{a}{b}"
 
 
 # ---- one symbol, from Equation Editor's own table ---------------------------
@@ -417,7 +417,7 @@ def test_ctrl_down_goes_from_numerator_to_denominator():
     e.insert_text("p")
     assert e.command("caret.slot_down")
     e.insert_text("q")
-    assert e.latex() == chr(92) + "frac{p}{q}"
+    assert e.latex() == chr(92) + "dfrac{p}{q}"
 
 
 def test_ctrl_up_comes_back():
@@ -532,9 +532,13 @@ def test_both_bracket_keys_reach_parentheses():
 
 def test_an_unknown_command_keeps_its_backslash():
     e = equation.Equation()
-    e.load_latex(chr(92) + "xrightarrow{f}")
+    # \xrightarrow used to stand here as the unknown command.  It is
+    # implemented now, so the example had to move to one that is still
+    # genuinely unhandled -- the test is about the failure mode, not
+    # about any particular command.
+    e.load_latex(chr(92) + "xhookrightarrow{f}")
     assert chr(92) + chr(92) not in e.latex()[:2]
-    assert "xrightarrow" in e.latex()
+    assert "xhookrightarrow" in e.latex()
     assert chr(92) + "text{" + chr(92) in e.latex(), (
         "an unhandled command must not read as prose: " + e.latex())
 

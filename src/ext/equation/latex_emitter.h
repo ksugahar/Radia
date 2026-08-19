@@ -28,6 +28,11 @@ public:
 
 private:
     int prodVer_;
+    /* How deep in fractions the walk is, so a fraction goes out at the size
+     * it was DRAWN: \dfrac outermost, rac inside.  LaTeX's own rule then
+     * agrees at every level and the paste matches the picture. */
+    int fracDepth_ = 0;
+    static const char* arrow_command(unsigned cp);
     bool runPasses_ = true;
     int depth_ = 0;
     PassPipeline pipeline_;

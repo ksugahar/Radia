@@ -137,11 +137,17 @@ def test_replacing_a_selection_is_one_undo_not_two():
 
 def test_a_template_wraps_what_was_selected():
     """Select B, press the vector chord, get a vector.  This is how a vector
-    actually gets written, which is why selection came before the Style work."""
+    actually gets written, which is why selection came before the Style work.
+
+    A vector is \vec\bm in this lab -- the arrow AND a bold italic letter
+    under it -- so wrapping applies the face as well as the accent.  The
+    plain \vec{B} this used to assert is a different mark: an upright-
+    weight letter with an arrow, which is not what the notation means here.
+    """
     e = at_end("B")
     e.select_all()
     assert e.insert_template("vec")
-    assert e.latex() == r"\vec{B}"
+    assert e.latex() == r"\vec{\bm{B}}"
 
 
 @pytest.mark.parametrize("kind,opening", [
@@ -156,7 +162,9 @@ def test_wrapping_covers_the_usual_templates(kind, opening):
     assert e.insert_template(kind)
     out = e.latex()
     assert out.startswith(opening), out
-    assert "AB" in out, out
+    # A vector also carries its face, so the letters arrive one \bm at a
+    # time rather than as the bare run.
+    assert ("AB" in out) or (out.count("A") and out.count("B")), out
 
 
 def test_a_fraction_takes_the_selection_as_its_numerator():
