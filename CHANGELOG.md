@@ -5,6 +5,44 @@ All notable changes to the `radia` package.  Format: each release lists
 
 ## Unreleased
 
+## 4.95.56 - EQNEDT64: an equation editor, and equations that reach Office as equations
+
+Released 2026-08-19.
+
+- Added **EQNEDT64** (`eqnedt64.exe`, shipped in the wheel), a replacement for
+  Microsoft Equation Editor 3.0. It has two references and they are different
+  documents: **appearance follows TeX, usability follows Equation Editor 3.0**.
+  The file format follows neither -- an equation is stored as **LaTeX**, usually
+  inside a Markdown file, which is what lets everything else here read it.
+  The window carries a palette bar generated from the command table, selection
+  and paste, the Style menu, zoom, and Equation Editor's own key chords, read
+  out of that editor's key table rather than guessed at.
+- The setting is measured against TeX, in numbers rather than screenshots:
+  Latin Modern Math is the font, its MATH table supplies the typesetting
+  parameters TeX calls `fontdimen`, radicals follow TeX's own `make_radical`,
+  and fences, accents, matrices, large operators and their limits are each
+  checked against XeLaTeX box dimensions
+  (`validation_test/equation/tex_reference.tex`).
+- Two notation rules are now decided rather than left to taste, because they
+  govern what the editor writes into files other people read: a vector is
+  `\vec\bm` (bold **italic**), `\mathbf` is upright bold and a different thing,
+  and `\dfrac` is the default spelling of a fraction so the LaTeX on the
+  clipboard matches the picture that was accepted on screen. See CLAUDE.md.
+- Reading MTEF (the Equation Editor 3.x binary format) was repaired against a
+  real corpus: the whole stream is read rather than its first object list,
+  display fractions and the brackets round them are put back together, big
+  operators keep the limits that were written outside them, integral bodies are
+  recovered, and a matrix header's partition arrays are decoded at the two bits
+  per line they are actually stored in. A document that had 620 of 779 equations
+  clean now has 774.
+- `markdown_to_pptx` writes a note out as slides with native equations, and it
+  is script-first: a `>` blockquote is what you SAY and goes into the speaker
+  notes, everything else is what the audience sees. One file holds both halves,
+  which is what lets the talk's own checks compare them.
+- Fixed: `\middle|` drew a double bar and `\middle\|` a single one -- each
+  other's glyph -- because the C++ compared against `"\|"`, which is not an
+  escape sequence. It round-tripped correctly the whole time, so only the
+  drawing was wrong.
 - Added `radia.equation`: equations stored as LaTeX, put into Word and
   PowerPoint as **native Office math**. An equation pasted this way is an
   equation -- Office's own tools edit it, it follows the theme font and colour,

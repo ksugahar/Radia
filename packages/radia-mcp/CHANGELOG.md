@@ -7,6 +7,21 @@ crystallized as its own package.
 
 ## [Unreleased]
 
+## [1.4.40] - 2026-08-19
+
+- presentation: recorded the script-first authoring format. The skill has
+  said since Phase 2 that the script comes first and the slide is built to
+  support it; there was nowhere to put the script, so the talk lived in one
+  file and the deck in another and the checks that compare them
+  (`presentation_script_vs_slide_coverage`,
+  `presentation_estimate_per_slide_time`, `presentation_speaker_note_ratio`)
+  had nothing reliable to read. One Markdown file now holds both halves: a
+  heading starts a slide, a `>` blockquote is what you SAY and becomes the
+  speaker notes, everything else is what the audience sees, and
+  `radia.equation.markdown_to_pptx` builds the deck with the equations native
+  rather than pictures. The header's "AI cannot make the slide body" caveat is
+  retired with it -- that was true when a deck could only be built by hand.
+
 ## [1.4.39] - 2026-08-19
 
 - matlab: mapped the four beam Lie-map / orbit pybind names onto their
