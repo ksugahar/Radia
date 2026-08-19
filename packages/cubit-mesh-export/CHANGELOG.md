@@ -6,6 +6,10 @@ VTK / MEG / FEMEEM writers + Python bindings for consistency checks).
 
 ## Unreleased
 
+## 0.14.9 - Sculpt/Exodus sideset preservation
+
+Released 2026-08-19.
+
 - Preserve direct/free triangle and quadrilateral faces from Sculpt or
   imported-Exodus sidesets in Netgen exports.  Equal geometry-owned faces are
   deduplicated, free boundaries recover adjacent material domains, and a
