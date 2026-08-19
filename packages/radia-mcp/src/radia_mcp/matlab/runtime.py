@@ -349,6 +349,20 @@ _PYBIND_CLASS_COMMANDS = {
 
 
 def _pybind_command_name(name):
+    # The beam Lie-map / reference-orbit surface groups its MEX commands
+    # under beam.* rather than the default radia.<name>, so the audit needs
+    # the mapping explicitly. Each pair below shares one C++ kernel
+    # (rad_lie::LieMapTensorsFromSpolyArrays, DragtFinnFactorizeFourthOrder,
+    # ApplyDragtFinnMapBatch, rad_orbit::TrackReferenceOrbit3D), which is what
+    # makes the coverage claim true rather than name-level.
+    beam_names = {
+        "lie_map_tensors_spoly": "beam.lie.map_tensors_spoly",
+        "lie_dragt_finn_factorize": "beam.lie.dragt_finn_factorize",
+        "lie_apply_dragt_finn_batch": "beam.lie.apply_dragt_finn_batch",
+        "track_reference_orbit_native": "beam.orbit.track_reference_3d",
+    }
+    if name in beam_names:
+        return beam_names[name]
     hlu_names = {
         "HLUSetTruncTol": "hlu.set_trunc_tol",
         "HLUGetTruncTol": "hlu.get_trunc_tol",
@@ -535,6 +549,7 @@ def matlab_radia_mex_contract(topic="all"):
             "Python convenience modules are tracked separately by matlab/python_api_parity_manifest.json; native MEX coverage alone is not module-level parity.",
             "MATLAB Optuna compatibility follows the ask/tell and define-by-run workflow; sampler streams and optimizer internals are not bit-for-bit Python Optuna reproductions.",
             "The native MEX target does not embed or launch Python; Python callback objects are rejected at the MEX boundary and numeric/handle equivalents are used instead. Full Python-DLL independence requires an NGSolve/Netgen build without Python support.",
+            "beam.orbit.track_reference_3d shares the rad_orbit::TrackReferenceOrbit3D kernel with the pybind route but drives Radia-object sources only; the HDiv iron evaluator stays a pybind-owned handle until an evaluator handle exists in the MEX registry.",
         ],
     }
     sections = {

@@ -1165,9 +1165,9 @@ materialized in the optimization loop.
 ## Binding policy
 
 The executable parity audit compares three pybind11 surfaces with the
-`radia_mex` command table: 94 public top-level names, 27 underscore-prefixed
-numerical kernels, and 123 stateful class members. All 244 entries are covered
-by the current 358-command gateway. Three internal mesh/test helpers are
+`radia_mex` command table: 98 public top-level names, 27 underscore-prefixed
+numerical kernels, and 123 stateful class members. All 248 entries are covered
+by the current 362-command gateway. Three internal mesh/test helpers are
 classified explicitly rather than silently omitted. The remaining `radentry`
 C ABI is not a backward-compatibility contract: dead or unsafe entries are
 deleted rather than retained. These families are represented as follows:
