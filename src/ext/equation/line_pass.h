@@ -33,6 +33,19 @@ public:
 };
 
 /* ============================================================
+ * Pass 0: Integral/BigOp slot splitting
+ *
+ * EQNEDT32 writes a native integral with its integrand AND its display block
+ * -- limits, symbol size, the signs -- in one slot.  The slot count comes
+ * from the variation, so that whole slot was taken as a limit and the
+ * integrand became a superscript.  Splits it at the size markers.
+ * ============================================================ */
+class IntegralSlotPass : public LinePass {
+public:
+    void run(NodeList& children, SkipSet& skip, int depth, int prodVer) override;
+};
+
+/* ============================================================
  * Pass 0a: Display-fraction reassembly
  *
  * EQNEDT32 writes a DISPLAY fraction across the template boundary: slot[1]
