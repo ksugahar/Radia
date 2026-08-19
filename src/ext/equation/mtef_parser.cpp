@@ -655,11 +655,15 @@ std::unique_ptr<MatrixNode> MtefParser::parseMatrix(int options) {
     if (n->rows < 0) n->rows = 0;
     if (n->cols < 0) n->cols = 0;
 
-    /* Skip row/column partition lines */
-    int nRowParts = n->rows + 1;
-    for (int i = 0; i < nRowParts; i++) readByte();
-    int nColParts = n->cols + 1;
-    for (int i = 0; i < nColParts; i++) readByte();
+    /* Skip the row/column partition lines.  There are (rows + 1) of them and
+     * (cols + 1) of them, at TWO BITS each, packed into bytes -- not one byte
+     * apiece.  Read as bytes, a 2x1 matrix consumed five where the file has
+     * two, and the three it took past them were its own first cell: the cells
+     * came out empty with their contents left outside the matrix. */
+    const int rowPartBytes = ((n->rows + 1) * 2 + 7) / 8;
+    for (int i = 0; i < rowPartBytes; i++) readByte();
+    const int colPartBytes = ((n->cols + 1) * 2 + 7) / 8;
+    for (int i = 0; i < colPartBytes; i++) readByte();
 
     /* Read elements (row-major order) */
     int total = n->rows * n->cols;

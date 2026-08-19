@@ -33,6 +33,17 @@ public:
 };
 
 /* ============================================================
+ * Pass 0b: Matrix cell redistribution
+ *
+ * EQNEDT32 sometimes writes every row of a matrix into its FIRST cell, as one
+ * line each, and leaves the other cells empty.  Hands them back out.
+ * ============================================================ */
+class MatrixCellPass : public LinePass {
+public:
+    void run(NodeList& children, SkipSet& skip, int depth, int prodVer) override;
+};
+
+/* ============================================================
  * Pass 0: Integral/BigOp slot splitting
  *
  * EQNEDT32 writes a native integral with its integrand AND its display block
