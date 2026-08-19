@@ -224,6 +224,14 @@
       "notes": "Design-orbit and transfer-matrix HDiv-MMM optimization composes NGSolve and Python topology objects at an explicit batch boundary; it is not a Simulink step-time backend."
     },
     {
+      "id": "accelerator-section-optics",
+      "patterns": ["accelerator_section_optics.py"],
+      "classification": "python-fallback",
+      "backend_contract": "in-process-python",
+      "matlab": ["matlab/+radia/+python/acceleratorSectionOptics.m"],
+      "notes": "Section-optics inverse design turns an optics specification written on one section's transfer block into the field difference that delivers it, resting on the exact ordered composition M = M_after . M_S . M_before. The representation-independent core is a whitened minimum-norm step under a physical field metric with an inert-knob filter, plus the horizontal/vertical coupling diagnostic that reports when a section simply cannot decouple the planes. Two representations are supported: the per-segment multipole profile with an analytic Jacobian, and the CanonicalHCurl chain coefficients with a differenced Jacobian and a dense A^T Omega A metric. It composes NGSolve chain objects, the native Lie kernel and Python least squares at an explicit batch boundary; it is not a Simulink step-time backend."
+    },
+    {
       "id": "accelerator-taylor-topopt",
       "patterns": ["accelerator_taylor_topopt.py"],
       "classification": "python-fallback",
