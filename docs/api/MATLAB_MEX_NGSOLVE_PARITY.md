@@ -17,11 +17,11 @@ silently dropped from the count.
 
 | Surface | Current contract |
 |---|---:|
-| Public top-level pybind11 names | 94 |
-| Covered mapped MEX names | 94 |
+| Public top-level pybind11 names | 98 |
+| Covered mapped MEX names | 98 |
 | Underscore numerical kernels | 28 / 28 covered |
 | Stateful pybind11 class surface | 123 / 123 covered |
-| MEX gateway commands | 358 |
+| MEX gateway commands | 362 |
 | MATLAB Optuna classes | 26 |
 | MATLAB Optuna factory functions | 7 |
 
