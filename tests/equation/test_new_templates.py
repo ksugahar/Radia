@@ -133,6 +133,32 @@ def test_a_middle_bar_is_a_delimiter_and_grows():
     assert tall[1] + tall[2] > small[1] + small[2] + 2.0
 
 
+def test_one_bar_and_two_bars_are_not_the_same_delimiter():
+    r"""``\middle|`` is a single bar and ``\middle\|`` is a double one.
+
+    They were swapped, and silently: the C++ compared against "\|", which is
+    not an escape, so the compiler read it as "|" -- the plain bar took the
+    double-bar branch and the double bar fell through to the plain one.  The
+    LaTeX round-tripped either way, because the emitter had the same broken
+    literal, so only the drawing was wrong.
+    """
+    single = fresh(B + "left( a " + B + "middle| b " + B + "right)")
+    double = fresh(B + "left( a " + B + "middle" + B + "| b " + B + "right)")
+    assert single.latex() != double.latex()
+    assert B + "middle| " in single.latex() or B + "middle|" in single.latex()
+    assert B + "middle" + B + "|" in double.latex()
+
+    # and what is drawn differs too -- U+2016 only for the double bar
+    assert "‖" not in equation.tex_to_svg(single.latex())
+    assert "‖" in equation.tex_to_svg(double.latex())
+
+
+def test_Vert_is_the_double_bar_it_names():
+    e = fresh(B + "left" + B + "langle a " + B + "middle" + B + "Vert b "
+              + B + "right" + B + "rangle")
+    assert "‖" in equation.tex_to_svg(e.latex())
+
+
 def _style():
     s = equation.SvgStyle()
     s.padding = 0.0
