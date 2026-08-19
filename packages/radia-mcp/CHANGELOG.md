@@ -7,6 +7,20 @@ crystallized as its own package.
 
 ## [Unreleased]
 
+- grant-writing: `skill.md` gained the shape of an adopted proposal, taken
+  from two funded Power Academy applications: a publication list dense
+  enough to verify (formal citations, dated awards, funding with amounts),
+  a five-step background, numbered sub-themes each naming its owner by
+  capability and referencing a figure, named partner companies, and a
+  budget with zero equipment where the largest line is outsourced work.
+  Added the FY2027 KAKENHI programme changes that alter what is worth
+  writing -- international evaluation weighted in 基盤(B), the 39-and-under
+  overlap relaxation, 開拓 moving to a two-stage written review, and the
+  review-support AI agent under development -- and recorded that a
+  rejection's reviewer comments are retrievable from the electronic
+  application system, which is the only primary source of what a reviewer
+  actually thought.
+
 - grant-writing: split the report into findings and questions. A DETECTOR
   points at a place in the text and says what is wrong there; a QUESTION
   asks whether a topic is covered, which keyword presence cannot answer.
