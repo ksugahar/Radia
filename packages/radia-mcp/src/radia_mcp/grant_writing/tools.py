@@ -2799,7 +2799,13 @@ def grant_writing_collaborative_integration_risk_check(text: str) -> dict:
         ],
         "core_vs_optional_scope": [
             ["中核", "必達", "成立条件", "core", "required"],
-            ["独立課題", "別課題", "発展候補", "条件付き", "optional", "exploratory"],
+            [
+                "独立課題", "別課題", "発展候補", "条件付き", "optional",
+                "exploratory",
+                # A proposal that says "NVH等は波及効果とする" has made exactly
+                # this split; the axis must not miss it on vocabulary alone.
+                "波及効果", "対象外", "今後の展開", "将来展開",
+            ],
         ],
         "negative_result_value": [
             ["結合不能", "適用境界", "不能理由", "反例", "不成立", "negative result"],
@@ -2830,19 +2836,40 @@ def grant_writing_collaborative_integration_risk_check(text: str) -> dict:
             "groups": groups,
         }
 
-    people_process_hits = _contains_any(
-        low,
-        [
-            "学生",
-            "若手",
-            "工程時間",
-            "手作業時間",
-            "生産性",
-            "被験者",
-            "アンケート",
-            "参加者",
-        ],
-    )
+    # Naming people is not the trigger; MEASURING them is. A sentence like
+    # 「教員・学生が利用している」 says who uses a tool, and demanding an ethics
+    # determination for it is a false positive. Terms that are inherently about
+    # human-subject measurement stand alone; merely naming a person category
+    # counts only next to a measurement verb in the same sentence.
+    _MEASURED_PEOPLE_TERMS = [
+        "工程時間",
+        "手作業時間",
+        "生産性",
+        "被験者",
+        "アンケート",
+    ]
+    _PERSON_CATEGORY_TERMS = ["学生", "若手", "参加者", "教員"]
+    _MEASUREMENT_TERMS = [
+        "評価する",
+        "評価を",
+        "計測",
+        "測定",
+        "記録し",
+        "記録する",
+        "比較する",
+        "分析単位",
+        "調査",
+        "収集",
+    ]
+    people_process_hits = _contains_any(low, _MEASURED_PEOPLE_TERMS)
+    if not people_process_hits:
+        for sentence in re.split(r"(?<=[。．!?！？])", text):
+            s_low = sentence.lower()
+            if _contains_any(s_low, _PERSON_CATEGORY_TERMS) and _contains_any(
+                s_low, _MEASUREMENT_TERMS
+            ):
+                people_process_hits = _contains_any(s_low, _PERSON_CATEGORY_TERMS)
+                break
     if not people_process_hits:
         axis_results["evaluation_unit_and_ethics"].update(
             {"ok": True, "not_applicable": True}
@@ -2910,8 +2937,37 @@ def grant_writing_collaborative_integration_risk_check(text: str) -> dict:
     }
 
 
+_BUDGET_COST_TOKENS = (
+    "円", "費", "単価", "積算", "計上", "予算", "経費", "見積", "金額", "内訳",
+)
+
+
+def _mentions_cost_nearby(text: str, keyword: str) -> bool:
+    """True when a keyword is costed in the sentence that mentions it.
+
+    Bare presence is not evidence of a budget rationale: a methods section
+    says 評価 and AI constantly without costing anything. The sentence is the
+    right window -- a cost token one sentence away belongs to a different
+    claim -- so this is what separates "mentions it" from "budgets for it".
+    """
+    needle = keyword.lower()
+    for sentence in re.split(r"(?<=[。．!?！？\n])", text):
+        if needle in sentence.lower() and any(
+            token in sentence for token in _BUDGET_COST_TOKENS
+        ):
+            return True
+    return False
+
+
 def grant_writing_budget_alignment_check(text: str) -> dict:
-    """Check that budget items are tied to verification and implementation."""
+    """Check that budget items are tied to verification and implementation.
+
+    The check is optional. A proposal section that carries no budget content
+    at all -- a research-plan or feasibility section, for example -- is not a
+    thin budget; it is the wrong document for this question, so the check
+    reports ``applicable: False`` rather than a low score. When it does apply,
+    a cost keyword only counts if a money token sits next to it.
+    """
     text = _read_text_if_path(text)
     low = text.lower()
     axes = {
@@ -2956,6 +3012,29 @@ def grant_writing_budget_alignment_check(text: str) -> dict:
             "端数処理",
         ],
     }
+    budget_markers = [
+        "予算", "経費", "費目", "直接経費", "設備備品", "消耗品費", "旅費",
+        "人件費", "謝金", "その他", "千円", "万円", "単価", "積算", "計上",
+    ]
+    money_pattern = re.compile(r"\d[\d,\.]*\s*(?:千円|万円|円|kJPY|JPY)")
+    marker_hits = _contains_any(low, budget_markers)
+    has_money = bool(money_pattern.search(text))
+    if not has_money and len(marker_hits) < 2:
+        return {
+            "applicable": False,
+            "score": None,
+            "missing_count": 0,
+            "missing_axes": [],
+            "axis_results": {},
+            "comments": [],
+            "budget_marker_hits": marker_hits,
+            "budget_policy": _BUDGET_POLICY,
+            "target": (
+                "budget rationale is judged only where budget content exists; "
+                "a research-plan or feasibility section carries none by design"
+            ),
+        }
+
     results = {}
     missing = []
     for axis, keywords in axes.items():
@@ -2985,6 +3064,25 @@ def grant_writing_budget_alignment_check(text: str) -> dict:
                 "required_groups": required_groups,
                 "group_matches": group_matches,
             }
+        elif axis in {
+            "ai_agent_costs",
+            "compute_resources",
+            "poc_experiment",
+            "dissemination",
+        }:
+            # A resource keyword is budget evidence only next to a money token.
+            # Otherwise a methods section "passes" on 評価 / AI it never costs.
+            matches = [
+                kw for kw in keywords
+                if kw.lower() in low and _mentions_cost_nearby(text, kw)
+            ]
+            ok = bool(matches)
+            results[axis] = {
+                "ok": ok,
+                "matches": matches,
+                "keywords": keywords,
+                "requires_cost_context": True,
+            }
         else:
             matches = _contains_any(low, keywords)
             ok = bool(matches)
@@ -3000,11 +3098,13 @@ def grant_writing_budget_alignment_check(text: str) -> dict:
         comments.append("AI費用が一般的な効率化に見える。検証ループの実行経費として説明する。")
         score = max(0.0, score - 1.0)
     return {
+        "applicable": True,
         "score": round(score, 1),
         "missing_count": len(missing),
         "missing_axes": missing,
         "axis_results": results,
         "comments": comments,
+        "budget_marker_hits": marker_hits,
         "budget_policy": _BUDGET_POLICY,
         "target": (
             "every major cost maps to AI/tool execution, compute, PoC, or dissemination; "
@@ -3310,15 +3410,19 @@ def grant_writing_health_report(
     if "budget" not in skip_set:
         budget = grant_writing_budget_alignment_check(text)
         detailed_results["budget"] = budget
-        detailed_scores["budget"] = budget["score"]
-        if budget["comments"]:
-            priority_issues.append({
-                "tool": "budget",
-                "name": "budget_alignment_check",
-                "severity": _severity_from_score(budget["score"]),
-                "score": budget["score"],
-                "comments": budget["comments"][:5],
-            })
+        # A section with no budget content is not a thin budget. Scoring it
+        # would drag the overall score down and raise a HIGH issue about
+        # itemization the section cannot carry.
+        if budget.get("applicable", True):
+            detailed_scores["budget"] = budget["score"]
+            if budget["comments"]:
+                priority_issues.append({
+                    "tool": "budget",
+                    "name": "budget_alignment_check",
+                    "severity": _severity_from_score(budget["score"]),
+                    "score": budget["score"],
+                    "comments": budget["comments"][:5],
+                })
 
     sev_rank = {"CRITICAL": 0, "HIGH": 1, "MEDIUM": 2, "UNKNOWN": 3, "LOW": 4}
     priority_issues.sort(
