@@ -125,3 +125,35 @@ def test_a_slot_that_is_not_that_shape_is_left_alone():
             + end())
     out = equation.mtef_to_latex(data)     # must not throw
     assert "f" in out, out
+
+
+def remote_block(lower=None, upper=None):
+    """The display block written as a SIBLING of the template."""
+    out = bytes([REC_SUB])
+    out += line(lower) if lower is not None else null_line()
+    out += line(upper) if upper is not None else null_line()
+    return out + bytes([REC_SYM]) + char("\u222b", TFW_SYM)
+
+
+def test_an_integrand_filed_as_a_limit_goes_back_to_the_body():
+    r"""Some integrals put the integrand in the slot the variation named and
+    write the display block outside.  Read straight, the integrand is a
+    superscript and the real limits are loose text beside it."""
+    tmpl = bytes([REC_TMPL, TM_SINT, VAR_UPPER]) + end() + line(char("f")) + end()
+    data = (HEADER + bytes([REC_FULL])
+            + line(tmpl + remote_block(char("a"), char("b")))
+            + end())
+    out = equation.mtef_to_latex(data).replace(" ", "")
+    assert "^{f}" not in out, out          # the integrand is not a limit
+    assert "f" in out, out
+    assert "_{a}" in out and "^{b}" in out, out
+
+
+def test_a_latex_integral_with_limits_is_not_touched():
+    r"""\int_a^b f has a body and no display block: the rule must not move
+    its limits into the body."""
+    src = B + "int_{a}^{b} f"
+    e = equation.Equation()
+    e.load_latex(src)
+    out = e.latex().replace(" ", "")
+    assert "_{a}" in out and "^{b}" in out, out
