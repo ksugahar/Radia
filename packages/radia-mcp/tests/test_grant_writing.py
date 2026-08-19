@@ -13,6 +13,7 @@ KDDI_SAMPLE = (
     "1年目、2年目、3年目の年度スケジュールを定め、"
     "Claude、Codex、Fable、MDXの計算資源と基板評価費を予算化する。"
     "予算は助成上限額に近い申請額とし、単価、数量、月数、年度配分、見積根拠を積算する。"
+    "成果発表の旅費は国内2回、国際1回の単価と泊数から積算し、外国旅費へ計上する。"
     "外部費用は公式料金表URL、料金年度、参照日、税込区分、最低購入単位、有効期限、"
     "為替換算、端数処理を記録する。"
 )
@@ -928,6 +929,87 @@ def test_kaken_review_format_runs_in_health_report():
 
     assert "kaken_review_format" in report["detailed_results"]
     assert "kaken_review_format" in report["detailed_scores"]
+
+
+RESEARCH_PLAN_SECTION = (
+    "本研究の学術的問いは、異種解析を結合しても設計判断を保つ条件は何かである。"
+    "低費用解析で候補順位を確定できる領域を評価し、順位が定まらない候補だけを"
+    "高忠実度解析で再評価する。AIが開発を加速する現在、共有仕様と試験がなければ"
+    "重複実装が増える。mdxで最終評価を行い、成果を国際会議で発表する。"
+    "MCPには検証手順を蓄積し、教員・学生が利用している。"
+)
+
+
+def test_budget_check_is_not_applicable_to_a_research_plan_section():
+    # A methods/plan section carries no budget by design. Reporting it as a
+    # thin budget was a false HIGH that dragged the whole health report down.
+    result = gw.grant_writing_budget_alignment_check(RESEARCH_PLAN_SECTION)
+
+    assert result["applicable"] is False
+    assert result["score"] is None
+    assert result["comments"] == []
+
+
+def test_budget_axes_require_a_cost_token_near_the_keyword():
+    # 評価 and AI appear in every methods section; alone they are not evidence
+    # that PoC work or AI usage was costed.
+    result = gw.grant_writing_budget_alignment_check(
+        "予算として旅費を計上する。評価を行い、AIが開発を加速する。"
+    )
+
+    assert result["applicable"] is True
+    assert not result["axis_results"]["poc_experiment"]["ok"]
+    assert not result["axis_results"]["ai_agent_costs"]["ok"]
+    assert result["axis_results"]["dissemination"]["ok"]
+
+
+def test_budget_axes_accept_keywords_stated_as_costs():
+    result = gw.grant_writing_budget_alignment_check(
+        "その他2,400千円の内訳は、生成AI費1,404千円とmdx計算資源664千円である。"
+        "基板試作費と計測評価費を消耗品費へ計上する。"
+    )
+
+    assert result["applicable"] is True
+    assert result["axis_results"]["ai_agent_costs"]["ok"]
+    assert result["axis_results"]["compute_resources"]["ok"]
+    assert result["axis_results"]["poc_experiment"]["ok"]
+
+
+def test_health_report_omits_an_inapplicable_budget_from_scoring():
+    report = gw.grant_writing_health_report(RESEARCH_PLAN_SECTION)
+
+    assert report["detailed_results"]["budget"]["applicable"] is False
+    assert "budget" not in report["detailed_scores"]
+    assert not any(
+        issue["name"] == "budget_alignment_check"
+        for issue in report["priority_issues"]
+    )
+
+
+def test_ethics_axis_ignores_merely_naming_students():
+    result = gw.grant_writing_collaborative_integration_risk_check(
+        "異種解析を結合する。MCPには検証手順を蓄積し、教員・学生が利用している。"
+    )
+
+    assert result["axis_results"]["evaluation_unit_and_ethics"]["not_applicable"]
+
+
+def test_ethics_axis_still_fires_when_people_are_measured():
+    result = gw.grant_writing_collaborative_integration_risk_check(
+        "異種解析を結合する。学生の作業を記録し、手順ごとに比較する。"
+    )
+
+    assert not result["axis_results"]["evaluation_unit_and_ethics"].get(
+        "not_applicable"
+    )
+
+
+def test_core_vs_optional_scope_accepts_ripple_effect_wording():
+    result = gw.grant_writing_collaborative_integration_risk_check(
+        "異種解析を結合する。必達範囲は二課題とし、NVH等は波及効果とする。"
+    )
+
+    assert result["axis_results"]["core_vs_optional_scope"]["ok"]
 
 
 def test_budget_policy_mentions_fill_rate_strategy():
