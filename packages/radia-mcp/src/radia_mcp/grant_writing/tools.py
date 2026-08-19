@@ -2508,6 +2508,92 @@ def grant_writing_central_claim_consistency_check(text: str) -> dict:
     }
 
 
+# Verbs that promise a result without naming the operation that produces it.
+# Derived from an experienced PI's rewrite of a 2026 Power Academy proposal
+# (2026-08-18): 「統合し」 went 3 -> 0 while 「双方向に連成」 went 0 -> 5 and
+# 「連成」 2 -> 8. The reviewer question these verbs leave unanswered is
+# always the same: integrated *how*?
+_VAGUE_CLAIM_VERBS = (
+    "統合する", "統合し", "統合を行う",
+    "連携する", "連携し",
+    "活用する", "活用し",
+    "融合する", "融合し",
+    "高度化する", "高度化し",
+    "推進する", "推進し",
+    "橋渡しする", "橋渡しし",
+)
+
+# Naming any of these makes the sentence answer "how".
+_MECHANISM_MARKERS = (
+    "連成", "接続", "射影", "写像", "写す", "縮約", "変換",
+    "入力", "出力", "反映", "介して", "を通じて", "経由",
+    "双方向", "電圧", "電流", "を渡す", "受け渡", "同じ",
+    "同一", "共通", "基底", "境界条件", "パラメータ",
+)
+
+
+def grant_writing_vague_claim_verb_check(text: str) -> dict:
+    """Flag 統合/連携/活用 that never say how.
+
+    A proposal that "integrates three technologies" has told the reviewer
+    nothing; one that "couples the two models bidirectionally through the
+    winding current and induced voltage" has. This check finds the first
+    shape and asks for the second. It is the edit an experienced PI makes
+    first, and no keyword-coverage axis sees it, because the vague verb and
+    the required nouns are all present -- separately.
+    """
+    text = _prose_for_lint(_read_text_if_path(text))
+    sentences = [s for s in re.split(r"(?<=[。．!?！？])", text) if s.strip()]
+
+    risks: list[dict] = []
+    concrete: list[dict] = []
+    for index, sentence in enumerate(sentences):
+        verb = next((v for v in _VAGUE_CLAIM_VERBS if v in sentence), None)
+        if verb is None:
+            continue
+        found = [m for m in _MECHANISM_MARKERS if m in sentence]
+        entry = {
+            "sentence_index": index + 1,
+            "verb": verb,
+            "mechanism_markers": found[:6],
+            "excerpt": re.sub(r"\s+", " ", sentence).strip()[:220],
+        }
+        if found:
+            concrete.append(entry)
+            continue
+        entry.update({
+            "type": "claim_verb_without_mechanism",
+            "severity": "MEDIUM",
+            "comment": (
+                f"「{verb}」が、何をどう渡すのかを書かずに使われている。"
+            ),
+            "recommendation": (
+                "動詞を操作に置き換える。何と何を、どの物理量を介して、"
+                "どちら向きに渡すのかを書く。"
+                "例: 「三者の技術を統合し」→「両モデルを巻線電流と誘起電圧を"
+                "介して双方向に連成し」。"
+            ),
+        })
+        risks.append(entry)
+
+    applicable = bool(risks or concrete)
+    score = None if not applicable else max(0.0, round(10.0 - 1.5 * len(risks), 1))
+    return {
+        "applicable": applicable,
+        "score": score,
+        "risk_count": len(risks),
+        "risks": risks,
+        "concrete_uses": concrete,
+        "comments": list(dict.fromkeys(r["comment"] for r in risks)),
+        "recommendations": list(dict.fromkeys(r["recommendation"] for r in risks)),
+        "target": (
+            "every 統合/連携/活用 names the operation, the quantity exchanged, "
+            "and the direction"
+        ),
+        "source": "vague-claim-verb check (Power Academy 2026 rewrite evidence)",
+    }
+
+
 def grant_writing_kaken_review_format_check(text: str) -> dict:
     """Check KAKENHI reviewer-format realities on a proposal draft.
 
@@ -3487,6 +3573,20 @@ def grant_writing_health_report(
                     "severity": _severity_from_score(persuasion["score"]),
                     "score": persuasion["score"],
                     "comments": persuasion["comments"][:5],
+                })
+
+    if "vague" not in skip_set:
+        vague = grant_writing_vague_claim_verb_check(text)
+        detailed_results["vague_claim_verb"] = vague
+        if vague["applicable"]:
+            detailed_scores["vague_claim_verb"] = vague["score"]
+            if vague["risks"]:
+                priority_issues.append({
+                    "tool": "vague",
+                    "name": "vague_claim_verb_check",
+                    "severity": "MEDIUM",
+                    "score": vague["score"],
+                    "comments": vague["comments"][:5],
                 })
 
     if "claim" not in skip_set:

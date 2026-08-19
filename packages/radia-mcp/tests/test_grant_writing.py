@@ -931,6 +931,53 @@ def test_kaken_review_format_runs_in_health_report():
     assert "kaken_review_format" in report["detailed_scores"]
 
 
+def test_vague_claim_verb_check_flags_integration_without_a_mechanism():
+    # The wording an experienced PI removes first: it promises a result and
+    # names no operation. Verified against a real 2026 proposal rewrite where
+    # 「統合し」 went 3 -> 0 and 「双方向に連成」 went 0 -> 5.
+    result = gw.grant_writing_vague_claim_verb_check(
+        "本研究では、研究者三者が有する非線形磁気モデリング、物理ベース等価回路抽出、"
+        "高周波損失測定の技術を統合し、回路シミュレータ上で利用可能なモデルを構築する。"
+    )
+
+    assert result["applicable"]
+    risk = next(
+        r for r in result["risks"]
+        if r["type"] == "claim_verb_without_mechanism"
+    )
+    assert risk["verb"] == "統合し"
+    assert result["score"] < 10
+
+
+def test_vague_claim_verb_check_accepts_a_named_operation():
+    result = gw.grant_writing_vague_claim_verb_check(
+        "両モデルを巻線電流と誘起電圧を介して双方向に連成し、"
+        "PoL変換回路の損失と動作波形を統一的に解析する。"
+    )
+
+    assert result["risks"] == []
+    assert result["concrete_uses"] == [] or result["score"] == 10.0
+
+
+def test_vague_claim_verb_check_credits_a_mechanism_in_the_same_sentence():
+    result = gw.grant_writing_vague_claim_verb_check(
+        "二つの解析を、電圧と電流を介して双方向に統合する。"
+    )
+
+    assert result["risks"] == []
+    assert result["concrete_uses"]
+    assert result["concrete_uses"][0]["mechanism_markers"]
+
+
+def test_vague_claim_verb_check_is_not_applicable_without_such_verbs():
+    result = gw.grant_writing_vague_claim_verb_check(
+        "誘導加熱の発熱量を評価し、損失分布を求める。"
+    )
+
+    assert not result["applicable"]
+    assert result["score"] is None
+
+
 DIVERGENT_CLAIM_DRAFT = (
     "本研究は「異なる研究室の解析手法を、内部形式を統一せずに連携・差し替えたとき、"
     "解析手法の違いによって設計候補の順位が変わる境界を、どう定量化し、"
