@@ -16,7 +16,7 @@ def test_radia_mex_contract_reads_the_cpp_command_inventory():
     contract = matlab_radia_mex_contract("mex")
 
     assert contract["status"] == "ready"
-    assert contract["command_count"] == 358
+    assert contract["command_count"] == 362
     assert contract["matlab_wrapper_count"] >= 133
     assert contract["matlab_optuna_class_count"] == 26
     assert contract["matlab_optuna_function_count"] == 7
@@ -60,9 +60,17 @@ def test_radia_mex_contract_reads_the_cpp_command_inventory():
     assert "hacapk.charge_gram.configured_linear_material_element_blocks" in contract["command_names"]
     assert "hacapk.charge_gram.configured_linear_material_candidate_clusters" in contract["command_names"]
     assert "hlu.set_trunc_tol" in contract["command_names"]
+    # The native Lie-map pipeline and 3D reference-orbit tracker (the four
+    # commands that took the gateway from 358 to 362).
+    assert {
+        "beam.lie.map_tensors_spoly",
+        "beam.lie.dragt_finn_factorize",
+        "beam.lie.apply_dragt_finn_batch",
+        "beam.orbit.track_reference_3d",
+    }.issubset(contract["command_names"])
     assert contract["command_groups"]["radia-core"] >= 70
-    assert contract["pybind_public_count"] == 94
-    assert contract["pybind_covered_count"] == 94
+    assert contract["pybind_public_count"] == 98
+    assert contract["pybind_covered_count"] == 98
     assert contract["pybind_missing"] == []
     assert contract["pybind_internal_numerical_count"] == 28
     assert contract["pybind_internal_missing"] == []
@@ -222,13 +230,13 @@ def test_root_readme_publishes_native_topology_mex_parity():
         (root / "matlab" / "README.md").read_text(encoding="utf-8").split()
     )
     assert "123 stateful class members" in matlab_readme
-    assert "All 244 entries are covered by the current 358-command gateway" in matlab_readme
+    assert "All 248 entries are covered by the current 362-command gateway" in matlab_readme
 
     parity_doc = (root / "docs" / "api" / "MATLAB_MEX_NGSOLVE_PARITY.md").read_text(
         encoding="utf-8"
     )
     assert "| Stateful pybind11 class surface | 123 / 123 covered |" in parity_doc
-    assert "| MEX gateway commands | 358 |" in parity_doc
+    assert "| MEX gateway commands | 362 |" in parity_doc
 
 
 def test_server_registers_bridge_tools():
