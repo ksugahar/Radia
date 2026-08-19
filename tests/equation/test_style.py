@@ -71,7 +71,9 @@ def test_without_a_selection_it_sets_the_mode_instead():
 # ---- what the lab writes ----------------------------------------------------
 
 def test_matrix_vector_is_bold():
-    assert styled("B", "vector").latex() == r"\mathbf{B}"
+    # Bold ITALIC: the lab writes a vector \vec\bm, and \mathbf is the
+    # upright face a matrix name takes.
+    assert styled("B", "vector").latex() == r"\bm{B}"
 
 
 def test_bold_reaches_office_as_bold():

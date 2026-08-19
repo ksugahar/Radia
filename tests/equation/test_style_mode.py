@@ -105,7 +105,7 @@ def test_restyling_a_selection_also_leaves_the_mode_set():
 
 
 @pytest.mark.parametrize("style,typed,want", [
-    ("vector", "B", r"\mathbf{B}"),
+    ("vector", "B", r"\bm{B}"),
     ("text", "B", r"\text{B}"),
     ("greek", "q", r"\theta"),
 ])

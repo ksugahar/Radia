@@ -46,6 +46,7 @@ std::vector<NodeList*> node_slots(Node& n) {
         }
         case Node::kFence: {
             auto& f = static_cast<FenceNode&>(n);
+            if (f.hasMiddle) return {&f.content, &f.content2};
             return {&f.content};
         }
         case Node::kIntegral: {
@@ -79,6 +80,11 @@ std::vector<NodeList*> node_slots(Node& n) {
         case Node::kBraceDeco: {
             auto& b = static_cast<BraceDecoNode&>(n);
             return {&b.content, &b.label};
+        }
+        case Node::kOverset: {
+            /* Label first: on a labelled arrow the label is what is typed. */
+            auto& o = static_cast<OversetNode&>(n);
+            return {&o.over, &o.base};
         }
         case Node::kMatrix: {
             auto& m = static_cast<MatrixNode&>(n);
@@ -1022,7 +1028,69 @@ bool Equation::insert_template(const std::string& kind) {
                       : (kind == "vec")   ? 11
                       : (kind == "bar")   ? 17
                       : (kind == "tilde") ? 8 : 2;
+        /* A vector is \vec\bm here -- the arrow AND a bold italic letter
+         * under it.  So the letter being wrapped is retyped, and when there
+         * is nothing to wrap the face is set for what gets typed next, which
+         * is how the Style menu has always behaved. */
+        if (kind == "vec") {
+            if (!wrapped.empty()) apply_style(wrapped, "vector");
+            else style_ = "vector";
+        }
         node = std::move(e);
+    } else if (kind == "prescript") {
+        /* {}^{14}_{6}C -- the mass number and the atomic number of an
+         * isotope, which is the reason left scripts exist. */
+        auto sc = std::make_unique<ScriptNode>();
+        sc->pre = true;
+        sc->hasSub = sc->hasSup = true;
+        node = std::move(sc);
+    } else if (kind == "overset" || kind == "underset") {
+        auto o = std::make_unique<OversetNode>();
+        o->under = (kind == "underset");
+        node = std::move(o);
+    } else if (kind == "xrightarrow" || kind == "xleftarrow" ||
+               kind == "xleftrightarrow" || kind == "xrightleftharpoons") {
+        /* An arrow with a label over it, drawn as long as the label:
+         * A ->[k] B, the everyday way a reaction or a map is written. */
+        auto o = std::make_unique<OversetNode>();
+        const uint16_t cp = (kind == "xrightarrow")     ? 0x2192
+                          : (kind == "xleftarrow")      ? 0x2190
+                          : (kind == "xleftrightarrow") ? 0x2194 : 0x21CC;
+        o->base.push_back(make_char(TF_SYMBOL, cp));
+        node = std::move(o);
+    } else if (kind == "braket") {
+        auto f = std::make_unique<FenceNode>();
+        f->selector = tmANGLE;
+        f->hasMiddle = true;
+        f->middle = '|';
+        node = std::move(f);
+    } else if (kind == "dbloverline" || kind == "dblunderline") {
+        /* Two rules is two decorations: TeX sets \overline{\overline{x}}
+         * that way and its spacing is the reference, so there is nothing
+         * here for a second rule to disagree with. */
+        auto outer = std::make_unique<DecorationNode>();
+        auto inner = std::make_unique<DecorationNode>();
+        const int sel = (kind == "dbloverline") ? tmOBAR : tmUBAR;
+        outer->selector = inner->selector = sel;
+        outer->content.push_back(std::move(inner));
+        node = std::move(outer);
+    } else if (kind.size() > 2 &&
+               (kind.compare(kind.size() - 2, 2, "_l") == 0 ||
+                kind.compare(kind.size() - 2, 2, "_r") == 0)) {
+        /* One-sided: \left. f \right|, the evaluation bar, and \left\{ with
+         * nothing to close it.  The layout could already draw both; there
+         * was no way to ask for either. */
+        const std::string base = kind.substr(0, kind.size() - 2);
+        const int sel = (base == "paren")   ? tmPAREN
+                      : (base == "bracket") ? tmBRACK
+                      : (base == "brace")   ? tmBRACE
+                      : (base == "abs")     ? tmBAR
+                      : (base == "angle")   ? tmANGLE : -1;
+        if (sel < 0) return false;
+        auto f = std::make_unique<FenceNode>();
+        f->selector = sel;
+        f->variation = (kind[kind.size() - 1] == 'l') ? 1 : 2;
+        node = std::move(f);
     } else if (kind.compare(0, 6, "matrix") == 0 && kind.size() > 6) {
         /* Any size, read off the name: "matrix3x4" is three rows of four.
          * Equation Editor has eleven fixed sizes on its palette and a dialog
@@ -1136,6 +1204,11 @@ const std::vector<std::string>& Equation::templates() {
         "int", "iint", "iiint", "oint", "oiint", "oiiint",
         "sum", "prod", "coprod", "bigcup", "bigcap",
         "binom", "overbrace", "underbrace", "phantom",
+        "prescript", "overset", "underset", "braket",
+        "xrightarrow", "xleftarrow", "xleftrightarrow", "xrightleftharpoons",
+        "dbloverline", "dblunderline",
+        "paren_l", "paren_r", "bracket_l", "bracket_r", "brace_l", "brace_r",
+        "abs_l", "abs_r", "angle_l", "angle_r",
         "matrix1x2", "matrix2x1", "matrix1x3", "matrix3x1", "matrix4x4",
         "overline", "underline", "hat", "vec", "bar", "tilde", "dot",
         "matrix2x2", "matrix3x3", "cases",
@@ -1243,20 +1316,30 @@ const std::vector<Equation::PaletteGroup>& Equation::template_palettes() {
     static const std::vector<PaletteGroup> kGroups = [] {
         struct Def { const char* name; std::vector<const char*> items; };
         static const Def kDefs[] = {
-            {"Fences",        {"paren", "bracket", "brace", "abs", "angle"}},
+            {"Fences",        {"paren", "bracket", "brace", "abs", "angle",
+                               "braket",
+                               "paren_l", "paren_r", "bracket_l", "bracket_r",
+                               "brace_l", "brace_r", "abs_l", "abs_r",
+                               "angle_l", "angle_r"}},
             {"Fractions",     {"frac", "sqrt", "nthroot", "binom"}},
-            {"Scripts",       {"sub", "sup", "subsup"}},
+            {"Scripts",       {"sub", "sup", "subsup", "prescript"}},
             {"Large operators", {"sum", "prod", "coprod", "bigcup", "bigcap"}},
             {"Integrals",     {"int", "iint", "iiint",
                                "oint", "oiint", "oiiint"}},
-            {"Braces",        {"overbrace", "underbrace"}},
+            {"Braces",        {"overbrace", "underbrace",
+                               "overline", "underline",
+                               "dbloverline", "dblunderline"}},
+            {"Arrows and limits", {"xrightarrow", "xleftarrow",
+                               "xleftrightarrow", "xrightleftharpoons",
+                               "overset", "underset"}},
             {"Matrices",      {"matrix1x2", "matrix2x1", "matrix2x2",
                                "matrix1x3", "matrix3x1", "matrix3x3",
                                "matrix4x4", "cases"}},
             {"Spacing",       {"phantom"}},
         };
-        /* Equation Editor also has a labelled-arrow palette.  This build has
-         * no such template, so the button is absent rather than empty. */
+        /* Equation Editor's labelled-arrow palette is the "Arrows and limits"
+         * group: its contents were read off that editor's own string table,
+         * which names every cell. */
         const std::vector<std::string>& known = templates();
         std::vector<PaletteGroup> groups;
         for (const Def& d : kDefs) {

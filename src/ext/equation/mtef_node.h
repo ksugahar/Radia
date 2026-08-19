@@ -151,6 +151,12 @@ public:
     int selector = 0;       /* tmANGLE..tmLPRB */
     int variation = 0;      /* 0=both, 1=left-only, 2=right-only */
     NodeList content;
+    /* A bra-ket has a bar down the middle that grows with the fence.  TeX
+     * spells it \middle|, and it is a third DELIMITER, not a character in the
+     * content -- a character would not grow. */
+    bool hasMiddle = false;
+    int middle = 0;         /* the delimiter selector for it */
+    NodeList content2;
 
     FenceNode() : Node(kFence) {}
     void accept(NodeVisitor& v) override;
@@ -166,6 +172,11 @@ public:
     /* False for inom: the parts stack with no rule between them. */
     bool ruled = true;
     bool display = false;   /* display fraction (Pass 0a) */
+    /* Which size the author ASKED for, as opposed to the one the nesting
+     * depth implies: 0 = by depth (\frac), +1 = \dfrac, -1 = \tfrac.
+     * Without it \tfrac drew display-size at the top level, which is a
+     * quiet wrong answer rather than a missing feature. */
+    int styleOverride = 0;
     NodeList numer;
     NodeList denom;
 
@@ -190,6 +201,10 @@ public:
     NodeList sup;
     bool hasSub = false;
     bool hasSup = false;
+    /* Scripts on the LEFT: the 14 and the 6 of a carbon isotope.  TeX writes
+     * them as an empty-based script, {}^{14}_{6}C, and they hang off the
+     * atom that FOLLOWS rather than the one before. */
+    bool pre = false;
 
     ScriptNode() : Node(kScript) {}
     void accept(NodeVisitor& v) override;
@@ -351,6 +366,7 @@ class OversetNode : public Node {
 public:
     NodeList over;
     NodeList base;
+    bool under = false;     /* \underset puts it below instead */
 
     OversetNode() : Node(kOverset) {}
     void accept(NodeVisitor& v) override;

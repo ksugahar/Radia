@@ -30,8 +30,10 @@ ROUND_TRIP = [
     (r"\overline{A}",   r"\overline{A}"),
     (r"\bar{A}",        r"\overline{A}"),      # one bar in the tree
     (r"\mathbf{B}",     r"\mathbf{B}"),
-    (r"\bm{H}",         r"\mathbf{H}"),
-    (r"\boldsymbol{J}", r"\mathbf{J}"),
+    # A vector is bold ITALIC here, so \bm keeps its own name on the way
+    # out; \mathbf is upright bold and stays a separate thing.
+    (r"\bm{H}",         r"\bm{H}"),
+    (r"\boldsymbol{J}", r"\bm{J}"),
 ]
 
 
