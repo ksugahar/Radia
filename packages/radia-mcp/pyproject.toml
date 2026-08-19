@@ -78,8 +78,12 @@ rag = [
     "pymupdf>=1.24.0",
 ]
 # md2html: Markdown -> HTML conversion requires Python-Markdown.
+# pymdown-extensions supplies arithmatex, which owns math detection: it keeps
+# \begin{...} environments and inline code containing "$" out of the hands of
+# the Markdown processors.
 md2html = [
     "markdown>=3.0",
+    "pymdown-extensions>=10.0",
 ]
 # document: paper_writing / grant_writing / presentation / poster / pdf /
 # doc_convert / bibliography --
