@@ -327,6 +327,9 @@ _BUDGET_POLICY = (
     "GPU等の機種名を記す場合は、アクセラレータとホストCPUを公式仕様で区別し、"
     "実在する構成だけを予算化する。高速化の成功でなく、異機種間で保存すべき物理量・"
     "設計判断と不一致時の扱いを示す。"
+    "科研費の基盤系種目では、採択時に申請額の約7割程度へ減額されて内定する場合が"
+    "多い(充足率)。減額後も検証ループが成立する経費の優先順位を用意する。"
+    "挑戦的研究は原則満額支給である。"
 )
 
 _BUDGET_AXIS_COMMENTS = {
@@ -392,6 +395,51 @@ _POWER_ELECTRONICS_FOCUS_AXES = {
     "commercial_positioning": ["商用CAE", "置換", "入口", "届かない", "習得コスト"],
     "llm_native_advantage": ["Python-native", "現代的", "API", "ツール呼び出し"],
 }
+
+
+_KAKEN_REVIEW_CRITERIA_AXES = {
+    "academic_importance": [
+        "学術的重要性",
+        "学術的意義",
+        "学術的問い",
+        "独自性",
+        "独創性",
+        "波及",
+    ],
+    "method_validity": [
+        "研究方法",
+        "研究計画",
+        "妥当",
+        "検証",
+        "実証",
+        "評価方法",
+        "達成指標",
+    ],
+    "feasibility_environment": [
+        "遂行能力",
+        "研究環境",
+        "研究実績",
+        "準備状況",
+        "実施体制",
+        "研究設備",
+        "予備",
+    ],
+}
+
+_KAKEN_BRIEFING_NOTES = [
+    "審査基準は3つ: (1)研究課題の学術的重要性、(2)研究方法の妥当性、"
+    "(3)研究遂行能力及び研究環境の適切性。",
+    "審査委員は約1ヶ月で多い場合100件程度の計画調書を審査する。"
+    "専門外の読者でも読みやすい調書が圧倒的に採択されやすい。",
+    "カラーの図・写真は審査時に白黒印刷される種目がある。"
+    "色の違いだけで系列を区別しない。",
+    "審査ではresearchmapが研究者番号で参照される。"
+    "応募前に更新と研究者番号の登録を確認する。",
+    "「人権の保護及び法令等の遵守への対応」欄は例年審査委員からの指摘が"
+    "非常に多い。該当なしの場合も判断根拠を一文添える。",
+    "基盤系種目は申請額の約7割程度への減額内定が多い(充足率)。"
+    "挑戦的研究は原則満額支給だが採択率が低く、基盤研究との重複応募を検討する。",
+]
 
 
 def _section_axes_for_program(program: str) -> dict[str, list[str]]:
@@ -2235,6 +2283,262 @@ def grant_writing_persuasion_quality_check(text: str) -> dict:
     }
 
 
+def grant_writing_kaken_review_format_check(text: str) -> dict:
+    """Check KAKENHI reviewer-format realities on a proposal draft.
+
+    Encodes the in-house KAKENHI call briefing (R9/FY2027 call): reviewers
+    judge on three criteria and read up to ~100 proposals in about a month;
+    figures may be printed in monochrome for some categories; publication
+    records are read through researchmap; the human-rights/legal-compliance
+    box draws the most reviewer remarks; and the funding-overlap box has a
+    fixed format. Fragment-level triggers gate each sub-check, so short
+    excerpts stay clean; full-draft heuristics apply above ~1500 chars.
+    """
+    raw = _read_text_if_path(text)
+    prose = _prose_for_lint(raw)
+    risks: list[dict] = []
+
+    def add_risk(
+        risk_type: str,
+        start: int,
+        excerpt: str,
+        comment: str,
+        recommendation: str,
+        severity: str = "MEDIUM",
+        **details,
+    ) -> None:
+        item = {
+            "type": risk_type,
+            "line": raw.count("\n", 0, max(0, start)) + 1,
+            "severity": severity,
+            "excerpt": re.sub(r"\s+", " ", excerpt).strip()[:360],
+            "comment": comment,
+            "recommendation": recommendation,
+        }
+        item.update(details)
+        risks.append(item)
+
+    color_figure_pattern = re.compile(
+        r"(?:赤|青|緑|黄|橙|紫|桃)(?:色|い)?(?:の)?"
+        r"(?:実線|破線|点線|一点鎖線|線|棒|丸印|丸|矢印|領域|塗り|"
+        r"プロット|曲線|マーカー|文字|枠)"
+        r"|色分け|色で(?:区別|示|表)|カラーで(?:区別|示|表)"
+    )
+    mono_terms = [
+        "白黒",
+        "モノクロ",
+        "グレースケール",
+        "線種",
+        "濃淡",
+        "ハッチング",
+        "マーカー形状",
+    ]
+    color_matches = list(color_figure_pattern.finditer(raw))
+    if color_matches and not any(term in raw for term in mono_terms):
+        first = color_matches[0]
+        add_risk(
+            "color_dependent_figure",
+            first.start(),
+            first.group(0),
+            "色の違いだけで図の系列・領域を区別している。審査時に白黒印刷される種目がある。",
+            "線種・マーカー・直接ラベル・濃淡で区別し、白黒でも判別できる図にする。",
+            severity="HIGH",
+            occurrence_count=len(color_matches),
+        )
+
+    subject_terms = [
+        "アンケート",
+        "質問紙",
+        "被験者",
+        "調査対象者",
+        "インタビュー",
+        "動物実験",
+        "実験動物",
+        "ヒト由来",
+        "臨床",
+        "個人情報",
+    ]
+    # NOTE: 「遵守」 alone is NOT a safeguard: the box heading itself
+    # (「人権の保護及び法令等の遵守への対応」) contains it, so it would
+    # suppress the check on every draft that quotes the heading.
+    safeguard_terms = [
+        "倫理審査",
+        "倫理委員会",
+        "動物実験委員会",
+        "同意",
+        "インフォームド",
+        "承認",
+        "匿名化",
+        "個人情報保護",
+        "適切に管理",
+    ]
+    subject_hits = [term for term in subject_terms if term in prose]
+    if subject_hits and not any(term in prose for term in safeguard_terms):
+        add_risk(
+            "human_subjects_without_safeguard",
+            max(0, raw.find(subject_hits[0])),
+            subject_hits[0],
+            "人・動物・個人情報を扱う記述があるのに、講じる対策・措置の記載が見当たらない。",
+            "「人権の保護及び法令等の遵守への対応」欄に、倫理審査、同意取得、"
+            "匿名化等の具体的な対策を記載する。例年、審査委員からの指摘が最も多い欄である。",
+            severity="HIGH",
+            subject_hits=subject_hits,
+        )
+
+    na_pattern = re.compile(r"該当\s*(?:は|事項は)?\s*(?:なし|ない|無し|ありません)")
+    rationale_terms = [
+        "ため",
+        "ので",
+        "対象としない",
+        "対象とせず",
+        "行わない",
+        "用いない",
+        "使用しない",
+        "含まない",
+        "扱わない",
+        "のみであり",
+        "のみで",
+        "理由",
+    ]
+    bare_na_matches = []
+    for match in na_pattern.finditer(raw):
+        sentence_start = max(raw.rfind("。", 0, match.start()) + 1, 0)
+        sentence_stop = raw.find("。", match.end())
+        if sentence_stop < 0:
+            sentence_stop = len(raw)
+        sentence = raw[sentence_start:sentence_stop]
+        if not any(term in sentence for term in rationale_terms):
+            bare_na_matches.append((match, sentence))
+    if bare_na_matches:
+        first, sentence = bare_na_matches[0]
+        add_risk(
+            "not_applicable_without_rationale",
+            first.start(),
+            sentence,
+            "「該当なし」とだけ書かれ、そう判断した根拠がない。",
+            "人を対象としない数値解析のみである等、該当なしと判断した根拠を"
+            "一文添える。この欄は例年審査委員からの指摘が非常に多い。",
+            occurrence_count=len(bare_na_matches),
+        )
+
+    pub_triggers = ["研究遂行能力", "研究業績", "主要論文", "代表論文", "発表論文", "業績"]
+    pub_hit = next((term for term in pub_triggers if term in prose), None)
+    identifier_pattern = re.compile(
+        r"(?:19|20)\d{2}|vol\.?\s*\d|no\.?\s*\d|pp\.?\s*\d|doi|DOI|"
+        r"\d+\s*巻|\d+\s*号|第\d+巻",
+        flags=re.IGNORECASE,
+    )
+    if pub_hit is not None and not identifier_pattern.search(raw):
+        add_risk(
+            "publication_not_identifiable",
+            max(0, raw.find(pub_hit)),
+            pub_hit,
+            "業績への言及があるが、業績を特定できる情報(誌名・年・巻号等)がない。",
+            "審査はresearchmapを研究者番号で参照する。調書に業績を書く場合は、"
+            "特定するための十分な情報(著者、誌名、年等)を添える。",
+        )
+
+    overlap_triggers = [
+        "応募中の研究費",
+        "受入予定の研究費",
+        "応募・受入",
+        "応募中及び受入",
+        "応募中および受入",
+    ]
+    overlap_hit = next((term for term in overlap_triggers if term in raw), None)
+    if overlap_hit is not None:
+        role_pattern = re.compile(
+            r"(?:大学|研究所|機構|高等専門学校|高専)[^。\n]{0,15}"
+            r"(?:教授|准教授|講師|助教|研究員)"
+        )
+        missing_parts = []
+        if "相違" not in raw:
+            missing_parts.append("本応募課題との相違点")
+        if not re.search(r"応募(?:する)?理由", raw):
+            missing_parts.append("応募する理由")
+        if not role_pattern.search(raw):
+            missing_parts.append("所属組織・役職(例: ○○大学教授)")
+        if missing_parts:
+            add_risk(
+                "funding_overlap_format",
+                max(0, raw.find(overlap_hit)),
+                overlap_hit,
+                "応募・受入状況欄に必要な記載要素が欠けている: "
+                + "、".join(missing_parts),
+                "国外資金・民間財団助成・受託/共同研究費も全て記載し、2件目以降は"
+                "研究内容の相違点と応募する理由、所属組織・役職を添える。"
+                "代表課題は分担者を含む金額、分担課題は自身の経費のみを書く。",
+                missing_parts=missing_parts,
+            )
+
+    full_draft = len(prose) >= 1500
+    criteria_axis_results: dict[str, dict] = {}
+    if full_draft:
+        low = prose.lower()
+        for axis, keywords in _KAKEN_REVIEW_CRITERIA_AXES.items():
+            hits = _contains_any(low, keywords)
+            criteria_axis_results[axis] = {
+                "ok": bool(hits),
+                "matches": hits[:8],
+                "keywords": keywords,
+            }
+        missing_criteria = [
+            axis
+            for axis, result in criteria_axis_results.items()
+            if not result["ok"]
+        ]
+        if missing_criteria:
+            add_risk(
+                "review_criteria_axis_missing",
+                0,
+                "、".join(missing_criteria),
+                "3つの審査基準(学術的重要性・方法の妥当性・遂行能力/環境)のうち、"
+                "読み取れない軸がある: " + "、".join(missing_criteria),
+                "各セクションがどの審査基準で読まれるかを意識し、3基準すべてに"
+                "対応する記述を置く。",
+                missing_axes=missing_criteria,
+            )
+        emphasis_pattern = re.compile(
+            r"下線|太字|ゴシック|アンダーライン|\\underline|\\textbf|"
+            r"[図表]\s*\d|Fig\.?\s*\d"
+        )
+        if not emphasis_pattern.search(raw):
+            add_risk(
+                "no_emphasis_or_figures",
+                0,
+                prose[:80],
+                "長い本文に、強調(下線・太字・ゴシック)や図表参照が見当たらない。",
+                "審査委員は約1ヶ月で最大100件程度を読む。要点への下線・太字と"
+                "図表で、一読で主張が追える構成にする。",
+            )
+
+    deductions = sum(2.0 if risk["severity"] == "HIGH" else 1.0 for risk in risks)
+    applicable = bool(raw.strip())
+    score = None if not applicable else max(0.0, round(10.0 - deductions, 1))
+    comments = list(dict.fromkeys(risk["comment"] for risk in risks))
+    recommendations = list(
+        dict.fromkeys(risk["recommendation"] for risk in risks)
+    )
+    return {
+        "applicable": applicable,
+        "score": score,
+        "risk_count": len(risks),
+        "risks": risks,
+        "comments": comments,
+        "recommendations": recommendations,
+        "full_draft_heuristics_applied": full_draft,
+        "criteria_axis_results": criteria_axis_results,
+        "briefing_notes": list(_KAKEN_BRIEFING_NOTES),
+        "target": (
+            "a proposal a reviewer can judge on the three criteria at "
+            "~100-proposals-per-month reading speed: monochrome-safe figures, "
+            "identifiable publications, an explicit human-rights/legal box, "
+            "and a complete funding-overlap box"
+        ),
+        "source": "KAKENHI in-house call briefing (R9/FY2027) review-format check",
+    }
+
+
 def grant_writing_literature_gap_evidence_check(text: str) -> dict:
     """Check whether literature-survey evidence supports the claimed gap.
 
@@ -2858,6 +3162,20 @@ def grant_writing_health_report(
                     "severity": _severity_from_score(persuasion["score"]),
                     "score": persuasion["score"],
                     "comments": persuasion["comments"][:5],
+                })
+
+    if "format" not in skip_set:
+        review_format = grant_writing_kaken_review_format_check(text)
+        detailed_results["kaken_review_format"] = review_format
+        if review_format["applicable"]:
+            detailed_scores["kaken_review_format"] = review_format["score"]
+            if review_format["risks"]:
+                priority_issues.append({
+                    "tool": "format",
+                    "name": "kaken_review_format_check",
+                    "severity": _severity_from_score(review_format["score"]),
+                    "score": review_format["score"],
+                    "comments": review_format["comments"][:5],
                 })
 
     if "scale" not in skip_set:

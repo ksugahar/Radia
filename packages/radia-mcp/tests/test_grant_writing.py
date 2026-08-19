@@ -783,6 +783,160 @@ def test_collaborative_integration_risk_check_is_optional_for_unrelated_plan():
     assert result["score"] is None
 
 
+def test_kaken_review_format_flags_color_only_figure():
+    result = gw.grant_writing_kaken_review_format_check(
+        "図1に赤線で提案法、青線で従来法の損失を示す。"
+    )
+
+    assert result["applicable"]
+    risk = next(
+        r for r in result["risks"] if r["type"] == "color_dependent_figure"
+    )
+    assert risk["severity"] == "HIGH"
+    assert result["score"] < 10
+
+
+def test_kaken_review_format_accepts_monochrome_safe_figure():
+    result = gw.grant_writing_kaken_review_format_check(
+        "図1では提案法を実線、従来法を破線の線種で区別し、"
+        "白黒印刷でも判別できるようにする。"
+    )
+
+    assert not any(
+        r["type"] == "color_dependent_figure" for r in result["risks"]
+    )
+
+
+def test_kaken_review_format_requires_safeguards_for_human_subjects():
+    result = gw.grant_writing_kaken_review_format_check(
+        "設計者へのアンケート調査で使い勝手を評価する。"
+    )
+
+    risk = next(
+        r
+        for r in result["risks"]
+        if r["type"] == "human_subjects_without_safeguard"
+    )
+    assert risk["severity"] == "HIGH"
+
+
+def test_kaken_review_format_accepts_safeguarded_survey():
+    result = gw.grant_writing_kaken_review_format_check(
+        "アンケート調査は倫理委員会の承認を得て、同意を取得し匿名化して実施する。"
+    )
+
+    assert not any(
+        r["type"] == "human_subjects_without_safeguard" for r in result["risks"]
+    )
+
+
+def test_kaken_review_format_box_heading_is_not_a_safeguard():
+    # The box heading itself contains 「遵守」; quoting it must not
+    # suppress the missing-safeguard check.
+    result = gw.grant_writing_kaken_review_format_check(
+        "人権の保護及び法令等の遵守への対応: 設計者へのアンケート調査を行う。"
+    )
+
+    assert any(
+        r["type"] == "human_subjects_without_safeguard" for r in result["risks"]
+    )
+
+
+def test_kaken_review_format_wants_rationale_next_to_not_applicable():
+    result = gw.grant_writing_kaken_review_format_check(
+        "人権の保護及び法令等の遵守への対応: 該当なし。"
+    )
+
+    assert any(
+        r["type"] == "not_applicable_without_rationale" for r in result["risks"]
+    )
+
+
+def test_kaken_review_format_accepts_rationale_with_not_applicable():
+    result = gw.grant_writing_kaken_review_format_check(
+        "本研究は数値解析のみで人や動物を対象としないため、該当なし。"
+    )
+
+    assert not any(
+        r["type"] == "not_applicable_without_rationale" for r in result["risks"]
+    )
+
+
+def test_kaken_review_format_flags_unidentifiable_publications():
+    result = gw.grant_writing_kaken_review_format_check(
+        "研究遂行能力: 関連する主要論文があり、実行可能性は高い。"
+    )
+
+    assert any(
+        r["type"] == "publication_not_identifiable" for r in result["risks"]
+    )
+
+
+def test_kaken_review_format_accepts_identifiable_publications():
+    result = gw.grant_writing_kaken_review_format_check(
+        "研究遂行能力: 代表論文はIEEE Trans. Magn., vol. 54, 2018に掲載された。"
+    )
+
+    assert not any(
+        r["type"] == "publication_not_identifiable" for r in result["risks"]
+    )
+
+
+def test_kaken_review_format_checks_funding_overlap_box():
+    result = gw.grant_writing_kaken_review_format_check(
+        "応募中の研究費: 基盤研究C(代表)。"
+    )
+
+    risk = next(
+        r for r in result["risks"] if r["type"] == "funding_overlap_format"
+    )
+    assert any("相違点" in part for part in risk["missing_parts"])
+    assert any("役職" in part for part in risk["missing_parts"])
+
+
+def test_kaken_review_format_accepts_complete_funding_overlap_box():
+    result = gw.grant_writing_kaken_review_format_check(
+        "応募中の研究費: 挑戦的研究(萌芽)。本応募課題との相違点は解析対象で、"
+        "応募する理由は検証装置の整備である。研究代表者は近畿大学教授。"
+    )
+
+    assert not any(
+        r["type"] == "funding_overlap_format" for r in result["risks"]
+    )
+
+
+def test_kaken_review_format_carries_briefing_notes():
+    result = gw.grant_writing_kaken_review_format_check("本研究の目的を述べる。")
+
+    assert result["score"] == 10.0
+    assert any("100件" in note for note in result["briefing_notes"])
+    assert any("充足率" in note for note in result["briefing_notes"])
+    assert any("白黒" in note for note in result["briefing_notes"])
+
+
+def test_kaken_review_format_skips_full_draft_heuristics_on_fragments():
+    result = gw.grant_writing_kaken_review_format_check(
+        "本研究の目的を述べる。"
+    )
+
+    assert not result["full_draft_heuristics_applied"]
+    assert result["criteria_axis_results"] == {}
+
+
+def test_kaken_review_format_runs_in_health_report():
+    report = gw.grant_writing_health_report(KDDI_SAMPLE, program="kddi_digital")
+
+    assert "kaken_review_format" in report["detailed_results"]
+    assert "kaken_review_format" in report["detailed_scores"]
+
+
+def test_budget_policy_mentions_fill_rate_strategy():
+    result = gw.grant_writing_budget_alignment_check(KDDI_SAMPLE)
+
+    assert "充足率" in result["budget_policy"]
+    assert "挑戦的研究" in result["budget_policy"]
+
+
 def test_grant_writing_reexports_ja_lint_helpers():
     result = gw.grant_writing_lint_bedrock("これは重要であると考えられる。")
 
