@@ -7,6 +7,28 @@ crystallized as its own package.
 
 ## [Unreleased]
 
+- grant-writing: taught the suite to see one question restated as two.
+  An A/B against a real KAKENHI draft found the checks scoring a
+  perfect 10 on a section whose summary promised a 「境界」 while its
+  body promised a 「条件」 — keyword coverage cannot see that defect,
+  because every required word is present and the flaw is that the words
+  disagree. New `grant_writing_central_claim_consistency_check` locates
+  the claim statements, compares their technical nouns, and reports HIGH
+  on divergent answer-shape nouns, MEDIUM on divergent operation nouns
+  (定量化 versus 記述), and LOW on near-verbatim restatement.
+- grant-writing: stopped scoring checks the document cannot answer. The
+  budget check now declares applicability like the other optional checks,
+  so a research-plan section reports `applicable: False` instead of a HIGH
+  finding about itemization it cannot carry, and the health report drops
+  it from the average. Where the check does apply, a resource keyword
+  counts only beside a money token in the same sentence; 評価 and AI ran
+  through ordinary methods prose and credited costs nobody had costed.
+  The collaboration ethics axis no longer fires on the word 学生 alone,
+  and the core-vs-optional axis now recognizes 波及効果.
+- grant-writing: `skill.md` gained the one-question rule and an honest
+  account of what these checks can and cannot judge, so a green score is
+  not mistaken for a sound proposal.
+
 ## [1.4.39] - 2026-08-19
 
 - matlab: mapped the four beam Lie-map / orbit pybind names onto their

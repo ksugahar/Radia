@@ -931,6 +931,86 @@ def test_kaken_review_format_runs_in_health_report():
     assert "kaken_review_format" in report["detailed_scores"]
 
 
+DIVERGENT_CLAIM_DRAFT = (
+    "本研究は「異なる研究室の解析手法を、内部形式を統一せずに連携・差し替えたとき、"
+    "解析手法の違いによって設計候補の順位が変わる境界を、どう定量化し、"
+    "第三者が検証可能な形で示せるか」を問う。"
+    "電気機器の電磁界解析では手法が高度化されてきた。"
+    "中心の問いは、異なる研究室が独自形式で実装した解析を、内部形式を統一せずに結合し、"
+    "その差が設計候補の優劣を覆さない条件を、どのように記述・検証できるか、である。"
+)
+
+UNIFIED_CLAIM_DRAFT = (
+    "本研究は次を問う。異なる研究室の解析手法を、内部形式を統一せずに連携・差し替えたとき、"
+    "解析手法の違いによって設計候補の順位を確定できる条件を、どのように定量化し、"
+    "第三者が検証可能な形で示せるか。"
+    "電気機器の電磁界解析では手法が高度化されてきた。"
+    "中心の問いは次である。こうして定義した解析モジュールを、内部形式のまま連携・差し替える。"
+    "このとき解析手法の違いが設計候補の順位を確定できる条件を、どのように定量化できるか。"
+)
+
+
+def test_central_claim_check_flags_a_question_restated_with_other_nouns():
+    # The defect a keyword-coverage checker cannot see: every required word is
+    # present, but the summary promises a 境界 while the body promises a 条件,
+    # so a reviewer cannot tell whether there is one question or two.
+    result = gw.grant_writing_central_claim_consistency_check(
+        DIVERGENT_CLAIM_DRAFT
+    )
+
+    assert result["applicable"]
+    assert result["statement_count"] == 2
+    risk = next(
+        r for r in result["risks"] if r["type"] == "outcome_noun_divergence"
+    )
+    assert risk["severity"] == "HIGH"
+    assert "境界" in risk["comment"] and "条件" in risk["comment"]
+    assert result["score"] < 10
+
+
+def test_central_claim_check_accepts_a_question_restated_with_the_same_nouns():
+    result = gw.grant_writing_central_claim_consistency_check(
+        UNIFIED_CLAIM_DRAFT
+    )
+
+    assert result["applicable"]
+    assert result["statement_count"] == 2
+    assert result["risks"] == []
+    assert result["score"] == 10.0
+
+
+def test_central_claim_check_does_not_swallow_the_second_statement():
+    # A greedy multi-sentence window merged both claims into one and reported
+    # a single statement, which silently disabled the whole check.
+    result = gw.grant_writing_central_claim_consistency_check(
+        DIVERGENT_CLAIM_DRAFT
+    )
+
+    markers = [s["marker"] for s in result["statements"]]
+    assert "を問う" in markers
+    assert "中心の問い" in markers
+
+
+def test_central_claim_check_ignores_headings_and_passing_mentions():
+    result = gw.grant_writing_central_claim_consistency_check(
+        "研究背景と学術的問い。手法を評価する。"
+    )
+
+    assert not result["applicable"]
+    assert result["statements"] == []
+
+
+def test_central_claim_check_runs_in_health_report():
+    report = gw.grant_writing_health_report(DIVERGENT_CLAIM_DRAFT)
+
+    assert "central_claim_consistency" in report["detailed_results"]
+    issue = next(
+        i for i in report["priority_issues"]
+        if i["name"] == "central_claim_consistency_check"
+    )
+    assert issue["severity"] == "HIGH"
+
+
 RESEARCH_PLAN_SECTION = (
     "本研究の学術的問いは、異種解析を結合しても設計判断を保つ条件は何かである。"
     "低費用解析で候補順位を確定できる領域を評価し、順位が定まらない候補だけを"

@@ -2283,6 +2283,231 @@ def grant_writing_persuasion_quality_check(text: str) -> dict:
     }
 
 
+_CLAIM_MARKERS = (
+    "本研究は次を問う",
+    "を問う",
+    "中心の問い",
+    "学術的な問い",
+    "学術的問い",
+    "研究目的は",
+    "本研究の目的",
+    "目的は",
+)
+
+# The noun that names what the answer will BE. Two statements of one question
+# must land on the same one; 「境界」 and 「条件」 read as two questions.
+_CLAIM_OUTCOME_NOUNS = (
+    "条件", "境界", "範囲", "領域", "基準", "指標", "手順", "限界", "閾値",
+    "選択則", "設計則", "法則",
+)
+
+# The operation the researcher performs on it.
+_CLAIM_OPERATION_NOUNS = (
+    "定量化", "記述", "検証", "同定", "決定", "確定", "評価", "予測", "測定",
+)
+
+_CLAIM_TERM = re.compile(r"[一-龥]{2,}|[ァ-ヴー]{3,}")
+_CLAIM_TERM_STOPWORDS = frozenset({
+    "本研究", "中心", "場合", "以下", "以上", "今回", "一方", "同様", "本文",
+    "概要", "研究",
+})
+
+
+def _claim_terms(fragment: str) -> set[str]:
+    """Technical-noun proxy: kanji runs and katakana runs, minus filler.
+
+    Japanese has no spaces, so a naive run of any kana/kanji swallows whole
+    clauses. Kanji and katakana runs approximate the content nouns well
+    enough to compare two statements of the same claim.
+    """
+    return {
+        term
+        for term in _CLAIM_TERM.findall(fragment)
+        if term not in _CLAIM_TERM_STOPWORDS
+    }
+
+
+def _claim_statements(text: str) -> list[dict]:
+    """Locate statements of the central question / aim.
+
+    A claim often spans several sentences (「中心の問いは次である。…。…か。」),
+    so each marker takes its own sentence plus the following ones up to a
+    sentence that closes the claim.
+    """
+    sentences = [s for s in re.split(r"(?<=[。．!?！？])", text) if s.strip()]
+
+    def marker_of(fragment: str) -> str | None:
+        return next((m for m in _CLAIM_MARKERS if m in fragment), None)
+
+    # An opener defers the claim to what follows (「中心の問いは次である。」).
+    opener = re.compile(r"(?:次である|次を問う|次のとおり|以下である)[。．]\s*$")
+    closer = re.compile(r"(?:か|である|ことである|問う|明らかにする)[。．]\s*$")
+
+    statements: list[dict] = []
+    consumed: set[int] = set()
+    for index, sentence in enumerate(sentences):
+        if index in consumed:
+            continue
+        marker = marker_of(sentence)
+        if marker is None:
+            continue
+        chunk = [sentence]
+        if opener.search(sentence.strip()) or not closer.search(sentence.strip()):
+            for offset in range(1, 4):
+                nxt = index + offset
+                if nxt >= len(sentences):
+                    break
+                # Never swallow the next claim: it is a separate statement.
+                if marker_of(sentences[nxt]):
+                    break
+                chunk.append(sentences[nxt])
+                consumed.add(nxt)
+                if closer.search(sentences[nxt].strip()):
+                    break
+        body = "".join(chunk).strip()
+        terms = _claim_terms(body)
+        # A heading fragment or a passing mention is not a claim statement.
+        if len(terms) < 4 or not closer.search(body):
+            continue
+        statements.append({
+            "marker": marker,
+            "sentence_index": index + 1,
+            "text": body,
+            "terms": terms,
+        })
+    return statements
+
+
+def grant_writing_central_claim_consistency_check(text: str) -> dict:
+    """Check that one central claim is not stated as two different claims.
+
+    A proposal states its question in the summary and again in the body. When
+    the two statements use different decisive nouns -- one promises a
+    「境界」, the other a 「条件」 -- a reviewer cannot tell whether the
+    proposal has one question or two. Keyword-coverage checks score such a
+    draft perfectly, because every required word is present somewhere; the
+    defect is that the words disagree with each other.
+
+    The check is optional: it needs at least two claim statements.
+    """
+    text = _prose_for_lint(_read_text_if_path(text))
+    statements = _claim_statements(text)
+    if len(statements) < 2:
+        return {
+            "applicable": False,
+            "score": None,
+            "statement_count": len(statements),
+            "statements": [
+                {k: v for k, v in s.items() if k != "terms"} for s in statements
+            ],
+            "risks": [],
+            "comments": [],
+            "target": (
+                "state one central question once; restatements must reuse its "
+                "decisive nouns"
+            ),
+            "source": "central-claim consistency check",
+        }
+
+    risks: list[dict] = []
+    pairs: list[dict] = []
+    for i in range(len(statements)):
+        for j in range(i + 1, len(statements)):
+            a, b = statements[i], statements[j]
+            shared = a["terms"] & b["terms"]
+            union = a["terms"] | b["terms"]
+            similarity = round(len(shared) / max(1, len(union)), 2)
+            a_outcomes = {n for n in _CLAIM_OUTCOME_NOUNS if n in a["text"]}
+            b_outcomes = {n for n in _CLAIM_OUTCOME_NOUNS if n in b["text"]}
+            a_ops = {n for n in _CLAIM_OPERATION_NOUNS if n in a["text"]}
+            b_ops = {n for n in _CLAIM_OPERATION_NOUNS if n in b["text"]}
+            pair = {
+                "statements": [a["sentence_index"], b["sentence_index"]],
+                "markers": [a["marker"], b["marker"]],
+                "similarity": similarity,
+                "shared_terms": sorted(shared),
+                "only_in_first": sorted(a["terms"] - b["terms"]),
+                "only_in_second": sorted(b["terms"] - a["terms"]),
+                "outcome_nouns": [sorted(a_outcomes), sorted(b_outcomes)],
+                "operation_nouns": [sorted(a_ops), sorted(b_ops)],
+            }
+            pairs.append(pair)
+
+            # Same topic (they share anchors) but the promised answer differs.
+            if len(shared) >= 2 and a_outcomes and b_outcomes and not (
+                a_outcomes & b_outcomes
+            ):
+                risks.append({
+                    "type": "outcome_noun_divergence",
+                    "severity": "HIGH",
+                    "statements": pair["statements"],
+                    "comment": (
+                        "同じ問いの言い直しだが、答えの形を表す名詞が異なる: "
+                        + "／".join(sorted(a_outcomes))
+                        + " と "
+                        + "／".join(sorted(b_outcomes))
+                    ),
+                    "recommendation": (
+                        "問いは一度だけ定義し、言い直しでは同じ名詞を使う。"
+                        "審査者は語が変わると別の問いと読む。"
+                    ),
+                    "excerpts": [a["text"][:160], b["text"][:160]],
+                })
+            elif len(shared) >= 2 and a_ops and b_ops and not (a_ops & b_ops):
+                risks.append({
+                    "type": "operation_noun_divergence",
+                    "severity": "MEDIUM",
+                    "statements": pair["statements"],
+                    "comment": (
+                        "問いに対して行う操作の語が異なる: "
+                        + "／".join(sorted(a_ops))
+                        + " と "
+                        + "／".join(sorted(b_ops))
+                    ),
+                    "recommendation": (
+                        "定量化・記述・検証のどれを約束するのかを一語に決める。"
+                    ),
+                    "excerpts": [a["text"][:160], b["text"][:160]],
+                })
+
+            if similarity >= 0.8:
+                risks.append({
+                    "type": "verbatim_restatement",
+                    "severity": "LOW",
+                    "statements": pair["statements"],
+                    "comment": "概要と本文がほぼ同一文になっている。",
+                    "recommendation": (
+                        "概要は全体の要約、本文は問いを導く論証と定義、と"
+                        "役割を分ける。"
+                    ),
+                    "excerpts": [a["text"][:160], b["text"][:160]],
+                })
+
+    deductions = sum(
+        3.0 if r["severity"] == "HIGH" else 1.5 if r["severity"] == "MEDIUM" else 0.5
+        for r in risks
+    )
+    score = max(0.0, round(10.0 - deductions, 1))
+    return {
+        "applicable": True,
+        "score": score,
+        "statement_count": len(statements),
+        "statements": [
+            {k: v for k, v in s.items() if k != "terms"} for s in statements
+        ],
+        "pairs": pairs,
+        "risk_count": len(risks),
+        "risks": risks,
+        "comments": list(dict.fromkeys(r["comment"] for r in risks)),
+        "recommendations": list(dict.fromkeys(r["recommendation"] for r in risks)),
+        "target": (
+            "one central question, stated once and restated with the same "
+            "decisive nouns"
+        ),
+        "source": "central-claim consistency check",
+    }
+
+
 def grant_writing_kaken_review_format_check(text: str) -> dict:
     """Check KAKENHI reviewer-format realities on a proposal draft.
 
@@ -3262,6 +3487,23 @@ def grant_writing_health_report(
                     "severity": _severity_from_score(persuasion["score"]),
                     "score": persuasion["score"],
                     "comments": persuasion["comments"][:5],
+                })
+
+    if "claim" not in skip_set:
+        claim = grant_writing_central_claim_consistency_check(text)
+        detailed_results["central_claim_consistency"] = claim
+        if claim["applicable"]:
+            detailed_scores["central_claim_consistency"] = claim["score"]
+            if claim["risks"]:
+                priority_issues.append({
+                    "tool": "claim",
+                    "name": "central_claim_consistency_check",
+                    "severity": max(
+                        (r["severity"] for r in claim["risks"]),
+                        key=lambda s: {"HIGH": 2, "MEDIUM": 1, "LOW": 0}[s],
+                    ),
+                    "score": claim["score"],
+                    "comments": claim["comments"][:5],
                 })
 
     if "format" not in skip_set:
