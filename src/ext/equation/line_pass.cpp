@@ -579,6 +579,54 @@ static bool hasOpenFence(const NodeList& list, int prodVer) {
 }
 
 
+
+/* ============================================================
+ * Pass 0b: Matrix cell redistribution
+ * ============================================================ */
+void MatrixCellPass::run(NodeList& children, SkipSet& skip,
+                         int /*depth*/, int /*prodVer*/) {
+    for (size_t idx = 0; idx < children.size(); ++idx) {
+        if (skip[idx] || !children[idx]) continue;
+        if (children[idx]->tag() != Node::kMatrix) continue;
+        auto* m = static_cast<MatrixNode*>(children[idx].get());
+
+        const size_t cells = m->elements.size();
+        if (cells < 2) continue;
+
+        /* Exactly one cell with anything in it. */
+        size_t full = cells;
+        size_t nonEmpty = 0;
+        for (size_t i = 0; i < cells; ++i) {
+            const Node* e = m->elements[i].get();
+            if (!e || e->tag() != Node::kLine) return;   /* not the shape */
+            if (!static_cast<const LineNode*>(e)->children.empty()) {
+                ++nonEmpty;
+                full = i;
+            }
+        }
+        if (nonEmpty != 1) continue;
+
+        /* Holding a line per cell, and no more than there are cells. */
+        auto* src = static_cast<LineNode*>(m->elements[full].get());
+        size_t lines = 0;
+        for (const auto& c : src->children) {
+            if (!c || c->tag() != Node::kLine) { lines = 0; break; }
+            ++lines;
+        }
+        if (lines < 2 || lines > cells) continue;
+
+        NodeList rows = std::move(src->children);
+        src->children.clear();
+        size_t at = 0;
+        for (auto& row : rows) {
+            auto* dst = static_cast<LineNode*>(m->elements[at].get());
+            auto* rl = static_cast<LineNode*>(row.get());
+            dst->children = std::move(rl->children);
+            ++at;
+        }
+    }
+}
+
 /* ============================================================
  * Pass 0: Integral/BigOp slot splitting
  * ============================================================ */
@@ -870,6 +918,7 @@ PassPipeline::PassPipeline() {
     /* Order matters: Pass 0a → Pass 1 → Pass 2 → Pass 2b.  The display
      * fraction goes first: it puts the fence back inside the denominator,
      * where Pass 1 can then fill it from its own siblings. */
+    passes_.push_back(std::make_unique<MatrixCellPass>());
     passes_.push_back(std::make_unique<IntegralSlotPass>());
     passes_.push_back(std::make_unique<DisplayFractionPass>());
     passes_.push_back(std::make_unique<FenceMergePass>());
