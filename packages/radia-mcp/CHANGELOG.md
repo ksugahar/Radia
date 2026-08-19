@@ -7,6 +7,21 @@ crystallized as its own package.
 
 ## [Unreleased]
 
+- md2html: replaced the hand-rolled math-protection regexes with
+  `pymdownx.arithmatex` (new `pymdown-extensions` dependency in the
+  `[md2html]` extra) and repaired seven defect classes found by a full
+  audit: bare `\begin{align}` blocks lost their `\\` row separators;
+  `$` inside inline code was mistaken for a math opener; `[N]` inside
+  code/math became citation links; `||A|B||` stayed unconverted and
+  split table rows; the References-section detector anchored on the
+  first prose occurrence of the word (numbering procedure lists instead
+  of the bibliography); and `<` inside math was injected raw, so the
+  browser swallowed the following text as a tag. Pipes inside math
+  spans are now neutralized as `&#124;` before the table parser runs,
+  and the citation pass skips code, math, and existing anchors.
+  `tests/test_md2html.py` grew from 12 to 21 goldens locking each
+  repaired behaviour.
+
 ## [1.4.38] - 2026-08-18
 
 - Added PPTX figure auditing for authored width, paste scale, final visible
