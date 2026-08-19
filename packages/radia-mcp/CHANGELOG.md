@@ -7,6 +7,15 @@ crystallized as its own package.
 
 ## [Unreleased]
 
+## [1.4.39] - 2026-08-19
+
+- matlab: mapped the four beam Lie-map / orbit pybind names onto their
+  `beam.*` MEX commands so the parity audit sees the coverage that the
+  shared C++ kernels already provide (98/98 public names, 362 gateway
+  commands), and recorded the one real gap: the MATLAB orbit tracker
+  drives Radia-object sources only while the HDiv iron evaluator remains
+  a pybind-owned handle.
+
 - grant-writing: encoded the R9 (FY2027) in-house KAKENHI call briefing.
   New `grant_writing_kaken_review_format_check` catches color-only figure
   discrimination (some categories are reviewed as monochrome prints),
