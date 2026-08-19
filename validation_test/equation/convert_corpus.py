@@ -42,8 +42,13 @@ B = chr(92)
 # command that reached the unknown-command path.  A document carrying one is a
 # document still to fix.
 CHECKS = [
-    ("empty fence", re.compile(re.escape(B + "left") + r".{0,12}?\s*"
-                               + re.escape(B + "right"))),
+    # \left, ONE delimiter -- a command word or a single character -- then
+    # nothing but space before \right.  Reading it as "up to twelve of
+    # anything" counted \left( 1+x_{ij} \right) as empty, and nineteen of the
+    # twenty documents it flagged were fine.
+    ("empty fence", re.compile(re.escape(B + "left")
+                               + r"(?:" + re.escape(B) + r"[a-zA-Z]+\s?|.)"
+                               + r"\s*" + re.escape(B + "right"))),
     ("empty fraction slot", re.compile(re.escape(B + "dfrac{}")
                                        + "|" + re.escape(B + "frac{}"))),
     ("unknown command", re.compile(re.escape(B + "text{") + re.escape(B))),
