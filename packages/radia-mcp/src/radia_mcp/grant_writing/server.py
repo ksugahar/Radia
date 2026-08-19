@@ -21,7 +21,11 @@ undefined symbols, defensive paragraphs, optional branches, acronym piles, and
 internal memo shorthand. Review-format checks encode the in-house KAKENHI
 briefing realities: three review criteria, ~100 proposals per reviewer-month,
 monochrome printing, researchmap-referenced records, the human-rights/legal
-box, and the funding-overlap box format.
+box, and the funding-overlap box format. Central-claim checks catch one
+question restated as two: keyword coverage cannot see it, because every
+required word is present and the defect is that the words disagree.
+Checks that a section cannot answer -- budget itemization in a research plan
+-- report themselves inapplicable instead of scoring it low.
 
 Promoted to radia-mcp so the document-writing servers are registered in
 parallel: paper-writing / figure / grant-writing / presentation.
@@ -58,6 +62,7 @@ register_status_tool(
         "reviewer vocabulary and benchmark role, "
         "persuasion hierarchy and equation introductions, "
         "KAKENHI review-format realities, "
+        "central-claim consistency across summary and body, "
         "and integrated health reports."
     ),
     subpackage="radia_mcp.grant_writing",
