@@ -663,6 +663,20 @@ static bool splitDisplaySlot(NodeList& slot, NodeList& body,
     return true;
 }
 
+/* SUB, then limit lines, then SYM: a display block waiting in this list. */
+static bool displayBlockFollows(const NodeList& list, size_t from) {
+    for (size_t j = from + 1; j < list.size(); ++j) {
+        const Node* n = list[j].get();
+        if (!n) continue;
+        if (n->tag() == Node::kLine) continue;
+        if (n->tag() != Node::kSize) return false;
+        const int t = static_cast<const SizeNode*>(n)->sizeType;
+        if (t == SIZETYPE_SYM) return true;
+        if (t != SIZETYPE_SUB) return false;
+    }
+    return false;
+}
+
 void IntegralSlotPass::run(NodeList& children, SkipSet& skip,
                            int /*depth*/, int /*prodVer*/) {
     for (size_t idx = 0; idx < children.size(); ++idx) {
@@ -673,11 +687,26 @@ void IntegralSlotPass::run(NodeList& children, SkipSet& skip,
             auto* ig = static_cast<IntegralNode*>(n);
             /* Whichever slot the variation sent it to. */
             NodeList* cand[3] = {&ig->body, &ig->upper, &ig->lower};
+            bool split = false;
             for (NodeList* sl : cand) {
                 if (sl->empty()) continue;
                 if (splitDisplaySlot(*sl, ig->body, ig->lower, ig->hasLower,
-                                     ig->upper, ig->hasUpper))
+                                     ig->upper, ig->hasUpper)) {
+                    split = true;
                     break;
+                }
+            }
+            /* Not that shape -- but if the body is empty, exactly one limit
+             * holds something, and a display block is coming in this list to
+             * supply the real limits, then what is in that slot is the
+             * integrand and belongs in the body. */
+            if (!split && ig->body.empty() &&
+                ig->upper.empty() != ig->lower.empty() &&
+                displayBlockFollows(children, idx)) {
+                NodeList& used = ig->upper.empty() ? ig->lower : ig->upper;
+                ig->body = std::move(used);
+                used.clear();
+                ig->hasLower = ig->hasUpper = false;
             }
         } else if (n->tag() == Node::kBigOp) {
             auto* b = static_cast<BigOpNode*>(n);
