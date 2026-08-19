@@ -5,6 +5,30 @@ All notable changes to the `radia` package.  Format: each release lists
 
 ## Unreleased
 
+## 4.95.55 - Native Lie-map pipeline and 3D reference-orbit tracker
+
+Released 2026-08-19.
+
+- Moved the fourth-order Lie-map construction into C++: a jet engine with
+  stage RK4 builds the map tensors, `DragtFinnFactorizeFourthOrder` produces
+  the factorization, and `ApplyDragtFinnMapBatch` applies it particle-parallel.
+  Map construction went from 37 s to 9 s per orbit and tracking now costs about
+  0.7 us per particle, so the C++ path is the single source of truth for the
+  numbers the Python route used to produce.
+- Added a native 3D reference-orbit tracker. Orbits are tracked in full three
+  dimensions and planarity is a measured gate rather than an assumption, which
+  is what lets a nominally planar lattice report its own out-of-plane error
+  instead of hiding it.
+- Exposed four of these kernels through the MATLAB gateway
+  (`beam.lie.map_tensors_spoly`, `beam.lie.dragt_finn_factorize`,
+  `beam.lie.apply_dragt_finn_batch`, `beam.orbit.track_reference_3d`), each
+  sharing the C++ kernel with its pybind counterpart and locked by
+  cross-language goldens at 1e-12. The gateway is now 362 commands covering 98
+  public pybind names. The orbit tracker drives Radia-object sources only from
+  MATLAB; the HDiv iron evaluator stays a pybind-owned handle for now.
+- Retired the paraxial Yoshida split-operator route after the CanonicalHCurl
+  work concluded it was unused.
+
 ## 4.95.54 - Canonical HCurl EarlyTimes and field-route verification
 
 Released 2026-08-18.
