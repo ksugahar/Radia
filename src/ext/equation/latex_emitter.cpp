@@ -591,7 +591,7 @@ void LaTeXEmitter::emitFence(const FenceNode& fence, std::string& out) {
     std::string content = emitNodes(fence.content);
     if (fence.hasMiddle) {
         content += " \\middle";
-        content += (fence.middle == 0x2016) ? "\| " : "| ";
+        content += (fence.middle == 0x2016) ? "\\| " : "| ";
         content += emitNodes(fence.content2);
     }
 
