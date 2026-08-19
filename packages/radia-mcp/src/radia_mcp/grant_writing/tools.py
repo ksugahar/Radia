@@ -2532,6 +2532,88 @@ _MECHANISM_MARKERS = (
 )
 
 
+def grant_writing_template_residue_check(text: str) -> dict:
+    """Find unfilled placeholders and leftover form instructions.
+
+    Evidence from two real 2026 applications. A Power Academy draft still
+    carried 「小計：○○○○千円（税込）」 and the form's own 「〜記入して
+    ください」 sentences when it reached the co-investigator, who deleted
+    them. A JSPS application was sent back by the office before any reviewer
+    saw it, purely on form compliance. Both defect classes are mechanical,
+    locatable, and fatal in a way no argument about research quality is.
+    """
+    text = _read_text_if_path(text)
+    lines = text.splitlines()
+    risks: list[dict] = []
+    instructions: list[dict] = []
+
+    placeholder = re.compile(
+        r"[○◯]{2,}|[×✕]{3,}|＿{2,}|_{4,}|"
+        r"[XxＸｘ]{3,}(?![A-Za-z0-9])|"
+        r"【\s*(?:記入|入力|ここに|要記入)[^】]*】|"
+        r"（\s*(?:記入|入力|未定)[^）]*）|"
+        r"\bTBD\b|\bTODO\b|未定"
+    )
+    # Instruction sentences are counted but NOT reported as defects. Measured
+    # on the 2026 Power Academy rewrite: the co-investigator deleted 6 of them
+    # and deliberately kept 13, and the two groups are indistinguishable in
+    # flat text -- 「研究マップを…選択してください」 went, 「性別を…選択して
+    # ください」 stayed, because one labels a prose box the applicant fills and
+    # the other is part of the form's own answer structure. A rule that cannot
+    # tell them apart cannot be a detector, so this becomes a count the author
+    # judges, not a finding.
+    instruction = re.compile(
+        r"(?:記入|記載|入力|選択|要約|確認|参照)して\s*ください|"
+        r"ご記入|ご覧いただき|お書きください"
+    )
+
+    for number, line in enumerate(lines, 1):
+        stripped = line.strip()
+        if not stripped:
+            continue
+        for match in placeholder.finditer(stripped):
+            risks.append({
+                "type": "unfilled_placeholder",
+                "severity": "HIGH",
+                "line": number,
+                "match": match.group(0)[:40],
+                "excerpt": stripped[:200],
+                "comment": "未記入のプレースホルダが残っている。",
+                "recommendation": (
+                    "提出前に実際の値へ置き換える。金額欄の ○○○○ は"
+                    "そのまま提出されると事務差し戻しの原因になる。"
+                ),
+            })
+            break
+        if instruction.search(stripped):
+            instructions.append({"line": number, "excerpt": stripped[:200]})
+
+    applicable = bool(text.strip())
+    deductions = sum(2.0 for r in risks)
+    score = None if not applicable else max(0.0, round(10.0 - deductions, 1))
+    question = (
+        f"様式の記入説明文が {len(instructions)} 件ある。"
+        "自由記述欄の説明文なら提出前に削除し、選択・回答欄の様式文なら残す。"
+        "文面だけでは区別できないため、欄ごとに確認する。"
+    ) if instructions else ""
+    return {
+        "applicable": applicable,
+        "score": score,
+        "risk_count": len(risks),
+        "risks": risks[:40],
+        "instruction_sentence_count": len(instructions),
+        "instruction_sentences": instructions[:20],
+        "questions": [question] if question else [],
+        "comments": list(dict.fromkeys(r["comment"] for r in risks)),
+        "recommendations": list(dict.fromkeys(r["recommendation"] for r in risks)),
+        "target": (
+            "no unfilled placeholder survives into the submitted document; "
+            "instruction sentences are counted for the author to judge"
+        ),
+        "source": "template-residue check (2026 Power Academy / JSPS evidence)",
+    }
+
+
 def grant_writing_vague_claim_verb_check(text: str) -> dict:
     """Flag 統合/連携/活用 that never say how.
 
@@ -3452,6 +3534,40 @@ def grant_writing_recommendation_letter_template(
     )
 
 
+# The test that decides which list a check belongs in: can it point at a
+# place in the text and say what is wrong there, such that the author agrees
+# without argument? 「この文は91字」 and 「概要は境界、本文は条件」 pass.
+# 「公開成果が3つで4つ未満」 does not -- that is an opinion wearing the
+# clothes of a measurement.
+_DETECTOR_TOOLS = frozenset({
+    "sentence",
+    "bedrock",
+    "weak",
+    "claim",
+    "vague",
+    "format",
+    "persuasion",
+    "vocabulary",
+    "abstraction",
+    "literature",
+    "residue",
+})
+
+_DETECTOR_RESULT_KEYS = frozenset({
+    "sentence",
+    "bedrock",
+    "weak",
+    "central_claim_consistency",
+    "vague_claim_verb",
+    "kaken_review_format",
+    "persuasion_quality",
+    "reviewer_vocabulary",
+    "named_software_abstraction",
+    "literature_gap_evidence",
+    "template_residue",
+})
+
+
 def grant_writing_health_report(
     text_or_path: str,
     program: str = "generic",
@@ -3573,6 +3689,23 @@ def grant_writing_health_report(
                     "severity": _severity_from_score(persuasion["score"]),
                     "score": persuasion["score"],
                     "comments": persuasion["comments"][:5],
+                })
+
+    if "residue" not in skip_set:
+        residue = grant_writing_template_residue_check(text)
+        detailed_results["template_residue"] = residue
+        if residue["applicable"]:
+            detailed_scores["template_residue"] = residue["score"]
+            if residue["risks"]:
+                priority_issues.append({
+                    "tool": "residue",
+                    "name": "template_residue_check",
+                    "severity": max(
+                        (r["severity"] for r in residue["risks"]),
+                        key=lambda s: {"HIGH": 2, "MEDIUM": 1, "LOW": 0}[s],
+                    ),
+                    "score": residue["score"],
+                    "comments": residue["comments"][:5],
                 })
 
     if "vague" not in skip_set:
@@ -3767,32 +3900,72 @@ def grant_writing_health_report(
                 })
 
     sev_rank = {"CRITICAL": 0, "HIGH": 1, "MEDIUM": 2, "UNKNOWN": 3, "LOW": 4}
-    priority_issues.sort(
+
+    # Split what the suite produces into the two kinds it actually contains.
+    # A DETECTOR points at a place in the text and says what is wrong there;
+    # the author can check it and fix it without argument. A QUESTION asks
+    # whether the proposal covers a topic; keyword presence cannot answer
+    # that, so it is surfaced as a prompt and never scored. Averaging the two
+    # into one number was what made the old overall_score meaningless: a
+    # draft with a fatal inconsistency could score 10 while a clean section
+    # scored 8.6 on question noise.
+    findings = [i for i in priority_issues if i["tool"] in _DETECTOR_TOOLS]
+    questions = [i for i in priority_issues if i["tool"] not in _DETECTOR_TOOLS]
+    findings.sort(
         key=lambda x: (sev_rank.get(x["severity"], 99), -1 * (x.get("score") or 0))
     )
+    questions.sort(key=lambda x: x["name"])
+    for q in questions:
+        q["kind"] = "question"
+        q.pop("severity", None)
+        q.pop("score", None)
 
-    scores = list(detailed_scores.values())
-    overall = round(sum(scores) / len(scores), 1) if scores else 0.0
-    severity = _severity_from_score(overall)
-    if overall >= 8:
-        summary = "Submission logic is mostly visible; polish evidence and wording."
-    elif overall >= 6:
-        summary = "Core story is present, but reviewer-facing gaps remain."
+    defect_counts = {"HIGH": 0, "MEDIUM": 0, "LOW": 0, "CRITICAL": 0}
+    for item in findings:
+        defect_counts[item["severity"]] = defect_counts.get(item["severity"], 0) + 1
+    defect_counts["total"] = len(findings)
+
+    detector_scores = {
+        name: value
+        for name, value in detailed_scores.items()
+        if name in _DETECTOR_RESULT_KEYS
+    }
+    defect_score = (
+        round(sum(detector_scores.values()) / len(detector_scores), 1)
+        if detector_scores
+        else 10.0
+    )
+
+    if defect_counts["total"] == 0:
+        summary = (
+            "No located defects. This says the mechanics are clean; it does "
+            "not say the argument holds."
+        )
     else:
-        summary = "Proposal needs clearer axes, deliverables, or budget-to-verification logic."
+        summary = (
+            f"{defect_counts['total']} located defect(s): "
+            f"{defect_counts['CRITICAL']} critical, {defect_counts['HIGH']} high, "
+            f"{defect_counts['MEDIUM']} medium, {defect_counts['LOW']} low. "
+            "Fix the findings; the questions are prompts, not defects."
+        )
 
     return {
-        "overall_score": overall,
+        "defect_counts": defect_counts,
+        "findings": findings,
+        "questions": questions,
+        "defect_score": defect_score,
         "score_max": 10,
-        "overall_severity": severity,
         "summary_comment": summary,
         "program": program,
         "detailed_scores": detailed_scores,
         "detailed_results": detailed_results,
-        "priority_issues": priority_issues,
         "tools_run": sorted(detailed_results),
         "tools_skipped": sorted(skip_set),
-        "total_findings": len(priority_issues),
-        "hint": "Use priority_issues first; do not optimize the score mechanically.",
+        "hint": (
+            "findings locate defects and are worth fixing; questions cannot be "
+            "answered by keyword presence and are for the author to judge. "
+            "defect_score measures located mechanical defects only -- it is not "
+            "a judgement of the research, and editing to raise it is wasted work."
+        ),
         "source": "radia_mcp.grant_writing public document server",
     }

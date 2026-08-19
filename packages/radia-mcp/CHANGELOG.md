@@ -7,6 +7,28 @@ crystallized as its own package.
 
 ## [Unreleased]
 
+- grant-writing: split the report into findings and questions. A DETECTOR
+  points at a place in the text and says what is wrong there; a QUESTION
+  asks whether a topic is covered, which keyword presence cannot answer.
+  Averaging the two produced the misleading number this suite shipped with,
+  where a draft with a fatal inconsistency scored 10 and a clean section
+  scored 8.6 on question noise. `grant_writing_health_report` now returns
+  `findings` (severity-ranked, locatable), `questions` (no severity, no
+  score), and `defect_counts`; `defect_score` is computed from detectors
+  alone and measures mechanical defect density, nothing more.
+- grant-writing: added `grant_writing_template_residue_check` for unfilled
+  placeholders. A real 2026 draft still read 「小計：○○○○千円（税込）」 in
+  four money boxes and 「氏名：○○ ○○」 twice when it reached its
+  co-investigator; a separate 2026 application was returned by the office on
+  form compliance before any reviewer saw it. The check separates that
+  draft's before and after exactly: 6 placeholders down to the single
+  genuinely-undecided item the co-investigator left in place.
+- grant-writing: the same check's instruction-sentence rule was demoted to a
+  count on its own evidence. The co-investigator deleted 6 form instructions
+  and deliberately kept 13, and the two groups are indistinguishable in flat
+  text, so the rule cannot be a detector. It reports a number and a question
+  instead.
+
 - grant-writing: taught the suite to see one question restated as two.
   An A/B against a real KAKENHI draft found the checks scoring a
   perfect 10 on a section whose summary promised a 「境界」 while its
