@@ -9,6 +9,7 @@
 % against it reported an 18.5% error in the radical that was the reference's,
 % not ours, and a "correction" made from that number had to be undone.
 \documentclass[12pt]{article}
+\usepackage{amsmath}
 \usepackage{unicode-math}
 \setmathfont{Latin Modern Math}
 \pagestyle{empty}
@@ -72,6 +73,30 @@
 \immediate\write\out{SCRIPTSPACE 	he\scriptspace\space 0pt 0pt}
 \immediate\write\out{NULLDELIM 	he
 ulldelimiterspace\space 0pt 0pt}
-\immediate\closeout\out
 \mbox{}
+
+% --- landed 2026-08-19: the vector face, prescripts, arrows, one-sided
+% fences, the bar down the middle of a bra-ket, and the two fraction
+% styles named outright.  \symbfit is the bold ITALIC alphabet, which is
+% the face a vector takes here; \mathbf is upright bold and a different
+% thing.
+\M{bold_italic}{\symbfit{B}}
+\M{bold_upright}{\mathbf{B}}
+\M{vec_bm}{\vec{\symbfit{B}}}
+\M{prescript}{{}^{14}_{6}C}
+\M{overrightarrow}{\overrightarrow{AB}}
+\M{overleftarrow}{\overleftarrow{AB}}
+\M{overset}{\overset{a}{=}}
+\M{underset}{\underset{n}{\max}}
+\M{xrightarrow}{\xrightarrow{k}}
+\M{xrightarrow_both}{\xrightarrow[m]{k}}
+\M{braket}{\left\langle \psi \middle| \phi \right\rangle}
+\M{evalbar}{\left. f \right|_{a}^{b}}
+\M{onesided_brace}{\left\{ x \right.}
+\M{dbloverline}{\overline{\overline{x}}}
+\M{dblunderline}{\underline{\underline{x}}}
+\M{dfrac}{\dfrac{a}{b}}
+\M{tfrac}{\tfrac{a}{b}}
+
+\immediate\closeout\out
 \end{document}

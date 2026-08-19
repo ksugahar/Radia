@@ -15,6 +15,35 @@ eq.tex_to_png(r"\frac{a+b}{c}")      # a bitmap, where nothing else works
 eq.markdown_to_docx(open("note.md", encoding="utf-8").read(), "note.docx")
 ```
 
+## What it writes
+
+Two spellings are decided rather than left to taste, because they are what
+goes into a `.md` or `.tex` file that someone else reads.
+
+**A vector is `\vec\bm{B}`** -- an arrow over a **bold italic** letter. The
+Style menu's *vector* applies both: with a selection it retypes it, with none
+it sets the face for what you type next, which is what Equation Editor's own
+Style menu does. `\mathbf` stays what it is in LaTeX -- upright bold, for a
+matrix name -- and is a separate button. They drew the same letter until this
+was written down.
+
+**A fraction goes out as `\dfrac`** when it is the outermost one, and as plain
+`\frac` inside another. That is not a preference: the outermost fraction is
+*drawn* at display size, so `\frac` pasted into running text would come out
+smaller than the picture you accepted. Nested, LaTeX already steps it down, so
+the plain name is the one that agrees. `\tfrac` is kept if you ask for it.
+
+## Where the sizes come from
+
+Appearance follows TeX, and the comparison is against numbers rather than
+against a picture of numbers: `validation_test/equation/tex_reference.tex`
+asks XeLaTeX for `\the\wd0 \the\ht0 \the\dp0` of every construct, and
+`tests/equation/test_tex_metrics.py` pins ours to those. Most are exact to
+0.01 pt. The handful that are not carry the reason next to the tolerance --
+for instance TeX's own `\overleftarrow` and `\overrightarrow` are not the same
+height on the same body, so one accent rule cannot reproduce both, and ours is
+pinned to the right-hand one.
+
 ## Why OMML rather than a picture
 
 An equation pasted as OMML **is an equation**: Word's and PowerPoint's own

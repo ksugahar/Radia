@@ -322,6 +322,49 @@ void LaTeXEmitter::emitNode(const Node* node, std::string& out) {
     case Node::kDecoration:
         emitDecoration(*static_cast<const DecorationNode*>(node), out);
         break;
+    case Node::kOverset: {
+        const OversetNode& o = *static_cast<const OversetNode*>(node);
+        const std::string over = emitNodes(o.over);
+        /* An arrow labelled above AND below is one command with an
+         * optional argument, not an \underset wrapped round an
+         * \overset -- which is how it is BUILT, but not how it is
+         * written, and the written form is what the author reads back. */
+        if (o.under && o.base.size() == 1 && o.base[0] &&
+            o.base[0]->tag() == Node::kOverset) {
+            const OversetNode& in = static_cast<const OversetNode&>(*o.base[0]);
+            if (!in.under && in.base.size() == 1 && in.base[0] &&
+                in.base[0]->tag() == Node::kChar) {
+                const CharNode& ch = static_cast<const CharNode&>(*in.base[0]);
+                const unsigned cp = ch.charCode ? ch.charCode : unsigned(ch.ch);
+                if (const char* name = arrow_command(cp)) {
+                    out += name;
+                    out += "[" + over + "]{" + emitNodes(in.over) + "}";
+                    break;
+                }
+            }
+        }
+        /* An arrow with a label over it goes back out as \xrightarrow,
+         * because that is what an author types; anything else is the
+         * \overset it was built from. */
+        int arrow = 0;
+        if (!o.under && o.base.size() == 1 && o.base[0] &&
+            o.base[0]->tag() == Node::kChar) {
+            const CharNode& c = static_cast<const CharNode&>(*o.base[0]);
+            const unsigned cp = c.charCode ? c.charCode : unsigned(c.ch);
+            arrow = arrow_command(cp) ? int(cp) : 0;
+        }
+        if (arrow) {
+            out += arrow_command(unsigned(arrow));
+            out += "{" + over + "}";
+            break;
+        }
+        out += o.under ? "\\underset{" : "\\overset{";
+        out += over;
+        out += "}{";
+        out += emitNodes(o.base);
+        out += "}";
+        break;
+    }
     case Node::kPhantom: {
         const PhantomNode& ph = *static_cast<const PhantomNode*>(node);
         out += ph.keepWidth ? (ph.keepHeight ? "\\phantom{" : "\\hphantom{")
@@ -441,14 +484,22 @@ void LaTeXEmitter::emitChar(const CharNode& ch, std::string& out) {
         else if (code < 128) out += char(code);
         else emit_utf8(uint32_t(code), out);   /* see emit_utf8: never '?' */
     }
-    /* Vector (bold) */
-    else if (tf == TF_VECTOR) {
-        if ((code >= 'A' && code <= 'Z') || (code >= 'a' && code <= 'z')) {
-            out += "\\mathbf{";
+    /* Vector -- bold ITALIC, which is \bm.  Writing \mathbf here set every
+     * vector upright, so the paste and the picture disagreed about the one
+     * face the lab has a rule for. */
+    else if (tf == TF_VECTOR || tf == TF_USER3) {
+        const char* cmd = (tf == TF_VECTOR) ? "\\bm{" : "\\mathbf{";
+        if ((code >= 'A' && code <= 'Z') || (code >= 'a' && code <= 'z') ||
+            (code >= '0' && code <= '9')) {
+            out += cmd;
             out += (char)code;
             out += '}';
         } else if (code >= 0x20 && code < 0x7F) {
             out += (char)code;
+        } else {
+            out += cmd;
+            emit_utf8(uint32_t(code), out);
+            out += '}';
         }
     }
     /* Function */
@@ -524,6 +575,11 @@ void LaTeXEmitter::emitFence(const FenceNode& fence, std::string& out) {
     }
 
     std::string content = emitNodes(fence.content);
+    if (fence.hasMiddle) {
+        content += " \\middle";
+        content += (fence.middle == 0x2016) ? "\| " : "| ";
+        content += emitNodes(fence.content2);
+    }
 
     if (fence.variation == 0) {
         out += "\\left";
@@ -546,9 +602,26 @@ void LaTeXEmitter::emitFence(const FenceNode& fence, std::string& out) {
     }
 }
 
+/* The amsmath name for an extensible arrow, or nullptr. */
+const char* LaTeXEmitter::arrow_command(unsigned cp) {
+    switch (cp) {
+        case 0x2192: return "\\xrightarrow";
+        case 0x2190: return "\\xleftarrow";
+        case 0x2194: return "\\xleftrightarrow";
+        case 0x21D2: return "\\xRightarrow";
+        case 0x21D0: return "\\xLeftarrow";
+        case 0x21D4: return "\\xLeftrightarrow";
+        case 0x21A6: return "\\xmapsto";
+        case 0x21CC: return "\\xrightleftharpoons";
+        default: return nullptr;
+    }
+}
+
 void LaTeXEmitter::emitFrac(const FracNode& frac, std::string& out) {
+    ++fracDepth_;
     std::string n = emitNodes(frac.numer);
     std::string d = emitNodes(frac.denom);
+    --fracDepth_;
     if (!frac.ruled) {
         /* A ruleless fraction is a binomial; the parentheses round it are
          * the fence node outside, so \binom would double them.  {a \atop b}
@@ -557,7 +630,16 @@ void LaTeXEmitter::emitFrac(const FracNode& frac, std::string& out) {
     } else if (frac.slashed) {
         out += "{}^{"; out += n; out += "}/{}_{"; out += d; out += "}";
     } else {
-        out += (frac.display ? "\\dfrac{" : "\\frac{");
+        /* \dfrac is the default, because the outermost fraction is DRAWN
+         * at display size and a bare \frac pasted into running text is
+         * not.  Inside another fraction the name is dropped again: LaTeX
+         * already steps a nested \frac down, so the two rules agree level
+         * by level and the paste matches the picture at each one. */
+        const bool display = frac.styleOverride ? (frac.styleOverride > 0)
+                                                : (fracDepth_ == 0);
+        out += display    ? "\\dfrac{"
+             : fracDepth_ ? "\\frac{"
+                          : "\\tfrac{";
         out += n; out += "}{"; out += d; out += "}";
     }
 }
@@ -597,6 +679,16 @@ void LaTeXEmitter::emitSqrt(const SqrtNode& sq, std::string& out) {
 
 void LaTeXEmitter::emitScript(const ScriptNode& script, std::string& out) {
     std::string base = emitNodes(script.base);
+    /* {}^{14}_{6}C -- the empty group is what carries the scripts, and it is
+     * what makes them attach to the LEFT of the C rather than to whatever
+     * happened to come before. */
+    if (script.pre) {
+        out += "{}";
+        if (script.hasSup) { out += "^{"; out += emitNodes(script.sup); out += "}"; }
+        if (script.hasSub) { out += "_{"; out += emitNodes(script.sub); out += "}"; }
+        out += base;
+        return;
+    }
     out += base;
     if (script.hasSub) {
         std::string sub = emitNodes(script.sub);

@@ -91,7 +91,7 @@ public:
 
 private:
     /* Stop conditions for a sequence.  A matrix cell also ends at & and \\. */
-    enum Ctx { kTop, kBrace, kCell };
+    enum Ctx { kTop, kBrace, kCell, kBracket };
 
     const std::string s_;    /* owned: the caller passes a stripped temporary */
     size_t p_;
@@ -142,6 +142,8 @@ private:
         skip_space();
         if (eof()) return true;
         if (ctx == kBrace && peek() == '}') return true;
+        /* The optional argument of \xrightarrow[under]{over}. */
+        if (ctx == kBracket && peek() == ']') return true;
         if (ctx == kCell) {
             if (peek() == '&' || peek() == '}') return true;
             if (peek() == '\\' && peek(1) == '\\') return true;
@@ -151,7 +153,9 @@ private:
         /* \right closes the fence that opened this sequence. */
         if (peek() == '\\') {
             std::string cmd = peek_command();
-            if (cmd == "\\right" || cmd == "\\end") return true;
+            if (cmd == "\\right" || cmd == "\\end" ||
+                cmd == "\\middle")
+                return true;
         }
         return false;
     }
@@ -236,8 +240,42 @@ private:
             if (c == '_') { sc->sub = parse_arg(); sc->hasSub = true; }
             else          { sc->sup = parse_arg(); sc->hasSup = true; }
         }
-        if (sc) return sc;
+        if (sc) {
+            /* {}^{14}_{6}C -- a script whose base is empty takes the atom
+             * that FOLLOWS as its base and hangs its scripts on the left.
+             * That is how TeX spells an isotope, and reading it as an empty
+             * base drew the 14 and the 6 floating before a separate C. */
+            if (sc->base.size() == 1 && is_empty_group(*sc->base[0])) {
+                sc->pre = true;
+                NodePtr next = parse_atom(ctx);
+                if (next) {
+                    sc->base.clear();
+                    sc->base.push_back(std::move(next));
+                }
+            }
+            return sc;
+        }
         return base;
+    }
+
+    static bool is_empty_group(const Node& n) {
+        if (n.tag() != Node::kLine) return false;
+        const auto& l = static_cast<const LineNode&>(n);
+        for (const auto& e : l.children) if (e) return false;
+        return true;
+    }
+
+    /* The extensible arrows amsmath spells with an x. */
+    static int extensible_arrow(const std::string& cmd) {
+        if (cmd == "\\xrightarrow")     return 0x2192;
+        if (cmd == "\\xleftarrow")      return 0x2190;
+        if (cmd == "\\xleftrightarrow") return 0x2194;
+        if (cmd == "\\xRightarrow")     return 0x21D2;
+        if (cmd == "\\xLeftarrow")      return 0x21D0;
+        if (cmd == "\\xLeftrightarrow") return 0x21D4;
+        if (cmd == "\\xmapsto")         return 0x21A6;
+        if (cmd == "\\xrightleftharpoons") return 0x21CC;
+        return 0;
     }
 
     /* Limits on a big operator go in its own slots.  Sums stack their limits
@@ -386,6 +424,11 @@ private:
             f->numer = parse_arg();
             f->denom = parse_arg();
             f->display = (cmd == "\\dfrac");
+            /* Which style was ASKED for, as opposed to the one the
+             * nesting depth implies.  \tfrac drew display-size at the
+             * top level, which looked finished and was wrong. */
+            f->styleOverride = (cmd == "\\dfrac") ? 1
+                             : (cmd == "\\tfrac") ? -1 : 0;
             return f;
         }
         if (cmd == "\\sqrt") {
@@ -449,6 +492,44 @@ private:
             return b;
         }
 
+        if (cmd == "\\overset" || cmd == "\\underset" ||
+            cmd == "\\stackrel") {
+            /* \stackrel is \overset under an older name. */
+            auto o = std::make_unique<OversetNode>();
+            o->under = (cmd == "\\underset");
+            o->over = parse_arg();
+            o->base = parse_arg();
+            return o;
+        }
+        if (cmd.size() > 2 && cmd.compare(0, 2, "\\x") == 0) {
+            const int arrow = extensible_arrow(cmd);
+            if (arrow) {
+                /* \xrightarrow[under]{over} is an arrow with labels, and an
+                 * arrow with a label over it is exactly \overset -- so it is
+                 * built from the same node, and the arrow grows to its label
+                 * because the layout grows any base that can. */
+                NodeList under;
+                skip_space();
+                if (peek() == 0x5B) {
+                    ++p_;
+                    under = parse_seq(kBracket);
+                    if (peek() == 0x5D) ++p_;
+                }
+                auto o = std::make_unique<OversetNode>();
+                o->over = parse_arg();
+                o->base.push_back(make_char(TF_SYMBOL, uint16_t(arrow)));
+                NodePtr top = std::move(o);
+                if (!under.empty()) {
+                    auto u = std::make_unique<OversetNode>();
+                    u->under = true;
+                    u->over = std::move(under);
+                    u->base.push_back(std::move(top));
+                    return u;
+                }
+                return top;
+            }
+        }
+
         if (cmd == "\\overline" || cmd == "\\underline") {
             auto d = std::make_unique<DecorationNode>();
             d->selector = (cmd == "\\overline") ? tmOBAR : tmUBAR;
@@ -467,8 +548,13 @@ private:
         if (cmd == "\\text" || cmd == "\\mathrm" || cmd == "\\textrm" ||
             cmd == "\\operatorname")
             return styled_group(TF_TEXT);
-        if (cmd == "\\mathbf" || cmd == "\\bm" || cmd == "\\boldsymbol")
+        /* The lab sets a vector as \vec\bm, so \bm is BOLD ITALIC and is
+         * the vector face.  \mathbf is upright bold and is a different
+         * thing -- a matrix name.  Both used to give the same drawing. */
+        if (cmd == "\\bm" || cmd == "\\boldsymbol" || cmd == "\\vb")
             return styled_group(TF_VECTOR);
+        if (cmd == "\\mathbf")
+            return styled_group(TF_USER3);
         if (cmd == "\\mathit")
             return styled_group(TF_VARIABLE);
 
@@ -578,6 +664,19 @@ private:
         int sel = fence_selector(open);
         f->selector = (sel >= 0) ? sel : tmPAREN;
         f->content = parse_seq(kBrace);
+
+        /* <psi|phi> -- \middle| is a third DELIMITER and grows with the
+         * fence.  Without this it reached the unknown-command branch and the
+         * word "\middle" was set between the two halves. */
+        if (eat_command("\\middle")) {
+            const std::string mid = read_delimiter();
+            f->hasMiddle = true;
+            f->middle = mid.empty() ? '|'
+                      : (mid == "\|" || mid == "\\Vert") ? 0x2016
+                      : (mid == "|" || mid == "\\vert") ? '|'
+                      : (unsigned char)mid[mid.size() - 1];
+            f->content2 = parse_seq(kBrace);
+        }
 
         std::string close = ".";
         if (eat_command("\\right")) close = read_delimiter();

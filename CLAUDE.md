@@ -753,6 +753,50 @@ Placement Policy), not buried in an application scratch directory or retired
 self-tested ports of NGSolve's `fem/*hofe*` C++ source; the symbolic
 building block for a VIM (Volume Integral Method) field operator.
 
+### Equation Notation: `\vec\bm` for Vectors, `\dfrac` by Default (EQNEDT64, 2026-08-19)
+
+**POLICY** (Sugahara): the equation editor shipped in this repository
+(**EQNEDT64**, `src/ext/equation/` -> `radia.equation` + `eqnedt64.exe`) has
+**two references, and they are different documents**: **appearance follows
+TeX**, **usability follows Equation Editor 3.0 (EQNEDT32)**. The file format
+follows neither -- an equation is stored as **LaTeX**, usually inside a
+Markdown file.
+
+**The notation rules** (they govern what the editor WRITES, and what the
+lab's own documents should say):
+
+1. **A vector is `\vec\bm` -- bold ITALIC under the arrow.** `\bm` (equivalently
+   `\boldsymbol`) is the vector face; the letter is drawn from the Mathematical
+   **Bold Italic** alphabet (U+1D468..). Applying the vector style to a
+   selection applies BOTH the arrow and the face; with nothing selected it sets
+   the face for what is typed next, which is how EQNEDT32's Style menu behaves.
+2. **`\mathbf` is a different thing** -- upright bold, for a matrix name. The
+   two were one typeface until this rule was written down, so `\mathbf{A}` and
+   `\bm{A}` drew the same letter; they no longer do.
+3. **`\dfrac` is the default spelling of a fraction.** The outermost fraction is
+   DRAWN at display size, so a bare `\frac` pasted into running text would come
+   out smaller than the picture the author accepted. A fraction INSIDE another
+   goes out as plain `\frac`, because LaTeX steps a nested one down by itself --
+   the two rules then agree level by level. `\tfrac` is preserved when the
+   author asks for it outright.
+
+**Why a policy and not a preference**: these decide what the editor emits into
+`.md` / `.tex` files that other people (and other tools) read. A silent
+disagreement between the picture on screen and the LaTeX on the clipboard is
+the same failure class as a silent fallback -- the reader gets a result they
+cannot audit.
+
+**How it is enforced**: `tests/equation/test_new_templates.py` (the notation
+rules, round-trips) and `tests/equation/test_tex_metrics.py` (the appearance
+half, measured against XeLaTeX + `unicode-math` + Latin Modern Math via
+`validation_test/equation/tex_reference.tex` -- numbers, not screenshots).
+
+**Retirement goal for EQNEDT32** (2026-08-19): the editor is finished when
+(a) a real Equation Editor document converts to `.tex` and can be edited in
+EQNEDT64 to the same result, and (b) a handwritten note (PDF) can be turned
+into correct TeX and from there into a native Microsoft (OMML) equation in
+PowerPoint. Both are acceptance targets, not features.
+
 ### Cubit Plugin Binary: cubit-mesh-export is the Sole Shipper (Tier-2, 2026-06-01)
 
 **POLICY**: The Cubit plugin binaries (`cubit_mesh_export.ccm` +

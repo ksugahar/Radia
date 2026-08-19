@@ -176,6 +176,65 @@ CASES = [
     # on the letter.  A rule the width of what it covers is \overline, which
     # is a different construct with its own node.
     (r"\bar{x}", (6.8640, 7.6800, 0.1320), EXACT),
+
+    # ---- landed 2026-08-19 --------------------------------------------------
+    #
+    # The vector face.  A vector is \vec\bm here, so the letter under the arrow
+    # comes from the Mathematical Bold Italic alphabet, and its advance is the
+    # font's for that letter rather than the upright one's.
+    (r"\bm{B}",              (10.5840, 8.2320, 0.0000), EXACT),
+    (r"\vec{\bm{B}}",        (10.5840, 11.3640, 0.0000), EXACT),
+
+    # Prescripts.  The scripts belong to the EMPTY group, so their shifts are
+    # measured against nothing -- not against the atom that follows.
+    ("{}^{14}_{6}C",         (19.5152, 10.0181, 3.3091), EXACT),
+
+    # \overset and \underset are \mathop\limits in amsmath, so they take the
+    # limit rules, the same ones \lim takes.
+    (r"\overset{a}{=}",      (9.3360, 12.0320, 0.0000), EXACT),
+    (r"\underset{n}{\max}",  (21.8760, 5.3520, 8.8431), EXACT),
+    (r"\xrightarrow{k}",     (12.0017, 15.8732, 0.1200), EXACT),
+
+    # One-sided fences: the delimiter that is not there still takes
+    # \nulldelimiterspace, 1.2 pt.
+    (r"\left. f \right|_{a}^{b}",  (17.2040, 12.7297, 4.7639), EXACT),
+    (r"\left\{ x \right.",         (14.0640, 9.0003, 2.9997), EXACT),
+
+    # Two rules is two decorations; TeX's own spacing then applies twice.
+    (r"\overline{\overline{x}}",   (6.8640, 10.1035, 0.1320), EXACT),
+    (r"\underline{\underline{x}}", (6.8640, 5.3040, 4.9315), EXACT),
+
+    # A text-style fraction sets its parts one size down, wherever it sits.
+    (r"\dfrac{a}{b}",        (8.7480, 13.4289, 8.3649), EXACT),
+    (r"\tfrac{a}{b}",        (7.6080, 8.4329, 4.2244), EXACT),
+
+    # \overrightarrow is the wide \vec: an accent, whose own axis lands on the
+    # body's ink top.  That reproduces TeX's right arrow to 0.012 pt -- but
+    # TeX's own two arrows are not the same height (10.764 against 11.724 on
+    # the same body), because \overleftarrow is a separate macro and not a
+    # mirror image.  One accent rule cannot be both; the tolerance is that
+    # 0.96 pt asymmetry, and the right arrow is the one it is pinned to.
+    (r"\overrightarrow{AB}", (18.4080, 11.7240, 0.0000), 0.02),
+    (r"\overleftarrow{AB}",  (18.4080, 10.7640, 0.0000), 1.0),
+
+    # An arrow labelled on BOTH sides.  TeX pads its arrow past the wider
+    # label by more than the \, on each side amsmath documents; ours grows to
+    # the label and stops, so it is 3.05 pt shorter.  The labels still fit --
+    # this is padding, not a collision.
+    (r"\xrightarrow[m]{k}",  (15.0515, 15.8732, 8.8431), 3.1),
+
+    # A bra-ket.  Height and depth are exact; the width is 2.08 pt over,
+    # because the bar down the middle is sized as a delimiter and takes the
+    # next variant up, where TeX keeps the smaller one.
+    (r"\left\langle \psi \middle| \phi \right\rangle",
+                             (27.8400, 9.0003, 2.9997), 2.1),
+
+    # \mathbf is upright bold.  Ours draws U+1D401, the Mathematical Bold
+    # capital, whose advance is 0.818 em; TeX's \mathbf under this preamble
+    # answers 0.800 em, so it is not setting that glyph.  Ours is the
+    # Unicode-correct one and is what Word receives, so the 0.216 pt stands.
+    (r"\mathbf{B}",          (9.6000, 8.2320, 0.0000), 0.22),
+
 ]
 
 

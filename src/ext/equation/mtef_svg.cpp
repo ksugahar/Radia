@@ -571,8 +571,14 @@ private:
      * That works when the input is a template chosen by hand; it cannot work
      * here, where the input is LaTeX and rac is one command.  So the size
      * has to come from the nesting, and TeX's rule is the one that does. */
-    double frac_child_size(double cur) const {
-        return fracDepth_ == 0 ? cur : script_size(cur);
+    /* A DISPLAY fraction keeps its parts at the body size; a text-style one
+     * steps them down.  Reading the style off the depth alone was right for
+     * \frac and wrong for \tfrac, which is text style at the top level: its
+     * parts stayed full size and the whole thing came out 1.14 pt wide. */
+    double frac_child_size(double cur, int styleOverride = 0) const {
+        const bool display = styleOverride ? (styleOverride > 0)
+                                           : (fracDepth_ == 0);
+        return display ? cur : script_size(cur);
     }
 
     /* How many fractions enclose the one being laid out.  The step has to be
@@ -937,10 +943,13 @@ private:
                  * Mathematical Alphanumeric block; the tree keeps the plain
                  * letter and the typeface, because those code points are past
                  * U+FFFF and a CharNode holds sixteen bits. */
-                if (c.typeface == TF_USER1 || c.typeface == TF_USER2) {
-                    const unsigned int m = (c.typeface == TF_USER1)
-                                         ? mtef_double_struck_of(cp)
-                                         : mtef_script_of(cp);
+                if (c.typeface == TF_USER1 || c.typeface == TF_USER2 ||
+                    c.typeface == TF_VECTOR || c.typeface == TF_USER3) {
+                    const unsigned int m =
+                        (c.typeface == TF_USER1) ? mtef_double_struck_of(cp)
+                      : (c.typeface == TF_USER2) ? mtef_script_of(cp)
+                      : (c.typeface == TF_VECTOR) ? mtef_bold_italic_of(cp)
+                                                  : mtef_bold_upright_of(cp);
                     if (m) return glyph_layout(m, sizePt, false, true);
                 }
                 return glyph_layout(cp, sizePt, typeface_is_italic(c.typeface),
@@ -965,11 +974,12 @@ private:
                                    listPath, child, pl.halign);
             }
             case Node::kDecoration: {
-                const auto& d = static_cast<const DecorationNode&>(n);
-                /* \overline / \underline: a rule the width of what it covers. */
-                return layout_bar(d.content, d.selector == tmOBAR, sizePt,
-                                  listPath, child);
+                return layout_deco(static_cast<const DecorationNode&>(n),
+                                   sizePt, listPath, child);
             }
+            case Node::kOverset:
+                return layout_overset(static_cast<const OversetNode&>(n),
+                                      sizePt, listPath, child);
             case Node::kBraceDeco:
                 return layout_brace_deco(static_cast<const BraceDecoNode&>(n),
                                          sizePt, listPath, child);
@@ -1140,7 +1150,7 @@ private:
                                : mfont.glyph_for(first_code_of(last.text));
             if (gid) delta = mfont.italics_correction(gid) * last.size;
         }
-        if (s.hasSub && delta > 0) base.w -= delta;
+        if (s.hasSub && !s.pre && delta > 0) base.w -= delta;
 
         Layout out = base;
         double x = base.w;
@@ -1170,17 +1180,24 @@ private:
          * high and seven tenths too low -- invisible on a letter, because for
          * a single-character nucleus the drop never binds, and plain on an
          * integral, whose box is tall. */
+        /* A PRESCRIPT is written {}^{14}_{6}C, and the empty group is the
+         * nucleus those scripts belong to: their shifts are measured against
+         * NOTHING, not against the atom that follows.  Measuring against the
+         * C made the pair 2.00 pt taller than TeX sets it, because a capital
+         * letter drives the drop that an empty box does not. */
+        const double baseAsc = s.pre ? 0.0 : base.asc;
+        const double baseDesc = s.pre ? 0.0 : base.desc;
         if (s.hasSup) {
             supShift = std::max(mc.superscriptShiftUp * sizePt,
                                 mc.superscriptBottomMin * sizePt + sup.desc);
             supShift = std::max(supShift,
-                                base.asc - mc.superscriptBaselineDropMax * ss);
+                                baseAsc - mc.superscriptBaselineDropMax * ss);
         }
         if (s.hasSub) {
             subShift = std::max(mc.subscriptShiftDown * sizePt,
                                 sub.asc - mc.subscriptTopMax * sizePt);
             subShift = std::max(subShift,
-                                base.desc + mc.subscriptBaselineDropMin * ss);
+                                baseDesc + mc.subscriptBaselineDropMin * ss);
         }
         if (s.hasSup && s.hasSub) {
             /* The two must not close up on each other, and the superscript
@@ -1201,6 +1218,31 @@ private:
                     subShift -= room;
                 }
             }
+        }
+
+        /* Prescripts -- the 14 and the 6 of {}^{14}_{6}C.  They sit BEFORE
+         * the base and are right-aligned with each other, so the last digit
+         * of each lines up against the C, which is how an isotope is set and
+         * the reason a left script cannot simply be a right one mirrored. */
+        if (s.pre) {
+            const double wpre = std::max(s.hasSup ? sup.w : 0.0,
+                                         s.hasSub ? sub.w : 0.0);
+            Layout pre;
+            if (s.hasSup) {
+                pre.absorb(sup, wpre - sup.w, -supShift);
+                pre.asc = std::max(pre.asc, supShift + sup.asc);
+            }
+            if (s.hasSub) {
+                pre.absorb(sub, wpre - sub.w, subShift);
+                pre.desc = std::max(pre.desc, subShift + sub.desc);
+            }
+            pre.absorb(base, wpre + kScriptSpace, 0);
+            pre.asc = std::max(pre.asc, base.asc);
+            pre.desc = std::max(pre.desc, base.desc);
+            /* \scriptspace after the scripts, as on the right-hand side --
+             * the left-hand path was exactly that 0.5 pt narrow. */
+            pre.w = wpre + kScriptSpace + base.w;
+            return pre;
         }
 
         double wsub = 0, wsup = 0;
@@ -1400,6 +1442,109 @@ private:
         return g;
     }
 
+    /* The single character a list is, when it is one -- so that a base which
+     * CAN grow sideways is recognised as one. */
+    static uint32_t single_char_of(const NodeList& l) {
+        const Node* n = nullptr;
+        for (const auto& e : l) {
+            if (!e) continue;
+            if (n) return 0;
+            n = e.get();
+        }
+        if (!n) return 0;
+        if (n->tag() == Node::kLine)
+            return single_char_of(static_cast<const LineNode&>(*n).children);
+        if (n->tag() != Node::kChar) return 0;
+        const auto& c = static_cast<const CharNode&>(*n);
+        return c.charCode ? c.charCode : uint32_t(uint8_t(c.ch));
+    }
+
+    /* \overset{a}{b} and \underset{a}{b} -- and, because a base that can grow
+     * sideways grows to its label, every labelled arrow with them:
+     * \xrightarrow{f} is \overset{f}{\rightarrow} with the arrow drawn as long
+     * as the f above it.  One rule, so an arrow and an overset cannot drift
+     * apart, and the node existed in the model for months drawing nothing. */
+    Layout layout_overset(const OversetNode& o, double sizePt,
+                          const std::string& lp, int c, double minBase = 0.0) {
+        /* Measured first, only to know how far the base has to grow. */
+        const Layout lab = layout_list(o.over, script_size(sizePt),
+                                       slot_path(lp, c, 0));
+        Layout base;
+        const uint32_t bc = single_char_of(o.base);
+        const mtef::MathFont& mf = mtef::MathFont::math();
+        const double need = std::max(lab.w, minBase);
+        if (bc && mf.ok() && mf.horizontal(mf.glyph_for(bc)) && need > 0) {
+            base = stretched_horizontal(bc, need, sizePt);
+        } else if (o.base.size() == 1 && o.base[0] &&
+                   o.base[0]->tag() == Node::kOverset) {
+            /* \xrightarrow[m]{k} is an underset round an overset, and the
+             * arrow inside has to know about BOTH labels or it grows to the
+             * upper one alone -- which is what left the two-sided form
+             * 3.05 pt narrow. */
+            base = layout_overset(static_cast<const OversetNode&>(*o.base[0]),
+                                  sizePt, slot_path(lp, c, 1), 0, need);
+        } else {
+            base = layout_list(o.base, sizePt, slot_path(lp, c, 1));
+        }
+
+        /* amsmath defines both as a large operator with limits --
+         * \overset{a}{b} is b with a as its upper limit -- so they take the
+         * limit rules, the same ones \lim and \sum take, and not the
+         * overbar gap.  Measured against TeX, the overbar gap put the label
+         * 2.40 pt too low above and 3.49 pt too high below. */
+        return stack_limits(base, o.under ? o.over : empty_list(),
+                            o.under ? empty_list() : o.over,
+                            o.under, !o.under, sizePt, lp, c, 0, 0);
+    }
+
+    static const NodeList& empty_list() {
+        static const NodeList kNone;
+        return kNone;
+    }
+
+    /* An over-decoration is a rule for \overline and an ARROW for
+     * \overrightarrow.  Only the rule was ever drawn: the three arrow
+     * selectors reached layout_bar, which tests for tmOBAR alone, so
+     * \overrightarrow{AB} drew an UNDERLINE -- the wrong mark, in the wrong
+     * place, and it looked deliberate. */
+    Layout layout_deco(const DecorationNode& d, double sizePt,
+                       const std::string& lp, int c) {
+        uint32_t arrow = 0;
+        switch (d.selector) {
+            case tmRARROW: arrow = 0x2192; break;
+            case tmLARROW: arrow = 0x2190; break;
+            case tmBARROW: arrow = 0x2194; break;
+            default: break;
+        }
+        if (!arrow)
+            return layout_bar(d.content, d.selector == tmOBAR, sizePt, lp, c);
+
+        Layout body = layout_list(d.content, sizePt, slot_path(lp, c, 0));
+        Layout ar = stretched_horizontal(arrow, body.w, sizePt);
+        const mtef::MathConstants& mc = mtef::MathFont::math().constants();
+
+        /* \overrightarrow is the WIDE \vec -- an accent, which sits ON the
+         * thing it marks rather than clear above it.  An arrow is drawn about
+         * the axis, so the axis is what lands on the body's ink top; held
+         * clear instead, the whole 0.52 em ink height of Latin Modern's arrow
+         * was added and the box stood 4.55 pt taller than TeX's. */
+        const double axis = mc.axisHeight * sizePt;
+
+        Layout out;
+        const double w = std::max(body.w, ar.w);
+        out.absorb(body, (w - body.w) / 2.0, 0);
+        out.w = w;
+        out.asc = body.asc;
+        out.desc = body.desc;
+        /* The arrow's OWN axis lands on the body's ink top, which is what
+         * "an accent sits on the thing it marks" means for a mark that is
+         * drawn about the axis rather than above the baseline. */
+        const double lift = body.asc - axis;
+        out.absorb(ar, (w - ar.w) / 2.0, -lift);
+        out.asc = std::max(out.asc, lift + ar.asc);
+        return out;
+    }
+
     Layout layout_brace_deco(const BraceDecoNode& b, double sizePt,
                              const std::string& lp, int c) {
         Layout body = layout_list(b.content, sizePt, slot_path(lp, c, 0));
@@ -1485,12 +1630,30 @@ private:
             x += g.w;
         };
 
+        /* A delimiter that is not there still occupies \nulldelimiterspace,
+         * 1.2 pt: TeX sets \left. f \right| exactly that much wider than the
+         * bar and the f together, and both one-sided cases were 1.2 pt narrow
+         * until the space was put back. */
+        const double kNullDelim = 1.2;
+        if (!left) x += kNullDelim;
         if (left) place(gl.first);
         out.absorb(inner, x, 0);
         out.asc = std::max(out.asc, inner.asc);
         out.desc = std::max(out.desc, inner.desc);
         x += inner.w;
+        /* <a|b> -- the bar is a DELIMITER, sized with the fence, not a
+         * character typed in the middle.  A typed one stays small while the
+         * brackets round it grow, which is the tell of a fake bra-ket. */
+        if (f.hasMiddle) {
+            place(uint32_t(f.middle));
+            Layout rest = layout_list(f.content2, sizePt, slot_path(lp, c, 1));
+            out.absorb(rest, x, 0);
+            out.asc = std::max(out.asc, rest.asc);
+            out.desc = std::max(out.desc, rest.desc);
+            x += rest.w;
+        }
         if (right) place(gl.second);
+        else x += kNullDelim;
 
         out.w = x;
         return out;
@@ -1499,7 +1662,7 @@ private:
     /* node_slots(kFrac) = { numer, denom } */
     Layout layout_frac(const FracNode& f, double sizePt,
                        const std::string& lp, int c) {
-        const double kidPt = frac_child_size(sizePt);
+        const double kidPt = frac_child_size(sizePt, f.styleOverride);
         ++fracDepth_;
         Layout num = layout_list(f.numer, kidPt, slot_path(lp, c, 0));
         Layout den = layout_list(f.denom, kidPt, slot_path(lp, c, 1));
@@ -1540,7 +1703,11 @@ ulldelimiterspace, 1.2 pt -- so the BOX is wider than the parts,
          * one.  Using the display set at every level was what still left a
          * fraction inside a fraction a fifth taller than TeX sets it, even
          * after its contents were stepped down in size. */
-        const bool display = (fracDepth_ == 0);
+        /* \dfrac and \tfrac name the style outright; a plain \frac takes the
+         * one its depth implies.  \tfrac used to draw display-size at the top
+         * level, which looked finished and was wrong. */
+        const bool display = f.styleOverride ? (f.styleOverride > 0)
+                                             : (fracDepth_ == 0);
         double shiftUp = (display ? mc.fractionNumeratorDisplayStyleShiftUp
                                   : mc.fractionNumeratorShiftUp) * sizePt;
         double shiftDown = (display ? mc.fractionDenominatorDisplayStyleShiftDown

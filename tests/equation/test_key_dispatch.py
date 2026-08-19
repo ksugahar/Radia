@@ -47,7 +47,7 @@ def fresh(latex=""):
 # ---- the templates ----------------------------------------------------------
 
 @pytest.mark.parametrize("key,fragment", [
-    ("F", r"\frac"), ("R", r"\sqrt"), ("H", "^"), ("L", "_"),
+    ("F", r"\dfrac"), ("R", r"\sqrt"), ("H", "^"), ("L", "_"),
     ("I", r"\int"),
 ])
 def test_ctrl_letter_inserts_its_template(key, fragment):
@@ -69,7 +69,7 @@ def test_ctrl_and_ctrl_shift_are_different_keys():
     a, b = fresh(), fresh()
     press(a, "F", ctrl=True)
     press(b, "F", ctrl=True, shift=True)
-    assert r"\frac" in a.latex()
+    assert r"\dfrac" in a.latex()
     assert r"\frac" not in b.latex()
 
 

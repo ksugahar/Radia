@@ -63,6 +63,12 @@ enum {
     TF_USER1    = 9,
     TF_USER2    = 10,
     TF_MTEXTRA  = 11,
+    /* Upright bold, \mathbf -- a matrix name, NOT a vector.  The lab sets a
+     * vector as \vec\bm, which is BOLD ITALIC, and that is TF_VECTOR above.
+     * The two were one code until the vector rule was written down, so
+     * \mathbf{A} and \bm{A} drew the same and one of them was wrong.
+     * MTEF has no code of its own for it and folds it onto TF_VECTOR. */
+    TF_USER3    = 12,
 };
 
 /* Typeface: wire format (logical | 0x80, indicates 16-bit char code).
@@ -315,6 +321,32 @@ inline unsigned int mtef_plain_of_alphabet(unsigned int cp, bool* doubleStruck) 
     }
     for (unsigned int c = '0'; c <= '9'; ++c)
         if (mtef_double_struck_of(c) == cp) { *doubleStruck = true;  return c; }
+    return 0;
+}
+
+/* Bold italic -- the lab's VECTOR face.
+ *
+ * \vec\bm{B} is the base spelling of a vector here, so the letter under the
+ * arrow is bold italic.  Unicode has no bold-italic digits (a bold digit is
+ * the same glyph in both), so those come from the bold set. */
+inline unsigned int mtef_bold_italic_of(unsigned int cp) {
+    if (cp >= 'A' && cp <= 'Z')     return 0x1D468 + (cp - 'A');
+    if (cp >= 'a' && cp <= 'z')     return 0x1D482 + (cp - 'a');
+    if (cp >= 0x391 && cp <= 0x3A9) return 0x1D71C + (cp - 0x391);
+    if (cp >= 0x3B1 && cp <= 0x3C9) return 0x1D736 + (cp - 0x3B1);
+    if (cp == 0x2207)               return 0x1D735;   /* nabla   */
+    if (cp == 0x2202)               return 0x1D74F;   /* partial */
+    if (cp >= '0' && cp <= '9')     return 0x1D7CE + (cp - '0');
+    return 0;
+}
+
+/* Upright bold -- \mathbf. */
+inline unsigned int mtef_bold_upright_of(unsigned int cp) {
+    if (cp >= 'A' && cp <= 'Z')     return 0x1D400 + (cp - 'A');
+    if (cp >= 'a' && cp <= 'z')     return 0x1D41A + (cp - 'a');
+    if (cp >= '0' && cp <= '9')     return 0x1D7CE + (cp - '0');
+    if (cp >= 0x391 && cp <= 0x3A9) return 0x1D6A8 + (cp - 0x391);
+    if (cp >= 0x3B1 && cp <= 0x3C9) return 0x1D6C2 + (cp - 0x3B1);
     return 0;
 }
 
