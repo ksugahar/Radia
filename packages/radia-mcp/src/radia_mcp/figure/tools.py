@@ -42,6 +42,11 @@ from __future__ import annotations
 # `figure_*` name scan in radia_mcp.figure.register().
 from ._pptx_audit import figure_audit_pptx_figures  # noqa: F401
 from ._script_reference import figure_audit_script_reference  # noqa: F401
+from ._claim import (  # noqa: F401
+    classify_claim,
+    figure_claim_visibility,
+    figure_plan_for_claim,
+)
 
 
 # ----- Style profile registry -----------------------------------------------
