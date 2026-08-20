@@ -2,7 +2,7 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **1013 tools** across 49 MCP servers.
+Total: **1017 tools** across 49 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
@@ -44,7 +44,7 @@ Total: **1013 tools** across 49 MCP servers.
 | [`mcp-server-mathematica`](#mcp-server-mathematica) | `radia_mcp.mathematica` | 14 |
 | [`mcp-server-md2html`](#mcp-server-md2html) | `radia_mcp.md2html` | 2 |
 | [`mcp-server-chart2d`](#mcp-server-chart2d) | `radia_mcp.chart2d` | 24 |
-| [`mcp-server-paper-writing`](#mcp-server-paper-writing) | `radia_mcp.paper_writing` | 191 |
+| [`mcp-server-paper-writing`](#mcp-server-paper-writing) | `radia_mcp.paper_writing` | 195 |
 | [`mcp-server-grant-writing`](#mcp-server-grant-writing) | `radia_mcp.grant_writing` | 29 |
 | [`mcp-server-poster`](#mcp-server-poster) | `radia_mcp.poster` | 32 |
 | [`mcp-server-literature-index`](#mcp-server-literature-index) | `radia_mcp.literature_index` | 9 |
@@ -1080,11 +1080,15 @@ Module: `radia_mcp.paper_writing.server`
 |---|---|
 | `figure_audit_embeds` | Lint every \includegraphics in a LaTeX file for figure embeds that |
 | `figure_audit_pptx_figures` | Lint every picture in a PPTX deck for paste-scale defects -- the slide |
+| `figure_audit_script_reference` | Report figures the script never points at. |
+| `figure_claim_visibility` | For every slide that makes a numeric claim, is the number visible? |
 | `figure_design_principles` | The figure-MAKING (作図, *sakuzu*) DESIGN canon, distilled from the |
 | `figure_diagram_recipes` | Flowchart + conceptual/schematic DIAGRAM recipes -- the diagram-DRAWING skill |
 | `figure_everyday_recipe` | Matplotlib recipe for the lab's EVERYDAY analysis figure. |
 | `figure_matlab2tikz_recipe` | Generate a MATLAB recipe that exports the current figure to TikZ |
 | `figure_office_export_recipe` | MATLAB recipe to export the current figure for Word / PowerPoint |
+| `figure_plan_for_claim` | What figure makes this claim visible, and what to annotate on it. |
+| `figure_readability_problems` | Everything about this figure that would make it unreadable. |
 | `figure_size_for_target` | Recommend output figure size + font settings for a target embedding. |
 | `figure_style_guide` | Return the lab-standard graph style guide. |
 | `paper_figure_profiles` | List paper-quality figure profiles + their exact journal geometry. |
