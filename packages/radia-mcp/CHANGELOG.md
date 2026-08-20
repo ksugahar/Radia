@@ -7,6 +7,20 @@ crystallized as its own package.
 
 ## [Unreleased]
 
+- grant-writing: added `validation_test/grant_writing/`, a corpus regression
+  lane over real proposals. `sweep.py` runs every detector over every
+  document and prints the pattern table -- the working surface that found
+  eight false-positive families in one pass -- and `--write-baseline` records
+  counts once they have been adjudicated. The pytest lane then asserts that
+  no count moves and no unseen finding pattern appears. The corpus is not in
+  the repository: real proposals belong to their authors, several are
+  colleagues' work, and this repository is public, so the lane reads a
+  manifest named by `GRANT_WRITING_CORPUS` and skips without it. Verified by
+  deliberately disabling the form-instruction stripping, which raised the
+  adopted 科研費 proposal from 5 findings to 6 and introduced
+  `international_standing/no_named_counterpart` -- the form's own 人権
+  boilerplate mentions 国際共同研究 -- and both tests named it.
+
 - grant-writing: added a non-prose immunity gate. The health report is fed a
   document assembled from nothing but what a real form contributes --
   instructions, a furigana field, a publication list, a year-by-task matrix,
