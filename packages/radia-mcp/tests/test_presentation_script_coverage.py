@@ -233,3 +233,55 @@ def test_an_unwritten_script_is_still_reported(tmp_path):
     got = presentation_script_vs_slide_coverage(deck)
     assert got["n_low_coverage_slides"] == 1
     assert got["low_coverage_slides"][0]["slide_no"] == 2
+
+
+# --- figures: is each one earned? -------------------------------------------
+
+def test_a_figure_nobody_points_at_is_reported(tmp_path):
+    """Paste-scale checking cannot find this: the figure renders perfectly and
+    the speaker never sends anyone to it."""
+    from radia_mcp.figure.tools import figure_audit_script_reference
+    deck = build_rich(tmp_path, [
+        {"body": "表紙", "note": "表紙です。"},
+        {"body": "スケーリング", "figure_label": "memory",
+         "note": "16万2千自由度を60.7秒で解きました。"},
+    ])
+    got = figure_audit_script_reference(deck)
+    assert got["n_not_referenced"] == 1
+    assert got["figures_not_referenced"][0]["slide_no"] == 2
+
+
+def test_pointing_at_the_figure_clears_it(tmp_path):
+    from radia_mcp.figure.tools import figure_audit_script_reference
+    deck = build_rich(tmp_path, [
+        {"body": "表紙", "note": "表紙です。"},
+        {"body": "スケーリング", "figure_label": "memory",
+         "note": "図は左がピークメモリ、右が解時間です。"},
+    ])
+    got = figure_audit_script_reference(deck)
+    assert got["n_not_referenced"] == 0
+    assert got["score"] == 10.0
+
+
+def test_naming_a_label_counts_as_pointing(tmp_path):
+    """Saying what the figure is labelled with sends the audience there just
+    as well as saying the word 'figure'."""
+    from radia_mcp.figure.tools import figure_audit_script_reference
+    deck = build_rich(tmp_path, [
+        {"body": "表紙", "note": "表紙です。"},
+        {"body": "メッシュ比較", "figure_label": "格子状メッシュ",
+         "note": "格子状メッシュと粗いメッシュを比べます。"},
+    ])
+    got = figure_audit_script_reference(deck)
+    assert got["n_not_referenced"] == 0
+
+
+def test_a_slide_with_no_figure_is_not_counted(tmp_path):
+    from radia_mcp.figure.tools import figure_audit_script_reference
+    deck = build_rich(tmp_path, [
+        {"body": "表紙", "note": "表紙です。"},
+        {"body": "文章だけ", "note": "図はありません。"},
+    ])
+    got = figure_audit_script_reference(deck)
+    assert got["slides_with_figures"] == 0
+    assert got["score"] == 10.0
