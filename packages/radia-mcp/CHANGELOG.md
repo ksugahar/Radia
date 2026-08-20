@@ -7,6 +7,33 @@ crystallized as its own package.
 
 ## [Unreleased]
 
+- grant-writing: the form's own instruction text is no longer linted as the
+  applicant's prose. Measured on two real 科研費 forms, instructions are 10%
+  of one and 40% of the other, and 「冒頭にその概要を簡潔にまとめて記述し、
+  本文には、(1)…」 was reported as a 逆茂木 sentence in an adopted proposal.
+  Two separators, both derived from the real forms: instruction vocabulary
+  (本欄には / 記述すること / 記入してください / 公募要領 / ても可 / 空欄の
+  まま), and politeness -- a proposal body is である調 and a form speaks
+  ですます調. Across five documents polite endings are 0-3% of the text and
+  every one belongs to the form; a ratio guard leaves a proposal genuinely
+  written in ですます調 alone. `_prose_for_lint` also no longer returns early
+  for text without backslashes, which had skipped this entirely for any
+  proposal extracted from Word.
+- grant-writing: swept every detector over nine real proposals at once and
+  adjudicated the result, which found more false positives in one pass than
+  the preceding sessions did one at a time: 21 finding patterns down to 13.
+  A フリガナ field became foreign counterparts named ケンゴ氏 and ユウキ氏,
+  which then drew international-reciprocity and irreplaceability findings; a
+  proposal citing IEEE papers was told it showed no international output; a
+  domestic 基盤 proposal that surveyed foreign prior work was judged on its
+  international standing; a person's name on its own line merged with the
+  paragraph below and produced eighteen vague-verb findings; 「活用する幅広い
+  産業分野」 was read as a promise rather than an adnominal; 「…を活用して
+  開発を行っている（S1,2）」 was read as a promise rather than a record; a
+  software inventory was an acronym pile; and a licence price was a budget
+  necessity, reported four times over. All eight have the same shape -- the
+  tool read something that is not prose as prose.
+
 - grant-writing: `_prose_for_lint` keeps newlines and puts a section heading
   on its own line. Flattening every whitespace run fused a field title into
   the paragraph below it, so 「２　応募者の研究遂行能力及び研究環境」 plus the

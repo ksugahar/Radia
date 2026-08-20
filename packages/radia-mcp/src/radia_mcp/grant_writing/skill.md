@@ -706,6 +706,63 @@ Two operating rules follow:
   「有能な研究協力者を有する」 describes a lab; it does not hand anyone a job,
   and an adopted proposal that says so must not be flagged for it.
 
+## The Form Is Not the Applicant
+
+A Japanese application form prints its own instructions inside the document
+the applicant submits, and a lint that reads the file reads both. Measured on
+two real 科研費 forms, the instructions are **10% of one and 40% of the
+other** — and in the shorter one the form outwrote the applicant.
+
+Findings taken from that text are the funder's writing scored as the
+applicant's defects. 「冒頭にその概要を簡潔にまとめて記述し、本文には、(1)本
+研究の学術的背景、…」 was reported as a 逆茂木 sentence in an **adopted**
+proposal.
+
+Two separators do the work, and both were derived from the real forms rather
+than guessed:
+
+1. **Instruction vocabulary** — 本欄には, 記述すること, 記入してください,
+   公募要領, 記入要領, 審査されます, ても可, てもよい, 空欄のまま. Together
+   these match every instruction paragraph in both forms and no applicant
+   sentence in either.
+2. **Politeness** — a proposal body is written in **である調** and a form
+   speaks in **ですます調**. Across five real documents, polite endings are
+   0–3% of the text and every single one belongs to the form. A ratio guard
+   (drop them only when they are under 30% of the document) leaves a proposal
+   genuinely written in ですます調 alone.
+
+The second rule generalises past 科研費: any funder's form, in any program,
+addresses the applicant politely and is answered plainly.
+
+## Sweep the Corpus, Do Not Wait for the Bite
+
+Every false positive fixed before this point was found one at a time, by
+running a check on one document and reading the output. Running **every
+detector over every real document at once** and adjudicating the result found
+more in one pass than the previous several sessions did.
+
+The first sweep produced 21 distinct finding patterns over nine documents.
+Adjudicating each against its excerpt reduced them to 13, all of which are
+real prose findings. What the sweep caught, in descending order of how badly
+each one lied:
+
+| Fired on | Actually | Fix |
+|---|---|---|
+| ケンゴ氏, ユウキ氏 as foreign counterparts | a **フリガナ field** followed by 氏名 on the next line | 氏 must be the honorific (not 氏名) and adjacent to the name |
+| 「no international output」 on a proposal citing IEEE papers | publishing in IEEE **is** international output | venue names count as outputs, not only as triggers |
+| 「no international output」 on a domestic 基盤 proposal | it surveyed 「フランスの研究グループによる」 **prior work** | the check opens on a relationship, a counterpart, a venue or an output — not a region name near a verb |
+| 18 vague-verb findings across six proposals | a **person's name on its own line** merged with the paragraph below | a newline ends a sentence here too |
+| 「活用する幅広い産業分野」 | **adnominal** use: it says who uses the technology | a claim verb followed by a noun is not the predicate |
+| 「…を活用して開発を行っている（S1,2）」 | a **record with a citation**, in これまでの研究活動 | an ongoing-form ending is a record, not a promise |
+| acronym pile on 「Adventure, CST Studio, Elmer, …」 | an **inventory** of the software a lab owns | six or more commas plus six acronyms is a list |
+| four identical budget findings on one sentence | 「顧客の採算が取れる1件あたり5,000千円に設定」 is a **price charged**, not a cost incurred | revenue vocabulary excluded; excerpts deduplicated |
+
+The recurring shape, now seen eight times, is one sentence long: **the tool
+read something that is not prose as prose.** Tables, bibliographies, headings,
+form instructions, furigana fields, inventories and price lists all live
+inside proposal documents, and none of them are the applicant arguing. Before
+adding any check, ask what non-prose in a real form could satisfy its trigger.
+
 ## A Trigger Is Not a Claim (誤検出の出どころ)
 
 Two proposals with known outcomes — an adopted Go-Tech application and a
