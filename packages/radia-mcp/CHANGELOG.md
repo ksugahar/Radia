@@ -7,6 +7,15 @@ crystallized as its own package.
 
 ## [Unreleased]
 
+- grant-writing: the international check now separates an achieved output
+  from an intended one, and no longer treats a plain statement of fact as a
+  plan. A network being formed and one already established must not read
+  alike; stating an accepted paper as accepted is what separates them.
+  Naming a foreign institution now triggers the check on its own, since a
+  draft that says ウィーン工科大学 is international whether or not it uses
+  the word 国際 -- requiring the word skipped exactly the drafts that name
+  their partners properly.
+
 - grant-writing: rescoped the skill away from being a KAKENHI-only tool.
   `skill.md` opens by stating that programme-neutral sections apply to any
   competitive funding application, that sections carrying a programme name
