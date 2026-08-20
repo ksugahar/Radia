@@ -1727,3 +1727,63 @@ def test_a_year_by_task_matrix_is_not_one_long_sentence():
 
     assert result["max_length"] < 30
     assert result["over_threshold_count"] == 0
+
+
+def test_a_capability_handed_to_a_non_member_is_reported():
+    # The line is from a rejected 基盤C whose novelty was machine learning.
+    proposal = (
+        "本研究では機械学習による電気機器設計の自動化を行う。"
+        "トポロジー最適化に機械学習を用いる点が新しい。"
+        "機械学習の観点からは最適化計算の高速化を検討する。\n"
+        "研究代表者\t菅原賢悟：研究統括，電磁界解析技術全般担当\n"
+        "連携研究者\t浅川伸一：機械学習に関する専門知識の供与\n"
+    )
+
+    result = gw.grant_writing_capability_responsibility_check(proposal)
+
+    assert result["applicable"]
+    risk = result["risks"][0]
+    assert risk["role"] == "連携研究者"
+    assert "機械学習" in risk["terms"]
+    assert "浅川伸一" not in risk["terms"]
+    assert "連携研究者" not in risk["terms"]
+
+
+def test_a_team_of_members_only_is_not_judged():
+    # Every name in an adopted proposal's 役割分担 carried a 分担 role.
+    proposal = (
+        "本研究はモデル縮約法を開発する。モデル縮約の要素技術は多い。"
+        "モデル縮約は物理現象の本質を抽出する技術である。\n"
+        "松尾哲司：とりまとめ，モデル縮約定式化\n"
+        "高橋康人：モータモデル縮約法の実装・実証\n"
+    )
+
+    result = gw.grant_writing_capability_responsibility_check(proposal)
+
+    assert not result["applicable"]
+
+
+def test_prose_mentioning_a_collaborator_is_not_an_assignment():
+    # 「有能な研究協力者を有する」 describes; it does not hand anyone a job.
+    proposal = (
+        "計算電磁気学の理論研究のため計算機環境は整備されており，"
+        "大学院生など有能な研究協力者を有する。"
+        "計算機環境は理論研究に用いる。計算機環境の増強も進めている。"
+    )
+
+    result = gw.grant_writing_capability_responsibility_check(proposal)
+
+    assert not result["applicable"]
+
+
+def test_role_description_filler_is_not_a_capability():
+    proposal = (
+        "本研究は誘導加熱コイルを設計する。誘導加熱の発熱量を評価する。"
+        "誘導加熱の損失分布を求める。\n"
+        "アドバイザー\t伊藤英昭：全般に関する助言の提供\n"
+    )
+
+    result = gw.grant_writing_capability_responsibility_check(proposal)
+
+    assert result["risks"] == []
+    assert result["score"] == 10.0

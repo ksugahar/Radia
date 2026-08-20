@@ -657,6 +657,55 @@ Better: 「日本発の階層行列ライブラリを用いた積分方程式解
 「著者がその指摘を見て、反論せずに直せるか」だけである。それが満たされて
 いれば、採否を予測しなくても検査として正しい。
 
+## Who Carries the Part That Is New
+
+A proposal usually joins a field the applicant knows to one they do not. The
+capability criterion is read by asking whether the team can do the part that
+is new, and that is a question about roles: 研究代表者 and 研究分担者 are
+accountable and funded, while 連携研究者, 研究協力者 and アドバイザー are not
+counted the same way.
+
+`grant_writing_capability_responsibility_check` reads role-assignment lines
+and reports a capability handed to someone without a responsibility share.
+Measured on a rejected 基盤C whose novelty was machine learning applied to
+topology optimisation: the applicant's twenty-three listed items were patents
+and papers on 電磁界解析 and accelerators with no machine-learning entry, and
+the line supplying the missing half read 「連携研究者　浅川伸一：機械学習に関
+する専門知識の供与」. The check names that line and that word.
+
+**Scope, honestly stated.** This is one true positive against four true
+negatives — an adopted 基盤 proposal, an adopted Go-Tech application in two
+documents, and the current draft, all of which give every named person a
+分担 role and are therefore not judged. It detects a structural defect. It
+does not predict adoption, and nothing in this suite does.
+
+### The version that had to be thrown away
+
+The first attempt compared the vocabulary of the novelty sentences against
+the words in the evidence list, reporting terms that appeared in one and not
+the other. It fired hardest on the **adopted** proposal — score 0.0, five
+findings — and stayed silent on the rejected one.
+
+The reason is worth keeping. An adopted proposal's novelty is usually a
+compound it coins for the occasion (マルチフィジクスモデル縮約), and no
+paper title in any evidence list can contain a phrase the proposal just
+invented. Meanwhile a weak proposal can have the missing capability appear in
+its evidence list through a collaborator's entries, which is precisely the
+case the check was built to catch.
+
+**Lexical overlap does not measure capability.** What is mechanically
+checkable is the role attribution: who is named, what they were assigned, and
+whether that role carries a budget. A narrow check that is right beats a
+broad one that inverts.
+
+Two operating rules follow:
+
+- Extract the capability from the description **after** the name, never from
+  the whole line: the person's name and the role word are not capabilities.
+- Require a real assignment — a role word, a name, then a colon.
+  「有能な研究協力者を有する」 describes a lab; it does not hand anyone a job,
+  and an adopted proposal that says so must not be flagged for it.
+
 ## A Trigger Is Not a Claim (誤検出の出どころ)
 
 Two proposals with known outcomes — an adopted Go-Tech application and a

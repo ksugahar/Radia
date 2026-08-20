@@ -3186,6 +3186,141 @@ def grant_writing_page_limit_check(pdf_path: str, tex_dir: str = "") -> dict:
     }
 
 
+# Someone who carries work without a responsibility or budget share. A funder
+# reads 研究分担者 as accountable and these as not.
+_NON_MEMBER_ROLE = re.compile(r"連携研究者|研究協力者|協力者|アドバイザー|オブザーバ")
+# A line that hands a named person a job, not prose that happens to use the
+# role word: 「連携研究者　浅川伸一：機械学習に関する専門知識の供与」 assigns,
+# while 「有能な研究協力者を有する」 describes. Only the former is checkable.
+_ROLE_ASSIGNMENT = re.compile(
+    r"(?:^|[\s　、，])(?P<role>連携研究者|研究協力者|アドバイザー|オブザーバ)"
+    r"[\s　]{0,4}(?P<name>[^\s　：:、，。]{2,12})[：:]\s*(?P<desc>.+)$"
+)
+# The form explains these roles in its own instruction text, which describes
+# nobody and therefore carries no capability.
+_FORM_INSTRUCTION_HINT = re.compile(
+    r"本欄には|記入して|記述して|してください|下さい|参照|場合には|必要に応じて"
+)
+# Vocabulary every proposal uses regardless of field: uncovered here means
+# nothing.
+_CAPABILITY_STOPWORDS = frozenset({
+    "本研究", "研究", "開発", "手法", "方法", "解析", "評価", "検証", "計算",
+    "設計", "技術", "問題", "課題", "目的", "計画", "実施", "実装", "適用",
+    "利用", "使用", "対象", "結果", "効果", "内容", "以下", "以上", "場合",
+    "今回", "一方", "同様", "現在", "近年", "従来", "既存", "各種", "全体",
+    "期間", "年度", "本欄", "記述", "検討", "提案", "構築", "向上", "実現",
+    "必要", "可能", "重要", "特徴", "状況", "分野", "国内", "国外",
+    # Role-description filler: these say what the person does for the
+    # project, not which capability they hold.
+    "専門知識", "供与", "助言", "提供", "全般", "担当", "統括", "指導",
+    "協力", "支援", "情報", "経験", "知見", "専門家",
+})
+
+
+def grant_writing_capability_responsibility_check(text: str) -> dict:
+    """Check who carries the capability the novelty rests on.
+
+    A proposal usually joins a field the applicant knows to one they do not,
+    and reviewers read the capability criterion by asking whether the team can
+    do the part that is new. The answer is a matter of roles: 研究代表者 and
+    研究分担者 are accountable and funded, while 連携研究者, 研究協力者 and
+    アドバイザー are not counted the same way.
+
+    Measured on a rejected 基盤C whose novelty was machine learning applied to
+    topology optimisation: the applicant's 23 listed items were patents and
+    papers on 電磁界解析 and accelerators with no machine-learning entry, and
+    the line that supplied the missing capability read 「連携研究者　浅川伸一：
+    機械学習に関する専門知識の供与」. The same document's adopted counterpart
+    named five people and gave every one of them a 分担 role.
+
+    An earlier version of this check compared the novelty vocabulary against
+    the words in the evidence list. It fired hardest on the *adopted*
+    proposal, whose novelty is a compound it coined (マルチフィジクスモデル
+    縮約) that no paper title could contain, and stayed silent on the rejected
+    one. Lexical overlap does not measure capability, so only the role
+    attribution -- which is mechanical and locatable -- is tested here.
+    """
+    text = _prose_for_lint(_read_text_if_path(text))
+
+    segments = [
+        s.strip()
+        for s in re.split(r"(?<=[。．!?！？])|\n", text)
+        if s and s.strip()
+    ]
+    assignments = [
+        (s, m)
+        for s in segments
+        for m in [_ROLE_ASSIGNMENT.search(s)]
+        if m and not _FORM_INSTRUCTION_HINT.search(s)
+    ]
+    if not assignments:
+        return {
+            "applicable": False,
+            "score": None,
+            "risk_count": 0,
+            "risks": [],
+            "carried_terms": [],
+            "role_lines": [],
+            "comments": [],
+            "recommendations": [],
+            "reason": (
+                "連携研究者・研究協力者・アドバイザーへの担当割り当て行がないため"
+                "判定しない。"
+            ),
+            "source": "capability-responsibility check",
+        }
+
+    risks: list[dict] = []
+    carried: list[str] = []
+    for line, match in assignments:
+        role = match.group("role")
+        # Only the description after the name states a capability; the name
+        # itself and the role word are not ones.
+        terms = sorted({
+            term
+            for term in _CLAIM_TERM.findall(match.group("desc"))
+            if len(term) >= 3
+            and term not in _CAPABILITY_STOPWORDS
+            and not _NON_MEMBER_ROLE.fullmatch(term)
+            and text.count(term) >= 3
+        })
+        if not terms:
+            continue
+        carried.extend(terms)
+        risks.append({
+            "type": "novelty_capability_on_non_member",
+            "severity": "HIGH",
+            "role": role,
+            "terms": terms,
+            "excerpt": line[:120],
+            "comment": (
+                f"「{'、'.join(terms)}」の能力が{role}に置かれている。"
+            ),
+            "recommendation": (
+                "予算と責任を持つ研究分担者にする。連携研究者・協力者は"
+                "遂行体制として数えにくく、その能力を要する主張は"
+                "裏付けのない主張として読まれる。"
+            ),
+        })
+
+    deductions = sum(3.0 for _ in risks)
+    return {
+        "applicable": True,
+        "score": max(0.0, round(10.0 - deductions, 1)),
+        "risk_count": len(risks),
+        "risks": risks,
+        "carried_terms": sorted(set(carried)),
+        "role_lines": [line[:120] for line, _ in assignments[:4]],
+        "comments": [r["comment"] for r in risks],
+        "recommendations": [r["recommendation"] for r in risks],
+        "target": (
+            "every capability the claim depends on sits with someone who has "
+            "a responsibility share"
+        ),
+        "source": "capability-responsibility check",
+    }
+
+
 def grant_writing_question_originality_check(text: str) -> dict:
     """Check that the central question carries an originality position.
 
@@ -4447,6 +4582,7 @@ _DETECTOR_TOOLS = frozenset({
     "international",
     "irreplaceable",
     "pages",
+    "capability",
 })
 
 _DETECTOR_RESULT_KEYS = frozenset({
@@ -4466,6 +4602,7 @@ _DETECTOR_RESULT_KEYS = frozenset({
     "international_standing",
     "collaboration_irreplaceability",
     "page_limit",
+    "capability_responsibility",
 })
 
 
@@ -4689,6 +4826,20 @@ def grant_writing_health_report(
                         "score": limits["score"],
                         "comments": limits["comments"][:5],
                     })
+
+    if "capability" not in skip_set:
+        capability = grant_writing_capability_responsibility_check(text)
+        detailed_results["capability_responsibility"] = capability
+        if capability["applicable"]:
+            detailed_scores["capability_responsibility"] = capability["score"]
+            if capability["risks"]:
+                priority_issues.append({
+                    "tool": "capability",
+                    "name": "capability_responsibility_check",
+                    "severity": "HIGH",
+                    "score": capability["score"],
+                    "comments": capability["comments"][:5],
+                })
 
     if "irreplaceable" not in skip_set:
         irrep = grant_writing_collaboration_irreplaceability_check(text)
