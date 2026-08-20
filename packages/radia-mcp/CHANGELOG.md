@@ -7,6 +7,23 @@ crystallized as its own package.
 
 ## [Unreleased]
 
+- grant-writing: a newline now ends a segment in the sentence-length check.
+  A 年度計画 matrix is a run of short cells with no full stop, and joining
+  them reported the Gantt table of an adopted 科研費 proposal as a single
+  455-character sentence -- the same defect class as the PDF-table
+  co-occurrence fixed above. Measured on that proposal: max 455 -> 136
+  characters, average 86 -> 36.
+- grant-writing: a fourth measurement, this time inside one applicant's own
+  科研費 folder, again finds no relationship between these checks and
+  adoption. An adopted 基盤 proposal (松尾, 令和2年度 S-14) carries six
+  findings against four for a rejected one by the same applicant (平成28年度
+  S-1-8), and the unsubmitted current draft -- the cleanest of the three at
+  two findings, no sentence over 90 characters -- has yet to face a
+  reviewer. What the adopted document does differently is structural, not
+  prose-level: named checkable deficiencies as bullets, five referenced
+  figures, a year-by-task matrix, and labelled publications (M1-M6/T1-T8/
+  S1-S5) cited inline from the capability prose.
+
 - grant-writing: removed six false positives found by running the suite over
   two proposals with known outcomes — an adopted Go-Tech application and a
   rejected 住友財団 form. Every one had the same shape: a word read as a claim

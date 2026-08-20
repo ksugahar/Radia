@@ -1710,3 +1710,20 @@ def test_a_proposal_body_missing_one_axis_is_still_reported():
 
     types = {r["type"] for r in result["risks"]}
     assert "review_criteria_axis_missing" in types
+
+
+def test_a_year_by_task_matrix_is_not_one_long_sentence():
+    # An adopted proposal's 年度計画 is a matrix of short cells with no full
+    # stop. Joined, it was reported as a single 455-character sentence.
+    plan = "\n".join([
+        "［研究計画］", "令和2年度", "令和3年度", "令和4年度",
+        "マルチスケールモデル縮約", "定式化・実装", "（汎用シミュレータ実装）",
+        "マルチフィジクスモデル縮約", "実現方法の検討・定式化", "実装",
+        "モータモデル縮約", "回転機への応用", "マルチスケール化検討",
+        "非線形化", "マルチフィジクス化", "シミュレータ化", "実証用モータ実験",
+    ])
+
+    result = gw.grant_writing_analyze_sentences(plan)
+
+    assert result["max_length"] < 30
+    assert result["over_threshold_count"] == 0

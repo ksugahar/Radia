@@ -175,7 +175,10 @@ def grant_writing_analyze_sentences(text: str, max_len: int = 90) -> dict:
     reviewers still need a clear one-claim-per-sentence rhythm.
     """
     text = _prose_for_lint(_read_text_if_path(text))
-    sentences = [s.strip() for s in re.split(r"[。．!?！？]", text) if s.strip()]
+    # A newline ends a segment too. A 年度計画 matrix is a run of short cells
+    # with no full stop, and joining them reported a Gantt table in an adopted
+    # proposal as a single 455-character sentence.
+    sentences = [s.strip() for s in re.split(r"[。．!?！？\n]", text) if s.strip()]
     if not sentences:
         return {"error": "no sentences found"}
     lengths = [len(s) for s in sentences]
