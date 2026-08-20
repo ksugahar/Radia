@@ -1359,3 +1359,27 @@ def test_international_standing_is_not_applicable_without_the_subject():
 
     assert not result["applicable"]
     assert result["score"] is None
+
+
+def test_international_standing_flags_outputs_that_are_all_planned():
+    # A network being formed and one already established must not read alike.
+    # Stating an accepted paper as accepted is what separates them.
+    result = gw.grant_writing_international_standing_check(
+        "グラーツ工科大学と相互に共同研究を進める。"
+        "国際会議での共著発表を目指す。日本発の手法を還流する予定である。"
+    )
+
+    types = {r["type"] for r in result["risks"]}
+    assert "international_output_all_planned" in types
+    assert result["planned_output_sentences"]
+
+
+def test_international_standing_credits_an_accepted_output():
+    result = gw.grant_writing_international_standing_check(
+        "ウィーン工科大学のHollaus氏と相互に共同研究を進め、"
+        "日本発の手法との相互検証をIGTE Symposium 2026採択共著論文として得た。"
+    )
+
+    types = {r["type"] for r in result["risks"]}
+    assert "international_output_all_planned" not in types
+    assert result["achieved_output_sentences"]
