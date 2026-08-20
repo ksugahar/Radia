@@ -7,6 +7,30 @@ crystallized as its own package.
 
 ## [Unreleased]
 
+- grant-writing: added `grant_writing_capability_responsibility_check`. A
+  proposal usually joins a field the applicant knows to one they do not, and
+  the capability criterion asks who can do the new part. That is a question
+  about roles: 研究分担者 is accountable and funded, 連携研究者 and
+  研究協力者 are not. Measured on a rejected 基盤C whose novelty was machine
+  learning applied to topology optimisation -- twenty-three listed items, all
+  patents and papers on 電磁界解析 and accelerators, none on machine learning,
+  and the missing half supplied by the line 「連携研究者　浅川伸一：機械学習に
+  関する専門知識の供与」. One true positive against four true negatives (an
+  adopted 基盤 proposal, an adopted Go-Tech application in two documents, and
+  the current draft), all of which give every named person a 分担 role. It
+  detects a structural defect; it does not predict adoption.
+- grant-writing: recorded the version of that check which had to be thrown
+  away. Comparing novelty vocabulary against the evidence list fired hardest
+  on the *adopted* proposal (score 0.0, five findings) and stayed silent on
+  the rejected one, because an adopted proposal's novelty is a compound it
+  coins for the occasion (マルチフィジクスモデル縮約) that no paper title can
+  contain, while a weak proposal can have the missing capability appear
+  through a collaborator's entries. Lexical overlap does not measure
+  capability. The shipped check reads role attribution only, takes the
+  capability from the description after the name, and requires a real
+  assignment -- 「有能な研究協力者を有する」 describes a lab rather than
+  handing anyone a job.
+
 - grant-writing: a newline now ends a segment in the sentence-length check.
   A 年度計画 matrix is a run of short cells with no full stop, and joining
   them reported the Gantt table of an adopted 科研費 proposal as a single
