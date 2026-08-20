@@ -7,6 +7,16 @@ crystallized as its own package.
 
 ## [Unreleased]
 
+- grant-writing: added `grant_writing_collaboration_irreplaceability_check`.
+  Funders on both sides of an international collaboration ask the same
+  question -- why this counterpart rather than someone closer -- and shared
+  enthusiasm answers neither direction. The check asks for the asset only
+  this side holds, evidence that the other side is asking for it, and a
+  reason no nearer substitute will do. Run against a live 基盤(C) draft it
+  isolated the real gap: the asset and the no-substitute argument were both
+  written, and the counterpart's own approaches were missing, which is the
+  half an applicant drops while describing their own plan.
+
 - grant-writing: the international check now separates an achieved output
   from an intended one, and no longer treats a plain statement of fact as a
   plan. A network being formed and one already established must not read
