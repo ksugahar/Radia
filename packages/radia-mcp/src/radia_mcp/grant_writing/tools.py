@@ -2557,6 +2557,146 @@ _GAP_MARKERS = (
 )
 
 
+# A proposal can be thoroughly international without ever writing 「国際」;
+# it names a region or a foreign institution instead. Triggering only on the
+# explicit word would skip exactly the drafts that do this well.
+_INTERNATIONAL_TRIGGERS = (
+    "国際", "海外", "国外", "世界", "グローバル", "外国", "諸外国",
+    "欧州", "欧米", "米国", "アジア", "アメリカ", "ヨーロッパ",
+    "ドイツ", "オーストリア", "フランス", "英国", "イタリア", "中国",
+    "韓国", "台湾", "スイス", "オランダ", "北欧",
+)
+
+# What makes an international claim checkable rather than aspirational.
+_NAMED_PARTNER = re.compile(
+    r"[ァ-ヴー]{2,}(?:工科)?大学|[ァ-ヴー]{3,}\s*(?:氏|教授|博士)|"
+    r"(?:TU|ETH|MIT|EPFL)\s*[A-Za-z]*|"
+    r"[A-Z][a-z]+\s+(?:University|Institute)|"
+    r"(?:IGTE|CEFC|COMPUMAG|ICEM|IEEE)"
+)
+_RECIPROCAL_MARKERS = (
+    "相互", "双方向", "還流", "共同研究", "共著", "招へい", "招聘", "派遣",
+    "受入", "交流", "分担", "共同開発", "共同実装",
+)
+_ONE_WAY_MARKERS = (
+    "追いつく", "追随", "導入する", "学ぶ", "取り入れる", "輸入",
+    "後追い", "キャッチアップ",
+)
+_INTERNATIONAL_OUTPUT_MARKERS = (
+    "共著", "国際会議", "国際学会", "国際誌", "国際共同", "英文",
+    "国際ベンチマーク", "国際レビュー", "査読",
+)
+_NATIONAL_VALUE_MARKERS = (
+    "日本発", "我が国独自", "国内で発展", "国内発", "本邦",
+    "日本独自", "国内の知見",
+)
+
+
+def grant_writing_international_standing_check(text: str) -> dict:
+    """Check that an international claim is evidenced, not aspirational.
+
+    Many programmes weigh an international dimension, and several state it
+    as an explicit criterion. The KAKENHI wording decomposes into three
+    things a proposal can actually show: leading the field, contributing
+    through collaboration, and creating value distinct to one's own country.
+    None of them are demonstrated by saying 「国際的に展開する」.
+
+    The check is optional and fires only when the draft raises the subject.
+    A 2025 review disclosure scored this axis 1.60 against an adopted 2.70,
+    which is why aspiration without a named partner is treated as the
+    defect it is.
+    """
+    text = _prose_for_lint(_read_text_if_path(text))
+    trigger_hits = [t for t in _INTERNATIONAL_TRIGGERS if t in text]
+    if not trigger_hits:
+        return {
+            "applicable": False,
+            "score": None,
+            "risks": [],
+            "comments": [],
+            "target": (
+                "an international claim names its partners, its exchanged "
+                "artefacts, and what flows back"
+            ),
+            "source": "international-standing check",
+        }
+
+    partners = sorted({m.group(0).strip() for m in _NAMED_PARTNER.finditer(text)})
+    reciprocal = [m for m in _RECIPROCAL_MARKERS if m in text]
+    one_way = [m for m in _ONE_WAY_MARKERS if m in text]
+    outputs = [m for m in _INTERNATIONAL_OUTPUT_MARKERS if m in text]
+    national = [m for m in _NATIONAL_VALUE_MARKERS if m in text]
+
+    risks: list[dict] = []
+    if not partners:
+        risks.append({
+            "type": "no_named_counterpart",
+            "severity": "HIGH",
+            "comment": "国際性に触れているが、相手先の機関名・研究者名がない。",
+            "recommendation": (
+                "「海外の研究者と連携する」ではなく、機関名と個人名を書く。"
+                "審査者が確認できない連携は、意図の表明にとどまる。"
+            ),
+        })
+    if not outputs:
+        risks.append({
+            "type": "no_international_output",
+            "severity": "MEDIUM",
+            "comment": "国際的な成果物（共著、国際会議、国際誌等）が示されていない。",
+            "recommendation": (
+                "既にある共著・国際会議発表・国際レビューを挙げ、本計画で"
+                "何を追加するかを書く。"
+            ),
+        })
+    if not reciprocal:
+        risks.append({
+            "type": "no_reciprocity",
+            "severity": "MEDIUM",
+            "comment": "やり取りの双方向性（何を渡し、何が返るか）が書かれていない。",
+            "recommendation": (
+                "招へい・派遣・共同実装・共著など、双方向の往来を具体化する。"
+            ),
+        })
+    # A catch-up frame concedes that the value flows one way, which is the
+    # opposite of what an international-standing criterion asks for.
+    if one_way and not national:
+        risks.append({
+            "type": "one_way_catch_up_frame",
+            "severity": "MEDIUM",
+            "comment": (
+                "海外に追随する枠組みで書かれており、自国発の価値が示されていない。"
+            ),
+            "recommendation": (
+                "「追いつく」ではなく、国内で発展した手法と海外の手法を相互検証し、"
+                "双方へ還流する構図にする。"
+            ),
+            "one_way_markers": one_way[:5],
+        })
+
+    deductions = sum(
+        3.0 if r["severity"] == "HIGH" else 1.5 for r in risks
+    )
+    score = max(0.0, round(10.0 - deductions, 1))
+    return {
+        "applicable": True,
+        "score": score,
+        "risk_count": len(risks),
+        "risks": risks,
+        "named_counterparts": partners[:12],
+        "reciprocity_markers": reciprocal[:8],
+        "one_way_markers": one_way[:5],
+        "international_outputs": outputs[:8],
+        "national_value_markers": national[:5],
+        "comments": [r["comment"] for r in risks],
+        "recommendations": [r["recommendation"] for r in risks],
+        "target": (
+            "named counterparts, real international outputs, two-way exchange, "
+            "and a value that originates here rather than a catch-up plan"
+        ),
+        "source": "international-standing check",
+    }
+
+
 def grant_writing_question_originality_check(text: str) -> dict:
     """Check that the central question carries an originality position.
 
@@ -3686,6 +3826,7 @@ _DETECTOR_TOOLS = frozenset({
     "literature",
     "residue",
     "originality",
+    "international",
 })
 
 _DETECTOR_RESULT_KEYS = frozenset({
@@ -3701,6 +3842,7 @@ _DETECTOR_RESULT_KEYS = frozenset({
     "literature_gap_evidence",
     "template_residue",
     "question_originality",
+    "international_standing",
 })
 
 
@@ -3856,6 +3998,23 @@ def grant_writing_health_report(
                     "severity": "MEDIUM",
                     "score": vague["score"],
                     "comments": vague["comments"][:5],
+                })
+
+    if "international" not in skip_set:
+        intl = grant_writing_international_standing_check(text)
+        detailed_results["international_standing"] = intl
+        if intl["applicable"]:
+            detailed_scores["international_standing"] = intl["score"]
+            if intl["risks"]:
+                priority_issues.append({
+                    "tool": "international",
+                    "name": "international_standing_check",
+                    "severity": max(
+                        (r["severity"] for r in intl["risks"]),
+                        key=lambda x: {"HIGH": 2, "MEDIUM": 1, "LOW": 0}[x],
+                    ),
+                    "score": intl["score"],
+                    "comments": intl["comments"][:5],
                 })
 
     if "originality" not in skip_set:
