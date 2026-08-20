@@ -68,7 +68,8 @@ audit.
 | `md_doc.cpp`, `md_blocks.cpp`, `md_layout.cpp` | which spans of a `.md` are math; block structure; document layout |
 | `eq_edit.cpp/.h` | **the editing model** — caret, templates, selection, undo |
 | `eq_chords.cpp/.h` | key chords → command names |
-| `eq_window.cpp/.h` | **the window and the palette bar** (979 lines, no test) |
+| `eq_window.cpp/.h` | **the window and the palette bar**, and `--selftest`, which drives it (§8) |
+| `gvml_clip.cpp/.h` | → `Art::GVML ClipFormat`, the only clipboard format that can state a paste size (§15) |
 | `eqnedt64_main.cpp` | `WinMain` |
 | `equation_pybind.cpp` | the pybind11 surface |
 | `mtef_dump.cpp` | `dump_tree` / `tex_dump_tree` — print the parsed tree |
@@ -84,7 +85,8 @@ audit.
 
 | | |
 |---|---|
-| `tests/equation/` | 33 files, **1388 pass, 1 xfail** |
+| `tests/equation/` | 36 files, **1409 pass, 1 xfail** |
+| `tests/equation/test_window_selftest.py` | runs `eqnedt64.exe --selftest`; deselected from the quick suite because it takes ~100 s |
 | `validation_test/equation/tex_reference.tex` (+ `_matrix`, `_wide`) | the TeX side of the appearance check |
 | `validation_test/equation/compare_boxes_with_tex.py`, `score_against_tex.py` | run the comparison |
 | `validation_test/equation/convert_corpus.py` | `.eqn` corpus before/after harness |
