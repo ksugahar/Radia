@@ -1003,6 +1003,7 @@ pybind11_add_module(_equation
 	${EQUATION_DIR}/mtef_svg.cpp
 	${EQUATION_DIR}/mtef_gdi.cpp
 	${EQUATION_DIR}/mtef_dump.cpp
+	${EQUATION_DIR}/gvml_clip.cpp
 	${EQUATION_DIR}/eq_edit.cpp
 	${EQUATION_DIR}/eq_chords.cpp
 	${EQUATION_DIR}/math_font.cpp
@@ -1094,6 +1095,9 @@ if(WIN32)
 		${EQUATION_DIR}/mtef_mathml.cpp
 		${EQUATION_DIR}/mtef_svg.cpp
 		${EQUATION_DIR}/mtef_gdi.cpp
+		# PowerPoint's own clipboard format, which is what carries the paste
+		# size -- an equation that inherits the destination box lands at 18 pt.
+		${EQUATION_DIR}/gvml_clip.cpp
 		# The OpenType MATH table reader.  The layout has read the font's own
 		# constants since it stopped guessing at them, so leaving this out of
 		# the window's own target made the window the one thing that would not

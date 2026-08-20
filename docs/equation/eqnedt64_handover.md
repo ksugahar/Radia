@@ -501,8 +501,8 @@ found it.** What remains before retirement is usability, not correctness.
 2. ~~A test for `eq_window.cpp`, and the command-fuzz harness~~ — **done**:
    `--selftest` and `test_window_selftest.py`. It found the crash on its first
    run; the fix and two dead chords are in §8.
-3. **Paste size in PowerPoint** (§15) — Sugahara, 2026-08-20: pasting gives
-   18 pt and he wants 24 pt.
+3. ~~Paste size in PowerPoint~~ — **done** (§15): the GVML clipboard format,
+   pasting at 24 pt as a native equation.
 4. **Palette simplification** (§9) — one representative member per button.
 5. `PageUp`/`PageDown`, `Ctrl+Tab` (§10).
 6. The 5 remaining stray-marker corpus documents (§4), lowest priority: they were
@@ -511,13 +511,14 @@ found it.** What remains before retirement is usability, not correctness.
 
 ---
 
-## 15. OPEN — a pasted equation takes PowerPoint's size, not ours
+## 15. CLOSED — a pasted equation is 24 pt
 
 Sugahara, 2026-08-20: *powerpointに貼り付けたときは、24ptにしてほしいよ、18ptでは
 小さい*.
 
-**Measured, not assumed** (`C:\temp\eq_pptx_size_probe.py`, PowerPoint 16.0 COM,
-paste into a real slide and read the run size back):
+**The clipboard could not say the size.** Measured, not assumed — PowerPoint
+16.0 through its own object model, pasting into a real slide and reading the
+run size back:
 
 | clipboard MathML | size in PowerPoint |
 |---|---|
@@ -525,20 +526,34 @@ paste into a real slide and read the run size back):
 | `<mstyle mathsize="24pt">` added | 28 pt |
 | `mathsize` on `<math>` | 28 pt |
 
-28 pt is that placeholder's own level-1 size. **PowerPoint ignores MathML sizing
-entirely and uses the destination's**, which is why Sugahara's 18 pt box gives
-18 pt equations. The size is not something our current clipboard can state.
+28 pt is that placeholder's own level-1 size. **PowerPoint ignores MathML
+sizing entirely and uses the destination's**, which is why an 18 pt body box
+gave 18 pt equations.
 
-**Where it can be stated.** Copying an equation out of PowerPoint puts
-`Art::GVML ClipFormat` on the clipboard: an OPC package (a ZIP — it starts
-`PK\x03\x04`) holding `clipboard/drawings/drawing1.xml`, whose runs carry
-explicit `<a:rPr sz="2400"/>`. Dumped and confirmed by
-`C:\temp\eq_ppt_clipboard_formats.py`; the extracted package is under
-`C:\temp\ppt_clip\gvml\`.
+**PowerPoint's own copy says it.** Copying a shape out of PowerPoint puts
+`Art::GVML ClipFormat` on the clipboard: an OPC package (a ZIP, `PK\x03\x04`)
+holding `clipboard/drawings/drawing1.xml`, whose runs carry explicit
+`<a:rPr sz="2400"/>`. So the route was the same one the RTF took —
+**transcribe what the application itself puts on the clipboard.**
 
-So the route is the same one the RTF took — **transcribe what the application
-itself puts on the clipboard.** Emit a minimal GVML package containing the
-`<a14:m>` OMML (which `mtef_omml` already produces) inside a `lockedCanvas`
-shape with `sz="2400"`, and offer it before the MathML. Needs a small
-store-only ZIP writer in the exe; nothing else is missing. Verify with the same
-COM probe, which reads the pasted run size back.
+`gvml_clip.cpp` writes that package: a store-only ZIP (no deflate to carry for
+a few kilobytes; PowerPoint accepts it — measured) holding `[Content_Types]`,
+`_rels/.rels` and a `lockedCanvas` shape whose paragraph holds the `<a14:m>`
+OMML. Two things kept it small:
+
+- **The OMML writer did not have to change.** PowerPoint repeats `sz` on every
+  `<m:r>`; a paragraph default (`<a:defRPr sz>` plus `<a:endParaRPr sz>`) was
+  measured to give the same 24.0 pt, so `tex_to_omml` is used as it is.
+- **No theme part.** PowerPoint's own package carries `theme1.xml` and a
+  relationship to it; dropping both still pastes.
+
+Offered **before** the MathML, since PowerPoint takes the richest format it
+recognises. `mtef::kPasteSizePt` is 24 — 18 is small to read from the back of a
+room, and PowerPoint's own default shrinks from 18 down by outline level.
+Exposed as `radia._equation.tex_to_gvml(latex, size_pt, display)` and
+`PASTE_SIZE_PT`, and used by both clipboard paths (the editor's Ctrl+C and
+`radia.equation.office.copy_to_clipboard`, which grew a `size_pt` argument).
+
+`tests/equation/test_paste_size.py` checks the package without Office, and its
+last test pastes into a real slide and asserts 24.0 pt — the claim is about
+PowerPoint, so something has to ask PowerPoint.

@@ -25,6 +25,7 @@
 
 #include "eq_chords.h"
 #include "eq_edit.h"
+#include "gvml_clip.h"
 #include "mtef_gdi.h"
 #include "mtef_mathml.h"
 #include "mtef_omml.h"
@@ -914,6 +915,10 @@ bool copy_equation_to_clipboard(const std::string& latex, bool display,
 
     const std::string rtf_bytes = tex_to_rtf(latex, rtf);
     const std::string mml_bytes = tex_to_mathml(latex, mml);
+    /* PowerPoint's own shape format, which is the only one that can state a
+     * SIZE -- see gvml_clip.h.  Offered before the MathML, which PowerPoint
+     * would otherwise take and paste at whatever the destination box is. */
+    const std::string gvml_bytes = tex_to_gvml(latex, kPasteSizePt, display);
 
     SvgStyle style;
     std::string emf_bytes, png_bytes, dib_bytes;
@@ -927,6 +932,10 @@ bool copy_equation_to_clipboard(const std::string& latex, bool display,
     EmptyClipboard();
 
     bool ok = put(RegisterClipboardFormatW(L"Rich Text Format"), rtf_bytes);
+    /* GVML first: PowerPoint takes the richest format it recognises, and this
+     * is the one that arrives at the size we asked for rather than the size
+     * of whatever box it landed in. */
+    put(RegisterClipboardFormatW(L"Art::GVML ClipFormat"), gvml_bytes);
     ok = put(RegisterClipboardFormatW(L"MathML"), mml_bytes) && ok;
 
     if (!emf_bytes.empty()) {
