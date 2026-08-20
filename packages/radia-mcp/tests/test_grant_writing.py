@@ -1604,3 +1604,109 @@ def test_prose_list_items_survive_but_stay_separate():
 
     assert "誘導加熱の発熱量を評価する。" in prose
     assert "加速器電磁石の出口位置ずれを抑える。" in prose
+
+
+def test_a_parenthesised_gloss_is_not_an_unfilled_placeholder():
+    # From a submitted proposal: 入力 opens an ordinary technical gloss.
+    result = gw.grant_writing_template_residue_check(
+        "設計技術を高度化し，高いビーム効率（入力したエネルギーに対する"
+        "ビーム強度）を実現する。"
+    )
+
+    assert [r for r in result["risks"] if r["type"] == "unfilled_placeholder"] == []
+
+
+def test_a_real_placeholder_parenthetical_still_fires():
+    result = gw.grant_writing_template_residue_check(
+        "申請金額（記入してください）を確定する。研究期間は（未定）である。"
+    )
+
+    matches = [
+        r["match"] for r in result["risks"] if r["type"] == "unfilled_placeholder"
+    ]
+    assert matches
+
+
+def test_a_conference_venue_is_not_an_international_claim():
+    # A country name inside a travel line names where a meeting is held.
+    result = gw.grant_writing_international_standing_check(
+        "本研究は負ミュオン核変換の磁場設計技術を確立する。"
+        "国際会議 Conference（2026/5/17~22,フランス）：50万円を計上する。"
+    )
+
+    assert not result["applicable"]
+
+
+def test_a_worldwide_problem_does_not_need_a_named_counterpart():
+    result = gw.grant_writing_international_standing_check(
+        "放射性廃棄物の処理は世界的な社会課題であり，長寿命核分裂生成物の"
+        "低減が求められている。加速器電磁石の磁場精度を高める。"
+    )
+
+    assert not result["applicable"]
+
+
+def test_a_domestic_partnership_is_not_a_foreign_one():
+    result = gw.grant_writing_international_standing_check(
+        "本事業は株式会社MotorAIと近畿大学の共同開発として実施する。"
+        "想定する国内、海外市場の規模を調査する。"
+    )
+
+    types = {r["type"] for r in result["risks"]}
+    assert "no_named_counterpart" not in types
+
+
+def test_alternating_current_is_not_academic_exchange():
+    # 交流 in an electrical proposal is AC. A glossary row tripped this.
+    result = gw.grant_writing_international_standing_check(
+        "誘導加熱は交流電流によって導体を加熱する技術である。"
+        "海外市場は年間4%で成長すると予測されている。"
+    )
+
+    types = {r["type"] for r in result["risks"]}
+    assert "no_named_counterpart" not in types
+
+
+def test_a_conference_acronym_is_not_a_collaboration_partner():
+    result = gw.grant_writing_collaboration_irreplaceability_check(
+        "成果はCOMPUMAG 2027およびCEFC 2028で発表する。"
+        "誘導加熱コイルの設計最適化を行う。"
+    )
+
+    assert not result["applicable"]
+
+
+def test_a_named_institution_still_starts_the_partner_question():
+    result = gw.grant_writing_collaboration_irreplaceability_check(
+        "ミラノ工科大学と階層行列圧縮の適用について共同研究を行う。"
+    )
+
+    assert result["applicable"]
+
+
+def test_a_compact_form_is_not_judged_on_the_three_review_criteria():
+    # One 要旨 box plus keywords and amounts: the form offers nowhere to
+    # write 研究遂行能力, so demanding it is a finding its author would argue.
+    form = (
+        "研究テーマ 負ミュオン核変換実現のための加速器用電磁石の磁場計算。"
+        "研究テーマの要旨 " + "加速器電磁石の磁場分布を数値的に求める。" * 20
+        + "キーワード 加速器、電磁石。申請金額 230万円。"
+    )
+
+    result = gw.grant_writing_kaken_review_format_check(form)
+
+    types = {r["type"] for r in result["risks"]}
+    assert "review_criteria_axis_missing" not in types
+
+
+def test_a_proposal_body_missing_one_axis_is_still_reported():
+    body = (
+        "本研究の独自性は異種解析の結合条件を定量化する点にある。" * 25
+        + "妥当性は解析解との比較で検証し、実証する。" * 25
+        + "波及効果として設計手順が再利用できる。" * 25
+    )
+
+    result = gw.grant_writing_kaken_review_format_check(body)
+
+    types = {r["type"] for r in result["risks"]}
+    assert "review_criteria_axis_missing" in types

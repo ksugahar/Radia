@@ -657,6 +657,63 @@ Better: 「日本発の階層行列ライブラリを用いた積分方程式解
 「著者がその指摘を見て、反論せずに直せるか」だけである。それが満たされて
 いれば、採否を予測しなくても検査として正しい。
 
+## A Trigger Is Not a Claim (誤検出の出どころ)
+
+Two proposals with known outcomes — an adopted Go-Tech application and a
+rejected 住友財団 form — produced six findings between them that were wrong.
+Every one had the same shape: a word was read as a claim the applicant never
+made. This is the failure mode to watch for when adding any keyword-triggered
+check.
+
+| What fired | What the text actually said | Why it was wrong |
+|---|---|---|
+| 未記入のプレースホルダ | 「高いビーム効率（入力したエネルギーに対するビーム強度）」 | 入力 opens an ordinary term gloss. A placeholder parenthetical holds the instruction word and nothing else. |
+| 国際性に触れているが相手先がない | 「Conference（2026/5/17~22,フランス）：50万円」 | A country name in a travel line names a venue, not a partner. |
+| 同上 | 「処理は世界的な社会課題であり」 | Worldwide importance of a problem is not the applicant's international activity. |
+| 同上 | 「株式会社MotorAIと近畿大学の共同開発」＋別文の「海外市場」 | A domestic partnership plus an unrelated foreign word is not a foreign collaboration. |
+| 同上 | 用語解説表の「交流電流」 | **交流 in an electrical proposal is alternating current.** |
+| なぜこの相手か | 「COMPUMAG 2027で発表する」 | A conference is not a counterpart. Nobody can answer why not a domestic substitute for COMPUMAG. |
+| 3つの審査基準のうち読み取れない軸 | 1,715字の住友財団フォーム（要旨欄1つ） | The form offers nowhere to write 研究遂行能力. |
+
+The rules that came out of it, in the order they generalise:
+
+1. **A word counts only in the sense the document uses it.** Domain vocabulary
+   collides with proposal vocabulary, and an electromagnetics lab writes 交流
+   constantly. When a marker has a common technical meaning, require the
+   unambiguous compound (国際交流) instead of the bare word.
+2. **Scope co-occurrence to a prose segment, and treat an over-long segment as
+   not prose.** Text extracted from a PDF table or diagram carries no full
+   stops, so a whole page becomes one "sentence" and any two words in it
+   appear adjacent. Segments beyond ~200 characters are excluded from
+   co-occurrence tests.
+3. **Separate output from relationship.** Presenting at an international
+   conference is international output and has no counterpart to name. Only a
+   claimed relationship — 共同研究, 共著, 招請, 受入, 派遣, 連携 — makes
+   「相手先を名指ししていない」 a fair thing to say.
+4. **A structural check needs a structure to check.** A compact form that
+   matches none of the three review vocabularies is not a proposal body with a
+   missing axis; it is a different kind of document. Two of three present is
+   the gate, and then the third is a real gap.
+
+## Three Documents, Three Genres, One Conclusion (三度目の実測)
+
+The adopted Go-Tech application and the rejected 住友財団 form were measured
+after the false positives above were removed. The adopted document carries
+**more** findings in absolute terms (5-6 against 3-4) and the rejected one
+carries **more per character** (about 37-47 per 10,000 characters against
+4-5). Neither direction is a result: the two documents are different genres of
+different length, and the count scales with both.
+
+That is itself worth stating plainly. **A defect count is not comparable
+across documents**, so it must never be used to rank two proposals, and the
+density is not a fix — it mostly measures how compressed the form is. Use the
+findings to remove reasons to mark a document down. Do not use the total as a
+score for the document, and never compare it with someone else's.
+
+This is the third independent measurement, over three funding programs, in
+which these checks fail to rank funded work above rejected work. The two
+earlier ones are in the sections above.
+
 ## Reference Proposals Have a Shelf Life
 
 他者の採択申請書を型の参考にするときは、**その申請書がいつの様式か**を先に
