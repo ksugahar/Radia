@@ -7,6 +7,17 @@ crystallized as its own package.
 
 ## [Unreleased]
 
+- grant-writing: `skill.md` now reads the reviewer-count column of a review
+  disclosure as what it is -- a measurement of disagreement between
+  reviewers. In the 2025 case the most-penalised item reached only three of
+  five, and no item was unanimous: the same document was judged both
+  sufficient and insufficient on every criterion. A one-of-five mark is
+  therefore not a defect to rewrite around, and the budget drew no criticism
+  at all in a proposal that was still rejected. The practical consequence is
+  that a proposal is evaluated several times independently and averaged, so
+  removing reasons to mark it down matters more than impressing any single
+  reader -- which is the one thing a lint is actually good for.
+
 - grant-writing: added `grant_writing_budget_narrative_check` from a 2019
   editor's review of a proposal that was subsequently funded. Amounts belong
   in the table only; repeating them in the prose that explains the need
