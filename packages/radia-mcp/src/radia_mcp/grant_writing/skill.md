@@ -763,6 +763,16 @@ form instructions, furigana fields, inventories and price lists all live
 inside proposal documents, and none of them are the applicant arguing. Before
 adding any check, ask what non-prose in a real form could satisfy its trigger.
 
+### The gate that keeps it fixed
+
+`test_the_suite_has_nothing_to_say_about_a_document_with_no_prose` feeds the
+health report a document assembled from nothing but the non-prose a real form
+contains — instructions, a furigana field, a publication list, a year-by-task
+matrix, a software inventory, a price table, headings — and requires zero
+findings. Every one of the eight families above would fail it. Add to that
+fixture whenever a new kind of non-prose turns up in a real document; it is
+cheaper than adjudicating the same class again.
+
 ## A Trigger Is Not a Claim (誤検出の出どころ)
 
 Two proposals with known outcomes — an adopted Go-Tech application and a

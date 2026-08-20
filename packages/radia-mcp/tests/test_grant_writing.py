@@ -1921,3 +1921,65 @@ def test_a_price_charged_is_not_a_cost_incurred():
         r for r in result["risks"]
         if r["type"] == "amount_repeated_in_necessity_text"
     ]
+
+
+# Everything a real application form contains that the applicant did not
+# argue: the form's instructions, a furigana field, a publication list, a
+# year-by-task matrix, a software inventory, a price table, and headings.
+# Eight separate false-positive families were traced to one of these being
+# read as prose, so the suite must have nothing to say about a document made
+# of nothing else.
+NON_PROSE_ONLY = """１　研究目的、研究方法など
+本欄には、本研究の目的と方法などについて、４頁以内で記述すること。
+冒頭にその概要を簡潔にまとめて記述し、本文には、(1)本研究の学術的背景、研究課題の核心をなす学術的「問い」、(2)本研究の目的および学術的独自性と創造性について具体的かつ明確に記述すること。
+本研究計画調書は「小区分」の審査区分で審査されます。
+承認手続が必要となる調査・研究・実験などが対象となります。
+なお、該当しない場合には、その旨記述してください。
+記入に当たっては、基盤研究（Ｃ）（一般）研究計画調書作成・記入要領を参照してください。
+（フリガナ）スガハラ ケンゴ
+氏名 菅原賢悟
+研究業績
+\\begin{enumerate}
+\\item K. Sugahara, ``Electromagnetic Analysis of Eddy Current Testing With Kelvin Transformation,'' IEEE Transactions on Magnetics, 58(9), 1--6 (2022).
+\\item S. Hiruma and H. Igarashi, ``Fast 3-D Analysis of Eddy Current in Litz Wire Using Integral Equation,'' IEEE Transactions on Magnetics, 53(6), 1--4 (2017).
+\\item H. Nagamine, T. Yamaguchi, and K. Sugahara, ``A Pullback-Based Formulation of Kelvin Transformation,'' CEFC 2026.
+\\end{enumerate}
+［研究計画］
+令和9年度
+令和10年度
+令和11年度
+モジュール結合
+定式化・実装
+検証
+二課題移転
+実装
+再検証
+研究環境
+Adventure, CST Studio, ELF, Elmer, EMCoS, EMSolution, FastCap, JMAG, COMSOL
+経費明細
+設備備品費 1,000千円
+消耗品費 500千円
+旅費 800千円
+"""
+
+
+def test_the_suite_has_nothing_to_say_about_a_document_with_no_prose():
+    report = gw.grant_writing_health_report(NON_PROSE_ONLY, program="kaken_oss")
+
+    # section_presence reads the raw source on purpose and correctly reports
+    # that a form skeleton has no argument in it.
+    findings = [f for f in report["findings"] if f["name"] != "section_presence"]
+    assert findings == [], [
+        (f["name"], f["comments"][:1]) for f in findings
+    ]
+
+
+def test_a_document_with_no_prose_leaves_no_sentences_to_measure():
+    prose = gw._prose_for_lint(NON_PROSE_ONLY)
+    result = gw.grant_writing_analyze_sentences(prose)
+
+    assert result.get("over_threshold_count", 0) == 0
+    # What survives is the software inventory line, ~75 characters. The
+    # citation list, the year matrix and the instruction block are gone; left
+    # in, any one of them alone exceeds the 90-character threshold.
+    assert result.get("max_length", 0) < 90

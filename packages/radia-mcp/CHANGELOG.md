@@ -7,6 +7,13 @@ crystallized as its own package.
 
 ## [Unreleased]
 
+- grant-writing: added a non-prose immunity gate. The health report is fed a
+  document assembled from nothing but what a real form contributes --
+  instructions, a furigana field, a publication list, a year-by-task matrix,
+  a software inventory, a price table, headings -- and must produce zero
+  findings. All eight false-positive families fixed today would fail it, so
+  the class is now enforced rather than re-adjudicated.
+
 - grant-writing: the form's own instruction text is no longer linted as the
   applicant's prose. Measured on two real 科研費 forms, instructions are 10%
   of one and 40% of the other, and 「冒頭にその概要を簡潔にまとめて記述し、
