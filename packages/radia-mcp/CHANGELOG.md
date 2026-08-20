@@ -7,6 +7,13 @@ crystallized as its own package.
 
 ## [Unreleased]
 
+- grant-writing: `_prose_for_lint` keeps newlines and puts a section heading
+  on its own line. Flattening every whitespace run fused a field title into
+  the paragraph below it, so 「２　応募者の研究遂行能力及び研究環境」 plus the
+  opening sentence was reported as one 93-character sentence and as a
+  逆茂木 example. Newlines are the segment boundaries the sentence-length and
+  co-occurrence checks rely on, so they now survive normalisation.
+
 - grant-writing: added `grant_writing_capability_responsibility_check`. A
   proposal usually joins a field the applicant knows to one they do not, and
   the capability criterion asks who can do the new part. That is a question

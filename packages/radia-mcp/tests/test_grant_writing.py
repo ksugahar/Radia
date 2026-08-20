@@ -1279,7 +1279,10 @@ def test_sentence_analysis_ignores_latex_scaffolding():
 
     result = gw.grant_writing_analyze_sentences(tex, max_len=50)
 
-    assert result["total_sentences"] == 2
+    # The heading is its own segment: two sentences plus 研究目的. Keeping it
+    # separate is what stops a field title from fusing with the paragraph
+    # under it and being counted as one long sentence.
+    assert result["total_sentences"] == 3
     assert result["over_threshold_count"] == 0
     assert all("template" not in item["head"] for item in result["over_threshold_examples"])
 

@@ -121,9 +121,16 @@ def _prose_for_lint(text: str) -> str:
         text,
         flags=re.DOTALL,
     )
+    # A heading is its own line. Rendered inline it fused with the paragraph
+    # below it, and the field title plus the opening sentence was reported as
+    # one 93-character sentence.
     text = re.sub(
-        r"\\(?:textbf|textit|emph|underline|section|subsection|subsubsection)"
-        r"\*?\{([^{}]*)\}",
+        r"\\(?:section|subsection|subsubsection)\*?\{([^{}]*)\}",
+        r"\n\1\n",
+        text,
+    )
+    text = re.sub(
+        r"\\(?:textbf|textit|emph|underline)\*?\{([^{}]*)\}",
         r" \1 ",
         text,
     )
@@ -144,7 +151,11 @@ def _prose_for_lint(text: str) -> str:
         " ",
         text,
     )
-    return re.sub(r"\s+", " ", text).strip()
+    # Collapse runs, but keep newlines: they are the segment boundaries the
+    # sentence and co-occurrence checks rely on, and flattening them fused
+    # every heading into the paragraph below it.
+    text = re.sub(r"[^\S\n]+", " ", text)
+    return re.sub(r"\n\s*\n+", "\n", text).strip()
 
 
 def _contains_any(text_lower: str, keywords: list[str]) -> list[str]:
