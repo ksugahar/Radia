@@ -4125,6 +4125,24 @@ def grant_writing_literature_gap_evidence_check(text: str) -> dict:
             "bounded corpus",
             "selected literature",
         ],
+        # An existential claim, as opposed to a report of having searched.
+        # Derived from the corpus: every absence claim in eight real proposals
+        # is phrased this way, and none is phrased as a search report, so the
+        # non_detection vocabulary below matched nothing at all.
+        "bare_absence": [
+            "存在しない",
+            "存在せず",
+            "他に類を見な",
+            "類を見ない",
+            "前例がな",
+            "報告例がな",
+            "研究例がな",
+            "事例がな",
+            "皆無",
+            "知られていない",
+            "does not exist",
+            "no such",
+        ],
         "non_detection": [
             "確認できなかった",
             "確認されなかった",
@@ -4228,8 +4246,10 @@ def grant_writing_literature_gap_evidence_check(text: str) -> dict:
         index
         for index, sentence in enumerate(sentences)
         if keyword_hits(sentence, "non_detection")
+        or keyword_hits(sentence, "bare_absence")
     ]
     candidate_windows = []
+    unbacked: list[dict] = []
     for index in absence_indices:
         start = max(0, index - 4)
         stop = min(len(sentences), index + 5)
@@ -4238,6 +4258,18 @@ def grant_writing_literature_gap_evidence_check(text: str) -> dict:
         corpus_hits = keyword_hits(window, "corpus_scope")
         count_hits = count_pattern.findall(window)
         if not search_hits and not corpus_hits and not count_hits:
+            # An absence asserted with no account of how the applicant looked.
+            # Four of eight real proposals do this -- 「統合的なマルチスケール
+            # モデル縮約法が存在しない」, 「直接的な競合製品は存在しない」 --
+            # and a reviewer who knows one counterexample loses the sentence
+            # and some of the trust around it.
+            bare = keyword_hits(sentences[index], "bare_absence")
+            if bare:
+                unbacked.append({
+                    "sentence": index + 1,
+                    "excerpt": sentences[index].strip()[:200],
+                    "absence_hits": bare,
+                })
             continue
         candidate_windows.append({
             "sentence": index + 1,
@@ -4280,9 +4312,22 @@ def grant_writing_literature_gap_evidence_check(text: str) -> dict:
                 "evidence": evidence[:3],
             })
 
-    applicable = bool(candidate_windows)
+    if unbacked:
+        risks.append({
+            "type": "absence_claimed_without_search",
+            "severity": "MEDIUM",
+            "comment": (
+                "「存在しない」と断定しているが、どう調べたかが書かれていない。"
+            ),
+            "evidence": unbacked[:3],
+        })
+
+    applicable = bool(candidate_windows or unbacked)
     score = None if not applicable else max(0.0, 10.0 - 3.0 * len(risks))
     rewrite_strategy = [
+        "断定した不在には、調べた範囲（検索語、対象、年）を一文添えるか、"
+        "「知る限り」に落とす。審査者は反例を一つ知っていれば足りる。",
+    ] + [
         "限定コーパスで語を確認できないことを、分野全体の未普及・優劣・研究障壁の主根拠にしない。",
         "文献調査は背景補助、候補選定、予備調査に位置づけ、対象範囲と限界を明示する。",
         "学術的空白は、既往研究が解いていない条件、理論、比較可能性、または検証可能な仮説として独立に述べる。",
@@ -4294,6 +4339,7 @@ def grant_writing_literature_gap_evidence_check(text: str) -> dict:
         "risk_count": len(risks),
         "risks": risks,
         "candidate_windows": candidate_windows[:5],
+        "unbacked_absence_claims": unbacked[:5],
         "comments": [risk["comment"] for risk in risks],
         "rewrite_strategy": rewrite_strategy if risks else [],
         "target": (

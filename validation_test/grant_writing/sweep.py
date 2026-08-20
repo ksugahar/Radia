@@ -109,10 +109,89 @@ def render(results: dict) -> str:
     return "\n".join(lines)
 
 
+# Result shapes differ per check: some return risks, some issues, some a bare
+# count. A check that never reports anything on any real proposal is either
+# correctly quiet or quietly broken, and only the inventory tells them apart.
+_FINDING_LISTS = (
+    "risks", "issues", "findings", "over_threshold_examples", "variants",
+    "misuses", "undefined_acronyms", "weak_expressions", "top_fixes",
+    "unbacked_absence_claims",
+)
+_NOT_DETECTORS = frozenset({
+    "health_report", "usage", "recommendation_letter_template",
+    "page_limit_check", "check_kanji_ratio",
+})
+
+
+def _reported_something(result) -> bool:
+    if not isinstance(result, dict):
+        return False
+    if any(isinstance(result.get(k), list) and result[k] for k in _FINDING_LISTS):
+        return True
+    for key, value in result.items():
+        if isinstance(value, int) and value > 0 and (
+            key.startswith("total_") or key.endswith(("_count", "_matches"))
+        ):
+            return True
+    score = result.get("score")
+    return isinstance(score, (int, float)) and score < 10
+
+
+def audit(documents: list[dict]) -> list[dict]:
+    """Report, per check, how often it applied and how often it said anything."""
+    import inspect
+
+    loaded = [(d, d["path"].read_text(encoding="utf-8")) for d in documents]
+    rows = []
+    for name in sorted(n for n in dir(gw) if n.startswith("grant_writing_")):
+        short = name[len("grant_writing_"):]
+        if short in _NOT_DETECTORS:
+            continue
+        fn = getattr(gw, name)
+        signature = inspect.signature(fn)
+        parameters = list(signature.parameters)
+        if not parameters or parameters[0] not in ("text", "text_or_path"):
+            continue
+        applied = reported = 0
+        error = ""
+        for document, text in loaded:
+            try:
+                if "program" in signature.parameters:
+                    result = fn(text, program=document["program"])
+                else:
+                    result = fn(text)
+            except Exception as exc:                      # noqa: BLE001
+                error = f"{type(exc).__name__}: {exc}"[:60]
+                break
+            if result.get("applicable", True):
+                applied += 1
+            if _reported_something(result):
+                reported += 1
+        rows.append({"check": short, "applied": applied,
+                     "reported": reported, "error": error})
+    return rows
+
+
+def render_audit(rows: list[dict]) -> str:
+    lines = ["%-46s %7s %8s" % ("check", "applied", "reported")]
+    for row in rows:
+        note = row["error"] or ("  never reported" if row["reported"] == 0 else "")
+        lines.append("%-46s %7d %8d%s"
+                     % (row["check"], row["applied"], row["reported"], note))
+    silent = [r["check"] for r in rows if not r["error"] and r["reported"] == 0]
+    lines.append("")
+    lines.append("silent on every document: %d" % len(silent))
+    for check in silent:
+        lines.append("  " + check)
+    return "\n".join(lines)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--write-baseline", action="store_true",
                         help="record the current counts as the expected ones")
+    parser.add_argument("--audit", action="store_true",
+                        help="report which checks never say anything")
     args = parser.parse_args()
 
     manifest = manifest_path()
@@ -120,7 +199,12 @@ def main() -> int:
         print(f"set {MANIFEST_ENV} to a corpus manifest; nothing to sweep")
         return 2
 
-    results = sweep(load_corpus(manifest))
+    documents = load_corpus(manifest)
+    if args.audit:
+        print(render_audit(audit(documents)))
+        return 0
+
+    results = sweep(documents)
     print(render(results))
 
     if args.write_baseline:
