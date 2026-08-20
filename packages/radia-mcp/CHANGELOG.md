@@ -7,6 +7,22 @@ crystallized as its own package.
 
 ## [Unreleased]
 
+- grant-writing: added `grant_writing_budget_narrative_check` from a 2019
+  editor's review of a proposal that was subsequently funded. Amounts belong
+  in the table only; repeating them in the prose that explains the need
+  creates two places to maintain, and a revision updates one of them. The
+  check separates that editor's before and after exactly, catching the two
+  duplicated figures and the travel line with no venue.
+- grant-writing: recorded that no check here predicts adoption, now measured
+  twice over ten submitted proposals by one applicant. The originality check
+  scored funded work lower than rejected (8.5 against 9.2); the budget check
+  came out level (7.5 against 7.4) with one funded proposal worst of all ten
+  and two other funded ones perfect. Funded documents disagree with each
+  other. This supports the architecture rather than undermining it: findings
+  locate defects, `defect_score` measures mechanical defect density, and a
+  new check should be judged on whether the author can fix what it points at
+  without argument -- not on correlation with the outcome.
+
 - grant-writing: validated the originality check against ten submitted
   proposals by one applicant, three of them funded, and reported what it
   found rather than what was hoped for. The gap vocabulary was written from

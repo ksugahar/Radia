@@ -2991,6 +2991,102 @@ def grant_writing_question_originality_check(text: str) -> dict:
     }
 
 
+_AMOUNT_PATTERN = re.compile(r"\d[\d,]*\s*(?:千円|万円|億円|円)")
+_NECESSITY_MARKERS = (
+    "必要性", "計上", "見積", "そのため", "必要である", "必要がある",
+    "購入する", "使用する",
+)
+_TRAVEL_MARKERS = ("旅費", "出張", "渡航")
+_DISSEMINATION_MARKERS = (
+    "学会", "国際会議", "研究会", "発表", "シンポジウム", "講演", "報告会",
+)
+
+
+def grant_writing_budget_narrative_check(text: str) -> dict:
+    """Check the necessity narrative that sits beside a budget table.
+
+    From an editor's review of a proposal that was subsequently funded
+    (2019): amounts belong in the table only. Repeating them in the prose
+    that explains why the money is needed creates two places to maintain,
+    and a later revision updates one of them. The same review noted that
+    funded proposals it had seen keep the figures in the table.
+
+    The check is optional: it applies only where a necessity narrative and
+    money both appear.
+    """
+    text = _prose_for_lint(_read_text_if_path(text))
+    sentences = [s for s in re.split(r"(?<=[。．!?！？])", text) if s.strip()]
+
+    narrative = [
+        (i, s) for i, s in enumerate(sentences)
+        if any(m in s for m in _NECESSITY_MARKERS)
+    ]
+    if not narrative:
+        return {
+            "applicable": False,
+            "score": None,
+            "risks": [],
+            "comments": [],
+            "target": (
+                "amounts live in the table; the narrative explains why the "
+                "money is needed"
+            ),
+            "source": "budget-narrative check (2019 editor review of a funded proposal)",
+        }
+
+    risks: list[dict] = []
+    for index, sentence in narrative:
+        amounts = _AMOUNT_PATTERN.findall(sentence)
+        if amounts:
+            risks.append({
+                "type": "amount_repeated_in_necessity_text",
+                "severity": "MEDIUM",
+                "sentence_index": index + 1,
+                "amounts": amounts[:4],
+                "excerpt": re.sub(r"\s+", " ", sentence).strip()[:200],
+                "comment": (
+                    "必要性の説明に金額が書かれている: " + "、".join(amounts[:3])
+                ),
+                "recommendation": (
+                    "金額は積算表だけに置き、説明は「〜のため〜を計上した」で"
+                    "終える。両方に書くと、修正時に片方だけ直してしまう。"
+                ),
+            })
+
+    travel = [s for s in sentences if any(t in s for t in _TRAVEL_MARKERS)]
+    if travel and not any(
+        any(d in s for d in _DISSEMINATION_MARKERS) for s in sentences
+    ):
+        risks.append({
+            "type": "travel_without_dissemination_plan",
+            "severity": "LOW",
+            "comment": "旅費を計上しているが、発表・参加する場が書かれていない。",
+            "recommendation": (
+                "出張の行き先だけでなく、学会・国際会議など何のための移動かを"
+                "書く。成果発表の予定がないなら、その旨を明示する。"
+            ),
+        })
+
+    deductions = sum(
+        1.5 if r["severity"] == "MEDIUM" else 0.5 for r in risks
+    )
+    score = max(0.0, round(10.0 - deductions, 1))
+    return {
+        "applicable": True,
+        "score": score,
+        "risk_count": len(risks),
+        "risks": risks[:20],
+        "necessity_sentence_count": len(narrative),
+        "comments": list(dict.fromkeys(r["comment"] for r in risks)),
+        "recommendations": list(dict.fromkeys(r["recommendation"] for r in risks)),
+        "target": (
+            "amounts in the table only; the narrative says what the money buys "
+            "and why, and travel names the venue it is for"
+        ),
+        "source": "budget-narrative check (2019 editor review of a funded proposal)",
+    }
+
+
 def grant_writing_template_residue_check(text: str) -> dict:
     """Find unfilled placeholders and leftover form instructions.
 
@@ -4010,6 +4106,7 @@ _DETECTOR_TOOLS = frozenset({
     "abstraction",
     "literature",
     "residue",
+    "narrative",
     "originality",
     "international",
     "irreplaceable",
@@ -4027,6 +4124,7 @@ _DETECTOR_RESULT_KEYS = frozenset({
     "named_software_abstraction",
     "literature_gap_evidence",
     "template_residue",
+    "budget_narrative",
     "question_originality",
     "international_standing",
     "collaboration_irreplaceability",
@@ -4154,6 +4252,23 @@ def grant_writing_health_report(
                     "severity": _severity_from_score(persuasion["score"]),
                     "score": persuasion["score"],
                     "comments": persuasion["comments"][:5],
+                })
+
+    if "narrative" not in skip_set:
+        narrative = grant_writing_budget_narrative_check(text)
+        detailed_results["budget_narrative"] = narrative
+        if narrative["applicable"]:
+            detailed_scores["budget_narrative"] = narrative["score"]
+            if narrative["risks"]:
+                priority_issues.append({
+                    "tool": "narrative",
+                    "name": "budget_narrative_check",
+                    "severity": max(
+                        (r["severity"] for r in narrative["risks"]),
+                        key=lambda x: {"HIGH": 2, "MEDIUM": 1, "LOW": 0}[x],
+                    ),
+                    "score": narrative["score"],
+                    "comments": narrative["comments"][:5],
                 })
 
     if "residue" not in skip_set:

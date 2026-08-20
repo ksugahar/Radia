@@ -1431,3 +1431,50 @@ def test_irreplaceability_is_not_applicable_without_a_named_partner():
 
     assert not result["applicable"]
     assert result["score"] is None
+
+
+def test_budget_narrative_flags_amounts_repeated_beside_the_table():
+    # From an editor's review of a proposal that was subsequently funded:
+    # amounts belong in the table only, because two places to maintain means
+    # a later revision updates one of them.
+    result = gw.grant_writing_budget_narrative_check(
+        "鉄心を改造する必要がある。そのためコイルを巻き直す費用が60万円、"
+        "またXYステージを70万円として見積もっている。"
+    )
+
+    assert result["applicable"]
+    risk = next(
+        r for r in result["risks"]
+        if r["type"] == "amount_repeated_in_necessity_text"
+    )
+    assert "60万円" in risk["amounts"]
+    assert result["score"] < 10
+
+
+def test_budget_narrative_accepts_the_editor_rewrite():
+    result = gw.grant_writing_budget_narrative_check(
+        "加速器を想定してギャップ部の分布を詳細に計測する必要があるため、"
+        "ギャップ付き鉄心に改造する費用を計上している。"
+        "成果は電気学会で発表する。"
+    )
+
+    assert result["risks"] == []
+    assert result["score"] == 10.0
+
+
+def test_budget_narrative_flags_travel_with_no_venue():
+    result = gw.grant_writing_budget_narrative_check(
+        "共同研究先へ出張する必要があるため、旅費を計上した。"
+    )
+
+    types = {r["type"] for r in result["risks"]}
+    assert "travel_without_dissemination_plan" in types
+
+
+def test_budget_narrative_is_not_applicable_without_a_necessity_section():
+    result = gw.grant_writing_budget_narrative_check(
+        "誘導加熱の発熱量を評価し、損失分布を求める。"
+    )
+
+    assert not result["applicable"]
+    assert result["score"] is None
