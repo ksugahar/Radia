@@ -1569,7 +1569,15 @@ private:
         const double bh = brace.asc + brace.desc;
         if (above) {
             const double top = body.asc + gap;
-            out.absorb(brace, (w - brace.w) / 2.0, -(top + brace.asc));
+            /* Place the brace by its BASELINE so that its ink lands in
+             * [-(top + bh), -top].  Its ink reaches `brace.asc` ABOVE its
+             * baseline, so the baseline goes `brace.desc` above `top`, not
+             * `brace.asc`.  Shifting by the ascent instead put the brace a
+             * whole brace-height too high -- outside the box this layout then
+             * reports, so the picture path cropped it away entirely and the
+             * palette drew it into the row of buttons above.  The underbrace
+             * branch below had the arithmetic right all along. */
+            out.absorb(brace, (w - brace.w) / 2.0, -(top + brace.desc));
             out.asc = top + bh;
             if (!label.glyphs.empty() || label.w > 0) {
                 out.absorb(label, (w - label.w) / 2.0,

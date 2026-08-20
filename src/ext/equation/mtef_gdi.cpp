@@ -152,7 +152,15 @@ void draw_layout(HDC hdc, const Layout& L, const SvgStyle& style,
                  double units_per_pt, int originX, int originY,
                  COLORREF colour, bool show_empty_slots) {
     (void)style;
-    SetBkMode(hdc, TRANSPARENT);
+    /* Put the drawing state back before returning.  This function sets the
+     * text alignment to TA_BASELINE, which is what a laid-out glyph needs and
+     * is exactly wrong for everything else: DrawTextW is documented to require
+     * TA_TOP, and with a baseline left behind it silently draws a whole line
+     * higher.  That is how the status strip came to be sliced in half by its
+     * own border -- a leaked DC setting, one caller away from where it was
+     * set. */
+    const UINT oldAlign = GetTextAlign(hdc);
+    const int oldBk = SetBkMode(hdc, TRANSPARENT);
 
     /* Empty slots are drawn for the editor and never for a picture: the boxes
      * exist to show where a template still needs typing, and pasting them into
@@ -216,6 +224,9 @@ void draw_layout(HDC hdc, const Layout& L, const SvgStyle& style,
         SelectObject(hdc, old);
         DeleteObject(f);
     }
+
+    SetTextAlign(hdc, oldAlign);
+    SetBkMode(hdc, oldBk);
 }
 
 std::string render_emf(const Layout& layout, const SvgStyle& style) {

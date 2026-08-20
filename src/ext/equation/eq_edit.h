@@ -214,6 +214,18 @@ public:
     struct PaletteGroup {
         std::string name;
         std::vector<PaletteItem> items;
+        /* Which member the bar button wears.  Empty means the first one.
+         *
+         * The button draws a REAL member, inserted by the real code, so it
+         * cannot start lying about what it offers -- that is the property
+         * worth keeping.  But "first in the list" is an ordering read off
+         * Equation Editor's own palettes, and it is not always the member
+         * that says what the group IS: the matrix palette opens with a 1x2,
+         * which reads as two boxes rather than as a matrix.  Naming one
+         * member here fixes the icon without inventing a drawing; a test
+         * checks every name is really in its group. */
+        std::string representative;
+        const PaletteItem& icon() const;
     };
     static const std::vector<PaletteGroup>& symbol_palettes();
     static const std::vector<PaletteGroup>& template_palettes();
