@@ -161,28 +161,56 @@ def figure_claim_visibility(pptx_path: str) -> dict:
         pool = (part["figure_labels"] + "\n" + part["body"] + "\n"
                 + part["table_text"]).replace(" ", "")
         shown = [n for n in got["numbers"] if n.replace(" ", "") in pool]
+        missing = [n for n in got["numbers"] if n not in shown]
+        has_picture = any(
+            s.shape_type is not None and "PICTURE" in str(s.shape_type)
+            for s in slide.shapes)
+
+        # Three states, not two.  Text is all this can read, so a number drawn
+        # INSIDE a raster is invisible to it -- and drawing it there is exactly
+        # what the plans ask for.  Reporting that as a gap would push authors
+        # to duplicate the number in a text box, which is the wrong lesson.
+        # The lab's existing rule for baked-in text applies: an unresolved
+        # picture is not a pass, but it is not a failure either.
+        if not missing:
+            status = "visible"
+        elif has_picture:
+            status = "unresolved_in_figure"
+        else:
+            status = "not_visible"
+
         row = {
             "slide_no": i,
             "claim": claim,
             "kind": got["kind"],
             "numbers": got["numbers"],
             "shown": shown,
-            "visible": len(shown) == len(got["numbers"]),
+            "missing": missing,
+            "status": status,
+            "visible": status == "visible",
         }
         rows.append(row)
-        if not row["visible"]:
+        if status != "visible":
             row = dict(row)
-            row["missing"] = [n for n in got["numbers"] if n not in shown]
             row["plan"] = figure_plan_for_claim(claim)
+            row["note"] = (
+                "the slide has a figure; check by eye or OCR whether the "
+                "number is drawn on it -- this check reads text only"
+                if status == "unresolved_in_figure" else
+                "no figure on this slide carries it either")
             invisible.append(row)
 
     n = len(rows)
-    ratio = (n - len(invisible)) / n if n else 1.0
+    hard = [r for r in rows if r["status"] == "not_visible"]
+    unresolved = [r for r in rows if r["status"] == "unresolved_in_figure"]
+    # unresolved counts as half: not a pass, not a failure
+    ratio = (n - len(hard) - 0.5 * len(unresolved)) / n if n else 1.0
     return {
         "score": round(ratio * 10, 1),
         "score_max": 10,
         "claims_checked": n,
-        "n_not_visible": len(invisible),
+        "n_not_visible": len(hard),
+        "n_unresolved_in_figure": len(unresolved),
         "claims_not_visible": invisible,
         "per_claim": rows,
         "hint": (
