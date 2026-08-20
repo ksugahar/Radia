@@ -129,6 +129,30 @@ def _get_slide_body(slide) -> str:
     return classify_slide_text(slide)["body"]
 
 
+_BACKUP_TITLE = re.compile(
+    r"^\s*(?:補足|付録|参考|予備|appendix|backup|q\s*&\s*a|質疑)",
+    re.IGNORECASE,
+)
+
+
+def _is_backup(slide) -> bool:
+    """A question-time slide, shown only if someone asks."""
+    try:
+        from radia_mcp.presentation.tools import _slide_title
+        title = _slide_title(slide) or ""
+    except Exception:
+        title = ""
+    if not title:
+        for shape in _iter_shapes(slide.shapes):
+            try:
+                if shape.has_text_frame and (shape.top or 0) == 0:
+                    title = shape.text_frame.text or ""
+                    break
+            except Exception:
+                continue
+    return bool(_BACKUP_TITLE.match(title.replace("\n", "")))
+
+
 def _is_spoken(token: str, notes: str, notes_tokens: set[str]) -> bool:
     """Is this slide token said in the script?
 
@@ -201,6 +225,11 @@ def presentation_script_vs_slide_coverage(pptx_path: str) -> dict:
     for i, (slide, part) in enumerate(zip(slides, parts), 1):
         banner = part["banner"].strip()
         if i == 1 or not banner:
+            continue
+        if _is_backup(slide):
+            # A question-time slide is shown only if someone asks. Its claim
+            # is not part of the talk, so scoring the script for not landing
+            # it would report a gap that should not be closed.
             continue
         notes = _get_notes(slide).strip()
         tokens = _extract_tokens(banner)
