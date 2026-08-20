@@ -42,6 +42,10 @@ from __future__ import annotations
 # `figure_*` name scan in radia_mcp.figure.register().
 from ._pptx_audit import figure_audit_pptx_figures  # noqa: F401
 from ._script_reference import figure_audit_script_reference  # noqa: F401
+from ._readability import (  # noqa: F401
+    enforce_readable,
+    figure_readability_problems,
+)
 from ._claim import (  # noqa: F401
     classify_claim,
     figure_claim_visibility,
@@ -812,6 +816,7 @@ def lab_savefig(
     medium: str | None = None,
     embed_width_cm: float | None = None,
     min_visible_font_pt: float | None = None,
+    allow_unreadable: bool = False,
     **kwargs,
 ) -> None:
     """Save a figure after checking text at its final displayed width.
@@ -837,6 +842,13 @@ def lab_savefig(
         ...             embed_width_cm=14.0)
     """
     from pathlib import Path
+
+    from ._readability import enforce_readable
+
+    # "read めない図は作らない" -- the size floor below is one way a figure is
+    # unreadable; a flattened panel and text lying on the data are others, and
+    # they are caught before the file exists rather than warned about after.
+    enforce_readable(fig, allow_unreadable=allow_unreadable)
 
     resolved_medium = medium or getattr(fig, "_lab_medium", "paper")
     floor = (
