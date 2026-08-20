@@ -2,7 +2,7 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **1017 tools** across 49 MCP servers.
+Total: **1018 tools** across 49 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
@@ -45,7 +45,7 @@ Total: **1017 tools** across 49 MCP servers.
 | [`mcp-server-md2html`](#mcp-server-md2html) | `radia_mcp.md2html` | 2 |
 | [`mcp-server-chart2d`](#mcp-server-chart2d) | `radia_mcp.chart2d` | 24 |
 | [`mcp-server-paper-writing`](#mcp-server-paper-writing) | `radia_mcp.paper_writing` | 191 |
-| [`mcp-server-grant-writing`](#mcp-server-grant-writing) | `radia_mcp.grant_writing` | 33 |
+| [`mcp-server-grant-writing`](#mcp-server-grant-writing) | `radia_mcp.grant_writing` | 34 |
 | [`mcp-server-poster`](#mcp-server-poster) | `radia_mcp.poster` | 32 |
 | [`mcp-server-literature-index`](#mcp-server-literature-index) | `radia_mcp.literature_index` | 9 |
 | [`mcp-server-document-meta`](#mcp-server-document-meta) | `radia_mcp.document_meta` | 11 |
@@ -1294,6 +1294,7 @@ Module: `radia_mcp.grant_writing.server`
 | `grant_writing_find_undefined_acronyms` | Latin 略語の初出で定義 (〜 or 〜の略) が近くに無いものを検出。 |
 | `grant_writing_health_report` | Integrated grant-writing health report. |
 | `grant_writing_internal_evidence_to_external_scale_check` | Check whether an internal success is evidence for external transfer. |
+| `grant_writing_international_standing_check` | Check that an international claim is evidenced, not aspirational. |
 | `grant_writing_kaken_oss_platform_check` | Check KAKENHI framing for an AI-era OSS research platform proposal. |
 | `grant_writing_kaken_review_format_check` | Check KAKENHI reviewer-format realities on a proposal draft. |
 | `grant_writing_kddi_digital_check` | KDDI Foundation Digital Innovation / social implementation check. |

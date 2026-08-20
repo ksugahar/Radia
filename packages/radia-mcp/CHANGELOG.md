@@ -7,6 +7,23 @@ crystallized as its own package.
 
 ## [Unreleased]
 
+- grant-writing: rescoped the skill away from being a KAKENHI-only tool.
+  `skill.md` opens by stating that programme-neutral sections apply to any
+  competitive funding application, that sections carrying a programme name
+  are limited to that programme's forms and vocabulary, and that a rule
+  which holds for only one programme must not be filed without its name.
+  The evidence table records that today's rules came from a private
+  foundation, a JSPS scheme and KAKENHI alike.
+- grant-writing: added `grant_writing_international_standing_check`.
+  Several programmes weigh an international dimension and a 2025 KAKENHI
+  disclosure scored that axis 1.60 against an adopted 2.70, so a
+  declaration with nothing behind it is treated as the defect it is. The
+  check asks for named counterparts, real international outputs, two-way
+  exchange, and value that originates here -- and flags a catch-up frame,
+  which concedes the value flows one way. It triggers on region and
+  institution names as well as the word 国際, because a draft that names
+  グラーツ工科大学 and 欧州 is international whether or not it says so.
+
 - grant-writing: added `grant_writing_question_originality_check`, which
   implements the review item three of five reviewers marked down in the
   2025 disclosure: whether the central question is clear AND shows academic

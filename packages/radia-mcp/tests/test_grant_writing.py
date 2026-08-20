@@ -1317,3 +1317,45 @@ def test_paper_writing_server_serves_merged_presentation_and_figure_tools():
     from radia_mcp.paper_writing import server as pw_server
     assert pw_server._N_PRESENTATION_TOOLS > 60
     assert pw_server._N_FIGURE_TOOLS > 5
+
+
+def test_international_standing_accepts_named_two_way_evidence():
+    result = gw.grant_writing_international_standing_check(
+        "日本発のCauer縮約と欧州発の高次要素を相互検証し、双方へ還流する。"
+        "グラーツ工科大学での共同研究とIGTEでの共著がその起点である。"
+    )
+
+    assert result["applicable"]
+    assert result["score"] == 10.0
+    assert result["named_counterparts"]
+    assert result["national_value_markers"]
+
+
+def test_international_standing_flags_a_declaration_with_no_partner():
+    # The axis a 2025 disclosure scored 1.60 against an adopted 2.70.
+    result = gw.grant_writing_international_standing_check(
+        "本研究は将来的に国際的な展開を目指す。海外の研究者とも連携したい。"
+    )
+
+    types = {r["type"] for r in result["risks"]}
+    assert "no_named_counterpart" in types
+    assert result["score"] < 6
+
+
+def test_international_standing_flags_a_catch_up_frame():
+    result = gw.grant_writing_international_standing_check(
+        "海外の研究者と共著を進め、国際会議で発表する。"
+        "グラーツ工科大学と交流し、世界水準の技術に追いつくことを目指す。"
+    )
+
+    types = {r["type"] for r in result["risks"]}
+    assert "one_way_catch_up_frame" in types
+
+
+def test_international_standing_is_not_applicable_without_the_subject():
+    result = gw.grant_writing_international_standing_check(
+        "誘導加熱の発熱量を評価し、損失分布を求める。"
+    )
+
+    assert not result["applicable"]
+    assert result["score"] is None
