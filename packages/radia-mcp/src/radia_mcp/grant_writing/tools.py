@@ -54,6 +54,22 @@ def _read_text_if_path(text_or_path: str) -> str:
     return s
 
 
+# Sentences the form wrote, not the applicant. Every marker was taken from the
+# instruction paragraphs of two real 科研費 forms (令和2年度 S-14 and 平成28年度
+# S-1-8); together they match all of them and none of the applicant prose in
+# either document. Instructions are 10% of one form and 40% of the other.
+_FORM_INSTRUCTION = re.compile(
+    r"本欄に[はも]|本欄は|"
+    r"記述すること|記入すること|記入の上|"
+    r"(?:記述|記入|参照|選択|要約|確認|留意|注意)して\s*(?:ください|下さい)|"
+    r"公募要領|記入要領|作成・記入要領|審査されます|"
+    r"て\s*も\s*可(?![能])|てもよい|ても構いません|"
+    r"空欄のまま|記述欄を削除|記入欄を削除"
+)
+
+# ですます調. The form speaks this way; a proposal body does not.
+_POLITE_ENDING = re.compile(r"(?:ます|です|ません|ましょう|ください)[。．]?$")
+
 _CITATION_YEAR = re.compile(r"(?:19|20)\d{2}")
 
 
@@ -89,10 +105,18 @@ def _prose_for_lint(text: str) -> str:
     Section-presence and program checks still inspect the original source. This
     normalization is only for sentence length, hedge, and Japanese prose lint;
     otherwise template comments and commands are reported as applicant prose.
-    """
-    if "\\" not in text and not re.search(r"(?m)^\s*%", text):
-        return text
 
+    A form's printed instruction text is stripped whether or not the document
+    is LaTeX. A proposal extracted from Word carries no backslashes at all, and
+    returning early for such text skipped the very normalization it needed
+    most: instructions are 40% of one real 科研費 form.
+    """
+    if "\\" in text or re.search(r"(?m)^\s*%", text):
+        text = _strip_latex_scaffolding(text)
+    return _finish_prose(text)
+
+
+def _strip_latex_scaffolding(text: str) -> str:
     text = re.sub(r"(?m)^\s*%.*$", " ", text)
     text = re.sub(
         r"\\begin\{(?P<figenv>figure\*?|center)\}.*?"
@@ -151,6 +175,40 @@ def _prose_for_lint(text: str) -> str:
         " ",
         text,
     )
+    return text
+
+
+def _finish_prose(text: str) -> str:
+    """Drop the form's own instruction text, then normalise whitespace.
+
+    Every Japanese application form carries several hundred characters of
+    instructions, and linting them reports the funder's writing as the
+    applicant's defects: 「冒頭にその概要を簡潔にまとめて記述し、本文には、
+    (1)…」 was reported as a 逆茂木 sentence in an adopted proposal.
+    """
+    lines = [re.split(r"(?<=[。．!?！？])", line) for line in text.split("\n")]
+    every = [s for line in lines for s in line if s.strip()]
+    polite = [s for s in every if _POLITE_ENDING.search(s.strip())]
+    # A Japanese proposal body is written in である調 and the form's own
+    # instructions in ですます調. Measured across five real documents, polite
+    # endings are 0-3% of the text and every one of them belongs to the form:
+    # 「…承認手続が必要となる調査・研究・実験などが対象となります。」 was
+    # linted as the applicant's 逆茂木 sentence. The ratio guard leaves a
+    # proposal that is genuinely written in ですます調 alone.
+    drop_polite = bool(every) and len(polite) / len(every) < 0.3
+
+    kept: list[str] = []
+    for line in lines:
+        sentences = [
+            s for s in line
+            if s.strip()
+            and not _FORM_INSTRUCTION.search(s)
+            and not (drop_polite and _POLITE_ENDING.search(s.strip()))
+        ]
+        if sentences:
+            kept.append("".join(sentences))
+    text = "\n".join(kept)
+
     # Collapse runs, but keep newlines: they are the segment boundaries the
     # sentence and co-occurrence checks rely on, and flattening them fused
     # every heading into the paragraph below it.
@@ -2324,9 +2382,15 @@ def grant_writing_persuasion_quality_check(text: str) -> dict:
         r"(?:[-/][A-Za-z0-9]+)*|H\([a-z]+\))(?![A-Za-z0-9])"
     )
     acronym_pile_count = 0
-    for sentence in re.split(r"(?<=[。．!?！？])", prose):
+    # An inventory is not a sentence that hides its meaning behind acronyms.
+    # 「Adventure, CST Studio, ELF/Magic, Elmer, EMCoS, EMSolution, ...」 in an
+    # adopted proposal's 研究環境 is a list of the software the lab owns, and
+    # naming them is the whole point.
+    for sentence in re.split(r"(?<=[。．!?！？])|\n", prose):
         acronyms = sorted(set(acronym_pattern.findall(sentence)))
         if len(acronyms) < 6:
+            continue
+        if sentence.count(",") + sentence.count("、") >= 6:
             continue
         acronym_pile_count += 1
         start = text.find(sentence[:24])
@@ -2682,7 +2746,12 @@ _INTERNATIONAL_TRIGGERS = (
 # one of those: asking why COMPUMAG rather than a domestic substitute is not a
 # question anybody can answer.
 _NAMED_PARTNER = re.compile(
-    r"[ァ-ヴー]{2,}(?:工科)?大学|[ァ-ヴー]{3,}\s*(?:氏|教授|博士)|"
+    r"[ァ-ヴー]{2,}(?:工科)?大学|"
+    # 氏 must be the honorific, not the 氏 of 氏名, and it must sit right after
+    # the name. A form's フリガナ field puts スガハラ ケンゴ on one line and 氏名
+    # on the next, which was read as a foreign counterpart named ケンゴ氏 and
+    # then judged for international reciprocity and irreplaceability.
+    r"[ァ-ヴー]{3,}[ 　]{0,2}(?:氏(?!名)|教授|博士)|"
     r"(?:TU|ETH|MIT|EPFL)\s*[A-Za-z]*|"
     r"[A-Z][a-z]+\s+(?:University|Institute)"
 )
@@ -2779,6 +2848,39 @@ def grant_writing_international_standing_check(text: str) -> dict:
     named_trigger = _NAMED_PARTNER.search(text)
     if named_trigger:
         trigger_hits = trigger_hits + [named_trigger.group(0).strip()]
+
+    # Scope by prose segment, not by sentence. Text extracted from a PDF table
+    # or diagram carries no full stops, so a whole page becomes one "sentence"
+    # and any two words in it appear to co-occur: a business-model figure put
+    # 連携 beside an unrelated 海外 that way.
+    segments = [
+        s.strip()
+        for s in re.split(r"(?<=[。．!?！？])|\n", text)
+        if s and s.strip() and len(s.strip()) <= 200
+    ]
+    # The relationship must be an international one. A domestic 共同開発 with a
+    # partner company, in a proposal that separately mentions 海外市場, is not a
+    # foreign collaboration missing its counterpart's name.
+    relations = [
+        m
+        for m in _INTERNATIONAL_RELATION_MARKERS
+        if any(
+            m in s and any(t in s for t in _INTERNATIONAL_TRIGGERS)
+            for s in segments
+        )
+    ]
+    # Citing foreign prior work is not a claim of international standing. A
+    # domestic 基盤 proposal that surveyed 「フランス・Clenet教授らによる」 was
+    # told it showed no international output, which is true and irrelevant.
+    # The check opens on a claimed relationship, a named counterpart or venue,
+    # or a claimed output -- not on a region name sitting near a verb.
+    if not (
+        relations
+        or named_trigger
+        or _NAMED_INTERNATIONAL_VENUE.search(text)
+        or any(m in text for m in _INTERNATIONAL_OUTPUT_MARKERS)
+    ):
+        trigger_hits = []
     if not trigger_hits:
         return {
             "applicable": False,
@@ -2797,33 +2899,17 @@ def grant_writing_international_standing_check(text: str) -> dict:
     reciprocal = [m for m in _RECIPROCAL_MARKERS if m in text]
     one_way = [m for m in _ONE_WAY_MARKERS if m in text]
     outputs = [m for m in _INTERNATIONAL_OUTPUT_MARKERS if m in text]
+    # Publishing in IEEE Transactions or presenting at CEFC is international
+    # output. Counting those venues as evidence of international activity while
+    # reporting that the document shows none was a contradiction the adopted
+    # 基盤 proposal exposed.
+    outputs += sorted({m.group(0) for m in _NAMED_INTERNATIONAL_VENUE.finditer(text)})
     national = [m for m in _NATIONAL_VALUE_MARKERS if m in text]
 
     # Presenting abroad is international output; it has no counterpart to name.
     # Only a claimed relationship does. A proposal whose international content
     # was 「国際競争力強化に貢献する」 and 「想定する国内、海外市場」 was told
     # to name the partner institution behind a collaboration it never claimed.
-    # The relationship must be an international one. A domestic 共同開発 with a
-    # partner company, in a proposal that separately mentions 海外市場, is not a
-    # foreign collaboration missing its counterpart's name.
-    # Scope by prose segment, not by sentence. Text extracted from a PDF table
-    # or diagram carries no full stops, so a whole page becomes one "sentence"
-    # and any two words in it appear to co-occur: a business-model figure put
-    # 連携 beside an unrelated 海外 that way.
-    segments = [
-        s.strip()
-        for s in re.split(r"(?<=[。．!?！？])|\n", text)
-        if s and s.strip() and len(s.strip()) <= 200
-    ]
-    relations = [
-        m
-        for m in _INTERNATIONAL_RELATION_MARKERS
-        if any(
-            m in s and any(t in s for t in _INTERNATIONAL_TRIGGERS)
-            for s in segments
-        )
-    ]
-
     risks: list[dict] = []
     if relations and not partners:
         risks.append({
@@ -3452,6 +3538,11 @@ _NECESSITY_MARKERS = (
     "必要性", "計上", "見積", "そのため", "必要である", "必要がある",
     "購入する", "使用する",
 )
+# Money the applicant expects to receive, not to spend.
+_REVENUE_MARKERS = (
+    "顧客", "販売", "売上", "収益", "価格", "ライセンス", "採算", "利益",
+    "事業化", "市場規模", "単価設定", "課金",
+)
 _TRAVEL_MARKERS = ("旅費", "出張", "渡航")
 _DISSEMINATION_MARKERS = (
     "学会", "国際会議", "研究会", "発表", "シンポジウム", "講演", "報告会",
@@ -3491,7 +3582,16 @@ def grant_writing_budget_narrative_check(text: str) -> dict:
         }
 
     risks: list[dict] = []
+    seen_excerpts: set[str] = set()
     for index, sentence in narrative:
+        # A price charged is not a cost incurred. 「ライセンスビジネスの権利
+        # 付与型は…1件あたり5,000千円に設定」 is a business model, and 計上 in
+        # it refers to the company's own accounting, not to a budget line.
+        if any(m in sentence for m in _REVENUE_MARKERS):
+            continue
+        if sentence in seen_excerpts:
+            continue
+        seen_excerpts.add(sentence)
         amounts = _AMOUNT_PATTERN.findall(sentence)
         if amounts:
             risks.append({
@@ -3642,7 +3742,10 @@ def grant_writing_vague_claim_verb_check(text: str) -> dict:
     the required nouns are all present -- separately.
     """
     text = _prose_for_lint(_read_text_if_path(text))
-    sentences = [s for s in re.split(r"(?<=[。．!?！？])", text) if s.strip()]
+    # A newline ends a sentence here too: a person's name on its own line
+    # merged with the paragraph under it, and the merged run was reported
+    # eighteen times across six real proposals.
+    sentences = [s for s in re.split(r"(?<=[。．!?！？])|\n", text) if s.strip()]
 
     risks: list[dict] = []
     concrete: list[dict] = []
@@ -3653,11 +3756,25 @@ def grant_writing_vague_claim_verb_check(text: str) -> dict:
         r"(?:した|した。|してきた|実施した|再実行した|完了した|得た|"
         r"確認した|発表した|示した)"
     )
+    # The same applies to a record written in the ongoing form. 「…知識を活用
+    # して先端技術開発を行っている（S1,2）」 in a これまでの研究活動 field is a
+    # record with a citation attached, not a promise about the project.
+    record_ending = re.compile(r"(?:た|ている|ており|てきた|ています)$")
+    trailing_note = re.compile(r"[（(][^（(）)]*[）)]\s*$")
     for index, sentence in enumerate(sentences):
         verb = next((v for v in _VAGUE_CLAIM_VERBS if v in sentence), None)
         if verb is None:
             continue
         if completed.search(sentence):
+            continue
+        stem = trailing_note.sub("", sentence.strip().rstrip("。．"))
+        if record_ending.search(stem):
+            continue
+        # 「誘導加熱技術を活用する幅広い産業分野」 modifies a noun; it describes
+        # who uses the technology, not what this project will do. A claim verb
+        # followed immediately by a noun is adnominal, not the predicate.
+        after = sentence[sentence.index(verb) + len(verb):]
+        if after and re.match(r"[一-龥ァ-ヴー]", after):
             continue
         found = [m for m in _MECHANISM_MARKERS if m in sentence]
         entry = {

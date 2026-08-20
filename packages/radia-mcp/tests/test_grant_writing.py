@@ -1790,3 +1790,134 @@ def test_role_description_filler_is_not_a_capability():
 
     assert result["risks"] == []
     assert result["score"] == 10.0
+
+
+def test_form_instruction_text_is_not_the_applicants_prose():
+    # Verbatim from an adopted 令和2年度 S-14 form.
+    form = (
+        "本欄には、本研究の目的と方法などについて、３頁以内で記述すること。\n"
+        "冒頭にその概要を簡潔にまとめて記述し、本文には、(1)本研究の学術的背景、"
+        "研究課題の核心をなす学術的「問い」、(2)本研究の目的および学術的独自性と"
+        "創造性について具体的かつ明確に記述すること。\n"
+        "本研究はモデル縮約法を開発する。\n"
+    )
+
+    prose = gw._prose_for_lint(form)
+
+    assert prose == "本研究はモデル縮約法を開発する。"
+
+
+def test_polite_form_sentences_are_read_as_the_forms_voice():
+    # A proposal body is written in である調; the form speaks in ですます調.
+    mixed = (
+        "承認手続が必要となる調査・研究・実験などが対象となります。\n"
+        "本研究は誘導加熱の発熱量を評価する。\n"
+        "損失分布を求める。解析経路を選ぶ。候補順位を確定する。\n"
+    )
+
+    prose = gw._prose_for_lint(mixed)
+
+    assert "対象となります" not in prose
+    assert "本研究は誘導加熱の発熱量を評価する。" in prose
+
+
+def test_a_document_written_in_polite_form_keeps_its_text():
+    polite = (
+        "本研究では誘導加熱の発熱量を評価します。\n"
+        "損失分布を求めます。\n"
+        "コイルのインピーダンスを測定します。\n"
+    )
+
+    prose = gw._prose_for_lint(polite)
+
+    assert "発熱量を評価します" in prose
+
+
+def test_a_furigana_field_is_not_a_foreign_counterpart():
+    # A form puts スガハラ ケンゴ on one line and 氏名 on the next.
+    form = (
+        "（フリガナ）スガハラ ケンゴ\n氏名 菅原賢悟\n"
+        "本事業は誘導加熱コイルの設計最適化を行う。海外市場の規模を調査する。"
+    )
+
+    assert gw._NAMED_PARTNER.search(form) is None
+    assert not gw.grant_writing_international_standing_check(form)["applicable"]
+
+
+def test_citing_foreign_prior_work_is_not_a_standing_claim():
+    survey = (
+        "電磁界のモデル縮約については有力な数学的手法がいくつか存在する。"
+        "フランスの研究グループによる直交分解法が知られており、"
+        "その適用範囲を検証した報告がある。"
+    )
+
+    assert not gw.grant_writing_international_standing_check(survey)["applicable"]
+
+
+def test_an_ieee_publication_counts_as_international_output():
+    record = (
+        "ウィーン工科大学と共同研究を行う。"
+        "成果は IEEE Transactions on Magnetics に発表した。"
+    )
+
+    result = gw.grant_writing_international_standing_check(record)
+
+    types = {r["type"] for r in result["risks"]}
+    assert "no_international_output" not in types
+
+
+def test_a_name_on_its_own_line_does_not_join_the_paragraph_below():
+    doc = (
+        "菅原賢悟（研究分担者）\n"
+        "(1)これまでの研究活動 三菱電機在職中に実務経験を積んだ後、"
+        "豊富な知識を活用して先端技術開発を行っている（S1,2）\n"
+    )
+
+    result = gw.grant_writing_vague_claim_verb_check(doc)
+
+    assert result["risks"] == []
+
+
+def test_an_adnominal_claim_verb_is_not_a_promise():
+    # 活用する modifies 産業分野; it says who uses the technology.
+    sentence = "本研究開発の成果は、誘導加熱技術を活用する幅広い産業分野に波及する。"
+
+    result = gw.grant_writing_vague_claim_verb_check(sentence)
+
+    assert result["risks"] == []
+
+
+def test_a_forward_claim_with_a_vague_verb_still_fires():
+    # No mechanism named: a sentence that says 縮約 or 出力 would be concrete.
+    sentence = "異なる研究室の資産を活用する。"
+
+    result = gw.grant_writing_vague_claim_verb_check(sentence)
+
+    assert any(r["type"] == "claim_verb_without_mechanism" for r in result["risks"])
+
+
+def test_a_software_inventory_is_not_an_acronym_pile():
+    inventory = (
+        "本研究の遂行に必要な計算機資源を有する。"
+        "Adventure, CST Studio, ELF, Elmer, EMCoS, EMSolution, FastCap, "
+        "JMAG, COMSOL を保有している。"
+    )
+
+    result = gw.grant_writing_persuasion_quality_check(inventory)
+
+    assert not [r for r in result["risks"] if r.get("type") == "acronym_pile"]
+
+
+def test_a_price_charged_is_not_a_cost_incurred():
+    plan = (
+        "ライセンスビジネスの権利付与型は、顧客の採算が取れる1件あたり"
+        "5,000千円に設定し、共同型は当社の人件費も計上するため1件あたり"
+        "10,000千円に設定する。"
+    )
+
+    result = gw.grant_writing_budget_narrative_check(plan)
+
+    assert not [
+        r for r in result["risks"]
+        if r["type"] == "amount_repeated_in_necessity_text"
+    ]
