@@ -1478,3 +1478,129 @@ def test_budget_narrative_is_not_applicable_without_a_necessity_section():
 
     assert not result["applicable"]
     assert result["score"] is None
+
+
+def _write_form_pdf(path, fields, overflow_notice=""):
+    """Build a stand-in compiled form: one page per entry of ``fields``."""
+    import fitz
+
+    doc = fitz.open()
+    for title, pages in fields:
+        for offset in range(pages):
+            page = doc.new_page()
+            head = title if offset == 0 else f"[{title} (tsuzuki)]"
+            page.insert_text((72, 72), head, fontname="helv", fontsize=11)
+            page.insert_text((72, 700), "body", fontname="helv", fontsize=11)
+    if overflow_notice:
+        page = doc.new_page()
+        # Helvetica cannot encode the Japanese notice; use the built-in CJK font.
+        page.insert_text((72, 72), overflow_notice, fontname="japan", fontsize=11)
+    doc.save(str(path))
+    doc.close()
+
+
+def _write_form_tex(path, title, max_pages):
+    path.write_text(
+        "\\section{" + title + "}\n"
+        f"%    <<最大 {max_pages}ページ>>\n\n本文。\n",
+        encoding="utf-8",
+    )
+
+
+def test_page_limit_flags_a_field_past_its_allowance(tmp_path):
+    _write_form_tex(tmp_path / "a.tex", "PURPOSE", 2)
+    _write_form_pdf(tmp_path / "form.pdf", [("PURPOSE", 3)])
+
+    result = gw.grant_writing_page_limit_check(str(tmp_path / "form.pdf"))
+
+    assert result["applicable"]
+    over = next(r for r in result["risks"] if r["severity"] == "CRITICAL")
+    assert "3ページ占めている" in over["comment"]
+    assert result["fields"][0]["used_pages"] == 3
+
+
+def test_page_limit_reads_the_notice_the_form_prints_itself(tmp_path):
+    # No .tex declaration at all: the template's own notice must still fire.
+    _write_form_pdf(
+        tmp_path / "form.pdf",
+        [("PURPOSE", 1)],
+        overflow_notice="「PURPOSE」は4ページ以内で書いてください。",
+    )
+
+    result = gw.grant_writing_page_limit_check(str(tmp_path / "form.pdf"))
+
+    assert result["applicable"]
+    assert any(r["severity"] == "CRITICAL" for r in result["risks"])
+    assert "様式が超過を印字している" in result["comments"][0]
+
+
+def test_page_limit_reports_an_allowance_left_unused(tmp_path):
+    _write_form_tex(tmp_path / "a.tex", "PURPOSE", 4)
+    _write_form_pdf(tmp_path / "form.pdf", [("PURPOSE", 2)])
+
+    result = gw.grant_writing_page_limit_check(str(tmp_path / "form.pdf"))
+
+    risk = next(r for r in result["risks"] if r["severity"] == "MEDIUM")
+    assert "4ページ許容のうち2ページ" in risk["comment"]
+
+
+def test_page_limit_keeps_quiet_on_a_short_single_page_field(tmp_path):
+    # A one-page compliance field is often short because the honest answer is.
+    _write_form_tex(tmp_path / "a.tex", "RIGHTS", 1)
+    _write_form_pdf(tmp_path / "form.pdf", [("RIGHTS", 1)])
+
+    result = gw.grant_writing_page_limit_check(str(tmp_path / "form.pdf"))
+
+    assert result["risks"] == []
+    assert result["score"] == 10.0
+
+
+def test_health_report_finds_a_single_sibling_pdf(tmp_path):
+    _write_form_tex(tmp_path / "a.tex", "PURPOSE", 1)
+    _write_form_pdf(tmp_path / "form.pdf", [("PURPOSE", 2)])
+
+    result = gw.grant_writing_health_report(str(tmp_path / "a.tex"))
+
+    assert "page_limit" in result["detailed_results"]
+    assert any(f["name"] == "page_limit_check" for f in result["findings"])
+
+
+def test_health_report_leaves_page_limits_alone_when_the_pdf_is_ambiguous(tmp_path):
+    _write_form_tex(tmp_path / "a.tex", "PURPOSE", 1)
+    _write_form_pdf(tmp_path / "one.pdf", [("PURPOSE", 2)])
+    _write_form_pdf(tmp_path / "two.pdf", [("PURPOSE", 2)])
+
+    result = gw.grant_writing_health_report(str(tmp_path / "a.tex"))
+
+    assert "page_limit" not in result["detailed_results"]
+
+
+def test_publication_list_is_not_linted_as_one_long_sentence():
+    proposal = (
+        "本研究は結合条件を明らかにする。\n"
+        "\\begin{enumerate}\n"
+        "\\item K. Sugahara, ``Electromagnetic Analysis of Eddy Current Testing"
+        " With Kelvin Transformation,'' IEEE Trans. Magn., 58(9), 1--6 (2022).\n"
+        "\\item H. Nagamine, T. Yamaguchi, and K. Sugahara, ``A Pullback-Based"
+        " Formulation of Kelvin Transformation,'' CEFC 2026.\n"
+        "\\end{enumerate}\n"
+    )
+
+    result = gw.grant_writing_analyze_sentences(gw._prose_for_lint(proposal))
+
+    assert result["max_length"] < 60
+    assert result["over_threshold_count"] == 0
+
+
+def test_prose_list_items_survive_but_stay_separate():
+    proposal = (
+        "\\begin{itemize}\n"
+        "\\item 誘導加熱の発熱量を評価する\n"
+        "\\item 加速器電磁石の出口位置ずれを抑える\n"
+        "\\end{itemize}\n"
+    )
+
+    prose = gw._prose_for_lint(proposal)
+
+    assert "誘導加熱の発熱量を評価する。" in prose
+    assert "加速器電磁石の出口位置ずれを抑える。" in prose

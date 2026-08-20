@@ -805,6 +805,73 @@ GPU等の機種名を予算化するときは、アクセラレータ名とホ�
 どの経費から削るか、削っても検証ループが成立する優先順位を設計時に用意して
 おく。挑戦的研究は原則満額支給であり、満額前提の計画を組める。
 
+## The Page Limit Is Enforced Before Anyone Reads the Science
+
+A field that runs past its allowance can be returned without review. No
+argument inside it is worth anything at that point, which makes the page
+limit the one defect in this suite that outranks every other finding — it is
+reported as CRITICAL.
+
+The limit is also a target. A field that leaves a whole page unused has
+thrown away space the funder granted for arguing, and that is the same defect
+seen from the other side. Both directions are reported by
+`grant_writing_page_limit_check(pdf_path)`.
+
+The check reads the **compiled PDF**, not the source, because a page limit is
+a property of the rendered document. Two independent signals are used:
+
+- Japanese form templates print their own notice onto the overflow page
+  (「<欄名>」はNページ以内で書いてください). That string appearing in the
+  compiled PDF is proof by itself, and needs no configuration.
+- Independently, the field spans measured from the PDF are compared with the
+  allowances declared in the LaTeX source (＜＜最大　Nページ＞＞), which
+  catches a form that stays silent about the overrun.
+
+The integrated health report runs this automatically when the source path it
+was given has exactly one sibling PDF. With several PDFs beside the source it
+stays quiet rather than guess which one is the submission — pass `pdf=` to
+name it.
+
+Underfill is reported only when a whole page of the allowance is unused, or
+when a multi-page field ends below 60% of its last page. A one-page
+compliance field is often short because the honest answer is short, and the
+check cannot tell that from laziness, so it says nothing.
+
+**This check exists because the suite failed to catch the defect on its own
+draft.** Editing prose for the other findings — splitting a 逆茂木 sentence,
+expanding an acronym on first use, adding the international-standing evidence
+— added about 275 characters to a field that was already filled to its 4-page
+allowance. Every text check still passed while the compiled proposal had
+grown to six pages in a four-page field. A suite that lints sentences without
+measuring the page they land on will approve a document that cannot be
+submitted.
+
+Two consequences for how the other rules are applied:
+
+- 「文の圧縮は厳禁」 stands. When a fix pushes a field over, drop whole
+  sentences or move them to another field. Do not compress the surviving
+  ones back down.
+- A field is not the only place its evidence may live. International
+  collaboration evidence moved from 研究目的 to 研究遂行能力及び研究環境
+  scores under the criterion that actually rewards it, and it freed the
+  overflow at the same time. Check which criterion reads the field before
+  deciding where evidence belongs.
+
+## A List Is Not a Sentence
+
+Every Japanese funding form asks for a publication list, and every one of
+them is written as `\item` entries inside `enumerate`. Stripped of its list
+markup, that block reads as a single sentence of many hundred characters and
+trips the sentence-length check on content the form itself demanded.
+
+`_prose_for_lint` drops list items that carry a four-digit year and at least
+two commas, which is what a citation looks like in every form seen so far.
+The year need not be parenthesised: an accepted paper is listed as
+``IGTE Symposium 2026 (accepted)``. Surviving items — genuine prose bullets —
+are kept and terminated so consecutive bullets cannot fuse into one
+pseudo-sentence. An English period does not end a sentence for the Japanese
+splitter, so it does not count as a terminator here.
+
 ## Useful Tools
 
 - `grant_writing_usage()`
