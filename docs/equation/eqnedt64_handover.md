@@ -503,9 +503,11 @@ found it.** What remains before retirement is usability, not correctness.
    run; the fix and two dead chords are in §8.
 3. ~~Paste size in PowerPoint~~ — **done** (§15): the GVML clipboard format,
    pasting at 24 pt as a native equation.
-4. **Palette simplification** (§9) — one representative member per button.
-5. `PageUp`/`PageDown`, `Ctrl+Tab` (§10).
-6. The 5 remaining stray-marker corpus documents (§4), lowest priority: they were
+4. ~~The window at awkward sizes~~ — **done** (§16): it fits what it holds and
+   grows to what it holds.
+5. **Palette simplification** (§9) — one representative member per button.
+6. `PageUp`/`PageDown`, `Ctrl+Tab` (§10).
+7. The 5 remaining stray-marker corpus documents (§4), lowest priority: they were
    wrong before this work and are five different shapes, so each is its own
    investigation.
 
@@ -557,3 +559,53 @@ Exposed as `radia._equation.tex_to_gvml(latex, size_pt, display)` and
 `tests/equation/test_paste_size.py` checks the package without Office, and its
 last test pastes into a real slide and asserts 24.0 pt — the claim is about
 PowerPoint, so something has to ask PowerPoint.
+
+---
+
+## 16. CLOSED — the window fits what it holds, and grows to what it holds
+
+Sugahara, 2026-08-20: *窓サイズを自動的に内容に調整するのか？小さいときには
+み出さないが大事*.
+
+It did neither. The equation was drawn at the asked-for zoom whatever the
+window was, from a fixed left margin and centred vertically — so a long
+equation ran off the right edge, a tall one painted over the palette bar and
+the status strip, and there was no scrollbar and no way to bring either back.
+The comment on the mouse wheel even said *"there is nothing to scroll — one
+equation, always fully visible"*, which was the intention and not the truth.
+
+**Two changes, in that order of importance.**
+
+**It cannot overflow.** `view_of()` computes the canvas — between the palette
+bar and the status strip — and drops the drawing scale until the equation fits
+inside it. The margin is given up first, because on a narrow window the white
+space matters less than the maths. The status strip shows the scale actually on
+screen, with `(fit)` when it is not the one that was asked for: a window that
+silently disobeys the zoom setting would be a mode you cannot see, which is the
+same trap the `Style:` cell exists to avoid. A clip rectangle is set over the
+canvas as well, so no layout can paint over the buttons even if its extents
+were wrong.
+
+`view_of()` is also the one place the position and scale are computed, and the
+painter and the mouse now both call it. The formula used to be written out
+three times, and only one copy needed to drift for a click to land somewhere
+other than where the caret appeared.
+
+**It grows.** `fit_window_to_content()` enlarges the window so the equation
+fits at the zoom asked for, capped at the monitor work area. It only ever
+grows, never shrinks: a window that got smaller as you deleted would move under
+the hand that is typing. And it stops the moment the user takes hold of an edge
+(`WM_ENTERSIZEMOVE` sets `user_sized`) — a window someone has deliberately
+sized is theirs.
+
+**Both are checked by the self-test, every paint.** `check_inside()` runs after
+each of the thousands of paints in the sweeps and walks — including at 90×40,
+which nobody would choose and which is exactly where a rule that only holds at
+the default size would go unnoticed. `sweep_autosize()` checks the window grows
+for an equation wider than it (760 → 1855 px) and then holds still once the
+user has sized it.
+
+The oracle was checked against a build with the fitting disabled, because a
+test that cannot fail proves nothing: it reported 6 overflows and exit 5. That
+negative control is not in the tree — run it by adding a `v.fit = 1.0;` after
+the two fit lines in `view_of()`.
