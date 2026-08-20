@@ -1983,3 +1983,47 @@ def test_a_document_with_no_prose_leaves_no_sentences_to_measure():
     # citation list, the year matrix and the instruction block are gone; left
     # in, any one of them alone exceeds the 90-character threshold.
     assert result.get("max_length", 0) < 90
+
+
+def test_misuse_check_is_alive_even_though_proposals_never_trip_it():
+    # Inherited from the shared Japanese table, which targets speech and
+    # email: よろしかったでしょうか, のほう, こんにちわ. Eight real proposals
+    # score zero, and that is the genre, not a broken check.
+    result = gw.grant_writing_check_misuse_japanese(
+        "資料のほうを送付いたします。こんにちわ。お連絡ありがとうございます。"
+    )
+
+    assert result["total_matches"] >= 2
+
+
+def test_an_asserted_absence_needs_an_account_of_the_search():
+    # Present in four of eight real proposals, three of them adopted.
+    result = gw.grant_writing_literature_gap_evidence_check(
+        "本提案事業に関して、類似する計画は存在しない。"
+        "誘導加熱コイルの設計分野では、直接的な競合製品は存在しない。"
+    )
+
+    assert result["applicable"]
+    assert [r["type"] for r in result["risks"]] == [
+        "absence_claimed_without_search"
+    ]
+    assert result["unbacked_absence_claims"]
+
+
+def test_an_absence_with_a_stated_search_is_not_flagged_as_unbacked():
+    result = gw.grant_writing_literature_gap_evidence_check(
+        "IEEE Xplore を対象文献として「stream function coil」で検索した結果、"
+        "鉄心を含む設計例は存在しない。"
+    )
+
+    types = {r["type"] for r in result["risks"]}
+    assert "absence_claimed_without_search" not in types
+
+
+def test_a_proposal_that_claims_no_absence_is_not_judged_on_it():
+    result = gw.grant_writing_literature_gap_evidence_check(
+        "既往研究では、個々の手法の高精度化・高速化が進められてきた。"
+        "本研究は手法間の差を設計量へ写す。"
+    )
+
+    assert not result["applicable"]
