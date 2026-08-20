@@ -342,10 +342,29 @@ def test_a_claim_shown_nowhere_is_reported(tmp_path):
     list(prs.slides)[1].shapes.title.text = "HACApKにより16.2万自由度を60.7秒で求解"
     prs.save(deck)
     got = figure_claim_visibility(deck)
-    assert got["n_not_visible"] == 1
+    # a figure is present, so this is unresolved rather than a flat failure:
+    # the number may be drawn inside the raster, which is what the plan asks
+    # for and what a text-reading check cannot see
+    assert got["n_unresolved_in_figure"] == 1
     bad = got["claims_not_visible"][0]
+    assert bad["status"] == "unresolved_in_figure"
     assert bad["kind"] == "operating_point"
     assert "marked" in bad["plan"]["form"]
+
+
+def test_a_claim_with_no_figure_at_all_is_a_flat_failure(tmp_path):
+    from radia_mcp.figure.tools import figure_claim_visibility
+    deck = build_rich(tmp_path, [
+        {"body": "表紙", "note": "表紙です。"},
+        {"body": "文章だけ", "note": "スケーリングです。"},
+    ])
+    from pptx import Presentation
+    prs = Presentation(deck)
+    list(prs.slides)[1].shapes.title.text = "16.2万自由度を60.7秒で求解"
+    prs.save(deck)
+    got = figure_claim_visibility(deck)
+    assert got["n_not_visible"] == 1
+    assert got["claims_not_visible"][0]["status"] == "not_visible"
 
 
 def test_a_claim_written_on_the_slide_is_not_reported(tmp_path):
