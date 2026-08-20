@@ -7,6 +7,18 @@ crystallized as its own package.
 
 ## [Unreleased]
 
+- grant-writing: validated the originality check against ten submitted
+  proposals by one applicant, three of them funded, and reported what it
+  found rather than what was hoped for. The gap vocabulary was written from
+  assumption and matched none of the ten, funded ones included: real
+  proposals negate a capability -- 「考慮できず」「そのまま適用できない」--
+  rather than announce an absence, and 「従来」 had never been registered as
+  a standalone marker. After fixing that, the check still does not separate
+  funded from rejected (mean 8.5 versus 9.2, the wrong way round) and marks
+  down a funded proposal, so `no_gap_against_prior_work` drops from HIGH to
+  MEDIUM. It measures whether the contrast was written, not whether the
+  proposal will succeed, and the skill now says so with the numbers.
+
 - grant-writing: added `grant_writing_collaboration_irreplaceability_check`.
   Funders on both sides of an international collaboration ask the same
   question -- why this counterpart rather than someone closer -- and shared

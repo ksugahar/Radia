@@ -2544,16 +2544,29 @@ _ORIGINALITY_MARKERS = (
 
 # A gap statement: prior work did X, but Y is not established. Without one,
 # an originality word is an assertion rather than a position.
+# 「従来」 must stand alone. The funded proposal writes 「従来提案された…は…
+# 考慮できず」 and 「従来提案されている…をそのまま適用できない」, which a list
+# of 従来手法／従来法／従来の misses entirely.
 _PRIOR_WORK_MARKERS = (
-    "既往研究", "既存研究", "先行研究", "従来手法", "従来法", "従来の",
-    "これまで", "既報",
+    "既往研究", "既存研究", "先行研究", "従来", "これまで", "既報",
+    "既存の", "現状の", "現行の",
 )
+# Measured against five real submitted proposals (one funded, four not).
+# None of them phrase the limit as 「確立していない」. They negate a capability:
+# 「考慮できず」「そのまま適用できない」「実現できなかった」「制限される」.
+# The first vocabulary here was written from assumption and matched zero of
+# the five, including the funded one.
 _GAP_MARKERS = (
+    # capability negation -- how real proposals actually write it
+    "できない", "できず", "できなかった", "えない", "困難",
+    "適用できない", "考慮できず", "制限される", "制約される",
+    "限界がある", "対応できない", "十分に扱えない",
+    # explicit absence
     "確立していない", "確立されていない", "体系化されていない",
     "明らかでない", "明らかにされていない", "得られていない",
-    "十分でない", "十分ではない", "扱えない", "扱われていない",
+    "十分でない", "十分ではない", "扱われていない",
     "できていない", "限られている", "残されている",
-    "未解決", "至っていない", "困難である", "難しい",
+    "未解決", "至っていない", "難しい", "存在しない", "知られていない",
 )
 
 
@@ -2938,8 +2951,12 @@ def grant_writing_question_originality_check(text: str) -> dict:
         })
     if not gap_sentences:
         risks.append({
+            # MEDIUM, not HIGH. Measured on ten submitted proposals (three
+            # funded): this rule fires on funded work too, so it cannot carry
+            # the severity of a defect. It marks a contrast worth writing,
+            # not a reason the proposal will fail.
             "type": "no_gap_against_prior_work",
-            "severity": "HIGH",
+            "severity": "MEDIUM",
             "comment": (
                 "既往研究の限界を一文で述べていない。"
                 if not (prior_hits and gap_hits)
@@ -2951,7 +2968,9 @@ def grant_writing_question_originality_check(text: str) -> dict:
             ),
         })
 
-    deductions = sum(3.0 for _ in risks)
+    deductions = sum(
+        3.0 if r["severity"] == "HIGH" else 1.5 for r in risks
+    )
     score = max(0.0, round(10.0 - deductions, 1))
     return {
         "applicable": True,
@@ -4211,7 +4230,10 @@ def grant_writing_health_report(
                 priority_issues.append({
                     "tool": "originality",
                     "name": "question_originality_check",
-                    "severity": "HIGH",
+                    "severity": max(
+                        (r["severity"] for r in originality["risks"]),
+                        key=lambda x: {"HIGH": 2, "MEDIUM": 1, "LOW": 0}[x],
+                    ),
                     "score": originality["score"],
                     "comments": originality["comments"][:5],
                 })
