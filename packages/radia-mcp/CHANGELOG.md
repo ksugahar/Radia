@@ -7,6 +7,38 @@ crystallized as its own package.
 
 ## [Unreleased]
 
+- grant-writing: removed six false positives found by running the suite over
+  two proposals with known outcomes — an adopted Go-Tech application and a
+  rejected 住友財団 form. Every one had the same shape: a word read as a claim
+  the applicant never made. 「（入力したエネルギーに対するビーム強度）」 was
+  reported as an unfilled placeholder because 入力 opened the parenthetical;
+  a placeholder now has to hold the instruction word and nothing else. The
+  international check demanded a counterpart institution behind a conference
+  venue in a travel line (「Conference（2026/5/17~22,フランス）：50万円」), behind
+  「世界的な社会課題」, behind a domestic 共同開発 that shared a document with
+  「海外市場」, and behind a glossary row for 交流電流 — **交流 in an
+  electrical proposal is alternating current**, so bare 交流 is out and only
+  国際交流/学術交流/人的交流 count. The irreplaceability check treated
+  COMPUMAG as a partner and asked why not a domestic substitute; conference
+  acronyms are now separated from institutions and people. The three review
+  criteria are no longer demanded of a 1,715-character form whose single 要旨
+  box matches none of them.
+  Three rules generalise from this: a marker with a common technical meaning
+  must be required in its unambiguous compound form; co-occurrence must be
+  scoped to a prose segment, with segments beyond ~200 characters excluded
+  because PDF tables carry no full stops and turn a page into one "sentence";
+  and international output (presenting abroad) must be separated from a
+  claimed relationship, since only the latter has a counterpart to name.
+- grant-writing: a third independent measurement, now over three funding
+  programs, finds no relationship between these checks and adoption. After
+  the false positives were removed the adopted Go-Tech document carries more
+  findings in absolute terms (5-6 against 3-4) and the rejected 住友財団 form
+  carries more per character (~37-47 per 10,000 against ~4-5). Neither
+  direction is a result: the documents are different genres of different
+  length. Recorded in skill.md that a defect count is not comparable across
+  documents and must never rank two proposals, and that density does not fix
+  this — it mostly measures how compressed the form is.
+
 - grant-writing: added `grant_writing_page_limit_check`, after the suite
   approved a draft that could not be submitted. Editing prose for the other
   findings -- splitting a 逆茂木 sentence, expanding an acronym on first use,
