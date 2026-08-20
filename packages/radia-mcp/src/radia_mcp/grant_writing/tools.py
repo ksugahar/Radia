@@ -2748,6 +2748,121 @@ def grant_writing_international_standing_check(text: str) -> dict:
     }
 
 
+# What the applicant's side supplies that the partner cannot obtain locally.
+# Derived from a 2026 bilateral case: an Austrian counterpart was asked by
+# his own funder why Japan, and told that Europe already has CERN. A facility
+# was never what he needed -- he needed a method line developed elsewhere to
+# cross-validate against. The answer to "why this partner" is always a named
+# asset, not a shared intention.
+_TRANSFERABLE_ASSET_MARKERS = (
+    "日本発", "国内で発展", "我が国独自", "国内発",
+    "本研究室が開発", "代表者が開発", "が開発した",
+    "提案者の一人", "開発者", "原著者",
+)
+_PARTNER_DEMAND_MARKERS = (
+    "求められ", "要請", "招請", "招へい", "招聘", "打診",
+    "関心を示", "議論したい", "共同研究の申し出", "取り上げられ",
+    "採用され", "導入され", "参照され", "問い合わせ",
+)
+_SUBSTITUTE_QUESTION_MARKERS = (
+    "他に代え", "代替できない", "他では得られない", "唯一",
+    "独立に発展", "別系統", "異なる系譜", "相互検証",
+)
+
+
+def grant_writing_collaboration_irreplaceability_check(text: str) -> dict:
+    """Check that a named collaboration says why that partner, both ways.
+
+    A funder on either side asks the same thing: why this counterpart rather
+    than someone closer to home. The answer is never a shared intention to
+    cooperate. It is a named asset one side holds and the other cannot obtain
+    locally, plus evidence that the other side actually wants it.
+
+    The check is optional and applies only when a foreign counterpart is
+    named. It does not judge whether the collaboration is good -- it asks
+    whether the proposal answers the question a reviewer will ask.
+    """
+    text = _prose_for_lint(_read_text_if_path(text))
+    partner = _NAMED_PARTNER.search(text)
+    if partner is None:
+        return {
+            "applicable": False,
+            "score": None,
+            "risks": [],
+            "comments": [],
+            "target": (
+                "a named collaboration states the asset only this side holds "
+                "and the evidence that the other side wants it"
+            ),
+            "source": "collaboration-irreplaceability check",
+        }
+
+    assets = [m for m in _TRANSFERABLE_ASSET_MARKERS if m in text]
+    demand = [m for m in _PARTNER_DEMAND_MARKERS if m in text]
+    substitute = [m for m in _SUBSTITUTE_QUESTION_MARKERS if m in text]
+
+    risks: list[dict] = []
+    if not assets:
+        risks.append({
+            "type": "no_asset_this_side_holds",
+            "severity": "HIGH",
+            "comment": (
+                "相手が自国で得られない、こちら側固有の資産が示されていない。"
+            ),
+            "recommendation": (
+                "手法名・ライブラリ名・原著者を挙げ、それが国内で発展した"
+                "ものであることを書く。「連携する」だけでは、なぜその相手か"
+                "にも、なぜこちらかにも答えていない。"
+            ),
+        })
+    if not demand:
+        risks.append({
+            "type": "no_evidence_partner_wants_it",
+            "severity": "MEDIUM",
+            "comment": "相手側がそれを求めている証拠が書かれていない。",
+            "recommendation": (
+                "招請、共同研究の申し出、相手が自国で取り上げた事実など、"
+                "相手側から来た動きを具体的に書く。こちらの意欲ではなく、"
+                "相手の需要が連携の必然性を示す。"
+            ),
+        })
+    if not substitute:
+        risks.append({
+            "type": "no_substitution_argument",
+            "severity": "LOW",
+            "comment": (
+                "近場で代替できない理由が書かれていない。"
+            ),
+            "recommendation": (
+                "独立に発展した別系統との相互検証である、など、"
+                "同一国内や近隣機関では代えられない理由を一文で置く。"
+            ),
+        })
+
+    deductions = sum(
+        3.0 if r["severity"] == "HIGH" else 1.5 if r["severity"] == "MEDIUM" else 0.5
+        for r in risks
+    )
+    score = max(0.0, round(10.0 - deductions, 1))
+    return {
+        "applicable": True,
+        "score": score,
+        "risk_count": len(risks),
+        "risks": risks,
+        "named_partner": partner.group(0).strip(),
+        "asset_markers": assets[:8],
+        "demand_markers": demand[:8],
+        "substitution_markers": substitute[:8],
+        "comments": [r["comment"] for r in risks],
+        "recommendations": [r["recommendation"] for r in risks],
+        "target": (
+            "name the asset only this side holds, show the other side asking "
+            "for it, and say why a closer substitute will not do"
+        ),
+        "source": "collaboration-irreplaceability check",
+    }
+
+
 def grant_writing_question_originality_check(text: str) -> dict:
     """Check that the central question carries an originality position.
 
@@ -3878,6 +3993,7 @@ _DETECTOR_TOOLS = frozenset({
     "residue",
     "originality",
     "international",
+    "irreplaceable",
 })
 
 _DETECTOR_RESULT_KEYS = frozenset({
@@ -3894,6 +4010,7 @@ _DETECTOR_RESULT_KEYS = frozenset({
     "template_residue",
     "question_originality",
     "international_standing",
+    "collaboration_irreplaceability",
 })
 
 
@@ -4049,6 +4166,23 @@ def grant_writing_health_report(
                     "severity": "MEDIUM",
                     "score": vague["score"],
                     "comments": vague["comments"][:5],
+                })
+
+    if "irreplaceable" not in skip_set:
+        irrep = grant_writing_collaboration_irreplaceability_check(text)
+        detailed_results["collaboration_irreplaceability"] = irrep
+        if irrep["applicable"]:
+            detailed_scores["collaboration_irreplaceability"] = irrep["score"]
+            if irrep["risks"]:
+                priority_issues.append({
+                    "tool": "irreplaceable",
+                    "name": "collaboration_irreplaceability_check",
+                    "severity": max(
+                        (r["severity"] for r in irrep["risks"]),
+                        key=lambda x: {"HIGH": 2, "MEDIUM": 1, "LOW": 0}[x],
+                    ),
+                    "score": irrep["score"],
+                    "comments": irrep["comments"][:5],
                 })
 
     if "international" not in skip_set:

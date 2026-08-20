@@ -2,7 +2,7 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **1018 tools** across 49 MCP servers.
+Total: **1019 tools** across 49 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
@@ -45,7 +45,7 @@ Total: **1018 tools** across 49 MCP servers.
 | [`mcp-server-md2html`](#mcp-server-md2html) | `radia_mcp.md2html` | 2 |
 | [`mcp-server-chart2d`](#mcp-server-chart2d) | `radia_mcp.chart2d` | 24 |
 | [`mcp-server-paper-writing`](#mcp-server-paper-writing) | `radia_mcp.paper_writing` | 191 |
-| [`mcp-server-grant-writing`](#mcp-server-grant-writing) | `radia_mcp.grant_writing` | 34 |
+| [`mcp-server-grant-writing`](#mcp-server-grant-writing) | `radia_mcp.grant_writing` | 35 |
 | [`mcp-server-poster`](#mcp-server-poster) | `radia_mcp.poster` | 32 |
 | [`mcp-server-literature-index`](#mcp-server-literature-index) | `radia_mcp.literature_index` | 9 |
 | [`mcp-server-document-meta`](#mcp-server-document-meta) | `radia_mcp.document_meta` | 11 |
@@ -1286,6 +1286,7 @@ Module: `radia_mcp.grant_writing.server`
 | `grant_writing_check_misuse_japanese` | 『問題な日本語』由来の現代誤用 15 パターン検出。 |
 | `grant_writing_check_notation_variants` | 同一テキスト内で同じ概念が複数の表記で書かれていないかを検出。 |
 | `grant_writing_check_subject_predicate_distance` | 主述の直結原則 (本多 p.22): 主語と述語の間の距離が遠い文を検出。 |
+| `grant_writing_collaboration_irreplaceability_check` | Check that a named collaboration says why that partner, both ways. |
 | `grant_writing_collaborative_integration_risk_check` | Check recurring risks in collaborative software-integration proposals. |
 | `grant_writing_count_weak_expressions` | Count hedges and grant-specific non-commitment phrases. |
 | `grant_writing_cross_organization_pilot_check` | Check whether preliminary evidence crosses an organization boundary. |

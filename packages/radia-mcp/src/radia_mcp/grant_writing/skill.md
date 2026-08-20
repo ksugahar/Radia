@@ -499,6 +499,39 @@ IGTE共著がその起点である。」
 なお2025年度の実測（下記の審査結果）では、この軸が1.60対2.70と最も差の
 大きい項目の一つだった。実体があっても書き方で失点する。
 
+## Why This Partner: Answer It in Both Directions
+
+国際連携を書くとき、双方の資金提供者が同じことを問う。**なぜその相手なのか。
+近場では代えられないのか。**
+
+2026年の実例がこの問いの形を示した。オーストリアの共同研究者が自国の資金
+提供者から「なぜ日本か、欧州にはCERNがある」と問われた。しかし彼が必要と
+していたのは施設ではない。自分の表面インピーダンス法を、**独立に発展した
+別系統の手法**と突き合わせることであり、その系統は日本で発展し一次文献は
+日本語だった。施設と手法系統を取り違えた反論には、その取り違えを指摘するのが
+答えになる。
+
+答えは常に三つの要素からなる。
+
+1. **こちら側だけが持つ資産。** 手法名、ライブラリ名、原著者を挙げる。
+   「連携する」では、なぜその相手かにも、なぜこちらかにも答えていない。
+2. **相手がそれを求めている証拠。** 招請、共同研究の申し出、相手が自国で
+   取り上げた事実。こちらの意欲ではなく、**相手の需要**が必然性を示す。
+3. **近場で代替できない理由。** 独立に発展した別系統との相互検証である、など。
+
+`grant_writing_collaboration_irreplaceability_check` がこの三点を検査する。
+実測では、資産と代替不能性は書けていても**相手の需要だけが抜ける**申請書が
+ある。自分の計画を書くうちに、相手から来た動きを書き落とすためである。
+
+Bad: 「ウィーン工科大学と国際共同研究を進め、相互に交流する。」
+
+Better: 「日本発の階層行列ライブラリを用いた積分方程式解法について、ミラノ
+工科大学より議論の招請を受けている。独立に発展した別系統との相互検証は、
+国内の近隣機関では代替できない。」
+
+なお相手の需要を書くときも、実績と予定の区別は保つ。関心の表明は関心の表明
+として書き、合意した共同研究として書かない。
+
 ## Writing the Question So Originality Is Recognisable
 
 上表で最も減点された項目は「研究課題の核心をなす学術的『問い』は明確であり、
@@ -698,6 +731,7 @@ GPU等の機種名を予算化するときは、アクセラレータ名とホ�
 - `grant_writing_template_residue_check(text)`
 - `grant_writing_question_originality_check(text)`
 - `grant_writing_international_standing_check(text)`
+- `grant_writing_collaboration_irreplaceability_check(text)`
 - `grant_writing_literature_gap_evidence_check(text)`
 - `grant_writing_collaborative_integration_risk_check(text)`
 - `grant_writing_budget_alignment_check(text)`

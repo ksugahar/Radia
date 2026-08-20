@@ -1383,3 +1383,51 @@ def test_international_standing_credits_an_accepted_output():
     types = {r["type"] for r in result["risks"]}
     assert "international_output_all_planned" not in types
     assert result["achieved_output_sentences"]
+
+
+def test_irreplaceability_flags_intent_without_an_asset_or_demand():
+    # The question a funder on either side asks: why this partner rather than
+    # someone closer. Shared enthusiasm answers neither direction.
+    result = gw.grant_writing_collaboration_irreplaceability_check(
+        "ウィーン工科大学と国際共同研究を進め、相互に交流する。"
+        "国際会議での共著発表を目指す。"
+    )
+
+    assert result["applicable"]
+    types = {r["type"] for r in result["risks"]}
+    assert "no_asset_this_side_holds" in types
+    assert "no_evidence_partner_wants_it" in types
+    assert result["score"] < 6
+
+
+def test_irreplaceability_accepts_a_named_asset_the_partner_asked_for():
+    result = gw.grant_writing_collaboration_irreplaceability_check(
+        "日本発の階層行列ライブラリを用いた積分方程式解法について、"
+        "ミラノ工科大学より議論の招請を受けている。"
+        "独立に発展した別系統との相互検証は、国内の近隣機関では代替できない。"
+    )
+
+    assert result["risks"] == []
+    assert result["score"] == 10.0
+    assert result["asset_markers"] and result["demand_markers"]
+
+
+def test_irreplaceability_reports_the_missing_half_only():
+    # The current 基盤(C) draft states the asset and why no substitute works,
+    # but never shows the counterpart asking. That single gap is the finding.
+    result = gw.grant_writing_collaboration_irreplaceability_check(
+        "日本発のCauer縮約と欧州発の高次要素は異なる系譜であり、"
+        "相互検証によってのみ妥当性を確認できる。グラーツ工科大学と行う。"
+    )
+
+    types = {r["type"] for r in result["risks"]}
+    assert types == {"no_evidence_partner_wants_it"}
+
+
+def test_irreplaceability_is_not_applicable_without_a_named_partner():
+    result = gw.grant_writing_collaboration_irreplaceability_check(
+        "誘導加熱の発熱量を評価し、損失分布を求める。"
+    )
+
+    assert not result["applicable"]
+    assert result["score"] is None
