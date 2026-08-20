@@ -706,6 +706,58 @@ Two operating rules follow:
   「有能な研究協力者を有する」 describes a lab; it does not hand anyone a job,
   and an adopted proposal that says so must not be flagged for it.
 
+## Ask Which Checks Never Say Anything
+
+A false positive announces itself. A check that has quietly stopped working,
+or that was aimed at a genre this suite does not serve, says nothing at all
+and looks exactly like a clean document.
+
+`sweep.py --audit` reports, per check, how often it applied to a real
+proposal and how often it reported anything. On the first run eight checks
+were silent on all eight documents. Adjudicating them separated three cases:
+
+- **Correctly quiet.** `international_standing_check` and
+  `collaboration_irreplaceability_check` apply to a handful of documents and
+  find nothing wrong with them, which is the answer. `check_misuse_japanese`
+  inherits the shared Japanese table aimed at speech and email
+  (よろしかったでしょうか, のほう, こんにちわ); no research proposal trips it,
+  and its silence is the genre rather than a fault. It now has a test proving
+  it still fires on the text it was built for.
+- **Aimed correctly, corpus clean.** Several checks apply to one or two
+  documents and pass them. Their unit tests carry the positive case.
+- **Broken.** `literature_gap_evidence_check` was **applicable to nothing at
+  all**, which no clean corpus explains. See below.
+
+A check that has never fired on real work and has no positive test is not a
+check. Run the audit whenever the corpus grows.
+
+## An Absence Asserted Is a Claim Like Any Other
+
+`literature_gap_evidence_check` was built for a search report — 「確認できな
+かった」「見当たらなかった」「記載がない」 — and asks whether a bounded search
+was over-generalised into a field-wide gap. Against eight real proposals it
+matched **nothing**, because none of them phrases absence that way.
+
+What they actually write is an existential claim with no search behind it:
+
+- 「統合的なマルチスケールモデル縮約法が存在しない」 (adopted 科研費)
+- 「他に類を見ないものである」 (adopted 科研費)
+- 「直接的な競合製品は存在しない」 (adopted Go-Tech)
+- 「本提案事業に関して、類似する計画は存在しない」 (adopted Go-Tech)
+
+This is the second time this suite's vocabulary was written from assumption
+and matched zero real proposals; `_GAP_MARKERS` was the first. **Derive the
+words from documents, then check the coverage against them.**
+
+The check now reports `absence_claimed_without_search` when an existential
+absence has no account of how the applicant looked. A reviewer is an expert
+in the field and needs one counterexample to puncture the sentence — and some
+of the trust around it. The fix is a clause naming the search, or a retreat
+to 「知る限り」.
+
+Three of the four instances are in adopted proposals, so this predicts
+nothing about adoption either.
+
 ## The Form Is Not the Applicant
 
 A Japanese application form prints its own instructions inside the document

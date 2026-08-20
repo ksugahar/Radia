@@ -7,6 +7,25 @@ crystallized as its own package.
 
 ## [Unreleased]
 
+- grant-writing: audited which checks ever say anything about a real
+  proposal (`sweep.py --audit`). Eight were silent on all eight documents;
+  adjudicating them found one genuinely broken.
+  `literature_gap_evidence_check` was applicable to **nothing**: it was built
+  for a search report (確認できなかった / 見当たらなかった) while real
+  proposals assert absence outright -- 「統合的なマルチスケールモデル縮約法が
+  存在しない」, 「直接的な競合製品は存在しない」 -- with no account of how
+  they looked. It now reports `absence_claimed_without_search` for that, the
+  more common and more punctured form: a reviewer needs one counterexample.
+  This is the second time a vocabulary here was written from assumption and
+  matched zero real proposals, after `_GAP_MARKERS`; derive the words from
+  documents. Three of the four instances are in adopted proposals, so it
+  predicts nothing about adoption either.
+- grant-writing: `check_misuse_japanese` had no test at all. It inherits the
+  shared Japanese table aimed at speech and email (よろしかったでしょうか,
+  のほう, こんにちわ), which no research proposal trips, so its silence is
+  the genre and not a fault -- now recorded, and covered by a test that
+  proves it still fires on the text it was built for.
+
 - grant-writing: added `validation_test/grant_writing/`, a corpus regression
   lane over real proposals. `sweep.py` runs every detector over every
   document and prints the pattern table -- the working surface that found
