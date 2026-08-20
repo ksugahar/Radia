@@ -7,6 +7,33 @@ crystallized as its own package.
 
 ## [Unreleased]
 
+- grant-writing: added `grant_writing_page_limit_check`, after the suite
+  approved a draft that could not be submitted. Editing prose for the other
+  findings -- splitting a 逆茂木 sentence, expanding an acronym on first use,
+  adding international-standing evidence -- added ~275 characters to a field
+  already filled to its 4-page allowance, and the compiled proposal grew to
+  six pages in a four-page field while every text check still passed. A page
+  limit is enforced before anyone reads the science, so the check reads the
+  compiled PDF and reports overruns as CRITICAL. Two independent signals:
+  the notice Japanese form templates print onto the overflow page
+  (「<欄名>」はNページ以内で書いてください), and the field spans measured from
+  the PDF against the allowances declared in the LaTeX source
+  (＜＜最大　Nページ＞＞). An unused whole page is reported too -- an
+  allowance is space the funder granted for arguing -- while a short
+  one-page compliance field is left alone, because the honest answer there
+  is often short. The health report runs it when the source has exactly one
+  sibling PDF, and stays quiet rather than guess when several exist.
+- grant-writing: `_prose_for_lint` no longer lints a publication list as
+  prose. Every Japanese form demands one and every one is `\item` entries
+  inside `enumerate`; stripped of list markup the block read as a single
+  1433-character sentence, which pushed the average sentence length of a
+  real proposal to 87.8 against a threshold of 90. Items carrying a
+  four-digit year and two or more commas are dropped as citations -- the
+  year need not be parenthesised, since an accepted paper is listed as
+  `IGTE Symposium 2026 (accepted)` -- and surviving prose bullets are
+  terminated so consecutive items cannot fuse. Measured on the same
+  proposal: max 1433 -> 519 -> 51 characters, average 87.8 -> 67.9.
+
 - grant-writing: `skill.md` now reads the reviewer-count column of a review
   disclosure as what it is -- a measurement of disagreement between
   reviewers. In the 2025 case the most-penalised item reached only three of

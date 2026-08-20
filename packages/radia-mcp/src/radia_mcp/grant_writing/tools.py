@@ -54,6 +54,35 @@ def _read_text_if_path(text_or_path: str) -> str:
     return s
 
 
+_CITATION_YEAR = re.compile(r"(?:19|20)\d{2}")
+
+
+def _strip_citation_items(match: re.Match[str]) -> str:
+    """Drop citation entries from a list and keep the remaining items apart.
+
+    An item is a citation when it carries a four-digit year and at least two
+    commas, which is how a publication list reads in every form this suite has
+    seen. The year is not required to be parenthesised: an accepted paper is
+    listed as ``IGTE Symposium 2026 (accepted)``.
+
+    Surviving items are terminated with a Japanese full stop so the sentence
+    splitter cannot fuse consecutive bullets into one pseudo-sentence. An
+    English period does not end a sentence for that splitter, so it does not
+    count as an existing terminator here.
+    """
+    kept: list[str] = []
+    for item in re.split(r"\\item\b", match.group("body"))[1:]:
+        stripped = item.strip()
+        if not stripped:
+            continue
+        if _CITATION_YEAR.search(stripped) and stripped.count(",") >= 2:
+            continue
+        if not stripped.endswith(("。", "．", "！", "？")):
+            stripped += "。"
+        kept.append(stripped)
+    return " " + " ".join(kept) + " " if kept else " "
+
+
 def _prose_for_lint(text: str) -> str:
     """Remove common LaTeX scaffolding before prose-oriented checks.
 
@@ -82,6 +111,16 @@ def _prose_for_lint(text: str) -> str:
     )
     text = re.sub(r"\$\$.*?\$\$", " 数式 ", text, flags=re.DOTALL)
     text = re.sub(r"\$[^$]*\$", " 数式 ", text)
+    # A 研究業績リスト is citations, not prose. Left alone, the \item markers are
+    # stripped as commands and the whole list merges into one sentence of many
+    # hundred characters, so every proposal trips the sentence-length check on
+    # the publication list its form requires.
+    text = re.sub(
+        r"\\begin\{(?P<listenv>enumerate|itemize)\}(?P<body>.*?)\\end\{(?P=listenv)\}",
+        _strip_citation_items,
+        text,
+        flags=re.DOTALL,
+    )
     text = re.sub(
         r"\\(?:textbf|textit|emph|underline|section|subsection|subsubsection)"
         r"\*?\{([^{}]*)\}",
@@ -96,6 +135,15 @@ def _prose_for_lint(text: str) -> str:
     )
     text = re.sub(r"\\[A-Za-z@]+\*?(?:\[[^\]]*\])?", " ", text)
     text = text.replace("\\\\", " ").replace("{", " ").replace("}", " ")
+    # Stripping the command but keeping its braces left the arguments behind:
+    # \vspace*{0zw} and \rule{\linewidth}{1pt} became the tokens 0zw and 1pt,
+    # which then joined the following sentence and were linted as prose.
+    text = re.sub(
+        r"(?<![0-9A-Za-z])-?[0-9]*\.?[0-9]+\s*"
+        r"(?:zw|zh|pt|mm|cm|in|em|ex|bp|dd|sp|truept|truemm)(?![0-9A-Za-z])",
+        " ",
+        text,
+    )
     return re.sub(r"\s+", " ", text).strip()
 
 
@@ -157,7 +205,6 @@ def grant_writing_count_weak_expressions(text: str) -> dict:
         "検討する": r"検討(?:する|します|を行う|を進める)",
         "目指す": r"目指(?:す|します)",
         "努める": r"努め(?:る|ます)",
-        "など": r"など",
         "今後": r"今後",
     })
     # Recompute with the grant-specific additions included.
@@ -168,6 +215,37 @@ def grant_writing_count_weak_expressions(text: str) -> dict:
         if n:
             by_pattern[name] = n
             total += n
+
+    # 「など」 hedges only when it trails a single item. After an enumeration
+    # -- 「高次要素、補助空間前処理など」 -- it is ordinary Japanese for "and
+    # the like", and counting it told an applicant to damage correct prose.
+    # A fixed-width lookbehind cannot express "no comma earlier in the
+    # clause", so it is counted here instead of in the pattern table.
+    # The form's own section headings are not the applicant's prose.
+    form_headings = ("研究目的、研究方法など", "研究目的、研究方法等")
+    nado = 0
+    for match in re.finditer("など", text):
+        window = text[max(0, match.start() - 12):match.end() + 2]
+        if any(h in window for h in form_headings):
+            continue
+        clause_start = max(
+            text.rfind(mark, 0, match.start())
+            for mark in ("。", "．", "\n", "、", "，")
+        )
+        clause = text[clause_start + 1:match.start()]
+        if "、" in clause or "，" in clause:
+            continue  # enumeration
+        # An enumeration whose last separator is the nearest mark also ends
+        # up here, so require the clause to look like a lone noun.
+        if len(clause) > 12:
+            continue
+        preceding = text[max(0, clause_start - 30):clause_start]
+        if "、" in preceding or "，" in preceding:
+            continue
+        nado += 1
+    if nado:
+        by_pattern["など"] = nado
+        total += nado
     return {
         "total_weak_expressions": total,
         "by_pattern": by_pattern,
@@ -2876,6 +2954,161 @@ def grant_writing_collaboration_irreplaceability_check(text: str) -> dict:
     }
 
 
+_FORM_OVERFLOW_NOTICE = re.compile(
+    r"「(?P<field>[^」]{2,40})」は(?P<limit>\d+)ページ以内で"
+)
+_TEX_FIELD_LIMIT = re.compile(
+    r"\\section\{(?P<title>[^{}]+)\}(?P<tail>(?:[^\n]*\n){0,5})",
+)
+_TEX_LIMIT_VALUE = re.compile(r"[＜<]{2}\s*最大\s*(?P<pages>\d+)\s*ページ\s*[＞>]{2}")
+
+
+def _flatten(text: str) -> str:
+    return re.sub(r"\s+", "", text)
+
+
+def grant_writing_page_limit_check(pdf_path: str, tex_dir: str = "") -> dict:
+    """Check each field of a compiled proposal against its page allowance.
+
+    A page limit is the one rule a funder enforces before anyone reads the
+    science: a field that runs past its allowance can be returned unexamined.
+    The limit is also a target. A field that leaves a page unused has thrown
+    away space the applicant was given to argue in, which is the same defect
+    seen from the other side.
+
+    Two independent signals are used. Japanese form templates print their own
+    notice (「<欄名>」はNページ以内で書いてください) onto the overflow page, and
+    that string in the compiled PDF is proof on its own. Separately, the field
+    spans measured from the PDF are compared with the allowances declared in
+    the LaTeX source (＜＜最大　Nページ＞＞), which catches a form that stays
+    silent.
+    """
+    pdf = pathlib.Path(pdf_path)
+    if not pdf.is_file():
+        raise FileNotFoundError(f"compiled proposal not found: {pdf_path}")
+
+    import fitz  # PyMuPDF; imported here so text-only checks never need it.
+
+    doc = fitz.open(str(pdf))
+    pages: list[dict] = []
+    for index in range(doc.page_count):
+        page = doc.load_page(index)
+        blocks = [b for b in page.get_text("blocks") if b[4].strip()]
+        pages.append({
+            "number": index + 1,
+            "flat": _flatten(page.get_text()),
+            "bottom": max((b[3] for b in blocks), default=0.0),
+        })
+    doc.close()
+    if not pages:
+        raise ValueError(f"compiled proposal has no pages: {pdf_path}")
+
+    text_bottom = max(p["bottom"] for p in pages)
+
+    declared: list[tuple[str, int]] = []
+    source_dir = pathlib.Path(tex_dir) if tex_dir else pdf.parent
+    for tex in sorted(source_dir.glob("*.tex")):
+        body = tex.read_text(encoding="utf-8", errors="replace")
+        for match in _TEX_FIELD_LIMIT.finditer(body):
+            limit = _TEX_LIMIT_VALUE.search(match.group("tail"))
+            if limit:
+                declared.append((_flatten(match.group("title")), int(limit.group("pages"))))
+
+    spans: list[dict] = []
+    starts: list[tuple[int, str, int]] = []
+    for title, limit in declared:
+        start = next((p["number"] for p in pages if title in p["flat"]), None)
+        if start is not None:
+            starts.append((start, title, limit))
+    starts.sort()
+    for position, (start, title, limit) in enumerate(starts):
+        end = starts[position + 1][0] - 1 if position + 1 < len(starts) else len(pages)
+        last = pages[end - 1]
+        spans.append({
+            "field": title,
+            "declared_max_pages": limit,
+            "first_page": start,
+            "last_page": end,
+            "used_pages": end - start + 1,
+            "last_page_fill": round(last["bottom"] / text_bottom, 2) if text_bottom else 0.0,
+        })
+
+    risks: list[dict] = []
+    for page in pages:
+        notice = _FORM_OVERFLOW_NOTICE.search(page["flat"])
+        if notice:
+            risks.append({
+                "severity": "CRITICAL",
+                "location": f"PDF p{page['number']}",
+                "comment": (
+                    f"様式が超過を印字している: 「{notice.group('field')}」は"
+                    f"{notice.group('limit')}ページ以内。"
+                ),
+                "recommendation": "溢れた分の文をまるごと落とすか、別欄へ移す。",
+            })
+
+    for span in spans:
+        if span["used_pages"] > span["declared_max_pages"]:
+            risks.append({
+                "severity": "CRITICAL",
+                "location": f"PDF p{span['first_page']}-p{span['last_page']}",
+                "comment": (
+                    f"「{span['field']}」は{span['declared_max_pages']}ページ指定に対し"
+                    f"{span['used_pages']}ページ占めている。"
+                ),
+                "recommendation": "文を圧縮せず、文・段落単位で落とすか別欄へ移す。",
+            })
+        elif span["used_pages"] < span["declared_max_pages"] or (
+            span["last_page_fill"] < 0.6 and span["declared_max_pages"] >= 2
+        ):
+            # A single-page administrative field is often short because the
+            # honest answer is short, so only an unused whole page or a slack
+            # multi-page allowance is reported.
+            risks.append({
+                "severity": "MEDIUM",
+                "location": f"PDF p{span['last_page']}",
+                "comment": (
+                    f"「{span['field']}」は{span['declared_max_pages']}ページ許容のうち"
+                    f"{span['used_pages']}ページ、最終ページの充填率"
+                    f"{span['last_page_fill']:.0%}。"
+                ),
+                "recommendation": "許容ページは埋める対象。証拠・数値・図で残りを使う。",
+            })
+
+    if not declared and not risks:
+        return {
+            "applicable": False,
+            "score": None,
+            "risk_count": 0,
+            "risks": [],
+            "page_count": len(pages),
+            "fields": [],
+            "comments": [],
+            "recommendations": [],
+            "reason": (
+                "ページ上限の宣言（＜＜最大　Nページ＞＞）が見つからず、様式の超過印字もない。"
+            ),
+            "source": "page-limit check",
+        }
+
+    deductions = sum(
+        5.0 if r["severity"] == "CRITICAL" else 1.5 if r["severity"] == "MEDIUM" else 0.5
+        for r in risks
+    )
+    return {
+        "applicable": True,
+        "score": max(0.0, round(10.0 - deductions, 1)),
+        "risk_count": len(risks),
+        "risks": risks,
+        "page_count": len(pages),
+        "fields": spans,
+        "comments": [r["comment"] for r in risks],
+        "recommendations": [r["recommendation"] for r in risks],
+        "target": "each field inside its allowance, and filling it",
+        "source": "page-limit check",
+    }
+
+
 def grant_writing_question_originality_check(text: str) -> dict:
     """Check that the central question carries an originality position.
 
@@ -3184,9 +3417,18 @@ def grant_writing_vague_claim_verb_check(text: str) -> dict:
 
     risks: list[dict] = []
     concrete: list[dict] = []
+    # Work already done is a report, not a promise. 「両者を辺要素OSSへ統合し、
+    # …再実行した」 names an artefact and states an outcome; asking it to say
+    # how is asking it to re-describe finished work.
+    completed = re.compile(
+        r"(?:した|した。|してきた|実施した|再実行した|完了した|得た|"
+        r"確認した|発表した|示した)"
+    )
     for index, sentence in enumerate(sentences):
         verb = next((v for v in _VAGUE_CLAIM_VERBS if v in sentence), None)
         if verb is None:
+            continue
+        if completed.search(sentence):
             continue
         found = [m for m in _MECHANISM_MARKERS if m in sentence]
         entry = {
@@ -4110,6 +4352,7 @@ _DETECTOR_TOOLS = frozenset({
     "originality",
     "international",
     "irreplaceable",
+    "pages",
 })
 
 _DETECTOR_RESULT_KEYS = frozenset({
@@ -4128,13 +4371,41 @@ _DETECTOR_RESULT_KEYS = frozenset({
     "question_originality",
     "international_standing",
     "collaboration_irreplaceability",
+    "page_limit",
 })
+
+
+def _find_compiled_pdf(text_or_path: str, pdf: str) -> pathlib.Path | None:
+    """Locate the compiled proposal whose page allowances should be checked.
+
+    An explicit path always wins. Otherwise the PDF is only inferred when the
+    source directory holds exactly one of them, because guessing which of
+    several PDFs is the submission would report page counts for the wrong
+    document.
+    """
+    if pdf:
+        candidate = pathlib.Path(pdf)
+        if not candidate.is_file():
+            raise FileNotFoundError(f"compiled proposal not found: {pdf}")
+        return candidate
+
+    # Proposal text must never reach the filesystem: statting it once per call
+    # is a network round trip on a NAS-hosted tree, and the suite calls this on
+    # every report.
+    if len(text_or_path) > 260 or "\n" in text_or_path:
+        return None
+    source = pathlib.Path(text_or_path)
+    if source.suffix.lower() not in {".md", ".tex", ".txt"} or not source.is_file():
+        return None
+    candidates = sorted(source.parent.glob("*.pdf"))
+    return candidates[0] if len(candidates) == 1 else None
 
 
 def grant_writing_health_report(
     text_or_path: str,
     program: str = "generic",
     skip: str = "",
+    pdf: str = "",
 ) -> dict:
     """Integrated grant-writing health report.
 
@@ -4142,6 +4413,8 @@ def grant_writing_health_report(
         text_or_path: Proposal text or an existing .md/.tex/.txt path.
         program: ``generic``, ``kddi_digital``, or ``kaken_oss``.
         skip: comma-separated tool ids to skip, e.g. ``sentence,literature``.
+        pdf: compiled proposal to check page allowances against. When omitted
+            and the source is a path, a single sibling PDF is used.
     """
     text = _read_text_if_path(text_or_path)
     skip_set = {s.strip().lower() for s in skip.split(",") if s.strip()}
@@ -4301,6 +4574,27 @@ def grant_writing_health_report(
                     "score": vague["score"],
                     "comments": vague["comments"][:5],
                 })
+
+    if "pages" not in skip_set:
+        compiled = _find_compiled_pdf(text_or_path, pdf)
+        if compiled is not None:
+            limits = grant_writing_page_limit_check(str(compiled))
+            detailed_results["page_limit"] = limits
+            if limits["applicable"]:
+                detailed_scores["page_limit"] = limits["score"]
+                if limits["risks"]:
+                    priority_issues.append({
+                        "tool": "pages",
+                        "name": "page_limit_check",
+                        "severity": max(
+                            (r["severity"] for r in limits["risks"]),
+                            key=lambda x: {
+                                "CRITICAL": 3, "HIGH": 2, "MEDIUM": 1, "LOW": 0,
+                            }[x],
+                        ),
+                        "score": limits["score"],
+                        "comments": limits["comments"][:5],
+                    })
 
     if "irreplaceable" not in skip_set:
         irrep = grant_writing_collaboration_irreplaceability_check(text)
