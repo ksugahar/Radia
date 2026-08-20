@@ -302,3 +302,66 @@ def test_a_question_time_slide_is_not_scored_for_its_banner(tmp_path):
     got = presentation_script_vs_slide_coverage(deck)
     scored = {b["slide_no"] for b in got["banner_detail"]}
     assert 2 in scored and 3 not in scored, got["banner_detail"]
+
+
+# --- figures: does the figure make the claim visible? ------------------------
+
+def test_a_claim_is_classified_by_what_it_asserts():
+    from radia_mcp.figure.tools import classify_claim
+    cases = {
+        "MMPMは要素ひずみによる偏差を最大1/145に低減": ("ratio", "1/145"),
+        "粗密メッシュ間の磁化差を0.18%以内に抑制": ("ratio", "0.18%"),
+        "HACApKにより16.2万自由度を60.7秒で求解": ("operating_point", "16.2万自由度"),
+    }
+    for claim, (kind, first) in cases.items():
+        got = classify_claim(claim)
+        assert got["kind"] == kind, (claim, got)
+        assert got["numbers"][0] == first, got
+
+
+def test_each_kind_of_claim_gets_the_form_that_shows_it():
+    from radia_mcp.figure.tools import figure_plan_for_claim
+    point = figure_plan_for_claim("16.2万自由度を60.7秒で求解")
+    assert "marked" in point["form"]
+    bound = figure_plan_for_claim("FEMとの差は0.280%以内")
+    assert "band" in bound["form"] or "difference" in bound["form"]
+    # the lab rule survives into every plan
+    assert any("No title inside the figure" in r for r in point["rules"])
+
+
+def test_a_claim_shown_nowhere_is_reported(tmp_path):
+    """The figure plots the data and the claimed point is left unmarked."""
+    from radia_mcp.figure.tools import figure_claim_visibility
+    deck = build_rich(tmp_path, [
+        {"body": "表紙", "note": "表紙です。"},
+        {"body": "スケーリング曲線", "figure_label": "memory",
+         "note": "スケーリングです。"},
+    ])
+    from pptx import Presentation
+    prs = Presentation(deck)
+    list(prs.slides)[1].shapes.title.text = "HACApKにより16.2万自由度を60.7秒で求解"
+    prs.save(deck)
+    got = figure_claim_visibility(deck)
+    assert got["n_not_visible"] == 1
+    bad = got["claims_not_visible"][0]
+    assert bad["kind"] == "operating_point"
+    assert "marked" in bad["plan"]["form"]
+
+
+def test_a_claim_written_on_the_slide_is_not_reported(tmp_path):
+    from radia_mcp.figure.tools import figure_claim_visibility
+    deck = build_rich(tmp_path, [
+        {"body": "表紙", "note": "表紙です。"},
+        {"body": "162,000自由度 60.7秒 スケーリング曲線", "figure_label": "memory",
+         "note": "スケーリングです。"},
+    ])
+    from pptx import Presentation
+    prs = Presentation(deck)
+    list(prs.slides)[1].shapes.title.text = "16.2万自由度を60.7秒で求解"
+    prs.save(deck)
+    got = figure_claim_visibility(deck)
+    # 16.2万自由度 is not on the slide, 60.7秒 is -- so it is still reported,
+    # and the report names exactly what is missing
+    bad = got["claims_not_visible"][0]
+    assert "60.7秒" in bad["shown"]
+    assert bad["missing"] == ["16.2万自由度"]
