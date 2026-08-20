@@ -147,7 +147,7 @@ void Equation::load_latex(const std::string& latex) {
     if (!root_) root_ = std::make_unique<LineNode>();
     path_.clear();
     index_ = int(root_->children.size());
-    anchor_ = -1;
+    clear_selection();
     undo_.clear();
     redo_.clear();
 }
@@ -199,6 +199,36 @@ void Equation::clamp() {
     if (size_t(index_) > l.size()) index_ = int(l.size());
 }
 
+/* ------------------------------------------------------------ selection */
+/* Both of these are here, above every caller, because the anchor's validity
+ * is the invariant the editing operations rely on: take_selection() indexes
+ * the slot with it, and an anchor from another slot made that read run past
+ * the end of the vector. */
+
+void Equation::set_anchor(int at) {
+    anchor_ = at;
+    anchor_path_ = path_;
+}
+
+bool Equation::selection_range(int& lo, int& hi) const {
+    if (anchor_ < 0) return false;
+    /* A selection belongs to the slot it was made in.  Tab, Ctrl+Up and a
+     * click all move to another slot without ending the selection, and the
+     * anchor means nothing there. */
+    if (anchor_path_ != path_) return false;
+    const NodeList* l = slot_at(path_);
+    if (!l) return false;
+    const int n = int(l->size());
+    /* Undo, redo and load_latex rebuild the tree under a live anchor.  A
+     * selection that no longer fits is gone, not shrunk: shrinking it would
+     * delete a different range than the one that was highlighted. */
+    if (anchor_ > n || index_ > n || index_ < 0) return false;
+    if (anchor_ == index_) return false;
+    lo = std::min(anchor_, index_);
+    hi = std::max(anchor_, index_);
+    return true;
+}
+
 /* --------------------------------------------------------------- caret */
 
 std::string Equation::caret_text() const {
@@ -212,6 +242,10 @@ std::string Equation::caret_text() const {
 }
 
 void Equation::set_caret_text(const std::string& s) {
+    /* Putting the caret somewhere is not restoring a selection.  Undo and
+     * redo come through here after replacing the whole tree, so an anchor
+     * left behind would index a slot that no longer holds what it counted. */
+    clear_selection();
     path_.clear();
     index_ = 0;
     size_t colon = s.rfind(':');
@@ -398,7 +432,7 @@ bool Equation::newline() {
 
 bool Equation::move_item(int dir, bool extend) {
     if (extend) {
-        if (anchor_ < 0) anchor_ = index_;
+        start_selection_here();
     } else {
         clear_selection();
     }
@@ -602,12 +636,11 @@ bool Equation::set_style(const std::string& name) {
      * the editor being imitated costs one, because there the style is
      * something you are IN. */
     style_ = name;
-    if (!has_selection()) return true;
+    int lo = 0, hi = 0;
+    if (!selection_range(lo, hi)) return true;
 
     checkpoint();
     NodeList& l = here();
-    const int lo = std::min(anchor_, index_);
-    const int hi = std::max(anchor_, index_);
     for (int i = lo; i < hi; ++i)
         if (l[size_t(i)]) style_one(*l[size_t(i)], name);
     return true;
@@ -616,44 +649,51 @@ bool Equation::set_style(const std::string& name) {
 /* ----------------------------------------------------------- selection */
 
 bool Equation::has_selection() const {
-    return anchor_ >= 0 && anchor_ != index_;
+    int lo = 0, hi = 0;
+    return selection_range(lo, hi);
 }
 
-void Equation::clear_selection() { anchor_ = -1; }
+void Equation::clear_selection() { anchor_ = -1; anchor_path_.clear(); }
 
 void Equation::select_all() {
-    anchor_ = 0;
+    set_anchor(0);
     index_ = int(here().size());
 }
 
-/* Shift+move starts a selection at wherever the caret was. */
+/* Shift+move starts a selection at wherever the caret was.  `start_here`
+ * rather than a bare `anchor_ = index_`, so the slot is recorded with it. */
+void Equation::start_selection_here() {
+    if (!has_selection()) set_anchor(index_);
+}
+
 bool Equation::extend_left() {
-    if (anchor_ < 0) anchor_ = index_;
+    start_selection_here();
     if (index_ <= 0) return false;      /* stop at the slot edge */
     --index_;
     return true;
 }
 
 bool Equation::extend_right() {
-    if (anchor_ < 0) anchor_ = index_;
+    start_selection_here();
     if (size_t(index_) >= here().size()) return false;
     ++index_;
     return true;
 }
 
 void Equation::extend_home() {
-    if (anchor_ < 0) anchor_ = index_;
+    start_selection_here();
     index_ = 0;
 }
 
 void Equation::extend_end() {
-    if (anchor_ < 0) anchor_ = index_;
+    start_selection_here();
     index_ = int(here().size());
 }
 
 bool Equation::extend_to_point(double x, double y, const SvgStyle& style) {
-    const int keep = (anchor_ < 0) ? index_ : anchor_;
+    const int keep = has_selection() ? anchor_ : index_;
     const std::vector<CaretStep> keep_path = path_;
+    /* move_to_point clears the selection, so the anchor is re-made below. */
     if (!move_to_point(x, y, style)) return false;
     /* Dragging out of the slot the selection started in would silently change
      * what is anchored, so the anchor holds and the caret is clamped back. */
@@ -662,15 +702,15 @@ bool Equation::extend_to_point(double x, double y, const SvgStyle& style) {
         clamp();
         index_ = (index_ < keep) ? 0 : int(here().size());
     }
-    anchor_ = keep;
+    set_anchor(keep);
+    clamp();
     return true;
 }
 
 std::string Equation::selected_latex() {
-    if (!has_selection()) return std::string();
+    int lo = 0, hi = 0;
+    if (!selection_range(lo, hi)) return std::string();
     NodeList& l = here();
-    const int lo = std::min(anchor_, index_);
-    const int hi = std::max(anchor_, index_);
 
     /* Borrow the nodes into a line, write it, and put them back.  Teaching
      * every node type to clone itself would be a lot of code for one caller,
@@ -685,14 +725,18 @@ std::string Equation::selected_latex() {
 
 NodeList Equation::take_selection() {
     NodeList taken;
-    if (!has_selection()) return taken;
+    int lo = 0, hi = 0;
+    if (!selection_range(lo, hi)) {
+        /* No valid selection -- including a stale anchor, which is how this
+         * once indexed past the end of the slot.  Drop it either way. */
+        clear_selection();
+        return taken;
+    }
     NodeList& l = here();
-    const int lo = std::min(anchor_, index_);
-    const int hi = std::max(anchor_, index_);
     for (int i = lo; i < hi; ++i) taken.push_back(std::move(l[size_t(i)]));
     l.erase(l.begin() + lo, l.begin() + hi);
     index_ = lo;
-    anchor_ = -1;
+    clear_selection();
     clamp();
     return taken;
 }
@@ -706,15 +750,16 @@ bool Equation::delete_selection() {
 
 Equation::SelectionBox Equation::selection_geometry(const SvgStyle& style) const {
     SelectionBox box;
-    if (!has_selection()) return box;
+    int lo = 0, hi = 0;
+    if (!selection_range(lo, hi)) return box;
 
     Layout L = layout_math(*root_, style);
     std::string ct = caret_text();
     size_t colon = ct.rfind(':');
     std::string path = (colon == std::string::npos) ? ct : ct.substr(0, colon);
 
-    const CaretStop* a = find_stop(L, path, std::min(anchor_, index_));
-    const CaretStop* b = find_stop(L, path, std::max(anchor_, index_));
+    const CaretStop* a = find_stop(L, path, lo);
+    const CaretStop* b = find_stop(L, path, hi);
     if (!a || !b) return box;
 
     box.found = true;
@@ -1434,9 +1479,13 @@ const std::vector<Equation::Binding>& Equation::shortcuts() {
         {"Ctrl+Shift+I", "style.variable",     "variable style"},
         {"Ctrl+Shift+B", "style.vector",       "matrix-vector (bold)"},
         {"Ctrl+Shift+G", "style.greek",        "greek"},
-        /* Ours: Equation Editor has no such style, its list being fonts. */
+        /* Ours: Equation Editor has no such style, its list being fonts.
+         * Script is on P, not S: the window reserves Ctrl+Shift+S for Save
+         * As -- the one convention every editor shares -- so a chord written
+         * S here was published but unreachable, shadowed before it could ever
+         * reach this table.  P is the first free letter in "script". */
         {"Ctrl+Shift+D", "style.blackboard",   "blackboard bold"},
-        {"Ctrl+Shift+S", "style.script",       "script"},
+        {"Ctrl+Shift+P", "style.script",       "script"},
 
         /* Move and select by WHOLE ITEM.  Left and Right walk into a
          * template, which is what you want for correcting a letter and not
