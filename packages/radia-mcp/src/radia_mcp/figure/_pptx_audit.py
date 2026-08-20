@@ -46,8 +46,16 @@ def _pptx():
 
 
 def _iter_pictures(shapes, slide_no, out, prefix=""):
-    """Collect picture shapes, descending into groups."""
+    """Collect picture shapes, descending into groups.
+
+    Each entry is ``(slide, name, shape, image, svg_blob)``.  A picture is
+    measurable through exactly one of the last two: ``image`` for a raster,
+    ``svg_blob`` for a vector.  A picture with neither is still collected --
+    with both None -- because dropping it is how a vectorised deck came to
+    report "0 pictures, 0 flagged" while carrying eight figures.
+    """
     from pptx.enum.shapes import MSO_SHAPE_TYPE
+    from ._svg_pptx import svg_blob
     for shape in shapes:
         if shape.shape_type == MSO_SHAPE_TYPE.GROUP:
             _iter_pictures(shape.shapes, slide_no, out,
@@ -55,11 +63,12 @@ def _iter_pictures(shapes, slide_no, out, prefix=""):
             continue
         if getattr(shape, "shape_type", None) != MSO_SHAPE_TYPE.PICTURE:
             continue
+        vector = svg_blob(shape)
         try:
             image = shape.image
         except Exception:
-            continue                                  # linked / OLE picture
-        out.append((slide_no, prefix + shape.name, shape, image))
+            image = None                              # SVG-only / linked / OLE
+        out.append((slide_no, prefix + shape.name, shape, image, vector))
     return out
 
 
@@ -110,7 +119,33 @@ def audit_pptx_figures(pptx_path: str,
         _iter_pictures(slide.shapes, i, found)
 
     rows = []
-    for slide_no, name, shape, image in found:
+    for slide_no, name, shape, image, vector in found:
+        if vector is not None:
+            # A picture that carries both is DISPLAYED from the SVG; the raster
+            # is only the fallback for a viewer that cannot read one, so the
+            # vector is what the audience sees and what must be measured.
+            from ._svg_pptx import svg_picture_row
+            rows.append(svg_picture_row(
+                slide_no, name, shape, vector, slide_area_pt,
+                scale_tol, aspect_tol, min_area_fraction,
+                _SLIDE_MIN_VISIBLE_FONT_PT))
+            continue
+        if image is None:
+            disp_pt_w = float(Emu(shape.width).pt)
+            disp_pt_h = float(Emu(shape.height).pt)
+            rows.append({
+                "slide": slide_no, "shape": name, "kind": "unmeasurable",
+                "displayed_cm": round(float(Emu(shape.width).cm), 2),
+                "displayed_pt": round(disp_pt_w, 1),
+                "displayed_cm_height": round(float(Emu(shape.height).cm), 2),
+                "area_fraction": round(
+                    disp_pt_w * disp_pt_h / slide_area_pt, 4) if slide_area_pt else 0.0,
+                "minor": False,
+                "risks": ["NOT MEASURABLE -- the picture has neither an embedded "
+                          "raster nor an SVG (linked or OLE artwork), so its "
+                          "paste scale cannot be checked from the file."],
+            })
+            continue
         px_w, px_h = image.size
         dpi_w, dpi_h = image.dpi
         # python-pptx substitutes 72 dpi when the file carries no resolution.
@@ -167,6 +202,7 @@ def audit_pptx_figures(pptx_path: str,
         rows.append({
             "slide": slide_no,
             "shape": name,
+            "kind": "raster",
             "pixels": [int(px_w), int(px_h)],
             "dpi": [int(dpi_w), int(dpi_h)],
             "authored_cm": round(authored_cm_w, 2),
@@ -188,6 +224,8 @@ def audit_pptx_figures(pptx_path: str,
     return {
         "pptx": os.path.abspath(pptx_path),
         "n_pictures": len(rows),
+        "n_vector": sum(1 for r in rows if r.get("kind") == "svg"),
+        "n_unmeasurable": sum(1 for r in rows if r.get("kind") == "unmeasurable"),
         "n_flagged": sum(1 for r in rows if r["risks"]),
         "authored_font_pt": _SLIDE_AUTHORED_FONT_PT,
         "min_visible_font_pt": _SLIDE_MIN_VISIBLE_FONT_PT,
@@ -285,17 +323,41 @@ def figure_audit_pptx_figures(pptx_path: str,
                              min_effective_dpi=min_effective_dpi)
     if "error" in rep:
         return f"figure-paste audit: {rep['error']}"
+    unchecked = sum(1 for r in rep["pictures"]
+                    if r.get("text_check") == "not-verifiable")
     lines = [f"figure-paste audit: {rep['pptx']}",
              f"  {rep['n_pictures']} pictures, {rep['n_flagged']} flagged "
              f"(authored {rep['authored_font_pt']:.0f} pt, floor "
-             f"{rep['min_visible_font_pt']:.0f} pt)", ""]
+             f"{rep['min_visible_font_pt']:.0f} pt)"]
+    if unchecked:
+        lines.append(
+            f"  {unchecked} vector picture(s) do not state their text size "
+            f"(PDF-converted artwork); those are NOT text-checked here.")
+    lines.append("")
     for r in rep["pictures"]:
         tag = "FLAG" if r["risks"] else " ok "
-        lines.append(
-            f"  [{tag}] slide {r['slide']:>2} {r['shape']}: authored "
-            f"{r['authored_cm']:.2f} cm -> pasted {r['displayed_cm']:.2f} cm "
-            f"(scale {r['scale']:.3f}, figure text {r['displayed_figure_font_pt']:.1f} pt, "
-            f"{r['effective_dpi']:.0f} dpi)")
+        head = f"  [{tag}] slide {r['slide']:>2} {r['shape']}: "
+        if r.get("kind") == "svg":
+            font = r.get("body_font_on_slide_pt")
+            lines.append(
+                head + (f"authored {r['authored_cm']:.2f} cm -> pasted "
+                        f"{r['displayed_cm']:.2f} cm (scale "
+                        f"{r['scale']:.3f}, " if r.get("scale") else
+                        f"pasted {r['displayed_cm']:.2f} cm (")
+                + "vector, text "
+                + (f"{r['smallest_font_on_slide_pt']:.0f}-"
+                   f"{r['largest_font_on_slide_pt']:.0f} pt on the slide)"
+                   if font else "size not readable from the file)"))
+        elif r.get("kind") == "unmeasurable":
+            lines.append(head + f"pasted {r['displayed_cm']:.2f} cm "
+                                f"(no embedded artwork to measure)")
+        else:
+            lines.append(
+                head + f"authored "
+                f"{r['authored_cm']:.2f} cm -> pasted {r['displayed_cm']:.2f} cm "
+                f"(scale {r['scale']:.3f}, figure text "
+                f"{r['displayed_figure_font_pt']:.1f} pt, "
+                f"{r['effective_dpi']:.0f} dpi)")
         for risk in r["risks"]:
             lines.append(f"         - {risk}")
     if rep["n_pictures"] == 0:
