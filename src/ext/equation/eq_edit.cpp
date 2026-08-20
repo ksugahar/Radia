@@ -1313,6 +1313,19 @@ static int palette_of(uint32_t c) {
     return kMisc;
 }
 
+/* The member the bar button wears: the named one, or the first.
+ *
+ * A name that is not in the group would silently fall back to the first item
+ * and the button would quietly go back to being wrong, so the name is checked
+ * by a test rather than trusted here. */
+const Equation::PaletteItem& Equation::PaletteGroup::icon() const {
+    if (!representative.empty()) {
+        for (const PaletteItem& it : items)
+            if (it.command == representative) return it;
+    }
+    return items.front();
+}
+
 const std::vector<Equation::PaletteGroup>& Equation::symbol_palettes() {
     static const std::vector<PaletteGroup> kGroups = [] {
         /* This array is indexed by palette_of()'s enum.  Keep the two in step:
@@ -1352,6 +1365,23 @@ const std::vector<Equation::PaletteGroup>& Equation::symbol_palettes() {
         groups.erase(std::remove_if(groups.begin(), groups.end(),
                          [](const PaletteGroup& g) { return g.items.empty(); }),
                      groups.end());
+
+        /* Icons.  The list order is Equation Editor's; the member that best
+         * SAYS what the group is, is sometimes elsewhere in it.  Arrows opened
+         * on a double left arrow and Relations on "approximately", neither of
+         * which is the first thing anyone pictures. */
+        static const struct { const char* group; const char* rep; } kIcons[] = {
+            {"Relations",      "\\neq"},
+            {"Arrows",         "\\rightarrow"},
+            {"Logic",          "\\forall"},
+            {"Set theory",     "\\subset"},
+            {"Miscellaneous",  "\\infty"},
+            {"Embellishments", "vec"},
+        };
+        for (PaletteGroup& g : groups)
+            for (const auto& ic : kIcons)
+                if (g.name == ic.group) g.representative = ic.rep;
+
         return groups;
     }();
     return kGroups;
@@ -1399,6 +1429,12 @@ const std::vector<Equation::PaletteGroup>& Equation::template_palettes() {
             }
             if (!g.items.empty()) groups.push_back(g);
         }
+
+        /* A 1x2 matrix reads as two boxes, not as a matrix; 2x2 is the shape
+         * the word means.  The rest open on their own archetype already. */
+        for (PaletteGroup& g : groups)
+            if (g.name == "Matrices") g.representative = "matrix2x2";
+
         return groups;
     }();
     return kGroups;

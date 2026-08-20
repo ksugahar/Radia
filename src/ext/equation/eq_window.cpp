@@ -92,11 +92,33 @@ const wchar_t* kPopupClass = L"Eqnedt64Palette";
  * still gets 150 % of this. */
 const double kPaletteScale = 1.5;
 
-const int kBtnW = int(46 * kPaletteScale), kBtnH = int(24 * kPaletteScale);
+const int kBtnW = int(46 * kPaletteScale), kBtnH = int(28 * kPaletteScale);
 const int kCellW = int(34 * kPaletteScale), kCellH = int(30 * kPaletteScale);
 const int kBarPad = int(3 * kPaletteScale);
-const double kBarPt = 9.0 * kPaletteScale;    /* type size inside a button */
+/* One member per button, at the size a cell in the popup uses.
+ *
+ * The bar used to show the first THREE members of each group, and 9 pt of
+ * three real templates -- each with its own empty slots -- inside a 69x36
+ * button came out as a smudge: the fences button was ([{ }]) drawn on top of
+ * itself, and nobody could tell the integrals from the sums.  Sugahara,
+ * 2026-08-20: the icons want simplifying.
+ *
+ * The answer is fewer things, not smaller ones: one representative member,
+ * drawn at the size the popup already draws its cells at.  A button still
+ * wears a REAL member rendered by the real layout, so it cannot start lying
+ * about what it inserts. */
+const double kBarPt = 12.0 * kPaletteScale;   /* type size inside a button */
 const double kCellPt = 12.0 * kPaletteScale;  /* type size inside a cell   */
+
+/* An icon's slots are drawn WIDER than the editor draws them.
+ *
+ * A decoration is only as wide as what it decorates, so an overbrace over the
+ * editing slot width came out 6 points across -- a flat sliver in a 69-point
+ * button, and the braces palette read as a plain empty box.  Widening the slot
+ * for the ICON gives the brace, the arrow and the root something to span.  It
+ * changes nothing about what the button inserts: the sample is still produced
+ * by performing the real insertion. */
+const double kBarSlotEm = 1.6;
 
 /* How much room an empty slot takes on screen.  A template nobody has typed
  * into has no extent of its own, so without this a fresh fraction is a bar
@@ -112,13 +134,14 @@ SvgStyle editing_style() {
 /* What a cell shows is what inserting it produces: the sample is rendered by
  * actually performing the insertion into a scratch equation.  A hand-written
  * table of sample LaTeX would drift from what the templates really are. */
-Layout sample_layout(const Equation::PaletteItem& item, double sizePt) {
+Layout sample_layout(const Equation::PaletteItem& item, double sizePt,
+                     double slotEm = kEmptySlotEm) {
     SvgStyle st;
     const double k = sizePt / 12.0;
     st.full = 12.0 * k; st.sub = 7.0 * k; st.sub2 = 5.0 * k;
     st.sym = 18.0 * k;  st.subsym = 12.0 * k;
     st.padding = 0.0;
-    st.empty_slot_em = kEmptySlotEm;   /* on screen: show there is a slot */
+    st.empty_slot_em = slotEm;         /* on screen: show there is a slot */
 
     Equation e;
     if (item.is_template) e.insert_template(item.command);
@@ -186,20 +209,13 @@ void build_bar(Editor& ed) {
             Button b;
             b.group = &g;
             b.rc = {x, y, x + w, y + h};
-            /* The button wears its own contents: the first few members, drawn
-             * by the same routine that will draw them once inserted. */
-            SvgStyle st;
-            const double k = kBarPt / 12.0;
-            st.full = 12.0 * k; st.sub = 7.0 * k; st.sub2 = 5.0 * k;
-            st.sym = 18.0 * k;  st.subsym = 12.0 * k;
-            st.padding = 0.0;
-            st.empty_slot_em = kEmptySlotEm;
-            Equation e;
-            for (size_t i = 0; i < g.items.size() && i < 3; ++i) {
-                if (g.items[i].is_template) e.insert_template(g.items[i].command);
-                else                        e.insert_symbol(g.items[i].command);
-            }
-            b.sample = e.layout(st);
+            /* The button wears one of its own members, drawn by the same
+             * routine that will draw it once inserted -- which is why a
+             * hand-written table of sample LaTeX is not used: it would drift,
+             * and the button would start advertising something the template no
+             * longer is.  Which member is named by the group; see
+             * PaletteGroup::icon(). */
+            b.sample = sample_layout(g.icon(), kBarPt, kBarSlotEm);
             ed.bar.push_back(b);
             x += w + pad;
         }
@@ -282,18 +298,24 @@ void paint_status(HDC dc, Editor& ed, const RECT& rc, double fit = 1.0) {
         L"Zoom: " + std::to_wstring(int(std::lround(ed.zoom * fit * 100))) + L"%";
     if (fit < 0.999) zoom += L" (fit)";
 
-    const std::wstring cells[3] = {
-        L"Style: " + pretty_style(ed.eq.style()),
-        L"Size: Full",
-        zoom,
-    };
-    const int w = (rc.right - rc.left) / 4;
-    for (int i = 0; i < 3; ++i) {
-        RECT cell = {rc.left + ed.scaled(6) + i * w, rc.top,
-                     rc.left + (i + 1) * w, rc.bottom};
-        DrawTextW(dc, cells[i].c_str(), -1, &cell,
-                  DT_LEFT | DT_SINGLELINE | DT_VCENTER);
-    }
+    /* DrawTextW is documented to need TA_TOP, and the equation drawn just
+     * before this leaves TA_BASELINE behind unless it tidies up.  It does now;
+     * saying so here as well costs nothing and makes this function correct
+     * whoever calls it. */
+    SetTextAlign(dc, TA_LEFT | TA_TOP);
+
+    /* Style at the left, zoom at the RIGHT.  The zoom lives in the bottom
+     * right corner of a window in Word, Excel, PowerPoint, Acrobat and every
+     * browser, so that is where a reader's eye already goes to find it. */
+    const std::wstring left =
+        L"Style: " + pretty_style(ed.eq.style()) + L"    Size: Full";
+    const int pad = ed.scaled(8);
+
+    RECT cell = {rc.left + pad, rc.top, rc.right - pad, rc.bottom};
+    DrawTextW(dc, left.c_str(), -1, &cell,
+              DT_LEFT | DT_SINGLELINE | DT_VCENTER);
+    DrawTextW(dc, zoom.c_str(), -1, &cell,
+              DT_RIGHT | DT_SINGLELINE | DT_VCENTER);
     SelectObject(dc, oldFont);
     DeleteObject(f);
 }
@@ -1516,6 +1538,40 @@ struct Driver {
         }
     }
 
+    /* What each bar button actually wears.
+     *
+     * Written into the journal because a button is drawn, not returned: when
+     * one of them showed a wide arc over its symbol, nothing in the model or
+     * the SVG path could reproduce it, and the only way to tell which member
+     * the WINDOW had resolved was to make the window say so. */
+    void dump_bar() {
+        log->line("== bar icons ==");
+        for (size_t i = 0; i < ed->bar.size(); ++i) {
+            const Button& b = ed->bar[i];
+            std::string cps;
+            for (const Glyph& g : b.sample.glyphs) {
+                char one[32];
+                unsigned cp = 0;
+                /* first code point of the glyph's UTF-8 */
+                const unsigned char* p = reinterpret_cast<const unsigned char*>(g.text.c_str());
+                if (!*p) cp = 0;
+                else if (*p < 0x80) cp = *p;
+                else if ((*p & 0xE0) == 0xC0) cp = ((*p & 0x1Fu) << 6) | (p[1] & 0x3Fu);
+                else if ((*p & 0xF0) == 0xE0) cp = ((*p & 0x0Fu) << 12) | ((p[1] & 0x3Fu) << 6) | (p[2] & 0x3Fu);
+                else cp = ((*p & 0x07u) << 18) | ((p[1] & 0x3Fu) << 12) | ((p[2] & 0x3Fu) << 6) | (p[3] & 0x3Fu);
+                std::snprintf(one, sizeof(one), "U+%04X@%.1fpt ", cp, g.size);
+                cps += one;
+            }
+            log->line("[bar %u] %s icon=%s glyphs=%u rules=%u slots=%u w=%.2f asc=%.2f desc=%.2f  %s",
+                      unsigned(i), b.group->name.c_str(),
+                      b.group->icon().command.c_str(),
+                      unsigned(b.sample.glyphs.size()),
+                      unsigned(b.sample.rules.size()),
+                      unsigned(b.sample.empty_slots.size()),
+                      b.sample.w, b.sample.asc, b.sample.desc, cps.c_str());
+        }
+    }
+
     /* ---- every palette cell, through the real popup -------------------- */
     void sweep_palette() {
         /* Two states, not four: a cell inserts the same thing from any caret,
@@ -1860,6 +1916,7 @@ int run_window_selftest(const SelftestOptions& opt) {
 
     d.pump();
     d.paint();
+    d.dump_bar();
     d.sweep_wiring();
     d.sweep_chords();
     d.sweep_window_keys();

@@ -398,7 +398,7 @@ chord could never reach the table; script moved to `Ctrl+Shift+P`.
 
 ---
 
-## 9. OPEN — the palette is too busy
+## 9. CLOSED — the palette was too busy (see §17)
 
 Sugahara, 2026-08-20: *ボタンのアイコンはもう少し簡素化してごちゃごちゃしない
 がよい*.
@@ -507,7 +507,8 @@ found it.** What remains before retirement is usability, not correctness.
    pasting at 24 pt as a native equation.
 4. ~~The window at awkward sizes~~ — **done** (§16): it fits what it holds and
    grows to what it holds.
-5. **Palette simplification** (§9) — one representative member per button.
+5. ~~Palette simplification~~ — **done** (§17), along with two drawing bugs it
+   exposed.
 6. `PageUp`/`PageDown`, `Ctrl+Tab` (§10).
 7. The 5 remaining stray-marker corpus documents (§4), lowest priority: they were
    wrong before this work and are five different shapes, so each is its own
@@ -611,3 +612,76 @@ The oracle was checked against a build with the fitting disabled, because a
 test that cannot fail proves nothing: it reported 6 overflows and exit 5. That
 negative control is not in the tree — run it by adding a `v.fit = 1.0;` after
 the two fit lines in `view_of()`.
+
+---
+
+## 17. CLOSED — one icon per button, and the two bugs that hid behind three
+
+Sugahara, 2026-08-20: *ボタンのアイコンはもう少し簡素化してごちゃごちゃしない
+ほうがよい*, and then, seeing the result, *ステータスバーがきちんとみえない*.
+
+Each bar button drew the **first three members** of its group. Three real
+templates, each with its own empty slots, shrunk into a 69×36 button came out as
+a smudge: the fences button was `([{ }])` drawn on top of itself and the
+integrals were indistinguishable from the sums.
+
+**The fix is fewer things, not smaller ones.** One representative member, drawn
+at the size the popup already uses for its cells. A button still wears a REAL
+member rendered by the real layout, so it cannot start advertising something the
+template no longer is — that property is the reason there is no hand-written
+table of sample LaTeX, and it is kept.
+
+**Which member.** "First in the list" is Equation Editor's ordering, and it is
+not always the member that says what the group IS: matrices opened on a 1×2
+(two boxes), relations on "approximately", arrows on a double LEFT arrow.
+`PaletteGroup::representative` names one, `PaletteGroup::icon()` resolves it,
+and a group that names nothing wears its first member. The named ones are
+`\neq`, `\rightarrow`, `\forall`, `\subset`, `\infty`, `vec`, `matrix2x2`.
+
+An icon's empty slots are drawn **wider** than the editor draws them
+(`kBarSlotEm = 1.6` against the editor's `0.55`): a decoration is only as wide
+as what it decorates, so an overbrace over an editing-width slot was six points
+across. It changes nothing about what the button inserts.
+
+### The two bugs this uncovered
+
+**A palette icon was painting into the row of buttons above it.**
+`layout_brace_deco` placed an overbrace by shifting it up by the brace's
+**ascent** where it should have used its **descent**, leaving the glyph a whole
+brace-height too high — outside the box the layout then reported. Consequences
+beyond the palette: the picture path sizes its bitmap from that box, so
+**`\overbrace` was cropped out of every pasted picture entirely** — a blank strip
+of paper where the annotation should be. The underbrace branch had the
+arithmetic right all along, which is why only one of the two was ever wrong.
+
+Caught now by `tests/equation/test_ink_inside_box.py`, which renders a construct
+and counts ink: a decoration must put something in the third of the picture it
+belongs in. It fails on the old build and passes on the new one.
+
+**The status strip was sliced in half by its own border.** `draw_layout` sets
+`TA_BASELINE` — right for a laid-out glyph, and it never put it back.
+`DrawTextW` is documented to require `TA_TOP`, and with a baseline left behind
+it silently draws a whole line higher, so "Style: Math" straddled the separator
+with its lower half hidden. A leaked DC setting, one caller away from where it
+was set. `draw_layout` now restores the text alignment and background mode it
+changes, and `paint_status` states what it needs rather than inheriting it.
+
+While there: the **zoom moved to the right edge** of the strip, where Word,
+Excel, PowerPoint, Acrobat and every browser put it. It reads the scale actually
+on screen and marks it `(fit)` when the window, not the setting, is what shrank
+the equation (§16).
+
+### How the icons were checked
+
+`PaletteGroup.icon` is exposed to Python so `tests/equation/test_palette_icons.py`
+can assert what the **window** resolves. Membership alone would have proved
+nothing: the first version of the icon table reached the compiler as `"\neq"`
+with ONE backslash — C++ read it as a newline followed by `eq` — so every symbol
+icon silently fell back to the member it was meant to replace. Nothing failed;
+the buttons simply did not change.
+
+`eqnedt64 --selftest` also journals what each button wears
+(`[bar N] <group> icon=<command> glyphs=… w=… asc=… desc=…`). That dump is what
+identified the stray arc as the Braces glyph rather than anything to do with the
+Logic button it was drawn in — the model, the SVG and the picture paths all
+agreed and all looked innocent, because the drawing was simply somewhere else.

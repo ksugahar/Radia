@@ -620,6 +620,14 @@ PYBIND11_MODULE(_equation, m) {
         "One button on the palette bar and what its popup holds.")
         .def_readonly("name", &mtef::Equation::PaletteGroup::name)
         .def_readonly("items", &mtef::Equation::PaletteGroup::items)
+        /* The member the bar button wears.  Exposed so a test can see what
+         * the WINDOW sees: membership alone proves nothing, because a
+         * mis-spelled name silently falls back to the first item and the
+         * button quietly stays wrong -- which is exactly what happened when
+         * the table reached the compiler with one backslash too few. */
+        .def_property_readonly("icon", &mtef::Equation::PaletteGroup::icon,
+             py::return_value_policy::reference_internal,
+             "The member this group's palette button draws.")
         .def("__repr__", [](const mtef::Equation::PaletteGroup& g) {
             return "<PaletteGroup " + g.name + " n=" +
                    std::to_string(g.items.size()) + ">";
