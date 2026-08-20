@@ -32,6 +32,7 @@
 #include "mtef_omml.h"
 #include "mtef_rtf.h"
 #include "mtef_mathml.h"
+#include "gvml_clip.h"
 #include "mtef_gdi.h"
 #include "mtef_dump.h"
 #include "tex_parser.h"
@@ -137,6 +138,13 @@ std::string tex_to_mathml_py(const std::string& latex,
     std::string m = mtef::tex_to_mathml(latex, opt);
     if (m.empty()) throw std::runtime_error("tex_to_mathml: emit failed for: " + latex);
     return m;
+}
+
+py::bytes tex_to_gvml_py(const std::string& latex, double size_pt,
+                         bool display) {
+    std::string pkg = mtef::tex_to_gvml(latex, size_pt, display);
+    if (pkg.empty()) throw std::runtime_error("tex_to_gvml: emit failed for: " + latex);
+    return py::bytes(pkg);
 }
 
 std::string mtef_to_mathml_py(const py::bytes& data, const mtef::MathMLOptions& opt) {
@@ -285,6 +293,16 @@ PYBIND11_MODULE(_equation, m) {
     m.def("tex_to_mathml", &tex_to_mathml_py, py::arg("latex"),
           py::arg("options") = mtef::MathMLOptions(),
           "LaTeX -> MathML (Word, PowerPoint and Excel all read it as maths).");
+
+    m.attr("PASTE_SIZE_PT") = mtef::kPasteSizePt;
+    m.def("tex_to_gvml", &tex_to_gvml_py, py::arg("latex"),
+          py::arg("size_pt") = mtef::kPasteSizePt,
+          py::arg("display") = false,
+          "LaTeX -> an Art::GVML ClipFormat package: PowerPoint's own shape "
+          "format, and the only clipboard format that can state the SIZE the "
+          "equation should arrive at.  MathML cannot -- mathsize is ignored "
+          "and the destination box wins, which is why a pasted equation used "
+          "to come out at 18 pt.  Returns the OPC package bytes.");
     m.def("mtef_to_mathml", &mtef_to_mathml_py, py::arg("data"),
           py::arg("options") = mtef::MathMLOptions(),
           "MTEF binary -> MathML.");
