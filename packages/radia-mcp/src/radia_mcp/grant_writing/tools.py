@@ -2651,6 +2651,11 @@ _GAP_MARKERS = (
 # A proposal can be thoroughly international without ever writing 「国際」;
 # it names a region or a foreign institution instead. Triggering only on the
 # explicit word would skip exactly the drafts that do this well.
+# Words that assert an international dimension wherever they appear. The
+# region names below are weaker: they also name a conference venue.
+_INTERNATIONAL_STRONG_TRIGGERS = (
+    "国際", "海外", "国外", "世界", "グローバル", "外国", "諸外国",
+)
 _INTERNATIONAL_TRIGGERS = (
     "国際", "海外", "国外", "世界", "グローバル", "外国", "諸外国",
     "欧州", "欧米", "米国", "アジア", "アメリカ", "ヨーロッパ",
@@ -2659,11 +2664,30 @@ _INTERNATIONAL_TRIGGERS = (
 )
 
 # What makes an international claim checkable rather than aspirational.
+# An institution or a person one could collaborate with. A conference is not
+# one of those: asking why COMPUMAG rather than a domestic substitute is not a
+# question anybody can answer.
 _NAMED_PARTNER = re.compile(
     r"[ァ-ヴー]{2,}(?:工科)?大学|[ァ-ヴー]{3,}\s*(?:氏|教授|博士)|"
     r"(?:TU|ETH|MIT|EPFL)\s*[A-Za-z]*|"
-    r"[A-Z][a-z]+\s+(?:University|Institute)|"
-    r"(?:IGTE|CEFC|COMPUMAG|ICEM|IEEE)"
+    r"[A-Z][a-z]+\s+(?:University|Institute)"
+)
+# International venues and societies. Publishing there is evidence of
+# international activity, but they are not counterparts.
+_NAMED_INTERNATIONAL_VENUE = re.compile(r"(?:IGTE|CEFC|COMPUMAG|ICEM|IEEE)")
+# A claimed relationship with someone abroad. These are the words that make
+# 「相手先を名指ししていない」 a fair thing to say.
+_INTERNATIONAL_RELATION_MARKERS = (
+    "共同研究", "共著", "招へい", "招聘", "招請", "受入", "受け入れ",
+    "派遣", "訪問", "滞在", "連携", "留学", "分担", "共同開発",
+    # NOT bare 交流: in an electrical proposal it is alternating current, and
+    # a glossary row for 誘導加熱 was read as an international exchange.
+    "国際交流", "学術交流", "人的交流",
+)
+# Words that make a sentence about the applicant's own international activity,
+# as opposed to the worldwide importance of a problem or the size of a market.
+_INTERNATIONAL_ACTIVITY_MARKERS = _INTERNATIONAL_RELATION_MARKERS + (
+    "発表", "参加", "投稿", "採択", "登壇", "議論", "レビュー",
 )
 _RECIPROCAL_MARKERS = (
     "相互", "双方向", "還流", "共同研究", "共著", "招へい", "招聘", "派遣",
@@ -2709,7 +2733,32 @@ def grant_writing_international_standing_check(text: str) -> dict:
     defect it is.
     """
     text = _prose_for_lint(_read_text_if_path(text))
-    trigger_hits = [t for t in _INTERNATIONAL_TRIGGERS if t in text]
+    # A country name inside a travel or cost line is a venue, not a claim of
+    # international standing. 「Conference（2026/5/17~22, フランス）：50万円」
+    # in a budget table was read as one, and the proposal was then told to name
+    # the counterpart institution it had never claimed to have.
+    logistics = re.compile(
+        r"円|旅費|参加費|宿泊|渡航|出張|"
+        r"\d{4}\s*[/年]\s*\d{1,2}|\d{1,2}\s*[/月]\s*\d{1,2}"
+    )
+    # 「世界的な社会課題である」 says the problem matters everywhere, not that
+    # the applicant works with anyone abroad, and the check went on to demand
+    # the counterpart institution behind a claim never made. A trigger counts
+    # only in a sentence that also describes activity or a relationship.
+    trigger_lines = [s for s in re.split(r"[。．\n]", text) if s.strip()]
+    trigger_hits = [
+        t
+        for t in _INTERNATIONAL_TRIGGERS
+        if t in text
+        and any(
+            t in line
+            and not logistics.search(line)
+            and any(a in line for a in _INTERNATIONAL_ACTIVITY_MARKERS)
+            for line in trigger_lines
+        )
+    ]
+    if _NAMED_INTERNATIONAL_VENUE.search(text):
+        trigger_hits = trigger_hits + [_NAMED_INTERNATIONAL_VENUE.search(text).group(0)]
     # Naming a foreign institution is itself the subject being raised. A draft
     # that says ウィーン工科大学 is international whether or not it also says
     # 国際 or a region name, and requiring the word skipped exactly those.
@@ -2736,12 +2785,37 @@ def grant_writing_international_standing_check(text: str) -> dict:
     outputs = [m for m in _INTERNATIONAL_OUTPUT_MARKERS if m in text]
     national = [m for m in _NATIONAL_VALUE_MARKERS if m in text]
 
+    # Presenting abroad is international output; it has no counterpart to name.
+    # Only a claimed relationship does. A proposal whose international content
+    # was 「国際競争力強化に貢献する」 and 「想定する国内、海外市場」 was told
+    # to name the partner institution behind a collaboration it never claimed.
+    # The relationship must be an international one. A domestic 共同開発 with a
+    # partner company, in a proposal that separately mentions 海外市場, is not a
+    # foreign collaboration missing its counterpart's name.
+    # Scope by prose segment, not by sentence. Text extracted from a PDF table
+    # or diagram carries no full stops, so a whole page becomes one "sentence"
+    # and any two words in it appear to co-occur: a business-model figure put
+    # 連携 beside an unrelated 海外 that way.
+    segments = [
+        s.strip()
+        for s in re.split(r"(?<=[。．!?！？])|\n", text)
+        if s and s.strip() and len(s.strip()) <= 200
+    ]
+    relations = [
+        m
+        for m in _INTERNATIONAL_RELATION_MARKERS
+        if any(
+            m in s and any(t in s for t in _INTERNATIONAL_TRIGGERS)
+            for s in segments
+        )
+    ]
+
     risks: list[dict] = []
-    if not partners:
+    if relations and not partners:
         risks.append({
             "type": "no_named_counterpart",
             "severity": "HIGH",
-            "comment": "国際性に触れているが、相手先の機関名・研究者名がない。",
+            "comment": "国際連携に触れているが、相手先の機関名・研究者名がない。",
             "recommendation": (
                 "「海外の研究者と連携する」ではなく、機関名と個人名を書く。"
                 "審査者が確認できない連携は、意図の表明にとどまる。"
@@ -3339,8 +3413,14 @@ def grant_writing_template_residue_check(text: str) -> dict:
         r"[○◯]{2,}|[×✕]{3,}|＿{2,}|_{4,}|"
         r"[XxＸｘ]{3,}(?![A-Za-z0-9])|"
         r"【\s*(?:記入|入力|ここに|要記入)[^】]*】|"
-        r"（\s*(?:記入|入力|未定)[^）]*）|"
-        r"\bTBD\b|\bTODO\b|未定"
+        # A prefix match on 「（入力…）」 is not enough. 入力 is ordinary
+        # technical vocabulary, and 「（入力したエネルギーに対するビーム強度）」
+        # -- a term gloss in a submitted proposal -- was reported as an
+        # unfilled field. A placeholder parenthetical holds the instruction
+        # word and nothing else.
+        r"（\s*(?:記入|入力)(?:して\s*(?:ください|下さい)|欄|例|箇所|事項)?\s*）|"
+        r"（\s*未定\s*）|"
+        r"\bTBD\b|\bTODO\b|未定(?!義)"
     )
     # Instruction sentences are counted but NOT reported as defects. Measured
     # on the 2026 Power Academy rewrite: the co-investigator deleted 6 of them
@@ -3661,12 +3741,23 @@ def grant_writing_kaken_review_format_check(text: str) -> dict:
                 missing_parts=missing_parts,
             )
 
-    full_draft = len(prose) >= 1500
+    low = prose.lower()
+    axis_hits = {
+        axis: _contains_any(low, keywords)
+        for axis, keywords in _KAKEN_REVIEW_CRITERIA_AXES.items()
+    }
+    # Length alone cannot tell a proposal body from a compact application form.
+    # A 1,715-character 住友財団 form -- one 要旨 box, then keywords, amounts and
+    # a funding plan -- matched none of the three vocabularies, and reporting a
+    # missing 研究遂行能力 axis there is a finding its author would argue with,
+    # because the form gave them nowhere to write it. A document that already
+    # speaks two of the three is a proposal body, and the third is then a real
+    # gap.
+    full_draft = len(prose) >= 1500 and sum(bool(h) for h in axis_hits.values()) >= 2
     criteria_axis_results: dict[str, dict] = {}
     if full_draft:
-        low = prose.lower()
         for axis, keywords in _KAKEN_REVIEW_CRITERIA_AXES.items():
-            hits = _contains_any(low, keywords)
+            hits = axis_hits[axis]
             criteria_axis_results[axis] = {
                 "ok": bool(hits),
                 "matches": hits[:8],
