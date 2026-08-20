@@ -157,6 +157,9 @@ struct Editor {
     std::wstring title_shown;       /* so the bar is not rewritten per key */
 
     bool dragging = false;          /* the mouse is selecting a range */
+    /* The user has sized the window themselves, so it is theirs and the
+     * editor stops growing it under them. */
+    bool user_sized = false;
     std::vector<Button> bar;
     HWND popup = nullptr;
     std::vector<Cell> cells;        /* what the open popup is showing */
@@ -251,7 +254,7 @@ std::wstring pretty_style(const std::string& s) {
     return widen(s);
 }
 
-void paint_status(HDC dc, Editor& ed, const RECT& rc) {
+void paint_status(HDC dc, Editor& ed, const RECT& rc, double fit = 1.0) {
     FillRect(dc, &rc, GetSysColorBrush(COLOR_BTNFACE));
     HPEN pen = CreatePen(PS_SOLID, 1, GetSysColor(COLOR_BTNSHADOW));
     HGDIOBJ oldPen = SelectObject(dc, pen);
@@ -270,10 +273,19 @@ void paint_status(HDC dc, Editor& ed, const RECT& rc) {
     SetBkMode(dc, TRANSPARENT);
     SetTextColor(dc, GetSysColor(COLOR_BTNTEXT));
 
+    /* The zoom shown is the one on screen.  When the window is too small for
+     * the equation it is drawn smaller than asked, and a status line still
+     * reading 200% would be telling the user something they can see is false;
+     * "(fit)" says why the number moved and that the window, not the setting,
+     * is what to change. */
+    std::wstring zoom =
+        L"Zoom: " + std::to_wstring(int(std::lround(ed.zoom * fit * 100))) + L"%";
+    if (fit < 0.999) zoom += L" (fit)";
+
     const std::wstring cells[3] = {
         L"Style: " + pretty_style(ed.eq.style()),
         L"Size: Full",
-        L"Zoom: " + std::to_wstring(int(std::lround(ed.zoom * 100))) + L"%",
+        zoom,
     };
     const int w = (rc.right - rc.left) / 4;
     for (int i = 0; i < 3; ++i) {
@@ -418,6 +430,60 @@ LRESULT CALLBACK popup_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     return DefWindowProcW(hwnd, msg, wp, lp);
 }
 
+/* Where the equation sits, and at what scale.
+ *
+ * ONE place, because the painter and the mouse have to agree exactly: a click
+ * is converted back through these same numbers, and if the two ever disagreed
+ * the caret would land somewhere other than where it was clicked.  The formula
+ * used to be written out three times.
+ *
+ * And it FITS.  The equation used to be drawn at the zoom whatever the window
+ * was, so a long one ran off the right edge and a tall one painted over the
+ * palette bar and the status strip, with no scrollbar and nothing to bring it
+ * back -- the window's only claim to being usable at any size was that you
+ * would not make it small.  Now the drawing scale drops until the whole
+ * equation is inside, which is what makes "one equation, always fully visible"
+ * -- the reason the wheel is free to zoom rather than scroll -- actually true.
+ */
+struct View {
+    RECT canvas{};        /* between the palette bar and the status strip */
+    double upp = 1.0;     /* points -> pixels, AFTER any shrink to fit    */
+    int originX = 0, originY = 0;   /* the equation's own origin          */
+    double fit = 1.0;     /* 1.0 when it fits at the zoom that was asked  */
+};
+
+View view_of(const Editor& ed, const RECT& client, const Layout& L) {
+    View v;
+    const int bar_h = ed.bar_height();
+    const int status_h = ed.status_height();
+    v.canvas.left = 0;
+    v.canvas.right = client.right;
+    v.canvas.top = std::min(LONG(bar_h), client.bottom);
+    v.canvas.bottom = std::max(v.canvas.top, client.bottom - LONG(status_h));
+
+    const double cw = double(v.canvas.right - v.canvas.left);
+    const double ch = double(v.canvas.bottom - v.canvas.top);
+
+    /* The margin is given up before the equation is: on a narrow window the
+     * white space either side matters less than reading the maths. */
+    const double m = std::min(double(ed.scaled(kMargin)), std::max(0.0, cw / 8));
+    const double availW = std::max(1.0, cw - 2 * m);
+    const double availH = std::max(1.0, ch - 2 * std::min(m, ch / 8));
+
+    v.upp = ed.units_per_pt();
+    const double needW = L.w * v.upp;
+    const double needH = (L.asc + L.desc) * v.upp;
+    if (needW > availW) v.fit = std::min(v.fit, availW / needW);
+    if (needH > availH) v.fit = std::min(v.fit, availH / needH);
+    if (v.fit <= 0.0) v.fit = 1.0;             /* an empty layout, not a fit */
+    v.upp *= v.fit;
+
+    v.originX = v.canvas.left + int(m);
+    v.originY = v.canvas.top +
+        int((ch + (L.asc - L.desc) * v.upp) / 2);
+    return v;
+}
+
 void paint(HWND hwnd, Editor& ed) {
     PAINTSTRUCT ps;
     HDC hdc = BeginPaint(hwnd, &ps);
@@ -452,10 +518,17 @@ void paint(HWND hwnd, Editor& ed) {
     }
 
     const Layout L = ed.eq.layout(ed.style);
-    const double upp = ed.units_per_pt();
-    const int originX = ed.scaled(kMargin);
-    const int originY = bar_h +
-        int(((H - bar_h - ed.status_height()) + L.asc * upp - L.desc * upp) / 2);
+    const View v = view_of(ed, rc, L);
+    const double upp = v.upp;
+    const int originX = v.originX, originY = v.originY;
+
+    /* Belt and braces over the fitting above: nothing the equation draws may
+     * reach the palette bar or the status strip, whatever a layout decides its
+     * extent is.  A glyph painted over the buttons is not a cosmetic problem
+     * -- it is a button you can no longer read before you click it. */
+    const int clip = SaveDC(mem);
+    IntersectClipRect(mem, v.canvas.left, v.canvas.top,
+                      v.canvas.right, v.canvas.bottom);
 
     /* The highlight goes down first so the equation draws over it, which keeps
      * the glyphs their own colour instead of inverting them. */
@@ -490,15 +563,67 @@ void paint(HWND hwnd, Editor& ed) {
         }
     }
 
+    RestoreDC(mem, clip);
+
     /* ---- the status strip ---- */
     RECT st_rc = {0, H - ed.status_height(), W, H};
-    paint_status(mem, ed, st_rc);
+    paint_status(mem, ed, st_rc, v.fit);
 
     BitBlt(hdc, 0, 0, W, H, mem, 0, 0, SRCCOPY);
     SelectObject(mem, oldBmp);
     DeleteObject(bmp);
     DeleteDC(mem);
     EndPaint(hwnd, &ps);
+}
+
+/* Grow the window so the equation fits at the zoom that was asked for.
+ *
+ * Fitting keeps a long equation VISIBLE, but visible and shrunk is a
+ * consolation prize; the window is small because nobody has said otherwise,
+ * not because the maths should be. So it opens small and grows as the equation
+ * does -- which is how the editor being imitated behaved when it was embedded
+ * in a document.
+ *
+ * It only ever GROWS, and only until the user sizes it themselves.  Shrinking
+ * as you delete would move the window under the hand that is typing, and a
+ * window someone has deliberately sized is theirs.
+ */
+void fit_window_to_content(HWND hwnd, Editor& ed) {
+    if (ed.user_sized || IsIconic(hwnd) || IsZoomed(hwnd)) return;
+
+    const Layout L = ed.eq.layout(ed.style);
+    const double upp = ed.units_per_pt();
+    const int m = ed.scaled(kMargin);
+    const int wantClientW = int(L.w * upp) + 2 * m;
+    const int wantClientH = int((L.asc + L.desc) * upp) + 2 * m +
+                            ed.bar_height() + ed.status_height();
+
+    RECT need = {0, 0, wantClientW, wantClientH};
+    AdjustWindowRectExForDpi(&need, WS_OVERLAPPEDWINDOW, FALSE, 0,
+                             UINT(ed.dpi));
+
+    RECT now;
+    GetWindowRect(hwnd, &now);
+    int w = now.right - now.left, h = now.bottom - now.top;
+    const int wantW = need.right - need.left, wantH = need.bottom - need.top;
+    if (wantW <= w && wantH <= h) return;
+
+    /* Never past the monitor: a window bigger than the screen cannot be
+     * resized back by its own edges. */
+    MONITORINFO mi = {sizeof(mi)};
+    if (GetMonitorInfoW(MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST), &mi)) {
+        const int maxW = mi.rcWork.right - mi.rcWork.left;
+        const int maxH = mi.rcWork.bottom - mi.rcWork.top;
+        w = std::min(std::max(w, wantW), maxW);
+        h = std::min(std::max(h, wantH), maxH);
+    } else {
+        w = std::max(w, wantW);
+        h = std::max(h, wantH);
+    }
+    if (w == now.right - now.left && h == now.bottom - now.top) return;
+
+    SetWindowPos(hwnd, nullptr, 0, 0, w, h,
+                 SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
 }
 
 void redraw(HWND hwnd) { InvalidateRect(hwnd, nullptr, FALSE); }
@@ -676,7 +801,14 @@ LRESULT CALLBACK proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             return 0;
 
         case WM_PAINT:
-            if (ed) { update_title(hwnd, *ed); paint(hwnd, *ed); }
+            if (ed) {
+                /* Before painting, not after: growing here means the paint
+                 * that follows is already at the final size, so nothing is
+                 * ever drawn shrunk and then redrawn full. */
+                fit_window_to_content(hwnd, *ed);
+                update_title(hwnd, *ed);
+                paint(hwnd, *ed);
+            }
             return 0;
 
         case WM_ERASEBKGND:
@@ -703,15 +835,10 @@ LRESULT CALLBACK proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
 
             RECT rc;
             GetClientRect(hwnd, &rc);
-            const int bar_h = ed->bar_height();
             const Layout L = ed->eq.layout(ed->style);
-            const double upp = ed->units_per_pt();
-            const int originX = ed->scaled(kMargin);
-            const int originY = bar_h +
-                int(((rc.bottom - bar_h - ed->status_height())
-                     + L.asc * upp - L.desc * upp) / 2);
-            const double ex = (p.x - originX) / upp;
-            const double ey = (p.y - originY) / upp;
+            const View v = view_of(*ed, rc, L);
+            const double ex = (p.x - v.originX) / v.upp;
+            const double ey = (p.y - v.originY) / v.upp;
 
             /* Shift+click extends from where the caret already is, the way it
              * does in every text editor. */
@@ -729,15 +856,11 @@ LRESULT CALLBACK proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             if (!ed || !ed->dragging) return 0;
             RECT rc;
             GetClientRect(hwnd, &rc);
-            const int bar_h = ed->bar_height();
             const Layout L = ed->eq.layout(ed->style);
-            const double upp = ed->units_per_pt();
-            const int originX = ed->scaled(kMargin);
-            const int originY = bar_h +
-                int(((rc.bottom - bar_h - ed->status_height())
-                     + L.asc * upp - L.desc * upp) / 2);
-            ed->eq.extend_to_point((GET_X_LPARAM(lp) - originX) / upp,
-                                   (GET_Y_LPARAM(lp) - originY) / upp, ed->style);
+            const View v = view_of(*ed, rc, L);
+            ed->eq.extend_to_point((GET_X_LPARAM(lp) - v.originX) / v.upp,
+                                   (GET_Y_LPARAM(lp) - v.originY) / v.upp,
+                                   ed->style);
             redraw(hwnd);
             return 0;
         }
@@ -748,6 +871,12 @@ LRESULT CALLBACK proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
 
         case WM_SIZE:
             if (ed) { build_bar(*ed); redraw(hwnd); }
+            return 0;
+
+        /* The user took hold of an edge.  From here the window is theirs: it
+         * stops growing itself, so it cannot fight the size they chose. */
+        case WM_ENTERSIZEMOVE:
+            if (ed) ed->user_sized = true;
             return 0;
 
         case WM_MOUSEWHEEL: {
@@ -1098,6 +1227,44 @@ struct Driver {
             SendMessageW(ed->popup, WM_PAINT, 0, 0);
         }
         pump();
+        check_inside();
+    }
+
+    /* The equation stays between the palette bar and the status strip.
+     *
+     * Checked after every paint in every sweep and every walk, because this is
+     * the property a window has to keep at sizes nobody would choose: the
+     * drawing used to happen at the asked-for zoom whatever the window was, so
+     * a long equation ran off the edge and a tall one painted over the buttons.
+     * A rule that only holds at the default size is not a rule.
+     *
+     * One pixel of slack: the origin and the extents are rounded to whole
+     * pixels independently, and a rule drawn exactly on the boundary is inside
+     * as far as anyone looking at it is concerned. */
+    void check_inside() {
+        if (IsIconic(hwnd)) return;
+        RECT rc;
+        GetClientRect(hwnd, &rc);
+        if (rc.right <= 0 || rc.bottom <= 0) return;
+        const Layout L = ed->eq.layout(ed->style);
+        if (L.w <= 0 && L.asc <= 0 && L.desc <= 0) return;
+        const View v = view_of(*ed, rc, L);
+        const int left = v.originX;
+        const int right = v.originX + int(L.w * v.upp);
+        const int top = v.originY - int(L.asc * v.upp);
+        const int bottom = v.originY + int(L.desc * v.upp);
+        const int slack = 1;
+        if (left < v.canvas.left - slack || right > v.canvas.right + slack ||
+            top < v.canvas.top - slack || bottom > v.canvas.bottom + slack) {
+            char what[256];
+            std::snprintf(what, sizeof(what),
+                          "the equation left the canvas: drawn "
+                          "(%d,%d)-(%d,%d) in (%ld,%ld)-(%ld,%ld)",
+                          left, top, right, bottom,
+                          long(v.canvas.left), long(v.canvas.top),
+                          long(v.canvas.right), long(v.canvas.bottom));
+            fail(what);
+        }
     }
 
     /* Modifiers for the WndProc's GetKeyState, set on this thread only. */
@@ -1162,7 +1329,11 @@ struct Driver {
                      MAKELPARAM(0, 0));
     }
 
+    /* Sizing the window the way a person does -- which includes taking it away
+     * from the editor, or the auto-grow would put back every small size this
+     * is trying to test at. */
     void resize(int w, int h) {
+        ed->user_sized = true;
         SetWindowPos(hwnd, nullptr, 0, 0, w, h,
                      SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
         pump();
@@ -1430,6 +1601,54 @@ struct Driver {
         paint();
     }
 
+    /* ---- the window sizing itself to what is in it --------------------- */
+    void sweep_autosize() {
+        log->line("== autosize ==");
+        /* Hand the window back to the editor, as it is when it opens. */
+        ed->user_sized = false;
+        SetWindowPos(hwnd, nullptr, 0, 0, 760, 260,
+                     SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
+        pump();
+        state(0);
+        paint();
+
+        RECT before;
+        GetWindowRect(hwnd, &before);
+        /* Something far wider than the window it started in. */
+        ed->eq.load_latex(
+            r_wide());
+        paint();
+        RECT after;
+        GetWindowRect(hwnd, &after);
+        log->line("[autosize] %ld -> %ld wide",
+                  long(before.right - before.left),
+                  long(after.right - after.left));
+        if (after.right - after.left <= before.right - before.left)
+            fail("the window did not grow for an equation wider than it");
+
+        /* And once the user has sized it, it stays where they put it. */
+        resize(420, 220);
+        RECT held;
+        GetWindowRect(hwnd, &held);
+        ed->eq.load_latex(r_wide() + r_wide());
+        paint();
+        RECT still;
+        GetWindowRect(hwnd, &still);
+        log->line("[autosize] after user sizing: %ld -> %ld wide",
+                  long(held.right - held.left),
+                  long(still.right - still.left));
+        if (still.right - still.left != held.right - held.left ||
+            still.bottom - still.top != held.bottom - held.top)
+            fail("the window resized itself after the user had sized it");
+        /* ...and the equation is still inside it: check_inside() ran in
+         * paint() above, which is the whole point of fitting. */
+    }
+
+    static std::string r_wide() {
+        return "a+b+c+d+e+f+g+h+i+j+k+l+m+n+o+p+q+r+s+t+u+v+w+x+y+z"
+               "+a+b+c+d+e+f+g+h+i+j+k+l+m+n+o+p+q+r+s+t+u+v+w+x+y+z";
+    }
+
     /* ---- blink, resize, minimize, DPI ---------------------------------- */
     void sweep_environment() {
         log->line("== environment ==");
@@ -1646,6 +1865,7 @@ int run_window_selftest(const SelftestOptions& opt) {
     d.sweep_window_keys();
     d.sweep_palette();
     d.sweep_mouse();
+    d.sweep_autosize();
     d.sweep_environment();
     for (unsigned s = 1; s <= opt.walks; ++s) d.walk(s, opt.walk_steps);
 
