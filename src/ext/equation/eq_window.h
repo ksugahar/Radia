@@ -47,6 +47,37 @@ EditorResult run_equation_window(const std::string& latex,
 bool copy_equation_to_clipboard(const std::string& latex, bool display = false,
                                 bool pictures = true);
 
+/* The interaction-layer self-test: `eqnedt64.exe --selftest`.
+ *
+ * The window is the one layer the Python tests cannot reach -- the model
+ * behind it is ordinary functions, but WM_KEYDOWN wiring, painting, the
+ * palette popups and the mouse all live in a WndProc.  The first crash this
+ * editor had in real use happened in exactly that gap: some fifty seconds of
+ * ordinary editing, an access violation, and nobody able to say which
+ * operation did it.
+ *
+ * So this drives the REAL window through the REAL WndProc by injecting window
+ * messages -- no keyboard is touched, no foreground is stolen, so it can run
+ * beside a working user and on a headless CI desktop.  Every published chord
+ * and every palette cell is applied from several caret states, then seeded
+ * random walks mix keys, mouse, resizes and repaints the way an editing
+ * session does.  Each step is journalled and flushed BEFORE it runs, so when
+ * a step crashes the process, the journal's last line names it, and the WER
+ * LocalDumps entry for eqnedt64.exe (see the handover) holds the dump.
+ *
+ * Returns 0 when every step survived; the failure count otherwise.  A crash
+ * of course returns nothing -- the exit code is the exception code, which is
+ * what the pytest wrapper asserts on. */
+struct SelftestOptions {
+    std::wstring log_path;      /* the journal; empty puts it in %TEMP% */
+    unsigned walks = 2;         /* random walks, seeded 1..walks */
+    unsigned walk_steps = 1200; /* injected messages per walk */
+    /* The clipboard is the user's; a test that clobbers it may not do so by
+     * default.  Enabling this adds Ctrl+C / Ctrl+X / Ctrl+V round-trips. */
+    bool clipboard = false;
+};
+int run_window_selftest(const SelftestOptions& opt);
+
 }  // namespace mtef
 
 #endif /* EQ_WINDOW_H */

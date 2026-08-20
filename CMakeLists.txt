@@ -1029,7 +1029,16 @@ if(WIN32)
 endif()
 
 if(MSVC)
-	target_compile_options(_equation PRIVATE /O2 /W0 /wd4244 /wd4267)
+	# /Zi + /DEBUG: keep the optimized build, but produce a PDB.  The first
+	# real-use crash of eqnedt64 (2026-08-20) could not be symbolized because
+	# nothing in this project emitted debug info; an access violation with a
+	# module-relative offset and no PDB is undiagnosable.  /OPT:REF,ICF are
+	# restated because /DEBUG silently turns them off, and the shipped binary
+	# should not change layout just because it grew a symbol file.  PDBs stay
+	# in the build tree -- they are not copied into src/radia, so the wheel
+	# does not grow by the size of the symbols.
+	target_compile_options(_equation PRIVATE /O2 /W0 /wd4244 /wd4267 /Zi)
+	target_link_options(_equation PRIVATE /DEBUG /OPT:REF /OPT:ICF)
 endif()
 
 # Post-build: Copy to src/radia
@@ -1104,12 +1113,18 @@ if(WIN32)
 		EQNEDT64_VERSION="${RADIA_VERSION}"
 	)
 
-	target_link_libraries(eqnedt64 PRIVATE gdi32 user32 gdiplus ole32 comdlg32)
+	# shell32: CommandLineToArgvW, which --selftest uses to parse its options.
+	target_link_libraries(eqnedt64 PRIVATE gdi32 user32 gdiplus ole32 comdlg32 shell32)
 
 	if(MSVC)
 		# /utf-8: MSVC reads an unmarked source in the ANSI code page, which on
 		# a Japanese machine turns literals into mojibake at compile time.
-		target_compile_options(eqnedt64 PRIVATE /O2 /W3 /utf-8)
+		# /Zi + /DEBUG (below): the 2026-08-20 first-use crash left only
+		# "fault offset 0xc435" because this target shipped without a PDB.
+		# Optimization stays on; /OPT:REF,ICF restated since /DEBUG disables
+		# them by default.  The PDB stays in the build tree.
+		target_compile_options(eqnedt64 PRIVATE /O2 /W3 /utf-8 /Zi)
+		target_link_options(eqnedt64 PRIVATE /DEBUG /OPT:REF /OPT:ICF)
 
 		# Static CRT, unlike the .pyd next to it.  The .pyd shares a process
 		# with Python and must share its runtime; this is its own process and
@@ -1119,6 +1134,26 @@ if(WIN32)
 		# makes "give someone the editor" a matter of handing over one file.
 		set_property(TARGET eqnedt64 PROPERTY
 			MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+
+		# -DRADIA_EQ_ASAN=ON builds the editor under AddressSanitizer.
+		#
+		# The ordinary practice for a memory bug, and the reason it is worth a
+		# switch here: without it a stale index reads past a vector, the
+		# program carries on with a wrecked heap, and it dies later somewhere
+		# innocent -- which is exactly the shape of the crash that started
+		# this work (fifty seconds in, a fault offset, no way back to the
+		# operation).  ASan stops AT the bad read and prints the line.
+		#
+		# Not on by default: it costs about 2x and the shipped editor should
+		# be the fast one.  Turn it on to diagnose, then turn it back off.
+		if(RADIA_EQ_ASAN)
+			target_compile_options(eqnedt64 PRIVATE /fsanitize=address /Oy-)
+			# ASan needs frame data and cannot live with incremental linking
+			# or edit-and-continue debug info.
+			target_link_options(eqnedt64 PRIVATE /INCREMENTAL:NO)
+			target_compile_definitions(eqnedt64 PRIVATE RADIA_EQ_ASAN=1)
+			message(STATUS "eqnedt64: AddressSanitizer ON")
+		endif()
 	endif()
 
 	add_custom_command(TARGET eqnedt64 POST_BUILD

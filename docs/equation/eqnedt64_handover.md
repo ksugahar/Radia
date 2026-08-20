@@ -313,42 +313,86 @@ the tree. It rests on LaTeX → tree → LaTeX reaching a fixed point, which
 
 ---
 
-## 8. OPEN — it crashes, and we cannot yet say where
+## 8. CLOSED — the crash, and the interaction-layer tests that found it
 
-Sugahara tried the editor on 2026-08-20 and it died on some operation.
-**Which operation was not recorded.**
+Sugahara tried the editor on 2026-08-20 and it died on some operation
+(`0xC0000005`, fault offset `0xc435`, ~52 s in). **Which operation was not
+recorded**, there was no PDB, and no dump. It is fixed, and the way it was
+found is the part worth keeping.
+
+### The standard practice this project now follows
+
+Nothing here is invented; it is the ordinary GUI-testing toolkit, and naming it
+that way is deliberate — the lab had never shipped a GUI before, so the wheel
+was there to be picked up rather than carved.
+
+| practice | where it lives here |
+|---|---|
+| **Test pyramid** — most tests at the model level, few at the UI | 1397 model tests under `tests/equation/`; the window has one |
+| **Humble object** — keep logic out of the untestable view | `eq_edit` / `eq_chords` decide everything; `eq_window` only reads modifiers and paints |
+| **Programmatic driving, not record-and-replay** | `--selftest` sends window messages by handle; no keyboard, no foreground, so it runs beside a working user and on a headless desktop |
+| **GUI ripping** — derive the cases from the widget tree | every chord comes from `chords()`, every cell from `Equation::*_palettes()`; nothing is written out twice |
+| **Monkey / stress testing** (Android's Monkey is the canonical one) | seeded random walks over keys, chords, palette, mouse, wheel, resize, DPI |
+| **Deterministic seeds** | xorshift64\*, seeds 1..N — a failing walk replays exactly |
+| **A journal flushed before each step** | the last line names the step that killed the process |
+| **Runtime memory verification** | `-DRADIA_EQ_ASAN=ON` builds the editor under AddressSanitizer |
+| **Crash dumps** | WER `LocalDumps\eqnedt64.exe`, `DumpType=2`, into `C:\temp\wer_dumps\eqnedt64` |
+| **Resource-leak oracle** | `GetGuiResources` sampled every 100 steps; a paint that leaks a GDI handle per frame fails |
+| **Push the bug down the pyramid** | what the monkey found got a fast model-level regression test |
+
+Not adopted, and why: **UI Automation / WinAppDriver** is the standard external
+driver on Windows, but it needs a UIA provider and this window is custom-drawn
+with no controls to expose. Message injection is the right level for it today;
+if the editor ever needs to be driven by an outside tool, exposing UIA is the
+move. **Visual/approval testing** of the painted output is not here either —
+the appearance is already pinned at the model level by `test_tex_metrics.py`
+against TeX's own box dimensions, which is stronger than a screenshot diff.
+
+### Running it
+
+```bash
+eqnedt64.exe --selftest [--log <path>] [--walks N] [--steps N] [--clipboard]
+```
+
+Exit code is the failure count, or the exception code if a step crashed the
+process. `--clipboard` opts into the copy/paste chords; without it the run
+leaves the user's clipboard alone. `tests/equation/test_window_selftest.py`
+wraps it for pytest.
+
+Every chord × 4 caret states, every palette cell, the mouse over and outside
+the canvas, blink/resize/minimize/DPI, then the walks. Roughly 100 s for
+4 × 2000 steps.
+
+### What it found, first run, 8.5 s in
+
+A random walk died. The journal's last line said `chord template.nthroot`; the
+dump symbolized to `take_selection`; and the ASan build named the line:
 
 ```
-Application Error, eqnedt64.exe
-exception 0xC0000005 (access violation)
-fault offset 0x000000000000c435      (RVA inside eqnedt64.exe itself)
-~52 s after launch
+AddressSanitizer: access-violation ... READ
+  #3 mtef::Equation::take_selection    eq_edit.cpp:692
+  #4 mtef::Equation::insert_template   eq_edit.cpp:940
 ```
 
-**It cannot be symbolized today.** `CMakeLists.txt:1112` builds the target with
-`/O2 /W3 /utf-8` — no `/Zi`, and no `/DEBUG` on the link — so **no PDB exists**
-and the offset cannot be turned into a function name. There was no minidump
-either: WER local dump collection is not enabled for this image.
+**The selection anchor was a bare index with no record of which slot it
+indexed.** `clamp()` only ever clamped `index_`. So Tab, Ctrl+Up, a click or
+undo — anything that moved to another slot or rebuilt the tree — left the
+anchor pointing into a list it no longer belonged to; a shorter list then made
+`take_selection()` read past the end of the vector and erase a range that was
+not there. The heap was wrecked at that moment and the process died seconds
+later somewhere unrelated, which is exactly the shape of the original report.
 
-**Do this before trying to reproduce anything:**
+**The fix** (`eq_edit`): the anchor carries its slot (`anchor_path_`), and one
+private `selection_range()` is the only place `lo`/`hi` are computed. A stale
+anchor means **no selection** — not a selection quietly shrunk to fit, which
+would delete a different range than the one highlighted.
+`tests/equation/test_selection_anchor.py` locks it at model level.
 
-1. Add `/Zi` to the target's compile options and `/DEBUG` to its link options,
-   keeping `/O2` (RelWithDebInfo-style, so the shipped binary stays optimized).
-   Confirm the `.pdb` lands beside the `.exe`.
-2. Enable local dumps:
-   `HKLM\SOFTWARE\Microsoft\Windows\Windows Error Reporting\LocalDumps\eqnedt64.exe`,
-   `DumpType = 2` (full).
-3. Then either ask Sugahara which operation it was, **or** drive it out
-   mechanically: `Equation.templates()` and the chord table are both
-   enumerable, so a harness can apply every command from several caret positions
-   (empty document, inside a slot, with a selection, at end of line) and find it
-   without anyone remembering what they pressed.
-
-**Where to look.** The editing model is covered at the API level by
-`test_edit.py`, `test_key_dispatch.py`, `test_usability.py`, `test_selection.py`
-and `test_caret_geometry.py`. **`eq_window.cpp` is 979 lines and has no test of
-its own.** By elimination the fault is in the window/painting layer. That gap is
-the thing to close, not just the crash.
+Fixed in the same pass, both found by the sweep: **`WM_SYSKEYDOWN` was not
+handled**, so every Alt chord (`Ctrl+Alt+Space`, the quad) was dead — the press
+went to `DefWindowProc` and became menu activation. And **`Ctrl+Shift+S` was
+published for `style.script` while the window uses it for Save As**, so that
+chord could never reach the table; script moved to `Ctrl+Shift+P`.
 
 ---
 
@@ -445,19 +489,56 @@ through as 72 equations, none failing to convert; PowerPoint opens and exports
 the file without complaint.
 
 These are acceptance targets for retiring EQNEDT32, not features. **Both are
-met — but the editor crashed in first real use, so retirement is not yet
-advisable.** Fix §8 first.
+met, and the crash that blocked retirement is fixed (§8) with the tests that
+found it.** What remains before retirement is usability, not correctness.
 
 ---
 
 ## 14. Suggested order of work
 
-1. **`/Zi` + `/DEBUG` + WER local dumps** (§8 step 1-2). Nothing else can be
-   diagnosed until this exists.
-2. **A test for `eq_window.cpp`**, and the command-fuzz harness. This finds the
-   crash and prevents the next one.
-3. **Palette simplification** (§9) — one representative member per button.
-4. `PageUp`/`PageDown`, `Ctrl+Tab` (§10).
-5. The 5 remaining stray-marker corpus documents (§4), lowest priority: they were
+1. ~~`/Zi` + `/DEBUG` + WER local dumps~~ — **done**, plus a `-DRADIA_EQ_ASAN=ON`
+   build (§8).
+2. ~~A test for `eq_window.cpp`, and the command-fuzz harness~~ — **done**:
+   `--selftest` and `test_window_selftest.py`. It found the crash on its first
+   run; the fix and two dead chords are in §8.
+3. **Paste size in PowerPoint** (§15) — Sugahara, 2026-08-20: pasting gives
+   18 pt and he wants 24 pt.
+4. **Palette simplification** (§9) — one representative member per button.
+5. `PageUp`/`PageDown`, `Ctrl+Tab` (§10).
+6. The 5 remaining stray-marker corpus documents (§4), lowest priority: they were
    wrong before this work and are five different shapes, so each is its own
    investigation.
+
+---
+
+## 15. OPEN — a pasted equation takes PowerPoint's size, not ours
+
+Sugahara, 2026-08-20: *powerpointに貼り付けたときは、24ptにしてほしいよ、18ptでは
+小さい*.
+
+**Measured, not assumed** (`C:\temp\eq_pptx_size_probe.py`, PowerPoint 16.0 COM,
+paste into a real slide and read the run size back):
+
+| clipboard MathML | size in PowerPoint |
+|---|---|
+| as we emit it | 28 pt |
+| `<mstyle mathsize="24pt">` added | 28 pt |
+| `mathsize` on `<math>` | 28 pt |
+
+28 pt is that placeholder's own level-1 size. **PowerPoint ignores MathML sizing
+entirely and uses the destination's**, which is why Sugahara's 18 pt box gives
+18 pt equations. The size is not something our current clipboard can state.
+
+**Where it can be stated.** Copying an equation out of PowerPoint puts
+`Art::GVML ClipFormat` on the clipboard: an OPC package (a ZIP — it starts
+`PK\x03\x04`) holding `clipboard/drawings/drawing1.xml`, whose runs carry
+explicit `<a:rPr sz="2400"/>`. Dumped and confirmed by
+`C:\temp\eq_ppt_clipboard_formats.py`; the extracted package is under
+`C:\temp\ppt_clip\gvml\`.
+
+So the route is the same one the RTF took — **transcribe what the application
+itself puts on the clipboard.** Emit a minimal GVML package containing the
+`<a14:m>` OMML (which `mtef_omml` already produces) inside a `lockedCanvas`
+shape with `sz="2400"`, and offer it before the MathML. Needs a small
+store-only ZIP writer in the exe; nothing else is missing. Verify with the same
+COM probe, which reads the pasted run size back.

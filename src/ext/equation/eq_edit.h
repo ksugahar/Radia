@@ -223,6 +223,21 @@ private:
     std::vector<CaretStep> path_;
     int index_ = 0;
     int anchor_ = -1;              /* where a selection started; -1 for none */
+    /* WHICH SLOT the anchor is an index into.
+     *
+     * Without this the anchor was a bare number, and every operation that
+     * moved to another slot or rebuilt the tree -- Tab, Ctrl+Up, undo -- left
+     * it pointing into a slot it no longer belonged to.  A shorter slot then
+     * made take_selection() read past the end of the vector and erase a range
+     * that was not there: a heap corruption that killed the editor some
+     * seconds later, somewhere else entirely.  It is what the window
+     * self-test found first.
+     *
+     * A selection belongs to the slot it was made in.  Leave that slot, or
+     * change the tree under it, and there is NO selection -- not a selection
+     * quietly shrunk to fit, which would delete a different range than the
+     * one the user highlighted. */
+    std::vector<CaretStep> anchor_path_;
     std::string style_ = "math";   /* the style typing goes in */
 
 public:
@@ -242,6 +257,17 @@ private:
     NodeList* slot_at(const std::vector<CaretStep>& path) const;
     NodeList& here();
     Node* parent_node(const std::vector<CaretStep>& path) const;
+
+    /* Start a selection here, remembering which slot "here" is. */
+    void set_anchor(int at);
+    /* Begin one at the caret if there is not one already -- what every
+     * Shift+move does first. */
+    void start_selection_here();
+    /* The selection as a range in the CURRENT slot, validated against it.
+     * False when there is none -- including when the anchor was made in
+     * another slot, or no longer fits the one it was made in.  This is the
+     * ONE place lo/hi are computed, so no caller can index past the end. */
+    bool selection_range(int& lo, int& hi) const;
 
     /* Remove the selected nodes without pushing an undo step, so replacing a
      * selection is ONE undo rather than two.  Returns them, because a template
