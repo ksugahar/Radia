@@ -285,3 +285,20 @@ def test_a_slide_with_no_figure_is_not_counted(tmp_path):
     got = figure_audit_script_reference(deck)
     assert got["slides_with_figures"] == 0
     assert got["score"] == 10.0
+
+
+def test_a_question_time_slide_is_not_scored_for_its_banner(tmp_path):
+    """A backup slide is shown only if someone asks, so its claim is not part
+    of the talk -- reporting it would name a gap that should not be closed."""
+    from pptx import Presentation
+    deck = build_rich(tmp_path, [
+        {"body": "表紙", "note": "表紙です。"},
+        {"body": "本編", "banner": "本編の主張です", "note": "本編の主張ですと述べます。"},
+        {"body": "予備", "banner": "補足の主張です", "note": "（質疑用）"},
+    ])
+    prs = Presentation(deck)
+    list(prs.slides)[2].shapes.title.text = "補足：近零モードについて"
+    prs.save(deck)
+    got = presentation_script_vs_slide_coverage(deck)
+    scored = {b["slide_no"] for b in got["banner_detail"]}
+    assert 2 in scored and 3 not in scored, got["banner_detail"]
