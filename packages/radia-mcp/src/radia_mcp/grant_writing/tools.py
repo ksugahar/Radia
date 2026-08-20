@@ -2586,6 +2586,17 @@ _INTERNATIONAL_OUTPUT_MARKERS = (
     "共著", "国際会議", "国際学会", "国際誌", "国際共同", "英文",
     "国際ベンチマーク", "国際レビュー", "査読",
 )
+
+# Whether an international output already exists decides how much it is
+# worth. A record a reviewer can look up outranks an intention, and mixing
+# the two lets a plan read as an achievement.
+_ACHIEVED_MARKERS = (
+    "採択", "掲載", "受理", "出版", "発表した", "共著論文",
+    "実施した", "完了した", "招へいした", "訪問した", "得た", "行った",
+)
+_PLANNED_MARKERS = (
+    "予定", "目指す", "したい", "見込み", "構想", "を計画",
+)
 _NATIONAL_VALUE_MARKERS = (
     "日本発", "我が国独自", "国内で発展", "国内発", "本邦",
     "日本独自", "国内の知見",
@@ -2608,6 +2619,12 @@ def grant_writing_international_standing_check(text: str) -> dict:
     """
     text = _prose_for_lint(_read_text_if_path(text))
     trigger_hits = [t for t in _INTERNATIONAL_TRIGGERS if t in text]
+    # Naming a foreign institution is itself the subject being raised. A draft
+    # that says ウィーン工科大学 is international whether or not it also says
+    # 国際 or a region name, and requiring the word skipped exactly those.
+    named_trigger = _NAMED_PARTNER.search(text)
+    if named_trigger:
+        trigger_hits = trigger_hits + [named_trigger.group(0).strip()]
     if not trigger_hits:
         return {
             "applicable": False,
@@ -2621,6 +2638,7 @@ def grant_writing_international_standing_check(text: str) -> dict:
             "source": "international-standing check",
         }
 
+    sentences = [s for s in re.split(r"(?<=[。．!?！？])", text) if s.strip()]
     partners = sorted({m.group(0).strip() for m in _NAMED_PARTNER.finditer(text)})
     reciprocal = [m for m in _RECIPROCAL_MARKERS if m in text]
     one_way = [m for m in _ONE_WAY_MARKERS if m in text]
@@ -2638,6 +2656,20 @@ def grant_writing_international_standing_check(text: str) -> dict:
                 "審査者が確認できない連携は、意図の表明にとどまる。"
             ),
         })
+    # Sentences that carry an international output, split by whether the
+    # output exists yet. A plan and a record must not read alike.
+    output_sentences = [
+        s for s in sentences if any(o in s for o in _INTERNATIONAL_OUTPUT_MARKERS)
+    ]
+    achieved = [
+        s for s in output_sentences if any(a in s for a in _ACHIEVED_MARKERS)
+    ]
+    planned = [
+        s for s in output_sentences
+        if any(p in s for p in _PLANNED_MARKERS)
+        and not any(a in s for a in _ACHIEVED_MARKERS)
+    ]
+
     if not outputs:
         risks.append({
             "type": "no_international_output",
@@ -2646,6 +2678,19 @@ def grant_writing_international_standing_check(text: str) -> dict:
             "recommendation": (
                 "既にある共著・国際会議発表・国際レビューを挙げ、本計画で"
                 "何を追加するかを書く。"
+            ),
+        })
+    elif planned and not achieved:
+        risks.append({
+            "type": "international_output_all_planned",
+            "severity": "MEDIUM",
+            "comment": (
+                "国際的な成果がすべて予定であり、既に成立したものがない。"
+            ),
+            "recommendation": (
+                "採択済み・掲載済みのものがあれば、その状態を明記して分ける。"
+                "無い場合は形成途上であることを正直に書き、本研究で到達する"
+                "段階を示す。実績と予定を混ぜて書くと、予定が実績に読める。"
             ),
         })
     if not reciprocal:
@@ -2686,6 +2731,12 @@ def grant_writing_international_standing_check(text: str) -> dict:
         "reciprocity_markers": reciprocal[:8],
         "one_way_markers": one_way[:5],
         "international_outputs": outputs[:8],
+        "achieved_output_sentences": [
+            re.sub(r"\s+", " ", x).strip()[:160] for x in achieved[:4]
+        ],
+        "planned_output_sentences": [
+            re.sub(r"\s+", " ", x).strip()[:160] for x in planned[:4]
+        ],
         "national_value_markers": national[:5],
         "comments": [r["comment"] for r in risks],
         "recommendations": [r["recommendation"] for r in risks],
