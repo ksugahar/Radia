@@ -51,6 +51,14 @@ CHECKS = [
                                + r"\s*" + re.escape(B + "right"))),
     ("empty fraction slot", re.compile(re.escape(B + "dfrac{}")
                                        + "|" + re.escape(B + "frac{}"))),
+    # ...and the other half of the fraction.  Only the NUMERATOR was
+    # checked, so a document whose denominator had escaped the fraction
+    # entirely scored clean -- which is how the corpus reached "100%"
+    # while one equation still read a/() with its denominator sitting
+    # outside.  A score that cannot see the defect is not a score.
+    ("empty fraction denominator",
+     re.compile(re.escape(B + "dfrac") + r"\{(?:[^{}]|\{[^{}]*\})*\}"
+                + re.escape("{}"))),
     ("unknown command", re.compile(re.escape(B + "text{") + re.escape(B))),
     ("stray style marker", re.compile(re.escape(B + "scriptstyle"))),
     ("empty matrix row", re.compile(re.escape(B + "begin{matrix}")

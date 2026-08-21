@@ -32,8 +32,27 @@ int MtefParser::readUint16() {
 }
 
 void MtefParser::skipNudge() {
-    /* Nudge data: 4 bytes (dx_lo, dx_hi, dy_lo, dy_hi) */
-    if (pos_ + 4 <= len_) pos_ += 4;
+    /* TWO bytes, dx and dy as signed bytes -- with (-128, -128) as an escape
+     * meaning two 16-bit values follow instead.
+     *
+     * This used to skip four unconditionally, which ate two bytes of whatever
+     * came next and desynchronised the whole rest of the stream.  The damage
+     * was silent and did not look like a parser fault: the reader carried on
+     * producing plausible records out of misaligned bytes -- a CHAR with
+     * typeface -128 and code 0x8083 is the nudge pair and a tag read as a
+     * character -- and the equation's real content simply never appeared.  One
+     * document lost both inner products of a fraction that way.
+     *
+     * Nudged records are rare, which is why 779 of 780 corpus documents never
+     * showed it. */
+    if (pos_ + 2 > len_) { pos_ = len_; return; }
+    const int dx = data_[pos_];
+    const int dy = data_[pos_ + 1];
+    pos_ += 2;
+    if (dx == 0x80 && dy == 0x80) {
+        if (pos_ + 4 <= len_) pos_ += 4;
+        else pos_ = len_;
+    }
 }
 
 /* ============================================================

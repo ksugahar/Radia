@@ -299,6 +299,7 @@ void BigOpDisplayPass::run(NodeList& children, SkipSet& skip, int depth, int pro
 
     for (int idx = 0; idx < n; idx++) {
         if (skip[idx]) continue;
+
         if (children[idx]->tag() != Node::kSize) continue;
         auto* sz = static_cast<SizeNode*>(children[idx].get());
         if (sz->sizeType != SIZETYPE_SUB) continue;
@@ -363,6 +364,37 @@ void BigOpDisplayPass::run(NodeList& children, SkipSet& skip, int depth, int pro
             if (!ln->isNull) {
                 targetTmpl = deepestBareBigOp(ln->children);
                 targetInsideLine = (targetTmpl != nullptr);
+            }
+        }
+
+        /* Still nothing, and the nearest line held no operator.  Keep looking
+         * back for one that does.
+         *
+         * The scan above takes the NEAREST line and hopes.  That is enough when
+         * the block follows its own content, and wrong when something else sits
+         * between: a document with TWO integrals in one line and their two
+         * blocks at the end has the second block reverse-scan straight into the
+         * FIRST block's limit lines, take `a` for the content, find no operator
+         * in it, and give up -- leaving both blocks unclaimed and both
+         * integrals bare.  Asking for a line that actually contains a bare
+         * operator makes the search purposeful rather than positional.
+         *
+         * `symFollows` still protects an operator whose own block is coming
+         * later in its list, so this cannot steal one that is already spoken
+         * for.  The content-merge below is deliberately not attempted for these:
+         * a line reached across other material is not this operator's body. */
+        if (!targetTmpl) {
+            for (int j = idx - 1; j >= 0; j--) {
+                if (skip[j]) continue;
+                Node* c = children[j].get();
+                if (c->tag() != Node::kLine) continue;
+                auto* ln = static_cast<LineNode*>(c);
+                if (ln->isNull || ln->children.empty()) continue;
+                if (Node* found = deepestBareBigOp(ln->children)) {
+                    targetTmpl = found;
+                    targetInsideLine = true;
+                    break;
+                }
             }
         }
 
