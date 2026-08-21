@@ -1,25 +1,25 @@
 {
-  "radia_version": "4.95.54",
+  "radia_version": "4.95.58",
   "radia_core_api_version": "4.32",
   "schema": "radia.validation.motor-angle-family-mex.v1",
-  "executed_at_utc": "2026-08-19T07:33:39.002Z",
+  "executed_at_utc": "2026-08-21T20:40:10.012Z",
   "execution_mode": "standalone_matlab_batch",
   "execution_policy": "MATLAB and Simulink verification with no external solver session.",
   "execution_environment": {
-    "host_role": "compute",
-    "hostname": "HIBINO",
+    "host_role": "developer-smoke",
+    "hostname": "lab",
     "platform": "PCWIN64"
   },
-  "matlab_version": "26.1.0.3312084 (R2026a) Update 4",
+  "matlab_version": "26.1.0.3276743 (R2026a) Update 3",
   "matlab_release": "2026a",
   "simulink_version": "26.1",
   "simulink_release": "2026a",
-  "optimization_toolbox_available": false,
+  "optimization_toolbox_available": true,
   "mex_api_version": 1,
   "mex_relative_path": "matlab/radia_mex.mexw64",
-  "mex_sha256": "02f3d2f194c1a9aa8d9c89427cc682ac60ef0bfe1c541d250bf5c452600b9724",
+  "mex_sha256": "eaf6602256edac116a219b5f781829eae2bfede82bd47cf169f16b14d134c146",
   "source_relative_path": "src/matlab/radia_mex.cpp",
-  "source_sha256": "960e86c254ee73c04dd16326c7a7cda96e1e8857f94618e57e5215c75564e144",
+  "source_sha256": "f3d5e562f2978bc900fe3fafce9ae8a525412a3e0a380d6aecccd4ee04d7916e",
   "setup_relative_path": "matlab/+radia/setup.m",
   "setup_sha256": "bc3e03823876eb16699e3c0c8c8ed8760db67e7afaf19d7a38591415a86f0069",
   "generator_relative_path": "validation_test/radia_mcp/generate_motor_angle_family_mex_artifact.m",
@@ -31,420 +31,430 @@
     "tests/matlab/test_radia_mex.m",
     "tests/matlab/test_simulink_workflow.m"
   ],
-  "test_count": 82,
-  "passed_count": 82,
+  "test_count": 84,
+  "passed_count": 84,
   "failed_count": 0,
   "incomplete_count": 0,
   "test_results": [
     {
       "name": "test_radia_mex/testApiAndTaskManager",
       "passed": true,
-      "duration_s": 2.4792072
+      "duration_s": 0.5895315
     },
     {
       "name": "test_radia_mex/testOptunaParetoRankCrowding",
       "passed": true,
-      "duration_s": 0.6876329000000001
+      "duration_s": 0.0288455
     },
     {
       "name": "test_radia_mex/testOptunaParzenLogPdfKernels",
       "passed": true,
-      "duration_s": 0.30658810000000003
+      "duration_s": 0.0605783
     },
     {
       "name": "test_radia_mex/testIHHandleCommandsAndLifecycle",
       "passed": true,
-      "duration_s": 0.2303658
+      "duration_s": 0.0635515
     },
     {
       "name": "test_radia_mex/testIHHandleCreateRejectsInvalidConfig",
       "passed": true,
-      "duration_s": 0.047424499999999994
+      "duration_s": 0.021601699999999998
     },
     {
       "name": "test_radia_mex/testNGSolveSpacesP1ToP6",
       "passed": true,
-      "duration_s": 2.1917257
+      "duration_s": 0.2120215
     },
     {
       "name": "test_radia_mex/testNGSolveMatrixDump",
       "passed": true,
-      "duration_s": 2.1803479
+      "duration_s": 0.2218428
     },
     {
       "name": "test_radia_mex/testPersistentNGSolveMeshSpaceFormMatrix",
       "passed": true,
-      "duration_s": 2.2125584
+      "duration_s": 0.2401081
     },
     {
       "name": "test_radia_mex/testChargeGramDirectNGSolveMassRegistration",
       "passed": true,
-      "duration_s": 1.7269735000000002
+      "duration_s": 0.2546408
     },
     {
       "name": "test_radia_mex/testPersistentNGSolveCoefficientBilinearForms",
       "passed": true,
-      "duration_s": 4.2966009000000005
+      "duration_s": 0.440079
     },
     {
       "name": "test_radia_mex/testPersistentNGSolveComplexBilinearForms",
       "passed": true,
-      "duration_s": 2.4365542
+      "duration_s": 0.29033990000000004
     },
     {
       "name": "test_radia_mex/testPersistentNGSolveNativeKrylovSolver",
       "passed": true,
-      "duration_s": 2.3230139
+      "duration_s": 0.21890440000000003
     },
     {
       "name": "test_radia_mex/testPersistentNGSolveGridFunctionAndLinearForm",
       "passed": true,
-      "duration_s": 1.2234707
+      "duration_s": 0.1344577
     },
     {
       "name": "test_radia_mex/testNGSolveCoefficientAndGridFunctionObjects",
       "passed": true,
-      "duration_s": 4.6661753999999993
+      "duration_s": 0.5075981
     },
     {
       "name": "test_radia_mex/testNativeHCurlEddyCLNBasis",
       "passed": true,
-      "duration_s": 0.9012684
+      "duration_s": 0.0926651
     },
     {
       "name": "test_radia_mex/testNativeHCurlEddyCLNModelProjection",
       "passed": true,
-      "duration_s": 1.4453608999999998
+      "duration_s": 2.4421434
     },
     {
       "name": "test_radia_mex/testNativeSimulinkStateSpaceHandle",
       "passed": true,
-      "duration_s": 0.0287134
+      "duration_s": 0.029972099999999998
     },
     {
       "name": "test_radia_mex/testNativePeriodicMotorAngleFamilyHandle",
       "passed": true,
-      "duration_s": 0.031696699999999994
+      "duration_s": 0.0371917
     },
     {
       "name": "test_radia_mex/testComplexMixedGalerkinKernels",
       "passed": true,
-      "duration_s": 0.035401999999999996
+      "duration_s": 0.0124742
     },
     {
       "name": "test_radia_mex/testCLNReductionKernels",
       "passed": true,
-      "duration_s": 0.0974874
+      "duration_s": 0.0359111
     },
     {
       "name": "test_radia_mex/testEVRSTMethodAlgebra",
       "passed": true,
-      "duration_s": 0.0147434
+      "duration_s": 0.015991800000000004
     },
     {
       "name": "test_radia_mex/testSIBCKernels",
       "passed": true,
-      "duration_s": 0.0154685
+      "duration_s": 0.014441
     },
     {
       "name": "test_radia_mex/testTetHCurlReducedGram",
       "passed": true,
-      "duration_s": 0.4873618
+      "duration_s": 0.0599089
     },
     {
       "name": "test_radia_mex/testComplexBiotSavartKernels",
       "passed": true,
-      "duration_s": 1.2540312
+      "duration_s": 0.12418860000000001
     },
     {
       "name": "test_radia_mex/testBEMGalerkinKernels",
       "passed": true,
-      "duration_s": 0.0113465
+      "duration_s": 0.0054896
     },
     {
       "name": "test_radia_mex/testHACApKBEMLifecycle",
       "passed": true,
-      "duration_s": 0.2965698
+      "duration_s": 0.0383827
     },
     {
       "name": "test_radia_mex/testHACApKPEECLifecycle",
       "passed": true,
-      "duration_s": 0.30552
+      "duration_s": 0.0367995
     },
     {
       "name": "test_radia_mex/testHACApKChargeGramLifecycle",
       "passed": true,
-      "duration_s": 29.551055500000004
+      "duration_s": 3.0318585
     },
     {
       "name": "test_radia_mex/testHACApKSampledChargeGramFactories",
       "passed": true,
-      "duration_s": 0.5864265
+      "duration_s": 0.10575150000000001
     },
     {
       "name": "test_radia_mex/testHACApKLocalPolynomialFactory",
       "passed": true,
-      "duration_s": 0.2888258
+      "duration_s": 0.0353245
     },
     {
       "name": "test_radia_mex/testHACApKHighOrderTetMatchesLocalPolynomial",
       "passed": true,
-      "duration_s": 0.2719505
+      "duration_s": 0.0693458
     },
     {
       "name": "test_radia_mex/testHACApKCyclicImageRotations",
       "passed": true,
-      "duration_s": 0.30024490000000004
+      "duration_s": 0.0363433
     },
     {
       "name": "test_radia_mex/testHACApKCurvedHighOrderTetReferenceDensity",
       "passed": true,
-      "duration_s": 0.29392240000000003
+      "duration_s": 0.0519736
     },
     {
       "name": "test_radia_mex/testHACApKHexFarBlock",
       "passed": true,
-      "duration_s": 0.3533521
+      "duration_s": 0.095918200000000009
     },
     {
       "name": "test_radia_mex/testHACApKHexSelfBlockDirectionalDerivative",
       "passed": true,
-      "duration_s": 6.5515646
+      "duration_s": 4.4009899
     },
     {
       "name": "test_radia_mex/testHACApKNonAffineHexSelfBlockDirectionalDerivative",
       "passed": true,
-      "duration_s": 0.7140531
+      "duration_s": 0.4292502
     },
     {
       "name": "test_radia_mex/testHACApKHexFaceSelfBlockDirectionalDerivative",
       "passed": true,
-      "duration_s": 5.3100004
+      "duration_s": 3.8375805
     },
     {
       "name": "test_radia_mex/testHACApKWedgeFarBlock",
       "passed": true,
-      "duration_s": 0.25410560000000004
+      "duration_s": 0.083143299999999989
     },
     {
       "name": "test_radia_mex/testHACApKTetAndWedgeSelfBlockDirectionalDerivatives",
       "passed": true,
-      "duration_s": 0.15019259999999998
+      "duration_s": 0.10121480000000001
     },
     {
       "name": "test_radia_mex/testHACApKConfiguredFieldRowsAndBatchedDerivatives",
       "passed": true,
-      "duration_s": 0.86512010000000006
+      "duration_s": 0.1038751
     },
     {
       "name": "test_radia_mex/testHACApKPlanar2DCellEdgeFarBlock",
       "passed": true,
-      "duration_s": 0.2691692
+      "duration_s": 0.0419369
     },
     {
       "name": "test_radia_mex/testHACApKCurvedPolytopeMatchesCurvedTet",
       "passed": true,
-      "duration_s": 0.31611010000000006
+      "duration_s": 0.052004499999999995
     },
     {
       "name": "test_radia_mex/testHACApKAnalyticTetFactory",
       "passed": true,
-      "duration_s": 0.3136299
+      "duration_s": 0.0416014
     },
     {
       "name": "test_radia_mex/testHACApKAnalyticPolytopeMatchesTet",
       "passed": true,
-      "duration_s": 0.34909379999999995
+      "duration_s": 0.060130399999999994
     },
     {
       "name": "test_radia_mex/testPersistentHDivFieldEvaluators",
       "passed": true,
-      "duration_s": 1.6039774
+      "duration_s": 0.2651935
     },
     {
       "name": "test_radia_mex/testChargeGramConfiguredFieldEvaluator",
       "passed": true,
-      "duration_s": 0.9580157
+      "duration_s": 0.2470072
     },
     {
       "name": "test_radia_mex/testChargeGramConfiguredPlanarFieldEvaluator",
       "passed": true,
-      "duration_s": 1.6235235000000001
+      "duration_s": 0.17863590000000001
     },
     {
       "name": "test_radia_mex/testHACApKGeometryMassWithoutChargeMap",
       "passed": true,
-      "duration_s": 0.334534
+      "duration_s": 0.0317352
     },
     {
       "name": "test_radia_mex/testEnergyStopLifecycle",
       "passed": true,
-      "duration_s": 1.007589
+      "duration_s": 0.1137929
     },
     {
       "name": "test_radia_mex/testLegacyTetraFieldRoute",
       "passed": true,
-      "duration_s": 1.2627429
+      "duration_s": 0.15880350000000001
     },
     {
       "name": "test_radia_mex/testLegacyObjectsAndTransforms",
       "passed": true,
-      "duration_s": 0.0475713
+      "duration_s": 0.028376
     },
     {
       "name": "test_radia_mex/testExtendedLegacyObjectsAndFields",
       "passed": true,
-      "duration_s": 0.0658267
+      "duration_s": 0.032473900000000007
     },
     {
       "name": "test_radia_mex/testExtendedMaterialsAndNonlinearSolve",
       "passed": true,
-      "duration_s": 0.2082768
+      "duration_s": 0.0334746
     },
     {
       "name": "test_radia_mex/testHysteresisMaterialsAndState",
       "passed": true,
-      "duration_s": 0.0277262
+      "duration_s": 0.015499800000000001
     },
     {
       "name": "test_radia_mex/testSolverConfigurationParity",
       "passed": true,
-      "duration_s": 0.0254642
+      "duration_s": 0.0168438
     },
     {
       "name": "test_radia_mex/testPlanarChargeKernels",
       "passed": true,
-      "duration_s": 1.2770895
+      "duration_s": 0.12555639999999998
     },
     {
       "name": "test_radia_mex/testClosedFormCuboidAverages",
       "passed": true,
-      "duration_s": 0.0080888
+      "duration_s": 0.004305
     },
     {
       "name": "test_radia_mex/testEquivalenceSourceKernels",
       "passed": true,
-      "duration_s": 0.5541711
+      "duration_s": 0.0577728
     },
     {
       "name": "test_radia_mex/testHACApKHLUParity",
       "passed": true,
-      "duration_s": 2.5912115
+      "duration_s": 0.3063201
     },
     {
       "name": "test_radia_mex/testPersistentNGSolveCoefficientLinearForms",
       "passed": true,
-      "duration_s": 2.9941428
+      "duration_s": 0.40605489999999994
     },
     {
       "name": "test_radia_mex/testAffineCellSelfEnergyShapeDerivative",
       "passed": true,
-      "duration_s": 0.0168744
+      "duration_s": 0.0053145000000000006
     },
     {
       "name": "test_radia_mex/testStreamACATSVD",
       "passed": true,
-      "duration_s": 0.015368000000000001
+      "duration_s": 0.0037703
+    },
+    {
+      "name": "test_radia_mex/testAbeElementFillPlanNative",
+      "passed": true,
+      "duration_s": 0.0369776
     },
     {
       "name": "test_radia_mex/testProjectedAndReducedNativeMatrices",
       "passed": true,
-      "duration_s": 0.9004641
+      "duration_s": 0.12329380000000001
     },
     {
       "name": "test_radia_mex/testRadiaFieldCoefficientCacheAndVoxel",
       "passed": true,
-      "duration_s": 2.4296949000000003
+      "duration_s": 0.2968152
     },
     {
       "name": "test_radia_mex/testBeamLieMapPipeline",
       "passed": true,
-      "duration_s": 0.0902295
+      "duration_s": 0.0487297
     },
     {
       "name": "test_radia_mex/testBeamOrbitTracker3D",
       "passed": true,
-      "duration_s": 0.19473600000000002
+      "duration_s": 0.036177900000000006
+    },
+    {
+      "name": "test_radia_mex/testBeamOrbitTrackerToPlaneHDivHandle",
+      "passed": true,
+      "duration_s": 0.043567400000000006
     },
     {
       "name": "test_simulink_workflow/testOptimizationAdapter",
       "passed": true,
-      "duration_s": 0.51072069999999992
+      "duration_s": 0.1688143
     },
     {
       "name": "test_simulink_workflow/testAdjointTopologyOptimizationBlock",
       "passed": true,
-      "duration_s": 24.4093323
+      "duration_s": 8.420937
     },
     {
       "name": "test_simulink_workflow/testAdjointLibraryBlockCompilesInModel",
       "passed": true,
-      "duration_s": 15.987426600000001
+      "duration_s": 8.8611186
     },
     {
       "name": "test_simulink_workflow/testStreamFunctionOptimizationModel",
       "passed": true,
-      "duration_s": 5.6608221
+      "duration_s": 4.3241342
     },
     {
       "name": "test_simulink_workflow/testTrackedStreamFunctionOptimizationArtifact",
       "passed": true,
-      "duration_s": 0.5242162
+      "duration_s": 0.48580619999999997
     },
     {
       "name": "test_simulink_workflow/testOpenIHLaunchEntryPoint",
       "passed": true,
-      "duration_s": 0.1427588
+      "duration_s": 0.1663229
     },
     {
       "name": "test_simulink_workflow/testTeam28CLNLUTAndSimulinkBlock",
       "passed": true,
-      "duration_s": 1.7470104
+      "duration_s": 0.824524
     },
     {
       "name": "test_simulink_workflow/testNativeMexHCurlStateSpaceSimulinkBlock",
       "passed": true,
-      "duration_s": 0.7011911
+      "duration_s": 0.49726549999999997
     },
     {
       "name": "test_simulink_workflow/testHCurlEddyCLNStateSpaceAndMexSolve",
       "passed": true,
-      "duration_s": 0.7509326999999999
+      "duration_s": 0.47788230000000004
     },
     {
       "name": "test_simulink_workflow/testHCurlEddyCLNExchangeLoadAndForce",
       "passed": true,
-      "duration_s": 0.085713
+      "duration_s": 0.0483778
     },
     {
       "name": "test_simulink_workflow/testHCurlEddyCLNHeightFamilyAndMovingBlock",
       "passed": true,
-      "duration_s": 0.56564039999999993
+      "duration_s": 0.3691976
     },
     {
       "name": "test_simulink_workflow/testNativePeriodicMotorAngleFamilyBlock",
       "passed": true,
-      "duration_s": 3.0351557000000002
+      "duration_s": 1.0016896
     },
     {
       "name": "test_simulink_workflow/testRadiaLibraryBrowserArtifact",
       "passed": true,
-      "duration_s": 2.0363021999999997
+      "duration_s": 1.3382834
     },
     {
       "name": "test_simulink_workflow/testApplicationBlockCompilesInModel",
       "passed": true,
-      "duration_s": 1.4907618
+      "duration_s": 1.5198816000000002
     },
     {
       "name": "test_simulink_workflow/testApplicationConfigAndFailureArtifacts",
       "passed": true,
-      "duration_s": 6.6336644
+      "duration_s": 8.4104298
     },
     {
       "name": "test_simulink_workflow/testApplicationLauncherFailureKeepsArtifacts",
       "passed": true,
-      "duration_s": 0.1812839
+      "duration_s": 0.13092959999999998
     }
   ],
   "validated_capabilities": [

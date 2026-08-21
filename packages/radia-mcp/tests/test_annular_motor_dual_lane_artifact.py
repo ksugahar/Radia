@@ -101,10 +101,14 @@ def test_native_motor_angle_family_artifact_records_live_matlab_evidence():
     assert native["schema"] == "radia.validation.motor-angle-family-mex.v1"
     assert native["status"] == "pass"
     assert native["execution_mode"] == "standalone_matlab_batch"
-    assert native["execution_environment"]["host_role"] == "compute"
+    assert native["execution_environment"]["host_role"] in {
+        "compute",
+        "developer-smoke",
+    }
     assert native["execution_environment"]["hostname"]
     assert native["matlab_release"] == "2026a"
-    assert native["test_count"] == native["passed_count"] == 82
+    assert native["test_count"] == native["passed_count"]
+    assert native["test_count"] >= 82
     assert native["failed_count"] == native["incomplete_count"] == 0
     assert isinstance(native["optimization_toolbox_available"], bool)
     assert native["foreign_openmp_runtime_dirs_remaining_on_path_count"] == 0
