@@ -300,7 +300,7 @@ Bell--Abell soft-edge fixtureを要求せず、利用者が`PlanarDesignOrbit`�
 固定1パス経路は`FFAGFixedDesignOrbitTargetFamily`を受け取り、Enge profileも周期軌道探索も挿入しない。
 `validation_ffag_full_field_c_yoke.py`もBell--Abellをfixture生成にだけ使い、最適化本体へは軌道列と
 target matrix列を直接渡すよう変更した。Python関連79件、MATLAB fallback 15件、両MATLAB wrapperの
-Code Analyzer 0件を確認した。C-yokeのcompute-host再実行は未実施である。
+Code Analyzer 0件を確認した。
 
 ### 5.6 C-yoke HEX compute preflight
 
@@ -313,8 +313,31 @@ CoilBuilder loopとの交差体積は0、実測clearance 30 mmは要求20 mmを�
 `validation_ffag_full_field_c_yoke.py --preflight-only`を追加し、同じ入力契約を
 `C:\temp\ffag_c_yoke_direct_api\preflight_direct_api.json`へ保存した。3軌道×16区間、空気体積要素0、
 直接入力target matrix契約を含む5 gateがすべてtrueである。preflightはChargeGramを作らず、
-最適化を開始しない。mdx/hibinoは2026-08-21の再試行でもSSH timeoutだったため、42k DOF本計算は
-未起動である。接続復帰後にassetをcompute hostの`C:\temp`へ転送し、同じscriptから本計算を始める。
+最適化を開始しない。
+
+### 5.7 100号機での42k DOF数値検証
+
+mdx/hibinoは2026-08-24まで停止予定なので、100号機`intel11`へ同じVOL/STEPを転送し、SHA-256一致後に
+42,480 BDM1 DOFの本計算を実施した。これは性能測定ではない。`--no-record-performance`を追加し、
+結果JSONから`timings_s`、H-matrix build内訳、peak working setを除外した。3エネルギー、各16区間、
+材料1更新ずつをrestartで3巡し、全巡で10 gateがtrue、binary topologyと完全HDiv再解法を維持した。
+
+| 巡 | active要素 | 更新 | exact transfer-map最大band比 | 候補縮約 |
+|---:|---:|---|---:|---|
+| 1 | 720→732 | 12追加 | 40.8597→40.8007 | 276候補、ACA 8、TSVD 8 |
+| 2 | 732→743 | 11追加 | 40.8007→38.5964 | 288候補、ACA 10、TSVD 9 |
+| 3 | 743→735 | 8削除 | 38.5964→38.3440 | 311候補、ACA 15、TSVD 10 |
+
+3巡目は`clustered-removal-aca-qr-tsvd-adaptive-trust-full-resolve`を選び、追加だけでなく削除側も
+実規模モデルで作動した。全候補の近似予測だけでは受理せず、各巡でexact fixed one-pass map gateを
+通している。一方、最終band比38.344は許容値1を大きく超え、`status=pass`は計算契約とgateの合格で
+あって任意transfer matrix再現の収束を意味しない。最適化電流scaleも6.11918、各coilの実効電流は
+約1.530 MAなので、これはPoC途中結果であり実機設計値ではない。
+
+結果はLABと100号機の`C:\temp\ffag_c_yoke_direct_api`に
+`full_direct_api_1iter_100.json`、`full_direct_api_restart2_100.json`、
+`full_direct_api_restart3_100.json`として保存した。mdx/hibino復帰まではLAB/100号機で数値正当性だけを
+確認し、計算時間・速度・スケーリングを測定、比較、主張しない。
 
 ## 6. これまで分かった失敗原因
 
@@ -357,7 +380,9 @@ transfer matrixは設計軌道が決まらないと定義できないため、�
 8. 軌道、ギャップ、コイルは固定非設計領域とし、ヨーク・磁極端部だけを動かす。
 9. 穴を絶対禁止にはしないが、加速器磁石では連結性・加工性を優先し、穴は積極的な設計自由度に
    しない。鉄連結性と外部空気連結性を検査する。
-10. Scratchは`C:\temp`だけを使う。重いvalidationはidleなmdx、またはhibinoで実行する。
+10. Scratchは`C:\temp`だけを使う。2026-08-24まではmdx/hibinoを使用せず、LAB/100号機で
+    数値正当性だけを検証する。この期間は計算時間・速度・スケーリングを測定、比較、主張しない。
+    復帰後の重いvalidationはidleなmdx、またはhibinoで実行する。
 11. 共有worktreeの他ユーザー・他agentの未コミット変更を変更・削除・commitしない。
 
 ## 8. Obika君に最初に進めてほしい中核タスク
@@ -376,7 +401,8 @@ transfer matrixは設計軌道が決まらないと定義できないため、�
 4. **完了**: 4・6・8個の滑らかなmodeで任意mapの小摂動を再現した。exact band比は順に
    `0.997`、`0.225`、`0.999`で、8 modeまでACA--QR--TSVDの保持rankとdense oracle parityを確認した。
    利用者入力の設計軌道・target map APIと小規模DOP853独立軌道cross-checkまで完了した。
-   次はcompute-host C-yoke再実行と実規模側の独立経路である。
+   42,480 BDM1 DOF C-yokeは100号機で3巡し、追加・削除とexact full-resolve gateまで確認した。
+   次は最終band比38.344を下げる外側再線形化の改善と、実規模側の独立tracking経路である。
 
 単純問題で壊れた時点でTURBO実問題へ進まず、candidate model、離散oracle、形状実現、軌道復元の
 どの段で失敗したかを分離する。
@@ -588,7 +614,8 @@ python -m pytest -q `
 - `e724977e6` `test(topopt): cross-check reclosed maps with DOP853`
 - `c1bbf9447` `test(topopt): add C-yoke compute preflight`
 
-この10本は現在のブランチ上で直列になっている。
+この10本は現在のブランチ上で直列になっている。100号機数値検証と計測無効モードは、この文書の
+5.7節および`validation_ffag_full_field_c_yoke.py --no-record-performance`を参照する。
 
 ## 12. Scratchの扱い
 
@@ -617,5 +644,6 @@ python -m pytest -q `
 > 98.2%予測を最終形状の達成と誤認せず、現在55.3%の段4完全閉ループを、受理済み外側再線形化
 > により改善することです。各反復でrank、条件数、clip履歴、gross/net材料量、面高さ、mesh品質、
 > bend/orbit guard、完全solve後transfer matrixを記録してください。有限差分はoptimizerに使わず、
-> NGSolveのFE plumbingをPythonで再実装しないでください。重い計算はidleなmdxまたはhibinoで行い、
+> NGSolveのFE plumbingをPythonで再実装しないでください。2026-08-24まではLAB/100号機で数値正当性
+> だけを検証し、計算時間を測定しないでください。復帰後の重い計算はidleなmdxまたはhibinoで行い、
 > 既存の未コミット変更を壊さないでください。
