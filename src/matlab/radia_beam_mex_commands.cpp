@@ -5,6 +5,7 @@
 #include "rad_beam_transfer.h"
 #include "rad_lie_map_batch.h"
 #include "rad_lie_map_kernel.h"
+#include "rad_hdiv_field_evaluator.h"
 #include "rad_orbit_tracker.h"
 
 #include <algorithm>
@@ -1508,6 +1509,25 @@ void LieApplyDragtFinnBatch(int nlhs, mxArray* plhs[], int nrhs,
     plhs[0] = output;
 }
 
+mxArray* OrbitTrackResultStruct(
+        mxArray* positions, mxArray* tangents, mxArray* stations,
+        mxArray* curvature, const rad_orbit::OrbitTrackResult& tracked) {
+    const char* names[] = {
+        "positions_m", "tangents", "stations_m", "signed_curvature_per_m",
+        "length_m", "out_of_plane_m", "out_of_plane_slope"};
+    mxArray* output = mxCreateStructMatrix(1, 1, 7, names);
+    mxSetField(output, 0, "positions_m", positions);
+    mxSetField(output, 0, "tangents", tangents);
+    mxSetField(output, 0, "stations_m", stations);
+    mxSetField(output, 0, "signed_curvature_per_m", curvature);
+    mxSetField(output, 0, "length_m", mxCreateDoubleScalar(tracked.length_m));
+    mxSetField(output, 0, "out_of_plane_m",
+               mxCreateDoubleScalar(tracked.out_of_plane_m));
+    mxSetField(output, 0, "out_of_plane_slope",
+               mxCreateDoubleScalar(tracked.out_of_plane_slope));
+    return output;
+}
+
 void TrackReferenceOrbit3DCommand(int nlhs, mxArray* plhs[], int nrhs,
                                   const mxArray* prhs[]) {
     if (nrhs != 2 || nlhs != 1)
@@ -1515,10 +1535,6 @@ void TrackReferenceOrbit3DCommand(int nlhs, mxArray* plhs[], int nrhs,
             "result = radia_mex('beam.orbit.track_reference_3d', config)");
     const mxArray* config = prhs[1];
     RequireScalarStruct(config);
-    // The HDiv iron evaluator is a pybind-owned handle, so the MEX route
-    // currently drives Radia-object sources only (coils, magnet blocks,
-    // containers); the iron term joins once an evaluator handle exists in
-    // the MEX registry.
     const double radia_object = Scalar(
         Field(config, "radia_object"), "radia_object", 0.0, false);
     if (radia_object < 1.0 || radia_object != std::floor(radia_object))
@@ -1562,20 +1578,8 @@ void TrackReferenceOrbit3DCommand(int nlhs, mxArray* plhs[], int nrhs,
             rigidity, point, direction, exit_x_m, step_m, maximum_path_m,
             planarity_tolerance_m, station_count, mxGetPr(positions),
             mxGetPr(tangents), mxGetPr(stations), mxGetPr(curvature));
-    const char* names[] = {
-        "positions_m", "tangents", "stations_m", "signed_curvature_per_m",
-        "length_m", "out_of_plane_m", "out_of_plane_slope"};
-    mxArray* output = mxCreateStructMatrix(1, 1, 7, names);
-    mxSetField(output, 0, "positions_m", positions);
-    mxSetField(output, 0, "tangents", tangents);
-    mxSetField(output, 0, "stations_m", stations);
-    mxSetField(output, 0, "signed_curvature_per_m", curvature);
-    mxSetField(output, 0, "length_m", mxCreateDoubleScalar(tracked.length_m));
-    mxSetField(output, 0, "out_of_plane_m",
-               mxCreateDoubleScalar(tracked.out_of_plane_m));
-    mxSetField(output, 0, "out_of_plane_slope",
-               mxCreateDoubleScalar(tracked.out_of_plane_slope));
-    plhs[0] = output;
+    plhs[0] = OrbitTrackResultStruct(
+        positions, tangents, stations, curvature, tracked);
 }
 
 }  // namespace
@@ -1674,4 +1678,83 @@ void BeamTrackGridFunction(
         radia::beam::Tracker(equation, stepper).Track(state, plan));
     ReplaceStructField(plhs[0], "backend", mxCreateString(
         "native-cpp-ngsolve-gridfunction-mex"));
+}
+
+void BeamTrackReferenceOrbitToPlane(
+        std::shared_ptr<rad_hdiv::HDivFieldEvaluator> field, int nlhs,
+        mxArray* plhs[], int nrhs, const mxArray* prhs[]) {
+    if (!field || nrhs != 3 || nlhs != 1)
+        throw std::invalid_argument(
+            "result = radia_mex('beam.orbit.track_reference_to_plane', "
+            "field_evaluator_handle, config)");
+    const mxArray* config = prhs[2];
+    RequireScalarStruct(config);
+    const double iron_scale = Scalar(
+        Field(config, "iron_scale"), "iron_scale", 1.0, true);
+    const mxArray* algorithm_value = Field(config, "iron_algorithm");
+    const std::string iron_algorithm = algorithm_value
+        ? Text(algorithm_value, "iron_algorithm") : "auto";
+    const int iron_algorithm_code = iron_algorithm == "auto" ? -1
+        : (iron_algorithm == "direct" ? 0
+        : (iron_algorithm == "tree" ? 1 : -2));
+    if (iron_algorithm_code < -1)
+        throw std::invalid_argument(
+            "iron_algorithm must be 'auto', 'direct', or 'tree'");
+    const double radia_object = Scalar(
+        Field(config, "radia_object"), "radia_object", -1.0, true);
+    if (!((radia_object == -1.0) ||
+          (radia_object >= 1.0 && radia_object == std::floor(radia_object))))
+        throw std::invalid_argument(
+            "radia_object must be -1 (absent) or a positive object key");
+    const bool mirror_z = OptionalBoolean(
+        Field(config, "mirror_z"), "mirror_z", false);
+    const double rigidity = Scalar(
+        Field(config, "magnetic_rigidity_t_m"),
+        "magnetic_rigidity_t_m", 0.0, false);
+    const mxArray* constant_value = Field(config, "constant_field_t");
+    const mxArray* point_value = Field(config, "entrance_point_m");
+    const mxArray* direction_value = Field(config, "entrance_direction");
+    const mxArray* normal_value = Field(config, "exit_plane_normal");
+    const double* constant_field = RealData(
+        constant_value, "constant_field_t");
+    const double* point = RealData(point_value, "entrance_point_m");
+    const double* direction = RealData(
+        direction_value, "entrance_direction");
+    const double* normal = RealData(normal_value, "exit_plane_normal");
+    if (mxGetNumberOfElements(constant_value) != 3
+        || mxGetNumberOfElements(point_value) != 3
+        || mxGetNumberOfElements(direction_value) != 3
+        || mxGetNumberOfElements(normal_value) != 3)
+        throw std::invalid_argument(
+            "constant field, entrance point/direction, and exit-plane "
+            "normal must have three entries");
+    const double exit_plane_offset_m = Scalar(
+        Field(config, "exit_plane_offset_m"),
+        "exit_plane_offset_m", 0.0, false);
+    const double step_m = Scalar(
+        Field(config, "step_m"), "step_m", 1.0e-3, true);
+    const double maximum_path_m = Scalar(
+        Field(config, "maximum_path_m"), "maximum_path_m", 0.14, true);
+    const double planarity_tolerance_m = Scalar(
+        Field(config, "planarity_tolerance_m"), "planarity_tolerance_m",
+        1.0e-6, true);
+    const std::size_t station_count = PositiveInteger(
+        Field(config, "station_count"), "station_count", 65, true);
+    if (station_count < 2)
+        throw std::invalid_argument("station_count must be at least 2");
+    // (3, N) MATLAB blocks are byte-identical to (N, 3) row-major buffers.
+    mxArray* positions = mxCreateDoubleMatrix(3, station_count, mxREAL);
+    mxArray* tangents = mxCreateDoubleMatrix(3, station_count, mxREAL);
+    mxArray* stations = mxCreateDoubleMatrix(station_count, 1, mxREAL);
+    mxArray* curvature = mxCreateDoubleMatrix(station_count - 1, 1, mxREAL);
+    const rad_orbit::OrbitTrackResult tracked =
+        rad_orbit::TrackReferenceOrbit3DToPlane(
+            field.get(), iron_scale, iron_algorithm_code,
+            static_cast<int>(radia_object), mirror_z ? 1 : 0,
+            constant_field, rigidity, point, direction, normal,
+            exit_plane_offset_m, step_m, maximum_path_m,
+            planarity_tolerance_m, station_count, mxGetPr(positions),
+            mxGetPr(tangents), mxGetPr(stations), mxGetPr(curvature));
+    plhs[0] = OrbitTrackResultStruct(
+        positions, tangents, stations, curvature, tracked);
 }

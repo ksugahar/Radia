@@ -464,6 +464,7 @@ def combined_function_linear_optics(curvature, normalized_gradient,
                                     eta_prime0=0.0,
                                     curvature_jacobian=None,
                                     gradient_jacobian=None,
+                                    segment_length_jacobian=None,
                                     stability_tolerance=1e-10):
     """Propagate dispersion and betatron maps through a combined-function bend.
 
@@ -484,10 +485,12 @@ def combined_function_linear_optics(curvature, normalized_gradient,
     if (np.any(ds<=0.0) or not np.all(np.isfinite(np.r_[h,k,ds,eta0,eta_prime0]))):
         raise ValueError("combined-function optics inputs must be finite and lengths positive")
 
-    supplied=(curvature_jacobian is not None or gradient_jacobian is not None)
+    supplied=(curvature_jacobian is not None or gradient_jacobian is not None
+              or segment_length_jacobian is not None)
     if supplied:
         raw=(curvature_jacobian if curvature_jacobian is not None
-             else gradient_jacobian)
+             else (gradient_jacobian if gradient_jacobian is not None
+                   else segment_length_jacobian))
         raw=np.asarray(raw,dtype=float)
         if raw.ndim!=2 or raw.shape[0]!=h.size:
             raise ValueError("combined-function Jacobians need shape (n_segment,n_parameter)")
@@ -496,13 +499,18 @@ def combined_function_linear_optics(curvature, normalized_gradient,
             np.asarray(curvature_jacobian,dtype=float))
         dk=(np.zeros((h.size,n_parameter)) if gradient_jacobian is None else
             np.asarray(gradient_jacobian,dtype=float))
-        if dh.shape!=(h.size,n_parameter) or dk.shape!=(h.size,n_parameter):
-            raise ValueError("curvature and gradient Jacobians must have matching shapes")
-        if not np.all(np.isfinite(np.r_[dh.ravel(),dk.ravel()])):
+        dds=(np.zeros((h.size,n_parameter))
+             if segment_length_jacobian is None else
+             np.asarray(segment_length_jacobian,dtype=float))
+        if (dh.shape!=(h.size,n_parameter) or dk.shape!=(h.size,n_parameter)
+                or dds.shape!=(h.size,n_parameter)):
+            raise ValueError(
+                "curvature, gradient, and length Jacobians must have matching shapes")
+        if not np.all(np.isfinite(np.r_[dh.ravel(),dk.ravel(),dds.ravel()])):
             raise ValueError("combined-function Jacobians must be finite")
     else:
         n_parameter=0
-        dh=np.zeros((h.size,0));dk=np.zeros((h.size,0))
+        dh=np.zeros((h.size,0));dk=np.zeros((h.size,0));dds=np.zeros((h.size,0))
 
     z=np.array([float(eta0),float(eta_prime0),1.0])
     dz=np.zeros((3,n_parameter))
@@ -521,7 +529,8 @@ def combined_function_linear_optics(curvature, normalized_gradient,
         vertical_propagator=expm(vertical_generator*length)
         for parameter in range(n_parameter):
             dhi=dh[segment,parameter];dki=dk[segment,parameter]
-            if dhi == 0.0 and dki == 0.0:
+            dlength=dds[segment,parameter]
+            if dhi == 0.0 and dki == 0.0 and dlength == 0.0:
                 dprop.append(np.zeros((3,3)))
                 dvertical_prop.append(np.zeros((2,2)))
                 continue
@@ -529,10 +538,12 @@ def combined_function_linear_optics(curvature, normalized_gradient,
             derivative[1,0]=-(2.0*hi*dhi+dki)
             derivative[1,2]=dhi
             dprop.append(expm_frechet(
-                scaled,derivative*length,compute_expm=False))
+                scaled,derivative*length+generator*dlength,
+                compute_expm=False))
             vertical_derivative=np.array([[0.0,0.0],[dki,0.0]])
             dvertical_prop.append(expm_frechet(
-                vertical_generator*length,vertical_derivative*length,
+                vertical_generator*length,
+                vertical_derivative*length+vertical_generator*dlength,
                 compute_expm=False))
         z=propagator@old_z
         radial=propagator[:2,:2]@old_radial
@@ -624,17 +635,26 @@ def _forward_ad_matrix(rows, parameter_count):
     return value, tangent
 
 
-def _forward_ad_expm(generator, generator_tangent, length):
+def _forward_ad_expm(generator, generator_tangent, length,
+                     length_tangent=None):
     """Differentiate one matrix exponential in every seeded direction."""
     from scipy.linalg import expm, expm_frechet
 
     scaled = np.asarray(generator, dtype=float) * float(length)
     propagator = expm(scaled)
     tangent = np.empty_like(generator_tangent, dtype=float)
+    if length_tangent is None:
+        dlength = np.zeros(tangent.shape[0])
+    else:
+        dlength = np.asarray(length_tangent, dtype=float).reshape(-1)
+        if dlength.shape != (tangent.shape[0],):
+            raise ValueError("length_tangent must match the parameter count")
     for parameter, direction in enumerate(generator_tangent):
-        if np.any(direction):
+        scaled_direction = (
+            direction*float(length) + generator*dlength[parameter])
+        if np.any(scaled_direction):
             tangent[parameter] = expm_frechet(
-                scaled, direction * float(length), compute_expm=False)
+                scaled, scaled_direction, compute_expm=False)
         else:
             tangent[parameter].fill(0.0)
     return propagator, tangent
@@ -656,6 +676,7 @@ def _forward_ad_left_compose(
 def combined_function_transfer_map(
         curvature, normalized_gradient, segment_lengths, *,
         curvature_jacobian=None, gradient_jacobian=None,
+        segment_length_jacobian=None,
         response_entries=None, stability_tolerance=1e-10):
     """Return the 6-by-6 first-order map of a combined-function bend.
 
@@ -685,10 +706,12 @@ def combined_function_transfer_map(
             "lengths positive")
 
     supplied = (curvature_jacobian is not None
-                or gradient_jacobian is not None)
+                or gradient_jacobian is not None
+                or segment_length_jacobian is not None)
     if supplied:
         raw = (curvature_jacobian if curvature_jacobian is not None
-               else gradient_jacobian)
+               else (gradient_jacobian if gradient_jacobian is not None
+                     else segment_length_jacobian))
         raw = np.asarray(raw, dtype=float)
         if raw.ndim != 2 or raw.shape[0] != h.size:
             raise ValueError(
@@ -701,16 +724,22 @@ def combined_function_transfer_map(
         dk = (np.zeros((h.size, n_parameter))
               if gradient_jacobian is None
               else np.asarray(gradient_jacobian, dtype=float))
+        dds = (np.zeros((h.size, n_parameter))
+               if segment_length_jacobian is None
+               else np.asarray(segment_length_jacobian, dtype=float))
         if (dh.shape != (h.size, n_parameter)
                 or dk.shape != (h.size, n_parameter)
-                or not np.all(np.isfinite(np.r_[dh.ravel(), dk.ravel()]))):
+                or dds.shape != (h.size, n_parameter)
+                or not np.all(np.isfinite(
+                    np.r_[dh.ravel(), dk.ravel(), dds.ravel()]))):
             raise ValueError(
-                "curvature and gradient transfer-map Jacobians must have "
+                "curvature, gradient, and length transfer-map Jacobians must have "
                 "matching finite shapes")
     else:
         n_parameter = 0
         dh = np.zeros((h.size, 0))
         dk = np.zeros((h.size, 0))
+        dds = np.zeros((h.size, 0))
 
     entries = (_DEFAULT_TRANSFER_RESPONSE_ENTRIES
                if response_entries is None else
@@ -739,7 +768,7 @@ def combined_function_transfer_map(
             [0.0, 0.0, 0.0, 0.0],
         ], n_parameter)
         propagator, dpropagator = _forward_ad_expm(
-            generator, generator_tangent, length)
+            generator, generator_tangent, length, dds[segment])
         horizontal, dhorizontal = _forward_ad_left_compose(
             propagator, dpropagator, horizontal, dhorizontal)
 
@@ -748,7 +777,8 @@ def combined_function_transfer_map(
             [k_ad, 0.0],
         ], n_parameter)
         vertical_propagator, dvertical_propagator = _forward_ad_expm(
-            vertical_generator, vertical_generator_tangent, length)
+            vertical_generator, vertical_generator_tangent,
+            length, dds[segment])
         vertical, dvertical = _forward_ad_left_compose(
             vertical_propagator, dvertical_propagator,
             vertical, dvertical)
@@ -757,6 +787,7 @@ def combined_function_transfer_map(
         h, k, ds,
         curvature_jacobian=(dh if supplied else None),
         gradient_jacobian=(dk if supplied else None),
+        segment_length_jacobian=(dds if supplied else None),
         stability_tolerance=stability_tolerance)
     matrix = np.eye(6)
     matrix_jacobian = np.zeros((n_parameter, 6, 6))
@@ -785,7 +816,8 @@ def combined_function_transfer_map(
 def combined_function_transfer_map_from_field_response(
         field_response, segment_lengths, magnetic_rigidity, *,
         field_response_jacobian=None, curvature_sign=1.0,
-        gradient_sign=1.0, response_entries=None,
+        gradient_sign=1.0, segment_length_jacobian=None,
+        response_entries=None,
         stability_tolerance=1e-10):
     """Fuse row-major HDiv-MMM ``[B..., dB/dx...]`` rows into a bend map."""
     values = np.asarray(field_response, dtype=float).reshape(-1)
@@ -819,6 +851,7 @@ def combined_function_transfer_map_from_field_response(
         lengths,
         curvature_jacobian=curvature_jacobian,
         gradient_jacobian=gradient_jacobian,
+        segment_length_jacobian=segment_length_jacobian,
         response_entries=response_entries,
         stability_tolerance=stability_tolerance)
 

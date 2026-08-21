@@ -1455,6 +1455,7 @@ mxArray* Commands() {
         "beam.lie.dragt_finn_factorize",
         "beam.lie.apply_dragt_finn_batch",
         "beam.orbit.track_reference_3d",
+        "beam.orbit.track_reference_to_plane",
         "hcurl.eddy_cln.native_basis",
         "hcurl.topopt.operator.create", "hcurl.topopt.operator.destroy",
         "hcurl.topopt.operator.info", "hcurl.topopt.operator.matvec",
@@ -1550,12 +1551,14 @@ mxArray* Commands() {
         "hacapk.charge_gram.solve_configured_linear_material_auto_prec_many",
         "hacapk.charge_gram.configured_field_functional_rows",
         "hacapk.charge_gram.configured_field_functional_rows_directional_derivative",
+        "hacapk.charge_gram.configured_field_values_shape_derivative",
         "hacapk.charge_gram.create_field_evaluator",
         "hacapk.charge_gram.create_planar_field_evaluator",
         "hacapk.charge_gram.stats",
         "hdiv.field_evaluator.from_tet", "hdiv.field_evaluator.from_cloud",
         "hdiv.field_evaluator.from_curved_tet", "hdiv.field_evaluator.destroy",
-        "hdiv.field_evaluator.field", "hdiv.field_evaluator.candidate_algorithm",
+        "hdiv.field_evaluator.field", "hdiv.field_evaluator.field_gradient",
+        "hdiv.field_evaluator.candidate_algorithm",
         "hdiv.field_evaluator.last_algorithm", "hdiv.field_evaluator.stats",
         "hdiv.field_evaluator.as_coefficient",
         "hdiv.planar_evaluator.create", "hdiv.planar_evaluator.destroy",
@@ -8520,6 +8523,52 @@ void ChargeGramConfiguredFieldFunctionalRowsDirectionalDerivative(
         static_cast<std::size_t>(holder.manager->ConfiguredNFace()));
 }
 
+void ChargeGramConfiguredFieldValuesShapeDerivative(
+    int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[]) {
+    CheckArity(nrhs, 7, nlhs, 1,
+        "values = radia_mex('hacapk.charge_gram."
+        "configured_field_values_shape_derivative', handle, observations, "
+        "magnetization, magnetization_jacobian, cell_vertex_velocity, "
+        "face_vertex_velocity)");
+    ChargeGramHandle& holder = ChargeGram(Handle(prhs[1]));
+    std::size_t n_observations = 0, observation_components = 0;
+    auto observations = RealMatrix(
+        prhs[2], n_observations, observation_components, "observations");
+    auto magnetization = RealVector(prhs[3], "magnetization");
+    std::size_t n_modes = 0, state_dofs = 0;
+    auto magnetization_jacobian = RealMatrix(
+        prhs[4], n_modes, state_dofs, "magnetization_jacobian");
+    std::size_t cell_modes = 0, n_cells = 0, cell_nodes = 0;
+    std::size_t cell_components = 0;
+    auto cell_velocity = RealTensor4(
+        prhs[5], cell_modes, n_cells, cell_nodes, cell_components,
+        "cell_vertex_velocity");
+    std::size_t face_modes = 0, n_faces = 0, face_nodes = 0;
+    std::size_t face_components = 0;
+    auto face_velocity = RealTensor4(
+        prhs[6], face_modes, n_faces, face_nodes, face_components,
+        "face_vertex_velocity");
+    const std::size_t n_face =
+        static_cast<std::size_t>(holder.manager->ConfiguredNFace());
+    if (n_observations == 0 || observation_components != 3)
+        BadArgument("observations must have shape n_observations-by-3");
+    if (n_modes == 0 || state_dofs != n_face ||
+        magnetization.size() != n_face)
+        BadArgument(
+            "state arrays must have shape n_face and n_modes-by-n_face");
+    if (cell_modes != n_modes || face_modes != n_modes || cell_nodes != 4 ||
+        face_nodes != 3 || cell_components != 3 || face_components != 3)
+        BadArgument(
+            "velocity arrays must be n_modes-by-n_host-by-n_node-by-3 for flat TET geometry");
+    if (n_modes > static_cast<std::size_t>(std::numeric_limits<int>::max()))
+        BadArgument("the mode count exceeds the native integer range");
+    auto values = holder.manager->ConfiguredFieldValuesShapeDerivative(
+        observations, magnetization, magnetization_jacobian,
+        static_cast<int>(n_modes), cell_velocity, face_velocity);
+    plhs[0] = RealTensor3Output(
+        values, n_modes, n_observations, static_cast<std::size_t>(3));
+}
+
 void ChargeGramCreateFieldEvaluator(int nlhs, mxArray* plhs[], int nrhs,
                                     const mxArray* prhs[]) {
     if (nlhs != 1 || (nrhs != 3 && nrhs != 9))
@@ -8650,6 +8699,20 @@ void HDivFieldField(int nlhs, mxArray* plhs[], int nrhs,
     std::vector<double> output(rows * 3, 0.0);
     evaluator->Evaluate(observations.data(), rows, output.data(), algorithm);
     plhs[0] = RealMatrixOutput(output, rows, 3);
+}
+
+void HDivFieldGradient(int nlhs, mxArray* plhs[], int nrhs,
+                       const mxArray* prhs[]) {
+    CheckArity(nrhs, 3, nlhs, 1,
+        "gradient = radia_mex('hdiv.field_evaluator.field_gradient', "
+        "handle, observations)");
+    const auto evaluator = Field(Handle(prhs[1]));
+    std::size_t rows = 0, cols = 0;
+    auto observations = RealMatrix(prhs[2], rows, cols, "observations");
+    if (cols != 3) BadArgument("observations must be N-by-3");
+    std::vector<double> gradient(rows * 9, 0.0);
+    evaluator->EvaluateGradient(observations.data(), rows, gradient.data());
+    plhs[0] = RealTensor3Output(gradient, rows, 3, 3);
 }
 
 void HDivFieldCandidateAlgorithm(int nlhs, mxArray* plhs[], int nrhs,
@@ -10346,6 +10409,16 @@ void Dispatch(const std::string& command, int nlhs, mxArray* plhs[], int nrhs,
             std::move(field), nlhs, plhs, nrhs, prhs);
         return;
     }
+    if (command == "beam.orbit.track_reference_to_plane") {
+        if (nrhs != 3)
+            BadArgument(
+                "result = radia_mex('beam.orbit.track_reference_to_plane', "
+                "field_evaluator_handle, config)");
+        auto field = Field(Handle(prhs[1]));
+        BeamTrackReferenceOrbitToPlane(
+            std::move(field), nlhs, plhs, nrhs, prhs);
+        return;
+    }
     if (DispatchBeamCommand(command, nlhs, plhs, nrhs, prhs))
         return;
     if (command == "axifem.q1_magnetic_element_matrices") {
@@ -10796,6 +10869,16 @@ void Dispatch(const std::string& command, int nlhs, mxArray* plhs[], int nrhs,
                    "configured_field_functional_rows_directional_derivative") {
         ChargeGramConfiguredFieldFunctionalRowsDirectionalDerivative(
             nlhs, plhs, nrhs, prhs);
+        return;
+    }
+    if (command == "hacapk.charge_gram."
+                   "configured_field_values_shape_derivative") {
+        ChargeGramConfiguredFieldValuesShapeDerivative(
+            nlhs, plhs, nrhs, prhs);
+        return;
+    }
+    if (command == "hdiv.field_evaluator.field_gradient") {
+        HDivFieldGradient(nlhs, plhs, nrhs, prhs);
         return;
     }
     if (command == "hacapk.charge_gram_derivative.destroy") {

@@ -13,6 +13,7 @@ from radia.ffag_topopt import (
     enge_fringe_integrals,
     magnetic_rigidity_from_kinetic_energy,
     recover_periodic_planar_closed_orbit,
+    recover_periodic_planar_closed_orbit_native,
 )
 from radia.isochronous_topopt import (
     combined_function_transfer_map_from_field_response,
@@ -277,6 +278,42 @@ def test_full_field_periodic_orbit_recovers_uniform_field_circle():
     np.testing.assert_allclose(result.field_response[:32], bending_field)
     np.testing.assert_allclose(result.field_response[32:], 0.0, atol=1e-13)
     assert result.transfer.matrix.shape == (6, 6)
+
+
+def test_native_periodic_orbit_recovery_matches_uniform_field_circle():
+    class UniformField:
+        def __init__(self, bending_field):
+            self.bending_field = float(bending_field)
+
+        def b_field(self, points):
+            values = np.asarray(points, dtype=float)
+            return np.broadcast_to(
+                [0.0, 0.0, self.bending_field], values.shape)
+
+    rigidity = 1.7
+    radius = 3.2
+    angle = 0.25
+    bending_field = rigidity / radius
+    result = recover_periodic_planar_closed_orbit_native(
+        UniformField(bending_field),
+        constant_field_t=(0.0, 0.0, bending_field),
+        magnetic_rigidity=rigidity, cell_angle_rad=angle,
+        initial_radius_m=1.03 * radius,
+        initial_incidence_angle_rad=0.02, n_segments=32,
+        gradient_offset=0.002, tracking_step_m=5.0e-4)
+
+    np.testing.assert_allclose(result.entrance_radius_m, radius, atol=3e-9)
+    np.testing.assert_allclose(
+        result.path_length_m, radius * angle, atol=3e-9)
+    np.testing.assert_allclose(
+        result.orbit.signed_curvature, 1.0 / radius, atol=2e-12)
+    assert abs(result.entrance_incidence_angle_rad) < 2e-9
+    assert result.periodic_position_residual_m < 3e-9
+    assert result.periodic_tangent_residual < 3e-9
+    assert result.vertical_position_residual_m == 0.0
+    assert result.vertical_tangent_residual == 0.0
+    np.testing.assert_allclose(result.field_response[:32], bending_field)
+    np.testing.assert_allclose(result.field_response[32:], 0.0, atol=1e-13)
 
 
 def test_two_rigidity_bdm1_hex_topology_reaches_both_cell_maps():

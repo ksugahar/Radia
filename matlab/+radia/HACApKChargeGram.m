@@ -632,6 +632,29 @@ classdef HACApKChargeGram < handle
                 double(cellVertexVelocity), double(faceVertexVelocity));
         end
 
+        function values = configuredFieldValuesShapeDerivative( ...
+                obj, observations, magnetization, magnetizationJacobian, ...
+                cellVertexVelocity, faceVertexVelocity)
+            %CONFIGUREDFIELDVALUESSHAPEDERIVATIVE Total C*dm+dC*m tangent.
+            % values has shape nMode-by-nObservation-by-3. The native
+            % flat-TET/TRI kernel includes the 1/(4*pi) normalization.
+            arguments
+                obj
+                observations (:,3) double
+                magnetization double
+                magnetizationJacobian double
+                cellVertexVelocity double
+                faceVertexVelocity double
+            end
+            obj.assertAlive();
+            values = radia.internal.callMex( ...
+                ['hacapk.charge_gram.' ...
+                 'configured_field_values_shape_derivative'], ...
+                obj.NativeHandle, double(observations), ...
+                double(magnetization), double(magnetizationJacobian), ...
+                double(cellVertexVelocity), double(faceVertexVelocity));
+        end
+
         function evaluator = createFieldEvaluator(obj, magnetization, options)
             arguments
                 obj

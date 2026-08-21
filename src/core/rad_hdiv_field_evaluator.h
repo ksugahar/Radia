@@ -80,6 +80,18 @@ public:
     void EvaluateSerial(const double* observations, std::size_t n_observations,
                         double* output, Algorithm algorithm = Algorithm::Auto) const;
 
+    // Exact spatial Jacobian dH_i/dx_j of the flat analytic TET/TRI or point
+    // source representation.  The result is row-major (n,3,3).  Curved and
+    // retained-cloud element representations fail loudly: their gradient
+    // kernel is not yet an optimizer contract.  The direct analytic source
+    // sum is always used; ``algorithm`` is intentionally absent.
+    void EvaluateGradient(const double* observations,
+                          std::size_t n_observations,
+                          double* gradient_out) const;
+    void EvaluateGradientSerial(const double* observations,
+                                std::size_t n_observations,
+                                double* gradient_out) const;
+
     Algorithm AlgorithmFor(std::size_t n_observations) const;
     static Algorithm ParseAlgorithm(const std::string& name);
     static const char* AlgorithmName(Algorithm algorithm);

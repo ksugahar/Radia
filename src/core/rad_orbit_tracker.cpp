@@ -31,8 +31,10 @@ namespace {
 struct CompositeField {
     const rad_hdiv::HDivFieldEvaluator* iron;
     double iron_scale;
+    rad_hdiv::HDivFieldEvaluator::Algorithm iron_algorithm;
     int radia_object;
     bool mirror_z;
+    const double* constant_field;
 
     // Evaluate the composite field at n points (row-major (n,3)).
     void Evaluate(const double* points, std::size_t count,
@@ -50,8 +52,21 @@ struct CompositeField {
         std::vector<double> total_field(3*total, 0.0);
         if (iron) {
             std::vector<double> demag(3*total);
-            iron->Evaluate(stacked.data(), total, demag.data(),
-                           rad_hdiv::HDivFieldEvaluator::Algorithm::Auto);
+            // RK stages request one physical point (two with mirror_z).  The
+            // general evaluator intentionally source-parallelizes such tiny
+            // batches, but opening that inner parallel region at every RK
+            // stage is much more expensive than the analytic source sum.
+            // Preserve batch parallelism for the final midpoint collocation.
+            if (total <= 2
+                    && iron_algorithm
+                        != rad_hdiv::HDivFieldEvaluator::Algorithm::Direct)
+                iron->EvaluateSerial(
+                    stacked.data(), total, demag.data(),
+                    iron_algorithm);
+            else
+                iron->Evaluate(
+                    stacked.data(), total, demag.data(),
+                    iron_algorithm);
             for (std::size_t index = 0; index < 3*total; ++index)
                 total_field[index] += iron_scale * demag[index];
         }
@@ -68,6 +83,9 @@ struct CompositeField {
             for (std::size_t index = 0; index < 3*total; ++index)
                 total_field[index] += flux[index];
         }
+        for (std::size_t index = 0; index < total; ++index)
+            for (int axis = 0; axis < 3; ++axis)
+                total_field[3*index+axis] += constant_field[axis];
         if (mirror_z) {
             for (std::size_t index = 0; index < count; ++index) {
                 field_out[3*index] = 0.5 * (total_field[3*index]
@@ -166,15 +184,18 @@ void InterpolateState(const StepRecord& start, const StepRecord& end,
 
 }  // namespace
 
-OrbitTrackResult TrackReferenceOrbit3D(
+OrbitTrackResult TrackReferenceOrbit3DToPlane(
     const rad_hdiv::HDivFieldEvaluator* iron,
     double iron_scale,
+    int iron_algorithm,
     int radia_object,
     int mirror_z,
+    const double constant_field_t[3],
     double magnetic_rigidity,
     const double entrance_point[3],
     const double entrance_direction[3],
-    double exit_x_m,
+    const double exit_plane_normal[3],
+    double exit_plane_offset_m,
     double step_m,
     double maximum_path_m,
     double planarity_tolerance_m,
@@ -183,15 +204,28 @@ OrbitTrackResult TrackReferenceOrbit3D(
     double* tangents_out,
     double* stations_out,
     double* curvature_out) {
-    if (!entrance_point || !entrance_direction || !positions_out
+    if (!constant_field_t || !entrance_point || !entrance_direction
+        || !exit_plane_normal || !positions_out
         || !tangents_out || !stations_out || !curvature_out)
         throw std::invalid_argument("orbit tracker: null array pointer");
-    if (!iron && radia_object < 0)
+    const double constant_norm = std::sqrt(
+        constant_field_t[0]*constant_field_t[0]
+        + constant_field_t[1]*constant_field_t[1]
+        + constant_field_t[2]*constant_field_t[2]);
+    if (!iron && radia_object < 0 && !(constant_norm > 0.0))
         throw std::invalid_argument(
             "orbit tracker: at least one field source is required");
+    const double plane_normal_norm = std::sqrt(
+        exit_plane_normal[0]*exit_plane_normal[0]
+        + exit_plane_normal[1]*exit_plane_normal[1]
+        + exit_plane_normal[2]*exit_plane_normal[2]);
+    if (iron_algorithm < -1 || iron_algorithm > 1)
+        throw std::invalid_argument(
+            "orbit tracker: iron_algorithm must be -1 (auto), 0 (direct), "
+            "or 1 (tree)");
     if (!(magnetic_rigidity != 0.0) || !(step_m > 0.0)
         || !(maximum_path_m > step_m) || !(planarity_tolerance_m > 0.0)
-        || station_count < 2)
+        || !(plane_normal_norm > 0.0) || station_count < 2)
         throw std::invalid_argument(
             "orbit tracker: integration controls are invalid");
 
@@ -199,8 +233,14 @@ OrbitTrackResult TrackReferenceOrbit3D(
     // reuse this region instead of standing up a pool per field call.
     ngcore::RegionTaskManager task_manager;
 
-    const CompositeField field{iron, iron_scale, radia_object,
-                               mirror_z != 0};
+    const auto selected_algorithm = iron_algorithm < 0
+        ? rad_hdiv::HDivFieldEvaluator::Algorithm::Auto
+        : (iron_algorithm == 0
+            ? rad_hdiv::HDivFieldEvaluator::Algorithm::Direct
+            : rad_hdiv::HDivFieldEvaluator::Algorithm::Tree);
+    const CompositeField field{iron, iron_scale, selected_algorithm,
+                               radia_object, mirror_z != 0,
+                               constant_field_t};
     const double inverse_rigidity = 1.0 / magnetic_rigidity;
     const long long step_cap = static_cast<long long>(
         std::ceil(maximum_path_m / step_m)) + 1;
@@ -212,6 +252,16 @@ OrbitTrackResult TrackReferenceOrbit3D(
         current.r[axis] = entrance_point[axis];
         current.t[axis] = entrance_direction[axis];
     }
+    auto plane_value = [&](const double position[3]) {
+        return exit_plane_normal[0]*position[0]
+            + exit_plane_normal[1]*position[1]
+            + exit_plane_normal[2]*position[2]
+            - exit_plane_offset_m;
+    };
+    if (!(plane_value(current.r) < 0.0))
+        throw std::invalid_argument(
+            "orbit tracker: entrance must lie on the negative side of the "
+            "exit plane");
     StepRecord record{current, {0.0, 0.0, 0.0}};
     Acceleration(field, current, inverse_rigidity, record.acceleration);
     records.push_back(record);
@@ -224,17 +274,27 @@ OrbitTrackResult TrackReferenceOrbit3D(
         StepRecord next_record{next, {0.0, 0.0, 0.0}};
         Acceleration(field, next, inverse_rigidity, next_record.acceleration);
         records.push_back(next_record);
-        if (next.r[0] >= exit_x_m) {
-            // Bisect the Hermite x(tau) for the exit-plane crossing.
+        if (plane_value(next.r) >= 0.0) {
+            // Bisect the Hermite plane coordinate for the crossing.
             const StepRecord& lower = records[records.size()-2];
             const StepRecord& upper = records.back();
+            const double lower_value = plane_value(lower.state.r);
+            const double upper_value = plane_value(upper.state.r);
+            const double lower_slope = step_m*(
+                exit_plane_normal[0]*lower.state.t[0]
+                + exit_plane_normal[1]*lower.state.t[1]
+                + exit_plane_normal[2]*lower.state.t[2]);
+            const double upper_slope = step_m*(
+                exit_plane_normal[0]*upper.state.t[0]
+                + exit_plane_normal[1]*upper.state.t[1]
+                + exit_plane_normal[2]*upper.state.t[2]);
             double low = 0.0, high = 1.0;
             for (int iteration = 0; iteration < 80; ++iteration) {
                 const double middle = 0.5*(low + high);
-                const double x_value = Hermite(
-                    lower.state.r[0], step_m*lower.state.t[0],
-                    upper.state.r[0], step_m*upper.state.t[0], middle);
-                if (x_value < exit_x_m) low = middle; else high = middle;
+                const double value = Hermite(
+                    lower_value, lower_slope,
+                    upper_value, upper_slope, middle);
+                if (value < 0.0) low = middle; else high = middle;
             }
             crossing_tau = 0.5*(low + high);
             break;
@@ -242,7 +302,7 @@ OrbitTrackResult TrackReferenceOrbit3D(
     }
     if (crossing_tau < 0.0)
         throw std::runtime_error(
-            "reference particle did not cross the C-magnet exit plane");
+            "reference particle did not cross the requested exit plane");
 
     const std::size_t full_steps = records.size() - 2;
     const double length = (static_cast<double>(full_steps)
@@ -307,6 +367,33 @@ OrbitTrackResult TrackReferenceOrbit3D(
         curvature_out[midpoint] =
             -midpoint_field[3*midpoint+2] * inverse_rigidity;
     return result;
+}
+
+OrbitTrackResult TrackReferenceOrbit3D(
+    const rad_hdiv::HDivFieldEvaluator* iron,
+    double iron_scale,
+    int radia_object,
+    int mirror_z,
+    double magnetic_rigidity,
+    const double entrance_point[3],
+    const double entrance_direction[3],
+    double exit_x_m,
+    double step_m,
+    double maximum_path_m,
+    double planarity_tolerance_m,
+    std::size_t station_count,
+    double* positions_out,
+    double* tangents_out,
+    double* stations_out,
+    double* curvature_out) {
+    const double zero_field[3] = {0.0, 0.0, 0.0};
+    const double exit_normal[3] = {1.0, 0.0, 0.0};
+    return TrackReferenceOrbit3DToPlane(
+        iron, iron_scale, -1, radia_object, mirror_z, zero_field,
+        magnetic_rigidity, entrance_point, entrance_direction,
+        exit_normal, exit_x_m, step_m, maximum_path_m,
+        planarity_tolerance_m, station_count, positions_out, tangents_out,
+        stations_out, curvature_out);
 }
 
 }  // namespace rad_orbit

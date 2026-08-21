@@ -66,6 +66,35 @@ OrbitTrackResult TrackReferenceOrbit3D(
     double* stations_out,
     double* curvature_out);
 
+// General-plane variant used by periodic sector-cell orbit recovery.
+// ``constant_field_t`` is added to the optional iron/Radia terms and permits
+// a uniform incident field without constructing a synthetic Radia object.
+// Tracking stops at the positive crossing
+// ``exit_plane_normal . r = exit_plane_offset_m``.  The entrance must lie on
+// the negative side of that plane.  Passing ``magnetic_rigidity < 0`` is the
+// established way to reverse the charge/curvature convention while retaining
+// the positive physical |B rho| in the caller's orbit object.
+OrbitTrackResult TrackReferenceOrbit3DToPlane(
+    const rad_hdiv::HDivFieldEvaluator* iron,
+    double iron_scale,
+    int iron_algorithm,
+    int radia_object,
+    int mirror_z,
+    const double constant_field_t[3],
+    double magnetic_rigidity,
+    const double entrance_point[3],
+    const double entrance_direction[3],
+    const double exit_plane_normal[3],
+    double exit_plane_offset_m,
+    double step_m,
+    double maximum_path_m,
+    double planarity_tolerance_m,
+    std::size_t station_count,
+    double* positions_out,
+    double* tangents_out,
+    double* stations_out,
+    double* curvature_out);
+
 }  // namespace rad_orbit
 
 #endif  // RAD_ORBIT_TRACKER_H
