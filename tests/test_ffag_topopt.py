@@ -8,8 +8,10 @@ from radia.accelerator_magnet_topopt import (
     solve_transfer_matrix_field_correction,
 )
 from radia.ffag_topopt import (
+    FFAGFixedDesignOrbitTargetFamily,
     FFAGSoftEdgeCellSpec,
     build_ffag_cell_target_family,
+    build_ffag_fixed_design_orbit_target_family,
     enge_fringe_integrals,
     magnetic_rigidity_from_kinetic_energy,
     recover_periodic_planar_closed_orbit,
@@ -34,6 +36,63 @@ def _one_segment_arc(*, radius=10.0, angle=0.1, rigidity=1.5):
     return PlanarDesignOrbit(
         positions, tangents, magnetic_rigidity=rigidity,
         bend_axis=np.array([0.0, 0.0, 1.0]))
+
+
+def test_build_fixed_design_orbit_target_family_uses_caller_maps_directly():
+    orbits = (
+        _one_segment_arc(radius=8.0, angle=0.08, rigidity=1.2),
+        _one_segment_arc(radius=9.0, angle=0.09, rigidity=1.8),
+    )
+    matrices = np.repeat(np.eye(6)[None, :, :], 2, axis=0)
+    matrices[0, 0, 1] = 0.31
+    matrices[1, 4, 5] = 0.17
+    family = build_ffag_fixed_design_orbit_target_family(
+        orbits, matrices, transfer_matrix_band=2.0e-3,
+        bend_field_band=(1.0e-3, 2.0e-3),
+        response_entries=((0, 1), (4, 5)))
+
+    assert isinstance(family, FFAGFixedDesignOrbitTargetFamily)
+    assert family.design_orbits == orbits
+    np.testing.assert_allclose(family.magnetic_rigidities_tm, (1.2, 1.8))
+    np.testing.assert_allclose(family.objective.target_matrices, matrices)
+    np.testing.assert_allclose(
+        family.objective.transfer_matrix_band, 2.0e-3)
+    assert family.objective.response_entries == ((0, 1), (4, 5))
+    np.testing.assert_allclose(
+        family.objective.objectives[0].bend_field_band, 1.0e-3)
+    np.testing.assert_allclose(
+        family.objective.objectives[1].bend_field_band, 2.0e-3)
+
+
+def test_direct_design_orbit_api_delegates_without_reference_field(
+        monkeypatch):
+    import radia.ffag_topopt as ffag
+
+    orbit = _one_segment_arc(radius=7.0, angle=0.07, rigidity=1.4)
+    matrix = np.eye(6)[None, :, :]
+    sentinel = object()
+    captured = {}
+
+    def fake_optimize(target_family, **options):
+        captured["target_family"] = target_family
+        captured["options"] = options
+        return sentinel
+
+    monkeypatch.setattr(
+        ffag, "optimize_ffag_hdiv_mmm_from_fixed_design_orbits",
+        fake_optimize)
+    result = ffag.optimize_ffag_hdiv_mmm_from_design_orbits(
+        (orbit,), matrix, transfer_matrix_band=3.0e-4,
+        bend_field_band=4.0e-4, source="native-source",
+        charge_gram="native-gram")
+
+    assert result is sentinel
+    family = captured["target_family"]
+    assert isinstance(family, FFAGFixedDesignOrbitTargetFamily)
+    assert family.design_orbits == (orbit,)
+    np.testing.assert_allclose(family.objective.target_matrices, matrix)
+    assert captured["options"] == {
+        "source": "native-source", "charge_gram": "native-gram"}
 
 
 def test_ffag_validation_restart_replays_accepted_binary_history(tmp_path):
@@ -540,12 +599,18 @@ def test_fixed_design_orbit_path_never_runs_periodic_orbit_recovery(
         MultiMomentumAcceleratorMagnetTopologyResult,
     )
 
-    family=build_ffag_cell_target_family(
+    fixture=build_ffag_cell_target_family(
         [31.0,40.0],n_segments=16,
         transfer_matrix_band=2e-4,bend_field_band=2e-4,
         response_entries=((0,0),(0,5),(2,2)))
     target_raw=np.concatenate([
-        reference.field_response for reference in family.references])
+        reference.field_response for reference in fixture.references])
+    family=build_ffag_fixed_design_orbit_target_family(
+        tuple(reference.orbit for reference in fixture.references),
+        fixture.objective.target_matrices,
+        transfer_matrix_band=fixture.objective.transfer_matrix_band,
+        bend_field_band=fixture.objective.bend_field_band,
+        response_entries=fixture.objective.response_entries)
     current_raw=target_raw.copy()
     current_raw[16]+=0.02
     active_initial=np.array([True,False])
