@@ -36,6 +36,55 @@ from .topology_optimization import (
 _ALL_TRANSFER_ENTRIES = tuple(
     (row, column) for row in range(6) for column in range(6))
 
+_STATIC_MAGNET_TRANSFER_COMPONENT_GROUPS = {
+    # State ordering: (x,x',y,y',ell,delta).  The two focusing-strength
+    # entries are the most direct first PoC for pole-face control.  Complete
+    # transverse blocks remain available when phase advance and imaging must
+    # be constrained together.
+    "horizontal_focusing": ((1, 0),),
+    "vertical_focusing": ((3, 2),),
+    "horizontal_block": ((0, 0), (0, 1), (1, 0), (1, 1)),
+    "vertical_block": ((2, 2), (2, 3), (3, 2), (3, 3)),
+    "horizontal_dispersion": ((0, 5), (1, 5)),
+    "path_length": ((4, 0), (4, 1), (4, 5)),
+}
+
+
+def static_magnet_transfer_component_entries(component_groups):
+    """Resolve named, physically interpretable transfer-map objectives.
+
+    The returned zero-based entries use the static-magnet state ordering
+    ``(x,x',y,y',ell,delta)``.  This selects which entries are compared; it
+    does not make the remaining entries independent.  Every realized map is
+    still produced by the Hamiltonian field model and remains symplectic.
+    """
+    if isinstance(component_groups, str):
+        component_groups = (component_groups,)
+    try:
+        names = tuple(
+            str(value).strip().lower().replace("-", "_")
+            for value in component_groups)
+    except TypeError as exc:
+        raise ValueError(
+            "component_groups must be a non-empty sequence of names") from exc
+    if not names or any(not name for name in names):
+        raise ValueError(
+            "component_groups must be a non-empty sequence of names")
+    unknown = tuple(
+        name for name in names
+        if name not in _STATIC_MAGNET_TRANSFER_COMPONENT_GROUPS)
+    if unknown:
+        available = ", ".join(_STATIC_MAGNET_TRANSFER_COMPONENT_GROUPS)
+        raise ValueError(
+            f"unknown transfer component group {unknown[0]!r}; "
+            f"available groups are {available}")
+    entries = []
+    for name in names:
+        for entry in _STATIC_MAGNET_TRANSFER_COMPONENT_GROUPS[name]:
+            if entry not in entries:
+                entries.append(entry)
+    return tuple(entries)
+
 
 def _finite_array(value, *, shape=None, name):
     array = np.asarray(value, dtype=float)
@@ -1836,5 +1885,6 @@ __all__ = [
     "planar_orbit_field_observations",
     "run_transfer_matrix_material_inverse_pipeline",
     "solve_transfer_matrix_field_correction",
+    "static_magnet_transfer_component_entries",
     "static_magnet_symplectic_residual",
 ]

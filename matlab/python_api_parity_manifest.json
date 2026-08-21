@@ -275,7 +275,7 @@
         "matlab/+radia/+python/buildFFAGFixedDesignOrbitTargetFamily.m",
         "matlab/+radia/+python/optimizeFFAGHDivMMMFromDesignOrbits.m"
       ],
-      "notes": "FFAG orbit-family, fringe, and transfer-target orchestration remains Python-owned and is exposed to MATLAB only at an explicit optimization or artifact-generation boundary. The named fixed-design-orbit wrappers accept caller-supplied design orbits and 6x6 transfer matrices without inserting a soft-edge fixture or periodic-orbit solve."
+      "notes": "FFAG orbit-family, fringe, and transfer-target orchestration remains Python-owned and is exposed to MATLAB only at an explicit optimization or artifact-generation boundary. The named fixed-design-orbit wrappers accept caller-supplied design orbits and 6x6 transfer matrices without inserting a soft-edge fixture or periodic-orbit solve. MATLAB can select the same named focusing, dispersion, transverse-block, and path-length component groups as Python; the complete target map is still checked against the same static-magnet symplectic residual and tolerance before optimization."
     },
     {
       "id": "ffag-taylor-topopt",
