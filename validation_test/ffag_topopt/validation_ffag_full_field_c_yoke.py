@@ -206,6 +206,7 @@ def run(args):
     from radia.coil_builder import audit_coil_yoke_clearance
     from radia.ffag_topopt import (
         build_ffag_cell_target_family,
+        build_ffag_fixed_design_orbit_target_family,
         optimize_ffag_hdiv_mmm_from_design_orbits,
     )
     from radia.topology_optimization import ngsolve_growth_topology
@@ -248,8 +249,76 @@ def run(args):
     design_orbits = tuple(
         reference.orbit for reference in fixture.references)
     target_transfer_matrices = fixture.objective.target_matrices.copy()
+    direct_target = build_ffag_fixed_design_orbit_target_family(
+        design_orbits, target_transfer_matrices,
+        transfer_matrix_band=fixture.objective.transfer_matrix_band,
+        bend_field_band=fixture.objective.bend_field_band,
+        response_entries=fixture.objective.response_entries)
 
     setup_done = time.perf_counter()
+    if args.preflight_only:
+        preflight_gates = {
+            "iron_only_hex_mesh": bool(
+                mesh.ne > 0 and all(len(element.vertices) == 8
+                                    for element in mesh.Elements(ng.VOL))),
+            "bdm1_space_is_nonempty": bool(
+                fes.globalorder == 1 and fes.ndof > 0),
+            "fixed_return_yoke_seed_is_valid": bool(
+                initial_topology.valid and initial_topology.iron_connected),
+            "coil_yoke_clearance_passes": bool(clearance["passed"]),
+            "caller_design_orbit_and_target_matrix_contract": bool(
+                all(actual is requested for actual, requested in zip(
+                    direct_target.design_orbits, design_orbits))
+                and np.array_equal(
+                    direct_target.objective.target_matrices,
+                    target_transfer_matrices)),
+        }
+        preflight = {
+            "schema": "radia.ffag-fixed-one-pass-c-yoke-preflight/v1",
+            "status": "pass" if all(preflight_gates.values()) else "fail",
+            "machine": platform.node(),
+            "python": platform.python_version(),
+            "scope": (
+                "Input-only C-yoke gate before ChargeGram construction or "
+                "HDiv-MMM optimization."),
+            "mesh": {
+                "path": str(args.mesh.resolve()),
+                "element_family": "HEX",
+                "hdiv_family": "BDM1",
+                "elements": int(mesh.ne),
+                "vertices": int(mesh.nv),
+                "dofs": int(fes.ndof),
+                "air_volume_elements": 0,
+                "total_superset_volume_m3": float(np.sum(volumes)),
+                "fixed_return_elements": int(np.count_nonzero(fixed_active)),
+                "fixed_return_volume_m3": float(np.sum(
+                    volumes[fixed_active])),
+            },
+            "coil": {
+                "coil_count": 2,
+                "finite_filament_segments": source.segment_count,
+                "clearance": clearance,
+            },
+            "optics": {
+                "orbit_mode": "fixed-one-pass",
+                "target_input_contract": (
+                    "caller-supplied design orbits and 6x6 transfer matrices"),
+                "energies_mev": [float(value) for value in args.energies],
+                "orbit_count": len(design_orbits),
+                "segments_per_orbit": args.segments,
+                "target_transfer_matrices": (
+                    target_transfer_matrices.tolist()),
+            },
+            "charge_gram_built": False,
+            "optimization_started": False,
+            "timings_s": {"preflight": setup_done-started},
+            "peak_working_set_bytes": _peak_working_set_bytes(),
+            "gates": preflight_gates,
+        }
+        args.output.parent.mkdir(parents=True, exist_ok=True)
+        args.output.write_text(
+            json.dumps(preflight, indent=2) + "\n", encoding="utf-8")
+        return preflight
     print(
         f"[ffag-full-field] building ChargeGram: {mesh.ne} HEX, "
         f"{fes.ndof} BDM1 DoFs", flush=True)
@@ -531,6 +600,7 @@ def parse_args(argv=None):
     parser.add_argument("--yoke-step", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--restart-result", type=Path)
+    parser.add_argument("--preflight-only", action="store_true")
     parser.add_argument("--energies", type=float, nargs="+",
                         default=[31.0, 140.0, 250.0])
     parser.add_argument("--segments", type=int, default=32)
