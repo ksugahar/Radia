@@ -5053,6 +5053,89 @@ def grant_writing_kaken_review_format_check(text: str) -> dict:
             occurrence_count=len(bare_na_matches),
         )
 
+    # The final-year-early-application box follows a different rule from the
+    # human-rights/legal box. If the applicant is not eligible for this box,
+    # the official instruction says to retain the page and leave every field
+    # blank. Writing 「該当なし」 or an explanatory sentence is itself a form
+    # violation; adding a rationale does not cure it.
+    final_year_heading = "研究計画最終年度前年度応募を行う場合の記述事項"
+    final_year_start = raw.find(final_year_heading)
+    final_year_rule_checked = final_year_start >= 0
+    final_year_blank_violations: list[dict] = []
+    if final_year_rule_checked:
+        next_section = re.search(
+            r"\\section\*?\{",
+            raw[final_year_start + len(final_year_heading):],
+        )
+        final_year_end = (
+            final_year_start
+            + len(final_year_heading)
+            + next_section.start()
+            if next_section is not None
+            else len(raw)
+        )
+        final_year_raw = raw[final_year_start:final_year_end]
+        final_year_raw = re.sub(r"(?m)^\s*%.*$", " ", final_year_raw)
+        final_year_na_pattern = re.compile(
+            r"該当\s*(?:は|事項は)?\s*"
+            r"(?:なし|無し|ない|ありません|しない|していない|せず)|対象外"
+        )
+        final_year_macro_pattern = re.compile(
+            r"\\(?:re)?newcommand\*?\{\\(?P<name>最終年度[^{}]*)\}"
+            r"(?:\[[^\]]*\])?\{(?P<value>[^{}]*)\}"
+        )
+        for match in final_year_macro_pattern.finditer(final_year_raw):
+            value = match.group("value").strip()
+            if not value:
+                continue
+            if final_year_na_pattern.search(value) or re.fullmatch(
+                r"[-‐‑‒–—―ー－]+", value
+            ):
+                final_year_blank_violations.append({
+                    "kind": "field_value",
+                    "field": match.group("name"),
+                    "value": value,
+                })
+
+        # _prose_for_lint removes TeX definitions and the form's own sentence
+        # 「該当しない場合は…空欄のまま」, leaving only applicant prose.
+        final_year_prose = _prose_for_lint(final_year_raw)
+        for match in final_year_na_pattern.finditer(final_year_prose):
+            sentence_start = max(
+                final_year_prose.rfind("。", 0, match.start()) + 1, 0
+            )
+            sentence_stop = final_year_prose.find("。", match.end())
+            if sentence_stop < 0:
+                sentence_stop = len(final_year_prose)
+            final_year_blank_violations.append({
+                "kind": "explanatory_text",
+                "value": final_year_prose[sentence_start:sentence_stop].strip(),
+            })
+
+        if final_year_blank_violations:
+            first = final_year_blank_violations[0]
+            first_value = first["value"]
+            add_risk(
+                "final_year_non_applicant_field_not_blank",
+                max(0, raw.find(first_value, final_year_start)),
+                first_value,
+                (
+                    "研究計画最終年度前年度応募に該当しない場合の欄へ、"
+                    "「該当なし」等の値又は説明文が記入されている。"
+                ),
+                (
+                    "第4欄のページ、表、見出しは削除せず、研究種目名、課題番号、"
+                    "課題名、研究期間、「当初研究計画及び研究成果」、"
+                    "「前年度応募する理由」の全記述欄を空欄にする。"
+                ),
+                severity="HIGH",
+                occurrence_count=len(final_year_blank_violations),
+                violations=final_year_blank_violations[:8],
+                official_rule=(
+                    "該当しない場合は記述欄を削除することなく、空欄のまま提出すること。"
+                ),
+            )
+
     pub_triggers = ["研究遂行能力", "研究業績", "主要論文", "代表論文", "発表論文", "業績"]
     pub_hit = next((term for term in pub_triggers if term in prose), None)
     identifier_pattern = re.compile(
@@ -5172,6 +5255,8 @@ def grant_writing_kaken_review_format_check(text: str) -> dict:
         "recommendations": recommendations,
         "full_draft_heuristics_applied": full_draft,
         "criteria_axis_results": criteria_axis_results,
+        "final_year_blank_rule_checked": final_year_rule_checked,
+        "final_year_blank_violations": final_year_blank_violations,
         "briefing_notes": list(_KAKEN_BRIEFING_NOTES),
         "target": (
             "a proposal a reviewer can judge on the three plan axes plus "

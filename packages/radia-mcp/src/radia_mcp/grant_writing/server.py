@@ -34,7 +34,9 @@ the three research-plan elements, internationality, and budget validity.
 Review-format checks separately encode in-house briefing realities:
 ~100 proposals per reviewer-month, monochrome printing,
 researchmap-referenced records, the human-rights/legal box, and the
-funding-overlap box format. Central-claim checks catch one
+funding-overlap box format. They also enforce the form-specific rule that a
+non-applicant keeps the final-year-early-application page completely blank
+instead of writing "not applicable." Central-claim checks catch one
 question restated as two: keyword coverage cannot see it, because every
 required word is present and the defect is that the words disagree.
 Argument-evidence mapping indexes the question, gap, operations, decision
@@ -84,6 +86,7 @@ register_status_tool(
         "reviewer momentum from concrete tension to observable payoff, "
         "MCP role accuracy and preparation-to-plan traceability, "
         "KAKENHI official review structure and review-format realities, "
+        "form-specific blank-field rules for conditional KAKENHI sections, "
         "central-claim consistency across summary and body, "
         "non-scoring argument-evidence maps for close reading, "
         "and integrated health reports."
