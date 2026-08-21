@@ -1018,13 +1018,24 @@ LRESULT CALLBACK proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
 
 /* ---- the clipboard ------------------------------------------------------ */
 
-bool put(UINT format, const std::string& bytes) {
+/* `terminate` appends a NUL and asks for one more byte, which is what the
+ * clipboard's TEXT formats are read as -- RTF and MathML are C strings to
+ * whoever takes them.
+ *
+ * A BINARY format must get its bytes and nothing else.  The GVML package is
+ * an OPC ZIP, and PowerPoint refuses to open one with a byte after the end:
+ * the paste fails outright -- no error, no picture, nothing on the slide.
+ * That is how Ctrl+C in the editor came to be broken for PowerPoint while
+ * the Python API path, which writes exact-length buffers, worked; and why
+ * the test that puts the package on the clipboard itself never saw it. */
+bool put(UINT format, const std::string& bytes, bool terminate = true) {
     if (bytes.empty()) return false;
-    HGLOBAL h = GlobalAlloc(GMEM_MOVEABLE, bytes.size() + 1);
+    const size_t extra = terminate ? 1 : 0;
+    HGLOBAL h = GlobalAlloc(GMEM_MOVEABLE, bytes.size() + extra);
     if (!h) return false;
     void* p = GlobalLock(h);
     memcpy(p, bytes.data(), bytes.size());
-    static_cast<char*>(p)[bytes.size()] = '\0';
+    if (terminate) static_cast<char*>(p)[bytes.size()] = '\0';
     GlobalUnlock(h);
     if (!SetClipboardData(format, h)) { GlobalFree(h); return false; }
     return true;
@@ -1086,7 +1097,7 @@ bool copy_equation_to_clipboard(const std::string& latex, bool display,
     /* GVML first: PowerPoint takes the richest format it recognises, and this
      * is the one that arrives at the size we asked for rather than the size
      * of whatever box it landed in. */
-    put(RegisterClipboardFormatW(L"Art::GVML ClipFormat"), gvml_bytes);
+    put(RegisterClipboardFormatW(L"Art::GVML ClipFormat"), gvml_bytes, false);
     ok = put(RegisterClipboardFormatW(L"MathML"), mml_bytes) && ok;
 
     if (!emf_bytes.empty()) {
@@ -1097,12 +1108,12 @@ bool copy_equation_to_clipboard(const std::string& latex, bool display,
         if (emf && !SetClipboardData(CF_ENHMETAFILE, emf)) DeleteEnhMetaFile(emf);
     }
     if (!png_bytes.empty())
-        put(RegisterClipboardFormatW(L"PNG"), png_bytes);
+        put(RegisterClipboardFormatW(L"PNG"), png_bytes, false);
     /* CF_DIB is what an application takes when it pastes a picture, and it is
      * the only image format a browser will find here -- Windows synthesises it
      * from a bitmap but not from a metafile. */
     if (!dib_bytes.empty())
-        put(CF_DIB, dib_bytes);
+        put(CF_DIB, dib_bytes, false);
 
     /* The LaTeX itself, for Markdown, Jupyter, and any plain editor. */
     std::wstring text = widen(latex);

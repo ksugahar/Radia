@@ -629,6 +629,9 @@ Exposed as `radia._equation.tex_to_gvml(latex, size_pt, display)` and
 last test pastes into a real slide and asserts 24.0 pt — the claim is about
 PowerPoint, so something has to ask PowerPoint.
 
+**But that test placed the package on the clipboard itself, and the editor's
+Ctrl+C was broken for a day without it noticing — see §21.**
+
 ---
 
 ## 16. CLOSED — the window fits what it holds, and grows to what it holds
@@ -889,8 +892,16 @@ rule is narrow (denominator empty, very next live sibling a real LINE) and moved
 one document:
 
 ```
-before: \dfrac{\left\langle f_{0},g ightangle }{}\left\langle f_{0},Mf_{0} ightangle
-after : \dfrac{\left\langle f_{0},g ightangle }{\left\langle f_{0},Mf_{0} ightangle }
+before: \dfrac{\left\langle f_{0},g 
+ight
+angle }{}\left\langle f_{0},Mf_{0} 
+ight
+angle
+after : \dfrac{\left\langle f_{0},g 
+ight
+angle }{\left\langle f_{0},Mf_{0} 
+ight
+angle }
 ```
 
 which is what Equation Editor draws. 779 of 780 byte-identical, 0 regressions.
@@ -955,3 +966,62 @@ it changes as its acceptance test, not the marker count.
 `harrington_ch2_polarizability_xx_matrix.eqn` is clean by every marker and by
 its fence, but its `\sum` still leaves the `n` at the end of the line rather
 than under the sign \u2014 the same class as (1) above, and invisible to the score.
+
+---
+
+## 21. CLOSED — Ctrl+C did not paste into PowerPoint at all
+
+Sugahara, 2026-08-21: *powerpointに貼り付けた場合に24ptはできている？*
+
+The honest answer at the time was **no**, and finding that out took asking the
+question the way the user asks it.
+
+`radia.equation.office.copy_to_clipboard` → paste → **24.0 pt, a text shape**.
+The editor's own Ctrl+C → paste → **PowerPoint refuses**: *"the clipboard is
+empty or contains data that cannot be pasted here."* Nothing on the slide, no
+picture, no fallback.
+
+**One byte.** The editor's `put()` asked `GlobalAlloc` for `size + 1` and wrote
+a NUL at the end. That is right for the clipboard's TEXT formats — RTF and
+MathML are read as C strings — and fatal for the GVML package, which is an OPC
+**ZIP**: PowerPoint will not open an archive with a byte after the end.
+
+Measured directly, same package, two buffers:
+
+| payload | paste |
+|---|---|
+| exact bytes | pasted, 24.0 pt |
+| bytes + one NUL | **failed** |
+
+`put()` takes a `terminate` flag now; GVML, PNG and CF_DIB pass `false`.
+
+### Why the existing test could not see it
+
+It builds the package with `tex_to_gvml` and puts **that** on the clipboard
+itself. It proves the package is right. It says nothing about whether the
+editor puts that package on the clipboard — and the editor did not.
+
+`validation_test/equation/test_editor_clipboard_bytes.py` closes the gap by
+driving the real gesture: launch the window, post Ctrl+C, read the bytes back,
+compare with `tex_to_gvml` **byte for byte**. It needs no Office and takes three
+seconds. On the broken build it says:
+
+```
+the editor wrote 2599 bytes where the package is 2598; a byte after the end of
+an OPC archive makes PowerPoint refuse the paste outright
+```
+
+Driving the window from a test needs two things that are easy to get wrong and
+are written down in that file: `SetKeyboardState` writes the CALLING thread's
+input state, so the queues must be attached first (`AttachThreadInput`), and the
+modifier has to stay down **across** the posted message — clearing it straight
+away races and `Ctrl+C` arrives as a plain `c`.
+
+### The general lesson
+
+**A test that stands in for the caller does not test the caller.** This is the
+third time in two days the same shape has appeared: a `tests/` fixture built
+with our own writer passed against a broken reader (§18), a corpus score could
+not see whose fault a defect was (§18) or half a fraction (§19), and here a
+clipboard test supplied its own clipboard. When the claim is about what a user
+does, something has to do what the user does.
