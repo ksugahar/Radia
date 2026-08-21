@@ -138,10 +138,9 @@ python validation_test/equation/convert_corpus.py --diff
 Runs the lab's `.eqn` corpus before and after a change and scores what is left.
 
 **A change is accepted only when zero documents gain a defect.** Corpus health
-went **620/779 → 774/779 → 778/780** clean under that rule. **No document
-carries a stray style marker or an empty fence any more.** What remains is one
-defect class in two documents, and it was there all along — the checker could
-not see it (below).
+went **620/779 → 774/779 → 779/780** clean under that rule. **No document
+carries a stray style marker or an empty fence any more.** One document is left,
+and its defect class was there all along — the checker could not see it (below).
 
 **The five stray markers were NOT five different shapes, and the documents were
 not "already wrong".** That reading stood for months and was wrong on both
@@ -878,10 +877,81 @@ regression.
 **Read a 100 % as "check the checker".** It has now been wrong twice: once
 counting short fences as empty (§4), once unable to see half a fraction.
 
-### What is left
+### What was left, and what closed it
 
-- `perturbation_alpha_native.eqn` and `harrington_ch2_operator_l_plate.eqn` —
-  the denominator escapes the fraction. `DisplayFractionPass` is where to look.
-- `harrington_ch2_polarizability_xx_matrix.eqn` — clean by every marker, but its
-  `\sum` still leaves its `n` at the end of the line rather than under the sign.
-  A marker-based score cannot see this; EE3's rendering can.
+`perturbation_alpha_native.eqn` turned out to be a **third shape** of display
+fraction: numerator inside the template, denominator **immediately after it**,
+with no size markers between. The two shapes `DisplayFractionPass` already knew
+both need a separator and a terminator to find where the denominator ENDS, and
+refuse without them — right, when the boundary is a guess. Here it is not: a
+LINE is one self-contained chunk, and the denominator is exactly that chunk. The
+rule is narrow (denominator empty, very next live sibling a real LINE) and moved
+one document:
+
+```
+before: \dfrac{\left\langle f_{0},g ightangle }{}\left\langle f_{0},Mf_{0} ightangle
+after : \dfrac{\left\langle f_{0},g ightangle }{\left\langle f_{0},Mf_{0} ightangle }
+```
+
+which is what Equation Editor draws. 779 of 780 byte-identical, 0 regressions.
+
+---
+
+## 20. OPEN — one document, and why the safe rules are exhausted
+
+`harrington_ch2_operator_l_plate.eqn` is the last corpus document that is wrong,
+and it is wrong three ways at once. Equation Editor draws:
+
+```
+L(f) = ∫₋ₐ^a dx′ ∫₋ₐ^a dy′ · f(x′,y′) / (4πε₀ √((x−x′)² + (y−y′)²))
+```
+
+and the reader gives
+
+```
+L(f) = \int ^{dx'}\int \limits_{-a}^{a}\dfrac{f(x'}{},y')4\pi \varepsilon _{0}
+       \sqrt{(x - x'})^{2}+(y - y')^{2} - aa\int
+```
+
+**What makes it hard is that everything crosses a level boundary.** The tree,
+after the repair passes:
+
+```
+LINE n=10           L ( f ) =  INT₁  INT₂  FRAC  ","  "y"
+CHAR ")"            ← still the numerator's, one level up
+LINE n=14           ← the DENOMINATOR, one level up
+CHAR ")"  SCRIPT ²
+LINE[null] LINE(-a) LINE(a) SIZE SYM  ∫     ← INT₁'s limit block
+SIZE SUB   LINE(-a) LINE(a) SIZE SYM  ∫     ← INT₂'s, claimed (§18)
+```
+
+Three separate things, none reachable by a rule that stays inside one list:
+
+1. **INT₁'s limit block opens with a null LINE**, not a size switch, so
+   `BigOpDisplayPass` never starts on it, and `BigOpDisplayAltPass` \u2014 which does
+   read that shape \u2014 begins from an operator in its OWN list, and this operator
+   is inside a line. Both halves are true at once. **Letting a block open on a
+   null LINE was tried and reverted**: it claimed the limit blocks of 32 working
+   summations (`\sum\limits_{n}` became `\sum n`).
+2. **The numerator continues past the template** (`,y` inside the line, `)` in
+   the parent) \u2014 and it is detectable, because the numerator holds an unclosed
+   `(`. `DisplayFractionPass` already uses exactly that signal for the
+   denominator; the symmetric rule for the numerator would have to reach up a
+   level to find the closing character.
+3. **The denominator is in the parent list**, past that `)`, so neither the
+   separator/terminator path nor the immediate-sibling rule (§19) can see it.
+
+The chunk splice in `PassPipeline::process` is the place where a cross-level
+repair belongs \u2014 it already opens PILEs and chunk LINEs so that a template and
+its continuation land in one list. `LINE n=10` is not opened because
+`continuedBy` does not recognise what follows it as a continuation.
+
+**Why this is where to stop rather than push on.** A wrongly-repaired fraction
+reads as finished; the corpus score is marker-based and cannot tell a correct
+reassembly from a plausible one; and the one rule tried in this direction cost
+32 working documents. The next attempt needs the EE3 rendering of every document
+it changes as its acceptance test, not the marker count.
+
+`harrington_ch2_polarizability_xx_matrix.eqn` is clean by every marker and by
+its fence, but its `\sum` still leaves the `n` at the end of the line rather
+than under the sign \u2014 the same class as (1) above, and invisible to the score.
