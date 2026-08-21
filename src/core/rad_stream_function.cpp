@@ -28,6 +28,9 @@
 #include "../ext/HACApK/cHACApK_cpp.h"
 
 #include <algorithm>
+#include <cmath>
+#include <limits>
+#include <numeric>
 #include <stdexcept>
 #include <vector>
 
@@ -87,6 +90,78 @@ void QrEcon(int m, int n, const double* a,
     info = LAPACKE_dorgqr(LAPACK_COL_MAJOR, m, n, n, Q.data(), m, tau.data());
     if (info != 0)
         throw std::runtime_error("rad_stream_function: LAPACKE_dorgqr failed");
+}
+
+TSVDResult DenseTSVD(int M, int N, const std::vector<double>& row_major,
+                     int modes) {
+    const int available = std::min(M, N);
+    const int retained = std::min(modes, available);
+    std::vector<double> matrix(static_cast<size_t>(M) * N);
+    for (int i = 0; i < M; ++i)
+        for (int j = 0; j < N; ++j)
+            matrix[i + static_cast<size_t>(j) * M] =
+                row_major[static_cast<size_t>(i) * N + j];
+    std::vector<double> u(static_cast<size_t>(M) * available);
+    std::vector<double> s(available);
+    std::vector<double> vt(static_cast<size_t>(available) * N);
+    SvdEcon(M, N, matrix.data(), u.data(), s.data(), vt.data());
+    TSVDResult result;
+    result.M = M;
+    result.N = N;
+    result.modes = retained;
+    result.k_aca = available;
+    result.S.assign(s.begin(), s.begin() + retained);
+    result.U.assign(static_cast<size_t>(M) * retained, 0.0);
+    result.V.assign(static_cast<size_t>(N) * retained, 0.0);
+    for (int i = 0; i < M; ++i)
+        for (int j = 0; j < retained; ++j)
+            result.U[static_cast<size_t>(i) * retained + j] =
+                u[i + static_cast<size_t>(j) * M];
+    for (int i = 0; i < N; ++i)
+        for (int j = 0; j < retained; ++j)
+            result.V[static_cast<size_t>(i) * retained + j] =
+                vt[j + static_cast<size_t>(i) * available];
+    return result;
+}
+
+std::vector<double> MatVec(int M, int N,
+                           const std::vector<double>& matrix,
+                           const std::vector<double>& value) {
+    std::vector<double> result(M, 0.0);
+    for (int i = 0; i < M; ++i) {
+        double sum = 0.0;
+        for (int j = 0; j < N; ++j)
+            sum += matrix[static_cast<size_t>(i) * N + j] * value[j];
+        result[i] = sum;
+    }
+    return result;
+}
+
+struct ResidualMetrics {
+    double peak_to_peak = 0.0;
+    double rms = 0.0;
+    double max_abs = 0.0;
+};
+
+ResidualMetrics Metrics(const std::vector<double>& residual) {
+    const auto range = std::minmax_element(residual.begin(), residual.end());
+    double square_sum = 0.0;
+    double max_abs = 0.0;
+    for (double value : residual) {
+        square_sum += value * value;
+        max_abs = std::max(max_abs, std::abs(value));
+    }
+    return {*range.second - *range.first,
+            std::sqrt(square_sum / static_cast<double>(residual.size())),
+            max_abs};
+}
+
+bool TargetMet(const ResidualMetrics& metrics,
+               const AbeBoundedOptions& options) {
+    return (options.residual_peak_to_peak < 0.0 ||
+            metrics.peak_to_peak <= options.residual_peak_to_peak) &&
+           (options.residual_rms < 0.0 ||
+            metrics.rms <= options.residual_rms);
 }
 
 }  // namespace
@@ -216,6 +291,135 @@ std::vector<double> PseudoInverseSolve(const TSVDResult& t,
         phi[i] = s;
     }
     return phi;
+}
+
+//-------------------------------------------------------------------------
+AbeBoundedResult SolveAbeBounded(
+    int M, int N, const std::vector<double>& response,
+    const std::vector<double>& target, const std::vector<double>& lower,
+    const std::vector<double>& upper, const std::vector<double>& initial,
+    const AbeBoundedOptions& options) {
+    if (M <= 0 || N <= 0 ||
+        response.size() != static_cast<size_t>(M) * N ||
+        target.size() != static_cast<size_t>(M) ||
+        lower.size() != static_cast<size_t>(N) ||
+        upper.size() != static_cast<size_t>(N) ||
+        initial.size() != static_cast<size_t>(N))
+        throw std::invalid_argument(
+            "rad_stream_function: invalid bounded Abe dimensions");
+    const auto finite = [](double value) { return std::isfinite(value); };
+    if (!std::all_of(response.begin(), response.end(), finite) ||
+        !std::all_of(target.begin(), target.end(), finite) ||
+        !std::all_of(initial.begin(), initial.end(), finite))
+        throw std::invalid_argument(
+            "rad_stream_function: bounded Abe arrays must be finite");
+    for (int j = 0; j < N; ++j) {
+        if (std::isnan(lower[j]) || std::isnan(upper[j]) ||
+            lower[j] > upper[j] || initial[j] < lower[j] ||
+            initial[j] > upper[j])
+            throw std::invalid_argument(
+                "rad_stream_function: invalid bounded Abe capacity");
+    }
+    if (options.max_iterations < 1 || !(options.relaxation > 0.0) ||
+        options.relaxation > 1.0 || options.stagnation_tolerance < 0.0 ||
+        options.relative_singular_threshold < 0.0 ||
+        !(options.aca_eps > 0.0) ||
+        (options.residual_peak_to_peak < 0.0 && options.residual_rms < 0.0))
+        throw std::invalid_argument(
+            "rad_stream_function: invalid bounded Abe options");
+
+    const int max_rank = options.kmax <= 0
+        ? std::min(M, N) : std::min(options.kmax, std::min(M, N));
+    const int mode_count = options.modes <= 0
+        ? max_rank : std::min(options.modes, max_rank);
+    TSVDResult factor = options.dense_tsvd
+        ? DenseTSVD(M, N, response, mode_count)
+        : ACATSVD(M, N,
+            [&response, N](int row, int col) {
+                return response[static_cast<size_t>(row) * N + col];
+            }, mode_count, max_rank, options.aca_eps);
+    if (factor.modes < 1 || factor.S.empty() || !(factor.S.front() > 0.0))
+        throw std::runtime_error(
+            "rad_stream_function: bounded Abe factor has no usable mode");
+
+    AbeBoundedResult result;
+    result.factor = factor;
+    std::vector<double> current = initial;
+    const double singular_cutoff = options.relative_singular_threshold *
+                                   factor.S.front();
+    for (int iteration = 0; iteration < options.max_iterations; ++iteration) {
+        auto current_field = MatVec(M, N, response, current);
+        std::vector<double> field_error(M);
+        for (int i = 0; i < M; ++i)
+            field_error[i] = target[i] - current_field[i];
+
+        std::vector<double> correction(N, 0.0);
+        std::vector<double> predicted_field = current_field;
+        for (int mode = 0; mode < factor.modes; ++mode) {
+            if (!(factor.S[mode] > singular_cutoff))
+                continue;
+            double strength = 0.0;
+            for (int i = 0; i < M; ++i)
+                strength += factor.U[static_cast<size_t>(i) *
+                                     factor.modes + mode] * field_error[i];
+            const double coefficient = strength / factor.S[mode];
+            std::vector<double> mode_step(N);
+            for (int j = 0; j < N; ++j) {
+                mode_step[j] = factor.V[static_cast<size_t>(j) *
+                                           factor.modes + mode] * coefficient;
+                correction[j] += mode_step[j];
+            }
+            const auto mode_field = MatVec(M, N, response, mode_step);
+            for (int i = 0; i < M; ++i)
+                predicted_field[i] += mode_field[i];
+            std::vector<double> predicted_residual(M);
+            for (int i = 0; i < M; ++i)
+                predicted_residual[i] = target[i] - predicted_field[i];
+            if (TargetMet(Metrics(predicted_residual), options))
+                break;
+        }
+
+        std::vector<double> bounded(N);
+        int clipped = 0;
+        double change = 0.0;
+        for (int j = 0; j < N; ++j) {
+            const double trial = current[j] +
+                                 options.relaxation * correction[j];
+            bounded[j] = std::clamp(trial, lower[j], upper[j]);
+            if (bounded[j] != trial) ++clipped;
+            change = std::max(change, std::abs(bounded[j] - current[j]));
+        }
+        const auto reconstructed = MatVec(M, N, response, bounded);
+        std::vector<double> residual(M);
+        for (int i = 0; i < M; ++i)
+            residual[i] = target[i] - reconstructed[i];
+        const auto metrics = Metrics(residual);
+        result.clipped_history.push_back(clipped);
+        result.potential_change_history.push_back(change);
+        result.residual_peak_to_peak_history.push_back(metrics.peak_to_peak);
+        result.residual_rms_history.push_back(metrics.rms);
+        result.residual_max_abs_history.push_back(metrics.max_abs);
+        current = std::move(bounded);
+        result.reconstructed = reconstructed;
+        result.residual = std::move(residual);
+        result.residual_peak_to_peak = metrics.peak_to_peak;
+        result.residual_rms = metrics.rms;
+        result.residual_max_abs = metrics.max_abs;
+        if (TargetMet(metrics, options)) {
+            result.converged = true;
+            result.stop_reason = "bounded_residual_target_met";
+            break;
+        }
+        if (change <= options.stagnation_tolerance) {
+            result.stop_reason = "bounded_stagnation";
+            break;
+        }
+    }
+    result.potential = std::move(current);
+    result.iterations = static_cast<int>(result.clipped_history.size());
+    if (result.stop_reason.empty())
+        result.stop_reason = "bounded_max_iterations";
+    return result;
 }
 
 }  // namespace stream_function
