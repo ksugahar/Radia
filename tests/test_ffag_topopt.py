@@ -207,6 +207,42 @@ def test_ffag_validation_can_disable_performance_provenance(tmp_path):
     assert args.record_performance is False
 
 
+def test_ffag_validation_manufactured_target_requires_named_components(
+        tmp_path):
+    import importlib.util
+    from pathlib import Path
+
+    runner_path=(Path(__file__).parents[1]/"validation_test"/"ffag_topopt"/
+                 "validation_ffag_full_field_c_yoke.py")
+    spec=importlib.util.spec_from_file_location(
+        "ffag_manufactured_runner",runner_path)
+    runner=importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(runner)
+    common=[
+        "--mesh",str(tmp_path/"mesh.vol"),
+        "--yoke-step",str(tmp_path/"yoke.step"),
+        "--output",str(tmp_path/"result.json"),
+        "--manufactured-target-elements","798",
+    ]
+    with pytest.raises(SystemExit):
+        runner.parse_args(common)
+    with pytest.raises(SystemExit):
+        runner.parse_args([
+            "--mesh",str(tmp_path/"mesh.vol"),
+            "--yoke-step",str(tmp_path/"yoke.step"),
+            "--output",str(tmp_path/"result.json"),
+            "--manufactured-target-only",
+        ])
+    args=runner.parse_args(common+[
+        "--controlled-components","horizontal_focusing",
+        "--manufactured-target-only",
+    ])
+    assert args.manufactured_target_elements == [798]
+    assert args.manufactured_candidate_elements is None
+    assert args.manufactured_target_only is True
+
+
 def test_ffag_validation_restart_prefers_explicit_final_active_set(tmp_path):
     import importlib.util
     import json
@@ -757,6 +793,28 @@ def test_fixed_design_orbit_path_never_runs_periodic_orbit_recovery(
     assert [trial.material_move_fraction
             for trial in result.map_trust_history]==[1.0,0.5,1.0]
     assert result.stop_reason=="fixed one-pass transfer bands reached"
+
+    warm_state=np.array([0.25,0.0])
+    validation_calls=[]
+    fake_initial_solve=topopt.solve_hdiv_mmm_active_elements
+    monkeypatch.setattr(
+        topopt,"validate_hdiv_mmm_active_state",
+        lambda **kwargs:validation_calls.append(
+            np.asarray(kwargs["state"]).copy()) or 0.0)
+    monkeypatch.setattr(
+        topopt,"solve_hdiv_mmm_active_elements",
+        lambda **kwargs:(_ for _ in ()).throw(
+            AssertionError("checked warm start must skip the initial solve")))
+    warm_result=ffag.optimize_ffag_hdiv_mmm_from_fixed_design_orbits(
+        family,source=source,charge_gram=object(),fes=fes,inv_chi=0.1,
+        active_elements=active_initial,element_volumes=np.ones(2),
+        volume_max=2.0,optimize_source_scale=False,
+        initial_state=warm_state,max_optics_iterations=1,
+        material_iterations_per_optics=1,map_trust_region_trials=1)
+    np.testing.assert_array_equal(validation_calls,[warm_state])
+    assert warm_result.converged
+    monkeypatch.setattr(
+        topopt,"solve_hdiv_mmm_active_elements",fake_initial_solve)
 
     common=dict(
         source=source,charge_gram=object(),fes=fes,inv_chi=0.1,

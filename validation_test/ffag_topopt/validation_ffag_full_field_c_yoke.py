@@ -199,6 +199,140 @@ def _coil_pair(args):
     return (loop(args.coil_z_m), loop(-args.coil_z_m))
 
 
+def _manufactured_fixed_orbit_target(
+        *, charge_gram, fes, source, base_target, initial_active,
+        target_elements, candidate_elements, inv_chi, source_scale,
+        gradient_offset, relative_band, bend_slack,
+        solve_tolerance, solve_max_iterations, cluster_coarse_size,
+        cluster_deflation_size, recycle_size):
+    """Make a reachable full-C-yoke map from an exact active-set solve."""
+    from radia.accelerator_magnet_topopt import (
+        build_multi_orbit_field_response_matrix,
+        static_magnet_symplectic_residual,
+    )
+    from radia.ffag_topopt import (
+        build_ffag_fixed_design_orbit_target_family,
+    )
+    from radia.topology_optimization import (
+        ngsolve_growth_topology,
+        solve_hdiv_mmm_active_elements,
+    )
+
+    active = np.asarray(initial_active, dtype=bool).reshape(-1)
+    targets = np.asarray(target_elements, dtype=np.int64).reshape(-1)
+    candidates = np.asarray(candidate_elements, dtype=np.int64).reshape(-1)
+    if (targets.size == 0 or candidates.size == 0
+            or len(np.unique(targets)) != len(targets)
+            or len(np.unique(candidates)) != len(candidates)
+            or np.any(targets < 0) or np.any(targets >= len(active))
+            or np.any(candidates < 0) or np.any(candidates >= len(active))
+            or np.any(active[targets]) or np.any(active[candidates])
+            or not set(targets.tolist()).issubset(candidates.tolist())):
+        raise ValueError(
+            "manufactured target/candidate elements must be unique inactive "
+            "mesh elements, and candidates must contain every target")
+    target_active = active.copy()
+    target_active[targets] = True
+    target_topology = ngsolve_growth_topology(fes.mesh, target_active)
+    if not target_topology.valid:
+        raise RuntimeError(
+            "manufactured target elements violate the topology gate")
+
+    objective = base_target.objective
+    response_matrix = build_multi_orbit_field_response_matrix(
+        charge_gram, objective, gradient_offset=gradient_offset)
+    rhs = float(source_scale) * source.assemble_hdiv_rhs(fes)
+    incident = float(source_scale) * source.incident_orbit_field_response(
+        objective, gradient_offset=gradient_offset)
+    solve_options = dict(
+        charge_gram=charge_gram, fes=fes, inv_chi=inv_chi, rhs=rhs,
+        response_matrix=response_matrix, incident_response=incident,
+        solve_tolerance=solve_tolerance,
+        solve_max_iterations=solve_max_iterations,
+        cluster_coarse_size=cluster_coarse_size,
+        cluster_deflation_size=cluster_deflation_size,
+        recycle_size=recycle_size)
+    initial_state, initial_raw, initial_iterations = (
+        solve_hdiv_mmm_active_elements(
+            active_elements=active, **solve_options)
+    )
+    _, target_raw, target_iterations = solve_hdiv_mmm_active_elements(
+        active_elements=target_active, **solve_options)
+    initial_blocks = objective.split_raw_response(initial_raw)
+    target_blocks = objective.split_raw_response(target_raw)
+    initial_matrices = np.asarray([
+        item.evaluate_transfer_map(values).matrix
+        for item, values in zip(objective.objectives, initial_blocks)])
+    target_matrices = np.asarray([
+        item.evaluate_transfer_map(values).matrix
+        for item, values in zip(objective.objectives, target_blocks)])
+
+    matrix_band = np.ones_like(target_matrices)
+    selected_changes = []
+    for orbit_index in range(len(objective.orbits)):
+        for row, column in objective.response_entries:
+            change = abs(
+                target_matrices[orbit_index, row, column]
+                - initial_matrices[orbit_index, row, column])
+            selected_changes.append(change)
+            matrix_band[orbit_index, row, column] = max(
+                float(relative_band) * change, 1.0e-12)
+    if max(selected_changes, default=0.0) <= 1.0e-12:
+        raise RuntimeError(
+            "manufactured pole change has no resolvable selected-map effect")
+
+    bend_bands = []
+    for item, initial_values, target_values in zip(
+            objective.objectives, initial_blocks, target_blocks):
+        count = len(item.orbit.segment_lengths)
+        deviation = np.maximum(
+            np.abs(initial_values[:count] - item.required_bend_field),
+            np.abs(target_values[:count] - item.required_bend_field))
+        bend_bands.append(
+            float(bend_slack) * np.maximum(deviation, 1.0e-9))
+    target_family = build_ffag_fixed_design_orbit_target_family(
+        objective.orbits, target_matrices,
+        transfer_matrix_band=matrix_band,
+        bend_field_band=tuple(bend_bands),
+        controlled_components=base_target.controlled_components)
+    target_ratio = float(np.max(np.abs(
+        (target_family.objective.transform(target_raw)
+         - target_family.objective.response_target)
+        / target_family.objective.response_band)))
+    initial_ratio = float(np.max(np.abs(
+        (target_family.objective.transform(initial_raw)
+         - target_family.objective.response_target)
+        / target_family.objective.response_band)))
+    if target_ratio > 1.0 or initial_ratio <= 1.0:
+        raise RuntimeError(
+            "manufactured target must be inside its bands while the seed is "
+            "outside them")
+
+    fixed_inactive = ~active
+    fixed_inactive[candidates] = False
+    metadata = {
+        "model": "exact-full-C-yoke-active-set-manufactured-target",
+        "target_element_ids": targets.tolist(),
+        "candidate_element_ids": candidates.tolist(),
+        "source_scale": float(source_scale),
+        "relative_transfer_band": float(relative_band),
+        "bend_band_slack": float(bend_slack),
+        "initial_max_band_ratio": initial_ratio,
+        "exact_target_max_band_ratio": target_ratio,
+        "selected_transfer_changes": selected_changes,
+        "initial_transfer_matrices": initial_matrices.tolist(),
+        "target_transfer_matrices": target_matrices.tolist(),
+        "target_symplectic_residuals": [
+            static_magnet_symplectic_residual(matrix)
+            for matrix in target_matrices],
+        "initial_solve_iterations": int(initial_iterations),
+        "target_solve_iterations": int(target_iterations),
+        "target_topology_valid": bool(target_topology.valid),
+    }
+    return (target_family, fixed_inactive, target_active,
+            np.ascontiguousarray(initial_state), metadata)
+
+
 def run(args):
     import ngsolve as ng
 
@@ -355,15 +489,122 @@ def run(args):
         if isinstance(value, (int, float, np.integer, np.floating))
     } if args.record_performance else None)
     hmatrix_done = time.perf_counter() if args.record_performance else None
+    next_action = (
+        "constructing exact active-set target"
+        if args.manufactured_target_only else
+        "optimizing about fixed entrance-to-exit design orbits")
     if args.record_performance:
         print(
             f"[ffag-full-field] ChargeGram ready in "
-            f"{hmatrix_done - setup_done:.3f} s; optimizing about fixed "
-            "entrance-to-exit design orbits", flush=True)
+            f"{hmatrix_done - setup_done:.3f} s; {next_action}",
+            flush=True)
     else:
         print(
-            "[ffag-full-field] ChargeGram ready; optimizing about fixed "
-            "entrance-to-exit design orbits", flush=True)
+            f"[ffag-full-field] ChargeGram ready; {next_action}",
+            flush=True)
+    manufactured_target = None
+    manufactured_initial_state = None
+    fixed_inactive = None
+    known_target_active = None
+    if args.manufactured_target_elements:
+        candidate_elements = (
+            args.manufactured_candidate_elements
+            or args.manufactured_target_elements)
+        with ng.TaskManager():
+            (direct_target, fixed_inactive, known_target_active,
+             manufactured_initial_state,
+             manufactured_target) = _manufactured_fixed_orbit_target(
+                charge_gram=gram, fes=fes, source=source,
+                base_target=direct_target, initial_active=active,
+                target_elements=args.manufactured_target_elements,
+                candidate_elements=candidate_elements,
+                inv_chi=1.0 / (args.mu_r - 1.0),
+                source_scale=args.manufactured_source_scale,
+                gradient_offset=args.gradient_offset,
+                relative_band=args.manufactured_relative_band,
+                bend_slack=args.manufactured_bend_slack,
+                solve_tolerance=args.solve_tolerance,
+                solve_max_iterations=args.solve_max_iterations,
+                cluster_coarse_size=args.cluster_coarse_size,
+                cluster_deflation_size=args.cluster_deflation_size,
+                recycle_size=args.recycle_size)
+        target_transfer_matrices = (
+            direct_target.objective.target_matrices.copy())
+        manufactured_target["target_element_centroids_m"] = centers[
+            np.asarray(args.manufactured_target_elements,
+                       dtype=np.int64)].tolist()
+        manufactured_target["candidate_element_centroids_m"] = centers[
+            np.asarray(candidate_elements, dtype=np.int64)].tolist()
+        print(
+            "[ffag-full-field] exact active-set manufactured target ready: "
+            f"seed ratio {manufactured_target['initial_max_band_ratio']:.6g}, "
+            f"target ratio {manufactured_target['exact_target_max_band_ratio']:.6g}",
+            flush=True)
+        if args.manufactured_target_only:
+            checkpoint_gates = {
+                "iron_only_hex_mesh": bool(
+                    mesh.ne > 0 and all(len(element.vertices) == 8
+                                        for element in mesh.Elements(ng.VOL))),
+                "initial_return_yoke_seed_is_valid": bool(
+                    initial_topology.valid),
+                "manufactured_target_topology_is_valid": bool(
+                    manufactured_target["target_topology_valid"]),
+                "manufactured_seed_is_outside_bands": bool(
+                    manufactured_target["initial_max_band_ratio"] > 1.0),
+                "manufactured_exact_target_is_inside_bands": bool(
+                    manufactured_target["exact_target_max_band_ratio"] <= 1.0),
+                "manufactured_target_maps_are_symplectic": bool(
+                    max(manufactured_target[
+                        "target_symplectic_residuals"]) <= 1.0e-9),
+            }
+            checkpoint = {
+                "schema": (
+                    "radia.ffag-full-c-yoke-manufactured-target/v1"),
+                "status": (
+                    "pass" if all(checkpoint_gates.values()) else "fail"),
+                "scope": (
+                    "Exact full-scale HDiv-MMM target reachability before "
+                    "the material inverse."),
+                "machine": platform.node(),
+                "python": platform.python_version(),
+                "performance_measurement": (
+                    "enabled" if args.record_performance else "disabled"),
+                "mesh": {
+                    "path": str(args.mesh),
+                    "element_family": "HEX",
+                    "hdiv_family": "BDM1",
+                    "elements": int(mesh.ne),
+                    "dofs": int(fes.ndof),
+                    "initial_active_elements": int(active.sum()),
+                    "target_active_elements": int(
+                        known_target_active.sum()),
+                },
+                "optics": {
+                    "controlled_components": list(controlled_components),
+                    "response_entries": [
+                        list(entry) for entry in
+                        direct_target.objective.response_entries],
+                    "target_transfer_matrices": (
+                        target_transfer_matrices.tolist()),
+                },
+                "manufactured_target": manufactured_target,
+                "material_inverse_started": False,
+                "gates": checkpoint_gates,
+            }
+            if args.record_performance:
+                checkpoint_finished = time.perf_counter()
+                checkpoint["timings_s"] = {
+                    "setup": setup_done - started,
+                    "hmatrix_build": hmatrix_done - setup_done,
+                    "target_construction": (
+                        checkpoint_finished - hmatrix_done),
+                    "total": checkpoint_finished - started,
+                }
+            args.output.parent.mkdir(parents=True, exist_ok=True)
+            args.output.write_text(
+                json.dumps(checkpoint, indent=2) + "\n",
+                encoding="utf-8")
+            return checkpoint
     with ng.TaskManager():
         optimization_target_options = {}
         if controlled_components:
@@ -374,15 +615,19 @@ def run(args):
                 fixture.objective.response_entries)
         result = optimize_ffag_hdiv_mmm_from_design_orbits(
             design_orbits, target_transfer_matrices,
-            transfer_matrix_band=fixture.objective.transfer_matrix_band,
-            bend_field_band=fixture.objective.bend_field_band,
+            transfer_matrix_band=direct_target.objective.transfer_matrix_band,
+            bend_field_band=direct_target.objective.bend_field_band,
             source=source, charge_gram=gram, fes=fes,
             inv_chi=1.0 / (args.mu_r - 1.0),
             active_elements=active, element_volumes=volumes,
             volume_max=float(np.sum(volumes)),
-            source_scale=(1.0 if restart is None else
-                          restart["source_scale"]),
-            optimize_source_scale=restart is None,
+            source_scale=(
+                args.manufactured_source_scale
+                if manufactured_target is not None else
+                (1.0 if restart is None else restart["source_scale"])),
+            optimize_source_scale=(
+                manufactured_target is None and restart is None),
+            initial_state=manufactured_initial_state,
             gradient_offset=args.gradient_offset,
             max_optics_iterations=args.material_iterations,
             material_iterations_per_optics=1,
@@ -403,6 +648,10 @@ def run(args):
             direct_map_oracle_graph_front_proposal_limit=(
                 args.direct_map_graph_front_proposal_limit),
             fixed_active_elements=fixed_active,
+            fixed_inactive_elements=fixed_inactive,
+            maximum_batch_elements=(
+                len(args.manufactured_target_elements)
+                if manufactured_target is not None else None),
             solve_tolerance=args.solve_tolerance,
             solve_max_iterations=args.solve_max_iterations,
             cluster_coarse_size=args.cluster_coarse_size,
@@ -450,6 +699,17 @@ def run(args):
         "all_material_batches_exactly_resolved": all(
             item.solve_iterations > 0 for item in material_history),
     }
+    if manufactured_target is not None:
+        gates.update({
+            "manufactured_exact_target_is_inside_bands": bool(
+                manufactured_target["exact_target_max_band_ratio"] <= 1.0),
+            "manufactured_seed_is_outside_bands": bool(
+                manufactured_target["initial_max_band_ratio"] > 1.0),
+            "manufactured_selected_map_objective_converged": bool(
+                result.converged),
+        })
+        manufactured_target["known_target_active_set_recovered"] = bool(
+            np.array_equal(result.active_elements, known_target_active))
     gram_stats = dict(gram.stats())
     report = {
         "schema": "radia.ffag-fixed-one-pass-c-yoke/v1",
@@ -477,6 +737,7 @@ def run(args):
                 result.active_elements).tolist(),
         },
         "restart": restart,
+        "manufactured_target": manufactured_target,
         "coil": {
             "coil_count": 2,
             "finite_filament_segments": source.segment_count,
@@ -535,6 +796,8 @@ def run(args):
             "map_trust_region_trials": args.map_trust_region_trials,
             "map_ratio_tolerance": args.map_ratio_tolerance,
             "direct_map_oracle_fallback": args.direct_map_oracle_fallback,
+            "initial_state_warm_start": bool(
+                manufactured_initial_state is not None),
             "direct_map_oracle_exact_beam_width": (
                 args.direct_map_exact_beam_width),
             "direct_map_oracle_exact_beam_depth": (
@@ -659,6 +922,24 @@ def parse_args(argv=None):
               "horizontal_focusing vertical_focusing "
               "horizontal_dispersion. Omit to retain the full-map study."))
     parser.add_argument(
+        "--manufactured-target-elements", type=int, nargs="+",
+        help=("Inactive HEX ids whose exact full solve manufactures a "
+              "reachable selected-map target."))
+    parser.add_argument(
+        "--manufactured-target-only", action="store_true",
+        help=("Stop after writing the exact full-scale target checkpoint; "
+              "do not start the material inverse."))
+    parser.add_argument(
+        "--manufactured-candidate-elements", type=int, nargs="+",
+        help=("Inactive HEX ids left movable in the manufactured inverse. "
+              "Defaults to the target elements."))
+    parser.add_argument(
+        "--manufactured-source-scale", type=float, default=1.0)
+    parser.add_argument(
+        "--manufactured-relative-band", type=float, default=0.20)
+    parser.add_argument(
+        "--manufactured-bend-slack", type=float, default=2.0)
+    parser.add_argument(
         "--record-performance", action=argparse.BooleanOptionalAction,
         default=True,
         help=("Record elapsed-time and peak-memory provenance. Disable for "
@@ -716,7 +997,15 @@ def parse_args(argv=None):
     parser.add_argument("--exact-beam-barrier-fraction", type=float,
                         default=0.25)
     args = parser.parse_args(argv)
-    if (len(args.energies) < 2 or args.segments < 16
+    manufactured = bool(args.manufactured_target_elements)
+    if ((manufactured and (args.preflight_only or args.restart_result
+                           or not args.controlled_components))
+            or (args.manufactured_target_only and not manufactured)
+            or (args.manufactured_candidate_elements and not manufactured)
+            or args.manufactured_source_scale <= 0.0
+            or not 0.0 < args.manufactured_relative_band < 1.0
+            or args.manufactured_bend_slack <= 1.0
+            or len(args.energies) < 2 or args.segments < 16
             or args.material_iterations < 1 or args.threads < 1
             or args.coil_current_a <= 0.0 or args.mu_r <= 1.0
             or not 0.0 < args.field_inverse_tolerance < 1.0

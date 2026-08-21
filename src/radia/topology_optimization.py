@@ -3010,6 +3010,61 @@ def select_tsvd_exact_block_batch(*, current_response, response_target,
         "all-candidate TSVD plus conditional exact block-Schur selection")
 
 
+def validate_hdiv_mmm_active_state(*, charge_gram, fes, inv_chi, rhs,
+        active_elements, state, solve_tolerance=1e-9, iterations=None):
+    """Validate a caller-supplied active-set state against the true operator.
+
+    This is the checked warm-start boundary.  It reapplies the exact
+    configured linear-material operator after installing the requested
+    inactive-DOF constraints; a stale state from another active set, RHS, or
+    material law therefore fails before it can enter an optimization loop.
+    """
+    blocks=ngsolve_discontinuous_element_dof_blocks(fes)
+    active=np.asarray(active_elements,dtype=bool).reshape(-1)
+    n=int(fes.ndof);rhs_full=np.asarray(rhs,dtype=float).reshape(-1)
+    value=np.asarray(state,dtype=float).reshape(-1)
+    tolerance=float(solve_tolerance)
+    if (active.shape!=(len(blocks),) or not np.any(active) or
+            rhs_full.shape!=(n,) or value.shape!=(n,) or
+            not np.all(np.isfinite(rhs_full)) or
+            not np.all(np.isfinite(value)) or
+            not np.isfinite(tolerance) or tolerance<=0.0):
+        raise ValueError("invalid HDiv-MMM active-state warm start")
+    active_dofs=np.concatenate(
+        [blocks[k] for k in np.flatnonzero(active)]).astype(np.int32)
+    mask=np.ones(n,dtype=bool);mask[active_dofs]=False
+    charge_gram.set_configured_constraints(
+        np.flatnonzero(mask).astype(np.int32),preserve_existing=False)
+    state_scale=max(1.0,float(np.linalg.norm(value)))
+    inactive_norm=float(np.linalg.norm(value[mask]))
+    inactive_limit=max(
+        1.0e-12,256.0*np.finfo(float).eps*state_scale)
+    if inactive_norm>inactive_limit:
+        raise RuntimeError(
+            "HDiv-MMM active-state warm start violates inactive-DOF "
+            f"constraints: norm {inactive_norm:.6e} exceeds "
+            f"{inactive_limit:.6e}")
+    active_rhs=rhs_full.copy();active_rhs[mask]=0.0
+    applied=np.asarray(
+        charge_gram.apply_configured_linear_material_operator(
+            float(inv_chi),np.ascontiguousarray(value),
+            respect_constraints=True),dtype=float).reshape(-1)
+    rhs_norm=float(np.linalg.norm(active_rhs))
+    residual_norm=float(np.linalg.norm(applied-active_rhs))
+    relative_residual=(residual_norm/rhs_norm if rhs_norm>0.0 else
+                       residual_norm)
+    residual_limit=max(5.0*tolerance,1.0e-12)
+    if (not np.isfinite(relative_residual) or
+            relative_residual>residual_limit):
+        suffix=("" if iterations is None else
+                f" after {int(iterations)} iterations")
+        raise RuntimeError(
+            "HDiv-MMM active-set solve failed the true-residual gate: "
+            f"relative residual {relative_residual:.6e} exceeds "
+            f"{residual_limit:.6e}{suffix}")
+    return relative_residual
+
+
 def solve_hdiv_mmm_active_elements(*, charge_gram, fes, inv_chi, rhs,
         response_matrix, active_elements, incident_response=None,
         solve_tolerance=1e-9, solve_max_iterations=5000, mass_riesz=True,
@@ -3049,22 +3104,10 @@ def solve_hdiv_mmm_active_elements(*, charge_gram, fes, inv_chi, rhs,
         recycle_size=recycle_size,
         mass_riesz=bool(mass_riesz))
     state=np.asarray(result["m"],dtype=float)[0]
-    applied=np.asarray(
-        charge_gram.apply_configured_linear_material_operator(
-            float(inv_chi),np.ascontiguousarray(state),
-            respect_constraints=True),dtype=float).reshape(-1)
-    rhs_norm=float(np.linalg.norm(active_rhs))
-    residual_norm=float(np.linalg.norm(applied-active_rhs))
-    relative_residual=(residual_norm/rhs_norm if rhs_norm>0.0 else
-                       residual_norm)
-    residual_limit=max(5.0*float(solve_tolerance),1.0e-12)
-    if (not np.isfinite(relative_residual) or
-            relative_residual>residual_limit):
-        iterations=int(np.asarray(result["iters"]).reshape(-1)[0])
-        raise RuntimeError(
-            "HDiv-MMM active-set solve failed the true-residual gate: "
-            f"relative residual {relative_residual:.6e} exceeds "
-            f"{residual_limit:.6e} after {iterations} iterations")
+    validate_hdiv_mmm_active_state(
+        charge_gram=charge_gram,fes=fes,inv_chi=inv_chi,rhs=rhs_full,
+        active_elements=active,state=state,solve_tolerance=solve_tolerance,
+        iterations=int(np.asarray(result["iters"]).reshape(-1)[0]))
     response=C@state
     if incident_response is not None:
         incident=np.asarray(incident_response,dtype=float).reshape(-1)
