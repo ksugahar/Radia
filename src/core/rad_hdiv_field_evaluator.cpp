@@ -553,6 +553,101 @@ struct HDivFieldEvaluator::Impl {
         }
     }
 
+    void AddExactDirectional(const SourceAtom& atom, const double r[3],
+                             const double direction[3],
+                             double derivative[3]) const {
+        const double zero_v4[4][3]{};
+        const double zero_v3[3][3]{};
+        if (atom.kind == SourceKind::Tet) {
+            const TetSource& source = tets[atom.index];
+            for (int index = 0; index < 20; ++index) {
+                const bool linear = index == 0
+                    || index == PolynomialIndex(1, 0, 0)
+                    || index == PolynomialIndex(0, 1, 0)
+                    || index == PolynomialIndex(0, 0, 1);
+                if (!linear && source.coefficient[index] != 0.0)
+                    throw std::runtime_error(
+                        "HDivFieldEvaluator.field_gradient: polynomial "
+                        "TET degree above one is not implemented");
+            }
+            const double gradient[3] = {
+                source.coefficient[PolynomialIndex(1, 0, 0)],
+                source.coefficient[PolynomialIndex(0, 1, 0)],
+                source.coefficient[PolynomialIndex(0, 0, 1)]};
+            const double zero_gradient[3]{};
+            double field[3];
+            TetVolFieldLinearDirectional(
+                source.v, zero_v4, r, direction,
+                source.coefficient[0], 0.0,
+                gradient, zero_gradient, field, derivative);
+        } else if (atom.kind == SourceKind::Triangle) {
+            const TriSource& source = triangles[atom.index];
+            const double zero_slope[3]{};
+            const double zero_hessian[3][3]{};
+            double field[3];
+            QuadTriFieldDirectional(
+                source.v, zero_v3, r, direction,
+                source.sigma0, 0.0, source.slope, zero_slope,
+                source.hessian, zero_hessian, field, derivative);
+        } else if (atom.kind == SourceKind::Point) {
+            const PointSource& source = points[atom.index];
+            const double delta[3] = {
+                r[0]-source.position[0], r[1]-source.position[1],
+                r[2]-source.position[2]};
+            const double radius2 = delta[0]*delta[0]
+                + delta[1]*delta[1] + delta[2]*delta[2];
+            if (radius2 <= 1e-300) return;
+            const double inverse_radius3 =
+                1.0/(radius2*std::sqrt(radius2));
+            const double projection = delta[0]*direction[0]
+                + delta[1]*direction[1] + delta[2]*direction[2];
+            const double scale = source.strength*inverse_radius3;
+            for (int axis = 0; axis < 3; ++axis)
+                derivative[axis] += scale*(direction[axis]
+                    - 3.0*delta[axis]*projection/radius2);
+        } else {
+            throw std::runtime_error(
+                "HDivFieldEvaluator.field_gradient: curved TET/TRI "
+                "sources are not implemented");
+        }
+    }
+
+    void EvaluateBaseGradient(const double r[3], double gradient[9]) const {
+        std::fill(gradient, gradient+9, 0.0);
+        for (int input = 0; input < 3; ++input) {
+            double direction[3] = {0.0, 0.0, 0.0};
+            direction[input] = 1.0;
+            double column[3] = {0.0, 0.0, 0.0};
+            for (const SourceAtom& atom : atoms)
+                AddExactDirectional(atom, r, direction, column);
+            for (int output = 0; output < 3; ++output)
+                gradient[3*output+input] = column[output];
+        }
+    }
+
+    void EvaluatePhysicalGradient(const double r[3], double gradient[9]) const {
+        EvaluateBaseGradient(r, gradient);
+        for (const ImageTerm& image : images) {
+            double reflected[3];
+            ImageInversePoint(image, r, reflected);
+            for (int input = 0; input < 3; ++input) {
+                double direction[3] = {0.0, 0.0, 0.0};
+                direction[input] = 1.0;
+                double inverse_direction[3];
+                ImageInversePoint(image, direction, inverse_direction);
+                double column[3] = {0.0, 0.0, 0.0};
+                for (const SourceAtom& atom : atoms)
+                    AddExactDirectional(
+                        atom, reflected, inverse_direction, column);
+                double mapped[3];
+                ImageForwardVector(image, column, mapped);
+                for (int output = 0; output < 3; ++output)
+                    gradient[3*output+input] +=
+                        image.sign*mapped[output];
+            }
+        }
+    }
+
     void AddMultipole(const TreeNode& node, const double r[3], double out[3]) const {
         const Vec R = {r[0]-node.center[0], r[1]-node.center[1], r[2]-node.center[2]};
         const double r2 = Dot(R, R);
@@ -988,6 +1083,35 @@ void HDivFieldEvaluator::EvaluateSerial(const double* observations, std::size_t 
         output[3*index+1] = total[1];
         output[3*index+2] = total[2];
     }
+}
+
+void HDivFieldEvaluator::EvaluateGradient(
+    const double* observations, std::size_t n_observations,
+    double* gradient_out) const {
+    if (!observations || !gradient_out) {
+        if (n_observations == 0) return;
+        throw std::invalid_argument(
+            "HDivFieldEvaluator.field_gradient: null observation/output buffer");
+    }
+    ngcore::RegionTaskManager task_manager;
+    ngcore::ParallelFor(
+        ngcore::IntRange(n_observations), [&](std::size_t index) {
+            m_impl->EvaluatePhysicalGradient(
+                observations+3*index, gradient_out+9*index);
+        });
+}
+
+void HDivFieldEvaluator::EvaluateGradientSerial(
+    const double* observations, std::size_t n_observations,
+    double* gradient_out) const {
+    if (!observations || !gradient_out) {
+        if (n_observations == 0) return;
+        throw std::invalid_argument(
+            "HDivFieldEvaluator.field_gradient: null observation/output buffer");
+    }
+    for (std::size_t index = 0; index < n_observations; ++index)
+        m_impl->EvaluatePhysicalGradient(
+            observations+3*index, gradient_out+9*index);
 }
 
 HDivFieldEvaluator::Algorithm HDivFieldEvaluator::AlgorithmFor(std::size_t n_observations) const {

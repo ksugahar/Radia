@@ -99,3 +99,47 @@ def test_native_tracker_planarity_gate_trips_on_asymmetric_field():
             None, 0.0, int(upper_only), False, RIGIDITY, ENTRANCE,
             DIRECTION, EXIT_X, 5.0e-4, 0.5, 1.0e-6, 33)
     rad.UtiDelAll()
+
+
+def test_native_general_plane_tracker_recovers_uniform_field_sector():
+    rigidity = 1.7
+    radius = 3.2
+    angle = 0.25
+    bending_field = rigidity / radius
+    radial_0 = np.array([0.0, -1.0, 0.0])
+    tangent_0 = np.array([1.0, 0.0, 0.0])
+    rotation = np.array([
+        [np.cos(angle), -np.sin(angle), 0.0],
+        [np.sin(angle), np.cos(angle), 0.0],
+        [0.0, 0.0, 1.0],
+    ])
+    radial_1 = rotation @ radial_0
+    tangent_1 = rotation @ tangent_0
+    positions, tangents, stations, curvature, length, oop_m, oop_t = (
+        _native.track_reference_orbit_to_plane_native(
+            None, 0.0, -1, False,
+            np.array([0.0, 0.0, bending_field]), -rigidity,
+            radius * radial_0, tangent_0, tangent_1, 0.0,
+            5.0e-4, 2.0, 1.0e-8, 33))
+
+    np.testing.assert_allclose(
+        positions[-1], radius * radial_1, atol=2.0e-9)
+    np.testing.assert_allclose(tangents[-1], tangent_1, atol=2.0e-9)
+    np.testing.assert_allclose(length, radius * angle, atol=2.0e-9)
+    np.testing.assert_allclose(stations, np.linspace(0.0, length, 33))
+    np.testing.assert_allclose(curvature, 1.0 / radius, atol=2.0e-12)
+    assert oop_m == 0.0 and oop_t == 0.0
+
+
+def test_hdiv_field_evaluator_point_gradient_is_analytic():
+    evaluator = _native._HDivFieldEvaluator.from_cloud(
+        np.array([[0.0, 0.0, 0.0]]), np.array([2.0]))
+    point = np.array([[1.0, 2.0, 3.0]])
+    displacement = point[0]
+    radius2 = float(displacement@displacement)
+    expected = 2.0*(
+        np.eye(3)/radius2**1.5
+        - 3.0*np.outer(displacement, displacement)/radius2**2.5)
+    np.testing.assert_allclose(
+        evaluator.field_gradient(point)[0], expected,
+        rtol=2.0e-15, atol=2.0e-17)

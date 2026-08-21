@@ -114,6 +114,22 @@ class VIMFunctionalShapeJacobian:
     timings_s: dict[str, float] | None = None
 
 
+@dataclass(frozen=True)
+class VIMStateShapeJacobian:
+    """Matrix-free analytic GetTrafo derivative of the HDiv-VIM state.
+
+    ``state_jacobian[k]`` is ``dm/dq_k``.  The derivative H-matrix is used
+    only as an operator while forming ``db/dq-dA/dq*m``; no dense ``dG`` or
+    dense VIM operator derivative is materialized.
+    """
+
+    state: np.ndarray
+    state_jacobian: np.ndarray
+    state_iterations: int
+    tangent_iterations: tuple[int, ...]
+    timings_s: dict | None = None
+
+
 def sample_production_gettrafo_displacements(fes, displacement_modes, charge_basis,
                                               *, family=None):
     """Evaluate deformation modes on the exact nodes stored by ChargeGram.
@@ -542,6 +558,143 @@ def production_vim_rms_adjoint_gradient_streaming(*, fes, deformation_modes,
             -gram_terms[k]+response_weight@(dC[k]@state))
     return VIMAdjointGradient(state,response,objective,gradient,
                               int(state_info),int(adjoint_info),0)
+
+
+def production_vim_state_shape_jacobian_streaming(*, fes,
+        deformation_modes, charge_basis, charge_gram, charge_map,
+        inv_chi, rhs, rhs_jacobian, family=None,
+        solve_tolerance=1e-9, solve_max_iterations=5000,
+        mass_riesz=True, derivative_eps=1e-8, derivative_leaf=32,
+        derivative_eta=2.0, cluster_coarse_size=0,
+        cluster_deflation_size=0, recycle_size=0,
+        state=None, state_iterations=None):
+    """Differentiate the complete HDiv-VIM state without dense ``dA``.
+
+    This is the forward counterpart of
+    :func:`production_vim_functional_shape_jacobian_streaming`.  It is used
+    when a downstream nonlinear operation, such as closed-orbit tracking,
+    needs the field tangent itself rather than a fixed list of adjoint
+    contractions.  ``dM``, ``dB``, ``dG`` and ``drhs`` all participate in
+    ``A dm = drhs-dA m``.  Each ``dG m`` action stays on a directional
+    H-matrix; optimizer finite differences are not used.
+
+    The caller owns ``ngsolve.TaskManager``.
+    """
+    import time
+    import scipy.sparse as sp
+
+    total_started = time.perf_counter()
+    modes = tuple(deformation_modes)
+    q = len(modes)
+    if q == 0:
+        raise ValueError("at least one deformation mode is required")
+    B = sp.csr_matrix(charge_map)
+    n = B.shape[1]
+    b = np.asarray(rhs, dtype=float).reshape(-1)
+    db = np.asarray(rhs_jacobian, dtype=float)
+    if b.shape != (n,) or db.shape != (q, n):
+        raise ValueError("state shape RHS/Jacobian mismatch")
+    reused_state = (None if state is None else
+                    np.asarray(state, dtype=float).reshape(-1))
+    if reused_state is not None and (
+            reused_state.shape != (n,)
+            or not np.all(np.isfinite(reused_state))):
+        raise ValueError("reused state must be finite and match fes.ndof")
+    derivative_eps = float(derivative_eps)
+    derivative_leaf = int(derivative_leaf)
+    derivative_eta = float(derivative_eta)
+    if (not np.isfinite(derivative_eps) or derivative_eps <= 0.0
+            or derivative_leaf < 1 or not np.isfinite(derivative_eta)
+            or derivative_eta <= 0.0):
+        raise ValueError("invalid directional H-matrix controls")
+
+    geometry_started = time.perf_counter()
+    geometry = sample_production_gettrafo_displacements(
+        fes, modes, charge_basis, family=family)
+    cells = np.stack(geometry.cell, axis=1)
+    if geometry.family == "wedge":
+        faces = np.zeros((q, len(geometry.face), 9, 3))
+        for host, values in enumerate(geometry.face):
+            faces[:, host, :values.shape[1]] = values
+    else:
+        faces = np.stack(geometry.face, axis=1)
+    geometry_s = time.perf_counter()-geometry_started
+
+    charge_gram.restore_geometry_mass_matrix()
+    state_solve_started = time.perf_counter()
+    if reused_state is None:
+        solved = charge_gram.solve_configured_linear_material_auto_prec_many(
+            float(inv_chi), np.ascontiguousarray(b[None, :]),
+            tol=float(solve_tolerance), maxit=int(solve_max_iterations),
+            cluster_coarse_size=int(cluster_coarse_size),
+            cluster_deflation_size=int(cluster_deflation_size),
+            recycle_size=0, mass_riesz=bool(mass_riesz))
+        state_value = np.asarray(solved["m"], dtype=float)[0]
+        state_count = int(solved["iters"][0])
+    else:
+        state_value = reused_state
+        state_count = (0 if state_iterations is None else
+                       int(state_iterations))
+    state_solve_s = time.perf_counter()-state_solve_started
+
+    tangent_started = time.perf_counter()
+    _, dmass, dcharge = assemble_ngsolve_hdiv_shape_tangents(
+        fes, modes, B, sparse=True)
+    bx = np.asarray(B@state_value).reshape(-1)
+    Gbx = np.asarray(charge_gram.matvec_sym(bx)).reshape(-1)
+    tangent_rhs = np.empty((q, n), dtype=float)
+    derivative_stats = []
+    for k in range(q):
+        dM = sp.csr_matrix(dmass[k])
+        if geometry.family == "tet":
+            rates = np.asarray(
+                charge_gram.tet_charge_map_row_directional_rates(
+                    np.ascontiguousarray(cells[k]),
+                    np.ascontiguousarray(faces[k])), dtype=float)
+            dB = sp.diags(rates)@B
+        else:
+            dB = sp.csr_matrix(dcharge[k])
+        dbx = np.asarray(dB@state_value).reshape(-1)
+        derivative = charge_gram.directional_derivative_operator(
+            geometry.family, np.ascontiguousarray(cells[k]),
+            np.ascontiguousarray(faces[k]), derivative_eps,
+            derivative_leaf, derivative_eta)
+        dGbx = np.asarray(derivative.matvec_sym(bx)).reshape(-1)
+        derivative_stats.append(dict(derivative.stats))
+        dA_state = (
+            float(inv_chi)*np.asarray(dM@state_value).reshape(-1)
+            + np.asarray(dB.T@Gbx).reshape(-1)
+            + np.asarray(B.T@(
+                dGbx + np.asarray(charge_gram.matvec_sym(dbx)).reshape(-1)
+            )).reshape(-1)
+        )
+        tangent_rhs[k] = db[k]-dA_state
+    tangent_rhs_s = time.perf_counter()-tangent_started
+
+    tangent_solve_started = time.perf_counter()
+    solved = charge_gram.solve_configured_linear_material_auto_prec_many(
+        float(inv_chi), np.ascontiguousarray(tangent_rhs),
+        tol=float(solve_tolerance), maxit=int(solve_max_iterations),
+        cluster_coarse_size=int(cluster_coarse_size),
+        cluster_deflation_size=int(cluster_deflation_size),
+        recycle_size=min(int(recycle_size), q),
+        mass_riesz=bool(mass_riesz))
+    state_jacobian = np.asarray(solved["m"], dtype=float)
+    tangent_iterations = tuple(int(value) for value in solved["iters"])
+    if state_jacobian.shape != (q, n):
+        raise RuntimeError("native VIM tangent solve returned invalid shape")
+    tangent_solve_s = time.perf_counter()-tangent_solve_started
+    timings = {
+        "geometry": geometry_s,
+        "state_solve": state_solve_s,
+        "tangent_rhs": tangent_rhs_s,
+        "tangent_solve": tangent_solve_s,
+        "directional_hmatrix_stats": derivative_stats,
+        "total": time.perf_counter()-total_started,
+    }
+    return VIMStateShapeJacobian(
+        state_value, state_jacobian, state_count,
+        tangent_iterations, timings)
 
 
 def production_vim_functional_shape_jacobian_streaming(*, fes,
@@ -5192,7 +5345,8 @@ def write_cubit_density_journal(path, element_ids, density, *, threshold=0.5,
     return {"path":str(destination),"solid_count":int(solid.size),"void_count":int(void.size),"threshold":float(threshold)}
 
 
-__all__=["VIMLinearization","VIMOperatorLinearization","ChargeGramLinearization",
+__all__=["VIMLinearization","VIMStateShapeJacobian",
+         "VIMOperatorLinearization","ChargeGramLinearization",
          "ChargeGramDirectionalOperators","VIMMatrixFreeLinearization","VIMAdjointGradient",
          "VIMFunctionalShapeJacobian",
          "ProductionGetTrafoDisplacements","ProductionVIMLinearization","LPUpdate",
@@ -5224,6 +5378,7 @@ __all__=["VIMLinearization","VIMOperatorLinearization","ChargeGramLinearization"
          "linearize_production_charge_gram_matrix_free","linearize_vim_operator_matrix_free",
          "linearize_production_vim_matrix_free_from_ngsolve",
          "production_vim_rms_adjoint_gradient_streaming",
+         "production_vim_state_shape_jacobian_streaming",
          "production_vim_functional_shape_jacobian_streaming",
          "linearize_production_vim_from_ngsolve","linearize_laplace_pair_gram",
          "affine_cell_self_energy_shape_derivative",

@@ -2988,6 +2988,99 @@ PYBIND11_MODULE(_radia_pybind, m) {
        "(positions, tangents, stations, curvature, length, out_of_plane_m, "
        "out_of_plane_slope).");
 
+    m.def("track_reference_orbit_to_plane_native", [](
+            py::object iron_evaluator,
+            double iron_scale,
+            int radia_object,
+            bool mirror_z,
+            py::array_t<double, py::array::c_style | py::array::forcecast>
+                constant_field_t,
+            double magnetic_rigidity,
+            py::array_t<double, py::array::c_style | py::array::forcecast>
+                entrance_point,
+            py::array_t<double, py::array::c_style | py::array::forcecast>
+                entrance_direction,
+            py::array_t<double, py::array::c_style | py::array::forcecast>
+                exit_plane_normal,
+            double exit_plane_offset_m,
+            double step_m,
+            double maximum_path_m,
+            double planarity_tolerance_m,
+            std::size_t station_count,
+            const std::string& iron_algorithm) {
+        std::shared_ptr<rad_hdiv::HDivFieldEvaluator> iron;
+        if (!iron_evaluator.is_none())
+            iron = py::cast<std::shared_ptr<rad_hdiv::HDivFieldEvaluator>>(
+                iron_evaluator);
+        auto field_info = constant_field_t.request();
+        auto point_info = entrance_point.request();
+        auto direction_info = entrance_direction.request();
+        auto normal_info = exit_plane_normal.request();
+        if (field_info.ndim != 1 || field_info.shape[0] != 3
+                || point_info.ndim != 1 || point_info.shape[0] != 3
+                || direction_info.ndim != 1 || direction_info.shape[0] != 3
+                || normal_info.ndim != 1 || normal_info.shape[0] != 3)
+            throw std::runtime_error(
+                "track_reference_orbit_to_plane_native: field, entrance, "
+                "direction, and plane normal must have shape (3,)");
+        if (station_count < 2)
+            throw std::runtime_error(
+                "track_reference_orbit_to_plane_native: station_count must "
+                "be >= 2");
+        py::array_t<double> positions(
+            {static_cast<py::ssize_t>(station_count), py::ssize_t(3)});
+        py::array_t<double> tangents(
+            {static_cast<py::ssize_t>(station_count), py::ssize_t(3)});
+        py::array_t<double> stations(
+            {static_cast<py::ssize_t>(station_count)});
+        py::array_t<double> curvature(
+            {static_cast<py::ssize_t>(station_count - 1)});
+        double* positions_ptr = static_cast<double*>(positions.request().ptr);
+        double* tangents_ptr = static_cast<double*>(tangents.request().ptr);
+        double* stations_ptr = static_cast<double*>(stations.request().ptr);
+        double* curvature_ptr = static_cast<double*>(curvature.request().ptr);
+        const double* field_ptr = static_cast<const double*>(field_info.ptr);
+        const double* point_ptr = static_cast<const double*>(point_info.ptr);
+        const double* direction_ptr =
+            static_cast<const double*>(direction_info.ptr);
+        const double* normal_ptr = static_cast<const double*>(normal_info.ptr);
+        rad_orbit::OrbitTrackResult tracked;
+        const auto selected_algorithm =
+            rad_hdiv::HDivFieldEvaluator::ParseAlgorithm(iron_algorithm);
+        const int algorithm_code =
+            selected_algorithm == rad_hdiv::HDivFieldEvaluator::Algorithm::Auto
+            ? -1
+            : (selected_algorithm
+                == rad_hdiv::HDivFieldEvaluator::Algorithm::Direct ? 0 : 1);
+        {
+            py::gil_scoped_release release;
+            tracked = rad_orbit::TrackReferenceOrbit3DToPlane(
+                iron.get(), iron_scale, algorithm_code, radia_object,
+                mirror_z ? 1 : 0, field_ptr, magnetic_rigidity, point_ptr,
+                direction_ptr, normal_ptr, exit_plane_offset_m, step_m,
+                maximum_path_m, planarity_tolerance_m, station_count,
+                positions_ptr, tangents_ptr, stations_ptr, curvature_ptr);
+        }
+        return py::make_tuple(positions, tangents, stations, curvature,
+                              tracked.length_m, tracked.out_of_plane_m,
+                              tracked.out_of_plane_slope);
+    }, py::arg("iron_evaluator") = py::none(), py::arg("iron_scale") = 1.0,
+       py::arg("radia_object") = -1, py::arg("mirror_z") = false,
+       py::arg("constant_field_t") = py::none(),
+       py::arg("magnetic_rigidity") = 1.0,
+       py::arg("entrance_point") = py::none(),
+       py::arg("entrance_direction") = py::none(),
+       py::arg("exit_plane_normal") = py::none(),
+       py::arg("exit_plane_offset_m") = 0.0,
+       py::arg("step_m") = 1.0e-3, py::arg("maximum_path_m") = 0.14,
+       py::arg("planarity_tolerance_m") = 1.0e-6,
+       py::arg("station_count") = 65,
+       py::arg("iron_algorithm") = "auto",
+       "Fixed-step RK4 3D reference-orbit tracker with an optional HDiv "
+       "evaluator, Radia object, constant B term, and arbitrary positive "
+       "exit-plane crossing. Returns positions, tangents, stations, signed "
+       "curvature, length, and measured planarity diagnostics.");
+
     using FieldEvaluator = rad_hdiv::HDivFieldEvaluator;
     py::class_<FieldEvaluator, std::shared_ptr<FieldEvaluator>>(m, "_HDivFieldEvaluator")
         .def_static("from_tet", [](
@@ -3085,6 +3178,25 @@ PYBIND11_MODULE(_radia_pybind, m) {
             return output;
         }, py::arg("observations"), py::arg("algorithm") = "auto",
            "Evaluate all physical and IMA sources in one TaskManager-parallel call; returns NO 1/(4pi).")
+        .def("field_gradient", [](const FieldEvaluator& evaluator,
+                py::array_t<double, py::array::c_style | py::array::forcecast> observations) {
+            auto input = observations.request();
+            if (input.ndim != 2 || input.shape[1] != 3)
+                throw std::runtime_error(
+                    "_HDivFieldEvaluator.field_gradient: observations must have shape (n,3)");
+            const std::size_t count = static_cast<std::size_t>(input.shape[0]);
+            py::array_t<double> output({
+                static_cast<py::ssize_t>(count), py::ssize_t(3),
+                py::ssize_t(3)});
+            {
+                py::gil_scoped_release release;
+                evaluator.EvaluateGradient(
+                    static_cast<const double*>(input.ptr), count,
+                    output.mutable_data());
+            }
+            return output;
+        }, py::arg("observations"),
+           "Exact flat-TET/TRI spatial Jacobian dH_i/dx_j; returns NO 1/(4pi).")
         .def("candidate_algorithm_for", [](const FieldEvaluator& evaluator, std::size_t n_observations) {
             return std::string(FieldEvaluator::AlgorithmName(evaluator.AlgorithmFor(n_observations)));
         }, "Return the work-threshold candidate; auto still probes accuracy and measured cost.")
@@ -4572,6 +4684,66 @@ PYBIND11_MODULE(_radia_pybind, m) {
              py::arg("cell_vertex_velocity"),py::arg("face_vertex_velocity"),
              "Differentiate configured flat-TET H-field rows for a batch of "
              "GetTrafo velocity modes in the analytic C++ Laplace kernel.")
+        .def("configured_field_values_shape_derivative",
+             [](const RadHACApKChargeGram& s, F64Array observations_a,
+                F64Array magnetization_a,
+                F64Array magnetization_jacobian_a,
+                F64Array cell_velocity_a, F64Array face_velocity_a) {
+                 const auto observations = observations_a.request();
+                 const auto magnetization = magnetization_a.request();
+                 const auto jacobian = magnetization_jacobian_a.request();
+                 const auto cells = cell_velocity_a.request();
+                 const auto faces = face_velocity_a.request();
+                 if (observations.ndim != 2 || observations.shape[0] < 1
+                     || observations.shape[1] != 3)
+                     throw std::invalid_argument(
+                         "observations must have shape (n_observations,3)");
+                 if (magnetization.ndim != 1
+                     || jacobian.ndim != 2
+                     || jacobian.shape[1] != magnetization.shape[0])
+                     throw std::invalid_argument(
+                         "state arrays must have shape (n_face) and (n_modes,n_face)");
+                 if (cells.ndim != 4 || cells.shape[0] != jacobian.shape[0]
+                     || cells.shape[2] != 4 || cells.shape[3] != 3
+                     || faces.ndim != 4 || faces.shape[0] != cells.shape[0]
+                     || faces.shape[2] != 3 || faces.shape[3] != 3)
+                     throw std::invalid_argument(
+                         "velocity arrays must have flat-TET batched shapes");
+                 const auto* observation_data =
+                     static_cast<const double*>(observations.ptr);
+                 const auto* state_data =
+                     static_cast<const double*>(magnetization.ptr);
+                 const auto* jacobian_data =
+                     static_cast<const double*>(jacobian.ptr);
+                 const auto* cell_data = static_cast<const double*>(cells.ptr);
+                 const auto* face_data = static_cast<const double*>(faces.ptr);
+                 std::vector<double> derivative;
+                 {
+                     py::gil_scoped_release release;
+                     derivative = s.ConfiguredFieldValuesShapeDerivative(
+                         std::vector<double>(
+                             observation_data,
+                             observation_data+observations.size),
+                         std::vector<double>(
+                             state_data, state_data+magnetization.size),
+                         std::vector<double>(
+                             jacobian_data, jacobian_data+jacobian.size),
+                         static_cast<int>(jacobian.shape[0]),
+                         std::vector<double>(cell_data, cell_data+cells.size),
+                         std::vector<double>(face_data, face_data+faces.size));
+                 }
+                 py::array_t<double> output({
+                     jacobian.shape[0], observations.shape[0],
+                     py::ssize_t(3)});
+                 std::memcpy(output.mutable_data(), derivative.data(),
+                             derivative.size()*sizeof(double));
+                 return output;
+             }, py::arg("observations"), py::arg("magnetization"),
+             py::arg("magnetization_jacobian"),
+             py::arg("cell_vertex_velocity"),
+             py::arg("face_vertex_velocity"),
+             "Evaluate total fixed-point field tangents C*dm+dC*m for "
+             "flat-TET GetTrafo modes with exact analytic source kernels.")
         .def("create_field_evaluator",
              [](const RadHACApKChargeGram& s, F64Array magnetization_a,
                 int leaf_size, double theta, std::size_t tree_min_sources,

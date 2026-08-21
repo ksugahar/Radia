@@ -129,6 +129,7 @@ pybindへ薄く公開してPython/MATLABの反復も完全な単一数値源に�
 - `packages/radia-mcp/tests/test_matlab_radia_mex_contract.py`
 - `validation_test/ffag_topopt/README.md`
 - `validation_test/ffag_topopt/validation_abe_manufactured_edge_cell.py`
+- `validation_test/ffag_topopt/validation_gettrafo_two_mode_reclosed_orbit.py`
 - `まとめ.md`
 
 ## 5. 再現済みの数値結果
@@ -204,6 +205,34 @@ oracleで選ぶ。
 これらの時間も公開ベンチ値ではない。単一削除と複数削除を同じSchur逆行列から評価できること、
 2セルの協調効果を単一セル係数の単純丸めに頼らず復元できることが検証上の成果である。
 
+### 5.2 2 mode GetTrafoと設計軌道再閉路
+
+入口・出口の滑らかなpole-face modeをそれぞれ1個使い、既知振幅
+`[+3.000, -2.000] mm`から作ったtarget mapを逆同定するcalibration benchmarkを閉じた。
+72 TET、BDM1、2エネルギー、16 sectionで、候補形状ごとにH-matrixを再構築し、磁化を再求解し、
+2本の周期軌道をnative C++ trackerで再閉路してからtransfer mapを再評価する。
+
+最初に軌道を固定したまま形状Jacobianを作る「lagged recovered orbit」を試したところ、最初のLP候補で
+exact band比が`20.0 -> 40.8347`へ悪化した。この失敗をtrust band緩和で隠さず、閉軌道条件
+`F(u(q),q)=0`を陰関数微分し、入口半径・入射角の`du/dq`、出口面event-time、軌道長、移動観測点を
+すべて解析的にJacobianへ含めた。
+
+修正後の受理済みexact band比は
+`20.0 -> 9.04 -> 5.14 -> 1.14 -> 1.10 -> 1.04 -> 0.194619`と単調に低下した。
+回収振幅は`[3.000073, -1.999590] mm`、相対係数誤差は`1.16e-4`、最終位置閉路誤差は
+`2.03e-9 m`、接線閉路誤差は`1.50e-9`、解析field responseと独立な随伴rowの最大差は
+`1.47e-14`だった。optimizer内の設計有限差分は0回である。
+
+実装の核は次である。
+
+- `production_vim_state_shape_jacobian_streaming`: `A dm = drhs-dA m`を全積則で解く。
+- `configured_field_values_shape_derivative`: dense観測行列を作らず`C dm+dC m`をC++で評価する。
+- `HDivFieldEvaluator::EvaluateGradient`: flat TET/TRIとpoint sourceの解析空間勾配を返す。
+- `differentiate_recovered_planar_orbit_shape_native`: Lorentz変分方程式と閉軌道陰関数を統合する。
+
+この実行はLAB smoke観測で、wall timeは270.3秒だった。mdx/hibinoはいずれもSSH timeoutだったため、
+公開benchmarkや正式compute-host validationとして引用してはならない。
+
 ## 6. これまで分かった失敗原因
 
 ### 6.1 設計空間が既存鉄だけだった
@@ -259,8 +288,9 @@ transfer matrixは設計軌道が決まらないと定義できないため、�
 2. **完了**: 固定設計軌道と1個の滑らかなGetTrafo pole-face modeで、既知振幅から作ったtarget mapを復元する。
    BDM1 TET 72要素・546 DOFで4.000 mmの既知係数を3.99967 mmまで回収し、fresh full solveの
    最大band比0.854を得た。`dM+dB+dG+dC+drhs`はすべて解析微分で、optimizer有限差分は0回である。
-3. **次に実施**: 入口・出口の2 modeへ拡張し、軌道復元を入れる。
-4. 4～8個の滑らかなmodeで任意mapの小摂動を再現する。
+3. **完了**: 入口・出口の2 modeと2エネルギーの設計軌道再閉路を入れる。
+   閉軌道の陰関数微分を含む解析Jacobianで既知`[+3,-2] mm`を回収し、exact band比0.195を得た。
+4. **次に実施**: 4～8個の滑らかなmodeで任意mapの小摂動を再現する。
 
 単純問題で壊れた時点でTURBO実問題へ進まず、candidate model、離散oracle、形状実現、軌道復元の
 どの段で失敗したかを分離する。
@@ -330,10 +360,11 @@ PoCを完成と呼ぶには、最低限次を満たす。
 9. 全反復のcommit、host、runtime、rank、残差、材料量、形状品質をresult JSON/logへ保存する。
 10. 有限差分をoptimizerに使用していない。
 
-現時点では条件1～4の基盤に加え、製造正解1セル・2セル問題と単一GetTrafo pole-face modeでは
-条件5～6を完全solveで満たした。ただし、後者は解析`dC/dq`が完成しているBDM1 TETの
-calibration benchmarkであり、HEX configured-field微分、複数mode、軌道復元、および実規模で
-条件6を満たす外側反復は未完である。
+現時点では条件1～4の基盤に加え、製造正解1セル・2セル問題、単一GetTrafo mode、および
+入口・出口2 mode＋設計軌道再閉路のBDM1 TET calibration benchmarkで条件5～6を完全solveにより
+満たした。optimizer有限差分なしの複数mode・軌道復元まで完了した一方、HEX configured-field微分、
+4～8 modeの一般map、小規模とは独立な軌道cross-check、および実規模で条件6～9を満たす外側反復は
+未完である。
 
 ## 10. 再現コマンド
 
@@ -384,6 +415,18 @@ LABの小規模実装smokeでは`status=pass`、72 TET、BDM1 546 DOF、既知4.
 速度benchmarkではない。multi-orbit観測はrow-major packed contractを使い、通常のbatched row
 builderとの差は最大`6.36e-21`、optimizerの有限差分使用は0回である。
 
+### 製造正解2 mode＋設計軌道再閉路検証
+
+```powershell
+python -u validation_test\ffag_topopt\validation_gettrafo_two_mode_reclosed_orbit.py `
+  --output C:\temp\ffag_reclosed_gettrafo_lab_smoke.json `
+  --validation-class "LAB smoke observation; mdx and hibino SSH unavailable"
+```
+
+LAB smokeでは`status=pass`、最終`exact_max_band_ratio=0.194619`、回収振幅
+`[3.000073,-1.999590] mm`、最終位置閉路`2.03e-9 m`以下、optimizer有限差分0回を確認した。
+正式結果はidleなmdx/hibinoで同じJSON契約を再生成する。
+
 ### MEX build
 
 ```powershell
@@ -398,7 +441,9 @@ pwsh -ExecutionPolicy Bypass -File .\Build.ps1 -MatlabMexOnly -Verbose
 matlab -batch "addpath('matlab'); clear mex; s=testsuite('tests/matlab/test_radia_mex.m'); n=string({s.Name}); r=run(s(contains(n,'testAbeElementFillPlanNative'))); disp(r); assert(all([r.Passed]));"
 ```
 
-2026-08-21時点で1/1件合格。dense参照とACA経路の両方を含む。
+2026-08-21時点で全MEX回帰68/68件合格。新規focused 3/3件は、解析空間勾配、
+`C dm+dC m`の剛体並進恒等式、任意出口面native orbit trackerを含む。変更したMATLABラッパーと
+`tests/matlab/test_radia_mex.m`のCode Analyzer指摘は0件である。
 
 ### Python/MCP MEX契約
 

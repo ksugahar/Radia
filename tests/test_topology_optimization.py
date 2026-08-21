@@ -23,6 +23,7 @@ from radia.topology_optimization import (
     linearize_production_vim_from_ngsolve,
     linearize_production_vim_matrix_free_from_ngsolve,
     sample_production_gettrafo_displacements,
+    production_vim_state_shape_jacobian_streaming,
     production_vim_functional_shape_jacobian_streaming,
     ElementInsertionResponse,
     ShapeLinearization,
@@ -2650,6 +2651,21 @@ def test_tet_streaming_shape_jacobian_uses_exact_configured_field_derivative():
             mass_riesz=False,
             cluster_coarse_size=8,cluster_deflation_size=2,
             recycle_size=2,state=state,state_iterations=123)
+        state_shape=production_vim_state_shape_jacobian_streaming(
+            fes=fes,deformation_modes=[mode],charge_basis=basis,
+            charge_gram=gram,charge_map=B,inv_chi=inv_chi,rhs=rhs,
+            rhs_jacobian=drhs,family="tet",solve_tolerance=1e-12,
+            mass_riesz=False,derivative_eps=1e-12,
+            derivative_leaf=256,derivative_eta=2.0,
+            state=state,state_iterations=123)
+        geometry=sample_production_gettrafo_displacements(
+            fes,[mode],basis,family="tet")
+        cells=np.ascontiguousarray(np.stack(geometry.cell,axis=1))
+        faces=np.ascontiguousarray(np.stack(geometry.face,axis=1))
+        field_shape=np.asarray(
+            gram.configured_field_values_shape_derivative(
+                observations,state,state_shape.state_jacobian,cells,faces))
+        forward_response=np.einsum("rpc,qpc->rq",weights,field_shape)
     epsilon=2e-6;plus,_=build(epsilon);minus,_=build(-epsilon)
     finite_difference=(plus-minus)/(2*epsilon)
 
@@ -2658,6 +2674,10 @@ def test_tet_streaming_shape_jacobian_uses_exact_configured_field_derivative():
         analytic.response_jacobian[:,0],finite_difference,
         rtol=3e-4,atol=3e-7)
     np.testing.assert_allclose(reused.state,state,rtol=0,atol=0)
+    np.testing.assert_allclose(
+        forward_response,analytic.response_jacobian,
+        rtol=5e-10,atol=2e-10)
+    assert state_shape.state_iterations==123
     np.testing.assert_allclose(reused.response,analytic.response,
                                rtol=2e-12,atol=2e-12)
     np.testing.assert_allclose(reused.response_jacobian,

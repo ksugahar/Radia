@@ -9606,6 +9606,310 @@ RadHACApKChargeGram::ConfiguredFieldFunctionalRowsDirectionalDerivative(
     return output;
 }
 
+std::vector<double>
+RadHACApKChargeGram::ConfiguredFieldValuesShapeDerivative(
+    const std::vector<double>& observations,
+    const std::vector<double>& magnetization,
+    const std::vector<double>& magnetization_jacobian,
+    int n_modes,
+    const std::vector<double>& cell_velocity,
+    const std::vector<double>& face_velocity) const
+{
+    if (!m_operatorChargeConfigured)
+        throw std::runtime_error(
+            "ConfiguredFieldValuesShapeDerivative: charge map is not configured");
+    if (m_d2 || !m_highorder || m_curved || m_hexmode || m_wedgemode
+            || m_polyCombo)
+        throw std::runtime_error(
+            "ConfiguredFieldValuesShapeDerivative: exact analytic values "
+            "require flat affine TET geometry");
+    if (observations.empty() || observations.size()%3 != 0)
+        throw std::invalid_argument(
+            "ConfiguredFieldValuesShapeDerivative: observations must have shape (n,3)");
+    const int n_observations = static_cast<int>(observations.size()/3);
+    if (n_modes < 1 || magnetization.size()
+            != static_cast<size_t>(m_operatorNFace)
+            || magnetization_jacobian.size()
+            != static_cast<size_t>(n_modes)*m_operatorNFace)
+        throw std::invalid_argument(
+            "ConfiguredFieldValuesShapeDerivative: state arrays must have "
+            "shape (n_face) and (n_modes,n_face)");
+    const int n_cells = static_cast<int>(m_hoCellCharges.size());
+    const int n_faces = static_cast<int>(m_hoFaceCharges.size());
+    if (cell_velocity.size() != static_cast<size_t>(n_modes)*n_cells*12
+            || face_velocity.size()
+                != static_cast<size_t>(n_modes)*n_faces*9)
+        throw std::invalid_argument(
+            "ConfiguredFieldValuesShapeDerivative: velocity array shape mismatch");
+    for (double value : observations)
+        if (!std::isfinite(value))
+            throw std::invalid_argument(
+                "ConfiguredFieldValuesShapeDerivative: observations must be finite");
+    for (double value : magnetization)
+        if (!std::isfinite(value))
+            throw std::invalid_argument(
+                "ConfiguredFieldValuesShapeDerivative: state must be finite");
+    for (double value : magnetization_jacobian)
+        if (!std::isfinite(value))
+            throw std::invalid_argument(
+                "ConfiguredFieldValuesShapeDerivative: state Jacobian must be finite");
+
+    std::vector<double> charge(static_cast<size_t>(m_ndof), 0.0);
+    std::vector<double> dcharge(
+        static_cast<size_t>(n_modes)*m_ndof, 0.0);
+    for (int a = 0; a < m_ndof; ++a) {
+        for (int entry = m_operatorBIndptr[static_cast<size_t>(a)];
+             entry < m_operatorBIndptr[static_cast<size_t>(a)+1]; ++entry) {
+            const int face = m_operatorBIndices[static_cast<size_t>(entry)];
+            const double coefficient =
+                m_operatorBData[static_cast<size_t>(entry)];
+            charge[static_cast<size_t>(a)] += coefficient
+                * magnetization[static_cast<size_t>(face)];
+            for (int mode = 0; mode < n_modes; ++mode)
+                dcharge[static_cast<size_t>(mode)*m_ndof+a] += coefficient
+                    * magnetization_jacobian[
+                        static_cast<size_t>(mode)*m_operatorNFace+face];
+        }
+    }
+    for (int mode = 0; mode < n_modes; ++mode) {
+        const auto cell_begin = cell_velocity.begin()
+            + static_cast<size_t>(mode)*n_cells*12;
+        const auto face_begin = face_velocity.begin()
+            + static_cast<size_t>(mode)*n_faces*9;
+        const auto rates = TetChargeMapRowDirectionalRates(
+            std::vector<double>(
+                cell_begin, cell_begin+static_cast<size_t>(n_cells)*12),
+            std::vector<double>(
+                face_begin, face_begin+static_cast<size_t>(n_faces)*9));
+        for (int a = 0; a < m_ndof; ++a)
+            dcharge[static_cast<size_t>(mode)*m_ndof+a]
+                += rates[static_cast<size_t>(a)]*charge[static_cast<size_t>(a)];
+    }
+
+    struct VolumeSource {
+        double V[4][3]{}, dV[4][3]{};
+        double rho0 = 0.0, drho0 = 0.0;
+        double g[3]{}, dg[3]{};
+    };
+    struct SurfaceSource {
+        double V[3][3]{}, dV[3][3]{};
+        double sigma0 = 0.0, dsigma0 = 0.0;
+        double slope[3]{}, dslope[3]{};
+        double hessian[3][3]{}, dhessian[3][3]{};
+    };
+    std::vector<VolumeSource> volumes(
+        static_cast<size_t>(n_modes)*m_ndof);
+    std::vector<SurfaceSource> surfaces(
+        static_cast<size_t>(n_modes)*m_ndof);
+    std::vector<unsigned char> is_volume(static_cast<size_t>(m_ndof));
+
+    for (int a = 0; a < m_ndof; ++a) {
+        const int* exponent = &m_expo[static_cast<size_t>(3*a)];
+        const int degree = exponent[0]+exponent[1]+exponent[2];
+        const bool volume = m_kind[static_cast<size_t>(a)] == 0;
+        is_volume[static_cast<size_t>(a)] = volume ? 1 : 0;
+        if ((volume && degree > 1) || (!volume && degree > 2))
+            throw std::runtime_error(
+                "ConfiguredFieldValuesShapeDerivative: unsupported charge degree");
+        const int host = m_host[static_cast<size_t>(a)];
+        for (int mode = 0; mode < n_modes; ++mode) {
+            const size_t linear = static_cast<size_t>(mode)*m_ndof+a;
+            const double coefficient = charge[static_cast<size_t>(a)];
+            const double dcoefficient = dcharge[linear];
+            if (volume) {
+                VolumeSource& source = volumes[linear];
+                const double* vertices = &m_cellV[static_cast<size_t>(host)*12];
+                const double* velocity = &cell_velocity[
+                    (static_cast<size_t>(mode)*n_cells+host)*12];
+                for (int i = 0; i < 4; ++i)
+                    for (int k = 0; k < 3; ++k) {
+                        source.V[i][k] = vertices[3*i+k];
+                        source.dV[i][k] = velocity[3*i+k];
+                    }
+                if (degree == 0) {
+                    source.rho0 = coefficient;
+                    source.drho0 = dcoefficient;
+                } else {
+                    const int axis = exponent[0] ? 0 : (exponent[1] ? 1 : 2);
+                    const double* inverse = &m_cellInv[static_cast<size_t>(host)*9];
+                    double dE[3][3]{}, dinverse[3][3]{};
+                    for (int physical = 0; physical < 3; ++physical)
+                        for (int reference = 0; reference < 3; ++reference)
+                            dE[physical][reference] =
+                                source.dV[reference+1][physical]
+                                - source.dV[0][physical];
+                    for (int i = 0; i < 3; ++i)
+                        for (int j = 0; j < 3; ++j)
+                            for (int k = 0; k < 3; ++k)
+                                for (int l = 0; l < 3; ++l)
+                                    dinverse[i][j] -= inverse[3*i+k]
+                                        * dE[k][l]*inverse[3*l+j];
+                    for (int k = 0; k < 3; ++k) {
+                        source.g[k] = coefficient*inverse[3*axis+k];
+                        source.dg[k] = dcoefficient*inverse[3*axis+k]
+                            + coefficient*dinverse[axis][k];
+                        source.rho0 -= source.g[k]*source.V[0][k];
+                        source.drho0 -= source.dg[k]*source.V[0][k]
+                            + source.g[k]*source.dV[0][k];
+                    }
+                }
+            } else {
+                SurfaceSource& source = surfaces[linear];
+                const double* vertices = &m_faceV[static_cast<size_t>(host)*9];
+                const double* velocity = &face_velocity[
+                    (static_cast<size_t>(mode)*n_faces+host)*9];
+                for (int i = 0; i < 3; ++i)
+                    for (int k = 0; k < 3; ++k) {
+                        source.V[i][k] = vertices[3*i+k];
+                        source.dV[i][k] = velocity[3*i+k];
+                    }
+                double edge[2][3], dedge[2][3], dgram[2][2]{};
+                for (int i = 0; i < 2; ++i)
+                    for (int k = 0; k < 3; ++k) {
+                        edge[i][k] = source.V[i+1][k]-source.V[0][k];
+                        dedge[i][k] = source.dV[i+1][k]-source.dV[0][k];
+                    }
+                for (int i = 0; i < 2; ++i)
+                    for (int j = 0; j < 2; ++j)
+                        for (int k = 0; k < 3; ++k)
+                            dgram[i][j] += dedge[i][k]*edge[j][k]
+                                + edge[i][k]*dedge[j][k];
+                const double* inverse = &m_faceGinv[static_cast<size_t>(host)*4];
+                double dinverse[2][2]{}, L[2][3]{}, dL[2][3]{}, b[2]{}, db[2]{};
+                for (int i = 0; i < 2; ++i)
+                    for (int j = 0; j < 2; ++j)
+                        for (int k = 0; k < 2; ++k)
+                            for (int l = 0; l < 2; ++l)
+                                dinverse[i][j] -= inverse[2*i+k]
+                                    * dgram[k][l]*inverse[2*l+j];
+                for (int i = 0; i < 2; ++i)
+                    for (int k = 0; k < 3; ++k) {
+                        for (int j = 0; j < 2; ++j) {
+                            L[i][k] += inverse[2*i+j]*edge[j][k];
+                            dL[i][k] += dinverse[i][j]*edge[j][k]
+                                + inverse[2*i+j]*dedge[j][k];
+                        }
+                        b[i] -= L[i][k]*source.V[0][k];
+                        db[i] -= dL[i][k]*source.V[0][k]
+                            + L[i][k]*source.dV[0][k];
+                    }
+                const int i = exponent[0], j = exponent[1];
+                if (i == 0 && j == 0) {
+                    source.sigma0 = coefficient;
+                    source.dsigma0 = dcoefficient;
+                } else if (i+j == 1) {
+                    const int axis = i ? 0 : 1;
+                    source.sigma0 = coefficient*b[axis];
+                    source.dsigma0 = dcoefficient*b[axis]
+                        + coefficient*db[axis];
+                    for (int k = 0; k < 3; ++k) {
+                        source.slope[k] = coefficient*L[axis][k];
+                        source.dslope[k] = dcoefficient*L[axis][k]
+                            + coefficient*dL[axis][k];
+                    }
+                } else {
+                    const int first = i == 2 ? 0 : (j == 2 ? 1 : 0);
+                    const int second = i == 2 ? 0 : (j == 2 ? 1 : 1);
+                    source.sigma0 = coefficient*b[first]*b[second];
+                    source.dsigma0 = dcoefficient*b[first]*b[second]
+                        + coefficient*(db[first]*b[second]
+                            + b[first]*db[second]);
+                    for (int k = 0; k < 3; ++k) {
+                        const double value = b[first]*L[second][k]
+                            + b[second]*L[first][k];
+                        const double derivative = db[first]*L[second][k]
+                            + b[first]*dL[second][k]
+                            + db[second]*L[first][k]
+                            + b[second]*dL[first][k];
+                        source.slope[k] = coefficient*value;
+                        source.dslope[k] = dcoefficient*value
+                            + coefficient*derivative;
+                    }
+                    for (int r = 0; r < 3; ++r)
+                        for (int c = 0; c < 3; ++c) {
+                            const double value = first == second
+                                ? L[first][r]*L[first][c]
+                                : 0.5*(L[first][r]*L[second][c]
+                                    + L[second][r]*L[first][c]);
+                            const double derivative = first == second
+                                ? dL[first][r]*L[first][c]
+                                    + L[first][r]*dL[first][c]
+                                : 0.5*(dL[first][r]*L[second][c]
+                                    + L[first][r]*dL[second][c]
+                                    + dL[second][r]*L[first][c]
+                                    + L[second][r]*dL[first][c]);
+                            source.hessian[r][c] = coefficient*value;
+                            source.dhessian[r][c] = dcoefficient*value
+                                + coefficient*derivative;
+                        }
+                }
+            }
+        }
+    }
+
+    constexpr double inv_four_pi =
+        0.079577471545947667884441881686257181;
+    const double zero_direction[3] = {0.0, 0.0, 0.0};
+    std::vector<double> output(
+        static_cast<size_t>(n_modes)*observations.size(), 0.0);
+    ngcore::RegionTaskManager task_manager;
+    ngcore::ParallelFor(
+        ngcore::IntRange(n_modes*n_observations), [&](int linear) {
+            const int mode = linear/n_observations;
+            const int observation = linear-mode*n_observations;
+            const double* target = &observations[
+                static_cast<size_t>(observation)*3];
+            double sum[3]{}, correction[3]{};
+            auto add = [&](const double value[3], double scale) {
+                for (int k = 0; k < 3; ++k) {
+                    const double term = scale*value[k];
+                    const double next = sum[k]+term;
+                    correction[k] += std::fabs(sum[k]) >= std::fabs(term)
+                        ? (sum[k]-next)+term : (term-next)+sum[k];
+                    sum[k] = next;
+                }
+            };
+            for (int a = 0; a < m_ndof; ++a) {
+                const size_t source_index =
+                    static_cast<size_t>(mode)*m_ndof+a;
+                auto evaluate = [&](const double point[3], double value[3]) {
+                    double base_value[3];
+                    if (is_volume[static_cast<size_t>(a)]) {
+                        const VolumeSource& source = volumes[source_index];
+                        rad_hdiv::TetVolFieldLinearDirectional(
+                            source.V, source.dV, point, zero_direction,
+                            source.rho0, source.drho0,
+                            source.g, source.dg, base_value, value);
+                    } else {
+                        const SurfaceSource& source = surfaces[source_index];
+                        rad_hdiv::QuadTriFieldDirectional(
+                            source.V, source.dV, point, zero_direction,
+                            source.sigma0, source.dsigma0,
+                            source.slope, source.dslope,
+                            source.hessian, source.dhessian,
+                            base_value, value);
+                    }
+                };
+                double value[3];
+                evaluate(target, value);
+                add(value, 1.0);
+                for (size_t image = 0; image < m_image_masks.size(); ++image) {
+                    const int img = static_cast<int>(image)+1;
+                    double reflected[3], term[3], mapped[3];
+                    ImageEvalPoint(img, target, reflected);
+                    evaluate(reflected, term);
+                    ImageApplyVector(img, term, mapped);
+                    add(mapped, m_image_signs[image]);
+                }
+            }
+            const size_t offset =
+                (static_cast<size_t>(mode)*n_observations+observation)*3;
+            for (int k = 0; k < 3; ++k)
+                output[offset+k] = inv_four_pi*(sum[k]+correction[k]);
+        });
+    return output;
+}
+
 std::shared_ptr<rad_hdiv::HDivFieldEvaluator>
 RadHACApKChargeGram::CreateConfiguredFieldEvaluator(
     const std::vector<double>& magnetization,
