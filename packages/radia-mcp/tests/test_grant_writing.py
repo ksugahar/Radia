@@ -74,6 +74,7 @@ def test_grant_writing_kaken_oss_health_report_runs():
     assert "reviewer_vocabulary" in report["detailed_results"]
     assert "persuasion_quality" in report["detailed_results"]
     assert "adjacent_reviewer_readability" in report["detailed_results"]
+    assert "reviewer_momentum" in report["detailed_results"]
     assert "literature_gap_evidence" in report["detailed_results"]
     assert "budget" in report["detailed_results"]
 
@@ -84,6 +85,7 @@ def test_grant_writing_server_exposes_adjacent_reviewer_readability():
     names = {tool.name for tool in asyncio.run(mcp.list_tools())}
 
     assert "grant_writing_adjacent_reviewer_readability_check" in names
+    assert "grant_writing_reviewer_momentum_check" in names
 
 
 def test_grant_writing_kaken_oss_platform_check():
@@ -883,6 +885,67 @@ def test_adjacent_reviewer_readability_accepts_takeaway_first_evidence():
 
     assert "takeaway_after_evidence" not in types
     assert result["metrics"]["takeaway_after_evidence_count"] == 0
+
+
+def test_reviewer_momentum_accepts_concrete_problem_to_payoff():
+    text = (
+        "粒子線がん治療では、患者のがん形状に合わせた高精度な照射が求められる。"
+        "しかし、磁場をそろえる初期化運転には半年を要し、治療装置の運用を"
+        "圧迫している。そこで本研究では、磁気ヒステリシスを定量化して磁場を"
+        "制御する。初期化運転を行わず、設定電流を即座に算出できる技術を確立する。"
+    )
+
+    result = gw.grant_writing_reviewer_momentum_check(text)
+
+    assert result["applicable"]
+    assert result["score"] is None
+    assert result["risk_count"] == 0
+    assert result["metrics"]["arc_complete"]
+
+
+def test_reviewer_momentum_accepts_unused_opportunity_arc():
+    text = (
+        "金属3Dプリンタの実用化により、加熱コイルの設計自由度が急速に拡大した。"
+        "しかし、任意形状の自動メッシュ生成は60年間実現されておらず、設計は"
+        "熟練者の試行錯誤に依存する。そこで本研究では、AIエージェントと"
+        "電磁界・熱解析を結ぶ。製造自由度を使い切るコイル設計を自動化し、"
+        "設計期間の短縮と加熱効率の向上を実現する。"
+    )
+
+    result = gw.grant_writing_reviewer_momentum_check(text)
+
+    assert result["risk_count"] == 0
+    assert result["metrics"]["arc_complete"]
+    assert result["metrics"]["productive_tension"]
+
+
+def test_reviewer_momentum_flags_method_first_inventory():
+    text = (
+        "FEM、RNA、CLN、MCP、OSS、APIを統合するモデルを構築する。"
+        "本研究では解析モジュールを接続する。"
+        "これにより設計条件を示す。"
+    )
+
+    result = gw.grant_writing_reviewer_momentum_check(text)
+    types = {risk["type"] for risk in result["risks"]}
+
+    assert "reviewer_stakes_delayed" in types
+    assert "bottleneck_not_concrete" in types
+    assert "method_before_problem" in types
+    assert "lead_method_inventory" in types
+
+
+def test_reviewer_momentum_flags_unsupported_hype():
+    text = (
+        "本研究は世界初の画期的で革新的な解析基盤を構築する。"
+        "新しいモデルを開発する。"
+        "設計へ応用する。"
+    )
+
+    result = gw.grant_writing_reviewer_momentum_check(text)
+    types = {risk["type"] for risk in result["risks"]}
+
+    assert "unsupported_excitement_language" in types
 
 
 def test_subject_predicate_distance_reads_fullwidth_japanese_comma():
