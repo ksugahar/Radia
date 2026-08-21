@@ -1326,11 +1326,25 @@ def presentation_check_slide_message_hierarchy(
         bottom_start_fraction: float = 0.68,
         footer_start_fraction: float = 0.94,
         min_takeaway_chars: int = 8,
-        max_title_chars: int = 28) -> dict:
+        max_title_chars: int = 28,
+        title_style: str = "auto") -> dict:
     """各 content slide の伝達意図 title と下端の知見を位置ベースで点検。
 
-    title は「このスライドで何を伝えるか」を、短い「対象＋観点」で示す。
-    「結果」「数値計算結果」のような汎用語や、結果の長い言い切りは避ける。
+    title には二つの流儀があり、どちらも正しい:
+
+    - ``topic``   「対象＋観点」を短く置き、結果の言い切りは下端に回す。
+    - ``message`` 伝えたい結論そのものを題目にする
+                  （例「MMPMは要素ひずみによる偏差を最大1/145に低減」）。
+
+    片方を全デッキに強いると、もう片方で書かれたデッキは一枚残らず落ちる。
+    実測 (2026-08-21): message 流儀で書かれた 16 枚のデッキに ``topic`` を当てると
+    8 枚が「結果の言い切り」として失格になった。どれも題目としては正しい。
+
+    ``title_style="auto"`` (既定) はデッキ自身の流儀を数えて判定し、どちらを
+    適用したかを ``title_style_used`` として返す。``"topic"`` / ``"message"``
+    を明示すれば固定できる。判定材料が乏しいとき (content slide が 3 枚未満)
+    は ``topic`` に倒す。
+
     takeaway は中央の図表・式・比較から「何が分かったか」を示す。
     footer、page number、URL、citation、所属は takeaway として数えない。
     """
@@ -1353,6 +1367,8 @@ def presentation_check_slide_message_hierarchy(
         return {"error": "min_takeaway_chars must be >= 1."}
     if max_title_chars < 5:
         return {"error": "max_title_chars must be >= 5."}
+    if title_style not in ("auto", "topic", "message"):
+        return {"error": "title_style must be auto, topic or message."}
 
     prs = _pptx.Presentation(str(p))
     slide_h = float(prs.slide_height)
@@ -1440,6 +1456,44 @@ def presentation_check_slide_message_hierarchy(
             return True
         return False
 
+    def _asserts(text: str) -> bool:
+        """Whether the title states something, rather than naming a topic.
+
+        Four signals, any one of which is enough: a predicate ending, a
+        measured number, a claim/effect word, or a topic particle with a
+        predicate after it -- the last is what makes 「従来法は補償点配置に
+        より解が変化」 a sentence and 「結果」 a label.
+        """
+        if not text:
+            return False
+        if result_sentence.search(text) or numeric_result.search(text):
+            return True
+        if claim_terms.search(text):
+            return True
+        # 体言止め with an object: 「…6面磁荷を局所閉包」「…HDiv-MMMを展開」.
+        # The action noun has to END the title and sit directly after を/へ/に,
+        # which is what separates it from a noun phrase whose particle belongs
+        # to a modifying clause (「非線形計算に用いた実測B-H曲線」).
+        if re.search(r"[をへに][一-鿿]{2,4}$", text):
+            return True
+        return bool(re.search(r"[はがも](?=.{3,})", text))
+
+    content_titles = []
+    for index, slide in enumerate(prs.slides, 1):
+        candidate = _slide_title(slide).strip()
+        if index == 1 or structural_title.match(candidate):
+            continue
+        content_titles.append(candidate)
+    n_asserting = sum(1 for t in content_titles if _asserts(t))
+    # Below three content slides there is not enough evidence to read a
+    # convention off the deck, so the established default stands.
+    style_detected = (
+        "message"
+        if len(content_titles) >= 3 and n_asserting >= 0.6 * len(content_titles)
+        else "topic"
+    )
+    style = style_detected if title_style == "auto" else title_style
+
     reports = []
     checked = 0
     passed = 0
@@ -1474,9 +1528,16 @@ def presentation_check_slide_message_hierarchy(
             or len(numeric_values) >= 2
             or (numeric_values and numeric_result_marker)
         )
-        title_is_message = bool(
-            title_is_specific and title_is_concise and not title_is_result_sentence
-        )
+        title_asserts_message = _asserts(title)
+        if style == "message":
+            # The result IS the title; a title that only names a topic fails.
+            title_is_message = bool(
+                title_is_specific and title_is_concise and title_asserts_message
+            )
+        else:
+            title_is_message = bool(
+                title_is_specific and title_is_concise and not title_is_result_sentence
+            )
 
         candidates = []
         for shape in _walk_shapes(slide.shapes):
@@ -1514,7 +1575,10 @@ def presentation_check_slide_message_hierarchy(
                 issues.append("title_not_specific")
             if not title_is_concise:
                 issues.append("title_too_long")
-            if title_is_result_sentence:
+            if style == "message":
+                if not title_asserts_message:
+                    issues.append("title_states_no_message")
+            elif title_is_result_sentence:
                 issues.append("title_is_result_sentence")
         if not has_takeaway:
             takeaway_failures += 1
@@ -1530,6 +1594,7 @@ def presentation_check_slide_message_hierarchy(
             "title_is_specific": title_is_specific,
             "title_is_concise": title_is_concise,
             "title_is_result_sentence": title_is_result_sentence,
+            "title_asserts_message": title_asserts_message,
             "bottom_takeaway": candidates[0]["text"] if candidates else "",
             "has_bottom_takeaway": has_takeaway,
             "issues": issues,
@@ -1544,9 +1609,18 @@ def presentation_check_slide_message_hierarchy(
         "slides_passing": passed,
         "title_message_failures": title_failures,
         "bottom_takeaway_failures": takeaway_failures,
+        "title_style_used": style,
+        "title_style_detected": style_detected,
+        "title_style_evidence": {
+            "content_titles": len(content_titles),
+            "asserting_titles": n_asserting,
+        },
         "slides": reports,
         "rule": {
             "title": (
+                "最上部に、そのスライドで伝えたい結論を一文で置く"
+                "（message 流儀）。『結果』のような題目名は不可。"
+                if style == "message" else
                 "最上部に、そのスライドで伝えたい対象＋観点を短い具体語句で置く。"
                 "『結果』『数値計算結果』や、結果の長い言い切りは避ける。"
             ),
