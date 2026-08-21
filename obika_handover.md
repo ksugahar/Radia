@@ -1,6 +1,6 @@
 # Obika君向け HDiv-MMM加速器電磁石最適化 研究引継書
 
-最終更新: 2026-08-21
+最終更新: 2026-08-22
 
 対象リポジトリ: `S:\Radia\01_GitHub`
 
@@ -338,6 +338,32 @@ mdx/hibinoは2026-08-24まで停止予定なので、100号機`intel11`へ同じ
 `full_direct_api_1iter_100.json`、`full_direct_api_restart2_100.json`、
 `full_direct_api_restart3_100.json`として保存した。mdx/hibino復帰まではLAB/100号機で数値正当性だけを
 確認し、計算時間・速度・スケーリングを測定、比較、主張しない。
+
+### 5.8 選択したsymplectic map成分を制御する磁極PoC
+
+6×6行列の36成分を独立に指定するのではなく、物理的に許される完全なsymplectic mapのうち、
+磁極形状で最初に制御したい成分だけを目的関数へ入れるAPIを追加した。状態順序は
+`(x,x',y,y',ell,delta)`で、現在の名前付き成分群は`horizontal_focusing` (`R21`)、
+`vertical_focusing` (`R43`)、`horizontal_block`、`vertical_block`、
+`horizontal_dispersion` (`R16`,`R26`)、`path_length`である。targetは選択成分だけでなく完全な
+6×6行列として入力し、既定では`M^T J M=J`の残差を`1e-9`以下に要求する。行列式1だけでは
+不十分であり、選択しなかった成分も独立な設計変数とはみなさない。
+
+`validation_selected_pole_transfer_components.py`は、隣接する2個のHEX/BDM1セルのうち1個を固定seed、
+もう1個を既知の追加磁極としてtargetを製造する。LABの数値正当性runでは2 HEX、72 BDM1 DOFで、
+active set `[0]`から`[0,1]`を完全に回収した。選択した`R21,R43,R16,R26`の最大band比、設計軌道上
+曲げ場の最大band比はいずれも0、target/realized symplectic residualはいずれも
+`1.5443879201889542e-16`で、binary connectivityを含む7 gateがすべてtrueだった。これは
+「物理的に到達可能なtargetなら、選択したtransfer-map成分をHDiv-MMMのwhole-HEX成長で制御できる」
+ことの回帰であり、計算時間は記録していない。
+
+同じ名前付き4成分を42,480 BDM1 DOF C-yokeへ適用した別runでは、固定seed 720セルから最初の巡で
+3セルを追加し、全体最大band比を`40.85966668457417`から`38.7142251590856`へ下げた。しかし次の
+field-target trialはすべて悪化し、direct-map oracle fallbackもactive-set変更を提案できず、723セルで
+停止した。最終の軌道場最大band比は`38.7142251590856`、選択transfer成分最大band比は
+`17.63346437851595`である。従ってAPIと探索ゲートは動作しているが、現在の軸対称C-yoke設計空間で
+Bell--Abell targetへ収束したとはいえない。次は実C-yoke上でも既知の小さなpole active-set変更から
+target mapを製造して回収し、探索不良とtarget/design-space到達不能を分離する。
 
 ## 6. これまで分かった失敗原因
 

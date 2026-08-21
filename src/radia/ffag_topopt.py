@@ -28,6 +28,8 @@ from .accelerator_magnet_topopt import (
     optimize_hdiv_mmm_magnet_from_transfer_matrices,
     planar_orbit_field_observations,
     solve_transfer_matrix_field_correction,
+    static_magnet_symplectic_residual,
+    static_magnet_transfer_component_entries,
 )
 from .isochronous_topopt import (
     CombinedFunctionTransferMap,
@@ -375,12 +377,32 @@ class FFAGFixedDesignOrbitTargetFamily:
     """
 
     objective: MultiMomentumTransferMatrixObjective
+    controlled_components: tuple[str, ...] = ()
+    target_symplectic_residuals: np.ndarray | None = None
 
     def __post_init__(self):
         if not isinstance(
                 self.objective, MultiMomentumTransferMatrixObjective):
             raise TypeError(
                 "objective must be a MultiMomentumTransferMatrixObjective")
+        components = tuple(str(value) for value in self.controlled_components)
+        residuals = self.target_symplectic_residuals
+        if residuals is None:
+            residuals = np.asarray([
+                static_magnet_symplectic_residual(matrix)
+                for matrix in self.objective.target_matrices])
+        else:
+            residuals = np.asarray(residuals, dtype=float).reshape(-1)
+        if (residuals.shape != (len(self.objective.orbits),)
+                or not np.all(np.isfinite(residuals))
+                or np.any(residuals < 0.0)):
+            raise ValueError(
+                "target_symplectic_residuals must contain one finite "
+                "nonnegative value per design orbit")
+        object.__setattr__(self, "controlled_components", components)
+        object.__setattr__(
+            self, "target_symplectic_residuals",
+            np.ascontiguousarray(residuals))
 
     @property
     def design_orbits(self) -> tuple[PlanarDesignOrbit, ...]:
@@ -423,16 +445,35 @@ def build_ffag_cell_target_family(
 def build_ffag_fixed_design_orbit_target_family(
         design_orbits, target_transfer_matrices, *,
         transfer_matrix_band=1.0e-3, bend_field_band=1.0e-3,
-        response_entries=None, curvature_sign=1.0, gradient_sign=1.0
+        response_entries=None, controlled_components=None,
+        require_symplectic=True, symplectic_tolerance=1.0e-9,
+        curvature_sign=1.0, gradient_sign=1.0
         ) -> FFAGFixedDesignOrbitTargetFamily:
     """Build the direct ``design orbit + target map`` one-pass contract.
 
     ``target_transfer_matrices[i]`` is interpreted about
     ``design_orbits[i]``.  The orbit geometry, magnetic rigidity, target map,
     and bands are all caller-owned; no Enge profile, reference-field fixture,
-    or closed-orbit solve is inserted by this constructor.
+    or closed-orbit solve is inserted by this constructor.  Named
+    ``controlled_components`` select physically interpretable entries such as
+    focusing and horizontal dispersion, but they do not make the unselected
+    entries independent.  By default each complete target map must satisfy the
+    static-magnet symplectic condition before any material optimization starts.
     """
     orbits = tuple(design_orbits)
+    if response_entries is not None and controlled_components is not None:
+        raise ValueError(
+            "response_entries and controlled_components are mutually "
+            "exclusive")
+    components = ()
+    if controlled_components is not None:
+        if isinstance(controlled_components, str):
+            controlled_components = (controlled_components,)
+        components = tuple(
+            str(value).strip().lower().replace("-", "_")
+            for value in controlled_components)
+        response_entries = static_magnet_transfer_component_entries(
+            components)
     options = dict(
         transfer_matrix_band=transfer_matrix_band,
         bend_field_band=bend_field_band,
@@ -442,7 +483,21 @@ def build_ffag_fixed_design_orbit_target_family(
         options["response_entries"] = response_entries
     objective = MultiMomentumTransferMatrixObjective(
         orbits, target_transfer_matrices, **options)
-    return FFAGFixedDesignOrbitTargetFamily(objective)
+    residuals = np.asarray([
+        static_magnet_symplectic_residual(matrix)
+        for matrix in objective.target_matrices])
+    tolerance = float(symplectic_tolerance)
+    if (not np.isfinite(tolerance) or tolerance < 0.0):
+        raise ValueError(
+            "symplectic_tolerance must be finite and nonnegative")
+    if require_symplectic and np.any(residuals > tolerance):
+        index = int(np.argmax(residuals))
+        raise ValueError(
+            "target transfer matrix is not symplectic in static-magnet "
+            f"coordinates: orbit {index}, residual {residuals[index]:.6g}, "
+            f"tolerance {tolerance:.6g}")
+    return FFAGFixedDesignOrbitTargetFamily(
+        objective, components, residuals)
 
 
 def _evaluate_b_field(field, points) -> np.ndarray:
@@ -1863,13 +1918,18 @@ def optimize_ffag_hdiv_mmm_from_fixed_design_orbits(
 def optimize_ffag_hdiv_mmm_from_design_orbits(
         design_orbits, target_transfer_matrices, *,
         transfer_matrix_band=1.0e-3, bend_field_band=1.0e-3,
-        response_entries=None, curvature_sign=1.0, gradient_sign=1.0,
+        response_entries=None, controlled_components=None,
+        require_symplectic=True, symplectic_tolerance=1.0e-9,
+        curvature_sign=1.0, gradient_sign=1.0,
         **optimization_options) -> FFAGFixedOrbitHDivMMMTopologyResult:
     """Optimize HDiv-MMM material for caller-supplied one-pass optics.
 
     This is the direct public PoC entry point: the caller supplies one or more
     design orbits and the 6-by-6 transfer matrix required about each orbit.
     It builds no reduced reference field and performs no periodic-orbit search.
+    ``controlled_components`` can restrict the objective to selected pole-face
+    observables while the complete caller-supplied map remains subject to the
+    symplectic input gate.
     The numerical path delegates to
     :func:`optimize_ffag_hdiv_mmm_from_fixed_design_orbits`, preserving its
     analytic field-to-map AD, ACA--QR--TSVD material inverse, exact active-set
@@ -1880,6 +1940,9 @@ def optimize_ffag_hdiv_mmm_from_design_orbits(
         transfer_matrix_band=transfer_matrix_band,
         bend_field_band=bend_field_band,
         response_entries=response_entries,
+        controlled_components=controlled_components,
+        require_symplectic=require_symplectic,
+        symplectic_tolerance=symplectic_tolerance,
         curvature_sign=curvature_sign,
         gradient_sign=gradient_sign)
     return optimize_ffag_hdiv_mmm_from_fixed_design_orbits(
