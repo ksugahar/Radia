@@ -302,6 +302,20 @@ Bell--Abell soft-edge fixtureを要求せず、利用者が`PlanarDesignOrbit`�
 target matrix列を直接渡すよう変更した。Python関連79件、MATLAB fallback 15件、両MATLAB wrapperの
 Code Analyzer 0件を確認した。C-yokeのcompute-host再実行は未実施である。
 
+### 5.6 C-yoke HEX compute preflight
+
+`build_ffag_axisymmetric_c_yoke_hex.py`をCubit Sculpt 2025.12で再実行し、LABの
+`C:\temp\ffag_c_yoke_direct_api`へ新しい`.vol`と`.step`を生成した。meshは1180 HEX、1788節点、
+42,480 BDM1 DOFである。`check-vol --strict-labels`はmaterial `yoke`、boundary `yoke_boundary`、
+最小scaled Jacobian 1.0、負向き要素0で合格した。初期return-yokeは720要素で連結し、2個の
+CoilBuilder loopとの交差体積は0、実測clearance 30 mmは要求20 mmを満たした。
+
+`validation_ffag_full_field_c_yoke.py --preflight-only`を追加し、同じ入力契約を
+`C:\temp\ffag_c_yoke_direct_api\preflight_direct_api.json`へ保存した。3軌道×16区間、空気体積要素0、
+直接入力target matrix契約を含む5 gateがすべてtrueである。preflightはChargeGramを作らず、
+最適化を開始しない。mdx/hibinoは2026-08-21の再試行でもSSH timeoutだったため、42k DOF本計算は
+未起動である。接続復帰後にassetをcompute hostの`C:\temp`へ転送し、同じscriptから本計算を始める。
+
 ## 6. これまで分かった失敗原因
 
 ### 6.1 設計空間が既存鉄だけだった
@@ -572,8 +586,9 @@ python -m pytest -q `
 - `e141e6c5e` `fix(topopt): close four-mode reclosed map inverse`
 - `36f73e0d3` `feat(topopt): accept caller-supplied FFAG maps`
 - `e724977e6` `test(topopt): cross-check reclosed maps with DOP853`
+- `c1bbf9447` `test(topopt): add C-yoke compute preflight`
 
-この9本は現在のブランチ上で直列になっている。
+この10本は現在のブランチ上で直列になっている。
 
 ## 12. Scratchの扱い
 
@@ -592,7 +607,7 @@ python -m pytest -q `
 以下をそのまま次の作業依頼に使える。
 
 > `S:\Radia\01_GitHub\obika_handover.md`を最初から最後まで読み、commit
-> `2ae5cbc7d`、`484a3f91d`、`d2eb092a7`、`5553beb62`、`86c14d6dd`、`2e694c0bd`、`e141e6c5e`、`36f73e0d3`、`e724977e6`の実装を確認してください。まず既存のPython・MEX focused回帰を
+> `2ae5cbc7d`、`484a3f91d`、`d2eb092a7`、`5553beb62`、`86c14d6dd`、`2e694c0bd`、`e141e6c5e`、`36f73e0d3`、`e724977e6`、`c1bbf9447`の実装を確認してください。まず既存のPython・MEX focused回帰を
 > 再現してください。次に`validation_abe_manufactured_edge_cell.py`をcompute hostで再現し、
 > `hdiv_mmm_all_single_removal_responses`が全候補ごとのSchur再分解をせず正解セルを1位にすることを
 > 確認してください。続いて`validation_gettrafo_manufactured_transfer_map.py`で単一modeの解析形状微分と
