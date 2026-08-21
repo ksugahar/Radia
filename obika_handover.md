@@ -365,6 +365,22 @@ field-target trialはすべて悪化し、direct-map oracle fallbackもactive-se
 Bell--Abell targetへ収束したとはいえない。次は実C-yoke上でも既知の小さなpole active-set変更から
 target mapを製造して回収し、探索不良とtarget/design-space到達不能を分離する。
 
+その分離の第1段として、`--manufactured-target-elements 798 --manufactured-target-only`を追加した。
+100号機の同じ1,180 HEX / 42,480 BDM1 DOFモデルで、720セルseedと798番を追加した721セルtargetを
+それぞれexact full solveし、target mapを製造した。seedの最大band比は5、exact targetは0.5、
+3 momentumのsymplectic residual最大は`5.557136697774819e-16`で、到達可能性6 gateはすべてtrueだった。
+結果はLAB/100号機の`C:\temp\ffag_c_yoke_direct_api\manufactured_target_checkpoint_100.json`に保存し、
+`performance_measurement=disabled`、`material_inverse_started=false`である。
+
+第2段のfull-scale inverseはまだ未完了である。3候補版と1候補版を試したところ、候補選択そのもの
+より、1 HEXあたり36 BDM1 local DOFのconfigured Schur応答に必要な多数右辺処理が支配したため、
+計算を意図的に停止した。SSHのCtrl+Cだけでは旧remote Pythonが残り、2本が競合した事例も確認したので、
+中断時はcommand lineを照合してremote PID消滅まで確認する。この結果を受け、checkpoint作成時に得た
+initial stateを最適化入口へ渡すwarm startを実装した。再利用前に同じactive mask、source-scaled RHS、
+`inv_chi`でconfigured operatorを再適用し、inactive DOFとtrue residualを検査するので、stale stateは
+fail-loudになる。残る次の中核は、36 local RHSを全生成する前にcluster-tree上で観測縮約する経路である。
+小規模2 HEX全候補回帰は既に既知セルを完全回収しているため、full-scale checkpointと役割を混同しない。
+
 ## 6. これまで分かった失敗原因
 
 ### 6.1 設計空間が既存鉄だけだった
