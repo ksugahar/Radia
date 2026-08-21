@@ -7,6 +7,8 @@
 ##   sideset 1 = "source"  (one gap face on the coil)
 ##   sideset 2 = "sink"    (other gap face on the coil)
 ##   sideset 3 = "sibc"    (the workpiece surface, for SIBC Robin BC)
+##   sideset 4 = "coil_surface" (coil wall excluding the two terminals)
+##   sideset 5 = "outer"    (exterior surface of the air sphere)
 ##
 ## Geometry (matched to the BEM reference test, L_analytical = 88.55 nH):
 ##   Coil:      gapped torus, R_major = 0.030 m, R_minor = 0.003 m, gap = 5 deg
@@ -66,6 +68,11 @@ merge volume all
 #   - toroidal arcs (length 2*pi*R*355/360 ~= 0.186 m)    -> interval 48
 # yielding ~1900 surface tris, ~12 s BEM solve, -0.84% L error
 # vs the analytical 88.55 nH (verified 2026-04-11).
+# This 12/48 resolution is the validated order-2 production setting. At export
+# order 3, check-vol detects 13 local Jacobian orientation flips even though
+# the total-volume error is only 0.0349%. For an order-3 .vol, use at least
+# 16/64 intervals and volume size 0.00225; that refinement was measured with
+# zero invalid/flipped samples. Always run check-vol before solver use.
 curve in volume 1 with length < 0.05 interval 12
 curve in volume 1 with length > 0.05 interval 48
 volume 1 scheme tetmesh
@@ -106,6 +113,20 @@ sideset 2 name "sink"
 #            = 7.854e-3 m^2.
 sideset 3 add surface in volume 2
 sideset 3 name "sibc"
+
+# Name every remaining exported boundary. Strict solver preflight rejects
+# Cubit's fallback Surface_N labels because they are unstable after CAD edits.
+group "coil_gap_faces" add surface 1 3
+group "coil_outer" add surface in volume 1
+group "coil_outer" remove surface in coil_gap_faces
+sideset 4 add surface in coil_outer
+sideset 4 name "coil_surface"
+
+# The air sphere is the only surface in volume 4 with area greater than
+# 0.05 m^2. Select it geometrically instead of relying on the current ID 7.
+group "air_outer" add surface in volume 4 with area > 0.05
+sideset 5 add surface in air_outer
+sideset 5 name "outer"
 
 # Hide air for visibility
 volume 4 visibility off
