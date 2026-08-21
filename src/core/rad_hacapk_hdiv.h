@@ -631,6 +631,18 @@ public:
         const std::vector<double>& weights, int n_rows, int n_modes,
         const std::vector<double>& cell_vertex_velocity,
         const std::vector<double>& face_vertex_velocity) const;
+    // Total analytic field tangent at fixed physical observation points.
+    // ``magnetization_jacobian`` is row-major [n_modes,n_face].  The return
+    // is [n_modes,n_observations,3] and includes C*dm + dC*m with the exact
+    // flat-TET/TRI kernels and 1/(4*pi) normalization.  This is the source
+    // term consumed by variational closed-orbit tracking.
+    std::vector<double> ConfiguredFieldValuesShapeDerivative(
+        const std::vector<double>& observations,
+        const std::vector<double>& magnetization,
+        const std::vector<double>& magnetization_jacobian,
+        int n_modes,
+        const std::vector<double>& cell_vertex_velocity,
+        const std::vector<double>& face_vertex_velocity) const;
     std::shared_ptr<rad_planar_charges::PlanarFieldEvaluator> CreateConfiguredPlanarFieldEvaluator(
         const std::vector<double>& magnetization) const;
     std::vector<std::pair<std::string, double>> LastSolveTimings() const;
