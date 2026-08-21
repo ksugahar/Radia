@@ -230,6 +230,35 @@ exact band比が`20.0 -> 40.8347`へ悪化した。この失敗をtrust band緩�
 - `HDivFieldEvaluator::EvaluateGradient`: flat TET/TRIとpoint sourceの解析空間勾配を返す。
 - `differentiate_recovered_planar_orbit_shape_native`: Lorentz変分方程式と閉軌道陰関数を統合する。
 
+### 5.3 4 mode GetTrafo、解析空間勾配修正、ACA残差補完
+
+2 modeの次に、長手方向Bernstein型の滑らかなpole-face modeを4個へ拡張し、既知振幅
+`[+2.5,-1.5,+1.0,-2.0] mm`から作った2エネルギーtarget mapをゼロ形状から再現した。
+当初は全列rank 4であるにもかかわらずLP予測とexact評価が逆向きになった。有限差分をoptimizerへ
+入れず、validation-onlyの成分別照合で次を特定した。
+
+- VIM状態接線 `dM+dB+dG+drhs`: 相対誤差 `5.43e-5`
+- 固定観測点の `C dm+dC m`: 相対誤差 `6.63e-5`
+- 実TET/TRI evaluatorの空間勾配: 相対誤差 `1.339`
+
+空間勾配のC++実装は各sourceの解析方向微分を加算せず、後続TET/TRIで出力を上書きしていた。
+さらにdegree-1 TET Newton potentialだけ歴史的な負符号契約を持ち、Gram側で再反転していた。
+各sourceを局所bufferへ評価して加算し、全次数を正の物理Newton momentへ統一した。修正後、
+148 sourceの実BDM1-TET evaluatorで中央差分との相対誤差は`4.20e-9`、軌道観測点群では
+`9.77e-9`となった。中央差分はこの回帰照合だけで、optimizerの微分源ではない。
+
+修正後の4 mode exact band比は
+`20.0 -> 2.2168 -> 1.1186 -> 1.0274 -> 0.997414`と単調に低下した。最終位置閉路誤差は
+`1.92e-10 m`、接線閉路誤差は`2.81e-10`、optimizer有限差分は0回である。最終線形化では
+C++ ACA+が弱い第4方向を落としてseed rank 3で停止したため、明示残差の最大pivot crossを1本追加し、
+QR＋small-core TSVDでrank 4へ再圧縮した。dense oracleとのprediction最大差は`6.94e-18`、
+factorization相対誤差は`1.01e-15`だった。
+
+最終係数は`[2.2974,-1.2654,0.8057,-1.8496] mm`で製造用係数と10.8%異なるが、係数自体は
+目的関数ではなく、有限幅のtransfer-map band内には別形状が存在する。この値は診断として残し、
+map再現の合否条件にはしていない。係数逆同定を要求する別benchmarkではbandを狭めるか、形状正則化を
+目的へ明示的に加える必要がある。
+
 この実行はLAB smoke観測で、wall timeは270.3秒だった。mdx/hibinoはいずれもSSH timeoutだったため、
 公開benchmarkや正式compute-host validationとして引用してはならない。
 
@@ -290,7 +319,8 @@ transfer matrixは設計軌道が決まらないと定義できないため、�
    最大band比0.854を得た。`dM+dB+dG+dC+drhs`はすべて解析微分で、optimizer有限差分は0回である。
 3. **完了**: 入口・出口の2 modeと2エネルギーの設計軌道再閉路を入れる。
    閉軌道の陰関数微分を含む解析Jacobianで既知`[+3,-2] mm`を回収し、exact band比0.195を得た。
-4. **次に実施**: 4～8個の滑らかなmodeで任意mapの小摂動を再現する。
+4. **部分完了**: 4個の滑らかなmodeで任意mapの小摂動を再現した。exact band比0.997、
+   ACA--QR--TSVDとdense oracleのprediction差`6.94e-18`を得た。次は5～8 modeと独立軌道経路である。
 
 単純問題で壊れた時点でTURBO実問題へ進まず、candidate model、離散oracle、形状実現、軌道復元の
 どの段で失敗したかを分離する。
@@ -360,11 +390,10 @@ PoCを完成と呼ぶには、最低限次を満たす。
 9. 全反復のcommit、host、runtime、rank、残差、材料量、形状品質をresult JSON/logへ保存する。
 10. 有限差分をoptimizerに使用していない。
 
-現時点では条件1～4の基盤に加え、製造正解1セル・2セル問題、単一GetTrafo mode、および
-入口・出口2 mode＋設計軌道再閉路のBDM1 TET calibration benchmarkで条件5～6を完全solveにより
-満たした。optimizer有限差分なしの複数mode・軌道復元まで完了した一方、HEX configured-field微分、
-4～8 modeの一般map、小規模とは独立な軌道cross-check、および実規模で条件6～9を満たす外側反復は
-未完である。
+現時点では条件1～4の基盤に加え、製造正解1セル・2セル問題、単一GetTrafo mode、入口・出口2 mode、
+および4 mode＋設計軌道再閉路のBDM1 TET calibration benchmarkで条件5～6を完全solveにより
+満たした。optimizer有限差分なしの4 mode・軌道復元まで完了した一方、HEX configured-field微分、
+5～8 mode、小規模とは独立な軌道cross-check、および実規模で条件6～9を満たす外側反復は未完である。
 
 ## 10. 再現コマンド
 
@@ -427,6 +456,19 @@ LAB smokeでは`status=pass`、最終`exact_max_band_ratio=0.194619`、回収振
 `[3.000073,-1.999590] mm`、最終位置閉路`2.03e-9 m`以下、optimizer有限差分0回を確認した。
 正式結果はidleなmdx/hibinoで同じJSON契約を再生成する。
 
+4 mode検証:
+
+```powershell
+python -u validation_test\ffag_topopt\validation_gettrafo_two_mode_reclosed_orbit.py `
+  --output C:\temp\ffag_reclosed_gettrafo_4mode.json `
+  --target-amplitude-mm 2.5 -1.5 1.0 -2.0 `
+  --validation-class "compute-host validation"
+```
+
+LAB smokeでは`status=pass`、最終`exact_max_band_ratio=0.997414`、ACA seed rank 3に
+residual crossを1本補完してdense oracleと`6.94e-18`で一致し、最終位置・接線閉路はそれぞれ
+`1.92e-10 m`、`2.81e-10`以下だった。LABの198.8秒は公開benchmarkにしない。
+
 ### MEX build
 
 ```powershell
@@ -464,8 +506,9 @@ python -m pytest -q `
 - `d2eb092a7` `feat(topopt): accelerate exact Schur removal oracle`
 - `5553beb62` `feat(topopt): evaluate collaborative Schur removals`
 - `86c14d6dd` `feat(topopt): close manufactured GetTrafo map inverse`
+- `2e694c0bd` `feat(topopt): differentiate reclosed design orbits`
 
-この5本は現在のブランチ上で直列になっている。
+この6本は現在のブランチ上で直列になっている。
 
 ## 12. Scratchの扱い
 
@@ -484,12 +527,12 @@ python -m pytest -q `
 以下をそのまま次の作業依頼に使える。
 
 > `S:\Radia\01_GitHub\obika_handover.md`を最初から最後まで読み、commit
-> `2ae5cbc7d`、`484a3f91d`、`d2eb092a7`、`5553beb62`、`86c14d6dd`の実装を確認してください。まず既存のPython・MEX focused回帰を
+> `2ae5cbc7d`、`484a3f91d`、`d2eb092a7`、`5553beb62`、`86c14d6dd`、`2e694c0bd`の実装を確認してください。まず既存のPython・MEX focused回帰を
 > 再現してください。次に`validation_abe_manufactured_edge_cell.py`をcompute hostで再現し、
 > `hdiv_mmm_all_single_removal_responses`が全候補ごとのSchur再分解をせず正解セルを1位にすることを
 > 確認してください。続いて`validation_gettrafo_manufactured_transfer_map.py`で単一modeの解析形状微分と
-> fresh full solveを再現してください。その後、入口・出口2 modeへ拡張して軌道復元を入れてから、
-> 保存済みTURBO/偏向電磁石モデルに`optimize_abe_section_contour`の
+> fresh full solveを再現してください。その後、4 mode＋軌道再閉路のpassを再現し、5～8 modeまたは
+> 保存済みTURBO/偏向電磁石モデルへ進んでください。実問題では`optimize_abe_section_contour`の
 > `realize_fill`、`evaluate_exact`、`relinearize` callbackを接続してください。目的は、段3の
 > 98.2%予測を最終形状の達成と誤認せず、現在55.3%の段4完全閉ループを、受理済み外側再線形化
 > により改善することです。各反復でrank、条件数、clip履歴、gross/net材料量、面高さ、mesh品質、

@@ -265,6 +265,66 @@ def test_transfer_map_reachability_rejects_uncontrolled_matrix_entry():
     assert passed.reachable
 
 
+def test_transfer_map_reachability_aca_qr_tsvd_matches_dense_oracle():
+    row = np.array([1.0, -0.4, 0.2, 0.7, -0.3])
+    left = np.array([1.0, 0.5, -0.25, 0.75, 0.1, -0.6])
+    second = np.array([-0.2, 0.8, 0.3, -0.5, 0.4])
+    matrix = np.outer(left, row) + np.outer(
+        np.array([0.3, -0.1, 0.9, 0.2, -0.7, 0.4]), second)
+    target_step = np.array([0.2, -0.15, 0.1, 0.05, -0.08])
+    target = matrix @ target_step
+    dense = transfer_map_reachability(
+        np.zeros(6), matrix, target, np.ones(6),
+        relative_tolerance=1e-11, method="dense")
+    compressed = transfer_map_reachability(
+        np.zeros(6), matrix, target, np.ones(6),
+        relative_tolerance=1e-9, method="aca_qr_tsvd",
+        aca_tolerance=1e-13)
+    assert dense.numerical_rank == compressed.numerical_rank == 2
+    assert compressed.factorization_method == "aca_qr_tsvd"
+    assert compressed.aca_rank == 2
+    assert compressed.reachable
+    np.testing.assert_allclose(
+        compressed.predicted_response, dense.predicted_response,
+        rtol=2e-11, atol=2e-12)
+    np.testing.assert_allclose(
+        compressed.parameter_step, dense.parameter_step,
+        rtol=2e-11, atol=2e-12)
+
+
+def test_transfer_map_reachability_completes_aca_pivot_breakdown(monkeypatch):
+    import radia.stream_function as stream_function
+
+    matrix = np.array([
+        [4.0, 0.0, 1.0], [0.0, 2.0, -0.5],
+        [1.0, -1.0, 0.25], [0.5, 0.75, -0.0625],
+    ])
+    exact_u, exact_s, exact_vh = np.linalg.svd(matrix, full_matrices=False)
+
+    def rank_one_seed(*_args, **_kwargs):
+        return stream_function.StreamTSVD(
+            U=exact_u[:, :1], S=exact_s[:1], V=exact_vh[:1].T,
+            k_aca=1, method="aca_qr_tsvd")
+
+    monkeypatch.setattr(stream_function, "aca_tsvd", rank_one_seed)
+    target = matrix@np.array([0.2, -0.1, 0.05])
+    completed = transfer_map_reachability(
+        np.zeros(4), matrix, target, np.ones(4),
+        relative_tolerance=1.0e-11, method="aca_qr_tsvd",
+        aca_tolerance=1.0e-13)
+    dense = transfer_map_reachability(
+        np.zeros(4), matrix, target, np.ones(4),
+        relative_tolerance=1.0e-11, method="dense")
+
+    assert completed.aca_seed_rank == 1
+    assert completed.aca_residual_completion_rank == 2
+    assert completed.aca_rank == completed.numerical_rank == 3
+    assert completed.factorization_relative_error < 1.0e-14
+    np.testing.assert_allclose(
+        completed.predicted_response, dense.predicted_response,
+        rtol=2.0e-13, atol=2.0e-14)
+
+
 def test_ideal_optics_calculates_realisable_achromatic_transfer_target():
     radial = np.array([[0.0, -3.0], [1.0 / 3.0, 0.0]])
     vertical = np.array([[0.0, 4.0], [-0.25, 0.0]])
