@@ -107,6 +107,20 @@ classdef HDivFieldEvaluator < handle
                 obj.NativeHandle, observations, char(options.Algorithm));
         end
 
+        function gradient = fieldGradient(obj, observations)
+            %FIELDGRADIENT Exact spatial Jacobian dH_i/dx_j.
+            % The returned array has shape nObservation-by-3-by-3 and does
+            % not include the 1/(4*pi) normalization.
+            arguments
+                obj (1,1) radia.HDivFieldEvaluator
+                observations (:,3) double
+            end
+            obj.assertAlive();
+            gradient = radia.internal.callMex( ...
+                'hdiv.field_evaluator.field_gradient', ...
+                obj.NativeHandle, double(observations));
+        end
+
         function value = candidateAlgorithm(obj, nObservations)
             obj.assertAlive();
             value = string(radia.internal.callMex( ...
