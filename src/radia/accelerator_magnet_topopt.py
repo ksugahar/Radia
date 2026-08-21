@@ -1245,6 +1245,48 @@ def build_multi_orbit_field_response_matrix(
     return np.ascontiguousarray(np.vstack(rows))
 
 
+def multi_orbit_field_observations(
+        objective: MultiMomentumTransferMatrixObjective, *,
+        gradient_offset, field_scale=MU0) -> tuple[np.ndarray, np.ndarray]:
+    """Materialize the common native observation contract for all orbits.
+
+    The returned points have shape ``(n_point,3)`` and the row-major vector
+    weights have shape ``(objective.raw_field_response_size,n_point,3)``.
+    Unlike :func:`build_multi_orbit_field_response_matrix`, this deliberately
+    constructs the zero-padded block tensor required by the native analytic
+    configured-field *shape derivative*.  Ordinary field-row assembly should
+    keep using the batched builder above to avoid this quadratic workspace.
+    """
+    if not isinstance(objective, MultiMomentumTransferMatrixObjective):
+        raise TypeError(
+            "objective must be a MultiMomentumTransferMatrixObjective")
+    offsets = gradient_offset
+    if np.isscalar(offsets):
+        offsets = (float(offsets),) * len(objective.orbits)
+    else:
+        offsets = tuple(offsets)
+        if len(offsets) != len(objective.orbits):
+            raise ValueError(
+                "gradient_offset must be scalar or have one value per orbit")
+    scale = float(field_scale)
+    if not np.isfinite(scale) or scale == 0.0:
+        raise ValueError("field_scale must be finite and nonzero")
+    batches = tuple(
+        planar_orbit_field_observations(orbit, gradient_offset=offset)
+        for orbit, offset in zip(objective.orbits, offsets))
+    points = np.ascontiguousarray(np.vstack([batch[0] for batch in batches]))
+    weights = np.zeros(
+        (objective.raw_field_response_size, len(points), 3), dtype=float)
+    raw_offsets = objective.raw_offsets
+    point_offsets = np.r_[0, np.cumsum([len(batch[0]) for batch in batches])]
+    for index, (_, block) in enumerate(batches):
+        weights[
+            raw_offsets[index]:raw_offsets[index + 1],
+            point_offsets[index]:point_offsets[index + 1], :
+        ] = scale * block
+    return points, np.ascontiguousarray(weights)
+
+
 @dataclass(frozen=True)
 class CoilBuilderHDivSource:
     """One or more closed CoilBuilder paths as an HDiv incident source.
@@ -1790,6 +1832,7 @@ __all__ = [
     "optimize_hdiv_mmm_magnet_from_transfer_matrices",
     "optimize_hdiv_mmm_magnet_from_transfer_matrix",
     "optimize_hdiv_mmm_magnet_to_measured_median_plane",
+    "multi_orbit_field_observations",
     "planar_orbit_field_observations",
     "run_transfer_matrix_material_inverse_pipeline",
     "solve_transfer_matrix_field_correction",
