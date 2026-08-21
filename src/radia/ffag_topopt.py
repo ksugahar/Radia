@@ -478,6 +478,9 @@ class ReclosedOrbitShapeJacobian:
     field_response_jacobian: np.ndarray
     transfer: CombinedFunctionTransferMap
     closure_partial_jacobian: np.ndarray
+    observation_points: np.ndarray
+    fixed_field_shape_jacobian: np.ndarray
+    observation_point_jacobian: np.ndarray
 
 
 def differentiate_recovered_planar_orbit_shape_native(
@@ -755,7 +758,8 @@ def differentiate_recovered_planar_orbit_shape_native(
         recovered, entrance_jacobian, length_jacobian,
         position_jacobian, tangent_jacobian,
         field_response, field_response_jacobian, transfer,
-        closure_jacobian)
+        closure_jacobian, observation_points,
+        observation_fixed_shape, observation_jacobian)
 
 
 def recover_periodic_planar_closed_orbit(
