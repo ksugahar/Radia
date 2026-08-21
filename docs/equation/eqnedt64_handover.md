@@ -138,8 +138,10 @@ python validation_test/equation/convert_corpus.py --diff
 Runs the lab's `.eqn` corpus before and after a change and scores what is left.
 
 **A change is accepted only when zero documents gain a defect.** Corpus health
-went **620/779 → 774/779 → 777/780** clean under that rule. What remains: 3 stray
-style markers and 1 empty fence.
+went **620/779 → 774/779 → 778/780** clean under that rule. **No document
+carries a stray style marker or an empty fence any more.** What remains is one
+defect class in two documents, and it was there all along — the checker could
+not see it (below).
 
 **The five stray markers were NOT five different shapes, and the documents were
 not "already wrong".** That reading stood for months and was wrong on both
@@ -159,6 +161,12 @@ Two warnings learned the hard way:
   Render the document in Equation Editor and look —
   `validation_test/equation/render_in_ee3.ps1`. Five documents were written off
   as malformed input until EE3 drew the first of them perfectly (§18).
+- **The checker missed half a fraction.** It looked for an empty NUMERATOR and
+  not an empty denominator, so a document reading `a/()` — with its denominator
+  escaped from the fraction entirely — scored clean. The corpus briefly read
+  **100 %** with that document still wrong. The check was added; the honest
+  score is 778/780. **A run at 100 % is a reason to look harder at the
+  checker, not to stop.**
 
 ### The debugging tool that settles arguments
 
@@ -570,9 +578,8 @@ found it.** What remains before retirement is usability, not correctness.
    exposed.
 6. ~~`PageUp`/`PageDown`, `Ctrl+Tab`~~ — **decided** (§10): they stay unbound,
    because nothing here is a tab stop and there is nothing to page through.
-7. The **3** remaining stray-marker corpus documents (§4, §18), lowest priority.
-   Two of the original five are fixed; ask EE3 what the document should look
-   like before assuming the next one is malformed.
+7. ~~The remaining stray-marker corpus documents~~ — **none left** (§18). Two
+   documents still lose a fraction's denominator; that class is described there.
 
 ---
 
@@ -816,3 +823,65 @@ cannot fail claims a coverage it does not have, which is worse than no test.
   denominator under a pile of four size markers.
 
 Start each by rendering it in EE3.
+
+---
+
+## 19. CLOSED — nudge is two bytes, and the reader was skipping four
+
+The last stray-marker document did not look like the other four. Its tree held a
+`CHAR` with **typeface -128 and code 0x8083**, and the equation's actual content
+— both inner products of a fraction — was nowhere in it at all.
+
+Those numbers are the tell. `0x80` is a nudge byte and `0x83` is a record tag:
+the reader was standing two bytes off and manufacturing characters out of
+whatever it landed on. **`skipNudge()` skipped four bytes. A nudge is two** —
+`dx` and `dy` as signed bytes, with `(-128, -128)` as an escape meaning two
+16-bit values follow instead. Every nudged record therefore ate the first two
+bytes of what came next and desynchronised the rest of the stream.
+
+Nudged records are rare, which is why this survived 779 of 780 documents.
+
+```
+before: \alpha = 1 - \dfrac{\left. \scriptscriptstyle \scriptstyle
+                             \scriptscriptstyle \displaystyle \right\rangle }{}
+after : \alpha = 1 - \dfrac{\left\langle f_{0},g \right\rangle }{}
+                     \left\langle f_{0},Mf_{0} \right\rangle
+```
+
+Measured over the corpus: **778 of 780 byte-identical, 2 recovered, 0
+regressions.** The other recovered document is the polarizability matrix, which
+had been carrying the corpus's only empty fence.
+
+This is the failure mode worth remembering: **a desynchronised reader does not
+crash and does not produce garbage.** It produces well-formed LaTeX for a
+different equation. Nothing downstream can tell. The only signals were a
+typeface that cannot exist and content that never appeared.
+
+### Where the score went to 100 %, and why that was the warning
+
+With this fixed, the corpus reported **780/780, no defect marker**. It was not
+true. `perturbation_alpha_native.eqn` still reads
+
+```
+\dfrac{\left\langle f_{0},g \right\rangle }{}\left\langle f_{0},Mf_{0} \right\rangle
+```
+
+— an empty denominator, with the denominator's content sitting *after* the
+fraction. `DisplayFractionPass` never put it back. The checker had a rule for an
+empty **numerator** (`\dfrac{}`) and none for an empty denominator, so the
+document scored clean.
+
+The rule was added, and the honest score is **778/780**. Two documents lose a
+denominator this way; both did so before any of this work, and neither is a
+regression.
+
+**Read a 100 % as "check the checker".** It has now been wrong twice: once
+counting short fences as empty (§4), once unable to see half a fraction.
+
+### What is left
+
+- `perturbation_alpha_native.eqn` and `harrington_ch2_operator_l_plate.eqn` —
+  the denominator escapes the fraction. `DisplayFractionPass` is where to look.
+- `harrington_ch2_polarizability_xx_matrix.eqn` — clean by every marker, but its
+  `\sum` still leaves its `n` at the end of the line rather than under the sign.
+  A marker-based score cannot see this; EE3's rendering can.

@@ -47,12 +47,13 @@ def corpus_dir():
     return pathlib.Path(env) if env else DEFAULT_CORPUS
 
 
-# The documents the fix recovered.  Equation Editor draws both correctly --
-# checked with validation_test/equation/render_in_ee3.ps1, which is what turned
-# these from "malformed input" back into a bug worth fixing.
+# The documents these fixes recovered.  Equation Editor draws all of them
+# correctly -- checked with validation_test/equation/render_in_ee3.ps1, which is
+# what turned them from "malformed input" back into bugs worth fixing.
 RECOVERED = [
     "harrington_ch2_integral_equation_conducting_plate.eqn",
     "harrington_ch2_lmn_matrix_element.eqn",
+    "harrington_ch2_operator_l_plate.eqn",
 ]
 
 
@@ -71,31 +72,40 @@ def test_the_limit_block_reaches_an_integral_inside_a_line(name):
         f"the limits went missing entirely:\n  {latex}")
 
 
+def test_a_nudged_record_does_not_desynchronise_the_stream():
+    """The content of a nudged equation is read, not skipped past.
+
+    Nudge is TWO bytes; the reader skipped four, ate the start of whatever came
+    next, and carried on emitting plausible records from misaligned bytes.  The
+    equation below lost BOTH inner products of its fraction that way, and
+    nothing said so -- the output was well-formed LaTeX for a different
+    equation.
+    """
+    path = corpus_dir() / "perturbation_alpha_native.eqn"
+    if not path.exists():
+        pytest.skip(f"corpus not present: {path}")
+
+    latex = equation.mtef_to_latex(path.read_bytes())
+
+    # What Equation Editor draws: alpha = 1 - <f0,g> / <f0,M f0>
+    assert "f_{0}" in latex, latex
+    assert latex.count(r"\langle") >= 2, (
+        f"an inner product went missing -- the stream desynchronised:\n  {latex}")
+    assert "Mf_{0}" in latex or "M f_{0}" in latex, latex
+    assert r"\scriptscriptstyle" not in latex, (
+        f"size markers from misaligned bytes:\n  {latex}")
+
+
 def test_the_corpus_carries_no_unowned_limit_block():
     """Nothing anywhere in the corpus leaves a limit block unclaimed.
 
-    The per-document checks above name two files; this one is the sweep, and it
-    is the check that would catch the same defect arriving somewhere else.
+    This is the sweep: it is what catches the same defect arriving in a
+    document nobody has looked at.
     """
     root = corpus_dir()
     if not root.exists():
         pytest.skip(f"corpus not present: {root}")
 
-    stray = []
-    for path in sorted(root.glob("*.eqn")):
-        latex = equation.mtef_to_latex(path.read_bytes())
-        if r"\scriptstyle" in latex:
-            stray.append(path.name)
-
-    # Three remain, each its own unfinished investigation; they are listed so
-    # that a NEW one fails this test instead of hiding in the count.
-    known = {
-        "harrington_ch2_operator_l_plate.eqn",
-        "harrington_ch2_polarizability_xx_matrix.eqn",
-        "perturbation_alpha_native.eqn",
-    }
-    unexpected = sorted(set(stray) - known)
-    assert not unexpected, f"new documents with an unclaimed limit block: {unexpected}"
-    fixed = sorted(known - set(stray))
-    assert not fixed, (
-        f"these are clean now -- remove them from `known`: {fixed}")
+    stray = [p.name for p in sorted(root.glob("*.eqn"))
+             if r"\scriptstyle" in equation.mtef_to_latex(p.read_bytes())]
+    assert not stray, f"documents with an unclaimed limit block: {stray}"
