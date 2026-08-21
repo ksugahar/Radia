@@ -547,6 +547,16 @@ _ADJACENT_REVIEWER_AUDIT_TERMS = (
     "再現", "再構成", "反証", "判定", "採否", "凍結", "版管理", "許容差",
     "適用限界", "変更履歴",
 )
+_ADJACENT_REVIEWER_EVIDENCE_PATTERNS = (
+    re.compile(r"(?:実装|導入|再実行|完了|確認|収束|採択|発表|共著|取り込)"),
+    re.compile(r"\d[\d,.]*(?:\\?%|~?k?Hz|自由度|反復|件|ケース|回)"),
+    re.compile(r"(?:共同研究|予備実証|回帰試験|解析解|有限差分一致)"),
+)
+_ADJACENT_REVIEWER_TAKEAWAY_PATTERN = re.compile(
+    r"(?:これら(?:の[^。！？\n]{0,24})?|この(?:実績|成果|準備|予備実証)|以上)"
+    r"(?:により|から)|"
+    r"研究項目[0-9０-９]+[^。！？\n]{0,64}(?:開始|着手|実行)できる"
+)
 
 
 def grant_writing_adjacent_reviewer_readability_check(text: str) -> dict:
@@ -600,6 +610,7 @@ def grant_writing_adjacent_reviewer_readability_check(text: str) -> dict:
     representation_mismatches: list[dict] = []
     ambiguous_relation_phrases: list[dict] = []
     scope_without_deliverables: list[dict] = []
+    takeaways_after_evidence: list[dict] = []
     representation_pattern = re.compile(
         r"(?P<answer>設計則|選択則|指針|適用条件|成立条件|知見|成果)"
         r"を[、，,\s]*(?P<representation>[^。！？\n]{0,36}"
@@ -763,6 +774,35 @@ def grant_writing_adjacent_reviewer_readability_check(text: str) -> dict:
                 "decision": decision[:6],
                 "excerpt": paragraph[:300],
             })
+
+        takeaway_match = _ADJACENT_REVIEWER_TAKEAWAY_PATTERN.search(paragraph)
+        if takeaway_match:
+            evidence_prefix = paragraph[:takeaway_match.start()]
+            evidence_signals = sum(
+                1
+                for pattern in _ADJACENT_REVIEWER_EVIDENCE_PATTERNS
+                if pattern.search(evidence_prefix)
+            )
+            latin_terms = list(dict.fromkeys(re.findall(
+                r"(?<![A-Za-z0-9_])[A-Za-z][A-Za-z0-9_.()+/-]{1,}",
+                evidence_prefix,
+            )))
+            if len(latin_terms) >= 2:
+                evidence_signals += 1
+            relative_position = takeaway_match.start() / max(len(paragraph), 1)
+            if (
+                evidence_signals >= 2
+                and takeaway_match.start() >= 48
+                and relative_position >= 0.28
+            ):
+                takeaways_after_evidence.append({
+                    "index": index,
+                    "takeaway": takeaway_match.group(0),
+                    "takeaway_relative_position": round(relative_position, 2),
+                    "evidence_signals_before_takeaway": evidence_signals,
+                    "terms_before_takeaway": latin_terms[:8],
+                    "excerpt": paragraph[:360],
+                })
     if layer_paragraphs:
         first = layer_paragraphs[0]
         add_risk(
@@ -778,6 +818,29 @@ def grant_writing_adjacent_reviewer_readability_check(text: str) -> dict:
             ),
             severity="HIGH",
             examples=layer_paragraphs[:5],
+        )
+
+    if takeaways_after_evidence:
+        first = takeaways_after_evidence[0]
+        add_risk(
+            "takeaway_after_evidence",
+            first["excerpt"],
+            (
+                "実績が研究計画に何を可能にするかが段落後半まで現れず、"
+                "審査者は固有名・手法名・数値を保持してから結論を逆算する必要がある。"
+            ),
+            (
+                "段落冒頭で研究項目の開始点又は得られる判断を述べる。次に一般語で"
+                "技術的な役割を説明し、手法名・数値・発表先はその根拠として後へ置く。"
+            ),
+            severity="HIGH",
+            examples=takeaways_after_evidence[:5],
+            rewrite_order=[
+                "reviewer_takeaway",
+                "plain_language_role",
+                "specific_method_or_evidence",
+                "limit_or_remaining_question",
+            ],
         )
 
     audit_hits = [
@@ -837,7 +900,21 @@ def grant_writing_adjacent_reviewer_readability_check(text: str) -> dict:
                 scope_without_deliverables
             ),
             "three_layer_paragraph_count": len(layer_paragraphs),
+            "takeaway_after_evidence_count": len(takeaways_after_evidence),
             "assurance_term_density_per_1000_chars": round(audit_density, 2),
+        },
+        "revision_protocol": {
+            "sequence": [
+                "reviewer_takeaway",
+                "plain_language_role",
+                "specific_method_or_evidence",
+                "limit_or_remaining_question",
+            ],
+            "instruction": (
+                "Preserve necessary technical terms, but make the reviewer-facing "
+                "claim readable before asking the reader to unpack method names, "
+                "numbers, publications, or infrastructure."
+            ),
         },
         "diagnosis": (
             "Sentence length alone is insufficient. Short sentences can remain hard "

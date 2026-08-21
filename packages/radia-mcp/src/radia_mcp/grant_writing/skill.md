@@ -1394,11 +1394,14 @@ method/notation piles, paragraphs mixing the scientific, decision, and
 infrastructure layers, validation language repeated across many paragraphs,
 research answers collapsed into implementation representations, vague
 relationship/decision objects, and required scope that names applications but
-not the deliverable. Rewrite in the order a neighboring-field reviewer needs:
-concrete object and problem, operation and observable, decision or knowledge
-output, then the software/reproducibility layer. The result has no score so an
-author cannot improve it by deleting necessary technical detail; each excerpt
-must be reviewed in context.
+not the deliverable. It also reports `takeaway_after_evidence` when method
+names, numerical results, and publication records make the reviewer wait until
+late in the paragraph to learn what the evidence enables. Preserve the
+technical detail, but rewrite in the reading order an adjacent-domain reviewer
+needs: the reviewer takeaway first, its plain-language technical role second,
+the specific method or evidence third, and the remaining limit or question
+last. The result has no score so an author cannot improve it by deleting
+necessary technical detail; each excerpt must be reviewed in context.
 
 Whenever a draft states its question in more than one place -- commonly in
 the summary and again in the body -- run
