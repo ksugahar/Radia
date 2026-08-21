@@ -750,33 +750,6 @@ static void TetPotentialMomentsUpToDirectional(
     const int count=(degree+1)*(degree+2)*(degree+3)/6;for(int i=0;i<count;++i){value[i]=out[i].value;direction[i]=out[i].direction;}
 }
 
-static void TetPotentialMomentsUpTo1DirectionalImpl(
-    const double V[4][3],const double dV[4][3],const double r[3],const double dr[3],
-    double value[4],double direction[4])
-{
-    static const int faces[4][3]={{1,2,3},{0,2,3},{0,1,3},{0,1,2}};
-    ValueDirectional vd[4][3],rd[3],cen[3];
-    for(int i=0;i<4;++i)for(int k=0;k<3;++k){vd[i][k]={V[i][k],dV[i][k]};cen[k]=cen[k]+vd[i][k]/4.0;}
-    for(int k=0;k<3;++k)rd[k]={r[k],dr[k]};
-    ValueDirectional phi,first[3];
-    for(int fi=0;fi<4;++fi){
-        ValueDirectional fv[3][3],e1[3],e2[3],n[3],fc[3];
-        double fp[3][3],dfp[3][3];
-        for(int a=0;a<3;++a)for(int k=0;k<3;++k){fv[a][k]=vd[faces[fi][a]][k];fp[a][k]=fv[a][k].value;dfp[a][k]=fv[a][k].direction;fc[k]=fc[k]+fv[a][k]/3.0;}
-        for(int k=0;k<3;++k){e1[k]=fv[1][k]-fv[0][k];e2[k]=fv[2][k]-fv[0][k];}
-        vd_cross(e1,e2,n);const auto nl=vd_norm(n);if(nl.value<1e-300)continue;for(auto& x:n)x=x/nl;
-        ValueDirectional outward[3];for(int k=0;k<3;++k)outward[k]=fc[k]-cen[k];
-        if(vd_dot(outward,n).value<0.0)for(auto& x:n)x=-x;
-        ValueDirectional rmf[3];for(int k=0;k<3;++k)rmf[k]=rd[k]-fv[0][k];const auto h=vd_dot(rmf,n);
-        double sv[4],sd[4];SurfacePotentialMomentsUpToDirectional(fp,dfp,r,dr,1,sv,sd);
-        const ValueDirectional s0{sv[0],sd[0]};phi=phi-h*s0;
-        for(int k=0;k<3;++k)first[k]=first[k]-h*ValueDirectional{sv[k+1],sd[k+1]};
-    }
-    phi=phi/(-2.0); // h=(r-face).n; Phi=-(1/2) sum h Phi_face
-    value[0]=phi.value;direction[0]=phi.direction;
-    for(int k=0;k<3;++k){first[k]=(first[k]+rd[k]*phi)/3.0;value[k+1]=first[k].value;direction[k+1]=first[k].direction;}
-}
-
 static void poly2_mul_linear(double poly[POLY_MAX_DEG + 1][POLY_MAX_DEG + 1], int& deg,
                              double c0, double c1, double c2)
 {
@@ -1379,7 +1352,12 @@ void TetPotentialMomentsDirectionalUpTo1(
     const double V[4][3],const double dV[4][3],const double r[3],const double dr[3],
     double value[4],double direction[4])
 {
-    TetPotentialMomentsUpTo1DirectionalImpl(V,dV,r,dr,value,direction);
+    // Keep degree one on the same positive-Newtonian-potential recurrence used
+    // by all higher orders.  The retired special case returned -PhiTet and
+    // assumed an x,y,z storage order where PotentialMomentIndex is z,y,x;
+    // callers then needed a second sign reversal.  One physical convention is
+    // now shared by the Gram derivative and field derivative paths.
+    TetPotentialMomentsUpToDirectional(V,dV,r,dr,1,value,direction);
 }
 
 // INT_V (rho0 + g.r')(r-r')/R^3 dV' (linear volume charge) = SUM_f n_f[rho0 I0_f + g.M1_f] - g PhiTet.
