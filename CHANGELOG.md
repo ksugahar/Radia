@@ -5,6 +5,21 @@ All notable changes to the `radia` package.  Format: each release lists
 
 ## Unreleased
 
+## 4.95.58 - Accelerator topology optimization and native transfer-map diagnostics
+
+Released 2026-08-22.
+
+- Added Abe element-fill topology optimization with Python, pybind11, and
+  standalone MATLAB MEX entry points, including bounded fill updates and
+  manufactured-response validation.
+- Extended FFAG and accelerator-magnet optimization with reclosed design-orbit
+  derivatives, selected symplectic transfer-map targets, and independent
+  reference-orbit-to-plane tracking.
+- Added native HDiv/HACApK field-gradient and shape-derivative surfaces, plus
+  MATLAB wrappers and parity checks for the new APIs.
+- Added focused Python and MATLAB regression coverage for the new numerical
+  kernels and transfer-map workflows.
+
 ## 4.95.57 - Exact binary clipboard payloads from EQNEDT64
 
 Released 2026-08-21.
