@@ -270,8 +270,12 @@
       "patterns": ["ffag_topopt.py"],
       "classification": "python-fallback",
       "backend_contract": "in-process-python",
-      "matlab": ["matlab/+radia/+python/ffagTopopt.m"],
-      "notes": "FFAG orbit-family, fringe, and transfer-target orchestration remains Python-owned and is exposed to MATLAB only at an explicit optimization or artifact-generation boundary."
+      "matlab": [
+        "matlab/+radia/+python/ffagTopopt.m",
+        "matlab/+radia/+python/buildFFAGFixedDesignOrbitTargetFamily.m",
+        "matlab/+radia/+python/optimizeFFAGHDivMMMFromDesignOrbits.m"
+      ],
+      "notes": "FFAG orbit-family, fringe, and transfer-target orchestration remains Python-owned and is exposed to MATLAB only at an explicit optimization or artifact-generation boundary. The named fixed-design-orbit wrappers accept caller-supplied design orbits and 6x6 transfer matrices without inserting a soft-edge fixture or periodic-orbit solve."
     },
     {
       "id": "ffag-taylor-topopt",

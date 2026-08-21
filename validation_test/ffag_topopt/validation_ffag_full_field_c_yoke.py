@@ -206,7 +206,7 @@ def run(args):
     from radia.coil_builder import audit_coil_yoke_clearance
     from radia.ffag_topopt import (
         build_ffag_cell_target_family,
-        optimize_ffag_hdiv_mmm_from_fixed_design_orbits,
+        optimize_ffag_hdiv_mmm_from_design_orbits,
     )
     from radia.topology_optimization import ngsolve_growth_topology
     from radia.vim._vim import build_charge_gram
@@ -241,10 +241,13 @@ def run(args):
             "fixed return-yoke seed violates the binary topology gate")
     volumes = np.asarray(
         ng.Integrate(1.0, mesh, element_wise=True), dtype=float)
-    family = build_ffag_cell_target_family(
+    fixture = build_ffag_cell_target_family(
         args.energies, n_segments=args.segments,
         transfer_matrix_band=args.transfer_band,
         bend_field_band=args.bend_band)
+    design_orbits = tuple(
+        reference.orbit for reference in fixture.references)
+    target_transfer_matrices = fixture.objective.target_matrices.copy()
 
     setup_done = time.perf_counter()
     print(
@@ -265,8 +268,12 @@ def run(args):
         f"{hmatrix_done - setup_done:.3f} s; optimizing about fixed "
         "entrance-to-exit design orbits", flush=True)
     with ng.TaskManager():
-        result = optimize_ffag_hdiv_mmm_from_fixed_design_orbits(
-            family, source=source, charge_gram=gram, fes=fes,
+        result = optimize_ffag_hdiv_mmm_from_design_orbits(
+            design_orbits, target_transfer_matrices,
+            transfer_matrix_band=fixture.objective.transfer_matrix_band,
+            bend_field_band=fixture.objective.bend_field_band,
+            response_entries=fixture.objective.response_entries,
+            source=source, charge_gram=gram, fes=fes,
             inv_chi=1.0 / (args.mu_r - 1.0),
             active_elements=active, element_volumes=volumes,
             volume_max=float(np.sum(volumes)),
@@ -318,6 +325,12 @@ def run(args):
         "air_volume_elements_are_zero": True,
         "fixed_design_orbits_used": True,
         "periodic_closed_orbit_search_disabled": True,
+        "caller_design_orbit_and_target_matrix_contract": (
+            all(actual is requested for actual, requested in zip(
+                result.target_family.design_orbits, design_orbits)) and
+            np.array_equal(
+                result.target_family.objective.target_matrices,
+                target_transfer_matrices)),
         "initial_return_yoke_seed_is_valid": bool(initial_topology.valid),
         "binary_topology_is_valid": bool(result.topology.valid),
         "no_gray_material": result.active_elements.dtype == np.bool_,
@@ -369,13 +382,16 @@ def run(args):
         },
         "optics": {
             "orbit_mode": "fixed-one-pass",
+            "target_input_contract": (
+                "caller-supplied design orbits and 6x6 transfer matrices"),
             "energies_mev": [float(value) for value in args.energies],
             "entrance_radii_m": [
-                float(np.linalg.norm(reference.orbit.positions[0, :2]))
-                for reference in family.references],
+                float(np.linalg.norm(orbit.positions[0, :2]))
+                for orbit in design_orbits],
             "path_lengths_m": [
-                float(np.sum(reference.orbit.segment_lengths))
-                for reference in family.references],
+                float(np.sum(orbit.segment_lengths))
+                for orbit in design_orbits],
+            "target_transfer_matrices": target_transfer_matrices.tolist(),
             "orbit_field_max_band_ratios": (
                 result.orbit_field_max_band_ratios.tolist()),
             "transfer_matrix_max_band_ratios": (
