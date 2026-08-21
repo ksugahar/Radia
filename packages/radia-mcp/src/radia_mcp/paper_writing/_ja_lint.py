@@ -6,6 +6,7 @@ Do NOT add new dependencies on grant_writing-specific plans modules —
 the 8 functions below are intentionally standalone.
 """
 from __future__ import annotations
+
 import pathlib
 import re
 
@@ -71,9 +72,10 @@ _DEFAULT_ACRONYM_WHITELIST = {
     "NIH", "NSF", "DARPA", "DOE", "CERN", "ESRF", "MIT", "TU",
     # ファイル・標準
     "PDF", "HTML", "XML", "JSON", "CSV", "URL", "URI", "API", "SDK",
+    "README",
     "GUI", "CLI", "IDE", "OS",
     # ライセンス
-    "BSD", "MIT", "GPL", "LGPL", "MPL",
+    "BSD", "GPL", "LGPL", "MPL",
     # 一般技術
     "CPU", "GPU", "RAM", "ROM", "SSD", "HDD", "IO", "UI", "UX",
     "AI", "ML", "DL", "NLP", "CV", "CAD", "CAM", "CAE",
@@ -444,12 +446,22 @@ def grant_writing_find_undefined_acronyms(
     schedule_marker_re = re.compile(r"^D\d{1,2}$")
     roman_re = re.compile(r"^[IVX]{1,5}$")
 
+    # Python's ``\b`` treats Japanese letters as word characters, so ``MCPで``
+    # has no boundary and was not counted. Use an ASCII identifier boundary.
     acronym_re = re.compile(
-        r"\b([A-Z][A-Z0-9]{" + str(min_len - 1) + "," + str(max_len - 1) + r"})\b"
+        r"(?<![A-Za-z0-9])([A-Z][A-Z0-9]{"
+        + str(min_len - 1)
+        + ","
+        + str(max_len - 1)
+        + r"})(?![A-Za-z0-9])"
     )
     first_seen: dict[str, int] = {}
     for m in acronym_re.finditer(text):
         a = m.group(1)
+        # JP-MARs and similarly hyphenated project names are one proper noun,
+        # not an unexplained acronym followed by an unrelated word.
+        if m.end() + 1 < len(text) and text[m.end()] in "-–—" and text[m.end() + 1].isalpha():
+            continue
         if a not in first_seen:
             first_seen[a] = m.start()
 
@@ -476,7 +488,12 @@ def grant_writing_find_undefined_acronyms(
         before_re = re.compile(
             r"[\(（]\s*" + re.escape(acronym) + r"\s*[\)）]"
         )
-        has_before = bool(before_re.search(before_all))
+        gloss_re = re.compile(
+            r"[\(（][^()（）]{3,100}[;；,，]\s*"
+            + re.escape(acronym)
+            + r"\s*[\)）]"
+        )
+        has_before = bool(before_re.search(before_all) or gloss_re.search(before_all))
 
         if has_after or has_before:
             defined.append(acronym)
@@ -545,13 +562,19 @@ def grant_writing_acronym_usage_audit(
     schedule_re = re.compile(r"^D\d{1,2}$")
     roman_re = re.compile(r"^[IVX]{1,5}$")
     acronym_re = re.compile(
-        r"\b([A-Z][A-Z0-9]{" + str(min_len - 1) + "," + str(max_len - 1) + r"})\b"
+        r"(?<![A-Za-z0-9])([A-Z][A-Z0-9]{"
+        + str(min_len - 1)
+        + ","
+        + str(max_len - 1)
+        + r"})(?![A-Za-z0-9])"
     )
     # Count occurrences and first position per acronym
     occurrences: dict[str, list[int]] = {}
     for m in acronym_re.finditer(text):
         a = m.group(1)
         if a in combined or schedule_re.match(a) or roman_re.match(a):
+            continue
+        if m.end() + 1 < len(text) and text[m.end()] in "-–—" and text[m.end() + 1].isalpha():
             continue
         occurrences.setdefault(a, []).append(m.start())
 
@@ -570,9 +593,14 @@ def grant_writing_acronym_usage_audit(
         before_paren_re = re.compile(
             r"[\(（]\s*" + re.escape(acronym) + r"\s*[\)）]"
         )
+        gloss_re = re.compile(
+            r"[\(（][^()（）]{3,100}[;；,，]\s*"
+            + re.escape(acronym)
+            + r"\s*[\)）]"
+        )
         has_paren_before = any(
             m.start() < first_pos for m in before_paren_re.finditer(before_slice)
-        )
+        ) or bool(gloss_re.search(before_slice))
 
         first_form = "expansion" if has_paren_before else "acronym"
 
@@ -663,9 +691,7 @@ def grant_writing_check_notation_variants(text: str) -> dict:
 
     # (5): 半角/全角括弧混在
     han_open = text.count("(")
-    han_close = text.count(")")
     zen_open = text.count("（")
-    zen_close = text.count("）")
     if han_open > 0 and zen_open > 0:
         findings.append({
             "type": "paren_mixed",
@@ -678,13 +704,6 @@ def grant_writing_check_notation_variants(text: str) -> dict:
         })
 
     # (6): 数値 + 単位の空白ゆれ
-    unit_patterns = [
-        (r"\d+(?:\.\d+)?\s*kHz", "kHz", r"\d+(?:\.\d+)?kHz", r"\d+(?:\.\d+)? kHz", r"\d+(?:\.\d+)?\\,kHz"),
-        (r"\d+(?:\.\d+)?\s*mm", "mm"),
-        (r"\d+(?:\.\d+)?\s*km", "km"),
-        (r"\d+(?:\.\d+)?\s*m(?![A-Za-z])", "m"),
-        (r"\d+(?:\.\d+)?\s*k[A-Z]", "k-prefix"),
-    ]
     unit_variants: dict[str, dict] = {}
     for unit in ("kHz", "mm", "km", "MHz", "GHz", "Hz", "V", "A"):
         no_space = len(re.findall(r"\d+(?:\.\d+)?" + unit + r"\b", text))
@@ -755,7 +774,7 @@ def grant_writing_check_notation_variants(text: str) -> dict:
         hyphen_tokens.setdefault(key, set()).add((a, b))
     hyphen_variants = []
     for key, parts_set in hyphen_tokens.items():
-        a, b = sorted(parts_set)[0]
+        a, b = min(parts_set)
         hyphen_forms = sorted({f"{pa}-{pb}" for pa, pb in parts_set})
         concat = a + b
         spaced = f"{a} {b}"

@@ -10,15 +10,29 @@ from __future__ import annotations
 import pathlib
 import re
 
-from radia_mcp.paper_writing._ja_lint import (  # noqa: F401
-    grant_writing_acronym_usage_audit,
-    grant_writing_check_kanji_ratio,
-    grant_writing_check_misuse_japanese,
-    grant_writing_check_notation_variants,
-    grant_writing_check_subject_predicate_distance,
-    grant_writing_find_undefined_acronyms,
-    grant_writing_lint_bedrock,
-    grant_writing_suggest_redundancy_fixes,
+from radia_mcp.paper_writing._ja_lint import (
+    grant_writing_acronym_usage_audit as _ja_acronym_usage_audit,
+)
+from radia_mcp.paper_writing._ja_lint import (
+    grant_writing_check_kanji_ratio as _ja_check_kanji_ratio,
+)
+from radia_mcp.paper_writing._ja_lint import (
+    grant_writing_check_misuse_japanese as _ja_check_misuse_japanese,
+)
+from radia_mcp.paper_writing._ja_lint import (
+    grant_writing_check_notation_variants as _ja_check_notation_variants,
+)
+from radia_mcp.paper_writing._ja_lint import (
+    grant_writing_check_subject_predicate_distance as _ja_subject_predicate_distance,
+)
+from radia_mcp.paper_writing._ja_lint import (
+    grant_writing_find_undefined_acronyms as _ja_find_undefined_acronyms,
+)
+from radia_mcp.paper_writing._ja_lint import (
+    grant_writing_lint_bedrock as _ja_lint_bedrock,
+)
+from radia_mcp.paper_writing._ja_lint import (
+    grant_writing_suggest_redundancy_fixes as _ja_suggest_redundancy_fixes,
 )
 
 from .._shared.hedges import HEDGE_PATTERNS, scan_hedges
@@ -54,16 +68,76 @@ def _read_text_if_path(text_or_path: str) -> str:
     return s
 
 
+# Sentences the form wrote, not the applicant. Every marker was taken from the
+# instruction paragraphs of two real 科研費 forms (令和2年度 S-14 and 平成28年度
+# S-1-8); together they match all of them and none of the applicant prose in
+# either document. Instructions are 10% of one form and 40% of the other.
+_FORM_INSTRUCTION = re.compile(
+    r"本欄に[はも]|本欄は|"
+    r"記述すること|記入すること|記入の上|"
+    r"(?:記述|記入|参照|選択|要約|確認|留意|注意)して\s*(?:ください|下さい)|"
+    r"公募要領|記入要領|作成・記入要領|審査されます|"
+    r"て\s*も\s*可(?![能])|てもよい|ても構いません|"
+    r"空欄のまま|記述欄を削除|記入欄を削除|"
+    # Older PDF forms wrap this ethics-box example across several physical
+    # lines. The fragments do not retain the polite sentence ending, so the
+    # general form-voice rule below cannot identify them on its own.
+    r"例えば[、，,]?\s*個人情報を伴う|"
+    r"個人情報を伴うアンケート調査[・･]インタビュー調査|"
+    r"(?:研究)?助成に関するアンケート|"
+    r"承認手続[きがの]?必要となる(?:調査|研究|実験)"
+)
+
+# ですます調. The form speaks this way; a proposal body does not.
+_POLITE_ENDING = re.compile(r"(?:ます|です|ません|ましょう|ください)[。．]?$")
+
+_CITATION_YEAR = re.compile(r"(?:19|20)\d{2}")
+
+
+def _strip_citation_items(match: re.Match[str]) -> str:
+    """Drop citation entries from a list and keep the remaining items apart.
+
+    An item is a citation when it carries a four-digit year and at least two
+    commas, which is how a publication list reads in every form this suite has
+    seen. The year is not required to be parenthesised: an accepted paper is
+    listed as ``IGTE Symposium 2026 (accepted)``.
+
+    Surviving items are terminated with a Japanese full stop so the sentence
+    splitter cannot fuse consecutive bullets into one pseudo-sentence. An
+    English period does not end a sentence for that splitter, so it does not
+    count as an existing terminator here.
+    """
+    kept: list[str] = []
+    for item in re.split(r"\\item\b", match.group("body"))[1:]:
+        stripped = item.strip()
+        if not stripped:
+            continue
+        if _CITATION_YEAR.search(stripped) and stripped.count(",") >= 2:
+            continue
+        if not stripped.endswith(("。", "．", "！", "？")):
+            stripped += "。"
+        kept.append(stripped)
+    return " " + " ".join(kept) + " " if kept else " "
+
+
 def _prose_for_lint(text: str) -> str:
     """Remove common LaTeX scaffolding before prose-oriented checks.
 
     Section-presence and program checks still inspect the original source. This
     normalization is only for sentence length, hedge, and Japanese prose lint;
     otherwise template comments and commands are reported as applicant prose.
-    """
-    if "\\" not in text and not re.search(r"(?m)^\s*%", text):
-        return text
 
+    A form's printed instruction text is stripped whether or not the document
+    is LaTeX. A proposal extracted from Word carries no backslashes at all, and
+    returning early for such text skipped the very normalization it needed
+    most: instructions are 40% of one real 科研費 form.
+    """
+    if "\\" in text or re.search(r"(?m)^\s*%", text):
+        text = _strip_latex_scaffolding(text)
+    return _finish_prose(text)
+
+
+def _strip_latex_scaffolding(text: str) -> str:
     text = re.sub(r"(?m)^\s*%.*$", " ", text)
     text = re.sub(
         r"\\begin\{(?P<figenv>figure\*?|center)\}.*?"
@@ -82,9 +156,35 @@ def _prose_for_lint(text: str) -> str:
     )
     text = re.sub(r"\$\$.*?\$\$", " 数式 ", text, flags=re.DOTALL)
     text = re.sub(r"\$[^$]*\$", " 数式 ", text)
+    # Form fields often use Japanese-named commands whose values are metadata,
+    # not proposal prose (for example ``\newcommand{\研究種目名}{該当なし}``).
+    # Remove the complete definition before the generic command stripper can
+    # leave both arguments behind as ordinary text.
     text = re.sub(
-        r"\\(?:textbf|textit|emph|underline|section|subsection|subsubsection)"
-        r"\*?\{([^{}]*)\}",
+        r"\\(?:re)?newcommand\*?\{[^{}]*\}(?:\[[^\]]*\])?\{[^{}]*\}",
+        " ",
+        text,
+    )
+    # A 研究業績リスト is citations, not prose. Left alone, the \item markers are
+    # stripped as commands and the whole list merges into one sentence of many
+    # hundred characters, so every proposal trips the sentence-length check on
+    # the publication list its form requires.
+    text = re.sub(
+        r"\\begin\{(?P<listenv>enumerate|itemize)\}(?P<body>.*?)\\end\{(?P=listenv)\}",
+        _strip_citation_items,
+        text,
+        flags=re.DOTALL,
+    )
+    # A heading is its own line. Rendered inline it fused with the paragraph
+    # below it, and the field title plus the opening sentence was reported as
+    # one 93-character sentence.
+    text = re.sub(
+        r"\\(?:section|subsection|subsubsection)\*?\{([^{}]*)\}",
+        r"\n\1\n",
+        text,
+    )
+    text = re.sub(
+        r"\\(?:textbf|textit|emph|underline)\*?\{([^{}]*)\}",
         r" \1 ",
         text,
     )
@@ -96,7 +196,141 @@ def _prose_for_lint(text: str) -> str:
     )
     text = re.sub(r"\\[A-Za-z@]+\*?(?:\[[^\]]*\])?", " ", text)
     text = text.replace("\\\\", " ").replace("{", " ").replace("}", " ")
-    return re.sub(r"\s+", " ", text).strip()
+    # Stripping the command but keeping its braces left the arguments behind:
+    # \vspace*{0zw} and \rule{\linewidth}{1pt} became the tokens 0zw and 1pt,
+    # which then joined the following sentence and were linted as prose.
+    text = re.sub(
+        r"(?<![0-9A-Za-z])-?[0-9]*\.?[0-9]+\s*"
+        r"(?:zw|zh|pt|mm|cm|in|em|ex|bp|dd|sp|truept|truemm)(?![0-9A-Za-z])",
+        " ",
+        text,
+    )
+    return text
+
+
+def _finish_prose(text: str) -> str:
+    """Drop the form's own instruction text, then normalise whitespace.
+
+    Every Japanese application form carries several hundred characters of
+    instructions, and linting them reports the funder's writing as the
+    applicant's defects: 「冒頭にその概要を簡潔にまとめて記述し、本文には、
+    (1)…」 was reported as a 逆茂木 sentence in an adopted proposal.
+    """
+    lines = [re.split(r"(?<=[。．!?！？])", line) for line in text.split("\n")]
+    every = [s for line in lines for s in line if s.strip()]
+    polite = [s for s in every if _POLITE_ENDING.search(s.strip())]
+    # A Japanese proposal body is written in である調 and the form's own
+    # instructions in ですます調. Measured across five real documents, polite
+    # endings are 0-3% of the text and every one of them belongs to the form:
+    # 「…承認手続が必要となる調査・研究・実験などが対象となります。」 was
+    # linted as the applicant's 逆茂木 sentence. The ratio guard leaves a
+    # proposal that is genuinely written in ですます調 alone.
+    drop_polite = bool(every) and len(polite) / len(every) < 0.3
+
+    kept: list[str] = []
+    for line in lines:
+        sentences = [
+            s for s in line
+            if s.strip()
+            and not _FORM_INSTRUCTION.search(s)
+            and not (drop_polite and _POLITE_ENDING.search(s.strip()))
+        ]
+        if sentences:
+            kept.append("".join(sentences))
+    text = "\n".join(kept)
+
+    # Collapse runs, but keep newlines: they are the segment boundaries the
+    # sentence and co-occurrence checks rely on, and flattening them fused
+    # every heading into the paragraph below it.
+    text = re.sub(r"[^\S\n]+", " ", text)
+    return re.sub(r"\n\s*\n+", "\n", text).strip()
+
+
+# The shared Japanese helpers also serve paper-writing and intentionally accept
+# already-extracted prose. The grant-writing server accepts whole .tex files,
+# so every public wrapper must apply the same form/scaffolding filter as the
+# integrated health report. Otherwise a direct MCP call and the health report
+# disagree about the same proposal.
+def grant_writing_lint_bedrock(text: str) -> dict:
+    """Lint applicant prose after removing form and LaTeX scaffolding."""
+    return _ja_lint_bedrock(_prose_for_lint(_read_text_if_path(text)))
+
+
+def grant_writing_suggest_redundancy_fixes(text: str) -> dict:
+    """Suggest redundancy fixes only in applicant prose."""
+    return _ja_suggest_redundancy_fixes(_prose_for_lint(_read_text_if_path(text)))
+
+
+def grant_writing_check_misuse_japanese(text: str) -> dict:
+    """Check Japanese misuse only in applicant prose."""
+    return _ja_check_misuse_japanese(_prose_for_lint(_read_text_if_path(text)))
+
+
+def grant_writing_check_kanji_ratio(
+    text: str,
+    min_ratio: float = 0.18,
+    max_ratio: float = 0.40,
+) -> dict:
+    """Measure the kanji ratio of applicant prose, not the application form."""
+    return _ja_check_kanji_ratio(
+        _prose_for_lint(_read_text_if_path(text)),
+        min_ratio=min_ratio,
+        max_ratio=max_ratio,
+    )
+
+
+def grant_writing_check_subject_predicate_distance(
+    text: str,
+    max_chars: int = 40,
+) -> dict:
+    """Check subject-predicate distance only in applicant prose."""
+    # Word drafts in the private corpus use both Japanese commas, ``、`` and
+    # ``，``. The shared checker keys on 「は、」「が、」; without normalising
+    # punctuation, an otherwise identical Word draft has no analyzable topic.
+    prose = _prose_for_lint(_read_text_if_path(text)).replace("，", "、")
+    return _ja_subject_predicate_distance(
+        prose,
+        max_chars=max_chars,
+    )
+
+
+def grant_writing_find_undefined_acronyms(
+    text: str,
+    whitelist: str = "",
+    min_len: int = 2,
+    max_len: int = 6,
+    context_window: int = 200,
+) -> dict:
+    """Find undefined acronyms in applicant prose only."""
+    return _ja_find_undefined_acronyms(
+        _prose_for_lint(_read_text_if_path(text)),
+        whitelist=whitelist,
+        min_len=min_len,
+        max_len=max_len,
+        context_window=context_window,
+    )
+
+
+def grant_writing_acronym_usage_audit(
+    text: str,
+    whitelist: str = "",
+    min_uses_for_abbrev: int = 3,
+    min_len: int = 2,
+    max_len: int = 6,
+) -> dict:
+    """Audit acronym use in applicant prose only."""
+    return _ja_acronym_usage_audit(
+        _prose_for_lint(_read_text_if_path(text)),
+        whitelist=whitelist,
+        min_uses_for_abbrev=min_uses_for_abbrev,
+        min_len=min_len,
+        max_len=max_len,
+    )
+
+
+def grant_writing_check_notation_variants(text: str) -> dict:
+    """Check notation variants in applicant prose only."""
+    return _ja_check_notation_variants(_prose_for_lint(_read_text_if_path(text)))
 
 
 def _contains_any(text_lower: str, keywords: list[str]) -> list[str]:
@@ -120,6 +354,152 @@ def grant_writing_usage() -> str:
     return _load_skill()
 
 
+def grant_writing_kaken_review_axes() -> dict:
+    """Return the current official review axes for KAKENHI B/C (General).
+
+    This is a source-grounded reference map, not a prediction or score. It
+    keeps the three research-plan elements, the separately rated
+    internationality element, and the additional budget-validity assessment
+    distinct because they affect a proposal in different ways.
+    """
+    review_regulations = (
+        "https://www.jsps.go.jp/file/storage/kaken_0103_shinsakitei_g_4984/"
+        "hyoukakitei260622.pdf"
+    )
+    web_input_guide = (
+        "https://www.jsps.go.jp/file/storage/kaken_kiban_2026_g_4978/"
+        "web_yoryo_kiban.pdf"
+    )
+    review_page = (
+        "https://www.jsps.go.jp/j-grantsinaid/01_seido/03_shinsa/index.html"
+    )
+    reviewer_pamphlet = (
+        "https://www.jsps.go.jp/file/storage/kaken_pamph_j2026/"
+        "kakenhi2026.pdf"
+    )
+    return {
+        "scheme": "科研費 基盤研究(B・C)(一般)",
+        "verified_on": "2026-08-21",
+        "source_revision": "審査規程: 2026-06-22改正",
+        "purpose": (
+            "公式基準を申請書のレビュー観点へ写す参照表。"
+            "採否予測やキーワード採点には用いない。"
+        ),
+        "review_process": {
+            "method": "同一審査委員による2段階書面審査",
+            "reviewers_for_scientific_research_c": 3,
+            "first_stage": (
+                "研究計画の3要素と国際性を個別に絶対評価し、"
+                "総合評点は審査区分内の相対評価で付す。"
+            ),
+            "second_stage": (
+                "ボーダーゾーン等を、他の審査委員の1段階目意見も"
+                "参照して再評価する。"
+            ),
+        },
+        "research_plan_axes": [
+            {
+                "id": "academic_importance",
+                "label": "研究課題の学術的重要性",
+                "review_questions": [
+                    "学術的に推進すべき重要な課題か。",
+                    "核心となる学術的問いが明確で、独自性・創造性があるか。",
+                    "着想、国内外の研究動向、研究上の位置づけが明確か。",
+                    "より広い学術、科学技術、社会への波及が期待できるか。",
+                ],
+            },
+            {
+                "id": "method_validity",
+                "label": "研究方法の妥当性",
+                "review_questions": [
+                    "目的に対する研究方法が具体的かつ適切か。",
+                    "研究経費が研究計画と整合しているか。",
+                    "目的達成に必要な準備が整っているか。",
+                ],
+            },
+            {
+                "id": "capability_environment",
+                "label": "研究遂行能力及び研究環境の適切性",
+                "review_questions": [
+                    "これまでの研究活動から十分な遂行能力を確認できるか。",
+                    "必要な施設、設備、資料等の研究環境が整っているか。",
+                ],
+            },
+        ],
+        "separate_scored_axis": {
+            "id": "internationality",
+            "label": "研究課題の国際性",
+            "review_question": (
+                "世界の研究を将来けん引する、協同により世界の研究へ貢献する、"
+                "又は日本独自の研究として高い価値を創出することが期待できるか。"
+            ),
+            "allocation_note": (
+                "国際性の高い課題は、若手研究者等への助成調整や、"
+                "応募額を尊重した配分の対象になり得る。"
+            ),
+        },
+        "budget_validity": {
+            "role": (
+                "研究方法では計画との整合性を評価し、これとは別に配分額の"
+                "判断材料として経費の妥当性・必要性を確認する。"
+                "学術的重要性と同格の独立した総合評点軸ではない。"
+            ),
+            "review_questions": [
+                "経費内容が妥当で、有効利用が見込まれるか。",
+                "設備備品が研究計画の遂行に真に必要か。",
+                "設備、旅費、人件費・謝金のいずれかが90%を超える場合も有効利用できるか。",
+            ],
+            "consequence": (
+                "基盤研究(B・C)では、複数の審査委員が経費に問題ありとした場合、"
+                "平均より低い充足率となる。"
+            ),
+            "persuasiveness_test": [
+                "各費目がどの研究行為、年度、成果物に対応するか。",
+                "単価、数量、月数・回数と根拠資料から再計算できるか。",
+                "最大費目が研究の中心作業と一致しているか。",
+                "減額時も核心の検証ループを維持できる優先順位があるか。",
+            ],
+        },
+        "budget_entry_requirements": [
+            "機械器具を単なる『一式』とせず、内訳を示す。",
+            "設備備品費・消耗品費は必要性と積算根拠を示す。",
+            "旅費は出張の事項・目的ごとに示す。",
+            "人件費・謝金は用途を分け、判明していれば身分、人数、月数も示す。",
+            "その他経費も事項ごとに分け、必要性と積算根拠を示す。",
+            "年度内で特定費目が90%を超える場合や大きな割合を占める場合は、研究上の必要性を明記する。",
+            "研究代表者・研究分担者本人の人件費・謝金は直接経費に計上しない。",
+        ],
+        "interpretation": [
+            "申請書を『4軸で均等採点』する制度ではない。研究計画3要素を中心に総合評価される。",
+            "国際性は別に評定されるため、共同研究だけでなく世界への価値の出方を明示する。",
+            "予算の説得力は金額の大小ではなく、研究計画との対応、積算可能性、必要性で作る。",
+            "公式基準に論文数の足切りはない。業績は各担当を遂行できる証拠として結びつける。",
+        ],
+        "sources": [
+            {
+                "title": "科研費 審査及び評価に関する規程（2026-06-22改正）",
+                "url": review_regulations,
+                "supports": "審査方式、評定要素、国際性、研究経費の妥当性",
+            },
+            {
+                "title": "令和9年度 基盤研究等 Web入力要領",
+                "url": web_input_guide,
+                "supports": "経費明細、必要性、積算根拠、90%超の説明、対象外経費",
+            },
+            {
+                "title": "日本学術振興会 審査・評価について",
+                "url": review_page,
+                "supports": "現行の審査規程・評定基準への公式入口",
+            },
+            {
+                "title": "科研費パンフレット2026",
+                "url": reviewer_pamphlet,
+                "supports": "基盤研究(C)の1課題当たり審査委員数",
+            },
+        ],
+    }
+
+
 def grant_writing_analyze_sentences(text: str, max_len: int = 90) -> dict:
     """Analyze Japanese sentence length for grant proposals.
 
@@ -127,7 +507,10 @@ def grant_writing_analyze_sentences(text: str, max_len: int = 90) -> dict:
     reviewers still need a clear one-claim-per-sentence rhythm.
     """
     text = _prose_for_lint(_read_text_if_path(text))
-    sentences = [s.strip() for s in re.split(r"[。．!?！？]", text) if s.strip()]
+    # A newline ends a segment too. A 年度計画 matrix is a run of short cells
+    # with no full stop, and joining them reported a Gantt table in an adopted
+    # proposal as a single 455-character sentence.
+    sentences = [s.strip() for s in re.split(r"[。．!?！？\n]", text) if s.strip()]
     if not sentences:
         return {"error": "no sentences found"}
     lengths = [len(s) for s in sentences]
@@ -148,6 +531,329 @@ def grant_writing_analyze_sentences(text: str, max_len: int = 90) -> dict:
     }
 
 
+_ADJACENT_REVIEWER_INFRA_TERMS = (
+    "OSS", "API", "MCP", "GitHub", "CI", "AI", "リポジトリ", "サーバ",
+    "インターフェース", "インタフェース", "モジュール", "版管理",
+)
+_ADJACENT_REVIEWER_SCIENCE_TERMS = (
+    "解析", "設計", "最適化", "離散化", "求解", "測定", "実験", "計算",
+    "モデル", "物理量", "磁場", "損失", "効率", "軌道", "インピーダンス",
+)
+_ADJACENT_REVIEWER_DECISION_TERMS = (
+    "条件", "判定", "順位", "再現", "反証", "検証", "許容差", "適用限界",
+    "採否", "凍結", "高忠実度", "確定",
+)
+_ADJACENT_REVIEWER_AUDIT_TERMS = (
+    "再現", "再構成", "反証", "判定", "採否", "凍結", "版管理", "許容差",
+    "適用限界", "変更履歴",
+)
+
+
+def grant_writing_adjacent_reviewer_readability_check(text: str) -> dict:
+    """Find prose that is short but cognitively dense for an adjacent reviewer.
+
+    Sentence length and phrase-level redundancy do not explain every reading
+    failure. A sentence can be under 60 characters and still ask the reader to
+    unpack technical nouns, an infrastructure layer, a scientific operation,
+    and a decision rule at once. This diagnostic intentionally has no score.
+    """
+    prose = _prose_for_lint(_read_text_if_path(text))
+    sentences = [
+        segment.strip()
+        for segment in re.split(r"[。．!?！？\n]", prose)
+        if segment.strip()
+    ]
+    paragraphs = [
+        line.strip()
+        for line in prose.splitlines()
+        if len(line.strip()) >= 30
+        and not re.fullmatch(r"[（(【\[].{0,45}[）)】\]]", line.strip())
+    ]
+    if not sentences:
+        return {"applicable": False, "risk_count": 0, "risks": []}
+
+    jp_chars = re.findall(r"[一-龥々〆ヵヶぁ-んァ-ヶー]", prose)
+    kanji_chars = re.findall(r"[一-龥々〆ヵヶ]", prose)
+    kanji_ratio = len(kanji_chars) / len(jp_chars) if jp_chars else 0.0
+    risks: list[dict] = []
+
+    def add_risk(
+        risk_type: str,
+        excerpt: str,
+        comment: str,
+        recommendation: str,
+        severity: str = "MEDIUM",
+        **details,
+    ) -> None:
+        item = {
+            "type": risk_type,
+            "severity": severity,
+            "excerpt": re.sub(r"\s+", " ", excerpt).strip()[:360],
+            "comment": comment,
+            "recommendation": recommendation,
+        }
+        item.update(details)
+        risks.append(item)
+
+    dense_sentences: list[dict] = []
+    notation_piles: list[dict] = []
+    representation_mismatches: list[dict] = []
+    ambiguous_relation_phrases: list[dict] = []
+    scope_without_deliverables: list[dict] = []
+    representation_pattern = re.compile(
+        r"(?P<answer>設計則|選択則|指針|適用条件|成立条件|知見|成果)"
+        r"を[、，,\s]*(?P<representation>[^。！？\n]{0,36}"
+        r"(?:区間|指標|コード|実装|リポジトリ))として"
+        r"(?:与える|示す|提示する)"
+    )
+    ambiguous_patterns = (
+        re.compile(r"(?:一方|双方)へ(?:統一|還流|移行|集約)"),
+        re.compile(r"異なるコード系譜(?:間|を|の)"),
+        re.compile(r"(?:同一|共通)の?設計量で採否(?:する|を判断する)"),
+    )
+    scope_markers = ("必達範囲", "必須範囲", "最低限の達成範囲")
+    deliverable_pattern = re.compile(
+        r"(?:実証|検証|解明|確立|同定|導出|提示|実装|構築|開発|評価|"
+        r"明らかに|条件を示|法則を示|知見を得)"
+    )
+    for index, sentence in enumerate(sentences):
+        local_jp = re.findall(r"[一-龥々〆ヵヶぁ-んァ-ヶー]", sentence)
+        local_kanji = re.findall(r"[一-龥々〆ヵヶ]", sentence)
+        local_ratio = len(local_kanji) / len(local_jp) if local_jp else 0.0
+        comma_count = len(re.findall(r"[、，,]", sentence))
+        latin_terms = list(dict.fromkeys(re.findall(
+            r"(?<![A-Za-z0-9_])[A-Za-z][A-Za-z0-9_.()+/-]{1,}",
+            sentence,
+        )))
+        if len(sentence) >= 36 and local_ratio >= 0.60 and comma_count >= 3:
+            dense_sentences.append({
+                "index": index,
+                "length": len(sentence),
+                "kanji_ratio": round(local_ratio, 3),
+                "comma_count": comma_count,
+                "excerpt": sentence[:240],
+            })
+        has_prose_predicate = bool(re.search(
+            r"(?:する|した|用いる|使う|示す|求める|比べる|比較|評価|解析|"
+            r"設計|接続|判定|構築|開発|明らか|である|となる)",
+            sentence,
+        ))
+        if len(sentence) >= 34 and len(latin_terms) >= 3 and has_prose_predicate:
+            notation_piles.append({
+                "index": index,
+                "terms": latin_terms[:8],
+                "excerpt": sentence[:240],
+            })
+        for match in representation_pattern.finditer(sentence):
+            representation_mismatches.append({
+                "index": index,
+                "answer": match.group("answer"),
+                "representation": match.group("representation"),
+                "excerpt": sentence[:240],
+            })
+        vague_hits = [
+            match.group(0)
+            for pattern in ambiguous_patterns
+            for match in pattern.finditer(sentence)
+        ]
+        if vague_hits:
+            ambiguous_relation_phrases.append({
+                "index": index,
+                "phrases": list(dict.fromkeys(vague_hits)),
+                "excerpt": sentence[:240],
+            })
+        if (
+            any(marker in sentence for marker in scope_markers)
+            and not deliverable_pattern.search(sentence)
+        ):
+            scope_without_deliverables.append({
+                "index": index,
+                "excerpt": sentence[:240],
+            })
+
+    if dense_sentences:
+        first = dense_sentences[0]
+        add_risk(
+            "compressed_concept_density",
+            first["excerpt"],
+            (
+                "短い文でも漢語と列挙が密集し、隣接分野の審査者は一文の中で"
+                "複数の概念を展開する必要がある。"
+            ),
+            (
+                "最初の文は対象・困りごと・得る答えの一つに絞る。手法名、"
+                "条件、評価量は次の文へ一段ずつ展開する。"
+            ),
+            examples=dense_sentences[:6],
+        )
+
+    if notation_piles:
+        first = notation_piles[0]
+        add_risk(
+            "notation_or_method_pile",
+            first["excerpt"],
+            "一文に三つ以上の英字略語・手法名があり、関係より名称が先に見える。",
+            (
+                "一般名と役割を先に述べ、固有名・略語は一文に一つを目安に"
+                "導入する。複数手法の対応は図表又は別文へ分ける。"
+            ),
+            examples=notation_piles[:6],
+        )
+
+    if representation_mismatches:
+        first = representation_mismatches[0]
+        add_risk(
+            "result_representation_type_mismatch",
+            first["excerpt"],
+            (
+                "研究上の答えと、その数理・実装上の表現を『として』で直結し、"
+                "何を明らかにする研究かが読みにくい。"
+            ),
+            (
+                "まず条件・設計則・知見を平易に述べ、区間・指標・コード等は"
+                "それをどのように表現又は検証するかとして次の文へ分ける。"
+            ),
+            examples=representation_mismatches[:5],
+        )
+
+    if ambiguous_relation_phrases:
+        first = ambiguous_relation_phrases[0]
+        add_risk(
+            "ambiguous_relation_or_decision_object",
+            first["excerpt"],
+            (
+                "統一・還流・採否の対象を内部略語や指示語へ預けており、"
+                "隣接分野の審査者が対象を確定しにくい。"
+            ),
+            (
+                "開発母体、内部形式、解析手法、設計候補、適用可否など、"
+                "何を統一せず、何を判断するのかを名詞で明示する。"
+            ),
+            examples=ambiguous_relation_phrases[:5],
+        )
+
+    if scope_without_deliverables:
+        first = scope_without_deliverables[0]
+        add_risk(
+            "required_scope_without_deliverable",
+            first["excerpt"],
+            "必達範囲が対象課題の列挙だけで、研究期間内に何を達成するかがない。",
+            (
+                "『二課題で結合条件を実証する』のように、対象とともに"
+                "検証・解明・確立する成果を動詞で示す。"
+            ),
+            severity="HIGH",
+            examples=scope_without_deliverables[:5],
+        )
+
+    layer_paragraphs: list[dict] = []
+    for index, paragraph in enumerate(paragraphs):
+        infra = [term for term in _ADJACENT_REVIEWER_INFRA_TERMS if term in paragraph]
+        science = [
+            term for term in _ADJACENT_REVIEWER_SCIENCE_TERMS if term in paragraph
+        ]
+        decision = [
+            term for term in _ADJACENT_REVIEWER_DECISION_TERMS if term in paragraph
+        ]
+        if len(infra) >= 2 and len(science) >= 2 and len(decision) >= 2:
+            layer_paragraphs.append({
+                "index": index,
+                "infrastructure": infra[:6],
+                "science": science[:6],
+                "decision": decision[:6],
+                "excerpt": paragraph[:300],
+            })
+    if layer_paragraphs:
+        first = layer_paragraphs[0]
+        add_risk(
+            "three_layer_paragraph",
+            first["excerpt"],
+            (
+                "同じ段落で研究基盤、科学的操作、設計判断を同時に説明している。"
+                "審査者は何が主張で何が手段かを保持し続けなければならない。"
+            ),
+            (
+                "段落を『対象分野の問題』『何を比較・測定するか』『再現基盤が"
+                "どう支えるか』の順に分け、基盤名は最後へ下げる。"
+            ),
+            severity="HIGH",
+            examples=layer_paragraphs[:5],
+        )
+
+    audit_hits = [
+        {"term": term, "count": prose.count(term)}
+        for term in _ADJACENT_REVIEWER_AUDIT_TERMS
+        if prose.count(term)
+    ]
+    audit_count = sum(item["count"] for item in audit_hits)
+    audit_density = 1000.0 * audit_count / max(len(prose), 1)
+    audit_paragraph_count = sum(
+        1
+        for paragraph in paragraphs
+        if any(term in paragraph for term in _ADJACENT_REVIEWER_AUDIT_TERMS)
+    )
+    if audit_density >= 5.0 and audit_paragraph_count >= 4:
+        add_risk(
+            "distributed_assurance_repetition",
+            "、".join(f"{item['term']} {item['count']}回" for item in audit_hits),
+            (
+                "再現・反証・判定・版管理などの保証語が多くの段落へ分散し、"
+                "科学的な発見より監査手順が前面に出ている。"
+            ),
+            (
+                "各研究項目では得る知見を先に書き、共通の再現・反証手順は"
+                "検証設計の一段落へ集約する。"
+            ),
+            audit_density_per_1000=round(audit_density, 2),
+            paragraph_count=audit_paragraph_count,
+        )
+
+    comments = list(dict.fromkeys(risk["comment"] for risk in risks))
+    recommendations = list(dict.fromkeys(
+        risk["recommendation"] for risk in risks
+    ))
+    return {
+        "applicable": True,
+        "score": None,
+        "risk_count": len(risks),
+        "risks": risks,
+        "comments": comments,
+        "recommendations": recommendations,
+        "metrics": {
+            "sentence_count": len(sentences),
+            "average_sentence_length": round(
+                sum(map(len, sentences)) / len(sentences), 1
+            ),
+            "kanji_ratio": round(kanji_ratio, 3),
+            "compressed_dense_sentence_count": len(dense_sentences),
+            "notation_or_method_pile_count": len(notation_piles),
+            "result_representation_mismatch_count": len(
+                representation_mismatches
+            ),
+            "ambiguous_relation_phrase_count": len(
+                ambiguous_relation_phrases
+            ),
+            "required_scope_without_deliverable_count": len(
+                scope_without_deliverables
+            ),
+            "three_layer_paragraph_count": len(layer_paragraphs),
+            "assurance_term_density_per_1000_chars": round(audit_density, 2),
+        },
+        "diagnosis": (
+            "Sentence length alone is insufficient. Short sentences can remain hard "
+            "when abstract nouns, method names, infrastructure, and decision rules "
+            "are compressed into the same reading unit."
+        ),
+        "target_reader": (
+            "a reviewer who knows the broad field but not the applicant's software, "
+            "laboratory shorthand, or exact numerical formulation"
+        ),
+        "source": (
+            "generic adjacent-domain reviewer readability diagnostic; non-scoring"
+        ),
+    }
+
+
 def grant_writing_count_weak_expressions(text: str) -> dict:
     """Count hedges and grant-specific non-commitment phrases."""
     text = _prose_for_lint(_read_text_if_path(text))
@@ -157,7 +863,6 @@ def grant_writing_count_weak_expressions(text: str) -> dict:
         "検討する": r"検討(?:する|します|を行う|を進める)",
         "目指す": r"目指(?:す|します)",
         "努める": r"努め(?:る|ます)",
-        "など": r"など",
         "今後": r"今後",
     })
     # Recompute with the grant-specific additions included.
@@ -168,6 +873,37 @@ def grant_writing_count_weak_expressions(text: str) -> dict:
         if n:
             by_pattern[name] = n
             total += n
+
+    # 「など」 hedges only when it trails a single item. After an enumeration
+    # -- 「高次要素、補助空間前処理など」 -- it is ordinary Japanese for "and
+    # the like", and counting it told an applicant to damage correct prose.
+    # A fixed-width lookbehind cannot express "no comma earlier in the
+    # clause", so it is counted here instead of in the pattern table.
+    # The form's own section headings are not the applicant's prose.
+    form_headings = ("研究目的、研究方法など", "研究目的、研究方法等")
+    nado = 0
+    for match in re.finditer("など", text):
+        window = text[max(0, match.start() - 12):match.end() + 2]
+        if any(h in window for h in form_headings):
+            continue
+        clause_start = max(
+            text.rfind(mark, 0, match.start())
+            for mark in ("。", "．", "\n", "、", "，")
+        )
+        clause = text[clause_start + 1:match.start()]
+        if "、" in clause or "，" in clause:
+            continue  # enumeration
+        # An enumeration whose last separator is the nearest mark also ends
+        # up here, so require the clause to look like a lone noun.
+        if len(clause) > 12:
+            continue
+        preceding = text[max(0, clause_start - 30):clause_start]
+        if "、" in preceding or "，" in preceding:
+            continue
+        nado += 1
+    if nado:
+        by_pattern["など"] = nado
+        total += nado
     return {
         "total_weak_expressions": total,
         "by_pattern": by_pattern,
@@ -424,27 +1160,65 @@ _KAKEN_REVIEW_CRITERIA_AXES = {
         "研究設備",
         "予備",
     ],
+    "internationality": [
+        "国際性",
+        "世界の研究",
+        "国際共同",
+        "国内外",
+        "我が国独自",
+        "日本独自",
+    ],
 }
 
 _KAKEN_BRIEFING_NOTES = [
-    "審査基準は3つ: (1)研究課題の学術的重要性、(2)研究方法の妥当性、"
-    "(3)研究遂行能力及び研究環境の適切性。",
-    "審査委員は約1ヶ月で多い場合100件程度の計画調書を審査する。"
-    "専門外の読者でも読みやすい調書が圧倒的に採択されやすい。",
-    "カラーの図・写真は審査時に白黒印刷される種目がある。"
-    "色の違いだけで系列を区別しない。",
-    "審査ではresearchmapが研究者番号で参照される。"
-    "応募前に更新と研究者番号の登録を確認する。",
-    "「人権の保護及び法令等の遵守への対応」欄は例年審査委員からの指摘が"
-    "非常に多い。該当なしの場合も判断根拠を一文添える。",
-    "基盤系種目は申請額の約7割程度への減額内定が多い(充足率)。"
-    "挑戦的研究は原則満額支給だが採択率が低く、基盤研究との重複応募を検討する。",
+    (
+        "研究計画の評定要素は3つ: (1)研究課題の学術的重要性、(2)研究方法の妥当性、"
+        "(3)研究遂行能力及び研究環境の適切性。これとは別に国際性も評定される。"
+    ),
+    (
+        "研究経費は、研究方法の妥当性の中で計画との整合性を見られ、さらに配分額の"
+        "判断に用いる別枠の経費妥当性評価を受ける。独立した同格の総合評点軸ではない。"
+    ),
+    (
+        "審査委員は約1ヶ月で多い場合100件程度の計画調書を審査する。"
+        "専門外の読者でも読みやすい調書が圧倒的に採択されやすい。"
+    ),
+    (
+        "カラーの図・写真は審査時に白黒印刷される種目がある。"
+        "色の違いだけで系列を区別しない。"
+    ),
+    (
+        "審査ではresearchmapが研究者番号で参照される。"
+        "応募前に更新と研究者番号の登録を確認する。"
+    ),
+    (
+        "「人権の保護及び法令等の遵守への対応」欄は例年審査委員からの指摘が"
+        "非常に多い。該当なしの場合も判断根拠を一文添える。"
+    ),
+    (
+        "基盤系種目は申請額の約7割程度への減額内定が多い(充足率)。"
+        "挑戦的研究は原則満額支給だが採択率が低く、基盤研究との重複応募を検討する。"
+    ),
 ]
+
+_SUPPORTED_PROGRAMS = frozenset({
+    "generic", "kaken_generic", "kaken_oss", "kaken_oss_platform",
+    "kddi_digital",
+})
+
+
+def _validate_program(program: str) -> None:
+    if program not in _SUPPORTED_PROGRAMS:
+        choices = ", ".join(sorted(_SUPPORTED_PROGRAMS))
+        raise ValueError(f"unknown grant program {program!r}; choose one of: {choices}")
 
 
 def _section_axes_for_program(program: str) -> dict[str, list[str]]:
+    _validate_program(program)
     if program == "kddi_digital":
         return _KDDI_DIGITAL_AXES
+    if program == "kaken_generic":
+        return _KAKEN_REVIEW_CRITERIA_AXES
     if program in {"kaken_oss", "kaken_oss_platform"}:
         return _KAKEN_OSS_PLATFORM_AXES
     return _GENERIC_AXES
@@ -452,7 +1226,7 @@ def _section_axes_for_program(program: str) -> dict[str, list[str]]:
 
 def grant_writing_section_presence(text: str, program: str = "generic") -> dict:
     """Check whether a proposal draft contains the expected review axes."""
-    text = _read_text_if_path(text)
+    text = _prose_for_lint(_read_text_if_path(text))
     low = text.lower()
     axes = _section_axes_for_program(program)
     axis_results = {}
@@ -1706,6 +2480,26 @@ def grant_writing_reviewer_vocabulary_check(text: str) -> dict:
                 spec["recommendation"],
             )
 
+    mcp_storage_pattern = re.compile(
+        r"(?<![A-Za-z0-9_])MCP(?![A-Za-z0-9_])(?:そのもの)?(?:に|へ)"
+        r"[^。！？\n]{0,80}(?:蓄積|保存|格納|収録)(?:する|し|した|している)?"
+    )
+    for match in mcp_storage_pattern.finditer(text):
+        add_risk(
+            "mcp_described_as_storage",
+            "MCP",
+            match,
+            (
+                "MCPを情報の保存場所として説明している。MCPは知識や実行機能を"
+                "AIへ提示する規約・インターフェースである。"
+            ),
+            (
+                "保存先をリポジトリ、文書又はデータベースとして明示し、"
+                "『実装判断・検証手順をMCPサーバーから利用可能にする』等と役割を分ける。"
+            ),
+            severity="HIGH",
+        )
+
     institution_aliases = {
         "TU Graz": "グラーツ工科大学",
         "TU Wien": "ウィーン工科大学",
@@ -2232,9 +3026,15 @@ def grant_writing_persuasion_quality_check(text: str) -> dict:
         r"(?:[-/][A-Za-z0-9]+)*|H\([a-z]+\))(?![A-Za-z0-9])"
     )
     acronym_pile_count = 0
-    for sentence in re.split(r"(?<=[。．!?！？])", prose):
+    # An inventory is not a sentence that hides its meaning behind acronyms.
+    # 「Adventure, CST Studio, ELF/Magic, Elmer, EMCoS, EMSolution, ...」 in an
+    # adopted proposal's 研究環境 is a list of the software the lab owns, and
+    # naming them is the whole point.
+    for sentence in re.split(r"(?<=[。．!?！？])|\n", prose):
         acronyms = sorted(set(acronym_pattern.findall(sentence)))
         if len(acronyms) < 6:
+            continue
+        if sentence.count(",") + sentence.count("、") >= 6:
             continue
         acronym_pile_count += 1
         start = text.find(sentence[:24])
@@ -2283,16 +3083,1419 @@ def grant_writing_persuasion_quality_check(text: str) -> dict:
     }
 
 
+_CLAIM_MARKERS = (
+    "本研究は次を問う",
+    "を問う",
+    "中心の問い",
+    "学術的な問い",
+    "学術的問い",
+    "研究目的は",
+    "本研究の目的",
+    "目的は",
+)
+
+# The noun that names what the answer will BE. Parallel statements of one
+# question should use the same noun for the same semantic role. Different
+# nouns may coexist when the prose distinguishes, for example, a scientific
+# condition, an operational criterion, and an application limit.
+_CLAIM_OUTCOME_NOUNS = (
+    "条件", "境界", "範囲", "領域", "基準", "指標", "手順", "限界", "閾値",
+    "選択則", "設計則", "法則",
+)
+
+# The operation the researcher performs on it.
+_CLAIM_OPERATION_NOUNS = (
+    "定量化", "記述", "検証", "同定", "決定", "確定", "評価", "予測", "測定",
+)
+
+_CLAIM_TERM = re.compile(r"[一-龥]{2,}|[ァ-ヴー]{3,}")
+_CLAIM_TERM_STOPWORDS = frozenset({
+    "本研究", "中心", "場合", "以下", "以上", "今回", "一方", "同様", "本文",
+    "概要", "研究",
+})
+
+
+def _claim_terms(fragment: str) -> set[str]:
+    """Technical-noun proxy: kanji runs and katakana runs, minus filler.
+
+    Japanese has no spaces, so a naive run of any kana/kanji swallows whole
+    clauses. Kanji and katakana runs approximate the content nouns well
+    enough to compare two statements of the same claim.
+    """
+    return {
+        term
+        for term in _CLAIM_TERM.findall(fragment)
+        if term not in _CLAIM_TERM_STOPWORDS
+    }
+
+
+def _claim_statements(text: str) -> list[dict]:
+    """Locate statements of the central question / aim.
+
+    A claim often spans several sentences (「中心の問いは次である。…。…か。」),
+    so each marker takes its own sentence plus the following ones up to a
+    sentence that closes the claim.
+    """
+    sentences = [s for s in re.split(r"(?<=[。．!?！？])", text) if s.strip()]
+
+    def marker_of(fragment: str) -> str | None:
+        return next((m for m in _CLAIM_MARKERS if m in fragment), None)
+
+    # An opener defers the claim to what follows (「中心の問いは次である。」).
+    opener = re.compile(r"(?:次である|次を問う|次のとおり|以下である)[。．]\s*$")
+    closer = re.compile(r"(?:か|である|ことである|問う|明らかにする)[。．]\s*$")
+
+    statements: list[dict] = []
+    consumed: set[int] = set()
+    for index, sentence in enumerate(sentences):
+        if index in consumed:
+            continue
+        marker = marker_of(sentence)
+        if marker is None:
+            continue
+        chunk = [sentence]
+        if opener.search(sentence.strip()) or not closer.search(sentence.strip()):
+            for offset in range(1, 4):
+                nxt = index + offset
+                if nxt >= len(sentences):
+                    break
+                # Never swallow the next claim: it is a separate statement.
+                if marker_of(sentences[nxt]):
+                    break
+                chunk.append(sentences[nxt])
+                consumed.add(nxt)
+                if closer.search(sentences[nxt].strip()):
+                    break
+        body = "".join(chunk).strip()
+        terms = _claim_terms(body)
+        # A heading fragment or a passing mention is not a claim statement.
+        if len(terms) < 4 or not closer.search(body):
+            continue
+        statements.append({
+            "marker": marker,
+            "sentence_index": index + 1,
+            "text": body,
+            "terms": terms,
+        })
+    return statements
+
+
+def grant_writing_central_claim_consistency_check(text: str) -> dict:
+    """Check that one central claim is not stated as two different claims.
+
+    A proposal commonly states its question in the summary and again in the
+    body. When parallel statements use different decisive nouns for what
+    appears to be the same role -- one promises a 「境界」, the other a
+    「条件」 -- a reviewer cannot tell whether the proposal has one question
+    or two. This is not a universal ban on either noun: distinct roles may
+    legitimately use distinct terms. Keyword-coverage checks score the
+    ambiguous draft perfectly because every required word is present
+    somewhere; the defect is that the words disagree with each other.
+
+    The check is optional: it needs at least two claim statements.
+    """
+    text = _prose_for_lint(_read_text_if_path(text))
+    statements = _claim_statements(text)
+    if len(statements) < 2:
+        return {
+            "applicable": False,
+            "score": None,
+            "statement_count": len(statements),
+            "statements": [
+                {k: v for k, v in s.items() if k != "terms"} for s in statements
+            ],
+            "risks": [],
+            "comments": [],
+            "target": (
+                "define one central-question semantic contract; parallel "
+                "restatements must preserve its decisive roles"
+            ),
+            "source": "central-claim consistency check",
+        }
+
+    risks: list[dict] = []
+    pairs: list[dict] = []
+    for i in range(len(statements)):
+        for j in range(i + 1, len(statements)):
+            a, b = statements[i], statements[j]
+            shared = a["terms"] & b["terms"]
+            union = a["terms"] | b["terms"]
+            similarity = round(len(shared) / max(1, len(union)), 2)
+            a_outcomes = {n for n in _CLAIM_OUTCOME_NOUNS if n in a["text"]}
+            b_outcomes = {n for n in _CLAIM_OUTCOME_NOUNS if n in b["text"]}
+            a_ops = {n for n in _CLAIM_OPERATION_NOUNS if n in a["text"]}
+            b_ops = {n for n in _CLAIM_OPERATION_NOUNS if n in b["text"]}
+            pair = {
+                "statements": [a["sentence_index"], b["sentence_index"]],
+                "markers": [a["marker"], b["marker"]],
+                "similarity": similarity,
+                "shared_terms": sorted(shared),
+                "only_in_first": sorted(a["terms"] - b["terms"]),
+                "only_in_second": sorted(b["terms"] - a["terms"]),
+                "outcome_nouns": [sorted(a_outcomes), sorted(b_outcomes)],
+                "operation_nouns": [sorted(a_ops), sorted(b_ops)],
+            }
+            pairs.append(pair)
+
+            # Same topic (they share anchors) but the promised answer differs.
+            if len(shared) >= 2 and a_outcomes and b_outcomes and not (
+                a_outcomes & b_outcomes
+            ):
+                risks.append({
+                    "type": "outcome_noun_divergence",
+                    "severity": "HIGH",
+                    "statements": pair["statements"],
+                    "comment": (
+                        "同じ問いの言い直しだが、答えの形を表す名詞が異なる: "
+                        + "／".join(sorted(a_outcomes))
+                        + " と "
+                        + "／".join(sorted(b_outcomes))
+                    ),
+                    "recommendation": (
+                        "同じ答えの役割なら同じ名詞を使う。別の役割を意図する"
+                        "場合は、条件、判断基準、適用限界等の関係を定義する。"
+                    ),
+                    "excerpts": [a["text"][:160], b["text"][:160]],
+                })
+            elif len(shared) >= 2 and a_ops and b_ops and not (a_ops & b_ops):
+                risks.append({
+                    "type": "operation_noun_divergence",
+                    "severity": "MEDIUM",
+                    "statements": pair["statements"],
+                    "comment": (
+                        "問いに対して行う操作の語が異なる: "
+                        + "／".join(sorted(a_ops))
+                        + " と "
+                        + "／".join(sorted(b_ops))
+                    ),
+                    "recommendation": (
+                        "中心となる操作を固定し、記述や検証を併記する場合は"
+                        "主操作との関係を示す。"
+                    ),
+                    "excerpts": [a["text"][:160], b["text"][:160]],
+                })
+
+            if similarity >= 0.8:
+                risks.append({
+                    "type": "verbatim_restatement",
+                    "severity": "LOW",
+                    "statements": pair["statements"],
+                    "comment": "概要と本文がほぼ同一文になっている。",
+                    "recommendation": (
+                        "概要は全体の要約、本文は問いを導く論証と定義、と"
+                        "役割を分ける。"
+                    ),
+                    "excerpts": [a["text"][:160], b["text"][:160]],
+                })
+
+    deductions = sum(
+        3.0 if r["severity"] == "HIGH" else 1.5 if r["severity"] == "MEDIUM" else 0.5
+        for r in risks
+    )
+    score = max(0.0, round(10.0 - deductions, 1))
+    return {
+        "applicable": True,
+        "score": score,
+        "statement_count": len(statements),
+        "statements": [
+            {k: v for k, v in s.items() if k != "terms"} for s in statements
+        ],
+        "pairs": pairs,
+        "risk_count": len(risks),
+        "risks": risks,
+        "comments": list(dict.fromkeys(r["comment"] for r in risks)),
+        "recommendations": list(dict.fromkeys(r["recommendation"] for r in risks)),
+        "target": (
+            "one central-question semantic contract, preserved across "
+            "summary and body"
+        ),
+        "source": "central-claim consistency check",
+    }
+
+
+# Verbs that promise a result without naming the operation that produces it.
+# Derived from an experienced PI's rewrite of a 2026 Power Academy proposal
+# (2026-08-18): 「統合し」 went 3 -> 0 while 「双方向に連成」 went 0 -> 5 and
+# 「連成」 2 -> 8. The reviewer question these verbs leave unanswered is
+# always the same: integrated *how*?
+_VAGUE_CLAIM_VERBS = (
+    "統合する", "統合し", "統合を行う",
+    "連携する", "連携し",
+    "活用する", "活用し",
+    "融合する", "融合し",
+    "高度化する", "高度化し",
+    "推進する", "推進し",
+    "橋渡しする", "橋渡しし",
+)
+
+# Naming any of these makes the sentence answer "how".
+_MECHANISM_MARKERS = (
+    "連成", "接続", "射影", "写像", "写す", "縮約", "変換",
+    "入力", "出力", "反映", "介して", "を通じて", "経由",
+    "双方向", "電圧", "電流", "を渡す", "受け渡", "同じ",
+    "同一", "共通", "基底", "境界条件", "パラメータ",
+)
+
+
+# The review criterion this check implements, quoted from a 2025 KAKENHI
+# review disclosure: 「研究課題の核心をなす学術的『問い』は明確であり、学術的
+# 独自性や創造性が認められるか」. Three of five reviewers marked that single
+# item down, and it drove the academic-importance score to 1.60 against an
+# adopted average of 2.83 -- the largest gap on the sheet.
+_ORIGINALITY_MARKERS = (
+    "独自", "独創", "新規", "初めて", "初の", "従来にない", "既存手法にない",
+    "本研究に固有", "他に例をみない",
+)
+
+# A gap statement: prior work did X, but Y is not established. Without one,
+# an originality word is an assertion rather than a position.
+# 「従来」 must stand alone. The funded proposal writes 「従来提案された…は…
+# 考慮できず」 and 「従来提案されている…をそのまま適用できない」, which a list
+# of 従来手法／従来法／従来の misses entirely.
+_PRIOR_WORK_MARKERS = (
+    "既往研究", "既存研究", "先行研究", "従来", "これまで", "既報",
+    "既存の", "現状の", "現行の",
+)
+# Measured against five real submitted proposals (one funded, four not).
+# None of them phrase the limit as 「確立していない」. They negate a capability:
+# 「考慮できず」「そのまま適用できない」「実現できなかった」「制限される」.
+# The first vocabulary here was written from assumption and matched zero of
+# the five, including the funded one.
+_GAP_MARKERS = (
+    # capability negation -- how real proposals actually write it
+    "できない", "できず", "できなかった", "えない", "困難",
+    "適用できない", "考慮できず", "制限される", "制約される",
+    "限界がある", "対応できない", "十分に扱えない",
+    # explicit absence
+    "確立していない", "確立されていない", "体系化されていない",
+    "明らかでない", "明らかにされていない", "得られていない",
+    "十分でない", "十分ではない", "扱われていない",
+    "できていない", "限られている", "残されている",
+    "未解決", "至っていない", "難しい", "存在しない", "知られていない",
+)
+
+
+# A proposal can be thoroughly international without ever writing 「国際」;
+# it names a region or a foreign institution instead. Triggering only on the
+# explicit word would skip exactly the drafts that do this well.
+# Words that assert an international dimension wherever they appear. The
+# region names below are weaker: they also name a conference venue.
+_INTERNATIONAL_STRONG_TRIGGERS = (
+    "国際", "海外", "国外", "世界", "グローバル", "外国", "諸外国",
+)
+_INTERNATIONAL_TRIGGERS = (
+    "国際", "海外", "国外", "世界", "グローバル", "外国", "諸外国",
+    "欧州", "欧米", "米国", "アジア", "アメリカ", "ヨーロッパ",
+    "ドイツ", "オーストリア", "フランス", "英国", "イタリア", "中国",
+    "韓国", "台湾", "スイス", "オランダ", "北欧",
+)
+
+# What makes an international claim checkable rather than aspirational.
+# An institution or a person one could collaborate with. A conference is not
+# one of those: asking why COMPUMAG rather than a domestic substitute is not a
+# question anybody can answer.
+_NAMED_PARTNER = re.compile(
+    r"[ァ-ヴー]{2,}(?:工科)?大学|"
+    # 氏 must be the honorific, not the 氏 of 氏名, and it must sit right after
+    # the name. A form's フリガナ field puts スガハラ ケンゴ on one line and 氏名
+    # on the next, which was read as a foreign counterpart named ケンゴ氏 and
+    # then judged for international reciprocity and irreplaceability.
+    r"[ァ-ヴー]{3,}[ 　]{0,2}(?:氏(?!名)|教授|博士)|"
+    r"(?:TU|ETH|MIT|EPFL)\s*[A-Za-z]*|"
+    r"[A-Z][a-z]+\s+(?:University|Institute)"
+)
+# International venues and societies. Publishing there is evidence of
+# international activity, but they are not counterparts.
+_NAMED_INTERNATIONAL_VENUE = re.compile(r"(?:IGTE|CEFC|COMPUMAG|ICEM|IEEE)")
+# A claimed relationship with someone abroad. These are the words that make
+# 「相手先を名指ししていない」 a fair thing to say.
+_INTERNATIONAL_RELATION_MARKERS = (
+    "共同研究", "共著", "招へい", "招聘", "招請", "受入", "受け入れ",
+    "派遣", "訪問", "滞在", "連携", "留学", "分担", "共同開発",
+    # NOT bare 交流: in an electrical proposal it is alternating current, and
+    # a glossary row for 誘導加熱 was read as an international exchange.
+    "国際交流", "学術交流", "人的交流",
+)
+# Words that make a sentence about the applicant's own international activity,
+# as opposed to the worldwide importance of a problem or the size of a market.
+_INTERNATIONAL_ACTIVITY_MARKERS = _INTERNATIONAL_RELATION_MARKERS + (
+    "発表", "参加", "投稿", "採択", "登壇", "議論", "レビュー",
+)
+_RECIPROCAL_MARKERS = (
+    "相互", "双方向", "還流", "共同研究", "共著", "招へい", "招聘", "派遣",
+    "受入", "交流", "分担", "共同開発", "共同実装",
+)
+_ONE_WAY_MARKERS = (
+    "追いつく", "追随", "導入する", "学ぶ", "取り入れる", "輸入",
+    "後追い", "キャッチアップ",
+)
+_INTERNATIONAL_OUTPUT_MARKERS = (
+    "共著", "国際会議", "国際学会", "国際誌", "国際共同", "英文",
+    "国際ベンチマーク", "国際レビュー", "査読",
+)
+
+# Whether an international output already exists decides how much it is
+# worth. A record a reviewer can look up outranks an intention, and mixing
+# the two lets a plan read as an achievement.
+_ACHIEVED_MARKERS = (
+    "採択", "掲載", "受理", "出版", "発表した", "共著論文",
+    "実施した", "完了した", "招へいした", "訪問した", "得た", "行った",
+)
+_PLANNED_MARKERS = (
+    "予定", "目指す", "したい", "見込み", "構想", "を計画",
+)
+_NATIONAL_VALUE_MARKERS = (
+    "日本発", "我が国独自", "国内で発展", "国内発", "本邦",
+    "日本独自", "国内の知見",
+)
+
+
+def grant_writing_international_standing_check(text: str) -> dict:
+    """Check that an international claim is evidenced, not aspirational.
+
+    Many programmes weigh an international dimension, and several state it
+    as an explicit criterion. The KAKENHI wording decomposes into three
+    things a proposal can actually show: leading the field, contributing
+    through collaboration, and creating value distinct to one's own country.
+    None of them are demonstrated by saying 「国際的に展開する」.
+
+    The check is optional and fires only when the draft raises the subject.
+    A 2025 review disclosure scored this axis 1.60 against an adopted 2.70,
+    which is why aspiration without a named partner is treated as the
+    defect it is.
+    """
+    text = _prose_for_lint(_read_text_if_path(text))
+    # A country name inside a travel or cost line is a venue, not a claim of
+    # international standing. 「Conference（2026/5/17~22, フランス）：50万円」
+    # in a budget table was read as one, and the proposal was then told to name
+    # the counterpart institution it had never claimed to have.
+    logistics = re.compile(
+        r"円|旅費|参加費|宿泊|渡航|出張|"
+        r"\d{4}\s*[/年]\s*\d{1,2}|\d{1,2}\s*[/月]\s*\d{1,2}"
+    )
+    # 「世界的な社会課題である」 says the problem matters everywhere, not that
+    # the applicant works with anyone abroad, and the check went on to demand
+    # the counterpart institution behind a claim never made. A trigger counts
+    # only in a sentence that also describes activity or a relationship.
+    trigger_lines = [s for s in re.split(r"[。．\n]", text) if s.strip()]
+    trigger_hits = [
+        t
+        for t in _INTERNATIONAL_TRIGGERS
+        if t in text
+        and any(
+            t in line
+            and not logistics.search(line)
+            and any(a in line for a in _INTERNATIONAL_ACTIVITY_MARKERS)
+            for line in trigger_lines
+        )
+    ]
+    if _NAMED_INTERNATIONAL_VENUE.search(text):
+        trigger_hits = trigger_hits + [_NAMED_INTERNATIONAL_VENUE.search(text).group(0)]
+    # Naming a foreign institution is itself the subject being raised. A draft
+    # that says ウィーン工科大学 is international whether or not it also says
+    # 国際 or a region name, and requiring the word skipped exactly those.
+    named_trigger = _NAMED_PARTNER.search(text)
+    if named_trigger:
+        trigger_hits = trigger_hits + [named_trigger.group(0).strip()]
+
+    # Scope by prose segment, not by sentence. Text extracted from a PDF table
+    # or diagram carries no full stops, so a whole page becomes one "sentence"
+    # and any two words in it appear to co-occur: a business-model figure put
+    # 連携 beside an unrelated 海外 that way.
+    segments = [
+        s.strip()
+        for s in re.split(r"(?<=[。．!?！？])|\n", text)
+        if s and s.strip() and len(s.strip()) <= 200
+    ]
+    # The relationship must be an international one. A domestic 共同開発 with a
+    # partner company, in a proposal that separately mentions 海外市場, is not a
+    # foreign collaboration missing its counterpart's name.
+    relations = [
+        m
+        for m in _INTERNATIONAL_RELATION_MARKERS
+        if any(
+            m in s and any(t in s for t in _INTERNATIONAL_TRIGGERS)
+            for s in segments
+        )
+    ]
+    # Citing foreign prior work is not a claim of international standing. A
+    # domestic 基盤 proposal that surveyed 「フランス・Clenet教授らによる」 was
+    # told it showed no international output, which is true and irrelevant.
+    # The check opens on a claimed relationship, a named counterpart or venue,
+    # or a claimed output -- not on a region name sitting near a verb.
+    if not (
+        relations
+        or named_trigger
+        or _NAMED_INTERNATIONAL_VENUE.search(text)
+        or any(m in text for m in _INTERNATIONAL_OUTPUT_MARKERS)
+    ):
+        trigger_hits = []
+    if not trigger_hits:
+        return {
+            "applicable": False,
+            "score": None,
+            "risks": [],
+            "comments": [],
+            "target": (
+                "an international claim names its partners, its exchanged "
+                "artefacts, and what flows back"
+            ),
+            "source": "international-standing check",
+        }
+
+    sentences = [s for s in re.split(r"(?<=[。．!?！？])", text) if s.strip()]
+    partners = sorted({m.group(0).strip() for m in _NAMED_PARTNER.finditer(text)})
+    reciprocal = [m for m in _RECIPROCAL_MARKERS if m in text]
+    one_way = [m for m in _ONE_WAY_MARKERS if m in text]
+    outputs = [m for m in _INTERNATIONAL_OUTPUT_MARKERS if m in text]
+    # Publishing in IEEE Transactions or presenting at CEFC is international
+    # output. Counting those venues as evidence of international activity while
+    # reporting that the document shows none was a contradiction the adopted
+    # 基盤 proposal exposed.
+    outputs += sorted({m.group(0) for m in _NAMED_INTERNATIONAL_VENUE.finditer(text)})
+    national = [m for m in _NATIONAL_VALUE_MARKERS if m in text]
+
+    # Presenting abroad is international output; it has no counterpart to name.
+    # Only a claimed relationship does. A proposal whose international content
+    # was 「国際競争力強化に貢献する」 and 「想定する国内、海外市場」 was told
+    # to name the partner institution behind a collaboration it never claimed.
+    risks: list[dict] = []
+    if relations and not partners:
+        risks.append({
+            "type": "no_named_counterpart",
+            "severity": "HIGH",
+            "comment": "国際連携に触れているが、相手先の機関名・研究者名がない。",
+            "recommendation": (
+                "「海外の研究者と連携する」ではなく、機関名と個人名を書く。"
+                "審査者が確認できない連携は、意図の表明にとどまる。"
+            ),
+        })
+    # Sentences that carry an international output, split by whether the
+    # output exists yet. A plan and a record must not read alike.
+    output_sentences = [
+        s for s in sentences if any(o in s for o in _INTERNATIONAL_OUTPUT_MARKERS)
+    ]
+    achieved = [
+        s for s in output_sentences if any(a in s for a in _ACHIEVED_MARKERS)
+    ]
+    planned = [
+        s for s in output_sentences
+        if any(p in s for p in _PLANNED_MARKERS)
+        and not any(a in s for a in _ACHIEVED_MARKERS)
+    ]
+
+    if not outputs:
+        risks.append({
+            "type": "no_international_output",
+            "severity": "MEDIUM",
+            "comment": "国際的な成果物（共著、国際会議、国際誌等）が示されていない。",
+            "recommendation": (
+                "既にある共著・国際会議発表・国際レビューを挙げ、本計画で"
+                "何を追加するかを書く。"
+            ),
+        })
+    elif planned and not achieved:
+        risks.append({
+            "type": "international_output_all_planned",
+            "severity": "MEDIUM",
+            "comment": (
+                "国際的な成果がすべて予定であり、既に成立したものがない。"
+            ),
+            "recommendation": (
+                "採択済み・掲載済みのものがあれば、その状態を明記して分ける。"
+                "無い場合は形成途上であることを正直に書き、本研究で到達する"
+                "段階を示す。実績と予定を混ぜて書くと、予定が実績に読める。"
+            ),
+        })
+    if not reciprocal:
+        risks.append({
+            "type": "no_reciprocity",
+            "severity": "MEDIUM",
+            "comment": "やり取りの双方向性（何を渡し、何が返るか）が書かれていない。",
+            "recommendation": (
+                "招へい・派遣・共同実装・共著など、双方向の往来を具体化する。"
+            ),
+        })
+    # A catch-up frame concedes that the value flows one way, which is the
+    # opposite of what an international-standing criterion asks for.
+    if one_way and not national:
+        risks.append({
+            "type": "one_way_catch_up_frame",
+            "severity": "MEDIUM",
+            "comment": (
+                "海外に追随する枠組みで書かれており、自国発の価値が示されていない。"
+            ),
+            "recommendation": (
+                "「追いつく」ではなく、国内で発展した手法と海外の手法を相互検証し、"
+                "双方へ還流する構図にする。"
+            ),
+            "one_way_markers": one_way[:5],
+        })
+
+    deductions = sum(
+        3.0 if r["severity"] == "HIGH" else 1.5 for r in risks
+    )
+    score = max(0.0, round(10.0 - deductions, 1))
+    return {
+        "applicable": True,
+        "score": score,
+        "risk_count": len(risks),
+        "risks": risks,
+        "named_counterparts": partners[:12],
+        "reciprocity_markers": reciprocal[:8],
+        "one_way_markers": one_way[:5],
+        "international_outputs": outputs[:8],
+        "achieved_output_sentences": [
+            re.sub(r"\s+", " ", x).strip()[:160] for x in achieved[:4]
+        ],
+        "planned_output_sentences": [
+            re.sub(r"\s+", " ", x).strip()[:160] for x in planned[:4]
+        ],
+        "national_value_markers": national[:5],
+        "comments": [r["comment"] for r in risks],
+        "recommendations": [r["recommendation"] for r in risks],
+        "target": (
+            "named counterparts, real international outputs, two-way exchange, "
+            "and a value that originates here rather than a catch-up plan"
+        ),
+        "source": "international-standing check",
+    }
+
+
+# What the applicant's side supplies that the partner cannot obtain locally.
+# Derived from a 2026 bilateral case: an Austrian counterpart was asked by
+# his own funder why Japan, and told that Europe already has CERN. A facility
+# was never what he needed -- he needed a method line developed elsewhere to
+# cross-validate against. The answer to "why this partner" is always a named
+# asset, not a shared intention.
+_TRANSFERABLE_ASSET_MARKERS = (
+    "日本発", "国内で発展", "我が国独自", "国内発",
+    "本研究室が開発", "代表者が開発", "が開発した",
+    "提案者の一人", "開発者", "原著者",
+)
+_PARTNER_DEMAND_MARKERS = (
+    "求められ", "要請", "招請", "招へい", "招聘", "打診",
+    "関心を示", "議論したい", "共同研究の申し出", "取り上げられ",
+    "採用され", "導入され", "参照され", "問い合わせ",
+)
+_SUBSTITUTE_QUESTION_MARKERS = (
+    "他に代え", "代替できない", "他では得られない", "唯一",
+    "独立に発展", "別系統", "異なる系譜", "相互検証",
+)
+
+
+def grant_writing_collaboration_irreplaceability_check(text: str) -> dict:
+    """Check that a named collaboration says why that partner, both ways.
+
+    A funder on either side asks the same thing: why this counterpart rather
+    than someone closer to home. The answer is never a shared intention to
+    cooperate. It is a named asset one side holds and the other cannot obtain
+    locally, plus evidence that the other side actually wants it.
+
+    The check is optional and applies only when a foreign counterpart is
+    named. It does not judge whether the collaboration is good -- it asks
+    whether the proposal answers the question a reviewer will ask.
+    """
+    text = _prose_for_lint(_read_text_if_path(text))
+    partner = _NAMED_PARTNER.search(text)
+    if partner is None:
+        return {
+            "applicable": False,
+            "score": None,
+            "risks": [],
+            "comments": [],
+            "target": (
+                "a named collaboration states the asset only this side holds "
+                "and the evidence that the other side wants it"
+            ),
+            "source": "collaboration-irreplaceability check",
+        }
+
+    assets = [m for m in _TRANSFERABLE_ASSET_MARKERS if m in text]
+    demand = [m for m in _PARTNER_DEMAND_MARKERS if m in text]
+    substitute = [m for m in _SUBSTITUTE_QUESTION_MARKERS if m in text]
+
+    risks: list[dict] = []
+    if not assets:
+        risks.append({
+            "type": "no_asset_this_side_holds",
+            "severity": "HIGH",
+            "comment": (
+                "相手が自国で得られない、こちら側固有の資産が示されていない。"
+            ),
+            "recommendation": (
+                "手法名・ライブラリ名・原著者を挙げ、それが国内で発展した"
+                "ものであることを書く。「連携する」だけでは、なぜその相手か"
+                "にも、なぜこちらかにも答えていない。"
+            ),
+        })
+    if not demand:
+        risks.append({
+            "type": "no_evidence_partner_wants_it",
+            "severity": "MEDIUM",
+            "comment": "相手側がそれを求めている証拠が書かれていない。",
+            "recommendation": (
+                "招請、共同研究の申し出、相手が自国で取り上げた事実など、"
+                "相手側から来た動きを具体的に書く。こちらの意欲ではなく、"
+                "相手の需要が連携の必然性を示す。"
+            ),
+        })
+    if not substitute:
+        risks.append({
+            "type": "no_substitution_argument",
+            "severity": "LOW",
+            "comment": (
+                "近場で代替できない理由が書かれていない。"
+            ),
+            "recommendation": (
+                "独立に発展した別系統との相互検証である、など、"
+                "同一国内や近隣機関では代えられない理由を一文で置く。"
+            ),
+        })
+
+    deductions = sum(
+        3.0 if r["severity"] == "HIGH" else 1.5 if r["severity"] == "MEDIUM" else 0.5
+        for r in risks
+    )
+    score = max(0.0, round(10.0 - deductions, 1))
+    return {
+        "applicable": True,
+        "score": score,
+        "risk_count": len(risks),
+        "risks": risks,
+        "named_partner": partner.group(0).strip(),
+        "asset_markers": assets[:8],
+        "demand_markers": demand[:8],
+        "substitution_markers": substitute[:8],
+        "comments": [r["comment"] for r in risks],
+        "recommendations": [r["recommendation"] for r in risks],
+        "target": (
+            "name the asset only this side holds, show the other side asking "
+            "for it, and say why a closer substitute will not do"
+        ),
+        "source": "collaboration-irreplaceability check",
+    }
+
+
+_FORM_OVERFLOW_NOTICE = re.compile(
+    r"「(?P<field>[^」]{2,40})」は(?P<limit>\d+)ページ以内で"
+)
+_TEX_FIELD_LIMIT = re.compile(
+    r"\\section\{(?P<title>[^{}]+)\}(?P<tail>(?:[^\n]*\n){0,5})",
+)
+_TEX_LIMIT_VALUE = re.compile(r"[＜<]{2}\s*最大\s*(?P<pages>\d+)\s*ページ\s*[＞>]{2}")
+
+
+def _flatten(text: str) -> str:
+    return re.sub(r"\s+", "", text)
+
+
+def grant_writing_page_limit_check(pdf_path: str, tex_dir: str = "") -> dict:
+    """Check each field of a compiled proposal against its page allowance.
+
+    A page limit is the one rule a funder enforces before anyone reads the
+    science: a field that runs past its allowance can be returned unexamined.
+    The limit is also a target. A field that leaves a page unused has thrown
+    away space the applicant was given to argue in, which is the same defect
+    seen from the other side.
+
+    Two independent signals are used. Japanese form templates print their own
+    notice (「<欄名>」はNページ以内で書いてください) onto the overflow page, and
+    that string in the compiled PDF is proof on its own. Separately, the field
+    spans measured from the PDF are compared with the allowances declared in
+    the LaTeX source (＜＜最大　Nページ＞＞), which catches a form that stays
+    silent.
+    """
+    pdf = pathlib.Path(pdf_path)
+    if not pdf.is_file():
+        raise FileNotFoundError(f"compiled proposal not found: {pdf_path}")
+
+    import fitz  # PyMuPDF; imported here so text-only checks never need it.
+
+    doc = fitz.open(str(pdf))
+    pages: list[dict] = []
+    for index in range(doc.page_count):
+        page = doc.load_page(index)
+        blocks = [b for b in page.get_text("blocks") if b[4].strip()]
+        pages.append({
+            "number": index + 1,
+            "flat": _flatten(page.get_text()),
+            "bottom": max((b[3] for b in blocks), default=0.0),
+        })
+    doc.close()
+    if not pages:
+        raise ValueError(f"compiled proposal has no pages: {pdf_path}")
+
+    text_bottom = max(p["bottom"] for p in pages)
+
+    declared: list[tuple[str, int]] = []
+    source_dir = pathlib.Path(tex_dir) if tex_dir else pdf.parent
+    for tex in sorted(source_dir.glob("*.tex")):
+        body = tex.read_text(encoding="utf-8", errors="replace")
+        for match in _TEX_FIELD_LIMIT.finditer(body):
+            limit = _TEX_LIMIT_VALUE.search(match.group("tail"))
+            if limit:
+                declared.append((_flatten(match.group("title")), int(limit.group("pages"))))
+
+    spans: list[dict] = []
+    starts: list[tuple[int, str, int]] = []
+    for title, limit in declared:
+        start = next((p["number"] for p in pages if title in p["flat"]), None)
+        if start is not None:
+            starts.append((start, title, limit))
+    starts.sort()
+    for position, (start, title, limit) in enumerate(starts):
+        end = starts[position + 1][0] - 1 if position + 1 < len(starts) else len(pages)
+        last = pages[end - 1]
+        spans.append({
+            "field": title,
+            "declared_max_pages": limit,
+            "first_page": start,
+            "last_page": end,
+            "used_pages": end - start + 1,
+            "last_page_fill": round(last["bottom"] / text_bottom, 2) if text_bottom else 0.0,
+        })
+
+    risks: list[dict] = []
+    for page in pages:
+        notice = _FORM_OVERFLOW_NOTICE.search(page["flat"])
+        if notice:
+            risks.append({
+                "severity": "CRITICAL",
+                "location": f"PDF p{page['number']}",
+                "comment": (
+                    f"様式が超過を印字している: 「{notice.group('field')}」は"
+                    f"{notice.group('limit')}ページ以内。"
+                ),
+                "recommendation": "溢れた分の文をまるごと落とすか、別欄へ移す。",
+            })
+
+    for span in spans:
+        if span["used_pages"] > span["declared_max_pages"]:
+            risks.append({
+                "severity": "CRITICAL",
+                "location": f"PDF p{span['first_page']}-p{span['last_page']}",
+                "comment": (
+                    f"「{span['field']}」は{span['declared_max_pages']}ページ指定に対し"
+                    f"{span['used_pages']}ページ占めている。"
+                ),
+                "recommendation": "文を圧縮せず、文・段落単位で落とすか別欄へ移す。",
+            })
+        elif span["used_pages"] < span["declared_max_pages"] or (
+            span["last_page_fill"] < 0.6 and span["declared_max_pages"] >= 2
+        ):
+            # A single-page administrative field is often short because the
+            # honest answer is short, so only an unused whole page or a slack
+            # multi-page allowance is reported.
+            risks.append({
+                "severity": "MEDIUM",
+                "location": f"PDF p{span['last_page']}",
+                "comment": (
+                    f"「{span['field']}」は{span['declared_max_pages']}ページ許容のうち"
+                    f"{span['used_pages']}ページ、最終ページの充填率"
+                    f"{span['last_page_fill']:.0%}。"
+                ),
+                "recommendation": "許容ページは埋める対象。証拠・数値・図で残りを使う。",
+            })
+
+    if not declared and not risks:
+        return {
+            "applicable": False,
+            "score": None,
+            "risk_count": 0,
+            "risks": [],
+            "page_count": len(pages),
+            "fields": [],
+            "comments": [],
+            "recommendations": [],
+            "reason": (
+                "ページ上限の宣言（＜＜最大　Nページ＞＞）が見つからず、様式の超過印字もない。"
+            ),
+            "source": "page-limit check",
+        }
+
+    deductions = sum(
+        5.0 if r["severity"] == "CRITICAL" else 1.5 if r["severity"] == "MEDIUM" else 0.5
+        for r in risks
+    )
+    return {
+        "applicable": True,
+        "score": max(0.0, round(10.0 - deductions, 1)),
+        "risk_count": len(risks),
+        "risks": risks,
+        "page_count": len(pages),
+        "fields": spans,
+        "comments": [r["comment"] for r in risks],
+        "recommendations": [r["recommendation"] for r in risks],
+        "target": "each field inside its allowance, and filling it",
+        "source": "page-limit check",
+    }
+
+
+# Someone who carries work without a responsibility or budget share. A funder
+# reads 研究分担者 as accountable and these as not.
+_NON_MEMBER_ROLE = re.compile(r"連携研究者|研究協力者|協力者|アドバイザー|オブザーバ")
+# A line that hands a named person a job, not prose that happens to use the
+# role word: 「連携研究者　浅川伸一：機械学習に関する専門知識の供与」 assigns,
+# while 「有能な研究協力者を有する」 describes. Only the former is checkable.
+_ROLE_ASSIGNMENT = re.compile(
+    r"(?:^|[\s　、，])(?P<role>連携研究者|研究協力者|アドバイザー|オブザーバ)"
+    r"[\s　]{0,4}(?P<name>[^\s　：:、，。]{2,12})[：:]\s*(?P<desc>.+)$"
+)
+# The form explains these roles in its own instruction text, which describes
+# nobody and therefore carries no capability.
+_FORM_INSTRUCTION_HINT = re.compile(
+    r"本欄には|記入して|記述して|してください|下さい|参照|場合には|必要に応じて"
+)
+# Vocabulary every proposal uses regardless of field: uncovered here means
+# nothing.
+_CAPABILITY_STOPWORDS = frozenset({
+    "本研究", "研究", "開発", "手法", "方法", "解析", "評価", "検証", "計算",
+    "設計", "技術", "問題", "課題", "目的", "計画", "実施", "実装", "適用",
+    "利用", "使用", "対象", "結果", "効果", "内容", "以下", "以上", "場合",
+    "今回", "一方", "同様", "現在", "近年", "従来", "既存", "各種", "全体",
+    "期間", "年度", "本欄", "記述", "検討", "提案", "構築", "向上", "実現",
+    "必要", "可能", "重要", "特徴", "状況", "分野", "国内", "国外",
+    # Role-description filler: these say what the person does for the
+    # project, not which capability they hold.
+    "専門知識", "供与", "助言", "提供", "全般", "担当", "統括", "指導",
+    "協力", "支援", "情報", "経験", "知見", "専門家",
+})
+
+
+def grant_writing_capability_responsibility_check(text: str) -> dict:
+    """Check who carries the capability the novelty rests on.
+
+    A proposal usually joins a field the applicant knows to one they do not,
+    and reviewers read the capability criterion by asking whether the team can
+    do the part that is new. The answer is a matter of roles: 研究代表者 and
+    研究分担者 are accountable and funded, while 連携研究者, 研究協力者 and
+    アドバイザー are not counted the same way.
+
+    Measured on a rejected 基盤C whose novelty was machine learning applied to
+    topology optimisation: the applicant's 23 listed items were patents and
+    papers on 電磁界解析 and accelerators with no machine-learning entry, and
+    the line that supplied the missing capability read 「連携研究者　浅川伸一：
+    機械学習に関する専門知識の供与」. The same document's adopted counterpart
+    named five people and gave every one of them a 分担 role.
+
+    An earlier version of this check compared the novelty vocabulary against
+    the words in the evidence list. It fired hardest on the *adopted*
+    proposal, whose novelty is a compound it coined (マルチフィジクスモデル
+    縮約) that no paper title could contain, and stayed silent on the rejected
+    one. Lexical overlap does not measure capability, so only the role
+    attribution -- which is mechanical and locatable -- is tested here.
+    """
+    text = _prose_for_lint(_read_text_if_path(text))
+
+    segments = [
+        s.strip()
+        for s in re.split(r"(?<=[。．!?！？])|\n", text)
+        if s and s.strip()
+    ]
+    assignments = [
+        (s, m)
+        for s in segments
+        for m in [_ROLE_ASSIGNMENT.search(s)]
+        if m and not _FORM_INSTRUCTION_HINT.search(s)
+    ]
+    if not assignments:
+        return {
+            "applicable": False,
+            "score": None,
+            "risk_count": 0,
+            "risks": [],
+            "carried_terms": [],
+            "role_lines": [],
+            "comments": [],
+            "recommendations": [],
+            "reason": (
+                "連携研究者・研究協力者・アドバイザーへの担当割り当て行がないため"
+                "判定しない。"
+            ),
+            "source": "capability-responsibility check",
+        }
+
+    risks: list[dict] = []
+    carried: list[str] = []
+    for line, match in assignments:
+        role = match.group("role")
+        # Only the description after the name states a capability; the name
+        # itself and the role word are not ones.
+        terms = sorted({
+            term
+            for term in _CLAIM_TERM.findall(match.group("desc"))
+            if len(term) >= 3
+            and term not in _CAPABILITY_STOPWORDS
+            and not _NON_MEMBER_ROLE.fullmatch(term)
+            and text.count(term) >= 3
+        })
+        if not terms:
+            continue
+        carried.extend(terms)
+        risks.append({
+            "type": "novelty_capability_on_non_member",
+            "severity": "HIGH",
+            "role": role,
+            "terms": terms,
+            "excerpt": line[:120],
+            "comment": (
+                f"「{'、'.join(terms)}」の能力が{role}に置かれている。"
+            ),
+            "recommendation": (
+                "予算と責任を持つ研究分担者にする。連携研究者・協力者は"
+                "遂行体制として数えにくく、その能力を要する主張は"
+                "裏付けのない主張として読まれる。"
+            ),
+        })
+
+    deductions = sum(3.0 for _ in risks)
+    return {
+        "applicable": True,
+        "score": max(0.0, round(10.0 - deductions, 1)),
+        "risk_count": len(risks),
+        "risks": risks,
+        "carried_terms": sorted(set(carried)),
+        "role_lines": [line[:120] for line, _ in assignments[:4]],
+        "comments": [r["comment"] for r in risks],
+        "recommendations": [r["recommendation"] for r in risks],
+        "target": (
+            "every capability the claim depends on sits with someone who has "
+            "a responsibility share"
+        ),
+        "source": "capability-responsibility check",
+    }
+
+
+def grant_writing_question_originality_check(text: str) -> dict:
+    """Check that the central question carries an originality position.
+
+    The criterion has two halves and this suite already covers the first:
+    the question must be clear (see the central-claim consistency check).
+    This one covers the second half -- that originality and creativity are
+    recognisable -- which needs three things present and connected: a stated
+    question, a claim of what is new, and a gap in prior work that the claim
+    stands against. An originality adjective with no gap behind it is an
+    assertion; a gap with no question attached belongs to somebody else's
+    proposal.
+    """
+    text = _prose_for_lint(_read_text_if_path(text))
+    statements = _claim_statements(text)
+    if not statements:
+        return {
+            "applicable": False,
+            "score": None,
+            "risks": [],
+            "comments": [],
+            "target": (
+                "the central question states what is new and what prior work "
+                "leaves unresolved"
+            ),
+            "source": "question-originality check (2025 review disclosure)",
+        }
+
+    sentences = [s for s in re.split(r"(?<=[。．!?！？])", text) if s.strip()]
+    originality_hits = [m for m in _ORIGINALITY_MARKERS if m in text]
+    prior_hits = [m for m in _PRIOR_WORK_MARKERS if m in text]
+    gap_hits = [m for m in _GAP_MARKERS if m in text]
+
+    # A gap statement is a position only when prior work and the gap are
+    # joined. Either in one sentence -- 「既往研究は…進めてきたが、…は確立
+    # していない」 -- or across two that a contrastive connective ties
+    # together: 「既往研究では…進められてきた。一方、…は体系化されていない」.
+    # Both are ordinary Japanese; requiring the single-sentence form only
+    # would fail correct prose.
+    contrastive = ("一方", "しかし", "だが", "ところが", "他方", "これに対し")
+    gap_sentences = []
+    for i, sentence in enumerate(sentences):
+        has_prior = any(p in sentence for p in _PRIOR_WORK_MARKERS)
+        has_gap = any(g in sentence for g in _GAP_MARKERS)
+        if has_prior and has_gap:
+            gap_sentences.append({
+                "sentence_index": i + 1,
+                "form": "single_sentence",
+                "excerpt": re.sub(r"\s+", " ", sentence).strip()[:220],
+            })
+            continue
+        if not has_prior:
+            continue
+        nxt = sentences[i + 1] if i + 1 < len(sentences) else ""
+        if any(g in nxt for g in _GAP_MARKERS) and any(
+            c in nxt for c in contrastive
+        ):
+            gap_sentences.append({
+                "sentence_index": i + 1,
+                "form": "contrastive_pair",
+                "excerpt": re.sub(r"\s+", " ", sentence + nxt).strip()[:260],
+            })
+
+    risks: list[dict] = []
+    if not originality_hits:
+        risks.append({
+            "type": "no_originality_claim",
+            "severity": "HIGH",
+            "comment": "何が新しいのかを述べた語がない。",
+            "recommendation": (
+                "独自性・新規性を一語で名指しする。審査項目は「学術的独自性や"
+                "創造性が認められるか」であり、読み取れなければ低評価になる。"
+            ),
+        })
+    if not gap_sentences:
+        risks.append({
+            # MEDIUM, not HIGH. Measured on ten submitted proposals (three
+            # funded): this rule fires on funded work too, so it cannot carry
+            # the severity of a defect. It marks a contrast worth writing,
+            # not a reason the proposal will fail.
+            "type": "no_gap_against_prior_work",
+            "severity": "MEDIUM",
+            "comment": (
+                "既往研究の限界を一文で述べていない。"
+                if not (prior_hits and gap_hits)
+                else "既往研究への言及と未解決の指摘が別々の文に散っている。"
+            ),
+            "recommendation": (
+                "「既往研究は〜を進めてきたが、〜は確立していない」の形で、"
+                "先行研究と未解決点を同一文に置く。独自性はこの対比の上に立つ。"
+            ),
+        })
+
+    deductions = sum(
+        3.0 if r["severity"] == "HIGH" else 1.5 for r in risks
+    )
+    score = max(0.0, round(10.0 - deductions, 1))
+    return {
+        "applicable": True,
+        "score": score,
+        "risk_count": len(risks),
+        "risks": risks,
+        "statement_count": len(statements),
+        "originality_markers": originality_hits[:8],
+        "prior_work_markers": prior_hits[:8],
+        "gap_statements": gap_sentences[:5],
+        "comments": [r["comment"] for r in risks],
+        "recommendations": [r["recommendation"] for r in risks],
+        "target": (
+            "the central question states what is new and what prior work "
+            "leaves unresolved, in one contrast"
+        ),
+        "source": "question-originality check (2025 review disclosure)",
+    }
+
+
+_AMOUNT_PATTERN = re.compile(r"\d[\d,]*\s*(?:千円|万円|億円|円)")
+_NECESSITY_MARKERS = (
+    "必要性", "計上", "見積", "そのため", "必要である", "必要がある",
+    "購入する", "使用する",
+)
+# Money the applicant expects to receive, not to spend.
+_REVENUE_MARKERS = (
+    "顧客", "販売", "売上", "収益", "価格", "ライセンス", "採算", "利益",
+    "事業化", "市場規模", "単価設定", "課金",
+)
+_TRAVEL_MARKERS = ("旅費", "出張", "渡航")
+_DISSEMINATION_MARKERS = (
+    "学会", "国際会議", "研究会", "発表", "シンポジウム", "講演", "報告会",
+)
+_CALCULATION_BASIS_MARKERS = (
+    "×", " x ", " X ", "単価", "月額", "年額", "人泊", "見積書",
+    "公式料金", "料金表", "旅費規程", "利用料", "数量", "月数", "回数",
+)
+_QUANTITY_BASIS_PATTERN = re.compile(r"\d+\s*(?:名|回|件|台|個|月|日|泊)")
+
+
+def grant_writing_budget_narrative_check(text: str) -> dict:
+    """Check the necessity narrative that sits beside a budget table.
+
+    The FY2027 JSPS Web entry guide requires both necessity and a calculation
+    basis. A 2019 editor also correctly warned that copying bare totals into
+    prose creates two values to maintain. Therefore an amount in the
+    narrative is acceptable when it forms a recomputable basis (unit price,
+    quantity, duration, official tariff, or quotation); only a bare amount is
+    reported.
+
+    The check is optional: it applies only where a necessity narrative and
+    money both appear.
+    """
+    text = _prose_for_lint(_read_text_if_path(text))
+    sentences = [s for s in re.split(r"(?<=[。．!?！？])", text) if s.strip()]
+
+    narrative = [
+        (i, s) for i, s in enumerate(sentences)
+        if any(m in s for m in _NECESSITY_MARKERS)
+    ]
+    if not narrative:
+        return {
+            "applicable": False,
+            "score": None,
+            "risks": [],
+            "comments": [],
+            "target": (
+                "the narrative explains necessity and gives a recomputable "
+                "calculation basis where an amount is stated"
+            ),
+            "source": (
+                "FY2027 JSPS Web entry guide plus 2019 editor review of a "
+                "funded proposal"
+            ),
+        }
+
+    risks: list[dict] = []
+    seen_excerpts: set[str] = set()
+    for index, sentence in narrative:
+        # A price charged is not a cost incurred. 「ライセンスビジネスの権利
+        # 付与型は…1件あたり5,000千円に設定」 is a business model, and 計上 in
+        # it refers to the company's own accounting, not to a budget line.
+        if any(m in sentence for m in _REVENUE_MARKERS):
+            continue
+        if sentence in seen_excerpts:
+            continue
+        seen_excerpts.add(sentence)
+        amounts = _AMOUNT_PATTERN.findall(sentence)
+        has_calculation_basis = any(
+            marker in sentence for marker in _CALCULATION_BASIS_MARKERS
+        ) or bool(_QUANTITY_BASIS_PATTERN.search(sentence))
+        if amounts and not has_calculation_basis:
+            risks.append({
+                "type": "amount_without_calculation_basis",
+                "severity": "MEDIUM",
+                "sentence_index": index + 1,
+                "amounts": amounts[:4],
+                "excerpt": re.sub(r"\s+", " ", sentence).strip()[:200],
+                "comment": (
+                    "必要性の説明に積算根拠のない金額がある: "
+                    + "、".join(amounts[:3])
+                ),
+                "recommendation": (
+                    "金額を残すなら、単価×数量×月数/回数、見積書、公式料金表等の"
+                    "積算根拠を同じ記述に置く。合計額だけなら積算表へ集約する。"
+                ),
+            })
+
+    travel = [s for s in sentences if any(t in s for t in _TRAVEL_MARKERS)]
+    if travel and not any(
+        any(d in s for d in _DISSEMINATION_MARKERS) for s in sentences
+    ):
+        risks.append({
+            "type": "travel_without_dissemination_plan",
+            "severity": "LOW",
+            "comment": "旅費を計上しているが、発表・参加する場が書かれていない。",
+            "recommendation": (
+                "出張の行き先だけでなく、学会・国際会議など何のための移動かを"
+                "書く。成果発表の予定がないなら、その旨を明示する。"
+            ),
+        })
+
+    deductions = sum(
+        1.5 if r["severity"] == "MEDIUM" else 0.5 for r in risks
+    )
+    score = max(0.0, round(10.0 - deductions, 1))
+    return {
+        "applicable": True,
+        "score": score,
+        "risk_count": len(risks),
+        "risks": risks[:20],
+        "necessity_sentence_count": len(narrative),
+        "comments": list(dict.fromkeys(r["comment"] for r in risks)),
+        "recommendations": list(dict.fromkeys(r["recommendation"] for r in risks)),
+        "target": (
+            "the narrative says what the money buys and why, amounts carry a "
+            "recomputable basis, and travel names its purpose"
+        ),
+        "source": (
+            "FY2027 JSPS Web entry guide plus 2019 editor review of a funded "
+            "proposal"
+        ),
+    }
+
+
+def grant_writing_template_residue_check(text: str) -> dict:
+    """Find unfilled placeholders and leftover form instructions.
+
+    Evidence from two real 2026 applications. A Power Academy draft still
+    carried 「小計：○○○○千円（税込）」 and the form's own 「〜記入して
+    ください」 sentences when it reached the co-investigator, who deleted
+    them. A JSPS application was sent back by the office before any reviewer
+    saw it, purely on form compliance. Both defect classes are mechanical,
+    locatable, and fatal in a way no argument about research quality is.
+    """
+    text = _read_text_if_path(text)
+    lines = text.splitlines()
+    risks: list[dict] = []
+    instructions: list[dict] = []
+
+    placeholder = re.compile(
+        r"[○◯]{2,}|[×✕]{3,}|＿{2,}|_{4,}|"
+        r"[XxＸｘ]{3,}(?![A-Za-z0-9])|"
+        r"【\s*(?:記入|入力|ここに|要記入)[^】]*】|"
+        # A prefix match on 「（入力…）」 is not enough. 入力 is ordinary
+        # technical vocabulary, and 「（入力したエネルギーに対するビーム強度）」
+        # -- a term gloss in a submitted proposal -- was reported as an
+        # unfilled field. A placeholder parenthetical holds the instruction
+        # word and nothing else.
+        r"（\s*(?:記入|入力)(?:して\s*(?:ください|下さい)|欄|例|箇所|事項)?\s*）|"
+        r"(?:氏名|所属|役職|研究者番号|研究期間|申請金額|課題名)"
+        r"[^。\n]{0,20}未定|"
+        r"\bTBD\b|\bTODO\b"
+    )
+    # Instruction sentences are counted but NOT reported as defects. Measured
+    # on the 2026 Power Academy rewrite: the co-investigator deleted 6 of them
+    # and deliberately kept 13, and the two groups are indistinguishable in
+    # flat text -- 「研究マップを…選択してください」 went, 「性別を…選択して
+    # ください」 stayed, because one labels a prose box the applicant fills and
+    # the other is part of the form's own answer structure. A rule that cannot
+    # tell them apart cannot be a detector, so this becomes a count the author
+    # judges, not a finding.
+    instruction = re.compile(
+        r"(?:記入|記載|入力|選択|要約|確認|参照)して\s*ください|"
+        r"ご記入|ご覧いただき|お書きください"
+    )
+
+    for number, line in enumerate(lines, 1):
+        stripped = line.strip()
+        if not stripped:
+            continue
+        for match in placeholder.finditer(stripped):
+            risks.append({
+                "type": "unfilled_placeholder",
+                "severity": "HIGH",
+                "line": number,
+                "match": match.group(0)[:40],
+                "excerpt": stripped[:200],
+                "comment": "未記入のプレースホルダが残っている。",
+                "recommendation": (
+                    "提出前に実際の値へ置き換える。金額欄の ○○○○ は"
+                    "そのまま提出されると事務差し戻しの原因になる。"
+                ),
+            })
+            break
+        if instruction.search(stripped):
+            instructions.append({"line": number, "excerpt": stripped[:200]})
+
+    applicable = bool(text.strip())
+    deductions = sum(2.0 for r in risks)
+    score = None if not applicable else max(0.0, round(10.0 - deductions, 1))
+    question = (
+        f"様式の記入説明文が {len(instructions)} 件ある。"
+        "自由記述欄の説明文なら提出前に削除し、選択・回答欄の様式文なら残す。"
+        "文面だけでは区別できないため、欄ごとに確認する。"
+    ) if instructions else ""
+    return {
+        "applicable": applicable,
+        "score": score,
+        "risk_count": len(risks),
+        "risks": risks[:40],
+        "instruction_sentence_count": len(instructions),
+        "instruction_sentences": instructions[:20],
+        "questions": [question] if question else [],
+        "comments": list(dict.fromkeys(r["comment"] for r in risks)),
+        "recommendations": list(dict.fromkeys(r["recommendation"] for r in risks)),
+        "target": (
+            "no unfilled placeholder survives into the submitted document; "
+            "instruction sentences are counted for the author to judge"
+        ),
+        "source": "template-residue check (2026 Power Academy / JSPS evidence)",
+    }
+
+
+def grant_writing_vague_claim_verb_check(text: str) -> dict:
+    """Flag 統合/連携/活用 that never say how.
+
+    A proposal that "integrates three technologies" has told the reviewer
+    nothing; one that "couples the two models bidirectionally through the
+    winding current and induced voltage" has. This check finds the first
+    shape and asks for the second. It is the edit an experienced PI makes
+    first, and no keyword-coverage axis sees it, because the vague verb and
+    the required nouns are all present -- separately.
+    """
+    text = _prose_for_lint(_read_text_if_path(text))
+    # A newline ends a sentence here too: a person's name on its own line
+    # merged with the paragraph under it, and the merged run was reported
+    # eighteen times across six real proposals.
+    sentences = [s for s in re.split(r"(?<=[。．!?！？])|\n", text) if s.strip()]
+
+    risks: list[dict] = []
+    concrete: list[dict] = []
+    # Work already done is a report, not a promise. 「両者を辺要素OSSへ統合し、
+    # …再実行した」 names an artefact and states an outcome; asking it to say
+    # how is asking it to re-describe finished work.
+    completed = re.compile(
+        r"(?:した|した。|してきた|実施した|再実行した|完了した|得た|"
+        r"確認した|発表した|示した)"
+    )
+    # The same applies to a record written in the ongoing form. 「…知識を活用
+    # して先端技術開発を行っている（S1,2）」 in a これまでの研究活動 field is a
+    # record with a citation attached, not a promise about the project.
+    record_ending = re.compile(r"(?:た|ている|ており|てきた|ています)$")
+    trailing_note = re.compile(r"[（(][^（(）)]*[）)]\s*$")
+    for index, sentence in enumerate(sentences):
+        verb = next((v for v in _VAGUE_CLAIM_VERBS if v in sentence), None)
+        if verb is None:
+            continue
+        if completed.search(sentence):
+            continue
+        stem = trailing_note.sub("", sentence.strip().rstrip("。．"))
+        if record_ending.search(stem):
+            continue
+        # 「誘導加熱技術を活用する幅広い産業分野」 modifies a noun; it describes
+        # who uses the technology, not what this project will do. A claim verb
+        # followed immediately by a noun is adnominal, not the predicate.
+        after = sentence[sentence.index(verb) + len(verb):]
+        if after and re.match(r"[一-龥ァ-ヴー]", after):
+            continue
+        found = [m for m in _MECHANISM_MARKERS if m in sentence]
+        entry = {
+            "sentence_index": index + 1,
+            "verb": verb,
+            "mechanism_markers": found[:6],
+            "excerpt": re.sub(r"\s+", " ", sentence).strip()[:220],
+        }
+        if found:
+            concrete.append(entry)
+            continue
+        entry.update({
+            "type": "claim_verb_without_mechanism",
+            "severity": "MEDIUM",
+            "comment": (
+                f"「{verb}」が、何をどう渡すのかを書かずに使われている。"
+            ),
+            "recommendation": (
+                "動詞を操作に置き換える。何と何を、どの物理量を介して、"
+                "どちら向きに渡すのかを書く。"
+                "例: 「三者の技術を統合し」→「両モデルを巻線電流と誘起電圧を"
+                "介して双方向に連成し」。"
+            ),
+        })
+        risks.append(entry)
+
+    applicable = bool(risks or concrete)
+    score = None if not applicable else max(0.0, round(10.0 - 1.5 * len(risks), 1))
+    return {
+        "applicable": applicable,
+        "score": score,
+        "risk_count": len(risks),
+        "risks": risks,
+        "concrete_uses": concrete,
+        "comments": list(dict.fromkeys(r["comment"] for r in risks)),
+        "recommendations": list(dict.fromkeys(r["recommendation"] for r in risks)),
+        "target": (
+            "every 統合/連携/活用 names the operation, the quantity exchanged, "
+            "and the direction"
+        ),
+        "source": "vague-claim-verb check (Power Academy 2026 rewrite evidence)",
+    }
+
+
 def grant_writing_kaken_review_format_check(text: str) -> dict:
     """Check KAKENHI reviewer-format realities on a proposal draft.
 
-    Encodes the in-house KAKENHI call briefing (R9/FY2027 call): reviewers
-    judge on three criteria and read up to ~100 proposals in about a month;
-    figures may be printed in monochrome for some categories; publication
-    records are read through researchmap; the human-rights/legal-compliance
-    box draws the most reviewer remarks; and the funding-overlap box has a
-    fixed format. Fragment-level triggers gate each sub-check, so short
-    excerpts stay clean; full-draft heuristics apply above ~1500 chars.
+    Combines the official B/C research-plan elements and internationality
+    rating with the in-house R9/FY2027 call briefing: reviewers may read up to
+    ~100 proposals in about a month; figures may be printed in monochrome for
+    some categories; publication records are read through researchmap; the
+    human-rights/legal-compliance box draws the most reviewer remarks; and the
+    funding-overlap box has a fixed format. Fragment-level triggers gate each
+    sub-check, so short excerpts stay clean; full-draft heuristics apply above
+    ~1500 chars.
     """
     raw = _read_text_if_path(text)
     prose = _prose_for_lint(raw)
@@ -2400,20 +4603,39 @@ def grant_writing_kaken_review_format_check(text: str) -> dict:
         "のみで",
         "理由",
     ]
+    ethics_context_terms = [
+        "人権",
+        "法令",
+        "倫理",
+        "安全対策",
+        "個人情報",
+        "被験者",
+        "動物",
+        "ヒト",
+        "アンケート",
+        "インタビュー",
+    ]
     bare_na_matches = []
-    for match in na_pattern.finditer(raw):
-        sentence_start = max(raw.rfind("。", 0, match.start()) + 1, 0)
-        sentence_stop = raw.find("。", match.end())
+    # Inspect applicant prose, not raw LaTeX. A final-year field commonly
+    # defines several ``\newcommand`` values as 「該当なし」; those form values
+    # are not the human-rights/legal rationale this check is about.
+    for match in na_pattern.finditer(prose):
+        local_context = prose[max(0, match.start() - 500):match.end()]
+        if not any(term in local_context for term in ethics_context_terms):
+            continue
+        sentence_start = max(prose.rfind("。", 0, match.start()) + 1, 0)
+        sentence_stop = prose.find("。", match.end())
         if sentence_stop < 0:
-            sentence_stop = len(raw)
-        sentence = raw[sentence_start:sentence_stop]
+            sentence_stop = len(prose)
+        sentence = prose[sentence_start:sentence_stop]
         if not any(term in sentence for term in rationale_terms):
             bare_na_matches.append((match, sentence))
     if bare_na_matches:
         first, sentence = bare_na_matches[0]
+        raw_start = raw.find(first.group(0))
         add_risk(
             "not_applicable_without_rationale",
-            first.start(),
+            max(0, raw_start),
             sentence,
             "「該当なし」とだけ書かれ、そう判断した根拠がない。",
             "人を対象としない数値解析のみである等、該当なしと判断した根拠を"
@@ -2471,12 +4693,23 @@ def grant_writing_kaken_review_format_check(text: str) -> dict:
                 missing_parts=missing_parts,
             )
 
-    full_draft = len(prose) >= 1500
+    low = prose.lower()
+    axis_hits = {
+        axis: _contains_any(low, keywords)
+        for axis, keywords in _KAKEN_REVIEW_CRITERIA_AXES.items()
+    }
+    # Length alone cannot tell a proposal body from a compact application form.
+    # A 1,715-character 住友財団 form -- one 要旨 box, then keywords, amounts and
+    # a funding plan -- matched none of the review vocabularies, and reporting a
+    # missing 研究遂行能力 axis there is a finding its author would argue with,
+    # because the form gave them nowhere to write it. A document that already
+    # speaks two review vocabularies is a proposal body, and absent axes then
+    # warrant review.
+    full_draft = len(prose) >= 1500 and sum(bool(h) for h in axis_hits.values()) >= 2
     criteria_axis_results: dict[str, dict] = {}
     if full_draft:
-        low = prose.lower()
         for axis, keywords in _KAKEN_REVIEW_CRITERIA_AXES.items():
-            hits = _contains_any(low, keywords)
+            hits = axis_hits[axis]
             criteria_axis_results[axis] = {
                 "ok": bool(hits),
                 "matches": hits[:8],
@@ -2492,10 +4725,11 @@ def grant_writing_kaken_review_format_check(text: str) -> dict:
                 "review_criteria_axis_missing",
                 0,
                 "、".join(missing_criteria),
-                "3つの審査基準(学術的重要性・方法の妥当性・遂行能力/環境)のうち、"
-                "読み取れない軸がある: " + "、".join(missing_criteria),
-                "各セクションがどの審査基準で読まれるかを意識し、3基準すべてに"
-                "対応する記述を置く。",
+                "研究計画3要素(学術的重要性・方法の妥当性・遂行能力/環境)と"
+                "別評定の国際性のうち、読み取れない軸がある: "
+                + "、".join(missing_criteria),
+                "各セクションがどの評定要素で読まれるかを意識し、研究計画3要素と"
+                "国際性に対応する記述を置く。",
                 missing_axes=missing_criteria,
             )
         emphasis_pattern = re.compile(
@@ -2530,12 +4764,16 @@ def grant_writing_kaken_review_format_check(text: str) -> dict:
         "criteria_axis_results": criteria_axis_results,
         "briefing_notes": list(_KAKEN_BRIEFING_NOTES),
         "target": (
-            "a proposal a reviewer can judge on the three criteria at "
+            "a proposal a reviewer can judge on the three plan axes plus "
+            "internationality at "
             "~100-proposals-per-month reading speed: monochrome-safe figures, "
             "identifiable publications, an explicit human-rights/legal box, "
             "and a complete funding-overlap box"
         ),
-        "source": "KAKENHI in-house call briefing (R9/FY2027) review-format check",
+        "source": (
+            "official KAKENHI B/C criteria plus in-house R9/FY2027 "
+            "review-format briefing"
+        ),
     }
 
 
@@ -2577,6 +4815,24 @@ def grant_writing_literature_gap_evidence_check(text: str) -> dict:
             "限定コーパス",
             "bounded corpus",
             "selected literature",
+        ],
+        # An existential claim, as opposed to a report of having searched.
+        # Derived from the corpus: every absence claim in eight real proposals
+        # is phrased this way, and none is phrased as a search report, so the
+        # non_detection vocabulary below matched nothing at all.
+        "bare_absence": [
+            "存在しない",
+            "存在せず",
+            "他に類を見な",
+            "類を見ない",
+            "前例がな",
+            "報告例がな",
+            "研究例がな",
+            "事例がな",
+            "皆無",
+            "知られていない",
+            "does not exist",
+            "no such",
         ],
         "non_detection": [
             "確認できなかった",
@@ -2681,8 +4937,10 @@ def grant_writing_literature_gap_evidence_check(text: str) -> dict:
         index
         for index, sentence in enumerate(sentences)
         if keyword_hits(sentence, "non_detection")
+        or keyword_hits(sentence, "bare_absence")
     ]
     candidate_windows = []
+    unbacked: list[dict] = []
     for index in absence_indices:
         start = max(0, index - 4)
         stop = min(len(sentences), index + 5)
@@ -2691,6 +4949,18 @@ def grant_writing_literature_gap_evidence_check(text: str) -> dict:
         corpus_hits = keyword_hits(window, "corpus_scope")
         count_hits = count_pattern.findall(window)
         if not search_hits and not corpus_hits and not count_hits:
+            # An absence asserted with no account of how the applicant looked.
+            # Four of eight real proposals do this -- 「統合的なマルチスケール
+            # モデル縮約法が存在しない」, 「直接的な競合製品は存在しない」 --
+            # and a reviewer who knows one counterexample loses the sentence
+            # and some of the trust around it.
+            bare = keyword_hits(sentences[index], "bare_absence")
+            if bare:
+                unbacked.append({
+                    "sentence": index + 1,
+                    "excerpt": sentences[index].strip()[:200],
+                    "absence_hits": bare,
+                })
             continue
         candidate_windows.append({
             "sentence": index + 1,
@@ -2733,9 +5003,23 @@ def grant_writing_literature_gap_evidence_check(text: str) -> dict:
                 "evidence": evidence[:3],
             })
 
-    applicable = bool(candidate_windows)
+    if unbacked:
+        risks.append({
+            "type": "absence_claimed_without_search",
+            "severity": "MEDIUM",
+            "comment": (
+                "「存在しない」と断定しているが、どう調べたかが書かれていない。"
+            ),
+            "evidence": unbacked[:3],
+        })
+
+    applicable = bool(candidate_windows or unbacked)
     score = None if not applicable else max(0.0, 10.0 - 3.0 * len(risks))
     rewrite_strategy = [
+        (
+            "断定した不在には、調べた範囲（検索語、対象、年）を一文添えるか、"
+            "「知る限り」に落とす。審査者は反例を一つ知っていれば足りる。"
+        ),
         "限定コーパスで語を確認できないことを、分野全体の未普及・優劣・研究障壁の主根拠にしない。",
         "文献調査は背景補助、候補選定、予備調査に位置づけ、対象範囲と限界を明示する。",
         "学術的空白は、既往研究が解いていない条件、理論、比較可能性、または検証可能な仮説として独立に述べる。",
@@ -2747,6 +5031,7 @@ def grant_writing_literature_gap_evidence_check(text: str) -> dict:
         "risk_count": len(risks),
         "risks": risks,
         "candidate_windows": candidate_windows[:5],
+        "unbacked_absence_claims": unbacked[:5],
         "comments": [risk["comment"] for risk in risks],
         "rewrite_strategy": rewrite_strategy if risks else [],
         "target": (
@@ -2799,7 +5084,13 @@ def grant_writing_collaborative_integration_risk_check(text: str) -> dict:
         ],
         "core_vs_optional_scope": [
             ["中核", "必達", "成立条件", "core", "required"],
-            ["独立課題", "別課題", "発展候補", "条件付き", "optional", "exploratory"],
+            [
+                "独立課題", "別課題", "発展候補", "条件付き", "optional",
+                "exploratory",
+                # A proposal that says "NVH等は波及効果とする" has made exactly
+                # this split; the axis must not miss it on vocabulary alone.
+                "波及効果", "対象外", "今後の展開", "将来展開",
+            ],
         ],
         "negative_result_value": [
             ["結合不能", "適用境界", "不能理由", "反例", "不成立", "negative result"],
@@ -2830,19 +5121,40 @@ def grant_writing_collaborative_integration_risk_check(text: str) -> dict:
             "groups": groups,
         }
 
-    people_process_hits = _contains_any(
-        low,
-        [
-            "学生",
-            "若手",
-            "工程時間",
-            "手作業時間",
-            "生産性",
-            "被験者",
-            "アンケート",
-            "参加者",
-        ],
-    )
+    # Naming people is not the trigger; MEASURING them is. A sentence like
+    # 「教員・学生が利用している」 says who uses a tool, and demanding an ethics
+    # determination for it is a false positive. Terms that are inherently about
+    # human-subject measurement stand alone; merely naming a person category
+    # counts only next to a measurement verb in the same sentence.
+    _MEASURED_PEOPLE_TERMS = [
+        "工程時間",
+        "手作業時間",
+        "生産性",
+        "被験者",
+        "アンケート",
+    ]
+    _PERSON_CATEGORY_TERMS = ["学生", "若手", "参加者", "教員"]
+    _MEASUREMENT_TERMS = [
+        "評価する",
+        "評価を",
+        "計測",
+        "測定",
+        "記録し",
+        "記録する",
+        "比較する",
+        "分析単位",
+        "調査",
+        "収集",
+    ]
+    people_process_hits = _contains_any(low, _MEASURED_PEOPLE_TERMS)
+    if not people_process_hits:
+        for sentence in re.split(r"(?<=[。．!?！？])", text):
+            s_low = sentence.lower()
+            if _contains_any(s_low, _PERSON_CATEGORY_TERMS) and _contains_any(
+                s_low, _MEASUREMENT_TERMS
+            ):
+                people_process_hits = _contains_any(s_low, _PERSON_CATEGORY_TERMS)
+                break
     if not people_process_hits:
         axis_results["evaluation_unit_and_ethics"].update(
             {"ok": True, "not_applicable": True}
@@ -2910,8 +5222,37 @@ def grant_writing_collaborative_integration_risk_check(text: str) -> dict:
     }
 
 
+_BUDGET_COST_TOKENS = (
+    "円", "費", "単価", "積算", "計上", "予算", "経費", "見積", "金額", "内訳",
+)
+
+
+def _mentions_cost_nearby(text: str, keyword: str) -> bool:
+    """True when a keyword is costed in the sentence that mentions it.
+
+    Bare presence is not evidence of a budget rationale: a methods section
+    says 評価 and AI constantly without costing anything. The sentence is the
+    right window -- a cost token one sentence away belongs to a different
+    claim -- so this is what separates "mentions it" from "budgets for it".
+    """
+    needle = keyword.lower()
+    for sentence in re.split(r"(?<=[。．!?！？\n])", text):
+        if needle in sentence.lower() and any(
+            token in sentence for token in _BUDGET_COST_TOKENS
+        ):
+            return True
+    return False
+
+
 def grant_writing_budget_alignment_check(text: str) -> dict:
-    """Check that budget items are tied to verification and implementation."""
+    """Check that budget items are tied to verification and implementation.
+
+    The check is optional. A proposal section that carries no budget content
+    at all -- a research-plan or feasibility section, for example -- is not a
+    thin budget; it is the wrong document for this question, so the check
+    reports ``applicable: False`` rather than a low score. When it does apply,
+    a cost keyword only counts if a money token sits next to it.
+    """
     text = _read_text_if_path(text)
     low = text.lower()
     axes = {
@@ -2956,6 +5297,29 @@ def grant_writing_budget_alignment_check(text: str) -> dict:
             "端数処理",
         ],
     }
+    budget_markers = [
+        "予算", "経費", "費目", "直接経費", "設備備品", "消耗品費", "旅費",
+        "人件費", "謝金", "その他", "千円", "万円", "単価", "積算", "計上",
+    ]
+    money_pattern = re.compile(r"\d[\d,\.]*\s*(?:千円|万円|円|kJPY|JPY)")
+    marker_hits = _contains_any(low, budget_markers)
+    has_money = bool(money_pattern.search(text))
+    if not has_money and len(marker_hits) < 2:
+        return {
+            "applicable": False,
+            "score": None,
+            "missing_count": 0,
+            "missing_axes": [],
+            "axis_results": {},
+            "comments": [],
+            "budget_marker_hits": marker_hits,
+            "budget_policy": _BUDGET_POLICY,
+            "target": (
+                "budget rationale is judged only where budget content exists; "
+                "a research-plan or feasibility section carries none by design"
+            ),
+        }
+
     results = {}
     missing = []
     for axis, keywords in axes.items():
@@ -2985,6 +5349,25 @@ def grant_writing_budget_alignment_check(text: str) -> dict:
                 "required_groups": required_groups,
                 "group_matches": group_matches,
             }
+        elif axis in {
+            "ai_agent_costs",
+            "compute_resources",
+            "poc_experiment",
+            "dissemination",
+        }:
+            # A resource keyword is budget evidence only next to a money token.
+            # Otherwise a methods section "passes" on 評価 / AI it never costs.
+            matches = [
+                kw for kw in keywords
+                if kw.lower() in low and _mentions_cost_nearby(text, kw)
+            ]
+            ok = bool(matches)
+            results[axis] = {
+                "ok": ok,
+                "matches": matches,
+                "keywords": keywords,
+                "requires_cost_context": True,
+            }
         else:
             matches = _contains_any(low, keywords)
             ok = bool(matches)
@@ -3000,17 +5383,170 @@ def grant_writing_budget_alignment_check(text: str) -> dict:
         comments.append("AI費用が一般的な効率化に見える。検証ループの実行経費として説明する。")
         score = max(0.0, score - 1.0)
     return {
+        "applicable": True,
         "score": round(score, 1),
         "missing_count": len(missing),
         "missing_axes": missing,
         "axis_results": results,
         "comments": comments,
+        "budget_marker_hits": marker_hits,
         "budget_policy": _BUDGET_POLICY,
         "target": (
             "every major cost maps to AI/tool execution, compute, PoC, or dissemination; "
             "the requested amount may be close to the ceiling when itemized, justified, "
             "and traceable to dated official prices or quotations"
         ),
+    }
+
+
+_ARGUMENT_EVIDENCE_ROLES = {
+    "central_question": {
+        "description": "解明対象となる中心の問いまたは主張",
+        "terms": ["中心の問い", "学術的問い", "研究上の問い", "何を明らか", "問う"],
+    },
+    "prior_gap": {
+        "description": "既往研究との限定された対比と未解決点",
+        "terms": [
+            "未解決", "明らかでない", "体系化されていない", "検証されていない",
+            "限界", "研究障壁", "一方", "これに対し",
+        ],
+    },
+    "method_operation": {
+        "description": "明示した入力・モデルに対して行う操作",
+        "terms": [
+            "比較する", "構成する", "結合する", "射影", "算出", "測定する",
+            "検証する", "導入する", "評価する", "同定する", "実装する",
+        ],
+    },
+    "decision_rule": {
+        "description": "主張を支持または棄却できる観測量・判定規則",
+        "terms": [
+            "判定", "許容差", "閾値", "順位", "一致", "不一致", "採否",
+            "反例", "成立条件", "適用境界", "信頼区間",
+        ],
+    },
+    "knowledge_output": {
+        "description": "ソフトウェア成果物を越えて得る分野知",
+        "terms": [
+            "設計則", "選択則", "適用条件", "成立条件", "適用境界", "知見",
+            "体系化", "指針", "条件を明らか",
+        ],
+    },
+    "preliminary_evidence": {
+        "description": "提案研究の実行可能性を支える完了済みの根拠",
+        "terms": [
+            "実装した", "完了した", "確認した", "再現した", "発表した",
+            "発表予定", "採択", "共著", "予備実証", "既往成果",
+        ],
+    },
+    "preparation_plan_link": {
+        "description": "完了済みの準備実績を開始可能な研究項目へ結ぶ文",
+        "terms": [
+            "実績により", "成果により", "これにより研究", "したがって本研究",
+            "から着手できる", "を開始できる", "実行できること", "遂行できること",
+            "を担保する", "準備が整っている", "基盤が既に整っている",
+        ],
+    },
+    "responsibility": {
+        "description": "研究の成立に不可欠な能力を担う構成員",
+        "terms": ["担当", "担う", "責任", "研究代表者", "研究分担者", "役割"],
+    },
+    "negative_result": {
+        "description": "結合や仮説が成立しない場合にも得られる知識",
+        "terms": [
+            "不成立", "結合不能", "不能理由", "反例", "適用境界", "失敗例",
+            "成立しない", "否定された場合",
+        ],
+    },
+}
+
+
+def _argument_segments(text: str) -> list[str]:
+    prose = _prose_for_lint(_read_text_if_path(text))
+    segments = [
+        re.sub(r"\s+", " ", item).strip()
+        for item in re.split(r"(?<=[。！？!?])|\n", prose)
+    ]
+    return [item for item in segments if 12 <= len(item) <= 500]
+
+
+def grant_writing_argument_evidence_map(text: str) -> dict:
+    """Map argument roles to excerpts without scoring scientific validity.
+
+    This bridges deterministic lint and an LLM/human close read. Lexical hits
+    only locate candidate evidence; they do not prove that the question is
+    original, the method is valid, or the evidence supports the claim.
+    """
+    segments = _argument_segments(text)
+    evidence_map = {}
+    for role, spec in _ARGUMENT_EVIDENCE_ROLES.items():
+        matched = [
+            segment for segment in segments
+            if any(term.lower() in segment.lower() for term in spec["terms"])
+        ]
+        hits = sorted({
+            term
+            for term in spec["terms"]
+            if any(term.lower() in segment.lower() for segment in matched)
+        })
+        evidence_map[role] = {
+            "description": spec["description"],
+            "candidate_count": len(matched),
+            "terms_hit": hits,
+            "excerpts": matched[:3],
+        }
+
+    untraced = [
+        role for role, result in evidence_map.items()
+        if result["candidate_count"] == 0
+    ]
+    prompts = [
+        (
+            "概要、目的、方法、年度計画で、中心の問いを決める名詞が同じか。"
+        ),
+        (
+            "各問いについて、何にどの操作を行い、どの観測量の変化を見るか。"
+        ),
+        (
+            "判定規則は主張を棄却できるか。どの結果でも成功になる設計ではないか。"
+        ),
+        (
+            "最終成果はリポジトリやソフトだけでなく、条件・境界・設計則などの分野知か。"
+        ),
+        (
+            "完了済みの根拠と担当者は、特に新規部分を含む必須能力を全て覆うか。"
+        ),
+        (
+            "各準備実績は、どの研究項目を直ちに開始・遂行できる根拠かを明示しているか。"
+        ),
+    ]
+    if (
+        evidence_map["preliminary_evidence"]["candidate_count"] > 0
+        and evidence_map["preparation_plan_link"]["candidate_count"] == 0
+    ):
+        prompts.insert(
+            0,
+            (
+                "準備実績の候補はあるが、研究項目への橋渡し文を確認できない。"
+                "実績ごとに、何を開始・遂行できる根拠かを対応付ける。"
+            ),
+        )
+    if untraced:
+        prompts.insert(
+            0,
+            "語彙上の候補を確認できない役割: " + ", ".join(untraced)
+            + "。該当節を通読する。ここでの未検出は欠陥を意味しない。",
+        )
+
+    return {
+        "applicable": bool(segments),
+        "evidence_map": evidence_map,
+        "untraced_roles": untraced,
+        "manual_review_prompts": prompts,
+        "warning": (
+            "候補文は通読の索引であり、論理的妥当性の証拠でも点数でもない。"
+        ),
+        "source": "反復的な申請書レビューから構成した論証追跡マップ",
     }
 
 
@@ -3041,20 +5577,111 @@ def grant_writing_recommendation_letter_template(
     )
 
 
+# The test that decides which list a check belongs in: can it point at a
+# place in the text and say what is wrong there, such that the author agrees
+# without argument? 「この文は91字」 and 「概要は境界、本文は条件」 pass.
+# 「公開成果が3つで4つ未満」 does not -- that is an opinion wearing the
+# clothes of a measurement.
+_DETECTOR_TOOLS = frozenset({
+    "sentence",
+    "bedrock",
+    "weak",
+    "claim",
+    "vague",
+    "format",
+    "persuasion",
+    "vocabulary",
+    "abstraction",
+    "literature",
+    "residue",
+    "narrative",
+    "originality",
+    "international",
+    "irreplaceable",
+    "pages",
+    "capability",
+})
+
+_DETECTOR_RESULT_KEYS = frozenset({
+    "sentence",
+    "bedrock",
+    "weak",
+    "central_claim_consistency",
+    "vague_claim_verb",
+    "kaken_review_format",
+    "persuasion_quality",
+    "reviewer_vocabulary",
+    "named_software_abstraction",
+    "literature_gap_evidence",
+    "template_residue",
+    "budget_narrative",
+    "question_originality",
+    "international_standing",
+    "collaboration_irreplaceability",
+    "page_limit",
+    "capability_responsibility",
+})
+
+
+def _find_compiled_pdf(text_or_path: str, pdf: str) -> pathlib.Path | None:
+    """Locate the compiled proposal whose page allowances should be checked.
+
+    An explicit path always wins. Otherwise the PDF is only inferred when the
+    source directory holds exactly one of them, because guessing which of
+    several PDFs is the submission would report page counts for the wrong
+    document.
+    """
+    if pdf:
+        candidate = pathlib.Path(pdf)
+        if not candidate.is_file():
+            raise FileNotFoundError(f"compiled proposal not found: {pdf}")
+        return candidate
+
+    # Proposal text must never reach the filesystem: statting it once per call
+    # is a network round trip on a NAS-hosted tree, and the suite calls this on
+    # every report.
+    if len(text_or_path) > 260 or "\n" in text_or_path:
+        return None
+    source = pathlib.Path(text_or_path)
+    if source.suffix.lower() not in {".md", ".tex", ".txt"} or not source.is_file():
+        return None
+    candidates = sorted(source.parent.glob("*.pdf"))
+    return candidates[0] if len(candidates) == 1 else None
+
+
 def grant_writing_health_report(
     text_or_path: str,
     program: str = "generic",
     skip: str = "",
+    pdf: str = "",
 ) -> dict:
     """Integrated grant-writing health report.
 
     Args:
         text_or_path: Proposal text or an existing .md/.tex/.txt path.
-        program: ``generic``, ``kddi_digital``, or ``kaken_oss``.
+        program: ``generic``, ``kaken_generic``, ``kddi_digital``, or
+            ``kaken_oss``. Use ``kaken_generic`` for ordinary KAKENHI drafts;
+            ``kaken_oss`` adds checks specific to the current OSS-platform
+            proposal.
         skip: comma-separated tool ids to skip, e.g. ``sentence,literature``.
+        pdf: compiled proposal to check page allowances against. When omitted
+            and the source is a path, a single sibling PDF is used.
     """
+    _validate_program(program)
     text = _read_text_if_path(text_or_path)
     skip_set = {s.strip().lower() for s in skip.split(",") if s.strip()}
+    valid_skip_ids = {
+        "abstraction", "argument_map", "bedrock", "budget", "capability",
+        "claim", "domain", "focus", "format", "integration", "international",
+        "irreplaceable", "kaken", "kddi", "literature", "metric", "narrative",
+        "originality", "pages", "persuasion", "pilot", "residue", "scale",
+        "readability", "sections", "sentence", "vague", "vocabulary", "weak",
+    }
+    unknown_skip_ids = sorted(skip_set - valid_skip_ids)
+    if unknown_skip_ids:
+        raise ValueError(
+            "unknown grant-writing skip id(s): " + ", ".join(unknown_skip_ids)
+        )
 
     detailed_results: dict[str, dict] = {}
     detailed_scores: dict[str, float] = {}
@@ -3162,6 +5789,157 @@ def grant_writing_health_report(
                     "severity": _severity_from_score(persuasion["score"]),
                     "score": persuasion["score"],
                     "comments": persuasion["comments"][:5],
+                })
+
+    if "narrative" not in skip_set:
+        narrative = grant_writing_budget_narrative_check(text)
+        detailed_results["budget_narrative"] = narrative
+        if narrative["applicable"]:
+            detailed_scores["budget_narrative"] = narrative["score"]
+            if narrative["risks"]:
+                priority_issues.append({
+                    "tool": "narrative",
+                    "name": "budget_narrative_check",
+                    "severity": max(
+                        (r["severity"] for r in narrative["risks"]),
+                        key=lambda x: {"HIGH": 2, "MEDIUM": 1, "LOW": 0}[x],
+                    ),
+                    "score": narrative["score"],
+                    "comments": narrative["comments"][:5],
+                })
+
+    if "residue" not in skip_set:
+        residue = grant_writing_template_residue_check(text)
+        detailed_results["template_residue"] = residue
+        if residue["applicable"]:
+            detailed_scores["template_residue"] = residue["score"]
+            if residue["risks"]:
+                priority_issues.append({
+                    "tool": "residue",
+                    "name": "template_residue_check",
+                    "severity": max(
+                        (r["severity"] for r in residue["risks"]),
+                        key=lambda s: {"HIGH": 2, "MEDIUM": 1, "LOW": 0}[s],
+                    ),
+                    "score": residue["score"],
+                    "comments": residue["comments"][:5],
+                })
+
+    if "vague" not in skip_set:
+        vague = grant_writing_vague_claim_verb_check(text)
+        detailed_results["vague_claim_verb"] = vague
+        if vague["applicable"]:
+            detailed_scores["vague_claim_verb"] = vague["score"]
+            if vague["risks"]:
+                priority_issues.append({
+                    "tool": "vague",
+                    "name": "vague_claim_verb_check",
+                    "severity": "MEDIUM",
+                    "score": vague["score"],
+                    "comments": vague["comments"][:5],
+                })
+
+    if "pages" not in skip_set:
+        compiled = _find_compiled_pdf(text_or_path, pdf)
+        if compiled is not None:
+            limits = grant_writing_page_limit_check(str(compiled))
+            detailed_results["page_limit"] = limits
+            if limits["applicable"]:
+                detailed_scores["page_limit"] = limits["score"]
+                if limits["risks"]:
+                    priority_issues.append({
+                        "tool": "pages",
+                        "name": "page_limit_check",
+                        "severity": max(
+                            (r["severity"] for r in limits["risks"]),
+                            key=lambda x: {
+                                "CRITICAL": 3, "HIGH": 2, "MEDIUM": 1, "LOW": 0,
+                            }[x],
+                        ),
+                        "score": limits["score"],
+                        "comments": limits["comments"][:5],
+                    })
+
+    if "capability" not in skip_set:
+        capability = grant_writing_capability_responsibility_check(text)
+        detailed_results["capability_responsibility"] = capability
+        if capability["applicable"]:
+            detailed_scores["capability_responsibility"] = capability["score"]
+            if capability["risks"]:
+                priority_issues.append({
+                    "tool": "capability",
+                    "name": "capability_responsibility_check",
+                    "severity": "HIGH",
+                    "score": capability["score"],
+                    "comments": capability["comments"][:5],
+                })
+
+    if "irreplaceable" not in skip_set:
+        irrep = grant_writing_collaboration_irreplaceability_check(text)
+        detailed_results["collaboration_irreplaceability"] = irrep
+        if irrep["applicable"]:
+            detailed_scores["collaboration_irreplaceability"] = irrep["score"]
+            if irrep["risks"]:
+                priority_issues.append({
+                    "tool": "irreplaceable",
+                    "name": "collaboration_irreplaceability_check",
+                    "severity": max(
+                        (r["severity"] for r in irrep["risks"]),
+                        key=lambda x: {"HIGH": 2, "MEDIUM": 1, "LOW": 0}[x],
+                    ),
+                    "score": irrep["score"],
+                    "comments": irrep["comments"][:5],
+                })
+
+    if "international" not in skip_set:
+        intl = grant_writing_international_standing_check(text)
+        detailed_results["international_standing"] = intl
+        if intl["applicable"]:
+            detailed_scores["international_standing"] = intl["score"]
+            if intl["risks"]:
+                priority_issues.append({
+                    "tool": "international",
+                    "name": "international_standing_check",
+                    "severity": max(
+                        (r["severity"] for r in intl["risks"]),
+                        key=lambda x: {"HIGH": 2, "MEDIUM": 1, "LOW": 0}[x],
+                    ),
+                    "score": intl["score"],
+                    "comments": intl["comments"][:5],
+                })
+
+    if "originality" not in skip_set:
+        originality = grant_writing_question_originality_check(text)
+        detailed_results["question_originality"] = originality
+        if originality["applicable"]:
+            detailed_scores["question_originality"] = originality["score"]
+            if originality["risks"]:
+                priority_issues.append({
+                    "tool": "originality",
+                    "name": "question_originality_check",
+                    "severity": max(
+                        (r["severity"] for r in originality["risks"]),
+                        key=lambda x: {"HIGH": 2, "MEDIUM": 1, "LOW": 0}[x],
+                    ),
+                    "score": originality["score"],
+                    "comments": originality["comments"][:5],
+                })
+
+    if "claim" not in skip_set:
+        claim = grant_writing_central_claim_consistency_check(text)
+        detailed_results["central_claim_consistency"] = claim
+        if claim["applicable"]:
+            detailed_scores["central_claim_consistency"] = claim["score"]
+            if claim["risks"]:
+                priority_issues.append({
+                    "tool": "claim",
+                    "name": "central_claim_consistency_check",
+                    "severity": max(
+                        (r["severity"] for r in claim["risks"]),
+                        key=lambda s: {"HIGH": 2, "MEDIUM": 1, "LOW": 0}[s],
+                    ),
+                    "score": claim["score"],
+                    "comments": claim["comments"][:5],
                 })
 
     if "format" not in skip_set:
@@ -3278,6 +6056,10 @@ def grant_writing_health_report(
                     "comments": [f"{over} sentence(s) exceed the threshold."],
                 })
 
+    if "readability" not in skip_set:
+        readability = grant_writing_adjacent_reviewer_readability_check(text)
+        detailed_results["adjacent_reviewer_readability"] = readability
+
     if "weak" not in skip_set:
         weak = grant_writing_count_weak_expressions(text)
         detailed_results["weak"] = weak
@@ -3310,43 +6092,95 @@ def grant_writing_health_report(
     if "budget" not in skip_set:
         budget = grant_writing_budget_alignment_check(text)
         detailed_results["budget"] = budget
-        detailed_scores["budget"] = budget["score"]
-        if budget["comments"]:
-            priority_issues.append({
-                "tool": "budget",
-                "name": "budget_alignment_check",
-                "severity": _severity_from_score(budget["score"]),
-                "score": budget["score"],
-                "comments": budget["comments"][:5],
-            })
+        # A section with no budget content is not a thin budget. Scoring it
+        # would drag the overall score down and raise a HIGH issue about
+        # itemization the section cannot carry.
+        if budget.get("applicable", True):
+            detailed_scores["budget"] = budget["score"]
+            if budget["comments"]:
+                priority_issues.append({
+                    "tool": "budget",
+                    "name": "budget_alignment_check",
+                    "severity": _severity_from_score(budget["score"]),
+                    "score": budget["score"],
+                    "comments": budget["comments"][:5],
+                })
+
+    if "argument_map" not in skip_set:
+        argument_map = grant_writing_argument_evidence_map(text)
+        detailed_results["argument_evidence_map"] = argument_map
 
     sev_rank = {"CRITICAL": 0, "HIGH": 1, "MEDIUM": 2, "UNKNOWN": 3, "LOW": 4}
-    priority_issues.sort(
+
+    # Split what the suite produces into the two kinds it actually contains.
+    # A DETECTOR points at a place in the text and says what is wrong there;
+    # the author can check it and fix it without argument. A QUESTION asks
+    # whether the proposal covers a topic; keyword presence cannot answer
+    # that, so it is surfaced as a prompt and never scored. Averaging the two
+    # into one number was what made the old overall_score meaningless: a
+    # draft with a fatal inconsistency could score 10 while a clean section
+    # scored 8.6 on question noise.
+    findings = [i for i in priority_issues if i["tool"] in _DETECTOR_TOOLS]
+    questions = [i for i in priority_issues if i["tool"] not in _DETECTOR_TOOLS]
+    findings.sort(
         key=lambda x: (sev_rank.get(x["severity"], 99), -1 * (x.get("score") or 0))
     )
+    questions.sort(key=lambda x: x["name"])
+    for q in questions:
+        q["kind"] = "question"
+        q.pop("severity", None)
+        q.pop("score", None)
 
-    scores = list(detailed_scores.values())
-    overall = round(sum(scores) / len(scores), 1) if scores else 0.0
-    severity = _severity_from_score(overall)
-    if overall >= 8:
-        summary = "Submission logic is mostly visible; polish evidence and wording."
-    elif overall >= 6:
-        summary = "Core story is present, but reviewer-facing gaps remain."
+    defect_counts = {"HIGH": 0, "MEDIUM": 0, "LOW": 0, "CRITICAL": 0}
+    for item in findings:
+        defect_counts[item["severity"]] = defect_counts.get(item["severity"], 0) + 1
+    defect_counts["total"] = len(findings)
+
+    detector_scores = {
+        name: value
+        for name, value in detailed_scores.items()
+        if name in _DETECTOR_RESULT_KEYS
+    }
+    defect_score = (
+        round(sum(detector_scores.values()) / len(detector_scores), 1)
+        if detector_scores
+        else 10.0
+    )
+
+    if defect_counts["total"] == 0:
+        summary = (
+            "No located defects. This says the mechanics are clean; it does "
+            "not say the argument holds."
+        )
     else:
-        summary = "Proposal needs clearer axes, deliverables, or budget-to-verification logic."
+        summary = (
+            f"{defect_counts['total']} located defect(s): "
+            f"{defect_counts['CRITICAL']} critical, {defect_counts['HIGH']} high, "
+            f"{defect_counts['MEDIUM']} medium, {defect_counts['LOW']} low. "
+            "Fix the findings; the questions are prompts, not defects."
+        )
 
     return {
-        "overall_score": overall,
+        "defect_counts": defect_counts,
+        "findings": findings,
+        "questions": questions,
+        "defect_score": defect_score,
         "score_max": 10,
-        "overall_severity": severity,
         "summary_comment": summary,
         "program": program,
         "detailed_scores": detailed_scores,
         "detailed_results": detailed_results,
-        "priority_issues": priority_issues,
         "tools_run": sorted(detailed_results),
         "tools_skipped": sorted(skip_set),
-        "total_findings": len(priority_issues),
-        "hint": "Use priority_issues first; do not optimize the score mechanically.",
+        "manual_review_prompts": (
+            detailed_results.get("argument_evidence_map", {})
+            .get("manual_review_prompts", [])
+        ),
+        "hint": (
+            "findings locate defects and are worth fixing; questions cannot be "
+            "answered by keyword presence and are for the author to judge. "
+            "defect_score measures located mechanical defects only -- it is not "
+            "a judgement of the research, and editing to raise it is wasted work."
+        ),
         "source": "radia_mcp.grant_writing public document server",
     }
