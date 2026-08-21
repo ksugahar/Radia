@@ -237,6 +237,7 @@ _PYBIND_CLASS_COMMANDS = {
     "_HDivFieldEvaluator.from_tet": ("hdiv.field_evaluator.from_tet",),
     "_HDivFieldEvaluator.from_cloud": ("hdiv.field_evaluator.from_cloud",),
     "_HDivFieldEvaluator.field": ("hdiv.field_evaluator.field",),
+    "_HDivFieldEvaluator.field_gradient": ("hdiv.field_evaluator.field_gradient",),
     "_HDivFieldEvaluator.candidate_algorithm_for": ("hdiv.field_evaluator.candidate_algorithm",),
     "_HDivFieldEvaluator.last_algorithm": ("hdiv.field_evaluator.last_algorithm",),
     "_HDivFieldEvaluator.stats": ("hdiv.field_evaluator.stats",),
@@ -311,6 +312,7 @@ _PYBIND_CLASS_COMMANDS = {
     "_ChargeGramHMatrix.solve_configured_linear_material_auto_prec_many": ("hacapk.charge_gram.solve_configured_linear_material_auto_prec_many",),
     "_ChargeGramHMatrix.configured_field_functional_rows": ("hacapk.charge_gram.configured_field_functional_rows",),
     "_ChargeGramHMatrix.configured_field_functional_rows_directional_derivative": ("hacapk.charge_gram.configured_field_functional_rows_directional_derivative",),
+    "_ChargeGramHMatrix.configured_field_values_shape_derivative": ("hacapk.charge_gram.configured_field_values_shape_derivative",),
     "_ChargeGramHMatrix.create_field_evaluator": ("hacapk.charge_gram.create_field_evaluator",),
     "_ChargeGramHMatrix.create_planar_field_evaluator": ("hacapk.charge_gram.create_planar_field_evaluator",),
     "_ChargeGramHMatrix.stats": ("hacapk.charge_gram.stats",),
@@ -360,6 +362,7 @@ def _pybind_command_name(name):
         "lie_dragt_finn_factorize": "beam.lie.dragt_finn_factorize",
         "lie_apply_dragt_finn_batch": "beam.lie.apply_dragt_finn_batch",
         "track_reference_orbit_native": "beam.orbit.track_reference_3d",
+        "track_reference_orbit_to_plane_native": "beam.orbit.track_reference_to_plane",
     }
     if name in beam_names:
         return beam_names[name]
