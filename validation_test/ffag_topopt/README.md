@@ -154,6 +154,45 @@ as an independent regression oracle.  The material response itself is already
 an explicit linear candidate-column map, so its low-rank ACA--QR--TSVD solve
 does not require a second differentiation layer.
 
+### Material-aware section specification and smooth contour loop
+
+`radia.accelerator_abe_topopt` is the continuous, smooth-interface companion
+to the binary Lego path.  It preserves the four physical variables explicitly:
+section transfer specification, orbit-field/multipole response, whole-cell
+magnetization/fill, and iron-interface height.  An HDiv state is never bounded
+DOF by DOF.  `measured_element_fill_patterns` obtains one complete solved
+magnetization pattern per cell and `contract_hdiv_element_fill_response`
+contracts the observation rows to one scalar fill column per cell.  Copying a
+local HDiv block into an inactive cell requires either an NGSolve-owned pattern
+transfer callback or an explicit assertion that a structured discontinuous
+mesh has compatible local ordering.
+
+For a section specification with AD Jacobian `J` and element field response
+`E`, `compose_specification_fill_response` forms `J E`.  This does not remove
+the field layer: it lets the bounded material inverse select a physically
+cheap member of the many field changes that produce the requested optics, and
+the implied field change is reported afterward.  Air cells have fill capacity
+`[0,1]`; reference iron cells have `[-1,0]`.  The weighted Abe solver retains
+its ACA--QR--TSVD mode evidence and reuses the factor during bound correction.
+
+`bin_element_fill_to_interface_height` converts signed cell volume to a
+conservative height field, and `blended_interface_displacement` keeps the
+aperture and pole root fixed.  `optimize_abe_section_contour` then realizes
+each absolute accumulated fill from the reference geometry, performs a
+caller-owned complete HDiv solve and exact map evaluation, backtracks rejected
+steps, and optionally rebuilds the analytic/AD response after every accepted
+shape.  Only exact states that improve the original engineering-band objective
+and pass the supplied bend/orbit/quality guard become incumbents.
+
+The promoted 170-by-2560 saved-data regression retains two specification
+modes with condition number 123.1.  Relative to the earlier research driver,
+the whole-element contraction differs by `1.63e-19`, the AD specification
+composition by `1.82e-17`, the bounded fills by `3.66e-16`, and the implied
+field by `9.15e-20`.  This is an API-parity regression of the material stage,
+not a claim that the outer smooth-contour problem is solved: the recorded
+single-pass exact shape delivered 55.3 percent, so relinearized outer passes
+remain the full-scale validation target.
+
 ## Second- and third-order R/T/U with x-y coupling
 
 `radia.accelerator_taylor_topopt` extends this contract to the factorial
