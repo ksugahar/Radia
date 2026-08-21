@@ -690,6 +690,20 @@ def matlab_optuna_simulink_contract():
             "sensitivity_policy": "No cell-wise finite differences: factor/solve the VIM tangent system with all design perturbations as multiple right-hand sides",
             "subproblem": "bounded linear programming with volume, field inequality, and move-limit constraints",
             "matlab_api": ["radia.topopt.linearizeVIM", "radia.topopt.solveLPUpdate", "radia.topopt.optimizeVIMLP", "radia.topopt.writeCubitJournal"],
+            "abe_element_fill": {
+                "status": "native-mex-ready",
+                "mex_command": "topopt.abe_element_fill_plan",
+                "matlab_api": [
+                    "radia.topopt.solveAbeElementFillPlan",
+                    "radia.topopt.contractHDivElementFillResponse",
+                    "radia.topopt.composeSpecificationFillResponse",
+                    "radia.topopt.binElementFillToInterfaceHeight",
+                    "radia.topopt.blendedInterfaceDisplacement",
+                ],
+                "variables": "one signed fill fraction per design element; existing iron [-1,0], addable air [0,1]",
+                "factorization": "HACApK ACA+ followed by QR-TSVD, factored once and reused through bounded residual corrections",
+                "ngsolve_boundary": "local/global HDiv DOF transforms, GetTrafo deformation, complete field re-solves, and exact transfer-map acceptance remain caller-owned",
+            },
             "adjoint_optimization": {
                 "status": "ready",
                 "contract": "Evaluator returns scalar objective, design gradient, c <= 0 inequalities with design-by-constraint Jacobian, and optional SQP equalities/Jacobian",

@@ -16,7 +16,7 @@ def test_radia_mex_contract_reads_the_cpp_command_inventory():
     contract = matlab_radia_mex_contract("mex")
 
     assert contract["status"] == "ready"
-    assert contract["command_count"] == 362
+    assert contract["command_count"] == 363
     assert contract["matlab_wrapper_count"] >= 133
     assert contract["matlab_optuna_class_count"] == 26
     assert contract["matlab_optuna_function_count"] == 7
@@ -68,6 +68,7 @@ def test_radia_mex_contract_reads_the_cpp_command_inventory():
         "beam.lie.apply_dragt_finn_batch",
         "beam.orbit.track_reference_3d",
     }.issubset(contract["command_names"])
+    assert "topopt.abe_element_fill_plan" in contract["command_names"]
     assert contract["command_groups"]["radia-core"] >= 70
     assert contract["pybind_public_count"] == 98
     assert contract["pybind_covered_count"] == 98
