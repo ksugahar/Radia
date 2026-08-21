@@ -242,7 +242,18 @@ void FenceMergePass::run(NodeList& children, SkipSet& skip, int depth, int prodV
  *
  * Equation Editor writes the display blocks innermost-last, so when a block
  * turns up with only a LINE before it, the operator it belongs to is the
- * deepest one inside that line that is still bare. */
+ * deepest one inside that line that is still bare.
+ *
+ * "Bare" means no display block has been given to it yet, and none is coming
+ * later in its own list.  It deliberately does NOT consult hasLower/hasUpper:
+ * those record which SLOTS the template wrote, and an integral written with
+ * variation 2 -- by far the common case -- puts its INTEGRAND in the slot this
+ * reader calls `upper`.  Testing them made every such integral look like it
+ * already had limits, so an operator sitting inside a LINE could never be
+ * given the limit block that followed the line.  The sibling path a few lines
+ * below takes the first integral it meets with no such test; the two are now
+ * consistent, which is what fixed the Harrington plate integrals -- Equation
+ * Editor draws them correctly, so the documents were never the problem. */
 /* Both shapes of display block end with a switch to symbol size, so an
  * operator with one after it in its own list has its limits coming and must
  * not be given somebody else's. */
@@ -269,13 +280,13 @@ static Node* deepestBareBigOp(NodeList& list) {
             auto* b = static_cast<BigOpNode*>(n);
             deeper = deepestBareBigOp(b->body);
             if (!deeper && !b->displayLower && !b->displayUpper &&
-                !b->hasLower && !b->hasUpper && !symFollows(list, i))
+                !symFollows(list, i))
                 deeper = n;
         } else if (n->tag() == Node::kIntegral) {
             auto* ig = static_cast<IntegralNode*>(n);
             deeper = deepestBareBigOp(ig->body);
             if (!deeper && !ig->displayLower && !ig->displayUpper &&
-                !ig->hasLower && !ig->hasUpper && !symFollows(list, i))
+                !symFollows(list, i))
                 deeper = n;
         }
         if (deeper) found = deeper;      /* the last one is the innermost */
