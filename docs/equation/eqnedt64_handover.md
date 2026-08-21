@@ -90,7 +90,7 @@ audit.
 | `validation_test/equation/tex_reference.tex` (+ `_matrix`, `_wide`) | the TeX side of the appearance check |
 | `validation_test/equation/compare_boxes_with_tex.py`, `score_against_tex.py` | run the comparison |
 | `validation_test/equation/convert_corpus.py` | `.eqn` corpus before/after harness |
-| `validation_test/equation/read_ee3_key_table.py`, `read_ee3_strings.py` | EE3 reverse-engineering readers |
+| `validation_test/equation/read_ee3_key_table.py`, `read_ee3_strings.py`, `read_ee3_menus.py` | EE3 reverse-engineering readers |
 | `validation_test/equation/probe_window_chords.ps1` | drives the real window with keystrokes |
 
 ---
@@ -138,9 +138,14 @@ python validation_test/equation/convert_corpus.py --diff
 Runs the lab's `.eqn` corpus before and after a change and scores what is left.
 
 **A change is accepted only when zero documents gain a defect.** Corpus health
-went **620/779 → 774/779** clean under that rule. What remains: 5 stray style
-markers (five *different* shapes) and 1 genuinely empty fence in a document that
-was already wrong before this work.
+went **620/779 → 774/779 → 777/780** clean under that rule. What remains: 3 stray
+style markers and 1 empty fence.
+
+**The five stray markers were NOT five different shapes, and the documents were
+not "already wrong".** That reading stood for months and was wrong on both
+counts. Four of the five came from one source (Harrington ch2) with one
+signature, and Equation Editor renders them correctly — so the fault was the
+reader's. Two are fixed (§18); the rest are described there.
 
 Two warnings learned the hard way:
 
@@ -150,6 +155,10 @@ Two warnings learned the hard way:
   the wrong place. **Verify the checker before trusting the score.**
 - **A defect-marker delta cannot see content.** Two files that recovered a whole
   missing integrand scored "neutral". Read the actual diff, not only the score.
+- **A score says a document carries a defect; it never says whose fault it is.**
+  Render the document in Equation Editor and look —
+  `validation_test/equation/render_in_ee3.ps1`. Five documents were written off
+  as malformed input until EE3 drew the first of them perfectly (§18).
 
 ### The debugging tool that settles arguments
 
@@ -427,14 +436,64 @@ over neighbours.
 
 ---
 
-## 10. Other open usability items
+## 10. DECIDED — the three keys that stay unbound
 
-- `PageUp` / `PageDown` (EE3 key-table **group 10**) and `Ctrl+Tab`
-  (**group 7**) are still unbound. Decoding them needs the EE3 dispatcher at
-  `0x427E37`.
-- Only chords that are **unambiguous in EE3's own Help** are bound. The rest of
-  `templates()` is reachable from the palette and is deliberately left unbound —
-  do not invent chords.
+`PageUp`, `PageDown` and `Ctrl+Tab` were carried as an open item ("decoding them
+needs the EE3 dispatcher at `0x427E37`"). They are now **closed as decided, not
+as done**: this editor has nothing for them to do.
+
+**What the evidence says.** The key table's navigation records (kind 6) group
+cleanly, and reading them all at once is what makes the gaps legible:
+
+| group | members | what it is |
+|---|---|---|
+| 0 | `Shift+Tab`→1, `Tab`/`Insert`→3 | previous / next **slot** |
+| 1 | `Left`→1 `Right`→3 `Up`→6 `Down`→7 | move by **character** |
+| 2 | the same four with `Shift` | **select** by character |
+| 3 | `Ctrl+Shift+Left`→1, `Ctrl+Shift+Right`→3 | **select** by item |
+| 6 | `Enter`→13 | break the line |
+| **7** | **`Ctrl+Tab`→0** | **only member** |
+| 8 | `Ctrl+Left`→1 `Ctrl+Right`→2 `Ctrl+Up`→3 `Ctrl+Down`→4 | move by **item** |
+| **10** | **`PageUp`→2, `PageDown`→3** | **only members** |
+| 11 | `End`→0, `Home`→1 | ends of the slot |
+
+Everything else in that table is bound here. The two odd groups are not.
+
+**Ctrl+Tab is a TAB STOP, and this editor has no tab stops.** The string table
+holds `Tab symbol`, `Tab Stop Changes` (an undo description) and *"Using tab
+formatting without left alignment may produce unexpected results"* — EE3 aligns
+with tab stops, and since plain `Tab` already moves between slots, the chord for
+inserting one is the obvious `Ctrl+Tab`. Alignment here is `format.left` /
+`center` / `right` / `at_eq`, applied to a line; there is no tab stop for a key
+to insert.
+
+**PageUp / PageDown want something to page through.** There is none: one
+equation, always fully visible — which stopped being an aspiration and became
+true in §16, and is the same reason the mouse wheel is free to zoom rather than
+scroll.
+
+**How this was settled, so nobody re-derives it.**
+`validation_test/equation/read_ee3_menus.py` dumps every EE3 menu with the
+accelerator text it shows the user: **no menu mentions any of the three**, so
+they are not commands a user could find and name — they are internal navigation.
+(The Help file `EQNEDT32.HLP` would be the other authority; it is a
+phrase-compressed WinHelp file that this session did not decode. The menus were
+enough: everything EE3 offers by name is there, and these are not.)
+
+An observation probe was built and then set aside: EE3 consults its key table in
+the **message loop**, so an injected `SendMessage` bypasses it entirely, and
+`PostMessage` plus `AttachThreadInput` is needed before a modifier registers at
+all — `SetKeyboardState` writes the calling thread's input state, which a window
+in another process never reads. It got that far; it did not get far enough to
+trust what a keypress did. If the question reopens, start there, and hold the
+modifier **across** the post: clearing it immediately races, and `Ctrl+F` arrives
+as a plain `f`.
+
+**The standing rule is unchanged**: only chords that are unambiguous in EE3's own
+documentation are bound. The rest of `templates()` is reachable from the palette
+and is deliberately left unbound — do not invent chords. Binding these three to
+something invented would give the editor keys that no EE3 muscle memory expects
+and no feature here supports.
 
 ---
 
@@ -509,10 +568,11 @@ found it.** What remains before retirement is usability, not correctness.
    grows to what it holds.
 5. ~~Palette simplification~~ — **done** (§17), along with two drawing bugs it
    exposed.
-6. `PageUp`/`PageDown`, `Ctrl+Tab` (§10).
-7. The 5 remaining stray-marker corpus documents (§4), lowest priority: they were
-   wrong before this work and are five different shapes, so each is its own
-   investigation.
+6. ~~`PageUp`/`PageDown`, `Ctrl+Tab`~~ — **decided** (§10): they stay unbound,
+   because nothing here is a tab stop and there is nothing to page through.
+7. The **3** remaining stray-marker corpus documents (§4, §18), lowest priority.
+   Two of the original five are fixed; ask EE3 what the document should look
+   like before assuming the next one is malformed.
 
 ---
 
@@ -685,3 +745,74 @@ the buttons simply did not change.
 identified the stray arc as the Braces glyph rather than anything to do with the
 Logic button it was drawn in — the model, the SVG and the picture paths all
 agreed and all looked innocent, because the drawing was simply somewhere else.
+
+---
+
+## 18. CLOSED (mostly) — the corpus documents that were never malformed
+
+Five documents carried a stray `\scriptstyle`, and the note here said they "were
+wrong before this work" and were "five different shapes, so each is its own
+investigation". Both halves were wrong.
+
+**Four of the five are one shape**, all from Harrington ch2, all with the same
+signature: an integral whose limits arrive as a size-wrapped block AFTER the
+line the integral sits in.
+
+**And the documents are fine.** `render_in_ee3.ps1` opens one in Equation Editor
+and captures what IT draws:
+
+```
+V = ∫₋ₐ^a dx′ ∫₋ₐ^a σ(x′,y′) / (4πε₀ √((x−x′)² + (y−y′)²)) dy′
+```
+
+A correct double integral. The reader was at fault, not the input. That is the
+lesson worth keeping: **a corpus score says a document carries a defect marker;
+it never says whose fault the defect is.** Nothing in the harness could have
+told the difference, and nobody asked the one program that knows.
+
+### What was wrong
+
+Equation Editor writes an operator's limits as a block AFTER the thing they
+belong to — `SIZE SUB`, the limit lines, `SIZE SYM`, the operator's glyph — and
+`BigOpDisplayPass` reunites them. It reaches the owner two ways:
+
+- **as a sibling**: the reverse scan meets an integral and takes it, no questions;
+- **inside a LINE**: `deepestBareBigOp` looks for one that has "no limits yet".
+
+The second asked `!hasLower && !hasUpper`. But those record which SLOTS the
+template wrote, and an integral written with **variation 2 — the common case —
+puts its INTEGRAND in the slot this reader calls `upper`**. So every ordinary
+integral looked like it already had limits, and one sitting inside a line could
+never be handed the block that followed. The two paths now ask the same
+question: has a display block been given to it, and is one coming later in its
+own list.
+
+Result, at zero cost to anything else: **778 of 780 documents byte-identical**,
+2 recovered, 0 regressions.
+
+```
+before: V = \int ^{dx'}\scriptstyle  - aa\int \displaystyle \int \limits_{-a}^{a}4\pi ...
+after : V = \int \limits_{ - a}^{a}\int \limits_{ - a}^{a}4\pi ...
+```
+
+### Where the regression lock lives, and why not in tests/
+
+`validation_test/equation/test_nested_integral_limits.py`, gated on the corpus
+being present (`RADIA_EQN_CORPUS`, or the lab path).
+
+A `tests/` fixture was written first, using `tex_to_mtef` to build the shape and
+read it back. **It passed against the broken reader**, because our writer emits
+the tidy form where limits are real slots — the torn-apart shape only exists in
+documents EQNEDT32 itself wrote. It was deleted rather than kept: a test that
+cannot fail claims a coverage it does not have, which is worse than no test.
+
+### What is left (3 documents)
+
+- `harrington_ch2_operator_l_plate.eqn` — same family, and it also loses the
+  fraction; the limit block is not the only thing adrift.
+- `harrington_ch2_polarizability_xx_matrix.eqn` — carries the empty fence as
+  well: `\left( \left. \right\rangle \right)`.
+- `perturbation_alpha_native.eqn` — a different shape: a fraction with an empty
+  denominator under a pile of four size markers.
+
+Start each by rendering it in EE3.
