@@ -2,7 +2,7 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **1017 tools** across 49 MCP servers.
+Total: **1025 tools** across 49 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
@@ -44,8 +44,8 @@ Total: **1017 tools** across 49 MCP servers.
 | [`mcp-server-mathematica`](#mcp-server-mathematica) | `radia_mcp.mathematica` | 14 |
 | [`mcp-server-md2html`](#mcp-server-md2html) | `radia_mcp.md2html` | 2 |
 | [`mcp-server-chart2d`](#mcp-server-chart2d) | `radia_mcp.chart2d` | 24 |
-| [`mcp-server-paper-writing`](#mcp-server-paper-writing) | `radia_mcp.paper_writing` | 195 |
-| [`mcp-server-grant-writing`](#mcp-server-grant-writing) | `radia_mcp.grant_writing` | 29 |
+| [`mcp-server-paper-writing`](#mcp-server-paper-writing) | `radia_mcp.paper_writing` | 191 |
+| [`mcp-server-grant-writing`](#mcp-server-grant-writing) | `radia_mcp.grant_writing` | 41 |
 | [`mcp-server-poster`](#mcp-server-poster) | `radia_mcp.poster` | 32 |
 | [`mcp-server-literature-index`](#mcp-server-literature-index) | `radia_mcp.literature_index` | 9 |
 | [`mcp-server-document-meta`](#mcp-server-document-meta) | `radia_mcp.document_meta` | 11 |
@@ -1080,15 +1080,11 @@ Module: `radia_mcp.paper_writing.server`
 |---|---|
 | `figure_audit_embeds` | Lint every \includegraphics in a LaTeX file for figure embeds that |
 | `figure_audit_pptx_figures` | Lint every picture in a PPTX deck for paste-scale defects -- the slide |
-| `figure_audit_script_reference` | Report figures the script never points at. |
-| `figure_claim_visibility` | For every slide that makes a numeric claim, is the number visible? |
 | `figure_design_principles` | The figure-MAKING (作図, *sakuzu*) DESIGN canon, distilled from the |
 | `figure_diagram_recipes` | Flowchart + conceptual/schematic DIAGRAM recipes -- the diagram-DRAWING skill |
 | `figure_everyday_recipe` | Matplotlib recipe for the lab's EVERYDAY analysis figure. |
 | `figure_matlab2tikz_recipe` | Generate a MATLAB recipe that exports the current figure to TikZ |
 | `figure_office_export_recipe` | MATLAB recipe to export the current figure for Word / PowerPoint |
-| `figure_plan_for_claim` | What figure makes this claim visible, and what to annotate on it. |
-| `figure_readability_problems` | Everything about this figure that would make it unreadable. |
 | `figure_size_for_target` | Recommend output figure size + font settings for a target embedding. |
 | `figure_style_guide` | Return the lab-standard graph style guide. |
 | `paper_figure_profiles` | List paper-quality figure profiles + their exact journal geometry. |
@@ -1276,41 +1272,53 @@ Module: `radia_mcp.paper_writing.server`
 
 ## `mcp-server-grant-writing`
 
-_Grant proposal helpers: Japanese technical-prose lint, section coverage, budget alignment, internal-to-external scale, collaborative-integration risk, tool-to-domain outcomes, derived-metric validation, cross-organization pilots, literature-gap evidence scope, named-software abstraction, reviewer vocabulary, benchmark role, persuasion hierarchy, equation introductions, and internal-memo shorthand, KAKENHI review-format realities (monochrome printing, human-rights box, researchmap-era publication identification, funding-overlap box), recommendation-letter template, and KDDI Digital Innovation and KAKENHI OSS-platform checks._
+_Grant proposal helpers: Japanese technical-prose lint, section coverage, budget alignment, internal-to-external scale, collaborative-integration risk, tool-to-domain outcomes, derived-metric validation, cross-organization pilots, literature-gap evidence scope, named-software abstraction, reviewer vocabulary, benchmark role, persuasion hierarchy, equation introductions, and internal-memo shorthand, KAKENHI review-format realities (monochrome printing, human-rights box, researchmap-era publication identification, funding-overlap box), central-claim consistency between summary and body, recommendation-letter template, and KDDI Digital Innovation and KAKENHI OSS-platform checks._
 
 Module: `radia_mcp.grant_writing.server`
 
 | Tool | Description |
 |---|---|
-| `grant_writing_acronym_usage_audit` | 略語の使用頻度と初出形式を監査し、3 段階の推奨を返す。 |
+| `grant_writing_acronym_usage_audit` | Audit acronym use in applicant prose only. |
+| `grant_writing_adjacent_reviewer_readability_check` | Find prose that is short but cognitively dense for an adjacent reviewer. |
 | `grant_writing_analyze_sentences` | Analyze Japanese sentence length for grant proposals. |
+| `grant_writing_argument_evidence_map` | Map argument roles to excerpts without scoring scientific validity. |
 | `grant_writing_budget_alignment_check` | Check that budget items are tied to verification and implementation. |
-| `grant_writing_check_kanji_ratio` | 漢字比率の偏りを検出。本多『日本語の作文技術』第四章に基づく。 |
-| `grant_writing_check_misuse_japanese` | 『問題な日本語』由来の現代誤用 15 パターン検出。 |
-| `grant_writing_check_notation_variants` | 同一テキスト内で同じ概念が複数の表記で書かれていないかを検出。 |
-| `grant_writing_check_subject_predicate_distance` | 主述の直結原則 (本多 p.22): 主語と述語の間の距離が遠い文を検出。 |
+| `grant_writing_budget_narrative_check` | Check the necessity narrative that sits beside a budget table. |
+| `grant_writing_capability_responsibility_check` | Check who carries the capability the novelty rests on. |
+| `grant_writing_central_claim_consistency_check` | Check that one central claim is not stated as two different claims. |
+| `grant_writing_check_kanji_ratio` | Measure the kanji ratio of applicant prose, not the application form. |
+| `grant_writing_check_misuse_japanese` | Check Japanese misuse only in applicant prose. |
+| `grant_writing_check_notation_variants` | Check notation variants in applicant prose only. |
+| `grant_writing_check_subject_predicate_distance` | Check subject-predicate distance only in applicant prose. |
+| `grant_writing_collaboration_irreplaceability_check` | Check that a named collaboration says why that partner, both ways. |
 | `grant_writing_collaborative_integration_risk_check` | Check recurring risks in collaborative software-integration proposals. |
 | `grant_writing_count_weak_expressions` | Count hedges and grant-specific non-commitment phrases. |
 | `grant_writing_cross_organization_pilot_check` | Check whether preliminary evidence crosses an organization boundary. |
 | `grant_writing_derived_metric_validation_check` | Check calibration and falsification of a proposal-specific metric. |
 | `grant_writing_domain_outcome_chain_check` | Check that a platform or tool proposal ends in domain knowledge. |
-| `grant_writing_find_undefined_acronyms` | Latin 略語の初出で定義 (〜 or 〜の略) が近くに無いものを検出。 |
+| `grant_writing_find_undefined_acronyms` | Find undefined acronyms in applicant prose only. |
 | `grant_writing_health_report` | Integrated grant-writing health report. |
 | `grant_writing_internal_evidence_to_external_scale_check` | Check whether an internal success is evidence for external transfer. |
+| `grant_writing_international_standing_check` | Check that an international claim is evidenced, not aspirational. |
 | `grant_writing_kaken_oss_platform_check` | Check KAKENHI framing for an AI-era OSS research platform proposal. |
+| `grant_writing_kaken_review_axes` | Return the current official review axes for KAKENHI B/C (General). |
 | `grant_writing_kaken_review_format_check` | Check KAKENHI reviewer-format realities on a proposal draft. |
 | `grant_writing_kddi_digital_check` | KDDI Foundation Digital Innovation / social implementation check. |
 | `grant_writing_kddi_power_electronics_focus_check` | Check the current KDDI power-electronics-board CAE-AI framing. |
-| `grant_writing_lint_bedrock` | 木下 10 原則 + 本多 + 知的 による和文技術文章 bedrock 診断。 |
+| `grant_writing_lint_bedrock` | Lint applicant prose after removing form and LaTeX scaffolding. |
 | `grant_writing_literature_gap_evidence_check` | Check whether literature-survey evidence supports the claimed gap. |
 | `grant_writing_named_software_abstraction_check` | Check whether named software is used at the right proposal level. |
+| `grant_writing_page_limit_check` | Check each field of a compiled proposal against its page allowance. |
 | `grant_writing_persuasion_quality_check` | Check reviewer-facing hierarchy, equations, and defensive prose. |
+| `grant_writing_question_originality_check` | Check that the central question carries an originality position. |
 | `grant_writing_recommendation_letter_template` | Return a one-page recommendation-letter draft template. |
 | `grant_writing_reviewer_vocabulary_check` | Check whether proposal vocabulary is accessible to the likely reviewer. |
 | `grant_writing_section_presence` | Check whether a proposal draft contains the expected review axes. |
 | `grant_writing_status` | (no description) |
-| `grant_writing_suggest_redundancy_fixes` | 和文の典型的冗長表現 25 パターンを検出し置換候補を示す。 |
+| `grant_writing_suggest_redundancy_fixes` | Suggest redundancy fixes only in applicant prose. |
+| `grant_writing_template_residue_check` | Find unfilled placeholders and leftover form instructions. |
 | `grant_writing_usage` | Return the grant-writing guide. |
+| `grant_writing_vague_claim_verb_check` | Flag 統合/連携/活用 that never say how. |
 
 ## `mcp-server-poster`
 
