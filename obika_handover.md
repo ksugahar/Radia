@@ -91,6 +91,9 @@ aperture面とpole rootを固定したblendでGetTrafo変形し、品質限界�
   - `hdiv_mmm_all_single_removal_responses`
     - 1回の候補Schur分解から全単一削除応答を厳密評価するbinary oracle
     - 候補ごとにほぼ同じSchur行列を再分解しない
+  - `hdiv_mmm_removal_group_responses`
+    - 同じSchur逆ブロック公式を任意の削除グループへ一般化
+    - 全候補ペアなどを追加H-matrix solveなしで比較する
 
 ### C++・MEX
 
@@ -188,6 +191,19 @@ SSH timeoutで到達できなかったため、compute-host benchmarkは未実�
 正しい低rank方向を複数セルへ分配する。TSVDは符号・候補部分空間を決め、最終の離散セルは縮約Schur
 oracleで選ぶ。
 
+同じ96 HEX問題を既知2セル削除targetへ拡張した結果も合格した。
+
+- 設計候補: 16セル、全削除ペア: 120
+- 製造正解: element `[24, 36]`
+- 連続ACA--QR--TSVDにおける正解セル順位: 1位・2位
+- 縮約Schur group oracleにおける正解ペア順位: 1位
+- 最終完全solveの最大band比: 0.0
+- 120ペアのgroup oracle: 0.0315秒
+- LAB smoke全体: 27.6秒
+
+これらの時間も公開ベンチ値ではない。単一削除と複数削除を同じSchur逆行列から評価できること、
+2セルの協調効果を単一セル係数の単純丸めに頼らず復元できることが検証上の成果である。
+
 ## 6. これまで分かった失敗原因
 
 ### 6.1 設計空間が既存鉄だけだった
@@ -239,8 +255,8 @@ transfer matrixは設計軌道が決まらないと定義できないため、�
 まず上記manufactured benchmarkを次の順に拡張してから、
 `optimize_abe_section_contour`を実際のTURBO/偏向電磁石モデルへ接続する。
 
-1. 既知の2セル追加・削除targetを全候補Schur oracleで復元する。
-2. 固定設計軌道と1個の滑らかなGetTrafo pole-face modeで、既知振幅から作ったtarget mapを復元する。
+1. **完了**: 既知の2セル削除targetを全候補Schur group oracleで復元する。
+2. **次に実施**: 固定設計軌道と1個の滑らかなGetTrafo pole-face modeで、既知振幅から作ったtarget mapを復元する。
 3. 入口・出口の2 modeへ拡張し、軌道復元を入れる。
 4. 4～8個の滑らかなmodeで任意mapの小摂動を再現する。
 
@@ -312,7 +328,7 @@ PoCを完成と呼ぶには、最低限次を満たす。
 9. 全反復のcommit、host、runtime、rank、残差、材料量、形状品質をresult JSON/logへ保存する。
 10. 有限差分をoptimizerに使用していない。
 
-現時点では条件1～4の基盤に加え、製造正解1セル問題では条件5～6を完全solveで満たした。ただし、
+現時点では条件1～4の基盤に加え、製造正解1セル・2セル問題では条件5～6を完全solveで満たした。ただし、
 これはcalibration benchmarkであり、実規模で条件6を満たす外側反復は未完である。
 
 ## 10. 再現コマンド
@@ -334,21 +350,21 @@ python -m pytest -q `
 
 ```powershell
 python -m pytest tests/test_topology_optimization.py -k `
-  "single_removal_oracle or block_schur_bundle" -q
+  "removal_oracle or block_schur_bundle" -q
 ```
 
-2026-08-21時点で2/2件合格。
+2026-08-21時点で3/3件合格。単一削除、2セル削除、既存block Schur照合を含む。
 
-### 製造正解1セル物理検証
+### 製造正解2セル物理検証
 
 ```powershell
 python -u validation_test\ffag_topopt\validation_abe_manufactured_edge_cell.py `
   --output C:\temp\abe_edge_96hex.json `
   --nx 8 --ny 6 --nz 2 --segments 16 --threads 16 `
-  --candidate-model schur
+  --candidate-model schur --target-cell-count 2
 ```
 
-`status=pass`、`schur_oracle_target_rank=1`、
+`status=pass`、`target_elements=[24,36]`、`schur_oracle_target_rank=1`、
 `exact_max_band_ratio=0.0`を確認する。重い正式実行はidleなmdx/hibinoで行い、hostとruntimeを
 result JSONへ残す。
 
@@ -385,8 +401,9 @@ python -m pytest -q `
 - `2ae5cbc7d` `feat(topopt): promote Abe element-fill contour optimization`
 - `484a3f91d` `feat(matlab): add native Abe element-fill MEX solve`
 - `d2eb092a7` `feat(topopt): accelerate exact Schur removal oracle`
+- `5553beb62` `feat(topopt): evaluate collaborative Schur removals`
 
-この3本は現在のブランチ上で直列になっている。
+この4本は現在のブランチ上で直列になっている。
 
 ## 12. Scratchの扱い
 
@@ -405,7 +422,7 @@ python -m pytest -q `
 以下をそのまま次の作業依頼に使える。
 
 > `S:\Radia\01_GitHub\obika_handover.md`を最初から最後まで読み、commit
-> `2ae5cbc7d`、`484a3f91d`、`d2eb092a7`の実装を確認してください。まず既存のPython・MEX focused回帰を
+> `2ae5cbc7d`、`484a3f91d`、`d2eb092a7`、`5553beb62`の実装を確認してください。まず既存のPython・MEX focused回帰を
 > 再現してください。次に`validation_abe_manufactured_edge_cell.py`をcompute hostで再現し、
 > `hdiv_mmm_all_single_removal_responses`が全候補ごとのSchur再分解をせず正解セルを1位にすることを
 > 確認してください。その後、既知2セルtarget、1個のGetTrafo mode、入口・出口2 modeの順に
