@@ -256,8 +256,10 @@ transfer matrixは設計軌道が決まらないと定義できないため、�
 `optimize_abe_section_contour`を実際のTURBO/偏向電磁石モデルへ接続する。
 
 1. **完了**: 既知の2セル削除targetを全候補Schur group oracleで復元する。
-2. **次に実施**: 固定設計軌道と1個の滑らかなGetTrafo pole-face modeで、既知振幅から作ったtarget mapを復元する。
-3. 入口・出口の2 modeへ拡張し、軌道復元を入れる。
+2. **完了**: 固定設計軌道と1個の滑らかなGetTrafo pole-face modeで、既知振幅から作ったtarget mapを復元する。
+   BDM1 TET 72要素・546 DOFで4.000 mmの既知係数を3.99967 mmまで回収し、fresh full solveの
+   最大band比0.854を得た。`dM+dB+dG+dC+drhs`はすべて解析微分で、optimizer有限差分は0回である。
+3. **次に実施**: 入口・出口の2 modeへ拡張し、軌道復元を入れる。
 4. 4～8個の滑らかなmodeで任意mapの小摂動を再現する。
 
 単純問題で壊れた時点でTURBO実問題へ進まず、candidate model、離散oracle、形状実現、軌道復元の
@@ -328,8 +330,10 @@ PoCを完成と呼ぶには、最低限次を満たす。
 9. 全反復のcommit、host、runtime、rank、残差、材料量、形状品質をresult JSON/logへ保存する。
 10. 有限差分をoptimizerに使用していない。
 
-現時点では条件1～4の基盤に加え、製造正解1セル・2セル問題では条件5～6を完全solveで満たした。ただし、
-これはcalibration benchmarkであり、実規模で条件6を満たす外側反復は未完である。
+現時点では条件1～4の基盤に加え、製造正解1セル・2セル問題と単一GetTrafo pole-face modeでは
+条件5～6を完全solveで満たした。ただし、後者は解析`dC/dq`が完成しているBDM1 TETの
+calibration benchmarkであり、HEX configured-field微分、複数mode、軌道復元、および実規模で
+条件6を満たす外側反復は未完である。
 
 ## 10. 再現コマンド
 
@@ -368,6 +372,18 @@ python -u validation_test\ffag_topopt\validation_abe_manufactured_edge_cell.py `
 `exact_max_band_ratio=0.0`を確認する。重い正式実行はidleなmdx/hibinoで行い、hostとruntimeを
 result JSONへ残す。
 
+### 製造正解GetTrafo transfer-map検証
+
+```powershell
+python validation_test\ffag_topopt\validation_gettrafo_manufactured_transfer_map.py `
+  --output C:\temp\manufactured_gettrafo_transfer_map.json
+```
+
+LABの小規模実装smokeでは`status=pass`、72 TET、BDM1 546 DOF、既知4.000 mmに対する
+回収値3.99967 mm、fresh full solveの`final_exact_max_band_ratio=0.854`を確認した。これは
+速度benchmarkではない。multi-orbit観測はrow-major packed contractを使い、通常のbatched row
+builderとの差は最大`6.36e-21`、optimizerの有限差分使用は0回である。
+
 ### MEX build
 
 ```powershell
@@ -402,8 +418,9 @@ python -m pytest -q `
 - `484a3f91d` `feat(matlab): add native Abe element-fill MEX solve`
 - `d2eb092a7` `feat(topopt): accelerate exact Schur removal oracle`
 - `5553beb62` `feat(topopt): evaluate collaborative Schur removals`
+- `86c14d6dd` `feat(topopt): close manufactured GetTrafo map inverse`
 
-この4本は現在のブランチ上で直列になっている。
+この5本は現在のブランチ上で直列になっている。
 
 ## 12. Scratchの扱い
 
@@ -422,11 +439,12 @@ python -m pytest -q `
 以下をそのまま次の作業依頼に使える。
 
 > `S:\Radia\01_GitHub\obika_handover.md`を最初から最後まで読み、commit
-> `2ae5cbc7d`、`484a3f91d`、`d2eb092a7`、`5553beb62`の実装を確認してください。まず既存のPython・MEX focused回帰を
+> `2ae5cbc7d`、`484a3f91d`、`d2eb092a7`、`5553beb62`、`86c14d6dd`の実装を確認してください。まず既存のPython・MEX focused回帰を
 > 再現してください。次に`validation_abe_manufactured_edge_cell.py`をcompute hostで再現し、
 > `hdiv_mmm_all_single_removal_responses`が全候補ごとのSchur再分解をせず正解セルを1位にすることを
-> 確認してください。その後、既知2セルtarget、1個のGetTrafo mode、入口・出口2 modeの順に
-> calibration benchmarkを拡張してから、保存済みTURBO/偏向電磁石モデルに`optimize_abe_section_contour`の
+> 確認してください。続いて`validation_gettrafo_manufactured_transfer_map.py`で単一modeの解析形状微分と
+> fresh full solveを再現してください。その後、入口・出口2 modeへ拡張して軌道復元を入れてから、
+> 保存済みTURBO/偏向電磁石モデルに`optimize_abe_section_contour`の
 > `realize_fill`、`evaluate_exact`、`relinearize` callbackを接続してください。目的は、段3の
 > 98.2%予測を最終形状の達成と誤認せず、現在55.3%の段4完全閉ループを、受理済み外側再線形化
 > により改善することです。各反復でrank、条件数、clip履歴、gross/net材料量、面高さ、mesh品質、
