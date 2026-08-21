@@ -1101,6 +1101,18 @@ class HDivMMMSingleRemovalResponses:
 
 
 @dataclass(frozen=True)
+class HDivMMMRemovalGroupResponses:
+    """Exact deletion responses for arbitrary groups from one Schur inverse."""
+
+    candidate_elements: np.ndarray
+    removal_groups: tuple[np.ndarray, ...]
+    full_candidate_state: np.ndarray
+    full_response_delta: np.ndarray
+    positive_material_response: np.ndarray
+    removed_response_delta: np.ndarray
+
+
+@dataclass(frozen=True)
 class CollaborativeElementBatchUpdate:
     """Best exact block-Schur bundle found by a discrete candidate search."""
     selected_elements: np.ndarray
@@ -1966,9 +1978,9 @@ def hdiv_mmm_block_insertion_response(linearization,
         selected,state,np.asarray(response).reshape(-1),schur)
 
 
-def hdiv_mmm_all_single_removal_responses(linearization,
-        full_elements=None) -> HDivMMMSingleRemovalResponses:
-    """Evaluate every one-element deletion with one dense Schur factorization.
+def hdiv_mmm_removal_group_responses(linearization,removal_groups,*,
+        full_elements=None) -> HDivMMMRemovalGroupResponses:
+    """Evaluate arbitrary element-group deletions with one Schur factorization.
 
     Let ``S`` be the candidate Schur complement, ``x=S^-1 b``, and
     ``Q=S^-1``.  Constraining one element block ``e`` to zero changes the
@@ -1976,10 +1988,11 @@ def hdiv_mmm_all_single_removal_responses(linearization,
 
     ``delta x = -Q[:,e] Q[e,e]^-1 x[e]``.
 
-    Therefore all singleton removal responses follow after one solve with
-    right-hand sides ``[b, I]`` plus one tiny local block solve per element.
-    This replaces repeatedly factoring the nearly identical ``S_without_e``
-    matrices and is the intended exact binary oracle after ACA--QR--TSVD.
+    Therefore all requested removal-group responses follow after one solve
+    with right-hand sides ``[b, I]`` plus one local block solve per group.
+    This replaces repeatedly factoring the nearly identical
+    ``S_without_group`` matrices and is the intended exact binary oracle after
+    ACA--QR--TSVD.
     """
     if not isinstance(linearization,HDivMMMElementGenerationLinearization):
         raise TypeError(
@@ -1993,6 +2006,19 @@ def hdiv_mmm_all_single_removal_responses(linearization,
     lookup={int(element):column for column,element in enumerate(available)}
     if any(int(element) not in lookup for element in selected):
         raise ValueError("full_elements contains an unavailable candidate")
+    try:
+        groups=tuple(np.asarray(group,dtype=np.int64).reshape(-1)
+                     for group in removal_groups)
+    except TypeError as error:
+        raise ValueError("removal_groups must be an iterable of groups") from error
+    selected_set=set(map(int,selected))
+    if (not groups or any(group.size==0 or
+            np.unique(group).size!=group.size or
+            any(int(element) not in selected_set for element in group)
+            for group in groups)):
+        raise ValueError(
+            "removal_groups must contain non-empty unique subsets of "
+            "full_elements")
     offsets=np.asarray(
         linearization.candidate_dof_offsets,dtype=np.int64).reshape(-1)
     if offsets.shape!=(available.size+1,):
@@ -2028,10 +2054,14 @@ def hdiv_mmm_all_single_removal_responses(linearization,
     inverse=np.asarray(solved[:,1:],dtype=float)
     full_delta=response@state
     local_offsets=np.r_[0,np.cumsum([block.size for block in source_blocks])]
+    selected_lookup={int(element):column
+                     for column,element in enumerate(selected)}
     positive=[]
-    for column in range(selected.size):
-        local=np.arange(
-            int(local_offsets[column]),int(local_offsets[column+1]))
+    for group in groups:
+        local=np.concatenate([
+            np.arange(int(local_offsets[selected_lookup[int(element)]]),
+                      int(local_offsets[selected_lookup[int(element)]+1]))
+            for element in group])
         inverse_local=inverse[np.ix_(local,local)]
         try:
             multiplier=np.linalg.solve(inverse_local,state[local])
@@ -2042,12 +2072,33 @@ def hdiv_mmm_all_single_removal_responses(linearization,
         positive.append(response@constrained_correction)
     positive=np.ascontiguousarray(np.column_stack(positive))
     removed=np.ascontiguousarray(full_delta[:,None]-positive)
-    return HDivMMMSingleRemovalResponses(
+    return HDivMMMRemovalGroupResponses(
         candidate_elements=np.ascontiguousarray(selected),
+        removal_groups=tuple(np.ascontiguousarray(group.copy())
+                             for group in groups),
         full_candidate_state=np.ascontiguousarray(state),
         full_response_delta=np.ascontiguousarray(full_delta),
         positive_material_response=positive,
         removed_response_delta=removed)
+
+
+def hdiv_mmm_all_single_removal_responses(linearization,
+        full_elements=None) -> HDivMMMSingleRemovalResponses:
+    """Evaluate every one-element deletion with one dense Schur factorization."""
+    available=np.asarray(
+        linearization.candidate_elements,dtype=np.int64).reshape(-1)
+    selected=(available.copy() if full_elements is None else
+              np.asarray(full_elements,dtype=np.int64).reshape(-1))
+    grouped=hdiv_mmm_removal_group_responses(
+        linearization,tuple(np.asarray([element],dtype=np.int64)
+                            for element in selected),
+        full_elements=selected)
+    return HDivMMMSingleRemovalResponses(
+        candidate_elements=grouped.candidate_elements,
+        full_candidate_state=grouped.full_candidate_state,
+        full_response_delta=grouped.full_response_delta,
+        positive_material_response=grouped.positive_material_response,
+        removed_response_delta=grouped.removed_response_delta)
 
 
 def select_collaborative_element_batch(*, current_response, response_target,
@@ -5149,6 +5200,7 @@ __all__=["VIMLinearization","VIMOperatorLinearization","ChargeGramLinearization"
          "ElementInsertionResponse","ElementGenerationLPUpdate",
          "HDivMMMElementGenerationLinearization",
          "HDivMMMSingleRemovalResponses",
+         "HDivMMMRemovalGroupResponses",
          "AbeMurataEquivalentMaterialDiagnostics",
          "TSVDElementCandidateSelection",
          "HDivMMMGenerationIteration","HDivMMMGraphFrontDiagnostics",
@@ -5161,6 +5213,7 @@ __all__=["VIMLinearization","VIMOperatorLinearization","ChargeGramLinearization"
          "linearize_hdiv_mmm_element_generation","solve_hdiv_mmm_active_elements",
          "hdiv_mmm_block_insertion_response",
          "hdiv_mmm_all_single_removal_responses",
+         "hdiv_mmm_removal_group_responses",
          "select_tsvd_element_candidates",
          "select_tsvd_exact_block_batch",
          "grow_hdiv_mmm_by_superposition","solve_element_generation_lp",
