@@ -6,6 +6,8 @@ from radia.accelerator_magnet_topopt import (
     build_multi_orbit_field_response_matrix,
     optimize_hdiv_mmm_magnet_from_transfer_matrices,
     solve_transfer_matrix_field_correction,
+    static_magnet_symplectic_residual,
+    static_magnet_transfer_component_entries,
 )
 from radia.ffag_topopt import (
     FFAGFixedDesignOrbitTargetFamily,
@@ -64,6 +66,44 @@ def test_build_fixed_design_orbit_target_family_uses_caller_maps_directly():
         family.objective.objectives[1].bend_field_band, 2.0e-3)
 
 
+def test_fixed_design_orbit_target_selects_named_pole_components():
+    orbit = _one_segment_arc(radius=8.0, angle=0.08, rigidity=1.2)
+    matrix = np.eye(6)[None, :, :]
+    family = build_ffag_fixed_design_orbit_target_family(
+        (orbit,), matrix,
+        controlled_components=(
+            "horizontal-focusing", "vertical_focusing",
+            "horizontal_dispersion"))
+
+    expected = ((1, 0), (3, 2), (0, 5), (1, 5))
+    assert family.controlled_components == (
+        "horizontal_focusing", "vertical_focusing",
+        "horizontal_dispersion")
+    assert family.objective.response_entries == expected
+    assert static_magnet_transfer_component_entries(
+        family.controlled_components) == expected
+    np.testing.assert_allclose(family.target_symplectic_residuals, 0.0)
+
+
+def test_fixed_design_orbit_target_rejects_unit_determinant_nonsymplectic_map():
+    orbit = _one_segment_arc(radius=8.0, angle=0.08, rigidity=1.2)
+    matrix = np.eye(6)
+    matrix[0, 0] = 2.0
+    matrix[2, 2] = 0.5
+    assert np.linalg.det(matrix) == pytest.approx(1.0)
+    assert static_magnet_symplectic_residual(matrix) > 0.9
+
+    with pytest.raises(ValueError, match="not symplectic"):
+        build_ffag_fixed_design_orbit_target_family(
+            (orbit,), matrix[None, :, :],
+            controlled_components="horizontal_focusing")
+
+
+def test_named_pole_components_reject_unknown_group():
+    with pytest.raises(ValueError, match="unknown transfer component"):
+        static_magnet_transfer_component_entries(("not_a_component",))
+
+
 def test_direct_design_orbit_api_delegates_without_reference_field(
         monkeypatch):
     import radia.ffag_topopt as ffag
@@ -83,7 +123,10 @@ def test_direct_design_orbit_api_delegates_without_reference_field(
         fake_optimize)
     result = ffag.optimize_ffag_hdiv_mmm_from_design_orbits(
         (orbit,), matrix, transfer_matrix_band=3.0e-4,
-        bend_field_band=4.0e-4, source="native-source",
+        bend_field_band=4.0e-4,
+        controlled_components=(
+            "horizontal_focusing", "horizontal_dispersion"),
+        source="native-source",
         charge_gram="native-gram")
 
     assert result is sentinel
@@ -91,6 +134,9 @@ def test_direct_design_orbit_api_delegates_without_reference_field(
     assert isinstance(family, FFAGFixedDesignOrbitTargetFamily)
     assert family.design_orbits == (orbit,)
     np.testing.assert_allclose(family.objective.target_matrices, matrix)
+    assert family.controlled_components == (
+        "horizontal_focusing", "horizontal_dispersion")
+    assert family.objective.response_entries == ((1, 0), (0, 5), (1, 5))
     assert captured["options"] == {
         "source": "native-source", "charge_gram": "native-gram"}
 
