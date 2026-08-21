@@ -16,7 +16,7 @@ def test_radia_mex_contract_reads_the_cpp_command_inventory():
     contract = matlab_radia_mex_contract("mex")
 
     assert contract["status"] == "ready"
-    assert contract["command_count"] == 363
+    assert contract["command_count"] == 366
     assert contract["matlab_wrapper_count"] >= 133
     assert contract["matlab_optuna_class_count"] == 26
     assert contract["matlab_optuna_function_count"] == 7
@@ -68,10 +68,15 @@ def test_radia_mex_contract_reads_the_cpp_command_inventory():
         "beam.lie.apply_dragt_finn_batch",
         "beam.orbit.track_reference_3d",
     }.issubset(contract["command_names"])
-    assert "topopt.abe_element_fill_plan" in contract["command_names"]
+    assert {
+        "topopt.abe_element_fill_plan",
+        "beam.orbit.track_reference_to_plane",
+        "hacapk.charge_gram.configured_field_values_shape_derivative",
+        "hdiv.field_evaluator.field_gradient",
+    }.issubset(contract["command_names"])
     assert contract["command_groups"]["radia-core"] >= 70
-    assert contract["pybind_public_count"] == 98
-    assert contract["pybind_covered_count"] == 98
+    assert contract["pybind_public_count"] == 99
+    assert contract["pybind_covered_count"] == 99
     assert contract["pybind_missing"] == []
     assert contract["pybind_internal_numerical_count"] == 28
     assert contract["pybind_internal_missing"] == []
@@ -84,8 +89,8 @@ def test_radia_mex_contract_reads_the_cpp_command_inventory():
     # _ChargeGramHMatrix.charge_sigma (the sigma-normalization diagnostic
     # from the roundoff-amplification fix) is EXCLUDED with a reason, and
     # exclusions leave the relevant surface; cyclic image setup expands the
-    # covered stateful surface to 123 entries.
-    assert contract["pybind_class_surface_count"] == 123
+    # covered stateful surface to 125 entries.
+    assert contract["pybind_class_surface_count"] == 125
     assert ("_ChargeGramHMatrix.charge_sigma"
             in contract["pybind_class_exclusions"])
     assert contract["pybind_class_covered_count"] == contract["pybind_class_surface_count"]
