@@ -213,7 +213,7 @@ def run(args):
     from radia.vim._vim import build_charge_gram
 
     ng.SetNumThreads(args.threads)
-    started = time.perf_counter()
+    started = time.perf_counter() if args.record_performance else None
     print("[ffag-full-field] loading mesh and auditing CoilBuilder clearance",
           flush=True)
     mesh = ng.Mesh(str(args.mesh.resolve()))
@@ -255,7 +255,7 @@ def run(args):
         bend_field_band=fixture.objective.bend_field_band,
         response_entries=fixture.objective.response_entries)
 
-    setup_done = time.perf_counter()
+    setup_done = time.perf_counter() if args.record_performance else None
     if args.preflight_only:
         preflight_gates = {
             "iron_only_hex_mesh": bool(
@@ -311,10 +311,13 @@ def run(args):
             },
             "charge_gram_built": False,
             "optimization_started": False,
-            "timings_s": {"preflight": setup_done-started},
-            "peak_working_set_bytes": _peak_working_set_bytes(),
+            "performance_measurement": (
+                "enabled" if args.record_performance else "disabled"),
             "gates": preflight_gates,
         }
+        if args.record_performance:
+            preflight["timings_s"] = {"preflight": setup_done-started}
+            preflight["peak_working_set_bytes"] = _peak_working_set_bytes()
         args.output.parent.mkdir(parents=True, exist_ok=True)
         args.output.write_text(
             json.dumps(preflight, indent=2) + "\n", encoding="utf-8")
@@ -326,16 +329,21 @@ def run(args):
         _, gram, _ = build_charge_gram(
             fes, eps=args.hmatrix_eps, leafsize=args.leaf_size,
             eta=args.hmatrix_eta, internal_interfaces=True)
-    gram_build_breakdown = {
+    gram_build_breakdown = ({
         str(key): float(value)
         for key, value in build_charge_gram.last_timings.items()
         if isinstance(value, (int, float, np.integer, np.floating))
-    }
-    hmatrix_done = time.perf_counter()
-    print(
-        f"[ffag-full-field] ChargeGram ready in "
-        f"{hmatrix_done - setup_done:.3f} s; optimizing about fixed "
-        "entrance-to-exit design orbits", flush=True)
+    } if args.record_performance else None)
+    hmatrix_done = time.perf_counter() if args.record_performance else None
+    if args.record_performance:
+        print(
+            f"[ffag-full-field] ChargeGram ready in "
+            f"{hmatrix_done - setup_done:.3f} s; optimizing about fixed "
+            "entrance-to-exit design orbits", flush=True)
+    else:
+        print(
+            "[ffag-full-field] ChargeGram ready; optimizing about fixed "
+            "entrance-to-exit design orbits", flush=True)
     with ng.TaskManager():
         result = optimize_ffag_hdiv_mmm_from_design_orbits(
             design_orbits, target_transfer_matrices,
@@ -381,10 +389,14 @@ def run(args):
             exact_beam_depth=args.exact_beam_depth,
             exact_beam_barrier_fraction=args.exact_beam_barrier_fraction,
         )
-    finished = time.perf_counter()
-    print(
-        f"[ffag-full-field] fixed-orbit material solve ready in "
-        f"{finished - hmatrix_done:.3f} s", flush=True)
+    finished = time.perf_counter() if args.record_performance else None
+    if args.record_performance:
+        print(
+            f"[ffag-full-field] fixed-orbit material solve ready in "
+            f"{finished - hmatrix_done:.3f} s", flush=True)
+    else:
+        print("[ffag-full-field] fixed-orbit material solve ready",
+              flush=True)
 
     topology_result = result.topology_result
     initial_ratio = result.initial_max_band_ratio
@@ -570,7 +582,6 @@ def run(args):
             "leaf_size": args.leaf_size,
             "compression": float(gram_stats.get("compression", 1.0)),
             "max_rank": int(gram_stats.get("max_rank", 0)),
-            "build_breakdown_s": gram_build_breakdown,
         },
         "linear_solver": {
             "tolerance": args.solve_tolerance,
@@ -579,15 +590,19 @@ def run(args):
             "cluster_deflation_size": args.cluster_deflation_size,
             "recycle_size": args.recycle_size,
         },
-        "timings_s": {
+        "performance_measurement": (
+            "enabled" if args.record_performance else "disabled"),
+        "gates": gates,
+    }
+    if args.record_performance:
+        report["hmatrix"]["build_breakdown_s"] = gram_build_breakdown
+        report["timings_s"] = {
             "setup": setup_done - started,
             "hmatrix_build": hmatrix_done - setup_done,
             "fixed_orbit_material_optimization": finished - hmatrix_done,
             "total": finished - started,
-        },
-        "peak_working_set_bytes": _peak_working_set_bytes(),
-        "gates": gates,
-    }
+        }
+        report["peak_working_set_bytes"] = _peak_working_set_bytes()
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(
         json.dumps(report, indent=2) + "\n", encoding="utf-8")
@@ -601,6 +616,11 @@ def parse_args(argv=None):
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--restart-result", type=Path)
     parser.add_argument("--preflight-only", action="store_true")
+    parser.add_argument(
+        "--record-performance", action=argparse.BooleanOptionalAction,
+        default=True,
+        help=("Record elapsed-time and peak-memory provenance. Disable for "
+              "numerical-only validation on non-benchmark hosts."))
     parser.add_argument("--energies", type=float, nargs="+",
                         default=[31.0, 140.0, 250.0])
     parser.add_argument("--segments", type=int, default=32)
