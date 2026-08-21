@@ -360,7 +360,7 @@ not a defect. Do not turn the map into another keyword-coverage score.
 | 欠陥の種類 | 検査 | 人手の通読 |
 |---|---|---|
 | 逆茂木文、二重ハ、単調な文末、90字超 | 検出（12件の二重ハまで数える） | 読めてしまい見逃す |
-| 色だけで区別した図、根拠なき「該当なし」、特定不能な業績 | 検出 | 見落としやすい |
+| 色だけで区別した図、条件付き欄への禁止記載、特定不能な業績 | 検出 | 見落としやすい |
 | 中心の問いが二重・語彙不一致 | 専用検査を足すまで沈黙（10.0/10） | 検出 |
 | 指示語の指示対象が不明 | 弱い | 検出 |
 | 節構成の不整合（並列でないものを並列に置く） | 検出できない | 検出 |
@@ -1090,6 +1090,12 @@ Sources:
 対策・措置(倫理審査、同意、匿名化等)を具体的に書く。該当がない場合も
 「該当なし」と明記した上で、そう判断した根拠を一文添える。
 
+ただし、第4欄「研究計画最終年度前年度応募を行う場合の記述事項」は逆で
+ある。該当しない場合はページ、表、見出しを削除せず、研究種目名、課題番号、
+課題名、研究期間、「当初研究計画及び研究成果」、「前年度応募する理由」の
+全記述欄を空欄のまま残す。「該当なし」「該当しない」又はその理由を書いては
+ならない。欄ごとの記入要領を一般化せず、条件付き欄は公式指示を個別に守る。
+
 ## KAKENHI Program Strategy (充足率と重複応募)
 
 > 制度固有: 科研費のみ。充足率・重複制限は制度ごとに異なる。
@@ -1446,10 +1452,12 @@ KAKENHI call briefing: color-only figure discrimination (some categories are
 reviewed as monochrome prints), missing safeguards when surveys, animal
 experiments, or personal data appear, a bare 「該当なし」 without a stated
 rationale in the human-rights/legal box (the box reviewers flag most often),
-publication mentions that cannot be identified in the researchmap era, and an
-incomplete funding-overlap box (相違点・応募理由・所属組織役職). For full
-drafts it also checks coverage of the three review criteria and the presence
-of emphasis and figure references, because reviewers read up to ~100
-proposals in about a month. The result carries `briefing_notes` with the
-review-reality reminders. The integrated health report runs this check for
-every program.
+and the opposite rule for the final-year-early-application box: a non-applicant
+must retain the page but leave every field blank, so 「該当なし」 and explanatory
+sentences are defects. It also checks publication mentions that cannot be
+identified in the researchmap era and an incomplete funding-overlap box
+(相違点・応募理由・所属組織役職). For full drafts it checks coverage of the
+three review criteria and the presence of emphasis and figure references,
+because reviewers read up to ~100 proposals in about a month. The result
+carries `briefing_notes` with the review-reality reminders. The integrated
+health report runs this check for every program.
