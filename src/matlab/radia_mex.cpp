@@ -1480,6 +1480,7 @@ mxArray* Commands() {
         "hcurl.tet_reduced_gram",
         "hdiv.affine_cell_self_energy_shape_derivative",
         "stream.aca_tsvd",
+        "topopt.abe_element_fill_plan",
         "acoustic.soft_sphere", "acoustic.rigid_sphere",
         "acoustic.fluid_sphere", "acoustic.elastic_sphere",
         "acoustic.soft_sphere_complex_k", "acoustic.bdf_delta",
@@ -5280,6 +5281,160 @@ void StreamACATSVD(int nlhs, mxArray* plhs[], int nrhs,
     plhs[1] = RealColumn(result.S);
     plhs[2] = RealMatrixOutput(result.V, result.N, result.modes);
     plhs[3] = mxCreateDoubleScalar(result.k_aca);
+}
+
+void TopoptAbeElementFillPlan(int nlhs, mxArray* plhs[], int nrhs,
+                              const mxArray* prhs[]) {
+    CheckArity(
+        nrhs, 17, nlhs, 1,
+        "result = radia_mex('topopt.abe_element_fill_plan', response, target, material_active, volumes, current_fill, field_response, residual_pp, residual_rms, max_iterations, relaxation, stagnation_tolerance, relative_singular_threshold, modes, kmax, aca_eps, method)");
+    std::size_t rows = 0, cols = 0;
+    const auto response = RealMatrix(prhs[1], rows, cols, "response");
+    if (rows == 0 || cols == 0 ||
+        rows > static_cast<std::size_t>(std::numeric_limits<int>::max()) ||
+        cols > static_cast<std::size_t>(std::numeric_limits<int>::max()))
+        BadArgument("response must be a nonempty matrix with native integer dimensions");
+    const auto target = FixedRealVector(prhs[2], rows, "target");
+
+    std::vector<bool> active(cols, false);
+    if (mxIsLogical(prhs[3]) && !mxIsComplex(prhs[3])) {
+        if (mxGetNumberOfElements(prhs[3]) != cols)
+            BadArgument("material_active must have one value per response column");
+        const auto* data = mxGetLogicals(prhs[3]);
+        for (std::size_t j = 0; j < cols; ++j) active[j] = data[j];
+    } else {
+        const auto supplied = FixedRealVector(
+            prhs[3], cols, "material_active");
+        for (std::size_t j = 0; j < cols; ++j) {
+            if (supplied[j] != 0.0 && supplied[j] != 1.0)
+                BadArgument("material_active must contain logical or 0/1 values");
+            active[j] = supplied[j] != 0.0;
+        }
+    }
+    const auto volumes = FixedRealVector(prhs[4], cols, "volumes");
+    const auto current_fill = FixedRealVector(
+        prhs[5], cols, "current_fill");
+    for (double volume : volumes)
+        if (!std::isfinite(volume) || !(volume > 0.0))
+            BadArgument("volumes must be finite and positive");
+
+    std::size_t field_rows = 0, field_cols = 0;
+    const auto field_response = RealMatrix(
+        prhs[6], field_rows, field_cols, "field_response");
+    if (field_cols != cols)
+        BadArgument("field_response must have one column per design element");
+    const double residual_pp = Scalar(prhs[7], "residual_pp");
+    const double residual_rms = Scalar(prhs[8], "residual_rms");
+    const int max_iterations = PositiveInteger(prhs[9], "max_iterations");
+    const double relaxation = Scalar(prhs[10], "relaxation");
+    const double stagnation = Scalar(prhs[11], "stagnation_tolerance");
+    const double relative_threshold = Scalar(
+        prhs[12], "relative_singular_threshold");
+    const int modes = NonnegativeInteger(prhs[13], "modes");
+    const int kmax = NonnegativeInteger(prhs[14], "kmax");
+    const double aca_eps = Scalar(prhs[15], "aca_eps");
+    const std::string method = Text(prhs[16], "method");
+    if ((residual_pp < 0.0 && residual_rms < 0.0) ||
+        residual_pp < -1.0 || residual_rms < -1.0)
+        BadArgument("at least one residual tolerance must be nonnegative; use -1 for omitted");
+    if (!(relaxation > 0.0) || relaxation > 1.0 || stagnation < 0.0 ||
+        relative_threshold < 0.0 || !(aca_eps > 0.0))
+        BadArgument("invalid Abe solver tolerance or relaxation");
+    if (method != "aca_qr_tsvd" && method != "dense")
+        BadArgument("method must be 'aca_qr_tsvd' or 'dense'");
+
+    std::vector<double> lower(cols), upper(cols), remaining_lower(cols),
+        remaining_upper(cols), zero(cols, 0.0);
+    const double capacity_tolerance =
+        64.0 * std::numeric_limits<double>::epsilon();
+    for (std::size_t j = 0; j < cols; ++j) {
+        lower[j] = active[j] ? -1.0 : 0.0;
+        upper[j] = active[j] ? 0.0 : 1.0;
+        if (!std::isfinite(current_fill[j]) ||
+            current_fill[j] < lower[j] - capacity_tolerance ||
+            current_fill[j] > upper[j] + capacity_tolerance)
+            BadArgument("current_fill violates signed material capacity");
+        remaining_lower[j] = lower[j] - current_fill[j];
+        remaining_upper[j] = upper[j] - current_fill[j];
+    }
+    radia::stream_function::AbeBoundedOptions options;
+    options.modes = modes;
+    options.kmax = kmax;
+    options.aca_eps = aca_eps;
+    options.dense_tsvd = method == "dense";
+    options.relative_singular_threshold = relative_threshold;
+    options.residual_peak_to_peak = residual_pp;
+    options.residual_rms = residual_rms;
+    options.max_iterations = max_iterations;
+    options.relaxation = relaxation;
+    options.stagnation_tolerance = stagnation;
+    const auto bounded = radia::stream_function::SolveAbeBounded(
+        static_cast<int>(rows), static_cast<int>(cols), response, target,
+        remaining_lower, remaining_upper, zero, options);
+
+    std::vector<double> absolute_fill(cols), delivered = bounded.reconstructed;
+    double gross_volume = 0.0;
+    double net_volume = 0.0;
+    for (std::size_t j = 0; j < cols; ++j) {
+        absolute_fill[j] = std::clamp(
+            current_fill[j] + bounded.potential[j], lower[j], upper[j]);
+        gross_volume += std::abs(bounded.potential[j]) * volumes[j];
+        net_volume += bounded.potential[j] * volumes[j];
+    }
+    std::vector<double> implied_field(field_rows, 0.0);
+    for (std::size_t i = 0; i < field_rows; ++i)
+        for (std::size_t j = 0; j < cols; ++j)
+            implied_field[i] += field_response[i * cols + j] *
+                                bounded.potential[j];
+    int numerical_rank = 0;
+    if (!bounded.factor.S.empty() && bounded.factor.S.front() > 0.0)
+        for (double value : bounded.factor.S)
+            if (value > relative_threshold * bounded.factor.S.front())
+                ++numerical_rank;
+    const double retained_condition = numerical_rank > 0
+        ? bounded.factor.S.front() /
+          bounded.factor.S[static_cast<std::size_t>(numerical_rank - 1)]
+        : std::numeric_limits<double>::infinity();
+
+    const char* fields[] = {
+        "fill_step", "absolute_fill", "lower_capacity", "upper_capacity",
+        "delivered_specification", "residual_specification",
+        "implied_field_difference", "gross_material_volume",
+        "net_material_volume", "U", "singular_values", "V", "aca_rank",
+        "numerical_rank", "retained_condition", "iterations",
+        "clipped_dof_history", "potential_change_history",
+        "residual_peak_to_peak_history", "residual_rms_history",
+        "residual_max_abs_history", "converged", "stop_reason",
+        "residual_peak_to_peak", "residual_rms", "residual_max_abs"};
+    plhs[0] = mxCreateStructMatrix(1, 1, 26, fields);
+    mxSetField(plhs[0], 0, "fill_step", RealColumn(bounded.potential));
+    mxSetField(plhs[0], 0, "absolute_fill", RealColumn(absolute_fill));
+    mxSetField(plhs[0], 0, "lower_capacity", RealColumn(lower));
+    mxSetField(plhs[0], 0, "upper_capacity", RealColumn(upper));
+    mxSetField(plhs[0], 0, "delivered_specification", RealColumn(delivered));
+    mxSetField(plhs[0], 0, "residual_specification", RealColumn(bounded.residual));
+    mxSetField(plhs[0], 0, "implied_field_difference", RealColumn(implied_field));
+    mxSetField(plhs[0], 0, "gross_material_volume", mxCreateDoubleScalar(gross_volume));
+    mxSetField(plhs[0], 0, "net_material_volume", mxCreateDoubleScalar(net_volume));
+    mxSetField(plhs[0], 0, "U", RealMatrixOutput(
+        bounded.factor.U, bounded.factor.M, bounded.factor.modes));
+    mxSetField(plhs[0], 0, "singular_values", RealColumn(bounded.factor.S));
+    mxSetField(plhs[0], 0, "V", RealMatrixOutput(
+        bounded.factor.V, bounded.factor.N, bounded.factor.modes));
+    mxSetField(plhs[0], 0, "aca_rank", mxCreateDoubleScalar(bounded.factor.k_aca));
+    mxSetField(plhs[0], 0, "numerical_rank", mxCreateDoubleScalar(numerical_rank));
+    mxSetField(plhs[0], 0, "retained_condition", mxCreateDoubleScalar(retained_condition));
+    mxSetField(plhs[0], 0, "iterations", mxCreateDoubleScalar(bounded.iterations));
+    mxSetField(plhs[0], 0, "clipped_dof_history", Int32Column(bounded.clipped_history));
+    mxSetField(plhs[0], 0, "potential_change_history", RealColumn(bounded.potential_change_history));
+    mxSetField(plhs[0], 0, "residual_peak_to_peak_history", RealColumn(bounded.residual_peak_to_peak_history));
+    mxSetField(plhs[0], 0, "residual_rms_history", RealColumn(bounded.residual_rms_history));
+    mxSetField(plhs[0], 0, "residual_max_abs_history", RealColumn(bounded.residual_max_abs_history));
+    mxSetField(plhs[0], 0, "converged", mxCreateLogicalScalar(bounded.converged));
+    mxSetField(plhs[0], 0, "stop_reason", TextOutput(bounded.stop_reason.c_str()));
+    mxSetField(plhs[0], 0, "residual_peak_to_peak", mxCreateDoubleScalar(bounded.residual_peak_to_peak));
+    mxSetField(plhs[0], 0, "residual_rms", mxCreateDoubleScalar(bounded.residual_rms));
+    mxSetField(plhs[0], 0, "residual_max_abs", mxCreateDoubleScalar(bounded.residual_max_abs));
 }
 
 void BiotSavartSegments(const std::string& command, int nlhs,
@@ -10480,6 +10635,10 @@ void Dispatch(const std::string& command, int nlhs, mxArray* plhs[], int nrhs,
     }
     if (command == "stream.aca_tsvd") {
         StreamACATSVD(nlhs, plhs, nrhs, prhs);
+        return;
+    }
+    if (command == "topopt.abe_element_fill_plan") {
+        TopoptAbeElementFillPlan(nlhs, plhs, nrhs, prhs);
         return;
     }
     if (command == "hdiv.field_evaluator.as_coefficient") {

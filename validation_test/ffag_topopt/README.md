@@ -193,6 +193,17 @@ not a claim that the outer smooth-contour problem is solved: the recorded
 single-pass exact shape delivered 55.3 percent, so relinearized outer passes
 remain the full-scale validation target.
 
+The signed element-fill solve also has a Python-free standalone MATLAB path:
+`radia.topopt.solveAbeElementFillPlan` calls
+`radia_mex('topopt.abe_element_fill_plan', ...)`.  The MEX command shares the
+HACApK ACA+ and QR--TSVD C++ implementation used by pybind, retains one factor
+through all capacity-clipping corrections, and returns residual and volume
+histories.  NGSolve DOF orientation, pattern transfer, GetTrafo deformation,
+and the complete-solve outer loop deliberately remain caller-owned.  The
+focused MATLAB regression checks both dense-reference and ACA paths, signed
+air/iron capacities, the EarlyTimes Jacobian composition, whole-element HDiv
+contraction, conservative interface height, and fixed-surface blending.
+
 ## Second- and third-order R/T/U with x-y coupling
 
 `radia.accelerator_taylor_topopt` extends this contract to the factorial
