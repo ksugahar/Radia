@@ -1218,7 +1218,7 @@ def test_kaken_review_format_ignores_not_applicable_in_an_unrelated_box():
     )
 
 
-def test_kaken_review_format_ignores_final_year_not_applicable_macros():
+def test_kaken_review_format_flags_final_year_not_applicable_text():
     result = gw.grant_writing_kaken_review_format_check(
         r"""
         \section{研究計画最終年度前年度応募を行う場合の記述事項}
@@ -1228,8 +1228,44 @@ def test_kaken_review_format_ignores_final_year_not_applicable_macros():
         """
     )
 
+    risks = {risk["type"]: risk for risk in result["risks"]}
+
+    assert "final_year_non_applicant_field_not_blank" in risks
+    assert risks["final_year_non_applicant_field_not_blank"]["severity"] == "HIGH"
+    assert result["final_year_blank_rule_checked"]
+    assert len(result["final_year_blank_violations"]) == 3
+
+
+def test_kaken_review_format_accepts_blank_final_year_fields():
+    result = gw.grant_writing_kaken_review_format_check(
+        r"""
+        \section{研究計画最終年度前年度応募を行う場合の記述事項}
+        \newcommand{\最終年度研究種目名}{}
+        \newcommand{\最終年度研究課題番号}{}
+        \newcommand{\最終年度研究課題名}{}
+        \newcommand{\最終年度研究期間}{}
+        \textbf{当初研究計画及び研究成果}
+        \textbf{前年度応募する理由}
+        """
+    )
+
     assert not any(
-        r["type"] == "not_applicable_without_rationale" for r in result["risks"]
+        risk["type"] == "final_year_non_applicant_field_not_blank"
+        for risk in result["risks"]
+    )
+    assert result["final_year_blank_rule_checked"]
+    assert result["final_year_blank_violations"] == []
+
+
+def test_kaken_review_format_ignores_final_year_form_instruction():
+    result = gw.grant_writing_kaken_review_format_check(
+        "研究計画最終年度前年度応募を行う場合の記述事項。"
+        "該当しない場合は記述欄を削除することなく、空欄のまま提出すること。"
+    )
+
+    assert not any(
+        risk["type"] == "final_year_non_applicant_field_not_blank"
+        for risk in result["risks"]
     )
 
 
