@@ -138,17 +138,61 @@ def _slide_title(slide) -> str:
                 continue
     except Exception:
         pass
-    # 2) Fall back to the first non-empty text frame in shape order.
+    # 2) No title placeholder (a Blank layout drawn by hand). Shape order alone
+    #    picks whatever text box happens to come first, which on a COVER slide
+    #    is the venue and paper number sitting above the title -- measured on
+    #    the MMPM deck, where that 24 pt line was then held to the 32 pt title
+    #    floor while the actual 54 pt title was called body text.
+    #
+    #    Two better readings, in order:
+    #      a) a full-width bar at the very top is the deck's title band;
+    #      b) otherwise the LARGEST text in the upper part of the slide.
+    try:
+        slide_h = float(slide.part.package.presentation_part.presentation.slide_height)
+        slide_w = float(slide.part.package.presentation_part.presentation.slide_width)
+    except Exception:
+        slide_h = slide_w = 0.0
+
+    candidates = []
     try:
         for shape in slide.shapes:
             try:
-                if shape.has_text_frame and shape.text_frame.text.strip():
-                    return shape.text_frame.text.splitlines()[0]
+                if not shape.has_text_frame or not shape.text_frame.text.strip():
+                    continue
+                # A reconstructed figure label lives INSIDE a picture; it is
+                # never the slide's title, whatever its size or position.
+                if str(getattr(shape, "name", "")).startswith("FIGURE_TEXT::"):
+                    continue
             except Exception:
                 continue
+            first = shape.text_frame.text.splitlines()[0]
+            top = float(getattr(shape, "top", 0) or 0)
+            width = float(getattr(shape, "width", 0) or 0)
+            size = 0.0
+            try:
+                for para in shape.text_frame.paragraphs:
+                    for run in para.runs:
+                        if run.font.size is not None:
+                            size = max(size, float(run.font.size.pt))
+            except Exception:
+                pass
+            candidates.append({"text": first, "top": top, "width": width, "size": size})
     except Exception:
         pass
-    return ""
+    if not candidates:
+        return ""
+
+    if slide_h and slide_w:
+        banners = [c for c in candidates
+                   if c["width"] >= 0.9 * slide_w and c["top"] < 0.15 * slide_h]
+        if banners:
+            return min(banners, key=lambda c: c["top"])["text"]
+        upper = [c for c in candidates if c["top"] < 0.40 * slide_h and c["size"] > 0]
+        if upper:
+            return max(upper, key=lambda c: (c["size"], -c["top"]))["text"]
+
+    # 3) Nothing measurable: first non-empty text frame in shape order.
+    return candidates[0]["text"]
 
 
 def _walk_shapes(shape_collection):
@@ -188,11 +232,15 @@ def _shape_is_slide_title(shape, slide) -> bool:
     try:
         if not shape.has_text_frame or not shape.text_frame.text.strip():
             return False
+        if str(getattr(shape, "name", "")).startswith("FIGURE_TEXT::"):
+            return False        # a label inside a picture, not the title
         first_line = shape.text_frame.text.splitlines()[0].strip()
         if first_line != _slide_title(slide).strip():
             return False
         slide_h = float(slide.part.package.presentation_part.presentation.slide_height)
-        return float(shape.top) < 0.20 * slide_h
+        # The band matches the one _slide_title searches: a cover slide sets
+        # its title below the top fifth, under the venue line.
+        return float(shape.top) < 0.40 * slide_h
     except Exception:
         return False
 
