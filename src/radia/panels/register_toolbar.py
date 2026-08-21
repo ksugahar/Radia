@@ -288,9 +288,18 @@ def _install_radia_export_menu():
     Fail Fast, Fail Loud" any ImportError is propagated unmodified.
     """
     import radia_export_menu
-    radia_export_menu.install_menu()
-    _panel_log("_install_radia_export_menu: installed via "
-               "radia_export_menu.install_menu()")
+    menu = radia_export_menu.install_menu()
+    observer_active = (
+        getattr(radia_export_menu, "_menu_persistence_filter", None)
+        is not None
+    )
+    if menu is None:
+        _panel_log("_install_radia_export_menu: deferred until Cubit "
+                   f"main window is ready; observer_active={observer_active}")
+    else:
+        _panel_log("_install_radia_export_menu: installed via "
+                   "radia_export_menu.install_menu(); "
+                   f"observer_active={observer_active}")
 
 
 def register_menu():

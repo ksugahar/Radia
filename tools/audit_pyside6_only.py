@@ -34,6 +34,7 @@ from __future__ import annotations
 
 import json
 import importlib.util
+import glob
 import os
 import subprocess
 import sys
@@ -161,17 +162,91 @@ def _run_smoke() -> int:
     return 1 if fails else 0
 
 
-def check_panel_smoke() -> list[str]:
-    """Spawn the toolbar smoke in an isolated offscreen subprocess."""
+def _find_cubit_python() -> Path | None:
+    """Return Cubit's embedded Python, which owns production PySide6."""
+    explicit = os.environ.get("CUBIT_PYTHON")
+    if explicit and Path(explicit).is_file():
+        return Path(explicit)
+    cubit_path = os.environ.get("CUBIT_PATH")
+    if cubit_path:
+        root = Path(cubit_path)
+        bin_dir = root if root.name.lower() == "bin" else root / "bin"
+        candidate = bin_dir / "python3" / "python.exe"
+        if candidate.is_file():
+            return candidate
+    if os.name == "nt":
+        program_files = os.environ.get("ProgramFiles", r"C:\Program Files")
+        candidates = sorted(
+            glob.glob(str(Path(program_files) / "Coreform Cubit *" / "bin"
+                           / "python3" / "python.exe")),
+            reverse=True,
+        )
+        if candidates:
+            return Path(candidates[0])
+    return None
+
+
+def _qt_runtime_python() -> tuple[Path | None, str]:
+    if importlib.util.find_spec("PySide6") is not None:
+        return Path(sys.executable), "current Python"
+    cubit_python = _find_cubit_python()
+    if cubit_python is not None:
+        return cubit_python, "Cubit embedded Python"
+    return None, "unavailable"
+
+
+def check_panel_smoke(python_executable: Path) -> list[str]:
+    """Spawn the toolbar smoke in the selected PySide6 runtime."""
     env = os.environ.copy()
     env["QT_QPA_PLATFORM"] = "offscreen"
-    r = subprocess.run([sys.executable, str(Path(__file__).resolve()), "--smoke"],
+    r = subprocess.run([str(python_executable), str(Path(__file__).resolve()), "--smoke"],
                        capture_output=True, text=True, env=env, timeout=120)
     line = next((ln for ln in reversed(r.stdout.splitlines()) if ln.strip().startswith("{")), "")
     if not line:
         return [f"toolbar smoke produced no JSON (rc={r.returncode}); stderr tail:\n{r.stderr[-800:]}"]
     data = json.loads(line)
     return list(data.get("fails", [])) if not data.get("ok") else []
+
+
+def check_menu_persistence(python_executable: Path) -> list[str]:
+    """Prove cold-start registration survives repeated stock-menu rebuilds."""
+    env = os.environ.copy()
+    env["QT_QPA_PLATFORM"] = "offscreen"
+    probe = ROOT / "tests" / "cubit_menu_runtime_probe.py"
+    menu_module = ROOT / "src" / "radia" / "panels" / "radia_export_menu.py"
+    r = subprocess.run(
+        [str(python_executable), str(probe), str(menu_module)],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        env=env,
+        timeout=120,
+        cwd=ROOT,
+    )
+    line = next(
+        (value for value in reversed(r.stdout.splitlines())
+         if value.lstrip().startswith("{")),
+        "",
+    )
+    if r.returncode != 0 or not line:
+        return [
+            f"menu persistence probe failed (rc={r.returncode}); "
+            f"stdout tail={r.stdout[-800:]!r}; stderr tail={r.stderr[-800:]!r}"
+        ]
+    try:
+        data = json.loads(line)
+    except json.JSONDecodeError as exc:
+        return [f"menu persistence probe returned invalid JSON: {exc}"]
+    rebuilds = data.get("rebuilds", [])
+    if (
+        data.get("ok") is not True
+        or len(rebuilds) != 4
+        or data.get("replay_menu_count") != 1
+        or not all(row.get("menu_count") == 1 for row in rebuilds)
+    ):
+        return [f"menu persistence contract failed: {data}"]
+    return []
 
 
 # ----------------------------------------------------------------------
@@ -203,23 +278,33 @@ def main(argv: list[str]) -> int:
     print(f"[{'FAIL' if ccm_issues else 'OK'}] cubit_mesh_export.ccm Qt-free  ({ccm_status})")
     all_issues += ccm_issues
 
-    if importlib.util.find_spec("PySide6") is None:
+    qt_python, qt_runtime = _qt_runtime_python()
+    if qt_python is None:
         smoke = []
+        persistence = []
         print("[OK] headless Cubit toolbar smoke skipped "
-              "(PySide6 not installed in this interpreter; Cubit owns the target runtime)")
+              "(no PySide6 runtime or Cubit embedded Python found)")
     else:
-        smoke = check_panel_smoke()
+        smoke = check_panel_smoke(qt_python)
         print(f"[{'FAIL' if smoke else 'OK'}] headless Cubit toolbar smoke "
-              f"(ExportDialog x6)")
+              f"(ExportDialog x6; {qt_runtime}: {qt_python})")
         for s in smoke:
             print("       " + s)
         all_issues += [f"panel smoke: {s}" for s in smoke]
+
+        persistence = check_menu_persistence(qt_python)
+        print(f"[{'FAIL' if persistence else 'OK'}] Cubit cold-start menu "
+              f"persistence (4 rebuilds + idempotent replay; {qt_runtime})")
+        for issue in persistence:
+            print("       " + issue)
+        all_issues += [f"menu persistence: {issue}" for issue in persistence]
 
     print("-" * 64)
     if all_issues:
         print(f"RESULT: {len(all_issues)} ISSUE(S) -- Cubit toolbar audit NOT clean")
         return 1
-    print("RESULT: CLEAN -- no legacy Qt; Cubit toolbar smoke is healthy/skipped")
+    print("RESULT: CLEAN -- no legacy Qt; all available Cubit toolbar "
+          "runtime checks passed")
     return 0
 
 
