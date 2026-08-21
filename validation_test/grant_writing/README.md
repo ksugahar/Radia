@@ -31,12 +31,21 @@ Put the manifest, the text files and the baseline together outside the tree:
 {
   "documents": [
     {"label": "adopted-example", "path": "texts/adopted-example.txt",
-     "outcome": "adopted", "program": "kaken_oss"},
-    {"label": "own-draft", "path": "texts/own-draft.txt",
+     "outcome": "adopted", "program": "kaken_oss",
+     "source_paths": ["../submitted/application.pdf"],
+     "outcome_basis": "award notice identifies the submitted project",
+     "outcome_evidence": ["../results/award-notice.pdf"]},
+    {"label": "own-draft",
+     "paths": ["../draft/purpose.tex", "../draft/abilities.tex"],
      "pdf": "../draft/proposal.pdf", "program": "kaken_oss"}
   ]
 }
 ```
+
+Use `path` for one frozen text snapshot. Use `paths` for the ordered source
+files of a live proposal; the lane joins them before running the checks. Name
+exactly one of the two. Live sources avoid a stale extracted-text copy making
+the regression suite pass after the proposal itself has changed.
 
 An optional `pdf` names the compiled document. A page limit is a property of
 the rendered page, and it is the only defect class that gets a proposal
@@ -44,10 +53,20 @@ returned before anyone reads it, so a document that has one is locked field by
 field even while the check reports nothing.
 
 Paths resolve against the manifest's directory. `program` selects the
-program-specific checks (`generic`, `kaken_oss`, `kddi_digital`). `outcome` is
+program-specific checks (`generic`, `kaken_generic`, `kaken_oss`,
+`kddi_digital`). Use `kaken_generic` for ordinary KAKENHI applications and
+reserve `kaken_oss` for the current OSS-platform theme. `outcome` is
 recorded but never scored — four measurements have found no relationship
 between these checks and adoption, so a document's outcome is context for the
 reader, not a target for the tool.
+
+For documents labelled `adopted` or `rejected`, record provenance when it is
+available. `source_paths` names the immutable submitted files from which the
+text snapshot was extracted. `outcome_basis` explains the classification, and
+`outcome_evidence` names award notices, review results, or other files that
+support it. These fields stay outside the public repository, but the loader
+validates every named file so a moved or guessed source cannot silently remain
+in the corpus.
 
 Documents extracted from Word or PDF should be converted to UTF-8 text once
 and stored in `texts/`; the lane does not run Word or a PDF reader.
@@ -57,6 +76,8 @@ and stored in `texts/`; the lane does not run Word or a PDF reader.
 ```powershell
 $env:GRANT_WRITING_CORPUS = "<somewhere private>/manifest.json"
 python validation_test/grant_writing/sweep.py
+python validation_test/grant_writing/sweep.py --audit
+python validation_test/grant_writing/sweep.py --compare-outcomes
 python -m pytest validation_test/grant_writing
 ```
 
@@ -75,6 +96,18 @@ eight checks were silent on all eight documents, and one of them
 (`literature_gap_evidence_check`) turned out to be applicable to nothing at all.
 Run it whenever the corpus grows.
 
+The audit honors each manifest entry's `program`: KDDI-only checks are not
+counted against a KAKENHI or generic document, and the KAKENHI OSS-platform
+check is not counted against unrelated applications. `reported` is derived
+only from explicit finding containers and known defect counts. Measurement
+metadata such as `statement_count` is not itself a finding.
+
+`sweep.py --compare-outcomes` reports detector prevalence separately for
+recorded adopted and rejected documents, both across the corpus and for
+ordinary KAKENHI entries. It is deliberately descriptive: programme, year,
+panel, scientific maturity, and competition are uncontrolled, so the output
+must not be used as an adoption score or a causal explanation.
+
 `sweep.py --write-baseline` records the current counts. Only do that once the
 counts have been adjudicated — the baseline's value is that every number in it
 was read and judged.
@@ -82,6 +115,7 @@ was read and judged.
 ## What the tests assert
 
 - every baselined document is still in the manifest
+- each source fingerprint matches the text whose findings were adjudicated
 - each document's finding count matches the baseline
 - no finding pattern appears that was absent when the corpus was adjudicated
 - no field runs past its page allowance, and page usage per field is unchanged

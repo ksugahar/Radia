@@ -1,3 +1,6 @@
+import asyncio
+
+import pytest
 from radia_mcp.document_meta.tools import document_meta_lint_all
 from radia_mcp.grant_writing import tools as gw
 from radia_mcp.meta.catalog import CATALOG
@@ -70,8 +73,17 @@ def test_grant_writing_kaken_oss_health_report_runs():
     assert "named_software_abstraction" in report["detailed_results"]
     assert "reviewer_vocabulary" in report["detailed_results"]
     assert "persuasion_quality" in report["detailed_results"]
+    assert "adjacent_reviewer_readability" in report["detailed_results"]
     assert "literature_gap_evidence" in report["detailed_results"]
     assert "budget" in report["detailed_results"]
+
+
+def test_grant_writing_server_exposes_adjacent_reviewer_readability():
+    from radia_mcp.grant_writing.server import mcp
+
+    names = {tool.name for tool in asyncio.run(mcp.list_tools())}
+
+    assert "grant_writing_adjacent_reviewer_readability_check" in names
 
 
 def test_grant_writing_kaken_oss_platform_check():
@@ -262,6 +274,109 @@ def test_domain_outcome_chain_rejects_platform_as_outcome():
     assert "measurable_domain_quantity" in result["missing_axes"]
     assert "conditional_knowledge_product" in result["missing_axes"]
     assert "falsifiable_gate" in result["missing_axes"]
+
+
+ARGUMENT_TRACEABLE = (
+    "中心の問いは、異なる解析手法でも設計候補の順位を確定できる条件は何か、である。"
+    "既往研究では個別手法が高度化した一方、手法間の比較条件は体系化されていない。"
+    "二つの解析結果を同じ設計量へ射影し、候補順位を比較する。"
+    "順位の一致率と許容差で成立条件を判定し、反例から適用境界を定める。"
+    "成果として解析経路の選択則と設計指針を示す。"
+    "予備実証では結合系を実装し、解析解との一致を確認した。"
+    "この実績により、研究項目2の結合試験から着手できる。"
+    "佐藤は最適化、比留間は行列解法、長嶺は数理理論、菅原は統合を担当する。"
+    "結合が成立しない場合も、不能理由と適用境界を知識成果とする。"
+)
+
+
+def test_argument_evidence_map_indexes_each_role_without_scoring_it():
+    result = gw.grant_writing_argument_evidence_map(ARGUMENT_TRACEABLE)
+
+    assert result["applicable"]
+    assert result["untraced_roles"] == []
+    assert all(
+        item["candidate_count"] > 0 for item in result["evidence_map"].values()
+    )
+    assert "score" not in result
+    assert "risks" not in result
+
+
+def test_argument_evidence_map_treats_absence_as_a_review_prompt_not_a_defect():
+    result = gw.grant_writing_argument_evidence_map(
+        "本研究では公開リポジトリと実行環境を整備する。"
+        "複数機関がソースコードを共同編集する。"
+    )
+
+    assert "central_question" in result["untraced_roles"]
+    assert "decision_rule" in result["untraced_roles"]
+    assert "未検出は欠陥を意味しない" in result["manual_review_prompts"][0]
+
+
+def test_argument_evidence_map_prompts_for_preparation_to_plan_link():
+    result = gw.grant_writing_argument_evidence_map(
+        "誘導加熱解析を実装し、解析解との一致を確認した。"
+        "大学間予備実証を完了した。"
+    )
+
+    assert result["evidence_map"]["preliminary_evidence"]["candidate_count"] > 0
+    assert result["evidence_map"]["preparation_plan_link"]["candidate_count"] == 0
+    assert any(
+        "研究項目への橋渡し文" in prompt
+        for prompt in result["manual_review_prompts"]
+    )
+
+
+def test_health_report_exposes_argument_map_only_for_manual_review():
+    result = gw.grant_writing_health_report(ARGUMENT_TRACEABLE)
+
+    assert "argument_evidence_map" in result["detailed_results"]
+    assert result["manual_review_prompts"]
+    assert all(item["name"] != "argument_evidence_map" for item in result["findings"])
+
+
+def test_health_report_rejects_unknown_program_instead_of_underchecking():
+    with pytest.raises(ValueError, match="unknown grant program"):
+        gw.grant_writing_health_report("本研究の目的を述べる。", program="kaken-oss")
+
+
+def test_kaken_generic_uses_general_review_axes_without_oss_theme_check():
+    text = (
+        "本研究の学術的重要性と独創性を示す。研究方法と検証手順を定める。"
+        "研究実績、実施体制および研究環境を整えている。"
+        "国際共同研究を通じて世界の研究の発展に貢献する。"
+    )
+    report = gw.grant_writing_health_report(text, program="kaken_generic")
+
+    assert report["program"] == "kaken_generic"
+    assert report["detailed_results"]["sections"]["missing_axes"] == []
+    assert "kaken_oss_platform" not in report["detailed_results"]
+
+
+def test_kaken_review_axes_separates_main_axes_internationality_and_budget():
+    result = gw.grant_writing_kaken_review_axes()
+
+    assert result["scheme"] == "科研費 基盤研究(B・C)(一般)"
+    assert len(result["research_plan_axes"]) == 3
+    assert result["separate_scored_axis"]["id"] == "internationality"
+    assert "同格" in result["budget_validity"]["role"]
+    assert "複数" in result["budget_validity"]["consequence"]
+    assert result["review_process"]["reviewers_for_scientific_research_c"] == 3
+    assert len(result["sources"]) >= 4
+
+
+def test_kaken_review_axes_records_budget_itemization_requirements():
+    result = gw.grant_writing_kaken_review_axes()
+    requirements = "".join(result["budget_entry_requirements"])
+
+    assert "一式" in requirements
+    assert "積算根拠" in requirements
+    assert "90%" in requirements
+    assert "研究代表者・研究分担者本人" in requirements
+
+
+def test_health_report_rejects_unknown_skip_id():
+    with pytest.raises(ValueError, match="unknown grant-writing skip"):
+        gw.grant_writing_health_report("本研究の目的を述べる。", skip="sentences")
 
 
 def test_derived_metric_validation_accepts_frozen_holdout_design():
@@ -474,6 +589,30 @@ def test_reviewer_vocabulary_accepts_japanese_role_first():
     assert result["term_results"]["MCP"]["explained"]
 
 
+def test_reviewer_vocabulary_rejects_mcp_as_a_storage_location():
+    result = gw.grant_writing_reviewer_vocabulary_check(
+        "AIが利用する知識・実行インターフェース（MCP）を整備する。"
+        "MCPには技術報告の実装判断・検証手順を蓄積している。"
+    )
+
+    assert any(
+        risk["type"] == "mcp_described_as_storage"
+        for risk in result["risks"]
+    )
+
+
+def test_reviewer_vocabulary_accepts_mcp_as_an_access_interface():
+    result = gw.grant_writing_reviewer_vocabulary_check(
+        "AIが利用する知識・実行インターフェース（MCP）を整備する。"
+        "技術報告に基づく実装判断・検証手順をMCPサーバーから利用可能にする。"
+    )
+
+    assert not any(
+        risk["type"] == "mcp_described_as_storage"
+        for risk in result["risks"]
+    )
+
+
 def test_reviewer_vocabulary_rejects_benchmark_as_engineering_significance():
     text = "本研究の独創性はTEAM Problem 28を高精度に解くことである。"
 
@@ -640,6 +779,84 @@ I_q(d)=[\hat q_d-\gamma_s\delta_s(d)-\gamma_h\delta_h(d)-
     result = gw.grant_writing_analyze_sentences(text)
 
     assert result["over_threshold_count"] == 0
+
+
+def test_adjacent_reviewer_readability_flags_short_dense_layer_mix():
+    text = (
+        "異種解析モジュールの機能、入出力物理量、実行条件、判定区間を"
+        "MCP、GitHub、CIで版管理し、設計候補の順位確定と第三者反証へ対応付ける。"
+        "XFEM、HACApK、ESIMをCauer縮約へ接続し、損失と効率を判定する。"
+        "再現、反証、判定、採否、凍結、版管理、許容差、適用限界を記録する。"
+        "別機関が同じ結論を再構成し、反証結果を判定する。"
+    )
+
+    result = gw.grant_writing_adjacent_reviewer_readability_check(text)
+
+    assert result["applicable"]
+    assert result["score"] is None
+    assert result["risk_count"] >= 2
+    types = {risk["type"] for risk in result["risks"]}
+    assert "compressed_concept_density" in types
+    assert "notation_or_method_pile" in types
+    assert "three_layer_paragraph" in types
+
+
+def test_adjacent_reviewer_readability_accepts_plain_causal_sequence():
+    text = (
+        "誘導加熱では、コイルに流す電流が品物を発熱させる。"
+        "しかし、解析手法を替えると発熱量の予測が変わる。"
+        "そこで二つの予測を実測値と比べ、設計順位を保てる条件を明らかにする。"
+        "実行履歴は最後に保存し、別機関が結果を確認できるようにする。"
+    )
+
+    result = gw.grant_writing_adjacent_reviewer_readability_check(text)
+
+    assert result["applicable"]
+    assert result["risk_count"] == 0
+
+
+def test_adjacent_reviewer_readability_flags_section_claim_compression():
+    text = (
+        "独創性は、機器設計則を、校正・保留検証済み区間として与える点にある。"
+        "さらに異なるコード系譜間で判断を再現する条件を示す。"
+        "必達範囲は誘導加熱と加速器電磁石の二課題とする。"
+        "本研究は一方へ統一せず、同一設計量で採否する。"
+    )
+
+    result = gw.grant_writing_adjacent_reviewer_readability_check(text)
+    types = {risk["type"] for risk in result["risks"]}
+
+    assert "result_representation_type_mismatch" in types
+    assert "ambiguous_relation_or_decision_object" in types
+    assert "required_scope_without_deliverable" in types
+
+
+def test_adjacent_reviewer_readability_accepts_explicit_section_claims():
+    text = (
+        "必要な解析忠実度を選び、候補順位を確定できる条件を示す。"
+        "開発母体と内部形式が異なる解析コードを結合する。"
+        "二課題で結合条件を実証することを必達範囲とする。"
+        "各手法を単一の内部形式へ統一せず、適用の可否を判断する。"
+    )
+
+    result = gw.grant_writing_adjacent_reviewer_readability_check(text)
+    types = {risk["type"] for risk in result["risks"]}
+
+    assert "result_representation_type_mismatch" not in types
+    assert "ambiguous_relation_or_decision_object" not in types
+    assert "required_scope_without_deliverable" not in types
+
+
+def test_subject_predicate_distance_reads_fullwidth_japanese_comma():
+    text = (
+        "本研究は，異なる手法で得た多数の候補について設計量を比較し，"
+        "第三者が同じ順位を再現できる条件を明らかにする。"
+    )
+
+    result = gw.grant_writing_check_subject_predicate_distance(text, max_chars=20)
+
+    assert result["analyzed_sentences"] == 1
+    assert result["violation_count"] == 1
 
 
 def test_sentence_analysis_does_not_join_figure_caption_to_aims():
@@ -831,6 +1048,33 @@ def test_kaken_review_format_accepts_safeguarded_survey():
     )
 
 
+def test_kaken_review_format_ignores_wrapped_ethics_form_example():
+    # Extracted old PDF forms wrap one instruction across lines, removing the
+    # polite ending from the fragments that carry the trigger words.
+    result = gw.grant_writing_kaken_review_format_check(
+        "例えば、個人情報を伴う、アンケート調査・インタビュー調査、\n"
+        "提供を受けた試料の使用、ヒト遺伝子解析研究など、\n"
+        "承認手続が必要となる調査・研究・実験などが対象となります。\n"
+        "本研究は公開済みの数値データだけを解析する。"
+    )
+
+    assert not any(
+        r["type"] == "human_subjects_without_safeguard" for r in result["risks"]
+    )
+
+
+def test_kaken_review_format_ignores_old_form_and_admin_survey_labels():
+    result = gw.grant_writing_kaken_review_format_check(
+        "個人情報を伴うアンケート調査・インタビュー調査、提供を受けた試料の使用\n"
+        "パワーアカデミー研究助成に関するアンケート\n"
+        "本研究は公開済みの数値データだけを解析する。"
+    )
+
+    assert not any(
+        r["type"] == "human_subjects_without_safeguard" for r in result["risks"]
+    )
+
+
 def test_kaken_review_format_box_heading_is_not_a_safeguard():
     # The box heading itself contains 「遵守」; quoting it must not
     # suppress the missing-safeguard check.
@@ -856,6 +1100,31 @@ def test_kaken_review_format_wants_rationale_next_to_not_applicable():
 def test_kaken_review_format_accepts_rationale_with_not_applicable():
     result = gw.grant_writing_kaken_review_format_check(
         "本研究は数値解析のみで人や動物を対象としないため、該当なし。"
+    )
+
+    assert not any(
+        r["type"] == "not_applicable_without_rationale" for r in result["risks"]
+    )
+
+
+def test_kaken_review_format_ignores_not_applicable_in_an_unrelated_box():
+    result = gw.grant_writing_kaken_review_format_check(
+        "研究計画と進捗評価を受けた研究課題の関連性: 該当なし。"
+    )
+
+    assert not any(
+        r["type"] == "not_applicable_without_rationale" for r in result["risks"]
+    )
+
+
+def test_kaken_review_format_ignores_final_year_not_applicable_macros():
+    result = gw.grant_writing_kaken_review_format_check(
+        r"""
+        \section{研究計画最終年度前年度応募を行う場合の記述事項}
+        \newcommand{\最終年度研究種目名}{該当なし}
+        \newcommand{\最終年度研究課題番号}{該当なし}
+        本応募は研究計画最終年度前年度応募には該当しない。
+        """
     )
 
     assert not any(
@@ -1105,11 +1374,17 @@ DIVERGENT_CLAIM_DRAFT = (
 
 UNIFIED_CLAIM_DRAFT = (
     "本研究は次を問う。異なる研究室の解析手法を、内部形式を統一せずに連携・差し替えたとき、"
-    "解析手法の違いによって設計候補の順位を確定できる条件を、どのように定量化し、"
+    "解析手法の違いを考慮しても設計候補の順位を確定できる条件を、どのように定量化し、"
     "第三者が検証可能な形で示せるか。"
     "電気機器の電磁界解析では手法が高度化されてきた。"
     "中心の問いは次である。こうして定義した解析モジュールを、内部形式のまま連携・差し替える。"
-    "このとき解析手法の違いが設計候補の順位を確定できる条件を、どのように定量化できるか。"
+    "このとき解析手法が異なっても設計候補の順位を確定できる条件を、どのように定量化できるか。"
+)
+
+DISTINCT_ROLE_CLAIM_DRAFT = (
+    "本研究の目的は、解析手法が異なっても設計候補の順位を確定できる条件を定量化し、"
+    "その条件を高忠実度解析へ進む判断基準へ展開することである。"
+    "中心の問いは、設計量の変動幅から順位を確定できる条件をどのように定量化できるか、である。"
 )
 
 
@@ -1140,6 +1415,18 @@ def test_central_claim_check_accepts_a_question_restated_with_the_same_nouns():
     assert result["statement_count"] == 2
     assert result["risks"] == []
     assert result["score"] == 10.0
+
+
+def test_central_claim_check_allows_distinct_terms_in_distinct_roles():
+    result = gw.grant_writing_central_claim_consistency_check(
+        DISTINCT_ROLE_CLAIM_DRAFT
+    )
+
+    assert result["applicable"]
+    assert not any(
+        risk["type"] == "outcome_noun_divergence"
+        for risk in result["risks"]
+    )
 
 
 def test_central_claim_check_does_not_swallow_the_second_statement():
@@ -1267,6 +1554,28 @@ def test_grant_writing_reexports_ja_lint_helpers():
 
     assert isinstance(result, dict)
     assert "issue_count" in result
+
+
+def test_acronym_audit_accepts_gloss_and_ignores_hyphenated_project_name():
+    result = gw.grant_writing_acronym_usage_audit(
+        "知識・実行インターフェース（Model Context Protocol; MCP）を用いる。"
+        "MCPで機能を提示し、MCPで実行する。JP-MARsで版管理する。"
+        "READMEに再現手順を記す。"
+    )
+
+    by_name = {item["acronym"]: item for item in result["findings"]}
+    assert by_name["MCP"]["verdict"] == "ok"
+    assert "JP" not in by_name
+    assert "README" not in by_name
+
+
+def test_undefined_acronyms_accept_gloss_and_hyphenated_project_name():
+    result = gw.grant_writing_find_undefined_acronyms(
+        "知識・実行インターフェース（Model Context Protocol; MCP）を用いる。"
+        "JP-MARsで版管理する。"
+    )
+
+    assert result["undefined"] == []
 
 
 def test_sentence_analysis_ignores_latex_scaffolding():
@@ -1436,10 +1745,9 @@ def test_irreplaceability_is_not_applicable_without_a_named_partner():
     assert result["score"] is None
 
 
-def test_budget_narrative_flags_amounts_repeated_beside_the_table():
-    # From an editor's review of a proposal that was subsequently funded:
-    # amounts belong in the table only, because two places to maintain means
-    # a later revision updates one of them.
+def test_budget_narrative_flags_amounts_without_a_calculation_basis():
+    # A bare total duplicates the table without satisfying the current JSPS
+    # request for a calculation basis.
     result = gw.grant_writing_budget_narrative_check(
         "鉄心を改造する必要がある。そのためコイルを巻き直す費用が60万円、"
         "またXYステージを70万円として見積もっている。"
@@ -1448,7 +1756,7 @@ def test_budget_narrative_flags_amounts_repeated_beside_the_table():
     assert result["applicable"]
     risk = next(
         r for r in result["risks"]
-        if r["type"] == "amount_repeated_in_necessity_text"
+        if r["type"] == "amount_without_calculation_basis"
     )
     assert "60万円" in risk["amounts"]
     assert result["score"] < 10
@@ -1459,6 +1767,16 @@ def test_budget_narrative_accepts_the_editor_rewrite():
         "加速器を想定してギャップ部の分布を詳細に計測する必要があるため、"
         "ギャップ付き鉄心に改造する費用を計上している。"
         "成果は電気学会で発表する。"
+    )
+
+    assert result["risks"] == []
+    assert result["score"] == 10.0
+
+
+def test_budget_narrative_accepts_an_itemized_calculation_basis():
+    result = gw.grant_writing_budget_narrative_check(
+        "国内旅費は、学会発表のため1件15万円×3回=45万円として計上する。"
+        "会場未定の国際会議は1件60万円として暫定計上する。"
     )
 
     assert result["risks"] == []
@@ -1630,6 +1948,15 @@ def test_a_real_placeholder_parenthetical_still_fires():
     assert matches
 
 
+def test_an_undecided_future_conference_venue_is_not_a_placeholder():
+    result = gw.grant_writing_template_residue_check(
+        "電気学会（開催地未定）へ4名が参加する。"
+        "開催地未定のため、学内旅費規程に基づき1名7万円で暫定積算する。"
+    )
+
+    assert [r for r in result["risks"] if r["type"] == "unfilled_placeholder"] == []
+
+
 def test_a_conference_venue_is_not_an_international_claim():
     # A country name inside a travel line names where a meeting is held.
     result = gw.grant_writing_international_standing_check(
@@ -1718,13 +2045,13 @@ def test_a_proposal_body_missing_one_axis_is_still_reported():
 def test_a_year_by_task_matrix_is_not_one_long_sentence():
     # An adopted proposal's 年度計画 is a matrix of short cells with no full
     # stop. Joined, it was reported as a single 455-character sentence.
-    plan = "\n".join([
-        "［研究計画］", "令和2年度", "令和3年度", "令和4年度",
-        "マルチスケールモデル縮約", "定式化・実装", "（汎用シミュレータ実装）",
-        "マルチフィジクスモデル縮約", "実現方法の検討・定式化", "実装",
-        "モータモデル縮約", "回転機への応用", "マルチスケール化検討",
-        "非線形化", "マルチフィジクス化", "シミュレータ化", "実証用モータ実験",
-    ])
+    plan = (
+        "［研究計画］\n令和2年度\n令和3年度\n令和4年度\n"
+        "マルチスケールモデル縮約\n定式化・実装\n（汎用シミュレータ実装）\n"
+        "マルチフィジクスモデル縮約\n実現方法の検討・定式化\n実装\n"
+        "モータモデル縮約\n回転機への応用\nマルチスケール化検討\n"
+        "非線形化\nマルチフィジクス化\nシミュレータ化\n実証用モータ実験"
+    )
 
     result = gw.grant_writing_analyze_sentences(plan)
 
@@ -1919,7 +2246,7 @@ def test_a_price_charged_is_not_a_cost_incurred():
 
     assert not [
         r for r in result["risks"]
-        if r["type"] == "amount_repeated_in_necessity_text"
+        if r["type"] == "amount_without_calculation_basis"
     ]
 
 
@@ -1966,12 +2293,42 @@ Adventure, CST Studio, ELF, Elmer, EMCoS, EMSolution, FastCap, JMAG, COMSOL
 def test_the_suite_has_nothing_to_say_about_a_document_with_no_prose():
     report = gw.grant_writing_health_report(NON_PROSE_ONLY, program="kaken_oss")
 
-    # section_presence reads the raw source on purpose and correctly reports
-    # that a form skeleton has no argument in it.
+    # section_presence also strips the form and correctly reports that a form
+    # skeleton has no applicant argument in it.
     findings = [f for f in report["findings"] if f["name"] != "section_presence"]
     assert findings == [], [
         (f["name"], f["comments"][:1]) for f in findings
     ]
+
+
+def test_kaken_form_instructions_do_not_satisfy_review_axis_presence():
+    form = (
+        "本欄には、研究課題の学術的重要性、研究方法の妥当性、研究遂行能力及び"
+        "研究環境、国際性について記述してください。"
+    )
+
+    result = gw.grant_writing_section_presence(form, program="kaken_generic")
+
+    assert set(result["missing_axes"]) == {
+        "academic_importance",
+        "method_validity",
+        "feasibility_environment",
+        "internationality",
+    }
+
+
+def test_direct_prose_tools_do_not_lint_the_form_or_publication_list():
+    results = [
+        gw.grant_writing_lint_bedrock(NON_PROSE_ONLY),
+        gw.grant_writing_check_misuse_japanese(NON_PROSE_ONLY),
+        gw.grant_writing_check_subject_predicate_distance(NON_PROSE_ONLY),
+        gw.grant_writing_suggest_redundancy_fixes(NON_PROSE_ONLY),
+    ]
+
+    assert results[0]["issue_count"] == 0
+    assert results[1]["total_matches"] == 0
+    assert results[2]["violation_count"] == 0
+    assert results[3]["total_matches"] == 0
 
 
 def test_a_document_with_no_prose_leaves_no_sentences_to_measure():

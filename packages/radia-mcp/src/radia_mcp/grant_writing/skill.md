@@ -71,18 +71,32 @@ JSPS各事業、公益法人、受託研究、いずれにも共通する欠陥�
     not establish inter-organizational feasibility. A preliminary pilot should
     name the artifact and organizations, show a bounded independent action and
     observed result, and state what remains unproven.
-12. Write for the actual reviewing conditions: three KAKENHI criteria
-    (academic importance, method validity, feasibility/environment), up to
-    ~100 proposals read per reviewer in about a month, and possible
+12. Write for the actual reviewing conditions: three KAKENHI research-plan
+    elements (academic importance, method validity, feasibility/environment),
+    a separate internationality rating, up to ~100 proposals read per reviewer
+    in about a month, and possible
     monochrome printing. A draft that even a non-specialist reads smoothly,
     with monochrome-safe figures, identifiable publications, an explicit
     human-rights/legal box, and a complete funding-overlap box, wins.
-13. State the central question once, and restate it with the same decisive
-    nouns. A summary promising a 「境界」 and a body promising a 「条件」 read
-    as two questions even when they mean one. Fix the wording, not the reader.
+13. Define a semantic contract for the central question: research object,
+    promised answer shape, operation, and verification. Preserve all four
+    when the question reappears in the summary or body. Keep exact wording and
+    one-sentence locks in the project source of truth; do not turn them into
+    universal bans on a word or sentence form.
 14. A lint score is not a quality score. These checks see mechanical defects;
     they cannot see whether the argument holds. Read the failures, ignore the
     number, and never edit a draft to satisfy a keyword list.
+15. Treat review readiness as two gates. First remove avoidable submission and
+    reading failures: residue, format errors, undefined terms, unreadable
+    structure, and a missing question. Then audit the competitive argument for
+    the weakest evidence link across academic importance, method validity, and
+    feasibility. Do not convert a programme-wide adoption rate into an
+    applicant-specific probability.
+16. Make execution evidence role-specific. For every investigator, connect the
+    assigned work to at least one recent, identifiable output or preliminary
+    result. A long undifferentiated publication list does not prove the team
+    can perform the proposed operation, and no invented paper-count threshold
+    should replace the programme's stated capability criterion.
 
 ## Literature Evidence and the Academic Gap
 
@@ -194,9 +208,9 @@ Better: 「公開基準問題で誤差を4%に収め、結合前後の整合確�
 
 Bad: 「MCP付きOSS基盤を構築し、研究室間連携を促進する。」
 
-Better: 「候補間の性能差に応じて低費用解析で順位を確定できる領域と高忠実度解析
-へ進む境界を同定する。MCP付きOSS基盤は異なる実装でこの選択則を反証する手段と
-する。」
+Better: 「候補間の性能差を解析手法による変動幅と比較し、低費用解析で順位を確定
+できる条件と、高忠実度解析へ進む判断基準を示す。MCP付きOSS基盤は異なる実装で
+この選択則を反証する手段とする。」
 
 ## Version Control and AI Execution Are Different Layers
 
@@ -210,6 +224,14 @@ issue、試験、科学レビュー、採否、来歴を管理する。MCP等の
 インターフェースは、能力、支配方程式、仮定、物理量・単位、検証法、固有実行手順を
 自己記述し、異なるコードを発見・意味解釈・実行する入口を与える。リポジトリがある
 だけで相手資産を実行できない分野固有の理由を書かなければ、MCPの必然性は伝わらない。
+
+MCP自体を保存場所として書かない。版付き文書・コード・試験を保存するのはリポジトリ
+又はデータベースであり、MCPサーバーはそこにある知識と実行機能をAIから利用可能に
+する入口である。
+
+Bad: 「MCPに技術報告と検証手順を蓄積する。」
+
+Better: 「技術報告に基づく実装判断と検証手順をMCPサーバーから利用可能にする。」
 
 各機関がコード、知的財産、内部API、保守責任を維持し、外部には検証可能な能力と
 実行窓口だけを提示する連邦型も許容する。成果は共通ソルバや利用者数でなく、異種資産
@@ -240,35 +262,43 @@ issue、試験、科学レビュー、採否、来歴を管理する。MCP等の
 共同研究歴や共著論文は体制の根拠になるが、中心実証の予備結果とは区別する。単なる
 利用者数、スター数、リンク、リポジトリ数を、科学的な大学間実証の代用にしない。
 
-## One Question, Stated Once
+## Central-Question Semantic Contract and Local Wording Locks
 
-申請書は中心の問いを概要と本文の二か所に書く。このとき、同じ問いを別の語彙で
-言い直すと、審査者には二つの問いに見える。実測例（2027-2030年度 基盤C、
-2026-08-19）では、概要が「順位が変わる**境界**を**定量化**し」と書き、本文1.1が
-「優劣を覆さない**条件**を**記述・検証**できるか」と書いていた。意味は同じだが、
-答えの形を表す名詞（境界／条件）も、行う操作の名詞（定量化／記述）も食い違って
-いた。しかも本文側には、概要では曖昧だとして除いたはずの指示語「その差」が残って
-いた。
+申請書では、中心の問いが概要と本文に現れる。ここで守るべきものは逐語的一致では
+なく、次の意味契約である。
 
-規則は三つである。
+| 要素 | 確認すること |
+|---|---|
+| 研究対象 | 何又は誰の、どの現象・判断を扱うか |
+| 答えの形 | 条件、法則、機構、範囲、指標等の何を得るか |
+| 操作 | 何を測定、定量化、比較、同定又は検証するか |
+| 検証 | 誰が、どのデータ又は反例で主張を退けられるか |
 
-1. **答えの形を表す名詞を一語に固定する。** 条件、境界、範囲、領域、基準、指標、
-   選択則のうち何を与えるのかを決め、言い直しでも同じ語を使う。
-2. **行う操作の名詞も一語に固定する。** 定量化するのか、記述するのか、検証するの
-   かを決める。三つ並べると、どれが必達か読めない。
-3. **概要と本文で役割を分ける。** 概要は研究全体の要約、本文は問いを導く論証と
-   定義である。同じ文を二度置かない。本文の問いは、その節が固有に導入した定義
-   （例: 解析モジュール）から導く形にする。
+同じ役割の語を言い換えてはならない。概要が「条件」を約束し、本文が同じ答えを
+「境界」と呼べば、審査者には二つの成果に見える。一方、一つの問いから導かれる
+異なる役割の語は併用できる。「成立条件」を解析手順へ落とした「判断基準」や、
+その条件を主張できる「適用範囲」は別の役割であり、区別して定義すれば矛盾しない。
 
-`grant_writing_central_claim_consistency_check` がこの食い違いを検出する。語彙
-カバレッジ型の検査はこの欠陥を見つけられない。必要な語はすべて文書のどこかに
-存在しており、欠陥は語同士が食い違っている点にあるからである。
+特に「境界」は一般的な禁止語ではない。変数、分ける二つの状態、推定法を示して、
+しきい値又は面を求める研究なら適切である。これらを示さずに「条件」「判断基準」
+「適用限界」の同義語として置くと、単一の数値境界を求めるのか、複数条件を明らかに
+するのかが曖昧になる。
 
-Bad: 概要「順位が変わる境界を定量化する」／本文「優劣を覆さない条件を記述・検証
-する」
+概要と本文は役割を分ける。概要は四要素を短く示し、本文は背景から問いを導き、
+対象量と検証法を定義する。同じ文を貼り直さず、意味契約を保ったまま本文で具体化
+する。問いを一文で書くか二文で書くか、かぎ括弧を使うか、どの言い回しを採るかは
+可読性と様式で決める。承認済み文への逆戻りを防ぐ必要がある場合は、プロジェクト内
+の正本に確定文を保存する。その局所的な表記ロックを、他の申請書へ一般化しない。
 
-Better: 概要「順位を確定できる条件をどのように定量化するか」／本文「こうして定義
-した解析モジュールについて、順位を確定できる条件をどのように定量化できるか」
+`grant_writing_central_claim_consistency_check` は、中心命題どうしの答えの形と
+操作の語が食い違う候補を検出する。語彙カバレッジ型の検査では、必要な語が文書の
+どこかに存在するだけで通過するため、この欠陥を見つけられない。検出結果は機械的な
+禁止判定ではなく、各語が同じ役割か別の役割かを確認するレビュー入口として使う。
+
+Bad: 概要「順位が変わる境界を定量化する」／本文「順位を確定できる条件を記述する」
+
+Better: 概要「手法差を考慮しても順位を確定できる条件を定量化する」／本文「設計量の
+変動幅を判定区間へ写し、順位を確定できる条件を独立データで検証する」
 
 ## Name the Operation, Not the Aspiration
 
@@ -304,6 +334,25 @@ Better: 「両モデルを巻線電流と誘起電圧を介して双方向に連
 定義した略語と元の語を混在させない。
 
 ## What These Checks Can and Cannot Judge
+
+`grant_writing_argument_evidence_map` is the handoff from mechanical checks to
+close reading. Run it on a full draft before rewriting. It indexes candidate
+sentences for the central question, prior-work gap, method operation, decision
+rule, field-knowledge output, preliminary evidence, the link from preparation
+to an executable work item, responsibility, and the value of a negative result.
+Then compare those excerpts directly: the same
+decisive nouns should survive from question to method and yearly plan; the
+decision rule must be able to reject the claim; and the output must be knowledge
+such as a condition, boundary, or design rule, not only software.
+
+A list of implementations, agreements, publications, and numerical matches is
+not yet a feasibility argument. For each major preparation result, say which
+research item it lets the team start or execute. The map reports this as
+`preparation_plan_link`; absence is a close-reading prompt, not a scored defect.
+
+The map deliberately has no score. A lexical hit does not establish logical
+support, and a missing candidate is a prompt to inspect the relevant section,
+not a defect. Do not turn the map into another keyword-coverage score.
 
 この診断群は**機械的欠陥**に強く、**論証の欠陥**に弱い。2026-08-19に実申請書で
 両者を突き合わせた結果は次のとおりである。
@@ -657,6 +706,53 @@ Better: 「日本発の階層行列ライブラリを用いた積分方程式解
 「著者がその指摘を見て、反論せずに直せるか」だけである。それが満たされて
 いれば、採否を予測しなくても検査として正しい。
 
+## What the Expanded Outcome Corpus Actually Teaches
+
+2026-08-21に非公開コーパスを19件（採択7、不採択11、未提出1）へ拡張した。
+このうち通常の科研費は10件（採択2、不採択8）である。提出版だけでなく、交付
+決定、採択通知、審査結果、または未採択として管理された原本との対応を記録した。
+比較は `sweep.py --compare-outcomes` で再現できる。
+
+検査指摘数を本文1万字当たりに正規化すると、通常の科研費では採択稿5.55、
+不採択稿4.37であった。**機械的指摘密度は採否を分離しない**という従来の負の
+結果を、より広い時系列でも確認した。採択稿に誤記や弱い文があり、不採択稿に
+明快な節がある。採否ラベルを教師信号にして語彙規則を増やしてはならない。
+
+ただし、不採択を情報のない出来事として捨ててもならない。競争的審査で相対的に
+選ばれなかったことは、少なくとも一つの審査軸で、複数の読者が短時間に確信を
+持てるだけの論証へ届かなかった可能性を示す。**不採択は全文への悪評ではなく、
+弱い接続を探すための監査開始信号**として使う。審査結果開示があればその項目を
+最優先し、無ければ学術的重要性、方法の妥当性、遂行能力・環境の三軸について、
+根拠文まで遡る。原因と断定せず、強い節は次稿へ保存する。
+
+一方、本文を対照して得られた、改稿時に使える論証上の観察は次のとおりである。
+これは採否の因果説明ではなく、現在の草稿を第三者が追える形へ直すための型である。
+
+1. **問いを「何を作るか」でなく、欠けた変換・条件・関係として書く。** 採択稿は、
+   既往法が扱えない運動、経路情報、スケール間接続などを名指しし、その欠落を
+   埋める数理操作へ直結していた。「実用化に必要な技術は何か」「基盤を構築
+   できるか」は、対象も判定条件も広すぎる。
+2. **一つの対象、一つの決定量、一つの到達点を概要で固定する。** 複数の応用を
+   並べる場合も、それぞれが独立した研究テーマではなく、同じ仮説を異なる条件で
+   反証する段階でなければならない。
+3. **手法名の列挙より、入力から出力への操作を書く。** 「AIを活用する」「連携
+   する」ではなく、どの表現を何へ変換し、何を比較し、どの差で採否を決めるかを
+   書く。長い比喩や周辺技術の解説は、この操作を埋没させる。
+4. **予備実績は要素技術の所有で終わらせない。** その実績により、研究期間の
+   初日にどの比較または統合試験から開始できるかを書く。国際共同研究も同様に、
+   相手名だけでなく、既に交換した資産と次に行う独立操作を示す。
+5. **新規部分を担当する者の能力と責任を一致させる。** 専門外の技術を計画の
+   中核に置くなら、その能力を持つ研究分担者、実績、担当作業を対応付ける。
+   助言者へ中核能力を預ける構造は、遂行能力の説明にならない。
+6. **プラットフォーム型研究では、構築物を結論にしない。** リポジトリやAI
+   インターフェースは、異なる研究資産を低い移行負担で比較・結合するための
+   実験手段である。成果は、どの記述情報があれば再実装せずに比較できるか、
+   どの条件では結合できないか、組合せが設計判断をどう変えるかという知見に置く。
+
+このコーパスには年度、種目、研究代表者、審査区分が混在する。したがって、上の
+観察を「採択文に多い語」へ還元しない。使う単位は語ではなく、**限界 -> 操作 ->
+判定 -> 知見**の論証鎖である。
+
 ## Who Carries the Part That Is New
 
 A proposal usually joins a field the applicant knows to one they do not. The
@@ -841,7 +937,7 @@ check.
 | 同上 | 「株式会社MotorAIと近畿大学の共同開発」＋別文の「海外市場」 | A domestic partnership plus an unrelated foreign word is not a foreign collaboration. |
 | 同上 | 用語解説表の「交流電流」 | **交流 in an electrical proposal is alternating current.** |
 | なぜこの相手か | 「COMPUMAG 2027で発表する」 | A conference is not a counterpart. Nobody can answer why not a domestic substitute for COMPUMAG. |
-| 3つの審査基準のうち読み取れない軸 | 1,715字の住友財団フォーム（要旨欄1つ） | The form offers nowhere to write 研究遂行能力. |
+| 研究計画の評定要素のうち読み取れない軸 | 1,715字の住友財団フォーム（要旨欄1つ） | The form offers nowhere to write 研究遂行能力. |
 
 The rules that came out of it, in the order they generalise:
 
@@ -922,14 +1018,57 @@ earlier ones are in the sections above.
   構造（見出し、番号、図参照、正式書誌）を保つ意味が増している。
 - 学際性への対応として、複数審査区分を選択できる仕組みが検討されている。
 
+## KAKENHI Official Review Axes (B/C, General)
+
+> 制度固有: 科研費。2026年6月22日改正の日本学術振興会審査規程と、
+> 令和9(2027)年度Web入力要領を2026年8月21日に確認した内容である。
+
+基盤研究(B・C)は、単純な「3軸の均等採点」ではない。まず研究計画の内容を
+次の3要素で個別評価し、それらを中心に総合評点を付す。
+
+1. **研究課題の学術的重要性**: 推進する学術的理由、核心的な問いの明確さと
+   独自性・創造性、着想と国内外動向の中での位置づけ、広い波及効果。
+2. **研究方法の妥当性**: 目的に対する方法の具体性・適切性、研究経費と
+   研究計画の整合性、準備状況。
+3. **研究遂行能力及び研究環境の適切性**: これまでの研究活動から確認できる
+   遂行能力と、施設・設備・資料等の研究環境。
+
+これとは別に、**研究課題の国際性**が絶対評価される。国際共同研究の有無を
+書くだけでは足りない。世界の研究を将来けん引する、協同によって世界の研究へ
+貢献する、又は日本独自の研究として高い価値を生む、のどれに該当するかを書く。
+
+予算は、学術的重要性と同格の独立した総合評点軸ではない。ただし二か所で効く。
+
+- 「研究方法の妥当性」の中で、研究計画との整合性が見られる。
+- 別枠の「研究経費の妥当性」で、有効利用、設備の真の必要性、設備・旅費・
+  人件費等への90%超の集中が確認される。複数審査委員が問題ありとした場合、
+  平均より低い充足率となる。
+
+したがって予算の説得力は、金額を控えめにすることではなく、`研究行為 -> 費目
+-> 単価 x 数量 x 期間/回数 -> 年度 -> 成果物`を追跡可能にすることで作る。
+最大費目が中心的な研究行為に一致し、減額後にも核心の検証ループが残るようにする。
+
+Web入力要領はさらに、機械器具を「一式」で済ませないこと、必要性と積算根拠、
+旅費の事項別記載、人件費・謝金の用途と身分・人数・月数、その他経費の項目別記載を
+求めている。研究代表者・研究分担者本人の人件費・謝金は直接経費の対象外である。
+
+公式構造は `grant_writing_kaken_review_axes()` で根拠URLと確認日を含めて取得する。
+採否を予測するスコアではなく、各欄の人間レビュー用チェックリストとして使う。
+
+Sources:
+
+- [科研費 審査及び評価に関する規程（2026-06-22改正）](https://www.jsps.go.jp/file/storage/kaken_0103_shinsakitei_g_4984/hyoukakitei260622.pdf)
+- [令和9年度 基盤研究等 Web入力要領](https://www.jsps.go.jp/file/storage/kaken_kiban_2026_g_4978/web_yoryo_kiban.pdf)
+- [日本学術振興会 審査・評価について](https://www.jsps.go.jp/j-grantsinaid/01_seido/03_shinsa/index.html)
+
 ## KAKENHI Review Realities (in-house call briefing)
 
 > 制度固有: 科研費。ただし「白黒印刷」「審査員の読む件数」「業績の特定可能性」は
 > 紙で審査する制度に共通する。
 
-科研費の審査基準は3つである: (1)研究課題の学術的重要性、(2)研究方法の
-妥当性、(3)研究遂行能力及び研究環境の適切性。各セクションがどの基準で
-読まれるかを意識して書く。
+科研費の研究計画に関する評定要素は3つである: (1)研究課題の学術的重要性、
+(2)研究方法の妥当性、(3)研究遂行能力及び研究環境の適切性。加えて国際性が
+別に評定される。各セクションがどの要素で読まれるかを意識して書く。
 
 審査委員は約1ヶ月の審査期間に、多い場合で100件程度の計画調書を読む。
 研究支援部門が毎年全調書を確認してきた実感として、専門外の読者でも
@@ -991,7 +1130,9 @@ earlier ones are in the sections above.
 
 ## Budget Policy
 
-予算はほぼ上限いっぱいで申請してよい。重要なのは、上限近くであることを
+公式審査上、予算は研究方法の中で研究計画との整合性を評価され、別枠でも
+研究経費の妥当性・必要性を確認される。この二つを満たした上で、予算はほぼ
+上限いっぱいで申請してよい。重要なのは、上限近くであることを
 遠慮して隠すのではなく、研究計画、PoC、計算資源、AI agent 運用、評価、
 発表・社会実装に必要な経費として精査済みに見せることである。
 
@@ -1073,9 +1214,13 @@ submitted.
 
 Two consequences for how the other rules are applied:
 
-- 「文の圧縮は厳禁」 stands. When a fix pushes a field over, drop whole
-  sentences or move them to another field. Do not compress the surviving
-  ones back down.
+- 「文の圧縮は厳禁」 stands. Never reduce a prescribed body font or line
+  spacing. If the project template explicitly permits heading before/after
+  spacing to be tightened, use that bounded layout adjustment before deleting
+  clear prose, then render and inspect every page for heading separation,
+  overlap, and clipping. The exact spacing allowance is project policy, not a
+  universal grant-writing rule. Otherwise drop whole sentences or move them to
+  another field; do not compress the surviving ones back down.
 - A field is not the only place its evidence may live. International
   collaboration evidence moved from 研究目的 to 研究遂行能力及び研究環境
   scores under the criterion that actually rewards it, and it freed the
@@ -1100,7 +1245,9 @@ splitter, so it does not count as a terminator here.
 ## Useful Tools
 
 - `grant_writing_usage()`
+- `grant_writing_kaken_review_axes()`
 - `grant_writing_health_report(text_or_path, program="generic")`
+- `grant_writing_argument_evidence_map(text)`
 - `grant_writing_section_presence(text, program="generic")`
 - `grant_writing_kddi_digital_check(text)`
 - `grant_writing_kddi_power_electronics_focus_check(text)`
@@ -1112,6 +1259,7 @@ splitter, so it does not count as a terminator here.
 - `grant_writing_named_software_abstraction_check(text)`
 - `grant_writing_reviewer_vocabulary_check(text)`
 - `grant_writing_persuasion_quality_check(text)`
+- `grant_writing_adjacent_reviewer_readability_check(text)`
 - `grant_writing_kaken_review_format_check(text)`
 - `grant_writing_central_claim_consistency_check(text)`
 - `grant_writing_vague_claim_verb_check(text)`
@@ -1127,6 +1275,13 @@ splitter, so it does not count as a terminator here.
 - `grant_writing_count_weak_expressions(text)`
 - `grant_writing_lint_bedrock(text)`
 - `grant_writing_recommendation_letter_template(program="kddi_digital")`
+
+For an ordinary KAKENHI draft, use `program="kaken_generic"`. It checks the
+three research-plan axes plus internationality without applying vocabulary and
+architecture checks that belong only to the current OSS-platform proposal.
+Use `grant_writing_kaken_review_axes()` beside it to review the official budget
+role and subcriteria without turning them into a keyword score. Reserve
+`program="kaken_oss"` for the current OSS-platform proposal.
 
 For KDDI Foundation Digital Innovation / social implementation proposals,
 use `program="kddi_digital"` so the report checks social issue, digital use,
@@ -1230,15 +1385,33 @@ paragraphs, optional branches in the core plan, and acronym piles. The target
 is a positive claim followed by its bounded verification, not confidence
 created by deleting caveats.
 
-Whenever a draft states its question in more than one place -- which every
-KAKENHI proposal does, in the summary and again in the body -- run
+The integrated health report also runs the non-scoring
+`grant_writing_adjacent_reviewer_readability_check(text)`. Sentence length is
+not enough: a 45-character sentence can still be hard when it compresses
+abstract kanji compounds, three method names, a platform layer, a scientific
+operation, and a decision rule. The check reports concept-dense sentences,
+method/notation piles, paragraphs mixing the scientific, decision, and
+infrastructure layers, validation language repeated across many paragraphs,
+research answers collapsed into implementation representations, vague
+relationship/decision objects, and required scope that names applications but
+not the deliverable. Rewrite in the order a neighboring-field reviewer needs:
+concrete object and problem, operation and observable, decision or knowledge
+output, then the software/reproducibility layer. The result has no score so an
+author cannot improve it by deleting necessary technical detail; each excerpt
+must be reviewed in context.
+
+Whenever a draft states its question in more than one place -- commonly in
+the summary and again in the body -- run
 `grant_writing_central_claim_consistency_check(text)`. It locates the claim
 statements, compares their technical nouns, and reports HIGH when two
-statements share a topic but promise different answer-shape nouns
-(境界 versus 条件), MEDIUM when the operation nouns diverge (定量化 versus
-記述), and LOW when the two are near-verbatim, which wastes the summary. It
-is not applicable to a fragment carrying fewer than two claim statements.
-The integrated health report runs it for every program.
+statements share a topic but use non-overlapping answer-shape nouns for what
+appears to be the same role (境界 versus 条件), MEDIUM when their core
+operation nouns diverge (定量化 versus 記述), and LOW when the two are
+near-verbatim, which wastes the summary. It does not impose a universal ban
+on either noun: a condition, operational decision criterion, and application
+limit may coexist when the prose gives them distinct roles. It is not
+applicable to a fragment carrying fewer than two claim statements. The
+integrated health report runs it for every program.
 
 Budget guidance is judged only where budget content exists.
 `grant_writing_budget_alignment_check` reports `applicable: False` for a
