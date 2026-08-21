@@ -276,9 +276,15 @@ TSVD保持rankと厳密受理判定を保ったままexact band比を
 dense oracleとの差は最大`8.88e-16`、最終位置・接線閉路誤差はそれぞれ`2.54e-10 m`、
 `2.97e-10`以下だった。6・8 modeともoptimizer有限差分は0回である。
 
+同じ8 mode最終場を、productionのnative fixed-step trackerとは独立なSciPy DOP853 root/trajectory
+積分でも再閉路した。transfer matrix最大差`3.99e-9`、field response最大差`1.37e-8`、経路長差
+`3.32e-9 m`、入口半径差`1.27e-8 m`、入口角差`4.55e-10 rad`で、各`2e-6`のcross-check
+gateを十分満たした。このDOP853経路は最終validationだけに使い、optimizerの感度・候補生成には使わない。
+
 これらはLAB smoke観測で、wall timeは6 modeが268.2秒、8 modeが201.1秒だった。正式な速度・精度結果は
 idleなcompute hostで再生成する。製造用の隠れ係数とは一致しなかったが、targetは係数同定ではなく
-有限band内のmap再現であり、全transfer-map bandへの到達を合否条件とする。
+有限band内のmap再現であり、全transfer-map bandへの到達を合否条件とする。独立tracker込みの通しLAB
+smokeは504.2秒（独立cross-check 42.9秒）だったが、これも公開benchmarkにはしない。
 
 ### 5.5 利用者入力の設計軌道＋target transfer matrix API
 
@@ -355,7 +361,8 @@ transfer matrixは設計軌道が決まらないと定義できないため、�
    閉軌道の陰関数微分を含む解析Jacobianで既知`[+3,-2] mm`を回収し、exact band比0.195を得た。
 4. **完了**: 4・6・8個の滑らかなmodeで任意mapの小摂動を再現した。exact band比は順に
    `0.997`、`0.225`、`0.999`で、8 modeまでACA--QR--TSVDの保持rankとdense oracle parityを確認した。
-   利用者入力の設計軌道・target map APIまで完了した。次はcompute-host C-yoke再実行と独立軌道経路である。
+   利用者入力の設計軌道・target map APIと小規模DOP853独立軌道cross-checkまで完了した。
+   次はcompute-host C-yoke再実行と実規模側の独立経路である。
 
 単純問題で壊れた時点でTURBO実問題へ進まず、candidate model、離散oracle、形状実現、軌道復元の
 どの段で失敗したかを分離する。
@@ -427,8 +434,9 @@ PoCを完成と呼ぶには、最低限次を満たす。
 
 現時点では条件1～4の基盤に加え、製造正解1セル・2セル問題、単一GetTrafo mode、入口・出口2 mode、
 および4・6・8 mode＋設計軌道再閉路のBDM1 TET calibration benchmarkで条件5～6を完全solveにより
-満たした。optimizer有限差分なしの8 mode・軌道復元と利用者入力APIまで完了した一方、
-HEX configured-field微分、独立軌道cross-check、および実規模で条件6～9を満たす外側反復は未完である。
+満たした。optimizer有限差分なしの8 mode・軌道復元、独立DOP853 cross-check、利用者入力APIまで
+完了した一方、HEX configured-field微分、実規模独立cross-check、および条件6～9を満たす外側反復は
+未完である。
 
 ## 10. 再現コマンド
 
@@ -520,7 +528,8 @@ python -u validation_test\ffag_topopt\validation_gettrafo_two_mode_reclosed_orbi
 
 LAB smokeでは6 modeが`exact_max_band_ratio=0.225439`、8 modeが`0.999419`で、どちらも
 `status=pass`、全反復でfull rank、optimizer有限差分0回だった。LAB時間はそれぞれ268.2秒、
-201.1秒であり公開benchmarkにしない。
+201.1秒であり公開benchmarkにしない。現在のscriptは最終場をSciPy DOP853でも独立再追跡する。
+独立経路込み8 mode通しLAB smokeも`status=pass`で、native transfer matrixとの差は`3.99e-9`だった。
 
 ### MEX build
 
@@ -562,8 +571,9 @@ python -m pytest -q `
 - `2e694c0bd` `feat(topopt): differentiate reclosed design orbits`
 - `e141e6c5e` `fix(topopt): close four-mode reclosed map inverse`
 - `36f73e0d3` `feat(topopt): accept caller-supplied FFAG maps`
+- `e724977e6` `test(topopt): cross-check reclosed maps with DOP853`
 
-この8本は現在のブランチ上で直列になっている。
+この9本は現在のブランチ上で直列になっている。
 
 ## 12. Scratchの扱い
 
@@ -582,7 +592,7 @@ python -m pytest -q `
 以下をそのまま次の作業依頼に使える。
 
 > `S:\Radia\01_GitHub\obika_handover.md`を最初から最後まで読み、commit
-> `2ae5cbc7d`、`484a3f91d`、`d2eb092a7`、`5553beb62`、`86c14d6dd`、`2e694c0bd`、`e141e6c5e`、`36f73e0d3`の実装を確認してください。まず既存のPython・MEX focused回帰を
+> `2ae5cbc7d`、`484a3f91d`、`d2eb092a7`、`5553beb62`、`86c14d6dd`、`2e694c0bd`、`e141e6c5e`、`36f73e0d3`、`e724977e6`の実装を確認してください。まず既存のPython・MEX focused回帰を
 > 再現してください。次に`validation_abe_manufactured_edge_cell.py`をcompute hostで再現し、
 > `hdiv_mmm_all_single_removal_responses`が全候補ごとのSchur再分解をせず正解セルを1位にすることを
 > 確認してください。続いて`validation_gettrafo_manufactured_transfer_map.py`で単一modeの解析形状微分と
