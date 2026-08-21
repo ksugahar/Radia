@@ -59,9 +59,17 @@ def load_corpus(manifest: pathlib.Path) -> list[dict]:
             path = manifest.parent / path
         if not path.is_file():
             raise FileNotFoundError(f"corpus document not found: {path}")
+        pdf = entry.get("pdf")
+        if pdf:
+            pdf = pathlib.Path(pdf)
+            if not pdf.is_absolute():
+                pdf = manifest.parent / pdf
+            if not pdf.is_file():
+                raise FileNotFoundError(f"compiled proposal not found: {pdf}")
         documents.append({
             "label": entry["label"],
             "path": path,
+            "pdf": pdf,
             "outcome": entry.get("outcome", "unknown"),
             "program": entry.get("program", "generic"),
         })
@@ -81,12 +89,30 @@ def measure(document: dict) -> dict:
             patterns[f"{key}/{risk.get('type') or '?'}"] += 1
         for issue in (result.get("issues") or []):
             patterns[f"{key}/{issue.get('rule') or '?'}"] += 1
+
+    # A page limit is a property of the rendered document, so it is checked
+    # against the compiled PDF when the manifest names one. It is the only
+    # defect class that gets a proposal returned before anyone reads it,
+    # which makes it the one worth locking even while it reports nothing.
+    pages = None
+    if document.get("pdf"):
+        limits = gw.grant_writing_page_limit_check(str(document["pdf"]))
+        for risk in limits["risks"]:
+            patterns[f"page_limit/{risk['type'] if 'type' in risk else risk['severity']}"] += 1
+        pages = {
+            field["field"]: [field["used_pages"], field["declared_max_pages"]]
+            for field in limits["fields"]
+        }
+
     prose = gw._prose_for_lint(text)
-    return {
+    measured = {
         "finding_count": len(report["findings"]),
         "prose_chars": len(prose),
         "patterns": dict(sorted(patterns.items())),
     }
+    if pages is not None:
+        measured["pages"] = pages
+    return measured
 
 
 def sweep(documents: list[dict]) -> dict:
