@@ -11,6 +11,9 @@ orbit-closure derivative, moving field observations, and segment-length AD.
 
 No optimizer finite difference is used.  The one numerical two-column
 Jacobian used to seed each Broyden orbit root belongs only to orbit recovery.
+After the final shape is fixed, an independent SciPy DOP853 root/trajectory
+integration re-closes the same field and cross-checks the native transfer map;
+that route is validation-only and never proposes an optimizer step.
 """
 from __future__ import annotations
 
@@ -47,6 +50,7 @@ def run(args):
         build_ffag_cell_target_family,
         differentiate_recovered_planar_orbit_shape_native,
         recover_ffag_closed_orbit_family_native,
+        recover_periodic_planar_closed_orbit,
     )
     from radia.isochronous_topopt import MU0, transfer_map_reachability
     from radia.topology_optimization import (
@@ -619,6 +623,45 @@ def run(args):
         item.periodic_position_residual_m for item in final_recovered))
     maximum_tangent_closure = float(max(
         item.periodic_tangent_residual for item in final_recovered))
+    independent_started = time.perf_counter()
+    independent_recovered = tuple(
+        recover_periodic_planar_closed_orbit(
+            final_package["field"],
+            magnetic_rigidity=item.magnetic_rigidity_tm,
+            cell_angle_rad=target_family.spec.cell_bend_angle_rad,
+            initial_radius_m=item.entrance_radius_m,
+            initial_incidence_angle_rad=(
+                item.entrance_incidence_angle_rad),
+            n_segments=args.segments,
+            gradient_offset=args.gradient_offset,
+            curvature_sign=1.0,
+            position_tolerance=args.position_tolerance,
+            tangent_tolerance=args.tangent_tolerance,
+            root_max_evaluations=max(20, args.root_max_evaluations),
+            response_entries=RESPONSE_ENTRIES)
+        for item in final_recovered)
+    independent_map_max_abs = float(max(
+        np.max(np.abs(independent.transfer.matrix-native.transfer.matrix))
+        for independent, native in zip(
+            independent_recovered, final_recovered)))
+    independent_response_max_abs = float(max(
+        np.max(np.abs(independent.field_response-native.field_response))
+        for independent, native in zip(
+            independent_recovered, final_recovered)))
+    independent_path_length_max_abs_m = float(max(
+        abs(independent.path_length_m-native.path_length_m)
+        for independent, native in zip(
+            independent_recovered, final_recovered)))
+    independent_entrance_radius_max_abs_m = float(max(
+        abs(independent.entrance_radius_m-native.entrance_radius_m)
+        for independent, native in zip(
+            independent_recovered, final_recovered)))
+    independent_incidence_max_abs_rad = float(max(
+        abs(independent.entrance_incidence_angle_rad
+            - native.entrance_incidence_angle_rad)
+        for independent, native in zip(
+            independent_recovered, final_recovered)))
+    independent_done = time.perf_counter()
     finished = time.perf_counter()
 
     ratios = [initial_ratio] + [
@@ -653,6 +696,17 @@ def run(args):
         "final_orbits_reclose": bool(
             maximum_position_closure <= args.position_tolerance
             and maximum_tangent_closure <= args.tangent_tolerance),
+        "native_orbits_match_independent_dop853": bool(
+            independent_map_max_abs
+            <= args.independent_map_tolerance
+            and independent_response_max_abs
+            <= args.independent_response_tolerance
+            and independent_path_length_max_abs_m
+            <= args.independent_path_tolerance
+            and independent_entrance_radius_max_abs_m
+            <= args.independent_position_tolerance
+            and independent_incidence_max_abs_rad
+            <= args.independent_tangent_tolerance),
         "optimizer_finite_difference_not_used": True,
     }
     diagnostics = {
@@ -729,11 +783,27 @@ def run(args):
             "maximum_position_residual_m": maximum_position_closure,
             "maximum_tangent_residual": maximum_tangent_closure,
         },
+        "independent_orbit_crosscheck": {
+            "method": "SciPy DOP853 root and trajectory integration",
+            "optimizer_dependency": False,
+            "maximum_transfer_matrix_absolute_difference": (
+                independent_map_max_abs),
+            "maximum_field_response_absolute_difference": (
+                independent_response_max_abs),
+            "maximum_path_length_difference_m": (
+                independent_path_length_max_abs_m),
+            "maximum_entrance_radius_difference_m": (
+                independent_entrance_radius_max_abs_m),
+            "maximum_entrance_incidence_difference_rad": (
+                independent_incidence_max_abs_rad),
+        },
         "timings_s": {
             "manufactured_target": target_done-started,
             "base": base_done-target_done,
             "analytic_shape_lp_and_candidate_gates": inverse_done-base_done,
-            "fresh_final_verification": finished-inverse_done,
+            "fresh_final_verification": independent_started-inverse_done,
+            "independent_orbit_crosscheck": (
+                independent_done-independent_started),
             "total": finished-started,
             "state_solves": solve_records,
             "orbit_recoveries": recovery_records,
@@ -797,6 +867,16 @@ def parse_args(argv=None):
     parser.add_argument("--position-tolerance", type=float, default=1.0e-7)
     parser.add_argument("--tangent-tolerance", type=float, default=1.0e-7)
     parser.add_argument("--root-max-evaluations", type=int, default=10)
+    parser.add_argument("--independent-map-tolerance", type=float,
+                        default=2.0e-6)
+    parser.add_argument("--independent-response-tolerance", type=float,
+                        default=2.0e-6)
+    parser.add_argument("--independent-path-tolerance", type=float,
+                        default=2.0e-6)
+    parser.add_argument("--independent-position-tolerance", type=float,
+                        default=2.0e-6)
+    parser.add_argument("--independent-tangent-tolerance", type=float,
+                        default=2.0e-6)
     parser.add_argument("--hmatrix-eps", type=float, default=1.0e-7)
     parser.add_argument("--leaf-size", type=int, default=64)
     parser.add_argument("--hmatrix-eta", type=float, default=2.0)
@@ -816,6 +896,12 @@ def parse_args(argv=None):
             or (args.variational_stations-1) % args.segments != 0
             or args.max_iterations < 1 or args.backtracking_trials < 1
             or args.trust_region_reductions < 1
+            or min(
+                args.independent_map_tolerance,
+                args.independent_response_tolerance,
+                args.independent_path_tolerance,
+                args.independent_position_tolerance,
+                args.independent_tangent_tolerance) <= 0.0
             or not 0.0 < args.trust_region_shrink < 1.0):
         parser.error("invalid multi-mode reclosed-orbit validation settings")
     return args
