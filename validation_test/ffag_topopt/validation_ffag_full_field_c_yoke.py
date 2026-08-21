@@ -202,7 +202,10 @@ def _coil_pair(args):
 def run(args):
     import ngsolve as ng
 
-    from radia.accelerator_magnet_topopt import CoilBuilderHDivSource
+    from radia.accelerator_magnet_topopt import (
+        CoilBuilderHDivSource,
+        static_magnet_transfer_component_entries,
+    )
     from radia.coil_builder import audit_coil_yoke_clearance
     from radia.ffag_topopt import (
         build_ffag_cell_target_family,
@@ -242,18 +245,29 @@ def run(args):
             "fixed return-yoke seed violates the binary topology gate")
     volumes = np.asarray(
         ng.Integrate(1.0, mesh, element_wise=True), dtype=float)
+    controlled_components = tuple(args.controlled_components or ())
+    selected_entries = (
+        static_magnet_transfer_component_entries(controlled_components)
+        if controlled_components else None)
     fixture = build_ffag_cell_target_family(
         args.energies, n_segments=args.segments,
         transfer_matrix_band=args.transfer_band,
-        bend_field_band=args.bend_band)
+        bend_field_band=args.bend_band,
+        response_entries=selected_entries)
     design_orbits = tuple(
         reference.orbit for reference in fixture.references)
     target_transfer_matrices = fixture.objective.target_matrices.copy()
-    direct_target = build_ffag_fixed_design_orbit_target_family(
-        design_orbits, target_transfer_matrices,
+    direct_target_options = dict(
         transfer_matrix_band=fixture.objective.transfer_matrix_band,
-        bend_field_band=fixture.objective.bend_field_band,
-        response_entries=fixture.objective.response_entries)
+        bend_field_band=fixture.objective.bend_field_band)
+    if controlled_components:
+        direct_target_options["controlled_components"] = (
+            controlled_components)
+    else:
+        direct_target_options["response_entries"] = (
+            fixture.objective.response_entries)
+    direct_target = build_ffag_fixed_design_orbit_target_family(
+        design_orbits, target_transfer_matrices, **direct_target_options)
 
     setup_done = time.perf_counter() if args.record_performance else None
     if args.preflight_only:
@@ -306,6 +320,12 @@ def run(args):
                 "energies_mev": [float(value) for value in args.energies],
                 "orbit_count": len(design_orbits),
                 "segments_per_orbit": args.segments,
+                "controlled_components": list(controlled_components),
+                "response_entries": [
+                    list(entry)
+                    for entry in direct_target.objective.response_entries],
+                "target_symplectic_residuals": (
+                    direct_target.target_symplectic_residuals.tolist()),
                 "target_transfer_matrices": (
                     target_transfer_matrices.tolist()),
             },
@@ -345,11 +365,17 @@ def run(args):
             "[ffag-full-field] ChargeGram ready; optimizing about fixed "
             "entrance-to-exit design orbits", flush=True)
     with ng.TaskManager():
+        optimization_target_options = {}
+        if controlled_components:
+            optimization_target_options["controlled_components"] = (
+                controlled_components)
+        else:
+            optimization_target_options["response_entries"] = (
+                fixture.objective.response_entries)
         result = optimize_ffag_hdiv_mmm_from_design_orbits(
             design_orbits, target_transfer_matrices,
             transfer_matrix_band=fixture.objective.transfer_matrix_band,
             bend_field_band=fixture.objective.bend_field_band,
-            response_entries=fixture.objective.response_entries,
             source=source, charge_gram=gram, fes=fes,
             inv_chi=1.0 / (args.mu_r - 1.0),
             active_elements=active, element_volumes=volumes,
@@ -388,6 +414,7 @@ def run(args):
             exact_beam_width=args.exact_beam_width,
             exact_beam_depth=args.exact_beam_depth,
             exact_beam_barrier_fraction=args.exact_beam_barrier_fraction,
+            **optimization_target_options,
         )
     finished = time.perf_counter() if args.record_performance else None
     if args.record_performance:
@@ -465,6 +492,12 @@ def run(args):
             "orbit_mode": "fixed-one-pass",
             "target_input_contract": (
                 "caller-supplied design orbits and 6x6 transfer matrices"),
+            "controlled_components": list(controlled_components),
+            "response_entries": [
+                list(entry)
+                for entry in result.target_family.objective.response_entries],
+            "target_symplectic_residuals": (
+                result.target_family.target_symplectic_residuals.tolist()),
             "energies_mev": [float(value) for value in args.energies],
             "entrance_radii_m": [
                 float(np.linalg.norm(orbit.positions[0, :2]))
@@ -473,10 +506,14 @@ def run(args):
                 float(np.sum(orbit.segment_lengths))
                 for orbit in design_orbits],
             "target_transfer_matrices": target_transfer_matrices.tolist(),
+            "realized_transfer_matrices": (
+                result.realized_transfer_matrices.tolist()),
             "orbit_field_max_band_ratios": (
                 result.orbit_field_max_band_ratios.tolist()),
             "transfer_matrix_max_band_ratios": (
                 result.transfer_matrix_max_band_ratios.tolist()),
+            "realized_symplectic_residuals": (
+                result.topology_result.realized_symplectic_residuals.tolist()),
         },
         "optimization": {
             "requested_material_iterations": args.material_iterations,
@@ -616,6 +653,11 @@ def parse_args(argv=None):
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--restart-result", type=Path)
     parser.add_argument("--preflight-only", action="store_true")
+    parser.add_argument(
+        "--controlled-components", nargs="+",
+        help=("Named transfer-map groups to constrain, for example "
+              "horizontal_focusing vertical_focusing "
+              "horizontal_dispersion. Omit to retain the full-map study."))
     parser.add_argument(
         "--record-performance", action=argparse.BooleanOptionalAction,
         default=True,
