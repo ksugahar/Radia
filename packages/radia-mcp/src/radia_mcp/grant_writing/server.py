@@ -21,8 +21,9 @@ Persuasion-quality checks catch self-negating evidence, abrupt equations,
 undefined symbols, defensive paragraphs, optional branches, acronym piles, and
 internal memo shorthand. Adjacent-reviewer readability checks catch short but
 concept-dense sentences, method-name piles, and paragraphs that mix scientific,
-decision, and platform layers; they also expose vague decision objects and
-required scope with no deliverable. Reviewer-vocabulary checks distinguish an
+decision, and platform layers; they also expose takeaways delayed until after
+method names and numerical evidence, vague decision objects, and required scope
+with no deliverable. Reviewer-vocabulary checks distinguish an
 MCP access interface from the repository or database that stores its sources.
 The official KAKENHI reference map separates
 the three research-plan elements, internationality, and budget validity.
