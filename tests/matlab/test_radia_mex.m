@@ -2440,6 +2440,46 @@ verifyLessThan(testCase, norm(reconstructed-matrix, "fro") / ...
     norm(matrix, "fro"), 2e-11);
 end
 
+function testAbeElementFillPlanNative(testCase)
+response = [1,1; 1,-1];
+result = radia.topopt.solveAbeElementFillPlan( ...
+    response,[0.75;1.25],[false;true],[2;3], ...
+    FieldResponse=[2,3],ResidualRms=1e-11,Method="dense");
+verifyEqual(testCase,result.fill_step,[1;-0.25],"AbsTol",2e-10);
+verifyEqual(testCase,result.absolute_fill,[1;-0.25],"AbsTol",2e-10);
+verifyEqual(testCase,result.delivered_specification, ...
+    [0.75;1.25],"AbsTol",3e-10);
+verifyEqual(testCase,result.implied_field_difference,1.25,"AbsTol",3e-10);
+verifyEqual(testCase,result.gross_material_volume,2.75,"AbsTol",1e-9);
+verifyEqual(testCase,result.net_material_volume,1.25,"AbsTol",1e-9);
+verifyEqual(testCase,result.numerical_rank,2);
+verifyTrue(testCase,result.converged);
+acaResult = radia.topopt.solveAbeElementFillPlan( ...
+    [1,1;1,1],[0.75;0.75],[false;true],[2;3], ...
+    ResidualRms=1e-11, ...
+    Method="aca_qr_tsvd",AcaTolerance=1e-12);
+verifyEqual(testCase,acaResult.fill_step,[0.75;0],"AbsTol",3e-10);
+verifyTrue(testCase,acaResult.converged);
+
+rows = [1,2,3,4; 4,3,2,1];
+elementResponse = radia.topopt.contractHDivElementFillResponse( ...
+    rows,{[1,2],[3,4]},[1;2],{[2;-1],[0.5;2]});
+jacobian = [1,2; -1,0.5; 3,-2];
+composed = radia.topopt.composeSpecificationFillResponse( ...
+    jacobian,elementResponse,[1;3]);
+verifyEqual(testCase,composed,jacobian([1,3],:)*elementResponse, ...
+    "AbsTol",2e-14);
+
+height = radia.topopt.binElementFillToInterfaceHeight( ...
+    [0.5;-0.25],[2;4],[0.5;1.5],[0.5;0.5], ...
+    [0;1;2],[0;1],[2;4]);
+verifyEqual(testCase,height.signed_volume,[1;-1],"AbsTol",2e-14);
+verifyEqual(testCase,height.height_change,[-0.5;0.25],"AbsTol",2e-14);
+displacement = radia.topopt.blendedInterfaceDisplacement( ...
+    [0,0.5,1,2,3,4],1,0,3,2);
+verifyEqual(testCase,displacement,[0,1,2,1,0,0],"AbsTol",2e-14);
+end
+
 function testProjectedAndReducedNativeMatrices(testCase)
 mesh = radia.ngsolve.Mesh.create(testCase.TestData.meshPath);
 space = radia.ngsolve.FESpace.create(mesh, "h1", 1);

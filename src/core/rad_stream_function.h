@@ -33,6 +33,7 @@
 #define RAD_STREAM_FUNCTION_H
 
 #include <functional>
+#include <string>
 #include <vector>
 
 namespace radia {
@@ -71,6 +72,52 @@ TSVDResult ACATSVD(int M, int N, const EntryFn& entry,
 std::vector<double> PseudoInverseSolve(const TSVDResult& result,
                                        const std::vector<double>& B,
                                        int k_mode);
+
+// Options for the bounded Abe/DUCAS material solve.  Negative physical
+// residual tolerances mean "not supplied"; at least one must be supplied.
+// The response matrix passed to SolveAbeBounded is row-major M x N.  Bounds,
+// initial values, and the returned potential are all physical (unscaled)
+// element-fill coordinates.
+struct AbeBoundedOptions {
+    int modes = 0;
+    int kmax = 0;
+    double aca_eps = 1.0e-8;
+    bool dense_tsvd = false;
+    double relative_singular_threshold = 1.0e-12;
+    double residual_peak_to_peak = -1.0;
+    double residual_rms = -1.0;
+    int max_iterations = 64;
+    double relaxation = 1.0;
+    double stagnation_tolerance = 1.0e-12;
+};
+
+struct AbeBoundedResult {
+    TSVDResult factor;
+    std::vector<double> potential;
+    std::vector<double> reconstructed;
+    std::vector<double> residual;
+    std::vector<int> clipped_history;
+    std::vector<double> potential_change_history;
+    std::vector<double> residual_peak_to_peak_history;
+    std::vector<double> residual_rms_history;
+    std::vector<double> residual_max_abs_history;
+    int iterations = 0;
+    bool converged = false;
+    std::string stop_reason;
+    double residual_peak_to_peak = 0.0;
+    double residual_rms = 0.0;
+    double residual_max_abs = 0.0;
+};
+
+// Box-bounded repeated Abe correction with one retained ACA--QR--TSVD factor.
+// This is the native numerical kernel shared by the accelerator element-fill
+// MEX surface and future pybind callers.  Geometry, NGSolve FE plumbing, and
+// exact transfer-map re-evaluation deliberately remain caller-owned.
+AbeBoundedResult SolveAbeBounded(
+    int M, int N, const std::vector<double>& response,
+    const std::vector<double>& target, const std::vector<double>& lower,
+    const std::vector<double>& upper, const std::vector<double>& initial,
+    const AbeBoundedOptions& options);
 
 }  // namespace stream_function
 }  // namespace radia
