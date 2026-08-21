@@ -25,6 +25,10 @@ decision, and platform layers; they also expose takeaways delayed until after
 method names and numerical evidence, vague decision objects, and required scope
 with no deliverable. Reviewer-vocabulary checks distinguish an
 MCP access interface from the repository or database that stores its sources.
+Reviewer-momentum checks distinguish empty excitement language from a useful
+opening arc: reviewer-visible stakes, a concrete bottleneck or unused
+opportunity, the research move, and an observable payoff. They also catch
+method inventories that appear before the problem is understood.
 The official KAKENHI reference map separates
 the three research-plan elements, internationality, and budget validity.
 Review-format checks separately encode in-house briefing realities:
@@ -77,6 +81,7 @@ register_status_tool(
         "reviewer vocabulary and benchmark role, "
         "persuasion hierarchy and equation introductions, "
         "adjacent-domain reviewer readability and concept density, "
+        "reviewer momentum from concrete tension to observable payoff, "
         "MCP role accuracy and preparation-to-plan traceability, "
         "KAKENHI official review structure and review-format realities, "
         "central-claim consistency across summary and body, "

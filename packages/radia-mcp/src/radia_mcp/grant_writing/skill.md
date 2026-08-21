@@ -1260,6 +1260,7 @@ splitter, so it does not count as a terminator here.
 - `grant_writing_reviewer_vocabulary_check(text)`
 - `grant_writing_persuasion_quality_check(text)`
 - `grant_writing_adjacent_reviewer_readability_check(text)`
+- `grant_writing_reviewer_momentum_check(text)`
 - `grant_writing_kaken_review_format_check(text)`
 - `grant_writing_central_claim_consistency_check(text)`
 - `grant_writing_vague_claim_verb_check(text)`
@@ -1402,6 +1403,21 @@ needs: the reviewer takeaway first, its plain-language technical role second,
 the specific method or evidence third, and the remaining limit or question
 last. The result has no score so an author cannot improve it by deleting
 necessary technical detail; each excerpt must be reviewed in context.
+
+The integrated health report also runs the non-scoring
+`grant_writing_reviewer_momentum_check(text)`. Readability and reviewer
+interest are separate. The check looks for an opening arc that recurs in
+strong adopted grant prose: a familiar human, engineering, or decision stake;
+a concrete bottleneck or newly available capability that cannot yet be used;
+the proposed research move; and the observable change that move would unlock.
+It flags method-first openings, abstract bottlenecks, missing payoff, and an
+opening that becomes an inventory of five or more method names before the
+research move. Keep two or three core concepts in the opening and move the
+remaining acronyms to research items, figures, or feasibility evidence. The
+check also flags unsupported phrases such as "world first" or "revolutionary";
+interest should come from the unresolved tension and bounded evidence, not
+from adjectives. A useful rewrite order is stakes, concrete bottleneck or
+unused opportunity, research move, observable payoff, then bounded evidence.
 
 Whenever a draft states its question in more than one place -- commonly in
 the summary and again in the body -- run
