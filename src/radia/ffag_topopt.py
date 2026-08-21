@@ -363,6 +363,35 @@ class FFAGCellTargetFamily:
             reference.kinetic_energy_mev for reference in self.references])
 
 
+@dataclass(frozen=True)
+class FFAGFixedDesignOrbitTargetFamily:
+    """Caller-supplied one-pass design orbits and target transfer maps.
+
+    This is the target contract for a beam line or one isolated magnet.  It has
+    no soft-edge field fixture and no periodic-orbit reconstruction: the
+    supplied :class:`PlanarDesignOrbit` objects define the observation paths,
+    and ``objective`` owns the requested maps and engineering bands about those
+    paths.
+    """
+
+    objective: MultiMomentumTransferMatrixObjective
+
+    def __post_init__(self):
+        if not isinstance(
+                self.objective, MultiMomentumTransferMatrixObjective):
+            raise TypeError(
+                "objective must be a MultiMomentumTransferMatrixObjective")
+
+    @property
+    def design_orbits(self) -> tuple[PlanarDesignOrbit, ...]:
+        return self.objective.orbits
+
+    @property
+    def magnetic_rigidities_tm(self) -> np.ndarray:
+        return np.asarray([
+            orbit.magnetic_rigidity for orbit in self.objective.orbits])
+
+
 def build_ffag_cell_target_family(
         kinetic_energies_mev, *, spec=None, n_segments=256,
         transfer_matrix_band=1.0e-3, bend_field_band=1.0e-3,
@@ -389,6 +418,31 @@ def build_ffag_cell_target_family(
     return FFAGCellTargetFamily(
         spec, references, objective,
         spec.symmetric_tanh_fringe_integrals())
+
+
+def build_ffag_fixed_design_orbit_target_family(
+        design_orbits, target_transfer_matrices, *,
+        transfer_matrix_band=1.0e-3, bend_field_band=1.0e-3,
+        response_entries=None, curvature_sign=1.0, gradient_sign=1.0
+        ) -> FFAGFixedDesignOrbitTargetFamily:
+    """Build the direct ``design orbit + target map`` one-pass contract.
+
+    ``target_transfer_matrices[i]`` is interpreted about
+    ``design_orbits[i]``.  The orbit geometry, magnetic rigidity, target map,
+    and bands are all caller-owned; no Enge profile, reference-field fixture,
+    or closed-orbit solve is inserted by this constructor.
+    """
+    orbits = tuple(design_orbits)
+    options = dict(
+        transfer_matrix_band=transfer_matrix_band,
+        bend_field_band=bend_field_band,
+        curvature_sign=curvature_sign,
+        gradient_sign=gradient_sign)
+    if response_entries is not None:
+        options["response_entries"] = response_entries
+    objective = MultiMomentumTransferMatrixObjective(
+        orbits, target_transfer_matrices, **options)
+    return FFAGFixedDesignOrbitTargetFamily(objective)
 
 
 def _evaluate_b_field(field, points) -> np.ndarray:
@@ -1443,7 +1497,7 @@ class FFAGFixedOrbitHDivMMMTopologyResult:
     inverse must reproduce.
     """
 
-    target_family: FFAGCellTargetFamily
+    target_family: FFAGCellTargetFamily | FFAGFixedDesignOrbitTargetFamily
     source_scale: float
     topology_result: MultiMomentumAcceleratorMagnetTopologyResult
     optics_history: tuple[MultiMomentumAcceleratorMagnetTopologyResult, ...]
@@ -1502,7 +1556,8 @@ class FFAGFixedOrbitHDivMMMTopologyResult:
 
 
 def optimize_ffag_hdiv_mmm_from_fixed_design_orbits(
-        target_family: FFAGCellTargetFamily, *, source,
+        target_family: (FFAGCellTargetFamily
+                        | FFAGFixedDesignOrbitTargetFamily), *, source,
         charge_gram, fes, inv_chi, active_elements, element_volumes,
         volume_max, gradient_offset=1.0e-3, source_scale=1.0,
         optimize_source_scale=True,
@@ -1533,8 +1588,11 @@ def optimize_ffag_hdiv_mmm_from_fixed_design_orbits(
     """
     from .topology_optimization import solve_hdiv_mmm_active_elements
 
-    if not isinstance(target_family, FFAGCellTargetFamily):
-        raise TypeError("target_family must be an FFAGCellTargetFamily")
+    if not isinstance(target_family, (
+            FFAGCellTargetFamily, FFAGFixedDesignOrbitTargetFamily)):
+        raise TypeError(
+            "target_family must be an FFAGCellTargetFamily or "
+            "FFAGFixedDesignOrbitTargetFamily")
     if not isinstance(source, CoilBuilderHDivSource):
         raise TypeError("source must be a CoilBuilderHDivSource")
     active = np.asarray(active_elements, dtype=bool).reshape(-1).copy()
@@ -1596,12 +1654,11 @@ def optimize_ffag_hdiv_mmm_from_fixed_design_orbits(
         sampled = []
         required = []
         bands = []
-        for reference, target in zip(
-                target_family.references, objective.objectives):
+        for target in objective.objectives:
             response = sample_planar_orbit_field_response(
-                total_field, reference.orbit,
+                total_field, target.orbit,
                 gradient_offset=gradient_offset)
-            count = len(reference.orbit.segment_lengths)
+            count = len(target.orbit.segment_lengths)
             sampled.extend(response[:count])
             required.extend(target.required_bend_field)
             bands.extend(target.bend_field_band)
@@ -1801,6 +1858,32 @@ def optimize_ffag_hdiv_mmm_from_fixed_design_orbits(
         target_family, scale, accepted_result, tuple(optics_history),
         termination_reason, float(initial_max_band_ratio),
         tuple(map_trust_history))
+
+
+def optimize_ffag_hdiv_mmm_from_design_orbits(
+        design_orbits, target_transfer_matrices, *,
+        transfer_matrix_band=1.0e-3, bend_field_band=1.0e-3,
+        response_entries=None, curvature_sign=1.0, gradient_sign=1.0,
+        **optimization_options) -> FFAGFixedOrbitHDivMMMTopologyResult:
+    """Optimize HDiv-MMM material for caller-supplied one-pass optics.
+
+    This is the direct public PoC entry point: the caller supplies one or more
+    design orbits and the 6-by-6 transfer matrix required about each orbit.
+    It builds no reduced reference field and performs no periodic-orbit search.
+    The numerical path delegates to
+    :func:`optimize_ffag_hdiv_mmm_from_fixed_design_orbits`, preserving its
+    analytic field-to-map AD, ACA--QR--TSVD material inverse, exact active-set
+    re-solves, and caller-owned ``ngsolve.TaskManager`` contract.
+    """
+    target_family = build_ffag_fixed_design_orbit_target_family(
+        design_orbits, target_transfer_matrices,
+        transfer_matrix_band=transfer_matrix_band,
+        bend_field_band=bend_field_band,
+        response_entries=response_entries,
+        curvature_sign=curvature_sign,
+        gradient_sign=gradient_sign)
+    return optimize_ffag_hdiv_mmm_from_fixed_design_orbits(
+        target_family, **optimization_options)
 
 
 def optimize_ffag_hdiv_mmm_from_transfer_matrices(
@@ -2084,6 +2167,7 @@ __all__ = [
     "EngeFringeIntegrals",
     "FFAGCellReference",
     "FFAGCellTargetFamily",
+    "FFAGFixedDesignOrbitTargetFamily",
     "FFAGHDivMMMOuterIteration",
     "FFAGHDivMMMTopologyResult",
     "FFAGFixedOrbitHDivMMMTopologyResult",
@@ -2095,10 +2179,12 @@ __all__ = [
     "PROTON_REST_ENERGY_MEV",
     "build_ffag_cell_reference",
     "build_ffag_cell_target_family",
+    "build_ffag_fixed_design_orbit_target_family",
     "enge_fringe_integrals",
     "differentiate_recovered_planar_orbit_shape_native",
     "magnetic_rigidity_from_kinetic_energy",
     "optimize_ffag_hdiv_mmm_from_fixed_design_orbits",
+    "optimize_ffag_hdiv_mmm_from_design_orbits",
     "optimize_ffag_hdiv_mmm_from_transfer_matrices",
     "recover_ffag_closed_orbit",
     "recover_ffag_closed_orbit_family",
