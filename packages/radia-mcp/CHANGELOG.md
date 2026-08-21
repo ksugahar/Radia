@@ -7,6 +7,8 @@ crystallized as its own package.
 
 ## [Unreleased]
 
+## [1.4.42] - 2026-08-22
+
 - matlab: narrowed all Optuna claims to the checked 4.9.0 subset and exposed
   that boundary through the compatibility contract. The direct oracle now
   covers `TrialPruned`, trial-number `tell`, FrozenTrial-returning collections,
