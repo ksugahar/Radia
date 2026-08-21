@@ -7,6 +7,112 @@ crystallized as its own package.
 
 ## [Unreleased]
 
+- matlab: narrowed all Optuna claims to the checked 4.9.0 subset and exposed
+  that boundary through the compatibility contract. The direct oracle now
+  covers `TrialPruned`, trial-number `tell`, FrozenTrial-returning collections,
+  FrozenTrial public behavior, and the snake-case `create_trial` factory.
+
+- grant-writing: added the non-scoring
+  `grant_writing_adjacent_reviewer_readability_check` for prose that remains
+  hard for an adjacent-domain reviewer despite short sentences. It reports
+  compressed concept density, method-name piles, paragraphs that mix science,
+  decision, and infrastructure layers, and assurance language distributed
+  across the draft. It also catches a research answer collapsed into an
+  implementation representation, vague relation or decision objects, and a
+  required scope that names applications but no deliverable. Reviewer-
+  vocabulary checks now reject descriptions of MCP as a storage location, and
+  the argument-evidence map locates whether preparation evidence is connected
+  to a research item the team can start. The integrated report exposes the
+  readability and traceability diagnostics without adding them to the defect
+  score or corpus finding baseline. Subject-predicate distance checks now also
+  recognize the full-width Japanese comma `，` used by Word documents.
+
+- grant-writing: generalized a project-specific wording prohibition into a
+  central-question semantic contract. Reviews now distinguish the scientific
+  answer (condition), its operational decision criterion, and its calibrated
+  application scope or limit; `boundary` is not banned when a variable, two
+  states, and an estimation method are defined. Exact wording and one- versus
+  two-sentence locks remain local to each proposal instead of becoming
+  universal lint rules. The central-claim checker and guidance now state this
+  scope explicitly.
+
+- grant-writing: added the source-grounded `grant_writing_kaken_review_axes`
+  reference for current KAKENHI Scientific Research B/C (General). It keeps
+  the three research-plan elements, the separately rated internationality
+  element, and budget validity distinct; records the two-stage review and
+  three-reviewer structure for Scientific Research C; and carries official
+  JSPS URLs, revision/access dates, budget itemization requirements, and the
+  consequence of multiple budget-problem ratings. `kaken_generic` now checks
+  internationality as well as the three research-plan axes.
+
+- grant-writing: corrected two corpus-exposed budget false positives against
+  the official FY2027 entry guide. A future conference whose venue is not yet
+  announced is no longer treated as an unfilled form field. Budget necessity
+  prose may state amounts when it gives a recomputable basis such as unit
+  price times quantity/duration, a quotation, or an official tariff; only a
+  bare amount is now reported. This replaces the overly broad 2019 rule that
+  all amounts must live in the table.
+
+- grant-writing: review-axis presence now runs on applicant prose after form
+  instructions are removed. The funder's own request to discuss academic
+  importance, method, capability, or internationality can no longer satisfy
+  the corresponding applicant-content check.
+
+- grant-writing: expanded the private outcome corpus from 8 to 19 documents
+  (7 adopted, 11 rejected, 1 unsubmitted) across ordinary KAKENHI, Go-Tech,
+  JSPS invitation, Power Academy, foundation, and internal-grant genres.
+  Outcome-labelled entries can now retain immutable submitted sources, a
+  written classification basis, and award/review evidence. Added
+  `sweep.py --compare-outcomes`, which normalizes findings by prose length and
+  counts document-level prevalence while explicitly refusing to treat outcome
+  as a score. In the 10 ordinary KAKENHI documents, detector density was 5.55
+  per 10k characters for adopted drafts and 4.37 for rejected drafts: another
+  direct negative result for adoption prediction.
+
+- grant-writing: separated ordinary KAKENHI review (`kaken_generic`) from the
+  current OSS-platform theme (`kaken_oss`). Historical KAKENHI applications
+  now receive the general review axes without being judged against
+  project-specific GitHub/MCP vocabulary. Wrapped ethics examples in older PDF
+  forms are also removed before the human-subjects check, preventing the
+  funder's own アンケート/インタビュー instructions from becoming an
+  applicant finding.
+
+- grant-writing: added a non-scoring `argument_evidence_map` for locating the
+  central question, prior gap, method operation, decision rule, knowledge
+  output, preliminary evidence, responsibilities, and negative-result plan.
+  It provides excerpts and manual review prompts rather than a keyword score.
+  Public Japanese-lint wrappers now all apply the same form/LaTeX prose filter;
+  acronym parsing accepts English-gloss definitions, Japanese particles after
+  acronyms, and hyphenated project names such as JP-MARs.
+
+- grant-writing: the private corpus lane can now read an ordered `paths` list
+  for a live multi-file proposal, and records a SHA-256 source fingerprint in
+  its adjudicated baseline. The current 科研費 draft therefore follows its
+  four TeX sources directly instead of a stale extracted-text snapshot, and
+  any later prose edit forces a new review even when finding counts happen to
+  stay unchanged. While connecting the live draft, the review-format check
+  was also fixed to ignore `\newcommand` metadata in the final-year field;
+  its repeated 「該当なし」 values are not bare human-rights rationales.
+
+- grant-writing: audited which checks ever say anything about a real
+  proposal (`sweep.py --audit`). Eight were silent on all eight documents;
+  adjudicating them found one genuinely broken.
+  `literature_gap_evidence_check` was applicable to **nothing**: it was built
+  for a search report (確認できなかった / 見当たらなかった) while real
+  proposals assert absence outright -- 「統合的なマルチスケールモデル縮約法が
+  存在しない」, 「直接的な競合製品は存在しない」 -- with no account of how
+  they looked. It now reports `absence_claimed_without_search` for that, the
+  more common and more punctured form: a reviewer needs one counterexample.
+  This is the second time a vocabulary here was written from assumption and
+  matched zero real proposals, after `_GAP_MARKERS`; derive the words from
+  documents. Three of the four instances are in adopted proposals, so it
+  predicts nothing about adoption either.
+- grant-writing: `check_misuse_japanese` had no test at all. It inherits the
+  shared Japanese table aimed at speech and email (よろしかったでしょうか,
+  のほう, こんにちわ), which no research proposal trips, so its silence is
+  the genre and not a fault -- now recorded, and covered by a test that
+  proves it still fires on the text it was built for.
+
 ## [1.4.41] - 2026-08-20
 
 - presentation: `presentation_script_vs_slide_coverage` could not read
