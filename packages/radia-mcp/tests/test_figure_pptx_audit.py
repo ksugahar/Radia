@@ -44,8 +44,11 @@ def test_paste_at_the_authored_width_is_clean(tmp_path: Path) -> None:
     rep = audit_pptx_figures(str(deck))
 
     assert rep["n_pictures"] == 1
-    assert rep["n_flagged"] == 0
     pic = rep["pictures"][0]
+    # The paste itself is clean.  The only thing reported is that the figure is
+    # a raster at all -- a separate rule (a figure should be vector), added
+    # 2026-08-21, which this test is not about.
+    assert [r for r in pic["risks"] if "RASTER FIGURE" not in r] == []
     assert pic["scale"] == 1.0
     assert pic["displayed_figure_font_pt"] == 24.0
     assert pic["effective_dpi"] == 300.0
@@ -143,7 +146,8 @@ def test_pdf_rasterised_at_the_paste_width_audits_clean(tmp_path: Path) -> None:
     deck = _deck(tmp_path, Path(info["png"]), width_in=500.0 / 72.0)
     rep = audit_pptx_figures(str(deck))
 
-    assert rep["n_flagged"] == 0
+    assert [r for r in rep["pictures"][0]["risks"]
+            if "RASTER FIGURE" not in r] == []
     # integer pixel rounding leaves a sub-0.1% residue, not a paste-scale error
     assert abs(rep["pictures"][0]["scale"] - 1.0) < 0.002
     assert abs(rep["pictures"][0]["effective_dpi"] - 300.0) < 1.0

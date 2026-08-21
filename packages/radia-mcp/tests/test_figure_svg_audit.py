@@ -230,3 +230,55 @@ def test_a_raster_picture_is_still_audited_the_old_way(tmp_path):
     assert rep["n_pictures"] == 1
     assert rep["pictures"][0]["kind"] == "raster"
     assert rep["n_vector"] == 0
+    assert rep["n_raster"] == 1
+
+
+def test_a_raster_figure_is_flagged_because_a_figure_should_be_vector(tmp_path):
+    """The rule is not taste: a raster's text cannot be measured from the file.
+
+    That is how a 16 pt label shipped unnoticed -- the size check on a raster
+    returns "OCR required", not a verdict, so the 20 pt floor is unenforceable
+    on one.
+    """
+    prs = Presentation()
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+    slide.shapes.add_picture(_png(tmp_path), 0, 0, Emu(20 * EMU_CM),
+                             Emu(10 * EMU_CM))
+    out = tmp_path / "raster_big.pptx"
+    prs.save(str(out))
+
+    rep = audit_pptx_figures(str(out))
+    assert any("RASTER FIGURE" in r for r in rep["pictures"][0]["risks"])
+
+
+def test_a_photograph_can_declare_itself_raster(tmp_path):
+    """A screen capture cannot be vector, and a flag nobody can clear is noise.
+
+    The decision is recorded in the shape name, where a reader of the file can
+    see it -- the same convention as FIGURE_TEXT::.
+    """
+    prs = Presentation()
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+    pic = slide.shapes.add_picture(_png(tmp_path), 0, 0, Emu(20 * EMU_CM),
+                                   Emu(10 * EMU_CM))
+    pic.name = "RASTER_OK::Cubit screen capture"
+    out = tmp_path / "declared.pptx"
+    prs.save(str(out))
+
+    row = audit_pptx_figures(str(out))["pictures"][0]
+    assert row["declared_raster"] is True
+    assert not any("RASTER FIGURE" in r for r in row["risks"])
+
+
+def test_a_logo_is_not_asked_to_be_vector(tmp_path):
+    """Decorations below the area threshold were never in scope."""
+    prs = Presentation()
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+    slide.shapes.add_picture(_png(tmp_path), 0, 0, Emu(1 * EMU_CM),
+                             Emu(1 * EMU_CM))
+    out = tmp_path / "logo.pptx"
+    prs.save(str(out))
+
+    row = audit_pptx_figures(str(out))["pictures"][0]
+    assert row["minor"] is True
+    assert not any("RASTER FIGURE" in r for r in row["risks"])
