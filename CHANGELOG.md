@@ -5,6 +5,18 @@ All notable changes to the `radia` package.  Format: each release lists
 
 ## Unreleased
 
+## 4.95.57 - Exact binary clipboard payloads from EQNEDT64
+
+Released 2026-08-21.
+
+- Fixed EQNEDT64's Ctrl+C path for PowerPoint. Binary clipboard formats now
+  carry their exact payload length, so the GVML OPC package no longer gains a
+  trailing NUL byte that makes PowerPoint reject the paste. Text formats remain
+  NUL-terminated as required.
+- Added a validation test that drives the real editor window, issues Ctrl+C,
+  and compares the clipboard's GVML bytes with the generated package byte for
+  byte. This covers the user path that the earlier package-only test could not.
+
 ## 4.95.56 - EQNEDT64: an equation editor, and equations that reach Office as equations
 
 Released 2026-08-19.
