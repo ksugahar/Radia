@@ -27,6 +27,7 @@ from radia.topology_optimization import (
     ElementInsertionResponse,
     ShapeLinearization,
     finite_element_insertion_response,
+    hdiv_mmm_all_single_removal_responses,
     hdiv_mmm_block_insertion_response,
     linearize_hdiv_mmm_element_generation,
     grow_hdiv_mmm_by_superposition,
@@ -567,6 +568,44 @@ def test_native_hdiv_mmm_block_schur_bundle_matches_exact_active_resolve():
         len(linearization.candidate_dof_blocks[index])
         for index in range(len(selected)))
     assert np.all(np.isfinite(exact_state))
+
+
+def test_native_hdiv_mmm_single_removal_oracle_reuses_one_schur_inverse():
+    import ngsolve as ng
+    from ngsolve.meshes import MakeStructured3DMesh
+    from radia.vim._vim import build_charge_gram
+    mesh=MakeStructured3DMesh(hexes=True,nx=3,ny=1,nz=1)
+    fes=ng.HDiv(mesh,order=0,discontinuous=True)
+    with ng.TaskManager():
+        _,gram,mass=build_charge_gram(fes,eps=1e-10,leafsize=256,
+            eta=2.0,internal_interfaces=True)
+    rng=np.random.default_rng(20260821)
+    rhs=np.asarray(mass@rng.normal(size=fes.ndof))
+    response_matrix=rng.normal(size=(4,fes.ndof))
+    retained=np.zeros(mesh.ne,dtype=bool);retained[1]=True
+    linearization=linearize_hdiv_mmm_element_generation(
+        charge_gram=gram,fes=fes,inv_chi=.2,rhs=rhs,
+        response_matrix=response_matrix,active_elements=retained,
+        solve_tolerance=1e-11,candidate_batch_size=8)
+    candidates=linearization.candidate_elements
+    oracle=hdiv_mmm_all_single_removal_responses(
+        linearization,candidates)
+    full=hdiv_mmm_block_insertion_response(linearization,candidates)
+    np.testing.assert_allclose(
+        oracle.full_response_delta,full.response_delta,
+        rtol=3e-12,atol=3e-12)
+    for column,removed in enumerate(candidates):
+        kept=candidates[candidates!=removed]
+        expected=hdiv_mmm_block_insertion_response(
+            linearization,kept).response_delta
+        np.testing.assert_allclose(
+            oracle.removed_response_delta[:,column],expected,
+            rtol=3e-12,atol=3e-12)
+        np.testing.assert_allclose(
+            oracle.full_response_delta-
+            oracle.positive_material_response[:,column],expected,
+            rtol=3e-12,atol=3e-12)
+    assert oracle.positive_material_response.flags.c_contiguous
 
 
 def test_native_bdm1_candidate_schur_tsvd_solves_only_charge_coupling_rank():

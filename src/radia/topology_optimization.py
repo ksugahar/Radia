@@ -1083,6 +1083,24 @@ class HDivMMMBlockInsertionResponse:
 
 
 @dataclass(frozen=True)
+class HDivMMMSingleRemovalResponses:
+    """All exact singleton deletions from one reduced candidate Schur solve.
+
+    ``positive_material_response[:, j]`` is the response of candidate element
+    ``j`` that disappears when that element is removed from the full selected
+    set.  ``removed_response_delta[:, j]`` is the corresponding response,
+    relative to the retained active base, after the deletion.  Both are exact
+    for the already-reduced fixed active set; no new H-matrix solve is used.
+    """
+
+    candidate_elements: np.ndarray
+    full_candidate_state: np.ndarray
+    full_response_delta: np.ndarray
+    positive_material_response: np.ndarray
+    removed_response_delta: np.ndarray
+
+
+@dataclass(frozen=True)
 class CollaborativeElementBatchUpdate:
     """Best exact block-Schur bundle found by a discrete candidate search."""
     selected_elements: np.ndarray
@@ -1946,6 +1964,90 @@ def hdiv_mmm_block_insertion_response(linearization,
               @state)
     return HDivMMMBlockInsertionResponse(
         selected,state,np.asarray(response).reshape(-1),schur)
+
+
+def hdiv_mmm_all_single_removal_responses(linearization,
+        full_elements=None) -> HDivMMMSingleRemovalResponses:
+    """Evaluate every one-element deletion with one dense Schur factorization.
+
+    Let ``S`` be the candidate Schur complement, ``x=S^-1 b``, and
+    ``Q=S^-1``.  Constraining one element block ``e`` to zero changes the
+    candidate state by
+
+    ``delta x = -Q[:,e] Q[e,e]^-1 x[e]``.
+
+    Therefore all singleton removal responses follow after one solve with
+    right-hand sides ``[b, I]`` plus one tiny local block solve per element.
+    This replaces repeatedly factoring the nearly identical ``S_without_e``
+    matrices and is the intended exact binary oracle after ACA--QR--TSVD.
+    """
+    if not isinstance(linearization,HDivMMMElementGenerationLinearization):
+        raise TypeError(
+            "linearization must be HDivMMMElementGenerationLinearization")
+    available=np.asarray(
+        linearization.candidate_elements,dtype=np.int64).reshape(-1)
+    selected=(available.copy() if full_elements is None else
+              np.asarray(full_elements,dtype=np.int64).reshape(-1))
+    if (selected.size==0 or np.unique(selected).size!=selected.size):
+        raise ValueError("full_elements must contain a non-empty unique set")
+    lookup={int(element):column for column,element in enumerate(available)}
+    if any(int(element) not in lookup for element in selected):
+        raise ValueError("full_elements contains an unavailable candidate")
+    offsets=np.asarray(
+        linearization.candidate_dof_offsets,dtype=np.int64).reshape(-1)
+    if offsets.shape!=(available.size+1,):
+        raise ValueError("candidate DOF offsets are inconsistent")
+    source_blocks=[np.arange(
+        int(offsets[lookup[int(element)]]),
+        int(offsets[lookup[int(element)]+1]),dtype=np.int64)
+        for element in selected]
+    if any(block.size==0 for block in source_blocks):
+        raise ValueError("every selected candidate must own a non-empty block")
+    source=np.concatenate(source_blocks)
+    schur_all=np.asarray(
+        linearization.reduced_schur_complement,dtype=float)
+    rhs_all=np.asarray(
+        linearization.reduced_schur_rhs,dtype=float).reshape(-1)
+    response_all=np.asarray(
+        linearization.reduced_response_matrix,dtype=float)
+    if (schur_all.shape!=(offsets[-1],offsets[-1]) or
+            rhs_all.shape!=(offsets[-1],) or
+            response_all.ndim!=2 or response_all.shape[1]!=offsets[-1]):
+        raise ValueError("reduced candidate Schur arrays are inconsistent")
+    schur=np.ascontiguousarray(schur_all[np.ix_(source,source)])
+    rhs=np.ascontiguousarray(rhs_all[source])
+    response=np.ascontiguousarray(response_all[:,source])
+    width=source.size
+    try:
+        solved=np.linalg.solve(
+            schur,np.column_stack((rhs,np.eye(width,dtype=float))))
+    except np.linalg.LinAlgError as error:
+        raise RuntimeError(
+            "candidate Schur complement is singular") from error
+    state=np.asarray(solved[:,0],dtype=float)
+    inverse=np.asarray(solved[:,1:],dtype=float)
+    full_delta=response@state
+    local_offsets=np.r_[0,np.cumsum([block.size for block in source_blocks])]
+    positive=[]
+    for column in range(selected.size):
+        local=np.arange(
+            int(local_offsets[column]),int(local_offsets[column+1]))
+        inverse_local=inverse[np.ix_(local,local)]
+        try:
+            multiplier=np.linalg.solve(inverse_local,state[local])
+        except np.linalg.LinAlgError as error:
+            raise RuntimeError(
+                "candidate inverse principal block is singular") from error
+        constrained_correction=inverse[:,local]@multiplier
+        positive.append(response@constrained_correction)
+    positive=np.ascontiguousarray(np.column_stack(positive))
+    removed=np.ascontiguousarray(full_delta[:,None]-positive)
+    return HDivMMMSingleRemovalResponses(
+        candidate_elements=np.ascontiguousarray(selected),
+        full_candidate_state=np.ascontiguousarray(state),
+        full_response_delta=np.ascontiguousarray(full_delta),
+        positive_material_response=positive,
+        removed_response_delta=removed)
 
 
 def select_collaborative_element_batch(*, current_response, response_target,
@@ -5046,6 +5148,7 @@ __all__=["VIMLinearization","VIMOperatorLinearization","ChargeGramLinearization"
          "ShapeLinearization","ShapeLPUpdate","solve_shape_lp",
          "ElementInsertionResponse","ElementGenerationLPUpdate",
          "HDivMMMElementGenerationLinearization",
+         "HDivMMMSingleRemovalResponses",
          "AbeMurataEquivalentMaterialDiagnostics",
          "TSVDElementCandidateSelection",
          "HDivMMMGenerationIteration","HDivMMMGraphFrontDiagnostics",
@@ -5056,6 +5159,8 @@ __all__=["VIMLinearization","VIMOperatorLinearization","ChargeGramLinearization"
          "ngsolve_boundary_removal_candidates",
          "ngsolve_discontinuous_element_dof_blocks",
          "linearize_hdiv_mmm_element_generation","solve_hdiv_mmm_active_elements",
+         "hdiv_mmm_block_insertion_response",
+         "hdiv_mmm_all_single_removal_responses",
          "select_tsvd_element_candidates",
          "select_tsvd_exact_block_batch",
          "grow_hdiv_mmm_by_superposition","solve_element_generation_lp",
