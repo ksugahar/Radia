@@ -458,6 +458,306 @@ class FullFieldClosedOrbit:
             abs(self.vertical_tangent_residual)))
 
 
+@dataclass(frozen=True)
+class ReclosedOrbitShapeJacobian:
+    """Total analytic GetTrafo derivative about a reclosed design orbit.
+
+    The HDiv state/source derivative is analytic.  The trajectory tangent is
+    propagated through the Lorentz variational equation and the entrance
+    radius/incidence response follows from the 2-by-2 periodic-closure
+    implicit function.  Hence the returned transfer derivative includes the
+    moving observation path and segment lengths, not merely a lagged orbit.
+    """
+
+    recovered: FullFieldClosedOrbit
+    entrance_parameter_jacobian: np.ndarray
+    path_length_jacobian: np.ndarray
+    position_jacobian: np.ndarray
+    tangent_jacobian: np.ndarray
+    field_response: np.ndarray
+    field_response_jacobian: np.ndarray
+    transfer: CombinedFunctionTransferMap
+    closure_partial_jacobian: np.ndarray
+
+
+def differentiate_recovered_planar_orbit_shape_native(
+        recovered: FullFieldClosedOrbit, *, charge_gram, state,
+        state_jacobian, cell_vertex_velocity, face_vertex_velocity,
+        iron_evaluator, iron_scale, constant_field_t=(0.0, 0.0, 0.0),
+        cell_angle_rad, gradient_offset=1.0e-3,
+        tracking_step_m=5.0e-3, integration_stations=257,
+        maximum_path_m=None, curvature_sign=1.0,
+        response_entries=None) -> ReclosedOrbitShapeJacobian:
+    """Differentiate a periodic orbit and its map without design FD.
+
+    This flat-TET production lane uses the exact native HDiv field spatial
+    Jacobian and ``C*dm+dC*m`` source tangent.  A dense nominal native track
+    supplies the coefficients of the Lorentz variational equation.  Its
+    entrance radius/incidence derivatives are closed analytically with the
+    implicit-function theorem.  Radia-object and extra tracker mirror terms
+    are intentionally absent: every field term in this derivative must expose
+    the same analytic spatial/design tangent contract.
+    """
+    from . import _radia_pybind as _native
+
+    if not isinstance(recovered, FullFieldClosedOrbit):
+        raise TypeError("recovered must be a FullFieldClosedOrbit")
+    state = np.asarray(state, dtype=float).reshape(-1)
+    state_jacobian = np.asarray(state_jacobian, dtype=float)
+    cells = np.ascontiguousarray(cell_vertex_velocity, dtype=float)
+    faces = np.ascontiguousarray(face_vertex_velocity, dtype=float)
+    modes = state_jacobian.shape[0] if state_jacobian.ndim == 2 else 0
+    constant_field = np.asarray(constant_field_t, dtype=float).reshape(-1)
+    theta = float(cell_angle_rad)
+    offset = float(gradient_offset)
+    step = float(tracking_step_m)
+    station_count = int(integration_stations)
+    rigidity = float(recovered.magnetic_rigidity_tm)
+    iron_scale = float(iron_scale)
+    curvature_sign = float(curvature_sign)
+    segment_count = len(recovered.orbit.segment_lengths)
+    if (modes < 1 or state_jacobian.shape[1:] != state.shape
+            or cells.shape[0] != modes or faces.shape[0] != modes
+            or cells.ndim != 4 or cells.shape[2:] != (4, 3)
+            or faces.ndim != 4 or faces.shape[2:] != (3, 3)
+            or constant_field.shape != (3,)
+            or not np.all(np.isfinite(np.r_[
+                state, state_jacobian.ravel(), cells.ravel(), faces.ravel(),
+                constant_field, theta, offset, step, rigidity, iron_scale,
+                curvature_sign]))
+            or theta <= 0.0 or theta >= np.pi or offset <= 0.0
+            or step <= 0.0 or rigidity <= 0.0 or iron_scale == 0.0
+            or curvature_sign == 0.0 or station_count < 17
+            or (station_count-1) % segment_count != 0):
+        raise ValueError("invalid reclosed-orbit shape derivative settings")
+    if maximum_path_m is None:
+        maximum_path = max(1.5*recovered.path_length_m,
+                           recovered.path_length_m+4.0*step)
+    else:
+        maximum_path = float(maximum_path_m)
+    if not np.isfinite(maximum_path) or maximum_path <= recovered.path_length_m:
+        raise ValueError("maximum_path_m must exceed the recovered path length")
+
+    axis = np.array([0.0, 0.0, 1.0])
+    radial_0 = np.array([0.0, -1.0, 0.0])
+    tangent_0 = np.array([1.0, 0.0, 0.0])
+    cosine = float(np.cos(theta))
+    sine = float(np.sin(theta))
+    rotation = np.array([
+        [cosine, -sine, 0.0],
+        [sine, cosine, 0.0],
+        [0.0, 0.0, 1.0],
+    ])
+    radial_1 = rotation@radial_0
+    tangent_1 = np.ascontiguousarray(rotation@tangent_0)
+    radius = float(recovered.entrance_radius_m)
+    alpha = float(recovered.entrance_incidence_angle_rad)
+    entrance_tangent = (
+        np.cos(alpha)*tangent_0 + np.sin(alpha)*radial_0)
+    entrance_alpha_tangent = (
+        -np.sin(alpha)*tangent_0 + np.cos(alpha)*radial_0)
+    native_rigidity = -rigidity/curvature_sign
+    tracked = _native.track_reference_orbit_to_plane_native(
+        iron_evaluator, iron_scale, -1, False, constant_field,
+        native_rigidity, np.ascontiguousarray(radius*radial_0),
+        np.ascontiguousarray(entrance_tangent), tangent_1, 0.0,
+        step, maximum_path, 1.0e-6, station_count, "direct")
+    positions = np.ascontiguousarray(tracked[0], dtype=float)
+    tangents = np.ascontiguousarray(tracked[1], dtype=float)
+    stations = np.ascontiguousarray(tracked[2], dtype=float)
+    length = float(tracked[4])
+    if abs(length-recovered.path_length_m) > 5.0e-10*max(1.0, length):
+        raise RuntimeError(
+            "dense shape track does not reproduce the recovered path length")
+
+    raw_field = np.asarray(
+        iron_evaluator.field(positions, "direct"), dtype=float)
+    field = iron_scale*raw_field + constant_field[None, :]
+    field_gradient = iron_scale*np.asarray(
+        iron_evaluator.field_gradient(positions), dtype=float)
+    # The configured-value API includes 1/(4*pi), whereas the persistent
+    # evaluator is deliberately raw.  Convert both to the same B units.
+    fixed_shape_field = (4.0*np.pi*iron_scale)*np.asarray(
+        charge_gram.configured_field_values_shape_derivative(
+            positions, np.ascontiguousarray(state),
+            np.ascontiguousarray(state_jacobian), cells, faces),
+        dtype=float)
+    if (field.shape != (station_count, 3)
+            or field_gradient.shape != (station_count, 3, 3)
+            or fixed_shape_field.shape != (modes, station_count, 3)):
+        raise RuntimeError("native field tangent API returned invalid shapes")
+
+    partial_count = modes+2
+    sensitivities = np.zeros((station_count, partial_count, 6))
+    sensitivities[0, 0, :3] = radial_0
+    sensitivities[0, 1, 3:] = entrance_alpha_tangent
+
+    def sensitivity_rhs(values, tangent, b_value, gradient, shape_value):
+        result = np.empty_like(values)
+        result[:, :3] = values[:, 3:]
+        displaced_field = values[:, :3]@gradient.T
+        displaced_field[2:] += shape_value
+        result[:, 3:] = (
+            np.cross(values[:, 3:], b_value[None, :])
+            + np.cross(tangent[None, :], displaced_field)
+        )/native_rigidity
+        return result
+
+    for index in range(station_count-1):
+        ds = stations[index+1]-stations[index]
+        t_left = tangents[index]
+        t_right = tangents[index+1]
+        t_middle = t_left+t_right
+        t_middle /= np.linalg.norm(t_middle)
+        b_left = field[index]
+        b_right = field[index+1]
+        b_middle = 0.5*(b_left+b_right)
+        g_left = field_gradient[index]
+        g_right = field_gradient[index+1]
+        g_middle = 0.5*(g_left+g_right)
+        q_left = fixed_shape_field[:, index]
+        q_right = fixed_shape_field[:, index+1]
+        q_middle = 0.5*(q_left+q_right)
+        value = sensitivities[index]
+        k1 = sensitivity_rhs(value, t_left, b_left, g_left, q_left)
+        k2 = sensitivity_rhs(
+            value+0.5*ds*k1, t_middle, b_middle, g_middle, q_middle)
+        k3 = sensitivity_rhs(
+            value+0.5*ds*k2, t_middle, b_middle, g_middle, q_middle)
+        k4 = sensitivity_rhs(
+            value+ds*k3, t_right, b_right, g_right, q_right)
+        sensitivities[index+1] = value + ds*(k1+2*k2+2*k3+k4)/6.0
+
+    exit_tangent = tangents[-1]
+    denominator = float(tangent_1@exit_tangent)
+    if abs(denominator) <= 1.0e-8:
+        raise RuntimeError("exit-plane event is tangent to the recovered orbit")
+    partial_length = -(sensitivities[-1, :, :3]@tangent_1)/denominator
+    exit_acceleration = np.cross(exit_tangent, field[-1])/native_rigidity
+    event_position = (sensitivities[-1, :, :3]
+                      + partial_length[:, None]*exit_tangent)
+    event_tangent = (sensitivities[-1, :, 3:]
+                     + partial_length[:, None]*exit_acceleration)
+    back_position = event_position@rotation
+    back_tangent = event_tangent@rotation
+    entrance_partials = np.zeros((partial_count, 3))
+    entrance_partials[1] = entrance_alpha_tangent
+    cross_value = float(axis@np.cross(
+        entrance_tangent, rotation.T@exit_tangent))
+    dot_value = float(entrance_tangent@(rotation.T@exit_tangent))
+    closure_jacobian = np.empty((2, partial_count))
+    radius_scale = max(radius, 1.0e-6)
+    closure_jacobian[0] = (back_position@radial_0)/radius_scale
+    closure_jacobian[0, 0] -= 1.0/radius_scale
+    for column in range(partial_count):
+        dcross = float(axis@(
+            np.cross(entrance_partials[column], rotation.T@exit_tangent)
+            + np.cross(entrance_tangent, back_tangent[column])))
+        ddot = float(
+            entrance_partials[column]@(rotation.T@exit_tangent)
+            + entrance_tangent@back_tangent[column])
+        closure_jacobian[1, column] = (
+            dot_value*dcross-cross_value*ddot)/(dot_value**2+cross_value**2)
+    entrance_jacobian = -np.linalg.solve(
+        closure_jacobian[:, :2], closure_jacobian[:, 2:])
+    length_jacobian = (
+        partial_length[2:] + partial_length[:2]@entrance_jacobian)
+
+    fractions = stations/length
+    acceleration = np.cross(tangents, field)/native_rigidity
+    normalized_sensitivity = sensitivities.copy()
+    normalized_sensitivity[:, :, :3] += (
+        fractions[:, None, None]*partial_length[None, :, None]
+        * tangents[:, None, :])
+    normalized_sensitivity[:, :, 3:] += (
+        fractions[:, None, None]*partial_length[None, :, None]
+        * acceleration[:, None, :])
+    total_sensitivity = (
+        normalized_sensitivity[:, 2:]
+        + np.einsum(
+            "sui,uq->sqi", normalized_sensitivity[:, :2],
+            entrance_jacobian))
+    total_sensitivity[:, :, 3:] -= (
+        tangents[:, None, :]
+        * np.einsum("si,sqi->sq", tangents,
+                    total_sensitivity[:, :, 3:])[:, :, None])
+
+    stride = (station_count-1)//segment_count
+    indices = np.arange(0, station_count, stride, dtype=np.int64)
+    coarse_position = positions[indices]
+    coarse_tangent = tangents[indices]
+    position_jacobian = np.transpose(
+        total_sensitivity[indices, :, :3], (1, 0, 2))
+    tangent_jacobian = np.transpose(
+        total_sensitivity[indices, :, 3:], (1, 0, 2))
+    segment_lengths = np.full(segment_count, length/segment_count)
+    segment_length_jacobian = np.tile(
+        length_jacobian[None, :]/segment_count, (segment_count, 1))
+    centers = (
+        0.5*(coarse_position[:-1]+coarse_position[1:])
+        + segment_lengths[:, None]
+        *(coarse_tangent[:-1]-coarse_tangent[1:])/8.0)
+    center_jacobian = (
+        0.5*(position_jacobian[:, :-1]+position_jacobian[:, 1:])
+        + segment_length_jacobian.T[:, :, None]
+        *(coarse_tangent[:-1]-coarse_tangent[1:])[None, :, :]/8.0
+        + segment_lengths[None, :, None]
+        *(tangent_jacobian[:, :-1]-tangent_jacobian[:, 1:])/8.0)
+    tangent_sum = coarse_tangent[:-1]+coarse_tangent[1:]
+    midpoint_tangent = tangent_sum/np.linalg.norm(
+        tangent_sum, axis=1)[:, None]
+    tangent_sum_jacobian = tangent_jacobian[:, :-1]+tangent_jacobian[:, 1:]
+    midpoint_tangent_jacobian = (
+        tangent_sum_jacobian
+        - midpoint_tangent[None, :, :]*np.einsum(
+            "si,qsi->qs", midpoint_tangent, tangent_sum_jacobian)[:, :, None]
+    )/np.linalg.norm(tangent_sum, axis=1)[None, :, None]
+    normals = np.cross(axis[None, :], midpoint_tangent)
+    normal_jacobian = np.cross(
+        axis[None, None, :], midpoint_tangent_jacobian)
+    observation_points = np.vstack((
+        centers, centers+offset*normals, centers-offset*normals))
+    observation_jacobian = np.concatenate((
+        center_jacobian,
+        center_jacobian+offset*normal_jacobian,
+        center_jacobian-offset*normal_jacobian), axis=1)
+    observation_field = (
+        iron_scale*np.asarray(
+            iron_evaluator.field(observation_points, "direct"), dtype=float)
+        + constant_field[None, :])
+    observation_gradient = iron_scale*np.asarray(
+        iron_evaluator.field_gradient(observation_points), dtype=float)
+    observation_fixed_shape = (4.0*np.pi*iron_scale)*np.asarray(
+        charge_gram.configured_field_values_shape_derivative(
+            np.ascontiguousarray(observation_points),
+            np.ascontiguousarray(state),
+            np.ascontiguousarray(state_jacobian), cells, faces), dtype=float)
+    observation_total_shape = (
+        observation_fixed_shape
+        + np.einsum("pij,qpj->qpi", observation_gradient,
+                    observation_jacobian))
+    field_response = np.r_[
+        observation_field[:segment_count, 2],
+        (observation_field[segment_count:2*segment_count, 2]
+         - observation_field[2*segment_count:, 2])/(2.0*offset)]
+    field_response_jacobian = np.concatenate((
+        observation_total_shape[:, :segment_count, 2],
+        (observation_total_shape[:, segment_count:2*segment_count, 2]
+         - observation_total_shape[:, 2*segment_count:, 2])/(2.0*offset),
+    ), axis=1).T
+    transfer = combined_function_transfer_map_from_field_response(
+        field_response, segment_lengths, rigidity,
+        field_response_jacobian=field_response_jacobian,
+        curvature_sign=curvature_sign,
+        segment_length_jacobian=segment_length_jacobian,
+        response_entries=response_entries)
+    return ReclosedOrbitShapeJacobian(
+        recovered, entrance_jacobian, length_jacobian,
+        position_jacobian, tangent_jacobian,
+        field_response, field_response_jacobian, transfer,
+        closure_jacobian)
+
+
 def recover_periodic_planar_closed_orbit(
         field, *, magnetic_rigidity, cell_angle_rad, initial_radius_m,
         initial_incidence_angle_rad=0.0, n_segments=128,
@@ -626,6 +926,263 @@ def recover_periodic_planar_closed_orbit(
         response, transfer)
 
 
+def recover_periodic_planar_closed_orbit_native(
+        field, *, iron_evaluator=None, iron_scale=0.0,
+        iron_algorithm="auto", radia_object=-1,
+        mirror_z=False, constant_field_t=(0.0, 0.0, 0.0),
+        magnetic_rigidity, cell_angle_rad, initial_radius_m,
+        initial_incidence_angle_rad=0.0, n_segments=128,
+        gradient_offset=1.0e-3, tracking_step_m=5.0e-4,
+        max_path_length_m=None, planarity_tolerance_m=1.0e-7,
+        curvature_sign=1.0, position_tolerance=1.0e-9,
+        tangent_tolerance=1.0e-9, root_max_evaluations=80,
+        response_entries=None) -> FullFieldClosedOrbit:
+    """Recover a periodic orbit with the fixed-step C++ field tracker.
+
+    Each complete trajectory integration and exit-plane interpolation is
+    performed in C++.  Python owns only the two-variable radius/incidence
+    Broyden iteration: it forms one physically scaled numerical root Jacobian
+    at the initial seed, then updates that 2-by-2 Jacobian by rank one.
+    ``field`` is the matching total-field provider used only for the final
+    orbit/gradient samples.  The native field is the sum of
+    ``iron_evaluator*iron_scale``, the optional Radia object, and
+    ``constant_field_t``.
+
+    Numerical differencing inside the orbit root finder is not an optimizer
+    design derivative.  Shape/topology sensitivities must continue to use the
+    analytic HDiv-MMM contractions; a candidate geometry is accepted only
+    after this routine re-integrates and re-closes its realized orbit.
+    """
+    from . import _radia_pybind as _native
+
+    rigidity = float(magnetic_rigidity)
+    theta = float(cell_angle_rad)
+    radius_guess = float(initial_radius_m)
+    alpha_guess = float(initial_incidence_angle_rad)
+    segments = int(n_segments)
+    gradient_offset = float(gradient_offset)
+    step = float(tracking_step_m)
+    planarity_tolerance = float(planarity_tolerance_m)
+    curvature_sign = float(curvature_sign)
+    position_tolerance = float(position_tolerance)
+    tangent_tolerance = float(tangent_tolerance)
+    max_evaluations = int(root_max_evaluations)
+    iron_scale = float(iron_scale)
+    iron_algorithm = str(iron_algorithm)
+    radia_object = int(radia_object)
+    constant_field = np.ascontiguousarray(
+        constant_field_t, dtype=float).reshape(-1)
+    if (iron_algorithm not in ("auto", "direct", "tree")
+            or constant_field.shape != (3,)
+            or not np.all(np.isfinite(np.r_[
+                constant_field, rigidity, theta, radius_guess, alpha_guess,
+                gradient_offset, step, planarity_tolerance, curvature_sign,
+                position_tolerance, tangent_tolerance, iron_scale]))
+            or rigidity <= 0.0 or radius_guess <= 0.0
+            or theta <= 0.0 or theta >= np.pi or segments < 8
+            or gradient_offset <= 0.0 or step <= 0.0
+            or planarity_tolerance <= 0.0 or curvature_sign == 0.0
+            or position_tolerance <= 0.0 or tangent_tolerance <= 0.0
+            or max_evaluations < 4):
+        raise ValueError("invalid native periodic closed-orbit settings")
+    if max_path_length_m is None:
+        max_path = max(
+            4.0 * radius_guess * theta, 0.25 * radius_guess)
+    else:
+        max_path = float(max_path_length_m)
+    if (not np.isfinite(max_path) or max_path <= step):
+        raise ValueError(
+            "max_path_length_m must be finite and exceed tracking_step_m")
+
+    axis = np.array([0.0, 0.0, 1.0])
+    radial_0 = np.array([0.0, -1.0, 0.0])
+    tangent_0 = np.array([1.0, 0.0, 0.0])
+    cosine = float(np.cos(theta))
+    sine = float(np.sin(theta))
+    rotation = np.array([
+        [cosine, -sine, 0.0],
+        [sine, cosine, 0.0],
+        [0.0, 0.0, 1.0],
+    ])
+    radial_1 = rotation @ radial_0
+    tangent_1 = np.ascontiguousarray(rotation @ tangent_0)
+    radius_scale = max(radius_guess, 1.0e-6)
+    # C++ uses dt/ds=t x B/(B rho), whereas the public planar convention is
+    # positive B_binormal -> positive signed curvature.
+    native_rigidity = -rigidity / curvature_sign
+
+    def track(radius, alpha, station_count):
+        start_position = np.ascontiguousarray(radius * radial_0)
+        start_tangent = np.ascontiguousarray(
+            np.cos(alpha) * tangent_0 + np.sin(alpha) * radial_0)
+        return _native.track_reference_orbit_to_plane_native(
+            iron_evaluator, iron_scale, radia_object, bool(mirror_z),
+            constant_field, native_rigidity, start_position, start_tangent,
+            tangent_1, 0.0, step, max_path, planarity_tolerance,
+            int(station_count), iron_algorithm)
+
+    track_evaluations = 0
+
+    def terminal_state(radius, alpha):
+        nonlocal track_evaluations
+        track_evaluations += 1
+        try:
+            tracked = track(radius, alpha, 2)
+        except (RuntimeError, ValueError):
+            return None
+        position = np.asarray(tracked[0][-1], dtype=float)
+        tangent = np.asarray(tracked[1][-1], dtype=float)
+        if position @ radial_1 <= 0.0:
+            return None
+        return position, tangent
+
+    cached_parameters = None
+    cached_residual = None
+
+    def residual(parameters):
+        nonlocal cached_parameters, cached_residual
+        parameters = np.asarray(parameters, dtype=float)
+        if (cached_parameters is not None
+                and np.array_equal(parameters, cached_parameters)):
+            return cached_residual.copy()
+        radius, alpha = parameters
+        terminal = terminal_state(radius, alpha)
+        if terminal is None:
+            value = np.array([1.0e3, 1.0e3])
+        else:
+            position_back = rotation.T @ terminal[0]
+            tangent_back = rotation.T @ terminal[1]
+            entrance_tangent = (
+                np.cos(alpha) * tangent_0 + np.sin(alpha) * radial_0)
+            tangent_cross = float(axis @ np.cross(
+                entrance_tangent, tangent_back))
+            tangent_dot = float(entrance_tangent @ tangent_back)
+            value = np.array([
+                (position_back @ radial_0 - radius) / radius_scale,
+                np.arctan2(tangent_cross, tangent_dot),
+            ])
+        cached_parameters = parameters.copy()
+        cached_residual = value.copy()
+        return value
+
+    def root_jacobian(parameters):
+        # Use physical absolute perturbations larger than the fixed-step RK4
+        # interpolation floor.  A generic sqrt(eps) perturbation can
+        # differentiate that floor and trigger many needless integrations.
+        # This Jacobian belongs only to the two-variable orbit-recovery root;
+        # it is never exposed as a magnet design derivative.
+        nonlocal cached_parameters, cached_residual
+        parameters = np.asarray(parameters, dtype=float)
+        base = residual(parameters)
+        steps = np.array([
+            max(1.0e-5 * radius_scale, 100.0 * position_tolerance),
+            max(1.0e-5, 100.0 * tangent_tolerance),
+        ])
+        jacobian = np.empty((2, 2))
+        for column, difference in enumerate(steps):
+            shifted = parameters.copy()
+            shifted[column] += difference
+            jacobian[:, column] = (
+                residual(shifted) - base) / difference
+        cached_parameters = parameters.copy()
+        cached_residual = base.copy()
+        return jacobian
+
+    lower = np.array([0.2 * radius_guess, -0.45 * np.pi])
+    upper = np.array([5.0 * radius_guess, 0.45 * np.pi])
+    parameters = np.array([radius_guess, alpha_guess])
+    root_residual = residual(parameters)
+    jacobian = root_jacobian(parameters)
+    position_root_tolerance = position_tolerance / radius_scale
+
+    def root_merit(value):
+        return float(max(
+            abs(value[0]) / position_root_tolerance,
+            abs(value[1]) / tangent_tolerance))
+
+    root_success = root_merit(root_residual) <= 1.0
+    while not root_success and track_evaluations < max_evaluations:
+        try:
+            update = np.linalg.solve(jacobian, -root_residual)
+        except np.linalg.LinAlgError:
+            update = np.linalg.lstsq(
+                jacobian, -root_residual, rcond=1.0e-12)[0]
+        # Keep a poor initial field seed inside the same local sector rather
+        # than asking the plane-crossing tracker to globalize the problem.
+        update[0] = np.clip(
+            update[0], -0.25 * radius_guess, 0.25 * radius_guess)
+        update[1] = np.clip(update[1], -0.15, 0.15)
+        base_merit = root_merit(root_residual)
+        accepted = False
+        damping = 1.0
+        while track_evaluations < max_evaluations:
+            candidate = np.clip(
+                parameters + damping * update, lower, upper)
+            candidate_residual = residual(candidate)
+            candidate_merit = root_merit(candidate_residual)
+            if candidate_merit < base_merit:
+                accepted = True
+                break
+            damping *= 0.5
+            if damping < 1.0 / 128.0:
+                break
+        if not accepted:
+            break
+        step_parameters = candidate - parameters
+        step_residual = candidate_residual - root_residual
+        denominator = float(step_parameters @ step_parameters)
+        if denominator > 1.0e-30:
+            jacobian += np.outer(
+                step_residual - jacobian @ step_parameters,
+                step_parameters) / denominator
+        parameters = candidate
+        root_residual = candidate_residual
+        root_success = root_merit(root_residual) <= 1.0
+    radius, alpha = (float(value) for value in parameters)
+    if not root_success:
+        raise RuntimeError(
+            "periodic orbit closure failed after "
+            f"{track_evaluations} native tracks: position residual "
+            f"{abs(root_residual[0]) * radius_scale:.6e} m, tangent "
+            f"residual {abs(root_residual[1]):.6e}")
+    try:
+        tracked = track(radius, alpha, segments + 1)
+    except (RuntimeError, ValueError) as error:
+        raise RuntimeError(
+            "periodic orbit did not reach the next radial boundary") from error
+    positions = np.ascontiguousarray(tracked[0], dtype=float)
+    tangents = np.ascontiguousarray(tracked[1], dtype=float)
+    path_stations = np.ascontiguousarray(tracked[2], dtype=float)
+    curvature = np.ascontiguousarray(tracked[3], dtype=float)
+    path_length = float(tracked[4])
+    final_residual = residual((radius, alpha))
+    position_residual = abs(float(final_residual[0])) * radius_scale
+    tangent_residual = abs(float(final_residual[1]))
+    position_back = rotation.T @ positions[-1]
+    tangent_back = rotation.T @ tangents[-1]
+    if (position_residual > position_tolerance
+            or tangent_residual > tangent_tolerance):
+        raise RuntimeError(
+            "periodic orbit closure failed: position residual "
+            f"{position_residual:.6e} m, tangent residual "
+            f"{tangent_residual:.6e}")
+    orbit = PlanarDesignOrbit(
+        positions, tangents, magnetic_rigidity=rigidity,
+        bend_axis=axis, path_length_stations=path_stations,
+        signed_curvature_per_m=curvature)
+    response = sample_planar_orbit_field_response(
+        field, orbit, gradient_offset=gradient_offset)
+    transfer = combined_function_transfer_map_from_field_response(
+        response, orbit.segment_lengths, rigidity,
+        curvature_sign=curvature_sign,
+        response_entries=response_entries)
+    return FullFieldClosedOrbit(
+        rigidity, orbit, path_length, radius, alpha,
+        position_residual, tangent_residual,
+        float(position_back[2]), float(tangent_back[2]), track_evaluations,
+        response, transfer)
+
+
 def recover_ffag_closed_orbit(
         field, spec: FFAGSoftEdgeCellSpec, kinetic_energy_mev, *,
         initial_reference=None, n_segments=128, gradient_offset=1.0e-3,
@@ -675,6 +1232,61 @@ def recover_ffag_closed_orbit(
         **recovery_options)
 
 
+def recover_ffag_closed_orbit_native(
+        field, spec: FFAGSoftEdgeCellSpec, kinetic_energy_mev, *,
+        iron_evaluator=None, iron_scale=0.0, iron_algorithm="auto",
+        radia_object=-1,
+        mirror_z=False, constant_field_t=(0.0, 0.0, 0.0),
+        initial_reference=None, n_segments=128, gradient_offset=1.0e-3,
+        **recovery_options) -> FullFieldClosedOrbit:
+    """Native-tracker counterpart of :func:`recover_ffag_closed_orbit`."""
+    if not isinstance(spec, FFAGSoftEdgeCellSpec):
+        raise TypeError("spec must be an FFAGSoftEdgeCellSpec")
+    energy = float(kinetic_energy_mev)
+    reference = (build_ffag_cell_reference(
+        spec, energy, n_segments=max(64, int(n_segments)))
+        if initial_reference is None else initial_reference)
+    if isinstance(reference, FFAGCellReference):
+        if (abs(reference.kinetic_energy_mev - energy)
+                > 1.0e-12 * max(1.0, energy)):
+            raise ValueError("initial_reference kinetic energy does not match")
+        seed_orbit = reference.orbit
+        rigidity = reference.magnetic_rigidity_tm
+        radius = None
+        alpha = None
+    elif isinstance(reference, FullFieldClosedOrbit):
+        rigidity = magnetic_rigidity_from_kinetic_energy(energy)
+        if (abs(reference.magnetic_rigidity_tm - rigidity)
+                > 1.0e-10 * max(1.0, rigidity)):
+            raise ValueError("initial full-field orbit rigidity does not match")
+        seed_orbit = reference.orbit
+        radius = reference.entrance_radius_m
+        alpha = reference.entrance_incidence_angle_rad
+    else:
+        raise TypeError(
+            "initial_reference must be an FFAGCellReference or "
+            "FullFieldClosedOrbit")
+    if radius is None:
+        radial_0 = np.array([0.0, -1.0, 0.0])
+        tangent_0 = np.array([1.0, 0.0, 0.0])
+        radius = float(seed_orbit.positions[0] @ radial_0)
+        entrance_tangent = seed_orbit.tangents[0]
+        alpha = float(np.arctan2(
+            entrance_tangent @ radial_0, entrance_tangent @ tangent_0))
+    recovery_options.setdefault(
+        "max_path_length_m", 2.5 * spec.cell_length_m)
+    return recover_periodic_planar_closed_orbit_native(
+        field, iron_evaluator=iron_evaluator, iron_scale=iron_scale,
+        iron_algorithm=iron_algorithm,
+        radia_object=radia_object, mirror_z=mirror_z,
+        constant_field_t=constant_field_t, magnetic_rigidity=rigidity,
+        cell_angle_rad=spec.cell_bend_angle_rad,
+        initial_radius_m=radius,
+        initial_incidence_angle_rad=alpha,
+        n_segments=n_segments, gradient_offset=gradient_offset,
+        **recovery_options)
+
+
 def recover_ffag_closed_orbit_family(
         field, target_family: FFAGCellTargetFamily, *, n_segments=128,
         gradient_offset=1.0e-3, initial_references=None,
@@ -692,6 +1304,33 @@ def recover_ffag_closed_orbit_family(
         field, target_family.spec, target.kinetic_energy_mev,
         initial_reference=seed, n_segments=n_segments,
         gradient_offset=gradient_offset, **recovery_options)
+        for target, seed in zip(target_family.references, references))
+
+
+def recover_ffag_closed_orbit_family_native(
+        field, target_family: FFAGCellTargetFamily, *,
+        iron_evaluator=None, iron_scale=0.0, iron_algorithm="auto",
+        radia_object=-1,
+        mirror_z=False, constant_field_t=(0.0, 0.0, 0.0),
+        n_segments=128, gradient_offset=1.0e-3,
+        initial_references=None, **recovery_options
+        ) -> tuple[FullFieldClosedOrbit, ...]:
+    """Recover a momentum family using the C++ trajectory integrator."""
+    if not isinstance(target_family, FFAGCellTargetFamily):
+        raise TypeError("target_family must be an FFAGCellTargetFamily")
+    references = (target_family.references if initial_references is None
+                  else tuple(initial_references))
+    if len(references) != len(target_family.references):
+        raise ValueError(
+            "initial_references must have one seed per target momentum")
+    return tuple(recover_ffag_closed_orbit_native(
+        field, target_family.spec, target.kinetic_energy_mev,
+        iron_evaluator=iron_evaluator, iron_scale=iron_scale,
+        iron_algorithm=iron_algorithm,
+        radia_object=radia_object, mirror_z=mirror_z,
+        constant_field_t=constant_field_t, initial_reference=seed,
+        n_segments=n_segments, gradient_offset=gradient_offset,
+        **recovery_options)
         for target, seed in zip(target_family.references, references))
 
 
@@ -1447,16 +2086,21 @@ __all__ = [
     "FFAGFixedOrbitMapTrial",
     "FFAGSoftEdgeCellSpec",
     "FullFieldClosedOrbit",
+    "ReclosedOrbitShapeJacobian",
     "GEV_C_PER_TESLA_METRE",
     "PROTON_REST_ENERGY_MEV",
     "build_ffag_cell_reference",
     "build_ffag_cell_target_family",
     "enge_fringe_integrals",
+    "differentiate_recovered_planar_orbit_shape_native",
     "magnetic_rigidity_from_kinetic_energy",
     "optimize_ffag_hdiv_mmm_from_fixed_design_orbits",
     "optimize_ffag_hdiv_mmm_from_transfer_matrices",
     "recover_ffag_closed_orbit",
     "recover_ffag_closed_orbit_family",
+    "recover_ffag_closed_orbit_family_native",
+    "recover_ffag_closed_orbit_native",
     "recover_periodic_planar_closed_orbit",
+    "recover_periodic_planar_closed_orbit_native",
     "sample_planar_orbit_field_response",
 ]
