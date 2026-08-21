@@ -6,6 +6,29 @@ VTK / MEG / FEMEEM writers + Python bindings for consistency checks).
 
 ## Unreleased
 
+- Strengthen `cubit-smoke-test` from a label-presence check into the complete
+  solver-ready `check-vol` gate. The smoke now requires its CAD sidecar,
+  validates element/point/order metadata, reloads the mesh with NGSolve, audits
+  tetrahedral topology and boundary-domain ownership, samples curved-map
+  Jacobians, and requires positive expected material volumes and boundary
+  areas. It writes a structured report and preserves failed work directories.
+- Add a reproducible complex-geometry volume-accuracy corpus with Cubit ACIS
+  and NGSolve measurements for Boolean-cut flanges/busbars, a stepped spacer,
+  a trimmed half torus, and a mixed tet/wedge boundary-layer solid at orders
+  1--3. The canonical IH sample now names its coil wall and air exterior instead
+  of exporting unstable `Surface_N` labels.
+- Fix periodic-curve seam interpolation in the high-order Netgen exporter. A
+  circle-to-rectangle loft formerly clamped one circular edge to its seam
+  endpoint, producing 4 order-2 and 9 order-3 orientation reversals despite
+  apparently accurate total volume. The exporter now projects on the untrimmed
+  curve and validates the unwrapped local interval; regenerated orders 2 and 3
+  have zero invalid/flipped samples and 0.0351%/0.0229% CAD-volume error.
+- Add coarse/refined 355-degree sweep twins to the learning corpus. The coarse
+  12/48 surface mesh records 13 order-3 orientation flips despite only 0.0349%
+  volume error, while one 16/64 refinement step removes every flip. This keeps
+  geometric under-resolution distinct from the fixed periodic-seam defect and
+  proves that order elevation is not a substitute for `check-vol` quality.
+
 ## 0.14.9 - Sculpt/Exodus sideset preservation
 
 Released 2026-08-19.

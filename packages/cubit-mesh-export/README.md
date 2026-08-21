@@ -53,6 +53,21 @@ Always re-run `cubit-plugin-install` after upgrading.
 hashes and, when `radia` is installed, the Cubit toolbar startup
 registration.
 
+For a complete deployed-export check, close the interactive Cubit process and
+run:
+
+```bash
+cubit-smoke-test --order 2
+```
+
+This launches Cubit in batch mode, exports the canonical IH model, and applies
+the production `check-vol` gate. Success requires strict boundary/material
+labels, matching companion-JSON metadata, successful NGSolve reload,
+tetrahedral topology, complete boundary-domain ownership, positive required
+volumes and areas, and valid sampled Jacobians for the curved map. A failed run
+retains its temporary work directory together with `vol-check.json` (or
+`vol-check-error.json`) for diagnosis.
+
 ## Cubit commands
 
 ```
