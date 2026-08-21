@@ -7,6 +7,8 @@ from radia.accelerator_magnet_topopt import (
     PlanarDesignOrbit,
     PlanarTransferMatrixObjective,
     build_planar_orbit_field_response_matrix,
+    build_multi_orbit_field_response_matrix,
+    multi_orbit_field_observations,
     optimize_hdiv_mmm_magnet_from_transfer_matrix,
     planar_orbit_field_observations,
     run_transfer_matrix_material_inverse_pipeline,
@@ -184,6 +186,39 @@ def test_planar_orbit_observations_measure_binormal_field_and_normal_gradient():
     assert points.shape==(3,3)
     assert weights.shape==(2,3,3)
     np.testing.assert_allclose(response[1],3.0,rtol=0.0,atol=2e-14)
+
+
+def test_multi_orbit_shape_observations_match_batched_field_rows():
+    class AnalyticRows:
+        @staticmethod
+        def configured_field_functional_rows(points, weights):
+            points = np.asarray(points, dtype=float)
+            basis = np.empty((len(points), 2, 3), dtype=float)
+            basis[:, 0, :] = np.column_stack((
+                1.0 + points[:, 0], 2.0 - points[:, 1], points[:, 2]))
+            basis[:, 1, :] = np.column_stack((
+                points[:, 0] * points[:, 1], 1.0 + points[:, 2],
+                points[:, 0] - points[:, 2]))
+            return np.einsum("rpc,pdc->rd", weights, basis)
+
+    orbits = (
+        _one_segment_arc(radius=8.0, angle=0.07, rigidity=1.3),
+        _one_segment_arc(radius=11.0, angle=0.09, rigidity=2.1),
+    )
+    objective = MultiMomentumTransferMatrixObjective(
+        orbits, np.asarray([np.eye(6), np.eye(6)]), 1.0, 1.0)
+    gradient_offsets = (0.02, 0.03)
+    points, weights = multi_orbit_field_observations(
+        objective, gradient_offset=gradient_offsets, field_scale=1.7)
+    packed = AnalyticRows.configured_field_functional_rows(points, weights)
+    batched = build_multi_orbit_field_response_matrix(
+        AnalyticRows(), objective, gradient_offset=gradient_offsets,
+        field_scale=1.7)
+
+    assert points.flags.c_contiguous and weights.flags.c_contiguous
+    assert weights.shape == (
+        objective.raw_field_response_size, len(points), 3)
+    np.testing.assert_allclose(packed, batched, rtol=2e-13, atol=1e-14)
 
 
 def test_coilbuilder_source_owns_hdiv_rhs_incident_rows_and_total_field():
