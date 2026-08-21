@@ -1615,7 +1615,7 @@ def optimize_ffag_hdiv_mmm_from_fixed_design_orbits(
                         | FFAGFixedDesignOrbitTargetFamily), *, source,
         charge_gram, fes, inv_chi, active_elements, element_volumes,
         volume_max, gradient_offset=1.0e-3, source_scale=1.0,
-        optimize_source_scale=True,
+        optimize_source_scale=True, initial_state=None,
         max_optics_iterations=1, material_iterations_per_optics=1,
         field_inverse_relative_tolerance=1.0e-3,
         field_inverse_basis=None,
@@ -1640,8 +1640,15 @@ def optimize_ffag_hdiv_mmm_from_fixed_design_orbits(
 
     The caller owns ``ngsolve.TaskManager``.  No design finite difference,
     density interpolation, air volume mesh, or tracking root solve is used.
+    A caller may reuse an ``initial_state`` already solved for the identical
+    active set, source scale, RHS, and material law.  The configured operator
+    and inactive-DOF constraints are reapplied and the true residual is gated
+    before that state can skip the otherwise redundant initial solve.
     """
-    from .topology_optimization import solve_hdiv_mmm_active_elements
+    from .topology_optimization import (
+        solve_hdiv_mmm_active_elements,
+        validate_hdiv_mmm_active_state,
+    )
 
     if not isinstance(target_family, (
             FFAGCellTargetFamily, FFAGFixedDesignOrbitTargetFamily)):
@@ -1688,20 +1695,28 @@ def optimize_ffag_hdiv_mmm_from_fixed_design_orbits(
     objective = target_family.objective
     source_rhs = source.assemble_hdiv_rhs(fes)
     rhs = scale * source_rhs
-    state = solve_hdiv_mmm_active_elements(
-        charge_gram=charge_gram, fes=fes, inv_chi=inv_chi, rhs=rhs,
-        response_matrix=np.zeros((1, int(fes.ndof))),
-        active_elements=active,
-        solve_tolerance=float(generation_options.get(
-            "solve_tolerance", 1.0e-9)),
-        solve_max_iterations=int(generation_options.get(
-            "solve_max_iterations", 5000)),
-        mass_riesz=bool(generation_options.get("mass_riesz", True)),
-        cluster_coarse_size=int(generation_options.get(
-            "cluster_coarse_size", 0)),
-        cluster_deflation_size=int(generation_options.get(
-            "cluster_deflation_size", 0)),
-        recycle_size=int(generation_options.get("recycle_size", 0)))[0]
+    solve_tolerance = float(generation_options.get(
+        "solve_tolerance", 1.0e-9))
+    if initial_state is None:
+        state = solve_hdiv_mmm_active_elements(
+            charge_gram=charge_gram, fes=fes, inv_chi=inv_chi, rhs=rhs,
+            response_matrix=np.zeros((1, int(fes.ndof))),
+            active_elements=active,
+            solve_tolerance=solve_tolerance,
+            solve_max_iterations=int(generation_options.get(
+                "solve_max_iterations", 5000)),
+            mass_riesz=bool(generation_options.get("mass_riesz", True)),
+            cluster_coarse_size=int(generation_options.get(
+                "cluster_coarse_size", 0)),
+            cluster_deflation_size=int(generation_options.get(
+                "cluster_deflation_size", 0)),
+            recycle_size=int(generation_options.get("recycle_size", 0)))[0]
+    else:
+        state = np.asarray(initial_state, dtype=float).reshape(-1).copy()
+        validate_hdiv_mmm_active_state(
+            charge_gram=charge_gram, fes=fes, inv_chi=inv_chi, rhs=rhs,
+            active_elements=active, state=state,
+            solve_tolerance=solve_tolerance)
 
     if optimize_source_scale:
         total_field = CoilHDivTotalField(

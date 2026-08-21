@@ -43,6 +43,7 @@ from radia.topology_optimization import (
     solve_hdiv_mmm_active_elements,
     solve_element_generation_lp,
     solve_shape_lp,
+    validate_hdiv_mmm_active_state,
 )
 
 
@@ -537,6 +538,46 @@ def test_large_hdiv_mmm_candidate_screen_uses_one_shared_hmatrix_batch():
     unconstrained=[count for count,respect in gram.operator_batches
                    if not respect]
     assert unconstrained==[2]
+
+
+def test_hdiv_mmm_active_state_warm_start_rechecks_constraints_and_residual():
+    import ngsolve as ng
+    from ngsolve.meshes import MakeStructured3DMesh
+    from radia.vim._vim import build_charge_gram
+
+    mesh=MakeStructured3DMesh(hexes=True,nx=2,ny=1,nz=1)
+    fes=ng.HDiv(mesh,order=0,discontinuous=True)
+    with ng.TaskManager():
+        _,gram,mass=build_charge_gram(
+            fes,eps=1e-10,leafsize=256,eta=2.0,
+            internal_interfaces=True)
+    rng=np.random.default_rng(20260822)
+    rhs=np.asarray(mass@rng.normal(size=fes.ndof))
+    active=np.array([True,False])
+    state,_,_=solve_hdiv_mmm_active_elements(
+        charge_gram=gram,fes=fes,inv_chi=.2,rhs=rhs,
+        response_matrix=np.zeros((1,fes.ndof)),active_elements=active,
+        solve_tolerance=1e-11)
+    residual=validate_hdiv_mmm_active_state(
+        charge_gram=gram,fes=fes,inv_chi=.2,rhs=rhs,
+        active_elements=active,state=state,solve_tolerance=1e-11)
+    assert residual <= 5e-11
+
+    blocks=ngsolve_discontinuous_element_dof_blocks(fes)
+    invalid_constraint=state.copy()
+    invalid_constraint[blocks[1][0]]=1e-5
+    with pytest.raises(RuntimeError,match="inactive-DOF"):
+        validate_hdiv_mmm_active_state(
+            charge_gram=gram,fes=fes,inv_chi=.2,rhs=rhs,
+            active_elements=active,state=invalid_constraint,
+            solve_tolerance=1e-11)
+    invalid_residual=state.copy()
+    invalid_residual[blocks[0][0]]+=1e-5
+    with pytest.raises(RuntimeError,match="true-residual"):
+        validate_hdiv_mmm_active_state(
+            charge_gram=gram,fes=fes,inv_chi=.2,rhs=rhs,
+            active_elements=active,state=invalid_residual,
+            solve_tolerance=1e-11)
 
 
 def test_native_hdiv_mmm_block_schur_bundle_matches_exact_active_resolve():
