@@ -285,6 +285,12 @@ class TransferMapReachability:
     residual: np.ndarray
     max_normalized_residual: float
     reachable: bool
+    factorization_method: str = "dense"
+    aca_rank: int | None = None
+    aca_seed_rank: int | None = None
+    aca_residual_completion_rank: int = 0
+    factorization_relative_error: float = 0.0
+    retained_condition_number: float = float("inf")
 
 
 @dataclass(frozen=True)
@@ -990,14 +996,18 @@ def design_combined_function_transfer_map_target(*, length, bend_angle,
 def transfer_map_reachability(current_response, response_jacobian,
                               target_response, response_band, *,
                               relative_tolerance=1e-10,
-                              acceptance_ratio=1.0):
+                              acceptance_ratio=1.0,
+                              method="dense", aca_tolerance=1e-12,
+                              maximum_rank=None):
     """Project a target transfer map onto one linearized design space.
 
     This is a necessary reachability gate for topology optimization.  It solves
     the band-scaled, unconstrained least-squares problem by TSVD and reports the
-    residual orthogonal to the candidate-response column space.  A failed gate
-    means the current design variables cannot reproduce the requested map even
-    before 0/1, volume, predecessor, and connectivity constraints are imposed.
+    residual orthogonal to the candidate-response column space.  ``method`` is
+    either the exact small-matrix ``"dense"`` oracle or the production
+    ``"aca_qr_tsvd"`` pipeline.  A failed gate means the current design
+    variables cannot reproduce the requested map even before 0/1, volume,
+    predecessor, and connectivity constraints are imposed.
     """
     response = np.asarray(current_response, dtype=float).reshape(-1)
     target = np.asarray(target_response, dtype=float).reshape(-1)
@@ -1005,26 +1015,105 @@ def transfer_map_reachability(current_response, response_jacobian,
     jacobian = np.asarray(response_jacobian, dtype=float)
     tolerance = float(relative_tolerance)
     acceptance = float(acceptance_ratio)
+    factorization = str(method).strip().lower()
+    if factorization == "aca+qr+tsvd":
+        factorization = "aca_qr_tsvd"
+    if factorization not in ("dense", "aca_qr_tsvd"):
+        raise ValueError("method must be 'dense' or 'aca_qr_tsvd'")
+    aca_eps = float(aca_tolerance)
     if (response.size == 0 or target.shape != response.shape
             or band.shape != response.shape or np.any(band <= 0.0)
             or jacobian.ndim != 2 or jacobian.shape[0] != response.size
             or not np.all(np.isfinite(
                 np.r_[response, target, band, jacobian.ravel()]))
             or not np.isfinite(tolerance) or tolerance < 0.0
-            or not np.isfinite(acceptance) or acceptance < 0.0):
+            or not np.isfinite(acceptance) or acceptance < 0.0
+            or not np.isfinite(aca_eps) or aca_eps <= 0.0):
         raise ValueError("invalid transfer-map reachability inputs")
     scaled = jacobian / band[:, None]
     rhs = (target - response) / band
-    u, singular_values, vh = np.linalg.svd(scaled, full_matrices=False)
+    aca_rank = None
+    aca_seed_rank = None
+    aca_completion_rank = 0
+    factorization_error = 0.0
+    if scaled.shape[1] == 0:
+        u = np.zeros((scaled.shape[0], 0), dtype=float)
+        singular_values = np.zeros(0, dtype=float)
+        v = np.zeros((0, 0), dtype=float)
+    elif factorization == "dense":
+        u, singular_values, vh = np.linalg.svd(
+            scaled, full_matrices=False)
+        v = vh.T
+    else:
+        from .stream_function import aca_tsvd
+        available = min(scaled.shape)
+        if maximum_rank is None:
+            kmax = available
+        else:
+            kmax = int(maximum_rank)
+            if kmax < 1:
+                raise ValueError("maximum_rank must be positive")
+            kmax = min(kmax, available)
+        decomposition = aca_tsvd(
+            scaled.shape[0], scaled.shape[1],
+            lambda row, column: scaled[row, column],
+            modes=kmax, kmax=kmax, aca_eps=aca_eps,
+            method="aca_qr_tsvd")
+        u = np.asarray(decomposition.U, dtype=float)
+        singular_values = np.asarray(decomposition.S, dtype=float)
+        v = np.asarray(decomposition.V, dtype=float)
+        aca_seed_rank = int(decomposition.k_aca)
+
+        # ACA+ can encounter an algebraic pivot breakdown before reaching the
+        # numerical rank (a weak but independent column is the common case in
+        # transfer-map design).  The Jacobian is already caller-owned dense
+        # storage here, so continue ACA on its explicit residual, then perform
+        # the same QR + small-core TSVD recompression.  This is not a dense-SVD
+        # substitution: every completion step is one residual cross/pivot.
+        left = u*singular_values[None, :]
+        right = v.copy()
+        reference_norm = max(
+            float(np.linalg.norm(scaled)), np.finfo(float).tiny)
+        while left.shape[1] < kmax:
+            matrix_residual = scaled-left@right.T
+            residual_norm = float(np.linalg.norm(matrix_residual))
+            if residual_norm <= aca_eps*reference_norm:
+                break
+            pivot_flat = int(np.argmax(np.abs(matrix_residual)))
+            pivot_row, pivot_column = np.unravel_index(
+                pivot_flat, matrix_residual.shape)
+            column = matrix_residual[:, pivot_column]
+            pivot = float(column[pivot_row])
+            if abs(pivot) <= np.finfo(float).tiny*reference_norm:
+                break
+            row = matrix_residual[pivot_row, :]/pivot
+            left = np.column_stack((left, column))
+            right = np.column_stack((right, row))
+            aca_completion_rank += 1
+        if left.shape[1]:
+            q_left, r_left = np.linalg.qr(left, mode="reduced")
+            q_right, r_right = np.linalg.qr(right, mode="reduced")
+            core_u, singular_values, core_vh = np.linalg.svd(
+                r_left@r_right.T, full_matrices=False)
+            u = q_left@core_u
+            v = q_right@core_vh.T
+        aca_rank = int(left.shape[1])
+        reconstructed = (
+            (u*singular_values[None, :])@v.T
+            if singular_values.size else np.zeros_like(scaled))
+        factorization_error = float(
+            np.linalg.norm(scaled-reconstructed)/reference_norm)
     threshold = (tolerance * singular_values[0]
                  if singular_values.size else 0.0)
     rank = int(np.count_nonzero(singular_values > threshold))
     if rank:
-        parameter_step = (vh[:rank].T
+        parameter_step = (v[:, :rank]
                           @ ((u[:, :rank].T @ rhs)
                              / singular_values[:rank]))
+        condition = float(singular_values[0]/singular_values[rank-1])
     else:
         parameter_step = np.zeros(jacobian.shape[1], dtype=float)
+        condition = float("inf")
     predicted = response + jacobian @ parameter_step
     residual = predicted - target
     ratio = float(np.max(np.abs(residual / band)))
@@ -1035,7 +1124,12 @@ def transfer_map_reachability(current_response, response_jacobian,
         predicted_response=np.asarray(predicted, dtype=float),
         residual=np.asarray(residual, dtype=float),
         max_normalized_residual=ratio,
-        reachable=bool(ratio <= acceptance))
+        reachable=bool(ratio <= acceptance),
+        factorization_method=factorization, aca_rank=aca_rank,
+        aca_seed_rank=aca_seed_rank,
+        aca_residual_completion_rank=aca_completion_rank,
+        factorization_relative_error=factorization_error,
+        retained_condition_number=condition)
 
 
 def combined_function_exit_metrics(
