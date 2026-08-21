@@ -847,6 +847,44 @@ def test_adjacent_reviewer_readability_accepts_explicit_section_claims():
     assert "required_scope_without_deliverable" not in types
 
 
+def test_adjacent_reviewer_readability_flags_takeaway_after_evidence():
+    text = (
+        "菅原・長嶺らは、Cauer縮約をGalerkin系へ実装した。"
+        "解析解に対する誤差が1%未満であることを確認し、IGTE 2026で発表した。"
+        "これらの誘導加熱実績により、研究項目2は実装済みの結合系から開始できる。"
+    )
+
+    result = gw.grant_writing_adjacent_reviewer_readability_check(text)
+    risks = {risk["type"]: risk for risk in result["risks"]}
+
+    assert "takeaway_after_evidence" in risks
+    assert risks["takeaway_after_evidence"]["severity"] == "HIGH"
+    assert risks["takeaway_after_evidence"]["rewrite_order"][0] == (
+        "reviewer_takeaway"
+    )
+    assert result["metrics"]["takeaway_after_evidence_count"] == 1
+    assert result["revision_protocol"]["sequence"] == [
+        "reviewer_takeaway",
+        "plain_language_role",
+        "specific_method_or_evidence",
+        "limit_or_remaining_question",
+    ]
+
+
+def test_adjacent_reviewer_readability_accepts_takeaway_first_evidence():
+    text = (
+        "誘導加熱の結合系は実装・検証済みであり、研究項目2を直ちに開始できる。"
+        "具体的には、Cauer縮約をGalerkin系へ実装した。"
+        "解析解に対する誤差が1%未満であることを確認し、IGTE 2026で発表した。"
+    )
+
+    result = gw.grant_writing_adjacent_reviewer_readability_check(text)
+    types = {risk["type"] for risk in result["risks"]}
+
+    assert "takeaway_after_evidence" not in types
+    assert result["metrics"]["takeaway_after_evidence_count"] == 0
+
+
 def test_subject_predicate_distance_reads_fullwidth_japanese_comma():
     text = (
         "本研究は，異なる手法で得た多数の候補について設計量を比較し，"
