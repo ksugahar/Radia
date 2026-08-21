@@ -219,9 +219,13 @@ def test_transfer_map_field_chain_uses_forward_ad_jacobian():
         [0.2, -0.1], [0.1, 0.3], [-0.05, 0.12],
         [1.0, -2.0], [-0.5, 0.4], [0.3, 0.8],
     ])
+    length_jacobian = np.array([
+        [0.03, -0.02], [-0.01, 0.04], [0.02, 0.01],
+    ])
     differentiated = combined_function_transfer_map_from_field_response(
         field, lengths, rigidity,
         field_response_jacobian=field_jacobian,
+        segment_length_jacobian=length_jacobian,
         curvature_sign=-1.0, gradient_sign=-1.0)
     assert differentiated.derivative_backend==(
         "forward-mode-expm-frechet-ad")
@@ -233,10 +237,12 @@ def test_transfer_map_field_chain_uses_forward_ad_jacobian():
     finite_difference = np.empty_like(differentiated.response_jacobian)
     for parameter in range(field_jacobian.shape[1]):
         plus = combined_function_transfer_map_from_field_response(
-            field + step * field_jacobian[:, parameter], lengths, rigidity,
+            field + step * field_jacobian[:, parameter],
+            lengths + step * length_jacobian[:, parameter], rigidity,
             curvature_sign=-1.0, gradient_sign=-1.0)
         minus = combined_function_transfer_map_from_field_response(
-            field - step * field_jacobian[:, parameter], lengths, rigidity,
+            field - step * field_jacobian[:, parameter],
+            lengths - step * length_jacobian[:, parameter], rigidity,
             curvature_sign=-1.0, gradient_sign=-1.0)
         finite_difference[:, parameter] = (
             plus.response - minus.response) / (2.0 * step)
