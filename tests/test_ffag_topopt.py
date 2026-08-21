@@ -139,6 +139,28 @@ def test_ffag_validation_restart_replays_accepted_binary_history(tmp_path):
             mesh_elements=4,dofs=12,energies=[31.0,250.0])
 
 
+def test_ffag_validation_can_disable_performance_provenance(tmp_path):
+    import importlib.util
+    from pathlib import Path
+
+    runner_path=(Path(__file__).parents[1]/"validation_test"/"ffag_topopt"/
+                 "validation_ffag_full_field_c_yoke.py")
+    spec=importlib.util.spec_from_file_location(
+        "ffag_no_performance_runner",runner_path)
+    runner=importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(runner)
+
+    args=runner.parse_args([
+        "--mesh",str(tmp_path/"mesh.vol"),
+        "--yoke-step",str(tmp_path/"yoke.step"),
+        "--output",str(tmp_path/"result.json"),
+        "--no-record-performance",
+    ])
+
+    assert args.record_performance is False
+
+
 def test_ffag_validation_restart_prefers_explicit_final_active_set(tmp_path):
     import importlib.util
     import json
