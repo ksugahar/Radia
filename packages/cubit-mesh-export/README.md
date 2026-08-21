@@ -72,6 +72,21 @@ Because `.pyd` files are intentionally gitignored, release CI fetches the
 content-addressed curver named in `native_payloads.json` and checks its exact
 size and SHA-256 before packaging.
 
+For a complete deployed-export check, close the interactive Cubit process and
+run:
+
+```bash
+cubit-smoke-test --order 2
+```
+
+This launches Cubit in batch mode, exports the canonical IH model, and applies
+the production `check-vol` gate. Success requires strict boundary/material
+labels, matching companion-JSON metadata, successful NGSolve reload,
+tetrahedral topology, complete boundary-domain ownership, positive required
+volumes and areas, and valid sampled Jacobians for the curved map. A failed run
+retains its temporary work directory together with `vol-check.json` (or
+`vol-check-error.json`) for diagnosis.
+
 ## Cubit commands
 
 ```
