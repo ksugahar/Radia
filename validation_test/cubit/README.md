@@ -40,6 +40,18 @@ environment:
 
 Most CI and normal repository test runs intentionally skip this directory.
 
+## Complex `.vol` volume-accuracy learning data
+
+`vol_accuracy_dataset/` is the durable complex-geometry validation lane. It
+builds Boolean-cut flanges and busbars, a stepped spacer, a trimmed half torus,
+a mixed tet/wedge boundary-layer solid, and a periodic-seam loft regression;
+it also keeps coarse/refined 355-degree sweep twins to distinguish order-3
+under-resolution from an exporter defect. It exports each at orders 1 through
+3, then records Cubit ACIS volume versus NGSolve-integrated `.vol` volume
+together with Jacobian quality. See its README and run
+`python validation_test/cubit/vol_accuracy_dataset/generate.py` after closing
+interactive Cubit.
+
 ## Test Notes
 
 - NGSolve must be imported before Cubit in tests that use both packages, to

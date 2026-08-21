@@ -1160,6 +1160,50 @@ bool NetgenCurver::attach_callback_geometry()
     double u_cp = re->u_from_position(cp);
     double umin = std::min(u1, u2);
     double umax = std::max(u1, u2);
+    // A periodic curve can represent adjacent segment endpoints on opposite
+    // sides of its parameter seam (for example 2*pi -> pi/4 on a circle).
+    // closest_point_trimmed may then clamp every chord sample to the 2*pi
+    // endpoint.  The old min/max test accepted that endpoint because the raw
+    // numeric interval [pi/4, 2*pi] looks wide, collapsing the curved edge and
+    // folding an adjacent high-order volume element.  Unwrap the second
+    // endpoint to identify the local interval, then project on the untrimmed
+    // curve and verify that the result remains inside that interval.
+    double period = 0.0;
+    if (re->is_periodic(period) == CUBIT_TRUE && period > 0.0 &&
+        std::fabs(u2 - u1) > 0.5 * period) {
+      double u2_local = u2;
+      while (u2_local - u1 > 0.5 * period) u2_local -= period;
+      while (u2_local - u1 < -0.5 * period) u2_local += period;
+      Curve *curve = re->get_curve_ptr();
+      CubitVector seam_out;
+      double seam_u = 0.0;
+      // Use the untrimmed geometric curve for the same chord-normal projection
+      // as the ordinary path.  The trimmed call can clamp to either seam
+      // endpoint before it sees the adjacent interval on the other side.
+      CubitStatus seam_status =
+        curve->closest_point(loc, seam_out, nullptr, nullptr, &seam_u);
+      double seam_u_local = seam_u;
+      while (seam_u_local - u1 > 0.5 * period) seam_u_local -= period;
+      while (seam_u_local - u1 < -0.5 * period) seam_u_local += period;
+      double local_min = std::min(u1, u2_local);
+      double local_max = std::max(u1, u2_local);
+      double local_tol = 0.01 * std::fabs(u2_local - u1);
+      double chord = std::sqrt((x2-x1)*(x2-x1) + (y2-y1)*(y2-y1) +
+                               (z2-z1)*(z2-z1));
+      double dd = std::numeric_limits<double>::infinity();
+      if (seam_status == CUBIT_SUCCESS) {
+        dd = std::sqrt((seam_out.x()-lmx)*(seam_out.x()-lmx) +
+                       (seam_out.y()-lmy)*(seam_out.y()-lmy) +
+                       (seam_out.z()-lmz)*(seam_out.z()-lmz));
+      }
+      if (seam_status == CUBIT_SUCCESS && std::isfinite(dd) && dd <= chord &&
+          seam_u_local >= local_min - local_tol &&
+          seam_u_local <= local_max + local_tol) {
+        return {seam_out.x(), seam_out.y(), seam_out.z()};
+      }
+      return linear_mid();
+    }
+
     // Allow a tiny tolerance (1% of range) to cover floating-point noise
     // at the exact endpoint.
     double tol = 0.01 * std::fabs(umax - umin);
