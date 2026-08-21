@@ -576,19 +576,25 @@ struct HDivFieldEvaluator::Impl {
                 source.coefficient[PolynomialIndex(0, 0, 1)]};
             const double zero_gradient[3]{};
             double field[3];
+            double term[3];
             TetVolFieldLinearDirectional(
                 source.v, zero_v4, r, direction,
                 source.coefficient[0], 0.0,
-                gradient, zero_gradient, field, derivative);
+                gradient, zero_gradient, field, term);
+            for (int axis = 0; axis < 3; ++axis)
+                derivative[axis] += term[axis];
         } else if (atom.kind == SourceKind::Triangle) {
             const TriSource& source = triangles[atom.index];
             const double zero_slope[3]{};
             const double zero_hessian[3][3]{};
             double field[3];
+            double term[3];
             QuadTriFieldDirectional(
                 source.v, zero_v3, r, direction,
                 source.sigma0, 0.0, source.slope, zero_slope,
-                source.hessian, zero_hessian, field, derivative);
+                source.hessian, zero_hessian, field, term);
+            for (int axis = 0; axis < 3; ++axis)
+                derivative[axis] += term[axis];
         } else if (atom.kind == SourceKind::Point) {
             const PointSource& source = points[atom.index];
             const double delta[3] = {

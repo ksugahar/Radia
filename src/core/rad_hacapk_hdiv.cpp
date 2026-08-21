@@ -1838,10 +1838,8 @@ std::vector<double> RadHACApKChargeGram::TetVolumeSelfBlockDirectionalDerivative
     Inverse3Directional(E,dE,I,dI);const double rate=Det3Rate(E,dE);
     for(size_t q=0;q<m_qp[g[0]].size();++q){const auto& pp=m_qp[g[0]][q];double p[3]={pp[0],pp[1],pp[2]},xi[3]={};for(int i=0;i<3;++i)for(int k=0;k<3;++k)xi[i]+=I[3*i+k]*(p[k]-V[0][k]);double dpnt[3];for(int k=0;k<3;++k)dpnt[k]=dV[0][k]+xi[0]*(dV[1][k]-dV[0][k])+xi[1]*(dV[2][k]-dV[0][k])+xi[2]*(dV[3][k]-dV[0][k]);
         double mv[4],dm[4];rad_hdiv::TetPotentialMomentsDirectionalUpTo1(V,dV,p,dpnt,mv,dm);
-        // Convert the outward physical moment ladder to the signed PhiTet
-        // convention used together with m_qw by the flat production Gram.
-        // This conversion is global, not a function of vertex orientation.
-        for(int k=0;k<4;++k){mv[k]=-mv[k];dm[k]=-dm[k];}
+        // The shared directional kernel returns the physical positive
+        // Newtonian moments [1,x,y,z], matching PhiTet and m_qw.
         for(int ls=0;ls<n;++ls){const int* e=&m_expo[(size_t)3*g[ls]];const int deg=e[0]+e[1]+e[2];if(deg>1)throw std::logic_error("analytic TET volume derivative supports charge degree <= 1");double val=mv[0],der=dm[0];if(deg==1){int c=e[1]?1:(e[2]?2:0);double beta[3],dbeta[3],alpha=0,dalpha=0;for(int k=0;k<3;++k){beta[k]=I[3*c+k];dbeta[k]=dI[3*c+k];alpha-=beta[k]*V[0][k];dalpha-=dbeta[k]*V[0][k]+beta[k]*dV[0][k];}val=alpha*mv[0];der=dalpha*mv[0]+alpha*dm[0];for(int k=0;k<3;++k){val+=beta[k]*mv[k+1];der+=dbeta[k]*mv[k+1]+beta[k]*dm[k+1];}}innerv[ls]=val;inner[ls]=der;}
         for(int i=0;i<n;++i){const double w=m_qw[g[i]][q];for(int j=0;j<n;++j)out[(size_t)i*n+j]+=w*(inner[j]+rate*innerv[j]);}
     }
@@ -1916,7 +1914,7 @@ std::vector<double> RadHACApKChargeGram::TetChargeGramDirectionalDerivativeImpl(
                 for(size_t l=0;l<g.size();++l){const double*c=&m_comboCoeffs[(size_t)g[l]*m_comboNMono];val[l]=der[l]=0;for(int m=0;m<m_comboNMono;++m){val[l]+=c[m]*moments[m];der[l]+=c[m]*dmoments[m];}}
                 return;
             }
-            double mv[4],dm[4];rad_hdiv::TetPotentialMomentsDirectionalUpTo1(V,dV,p,dp,mv,dm);for(int k=0;k<4;++k){mv[k]=-mv[k];dm[k]=-dm[k];}
+            double mv[4],dm[4];rad_hdiv::TetPotentialMomentsDirectionalUpTo1(V,dV,p,dp,mv,dm);
             for(size_t l=0;l<g.size();++l){const int*e=&m_expo[(size_t)3*g[l]];const int deg=e[0]+e[1]+e[2];if(deg>1)throw std::logic_error("analytic TET volume derivative supports charge degree <= 1");val[l]=mv[0];der[l]=dm[0];if(deg==1){int c=e[1]?1:(e[2]?2:0);double alpha=0,dalpha=0;for(int k=0;k<3;++k){const double beta=I[3*c+k],dbeta=dI[3*c+k];alpha-=beta*V[0][k];dalpha-=dbeta*V[0][k]+beta*dV[0][k];val[l]+=beta*mv[k+1];der[l]+=dbeta*mv[k+1]+beta*dm[k+1];}val[l]+=(alpha-1.0)*mv[0];der[l]+=(dalpha)*mv[0]+(alpha-1.0)*dm[0];}}
             return;
         }

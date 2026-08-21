@@ -143,3 +143,62 @@ def test_hdiv_field_evaluator_point_gradient_is_analytic():
     np.testing.assert_allclose(
         evaluator.field_gradient(point)[0], expected,
         rtol=2.0e-15, atol=2.0e-17)
+
+
+def _central_field_gradient(evaluator, points, step=1.0e-5):
+    """Validation-only numerical oracle; optimization never calls this."""
+    result = np.empty((len(points), 3, 3))
+    for axis in range(3):
+        displacement = np.zeros(3)
+        displacement[axis] = step
+        result[:, :, axis] = (
+            np.asarray(evaluator.field(points+displacement, "direct"))
+            - np.asarray(evaluator.field(points-displacement, "direct"))
+        )/(2.0*step)
+    return result
+
+
+def test_hdiv_field_evaluator_flat_tet_gradient_matches_spatial_regression():
+    vertices = np.array([
+        [0.0, 0.0, 0.0], [1.1, 0.1, 0.0],
+        [0.2, 0.9, 0.1], [0.1, 0.2, 1.2],
+    ])
+    # Physical density 1.3 + 0.2*x - 0.15*y + 0.07*z exercises the
+    # degree-one tetrahedron potential term, not only constant charge.
+    shifted = vertices+np.array([1.5, -0.4, 0.2])
+    volume = np.vstack((
+        np.r_[vertices.ravel(), [1.3, 0.2, -0.15, 0.07]],
+        np.r_[shifted.ravel(), [-0.4, 0.03, 0.08, -0.02]],
+    ))
+    evaluator = _native._HDivFieldEvaluator.from_tet(
+        volume, np.empty((0, 22)))
+    points = np.array([
+        [1.7, 1.3, 1.9], [-0.7, 0.4, 1.5], [0.3, -0.9, 0.8],
+    ])
+    analytic = np.asarray(evaluator.field_gradient(points))
+    regression = _central_field_gradient(evaluator, points)
+    np.testing.assert_allclose(analytic, regression, rtol=2.0e-7, atol=2.0e-10)
+    np.testing.assert_allclose(
+        analytic, analytic.transpose(0, 2, 1), rtol=2.0e-12, atol=2.0e-14)
+
+
+def test_hdiv_field_evaluator_flat_triangle_gradient_matches_spatial_regression():
+    vertices = np.array([
+        [0.0, 0.0, 0.0], [1.1, 0.1, 0.0], [0.2, 0.9, 0.1],
+    ])
+    # sigma0, slope[3], and Hessian[9].
+    shifted = vertices+np.array([-1.2, 0.5, -0.3])
+    surface = np.vstack((
+        np.r_[vertices.ravel(), [0.8, 0.1, -0.2, 0.05], [0.0]*9],
+        np.r_[shifted.ravel(), [-0.3, 0.04, 0.07, -0.02], [0.0]*9],
+    ))
+    evaluator = _native._HDivFieldEvaluator.from_tet(
+        np.empty((0, 16)), surface)
+    points = np.array([
+        [1.7, 1.3, 1.9], [-0.7, 0.4, 1.5], [0.3, -0.9, 0.8],
+    ])
+    analytic = np.asarray(evaluator.field_gradient(points))
+    regression = _central_field_gradient(evaluator, points)
+    np.testing.assert_allclose(analytic, regression, rtol=2.0e-7, atol=2.0e-10)
+    np.testing.assert_allclose(
+        analytic, analytic.transpose(0, 2, 1), rtol=2.0e-12, atol=2.0e-14)
