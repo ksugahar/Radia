@@ -2,7 +2,7 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **1025 tools** across 49 MCP servers.
+Total: **1030 tools** across 49 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
@@ -44,8 +44,8 @@ Total: **1025 tools** across 49 MCP servers.
 | [`mcp-server-mathematica`](#mcp-server-mathematica) | `radia_mcp.mathematica` | 14 |
 | [`mcp-server-md2html`](#mcp-server-md2html) | `radia_mcp.md2html` | 2 |
 | [`mcp-server-chart2d`](#mcp-server-chart2d) | `radia_mcp.chart2d` | 24 |
-| [`mcp-server-paper-writing`](#mcp-server-paper-writing) | `radia_mcp.paper_writing` | 191 |
-| [`mcp-server-grant-writing`](#mcp-server-grant-writing) | `radia_mcp.grant_writing` | 41 |
+| [`mcp-server-paper-writing`](#mcp-server-paper-writing) | `radia_mcp.paper_writing` | 195 |
+| [`mcp-server-grant-writing`](#mcp-server-grant-writing) | `radia_mcp.grant_writing` | 42 |
 | [`mcp-server-poster`](#mcp-server-poster) | `radia_mcp.poster` | 32 |
 | [`mcp-server-literature-index`](#mcp-server-literature-index) | `radia_mcp.literature_index` | 9 |
 | [`mcp-server-document-meta`](#mcp-server-document-meta) | `radia_mcp.document_meta` | 11 |
@@ -1080,11 +1080,15 @@ Module: `radia_mcp.paper_writing.server`
 |---|---|
 | `figure_audit_embeds` | Lint every \includegraphics in a LaTeX file for figure embeds that |
 | `figure_audit_pptx_figures` | Lint every picture in a PPTX deck for paste-scale defects -- the slide |
+| `figure_audit_script_reference` | Report figures the script never points at. |
+| `figure_claim_visibility` | For every slide that makes a numeric claim, is the number visible? |
 | `figure_design_principles` | The figure-MAKING (作図, *sakuzu*) DESIGN canon, distilled from the |
 | `figure_diagram_recipes` | Flowchart + conceptual/schematic DIAGRAM recipes -- the diagram-DRAWING skill |
 | `figure_everyday_recipe` | Matplotlib recipe for the lab's EVERYDAY analysis figure. |
 | `figure_matlab2tikz_recipe` | Generate a MATLAB recipe that exports the current figure to TikZ |
 | `figure_office_export_recipe` | MATLAB recipe to export the current figure for Word / PowerPoint |
+| `figure_plan_for_claim` | What figure makes this claim visible, and what to annotate on it. |
+| `figure_readability_problems` | Everything about this figure that would make it unreadable. |
 | `figure_size_for_target` | Recommend output figure size + font settings for a target embedding. |
 | `figure_style_guide` | Return the lab-standard graph style guide. |
 | `paper_figure_profiles` | List paper-quality figure profiles + their exact journal geometry. |
@@ -1272,7 +1276,7 @@ Module: `radia_mcp.paper_writing.server`
 
 ## `mcp-server-grant-writing`
 
-_Grant proposal helpers: Japanese technical-prose lint, section coverage, budget alignment, internal-to-external scale, collaborative-integration risk, tool-to-domain outcomes, derived-metric validation, cross-organization pilots, literature-gap evidence scope, named-software abstraction, reviewer vocabulary, benchmark role, persuasion hierarchy, equation introductions, and internal-memo shorthand, KAKENHI review-format realities (monochrome printing, human-rights box, researchmap-era publication identification, funding-overlap box), central-claim consistency between summary and body, recommendation-letter template, and KDDI Digital Innovation and KAKENHI OSS-platform checks._
+_Grant proposal helpers: Japanese technical-prose lint, section coverage, budget alignment, internal-to-external scale, collaborative-integration risk, tool-to-domain outcomes, derived-metric validation, cross-organization pilots, literature-gap evidence scope, named-software abstraction, reviewer vocabulary, benchmark role, persuasion hierarchy, equation introductions, and internal-memo shorthand, KAKENHI review-format realities (monochrome printing, human-rights box, researchmap-era publication identification, funding-overlap box), recommendation-letter template, and KDDI Digital Innovation and KAKENHI OSS-platform checks._
 
 Module: `radia_mcp.grant_writing.server`
 
@@ -1312,6 +1316,7 @@ Module: `radia_mcp.grant_writing.server`
 | `grant_writing_persuasion_quality_check` | Check reviewer-facing hierarchy, equations, and defensive prose. |
 | `grant_writing_question_originality_check` | Check that the central question carries an originality position. |
 | `grant_writing_recommendation_letter_template` | Return a one-page recommendation-letter draft template. |
+| `grant_writing_reviewer_momentum_check` | Check whether the opening makes a reviewer want to keep reading. |
 | `grant_writing_reviewer_vocabulary_check` | Check whether proposal vocabulary is accessible to the likely reviewer. |
 | `grant_writing_section_presence` | Check whether a proposal draft contains the expected review axes. |
 | `grant_writing_status` | (no description) |
