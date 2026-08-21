@@ -79,3 +79,37 @@ def test_no_new_finding_pattern_appears(corpus):
         "a finding pattern not present when the corpus was adjudicated:\n  "
         + "\n  ".join(appeared)
     )
+
+
+def test_no_field_outgrows_its_page_allowance(corpus):
+    """The one defect that gets a proposal returned before it is read."""
+    over = []
+    for document in corpus["documents"]:
+        if not document.get("pdf"):
+            continue
+        pages = sweep.measure(document).get("pages") or {}
+        for field, (used, allowed) in pages.items():
+            if used > allowed:
+                over.append(f"{document['label']}: {field} {used}/{allowed}")
+
+    assert not over, "a field runs past its allowance:\n  " + "\n  ".join(over)
+
+
+def test_page_usage_matches_the_baseline(corpus):
+    drift = []
+    for document in corpus["documents"]:
+        expected = (corpus["baseline"].get(document["label"]) or {}).get("pages")
+        if not expected:
+            continue
+        actual = sweep.measure(document).get("pages") or {}
+        for field, allowance in expected.items():
+            if actual.get(field) != allowance:
+                drift.append(
+                    "%s: %s now %s, baseline %s"
+                    % (document["label"], field, actual.get(field), allowance)
+                )
+
+    assert not drift, (
+        "page usage moved; rebuild the PDF and re-baseline if intended:\n  "
+        + "\n  ".join(drift)
+    )

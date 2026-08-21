@@ -31,10 +31,17 @@ Put the manifest, the text files and the baseline together outside the tree:
 {
   "documents": [
     {"label": "adopted-example", "path": "texts/adopted-example.txt",
-     "outcome": "adopted", "program": "kaken_oss"}
+     "outcome": "adopted", "program": "kaken_oss"},
+    {"label": "own-draft", "path": "texts/own-draft.txt",
+     "pdf": "../draft/proposal.pdf", "program": "kaken_oss"}
   ]
 }
 ```
+
+An optional `pdf` names the compiled document. A page limit is a property of
+the rendered page, and it is the only defect class that gets a proposal
+returned before anyone reads it, so a document that has one is locked field by
+field even while the check reports nothing.
 
 Paths resolve against the manifest's directory. `program` selects the
 program-specific checks (`generic`, `kaken_oss`, `kddi_digital`). `outcome` is
@@ -60,6 +67,14 @@ real defect. Running every detector over every document at once found eight
 false-positive families in a single pass, after several sessions of finding
 one at a time.
 
+`sweep.py --audit` reports, per check, how often it applied to a real proposal
+and how often it said anything. A false positive announces itself; a check that
+has quietly stopped working, or that was aimed at a genre this suite does not
+serve, says nothing and looks exactly like a clean document. On the first run
+eight checks were silent on all eight documents, and one of them
+(`literature_gap_evidence_check`) turned out to be applicable to nothing at all.
+Run it whenever the corpus grows.
+
 `sweep.py --write-baseline` records the current counts. Only do that once the
 counts have been adjudicated — the baseline's value is that every number in it
 was read and judged.
@@ -69,6 +84,7 @@ was read and judged.
 - every baselined document is still in the manifest
 - each document's finding count matches the baseline
 - no finding pattern appears that was absent when the corpus was adjudicated
+- no field runs past its page allowance, and page usage per field is unchanged
 
 A count that moves is either a fix worth re-baselining or a false positive
 coming back. The test cannot tell which, and does not try: it forces the
