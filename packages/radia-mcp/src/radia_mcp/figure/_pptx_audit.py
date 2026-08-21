@@ -172,6 +172,18 @@ def audit_pptx_figures(pptx_path: str,
 
         risks = []
         minor = area_fraction < min_area_fraction
+        declared_raster = name.split("/")[-1].startswith("RASTER_OK::")
+        if not minor and not declared_raster:
+            # The lab rule is that a figure is vector.  It is not a matter of
+            # taste: the text inside a raster cannot be measured from the file
+            # (that needs OCR), so the 20 pt floor is unenforceable on one --
+            # which is exactly how a 16 pt label shipped unnoticed.
+            risks.append(
+                "RASTER FIGURE -- re-export as SVG (matplotlib: savefig(..., "
+                "format='svg'); a PDF converts with PyMuPDF get_svg_image). "
+                "Its on-slide text size cannot be verified from the file. If "
+                "raster is genuinely right (a photograph or a screen capture), "
+                "rename the shape RASTER_OK::<why> to record that decision.")
         if no_dpi:
             risks.append(
                 "NO DPI METADATA -- authored width UNVERIFIABLE (python-pptx "
@@ -203,6 +215,7 @@ def audit_pptx_figures(pptx_path: str,
             "slide": slide_no,
             "shape": name,
             "kind": "raster",
+            "declared_raster": bool(declared_raster),
             "pixels": [int(px_w), int(px_h)],
             "dpi": [int(dpi_w), int(dpi_h)],
             "authored_cm": round(authored_cm_w, 2),
@@ -225,6 +238,7 @@ def audit_pptx_figures(pptx_path: str,
         "pptx": os.path.abspath(pptx_path),
         "n_pictures": len(rows),
         "n_vector": sum(1 for r in rows if r.get("kind") == "svg"),
+        "n_raster": sum(1 for r in rows if r.get("kind") == "raster"),
         "n_unmeasurable": sum(1 for r in rows if r.get("kind") == "unmeasurable"),
         "n_flagged": sum(1 for r in rows if r["risks"]),
         "authored_font_pt": _SLIDE_AUTHORED_FONT_PT,
