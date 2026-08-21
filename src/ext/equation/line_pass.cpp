@@ -882,7 +882,32 @@ void DisplayFractionPass::run(NodeList& children, SkipSet& skip,
                 if (g->denom.empty()) { sep = -2; break; }  /* another one */
             }
         }
-        if (sep < 0) continue;
+        /* No separator at all, and the very next thing is one LINE: that
+         * line IS the denominator.
+         *
+         * This is the third shape Equation Editor writes a display fraction
+         * in -- numerator inside the template, denominator immediately after
+         * it, no size markers between.  The two shapes below need a separator
+         * and a terminator to know where the denominator ENDS, and refuse
+         * without them, which is right when the boundary is a guess.  Here it
+         * is not a guess: a LINE is one self-contained chunk, and the
+         * denominator is exactly that chunk.
+         *
+         * Narrow on purpose: the denominator must be empty (so nothing is
+         * displaced), and the very next live sibling must be a real LINE.
+         * Anything else still refuses. */
+        if (sep < 0) {
+            const int m = nextLive(idx + 1);
+            if (m < 0 || children[m]->tag() != Node::kLine) continue;
+            auto* ln = static_cast<LineNode*>(children[m].get());
+            if (ln->isNull || ln->children.empty()) continue;
+            f->denom.clear();
+            f->denom.push_back(std::move(children[m]));
+            skip[m] = true;
+            f->display = true;
+            f->styleOverride = 1;
+            continue;
+        }
 
         /* The terminator.  A size record ends the denominator UNLESS the
          * display characters of a fence opened inside it follow -- the fence

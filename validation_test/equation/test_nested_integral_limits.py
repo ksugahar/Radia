@@ -95,6 +95,16 @@ def test_a_nudged_record_does_not_desynchronise_the_stream():
     assert r"\scriptscriptstyle" not in latex, (
         f"size markers from misaligned bytes:\n  {latex}")
 
+    # And the denominator is INSIDE the fraction.  Equation Editor writes
+    # this one as numerator-in-template, denominator-immediately-after, with
+    # no size markers between; the reader needed both halves of that before
+    # the equation matched what EE3 draws: alpha = 1 - <f0,g> / <f0,M f0>
+    assert "}{}" not in latex, (
+        f"the denominator escaped the fraction:\n  {latex}")
+    whole = (r"\dfrac{\left\langle  f_{0},g \right\rangle }"
+             r"{\left\langle  f_{0},Mf_{0} \right\rangle }")
+    assert whole in latex, f"expected the whole fraction:\n  got {latex}"
+
 
 def test_the_corpus_carries_no_unowned_limit_block():
     """Nothing anywhere in the corpus leaves a limit block unclaimed.
