@@ -931,6 +931,339 @@ def grant_writing_adjacent_reviewer_readability_check(text: str) -> dict:
     }
 
 
+_REVIEWER_MOMENTUM_STAKE_PATTERN = re.compile(
+    r"(?:患者|治療|電力消費|省エネルギー|環境|安全|市場|コスト|期間|"
+    r"熟練|設計(?:判断|期間|候補|者)|候補選択|比較対象|解析経路|"
+    r"研究選択|性能|品質|効率|損失|"
+    r"普及|運用|負担|採用|社会|産業|製造)[^。！？\n]{0,44}"
+    r"(?:求め|望まれ|必要|左右|削減|短縮|向上|改善|支える|妨げ|課題|"
+    r"価値|影響|依存|困難|偏る)|"
+    r"(?:求め|望まれ|必要|左右|削減|短縮|向上|改善|妨げ|課題|依存|"
+    r"困難|偏る)[^。！？\n]{0,44}(?:患者|治療|電力消費|省エネルギー|環境|"
+    r"安全|市場|コスト|期間|熟練|設計|性能|品質|効率|損失|普及|運用)"
+)
+_REVIEWER_MOMENTUM_BOTTLENECK_PATTERN = re.compile(
+    r"(?:しかし|一方|ところが|にもかかわらず|課題|障壁|難所|困難|"
+    r"未解決|未確立|未実現|実現されていない|できない|難しい|依存|"
+    r"試行錯誤|要する|負担|限界|妨げ|左右|偏る|再実装|実装し直)"
+)
+_REVIEWER_MOMENTUM_SPECIFICITY_PATTERN = re.compile(
+    r"(?:\d[\d,.]*(?:\\?%|年|月|日|時間|件|回|倍|円|人|自由度)?|"
+    r"半年|手作業|試行錯誤|既存コード|接続|再実装|初期化運転|人件費|"
+    r"誤差|未実現|未確立|未検証|設計時間|作業負荷|適用例|候補選択)"
+)
+_REVIEWER_MOMENTUM_OPPORTUNITY_PATTERN = re.compile(
+    r"(?:近年|急速|進展|蓄積|新た|自由度|利用可能|可能にな|実用化|"
+    r"使える|到来|発展|拡大|解放)"
+)
+_REVIEWER_MOMENTUM_MOVE_PATTERN = re.compile(
+    r"(?:そこで)?本(?:研究|提案|事業|研究開発)(?:では|は|の目的)|"
+    r"(?:中心|学術的)の問い|目的は|"
+    r"そこで[^。！？\n]{0,100}(?:定義|構築|提案|確立|検証|明らか|"
+    r"開発|導出|比較|定量化)"
+)
+_REVIEWER_MOMENTUM_PAYOFF_PATTERN = re.compile(
+    r"(?:明らかに|確立|実現|算出|短縮|削減|向上|改善|可能に|開拓|"
+    r"普及|解放|判断|選択|確定|再現|反証|変える|取り戻す|断つ|"
+    r"定量化|体系化|示す|条件を求め|適用条件)"
+)
+_REVIEWER_MOMENTUM_METHOD_PATTERN = re.compile(
+    r"(?:FEM|RNA|CLN|MCP|OSS|API|AIエージェント|有限要素|"
+    r"数値解析|解析手法|モデル|アルゴリズム|ソルバー|メッシュ|"
+    r"等価回路|インターフェース|モジュール)"
+)
+_REVIEWER_MOMENTUM_HYPE_PATTERN = re.compile(
+    r"(?:世界初|世界で初めて|全く新しい|画期的|革新的|圧倒的|劇的|"
+    r"パラダイムシフト|夢の|究極の)"
+)
+_REVIEWER_MOMENTUM_EVIDENCE_PATTERN = re.compile(
+    r"(?:\d[\d,.]*(?:\\?%|年|月|日|時間|件|回|倍|円|人)?|文献|"
+    r"報告|実測|実証|実装|確認|採択|査読|共同研究|市場|既に|済み)"
+)
+
+
+def grant_writing_reviewer_momentum_check(text: str) -> dict:
+    """Check whether the opening makes a reviewer want to keep reading.
+
+    Readability and interest are different. A readable opening can still feel
+    like an inventory, while an exciting opening can be empty hype. This
+    non-scoring diagnostic looks for the reusable arc found in strong grant
+    prose: a reviewer-visible stake, a concrete bottleneck, the research move,
+    and the observable change that move would unlock. It also keeps method
+    names subordinate to that arc.
+    """
+    prose = _prose_for_lint(_read_text_if_path(text))
+    all_sentences = [
+        segment.strip()
+        for segment in re.split(r"[。．!?！？\n]", prose)
+        if segment.strip()
+    ]
+    if len(all_sentences) < 3:
+        return {
+            "applicable": False,
+            "score": None,
+            "risk_count": 0,
+            "risks": [],
+            "reason": "at least three opening sentences are needed",
+        }
+
+    lead_sentences: list[str] = []
+    lead_chars = 0
+    for sentence in all_sentences[:24]:
+        if lead_sentences and lead_chars + len(sentence) > 2400:
+            break
+        lead_sentences.append(sentence)
+        lead_chars += len(sentence)
+
+    def first_index(pattern: re.Pattern[str]) -> int | None:
+        return next(
+            (index for index, sentence in enumerate(lead_sentences)
+             if pattern.search(sentence)),
+            None,
+        )
+
+    stake_index = first_index(_REVIEWER_MOMENTUM_STAKE_PATTERN)
+    bottleneck_index = first_index(_REVIEWER_MOMENTUM_BOTTLENECK_PATTERN)
+    opportunity_index = first_index(_REVIEWER_MOMENTUM_OPPORTUNITY_PATTERN)
+    move_index = first_index(_REVIEWER_MOMENTUM_MOVE_PATTERN)
+    method_index = first_index(_REVIEWER_MOMENTUM_METHOD_PATTERN)
+
+    bottleneck_specific = False
+    if bottleneck_index is not None:
+        nearby = "。".join(
+            lead_sentences[max(0, bottleneck_index - 1):bottleneck_index + 2]
+        )
+        bottleneck_specific = bool(
+            _REVIEWER_MOMENTUM_SPECIFICITY_PATTERN.search(nearby)
+        )
+
+    payoff_index = None
+    if move_index is not None:
+        payoff_index = next(
+            (
+                index
+                for index in range(move_index, min(len(lead_sentences), move_index + 9))
+                if _REVIEWER_MOMENTUM_PAYOFF_PATTERN.search(
+                    lead_sentences[index]
+                )
+            ),
+            None,
+        )
+
+    method_terms_before_move: list[str] = []
+    method_scope_end = move_index if move_index is not None else min(
+        len(lead_sentences), 8
+    )
+    generic_method_terms = {
+        "有限要素", "数値解析", "解析手法", "モデル", "アルゴリズム",
+        "ソルバー", "メッシュ", "等価回路", "インターフェース",
+        "モジュール",
+    }
+    for sentence in lead_sentences[:method_scope_end]:
+        method_terms_before_move.extend(
+            term
+            for term in _REVIEWER_MOMENTUM_METHOD_PATTERN.findall(sentence)
+            if term not in generic_method_terms
+        )
+        method_terms_before_move.extend(
+            re.findall(
+                r"(?<![A-Za-z0-9_])[A-Z][A-Za-z0-9_.()+/-]{1,}", sentence
+            )
+        )
+    method_terms_before_move = list(dict.fromkeys(method_terms_before_move))
+
+    risks: list[dict] = []
+
+    def add_risk(
+        risk_type: str,
+        excerpt: str,
+        comment: str,
+        recommendation: str,
+        severity: str = "MEDIUM",
+        **details,
+    ) -> None:
+        item = {
+            "type": risk_type,
+            "severity": severity,
+            "excerpt": re.sub(r"\s+", " ", excerpt).strip()[:360],
+            "comment": comment,
+            "recommendation": recommendation,
+        }
+        item.update(details)
+        risks.append(item)
+
+    if stake_index is None or stake_index > 3:
+        excerpt = "。".join(lead_sentences[:4])
+        add_risk(
+            "reviewer_stakes_delayed",
+            excerpt,
+            "導入部で、誰のどの判断・性能・負担が変わる研究かが見えない。",
+            (
+                "最初の一〜二文で、対象分野の読者が既に価値を理解できる"
+                "設計判断、時間、精度、損失、人への効果のいずれかを示す。"
+            ),
+        )
+
+    if bottleneck_index is None or not bottleneck_specific:
+        excerpt = (
+            "。".join(lead_sentences[:6])
+            if bottleneck_index is None
+            else lead_sentences[bottleneck_index]
+        )
+        add_risk(
+            "bottleneck_not_concrete",
+            excerpt,
+            "課題が抽象語に留まり、なぜ今の方法では前へ進めないかを想像しにくい。",
+            (
+                "未解決の操作、手作業、時間、誤差、適用不能、試行錯誤など、"
+                "研究で取り除く具体的な詰まりを一つ示す。"
+            ),
+        )
+
+    if (
+        method_index is not None
+        and method_index <= 1
+        and (stake_index is None or stake_index > method_index)
+        and (bottleneck_index is None or bottleneck_index > method_index)
+    ):
+        add_risk(
+            "method_before_problem",
+            lead_sentences[method_index],
+            "対象分野の困りごとより先に手法・モデルが現れ、研究の必要性が後付けに見える。",
+            (
+                "方法名の前に、既存の選択や運用が何に阻まれているかを述べる。"
+                "手法はその障壁を外す一手として導入する。"
+            ),
+            severity="HIGH",
+        )
+
+    if len(method_terms_before_move) >= 5:
+        add_risk(
+            "lead_method_inventory",
+            "、".join(method_terms_before_move),
+            "導入部の主役が増え、研究課題より手法名の在庫表として読まれる。",
+            (
+                "導入部の中核概念は二〜三個に絞る。残りの固有名・略語は、"
+                "研究項目、図、実行可能性の根拠へ下げる。"
+            ),
+            method_terms=method_terms_before_move,
+        )
+
+    if move_index is None:
+        add_risk(
+            "research_move_missing_from_lead",
+            "。".join(lead_sentences[-4:]),
+            "問題を示した後、申請者が何を変えるかが導入部で宣言されていない。",
+            (
+                "『そこで本研究では』に続け、研究期間内の一手を一文で述べる。"
+                "技術要素の列挙ではなく、障壁をどう扱う研究かを主語述語で示す。"
+            ),
+            severity="HIGH",
+        )
+    elif payoff_index is None:
+        add_risk(
+            "payoff_missing_after_research_move",
+            "。".join(lead_sentences[move_index:move_index + 4]),
+            "研究の一手はあるが、それにより何が判断・実現できるかが続かない。",
+            (
+                "方法の直後に、短縮・精度・設計判断・新たに可能になる検証など、"
+                "審査者が成果を思い描ける変化を置く。"
+            ),
+        )
+
+    unsupported_hype: list[dict] = []
+    for index, sentence in enumerate(lead_sentences):
+        hype = _REVIEWER_MOMENTUM_HYPE_PATTERN.search(sentence)
+        if hype is None:
+            continue
+        nearby = "。".join(
+            lead_sentences[max(0, index - 2):min(len(lead_sentences), index + 3)]
+        )
+        if _REVIEWER_MOMENTUM_EVIDENCE_PATTERN.search(nearby):
+            continue
+        unsupported_hype.append({
+            "index": index,
+            "phrase": hype.group(0),
+            "excerpt": sentence,
+        })
+    if unsupported_hype:
+        first = unsupported_hype[0]
+        add_risk(
+            "unsupported_excitement_language",
+            first["excerpt"],
+            "強い形容だけで期待を作っており、研究上の緊張や根拠がない。",
+            (
+                "『画期的』『世界初』を足す代わりに、新たな可能性、まだ使えない"
+                "理由、本研究が外す障壁を具体化する。"
+            ),
+            examples=unsupported_hype[:5],
+        )
+
+    arc_complete = (
+        stake_index is not None
+        and stake_index <= 3
+        and bottleneck_index is not None
+        and bottleneck_specific
+        and move_index is not None
+        and payoff_index is not None
+        and stake_index <= bottleneck_index <= move_index <= payoff_index
+    )
+    productive_tension = (
+        opportunity_index is not None
+        and bottleneck_index is not None
+        and opportunity_index <= bottleneck_index
+    )
+    comments = list(dict.fromkeys(risk["comment"] for risk in risks))
+    recommendations = list(dict.fromkeys(
+        risk["recommendation"] for risk in risks
+    ))
+    return {
+        "applicable": True,
+        "score": None,
+        "risk_count": len(risks),
+        "risks": risks,
+        "comments": comments,
+        "recommendations": recommendations,
+        "metrics": {
+            "lead_sentence_count": len(lead_sentences),
+            "lead_character_count": lead_chars,
+            "stake_sentence": stake_index,
+            "opportunity_sentence": opportunity_index,
+            "bottleneck_sentence": bottleneck_index,
+            "bottleneck_is_specific": bottleneck_specific,
+            "research_move_sentence": move_index,
+            "payoff_sentence": payoff_index,
+            "method_sentence": method_index,
+            "method_terms_before_move": method_terms_before_move,
+            "arc_complete": arc_complete,
+            "productive_tension": productive_tension,
+        },
+        "revision_protocol": {
+            "sequence": [
+                "reviewer_visible_stakes",
+                "concrete_bottleneck_or_unused_opportunity",
+                "research_move",
+                "observable_payoff",
+                "bounded_evidence",
+            ],
+            "instruction": (
+                "Create interest from a concrete unresolved tension, not from "
+                "adjectives. Keep the opening's core concepts few, and introduce "
+                "method names only after the reviewer understands the problem."
+            ),
+        },
+        "diagnosis": (
+            "Strong adopted prose is easy to enter and gives the reviewer a reason "
+            "to continue: a familiar value is blocked by a specific obstacle, and "
+            "the proposed research unlocks an observable change."
+        ),
+        "source": (
+            "generic reviewer-momentum diagnostic informed by adopted grant prose "
+            "and adjacent-reader feedback; non-scoring"
+        ),
+    }
+
+
 def grant_writing_count_weak_expressions(text: str) -> dict:
     """Count hedges and grant-specific non-commitment phrases."""
     text = _prose_for_lint(_read_text_if_path(text))
@@ -5752,7 +6085,8 @@ def grant_writing_health_report(
         "claim", "domain", "focus", "format", "integration", "international",
         "irreplaceable", "kaken", "kddi", "literature", "metric", "narrative",
         "originality", "pages", "persuasion", "pilot", "residue", "scale",
-        "readability", "sections", "sentence", "vague", "vocabulary", "weak",
+        "readability", "momentum", "sections", "sentence", "vague",
+        "vocabulary", "weak",
     }
     unknown_skip_ids = sorted(skip_set - valid_skip_ids)
     if unknown_skip_ids:
@@ -6136,6 +6470,10 @@ def grant_writing_health_report(
     if "readability" not in skip_set:
         readability = grant_writing_adjacent_reviewer_readability_check(text)
         detailed_results["adjacent_reviewer_readability"] = readability
+
+    if "momentum" not in skip_set:
+        momentum = grant_writing_reviewer_momentum_check(text)
+        detailed_results["reviewer_momentum"] = momentum
 
     if "weak" not in skip_set:
         weak = grant_writing_count_weak_expressions(text)
