@@ -141,6 +141,20 @@ After each accepted binary batch, the one-pass transfer matrices are
 recomputed on the same frozen paths and the optics inverse is relinearized.
 The validation history stores both TSVD layers independently.
 
+### Full C-yoke manufactured inverse gate
+
+The 2026-08-22 100-machine recovery run used the 1,180-HEX, 42,480-DoF BDM1
+C-yoke and an exact manufactured target obtained by adding inactive element
+798.  Starting from 720 active cells, the analytic transfer-map-to-field
+inverse and ACA--QR--TSVD material screen selected that element without using
+the direct-map fallback.  The accepted 721-cell state was then solved in full
+and reduced the exact fixed-orbit transfer-matrix maximum band ratio from 5.0
+to 0.5 at all three momentum points.  The known active set was recovered, the
+binary topology and coil-clearance gates passed, and the largest realized-map
+symplectic residual was 1.06e-15.  Performance recording was disabled; these
+are correctness data, not benchmark timings.  The compact retained evidence is
+`manufactured_inverse_recovery_100_20260822.json`.
+
 The public diagnostic entry point
 `run_transfer_matrix_material_inverse_pipeline` exposes the same ordering as
 five inspectable stages: magnetic-field distribution; forward-AD transfer

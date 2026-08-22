@@ -1323,7 +1323,8 @@ def test_hdiv_mmm_generation_checks_global_addition_proposal_before_dense_schur(
         element_volumes=volumes,response_target=target,
         response_band=np.full(2,1e-8),volume_max=float(np.sum(volumes)),
         fixed_active_elements=np.array([False,True,False]),
-        maximum_batch_elements=1,max_iterations=1,solve_tolerance=1e-11)
+        maximum_batch_elements=1,max_iterations=1,solve_tolerance=1e-11,
+        proposal_adjoint_count=0)
     assert result.converged and len(result.history)==1
     np.testing.assert_array_equal(result.active_elements,target_active)
     np.testing.assert_array_equal(result.history[0].added_elements,[0])
@@ -1331,6 +1332,7 @@ def test_hdiv_mmm_generation_checks_global_addition_proposal_before_dense_schur(
         "all-candidate-aca-qr-tsvd-direct-full-resolve")
     assert result.history[0].collaborative_bundles_evaluated==1
     assert result.history[0].candidate_coupling_rank==0
+    assert result.history[0].response_adjoint_count==0
     assert result.history[0].native_reduction_timings["solve_s"]==0.0
 
 

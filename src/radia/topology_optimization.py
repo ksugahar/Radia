@@ -3297,8 +3297,10 @@ def grow_hdiv_mmm_by_superposition(*, charge_gram, fes, inv_chi, rhs,
     define the bounded exact-physics removal front.  ``removal_cluster_count``
     may prescribe the number of native tree nodes; zero chooses it from the
     retained global response rank.
-    Tiny fronts retain the full adjoint model automatically.  Proposal adjoints
-    use the separate, deliberately looser ``proposal_solve_tolerance`` because
+    Tiny fronts retain the full adjoint model automatically unless
+    ``proposal_adjoint_count=0`` explicitly requests the direct-superposition
+    screen.  Proposal adjoints use the separate, deliberately looser
+    ``proposal_solve_tolerance`` because
     the accepted active-set solve still uses ``solve_tolerance`` and is the sole
     physical acceptance gate.  ``minimum_model_agreement`` is the usual ratio
     of actual to predicted minimax reduction; a smaller ratio triggers at most
@@ -4053,7 +4055,7 @@ def grow_hdiv_mmm_by_superposition(*, charge_gram, fes, inv_chi, rhs,
             float(solve_tolerance),float(proposal_solve_tolerance))
         if not np.isfinite(proposal_tolerance) or proposal_tolerance<=0.0:
             raise ValueError("proposal_solve_tolerance must be positive and finite")
-        if len(candidates)<=8:
+        if len(candidates)<=8 and working_adjoint_count>0:
             proposal_tolerance=float(solve_tolerance)
             proposal_adjoint_rows=np.arange(target.size,dtype=np.int64)
         else:
