@@ -7,8 +7,11 @@ Runs inside Cubit on startup (via ~/.cubit -> startup.py) and performs:
   3. Cleanup of any legacy menus left behind by older installs
      (including the C++ Qt5 .ccl "Export Mesh" menu, which is now
      removed -- see radia 4.80.0 / src/radia/panels/radia_export_menu.py)
-  4. Installation of the PySide6 "Radia Export" menu via
-     radia_export_menu.install_menu()
+  4. Plugin freshness diagnostics
+
+The persistent PySide6 "Radia Export" surface is a Coreform
+WorkflowToolbar package imported once through Custom Toolbar Editor.
+It is deliberately not injected from this early startup hook.
 
 The Qt5 C++ Claro component (src/cubit_plugin/RadiaComp.cpp) was
 deleted in radia 4.80.0; all GUI work is now PySide6.  The .ccm
@@ -238,12 +241,13 @@ def _cleanup_legacy_menus():
       - The Qt5 C++ "Export Mesh" menu from radia <= 4.79.0
         (RadiaComp.cpp was deleted in 4.80.0; the menu may linger
         if an old .ccl is still loaded by Cubit)
-      - The transient PySide6 fallback "Export Mesh" menu from
-        radia 4.79.0 (replaced by "Radia Export" in 4.80.0)
+      - The transient PySide6 "Export Mesh" / "Radia Export" menus
+        previously injected directly into Cubit's QMenuBar
       - "RadiaToolBar" QToolBar from older toolbar prototypes
 
-    The new "Radia Export" menu (PySide6, radia_export_menu.py) is
-    NOT removed -- install_menu() handles its own idempotent reload.
+    The supported persistent surface is now Coreform's WorkflowToolbar,
+    installed through Custom Toolbar Editor.  It is owned by Cubit and is not
+    one of the QMenu/QToolBar objects removed here.
     """
     main_window = _find_main_window()
     if main_window is None:
@@ -253,7 +257,7 @@ def _cleanup_legacy_menus():
     removed = []
     legacy_names = (
         "Solve", "Radia-NGSolve", "Generate Coil", "Reload Panels",
-        "Export Mesh",  # both the old C++ .ccl menu and the 4.79.0 fallback
+        "Export Mesh", "Radia Export",
     )
     for name in legacy_names:
         for action in list(menu_bar.actions()):
@@ -274,37 +278,17 @@ def _cleanup_legacy_menus():
         _panel_log(f"_cleanup_legacy_menus: removed {removed}")
 
 
-def _install_radia_export_menu():
-    """Install the PySide6 'Radia Export' menu.
-
-    Delegates to radia_export_menu.install_menu() which provides the
-    6 export actions: Netgen / GMSH / Nastran / VTK / FEMEEM / MEG.
-    Mesh p-convergence evaluation is a docs demonstration, not a
-    Cubit menu action.  See src/radia/panels/radia_export_menu.py.
-
-    No import fallback: Cubit's startup hook puts `panels/` on sys.path
-    (see lines 24-27 above), so `import radia_export_menu` is the
-    canonical and only import path.  Per CLAUDE.md "No Fallbacks —
-    Fail Fast, Fail Loud" any ImportError is propagated unmodified.
-    """
-    import radia_export_menu
-    radia_export_menu.install_menu()
-    _panel_log("_install_radia_export_menu: installed via "
-               "radia_export_menu.install_menu()")
-
-
 def register_menu():
-    """Initialize export defaults, clean up legacy menus, install
-    the PySide6 'Radia Export' menu.
+    """Initialize export defaults and remove unsupported legacy GUI hooks.
 
-    The Qt5 C++ .ccl menu (RadiaComp.cpp) was removed in radia
-    4.80.0.  All Export Mesh functionality is now in
-    src/radia/panels/radia_export_menu.py (PySide6).
+    ``~/.cubit`` remains the correct startup hook for plugin/default setup.
+    Radia Export itself is the official WorkflowToolbar package imported once
+    through Cubit's Custom Toolbar Editor; injecting a QMenu here is unsafe
+    because Cubit can replace its menu bar later during cold startup.
     """
     _panel_log("register_menu: ENTER (PySide6-only, Qt5 .ccl removed)")
     for step in (_cleanup_legacy_menus, _init_export_default_dir,
-                 _check_plugin_freshness,
-                 _install_radia_export_menu):
+                 _check_plugin_freshness):
         try:
             step()
         except Exception:

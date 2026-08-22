@@ -1032,6 +1032,26 @@ def _show_netgen_result(r, vol_path, order, parent):
     dlg.show()
 
 
+def launch_export(fmt):
+    """Launch one export dialog from Cubit's official custom toolbar.
+
+    ``WorkflowToolbar`` buttons execute small Python scripts.  Those scripts
+    call this stable dispatcher instead of modifying Cubit's QMenuBar.
+    """
+    supported = {
+        FMT_NETGEN, FMT_GMSH, FMT_NASTRAN, FMT_VTK, FMT_FEMEEM, FMT_MEG,
+    }
+    if fmt not in supported:
+        raise ValueError(f"unsupported Radia export format: {fmt!r}")
+    import cubit as cubit_mod
+    parent = find_claro()
+    if parent is None:
+        raise RuntimeError("Cubit main window is not available")
+    if fmt == FMT_NETGEN:
+        return _run_netgen_export(cubit_mod, parent)
+    return _run_generic_export(fmt, cubit_mod, parent)
+
+
 # ----------------------------------------------------------------------
 # Menu installation
 # ----------------------------------------------------------------------
@@ -1041,30 +1061,17 @@ def _show_netgen_result(r, vol_path, order, parent):
 # Python interpreter from the GUI).
 _INSTALLED_OBJECT_NAME = "RadiaExportMenu"
 
+def _find_installed_menu(main):
+    """Return the installed Radia menu, or None if Cubit removed it."""
+    for action in list(main.menuBar().actions()):
+        sub = action.menu()
+        if sub is not None and sub.objectName() == _INSTALLED_OBJECT_NAME:
+            return sub
+    return None
 
-def install_menu():
-    """Install the 'Radia Export' QMenu on the Cubit main menu bar.
 
-    Idempotent: removes any previous instance before adding a new one.
-    No-op when no Cubit main window is available (headless / batch).
-    """
-    # Cubit imports `cubit` at host startup; re-importing here is safe
-    # (Python caches it).  Doing the import inside the function rather
-    # than at module top means the module can still be imported under
-    # `pytest` for unit tests that don't need Cubit.
-    try:
-        import cubit as cubit_mod
-    except ImportError:
-        print("[Radia] cubit module not available — "
-              "Radia Export menu not installed")
-        return None
-
-    main = find_claro()
-    if main is None:
-        print("[Radia] Cubit main window not found — "
-              "Radia Export menu not installed")
-        return None
-
+def _install_menu_on_main(cubit_mod, main):
+    """Create the menu after Cubit's QMainWindow is known to exist."""
     menu_bar = main.menuBar()
 
     # Remove any previous instance (idempotent reload)
@@ -1117,7 +1124,35 @@ def install_menu():
     return menu
 
 
-# Toolbar entry point when this file is run via `play` or
-# `import radia.panels.radia_export_menu` in a Cubit Python REPL.
+def install_menu():
+    """Install the deprecated, non-persistent top-level menu manually.
+
+    Radia's supported persistent Cubit surface is the ``WorkflowToolbar``
+    package installed through Custom Toolbar Editor.  This compatibility helper
+    remains for interactive use, but startup code must not depend on it because
+    Cubit may replace its QMenuBar after ``~/.cubit`` has run.
+    """
+    # Cubit imports `cubit` at host startup; re-importing here is safe
+    # (Python caches it).  Doing the import inside the function rather
+    # than at module top means the module can still be imported under
+    # `pytest` for unit tests that don't need Cubit.
+    try:
+        import cubit as cubit_mod
+    except ImportError:
+        print("[Radia] cubit module not available - "
+              "Radia Export menu not installed")
+        return None
+
+    main = find_claro()
+    if main is None:
+        print("[Radia] Cubit main window not found - "
+              "Radia Export compatibility menu not installed")
+        return None
+
+    return _install_menu_on_main(cubit_mod, main)
+
+
+# Compatibility entry point for an explicit interactive ``play``.  Normal
+# installation uses the official WorkflowToolbar package instead.
 if __name__ == "_coreform_cubit":
     install_menu()
