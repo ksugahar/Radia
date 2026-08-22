@@ -243,6 +243,35 @@ def test_ffag_validation_manufactured_target_requires_named_components(
     assert args.manufactured_target_only is True
 
 
+def test_ffag_validation_direct_map_only_requires_manufactured_target(
+        tmp_path):
+    import importlib.util
+    from pathlib import Path
+
+    runner_path=(Path(__file__).parents[1]/"validation_test"/"ffag_topopt"/
+                 "validation_ffag_full_field_c_yoke.py")
+    spec=importlib.util.spec_from_file_location(
+        "ffag_direct_map_only_runner",runner_path)
+    runner=importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(runner)
+    common=[
+        "--mesh",str(tmp_path/"mesh.vol"),
+        "--yoke-step",str(tmp_path/"yoke.step"),
+        "--output",str(tmp_path/"result.json"),
+        "--material-proposal-model","direct-map-only",
+    ]
+    with pytest.raises(SystemExit):
+        runner.parse_args(common)
+    args=runner.parse_args(common+[
+        "--manufactured-target-elements","798",
+        "--manufactured-candidate-elements","804","798",
+        "--controlled-components","horizontal_focusing",
+    ])
+    assert args.material_proposal_model == "direct-map-only"
+    assert args.manufactured_candidate_elements == [804,798]
+
+
 def test_ffag_validation_restart_prefers_explicit_final_active_set(tmp_path):
     import importlib.util
     import json

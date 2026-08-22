@@ -338,10 +338,14 @@ def run(args):
 
     from radia.accelerator_magnet_topopt import (
         CoilBuilderHDivSource,
+        build_multi_orbit_field_response_matrix,
+        optimize_hdiv_mmm_magnet_from_transfer_matrices,
         static_magnet_transfer_component_entries,
     )
     from radia.coil_builder import audit_coil_yoke_clearance
     from radia.ffag_topopt import (
+        FFAGFixedOrbitHDivMMMTopologyResult,
+        FFAGFixedOrbitMapTrial,
         build_ffag_cell_target_family,
         build_ffag_fixed_design_orbit_target_family,
         optimize_ffag_hdiv_mmm_from_design_orbits,
@@ -479,6 +483,7 @@ def run(args):
     print(
         f"[ffag-full-field] building ChargeGram: {mesh.ne} HEX, "
         f"{fes.ndof} BDM1 DoFs", flush=True)
+    proposal_material_stop_reason = None
     with ng.TaskManager():
         _, gram, _ = build_charge_gram(
             fes, eps=args.hmatrix_eps, leafsize=args.leaf_size,
@@ -613,45 +618,15 @@ def run(args):
         else:
             optimization_target_options["response_entries"] = (
                 fixture.objective.response_entries)
-        result = optimize_ffag_hdiv_mmm_from_design_orbits(
-            design_orbits, target_transfer_matrices,
-            transfer_matrix_band=direct_target.objective.transfer_matrix_band,
-            bend_field_band=direct_target.objective.bend_field_band,
-            source=source, charge_gram=gram, fes=fes,
-            inv_chi=1.0 / (args.mu_r - 1.0),
-            active_elements=active, element_volumes=volumes,
-            volume_max=float(np.sum(volumes)),
-            source_scale=(
-                args.manufactured_source_scale
-                if manufactured_target is not None else
-                (1.0 if restart is None else restart["source_scale"])),
-            optimize_source_scale=(
-                manufactured_target is None and restart is None),
-            initial_state=manufactured_initial_state,
-            gradient_offset=args.gradient_offset,
-            max_optics_iterations=args.material_iterations,
-            material_iterations_per_optics=1,
-            initial_material_move_fraction=args.move_fraction,
-            maximum_material_move_fraction=args.move_fraction,
-            proposal_trust_region_trials=args.proposal_trust_region_trials,
-            field_inverse_relative_tolerance=args.field_inverse_tolerance,
-            field_inverse_maximum_step_scale=args.field_inverse_max_step,
-            field_inverse_line_search_steps=(
-                args.field_inverse_line_search_steps),
-            map_trust_region_trials=args.map_trust_region_trials,
-            map_ratio_tolerance=args.map_ratio_tolerance,
-            direct_map_oracle_fallback=args.direct_map_oracle_fallback,
-            direct_map_oracle_exact_beam_width=(
-                args.direct_map_exact_beam_width),
-            direct_map_oracle_exact_beam_depth=(
-                args.direct_map_exact_beam_depth),
-            direct_map_oracle_graph_front_proposal_limit=(
-                args.direct_map_graph_front_proposal_limit),
+        common_generation_options = dict(
             fixed_active_elements=fixed_active,
             fixed_inactive_elements=fixed_inactive,
             maximum_batch_elements=(
                 len(args.manufactured_target_elements)
                 if manufactured_target is not None else None),
+            initial_material_move_fraction=args.move_fraction,
+            maximum_material_move_fraction=args.move_fraction,
+            proposal_trust_region_trials=args.proposal_trust_region_trials,
             solve_tolerance=args.solve_tolerance,
             solve_max_iterations=args.solve_max_iterations,
             cluster_coarse_size=args.cluster_coarse_size,
@@ -662,9 +637,109 @@ def run(args):
             exact_candidate_limit=args.exact_candidate_limit,
             exact_beam_width=args.exact_beam_width,
             exact_beam_depth=args.exact_beam_depth,
-            exact_beam_barrier_fraction=args.exact_beam_barrier_fraction,
-            **optimization_target_options,
-        )
+            exact_beam_barrier_fraction=args.exact_beam_barrier_fraction)
+        if args.material_proposal_model == "direct-map-only":
+            source_scale = float(args.manufactured_source_scale)
+            objective = direct_target.objective
+            rhs = source_scale * source.assemble_hdiv_rhs(fes)
+            response_matrix = build_multi_orbit_field_response_matrix(
+                gram, objective, gradient_offset=args.gradient_offset)
+            incident_response = (
+                source_scale * source.incident_orbit_field_response(
+                    objective, gradient_offset=args.gradient_offset))
+
+            def solve_direct_map(max_iterations):
+                return optimize_hdiv_mmm_magnet_from_transfer_matrices(
+                    design_orbits, target_transfer_matrices,
+                    transfer_matrix_band=objective.transfer_matrix_band,
+                    bend_field_band=objective.bend_field_band,
+                    charge_gram=gram, fes=fes,
+                    inv_chi=1.0 / (args.mu_r - 1.0), rhs=rhs,
+                    field_response_matrix=response_matrix,
+                    incident_field_response=incident_response,
+                    active_elements=active, element_volumes=volumes,
+                    volume_max=float(np.sum(volumes)),
+                    initial_state=manufactured_initial_state,
+                    response_entries=objective.response_entries,
+                    max_iterations=max_iterations,
+                    **common_generation_options)
+
+            proposal = solve_direct_map(args.material_iterations)
+            proposal_material_stop_reason = proposal.generation.stop_reason
+            initial_ratio = float(
+                manufactured_target["initial_max_band_ratio"])
+            candidate_ratio = float(max(
+                np.max(proposal.orbit_field_max_band_ratios),
+                np.max(proposal.transfer_matrix_max_band_ratios)))
+            changed = not np.array_equal(proposal.active_elements, active)
+            accepted = bool(
+                candidate_ratio <= 1.0 + args.map_ratio_tolerance or
+                (changed and candidate_ratio
+                 < initial_ratio - args.map_ratio_tolerance))
+            if accepted:
+                reason = "accepted by direct analytic map-Jacobian oracle"
+                topology_result = proposal
+                optics_history = (proposal,)
+            else:
+                reason = (
+                    "direct map oracle proposed no active-set change"
+                    if not changed else
+                    "rejected by exact fixed one-pass map gate")
+                topology_result = (
+                    proposal if not changed else solve_direct_map(0))
+                optics_history = ()
+            map_trial = FFAGFixedOrbitMapTrial(
+                0, 0, args.move_fraction, int(np.count_nonzero(active)),
+                int(np.count_nonzero(proposal.active_elements)),
+                initial_ratio, candidate_ratio, accepted, reason,
+                "direct-map-jacobian",
+                tuple(proposal.generation.exact_search_trace))
+            termination_reason = (
+                "fixed one-pass transfer bands reached"
+                if accepted and candidate_ratio <= 1.0 + args.map_ratio_tolerance
+                else ("direct analytic map-Jacobian improvement accepted"
+                      if accepted else
+                      "map-level trust-region proposals rejected"))
+            result = FFAGFixedOrbitHDivMMMTopologyResult(
+                direct_target, source_scale, topology_result,
+                optics_history, termination_reason, initial_ratio,
+                (map_trial,))
+        else:
+            result = optimize_ffag_hdiv_mmm_from_design_orbits(
+                design_orbits, target_transfer_matrices,
+                transfer_matrix_band=(
+                    direct_target.objective.transfer_matrix_band),
+                bend_field_band=direct_target.objective.bend_field_band,
+                source=source, charge_gram=gram, fes=fes,
+                inv_chi=1.0 / (args.mu_r - 1.0),
+                active_elements=active, element_volumes=volumes,
+                volume_max=float(np.sum(volumes)),
+                source_scale=(
+                    args.manufactured_source_scale
+                    if manufactured_target is not None else
+                    (1.0 if restart is None else restart["source_scale"])),
+                optimize_source_scale=(
+                    manufactured_target is None and restart is None),
+                initial_state=manufactured_initial_state,
+                gradient_offset=args.gradient_offset,
+                max_optics_iterations=args.material_iterations,
+                material_iterations_per_optics=1,
+                field_inverse_relative_tolerance=(
+                    args.field_inverse_tolerance),
+                field_inverse_maximum_step_scale=args.field_inverse_max_step,
+                field_inverse_line_search_steps=(
+                    args.field_inverse_line_search_steps),
+                map_trust_region_trials=args.map_trust_region_trials,
+                map_ratio_tolerance=args.map_ratio_tolerance,
+                direct_map_oracle_fallback=args.direct_map_oracle_fallback,
+                direct_map_oracle_exact_beam_width=(
+                    args.direct_map_exact_beam_width),
+                direct_map_oracle_exact_beam_depth=(
+                    args.direct_map_exact_beam_depth),
+                direct_map_oracle_graph_front_proposal_limit=(
+                    args.direct_map_graph_front_proposal_limit),
+                **common_generation_options,
+                **optimization_target_options)
     finished = time.perf_counter() if args.record_performance else None
     if args.record_performance:
         print(
@@ -796,6 +871,9 @@ def run(args):
             "map_trust_region_trials": args.map_trust_region_trials,
             "map_ratio_tolerance": args.map_ratio_tolerance,
             "direct_map_oracle_fallback": args.direct_map_oracle_fallback,
+            "material_proposal_model": args.material_proposal_model,
+            "proposal_material_stop_reason": (
+                proposal_material_stop_reason),
             "initial_state_warm_start": bool(
                 manufactured_initial_state is not None),
             "direct_map_oracle_exact_beam_width": (
@@ -981,6 +1059,13 @@ def parse_args(argv=None):
     parser.add_argument(
         "--direct-map-oracle-fallback",
         action=argparse.BooleanOptionalAction, default=False)
+    parser.add_argument(
+        "--material-proposal-model",
+        choices=("field-target-then-direct", "direct-map-only"),
+        default="field-target-then-direct",
+        help=("Material proposal lane. direct-map-only is a manufactured-"
+              "target validation shortcut that bypasses the field-target "
+              "surrogate and exercises the analytic map Jacobian directly."))
     parser.add_argument("--direct-map-exact-beam-width", type=int, default=0)
     parser.add_argument("--direct-map-exact-beam-depth", type=int, default=0)
     parser.add_argument(
@@ -1003,6 +1088,8 @@ def parse_args(argv=None):
             or (args.manufactured_target_only and not manufactured)
             or (args.manufactured_candidate_elements and not manufactured)
             or args.manufactured_source_scale <= 0.0
+            or (args.material_proposal_model == "direct-map-only"
+                and not manufactured)
             or not 0.0 < args.manufactured_relative_band < 1.0
             or args.manufactured_bend_slack <= 1.0
             or len(args.energies) < 2 or args.segments < 16
