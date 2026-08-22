@@ -1,81 +1,59 @@
-"""Run the menu-persistence regression in Cubit's own PySide6 runtime."""
+"""Regression tests for Cubit's startup hook and GUI ownership boundary."""
 
 from __future__ import annotations
 
-import glob
-import json
-import os
-import subprocess
 from pathlib import Path
 
-import pytest
+from tools.audit_pyside6_only import check_deployed_panel_source
 
 
 ROOT = Path(__file__).resolve().parents[1]
-PROBE = ROOT / "tests" / "cubit_menu_runtime_probe.py"
-EXPORT_MENU = ROOT / "src" / "radia" / "panels" / "radia_export_menu.py"
+REGISTER_TOOLBAR = ROOT / "src" / "radia" / "panels" / "register_toolbar.py"
 
 
-def _find_cubit_python() -> Path | None:
-    explicit = os.environ.get("CUBIT_PYTHON")
-    if explicit and Path(explicit).is_file():
-        return Path(explicit)
+def test_deployment_audit_rejects_startup_from_another_checkout(tmp_path):
+    expected = tmp_path / "current" / "src" / "radia" / "panels" \
+        / "register_toolbar.py"
+    foreign = tmp_path / "old-release" / "src" / "radia" / "panels" \
+        / "register_toolbar.py"
+    expected.parent.mkdir(parents=True)
+    foreign.parent.mkdir(parents=True)
+    expected.write_text("# current\n", encoding="utf-8")
+    foreign.write_text("# stale\n", encoding="utf-8")
 
-    cubit_path = os.environ.get("CUBIT_PATH")
-    if cubit_path:
-        root = Path(cubit_path)
-        bin_dir = root if root.name.lower() == "bin" else root / "bin"
-        candidate = bin_dir / "python3" / "python.exe"
-        if candidate.is_file():
-            return candidate
-
-    if os.name == "nt":
-        program_files = os.environ.get("ProgramFiles", r"C:\Program Files")
-        candidates = sorted(
-            glob.glob(str(Path(program_files) / "Coreform Cubit *" / "bin"
-                           / "python3" / "python.exe")),
-            reverse=True,
-        )
-        if candidates:
-            return Path(candidates[0])
-    return None
-
-
-def test_cubit_runtime_restores_menu_after_repeated_stock_menu_rebuilds():
-    cubit_python = _find_cubit_python()
-    if cubit_python is None:
-        pytest.skip("Coreform Cubit embedded Python is not installed")
-
-    env = os.environ.copy()
-    env["QT_QPA_PLATFORM"] = "offscreen"
-    proc = subprocess.run(
-        [str(cubit_python), str(PROBE), str(EXPORT_MENU)],
-        cwd=str(ROOT),
-        env=env,
-        capture_output=True,
-        text=True,
+    startup = tmp_path / "radia_startup.py"
+    startup.write_text(
+        f"exec(open(r'{foreign.as_posix()}').read())\n",
         encoding="utf-8",
-        errors="replace",
-        timeout=60,
     )
-    json_line = next(
-        (line for line in reversed(proc.stdout.splitlines())
-         if line.lstrip().startswith("{")),
-        "",
+    cubit_file = tmp_path / ".cubit"
+    cubit_file.write_text(
+        "## BEGIN radia toolbar\n"
+        f'play "{startup.as_posix()}"\n'
+        "## END radia toolbar\n",
+        encoding="utf-8",
     )
-    assert proc.returncode == 0, (
-        f"Cubit PySide6 menu probe failed (rc={proc.returncode})\n"
-        f"stdout:\n{proc.stdout}\nstderr:\n{proc.stderr}"
-    )
-    assert json_line, f"probe returned no JSON payload:\n{proc.stdout}"
-    result = json.loads(json_line)
 
-    assert result["ok"] is True
-    assert result["runtime"]["python"].startswith("3.10")
-    assert result["observer"]["installed_before_main_window"] is True
-    assert result["observer"]["survived_gc"] is True
-    assert result["observer"]["parented_to_qapplication"] is True
-    assert result["replay_menu_count"] == 1
-    assert len(result["rebuilds"]) == 4
-    assert all(row["menu_count"] == 1 for row in result["rebuilds"])
-    assert all(row["action_count"] == 6 for row in result["rebuilds"])
+    status, issues = check_deployed_panel_source(cubit_file, expected)
+    assert status == "checked"
+    assert len(issues) == 1
+    assert "different checkout" in issues[0]
+    assert expected.as_posix().lower() in issues[0]
+
+    startup.write_text(
+        f"exec(open(r'{expected.as_posix()}').read())\n",
+        encoding="utf-8",
+    )
+    status, issues = check_deployed_panel_source(cubit_file, expected)
+    assert status == "checked"
+    assert issues == []
+
+
+def test_cubit_startup_does_not_inject_a_qmenu():
+    """``~/.cubit`` must leave persistent GUI ownership to Coreform."""
+    source = REGISTER_TOOLBAR.read_text(encoding="utf-8")
+
+    assert "def _install_radia_export_menu" not in source
+    assert "radia_export_menu.install_menu()" not in source
+    assert '"Export Mesh", "Radia Export"' in source
+    assert "official WorkflowToolbar package" in source

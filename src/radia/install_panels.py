@@ -18,7 +18,10 @@ from __future__ import annotations
 import glob
 import os
 import re
+import shutil
 import sys
+import tarfile
+import tempfile
 from pathlib import Path
 
 
@@ -167,6 +170,63 @@ def _startup_dir(all_users=False):
             base = os.environ.get("LOCALAPPDATA") or os.path.expanduser("~")
         return os.path.join(base, "Radia", "Cubit")
     return os.path.join(os.path.expanduser("~"), ".radia", "cubit")
+
+
+def build_official_toolbar_package(output_dir=None):
+    """Build Coreform's supported ``WorkflowToolbar`` import package.
+
+    The archive layout and ``.mappings`` contract match Coreform's official
+    ``tire_cross_section_tool`` and ``cubit-dagmc-toolbar`` examples.  The
+    export implementation is copied into the package so a Cubit toolbar never
+    follows a stale editable-install or release-worktree path.
+    """
+    panels_dir = Path(_get_panels_dir())
+    source = panels_dir / "cubit_toolbar"
+    template = source / "toolbars" / "radia_export_toolbar.ttb.tmpl"
+    menu_source = panels_dir / "radia_export_menu.py"
+    if not template.is_file():
+        raise FileNotFoundError(f"official toolbar template missing: {template}")
+    if not menu_source.is_file():
+        raise FileNotFoundError(f"export implementation missing: {menu_source}")
+
+    destination = Path(output_dir or _startup_dir(all_users=False))
+    destination.mkdir(parents=True, exist_ok=True)
+    package_path = destination / "radia_export_toolbar.tar.gz"
+
+    with tempfile.TemporaryDirectory(
+            prefix="radia-export-toolbar-", dir=str(destination)) as temp_dir:
+        staging = Path(temp_dir)
+        shutil.copytree(
+            source / "scripts",
+            staging / "scripts",
+            ignore=shutil.ignore_patterns("__pycache__", "*.pyc"),
+        )
+        shutil.copytree(source / "icons", staging / "icons")
+        (staging / "toolbars").mkdir()
+        shutil.copy2(menu_source, staging / "scripts" / "radia_export_menu.py")
+
+        install_dir = staging.as_posix()
+        toolbar_text = template.read_text(encoding="utf-8").replace(
+            "@TOOLBAR_INSTALL_DIR@", install_dir)
+        toolbar_rel = Path("toolbars") / "radia_export_toolbar.ttb"
+        (staging / toolbar_rel).write_text(toolbar_text, encoding="utf-8")
+
+        mapped_files = sorted(
+            path.relative_to(staging).as_posix()
+            for path in staging.rglob("*")
+            if path.is_file()
+        )
+        mappings = "\n".join(
+            f"{install_dir}/{relative} => {relative}"
+            for relative in mapped_files
+        ) + "\n"
+        (staging / ".mappings").write_text(mappings, encoding="utf-8")
+
+        with tarfile.open(package_path, "w:gz") as archive:
+            for relative in ("scripts", "toolbars", "icons", ".mappings"):
+                archive.add(staging / relative, arcname=relative)
+
+    return str(package_path)
 
 
 def _generate_startup_script(panels_dir, *, all_users=False):
@@ -390,12 +450,15 @@ def install_panels(all_users=False):
 
     try:
         startup_script = _generate_startup_script(panels_dir, all_users=all_users)
+        toolbar_package = build_official_toolbar_package(
+            output_dir=_startup_dir(all_users=all_users))
     except OSError as exc:
-        print(f"ERROR: could not create startup script: {exc}")
+        print(f"ERROR: could not create Cubit startup assets: {exc}")
         return False
 
     print(f"Toolbar script: {register_script}")
     print(f"Startup script: {startup_script}")
+    print(f"Official toolbar package: {toolbar_package}")
 
     cubit_bin = find_cubit_bin()
     if not cubit_bin:
@@ -451,7 +514,10 @@ def install_panels(all_users=False):
 
     print()
     print("=== Installation Complete ===")
-    print("Restart Cubit 2025.12 to load the toolbar.")
+    print("Import the official toolbar package once in Cubit via:")
+    print("  Tools > Custom Toolbar Editor > Import > Package")
+    print(f"  {toolbar_package}")
+    print("Then restart Cubit 2025.12 to verify persistent loading.")
     return True
 
 
@@ -488,7 +554,11 @@ def uninstall_panels(all_users=False):
 def main():
     """Console script entry point."""
     all_users = "--all-users" in sys.argv
-    if "--uninstall" in sys.argv:
+    if "--build-toolbar-only" in sys.argv:
+        package = build_official_toolbar_package()
+        print(package)
+        success = True
+    elif "--uninstall" in sys.argv:
         success = uninstall_panels(all_users=all_users)
     elif "--verify-only" in sys.argv:
         success, _ = verify_panel_installation(all_users=all_users, verbose=True)

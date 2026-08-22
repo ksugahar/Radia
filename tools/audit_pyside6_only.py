@@ -36,8 +36,10 @@ import json
 import importlib.util
 import glob
 import os
+import re
 import subprocess
 import sys
+import xml.etree.ElementTree as ET
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -121,6 +123,76 @@ def check_ccm_qt_free() -> tuple[str, list[str]]:
     deps = {e.dll.decode().lower() for e in getattr(pe, "DIRECTORY_ENTRY_IMPORT", [])}
     qt = sorted(d for d in deps if d.startswith("qt"))
     return ("checked", [f".ccm imports Qt DLL(s): {qt}"] if qt else [])
+
+
+def check_deployed_panel_source(
+        cubit_file: Path | None = None,
+        expected_register: Path | None = None) -> tuple[str, list[str]]:
+    """Reject a registered startup shim that loads another checkout.
+
+    The package-level verifier proves that *its own* deployment is internally
+    consistent.  A developer audit also has to prove that Cubit loads the
+    checkout being audited; otherwise an old release worktree can pass while
+    the current menu fix is never executed.
+    """
+    cubit_file = cubit_file or (Path.home() / ".cubit")
+    expected_register = expected_register or (
+        ROOT / "src" / "radia" / "panels" / "register_toolbar.py")
+    if not cubit_file.is_file():
+        return ("skip (no ~/.cubit)", [])
+
+    cubit_text = cubit_file.read_text(encoding="utf-8", errors="replace")
+    begin = cubit_text.find("## BEGIN radia toolbar")
+    end = cubit_text.find("## END radia toolbar")
+    if begin < 0 or end < begin:
+        return ("skip (Radia startup not registered)", [])
+    match = re.search(r'play\s+"([^"]+)"', cubit_text[begin:end])
+    if not match:
+        return ("checked", [f"invalid Radia startup block: {cubit_file}"])
+
+    startup = Path(match.group(1).replace("/", os.sep))
+    if not startup.is_file():
+        return ("checked", [f"registered startup shim is missing: {startup}"])
+    startup_text = startup.read_text(encoding="utf-8", errors="replace")
+    expected = str(expected_register.resolve()).replace("\\", "/").lower()
+    actual_text = startup_text.replace("\\", "/").lower()
+    if expected not in actual_text:
+        loaded = re.findall(r"[^'\"]+register_toolbar\.py", actual_text)
+        loaded_text = loaded[-1] if loaded else "unknown"
+        return ("checked", [
+            "Cubit startup loads a different checkout: "
+            f"expected={expected}; loaded={loaded_text}"
+        ])
+    return ("checked", [])
+
+
+def check_official_toolbar_contract() -> list[str]:
+    """Validate the Coreform-owned WorkflowToolbar source contract."""
+    toolbar_root = ROOT / "src" / "radia" / "panels" / "cubit_toolbar"
+    template = toolbar_root / "toolbars" / "radia_export_toolbar.ttb.tmpl"
+    register = ROOT / "src" / "radia" / "panels" / "register_toolbar.py"
+    issues: list[str] = []
+    if not template.is_file():
+        return [f"missing WorkflowToolbar template: {template}"]
+    try:
+        root = ET.fromstring(template.read_text(encoding="utf-8"))
+    except (OSError, ET.ParseError) as exc:
+        return [f"invalid WorkflowToolbar template: {exc}"]
+    if root.tag != "WorkflowToolbar" or root.attrib.get("name") != "Radia Export":
+        issues.append("toolbar root must be WorkflowToolbar name='Radia Export'")
+    buttons = root.findall("WTButton")
+    if len(buttons) != 6:
+        issues.append(f"expected 6 official toolbar buttons, found {len(buttons)}")
+
+    for filename in root.findall(".//filename"):
+        relative = (filename.text or "").split("@TOOLBAR_INSTALL_DIR@/", 1)[-1]
+        if not relative or not (toolbar_root / relative).is_file():
+            issues.append(f"missing toolbar launcher: {relative!r}")
+
+    register_text = register.read_text(encoding="utf-8", errors="replace")
+    if "radia_export_menu.install_menu()" in register_text:
+        issues.append("~/.cubit startup still injects the unsupported QMenu")
+    return issues
 
 
 # ----------------------------------------------------------------------
@@ -208,47 +280,6 @@ def check_panel_smoke(python_executable: Path) -> list[str]:
     return list(data.get("fails", [])) if not data.get("ok") else []
 
 
-def check_menu_persistence(python_executable: Path) -> list[str]:
-    """Prove cold-start registration survives repeated stock-menu rebuilds."""
-    env = os.environ.copy()
-    env["QT_QPA_PLATFORM"] = "offscreen"
-    probe = ROOT / "tests" / "cubit_menu_runtime_probe.py"
-    menu_module = ROOT / "src" / "radia" / "panels" / "radia_export_menu.py"
-    r = subprocess.run(
-        [str(python_executable), str(probe), str(menu_module)],
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-        env=env,
-        timeout=120,
-        cwd=ROOT,
-    )
-    line = next(
-        (value for value in reversed(r.stdout.splitlines())
-         if value.lstrip().startswith("{")),
-        "",
-    )
-    if r.returncode != 0 or not line:
-        return [
-            f"menu persistence probe failed (rc={r.returncode}); "
-            f"stdout tail={r.stdout[-800:]!r}; stderr tail={r.stderr[-800:]!r}"
-        ]
-    try:
-        data = json.loads(line)
-    except json.JSONDecodeError as exc:
-        return [f"menu persistence probe returned invalid JSON: {exc}"]
-    rebuilds = data.get("rebuilds", [])
-    if (
-        data.get("ok") is not True
-        or len(rebuilds) != 4
-        or data.get("replay_menu_count") != 1
-        or not all(row.get("menu_count") == 1 for row in rebuilds)
-    ):
-        return [f"menu persistence contract failed: {data}"]
-    return []
-
-
 # ----------------------------------------------------------------------
 def main(argv: list[str]) -> int:
     if "--smoke" in argv:
@@ -278,10 +309,23 @@ def main(argv: list[str]) -> int:
     print(f"[{'FAIL' if ccm_issues else 'OK'}] cubit_mesh_export.ccm Qt-free  ({ccm_status})")
     all_issues += ccm_issues
 
+    deploy_status, deploy_issues = check_deployed_panel_source()
+    print(f"[{'FAIL' if deploy_issues else 'OK'}] Cubit startup source "
+          f"matches audited checkout  ({deploy_status})")
+    for issue in deploy_issues:
+        print("       " + issue)
+    all_issues += deploy_issues
+
+    toolbar_contract = check_official_toolbar_contract()
+    print(f"[{'FAIL' if toolbar_contract else 'OK'}] official Coreform "
+          "WorkflowToolbar contract (6 export actions; no startup QMenu)")
+    for issue in toolbar_contract:
+        print("       " + issue)
+    all_issues += toolbar_contract
+
     qt_python, qt_runtime = _qt_runtime_python()
     if qt_python is None:
         smoke = []
-        persistence = []
         print("[OK] headless Cubit toolbar smoke skipped "
               "(no PySide6 runtime or Cubit embedded Python found)")
     else:
@@ -291,13 +335,6 @@ def main(argv: list[str]) -> int:
         for s in smoke:
             print("       " + s)
         all_issues += [f"panel smoke: {s}" for s in smoke]
-
-        persistence = check_menu_persistence(qt_python)
-        print(f"[{'FAIL' if persistence else 'OK'}] Cubit cold-start menu "
-              f"persistence (4 rebuilds + idempotent replay; {qt_runtime})")
-        for issue in persistence:
-            print("       " + issue)
-        all_issues += [f"menu persistence: {issue}" for issue in persistence]
 
     print("-" * 64)
     if all_issues:
