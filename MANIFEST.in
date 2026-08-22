@@ -15,6 +15,7 @@ exclude src/radia/panels/cub5_to_vol.py
 
 # Include Cubit toolbar panels and sample .jou files
 recursive-include src/radia/panels *.txt *.ui *.jou
+recursive-include src/radia/panels/cubit_toolbar *.tmpl *.py *.svg
 
 # Include conventions document
 include src/radia/CONVENTIONS.md

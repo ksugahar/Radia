@@ -1,5 +1,7 @@
 import sys
 import importlib.util
+import tarfile
+import xml.etree.ElementTree as ET
 from pathlib import Path
 
 
@@ -123,10 +125,15 @@ def test_install_panels_writes_and_verifies_current_user(monkeypatch, tmp_path):
 
     cubit_file = tmp_path / "Home" / ".cubit"
     startup = tmp_path / "LocalAppData" / "Radia" / "Cubit" / "radia_startup.py"
+    toolbar_package = (
+        tmp_path / "LocalAppData" / "Radia" / "Cubit"
+        / "radia_export_toolbar.tar.gz"
+    )
     ini = tmp_path / "AppData" / "Roaming" / "Coreform" / "Cubit.ini"
 
     assert cubit_file.is_file()
     assert startup.is_file()
+    assert toolbar_package.is_file()
     assert "play" in cubit_file.read_text(encoding="utf-8")
     assert str(startup).replace("\\", "/") in cubit_file.read_text(encoding="utf-8")
     assert str(cubit_root / "bin" / "plugins").replace("\\", "/") in ini.read_text(
@@ -134,3 +141,43 @@ def test_install_panels_writes_and_verifies_current_user(monkeypatch, tmp_path):
     )
     ok, issues = install_panels.verify_panel_installation(all_users=False)
     assert ok, issues
+
+
+def test_official_toolbar_package_is_self_contained(tmp_path):
+    install_panels = _load_install_panels()
+
+    package = Path(install_panels.build_official_toolbar_package(tmp_path))
+    assert package.name == "radia_export_toolbar.tar.gz"
+
+    with tarfile.open(package, "r:gz") as archive:
+        names = set(archive.getnames())
+        assert "toolbars/radia_export_toolbar.ttb" in names
+        assert "scripts/radia_export_menu.py" in names
+        assert "icons/radia_export.svg" in names
+        assert ".mappings" in names
+        assert not any("__pycache__" in name or name.endswith(".pyc")
+                       for name in names)
+        toolbar_text = archive.extractfile(
+            "toolbars/radia_export_toolbar.ttb").read().decode("utf-8")
+        mappings = archive.extractfile(".mappings").read().decode("utf-8")
+
+    root = ET.fromstring(toolbar_text)
+    assert root.tag == "WorkflowToolbar"
+    assert root.attrib == {
+        "version": "1.0", "name": "Radia Export", "visible": "true",
+    }
+    buttons = root.findall("WTButton")
+    assert len(buttons) == 6
+    action_names = [
+        button.find(".//WAction").attrib["name"] for button in buttons
+    ]
+    assert action_names == [
+        "Netgen Vol (.vol)", "GMSH (.msh)", "Nastran (.bdf)",
+        "VTK (.vtk)", "FEMEEM", "MEG (ELF/MAGIC)",
+    ]
+
+    referenced = [
+        element.text for element in root.iter()
+        if element.tag in {"filename", "icon"} and element.text
+    ]
+    assert all(f"{path} => " in mappings for path in referenced)
