@@ -1706,6 +1706,117 @@ def test_hdiv_mmm_generation_reuses_checked_initial_state(monkeypatch):
     np.testing.assert_allclose(result.response,response,rtol=1e-14,atol=1e-14)
 
 
+def test_hdiv_mmm_zero_rank_fallback_honors_exact_candidate_limit(monkeypatch):
+    import ngsolve as ng
+    import radia.topology_optimization as topopt
+    from ngsolve.meshes import MakeStructured3DMesh
+    from radia.vim._vim import build_charge_gram
+
+    mesh=MakeStructured3DMesh(hexes=True,nx=3,ny=3,nz=3)
+    centers=_element_centroids(mesh)
+    active=np.all((centers>.33)&(centers<.67),axis=1)
+    candidates=ngsolve_boundary_growth_candidates(mesh,active)
+    assert candidates.size>3
+    fes=ng.HDiv(mesh,order=0,discontinuous=True)
+    with ng.TaskManager():
+        _,gram,mass=build_charge_gram(
+            fes,eps=1e-10,leafsize=256,eta=2.0,
+            internal_interfaces=True)
+    rng=np.random.default_rng(20260822)
+    rhs=np.asarray(mass@rng.normal(size=fes.ndof))
+    response_matrix=rng.normal(size=(2,fes.ndof))
+    volumes=np.asarray(ng.Integrate(1.0,mesh,element_wise=True))
+
+    def force_zero_rank(**kwargs):
+        elements=np.asarray(kwargs["candidate_elements"],dtype=np.int64)
+        return topopt.TSVDElementCandidateSelection(
+            selected_elements=np.empty(0,dtype=np.int64),
+            selected_directions=np.empty(0,dtype=np.int8),
+            representative_elements=np.empty(0,dtype=np.int64),
+            representative_directions=np.empty(0,dtype=np.int8),
+            predicted_response=np.asarray(
+                kwargs["current_response"],dtype=float),
+            predicted_max_band_ratio=1.0,added_volume=0.0,
+            numerical_rank=0,aca_rank=0,singular_values=np.empty(0),
+            signed_coefficients=np.zeros(len(elements)),
+            relative_truncation_error=0.0,status="forced zero rank")
+
+    captured=[]
+    def capture_exact_front(**kwargs):
+        candidates=np.asarray(
+            kwargs["candidate_elements"],dtype=np.int64)
+        proposal=np.asarray(
+            kwargs["proposal_elements"],dtype=np.int64)
+        representatives=np.asarray(
+            kwargs["representative_elements"],dtype=np.int64)
+        captured.extend(np.union1d(proposal,representatives).tolist())
+        assert set(captured).issubset(set(candidates.tolist()))
+        current=np.asarray(kwargs["current_response"],dtype=float)
+        target=np.asarray(kwargs["response_target"],dtype=float)
+        band=np.asarray(kwargs["response_band"],dtype=float)
+        ratio=float(np.max(np.abs((current-target)/band)))
+        return topopt.CollaborativeElementBatchUpdate(
+            np.empty(0,dtype=np.int64),current,ratio,0.0,0,
+            "captured exact fallback front")
+
+    monkeypatch.setattr(
+        topopt,"select_tsvd_element_candidates",force_zero_rank)
+    monkeypatch.setattr(
+        topopt,"select_tsvd_exact_block_batch",capture_exact_front)
+    result=topopt.grow_hdiv_mmm_by_superposition(
+        charge_gram=gram,fes=fes,inv_chi=.2,rhs=rhs,
+        response_matrix=response_matrix,active_elements=active,
+        element_volumes=volumes,response_target=np.array([10.0,-10.0]),
+        response_band=np.ones(2),volume_max=float(np.sum(volumes)),
+        fixed_active_elements=active,maximum_batch_elements=1,
+        max_iterations=1,solve_tolerance=1e-11,
+        proposal_adjoint_count=0,exact_candidate_limit=3)
+
+    assert not result.converged
+    assert len(captured)==3,result.stop_reason
+    assert set(captured).issubset(set(candidates.tolist()))
+
+
+def test_hdiv_mmm_generation_reuses_checked_initial_state(monkeypatch):
+    import ngsolve as ng
+    import radia.topology_optimization as topopt
+    from ngsolve.meshes import MakeStructured3DMesh
+    from radia.vim._vim import build_charge_gram
+
+    mesh=MakeStructured3DMesh(hexes=True,nx=2,ny=1,nz=1)
+    centers=_element_centroids(mesh)
+    active=centers[:,0]<.5
+    fes=ng.HDiv(mesh,order=0,discontinuous=True)
+    with ng.TaskManager():
+        _,gram,mass=build_charge_gram(
+            fes,eps=1e-10,leafsize=256,eta=2.0,
+            internal_interfaces=True)
+        rng=np.random.default_rng(20260823)
+        rhs=np.asarray(mass@rng.normal(size=fes.ndof))
+        response_matrix=rng.normal(size=(1,fes.ndof))
+        state,response,_=topopt.solve_hdiv_mmm_active_elements(
+            charge_gram=gram,fes=fes,inv_chi=.2,rhs=rhs,
+            response_matrix=response_matrix,active_elements=active,
+            solve_tolerance=1e-11)
+    volumes=np.asarray(ng.Integrate(1.0,mesh,element_wise=True))
+
+    def unexpected_solve(**kwargs):
+        raise AssertionError("checked initial state must skip the initial solve")
+
+    monkeypatch.setattr(
+        topopt,"solve_hdiv_mmm_active_elements",unexpected_solve)
+    with ng.TaskManager():
+        result=topopt.grow_hdiv_mmm_by_superposition(
+            charge_gram=gram,fes=fes,inv_chi=.2,rhs=rhs,
+            response_matrix=response_matrix,active_elements=active,
+            element_volumes=volumes,response_target=np.array([10.0]),
+            response_band=np.ones(1),volume_max=float(np.sum(volumes)),
+            initial_state=state,max_iterations=0,solve_tolerance=1e-11)
+
+    np.testing.assert_allclose(result.state,state,rtol=0.0,atol=0.0)
+    np.testing.assert_allclose(result.response,response,rtol=1e-14,atol=1e-14)
+
+
 def test_hdiv_mmm_generation_uses_qr_representative_adjoint_rows(monkeypatch):
     import ngsolve as ng
     import radia.topology_optimization as topopt
