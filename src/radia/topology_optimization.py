@@ -3205,7 +3205,8 @@ def _positive_minimax_source_scale_and_gradient(response,target,band):
 def grow_hdiv_mmm_by_superposition(*, charge_gram, fes, inv_chi, rhs,
         response_matrix, active_elements, element_volumes,
         response_target, response_band, volume_max,
-        incident_response=None, maximum_batch_elements=None,
+        incident_response=None, initial_state=None,
+        maximum_batch_elements=None,
         max_iterations=30, ratio_tolerance=1e-8,
         solve_tolerance=1e-9, solve_max_iterations=5000,
         candidate_batch_size=64, mass_riesz=True,
@@ -3324,6 +3325,11 @@ def grow_hdiv_mmm_by_superposition(*, charge_gram, fes, inv_chi, rhs,
     must return one boolean.  Guard-rejected states are neither accepted nor
     retained as nonmonotone beam parents.  Proposal linearization remains
     unchanged; the complete solve is the single source of truth for the guard.
+
+    ``initial_state`` may reuse a state solved for the identical active set,
+    RHS, material law, and configured operator.  The true operator residual
+    and inactive-DOF constraints are checked before the initial Krylov solve is
+    skipped; a stale or approximate state fails loudly.
 
     ``initial_material_move_fraction`` enables a TOBS/SAIP-style trust region
     on the *total physical volume flipped* by one signed add/remove proposal.
@@ -3639,14 +3645,35 @@ def grow_hdiv_mmm_by_superposition(*, charge_gram, fes, inv_chi, rhs,
         raise ValueError("initial iron seed must be connected and contain no enclosed inactive cavity")
     if active_set_validator is not None and not valid_active_set(active):
         raise ValueError("initial iron seed violates active_set_validator")
-    state,response,solve_iterations=solve_hdiv_mmm_active_elements(
-        charge_gram=charge_gram,fes=fes,inv_chi=inv_chi,rhs=rhs,
-        response_matrix=response_matrix,active_elements=active,
-        incident_response=incident_response,solve_tolerance=solve_tolerance,
-        solve_max_iterations=solve_max_iterations,mass_riesz=mass_riesz,
-        cluster_coarse_size=cluster_coarse_size,
-        cluster_deflation_size=cluster_deflation_size,
-        recycle_size=recycle_size)
+    if initial_state is None:
+        state,response,solve_iterations=solve_hdiv_mmm_active_elements(
+            charge_gram=charge_gram,fes=fes,inv_chi=inv_chi,rhs=rhs,
+            response_matrix=response_matrix,active_elements=active,
+            incident_response=incident_response,
+            solve_tolerance=solve_tolerance,
+            solve_max_iterations=solve_max_iterations,mass_riesz=mass_riesz,
+            cluster_coarse_size=cluster_coarse_size,
+            cluster_deflation_size=cluster_deflation_size,
+            recycle_size=recycle_size)
+    else:
+        state=np.asarray(initial_state,dtype=float).reshape(-1).copy()
+        validate_hdiv_mmm_active_state(
+            charge_gram=charge_gram,fes=fes,inv_chi=inv_chi,rhs=rhs,
+            active_elements=active,state=state,
+            solve_tolerance=solve_tolerance)
+        response_rows=np.atleast_2d(
+            np.asarray(response_matrix,dtype=float))
+        if response_rows.shape[1]!=state.size:
+            raise ValueError(
+                "response_matrix must match the initial state size")
+        incident=(np.zeros(response_rows.shape[0],dtype=float)
+                  if incident_response is None else
+                  np.asarray(incident_response,dtype=float).reshape(-1))
+        if incident.shape!=(response_rows.shape[0],):
+            raise ValueError(
+                "incident_response must match the response rows")
+        response=response_rows@state+incident
+        solve_iterations=0
     state,response,source_scale=calibrate_source(state,response)
     element_blocks=ngsolve_discontinuous_element_dof_blocks(fes)
     ratio=lambda values:float(np.max(np.abs((np.asarray(values)-target)/band)))
@@ -4244,9 +4271,17 @@ def grow_hdiv_mmm_by_superposition(*, charge_gram, fes, inv_chi, rhs,
             # block-Schur challenge deliberately small: reducing hundreds of
             # BDM blocks forms a multi-gigabyte candidate-active matrix and
             # defeats the all-candidate low-rank screen.
-            fallback_limit=min(16,int(exact_candidate_limit),max(
-                2,len(positive_probe),
-                2*int(tsvd_proposal.numerical_rank)+2))
+            if (not positive_probe.size and
+                    int(tsvd_proposal.numerical_rank)==0):
+                # With no retained response mode there is no QR skeleton from
+                # which to size the exact challenge.  Honour the caller's
+                # bounded look-ahead request instead of silently reducing the
+                # fallback to two arbitrary cells.
+                fallback_limit=min(16,int(exact_candidate_limit))
+            else:
+                fallback_limit=min(16,int(exact_candidate_limit),max(
+                    2,len(positive_probe),
+                    2*int(tsvd_proposal.numerical_rank)+2))
             fallback_pool=np.union1d(
                 positive_probe,ranked_additions[:fallback_limit])
             fallback_addition_elements=np.asarray(sorted(
@@ -4291,12 +4326,18 @@ def grow_hdiv_mmm_by_superposition(*, charge_gram, fes, inv_chi, rhs,
                 return np.r_[proposed,extras[:extra_limit]].astype(
                     np.int64,copy=False)
             # A no-improvement TSVD proposal still receives one exact Schur
-            # probe.  When the zero-rank set is small, keep it whole so a pair
-            # that improves only jointly is not discarded.  The limit controls
-            # exact look-ahead work, not accepted batch cardinality.
+            # front.  When the zero-rank set is small, keep it whole so a pair
+            # that improves only jointly is not discarded.  Otherwise retain
+            # the requested number of predicted-best singletons; collapsing
+            # this branch to one cell made ``exact_candidate_limit`` ineffective
+            # precisely when the first-order model could not see a full-cell
+            # nonlinear improvement.  The limit controls exact look-ahead work,
+            # not accepted batch cardinality.
             score=np.max(np.abs((base_objective[:,None]+effective_matrix-
                                  target[:,None])/band[:,None]),axis=0)
-            return valid_elements[np.asarray([int(np.argmin(score))])]
+            front_limit=min(int(exact_candidate_limit),valid_elements.size)
+            order=np.argsort(score,kind="stable")[:front_limit]
+            return valid_elements[order]
 
         common_linearization=dict(charge_gram=charge_gram,fes=fes,
             inv_chi=inv_chi,rhs=rhs,response_matrix=linear_response_matrix,
@@ -4802,9 +4843,13 @@ def grow_hdiv_mmm_by_superposition(*, charge_gram, fes, inv_chi, rhs,
             # global proposal with adaptively shrunken physical moves.  Do not
             # silently expand it to every response adjoint: that defeated the
             # matrix-free search on the 63k-DOF end-pack model.  The exact
-            # block-Schur fallback remains available for tiny/full-adjoint
-            # fronts where its cost is explicitly bounded.
-            if proposal_adjoint_rows.size!=target.size:
+            # block-Schur fallback remains available for full-adjoint fronts.
+            # A front of at most eight cells is the deliberate exception: it
+            # is already a bounded regression/design pool, so recompute only
+            # its requested fallback cells with complete response adjoints.
+            if (proposal_adjoint_rows.size!=target.size and
+                    not (lin.available_candidate_count<=8 and
+                         fallback_addition_elements.size)):
                 branch=next_nonmonotone_state(exact_trial_states)
                 if branch is not None:
                     active=branch.active;state=branch.state
@@ -4872,6 +4917,13 @@ def grow_hdiv_mmm_by_superposition(*, charge_gram, fes, inv_chi, rhs,
                  if lin.available_candidate_count<=int(exact_candidate_limit)
                  else representative_additions),
                 exact_candidates).astype(np.int64)
+            if not exact_proposal.size and not exact_representatives.size:
+                # ``candidate_selector`` may have built a bounded exact
+                # fallback after a zero-rank/empty TSVD proposal.  That
+                # selected Schur front is itself the representative set; do
+                # not discard it merely because the preceding low-rank model
+                # supplied no QR representatives.
+                exact_representatives=exact_candidates.copy()
             exact=select_tsvd_exact_block_batch(
                 current_response=lp_response,response_target=target,
                 response_band=band,candidate_elements=exact_candidates,
