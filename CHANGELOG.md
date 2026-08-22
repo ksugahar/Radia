@@ -5,6 +5,15 @@ All notable changes to the `radia` package.  Format: each release lists
 
 ## Unreleased
 
+## 4.95.59 - Persistent Cubit export toolbar
+
+Released 2026-08-22.
+
+- Replaced startup-only export menu registration with a packaged Coreform
+  WorkflowToolbar definition and six durable Radia export actions.
+- Added installer, cold-start, and embedded-Cubit smoke coverage so deployed
+  toolbar assets and their PySide6 entry points are checked together.
+
 ## 4.95.58 - Accelerator topology optimization and native transfer-map diagnostics
 
 Released 2026-08-22.
