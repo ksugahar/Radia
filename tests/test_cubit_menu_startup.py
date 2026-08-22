@@ -2,13 +2,20 @@
 
 from __future__ import annotations
 
+import importlib.util
 from pathlib import Path
-
-from tools.audit_pyside6_only import check_deployed_panel_source
-
 
 ROOT = Path(__file__).resolve().parents[1]
 REGISTER_TOOLBAR = ROOT / "src" / "radia" / "panels" / "register_toolbar.py"
+AUDIT_SCRIPT = ROOT / "tools" / "audit_pyside6_only.py"
+
+_AUDIT_SPEC = importlib.util.spec_from_file_location(
+    "radia_audit_pyside6_only", AUDIT_SCRIPT
+)
+assert _AUDIT_SPEC is not None and _AUDIT_SPEC.loader is not None
+_AUDIT_MODULE = importlib.util.module_from_spec(_AUDIT_SPEC)
+_AUDIT_SPEC.loader.exec_module(_AUDIT_MODULE)
+check_deployed_panel_source = _AUDIT_MODULE.check_deployed_panel_source
 
 
 def test_deployment_audit_rejects_startup_from_another_checkout(tmp_path):
