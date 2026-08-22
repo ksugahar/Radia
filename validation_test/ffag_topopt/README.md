@@ -155,6 +155,30 @@ symplectic residual was 1.06e-15.  Performance recording was disabled; these
 are correctness data, not benchmark timings.  The compact retained evidence is
 `manufactured_inverse_recovery_100_20260822.json`.
 
+### Eight-candidate direct-map inverse gate
+
+The 2026-08-23 follow-up used the same 1,180-HEX, 42,480-DoF model but
+deliberately shuffled eight legal growth candidates, with the known target
+element 798 fourth in the input list.  The original transfer-matrix error was
+contracted directly with the analytic HDiv-MMM candidate response.  The global
+ACA--QR--TSVD predictor retained rank 3 (ACA rank 4); a beam search was not
+used.  All eight candidates were then retained in one bounded conditional
+block-Schur front.  Its 37 evaluated bundles selected element 798, and the
+mandatory full active-system solve recovered the known 721-cell state and
+reduced the exact map maximum band ratio from 5.0 to 0.5.
+
+This result also records an important algorithmic boundary: continuous signed
+DUCAS fractions are proposal diagnostics, not the final add/remove decision.
+For this case the continuous coefficient of the correct inactive element was
+negative, whereas the whole-cell exact Schur response correctly selected its
+insertion.  An empty/zero-rank low-rank proposal must therefore pass its
+caller-bounded candidate front to the exact selector rather than silently
+ending the iteration.  The initial state is reused only after the configured
+H-matrix true-residual and inactive-DOF gates pass.  No finite-difference
+design sensitivity, gray material, or nonmonotone beam was used.  Performance
+recording was disabled; the compact correctness evidence is
+`manufactured_inverse_8candidate_direct_map_100_20260823.json`.
+
 The public diagnostic entry point
 `run_transfer_matrix_material_inverse_pipeline` exposes the same ordering as
 five inspectable stages: magnetic-field distribution; forward-AD transfer
