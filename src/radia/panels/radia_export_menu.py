@@ -42,7 +42,7 @@ from PySide6.QtWidgets import QApplication, QCheckBox, QComboBox, \
     QHBoxLayout, QLabel, QLineEdit, QMainWindow, QMenu, \
     QMessageBox, QPushButton, QTableWidget, QTableWidgetItem, \
     QVBoxLayout
-from PySide6.QtCore import QEvent, QObject, Qt
+from PySide6.QtCore import Qt
 from PySide6.QtGui import QAction
 
 
@@ -1032,6 +1032,26 @@ def _show_netgen_result(r, vol_path, order, parent):
     dlg.show()
 
 
+def launch_export(fmt):
+    """Launch one export dialog from Cubit's official custom toolbar.
+
+    ``WorkflowToolbar`` buttons execute small Python scripts.  Those scripts
+    call this stable dispatcher instead of modifying Cubit's QMenuBar.
+    """
+    supported = {
+        FMT_NETGEN, FMT_GMSH, FMT_NASTRAN, FMT_VTK, FMT_FEMEEM, FMT_MEG,
+    }
+    if fmt not in supported:
+        raise ValueError(f"unsupported Radia export format: {fmt!r}")
+    import cubit as cubit_mod
+    parent = find_claro()
+    if parent is None:
+        raise RuntimeError("Cubit main window is not available")
+    if fmt == FMT_NETGEN:
+        return _run_netgen_export(cubit_mod, parent)
+    return _run_generic_export(fmt, cubit_mod, parent)
+
+
 # ----------------------------------------------------------------------
 # Menu installation
 # ----------------------------------------------------------------------
@@ -1040,15 +1060,6 @@ def _show_netgen_result(r, vol_path, order, parent):
 # re-runs (Cubit replays the startup script if the user reloads the
 # Python interpreter from the GUI).
 _INSTALLED_OBJECT_NAME = "RadiaExportMenu"
-
-# Cubit plays ~/.cubit before its final QMenuBar is guaranteed to exist.  It can
-# successfully accept the menu and then rebuild the stock menu bar later in the
-# same cold start, removing the entry.  A QApplication event filter observes
-# the stock QAction additions and repairs the *final* menu bar synchronously.
-# This follows the same timing that makes a later APREPRO replay succeed without
-# relying on Python QTimer callbacks during Cubit's nested startup loops.
-_menu_persistence_filter = None
-
 
 def _find_installed_menu(main):
     """Return the installed Radia menu, or None if Cubit removed it."""
@@ -1113,57 +1124,13 @@ def _install_menu_on_main(cubit_mod, main):
     return menu
 
 
-class _MenuPersistenceFilter(QObject):
-    """Restore Radia when Cubit constructs or rebuilds its stock menu bar."""
-
-    def __init__(self, cubit_mod, parent=None):
-        super().__init__(parent)
-        self.cubit_mod = cubit_mod
-        self.repairing = False
-
-    def eventFilter(self, watched, event):
-        if self.repairing or event.type() != QEvent.Type.ActionAdded:
-            return False
-        try:
-            main = find_claro()
-            if main is None or watched is not main.menuBar():
-                return False
-            if _find_installed_menu(main) is None:
-                self.repairing = True
-                try:
-                    _install_menu_on_main(self.cubit_mod, main)
-                finally:
-                    self.repairing = False
-        except Exception as exc:
-            # An event filter must never break Cubit's own QAction delivery.
-            print("[Radia] Failed to restore Radia Export menu after Cubit "
-                  f"menu rebuild: {type(exc).__name__}: {exc}")
-        return False
-
-
-def _install_persistence_filter(cubit_mod):
-    """Install one process-lifetime menu-rebuild observer."""
-    global _menu_persistence_filter
-    app = QApplication.instance()
-    if app is None:
-        return False
-    if _menu_persistence_filter is not None:
-        _menu_persistence_filter.cubit_mod = cubit_mod
-        return True
-    observer = _MenuPersistenceFilter(cubit_mod, parent=app)
-    app.installEventFilter(observer)
-    _menu_persistence_filter = observer
-    print("[Radia] Cubit menu-rebuild observer installed")
-    return True
-
-
 def install_menu():
-    """Install the 'Radia Export' QMenu on the Cubit main menu bar.
+    """Install the deprecated, non-persistent top-level menu manually.
 
-    Idempotent: removes any previous instance before adding a new one.
-    The process-lifetime QApplication observer restores it if Cubit constructs
-    or rebuilds its stock menu bar after the startup hook.  It remains a no-op
-    in a true headless process where no Qt application exists.
+    Radia's supported persistent Cubit surface is the ``WorkflowToolbar``
+    package installed through Custom Toolbar Editor.  This compatibility helper
+    remains for interactive use, but startup code must not depend on it because
+    Cubit may replace its QMenuBar after ``~/.cubit`` has run.
     """
     # Cubit imports `cubit` at host startup; re-importing here is safe
     # (Python caches it).  Doing the import inside the function rather
@@ -1176,21 +1143,16 @@ def install_menu():
               "Radia Export menu not installed")
         return None
 
-    observer_installed = _install_persistence_filter(cubit_mod)
     main = find_claro()
     if main is None:
-        if observer_installed:
-            print("[Radia] Cubit main window is still starting - "
-                  "menu-rebuild observer is waiting")
-        else:
-            print("[Radia] Cubit main window not found - "
-                  "Radia Export menu not installed")
+        print("[Radia] Cubit main window not found - "
+              "Radia Export compatibility menu not installed")
         return None
 
     return _install_menu_on_main(cubit_mod, main)
 
 
-# Toolbar entry point when this file is run via `play` or
-# `import radia.panels.radia_export_menu` in a Cubit Python REPL.
+# Compatibility entry point for an explicit interactive ``play``.  Normal
+# installation uses the official WorkflowToolbar package instead.
 if __name__ == "_coreform_cubit":
     install_menu()
