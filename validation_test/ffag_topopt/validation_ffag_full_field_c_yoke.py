@@ -697,6 +697,7 @@ def run(args):
             initial_material_move_fraction=args.move_fraction,
             maximum_material_move_fraction=args.move_fraction,
             proposal_trust_region_trials=args.proposal_trust_region_trials,
+            proposal_solve_tolerance=args.proposal_solve_tolerance,
             solve_tolerance=args.solve_tolerance,
             solve_max_iterations=args.solve_max_iterations,
             cluster_coarse_size=args.cluster_coarse_size,
@@ -1024,6 +1025,12 @@ def run(args):
                 "nonmonotone_search_depth": item.nonmonotone_search_depth,
                 "tsvd_rank": item.tsvd_rank,
                 "tsvd_aca_rank": item.tsvd_aca_rank,
+                "candidate_coupling_rank": item.candidate_coupling_rank,
+                "candidate_coupling_relative_truncation_error": (
+                    item.candidate_coupling_relative_truncation_error),
+                "candidate_schur_max_iterations": (
+                    item.candidate_schur_max_iterations),
+                "response_adjoint_count": item.response_adjoint_count,
                 "material_changed_volume": item.material_changed_volume,
             } for index, item in enumerate(material_history)],
         },
@@ -1036,6 +1043,7 @@ def run(args):
         },
         "linear_solver": {
             "tolerance": args.solve_tolerance,
+            "proposal_tolerance": args.proposal_solve_tolerance,
             "maximum_iterations": args.solve_max_iterations,
             "cluster_coarse_size": args.cluster_coarse_size,
             "cluster_deflation_size": args.cluster_deflation_size,
@@ -1157,6 +1165,11 @@ def parse_args(argv=None):
     parser.add_argument("--field-inverse-line-search-steps", type=int,
                         default=8)
     parser.add_argument("--proposal-adjoint-count", type=int, default=6)
+    parser.add_argument(
+        "--proposal-solve-tolerance", type=float, default=1.0e-5,
+        help=("Tolerance for candidate TSVD/Schur proposal solves only; "
+              "accepted material states are always re-solved with "
+              "--solve-tolerance."))
     parser.add_argument("--exact-candidate-limit", type=int, default=64)
     parser.add_argument("--exact-beam-width", type=int, default=0)
     parser.add_argument("--exact-beam-depth", type=int, default=0)
@@ -1173,6 +1186,7 @@ def parse_args(argv=None):
             or (args.manufactured_removal_candidate_elements
                 and not manufactured)
             or args.manufactured_source_scale <= 0.0
+            or not 0.0 < args.proposal_solve_tolerance < 1.0
             or (args.material_proposal_model == "direct-map-only"
                 and not manufactured)
             or not 0.0 < args.manufactured_relative_band < 1.0

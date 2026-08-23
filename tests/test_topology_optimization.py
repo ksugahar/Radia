@@ -81,6 +81,14 @@ def test_screened_adjoint_correction_is_lifted_through_candidate_row_space():
         direct,partial,[0,1],np.ones(4))
     np.testing.assert_allclose(actual,expected,rtol=0,atol=2e-14)
 
+    rank_one_direct=np.array([[1.0],[2.0],[3.0]])
+    rank_one_partial=rank_one_direct.copy()
+    rank_one_partial[[0,2],0]=[1.4,2.2]
+    rank_one_lifted=topopt._interpolate_screened_response_correction(
+        rank_one_direct,rank_one_partial,[0,2],np.ones(3))
+    np.testing.assert_array_equal(
+        rank_one_lifted[[0,2]],rank_one_partial[[0,2]])
+
 
 def _element_centroids(mesh):
     import ngsolve as ng
@@ -726,6 +734,70 @@ def test_native_bdm1_candidate_schur_tsvd_solves_only_charge_coupling_rank():
         linearization.response+linearization.candidate_response_delta[:,0],
         exact_response,rtol=3e-10,atol=3e-10)
     assert np.all(np.isfinite(exact_state))
+
+
+def test_native_bdm1_directional_schur_matches_full_schur_projection():
+    import ngsolve as ng
+    from ngsolve.meshes import MakeStructured3DMesh
+    from radia.vim._vim import build_charge_gram
+
+    mesh=MakeStructured3DMesh(hexes=True,nx=2,ny=1,nz=1)
+    fes=ng.HDiv(mesh,order=1,discontinuous=True)
+    with ng.TaskManager():
+        _,gram,mass=build_charge_gram(
+            fes,eps=1e-10,leafsize=256,eta=2.0,
+            internal_interfaces=True)
+    rng=np.random.default_rng(20260823)
+    rhs=np.asarray(mass@rng.normal(size=fes.ndof))
+    response_matrix=rng.normal(size=(3,fes.ndof))
+    active=np.array([True,False])
+    common=dict(
+        charge_gram=gram,fes=fes,inv_chi=.2,rhs=rhs,
+        response_matrix=response_matrix,active_elements=active,
+        solve_tolerance=1e-11,candidate_batch_size=128)
+    full=linearize_hdiv_mmm_element_generation(**common)
+    directional=linearize_hdiv_mmm_element_generation(
+        **common,candidate_selector=lambda elements,*_:elements,
+        candidate_direction_reduction=True)
+
+    assert directional.candidate_directional_reduction
+    assert directional.candidate_coupling_rank<=1
+    np.testing.assert_array_equal(directional.candidate_dof_offsets,[0,1])
+    assert directional.candidate_ritz_directions is not None
+    direction=directional.candidate_ritz_directions[0]
+    np.testing.assert_allclose(np.linalg.norm(direction),1.0,rtol=1e-13)
+    expected_schur=float(direction@full.reduced_schur_complement@direction)
+    expected_rhs=float(direction@full.reduced_schur_rhs)
+    expected_response=full.reduced_response_matrix@direction
+    np.testing.assert_allclose(
+        directional.reduced_schur_complement,[[expected_schur]],
+        rtol=2e-9,atol=2e-11)
+    np.testing.assert_allclose(
+        directional.reduced_schur_rhs,[expected_rhs],
+        rtol=2e-9,atol=2e-11)
+    np.testing.assert_allclose(
+        directional.reduced_response_matrix[:,0],expected_response,
+        rtol=2e-9,atol=2e-11)
+    np.testing.assert_allclose(
+        directional.candidate_response_delta[:,0],
+        expected_response*(expected_rhs/expected_schur),
+        rtol=3e-9,atol=3e-11)
+    partial=linearize_hdiv_mmm_element_generation(
+        **common,candidate_selector=lambda elements,*_:elements,
+        candidate_direction_reduction=True,
+        screen_adjoint_rows=np.array([0,2],dtype=np.int64),
+        screen_response_band=np.ones(3))
+    assert len(partial.adjoint_iterations)==2
+    partial_reference=linearize_hdiv_mmm_element_generation(
+        **common,active_state=partial.state)
+    partial_direction=partial.candidate_ritz_directions[0]
+    partial_expected=(
+        partial_reference.reduced_response_matrix@partial_direction)
+    np.testing.assert_allclose(
+        partial.reduced_response_matrix[[0,2],0],
+        partial_expected[[0,2]],
+        rtol=3e-9,atol=3e-11)
+    assert np.all(np.isfinite(partial.reduced_response_matrix))
 
 
 def test_native_candidate_schur_reports_zero_coupling_rank_and_stable_iters():
@@ -1405,6 +1477,21 @@ def test_hdiv_mmm_zero_rank_fallback_honors_exact_candidate_limit(monkeypatch):
     assert set(captured).issubset(set(candidates.tolist()))
 
 
+def test_hdiv_mmm_proposal_tolerance_uses_global_and_local_dof_budgets():
+    import radia.topology_optimization as topopt
+
+    choose=topopt._hdiv_mmm_proposal_solve_tolerance
+    assert choose(
+        solve_tolerance=1e-9,proposal_solve_tolerance=1e-4,
+        system_dof_count=512,candidate_dof_count=48) == 1e-9
+    assert choose(
+        solve_tolerance=1e-9,proposal_solve_tolerance=1e-4,
+        system_dof_count=42480,candidate_dof_count=36) == 1e-4
+    assert choose(
+        solve_tolerance=1e-9,proposal_solve_tolerance=1e-4,
+        system_dof_count=512,candidate_dof_count=288) == 1e-4
+
+
 def test_hdiv_mmm_generation_reuses_checked_initial_state(monkeypatch):
     import ngsolve as ng
     import radia.topology_optimization as topopt
@@ -1916,6 +2003,101 @@ def test_hdiv_mmm_empty_removal_proposal_does_not_expand_large_exact_front(
     assert result.stop_reason=="no_improving_removal_candidate"
     assert len(result.history)==0
     assert len(solve_calls)==1
+
+
+def test_hdiv_mmm_conditional_mixed_front_crosses_pair_only_barrier(monkeypatch):
+    import ngsolve as ng
+    import radia.topology_optimization as topopt
+    from ngsolve.meshes import MakeStructured3DMesh
+
+    mesh=MakeStructured3DMesh(hexes=True,nx=2,ny=2,nz=1)
+    fes=ng.HDiv(mesh,order=0,discontinuous=True)
+    blocks=topopt.ngsolve_discontinuous_element_dof_blocks(fes)
+    initial=np.array([True,True,True,False])
+    target_active=np.array([True,False,True,True])
+    fixed_active=np.array([True,False,True,False])
+    assert topopt.ngsolve_growth_topology(mesh,initial).valid
+    assert topopt.ngsolve_growth_topology(mesh,target_active).valid
+
+    def fake_solve(**kwargs):
+        active=np.asarray(kwargs["active_elements"],dtype=bool)
+        if np.array_equal(active,target_active):
+            response=np.array([0.0])
+        elif np.array_equal(active,initial):
+            response=np.array([5.0])
+        else:
+            response=np.array([6.0])
+        return np.zeros(fes.ndof),response,1
+
+    def fake_linearize(**kwargs):
+        candidates=np.asarray(kwargs["candidate_elements"],dtype=np.int64)
+        approximate=np.ones((1,len(candidates)))
+        selected=np.asarray(kwargs["candidate_selector"](
+            candidates,approximate,np.zeros(fes.ndof),np.array([5.0])),
+            dtype=np.int64)
+        selected_blocks=tuple(blocks[int(element)] for element in selected)
+        count=len(selected)
+        return topopt.HDivMMMElementGenerationLinearization(
+            state=np.zeros(fes.ndof),response=np.array([5.0]),
+            candidate_elements=selected,
+            candidate_dof_blocks=selected_blocks,
+            candidate_response_delta=np.ones((1,count)),
+            candidate_states=tuple(np.ones(1) for _ in selected),
+            candidate_dof_offsets=np.arange(count+1,dtype=np.int32),
+            reduced_schur_complement=np.eye(count),
+            reduced_schur_rhs=np.ones(count),
+            reduced_response_matrix=np.ones((1,count)),
+            available_candidate_count=len(candidates),
+            native_reduction_timings={
+                "operator_s":0.0,"solve_s":0.0,"contraction_s":0.0},
+            state_iterations=0,adjoint_iterations=tuple(),
+            schur_iterations=tuple(),candidate_coupling_rank=count,
+            candidate_coupling_relative_truncation_error=0.0)
+
+    def empty_signed_proposal(**kwargs):
+        elements=np.asarray(kwargs["candidate_elements"],dtype=np.int64)
+        current=np.asarray(kwargs["current_response"],dtype=float)
+        return topopt.TSVDElementCandidateSelection(
+            selected_elements=np.empty(0,dtype=np.int64),
+            selected_directions=np.empty(0,dtype=np.int8),
+            representative_elements=np.empty(0,dtype=np.int64),
+            representative_directions=np.empty(0,dtype=np.int8),
+            predicted_response=current,
+            predicted_max_band_ratio=float(np.max(np.abs(current))),
+            added_volume=0.0,numerical_rank=0,aca_rank=0,
+            singular_values=np.empty(0),
+            signed_coefficients=np.zeros(len(elements)),
+            relative_truncation_error=0.0,status="forced pair barrier")
+
+    monkeypatch.setattr(topopt,"solve_hdiv_mmm_active_elements",fake_solve)
+    monkeypatch.setattr(
+        topopt,"linearize_hdiv_mmm_element_generation",fake_linearize)
+    monkeypatch.setattr(
+        topopt,"select_tsvd_element_candidates",empty_signed_proposal)
+    monkeypatch.setattr(
+        topopt,"_adjoint_corrected_removal_material_response",
+        lambda **kwargs:np.array([[-1.0]]))
+    monkeypatch.setattr(
+        topopt,"_configured_candidate_cluster_labels",
+        lambda *args,**kwargs:(np.zeros(1,dtype=np.int64),1))
+    monkeypatch.setattr(
+        topopt,"_clustered_tsvd_candidate_front",
+        lambda **kwargs:np.asarray(kwargs["candidate_elements"],dtype=np.int64))
+    volumes=np.ones(mesh.ne)
+    result=topopt.grow_hdiv_mmm_by_superposition(
+        charge_gram=object(),fes=fes,inv_chi=.2,rhs=np.zeros(fes.ndof),
+        response_matrix=np.zeros((1,fes.ndof)),active_elements=initial,
+        element_volumes=volumes,response_target=np.array([0.0]),
+        response_band=np.array([1.0]),volume_max=float(mesh.ne),
+        fixed_active_elements=fixed_active,maximum_batch_elements=2,
+        exact_candidate_limit=2,max_iterations=1)
+
+    assert result.converged
+    np.testing.assert_array_equal(result.active_elements,target_active)
+    np.testing.assert_array_equal(result.history[0].added_elements,[3])
+    np.testing.assert_array_equal(result.history[0].removed_elements,[1])
+    assert result.history[0].selection_model == (
+        "directional-schur-plus-clustered-removal-conditional-full-resolve")
 
 
 def test_hdiv_mmm_generation_removes_through_thickness_group_as_one_move():

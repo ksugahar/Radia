@@ -1,0 +1,93 @@
+{
+  "schema": "radia.ffag-fixed-one-pass-c-yoke-summary/v1",
+  "status": "pass",
+  "provenance": {
+    "machine": "intel11",
+    "python": "3.12.10",
+    "ngsolve_threads": 16,
+    "full_result": "C:/temp/ffag_c_yoke_direct_api/manufactured_inverse_add798_remove83_directional_partial3_100_20260823.json",
+    "performance_measurement": "disabled"
+  },
+  "problem": {
+    "element_family": "HEX",
+    "hdiv_family": "BDM1",
+    "elements": 1180,
+    "dofs": 42480,
+    "air_volume_elements": 0,
+    "controlled_components": [
+      "horizontal_focusing",
+      "vertical_focusing",
+      "horizontal_dispersion"
+    ],
+    "energies_mev": [31.0, 140.0, 250.0],
+    "response_entries": [[1, 0], [3, 2], [0, 5], [1, 5]],
+    "source_scale": 6.0,
+    "effective_current_a_per_coil": 1500000.0
+  },
+  "manufactured_target": {
+    "target_addition_element_ids": [798],
+    "addition_candidate_element_ids": [798],
+    "target_removal_element_ids": [83],
+    "removal_candidate_element_ids": [83],
+    "addition_target_element_centroid_m": [0.0, -5.0, 0.4333333333333334],
+    "removal_target_element_centroid_m": [-5.0, -5.0, 0.4333333333333334],
+    "initial_active_elements": 720,
+    "final_active_elements": 720,
+    "initial_max_transfer_matrix_band_ratio": 5.0,
+    "exact_target_max_transfer_matrix_band_ratio": 0.5,
+    "initial_solve_iterations": 564,
+    "target_and_final_solve_iterations": 679,
+    "known_target_active_set_recovered": true,
+    "target_topology_valid": true
+  },
+  "material_selection": {
+    "proposal_model": "direct-map-jacobian",
+    "selection_model": "directional-schur-plus-clustered-removal-conditional-full-resolve",
+    "candidate_count": 2,
+    "selected_additions": [798],
+    "selected_removals": [83],
+    "tsvd_rank": 1,
+    "aca_rank": 2,
+    "singular_values": [39.35292114656141, 0.0],
+    "candidate_coupling_rank": 1,
+    "candidate_coupling_relative_truncation_error": 0.0,
+    "candidate_schur_max_iterations": 162,
+    "response_adjoint_count": 3,
+    "proposal_solve_tolerance": 0.001,
+    "physical_solve_tolerance": 1e-7,
+    "exact_candidate_limit": 2,
+    "exact_bundles_evaluated": 2,
+    "predicted_max_band_ratio": 47.04474302632742,
+    "fully_resolved_max_band_ratio": 0.5,
+    "note": "The reduced model ranked the mixed addition/removal challenge but did not predict its nonlinear full-strength benefit. Acceptance and the reported objective are owned by the fresh complete BDM1 active-system solve; no finite-difference sensitivity was used."
+  },
+  "exact_map_acceptance": {
+    "accepted": true,
+    "reason": "accepted by direct analytic map-Jacobian oracle",
+    "initial_max_band_ratio": 5.0,
+    "final_max_band_ratio": 0.5,
+    "orbit_field_max_band_ratios": [0.5, 0.5, 0.5],
+    "transfer_matrix_max_band_ratios": [0.0, 0.0, 0.0],
+    "maximum_target_symplectic_residual": 1.1216574763357464e-15,
+    "maximum_realized_symplectic_residual": 1.1216574763357464e-15,
+    "exact_added_elements": [798],
+    "exact_removed_elements": [83],
+    "full_solve_iterations": 679
+  },
+  "gates": {
+    "coil_yoke_clearance": true,
+    "air_volume_elements_are_zero": true,
+    "fixed_design_orbits_used": true,
+    "periodic_closed_orbit_search_disabled": true,
+    "caller_design_orbit_and_target_matrix_contract": true,
+    "initial_return_yoke_seed_is_valid": true,
+    "binary_topology_is_valid": true,
+    "no_gray_material": true,
+    "analytic_transfer_map_derivative_precedes_material_inverse": true,
+    "all_material_batches_exactly_resolved": true,
+    "manufactured_exact_target_is_inside_bands": true,
+    "manufactured_seed_is_outside_bands": true,
+    "manufactured_selected_map_objective_converged": true,
+    "manufactured_known_active_set_recovered": true
+  }
+}

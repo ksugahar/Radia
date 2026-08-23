@@ -1206,7 +1206,12 @@ class ElementGenerationLPUpdate:
 
 @dataclass(frozen=True)
 class HDivMMMElementGenerationLinearization:
-    """Matrix-free finite insertion responses for boundary-growth candidates."""
+    """Matrix-free finite insertion responses for boundary-growth candidates.
+
+    ``candidate_dof_offsets`` partitions the retained reduced coordinates.  It
+    partitions physical DOFs for the full block-Schur oracle and one scalar
+    Ritz coordinate per element for the proposal-only directional oracle.
+    """
     state: np.ndarray
     response: np.ndarray
     candidate_elements: np.ndarray
@@ -1224,6 +1229,8 @@ class HDivMMMElementGenerationLinearization:
     schur_iterations: tuple[int, ...]
     candidate_coupling_rank: int
     candidate_coupling_relative_truncation_error: float
+    candidate_directional_reduction: bool = False
+    candidate_ritz_directions: tuple[np.ndarray, ...] | None = None
 
 
 @dataclass(frozen=True)
@@ -1684,7 +1691,10 @@ def linearize_hdiv_mmm_element_generation(*, charge_gram, fes, inv_chi,
         candidate_selector=None, active_state=None,
         screen_with_adjoint=True,
         screen_adjoint_rows=None,
-        candidate_screen_context=None) -> HDivMMMElementGenerationLinearization:
+        candidate_screen_context=None,
+        candidate_direction_reduction=False,
+        screen_response_band=None
+        ) -> HDivMMMElementGenerationLinearization:
     """Close boundary element generation on the configured H-matrix operator.
 
     State and response adjoints are solved once on the active iron.  For every
@@ -1699,7 +1709,11 @@ def linearize_hdiv_mmm_element_generation(*, charge_gram, fes, inv_chi,
     element indices that receive the exact fused reduction.  An empty selection
     is permitted when the global signed proposal will instead be checked by one
     complete active-set solve.  The full dense ``A`` and ``N`` matrices are
-    never materialized.
+    never materialized.  ``candidate_direction_reduction`` is an explicitly
+    proposal-only path: it retains the locally solved Ritz direction of each
+    selected element and forms an element-level Schur system.  This changes the
+    candidate solve count from local-HDiv-DOF rank to element-response rank;
+    every accepted move still receives a complete physical active-set solve.
     """
     blocks=ngsolve_discontinuous_element_dof_blocks(fes)
     if (candidate_screen_context is not None and
@@ -1725,6 +1739,15 @@ def linearize_hdiv_mmm_element_generation(*, charge_gram, fes, inv_chi,
         raise ValueError("inv_chi must be finite and nonnegative")
     batch_size=int(candidate_batch_size)
     if batch_size<1: raise ValueError("candidate_batch_size must be positive")
+    candidate_direction_reduction=bool(candidate_direction_reduction)
+    if candidate_direction_reduction and candidate_selector is None:
+        raise ValueError(
+            "candidate_direction_reduction requires a candidate_selector")
+    screen_band=(None if screen_response_band is None else
+                 np.asarray(screen_response_band,dtype=float).reshape(-1))
+    if (screen_band is not None and
+            (screen_band.shape!=(C.shape[0],) or np.any(screen_band<=0.0))):
+        raise ValueError("screen_response_band must be positive and match response rows")
     coarse_size=int(cluster_coarse_size)
     deflation_size=int(cluster_deflation_size)
     recycle=int(recycle_size)
@@ -1883,8 +1906,9 @@ def linearize_hdiv_mmm_element_generation(*, charge_gram, fes, inv_chi,
                 adjoints[active_dofs].T@active_coupling)
         return local
 
+    selected_directions=None
     if candidate_selector is not None:
-        approximate=[]
+        approximate=[];approximate_directions=[]
         if hasattr(charge_gram,
                    "configured_linear_material_element_blocks"):
             # The active/candidate couplings for every element follow from one
@@ -1915,8 +1939,10 @@ def linearize_hdiv_mmm_element_generation(*, charge_gram, fes, inv_chi,
                 try:
                     local_state=np.linalg.solve(local_matrix,local_rhs)
                     approximate.append(local_response@local_state)
+                    approximate_directions.append(local_state.copy())
                 except np.linalg.LinAlgError:
                     approximate.append(np.full(C.shape[0],np.nan))
+                    approximate_directions.append(None)
             if packed_offset!=packed.size:
                 raise RuntimeError(
                     "native HDiv-MMM local block packing is inconsistent")
@@ -1953,8 +1979,10 @@ def linearize_hdiv_mmm_element_generation(*, charge_gram, fes, inv_chi,
                     try:
                         local_state=np.linalg.solve(local_matrix,local_rhs)
                         approximate.append(local_response@local_state)
+                        approximate_directions.append(local_state.copy())
                     except np.linalg.LinAlgError:
                         approximate.append(np.full(C.shape[0],np.nan))
+                        approximate_directions.append(None)
                 begin=end
         else:
             # Compatibility with downloaded binaries predating the local-block
@@ -1995,10 +2023,12 @@ def linearize_hdiv_mmm_element_generation(*, charge_gram, fes, inv_chi,
                     if (not np.isfinite(denominator) or
                             denominator<=scale_floor or numerator==0.0):
                         approximate.append(np.full(C.shape[0],np.nan))
+                        approximate_directions.append(None)
                         continue
                     local_state=(numerator/denominator)*residual
                     approximate.append(
                         responses[local_column]@local_state)
+                    approximate_directions.append(local_state.copy())
         approximate_delta=np.stack(approximate,axis=1)
         selected=np.asarray(candidate_selector(
             candidates,approximate_delta,state,response),dtype=np.int64).reshape(-1)
@@ -2007,6 +2037,16 @@ def linearize_hdiv_mmm_element_generation(*, charge_gram, fes, inv_chi,
         available=set(int(k) for k in candidates)
         if any(int(k) not in available for k in selected):
             raise ValueError("candidate_selector returned an unavailable element")
+        if candidate_direction_reduction and selected.size:
+            direction_lookup={int(element):direction for element,direction in
+                zip(candidates,approximate_directions)}
+            selected_directions=tuple(
+                direction_lookup[int(element)] for element in selected)
+            if any(direction is None or not np.all(np.isfinite(direction)) or
+                   np.linalg.norm(direction)==0.0
+                   for direction in selected_directions):
+                raise RuntimeError(
+                    "selected candidate has no finite nonzero Ritz direction")
         candidates=selected
 
     if candidates.size==0:
@@ -2020,26 +2060,66 @@ def linearize_hdiv_mmm_element_generation(*, charge_gram, fes, inv_chi,
             {"operator_s":0.0,"solve_s":0.0,"contraction_s":0.0},
             int(state_iterations),tuple(adjoint_iterations),tuple(),0,0.0)
 
-    if adjoints is None or adjoint_rows.size!=C.shape[0]:
+    if (adjoints is None or
+            (adjoint_rows.size!=C.shape[0] and
+             not candidate_direction_reduction)):
         raise RuntimeError(
             "partial-adjoint global screening must return an empty exact Schur front")
+    if (candidate_direction_reduction and
+            adjoint_rows.size!=C.shape[0] and screen_band is None):
+        raise RuntimeError(
+            "partial-adjoint directional Schur requires screen_response_band")
 
     candidate_blocks=tuple(blocks[int(k)] for k in candidates)
     candidate_dofs=np.concatenate(candidate_blocks).astype(np.int32)
     native_timings={"operator_s":0.0,"solve_s":0.0,"contraction_s":0.0}
-    if hasattr(charge_gram,"reduce_configured_candidate_schur"):
+    if candidate_direction_reduction:
+        if not hasattr(
+                charge_gram,"_reduce_configured_candidate_directional_schur"):
+            raise RuntimeError(
+                "directional candidate Schur reduction requires a rebuilt Radia native extension")
+        physical_offsets=np.asarray(np.r_[0,np.cumsum(
+            [len(block) for block in candidate_blocks])],dtype=np.int32)
+        packed_directions=np.ascontiguousarray(
+            np.concatenate(selected_directions),dtype=float)
+        directional_response=C[adjoint_rows]
+        reduced=charge_gram._reduce_configured_candidate_directional_schur(
+            float(inv_chi),candidate_dofs,physical_offsets,packed_directions,
+            np.ascontiguousarray(rhs_full),np.ascontiguousarray(state),
+            np.ascontiguousarray(directional_response),
+            np.ascontiguousarray(adjoints.T),
+            tol=float(solve_tolerance),maxit=int(solve_max_iterations),
+            solve_batch_size=batch_size,mass_riesz=bool(mass_riesz))
+        offsets=np.arange(len(candidate_blocks)+1,dtype=np.int32)
+    elif hasattr(charge_gram,"reduce_configured_candidate_schur"):
         reduced=charge_gram.reduce_configured_candidate_schur(
             float(inv_chi),candidate_dofs,np.ascontiguousarray(rhs_full),
             np.ascontiguousarray(state),np.ascontiguousarray(C),
             np.ascontiguousarray(adjoints.T),tol=float(solve_tolerance),
             maxit=int(solve_max_iterations),solve_batch_size=batch_size,
             mass_riesz=bool(mass_riesz))
+        offsets=np.asarray(np.r_[0,np.cumsum(
+            [len(block) for block in candidate_blocks])],dtype=np.int32)
+    else:
+        reduced=None
+    if reduced is not None:
         reduced_schur=np.asarray(reduced["schur"],dtype=float)
         reduced_rhs=np.asarray(reduced["rhs"],dtype=float).reshape(-1)
         reduced_response=np.asarray(reduced["response"],dtype=float)
+        if candidate_direction_reduction and adjoint_rows.size!=C.shape[0]:
+            direct_response=np.column_stack([
+                C[:,block]@(np.asarray(direction,dtype=float)/
+                            np.linalg.norm(direction))
+                for block,direction in zip(
+                    candidate_blocks,selected_directions)])
+            partial_response=direct_response.copy()
+            partial_response[adjoint_rows]=reduced_response
+            reduced_response=_interpolate_screened_response_correction(
+                direct_response,partial_response,adjoint_rows,screen_band)
         schur_iterations=tuple(int(x) for x in reduced.get(
             "coupling_mode_iters",reduced["iters"]))
-        nc=len(candidate_dofs)
+        nc=(len(candidate_blocks) if candidate_direction_reduction else
+            len(candidate_dofs))
         coupling_rank=int(reduced.get("coupling_rank",nc))
         coupling_error=float(reduced.get(
             "coupling_relative_truncation_error",0.0))
@@ -2074,8 +2154,9 @@ def linearize_hdiv_mmm_element_generation(*, charge_gram, fes, inv_chi,
                           -adjoints[active_dofs].T@active_coupling)
         coupling_rank=len(candidate_dofs)
         coupling_error=0.0
+        offsets=np.asarray(np.r_[0,np.cumsum(
+            [len(block) for block in candidate_blocks])],dtype=np.int32)
 
-    offsets=np.r_[0,np.cumsum([len(block) for block in candidate_blocks])]
     response_deltas=[];candidate_states=[]
     for column in range(len(candidate_blocks)):
         local=np.arange(offsets[column],offsets[column+1])
@@ -2092,7 +2173,11 @@ def linearize_hdiv_mmm_element_generation(*, charge_gram, fes, inv_chi,
         np.ascontiguousarray(reduced_response),available_candidate_count,
         native_timings,int(state_iterations),
         tuple(adjoint_iterations),tuple(schur_iterations),
-        int(coupling_rank),float(coupling_error))
+        int(coupling_rank),float(coupling_error),
+        bool(candidate_direction_reduction),
+        (None if selected_directions is None else tuple(
+            np.asarray(direction,dtype=float)/np.linalg.norm(direction)
+            for direction in selected_directions)))
 
 
 def hdiv_mmm_block_insertion_response(linearization,
@@ -2684,8 +2769,14 @@ def _interpolate_screened_response_correction(
     skeleton=normalized[rows]
     interpolation=normalized@np.linalg.pinv(skeleton,rcond=1e-10)
     sampled_correction=(partial[rows]-direct[rows])/band[rows,None]
-    return np.ascontiguousarray(
+    lifted=np.ascontiguousarray(
         direct+band[:,None]*(interpolation@sampled_correction),dtype=float)
+    # The sampled rows are the actual adjoint contractions, not fit targets.
+    # Preserve them exactly and interpolate only the unsolved response rows.
+    # Without this overwrite, a rank-deficient skeleton projected even its own
+    # sampled values and defeated the point of the QR-selected adjoints.
+    lifted[rows]=partial[rows]
+    return lifted
 
 
 def _configured_candidate_cluster_labels(charge_gram,dof_blocks,
@@ -3200,6 +3291,19 @@ def _positive_minimax_source_scale_and_gradient(response,target,band):
     np.add.at(gradient,rows[right],
               alpha*signs[right]/(bands[rows[right]]*denominator))
     return float(alpha),gradient
+
+
+def _hdiv_mmm_proposal_solve_tolerance(*, solve_tolerance,
+        proposal_solve_tolerance, system_dof_count, candidate_dof_count):
+    """Choose proposal accuracy without mistaking a small element count for a small solve."""
+    exact=float(solve_tolerance)
+    proposal=max(exact,float(proposal_solve_tolerance))
+    if (not np.isfinite(proposal) or proposal<=0.0 or
+            int(system_dof_count)<1 or int(candidate_dof_count)<0):
+        raise ValueError("proposal solve tolerance and DOF counts are invalid")
+    if int(system_dof_count)<=4096 and int(candidate_dof_count)<=64:
+        return exact
+    return proposal
 
 
 def grow_hdiv_mmm_by_superposition(*, charge_gram, fes, inv_chi, rhs,
@@ -4084,12 +4188,24 @@ def grow_hdiv_mmm_by_superposition(*, charge_gram, fes, inv_chi, rhs,
         working_adjoint_count=int(proposal_adjoint_count)
         if working_adjoint_count<0:
             raise ValueError("proposal_adjoint_count must be nonnegative")
-        proposal_tolerance=max(
-            float(solve_tolerance),float(proposal_solve_tolerance))
-        if not np.isfinite(proposal_tolerance) or proposal_tolerance<=0.0:
-            raise ValueError("proposal_solve_tolerance must be positive and finite")
-        if len(candidates)<=8:
-            proposal_tolerance=float(solve_tolerance)
+        candidate_dof_count=sum(
+            len(element_blocks[int(element)]) for element in candidates)
+        proposal_tolerance=_hdiv_mmm_proposal_solve_tolerance(
+            solve_tolerance=solve_tolerance,
+            proposal_solve_tolerance=proposal_solve_tolerance,
+            system_dof_count=int(fes.ndof),
+            candidate_dof_count=candidate_dof_count)
+        use_directional_candidate_reduction=(
+            int(fes.ndof)>4096 or candidate_dof_count>64)
+        if (len(candidates)<=8 and working_adjoint_count>0 and
+                not use_directional_candidate_reduction):
+            # A small *element* front is not necessarily a cheap exact front:
+            # one BDM1 HEX still owns 36 candidate DOFs, and every retained
+            # coupling mode requires a solve on the complete active system.
+            # Keep all response adjoints for the small front, but reserve the
+            # final ``solve_tolerance`` for the physical acceptance solve.  A
+            # genuinely small global system retains the former exact-regression
+            # behaviour so focused algebra tests remain a strict oracle.
             proposal_adjoint_rows=np.arange(target.size,dtype=np.int64)
         else:
             proposal_adjoint_rows=np.empty(0,dtype=np.int64)
@@ -4358,8 +4474,12 @@ def grow_hdiv_mmm_by_superposition(*, charge_gram, fes, inv_chi, rhs,
             cluster_deflation_size=cluster_deflation_size,
             recycle_size=recycle_size,
             active_state=np.asarray(state,dtype=float)/float(source_scale),
-            candidate_screen_context=screen_context)
-        if len(candidates)>8 and working_adjoint_count>0:
+            candidate_screen_context=screen_context,
+            candidate_direction_reduction=(
+                use_directional_candidate_reduction),
+            screen_response_band=band)
+        if (working_adjoint_count>0 and
+                proposal_adjoint_rows.size!=target.size):
             direct_capture={}
             def capture_direct_candidates(elements,approximate_delta,
                                           approximate_state,
@@ -4891,7 +5011,11 @@ def grow_hdiv_mmm_by_superposition(*, charge_gram, fes, inv_chi, rhs,
                 response_matrix=linear_response_matrix,
                 active_elements=active,candidate_elements=candidates,
                 incident_response=linear_incident_response,
-                solve_tolerance=solve_tolerance,
+                # This is a proposal-only reduced Schur model.  Its candidate
+                # coupling TSVD and Krylov solves use the explicitly looser
+                # proposal tolerance; the selected whole-element move is still
+                # accepted only by the high-accuracy full solve below.
+                solve_tolerance=proposal_tolerance,
                 solve_max_iterations=solve_max_iterations,
                 candidate_batch_size=candidate_batch_size,
                 mass_riesz=mass_riesz,
@@ -4900,7 +5024,13 @@ def grow_hdiv_mmm_by_superposition(*, charge_gram, fes, inv_chi, rhs,
                 recycle_size=recycle_size,
                 candidate_selector=fallback_addition_front,
                 active_state=np.asarray(state,dtype=float)/float(source_scale),
-                screen_with_adjoint=True)
+                screen_with_adjoint=True,
+                screen_adjoint_rows=(
+                    None if proposal_adjoint_rows.size==0 else
+                    proposal_adjoint_rows),
+                candidate_direction_reduction=(
+                    use_directional_candidate_reduction),
+                screen_response_band=band)
             if len(lin.candidate_elements)==0:
                 stop_reason="full_solve_rejected_removal_only_tsvd";break
 
@@ -4955,23 +5085,85 @@ def grow_hdiv_mmm_by_superposition(*, charge_gram, fes, inv_chi, rhs,
             exact_evaluated=exact.evaluated_bundles
             selection_model="all-candidate-aca-qr-tsvd-exact-conditional"
             if selected.size==0 or predicted_ratio>=current_ratio-ratio_tolerance:
-                branch=next_nonmonotone_state(exact_trial_states)
-                if branch is not None:
-                    active=branch.active;state=branch.state
-                    response=branch.response
-                    objective_response=branch.objective_response
-                    current_ratio=branch.ratio
-                    source_scale=branch.source_scale
-                    solve_iterations=branch.solve_iterations
-                    search_depth=branch.depth;search_path=branch.path
-                    stop_reason="exact_nonmonotone_beam_in_progress"
-                    continue
-                stop_reason=("exact_nonmonotone_beam_exhausted" if
-                    exact_beam_width else "no_improving_exact_bundle")
-                break
-            # Block Schur is exact for the current active set, but acceptance
-            # remains tied to a fresh full solve and the topology gate.
+                # Addition and removal may be a genuinely cooperative binary
+                # move even when neither singleton improves.  Challenge one
+                # response-ranked cross-front proposal before declaring the
+                # local model exhausted.  The addition response comes from the
+                # directional block Schur; deletion uses the analytic
+                # adjoint-contracted material column.  This ranking is only a
+                # proposal: the complete active-set solve below remains the
+                # acceptance oracle and no finite-difference sensitivity is
+                # introduced.
+                removal_front=np.asarray([
+                    int(element) for element in removal_cluster_front
+                    if int(element) in removal_material_response],dtype=np.int64)
+                if (removal_front.size==0 and
+                        len(removal_candidates)<=8):
+                    removal_front=np.asarray([
+                        int(element) for element in removal_candidates
+                        if int(element) in removal_material_response],
+                        dtype=np.int64)
+                addition_bundles=[]
+                if exact_proposal.size:
+                    addition_bundles.append(tuple(map(int,exact_proposal)))
+                addition_bundles.extend(
+                    (int(element),) for element in exact_representatives)
+                addition_bundles=list(dict.fromkeys(addition_bundles))
+                predicted_additions={};mixed_challenges=[]
+                for addition_bundle in addition_bundles:
+                    if (maximum_cap is not None and
+                            len(addition_bundle)+1>maximum_cap):
+                        continue
+                    addition_values=predicted_additions.get(addition_bundle)
+                    if addition_values is None:
+                        addition_values=evaluate_bundle(np.asarray(
+                            addition_bundle,dtype=np.int64))
+                        predicted_additions[addition_bundle]=addition_values
+                    if addition_values is None:
+                        continue
+                    for removal_group in removal_front:
+                        expanded=np.asarray(
+                            removal_members[int(removal_group)],dtype=np.int64)
+                        challenge_active=active.copy()
+                        challenge_active[np.asarray(
+                            addition_bundle,dtype=np.int64)]=True
+                        challenge_active[expanded]=False
+                        if not valid_active_set(challenge_active):
+                            continue
+                        predicted_values=(np.asarray(
+                            addition_values,dtype=float)-
+                            removal_material_response[int(removal_group)])
+                        mixed_challenges.append((
+                            ratio(predicted_values),addition_bundle,
+                            int(removal_group),expanded))
+                if mixed_challenges:
+                    (predicted_ratio,addition_bundle,_,removed_elements)=min(
+                        mixed_challenges,key=lambda item:(
+                            item[0],len(item[1]),item[1],item[2]))
+                    selected=np.asarray(addition_bundle,dtype=np.int64)
+                    selection_model=(
+                        "directional-schur-plus-clustered-removal-"
+                        "conditional-full-resolve")
+                    exact_evaluated+=1
+                else:
+                    branch=next_nonmonotone_state(exact_trial_states)
+                    if branch is not None:
+                        active=branch.active;state=branch.state
+                        response=branch.response
+                        objective_response=branch.objective_response
+                        current_ratio=branch.ratio
+                        source_scale=branch.source_scale
+                        solve_iterations=branch.solve_iterations
+                        search_depth=branch.depth;search_path=branch.path
+                        stop_reason="exact_nonmonotone_beam_in_progress"
+                        continue
+                    stop_reason=("exact_nonmonotone_beam_exhausted" if
+                        exact_beam_width else "no_improving_exact_bundle")
+                    break
+            # The reduced Schur is a proposal oracle; acceptance remains tied
+            # to a fresh complete solve and the topology gate.
             trial_active=active.copy();trial_active[selected]=True
+            trial_active[np.asarray(removed_elements,dtype=np.int64)]=False
             trial_topology=ngsolve_growth_topology(fes.mesh,trial_active)
             if not trial_topology.valid or not valid_active_set(trial_active):
                 stop_reason="topology_gate_rejected_exact_bundle";break
@@ -5014,7 +5206,9 @@ def grow_hdiv_mmm_by_superposition(*, charge_gram, fes, inv_chi, rhs,
                 scale_value=trial_scale,iterations_value=trial_iterations,
                 depth_value=search_depth+1,
                 path_value=search_path+(tuple(
-                    (int(element),1) for element in selected),))))
+                    [(int(element),1) for element in selected]+
+                    [(int(element),-1) for element in
+                     np.asarray(removed_elements,dtype=np.int64)]),))))
             if actual>=current_ratio-ratio_tolerance:
                 branch=next_nonmonotone_state(exact_trial_states)
                 if branch is not None:

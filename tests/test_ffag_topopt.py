@@ -292,11 +292,13 @@ def test_ffag_validation_accepts_signed_manufactured_material_contract(
         "--manufactured-remove-target-elements","83",
         "--manufactured-removal-candidate-elements","80","83","86",
         "--manufactured-candidate-elements","798","801",
+        "--proposal-solve-tolerance","0.001",
         "--controlled-components","horizontal_focusing",
     ])
     assert args.manufactured_target_elements is None
     assert args.manufactured_remove_target_elements == [83]
     assert args.manufactured_removal_candidate_elements == [80,83,86]
+    assert args.proposal_solve_tolerance == pytest.approx(0.001)
 
     target,fixed_inactive,fixed_active=runner._manufactured_binary_material_sets(
         initial_active=np.array([True,True,False,False]),
