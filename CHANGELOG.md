@@ -5,6 +5,19 @@ All notable changes to the `radia` package.  Format: each release lists
 
 ## Unreleased
 
+## 4.95.60 - Exact mixed-front HDiv topology updates
+
+Released 2026-08-23.
+
+- Recovered exact addition and removal candidates when the low-rank material
+  proposal is empty or has zero retained rank.
+- Added directional Schur contraction for large mixed BDM candidate fronts,
+  while retaining complete configured solves for physical acceptance.
+- Added manufactured full-field evidence and focused regression coverage for
+  zero-rank, removal-only, and mixed-direction topology updates.
+- Completed the cubic polynomial field-evaluator dependency required by the
+  native BDM path so the release builds reproducibly from a clean checkout.
+
 ## 4.95.59 - Persistent Cubit export toolbar
 
 Released 2026-08-22.
