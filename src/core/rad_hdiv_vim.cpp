@@ -1638,6 +1638,27 @@ void QuadTriField(const double V[3][3], const double r[3], double sigma0,
     }
 }
 
+// Exact field of a total-degree <= 3 physical surface polynomial. If
+// U(r)=int_T sigma(r')/|r-r'| dS', then the magnetic-charge field is
+// -grad_r U. The potential-moment directional recurrence already carries
+// the analytic target derivative, so three unit target directions close the
+// cubic field without source or observation quadrature.
+void CubicTriField(const double V[3][3], const double r[3],
+                   const double coefficient[20], double out[3])
+{
+    const double zero_vertices[3][3] = {};
+    for(int axis=0;axis<3;++axis){
+        double direction_vector[3] = {};
+        direction_vector[axis] = 1.0;
+        double moments[35] = {}, direction[35] = {};
+        TriPotentialMomentsDirectionalUpTo4(
+            V,zero_vertices,r,direction_vector,moments,direction);
+        out[axis] = 0.0;
+        for(int index=0;index<20;++index)
+            out[axis] -= coefficient[index]*direction[index];
+    }
+}
+
 void QuadTriFieldBasis(const double V[3][3], const double r[3],
                        double out[10][3])
 {
