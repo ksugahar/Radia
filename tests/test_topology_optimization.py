@@ -1802,6 +1802,122 @@ def test_hdiv_mmm_generation_supports_removal_only_front():
     np.testing.assert_array_equal(result.active_elements,target_active)
 
 
+def test_hdiv_mmm_removal_only_exact_front_survives_empty_tsvd_proposal(
+        monkeypatch):
+    import ngsolve as ng
+    import radia.topology_optimization as topopt
+    from ngsolve.meshes import MakeStructured3DMesh
+    from radia.vim._vim import build_charge_gram
+
+    mesh=MakeStructured3DMesh(hexes=True,nx=2,ny=1,nz=1)
+    fes=ng.HDiv(mesh,order=0,discontinuous=True)
+    with ng.TaskManager():
+        _,gram,mass=build_charge_gram(
+            fes,eps=1e-10,leafsize=256,eta=2.0,
+            internal_interfaces=True)
+    rng=np.random.default_rng(20260823)
+    rhs=np.asarray(mass@rng.normal(size=fes.ndof))
+    response_matrix=rng.normal(size=(2,fes.ndof))
+    current=np.ones(2,dtype=bool)
+    target_active=np.array([True,False])
+    _,target,_=solve_hdiv_mmm_active_elements(
+        charge_gram=gram,fes=fes,inv_chi=.2,rhs=rhs,
+        response_matrix=response_matrix,active_elements=target_active,
+        solve_tolerance=1e-11)
+
+    def empty_signed_proposal(**kwargs):
+        elements=np.asarray(kwargs["candidate_elements"],dtype=np.int64)
+        return topopt.TSVDElementCandidateSelection(
+            selected_elements=np.empty(0,dtype=np.int64),
+            selected_directions=np.empty(0,dtype=np.int8),
+            representative_elements=np.empty(0,dtype=np.int64),
+            representative_directions=np.empty(0,dtype=np.int8),
+            predicted_response=np.asarray(
+                kwargs["current_response"],dtype=float),
+            predicted_max_band_ratio=float("inf"),added_volume=0.0,
+            numerical_rank=0,aca_rank=0,
+            singular_values=np.empty(0),
+            signed_coefficients=np.zeros(len(elements)),
+            relative_truncation_error=0.0,
+            status="deliberately empty removal proposal")
+
+    monkeypatch.setattr(
+        topopt,"select_tsvd_element_candidates",empty_signed_proposal)
+    volumes=np.asarray(ng.Integrate(1.0,mesh,element_wise=True))
+    result=topopt.grow_hdiv_mmm_by_superposition(
+        charge_gram=gram,fes=fes,inv_chi=.2,rhs=rhs,
+        response_matrix=response_matrix,active_elements=current,
+        element_volumes=volumes,response_target=target,
+        response_band=np.full(2,1e-8),volume_max=float(np.sum(volumes)),
+        fixed_active_elements=np.array([True,False]),max_iterations=1,
+        exact_candidate_limit=1,solve_tolerance=1e-11)
+    assert result.converged and len(result.history)==1
+    np.testing.assert_array_equal(result.history[0].removed_elements,[1])
+    np.testing.assert_array_equal(result.active_elements,target_active)
+    assert result.history[0].collaborative_bundles_evaluated==1
+
+
+def test_hdiv_mmm_empty_removal_proposal_does_not_expand_large_exact_front(
+        monkeypatch):
+    import ngsolve as ng
+    import radia.topology_optimization as topopt
+    from ngsolve.meshes import MakeStructured3DMesh
+    from radia.vim._vim import build_charge_gram
+
+    mesh=MakeStructured3DMesh(hexes=True,nx=4,ny=4,nz=1)
+    active=np.ones(mesh.ne,dtype=bool)
+    fixed_active=np.zeros(mesh.ne,dtype=bool);fixed_active[0]=True
+    removals=ngsolve_boundary_removal_candidates(
+        mesh,active,fixed_active_elements=fixed_active)
+    assert removals.size>8
+    fes=ng.HDiv(mesh,order=0,discontinuous=True)
+    with ng.TaskManager():
+        _,gram,mass=build_charge_gram(
+            fes,eps=1e-10,leafsize=256,eta=2.0,
+            internal_interfaces=True)
+    rng=np.random.default_rng(20260824)
+    rhs=np.asarray(mass@rng.normal(size=fes.ndof))
+    response_matrix=rng.normal(size=(2,fes.ndof))
+
+    def empty_signed_proposal(**kwargs):
+        elements=np.asarray(kwargs["candidate_elements"],dtype=np.int64)
+        return topopt.TSVDElementCandidateSelection(
+            selected_elements=np.empty(0,dtype=np.int64),
+            selected_directions=np.empty(0,dtype=np.int8),
+            representative_elements=np.empty(0,dtype=np.int64),
+            representative_directions=np.empty(0,dtype=np.int8),
+            predicted_response=np.asarray(
+                kwargs["current_response"],dtype=float),
+            predicted_max_band_ratio=float("inf"),added_volume=0.0,
+            numerical_rank=0,aca_rank=0,
+            singular_values=np.empty(0),
+            signed_coefficients=np.zeros(len(elements)),
+            relative_truncation_error=0.0,
+            status="deliberately empty large removal proposal")
+    monkeypatch.setattr(
+        topopt,"select_tsvd_element_candidates",empty_signed_proposal)
+    original_solve=topopt.solve_hdiv_mmm_active_elements
+    solve_calls=[]
+    def counted_solve(**kwargs):
+        solve_calls.append(np.asarray(
+            kwargs["active_elements"],dtype=bool).copy())
+        return original_solve(**kwargs)
+    monkeypatch.setattr(
+        topopt,"solve_hdiv_mmm_active_elements",counted_solve)
+    volumes=np.asarray(ng.Integrate(1.0,mesh,element_wise=True))
+    result=topopt.grow_hdiv_mmm_by_superposition(
+        charge_gram=gram,fes=fes,inv_chi=.2,rhs=rhs,
+        response_matrix=response_matrix,active_elements=active,
+        element_volumes=volumes,response_target=np.full(2,1.0e6),
+        response_band=np.ones(2),volume_max=float(np.sum(volumes)),
+        fixed_active_elements=fixed_active,max_iterations=1,
+        exact_candidate_limit=64,solve_tolerance=1e-11)
+    assert not result.converged
+    assert result.stop_reason=="no_improving_removal_candidate"
+    assert len(result.history)==0
+    assert len(solve_calls)==1
+
+
 def test_hdiv_mmm_generation_removes_through_thickness_group_as_one_move():
     import ngsolve as ng
     from ngsolve.meshes import MakeStructured3DMesh
