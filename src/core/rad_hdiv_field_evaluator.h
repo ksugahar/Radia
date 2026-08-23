@@ -39,6 +39,18 @@ public:
         std::vector<int> image_masks,
         std::vector<double> image_signs,
         const FieldEvaluatorOptions& options = {});
+    // Affine BDM3 path. Both volume and surface densities are retained as
+    // total-degree <= 3 physical polynomials. The BDM3 volume charge only
+    // reaches degree two, but sharing the 20-coefficient record keeps one
+    // exact polynomial source representation.
+    // volume: [12 vertex coordinates, 20 coefficients]
+    // surface: [9 vertex coordinates, 20 coefficients]
+    static std::shared_ptr<HDivFieldEvaluator> FromCubicPolynomialTet(
+        std::vector<double> volume,
+        std::vector<double> surface,
+        std::vector<int> image_masks,
+        std::vector<double> image_signs,
+        const FieldEvaluatorOptions& options = {});
 
     static std::shared_ptr<HDivFieldEvaluator> FromCloud(
         std::vector<double> xyz,
