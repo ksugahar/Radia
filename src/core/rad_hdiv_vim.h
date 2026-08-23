@@ -109,6 +109,8 @@ void QuadTriField(const double V[3][3], const double r[3], double sigma0,
                   const double s[3], const double S[3][3], double out[3]);         /* quadratic surface charge */
 void QuadTriFieldBasis(const double V[3][3], const double r[3],
                        double out[10][3]);                                        /* fields of physical monomials */
+void CubicTriField(const double V[3][3], const double r[3],
+                   const double coefficient[20], double out[3]);                  /* total-degree <= 3 surface charge */
 /* Forward geometry/coefficient derivative of the same exact affine TET/TRI
  * field kernels.  Both value and direction exclude 1/(4*pi).  These routines
  * differentiate the closed-form moment formulas; no finite-difference or
