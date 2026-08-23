@@ -1777,6 +1777,21 @@ def test_hdiv_mmm_zero_rank_fallback_honors_exact_candidate_limit(monkeypatch):
     assert set(captured).issubset(set(candidates.tolist()))
 
 
+def test_hdiv_mmm_proposal_tolerance_uses_global_and_local_dof_budgets():
+    import radia.topology_optimization as topopt
+
+    choose=topopt._hdiv_mmm_proposal_solve_tolerance
+    assert choose(
+        solve_tolerance=1e-9,proposal_solve_tolerance=1e-4,
+        system_dof_count=512,candidate_dof_count=48) == 1e-9
+    assert choose(
+        solve_tolerance=1e-9,proposal_solve_tolerance=1e-4,
+        system_dof_count=42480,candidate_dof_count=36) == 1e-4
+    assert choose(
+        solve_tolerance=1e-9,proposal_solve_tolerance=1e-4,
+        system_dof_count=512,candidate_dof_count=288) == 1e-4
+
+
 def test_hdiv_mmm_generation_reuses_checked_initial_state(monkeypatch):
     import ngsolve as ng
     import radia.topology_optimization as topopt
