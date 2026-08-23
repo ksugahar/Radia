@@ -578,6 +578,20 @@ public:
         const std::vector<double>& adjoints, int n_response,
         double tol, int maxit, int solve_batch_size,
         bool mass_riesz = true);
+    // Proposal-only Schur reduction on one caller-supplied Ritz direction per
+    // element block.  candidate_dofs/block_offsets/directions are packed in
+    // matching order.  The reduced dimension is the number of blocks rather
+    // than the number of local HDiv DOFs; accepted topology moves must still be
+    // checked by a complete configured solve.
+    CandidateSchurReduction ReduceConfiguredCandidateDirectionalSchur(
+        double inv_chi, const std::vector<int>& candidate_dofs,
+        const std::vector<int>& block_offsets,
+        const std::vector<double>& directions,
+        const std::vector<double>& rhs, const std::vector<double>& state,
+        const std::vector<double>& response_matrix,
+        const std::vector<double>& adjoints, int n_response,
+        double tol, int maxit, int solve_batch_size,
+        bool mass_riesz = true);
     std::vector<double> ApplyConfiguredMassRiesz(const std::vector<double>& rhs);
     std::vector<double> SolveConfiguredLinearMaterial(
         double inv_chi, const std::vector<double>& rhs, double tol, int maxit,

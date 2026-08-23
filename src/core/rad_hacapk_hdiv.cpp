@@ -1398,18 +1398,26 @@ void RadHACApKChargeGram::InitHOPolynomialCoefficients()
     m_hoPolyB.assign((size_t)m_n * 3, 0.0);
     m_hoPolyC.assign((size_t)m_n * 9, 0.0);
     m_hoAnalyticBlock = true;
-    bool has_quadratic_face_mode = false;
+    bool has_higher_face_mode = false;
     for (int src = 0; src < m_n; ++src) {
         const int host = m_host[src];
         const int* e = &m_expo[(size_t)3*src];
         const int deg = e[0] + e[1] + e[2];
         m_hoPolyDegree[src] = deg;
-        const int max_degree = (m_kind[src] == 0) ? 1 : 2;
+        // Flat-TET BDM3 carries a quadratic volume charge and a cubic face
+        // charge.  Exact reference/physical moment kernels already cover
+        // those degrees; keep higher orders on the fail-loud Duffy path.
+        const int max_degree = (m_kind[src] == 0) ? 2 : 3;
         if (deg > max_degree) {
             m_hoAnalyticBlock = false;
             continue;
         }
-        if (m_kind[src] == 1 && deg == 2) has_quadratic_face_mode = true;
+        if (m_kind[src] == 1 && deg >= 2) has_higher_face_mode = true;
+
+        // The compact A+B.x+x^T C x cache is the BDM1/BDM2 fast path.
+        // Cubic face modes are evaluated host-wise below from the exact
+        // degree-four triangle moment ladder, so they need no cubic cache.
+        if (deg > 2) continue;
 
         double beta[3][3] = {{0,0,0},{0,0,0},{0,0,0}}, V0[3];
         int ncoord;
@@ -1460,8 +1468,9 @@ void RadHACApKChargeGram::InitHOPolynomialCoefficients()
         }
     }
     // BDM1's one/three-charge groups are already cheap on the scalar memo path; whole-host blocks add more
-    // cache bookkeeping than kernel work there.  The production win starts at BDM2's six quadratic face modes.
-    m_hoAnalyticBlock = m_hoAnalyticBlock && has_quadratic_face_mode;
+    // cache bookkeeping than kernel work there.  The production win starts at BDM2's six quadratic face modes
+    // and remains essential for BDM3's ten cubic face modes.
+    m_hoAnalyticBlock = m_hoAnalyticBlock && has_higher_face_mode;
 }
 
 // EXACT analytic high-order inner potential INT_host(src) m_src(y)/|p-y| dy for FLAT panels, charge degree
@@ -1481,6 +1490,17 @@ double RadHACApKChargeGram::PhiAtHO_Analytic(int src, const double p[3]) const
     const double A = m_hoPolyA[src];
     const double* B = &m_hoPolyB[(size_t)3*src];
     const double* C = &m_hoPolyC[(size_t)9*src];
+    // BDM3's quadratic cell and cubic face modes use the exact host-wise
+    // reference/physical moment ladders.  Calling the vector kernel for one
+    // mode keeps the scalar entry oracle and the memoized host-block path on
+    // one numerical implementation.
+    if ((m_kind[src] == 0 && deg > 1) ||
+        (m_kind[src] == 1 && deg > 2)) {
+        const std::vector<int> one{src};
+        double value = 0.0;
+        PhiInnerHOHostVec(m_kind[src], host, p, one, &value);
+        return value;
+    }
     if (m_kind[src] == 0) {                                  // cell: degree <= 1 for order<=2 (no TetMoment2 needed)
         double V[4][3]; const double* s=&m_cellV[(size_t)host*12];
         for (int i=0;i<4;++i) for (int k=0;k<3;++k) V[i][k]=s[3*i+k];
@@ -1528,6 +1548,85 @@ void RadHACApKChargeGram::PhiInnerHOHostVec(
     }
     int max_degree = 0;
     for (int src : charges) max_degree = std::max(max_degree, m_hoPolyDegree[src]);
+
+    // BDM3 slow-reference kernel.  A TET cell charge is a reference P2
+    // monomial, for which the stable reference-coordinate Newton moments are
+    // exact.  A boundary charge is reference P3 on a flat triangle; expand
+    // its two affine reference coordinates only to degree three and contract
+    // the exact physical triangle moments.  This removes the order>=3 Duffy
+    // error that the ill-conditioned charge map amplified into an unphysical
+    // material spectrum.
+    if ((kind == 0 && max_degree > 1) || (kind == 1 && max_degree > 2)) {
+        if (kind == 0) {
+            double V[4][3]; const double* stored = &m_cellV[(size_t)host*12];
+            for (int i=0;i<4;++i) for (int k=0;k<3;++k) V[i][k]=stored[3*i+k];
+            std::vector<std::array<int,3>> exponents;
+            exponents.reserve(charges.size());
+            for (int src : charges) {
+                const int* e = &m_expo[(size_t)3*src];
+                exponents.push_back({e[0], e[1], e[2]});
+            }
+            rad_hdiv::TetReferencePotentialMoments(V, p, exponents, values);
+            return;
+        }
+
+        double V[3][3]; const double* stored = &m_faceV[(size_t)host*9];
+        for (int i=0;i<3;++i) for (int k=0;k<3;++k) V[i][k]=stored[3*i+k];
+        double moments[35] = {};
+        rad_hdiv::TriPotentialMomentsUpTo4(V, p, moments);
+
+        const double* Gi = &m_faceGinv[(size_t)host*4];
+        double edge[2][3];
+        for (int k=0;k<3;++k) {
+            edge[0][k]=V[1][k]-V[0][k];
+            edge[1][k]=V[2][k]-V[0][k];
+        }
+        double form[2][4] = {};
+        for (int k=0;k<3;++k) {
+            form[0][k+1]=Gi[0]*edge[0][k]+Gi[1]*edge[1][k];
+            form[1][k+1]=Gi[2]*edge[0][k]+Gi[3]*edge[1][k];
+        }
+        for (int axis=0;axis<2;++axis)
+            form[axis][0]=-(form[axis][1]*V[0][0]
+                           +form[axis][2]*V[0][1]
+                           +form[axis][3]*V[0][2]);
+
+        auto moment_index = [](int ax, int ay, int az) {
+            const int degree=ax+ay+az;
+            int index=0;
+            for (int d=0;d<degree;++d) index+=(d+1)*(d+2)/2;
+            for (int x=0;x<ax;++x) index+=degree-x+1;
+            return index+ay;
+        };
+        auto multiply_linear = [&](double* polynomial, int& degree,
+                                   const double factor[4]) {
+            double next[35] = {};
+            for (int total=0;total<=degree;++total)
+                for (int ax=0;ax<=total;++ax)
+                    for (int ay=0;ay<=total-ax;++ay) {
+                        const int az=total-ax-ay;
+                        const double value=polynomial[moment_index(ax,ay,az)];
+                        next[moment_index(ax,ay,az)] += value*factor[0];
+                        next[moment_index(ax+1,ay,az)] += value*factor[1];
+                        next[moment_index(ax,ay+1,az)] += value*factor[2];
+                        next[moment_index(ax,ay,az+1)] += value*factor[3];
+                    }
+            ++degree;
+            std::copy(next,next+35,polynomial);
+        };
+        for (size_t local=0;local<charges.size();++local) {
+            const int* e=&m_expo[(size_t)3*charges[local]];
+            double polynomial[35] = {1.0};
+            int degree=0;
+            for (int q=0;q<e[0];++q) multiply_linear(polynomial,degree,form[0]);
+            for (int q=0;q<e[1];++q) multiply_linear(polynomial,degree,form[1]);
+            double value=0.0;
+            const int count=(degree+1)*(degree+2)*(degree+3)/6;
+            for (int index=0;index<count;++index) value+=polynomial[index]*moments[index];
+            values[local]=value;
+        }
+        return;
+    }
 
     double I0, M1[3] = {0,0,0}, M2[3][3] = {{0,0,0},{0,0,0},{0,0,0}};
     if (kind == 0) {
@@ -2107,7 +2206,7 @@ double RadHACApKChargeGram::PhiInner(int src, const double p[3]) const
     if (m_curved) return PhiAtHO_Curved(src, p);
     const int* e = &m_expo[(size_t)3*src];
     const int deg = e[0] + e[1] + e[2];
-    const bool analytic_ok = (m_kind[src] == 0) ? (deg <= 1) : (deg <= 2);
+    const bool analytic_ok = (m_kind[src] == 0) ? (deg <= 2) : (deg <= 3);
     return analytic_ok ? PhiAtHO_Analytic(src, p) : PhiAtHO_Duffy(src, p);
 }
 
@@ -8213,6 +8312,264 @@ RadHACApKChargeGram::ReduceConfiguredCandidateSchur(
     return result;
 }
 
+RadHACApKChargeGram::CandidateSchurReduction
+RadHACApKChargeGram::ReduceConfiguredCandidateDirectionalSchur(
+    double inv_chi, const std::vector<int>& candidate_dofs,
+    const std::vector<int>& block_offsets,
+    const std::vector<double>& directions,
+    const std::vector<double>& rhs, const std::vector<double>& state,
+    const std::vector<double>& response_matrix,
+    const std::vector<double>& adjoints, int n_response,
+    double tol, int maxit, int solve_batch_size, bool mass_riesz)
+{
+    using Clock = std::chrono::steady_clock;
+    if (!m_operatorChargeConfigured || !m_operatorMassConfigured)
+        throw std::runtime_error(
+            "ReduceConfiguredCandidateDirectionalSchur: charge map and mass matrix must be configured");
+    const int n_face = m_operatorNFace;
+    const int packed_size = static_cast<int>(candidate_dofs.size());
+    const int n_block = static_cast<int>(block_offsets.size())-1;
+    if (!std::isfinite(inv_chi) || inv_chi < 0.0 ||
+        !std::isfinite(tol) || tol <= 0.0 || tol >= 1.0 || maxit < 1)
+        throw std::runtime_error(
+            "ReduceConfiguredCandidateDirectionalSchur: invalid material or solver parameters");
+    if (packed_size < 1 || n_block < 1 || n_response < 1 ||
+        solve_batch_size < 1 ||
+        static_cast<int>(directions.size()) != packed_size ||
+        block_offsets.front() != 0 || block_offsets.back() != packed_size)
+        throw std::runtime_error(
+            "ReduceConfiguredCandidateDirectionalSchur: invalid packed candidate blocks");
+    if (static_cast<int>(rhs.size()) != n_face ||
+        static_cast<int>(state.size()) != n_face ||
+        static_cast<int64_t>(response_matrix.size()) !=
+            static_cast<int64_t>(n_response)*n_face ||
+        response_matrix.size() != adjoints.size())
+        throw std::runtime_error(
+            "ReduceConfiguredCandidateDirectionalSchur: state/response array shape mismatch");
+
+    std::vector<unsigned char> seen(static_cast<size_t>(n_face), 0);
+    for (int block = 0; block < n_block; ++block) {
+        const int begin = block_offsets[static_cast<size_t>(block)];
+        const int end = block_offsets[static_cast<size_t>(block)+1];
+        if (begin >= end)
+            throw std::runtime_error(
+                "ReduceConfiguredCandidateDirectionalSchur: candidate blocks must be non-empty");
+        double norm_square = 0.0;
+        for (int local = begin; local < end; ++local) {
+            const int dof = candidate_dofs[static_cast<size_t>(local)];
+            const double value = directions[static_cast<size_t>(local)];
+            if (dof < 0 || dof >= n_face || seen[static_cast<size_t>(dof)] ||
+                !std::isfinite(value))
+                throw std::runtime_error(
+                    "ReduceConfiguredCandidateDirectionalSchur: candidate directions must be finite, unique, and in range");
+            if (!m_operatorConstrained[static_cast<size_t>(dof)])
+                throw std::runtime_error(
+                    "ReduceConfiguredCandidateDirectionalSchur: candidate DOFs must be outside the active set");
+            seen[static_cast<size_t>(dof)] = 1;
+            norm_square += value*value;
+        }
+        if (!(norm_square > 0.0) || !std::isfinite(norm_square))
+            throw std::runtime_error(
+                "ReduceConfiguredCandidateDirectionalSchur: each Ritz direction must be nonzero");
+    }
+
+    CandidateSchurReduction result;
+    result.n_candidate = n_block;
+    result.n_response = n_response;
+    std::vector<double> basis(static_cast<size_t>(n_block)*n_face, 0.0);
+    for (int block = 0; block < n_block; ++block) {
+        const int begin = block_offsets[static_cast<size_t>(block)];
+        const int end = block_offsets[static_cast<size_t>(block)+1];
+        double norm_square = 0.0;
+        for (int local = begin; local < end; ++local) {
+            const double value = directions[static_cast<size_t>(local)];
+            norm_square += value*value;
+        }
+        const double inverse_norm = 1.0/std::sqrt(norm_square);
+        for (int local = begin; local < end; ++local)
+            basis[static_cast<size_t>(block)*n_face+
+                  candidate_dofs[static_cast<size_t>(local)]] =
+                directions[static_cast<size_t>(local)]*inverse_norm;
+    }
+
+    const auto operator_started = Clock::now();
+    std::vector<double> columns = ApplyConfiguredLinearMaterialOperatorMany(
+        inv_chi, basis, n_block, /*respect_constraints=*/false);
+    result.operator_s = std::chrono::duration<double>(
+        Clock::now()-operator_started).count();
+
+    std::vector<double> coupling = columns;
+    {
+        ngcore::RegionTaskManager rtm(radia::GetMaxThreads());
+        ngcore::ParallelFor(
+            ngcore::IntRange(static_cast<size_t>(n_block)*n_face),
+            [&](size_t index) {
+                if (m_operatorConstrained[index%static_cast<size_t>(n_face)])
+                    coupling[index] = 0.0;
+            });
+    }
+
+    const auto solve_started = Clock::now();
+    std::vector<double> solve_rhs = coupling;
+    std::vector<double> left_singular;
+    std::vector<double> singular_values;
+    int coupling_rank = n_block;
+#ifdef HAVE_LAPACK
+    {
+        double coupling_square = 0.0;
+        for (double value : coupling) coupling_square += value*value;
+        if (coupling_square == 0.0) {
+            coupling_rank = 0;
+            solve_rhs.clear();
+        }
+        else {
+            std::vector<double> factor_input = coupling;
+            singular_values.assign(static_cast<size_t>(n_block), 0.0);
+            left_singular.assign(
+                static_cast<size_t>(n_block)*n_block, 0.0);
+            std::vector<double> right_singular(
+                static_cast<size_t>(n_block)*n_face, 0.0);
+            const int info = LAPACKE_dgesdd(
+                LAPACK_ROW_MAJOR, 'S', n_block, n_face,
+                factor_input.data(), n_face, singular_values.data(),
+                left_singular.data(), n_block, right_singular.data(), n_face);
+            if (info != 0)
+                throw std::runtime_error(
+                    "ReduceConfiguredCandidateDirectionalSchur: coupling TSVD failed");
+            const double scale = singular_values.front();
+            const double relative_cutoff = std::max(1.0e-13, 1.0e-2*tol);
+            coupling_rank = 0;
+            double total_square = 0.0, discarded_square = 0.0;
+            for (double value : singular_values) total_square += value*value;
+            for (int mode = 0; mode < n_block; ++mode) {
+                const double value = singular_values[static_cast<size_t>(mode)];
+                if (value > relative_cutoff*scale)
+                    ++coupling_rank;
+                else
+                    discarded_square += value*value;
+            }
+            solve_rhs.assign(
+                right_singular.begin(), right_singular.begin()+
+                static_cast<size_t>(coupling_rank)*n_face);
+            result.coupling_relative_truncation_error =
+                std::sqrt(discarded_square/total_square);
+        }
+    }
+#endif
+    result.coupling_rank = coupling_rank;
+    std::vector<double> solved_modes(
+        static_cast<size_t>(coupling_rank)*n_face, 0.0);
+    result.coupling_mode_iterations.reserve(
+        static_cast<size_t>(coupling_rank));
+    for (int begin = 0; begin < coupling_rank; begin += solve_batch_size) {
+        const int count = std::min(solve_batch_size, coupling_rank-begin);
+        const auto first = solve_rhs.begin()+static_cast<size_t>(begin)*n_face;
+        std::vector<double> chunk(
+            first, first+static_cast<size_t>(count)*n_face);
+        std::vector<int> iterations;
+        double pmin = 0.0, pmax = 0.0, coarse_setup_s = 0.0, projection_s = 0.0;
+        int coarse_dim = 0, recycle_dim = 0;
+        std::vector<double> solved = SolveConfiguredLinearMaterialAutoPrecMany(
+            inv_chi, chunk, count, tol, maxit,
+            /*cluster_coarse_size=*/0, /*cluster_deflation_size=*/0,
+            /*recycle_size=*/0, iterations, pmin, pmax,
+            coarse_dim, recycle_dim, coarse_setup_s, projection_s,
+            mass_riesz, nullptr);
+        std::copy(solved.begin(), solved.end(),
+                  solved_modes.begin()+static_cast<size_t>(begin)*n_face);
+        result.coupling_mode_iterations.insert(
+            result.coupling_mode_iterations.end(),
+            iterations.begin(), iterations.end());
+    }
+    const int iteration_upper_bound = result.coupling_mode_iterations.empty()
+        ? 0 : *std::max_element(result.coupling_mode_iterations.begin(),
+                                result.coupling_mode_iterations.end());
+    result.iterations.assign(static_cast<size_t>(n_block),
+                             iteration_upper_bound);
+    std::vector<double> active_solutions(
+        static_cast<size_t>(n_block)*n_face, 0.0);
+#ifdef HAVE_LAPACK
+    if (!left_singular.empty() && coupling_rank > 0) {
+        std::vector<double> scaled_left(
+            static_cast<size_t>(n_block)*coupling_rank, 0.0);
+        for (int row = 0; row < n_block; ++row)
+            for (int mode = 0; mode < coupling_rank; ++mode)
+                scaled_left[static_cast<size_t>(row)*coupling_rank+mode] =
+                    left_singular[static_cast<size_t>(row)*n_block+mode]*
+                    singular_values[static_cast<size_t>(mode)];
+        cblas_dgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans,
+            n_block, n_face, coupling_rank, 1.0,
+            scaled_left.data(), coupling_rank,
+            solved_modes.data(), n_face, 0.0,
+            active_solutions.data(), n_face);
+    }
+    else
+#endif
+        active_solutions.swap(solved_modes);
+    result.solve_s = std::chrono::duration<double>(
+        Clock::now()-solve_started).count();
+
+    const auto contraction_started = Clock::now();
+    result.schur.assign(static_cast<size_t>(n_block)*n_block, 0.0);
+    result.rhs.assign(static_cast<size_t>(n_block), 0.0);
+    result.response.assign(static_cast<size_t>(n_response)*n_block, 0.0);
+    for (int p = 0; p < n_block; ++p) {
+        const double* vp = basis.data()+static_cast<size_t>(p)*n_face;
+        const double* cp = coupling.data()+static_cast<size_t>(p)*n_face;
+        double projected_rhs = 0.0;
+        for (int local = block_offsets[static_cast<size_t>(p)];
+             local < block_offsets[static_cast<size_t>(p)+1]; ++local) {
+            const int dof = candidate_dofs[static_cast<size_t>(local)];
+            projected_rhs += vp[dof]*rhs[static_cast<size_t>(dof)];
+            for (int q = 0; q < n_block; ++q)
+                result.schur[static_cast<size_t>(p)*n_block+q] +=
+                    vp[dof]*columns[static_cast<size_t>(q)*n_face+dof];
+            for (int output = 0; output < n_response; ++output)
+                result.response[static_cast<size_t>(output)*n_block+p] +=
+                    response_matrix[static_cast<size_t>(output)*n_face+dof]*
+                    vp[dof];
+        }
+        for (int face = 0; face < n_face; ++face)
+            projected_rhs -= cp[face]*state[static_cast<size_t>(face)];
+        result.rhs[static_cast<size_t>(p)] = projected_rhs;
+    }
+#ifdef HAVE_LAPACK
+    if (coupling_rank > 0) {
+        cblas_dgemm(CblasRowMajor, CblasNoTrans, CblasTrans,
+            n_block, n_block, n_face, -1.0, coupling.data(), n_face,
+            active_solutions.data(), n_face, 1.0,
+            result.schur.data(), n_block);
+        cblas_dgemm(CblasRowMajor, CblasNoTrans, CblasTrans,
+            n_response, n_block, n_face, -1.0, adjoints.data(), n_face,
+            coupling.data(), n_face, 1.0, result.response.data(), n_block);
+    }
+#else
+    for (int p = 0; p < n_block; ++p) {
+        for (int q = 0; q < n_block; ++q)
+            for (int face = 0; face < n_face; ++face)
+                result.schur[static_cast<size_t>(p)*n_block+q] -=
+                    coupling[static_cast<size_t>(p)*n_face+face]*
+                    active_solutions[static_cast<size_t>(q)*n_face+face];
+        for (int output = 0; output < n_response; ++output)
+            for (int face = 0; face < n_face; ++face)
+                result.response[static_cast<size_t>(output)*n_block+p] -=
+                    adjoints[static_cast<size_t>(output)*n_face+face]*
+                    coupling[static_cast<size_t>(p)*n_face+face];
+    }
+#endif
+    for (int p = 0; p < n_block; ++p)
+        for (int q = p+1; q < n_block; ++q) {
+            const double value = 0.5*(
+                result.schur[static_cast<size_t>(p)*n_block+q]+
+                result.schur[static_cast<size_t>(q)*n_block+p]);
+            result.schur[static_cast<size_t>(p)*n_block+q] = value;
+            result.schur[static_cast<size_t>(q)*n_block+p] = value;
+        }
+    result.contraction_s = std::chrono::duration<double>(
+        Clock::now()-contraction_started).count();
+    return result;
+}
+
 std::vector<double> RadHACApKChargeGram::SolveConfiguredLinearMaterialAutoPrecMany(
     double inv_chi, const std::vector<double>& rhs, int nrhs,
     double tol, int maxit, int cluster_coarse_size,
@@ -9930,18 +10287,87 @@ RadHACApKChargeGram::CreateConfiguredFieldEvaluator(
         charge[static_cast<size_t>(a)] = value;
     }
 
-    // Flat TET BDM1/BDM2: convert reference monomials to physical polynomials once and retain the exact
+    // Flat TET BDM1/BDM2/BDM3: convert reference monomials to physical polynomials once and retain the exact
     // analytic volume/triangle field kernels at every target, including near-surface targets.
     bool analytic_tet = m_highorder && !m_curved && !m_hexmode && !m_wedgemode;
+    bool cubic_tet = false;
     if (analytic_tet) {
         for (int a = 0; a < m_ndof; ++a) {
             const int* e = &m_expo[static_cast<size_t>(3*a)];
             const int degree = e[0] + e[1] + e[2];
-            if ((m_kind[a] == 0 && degree > 1) || (m_kind[a] == 1 && degree > 2)) {
+            if ((m_kind[a] == 0 && degree > 2) || (m_kind[a] == 1 && degree > 3)) {
                 analytic_tet = false;
                 break;
             }
+            cubic_tet = cubic_tet
+                || (m_kind[a] == 0 && degree > 1)
+                || (m_kind[a] == 1 && degree > 2);
         }
+    }
+    if (analytic_tet && cubic_tet) {
+        const int n_cells = m_n_el;
+        const int n_faces = static_cast<int>(m_faceV.size()/9);
+        std::vector<double> volume(static_cast<size_t>(n_cells)*32, 0.0);
+        std::vector<double> surface(static_cast<size_t>(n_faces)*29, 0.0);
+        for (int host = 0; host < n_cells; ++host)
+            std::copy_n(&m_cellV[static_cast<size_t>(host)*12], 12,
+                        &volume[static_cast<size_t>(host)*32]);
+        for (int host = 0; host < n_faces; ++host)
+            std::copy_n(&m_faceV[static_cast<size_t>(host)*9], 9,
+                        &surface[static_cast<size_t>(host)*29]);
+
+        for (int charge_id = 0; charge_id < m_ndof; ++charge_id) {
+            const double coefficient = charge[static_cast<size_t>(charge_id)];
+            if (coefficient == 0.0) continue;
+            const int host = m_host[static_cast<size_t>(charge_id)];
+            const int* exponent = &m_expo[static_cast<size_t>(3*charge_id)];
+            double forms[3][4] = {};
+            int form_count = 0;
+            double* polynomial = nullptr;
+            if (m_kind[static_cast<size_t>(charge_id)] == 0) {
+                const double* vertices = &m_cellV[static_cast<size_t>(host)*12];
+                const double* inverse = &m_cellInv[static_cast<size_t>(host)*9];
+                form_count = 3;
+                for (int axis = 0; axis < 3; ++axis) {
+                    for (int k = 0; k < 3; ++k)
+                        forms[axis][k+1] = inverse[3*axis+k];
+                    forms[axis][0] = -(forms[axis][1]*vertices[0]
+                                          +forms[axis][2]*vertices[1]
+                                          +forms[axis][3]*vertices[2]);
+                }
+                polynomial = &volume[static_cast<size_t>(host)*32+12];
+            } else {
+                const double* vertices = &m_faceV[static_cast<size_t>(host)*9];
+                const double edge1[3] = {
+                    vertices[3]-vertices[0], vertices[4]-vertices[1], vertices[5]-vertices[2]};
+                const double edge2[3] = {
+                    vertices[6]-vertices[0], vertices[7]-vertices[1], vertices[8]-vertices[2]};
+                const double* inverse = &m_faceGinv[static_cast<size_t>(host)*4];
+                form_count = 2;
+                for (int k = 0; k < 3; ++k) {
+                    forms[0][k+1] = inverse[0]*edge1[k]+inverse[1]*edge2[k];
+                    forms[1][k+1] = inverse[2]*edge1[k]+inverse[3]*edge2[k];
+                }
+                for (int axis = 0; axis < 2; ++axis)
+                    forms[axis][0] = -(forms[axis][1]*vertices[0]
+                                          +forms[axis][2]*vertices[1]
+                                          +forms[axis][3]*vertices[2]);
+                polynomial = &surface[static_cast<size_t>(host)*29+9];
+            }
+            double mode[20] = {};
+            mode[0] = coefficient;
+            int degree = 0;
+            for (int axis = 0; axis < form_count; ++axis)
+                for (int power = 0; power < exponent[axis]; ++power)
+                    HexPolyMulLinear(mode,degree,forms[axis],20);
+            for (int index = 0; index < 20; ++index)
+                polynomial[index] += mode[index];
+        }
+        auto evaluator = rad_hdiv::HDivFieldEvaluator::FromCubicPolynomialTet(
+            std::move(volume), std::move(surface),
+            m_image_masks, m_image_signs, options);
+        evaluator->SetImageRotations(m_image_rot_angle);
+        return evaluator;
     }
     if (analytic_tet) {
         const int n_cells = m_n_el;

@@ -4454,6 +4454,70 @@ PYBIND11_MODULE(_radia_pybind, m) {
              py::arg("solve_batch_size") = 64,
              py::arg("mass_riesz") = true,
              "Fuse candidate A*e columns, native coupling-row TSVD, constrained active solves, and reduced Schur/response contractions.")
+        .def("_reduce_configured_candidate_directional_schur",
+             [](RadHACApKChargeGram& s, double inv_chi,
+                I32Array candidate_a, I32Array offsets_a,
+                F64Array directions_a, F64Array rhs_a, F64Array state_a,
+                F64Array response_a, F64Array adjoints_a,
+                double tol, int maxit, int solve_batch_size,
+                bool mass_riesz) {
+                 auto candidates = to_1d_vector<int>(
+                     candidate_a, "candidate_dofs");
+                 auto offsets = to_1d_vector<int>(offsets_a, "block_offsets");
+                 auto directions = to_1d_vector<double>(
+                     directions_a, "directions");
+                 auto rhs = to_1d_vector<double>(rhs_a, "rhs");
+                 auto state = to_1d_vector<double>(state_a, "state");
+                 const auto response_view = response_a.request();
+                 const auto adjoint_view = adjoints_a.request();
+                 if (response_view.ndim != 2 || response_view.shape[0] < 1 ||
+                     response_view.shape[1] != s.ConfiguredNFace() ||
+                     adjoint_view.ndim != 2 ||
+                     adjoint_view.shape[0] != response_view.shape[0] ||
+                     adjoint_view.shape[1] != response_view.shape[1])
+                     throw std::invalid_argument(
+                         "response_matrix and adjoints must share shape (n_response, configured_n_face)");
+                 const auto* response_data =
+                     static_cast<const double*>(response_view.ptr);
+                 const auto* adjoint_data =
+                     static_cast<const double*>(adjoint_view.ptr);
+                 std::vector<double> response(
+                     response_data, response_data+response_view.size);
+                 std::vector<double> adjoints(
+                     adjoint_data, adjoint_data+adjoint_view.size);
+                 RadHACApKChargeGram::CandidateSchurReduction reduced;
+                 {
+                     py::gil_scoped_release release;
+                     reduced = s.ReduceConfiguredCandidateDirectionalSchur(
+                         inv_chi, candidates, offsets, directions, rhs, state,
+                         response, adjoints,
+                         static_cast<int>(response_view.shape[0]),
+                         tol, maxit, solve_batch_size, mass_riesz);
+                 }
+                 py::dict out;
+                 out["schur"] = to_numpy_2d(
+                     reduced.schur,reduced.n_candidate,reduced.n_candidate);
+                 out["rhs"] = to_numpy_1d(reduced.rhs);
+                 out["response"] = to_numpy_2d(
+                     reduced.response,reduced.n_response,reduced.n_candidate);
+                 out["iters"] = py::cast(reduced.iterations);
+                 out["coupling_mode_iters"] =
+                     py::cast(reduced.coupling_mode_iterations);
+                 out["coupling_rank"] = reduced.coupling_rank;
+                 out["coupling_relative_truncation_error"] =
+                     reduced.coupling_relative_truncation_error;
+                 out["operator_s"] = reduced.operator_s;
+                 out["solve_s"] = reduced.solve_s;
+                 out["contraction_s"] = reduced.contraction_s;
+                 return out;
+             }, py::arg("inv_chi"), py::arg("candidate_dofs"),
+             py::arg("block_offsets"), py::arg("directions"),
+             py::arg("rhs"), py::arg("state"),
+             py::arg("response_matrix"), py::arg("adjoints"),
+             py::arg("tol") = 1e-5, py::arg("maxit") = 5000,
+             py::arg("solve_batch_size") = 64,
+             py::arg("mass_riesz") = true,
+             "Internal proposal-only one-Ritz-direction-per-element Schur reduction.")
         .def("apply_configured_mass_riesz",
              [](RadHACApKChargeGram& s, F64Array rhs_a) {
                  const auto input = array_1d_view<double>(rhs_a, "rhs");
