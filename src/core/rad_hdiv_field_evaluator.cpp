@@ -71,6 +71,11 @@ struct TriSource {
     double hessian[3][3]{};
 };
 
+struct CubicTriSource {
+    double v[3][3]{};
+    double coefficient[20]{};
+};
+
 struct CurvedTetSource {
     double nodes[10][3]{};
     double coefficient[4]{}; // 1, xi, eta, zeta
@@ -86,7 +91,9 @@ struct PointSource {
     double strength = 0.0;
 };
 
-enum class SourceKind : std::uint8_t { Tet, Triangle, CurvedTet, CurvedTriangle, Point };
+enum class SourceKind : std::uint8_t {
+    Tet, Triangle, CubicTriangle, CurvedTet, CurvedTriangle, Point
+};
 
 struct SourceAtom {
     SourceKind kind = SourceKind::Point;
@@ -226,6 +233,41 @@ SourceAtom MakeTriAtom(const TriSource& source, std::size_t index) {
     return atom;
 }
 
+SourceAtom MakeCubicTriAtom(const CubicTriSource& source, std::size_t index) {
+    SourceAtom atom;
+    atom.kind = SourceKind::CubicTriangle;
+    atom.index = index;
+    SetBounds(atom, source.v);
+    const Vec e1 = {source.v[1][0]-source.v[0][0], source.v[1][1]-source.v[0][1], source.v[1][2]-source.v[0][2]};
+    const Vec e2 = {source.v[2][0]-source.v[0][0], source.v[2][1]-source.v[0][1], source.v[2][2]-source.v[0][2]};
+    const double jacobian = Norm(Cross(e1, e2));
+    for (int iu = 0; iu < 4; ++iu) for (int iv = 0; iv < 4; ++iv) {
+        const double u = GL_X[iu], v = GL_X[iv];
+        const double l0 = (1.0-u)*(1.0-v);
+        const double l1 = u;
+        const double l2 = (1.0-u)*v;
+        Vec x{};
+        for (int k = 0; k < 3; ++k)
+            x[k] = l0*source.v[0][k] + l1*source.v[1][k] + l2*source.v[2][k];
+        double powers[3][4] = {
+            {1.0,x[0],x[0]*x[0],x[0]*x[0]*x[0]},
+            {1.0,x[1],x[1]*x[1],x[1]*x[1]*x[1]},
+            {1.0,x[2],x[2]*x[2],x[2]*x[2]*x[2]}
+        };
+        double sigma = 0.0;
+        for(int total=0;total<=3;++total)
+            for(int ax=0;ax<=total;++ax)
+                for(int ay=0;ay<=total-ax;++ay){
+                    const int az=total-ax-ay;
+                    sigma += source.coefficient[PolynomialIndex(ax,ay,az)]
+                           * powers[0][ax]*powers[1][ay]*powers[2][az];
+                }
+        const double weight = GL_W[iu]*GL_W[iv]*jacobian*(1.0-u);
+        AddMoment(atom, x, sigma*weight);
+    }
+    return atom;
+}
+
 SourceAtom MakePointAtom(const PointSource& source, std::size_t index) {
     SourceAtom atom;
     atom.kind = SourceKind::Point;
@@ -288,6 +330,7 @@ struct HDivFieldEvaluator::Impl {
     FieldEvaluatorOptions options;
     std::vector<TetSource> tets;
     std::vector<TriSource> triangles;
+    std::vector<CubicTriSource> cubic_triangles;
     std::vector<CurvedTetSource> curved_tets;
     std::vector<CurvedTriSource> curved_triangles;
     std::vector<PointSource> points;
@@ -537,6 +580,11 @@ struct HDivFieldEvaluator::Impl {
             double value[3];
             QuadTriField(source.v, r, source.sigma0, source.slope, source.hessian, value);
             for (int k = 0; k < 3; ++k) out[k] += value[k];
+        } else if (atom.kind == SourceKind::CubicTriangle) {
+            const CubicTriSource& source = cubic_triangles[atom.index];
+            double value[3];
+            CubicTriField(source.v, r, source.coefficient, value);
+            for (int k = 0; k < 3; ++k) out[k] += value[k];
         } else if (atom.kind == SourceKind::CurvedTet) {
             AddCurvedTet(curved_tets[atom.index], r, out);
         } else if (atom.kind == SourceKind::CurvedTriangle) {
@@ -595,6 +643,9 @@ struct HDivFieldEvaluator::Impl {
                 source.hessian, zero_hessian, field, term);
             for (int axis = 0; axis < 3; ++axis)
                 derivative[axis] += term[axis];
+        } else if (atom.kind == SourceKind::CubicTriangle) {
+            throw std::runtime_error(
+                "HDivFieldEvaluator.field_gradient: cubic TRI source is not implemented");
         } else if (atom.kind == SourceKind::Point) {
             const PointSource& source = points[atom.index];
             const double delta[3] = {
@@ -706,6 +757,10 @@ struct HDivFieldEvaluator::Impl {
             }
             for (const TriSource& source : triangles) {
                 double value[3]; QuadTriField(source.v, r, source.sigma0, source.slope, source.hessian, value);
+                accumulated.Add(value);
+            }
+            for (const CubicTriSource& source : cubic_triangles) {
+                double value[3]; CubicTriField(source.v, r, source.coefficient, value);
                 accumulated.Add(value);
             }
             for (const CurvedTetSource& source : curved_tets) {
@@ -953,6 +1008,39 @@ std::shared_ptr<HDivFieldEvaluator> HDivFieldEvaluator::FromPolynomialTet(
     return std::shared_ptr<HDivFieldEvaluator>(new HDivFieldEvaluator(std::move(impl)));
 }
 
+std::shared_ptr<HDivFieldEvaluator> HDivFieldEvaluator::FromCubicPolynomialTet(
+    std::vector<double> volume, std::vector<double> surface,
+    std::vector<int> image_masks, std::vector<double> image_signs,
+    const FieldEvaluatorOptions& options) {
+    if (volume.size()%32 != 0 || surface.size()%29 != 0)
+        throw std::invalid_argument(
+            "HDivFieldEvaluator.from_cubic_polynomial_tet: volume/surface shape mismatch");
+    auto impl = std::make_unique<Impl>();
+    impl->options = options;
+    impl->ValidateOptions();
+    impl->SetImages(std::move(image_masks), std::move(image_signs));
+    impl->tets.resize(volume.size()/32);
+    for (std::size_t e = 0; e < impl->tets.size(); ++e) {
+        TetSource& source = impl->tets[e];
+        const double* block = volume.data()+32*e;
+        for (int i = 0; i < 4; ++i) for (int k = 0; k < 3; ++k)
+            source.v[i][k] = block[3*i+k];
+        std::copy_n(block+12,20,source.coefficient);
+        impl->atoms.push_back(MakeTetAtom(source,e));
+    }
+    impl->cubic_triangles.resize(surface.size()/29);
+    for (std::size_t e = 0; e < impl->cubic_triangles.size(); ++e) {
+        CubicTriSource& source = impl->cubic_triangles[e];
+        const double* block = surface.data()+29*e;
+        for (int i = 0; i < 3; ++i) for (int k = 0; k < 3; ++k)
+            source.v[i][k] = block[3*i+k];
+        std::copy_n(block+9,20,source.coefficient);
+        impl->atoms.push_back(MakeCubicTriAtom(source,e));
+    }
+    impl->BuildTree();
+    return std::shared_ptr<HDivFieldEvaluator>(new HDivFieldEvaluator(std::move(impl)));
+}
+
 std::shared_ptr<HDivFieldEvaluator> HDivFieldEvaluator::FromCloud(
     std::vector<double> xyz, std::vector<double> strength,
     std::vector<int> image_masks, std::vector<double> image_signs,
@@ -1158,7 +1246,8 @@ double HDivFieldEvaluator::TreeRelativeTolerance() const { return m_impl->option
 int HDivFieldEvaluator::ProbeCount() const { return m_impl->options.probe_count; }
 const char* HDivFieldEvaluator::SourceRepresentation() const {
     if (!m_impl->curved_tets.empty() || !m_impl->curved_triangles.empty()) return "curved-element-exact";
-    if (!m_impl->tets.empty() || !m_impl->triangles.empty()) return "analytic-tet";
+    if (!m_impl->tets.empty() || !m_impl->triangles.empty()
+            || !m_impl->cubic_triangles.empty()) return "analytic-tet";
     return "element-cloud";
 }
 HDivFieldEvaluator::Algorithm HDivFieldEvaluator::LastAlgorithm() const {
