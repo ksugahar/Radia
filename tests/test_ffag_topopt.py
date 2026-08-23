@@ -272,6 +272,49 @@ def test_ffag_validation_direct_map_only_requires_manufactured_target(
     assert args.manufactured_candidate_elements == [804,798]
 
 
+def test_ffag_validation_accepts_signed_manufactured_material_contract(
+        tmp_path):
+    import importlib.util
+    from pathlib import Path
+
+    runner_path=(Path(__file__).parents[1]/"validation_test"/"ffag_topopt"/
+                 "validation_ffag_full_field_c_yoke.py")
+    spec=importlib.util.spec_from_file_location(
+        "ffag_signed_manufactured_runner",runner_path)
+    runner=importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(runner)
+    args=runner.parse_args([
+        "--mesh",str(tmp_path/"mesh.vol"),
+        "--yoke-step",str(tmp_path/"yoke.step"),
+        "--output",str(tmp_path/"result.json"),
+        "--material-proposal-model","direct-map-only",
+        "--manufactured-remove-target-elements","83",
+        "--manufactured-removal-candidate-elements","80","83","86",
+        "--manufactured-candidate-elements","798","801",
+        "--controlled-components","horizontal_focusing",
+    ])
+    assert args.manufactured_target_elements is None
+    assert args.manufactured_remove_target_elements == [83]
+    assert args.manufactured_removal_candidate_elements == [80,83,86]
+
+    target,fixed_inactive,fixed_active=runner._manufactured_binary_material_sets(
+        initial_active=np.array([True,True,False,False]),
+        fixed_active=np.array([True,True,False,False]),
+        addition_target_elements=[], addition_candidate_elements=[2,3],
+        removal_target_elements=[1], removal_candidate_elements=[0,1])
+    np.testing.assert_array_equal(target,[True,False,False,False])
+    np.testing.assert_array_equal(fixed_inactive,[False,False,False,False])
+    np.testing.assert_array_equal(fixed_active,[False,False,False,False])
+
+    with pytest.raises(ValueError,match="manufactured additions"):
+        runner._manufactured_binary_material_sets(
+            initial_active=np.array([True,True,False]),
+            fixed_active=np.array([True,True,False]),
+            addition_target_elements=[], addition_candidate_elements=[2],
+            removal_target_elements=[1], removal_candidate_elements=[0])
+
+
 def test_ffag_validation_restart_prefers_explicit_final_active_set(tmp_path):
     import importlib.util
     import json
