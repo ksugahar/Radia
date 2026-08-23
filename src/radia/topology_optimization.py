@@ -3835,15 +3835,23 @@ def grow_hdiv_mmm_by_superposition(*, charge_gram, fes, inv_chi, rhs,
                 maximum_changed_elements=maximum_cap)
             selected_remove=np.asarray(removal_tsvd.selected_elements,dtype=np.int64)[
                 np.asarray(removal_tsvd.selected_directions)<0]
-            if selected_remove.size==0:
+            if selected_remove.size==0 and removal_candidates.size>8:
+                # An empty low-rank proposal over a production-sized removal
+                # pool is not authority to launch several full active-system
+                # solves.  Preserve the exact challenge only for an explicitly
+                # tiny front; larger pools must first produce a TSVD/QR sign or
+                # be reduced by the clustered signed path used below.
                 stop_reason="no_improving_removal_candidate";break
             # A removal-only TSVD proposal is an additive magnetization model,
             # not an exact downdate of the active VIM system.  A collaborative
             # bundle can therefore be rejected even though one of its cells is
-            # genuinely useful.  Evaluate the full proposal, nested smaller
-            # proposals, and a bounded representative singleton front with
-            # complete active-system re-solves.  This is the removal analogue
-            # of conditional exact-Schur selection on the insertion path.
+            # genuinely useful.  This includes an empty signed proposal: the
+            # manufactured full-C-yoke deletion regression has an exact useful
+            # cell whose additive local-magnetization coefficient has the wrong
+            # sign.  Evaluate any global/nested proposal and a caller-bounded
+            # representative singleton front with complete active-system
+            # re-solves.  This is the removal analogue of conditional exact-
+            # Schur selection on the insertion path.
             material_matrix=np.column_stack(material)
             removal_lookup={int(element):column for column,element in
                             enumerate(removal_candidates)}

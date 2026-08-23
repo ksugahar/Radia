@@ -199,9 +199,60 @@ def _coil_pair(args):
     return (loop(args.coil_z_m), loop(-args.coil_z_m))
 
 
+def _manufactured_binary_material_sets(
+        *, initial_active, fixed_active, addition_target_elements,
+        addition_candidate_elements, removal_target_elements,
+        removal_candidate_elements):
+    """Return checked binary target and inverse-design material masks.
+
+    The ordinary C-yoke run keeps the complete return-yoke seed fixed.  A
+    manufactured signed inverse may explicitly release only named active HEX
+    cells so addition and removal candidates coexist without weakening that
+    production default.
+    """
+    active = np.asarray(initial_active, dtype=bool).reshape(-1)
+    fixed_active = np.asarray(fixed_active, dtype=bool).reshape(-1)
+    add_targets = np.asarray(
+        addition_target_elements, dtype=np.int64).reshape(-1)
+    add_candidates = np.asarray(
+        addition_candidate_elements, dtype=np.int64).reshape(-1)
+    remove_targets = np.asarray(
+        removal_target_elements, dtype=np.int64).reshape(-1)
+    remove_candidates = np.asarray(
+        removal_candidate_elements, dtype=np.int64).reshape(-1)
+    groups = (add_targets, add_candidates, remove_targets, remove_candidates)
+    if (fixed_active.shape != active.shape or np.any(fixed_active & ~active)
+            or not add_targets.size + remove_targets.size
+            or any(len(np.unique(values)) != len(values) for values in groups)
+            or any(np.any(values < 0) or np.any(values >= len(active))
+                   for values in groups)
+            or np.any(active[add_targets]) or np.any(active[add_candidates])
+            or np.any(~active[remove_targets])
+            or np.any(~active[remove_candidates])
+            or not set(add_targets.tolist()).issubset(
+                add_candidates.tolist())
+            or not set(remove_targets.tolist()).issubset(
+                remove_candidates.tolist())):
+        raise ValueError(
+            "manufactured additions must be unique inactive HEX elements, "
+            "manufactured removals must be unique active HEX elements, and "
+            "each candidate set must contain its targets")
+
+    target_active = active.copy()
+    target_active[add_targets] = True
+    target_active[remove_targets] = False
+    fixed_inactive = ~active
+    fixed_inactive[add_candidates] = False
+    inverse_fixed_active = fixed_active.copy()
+    inverse_fixed_active[remove_candidates] = False
+    return target_active, fixed_inactive, inverse_fixed_active
+
+
 def _manufactured_fixed_orbit_target(
         *, charge_gram, fes, source, base_target, initial_active,
-        target_elements, candidate_elements, inv_chi, source_scale,
+        fixed_active, addition_target_elements, addition_candidate_elements,
+        removal_target_elements, removal_candidate_elements,
+        inv_chi, source_scale,
         gradient_offset, relative_band, bend_slack,
         solve_tolerance, solve_max_iterations, cluster_coarse_size,
         cluster_deflation_size, recycle_size):
@@ -219,20 +270,21 @@ def _manufactured_fixed_orbit_target(
     )
 
     active = np.asarray(initial_active, dtype=bool).reshape(-1)
-    targets = np.asarray(target_elements, dtype=np.int64).reshape(-1)
-    candidates = np.asarray(candidate_elements, dtype=np.int64).reshape(-1)
-    if (targets.size == 0 or candidates.size == 0
-            or len(np.unique(targets)) != len(targets)
-            or len(np.unique(candidates)) != len(candidates)
-            or np.any(targets < 0) or np.any(targets >= len(active))
-            or np.any(candidates < 0) or np.any(candidates >= len(active))
-            or np.any(active[targets]) or np.any(active[candidates])
-            or not set(targets.tolist()).issubset(candidates.tolist())):
-        raise ValueError(
-            "manufactured target/candidate elements must be unique inactive "
-            "mesh elements, and candidates must contain every target")
-    target_active = active.copy()
-    target_active[targets] = True
+    add_targets = np.asarray(
+        addition_target_elements, dtype=np.int64).reshape(-1)
+    add_candidates = np.asarray(
+        addition_candidate_elements, dtype=np.int64).reshape(-1)
+    remove_targets = np.asarray(
+        removal_target_elements, dtype=np.int64).reshape(-1)
+    remove_candidates = np.asarray(
+        removal_candidate_elements, dtype=np.int64).reshape(-1)
+    (target_active, fixed_inactive,
+     inverse_fixed_active) = _manufactured_binary_material_sets(
+        initial_active=active, fixed_active=fixed_active,
+        addition_target_elements=add_targets,
+        addition_candidate_elements=add_candidates,
+        removal_target_elements=remove_targets,
+        removal_candidate_elements=remove_candidates)
     target_topology = ngsolve_growth_topology(fes.mesh, target_active)
     if not target_topology.valid:
         raise RuntimeError(
@@ -308,12 +360,12 @@ def _manufactured_fixed_orbit_target(
             "manufactured target must be inside its bands while the seed is "
             "outside them")
 
-    fixed_inactive = ~active
-    fixed_inactive[candidates] = False
     metadata = {
         "model": "exact-full-C-yoke-active-set-manufactured-target",
-        "target_element_ids": targets.tolist(),
-        "candidate_element_ids": candidates.tolist(),
+        "target_element_ids": add_targets.tolist(),
+        "candidate_element_ids": add_candidates.tolist(),
+        "removal_target_element_ids": remove_targets.tolist(),
+        "removal_candidate_element_ids": remove_candidates.tolist(),
         "source_scale": float(source_scale),
         "relative_transfer_band": float(relative_band),
         "bend_band_slack": float(bend_slack),
@@ -329,7 +381,7 @@ def _manufactured_fixed_orbit_target(
         "target_solve_iterations": int(target_iterations),
         "target_topology_valid": bool(target_topology.valid),
     }
-    return (target_family, fixed_inactive, target_active,
+    return (target_family, fixed_inactive, inverse_fixed_active, target_active,
             np.ascontiguousarray(initial_state), metadata)
 
 
@@ -496,7 +548,8 @@ def run(args):
     hmatrix_done = time.perf_counter() if args.record_performance else None
     next_action = (
         "constructing exact active-set target"
-        if args.manufactured_target_only else
+        if (args.manufactured_target_elements
+            or args.manufactured_remove_target_elements) else
         "optimizing about fixed entrance-to-exit design orbits")
     if args.record_performance:
         print(
@@ -510,19 +563,30 @@ def run(args):
     manufactured_target = None
     manufactured_initial_state = None
     fixed_inactive = None
+    inverse_fixed_active = fixed_active
     known_target_active = None
-    if args.manufactured_target_elements:
-        candidate_elements = (
+    if (args.manufactured_target_elements
+            or args.manufactured_remove_target_elements):
+        addition_candidate_elements = (
             args.manufactured_candidate_elements
-            or args.manufactured_target_elements)
+            or args.manufactured_target_elements or [])
+        removal_candidate_elements = (
+            args.manufactured_removal_candidate_elements
+            or args.manufactured_remove_target_elements or [])
         with ng.TaskManager():
-            (direct_target, fixed_inactive, known_target_active,
+            (direct_target, fixed_inactive, inverse_fixed_active,
+             known_target_active,
              manufactured_initial_state,
              manufactured_target) = _manufactured_fixed_orbit_target(
                 charge_gram=gram, fes=fes, source=source,
                 base_target=direct_target, initial_active=active,
-                target_elements=args.manufactured_target_elements,
-                candidate_elements=candidate_elements,
+                fixed_active=fixed_active,
+                addition_target_elements=(
+                    args.manufactured_target_elements or []),
+                addition_candidate_elements=addition_candidate_elements,
+                removal_target_elements=(
+                    args.manufactured_remove_target_elements or []),
+                removal_candidate_elements=removal_candidate_elements,
                 inv_chi=1.0 / (args.mu_r - 1.0),
                 source_scale=args.manufactured_source_scale,
                 gradient_offset=args.gradient_offset,
@@ -536,10 +600,15 @@ def run(args):
         target_transfer_matrices = (
             direct_target.objective.target_matrices.copy())
         manufactured_target["target_element_centroids_m"] = centers[
-            np.asarray(args.manufactured_target_elements,
+            np.asarray(args.manufactured_target_elements or [],
                        dtype=np.int64)].tolist()
         manufactured_target["candidate_element_centroids_m"] = centers[
-            np.asarray(candidate_elements, dtype=np.int64)].tolist()
+            np.asarray(addition_candidate_elements, dtype=np.int64)].tolist()
+        manufactured_target["removal_target_element_centroids_m"] = centers[
+            np.asarray(args.manufactured_remove_target_elements or [],
+                       dtype=np.int64)].tolist()
+        manufactured_target["removal_candidate_element_centroids_m"] = centers[
+            np.asarray(removal_candidate_elements, dtype=np.int64)].tolist()
         print(
             "[ffag-full-field] exact active-set manufactured target ready: "
             f"seed ratio {manufactured_target['initial_max_band_ratio']:.6g}, "
@@ -619,10 +688,11 @@ def run(args):
             optimization_target_options["response_entries"] = (
                 fixture.objective.response_entries)
         common_generation_options = dict(
-            fixed_active_elements=fixed_active,
+            fixed_active_elements=inverse_fixed_active,
             fixed_inactive_elements=fixed_inactive,
             maximum_batch_elements=(
-                len(args.manufactured_target_elements)
+                (len(args.manufactured_target_elements or [])
+                 + len(args.manufactured_remove_target_elements or []))
                 if manufactured_target is not None else None),
             initial_material_move_fraction=args.move_fraction,
             maximum_material_move_fraction=args.move_fraction,
@@ -782,6 +852,9 @@ def run(args):
                 manufactured_target["initial_max_band_ratio"] > 1.0),
             "manufactured_selected_map_objective_converged": bool(
                 result.converged),
+            "manufactured_known_active_set_recovered": bool(
+                np.array_equal(result.active_elements,
+                               known_target_active)),
         })
         manufactured_target["known_target_active_set_recovered"] = bool(
             np.array_equal(result.active_elements, known_target_active))
@@ -1012,6 +1085,14 @@ def parse_args(argv=None):
         help=("Inactive HEX ids left movable in the manufactured inverse. "
               "Defaults to the target elements."))
     parser.add_argument(
+        "--manufactured-remove-target-elements", type=int, nargs="+",
+        help=("Active HEX ids removed by the exact full solve that "
+              "manufactures a reachable selected-map target."))
+    parser.add_argument(
+        "--manufactured-removal-candidate-elements", type=int, nargs="+",
+        help=("Active HEX ids released from the fixed seed and offered as "
+              "removal candidates. Defaults to the removal targets."))
+    parser.add_argument(
         "--manufactured-source-scale", type=float, default=1.0)
     parser.add_argument(
         "--manufactured-relative-band", type=float, default=0.20)
@@ -1082,11 +1163,15 @@ def parse_args(argv=None):
     parser.add_argument("--exact-beam-barrier-fraction", type=float,
                         default=0.25)
     args = parser.parse_args(argv)
-    manufactured = bool(args.manufactured_target_elements)
+    manufactured = bool(
+        args.manufactured_target_elements
+        or args.manufactured_remove_target_elements)
     if ((manufactured and (args.preflight_only or args.restart_result
                            or not args.controlled_components))
             or (args.manufactured_target_only and not manufactured)
             or (args.manufactured_candidate_elements and not manufactured)
+            or (args.manufactured_removal_candidate_elements
+                and not manufactured)
             or args.manufactured_source_scale <= 0.0
             or (args.material_proposal_model == "direct-map-only"
                 and not manufactured)
