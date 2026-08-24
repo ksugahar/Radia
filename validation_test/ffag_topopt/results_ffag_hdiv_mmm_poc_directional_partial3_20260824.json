@@ -1,0 +1,104 @@
+{
+  "schema": "radia.ffag-hdiv-mmm-poc-evidence/v1",
+  "date": "2026-08-24",
+  "status": "pass",
+  "scope": "Study-scale one-sided HEX pole-slab FFAG PoC using exact whole-element re-solves after ACA-QR-TSVD proposals. This is not a final two-pole yoke or engineered coil design.",
+  "execution": {
+    "machine": "Hibino",
+    "python": "3.12.10",
+    "ngsolve_threads": 16,
+    "source_worktree_head": "410dd0dc8277e0faa691223cfaaa6ef377240f8c",
+    "native_binary_sha256": "096F58CB594963F669BDCD8994D1652C4CC47F7B16BA9E4F452FBD2EBC92DA2C",
+    "topology_optimization_py_sha256": "BFBA053375608707F673C57F9E565D396C7A55B8971E3D156C96A9912EE49A51",
+    "runner_sha256": "CDF7BE537611281308A1B4B8FA91EEEFD82DE02991D85C51FABAA1C1A17E51C3",
+    "full_result_sha256": "D4CC931453C2571C124151F608B89179078BDFE0771386C520FEE62DD79F7EE7",
+    "full_result_scratch": "C:\\temp\\ffag_hdiv_mmm_directional_partial3_20260824.json",
+    "performance_measurement": "disabled",
+    "timings_s": null,
+    "peak_working_set_bytes": null
+  },
+  "case": {
+    "energies_mev": [31.0, 140.0, 250.0],
+    "element_family": "HEX",
+    "hdiv_family": "BDM1",
+    "air_volume_elements": 0,
+    "elements": 192,
+    "dofs": 6912,
+    "raw_field_rows": 192,
+    "design_responses": 135,
+    "segments_per_orbit": 32,
+    "hmatrix_eps": 1e-06,
+    "hmatrix_eta": 2.0,
+    "leaf_size": 64,
+    "hmatrix_compression": 0.3507936957216687,
+    "hmatrix_max_rank": 44,
+    "solve_tolerance": 1e-07,
+    "proposal_solve_tolerance": 0.001,
+    "proposal_adjoint_count": 3,
+    "exact_candidate_limit": 64
+  },
+  "outcome": {
+    "requested_iterations": 2,
+    "accepted_iterations": 2,
+    "stop_reason": "max_iterations",
+    "converged": false,
+    "initial_active_elements": 192,
+    "final_active_elements": 179,
+    "initial_max_band_ratio": 12.743414767975006,
+    "final_max_band_ratio": 12.103629176531227,
+    "relative_improvement": 0.05020519249295723,
+    "final_orbit_field_max_band_ratios": [
+      8.567915644740047,
+      1.688821797927281,
+      6.467451990321907
+    ],
+    "final_transfer_matrix_max_band_ratios": [
+      12.103629176531227,
+      4.654520959497858,
+      5.019343987428476
+    ]
+  },
+  "iterations": [
+    {
+      "iteration": 0,
+      "response_adjoint_count": 0,
+      "removal_candidate_count": 191,
+      "addition_candidate_count": 0,
+      "screened_candidate_count": 64,
+      "tsvd_rank": 38,
+      "tsvd_selected_count": 7,
+      "removed_elements": [26, 42, 58, 74, 156, 158, 172],
+      "exact_solve_iterations": 22,
+      "actual_max_band_ratio": 12.394965455381543
+    },
+    {
+      "iteration": 1,
+      "response_adjoint_count": 3,
+      "removal_candidate_count": 184,
+      "addition_candidate_count": 7,
+      "screened_candidate_count": 184,
+      "tsvd_rank": 38,
+      "tsvd_selected_count": 6,
+      "removed_elements": [76, 90, 92, 174, 175, 188],
+      "added_elements": [],
+      "exact_solve_iterations": 25,
+      "actual_max_band_ratio": 12.103629176531227
+    }
+  ],
+  "comparison_to_previous_full_adjoint_result": {
+    "previous_response_adjoint_counts": [0, 204],
+    "current_response_adjoint_counts": [0, 3],
+    "previous_final_max_band_ratio": 12.0924116922209,
+    "current_final_max_band_ratio": 12.103629176531227,
+    "current_minus_previous_final_ratio": 0.0112174843103112,
+    "relative_final_ratio_change": 0.00092764657669786,
+    "interpretation": "The partial-adjoint proposal retained the two-step exact objective improvement within 0.093 percent of the saved full-adjoint result while reducing the second proposal contraction from 204 response adjoints to 3. Runtime was intentionally not measured."
+  },
+  "gates": {
+    "native_rows_are_row_major": true,
+    "binary_topology_is_valid": true,
+    "accepted_whole_element_move": true,
+    "exact_resolve_improves_objective": true,
+    "no_gray_material": true
+  }
+}
