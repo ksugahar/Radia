@@ -517,6 +517,7 @@ def _deploy_lab():
     run(["cubit-plugin-install"])
     run(["cubit-plugin-install", "--verify-only"])
     run(["cubit-smoke-test"])
+    run(["cubit-toolbar-smoke-test", "--restarts", "2"])
     ok("Phase 8 complete on LAB")
     return 0
 
