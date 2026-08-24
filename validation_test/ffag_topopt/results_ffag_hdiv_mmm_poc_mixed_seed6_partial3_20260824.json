@@ -1,0 +1,132 @@
+{
+  "schema": "radia.ffag-hdiv-mmm-poc-evidence/v1",
+  "date": "2026-08-24",
+  "status": "pass",
+  "scope": "Study-scale connected-seed HEX pole-slab FFAG PoC with bidirectional whole-element proposals and exact re-solves. This is not a final two-pole yoke or engineered coil design.",
+  "execution": {
+    "machine": "Hibino",
+    "python": "3.12.10",
+    "ngsolve_threads": 16,
+    "source_worktree_head": "177939a5b",
+    "native_binary_sha256": "096F58CB594963F669BDCD8994D1652C4CC47F7B16BA9E4F452FBD2EBC92DA2C",
+    "topology_optimization_py_sha256": "BFBA053375608707F673C57F9E565D396C7A55B8971E3D156C96A9912EE49A51",
+    "runner_sha256": "ECFB86DF03F5E9D06F0355176CC6155EB93C69ED4ACD094E86CB21973BEEF413",
+    "full_result_sha256": "8C0182C3DAE3B1F4AE6D611753BA5343B3AE9B60C89A33F2BEAFA4BFF5A1F69B",
+    "full_result_scratch": "C:\\temp\\ffag_hdiv_mmm_mixed_seed6_partial3_20260824.json",
+    "performance_measurement": "disabled",
+    "timings_s": null,
+    "peak_working_set_bytes": null
+  },
+  "case": {
+    "energies_mev": [31.0, 140.0, 250.0],
+    "element_family": "HEX",
+    "hdiv_family": "BDM1",
+    "air_volume_elements": 0,
+    "elements": 192,
+    "dofs": 6912,
+    "raw_field_rows": 192,
+    "design_responses": 135,
+    "segments_per_orbit": 32,
+    "initial_active_x_layers": 6,
+    "initial_active_elements": 96,
+    "fixed_inward_seed_elements": 16,
+    "predecessor_columns": 16,
+    "hmatrix_eps": 1e-06,
+    "hmatrix_eta": 2.0,
+    "leaf_size": 64,
+    "hmatrix_compression": 0.3507936957216687,
+    "hmatrix_max_rank": 44,
+    "solve_tolerance": 1e-07,
+    "proposal_solve_tolerance": 0.001,
+    "proposal_adjoint_count": 3,
+    "exact_candidate_limit": 64
+  },
+  "outcome": {
+    "requested_iterations": 4,
+    "accepted_iterations": 4,
+    "stop_reason": "max_iterations",
+    "converged": false,
+    "final_active_elements": 87,
+    "initial_max_band_ratio": 12.75383029005284,
+    "final_max_band_ratio": 11.982824875192101,
+    "relative_improvement": 0.06045285199239891,
+    "final_orbit_field_max_band_ratios": [
+      8.522753684230326,
+      1.8541285922648527,
+      6.522603633593302
+    ],
+    "final_transfer_matrix_max_band_ratios": [
+      11.982824875192101,
+      4.433673882387527,
+      4.942357079160615
+    ]
+  },
+  "iterations": [
+    {
+      "iteration": 0,
+      "added_elements": [],
+      "removed_elements": [93],
+      "response_adjoint_count": 3,
+      "addition_candidate_count": 16,
+      "removal_candidate_count": 16,
+      "tsvd_rank": 15,
+      "actual_max_band_ratio": 12.753191143886497,
+      "exact_solve_iterations": 20
+    },
+    {
+      "iteration": 1,
+      "added_elements": [106],
+      "removed_elements": [92],
+      "response_adjoint_count": 3,
+      "addition_candidate_count": 16,
+      "removal_candidate_count": 16,
+      "tsvd_rank": 18,
+      "actual_max_band_ratio": 12.118101653871609,
+      "exact_solve_iterations": 22
+    },
+    {
+      "iteration": 2,
+      "added_elements": [],
+      "removed_elements": [76, 80, 82, 95],
+      "response_adjoint_count": 3,
+      "addition_candidate_count": 16,
+      "removal_candidate_count": 16,
+      "tsvd_rank": 16,
+      "actual_max_band_ratio": 12.092573880928239,
+      "exact_solve_iterations": 23
+    },
+    {
+      "iteration": 3,
+      "added_elements": [],
+      "removed_elements": [60, 64, 79, 94],
+      "response_adjoint_count": 3,
+      "addition_candidate_count": 16,
+      "removal_candidate_count": 16,
+      "tsvd_rank": 15,
+      "actual_max_band_ratio": 11.982824875192101,
+      "exact_solve_iterations": 26
+    }
+  ],
+  "posthoc_topology_reconstruction": {
+    "active_counts_after_each_iteration": [95, 95, 91, 87],
+    "fixed_seed_preserved": true,
+    "predecessor_order_valid_after_every_iteration": true,
+    "iron_and_external_air_connectivity_valid_after_every_iteration": true
+  },
+  "comparison_to_fully_active_two_iteration_result": {
+    "fully_active_final_max_band_ratio": 12.103629176531227,
+    "mixed_seed_final_max_band_ratio": 11.982824875192101,
+    "mixed_seed_minus_fully_active_final_ratio": -0.120804301339126,
+    "interpretation": "The connected mixed design space accepted both an addition and removals and reached a lower exact objective after four iterations. It is still outside the requested response bands, so this is an exploration result rather than design closure."
+  },
+  "gates": {
+    "native_rows_are_row_major": true,
+    "binary_topology_is_valid": true,
+    "accepted_whole_element_move": true,
+    "accepted_addition": true,
+    "accepted_removal": true,
+    "exact_resolve_improves_objective": true,
+    "no_gray_material": true,
+    "predecessor_order_valid": true
+  }
+}
