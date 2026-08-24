@@ -49,6 +49,46 @@ def _history_record(item):
     return _json_value(asdict(item))
 
 
+def _structured_x_growth_seed(mesh, active_x_layers):
+    """Build a connected inward seed and one predecessor chain per x column."""
+    import ngsolve as ng
+
+    active_x_layers = int(active_x_layers)
+    if active_x_layers == 0:
+        active = np.ones(mesh.ne, dtype=bool)
+        fixed_active = np.zeros(mesh.ne, dtype=bool)
+        fixed_active[0] = True
+        return active, fixed_active, None
+
+    centers = np.empty((mesh.ne, 3), dtype=float)
+    for element in mesh.Elements(ng.VOL):
+        points = np.asarray([
+            tuple(mesh[vertex].point)[:3] for vertex in element.vertices])
+        centers[element.nr] = points.mean(axis=0)
+    rounded = np.round(centers, decimals=12)
+    x_values = np.unique(rounded[:, 0])
+    if not 0 < active_x_layers < x_values.size:
+        raise ValueError(
+            "active_x_layers must select a non-empty proper subset of "
+            "the structured x layers")
+
+    predecessors = np.full(mesh.ne, -1, dtype=np.int64)
+    yz_values, yz_inverse = np.unique(
+        rounded[:, 1:], axis=0, return_inverse=True)
+    for column in range(yz_values.shape[0]):
+        elements = np.flatnonzero(yz_inverse == column)
+        order = elements[np.argsort(rounded[elements, 0], kind="stable")]
+        if (order.size != x_values.size or
+                not np.array_equal(rounded[order, 0], x_values)):
+            raise ValueError(
+                "mesh is not a complete structured x-column candidate slab")
+        predecessors[order[1:]] = order[:-1]
+
+    active = rounded[:, 0] <= x_values[active_x_layers - 1]
+    fixed_active = rounded[:, 0] == x_values[0]
+    return active, fixed_active, predecessors
+
+
 def run(args):
     import ngsolve as ng
     from ngsolve.meshes import MakeStructured3DMesh
@@ -102,9 +142,8 @@ def run(args):
     calibration_rows = np.asarray(calibration_rows, dtype=np.int64)
     calibration_target = np.asarray(calibration_target, dtype=float)
 
-    active = np.ones(mesh.ne, dtype=bool)
-    fixed_active = np.zeros(mesh.ne, dtype=bool)
-    fixed_active[0] = True
+    active, fixed_active, predecessors = _structured_x_growth_seed(
+        mesh, args.initial_active_x_layers)
     volumes = np.asarray(
         ng.Integrate(1.0, mesh, element_wise=True), dtype=float)
     initial_state, initial_response, initial_solve_iterations = (
@@ -136,6 +175,7 @@ def run(args):
         active_elements=active, element_volumes=volumes,
         volume_max=float(np.sum(volumes)),
         fixed_active_elements=fixed_active,
+        predecessor_elements=predecessors,
         max_iterations=args.iterations,
         solve_tolerance=args.solve_tolerance,
         solve_max_iterations=args.solve_max_iterations,
@@ -176,7 +216,9 @@ def run(args):
             "air_volume_elements": 0,
             "nx": args.nx, "ny": args.ny, "nz": args.nz,
             "elements": int(mesh.ne), "dofs": int(fes.ndof),
+            "initial_active_x_layers": int(args.initial_active_x_layers),
             "initial_active_elements": int(active.sum()),
+            "fixed_active_elements": int(fixed_active.sum()),
             "final_active_elements": int(result.active_elements.sum()),
         },
         "field_contract": {
@@ -240,6 +282,10 @@ def parse_args(argv=None):
     parser.add_argument("--nx", type=int, default=12)
     parser.add_argument("--ny", type=int, default=8)
     parser.add_argument("--nz", type=int, default=2)
+    parser.add_argument("--initial-active-x-layers", type=int, default=0,
+                        help=("0 keeps the legacy fully active slab; a positive "
+                              "value selects that many inward x layers and "
+                              "enforces column predecessors"))
     parser.add_argument("--segments", type=int, default=32)
     parser.add_argument("--iterations", type=int, default=2)
     parser.add_argument("--threads", type=int, default=16)
@@ -263,7 +309,9 @@ def parse_args(argv=None):
     args = parser.parse_args(argv)
     if (len(args.energies) < 2 or args.nx < 2 or args.ny < 2 or args.nz < 1
             or args.segments < 16 or args.iterations < 1
-            or args.threads < 1 or args.mu_r <= 1.0):
+            or args.threads < 1 or args.mu_r <= 1.0
+            or args.initial_active_x_layers < 0
+            or args.initial_active_x_layers >= args.nx):
         parser.error("invalid FFAG HDiv-MMM PoC settings")
     return args
 

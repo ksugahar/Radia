@@ -493,6 +493,23 @@ def test_ffag_hdiv_mmm_poc_accepts_proposal_and_performance_contract(tmp_path):
     assert args.proposal_adjoint_count == 3
     assert args.no_record_performance
 
+    from ngsolve.meshes import MakeStructured3DMesh
+    mesh=MakeStructured3DMesh(hexes=True,nx=3,ny=2,nz=1)
+    active,fixed,predecessors=runner._structured_x_growth_seed(mesh,1)
+    assert np.count_nonzero(active) == 2
+    np.testing.assert_array_equal(fixed,active)
+    assert np.count_nonzero(predecessors < 0) == 2
+    for element in np.flatnonzero(predecessors >= 0):
+        assert predecessors[element] != element
+
+    legacy_active,legacy_fixed,legacy_predecessors=(
+        runner._structured_x_growth_seed(mesh,0))
+    assert np.all(legacy_active)
+    assert np.count_nonzero(legacy_fixed) == 1
+    assert legacy_predecessors is None
+    with pytest.raises(ValueError,match="proper subset"):
+        runner._structured_x_growth_seed(mesh,3)
+
     @dataclass
     class NestedHistory:
         response: np.ndarray
