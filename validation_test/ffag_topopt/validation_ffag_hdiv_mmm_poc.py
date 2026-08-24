@@ -28,15 +28,25 @@ def _peak_working_set_bytes():
         return None
 
 
+def _json_history_value(value, key=None):
+    if key == "linearized_reachability_residual":
+        return None
+    if isinstance(value, np.ndarray):
+        return value.tolist()
+    if isinstance(value, np.generic):
+        return value.item()
+    if isinstance(value, dict):
+        return {
+            name: _json_history_value(nested, key=name)
+            for name, nested in value.items()
+        }
+    if isinstance(value, (list, tuple)):
+        return [_json_history_value(nested) for nested in value]
+    return value
+
+
 def _history_record(item):
-    record = asdict(item)
-    for key, value in tuple(record.items()):
-        if isinstance(value, np.ndarray):
-            if key == "linearized_reachability_residual":
-                record[key] = None
-            else:
-                record[key] = value.tolist()
-    return record
+    return _json_history_value(asdict(item))
 
 
 def run(args):
@@ -53,7 +63,8 @@ def run(args):
     from radia.vim._vim import build_charge_gram
 
     ng.SetNumThreads(args.threads)
-    started = time.perf_counter()
+    record_performance = not args.no_record_performance
+    started = time.perf_counter() if record_performance else None
     mesh = MakeStructured3DMesh(
         hexes=True, nx=args.nx, ny=args.ny, nz=args.nz,
         mapping=lambda x, y, z: (
@@ -65,7 +76,7 @@ def run(args):
         _, gram, _ = build_charge_gram(
             fes, eps=args.hmatrix_eps, leafsize=args.leaf_size,
             eta=args.hmatrix_eta, internal_interfaces=True)
-    hmatrix_done = time.perf_counter()
+    hmatrix_done = time.perf_counter() if record_performance else None
 
     family = build_ffag_cell_target_family(
         args.energies, n_segments=args.segments,
@@ -75,7 +86,7 @@ def run(args):
         field_rows = build_multi_orbit_field_response_matrix(
             gram, family.objective, gradient_offset=args.gradient_offset,
             field_scale=MU0)
-    rows_done = time.perf_counter()
+    rows_done = time.perf_counter() if record_performance else None
 
     incident = np.concatenate([
         np.r_[np.full(args.segments, MU0*args.source_h_a_per_m),
@@ -112,7 +123,7 @@ def run(args):
     initial_ratio = float(np.max(np.abs(
         (initial_objective - family.objective.response_target)
         / family.objective.response_band)))
-    initial_done = time.perf_counter()
+    initial_done = time.perf_counter() if record_performance else None
 
     result = optimize_hdiv_mmm_magnet_from_transfer_matrices(
         tuple(reference.orbit for reference in family.references),
@@ -134,9 +145,10 @@ def run(args):
         initial_material_move_fraction=args.move_fraction,
         maximum_material_move_fraction=args.maximum_move_fraction,
         proposal_adjoint_count=args.proposal_adjoint_count,
+        proposal_solve_tolerance=args.proposal_solve_tolerance,
         graph_front_proposal_limit=0,
         exact_candidate_limit=args.exact_candidate_limit)
-    finished = time.perf_counter()
+    finished = time.perf_counter() if record_performance else None
     final_ratio = float(max(
         np.max(result.orbit_field_max_band_ratios),
         np.max(result.transfer_matrix_max_band_ratios)))
@@ -181,6 +193,7 @@ def run(args):
             "hmatrix_eta": args.hmatrix_eta,
             "leaf_size": args.leaf_size,
             "solve_tolerance": args.solve_tolerance,
+            "proposal_solve_tolerance": args.proposal_solve_tolerance,
             "solve_max_iterations": args.solve_max_iterations,
             "initial_solve_iterations": int(initial_solve_iterations),
             "source_scale_initial": source_scale,
@@ -205,14 +218,17 @@ def run(args):
             "history": [_history_record(item)
                         for item in result.generation.history],
         },
-        "timings_s": {
+        "performance_measurement": (
+            "enabled" if record_performance else "disabled"),
+        "timings_s": ({
             "hmatrix_build": hmatrix_done-started,
             "native_field_rows": rows_done-hmatrix_done,
             "initial_exact_solve": initial_done-rows_done,
             "optimization": finished-initial_done,
             "total": finished-started,
-        },
-        "peak_working_set_bytes": _peak_working_set_bytes(),
+        } if record_performance else None),
+        "peak_working_set_bytes": (
+            _peak_working_set_bytes() if record_performance else None),
         "gates": gates,
     }
     output = Path(args.output)
@@ -241,15 +257,19 @@ def parse_args(argv=None):
     parser.add_argument("--hmatrix-eta", type=float, default=2.0)
     parser.add_argument("--leaf-size", type=int, default=64)
     parser.add_argument("--solve-tolerance", type=float, default=1.0e-7)
+    parser.add_argument("--proposal-solve-tolerance", type=float,
+                        default=1.0e-5)
     parser.add_argument("--solve-max-iterations", type=int, default=2000)
     parser.add_argument("--move-fraction", type=float, default=0.05)
     parser.add_argument("--maximum-move-fraction", type=float, default=0.20)
     parser.add_argument("--proposal-adjoint-count", type=int, default=6)
     parser.add_argument("--exact-candidate-limit", type=int, default=64)
+    parser.add_argument("--no-record-performance", action="store_true")
     args = parser.parse_args(argv)
     if (len(args.energies) < 2 or args.nx < 2 or args.ny < 2 or args.nz < 1
             or args.segments < 16 or args.iterations < 1
-            or args.threads < 1 or args.mu_r <= 1.0):
+            or args.threads < 1 or args.mu_r <= 1.0
+            or not 0.0 < args.proposal_solve_tolerance < 1.0):
         parser.error("invalid FFAG HDiv-MMM PoC settings")
     return args
 
