@@ -1,5 +1,5 @@
 classdef Study < handle
-    %STUDY Table-backed Optuna-style experiment database.
+    %STUDY Table-backed implementation of a verified Optuna 4.9 subset.
 
     properties (SetAccess=private)
         Name (1,1) string
@@ -8,14 +8,11 @@ classdef Study < handle
         Sampler
         Pruner
         AutoSave (1,1) logical = true
-        TrialTable table
-        ParamTable table
         IntermediateTable table
         UserAttrTable table
         SystemAttrTable table
         ConstraintTable table
         ConstraintCountTable table
-        ObjectiveTable table
         SamplerStateTable table
         QueueParamTable table
         ProgressFcn = []
@@ -24,10 +21,44 @@ classdef Study < handle
         MetricNames string = strings(1,0)
     end
 
+    properties (Dependent, SetAccess=private)
+        % Public compatibility views.  The optimizer's hot path uses the
+        % column stores below and materializes these tables only on demand.
+        TrialTable
+        ParamTable
+        ObjectiveTable
+    end
+
     properties (Access=private)
         NextTrialNumber (1,1) double = 0
         StopRequested (1,1) logical = false
         InOptimize (1,1) logical = false
+        TrialNumberData double = zeros(0,1)
+        TrialStateData string = strings(0,1)
+        TrialValueData double = zeros(0,1)
+        TrialStartTimeData
+        TrialEndTimeData
+        TrialDurationData double = zeros(0,1)
+        TrialParamsData cell = cell(0,1)
+        TrialIntermediateData cell = cell(0,1)
+        TrialErrorData string = strings(0,1)
+        ParamTrialNumberData double = zeros(0,1)
+        ParamNameData string = strings(0,1)
+        ParamKindData string = strings(0,1)
+        ParamValueNumericData double = zeros(0,1)
+        ParamValueTextData string = strings(0,1)
+        ParamDistributionData string = strings(0,1)
+        ObjectiveTrialNumberData double = zeros(0,1)
+        ObjectiveIndexData double = zeros(0,1)
+        ObjectiveValueData double = zeros(0,1)
+        TrialTableCache = table()
+        ParamTableCache = table()
+        ObjectiveTableCache = table()
+        TrialTableDirty (1,1) logical = true
+        ParamTableDirty (1,1) logical = true
+        ObjectiveTableDirty (1,1) logical = true
+        SamplerHasBeforeTrial (1,1) logical = false
+        SamplerHasAfterTrial (1,1) logical = false
     end
 
     properties (Constant, Access=private)
@@ -38,16 +69,20 @@ classdef Study < handle
     methods
         function obj = Study(options)
             arguments
-                options.Name (1,1) string = "radia-study"
+                options.Name (1,1) string = ""
                 options.StoragePath (1,1) string = ""
-                options.Directions string = "minimize"
+                options.Directions = "minimize"
                 options.Sampler = []
                 options.Pruner = []
                 options.AutoSave (1,1) logical = true
                 options.ProgressFcn = []
             end
             obj.Name = options.Name;
-            obj.Directions = options.Directions;
+            if strlength(obj.Name) == 0
+                obj.Name = obj.generateStudyName();
+            end
+            obj.Directions = ...
+                radia.optuna.StudyDirection.toStorage(options.Directions);
             if isempty(obj.Directions) || any(~ismember(obj.Directions, ["minimize", "maximize"]))
                 error("radia:optuna:Direction", ...
                     "Directions must contain only 'minimize' or 'maximize'.");
@@ -64,71 +99,130 @@ classdef Study < handle
             if isempty(obj.Sampler)
                 if isscalar(obj.Directions)
                     obj.Sampler = radia.optuna.TPESampler( ...
-                        Seed=0, NStartupTrials=10);
+                        NStartupTrials=10);
                 else
-                    obj.Sampler = radia.optuna.MOTPESampler( ...
-                        Seed=0, NStartupTrials=20);
+                    % Optuna 4.9 selects NSGA-II for a multi-objective
+                    % study when no sampler is supplied.
+                    obj.Sampler = radia.optuna.NSGAIISampler( ...
+                        PopulationSize=50);
                 end
             end
             if isempty(obj.Pruner)
                 obj.Pruner = radia.optuna.MedianPruner();
             end
+            obj.SamplerHasBeforeTrial=ismethod(obj.Sampler,"beforeTrial");
+            obj.SamplerHasAfterTrial=ismethod(obj.Sampler,"afterTrial");
             obj.initializeTables();
             if strlength(obj.StoragePath) > 0 && ...
                     (isfile(obj.StoragePath) || isfile(obj.backupStoragePath()))
                 obj.loadState();
+            elseif strlength(obj.StoragePath) > 0
+                % Upstream create_study registers even an empty study in
+                % its storage immediately.
+                obj.persist();
             end
         end
 
-        function trial = ask(obj)
-            waiting=find(obj.TrialTable.State=="WAITING",1);
+        function trial = ask(obj, fixedDistributions)
+            if nargin < 2
+                fixedDistributions = struct();
+            end
+            if ~isstruct(fixedDistributions) || ~isscalar(fixedDistributions)
+                error("radia:optuna:FixedDistributions", ...
+                    "fixedDistributions must be a scalar struct of distributions.");
+            end
+            waiting=find(obj.TrialStateData=="WAITING",1);
             if isempty(waiting)
                 trial = radia.optuna.Trial(obj, obj.NextTrialNumber);
                 obj.NextTrialNumber = obj.NextTrialNumber + 1;
-                obj.TrialTable(end+1,:) = {trial.Number, "RUNNING", NaN, ...
-                    trial.StartTime, NaT, NaN, {trial.Params}, ...
-                    {trial.IntermediateValues}, ""};
+                obj.appendTrialRecord(trial.Number,"RUNNING",NaN, ...
+                    trial.startTimeSerial(),NaN,NaN, ...
+                    trial.Params,trial.IntermediateValues,"");
             else
-                number=obj.TrialTable.TrialNumber(waiting);
+                number=obj.TrialNumberData(waiting);
                 trial=radia.optuna.Trial(obj,number);
+                claimedAt=trial.startTimeSerial();
+                trial.restoreSnapshot(obj.freezeTrial(number));
+                trial.markRunning(claimedAt);
                 rows=obj.QueueParamTable.TrialNumber==number;
                 queuedParams=obj.QueueParamTable(rows,:);
                 trial.setFixedParameters(queuedParams.Name,queuedParams.Value);
-                userRows=obj.UserAttrTable.TrialNumber==number;
-                for index=find(userRows)'
-                    trial.setUserAttr(obj.UserAttrTable.Name(index), ...
-                        jsondecode(obj.UserAttrTable.ValueJSON(index)));
-                end
-                obj.TrialTable.State(waiting)="RUNNING";
-                obj.TrialTable.StartTime(waiting)=trial.StartTime;
-                obj.TrialTable.EndTime(waiting)=NaT;
-                obj.TrialTable.Duration_s(waiting)=NaN;
-                obj.TrialTable.ErrorMessage(waiting)="";
+                obj.TrialStateData(waiting)="RUNNING";
+                obj.TrialStartTimeData(waiting)=trial.startTimeSerial();
+                obj.TrialEndTimeData(waiting)=NaN;
+                obj.TrialDurationData(waiting)=NaN;
+                obj.TrialErrorData(waiting)="";
+                obj.TrialTableDirty=true;
             end
-            if ismethod(obj.Sampler, "beforeTrial")
+            if obj.SamplerHasBeforeTrial
                 obj.Sampler.beforeTrial(obj, trial);
             end
-            obj.updateTrialSnapshot(trial);
-            obj.persist();
-            obj.reportProgress("TRIAL_STARTED", trial);
+            if ~isempty(fieldnames(fixedDistributions))
+                obj.suggestFixedDistributions(trial, fixedDistributions);
+            end
+            if ~isempty(waiting) || ~isempty(fieldnames(fixedDistributions))
+                obj.updateTrialSnapshot(trial);
+            end
+            if obj.AutoSave && strlength(obj.StoragePath)>0
+                obj.save();
+            end
+            if ~isempty(obj.ProgressFcn)
+                obj.reportProgress("TRIAL_STARTED", trial);
+            end
         end
 
-        function tell(obj, trial, value, options)
+        function frozen = tell(obj, trial, value, options)
             arguments
                 obj
-                trial (1,1) radia.optuna.Trial
-                value double
+                trial
+                value double = double.empty(1,0)
+                options.State = string.empty
                 options.SkipIfFinished (1,1) logical = false
             end
+            trial=obj.resolveTrial(trial);
             if obj.skipFinishedTrial(trial, options.SkipIfFinished)
+                if nargout>0
+                    frozen=obj.freezeTrial(trial.Number);
+                end
                 return
             end
-            value = reshape(double(value), 1, []);
-            if numel(value) ~= numel(obj.Directions) || any(~isfinite(value))
-                error("radia:optuna:Value", ...
-                    "Trial value must contain one finite value per direction.");
+            if isempty(options.State)
+                state="";
+            else
+                state=radia.optuna.TrialState.toStorage(options.State);
             end
-            obj.finishTrial(trial, "COMPLETE", value, "");
+            if ~ismember(state, ["", "COMPLETE", "PRUNED", "FAIL"])
+                error("radia:optuna:TrialState", ...
+                    "tell state must be COMPLETE, PRUNED, FAIL, or empty.");
+            end
+            value = reshape(double(value), 1, []);
+            if state == ""
+                if isempty(value) || any(isnan(value))
+                    warning("radia:optuna:InvalidObjectiveValue", ...
+                        "The objective value is missing or NaN; the trial is marked FAIL.");
+                    state = "FAIL";
+                else
+                    state = "COMPLETE";
+                end
+            end
+            if state == "COMPLETE"
+                if numel(value) ~= numel(obj.Directions) || any(isnan(value))
+                    error("radia:optuna:Value", ...
+                        "A COMPLETE trial requires one non-NaN value per direction.");
+                end
+            elseif ~isempty(value)
+                error("radia:optuna:Value", ...
+                    "Values cannot be specified for a PRUNED or FAIL trial.");
+            elseif state == "PRUNED" && ~isempty(trial.IntermediateValues)
+                ordered = sortrows(trial.IntermediateValues, "Step");
+                value = ordered.Value(end);
+            else
+                value = NaN;
+            end
+            obj.finishTrial(trial, state, value, "");
+            if nargout>0
+                frozen=obj.freezeTrial(trial.Number);
+            end
         end
 
         function fail(obj, trial, message, options)
@@ -156,9 +250,9 @@ classdef Study < handle
             end
             number=obj.NextTrialNumber;
             obj.NextTrialNumber=number+1;
-            notATime=datetime(NaT,"TimeZone","local");
-            obj.TrialTable(end+1,:)={number,"WAITING",NaN,notATime, ...
-                notATime,NaN,{struct()},{table()},""};
+            notATime=NaN;
+            obj.appendTrialRecord(number,"WAITING",NaN,notATime, ...
+                notATime,NaN,struct(),table(),"");
             names=string(fieldnames(params));
             for index=1:numel(names)
                 value=params.(names(index));
@@ -217,18 +311,26 @@ classdef Study < handle
                         obj.tell(trial, value);
                     end
                 catch exception
-                    if trial.State == "RUNNING"
-                        obj.fail(trial, exception.message);
-                    end
-                    caught=any(options.Catch==string(exception.identifier)) || ...
-                        any(options.Catch=="*");
-                    if ~caught
-                        rethrow(exception);
+                    if exception.identifier == "radia:optuna:TrialPruned"
+                        if trial.State == "RUNNING"
+                            obj.tell(trial, State="PRUNED");
+                        end
+                    else
+                        if trial.State == "RUNNING"
+                            obj.fail(trial, exception.message);
+                        end
+                        caught=any(options.Catch==string(exception.identifier)) || ...
+                            any(options.Catch=="*");
+                        if ~caught
+                            rethrow(exception);
+                        end
                     end
                 end
-                frozen=obj.freezeTrial(trial.Number);
-                for callback=callbacks
-                    callback{1}(obj,frozen);
+                if ~isempty(callbacks)
+                    frozen=obj.freezeTrial(trial.Number);
+                    for callback=callbacks
+                        callback{1}(obj,frozen);
+                    end
                 end
             end
             results = obj.TrialTable;
@@ -361,7 +463,7 @@ classdef Study < handle
                     "Use paretoFront() for a multi-objective study.");
             end
             complete = obj.TrialTable.State == "COMPLETE" & ...
-                isfinite(obj.TrialTable.Value);
+                ~isnan(obj.TrialTable.Value);
             if ~any(complete)
                 result = obj.TrialTable([],:);
                 return;
@@ -450,7 +552,7 @@ classdef Study < handle
                     values(k, objectiveRows.ObjectiveIndex(j)) = objectiveRows.Value(j);
                 end
             end
-            valid = all(isfinite(values),2);
+            valid = all(~isnan(values),2);
             trialNumbers = trialNumbers(valid); values = values(valid,:);
             if isempty(trialNumbers)
                 result = obj.emptyParetoFront();
@@ -484,7 +586,12 @@ classdef Study < handle
         end
 
         function result = best_trial(obj)
-            result = obj.bestTrial();
+            best = obj.bestTrial();
+            if isempty(best)
+                error("radia:optuna:NoCompletedTrials", ...
+                    "No trials are completed yet.");
+            end
+            result = obj.freezeTrial(best.TrialNumber(1));
         end
 
         function value = best_value(obj)
@@ -500,7 +607,8 @@ classdef Study < handle
         end
 
         function result = best_trials(obj)
-            result=obj.paretoFront();
+            front=obj.paretoFront();
+            result=obj.freezeTrials(front.TrialNumber);
         end
 
         function result = trials_dataframe(obj)
@@ -512,15 +620,16 @@ classdef Study < handle
                 error("radia:optuna:MultiObjectiveDirection", ...
                     "Use Directions for a multi-objective study.");
             end
-            value=obj.Directions(1);
+            value=radia.optuna.StudyDirection.from(obj.Directions(1));
         end
 
         function result = get_trials(obj, states)
             if nargin < 2
-                result = obj.trials();
+                rows = obj.TrialTable;
             else
-                result = obj.trials(states);
+                rows = obj.trials(states);
             end
+            result=obj.freezeTrials(rows.TrialNumber);
         end
 
         function values = intermediateValuesAtStep(obj, step)
@@ -542,9 +651,9 @@ classdef Study < handle
                 timeoutSeconds (1,1) double {mustBeFinite,mustBeNonnegative}
                 options.Message (1,1) string = ""
             end
-            nowTime = datetime("now", "TimeZone", "local");
-            ages = seconds(nowTime - obj.TrialTable.StartTime);
-            rows = obj.TrialTable.State == "RUNNING" & ...
+            nowTime = now; %#ok<TNOW1> hot-path serial timestamp
+            ages = (nowTime-obj.TrialStartTimeData)*86400;
+            rows = obj.TrialStateData == "RUNNING" & ...
                 isfinite(ages) & ages >= timeoutSeconds;
             if ~any(rows)
                 recovered = obj.TrialTable([],:);
@@ -554,14 +663,18 @@ classdef Study < handle
             if strlength(message) == 0
                 message = "Recovered stale RUNNING trial after timeout.";
             end
-            trialNumbers = obj.TrialTable.TrialNumber(rows);
-            obj.TrialTable.State(rows) = "FAIL";
-            obj.TrialTable.Value(rows) = NaN;
-            obj.TrialTable.EndTime(rows) = nowTime;
-            obj.TrialTable.Duration_s(rows) = ages(rows);
-            obj.TrialTable.ErrorMessage(rows) = message;
-            obj.ObjectiveTable(ismember( ...
-                obj.ObjectiveTable.TrialNumber, trialNumbers), :) = [];
+            trialNumbers = obj.TrialNumberData(rows);
+            obj.TrialStateData(rows) = "FAIL";
+            obj.TrialValueData(rows) = NaN;
+            obj.TrialEndTimeData(rows) = nowTime;
+            obj.TrialDurationData(rows) = ages(rows);
+            obj.TrialErrorData(rows) = message;
+            keep=~ismember(obj.ObjectiveTrialNumberData,trialNumbers);
+            obj.ObjectiveTrialNumberData=obj.ObjectiveTrialNumberData(keep);
+            obj.ObjectiveIndexData=obj.ObjectiveIndexData(keep);
+            obj.ObjectiveValueData=obj.ObjectiveValueData(keep);
+            obj.TrialTableDirty=true;
+            obj.ObjectiveTableDirty=true;
             obj.persist();
             recovered = obj.TrialTable(rows,:);
         end
@@ -614,7 +727,183 @@ classdef Study < handle
         end
     end
 
+    methods
+        function value=get.TrialTable(obj)
+            if obj.TrialTableDirty
+                value=table(obj.TrialNumberData,obj.TrialStateData, ...
+                    obj.TrialValueData,obj.serialDatetimes(obj.TrialStartTimeData), ...
+                    obj.serialDatetimes(obj.TrialEndTimeData),obj.TrialDurationData, ...
+                    obj.TrialParamsData,obj.TrialIntermediateData, ...
+                    obj.TrialErrorData, ...
+                    'VariableNames',{'TrialNumber','State','Value', ...
+                    'StartTime','EndTime','Duration_s','Params', ...
+                    'IntermediateValues','ErrorMessage'});
+                obj.TrialTableCache=value;
+                obj.TrialTableDirty=false;
+            else
+                value=obj.TrialTableCache;
+            end
+        end
+
+        function set.TrialTable(obj,value)
+            obj.TrialNumberData=reshape(double(value.TrialNumber),[],1);
+            obj.TrialStateData=reshape(string(value.State),[],1);
+            obj.TrialValueData=reshape(double(value.Value),[],1);
+            obj.TrialStartTimeData=reshape(datenum(value.StartTime),[],1); %#ok<DATNM>
+            obj.TrialEndTimeData=reshape(datenum(value.EndTime),[],1); %#ok<DATNM>
+            obj.TrialDurationData=reshape(double(value.Duration_s),[],1);
+            obj.TrialParamsData=reshape(value.Params,[],1);
+            obj.TrialIntermediateData=reshape(value.IntermediateValues,[],1);
+            obj.TrialErrorData=reshape(string(value.ErrorMessage),[],1);
+            obj.TrialTableCache=value;
+            obj.TrialTableDirty=false;
+        end
+
+        function value=get.ParamTable(obj)
+            if obj.ParamTableDirty
+                value=table(obj.ParamTrialNumberData,obj.ParamNameData, ...
+                    obj.ParamKindData,obj.ParamValueNumericData, ...
+                    obj.ParamValueTextData,obj.ParamDistributionData, ...
+                    'VariableNames',{'TrialNumber','Name','Kind', ...
+                    'ValueNumeric','ValueText','Distribution'});
+                obj.ParamTableCache=value;
+                obj.ParamTableDirty=false;
+            else
+                value=obj.ParamTableCache;
+            end
+        end
+
+        function set.ParamTable(obj,value)
+            obj.ParamTrialNumberData=reshape(double(value.TrialNumber),[],1);
+            obj.ParamNameData=reshape(string(value.Name),[],1);
+            obj.ParamKindData=reshape(string(value.Kind),[],1);
+            obj.ParamValueNumericData=reshape(double(value.ValueNumeric),[],1);
+            obj.ParamValueTextData=reshape(string(value.ValueText),[],1);
+            obj.ParamDistributionData=reshape(string(value.Distribution),[],1);
+            obj.ParamTableCache=value;
+            obj.ParamTableDirty=false;
+        end
+
+        function value=get.ObjectiveTable(obj)
+            if obj.ObjectiveTableDirty
+                value=table(obj.ObjectiveTrialNumberData, ...
+                    obj.ObjectiveIndexData,obj.ObjectiveValueData, ...
+                    'VariableNames',{'TrialNumber','ObjectiveIndex','Value'});
+                obj.ObjectiveTableCache=value;
+                obj.ObjectiveTableDirty=false;
+            else
+                value=obj.ObjectiveTableCache;
+            end
+        end
+
+        function set.ObjectiveTable(obj,value)
+            obj.ObjectiveTrialNumberData=reshape(double(value.TrialNumber),[],1);
+            obj.ObjectiveIndexData=reshape(double(value.ObjectiveIndex),[],1);
+            obj.ObjectiveValueData=reshape(double(value.Value),[],1);
+            obj.ObjectiveTableCache=value;
+            obj.ObjectiveTableDirty=false;
+        end
+
+    end
+
     methods (Hidden=true)
+
+        function data=trialData(obj)
+            data=struct('TrialNumber',obj.TrialNumberData, ...
+                'State',obj.TrialStateData,'Value',obj.TrialValueData, ...
+                'StartTime',obj.TrialStartTimeData, ...
+                'EndTime',obj.TrialEndTimeData, ...
+                'Duration_s',obj.TrialDurationData, ...
+                'Params',{obj.TrialParamsData}, ...
+                'IntermediateValues',{obj.TrialIntermediateData}, ...
+                'ErrorMessage',obj.TrialErrorData);
+        end
+
+        function data=parameterData(obj)
+            data=struct('TrialNumber',obj.ParamTrialNumberData, ...
+                'Name',obj.ParamNameData,'Kind',obj.ParamKindData, ...
+                'ValueNumeric',obj.ParamValueNumericData, ...
+                'ValueText',obj.ParamValueTextData, ...
+                'Distribution',obj.ParamDistributionData);
+        end
+
+        function data=objectiveData(obj)
+            data=struct('TrialNumber',obj.ObjectiveTrialNumberData, ...
+                'ObjectiveIndex',obj.ObjectiveIndexData, ...
+                'Value',obj.ObjectiveValueData);
+        end
+
+        function appendTrialRecord(obj,number,state,value,startTime, ...
+                endTime,duration,params,intermediate,errorMessage)
+            row=numel(obj.TrialNumberData)+1;
+            obj.TrialNumberData(row,1)=double(number);
+            obj.TrialStateData(row,1)=string(state);
+            obj.TrialValueData(row,1)=double(value);
+            obj.TrialStartTimeData(row,1)=double(startTime);
+            obj.TrialEndTimeData(row,1)=double(endTime);
+            obj.TrialDurationData(row,1)=double(duration);
+            obj.TrialParamsData{row,1}=params;
+            obj.TrialIntermediateData{row,1}=intermediate;
+            obj.TrialErrorData(row,1)=string(errorMessage);
+            obj.TrialTableDirty=true;
+        end
+
+        function row=trialRow(obj,number)
+            candidate=double(number)+1;
+            if candidate>=1 && candidate<=numel(obj.TrialNumberData) && ...
+                    obj.TrialNumberData(candidate)==number
+                row=candidate;
+            else
+                row=find(obj.TrialNumberData==number);
+            end
+        end
+
+        function value=serialDatetimes(~,serial)
+            value=datetime(serial,'ConvertFrom','datenum','TimeZone','local');
+        end
+
+        function name = generateStudyName(~)
+            % Match Optuna's anonymous-study naming shape.
+            try
+                identifier = string(java.util.UUID.randomUUID());
+            catch
+                temporary = string(tempname("C:\temp"));
+                identifier = extractAfter(temporary, "C:\temp\");
+            end
+            name = "no-name-" + identifier;
+        end
+
+        function suggestFixedDistributions(~, trial, distributions)
+            names = string(fieldnames(distributions));
+            for index = 1:numel(names)
+                name = names(index);
+                distribution = distributions.(name);
+                if ~isstruct(distribution) || ~isscalar(distribution) || ...
+                        ~isfield(distribution, "kind")
+                    error("radia:optuna:FixedDistributions", ...
+                        "Distribution '%s' is not a Radia Optuna distribution.", ...
+                        name);
+                end
+                switch string(distribution.kind)
+                    case "float"
+                        trial.suggest_float(name, distribution.low, ...
+                            distribution.high, Log=distribution.log, ...
+                            Step=distribution.step);
+                    case "integer"
+                        trial.suggest_int(name, distribution.low, ...
+                            distribution.high, Step=distribution.step, ...
+                            Log=distribution.log);
+                    case "categorical"
+                        trial.suggest_categorical(name, ...
+                            distribution.choices);
+                    otherwise
+                        error("radia:optuna:FixedDistributions", ...
+                            "Unsupported distribution kind '%s'.", ...
+                            string(distribution.kind));
+                end
+            end
+        end
+
         function stopWhenOptimizing(obj)
             if obj.InOptimize
                 obj.StopRequested=true;
@@ -622,11 +911,28 @@ classdef Study < handle
         end
 
         function initializeTables(obj)
-            obj.TrialTable = table('Size', [0, 9], ...
+            persistent templates
+            if ~isempty(templates)
+                obj.TrialTable=templates.TrialTable;
+                obj.ParamTable=templates.ParamTable;
+                obj.IntermediateTable=templates.IntermediateTable;
+                obj.UserAttrTable=templates.UserAttrTable;
+                obj.SystemAttrTable=templates.SystemAttrTable;
+                obj.ConstraintTable=templates.ConstraintTable;
+                obj.ConstraintCountTable=templates.ConstraintCountTable;
+                obj.ObjectiveTable=templates.ObjectiveTable;
+                obj.SamplerStateTable=templates.SamplerStateTable;
+                obj.QueueParamTable=templates.QueueParamTable;
+                return
+            end
+            trialTable = table('Size', [0, 9], ...
                 'VariableTypes', {'double','string','double','datetime','datetime', ...
                 'double','cell','cell','string'}, ...
                 'VariableNames', {'TrialNumber','State','Value','StartTime','EndTime', ...
                 'Duration_s','Params','IntermediateValues','ErrorMessage'});
+            trialTable.StartTime.TimeZone = "local";
+            trialTable.EndTime.TimeZone = "local";
+            obj.TrialTable = trialTable;
             obj.ParamTable = table('Size', [0, 6], ...
                 'VariableTypes', {'double','string','string','double','string','string'}, ...
                 'VariableNames', {'TrialNumber','Name','Kind','ValueNumeric','ValueText','Distribution'});
@@ -656,10 +962,18 @@ classdef Study < handle
             obj.QueueParamTable=table('Size',[0,3], ...
                 'VariableTypes',{'double','string','cell'}, ...
                 'VariableNames',{'TrialNumber','Name','Value'});
-            obj.TrialTable.StartTime.TimeZone = "local";
-            obj.TrialTable.EndTime.TimeZone = "local";
             obj.IntermediateTable.Timestamp.TimeZone = "local";
             obj.SamplerStateTable.Timestamp.TimeZone = "local";
+            templates=struct('TrialTable',obj.TrialTable, ...
+                'ParamTable',obj.ParamTable, ...
+                'IntermediateTable',obj.IntermediateTable, ...
+                'UserAttrTable',obj.UserAttrTable, ...
+                'SystemAttrTable',obj.SystemAttrTable, ...
+                'ConstraintTable',obj.ConstraintTable, ...
+                'ConstraintCountTable',obj.ConstraintCountTable, ...
+                'ObjectiveTable',obj.ObjectiveTable, ...
+                'SamplerStateTable',obj.SamplerStateTable, ...
+                'QueueParamTable',obj.QueueParamTable);
         end
 
         function loadState(obj)
@@ -734,7 +1048,7 @@ classdef Study < handle
             if isfield(data, "ObjectiveTable")
                 obj.ObjectiveTable = data.ObjectiveTable;
             else
-                complete = obj.TrialTable.State == "COMPLETE" & isfinite(obj.TrialTable.Value);
+                complete = obj.TrialTable.State == "COMPLETE" & ~isnan(obj.TrialTable.Value);
                 obj.ObjectiveTable = table(obj.TrialTable.TrialNumber(complete), ...
                     ones(sum(complete),1), obj.TrialTable.Value(complete), ...
                     'VariableNames',{'TrialNumber','ObjectiveIndex','Value'});
@@ -748,29 +1062,28 @@ classdef Study < handle
         end
 
         function frozen = freezeTrial(obj,trialNumber)
-            row=obj.TrialTable.TrialNumber==trialNumber;
-            if sum(row)~=1
+            row=obj.trialRow(trialNumber);
+            if numel(row)~=1
                 error("radia:optuna:UnknownTrial", ...
                     "Trial %d does not identify exactly one row.",trialNumber);
             end
-            selected=obj.TrialTable(row,:);
             values=NaN;
-            objectiveRows=obj.ObjectiveTable.TrialNumber==trialNumber;
+            objectiveRows=obj.ObjectiveTrialNumberData==trialNumber;
             if any(objectiveRows)
-                objectives=sortrows(obj.ObjectiveTable(objectiveRows,:), ...
-                    "ObjectiveIndex");
-                values=reshape(objectives.Value,1,[]);
-            elseif isfinite(selected.Value)
-                values=selected.Value;
+                [~,order]=sort(obj.ObjectiveIndexData(objectiveRows));
+                objectiveValues=obj.ObjectiveValueData(objectiveRows);
+                values=reshape(objectiveValues(order),1,[]);
+            elseif ~isnan(obj.TrialValueData(row))
+                values=obj.TrialValueData(row);
             end
             distributions=struct();
-            parameterRows=find(obj.ParamTable.TrialNumber==trialNumber)';
+            parameterRows=find(obj.ParamTrialNumberData==trialNumber)';
             for index=parameterRows
-                key=matlab.lang.makeValidName(obj.ParamTable.Name(index));
+                key=matlab.lang.makeValidName(obj.ParamNameData(index));
                 distributions.(key)= ...
                     radia.optuna.internal.DistributionCodec.decode( ...
-                    obj.ParamTable.Kind(index), ...
-                    obj.ParamTable.Distribution(index));
+                    obj.ParamKindData(index), ...
+                    obj.ParamDistributionData(index));
             end
             userAttrs=obj.attributesForTrial(obj.UserAttrTable,trialNumber);
             systemAttrs=obj.attributesForTrial(obj.SystemAttrTable,trialNumber);
@@ -779,14 +1092,51 @@ classdef Study < handle
                 ["Step","Value","Timestamp"]);
             [constraintPresent,constraints]=obj.constraintRecord(trialNumber);
             frozen=radia.optuna.FrozenTrial(Number=trialNumber, ...
-                State=selected.State,Values=values,Params=selected.Params{1}, ...
+                State=obj.TrialStateData(row),Values=values, ...
+                Params=obj.TrialParamsData{row}, ...
                 Distributions=distributions, ...
                 IntermediateValues=intermediate,UserAttrs=userAttrs, ...
                 SystemAttrs=systemAttrs,Constraints=constraints, ...
                 ConstraintPresent=constraintPresent, ...
-                DatetimeStart=selected.StartTime, ...
-                DatetimeComplete=selected.EndTime, ...
-                ErrorMessage=selected.ErrorMessage);
+                DatetimeStart=obj.serialDatetimes(obj.TrialStartTimeData(row)), ...
+                DatetimeComplete=obj.serialDatetimes(obj.TrialEndTimeData(row)), ...
+                ErrorMessage=obj.TrialErrorData(row));
+        end
+
+        function frozen = freezeTrials(obj,trialNumbers)
+            trialNumbers=reshape(double(trialNumbers),[],1);
+            if isempty(trialNumbers)
+                frozen=radia.optuna.FrozenTrial.empty(0,1);
+                return
+            end
+            frozen(numel(trialNumbers),1)=obj.freezeTrial(trialNumbers(end));
+            for index=1:numel(trialNumbers)
+                frozen(index,1)=obj.freezeTrial(trialNumbers(index));
+            end
+        end
+
+        function trial=resolveTrial(obj,value)
+            if isa(value,"radia.optuna.Trial")
+                if ~isscalar(value)
+                    error("radia:optuna:Trial", ...
+                        "tell requires one Trial or one trial number.");
+                end
+                trial=value;
+                return
+            end
+            if ~(isnumeric(value) && isscalar(value) && isfinite(value) && ...
+                    value==floor(value) && value>=0)
+                error("radia:optuna:Trial", ...
+                    "tell requires one Trial or one nonnegative trial number.");
+            end
+            number=double(value);
+            rows=obj.trialRow(number);
+            if numel(rows)~=1
+                error("radia:optuna:UnknownTrial", ...
+                    "Trial %d does not identify exactly one row.",number);
+            end
+            trial=radia.optuna.Trial(obj,number);
+            trial.restoreSnapshot(obj.freezeTrial(number));
         end
 
         function addTrial(obj,frozen)
@@ -794,15 +1144,11 @@ classdef Study < handle
                 obj
                 frozen (1,1) radia.optuna.FrozenTrial
             end
-            if ismember(frozen.State,["RUNNING","WAITING"])
-                error("radia:optuna:AddTrialState", ...
-                    "addTrial requires a finished trial.");
-            end
             if frozen.State=="COMPLETE" && ...
                     (numel(frozen.Values)~=numel(obj.Directions) || ...
-                    any(~isfinite(frozen.Values)))
+                    any(isnan(frozen.Values)))
                 error("radia:optuna:AddTrialValue", ...
-                    "A COMPLETE trial must have one finite value per direction.");
+                    "A COMPLETE trial must have one non-NaN value per direction.");
             end
             names=string(fieldnames(frozen.Params));
             distributionNames=string(fieldnames(frozen.Distributions));
@@ -813,20 +1159,45 @@ classdef Study < handle
             number=obj.NextTrialNumber;
             obj.NextTrialNumber=number+1;
             startTime=frozen.DatetimeStart;
-            if isnat(startTime), startTime=datetime("now","TimeZone","local"); end
             endTime=frozen.DatetimeComplete;
-            if isnat(endTime), endTime=startTime; end
-            duration=seconds(endTime-startTime);
+            if frozen.State=="WAITING"
+                startTime=datetime(NaT,"TimeZone","local");
+                endTime=datetime(NaT,"TimeZone","local");
+                duration=NaN;
+            elseif frozen.State=="RUNNING"
+                if isnat(startTime)
+                    startTime=datetime("now","TimeZone","local");
+                elseif strlength(string(startTime.TimeZone))==0
+                    startTime.TimeZone="local";
+                end
+                endTime=datetime(NaT,"TimeZone","local");
+                duration=NaN;
+            else
+                if isnat(startTime)
+                    startTime=datetime("now","TimeZone","local");
+                elseif strlength(string(startTime.TimeZone))==0
+                    startTime.TimeZone="local";
+                end
+                if isnat(endTime), endTime=startTime; end
+                if strlength(string(endTime.TimeZone))==0
+                    endTime.TimeZone="local";
+                end
+                duration=seconds(endTime-startTime);
+            end
             scalarValue=NaN;
             if frozen.State=="COMPLETE", scalarValue=frozen.Values(1); end
-            obj.TrialTable(end+1,:)={number,frozen.State,scalarValue, ...
-                startTime,endTime,duration,{frozen.Params}, ...
-                {frozen.IntermediateValues},frozen.ErrorMessage};
+            startSerial=datenum(startTime); %#ok<DATNM>
+            endSerial=datenum(endTime); %#ok<DATNM>
+            obj.appendTrialRecord(number,frozen.State,scalarValue, ...
+                startSerial,endSerial,duration,frozen.Params, ...
+                frozen.IntermediateValues,frozen.ErrorMessage);
             if frozen.State=="COMPLETE"
-                obj.ObjectiveTable=[obj.ObjectiveTable;table( ...
-                    repmat(number,numel(frozen.Values),1), ...
-                    (1:numel(frozen.Values))',reshape(frozen.Values,[],1), ...
-                    'VariableNames',obj.ObjectiveTable.Properties.VariableNames)];
+                count=numel(frozen.Values);
+                obj.ObjectiveTrialNumberData(end+(1:count),1)=number;
+                obj.ObjectiveIndexData(end+(1:count),1)=(1:count)';
+                obj.ObjectiveValueData(end+(1:count),1)= ...
+                    reshape(frozen.Values,[],1);
+                obj.ObjectiveTableDirty=true;
             end
             for name=reshape(names,1,[])
                 distribution=frozen.Distributions.(name);
@@ -907,8 +1278,16 @@ classdef Study < handle
         end
 
         function recordParameter(obj, trial, name, kind, value, distribution)
-            rows = obj.ParamTable.TrialNumber == trial.Number & obj.ParamTable.Name == name;
-            obj.ParamTable(rows,:) = [];
+            rows = obj.ParamTrialNumberData == trial.Number & ...
+                obj.ParamNameData == name;
+            if any(rows)
+                obj.ParamTrialNumberData(rows)=[];
+                obj.ParamNameData(rows)=[];
+                obj.ParamKindData(rows)=[];
+                obj.ParamValueNumericData(rows)=[];
+                obj.ParamValueTextData(rows)=[];
+                obj.ParamDistributionData(rows)=[];
+            end
             numeric = NaN;
             text = "";
             if isnumeric(value) && isscalar(value)
@@ -916,15 +1295,29 @@ classdef Study < handle
             else
                 text = string(jsonencode(value));
             end
-            obj.ParamTable(end+1,:) = {trial.Number, name, kind, numeric, text, distribution};
-            obj.updateTrialSnapshot(trial);
-            obj.persist();
+            row=numel(obj.ParamTrialNumberData)+1;
+            obj.ParamTrialNumberData(row,1)=trial.Number;
+            obj.ParamNameData(row,1)=string(name);
+            obj.ParamKindData(row,1)=string(kind);
+            obj.ParamValueNumericData(row,1)=numeric;
+            obj.ParamValueTextData(row,1)=text;
+            obj.ParamDistributionData(row,1)=string(distribution);
+            obj.ParamTableDirty=true;
+            trialRow=obj.trialRow(trial.Number);
+            obj.TrialParamsData{trialRow}=trial.Params;
+            obj.TrialIntermediateData{trialRow}=trial.IntermediateValues;
+            obj.TrialTableDirty=true;
+            if obj.AutoSave && strlength(obj.StoragePath)>0
+                obj.save();
+            end
         end
 
         function recordIntermediate(obj, trial, value, step)
             rows = obj.IntermediateTable.TrialNumber == trial.Number & ...
                 obj.IntermediateTable.Step == step;
-            obj.IntermediateTable(rows,:) = [];
+            if any(rows)
+                obj.IntermediateTable(rows,:) = [];
+            end
             obj.IntermediateTable(end+1,:) = {trial.Number, step, value, ...
                 datetime("now", "TimeZone", "local")};
             obj.updateTrialSnapshot(trial);
@@ -934,7 +1327,9 @@ classdef Study < handle
         function recordUserAttribute(obj, trial, name, value)
             rows = obj.UserAttrTable.TrialNumber == trial.Number & ...
                 obj.UserAttrTable.Name == name;
-            obj.UserAttrTable(rows,:) = [];
+            if any(rows)
+                obj.UserAttrTable(rows,:) = [];
+            end
             obj.UserAttrTable(end+1,:) = {trial.Number, name, string(jsonencode(value))};
             obj.persist();
         end
@@ -942,7 +1337,9 @@ classdef Study < handle
         function recordSystemAttribute(obj,trial,name,value)
             rows=obj.SystemAttrTable.TrialNumber==trial.Number & ...
                 obj.SystemAttrTable.Name==name;
-            obj.SystemAttrTable(rows,:)=[];
+            if any(rows)
+                obj.SystemAttrTable(rows,:)=[];
+            end
             obj.SystemAttrTable(end+1,:)={trial.Number,name, ...
                 string(jsonencode(value))};
             obj.persist();
@@ -1022,13 +1419,13 @@ classdef Study < handle
 
         function finishTrial(obj, trial, state, value, message)
             obj.ensureTrialOwnership(trial);
-            rows = obj.TrialTable.TrialNumber == trial.Number;
-            if sum(rows) ~= 1
+            rows = obj.trialRow(trial.Number);
+            if numel(rows) ~= 1
                 error("radia:optuna:UnknownTrial", ...
                     "Trial %d does not identify exactly one row in this study.", ...
                     trial.Number);
             end
-            storedState = obj.TrialTable.State(rows);
+            storedState = obj.TrialStateData(rows);
             if trial.State ~= "RUNNING" || storedState ~= "RUNNING"
                 if trial.State ~= "RUNNING"
                     finishedState = trial.State;
@@ -1038,23 +1435,33 @@ classdef Study < handle
                 error("radia:optuna:TrialState", "Trial %d is already %s.", ...
                     trial.Number, finishedState);
             end
-            endTime = datetime("now", "TimeZone", "local");
+            endTime = now; %#ok<TNOW1> hot-path serial timestamp
             trial.markFinished(state, value, endTime, message);
-            elapsed = seconds(endTime - trial.StartTime);
-            obj.TrialTable.State(rows) = state;
-            obj.TrialTable.Value(rows) = value(1);
-            obj.ObjectiveTable(obj.ObjectiveTable.TrialNumber == trial.Number,:) = [];
+            elapsed = (endTime-trial.startTimeSerial())*86400;
+            objectiveRows=obj.ObjectiveTrialNumberData==trial.Number;
+            if any(objectiveRows)
+                obj.ObjectiveTrialNumberData(objectiveRows)=[];
+                obj.ObjectiveIndexData(objectiveRows)=[];
+                obj.ObjectiveValueData(objectiveRows)=[];
+            end
             if state == "COMPLETE"
                 values = reshape(double(value),[],1);
-                obj.ObjectiveTable = [obj.ObjectiveTable; table( ...
-                    repmat(trial.Number,numel(values),1), (1:numel(values))', values, ...
-                    'VariableNames',obj.ObjectiveTable.Properties.VariableNames)];
+                count=numel(values);
+                newRows=numel(obj.ObjectiveTrialNumberData)+(1:count);
+                obj.ObjectiveTrialNumberData(newRows,1)=trial.Number;
+                obj.ObjectiveIndexData(newRows,1)=(1:count)';
+                obj.ObjectiveValueData(newRows,1)=values;
             end
-            obj.TrialTable.EndTime(rows) = endTime;
-            obj.TrialTable.Duration_s(rows) = elapsed;
-            obj.TrialTable.ErrorMessage(rows) = message;
-            obj.updateTrialSnapshot(trial);
-            if ismethod(obj.Sampler, "afterTrial")
+            obj.ObjectiveTableDirty=true;
+            obj.TrialStateData(rows)=state;
+            obj.TrialValueData(rows)=value(1);
+            obj.TrialEndTimeData(rows)=endTime;
+            obj.TrialDurationData(rows)=elapsed;
+            obj.TrialErrorData(rows)=message;
+            obj.TrialParamsData{rows}=trial.Params;
+            obj.TrialIntermediateData{rows}=trial.IntermediateValues;
+            obj.TrialTableDirty=true;
+            if obj.SamplerHasAfterTrial
                 try
                     obj.Sampler.afterTrial(obj, trial);
                 catch exception
@@ -1064,14 +1471,19 @@ classdef Study < handle
                     rethrow(exception)
                 end
             end
-            obj.persist();
-            obj.reportProgress("TRIAL_FINISHED", trial);
+            if obj.AutoSave && strlength(obj.StoragePath)>0
+                obj.save();
+            end
+            if ~isempty(obj.ProgressFcn)
+                obj.reportProgress("TRIAL_FINISHED", trial);
+            end
         end
 
         function updateTrialSnapshot(obj, trial)
-            rows = obj.TrialTable.TrialNumber == trial.Number;
-            obj.TrialTable.Params(rows) = {trial.Params};
-            obj.TrialTable.IntermediateValues(rows) = {trial.IntermediateValues};
+            rows = obj.trialRow(trial.Number);
+            obj.TrialParamsData{rows}=trial.Params;
+            obj.TrialIntermediateData{rows}=trial.IntermediateValues;
+            obj.TrialTableDirty=true;
         end
 
         function persist(obj)
@@ -1110,13 +1522,13 @@ classdef Study < handle
 
         function skip = skipFinishedTrial(obj, trial, skipIfFinished)
             obj.ensureTrialOwnership(trial);
-            rows = obj.TrialTable.TrialNumber == trial.Number;
-            if sum(rows) ~= 1
+            rows = obj.trialRow(trial.Number);
+            if numel(rows) ~= 1
                 error("radia:optuna:UnknownTrial", ...
                     "Trial %d does not identify exactly one row in this study.", ...
                     trial.Number);
             end
-            storedState = obj.TrialTable.State(rows);
+            storedState = obj.TrialStateData(rows);
             finished = trial.State ~= "RUNNING" || storedState ~= "RUNNING";
             skip = finished && skipIfFinished;
             if finished && ~skip
@@ -1295,9 +1707,9 @@ classdef Study < handle
         function result=containsParameterSet(obj,params)
             result=false;
             target=orderfields(params);
-            for index=1:height(obj.TrialTable)
-                number=obj.TrialTable.TrialNumber(index);
-                if obj.TrialTable.State(index)=="WAITING"
+            for index=1:numel(obj.TrialNumberData)
+                number=obj.TrialNumberData(index);
+                if obj.TrialStateData(index)=="WAITING"
                     rows=obj.QueueParamTable.TrialNumber==number;
                     candidate=struct();
                     for row=find(rows)'
@@ -1305,7 +1717,7 @@ classdef Study < handle
                             obj.QueueParamTable.Value{row};
                     end
                 else
-                    candidate=obj.TrialTable.Params{index};
+                    candidate=obj.TrialParamsData{index};
                 end
                 if isequaln(orderfields(candidate),target)
                     result=true;
@@ -1356,9 +1768,15 @@ classdef Study < handle
             else
                 textValue=string(jsonencode(value));
             end
-            obj.ParamTable(end+1,:)={number,name,string(distribution.kind), ...
-                numeric,textValue, ...
-                radia.optuna.internal.DistributionCodec.encode(distribution)};
+            row=numel(obj.ParamTrialNumberData)+1;
+            obj.ParamTrialNumberData(row,1)=number;
+            obj.ParamNameData(row,1)=name;
+            obj.ParamKindData(row,1)=string(distribution.kind);
+            obj.ParamValueNumericData(row,1)=numeric;
+            obj.ParamValueTextData(row,1)=textValue;
+            obj.ParamDistributionData(row,1)= ...
+                radia.optuna.internal.DistributionCodec.encode(distribution);
+            obj.ParamTableDirty=true;
         end
 
         function target=appendImportedAttributes(~,target,number,attrs)

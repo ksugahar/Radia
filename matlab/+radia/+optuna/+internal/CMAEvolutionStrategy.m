@@ -94,7 +94,8 @@ classdef CMAEvolutionStrategy < handle
             obj.PSigma = zeros(1, dimension);
             obj.PC = zeros(1, dimension);
             obj.Bounds = double(bounds);
-            obj.Stream = RandStream("mt19937ar", "Seed", double(options.Seed));
+            obj.Stream = radia.optuna.internal.NumpyRandomState( ...
+                double(options.Seed));
             obj.MaxResampling = options.MaxResampling;
             obj.initializeCoefficients();
             obj.repairCovariance();
@@ -109,6 +110,11 @@ classdef CMAEvolutionStrategy < handle
                 end
             end
             point = min(max(point, obj.Bounds(:,1).'), obj.Bounds(:,2).');
+        end
+
+        function reseed(obj,seed)
+            %RESEED Match Optuna/cmaes per-trial optimizer re-seeding.
+            obj.Stream=radia.optuna.internal.NumpyRandomState(double(seed));
         end
 
         function tell(obj, points, fitness)

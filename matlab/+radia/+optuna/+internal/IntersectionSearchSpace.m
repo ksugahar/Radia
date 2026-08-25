@@ -7,6 +7,7 @@ classdef IntersectionSearchSpace
                 study (1,1) radia.optuna.Study
                 options.IncludePruned (1,1) logical = true
                 options.NumericOnly (1,1) logical = false
+                options.ExcludeSingle (1,1) logical = true
             end
             searchSpace = ...
                 radia.optuna.internal.IntersectionSearchSpace.empty();
@@ -52,9 +53,9 @@ classdef IntersectionSearchSpace
                         break
                     end
                 end
-                if ~compatible || ...
+                if ~compatible || (options.ExcludeSingle && ...
                         radia.optuna.internal.DistributionCodec.isSingle( ...
-                        distribution)
+                        distribution))
                     continue
                 end
                 if options.NumericOnly && distribution.kind == "categorical"

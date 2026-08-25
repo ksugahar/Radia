@@ -95,6 +95,8 @@ classdef ParzenEstimator
                 nChoices (1,1) double {mustBeInteger, mustBePositive}
                 options.PriorWeight (1,1) double = 1
                 options.ObservationWeights double = zeros(0, 1)
+                options.DistanceFcn = []
+                options.Choices = []
             end
             observedIndices = reshape(double(observedIndices), [], 1);
             if options.PriorWeight < 0 || ~isfinite(options.PriorWeight)
@@ -114,9 +116,40 @@ classdef ParzenEstimator
                 nKernels = n + 1;
                 probabilities = repmat(options.PriorWeight / nKernels, ...
                     nKernels, nChoices);
-                for index = 1:n
-                    probabilities(index, observedIndices(index)) = ...
-                        probabilities(index, observedIndices(index)) + 1;
+                if isempty(options.DistanceFcn)
+                    for index = 1:n
+                        probabilities(index, observedIndices(index)) = ...
+                            probabilities(index, observedIndices(index)) + 1;
+                    end
+                else
+                    if ~isa(options.DistanceFcn,"function_handle") || ...
+                            numel(options.Choices)~=nChoices
+                        error("radia:optuna:TPECategoricalDistance", ...
+                            "Categorical choices and distance function must be provided together.");
+                    end
+                    [usedIndices,~,reverseIndices]=unique(observedIndices);
+                    distances=zeros(numel(usedIndices),nChoices);
+                    for row=1:numel(usedIndices)
+                        first=radia.optuna.internal.DistributionCodec. ...
+                            choiceAt(options.Choices,usedIndices(row));
+                        for column=1:nChoices
+                            second=radia.optuna.internal.DistributionCodec. ...
+                                choiceAt(options.Choices,column);
+                            value=options.DistanceFcn(first,second);
+                            if ~(isnumeric(value) && isreal(value) && ...
+                                    isscalar(value))
+                                error("radia:optuna:TPECategoricalDistance", ...
+                                    "A categorical distance must return a real numeric scalar.");
+                            end
+                            distances(row,column)=double(value);
+                        end
+                    end
+                    maximum=max(distances,[],2);
+                    coefficient=log(nKernels/options.PriorWeight)* ...
+                        log(nChoices)/log(6);
+                    categoricalWeights=exp(-((distances./maximum).^2)* ...
+                        coefficient);
+                    probabilities(1:n,:)=categoricalWeights(reverseIndices,:);
                 end
                 rowSums = sum(probabilities, 2);
                 zeroRows = rowSums == 0;
@@ -136,7 +169,7 @@ classdef ParzenEstimator
         function values = sampleNumerical(estimator, stream, count)
             arguments
                 estimator (1,1) struct
-                stream (1,1) RandStream
+                stream
                 count (1,1) double {mustBeInteger, mustBePositive}
             end
             kernels = radia.optuna.internal.ParzenEstimator.sampleComponents( ...
@@ -194,7 +227,7 @@ classdef ParzenEstimator
         function values = sampleCategorical(estimator, stream, count)
             arguments
                 estimator (1,1) struct
-                stream (1,1) RandStream
+                stream
                 count (1,1) double {mustBeInteger, mustBePositive}
             end
             kernels = radia.optuna.internal.ParzenEstimator.sampleComponents( ...
@@ -235,15 +268,34 @@ classdef ParzenEstimator
             samples = reshape(double(samples), [], 1);
             if radia.optuna.internal.NativeKernels.has( ...
                     "optuna.parzen.log_pdf_numerical")
-                value = radia.internal.callMex( ...
+                value = radia.optuna.internal.NativeKernels.call( ...
                     "optuna.parzen.log_pdf_numerical", samples, ...
                     estimator.weights, estimator.mu, estimator.sigma, ...
                     estimator.internal_low, estimator.internal_high, ...
                     estimator.log, estimator.step);
                 return
             end
+            componentLogPdf = ...
+                radia.optuna.internal.ParzenEstimator. ...
+                componentLogPdfNumerical(estimator, samples);
+            weighted = componentLogPdf + ...
+                repmat(log(reshape(estimator.weights, 1, [])), ...
+                size(componentLogPdf, 1), 1);
+            value = radia.optuna.internal.ParzenEstimator.logSumExp(weighted);
+        end
+
+        function componentLogPdf = componentLogPdfNumerical(estimator, samples)
+            % Log density or probability mass for every mixture component.
+            % Joint multivariate TPE sums these values across dimensions
+            % before mixing, because Optuna shares one component index over
+            % the complete product distribution.
+            arguments
+                estimator (1,1) struct
+                samples double
+            end
             nSamples = numel(samples);
             nKernels = numel(estimator.weights);
+            samples = reshape(double(samples), [], 1);
             mu = reshape(estimator.mu, 1, nKernels);
             sigma = reshape(estimator.sigma, 1, nKernels);
             denominator = radia.optuna.internal.ParzenEstimator.logNormalMass( ...
@@ -272,13 +324,8 @@ classdef ParzenEstimator
                     log(sigma) - denominator;
             end
             if nSamples == 0
-                value = zeros(0, 1);
-                return
+                componentLogPdf = zeros(0, nKernels);
             end
-            weighted = componentLogPdf + ...
-                repmat(log(reshape(estimator.weights, 1, nKernels)), ...
-                nSamples, 1);
-            value = radia.optuna.internal.ParzenEstimator.logSumExp(weighted);
         end
 
         function value = logPdfCategorical(estimator, samples)
@@ -294,11 +341,27 @@ classdef ParzenEstimator
             end
             if radia.optuna.internal.NativeKernels.has( ...
                     "optuna.parzen.log_pdf_categorical")
-                value = radia.internal.callMex( ...
+                value = radia.optuna.internal.NativeKernels.call( ...
                     "optuna.parzen.log_pdf_categorical", samples, ...
                     estimator.weights, estimator.probabilities);
                 return
             end
+            componentLogPdf = ...
+                radia.optuna.internal.ParzenEstimator. ...
+                componentLogPdfCategorical(estimator, samples);
+            weighted = componentLogPdf + ...
+                repmat(log(reshape(estimator.weights, 1, [])), ...
+                size(componentLogPdf, 1), 1);
+            value = radia.optuna.internal.ParzenEstimator.logSumExp(weighted);
+        end
+
+        function componentLogPdf = componentLogPdfCategorical( ...
+                estimator, samples)
+            arguments
+                estimator (1,1) struct
+                samples double
+            end
+            samples = reshape(double(samples), [], 1);
             nSamples = numel(samples);
             nKernels = numel(estimator.weights);
             probabilities = zeros(nSamples, nKernels);
@@ -306,10 +369,7 @@ classdef ParzenEstimator
                 probabilities(index, :) = ...
                     estimator.probabilities(:, samples(index)).';
             end
-            weighted = log(max(probabilities, realmin)) + ...
-                repmat(log(reshape(estimator.weights, 1, nKernels)), ...
-                nSamples, 1);
-            value = radia.optuna.internal.ParzenEstimator.logSumExp(weighted);
+            componentLogPdf = log(max(probabilities, realmin));
         end
 
         function weights = defaultWeights(count)
@@ -324,6 +384,10 @@ classdef ParzenEstimator
                 rampCount = count - 25;
                 if rampCount == 0
                     ramp = zeros(0, 1);
+                elseif rampCount == 1
+                    % NumPy linspace(start, stop, 1) returns start, while
+                    % MATLAB linspace(start, stop, 1) returns stop.
+                    ramp = 1 / count;
                 else
                     ramp = linspace(1 / count, 1, rampCount).';
                 end

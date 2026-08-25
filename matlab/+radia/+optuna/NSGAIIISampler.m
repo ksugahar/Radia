@@ -1,4 +1,4 @@
-classdef NSGAIIISampler < handle
+classdef NSGAIIISampler < radia.optuna.BaseSampler
     %NSGAIIISAMPLER Constrained joint NSGA-III with reference-line niching.
     %   Child generation, dynamic-space fallback, generation caching, and
     %   constrained Pareto ranks are shared with NSGAIISampler. The elite
@@ -20,7 +20,7 @@ classdef NSGAIIISampler < handle
     methods
         function obj=NSGAIIISampler(options)
             arguments
-                options.Seed (1,1) double = 0
+                options.Seed double = double.empty(1,0)
                 options.PopulationSize (1,1) double ...
                     {mustBeInteger,mustBePositive} = 50
                 options.DividingParameter (1,1) double ...
@@ -47,11 +47,11 @@ classdef NSGAIIISampler < handle
                 error("radia:optuna:NSGAIIIReferencePoints", ...
                     "ReferencePoints must be finite, nonnegative, nonzero rows.");
             end
-            obj.Seed=double(options.Seed);
+            obj.Seed=radia.optuna.internal.resolveSeed(options.Seed);
             obj.PopulationSize=double(options.PopulationSize);
             obj.DividingParameter=double(options.DividingParameter);
             obj.ReferencePoints=referencePoints;
-            obj.Stream=RandStream("mt19937ar","Seed",obj.Seed);
+            obj.Stream=radia.optuna.internal.NumpyRandomState(obj.Seed);
             obj.Core=radia.optuna.NSGAIISampler( ...
                 Seed=obj.Seed,PopulationSize=obj.PopulationSize, ...
                 MutationProbability=options.MutationProbability, ...
@@ -128,7 +128,11 @@ classdef NSGAIIISampler < handle
                 front=find(rank==level);
                 remaining=obj.PopulationSize-numel(selected);
                 if remaining<=0, break, end
-                if numel(front)<=remaining
+                % Upstream runs reference-line preservation even when the
+                % cutoff front exactly fills the remaining population.  In
+                % addition to ordering the parents, that operation consumes
+                % the seeded RNG through its bucket shuffles.
+                if numel(front)<remaining
                     selected=[selected;front]; %#ok<AGROW>
                 else
                     cutoff=front;
@@ -193,24 +197,72 @@ classdef NSGAIIISampler < handle
             nicheCounts=accumarray(associations(selected),1, ...
                 [size(references,1),1]);
             chosen=zeros(0,1);
-            while numel(chosen)<count && ~isempty(available)
-                active=unique(associations(available));
-                minimum=min(nicheCounts(active));
-                tied=active(nicheCounts(active)==minimum);
-                reference=tied(randi(obj.Stream,numel(tied)));
-                local=available(associations(available)==reference);
-                if nicheCounts(reference)==0
-                    direction=references(reference,:);
-                    projection=(points(local,:)*direction')*direction;
-                    distance=vecnorm(points(local,:)-projection,2,2);
-                    [~,pick]=min(distance);
-                else
-                    pick=randi(obj.Stream,numel(local));
+            referenceCount=size(references,1);
+            borderline=cell(referenceCount,1);
+            borderlineShuffled=false(referenceCount,1);
+            for localIndex=1:numel(available)
+                populationIndex=available(localIndex);
+                reference=associations(populationIndex);
+                direction=references(reference,:);
+                projection=(points(populationIndex,:)*direction')*direction;
+                distance=norm(points(populationIndex,:)-projection);
+                borderline{reference}(end+1,:)=[distance,localIndex];
+            end
+
+            % Python defaultdict/list insertion order is the first
+            % appearance of a reference in the cutoff population.
+            activeReferences=unique(associations(available),"stable");
+            buckets=cell(max(count+1,2),1);
+            for reference=reshape(activeReferences,1,[])
+                bucket=nicheCounts(reference)+1;
+                if bucket>numel(buckets), buckets{bucket}=zeros(1,0); end
+                buckets{bucket}(end+1)=reference;
+            end
+
+            bucketCount=-1;
+            while numel(chosen)<count
+                bucketIndex=bucketCount+1;
+                if bucketIndex<1 || bucketIndex>numel(buckets) || ...
+                        isempty(buckets{bucketIndex})
+                    bucketCount=bucketCount+1;
+                    bucketIndex=bucketCount+1;
+                    if bucketIndex>numel(buckets)
+                        buckets{bucketIndex}=zeros(1,0);
+                    end
+                    order=randperm(obj.Stream,numel(buckets{bucketIndex}));
+                    buckets{bucketIndex}=buckets{bucketIndex}(order);
+                    continue
                 end
-                selectedIndex=local(pick);
-                chosen(end+1,1)=selectedIndex; %#ok<AGROW>
-                available(available==selectedIndex)=[];
-                nicheCounts(reference)=nicheCounts(reference)+1;
+
+                % list.pop() removes the last shuffled reference.
+                reference=buckets{bucketIndex}(end);
+                buckets{bucketIndex}(end)=[];
+                candidates=borderline{reference};
+                if bucketCount==0
+                    % sort(reverse=True); pop() chooses the smallest
+                    % (distance, original-population-index) tuple.
+                    [~,order]=sortrows(candidates,[1 2],"ascend");
+                    pick=order(1);
+                else
+                    if ~borderlineShuffled(reference)
+                        order=randperm(obj.Stream,size(candidates,1));
+                        candidates=candidates(order,:);
+                        borderline{reference}=candidates;
+                        borderlineShuffled(reference)=true;
+                    end
+                    pick=size(candidates,1);
+                end
+                localIndex=candidates(pick,2);
+                chosen(end+1,1)=available(localIndex); %#ok<AGROW>
+                candidates(pick,:)=[];
+                borderline{reference}=candidates;
+                if ~isempty(candidates)
+                    nextBucket=bucketCount+2;
+                    if nextBucket>numel(buckets)
+                        buckets{nextBucket}=zeros(1,0);
+                    end
+                    buckets{nextBucket}(end+1)=reference;
+                end
             end
         end
     end

@@ -1,4 +1,4 @@
-classdef MOTPESampler < handle
+classdef MOTPESampler < radia.optuna.BaseSampler
     %MOTPESAMPLER Multi-objective TPE with Optuna-style Parzen mixtures.
     %   Pareto rank and hypervolume contribution select and weight the
     %   below trials. Candidate generation and acquisition evaluation share
@@ -10,16 +10,20 @@ classdef MOTPESampler < handle
         NStartupTrials (1,1) double = 10
         Gamma (1,1) double = 0.1
         MaxGoodTrials (1,1) double = 25
+        GammaFcn = []
+        WeightsFcn = []
         NumberOfEIChoices (1,1) double = 24
         PriorWeight (1,1) double = 1
         ConsiderMagicClip (1,1) logical = true
         ConsiderEndpoints (1,1) logical = false
         ConstraintsFcn = []
+        CategoricalDistanceFcn = []
     end
 
     properties (Access=private)
         AttachedStudy = []
         Restored (1,1) logical = false
+        IndependentSampler
     end
 
     properties (Constant, Access=private)
@@ -30,18 +34,21 @@ classdef MOTPESampler < handle
     methods
         function obj = MOTPESampler(options)
             arguments
-                options.Seed (1,1) double = 0
+                options.Seed double = double.empty(1,0)
                 options.NStartupTrials (1,1) double ...
                     {mustBeInteger, mustBeNonnegative} = 10
                 options.Gamma (1,1) double = 0.1
                 options.MaxGoodTrials (1,1) double ...
                     {mustBeInteger, mustBePositive} = 25
+                options.GammaFcn = []
+                options.WeightsFcn = []
                 options.NumberOfEIChoices (1,1) double ...
                     {mustBeInteger, mustBePositive} = 24
                 options.PriorWeight (1,1) double = 1
                 options.ConsiderMagicClip (1,1) logical = true
                 options.ConsiderEndpoints (1,1) logical = false
                 options.ConstraintsFcn = []
+                options.CategoricalDistanceFcn = []
             end
             if options.Gamma <= 0 || options.Gamma > 1
                 error("radia:optuna:MOTPEGamma", ...
@@ -51,21 +58,38 @@ classdef MOTPESampler < handle
                 error("radia:optuna:TPEPriorWeight", ...
                     "PriorWeight must be finite and nonnegative.");
             end
+            if ~isempty(options.GammaFcn) && ...
+                    ~isa(options.GammaFcn, "function_handle")
+                error("radia:optuna:TPEGamma", ...
+                    "GammaFcn must be a function handle.");
+            end
+            if ~isempty(options.WeightsFcn) && ...
+                    ~isa(options.WeightsFcn, "function_handle")
+                error("radia:optuna:TPEWeights", ...
+                    "WeightsFcn must be a function handle.");
+            end
             if ~isempty(options.ConstraintsFcn) && ...
                     ~isa(options.ConstraintsFcn, "function_handle")
                 error("radia:optuna:ConstraintsFcn", ...
                     "ConstraintsFcn must be a function handle.");
             end
-            obj.Seed = double(options.Seed);
-            obj.Stream = RandStream("mt19937ar", "Seed", obj.Seed);
+            obj.Seed = radia.optuna.internal.resolveSeed(options.Seed);
+            obj.Stream = ...
+                radia.optuna.internal.NumpyRandomState(obj.Seed);
+            obj.IndependentSampler = radia.optuna.RandomSampler(options.Seed);
             obj.NStartupTrials = options.NStartupTrials;
             obj.Gamma = options.Gamma;
             obj.MaxGoodTrials = options.MaxGoodTrials;
+            obj.GammaFcn = options.GammaFcn;
+            obj.WeightsFcn = options.WeightsFcn;
             obj.NumberOfEIChoices = options.NumberOfEIChoices;
             obj.PriorWeight = options.PriorWeight;
             obj.ConsiderMagicClip = options.ConsiderMagicClip;
             obj.ConsiderEndpoints = options.ConsiderEndpoints;
             obj.ConstraintsFcn = options.ConstraintsFcn;
+            radia.optuna.internal.CategoricalDistance.validate( ...
+                options.CategoricalDistanceFcn);
+            obj.CategoricalDistanceFcn=options.CategoricalDistanceFcn;
         end
 
         function value = sampleFloat(obj, study, trial, name, low, high, options)
@@ -86,14 +110,12 @@ classdef MOTPESampler < handle
             objectives = objectives(valid, :);
             trialNumbers = trialNumbers(valid);
             if numel(x) < obj.NStartupTrials
-                value = obj.quantize( ...
-                    obj.uniform(low, high, options.Log), ...
-                    low, high, options.Step);
-                obj.recordState(study, trial.Number);
+                value = obj.IndependentSampler.sampleFloat( ...
+                    study, trial, name, low, high, options);
                 return
             end
 
-            nGood = min(obj.MaxGoodTrials, ceil(obj.Gamma * numel(x)));
+            nGood = obj.goodTrialCount(numel(x));
             [goodMask, goodWeights] = ...
                 radia.optuna.internal.ParetoSupport.splitMOTPE( ...
                 study, trialNumbers, objectives, nGood);
@@ -107,7 +129,8 @@ classdef MOTPESampler < handle
                 x(goodMask), low, high, estimatorOptions{:}, ...
                 ObservationWeights=goodWeights);
             above = radia.optuna.internal.ParzenEstimator.numerical( ...
-                x(~goodMask), low, high, estimatorOptions{:});
+                x(~goodMask), low, high, estimatorOptions{:}, ...
+                ObservationWeights=obj.observationWeights(sum(~goodMask)));
             candidates = ...
                 radia.optuna.internal.ParzenEstimator.sampleNumerical( ...
                 below, obj.Stream, obj.NumberOfEIChoices);
@@ -160,21 +183,25 @@ classdef MOTPESampler < handle
             trialNumbers = trialNumbers(valid);
             count = numel(choiceTokens);
             if numel(observed) < obj.NStartupTrials
-                index = 1 + floor(rand(obj.Stream, 1, 1) * count);
-                value = obj.choiceAt(choices, index);
-                obj.recordState(study, trial.Number);
+                value = obj.IndependentSampler.sampleCategorical( ...
+                    study, trial, name, choices);
                 return
             end
 
-            nGood = min(obj.MaxGoodTrials, ceil(obj.Gamma * numel(observed)));
+            nGood = obj.goodTrialCount(numel(observed));
             [goodMask, goodWeights] = ...
                 radia.optuna.internal.ParetoSupport.splitMOTPE( ...
                 study, trialNumbers, objectives, nGood);
+            distanceFcn=radia.optuna.internal.CategoricalDistance. ...
+                get(obj.CategoricalDistanceFcn,name);
             below = radia.optuna.internal.ParzenEstimator.categorical( ...
                 observed(goodMask), count, PriorWeight=obj.PriorWeight, ...
-                ObservationWeights=goodWeights);
+                ObservationWeights=goodWeights,DistanceFcn=distanceFcn, ...
+                Choices=choices);
             above = radia.optuna.internal.ParzenEstimator.categorical( ...
-                observed(~goodMask), count, PriorWeight=obj.PriorWeight);
+                observed(~goodMask), count, PriorWeight=obj.PriorWeight, ...
+                ObservationWeights=obj.observationWeights(sum(~goodMask)), ...
+                DistanceFcn=distanceFcn,Choices=choices);
             candidates = ...
                 radia.optuna.internal.ParzenEstimator.sampleCategorical( ...
                 below, obj.Stream, obj.NumberOfEIChoices);
@@ -188,7 +215,8 @@ classdef MOTPESampler < handle
             obj.recordState(study, trial.Number);
         end
 
-        function beforeTrial(obj, study, trial) %#ok<INUSD>
+        function beforeTrial(obj, study, trial)
+            obj.IndependentSampler.beforeTrial(study,trial);
             obj.attach(study);
         end
 
@@ -201,12 +229,55 @@ classdef MOTPESampler < handle
     end
 
     methods (Access=private)
+        function count = goodTrialCount(obj, finishedCount)
+            if isempty(obj.GammaFcn)
+                count = min(obj.MaxGoodTrials, ...
+                    ceil(obj.Gamma * finishedCount));
+                count = max(1, min(finishedCount, count));
+                return
+            end
+            count = obj.GammaFcn(finishedCount);
+            if ~(isnumeric(count) && isreal(count) && isscalar(count) && ...
+                    isfinite(count) && count == floor(count) && ...
+                    count >= 0 && count <= finishedCount)
+                error("radia:optuna:TPEGamma", ...
+                    "GammaFcn(%d) must return an integer from 0 through %d.", ...
+                    finishedCount, finishedCount);
+            end
+            count = double(count);
+        end
+
+        function weights = observationWeights(obj, count)
+            if isempty(obj.WeightsFcn)
+                weights = zeros(0,1);
+                return
+            end
+            weights = obj.WeightsFcn(count);
+            if ~(isnumeric(weights) && isreal(weights))
+                error("radia:optuna:TPEWeights", ...
+                    "WeightsFcn(%d) must return a real numeric vector.", count);
+            end
+            weights = reshape(double(weights),[],1);
+            if numel(weights) ~= count
+                error("radia:optuna:TPEWeights", ...
+                    "WeightsFcn(%d) returned %d weights; expected %d.", ...
+                    count, numel(weights), count);
+            end
+            if any(~isfinite(weights)) || any(weights < 0) || ...
+                    (count > 0 && sum(weights) <= 0)
+                error("radia:optuna:TPEWeights", ...
+                    "WeightsFcn(%d) must return finite nonnegative weights " + ...
+                    "with positive total mass.", count);
+            end
+        end
+
         function attach(obj, study)
             changed = isempty(obj.AttachedStudy) || ...
                 ~isequal(obj.AttachedStudy, study);
             if changed
                 obj.AttachedStudy = study;
-                obj.Stream = RandStream("mt19937ar", "Seed", obj.Seed);
+                obj.Stream = ...
+                    radia.optuna.internal.NumpyRandomState(obj.Seed);
                 obj.Restored = false;
             end
             if obj.Restored
@@ -230,6 +301,9 @@ classdef MOTPESampler < handle
 
         function recordState(obj, study, trialNumber)
             obj.attach(study);
+            if strlength(study.StoragePath)==0
+                return
+            end
             state = struct( ...
                 "schema", obj.StateSchema, ...
                 "seed", obj.Seed, ...
