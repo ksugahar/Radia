@@ -26,8 +26,12 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from radia.analytical_formulas import (cylinder_ac_impedance,  # noqa: E402
-                                       cylinder_dc_resistance, skin_depth)
+from radia.analytical_formulas import (  # noqa: E402
+    cylinder_ac_impedance,
+    cylinder_dc_resistance,
+    dowell_rectangular_ac_impedance,
+    skin_depth,
+)
 from radia.peec_matrices import PEECBuilder  # noqa: E402
 from radia.peec_topology import PEECCircuitSolver  # noqa: E402
 
@@ -112,3 +116,51 @@ def test_skin_effect_resistance_matches_the_thin_skin_asymptote():
             asym = a / (2.0 * delta) + 0.25
             assert ratio == pytest.approx(asym, rel=0.02), (freq, ratio,
                                                             asym)
+
+
+def test_rectangular_dowell_preserves_dc_and_orientation():
+    width, thickness = 10.0e-3, 0.2e-3
+    r_dc = 1.0 / (SIGMA_CU * width * thickness)
+    assert dowell_rectangular_ac_impedance(
+        width, thickness, SIGMA_CU, 0.0) == pytest.approx(r_dc)
+    assert dowell_rectangular_ac_impedance(
+        thickness, width, SIGMA_CU, 0.0) == pytest.approx(r_dc)
+
+
+def test_rectangular_dowell_matches_closed_form_resistance_factor():
+    width, thickness = 8.0e-3, 1.0e-3
+    omega = 2.0 * math.pi * 100.0e3
+    delta = skin_depth(SIGMA_CU, omega)
+    xi = thickness / (2.0 * delta)
+    expected_factor = xi * (
+        math.sinh(2.0 * xi) + math.sin(2.0 * xi)
+    ) / (math.cosh(2.0 * xi) - math.cos(2.0 * xi))
+    r_dc = 1.0 / (SIGMA_CU * width * thickness)
+    z = dowell_rectangular_ac_impedance(
+        width, thickness, SIGMA_CU, omega)
+    assert z.real / r_dc == pytest.approx(expected_factor, rel=1.0e-12)
+
+
+def test_rectangular_dowell_internal_inductance_and_skin_asymptote():
+    width, thickness = 10.0e-3, 0.1e-3
+    omega_low = 1.0
+    z_low = dowell_rectangular_ac_impedance(
+        width, thickness, SIGMA_CU, omega_low)
+    expected_l_internal = 4.0e-7 * math.pi * thickness / (12.0 * width)
+    assert z_low.imag / omega_low == pytest.approx(
+        expected_l_internal, rel=1.0e-10)
+
+    omega_high = 2.0 * math.pi * 1.0e9
+    delta = skin_depth(SIGMA_CU, omega_high)
+    expected_surface = (1.0 + 1.0j) / (
+        2.0 * SIGMA_CU * width * delta)
+    z_high = dowell_rectangular_ac_impedance(
+        width, thickness, SIGMA_CU, omega_high)
+    assert z_high == pytest.approx(expected_surface, rel=1.0e-12)
+
+
+@pytest.mark.parametrize("width,thickness", [(0.0, 1.0), (1.0, -1.0)])
+def test_rectangular_dowell_rejects_nonphysical_dimensions(width, thickness):
+    with pytest.raises(ValueError):
+        dowell_rectangular_ac_impedance(
+            width, thickness, SIGMA_CU, 1.0)

@@ -339,6 +339,9 @@ def _filaments_from_lateral_surface_uv(face,
     # Project the n_peri points at each station onto a plane fit to
     # them (= station cross-section plane), then 2D shoelace.
     area_per_station = np.zeros(n_stations, dtype=np.float64)
+    perimeter_per_station = np.zeros(n_stations, dtype=np.float64)
+    radius_per_station = np.zeros(n_stations, dtype=np.float64)
+    radial_cv_per_station = np.zeros(n_stations, dtype=np.float64)
     for i in range(n_stations):
         ring = pts_m[i]                         # (n_peri, 3)
         center = ring.mean(axis=0)              # (3,)
@@ -354,6 +357,21 @@ def _filaments_from_lateral_surface_uv(face,
         # Shoelace
         area_per_station[i] = 0.5 * abs(float(np.sum(
             u_2d * np.roll(v_2d, -1) - np.roll(u_2d, -1) * v_2d)))
+        perimeter_per_station[i] = float(np.sum(np.linalg.norm(
+            np.roll(ring, -1, axis=0) - ring, axis=1)))
+        radial = np.linalg.norm(delta, axis=1)
+        radius_per_station[i] = float(np.mean(radial))
+        radial_cv_per_station[i] = float(
+            np.std(radial) / max(radius_per_station[i], 1.0e-30))
+
+    # A circular sweep has constant radius in every sampled station even
+    # when OCC represents its lateral as a BSPLINE.  Recognise only that
+    # strict case; rectangles, rounded rectangles and arbitrary profiles
+    # must not be converted to an equivalent circle implicitly.
+    is_circle = bool(np.max(radial_cv_per_station) < 1.0e-3)
+    if is_circle:
+        area_per_station = math.pi * radius_per_station ** 2
+        perimeter_per_station = 2.0 * math.pi * radius_per_station
 
     # Build n_peri filaments
     filament_paths = []
@@ -373,7 +391,7 @@ def _filaments_from_lateral_surface_uv(face,
     solver, seg_of_fil, port_p, port_m_idx = build_bundle_solver(
         filament_paths, dw=None, dh=None, sigma=sigma, cell_wh=cell_wh)
 
-    return {
+    result = {
         "solver": solver,
         "seg_of_filament": seg_of_fil,
         "filament_paths": filament_paths,
@@ -386,7 +404,18 @@ def _filaments_from_lateral_surface_uv(face,
         "cross_section_area_m2_mean": float(np.mean(area_per_station)),
         "cross_section_area_m2_min":  float(np.min(area_per_station)),
         "cross_section_area_m2_max":  float(np.max(area_per_station)),
+        "cross_section_perimeter_m_mean": float(
+            np.mean(perimeter_per_station)),
+        "cross_section_kind": "circle" if is_circle else "unknown",
     }
+    if is_circle:
+        result.update({
+            "cross_section_radius_m_min": float(radius_per_station.min()),
+            "cross_section_radius_m_max": float(radius_per_station.max()),
+            "cross_section_radius_m_mean": float(radius_per_station.mean()),
+            "cross_section_radius_m": float(radius_per_station.mean()),
+        })
+    return result
 
 
 def _detect_lead_bars_cad(solid, median_radius_cad: float):
@@ -961,6 +990,12 @@ def _filaments_from_circle_edges_per_station(solid,
         "cross_section_radius_m_min": float(radii_m.min()),
         "cross_section_radius_m_max": float(radii_m.max()),
         "cross_section_radius_m_mean": float(radii_m.mean()),
+        "cross_section_radius_m": float(radii_m.mean()),
+        "cross_section_area_m2_mean": float(
+            np.mean(math.pi * radii_m ** 2)),
+        "cross_section_perimeter_m_mean": float(
+            np.mean(2.0 * math.pi * radii_m)),
+        "cross_section_kind": "circle",
     }
 
 
@@ -2449,7 +2484,7 @@ def _check_filaments_cover_solid_bbox(topo, solid_bbox_min, solid_bbox_max,
               "which bypasses spine extraction entirely.")
 
 
-_PEEC_CACHE_FORMAT_VERSION = 2
+_PEEC_CACHE_FORMAT_VERSION = 3
 
 
 def _peec_cache_path(step_path: str, n_peri, sigma, nwinc, nhinc,
@@ -2899,7 +2934,8 @@ def _filaments_from_step_compute(step_path: str,
         topo = filaments_from_polyline(
             path_m, r_m,
             sigma=sigma, n_peri=n_peri,
-            source_tag="step_longest_edge")
+            source_tag="step_longest_edge",
+            cross_section_kind="equivalent-circle")
         _check_filaments_cover_solid_bbox(
             topo, solid_bbox_min, solid_bbox_max,
             tier="step_longest_edge")
@@ -3226,6 +3262,11 @@ def _filaments_from_walked_centerline(ng_solid, start_hint, *, sigma,
         w, h = prof.bounding_wh()
         r_eq = max(r_eq, 0.5 * float(max(w, h)))
 
+    profile_names = [type(profile).__name__ for profile in res.profiles]
+    profile_areas = np.asarray(
+        [float(profile.total_area()) for profile in res.profiles],
+        dtype=np.float64)
+
     result = {
         "solver": solver,
         "seg_of_filament": seg_of_fil,
@@ -3236,7 +3277,45 @@ def _filaments_from_walked_centerline(ng_solid, start_hint, *, sigma,
         "port_plus": port_p,
         "port_minus": port_m,
         "cross_section_radius_m": r_eq,
+        "cross_section_kind": "unknown",
     }
+    if profile_areas.size:
+        result.update({
+            "cross_section_area_m2_mean": float(profile_areas.mean()),
+            "cross_section_area_m2_min": float(profile_areas.min()),
+            "cross_section_area_m2_max": float(profile_areas.max()),
+        })
+    if profile_names and all(name == "RectProfile" for name in profile_names):
+        dimensions = np.asarray([
+            sorted((float(profile.bounding_wh()[0]),
+                    float(profile.bounding_wh()[1])), reverse=True)
+            for profile in res.profiles
+        ], dtype=np.float64)
+        result.update({
+            "cross_section_kind": "rect",
+            "cross_section_width_m_mean": float(dimensions[:, 0].mean()),
+            "cross_section_width_m_min": float(dimensions[:, 0].min()),
+            "cross_section_width_m_max": float(dimensions[:, 0].max()),
+            "cross_section_thickness_m_mean": float(dimensions[:, 1].mean()),
+            "cross_section_thickness_m_min": float(dimensions[:, 1].min()),
+            "cross_section_thickness_m_max": float(dimensions[:, 1].max()),
+            "cross_section_perimeter_m_mean": float(
+                np.mean(2.0 * (dimensions[:, 0] + dimensions[:, 1]))),
+        })
+    elif profile_names and all(
+            name == "CircleProfile" for name in profile_names):
+        radii = np.asarray(
+            [0.5 * float(profile.bounding_wh()[0])
+             for profile in res.profiles], dtype=np.float64)
+        result.update({
+            "cross_section_kind": "circle",
+            "cross_section_radius_m": float(radii.mean()),
+            "cross_section_radius_m_mean": float(radii.mean()),
+            "cross_section_radius_m_min": float(radii.min()),
+            "cross_section_radius_m_max": float(radii.max()),
+            "cross_section_perimeter_m_mean": float(
+                np.mean(2.0 * math.pi * radii)),
+        })
 
     bbox_min = np.asarray(solid_bbox_cad[0], dtype=float) / cad_units_per_meter
     bbox_max = np.asarray(solid_bbox_cad[1], dtype=float) / cad_units_per_meter
@@ -3568,7 +3647,8 @@ def filaments_from_polyline(pts_m: np.ndarray,
                              *,
                              sigma: float = 5.8e7,
                              n_peri: int = 16,
-                             source_tag: str = "polyline"):
+                             source_tag: str = "polyline",
+                             cross_section_kind: str = "circle"):
     """Build a PEEC topology from an explicit 3D polyline + circular profile.
 
     Internal helper.  Used by ``filaments_from_step`` longest-edge path
@@ -3582,6 +3662,9 @@ def filaments_from_polyline(pts_m: np.ndarray,
         sigma, n_peri: solver parameters.
         source_tag: free-form string copied into the result dict's
             ``source`` field (e.g. "step_longest_edge").
+        cross_section_kind: ``"circle"`` for a physical round wire or
+            ``"equivalent-circle"`` when the caller deliberately reduced
+            an otherwise unknown profile by area.
 
     Returns:
         topology_dict, same shape as ``filaments_from_step``.
@@ -3631,6 +3714,10 @@ def filaments_from_polyline(pts_m: np.ndarray,
         "source": source_tag,
         "n_path_pts": n_pts,
         "cross_section_radius_m": radius_m,
+        "cross_section_radius_m_mean": radius_m,
+        "cross_section_area_m2_mean": math.pi * radius_m * radius_m,
+        "cross_section_perimeter_m_mean": 2.0 * math.pi * radius_m,
+        "cross_section_kind": cross_section_kind,
     }
 
 
@@ -3726,6 +3813,37 @@ def _sample_face_perimeter_in_pt_frame(face, centroid_3d: np.ndarray,
     return uv
 
 
+def _rectangular_face_dimensions(face):
+    """Return ``(width, thickness)`` for a strict planar rectangle.
+
+    Dimensions are in the face's native CAD units.  Four straight edges,
+    two equal-length pairs and ``area == width*thickness`` are all required.
+    A rhombus, rounded/chamfered rectangle or arbitrary polygon therefore
+    remains ``unknown`` instead of silently receiving a Dowell model.
+    """
+    from radia._b3d_shim import GeomType
+
+    try:
+        edges = face.outer_wire().edges()
+    except Exception:
+        return None
+    if len(edges) != 4 or any(e.geom_type != GeomType.LINE for e in edges):
+        return None
+    lengths = np.sort(np.asarray(
+        [float(e.length) for e in edges], dtype=np.float64))
+    if lengths[0] <= 0.0:
+        return None
+    pair_tol = 1.0e-6
+    if not (math.isclose(lengths[0], lengths[1], rel_tol=pair_tol)
+            and math.isclose(lengths[2], lengths[3], rel_tol=pair_tol)):
+        return None
+    thickness = 0.5 * float(lengths[0] + lengths[1])
+    width = 0.5 * float(lengths[2] + lengths[3])
+    if not math.isclose(float(face.area), width * thickness, rel_tol=1.0e-5):
+        return None
+    return width, thickness
+
+
 def _filaments_from_per_station_faces(centroids_m: np.ndarray,
                                         faces_ordered: list,
                                         sigma: float = 5.8e7,
@@ -3797,6 +3915,8 @@ def _filaments_from_per_station_faces(centroids_m: np.ndarray,
     # Per-station UV (n_path, n_peri, 2) and per-station perimeter (n_path,)
     uv_per_station = np.zeros((n_path, n_peri, 2), dtype=np.float64)
     area_per_station = np.zeros(n_path, dtype=np.float64)
+    perimeter_per_station = np.zeros(n_path, dtype=np.float64)
+    rectangle_dimensions_cad = []
     for i in range(n_path):
         face = faces_ordered[i]
         c = face.center()
@@ -3813,6 +3933,9 @@ def _filaments_from_per_station_faces(centroids_m: np.ndarray,
             face, c_np, u_hat[i], v_hat[i], n_peri)
         uv_per_station[i] = uv_cad
         area_per_station[i] = float(face.area)
+        perimeter_per_station[i] = float(sum(
+            edge.length for edge in face.outer_wire().edges()))
+        rectangle_dimensions_cad.append(_rectangular_face_dimensions(face))
 
     # Per-station UV is in CAD units of the face.  centroids_m is in
     # metres after the caller's cad_units_per_meter scale.  Recover
@@ -3841,6 +3964,7 @@ def _filaments_from_per_station_faces(centroids_m: np.ndarray,
     cad_to_m = span_m / span_cad
     uv_per_station *= cad_to_m
     area_per_station *= cad_to_m * cad_to_m
+    perimeter_per_station *= cad_to_m
 
     # Build n_peri filaments, each as a polyline through the matching
     # k-th sample at every station.
@@ -3867,7 +3991,7 @@ def _filaments_from_per_station_faces(centroids_m: np.ndarray,
     solver, seg_of_fil, port_p, port_m = build_bundle_solver(
         filament_paths, dw=None, dh=None, sigma=sigma, cell_wh=cell_wh)
 
-    return {
+    result = {
         "solver": solver,
         "seg_of_filament": seg_of_fil,
         "filament_paths": filament_paths,
@@ -3880,7 +4004,30 @@ def _filaments_from_per_station_faces(centroids_m: np.ndarray,
         "cross_section_area_m2_mean": float(np.mean(area_per_station)),
         "cross_section_area_m2_min": float(np.min(area_per_station)),
         "cross_section_area_m2_max": float(np.max(area_per_station)),
+        "cross_section_perimeter_m_mean": float(
+            np.mean(perimeter_per_station)),
+        "cross_section_kind": "unknown",
     }
+    if all(dimensions is not None
+           for dimensions in rectangle_dimensions_cad):
+        rectangle_dimensions_m = np.asarray(
+            rectangle_dimensions_cad, dtype=np.float64) * cad_to_m
+        result.update({
+            "cross_section_kind": "rect",
+            "cross_section_width_m_min": float(
+                rectangle_dimensions_m[:, 0].min()),
+            "cross_section_width_m_max": float(
+                rectangle_dimensions_m[:, 0].max()),
+            "cross_section_width_m_mean": float(
+                rectangle_dimensions_m[:, 0].mean()),
+            "cross_section_thickness_m_min": float(
+                rectangle_dimensions_m[:, 1].min()),
+            "cross_section_thickness_m_max": float(
+                rectangle_dimensions_m[:, 1].max()),
+            "cross_section_thickness_m_mean": float(
+                rectangle_dimensions_m[:, 1].mean()),
+        })
+    return result
 
 
 def _section_solid_at_plane(solid, point_xyz, normal_xyz):

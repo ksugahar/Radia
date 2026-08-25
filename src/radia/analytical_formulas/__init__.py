@@ -136,6 +136,7 @@ from .shielding import (
 from .conductor_impedance import (
     skin_depth,
     planar_surface_impedance,
+    dowell_rectangular_ac_impedance,
     cylinder_ac_impedance,
     cylinder_dc_resistance,
     cylinder_internal_inductance,
@@ -209,6 +210,7 @@ __all__ = [
     # conductor_impedance (Part 6 §4-§5)
     "skin_depth",
     "planar_surface_impedance",
+    "dowell_rectangular_ac_impedance",
     "cylinder_ac_impedance",
     "cylinder_dc_resistance",
     "cylinder_internal_inductance",

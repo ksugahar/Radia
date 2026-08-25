@@ -6,6 +6,14 @@ VTK / MEG / FEMEEM writers + Python bindings for consistency checks).
 
 ## Unreleased
 
+## 0.14.11 - Active Python ABI plugin refresh
+
+Released 2026-08-26.
+
+- Rebuilt the bundled Coreform Cubit backend after pinning the active Python
+  ABI and isolating the NGSolve 6.2.2606 build environment. The mesh-format and
+  Python API contracts are unchanged.
+
 ## 0.14.10 - Netgen 6.2.2606 ABI migration
 
 Released 2026-08-25.

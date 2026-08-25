@@ -149,8 +149,9 @@ class CoupledPEECBEMSolver:
 
     The coil is given pre-reduced to filament loop form (``R_f``, ``L_f``
     from ``peec_bundle.build_loop_bundle_impedance``) plus the filament
-    polylines and the optional per-filament Bessel skin impedance
-    ``Zs_fil``.  The workpiece is the same ``ScalarBIESIBCSolver`` used by
+    polylines and the optional per-filament shape-specific internal
+    impedance correction ``Zs_fil``.  The workpiece is the same
+    ``ScalarBIESIBCSolver`` used by
     ``CoupledBEMSolver`` (dense or intree-HACApK).
     """
 
