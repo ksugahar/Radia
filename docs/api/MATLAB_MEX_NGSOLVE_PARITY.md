@@ -17,13 +17,13 @@ silently dropped from the count.
 
 | Surface | Current contract |
 |---|---:|
-| Public top-level pybind11 names | 98 |
-| Covered mapped MEX names | 98 |
+| Public top-level pybind11 names | 99 |
+| Covered mapped MEX names | 99 |
 | Underscore numerical kernels | 28 / 28 covered |
-| Stateful pybind11 class surface | 123 / 123 covered |
-| MEX gateway commands | 362 |
-| MATLAB Optuna classes | 26 |
-| MATLAB Optuna factory functions | 7 |
+| Stateful pybind11 class surface | 125 / 125 covered |
+| MEX gateway commands | 363 |
+| MATLAB Optuna classes | 38 |
+| MATLAB Optuna factory functions | 30 |
 
 Seven acoustic commands share their implementation with the pybind11
 scattering/CQ bindings: four real-wavenumber sphere models, complex-wavenumber

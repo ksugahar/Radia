@@ -1315,8 +1315,8 @@ materialized in the optimization loop.
 
 The executable parity audit compares three pybind11 surfaces with the
 `radia_mex` command table: 99 public top-level names, 28 underscore-prefixed
-numerical kernels, and 126 stateful class members. All three surfaces are fully
-covered by the current 363-command gateway. The independent 20-command
+numerical kernels, and 125 stateful class members. All 252 entries are covered
+by the current 363-command gateway. The independent 20-command
 `optuna_mex` owns only its two API commands and 18 optimizer kernels. Three
 internal mesh/test helpers are
 classified explicitly rather than silently omitted. The remaining `radentry`
