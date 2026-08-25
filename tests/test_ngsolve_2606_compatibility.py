@@ -63,6 +63,8 @@ def test_self_hosted_ci_keeps_the_ngsolve_abi_in_a_run_local_environment():
     assert "NGSOLVE_DIR=" in workflow
     assert "Netgen_DIR=" in workflow
     assert "ngsolve.__version__==want['ngsolve']" in workflow
+    assert "Get-Command git -ErrorAction Stop" in workflow
+    assert "git --version" in workflow
 
 
 def test_build_scripts_resolve_netgen_from_the_active_python_environment():
