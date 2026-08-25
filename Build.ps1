@@ -90,11 +90,22 @@ if (-not (Test-Path $MklImportLibrary) -or -not (Test-Path $MklRuntime)) {
     }
 }
 
-# NGSolve (optional override via NGSOLVE_DIR environment variable)
+# NGSolve (optional override via NGSOLVE_DIR / Netgen_DIR environment variables)
 $NGSolveCMakeArgs = ""
 if ($env:NGSOLVE_DIR -and (Test-Path "$env:NGSOLVE_DIR\NGSolveConfig.cmake")) {
-    $NGSolveCMakeArgs = " ^`n    -DNGSolve_DIR=`"$env:NGSOLVE_DIR`" ^`n    -DNetgen_DIR=`"$env:NGSOLVE_DIR`""
+    $NetgenCMakeDir = if ($env:Netgen_DIR -and
+        (Test-Path "$env:Netgen_DIR\NetgenConfig.cmake")) {
+        $env:Netgen_DIR
+    } else {
+        $env:NGSOLVE_DIR
+    }
+    $NGSolveCMakeArgs = " ^`n    -DNGSolve_DIR=`"$env:NGSOLVE_DIR`" ^`n    -DNetgen_DIR=`"$NetgenCMakeDir`""
     Write-Host "NGSolve: $env:NGSOLVE_DIR (from env)" -ForegroundColor Gray
+}
+$NetgenPackageDir = (& python -c "import netgen,os;print(os.path.dirname(netgen.__file__))").Trim()
+if (-not (Test-Path "$NetgenPackageDir\include")) {
+    Write-Host "ERROR: Netgen include directory not found under $NetgenPackageDir" -ForegroundColor Red
+    exit 1
 }
 $MatlabMexCMakeArgs = if ($MatlabMexOnly) {
     " ^`n    -DRADIA_BUILD_MATLAB_MEX=ON"
@@ -392,7 +403,7 @@ rem CUBIT_INSTALL_DIR (the helper appends \cmake automatically). The
 rem outer PowerShell wrapper passes $CubitCmakeDir into the batch via
 rem this set; if discovery failed the wrapper exited before us.
 set "CUBIT_DIR=$CubitCmakeDir"
-set "NETGEN_DIR=C:\Program Files\Python312\Lib\site-packages\netgen"
+set "NETGEN_DIR=$NetgenPackageDir"
 rem Compact Netgen sources are in-repo (src/cubit_plugin/compact_netgen/netgen_src/).
 rem No external NETGEN_SRC_DIR needed.
 
