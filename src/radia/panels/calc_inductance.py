@@ -117,43 +117,78 @@ def _equivalent_wire_radius_m(topo, n_peri):
     return 0.0
 
 
-def _peec_skin_impedance_per_filament(paths, wire_radius_m, sigma, omega,
-                                       n_peri):
-    """Per-filament complex skin-impedance ``Zs_fil`` for ``solve_loop_bundle``.
-
-    Derivation (BEM-A analogue, see docs/esim/R_MISMATCH_PEEC_VS_BEMA.md).
-    A round-wire bundle of n_peri parallel filaments has:
-
-        Z_port(omega) = Z_cyl(omega) * L_filament
-
-    where ``Z_cyl(omega)`` is the closed-form per-unit-length Bessel
-    impedance of a SOLID cylinder (analytical_formulas.conductor_impedance.
-    cylinder_ac_impedance).  In the parallel-filament solve each
-    filament's self-impedance contributes as Z_fil / n_peri (parallel
-    of n_peri identical filaments).  Combined with the PEEC builder's
-    R_DC_per_filament = n_peri * rho * L / (pi a^2) the self diagonal
-    should reach::
-
-        Z_self_k = n_peri * Z_cyl(omega) * L_k
-
-    so the additive correction over the existing R_DC term is::
-
-        Zs_fil_k = n_peri * (Z_cyl(omega) - R_DC_per_unit_length) * L_k.
-
-    This recovers the full Bessel impedance smoothly across frequencies:
-    at omega=0 we get R_DC; at high omega we get (1+j)/(sigma*delta*P) per
-    unit length (the BEM-A SIBC limit).
-    """
-    import numpy as np
+def _peec_cross_section_model(topo, sigma, omega, n_peri):
+    """Resolve the physical internal-impedance model from CAD metadata."""
     from radia.analytical_formulas.conductor_impedance import (
-        cylinder_ac_impedance, cylinder_dc_resistance,
+        cylinder_ac_impedance,
+        cylinder_dc_resistance,
+        dowell_rectangular_ac_impedance,
     )
 
-    if wire_radius_m <= 0 or omega <= 0:
+    kind = str(topo.get("cross_section_kind") or "unknown").lower()
+    perimeter_m = float(
+        topo.get("cross_section_perimeter_m_mean") or 0.0)
+
+    if kind == "rect":
+        width_m = float(topo.get("cross_section_width_m_mean") or 0.0)
+        thickness_m = float(
+            topo.get("cross_section_thickness_m_mean") or 0.0)
+        if width_m <= 0.0 or thickness_m <= 0.0:
+            raise ValueError(
+                "rectangular PEEC topology is missing width/thickness metadata")
+        width_m, thickness_m = max(width_m, thickness_m), min(
+            width_m, thickness_m)
+        if perimeter_m <= 0.0:
+            perimeter_m = 2.0 * (width_m + thickness_m)
+        return {
+            "name": "rectangular-dowell",
+            "cross_section_kind": kind,
+            "impedance_per_m": dowell_rectangular_ac_impedance(
+                width_m, thickness_m, sigma, omega),
+            "dc_resistance_per_m": 1.0 / (sigma * width_m * thickness_m),
+            "perimeter_m": perimeter_m,
+            "width_m": width_m,
+            "thickness_m": thickness_m,
+        }
+
+    if kind in ("circle", "equivalent-circle"):
+        radius_m = float(topo.get("cross_section_radius_m_mean") or
+                         topo.get("cross_section_radius_m") or 0.0)
+    else:
+        # Unknown/polygon profiles retain the historical, explicitly named
+        # equivalent-area approximation.  Only a strict CAD rectangle reaches
+        # the Dowell branch above.
+        radius_m = _equivalent_wire_radius_m(topo, n_peri)
+    if radius_m <= 0.0:
         return None
-    Z_ac = cylinder_ac_impedance(a=wire_radius_m, sigma=sigma, omega=omega)
-    R_dc = cylinder_dc_resistance(a=wire_radius_m, sigma=sigma)
-    dZ_per_m = complex(Z_ac) - complex(R_dc, 0.0)  # AC-skin contribution / m
+    if perimeter_m <= 0.0:
+        perimeter_m = 2.0 * math.pi * radius_m
+    return {
+        "name": ("round-bessel" if kind == "circle"
+                 else "equivalent-round-bessel"),
+        "cross_section_kind": kind,
+        "impedance_per_m": cylinder_ac_impedance(
+            a=radius_m, sigma=sigma, omega=omega),
+        "dc_resistance_per_m": cylinder_dc_resistance(
+            a=radius_m, sigma=sigma),
+        "perimeter_m": perimeter_m,
+        "radius_m": radius_m,
+    }
+
+
+def _peec_internal_impedance_per_filament(paths, model, n_peri):
+    """Return the internal-impedance excess for each PEEC filament.
+
+    ``model`` supplies the full per-unit-length conductor impedance and
+    its DC resistance.  The parallel perimeter bundle already contains
+    the DC resistance, so only their difference is injected.
+    """
+    import numpy as np
+
+    if model is None:
+        return None
+    dZ_per_m = (complex(model["impedance_per_m"])
+                - complex(model["dc_resistance_per_m"], 0.0))
     Zs_fil = []
     for path_k in paths:
         # filament length = sum of |p2 - p1| over polyline tuples
@@ -170,15 +205,9 @@ def _solve_coil_peec(args):
 
     Returns a dict with:
       * L_coil [H], R_coil [Ω] at unit terminal current.
-        R is the full Bessel AC resistance for a round-wire bundle:
-        per-filament ``Zs_fil = n_peri * (Z_cyl(omega) - R_DC_per_m) * L_k``
-        is injected into ``solve_loop_bundle`` so the loop-bundle
-        impedance approaches ``Z_cyl(omega) * L_filament`` at all
-        frequencies (R_DC at omega=0, SIBC asymptote at high omega).
-        Falls back to R_DC-only when the wire radius cannot be inferred
-        from the PEEC topology (rectangular cross-sections with no
-        cross_section_radius_m_mean / cross_section_area_m2_mean keys);
-        in that case a WARNING is logged on the progress channel.
+        Rectangular conductors use the one-dimensional Dowell solution;
+        physical round conductors use the Bessel solution.  Unknown shapes
+        retain an explicitly reported equivalent-area round approximation.
       * source_type = "filament"
       * paths : list of filament polylines (m)
       * I_fil : (K,) complex per-filament current at args.current
@@ -200,29 +229,36 @@ def _solve_coil_peec(args):
     t_topo = time.perf_counter() - t0
     progress("PEEC", f"{len(paths)} filaments ({t_topo:.1f}s)")
 
-    # Compute per-filament Bessel skin impedance Zs_fil so the bundle
-    # impedance reaches the proper round-wire AC value at args.frequency.
-    a_eq = _equivalent_wire_radius_m(topo, args.peec_n_peri)
-    Zs_fil = _peec_skin_impedance_per_filament(
-        paths, a_eq, args.coil_sigma, omega, args.peec_n_peri)
+    model = _peec_cross_section_model(
+        topo, args.coil_sigma, omega, args.peec_n_peri)
+    Zs_fil = _peec_internal_impedance_per_filament(
+        paths, model, args.peec_n_peri) if omega > 0.0 else None
     if Zs_fil is None:
-        progress("PEEC", "WARNING: wire radius unknown -- returning R_DC "
-                          "(no Bessel skin correction).")
+        progress("PEEC", "WARNING: cross-section model unavailable -- "
+                          "returning R_DC without skin correction.")
     else:
         from radia.analytical_formulas.conductor_impedance import (
             skin_depth as _skin_depth,
         )
         delta_m = _skin_depth(args.coil_sigma, omega)
-        progress("PEEC",
-            f"Bessel skin: a_eq={a_eq * 1e3:.3f} mm, "
-            f"delta={delta_m * 1e3:.3f} mm, "
-            f"a/delta={a_eq / delta_m:.2f}")
+        if model["name"] == "rectangular-dowell":
+            progress("PEEC",
+                f"Dowell skin: {model['width_m'] * 1e3:.3f} x "
+                f"{model['thickness_m'] * 1e3:.3f} mm, "
+                f"delta={delta_m * 1e3:.3f} mm, "
+                f"t/(2 delta)={model['thickness_m'] / (2 * delta_m):.2f}")
+        else:
+            progress("PEEC",
+                f"Bessel skin: a={model['radius_m'] * 1e3:.3f} mm, "
+                f"delta={delta_m * 1e3:.3f} mm, "
+                f"a/delta={model['radius_m'] / delta_m:.2f}")
 
-    use_prox = bool(getattr(args, "peec_proximity", True)) and a_eq > 0 \
-        and omega > 0
+    use_prox = bool(getattr(args, "peec_proximity", True)) \
+        and model is not None and model["perimeter_m"] > 0.0 and omega > 0
     progress("PEEC",
         f"Loop-bundle solve @ {args.frequency:.0f} Hz "
-        f"({'proximity-iterative' if use_prox else 'self-only Bessel'})")
+        f"({'proximity-iterative' if use_prox else 'self-only'}; "
+        f"{model['name'] if model is not None else 'dc-only'})")
     t0 = time.perf_counter()
     R_f, L_f = build_loop_bundle_impedance(solver, seg_of_fil)
 
@@ -232,12 +268,17 @@ def _solve_coil_peec(args):
         prox = solve_proximity_iterative(
             R_f=R_f, L_f=L_f, filament_paths=paths,
             frequency=args.frequency,
-            sigma=args.coil_sigma, wire_radius_m=a_eq,
+            sigma=args.coil_sigma,
+            wire_radius_m=float(model.get("radius_m") or 0.0),
             n_peri=int(args.peec_n_peri),
             I_port=args.current,
             max_iter=int(args.peec_proximity_max_iter),
             tol=float(args.peec_proximity_tol),
             relax=float(args.peec_proximity_relax),
+            self_impedance_per_m=model["impedance_per_m"],
+            dc_resistance_per_m=model["dc_resistance_per_m"],
+            perimeter_m=model["perimeter_m"],
+            internal_impedance_model=model["name"],
         )
         I_fil = prox["I_fil"]; V_port = prox["V_port"]
         proximity_info = {
@@ -270,6 +311,10 @@ def _solve_coil_peec(args):
         "n_filaments": len(paths),
         "t_coil_topology_s": t_topo,
         "t_coil_solve_s": t_peec,
+        "cross_section_kind": str(
+            topo.get("cross_section_kind") or "unknown"),
+        "internal_impedance_model": (
+            model["name"] if model is not None else "dc-only"),
     }
     if proximity_info is not None:
         out["proximity"] = proximity_info
@@ -2086,9 +2131,10 @@ def _solve_workpiece_strong_coupled_peec(args, coil_data):
     paths = topo["filament_paths"]
     R_f, L_f = build_loop_bundle_impedance(topo["solver"],
                                            topo["seg_of_filament"])
-    a_eq = _equivalent_wire_radius_m(topo, args.peec_n_peri)
-    Zs_fil = _peec_skin_impedance_per_filament(
-        paths, a_eq, args.coil_sigma, omega, args.peec_n_peri)
+    internal_model = _peec_cross_section_model(
+        topo, args.coil_sigma, omega, args.peec_n_peri)
+    Zs_fil = _peec_internal_impedance_per_filament(
+        paths, internal_model, args.peec_n_peri) if omega > 0.0 else None
 
     # --- workpiece surface mesh (same convention as the BEM-A strong path) ---
     vol_mesh = Mesh(args.vol)
