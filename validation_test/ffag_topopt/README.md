@@ -390,10 +390,14 @@ measurement of exact inactive-leaf pruning.  The 42,480-DoF BDM1 HEX problem
 keeps 25,920 active DoFs.  Pruning preserves the active principal system
 exactly while reducing active charge leaves, accelerating both direct operator
 application and the scalar-finishing path of mass-Riesz PCG.  The JSON keeps
-kernel and complete-solve timings separate and records the remaining
-mass-Riesz and block-PCG work separately.  A later entry in the same JSON
+kernel and complete-solve timings separate and retains the superseded
+mass-Riesz and block-PCG timings as comparison baselines.  A later entry
 records the exact local Cholesky mass-Riesz path for broken HDiv: it retains
 PARDISO for a connected conforming mass, and omits the unused Jacobi-diagonal
-setup when mass-Riesz is active.  Repeat the measurement on mdx or hibino after
-their cooling-system recovery before using the LAB wall times as publication
-claims.
+setup when mass-Riesz is active.  The final entry replaces the fixed 500-step
+block-PCG startup with independent CG recurrences over shared row-major
+operator and mass-Riesz traversals.  On the same LAB object, six RHS decrease
+from 35.85 s to 12.95 s while preserving a true relative residual below
+1.0e-8; one RHS remains on the lower-overhead scalar kernel.  Repeat the
+measurement on mdx or hibino after their cooling-system recovery before using
+the LAB wall times as publication claims.
