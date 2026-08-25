@@ -6,6 +6,17 @@ VTK / MEG / FEMEEM writers + Python bindings for consistency checks).
 
 ## Unreleased
 
+## 0.14.10 - Netgen 6.2.2606 ABI migration
+
+Released 2026-08-25.
+
+- Pinned NGSolve and Netgen to 6.2.2606 so the bundled high-order curver,
+  deployed Netgen DLLs, `check-vol`, and solver runtime use one C++ ABI.
+- Rebuilt the Cubit backend and high-order curver and re-ran the complex-shape
+  volume and curved-Jacobian acceptance gates.
+- Evaluated curved Jacobians through NGSolve's vectorized mapping route and
+  kept periodic Cubit edge interpolation on the local unwrapped branch.
+
 ## 0.14.9 - Sculpt/Exodus sideset preservation
 
 Released 2026-08-19.

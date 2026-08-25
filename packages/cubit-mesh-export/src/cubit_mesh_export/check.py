@@ -715,50 +715,82 @@ def check_mesh_quality(mesh_or_path, *, min_scaled_jacobian=1.0e-6,
     positive_orientation_element_count = 0
     negative_orientation_element_count = 0
 
+    # Evaluate the Jacobian as an NGSolve CoefficientFunction on a complete
+    # integration rule.  Do not call ``trafo(point).jacobi`` one point at a
+    # time: Netgen's scalar curved-HEX derivative path leaves face-mode rows
+    # uninitialised (observed through 6.2.2606), while NGSolve assembly uses
+    # the vectorised mapping path below.  Apart from avoiding spurious NaNs,
+    # this keeps the quality gate on the same geometry evaluation route as
+    # solver forms and Integrate().
+    jacobian_cf = ng.specialcf.JacobianMatrix(3)
+
     for element in mesh.Elements(ng.VOL):
         volume_element_count += 1
         if element.type == ng.ET.TET:
             tetrahedron_count += 1
         trafo = mesh.GetTrafo(element)
         rule = ng.IntegrationRule(element.type, sample_order)
-        orientation_sign = None
-        for point in rule:
-            jacobian = np.asarray(trafo(point).jacobi, dtype=float)
-            determinant = float(np.linalg.det(jacobian))
-            column_norm_product = float(np.prod(np.linalg.norm(jacobian, axis=0)))
-            scaled = (
-                abs(determinant) / column_norm_product
-                if column_norm_product > 0.0 else float("-inf")
-            )
-            sample_count += 1
-            if np.isfinite(determinant):
-                finite_jacobian_sample_count += 1
-                min_det = min(min_det, determinant)
-                max_det = max(max_det, determinant)
-                min_abs_det = min(min_abs_det, abs(determinant))
-                if determinant < 0.0:
-                    negative_jacobian_sample_count += 1
-            if np.isfinite(scaled):
-                finite_scaled_jacobian_sample_count += 1
-                min_scaled = min(min_scaled, scaled)
+        mapped_points = trafo(rule)
+        jacobians = np.asarray(jacobian_cf(mapped_points), dtype=float).reshape(
+            -1, 3, 3
+        )
+        determinants = np.linalg.det(jacobians)
+        column_norm_products = np.prod(
+            np.linalg.norm(jacobians, axis=1), axis=1
+        )
+        scaled_values = np.full(determinants.shape, float("-inf"))
+        nonzero_columns = column_norm_products > 0.0
+        scaled_values[nonzero_columns] = (
+            np.abs(determinants[nonzero_columns])
+            / column_norm_products[nonzero_columns]
+        )
 
-            invalid = (
-                not np.isfinite(determinant)
-                or abs(determinant) <= jacobian_tolerance
+        element_number = _element_number(element)
+        element_sample_count = int(determinants.size)
+        sample_count += element_sample_count
+
+        finite_determinants = np.isfinite(determinants)
+        finite_scaled = np.isfinite(scaled_values)
+        finite_jacobian_sample_count += int(np.count_nonzero(finite_determinants))
+        finite_scaled_jacobian_sample_count += int(np.count_nonzero(finite_scaled))
+        if np.any(finite_determinants):
+            finite_values = determinants[finite_determinants]
+            min_det = min(min_det, float(np.min(finite_values)))
+            max_det = max(max_det, float(np.max(finite_values)))
+            min_abs_det = min(
+                min_abs_det, float(np.min(np.abs(finite_values)))
             )
-            if not invalid:
-                sign = 1 if determinant > 0.0 else -1
-                if orientation_sign is None:
-                    orientation_sign = sign
-                elif sign != orientation_sign:
-                    invalid = True
-                    orientation_flip_count += 1
-            if invalid:
-                invalid_count += 1
-                invalid_elements.add(_element_number(element))
-            if not np.isfinite(scaled) or scaled < min_scaled_jacobian:
-                low_scaled_count += 1
-                low_scaled_elements.add(_element_number(element))
+            negative_jacobian_sample_count += int(
+                np.count_nonzero(finite_values < 0.0)
+            )
+        if np.any(finite_scaled):
+            min_scaled = min(
+                min_scaled, float(np.min(scaled_values[finite_scaled]))
+            )
+
+        valid_orientation = finite_determinants & (
+            np.abs(determinants) > jacobian_tolerance
+        )
+        valid_signs = np.sign(determinants[valid_orientation])
+        orientation_sign = None
+        orientation_flips = np.zeros(determinants.shape, dtype=bool)
+        if valid_signs.size:
+            orientation_sign = int(valid_signs[0])
+            valid_indices = np.flatnonzero(valid_orientation)
+            orientation_flips[valid_indices] = valid_signs != orientation_sign
+
+        invalid = ~valid_orientation | orientation_flips
+        element_invalid_count = int(np.count_nonzero(invalid))
+        invalid_count += element_invalid_count
+        orientation_flip_count += int(np.count_nonzero(orientation_flips))
+        if element_invalid_count:
+            invalid_elements.add(element_number)
+
+        low_scaled = ~finite_scaled | (scaled_values < min_scaled_jacobian)
+        element_low_scaled_count = int(np.count_nonzero(low_scaled))
+        low_scaled_count += element_low_scaled_count
+        if element_low_scaled_count:
+            low_scaled_elements.add(element_number)
         if orientation_sign == 1:
             positive_orientation_element_count += 1
         elif orientation_sign == -1:

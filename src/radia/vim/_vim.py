@@ -1858,7 +1858,7 @@ def build_charge_gram(fes, intorder=None, eps=1e-7, leafsize=16, eta=2.0, far_qu
         raise ValueError(
             "vim.ChargeGram: HDiv-VIM is TET (tri-face), pure-HEX (quad-face), or pure-WEDGE/prism "
             "(6-vertex) -- a MIXED-element mesh (e.g. tet+hex) needs HDiv-pyramid transition elements "
-            "(NGSolve 6.2.2604 does NOT implement them yet).  Got vertex counts %s." % sorted(_vtypes))
+            "(NGSolve 6.2.2606 does NOT implement them yet).  Got vertex counts %s." % sorted(_vtypes))
     pv = max(p - 1, 0)
     # Gauss pts/dim for the NEAR/SELF singular entries (the far/smooth pairs use the cheaper far_quad).  N =
     # B^T G B is a demag SELF-ENERGY and MUST be positive-semidefinite; UNDER-integrating the near/self pairs

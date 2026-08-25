@@ -719,7 +719,8 @@ def _strip_unused_face_descriptors(vol_path):
     section_keywords = {
         "mesh3d", "dimension", "geomtype", "facedescriptors",
         "surfaceelements", "surfaceelementsuv", "surfaceelementsgi",
-        "volumeelements", "edgesegmentsgi2", "points", "pointelements",
+        "volumeelements", "edgesegmentsgi2", "edgesegmentsgi3",
+        "edgedescriptors", "points", "pointelements",
         "identifications", "identificationtypes", "identificationnames",
         "materials", "bcnames", "cd2names", "cd3names",
         "singular_points", "singular_lines", "singular_faces",
@@ -961,7 +962,8 @@ def _is_section_header(s):
     if not s or s.startswith("#"):
         return False
     return (s.isalpha() or s in (
-        "edgesegmentsgi2", "facedescriptors", "face_transparencies",
+        "edgesegmentsgi2", "edgesegmentsgi3", "edgedescriptors",
+        "facedescriptors", "face_transparencies",
         "surfaceelements", "surfaceelementsuv",
         "volumeelements", "curvedelements",
         "points", "materials", "bcnames", "endmesh",

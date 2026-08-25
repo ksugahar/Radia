@@ -3,6 +3,9 @@ High-order volume convergence test for mixed element types.
 
 Tests:
   1. p-convergence: export netgen .vol at order 1-5, volume must converge to CAD
+  2. mapping validity: every sampled high-order Jacobian must remain finite,
+     orientation-consistent within its element, and above the production
+     scaled-Jacobian floor
 
 Cases:
   1. Flat brick (hex + tet + pyramid) -- exact volume expected
@@ -38,6 +41,7 @@ if _plugin_dir and os.path.isdir(_plugin_dir):
 import netgen.meshing
 from ngsolve import Mesh, Integrate, CF, BND, BBND
 from ngsolve import TaskManager
+from cubit_mesh_export.check import check_mesh_quality
 
 import cubit
 cubit.init(['cubit', '-nojournal', '-batch',
@@ -408,8 +412,10 @@ def pyramid5_volume(pts):
 def test_p_convergence(case_name, cad_volume, cad_area, is_flat, area_warn=False):
     """Export .vol at orders 1-5, check volume and area convergence."""
     print(f"\n  p-convergence (CAD vol={cad_volume:.6e}, area={cad_area:.6e}):")
-    print(f"  {'Order':>5} {'Volume':>14} {'V_err':>14} {'Area':>14} {'A_err':>14} {'Verdict':>8}")
-    print(f"  {'-----':>5} {'-'*14:>14} {'-'*14:>14} {'-'*14:>14} {'-'*14:>14} {'--------':>8}")
+    print(f"  {'Order':>5} {'Volume':>14} {'V_err':>14} {'Area':>14} {'A_err':>14} "
+          f"{'min_sJ':>11} {'flipJ':>6} {'negJ':>6} {'Verdict':>10}")
+    print(f"  {'-----':>5} {'-'*14:>14} {'-'*14:>14} {'-'*14:>14} {'-'*14:>14} "
+          f"{'-'*11:>11} {'-'*6:>6} {'-'*6:>6} {'-'*10:>10}")
 
     v_errors = []
     a_errors = []
@@ -424,6 +430,11 @@ def test_p_convergence(case_name, cad_volume, cad_area, is_flat, area_warn=False
             with TaskManager():
                 vol = Integrate(CF(1), mesh)
                 area = Integrate(CF(1), mesh, BND)
+            quality = check_mesh_quality(
+                mesh,
+                min_scaled_jacobian=1.0e-6,
+                integration_order=max(4, 2 * order),
+            )
         except Exception as e:
             print(f"  {order:>5} FAILED: {e}")
             v_errors.append(None)
@@ -433,7 +444,16 @@ def test_p_convergence(case_name, cad_volume, cad_area, is_flat, area_warn=False
 
         v_err = (vol - cad_volume) / cad_volume * 100.0
         a_err = (area - cad_area) / cad_area * 100.0
+        min_scaled = quality["minimum_scaled_jacobian"]
+        orientation_flips = quality["orientation_flip_sample_count"]
+        negative_jacobians = quality["negative_jacobian_sample_count"]
         verdict = "OK"
+
+        # Volume agreement alone can hide a folded high-order mapping.  Treat
+        # every structural/Jacobian quality issue as a hard regression.
+        if not quality["passed"]:
+            verdict = "FAIL(J)"
+            all_pass = False
 
         if is_flat:
             if abs(v_err) > 0.01 or abs(a_err) > 0.01:
@@ -454,7 +474,9 @@ def test_p_convergence(case_name, cad_volume, cad_area, is_flat, area_warn=False
                         verdict = "REGRESS"
                         all_pass = False
 
-        print(f"  {order:>5} {vol:>14.6e} {v_err:>+13.4e}% {area:>14.6e} {a_err:>+13.4e}% {verdict:>8}")
+        min_scaled_text = "n/a" if min_scaled is None else f"{min_scaled:.3e}"
+        print(f"  {order:>5} {vol:>14.6e} {v_err:>+13.4e}% {area:>14.6e} {a_err:>+13.4e}% "
+              f"{min_scaled_text:>11} {orientation_flips:>6} {negative_jacobians:>6} {verdict:>10}")
         v_errors.append(v_err)
         a_errors.append(a_err)
 

@@ -19,7 +19,8 @@ import scipy.sparse.linalg as spla
 
 import netgen.meshing as ng_meshing
 from netgen.meshing import (
-    Mesh as NgMesh, Element1D, Element2D, FaceDescriptor, MeshPoint, Pnt,
+    Mesh as NgMesh, EdgeDescriptor, Element1D, Element2D, FaceDescriptor,
+    MeshPoint, Pnt,
 )
 from ngsolve import (
     Mesh, BilinearForm, LinearForm, CoefficientFunction, TaskManager,
@@ -78,6 +79,14 @@ def make_structured_disk_quad_mesh(NR_disk=40, Nz_disk=8, NR_air=15, Nz_air=15,
     ngmesh.SetBCName(1, "right")
     ngmesh.SetBCName(2, "top")
     ngmesh.SetBCName(3, "bot")
+    for boundary, name in enumerate(("axis", "right", "top", "bot"), start=1):
+        edge = EdgeDescriptor()
+        edge.edgenr = boundary
+        edge.surfnr = (boundary, -1)
+        edge.domin = 1
+        edge.domout = 0
+        edge.name = name
+        ngmesh.Add(edge)
 
     # Add nodes.
     pids = np.empty((NZ + 1, NR + 1), dtype=object)

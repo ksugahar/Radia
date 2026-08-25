@@ -161,9 +161,26 @@ Write-Host "MKL:   $INTEL_MKL (mkl_rt.3.dll)" -ForegroundColor Gray
 Write-Host "Build: $BUILD_DIR" -ForegroundColor Gray
 Write-Host ""
 
-if ($Rebuild -and (Test-Path $BUILD_DIR)) {
-    Write-Host "Cleaning build directory..." -ForegroundColor Yellow
-    Remove-Item -Recurse -Force $BUILD_DIR
+if ($Rebuild) {
+    $BuildDirsToClean = @($BUILD_DIR)
+    if (-not $AxiFemOnly -and -not $MatlabMexOnly) {
+        $BuildDirsToClean += @(
+            "$PROJECT_DIR\src\cubit_plugin\build-pyd",
+            "$PROJECT_DIR\src\cubit_plugin\build-ccm"
+        )
+    }
+    $ProjectRoot = [System.IO.Path]::GetFullPath($PROJECT_DIR).TrimEnd('\') + '\'
+    foreach ($BuildDirToClean in $BuildDirsToClean) {
+        $ResolvedBuildDir = [System.IO.Path]::GetFullPath($BuildDirToClean)
+        if (-not $ResolvedBuildDir.StartsWith(
+                $ProjectRoot, [System.StringComparison]::OrdinalIgnoreCase)) {
+            throw "Refusing to clean build directory outside project: $ResolvedBuildDir"
+        }
+        if (Test-Path -LiteralPath $ResolvedBuildDir) {
+            Write-Host "Cleaning build directory: $ResolvedBuildDir" -ForegroundColor Yellow
+            Remove-Item -LiteralPath $ResolvedBuildDir -Recurse -Force
+        }
+    }
 }
 if (-not (Test-Path $BUILD_DIR)) {
     New-Item -ItemType Directory -Path $BUILD_DIR | Out-Null

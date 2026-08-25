@@ -7,6 +7,13 @@ crystallized as its own package.
 
 ## [Unreleased]
 
+## [1.4.43] - 2026-08-25
+
+- radia-ngsolve: migrated deterministic two-dimensional Netgen mesh writers
+  to the 6.2.2606 `EdgeDescriptor` contract and taught the strict `.vol`
+  inventory and execution gates to accept `edgesegmentsgi3` plus
+  `edgedescriptors` while retaining legacy `edgesegmentsgi2` input.
+
 ## [1.4.42] - 2026-08-22
 
 - matlab: narrowed all Optuna claims to the checked 4.9.0 subset and exposed

@@ -1330,7 +1330,7 @@ entries moved to `S:\COMSOL\mcp-server`) to FEMM and JMAG.
 
 ### No Fallbacks — Fail Fast, Fail Loud
 
-**POLICY**: Do NOT write fallback chains (`try API_A except: try API_B except: try API_C`). Pick the **one** API that works for the project's target environment (Cubit 2025.12, NGSolve 6.2.2604+, Python 3.12) and commit to it. If the chosen API stops working, fix the call site or raise — never bury the breakage under another path.
+**POLICY**: Do NOT write fallback chains (`try API_A except: try API_B except: try API_C`). Pick the **one** API that works for the project's target environment (Cubit 2025.12, NGSolve 6.2.2606, Python 3.12) and commit to it. If the chosen API stops working, fix the call site or raise — never bury the breakage under another path.
 
 **Design philosophy**: this is the **fail-fast** principle (Jim Shore, 2004) combined with **"errors should never pass silently"** (PEP 20, Zen of Python) and **"explicit is better than implicit"**. The deeper rationale is *user agency*: a fallback path performs a computation the user did not ask for and cannot inspect. Silent fallback violates the **Principle of Least Astonishment** — the user gets a number, has no way to know which code path produced it, and trusts it. That trust is unrecoverable when the result turns out to be from the wrong path.
 
@@ -2217,7 +2217,7 @@ Prefer RAII containers (`std::vector`) over manual `new`/`delete`.
 |-----------|---------|-------|
 | **Python** | 3.12.10 | System Python for Radia/NGSolve. Cubit toolbar launches notebook/headless workflows via subprocess. |
 | **Coreform Cubit** | 2025.12 | Embedded Python 3.10 + PySide6 (Qt6). No Qt5/PyQt5. Cannot import NGSolve/Radia directly. |
-| **NGSolve** | 6.2.2604+ | curvedelements Load, hex/prism curving, Periodic BC fix, `ngsolve.bem` FMM-based Biot-Savart (`BiotSavartCF`, `*MLCF`, `MLExpansion`, `SphericalHarmonicsCF`) |
+| **NGSolve** | 6.2.2606 | BEM correctness, thread-local TaskManager/LocalHeap, curvedelements Load, hex/prism curving, Periodic BC fix |
 
 **Cubit panel subprocess constraint**: Cubit embeds Python 3.10; Radia/NGSolve require 3.12. Same-process import is impossible. All computation runs via `subprocess.run([python3.12, calc_*.py])` with JSON output.
 
@@ -2890,14 +2890,14 @@ src/radia/
 
 ### NGSolve Version Requirement
 
-**CRITICAL**: Use NGSolve **6.2.2604** or later. Required for curvedelements .vol Load, hex/prism curving, Periodic BC fix, AND the new `ngsolve.bem` FMM-based hierarchical BEM (`BiotSavartCF`, `BiotSavartRegularMLCF`, `BiotSavartSingularMLCF`, `RegularMLExpansion`, `SingularMLExpansion`, `SphericalHarmonicsCF`, `IntegralOperator.NearFieldMatrix` / `CalcSubMatrix`).
+**CRITICAL**: Use NGSolve **6.2.2606** as pinned by `pyproject.toml`. Required for the validated BEM fixes, thread-local TaskManager/LocalHeap behavior, curvedelements .vol Load, hex/prism curving, Periodic BC fix, and the `ngsolve.bem` FMM-based hierarchical BEM APIs.
 
 Reference: https://forum.ngsolve.org/t/ngsolve-periodic-boundary-condition-regression-bug-report/3805
 
-Official PyPI ngsolve **6.2.2604**+ includes: **MKL**, **PARDISO**, Periodic BC fix,
-**curvedelements Save/Load**, **p-version hex/prism curving**, and an **FMM-style hierarchical Biot-Savart / Laplace / Helmholtz backend in `ngsolve.bem`**.  The FMM backend is appropriate for SF coil design on smooth surfaces (free-space Biot-Savart on plane / cylinder / sphere); see the "FMM Removed from Radia core (2026-03-06)" policy section for the scope clarification -- Radia's own HDiv-VIM / PEEC / BEM repeated-apply matrices remain on HACApK ACA+ where compression is the right tool.
+Official PyPI ngsolve **6.2.2606** includes the Periodic BC fix,
+**curvedelements Save/Load**, **p-version hex/prism curving**, and an **FMM-style hierarchical Biot-Savart / Laplace / Helmholtz backend in `ngsolve.bem`**. The wheel uses `ngsolve-openblas`; optional PARDISO support is selected when the separate `mkl` package is installed. The FMM backend is appropriate for SF coil design on smooth surfaces (free-space Biot-Savart on plane / cylinder / sphere); see the "FMM Removed from Radia core (2026-03-06)" policy section for the scope clarification -- Radia's own HDiv-VIM / PEEC / BEM repeated-apply matrices remain on HACApK ACA+ where compression is the right tool.
 
-Installed on LAB 2026-05-30: `pip show ngsolve` -> `Version: 6.2.2604`, `Location: C:\Program Files\Python312\Lib\site-packages`.  Bump `pyproject.toml` dependency pin to `ngsolve>=6.2.2604` when the FE-direct + ngsolve.bem demo lands.
+Installed on LAB 2026-08-25: `pip show ngsolve` -> `Version: 6.2.2606`, `Location: C:\Program Files\Python312\Lib\site-packages`. Keep the exact `ngsolve==6.2.2606` and `netgen-mesher==6.2.2606` pins synchronized with every native rebuild.
 
 **Netgen fork is no longer required.** The ksugahar/netgen repository is historical only.
 All curvedelements, CallbackGeometry, and curving features are now in the official release.

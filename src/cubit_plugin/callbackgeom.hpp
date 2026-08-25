@@ -83,7 +83,11 @@ namespace netgen
     virtual PointGeomInfo ProjectPoint(int surfind, Point<3> & p) const override;
 
     virtual void ProjectPointEdge(int surfind, int surfind2, Point<3> & p,
-                                  EdgePointGeomInfo* gi = nullptr) const override;
+                                  EdgePointGeomInfo* gi = nullptr
+#ifdef RADIA_NETGEN_EDGE_DESCRIPTOR_API
+                                  , int edgenr = -1
+#endif
+                                  ) const override;
 
     virtual bool ProjectPointGI(int surfind, Point<3> & p,
                                 PointGeomInfo & gi) const override;
@@ -97,7 +101,11 @@ namespace netgen
                                   const EdgePointGeomInfo & ap1,
                                   const EdgePointGeomInfo & ap2,
                                   Point<3> & newp,
-                                  EdgePointGeomInfo & newgi) const override;
+                                  EdgePointGeomInfo & newgi
+#ifdef RADIA_NETGEN_EDGE_DESCRIPTOR_API
+                                  , int edgenr
+#endif
+                                  ) const override;
 
     virtual void PointBetween(const Point<3> & p1, const Point<3> & p2,
                               double secpoint,
@@ -109,7 +117,11 @@ namespace netgen
 
     virtual Vec<3> GetTangent(const Point<3> & p, int surfi1,
                               int surfi2,
-                              const EdgePointGeomInfo & egi) const override;
+                              const EdgePointGeomInfo & egi
+#ifdef RADIA_NETGEN_EDGE_DESCRIPTOR_API
+                              , int edgenr = -1
+#endif
+                              ) const override;
   };
 
 }

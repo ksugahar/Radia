@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "cubit-mesh-export"
-version = "0.14.9"
+version = "0.14.10"
 description = "Solver-neutral mesh export from Coreform Cubit: high-order curved .vol/.msh/.bdf, Kelvin transformation, Dirichlet/symmetry label conventions"
 readme = "README.md"
 license = {text = "MIT"}
@@ -21,8 +21,10 @@ classifiers = [
     "Topic :: Scientific/Engineering",
 ]
 dependencies = [
-    "netgen-mesher>=6.2.2602",
-    "ngsolve>=6.2.2601",
+    # The bundled native curver uses Netgen's C++ ABI. Keep both packages on
+    # the exact version used to build the wheel and deployed Cubit DLLs.
+    "netgen-mesher==6.2.2606",
+    "ngsolve==6.2.2606",
     "numpy",
 ]
 

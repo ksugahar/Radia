@@ -2,7 +2,7 @@
 ngsolve.bem (the Laplace single-layer), validated vs the sphere ANALYTIC 1/3.
 
 The HDiv-VIM surface demag Gram (the uniform-M case: div M = 0 -> pure surface charge sigma = M.n) IS
-the Laplace SINGLE-LAYER operator V:  (V sigma)(r) = INT_S sigma(r')/(4 pi |r-r'|) dS'.  NGSolve 6.2.2604
+the Laplace SINGLE-LAYER operator V:  (V sigma)(r) = INT_S sigma(r')/(4 pi |r-r'|) dS'.  NGSolve 6.2.2606
 ships `ngsolve.bem` with a high-order, CURVED-aware, FMM-accelerated Laplace single-layer -- so the
 curved AND high-order AND scalable surface Gram come essentially for free (the "complement NGSolve /
 NGSolve-through" principle), with NO hand-rolled singular quadrature.
@@ -45,8 +45,8 @@ import os
 from math import pi, log, sqrt, acos
 
 from ngsolve import (Mesh, SurfaceL2, GridFunction, CoefficientFunction, Integrate,
-                     specialcf, InnerProduct, TaskManager, SetNumThreads)
-from ngsolve.bem import SingleLayerPotentialOperator
+                     specialcf, InnerProduct, TaskManager, SetNumThreads, ds)
+from ngsolve.bem import LaplaceSL
 from netgen.csg import CSGeometry, Sphere, Ellipsoid, Pnt, Vec
 
 SetNumThreads(4)
@@ -64,7 +64,13 @@ def _demag_core(geo, h, curve_order, charge_order, intorder, axis=2):
         if curve_order:
             mesh.Curve(curve_order)
         fes = SurfaceL2(mesh, order=charge_order)
-        V = SingleLayerPotentialOperator(fes, intorder=intorder)
+        u, v = fes.TnT()
+        # The 6.2.2606 public BEM API replaced SingleLayerPotentialOperator
+        # with variational LaplaceSL syntax.  Its effective quadrature order
+        # is fes_order + bonus_intorder, so retain the legacy absolute
+        # ``intorder`` contract used by this validation.
+        boundary_dx = ds(bonus_intorder=max(0, intorder - charge_order))
+        V = LaplaceSL(u * boundary_dx) * v * boundary_dx
         gf = GridFunction(fes)
         gf.Set(specialcf.normal(3)[axis], definedon=mesh.Boundaries(".*"))   # sigma = n_axis (M = e_axis)
         Vs = gf.vec.CreateVector(); Vs.data = V.mat * gf.vec

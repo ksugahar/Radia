@@ -210,15 +210,22 @@ def parse_netgen_2d_vol(text: str, *, source_name: str | None = None) -> Netgen2
             volume_count = count("volumeelements")
             if volume_count:
                 raise ValueError("dimension-2 .vol must not contain volume elements")
-        elif normalized == "edgesegmentsgi2":
-            for edge_index in range(1, count("edgesegmentsgi2") + 1):
-                record = required("edgesegmentsgi2").split()
-                if len(record) < 4:
+        elif normalized in {"edgesegmentsgi2", "edgesegmentsgi3"}:
+            for edge_index in range(1, count(normalized) + 1):
+                record = required(normalized).split()
+                minimum_fields = 4 if normalized == "edgesegmentsgi2" else 7
+                if len(record) < minimum_fields:
                     raise ValueError(f"boundary edge {edge_index} is too short")
+                if normalized == "edgesegmentsgi2":
+                    boundary_number = int(record[0])
+                    nodes = (int(record[2]), int(record[3]))
+                else:
+                    # Netgen 6.2.2606 stores p1/p2 first and a zero-based
+                    # EdgeDescriptor table index (edsi) in field seven.
+                    boundary_number = int(record[6]) + 1
+                    nodes = (int(record[0]), int(record[1]))
                 edges.append(
-                    Netgen2DBoundaryEdge(
-                        int(record[0]), (int(record[2]), int(record[3]))
-                    )
+                    Netgen2DBoundaryEdge(boundary_number, nodes)
                 )
         elif normalized == "points":
             for point_index in range(1, count("points") + 1):
@@ -238,7 +245,12 @@ def parse_netgen_2d_vol(text: str, *, source_name: str | None = None) -> Netgen2
                 boundary_names[int(record[0])] = (
                     record[1] if len(record) > 1 else f"boundary_{record[0]}"
                 )
-        elif normalized in {"pointelements", "face_colours", "face_transparencies"}:
+        elif normalized in {
+            "pointelements",
+            "edgedescriptors",
+            "face_colours",
+            "face_transparencies",
+        }:
             skip_counted(normalized)
         elif normalized == "curvedelements":
             has_curved_geometry = True
@@ -368,11 +380,19 @@ def _validate_ngsolve_2d_execution_text(text: str) -> None:
             "solver-ready dimension-2 .vol requires a facedescriptors section; "
             "generate it with the Netgen writer"
         )
+    edge_section = next(
+        (name for name in ("edgesegmentsgi3", "edgesegmentsgi2") if name in lowered),
+        None,
+    )
+    if edge_section is None:
+        raise ValueError("solver-ready dimension-2 .vol has no edge segment section")
     try:
-        edge_index = lowered.index("edgesegmentsgi2")
+        edge_index = lowered.index(edge_section)
         edge_count = int(lines[edge_index + 1])
     except (ValueError, IndexError) as exc:
-        raise ValueError("solver-ready dimension-2 .vol has invalid edgesegmentsgi2") from exc
+        raise ValueError(
+            f"solver-ready dimension-2 .vol has invalid {edge_section}"
+        ) from exc
     edge_rows: list[list[str]] = []
     for line in lines[edge_index + 2 :]:
         if not line or line.startswith("#"):
@@ -380,9 +400,16 @@ def _validate_ngsolve_2d_execution_text(text: str) -> None:
         edge_rows.append(line.split())
         if len(edge_rows) == edge_count:
             break
-    if len(edge_rows) != edge_count or any(len(row) < 12 for row in edge_rows):
+    minimum_fields = 7 if edge_section == "edgesegmentsgi3" else 12
+    if len(edge_rows) != edge_count or any(
+        len(row) < minimum_fields for row in edge_rows
+    ):
         raise ValueError(
             "solver-ready dimension-2 .vol requires complete Netgen edge records"
+        )
+    if edge_section == "edgesegmentsgi3" and "edgedescriptors" not in lowered:
+        raise ValueError(
+            "solver-ready dimension-2 .vol requires edgedescriptors with edgesegmentsgi3"
         )
 
 
@@ -600,6 +627,7 @@ def write_structured_rect_vol(
     if not (x1 > x0 and y1 > y0):
         raise ValueError("rectangle bounds must be strictly increasing")
     from netgen.meshing import (  # type: ignore
+        EdgeDescriptor,
         Element1D,
         Element2D,
         FaceDescriptor,
@@ -616,6 +644,13 @@ def write_structured_rect_vol(
     for boundary, name in enumerate(("bottom", "right", "top", "left"), start=1):
         mesh.Add(FaceDescriptor(surfnr=boundary, domin=0, bc=boundary))
         mesh.SetBCName(boundary - 1, name)
+        edge = EdgeDescriptor()
+        edge.edgenr = boundary
+        edge.surfnr = (boundary, -1)
+        edge.domin = 1
+        edge.domout = 0
+        edge.name = name
+        mesh.Add(edge)
     point_ids: list[list[Any]] = []
     for j in range(ny + 1):
         row = []
@@ -697,6 +732,7 @@ def write_structured_material_rect_vol(
         names.add(name)
 
     from netgen.meshing import (  # type: ignore
+        EdgeDescriptor,
         Element1D,
         Element2D,
         FaceDescriptor,
@@ -715,6 +751,13 @@ def write_structured_material_rect_vol(
     for boundary, name in enumerate(("bottom", "right", "top", "left"), start=1):
         mesh.Add(FaceDescriptor(surfnr=boundary, domin=0, bc=boundary))
         mesh.SetBCName(boundary - 1, name)
+        edge = EdgeDescriptor()
+        edge.edgenr = boundary
+        edge.surfnr = (boundary, -1)
+        edge.domin = 1
+        edge.domout = 0
+        edge.name = name
+        mesh.Add(edge)
     point_ids: list[list[Any]] = []
     for j in range(ny + 1):
         row = []

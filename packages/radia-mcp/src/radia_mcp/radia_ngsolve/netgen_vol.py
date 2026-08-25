@@ -1995,7 +1995,14 @@ def parse_netgen_tri_tet_vol(text: str, source: str | None = None) -> NetgenTriT
             for _ in range(count):
                 record = next_required_line("bcnames").split(maxsplit=1)
                 boundary_names[int(record[0])] = record[1] if len(record) > 1 else f"boundary_{record[0]}"
-        elif key_lower in {"edgesegmentsgi2", "pointelements", "face_colours", "face_transparencies"}:
+        elif key_lower in {
+            "edgesegmentsgi2",
+            "edgesegmentsgi3",
+            "edgedescriptors",
+            "pointelements",
+            "face_colours",
+            "face_transparencies",
+        }:
             skip_counted_section(key_lower)
         elif key_lower == "curvedelements":
             break

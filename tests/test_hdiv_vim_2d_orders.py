@@ -7,7 +7,7 @@ ng = pytest.importorskip("ngsolve")
 pytest.importorskip("netgen.occ")
 from netgen.occ import OCCGeometry, WorkPlane  # noqa: E402
 from netgen.meshing import (  # noqa: E402
-    Element1D, Element2D, FaceDescriptor, Mesh as NetgenMesh,
+    EdgeDescriptor, Element1D, Element2D, FaceDescriptor, Mesh as NetgenMesh,
     MeshPoint, Pnt,
 )
 
@@ -27,6 +27,13 @@ def _mixed_tri_quad_mesh():
     mesh.SetMaterial(1, "body")
     mesh.Add(FaceDescriptor(surfnr=1, domin=0, bc=1))
     mesh.SetBCName(0, "outer")
+    edge = EdgeDescriptor()
+    edge.edgenr = 1
+    edge.surfnr = (1, -1)
+    edge.domin = 1
+    edge.domout = 0
+    edge.name = "outer"
+    mesh.Add(edge)
     points = [
         mesh.Add(MeshPoint(Pnt(x, y, 0.0)))
         for x, y in ((0, 0), (1, 0), (2, 0), (0, 1), (1, 1), (2, 1))

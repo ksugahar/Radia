@@ -23,7 +23,8 @@ import scipy.linalg as sla
 
 import netgen.meshing as ng_meshing
 from netgen.meshing import (
-    Mesh as NgMesh, Element2D, Element1D, FaceDescriptor, MeshPoint, Pnt,
+    Mesh as NgMesh, EdgeDescriptor, Element2D, Element1D, FaceDescriptor,
+    MeshPoint, Pnt,
 )
 from ngsolve import (
     Mesh, BilinearForm, CoefficientFunction, TaskManager, ngsglobals,
@@ -67,6 +68,13 @@ def make_sphere_axisym_trig_mesh(N_rho_in, N_rho_out, N_theta):
     mesh.Add(FaceDescriptor(surfnr=2, domin=0, bc=2))   # idx 2 -> conductor
     mesh.SetBCName(0, "outer")
     mesh.SetBCName(1, "inner")  # interior interface -- unused but distinct
+    edge = EdgeDescriptor()
+    edge.edgenr = 1
+    edge.surfnr = (1, -1)
+    edge.domin = 1
+    edge.domout = 0
+    edge.name = "outer"
+    mesh.Add(edge)
 
     # Add points, deduplicating axis points so each physical (r=0, z) becomes
     # a single mesh vertex. Without this, NGSolve creates degenerate

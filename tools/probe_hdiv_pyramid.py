@@ -6,7 +6,7 @@ transition elements (4 tri faces + 1 quad face) at every hex(quad-face) <-> tet(
 those pyramids must carry an H(div) flux.  Joachim (Schoberl, NGSolve) committed to add HDiv-pyramid on the
 NGSolve side; we WAIT for it (do NOT reimplement -- same "complement NGSolve" pattern as wait-for-Hlib).
 
-As of NGSolve 6.2.2604 the state is ALLOC-BUT-UNIMPLEMENTED: HDiv(pyramid_mesh, order=1) constructs, but the
+As of NGSolve 6.2.2606 the state is ALLOC-BUT-UNIMPLEMENTED: HDiv(pyramid_mesh, order=1) constructs, but the
 first Assemble raises `HDivHighOrderFESpace: Pyramid elements not implemented yet!`.  So the check must be
 FUNCTIONAL (assemble a mass form + reproduce a constant field), not just "did HDiv() not raise".
 

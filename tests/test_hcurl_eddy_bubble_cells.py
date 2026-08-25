@@ -4,6 +4,7 @@ import pytest
 ng = pytest.importorskip("ngsolve")
 from netgen.csg import Pnt  # noqa: E402
 from netgen.meshing import (  # noqa: E402
+    EdgeDescriptor,
     Element1D,
     Element2D,
     Element3D,
@@ -59,6 +60,18 @@ _CELLS_2D = {
 }
 
 
+def _add_2d_boundary_descriptor(mesh, name="skin"):
+    mesh.Add(FaceDescriptor(surfnr=1, domin=0, bc=1))
+    mesh.SetBCName(0, name)
+    edge = EdgeDescriptor()
+    edge.edgenr = 1
+    edge.surfnr = (1, -1)
+    edge.domin = 1
+    edge.domout = 0
+    edge.name = name
+    mesh.Add(edge)
+
+
 def _single_cell_mesh(family):
     if family in _CELLS_3D:
         vertices, faces = _CELLS_3D[family]
@@ -79,8 +92,7 @@ def _single_cell_mesh(family):
     vertices, element = _CELLS_2D[family]
     netgen_mesh = NetgenMesh(dim=2)
     netgen_mesh.SetMaterial(1, "cond")
-    netgen_mesh.Add(FaceDescriptor(surfnr=1, domin=0, bc=1))
-    netgen_mesh.SetBCName(0, "skin")
+    _add_2d_boundary_descriptor(netgen_mesh)
     points = [netgen_mesh.Add(MeshPoint(Pnt(*point))) for point in vertices]
     netgen_mesh.Add(Element2D(1, [points[i] for i in element]))
     for first, second in zip(element, element[1:] + element[:1]):
@@ -113,8 +125,7 @@ def _warped_hex_mesh():
 def _mixed_tri_quad_mesh():
     netgen_mesh = NetgenMesh(dim=2)
     netgen_mesh.SetMaterial(1, "cond")
-    netgen_mesh.Add(FaceDescriptor(surfnr=1, domin=0, bc=1))
-    netgen_mesh.SetBCName(0, "skin")
+    _add_2d_boundary_descriptor(netgen_mesh)
     points = [
         netgen_mesh.Add(MeshPoint(Pnt(x, y, 0.0)))
         for x, y in ((0, 0), (1, 0), (2, 0), (0, 1), (1, 1), (2, 1))
@@ -130,8 +141,7 @@ def _mixed_tri_quad_mesh():
 def _two_triangle_square_mesh():
     netgen_mesh = NetgenMesh(dim=2)
     netgen_mesh.SetMaterial(1, "cond")
-    netgen_mesh.Add(FaceDescriptor(surfnr=1, domin=0, bc=1))
-    netgen_mesh.SetBCName(0, "skin")
+    _add_2d_boundary_descriptor(netgen_mesh)
     points = [
         netgen_mesh.Add(MeshPoint(Pnt(*point)))
         for point in ((0, 0, 0), (1, 0, 0), (1, 1, 0), (0, 1, 0))
