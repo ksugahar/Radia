@@ -1,4 +1,4 @@
-classdef BruteForceSampler < handle
+classdef BruteForceSampler < radia.optuna.BaseSampler
     %BRUTEFORCESAMPLER Exhaust finite define-by-run search trees.
 
     properties (SetAccess=private)
@@ -20,12 +20,12 @@ classdef BruteForceSampler < handle
     methods
         function obj=BruteForceSampler(options)
             arguments
-                options.Seed (1,1) double = 0
+                options.Seed double = double.empty(1,0)
                 options.AvoidPrematureStop (1,1) logical = false
             end
-            obj.Seed=options.Seed;
+            obj.Seed=radia.optuna.internal.resolveSeed(options.Seed);
             obj.AvoidPrematureStop=options.AvoidPrematureStop;
-            obj.Stream=RandStream("mt19937ar","Seed",obj.Seed);
+            obj.Stream=radia.optuna.internal.NumpyRandomState(obj.Seed);
         end
 
         function beforeTrial(obj,study,~)
@@ -91,7 +91,7 @@ classdef BruteForceSampler < handle
                     selected,ignored,excludeRunning);
             end
             if all(counts==0)
-                chosen=1+floor(rand(obj.Stream)*numel(candidates));
+                chosen=randi(obj.Stream,numel(candidates));
             else
                 exact=counts/sum(counts);
                 flat=double(counts>0)/sum(counts>0);
@@ -278,7 +278,8 @@ classdef BruteForceSampler < handle
             changed=isempty(obj.AttachedStudy) || ~isequal(obj.AttachedStudy,study);
             if changed
                 obj.AttachedStudy=study;
-                obj.Stream=RandStream("mt19937ar","Seed",obj.Seed);
+                obj.Stream= ...
+                    radia.optuna.internal.NumpyRandomState(obj.Seed);
                 obj.Restored=false;
             end
             if obj.Restored

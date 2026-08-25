@@ -1,5 +1,6 @@
 #include "mex.h"
 
+#ifndef RADIA_OPTUNA_MEX_ONLY
 #include "rad_evrs_tmethod.h"
 #include "rad_acoustic_analytic.h"
 #include "axi_henrotte_numeric.hpp"
@@ -42,6 +43,7 @@
 #include <postproc.hpp>
 #include <sparsematrix.hpp>
 #include <symbolicintegrator.hpp>
+#endif
 
 #include <algorithm>
 #include <array>
@@ -64,11 +66,14 @@
 
 // The legacy C API header defines short macros (EXP, CALL, OK), so include it
 // only after the NGSolve and standard-library headers have been parsed.
+#ifndef RADIA_OPTUNA_MEX_ONLY
 #include "radentry.h"
+#endif
 
 namespace {
 
 using Complex = std::complex<double>;
+#ifndef RADIA_OPTUNA_MEX_ONLY
 using EnergyStopMaterial = rad_hdiv::EnergyStopMaterial;
 using HACApKBEMManager = RadHACApKBEMManager;
 using HACApKPEECManager = RadHACApKPEECManager;
@@ -217,8 +222,26 @@ struct NativeStateSpaceHandle {
     std::vector<double> state;
     std::size_t step_count = 0;
 };
+#endif
+
+#ifdef RADIA_OPTUNA_MEX_ONLY
+struct OptunaTPEHistoryTrial {
+    int trial_number = -1;
+    double objective = std::numeric_limits<double>::quiet_NaN();
+    std::unordered_map<int, double> parameters;
+};
+
+struct OptunaRandomStateHandle {
+    std::array<std::uint32_t, 624> mt{};
+    std::size_t index = 624;
+    bool has_gauss = false;
+    double gauss = 0.0;
+    std::vector<OptunaTPEHistoryTrial> tpe_history;
+};
+#endif
 
 std::mutex registry_mutex;
+#ifndef RADIA_OPTUNA_MEX_ONLY
 std::unordered_map<std::uint64_t, std::unique_ptr<EnergyStopMaterial>> energy_registry;
 std::unordered_map<std::uint64_t, std::unique_ptr<BEMHandle>> bem_registry;
 std::unordered_map<std::uint64_t, std::unique_ptr<PEECHandle>> peec_registry;
@@ -249,10 +272,16 @@ std::unordered_map<std::uint64_t, std::unique_ptr<NGSolveSolverHandle>>
     solver_registry;
 std::unordered_map<std::uint64_t, std::unique_ptr<NativeStateSpaceHandle>>
     state_space_registry;
+#endif
+#ifdef RADIA_OPTUNA_MEX_ONLY
+std::unordered_map<std::uint64_t, std::unique_ptr<OptunaRandomStateHandle>>
+    optuna_random_state_registry;
+#endif
 std::uint64_t next_handle = 1;
 std::size_t lock_count = 0;
 bool exit_handler_registered = false;
 
+#ifndef RADIA_OPTUNA_MEX_ONLY
 extern "C" {
     void cHACApK_hlu_get_timings(double* out_t_decomp, double* out_t_solve,
                                  long* out_n_dense_lu, long* out_n_dense_gemm);
@@ -284,6 +313,7 @@ extern "C" {
     double cHACApK_harith_self_test_mixed_sibling(int nb_small);
     double cHACApK_harith_self_test_rk_deep(int n_per_block, int rk_rank);
 }
+#endif
 
 [[noreturn]] void BadArgument(const std::string& message) {
     throw std::invalid_argument(message);
@@ -736,6 +766,7 @@ mxArray* PairStructOutput(const std::vector<std::pair<std::string, double>>& val
     return result;
 }
 
+#ifndef RADIA_OPTUNA_MEX_ONLY
 rad_hdiv::FieldEvaluatorOptions FieldOptions(int nrhs, const mxArray* prhs[],
                                              int first_option, const char* usage) {
     const int count = nrhs - first_option;
@@ -754,6 +785,7 @@ rad_hdiv::FieldEvaluatorOptions FieldOptions(int nrhs, const mxArray* prhs[],
     }
     return options;
 }
+#endif
 
 mxArray* ComplexScalarOutput(Complex value) {
     mxArray* result = mxCreateDoubleMatrix(1, 1, mxCOMPLEX);
@@ -803,6 +835,7 @@ std::vector<std::uint64_t> HandleVector(const mxArray* value,
     return std::vector<std::uint64_t>(data, data + count);
 }
 
+#ifndef RADIA_OPTUNA_MEX_ONLY
 void CheckRadia(int error_code) {
     if (error_code == 0)
         return;
@@ -1351,7 +1384,86 @@ void DestroyStateSpace(std::uint64_t handle) {
     --lock_count;
 }
 
+#else
+
+void Cleanup() {
+    std::lock_guard<std::mutex> guard(registry_mutex);
+    optuna_random_state_registry.clear();
+    while (lock_count > 0) {
+        mexUnlock();
+        --lock_count;
+    }
+}
+
+bool HandleInUse(std::uint64_t handle) {
+    return handle == 0 || optuna_random_state_registry.count(handle) != 0;
+}
+
+void EnsureExitHandler() {
+    if (!exit_handler_registered) {
+        mexAtExit(Cleanup);
+        exit_handler_registered = true;
+    }
+}
+
+#endif
+
+#ifdef RADIA_OPTUNA_MEX_ONLY
+std::uint64_t RegisterOptunaRandomState(
+    std::unique_ptr<OptunaRandomStateHandle> random_state) {
+    if (!random_state)
+        BadArgument("Optuna random-state construction returned null");
+    std::lock_guard<std::mutex> guard(registry_mutex);
+    while (HandleInUse(next_handle))
+        ++next_handle;
+    const std::uint64_t handle = next_handle++;
+    optuna_random_state_registry.emplace(handle, std::move(random_state));
+    mexLock();
+    ++lock_count;
+    return handle;
+}
+
+OptunaRandomStateHandle& OptunaRandomState(std::uint64_t handle) {
+    std::lock_guard<std::mutex> guard(registry_mutex);
+    const auto found = optuna_random_state_registry.find(handle);
+    if (found == optuna_random_state_registry.end())
+        BadArgument("invalid or stale Optuna random-state handle");
+    return *found->second;
+}
+
+void DestroyOptunaRandomState(std::uint64_t handle) {
+    std::lock_guard<std::mutex> guard(registry_mutex);
+    if (optuna_random_state_registry.erase(handle) == 0)
+        BadArgument("invalid or stale Optuna random-state handle");
+    mexUnlock();
+    --lock_count;
+}
+#endif
+
 mxArray* Commands() {
+#ifdef RADIA_OPTUNA_MEX_ONLY
+    static const char* names[] = {
+        "api.info", "api.commands",
+        "optuna.pareto.rank_crowding",
+        "optuna.parzen.log_pdf_numerical",
+        "optuna.parzen.log_pdf_categorical",
+        "optuna.tpe.best_numerical",
+        "optuna.tpe.best_joint",
+        "optuna.tpe.best_joint_observations",
+        "optuna.tpe.best_numerical_observations",
+        "optuna.tpe.history.reset",
+        "optuna.tpe.history.append_complete",
+        "optuna.tpe.best_grouped_history",
+        "optuna.random_state.create",
+        "optuna.random_state.rand",
+        "optuna.random_state.randn",
+        "optuna.random_state.randi",
+        "optuna.random_state.randperm",
+        "optuna.random_state.snapshot",
+        "optuna.random_state.restore",
+        "optuna.random_state.destroy"
+    };
+#else
     static const char* names[] = {
         "api.info", "api.commands", "taskmanager.probe", "ngsolve.space_info",
         "ngsolve.matrix_dump",
@@ -1420,9 +1532,6 @@ mxArray* Commands() {
         "simulink.state_space.restore",
         "simulink.state_space.reset",
         "simulink.state_space.destroy",
-        "optuna.pareto.rank_crowding",
-        "optuna.parzen.log_pdf_numerical",
-        "optuna.parzen.log_pdf_categorical",
         "ih.eddy.create",
         "ih.eddy.output",
         "ih.eddy.destroy",
@@ -1604,12 +1713,15 @@ mxArray* Commands() {
         "radia.TrfTrsl", "radia.TrfRot", "radia.TrfInv", "radia.TrfCmbL",
         "radia.TrfCmbR", "radia.TrfOrnt", "radia.MatPM", "radia.UtiVer"
     };
+#endif
     constexpr std::size_t count = sizeof(names) / sizeof(names[0]);
     mxArray* result = mxCreateCellMatrix(1, count);
     for (std::size_t i = 0; i < count; ++i)
         mxSetCell(result, i, mxCreateString(names[i]));
     return result;
 }
+
+#ifdef RADIA_OPTUNA_MEX_ONLY
 
 void OptunaParetoRankCrowding(int nlhs, mxArray* plhs[], int nrhs,
                               const mxArray* prhs[]) {
@@ -1863,6 +1975,1178 @@ void OptunaParzenLogPdfCategorical(int nlhs, mxArray* plhs[], int nrhs,
     }
     plhs[0] = RealColumn(result);
 }
+
+void OptunaRandomStateSeed(OptunaRandomStateHandle& state,
+                           std::uint32_t seed) {
+    state.mt[0] = seed;
+    for (std::size_t index = 1; index < state.mt.size(); ++index) {
+        const std::uint32_t previous = state.mt[index - 1];
+        state.mt[index] = 1812433253U *
+            (previous ^ (previous >> 30U)) + static_cast<std::uint32_t>(index);
+    }
+    state.index = state.mt.size();
+    state.has_gauss = false;
+    state.gauss = 0.0;
+}
+
+void OptunaRandomStateTwist(OptunaRandomStateHandle& state) {
+    constexpr std::uint32_t upper = 0x80000000U;
+    constexpr std::uint32_t lower = 0x7fffffffU;
+    constexpr std::uint32_t matrix_a = 0x9908b0dfU;
+    constexpr std::size_t offset = 397;
+    for (std::size_t index = 0; index < state.mt.size() - offset; ++index) {
+        const std::uint32_t joined = (state.mt[index] & upper) |
+                                     (state.mt[index + 1] & lower);
+        state.mt[index] = state.mt[index + offset] ^ (joined >> 1U) ^
+                          ((joined & 1U) ? matrix_a : 0U);
+    }
+    for (std::size_t index = state.mt.size() - offset;
+         index < state.mt.size() - 1; ++index) {
+        const std::uint32_t joined = (state.mt[index] & upper) |
+                                     (state.mt[index + 1] & lower);
+        state.mt[index] = state.mt[index + offset - state.mt.size()] ^
+                          (joined >> 1U) ^ ((joined & 1U) ? matrix_a : 0U);
+    }
+    const std::uint32_t joined = (state.mt.back() & upper) |
+                                 (state.mt.front() & lower);
+    state.mt.back() = state.mt[offset - 1] ^ (joined >> 1U) ^
+                      ((joined & 1U) ? matrix_a : 0U);
+    state.index = 0;
+}
+
+std::uint32_t OptunaRandomStateUInt32(OptunaRandomStateHandle& state) {
+    if (state.index >= state.mt.size())
+        OptunaRandomStateTwist(state);
+    std::uint32_t value = state.mt[state.index++];
+    value ^= value >> 11U;
+    value ^= (value << 7U) & 0x9d2c5680U;
+    value ^= (value << 15U) & 0xefc60000U;
+    value ^= value >> 18U;
+    return value;
+}
+
+double OptunaRandomStateUniform(OptunaRandomStateHandle& state) {
+    const std::uint32_t left = OptunaRandomStateUInt32(state) >> 5U;
+    const std::uint32_t right = OptunaRandomStateUInt32(state) >> 6U;
+    return (static_cast<double>(left) * 67108864.0 +
+            static_cast<double>(right)) / 9007199254740992.0;
+}
+
+// Wichura's AS241 inverse standard-normal CDF.  The coefficient ordering
+// below follows the original Horner form and retains full double precision.
+double OptunaNormalInverse(double probability) {
+    const double q = probability - 0.5;
+    if (std::abs(q) <= 0.425) {
+        const double r = 0.180625 - q * q;
+        const double numerator = (((((((
+            2509.0809287301226727 * r + 33430.575583588128105) * r +
+            67265.770927008700853) * r + 45921.953931549871457) * r +
+            13731.693765509461125) * r + 1971.5909503065514427) * r +
+            133.14166789178437745) * r + 3.387132872796366608);
+        const double denominator = (((((((
+            5226.495278852854561 * r + 28729.085735721942674) * r +
+            39307.89580009271061) * r + 21213.794301586595867) * r +
+            5394.1960214247511077) * r + 687.18700749205790830) * r +
+            42.313330701600911252) * r + 1.0);
+        return q * numerator / denominator;
+    }
+    const double tail = q < 0.0 ? probability : 1.0 - probability;
+    double r = std::sqrt(-std::log(tail));
+    double value = 0.0;
+    if (r <= 5.0) {
+        r -= 1.6;
+        const double numerator = (((((((
+            7.7454501427834140764e-4 * r + 0.0227238449892691845833) * r +
+            0.24178072517745061177) * r + 1.27045825245236838258) * r +
+            3.64784832476320460504) * r + 5.76949722146069140550) * r +
+            4.63033784615654529590) * r + 1.42343711074968357734);
+        const double denominator = (((((((
+            1.05075007164441684324e-9 * r +
+            5.47593808499534494600e-4) * r +
+            0.0151986665636164571966) * r + 0.148103976427480074590) * r +
+            0.689767334985100004550) * r + 1.67638483018380384940) * r +
+            2.05319162663775882187) * r + 1.0);
+        value = numerator / denominator;
+    } else {
+        r -= 5.0;
+        const double numerator = (((((((
+            2.01033439929228813265e-7 * r +
+            2.71155556874348757815e-5) * r +
+            0.00124266094738807843860) * r + 0.0265321895265761230930) * r +
+            0.29656057182850489123) * r + 1.78482653991729133580) * r +
+            5.46378491116411436990) * r + 6.65790464350110377720);
+        const double denominator = (((((((
+            2.04426310338993978564e-15 * r +
+            1.42151175831644588870e-7) * r +
+            1.84631831751005468180e-5) * r +
+            7.86869131145613259100e-4) * r + 0.0148753612908506148525) * r +
+            0.136929880922735805310) * r + 0.599832206555887937690) * r + 1.0);
+        value = numerator / denominator;
+    }
+    return q < 0.0 ? -value : value;
+}
+
+double OptunaParzenLogPdfAt(
+    double sample, const std::vector<double>& weights,
+    const std::vector<double>& mu, const std::vector<double>& sigma,
+    const std::vector<double>& denominator, bool log_scale, double step) {
+    constexpr double half_log_two_pi = 0.91893853320467274178;
+    const bool discrete = std::isfinite(step);
+    std::vector<double> components(weights.size());
+    for (std::size_t kernel = 0; kernel < weights.size(); ++kernel) {
+        double component = 0.0;
+        if (discrete) {
+            double sample_low = sample - 0.5 * step;
+            double sample_high = sample + 0.5 * step;
+            if (log_scale) {
+                sample_low = std::log(sample_low);
+                sample_high = std::log(sample_high);
+            }
+            component = OptunaLogNormalMass(
+                (sample_low - mu[kernel]) / sigma[kernel],
+                (sample_high - mu[kernel]) / sigma[kernel]) -
+                denominator[kernel];
+        } else {
+            const double internal_sample = log_scale ? std::log(sample) : sample;
+            const double z = (internal_sample - mu[kernel]) / sigma[kernel];
+            component = -0.5 * z * z - half_log_two_pi -
+                std::log(sigma[kernel]) - denominator[kernel];
+        }
+        components[kernel] = component + std::log(weights[kernel]);
+    }
+    return OptunaLogSumExp(components);
+}
+
+void OptunaTPEBestNumerical(int nlhs, mxArray* plhs[], int nrhs,
+                            const mxArray* prhs[]) {
+    CheckArity(nrhs, 15, nlhs, 1,
+        "value = radia_mex('optuna.tpe.best_numerical', handle, count, below_weights, below_mu, below_sigma, above_weights, above_mu, above_sigma, internal_low, internal_high, low, high, log_scale, step)");
+    OptunaRandomStateHandle& state = OptunaRandomState(Handle(prhs[1]));
+    const int count = PositiveInteger(prhs[2], "count");
+    const auto below_weights = RealVector(prhs[3], "below_weights");
+    const auto below_mu = RealVector(prhs[4], "below_mu");
+    const auto below_sigma = RealVector(prhs[5], "below_sigma");
+    const auto above_weights = RealVector(prhs[6], "above_weights");
+    const auto above_mu = RealVector(prhs[7], "above_mu");
+    const auto above_sigma = RealVector(prhs[8], "above_sigma");
+    const double internal_low = Scalar(prhs[9], "internal_low");
+    const double internal_high = Scalar(prhs[10], "internal_high");
+    const double low = Scalar(prhs[11], "low");
+    const double high = Scalar(prhs[12], "high");
+    const bool log_scale = Boolean(prhs[13], "log_scale");
+    const auto step_values = RealVector(prhs[14], "step");
+    if (step_values.size() != 1)
+        BadArgument("step must be a real scalar or NaN");
+    const double step = step_values.front();
+    const bool discrete = std::isfinite(step);
+    if (!(internal_low < internal_high) || !(low < high) ||
+        below_weights.empty() || above_weights.empty() ||
+        below_weights.size() != below_mu.size() ||
+        below_weights.size() != below_sigma.size() ||
+        above_weights.size() != above_mu.size() ||
+        above_weights.size() != above_sigma.size() ||
+        (discrete && step <= 0.0) || (!discrete && !std::isnan(step)))
+        BadArgument("invalid fused numerical TPE estimator");
+
+    auto validate = [](const std::vector<double>& weights,
+                       const std::vector<double>& mu,
+                       const std::vector<double>& sigma) {
+        double total = 0.0;
+        for (std::size_t index = 0; index < weights.size(); ++index) {
+            if (!std::isfinite(weights[index]) || weights[index] < 0.0 ||
+                !std::isfinite(mu[index]) || !std::isfinite(sigma[index]) ||
+                sigma[index] <= 0.0)
+                BadArgument("fused numerical TPE estimator contains invalid entries");
+            total += weights[index];
+        }
+        if (!(total > 0.0))
+            BadArgument("fused numerical TPE weights must contain positive mass");
+    };
+    validate(below_weights, below_mu, below_sigma);
+    validate(above_weights, above_mu, above_sigma);
+
+    auto denominator = [&](const std::vector<double>& mu,
+                           const std::vector<double>& sigma) {
+        std::vector<double> values(mu.size());
+        for (std::size_t index = 0; index < mu.size(); ++index)
+            values[index] = OptunaLogNormalMass(
+                (internal_low - mu[index]) / sigma[index],
+                (internal_high - mu[index]) / sigma[index]);
+        return values;
+    };
+    const auto below_denominator = denominator(below_mu, below_sigma);
+    const auto above_denominator = denominator(above_mu, above_sigma);
+
+    std::vector<double> cumulative(below_weights.size());
+    std::partial_sum(below_weights.begin(), below_weights.end(), cumulative.begin());
+    cumulative.back() = 1.0;
+    std::vector<std::size_t> components(static_cast<std::size_t>(count));
+    for (std::size_t& component : components) {
+        const double uniform = OptunaRandomStateUniform(state);
+        component = static_cast<std::size_t>(std::lower_bound(
+            cumulative.begin(), cumulative.end(), uniform) - cumulative.begin());
+    }
+
+    constexpr double inverse_sqrt_two = 0.70710678118654752440;
+    const double probability_epsilon = std::numeric_limits<double>::epsilon();
+    double best_value = std::numeric_limits<double>::quiet_NaN();
+    double best_acquisition = -std::numeric_limits<double>::infinity();
+    for (int index = 0; index < count; ++index) {
+        const std::size_t component = components[static_cast<std::size_t>(index)];
+        const double mean = below_mu[component];
+        const double deviation = below_sigma[component];
+        const double a = (internal_low - mean) / deviation;
+        const double b = (internal_high - mean) / deviation;
+        const double cdf_low = 0.5 * std::erfc(-a * inverse_sqrt_two);
+        const double cdf_high = 0.5 * std::erfc(-b * inverse_sqrt_two);
+        double probability = cdf_low + OptunaRandomStateUniform(state) *
+            (cdf_high - cdf_low);
+        probability = std::min(std::max(probability, probability_epsilon),
+                               1.0 - probability_epsilon);
+        const double z = OptunaNormalInverse(probability);
+        double candidate = mean + deviation * z;
+        if (log_scale)
+            candidate = std::exp(candidate);
+        if (discrete)
+            candidate = low + std::round((candidate - low) / step) * step;
+        candidate = std::min(std::max(candidate, low), high);
+        const double acquisition = OptunaParzenLogPdfAt(
+            candidate, below_weights, below_mu, below_sigma,
+            below_denominator, log_scale, step) -
+            OptunaParzenLogPdfAt(candidate, above_weights, above_mu,
+                                above_sigma, above_denominator, log_scale, step);
+        if (acquisition > best_acquisition) {
+            best_acquisition = acquisition;
+            best_value = candidate;
+        }
+    }
+    plhs[0] = mxCreateDoubleScalar(best_value);
+}
+
+struct OptunaJointEstimator {
+    bool categorical = false;
+    std::vector<double> weights;
+    std::vector<double> mu;
+    std::vector<double> sigma;
+    std::vector<double> denominator;
+    std::vector<double> probabilities;
+    std::size_t choice_count = 0;
+    double internal_low = 0.0;
+    double internal_high = 0.0;
+    double low = 0.0;
+    double high = 0.0;
+    double step = std::numeric_limits<double>::quiet_NaN();
+    bool log_scale = false;
+};
+
+const mxArray* OptunaRequiredField(const mxArray* value, const char* field) {
+    if (!mxIsStruct(value) || mxGetNumberOfElements(value) != 1)
+        BadArgument("joint TPE estimators must be scalar structs");
+    const mxArray* result = mxGetField(value, 0, field);
+    if (result == nullptr)
+        BadArgument(std::string("joint TPE estimator is missing field '") +
+                    field + "'");
+    return result;
+}
+
+OptunaJointEstimator OptunaParseJointEstimator(const mxArray* value,
+                                                bool categorical) {
+    OptunaJointEstimator result;
+    result.categorical = categorical;
+    result.weights = RealVector(OptunaRequiredField(value, "weights"), "weights");
+    if (result.weights.empty())
+        BadArgument("joint TPE estimator weights must not be empty");
+    if (categorical) {
+        std::size_t rows = 0;
+        result.probabilities = RealMatrix(
+            OptunaRequiredField(value, "probabilities"), rows,
+            result.choice_count, "probabilities");
+        if (rows != result.weights.size() || result.choice_count == 0)
+            BadArgument("joint categorical probabilities have invalid shape");
+    } else {
+        result.mu = RealVector(OptunaRequiredField(value, "mu"), "mu");
+        result.sigma = RealVector(OptunaRequiredField(value, "sigma"), "sigma");
+        result.internal_low = Scalar(
+            OptunaRequiredField(value, "internal_low"), "internal_low");
+        result.internal_high = Scalar(
+            OptunaRequiredField(value, "internal_high"), "internal_high");
+        result.low = Scalar(OptunaRequiredField(value, "low"), "low");
+        result.high = Scalar(OptunaRequiredField(value, "high"), "high");
+        result.log_scale = Boolean(
+            OptunaRequiredField(value, "log"), "log_scale");
+        const auto step_values = RealVector(
+            OptunaRequiredField(value, "step"), "step");
+        if (step_values.size() != 1)
+            BadArgument("joint numerical step must be a scalar or NaN");
+        result.step = step_values.front();
+        if (result.mu.size() != result.weights.size() ||
+            result.sigma.size() != result.weights.size() ||
+            !(result.internal_low < result.internal_high) ||
+            !(result.low < result.high))
+            BadArgument("joint numerical estimator has invalid shape or bounds");
+        result.denominator.resize(result.weights.size());
+        for (std::size_t kernel = 0; kernel < result.weights.size(); ++kernel) {
+            if (!(result.sigma[kernel] > 0.0))
+                BadArgument("joint numerical sigma must be positive");
+            result.denominator[kernel] = OptunaLogNormalMass(
+                (result.internal_low - result.mu[kernel]) / result.sigma[kernel],
+                (result.internal_high - result.mu[kernel]) / result.sigma[kernel]);
+        }
+    }
+    double total = 0.0;
+    for (double weight : result.weights) {
+        if (!std::isfinite(weight) || weight < 0.0)
+            BadArgument("joint TPE weights must be finite and nonnegative");
+        total += weight;
+    }
+    if (!(total > 0.0))
+        BadArgument("joint TPE weights must contain positive mass");
+    return result;
+}
+
+double OptunaJointComponentLogPdf(const OptunaJointEstimator& estimator,
+                                  double sample, std::size_t kernel) {
+    if (estimator.categorical) {
+        const std::size_t choice = static_cast<std::size_t>(sample) - 1;
+        return std::log(std::max(
+            estimator.probabilities[kernel * estimator.choice_count + choice],
+            std::numeric_limits<double>::min()));
+    }
+    constexpr double half_log_two_pi = 0.91893853320467274178;
+    if (std::isfinite(estimator.step)) {
+        double sample_low = sample - 0.5 * estimator.step;
+        double sample_high = sample + 0.5 * estimator.step;
+        if (estimator.log_scale) {
+            sample_low = std::log(sample_low);
+            sample_high = std::log(sample_high);
+        }
+        return OptunaLogNormalMass(
+            (sample_low - estimator.mu[kernel]) / estimator.sigma[kernel],
+            (sample_high - estimator.mu[kernel]) / estimator.sigma[kernel]) -
+            estimator.denominator[kernel];
+    }
+    const double internal_sample = estimator.log_scale ? std::log(sample) : sample;
+    const double z = (internal_sample - estimator.mu[kernel]) /
+                     estimator.sigma[kernel];
+    return -0.5 * z * z - half_log_two_pi -
+           std::log(estimator.sigma[kernel]) - estimator.denominator[kernel];
+}
+
+std::vector<double> OptunaBestJoint(
+    OptunaRandomStateHandle& state, int count,
+    const std::vector<OptunaJointEstimator>& below,
+    const std::vector<OptunaJointEstimator>& above) {
+    const std::size_t dimension = below.size();
+    if (dimension == 0 || above.size() != dimension)
+        BadArgument("joint TPE estimator dimensions must agree");
+    const std::size_t below_kernels = below.front().weights.size();
+    const std::size_t above_kernels = above.front().weights.size();
+    for (std::size_t index = 1; index < dimension; ++index)
+        if (below[index].weights.size() != below_kernels ||
+            above[index].weights.size() != above_kernels)
+            BadArgument("joint TPE dimensions must share mixture component counts");
+
+    std::vector<double> cumulative(below.front().weights.size());
+    std::partial_sum(below.front().weights.begin(), below.front().weights.end(),
+                     cumulative.begin());
+    cumulative.back() = 1.0;
+    std::vector<std::size_t> components(static_cast<std::size_t>(count));
+    for (std::size_t& component : components) {
+        const double uniform = OptunaRandomStateUniform(state);
+        component = static_cast<std::size_t>(std::lower_bound(
+            cumulative.begin(), cumulative.end(), uniform) - cumulative.begin());
+    }
+    std::vector<double> candidates(static_cast<std::size_t>(count) * dimension);
+    for (std::size_t dim = 0; dim < dimension; ++dim) {
+        if (!below[dim].categorical)
+            continue;
+        for (int row = 0; row < count; ++row) {
+            const std::size_t component = components[static_cast<std::size_t>(row)];
+            const double uniform = OptunaRandomStateUniform(state);
+            double running = 0.0;
+            std::size_t choice = 0;
+            for (; choice + 1 < below[dim].choice_count; ++choice) {
+                running += below[dim].probabilities[
+                    component * below[dim].choice_count + choice];
+                if (running >= uniform)
+                    break;
+            }
+            candidates[static_cast<std::size_t>(row) * dimension + dim] =
+                static_cast<double>(choice + 1);
+        }
+    }
+    constexpr double inverse_sqrt_two = 0.70710678118654752440;
+    const double probability_epsilon = std::numeric_limits<double>::epsilon();
+    for (std::size_t dim = 0; dim < dimension; ++dim) {
+        if (below[dim].categorical)
+            continue;
+        for (int row = 0; row < count; ++row) {
+            const std::size_t component = components[static_cast<std::size_t>(row)];
+            const double mean = below[dim].mu[component];
+            const double deviation = below[dim].sigma[component];
+            const double a = (below[dim].internal_low - mean) / deviation;
+            const double b = (below[dim].internal_high - mean) / deviation;
+            const double cdf_low = 0.5 * std::erfc(-a * inverse_sqrt_two);
+            const double cdf_high = 0.5 * std::erfc(-b * inverse_sqrt_two);
+            double probability = cdf_low + OptunaRandomStateUniform(state) *
+                (cdf_high - cdf_low);
+            probability = std::min(std::max(probability, probability_epsilon),
+                                   1.0 - probability_epsilon);
+            double candidate = mean + deviation * OptunaNormalInverse(probability);
+            if (below[dim].log_scale)
+                candidate = std::exp(candidate);
+            if (std::isfinite(below[dim].step))
+                candidate = below[dim].low + std::round(
+                    (candidate - below[dim].low) / below[dim].step) *
+                    below[dim].step;
+            candidates[static_cast<std::size_t>(row) * dimension + dim] =
+                std::min(std::max(candidate, below[dim].low), below[dim].high);
+        }
+    }
+
+    std::size_t best = 0;
+    double best_acquisition = -std::numeric_limits<double>::infinity();
+    std::vector<double> below_components(below_kernels);
+    std::vector<double> above_components(above_kernels);
+    for (int row = 0; row < count; ++row) {
+        for (std::size_t kernel = 0; kernel < below_kernels; ++kernel)
+            below_components[kernel] = std::log(below.front().weights[kernel]);
+        for (std::size_t kernel = 0; kernel < above_kernels; ++kernel)
+            above_components[kernel] = std::log(above.front().weights[kernel]);
+        for (std::size_t dim = 0; dim < dimension; ++dim) {
+            const double sample = candidates[static_cast<std::size_t>(row) * dimension + dim];
+            for (std::size_t kernel = 0; kernel < below_kernels; ++kernel)
+                below_components[kernel] += OptunaJointComponentLogPdf(
+                    below[dim], sample, kernel);
+            for (std::size_t kernel = 0; kernel < above_kernels; ++kernel)
+                above_components[kernel] += OptunaJointComponentLogPdf(
+                    above[dim], sample, kernel);
+        }
+        const double acquisition = OptunaLogSumExp(below_components) -
+                                   OptunaLogSumExp(above_components);
+        if (acquisition > best_acquisition) {
+            best_acquisition = acquisition;
+            best = static_cast<std::size_t>(row);
+        }
+    }
+    std::vector<double> result(dimension);
+    std::copy(candidates.begin() + best * dimension,
+              candidates.begin() + (best + 1) * dimension, result.begin());
+    return result;
+}
+
+void OptunaTPEBestJoint(int nlhs, mxArray* plhs[], int nrhs,
+                        const mxArray* prhs[]) {
+    CheckArity(nrhs, 6, nlhs, 1,
+        "values = radia_mex('optuna.tpe.best_joint', handle, count, categorical, below_estimators, above_estimators)");
+    OptunaRandomStateHandle& state = OptunaRandomState(Handle(prhs[1]));
+    const int count = PositiveInteger(prhs[2], "count");
+    const mxArray* categorical = prhs[3];
+    const mxArray* below_cells = prhs[4];
+    const mxArray* above_cells = prhs[5];
+    if (!mxIsLogical(categorical) || !mxIsCell(below_cells) ||
+        !mxIsCell(above_cells))
+        BadArgument("joint TPE categorical flags must be logical and estimators cells");
+    const std::size_t dimension = mxGetNumberOfElements(categorical);
+    if (dimension == 0 || mxGetNumberOfElements(below_cells) != dimension ||
+        mxGetNumberOfElements(above_cells) != dimension)
+        BadArgument("joint TPE estimator dimensions must agree");
+    const auto* categorical_data = mxGetLogicals(categorical);
+    std::vector<OptunaJointEstimator> below(dimension), above(dimension);
+    for (std::size_t index = 0; index < dimension; ++index) {
+        below[index] = OptunaParseJointEstimator(
+            mxGetCell(below_cells, index), categorical_data[index]);
+        above[index] = OptunaParseJointEstimator(
+            mxGetCell(above_cells, index), categorical_data[index]);
+    }
+    plhs[0] = RealRow(OptunaBestJoint(state, count, below, above));
+}
+
+std::vector<double> OptunaMixtureWeights(
+    std::size_t observation_count, double prior_weight,
+    const std::vector<double>& supplied) {
+    if (!std::isfinite(prior_weight) || prior_weight < 0.0)
+        BadArgument("joint TPE prior weight must be finite and nonnegative");
+    if (observation_count == 0)
+        return {1.0};
+    std::vector<double> result(observation_count + 1, 1.0);
+    if (!supplied.empty()) {
+        if (supplied.size() != observation_count)
+            BadArgument("joint TPE observation weights have invalid length");
+        std::copy(supplied.begin(), supplied.end(), result.begin());
+    } else if (observation_count >= 25) {
+        const std::size_t ramp_count = observation_count - 25;
+        if (ramp_count == 1) {
+            result[0] = 1.0 / static_cast<double>(observation_count);
+        } else if (ramp_count > 1) {
+            const double start = 1.0 / static_cast<double>(observation_count);
+            for (std::size_t index = 0; index < ramp_count; ++index)
+                result[index] = start + (1.0 - start) *
+                    static_cast<double>(index) /
+                    static_cast<double>(ramp_count - 1);
+        }
+    }
+    result.back() = prior_weight;
+    double total = 0.0;
+    for (double weight : result) {
+        if (!std::isfinite(weight) || weight < 0.0)
+            BadArgument("joint TPE observation weights are invalid");
+        total += weight;
+    }
+    if (!(total > 0.0))
+        BadArgument("joint TPE weights must contain positive mass");
+    for (double& weight : result)
+        weight /= total;
+    return result;
+}
+
+std::vector<OptunaJointEstimator> OptunaBuildJointEstimators(
+    const std::vector<double>& observations, std::size_t observation_count,
+    std::size_t dimension, const mxLogical* categorical,
+    const std::vector<double>& lows, const std::vector<double>& highs,
+    const mxLogical* log_scale, const std::vector<double>& steps,
+    const std::vector<int>& choice_counts, double prior_weight,
+    bool magic_clip, const std::vector<double>& observation_weights) {
+    std::vector<OptunaJointEstimator> result(dimension);
+    const auto weights = OptunaMixtureWeights(
+        observation_count, prior_weight, observation_weights);
+    for (std::size_t dim = 0; dim < dimension; ++dim) {
+        auto& estimator = result[dim];
+        estimator.categorical = categorical[dim];
+        estimator.weights = weights;
+        if (estimator.categorical) {
+            if (choice_counts[dim] < 1)
+                BadArgument("joint TPE categorical choice count must be positive");
+            estimator.choice_count = static_cast<std::size_t>(choice_counts[dim]);
+            estimator.probabilities.assign(
+                (observation_count + 1) * estimator.choice_count,
+                observation_count == 0
+                    ? 1.0 / static_cast<double>(estimator.choice_count)
+                    : prior_weight / static_cast<double>(observation_count + 1));
+            if (observation_count > 0) {
+                for (std::size_t row = 0; row < observation_count; ++row) {
+                    const double raw = observations[row * dimension + dim];
+                    if (!std::isfinite(raw) || raw != std::floor(raw) ||
+                        raw < 1.0 || raw > static_cast<double>(estimator.choice_count))
+                        BadArgument("joint TPE categorical observation is invalid");
+                    estimator.probabilities[
+                        row * estimator.choice_count +
+                        static_cast<std::size_t>(raw - 1.0)] += 1.0;
+                }
+                for (std::size_t row = 0; row <= observation_count; ++row) {
+                    double total = 0.0;
+                    for (std::size_t choice = 0; choice < estimator.choice_count;
+                         ++choice)
+                        total += estimator.probabilities[
+                            row * estimator.choice_count + choice];
+                    if (total > 0.0) {
+                        for (std::size_t choice = 0;
+                             choice < estimator.choice_count; ++choice)
+                            estimator.probabilities[
+                                row * estimator.choice_count + choice] /= total;
+                    } else {
+                        for (std::size_t choice = 0;
+                             choice < estimator.choice_count; ++choice)
+                            estimator.probabilities[
+                                row * estimator.choice_count + choice] =
+                                1.0 / static_cast<double>(estimator.choice_count);
+                    }
+                }
+            }
+            continue;
+        }
+        estimator.low = lows[dim];
+        estimator.high = highs[dim];
+        estimator.log_scale = log_scale[dim];
+        estimator.step = steps[dim];
+        const bool discrete = std::isfinite(estimator.step);
+        const double support_low = discrete
+            ? estimator.low - 0.5 * estimator.step : estimator.low;
+        const double support_high = discrete
+            ? estimator.high + 0.5 * estimator.step : estimator.high;
+        if (!(support_low < support_high) ||
+            (estimator.log_scale && support_low <= 0.0))
+            BadArgument("joint TPE numerical support is invalid");
+        estimator.internal_low = estimator.log_scale
+            ? std::log(support_low) : support_low;
+        estimator.internal_high = estimator.log_scale
+            ? std::log(support_high) : support_high;
+        const double span = estimator.internal_high - estimator.internal_low;
+        double sigma = 0.2 * std::pow(
+            std::max<std::size_t>(observation_count, 1),
+            -1.0 / static_cast<double>(dimension + 4)) * span;
+        double minimum = std::numeric_limits<double>::epsilon();
+        if (magic_clip)
+            minimum = span / std::min<double>(
+                100.0, 1.0 + static_cast<double>(observation_count + 1));
+        sigma = std::min(std::max(sigma, minimum), span);
+        estimator.mu.resize(observation_count + 1);
+        estimator.sigma.assign(observation_count + 1, sigma);
+        for (std::size_t row = 0; row < observation_count; ++row) {
+            const double raw = observations[row * dimension + dim];
+            estimator.mu[row] = estimator.log_scale ? std::log(raw) : raw;
+        }
+        estimator.mu.back() = 0.5 *
+            (estimator.internal_low + estimator.internal_high);
+        estimator.sigma.back() = span;
+        estimator.denominator.resize(observation_count + 1);
+        for (std::size_t kernel = 0; kernel <= observation_count; ++kernel)
+            estimator.denominator[kernel] = OptunaLogNormalMass(
+                (estimator.internal_low - estimator.mu[kernel]) /
+                    estimator.sigma[kernel],
+                (estimator.internal_high - estimator.mu[kernel]) /
+                    estimator.sigma[kernel]);
+    }
+    return result;
+}
+
+void OptunaTPEBestJointObservations(int nlhs, mxArray* plhs[], int nrhs,
+                                    const mxArray* prhs[]) {
+    CheckArity(nrhs, 15, nlhs, 1,
+        "values = radia_mex('optuna.tpe.best_joint_observations', handle, count, categorical, lows, highs, log_scale, steps, choice_counts, good, bad, prior_weight, magic_clip, below_weights, above_weights)");
+    OptunaRandomStateHandle& state = OptunaRandomState(Handle(prhs[1]));
+    const int count = PositiveInteger(prhs[2], "count");
+    const mxArray* categorical_array = prhs[3];
+    const mxArray* log_array = prhs[6];
+    if (!mxIsLogical(categorical_array) || !mxIsLogical(log_array))
+        BadArgument("joint TPE categorical and log flags must be logical");
+    const std::size_t dimension = mxGetNumberOfElements(categorical_array);
+    if (dimension == 0 || mxGetNumberOfElements(log_array) != dimension)
+        BadArgument("joint TPE distribution dimensions must agree");
+    const auto lows = FixedRealVector(prhs[4], dimension, "lows");
+    const auto highs = FixedRealVector(prhs[5], dimension, "highs");
+    const auto steps = FixedRealVector(prhs[7], dimension, "steps");
+    const auto choice_counts = IntegerVector(prhs[8], "choice_counts");
+    if (choice_counts.size() != dimension)
+        BadArgument("joint TPE choice counts have invalid length");
+    std::size_t good_count = 0, good_dimension = 0;
+    std::size_t bad_count = 0, bad_dimension = 0;
+    const auto good = RealMatrix(prhs[9], good_count, good_dimension, "good");
+    const auto bad = RealMatrix(prhs[10], bad_count, bad_dimension, "bad");
+    if (good_dimension != dimension || bad_dimension != dimension)
+        BadArgument("joint TPE observation matrices have invalid width");
+    const double prior_weight = Scalar(prhs[11], "prior_weight");
+    const bool magic_clip = Boolean(prhs[12], "magic_clip");
+    const auto below_weights = RealVector(prhs[13], "below_weights");
+    const auto above_weights = RealVector(prhs[14], "above_weights");
+    const auto* categorical = mxGetLogicals(categorical_array);
+    const auto* log_scale = mxGetLogicals(log_array);
+    const auto below = OptunaBuildJointEstimators(
+        good, good_count, dimension, categorical, lows, highs, log_scale,
+        steps, choice_counts, prior_weight, magic_clip, below_weights);
+    const auto above = OptunaBuildJointEstimators(
+        bad, bad_count, dimension, categorical, lows, highs, log_scale,
+        steps, choice_counts, prior_weight, magic_clip, above_weights);
+    plhs[0] = RealRow(OptunaBestJoint(state, count, below, above));
+}
+
+OptunaJointEstimator OptunaBuildUnivariateNumericalEstimator(
+    const std::vector<double>& observations, double low, double high,
+    bool log_scale, double step, double prior_weight, bool magic_clip,
+    bool endpoints, const std::vector<double>& observation_weights) {
+    OptunaJointEstimator estimator;
+    estimator.weights = OptunaMixtureWeights(
+        observations.size(), prior_weight, observation_weights);
+    estimator.low = low;
+    estimator.high = high;
+    estimator.log_scale = log_scale;
+    estimator.step = step;
+    const bool discrete = std::isfinite(step);
+    const double support_low = discrete ? low - 0.5 * step : low;
+    const double support_high = discrete ? high + 0.5 * step : high;
+    if (!(support_low < support_high) || (log_scale && support_low <= 0.0))
+        BadArgument("univariate TPE numerical support is invalid");
+    estimator.internal_low = log_scale ? std::log(support_low) : support_low;
+    estimator.internal_high = log_scale ? std::log(support_high) : support_high;
+    const std::size_t n = observations.size();
+    std::vector<double> mus(n);
+    for (std::size_t index = 0; index < n; ++index) {
+        if (!std::isfinite(observations[index]) ||
+            (log_scale && observations[index] <= 0.0))
+            BadArgument("univariate TPE observation is invalid");
+        mus[index] = log_scale ? std::log(observations[index]) : observations[index];
+    }
+    std::vector<double> sigmas(n);
+    if (n > 0) {
+        std::vector<std::size_t> order(n);
+        std::iota(order.begin(), order.end(), 0);
+        std::stable_sort(order.begin(), order.end(),
+            [&](std::size_t left, std::size_t right) {
+                return mus[left] < mus[right];
+            });
+        std::vector<double> sorted(n), sorted_sigma(n);
+        for (std::size_t index = 0; index < n; ++index)
+            sorted[index] = mus[order[index]];
+        for (std::size_t index = 0; index < n; ++index) {
+            const double left = index == 0 ? estimator.internal_low
+                                           : sorted[index - 1];
+            const double right = index + 1 == n ? estimator.internal_high
+                                                 : sorted[index + 1];
+            sorted_sigma[index] = std::max(sorted[index] - left,
+                                           right - sorted[index]);
+        }
+        if (!endpoints && n >= 2) {
+            sorted_sigma.front() = sorted[1] - sorted[0];
+            sorted_sigma.back() = sorted[n - 1] - sorted[n - 2];
+        }
+        const double span = estimator.internal_high - estimator.internal_low;
+        double minimum = std::numeric_limits<double>::epsilon();
+        if (magic_clip)
+            minimum = span / std::min<double>(
+                100.0, 1.0 + static_cast<double>(n + 1));
+        for (std::size_t index = 0; index < n; ++index)
+            sigmas[order[index]] = std::min(
+                std::max(sorted_sigma[index], minimum), span);
+    }
+    estimator.mu = mus;
+    estimator.sigma = sigmas;
+    estimator.mu.push_back(0.5 *
+        (estimator.internal_low + estimator.internal_high));
+    estimator.sigma.push_back(estimator.internal_high - estimator.internal_low);
+    estimator.denominator.resize(n + 1);
+    for (std::size_t kernel = 0; kernel <= n; ++kernel)
+        estimator.denominator[kernel] = OptunaLogNormalMass(
+            (estimator.internal_low - estimator.mu[kernel]) /
+                estimator.sigma[kernel],
+            (estimator.internal_high - estimator.mu[kernel]) /
+                estimator.sigma[kernel]);
+    return estimator;
+}
+
+void OptunaTPEBestNumericalObservations(int nlhs, mxArray* plhs[], int nrhs,
+                                        const mxArray* prhs[]) {
+    CheckArity(nrhs, 14, nlhs, 1,
+        "value = radia_mex('optuna.tpe.best_numerical_observations', handle, count, good, bad, low, high, log_scale, step, prior_weight, magic_clip, endpoints, below_weights, above_weights)");
+    OptunaRandomStateHandle& state = OptunaRandomState(Handle(prhs[1]));
+    const int count = PositiveInteger(prhs[2], "count");
+    const auto good = RealVector(prhs[3], "good");
+    const auto bad = RealVector(prhs[4], "bad");
+    const double low = Scalar(prhs[5], "low");
+    const double high = Scalar(prhs[6], "high");
+    const bool log_scale = Boolean(prhs[7], "log_scale");
+    const auto step_values = RealVector(prhs[8], "step");
+    if (step_values.size() != 1)
+        BadArgument("univariate TPE step must be a scalar or NaN");
+    const double prior_weight = Scalar(prhs[9], "prior_weight");
+    const bool magic_clip = Boolean(prhs[10], "magic_clip");
+    const bool endpoints = Boolean(prhs[11], "endpoints");
+    const auto below_weights = RealVector(prhs[12], "below_weights");
+    const auto above_weights = RealVector(prhs[13], "above_weights");
+    std::vector<OptunaJointEstimator> below = {
+        OptunaBuildUnivariateNumericalEstimator(
+            good, low, high, log_scale, step_values.front(), prior_weight,
+            magic_clip, endpoints, below_weights)};
+    std::vector<OptunaJointEstimator> above = {
+        OptunaBuildUnivariateNumericalEstimator(
+            bad, low, high, log_scale, step_values.front(), prior_weight,
+            magic_clip, endpoints, above_weights)};
+    plhs[0] = mxCreateDoubleScalar(
+        OptunaBestJoint(state, count, below, above).front());
+}
+
+void OptunaTPEHistoryReset(int nlhs, mxArray*[], int nrhs,
+                           const mxArray* prhs[]) {
+    CheckArity(nrhs, 2, nlhs, 0,
+        "radia_mex('optuna.tpe.history.reset', handle)");
+    OptunaRandomState(Handle(prhs[1])).tpe_history.clear();
+}
+
+void OptunaTPEHistoryAppendComplete(int nlhs, mxArray*[], int nrhs,
+                                    const mxArray* prhs[]) {
+    CheckArity(nrhs, 6, nlhs, 0,
+        "radia_mex('optuna.tpe.history.append_complete', handle, trial_number, objective, distribution_ids, values)");
+    auto& state = OptunaRandomState(Handle(prhs[1]));
+    const int trial_number = NonnegativeInteger(prhs[2], "trial_number");
+    const double objective = Scalar(prhs[3], "objective");
+    if (!std::isfinite(objective))
+        BadArgument("completed TPE history objective must be finite");
+    const auto distribution_ids = IntegerVector(
+        prhs[4], "distribution_ids");
+    const auto values = RealVector(prhs[5], "values");
+    if (distribution_ids.size() != values.size())
+        BadArgument("TPE history distribution IDs and values must agree");
+    OptunaTPEHistoryTrial trial;
+    trial.trial_number = trial_number;
+    trial.objective = objective;
+    for (std::size_t index = 0; index < distribution_ids.size(); ++index) {
+        const int identifier = distribution_ids[index];
+        if (identifier < 1 || !std::isfinite(values[index]) ||
+            trial.parameters.count(identifier) != 0)
+            BadArgument(
+                "TPE history distribution IDs must be unique positive integers with finite values");
+        trial.parameters.emplace(identifier, values[index]);
+    }
+    auto found = std::find_if(
+        state.tpe_history.begin(), state.tpe_history.end(),
+        [trial_number](const OptunaTPEHistoryTrial& existing) {
+            return existing.trial_number == trial_number;
+        });
+    if (found == state.tpe_history.end())
+        state.tpe_history.push_back(std::move(trial));
+    else
+        *found = std::move(trial);
+}
+
+void OptunaTPEBestGroupedHistory(int nlhs, mxArray* plhs[], int nrhs,
+                                 const mxArray* prhs[]) {
+    CheckArity(nrhs, 16, nlhs, 1,
+        "values = radia_mex('optuna.tpe.best_grouped_history', handle, count, group_offsets, distribution_ids, categorical, lows, highs, log_scale, steps, choice_counts, minimize, gamma, max_good, prior_weight, magic_clip)");
+    auto& state = OptunaRandomState(Handle(prhs[1]));
+    const int count = PositiveInteger(prhs[2], "count");
+    const auto group_offsets = IntegerVector(prhs[3], "group_offsets");
+    const auto distribution_ids = IntegerVector(
+        prhs[4], "distribution_ids");
+    const std::size_t dimension = distribution_ids.size();
+    if (dimension == 0 || group_offsets.size() < 2 ||
+        group_offsets.front() != 0 ||
+        group_offsets.back() != static_cast<int>(dimension))
+        BadArgument("grouped TPE offsets do not span the distributions");
+    for (std::size_t index = 1; index < group_offsets.size(); ++index)
+        if (group_offsets[index] <= group_offsets[index - 1])
+            BadArgument("grouped TPE groups must be nonempty and ordered");
+    for (int identifier : distribution_ids)
+        if (identifier < 1)
+            BadArgument("grouped TPE distribution IDs must be positive");
+    const mxArray* categorical_array = prhs[5];
+    const mxArray* log_array = prhs[8];
+    if (!mxIsLogical(categorical_array) || !mxIsLogical(log_array) ||
+        mxGetNumberOfElements(categorical_array) != dimension ||
+        mxGetNumberOfElements(log_array) != dimension)
+        BadArgument("grouped TPE categorical and log flags are invalid");
+    const auto* categorical = mxGetLogicals(categorical_array);
+    const auto* log_scale = mxGetLogicals(log_array);
+    const auto lows = FixedRealVector(prhs[6], dimension, "lows");
+    const auto highs = FixedRealVector(prhs[7], dimension, "highs");
+    const auto steps = FixedRealVector(prhs[9], dimension, "steps");
+    const auto choice_counts = IntegerVector(prhs[10], "choice_counts");
+    if (choice_counts.size() != dimension)
+        BadArgument("grouped TPE choice counts have invalid length");
+    const bool minimize = Boolean(prhs[11], "minimize");
+    const double gamma = Scalar(prhs[12], "gamma");
+    if (!(gamma > 0.0 && gamma <= 1.0))
+        BadArgument("grouped TPE gamma must be in (0, 1]");
+    const int max_good = PositiveInteger(prhs[13], "max_good");
+    const double prior_weight = Scalar(prhs[14], "prior_weight");
+    const bool magic_clip = Boolean(prhs[15], "magic_clip");
+    if (state.tpe_history.empty())
+        BadArgument("grouped TPE history has no completed trials");
+
+    std::vector<std::size_t> chronological(state.tpe_history.size());
+    std::iota(chronological.begin(), chronological.end(), 0);
+    std::stable_sort(
+        chronological.begin(), chronological.end(),
+        [&](std::size_t left, std::size_t right) {
+            return state.tpe_history[left].trial_number <
+                   state.tpe_history[right].trial_number;
+        });
+    auto ranked = chronological;
+    std::stable_sort(
+        ranked.begin(), ranked.end(),
+        [&](std::size_t left, std::size_t right) {
+            const double lhs = state.tpe_history[left].objective;
+            const double rhs = state.tpe_history[right].objective;
+            return minimize ? lhs < rhs : lhs > rhs;
+        });
+    const int finished = static_cast<int>(ranked.size());
+    const int good_count = std::max(
+        1, std::min(finished, std::min(
+            max_good, static_cast<int>(std::ceil(gamma * finished)))));
+    std::vector<unsigned char> globally_good(state.tpe_history.size(), 0);
+    for (int index = 0; index < good_count; ++index)
+        globally_good[ranked[static_cast<std::size_t>(index)]] = 1;
+
+    std::vector<double> result(dimension);
+    for (std::size_t group = 0; group + 1 < group_offsets.size(); ++group) {
+        const std::size_t begin = static_cast<std::size_t>(group_offsets[group]);
+        const std::size_t end = static_cast<std::size_t>(group_offsets[group + 1]);
+        const std::size_t group_dimension = end - begin;
+        std::vector<double> good;
+        std::vector<double> bad;
+        for (std::size_t history_index : chronological) {
+            const auto& trial = state.tpe_history[history_index];
+            bool present = true;
+            for (std::size_t dim = begin; dim < end; ++dim)
+                present = present &&
+                    trial.parameters.count(distribution_ids[dim]) != 0;
+            if (!present)
+                continue;
+            auto& target = globally_good[history_index] ? good : bad;
+            for (std::size_t dim = begin; dim < end; ++dim)
+                target.push_back(
+                    trial.parameters.at(distribution_ids[dim]));
+        }
+        const std::size_t group_observations =
+            (good.size() + bad.size()) / group_dimension;
+        if (group_observations == 0)
+            BadArgument("grouped TPE group has no compatible observations");
+        std::vector<double> group_lows(lows.begin() + begin, lows.begin() + end);
+        std::vector<double> group_highs(
+            highs.begin() + begin, highs.begin() + end);
+        std::vector<double> group_steps(
+            steps.begin() + begin, steps.begin() + end);
+        std::vector<int> group_choices(
+            choice_counts.begin() + begin, choice_counts.begin() + end);
+        const auto below = OptunaBuildJointEstimators(
+            good, good.size() / group_dimension, group_dimension,
+            categorical + begin, group_lows, group_highs, log_scale + begin,
+            group_steps, group_choices, prior_weight, magic_clip, {});
+        const auto above = OptunaBuildJointEstimators(
+            bad, bad.size() / group_dimension, group_dimension,
+            categorical + begin, group_lows, group_highs, log_scale + begin,
+            group_steps, group_choices, prior_weight, magic_clip, {});
+        const auto candidate = OptunaBestJoint(state, count, below, above);
+        std::copy(candidate.begin(), candidate.end(), result.begin() + begin);
+    }
+    plhs[0] = RealRow(result);
+}
+
+std::uint32_t OptunaRandomStateInterval(OptunaRandomStateHandle& state,
+                                        std::uint32_t maximum) {
+    std::uint32_t mask = maximum;
+    mask |= mask >> 1U;
+    mask |= mask >> 2U;
+    mask |= mask >> 4U;
+    mask |= mask >> 8U;
+    mask |= mask >> 16U;
+    while (true) {
+        const std::uint32_t value = OptunaRandomStateUInt32(state) & mask;
+        if (value <= maximum)
+            return value;
+    }
+}
+
+mxArray* OptunaRandomStateSnapshot(const OptunaRandomStateHandle& state) {
+    const char* fields[] = {"schema", "mt", "index", "has_gauss", "gauss"};
+    mxArray* result = mxCreateStructMatrix(1, 1, 5, fields);
+    mxSetField(result, 0, "schema",
+               mxCreateString("numpy.randomstate.mt19937.v1"));
+    mxArray* mt = mxCreateNumericMatrix(1, state.mt.size(), mxUINT32_CLASS,
+                                        mxREAL);
+    auto* mt_data = static_cast<std::uint32_t*>(mxGetData(mt));
+    std::copy(state.mt.begin(), state.mt.end(), mt_data);
+    mxSetField(result, 0, "mt", mt);
+    mxSetField(result, 0, "index",
+               mxCreateDoubleScalar(static_cast<double>(state.index)));
+    mxSetField(result, 0, "has_gauss", mxCreateLogicalScalar(state.has_gauss));
+    mxSetField(result, 0, "gauss", mxCreateDoubleScalar(state.gauss));
+    return result;
+}
+
+void OptunaRandomStateRestoreValue(OptunaRandomStateHandle& state,
+                                   const mxArray* value) {
+    if (!mxIsStruct(value) || mxGetNumberOfElements(value) != 1)
+        BadArgument("random-state snapshot must be a scalar struct");
+    const mxArray* schema = mxGetField(value, 0, "schema");
+    const mxArray* mt = mxGetField(value, 0, "mt");
+    const mxArray* index = mxGetField(value, 0, "index");
+    const mxArray* has_gauss = mxGetField(value, 0, "has_gauss");
+    const mxArray* gauss = mxGetField(value, 0, "gauss");
+    if (schema == nullptr || mt == nullptr || index == nullptr ||
+        has_gauss == nullptr || gauss == nullptr ||
+        Text(schema, "snapshot.schema") != "numpy.randomstate.mt19937.v1" ||
+        !mxIsUint32(mt) || mxIsComplex(mt) ||
+        mxGetNumberOfElements(mt) != state.mt.size())
+        BadArgument("invalid NumPy RandomState snapshot");
+    const double raw_index = Scalar(index, "snapshot.index");
+    if (raw_index < 0.0 || raw_index > static_cast<double>(state.mt.size()) ||
+        raw_index != std::floor(raw_index))
+        BadArgument("snapshot.index must be an integer in [0, 624]");
+    const auto* mt_data = static_cast<const std::uint32_t*>(mxGetData(mt));
+    std::copy(mt_data, mt_data + state.mt.size(), state.mt.begin());
+    state.index = static_cast<std::size_t>(raw_index);
+    state.has_gauss = Boolean(has_gauss, "snapshot.has_gauss");
+    state.gauss = Scalar(gauss, "snapshot.gauss");
+}
+
+void OptunaRandomStateCommand(const std::string& command, int nlhs,
+                              mxArray* plhs[], int nrhs,
+                              const mxArray* prhs[]) {
+    if (command == "optuna.random_state.create") {
+        CheckArity(nrhs, 2, nlhs, 1,
+            "handle = radia_mex('optuna.random_state.create', seed)");
+        const double raw_seed = Scalar(prhs[1], "seed");
+        if (raw_seed < 0.0 || raw_seed != std::floor(raw_seed) ||
+            raw_seed > static_cast<double>(std::numeric_limits<std::uint32_t>::max()))
+            BadArgument("seed must be an integer in the uint32 range");
+        auto state = std::make_unique<OptunaRandomStateHandle>();
+        OptunaRandomStateSeed(*state, static_cast<std::uint32_t>(raw_seed));
+        plhs[0] = Uint64Output(RegisterOptunaRandomState(std::move(state)));
+        return;
+    }
+
+    const bool count_command = command == "optuna.random_state.rand" ||
+        command == "optuna.random_state.randn" ||
+        command == "optuna.random_state.randperm";
+    CheckArity(nrhs, command == "optuna.random_state.randi" ? 4 :
+                       ((command == "optuna.random_state.restore" || count_command) ? 3 : 2),
+               nlhs,
+               command == "optuna.random_state.restore" ||
+               command == "optuna.random_state.destroy" ? 0 : 1,
+               "invalid optuna.random_state command arguments");
+    const std::uint64_t handle = Handle(prhs[1]);
+    if (command == "optuna.random_state.destroy") {
+        DestroyOptunaRandomState(handle);
+        return;
+    }
+    OptunaRandomStateHandle& state = OptunaRandomState(handle);
+    if (command == "optuna.random_state.snapshot") {
+        plhs[0] = OptunaRandomStateSnapshot(state);
+        return;
+    }
+    if (command == "optuna.random_state.restore") {
+        OptunaRandomStateRestoreValue(state, prhs[2]);
+        return;
+    }
+    if (command == "optuna.random_state.rand" ||
+        command == "optuna.random_state.randn" ||
+        command == "optuna.random_state.randperm") {
+        const int count = NonnegativeInteger(prhs[2], "count");
+        std::vector<double> result(static_cast<std::size_t>(count));
+        if (command == "optuna.random_state.rand") {
+            for (double& value : result)
+                value = OptunaRandomStateUniform(state);
+            plhs[0] = RealColumn(result);
+            return;
+        }
+        if (command == "optuna.random_state.randn") {
+            for (double& value : result) {
+                if (state.has_gauss) {
+                    value = state.gauss;
+                    state.has_gauss = false;
+                    state.gauss = 0.0;
+                    continue;
+                }
+                double left = 0.0, right = 0.0, radius_squared = 2.0;
+                while (radius_squared >= 1.0 || radius_squared == 0.0) {
+                    left = 2.0 * OptunaRandomStateUniform(state) - 1.0;
+                    right = 2.0 * OptunaRandomStateUniform(state) - 1.0;
+                    radius_squared = left * left + right * right;
+                }
+                const double factor = std::sqrt(
+                    -2.0 * std::log(radius_squared) / radius_squared);
+                state.gauss = factor * left;
+                state.has_gauss = true;
+                value = factor * right;
+            }
+            plhs[0] = RealColumn(result);
+            return;
+        }
+        std::iota(result.begin(), result.end(), 1.0);
+        for (std::size_t right = result.size(); right > 1; --right) {
+            const std::size_t left = static_cast<std::size_t>(
+                OptunaRandomStateInterval(state,
+                    static_cast<std::uint32_t>(right - 1)));
+            std::swap(result[right - 1], result[left]);
+        }
+        plhs[0] = RealRow(result);
+        return;
+    }
+    if (command == "optuna.random_state.randi") {
+        const double raw_maximum = Scalar(prhs[2], "maximum");
+        if (raw_maximum < 1.0 || raw_maximum != std::floor(raw_maximum) ||
+            raw_maximum > static_cast<double>(std::numeric_limits<std::uint32_t>::max()))
+            BadArgument("maximum must be a positive integer in the uint32 range");
+        const int count = NonnegativeInteger(prhs[3], "count");
+        std::vector<double> result(static_cast<std::size_t>(count));
+        const std::uint32_t maximum = static_cast<std::uint32_t>(raw_maximum - 1.0);
+        for (double& value : result)
+            value = static_cast<double>(OptunaRandomStateInterval(state, maximum)) + 1.0;
+        plhs[0] = RealColumn(result);
+        return;
+    }
+    BadArgument("unknown optuna.random_state command");
+}
+
+void ApiInfo(int nlhs, mxArray* plhs[], int nrhs) {
+    CheckArity(nrhs, 1, nlhs, 1, "info = optuna_mex('api.info')");
+    const char* fields[] = {
+        "api_version", "backend", "command_count", "handle_count"};
+    plhs[0] = mxCreateStructMatrix(1, 1, 4, fields);
+    mxSetField(plhs[0], 0, "api_version", mxCreateDoubleScalar(1.0));
+    mxSetField(plhs[0], 0, "backend", mxCreateString("optuna_mex"));
+    mxSetField(plhs[0], 0, "command_count", mxCreateDoubleScalar(20.0));
+    std::lock_guard<std::mutex> guard(registry_mutex);
+    mxSetField(plhs[0], 0, "handle_count", mxCreateDoubleScalar(
+        static_cast<double>(optuna_random_state_registry.size())));
+}
+
+void Dispatch(const std::string& command, int nlhs, mxArray* plhs[], int nrhs,
+              const mxArray* prhs[]) {
+    if (command == "api.info") {
+        ApiInfo(nlhs, plhs, nrhs);
+        return;
+    }
+    if (command == "api.commands") {
+        CheckArity(nrhs, 1, nlhs, 1,
+                   "commands = optuna_mex('api.commands')");
+        plhs[0] = Commands();
+        return;
+    }
+    if (command == "optuna.pareto.rank_crowding") {
+        OptunaParetoRankCrowding(nlhs, plhs, nrhs, prhs);
+        return;
+    }
+    if (command == "optuna.parzen.log_pdf_numerical") {
+        OptunaParzenLogPdfNumerical(nlhs, plhs, nrhs, prhs);
+        return;
+    }
+    if (command == "optuna.parzen.log_pdf_categorical") {
+        OptunaParzenLogPdfCategorical(nlhs, plhs, nrhs, prhs);
+        return;
+    }
+    if (command == "optuna.tpe.best_numerical") {
+        OptunaTPEBestNumerical(nlhs, plhs, nrhs, prhs);
+        return;
+    }
+    if (command == "optuna.tpe.best_joint") {
+        OptunaTPEBestJoint(nlhs, plhs, nrhs, prhs);
+        return;
+    }
+    if (command == "optuna.tpe.best_joint_observations") {
+        OptunaTPEBestJointObservations(nlhs, plhs, nrhs, prhs);
+        return;
+    }
+    if (command == "optuna.tpe.best_numerical_observations") {
+        OptunaTPEBestNumericalObservations(nlhs, plhs, nrhs, prhs);
+        return;
+    }
+    if (command == "optuna.tpe.history.reset") {
+        OptunaTPEHistoryReset(nlhs, plhs, nrhs, prhs);
+        return;
+    }
+    if (command == "optuna.tpe.history.append_complete") {
+        OptunaTPEHistoryAppendComplete(nlhs, plhs, nrhs, prhs);
+        return;
+    }
+    if (command == "optuna.tpe.best_grouped_history") {
+        OptunaTPEBestGroupedHistory(nlhs, plhs, nrhs, prhs);
+        return;
+    }
+    if (command.rfind("optuna.random_state.", 0) == 0) {
+        OptunaRandomStateCommand(command, nlhs, plhs, nrhs, prhs);
+        return;
+    }
+    BadArgument("unknown optuna_mex command: " + command);
+}
+
+} // namespace
+
+void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[]) {
+    try {
+        if (nrhs < 1)
+            BadArgument("first input must be a command character vector");
+        EnsureExitHandler();
+        Dispatch(Text(prhs[0], "command"), nlhs, plhs, nrhs, prhs);
+    } catch (const std::exception& exception) {
+        mexErrMsgIdAndTxt("radia:optuna:mex:Exception", "%s",
+                         exception.what());
+    } catch (...) {
+        mexErrMsgIdAndTxt("radia:optuna:mex:UnknownException",
+                         "unknown C++ exception");
+    }
+}
+
+#else
 
 void ApiInfo(int nlhs, mxArray* plhs[], int nrhs) {
     CheckArity(nrhs, 1, nlhs, 1, "info = radia_mex('api.info')");
@@ -10629,18 +11913,6 @@ void Dispatch(const std::string& command, int nlhs, mxArray* plhs[], int nrhs,
         DestroyStateSpace(Handle(prhs[1]));
         return;
     }
-    if (command == "optuna.pareto.rank_crowding") {
-        OptunaParetoRankCrowding(nlhs, plhs, nrhs, prhs);
-        return;
-    }
-    if (command == "optuna.parzen.log_pdf_numerical") {
-        OptunaParzenLogPdfNumerical(nlhs, plhs, nrhs, prhs);
-        return;
-    }
-    if (command == "optuna.parzen.log_pdf_categorical") {
-        OptunaParzenLogPdfCategorical(nlhs, plhs, nrhs, prhs);
-        return;
-    }
     // New parity commands use flat early-return dispatch.  Keep additions out
     // of the legacy compatibility chain, which is already at MSVC's nested
     // statement limit.
@@ -11229,3 +12501,5 @@ void mexFunction(int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[]) {
         mexErrMsgIdAndTxt("radia:mex:UnknownException", "unknown C++ exception");
     }
 }
+
+#endif

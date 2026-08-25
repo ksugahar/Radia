@@ -1,0 +1,84 @@
+{
+  "schema": "radia.validation.optuna49-performance.v1",
+  "generated_at": "2026-08-25T12:21:32+09:00",
+  "host": "LAB",
+  "versions": {
+    "python": "3.12.10",
+    "optuna": "4.9.0",
+    "numpy": "2.4.6",
+    "scipy": "1.17.1",
+    "matlab": "R2026a Update 3",
+    "radia_mex_command_count": 364,
+    "optuna_mex_command_count": 20
+  },
+  "settings": {
+    "trials": 100,
+    "total_repeats": 11,
+    "warmup_repeats": 3,
+    "reported_repeats": 8,
+    "sequential": true,
+    "persistence": false
+  },
+  "workloads": {
+    "scalar_tpe": {
+      "seed": 37,
+      "startup_trials": 4,
+      "python_median_warmed_s": 0.1040304499983904,
+      "matlab_median_warmed_s": 0.0933584,
+      "python_trials_per_s": 961.2570165903084,
+      "matlab_trials_per_s": 1071.140893588579,
+      "python_over_matlab_speed_ratio": 1.1143126917169788,
+      "python_checksum": 20.040135043951892,
+      "matlab_checksum": 20.040135043951906,
+      "checksum_absolute_tolerance": 1e-12,
+      "checksum_match": true,
+      "matlab_not_slower": true
+    },
+    "grouped_conditional_tpe": {
+      "seed": 101,
+      "startup_trials": 4,
+      "python_median_warmed_s": 0.3271597000057227,
+      "matlab_median_warmed_s": 0.19806885,
+      "python_trials_per_s": 305.66111901389684,
+      "matlab_trials_per_s": 504.87494626237293,
+      "python_over_matlab_speed_ratio": 1.651747359596033,
+      "python_checksum": 104.33176385944043,
+      "matlab_checksum": 104.33176385944044,
+      "checksum_absolute_tolerance": 1e-12,
+      "checksum_match": true,
+      "matlab_not_slower": true
+    }
+  },
+  "gate": {
+    "requirement": "MATLAB median warmed time must be no greater than upstream Optuna 4.9.0 on both workloads, with matching seeded checksums.",
+    "passed": true
+  },
+  "native_gateway": {
+    "name": "optuna_mex",
+    "size_bytes": 151552,
+    "sha256": "402880b5360827605abe189dbf39a077c1137fb3affb0be80754ebc24fe296ae",
+    "dependencies": [
+      "libmex.dll",
+      "libmx.dll",
+      "MSVCP140.dll",
+      "VCRUNTIME140.dll",
+      "VCRUNTIME140_1.dll",
+      "Windows CRT",
+      "KERNEL32.dll"
+    ],
+    "fresh_process_first_call_s": [
+      0.0326771,
+      0.00698,
+      0.0071772,
+      0.0078069,
+      0.0377141,
+      0.007793,
+      0.0074954
+    ],
+    "fresh_process_first_call_median_s": 0.007793,
+    "gateway_directory": "S:\\Radia\\01_GitHub\\matlab",
+    "measurement_boundary": "Each value is the first optuna_mex api.info call in a fresh MATLAB process. MATLAB process launch is excluded; filesystem-cache and host-activity effects remain visible in the individual measurements."
+  },
+  "scope": "Same-host warmed sequential proposal throughput; the analytic objective is included equally on both sides.",
+  "claim_boundary": "The throughput gate excludes cold process startup, MAT/table persistence, parallel scheduling, and real CAE objective time. Native-gateway first-call load is reported separately and excludes MATLAB executable startup. Re-run both scripts on the target host before making a host-specific speed claim."
+}

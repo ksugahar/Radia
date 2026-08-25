@@ -10,6 +10,8 @@ testCase.TestData.RemovePath= ...
     ~any(strcmpi(entries,string(matlabDirectory)));
 if testCase.TestData.RemovePath, addpath(matlabDirectory); end
 testCase.TestData.MatlabDirectory=matlabDirectory;
+fixture=fullfile(root,"tests","matlab","fixtures","optuna49_oracle.json");
+testCase.TestData.Oracle=jsondecode(fileread(fixture));
 end
 
 function teardownOnce(testCase)
@@ -18,130 +20,91 @@ if testCase.TestData.RemovePath
 end
 end
 
-function testReportMatchesOptunaSemantics(testCase)
-study=radia.optuna.Study(Pruner=radia.optuna.NopPruner(),AutoSave=false);
-trial=study.ask();
-trial.report(NaN,0);
-verifyWarning(testCase,@()trial.report(7,0), ...
-    "radia:optuna:DuplicateReport");
-verifyTrue(testCase,isnan(trial.IntermediateValues.Value(1)));
-verifyError(testCase,@()trial.report(1,-1),"radia:optuna:Report");
-verifyFalse(testCase,trial.shouldPrune());
-end
-
-function testPercentileUsesBestAndSparseIntervals(testCase)
-pruner=radia.optuna.PercentilePruner(50,NStartupTrials=0, ...
-    NWarmupSteps=0,IntervalSteps=2,NMinTrials=1);
-study=radia.optuna.Study(Pruner=pruner,AutoSave=false);
-addCompleted(study,[1 3],[1 1]);
-addCompleted(study,[1 3],[3 3]);
-trial=study.ask();
-trial.report(5,1);
-trial.report(4,3);
-verifyTrue(testCase,trial.shouldPrune());
+function testPrunerDecisionsMatchUpstream(testCase)
+expected=testCase.TestData.Oracle.pruners;
+percentile=radia.optuna.Study(Pruner=radia.optuna.PercentilePruner( ...
+    50,NStartupTrials=0,NWarmupSteps=0,IntervalSteps=2,NMinTrials=1), ...
+    AutoSave=false);
+addCompletedTrial(percentile,[1,3],[1,1]);
+addCompletedTrial(percentile,[1,3],[3,3]);
+trial=percentile.ask();
+trial.report(5,1); trial.report(4,3);
+verifyEqual(testCase,trial.shouldPrune(), ...
+    logical(expected.percentile_minimize));
 
 maximize=radia.optuna.Study(Directions="maximize",Pruner= ...
     radia.optuna.PercentilePruner(50,NStartupTrials=0),AutoSave=false);
-addCompleted(maximize,0,1);
-addCompleted(maximize,0,3);
-candidate=maximize.ask();
-candidate.report(1.5,0);
-verifyTrue(testCase,candidate.shouldPrune());
-end
+addCompletedTrial(maximize,0,1); addCompletedTrial(maximize,0,3);
+trial=maximize.ask(); trial.report(1.5,0);
+verifyEqual(testCase,trial.shouldPrune(), ...
+    logical(expected.percentile_maximize));
 
-function testThresholdUsesLatestValueAndNaN(testCase)
-study=radia.optuna.Study(Pruner=radia.optuna.ThresholdPruner( ...
+threshold=radia.optuna.Study(Pruner=radia.optuna.ThresholdPruner( ...
     Lower=0,Upper=10),AutoSave=false);
-trial=study.ask();
-trial.report(5,0);
-verifyFalse(testCase,trial.shouldPrune());
-trial.report(11,1);
-verifyTrue(testCase,trial.shouldPrune());
-nanTrial=study.ask();
-nanTrial.report(NaN,0);
-verifyTrue(testCase,nanTrial.shouldPrune());
-end
+trial=threshold.ask(); trial.report(5,0);
+actual(1)=trial.shouldPrune();
+trial.report(11,1); actual(2)=trial.shouldPrune();
+nanTrial=threshold.ask(); nanTrial.report(NaN,0);
+actual(3)=nanTrial.shouldPrune();
+verifyEqual(testCase,actual,reshape(logical(expected.threshold),1,[]));
 
-function testPatientRequiresAFullNoImprovementWindow(testCase)
-study=radia.optuna.Study(Pruner=radia.optuna.PatientPruner([], ...
+patient=radia.optuna.Study(Pruner=radia.optuna.PatientPruner([], ...
     Patience=1,MinDelta=0),AutoSave=false);
-trial=study.ask();
-values=[10 4 5 6];
-for index=1:4
-    trial.report(values(index),index-1);
-end
-verifyTrue(testCase,trial.shouldPrune());
+trial=patient.ask();
+patientValues=[10,4,5,6];
+for index=1:4, trial.report(patientValues(index),index-1); end
+wrapped=radia.optuna.Study(Pruner=radia.optuna.PatientPruner( ...
+    radia.optuna.NopPruner(),Patience=1),AutoSave=false);
+wrappedTrial=wrapped.ask();
+for index=1:4, wrappedTrial.report(patientValues(index),index-1); end
+verifyEqual(testCase,[trial.shouldPrune(),wrappedTrial.shouldPrune()], ...
+    reshape(logical(expected.patient),1,[]));
 
-wrapped=radia.optuna.PatientPruner(radia.optuna.NopPruner(),Patience=1);
-study2=radia.optuna.Study(Pruner=wrapped,AutoSave=false);
-trial2=study2.ask();
-values=[10 4 5 6];
-for index=1:4
-    trial2.report(values(index),index-1);
-end
-verifyFalse(testCase,trial2.shouldPrune());
-end
-
-function testSuccessiveHalvingPromotionAndRungState(testCase)
-pruner=radia.optuna.SuccessiveHalvingPruner( ...
+halvingPruner=radia.optuna.SuccessiveHalvingPruner( ...
     MinResource=1,ReductionFactor=2);
-study=radia.optuna.Study(Pruner=pruner,AutoSave=false);
-first=study.ask();
-first.report(1,1);
-verifyFalse(testCase,first.shouldPrune());
-verifyTrue(testCase,isfield(first.SystemAttrs,"completed_rung_0"));
-study.tell(first,1);
-
-second=study.ask();
-second.report(2,1);
-verifyTrue(testCase,second.shouldPrune());
-verifyEqual(testCase,second.SystemAttrs.completed_rung_0,2);
-end
-
-function testSuccessiveHalvingBootstrapPrunesFirstRung(testCase)
-study=radia.optuna.Study(Pruner= ...
+halving=radia.optuna.Study(Pruner=halvingPruner,AutoSave=false);
+first=halving.ask(); first.report(1,1);
+firstDecision=first.shouldPrune(); halving.tell(first,1);
+second=halving.ask(); second.report(2,1);
+secondDecision=second.shouldPrune();
+verifyEqual(testCase,[firstDecision,secondDecision], ...
+    reshape(logical(expected.successive_halving.decisions),1,[]));
+verifyEqual(testCase,[first.SystemAttrs.completed_rung_0, ...
+    second.SystemAttrs.completed_rung_0], ...
+    reshape(double(expected.successive_halving.rung_values),1,[]));
+bootstrap=radia.optuna.Study(Pruner= ...
     radia.optuna.SuccessiveHalvingPruner(MinResource=1, ...
     ReductionFactor=2,BootstrapCount=1),AutoSave=false);
-trial=study.ask();
-trial.report(1,1);
-verifyTrue(testCase,trial.shouldPrune());
-end
+bootstrapTrial=bootstrap.ask(); bootstrapTrial.report(1,1);
+verifyEqual(testCase,bootstrapTrial.shouldPrune(), ...
+    logical(expected.successive_halving.bootstrap));
 
-function testHyperbandUsesOptunaCrc32BracketAssignment(testCase)
-pruner=radia.optuna.HyperbandPruner(MinResource=1, ...
+hyperbandPruner=radia.optuna.HyperbandPruner(MinResource=1, ...
     MaxResource=9,ReductionFactor=3);
-study=radia.optuna.Study(Name="hb",Pruner=pruner,AutoSave=false);
-trial=study.ask();
-trial.report(1,0);
-verifyFalse(testCase,trial.shouldPrune());
-actual=zeros(1,10);
-for number=0:9
-    actual(number+1)=pruner.bracketId(study,number);
-end
-verifyEqual(testCase,actual,[0 0 2 2 1 1 1 2 1 0]);
-end
+hyperband=radia.optuna.Study(Name="hb",Pruner=hyperbandPruner,AutoSave=false);
+hyperbandTrial=hyperband.ask(); hyperbandTrial.report(1,0);
+verifyEqual(testCase,hyperbandTrial.shouldPrune(), ...
+    logical(expected.hyperband.first_decision));
+brackets=zeros(1,10);
+for number=0:9, brackets(number+1)=hyperbandPruner.bracketId(hyperband,number); end
+verifyEqual(testCase,brackets, ...
+    reshape(double(expected.hyperband.bracket_ids),1,[]));
 
-function testWilcoxonPrunesPairedConsistentlyWorseTrial(testCase)
-study=radia.optuna.Study(Pruner=radia.optuna.WilcoxonPruner( ...
+wilcoxon=radia.optuna.Study(Pruner=radia.optuna.WilcoxonPruner( ...
     PThreshold=0.1,NStartupSteps=2),AutoSave=false);
-addCompleted(study,0:5,zeros(1,6));
-trial=study.ask();
-for step=0:5
-    trial.report(10,step);
-end
-verifyTrue(testCase,trial.shouldPrune());
-
-nonfinite=study.ask();
-nonfinite.report(Inf,0);
-verifyWarning(testCase,@()nonfinite.shouldPrune(), ...
-    "radia:optuna:WilcoxonNonfinite");
-verifyFalse(testCase,nonfinite.shouldPrune());
+addCompletedTrial(wilcoxon,0:5,zeros(1,6));
+wilcoxonTrial=wilcoxon.ask();
+for step=0:5, wilcoxonTrial.report(10,step); end
+nonfinite=wilcoxon.ask(); nonfinite.report(Inf,0);
+warning("off","radia:optuna:WilcoxonNonfinite");
+cleanup=onCleanup(@()warning("on","radia:optuna:WilcoxonNonfinite"));
+verifyEqual(testCase,[wilcoxonTrial.shouldPrune(),nonfinite.shouldPrune()], ...
+    reshape(logical(expected.wilcoxon),1,[]));
+clear cleanup
 end
 
-function addCompleted(study,steps,values)
+function addCompletedTrial(study,steps,values)
 trial=study.ask();
-for index=1:numel(steps)
-    trial.report(values(index),steps(index));
-end
+for index=1:numel(steps), trial.report(values(index),steps(index)); end
 study.tell(trial,values(end));
 end

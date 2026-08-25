@@ -78,7 +78,7 @@ classdef ParetoSupport
             signs=ones(1,numel(directions)); signs(directions=="maximize")=-1;
             if radia.optuna.internal.NativeKernels.has( ...
                     "optuna.pareto.rank_crowding")
-                [rank,crowding]=radia.internal.callMex( ...
+                [rank,crowding]=radia.optuna.internal.NativeKernels.call( ...
                     "optuna.pareto.rank_crowding",values,signs);
                 return
             end
@@ -446,11 +446,19 @@ classdef ParetoSupport
             signs=ones(1,numel(directions)); signs(string(directions)=="maximize")=-1;
             points=double(values).*signs;
             worst=max(points,[],1); reference=worst+max(0.1*abs(worst),1e-12);
-            total=radia.optuna.internal.ParetoSupport.hypervolume(points,reference);
+            [rank,~]=radia.optuna.internal.ParetoSupport. ...
+                rankAndCrowding(values,directions);
+            onFront=rank==min(rank);
+            paretoPoints=points(onFront,:);
+            total=radia.optuna.internal.ParetoSupport.hypervolume( ...
+                paretoPoints,reference);
             weights=zeros(size(points,1),1);
-            for k=1:size(points,1)
-                remaining=points; remaining(k,:)=[];
-                weights(k)=max(total-radia.optuna.internal.ParetoSupport.hypervolume( ...
+            frontIndices=find(onFront);
+            for index=1:numel(frontIndices)
+                remaining=paretoPoints;
+                remaining(index,:)=[];
+                weights(frontIndices(index))=max(total- ...
+                    radia.optuna.internal.ParetoSupport.hypervolume( ...
                     remaining,reference),1e-12);
             end
         end

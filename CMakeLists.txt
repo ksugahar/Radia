@@ -2,6 +2,40 @@ cmake_minimum_required(VERSION 3.21)
 project(radia C CXX)
 
 option(RADIA_BUILD_MATLAB_MEX "Build the MATLAB MEX gateway" OFF)
+option(RADIA_BUILD_OPTUNA_MEX_ONLY
+    "Configure only the independent MATLAB Optuna MEX gateway" OFF)
+
+function(radia_add_optuna_mex)
+	matlab_add_mex(
+		NAME optuna_mex
+		R2018a
+		SRC ${CMAKE_CURRENT_SOURCE_DIR}/src/matlab/radia_mex.cpp
+	)
+	target_compile_definitions(optuna_mex PRIVATE
+		RADIA_OPTUNA_MEX_ONLY
+		NOMINMAX
+	)
+	target_compile_features(optuna_mex PRIVATE cxx_std_20)
+	if(MSVC)
+		target_compile_options(optuna_mex PRIVATE /O2 /fp:fast /arch:AVX2 /W0)
+		target_link_options(optuna_mex PRIVATE /NODEFAULTLIB:LIBCMT)
+	endif()
+	add_custom_command(TARGET optuna_mex POST_BUILD
+		COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_SOURCE_DIR}/matlab"
+		COMMAND ${CMAKE_COMMAND} -E copy_if_different
+			"$<TARGET_FILE:optuna_mex>"
+			"${CMAKE_SOURCE_DIR}/matlab/$<TARGET_FILE_NAME:optuna_mex>"
+		COMMENT "Copying optuna_mex to matlab"
+	)
+endfunction()
+
+if(RADIA_BUILD_OPTUNA_MEX_ONLY)
+	find_package(Matlab REQUIRED COMPONENTS MX_LIBRARY MEX_LIBRARY)
+	radia_add_optuna_mex()
+	message(STATUS
+		"Standalone optuna_mex configured without Python, NGSolve, MKL, or Radia core")
+	return()
+endif()
 
 # C++17 required for structured bindings and inline variables
 set(CMAKE_CXX_STANDARD 17)
@@ -720,6 +754,10 @@ if(MSVC)
 		/W0
 		/wd4244
 		/wd4267
+		# Python's installation can contain stale core/*.hpp files. Force the
+		# headers from the selected Netgen package before any Python include path.
+		"$<$<COMPILE_LANGUAGE:CXX>:/FI${NGSOLVE_BUNDLED_INC}/core/taskmanager.hpp>"
+		"$<$<COMPILE_LANGUAGE:CXX>:/FI${NGSOLVE_BUNDLED_INC}/core/localheap.hpp>"
 	)
 elseif(CMAKE_CXX_COMPILER_ID MATCHES "IntelLLVM")
 	target_compile_options(_radia_pybind PRIVATE /O3 /fp:fast /W0)
@@ -818,13 +856,15 @@ if(RADIA_BUILD_MATLAB_MEX)
 	endif()
 	if(MSVC)
 		# The bundled Windows NGSolve package is built with Python support and
-		# propagates these feature macros through its imported targets.  The MEX
+		# propagates these feature macros through its imported targets. The MEX
 		# gateway uses only the native C++ API, so suppress Python-only header
 		# instantiations here; otherwise radia_mex.obj requests python312.lib.
 		target_compile_options(radia_mex PRIVATE
 			/O2 /fp:fast /W0
 			/UNGS_PYTHON /UNETGEN_PYTHON /UNG_PYTHON
 			/UPYBIND11_SIMPLE_GIL_MANAGEMENT
+			"$<$<COMPILE_LANGUAGE:CXX>:/FI${NGSOLVE_BUNDLED_INC}/core/taskmanager.hpp>"
+			"$<$<COMPILE_LANGUAGE:CXX>:/FI${NGSOLVE_BUNDLED_INC}/core/localheap.hpp>"
 		)
 		target_link_options(radia_mex PRIVATE /NODEFAULTLIB:LIBCMT)
 		target_link_libraries(radia_mex version.lib)
@@ -836,6 +876,9 @@ if(RADIA_BUILD_MATLAB_MEX)
 			"${CMAKE_SOURCE_DIR}/matlab/$<TARGET_FILE_NAME:radia_mex>"
 		COMMENT "Copying radia_mex to matlab"
 	)
+	# Compile the domain-only gateway from the same command source. It does not
+	# resolve the monolithic radia_mex dependency graph at runtime.
+	radia_add_optuna_mex()
 	if(WIN32 AND USE_MKL_FOUND)
 		# MATLAB resolves MEX dependencies from the module directory.  Keep the
 		# oneMKL dispatch DLLs beside radia_mex so it does not depend on the
@@ -851,7 +894,7 @@ if(RADIA_BUILD_MATLAB_MEX)
 			)
 		endforeach()
 	endif()
-	message(STATUS "radia_mex configured (MATLAB R2018a interleaved complex API)")
+	message(STATUS "radia_mex + lightweight optuna_mex configured (MATLAB R2018a interleaved complex API)")
 endif()
 
 # ========================================

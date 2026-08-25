@@ -1,4 +1,4 @@
-classdef PatientPruner < handle
+classdef PatientPruner < radia.optuna.BasePruner
     %PATIENTPRUNER Prune after a patience window without improvement.
 
     properties (SetAccess=private)

@@ -1,0 +1,73 @@
+{
+  "schema": "radia.optuna-upstream-compatibility.v1",
+  "claim": "Differentially verified subset of Optuna 4.9.0; not a drop-in replacement for the complete Python package.",
+  "oracle": {
+    "package": "optuna",
+    "version": "4.9.0",
+    "seed_rule": "Every seeded comparison uses the same explicit seed, options, parameter order, history, and sequential ask/tell order.",
+    "numerical_transport": "direct-python",
+    "public_contract_transport": "official-optuna-mcp-0.2.0"
+  },
+  "complete_api_closure": {
+    "inventory": "tests/matlab/fixtures/optuna49_public_api.json",
+    "coverage": "matlab/optuna49_api_coverage.json",
+    "rule": "A complete-compatibility claim is forbidden until every inventoried public symbol and class member is present and has an exact upstream-oracle mapping."
+  },
+  "shared_behavior_verified": [
+    "Study ask/tell-by-object/tell-by-number/enqueue/add-trial lifecycle, including imported WAITING/RUNNING trials, finished-trial handling, directions, metric names, attributes, FrozenTrial-returning get_trials/best_trial/best_trials observables, and single-MAT-storage load/copy/delete/list management",
+    "StudySummary objects, include_best_trial behavior, single- versus multi-objective direction access, and immediate registration of empty stored studies",
+    "BaseTrial inheritance for Trial, FixedTrial, and FrozenTrial; BaseSampler/BasePruner subtype identity; and the BasePruner.prune interface",
+    "TrialPruned exception handling through Study.optimize, including PRUNED state, last intermediate value, and callback snapshot",
+    "FixedTrial objective evaluation, suggestions, attributes, warnings, and incompatibility errors",
+    "FrozenTrial suggestions, no-op report, should-prune result, mutable attributes, collection return types, and incompatibility errors",
+    "Float, integer, stepped, logarithmic, and categorical distributions, including effective-high adjustment, repeated-parameter compatibility, and arbitrary parameter names",
+    "Distribution JSON round trips, dynamic-space compatibility checks, and the five deprecated Optuna 4.9 distribution aliases",
+    "StudyDirection and TrialState values, TrialState.is_finished, enum inputs to study/trial factories, and Study.direction",
+    "IntersectionSearchSpace and intersection_search_space, including pruned-state inclusion, ignored failed/waiting trials, sorted keys, dynamic-range exclusion, and retained single-value distributions",
+    "Sampler seed=None constructor semantics: independently constructed unseeded samplers draw fresh private entropy without mutating MATLAB's global RNG; exact proposal comparison remains explicitly seeded",
+    "RandomSampler proposal sequences",
+    "TPESampler scalar, mixed, multivariate, group-decomposed conditional, constrained, callable gamma/weights, and categorical-distance proposal sequences, including independent-fallback warning control",
+    "MOTPESampler multi-objective proposal sequences and constrained Pareto support",
+    "GridSampler and fixed/conditional BruteForceSampler exhaustion behavior",
+    "PartialFixedSampler proposal sequences",
+    "QMCSampler seeded scrambled and deterministic unscrambled Sobol/Halton prefixes within the documented dimension boundary, custom independent samplers, and warning controls for seed=None scrambling and independent fallback",
+    "CmaEsSampler seeded numeric proposal sequences and independent-sampler controls",
+    "GPSampler float/integer/categorical proposals through acquisition after startup, constraint-aware acquisition, and deterministic MAT-table history replay when Backend is upstream-python",
+    "NSGAIISampler and NSGAIIISampler seeded population behavior",
+    "NSGA-II Uniform, BLX-alpha, SBX, VSBX, SPX, and UNDX crossover proposal sequences",
+    "Percentile, threshold, patient, no-op, successive-halving, Hyperband, and Wilcoxon pruning decisions",
+    "fANOVA parameter importance through the pinned Optuna 4.9.0 evaluator",
+    "MaxTrialsCallback, BestValueStagnationEvaluator, and stagnation-based Terminator behavior",
+    "Official Optuna MCP Study/Trial tool contract where optuna-mcp exposes the operation"
+  ],
+  "matlab_integration_only": [
+    "parallel trial scheduling, overshoot, late completion, and deterministic cache handling",
+    "MATLAB table normalization and MAT-file persistence/reload",
+    "MATLAB callback transactions and storage locking",
+    "Simulink block, mask, signal, and run-artifact integration",
+    "native MEX kernel lifecycle and fallback selection",
+    "GPSampler Backend=matlab-native state persistence and lifecycle"
+  ],
+  "unsupported_or_not_yet_oracled": [
+    {
+      "feature": "Remaining TPE constructor and concurrent-trial behavior",
+      "boundary": "The deprecated consider_prior argument and its warning category, plus constant-liar behavior with genuinely concurrent running trials, are not yet upstream-oracled. Group-decomposed multivariate TPE, categorical-distance callbacks, independent-fallback warning control, and callable gamma/weights are covered."
+    },
+    {
+      "feature": "Advanced CMA-ES modes",
+      "boundary": "Warm start from source trials, separable CMA, margin, learning-rate adaptation, restart strategies, and native categorical handling are not claimed. A separately seeded independent sampler and its warning control are covered."
+    },
+    {
+      "feature": "Native unscrambled Sobol above 32 dimensions",
+      "boundary": "The MATLAB-native Sobol direction table is limited to 32 dimensions; use the SciPy-backed path where supported or treat higher dimensions as unsupported."
+    },
+    {
+      "feature": "Optuna ecosystem services",
+      "boundary": "RDB/Journal storage, heartbeat and stale-trial recovery, artifact stores, visualization/dashboard, and third-party integrations are not implemented by the MATLAB layer."
+    },
+    {
+      "feature": "Complete public Python API surface",
+      "boundary": "Public logging, storage classes, group-decomposed search-space helpers, visualization functions, artifact APIs, integrations, and Python plugin extension points are outside the current MATLAB subset. Compatibility claims apply only to entries listed in shared_behavior_verified."
+    }
+  ]
+}

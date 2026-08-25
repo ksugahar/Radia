@@ -1,4 +1,4 @@
-classdef GPSampler < handle
+classdef GPSampler < radia.optuna.BaseSampler
     %GPSAMPLER Matérn-5/2 ARD Bayesian optimization for CAE objectives.
     %   Supports mixed stable search spaces, single-objective expected
     %   improvement, multi-objective expected hypervolume improvement,
@@ -9,6 +9,7 @@ classdef GPSampler < handle
         Seed (1,1) double = 0
         NStartupTrials (1,1) double = 10
         DeterministicObjective (1,1) logical = false
+        Backend (1,1) string = "upstream-python"
         CandidateCount (1,1) double = 2048
         LocalSearchCount (1,1) double = 10
         MonteCarloSamples (1,1) double = 128
@@ -17,10 +18,18 @@ classdef GPSampler < handle
     end
 
     properties (Access=private)
+        IndependentSampler
         AttachedStudy = []
         Restored (1,1) logical = false
         ObjectiveTheta cell = cell(0,1)
         ConstraintTheta cell = cell(0,1)
+    end
+
+    properties (Transient, Access=private)
+        PythonOptuna = []
+        PythonStudy = []
+        PythonTrial = []
+        PythonTrialNumber (1,1) double = NaN
     end
 
     properties (Constant, Access=private)
@@ -31,10 +40,11 @@ classdef GPSampler < handle
     methods
         function obj=GPSampler(options)
             arguments
-                options.Seed (1,1) double = 0
+                options.Seed double = double.empty(1,0)
                 options.NStartupTrials (1,1) double ...
                     {mustBeInteger,mustBeNonnegative} = 10
                 options.DeterministicObjective (1,1) logical = false
+                options.Backend (1,1) string = "upstream-python"
                 options.CandidateCount (1,1) double ...
                     {mustBeInteger,mustBePositive} = 2048
                 options.LocalSearchCount (1,1) double ...
@@ -52,14 +62,20 @@ classdef GPSampler < handle
                 error("radia:optuna:GPConstraints", ...
                     "ConstraintsFcn must be a function handle.");
             end
-            obj.Seed=double(options.Seed);
+            if ~ismember(options.Backend,["upstream-python","matlab-native"])
+                error("radia:optuna:GPBackend", ...
+                    "Backend must be 'upstream-python' or 'matlab-native'.");
+            end
+            obj.Seed=radia.optuna.internal.resolveSeed(options.Seed);
             obj.NStartupTrials=double(options.NStartupTrials);
             obj.DeterministicObjective=options.DeterministicObjective;
+            obj.Backend=options.Backend;
             obj.CandidateCount=double(options.CandidateCount);
             obj.LocalSearchCount=double(options.LocalSearchCount);
             obj.MonteCarloSamples=double(options.MonteCarloSamples);
             obj.ConstraintsFcn=options.ConstraintsFcn;
-            obj.Stream=RandStream("mt19937ar","Seed",obj.Seed);
+            obj.Stream=radia.optuna.internal.NumpyRandomState(obj.Seed);
+            obj.IndependentSampler=radia.optuna.RandomSampler(options.Seed);
         end
 
         function searchSpace=inferRelativeSearchSpace(~,study,trial) %#ok<INUSD>
@@ -73,6 +89,14 @@ classdef GPSampler < handle
         end
 
         function beforeTrial(obj,study,trial)
+            if obj.Backend=="upstream-python"
+                obj.attach(study);
+                obj.preparePythonTrial(study,trial);
+                trial.setSystemAttr("gp_sampling_mode","upstream_optuna_4_9_0");
+                trial.setSystemAttr("gp_backend","upstream-python");
+                return
+            end
+            obj.IndependentSampler.beforeTrial(study,trial);
             obj.attach(study);
             completed=sum(study.TrialTable.State=="COMPLETE");
             if completed<obj.NStartupTrials
@@ -110,41 +134,94 @@ classdef GPSampler < handle
             obj.recordState(study,trial.Number);
         end
 
-        function value=sampleFloat(obj,study,trial,name,low,high,options) %#ok<INUSD>
-            obj.attach(study);
-            distribution=radia.optuna.internal.DistributionCodec.float( ...
-                low,high,options.Log,options.Step);
-            value=obj.randomValue(distribution);
-            obj.recordState(study,trial.Number);
+        function value=sampleFloat(obj,study,trial,name,low,high,options)
+            if obj.Backend=="upstream-python"
+                obj.ensurePythonTrial(trial);
+                arguments={"log",logical(options.Log)};
+                if isfinite(options.Step)
+                    arguments=[arguments,{"step",double(options.Step)}];
+                end
+                value=double(obj.PythonTrial.suggest_float( ...
+                    char(name),double(low),double(high),pyargs(arguments{:})));
+                return
+            end
+            value=obj.IndependentSampler.sampleFloat( ...
+                study,trial,name,low,high,options);
         end
 
-        function value=sampleInteger(obj,study,trial,name,low,high) %#ok<INUSD>
-            obj.attach(study);
-            distribution=radia.optuna.internal.DistributionCodec.integer( ...
-                low,high,false,1);
-            value=obj.randomValue(distribution);
-            obj.recordState(study,trial.Number);
+        function value=sampleInteger(obj,study,trial,name,low,high)
+            if obj.Backend=="upstream-python"
+                value=obj.sampleIntegerDetailed( ...
+                    study,trial,name,low,high,1,false);
+                return
+            end
+            value=obj.IndependentSampler.sampleInteger( ...
+                study,trial,name,low,high);
         end
 
-        function value=sampleCategorical(obj,study,trial,name,choices) %#ok<INUSD>
-            obj.attach(study);
-            distribution=radia.optuna.internal.DistributionCodec. ...
-                categorical(choices);
-            value=obj.randomValue(distribution);
-            obj.recordState(study,trial.Number);
+        function value=sampleIntegerDetailed(obj,study,trial,name,low,high,step,logScale)
+            if obj.Backend~="upstream-python"
+                if ~logScale && step==1
+                    value=obj.IndependentSampler.sampleInteger( ...
+                        study,trial,name,low,high);
+                else
+                    value=obj.IndependentSampler.sampleFloat( ...
+                        study,trial,name,low,high, ...
+                        struct("Log",logical(logScale),"Step",double(step)));
+                    value=low+round((value-low)/step)*step;
+                end
+                return
+            end
+            obj.ensurePythonTrial(trial);
+            value=double(obj.PythonTrial.suggest_int( ...
+                char(name),int64(low),int64(high), ...
+                pyargs("step",int64(step),"log",logical(logScale))));
+        end
+
+        function value=sampleCategorical(obj,study,trial,name,choices)
+            if obj.Backend=="upstream-python"
+                obj.ensurePythonTrial(trial);
+                raw=obj.PythonTrial.suggest_categorical( ...
+                    char(name),obj.pythonChoices(choices));
+                value=obj.matlabChoice(raw);
+                return
+            end
+            value=obj.IndependentSampler.sampleCategorical( ...
+                study,trial,name,choices);
         end
 
         function values=sampleJoint(obj,study,trial,names,lows,highs,options)
             values=zeros(1,numel(names));
             for index=1:numel(names)
-                distribution=radia.optuna.internal.DistributionCodec.float( ...
-                    lows(index),highs(index),options.Log(index),NaN);
-                values(index)=obj.randomValue(distribution);
+                if obj.Backend=="upstream-python"
+                    values(index)=obj.sampleFloat( ...
+                        study,trial,names(index),lows(index),highs(index), ...
+                        struct("Log",options.Log(index),"Step",NaN));
+                else
+                    values(index)=obj.IndependentSampler.sampleFloat( ...
+                        study,trial,names(index),lows(index),highs(index), ...
+                        struct("Log",options.Log(index),"Step",NaN));
+                end
             end
-            obj.recordState(study,trial.Number);
         end
 
         function afterTrial(obj,study,trial)
+            if obj.Backend=="upstream-python"
+                constraintPresent=false;
+                constraints=zeros(1,0);
+                if trial.State=="COMPLETE" && ~isempty(obj.ConstraintsFcn)
+                    [constraintPresent,constraints]= ...
+                        study.constraintRecord(trial.Number);
+                    if ~constraintPresent
+                        constraints=reshape(double(obj.ConstraintsFcn(trial)),1,[]);
+                        study.recordConstraints(trial,constraints);
+                        constraintPresent=true;
+                    end
+                end
+                obj.finishPythonTrial(trial,constraintPresent,constraints);
+                return
+            end
+            obj.IndependentSampler.afterTrial(study,trial);
             if trial.State=="COMPLETE" && ~isempty(obj.ConstraintsFcn)
                 study.recordConstraints(trial,obj.ConstraintsFcn(trial));
             end
@@ -153,6 +230,274 @@ classdef GPSampler < handle
     end
 
     methods (Access=private)
+        function preparePythonTrial(obj,study,trial)
+            if isempty(obj.PythonStudy)
+                obj.initializePythonStudy(study);
+                obj.replayPythonHistory(study,trial.Number);
+            end
+            if ~isempty(obj.PythonTrial)
+                error("radia:optuna:GPPythonTrial", ...
+                    "The previous upstream Python GP trial is still running.");
+            end
+            obj.PythonTrial=obj.PythonStudy.ask();
+            obj.PythonTrialNumber=trial.Number;
+        end
+
+        function initializePythonStudy(obj,study)
+            environment=pyenv;
+            if environment.Status=="NotLoaded"
+                try
+                    environment=pyenv(ExecutionMode="InProcess");
+                catch exception
+                    cause=MException("radia:optuna:GPPython", ...
+                        "GPSampler Backend='upstream-python' requires the " + ...
+                         "configured in-process Python 3.12 environment.");
+                    throw(addCause(cause,exception));
+                end
+            end
+            if environment.ExecutionMode~="InProcess" || ...
+                    ~startsWith(string(environment.Version),"3.12")
+                error("radia:optuna:GPPython", ...
+                    "GPSampler Backend='upstream-python' requires " + ...
+                     "in-process Python 3.12; pyenv reports %s (%s).", ...
+                    string(environment.Version),string(environment.ExecutionMode));
+            end
+            try
+                obj.PythonOptuna=py.importlib.import_module("optuna");
+                version=string(py.getattr(obj.PythonOptuna,"__version__"));
+                if version~="4.9.0"
+                    error("radia:optuna:GPPythonVersion", ...
+                        "Expected optuna==4.9.0, found %s.",version);
+                end
+                samplerArguments=obj.pythonSamplerArguments();
+                sampler=obj.PythonOptuna.samplers.GPSampler( ...
+                    pyargs(samplerArguments{:}));
+                if isscalar(study.Directions)
+                    obj.PythonStudy=obj.PythonOptuna.create_study(pyargs( ...
+                        "direction",char(study.Directions),"sampler",sampler));
+                else
+                    directions=py.list(cellstr(study.Directions));
+                    obj.PythonStudy=obj.PythonOptuna.create_study(pyargs( ...
+                        "directions",directions,"sampler",sampler));
+                end
+            catch exception
+                if exception.identifier=="radia:optuna:GPPythonVersion"
+                    rethrow(exception)
+                end
+                cause=MException("radia:optuna:GPPython", ...
+                    "Could not initialize the pinned Optuna 4.9.0 GP " + ...
+                     "backend with its NumPy, SciPy, and PyTorch runtime.");
+                throw(addCause(cause,exception));
+            end
+        end
+
+        function ensurePythonTrial(obj,trial)
+            if isempty(obj.PythonTrial) || obj.PythonTrialNumber~=trial.Number
+                error("radia:optuna:GPPythonTrial", ...
+                    "No upstream Python GP trial is active for trial %d.", ...
+                    trial.Number);
+            end
+        end
+
+        function finishPythonTrial(obj,trial,constraintPresent,constraints)
+            obj.ensurePythonTrial(trial);
+            if nargin<3, constraintPresent=false; end
+            if nargin<4, constraints=zeros(1,0); end
+            if trial.State=="COMPLETE" && constraintPresent
+                obj.setPythonConstraints(obj.PythonTrial,constraints);
+            end
+            switch trial.State
+                case "COMPLETE"
+                    values=reshape(double(trial.Values),1,[]);
+                    if isscalar(values)
+                        obj.PythonStudy.tell(obj.PythonTrial,values);
+                    else
+                        obj.PythonStudy.tell(obj.PythonTrial, ...
+                            py.list(num2cell(values)));
+                    end
+                case "PRUNED"
+                    obj.PythonStudy.tell(obj.PythonTrial,pyargs( ...
+                        "state",obj.PythonOptuna.trial.TrialState.PRUNED));
+                case "FAIL"
+                    obj.PythonStudy.tell(obj.PythonTrial,pyargs( ...
+                        "state",obj.PythonOptuna.trial.TrialState.FAIL));
+                otherwise
+                    error("radia:optuna:GPPythonTrial", ...
+                        "Unsupported upstream GP trial state '%s'.",trial.State);
+            end
+            obj.PythonTrial=[];
+            obj.PythonTrialNumber=NaN;
+        end
+
+        function pairs=pythonSamplerArguments(obj)
+            pairs={ ...
+                "seed",int64(obj.Seed), ...
+                "n_startup_trials",int64(obj.NStartupTrials), ...
+                "deterministic_objective",obj.DeterministicObjective};
+            if ~isempty(obj.ConstraintsFcn)
+                code=join([ ...
+                    "def radia_matlab_constraints(trial):"; ...
+                    "    return trial.user_attrs['__radia_matlab_constraints']"; ...
+                    "result = radia_matlab_constraints"],newline);
+                callback=pyrun(code,"result");
+                pairs=[pairs,{"constraints_func",callback}];
+            end
+        end
+
+        function replayPythonHistory(obj,study,beforeTrialNumber)
+            rows=study.TrialTable.TrialNumber<beforeTrialNumber;
+            prior=sortrows(study.TrialTable(rows,:),"TrialNumber");
+            for index=1:height(prior)
+                number=prior.TrialNumber(index);
+                state=prior.State(index);
+                if ~ismember(state,["COMPLETE","PRUNED","FAIL"])
+                    error("radia:optuna:GPPythonReplay", ...
+                        "Cannot replay prior trial %d in state %s.",number,state);
+                end
+                pythonTrial=obj.PythonStudy.ask();
+                if double(pythonTrial.number)~=number
+                    error("radia:optuna:GPPythonReplay", ...
+                        "Python replay trial number %d does not match MATLAB trial %d.", ...
+                        double(pythonTrial.number),number);
+                end
+                parameterRows=find(study.ParamTable.TrialNumber==number)';
+                for row=parameterRows
+                    distribution= ...
+                        radia.optuna.internal.DistributionCodec.decode( ...
+                        study.ParamTable.Kind(row), ...
+                        study.ParamTable.Distribution(row));
+                    proposed=obj.pythonSuggest( ...
+                        pythonTrial,study.ParamTable.Name(row),distribution);
+                    recorded=obj.parameterValue(study.ParamTable(row,:));
+                    if ~obj.sameParameterValue(proposed,recorded)
+                        error("radia:optuna:GPPythonReplay", ...
+                            "Replayed parameter '%s' in trial %d differs from the stored value.", ...
+                            study.ParamTable.Name(row),number);
+                    end
+                end
+                intermediate=sortrows(study.IntermediateTable( ...
+                    study.IntermediateTable.TrialNumber==number,:),"Step");
+                for reportIndex=1:height(intermediate)
+                    pythonTrial.report(intermediate.Value(reportIndex), ...
+                        int64(intermediate.Step(reportIndex)));
+                end
+                [constraintPresent,constraints]=study.constraintRecord(number);
+                if state=="COMPLETE" && constraintPresent && ...
+                        ~isempty(obj.ConstraintsFcn)
+                    obj.setPythonConstraints(pythonTrial,constraints);
+                end
+                obj.tellPythonReplay(study,pythonTrial,number,state);
+            end
+        end
+
+        function value=pythonSuggest(obj,pythonTrial,name,distribution)
+            switch distribution.kind
+                case "float"
+                    args={"log",logical(distribution.log)};
+                    if isfinite(distribution.step)
+                        args=[args,{"step",double(distribution.step)}];
+                    end
+                    value=double(pythonTrial.suggest_float( ...
+                        char(name),distribution.low,distribution.high, ...
+                        pyargs(args{:})));
+                case "integer"
+                    value=double(pythonTrial.suggest_int( ...
+                        char(name),int64(distribution.low), ...
+                        int64(distribution.high),pyargs( ...
+                        "step",int64(distribution.step), ...
+                        "log",logical(distribution.log))));
+                case "categorical"
+                    value=obj.matlabChoice(pythonTrial.suggest_categorical( ...
+                        char(name),obj.pythonChoices(distribution.choices)));
+                otherwise
+                    error("radia:optuna:GPPythonReplay", ...
+                        "Unsupported stored distribution kind '%s'.", ...
+                        distribution.kind);
+            end
+        end
+
+        function value=parameterValue(~,row)
+            if ~isnan(row.ValueNumeric)
+                value=row.ValueNumeric;
+            else
+                value=jsondecode(row.ValueText);
+            end
+        end
+
+        function result=sameParameterValue(~,left,right)
+            if isnumeric(left) && isnumeric(right) && ...
+                    isscalar(left) && isscalar(right)
+                result=isequaln(double(left),double(right));
+            else
+                result=radia.optuna.internal.DistributionCodec. ...
+                    choiceToken(left)== ...
+                    radia.optuna.internal.DistributionCodec.choiceToken(right);
+            end
+        end
+
+        function setPythonConstraints(~,pythonTrial,constraints)
+            pythonTrial.set_user_attr(char("__radia_matlab_constraints"), ...
+                py.list(num2cell(reshape(double(constraints),1,[]))));
+        end
+
+        function tellPythonReplay(obj,study,pythonTrial,number,state)
+            switch state
+                case "COMPLETE"
+                    rows=study.ObjectiveTable.TrialNumber==number;
+                    values=sortrows(study.ObjectiveTable(rows,:), ...
+                        "ObjectiveIndex").Value;
+                    values=reshape(double(values),1,[]);
+                    if isscalar(values)
+                        obj.PythonStudy.tell(pythonTrial,values);
+                    else
+                        obj.PythonStudy.tell(pythonTrial,py.list(num2cell(values)));
+                    end
+                case "PRUNED"
+                    obj.PythonStudy.tell(pythonTrial,pyargs( ...
+                        "state",obj.PythonOptuna.trial.TrialState.PRUNED));
+                case "FAIL"
+                    obj.PythonStudy.tell(pythonTrial,pyargs( ...
+                        "state",obj.PythonOptuna.trial.TrialState.FAIL));
+            end
+        end
+
+        function result=pythonChoices(~,choices)
+            count=numel(choices);
+            items=cell(1,count);
+            for index=1:count
+                if iscell(choices)
+                    item=choices{index};
+                else
+                    item=choices(index);
+                end
+                if isstring(item) || ischar(item)
+                    items{index}=py.str(char(string(item)));
+                elseif islogical(item)
+                    items{index}=py.bool(logical(item));
+                elseif isnumeric(item) && isscalar(item)
+                    items{index}=py.float(double(item));
+                else
+                    error("radia:optuna:GPChoices", ...
+                        "The upstream GP backend supports scalar string, logical, and numeric choices.");
+                end
+            end
+            result=py.list(items);
+        end
+
+        function value=matlabChoice(~,raw)
+            if isa(raw,"py.str")
+                value=string(raw);
+            elseif isa(raw,"py.bool")
+                value=logical(raw);
+            elseif isa(raw,"py.int") || isa(raw,"py.float")
+                value=double(raw);
+            else
+                error("radia:optuna:GPChoices", ...
+                    "Optuna returned an unsupported categorical choice type '%s'.", ...
+                    string(class(raw)));
+            end
+        end
+
         function values=sampleRelative(obj,study,searchSpace,observations, ...
                 objectives,trialNumbers,pending,constraints,constraintPresent)
             finished=~pending;
@@ -222,7 +567,7 @@ classdef GPSampler < handle
             % Match Optuna's 2048-point QMC preliminary search where the
             % native Sobol table covers the requested dimensionality.
             if dimensions<=32
-                qmcSeed=floor(rand(obj.Stream)*(2^31-1));
+                qmcSeed=randi(obj.Stream,2^30)-1;
                 qmc=radia.optuna.QMCSampler(QMCType="sobol", ...
                     Scramble=true,Seed=qmcSeed);
                 candidates=qmc.unitPoints(dimensions,count);
@@ -405,7 +750,7 @@ classdef GPSampler < handle
             signedMeans=means.*signs;
             lower=min([front;signedMeans-4*deviations],[],1);
             span=max(reference-lower,1e-12);
-            qmcSeed=floor(rand(obj.Stream)*(2^31-1));
+            qmcSeed=randi(obj.Stream,2^30)-1;
             qmc=radia.optuna.QMCSampler(QMCType="sobol", ...
                 Scramble=true,Seed=qmcSeed);
             integration=lower+qmc.unitPoints( ...
@@ -628,10 +973,18 @@ classdef GPSampler < handle
             changed=isempty(obj.AttachedStudy) || ~isequal(obj.AttachedStudy,study);
             if changed
                 obj.AttachedStudy=study;
-                obj.Stream=RandStream("mt19937ar","Seed",obj.Seed);
+                obj.Stream=radia.optuna.internal.NumpyRandomState(obj.Seed);
                 obj.ObjectiveTheta=cell(0,1);
                 obj.ConstraintTheta=cell(0,1);
+                obj.PythonOptuna=[];
+                obj.PythonStudy=[];
+                obj.PythonTrial=[];
+                obj.PythonTrialNumber=NaN;
                 obj.Restored=false;
+            end
+            if obj.Backend=="upstream-python"
+                obj.Restored=true;
+                return
             end
             if obj.Restored, return, end
             state=study.samplerState(obj.SamplerName,obj.StateSchema);

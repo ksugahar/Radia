@@ -287,8 +287,9 @@ MATLAB adapters.
 Radia supports global, local, and gradient-based design loops:
 
 - TPE, CMA-ES, GP, NSGA-II/III, QMC, and finite define-by-run search;
-- MATLAB-native Optuna 4.9-style Study/Trial workflows, table-backed resume,
-  automatic sampler routing, and live Pareto monitoring;
+- MATLAB-native Optuna 4.9.0-oracled Study/Trial workflows, table-backed
+  resume/replay, parameter importance, termination callbacks, automatic
+  sampler routing, and live Pareto monitoring;
 - analytic-adjoint MMA and SQP for continuous field optimization;
 - HDiv-VIM and HCurl material topology;
 - stream-function, sheet-metal, and electromagnet topology optimization;
@@ -469,7 +470,7 @@ explicit configuration.
 
 ### Python packages
 
-This monorepo contains three independently published packages. SPICE/LTspice
+This monorepo contains four independently versioned distributions. SPICE/LTspice
 integration ships inside `radia`; its extra only adds schemdraw support.
 
 | Package or extra | Install | Purpose |
@@ -477,7 +478,14 @@ integration ships inside `radia`; its extra only adds schemdraw support.
 | `radia` | `python -m pip install radia` | C++ core, Python APIs, NGSolve integration, physical methods, and application logic |
 | `radia-mcp` | `python -m pip install radia-mcp` | AI-facing MCP servers and executable domain knowledge |
 | `cubit-mesh-export` | `python -m pip install cubit-mesh-export` | Solver-neutral high-order Cubit export and `check-vol` |
+| `radia-optuna` | `python -m pip install radia-optuna` | Standalone MATLAB Optuna namespace and 20-command native gateway; no Radia solver, NGSolve, or MKL runtime |
+| `radia[optuna]` | `python -m pip install "radia[optuna]"` | Radia plus the independently versioned, validated native MATLAB/Simulink `radia-optuna` release |
+| `radia[optuna-upstream]` | `python -m pip install "radia[optuna-upstream]"` | Also installs pinned upstream Python/SciPy/PyTorch paths used by GP, scrambled QMC, and importance parity |
 | `radia[ltspice]` | `python -m pip install "radia[ltspice]"` | Radia plus schemdraw support for built-in SPICE/LTspice conversion and circuit coupling |
+
+The separately verified `radia-optuna` wheel is also emitted as a CI artifact.
+Its first PyPI release requires registration of the repository's trusted
+publisher and a matching `radia-optuna-v<version>` tag.
 
 Pin release versions together when reproducing a validated deployment. Release
 notes and immutable native/Simulink assets are published on the

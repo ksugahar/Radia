@@ -1,0 +1,278 @@
+{
+  "all_study_names": {
+    "result": [
+      {
+        "directions": null,
+        "metric_names": null,
+        "sampler_name": null,
+        "study_name": "radia-matlab-mcp-single"
+      },
+      {
+        "directions": null,
+        "metric_names": null,
+        "sampler_name": null,
+        "study_name": "radia-matlab-mcp-multi"
+      }
+    ]
+  },
+  "mcp_server_name": "Optuna",
+  "mcp_server_reported_version": "1.27.0",
+  "multi": {
+    "add_trials": {
+      "result": "3 trials were added."
+    },
+    "ask": {
+      "params": {
+        "x": 0.0
+      },
+      "system_attrs": null,
+      "trial_number": 0,
+      "user_attrs": null,
+      "values": null
+    },
+    "best_trial_is_error": true,
+    "best_trials": {
+      "result": [
+        {
+          "params": {
+            "x": 0.0
+          },
+          "system_attrs": {},
+          "trial_number": 0,
+          "user_attrs": {},
+          "values": [
+            1.0,
+            1.0
+          ]
+        },
+        {
+          "params": {
+            "x": 0.5
+          },
+          "system_attrs": {},
+          "trial_number": 1,
+          "user_attrs": {},
+          "values": [
+            0.5,
+            0.5
+          ]
+        },
+        {
+          "params": {
+            "x": 2.0
+          },
+          "system_attrs": {},
+          "trial_number": 2,
+          "user_attrs": {},
+          "values": [
+            2.0,
+            2.0
+          ]
+        }
+      ]
+    },
+    "create_study": {
+      "directions": null,
+      "metric_names": null,
+      "sampler_name": null,
+      "study_name": "radia-matlab-mcp-multi"
+    },
+    "directions": {
+      "directions": [
+        "minimize",
+        "maximize"
+      ],
+      "metric_names": null,
+      "sampler_name": null,
+      "study_name": "radia-matlab-mcp-multi"
+    },
+    "get_metric_names": {
+      "directions": null,
+      "metric_names": [
+        "loss",
+        "score"
+      ],
+      "sampler_name": null,
+      "study_name": "radia-matlab-mcp-multi"
+    },
+    "set_metric_names": {
+      "directions": null,
+      "metric_names": [
+        "loss",
+        "score"
+      ],
+      "sampler_name": null,
+      "study_name": "radia-matlab-mcp-multi"
+    },
+    "study_name": "radia-matlab-mcp-multi",
+    "tell": {
+      "params": null,
+      "system_attrs": null,
+      "trial_number": 0,
+      "user_attrs": null,
+      "values": [
+        1.0,
+        1.0
+      ]
+    }
+  },
+  "optuna_mcp_version": "0.2.0",
+  "optuna_version": "4.9.0",
+  "sampler_seed_supported": false,
+  "schema": "radia.test.optuna-upstream-mcp-oracle.v1",
+  "set_sampler_arguments": [
+    "name"
+  ],
+  "single": {
+    "add_trial": {
+      "result": "Trial was added."
+    },
+    "add_trials": {
+      "result": "2 trials were added."
+    },
+    "ask": {
+      "params": {
+        "mode": "A",
+        "n": 3,
+        "x": 1.25
+      },
+      "system_attrs": null,
+      "trial_number": 0,
+      "user_attrs": null,
+      "values": null
+    },
+    "best_trial": {
+      "params": {
+        "x": -0.5
+      },
+      "system_attrs": {
+        "origin": "official-mcp"
+      },
+      "trial_number": 1,
+      "user_attrs": {
+        "source": "archive"
+      },
+      "values": [
+        0.5
+      ]
+    },
+    "create_study": {
+      "directions": null,
+      "metric_names": null,
+      "sampler_name": null,
+      "study_name": "radia-matlab-mcp-single"
+    },
+    "directions": {
+      "directions": [
+        "minimize"
+      ],
+      "metric_names": null,
+      "sampler_name": null,
+      "study_name": "radia-matlab-mcp-single"
+    },
+    "set_sampler": {
+      "directions": null,
+      "metric_names": null,
+      "sampler_name": "RandomSampler",
+      "study_name": "radia-matlab-mcp-single"
+    },
+    "study_name": "radia-matlab-mcp-single",
+    "tell": {
+      "params": null,
+      "system_attrs": null,
+      "trial_number": 0,
+      "user_attrs": null,
+      "values": [
+        2.5
+      ]
+    },
+    "trials": {
+      "numbers": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "params_mode": [
+        "A",
+        "",
+        "",
+        ""
+      ],
+      "params_n": [
+        3,
+        0,
+        0,
+        0
+      ],
+      "params_x": [
+        1.25,
+        -0.5,
+        0.0,
+        0.75
+      ],
+      "states": [
+        "COMPLETE",
+        "COMPLETE",
+        "PRUNED",
+        "FAIL"
+      ],
+      "user_attrs_source": [
+        "official-mcp",
+        "archive",
+        "",
+        ""
+      ],
+      "value_present": [
+        true,
+        true,
+        false,
+        false
+      ],
+      "values": [
+        2.5,
+        0.5,
+        0.0,
+        0.0
+      ]
+    },
+    "user_attrs": {
+      "params": null,
+      "system_attrs": null,
+      "trial_number": 0,
+      "user_attrs": {
+        "source": "official-mcp"
+      },
+      "values": null
+    }
+  },
+  "tools": [
+    "add_trial",
+    "add_trials",
+    "ask",
+    "best_trial",
+    "best_trials",
+    "create_study",
+    "get_all_study_names",
+    "get_directions",
+    "get_metric_names",
+    "get_trial_user_attrs",
+    "get_trials",
+    "launch_optuna_dashboard",
+    "plot_contour",
+    "plot_edf",
+    "plot_hypervolume_history",
+    "plot_optimization_history",
+    "plot_parallel_coordinate",
+    "plot_param_importances",
+    "plot_pareto_front",
+    "plot_rank",
+    "plot_slice",
+    "plot_timeline",
+    "set_metric_names",
+    "set_sampler",
+    "set_trial_user_attr",
+    "tell"
+  ],
+  "transport": "stdio"
+}

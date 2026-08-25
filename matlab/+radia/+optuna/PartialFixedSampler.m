@@ -1,4 +1,4 @@
-classdef PartialFixedSampler < handle
+classdef PartialFixedSampler < radia.optuna.BaseSampler
     %PARTIALFIXEDSAMPLER Fix selected parameters and delegate the remainder.
 
     properties (SetAccess=private)

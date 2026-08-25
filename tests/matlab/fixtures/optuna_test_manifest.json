@@ -1,0 +1,671 @@
+{
+  "entries": [
+    {
+      "classification": "upstream-python",
+      "file": "test_optuna_core_parity.m",
+      "oracle": "optuna49_oracle.json",
+      "scope": "shared Optuna 4.9.0 behavior",
+      "test": "testEnqueueTrialMatchesUpstream"
+    },
+    {
+      "classification": "upstream-python",
+      "file": "test_optuna_core_parity.m",
+      "oracle": "optuna49_oracle.json",
+      "scope": "shared Optuna 4.9.0 behavior",
+      "test": "testInvalidEnqueuedValueFallsBackLikeUpstream"
+    },
+    {
+      "classification": "upstream-python",
+      "file": "test_optuna_core_parity.m",
+      "oracle": "optuna49_oracle.json",
+      "scope": "shared Optuna 4.9.0 behavior",
+      "test": "testAskFixedDistributionsMatchesUpstream"
+    },
+    {
+      "classification": "upstream-mcp",
+      "file": "test_optuna_mcp_oracle.m",
+      "oracle": "optuna49_mcp_oracle.json",
+      "scope": "official Optuna MCP behavior",
+      "test": "testOfficialMCPProvenanceAndToolContract"
+    },
+    {
+      "classification": "upstream-mcp",
+      "file": "test_optuna_mcp_oracle.m",
+      "oracle": "optuna49_mcp_oracle.json",
+      "scope": "official Optuna MCP behavior",
+      "test": "testSingleObjectiveStudyTrialContract"
+    },
+    {
+      "classification": "upstream-mcp",
+      "file": "test_optuna_mcp_oracle.m",
+      "oracle": "optuna49_mcp_oracle.json",
+      "scope": "official Optuna MCP behavior",
+      "test": "testMultiObjectiveMetricAndParetoContract"
+    },
+    {
+      "classification": "matlab-integration",
+      "file": "test_optuna_nsgaii_joint.m",
+      "oracle": null,
+      "scope": "MATLAB NSGA-II generation cache, parallel scheduling, and persistence",
+      "test": "testGenerationStateAndParentCacheAreFixed"
+    },
+    {
+      "classification": "matlab-integration",
+      "file": "test_optuna_nsgaii_joint.m",
+      "oracle": null,
+      "scope": "MATLAB NSGA-II generation cache, parallel scheduling, and persistence",
+      "test": "testParallelOvershootAndLateCompletionKeepParentCachesFixed"
+    },
+    {
+      "classification": "matlab-integration",
+      "file": "test_optuna_nsgaii_joint.m",
+      "oracle": null,
+      "scope": "MATLAB NSGA-II generation cache, parallel scheduling, and persistence",
+      "test": "testGenerationCacheAndRngResumeDeterministically"
+    },
+    {
+      "classification": "matlab-integration",
+      "file": "test_optuna_nsgaii_joint.m",
+      "oracle": null,
+      "scope": "MATLAB NSGA-II generation cache, parallel scheduling, and persistence",
+      "test": "testConstraintVectorShapeIsStable"
+    },
+    {
+      "classification": "matlab-integration",
+      "file": "test_optuna_nsgaii_joint.m",
+      "oracle": null,
+      "scope": "MATLAB NSGA-II generation cache, parallel scheduling, and persistence",
+      "test": "testEmptyConstraintVectorIsPresentAndFeasible"
+    },
+    {
+      "classification": "matlab-integration",
+      "file": "test_optuna_nsgaii_joint.m",
+      "oracle": null,
+      "scope": "MATLAB NSGA-II generation cache, parallel scheduling, and persistence",
+      "test": "testDynamicParameterFallsBackOutsideJointIntersection"
+    },
+    {
+      "classification": "matlab-integration",
+      "file": "test_optuna_nsgaii_joint.m",
+      "oracle": null,
+      "scope": "MATLAB NSGA-II generation cache, parallel scheduling, and persistence",
+      "test": "testRunningAndFailedTrialsAreNeverParents"
+    },
+    {
+      "classification": "matlab-integration",
+      "file": "test_optuna_nsgaii_joint.m",
+      "oracle": null,
+      "scope": "MATLAB NSGA-II generation cache, parallel scheduling, and persistence",
+      "test": "testConstraintCallbackPersistsPerCompletedTrial"
+    },
+    {
+      "classification": "matlab-integration",
+      "file": "test_optuna_nsgaii_joint.m",
+      "oracle": null,
+      "scope": "MATLAB NSGA-II generation cache, parallel scheduling, and persistence",
+      "test": "testPrunedTrialRunsConstraintCallback"
+    },
+    {
+      "classification": "upstream-python",
+      "file": "test_optuna_pruner_parity.m",
+      "oracle": "optuna49_oracle.json",
+      "scope": "shared Optuna 4.9.0 behavior",
+      "test": "testPrunerDecisionsMatchUpstream"
+    },
+    {
+      "classification": "matlab-integration",
+      "file": "test_optuna_reliability.m",
+      "oracle": null,
+      "scope": "MATLAB MAT-file transaction, recovery, and sampler-state persistence",
+      "test": "testConstraintCallbackFailureStillCommitsCompleteTrial"
+    },
+    {
+      "classification": "matlab-integration",
+      "file": "test_optuna_reliability.m",
+      "oracle": null,
+      "scope": "MATLAB MAT-file transaction, recovery, and sampler-state persistence",
+      "test": "testUnsupportedConstrainedCMAFailsClosed"
+    },
+    {
+      "classification": "matlab-integration",
+      "file": "test_optuna_reliability.m",
+      "oracle": null,
+      "scope": "MATLAB MAT-file transaction, recovery, and sampler-state persistence",
+      "test": "testStaleRunningTrialRecoveryLeavesNoRunningRow"
+    },
+    {
+      "classification": "matlab-integration",
+      "file": "test_optuna_reliability.m",
+      "oracle": null,
+      "scope": "MATLAB MAT-file transaction, recovery, and sampler-state persistence",
+      "test": "testAtomicStorageSchemaAndBackupRecovery"
+    },
+    {
+      "classification": "matlab-integration",
+      "file": "test_optuna_reliability.m",
+      "oracle": null,
+      "scope": "MATLAB MAT-file transaction, recovery, and sampler-state persistence",
+      "test": "testEmptyConstraintRecordSurvivesStorageRoundTrip"
+    },
+    {
+      "classification": "matlab-integration",
+      "file": "test_optuna_reliability.m",
+      "oracle": null,
+      "scope": "MATLAB MAT-file transaction, recovery, and sampler-state persistence",
+      "test": "testSamplerRandomStatesResumeDeterministically"
+    },
+    {
+      "classification": "matlab-integration",
+      "file": "test_optuna_reliability.m",
+      "oracle": null,
+      "scope": "MATLAB MAT-file transaction, recovery, and sampler-state persistence",
+      "test": "testParameterNameCollisionUsesDistinctMATLABKeys"
+    },
+    {
+      "classification": "matlab-integration",
+      "file": "test_optuna_sampler_wrappers.m",
+      "oracle": null,
+      "scope": "MATLAB sampler-state persistence and AutoSampler policy integration",
+      "test": "testGPProposalResumesWithHyperparametersAndRandomState"
+    },
+    {
+      "classification": "matlab-integration",
+      "file": "test_optuna_sampler_wrappers.m",
+      "oracle": null,
+      "scope": "MATLAB sampler-state persistence and AutoSampler policy integration",
+      "test": "testAutoSamplerPolicyUsesGPAndNSGAIIIAtOptunaBudgets"
+    },
+    {
+      "classification": "matlab-integration",
+      "file": "test_optuna_sampler_wrappers.m",
+      "oracle": null,
+      "scope": "MATLAB sampler-state persistence and AutoSampler policy integration",
+      "test": "testQMCSequenceResumesFromPersistedSamplerState"
+    },
+    {
+      "classification": "matlab-integration",
+      "file": "test_optuna_sampler_wrappers.m",
+      "oracle": null,
+      "scope": "MATLAB sampler-state persistence and AutoSampler policy integration",
+      "test": "testQueuedTrialSurvivesStorageReload"
+    },
+    {
+      "classification": "matlab-integration",
+      "file": "test_optuna_simulink_block.m",
+      "oracle": null,
+      "scope": "MATLAB and Simulink block integration",
+      "test": "testTriggeredBlockRunsStudy"
+    },
+    {
+      "classification": "matlab-integration",
+      "file": "test_optuna_simulink_block.m",
+      "oracle": null,
+      "scope": "MATLAB and Simulink block integration",
+      "test": "testTriggeredBlockRunsLTspiceStudy"
+    },
+    {
+      "classification": "matlab-integration",
+      "file": "test_optuna_simulink_block.m",
+      "oracle": null,
+      "scope": "MATLAB and Simulink block integration",
+      "test": "testSimulinkOutputsLiveParetoEvolution"
+    },
+    {
+      "classification": "matlab-integration",
+      "file": "test_optuna_simulink_block.m",
+      "oracle": null,
+      "scope": "MATLAB and Simulink block integration",
+      "test": "testMonitorUsesSimulinkScopesAndNoBrowser"
+    },
+    {
+      "classification": "matlab-integration",
+      "file": "test_optuna_simulink_block.m",
+      "oracle": null,
+      "scope": "MATLAB and Simulink block integration",
+      "test": "testSheetMetalOptimizationBlockUsesNativeRunner"
+    },
+    {
+      "classification": "matlab-integration",
+      "file": "test_optuna_simulink_block.m",
+      "oracle": null,
+      "scope": "MATLAB and Simulink block integration",
+      "test": "testObjectiveFunctionHandleParameter"
+    },
+    {
+      "classification": "matlab-integration",
+      "file": "test_optuna_simulink_block.m",
+      "oracle": null,
+      "scope": "MATLAB and Simulink block integration",
+      "test": "testCAEFailuresAreRecordedAndStudyContinues"
+    },
+    {
+      "classification": "matlab-integration",
+      "file": "test_optuna_simulink_block.m",
+      "oracle": null,
+      "scope": "MATLAB and Simulink block integration",
+      "test": "testCancelStopsActiveStudy"
+    },
+    {
+      "classification": "matlab-integration",
+      "file": "test_optuna_simulink_block.m",
+      "oracle": null,
+      "scope": "MATLAB and Simulink block integration",
+      "test": "testLiveMonitorReceivesTrialProgress"
+    },
+    {
+      "classification": "matlab-integration",
+      "file": "test_optuna_simulink_block.m",
+      "oracle": null,
+      "scope": "MATLAB and Simulink block integration",
+      "test": "testLiveMonitorDisplaysParetoProgress"
+    },
+    {
+      "classification": "matlab-integration",
+      "file": "test_optuna_simulink_block.m",
+      "oracle": null,
+      "scope": "MATLAB and Simulink block integration",
+      "test": "testBuilderExposesLargeNativeSamplerChoices"
+    },
+    {
+      "classification": "matlab-integration",
+      "file": "test_optuna_table.m",
+      "oracle": null,
+      "scope": "MATLAB table storage, MAT persistence, and SimulinkRunner integration",
+      "test": "testDefineByRunAndPersistence"
+    },
+    {
+      "classification": "matlab-integration",
+      "file": "test_optuna_table.m",
+      "oracle": null,
+      "scope": "MATLAB table storage, MAT persistence, and SimulinkRunner integration",
+      "test": "testTrialCompatibilityMetadata"
+    },
+    {
+      "classification": "matlab-integration",
+      "file": "test_optuna_table.m",
+      "oracle": null,
+      "scope": "MATLAB table storage, MAT persistence, and SimulinkRunner integration",
+      "test": "testStudyUserAttributesPersist"
+    },
+    {
+      "classification": "matlab-integration",
+      "file": "test_optuna_table.m",
+      "oracle": null,
+      "scope": "MATLAB table storage, MAT persistence, and SimulinkRunner integration",
+      "test": "testDistributionCodecReadsVersionedAndLegacyMetadata"
+    },
+    {
+      "classification": "matlab-integration",
+      "file": "test_optuna_table.m",
+      "oracle": null,
+      "scope": "MATLAB table storage, MAT persistence, and SimulinkRunner integration",
+      "test": "testSimulinkRunnerContract"
+    },
+    {
+      "classification": "matlab-integration",
+      "file": "test_optuna_table.m",
+      "oracle": null,
+      "scope": "MATLAB table storage, MAT persistence, and SimulinkRunner integration",
+      "test": "testSimulinkRunnerOptimizesStudy"
+    },
+    {
+      "classification": "matlab-integration",
+      "file": "test_optuna_table.m",
+      "oracle": null,
+      "scope": "MATLAB table storage, MAT persistence, and SimulinkRunner integration",
+      "test": "testSimulinkRunnerRecordsCAETrialContract"
+    },
+    {
+      "classification": "matlab-integration",
+      "file": "test_optuna_table.m",
+      "oracle": null,
+      "scope": "MATLAB table storage, MAT persistence, and SimulinkRunner integration",
+      "test": "testSimulinkRunnerClassifiesCAEFailureAndContinues"
+    },
+    {
+      "classification": "matlab-integration",
+      "file": "test_optuna_table.m",
+      "oracle": null,
+      "scope": "MATLAB table storage, MAT persistence, and SimulinkRunner integration",
+      "test": "testCmaPartialGenerationSurvivesStudyReload"
+    },
+    {
+      "classification": "matlab-integration",
+      "file": "test_optuna_table.m",
+      "oracle": null,
+      "scope": "MATLAB table storage, MAT persistence, and SimulinkRunner integration",
+      "test": "testMultiObjectiveParetoFrontAndPersistence"
+    },
+    {
+      "classification": "matlab-integration",
+      "file": "test_optuna_table.m",
+      "oracle": null,
+      "scope": "MATLAB table storage, MAT persistence, and SimulinkRunner integration",
+      "test": "testSimulinkRunnerParallelTrials"
+    },
+    {
+      "classification": "matlab-integration",
+      "file": "test_optuna_table.m",
+      "oracle": null,
+      "scope": "MATLAB table storage, MAT persistence, and SimulinkRunner integration",
+      "test": "testSimulinkRunnerSteadyStateFailuresLeaveNoRunningTrials"
+    },
+    {
+      "classification": "matlab-integration",
+      "file": "test_optuna_table.m",
+      "oracle": null,
+      "scope": "MATLAB table storage, MAT persistence, and SimulinkRunner integration",
+      "test": "testConstraintTablePersists"
+    },
+    {
+      "classification": "upstream-python",
+      "file": "test_optuna_upstream_oracle.m",
+      "oracle": "optuna49_oracle.json",
+      "scope": "shared Optuna 4.9.0 behavior",
+      "test": "testOracleProvenance"
+    },
+    {
+      "classification": "matlab-integration",
+      "file": "test_optuna_upstream_oracle.m",
+      "oracle": null,
+      "scope": "MATLAB test-policy integration",
+      "test": "testOraclePolicyManifestIsComplete"
+    },
+    {
+      "classification": "upstream-python",
+      "file": "test_optuna_upstream_oracle.m",
+      "oracle": "optuna49_oracle.json",
+      "scope": "shared Optuna 4.9.0 behavior",
+      "test": "testNumpyRandomStateSeedContract"
+    },
+    {
+      "classification": "upstream-python",
+      "file": "test_optuna_upstream_oracle.m",
+      "oracle": "optuna49_oracle.json",
+      "scope": "shared Optuna 4.9.0 behavior",
+      "test": "testUpstreamDefaults"
+    },
+    {
+      "classification": "upstream-python",
+      "file": "test_optuna_upstream_oracle.m",
+      "oracle": "optuna49_oracle.json",
+      "scope": "shared Optuna 4.9.0 behavior",
+      "test": "testUnseededSamplerDefaultsMatchUpstreamSemantics"
+    },
+    {
+      "classification": "upstream-python",
+      "file": "test_optuna_upstream_oracle.m",
+      "oracle": "optuna49_oracle.json",
+      "scope": "shared Optuna 4.9.0 behavior",
+      "test": "testUpstreamTellContract"
+    },
+    {
+      "classification": "upstream-python",
+      "file": "test_optuna_upstream_oracle.m",
+      "oracle": "optuna49_oracle.json",
+      "scope": "shared Optuna 4.9.0 behavior",
+      "test": "testTrialPrunedExceptionMatchesUpstream"
+    },
+    {
+      "classification": "upstream-python",
+      "file": "test_optuna_upstream_oracle.m",
+      "oracle": "optuna49_oracle.json",
+      "scope": "shared Optuna 4.9.0 behavior",
+      "test": "testFinishedTellAndConstraintFailureMatchUpstream"
+    },
+    {
+      "classification": "upstream-python",
+      "file": "test_optuna_upstream_oracle.m",
+      "oracle": "optuna49_oracle.json",
+      "scope": "shared Optuna 4.9.0 behavior",
+      "test": "testFixedTrialMatchesUpstream"
+    },
+    {
+      "classification": "upstream-python",
+      "file": "test_optuna_upstream_oracle.m",
+      "oracle": "optuna49_oracle.json",
+      "scope": "shared Optuna 4.9.0 behavior",
+      "test": "testFrozenTrialPublicBehaviorMatchesUpstream"
+    },
+    {
+      "classification": "upstream-python",
+      "file": "test_optuna_upstream_oracle.m",
+      "oracle": "optuna49_oracle.json",
+      "scope": "shared Optuna 4.9.0 behavior",
+      "test": "testStudyManagementMatchesUpstream"
+    },
+    {
+      "classification": "upstream-python",
+      "file": "test_optuna_upstream_oracle.m",
+      "oracle": "optuna49_oracle.json",
+      "scope": "shared Optuna 4.9.0 behavior",
+      "test": "testParameterImportancesMatchUpstream"
+    },
+    {
+      "classification": "upstream-python",
+      "file": "test_optuna_upstream_oracle.m",
+      "oracle": "optuna49_oracle.json",
+      "scope": "shared Optuna 4.9.0 behavior",
+      "test": "testTerminationContractsMatchUpstream"
+    },
+    {
+      "classification": "upstream-python",
+      "file": "test_optuna_upstream_oracle.m",
+      "oracle": "optuna49_oracle.json",
+      "scope": "shared Optuna 4.9.0 behavior",
+      "test": "testRandomSamplerSeededSequence"
+    },
+    {
+      "classification": "upstream-python",
+      "file": "test_optuna_upstream_oracle.m",
+      "oracle": "optuna49_oracle.json",
+      "scope": "shared Optuna 4.9.0 behavior",
+      "test": "testDistributionCompatibilityMatchesUpstream"
+    },
+    {
+      "classification": "upstream-python",
+      "file": "test_optuna_upstream_oracle.m",
+      "oracle": "optuna49_oracle.json",
+      "scope": "shared Optuna 4.9.0 behavior",
+      "test": "testIntersectionSearchSpaceMatchesUpstream"
+    },
+    {
+      "classification": "upstream-python",
+      "file": "test_optuna_upstream_oracle.m",
+      "oracle": "optuna49_oracle.json",
+      "scope": "shared Optuna 4.9.0 behavior",
+      "test": "testStudyDirectionAndTrialStateMatchUpstream"
+    },
+    {
+      "classification": "upstream-python",
+      "file": "test_optuna_upstream_oracle.m",
+      "oracle": "optuna49_oracle.json",
+      "scope": "shared Optuna 4.9.0 behavior",
+      "test": "testUnfinishedAddedTrialsMatchUpstream"
+    },
+    {
+      "classification": "upstream-python",
+      "file": "test_optuna_upstream_oracle.m",
+      "oracle": "optuna49_oracle.json",
+      "scope": "shared Optuna 4.9.0 behavior",
+      "test": "testBaseClassHierarchyMatchesUpstream"
+    },
+    {
+      "classification": "upstream-python",
+      "file": "test_optuna_upstream_oracle.m",
+      "oracle": "optuna49_oracle.json",
+      "scope": "shared Optuna 4.9.0 behavior",
+      "test": "testDistributionJSONAndCompatibilityMatchUpstream"
+    },
+    {
+      "classification": "upstream-python",
+      "file": "test_optuna_upstream_oracle.m",
+      "oracle": "optuna49_oracle.json",
+      "scope": "shared Optuna 4.9.0 behavior",
+      "test": "testTPESamplerSeededSequence"
+    },
+    {
+      "classification": "upstream-python",
+      "file": "test_optuna_upstream_oracle.m",
+      "oracle": "optuna49_oracle.json",
+      "scope": "shared Optuna 4.9.0 behavior",
+      "test": "testTPECallableGammaWeightsSeededSequence"
+    },
+    {
+      "classification": "upstream-python",
+      "file": "test_optuna_upstream_oracle.m",
+      "oracle": "optuna49_oracle.json",
+      "scope": "shared Optuna 4.9.0 behavior",
+      "test": "testTPEGroupAndIndependentWarningMatchUpstream"
+    },
+    {
+      "classification": "upstream-python",
+      "file": "test_optuna_upstream_oracle.m",
+      "oracle": "optuna49_oracle.json",
+      "scope": "shared Optuna 4.9.0 behavior",
+      "test": "testTPECategoricalDistanceMatchesUpstream"
+    },
+    {
+      "classification": "upstream-python",
+      "file": "test_optuna_upstream_oracle.m",
+      "oracle": "optuna49_oracle.json",
+      "scope": "shared Optuna 4.9.0 behavior",
+      "test": "testMultiObjectiveTPESamplerSeededSequence"
+    },
+    {
+      "classification": "upstream-python",
+      "file": "test_optuna_upstream_oracle.m",
+      "oracle": "optuna49_oracle.json",
+      "scope": "shared Optuna 4.9.0 behavior",
+      "test": "testMixedTPESamplerSeededSequence"
+    },
+    {
+      "classification": "upstream-python",
+      "file": "test_optuna_upstream_oracle.m",
+      "oracle": "optuna49_oracle.json",
+      "scope": "shared Optuna 4.9.0 behavior",
+      "test": "testGridSamplerSeededOrder"
+    },
+    {
+      "classification": "upstream-python",
+      "file": "test_optuna_upstream_oracle.m",
+      "oracle": "optuna49_oracle.json",
+      "scope": "shared Optuna 4.9.0 behavior",
+      "test": "testNSGAIISeededProposalSequence"
+    },
+    {
+      "classification": "upstream-python",
+      "file": "test_optuna_upstream_oracle.m",
+      "oracle": "optuna49_oracle.json",
+      "scope": "shared Optuna 4.9.0 behavior",
+      "test": "testNSGAIIISeededProposalSequence"
+    },
+    {
+      "classification": "upstream-python",
+      "file": "test_optuna_upstream_oracle.m",
+      "oracle": "optuna49_oracle.json",
+      "scope": "shared Optuna 4.9.0 behavior",
+      "test": "testBruteForceSeededProposalSequence"
+    },
+    {
+      "classification": "upstream-python",
+      "file": "test_optuna_upstream_oracle.m",
+      "oracle": "optuna49_oracle.json",
+      "scope": "shared Optuna 4.9.0 behavior",
+      "test": "testConditionalBruteForceSeededProposalSequence"
+    },
+    {
+      "classification": "upstream-python",
+      "file": "test_optuna_upstream_oracle.m",
+      "oracle": "optuna49_oracle.json",
+      "scope": "shared Optuna 4.9.0 behavior",
+      "test": "testCmaEsSeededProposalSequence"
+    },
+    {
+      "classification": "upstream-python",
+      "file": "test_optuna_upstream_oracle.m",
+      "oracle": "optuna49_oracle.json",
+      "scope": "shared Optuna 4.9.0 behavior",
+      "test": "testCmaEsIndependentSamplerSeededSequence"
+    },
+    {
+      "classification": "upstream-python",
+      "file": "test_optuna_upstream_oracle.m",
+      "oracle": "optuna49_oracle.json",
+      "scope": "shared Optuna 4.9.0 behavior",
+      "test": "testScrambledQMCSeededProposalSequence"
+    },
+    {
+      "classification": "upstream-python",
+      "file": "test_optuna_upstream_oracle.m",
+      "oracle": "optuna49_oracle.json",
+      "scope": "shared Optuna 4.9.0 behavior",
+      "test": "testGPSeededProposalSequence"
+    },
+    {
+      "classification": "upstream-python",
+      "file": "test_optuna_upstream_oracle.m",
+      "oracle": "optuna49_oracle.json",
+      "scope": "shared Optuna 4.9.0 behavior",
+      "test": "testGPConstraintsSeededProposalSequence"
+    },
+    {
+      "classification": "upstream-python",
+      "file": "test_optuna_upstream_oracle.m",
+      "oracle": "optuna49_oracle.json",
+      "scope": "shared Optuna 4.9.0 behavior",
+      "test": "testGPTableResumeReplaysUpstreamHistory"
+    },
+    {
+      "classification": "upstream-python",
+      "file": "test_optuna_upstream_oracle.m",
+      "oracle": "optuna49_oracle.json",
+      "scope": "shared Optuna 4.9.0 behavior",
+      "test": "testNSGAIICrossoverSeededSequences"
+    },
+    {
+      "classification": "upstream-python",
+      "file": "test_optuna_upstream_oracle.m",
+      "oracle": "optuna49_oracle.json",
+      "scope": "shared Optuna 4.9.0 behavior",
+      "test": "testPartialFixedSamplerSeededSequence"
+    },
+    {
+      "classification": "upstream-python",
+      "file": "test_optuna_upstream_oracle.m",
+      "oracle": "optuna49_oracle.json",
+      "scope": "shared Optuna 4.9.0 behavior",
+      "test": "testMultivariateTPESeededSequence"
+    },
+    {
+      "classification": "upstream-python",
+      "file": "test_optuna_upstream_oracle.m",
+      "oracle": "optuna49_oracle.json",
+      "scope": "shared Optuna 4.9.0 behavior",
+      "test": "testUnscrambledQMCSeededSequence"
+    },
+    {
+      "classification": "upstream-python",
+      "file": "test_optuna_upstream_oracle.m",
+      "oracle": "optuna49_oracle.json",
+      "scope": "shared Optuna 4.9.0 behavior",
+      "test": "testQMCWarningOptionsMatchUpstream"
+    },
+    {
+      "classification": "upstream-python",
+      "file": "test_optuna_upstream_oracle.m",
+      "oracle": "optuna49_oracle.json",
+      "scope": "shared Optuna 4.9.0 behavior",
+      "test": "testPrunerDecisionsMatchUpstream"
+    },
+    {
+      "classification": "upstream-python",
+      "file": "test_optuna_upstream_oracle.m",
+      "oracle": "optuna49_oracle.json",
+      "scope": "shared Optuna 4.9.0 behavior",
+      "test": "testConstraintParetoMatchesUpstream"
+    }
+  ],
+  "schema": "radia.test.optuna-matlab-policy.v1",
+  "upstream_version": "4.9.0"
+}
