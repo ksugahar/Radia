@@ -82,6 +82,12 @@ def _field_inverse_diagnostics(topology_result):
             dtype=float).tolist(),
         "mode_field_amplitudes": np.asarray(
             correction.mode_field_amplitudes, dtype=float).tolist(),
+        "local_reachability_max_band_ratio": float(
+            correction.local_reachability_max_band_ratio),
+        "local_reachability_relative_residual": float(
+            correction.local_reachability_relative_residual),
+        "locally_reachable_within_bands": bool(
+            correction.locally_reachable_within_bands),
         "step_scale": float(correction.step_scale),
         "current_max_band_ratio": float(
             correction.current_max_band_ratio),
