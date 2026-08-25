@@ -29,7 +29,7 @@ FULL_REQUIRED_MATLAB_SFUNCTIONS = REQUIRED_MATLAB_SFUNCTIONS + (
     "+radia/+simulink/nonlinearReactorSFunction.m",
 )
 REQUIRED_MODELS = ("radia_ih.slx",)
-FULL_REQUIRED_MEX = REQUIRED_MEX
+FULL_REQUIRED_MEX = REQUIRED_MEX + ("optuna_mex.mexw64",)
 FULL_REQUIRED_MODELS = (
     "radia_simulink_library.slx",
     "radia_electromagnet.slx",
@@ -224,7 +224,7 @@ def build_package(
                 })
         manifest = {
             "schema": (
-                "radia.simulink.library-release-manifest.v2"
+                "radia.simulink.library-release-manifest.v3"
                 if full_library
                 else "radia.simulink.ih-release-manifest.v2"
             ),

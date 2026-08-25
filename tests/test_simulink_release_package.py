@@ -14,6 +14,10 @@ def test_package_builder_requires_native_ih_assets():
         ROOT / "tools" / "package_simulink_release.py",
     )
     assert module.REQUIRED_MEX == ("radia_mex.mexw64",)
+    assert module.FULL_REQUIRED_MEX == (
+        "radia_mex.mexw64",
+        "optuna_mex.mexw64",
+    )
     assert set(module.REQUIRED_MATLAB_SFUNCTIONS) == {
         "radia_ih_eddy_sfun.m",
         "radia_ih_thermal_sfun.m",
@@ -124,7 +128,7 @@ def test_full_library_package_includes_mex_models_and_runtime(tmp_path):
     )
     manifest = verify_module.verify_archive(archive)
     assert manifest["schema"] == (
-        "radia.simulink.library-release-manifest.v2"
+        "radia.simulink.library-release-manifest.v3"
     )
     assert manifest["release_channel"] == "production"
     assert manifest["entry_model"] == "matlab/radia_simulink_library.slx"
@@ -136,7 +140,10 @@ def test_full_library_package_includes_mex_models_and_runtime(tmp_path):
     assert manifest["reactor_backend"] == \
         "matlab-level2+radia-mex-handle"
     assert manifest["reactor_surrogate"] is False
-    assert manifest["required_mex"] == ["matlab/radia_mex.mexw64"]
+    assert manifest["required_mex"] == [
+        "matlab/radia_mex.mexw64",
+        "matlab/optuna_mex.mexw64",
+    ]
     assert manifest["required_matlab_products"] == ["MATLAB", "Simulink"]
     assert manifest["feature_toolbox_requirements"] == {
         "adjoint_topology_optimization": ["Optimization Toolbox"],
@@ -155,6 +162,7 @@ def test_full_library_package_includes_mex_models_and_runtime(tmp_path):
     assert "matlab/radia_maglev.slx" in names
     assert "matlab/radia_nonlinear_reactor.slx" in names
     assert "matlab/radia_nonlinear_reactor_sfun.m" in names
+    assert "matlab/optuna_mex.mexw64" in names
     assert (
         "matlab/+radia/+simulink/nonlinearReactorSFunction.m" in names
     )
@@ -208,6 +216,8 @@ def test_full_library_verifier_gates_optional_optimization_toolbox():
     assert verifier.count(
         'max(abs(maglevForce(:,3,:)), [], "all")'
     ) == 2
+    assert '"optuna_mex." + mexext' in verifier
+    assert 'optunaInfo.command_count ~= 20' in verifier
 
 
 def test_matlab_smoke_decodes_utf8_without_cp932(monkeypatch, tmp_path):
