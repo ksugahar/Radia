@@ -198,6 +198,16 @@ def test_meta_related_exposes_external_optuna_mcp_without_catalog_import():
     assert optuna[0]["external"] is True
     assert optuna[0]["entry_point"] == "optuna-mcp"
 
+    from_matlab = radia_mcp_related("radia-matlab")
+    upstream = [
+        row for row in from_matlab["related"] if row["name"] == "optuna-mcp"
+    ]
+    assert upstream
+    assert upstream[0]["owns"].startswith("Every shared Optuna operation")
+    assert upstream[0]["radia_difference_tool"].endswith(
+        "matlab_optuna_mcp_route"
+    )
+
 
 def test_meta_related_mesh_chain_points_to_radia_ngsolve_registry():
     """CAD/mesh servers should point agents toward radia-ngsolve validation."""

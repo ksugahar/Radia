@@ -61,6 +61,10 @@ class build_py(_build_py):
             shutil.copy2(source, target)
         shutil.copy2(PACKAGE_ROOT / "MATLAB_README.md", matlab_dir / "README.md")
         shutil.copy2(REPO_ROOT / "LICENSE", matlab_dir / "LICENSE")
+        shutil.copy2(
+            PACKAGE_ROOT / "THIRD_PARTY_NOTICES.md",
+            matlab_dir / "THIRD_PARTY_NOTICES.md",
+        )
 
 
 setup(cmdclass={"build_py": build_py})

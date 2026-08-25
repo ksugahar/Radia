@@ -119,11 +119,32 @@ def verify(wheel: Path) -> dict[str, object]:
             str(MATLAB_PREFIX / "optuna49_api_coverage.json"),
             str(MATLAB_PREFIX / "README.md"),
             str(MATLAB_PREFIX / "LICENSE"),
+            str(MATLAB_PREFIX / "THIRD_PARTY_NOTICES.md"),
             str(PACKAGE_PREFIX / "manifest.json"),
         }
         missing = sorted(expected_fixed - names)
         if missing:
             errors.append("missing required entries: " + ", ".join(missing))
+
+        if str(MATLAB_PREFIX / "THIRD_PARTY_NOTICES.md") in names:
+            notices = archive.read(
+                str(MATLAB_PREFIX / "THIRD_PARTY_NOTICES.md")
+            ).decode("utf-8")
+            required_notices = (
+                "Copyright (c) 2018 Preferred Networks, Inc.",
+                "Copyright (c) 2025 Preferred Networks, Inc.",
+                "Optuna, the Optuna logo and any related marks are trademarks "
+                "of Preferred Networks, Inc.",
+                "independent, unofficial project",
+            )
+            missing_notices = [
+                notice for notice in required_notices if notice not in notices
+            ]
+            if missing_notices:
+                errors.append(
+                    "third-party notice is incomplete: "
+                    + ", ".join(missing_notices)
+                )
 
         matlab_files = sorted(
             name

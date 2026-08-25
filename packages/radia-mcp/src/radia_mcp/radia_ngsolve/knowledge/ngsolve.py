@@ -6982,10 +6982,14 @@ knowledge topic.
 
 The old in-package Optuna MCP path is retired.  There must be no
 `radia_mcp.optuna` package, no `mcp-server-optuna` console script, and no Optuna
-runtime dependency in radia-mcp.  Study/trial/dashboard operation belongs to the
-official external `optuna/optuna-mcp` package.  radia-mcp may keep CAE objective
-helpers, analytic gates, and example scripts that are optional/plain-Python, but
-the MCP server itself stays external.
+runtime dependency in radia-mcp. Every shared operation present in the official
+external `optuna/optuna-mcp` live `tools/list` belongs to that server.
+`mcp-server-radia-matlab` may support only the differences of the standalone
+MATLAB distribution: table/MAT persistence, Simulink monitoring and failure
+telemetry, MATLAB parallel execution, `optuna_mex`, and Radia CAE artifacts.
+radia-mcp may also keep CAE objective helpers, analytic gates, and example
+scripts that are optional/plain-Python, but it must not proxy, rename, or
+reimplement an upstream Optuna MCP tool.
 
 The policy guard in `packages/radia-mcp/tools/policy_lint.py` enforces this
 boundary with synthetic tests for server entry points, dependencies, source

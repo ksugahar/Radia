@@ -25,3 +25,9 @@ not a claim of complete package compatibility. See
 machine-readable boundary. MATLAB-only parallel execution, MAT/table storage,
 Simulink operation, and Radia adapters are extensions rather than Optuna parity
 evidence.
+
+This is an independent, unofficial project and is not affiliated with,
+sponsored by, or endorsed by Preferred Networks, Inc. or the Optuna project.
+Optuna, the Optuna logo and any related marks are trademarks of Preferred Networks, Inc.
+The Optuna logo is not used. See `THIRD_PARTY_NOTICES.md` in
+this directory for upstream MIT license notices and provenance links.

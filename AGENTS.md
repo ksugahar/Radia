@@ -448,6 +448,24 @@ evidence of Optuna parity.
   transport for the public MCP Study/Trial tool contract. The MCP server is not
   a seeded numerical oracle while its `set_sampler` tool does not expose a
   seed.
+- radia-mcp supports the MATLAB distribution without becoming a second Optuna
+  MCP server. Every shared operation present in the official
+  `optuna/optuna-mcp` live `tools/list` MUST be executed by that upstream
+  server. `mcp-server-radia-matlab` owns only MATLAB differences: table/MAT
+  persistence, Simulink monitoring and failure telemetry, MATLAB parallel
+  execution, the standalone `optuna_mex`, and Radia CAE artifact adapters. It
+  MUST NOT proxy, rename, or reimplement an upstream Optuna MCP tool.
+- Preserve the applicable Optuna and `optuna-mcp` MIT copyright and permission
+  notices whenever upstream source or a substantial portion is copied or
+  redistributed, and record copied/adapted provenance. `radia-optuna` is an
+  independent, unofficial project; it is not affiliated with, sponsored by,
+  or endorsed by Preferred Networks, Inc. or the Optuna project. Public docs
+  MUST include exactly: "Optuna, the Optuna logo and any related marks are
+  trademarks of Preferred Networks, Inc." Do not use the Optuna logo or imply
+  official status. Differential MCP regeneration uses local stdio and a fresh
+  per-run temporary SQLite database, never shared/production storage; routine
+  tests use checked fixtures, never launch Dashboard, and never automatically
+  create upstream issues or pull requests.
 - A test of shared behavior must read its expected values, states, ordering,
   warnings/errors, or proposal sequence from an upstream-generated fixture.
   Do not add handcrafted sampler sequences, quality bands, dominance orders,
