@@ -11,6 +11,8 @@
 #==============================================================================
 
 $ErrorActionPreference = "Stop"
+$pythonExecutable = (Get-Command python -ErrorAction Stop).Source
+$pybind11CmakeDir = (& $pythonExecutable -c "import pybind11; print(pybind11.get_cmake_dir())").Trim()
 
 # Visual Studio + CMake discovery via vswhere (matches Build.ps1's
 # pattern).  Was hardcoded `Microsoft Visual Studio\2022\BuildTools\...`
@@ -31,11 +33,11 @@ $cmake     = "$vsPath\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cma
 if (-not (Test-Path $vcvarsBat)) { throw "vcvars64.bat not found at $vcvarsBat" }
 if (-not (Test-Path $cmake)) {
     # Fallback: pip-installed cmake
-    $pipCmake = & python -c "import shutil; print(shutil.which('cmake') or '')" 2>$null
+    $pipCmake = & $pythonExecutable -c "import shutil; print(shutil.which('cmake') or '')" 2>$null
     if ($pipCmake -and (Test-Path $pipCmake)) { $cmake = $pipCmake }
     else { throw "cmake.exe not found in VS install or on PATH" }
 }
-$ninja = & python -c "import shutil; print(shutil.which('ninja') or '')" 2>$null
+$ninja = & $pythonExecutable -c "import shutil; print(shutil.which('ninja') or '')" 2>$null
 if (-not $ninja -or -not (Test-Path $ninja)) {
     throw "ninja.exe not found on PATH or in the active Python environment."
 }
@@ -47,7 +49,7 @@ if (-not $CubitCmakeDir) {
     throw "Cubit not found under C:\Program Files. Set CUBIT_INSTALL_DIR to override."
 }
 $env:CUBIT_DIR = $CubitCmakeDir
-$netgenPackageDir = (& python -c "import netgen,os;print(os.path.dirname(netgen.__file__))").Trim()
+$netgenPackageDir = (& $pythonExecutable -c "import netgen,os;print(os.path.dirname(netgen.__file__))").Trim()
 if (-not (Test-Path "$netgenPackageDir\include")) {
     throw "Netgen include directory not found under $netgenPackageDir"
 }
@@ -96,6 +98,8 @@ Set-Location $buildCcm
 
 & $cmake -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=cl -DCMAKE_CXX_COMPILER=cl `
     "-DCMAKE_MAKE_PROGRAM=$ninja" `
+    "-DPython3_EXECUTABLE=$pythonExecutable" `
+    "-Dpybind11_DIR=$pybind11CmakeDir" `
     "-DCubit_DIR=$($env:CUBIT_DIR)" "-DNETGEN_DIR=$($env:NETGEN_DIR)" $src
 if ($LASTEXITCODE -ne 0) { throw "cmake configure build-ccm failed" }
 
