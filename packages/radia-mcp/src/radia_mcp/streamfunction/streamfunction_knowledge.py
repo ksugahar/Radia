@@ -107,7 +107,7 @@ TOPIC MAP  (query: streamfunction("<topic>"))
                     (--greedy-turns, monotone) + connector-aware; --pin-tiling
                     driven array; --optimize-levels; --distort; single-pass
   single_stroke     one-wire chain, FE-direct on arbitrary formers, wire forming
-  cmaes             SA-25-020 CMA-ES outer loop
+  cmaes / optuna    MATLAB Optuna outer loop around the C++ inverse
   performance       ACA+ amortisation numbers
   validation        analytic-benchmark checks
   literature        SFM lineage (Turner / Peeren / current potential)
@@ -1028,7 +1028,7 @@ TOPICS = {
     "single_stroke": "one-wire chain, FE-direct on arbitrary formers, wire distortion",
     "deformation": "surface-deformation outer loop (accuracy) -- see also pareto for the peak front",
     "fe_direct": "FE-direct H1 psi on plane / cylinder / sphere / conformal formers",
-    "cmaes": "SA-25-020 CMA-ES outer loop",
+    "cmaes": "MATLAB Optuna outer loop around the C++ ACA+/QR/TSVD inverse",
     "performance": "(ACA+)+TSVD amortisation numbers",
     "validation": "analytic-benchmark validation",
     "literature": "SFM lineage (Turner / Peeren / current potential method)",

@@ -202,17 +202,28 @@ is no longer a linear least-norm solve -> use a black-box optimiser.  This is
 the "ACA stream function + CMA-ES" split (IEEJ SA-25-020): fast linear inner
 solve = (ACA+)+TSVD; nonlinear outer search = CMA-ES.
 
-Use Optuna's CmaEsSampler (do NOT re-implement CMA-ES):
+Radia's production outer loop is MATLAB-native Optuna (do NOT re-implement
+CMA-ES):
 
-    import optuna
-    study = optuna.create_study(direction="minimize",
-                                sampler=optuna.samplers.CmaEsSampler(seed=42))
-    study.optimize(objective, n_trials=200)   # objective builds Radia magnets,
-                                              # evaluates the field, returns scalar
+    runner = radia.stream.OptunaRunner(baseSettings, ...
+        SearchSpace=searchSpace, ...
+        ObjectiveKeys=["homogeneity_rms", "peak_J"]);
+    study = radia.optuna.createStudy( ...
+        directions=["minimize", "minimize"], ...
+        sampler=radia.optuna.NSGAIISampler(Seed=42));
+    runner.optimize(study, 200);
 
-CMA-ES is for continuous, mid-dimension (10-300) BBO; cast int/categorical with
-care.  Use official `optuna/optuna-mcp` or plain Optuna APIs for sampler
-choice, multi-objective (NSGA-II), pruning, and lab BBO recipes.
+The `Stream Function Optuna` Simulink block executes the same contract: one
+rising trigger runs one explicit batch study, and one trial runs one complete
+Stream Function application with isolated `config.json`, `result.json`, and
+`optuna_trial.json` artifacts. Python may be launched once per trial but never
+once per Simulink timestep. The inner inverse remains the C++ ACA+ factorization
+with QR/TSVD recompression.
+
+CMA-ES is for continuous, mid-dimension (10-300) BBO; use NSGA-II for mixed or
+multi-objective searches. Keep `aca_eps` fixed while comparing physical
+designs. Numerical tolerance, rank, and threading belong in a separate
+accuracy/memory-constrained calibration study.
 
 Example: the gallery/catalog record ``demo_cmaes_magnet_design.py`` optimises
 16 magnetization angles for a uniform transverse field (16-D CMA-ES, ~3x
