@@ -47,7 +47,11 @@ if (-not $CubitCmakeDir) {
     throw "Cubit not found under C:\Program Files. Set CUBIT_INSTALL_DIR to override."
 }
 $env:CUBIT_DIR = $CubitCmakeDir
-$env:NETGEN_DIR = 'C:\Program Files\Python312\Lib\site-packages\netgen'
+$netgenPackageDir = (& python -c "import netgen,os;print(os.path.dirname(netgen.__file__))").Trim()
+if (-not (Test-Path "$netgenPackageDir\include")) {
+    throw "Netgen include directory not found under $netgenPackageDir"
+}
+$env:NETGEN_DIR = $netgenPackageDir
 
 # Resolve the cubit plugin source dir relative to this script.
 #

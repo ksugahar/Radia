@@ -75,7 +75,8 @@ jobs:
     # to its natural end is the only way to capture full stderr
     # for diagnosis without chasing the next cliff.
 
-    # NGSolve + Netgen from pip install (6.2.2602)
+    # The exact NGSolve/Netgen paths are replaced below with a per-run venv.
+    # These defaults only keep pre-venv policy steps independent of runner state.
     env:
       NGSOLVE_ROOT: 'C:\Program Files\Python312\Lib\site-packages\ngsolve'
       NGSOLVE_DIR: 'C:\Program Files\Python312\Lib\site-packages\ngsolve\cmake'
@@ -288,6 +289,44 @@ jobs:
           if ($LASTEXITCODE -ne 0) { Write-Host "::error::radia-mcp publish-boundary lint failed -- commercial-tool attribution / design-reference / internal-path leak in the public package"; exit 1 }
 
       # ----------------------------------------------------------------
+      # Isolate NGSolve/Netgen from LAB's shared Python. Other editable
+      # development tasks may legitimately install an older Radia release and
+      # therefore change the shared NGSolve ABI while CI is queued. Building
+      # against one header set and testing against another produces a valid-
+      # looking .pyd that fails to load in subprocesses. A run-local venv keeps
+      # the exact pyproject pins stable for the complete build/test/package job.
+      # ----------------------------------------------------------------
+      - name: Create isolated NGSolve environment
+        shell: pwsh
+        run: |
+          $venv = Join-Path $env:RUNNER_TEMP "radia-ci-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
+          $basePython = (Get-Command python).Source
+          & $basePython -m venv --system-site-packages $venv
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+          $ciPython = Join-Path $venv 'Scripts\python.exe'
+          $pins = @(& $basePython -c "import pathlib,tomllib; d=tomllib.loads(pathlib.Path('pyproject.toml').read_text(encoding='utf-8')); print(*[x for x in d['project']['dependencies'] if x.startswith(('ngsolve==','netgen-mesher=='))], sep='\n')")
+          if ($pins.Count -ne 2) {
+            Write-Host "::error::Expected exact ngsolve and netgen-mesher pins in pyproject.toml; got $($pins -join ', ')"
+            exit 1
+          }
+          & $ciPython -m pip install --upgrade --force-reinstall --no-cache-dir @pins
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+          $ngsolveRoot = (& $ciPython -c "import ngsolve,pathlib; print(pathlib.Path(ngsolve.__file__).parent)").Trim()
+          $netgenRoot = (& $ciPython -c "import netgen,pathlib; print(pathlib.Path(netgen.__file__).parent)").Trim()
+          $scripts = Join-Path $venv 'Scripts'
+          $scripts | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          "RADIA_CI_VENV=$venv" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "NGSOLVE_ROOT=$ngsolveRoot" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "NGSOLVE_DIR=$(Join-Path $ngsolveRoot 'cmake')" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "Netgen_DIR=$(Join-Path $netgenRoot 'cmake')" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "MKLROOT=C:\Program Files\Python312\Library" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+          & $ciPython -c "import importlib.metadata as m,ngsolve,tomllib,pathlib; deps=tomllib.loads(pathlib.Path('pyproject.toml').read_text(encoding='utf-8'))['project']['dependencies']; want={x.split('==',1)[0]:x.split('==',1)[1] for x in deps if x.startswith(('ngsolve==','netgen-mesher=='))}; assert ngsolve.__version__==want['ngsolve']; assert m.version('netgen-mesher')==want['netgen-mesher']; print('isolated ABI',ngsolve.__version__,m.version('netgen-mesher'))"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      # ----------------------------------------------------------------
       # Install test dependencies (MCP server tests need the mcp package).
       #
       # radia_mcp itself is NOT pip-installed.  The self-hosted runner
@@ -334,7 +373,7 @@ jobs:
           Write-Host "mcp + pytest-rerunfailures installed (radia_mcp via PYTHONPATH, not pip-installed)"
 
       # ----------------------------------------------------------------
-      # Verify NGSolve: pip-installed version (6.2.2602+)
+      # Verify NGSolve: exact pyproject-pinned version in the run-local venv.
       # ----------------------------------------------------------------
       - name: Verify NGSolve
         shell: pwsh
