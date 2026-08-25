@@ -1,4 +1,4 @@
-classdef CmaEsSampler < handle
+classdef CmaEsSampler < radia.optuna.BaseSampler
     %CMAESSAMPLER Table-persistent full-covariance CMA-ES sampler.
     %   Numeric parameters in the completed-trial intersection search space
     %   are sampled jointly. Categorical and non-intersection parameters use
@@ -13,9 +13,11 @@ classdef CmaEsSampler < handle
         Sigma (1,1) double = NaN
         X0 struct = struct()
         ConsiderPrunedTrials (1,1) logical = false
+        WarnIndependentSampling (1,1) logical = true
     end
 
     properties (Access=private)
+        IndependentSampler
         Engine = []
         SearchSpace struct = ...
             radia.optuna.internal.IntersectionSearchSpace.empty()
@@ -23,6 +25,7 @@ classdef CmaEsSampler < handle
         PopulationPoints double = zeros(0,0)
         PopulationFitness double = zeros(0,1)
         PopulationTrialNumbers double = zeros(0,1)
+        OptimizerCheckpointed (1,1) logical = false
         AttachedStudy = []
         Restored (1,1) logical = false
     end
@@ -35,13 +38,15 @@ classdef CmaEsSampler < handle
     methods
         function obj = CmaEsSampler(options)
             arguments
-                options.Seed (1,1) double = 0
+                options.Seed double = double.empty(1,0)
                 options.NStartupTrials (1,1) double = 1
                 options.PopulationSize (1,1) double = 0
                 options.Sigma0 (1,1) double = NaN
                 options.Sigma (1,1) double = NaN
                 options.X0 struct = struct()
                 options.ConsiderPrunedTrials (1,1) logical = false
+                options.IndependentSampler = []
+                options.WarnIndependentSampling (1,1) logical = true
             end
             if options.NStartupTrials < 0 || ...
                     options.NStartupTrials ~= floor(options.NStartupTrials)
@@ -66,14 +71,32 @@ classdef CmaEsSampler < handle
                 error("radia:optuna:CMASigma", ...
                     "Sigma0 must be positive when specified.");
             end
-            obj.Seed = double(options.Seed);
-            obj.Stream = RandStream("mt19937ar", "Seed", obj.Seed);
+            obj.Seed = radia.optuna.internal.resolveSeed(options.Seed);
+            obj.Stream = ...
+                radia.optuna.internal.NumpyRandomState(obj.Seed);
+            if isempty(options.IndependentSampler)
+                obj.IndependentSampler = radia.optuna.RandomSampler(options.Seed);
+            else
+                if ~isobject(options.IndependentSampler)
+                    error("radia:optuna:CMAIndependentSampler", ...
+                        "IndependentSampler must implement the sampler API.");
+                end
+                samplerMethods = string(methods(options.IndependentSampler));
+                required = ["sampleFloat","sampleInteger", ...
+                    "sampleCategorical"];
+                if any(~ismember(required,samplerMethods))
+                    error("radia:optuna:CMAIndependentSampler", ...
+                        "IndependentSampler must implement the sampler API.");
+                end
+                obj.IndependentSampler = options.IndependentSampler;
+            end
             obj.NStartupTrials = options.NStartupTrials;
             obj.PopulationSize = options.PopulationSize;
             obj.Sigma0 = sigma;
             obj.Sigma = sigma;
             obj.X0 = options.X0;
             obj.ConsiderPrunedTrials = options.ConsiderPrunedTrials;
+            obj.WarnIndependentSampling = options.WarnIndependentSampling;
         end
 
         function searchSpace = inferRelativeSearchSpace(obj, study, trial) %#ok<INUSD>
@@ -95,6 +118,7 @@ classdef CmaEsSampler < handle
                 error("radia:optuna:CMAMultiObjective", ...
                     "CMA-ES supports one objective. Use multivariate TPE for multiple objectives.");
             end
+            obj.IndependentSampler.beforeTrial(study,trial);
             obj.attach(study);
             completed = study.TrialTable.State == "COMPLETE";
             if sum(completed) < obj.NStartupTrials
@@ -105,10 +129,27 @@ classdef CmaEsSampler < handle
                 return
             end
             signature = obj.searchSpaceFingerprint(searchSpace);
+            initialized=false;
             if isempty(obj.Engine) || signature ~= obj.SearchSpaceSignature
                 obj.initializeEngine(searchSpace);
+                initialized=true;
+            elseif ~obj.OptimizerCheckpointed
+                % Until the first complete population is told, upstream
+                % cannot restore a serialized cmaes optimizer and creates a
+                % fresh one on every trial.  Its constructor seed is later
+                % overwritten, but the sampler-level randint is observable.
+                randi(obj.Stream,2^31-3);
             end
+            % Optuna re-seeds the cmaes optimizer for every trial from a
+            % separate sampler-level RandomState, then adds trial.number.
+            candidateSeed=randi(obj.Stream,2^16-1)+trial.Number;
+            obj.Engine.reseed(candidateSeed);
             candidate = obj.Engine.ask();
+            if obj.Engine.Generation>0
+                obj.OptimizerCheckpointed=true;
+            elseif initialized
+                obj.OptimizerCheckpointed=false;
+            end
             values = cell(1, numel(searchSpace));
             for index = 1:numel(searchSpace)
                 values{index} = obj.fromInternal( ...
@@ -118,41 +159,26 @@ classdef CmaEsSampler < handle
             obj.recordState(study, trial.Number);
         end
 
-        function value = sampleFloat(obj, study, trial, name, low, high, options) %#ok<INUSD>
-            obj.validateBounds(low, high, options.Log, options.Step);
-            if low == high
-                value = low;
-                return
-            end
-            value = obj.uniform(low, high, options.Log);
-            value = obj.quantize(value, low, high, options.Step);
-            obj.recordState(study, trial.Number);
+        function value = sampleFloat(obj, study, trial, name, low, high, options)
+            obj.warnIndependent(study, trial, name);
+            value=obj.IndependentSampler.sampleFloat( ...
+                study,trial,name,low,high,options);
         end
 
-        function value = sampleInteger(obj, study, trial, name, low, high) %#ok<INUSD>
-            if low ~= floor(low) || high ~= floor(high) || low > high
-                error("radia:optuna:Bounds", ...
-                    "Integer bounds must be finite integers with low <= high.");
-            end
-            if low == high
-                value = low;
-                return
-            end
-            value = obj.uniform(low, high, false);
-            value = min(max(round(value), low), high);
-            obj.recordState(study, trial.Number);
+        function value = sampleInteger(obj, study, trial, name, low, high)
+            obj.warnIndependent(study, trial, name);
+            value=obj.IndependentSampler.sampleInteger( ...
+                study,trial,name,low,high);
         end
 
-        function value = sampleCategorical(obj, study, trial, name, choices) %#ok<INUSD>
-            spec = radia.optuna.internal.DistributionCodec.categorical(choices);
-            count = numel(spec.choices);
-            index = 1 + floor(rand(obj.Stream, 1, 1) * count);
-            value = radia.optuna.internal.DistributionCodec.choiceAt( ...
-                spec.choices, index);
-            obj.recordState(study, trial.Number);
+        function value = sampleCategorical(obj, study, trial, name, choices)
+            obj.warnIndependent(study, trial, name);
+            value=obj.IndependentSampler.sampleCategorical( ...
+                study,trial,name,choices);
         end
 
         function afterTrial(obj, study, trial)
+            obj.IndependentSampler.afterTrial(study,trial);
             obj.attach(study);
             if trial.State ~= "COMPLETE" || isempty(obj.Engine) || ...
                     isempty(obj.SearchSpace)
@@ -207,11 +233,37 @@ classdef CmaEsSampler < handle
     end
 
     methods (Access=private)
+        function warnIndependent(obj, study, trial, name)
+            if ~obj.WarnIndependentSampling
+                return
+            end
+            count = sum(study.TrialTable.State == "COMPLETE");
+            if obj.ConsiderPrunedTrials
+                prunedNumbers = study.TrialTable.TrialNumber( ...
+                    study.TrialTable.State == "PRUNED");
+                for number = reshape(prunedNumbers,1,[])
+                    if any(study.IntermediateTable.TrialNumber == number)
+                        count = count + 1;
+                    end
+                end
+            end
+            if count < obj.NStartupTrials
+                return
+            end
+            warning("radia:optuna:CMAIndependentSampling", ...
+                "Parameter '%s' in trial %d is sampled independently by " + ...
+                "%s because dynamic spaces and categorical distributions " + ...
+                "are outside CmaEsSampler's relative search space.", ...
+                string(name), trial.Number, class(obj.IndependentSampler));
+        end
+
         function attach(obj, study)
             changed = isempty(obj.AttachedStudy) || ...
                 ~isequal(obj.AttachedStudy, study);
             if changed
                 obj.AttachedStudy = study;
+                obj.Stream = ...
+                    radia.optuna.internal.NumpyRandomState(obj.Seed);
                 obj.Engine = [];
                 obj.SearchSpace = ...
                     radia.optuna.internal.IntersectionSearchSpace.empty();
@@ -219,6 +271,7 @@ classdef CmaEsSampler < handle
                 obj.PopulationPoints = zeros(0,0);
                 obj.PopulationFitness = zeros(0,1);
                 obj.PopulationTrialNumbers = zeros(0,1);
+                obj.OptimizerCheckpointed = false;
                 obj.Restored = false;
             end
             if obj.Restored
@@ -252,15 +305,18 @@ classdef CmaEsSampler < handle
             if ~isfinite(sigma)
                 sigma = 1 / 6;
             end
+            engineSeed=randi(obj.Stream,2^31-3);
             obj.Engine = ...
                 radia.optuna.internal.CMAEvolutionStrategy(mean, sigma, ...
                 Bounds=repmat([0,1], dimension, 1), ...
-                PopulationSize=obj.PopulationSize, Seed=obj.Seed);
+                PopulationSize=obj.PopulationSize, Seed=engineSeed, ...
+                MaxResampling=10*dimension);
             obj.SearchSpace = searchSpace;
             obj.SearchSpaceSignature = obj.searchSpaceFingerprint(searchSpace);
             obj.PopulationPoints = zeros(0, dimension);
             obj.PopulationFitness = zeros(0,1);
             obj.PopulationTrialNumbers = zeros(0,1);
+            obj.OptimizerCheckpointed = false;
             obj.Sigma = obj.Engine.Sigma;
         end
 
@@ -280,6 +336,7 @@ classdef CmaEsSampler < handle
                 "population_points", obj.PopulationPoints, ...
                 "population_fitness", obj.PopulationFitness, ...
                 "population_trial_numbers", obj.PopulationTrialNumbers, ...
+                "optimizer_checkpointed",obj.OptimizerCheckpointed, ...
                 "independent_random_state", obj.Stream.State, ...
                 "generation", generation);
         end
@@ -314,6 +371,13 @@ classdef CmaEsSampler < handle
                 double(state.population_fitness), [], 1);
             obj.PopulationTrialNumbers = reshape( ...
                 double(state.population_trial_numbers), [], 1);
+            if isfield(state,"optimizer_checkpointed")
+                obj.OptimizerCheckpointed=logical(state.optimizer_checkpointed);
+            else
+                obj.OptimizerCheckpointed=~isempty(obj.Engine) && ...
+                    obj.Engine.Generation>0 && ...
+                    ~isempty(obj.PopulationTrialNumbers);
+            end
             obj.Stream.State = state.independent_random_state;
         end
 

@@ -1,4 +1,4 @@
-classdef NopPruner
+classdef NopPruner < radia.optuna.BasePruner
     %NOPPRUNER Never prune a trial.
 
     methods

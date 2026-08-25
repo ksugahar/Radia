@@ -3,7 +3,7 @@ name: CI
 on:
   push:
     branches: [main]
-    tags: ['v*', 'cubit-mesh-export-v*', 'radia-mcp-v*']
+    tags: ['v*', 'cubit-mesh-export-v*', 'radia-mcp-v*', 'radia-optuna-v*']
     paths-ignore:
       - '**/*.md'
       - 'docs/**'
@@ -37,7 +37,7 @@ permissions:
 # Concurrency: serialize per-SHA, NOT per-ref.
 #
 # Why: a release pushes BOTH main and a tag (e.g. main + v4.78.1 +
-# radia-mcp-v0.72.0) for the SAME commit SHA.  Per-ref grouping put
+# radia-mcp-v0.72.0 / radia-optuna-v0.1.0) for the SAME commit SHA. Per-ref grouping put
 # main and each tag in separate concurrency groups, so they raced
 # on the shared self-hosted [windows-radia] runner.  Build.ps1
 # writes to S:\...\src\radia\*.pyd (NAS-shared editable path on
@@ -54,7 +54,7 @@ permissions:
 # A stale-main guard below cancels an older main push as soon as it starts,
 # before it spends ~40 min in tests while a newer SHA is queued.
 # On tags: a duplicate-tag guard below keeps one release-tag CI per SHA even
-# when v* + radia-mcp-v* are pushed together.
+# when multiple package release tags are pushed together.
 # On PRs: cancel the previous run to save runner time.
 concurrency:
   group: ci-${{ github.sha }}
@@ -150,7 +150,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          $patterns = @('refs/tags/v*', 'refs/tags/radia-mcp-v*', 'refs/tags/cubit-mesh-export-v*')
+          $patterns = @('refs/tags/v*', 'refs/tags/radia-mcp-v*', 'refs/tags/cubit-mesh-export-v*', 'refs/tags/radia-optuna-v*')
           $releaseTags = [System.Collections.Generic.List[string]]::new()
 
           foreach ($line in (git ls-remote --tags origin @patterns)) {
@@ -180,6 +180,7 @@ jobs:
                 if ($_ -like 'v*') { 0 }
                 elseif ($_ -like 'radia-mcp-v*') { 1 }
                 elseif ($_ -like 'cubit-mesh-export-v*') { 2 }
+                elseif ($_ -like 'radia-optuna-v*') { 3 }
                 else { 9 }
               } },
               @{ Expression = { $_ } }
@@ -221,7 +222,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          $patterns = @('refs/tags/v*', 'refs/tags/radia-mcp-v*', 'refs/tags/cubit-mesh-export-v*')
+          $patterns = @('refs/tags/v*', 'refs/tags/radia-mcp-v*', 'refs/tags/cubit-mesh-export-v*', 'refs/tags/radia-optuna-v*')
           $releaseTags = @()
           if ($env:GITHUB_REF_TYPE -eq 'tag') {
             $repoUrl = "https://x-access-token:$env:GITHUB_TOKEN@github.com/${{ github.repository }}.git"
@@ -864,6 +865,73 @@ jobs:
         with:
           name: radia-wheel
           path: dist/*.whl
+          retention-days: 7
+
+      # ----------------------------------------------------------------
+      # Build the separately installable MATLAB Optuna distribution. Its
+      # native gateway deliberately does not configure Radia/NGSolve/MKL.
+      # ----------------------------------------------------------------
+      - name: Build and verify radia-optuna wheel
+        if: success()
+        shell: pwsh
+        working-directory: ${{ github.workspace }}
+        run: |
+          & "${{ github.workspace }}\Build.ps1" -OptunaMexOnly
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host "::error::Standalone optuna_mex build failed"
+            exit $LASTEXITCODE
+          }
+
+          python -m pytest packages/radia-optuna/tests -q
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+          python -m pip install build wheel --quiet
+          Push-Location packages/radia-optuna
+          try {
+            python -m build --wheel
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            $wheels = @(Get-ChildItem dist\*.whl)
+            if ($wheels.Count -ne 1) {
+              Write-Host "::error::Expected one fresh radia-optuna wheel, found $($wheels.Count)"
+              exit 1
+            }
+            $wheel = $wheels[0]
+            python -m wheel tags --python-tag py3 --abi-tag none `
+              --platform-tag win_amd64 --remove $wheel.FullName
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            $wheels = @(Get-ChildItem dist\*.whl)
+            if ($wheels.Count -ne 1) {
+              Write-Host "::error::Expected one retagged radia-optuna wheel, found $($wheels.Count)"
+              exit 1
+            }
+            $wheel = $wheels[0]
+            python verify_wheel.py $wheel.FullName --json
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          } finally {
+            Pop-Location
+          }
+
+      - name: Test installed radia-optuna wheel with standalone Simulink
+        if: success()
+        shell: pwsh
+        working-directory: ${{ github.workspace }}
+        run: |
+          $wheels = @(Get-ChildItem packages/radia-optuna/dist/*.whl)
+          if ($wheels.Count -ne 1) {
+            Write-Host "::error::Expected one verified radia-optuna wheel, found $($wheels.Count)"
+            exit 1
+          }
+          pwsh -NoProfile -ExecutionPolicy Bypass `
+            -File packages/radia-optuna/tests/run_installed_wheel_simulink.ps1 `
+            -Wheel $wheels[0].FullName
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Upload radia-optuna wheel
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: radia-optuna-wheel
+          path: packages/radia-optuna/dist/*.whl
           retention-days: 7
 
       # ----------------------------------------------------------------

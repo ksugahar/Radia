@@ -1,4 +1,4 @@
-classdef QMCSampler < handle
+classdef QMCSampler < radia.optuna.BaseSampler
     %QMCSAMPLER Sobol or Halton sampling for a fixed numeric search space.
 
     properties (SetAccess=private)
@@ -6,6 +6,8 @@ classdef QMCSampler < handle
         Scramble (1,1) logical = false
         Seed (1,1) double = 0
         IndependentSampler
+        WarnAsynchronousSeeding (1,1) logical = true
+        WarnIndependentSampling (1,1) logical = true
     end
 
     properties (Access=private)
@@ -24,8 +26,10 @@ classdef QMCSampler < handle
             arguments
                 options.QMCType (1,1) string = "sobol"
                 options.Scramble (1,1) logical = false
-                options.Seed (1,1) double = 0
+                options.Seed double = double.empty(1,0)
                 options.IndependentSampler = []
+                options.WarnAsynchronousSeeding (1,1) logical = true
+                options.WarnIndependentSampling (1,1) logical = true
             end
             qmcType=lower(options.QMCType);
             if ~ismember(qmcType,["sobol","halton"])
@@ -34,10 +38,21 @@ classdef QMCSampler < handle
             end
             obj.QMCType=qmcType;
             obj.Scramble=options.Scramble;
-            obj.Seed=options.Seed;
+            unseeded=isempty(options.Seed);
+            obj.Seed=radia.optuna.internal.resolveSeed(options.Seed);
+            obj.WarnAsynchronousSeeding=options.WarnAsynchronousSeeding;
+            obj.WarnIndependentSampling=options.WarnIndependentSampling;
+            if unseeded && obj.Scramble && obj.WarnAsynchronousSeeding
+                warning("radia:optuna:QMCAsynchronousSeeding", ...
+                    "Scrambled QMC with seed=None may use a different sequence in each parallel worker.");
+            end
             if isempty(options.IndependentSampler)
                 obj.IndependentSampler=radia.optuna.RandomSampler(options.Seed);
             else
+                if ~isa(options.IndependentSampler,"radia.optuna.BaseSampler")
+                    error("radia:optuna:QMCIndependentSampler", ...
+                        "IndependentSampler must derive from radia.optuna.BaseSampler.");
+                end
                 obj.IndependentSampler=options.IndependentSampler;
             end
         end
@@ -90,16 +105,19 @@ classdef QMCSampler < handle
         end
 
         function value=sampleFloat(obj,study,trial,name,low,high,options)
+            obj.warnIndependent(study,trial,name);
             value=obj.IndependentSampler.sampleFloat( ...
                 study,trial,name,low,high,options);
         end
 
         function value=sampleInteger(obj,study,trial,name,low,high)
+            obj.warnIndependent(study,trial,name);
             value=obj.IndependentSampler.sampleInteger( ...
                 study,trial,name,low,high);
         end
 
         function value=sampleCategorical(obj,study,trial,name,choices)
+            obj.warnIndependent(study,trial,name);
             value=obj.IndependentSampler.sampleCategorical( ...
                 study,trial,name,choices);
         end
@@ -107,6 +125,7 @@ classdef QMCSampler < handle
         function values=sampleJoint(obj,study,trial,names,lows,highs,options)
             values=zeros(1,numel(names));
             for index=1:numel(names)
+                obj.warnIndependent(study,trial,names(index));
                 values(index)=obj.IndependentSampler.sampleFloat( ...
                     study,trial,names(index),lows(index),highs(index), ...
                     struct("Log",options.Log(index),"Step",NaN));
@@ -135,6 +154,20 @@ classdef QMCSampler < handle
     end
 
     methods (Access=private)
+        function warnIndependent(obj,study,trial,name)
+            if ~obj.WarnIndependentSampling
+                return
+            end
+            prior=study.TrialTable.TrialNumber<trial.Number & ...
+                ismember(study.TrialTable.State, ...
+                ["RUNNING","WAITING","COMPLETE","PRUNED"]);
+            if any(prior)
+                warning("radia:optuna:QMCIndependentSampling", ...
+                    "Parameter '%s' in trial %d is sampled independently by %s.", ...
+                    name,trial.Number,class(obj.IndependentSampler));
+            end
+        end
+
         function attach(obj,study)
             changed=isempty(obj.AttachedStudy) || ...
                 ~isequal(obj.AttachedStudy,study);
@@ -181,6 +214,14 @@ classdef QMCSampler < handle
         function points=generatePoints(obj,dimension,sampleIds)
             sampleIds=reshape(double(sampleIds),[],1);
             points=zeros(numel(sampleIds),dimension);
+            if obj.Scramble
+                % Optuna 4.9 delegates scrambled Sobol/Halton generation to
+                % scipy.stats.qmc.  Its seeded PCG64 scrambling is part of
+                % the observable proposal sequence, so use that same oracle
+                % instead of maintaining a second scramble implementation.
+                points=obj.scipyScrambledPoints(dimension,sampleIds);
+                return
+            end
             if obj.QMCType~="sobol"
                 for row=1:numel(sampleIds)
                     points(row,:)=obj.haltonPoint( ...
@@ -213,6 +254,37 @@ classdef QMCSampler < handle
                     end
                     points(row,dim)=double(integer)/2^32;
                 end
+            end
+        end
+
+        function points=scipyScrambledPoints(obj,dimension,sampleIds)
+            if isempty(sampleIds)
+                points=zeros(0,dimension);
+                return
+            end
+            if any(sampleIds<0 | sampleIds~=floor(sampleIds))
+                error("radia:optuna:QMCIndex", ...
+                    "QMC sample IDs must be nonnegative integers.");
+            end
+            try
+                arguments=pyargs("d",int32(dimension), ...
+                    "scramble",true,"seed",int64(obj.Seed));
+                maximum=max(sampleIds);
+                if obj.QMCType=="sobol"
+                    engine=py.scipy.stats.qmc.Sobol(arguments);
+                    exponent=ceil(log2(maximum+1));
+                    generated=double(engine.random_base2(int32(exponent)));
+                else
+                    engine=py.scipy.stats.qmc.Halton(arguments);
+                    generated=double(engine.random(int64(maximum+1)));
+                end
+                points=generated(sampleIds+1,:);
+            catch exception
+                cause=MException("radia:optuna:QMCSciPy", ...
+                    "Scrambled QMCSampler requires the configured Python " + ...
+                    "environment with scipy.stats.qmc (Optuna 4.9 oracle).");
+                cause=addCause(cause,exception);
+                throw(cause);
             end
         end
 
