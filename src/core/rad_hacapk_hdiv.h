@@ -931,7 +931,7 @@ private:
     void UpdateConfiguredActiveChargePrefixes();
     void MatVecSymManyConfigured(
         const std::vector<double>& x, int nrhs, int component,
-        std::vector<double>& y);
+        bool respect_constraints, std::vector<double>& y);
     // Get-or-build the persistent factor (the single shared implementation for both solve methods,
     // defined in the .cpp under HAVE_LAPACK).  Returns a PINNED shared_ptr the caller must hold for the
     // duration of its Krylov loop -- pinning makes a concurrent/nested replacement of the slot unable to

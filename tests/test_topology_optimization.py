@@ -464,6 +464,46 @@ def test_native_hdiv_mmm_boundary_insertions_match_exact_active_resolves():
                                rtol=2e-12,atol=2e-12)
 
 
+def test_configured_hmatrix_prunes_inactive_principal_submatrix_exactly():
+    import ngsolve as ng
+    from ngsolve.meshes import MakeStructured3DMesh
+    from radia.vim._vim import build_charge_gram
+
+    mesh=MakeStructured3DMesh(hexes=True,nx=4,ny=2,nz=1)
+    fes=ng.HDiv(mesh,order=1,discontinuous=True)
+    with ng.TaskManager():
+        _,gram,_=build_charge_gram(
+            fes,eps=1e-10,leafsize=16,eta=2.0,
+            internal_interfaces=True)
+    blocks=ngsolve_discontinuous_element_dof_blocks(fes)
+    active_dofs=np.concatenate(blocks[:mesh.ne//2]).astype(np.int32)
+    active=np.zeros(fes.ndof,dtype=bool);active[active_dofs]=True
+    inactive=np.flatnonzero(~active).astype(np.int32)
+    rng=np.random.default_rng(20260825)
+    rows=np.ascontiguousarray(rng.normal(size=(3,fes.ndof)))
+    rows[:,~active]=0.0
+
+    gram.set_configured_constraints(
+        np.empty(0,dtype=np.int32),preserve_existing=False)
+    full_stats=gram.configured_active_hmatrix_stats()
+    full=np.asarray(gram.apply_configured_linear_material_operator_many(
+        .2,rows,respect_constraints=False))
+
+    gram.set_configured_constraints(inactive,preserve_existing=False)
+    active_stats=gram.configured_active_hmatrix_stats()
+    pruned=np.asarray(gram.apply_configured_linear_material_operator_many(
+        .2,rows,respect_constraints=True))
+    explicitly_full=np.asarray(
+        gram.apply_configured_linear_material_operator_many(
+            .2,rows,respect_constraints=False))
+
+    assert active_stats["active_charges"]<full_stats["active_charges"]
+    assert active_stats["active_upper_leaves"]<full_stats["active_upper_leaves"]
+    np.testing.assert_array_equal(pruned[:,active],full[:,active])
+    np.testing.assert_array_equal(pruned[:,~active],0.0)
+    np.testing.assert_array_equal(explicitly_full,full)
+
+
 def test_large_hdiv_mmm_candidate_screen_uses_one_shared_hmatrix_batch():
     import ngsolve as ng
     from ngsolve.meshes import MakeStructured3DMesh
