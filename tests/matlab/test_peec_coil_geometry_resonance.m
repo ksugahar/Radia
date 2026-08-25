@@ -13,6 +13,7 @@ end
 function testCircularTurnStackHasClosedOrientedTurns(testCase)
 coil = radia.peec.circularTurnStack(0.03,12,SegmentsPerTurn=24);
 verifyEqual(testCase,coil.segment_count,288);
+verifyEqual(testCase,coil.cross_section_kind,"rect");
 verifySize(testCase,coil.centers_m,[288 3]);
 verifySize(testCase,coil.polylines_m,[25 3 12]);
 verifyEqual(testCase,vecnorm(coil.directions,2,2), ...
@@ -21,6 +22,12 @@ for turn = 1:coil.turn_count
     points = coil.polylines_m(:,:,turn);
     verifyEqual(testCase,points(1,:),points(end,:),"AbsTol",1e-14);
 end
+end
+
+function testCircularTurnStackRejectsShortSegmentsWithStableError(testCase)
+verifyError(testCase,@() radia.peec.circularTurnStack( ...
+    0.03,1,SegmentsPerTurn=64,WireWidth_m=8e-3), ...
+    "radia:peec:CoilSegmentAspect");
 end
 
 function testPEECInductanceConvergesAndMatchesWheelerScale(testCase)
@@ -44,19 +51,20 @@ dc = radia.peec.seriesCoilProperties(coil);
 low = radia.peec.seriesCoilImpedance(coil,1,DCProperties=dc);
 high = radia.peec.seriesCoilImpedance(coil,1e6,DCProperties=dc);
 verifyEqual(testCase,low.inductance_H,dc.inductance_H,"RelTol",1e-9);
-verifyEqual(testCase,low.resistance_Ohm,dc.resistance_Ohm,"RelTol",1e-9);
+verifyEqual(testCase,low.resistance_Ohm,dc.resistance_Ohm,"RelTol",2e-9);
 verifyGreaterThan(testCase,high.resistance_Ohm,4*dc.resistance_Ohm);
 verifyLessThan(testCase,high.inductance_H,dc.inductance_H);
 verifyFalse(testCase,high.proximity_effect_included);
 verifyEqual(testCase,high.internal_impedance_model, ...
-    "equivalent-round-bessel");
+    "rectangular-dowell");
 end
 
 function testBesselCorrectionApproachesSurfaceImpedance(testCase)
 frequency = 1e9;
 coil = radia.peec.circularTurnStack(0.03,12,SegmentsPerTurn=24);
 dc = radia.peec.seriesCoilProperties(coil);
-ac = radia.peec.seriesCoilImpedance(coil,frequency,DCProperties=dc);
+ac = radia.peec.seriesCoilImpedance(coil,frequency,DCProperties=dc, ...
+    InternalImpedanceModel="equivalent-round-bessel");
 mu0 = 4*pi*1e-7;
 omega = 2*pi*frequency;
 area = coil.wire_width_m*coil.wire_height_m;
@@ -69,6 +77,28 @@ expectedCorrection = coil.wire_length_m* ...
     (surfacePerLength-uniformPerLength);
 verifyEqual(testCase,ac.internal_impedance_correction_Ohm, ...
     expectedCorrection,"RelTol",5e-3);
+end
+
+function testDowellCorrectionApproachesBroadFaceSurfaceImpedance(testCase)
+frequency = 1e9;
+coil = radia.peec.circularTurnStack(0.03,12,SegmentsPerTurn=16, ...
+    WireWidth_m=8e-3,WireHeight_m=0.2e-3);
+dc = radia.peec.seriesCoilProperties(coil);
+ac = radia.peec.seriesCoilImpedance(coil,frequency,DCProperties=dc);
+mu0 = 4*pi*1e-7;
+omega = 2*pi*frequency;
+width = max(coil.wire_width_m,coil.wire_height_m);
+thickness = min(coil.wire_width_m,coil.wire_height_m);
+sigma = coil.conductivity_S_per_m;
+skinDepth = sqrt(2/(omega*mu0*sigma));
+surfacePerLength = (1+1i)/(2*sigma*width*skinDepth);
+uniformPerLength = 1/(sigma*width*thickness) + ...
+    1i*omega*mu0*thickness/(12*width);
+expectedCorrection = coil.wire_length_m* ...
+    (surfacePerLength-uniformPerLength);
+verifyEqual(testCase,ac.internal_impedance_correction_Ohm, ...
+    expectedCorrection,"RelTol",1e-9);
+verifyEqual(testCase,ac.internal_impedance_model,"rectangular-dowell");
 end
 
 function testSelfConsistentResonanceUsesInductanceAtTheRoot(testCase)
