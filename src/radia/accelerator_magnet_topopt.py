@@ -696,6 +696,9 @@ class TransferMatrixFieldCorrection:
     normalized_mode_target_strengths: np.ndarray
     mode_field_amplitudes: np.ndarray
     basis_coefficients: np.ndarray
+    local_reachability_max_band_ratio: float
+    local_reachability_relative_residual: float
+    locally_reachable_within_bands: bool
     relative_linearized_residual: float
     step_scale: float
     current_max_band_ratio: float
@@ -1106,6 +1109,18 @@ def solve_transfer_matrix_field_correction(
             (np.asarray(design_response, dtype=float) - target) / band)))
 
     current_ratio = max_ratio(current_design)
+    locally_reachable_design = (
+        current_design + jacobian @ unconstrained_correction)
+    local_reachability_ratio = max_ratio(locally_reachable_design)
+    retained_projection = (
+        U[:, :rank] @ mode_projection[:rank]
+        if rank else np.zeros_like(normalized_residual))
+    normalized_unreachable_residual = (
+        normalized_residual - retained_projection)
+    normalized_residual_norm = float(np.linalg.norm(normalized_residual))
+    local_reachability_relative_residual = float(
+        np.linalg.norm(normalized_unreachable_residual)
+        / max(np.finfo(float).tiny, normalized_residual_norm))
     selected_scale = 0.0
     nonlinear_design = current_design.copy()
     nonlinear_ratio = current_ratio
@@ -1127,10 +1142,9 @@ def solve_transfer_matrix_field_correction(
     linearized_ratio = max_ratio(linearized_design)
     normalized_linearized_residual = (
         (target - linearized_design) / band)
-    residual_norm = float(np.linalg.norm(normalized_residual))
     relative_residual = float(
         np.linalg.norm(normalized_linearized_residual)
-        / max(np.finfo(float).tiny, residual_norm))
+        / max(np.finfo(float).tiny, normalized_residual_norm))
 
     # One raw-field change equal to field_response_band produces at most one
     # normalized design-band change in the local Jacobian.  This supplies the
@@ -1163,6 +1177,11 @@ def solve_transfer_matrix_field_correction(
         mode_field_amplitudes=np.asarray(
             mode_field_amplitudes, dtype=float),
         basis_coefficients=np.asarray(coefficients, dtype=float),
+        local_reachability_max_band_ratio=local_reachability_ratio,
+        local_reachability_relative_residual=(
+            local_reachability_relative_residual),
+        locally_reachable_within_bands=bool(
+            local_reachability_ratio <= 1.0),
         relative_linearized_residual=relative_residual,
         step_scale=float(selected_scale),
         current_max_band_ratio=current_ratio,
