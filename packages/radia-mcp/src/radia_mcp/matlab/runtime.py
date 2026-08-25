@@ -216,6 +216,10 @@ _PYBIND_CLASS_EXCLUSIONS = {
         "sigma-normalization diagnostic for the roundoff-amplification "
         "regression tests (empty before BuildHMatrix; every public apply "
         "already wraps S back, so MATLAB sees the physical Gram)"),
+    "_ChargeGramHMatrix._reduce_configured_candidate_directional_schur": (
+        "private proposal-only acceleration used by the Python topology "
+        "optimizer; it is not a public pybind capability, and MATLAB uses "
+        "the public reduce_configured_candidate_schur MEX contract"),
 }
 
 
