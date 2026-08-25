@@ -17,5 +17,5 @@ Records:
   public-boundary lint, and representative selftest evidence.
 - `release_candidate_review_2026-06-26.json` — review result after the
   radia-mcp matrix reached 229 passed: strong public-facing health, with
-  operational quality still gated on PyPI entry-point smoke and release-QUD
+  operational quality still gated on PyPI entry-point smoke and release-quad
   machine checks.

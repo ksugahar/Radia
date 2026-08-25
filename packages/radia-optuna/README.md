@@ -78,3 +78,12 @@ CI builds and verifies a distinct `radia-optuna-wheel` artifact. A
 `radia-optuna-v<version>` tag may publish only that exact CI artifact, after
 rechecking its tag, version, API inventory, MEX inventory, and dependency
 boundary, including the bundled third-party notice.
+
+Publication also uses the standalone four-machine release-quad lane. After the
+successful `main` CI run, execute
+`python tools/release_quad.py optuna-candidate --ci-run-id <id> --target all`,
+then pass the retained wheel to
+`python tools/release_quad.py optuna-done --wheel <path>`. Only after that gate
+passes may the matching commit be tagged. The manual release workflow requires
+the same CI run ID and the candidate SHA256, publishes that exact wheel to
+PyPI, and attaches it to the matching GitHub Release.

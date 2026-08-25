@@ -16,7 +16,7 @@ Token source (first hit wins) -- NEVER committed:
                                  set RADIA_GH to a gh executable if needed)
 
 So a one-time `setx GH_TOKEN ghp_xxx` (or writing ~/.radia/gh_token) lifts
-the whole repo's CI tooling -- tools/check_ci.py, release_qud ci-verify,
+the whole repo's CI tooling -- tools/check_ci.py, release_quad ci-verify,
 ad-hoc polling -- to 5000 req/hr.
 """
 from __future__ import annotations

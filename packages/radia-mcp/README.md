@@ -201,7 +201,7 @@ when the matrix, policy lint, version consistency, generated
 `docs/TOOLS.md` drift check, and top-level pytest collection all pass.
 
 Operational quality is claimed only after PyPI-installed MCP entry
-points smoke successfully and the release-QUD machine checks pass on
+points smoke successfully and the release-quad machine checks pass on
 the lab deployment roles.  Public-safe quality records live in
 [`validation/mcp_quality/`](validation/mcp_quality/).
 

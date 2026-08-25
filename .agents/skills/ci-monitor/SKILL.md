@@ -1,6 +1,6 @@
 ---
 name: ci-monitor
-description: Watch one or more GitHub Actions CI runs to completion, then on failure auto-fetch the failing job's log tail so the AI agent can diagnose without manually clicking through `gh run view`. Use this skill (a) immediately after `git push` of a release tag (the release-qud flow's Phase 7), (b) after pushing a fix-forward commit on main, (c) any time you want to know when N CI runs finish AND get the failing-step output in one go. Default: poll every 30s, emit a state-change line per run, exit when all runs are completed (success or failure), then for each failure, fetch the last ~80 lines of the failed step's log via `gh run view --log-failed`. CI run IDs can be passed explicitly or auto-discovered from the most recent N runs of the current repo.
+description: Watch one or more GitHub Actions CI runs to completion, then on failure auto-fetch the failing job's log tail so the AI agent can diagnose without manually clicking through `gh run view`. Use this skill (a) immediately after `git push` of a release tag (the release-quad flow's Phase 7), (b) after pushing a fix-forward commit on main, (c) any time you want to know when N CI runs finish AND get the failing-step output in one go. Default: poll every 30s, emit a state-change line per run, exit when all runs are completed (success or failure), then for each failure, fetch the last ~80 lines of the failed step's log via `gh run view --log-failed`. CI run IDs can be passed explicitly or auto-discovered from the most recent N runs of the current repo.
 ---
 
 # ci-monitor
@@ -17,7 +17,7 @@ Single skill, two phases:
 
 ## When to use
 
-- **Right after `git push` of a release** (Phase 7 of `release-qud`):
+- **Right after `git push` of a release** (Phase 7 of `release-quad`):
   three CI runs trigger (main + tag1 + tag2), and we need to know
   which finish, which fail, and why before proceeding to deploy.
 - **After a fix-forward commit** on a still-open release: confirm
@@ -43,7 +43,7 @@ runs and watch them.
 python .Codex/skills/ci-monitor/monitor.py
 ```
 
-Explicit run IDs (release-qud Phase 7 idiom):
+Explicit run IDs (release-quad Phase 7 idiom):
 
 ```bash
 python .Codex/skills/ci-monitor/monitor.py 25275163545 25275166586 25275166607
@@ -90,9 +90,9 @@ follow-up tool call.
 The runner is `monitor.py` in this skill directory.  See its
 docstring for the full CLI surface.
 
-## Integration with release-qud
+## Integration with release-quad
 
-`release-qud` Phase 7 is the canonical caller.  The release-qud flow
+`release-quad` Phase 7 is the canonical caller.  The release-quad flow
 ends with the main/tag CI runs; call
 this skill with their IDs once they're queued, and the next thing
 you read in the chat is either "all green, proceed to phase 8" or

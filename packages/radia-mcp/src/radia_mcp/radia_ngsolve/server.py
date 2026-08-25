@@ -2487,7 +2487,7 @@ def install_deploy(topic: str = "") -> str:
 @mcp.tool()
 def release_workflow(topic: str = "") -> str:
     """
-    Release-QUD workflow for PyPI and the MEX + SLX GitHub Release.
+    release-quad workflow for PyPI and the MEX + SLX GitHub Release.
     Covers 3 packages / 4 machines (LAB, 100号機, mdx, hibino), the 9-phase
     pipeline, the 4 pre-flight gates added 2026-05-03, the historical
     CI failure modes + their root causes, and the patch-bump recovery
