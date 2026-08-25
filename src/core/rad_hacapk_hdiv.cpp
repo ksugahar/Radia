@@ -5943,13 +5943,14 @@ void RadHACApKChargeGram::MatVecSymMany(const std::vector<double>& x,
 
 void RadHACApKChargeGram::MatVecSymManyConfigured(
     const std::vector<double>& x, int nrhs, int component,
-    std::vector<double>& y)
+    bool respect_constraints, std::vector<double>& y)
 {
     if (component < 0 || component >= m_operatorChargeComponents)
         throw std::out_of_range("MatVecSymManyConfigured: component out of range");
     const size_t stride = static_cast<size_t>(m_ndof)+1;
     const size_t begin = static_cast<size_t>(component)*stride;
-    const bool masked = m_operatorActiveChargePrefix.size() ==
+    const bool masked = respect_constraints &&
+        m_operatorActiveChargePrefix.size() ==
             static_cast<size_t>(m_operatorChargeComponents)*stride &&
         m_operatorActiveChargePrefix[begin+stride-1] < m_ndof;
     const std::vector<double>* input = &x;
@@ -7874,7 +7875,8 @@ std::vector<double> RadHACApKChargeGram::ApplyConfiguredLinearMaterialOperatorMa
                 });
         }
         std::vector<double> gcharge;
-        MatVecSymManyConfigured(charge, nrhs, component, gcharge);
+        MatVecSymManyConfigured(
+            charge, nrhs, component, respect_constraints, gcharge);
         const size_t bt_offset = static_cast<size_t>(component)*n_face;
         {
             ngcore::RegionTaskManager rtm(radia::GetMaxThreads());
@@ -9132,7 +9134,7 @@ std::vector<double> RadHACApKChargeGram::SolveConfiguredLinearMaterialAutoPrecMa
                 });
         }
         std::vector<double> gcharge;
-        MatVecSymManyConfigured(charge, nrhs, 0, gcharge);
+        MatVecSymManyConfigured(charge, nrhs, 0, true, gcharge);
         output.assign(total, 0.0);
         {
             ngcore::RegionTaskManager rtm(radia::GetMaxThreads());
