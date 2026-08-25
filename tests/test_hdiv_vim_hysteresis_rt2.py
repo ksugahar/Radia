@@ -7,6 +7,7 @@ ng = pytest.importorskip("ngsolve")
 from ngsolve.meshes import MakeStructured3DMesh  # noqa: E402
 
 from radia import vim  # noqa: E402
+from tests._ngsolve_2606 import curve_mesh  # noqa: E402
 
 
 MU0 = 4.0e-7*np.pi
@@ -34,7 +35,7 @@ def _curved_hex():
     mesh = MakeStructured3DMesh(
         hexes=True, nx=1, ny=1, nz=1,
         mapping=lambda x, y, z: (x-0.5, y-0.5, z-0.5))
-    mesh.Curve(2)
+    curve_mesh(mesh, 2)
     return mesh
 
 

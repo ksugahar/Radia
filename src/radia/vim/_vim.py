@@ -34,6 +34,7 @@ DemagOperator construction + DemagFactor / solve in `with TaskManager():` (the n
 """
 import numpy as np
 import scipy.sparse as sp
+from netgen.meshing import EdgeDescriptor
 
 from ._capabilities import validate_hdiv_configuration
 import ngsolve as ng
@@ -59,6 +60,40 @@ _EMPTY_I32 = np.empty(0, dtype=np.int32)
 def _volume_vertex_counts(mesh):
     """Unique volume-element vertex counts from the native MeshAccess."""
     return frozenset(int(value) for value in _rp._volume_element_vertex_counts(mesh))
+
+
+def _curve_mesh(mesh, order):
+    """Apply Curve after satisfying NGSolve 6.2.2606 edge descriptors."""
+    ngmesh = mesh.ngmesh
+    if not ngmesh.EdgeDescriptors():
+        if ngmesh.dim == 2:
+            for index, name in enumerate(mesh.GetBoundaries(), start=1):
+                descriptor = EdgeDescriptor()
+                descriptor.edgenr = index
+                descriptor.surfnr = (1, -1)
+                descriptor.domin = 1
+                descriptor.domout = 0
+                descriptor.name = name
+                added = ngmesh.Add(descriptor)
+                if added != index:
+                    raise RuntimeError(
+                        f"NGSolve edge descriptor index mismatch: {added} != {index}")
+        elif ngmesh.dim == 3:
+            for index, face in enumerate(ngmesh.FaceDescriptors(), start=1):
+                descriptor = EdgeDescriptor()
+                descriptor.edgenr = index
+                descriptor.surfnr = (face.surfnr, -1)
+                descriptor.domin = face.domin
+                descriptor.domout = face.domout
+                descriptor.name = face.bcname or f"boundary_{index}"
+                added = ngmesh.Add(descriptor)
+                if added != index:
+                    raise RuntimeError(
+                        f"NGSolve edge descriptor index mismatch: {added} != {index}")
+        else:
+            raise ValueError(f"unsupported mesh dimension for Curve: {ngmesh.dim}")
+    mesh.Curve(int(order))
+    return mesh
 
 
 # ------------------------------------------------------------------ reference Gauss-Duffy quadrature
