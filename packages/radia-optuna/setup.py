@@ -6,6 +6,7 @@ from pathlib import Path
 import shutil
 
 from setuptools import setup
+from setuptools.command.bdist_wheel import bdist_wheel as _bdist_wheel
 from setuptools.command.build_py import build_py as _build_py
 
 
@@ -67,4 +68,11 @@ class build_py(_build_py):
         )
 
 
-setup(cmdclass={"build_py": build_py})
+class bdist_wheel(_bdist_wheel):
+    """Tag the MATLAB MEX payload as Windows x64 at build time."""
+
+    def get_tag(self) -> tuple[str, str, str]:
+        return "py3", "none", "win_amd64"
+
+
+setup(cmdclass={"build_py": build_py, "bdist_wheel": bdist_wheel})
