@@ -30,6 +30,47 @@ family and must be requested explicitly as `HDiv(mesh, order=p, RT=True)`.
 Historical Radia material that called the production spaces RT1/RT2 was using
 the wrong name; the solver and stored results were BDM.
 
+## Discrete de Rham and charge-map contract
+
+In three-dimensional finite-element exterior calculus, magnetization is a
+2-form whose vector proxy belongs to `HDiv`.  NGSolve supplies the compatible
+discrete sequence
+
+```text
+H1 --grad--> HCurl --curl--> HDiv --div--> L2,
+                        div curl = 0.
+```
+
+`HCurl` is not an additional state unknown in an HDiv-VIM material solve.  It
+is the upstream space that characterizes charge-free HDiv modes: a
+boundary-compatible `curl(a)` lies in the kernel of the complete magnetic
+charge map.  Radia discretizes that map as
+
+```text
+q = B m = (-div M, normal trace M.n),
+```
+
+with interface jumps included when a deliberately broken HDiv space is used.
+Sharing oriented normal-trace moments on an ordinary interior facet prevents a
+numerical charge sheet there, but sharing the facet DoF is a consequence of
+HDiv conformity rather than the definition of the de Rham structure.  A
+physical normal jump is represented by separate body spaces or by the checked
+`internal_interfaces=True` broken-space path.
+
+The Coulomb energy is pulled back from charge space to magnetization space:
+
+```text
+E_demag(m) = 0.5 * (B m)^T G (B m),
+N = B^T G B.
+```
+
+Consequently `N` is symmetric positive semidefinite and vanishes on `ker(B)`.
+The production solve does not construct or constrain a loop/cotree basis; the
+positive material Hodge operator `W` selects the unique physical solution of
+the symmetric positive-definite system `W + B^T G B`.  On a multiply connected
+domain, harmonic/cohomology modes remain a topology-owned finite-dimensional
+part of `ker(B)` and must not be confused with spurious charge modes.
+
 ## Live API
 
 ```python
