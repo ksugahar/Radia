@@ -55,7 +55,16 @@ def _radia_mex_commands():
     )
     if match is None:
         return []
-    return re.findall(r'"([^"\\]*(?:\\.[^"\\]*)*)"', match.group("body"))
+    body = match.group("body")
+    regular_branch = re.search(
+        r"#else\s*static const char\* names\[\]\s*=\s*\{"
+        r"(?P<names>.*?)\};\s*#endif",
+        body,
+        flags=re.DOTALL,
+    )
+    if regular_branch is not None:
+        body = regular_branch.group("names")
+    return re.findall(r'"([^"\\]*(?:\\.[^"\\]*)*)"', body)
 
 
 def _pybind_public_names():

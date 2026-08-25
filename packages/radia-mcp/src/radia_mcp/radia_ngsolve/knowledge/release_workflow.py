@@ -96,7 +96,7 @@ table is the AI-readable summary.
 | 3 | Stage exactly the release files | always | NO `git add -A`; user has WIP |
 | 4 | Composite commit (HEREDOC, all packages in title) | always | Co-Authored-By trailer required |
 | 5 | Three (or two) annotated tags | always | only bump packages with changes |
-| 6 | Push main + all tags | always | tag push triggers CI; the exact tag CI uploads `ci-release-context`, and only that run may gate Release workflows |
+| 6 | Push main + all tags | always | tag push triggers CI; the exact tag CI uploads `ci-release-context` and is the automatic Release gate. The `radia-optuna` workflow alone also has an explicit recovery dispatch that may select an immutable, fully successful push CI for the exact tagged SHA after GitHub administratively cancels the tag run; it rechecks the CI workflow, repository, both required jobs, SHA, tag, version, and wheel before trusted publishing. |
 | 7 | Monitor CI propagation to PyPI | always | use ci-monitor skill |
 | 8 | Deploy LAB + 100号機 editable, hibino PyPI, then mdx PyPI via Phase 8e | always | mdx skips radia-mcp |
 | 8S | Verify the exact versioned Simulink ZIP on LAB / 100号機 / mdx / hibino | for every Simulink revision | `simulink-candidate --package <zip> --target all` |
@@ -270,12 +270,23 @@ CI on a tag ref running on a broken commit cannot be rescued by
 pushing a fix to main.  Each CI run uploads an immutable
 `ci-release-context` artifact containing its ref type, ref name, SHA, run ID,
 and the release tags present on that SHA when CI started. The `Release`
-workflows reject a successful branch CI or a package tag added after CI began;
-manual/PR CI events are ineligible. Publication is gated on `workflow_run` of
-an exact push-triggered tag-ref CI, and the tag still points at the broken
-commit.
+workflows automatically reject a successful branch CI or a package tag added
+after CI began; manual/PR CI events are ineligible. Normal publication is gated
+on `workflow_run` of an exact push-triggered tag-ref CI, and the tag still
+points at the broken commit.
 
-**The only path forward is patch bump and re-tag**, per the skill's
+`radia-optuna` has one narrow administrative-cancellation recovery lane. A
+maintainer may manually select an immutable CI run only when that run itself
+was a successful in-repository `push` execution of `build-test.yml` for the
+exact commit now named by `radia-optuna-v*`, and both `build-test` and the
+installed-wheel MATLAB/Simulink E2E job passed. The release workflow downloads
+that run's wheel artifact and reverifies its contents, source version, and tag
+before trusted publishing. This does not accept a manual CI run, a local wheel,
+or a failed/cancelled tag run; it recovers when GitHub cancels redundant tag CI
+after an equivalent exact-SHA push CI already completed successfully.
+
+When the exact source CI actually fails, **the only path forward is patch bump
+and re-tag**, per the skill's
 "PyPI is immutable" policy.  Do NOT delete + recreate a pushed tag
 unless the user explicitly authorizes it (and even then, only if
 the version has not gone to PyPI. Always check PyPI before choosing the next
