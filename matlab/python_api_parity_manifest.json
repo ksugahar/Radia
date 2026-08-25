@@ -390,6 +390,13 @@
       "notes": "Cubit toolbar, samples, logging, and internal adapters are not reusable MATLAB numerical APIs."
     },
     {
+      "id": "cubit-gui-release-gate",
+      "patterns": ["cubit_toolbar_smoke.py"],
+      "classification": "private/not-applicable",
+      "matlab": [],
+      "notes": "The real-Cubit cold-start toolbar smoke command is a GUI delivery and release diagnostic, not a reusable numerical API requiring a MATLAB counterpart."
+    },
+    {
       "id": "vim-internals",
       "patterns": ["vim/_*.py"],
       "classification": "private/not-applicable",
