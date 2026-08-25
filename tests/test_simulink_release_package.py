@@ -205,6 +205,9 @@ def test_full_library_verifier_gates_optional_optimization_toolbox():
     assert "electromagnetStatus(end) ~= -1" in verifier
     assert '"electromagnet_topology_executed"' in verifier
     assert 'electromagnetCheck = "dependency-gated";' in verifier
+    assert verifier.count(
+        'max(abs(maglevForce(:,3,:)), [], "all")'
+    ) == 2
 
 
 def test_matlab_smoke_decodes_utf8_without_cp932(monkeypatch, tmp_path):
