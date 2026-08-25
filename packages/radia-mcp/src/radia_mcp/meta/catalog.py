@@ -122,16 +122,17 @@ CATALOG: dict[str, dict[str, Any]] = {
         "subpackage": "radia_mcp.matlab",
         "entry_point": "mcp-server-radia-matlab",
         "description": "Official MATLAB MCP composition, Radia/NGSolve MEX "
-                       "capability contract, table-backed Optuna-like "
-                       "optimization, and 43 generic ML/RL gates",
+                       "capability contract, radia-optuna MATLAB/Simulink "
+                       "difference support, and 43 generic ML/RL gates",
         "primary_tools": ["matlab_agent_guide",
                             "matlab_extension_contract",
                             "matlab_official_server_config",
                             "matlab_radia_mex_contract",
+                            "matlab_optuna_mcp_route",
                             "matlab_optuna_simulink_contract",
                             "matlab_radia_acoustic_interface_contract"],
         "related": ["acoustic-fembem", "radia-ngsolve"],
-        "tags": ["ml", "solver"],
+        "tags": ["ml", "optimization", "solver"],
     },
     "acoustic-fembem": {
         "subpackage": "radia_mcp.acoustic_fembem",
@@ -747,11 +748,17 @@ EXTERNAL_PACKAGES: dict[str, dict[str, Any]] = {
                        "Visualization, and Dashboard operations. Use "
                        "`--storage sqlite:///C:/temp/optuna_mcp.db` for "
                        "persistent lab sessions.",
+        "owns": "Every shared Optuna operation present in the live MCP tools/list response.",
+        "radia_difference_tool": "mcp-server-radia-matlab:matlab_optuna_mcp_route",
+        "license": "MIT",
+        "validation_storage": "fresh per-run temporary SQLite database",
+        "automated_dashboard": False,
         "related": [
             "bayesian-opt",
             "evolutionary",
             "topology-optimization",
             "radia-streamfunction",
+            "radia-matlab",
         ],
     },
     "elf": {

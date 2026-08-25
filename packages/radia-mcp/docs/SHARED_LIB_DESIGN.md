@@ -42,7 +42,7 @@ All 3 repos `pip install sugahara-mcp-common`.
 - elf + comsol users pay a transitive-dep install cost.
 - Bumping the common lib for one consumer forces all to upgrade.
 - Versioning policy needed (semver discipline).
-- 3 packages' CI / release-qud now has a 4-machine gate.
+- 3 packages' CI / release-quad now has a 4-machine gate.
 
 ### C. Vendor radia-mcp.common into elf + comsol-fork via sync script
 

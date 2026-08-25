@@ -6,6 +6,8 @@ import json
 import re
 from typing import Any, Mapping
 
+from .optuna_boundary import matlab_optuna_mcp_route
+
 
 _FUNCTION = re.compile(r"^[A-Za-z]\w*(?:\.[A-Za-z]\w*)*$")
 _SAMPLERS = {
@@ -48,6 +50,7 @@ def matlab_optimize_build(spec: Mapping[str, Any] | str) -> dict[str, Any]:
         "status": "ready",
         "runtime_owner": "MathWorks MATLAB MCP Server",
         "domain_owner": "radia-mcp.matlab.optimize",
+        "mcp_ownership": matlab_optuna_mcp_route("composition")["route"],
         "execute_with": "official MATLAB MCP evaluate_matlab_code",
         "spec": {
             "name": name,
@@ -82,6 +85,7 @@ def matlab_optimize_resume(storage_path: str, n_trials: int, *, parallel: bool =
         "schema": "radia-mcp.matlab-optimize-resume/v1",
         "status": "ready",
         "execute_with": "official MATLAB MCP evaluate_matlab_code",
+        "mcp_ownership": matlab_optuna_mcp_route("composition")["route"],
         "matlab_code": (
             f"study=radia.optuna.Study(StoragePath='{path}');\n"
             "% Recreate the same objective or runner, then execute one of:\n"

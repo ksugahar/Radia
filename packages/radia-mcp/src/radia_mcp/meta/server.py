@@ -256,14 +256,28 @@ def radia_mcp_golden_gate(check_path: bool = False) -> dict:
         name: info.get("entry_point", "")
         for name, info in catalog.EXTERNAL_PACKAGES.items()
     }
+    radia_matlab = catalog.CATALOG.get("radia-matlab", {})
+    radia_matlab_tools = set(radia_matlab.get("primary_tools", []))
+    optuna_mcp_related = set(
+        catalog.EXTERNAL_PACKAGES.get("optuna-mcp", {}).get("related", [])
+    )
     add(
         "optuna_external_boundary",
-        "optuna" not in catalog_names and "optuna-mcp" in external_names,
-        "Optuna Study/Trial operation stays in the official external optuna-mcp server.",
+        (
+            "optuna" not in catalog_names
+            and "optuna-mcp" in external_names
+            and "matlab_optuna_mcp_route" in radia_matlab_tools
+            and "radia-matlab" in optuna_mcp_related
+        ),
+        "Shared Optuna operation stays upstream; radia-mcp exposes only the MATLAB difference route.",
         {
             "catalog_has_optuna": "optuna" in catalog_names,
             "external_has_optuna_mcp": "optuna-mcp" in external_names,
             "optuna_entry_point": external_entrypoints.get("optuna-mcp"),
+            "matlab_difference_tool": "matlab_optuna_mcp_route",
+            "upstream_links_radia_matlab_difference": (
+                "radia-matlab" in optuna_mcp_related
+            ),
         },
     )
 

@@ -1,7 +1,7 @@
 #==============================================================================
 # _build_cubit_plugin.ps1 — clean rebuild of cubit_mesh_export.ccm + cubit_mesh_export.ccl
 #
-# Used by tools/release_qud.py phase0. Skips the .pyd target (it requires
+# Used by tools/release_quad.py phase0. Skips the .pyd target (it requires
 # pybind11 + non-compact-netgen which isn't the CI / dev path; the bundled
 # .pyd in the repo is rebuilt manually when its source changes).
 #
