@@ -60,3 +60,11 @@ def test_optuna_manual_release_selects_one_fully_successful_ci_run():
     assert "ref: ${{ steps.source.outputs.sha }}" in workflow
     assert "python3 packages/radia-optuna/verify_wheel.py" in workflow
     assert 'EXPECTED_TAG="refs/tags/radia-optuna-v${VERSION}"' in workflow
+
+
+def test_optuna_manual_release_fails_loudly_when_ci_sha_has_no_tag():
+    workflow=OPTUNA_RELEASE_WORKFLOW.read_text(encoding="utf-8")
+    tag_check=workflow[workflow.index("- name: Confirm tag points"):]
+    tag_check=tag_check[:tag_check.index("- name: Check out the exact")]
+    assert 'echo "::error::No radia-optuna-v* tag points at $SHA"' in tag_check
+    assert "exit 1" in tag_check

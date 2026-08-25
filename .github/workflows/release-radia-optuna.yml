@@ -137,7 +137,8 @@ jobs:
             echo "tag=$VTAG" >> "$GITHUB_OUTPUT"
           else
             echo "found=false" >> "$GITHUB_OUTPUT"
-            echo "No radia-optuna-v* tag points at $SHA"
+            echo "::error::No radia-optuna-v* tag points at $SHA"
+            exit 1
           fi
 
       - name: Check out the exact verified source
