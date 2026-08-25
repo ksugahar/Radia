@@ -109,7 +109,7 @@ class StreamFunctionDesignSpec:
         fields.update({
             "coil_vol", "eval_vol", "target_cf", "target_harmonic",
             "harmonic_lmax", "order", "regularize", "confine",
-            "alpha", "eval_max", "iron_vol", "mu_r", "iron_mat",
+            "alpha", "aca_eps", "eval_max", "iron_vol", "mu_r", "iron_mat",
             "iron_exact_source", "iron_quad_order", "shield_vol",
             "shield_eval_vol", "shield_weight",
         })
@@ -166,6 +166,7 @@ class StreamFunctionDesignSpec:
             "--regularize", self.regularize,
             "--confine", self.confine,
             "--alpha", str(self.alpha),
+            "--aca-eps", str(self.aca_eps),
             "--eval-max", str(self.eval_max),
             "--msh-output", msh_output(self.coil_vol, f"_sf_{cli_method}"),
             "--output", json_output(self.coil_vol, f"_sf_{cli_method}"),
