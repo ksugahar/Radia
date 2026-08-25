@@ -464,7 +464,7 @@ def test_native_hdiv_mmm_boundary_insertions_match_exact_active_resolves():
                                rtol=2e-12,atol=2e-12)
 
 
-def test_configured_hmatrix_prunes_inactive_principal_submatrix_exactly():
+def test_configured_hmatrix_prunes_inactive_principal_submatrix_exactly(monkeypatch):
     import ngsolve as ng
     from ngsolve.meshes import MakeStructured3DMesh
     from radia.vim._vim import build_charge_gram
@@ -481,6 +481,7 @@ def test_configured_hmatrix_prunes_inactive_principal_submatrix_exactly():
     inactive=np.flatnonzero(~active).astype(np.int32)
     rng=np.random.default_rng(20260825)
     rows=np.ascontiguousarray(rng.normal(size=(3,fes.ndof)))
+    unconstrained_rows=rows.copy()
     rows[:,~active]=0.0
 
     gram.set_configured_constraints(
@@ -493,6 +494,8 @@ def test_configured_hmatrix_prunes_inactive_principal_submatrix_exactly():
     active_stats=gram.configured_active_hmatrix_stats()
     pruned=np.asarray(gram.apply_configured_linear_material_operator_many(
         .2,rows,respect_constraints=True))
+    pruned_dirty=np.asarray(gram.apply_configured_linear_material_operator_many(
+        .2,np.ascontiguousarray(unconstrained_rows),respect_constraints=True))
     explicitly_full=np.asarray(
         gram.apply_configured_linear_material_operator_many(
             .2,rows,respect_constraints=False))
@@ -501,6 +504,7 @@ def test_configured_hmatrix_prunes_inactive_principal_submatrix_exactly():
     assert active_stats["active_upper_leaves"]<full_stats["active_upper_leaves"]
     np.testing.assert_array_equal(pruned[:,active],full[:,active])
     np.testing.assert_array_equal(pruned[:,~active],0.0)
+    np.testing.assert_array_equal(pruned_dirty,pruned)
     np.testing.assert_array_equal(explicitly_full,full)
 
     rhs=np.ascontiguousarray(rows[0])
@@ -520,6 +524,7 @@ def test_configured_hmatrix_prunes_inactive_principal_submatrix_exactly():
     batched_rhs=np.asarray(
         gram.apply_configured_linear_material_operator_many(
             .2,known,respect_constraints=True))
+    monkeypatch.setenv("RADIA_HDIV_HMATVEC_STATS","1")
     batched=gram.solve_configured_linear_material_auto_prec_many(
         .2,np.ascontiguousarray(batched_rhs),tol=1e-10,maxit=5000,
         mass_riesz=True)
@@ -527,6 +532,9 @@ def test_configured_hmatrix_prunes_inactive_principal_submatrix_exactly():
     assert recovered.shape==known.shape and recovered.flags.c_contiguous
     assert batched["last_rhs_timings"]["mass_riesz_local_blocks"]>1
     assert batched["last_rhs_timings"]["mass_riesz_max_block"]==len(blocks[0])
+    assert batched["last_rhs_timings"]["hmatvec_calls"]>0
+    assert (batched["last_rhs_timings"]["hmatvec_total_s"]>=
+            batched["last_rhs_timings"]["hmatvec_leaf_s"]>=0)
     check=np.asarray(gram.apply_configured_linear_material_operator_many(
         .2,np.ascontiguousarray(recovered),respect_constraints=True))
     assert np.linalg.norm(check-batched_rhs)/np.linalg.norm(batched_rhs)<5e-10
