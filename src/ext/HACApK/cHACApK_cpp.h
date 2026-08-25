@@ -226,6 +226,19 @@ void HACApK_matvec_sym_many_masked_wrapper(
     int nrhs,
     const int *active_prefix);
 
+/* Prepared symmetric batch apply.  active_prefix and diagonal_scale are
+ * optional.  Scaling is fused into permutation/reduction so callers can
+ * evaluate S*A*S without allocating two row-major scratch batches. */
+void HACApK_matvec_sym_many_prepared_wrapper(
+    void *leafmtxp,
+    void *ctl,
+    const double *x,
+    double *y,
+    int nd,
+    int nrhs,
+    const int *active_prefix,
+    const double *diagonal_scale);
+
 /* Optional matvec profiler. Enabled by RADIA_HDIV_HMATVEC_STATS=1.
  * values[0..7] = total_s, zero_s, permute_s, leaf_s, reduce_s, meta_s,
  *                lowrank_flop_est, dense_flop_est.
