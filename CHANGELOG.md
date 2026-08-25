@@ -5,6 +5,29 @@ All notable changes to the `radia` package.  Format: each release lists
 
 ## Unreleased
 
+## 4.95.63 - Shape-aware PEEC conductor impedance
+
+Released 2026-08-26.
+
+- Added shape-aware PEEC internal impedance. Strict four-edge rectangular
+  conductor sections use the single-layer Dowell solution with the smaller
+  dimension as diffusion thickness, while physical round conductors retain the
+  cylindrical Bessel solution. Rounded, chamfered, and arbitrary sections are
+  kept distinguishable and report an explicit equivalent-round approximation.
+- Propagated checked cross-section kind, area, dimensions, and perimeter from
+  STEP/CAD extraction into the coil solver. Proximity iteration now uses the
+  actual conductor perimeter, so rectangular bars are not assigned a
+  fictitious circular or chamfered boundary. The PEEC topology cache contract
+  was advanced to version 3.
+- Applied the same automatic Dowell/Bessel selection in MATLAB PEEC and added
+  Python and MATLAB regression coverage for DC continuity, broad-face skin
+  asymptotics, shape dispatch, real-perimeter proximity, and invalid bundles.
+- Hardened standalone `radia-optuna` publication recovery: a manually selected
+  artifact is accepted only from an immutable, fully successful in-repository
+  push CI for the exact tagged SHA, with the required wheel and MATLAB/Simulink
+  jobs rechecked before trusted publishing. The optimizer itself remains the
+  independently versioned `radia-optuna` 0.1.0 release.
+
 ## 4.95.62 - Standalone MATLAB Optuna 4.9.0 distribution
 
 Released 2026-08-25.
