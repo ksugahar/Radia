@@ -503,6 +503,17 @@ def test_configured_hmatrix_prunes_inactive_principal_submatrix_exactly():
     np.testing.assert_array_equal(pruned[:,~active],0.0)
     np.testing.assert_array_equal(explicitly_full,full)
 
+    rhs=np.ascontiguousarray(rows[0])
+    solved=gram.solve_configured_linear_material_mass_riesz(
+        .2,rhs,tol=1e-11,maxit=5000,symmetric=True)
+    solution=np.asarray(solved["m"])
+    applied=np.asarray(gram.apply_configured_linear_material_operator_many(
+        .2,np.ascontiguousarray(solution[None,:]),
+        respect_constraints=True))[0]
+    relative_residual=np.linalg.norm(applied-rhs)/np.linalg.norm(rhs)
+    assert relative_residual<5e-11
+    np.testing.assert_array_equal(solution[~active],0.0)
+
 
 def test_large_hdiv_mmm_candidate_screen_uses_one_shared_hmatrix_batch():
     import ngsolve as ng
