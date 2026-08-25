@@ -18,6 +18,7 @@ import radia._radia_pybind as _rp  # noqa: E402
 from radia.vim import (  # noqa: E402
     ChargeGram, FieldFromSolution, MagnetizationSource, Solve,
 )
+from tests._ngsolve_2606 import curve_mesh  # noqa: E402
 
 
 def _cube(kind):
@@ -81,7 +82,7 @@ def test_rt2_charge_solve_and_field_pipeline(kind, expected_fes_dofs,
 def test_curved_rt2_nonlinear_material_uses_energy_newton(kind):
     """Curve(2) BDM2 polyhedra use the production C++ nonlinear path."""
     mesh = _cube(kind)
-    mesh.Curve(2)
+    curve_mesh(mesh, 2)
     mu0 = 4.0e-7*np.pi
     linear_bh = np.asarray([
         [0.0, 0.0],

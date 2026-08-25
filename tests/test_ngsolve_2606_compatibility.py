@@ -21,9 +21,11 @@ from netgen.meshing import (
 )
 
 ng = pytest.importorskip("ngsolve")
-MakeStructured3DMesh = pytest.importorskip(
-    "ngsolve.meshes"
-).MakeStructured3DMesh
+_mesh_helpers = pytest.importorskip("ngsolve.meshes")
+MakeStructured2DMesh = _mesh_helpers.MakeStructured2DMesh
+MakeStructured3DMesh = _mesh_helpers.MakeStructured3DMesh
+
+from radia.vim._vim import _curve_mesh  # noqa: E402
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -93,6 +95,27 @@ def test_hdiv_pyramid_remains_an_explicit_upstream_tripwire():
     assert result["ngsolve_version"] == PINNED_VERSION
     assert result["detail"]["mesh_valid_h1"] is True
     assert result["verdict"] == "NOT_IMPLEMENTED", result
+
+
+@pytest.mark.parametrize(
+    ("family", "factory"),
+    [
+        ("QUAD", lambda: MakeStructured2DMesh(quads=True, nx=1, ny=1)),
+        ("HEX", lambda: MakeStructured3DMesh(hexes=True, nx=1, ny=1, nz=1)),
+        (
+            "WEDGE",
+            lambda: MakeStructured3DMesh(
+                hexes=False, prism=True, nx=1, ny=1, nz=1
+            ),
+        ),
+    ],
+)
+def test_programmatic_structured_meshes_are_curve_safe(family, factory):
+    mesh = factory()
+    assert mesh.ngmesh.EdgeDescriptors() == [], family
+    _curve_mesh(mesh, 2)
+    assert mesh.GetCurveOrder() == 2, family
+    assert mesh.ngmesh.EdgeDescriptors(), family
 
 
 def test_programmatic_2d_mesh_has_2606_edge_descriptors_before_vol_save(tmp_path):
