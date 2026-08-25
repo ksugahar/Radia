@@ -8,7 +8,7 @@ import radia._radia_pybind as _rp
 
 from . import _image
 from ._field_batch import _create_field_evaluator
-from ._vim import build_charge_gram
+from ._vim import _curve_mesh, build_charge_gram
 
 
 class MagnetizationSource:
@@ -55,7 +55,7 @@ class MagnetizationSource:
                 "vim.MagnetizationSource: only curve_order=2 is supported")
         else:
             curve_order = 2
-            mesh.Curve(2)
+            _curve_mesh(mesh, 2)
 
         image_masks, image_signs = [], []
         if image is not None:

@@ -26,6 +26,7 @@ from radia.gmsh_post_export import (
     export_element_activation_animation,
     export_nodal_deformation_animation,
 )
+from tests._ngsolve_2606 import curve_mesh
 
 
 def test_gmsh_reference_points_use_element_dimension_stride():
@@ -112,7 +113,7 @@ def test_volume_element_orientation_tet_hex_prism():
 
     geo = OCCGeometry(Sphere(OccPnt(0, 0, 0), 1.0))
     mesh = Mesh(geo.GenerateMesh(maxh=0.5))
-    mesh.Curve(2)
+    curve_mesh(mesh, 2)
     out = os.path.join(_TMP, "rt_orient_tet.msh")
     GmshPostExport(mesh).write_mesh(out)
     _assert_positive_jacobians(out, expect_vol=4.0 / 3.0 * math.pi, rel=5e-3)
@@ -121,7 +122,7 @@ def test_volume_element_orientation_tet_hex_prism():
                         ("prism", dict(hexes=False, prism=True))):
         mesh = MakeStructured3DMesh(nx=2, ny=2, nz=2, mapping=_shear,
                                     **kwargs)
-        mesh.Curve(2)
+        curve_mesh(mesh, 2)
         out = os.path.join(_TMP, f"rt_orient_{tag}.msh")
         GmshPostExport(mesh).write_mesh(out)
         _assert_positive_jacobians(out, expect_vol=1.0)
@@ -151,7 +152,7 @@ def test_volume_element_orientation_pyramid():
     for order, tag in ((1, "pyr1"), (2, "pyr2")):
         mesh = Mesh(m)
         if order >= 2:
-            mesh.Curve(order)
+            curve_mesh(mesh, order)
         out = os.path.join(_TMP, f"rt_orient_{tag}.msh")
         GmshPostExport(mesh).write_mesh(out)
         _assert_positive_jacobians(out, expect_vol=base_area / 3.0, rel=1e-6)
@@ -185,7 +186,7 @@ def test_curved_nodal_cf_field_probes_exactly():
 
     geo = OCCGeometry(Sphere(OccPnt(0, 0, 0), 1.0))
     mesh = Mesh(geo.GenerateMesh(maxh=0.4))
-    mesh.Curve(2)
+    curve_mesh(mesh, 2)
     post = GmshPostExport(mesh)
     post.add_vector_field("B", CF((y, -x, z)))
     out = os.path.join(_TMP, "rt_curved_field_exact.msh")
@@ -208,7 +209,7 @@ def test_vertex_array_field_expands_exactly(kwargs):
     exactly -- this also locks the hex27 face/center and prism18 face
     orderings of the P1->P2 fill tables."""
     mesh = MakeStructured3DMesh(nx=2, ny=2, nz=2, **kwargs)
-    mesh.Curve(2)
+    curve_mesh(mesh, 2)
     data = np.array([1.0 + 2.0 * v.point[0] - v.point[1]
                      + 0.5 * v.point[2] for v in mesh.vertices])
     post = GmshPostExport(mesh)
@@ -230,7 +231,7 @@ def test_export_passes_radia_mcp_verify_gate():
     verify_mod = pytest.importorskip("radia_mcp.gmsh.verify")
 
     mesh = MakeStructured3DMesh(hexes=True, nx=2, ny=2, nz=2)
-    mesh.Curve(2)
+    curve_mesh(mesh, 2)
     post = GmshPostExport(mesh)
     post.add_scalar_field("phi", x + y + z)
     out = os.path.join(_TMP, "rt_mcp_verify_gate.msh")
@@ -247,7 +248,7 @@ def test_highorder_hex_roundtrip():
     """A curved (order-2) structured HEX mesh exports as Hex27 (gmsh type 12)
     and gmsh re-reads it with the right node count + 2 field views."""
     mesh = MakeStructured3DMesh(hexes=True, nx=3, ny=3, nz=3)
-    mesh.Curve(2)
+    curve_mesh(mesh, 2)
     post = GmshPostExport(mesh)
     post.add_vector_field("B", CF((y, -x, z)))
     post.add_scalar_field("absr", sqrt(x * x + y * y + z * z))
@@ -271,7 +272,7 @@ def test_per_material_physical_groups():
     geo.Add(OrthoBrick(Pnt(-0.15, -0.15, -0.15), Pnt(0.15, 0.15, 0.15)).mat("air")
             - Sphere(Pnt(0, 0, 0), 0.05))
     mesh = Mesh(geo.GenerateMesh(maxh=0.06))
-    mesh.Curve(2)
+    curve_mesh(mesh, 2)
     post = GmshPostExport(mesh)
     post.add_vector_field("B", CF((y, -x, z)), material="sphere")
     post.add_scalar_field("phi", x + y + z)
@@ -371,7 +372,7 @@ def test_nodal_deformation_animation_roundtrip():
 
 def test_curved_nodal_deformation_samples_ngsolve_callable():
     mesh = MakeStructured3DMesh(hexes=True, nx=1, ny=1, nz=1)
-    mesh.Curve(2)
+    curve_mesh(mesh, 2)
     displacement = CF((0.01 * x, -0.02 * y, 0.03 * z))
     out = os.path.join(_TMP, "rt_curved_nodal_deformation.msh")
     export_nodal_deformation_animation(mesh, [displacement], out)

@@ -21,9 +21,10 @@ Released 2026-08-25.
 - Migrated programmatic two-dimensional Netgen meshes to the required
   `EdgeDescriptor` table and accepted the 6.2.2606 `edgesegmentsgi3` /
   `edgedescriptors` serialization without dropping legacy `.vol` support.
-- Made mapped `MakeStructured2DMesh` curvature and `.vol` round-trips explicit
-  about that descriptor contract, avoiding a native `Curve()` access violation
-  while retaining the curved-Q2 numerical regression.
+- Made mapped `MakeStructured2DMesh` / `MakeStructured3DMesh` curvature and
+  `.vol` round-trips explicit about that descriptor contract.  This avoids a
+  native `Curve()` access violation for curved-Q2, HEX, PRISM, and VIM source
+  paths while retaining their numerical and positive-Jacobian regressions.
 - Added a fast compatibility gate for the supported TET, HEX, and WEDGE
   HDiv order-2 spaces and retained the functional Pyramid tripwire.
 - Kept HDiv-Pyramid explicitly unsupported: NGSolve 6.2.2606 still raises

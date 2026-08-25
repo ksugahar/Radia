@@ -9,6 +9,7 @@ from netgen.csg import CSGeometry, OrthoBrick, Pnt
 from ngsolve.meshes import MakeStructured3DMesh
 
 from radia import vim
+from tests._ngsolve_2606 import curve_mesh
 
 
 def _box_mesh(x0, x1, maxh=0.28):
@@ -169,7 +170,7 @@ def test_curved_hex_wedge_rt2_field_matches_independent_ngsolve_boundary_integra
     expected_vertices = 8 if kind == "hex" else 6
     if {len(element.vertices) for element in mesh.Elements(ng.VOL)} != {expected_vertices}:
         pytest.skip(f"structured {kind} generator returned a different topology")
-    mesh.Curve(2)
+    curve_mesh(mesh, 2)
     with ng.TaskManager():
         source = vim.MagnetizationSource(
             mesh, (1.0e5, 2.0e5, 3.0e5), order=2, curve_order=2)

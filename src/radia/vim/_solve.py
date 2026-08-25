@@ -111,6 +111,7 @@ import ngsolve as ng
 import radia._radia_pybind as _rp
 from . import _image
 from ._vim import (
+    _curve_mesh,
     build_charge_gram,
     _hex_mapping_affinity_report,
     _volume_vertex_counts,
@@ -732,7 +733,7 @@ def _solve_highorder(mesh, order, mu_r, bh_table, H_ext, image, linear_solver,
             # CURVED (isoparametric P2) demag solve: curve the geometry, then the curved-Duffy charge Gram.
             if int(curve_order) != 2:
                 raise NotImplementedError("vim.Solve: only curve_order=2 (isoparametric P2) is wired.")
-            mesh.Curve(int(curve_order))
+            _curve_mesh(mesh, int(curve_order))
         fes, symmetry_constrained_dofs = _hdiv_space_with_image_constraints(
             mesh, order, image_planes)
         t_before_charge_gram = time.perf_counter()
