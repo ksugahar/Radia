@@ -153,7 +153,7 @@ section at the bottom.
 
 ---
 
-## 1. PEEC's R: Bessel skin-corrected loop-bundle (current behaviour)
+## 1. PEEC's R: shape-aware skin-corrected loop-bundle
 
 PEEC discretises each filament as a series chain of segments.  Each
 segment carries a DC resistance from the C++ `PEECBuilder`:
@@ -171,14 +171,17 @@ builder.add_connected_segment(node_a, node_b, w_i, h_i, sigma=sigma)
 R_f[k, k] = sum_{i in seg_of_filament[k]} R_dc[i, i]
 ```
 
-`calc_inductance.py:_solve_coil_peec` then **injects the Bessel skin
-contribution** as `Zs_fil`:
+`calc_inductance.py:_solve_coil_peec` selects the internal-impedance
+model from checked CAD metadata and injects its excess as `Zs_fil`:
 
 ```python
-# calc_inductance.py:_peec_skin_impedance_per_filament
-a_eq    = _equivalent_wire_radius_m(topo, n_peri)         # round-wire radius
-Z_ac    = cylinder_ac_impedance(a_eq, sigma, omega)        # Bessel, per unit length
-R_dc_m  = cylinder_dc_resistance(a_eq, sigma)              # ρ/(πa²)
+# calc_inductance.py:_peec_cross_section_model
+if topo["cross_section_kind"] == "rect":
+    Z_ac = dowell_rectangular_ac_impedance(width, thickness, sigma, omega)
+    R_dc_m = 1 / (sigma * width * thickness)
+else:
+    Z_ac = cylinder_ac_impedance(radius, sigma, omega)
+    R_dc_m = cylinder_dc_resistance(radius, sigma)
 dZ_per_m = Z_ac - R_dc_m                                   # skin contribution only
 for k:
     Zs_fil[k] = n_peri * dZ_per_m * L_filament_k
@@ -191,8 +194,13 @@ I_fil, V_port = solve_loop_bundle(R_f, L_f, args.frequency,
 
 `solve_loop_bundle` then builds `Z_fil[k,k] = R_f[k,k] + jωL_self_k +
 Zs_fil[k]`, and the parallel-of-n_peri equivalence makes the bundle
-self-impedance reach `Z_cyl(ω) · L_filament` exactly — both real and
-imaginary parts.
+self-impedance reach the selected isolated-conductor model.  Physical
+circles use Bessel; strict four-edge rectangular CAD sections use the
+single-layer Dowell `q*coth(q)` solution with the smaller dimension as
+diffusion thickness.  Polygonal or rounded sections remain an explicitly
+reported equivalent-round approximation rather than being mislabelled as
+rectangular.  Proximity iteration uses the actual sampled perimeter, so a
+rectangle is not given a fictitious circular or chamfered boundary.
 
 **Frequency response on the in-repo 3-turn coil** (n_peri=16, Cu,
 3turnCoil_work_coil.step):
@@ -301,14 +309,12 @@ separate mesh / topology issue.
 
 ## 5. Roadmap / open items
 
-- **Non-round cross-sections** (rectangular bars, ribbons): the
-  Bessel `cylinder_ac_impedance` falls back to "equivalent circle"
-  via mean cross-section area.  This is OK for square-like
-  cross-sections (within ~10 %) but errs for high-aspect-ratio
-  ribbons.  A proper Dowell formula for rectangular bars is in
-  [`dielectric_solver._apply_dowell_correction`](../../src/radia/dielectric_solver.py)
-  but not wired into `_solve_coil_peec` yet.  Once wired, choose by
-  `topo['cross_section_kind']` (round → Bessel; rect → Dowell).
+- **Rectangular bars and ribbons — SHIPPED 2026-08-26**: STEP extraction
+  persists strict shape, width, thickness and perimeter metadata.  PEEC
+  selects round Bessel versus rectangular Dowell automatically; MATLAB
+  uses the same selection.  Rounded rectangles and arbitrary polygons are
+  still marked unknown and use an explicit equivalent-round self model
+  until a two-dimensional cross-section cell solve is added.
 - **ESIM nonlinear steel filaments**: when filaments are themselves
   ferromagnetic with `μ_r(H)` dependence, the per-filament Z_s should
   come from the ESIM cell solver, not the linear Bessel formula.
