@@ -506,6 +506,8 @@ def test_configured_hmatrix_prunes_inactive_principal_submatrix_exactly():
     rhs=np.ascontiguousarray(rows[0])
     solved=gram.solve_configured_linear_material_mass_riesz(
         .2,rhs,tol=1e-11,maxit=5000,symmetric=True)
+    assert solved["timings"]["mass_riesz_local_blocks"]>1
+    assert solved["timings"]["mass_riesz_max_block"]==len(blocks[0])
     solution=np.asarray(solved["m"])
     applied=np.asarray(gram.apply_configured_linear_material_operator_many(
         .2,np.ascontiguousarray(solution[None,:]),

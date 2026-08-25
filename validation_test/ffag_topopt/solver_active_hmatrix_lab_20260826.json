@@ -71,6 +71,29 @@
     "inactive_solution_norm": 0.0,
     "smooth_known_solution_relative_error": 9.483097220975646e-8
   },
+  "local_mass_riesz": {
+    "policy": "Use TaskManager-parallel exact dense Cholesky for mass-graph components of at most 256 DoFs; retain PARDISO for a connected or larger conforming mass.",
+    "local_block_count_with_active_constraints": 17280,
+    "maximum_local_block_dofs": 36,
+    "one_rhs": {
+      "pardiso_and_unused_diagonal_baseline_s": 17.73008619999746,
+      "local_mass_and_no_unused_diagonal_s": 4.660101300018141,
+      "speedup": 3.804652527936486,
+      "iterations": 459,
+      "local_mass_preconditioner_s": 0.1748011000000001,
+      "relative_residual": 9.04078148106646e-9
+    },
+    "six_rhs": {
+      "pardiso_and_unused_diagonal_baseline_s": 77.25413879999542,
+      "local_mass_and_no_unused_diagonal_s": 35.845127099979436,
+      "speedup": 2.1552131306387687,
+      "iterations": [614, 616, 595, 566, 546, 601],
+      "local_mass_preconditioner_last_rhs_s": 0.2288068999999999,
+      "relative_residual": 9.86927145870891e-9
+    },
+    "inactive_solution_norm": 0.0,
+    "continuous_hdiv_pardiso_fallback_tested": true
+  },
   "gates": {
     "same_hmatrix_object_for_each_pair": true,
     "same_rhs_for_each_pair": true,
@@ -80,7 +103,7 @@
     "diagnostic_toggle_absent_from_product_source": true
   },
   "follow_up": {
-    "next_solver_target": "Profile and reduce per-iteration mass-Riesz PARDISO cost, then compare the fixed 500-step block-PCG startup with independent scalar finishing on identical RHS batches.",
+    "next_solver_target": "Compare the fixed 500-step block-PCG startup with an independent batched PCG that retains shared H-matrix traversal without dense block recurrences.",
     "remote_measurement": "Repeat on mdx or hibino after cooling-system recovery."
   }
 }
