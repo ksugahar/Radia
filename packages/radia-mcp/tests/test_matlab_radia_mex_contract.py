@@ -6,6 +6,7 @@ from radia_mcp.matlab import (
     matlab_cad_topology_build,
     matlab_optimize_build,
     matlab_optimize_resume,
+    matlab_optuna_mcp_route,
     matlab_sheet_metal_topology_build,
     matlab_optuna_simulink_contract,
     matlab_radia_mex_contract,
@@ -147,12 +148,21 @@ def test_optuna_simulink_contract_is_table_backed():
 
     assert contract["status"] == "ready"
     assert contract["package"] == "radia.optuna"
+    assert contract["distribution"] == "radia-optuna"
+    assert contract["upstream_oracle"] == "optuna==4.9.0"
+    assert contract["mcp_ownership"]["routes"]["shared"]["owner"] == (
+        "optuna/optuna-mcp"
+    )
     assert "TrialTable" in contract["tables"]
     assert "ObjectiveTable" in contract["tables"]
     assert "ConstraintTable" in contract["tables"]
     assert "SamplerStateTable" in contract["tables"]
     assert contract["native_acceleration"]["python_per_trial"] is False
     assert contract["native_acceleration"]["full_optimizer_in_cpp"] is False
+    assert contract["native_acceleration"]["gateway"] == "optuna_mex"
+    assert contract["native_acceleration"]["command_count"] == 20
+    assert contract["native_acceleration"]["required"] is True
+    assert contract["native_acceleration"]["missing_mex_fallback"] is False
     assert contract["cae_trial_contract"]["success_schema"] == (
         "radia.optuna.cae-trial.v1"
     )
@@ -214,7 +224,9 @@ def test_optuna_simulink_contract_is_table_backed():
     assert topology["sheet_metal"]["simulink_block"] == (
         "Optimization/Sheet Metal Optimization"
     )
-    assert contract["sampler_quality"]["python_parity_claim"].startswith("none")
+    assert contract["sampler_quality"]["python_parity_claim"].startswith(
+        "Only behavior mapped"
+    )
     hcurl = topology["sheet_metal"]["hcurl_eddy_bubble"]
     assert hcurl["status"] == "native-mex-ready"
     assert hcurl["python_boundary"] == "none in the MATLAB optimization loop"
@@ -254,6 +266,7 @@ def test_server_registers_bridge_tools():
     tool_names = {item.name for item in asyncio.run(mcp.list_tools())}
     assert "matlab_radia_mex_contract" in tool_names
     assert "matlab_optuna_simulink_contract" in tool_names
+    assert "matlab_optuna_mcp_route" in tool_names
     assert "matlab_optimize_build" in tool_names
     assert "matlab_optimize_resume" in tool_names
     assert "matlab_cad_topology_build" in tool_names
@@ -262,6 +275,56 @@ def test_server_registers_bridge_tools():
     payload = json.loads(mex_tool("ngsolve"))
     assert payload["topic"] == "ngsolve"
     assert payload["topic_data"]["owner"] == "NGSolve"
+
+
+def test_optuna_mcp_route_keeps_shared_tools_upstream_and_matlab_differences_local():
+    contract = matlab_optuna_mcp_route()
+    shared = contract["routes"]["shared"]
+    matlab = contract["routes"]["matlab"]
+    differential = contract["routes"]["differential"]
+    stewardship = contract["routes"]["stewardship"]
+
+    assert contract["policy"] == (
+        "upstream for shared behavior; radia-mcp for MATLAB differences"
+    )
+    assert shared["owner"] == "optuna/optuna-mcp"
+    assert "live MCP tools/list" in shared["authority"]
+    assert shared["verified_snapshot"]["sampler_seed_exposed"] is False
+    assert matlab["owner"] == "radia-mcp/radia-matlab"
+    assert matlab["distribution"] == "radia-optuna"
+    assert "table/MAT progress persistence and resume code generation" in (
+        matlab["capabilities"]
+    )
+    assert "a second Optuna MCP server or optuna-mcp proxy" in (
+        matlab["does_not_own"]
+    )
+    assert differential["behavioral_oracle"] == "optuna==4.9.0"
+    assert "does not expose a seed" in differential["seeded_numeric_route"]
+    assert stewardship["upstream_runtime_bundled"] is False
+    assert stewardship["validation_operation"]["shared_or_production_storage"] is False
+    assert stewardship["validation_operation"]["dashboard_in_automated_tests"] is False
+    assert (
+        stewardship["trademark_attribution"]
+        == "Optuna, the Optuna logo and any related marks are trademarks of "
+        "Preferred Networks, Inc."
+    )
+    assert {item["license"] for item in stewardship["upstream_licenses"]} == {"MIT"}
+
+
+def test_radia_matlab_tools_do_not_shadow_verified_upstream_optuna_mcp_tools():
+    from radia_mcp.matlab.server import mcp
+
+    root = Path(__file__).resolve().parents[3]
+    fixture = json.loads(
+        (root / "tests" / "matlab" / "fixtures" /
+         "optuna49_mcp_oracle.json").read_text(encoding="utf-8")
+    )
+    upstream_tools = set(fixture["tools"])
+    radia_tools = {item.name for item in asyncio.run(mcp.list_tools())}
+
+    assert fixture["optuna_version"] == "4.9.0"
+    assert fixture["optuna_mcp_version"] == "0.2.0"
+    assert upstream_tools.isdisjoint(radia_tools)
 
 
 def test_optimize_server_builds_multiobjective_ltspice_code():

@@ -2,7 +2,7 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **1030 tools** across 49 MCP servers.
+Total: **1031 tools** across 49 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
@@ -11,7 +11,7 @@ Total: **1030 tools** across 49 MCP servers.
 | [`mcp-server-gmsh`](#mcp-server-gmsh) | `radia_mcp.gmsh` | 69 |
 | [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 143 |
 | [`mcp-server-force`](#mcp-server-force) | `radia_mcp.force` | 21 |
-| [`mcp-server-radia-matlab`](#mcp-server-radia-matlab) | `radia_mcp.matlab` | 15 |
+| [`mcp-server-radia-matlab`](#mcp-server-radia-matlab) | `radia_mcp.matlab` | 16 |
 | [`mcp-server-acoustic-fembem`](#mcp-server-acoustic-fembem) | `radia_mcp.acoustic_fembem` | 4 |
 | [`mcp-server-radia-acoustic`](#mcp-server-radia-acoustic) | `radia_mcp.radia_acoustic` | 5 |
 | [`mcp-server-radia-streamfunction`](#mcp-server-radia-streamfunction) | `radia_mcp.streamfunction` | 3 |
@@ -439,7 +439,7 @@ Module: `radia_mcp.radia_ngsolve.server`
 | `radial_bearing_force_symmetry_gate` | Gate magnetic-body force with equal and mirrored excitation controls. |
 | `reciprocal_two_port_power_sweep_gate` | Gate complex two-port reciprocity, symmetry, passivity, and power closure. |
 | `regularized_trace_inverse_path_gate` | Gate a P1 trace Tikhonov path, L-curve, Morozov, and replay. |
-| `release_workflow` | Release-QUD workflow for PyPI and the MEX + SLX GitHub Release. |
+| `release_workflow` | release-quad workflow for PyPI and the MEX + SLX GitHub Release. |
 | `rf_sweep_artifact_summary_gate` | Gate a solved two-port sweep artifact and its process-neutral metadata. |
 | `rotating_conductor_transient_gate` | Gate moving-axis migration, rotational kinematics, and loss partition. |
 | `rotational_eddy_brake_energy_gate` | Gate free rotational braking with angular impulse and field energy. |
@@ -502,7 +502,7 @@ Module: `radia_mcp.force.server`
 
 ## `mcp-server-radia-matlab`
 
-_Official MATLAB MCP composition, Radia/NGSolve MEX capability contract, table-backed Optuna-like optimization, and 43 generic ML/RL gates_
+_Official MATLAB MCP composition, Radia/NGSolve MEX capability contract, radia-optuna MATLAB/Simulink difference support, and 43 generic ML/RL gates_
 
 Module: `radia_mcp.matlab.server`
 
@@ -517,7 +517,8 @@ Module: `radia_mcp.matlab.server`
 | `matlab_official_server_config` | (no description) |
 | `matlab_optimize_build` | Build validated MATLAB code for objective, Simulink, or LTspice optimization. |
 | `matlab_optimize_resume` | Build official-MATLAB-MCP-ready code to resume a persisted Study. |
-| `matlab_optuna_simulink_contract` | Describe the table-backed MATLAB Optuna-like and Simulink workflow. |
+| `matlab_optuna_mcp_route` | Route shared Optuna tools upstream and MATLAB differences to Radia. |
+| `matlab_optuna_simulink_contract` | Describe the table-backed MATLAB Optuna and Simulink workflow. |
 | `matlab_radia_acoustic_interface_contract` | (no description) |
 | `matlab_radia_mex_contract` | Expose the shared Radia/NGSolve Python-to-MATLAB MEX capability contract. |
 | `matlab_sheet_metal_topology_build` | Build a Radia-VIM + LP + adaptive NGSolve/Cubit sheet-metal workflow. |

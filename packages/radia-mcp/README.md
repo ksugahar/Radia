@@ -159,12 +159,33 @@ pip install radia-mcp[radia]          # adds Radia core (radia-coupled servers)
 pip install radia-mcp[full]           # everything above
 ```
 
-Optuna is intentionally external to `radia-mcp`; install the official
-Optuna MCP server separately:
+Install the standalone MATLAB distribution and the official Optuna MCP server
+separately; neither is a runtime dependency of `radia-mcp`:
 
 ```bash
+pip install --upgrade radia-optuna
 pip install --upgrade optuna optuna-mcp
 ```
+
+The ownership rule is strict: the official `optuna/optuna-mcp` live
+`tools/list` owns every shared Study/Trial/query/visualization/Dashboard
+operation it exposes. `mcp-server-radia-matlab` supports only the MATLAB
+differences through `matlab_optuna_mcp_route`: table/MAT persistence, Simulink
+monitoring and failure telemetry, MATLAB parallel execution, the required
+20-command `optuna_mex`, and Radia CAE artifact adapters. Seeded numerical
+oracle checks execute pinned `optuna==4.9.0` directly because the verified
+upstream MCP sampler tool does not expose a seed.
+
+`radia-optuna` is independent and unofficial; it is not affiliated with,
+sponsored by, or endorsed by Preferred Networks, Inc. or the Optuna project.
+Optuna, the Optuna logo and any related marks are trademarks of Preferred Networks, Inc.
+Radia does not use the Optuna logo or present its MCP layer as
+official. Optuna and `optuna-mcp` are MIT-licensed upstream projects; their
+copyright/license notices are bundled in the `radia-optuna` wheel's
+`THIRD_PARTY_NOTICES.md`. Oracle regeneration starts the official MCP locally
+over stdio with a fresh temporary SQLite database. Routine tests use the checked
+fixture, do not launch Dashboard, do not touch shared/production storage, and
+do not automatically open upstream issues or pull requests.
 
 Requires Python ≥ 3.10. Coreform Cubit is auto-discovered from
 standard install paths; set `CUBIT_BIN_DIR` env var if installed
@@ -180,7 +201,7 @@ when the matrix, policy lint, version consistency, generated
 `docs/TOOLS.md` drift check, and top-level pytest collection all pass.
 
 Operational quality is claimed only after PyPI-installed MCP entry
-points smoke successfully and the release-QUD machine checks pass on
+points smoke successfully and the release-quad machine checks pass on
 the lab deployment roles.  Public-safe quality records live in
 [`validation/mcp_quality/`](validation/mcp_quality/).
 
@@ -215,7 +236,8 @@ radia_mcp_by_tag("optimization")
      data-assimilation, gnn, pinn]
   → bayesian_opt_status()        # confirm radia-side theory tools
   → bayesian_opt_topics()        # topic enum for BO / GP / FMQA
-  → use official optuna-mcp      # Study/Trial/Dashboard operations
+  → official optuna-mcp          # every shared operation in live tools/list
+  → matlab_optuna_mcp_route()    # MATLAB/Simulink differences only
 ```
 
 ## MCP servers
@@ -264,6 +286,7 @@ Continue, …):
     "force":               {"command": "mcp-server-force"},
     "differential-forms":  {"command": "mcp-server-differential-forms"},
     "mathematica":         {"command": "mcp-server-mathematica"},
+    "radia-matlab":        {"command": "mcp-server-radia-matlab"},
     "optuna": {
       "command": "optuna-mcp",
       "args": ["--storage", "sqlite:///C:/temp/optuna_mcp.db"]
@@ -271,6 +294,10 @@ Continue, …):
   }
 }
 ```
+
+The path above is an example of user-owned persistent local storage. Automated
+oracle tests must instead create a unique database in the per-run temporary
+directory and delete it after the local stdio server exits.
 
 Registering more than the 9 above is rarely necessary — once you have
 **meta**, `radia_mcp_get(name)` returns the entry point for any of the
