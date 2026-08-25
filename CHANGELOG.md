@@ -5,6 +5,10 @@ All notable changes to the `radia` package.  Format: each release lists
 
 ## Unreleased
 
+## 4.95.62 - Standalone MATLAB Optuna 4.9.0 distribution
+
+Released 2026-08-25.
+
 - Added `radia-optuna` as a separately installable Windows x64 wheel while
   retaining one canonical monorepo source tree. `pip install radia-optuna`
   installs the 92-file `radia.optuna` MATLAB namespace, the isolated
