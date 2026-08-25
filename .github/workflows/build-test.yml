@@ -911,21 +911,6 @@ jobs:
             Pop-Location
           }
 
-      - name: Test installed radia-optuna wheel with standalone Simulink
-        if: success()
-        shell: pwsh
-        working-directory: ${{ github.workspace }}
-        run: |
-          $wheels = @(Get-ChildItem packages/radia-optuna/dist/*.whl)
-          if ($wheels.Count -ne 1) {
-            Write-Host "::error::Expected one verified radia-optuna wheel, found $($wheels.Count)"
-            exit 1
-          }
-          pwsh -NoProfile -ExecutionPolicy Bypass `
-            -File packages/radia-optuna/tests/run_installed_wheel_simulink.ps1 `
-            -Wheel $wheels[0].FullName
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-
       - name: Upload radia-optuna wheel
         if: success()
         uses: actions/upload-artifact@v4
@@ -1108,3 +1093,71 @@ jobs:
           name: mcp-test-results
           path: mcp-test-results.xml
           retention-days: 30
+
+  radia-optuna-matlab-e2e:
+    name: radia-optuna installed-wheel MATLAB/Simulink E2E
+    needs: build-test
+    runs-on: windows-latest
+    timeout-minutes: 45
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download the verified radia-optuna wheel
+        uses: actions/download-artifact@v4
+        with:
+          name: radia-optuna-wheel
+          path: dist/radia-optuna
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      # MathWorks' official action supplies a noninteractive license for this
+      # public repository.  Keep this required E2E out of the LocalSystem
+      # self-hosted runner, whose Named User Service Host cannot cross the
+      # Windows session boundary and returns licensing service error 5202.
+      - name: Set up MATLAB and Simulink
+        uses: matlab-actions/setup-matlab@v3
+        with:
+          products: Simulink
+
+      - name: Install and inspect only the built wheel
+        shell: pwsh
+        run: |
+          $wheels = @(Get-ChildItem dist/radia-optuna/*.whl)
+          if ($wheels.Count -ne 1) {
+            Write-Host "::error::Expected one verified radia-optuna wheel, found $($wheels.Count)"
+            exit 1
+          }
+
+          $venv = Join-Path $env:RUNNER_TEMP 'radia-optuna-e2e-venv'
+          python -m venv $venv
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $venvPython = Join-Path $venv 'Scripts/python.exe'
+          & $venvPython -m pip install --disable-pip-version-check --no-deps $wheels[0].FullName
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+          $doctor = Join-Path $venv 'Scripts/radia-optuna-doctor.exe'
+          & $doctor --json
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+          $installedMatlabPath = (& $venvPython -c 'from radia_optuna import matlab_path; print(matlab_path())').Trim()
+          if (-not (Test-Path -LiteralPath $installedMatlabPath -PathType Container)) {
+            Write-Host "::error::Installed MATLAB directory is missing: $installedMatlabPath"
+            exit 1
+          }
+          $testDirectory = (Resolve-Path packages/radia-optuna/tests/matlab).ProviderPath
+          "RADIA_OPTUNA_MATLAB_PATH=$installedMatlabPath" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "RADIA_OPTUNA_TEST_PATH=$testDirectory" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+      - name: Test installed wheel with standalone Simulink
+        uses: matlab-actions/run-command@v3
+        with:
+          command: >-
+            restoredefaultpath;
+            addpath(getenv('RADIA_OPTUNA_MATLAB_PATH'));
+            addpath(getenv('RADIA_OPTUNA_TEST_PATH'));
+            result=test_standalone_simulink(getenv('RADIA_OPTUNA_MATLAB_PATH'));
+            assert(result.ok);
