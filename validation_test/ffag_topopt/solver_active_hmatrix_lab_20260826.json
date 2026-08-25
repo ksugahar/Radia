@@ -94,6 +94,33 @@
     "inactive_solution_norm": 0.0,
     "continuous_hdiv_pardiso_fallback_tested": true
   },
+  "independent_batched_mass_riesz_cg": {
+    "policy": "Use the lower-overhead scalar true-residual CG for one RHS. For multiple RHS, retain independent CG recurrences while applying B/G/B^T and the exact local mass-Riesz map to the complete row-major batch.",
+    "one_rhs": {
+      "route": "scalar",
+      "elapsed_s": 4.47422020000522,
+      "iterations": 447,
+      "speedup_vs_pre_local_mass_riesz": 3.9627209675502275,
+      "speedup_vs_first_local_mass_path": 1.0415449154721317,
+      "relative_residual": 9.296033063324846e-9,
+      "relative_known_solution_error": 4.291560286603549e-7
+    },
+    "six_rhs": {
+      "route": "independent_batched_cg",
+      "elapsed_s": 12.948182899999665,
+      "iterations": [471, 465, 447, 379, 579, 620],
+      "speedup_vs_fixed_block_pcg": 2.7683519283605706,
+      "speedup_vs_pre_local_mass_riesz": 5.966407749769847,
+      "speedup_vs_independent_scalar_solves": 2.190263036831864,
+      "independent_scalar_elapsed_s": 28.35992640000768,
+      "relative_residual": 9.92124881163507e-9,
+      "relative_known_solution_error": 4.9248814708404584e-8
+    },
+    "batched_local_mass_blocks": 1180,
+    "maximum_local_block_dofs": 36,
+    "inactive_solution_norm": 0.0,
+    "true_residual_gate_preserved": true
+  },
   "gates": {
     "same_hmatrix_object_for_each_pair": true,
     "same_rhs_for_each_pair": true,
@@ -103,7 +130,7 @@
     "diagnostic_toggle_absent_from_product_source": true
   },
   "follow_up": {
-    "next_solver_target": "Compare the fixed 500-step block-PCG startup with an independent batched PCG that retains shared H-matrix traversal without dense block recurrences.",
+    "next_solver_target": "Profile nonlinear state/adjoint batches and persistent field evaluation with the finalized independent batched mass-Riesz CG.",
     "remote_measurement": "Repeat on mdx or hibino after cooling-system recovery."
   }
 }

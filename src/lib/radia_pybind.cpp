@@ -4673,8 +4673,9 @@ PYBIND11_MODULE(_radia_pybind, m) {
              py::arg("mass_riesz") = false, py::arg("x0") = py::none(),
              "Solve row-major shared-operator right-hand sides in one native call, "
              "with optional batched mass-Riesz preconditioning, a bounded shared "
-             "block-Krylov startup, and true-residual scalar "
-             "completion. Cluster deflation is opt-in because it is not a CPU "
+             "independent-CG traversal, and true-residual convergence. A single "
+             "mass-Riesz RHS uses the lower-overhead scalar kernel. Cluster "
+             "deflation is opt-in because it is not a CPU "
              "speedup on the measured study system.")
         .def("configured_field_functional_rows",
              [](const RadHACApKChargeGram& s, F64Array observations_a,

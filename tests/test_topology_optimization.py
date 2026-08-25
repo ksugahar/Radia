@@ -516,6 +516,29 @@ def test_configured_hmatrix_prunes_inactive_principal_submatrix_exactly():
     assert relative_residual<5e-11
     np.testing.assert_array_equal(solution[~active],0.0)
 
+    known=np.ascontiguousarray(rows)
+    batched_rhs=np.asarray(
+        gram.apply_configured_linear_material_operator_many(
+            .2,known,respect_constraints=True))
+    batched=gram.solve_configured_linear_material_auto_prec_many(
+        .2,np.ascontiguousarray(batched_rhs),tol=1e-10,maxit=5000,
+        mass_riesz=True)
+    recovered=np.asarray(batched["m"])
+    assert recovered.shape==known.shape and recovered.flags.c_contiguous
+    assert batched["last_rhs_timings"]["mass_riesz_local_blocks"]>1
+    assert batched["last_rhs_timings"]["mass_riesz_max_block"]==len(blocks[0])
+    check=np.asarray(gram.apply_configured_linear_material_operator_many(
+        .2,np.ascontiguousarray(recovered),respect_constraints=True))
+    assert np.linalg.norm(check-batched_rhs)/np.linalg.norm(batched_rhs)<5e-10
+    assert np.linalg.norm(recovered-known)/np.linalg.norm(known)<5e-8
+    np.testing.assert_array_equal(recovered[:,~active],0.0)
+
+    warm=gram.solve_configured_linear_material_auto_prec_many(
+        .2,np.ascontiguousarray(batched_rhs),tol=1e-10,maxit=5000,
+        mass_riesz=True,x0=known)
+    assert max(warm["iters"])==0
+    np.testing.assert_allclose(warm["m"],known,rtol=3e-15,atol=3e-15)
+
 
 def test_large_hdiv_mmm_candidate_screen_uses_one_shared_hmatrix_batch():
     import ngsolve as ng

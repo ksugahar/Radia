@@ -8906,7 +8906,7 @@ std::vector<double> RadHACApKChargeGram::SolveConfiguredLinearMaterialAutoPrecMa
             "SolveConfiguredLinearMaterialAutoPrecMany: positive cluster size requires deflation size");
     if (mass_riesz && cluster_coarse_size > 0)
         throw std::runtime_error(
-            "SolveConfiguredLinearMaterialAutoPrecMany: mass-Riesz block PCG "
+            "SolveConfiguredLinearMaterialAutoPrecMany: mass-Riesz batched CG "
             "currently requires cluster_coarse_size=0");
 
     // The exact Jacobi diagonal is needed only by the diagonal/cluster path.
@@ -8956,13 +8956,33 @@ std::vector<double> RadHACApKChargeGram::SolveConfiguredLinearMaterialAutoPrecMa
         prec_min = prec_max = 1.0;
     }
 
+    if (mass_riesz && nrhs == 1) {
+        // The scalar kernel has less row-bookkeeping and a cheaper reduction
+        // path than the batched kernel.  Preserve it for the common one-load
+        // solve; batching starts paying only when operators are shared by
+        // multiple physical right-hand sides.
+        int iterations = 0;
+        std::vector<double> solution = SolveLinearMaterial(
+            m_operatorBIndptr, m_operatorBIndices, m_operatorBData,
+            n_face, m_operatorMassI, m_operatorMassJ, m_operatorMassV,
+            inv_chi, prec, rhs, tol, maxit, iterations,
+            /*mass_riesz=*/true, /*symmetric=*/true, x0,
+            nullptr, nullptr, nullptr, 0);
+        iters_out.assign(1, iterations);
+        coarse_dim_out = recycle_dim_out = 0;
+        coarse_setup_s = 0.0;
+        projection_s = m_lastSolveTiming.total_s;
+        return solution;
+    }
+
 #ifdef HAVE_LAPACK
     std::shared_ptr<RadMassRieszCache> block_mr_keep;
     MassRieszFactor* block_mr = nullptr;
+    double block_factor_s = 0.0;
     if (mass_riesz) {
         block_mr_keep = EnsureMassRieszFactor(
             m_operatorMassI, m_operatorMassJ, m_operatorMassV, n_face,
-            "SolveConfiguredLinearMaterialAutoPrecMany", nullptr);
+            "SolveConfiguredLinearMaterialAutoPrecMany", &block_factor_s);
         block_mr = &block_mr_keep->factor;
     }
 #else
@@ -9380,6 +9400,303 @@ std::vector<double> RadHACApKChargeGram::SolveConfiguredLinearMaterialAutoPrecMa
         return dot(a.data()+static_cast<size_t>(row_a)*n_face,
                    b.data()+static_cast<size_t>(row_b)*n_face);
     };
+    if (mass_riesz) {
+        // Independent batched PCG: each physical RHS retains its scalar-CG
+        // recurrence and true-residual contract, while B/G/B^T and M^-1 are
+        // traversed once for the complete row-major batch.  This avoids the
+        // dense block-Gram recurrences, rank breakdown, fixed 500-step block
+        // startup, and sequential scalar tails of the former block PCG.
+        m_lastSolveTiming = SolveTiming();
+#ifdef HAVE_LAPACK
+        m_lastSolveTiming.factor_s = block_factor_s;
+        m_lastSolveTiming.mass_riesz_local_blocks =
+            block_mr->LocalBlockCount();
+        m_lastSolveTiming.mass_riesz_max_block = block_mr->LocalMaxBlock();
+#endif
+        const auto solve_started = Clock::now();
+        auto timed_apply = [&](const std::vector<double>& input,
+                               std::vector<double>& output) {
+            const auto started = Clock::now();
+            apply_system_many(input, output);
+            m_lastSolveTiming.ax_total_s +=
+                std::chrono::duration<double>(Clock::now()-started).count();
+            ++m_lastSolveTiming.apply_count;
+        };
+        auto timed_precondition = [&](const std::vector<double>& input,
+                                      std::vector<double>& output,
+                                      const std::vector<int>& rows) {
+            const auto started = Clock::now();
+            apply_preconditioner_many(input, output, rows);
+            m_lastSolveTiming.prec_s +=
+                std::chrono::duration<double>(Clock::now()-started).count();
+            ++m_lastSolveTiming.prec_count;
+        };
+
+        std::vector<double> projected_rhs = rhs;
+        project_many(projected_rhs);
+        std::vector<double> rhs_scale(static_cast<size_t>(nrhs), 1.0);
+        std::vector<unsigned char> row_active(static_cast<size_t>(nrhs), 0);
+        std::vector<int> active;
+        iters_out.assign(static_cast<size_t>(nrhs), maxit);
+        for (int row = 0; row < nrhs; ++row) {
+            rhs_scale[static_cast<size_t>(row)] = std::sqrt(std::max(
+                0.0, row_dot(projected_rhs, projected_rhs, row, row)));
+            if (rhs_scale[static_cast<size_t>(row)] > 0.0) {
+                const double inverse = 1.0/rhs_scale[static_cast<size_t>(row)];
+                for (int face = 0; face < n_face; ++face)
+                    projected_rhs[static_cast<size_t>(row)*n_face+face] *= inverse;
+                row_active[static_cast<size_t>(row)] = 1;
+                active.push_back(row);
+            }
+            else
+                iters_out[static_cast<size_t>(row)] = 0;
+        }
+
+        std::vector<double> solutions(total, 0.0);
+        if (x0)
+            for (int row : active)
+                for (int face = 0; face < n_face; ++face)
+                    solutions[static_cast<size_t>(row)*n_face+face] =
+                        (*x0)[static_cast<size_t>(row)*n_face+face] /
+                        rhs_scale[static_cast<size_t>(row)];
+        project_many(solutions);
+        std::vector<double> applied, residual(total, 0.0), zvec(total, 0.0),
+            pvec(total, 0.0), apvec;
+        timed_apply(solutions, applied);
+        for (size_t index = 0; index < total; ++index)
+            residual[index] = projected_rhs[index]-applied[index];
+        project_many(residual);
+
+        std::vector<int> remaining;
+        for (int row : active) {
+            const double norm = std::sqrt(std::max(
+                0.0, row_dot(residual, residual, row, row)));
+            if (norm <= tol) {
+                iters_out[static_cast<size_t>(row)] = 0;
+                row_active[static_cast<size_t>(row)] = 0;
+                std::fill(residual.begin()+static_cast<size_t>(row)*n_face,
+                          residual.begin()+static_cast<size_t>(row+1)*n_face,
+                          0.0);
+            }
+            else
+                remaining.push_back(row);
+        }
+        active.swap(remaining);
+        std::vector<double> rho(static_cast<size_t>(nrhs), 0.0);
+        if (!active.empty()) {
+            timed_precondition(residual, zvec, active);
+            pvec = zvec;
+            for (int row : active)
+                rho[static_cast<size_t>(row)] =
+                    row_dot(residual, zvec, row, row);
+        }
+
+        auto restart_from_true_residual = [&](int completed_iterations) {
+            timed_apply(solutions, applied);
+            for (size_t index = 0; index < total; ++index)
+                residual[index] = projected_rhs[index]-applied[index];
+            project_many(residual);
+            remaining.clear();
+            for (int row : active) {
+                const double norm = std::sqrt(std::max(
+                    0.0, row_dot(residual, residual, row, row)));
+                if (norm <= tol) {
+                    iters_out[static_cast<size_t>(row)] = completed_iterations;
+                    row_active[static_cast<size_t>(row)] = 0;
+                    std::fill(
+                        residual.begin()+static_cast<size_t>(row)*n_face,
+                        residual.begin()+static_cast<size_t>(row+1)*n_face,
+                        0.0);
+                }
+                else
+                    remaining.push_back(row);
+            }
+            active.swap(remaining);
+            if (active.empty()) return true;
+            timed_precondition(residual, zvec, active);
+            pvec = zvec;
+            std::fill(rho.begin(), rho.end(), 0.0);
+            for (int row : active)
+                rho[static_cast<size_t>(row)] =
+                    row_dot(residual, zvec, row, row);
+            return false;
+        };
+
+        constexpr int refresh_period = 1000;
+        constexpr int max_breakdown_restarts = 1;
+        int consecutive_breakdown_restarts = 0;
+        int completed_iterations = 0;
+        bool scalar_fallback = false;
+        for (int iteration = 0; iteration < maxit && !active.empty(); ++iteration) {
+            timed_apply(pvec, apvec);
+            std::vector<double> alpha(static_cast<size_t>(nrhs), 0.0);
+            bool breakdown = false;
+            for (int row : active) {
+                const double denominator = row_dot(pvec, apvec, row, row);
+                if (denominator == 0.0 || !std::isfinite(denominator)) {
+                    breakdown = true;
+                    break;
+                }
+                alpha[static_cast<size_t>(row)] =
+                    rho[static_cast<size_t>(row)]/denominator;
+            }
+            if (breakdown) {
+                if (++consecutive_breakdown_restarts > max_breakdown_restarts) {
+                    scalar_fallback = true;
+                    break;
+                }
+                if (restart_from_true_residual(iteration)) break;
+                continue;
+            }
+            {
+                const auto started = Clock::now();
+                ngcore::RegionTaskManager rtm(radia::GetMaxThreads());
+                ngcore::ParallelFor(ngcore::IntRange(total), [&](size_t index) {
+                    const int row = static_cast<int>(index/n_face);
+                    if (!row_active[static_cast<size_t>(row)]) return;
+                    const double step = alpha[static_cast<size_t>(row)];
+                    solutions[index] += step*pvec[index];
+                    residual[index] -= step*apvec[index];
+                });
+                m_lastSolveTiming.pcg_update_s +=
+                    std::chrono::duration<double>(Clock::now()-started).count();
+            }
+            project_many(solutions);
+            project_many(residual);
+            completed_iterations = iteration+1;
+
+            bool candidate = ((iteration+1)%refresh_period) == 0;
+            for (int row : active)
+                candidate = candidate || std::sqrt(std::max(
+                    0.0, row_dot(residual, residual, row, row))) <= tol;
+            if (candidate) {
+                if (restart_from_true_residual(iteration+1)) break;
+                continue;
+            }
+
+            timed_precondition(residual, zvec, active);
+            std::vector<double> rho_new(static_cast<size_t>(nrhs), 0.0);
+            std::vector<double> beta(static_cast<size_t>(nrhs), 0.0);
+            bool residual_breakdown = false;
+            for (int row : active) {
+                rho_new[static_cast<size_t>(row)] =
+                    row_dot(residual, zvec, row, row);
+                if (rho_new[static_cast<size_t>(row)] == 0.0 ||
+                        rho[static_cast<size_t>(row)] == 0.0 ||
+                        !std::isfinite(rho_new[static_cast<size_t>(row)]) ||
+                        !std::isfinite(rho[static_cast<size_t>(row)])) {
+                    residual_breakdown = true;
+                    break;
+                }
+                beta[static_cast<size_t>(row)] =
+                    rho_new[static_cast<size_t>(row)]/
+                    rho[static_cast<size_t>(row)];
+            }
+            if (residual_breakdown) {
+                if (++consecutive_breakdown_restarts > max_breakdown_restarts) {
+                    scalar_fallback = true;
+                    break;
+                }
+                if (restart_from_true_residual(iteration+1)) break;
+                continue;
+            }
+            {
+                const auto started = Clock::now();
+                ngcore::RegionTaskManager rtm(radia::GetMaxThreads());
+                ngcore::ParallelFor(ngcore::IntRange(total), [&](size_t index) {
+                    const int row = static_cast<int>(index/n_face);
+                    pvec[index] = row_active[static_cast<size_t>(row)]
+                        ? zvec[index] + beta[static_cast<size_t>(row)]*pvec[index]
+                        : 0.0;
+                });
+                m_lastSolveTiming.pcg_update_s +=
+                    std::chrono::duration<double>(Clock::now()-started).count();
+            }
+            rho.swap(rho_new);
+            consecutive_breakdown_restarts = 0;
+        }
+
+        if (scalar_fallback && !active.empty()) {
+            // Preserve every batched update as the seed if a recurrence
+            // becomes zero or non-finite, then hand only the unfinished rows
+            // to the mature scalar true-residual CG path.  ACA-compressed
+            // systems may have roundoff-scale negative Rayleigh quotients;
+            // those remain valid finite CG steps, matching the scalar path.
+            SolveTiming combined = m_lastSolveTiming;
+            const int remaining_iterations = std::max(
+                1, maxit-completed_iterations);
+            auto add_timing = [](SolveTiming& target, const SolveTiming& source) {
+                target.factor_s += source.factor_s;
+                target.prec_s += source.prec_s;
+                target.bx_s += source.bx_s;
+                target.gmatvec_s += source.gmatvec_s;
+                target.btx_s += source.btx_s;
+                target.mass_s += source.mass_s;
+                target.dot_s += source.dot_s;
+                target.ax_total_s += source.ax_total_s;
+                target.ax_other_s += source.ax_other_s;
+                target.pcg_update_s += source.pcg_update_s;
+                target.hmatvec_total_s += source.hmatvec_total_s;
+                target.hmatvec_zero_s += source.hmatvec_zero_s;
+                target.hmatvec_permute_s += source.hmatvec_permute_s;
+                target.hmatvec_leaf_s += source.hmatvec_leaf_s;
+                target.hmatvec_reduce_s += source.hmatvec_reduce_s;
+                target.hmatvec_meta_s += source.hmatvec_meta_s;
+                target.hmatvec_lowrank_flop_est += source.hmatvec_lowrank_flop_est;
+                target.hmatvec_dense_flop_est += source.hmatvec_dense_flop_est;
+                target.hmatvec_calls += source.hmatvec_calls;
+                target.hmatvec_lowrank_leaves += source.hmatvec_lowrank_leaves;
+                target.hmatvec_dense_leaves += source.hmatvec_dense_leaves;
+                target.hmatvec_mirrored_upper_leaves +=
+                    source.hmatvec_mirrored_upper_leaves;
+                target.hmatvec_diagonal_leaves += source.hmatvec_diagonal_leaves;
+                target.hmatvec_skipped_lower_leaves +=
+                    source.hmatvec_skipped_lower_leaves;
+                target.hmatvec_last_nd = source.hmatvec_last_nd;
+                target.hmatvec_last_nthr = source.hmatvec_last_nthr;
+                target.apply_count += source.apply_count;
+                target.prec_count += source.prec_count;
+                target.dot_count += source.dot_count;
+                target.mass_riesz_local_blocks = std::max(
+                    target.mass_riesz_local_blocks,
+                    source.mass_riesz_local_blocks);
+                target.mass_riesz_max_block = std::max(
+                    target.mass_riesz_max_block,
+                    source.mass_riesz_max_block);
+            };
+            for (int row : active) {
+                const auto offset = static_cast<size_t>(row)*n_face;
+                std::vector<double> one_rhs(
+                    projected_rhs.begin()+offset,
+                    projected_rhs.begin()+offset+n_face);
+                std::vector<double> seed(
+                    solutions.begin()+offset,
+                    solutions.begin()+offset+n_face);
+                int scalar_iterations = 0;
+                std::vector<double> solution = SolveLinearMaterial(
+                    m_operatorBIndptr, m_operatorBIndices, m_operatorBData,
+                    n_face, m_operatorMassI, m_operatorMassJ, m_operatorMassV,
+                    inv_chi, prec, one_rhs, tol, remaining_iterations,
+                    scalar_iterations, /*mass_riesz=*/true,
+                    /*symmetric=*/true, &seed, nullptr, nullptr, nullptr, 0);
+                add_timing(combined, m_lastSolveTiming);
+                iters_out[static_cast<size_t>(row)] =
+                    completed_iterations+scalar_iterations;
+                std::copy(solution.begin(), solution.end(),
+                          solutions.begin()+offset);
+            }
+            m_lastSolveTiming = combined;
+        }
+
+        for (int row = 0; row < nrhs; ++row)
+            for (int face = 0; face < n_face; ++face)
+                solutions[static_cast<size_t>(row)*n_face+face] *=
+                    rhs_scale[static_cast<size_t>(row)];
+        projection_s = std::chrono::duration<double>(
+            Clock::now()-solve_started).count();
+        m_lastSolveTiming.total_s = projection_s;
+        return solutions;
+    }
     auto block_gram = [&](const std::vector<double>& left,
                           const std::vector<double>& right,
                           const std::vector<int>& rows) {
