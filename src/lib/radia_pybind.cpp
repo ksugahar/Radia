@@ -4282,6 +4282,17 @@ PYBIND11_MODULE(_radia_pybind, m) {
              },
              py::arg("dofs"), py::arg("preserve_existing") = false,
              "Replace or extend the constrained HDiv DOF set used by active-material solves.")
+        .def("configured_active_hmatrix_stats",
+             [](const RadHACApKChargeGram& s, int component) {
+                 const auto values = s.ConfiguredActiveHMatrixStats(component);
+                 py::dict result;
+                 result["active_charges"] = values[0];
+                 result["total_charges"] = values[1];
+                 result["active_upper_leaves"] = values[2];
+                 result["total_upper_leaves"] = values[3];
+                 return result;
+             }, py::arg("component") = 0,
+             "Active-charge and exact symmetric H-matrix leaf-pruning diagnostics.")
         .def("demag_matrix",
              [](std::shared_ptr<RadHACApKChargeGram> s) {
                  return std::make_shared<radia::ngsolve_bridge::HDivDemagMatrix>(
