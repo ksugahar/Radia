@@ -84,6 +84,35 @@ def test_transfer_matrix_inverse_produces_field_target_before_material_step():
         "dense optics TSVD-Chebyshev solve to orbit-field target")
     assert correction.derivative_backend=="forward-mode-expm-frechet-ad"
     assert correction.field_to_design_jacobian.shape==(37,2)
+    assert correction.local_reachability_max_band_ratio<1.0
+    assert correction.local_reachability_relative_residual<1.0
+    assert correction.locally_reachable_within_bands
+
+
+def test_transfer_matrix_inverse_reports_unreachable_local_component():
+    class PartlyUnreachableObjective:
+        raw_field_response_size=1
+        response_target=np.array([2.0,2.0])
+        response_band=np.ones(2)
+
+        @staticmethod
+        def transform(field):
+            value=float(np.asarray(field).reshape(-1)[0])
+            return np.array([value,0.0])
+
+        @staticmethod
+        def transform_jacobian(field):
+            return np.array([[1.0],[0.0]])
+
+    correction=solve_transfer_matrix_field_correction(
+        PartlyUnreachableObjective(),np.array([0.0]),
+        relative_tolerance=1e-12,line_search_steps=8)
+
+    assert correction.numerical_rank==1
+    assert np.isclose(correction.local_reachability_max_band_ratio,2.0)
+    assert np.isclose(
+        correction.local_reachability_relative_residual,1.0/np.sqrt(2.0))
+    assert not correction.locally_reachable_within_bands
 
 
 def test_field_to_map_to_aca_qr_tsvd_material_pipeline_is_auditable():
