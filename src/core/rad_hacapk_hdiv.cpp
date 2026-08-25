@@ -49,24 +49,26 @@ public:
     PardisoMKLThreadGuard& operator=(const PardisoMKLThreadGuard&) = delete;
 };
 
-// RAII PARDISO SPD (mtype=2 real symmetric positive definite) factor of the HDiv mass M_mass,
-// used as the MASS RIESZ preconditioner (z = M_mass^{-1} r) of the HDiv-VIM material CG / MINRES.  The
-// mass is supplied as the FULL symmetric COO (mI,mJ,mV); only the UPPER triangle (j>=i) is assembled
-// into the 0-based CSR PARDISO mtype=2 expects.  Follows the established sparse-direct PARDISO pattern in
-// this repo.  Replaces the prior Python splu(M_mass) glue so
-// the whole linear demag solve (H-matvec + mass solve + Krylov) runs in C++.
-struct MassRieszPardiso {
+// Persistent exact MASS RIESZ factor.  Broken HDiv masses are element-block
+// diagonal, so small connected components use TaskManager-parallel dense
+// Cholesky solves.  General conforming masses retain the PARDISO SPD path.
+struct MassRieszFactor {
     void* pt[64];
     MKL_INT iparm[64];
     MKL_INT n = 0, mtype = 2, maxfct = 1, mnum = 1, msglvl = 0;
     std::vector<MKL_INT> ia, ja;     // upper-triangular CSR, 0-based (iparm[34]=1); columns ascending
     std::vector<double>  a;
+    std::vector<int> local_offsets, local_dofs;
+    std::vector<size_t> local_factor_offsets;
+    std::vector<double> local_factors;
+    int local_max_block = 0;
+    bool local_factored = false;
     bool factored = false;
-    MassRieszPardiso() { for (int i = 0; i < 64; ++i) { pt[i] = nullptr; iparm[i] = 0; } }
-    MassRieszPardiso(const MassRieszPardiso&) = delete;
-    MassRieszPardiso& operator=(const MassRieszPardiso&) = delete;
-    ~MassRieszPardiso() {
-        if (factored) {
+    MassRieszFactor() { for (int i = 0; i < 64; ++i) { pt[i] = nullptr; iparm[i] = 0; } }
+    MassRieszFactor(const MassRieszFactor&) = delete;
+    MassRieszFactor& operator=(const MassRieszFactor&) = delete;
+    ~MassRieszFactor() {
+        if (factored && !local_factored) {
             // PARDISO is called from the HDiv Krylov loop while an NGSolve
             // TaskManager may be active.  Suspend its workers while PARDISO
             // owns the configured thread count; this avoids nested pools while
@@ -78,14 +80,206 @@ struct MassRieszPardiso {
                     &idum, &nrhs, iparm, &msglvl, &ddum, &ddum, &error);
         }
     }
+
+    bool TryFactorLocalBlocks(const std::vector<int>& mI,
+                              const std::vector<int>& mJ,
+                              const std::vector<double>& mV,
+                              int n_face) {
+        if (n_face < 1) return false;
+        std::vector<int> parent(static_cast<size_t>(n_face));
+        std::vector<unsigned char> rank(static_cast<size_t>(n_face), 0);
+        for (int i = 0; i < n_face; ++i) parent[static_cast<size_t>(i)] = i;
+        auto root = [&](int value) {
+            int result = value;
+            while (parent[static_cast<size_t>(result)] != result)
+                result = parent[static_cast<size_t>(result)];
+            while (parent[static_cast<size_t>(value)] != value) {
+                const int next = parent[static_cast<size_t>(value)];
+                parent[static_cast<size_t>(value)] = result;
+                value = next;
+            }
+            return result;
+        };
+        auto unite = [&](int left, int right) {
+            int aroot = root(left), broot = root(right);
+            if (aroot == broot) return;
+            if (rank[static_cast<size_t>(aroot)] <
+                    rank[static_cast<size_t>(broot)])
+                std::swap(aroot, broot);
+            parent[static_cast<size_t>(broot)] = aroot;
+            if (rank[static_cast<size_t>(aroot)] ==
+                    rank[static_cast<size_t>(broot)])
+                ++rank[static_cast<size_t>(aroot)];
+        };
+        for (size_t k = 0; k < mV.size(); ++k) {
+            const int i = mI[k], j = mJ[k];
+            if (i >= 0 && i < n_face && j >= 0 && j < n_face &&
+                    i != j && mV[k] != 0.0)
+                unite(i, j);
+        }
+
+        std::unordered_map<int, int> component_of;
+        std::vector<std::vector<int>> components;
+        for (int dof = 0; dof < n_face; ++dof) {
+            const int owner = root(dof);
+            auto inserted = component_of.emplace(
+                owner, static_cast<int>(components.size()));
+            if (inserted.second) components.emplace_back();
+            components[static_cast<size_t>(inserted.first->second)].push_back(dof);
+        }
+        int max_block = 0;
+        for (const auto& component : components)
+            max_block = std::max(max_block, static_cast<int>(component.size()));
+        constexpr int local_block_limit = 256;
+        if (components.size() < 2 || max_block > local_block_limit) return false;
+
+        local_offsets.assign(components.size()+1, 0);
+        local_dofs.clear();
+        local_dofs.reserve(static_cast<size_t>(n_face));
+        std::vector<int> block_of(static_cast<size_t>(n_face), -1);
+        std::vector<int> local_of(static_cast<size_t>(n_face), -1);
+        size_t factor_size = 0;
+        for (size_t block = 0; block < components.size(); ++block) {
+            local_offsets[block] = static_cast<int>(local_dofs.size());
+            const auto& component = components[block];
+            for (size_t local = 0; local < component.size(); ++local) {
+                const int dof = component[local];
+                block_of[static_cast<size_t>(dof)] = static_cast<int>(block);
+                local_of[static_cast<size_t>(dof)] = static_cast<int>(local);
+                local_dofs.push_back(dof);
+            }
+            factor_size += component.size()*component.size();
+        }
+        local_offsets.back() = static_cast<int>(local_dofs.size());
+        local_factors.assign(factor_size, 0.0);
+        local_factor_offsets.assign(components.size()+1, 0);
+        for (size_t block = 0; block < components.size(); ++block) {
+            const size_t width = components[block].size();
+            local_factor_offsets[block+1] =
+                local_factor_offsets[block]+width*width;
+        }
+        for (size_t k = 0; k < mV.size(); ++k) {
+            const int i = mI[k], j = mJ[k];
+            if (i < 0 || i >= n_face || j < 0 || j >= n_face) continue;
+            const int block = block_of[static_cast<size_t>(i)];
+            if (block < 0 || block != block_of[static_cast<size_t>(j)])
+                return false;
+            const int width = local_offsets[static_cast<size_t>(block)+1] -
+                local_offsets[static_cast<size_t>(block)];
+            local_factors[local_factor_offsets[static_cast<size_t>(block)] +
+                static_cast<size_t>(local_of[static_cast<size_t>(i)])*width +
+                local_of[static_cast<size_t>(j)]] += mV[k];
+        }
+
+        std::atomic<bool> ok(true);
+        {
+            ngcore::RegionTaskManager rtm(radia::GetMaxThreads());
+            ngcore::ParallelFor(ngcore::IntRange(components.size()),
+                [&](size_t block) {
+                    const int width = local_offsets[block+1]-local_offsets[block];
+                    double* factor =
+                        local_factors.data()+local_factor_offsets[block];
+                    for (int i = 0; i < width; ++i)
+                        for (int j = i+1; j < width; ++j) {
+                            const double upper = factor[static_cast<size_t>(i)*width+j];
+                            const double lower = factor[static_cast<size_t>(j)*width+i];
+                            const double value = upper != 0.0 && lower != 0.0
+                                ? 0.5*(upper+lower) : upper+lower;
+                            factor[static_cast<size_t>(i)*width+j] = value;
+                            factor[static_cast<size_t>(j)*width+i] = value;
+                        }
+                    double max_diag = 0.0;
+                    for (int i = 0; i < width; ++i)
+                        max_diag = std::max(max_diag,
+                            std::fabs(factor[static_cast<size_t>(i)*width+i]));
+                    const double floor = std::max(1.0e-30, 1.0e-13*max_diag);
+                    for (int i = 0; i < width && ok.load(); ++i) {
+                        for (int j = 0; j <= i; ++j) {
+                            double value = factor[static_cast<size_t>(i)*width+j];
+                            for (int k = 0; k < j; ++k)
+                                value -= factor[static_cast<size_t>(i)*width+k]*
+                                    factor[static_cast<size_t>(j)*width+k];
+                            if (i == j) {
+                                if (!(value > floor) || !std::isfinite(value)) {
+                                    ok.store(false);
+                                    break;
+                                }
+                                factor[static_cast<size_t>(i)*width+j] =
+                                    std::sqrt(value);
+                            }
+                            else
+                                factor[static_cast<size_t>(i)*width+j] = value /
+                                    factor[static_cast<size_t>(j)*width+j];
+                        }
+                        for (int j = i+1; j < width; ++j)
+                            factor[static_cast<size_t>(i)*width+j] = 0.0;
+                    }
+                });
+        }
+        if (!ok.load()) {
+            local_offsets.clear(); local_dofs.clear();
+            local_factor_offsets.clear(); local_factors.clear();
+            return false;
+        }
+        local_max_block = max_block;
+        local_factored = true;
+        return true;
+    }
+
+    void SolveLocalMany(const double* rhs, double* x, int rhs_count) const {
+        if (rhs_count < 1)
+            throw std::runtime_error(
+                "MassRieszFactor: rhs_count must be positive");
+        const size_t block_count = local_offsets.size()-1;
+        std::fill(x, x+static_cast<size_t>(rhs_count)*n, 0.0);
+        ngcore::RegionTaskManager rtm(radia::GetMaxThreads());
+        ngcore::ParallelFor(
+            ngcore::IntRange(static_cast<size_t>(rhs_count)*block_count),
+            [&](size_t task) {
+                const int rhs_index = static_cast<int>(task/block_count);
+                const size_t block = task%block_count;
+                const int begin = local_offsets[block];
+                const int width = local_offsets[block+1]-begin;
+                const double* factor =
+                    local_factors.data()+local_factor_offsets[block];
+                double* output = x+static_cast<size_t>(rhs_index)*n;
+                const double* input = rhs+static_cast<size_t>(rhs_index)*n;
+                for (int i = 0; i < width; ++i) {
+                    const int dof = local_dofs[static_cast<size_t>(begin+i)];
+                    double value = input[dof];
+                    for (int j = 0; j < i; ++j)
+                        value -= factor[static_cast<size_t>(i)*width+j]*
+                            output[local_dofs[static_cast<size_t>(begin+j)]];
+                    output[dof] = value/factor[static_cast<size_t>(i)*width+i];
+                }
+                for (int ii = width; ii-- > 0;) {
+                    const int dof = local_dofs[static_cast<size_t>(begin+ii)];
+                    double value = output[dof];
+                    for (int j = ii+1; j < width; ++j)
+                        value -= factor[static_cast<size_t>(j)*width+ii]*
+                            output[local_dofs[static_cast<size_t>(begin+j)]];
+                    output[dof] = value/factor[static_cast<size_t>(ii)*width+ii];
+                }
+            });
+    }
+
+    int LocalBlockCount() const {
+        return local_factored ? static_cast<int>(local_offsets.size())-1 : 0;
+    }
+    int LocalMaxBlock() const { return local_factored ? local_max_block : 0; }
+
     // Assemble the upper-triangular CSR from the symmetric mass COO and factor (analyze phase 11 +
     // numeric phase 22).  Returns false on a PARDISO error (caller raises -- No-Fallbacks: a non-SPD
     // mass would be a setup bug, not a soft condition to paper over).
     bool Factor(const std::vector<int>& mI, const std::vector<int>& mJ,
                 const std::vector<double>& mV, int n_face) {
+        n = n_face;
+        if (TryFactorLocalBlocks(mI, mJ, mV, n_face)) {
+            factored = true;
+            return true;
+        }
         ngcore::SuspendTaskManager stm;
         PardisoMKLThreadGuard mkl_guard(radia::GetMaxThreads());
-        n = n_face;
         std::vector<std::map<int, double>> row((size_t)n_face);   // std::map keeps columns ascending
         for (size_t k = 0; k < mV.size(); ++k) {
             int i = mI[k], j = mJ[k];
@@ -121,6 +315,10 @@ struct MassRieszPardiso {
         return true;
     }
     void Solve(const double* rhs, double* x) {                   // M_mass x = rhs (phase 33, single rhs)
+        if (local_factored) {
+            SolveLocalMany(rhs, x, 1);
+            return;
+        }
         ngcore::SuspendTaskManager stm;
         PardisoMKLThreadGuard mkl_guard(radia::GetMaxThreads());
         MKL_INT phase = 33, nrhs = 1, idum = 0, error = 0;
@@ -135,7 +333,11 @@ struct MassRieszPardiso {
         // right-hand side is one contiguous PARDISO column.
         if (rhs_count < 1)
             throw std::runtime_error(
-                "MassRieszPardiso: rhs_count must be positive");
+                "MassRieszFactor: rhs_count must be positive");
+        if (local_factored) {
+            SolveLocalMany(rhs, x, rhs_count);
+            return;
+        }
         ngcore::SuspendTaskManager stm;
         PardisoMKLThreadGuard mkl_guard(radia::GetMaxThreads());
         MKL_INT phase = 33, nrhs = static_cast<MKL_INT>(rhs_count);
@@ -151,14 +353,14 @@ struct MassRieszPardiso {
 } // namespace
 
 // Definition of the .h-forward-declared persistent factor holder (SINGLE entry on RadHACApKChargeGram):
-// the PARDISO factor plus the exact COO arrays it was built from.  A solve call whose (n_face, mI, mJ, mV)
+// the selected local/PARDISO factor plus the exact COO arrays it was built from.  A solve call whose (n_face, mI, mJ, mV)
 // compares EQUAL element-wise reuses the factor; any difference rebuilds and replaces the entry.  Only this
-// translation unit sees the complete type (the members use the TU-local MassRieszPardiso above).
+// translation unit sees the complete type (the members use the TU-local MassRieszFactor above).
 struct RadMassRieszCache {
     std::vector<int> keyI, keyJ;
     std::vector<double> keyV;
     int keyN = -1;
-    MassRieszPardiso factor;
+    MassRieszFactor factor;
 };
 
 // The single get-or-build implementation used by SolveLinearMaterial (see the .h declaration for the
@@ -6919,15 +7121,15 @@ std::vector<double> RadHACApKChargeGram::SolveLinearMaterial(
     // worker pools, while the sparse factor/solve can still scale.
     radia::MKLThreadGuard solve_mkl_guard(1);
 #endif
-    // MASS RIESZ preconditioner (the default 'auto' path): z = M_mass^{-1} r via a single PARDISO SPD
-    // factor of the HDiv mass (built once, applied per iteration).  ~3-5x fewer iters than the diagonal
+    // MASS RIESZ preconditioner (the default 'auto' path): z = M_mass^{-1} r via the persistent exact
+    // local-block/PARDISO factor of the HDiv mass.  ~3-5x fewer iters than the diagonal
     // Jacobi (the diagonal under-resolves the HDiv mass off-diagonal coupling) and nearly mu_r-flat.  When
     // mass_riesz is false the legacy diagonal Jacobi z = r/prec is used (linear_solver="cpp-cg").
 #ifdef HAVE_LAPACK
     // PERSISTENT factor (2026-07-10): get-or-build via EnsureMassRieszFactor (exact-COO key; hit =
     // reuse, factor_s += 0; miss = release-then-refactor).  mrKeep pins the entry for the CG loop.
     std::shared_ptr<RadMassRieszCache> mrKeep;
-    MassRieszPardiso* mr = nullptr;
+    MassRieszFactor* mr = nullptr;
     if (mass_riesz) {
         const std::vector<int>* factorI = &mI;
         const std::vector<int>* factorJ = &mJ;
@@ -6951,6 +7153,8 @@ std::vector<double> RadHACApKChargeGram::SolveLinearMaterial(
         mrKeep = EnsureMassRieszFactor(*factorI, *factorJ, *factorV, n_face, "SolveLinearMaterial",
                                        &m_lastSolveTiming.factor_s);
         mr = &mrKeep->factor;
+        m_lastSolveTiming.mass_riesz_local_blocks = mr->LocalBlockCount();
+        m_lastSolveTiming.mass_riesz_max_block = mr->LocalMaxBlock();
     }
 #else
     if (mass_riesz)
@@ -8705,49 +8909,56 @@ std::vector<double> RadHACApKChargeGram::SolveConfiguredLinearMaterialAutoPrecMa
             "SolveConfiguredLinearMaterialAutoPrecMany: mass-Riesz block PCG "
             "currently requires cluster_coarse_size=0");
 
-    // Build the exact system diagonal once for the complete RHS batch.  The
-    // former Python loop rebuilt this support map and diagonal for every
-    // state/adjoint even though all columns share A.
-    std::vector<double> mass_diag(static_cast<size_t>(n_face), 0.0);
-    for (size_t k = 0; k < m_operatorMassV.size(); ++k)
-        if (m_operatorMassI[k] == m_operatorMassJ[k])
-            mass_diag[static_cast<size_t>(m_operatorMassI[k])] += m_operatorMassV[k];
-    std::vector<std::vector<int>> support_id(static_cast<size_t>(n_face));
-    std::vector<std::vector<double>> support_value(static_cast<size_t>(n_face));
-    for (int a = 0; a < m_ndof; ++a)
-        for (int k = m_operatorBIndptr[static_cast<size_t>(a)];
-             k < m_operatorBIndptr[static_cast<size_t>(a) + 1]; ++k) {
-            const int f = m_operatorBIndices[static_cast<size_t>(k)];
-            support_id[static_cast<size_t>(f)].push_back(a);
-            support_value[static_cast<size_t>(f)].push_back(
-                m_operatorBData[static_cast<size_t>(k)]);
+    // The exact Jacobi diagonal is needed only by the diagonal/cluster path.
+    // Mass-Riesz applies M^-1 directly and deliberately rejects a simultaneous
+    // cluster coarse space, so building every local Gram diagonal there is
+    // pure setup cost.
+    std::vector<double> prec(static_cast<size_t>(n_face), 1.0);
+    if (!mass_riesz) {
+        std::vector<double> mass_diag(static_cast<size_t>(n_face), 0.0);
+        for (size_t k = 0; k < m_operatorMassV.size(); ++k)
+            if (m_operatorMassI[k] == m_operatorMassJ[k])
+                mass_diag[static_cast<size_t>(m_operatorMassI[k])] +=
+                    m_operatorMassV[k];
+        std::vector<std::vector<int>> support_id(static_cast<size_t>(n_face));
+        std::vector<std::vector<double>> support_value(static_cast<size_t>(n_face));
+        for (int a = 0; a < m_ndof; ++a)
+            for (int k = m_operatorBIndptr[static_cast<size_t>(a)];
+                 k < m_operatorBIndptr[static_cast<size_t>(a) + 1]; ++k) {
+                const int f = m_operatorBIndices[static_cast<size_t>(k)];
+                support_id[static_cast<size_t>(f)].push_back(a);
+                support_value[static_cast<size_t>(f)].push_back(
+                    m_operatorBData[static_cast<size_t>(k)]);
+            }
+        {
+            ngcore::RegionTaskManager rtm(radia::GetMaxThreads());
+            ngcore::ParallelFor(ngcore::IntRange(n_face), [&](size_t f) {
+                double ndiag = 0.0;
+                const auto& ids = support_id[f];
+                const auto& vals = support_value[f];
+                for (size_t p = 0; p < ids.size(); ++p)
+                    for (size_t q = 0; q < ids.size(); ++q)
+                        ndiag += vals[p] * vals[q] *
+                            GetInteractionMatrixElement(ids[p], ids[q]);
+                double value = inv_chi * mass_diag[f] + ndiag;
+                if (!(value > 0.0) || !std::isfinite(value)) value = 1.0;
+                prec[f] = value;
+            });
         }
-    std::vector<double> prec(static_cast<size_t>(n_face), 0.0);
-    {
-        ngcore::RegionTaskManager rtm(radia::GetMaxThreads());
-        ngcore::ParallelFor(ngcore::IntRange(n_face), [&](size_t f) {
-            double ndiag = 0.0;
-            const auto& ids = support_id[f];
-            const auto& vals = support_value[f];
-            for (size_t p = 0; p < ids.size(); ++p)
-                for (size_t q = 0; q < ids.size(); ++q)
-                    ndiag += vals[p] * vals[q] *
-                        GetInteractionMatrixElement(ids[p], ids[q]);
-            double value = inv_chi * mass_diag[f] + ndiag;
-            if (!(value > 0.0) || !std::isfinite(value)) value = 1.0;
-            prec[f] = value;
-        });
+        prec_min = n_face ? prec[0] : 0.0;
+        prec_max = prec_min;
+        for (double value : prec) {
+            prec_min = std::min(prec_min, value);
+            prec_max = std::max(prec_max, value);
+        }
     }
-    prec_min = n_face ? prec[0] : 0.0;
-    prec_max = prec_min;
-    for (double value : prec) {
-        prec_min = std::min(prec_min, value);
-        prec_max = std::max(prec_max, value);
+    else {
+        prec_min = prec_max = 1.0;
     }
 
 #ifdef HAVE_LAPACK
     std::shared_ptr<RadMassRieszCache> block_mr_keep;
-    MassRieszPardiso* block_mr = nullptr;
+    MassRieszFactor* block_mr = nullptr;
     if (mass_riesz) {
         block_mr_keep = EnsureMassRieszFactor(
             m_operatorMassI, m_operatorMassJ, m_operatorMassV, n_face,
@@ -10987,6 +11198,8 @@ std::vector<std::pair<std::string, double>> RadHACApKChargeGram::LastSolveTiming
         {"solve_ax_total_s", t.ax_total_s},
         {"solve_ax_other_s", t.ax_other_s},
         {"solve_pcg_update_s", t.pcg_update_s},
+        {"mass_riesz_local_blocks", (double)t.mass_riesz_local_blocks},
+        {"mass_riesz_max_block", (double)t.mass_riesz_max_block},
         {"solve_apply_count", (double)t.apply_count},
         {"solve_prec_count", (double)t.prec_count},
         {"solve_dot_count", (double)t.dot_count},

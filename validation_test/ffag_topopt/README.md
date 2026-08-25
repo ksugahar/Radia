@@ -391,6 +391,9 @@ keeps 25,920 active DoFs.  Pruning preserves the active principal system
 exactly while reducing active charge leaves, accelerating both direct operator
 application and the scalar-finishing path of mass-Riesz PCG.  The JSON keeps
 kernel and complete-solve timings separate and records the remaining
-mass-Riesz and block-PCG work as the next optimization targets.  Repeat the
-measurement on mdx or hibino after their cooling-system recovery before using
-the LAB wall times as publication claims.
+mass-Riesz and block-PCG work separately.  A later entry in the same JSON
+records the exact local Cholesky mass-Riesz path for broken HDiv: it retains
+PARDISO for a connected conforming mass, and omits the unused Jacobi-diagonal
+setup when mass-Riesz is active.  Repeat the measurement on mdx or hibino after
+their cooling-system recovery before using the LAB wall times as publication
+claims.
