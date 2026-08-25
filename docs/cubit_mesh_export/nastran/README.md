@@ -9,14 +9,14 @@ Controls the mesh dimension and element types:
 | DIM | Description | Elements |
 |-----|-------------|----------|
 | `"3D"` | Volume elements | CTETRA, CHEXA, CPENTA, CPYRAM |
-| `"2D"` | Surface elements | CTRIA3, CQUAD4 (normals oriented to +z) |
+| `"2D"` | Surface elements | CTRIA3/CTRIA6, CQUAD4/CQUAD8; original coordinates preserved |
 
 ```python
 # 3D solid mesh
-cubit.cmd('export jmag_nastran "solid.bdf" dimension 3 overwrite')
+cubit.cmd('export nastran_bdf "solid.bdf" dimension 3 overwrite')
 
-# 2D shell mesh (normals reoriented to +z, z-coordinates set to 0)
-cubit.cmd('export jmag_nastran "plate.bdf" dimension 2 overwrite')
+# 2D shell mesh; all three GRID coordinates are preserved
+cubit.cmd('export nastran_bdf "plate.bdf" dimension 2 overwrite')
 ```
 
 ## PYRAM Parameter
@@ -32,10 +32,10 @@ Controls pyramid element handling in hybrid hex/tet meshes:
 
 ```python
 # Standard export with CPYRAM elements
-cubit.cmd('export jmag_nastran "mesh.bdf" overwrite')
+cubit.cmd('export nastran_bdf "mesh.bdf" overwrite')
 
 # For JMAG: convert pyramids to degenerate hex
-cubit.cmd('export jmag_nastran "mesh_jmag.bdf" nopyramid overwrite')
+cubit.cmd('export nastran_bdf "mesh_jmag.bdf" nopyramid overwrite')
 ```
 
 ## Element Mapping
@@ -48,14 +48,17 @@ cubit.cmd('export jmag_nastran "mesh_jmag.bdf" nopyramid overwrite')
 | Pyramid | CPYRAM / CHEXA* | - |
 | Tri | - | CTRIA3 |
 | Quad | - | CQUAD4 |
-| Edge | CROD | CROD |
-| Node | CMASS | CMASS |
 
 *Pyramid exported as CPYRAM when `PYRAM=True`, degenerate CHEXA when `PYRAM=False`.
 
-## Limitations
+## Contract boundary
 
-- **1st order elements only**: 2nd order elements (TETRA10, HEX20) are not supported.
+- Orders 1 and 2 are supported for all element families in the table.
+- Blocks produce PSOLID/PSHELL, sidesets produce collision-free PSHELL, and
+  nodesets produce SET1 cards.
+- MAT cards are intentionally omitted because the exporter cannot infer real
+  constitutive data. Assign materials in the receiving application.
+- `export jmag_nastran` remains a deprecated alias for old journals.
 
 ## Sample Files
 

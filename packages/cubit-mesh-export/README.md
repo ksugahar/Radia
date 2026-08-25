@@ -10,7 +10,7 @@ that every domain-specific Radia notebook or headless workflow consumes.
 ## Features
 
 - **Cubit plugin** (`.ccm` + `.pyd`, Coreform Cubit 2025.12+):
-  - `export {netgen|gmsh|vtk|femeem|meg}` + `export jmag_nastran` APREPRO commands
+  - `export {netgen|gmsh|vtk|femeem|meg|nastran_bdf}` APREPRO commands
   - **Export Mesh** GUI menu / toolbar inside Cubit's embedded Python
 - **Arbitrary-order curving** (order 1-5) via ACIS geometry projection
 - **Kelvin open-boundary** transformation built into `export netgen`
@@ -58,9 +58,15 @@ registration.
 ```
 export netgen "model.vol" order 3 overwrite                 # NGSolve FEM (.vol)
 export gmsh   "model.msh" order 2 overwrite                 # GMSH v4.1 raw data + .geo launch
-export jmag_nastran "model.bdf" order 2 overwrite                # Nastran BDF
+export nastran_bdf "model.bdf" order 2 overwrite             # Nastran BDF
 export vtk    "model.vtk" order 2 overwrite                 # VTK Legacy
 ```
+
+`export jmag_nastran` remains as a deprecated compatibility alias for old
+journals.  Nastran output is a mesh-interchange deck: blocks become PSOLID or
+PSHELL properties, sidesets become collision-free PSHELL properties, and
+nodesets become SET1 cards.  The exporter does not invent MAT cards; assign
+physical material data in the receiving solver.
 
 For Radia post-processing, `.geo` is the standard launch artifact. The Gmsh
 export writes:

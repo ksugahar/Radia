@@ -4,8 +4,11 @@
 #include "CubitMessage.hpp"
 #include "utf8_path.hpp"
 
+#include <algorithm>
 #include <ctime>
 #include <iomanip>
+#include <map>
+#include <set>
 #include <sstream>
 
 // ========================================================================
@@ -53,23 +56,52 @@ static std::vector<int> reorder_for_bdf(const std::vector<int> &conn,
   return out;
 }
 
+static int bdf_element_dimension(const MeshElement &elem)
+{
+  if (elem.nv == 4 && (elem.type == TETRA4 || elem.type == TETRA)) return 3;
+  if (elem.nv == 8 && (elem.type == HEX8 || elem.type == HEX)) return 3;
+  if (elem.nv == 6 && (elem.type == WEDGE6 || elem.type == WEDGE)) return 3;
+  if (elem.nv == 5 && (elem.type == PYRAMID5 || elem.type == PYRAMID)) return 3;
+  if (elem.nv == 3 && (elem.type == TRI3 || elem.type == CUBIT_TRI
+                    || elem.type == TRISHELL || elem.type == TRISHELL3)) return 2;
+  if (elem.nv == 4 && (elem.type == QUAD4 || elem.type == QUAD
+                    || elem.type == SHEL || elem.type == SHELL4)) return 2;
+  if (elem.type == BAR || elem.type == BAR2 || elem.type == BAR3) return 1;
+  return 0;
+}
+
+static bool include_bdf_element(const MeshElement &elem, bool is_3d)
+{
+  const int dim = bdf_element_dimension(elem);
+  return dim >= 2 && (is_3d || dim == 2);
+}
+
+static std::map<int, int> assign_sideset_property_ids(const MeshData &mesh)
+{
+  std::set<int> used(mesh.block_ids.begin(), mesh.block_ids.end());
+  int next_pid = used.empty() ? 1 : (*used.rbegin() + 1);
+  std::map<int, int> result;
+  for (const auto &sg : mesh.sidesets) {
+    if (sg.faces.empty()) continue;
+    int pid = sg.id;
+    if (used.count(pid)) {
+      while (used.count(next_pid)) ++next_pid;
+      pid = next_pid++;
+    }
+    used.insert(pid);
+    result[sg.id] = pid;
+  }
+  return result;
+}
+
 ExportNastranCommand::ExportNastranCommand() {}
 ExportNastranCommand::~ExportNastranCommand() {}
 
 std::vector<std::string> ExportNastranCommand::get_syntax()
 {
   std::vector<std::string> syntax_list;
-  // Primary, tool-neutral command name.
   syntax_list.push_back(
     "export nastran_bdf <string:label='filename',help='<filename>'> "
-    "[order <value:label='order',help='<1 or 2>'>] "
-    "[dimension <value:label='dimension',help='<2 or 3>'>] "
-    "[nopyramid] "
-    "[overwrite]"
-  );
-  // Deprecated alias kept for backward compatibility with existing .jou scripts.
-  syntax_list.push_back(
-    "export jmag_nastran <string:label='filename',help='<filename>'> "
     "[order <value:label='order',help='<1 or 2>'>] "
     "[dimension <value:label='dimension',help='<2 or 3>'>] "
     "[nopyramid] "
@@ -83,9 +115,6 @@ std::vector<std::string> ExportNastranCommand::get_syntax_help()
   std::vector<std::string> help;
   help.push_back(
     "export nastran_bdf \"filename\" [order {1|2}] [dimension {2|3}] [nopyramid] [overwrite]"
-  );
-  help.push_back(
-    "export jmag_nastran \"filename\" ...   (deprecated alias of nastran_bdf)"
   );
   return help;
 }
@@ -104,6 +133,34 @@ std::vector<std::string> ExportNastranCommand::get_help()
     "  dimension 2   2D shell mesh output\n"
     "  nopyramid     Convert pyramid to degenerate hex (solver-compatible)\n"
     "  overwrite     Overwrite existing file without warning\n"
+  );
+  return help;
+}
+
+std::vector<std::string> ExportJmagNastranCommand::get_syntax()
+{
+  return {
+    "export jmag_nastran <string:label='filename',help='<filename>'> "
+    "[order <value:label='order',help='<1 or 2>'>] "
+    "[dimension <value:label='dimension',help='<2 or 3>'>] "
+    "[nopyramid] "
+    "[overwrite]"
+  };
+}
+
+std::vector<std::string> ExportJmagNastranCommand::get_syntax_help()
+{
+  return {
+    "export jmag_nastran \"filename\" [order {1|2}] "
+    "[dimension {2|3}] [nopyramid] [overwrite]"
+  };
+}
+
+std::vector<std::string> ExportJmagNastranCommand::get_help()
+{
+  auto help = ExportNastranCommand::get_help();
+  help.push_back(
+    "Deprecated compatibility alias. Prefer export nastran_bdf."
   );
   return help;
 }
@@ -144,28 +201,51 @@ bool ExportNastranCommand::write_nastran(const std::string &filename,
   if (!mesh.extract(order))
     return false;
 
+  const bool is_3d = (dim == "3d");
+  int selected_elements = 0;
+  std::map<int, int> block_dimensions;
+  for (const auto &elem : mesh.elements) {
+    if (!include_bdf_element(elem, is_3d)) continue;
+    ++selected_elements;
+    const int elem_dim = bdf_element_dimension(elem);
+    auto inserted = block_dimensions.emplace(elem.group_id, elem_dim);
+    if (!inserted.second && inserted.first->second != elem_dim) {
+      PRINT_ERROR("Nastran block %d mixes element dimensions %d and %d. "
+                  "Split it into separate Cubit blocks before export.\n",
+                  elem.group_id, inserted.first->second, elem_dim);
+      return false;
+    }
+  }
+  for (const auto &sg : mesh.sidesets)
+    selected_elements += (int)sg.faces.size();
+  if (selected_elements == 0) {
+    PRINT_ERROR("Nastran dimension %d selected no compatible elements.\n",
+                is_3d ? 3 : 2);
+    return false;
+  }
+
+  const auto sideset_pids = assign_sideset_property_ids(mesh);
+
   std::ofstream fid(u8_string_to_path(filename));
   if (!fid.is_open()) {
     PRINT_ERROR("Cannot open file: %s\n", filename.c_str());
     return false;
   }
 
-  bool is_3d = (dim == "3d");
-
   write_header(fid, filename);
   write_nodes(fid, mesh, is_3d);
   int eid = write_elements(fid, mesh, is_3d, pyram, 1);
-  eid = write_sidesets(fid, mesh, is_3d, eid);
+  eid = write_sidesets(fid, mesh, is_3d, eid, sideset_pids);
   write_nodesets(fid, mesh);
-  write_properties(fid, mesh);
+  write_properties(fid, mesh, is_3d, sideset_pids);
 
   fid << "ENDDATA\n";
   fid.close();
 
-  PRINT_INFO("Exported Nastran BDF (order %d%s): %s (%d nodes, %d elements)\n",
+  PRINT_INFO("Exported Nastran BDF (order %d%s): %s (%d nodes, %d selected elements)\n",
              mesh.order, mesh.has_netgen ? ", NetgenCurver" : "",
              filename.c_str(), mesh.total_node_count(),
-             mesh.total_element_count());
+             selected_elements);
   return true;
 }
 
@@ -210,6 +290,7 @@ void ExportNastranCommand::write_header(std::ofstream &fid, const std::string &f
 void ExportNastranCommand::write_nodes(std::ofstream &fid, const MeshData &mesh,
                                         bool is_3d)
 {
+  (void)is_3d;
   fid << "$ Node cards";
   if (mesh.order >= 2)
     fid << " (order " << mesh.order << (mesh.has_netgen ? ", NetgenCurver" : "") << ")";
@@ -217,15 +298,9 @@ void ExportNastranCommand::write_nodes(std::ofstream &fid, const MeshData &mesh,
 
   for (auto &nd : mesh.nodes) {
     char line1[128], line2[128];
-    if (is_3d) {
-      std::snprintf(line1, sizeof(line1), "GRID*   %16d%16d%16.9e%16.9e",
-                    nd.id, 0, nd.x, nd.y);
-      std::snprintf(line2, sizeof(line2), "*       %16.9e", nd.z);
-    } else {
-      std::snprintf(line1, sizeof(line1), "GRID*   %16d%16d%16.9e%16.9e",
-                    nd.id, 0, nd.x, nd.y);
-      std::snprintf(line2, sizeof(line2), "*       %16d", 0);
-    }
+    std::snprintf(line1, sizeof(line1), "GRID*   %16d%16d%16.9e%16.9e",
+                  nd.id, 0, nd.x, nd.y);
+    std::snprintf(line2, sizeof(line2), "*       %16.9e", nd.z);
     fid << line1 << "\n" << line2 << "\n";
   }
 }
@@ -383,8 +458,10 @@ int ExportNastranCommand::write_elements(std::ofstream &fid,
   fid << "$\n$ Element cards\n$\n";
   int eid = start_eid;
 
-  for (auto &elem : mesh.elements)
+  for (auto &elem : mesh.elements) {
+    if (!include_bdf_element(elem, is_3d)) continue;
     eid = write_element_card(fid, elem, eid, elem.group_id, pyram, mesh.order);
+  }
 
   return eid;
 }
@@ -394,8 +471,10 @@ int ExportNastranCommand::write_elements(std::ofstream &fid,
 // ========================================================================
 int ExportNastranCommand::write_sidesets(std::ofstream &fid,
                                           const MeshData &mesh,
-                                          bool is_3d, int start_eid)
+                                          bool is_3d, int start_eid,
+                                          const std::map<int, int> &sideset_pids)
 {
+  (void)is_3d;
   int eid = start_eid;
   bool has_any = false;
 
@@ -407,16 +486,19 @@ int ExportNastranCommand::write_sidesets(std::ofstream &fid,
     }
     fid << "$ Sideset " << sg.id;
     if (!sg.name.empty()) fid << " (" << sg.name << ")";
+    auto pid_it = sideset_pids.find(sg.id);
+    const int pid = pid_it == sideset_pids.end() ? sg.id : pid_it->second;
+    fid << ", property " << pid;
     fid << "\n";
 
     for (auto &face : sg.faces)
-      eid = write_element_card(fid, face, eid, sg.id, true, mesh.order);
+      eid = write_element_card(fid, face, eid, pid, true, mesh.order);
   }
   return eid;
 }
 
 // ========================================================================
-// Nodesets as comments
+// Nodesets as comments plus machine-readable SET1 cards
 // ========================================================================
 void ExportNastranCommand::write_nodesets(std::ofstream &fid, const MeshData &mesh)
 {
@@ -430,26 +512,57 @@ void ExportNastranCommand::write_nodesets(std::ofstream &fid, const MeshData &me
       fid << " " << ng.node_ids[i];
     }
     fid << "\n";
+
+    // Small fixed-field form: one set ID plus seven node IDs on the first
+    // line, then eight node IDs on each continuation line.  A previous
+    // free-field "+,..." continuation inserted blank fields in strict
+    // readers such as pyNastran.
+    fid << std::left << std::setw(8) << "SET1" << std::right
+        << std::setw(8) << ng.id;
+    int fields_used = 1;
+    for (int node_id : ng.node_ids) {
+      if (fields_used == 8) {
+        fid << "\n" << std::setw(8) << "";
+        fields_used = 0;
+      }
+      fid << std::setw(8) << node_id;
+      ++fields_used;
+    }
+    fid << "\n";
   }
 }
 
 // ========================================================================
 // Property cards — PSOLID for blocks, PSHELL for sidesets
 // ========================================================================
-void ExportNastranCommand::write_properties(std::ofstream &fid, const MeshData &mesh)
+void ExportNastranCommand::write_properties(
+    std::ofstream &fid, const MeshData &mesh, bool is_3d,
+    const std::map<int, int> &sideset_pids)
 {
   fid << "$\n$ Property cards\n$\n";
 
-  for (int bid : mesh.block_ids) {
+  std::map<int, int> block_dimensions;
+  for (const auto &elem : mesh.elements) {
+    if (!include_bdf_element(elem, is_3d)) continue;
+    block_dimensions[elem.group_id] = bdf_element_dimension(elem);
+  }
+
+  for (const auto &entry : block_dimensions) {
+    const int bid = entry.first;
     char line[128];
-    std::snprintf(line, sizeof(line), "PSOLID  %8d%8d", bid, bid);
+    if (entry.second == 3)
+      std::snprintf(line, sizeof(line), "PSOLID  %8d%8d", bid, bid);
+    else
+      std::snprintf(line, sizeof(line), "PSHELL  %8d%8d", bid, bid);
     fid << line << "\n";
   }
 
   for (auto &sg : mesh.sidesets) {
     if (sg.faces.empty()) continue;
+    auto pid_it = sideset_pids.find(sg.id);
+    const int pid = pid_it == sideset_pids.end() ? sg.id : pid_it->second;
     char line[128];
-    std::snprintf(line, sizeof(line), "PSHELL  %8d%8d", sg.id, sg.id);
+    std::snprintf(line, sizeof(line), "PSHELL  %8d%8d", pid, sg.id);
     fid << line << "\n";
   }
 }
