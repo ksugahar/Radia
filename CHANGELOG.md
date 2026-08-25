@@ -5,6 +5,12 @@ All notable changes to the `radia` package.  Format: each release lists
 
 ## Unreleased
 
+- Hardened the standalone `cubit-mesh-export` Nastran interchange path for
+  JMAG/COMSOL handoff: the Radia menu now calls the solver-neutral
+  `export nastran_bdf` command, while old `export jmag_nastran` journals remain
+  compatible. Corrected 2D coordinates and properties, group cards and PID
+  collisions, and added real-Cubit plus independent pyNastran validation.
+
 ## 4.95.64 - Active HDiv H-matrix and Stream Function optimization
 
 Released 2026-08-27.
@@ -178,7 +184,6 @@ Released 2026-08-25.
   callbacks, CMA-ES independent samplers, Grid/PartialFixed configuration, and
   all six NSGA-II crossovers. Sequential generated studies are marked as
   upstream differentials; parallel runs remain MATLAB integration tests.
-
 ## 4.95.61 - NGSolve 6.2.2606 ABI migration
 
 Released 2026-08-25.

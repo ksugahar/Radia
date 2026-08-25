@@ -246,7 +246,7 @@ class TestNastranCommand(_DialogTestBase):
         cmd = d.cubit_command()
         self.assertRegex(
             cmd,
-            r'^export jmag_nastran "[^"]+\.bdf" order \d+ '
+            r'^export nastran_bdf "[^"]+\.bdf" order \d+ '
             r'dimension 3 overwrite$')
         # nopyramid default = off
         self.assertNotIn("nopyramid", cmd)
