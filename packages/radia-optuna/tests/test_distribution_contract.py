@@ -65,6 +65,7 @@ def test_staging_refuses_a_partial_native_distribution():
     assert "optuna_mex.mexw64" in setup_source
     assert "optuna_upstream_compatibility.json" in setup_source
     assert "optuna49_api_coverage.json" in setup_source
+    assert "THIRD_PARTY_NOTICES.md" in setup_source
 
 
 def test_wheel_verifier_rejects_solver_boundary_leaks():
@@ -73,3 +74,19 @@ def test_wheel_verifier_rejects_solver_boundary_leaks():
         assert forbidden in verifier
     assert "py3-none-win_amd64" in verifier
     assert "optuna\\s*==\\s*4\\.9\\.0" in verifier
+    assert "THIRD_PARTY_NOTICES.md" in verifier
+
+
+def test_upstream_notices_and_trademark_attribution_are_checked():
+    notices = (PACKAGE_ROOT / "THIRD_PARTY_NOTICES.md").read_text(
+        encoding="utf-8"
+    )
+    assert "Copyright (c) 2018 Preferred Networks, Inc." in notices
+    assert "Copyright (c) 2025 Preferred Networks, Inc." in notices
+    assert (
+        "Optuna, the Optuna logo and any related marks are trademarks of "
+        "Preferred Networks, Inc."
+    ) in notices
+    assert "independent, unofficial project" in notices
+    assert "not affiliated with, sponsored by, or endorsed by" in notices
+    assert "does not use the Optuna logo" in notices

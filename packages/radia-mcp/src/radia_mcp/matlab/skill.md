@@ -2,8 +2,8 @@
 MathWorks' official MATLAB MCP Server is the execution substrate. The MATLAB
 Agentic Toolkit owns generic MATLAB workflows and the Simulink Agentic Toolkit
 owns generic model inspection, editing, checking, and testing. This
-package adds the Radia/NGSolve MEX capability contract, a table-backed
-CAE-oriented `radia.optuna` layer with `SimulinkRunner`, and 43 generic ML/RL
+package adds the Radia/NGSolve MEX capability contract, support for the
+table-backed `radia-optuna` MATLAB layer with `SimulinkRunner`, and 43 generic ML/RL
 gates backed by 86 self-contained MATLAB functions. The Simulink surface also
 contains the validated 50 Hz TEAM 28 six-stage CLN force LUT and a numeric
 HCurl Eddy Bubble/CLN reduced-state bridge. The bridge consumes trusted R/L/P
@@ -12,15 +12,31 @@ and builds a passive discrete state-space model; NGSolve remains the owner of
 mesh assembly, high-order geometry, and DoF orientation. Acoustic FEM/BEM
 remains separate.
 
-For Simulink optimization, use the MATLAB-native `radia.optuna` route rather
-than calling MATLAB Engine once per Python Optuna trial. `Study` and `Trial`
-remain readable MATLAB objects and own MAT persistence. The optional MEX
-kernels accelerate Pareto rank/crowding and numerical/categorical Parzen
-log-density evaluation; inspect them with `radia.optuna.nativeStatus`. The
-Optimization block exposes start/cancel, attempted and failed trial counts,
-and a numeric failure class while preserving failed CAE trials. Generic Python
-Optuna and its official MCP server remain external tools, not dependencies of
-the Radia Simulink loop.
+Call `matlab_optuna_mcp_route` first. Every shared operation present in the
+official `optuna/optuna-mcp` live `tools/list` belongs to that upstream server;
+radia-mcp must not proxy or reimplement it. Radia owns the MATLAB differences:
+table/MAT persistence, Simulink monitoring and failure telemetry, MATLAB
+parallel execution, `optuna_mex`, and CAE artifact adapters. For Simulink
+optimization, use the MATLAB-native `radia.optuna` route rather than calling
+MATLAB Engine once per Python Optuna trial. `Study` and `Trial` remain readable
+MATLAB objects and own MAT persistence. The required 20-command `optuna_mex`
+gateway is inspected with `radia.optuna.nativeStatus`; a missing-MEX fallback is
+not permitted. The Optimization block exposes start/cancel, attempted and
+failed trial counts, and a numeric failure class while preserving failed CAE
+trials. Generic Python Optuna and its official MCP server remain external
+tools, not dependencies of the Radia Simulink loop. Seeded numerical comparison
+uses direct pinned `optuna==4.9.0`, because the verified upstream MCP sampler
+tool does not expose a seed.
+
+Respect upstream stewardship when using this route. `radia-optuna` is
+independent and unofficial, uses no Optuna logo, and must not imply affiliation,
+sponsorship, or endorsement. Preserve the applicable Optuna/`optuna-mcp` MIT
+notice for copied or redistributed upstream material. Oracle regeneration runs
+the official MCP locally over stdio with a fresh temporary SQLite database;
+routine tests consume the checked fixture, never open Dashboard, never touch
+shared or production storage, and never automatically file an upstream issue or
+pull request. Public attribution is: "Optuna, the Optuna logo and any related
+marks are trademarks of Preferred Networks, Inc."
 
 For a reusable file exchange, call `radia.vim.ExportHCurlEddyCLNJSON` from
 the NGSolve/Python side and load it with
@@ -60,9 +76,10 @@ dependency for assembling the family, not a runtime dependency for MATLAB or
 Simulink.
 
 Use `matlab_radia_mex_contract` to inspect the current C++ `radia_mex` command
-list and the explicit non-parity boundaries. Use
-`matlab_optuna_simulink_contract` for the MATLAB optimization and Simulink
-workflow. The MEX boundary shares numerical contracts, not Python object
+list and the explicit non-parity boundaries. Use `matlab_optuna_mcp_route` for
+upstream-versus-Radia ownership and `matlab_optuna_simulink_contract` for the
+MATLAB optimization and Simulink difference workflow. The MEX boundary shares
+numerical contracts, not Python object
 identity: NGSolve continues to own meshes, spaces, Piola maps, and FE
 orientation.
 

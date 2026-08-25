@@ -123,6 +123,21 @@ def test_optuna_import_scan_accepts_utf8_bom_python_files(tmp_path):
     assert _run(tmp_path) == 0
 
 
+def test_optuna_matlab_difference_support_is_allowed(tmp_path):
+    _make_repo(
+        tmp_path,
+        {"mcp-server-radia-matlab": "radia_mcp.matlab.server:main"},
+        token_files={
+            "matlab/optuna_boundary.py": (
+                "def matlab_optuna_mcp_route():\n"
+                "    return {'owner': 'optuna/optuna-mcp', "
+                "'difference': 'MATLAB table/MAT and Simulink'}\n"
+            ),
+        },
+    )
+    assert _run(tmp_path) == 0
+
+
 def test_tracked_only_provenance_scan_for_repo_root(tmp_path):
     examples = tmp_path / "examples"
     examples.mkdir()

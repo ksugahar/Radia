@@ -1,6 +1,7 @@
 import hashlib,json,os,re,shutil
 from collections import Counter
 from pathlib import Path
+from .optuna_boundary import matlab_optuna_mcp_route
 HERE=Path(__file__).parent; EXT=HERE/"extensions/radia-matlab-tools.json"; MATLAB=HERE/"matlab"
 PROFILES={"existing":("existing","desktop"),"auto_nodesktop":("auto","nodesktop"),"new_nodesktop":("new","nodesktop")}
 def matlab_extension_path():
@@ -563,7 +564,7 @@ def matlab_radia_mex_contract(topic="all"):
             "ObjMltExtPgn, ObjMltExtRtg, and ObjMltExtTri were deleted from Python, MATLAB, and the legacy C ABI; no compatibility shims remain.",
             "Mesh-backed high-order NGSolve spaces remain NGSolve-owned; MATLAB receives assembled data or diagnostics. The native HCurl CLN builder now projects M, curl-curl, and ports in C++ and returns a local diffusion model, but it does not replace topology-aware VIM/BEM/SIBC assembly.",
             "Python convenience modules are tracked separately by matlab/python_api_parity_manifest.json; native MEX coverage alone is not module-level parity.",
-            "MATLAB Optuna compatibility follows the ask/tell and define-by-run workflow; sampler streams and optimizer internals are not bit-for-bit Python Optuna reproductions.",
+            "MATLAB Optuna shared behavior is judged only against pinned optuna==4.9.0 fixtures; MATLAB-only table/MAT, Simulink, parallel, and MEX behavior is extension evidence, not upstream-parity evidence.",
             "The native MEX target does not embed or launch Python; Python callback objects are rejected at the MEX boundary and numeric/handle equivalents are used instead. Full Python-DLL independence requires an NGSolve/Netgen build without Python support.",
             "beam.orbit.track_reference_3d shares the rad_orbit::TrackReferenceOrbit3D kernel with the pybind route but drives Radia-object sources only; the HDiv iron evaluator stays a pybind-owned handle until an evaluator handle exists in the MEX registry.",
         ],
@@ -582,11 +583,14 @@ def matlab_radia_mex_contract(topic="all"):
 
 
 def matlab_optuna_simulink_contract():
-    """Return the MATLAB-native Optuna-like and Simulink contract."""
+    """Return the MATLAB-native Optuna and Simulink difference contract."""
     return {
-        "schema": "radia-mcp.matlab-optuna-simulink/v2",
+        "schema": "radia-mcp.matlab-optuna-simulink/v3",
         "status": "ready",
         "package": "radia.optuna",
+        "distribution": "radia-optuna",
+        "upstream_oracle": "optuna==4.9.0",
+        "mcp_ownership": matlab_optuna_mcp_route(),
         "classes": {
             "Study": "ask/tell, scalar or vector objectives, normalized ObjectiveTable, MAT persistence, bestTrial/bestValue/bestParams/bestSolution or paretoFront",
             "Trial": "suggestFloat/suggestInteger/suggestCategorical, report, shouldPrune, user attributes",
@@ -656,12 +660,11 @@ def matlab_optuna_simulink_contract():
         "tables": ["TrialTable", "ObjectiveTable", "ParamTable", "IntermediateTable", "UserAttrTable", "ConstraintTable", "SamplerStateTable"],
         "native_acceleration": {
             "status_api": "radia.optuna.nativeStatus",
-            "commands": [
-                "optuna.pareto.rank_crowding",
-                "optuna.parzen.log_pdf_numerical",
-                "optuna.parzen.log_pdf_categorical",
-            ],
-            "policy": "Use MEX for dense optimizer kernels when available; preserve MATLAB Study/Trial, sampler random streams, persistence, and a checked MATLAB fallback.",
+            "gateway": "optuna_mex",
+            "command_count": 20,
+            "required": True,
+            "policy": "The standalone optuna_mex gateway is required. Preserve MATLAB Study/Trial, upstream-oracled sampler streams, and persistence; never silently substitute a missing-MEX implementation.",
+            "missing_mex_fallback": False,
             "full_optimizer_in_cpp": False,
             "python_per_trial": False,
         },
@@ -686,7 +689,7 @@ def matlab_optuna_simulink_contract():
             "correlated_continuous": "prefer CmaEsSampler, then verify equal-budget quality because it is a lightweight implementation rather than full reference CMA-ES",
             "multi_objective": "use MOTPESampler or NSGAIISampler and inspect front error plus coverage, not Pareto point count alone",
             "validation": "validation_test/optimization/validate_matlab_optuna_quality.m",
-            "python_parity_claim": "none; lifecycle compatibility does not imply equal sample efficiency or identical optimizer internals",
+            "python_parity_claim": "Only behavior mapped to pinned optuna==4.9.0 fixtures is parity evidence; API coverage must close before a complete-compatibility claim.",
             "simulink_auto": "CmaEsSampler for one objective and NSGAIISampler for multiple objectives; the mask also exposes every sampler explicitly",
         },
         "parallel_trials": {
@@ -804,8 +807,8 @@ def matlab_optuna_simulink_contract():
             "Optionally adapt the environment to rlFunctionEnv.",
             "For IH, train against the native distributed Eddy/Thermal block; do not substitute a LUT or lumped thermal environment.",
         ],
-        "python_relation": "The official Optuna MCP remains the external owner for generic Python Optuna. The normal Simulink route is MATLAB-native and never performs a Python-to-MATLAB-Engine call per trial.",
-        "mcp_route": "matlab_optuna_simulink_contract",
+        "python_relation": "The official optuna/optuna-mcp server owns every shared operation in its live tools/list. radia-mcp owns only MATLAB/Simulink differences and never performs a Python-to-MATLAB-Engine call per trial.",
+        "mcp_route": "matlab_optuna_mcp_route",
     }
 
 
