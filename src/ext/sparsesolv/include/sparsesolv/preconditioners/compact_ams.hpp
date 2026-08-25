@@ -346,7 +346,7 @@ private:
                 std::cout << "\n  Subspace solver: SparseCholesky (diagnostic)" << std::flush;
 
             t0 = std::chrono::high_resolution_clock::now();
-            A_G_->SetInverseType(SPARSECHOLESKY);
+            A_G_->SetInverseType("sparsecholesky");
             B_G_ = A_G_->InverseMatrix(shared_ptr<BitArray>(nullptr));
             t1 = std::chrono::high_resolution_clock::now();
             if (print_level_ > 0)
@@ -354,9 +354,9 @@ private:
                           << "s (direct, n=" << A_G_->Height() << ")" << std::flush;
 
             t0 = std::chrono::high_resolution_clock::now();
-            A_Pix_->SetInverseType(SPARSECHOLESKY);
-            A_Piy_->SetInverseType(SPARSECHOLESKY);
-            A_Piz_->SetInverseType(SPARSECHOLESKY);
+            A_Pix_->SetInverseType("sparsecholesky");
+            A_Piy_->SetInverseType("sparsecholesky");
+            A_Piz_->SetInverseType("sparsecholesky");
             B_Pix_ = A_Pix_->InverseMatrix(shared_ptr<BitArray>(nullptr));
             B_Piy_ = A_Piy_->InverseMatrix(shared_ptr<BitArray>(nullptr));
             B_Piz_ = A_Piz_->InverseMatrix(shared_ptr<BitArray>(nullptr));

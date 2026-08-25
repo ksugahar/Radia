@@ -2,7 +2,7 @@
 
 A conforming mixed tet+hex mesh needs pyramid transition elements carrying an H(div) flux; that needs
 NGSolve to implement HDiv on pyramids (Joachim/Schoberl committed to add it -- the lab WAITS, does not
-reimplement).  As of NGSolve 6.2.2604 HDiv-pyramid is alloc-but-unimplemented (the first Assemble raises
+reimplement).  As of NGSolve 6.2.2606 HDiv-pyramid is alloc-but-unimplemented (the first Assemble raises
 "HDivHighOrderFESpace: Pyramid elements not implemented yet!").
 
 This test is an executable tripwire, not a normal desired-state assertion:

@@ -34,27 +34,46 @@ PointGeomInfo CallbackGeometry::ProjectPoint(int surfind, Point<3> & p) const
 }
 
 void CallbackGeometry::ProjectPointEdge(int surfind, int surfind2, Point<3> & p,
-                                         EdgePointGeomInfo* gi) const
+                                         EdgePointGeomInfo* gi
+#ifdef RADIA_NETGEN_EDGE_DESCRIPTOR_API
+                                         , int edgenr
+#endif
+                                         ) const
 {
+#ifdef RADIA_NETGEN_EDGE_DESCRIPTOR_API
+  (void)edgenr;
+  const int callback_surfind = surfind;
+  const int callback_surfind2 = surfind2;
+#else
+  const int callback_surfind = surfind + 1;
+  const int callback_surfind2 = surfind2 + 1;
+#endif
   if (!project_func) return;
 
   if (edge_project_func && surfind >= 0 && surfind2 >= 0) {
-    // Direct edge/curve projection (surfind is 0-based from BuildCurvedElements)
-    auto [xp, yp, zp] = edge_project_func(surfind + 1, surfind2 + 1, p[0], p[1], p[2]);
+    auto [xp, yp, zp] = edge_project_func(callback_surfind, callback_surfind2,
+                                           p[0], p[1], p[2]);
     p = Point<3>(xp, yp, zp);
   } else {
     // Fallback: project onto first surface only
-    auto [xp, yp, zp, u, v] = project_func(surfind, p[0], p[1], p[2], 0, 0, false);
+    auto [xp, yp, zp, u, v] = project_func(callback_surfind, p[0], p[1], p[2], 0, 0, false);
     p = Point<3>(xp, yp, zp);
   }
   // Get UV on surfind (query only, do NOT move the point again)
   if (gi) {
-    auto [xf, yf, zf, uf, vf] = project_func(surfind, p[0], p[1], p[2], 0, 0, false);
+    auto [xf, yf, zf, uf, vf] = project_func(callback_surfind, p[0], p[1], p[2], 0, 0, false);
+#ifdef RADIA_NETGEN_EDGE_DESCRIPTOR_API
+    gi->dist = 0;
+    gi->gi.trignum = surfind;
+    gi->gi.u = uf;
+    gi->gi.v = vf;
+#else
     gi->edgenr = 0;
     gi->body = 0;
     gi->dist = 0;
     gi->u = uf;
     gi->v = vf;
+#endif
   }
 }
 
@@ -89,8 +108,20 @@ void CallbackGeometry::PointBetweenEdge(const Point<3> & p1, const Point<3> & p2
                                          const EdgePointGeomInfo & ap1,
                                          const EdgePointGeomInfo & ap2,
                                          Point<3> & newp,
-                                         EdgePointGeomInfo & newgi) const
+                                         EdgePointGeomInfo & newgi
+#ifdef RADIA_NETGEN_EDGE_DESCRIPTOR_API
+                                         , int edgenr
+#endif
+                                         ) const
 {
+#ifdef RADIA_NETGEN_EDGE_DESCRIPTOR_API
+  (void)edgenr;
+  const int callback_surfi1 = surfi1;
+  const int callback_surfi2 = surfi2;
+#else
+  const int callback_surfi1 = surfi1 + 1;
+  const int callback_surfi2 = surfi2 + 1;
+#endif
   bool placed = false;
 
   // Preferred path: arc-length parametric midpoint on the shared curve,
@@ -99,7 +130,7 @@ void CallbackGeometry::PointBetweenEdge(const Point<3> & p1, const Point<3> & p2
   // the linear midpoint sits nearer to a different part of the curve than
   // the true arc midpoint.
   if (between_edge_func && surfi1 >= 0 && surfi2 >= 0) {
-    auto [xp, yp, zp] = between_edge_func(surfi1 + 1, surfi2 + 1,
+    auto [xp, yp, zp] = between_edge_func(callback_surfi1, callback_surfi2,
                                              p1[0], p1[1], p1[2],
                                              p2[0], p2[1], p2[2],
                                              secpoint);
@@ -111,24 +142,38 @@ void CallbackGeometry::PointBetweenEdge(const Point<3> & p1, const Point<3> & p2
     // Linear midpoint then project (legacy path)
     newp = p1 + secpoint * (p2 - p1);
     if (edge_project_func && surfi1 >= 0 && surfi2 >= 0) {
-      // Direct edge/curve projection (surfi1/2 are 0-based from BuildCurvedElements)
-      auto [xp, yp, zp] = edge_project_func(surfi1 + 1, surfi2 + 1, newp[0], newp[1], newp[2]);
+      auto [xp, yp, zp] = edge_project_func(callback_surfi1, callback_surfi2,
+                                             newp[0], newp[1], newp[2]);
       newp = Point<3>(xp, yp, zp);
     } else if (project_func && surfi1 >= 0) {
       // Fallback: project onto first surface
-      auto [xp, yp, zp, u, v] = project_func(surfi1, newp[0], newp[1], newp[2],
-                                               0.5*(ap1.u + ap2.u),
-                                               0.5*(ap1.v + ap2.v), true);
+#ifdef RADIA_NETGEN_EDGE_DESCRIPTOR_API
+      const double ap1_u = ap1.gi.u, ap1_v = ap1.gi.v;
+      const double ap2_u = ap2.gi.u, ap2_v = ap2.gi.v;
+#else
+      const double ap1_u = ap1.u, ap1_v = ap1.v;
+      const double ap2_u = ap2.u, ap2_v = ap2.v;
+#endif
+      auto [xp, yp, zp, u, v] = project_func(callback_surfi1, newp[0], newp[1], newp[2],
+                                               0.5*(ap1_u + ap2_u),
+                                               0.5*(ap1_v + ap2_v), true);
       newp = Point<3>(xp, yp, zp);
     }
   }
 
   // Get UV on surfi1
   if (project_func && surfi1 >= 0) {
-    auto [xf, yf, zf, uf, vf] = project_func(surfi1, newp[0], newp[1], newp[2], 0, 0, false);
+    auto [xf, yf, zf, uf, vf] = project_func(callback_surfi1, newp[0], newp[1], newp[2], 0, 0, false);
+#ifdef RADIA_NETGEN_EDGE_DESCRIPTOR_API
+    newgi.gi.trignum = surfi1;
+    newgi.gi.u = uf;
+    newgi.gi.v = vf;
+#else
     newgi.u = uf;
     newgi.v = vf;
+#endif
   }
+  newgi.dist = ap1.dist + secpoint * (ap2.dist - ap1.dist);
 }
 
 void CallbackGeometry::PointBetween(const Point<3> & p1, const Point<3> & p2,
@@ -155,16 +200,28 @@ void CallbackGeometry::PointBetween(const Point<3> & p1, const Point<3> & p2,
 
 Vec<3> CallbackGeometry::GetTangent(const Point<3> & p, int surfi1,
                                      int surfi2,
-                                     const EdgePointGeomInfo & egi) const
+                                     const EdgePointGeomInfo & egi
+#ifdef RADIA_NETGEN_EDGE_DESCRIPTOR_API
+                                     , int edgenr
+#endif
+                                     ) const
 {
+#ifdef RADIA_NETGEN_EDGE_DESCRIPTOR_API
+  (void)edgenr;
+  const int callback_surfi1 = surfi1;
+  const int callback_surfi2 = surfi2;
+#else
+  const int callback_surfi1 = surfi1 + 1;
+  const int callback_surfi2 = surfi2 + 1;
+#endif
   if (tangent_func) {
-    auto [tx, ty, tz] = tangent_func(surfi1, surfi2, p[0], p[1], p[2]);
+    auto [tx, ty, tz] = tangent_func(callback_surfi1, callback_surfi2, p[0], p[1], p[2]);
     return Vec<3>(tx, ty, tz);
   }
   // Fallback: cross product of two surface normals
   if (normal_func && surfi1 >= 0 && surfi2 >= 0) {
-    auto [n1x, n1y, n1z] = normal_func(surfi1, p[0], p[1], p[2]);
-    auto [n2x, n2y, n2z] = normal_func(surfi2, p[0], p[1], p[2]);
+    auto [n1x, n1y, n1z] = normal_func(callback_surfi1, p[0], p[1], p[2]);
+    auto [n2x, n2y, n2z] = normal_func(callback_surfi2, p[0], p[1], p[2]);
     Vec<3> n1(n1x, n1y, n1z), n2(n2x, n2y, n2z);
     Vec<3> t = Cross(n1, n2);
     double len = t.Length();

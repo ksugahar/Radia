@@ -12,7 +12,13 @@ from pathlib import Path
 import uuid
 
 import numpy as np
-from netgen.meshing import Element1D, Element2D, FaceDescriptor, Mesh as NgMesh
+from netgen.meshing import (
+    EdgeDescriptor,
+    Element1D,
+    Element2D,
+    FaceDescriptor,
+    Mesh as NgMesh,
+)
 from netgen.meshing import MeshPoint, Pnt
 from ngsolve import Mesh
 
@@ -55,14 +61,16 @@ def structured_rect_vol_mesh(
     ngmesh.dim = 2
     ngmesh.SetMaterial(1, "domain")
 
-    ngmesh.Add(FaceDescriptor(surfnr=1, domin=0, bc=1))
-    ngmesh.Add(FaceDescriptor(surfnr=2, domin=0, bc=2))
-    ngmesh.Add(FaceDescriptor(surfnr=3, domin=0, bc=3))
-    ngmesh.Add(FaceDescriptor(surfnr=4, domin=0, bc=4))
-    ngmesh.SetBCName(0, "bottom")
-    ngmesh.SetBCName(1, "right")
-    ngmesh.SetBCName(2, "top")
-    ngmesh.SetBCName(3, "left")
+    for boundary, name in enumerate(("bottom", "right", "top", "left"), start=1):
+        ngmesh.Add(FaceDescriptor(surfnr=boundary, domin=0, bc=boundary))
+        ngmesh.SetBCName(boundary - 1, name)
+        edge = EdgeDescriptor()
+        edge.edgenr = boundary
+        edge.surfnr = (boundary, -1)
+        edge.domin = 1
+        edge.domout = 0
+        edge.name = name
+        ngmesh.Add(edge)
 
     pids = np.empty((ny + 1, nx + 1), dtype=object)
     for j in range(ny + 1):

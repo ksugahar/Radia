@@ -145,7 +145,7 @@ public:
         auto& coarsest = levels_.back();
         if (coarsest.ndof <= min_coarse_ * 10) {
             // Use sparse Cholesky for coarsest level
-            coarsest.A->SetInverseType(SPARSECHOLESKY);
+            coarsest.A->SetInverseType("sparsecholesky");
             coarsest.inv = coarsest.A->InverseMatrix(shared_ptr<BitArray>(nullptr));
         }
         // else: just use smoother at coarsest level too

@@ -16,7 +16,8 @@ import scipy.linalg as sla
 
 import netgen.meshing as ng_meshing
 from netgen.meshing import (
-    Mesh as NgMesh, Element1D, Element2D, FaceDescriptor, MeshPoint, Pnt,
+    Mesh as NgMesh, EdgeDescriptor, Element1D, Element2D, FaceDescriptor,
+    MeshPoint, Pnt,
 )
 from ngsolve import (
     Mesh, BilinearForm, CoefficientFunction, TaskManager, ngsglobals,
@@ -47,6 +48,14 @@ def make_disk_mesh(N_r, N_z):
     m.SetBCName(1, "right")
     m.SetBCName(2, "top")
     m.SetBCName(3, "bot")
+    for boundary, name in enumerate(("axis", "right", "top", "bot"), start=1):
+        edge = EdgeDescriptor()
+        edge.edgenr = boundary
+        edge.surfnr = (boundary, -1)
+        edge.domin = 1
+        edge.domout = 0
+        edge.name = name
+        m.Add(edge)
 
     pids = np.empty((N_z + 1, N_r + 1), dtype=object)
     for j, z in enumerate(z_pts):

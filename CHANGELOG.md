@@ -5,6 +5,20 @@ All notable changes to the `radia` package.  Format: each release lists
 
 ## Unreleased
 
+## 4.95.61 - NGSolve 6.2.2606 ABI migration
+
+Released 2026-08-25.
+
+- Pinned NGSolve and Netgen to 6.2.2606 and rebuilt every native Radia and
+  Cubit integration binary against the same C++ ABI.
+- Migrated programmatic two-dimensional Netgen meshes to the required
+  `EdgeDescriptor` table and accepted the 6.2.2606 `edgesegmentsgi3` /
+  `edgedescriptors` serialization without dropping legacy `.vol` support.
+- Added a fast compatibility gate for the supported TET, HEX, and WEDGE
+  HDiv order-2 spaces and retained the functional Pyramid tripwire.
+- Kept HDiv-Pyramid explicitly unsupported: NGSolve 6.2.2606 still raises
+  its upstream not-implemented guard during functional assembly.
+
 ## 4.95.60 - Exact mixed-front HDiv topology updates
 
 Released 2026-08-23.

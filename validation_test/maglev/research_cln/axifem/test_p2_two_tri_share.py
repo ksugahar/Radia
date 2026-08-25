@@ -17,7 +17,8 @@ from math import pi
 
 import netgen.meshing as ng_meshing
 from netgen.meshing import (
-    Mesh as NgMesh, Element1D, Element2D, FaceDescriptor, MeshPoint, Pnt,
+    Mesh as NgMesh, EdgeDescriptor, Element1D, Element2D, FaceDescriptor,
+    MeshPoint, Pnt,
 )
 from ngsolve import (
     Mesh, BilinearForm, CoefficientFunction, TaskManager, ngsglobals,
@@ -49,6 +50,13 @@ def build_cpp_mesh():
     m.SetMaterial(1, "conductor")
     m.Add(FaceDescriptor(surfnr=1, domin=0, bc=1))
     m.SetBCName(0, "outer")
+    edge = EdgeDescriptor()
+    edge.edgenr = 1
+    edge.surfnr = (1, -1)
+    edge.domin = 1
+    edge.domout = 0
+    edge.name = "outer"
+    m.Add(edge)
     pids = [m.Add(MeshPoint(Pnt(V[i, 0], V[i, 1], 0))) for i in range(4)]
     for t in TRI:
         m.Add(Element2D(1, [pids[t[0]], pids[t[1]], pids[t[2]]]))
