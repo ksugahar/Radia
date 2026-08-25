@@ -34,8 +34,8 @@ def main():
     """
     import netgen.meshing as ngm_pkg
     from netgen.meshing import (
-        Mesh as NgMesh, MeshPoint, FaceDescriptor, Element1D, Element2D,
-        Pnt,
+        Mesh as NgMesh, MeshPoint, EdgeDescriptor, FaceDescriptor, Element1D,
+        Element2D, Pnt,
     )
 
     here = os.path.dirname(os.path.abspath(__file__))
@@ -80,6 +80,13 @@ def main():
     ]
     for bc_idx, (name, edges) in enumerate(edge_specs, start=1):
         ngm.SetBCName(bc_idx - 1, name)
+        edge_descriptor = EdgeDescriptor()
+        edge_descriptor.edgenr = bc_idx
+        edge_descriptor.surfnr = (bc_idx, -1)
+        edge_descriptor.domin = 1
+        edge_descriptor.domout = 0
+        edge_descriptor.name = name
+        ngm.Add(edge_descriptor)
         for (i0, j0, i1, j1) in edges:
             seg = Element1D([pids[(i0, j0)], pids[(i1, j1)]], index=bc_idx)
             ngm.Add(seg)

@@ -1108,16 +1108,11 @@ bool NetgenCurver::attach_callback_geometry()
     return {x, y, z};  // no projection if curve not found
   };
 
-  // Arc-length parametric midpoint on the shared curve.
-  // Inputs (x1,y1,z1) and (x2,y2,z2) are the segment's 3D endpoints. We
-  // compute each endpoint's curve parameter via u_from_position, derive the
-  // per-endpoint arc lengths from the curve's start, linearly interpolate
-  // the arc length at secpoint, then place the point at that arc-length
-  // position via position_from_fraction. On any error we fall back to the
-  // linear midpoint between p1 and p2 (caller is expected to then ignore or
-  // re-project). This avoids closest_point_trimmed jumping to the wrong part
-  // of a wavy curve when the linear midpoint is closer to a different
-  // segment of it.
+  // Segment-bounded interpolation on the shared curve.
+  // Periodic curves require special handling: Cubit normalizes u values to a
+  // fundamental period, so an edge crossing the seam can otherwise look like
+  // the almost-complete curve. Work on the nearest unwrapped branch and use a
+  // signed, endpoint-relative arc length for the fallback.
   auto between_edge = [this, surfpair_to_curve](int surfnr1, int surfnr2,
                                                    double x1, double y1, double z1,
                                                    double x2, double y2, double z2,
@@ -1143,14 +1138,21 @@ bool NetgenCurver::attach_callback_geometry()
     CubitVector cv1(x1, y1, z1), cv2(x2, y2, z2);
     double u1 = re->u_from_position(cv1);
     double u2 = re->u_from_position(cv2);
-    double u_start = re->start_param();
+
+    double period = 0.0;
+    const bool periodic =
+        re->is_periodic(period) == CUBIT_TRUE && period > 0.0;
+    auto unwrap_near = [period](double reference, double u) {
+      return u + period * std::round((reference - u) / period);
+    };
+    double u2_local = periodic ? unwrap_near(u1, u2) : u2;
 
     // Primary path: chord-perpendicular projection on the curve. This
     // matches Netgen's uniform-t LSQ curving convention. closest_point_trimmed
     // can jump to the wrong segment of a wavy curve, so we validate the
     // result by checking that the returned point's curve parameter falls
-    // within [min(u1,u2), max(u1,u2)] — i.e., stays inside this segment.
-    // If yes, use it. Otherwise fall back to arc-length midpoint.
+    // inside this segment on the same local parameter branch. If yes, use it.
+    // Otherwise fall back to endpoint-relative arc-length interpolation.
     double lmx = x1 + secpoint * (x2 - x1);
     double lmy = y1 + secpoint * (y2 - y1);
     double lmz = z1 + secpoint * (z2 - z1);
@@ -1158,32 +1160,42 @@ bool NetgenCurver::attach_callback_geometry()
     CubitVector cp;
     re->get_curve_ptr()->closest_point_trimmed(loc, cp);
     double u_cp = re->u_from_position(cp);
-    double umin = std::min(u1, u2);
-    double umax = std::max(u1, u2);
+    const double u_expected = u1 + secpoint * (u2_local - u1);
+    double u_cp_local = periodic ? unwrap_near(u_expected, u_cp) : u_cp;
+    double umin = std::min(u1, u2_local);
+    double umax = std::max(u1, u2_local);
     // Allow a tiny tolerance (1% of range) to cover floating-point noise
     // at the exact endpoint.
     double tol = 0.01 * std::fabs(umax - umin);
-    if (u_cp >= umin - tol && u_cp <= umax + tol) {
+    double chord = std::sqrt((x2-x1)*(x2-x1) + (y2-y1)*(y2-y1) +
+                             (z2-z1)*(z2-z1));
+    double cp1 = std::sqrt((cp.x()-x1)*(cp.x()-x1) +
+                           (cp.y()-y1)*(cp.y()-y1) +
+                           (cp.z()-z1)*(cp.z()-z1));
+    double cp2 = std::sqrt((cp.x()-x2)*(cp.x()-x2) +
+                           (cp.y()-y2)*(cp.y()-y2) +
+                           (cp.z()-z2)*(cp.z()-z2));
+    const double endpoint_tol = 1.0e-8 * chord + 1.0e-15;
+    const bool stuck_at_endpoint =
+        secpoint > 1.0e-8 && secpoint < 1.0 - 1.0e-8 &&
+        (cp1 <= endpoint_tol || cp2 <= endpoint_tol);
+    if (!stuck_at_endpoint &&
+        u_cp_local >= umin - tol && u_cp_local <= umax + tol) {
       // chord-perpendicular projection lies inside the segment — use it
       return {cp.x(), cp.y(), cp.z()};
     }
 
-    // closest_point jumped to a different segment of the curve — fall
-    // back to arc-length parametric midpoint derived from the endpoints.
-    double L1 = re->length_from_u(u_start, u1);
-    double L2 = re->length_from_u(u_start, u2);
-    double L_mid = L1 + secpoint * (L2 - L1);
-    double frac = L_mid / crv_length;
-    if (frac < 0.0) frac = 0.0;
-    if (frac > 1.0) frac = 1.0;
-
+    // closest_point jumped to a different segment of the curve. For a
+    // periodic seam, u2_local deliberately spans the break in the short
+    // direction accepted by RefEdge::length_from_u().
+    double segment_length = re->length_from_u(u1, u2_local);
     CubitVector out;
-    CubitStatus st = re->position_from_fraction(frac, out);
+    CubitStatus st = re->point_from_arc_length(
+        u1, secpoint * segment_length, out);
     if (st != CUBIT_SUCCESS) return linear_mid();
 
     // Sanity: the arc-midpoint should not lie farther from the linear
     // midpoint than the segment's chord length.
-    double chord = std::sqrt((x2-x1)*(x2-x1) + (y2-y1)*(y2-y1) + (z2-z1)*(z2-z1));
     double dd = std::sqrt((out.x()-lmx)*(out.x()-lmx) +
                           (out.y()-lmy)*(out.y()-lmy) +
                           (out.z()-lmz)*(out.z()-lmz));

@@ -1092,7 +1092,7 @@ Do NOT confuse M (A/m) with J (magnetic polarization, Tesla): J = mu_0 * M.
 
 ### No Fallbacks — Fail Fast, Fail Loud
 
-**POLICY**: Do NOT write fallback chains (`try API_A except: try API_B except: try API_C`). Pick the **one** API that works for the project's target environment (Cubit 2025.12, NGSolve 6.2.2604, Python 3.12) and commit to it. If the chosen API stops working, fix the call site or raise — never bury the breakage under another path.
+**POLICY**: Do NOT write fallback chains (`try API_A except: try API_B except: try API_C`). Pick the **one** API that works for the project's target environment (Cubit 2025.12, NGSolve 6.2.2606, Python 3.12) and commit to it. If the chosen API stops working, fix the call site or raise — never bury the breakage under another path.
 
 **Design philosophy**: this is the **fail-fast** principle (Jim Shore, 2004) combined with **"errors should never pass silently"** (PEP 20, Zen of Python) and **"explicit is better than implicit"**. The deeper rationale is *user agency*: a fallback path performs a computation the user did not ask for and cannot inspect. Silent fallback violates the **Principle of Least Astonishment** — the user gets a number, has no way to know which code path produced it, and trusts it. That trust is unrecoverable when the result turns out to be from the wrong path.
 
@@ -1679,7 +1679,7 @@ Prefer RAII containers (`std::vector`) over manual `new`/`delete`.
 |-----------|---------|-------|
 | **Python** | 3.12.10 | System Python for Radia/NGSolve. Cubit toolbar launches notebook/headless workflows via subprocess. |
 | **Coreform Cubit** | 2025.12 | Embedded Python 3.10 + PySide6. Cannot import NGSolve/Radia directly. |
-| **NGSolve** | 6.2.2604 | pinned by `pyproject.toml`; curvedelements Load, hex/prism curving, Periodic BC fix |
+| **NGSolve** | 6.2.2606 | pinned by `pyproject.toml`; BEM correctness, thread-local TaskManager/LocalHeap, curved mesh support |
 
 **Cubit panel subprocess constraint**: Cubit embeds Python 3.10; Radia/NGSolve require 3.12. Same-process import is impossible. All computation runs via `subprocess.run([python3.12, calc_*.py])` with JSON output.
 
@@ -1940,11 +1940,11 @@ src/radia/
 
 ### NGSolve Version Requirement
 
-**CRITICAL**: Use NGSolve **6.2.2604** as pinned by `pyproject.toml`. Required for curvedelements .vol Load, hex/prism curving, and Periodic BC fix.
+**CRITICAL**: Use NGSolve **6.2.2606** as pinned by `pyproject.toml`. Required for the validated BEM fixes, thread-local TaskManager/LocalHeap behavior, curvedelements .vol Load, hex/prism curving, and Periodic BC fix.
 
 Reference: https://forum.ngsolve.org/t/ngsolve-periodic-boundary-condition-regression-bug-report/3805
 
-Official PyPI ngsolve **6.2.2604** includes the Periodic BC fix,
+Official PyPI ngsolve **6.2.2606** includes the Periodic BC fix,
 **curvedelements Save/Load**, **p-version hex/prism curving**, and the
 current `ngsolve.bem` APIs used by Radia. Radia links Intel MKL for its own
 BLAS/LAPACK/PARDISO calls; NGSolve's wheel dependencies are managed by PyPI.

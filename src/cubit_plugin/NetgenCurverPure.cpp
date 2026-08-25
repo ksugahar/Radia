@@ -159,6 +159,13 @@ bool NetgenCurverPure::build_netgen_mesh(
   {
     int edgenr = 1;
     for (auto& ei : edge_elements) {
+#ifdef RADIA_NETGEN_EDGE_DESCRIPTOR_API
+      // Netgen 6.2.2606 moved geometric edge metadata out of Segment and
+      // into a 1-based EdgeDescriptor table.  Surface descriptor indices are
+      // also 1-based in the new API and are passed to CallbackGeometry as-is.
+      const int edge_descriptor_index = ng_mesh_->AddEdgeDescriptor(
+          ng::EdgeDescriptor(edgenr, ei.surfnr1, ei.surfnr2));
+#endif
       for (size_t s = 0; s < ei.segments.size(); s++) {
         auto& seg = ei.segments[s];
         auto it0 = cubit_nid_to_ng_pi_.find(seg[0]);
@@ -175,6 +182,11 @@ bool NetgenCurverPure::build_netgen_mesh(
         ng::Segment nseg;
         nseg[0] = it0->second;
         nseg[1] = it1->second;
+#ifdef RADIA_NETGEN_EDGE_DESCRIPTOR_API
+        nseg.SetIndex(edge_descriptor_index);
+        nseg.EPGeomInfo(0).dist = dist0;
+        nseg.EPGeomInfo(1).dist = dist1;
+#else
         // Use surfnr2 as si to give each curve a unique surface reference.
         // surfnr1 is often shared (e.g., both curves touch the same surface),
         // but surfnr2 differs, which helps Netgen topology distinguish edges.
@@ -188,6 +200,7 @@ bool NetgenCurverPure::build_netgen_mesh(
         nseg.epgeominfo[0].dist = dist0;
         nseg.epgeominfo[1].edgenr = edgenr;
         nseg.epgeominfo[1].dist = dist1;
+#endif
         ng_mesh_->AddSegment(nseg);
       }
       edgenr++;
@@ -195,8 +208,10 @@ bool NetgenCurverPure::build_netgen_mesh(
     // Pre-allocate cd2names array so Python SetCD2Name doesn't segfault.
     // Segment edgenr is 1-based (1..n_edges), cd2names uses same indices.
     // edgenr is now max_edgenr + 1, so allocate edgenr entries (0..edgenr-1).
+#ifndef RADIA_NETGEN_EDGE_DESCRIPTOR_API
     if (edgenr > 1)
       ng_mesh_->SetNCD2Names(edgenr);
+#endif
   }
 
   ng_mesh_->UpdateTopology();

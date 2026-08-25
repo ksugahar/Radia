@@ -16,6 +16,7 @@ ng = pytest.importorskip("ngsolve")
 pytest.importorskip("radia.axifem")
 
 from netgen.meshing import (  # noqa: E402
+    EdgeDescriptor,
     Element1D,
     Element2D,
     FaceDescriptor,
@@ -42,6 +43,14 @@ def _structured_mesh():
     mesh.SetBCName(1, "outer")
     mesh.SetBCName(2, "outer")
     mesh.SetBCName(3, "outer")
+    for boundary, name in enumerate(("axis", "outer", "outer", "outer"), start=1):
+        edge = EdgeDescriptor()
+        edge.edgenr = boundary
+        edge.surfnr = (boundary, -1)
+        edge.domin = 1
+        edge.domout = 0
+        edge.name = name
+        mesh.Add(edge)
 
     radii = (0.0, 1.0, 2.0, 3.0)
     axial = (-1.0, 0.0, 1.0)

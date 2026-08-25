@@ -244,6 +244,7 @@ if(pybind11_FOUND AND HAVE_NETGEN AND NOT USE_COMPACT_NETGEN)
     "${NETGEN_DIR}/include/include"
     "${CMAKE_CURRENT_SOURCE_DIR}"
   )
+  target_compile_definitions(cubit_mesh_curver PRIVATE RADIA_NETGEN_EDGE_DESCRIPTOR_API)
   target_link_libraries(cubit_mesh_curver PRIVATE netgen::nglib netgen::ngcore)
 
   install(TARGETS cubit_mesh_curver
