@@ -7,6 +7,14 @@ crystallized as its own package.
 
 ## [Unreleased]
 
+## [1.4.44] - 2026-08-26
+
+- matlab: kept standalone `optuna_mex` commands outside the regular Radia MEX
+  inventory while preserving complete checked coverage of the Radia gateway.
+- release: documented the narrow `radia-optuna` recovery lane that reuses only
+  an immutable successful push-CI artifact for the exact tagged SHA and
+  rechecks both required CI jobs before publication.
+
 ## [1.4.43] - 2026-08-25
 
 - radia-ngsolve: migrated deterministic two-dimensional Netgen mesh writers
