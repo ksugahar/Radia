@@ -5941,6 +5941,41 @@ void RadHACApKChargeGram::MatVecSymMany(const std::vector<double>& x,
             y[(size_t)r * m_n + p] *= m_chargeSigma[(size_t)p];
 }
 
+void RadHACApKChargeGram::MatVecSymManyConfigured(
+    const std::vector<double>& x, int nrhs, int component,
+    std::vector<double>& y)
+{
+    if (component < 0 || component >= m_operatorChargeComponents)
+        throw std::out_of_range("MatVecSymManyConfigured: component out of range");
+    const size_t stride = static_cast<size_t>(m_ndof)+1;
+    const size_t begin = static_cast<size_t>(component)*stride;
+    const bool masked = m_operatorActiveChargePrefix.size() ==
+            static_cast<size_t>(m_operatorChargeComponents)*stride &&
+        m_operatorActiveChargePrefix[begin+stride-1] < m_ndof;
+    const std::vector<double>* input = &x;
+    std::vector<double> scaled;
+    if (m_sigmaActive) {
+        scaled.resize(x.size());
+        for (int r = 0; r < nrhs; ++r)
+            for (int p = 0; p < m_n; ++p)
+                scaled[static_cast<size_t>(r)*m_n+p] =
+                    x[static_cast<size_t>(r)*m_n+p]*m_chargeSigma[p];
+        input = &scaled;
+    }
+    if (masked) {
+        std::vector<int> prefix(
+            m_operatorActiveChargePrefix.begin()+begin,
+            m_operatorActiveChargePrefix.begin()+begin+stride);
+        RadHACApKBase::MatVecSymManyMasked(*input, nrhs, prefix, y);
+    }
+    else
+        RadHACApKBase::MatVecSymMany(*input, nrhs, y);
+    if (m_sigmaActive)
+        for (int r = 0; r < nrhs; ++r)
+            for (int p = 0; p < m_n; ++p)
+                y[static_cast<size_t>(r)*m_n+p] *= m_chargeSigma[p];
+}
+
 void RadHACApKChargeGram::OnBeforeBuild()
 {
     if (m_curved) PrecomputeCurvedTouchBlocks();
@@ -7365,6 +7400,7 @@ void RadHACApKChargeGram::ConfigureChargeMap(
                     m_operatorConstrained[(size_t)m_operatorBIndices[(size_t)k]] = 1;
         }
     }
+    UpdateConfiguredActiveChargePrefixes();
 }
 
 void RadHACApKChargeGram::ConfigureVectorChargeMap(
@@ -7419,6 +7455,7 @@ void RadHACApKChargeGram::ConfigureVectorChargeMap(
     m_operatorChargeComponents = n_components;
     m_operatorNFace = n_face;
     m_operatorChargeConfigured = true;
+    UpdateConfiguredActiveChargePrefixes();
 }
 
 int RadHACApKChargeGram::ConfiguredConstraintCount() const
@@ -7443,6 +7480,63 @@ void RadHACApKChargeGram::SetConfiguredConstraints(
                 "SetConfiguredConstraints: DOF index out of range");
         m_operatorConstrained[static_cast<size_t>(dof)] = 1;
     }
+    UpdateConfiguredActiveChargePrefixes();
+}
+
+void RadHACApKChargeGram::UpdateConfiguredActiveChargePrefixes()
+{
+    m_operatorActiveChargePrefix.clear();
+    if (!m_operatorChargeConfigured || !m_control || m_ndof < 1 ||
+        m_operatorChargeComponents < 1)
+        return;
+    const auto* control = static_cast<const st_cHACApK_lcontrol_t*>(m_control);
+    if (!control->lod) return;
+    const size_t stride = static_cast<size_t>(m_ndof)+1;
+    m_operatorActiveChargePrefix.assign(
+        static_cast<size_t>(m_operatorChargeComponents)*stride, 0);
+    for (int component = 0; component < m_operatorChargeComponents; ++component) {
+        int* prefix = m_operatorActiveChargePrefix.data()+
+            static_cast<size_t>(component)*stride;
+        for (int permuted = 0; permuted < m_ndof; ++permuted) {
+            const int charge = control->lod[permuted+1]-1;
+            const size_t row = static_cast<size_t>(component)*m_ndof+charge;
+            bool active = false;
+            for (int k = m_operatorBIndptr[row];
+                 k < m_operatorBIndptr[row+1] && !active; ++k) {
+                const int face = m_operatorBIndices[static_cast<size_t>(k)];
+                active = !m_operatorConstrained[static_cast<size_t>(face)] &&
+                    m_operatorBData[static_cast<size_t>(k)] != 0.0;
+            }
+            prefix[permuted+1] = prefix[permuted]+(active ? 1 : 0);
+        }
+    }
+}
+
+std::vector<int> RadHACApKChargeGram::ConfiguredActiveHMatrixStats(
+    int component) const
+{
+    if (component < 0 || component >= m_operatorChargeComponents)
+        throw std::out_of_range(
+            "ConfiguredActiveHMatrixStats: component out of range");
+    const size_t stride = static_cast<size_t>(m_ndof)+1;
+    const size_t begin = static_cast<size_t>(component)*stride;
+    if (m_operatorActiveChargePrefix.size() !=
+            static_cast<size_t>(m_operatorChargeComponents)*stride)
+        return {m_ndof, m_ndof, 0, 0};
+    const int* prefix = m_operatorActiveChargePrefix.data()+begin;
+    const auto* leaves = static_cast<const st_cHACApK_leafmtxp_t*>(m_leafmtxp);
+    int active_leaves = 0, total_leaves = 0;
+    if (leaves)
+        for (int ip = 1; ip <= leaves->nlf; ++ip) {
+            const auto* leaf = leaves->st_lf[ip];
+            if (!leaf || leaf->nstrtl > leaf->nstrtt) continue;
+            ++total_leaves;
+            const int r0 = leaf->nstrtl-1, c0 = leaf->nstrtt-1;
+            if (prefix[r0+leaf->ndl] != prefix[r0] &&
+                prefix[c0+leaf->ndt] != prefix[c0])
+                ++active_leaves;
+        }
+    return {prefix[m_ndof], m_ndof, active_leaves, total_leaves};
 }
 
 void RadHACApKChargeGram::ConfigureMassMatrix(
@@ -7780,7 +7874,7 @@ std::vector<double> RadHACApKChargeGram::ApplyConfiguredLinearMaterialOperatorMa
                 });
         }
         std::vector<double> gcharge;
-        MatVecSymMany(charge, nrhs, gcharge);
+        MatVecSymManyConfigured(charge, nrhs, component, gcharge);
         const size_t bt_offset = static_cast<size_t>(component)*n_face;
         {
             ngcore::RegionTaskManager rtm(radia::GetMaxThreads());
@@ -9038,7 +9132,7 @@ std::vector<double> RadHACApKChargeGram::SolveConfiguredLinearMaterialAutoPrecMa
                 });
         }
         std::vector<double> gcharge;
-        MatVecSymMany(charge, nrhs, gcharge);
+        MatVecSymManyConfigured(charge, nrhs, 0, gcharge);
         output.assign(total, 0.0);
         {
             ngcore::RegionTaskManager rtm(radia::GetMaxThreads());
