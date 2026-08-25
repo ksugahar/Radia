@@ -13,9 +13,8 @@ import platform
 
 import cubit_mesh_export
 import ngsolve
-from ngsolve import BND, CF, Integrate, Mesh, TaskManager
-
 from cubit_mesh_export.check import check_mesh_quality
+from ngsolve import BND, CF, Integrate, Mesh, TaskManager
 
 
 def main() -> int:
