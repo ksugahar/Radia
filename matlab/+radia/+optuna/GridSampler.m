@@ -1,4 +1,4 @@
-classdef GridSampler < handle
+classdef GridSampler < radia.optuna.BaseSampler
     %GRIDSAMPLER Exhaustively evaluate a finite Cartesian product.
 
     properties (SetAccess=private)
@@ -16,7 +16,7 @@ classdef GridSampler < handle
         function obj=GridSampler(searchSpace,options)
             arguments
                 searchSpace (1,1) struct
-                options.Seed (1,1) double = 0
+                options.Seed double = double.empty(1,0)
             end
             names=sort(string(fieldnames(searchSpace)));
             if isempty(names)
@@ -40,8 +40,8 @@ classdef GridSampler < handle
             end
             obj.SearchSpace=normalized;
             obj.ParameterNames=names;
-            obj.Seed=options.Seed;
-            obj.Stream=RandStream("mt19937ar","Seed",obj.Seed);
+            obj.Seed=radia.optuna.internal.resolveSeed(options.Seed);
+            obj.Stream=radia.optuna.internal.NumpyRandomState(obj.Seed);
             obj.AllGrids=obj.cartesianProduct(choices);
             order=randperm(obj.Stream,size(obj.AllGrids,1));
             obj.AllGrids=obj.AllGrids(order,:);
@@ -62,7 +62,7 @@ classdef GridSampler < handle
                         "GridSampler is re-evaluating a configuration because the grid is exhausted.");
                     target=0:(count-1);
                 end
-                gridId=target(1+floor(rand(obj.Stream)*numel(target)));
+                gridId=target(randi(obj.Stream,numel(target)));
             end
             trial.setSystemAttr("search_space",obj.SearchSpace);
             trial.setSystemAttr("grid_id",gridId);

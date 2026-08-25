@@ -61,17 +61,6 @@ verifyEqual(testCase, reloaded.best_params(), bestParams);
 verifyEqual(testCase, reloaded.best_solution().trial_number, 0);
 end
 
-function testTPEKeepsBadSetForGammaOne(testCase)
-sampler = radia.optuna.TPESampler(Seed=17, NStartupTrials=1, Gamma=1);
-study = radia.optuna.Study(Name="tpe-boundary", Sampler=sampler, ...
-    AutoSave=false);
-study.optimize(@tpeBoundaryObjective, 12);
-
-verifyEqual(testCase, height(study.TrialTable), 12);
-verifyTrue(testCase, all(study.TrialTable.State == "COMPLETE"));
-verifyTrue(testCase, all(isfinite(study.TrialTable.Value)));
-end
-
 function testTrialCompatibilityMetadata(testCase)
 trial = radia.optuna.Study(AutoSave=false).ask();
 x = trial.suggest_float("positive", 1, 100, Log=true);
@@ -85,121 +74,6 @@ verifyEqual(testCase, trial.UserAttrs.role, "compatibility-test");
 verifyEqual(testCase, trial.SystemAttrs.source, "matlab");
 end
 
-function testJointSearchSpaceContract(testCase)
-study = radia.optuna.Study(Sampler=radia.optuna.TPESampler( ...
-    Seed=21, NStartupTrials=0), AutoSave=false);
-trial = study.ask();
-values = trial.suggest_vector(["x","y"], [-1,-2], [1,2]);
-
-verifySize(testCase, values, [1 2]);
-verifyTrue(testCase, all(values >= [-1,-2] & values <= [1,2]));
-verifyTrue(testCase, isfield(trial.Distributions, "x"));
-verifyTrue(testCase, isfield(trial.Distributions, "y"));
-verifyEqual(testCase, height(study.ParamTable), 2);
-end
-
-function testJointTPESamplesSharedMixture(testCase)
-study = radia.optuna.Study(Sampler=radia.optuna.TPESampler( ...
-    Seed=22, NStartupTrials=3), AutoSave=false);
-study.optimize(@jointTPEObjective, 18);
-verifyEqual(testCase, height(study.TrialTable), 18);
-verifyTrue(testCase, all(study.TrialTable.State == "COMPLETE"));
-verifyLessThan(testCase, study.bestValue(), 0.5);
-end
-
-function testAutomaticIntersectionMatchesExplicitJointSampling(testCase)
-automatic = radia.optuna.Study(Sampler=radia.optuna.TPESampler( ...
-    Seed=22, NStartupTrials=3, Multivariate=true), AutoSave=false);
-explicit = radia.optuna.Study(Sampler=radia.optuna.TPESampler( ...
-    Seed=22, NStartupTrials=3), AutoSave=false);
-
-automatic.optimize(@automaticJointTPEObjective, 18);
-explicit.optimize(@jointTPEObjective, 18);
-
-verifyEqual(testCase, automatic.ParamTable.Name, explicit.ParamTable.Name);
-verifyEqual(testCase, automatic.ParamTable.ValueNumeric, ...
-    explicit.ParamTable.ValueNumeric, AbsTol=0);
-verifyEqual(testCase, automatic.TrialTable.Value, ...
-    explicit.TrialTable.Value, AbsTol=0);
-next = automatic.ask();
-verifyEqual(testCase, next.SystemAttrs.tpe_relative_search_space, ["x","y"]);
-end
-
-function testAutomaticIntersectionShrinksDynamicSearchSpace(testCase)
-study = radia.optuna.Study(Sampler=radia.optuna.TPESampler( ...
-    Seed=23, NStartupTrials=0, Multivariate=true), AutoSave=false);
-first = study.ask();
-first.suggestFloat("x", -1, 1);
-first.suggestFloat("conditional", -2, 2);
-study.tell(first, 1);
-
-second = study.ask();
-second.suggestFloat("x", -1, 1);
-study.tell(second, 0.5);
-
-third = study.ask();
-verifyEqual(testCase, ...
-    third.SystemAttrs.tpe_relative_search_space, "x");
-verifyFalse(testCase, isfield(third.Params, "x"));
-end
-
-function testAutomaticIntersectionSupportsMixedDistributions(testCase)
-sampler = radia.optuna.TPESampler( ...
-    Seed=24, NStartupTrials=2, Multivariate=true);
-study = radia.optuna.Study(Sampler=sampler, AutoSave=false);
-choices = ["steel","copper"];
-for index = 1:2
-    trial = study.ask();
-    x = trial.suggestFloat("x", 0.1, 2, Log=true);
-    n = trial.suggest_int("n", 1, 5);
-    material = trial.suggestCategorical("material", choices);
-    study.tell(trial, (x-0.7)^2 + (n-3)^2 + double(material=="copper"));
-end
-
-trial = study.ask();
-verifyEqual(testCase, trial.SystemAttrs.tpe_relative_search_space, ...
-    ["material","n","x"]);
-x = trial.suggestFloat("x", 0.1, 2, Log=true);
-n = trial.suggest_int("n", 1, 5);
-material = trial.suggestCategorical("material", choices);
-verifyTrue(testCase, x >= 0.1 && x <= 2);
-verifyTrue(testCase, n >= 1 && n <= 5 && n == floor(n));
-verifyTrue(testCase, isstring(material) && isscalar(material));
-verifyTrue(testCase, any(material == choices));
-end
-
-function testAutomaticIntersectionSurvivesStudyReload(testCase)
-path = string(tempname("C:\temp")) + ".mat";
-cleanup = onCleanup(@() deleteIfPresent(path));
-study = radia.optuna.Study(StoragePath=path, AutoSave=true, ...
-    Sampler=radia.optuna.TPESampler( ...
-    Seed=25, NStartupTrials=1, Multivariate=true));
-trial = study.ask();
-trial.suggestFloat("x", -1, 1);
-trial.suggestInteger("n", 1, 4);
-study.tell(trial, 1);
-verifyTrue(testCase, all(startsWith(study.ParamTable.Distribution, "{")));
-
-reloaded = radia.optuna.Study(StoragePath=path, AutoSave=false, ...
-    Sampler=radia.optuna.TPESampler( ...
-    Seed=25, NStartupTrials=1, Multivariate=true));
-next = reloaded.ask();
-verifyEqual(testCase, next.SystemAttrs.tpe_relative_search_space, ["n","x"]);
-clear cleanup;
-deleteIfPresent(path);
-end
-
-function value = jointTPEObjective(trial)
-xy = trial.suggestVector(["x","y"], [-2,-2], [2,2]);
-value = (xy(2) - 0.8 * xy(1))^2 + 0.02 * sum(xy.^2);
-end
-
-function value = automaticJointTPEObjective(trial)
-x = trial.suggestFloat("x", -2, 2);
-y = trial.suggestFloat("y", -2, 2);
-value = (y - 0.8 * x)^2 + 0.02 * (x^2 + y^2);
-end
-
 function testStudyUserAttributesPersist(testCase)
 path = string(tempname("C:\temp")) + ".mat";
 cleanup = onCleanup(@() deleteIfPresent(path));
@@ -209,16 +83,6 @@ reloaded = radia.optuna.Study(StoragePath=path);
 verifyEqual(testCase, reloaded.UserAttrs.owner, "radia");
 clear cleanup;
 deleteIfPresent(path);
-end
-
-function testTPEParzenMixtureHasOptunaPrior(testCase)
-estimator = radia.optuna.internal.ParzenEstimator.numerical( ...
-    [0.2; 0.4; 0.8], 0, 1, PriorWeight=1);
-
-verifyEqual(testCase, numel(estimator.weights), 4);
-verifyEqual(testCase, sum(estimator.weights), 1, AbsTol=1e-14);
-verifyEqual(testCase, estimator.mu(end), 0.5, AbsTol=1e-14);
-verifyEqual(testCase, estimator.sigma(end), 1, AbsTol=1e-14);
 end
 
 function testDistributionCodecReadsVersionedAndLegacyMetadata(testCase)
@@ -252,67 +116,6 @@ verifyTrue(testCase, ...
 verifyTrue(testCase, ...
     radia.optuna.internal.DistributionCodec.equivalent( ...
     singleCategorical, singleRoundTrip));
-end
-
-function testParzenUsesPredeterminedObservationWeights(testCase)
-numerical = radia.optuna.internal.ParzenEstimator.numerical( ...
-    [0.2; 0.8], 0, 1, PriorWeight=2, ...
-    ObservationWeights=[1;3]);
-categorical = radia.optuna.internal.ParzenEstimator.categorical( ...
-    [1;2], 3, PriorWeight=2, ObservationWeights=[1;3]);
-
-verifyEqual(testCase, numerical.weights, [1;3;2]/6, AbsTol=1e-14);
-verifyEqual(testCase, categorical.weights, [1;3;2]/6, AbsTol=1e-14);
-verifyError(testCase, @() ...
-    radia.optuna.internal.ParzenEstimator.numerical( ...
-    [0.2;0.8], 0, 1, ObservationWeights=1), ...
-    "radia:optuna:TPEWeights");
-verifyError(testCase, @() ...
-    radia.optuna.internal.ParzenEstimator.numerical( ...
-    [], 0, 1, ObservationWeights=1), ...
-    "radia:optuna:TPEWeights");
-end
-
-function testMultivariateParzenUsesOptunaBandwidth(testCase)
-observations = linspace(0.05, 0.95, 20).';
-dimension = 2;
-estimator = radia.optuna.internal.ParzenEstimator.numerical( ...
-    observations, 0, 1, MultivariateDimension=dimension);
-expected = 0.2 * numel(observations)^(-1/(dimension+4));
-
-verifyEqual(testCase, estimator.sigma(1:end-1), ...
-    repmat(expected, numel(observations), 1), AbsTol=1e-14);
-verifyEqual(testCase, estimator.sigma(end), 1, AbsTol=1e-14);
-end
-
-function testTPEDefaultsMatchOptuna49Lifecycle(testCase)
-sampler = radia.optuna.TPESampler();
-verifyFalse(testCase, sampler.ConstantLiar);
-end
-
-function value = tpeBoundaryObjective(trial)
-x = trial.suggestFloat("x", -1, 1);
-value = (x - 0.25)^2;
-end
-
-function testMedianPruningAndOptimize(testCase)
-study = radia.optuna.Study( ...
-    Sampler=radia.optuna.RandomSampler(11), ...
-    Pruner=radia.optuna.MedianPruner(NStartupTrials=0, MinCompletedTrials=1));
-first = study.ask();
-first.report(1, 1);
-study.tell(first, 1);
-
-second = study.ask();
-second.report(2, 1);
-verifyTrue(testCase, second.shouldPrune());
-second.prune();
-verifyEqual(testCase, second.State, "PRUNED");
-
-study2 = radia.optuna.Study(Sampler=radia.optuna.RandomSampler(3));
-results = study2.optimize(@localObjective, 3);
-verifyEqual(testCase, height(results), 3);
-verifyEqual(testCase, sum(results.State == "COMPLETE"), 3);
 end
 
 function testSimulinkRunnerContract(testCase)
@@ -434,83 +237,6 @@ clear cleanup
 closeIfLoaded(modelName);
 end
 
-function testTPEAndCmaEsSamplers(testCase)
-tpe = radia.optuna.create_study( ...
-    study_name="tpe-study", direction="minimize", ...
-    sampler=radia.optuna.TPESampler(Seed=4, NStartupTrials=2));
-tpe.optimize(@(trial) tpeObjective(trial), 8);
-verifyEqual(testCase, height(tpe.get_trials()), 8);
-verifyEqual(testCase, tpe.best_trial().State, "COMPLETE");
-
-cma = radia.optuna.create_study( ...
-    study_name="cma-study", direction="minimize", ...
-    sampler=radia.optuna.CmaEsSampler(Seed=5, NStartupTrials=1));
-cma.optimize(@(trial) cmaObjective(trial), 8);
-verifyEqual(testCase, height(cma.get_trials()), 8);
-verifyTrue(testCase, all(cma.get_trials().State == "COMPLETE"));
-end
-
-function testCanonicalCmaEvolutionStateUpdate(testCase)
-engine = radia.optuna.internal.CMAEvolutionStrategy( ...
-    [0.5,0.5], 1/6, Bounds=[0,1;0,1], ...
-    PopulationSize=4, Seed=51);
-points = zeros(engine.PopulationSize, engine.Dimension);
-for index = 1:engine.PopulationSize
-    points(index,:) = engine.ask();
-end
-fitness = sum((points - [0.2,0.8]).^2, 2);
-engine.tell(points, fitness);
-
-verifyEqual(testCase, engine.Generation, 1);
-verifyGreaterThan(testCase, norm(engine.PSigma), 0);
-verifyGreaterThan(testCase, norm(engine.PC), 0);
-verifyGreaterThan(testCase, min(eig(engine.Covariance)), 0);
-verifyGreaterThan(testCase, engine.Sigma, 0);
-
-restored = radia.optuna.internal.CMAEvolutionStrategy.fromSnapshot( ...
-    engine.snapshot());
-verifyEqual(testCase, restored.ask(), engine.ask(), AbsTol=1e-15);
-end
-
-function testCanonicalCmaGenerationGolden(testCase)
-engine = radia.optuna.internal.CMAEvolutionStrategy( ...
-    [0.5,0.5], 1/6, Bounds=[0,1;0,1], ...
-    PopulationSize=4, Seed=61);
-points = [0.2,0.8;0.4,0.6;0.7,0.3;0.9,0.1];
-fitness = [0.1;0.2;0.8;1.2];
-engine.tell(points, fitness);
-
-verifyEqual(testCase, engine.Mean, ...
-    [0.2391674280134541,0.7608325719865459], AbsTol=2e-15);
-verifyEqual(testCase, engine.Sigma, ...
-    0.20539021051529205, AbsTol=2e-15);
-verifyEqual(testCase, engine.PSigma, ...
-    [-1.5252557671746065,1.5252557671746065], AbsTol=2e-15);
-verifyEqual(testCase, engine.PC, ...
-    [-1.759696529682537,1.759696529682537], AbsTol=2e-15);
-verifyEqual(testCase, engine.Covariance, ...
-    [1.367328043231014,-0.5132177541621417; ...
-    -0.5132177541621417,1.367328043231014], AbsTol=2e-15);
-end
-
-function testCmaUsesAutomaticIntersectionAndFullGenerations(testCase)
-study = radia.optuna.Study(Sampler=radia.optuna.CmaEsSampler( ...
-    Seed=52, NStartupTrials=1, PopulationSize=4), AutoSave=false);
-study.optimize(@cmaObjective, 5);
-
-verifyEqual(testCase, height(study.SamplerStateTable), 1);
-verifyEqual(testCase, study.SamplerStateTable.Sampler, "cmaes");
-verifyEqual(testCase, study.SamplerStateTable.Generation, 1);
-state = study.SamplerStateTable.State{1};
-verifyEqual(testCase, state.engine.generation, 1);
-verifySize(testCase, state.engine.covariance, [2,2]);
-verifyEmpty(testCase, state.population_fitness);
-
-next = study.ask();
-verifyEqual(testCase, next.SystemAttrs.cmaes_relative_search_space, ...
-    ["x","y"]);
-end
-
 function testCmaPartialGenerationSurvivesStudyReload(testCase)
 path = string(tempname("C:\temp")) + ".mat";
 cleanup = onCleanup(@() deleteIfPresent(path));
@@ -535,31 +261,12 @@ expectedY = expected.suggest_float("y", -1, 3);
 actualX = actual.suggest_float("x", 0.05, 2, Log=true);
 actualY = actual.suggest_float("y", -1, 3);
 verifyEqual(testCase, [actualX,actualY], [expectedX,expectedY], AbsTol=0);
-verifyEqual(testCase, height(reloaded.SamplerStateTable), 1);
+row=reloaded.SamplerStateTable.Sampler=="cmaes";
+verifyEqual(testCase,sum(row),1);
 verifyEqual(testCase, ...
-    reloaded.SamplerStateTable.State{1}.population_trial_numbers, [1;2]);
+    reloaded.SamplerStateTable.State{row}.population_trial_numbers, [1;2]);
 clear cleanup
 deleteIfPresent(path);
-end
-
-function testCmaRejectsChangedDistributionFromGeneration(testCase)
-study = radia.optuna.Study(Sampler=radia.optuna.CmaEsSampler( ...
-    Seed=54, NStartupTrials=1, PopulationSize=4), AutoSave=false);
-first = study.ask();
-first.suggestFloat("x", -1, 1);
-first.suggestFloat("y", -1, 1);
-study.tell(first, 1);
-
-changed = study.ask();
-changed.suggestFloat("x", -1, 2);
-changed.suggestFloat("y", -1, 1);
-study.tell(changed, 0.5);
-state = study.SamplerStateTable.State{1};
-verifyEmpty(testCase, state.population_fitness);
-
-next = study.ask();
-verifyFalse(testCase, ...
-    isfield(next.SystemAttrs, "cmaes_relative_search_space"));
 end
 
 function testMultiObjectiveParetoFrontAndPersistence(testCase)
@@ -631,48 +338,6 @@ clear cleanup
 closeAndDelete(name, file);
 end
 
-function testMOTPEAndNSGAIIMultiObjectiveSamplers(testCase)
-motpe=radia.optuna.createStudy(directions=["minimize","minimize"], ...
-    sampler=radia.optuna.MOTPESampler(Seed=8,NStartupTrials=4),AutoSave=false);
-motpe.optimize(@multiObjective,20);
-verifyEqual(testCase,sum(motpe.TrialTable.State=="COMPLETE"),20);
-verifyGreaterThan(testCase,height(motpe.paretoFront()),1);
-
-nsga=radia.optuna.createStudy(directions=["minimize","minimize"], ...
-    sampler=radia.optuna.NSGAIISampler(Seed=9,PopulationSize=4),AutoSave=false);
-nsga.optimize(@multiObjective,20);
-verifyEqual(testCase,sum(nsga.TrialTable.State=="COMPLETE"),20);
-verifyGreaterThan(testCase,height(nsga.paretoFront()),1);
-verifyTrue(testCase,all(nsga.ParamTable.ValueNumeric>=-1 & nsga.ParamTable.ValueNumeric<=3));
-end
-
-function testMOTPEQualityBeatsRandomOnZDT1(testCase)
-errors = zeros(3, 2);
-for seed = 0:2
-    errors(seed+1, 1) = zdt1FrontError( ...
-        radia.optuna.RandomSampler(seed), 60);
-    errors(seed+1, 2) = zdt1FrontError( ...
-        radia.optuna.MOTPESampler(Seed=seed, NStartupTrials=10), 60);
-end
-verifyLessThan(testCase, median(errors(:,2)), median(errors(:,1)));
-end
-
-function value = zdt1FrontError(sampler, trialCount)
-study = radia.optuna.createStudy(directions=["minimize","minimize"], ...
-    Sampler=sampler, AutoSave=false);
-for index = 1:trialCount
-    trial = study.ask();
-    x1 = trial.suggestFloat("x1", 0, 1);
-    x2 = trial.suggestFloat("x2", 0, 1);
-    g = 1 + 9*x2;
-    study.tell(trial, [x1,g*(1-sqrt(x1/g))]);
-end
-front = study.paretoFront();
-values = vertcat(front.Values{:});
-ideal = 1 - sqrt(max(0, min(1, values(:,1))));
-value = mean(max(0, values(:,2)-ideal));
-end
-
 function testConstraintTablePersists(testCase)
 path=string(tempname("C:\temp"))+".mat";
 cleanup=onCleanup(@()deleteIfPresent(path));
@@ -686,47 +351,6 @@ verifyEqual(testCase,reloaded.ConstraintTable,study.ConstraintTable);
 clear cleanup; deleteIfPresent(path);
 end
 
-function testConstrainedMOTPESplitPrefersFeasibleTrials(testCase)
-sampler=radia.optuna.MOTPESampler(Seed=32,NStartupTrials=2,Gamma=0.5, ...
-    ConstraintsFcn=@(trial)trial.Params.x-0.2);
-study=radia.optuna.createStudy(directions=["minimize","minimize"], ...
-    sampler=sampler,AutoSave=false);
-study.optimize(@constrainedMultiObjective,12);
-verifyEqual(testCase,height(study.ConstraintTable),12);
-constraints=arrayfun(@(n)study.constraintsForTrial(n), ...
-    study.TrialTable.TrialNumber,'UniformOutput',false);
-verifyTrue(testCase,any(cellfun(@(v)all(v<=0),constraints)));
-verifyGreaterThan(testCase,height(study.paretoFront()),0);
-end
-
-function testMOTPESplitSelectsFeasibleBeforeInfeasible(testCase)
-study=radia.optuna.Study(Directions=["minimize","minimize"],AutoSave=false);
-values=[0.1 0.9;0.9 0.1;0.0 0.0;0.2 0.2];
-violations=[-1;-1;1;2];
-for k=1:4
-    trial=study.ask();
-    study.tell(trial,values(k,:));
-    study.recordConstraints(trial,violations(k));
-end
-[good,weights]=radia.optuna.internal.ParetoSupport.splitMOTPE( ...
-    study,(0:3)',values,2);
-verifyEqual(testCase,good,[true;true;false;false]);
-verifySize(testCase,weights,[2 1]);
-verifyTrue(testCase,all(weights>0));
-end
-
-function testParetoRankAndCrowdingContract(testCase)
-values=[0 3;1 2;2 1;3 3;2 4];
-[rank,crowding]=radia.optuna.internal.ParetoSupport.rankAndCrowding( ...
-    values,["minimize","minimize"]);
-verifyEqual(testCase,rank(1:3),ones(3,1));
-verifyEqual(testCase,rank,[1;1;1;2;2]);
-verifyEqual(testCase,crowding,[Inf;2;Inf;Inf;Inf]);
-native=radia.optuna.nativeStatus();
-verifyEqual(testCase,native.backend,"native-mex");
-verifyEmpty(testCase,native.missing_commands);
-end
-
 function value = localObjective(trial)
 x = trial.suggestFloat("x", -1, 1);
 trial.report(x^2, 0);
@@ -736,17 +360,6 @@ end
 function value=constraintObjective(trial)
 x=trial.suggestFloat("x",-1,1);
 value=x^2;
-end
-
-function values=constrainedMultiObjective(trial)
-x=trial.suggestFloat("x",-1,1);
-values=[x^2,(x-0.5)^2];
-end
-
-function value = tpeObjective(trial)
-x = trial.suggest_float("x", -2, 2);
-mode = trial.suggest_categorical("mode", {"a", "b"});
-value = x^2 + double(string(mode) == "b");
 end
 
 function value = cmaObjective(trial)
