@@ -2,19 +2,37 @@ function result = seriesCoilImpedance(coil, frequency_Hz, options)
 %SERIESCOILIMPEDANCE Evaluate a PEEC coil at one AC frequency.
 %
 % The HACApK matrix stores the uniform-current (DC) partial inductance.
-% This function preserves that low-frequency limit and replaces the
-% equivalent round conductor's DC internal impedance with its exact Bessel
-% impedance. The resulting R_eff(f) and L_eff(f) are suitable for a
-% self-consistent narrow-band resonance solve.
+% This function preserves that low-frequency limit and replaces its internal
+% term with a shape-specific AC model: Dowell for a strict rectangle and the
+% Bessel solution for a physical round wire. The resulting R_eff(f) and
+% L_eff(f) are suitable for a self-consistent narrow-band resonance solve.
 arguments
     coil (1,1) struct
     frequency_Hz (1,1) double {mustBePositive,mustBeFinite}
     options.DCProperties (1,1) struct = struct()
     options.RelativePermeability (1,1) double {mustBePositive,mustBeFinite} = 1
-    options.InternalImpedanceModel (1,1) string = "equivalent-round-bessel"
+    options.InternalImpedanceModel (1,1) string = "auto"
 end
 
-if options.InternalImpedanceModel ~= "equivalent-round-bessel"
+crossSectionKind = "unknown";
+if isfield(coil,"cross_section_kind")
+    crossSectionKind = lower(string(coil.cross_section_kind));
+end
+resolvedModel = lower(options.InternalImpedanceModel);
+if resolvedModel == "auto"
+    if crossSectionKind == "circle"
+        resolvedModel = "round-bessel";
+    elseif crossSectionKind == "equivalent-circle"
+        resolvedModel = "equivalent-round-bessel";
+    else
+        % The MATLAB PEEC schema's widths/heights describe rectangular bars.
+        % Older structs without the shape field therefore remain compatible.
+        resolvedModel = "rectangular-dowell";
+    end
+end
+supportedModels = ["rectangular-dowell","round-bessel", ...
+    "equivalent-round-bessel"];
+if ~any(resolvedModel == supportedModels)
     error("radia:peec:InternalImpedanceModel", ...
         "Unsupported internal impedance model: %s", ...
         options.InternalImpedanceModel);
@@ -50,14 +68,26 @@ omega = 2*pi*frequency_Hz;
 areas = widths.*heights;
 equivalentRadii = sqrt(areas/pi);
 dcPerLength = 1./(conductivities.*areas);
-dcInternalInductancePerLength = ...
-    mu0*options.RelativePermeability/(8*pi);
 
 acPerLength = zeros(size(lengths));
+dcInternalInductancePerLength = zeros(size(lengths));
 for index = 1:numel(lengths)
-    acPerLength(index) = cylinderImpedancePerLength( ...
-        equivalentRadii(index),conductivities(index),omega, ...
-        options.RelativePermeability);
+    if resolvedModel == "rectangular-dowell"
+        broadWidth = max(widths(index),heights(index));
+        diffusionThickness = min(widths(index),heights(index));
+        acPerLength(index) = rectangularDowellImpedancePerLength( ...
+            broadWidth,diffusionThickness,conductivities(index),omega, ...
+            options.RelativePermeability);
+        dcInternalInductancePerLength(index) = ...
+            mu0*options.RelativePermeability*diffusionThickness/ ...
+            (12*broadWidth);
+    else
+        acPerLength(index) = cylinderImpedancePerLength( ...
+            equivalentRadii(index),conductivities(index),omega, ...
+            options.RelativePermeability);
+        dcInternalInductancePerLength(index) = ...
+            mu0*options.RelativePermeability/(8*pi);
+    end
 end
 uniformInternal = dcPerLength + ...
     1i*omega*dcInternalInductancePerLength;
@@ -85,9 +115,27 @@ result = struct( ...
     "internal_impedance_correction_Ohm",internalCorrection, ...
     "equivalent_radius_m",mean(equivalentRadii), ...
     "skin_depth_m",mean(skinDepths), ...
-    "internal_impedance_model",options.InternalImpedanceModel, ...
+    "internal_impedance_model",resolvedModel, ...
+    "cross_section_kind",crossSectionKind, ...
     "proximity_effect_included",false, ...
     "dc_properties",dc);
+end
+
+function impedance = rectangularDowellImpedancePerLength( ...
+    width,thickness,sigma,omega,muR)
+mu0 = 4*pi*1e-7;
+dcResistance = 1/(sigma*width*thickness);
+skinDepth = sqrt(2/(omega*mu0*muR*sigma));
+q = (1+1i)*thickness/(2*skinDepth);
+if abs(q) < 1e-3
+    q2 = q*q;
+    factor = 1 + q2/3 - q2*q2/45 + 2*q2*q2*q2/945;
+elseif real(q) > 30
+    factor = q;
+else
+    factor = q/tanh(q);
+end
+impedance = dcResistance*factor;
 end
 
 function impedance = cylinderImpedancePerLength(radius,sigma,omega,muR)

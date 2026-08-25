@@ -60,8 +60,8 @@ def _port_L_nH(topo):
 _L_ANALYTIC_NH = 89.8
 
 
-def test_pre_unit_boundary_cache_format_is_rejected(tmp_path):
-    """Format-1 paths may contain raw mm coordinates and must never load."""
+def test_pre_cross_section_contract_cache_format_is_rejected(tmp_path):
+    """Old paths may lack SI units or shape metadata and must never load."""
     from radia.coil_from_cad import (
         _PEEC_CACHE_FORMAT_VERSION,
         _peec_cache_load,
@@ -83,7 +83,7 @@ def test_pre_unit_boundary_cache_format_is_rejected(tmp_path):
         "cell_wh": [[(0.001, 0.001)]],
     }, "same-step", {"cad_units_per_meter": 1000.0})
     data = json.loads(current_cache.read_text(encoding="utf-8"))
-    assert data["_format_version"] == _PEEC_CACHE_FORMAT_VERSION == 2
+    assert data["_format_version"] == _PEEC_CACHE_FORMAT_VERSION == 3
 
 
 def test_peec_cache_key_includes_format_and_slice_count(tmp_path):
@@ -94,8 +94,8 @@ def test_peec_cache_key_includes_format_and_slice_count(tmp_path):
     path_100 = _peec_cache_path(*common, 100, 1000.0, True)
     path_200 = _peec_cache_path(*common, 200, 1000.0, True)
     assert path_100 != path_200
-    assert ".peec_v2_peri16_n100_" in path_100
-    assert ".peec_v2_peri16_n200_" in path_200
+    assert ".peec_v3_peri16_n100_" in path_100
+    assert ".peec_v3_peri16_n200_" in path_200
 
 
 @pytest.mark.parametrize("scale", [0.0, -1.0, np.inf, np.nan, "bad"])

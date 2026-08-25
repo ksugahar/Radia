@@ -60,6 +60,9 @@ Schelkunoff S. A., "The Electromagnetic Theory of Coaxial Transmission
   pp. 532-579.
 
 Montgomery D. B., "Solenoid Magnet Design", Wiley (1969).
+
+Dowell P. L., "Effects of eddy currents in transformer windings",
+  Proc. IEE 113(8), pp. 1387-1394 (1966).
 """
 
 from __future__ import annotations
@@ -100,6 +103,61 @@ def planar_surface_impedance(
     if math.isinf(d):
         return 0.0 + 0.0j
     return (1.0 + 1.0j) / (sigma * d)
+
+
+def dowell_rectangular_ac_impedance(
+    width: float,
+    thickness: float,
+    sigma: float,
+    omega: float,
+    mu_r: float = 1.0,
+) -> complex:
+    """Single-layer Dowell impedance of a rectangular conductor [Ohm/m].
+
+    The conductor carries current along its length.  ``width`` and
+    ``thickness`` are normalized internally so the smaller dimension is
+    the diffusion thickness.  The returned impedance is
+
+    ``Z = R_dc q coth(q)``, ``q = (1+j) thickness / (2 delta)``.
+
+    This is the one-dimensional broad-face solution for a rectangular
+    strip.  It retains the DC limit and internal reactance and approaches
+    two independent planar surfaces at high frequency.  It does not invent
+    a corner radius or an equivalent circular section; edge crowding and
+    proximity redistribution remain the responsibility of the PEEC
+    perimeter solve.
+    """
+    if width <= 0 or thickness <= 0 or sigma <= 0:
+        raise ValueError(
+            "width, thickness, sigma must be > 0; got "
+            f"width={width}, thickness={thickness}, sigma={sigma}"
+        )
+    if omega < 0 or mu_r < 1:
+        raise ValueError(
+            f"omega >= 0, mu_r >= 1 required; got omega={omega}, mu_r={mu_r}"
+        )
+
+    broad_width = max(float(width), float(thickness))
+    diffusion_thickness = min(float(width), float(thickness))
+    r_dc = 1.0 / (sigma * broad_width * diffusion_thickness)
+    if omega == 0.0:
+        return complex(r_dc, 0.0)
+
+    delta = skin_depth(sigma, omega, mu_r)
+    q = (1.0 + 1.0j) * diffusion_thickness / (2.0 * delta)
+    abs_q = abs(q)
+    if abs_q < 1.0e-3:
+        # q*coth(q) = 1 + q^2/3 - q^4/45 + 2q^6/945 + O(q^8).
+        q2 = q * q
+        factor = 1.0 + q2 / 3.0 - q2 * q2 / 45.0 \
+            + 2.0 * q2 * q2 * q2 / 945.0
+    elif q.real > 30.0:
+        # coth(q) is one to machine precision and direct sinh/cosh can
+        # overflow in the strong-skin regime.
+        factor = q
+    else:
+        factor = q / np.tanh(q)
+    return complex(r_dc * factor)
 
 
 def cylinder_ac_impedance(

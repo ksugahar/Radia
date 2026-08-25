@@ -2,9 +2,10 @@
 
 Approach
 ========
-The v4.55.4 PEEC pipeline uses isolated-wire Bessel for ``Zs_fil``
-which captures self-skin but misses proximity (eddy currents driven
-by neighbour-turn H field).
+The PEEC pipeline uses a shape-specific isolated-conductor model for
+``Zs_fil`` (round-wire Bessel or rectangular Dowell).  That captures
+self-skin but misses proximity (eddy currents driven by neighbour-turn
+H field).
 
 This module wraps ``solve_loop_bundle`` with an outer iteration:
 
@@ -125,6 +126,10 @@ def solve_proximity_iterative(
     tol: float = 1.0e-3,
     relax: float = 0.3,
     verbose: bool = False,
+    self_impedance_per_m: complex | None = None,
+    dc_resistance_per_m: float | None = None,
+    perimeter_m: float | None = None,
+    internal_impedance_model: str | None = None,
 ) -> dict:
     """Outer iteration capturing proximity in perim PEEC bundle.
 
@@ -144,12 +149,23 @@ def solve_proximity_iterative(
             "n_iter": 0, "converged": True, "history": [],
         }
 
+    if n_peri <= 0:
+        raise ValueError(f"n_peri must be > 0, got {n_peri}")
+    K = R_f.shape[0]
+    if len(filament_paths) != K:
+        raise ValueError(
+            "filament_paths must contain one path per PEEC filament: "
+            f"got {len(filament_paths)} paths for {K} matrix rows")
+    if K % n_peri != 0:
+        raise ValueError(
+            "the total PEEC filament count must be an integer multiple "
+            "of n_peri: "
+            f"got n_peri={n_peri}, K={K}")
     MU_0 = 4.0e-7 * math.pi
     delta = math.sqrt(2.0 / (omega * MU_0 * sigma))
     Re_Zs = 1.0 / (sigma * delta)                       # surface resistance [Ω/sq]
     # Build flattened segment arrays
     starts, ends, fil_of_seg = _flatten_paths(filament_paths)
-    K = R_f.shape[0]
 
     # Per-filament axial length
     L_fil = np.array([
@@ -157,8 +173,18 @@ def solve_proximity_iterative(
             for (p1, p2) in path_k)
         for path_k in filament_paths
     ])
-    # Per-filament arc length on wire surface
-    perimeter = 2.0 * math.pi * wire_radius_m
+    # Per-filament arc length on the actual conductor perimeter.  Round
+    # wire keeps the historical 2*pi*a path; rectangular CAD supplies
+    # 2*(w+t), so no equivalent-circle perimeter enters proximity loss.
+    if perimeter_m is None:
+        if wire_radius_m <= 0.0:
+            raise ValueError(
+                "perimeter_m is required when wire_radius_m is unavailable")
+        perimeter = 2.0 * math.pi * wire_radius_m
+    else:
+        perimeter = float(perimeter_m)
+    if perimeter <= 0.0:
+        raise ValueError(f"perimeter_m must be > 0, got {perimeter}")
     s_k = perimeter / float(n_peri)
 
     # Eval points: one per filament = the filament's geometric midpoint
@@ -172,15 +198,29 @@ def solve_proximity_iterative(
         seg_mid_per_fil_count[k] += 1
     mid_per_fil = mid_per_fil / seg_mid_per_fil_count[:, None]
 
-    # Initialize Zs_fil = isolated-wire Bessel value (existing v4.55.4 path).
-    from radia.analytical_formulas.conductor_impedance import (
-        cylinder_ac_impedance, cylinder_dc_resistance,
-    )
-    Z_ac = cylinder_ac_impedance(wire_radius_m, sigma, omega)
-    R_dc_per_m = cylinder_dc_resistance(wire_radius_m, sigma)
+    # Initialize from the selected isolated-conductor model.  Explicit
+    # values carry the rectangular Dowell path; omitted values preserve
+    # the public round-wire Bessel API.
+    if self_impedance_per_m is None or dc_resistance_per_m is None:
+        if wire_radius_m <= 0.0:
+            raise ValueError(
+                "wire_radius_m is required for the round-wire Bessel model")
+        from radia.analytical_formulas.conductor_impedance import (
+            cylinder_ac_impedance, cylinder_dc_resistance,
+        )
+        Z_ac = cylinder_ac_impedance(wire_radius_m, sigma, omega)
+        R_dc_per_m = cylinder_dc_resistance(wire_radius_m, sigma)
+        resolved_model = internal_impedance_model or "round-bessel"
+    else:
+        Z_ac = complex(self_impedance_per_m)
+        R_dc_per_m = float(dc_resistance_per_m)
+        if R_dc_per_m <= 0.0:
+            raise ValueError(
+                f"dc_resistance_per_m must be > 0, got {R_dc_per_m}")
+        resolved_model = internal_impedance_model or "explicit"
     dZ_per_m = complex(Z_ac) - complex(R_dc_per_m, 0.0)
-    Zs_fil = n_peri * dZ_per_m * L_fil
-    Zs_fil = Zs_fil.astype(complex)
+    self_delta = n_peri * dZ_per_m * L_fil
+    Zs_fil = self_delta.astype(complex)
 
     history = []
     converged = False
@@ -229,7 +269,7 @@ def solve_proximity_iterative(
         prox_dZ = prox_real * (1.0 + 1.0j)
 
         # New target Zs_fil = initial self + proximity correction
-        Zs_new = (n_peri * dZ_per_m * L_fil + prox_dZ)
+        Zs_new = self_delta + prox_dZ
         # Under-relax
         diff_norm = np.linalg.norm(Zs_new - Zs_fil) / max(
             np.linalg.norm(Zs_fil), 1e-30)
@@ -259,4 +299,6 @@ def solve_proximity_iterative(
         "n_iter": len(history),
         "converged": converged,
         "history": history,
+        "internal_impedance_model": resolved_model,
+        "perimeter_m": perimeter,
     }
