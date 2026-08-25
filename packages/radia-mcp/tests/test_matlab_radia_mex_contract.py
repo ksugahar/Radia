@@ -93,6 +93,10 @@ def test_radia_mex_contract_reads_the_cpp_command_inventory():
     assert contract["pybind_class_surface_count"] == 125
     assert ("_ChargeGramHMatrix.charge_sigma"
             in contract["pybind_class_exclusions"])
+    assert (
+        "_ChargeGramHMatrix._reduce_configured_candidate_directional_schur"
+        in contract["pybind_class_exclusions"]
+    )
     assert contract["pybind_class_covered_count"] == contract["pybind_class_surface_count"]
     assert contract["pybind_class_missing_commands"] == []
     assert contract["pybind_class_unmapped"] == []

@@ -13,6 +13,9 @@ crystallized as its own package.
   to the 6.2.2606 `EdgeDescriptor` contract and taught the strict `.vol`
   inventory and execution gates to accept `edgesegmentsgi3` plus
   `edgedescriptors` while retaining legacy `edgesegmentsgi2` input.
+- matlab: classified the private directional-Schur proposal helper explicitly
+  so the checked pybind/MEX parity inventory remains complete without
+  presenting a Python optimizer implementation detail as a public MATLAB API.
 
 ## [1.4.42] - 2026-08-22
 
