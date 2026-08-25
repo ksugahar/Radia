@@ -47,6 +47,12 @@ if (@($RadiaOnly, $AxiFemOnly, $MatlabMexOnly).Where({ $_ }).Count -gt 1) {
 
 $PROJECT_DIR = Split-Path -Parent $MyInvocation.MyCommand.Path
 $BUILD_DIR = "$PROJECT_DIR\build-msvc"
+$PythonExecutable = (Get-Command python -ErrorAction Stop).Source
+$Pybind11CMakeDir = (& $PythonExecutable -c "import pybind11; print(pybind11.get_cmake_dir())").Trim()
+if (-not (Test-Path "$Pybind11CMakeDir\pybind11Config.cmake")) {
+    Write-Host "ERROR: pybind11 CMake package not found under $Pybind11CMakeDir" -ForegroundColor Red
+    exit 1
+}
 
 # ---- Cubit install discovery ------------------------------------------------
 # Was: hardcoded 'Coreform Cubit 2025.3'. Now: dot-source tools/find_cubit.ps1
@@ -68,7 +74,7 @@ if ($env:MKLROOT -and (Test-Path $env:MKLROOT)) {
     $MklCandidates += $env:MKLROOT
 }
 $MklCandidates += "C:\Program Files (x86)\Intel\oneAPI\mkl\latest"
-$PythonLibrary = & python -c "import pathlib, sys; print(pathlib.Path(sys.prefix) / 'Library')" 2>$null
+$PythonLibrary = & $PythonExecutable -c "import pathlib, sys; print(pathlib.Path(sys.prefix) / 'Library')" 2>$null
 if ($PythonLibrary -and (Test-Path $PythonLibrary)) {
     $MklCandidates += $PythonLibrary
 }
@@ -102,7 +108,7 @@ if ($env:NGSOLVE_DIR -and (Test-Path "$env:NGSOLVE_DIR\NGSolveConfig.cmake")) {
     $NGSolveCMakeArgs = " ^`n    -DNGSolve_DIR=`"$env:NGSOLVE_DIR`" ^`n    -DNetgen_DIR=`"$NetgenCMakeDir`""
     Write-Host "NGSolve: $env:NGSOLVE_DIR (from env)" -ForegroundColor Gray
 }
-$NetgenPackageDir = (& python -c "import netgen,os;print(os.path.dirname(netgen.__file__))").Trim()
+$NetgenPackageDir = (& $PythonExecutable -c "import netgen,os;print(os.path.dirname(netgen.__file__))").Trim()
 if (-not (Test-Path "$NetgenPackageDir\include")) {
     Write-Host "ERROR: Netgen include directory not found under $NetgenPackageDir" -ForegroundColor Red
     exit 1
@@ -133,7 +139,7 @@ if (-not $VS_PATH) {
 }
 if (-not $CMAKE_EXE) {
     # Fallback: pip-installed cmake
-    $PIP_CMAKE = & python -c "import shutil; print(shutil.which('cmake') or '')" 2>$null
+    $PIP_CMAKE = & $PythonExecutable -c "import shutil; print(shutil.which('cmake') or '')" 2>$null
     if ($PIP_CMAKE -and (Test-Path $PIP_CMAKE)) {
         $CMAKE_EXE = $PIP_CMAKE
     }
@@ -150,7 +156,7 @@ if (-not (Test-Path $CTEST_EXE)) {
 
 # Ninja generator backend.  Pass the long path explicitly so stale CMake
 # short-path cache entries do not break after Python install path changes.
-$NINJA_EXE = & python -c "import shutil; print(shutil.which('ninja') or '')" 2>$null
+$NINJA_EXE = & $PythonExecutable -c "import shutil; print(shutil.which('ninja') or '')" 2>$null
 if (-not $NINJA_EXE) {
     $NINJA_EXE = & where.exe ninja 2>$null | Select-Object -First 1
 }
@@ -208,10 +214,10 @@ if ($AxiFemOnly) {
 # machine with VS + ngsolve installed -- even without the full MKL/CMake build
 # environment -- and sidesteps a stale build-msvc CMake cache (e.g. 8.3 short
 # paths that do not resolve when 8dot3 name creation is disabled on the volume).
-$netgenPkg = (& python -c "import netgen,os;print(os.path.dirname(netgen.__file__))").Trim()
-$pyPrefix  = (& python -c "import sys;print(sys.prefix)").Trim()
-$pyInc     = (& python -c "import sysconfig;print(sysconfig.get_path('include'))").Trim()
-$pyLib     = (& python -c "import sys;print(f'python{sys.version_info.major}{sys.version_info.minor}.lib')").Trim()
+$netgenPkg = (& $PythonExecutable -c "import netgen,os;print(os.path.dirname(netgen.__file__))").Trim()
+$pyPrefix  = (& $PythonExecutable -c "import sys;print(sys.prefix)").Trim()
+$pyInc     = (& $PythonExecutable -c "import sysconfig;print(sysconfig.get_path('include'))").Trim()
+$pyLib     = (& $PythonExecutable -c "import sys;print(f'python{sys.version_info.major}{sys.version_info.minor}.lib')").Trim()
 $axiSrc    = "$PROJECT_DIR\src\ext\axifem"
 $objDir    = "$BUILD_DIR\axifem_direct"
 if (-not (Test-Path $objDir)) { New-Item -ItemType Directory -Path $objDir | Out-Null }
@@ -276,6 +282,8 @@ echo ========================================
     -DCMAKE_MAKE_PROGRAM="$NINJA_EXE" ^
     -DCMAKE_C_COMPILER=cl ^
     -DCMAKE_CXX_COMPILER=cl ^
+    -DPython3_EXECUTABLE="$PythonExecutable" ^
+    -Dpybind11_DIR="$Pybind11CMakeDir" ^
     -DCMAKE_BUILD_TYPE=Release$NGSolveCMakeArgs$MatlabMexCMakeArgs
 
 if errorlevel 1 (
@@ -413,7 +421,7 @@ if exist "%CUBIT_DIR%\CubitConfig.cmake" (
     rem build-pyd: force FULL Netgen mode (disable compact_netgen detection)
     rem so cubit_mesh_curver.pyd builds against pip-installed Netgen + pybind11.
     rem .ccm/.ccl in build-ccm continue to use compact_netgen (no DLL deps).
-    "$CMAKE_EXE" -G Ninja -DCMAKE_BUILD_TYPE=Release -DCubit_DIR="%CUBIT_DIR%" -DNETGEN_DIR="%NETGEN_DIR%" -DCOMPACT_NETGEN_OVERRIDES=NONE "%CUBIT_PLUGIN_SRC%"
+    "$CMAKE_EXE" -G Ninja -DCMAKE_BUILD_TYPE=Release -DPython3_EXECUTABLE="$PythonExecutable" -Dpybind11_DIR="$Pybind11CMakeDir" -DCubit_DIR="%CUBIT_DIR%" -DNETGEN_DIR="%NETGEN_DIR%" -DCOMPACT_NETGEN_OVERRIDES=NONE "%CUBIT_PLUGIN_SRC%"
     "$CMAKE_EXE" --build . --config Release --target cubit_mesh_curver -j
     if errorlevel 1 ( echo WARNING: cubit_mesh_curver build failed )
 
@@ -431,7 +439,7 @@ if exist "%CUBIT_DIR%\CubitConfig.cmake" (
     set "CUBIT_CCM_BUILD=$PROJECT_DIR\src\cubit_plugin\build-ccm"
     if not exist "!CUBIT_CCM_BUILD!" mkdir "!CUBIT_CCM_BUILD!"
     cd /d "!CUBIT_CCM_BUILD!"
-    "$CMAKE_EXE" -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=cl -DCMAKE_CXX_COMPILER=cl -DCubit_DIR="%CUBIT_DIR%" -DNETGEN_DIR="%NETGEN_DIR%" "%CUBIT_PLUGIN_SRC%"
+    "$CMAKE_EXE" -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=cl -DCMAKE_CXX_COMPILER=cl -DPython3_EXECUTABLE="$PythonExecutable" -Dpybind11_DIR="$Pybind11CMakeDir" -DCubit_DIR="%CUBIT_DIR%" -DNETGEN_DIR="%NETGEN_DIR%" "%CUBIT_PLUGIN_SRC%"
     "$CMAKE_EXE" --build . --config Release --target cubit_mesh_export_ccm -j
     if errorlevel 1 ( echo WARNING: cubit_mesh_export_ccm build failed )
 

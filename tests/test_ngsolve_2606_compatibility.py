@@ -65,16 +65,34 @@ def test_self_hosted_ci_keeps_the_ngsolve_abi_in_a_run_local_environment():
     assert "ngsolve.__version__==want['ngsolve']" in workflow
     assert "Get-Command git -ErrorAction Stop" in workflow
     assert "git --version" in workflow
+    assert "shutil.which('git')" in workflow
+    assert "[Text.UTF8Encoding]::new($false)" in workflow
 
 
 def test_build_scripts_resolve_netgen_from_the_active_python_environment():
     for relative in ("Build.ps1", "tools/_build_cubit_plugin.ps1"):
         script = (ROOT / relative).read_text(encoding="utf-8")
+        assert "Get-Command python -ErrorAction Stop" in script, relative
         assert "import netgen,os" in script, relative
+        assert "-DPython3_EXECUTABLE=" in script, relative
+        assert "-Dpybind11_DIR=" in script, relative
         assert (
             "C:\\Program Files\\Python312\\Lib\\site-packages\\netgen"
             not in script
         ), relative
+
+    build_script = (ROOT / "Build.ps1").read_text(encoding="utf-8")
+    assert build_script.count("-DPython3_EXECUTABLE=") >= 3
+
+    cmake = (ROOT / "CMakeLists.txt").read_text(encoding="utf-8")
+    assert "pybind11.get_cmake_dir()" in cmake
+    assert "set(pybind11_DIR ${PYTHON_SITE_PACKAGES}" not in cmake
+    assert "target_include_directories(radia_mex BEFORE PRIVATE" in cmake
+    mex_includes = cmake[
+        cmake.index("target_include_directories(radia_mex BEFORE PRIVATE") :
+        cmake.index("target_compile_definitions(radia_mex PRIVATE")
+    ]
+    assert "${Python3_INCLUDE_DIRS}" not in mex_includes
 
 
 @pytest.mark.parametrize(

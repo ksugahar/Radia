@@ -317,8 +317,10 @@ jobs:
           $ngsolveRoot = (& $ciPython -c "import ngsolve,pathlib; print(pathlib.Path(ngsolve.__file__).parent)").Trim()
           $netgenRoot = (& $ciPython -c "import netgen,pathlib; print(pathlib.Path(netgen.__file__).parent)").Trim()
           $scripts = Join-Path $venv 'Scripts'
-          $gitDir | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
-          $scripts | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          [IO.File]::AppendAllText(
+            $env:GITHUB_PATH,
+            "$gitDir`n$scripts`n",
+            [Text.UTF8Encoding]::new($false))
           "RADIA_CI_VENV=$venv" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           "NGSOLVE_ROOT=$ngsolveRoot" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           "NGSOLVE_DIR=$(Join-Path $ngsolveRoot 'cmake')" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
@@ -391,6 +393,8 @@ jobs:
             Write-Host "::error::git is unavailable after activating the isolated test environment"
             exit $LASTEXITCODE
           }
+          python -c "import shutil,subprocess; p=shutil.which('git'); assert p, 'git is absent from subprocess PATH'; subprocess.run([p,'--version'],check=True)"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       # ----------------------------------------------------------------
       # Build: MSVC + MKL + NGSolve TaskManager
