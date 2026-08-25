@@ -10,6 +10,14 @@ VTK / MEG / FEMEEM writers + Python bindings for consistency checks).
 
 Released 2026-08-25.
 
+- Fixed high-order edge interpolation at periodic Cubit curve seams.  Cubit
+  can return the trimmed-edge endpoint for every interior closest-point query;
+  the exporter now detects that stalled projection and evaluates the intended
+  point on the locally unwrapped periodic branch.  The circle-to-rectangle
+  loft no longer folds one HEX element despite apparently converged volume.
+- Run complex-shape CAD-volume and surface-area comparisons in an isolated
+  NGSolve process and persist the order 1--5 results together with sampled
+  scaled-Jacobian and within-element orientation data.
 - Pinned NGSolve and Netgen to 6.2.2606 so the bundled high-order curver,
   deployed Netgen DLLs, `check-vol`, and solver runtime use one C++ ABI.
 - Rebuilt the Cubit backend and high-order curver and re-ran the complex-shape
