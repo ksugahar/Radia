@@ -20,6 +20,9 @@ Usage:
 import sys
 import os
 import math
+import json
+import subprocess
+from datetime import datetime, timezone
 import numpy as np
 
 # --- Setup paths ---
@@ -37,17 +40,12 @@ _plugin_dir = os.path.join(os.path.dirname(_cubit_path), 'bin', 'plugins') \
 if _plugin_dir and os.path.isdir(_plugin_dir):
     os.environ['CUBIT_PLUGIN_DIR'] = _plugin_dir
 
-# Import NGSolve FIRST (DLL conflict avoidance)
-import netgen.meshing
-from ngsolve import Mesh, Integrate, CF, BND, BBND
-from ngsolve import TaskManager
-from cubit_mesh_export.check import check_mesh_quality
-
 import cubit
 cubit.init(['cubit', '-nojournal', '-batch',
             '-commandplugindir', _plugin_dir or ''])
 OUT_DIR = os.path.join(_test_dir, 'ho_convergence_test')
 os.makedirs(OUT_DIR, exist_ok=True)
+_solver_versions = {}
 
 
 # ================================================================
@@ -409,6 +407,32 @@ def pyramid5_volume(pts):
 # ================================================================
 # Test 1: p-convergence (netgen .vol, order 1-5, volume + area)
 # ================================================================
+def _check_exported_vol(vol_path, order):
+    """Check one export in a clean NGSolve process.
+
+    Cubit's command plugin embeds compact Netgen. Loading full NGSolve into
+    that same process risks symbol collisions and does not represent how the
+    solver reads the final .vol file.
+    """
+    worker = os.path.join(_test_dir, "_ho_volume_worker.py")
+    proc = subprocess.run(
+        [sys.executable, worker, vol_path,
+         "--integration-order", str(max(4, 2 * order + 2))],
+        cwd=_repo_root,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if proc.returncode != 0:
+        raise RuntimeError(
+            f"NGSolve worker failed ({proc.returncode}): "
+            f"{proc.stderr.strip() or proc.stdout.strip()}"
+        )
+    checked = json.loads(proc.stdout)
+    _solver_versions.update(checked.get("versions", {}))
+    return checked
+
+
 def test_p_convergence(case_name, cad_volume, cad_area, is_flat, area_warn=False):
     """Export .vol at orders 1-5, check volume and area convergence."""
     print(f"\n  p-convergence (CAD vol={cad_volume:.6e}, area={cad_area:.6e}):")
@@ -419,6 +443,7 @@ def test_p_convergence(case_name, cad_volume, cad_area, is_flat, area_warn=False
 
     v_errors = []
     a_errors = []
+    records = []
     all_pass = True
 
     for order in range(1, 6):
@@ -426,19 +451,15 @@ def test_p_convergence(case_name, cad_volume, cad_area, is_flat, area_warn=False
         cmd = f'export netgen "{vol_path}" order {order} overwrite'
         try:
             cubit.cmd(cmd)
-            mesh = Mesh(vol_path)
-            with TaskManager():
-                vol = Integrate(CF(1), mesh)
-                area = Integrate(CF(1), mesh, BND)
-            quality = check_mesh_quality(
-                mesh,
-                min_scaled_jacobian=1.0e-6,
-                integration_order=max(4, 2 * order),
-            )
+            checked = _check_exported_vol(vol_path, order)
+            vol = checked["ngsolve_volume"]
+            area = checked["ngsolve_area"]
+            quality = checked["quality"]
         except Exception as e:
             print(f"  {order:>5} FAILED: {e}")
             v_errors.append(None)
             a_errors.append(None)
+            records.append({"order": order, "error": str(e)})
             all_pass = False
             continue
 
@@ -479,6 +500,25 @@ def test_p_convergence(case_name, cad_volume, cad_area, is_flat, area_warn=False
               f"{min_scaled_text:>11} {orientation_flips:>6} {negative_jacobians:>6} {verdict:>10}")
         v_errors.append(v_err)
         a_errors.append(a_err)
+        records.append({
+            "order": order,
+            "vol_file": os.path.relpath(vol_path, OUT_DIR),
+            "ngsolve_volume": vol,
+            "volume_error_pct": v_err,
+            "ngsolve_area": area,
+            "area_error_pct": a_err,
+            "quality_passed": quality["passed"],
+            "minimum_scaled_jacobian": min_scaled,
+            "minimum_jacobian": quality["minimum_jacobian"],
+            "maximum_jacobian": quality["maximum_jacobian"],
+            "mapping_sample_count": quality["mapping_sample_count"],
+            "invalid_jacobian_sample_count": quality["invalid_jacobian_sample_count"],
+            "orientation_flip_sample_count": orientation_flips,
+            "negative_jacobian_sample_count": negative_jacobians,
+            "positive_orientation_element_count": quality["positive_orientation_element_count"],
+            "negative_orientation_element_count": quality["negative_orientation_element_count"],
+            "invalid_jacobian_elements": quality["invalid_jacobian_elements"],
+        })
 
     # Convergence check: order 2 must improve over order 1
     if not is_flat:
@@ -494,7 +534,7 @@ def test_p_convergence(case_name, cad_volume, cad_area, is_flat, area_warn=False
                     print(f"  area: order 2 not better than order 1: FAIL")
                     all_pass = False
 
-    return all_pass
+    return all_pass, records
 
 
 # ================================================================
@@ -507,6 +547,24 @@ def main():
     print("=" * 70)
 
     overall_pass = True
+    dataset = {
+        "schema": "cubit-mesh-export.ho-volume-convergence.v1",
+        "generated_at_utc": datetime.now(timezone.utc).isoformat(),
+        "purpose": (
+            "Cubit CAD volume/area versus NGSolve .vol integration, with "
+            "independent curved-map Jacobian validation"
+        ),
+        "versions": {"cubit": cubit.get_version()},
+        "quality_contract": {
+            "minimum_scaled_jacobian": 1.0e-6,
+            "integration_order": "max(4, 2 * curve_order + 2)",
+            "orientation_rule": (
+                "A consistently negative element orientation is valid; a "
+                "sign change within one element is a failure."
+            ),
+        },
+        "cases": [],
+    }
 
     for case_name, commands, is_flat, area_warn in test_cases:
         print(f"\n{'=' * 70}")
@@ -527,8 +585,23 @@ def main():
         print(f"  Elements: hex={n_hex} tet={n_tet} pyramid={n_pyr}")
         print(f"  CAD volume: {cad_volume:.6e}, area: {cad_area:.6e}")
 
-        case_pass = test_p_convergence(case_name, cad_volume, cad_area, is_flat, area_warn)
+        case_pass, order_records = test_p_convergence(
+            case_name, cad_volume, cad_area, is_flat, area_warn)
         print(f"\n  Result: [{'PASS' if case_pass else 'FAIL'}]")
+        dataset["cases"].append({
+            "name": case_name,
+            "is_flat": is_flat,
+            "cad_volume": cad_volume,
+            "cad_area": cad_area,
+            "cubit_commands": commands,
+            "element_counts": {
+                "hex": n_hex,
+                "tet": n_tet,
+                "pyramid": n_pyr,
+            },
+            "passed": case_pass,
+            "orders": order_records,
+        })
         if not case_pass:
             overall_pass = False
 
@@ -539,6 +612,15 @@ def main():
         print("SOME TESTS FAILED — see details above")
     print(f"{'=' * 70}")
 
+    dataset["passed"] = overall_pass
+    dataset["versions"].update(_solver_versions)
+    dataset_path = os.path.join(OUT_DIR, "ho_volume_convergence_results.json")
+    with open(dataset_path, "w", encoding="utf-8") as stream:
+        json.dump(dataset, stream, indent=2, ensure_ascii=False)
+        stream.write("\n")
+    print(f"Learning dataset: {dataset_path}")
+
+    cubit.destroy()
     return 0 if overall_pass else 1
 
 

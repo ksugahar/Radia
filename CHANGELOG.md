@@ -9,6 +9,13 @@ All notable changes to the `radia` package.  Format: each release lists
 
 Released 2026-08-25.
 
+- Fixed periodic-seam folding in Cubit's high-order `.vol` export.  The
+  24-HEX circle-to-rectangle loft now has zero within-element Jacobian sign
+  changes at orders 1--5; a refined 14,212-HEX order-2 cross-check also has
+  zero sign changes and a `0.0000301%` Cubit/NGSolve volume error.
+- Strengthened the complex `.vol` validation corpus to isolate Cubit from the
+  solver-side NGSolve reader and save reproducible CAD volume/area, mapping
+  quality, and orientation results as a versioned JSON learning dataset.
 - Pinned NGSolve and Netgen to 6.2.2606 and rebuilt every native Radia and
   Cubit integration binary against the same C++ ABI.
 - Migrated programmatic two-dimensional Netgen meshes to the required

@@ -1185,13 +1185,19 @@ bool NetgenCurver::attach_callback_geometry()
       return {cp.x(), cp.y(), cp.z()};
     }
 
-    // closest_point jumped to a different segment of the curve. For a
-    // periodic seam, u2_local deliberately spans the break in the short
-    // direction accepted by RefEdge::length_from_u().
-    double segment_length = re->length_from_u(u1, u2_local);
     CubitVector out;
-    CubitStatus st = re->point_from_arc_length(
-        u1, secpoint * segment_length, out);
+    CubitStatus st;
+    if (periodic) {
+      // RefEdge::point_from_arc_length normalizes the periodic root before
+      // applying the distance and can select the long trimmed branch at the
+      // seam. position_from_u explicitly accepts an unwrapped parameter and
+      // normalizes only after the local branch has been selected.
+      st = re->position_from_u(u_expected, out);
+    } else {
+      double segment_length = re->length_from_u(u1, u2_local);
+      st = re->point_from_arc_length(
+          u1, secpoint * segment_length, out);
+    }
     if (st != CUBIT_SUCCESS) return linear_mid();
 
     // Sanity: the arc-midpoint should not lie farther from the linear
