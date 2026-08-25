@@ -6132,15 +6132,8 @@ void RadHACApKChargeGram::MatVecSymMany(const std::vector<double>& x,
                                         int nrhs, std::vector<double>& y)
 {
     if (!m_sigmaActive) { RadHACApKBase::MatVecSymMany(x, nrhs, y); return; }
-    std::vector<double> xs(x.size());
-    for (int r = 0; r < nrhs; ++r)
-        for (int p = 0; p < m_n; ++p)
-            xs[(size_t)r * m_n + p] =
-                x[(size_t)r * m_n + p] * m_chargeSigma[(size_t)p];
-    RadHACApKBase::MatVecSymMany(xs, nrhs, y);
-    for (int r = 0; r < nrhs; ++r)
-        for (int p = 0; p < m_n; ++p)
-            y[(size_t)r * m_n + p] *= m_chargeSigma[(size_t)p];
+    MatVecSymManyPrepared(
+        x, nrhs, nullptr, m_chargeSigma.data(), y);
 }
 
 void RadHACApKChargeGram::MatVecSymManyConfigured(
@@ -6155,28 +6148,11 @@ void RadHACApKChargeGram::MatVecSymManyConfigured(
         m_operatorActiveChargePrefix.size() ==
             static_cast<size_t>(m_operatorChargeComponents)*stride &&
         m_operatorActiveChargePrefix[begin+stride-1] < m_ndof;
-    const std::vector<double>* input = &x;
-    std::vector<double> scaled;
-    if (m_sigmaActive) {
-        scaled.resize(x.size());
-        for (int r = 0; r < nrhs; ++r)
-            for (int p = 0; p < m_n; ++p)
-                scaled[static_cast<size_t>(r)*m_n+p] =
-                    x[static_cast<size_t>(r)*m_n+p]*m_chargeSigma[p];
-        input = &scaled;
-    }
-    if (masked) {
-        std::vector<int> prefix(
-            m_operatorActiveChargePrefix.begin()+begin,
-            m_operatorActiveChargePrefix.begin()+begin+stride);
-        RadHACApKBase::MatVecSymManyMasked(*input, nrhs, prefix, y);
-    }
-    else
-        RadHACApKBase::MatVecSymMany(*input, nrhs, y);
-    if (m_sigmaActive)
-        for (int r = 0; r < nrhs; ++r)
-            for (int p = 0; p < m_n; ++p)
-                y[static_cast<size_t>(r)*m_n+p] *= m_chargeSigma[p];
+    MatVecSymManyPrepared(
+        x, nrhs,
+        masked ? m_operatorActiveChargePrefix.data()+begin : nullptr,
+        m_sigmaActive ? m_chargeSigma.data() : nullptr,
+        y);
 }
 
 void RadHACApKChargeGram::OnBeforeBuild()
@@ -7890,9 +7866,11 @@ void RadHACApKChargeGram::ApplyConfiguredDemagImpl(
         ngcore::ParallelFor(ngcore::IntRange(m_ndof), [&](size_t a) {
             double sum = 0.0;
             const size_t row = row_offset + a;
-            for (int k = m_operatorBIndptr[row]; k < m_operatorBIndptr[row + 1]; ++k)
-                sum += m_operatorBData[(size_t)k] *
-                       x[(size_t)m_operatorBIndices[(size_t)k]];
+            for (int k = m_operatorBIndptr[row]; k < m_operatorBIndptr[row + 1]; ++k) {
+                const int face = m_operatorBIndices[(size_t)k];
+                if (!respect_constraints || !m_operatorConstrained[(size_t)face])
+                    sum += m_operatorBData[(size_t)k] * x[(size_t)face];
+            }
             q_data[a] = sum;
         });
         std::fill(Gq.begin(), Gq.end(), 0.0);
@@ -8039,9 +8017,13 @@ std::vector<double> RadHACApKChargeGram::ApplyConfiguredLinearMaterialOperator(
         }
         double value = 0.0;
         for (int k = m_operatorMassIndptr[row];
-             k < m_operatorMassIndptr[row + 1]; ++k)
-            value += m_operatorMassData[static_cast<size_t>(k)] *
-                     x[static_cast<size_t>(m_operatorMassIndices[static_cast<size_t>(k)])];
+             k < m_operatorMassIndptr[row + 1]; ++k) {
+            const int column = m_operatorMassIndices[static_cast<size_t>(k)];
+            if (!respect_constraints ||
+                !m_operatorConstrained[static_cast<size_t>(column)])
+                value += m_operatorMassData[static_cast<size_t>(k)] *
+                         x[static_cast<size_t>(column)];
+        }
         y[row] += inv_chi * value;
     });
     return y;
@@ -8077,10 +8059,14 @@ std::vector<double> RadHACApKChargeGram::ApplyConfiguredLinearMaterialOperatorMa
                     double value = 0.0;
                     const size_t mapped = row_offset+static_cast<size_t>(row);
                     for (int k = m_operatorBIndptr[mapped];
-                         k < m_operatorBIndptr[mapped+1]; ++k)
-                        value += m_operatorBData[static_cast<size_t>(k)] *
-                            x[static_cast<size_t>(rhs)*n_face+
-                              m_operatorBIndices[static_cast<size_t>(k)]];
+                         k < m_operatorBIndptr[mapped+1]; ++k) {
+                        const int face =
+                            m_operatorBIndices[static_cast<size_t>(k)];
+                        if (!respect_constraints ||
+                            !m_operatorConstrained[static_cast<size_t>(face)])
+                            value += m_operatorBData[static_cast<size_t>(k)] *
+                                x[static_cast<size_t>(rhs)*n_face+face];
+                    }
                     charge[index] = value;
                 });
         }
@@ -8118,10 +8104,14 @@ std::vector<double> RadHACApKChargeGram::ApplyConfiguredLinearMaterialOperatorMa
             }
             double value = 0.0;
             for (int k = m_operatorMassIndptr[static_cast<size_t>(row)];
-                 k < m_operatorMassIndptr[static_cast<size_t>(row)+1]; ++k)
-                value += m_operatorMassData[static_cast<size_t>(k)] *
-                    x[static_cast<size_t>(rhs)*n_face+
-                      m_operatorMassIndices[static_cast<size_t>(k)]];
+                 k < m_operatorMassIndptr[static_cast<size_t>(row)+1]; ++k) {
+                const int column =
+                    m_operatorMassIndices[static_cast<size_t>(k)];
+                if (!respect_constraints ||
+                    !m_operatorConstrained[static_cast<size_t>(column)])
+                    value += m_operatorMassData[static_cast<size_t>(k)] *
+                        x[static_cast<size_t>(rhs)*n_face+column];
+            }
             y[index] += inv_chi*value;
         });
     }
@@ -9352,12 +9342,15 @@ std::vector<double> RadHACApKChargeGram::SolveConfiguredLinearMaterialAutoPrecMa
                     input[static_cast<size_t>(row)*n_face+face] /
                     prec[static_cast<size_t>(face)];
     };
+    const size_t charge_total = static_cast<size_t>(nrhs)*m_ndof;
+    std::vector<double> system_charge(charge_total, 0.0);
+    std::vector<double> system_gcharge;
+    system_gcharge.reserve(charge_total);
     auto apply_system_many = [&](const std::vector<double>& input,
                                  std::vector<double>& output) {
-        std::vector<double> charge(static_cast<size_t>(nrhs)*m_ndof, 0.0);
         {
             ngcore::RegionTaskManager rtm(radia::GetMaxThreads());
-            ngcore::ParallelFor(ngcore::IntRange(static_cast<size_t>(nrhs)*m_ndof),
+            ngcore::ParallelFor(ngcore::IntRange(charge_total),
                 [&](size_t index) {
                     const int column = static_cast<int>(index / m_ndof);
                     const int row = static_cast<int>(index % m_ndof);
@@ -9367,11 +9360,11 @@ std::vector<double> RadHACApKChargeGram::SolveConfiguredLinearMaterialAutoPrecMa
                         value += m_operatorBData[static_cast<size_t>(k)] *
                             input[static_cast<size_t>(column)*n_face+
                                   m_operatorBIndices[static_cast<size_t>(k)]];
-                    charge[index] = value;
+                    system_charge[index] = value;
                 });
         }
-        std::vector<double> gcharge;
-        MatVecSymManyConfigured(charge, nrhs, 0, true, gcharge);
+        MatVecSymManyConfigured(
+            system_charge, nrhs, 0, true, system_gcharge);
         output.assign(total, 0.0);
         {
             ngcore::RegionTaskManager rtm(radia::GetMaxThreads());
@@ -9383,7 +9376,7 @@ std::vector<double> RadHACApKChargeGram::SolveConfiguredLinearMaterialAutoPrecMa
                 for (int k = m_operatorBTIndptr[static_cast<size_t>(face)];
                      k < m_operatorBTIndptr[static_cast<size_t>(face)+1]; ++k)
                     value += m_operatorBTData[static_cast<size_t>(k)] *
-                        gcharge[static_cast<size_t>(column)*m_ndof+
+                        system_gcharge[static_cast<size_t>(column)*m_ndof+
                                 m_operatorBTIndices[static_cast<size_t>(k)]];
                 double mass_value = 0.0;
                 for (int k = m_operatorMassIndptr[static_cast<size_t>(face)];
@@ -9407,6 +9400,7 @@ std::vector<double> RadHACApKChargeGram::SolveConfiguredLinearMaterialAutoPrecMa
         // dense block-Gram recurrences, rank breakdown, fixed 500-step block
         // startup, and sequential scalar tails of the former block PCG.
         m_lastSolveTiming = SolveTiming();
+        HACApK_matvec_stats_reset();
 #ifdef HAVE_LAPACK
         m_lastSolveTiming.factor_s = block_factor_s;
         m_lastSolveTiming.mass_riesz_local_blocks =
@@ -9430,6 +9424,32 @@ std::vector<double> RadHACApKChargeGram::SolveConfiguredLinearMaterialAutoPrecMa
             m_lastSolveTiming.prec_s +=
                 std::chrono::duration<double>(Clock::now()-started).count();
             ++m_lastSolveTiming.prec_count;
+        };
+        auto collect_hmatvec_stats = [&]() {
+            double mv[8] = {0.0};
+            int64_t mc[8] = {0};
+            HACApK_matvec_stats_get(mv, 8, mc, 8);
+            m_lastSolveTiming.hmatvec_total_s = mv[0];
+            m_lastSolveTiming.hmatvec_zero_s = mv[1];
+            m_lastSolveTiming.hmatvec_permute_s = mv[2];
+            m_lastSolveTiming.hmatvec_leaf_s = mv[3];
+            m_lastSolveTiming.hmatvec_reduce_s = mv[4];
+            m_lastSolveTiming.hmatvec_meta_s = mv[5];
+            m_lastSolveTiming.hmatvec_lowrank_flop_est = mv[6];
+            m_lastSolveTiming.hmatvec_dense_flop_est = mv[7];
+            m_lastSolveTiming.hmatvec_calls = static_cast<double>(mc[0]);
+            m_lastSolveTiming.hmatvec_lowrank_leaves =
+                static_cast<double>(mc[1]);
+            m_lastSolveTiming.hmatvec_dense_leaves =
+                static_cast<double>(mc[2]);
+            m_lastSolveTiming.hmatvec_mirrored_upper_leaves =
+                static_cast<double>(mc[3]);
+            m_lastSolveTiming.hmatvec_diagonal_leaves =
+                static_cast<double>(mc[4]);
+            m_lastSolveTiming.hmatvec_skipped_lower_leaves =
+                static_cast<double>(mc[5]);
+            m_lastSolveTiming.hmatvec_last_nd = static_cast<double>(mc[6]);
+            m_lastSolveTiming.hmatvec_last_nthr = static_cast<double>(mc[7]);
         };
 
         std::vector<double> projected_rhs = rhs;
@@ -9465,7 +9485,11 @@ std::vector<double> RadHACApKChargeGram::SolveConfiguredLinearMaterialAutoPrecMa
         timed_apply(solutions, applied);
         for (size_t index = 0; index < total; ++index)
             residual[index] = projected_rhs[index]-applied[index];
-        project_many(residual);
+
+        // The projected RHS/initial state, constrained system rows, and
+        // projected mass-Riesz output keep constrained entries exactly zero.
+        // The scalar recurrences therefore preserve the constraint without a
+        // full-vector projection after every update or true-residual refresh.
 
         std::vector<int> remaining;
         for (int row : active) {
@@ -9495,7 +9519,6 @@ std::vector<double> RadHACApKChargeGram::SolveConfiguredLinearMaterialAutoPrecMa
             timed_apply(solutions, applied);
             for (size_t index = 0; index < total; ++index)
                 residual[index] = projected_rhs[index]-applied[index];
-            project_many(residual);
             remaining.clear();
             for (int row : active) {
                 const double norm = std::sqrt(std::max(
@@ -9561,8 +9584,6 @@ std::vector<double> RadHACApKChargeGram::SolveConfiguredLinearMaterialAutoPrecMa
                 m_lastSolveTiming.pcg_update_s +=
                     std::chrono::duration<double>(Clock::now()-started).count();
             }
-            project_many(solutions);
-            project_many(residual);
             completed_iterations = iteration+1;
 
             bool candidate = ((iteration+1)%refresh_period) == 0;
@@ -9622,6 +9643,7 @@ std::vector<double> RadHACApKChargeGram::SolveConfiguredLinearMaterialAutoPrecMa
             // to the mature scalar true-residual CG path.  ACA-compressed
             // systems may have roundoff-scale negative Rayleigh quotients;
             // those remain valid finite CG steps, matching the scalar path.
+            collect_hmatvec_stats();
             SolveTiming combined = m_lastSolveTiming;
             const int remaining_iterations = std::max(
                 1, maxit-completed_iterations);
@@ -9695,6 +9717,7 @@ std::vector<double> RadHACApKChargeGram::SolveConfiguredLinearMaterialAutoPrecMa
         projection_s = std::chrono::duration<double>(
             Clock::now()-solve_started).count();
         m_lastSolveTiming.total_s = projection_s;
+        if (!scalar_fallback) collect_hmatvec_stats();
         return solutions;
     }
     auto block_gram = [&](const std::vector<double>& left,

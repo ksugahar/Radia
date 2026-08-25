@@ -398,6 +398,17 @@ setup when mass-Riesz is active.  The final entry replaces the fixed 500-step
 block-PCG startup with independent CG recurrences over shared row-major
 operator and mass-Riesz traversals.  On the same LAB object, six RHS decrease
 from 35.85 s to 12.95 s while preserving a true relative residual below
-1.0e-8; one RHS remains on the lower-overhead scalar kernel.  Repeat the
-measurement on mdx or hibino after their cooling-system recovery before using
-the LAB wall times as publication claims.
+1.0e-8; one RHS remains on the lower-overhead scalar kernel.
+
+The prepared active-batch follow-up fuses charge normalization into the HACApK
+permutation/reduction, removes active-prefix and per-iteration charge-workspace
+copies, and avoids algebraically redundant constraint projections.  It also
+makes `respect_constraints=True` a true principal-operator contract even when
+the caller supplies nonzero constrained entries.  The paired six-RHS direct
+apply diagnostic fell from 30.22 ms to 18.50 ms with bit-identical active
+output.  A quiet final LAB run took 4.78 s for one RHS and 13.56 s for six RHS;
+the latter retained a relative residual below 1.0e-8.  Internal profiling puts
+7.27 s of the 13.64 s profiled solve in HACApK leaf kernels, making small-leaf
+GEMM overhead the next performance target.  Repeat on mdx and hibino after a
+formal release and PyPI installation before using LAB wall times as publication
+claims.

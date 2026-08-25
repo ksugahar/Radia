@@ -6,7 +6,7 @@
     "python": "3.12.10",
     "ngsolve": "6.2.2606",
     "ngsolve_threads": 16,
-    "repository_base_head": "386474f12",
+    "repository_base_head": "810980647",
     "worktree_dirty_during_measurement": true,
     "paired_diagnostic_result": "C:/temp/ffag_active_hmatrix_same_process_20260825.json",
     "measurement_scope": "same process, same ChargeGram, same RHS; diagnostic-only pruning toggle removed from the production source"
@@ -121,6 +121,56 @@
     "inactive_solution_norm": 0.0,
     "true_residual_gate_preserved": true
   },
+  "prepared_active_batch_apply": {
+    "implementation": [
+      "Fuse charge-basis S*A*S normalization into HACApK permutation and reduction.",
+      "Pass the configured active-prefix view without copying it.",
+      "Reuse B*x and G*(B*x) work arrays throughout the batched CG solve.",
+      "Remove redundant full-vector projections while preserving exact constrained zeros algebraically.",
+      "Mask constrained input columns and inactive charge outputs so respect_constraints=True is a true principal operator."
+    ],
+    "six_rhs_direct_apply_diagnostic": {
+      "before_fused_scaling_median_s": 0.030217200023122132,
+      "after_fused_scaling_median_s": 0.0184978999895975,
+      "speedup": 1.633523837842741,
+      "active_relative_error": 0.0,
+      "inactive_output_norm": 0.0
+    },
+    "quiet_lab_final": {
+      "charge_gram_build_s": 75.95572639998863,
+      "one_rhs": {
+        "elapsed_s": 4.783704300003592,
+        "iterations": 451,
+        "relative_residual": 9.324648226772153e-9,
+        "relative_known_solution_error": 3.942698581148977e-7
+      },
+      "six_rhs": {
+        "elapsed_s": 13.561431200010702,
+        "iterations": [481, 486, 451, 389, 582, 625],
+        "relative_residual": 9.663166536170838e-9,
+        "relative_known_solution_error": 4.919345998102083e-8
+      },
+      "six_rhs_profiled": {
+        "elapsed_s": 13.678549700009171,
+        "operator_apply_s": 10.67653370000001,
+        "mass_riesz_preconditioner_s": 1.9205709000000037,
+        "hmatrix_total_s": 8.169646100257523,
+        "hmatrix_leaf_s": 7.272624300210737,
+        "hmatrix_zero_s": 0.2871696997026447,
+        "hmatrix_permute_s": 0.14662719957414083,
+        "hmatrix_reduce_s": 0.4436600001936313,
+        "hmatrix_calls": 632,
+        "hmatrix_threads": 16
+      }
+    },
+    "verification": {
+      "focused_and_topology_regressions": 123,
+      "all_passed": true,
+      "nonzero_constrained_input_is_ignored": true,
+      "active_principal_operator_bit_identical": true,
+      "inactive_solution_norm": 0.0
+    }
+  },
   "gates": {
     "same_hmatrix_object_for_each_pair": true,
     "same_rhs_for_each_pair": true,
@@ -130,7 +180,7 @@
     "diagnostic_toggle_absent_from_product_source": true
   },
   "follow_up": {
-    "next_solver_target": "Profile nonlinear state/adjoint batches and persistent field evaluation with the finalized independent batched mass-Riesz CG.",
-    "remote_measurement": "Repeat on mdx or hibino after cooling-system recovery."
+    "next_solver_target": "Group or otherwise lower the overhead of the many small dense/low-rank HACApK leaf GEMMs; leaf work is 7.27 s of the 13.64 s profiled six-RHS solve.",
+    "remote_measurement": "mdx and hibino are available again; repeat after a formal build/release and PyPI installation, without copying a local pyd."
   }
 }

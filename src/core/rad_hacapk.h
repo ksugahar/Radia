@@ -203,6 +203,14 @@ public:
 protected:
     RadHACApKBase();
 
+    // Internal row-major symmetric apply with optional active principal mask
+    // and fused S*A*S diagonal scaling.  The optional arrays contain ndof+1
+    // and ndof entries and remain caller-owned for the duration of the call.
+    void MatVecSymManyPrepared(
+        const std::vector<double>& x, int nrhs,
+        const int* active_prefix, const double* diagonal_scale,
+        std::vector<double>& y);
+
     // Kernel hooks
     virtual void ExtractCoordinates() = 0;
     virtual void OnBeforeBuild() = 0;

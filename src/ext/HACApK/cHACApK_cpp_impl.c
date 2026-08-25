@@ -1314,6 +1314,8 @@ static void matvec_many_zero_y(int tid, void *data) {
 
 typedef struct {
     const double *x;
+    const double *diagonal_scale;
+    const int *active_prefix;
     double *y;
     int *lod;
     int nd, nrhs, nthr;
@@ -1323,8 +1325,16 @@ static void matvec_many_permute(int idx, void *data) {
     matvec_many_io_ctx *ctx = (matvec_many_io_ctx*)data;
     const int rhs = idx / ctx->nd;
     const int pos = idx - rhs*ctx->nd;
-    g_batch_x_perm[pos + (size_t)ctx->nd*rhs] =
-        ctx->x[(size_t)rhs*ctx->nd + ctx->lod[pos+1]-1];
+    const int original = ctx->lod[pos+1]-1;
+    double value;
+    if (ctx->active_prefix &&
+        ctx->active_prefix[pos+1] == ctx->active_prefix[pos]) {
+        g_batch_x_perm[pos + (size_t)ctx->nd*rhs] = 0.0;
+        return;
+    }
+    value = ctx->x[(size_t)rhs*ctx->nd + original];
+    if (ctx->diagonal_scale) value *= ctx->diagonal_scale[original];
+    g_batch_x_perm[pos + (size_t)ctx->nd*rhs] = value;
 }
 
 static void matvec_many_reduce(int idx, void *data) {
@@ -1333,9 +1343,18 @@ static void matvec_many_reduce(int idx, void *data) {
     const int pos = idx - rhs*ctx->nd;
     double sum = 0.0;
     int tid;
+    if (ctx->active_prefix &&
+        ctx->active_prefix[pos+1] == ctx->active_prefix[pos]) {
+        ctx->y[(size_t)rhs*ctx->nd + ctx->lod[pos+1]-1] = 0.0;
+        return;
+    }
     for (tid = 0; tid < ctx->nthr; ++tid)
         sum += g_batch_y_thread[tid][pos + (size_t)ctx->nd*rhs];
-    ctx->y[(size_t)rhs*ctx->nd + ctx->lod[pos+1]-1] = sum;
+    {
+        const int original = ctx->lod[pos+1]-1;
+        if (ctx->diagonal_scale) sum *= ctx->diagonal_scale[original];
+        ctx->y[(size_t)rhs*ctx->nd + original] = sum;
+    }
 }
 
 /* Reduce thread-local y arrays and apply inverse permutation for one element */
@@ -1505,26 +1524,72 @@ void HACApK_matvec_sym_wrapper(
 
 static void hacapk_matvec_sym_many_run(
     void *leafmtxp_void, void *ctl_void, const double *x, double *y,
-    int nd, int nrhs, const int *active_prefix)
+    int nd, int nrhs, const int *active_prefix,
+    const double *diagonal_scale)
 {
     st_cHACApK_leafmtxp leafmtxp = (st_cHACApK_leafmtxp)leafmtxp_void;
     st_cHACApK_lcontrol ctl = (st_cHACApK_lcontrol)ctl_void;
     int nthr;
     matvec_many_job_ctx job;
     matvec_many_io_ctx io;
+    int stats_on;
+    double t_total0 = 0.0, t0 = 0.0;
+    double zero_s = 0.0, permute_s = 0.0, leaf_s = 0.0;
+    double reduce_s = 0.0, meta_s = 0.0;
+    int64_t lowrank_leaves = 0, dense_leaves = 0;
+    int64_t mirrored_upper_leaves = 0, diagonal_leaves = 0;
+    int64_t skipped_lower_leaves = 0;
+    double lowrank_flop_est = 0.0, dense_flop_est = 0.0;
     if (!leafmtxp || !ctl || !ctl->lod || !leafmtxp->st_lf ||
         !x || !y || nd < 1 || nrhs < 1) return;
     nthr = hacapk_get_num_threads();
+    stats_on = matvec_stats_enabled();
+    if (stats_on) {
+        t_total0 = matvec_wall_time();
+        t0 = t_total0;
+        matvec_collect_leaf_profile(
+            leafmtxp->st_lf, leafmtxp->nlf, 1,
+            &lowrank_leaves, &dense_leaves,
+            &mirrored_upper_leaves, &diagonal_leaves,
+            &skipped_lower_leaves,
+            &lowrank_flop_est, &dense_flop_est);
+        meta_s = matvec_wall_time()-t0;
+    }
     init_batch_matvec_buffers(nd, nrhs, nthr, leafmtxp->ktmax);
     job.st_lf = leafmtxp->st_lf; job.nlf = leafmtxp->nlf;
     job.nd = nd; job.nrhs = nrhs;
     job.active_prefix = active_prefix;
-    io.x = x; io.y = y; io.lod = ctl->lod; io.nd = nd;
+    io.x = x; io.diagonal_scale = diagonal_scale;
+    io.active_prefix = active_prefix;
+    io.y = y; io.lod = ctl->lod; io.nd = nd;
     io.nrhs = nrhs; io.nthr = nthr;
+    if (stats_on) t0 = matvec_wall_time();
     hacapk_parallel_for(nthr, matvec_many_zero_y, &job);
+    if (stats_on) { zero_s = matvec_wall_time()-t0; t0 = matvec_wall_time(); }
     hacapk_parallel_for(nd*nrhs, matvec_many_permute, &io);
+    if (stats_on) { permute_s = matvec_wall_time()-t0; t0 = matvec_wall_time(); }
     hacapk_parallel_job(matvec_sym_many_thread_func, &job);
+    if (stats_on) { leaf_s = matvec_wall_time()-t0; t0 = matvec_wall_time(); }
     hacapk_parallel_for(nd*nrhs, matvec_many_reduce, &io);
+    if (stats_on) {
+        reduce_s = matvec_wall_time()-t0;
+        g_matvec_stats.calls += 1;
+        g_matvec_stats.total_s += matvec_wall_time()-t_total0;
+        g_matvec_stats.zero_s += zero_s;
+        g_matvec_stats.permute_s += permute_s;
+        g_matvec_stats.leaf_s += leaf_s;
+        g_matvec_stats.reduce_s += reduce_s;
+        g_matvec_stats.meta_s += meta_s;
+        g_matvec_stats.lowrank_leaves += lowrank_leaves;
+        g_matvec_stats.dense_leaves += dense_leaves;
+        g_matvec_stats.mirrored_upper_leaves += mirrored_upper_leaves;
+        g_matvec_stats.diagonal_leaves += diagonal_leaves;
+        g_matvec_stats.skipped_lower_leaves += skipped_lower_leaves;
+        g_matvec_stats.lowrank_flop_est += nrhs*lowrank_flop_est;
+        g_matvec_stats.dense_flop_est += nrhs*dense_flop_est;
+        g_matvec_stats.last_nd = nd;
+        g_matvec_stats.last_nthr = nthr;
+    }
 }
 
 void HACApK_matvec_sym_many_wrapper(
@@ -1532,7 +1597,7 @@ void HACApK_matvec_sym_many_wrapper(
     int nd, int nrhs)
 {
     hacapk_matvec_sym_many_run(
-        leafmtxp_void, ctl_void, x, y, nd, nrhs, NULL);
+        leafmtxp_void, ctl_void, x, y, nd, nrhs, NULL, NULL);
 }
 
 void HACApK_matvec_sym_many_masked_wrapper(
@@ -1541,7 +1606,18 @@ void HACApK_matvec_sym_many_masked_wrapper(
 {
     if (!active_prefix || active_prefix[0] != 0) return;
     hacapk_matvec_sym_many_run(
-        leafmtxp_void, ctl_void, x, y, nd, nrhs, active_prefix);
+        leafmtxp_void, ctl_void, x, y, nd, nrhs, active_prefix, NULL);
+}
+
+void HACApK_matvec_sym_many_prepared_wrapper(
+    void *leafmtxp_void, void *ctl_void, const double *x, double *y,
+    int nd, int nrhs, const int *active_prefix,
+    const double *diagonal_scale)
+{
+    if (active_prefix && active_prefix[0] != 0) return;
+    hacapk_matvec_sym_many_run(
+        leafmtxp_void, ctl_void, x, y, nd, nrhs,
+        active_prefix, diagonal_scale);
 }
 
 /*=========================================================================
