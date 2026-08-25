@@ -32,7 +32,7 @@ The current 2-tier policy is:
 
 The user set the 100号機 editable / mdx PyPI split explicitly, and on
 2026-06-25 added hibino as another PyPI consumer reached by `ssh hibino`.
-The release gate is QUD: four machines must agree at Phase 9.
+The release gate is QUAD: four machines must agree at Phase 9.
 
 Topics: two_tier, lab_editable, hyaku_editable, mdx_pypi, hibino_pypi, gui_extra,
         editable_to_pypi_migration, pypi_to_editable_migration,
@@ -58,12 +58,12 @@ Roles:
   editably so LAB-side fixes can be reflected by metadata refresh plus
   plugin deploy, not by waiting for PyPI.
 * **mdx** — PyPI verification point, isolated from NAS, used as a wheel
-  consumer in `release_qud.py phase8e` and the Phase 9 drift probe.
+  consumer in `release_quad.py phase8e` and the Phase 9 drift probe.
 * **hibino** — PyPI verification / deployment point, reached by
   `ssh hibino`. It installs `radia`, `cubit-mesh-export`, and
-  `radia-mcp` from PyPI and is included in `release_qud.py phase9`.
+  `radia-mcp` from PyPI and is included in `release_quad.py phase9`.
   Cubit is optional on hibino: if Coreform Cubit 2025.12+ is absent,
-  `release_qud.py phase8 --target hibino` skips the plugin/smoke part
+  `release_quad.py phase8 --target hibino` skips the plugin/smoke part
   after the PyPI install. Its bare `python` command is a Windows Store
   alias, so release probes and deploys use `py -3.12`.
 
@@ -111,7 +111,7 @@ UNC path back to the same workstation: loading `_radia_pybind.pyd` directly
 from that UNC form can access-violate on Windows even though the same binary
 imports from a local path or PyPI wheel.
 
-After every release or source-side deploy, `release_qud.py phase8
+After every release or source-side deploy, `release_quad.py phase8
 --target 100` runs the equivalent of:
 
 ```powershell
@@ -183,12 +183,12 @@ cutting a tag); it's NOT part of the standard release path anymore.
 ## hibino_pypi — hibino PyPI install
 ============================================================
 
-hibino is the second PyPI consumer machine in the release-qud gate. Use
+hibino is the second PyPI consumer machine in the release-quad gate. Use
 the SSH alias `hibino`; do not pass Japanese paths or long PowerShell
 commands as SSH arguments. Use `py -3.12` for Python on hibino; the
 bare `python` command is the Windows Store alias and will only print
 `Python`.  `C:\\Python312\\Scripts` may be absent from PATH, so
-`release_qud.py` derives the Scripts directory from `py -3.12 -c
+`release_quad.py` derives the Scripts directory from `py -3.12 -c
 "import sys; print(sys.executable)"` before calling
 `cubit-plugin-install` or `cubit-smoke-test`.  If Coreform Cubit
 2025.12+ is not installed, hibino remains a package/MCP verification
@@ -213,8 +213,8 @@ cubit-smoke-test
 PS
 ```
 
-`tools/release_qud.py phase8 --target hibino` runs this recipe through
-the common PyPI deploy helper. `tools/release_qud.py phase9` includes
+`tools/release_quad.py phase8 --target hibino` runs this recipe through
+the common PyPI deploy helper. `tools/release_quad.py phase9` includes
 hibino in the version/hash drift table.
 
 ============================================================
@@ -256,7 +256,7 @@ Cubit owns that embedded runtime.
 ============================================================
 
 Use this when moving a machine from editable to PyPI, e.g. mdx or
-hibino. 100号機 is intentionally editable in the current release-qud
+hibino. 100号機 is intentionally editable in the current release-quad
 policy.
 
 ```powershell
@@ -360,7 +360,7 @@ pip install -e packages/cubit-mesh-export --no-deps --no-cache-dir
 pip install -e packages/radia-mcp --no-deps --no-cache-dir
 ```
 
-`tools/release_qud.py done` runs a Phase 9 cross-machine probe
+`tools/release_quad.py done` runs a Phase 9 cross-machine probe
 that compares `__version__` and `pip list` outputs. A DRIFT row in
 that report usually means metadata_sync was skipped on LAB (the
 only editable machine left).
@@ -479,12 +479,12 @@ until this passes.
 
 * `.claude/skills/deploy/SKILL.md` — deployment background for 100号機,
   mdx, and hibino.
-* `tools/release_qud.py` — Phase 8a-8e deploy
+* `tools/release_quad.py` — Phase 8a-8e deploy
   steps after a release.
 * `tools/push_pyds_to_mdx.py` — LAB → mdx C++ artifact pusher (with
   lock-killer prelude).  RETIRED 2026-05-02 from standard release
   flow; preserved for branch-test scenarios only.
-* `tools/release_qud.py done` — Phase 9 cross-machine drift
+* `tools/release_quad.py done` — Phase 9 cross-machine drift
   probe (the Definition Of Done gate).
 """
 

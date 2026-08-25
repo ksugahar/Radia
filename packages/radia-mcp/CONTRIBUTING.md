@@ -136,7 +136,7 @@ operational completion.  The minimum pre-push health evidence is:
 - top-level pytest collection green
 
 After PyPI upload, the release is not "done" until wheel-installed MCP
-entry points smoke and the release-QUD deploy checks pass on their
+entry points smoke and the release-quad deploy checks pass on their
 intended machines.  See
 `release_workflow(topic="mcp_quality_review")` and
 `validation/mcp_quality/release_candidate_review_2026-06-26.json`.
@@ -150,7 +150,7 @@ PYTHONIOENCODING=utf-8 \
   twine upload --disable-progress-bar dist/radia_mcp-X.Y.Z*
 ```
 
-After upload, follow the monorepo release-QUD deployment policy:
+After upload, follow the monorepo release-quad deployment policy:
 LAB and 100号機 remain editable installs, mdx is a PyPI consumer for
 `radia` / `cubit-mesh-export` without `radia-mcp`, and hibino is the
 PyPI MCP consumer.  Do not claim operational release quality until the

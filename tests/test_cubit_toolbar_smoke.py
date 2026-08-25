@@ -107,7 +107,7 @@ def test_gui_smoke_is_an_installed_release_gate():
         "radia.cubit_toolbar_smoke:main"
     )
 
-    release_source = (ROOT / "tools" / "release_qud.py").read_text(
+    release_source = (ROOT / "tools" / "release_quad.py").read_text(
         encoding="utf-8"
     )
     lab_start = release_source.index("def _deploy_lab():")

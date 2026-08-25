@@ -18,6 +18,16 @@ def _manifest() -> dict[str, object]:
 def _doctor_payload() -> dict[str, object]:
     root = matlab_path()
     mex = mex_path()
+    notice = root / "THIRD_PARTY_NOTICES.md"
+    notice_text = notice.read_text(encoding="utf-8") if notice.is_file() else ""
+    required_notices = (
+        "Copyright (c) 2018 Preferred Networks, Inc.",
+        "Copyright (c) 2025 Preferred Networks, Inc.",
+        "Optuna, the Optuna logo and any related marks are trademarks of "
+        "Preferred Networks, Inc.",
+        "independent, unofficial project",
+    )
+    notices_complete = all(token in notice_text for token in required_notices)
     matlab_files = sorted((root / "+radia" / "+optuna").rglob("*.m"))
     manifest = _manifest()
     expected_files = int(manifest["matlab_file_count"])
@@ -27,6 +37,7 @@ def _doctor_payload() -> dict[str, object]:
         and mex.is_file()
         and len(matlab_files) == expected_files
         and all(path.is_file() for path in simulink_entries)
+        and notices_complete
     )
     return {
         "schema": "radia-optuna.doctor.v1",
@@ -46,6 +57,8 @@ def _doctor_payload() -> dict[str, object]:
         "simulink_entry_count": sum(path.is_file() for path in simulink_entries),
         "oracle_version": manifest["oracle_version"],
         "radia_integration_adapters": manifest["radia_integration_adapters"],
+        "third_party_notice": str(notice),
+        "upstream_notices_complete": notices_complete,
     }
 
 
