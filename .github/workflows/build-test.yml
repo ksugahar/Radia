@@ -321,6 +321,7 @@ jobs:
             $env:GITHUB_PATH,
             "$gitDir`n$scripts`n",
             [Text.UTF8Encoding]::new($false))
+          "RADIA_CI_GIT_DIR=$gitDir" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           "RADIA_CI_VENV=$venv" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           "NGSOLVE_ROOT=$ngsolveRoot" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           "NGSOLVE_DIR=$(Join-Path $ngsolveRoot 'cmake')" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
@@ -539,6 +540,14 @@ jobs:
         env:
           PYTHONPATH: '${{ github.workspace }}\src;${{ github.workspace }}\src\radia;${{ github.workspace }}\packages\radia-mcp\src'
         run: |
+          if (-not $env:RADIA_CI_GIT_DIR -or
+              -not (Test-Path (Join-Path $env:RADIA_CI_GIT_DIR 'git.exe'))) {
+            Write-Host "::error::The run-local Git directory is unavailable: $env:RADIA_CI_GIT_DIR"
+            exit 1
+          }
+          $env:PATH = "$env:RADIA_CI_GIT_DIR;$env:PATH"
+          python -c "import shutil,subprocess; p=shutil.which('git'); assert p, 'git is absent from pytest PATH'; subprocess.run([p,'--version'],check=True)"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           Write-Host "Running lightweight pytest gate from tests/..."
           # --reruns 2: retry transient failures up to 2x.  Commit
           # a61cecdf added pytest-rerunfailures as a dependency
