@@ -27,8 +27,20 @@ execute_process(
 )
 message("Python site-packages: ${PYTHON_SITE_PACKAGES}")
 
-# Set pybind11 directory
-set(pybind11_DIR ${PYTHON_SITE_PACKAGES}/pybind11/share/cmake/pybind11)
+# Resolve pybind11 from the selected Python interpreter. A venv created with
+# --system-site-packages may import pybind11 from its base installation even
+# though sysconfig's purelib points at the venv itself.
+if(NOT pybind11_DIR)
+	execute_process(
+		COMMAND ${Python3_EXECUTABLE} -c "import pybind11; print(pybind11.get_cmake_dir())"
+		OUTPUT_VARIABLE pybind11_DIR
+		OUTPUT_STRIP_TRAILING_WHITESPACE
+		RESULT_VARIABLE _PYBIND11_DIR_RESULT
+	)
+	if(NOT _PYBIND11_DIR_RESULT EQUAL 0 OR NOT EXISTS "${pybind11_DIR}/pybind11Config.cmake")
+		message(FATAL_ERROR "pybind11 CMake package is unavailable to ${Python3_EXECUTABLE}")
+	endif()
+endif()
 
 message("Finding pybind11...")
 find_package(pybind11 REQUIRED)
@@ -766,6 +778,10 @@ if(RADIA_BUILD_MATLAB_MEX)
 			# RADIA_MEX_NO_PYTHON feature below.
 			${RADIA_LIB_SOURCES}
 	)
+	target_include_directories(radia_mex BEFORE PRIVATE
+		${NGSOLVE_BUNDLED_INC}
+		${NGSOLVE_COMPAT_INC}
+	)
 	target_include_directories(radia_mex PRIVATE
 		${CMAKE_CURRENT_SOURCE_DIR}/src/matlab
 		${CMAKE_CURRENT_SOURCE_DIR}/src/radia/simulink
@@ -776,11 +792,8 @@ if(RADIA_BUILD_MATLAB_MEX)
 		${EXT_DIR}/auxparse
 		${EXT_DIR}/genmath
 		${EXT_DIR}/HACApK
-		${NGSOLVE_BUNDLED_INC}
-		${NGSOLVE_COMPAT_INC}
 		${Netgen_INCLUDE_DIRS}
 		${NGSolve_INCLUDE_DIRS}
-		${Python3_INCLUDE_DIRS}
 	)
 	target_compile_definitions(radia_mex PRIVATE
 		_CRT_SECURE_NO_WARNINGS
