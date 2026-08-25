@@ -22,11 +22,11 @@ Released 2026-08-26.
 - Applied the same automatic Dowell/Bessel selection in MATLAB PEEC and added
   Python and MATLAB regression coverage for DC continuity, broad-face skin
   asymptotics, shape dispatch, real-perimeter proximity, and invalid bundles.
-- Hardened standalone `radia-optuna` publication recovery: a manually selected
-  artifact is accepted only from an immutable, fully successful in-repository
-  push CI for the exact tagged SHA, with the required wheel and MATLAB/Simulink
-  jobs rechecked before trusted publishing. The optimizer itself remains the
-  independently versioned `radia-optuna` 0.1.0 release.
+- Updated the independent `radia-optuna` distribution to 0.1.1. It now records
+  the official Optuna MCP ownership and license boundary, bundles checked
+  upstream notices, emits its MEX-bearing Windows platform wheel directly, and
+  releases only the exact successful main-CI wheel after that wheel passes the
+  standalone LAB / 100-machine / mdx / hibino QUAD gate.
 
 ## 4.95.62 - Standalone MATLAB Optuna 4.9.0 distribution
 

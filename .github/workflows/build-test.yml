@@ -896,15 +896,6 @@ jobs:
               exit 1
             }
             $wheel = $wheels[0]
-            python -m wheel tags --python-tag py3 --abi-tag none `
-              --platform-tag win_amd64 --remove $wheel.FullName
-            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-            $wheels = @(Get-ChildItem dist\*.whl)
-            if ($wheels.Count -ne 1) {
-              Write-Host "::error::Expected one retagged radia-optuna wheel, found $($wheels.Count)"
-              exit 1
-            }
-            $wheel = $wheels[0]
             python verify_wheel.py $wheel.FullName --json
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           } finally {

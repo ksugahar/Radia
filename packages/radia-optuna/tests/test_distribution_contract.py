@@ -66,6 +66,8 @@ def test_staging_refuses_a_partial_native_distribution():
     assert "optuna_upstream_compatibility.json" in setup_source
     assert "optuna49_api_coverage.json" in setup_source
     assert "THIRD_PARTY_NOTICES.md" in setup_source
+    assert 'return "py3", "none", "win_amd64"' in setup_source
+    assert '"bdist_wheel": bdist_wheel' in setup_source
 
 
 def test_wheel_verifier_rejects_solver_boundary_leaks():
