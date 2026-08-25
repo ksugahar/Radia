@@ -1249,6 +1249,7 @@ static void matvec_sym_thread_func(int tid, int nthr, void *data) {
 typedef struct {
     st_cHACApK_leafmtx *st_lf;
     int nlf, nd, nrhs;
+    const int *active_prefix;
 } matvec_many_job_ctx;
 
 static void matvec_sym_many_thread_func(int tid, int nthr, void *data) {
@@ -1267,6 +1268,12 @@ static void matvec_sym_many_thread_func(int tid, int nthr, void *data) {
         upper = leaf->nstrtl < leaf->nstrtt;
         ndl = leaf->ndl; ndt = leaf->ndt;
         nstrtl = leaf->nstrtl; nstrtt = leaf->nstrtt;
+        if (ctx->active_prefix &&
+            (ctx->active_prefix[nstrtl-1+ndl] ==
+                 ctx->active_prefix[nstrtl-1] ||
+             ctx->active_prefix[nstrtt-1+ndt] ==
+                 ctx->active_prefix[nstrtt-1]))
+            continue;
         a1 = leaf->a1; a2 = leaf->a2;
         if (leaf->ltmtx == 1) {
             int kt = leaf->kt;
@@ -1496,9 +1503,9 @@ void HACApK_matvec_sym_wrapper(
     hacapk_matvec_run(leafmtxp_void, ctl_void, x, y, nd, matvec_sym_thread_func, 1);
 }
 
-void HACApK_matvec_sym_many_wrapper(
+static void hacapk_matvec_sym_many_run(
     void *leafmtxp_void, void *ctl_void, const double *x, double *y,
-    int nd, int nrhs)
+    int nd, int nrhs, const int *active_prefix)
 {
     st_cHACApK_leafmtxp leafmtxp = (st_cHACApK_leafmtxp)leafmtxp_void;
     st_cHACApK_lcontrol ctl = (st_cHACApK_lcontrol)ctl_void;
@@ -1511,12 +1518,30 @@ void HACApK_matvec_sym_many_wrapper(
     init_batch_matvec_buffers(nd, nrhs, nthr, leafmtxp->ktmax);
     job.st_lf = leafmtxp->st_lf; job.nlf = leafmtxp->nlf;
     job.nd = nd; job.nrhs = nrhs;
+    job.active_prefix = active_prefix;
     io.x = x; io.y = y; io.lod = ctl->lod; io.nd = nd;
     io.nrhs = nrhs; io.nthr = nthr;
     hacapk_parallel_for(nthr, matvec_many_zero_y, &job);
     hacapk_parallel_for(nd*nrhs, matvec_many_permute, &io);
     hacapk_parallel_job(matvec_sym_many_thread_func, &job);
     hacapk_parallel_for(nd*nrhs, matvec_many_reduce, &io);
+}
+
+void HACApK_matvec_sym_many_wrapper(
+    void *leafmtxp_void, void *ctl_void, const double *x, double *y,
+    int nd, int nrhs)
+{
+    hacapk_matvec_sym_many_run(
+        leafmtxp_void, ctl_void, x, y, nd, nrhs, NULL);
+}
+
+void HACApK_matvec_sym_many_masked_wrapper(
+    void *leafmtxp_void, void *ctl_void, const double *x, double *y,
+    int nd, int nrhs, const int *active_prefix)
+{
+    if (!active_prefix || active_prefix[0] != 0) return;
+    hacapk_matvec_sym_many_run(
+        leafmtxp_void, ctl_void, x, y, nd, nrhs, active_prefix);
 }
 
 /*=========================================================================

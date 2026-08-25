@@ -213,6 +213,19 @@ void HACApK_matvec_sym_many_wrapper(
     int nd,
     int nrhs);
 
+/* Symmetric row-major batch restricted to an active principal submatrix.
+ * active_prefix is the inclusive-prefix count in HACApK's permuted ordering
+ * (length nd+1, active_prefix[0]=0).  A leaf is skipped exactly when either
+ * its row or column range contains no active entry. */
+void HACApK_matvec_sym_many_masked_wrapper(
+    void *leafmtxp,
+    void *ctl,
+    const double *x,
+    double *y,
+    int nd,
+    int nrhs,
+    const int *active_prefix);
+
 /* Optional matvec profiler. Enabled by RADIA_HDIV_HMATVEC_STATS=1.
  * values[0..7] = total_s, zero_s, permute_s, leaf_s, reduce_s, meta_s,
  *                lowrank_flop_est, dense_flop_est.
