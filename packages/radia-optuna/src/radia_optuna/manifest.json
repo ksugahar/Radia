@@ -1,0 +1,26 @@
+{
+  "schema": "radia-optuna.distribution.v1",
+  "version": "0.1.0",
+  "oracle_version": "4.9.0",
+  "matlab_namespace": "radia.optuna",
+  "matlab_file_count": 92,
+  "native_gateway": "optuna_mex",
+  "native_command_count": 20,
+  "radia_runtime_required": false,
+  "simulink_standalone": true,
+  "simulink_entry_points": [
+    "+radia/+optuna/SimulinkRunner.m",
+    "+radia/+optuna/+internal/runSimulinkInput.m",
+    "+radia/+optuna/+internal/setupSimulinkWorker.m",
+    "+radia/+simulink/buildOptunaBlock.m",
+    "+radia/+simulink/optunaSFunction.m",
+    "+radia/+simulink/optunaRuntimeStore.m",
+    "+radia/+simulink/addOptunaMonitor.m",
+    "radia_optuna_sfun.m"
+  ],
+  "radia_integration_adapters": [
+    "+radia/+optuna/LTspiceRunner.m",
+    "+radia/+optuna/SheetMetalRunner.m",
+    "+radia/+optuna/+internal/runLTspiceTrial.m"
+  ]
+}

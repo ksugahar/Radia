@@ -1,0 +1,117 @@
+name: Release radia-optuna
+
+# Publish only the wheel built and verified by CI for a radia-optuna-v* tag.
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+
+permissions:
+  actions: read
+  id-token: write
+  contents: read
+
+jobs:
+  publish:
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment: pypi
+
+    steps:
+      - name: Download exact CI ref context
+        uses: actions/download-artifact@v4
+        with:
+          name: ci-release-context
+          path: ci-release-context
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Verify triggering CI ran on a radia-optuna tag
+        id: ref_check
+        env:
+          SHA: ${{ github.event.workflow_run.head_sha }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+        run: |
+          python3 - <<'PY'
+          import json, os, pathlib, sys
+          context = json.loads(pathlib.Path(
+              "ci-release-context/ci-release-context.json"
+          ).read_text(encoding="utf-8"))
+          valid = (
+              context.get("schema") == "radia.ci-release-context.v1"
+              and context.get("sha") == os.environ["SHA"]
+              and str(context.get("run_id")) == os.environ["RUN_ID"]
+              and context.get("ref_type") == "tag"
+              and any(
+                  tag.startswith("radia-optuna-v")
+                  for tag in context.get("release_tags", [])
+              )
+          )
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as out:
+              out.write(f"eligible={str(valid).lower()}\n")
+          if not valid:
+              print("No eligible radia-optuna tag in the exact CI context")
+          PY
+
+      - name: Confirm tag points at the CI commit
+        id: tag_check
+        if: steps.ref_check.outputs.eligible == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          REPO_URL="https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          VTAG=$(git ls-remote --tags "$REPO_URL" 'refs/tags/radia-optuna-v*' \
+                 | awk -v sha="$SHA" '$1 == sha {print $2}' \
+                 | sed 's/\^{}//' | head -1)
+          if [ -n "$VTAG" ]; then
+            echo "found=true" >> "$GITHUB_OUTPUT"
+            echo "tag=$VTAG" >> "$GITHUB_OUTPUT"
+          else
+            echo "found=false" >> "$GITHUB_OUTPUT"
+            echo "No radia-optuna-v* tag points at $SHA"
+          fi
+
+      - name: Check out the exact verified source
+        if: steps.tag_check.outputs.found == 'true'
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - name: Download radia-optuna wheel
+        if: steps.tag_check.outputs.found == 'true'
+        uses: actions/download-artifact@v4
+        with:
+          name: radia-optuna-wheel
+          path: dist
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Reverify wheel at the release boundary
+        if: steps.tag_check.outputs.found == 'true'
+        env:
+          RELEASE_TAG: ${{ steps.tag_check.outputs.tag }}
+        run: |
+          mapfile -t WHEELS < <(find dist -name '*.whl')
+          if [ "${#WHEELS[@]}" -ne 1 ]; then
+            echo "::error::Expected one radia-optuna wheel, found ${#WHEELS[@]}"
+            exit 1
+          fi
+          WHL="${WHEELS[0]}"
+          python3 packages/radia-optuna/verify_wheel.py "$WHL" --json
+          VERSION=$(python3 -c 'import tomllib; print(tomllib.load(open("packages/radia-optuna/pyproject.toml", "rb"))["project"]["version"])')
+          EXPECTED_TAG="refs/tags/radia-optuna-v${VERSION}"
+          if [ "$RELEASE_TAG" != "$EXPECTED_TAG" ]; then
+            echo "::error::Release tag $RELEASE_TAG does not match package version $VERSION"
+            exit 1
+          fi
+
+      - name: Publish to PyPI
+        if: steps.tag_check.outputs.found == 'true'
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist/
+          skip-existing: true

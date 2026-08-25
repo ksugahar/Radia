@@ -87,11 +87,19 @@ operating-point result. These application outputs can therefore use the same
 method-agreement, action-reaction, and lift/weight gates without duplicating
 their numerical definitions.
 
-## Optional MEX Interface
+## Separated MEX Interfaces
 
 `radia_mex` exposes Radia C++ kernels directly to MATLAB without routing
 solver calls through a Python process. NGSolve still owns TaskManager, mesh loading,
 finite-element orientation, curved mappings, and HCurl/HDiv space updates.
+
+Optimization is a separate domain and uses the 20-command `optuna_mex`.
+It has no NGSolve, oneMKL, Radia-core, or Python dependency and is loaded only
+when `radia.optuna` first performs native optimization work. `radia_mex` does
+not expose `optuna.*`, and `optuna_mex` never redirects to `radia_mex` when its
+own binary is absent. An older or partial gateway that does not expose the exact
+20-command contract also fails loudly. This keeps non-optimization MATLAB and Simulink runs from
+paying an optimizer load cost.
 
 On the current Windows distribution, the MEX gateway does not link
 `python312.lib` and MATLAB does not launch `python.exe`, but the prebuilt
@@ -107,6 +115,13 @@ Use the checked MSVC environment wrapper for the focused MEX build:
 pwsh -ExecutionPolicy Bypass -File .\Build.ps1 -MatlabMexOnly -Verbose
 ```
 
+That command builds both gateways. To build only the independent optimization
+gateway, without requiring NGSolve, use:
+
+```powershell
+pwsh -ExecutionPolicy Bypass -File .\Build.ps1 -OptunaMexOnly
+```
+
 The equivalent manual CMake route, from an initialized Visual Studio x64
 developer environment, is:
 
@@ -114,13 +129,14 @@ developer environment, is:
 cmake -S . -B build-msvc `
   -DRADIA_BUILD_MATLAB_MEX=ON `
   -DMatlab_ROOT_DIR="C:\Program Files\MATLAB\R2026a"
-cmake --build build-msvc --config Release --target radia_mex -j 8
+cmake --build build-msvc --config Release --target radia_mex optuna_mex -j 8
 ```
 
-The build copies `radia_mex.mexw64` into this directory. On Windows it also
-places the required oneMKL dispatch DLLs beside the MEX; these local binary
-artifacts are intentionally excluded from Git. MATLAB's existing OpenMP
-runtime is reused, so `libiomp5md.dll` is not copied beside the MEX.
+The build copies `radia_mex.mexw64` and `optuna_mex.mexw64` into this
+directory. On Windows it also places the required oneMKL dispatch DLLs beside
+`radia_mex`; `optuna_mex` does not use them. These local binary artifacts are
+intentionally excluded from Git. MATLAB's existing OpenMP runtime is reused,
+so `libiomp5md.dll` is not copied beside the MEX.
 
 In MATLAB:
 
@@ -782,9 +798,35 @@ developer smoke.
 
 ## Table-backed optimization
 
-The MATLAB side also provides an Optuna-style, table-backed study. The main
+The MATLAB side provides a table-backed, differentially tested subset of
+Optuna 4.9.0. It is not a drop-in replacement for the complete Python package;
+the checked scope and explicit gaps are the machine-readable
+`optuna_upstream_compatibility.json` contract. The main
 trial table is accompanied by normalized parameter, intermediate-value, and
 user-attribute tables, and can be persisted to a MAT file:
+
+It can be installed independently from the same monorepo source of truth with
+`python -m pip install radia-optuna`, or together with Radia through
+`python -m pip install "radia[optuna]"`. The package has its own release
+version; the Radia extra pins the independently released version that passed
+its integration gate. `radia-optuna-path` prints the directory to add to
+MATLAB and `radia-optuna-doctor --json` verifies the installed 92-file API and
+native gateway. The standalone wheel contains three explicitly declared Radia
+integration adapters; using those adapters requires the full Radia install,
+while the core Study/Trial/sampler/pruner API does not.
+
+Generic Simulink optimization is also standalone. `SimulinkRunner`,
+`runSimulinkInput`, and `setupSimulinkWorker` ship in `radia-optuna`, operate on
+`Simulink.SimulationInput`, and do not call Radia. Electromagnetic application
+models, Radia library blocks, PEEC, and sheet-metal adapters remain Radia-owned.
+The generic `radia.simulink.buildOptunaBlock` Level-2 MATLAB S-Function and
+`radia.simulink.addOptunaMonitor` are shipped too: each trial is persisted to
+the normalized MAT-backed tables, while best value, status, counts, Pareto
+points, and failure information remain visible as Simulink signals and Scope/
+XY Graph views. These generic block files are an audited standalone subset of
+`radia.simulink`; they do not load the Radia solver.
+Install `radia[optuna-upstream]` only when the pinned Python/SciPy/PyTorch
+oracle-backed features are also required.
 
 ```matlab
 study = radia.optuna.create_study( ...
@@ -810,12 +852,22 @@ bestSnapshot = study.bestSolution();
 `paretoFront()` instead. The snapshot is derived from the persisted tables, so
 it cannot become stale when a study is reloaded.
 
-`Trial.suggest_float`, `suggest_int`, and `suggest_categorical` are compatible
-spellings for the MATLAB camelCase methods. FIFO `enqueueTrial`, immutable
-`FrozenTrial` snapshots, `createTrial`/`addTrial`, callbacks, timeout,
-selective exception catching, `stop`, attributes, and metric names follow the
-same Study/Trial lifecycle. Duplicate intermediate steps are ignored rather
-than overwritten, while NaN reports remain available to pruners.
+`load_study`, `copy_study`, `delete_study`, `get_all_study_names`, and
+`get_all_study_summaries` provide the corresponding Optuna study-management
+surface for the deliberately narrow zero-or-one-study MAT backend.
+`FixedTrial` evaluates an objective at supplied parameters with upstream
+warnings and distribution-compatibility errors, which is useful for replaying
+or validating a selected CAE design.
+
+`Trial.suggest_float`, `suggest_int`, and `suggest_categorical` are checked
+spellings for the MATLAB camelCase methods. FIFO `enqueueTrial`,
+`FrozenTrial` snapshots, `createTrial`/`create_trial`/`addTrial`, callbacks,
+timeout, selective exception catching, `stop`, attributes, and metric names
+cover the verified Study/Trial subset. `tell` accepts either a live Trial or
+its trial number. Throwing `radia.optuna.TrialPruned()` inside an objective is
+converted to a PRUNED trial with the last intermediate value before callbacks
+run. Duplicate intermediate steps are ignored rather than overwritten, while
+NaN reports remain available to pruners.
 
 `MedianPruner`, `PercentilePruner`, `ThresholdPruner`, `PatientPruner`,
 `NopPruner`, `SuccessiveHalvingPruner`, `HyperbandPruner`, and
@@ -828,23 +880,107 @@ share the same ask/tell lifecycle. Grid search stops `Study.optimize` after
 the Cartesian product is exhausted, while brute-force search exhausts finite
 conditional define-by-run trees. Unscrambled Sobol/Halton prefixes match the
 Optuna/SciPy definitions through the supported 32 Sobol dimensions.
-`Scramble=true` uses a seeded lower-triangular linear-matrix scramble plus
-digital shift for Sobol and seeded per-digit Owen permutations for Halton;
-MATLAB and SciPy random streams are intentionally not bit-identical. TPE uses the persisted
-MATLAB tables for good/bad density proposals. CMA-ES infers the numeric
-intersection search space, samples a full population jointly, and applies
+`Scramble=true` uses the configured `scipy.stats.qmc` implementation, matching
+Optuna 4.9.0's seeded PCG64 Sobol/Halton sequence and failing loudly when
+SciPy is unavailable. TPE uses typed internal study columns and exposes the
+persisted MATLAB tables as lazy compatibility views; `GammaFcn` and
+`WeightsFcn` expose Optuna 4.9.0's callable split and
+history-weight contracts for both single- and multi-objective studies.
+`Group=true` decomposes conditional spaces by parameter co-occurrence and uses
+Optuna's global trial ranking before fitting each group. `CategoricalDistanceFcn`
+accepts a `containers.Map` from exact parameter names to two-argument distance
+functions and applies Optuna's distance-weighted categorical kernels. With
+`Multivariate=true`, `WarnIndependentSampling` controls the matching warning
+when a known dynamic parameter falls back outside the relative search space.
+The native MT19937 handle and fused numerical/joint TPE proposal kernels retain
+the exact explicitly seeded proposal sequence. Sequential in-memory grouped TPE
+also appends completed trials to an incremental native history and proposes all
+current co-occurrence groups in one preparation call. Storage, pruning,
+constraints, constant-liar, custom gamma/weights, and categorical-distance
+callbacks use the checked high-level MATLAB orchestration path. This is a
+behavioral path selection above the required native gateway, not a missing-MEX
+or legacy-`radia_mex` fallback. In the 2026-08-25 LAB benchmark,
+100 warmed sequential trials took 0.093358 s for scalar TPE and 0.198069 s for
+grouped conditional TPE, versus 0.104030 s and 0.327160 s for
+upstream Optuna 4.9.0 on the same host. See
+`validation_test/optimization/results_matlab_optuna49_performance_20260825.json`.
+CMA-ES
+infers the numeric intersection search space, samples a full population jointly, and applies
 full-covariance rank-one/rank-mu adaptation with cumulative evolution paths;
-integer variables are quantized after sampling. Its mean, covariance, step
-size, evolution paths, partial population, and random state are retained in
-`Study.SamplerStateTable` and survive MAT-file reloads. The workflow and tables are
-compatible with Optuna, while sampler random streams and optimizer internals
-are not promised to be bit-for-bit identical to Python Optuna.
+integer variables are quantized after sampling. A separately seeded
+`IndependentSampler` handles startup, categorical, and dynamic-space fallback,
+with `WarnIndependentSampling` matching the public warning control. Its mean,
+covariance, step size, evolution paths, partial population, and random state are retained in
+`Study.SamplerStateTable` and survive MAT-file reloads. Explicitly seeded
+Random, scalar/mixed/multivariate/multi-objective TPE, Grid, PartialFixed,
+scrambled and unscrambled QMC, fixed and conditional BruteForce, CMA-ES,
+NSGA-II, NSGA-III, all six built-in NSGA-II crossovers, and GP proposal
+sequences (including acquisition after startup) are regression-tested against
+fixtures generated by upstream Optuna 4.9.0. The same direct oracle supplies core
+ask/tell/enqueue expectations, pruning decisions, and constrained Pareto
+results, plus StudyDirection/TrialState enums, distribution JSON and deprecated
+aliases, public intersection-search-space behavior, unfinished imported-trial
+claiming, the BaseTrial/BaseSampler/BasePruner hierarchy, and StudySummary
+objects. Empty persisted studies are registered at creation, matching upstream
+storage visibility. The GP oracle also
+covers constraint-aware acquisition and exact
+history replay after MAT-table reload. `GPSampler` therefore defaults to
+`Backend="upstream-python"` and
+requires the pinned Optuna/NumPy/SciPy/PyTorch runtime. The former toolbox-free
+Matérn-5/2 implementation remains available only as
+`Backend="matlab-native"`; its MAT-file resume and lifecycle tests are MATLAB
+integration evidence, not upstream proposal-parity evidence.
+The public Study/Trial lifecycle is independently checked through the official
+`optuna/optuna-mcp` 0.2.0 server over a real stdio MCP session, covering
+fixed-distribution `ask`, `tell`, user attributes, `add_trial(s)`, metric
+names, `best_trial`, and `best_trials`. The two fixtures can be regenerated
+with `tests/matlab/fixtures/generate_optuna49_oracle.py` and
+`tests/matlab/fixtures/generate_optuna49_mcp_oracle.py`. optuna-mcp 0.2.0 does
+not accept a sampler seed, so exact seed streams intentionally remain in the
+direct Optuna 4.9.0 oracle. Every MATLAB Optuna test function is classified in
+`tests/matlab/fixtures/optuna_test_manifest.json` as `upstream-python`,
+`upstream-mcp`, or `matlab-integration`. The last class covers only MATLAB
+storage, parallel, native, and Simulink integration and is not evidence of
+behavioral parity. Regenerate that checked inventory with
+`tests/matlab/fixtures/generate_optuna_test_manifest.py`.
+The machine-readable `matlab/optuna_upstream_compatibility.json` inventory
+separates the shared behavior already verified against 4.9.0, MATLAB-only
+integration contracts, and upstream features that are unsupported or not yet
+oracled. Unseeded sampler constructors now follow upstream `seed=None`
+semantics by drawing fresh private entropy for each instance without changing
+MATLAB's global RNG. Exact random-stream compatibility still requires the same
+explicit seed because an unseeded proposal sequence is intentionally
+nondeterministic on both sides.
+QMCSampler also exposes the upstream asynchronous-seeding and independent-
+fallback warning controls; their enabled/disabled behavior is generated from
+the Optuna 4.9.0 logger rather than asserted from handwritten expectations.
 
-`GPSampler` fits a toolbox-free Matern-5/2 ARD Gaussian process over the
-stable intersection search space. It supports numeric and categorical
-variables, constrained feasibility, pending-trial repulsion, expected
-improvement, and Monte-Carlo expected hypervolume improvement. GP
-hyperparameters and random state survive MAT-file reloads. `NSGAIIISampler`
+Complete-package work is tracked separately by
+`tests/matlab/fixtures/optuna49_public_api.json`, generated directly from the
+pinned Python package, and `matlab/optuna49_api_coverage.json`, generated by
+comparing that inventory with the MATLAB package. The inventory includes the
+selected public modules, their exported symbols, and public class members.
+The coverage file is deliberately release-blocking: full compatibility remains
+false while any entry is missing, only partially oracled, or lacks an exact
+oracle mapping. Regenerate both files with
+`generate_optuna49_api_inventory.py` and
+`generate_optuna49_api_coverage.py`; do not hand-edit their counts.
+
+`get_param_importances` delegates fANOVA, mean-decrease-impurity, and PED-ANOVA
+evaluation to the pinned Optuna 4.9.0 implementation after rebuilding the
+public completed-trial contract. `MaxTrialsCallback`,
+`BestValueStagnationEvaluator`, `Terminator`, and `TerminatorCallback` provide
+the corresponding checked stopping behavior. These expectations come from the
+upstream fixture rather than handwritten MATLAB thresholds.
+
+`GPSampler(Backend="upstream-python")` executes Optuna 4.9.0's public GP
+sampler, including its PyTorch/SciPy LogEI acquisition path. The explicit
+`Backend="matlab-native"` alternative fits a toolbox-free Matern-5/2 ARD
+Gaussian process over the stable intersection search space. It supports
+numeric and categorical variables, constrained feasibility, pending-trial
+repulsion, expected improvement, and Monte-Carlo expected hypervolume
+improvement; its hyperparameters and random state survive MAT-file reloads.
+`NSGAIIISampler`
 adds Optuna-style extreme-point normalization, reference-line association,
 and niche preservation for many-objective populations.
 
@@ -860,6 +996,16 @@ study = radia.optuna.create_study( ...
     storage="C:\temp\multivariate-study.mat");
 study.optimize(@(trial) objectiveWithScalarSuggestions(trial), 40);
 ```
+
+For a conditional define-by-run tree, enable group decomposition explicitly:
+
+```matlab
+sampler = radia.optuna.TPESampler( ...
+    Seed=42, Multivariate=true, Group=true);
+```
+
+This matches upstream TPE's global good/bad split followed by projection into
+maximal co-occurrence groups; it is not a separate MATLAB grouping heuristic.
 
 Parameters that are absent from any eligible trial, or whose persisted
 distribution changed, stay outside the intersection and use their ordinary
@@ -902,16 +1048,19 @@ constraint-aware tournament and elite selection, categorical uniform
 crossover, random-fallback mutation, and Uniform, BLX-alpha, SPX, SBX, vSBX,
 and UNDX numerical crossovers under `radia.optuna.nsgaii`. Empty constraint
 vectors remain distinguishable from missing constraint data across storage
-reloads. MATLAB and NumPy random streams are intentionally not bit-identical.
+reloads. Parent ordering, crossover/mutation draw order, and NumPy-compatible
+MT19937 state are checked against the upstream 4.9.0 seeded sequence.
 Use
 `SimulinkRunner.optimizeParallel` (`parsim`) or
 `LTspiceRunner.optimizeParallel` (`parfeval`) for parallel engineering trials.
 
 `radia.optuna.nativeStatus()` reports the optional optimizer MEX backend. The
 native commands accelerate non-dominated rank/crowding and numerical or
-categorical Parzen log-density evaluation. `Study`, `Trial`, random streams,
-MAT-file persistence, and CAE evidence remain readable MATLAB code, with a
-checked MATLAB fallback when the MEX is unavailable. The Simulink Optimization
+categorical Parzen log-density evaluation. The NumPy-compatible MT19937 stream
+uses a checked native handle for uniform, normal, integer, and permutation
+draws and serializes through the same sampler-state schema; its exact MATLAB
+implementation remains the fallback. `Study`, `Trial`, MAT-file persistence,
+and CAE evidence remain readable MATLAB code. The Simulink Optimization
 block keeps its original telemetry ports and adds an independent `cancel`
 input plus failed, attempted, and failure-code outputs. Failed mesh or solver
 trials are recorded and the requested trial budget continues; no Python or
@@ -1165,9 +1314,11 @@ materialized in the optimization loop.
 ## Binding policy
 
 The executable parity audit compares three pybind11 surfaces with the
-`radia_mex` command table: 98 public top-level names, 27 underscore-prefixed
-numerical kernels, and 123 stateful class members. All 248 entries are covered
-by the current 362-command gateway. Three internal mesh/test helpers are
+`radia_mex` command table: 99 public top-level names, 28 underscore-prefixed
+numerical kernels, and 126 stateful class members. All three surfaces are fully
+covered by the current 363-command gateway. The independent 20-command
+`optuna_mex` owns only its two API commands and 18 optimizer kernels. Three
+internal mesh/test helpers are
 classified explicitly rather than silently omitted. The remaining `radentry`
 C ABI is not a backward-compatibility contract: dead or unsafe entries are
 deleted rather than retained. These families are represented as follows:
@@ -1193,8 +1344,10 @@ The current gaps and measured backend comparison are recorded in the
 [MATLAB/Python API parity audit](../docs/api/MATLAB_PYTHON_API_PARITY.md).
 
 This is deliberately not a mechanical one-MEX-file-per-`.def` translation.
-One gateway avoids duplicating the Radia/NGSolve runtime and gives every
-stateful class the same checked lifetime and exception boundary.
+One Radia gateway avoids duplicating the Radia/NGSolve runtime and gives every
+solver-side stateful class the same checked lifetime and exception boundary;
+the independent optimizer gateway avoids loading that runtime when it is not
+needed.
 
 The parity audit also rejects any reappearance of the retired
 `ObjMltExtPgn`, `ObjMltExtRtg`, or `ObjMltExtTri` names in pybind11, MEX, or the

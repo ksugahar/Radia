@@ -33,6 +33,7 @@ S:\Radia\01_GitHub\
         check.py          # check-vol CLI + check_consistency() API
         cubit_mesh_curver.pyd  # C++ pybind11 module (bundled)
     radia-mcp/            # pip install radia-mcp (MCP servers + skills)
+    radia-optuna/         # pip install radia-optuna (standalone MATLAB Optuna)
   src/radia/axifem.pyd  # CORE METHOD (not a package): axisymmetric FE
                           # (Henrotte basis), ships in the radia wheel.
                           # docs/axifem/ (+ validation_test/), tests/axifem/.
@@ -57,7 +58,7 @@ S:\Radia\01_GitHub\
   install_full.py          # One-command full setup
 ```
 
-**PyPI packages** (3 independent packages in the same monorepo, each
+**PyPI packages** (4 independent distributions in the same monorepo, each
 versioned + released separately on PyPI):
 
 | Package | Install | Purpose |
@@ -65,8 +66,9 @@ versioned + released separately on PyPI):
 | **radia** | `pip install radia` | C++ core + Python (HDiv-VIM/PEEC, panels, MCP) |
 | **cubit-mesh-export** | `pip install cubit-mesh-export` | High-order curved mesh export from Cubit (does NOT require radia) |
 | **radia-mcp** | `pip install radia-mcp` | MCP servers + skills for AI-assisted workflows |
+| **radia-optuna** | `pip install radia-optuna` | Standalone MATLAB Optuna namespace + lightweight `optuna_mex`; no Radia solver/NGSolve/MKL dependency |
 
-### POLICY: Compute Core in `radia`, Applications Outside (2026-06-14)
+### POLICY: Compute Core in `radia`; Optuna Distribution Exception (2026-08-25)
 
 **POLICY**: The computational **core methods** -- HDiv-VIM, PEEC, axisymmetric FE,
 the DtN / FEM-Kelvin operator, and any future solver/kernel -- live in
@@ -81,16 +83,32 @@ Decision rule for new work:
 - a new **engineering application** -> a `radia.<domain>` subpackage (+ panels +
   `radia_mcp.<domain>` knowledge); a deployable `radia-<app>` package only if it
   genuinely needs an independent PyPI release.
-- Three PyPI packages exist: **`radia`** itself (`pip install radia`, the main
+- `radia-optuna` is the explicit exception: Optuna is a generic, independently
+  useful MATLAB compatibility component rather than a Radia physical solver.
+  Its canonical optimization sources remain under `matlab/+radia/+optuna`; the
+  separate wheel stages that tree plus the 20-command `optuna_mex`. The audited
+  generic Simulink subset (`buildOptunaBlock`, its Level-2 MATLAB S-Function/
+  runtime store, and `addOptunaMonitor`) is staged from
+  `matlab/+radia/+simulink` too. It must not acquire Radia-core, NGSolve, or MKL
+  dependencies. Three named LTspice/sheet-metal adapters may require Radia and
+  remain declared in its checked manifest. Generic `SimulinkRunner` and block
+  operation belong to the standalone package and must be tested from an
+  installed wheel without the repository or Radia on the MATLAB path. The block
+  must persist trial tables and expose progress/failure telemetry as Simulink
+  signals; `optuna_mex` is required, not an optional missing-MEX fallback.
+  `radia-optuna` has its own release version; `radia[optuna]` pins the
+  independently released version that passed Radia's integration gate.
+- Four PyPI distributions exist: **`radia`** itself (`pip install radia`, the main
   wheel -- it bundles every core method + every `radia.<domain>` application) plus
-  the two **tooling** packages above (`cubit-mesh-export`, `radia-mcp`). The
-  `packages/` directory holds ONLY those two extra packages; no core method and no
+  the three independent packages above (`cubit-mesh-export`, `radia-mcp`,
+  `radia-optuna`). The `packages/` directory holds ONLY those three extra
+  distributions; except for the explicit Optuna boundary, no core method and no
   `radia.<domain>` is ever its own PyPI package -- they all ship inside the `radia`
   wheel.
 
 This is why compute-method side packages were dissolved into radia on 2026-06-14
 (they were compute methods mis-packaged as `radia-<X>`); `packages/` now holds
-only the two genuine tooling packages above.
+only the genuine tooling/interface packages above.
 
 **Core solver methods inside `radia`** (NOT standalone packages -- they ship in the
 `radia` wheel):
@@ -361,6 +379,59 @@ be silently omitted or replaced by a numerically different MATLAB algorithm.
   artifact boundary, deliberately retained Python/ecosystem boundary, and test
   gates. Landing one focused MEX command advances the family but does not mark
   the whole family complete.
+
+### MATLAB Optuna Upstream Differential-Oracle Policy (2026-08-21)
+
+**POLICY**: Upstream Optuna 4.9.0 is the sole behavioral oracle for every
+MATLAB Optuna test that exercises behavior shared with Optuna. A MATLAB
+implementation detail, historical Radia result, or handwritten expected value
+must never define compatibility. MATLAB-only storage, Simulink, native-MEX, and
+parallel-execution checks may remain as integration tests, but they are not
+evidence of Optuna parity.
+
+- Generate shared-behavior expectations by executing pinned
+  `optuna==4.9.0`. Use the same explicit sampler seed, sampler options, search
+  space and parameter order, trial numbers, completed/pruned/failed history,
+  constraints, and objective values on both sides. Run proposal-sequence
+  comparisons sequentially so scheduling cannot change random consumption.
+- Record and check every backend version that can affect the result: Python,
+  NumPy, SciPy, PyTorch, and `cmaes` where applicable. Regenerators must fail
+  when the pinned Optuna version is not present and must produce byte-stable
+  JSON on repeated runs.
+- Use direct upstream Optuna execution for seeded numerical and state-machine
+  comparisons. Use the official `optuna/optuna-mcp` server over a real MCP
+  transport for the public MCP Study/Trial tool contract. The MCP server is not
+  a seeded numerical oracle while its `set_sampler` tool does not expose a
+  seed.
+- A test of shared behavior must read its expected values, states, ordering,
+  warnings/errors, or proposal sequence from an upstream-generated fixture.
+  Do not add handcrafted sampler sequences, quality bands, dominance orders,
+  pruning decisions, default values, or private-state assumptions as the
+  compatibility truth.
+- Prefer public observable behavior. An internal MATLAB test is allowed only
+  when it protects a MATLAB-specific invariant that upstream Optuna cannot
+  express; classify it explicitly as `matlab-integration` and state the
+  boundary. Such a test must not be cited in docs, changelogs, or releases as
+  evidence of upstream parity.
+- Every `tests/matlab/test_optuna*.m` test function must appear in the checked
+  Optuna oracle manifest as `upstream-python`, `upstream-mcp`, or
+  `matlab-integration`. Shared-behavior tests classified as
+  `matlab-integration` are a policy failure.
+- Generate the complete pinned public-API inventory, including exported symbols
+  and public class members, directly from `optuna==4.9.0`. Compare it with the
+  MATLAB surface in a checked coverage file. A complete-compatibility claim is
+  forbidden until every required entry is present and exactly oracle-mapped;
+  partial family evidence is not closure. MATLAB-only parallel execution and
+  table/MAT storage are extensions and do not waive any shared API behavior.
+- Treat upstream `seed=None` as nondeterministic constructor behavior, not an
+  exact proposal sequence. Verify that the upstream default is `None`, that
+  separately constructed MATLAB samplers draw fresh private entropy, and that
+  this does not mutate MATLAB's global RNG. Exact sequence parity still uses an
+  equal explicit seed on both sides.
+- When upstream and MATLAB disagree, first add or regenerate the upstream
+  fixture, then fix MATLAB. Never update the expected result from the MATLAB
+  output. A deliberate unsupported upstream feature must fail loudly and be
+  recorded as a limitation, not normalized into a passing alternative.
 
 ---
 

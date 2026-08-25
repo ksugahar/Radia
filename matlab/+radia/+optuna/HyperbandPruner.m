@@ -1,4 +1,4 @@
-classdef HyperbandPruner < handle
+classdef HyperbandPruner < radia.optuna.BasePruner
     %HYPERBANDPRUNER Optuna-compatible asynchronous Hyperband brackets.
 
     properties (SetAccess=private)

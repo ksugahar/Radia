@@ -1,4 +1,4 @@
-classdef PercentilePruner < handle
+classdef PercentilePruner < radia.optuna.BasePruner
     %PERCENTILEPRUNER Keep the requested percentile of completed trials.
 
     properties (SetAccess=private)
