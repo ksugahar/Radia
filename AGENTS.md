@@ -448,6 +448,24 @@ evidence of Optuna parity.
   transport for the public MCP Study/Trial tool contract. The MCP server is not
   a seeded numerical oracle while its `set_sampler` tool does not expose a
   seed.
+- radia-mcp supports the MATLAB distribution without becoming a second Optuna
+  MCP server. Every shared operation present in the official
+  `optuna/optuna-mcp` live `tools/list` MUST be executed by that upstream
+  server. `mcp-server-radia-matlab` owns only MATLAB differences: table/MAT
+  persistence, Simulink monitoring and failure telemetry, MATLAB parallel
+  execution, the standalone `optuna_mex`, and Radia CAE artifact adapters. It
+  MUST NOT proxy, rename, or reimplement an upstream Optuna MCP tool.
+- Preserve the applicable Optuna and `optuna-mcp` MIT copyright and permission
+  notices whenever upstream source or a substantial portion is copied or
+  redistributed, and record copied/adapted provenance. `radia-optuna` is an
+  independent, unofficial project; it is not affiliated with, sponsored by,
+  or endorsed by Preferred Networks, Inc. or the Optuna project. Public docs
+  MUST include exactly: "Optuna, the Optuna logo and any related marks are
+  trademarks of Preferred Networks, Inc." Do not use the Optuna logo or imply
+  official status. Differential MCP regeneration uses local stdio and a fresh
+  per-run temporary SQLite database, never shared/production storage; routine
+  tests use checked fixtures, never launch Dashboard, and never automatically
+  create upstream issues or pull requests.
 - A test of shared behavior must read its expected values, states, ordering,
   warnings/errors, or proposal sequence from an upstream-generated fixture.
   Do not add handcrafted sampler sequences, quality bands, dominance orders,
@@ -678,11 +696,11 @@ Skin depth is computed from frequency for SIBC, but field propagation uses quasi
 
 **POLICY**: A Radia Simulink library release, including
 `radia_simulink_library.slx`, MATLAB support files, and MEX assets, MUST NOT
-be published to GitHub Releases until the complete `release-qud` four-machine
+be published to GitHub Releases until the complete `release-quad` four-machine
 verification has passed. The four machines are LAB, 100号機, mdx, and hibino.
 
 - The release candidate is assembled and tested before publication.
-- The `release-qud` `done` gate is the authoritative publication decision.
+- The `release-quad` `done` gate is the authoritative publication decision.
 - A failed, partial, or manually waived machine check is not a release pass.
 - GitHub Release assets must include the versioned Simulink package,
   `manifest.json`, and `SHA256SUMS.txt` when the candidate contains them.
@@ -1433,7 +1451,7 @@ ERROR is **harmless for the Radia workflow**:
 
 - The deployed LAB / 100号機 / mdx machines run Cubit Pro and never see
   the warning anyway. hibino is a PyPI package / MCP consumer; Cubit is
-  optional there and the QUD deploy skips the Cubit plugin smoke when
+  optional there and the QUAD deploy skips the Cubit plugin smoke when
   Coreform Cubit 2025.12+ is absent.
 
 **Do NOT** coarsen sample .jou meshes to "fit under" the 50k cap, and
@@ -1835,7 +1853,7 @@ for (int i = 0; i < n; i++) { ... }
    git tag vX.Y.Z
    git push origin vX.Y.Z
    ```
-9. Monitor with `python tools/check_ci.py --branch main --watch`; for full multi-machine deploy use `release-qud`.
+9. Monitor with `python tools/check_ci.py --branch main --watch`; for full multi-machine deploy use `release-quad`.
 
 **General User Install** (after PyPI publish):
 ```bash
@@ -1875,13 +1893,13 @@ robocopy S:\NGSolve\01_GitHub\install_ngsolve C:\NGSolve /MIR
 - CI/CD 環境 (e.g. `C:\actions-runner\_work\Radia\Radia\...`) は別管理 (NETWORK
   SERVICE 所有)。 LAB の editable pointer がそちらに drift していたら戻す。
 
-**POLICY (2026-06-25 update)**: **QUD 配布**: LAB と 100号機 は editable
+**POLICY (2026-06-25 update)**: **QUAD 配布**: LAB と 100号機 は editable
 (NAS source、developer/user feedback loop)、mdx と hibino は PyPI install。
 mdx は compute/Cubit verification point なので `radia` + `cubit-mesh-export`
 のみでよく、`radia-mcp` は不要。hibino は PyPI 経由の MCP consumer として
 `radia-mcp` も入れる。
 
-**QUD 配布モデル (2026-06-25)**:
+**QUAD 配布モデル (2026-06-25)**:
 
 | Stage | マシン | install 形態 | 目的 |
 |-------|--------|-----------|------|
@@ -1892,7 +1910,7 @@ mdx は compute/Cubit verification point なので `radia` + `cubit-mesh-export`
 
 **変更点 (2026-06-25)**:
 - 旧: LAB editable / 100号機 + mdx 両方 PyPI (2-tier).
-- 新: LAB + 100号機 editable / mdx + hibino PyPI (QUD).
+- 新: LAB + 100号機 editable / mdx + hibino PyPI (QUAD).
 - mdx は `radia-mcp` 不要。hibino を PyPI 経由の MCP consumer として追加。
 
 **LAB / 100号機 editable パッケージ**:
@@ -1904,8 +1922,8 @@ mdx は compute/Cubit verification point なので `radia` + `cubit-mesh-export`
 共有worktreeに並行WIPがあるreleaseでは、そのWIPをstash/clean/resetしてはならない。
 代わりに同一NAS上へexact SHAのclean release worktreeを作り、
 `RADIA_RELEASE_EDITABLE_REPO_LAB` と `RADIA_RELEASE_EDITABLE_REPO_100` で
-LAB/100号機から見える各pathを `release_qud all` と `done` の両方へ渡す。
-QUDはprocess停止やinstallより前にSHA一致とtracked-cleanを強制する。公開完了まで
+LAB/100号機から見える各pathを `release_quad all` と `done` の両方へ渡す。
+QUADはprocess停止やinstallより前にSHA一致とtracked-cleanを強制する。公開完了まで
 release worktreeを保持し、並行WIPがmainへ着地した後に通常のeditable pointerへ戻す。
 
 LAB / 100号機で `pip install --upgrade <pkg>` を流すと editable が静かに上書きされて壊れるので注意。release 後の LAB / 100号機 側 metadata 同期は `pip install -e <path> --no-deps --no-cache-dir` で再 editable 化。`pip install --upgrade` は **mdx / hibino 用** (PyPI から通常通り upgrade).
@@ -3224,9 +3242,9 @@ same section in CLAUDE.md; a change to one is a change to both.
   to green with `python tools/check_ci.py --watch`.  A red CI on Claude's own
   commit is Claude's to fix-forward, not to hand over.
 - **Release is codex's job.** codex cuts tags, runs the PyPI publish, drives the
-  `release-qud` four-machine verification, and deploys (100号機 / mdx / hibino).
+  `release-quad` four-machine verification, and deploys (100号機 / mdx / hibino).
 
-Claude does **NOT** push tags, invoke `release-qud`, publish to PyPI, or deploy
+Claude does **NOT** push tags, invoke `release-quad`, publish to PyPI, or deploy
 to remote machines.  When Claude finishes, the work is committed, pushed and
 CI-green; codex takes it from the tag onwards.
 

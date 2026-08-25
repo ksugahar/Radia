@@ -1,7 +1,8 @@
 param(
     [Parameter(Mandatory = $true)]
     [string]$Wheel,
-    [string]$MatlabExecutable = 'matlab'
+    [string]$MatlabExecutable = 'matlab',
+    [string]$PythonExecutable = 'python'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -21,8 +22,8 @@ function ConvertTo-MatlabLiteral([string]$Value) {
 New-Item -ItemType Directory -Path $resolvedRunRoot | Out-Null
 try {
     $venv = Join-Path $resolvedRunRoot 'venv'
-    python -m venv $venv
-    if ($LASTEXITCODE -ne 0) { throw "python -m venv failed with exit code $LASTEXITCODE" }
+    & $PythonExecutable -m venv $venv
+    if ($LASTEXITCODE -ne 0) { throw "Python venv creation failed with exit code $LASTEXITCODE" }
 
     $venvPython = Join-Path $venv 'Scripts\python.exe'
     & $venvPython -m pip install --disable-pip-version-check --no-deps $wheelPath
@@ -62,6 +63,7 @@ try {
         Write-Warning "MathWorks license service returned 5202; retrying the same MATLAB batch command in $delaySeconds seconds (attempt $($attempt + 1)/$maxMatlabAttempts)."
         Start-Sleep -Seconds $delaySeconds
     }
+    Write-Output 'RADIA_OPTUNA_WHEEL_SIMULINK_OK'
 } finally {
     $checkedRunRoot = [IO.Path]::GetFullPath($resolvedRunRoot)
     if ($checkedRunRoot.StartsWith($resolvedTempRoot, [StringComparison]::OrdinalIgnoreCase) -and

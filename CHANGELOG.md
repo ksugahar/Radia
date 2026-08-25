@@ -33,7 +33,7 @@ Released 2026-08-25.
   processes measured a 0.007793-second median first-call load; all 95 MATLAB
   Optuna tests pass.
 - Added `optuna_mex` to the full Radia Simulink release bundle alongside
-  `radia_mex`. The v3 bundle manifest, archive verifier, four-machine QUD gate,
+  `radia_mex`. The v3 bundle manifest, archive verifier, four-machine QUAD gate,
   and MATLAB release smoke test now require the standalone optimizer gateway
   and verify its complete 20-command API before accepting the package.
 - Brought warmed sequential MATLAB TPE throughput past upstream Optuna 4.9.0
@@ -491,7 +491,7 @@ Released 2026-08-06.
   Netgen/Cubit mesh studies, with isolated per-route diagnostics.
 - Recorded and hardened the release-worktree editable-install drift checks.
 
-## 4.95.47 - NAS-safe exact-source QUD
+## 4.95.47 - NAS-safe exact-source QUAD
 
 Released 2026-08-06.
 
@@ -499,11 +499,11 @@ Released 2026-08-06.
   release worktree during exact-SHA checks, without changing global Git
   configuration.
 
-## 4.95.46 - Exact-source QUD deployment
+## 4.95.46 - Exact-source QUAD deployment
 
 Released 2026-08-06.
 
-- Added a parallel-work-safe QUD route that deploys LAB and the 100-machine
+- Added a parallel-work-safe QUAD route that deploys LAB and the 100-machine
   host from one explicit clean NAS release worktree without disturbing active
   development.
 - Made editable deployment fail before process shutdown or installation when

@@ -1,129 +1,73 @@
 name: Release radia-optuna
 
-# Publish only a wheel built and verified by a successful CI run whose exact
-# commit is tagged radia-optuna-v*. The manual lane recovers from a tag CI that
-# GitHub cancels after an equivalent main-push CI for the same SHA has passed;
-# it selects an immutable CI run rather than rebuilding or accepting a local
-# artifact.
+# Publication is deliberately manual. release_quad.py downloads one successful
+# main-push CI artifact, runs that exact wheel on four MATLAB machines, and
+# emits its SHA256. This workflow accepts only that CI run and hash; it never
+# rebuilds the distribution or substitutes a tag-run artifact.
 on:
-  workflow_run:
-    workflows: ["CI"]
-    types: [completed]
   workflow_dispatch:
     inputs:
       ci_run_id:
-        description: "Successful CI run ID that produced the release wheel"
+        description: "Successful main-push CI run gated by release-quad"
+        required: true
+        type: string
+      candidate_sha256:
+        description: "SHA256 emitted by release_quad optuna-done"
         required: true
         type: string
 
 permissions:
   actions: read
   id-token: write
-  contents: read
+  contents: write
 
 jobs:
   publish:
-    if: >-
-      github.event_name == 'workflow_dispatch' ||
-      (github.event.workflow_run.conclusion == 'success' &&
-      github.event.workflow_run.event == 'push')
     runs-on: ubuntu-latest
     timeout-minutes: 5
     environment: pypi
 
     steps:
-      - name: Resolve and verify the exact successful CI run
+      - name: Resolve the exact successful main CI run
         id: source
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          EVENT_NAME: ${{ github.event_name }}
-          MANUAL_RUN_ID: ${{ inputs.ci_run_id }}
-          WORKFLOW_RUN_ID: ${{ github.event.workflow_run.id }}
-          WORKFLOW_RUN_SHA: ${{ github.event.workflow_run.head_sha }}
+          RUN_ID: ${{ inputs.ci_run_id }}
         run: |
-          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
-            RUN_ID="$MANUAL_RUN_ID"
-            RUN_JSON=$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}")
-            SHA=$(jq -r '.head_sha' <<<"$RUN_JSON")
-            STATUS=$(jq -r '.status' <<<"$RUN_JSON")
-            CONCLUSION=$(jq -r '.conclusion' <<<"$RUN_JSON")
-            EVENT=$(jq -r '.event' <<<"$RUN_JSON")
-            WORKFLOW_PATH=$(jq -r '.path' <<<"$RUN_JSON")
-            HEAD_REPOSITORY=$(jq -r '.head_repository.full_name' <<<"$RUN_JSON")
-            if [ "$STATUS" != "completed" ] || [ "$CONCLUSION" != "success" ] || \
-               [ "$EVENT" != "push" ] || \
-               [ "$WORKFLOW_PATH" != ".github/workflows/build-test.yml" ] || \
-               [ "$HEAD_REPOSITORY" != "$GITHUB_REPOSITORY" ]; then
-              echo "::error::CI run $RUN_ID is not a successful in-repository push run of build-test.yml"
+          RUN_JSON=$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}")
+          SHA=$(jq -r '.head_sha' <<<"$RUN_JSON")
+          STATUS=$(jq -r '.status' <<<"$RUN_JSON")
+          CONCLUSION=$(jq -r '.conclusion' <<<"$RUN_JSON")
+          EVENT=$(jq -r '.event' <<<"$RUN_JSON")
+          WORKFLOW_PATH=$(jq -r '.path' <<<"$RUN_JSON")
+          HEAD_BRANCH=$(jq -r '.head_branch' <<<"$RUN_JSON")
+          HEAD_REPOSITORY=$(jq -r '.head_repository.full_name' <<<"$RUN_JSON")
+          if [ "$STATUS" != "completed" ] || [ "$CONCLUSION" != "success" ] || \
+             [ "$EVENT" != "push" ] || [ "$HEAD_BRANCH" != "main" ] || \
+             [ "$WORKFLOW_PATH" != ".github/workflows/build-test.yml" ] || \
+             [ "$HEAD_REPOSITORY" != "$GITHUB_REPOSITORY" ]; then
+            echo "::error::CI run $RUN_ID is not a successful main-push run of build-test.yml"
+            exit 1
+          fi
+
+          JOBS_JSON=$(gh api --paginate \
+            "repos/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}/jobs?per_page=100")
+          for REQUIRED_JOB in \
+            "build-test" \
+            "radia-optuna installed-wheel MATLAB/Simulink E2E"; do
+            SUCCESS_COUNT=$(jq --arg name "$REQUIRED_JOB" \
+              '[.jobs[] | select(.name == $name and .status == "completed" and .conclusion == "success")] | length' \
+              <<<"$JOBS_JSON")
+            if [ "$SUCCESS_COUNT" -ne 1 ]; then
+              echo "::error::CI run $RUN_ID lacks one successful '$REQUIRED_JOB' job"
               exit 1
             fi
-
-            JOBS_JSON=$(gh api --paginate \
-              "repos/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}/jobs?per_page=100")
-            for REQUIRED_JOB in \
-              "build-test" \
-              "radia-optuna installed-wheel MATLAB/Simulink E2E"; do
-              SUCCESS_COUNT=$(jq --arg name "$REQUIRED_JOB" \
-                '[.jobs[] | select(.name == $name and .status == "completed" and .conclusion == "success")] | length' \
-                <<<"$JOBS_JSON")
-              if [ "$SUCCESS_COUNT" -ne 1 ]; then
-                echo "::error::CI run $RUN_ID lacks one successful '$REQUIRED_JOB' job"
-                exit 1
-              fi
-            done
-            MANUAL=true
-          else
-            RUN_ID="$WORKFLOW_RUN_ID"
-            SHA="$WORKFLOW_RUN_SHA"
-            MANUAL=false
-          fi
+          done
           echo "run_id=$RUN_ID" >> "$GITHUB_OUTPUT"
           echo "sha=$SHA" >> "$GITHUB_OUTPUT"
-          echo "manual=$MANUAL" >> "$GITHUB_OUTPUT"
-
-      - name: Download exact CI ref context
-        if: steps.source.outputs.manual != 'true'
-        uses: actions/download-artifact@v4
-        with:
-          name: ci-release-context
-          path: ci-release-context
-          run-id: ${{ steps.source.outputs.run_id }}
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Verify automatic release source ran on a radia-optuna tag
-        id: eligibility
-        env:
-          MANUAL: ${{ steps.source.outputs.manual }}
-          SHA: ${{ steps.source.outputs.sha }}
-          RUN_ID: ${{ steps.source.outputs.run_id }}
-        run: |
-          python3 - <<'PY'
-          import json, os, pathlib, sys
-          if os.environ["MANUAL"] == "true":
-              valid = True
-          else:
-              context = json.loads(pathlib.Path(
-                  "ci-release-context/ci-release-context.json"
-              ).read_text(encoding="utf-8"))
-              valid = (
-                  context.get("schema") == "radia.ci-release-context.v1"
-                  and context.get("sha") == os.environ["SHA"]
-                  and str(context.get("run_id")) == os.environ["RUN_ID"]
-                  and context.get("ref_type") == "tag"
-                  and any(
-                      tag.startswith("radia-optuna-v")
-                      for tag in context.get("release_tags", [])
-                  )
-              )
-          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as out:
-              out.write(f"eligible={str(valid).lower()}\n")
-          if not valid:
-              print("No eligible radia-optuna tag in the exact CI context")
-          PY
 
       - name: Confirm tag points at the CI commit
         id: tag_check
-        if: steps.eligibility.outputs.eligible == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SHA: ${{ steps.source.outputs.sha }}
@@ -132,23 +76,18 @@ jobs:
           VTAG=$(git ls-remote --tags "$REPO_URL" 'refs/tags/radia-optuna-v*' \
                  | awk -v sha="$SHA" '$1 == sha {print $2}' \
                  | sed 's/\^{}//' | head -1)
-          if [ -n "$VTAG" ]; then
-            echo "found=true" >> "$GITHUB_OUTPUT"
-            echo "tag=$VTAG" >> "$GITHUB_OUTPUT"
-          else
-            echo "found=false" >> "$GITHUB_OUTPUT"
+          if [ -z "$VTAG" ]; then
             echo "::error::No radia-optuna-v* tag points at $SHA"
             exit 1
           fi
+          echo "tag=$VTAG" >> "$GITHUB_OUTPUT"
 
       - name: Check out the exact verified source
-        if: steps.tag_check.outputs.found == 'true'
         uses: actions/checkout@v4
         with:
           ref: ${{ steps.source.outputs.sha }}
 
-      - name: Download radia-optuna wheel
-        if: steps.tag_check.outputs.found == 'true'
+      - name: Download the exact release-quad candidate wheel
         uses: actions/download-artifact@v4
         with:
           name: radia-optuna-wheel
@@ -156,10 +95,11 @@ jobs:
           run-id: ${{ steps.source.outputs.run_id }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Reverify wheel at the release boundary
-        if: steps.tag_check.outputs.found == 'true'
+      - name: Reverify version, tag, and release-quad SHA256
+        id: artifact
         env:
           RELEASE_TAG: ${{ steps.tag_check.outputs.tag }}
+          CANDIDATE_SHA256: ${{ inputs.candidate_sha256 }}
         run: |
           mapfile -t WHEELS < <(find dist -name '*.whl')
           if [ "${#WHEELS[@]}" -ne 1 ]; then
@@ -168,16 +108,40 @@ jobs:
           fi
           WHL="${WHEELS[0]}"
           python3 packages/radia-optuna/verify_wheel.py "$WHL" --json
+          ACTUAL_SHA256=$(sha256sum "$WHL" | awk '{print $1}')
+          if [ "${ACTUAL_SHA256,,}" != "${CANDIDATE_SHA256,,}" ]; then
+            echo "::error::Wheel SHA256 $ACTUAL_SHA256 differs from release-quad $CANDIDATE_SHA256"
+            exit 1
+          fi
           VERSION=$(python3 -c 'import tomllib; print(tomllib.load(open("packages/radia-optuna/pyproject.toml", "rb"))["project"]["version"])')
           EXPECTED_TAG="refs/tags/radia-optuna-v${VERSION}"
           if [ "$RELEASE_TAG" != "$EXPECTED_TAG" ]; then
             echo "::error::Release tag $RELEASE_TAG does not match package version $VERSION"
             exit 1
           fi
+          echo "wheel=$WHL" >> "$GITHUB_OUTPUT"
+          echo "sha256=$ACTUAL_SHA256" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag_name=${RELEASE_TAG#refs/tags/}" >> "$GITHUB_OUTPUT"
 
-      - name: Publish to PyPI
-        if: steps.tag_check.outputs.found == 'true'
+      - name: Publish exact candidate to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           packages-dir: dist/
           skip-existing: true
+
+      - name: Publish exact candidate on GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG_NAME: ${{ steps.artifact.outputs.tag_name }}
+          VERSION: ${{ steps.artifact.outputs.version }}
+          WHEEL: ${{ steps.artifact.outputs.wheel }}
+          WHEEL_SHA256: ${{ steps.artifact.outputs.sha256 }}
+        run: |
+          NOTES=$(printf 'Independent MATLAB optimization implementation differentially verified against Optuna 4.9.0.\n\nWheel SHA256: `%s`\n' "$WHEEL_SHA256")
+          if gh release view "$TAG_NAME" >/dev/null 2>&1; then
+            gh release upload "$TAG_NAME" "$WHEEL" --clobber
+          else
+            gh release create "$TAG_NAME" "$WHEEL" \
+              --title "radia-optuna v${VERSION}" --notes "$NOTES"
+          fi

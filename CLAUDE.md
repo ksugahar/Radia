@@ -403,6 +403,24 @@ evidence of Optuna parity.
   transport for the public MCP Study/Trial tool contract. The MCP server is not
   a seeded numerical oracle while its `set_sampler` tool does not expose a
   seed.
+- radia-mcp supports the MATLAB distribution without becoming a second Optuna
+  MCP server. Every shared operation present in the official
+  `optuna/optuna-mcp` live `tools/list` MUST be executed by that upstream
+  server. `mcp-server-radia-matlab` owns only MATLAB differences: table/MAT
+  persistence, Simulink monitoring and failure telemetry, MATLAB parallel
+  execution, the standalone `optuna_mex`, and Radia CAE artifact adapters. It
+  MUST NOT proxy, rename, or reimplement an upstream Optuna MCP tool.
+- Preserve the applicable Optuna and `optuna-mcp` MIT copyright and permission
+  notices whenever upstream source or a substantial portion is copied or
+  redistributed, and record copied/adapted provenance. `radia-optuna` is an
+  independent, unofficial project; it is not affiliated with, sponsored by,
+  or endorsed by Preferred Networks, Inc. or the Optuna project. Public docs
+  MUST include exactly: "Optuna, the Optuna logo and any related marks are
+  trademarks of Preferred Networks, Inc." Do not use the Optuna logo or imply
+  official status. Differential MCP regeneration uses local stdio and a fresh
+  per-run temporary SQLite database, never shared/production storage; routine
+  tests use checked fixtures, never launch Dashboard, and never automatically
+  create upstream issues or pull requests.
 - A test of shared behavior must read its expected values, states, ordering,
   warnings/errors, or proposal sequence from an upstream-generated fixture.
   Do not add handcrafted sampler sequences, quality bands, dominance orders,
@@ -787,11 +805,11 @@ Skin depth is computed from frequency for SIBC, but field propagation uses quasi
 
 **POLICY**: A Radia Simulink library release, including
 `radia_simulink_library.slx`, MATLAB support files, and MEX assets, MUST NOT
-be published to GitHub Releases until the complete `release-qud` four-machine
+be published to GitHub Releases until the complete `release-quad` four-machine
 verification has passed. The four machines are LAB, 100号機, mdx, and hibino.
 
 - The release candidate is assembled and tested before publication.
-- The `release-qud` `done` gate is the authoritative publication decision.
+- The `release-quad` `done` gate is the authoritative publication decision.
 - A failed, partial, or manually waived machine check is not a release pass.
 - GitHub Release assets must include the versioned Simulink package,
   `manifest.json`, and `SHA256SUMS.txt` when the candidate contains them.
@@ -888,14 +906,14 @@ the **ship/release coupling** that previously forced lockstep releases.
   `cubit-plugin-install`; `register_toolbar.py::_check_plugin_freshness`
   checks the **DEPLOYED** plugin, never a radia-bundled copy — so radia
   has no runtime/deploy dependency on bundling the binary.
-- `Build.ps1` and `tools/release_qud.py phase0` propagate the built
+- `Build.ps1` and `tools/release_quad.py phase0` propagate the built
   binaries to the **cme package only** (not `src/radia/`).
 - The radia↔cme compat window (`COMPAT_CUBIT_MESH_EXPORT_*` /
   `COMPAT_RADIA_*`, enforced by `cubit-plugin-install` at deploy) remains
   the safety net the 2026-04-14 sideset/.ccl drift incident motivated.
 - Release per-package (`v*` / `cubit-mesh-export-v*` / `radia-mcp-v*`);
   bundle all three only when they genuinely co-change (see the
-  `release-qud` skill).
+  `release-quad` skill).
 
 ### File Placement Policy
 
@@ -2612,7 +2630,7 @@ solution and pointwise `rad.Fld`).
 5. Test on remote machines (Cubit toolbar, Simulink application blocks, result-bearing docs notebooks, Mesh Evaluation, etc.)
 6. If tests pass: `git push origin main`
 7. **Confirm main CI is GREEN before tagging** (gh-free; `gh` is not on LAB):
-   `python tools/release_qud.py ci-verify` — waits for the self-hosted
+   `python tools/release_quad.py ci-verify` — waits for the self-hosted
    runner job to finish, then checks the workspace junit XMLs
    (failures=errors=0). Tag CI = the same `build-test.yml` on the same commit,
    so a green main CI guarantees a green tag CI — and avoids burning a version
@@ -2665,13 +2683,13 @@ robocopy S:\NGSolve\01_GitHub\install_ngsolve C:\NGSolve /MIR
 - CI/CD 環境 (e.g. `C:\actions-runner\_work\Radia\Radia\...`) は別管理 (NETWORK
   SERVICE 所有)。 LAB の editable pointer がそちらに drift していたら戻す。
 
-**POLICY (2026-06-25 update)**: **QUD 配布**: LAB と 100号機 は editable
+**POLICY (2026-06-25 update)**: **QUAD 配布**: LAB と 100号機 は editable
 (NAS source、developer/user feedback loop)、mdx と hibino は PyPI install。
 mdx は compute/Cubit verification point なので `radia` + `cubit-mesh-export`
 のみでよく、`radia-mcp` は不要。hibino は PyPI 経由の MCP consumer として
 `radia-mcp` も入れる。
 
-**QUD 配布モデル (2026-06-25)**:
+**QUAD 配布モデル (2026-06-25)**:
 
 | Stage | マシン | install 形態 | 目的 |
 |-------|--------|-----------|------|
@@ -2682,7 +2700,7 @@ mdx は compute/Cubit verification point なので `radia` + `cubit-mesh-export`
 
 **変更点 (2026-06-25)**:
 - 旧: LAB editable / 100号機 + mdx 両方 PyPI (2-tier).
-- 新: LAB + 100号機 editable / mdx + hibino PyPI (QUD).
+- 新: LAB + 100号機 editable / mdx + hibino PyPI (QUAD).
 - mdx は `radia-mcp` 不要。hibino を PyPI 経由の MCP consumer として追加。
 
 **LAB / 100号機 editable パッケージ**:
@@ -2694,8 +2712,8 @@ mdx は compute/Cubit verification point なので `radia` + `cubit-mesh-export`
 共有worktreeに並行WIPがあるreleaseでは、そのWIPをstash/clean/resetしてはならない。
 代わりに同一NAS上へexact SHAのclean release worktreeを作り、
 `RADIA_RELEASE_EDITABLE_REPO_LAB` と `RADIA_RELEASE_EDITABLE_REPO_100` で
-LAB/100号機から見える各pathを `release_qud all` と `done` の両方へ渡す。
-QUDはprocess停止やinstallより前にSHA一致とtracked-cleanを強制する。公開完了まで
+LAB/100号機から見える各pathを `release_quad all` と `done` の両方へ渡す。
+QUADはprocess停止やinstallより前にSHA一致とtracked-cleanを強制する。公開完了まで
 release worktreeを保持し、並行WIPがmainへ着地した後に通常のeditable pointerへ戻す。
 
 LAB / 100号機で `pip install --upgrade <pkg>` を流すと editable が静かに上書きされて壊れるので注意。release 後の LAB / 100号機 側 metadata 同期は `pip install -e <path> --no-deps --no-cache-dir` で再 editable 化。`pip install --upgrade` は **mdx / hibino 用** (PyPI から通常通り upgrade).
@@ -2703,7 +2721,7 @@ LAB / 100号機で `pip install --upgrade <pkg>` を流すと editable が静か
 **POLICY (2026-05-27 追加): release 後の LAB editable 再確認**
 
 PyPI release (tag push → CI publish) 後、**LAB の editable pointer
-が drift していないか必ず確認する**。これは `release-qud` skill
+が drift していないか必ず確認する**。これは `release-quad` skill
 の Definition of Done の暗黙の前提条件であり、CLAUDE.md「LAB editable
 default」原則を実運用で守るチェック。
 
@@ -2715,12 +2733,12 @@ default」原則を実運用で守るチェック。
 | 2026-05-19 | 同じ pattern 再発 | LAB から「source 編集が反映されない」報告で発覚 |
 | 2026-05-26 | release 直後の CI runner clone (`C:\actions-runner\_work\...`) に `radia-mcp` editable が drift | LAB 側で knowledge file の編集が radia-mcp 経由で見えないことで発覚 |
 | 2026-05-27 | 同上、再発 | MCP tool 経由で新規 topic が dispatch されない (Unknown topic) で発覚 |
-| 2026-08-06 | v4.95.47 release 後、radia + cubit-mesh-export + radia-mcp の 3 つ全部が **release-qud worktree** (`release-qud/Radia-v4.95.47-<sha>`) に drift(新パターン: CI runner ではなくリリース用worktreeで editable install が走った) | release 直後の本チェックで発覚。**重要教訓: 同バージョンへの `pip install -e` 再実行は `.pth` を書き換えない no-op になり得る — `pip show` の Editable location が直っても import は旧パスのまま**(実測: show=canonical tree なのに `__editable__.*.pth` は release-qud、radia.gmsh_post_export が旧ソースを解決)。修復は `pip uninstall -y <pkgs>` → 再 `-e`。**検証は `pip show` でなく site-packages の `__editable__*.pth` の中身と `<pkg>.__file__` で行うこと** |
-| 2026-08-07 | v4.95.48 release 後、同じ release-qud クローンパターンで 3 つとも再 drift(`Radia-v4.95.48-a6a5ddde`) | **ソース修正が実行時に反映されない**ことで発覚(coil_builder の OCC pose 修正を入れたのに `write_step` の出力が 1 バイトも変わらなかった)。**教訓: `sys.path.insert` するテストは自分のツリーを見るので緑のまま、素の `import radia` を使うデモ/スクリプトだけが旧ソースを掴む** — テストが通っていることは editable が正しい証拠にならない。デモの結果が「直したはずなのに変わらない」ときは真っ先に `<pkg>.__file__` を見る |
+| 2026-08-06 | v4.95.47 release 後、radia + cubit-mesh-export + radia-mcp の 3 つ全部が **release-quad worktree** (`release-quad/Radia-v4.95.47-<sha>`) に drift(新パターン: CI runner ではなくリリース用worktreeで editable install が走った) | release 直後の本チェックで発覚。**重要教訓: 同バージョンへの `pip install -e` 再実行は `.pth` を書き換えない no-op になり得る — `pip show` の Editable location が直っても import は旧パスのまま**(実測: show=canonical tree なのに `__editable__.*.pth` は release-quad、radia.gmsh_post_export が旧ソースを解決)。修復は `pip uninstall -y <pkgs>` → 再 `-e`。**検証は `pip show` でなく site-packages の `__editable__*.pth` の中身と `<pkg>.__file__` で行うこと** |
+| 2026-08-07 | v4.95.48 release 後、同じ release-quad クローンパターンで 3 つとも再 drift(`Radia-v4.95.48-a6a5ddde`) | **ソース修正が実行時に反映されない**ことで発覚(coil_builder の OCC pose 修正を入れたのに `write_step` の出力が 1 バイトも変わらなかった)。**教訓: `sys.path.insert` するテストは自分のツリーを見るので緑のまま、素の `import radia` を使うデモ/スクリプトだけが旧ソースを掴む** — テストが通っていることは editable が正しい証拠にならない。デモの結果が「直したはずなのに変わらない」ときは真っ先に `<pkg>.__file__` を見る |
 
 **再発するため、release 後の確認を policy 化**。
 
-**チェック手順** (release-qud Phase 8 / Phase 9 の直後に流す):
+**チェック手順** (release-quad Phase 8 / Phase 9 の直後に流す):
 
 ```powershell
 # 4 パッケージ全部の editable pointer が LAB source を指しているか確認
@@ -2751,19 +2769,19 @@ pip show <pkg> | Select-String "Editable project location"
 ```
 
 **自動化候補** (TODO): `tools/verify_lab_editable.py` を作って
-`release-qud done` から呼び出し、drift があれば exit non-zero。
+`release-quad done` から呼び出し、drift があれば exit non-zero。
 今は手動チェックで運用。
 
 **Drift する原因** (analysis):
 
 1. **CI runner と LAB が同じ NAS source を共有**: `\\192.168.11.100\work\00_CAE\Radia\01_GitHub` を `S:\` で参照 (LAB) または UNC で参照 (CI runner)。CI が editable install を走らせると、CI 側の pip metadata が LAB の Python の site-packages にも書き戻されるケースがある (NAS-mounted Python env でない限り通常起こらないが、`pip install -e .` を CI で実行すると `.egg-info` 等が source tree に書かれ、その後の `pip show` 解決順序を狂わせる)。
 2. **`pip install --upgrade <lab-pkg>` を LAB で実行**: editable 上書き。**禁止**。
-3. **release-qud Phase 8 の PyPI install command**: mdx / hibino で実行されるべきコマンドを誤って LAB / 100号機 shell で実行。
+3. **release-quad Phase 8 の PyPI install command**: mdx / hibino で実行されるべきコマンドを誤って LAB / 100号機 shell で実行。
 
 **予防策**:
 
 - LAB shell では決して `pip install <lab-pkg>` (non-editable) / `pip install --upgrade <lab-pkg>` を打たない
-- release-qud skill の deploy commands は対象マシンの tier に従って実行する。LAB / 100号機は editable、mdx / hibino は PyPI。
+- release-quad skill の deploy commands は対象マシンの tier に従って実行する。LAB / 100号機は editable、mdx / hibino は PyPI。
 - 不安な場合は release 直後に上記チェック手順を流す
 
 **mdx / hibino 全ユーザー PyPI install**: `C:\Program Files\Python312`
@@ -2844,7 +2862,7 @@ bypass: `CI_PREFLIGHT_SKIP=1 git push`.  Run the installer once per clone
 `init-py-version-mismatch-vs-pyproject`, etc. — each names ci_preflight as
 the detection tool.
 
-**Release flow** (release-qud) keeps its own release gates, but
+**Release flow** (release-quad) keeps its own release gates, but
 ci_preflight is the everyday "before any push" gate — run it even for a
 non-release push to `main`.
 
@@ -4371,9 +4389,9 @@ python tests/cubit/test_ho_volume_all_formats.py  # Order=2 volume accuracy (sph
   watches GitHub Actions to green with `python tools/check_ci.py --watch`. A red
   CI on Claude's own commit is Claude's to fix-forward, not to hand over.
 - **Release is codex's job.** codex cuts tags, runs the PyPI publish, drives the
-  `release-qud` four-machine verification, and deploys (100号機 / mdx / hibino).
+  `release-quad` four-machine verification, and deploys (100号機 / mdx / hibino).
 
-Claude does **NOT**: push tags, invoke the `release-qud` flow, publish to PyPI,
+Claude does **NOT**: push tags, invoke the `release-quad` flow, publish to PyPI,
 or deploy to remote machines. If asked to "release", Claude gets the work
 committed, pushed and CI-green, then hands off to codex for the tag and publish.
 

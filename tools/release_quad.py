@@ -1,38 +1,46 @@
 #!/usr/bin/env python
-"""release_qud.py — orchestrator for the 3-package / 4-machine release flow.
+"""release_quad.py — orchestrator for the 4-distribution / 4-machine release flow.
 
-Walks Phase 0 -> 9 of the release-qud skill in order, gating each
+Walks Phase 0 -> 9 of the release-quad skill in order, gating each
 phase on the success of the previous one. Refuses to skip steps that
 have caused real outages (2026-04-14 incident series).
 
 Usage:
-    python tools/release_qud.py preflight
+    python tools/release_quad.py preflight
         Read-only: report current state and consistency. Use anytime.
 
-    python tools/release_qud.py phase0
+    python tools/release_quad.py phase0
         Mandatory clean rebuild of the Cubit plugin (~3-4 min).
 
-    python tools/release_qud.py phase8 [--target lab|100|hibino|all]
+    python tools/release_quad.py phase8 [--target lab|100|hibino|all]
         Run Phase 8a..8d on each target: kill Cubit, install by the
         target's tier (LAB/100 editable, hibino PyPI), cubit-plugin-install,
         --verify-only, cubit-smoke-test. Refuses
         to start if Phase 0 has not been done since the last source
         change in src/cubit_plugin/.
 
-    python tools/release_qud.py phase8e
+    python tools/release_quad.py phase8e
         Upgrade mdx from PyPI. Refuses to run if pip index versions
         radia / cubit-mesh-export don't match the local repo
         (i.e. PyPI hasn't propagated yet). radia-mcp is intentionally
         not installed on mdx -- and is actively uninstalled if a prior
         release left it behind (mdx is a compute consumer, no MCP).
 
-    python tools/release_qud.py phase9
+    python tools/release_quad.py phase9
         Cross-machine consistency probe. Final gate.
 
-    python tools/release_qud.py simulink-candidate --package <zip> --target all
+    python tools/release_quad.py simulink-candidate --package <zip> --target all
         Extract and execute the exact Simulink package on all four MATLAB machines.
 
-    python tools/release_qud.py all
+    python tools/release_quad.py optuna-candidate --ci-run-id <id> --target all
+        Download the exact radia-optuna wheel from one successful main CI run
+        and execute its installed-wheel MATLAB/Simulink test on all four machines.
+
+    python tools/release_quad.py optuna-done --wheel <path>
+        Require the retained wheel bytes, source commit, CI run, version, and
+        four-machine candidate state to agree before tagging/publication.
+
+    python tools/release_quad.py all
         phase8 -> phase8e -> phase9 with all preconditions enforced.
 
         When the canonical LAB worktree contains parallel WIP, set
@@ -41,9 +49,12 @@ Usage:
         Both editable deployments then fail before install unless that
         worktree is tracked-clean and matches the invoking release SHA.
 
-    python tools/release_qud.py done --simulink-package <zip>
+    python tools/release_quad.py done --simulink-package <zip>
         Require both the normal release gate and the matching four-machine
         Simulink candidate state.
+
+The independent radia-optuna lane does not install or deploy Radia, Cubit,
+radia-mcp, or NGSolve. It gates one exact CI wheel before publication.
 
 Exit codes:
     0   success
@@ -62,6 +73,7 @@ import os
 import shutil
 import subprocess
 import sys
+import tempfile
 import zipfile
 from datetime import datetime, timezone
 from importlib import metadata as importlib_metadata
@@ -88,7 +100,9 @@ SSH_MDX = "mdx"
 SSH_HIBINO = "hibino"
 PY_HIBINO = "py -3.12"
 MATLAB_EXE = r"C:\Program Files\MATLAB\R2026a\bin\matlab.exe"
-SIMULINK_GATE_ROOT = Path(r"C:\temp\radia-release-qud")
+SIMULINK_GATE_ROOT = Path(r"C:\temp\radia-release-quad")
+OPTUNA_GATE_ROOT = SIMULINK_GATE_ROOT / "radia-optuna"
+OPTUNA_SUCCESS_MARKER = "RADIA_OPTUNA_WHEEL_SIMULINK_OK"
 SIMULINK_TARGETS = {
     "lab": ("LAB", None, "python"),
     "100": ("100号機", SSH_100, "python"),
@@ -168,6 +182,8 @@ def _read_repo_versions():
         ("cubit-mesh-export", REPO / "packages/cubit-mesh-export/pyproject.toml"),
         ("cme.__version__",   REPO / "packages/cubit-mesh-export/src/cubit_mesh_export/__init__.py"),
         ("radia-mcp",         REPO / "packages/radia-mcp/pyproject.toml"),
+        ("radia-optuna",      REPO / "packages/radia-optuna/pyproject.toml"),
+        ("optuna.__version__", REPO / "packages/radia-optuna/src/radia_optuna/__init__.py"),
     ]:
         text = path.read_text(encoding="utf-8")
         m = re.search(r'(?:^version|^__version__)\s*=\s*"([^"]+)"', text, re.M)
@@ -250,7 +266,7 @@ def _run_simulink_candidate_target(
         ]
         result = subprocess.run(command, capture_output=True, text=True)
     else:
-        remote_root_posix = f"C:/temp/radia-release-qud/{package_sha256[:16]}"
+        remote_root_posix = f"C:/temp/radia-release-quad/{package_sha256[:16]}"
         remote_root_windows = remote_root_posix.replace("/", "\\")
         prepare = f"New-Item -ItemType Directory -Force -Path '{remote_root_windows}' | Out-Null\n"
         created = subprocess.run(
@@ -308,7 +324,7 @@ def cmd_simulink_candidate(args):
     )
     state_path = _simulink_state_path(package_sha256)
     state = {
-        "schema": "radia.release-qud.simulink-candidate.v1",
+        "schema": "radia.release-quad.simulink-candidate.v1",
         "package": str(package),
         "package_sha256": package_sha256,
         "version": manifest.get("version"),
@@ -364,8 +380,8 @@ def _verify_simulink_candidate_state(package_arg: str) -> int:
         return 2
     state_path = _simulink_state_path(package_sha256)
     if not state_path.is_file():
-        fail("Simulink candidate has no release-qud state. Run "
-             "`release_qud simulink-candidate --package <zip> --target all`.")
+        fail("Simulink candidate has no release-quad state. Run "
+             "`release_quad simulink-candidate --package <zip> --target all`.")
         return 4
     state = json.loads(state_path.read_text(encoding="utf-8"))
     if state.get("package_sha256") != package_sha256 or \
@@ -389,6 +405,314 @@ def _verify_simulink_candidate_state(package_arg: str) -> int:
 
 
 # ============================================================
+# Standalone radia-optuna exact-wheel candidate gate
+# ============================================================
+
+def _optuna_state_path(wheel_sha256: str) -> Path:
+    return OPTUNA_GATE_ROOT / f"candidate-{wheel_sha256}.json"
+
+
+def _verify_optuna_wheel(wheel: Path) -> tuple[dict | None, str]:
+    verifier = REPO / "packages/radia-optuna/verify_wheel.py"
+    result = subprocess.run(
+        [sys.executable, str(verifier), str(wheel), "--json"],
+        capture_output=True, text=True,
+    )
+    output = ((result.stdout or "") + (result.stderr or "")).strip()
+    if result.returncode != 0:
+        return None, output
+    try:
+        payload = json.loads(result.stdout)
+    except json.JSONDecodeError as error:
+        return None, f"wheel verifier returned invalid JSON: {error}\n{output}"
+    if payload.get("ok") is not True:
+        return None, f"wheel verifier did not report ok=true:\n{output}"
+    return payload, output
+
+
+def _optuna_release_source_ready() -> tuple[bool, str]:
+    head = _release_head()
+    status = subprocess.run(
+        ["git", "status", "--porcelain", "--untracked-files=no"],
+        cwd=str(REPO), capture_output=True, text=True,
+    )
+    if status.returncode != 0:
+        return False, status.stderr.strip() or "git status failed"
+    if status.stdout.strip():
+        return False, "tracked release source is dirty"
+    fetched = subprocess.run(
+        ["git", "fetch", "origin", "main", "--quiet"],
+        cwd=str(REPO), capture_output=True, text=True,
+    )
+    if fetched.returncode != 0:
+        return False, fetched.stderr.strip() or "git fetch origin main failed"
+    origin_main = subprocess.run(
+        ["git", "rev-parse", "origin/main"], cwd=str(REPO),
+        capture_output=True, text=True,
+    )
+    if origin_main.returncode != 0:
+        return False, origin_main.stderr.strip() or "origin/main is unavailable"
+    remote_head = origin_main.stdout.strip().lower()
+    if head != remote_head:
+        return False, f"HEAD {head} differs from origin/main {remote_head}"
+    return True, head
+
+
+def _download_verified_optuna_ci_wheel(ci_run_id: str) -> tuple[dict | None, str]:
+    ready, source = _optuna_release_source_ready()
+    if not ready:
+        return None, source
+    head = source
+    result = subprocess.run(
+        [
+            "gh", "run", "view", str(ci_run_id), "--json",
+            "databaseId,headSha,headBranch,event,status,conclusion,workflowName,url,jobs",
+        ],
+        cwd=str(REPO), capture_output=True, text=True,
+    )
+    if result.returncode != 0:
+        return None, result.stderr.strip() or result.stdout.strip()
+    try:
+        run_info = json.loads(result.stdout)
+    except json.JSONDecodeError as error:
+        return None, f"gh run view returned invalid JSON: {error}"
+    expected = {
+        "headSha": head,
+        "headBranch": "main",
+        "event": "push",
+        "status": "completed",
+        "conclusion": "success",
+        "workflowName": "CI",
+    }
+    mismatches = [
+        f"{key}={run_info.get(key)!r} (expected {value!r})"
+        for key, value in expected.items()
+        if str(run_info.get(key, "")).lower() != str(value).lower()
+    ]
+    if mismatches:
+        return None, "CI run is not the exact successful main run: " + "; ".join(mismatches)
+    jobs = {
+        row.get("name"): (row.get("status"), row.get("conclusion"))
+        for row in run_info.get("jobs", [])
+    }
+    required_jobs = (
+        "build-test",
+        "radia-optuna installed-wheel MATLAB/Simulink E2E",
+    )
+    missing_jobs = [name for name in required_jobs
+                    if jobs.get(name) != ("completed", "success")]
+    if missing_jobs:
+        return None, "CI run lacks successful required jobs: " + ", ".join(missing_jobs)
+
+    Path(r"C:\temp").mkdir(parents=True, exist_ok=True)
+    download_dir = Path(tempfile.mkdtemp(
+        prefix=f"radia-optuna-ci-{ci_run_id}-", dir=r"C:\temp"
+    ))
+    downloaded = subprocess.run(
+        [
+            "gh", "run", "download", str(ci_run_id),
+            "--name", "radia-optuna-wheel", "--dir", str(download_dir),
+        ],
+        cwd=str(REPO), capture_output=True, text=True,
+    )
+    if downloaded.returncode != 0:
+        return None, downloaded.stderr.strip() or downloaded.stdout.strip()
+    wheels = sorted(download_dir.rglob("*.whl"))
+    if len(wheels) != 1:
+        return None, f"expected one radia-optuna wheel artifact, found {len(wheels)}"
+    verification, output = _verify_optuna_wheel(wheels[0])
+    if verification is None:
+        return None, output
+    wheel_sha256 = _sha256_file(wheels[0])
+    retained_dir = OPTUNA_GATE_ROOT / f"{head[:12]}-ci-{ci_run_id}"
+    retained_dir.mkdir(parents=True, exist_ok=True)
+    retained_wheel = retained_dir / wheels[0].name
+    if retained_wheel.exists() and _sha256_file(retained_wheel) != wheel_sha256:
+        return None, f"retained candidate path contains different bytes: {retained_wheel}"
+    if not retained_wheel.exists():
+        copy_file(wheels[0], retained_wheel)
+    return {
+        "ci_run_id": str(ci_run_id),
+        "ci_url": run_info.get("url"),
+        "commit": head,
+        "wheel": str(retained_wheel),
+        "wheel_sha256": wheel_sha256,
+        "version": verification["version"],
+    }, output
+
+
+def _run_optuna_candidate_target(
+        key: str, wheel: Path, wheel_sha256: str) -> tuple[bool, str]:
+    label, host, python_command = SIMULINK_TARGETS[key]
+    runner = REPO / "packages/radia-optuna/tests/run_installed_wheel_simulink.ps1"
+    matlab_tests = REPO / "packages/radia-optuna/tests/matlab"
+    if host is None:
+        command = [
+            "pwsh", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File",
+            str(runner), "-Wheel", str(wheel),
+            "-MatlabExecutable", MATLAB_EXE,
+            "-PythonExecutable", sys.executable,
+        ]
+        result = subprocess.run(command, capture_output=True, text=True)
+    else:
+        remote_root_posix = f"C:/temp/radia-release-quad/optuna-{wheel_sha256[:16]}"
+        remote_root_windows = remote_root_posix.replace("/", "\\")
+        remote_matlab_windows = remote_root_windows + r"\matlab"
+        prepare = (
+            "$ErrorActionPreference = 'Stop'\n"
+            f"New-Item -ItemType Directory -Force -Path '{remote_matlab_windows}' | Out-Null\n"
+        )
+        created = subprocess.run(
+            ["ssh", host, "pwsh", "-NoProfile", "-ExecutionPolicy", "Bypass",
+             "-Command", "-"],
+            input=prepare, capture_output=True, text=True,
+        )
+        if created.returncode != 0:
+            return False, created.stderr.strip() or created.stdout.strip()
+        sources = [runner, wheel, *sorted(matlab_tests.glob("*.m"))]
+        for source_file in sources:
+            subdir = "matlab/" if source_file.suffix == ".m" else ""
+            destination = f"{remote_root_posix}/{subdir}{source_file.name}"
+            copied = subprocess.run(
+                ["scp", str(source_file), f"{host}:{destination}"],
+                capture_output=True, text=True,
+            )
+            if copied.returncode != 0:
+                return False, copied.stderr.strip() or copied.stdout.strip()
+        remote_runner = remote_root_windows + "\\" + runner.name
+        remote_wheel = remote_root_windows + "\\" + wheel.name
+        python_parts = python_command.split()
+        python_line = (
+            "$pythonExe = (& " + " ".join(python_parts)
+            + " -c \"import sys; print(sys.executable)\").Trim()\n"
+        )
+        invocation = (
+            "$ErrorActionPreference = 'Stop'\n"
+            + python_line
+            + f"& '{remote_runner}' -Wheel '{remote_wheel}' "
+              f"-MatlabExecutable '{MATLAB_EXE}' -PythonExecutable $pythonExe\n"
+            + "exit $LASTEXITCODE\n"
+        )
+        result = subprocess.run(
+            ["ssh", host, "pwsh", "-NoProfile", "-ExecutionPolicy", "Bypass",
+             "-Command", "-"],
+            input=invocation, capture_output=True, text=True,
+        )
+    output = ((result.stdout or "") + (result.stderr or "")).strip()
+    if result.returncode != 0:
+        return False, output
+    if OPTUNA_SUCCESS_MARKER not in output:
+        return False, f"{label} did not emit {OPTUNA_SUCCESS_MARKER}:\n{output}"
+    return True, output
+
+
+def cmd_optuna_candidate(args):
+    """Download one main-CI wheel and run it on all four MATLAB machines."""
+    step("radia-optuna exact-wheel candidate gate (LAB / 100号機 / mdx / hibino)")
+    candidate, output = _download_verified_optuna_ci_wheel(args.ci_run_id)
+    if candidate is None:
+        fail(f"invalid radia-optuna CI candidate: {output}")
+        return 2
+    wheel = Path(candidate["wheel"])
+    wheel_sha256 = candidate["wheel_sha256"]
+    state_path = _optuna_state_path(wheel_sha256)
+    state = {
+        "schema": "radia.release-quad.optuna-candidate.v1",
+        **candidate,
+        "targets": {},
+    }
+    if state_path.is_file():
+        previous = json.loads(state_path.read_text(encoding="utf-8"))
+        if (previous.get("wheel_sha256") == wheel_sha256
+                and previous.get("commit") == candidate["commit"]
+                and str(previous.get("ci_run_id")) == str(args.ci_run_id)):
+            state["targets"] = previous.get("targets", {})
+
+    requested = [part.strip().lower() for part in args.target.split(",")]
+    if "all" in requested:
+        requested = list(SIMULINK_TARGETS)
+    unknown = sorted(set(requested) - set(SIMULINK_TARGETS))
+    if unknown:
+        fail(f"unknown radia-optuna target(s): {', '.join(unknown)}")
+        return 2
+    failed = 0
+    for key in requested:
+        label = SIMULINK_TARGETS[key][0]
+        info(f"verifying exact installed wheel on {label}")
+        passed, target_output = _run_optuna_candidate_target(
+            key, wheel, wheel_sha256
+        )
+        state["targets"][key] = {
+            "label": label,
+            "status": "passed" if passed else "failed",
+            "verified_at_utc": datetime.now(timezone.utc).isoformat(),
+            "output_tail": target_output[-4000:],
+        }
+        _write_simulink_state(state_path, state)
+        if passed:
+            ok(f"radia-optuna wheel passed on {label}")
+        else:
+            failed += 1
+            fail(f"radia-optuna wheel failed on {label}")
+            if target_output:
+                print(target_output[-4000:])
+    if failed:
+        return 4
+    ok(f"retained wheel: {wheel}")
+    ok(f"wheel SHA256: {wheel_sha256}")
+    ok(f"candidate state: {state_path}")
+    return 0
+
+
+def _verify_optuna_candidate_state(wheel_arg: str) -> tuple[int, dict | None]:
+    wheel = Path(wheel_arg).resolve()
+    verification, output = _verify_optuna_wheel(wheel)
+    if verification is None:
+        fail(f"invalid radia-optuna wheel: {output}")
+        return 2, None
+    wheel_sha256 = _sha256_file(wheel)
+    state_path = _optuna_state_path(wheel_sha256)
+    if not state_path.is_file():
+        fail("radia-optuna wheel has no release-quad state. Run "
+             "`release_quad optuna-candidate --ci-run-id <id> --target all`.")
+        return 4, None
+    state = json.loads(state_path.read_text(encoding="utf-8"))
+    ready, source = _optuna_release_source_ready()
+    if not ready:
+        fail(source)
+        return 4, None
+    if (state.get("wheel_sha256") != wheel_sha256
+            or state.get("commit") != source
+            or state.get("version") != verification.get("version")):
+        fail("radia-optuna candidate state differs from wheel, version, or HEAD")
+        return 4, None
+    missing = [key for key in SIMULINK_TARGETS
+               if state.get("targets", {}).get(key, {}).get("status") != "passed"]
+    if missing:
+        fail(f"radia-optuna candidate has not passed: {', '.join(missing)}")
+        return 4, None
+    ok("exact radia-optuna wheel passed LAB / 100号機 / mdx / hibino")
+    return 0, state
+
+
+def cmd_optuna_done(args):
+    """Definition-of-done gate for the independent radia-optuna wheel."""
+    step("radia-optuna definition of done")
+    rc, state = _verify_optuna_candidate_state(args.wheel)
+    if rc != 0 or state is None:
+        return rc
+    print("")
+    ok("RADIA-OPTUNA DEFINITION OF DONE met")
+    info(f"CI run ID: {state['ci_run_id']}")
+    info(f"commit: {state['commit']}")
+    info(f"wheel: {state['wheel']}")
+    info(f"SHA256: {state['wheel_sha256']}")
+    info("Next: create the matching radia-optuna-v<version> tag, then dispatch "
+         "release-radia-optuna.yml with this CI run ID and SHA256.")
+    return 0
+
+
+# ============================================================
 # Phases
 # ============================================================
 
@@ -402,13 +726,19 @@ def cmd_preflight(args):
     info(f"  radia              pyproject={v['radia']}  __version__={v['radia.__version__']}")
     info(f"  cubit-mesh-export  pyproject={v['cubit-mesh-export']}  __version__={v['cme.__version__']}")
     info(f"  radia-mcp          pyproject={v['radia-mcp']}")
+    info(f"  radia-optuna       pyproject={v['radia-optuna']}  __version__={v['optuna.__version__']}")
 
     pp_radia = (v["radia"] == v["radia.__version__"])
     pp_cme   = (v["cubit-mesh-export"] == v["cme.__version__"])
+    pp_optuna = (v["radia-optuna"] == v["optuna.__version__"])
     if pp_radia: ok("radia pyproject == __init__")
     else:        fail("radia pyproject != __init__ — fix before any release")
     if pp_cme: ok("cubit-mesh-export pyproject == __init__")
     else:      fail("cubit-mesh-export pyproject != __init__ — fix before any release")
+    if pp_optuna: ok("radia-optuna pyproject == __init__")
+    else:         fail("radia-optuna pyproject != __init__ — fix before any release")
+    if not (pp_radia and pp_cme and pp_optuna):
+        return 2
 
     # Cubit plugin freshness
     src_dir = REPO / "src/cubit_plugin"
@@ -423,7 +753,7 @@ def cmd_preflight(args):
         from datetime import datetime
         fail(f"bundled .ccm ({datetime.fromtimestamp(bin_mtime)}) older than "
               f"src/cubit_plugin/ ({datetime.fromtimestamp(src_mtime)}). "
-              "Run `python tools/release_qud.py phase0`.")
+              "Run `python tools/release_quad.py phase0`.")
         return 2
     else:
         ok("bundled plugin .ccm >= src/cubit_plugin/ mtime")
@@ -1254,7 +1584,7 @@ def _check_github_hosted_workflows(sha, *, timeout_sec=1800, poll_sec=20):
            "?per_page=100")
     headers = {
         "Accept": "application/vnd.github+json",
-        "User-Agent": "radia-release_qud",
+        "User-Agent": "radia-release_quad",
     }
 
     def _fetch():
@@ -1455,7 +1785,7 @@ def cmd_done(args):
     if drift > 0:
         fail(f"{drift} editable-tier check(s) drifted.  "
              "Run the printed recovery commands, then re-run "
-             "`release_qud done`.")
+             "`release_quad done`.")
         return 1
 
     rc = cmd_phase9(args)
@@ -1466,7 +1796,7 @@ def cmd_done(args):
     rc = _run_retired_standalone_pyside_guard()
     if rc != 0:
         fail("retired standalone PySide panel surface reappeared. Remove it, then re-run "
-             "`release_qud done`.")
+             "`release_quad done`.")
         return rc
 
     rc = _check_main_synced(hard=True)
@@ -1529,7 +1859,7 @@ def _check_main_synced(*, hard: bool) -> int:
     if ahead == 0:
         info("recovery: git -C " + str(REPO) + " merge --ff-only origin/main")
     else:
-        info("recovery: python tools/release_qud.py sync-main")
+        info("recovery: python tools/release_quad.py sync-main")
     return 4
 
 
@@ -1593,7 +1923,7 @@ def cmd_sync_main(args):
     if tools_md in _git("status", "--porcelain").stdout:
         _git("add", tools_md)
         _git("commit", "-m",
-             "docs(mcp): regenerate TOOLS.md (release_qud sync-main)")
+             "docs(mcp): regenerate TOOLS.md (release_quad sync-main)")
         ok("committed regenerated TOOLS.md")
 
     p = run(["git", "-C", str(REPO), "push", "origin", "main"], check=False)
@@ -1621,7 +1951,7 @@ _MOTOR_SNAPSHOT_ROOTS = (
     "docs/maglev/demos/team28",
 )
 _MOTOR_SNAPSHOT_FILES = ("pyproject.toml",)
-_HIBINO_DEST = r"C:\temp\radia_motor_evidence_qud"
+_HIBINO_DEST = r"C:\temp\radia_motor_evidence_quad"
 
 
 def _motor_text_sha(path: Path) -> str:
@@ -1680,7 +2010,7 @@ def cmd_evidence_motor(args):
         return 3
 
     # 2) snapshot zip
-    zip_path = Path(r"C:\temp\radia_motor_evidence_qud.zip")
+    zip_path = Path(r"C:\temp\radia_motor_evidence_quad.zip")
     with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as z:
         for f in _MOTOR_SNAPSHOT_FILES:
             z.write(REPO / f, f)
@@ -1701,21 +2031,21 @@ def cmd_evidence_motor(args):
         "    Write-Output 'BUSY: MATLAB already running on hibino'; exit 2 }",
         f"$dest = '{_HIBINO_DEST}'",
         "if (Test-Path $dest) { Remove-Item $dest -Recurse -Force }",
-        "Expand-Archive -Path 'C:\\temp\\radia_motor_evidence_qud.zip' -DestinationPath $dest -Force",
+        "Expand-Archive -Path 'C:\\temp\\radia_motor_evidence_quad.zip' -DestinationPath $dest -Force",
         "$env:RADIA_VALIDATION_HOST_ROLE = 'compute'",
         f"$gen = Join-Path $dest '{gen_rel}'",
-        "$log = 'C:\\temp\\radia_motor_evidence_qud.log'",
+        "$log = 'C:\\temp\\radia_motor_evidence_quad.log'",
         "Remove-Item $log -Force -ErrorAction SilentlyContinue",
         f"& '{MATLAB_EXE}' -wait -batch (\"run('\" + $gen + \"')\") -logfile $log",
         "Write-Output ('MATLAB_EXIT=' + $LASTEXITCODE)",
         "Get-Content $log -Tail 8 -ErrorAction SilentlyContinue",
         "exit $LASTEXITCODE",
     ]) + "\n"
-    runner_path = Path(r"C:\temp\radia_motor_evidence_qud_runner.ps1")
+    runner_path = Path(r"C:\temp\radia_motor_evidence_quad_runner.ps1")
     runner_path.write_text(runner, encoding="ascii")
 
-    for src, dst in ((zip_path, "C:/temp/radia_motor_evidence_qud.zip"),
-                     (runner_path, "C:/temp/radia_motor_evidence_qud_runner.ps1")):
+    for src, dst in ((zip_path, "C:/temp/radia_motor_evidence_quad.zip"),
+                     (runner_path, "C:/temp/radia_motor_evidence_quad_runner.ps1")):
         p = run(["scp", "-o", "ConnectTimeout=20", str(src),
                  f"{SSH_HIBINO}:{dst}"], check=False)
         if p.returncode != 0:
@@ -1724,7 +2054,7 @@ def cmd_evidence_motor(args):
 
     # 4) synchronous run (previous artifact: 79 tests in ~2 min + startup)
     p = run(["ssh", SSH_HIBINO, "pwsh -NoProfile -ExecutionPolicy Bypass "
-             "-File C:\\temp\\radia_motor_evidence_qud_runner.ps1"],
+             "-File C:\\temp\\radia_motor_evidence_quad_runner.ps1"],
             check=False, timeout=1800)
     if p.returncode != 0:
         fail(f"hibino generator failed (exit {p.returncode}) — see log above")
@@ -1767,8 +2097,8 @@ def cmd_evidence_motor(args):
 # ============================================================
 
 def main():
-    p = argparse.ArgumentParser(prog="release_qud",
-                                 description="Enforce the release-qud flow.")
+    p = argparse.ArgumentParser(prog="release_quad",
+                                 description="Enforce the release-quad flow.")
     sub = p.add_subparsers(dest="cmd", required=True)
 
     sub.add_parser("preflight",
@@ -1790,6 +2120,21 @@ def main():
                     help="path to an IH preview or full Radia Simulink ZIP")
     ss.add_argument("--target", default="all",
                     help="comma list: lab, 100, mdx, hibino, all")
+    optuna_candidate = sub.add_parser(
+        "optuna-candidate",
+        help="download one main-CI radia-optuna wheel and verify it on four MATLAB machines")
+    optuna_candidate.add_argument(
+        "--ci-run-id", required=True,
+        help="successful main-push CI run containing radia-optuna-wheel")
+    optuna_candidate.add_argument(
+        "--target", default="all",
+        help="comma list: lab, 100, mdx, hibino, all")
+    optuna_done = sub.add_parser(
+        "optuna-done",
+        help="require the exact radia-optuna wheel to have passed all four machines")
+    optuna_done.add_argument(
+        "--wheel", required=True,
+        help="retained wheel path emitted by optuna-candidate")
     sub.add_parser("all",
                     help="phase8 -> phase8e -> phase9 in one shot")
     sub.add_parser("verify-editable",
@@ -1821,6 +2166,8 @@ def main():
         "phase8e":          cmd_phase8e,
         "phase9":           cmd_phase9,
         "simulink-candidate": cmd_simulink_candidate,
+        "optuna-candidate":  cmd_optuna_candidate,
+        "optuna-done":       cmd_optuna_done,
         "all":              cmd_all,
         "verify-editable":  cmd_verify_editable,
         "ci-verify":        cmd_ci_verify,

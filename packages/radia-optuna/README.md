@@ -1,10 +1,10 @@
 # radia-optuna
 
-`radia-optuna` is the separately distributed MATLAB optimization component of
-the Radia monorepo. It installs the `radia.optuna` MATLAB namespace, the
-independent 20-command `optuna_mex`, and the checked Optuna 4.9.0 compatibility
-contracts. It does not install or load the Radia solver, NGSolve, oneMKL, or
-Cubit.
+`radia-optuna` is an independent, separately distributed MATLAB optimization
+component from the Radia monorepo. It installs the `radia.optuna` MATLAB
+namespace, the 20-command `optuna_mex`, and checked compatibility contracts
+whose behavioral oracle is Optuna 4.9.0. It does not install or load the Radia
+solver, NGSolve, oneMKL, or Cubit.
 
 Install it by itself:
 
@@ -57,12 +57,33 @@ acquisition, scrambled QMC, and parameter importance.
 as explicitly classified Radia integration adapters. The standalone core does
 not call them; choosing one requires the full `radia` installation.
 
+## Upstream attribution
+
+This is an independent, unofficial project. It is not affiliated with,
+sponsored by, or endorsed by Preferred Networks, Inc. or the Optuna project.
+It does not use the Optuna logo or present itself as an official Optuna
+distribution.
+
+Optuna, the Optuna logo and any related marks are trademarks of Preferred Networks, Inc.
+
+Optuna and the official `optuna/optuna-mcp` server are separate MIT-licensed
+upstream projects and are not bundled in this wheel. See
+[`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md) for their copyright and
+license notices. Shared MCP Study/Trial/visualization operations remain owned
+by the official server; `radia-mcp` covers only MATLAB/Simulink differences.
+
 ## Release boundary
 
 CI builds and verifies a distinct `radia-optuna-wheel` artifact. A
 `radia-optuna-v<version>` tag may publish only that exact CI artifact, after
 rechecking its tag, version, API inventory, MEX inventory, and dependency
-boundary. The first PyPI publication additionally requires the repository's
-trusted publisher to be registered for the new `radia-optuna` project; until
-that external registration and release tag exist, install the verified wheel
-artifact rather than assuming the PyPI name is already live.
+boundary, including the bundled third-party notice.
+
+Publication also uses the standalone four-machine release-quad lane. After the
+successful `main` CI run, execute
+`python tools/release_quad.py optuna-candidate --ci-run-id <id> --target all`,
+then pass the retained wheel to
+`python tools/release_quad.py optuna-done --wheel <path>`. Only after that gate
+passes may the matching commit be tagged. The manual release workflow requires
+the same CI run ID and the candidate SHA256, publishes that exact wheel to
+PyPI, and attaches it to the matching GitHub Release.

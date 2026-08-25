@@ -7,6 +7,7 @@ from radia_mcp.matlab_agentic_ml import (
     validate_aicia_catalog as _validate_aicia_catalog,
 )
 from . import matlab_agent_guide as _guide
+from .optuna_boundary import matlab_optuna_mcp_route as _optuna_mcp_route
 from .optimize import matlab_cad_topology_build as _cad_topology_build, matlab_optimize_build as _optimize_build, matlab_optimize_resume as _optimize_resume, matlab_sheet_metal_topology_build as _sheet_metal_topology_build
 from .runtime import (
     matlab_extension_contract as _contract,
@@ -41,8 +42,12 @@ def matlab_radia_mex_contract(topic:str="all")->str:
     return json.dumps(_mex_contract(topic),ensure_ascii=False,indent=2)
 @mcp.tool()
 def matlab_optuna_simulink_contract()->str:
-    """Describe the table-backed MATLAB Optuna-like and Simulink workflow."""
+    """Describe the table-backed MATLAB Optuna and Simulink workflow."""
     return json.dumps(_optuna_contract(),ensure_ascii=False,indent=2)
+@mcp.tool()
+def matlab_optuna_mcp_route(topic:str="overview")->str:
+    """Route shared Optuna tools upstream and MATLAB differences to Radia."""
+    return json.dumps(_optuna_mcp_route(topic),ensure_ascii=False,indent=2)
 @mcp.tool()
 def matlab_simulink_library_contract()->str:
     """Describe Radia application blocks, Library Browser registration, and LTspice compatibility."""

@@ -1,23 +1,25 @@
 ---
-name: release-qud
-description: Four-machine Radia release gate. Use when the user asks for release-qud, release_quad, release_qud, post-release deploy, GitHub Release publication, or the Definition Of Done for Radia releases. Coordinates PyPI and Simulink release candidates across LAB, 100号機, mdx, and hibino via tools/release_qud.py.
+name: release-quad
+description: Four-machine Radia release gate. Use when the user asks for release-quad, release_quad, post-release deploy, GitHub Release publication, or the Definition Of Done for Radia releases. Coordinates PyPI and Simulink release candidates across LAB, 100号機, mdx, and hibino via tools/release_quad.py.
 ---
 
-# release-qud
+# release-quad
 
 ## Canonical Entry Point
 
-Use only `tools/release_qud.py`; release work must go through QUD.
+Use only `tools/release_quad.py`; release work must go through QUAD.
 
 ```powershell
-python tools/release_qud.py preflight
-python tools/release_qud.py phase0
-python tools/release_qud.py phase8 --target lab,100,hibino
-python tools/release_qud.py phase8e
-python tools/release_qud.py phase9
-python tools/release_qud.py simulink-candidate --package <zip> --target all
-python tools/release_qud.py all
-python tools/release_qud.py done --simulink-package <zip>
+python tools/release_quad.py preflight
+python tools/release_quad.py phase0
+python tools/release_quad.py phase8 --target lab,100,hibino
+python tools/release_quad.py phase8e
+python tools/release_quad.py phase9
+python tools/release_quad.py simulink-candidate --package <zip> --target all
+python tools/release_quad.py optuna-candidate --ci-run-id <id> --target all
+python tools/release_quad.py optuna-done --wheel <path>
+python tools/release_quad.py all
+python tools/release_quad.py done --simulink-package <zip>
 ```
 
 ## Machine Policy
@@ -28,6 +30,13 @@ python tools/release_qud.py done --simulink-package <zip>
 | 100号機 | NAS editable over SSH | `phase8 --target 100` |
 | hibino | PyPI wheel consumer over `ssh hibino` | `phase8 --target hibino` |
 | mdx | PyPI wheel consumer, no `radia-mcp` | `phase8e` |
+
+`radia-optuna` is an independent release lane. It does not run `phase8` or
+install Radia/Cubit. `optuna-candidate` downloads the exact wheel artifact from
+one successful `main` push CI run and runs that wheel's installed-wheel
+MATLAB/Simulink test on LAB, 100号機, mdx, and hibino. `optuna-done` requires
+the wheel SHA256, source commit, package version, CI run, and all four target
+results to agree.
 
 `phase9` is the hard gate: LAB / 100号機 / mdx / hibino must agree on
 versions, compatibility constants, and tracked file hashes. mdx reports
@@ -42,13 +51,13 @@ worktree on the NAS and expose its two machine-local views before `all`,
 `verify-editable`, and `done`:
 
 ```powershell
-$env:RADIA_RELEASE_EDITABLE_REPO_LAB = "S:/Radia/release-qud/<release>"
-$env:RADIA_RELEASE_EDITABLE_REPO_100 = "W:\00_CAE\Radia\release-qud\<release>"
-python tools/release_qud.py all
+$env:RADIA_RELEASE_EDITABLE_REPO_LAB = "S:/Radia/release-quad/<release>"
+$env:RADIA_RELEASE_EDITABLE_REPO_100 = "W:\00_CAE\Radia\release-quad\<release>"
+python tools/release_quad.py all
 ```
 
 The release worktree must contain the native build outputs needed by editable
-installs. QUD verifies its exact Git SHA and tracked-clean state on LAB and
+installs. QUAD verifies its exact Git SHA and tracked-clean state on LAB and
 100号機 before killing processes or installing anything. Repeat the same two
 environment variables for `done`. Keep that worktree until publication is
 complete; after parallel work lands and the canonical worktree catches up,
@@ -56,8 +65,13 @@ restore the normal editable pointers.
 
 ## Rules
 
-- Do not call a release done until `python tools/release_qud.py done`
+- Do not call a release done until `python tools/release_quad.py done`
   exits 0.
+- Do not call a standalone radia-optuna release done until
+  `python tools/release_quad.py optuna-done --wheel <path>` exits 0. Tag only
+  afterward. Dispatch `release-radia-optuna.yml` with the exact candidate CI
+  run ID and SHA256 emitted by QUAD; the workflow must publish that artifact to
+  both PyPI and the GitHub Release without rebuilding it.
 - Do not publish any GitHub Release containing the Radia Simulink library,
   MATLAB support files, or MEX assets until the complete four-machine gate
   passes for LAB, 100号機, mdx, and hibino.

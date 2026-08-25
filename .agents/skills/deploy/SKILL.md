@@ -1,11 +1,11 @@
 ---
 name: deploy
-description: Historical deploy notes. Current Radia deploy/release uses release-qud plus cubit-plugin-install; do not follow old .ccl/Cubit-2025.3 recipes except for archaeology.
+description: Historical deploy notes. Current Radia deploy/release uses release-quad plus cubit-plugin-install; do not follow old .ccl/Cubit-2025.3 recipes except for archaeology.
 ---
 
-# Deploy (historical notes; current flow is release-qud)
+# Deploy (historical notes; current flow is release-quad)
 
-> **CURRENT POLICY (2026-07-06)**: use `release-qud` for real Radia
+> **CURRENT POLICY (2026-07-06)**: use `release-quad` for real Radia
 > deployment. LAB and 100号機 keep `radia`, `cubit-mesh-export`, and
 > `radia-mcp` as editable installs; mdx and hibino consume PyPI wheels.
 > Cubit 2025.12 uses a `.ccm` backend plus the Cubit-embedded PySide6
@@ -17,8 +17,8 @@ description: Historical deploy notes. Current Radia deploy/release uses release-
 > and invalid. Current application QA is Simulink-only; docs notebooks use
 > the separate saved-WebGUI audit.
 
-For current work, read `.agents/skills/release-qud/SKILL.md`, run
-`tools/release_qud.py`, and verify Cubit with `cubit-plugin-install
+For current work, read `.agents/skills/release-quad/SKILL.md`, run
+`tools/release_quad.py`, and verify Cubit with `cubit-plugin-install
 --verify-only` plus the Cubit smoke tests.
 
 # Historical Deploy (2-Stage: LAB editable, 100号機+mdx PyPI)
@@ -45,7 +45,7 @@ editable / 100号機 PyPI) を 2-tier (LAB editable / 100号機 + mdx PyPI)
 - **100号機**: `pip install 'radia[cubit]==X.Y.Z'` + `cubit-plugin-install
   --all-users`.  21 ラボメンバの本番。
 - **mdx**: 100号機 と完全に同じ recipe.  PyPI cross-machine consistency
-  probe (release-qud Phase 9).  C++ 変更を mdx に届けるには `v*
+  probe (release-quad Phase 9).  C++ 変更を mdx に届けるには `v*
   tag → CD/PyPI` リリースが必要 (LAB の Build.ps1 出力は届かない).
 
 **Cubit plugin (100号機 + mdx)**: 両方とも PyPI wheel から regular-file
@@ -272,7 +272,7 @@ silently corrupted a large fraction of users twice in 4 days.
 ショートカットで動いても *distribution* を検証したことにはならない。
 Stage 2 を 2 マシンで二重化することで PyPI 互換性 (wheel manifest /
 package-data / entry-points / cubit-plugin-install regular-file
-deploy) を release-qud Phase 9 cross-machine consistency probe で
+deploy) を release-quad Phase 9 cross-machine consistency probe で
 ピン留めする。
 
 ## radia-mcp Policy
@@ -967,7 +967,7 @@ ssh "$TARGET" 'python -m pytest tests/test_simulink_application.py tests/test_ap
 Both probes are mandatory before declaring the deploy complete. On a source
 checkout, also run the docs notebook audit when notebooks changed.
 See
-also `release-qud` Phase 8c (verify) and Phase 8d (smoke).
+also `release-quad` Phase 8c (verify) and Phase 8d (smoke).
 
 ### Stage 2 — LEGACY (mdx editable, 2026-05-01 only) -- RETIRED 2026-05-02
 

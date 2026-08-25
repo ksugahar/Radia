@@ -4,7 +4,7 @@
   "scope": "radia-mcp release candidate before main integration and push",
   "assessment": {
     "level": "release-candidate",
-    "summary": "The MCP server fleet is in a strong public-facing state, but should not be called operationally complete until PyPI install smoke and release-QUD machine checks pass.",
+    "summary": "The MCP server fleet is in a strong public-facing state, but should not be called operationally complete until PyPI install smoke and release-quad machine checks pass.",
     "do_not_overclaim": true
   },
   "passed_evidence": [
@@ -48,7 +48,7 @@
       "required_for": "claiming released MCP tools start correctly from wheel entry points"
     },
     {
-      "gate": "release-QUD deploy smoke",
+      "gate": "release-quad deploy smoke",
       "required_for": "claiming operational quality across LAB, 100 machine, mdx, and hibino"
     },
     {
@@ -60,5 +60,5 @@
       "required_for": "keeping long-running validation outside fast tests while preserving evidence"
     }
   ],
-  "release_decision_rule": "It is fair to say radia-mcp is healthy and practical. Do not say perfect or fully operational until PyPI entry-point smoke and release-QUD Phase 8/9 checks pass."
+  "release_decision_rule": "It is fair to say radia-mcp is healthy and practical. Do not say perfect or fully operational until PyPI entry-point smoke and release-quad Phase 8/9 checks pass."
 }
