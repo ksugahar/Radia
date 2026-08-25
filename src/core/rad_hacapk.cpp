@@ -767,6 +767,34 @@ void RadHACApKBase::MatVecSymMany(
             }
 }
 
+void RadHACApKBase::MatVecSymManyMasked(
+    const std::vector<double>& x, int nrhs,
+    const std::vector<int>& active_prefix, std::vector<double>& y)
+{
+    if (!m_valid || !m_leafmtxp || !m_control || nrhs < 1 ||
+        x.size() != static_cast<size_t>(nrhs)*m_ndof ||
+        active_prefix.size() != static_cast<size_t>(m_ndof)+1 ||
+        active_prefix.front() != 0)
+        throw std::runtime_error(
+            "MatVecSymManyMasked: invalid operator, batch, or active prefix");
+    y.assign(x.size(), 0.0);
+    HACApK_matvec_sym_many_masked_wrapper(
+        m_leafmtxp, m_control, x.data(), y.data(), m_ndof, nrhs,
+        active_prefix.data());
+    if (m_defl_nplaq > 0 && m_defl_alpha != 0.0)
+        for (int rhs = 0; rhs < nrhs; ++rhs)
+            for (int p = 0; p < m_defl_nplaq; ++p) {
+                double c = 0.0;
+                for (int k = m_defl_offsets[p]; k < m_defl_offsets[p+1]; ++k)
+                    c += m_defl_signs[k] *
+                         x[static_cast<size_t>(rhs)*m_ndof+m_defl_dofs[k]];
+                c *= m_defl_alpha;
+                for (int k = m_defl_offsets[p]; k < m_defl_offsets[p+1]; ++k)
+                    y[static_cast<size_t>(rhs)*m_ndof+m_defl_dofs[k]] +=
+                        m_defl_signs[k]*c;
+            }
+}
+
 void RadHACApKBase::UpdateDiagonal(const std::vector<double>& inv_chi) {
     if (!m_valid || !m_leafmtxp || !m_control) return;
 

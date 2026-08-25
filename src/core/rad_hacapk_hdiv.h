@@ -511,6 +511,7 @@ public:
     bool HasConfiguredGeometryMassMatrix() const { return m_operatorGeometryMassConfigured; }
     int ConfiguredNFace() const { return m_operatorNFace; }
     int ConfiguredConstraintCount() const;
+    std::vector<int> ConfiguredActiveHMatrixStats(int component = 0) const;
     void SetConfiguredConstraints(const std::vector<int>& dofs,
                                   bool preserve_existing = false);
     std::vector<double> ApplyConfiguredDemag(
@@ -918,11 +919,19 @@ private:
     std::vector<int> m_operatorGeometryMassIndptr, m_operatorGeometryMassIndices;
     std::vector<double> m_operatorGeometryMassData;
     std::vector<unsigned char> m_operatorConstrained;
+    // Per charge component, prefix counts in HACApK's permuted ordering.
+    // A symmetric leaf contributes to the constrained principal submatrix
+    // only when both its row and column ranges contain an active charge.
+    std::vector<int> m_operatorActiveChargePrefix;
     int m_operatorNFace = 0;
     bool m_operatorChargeConfigured = false;
     bool m_operatorMassConfigured = false;
     bool m_operatorGeometryMassConfigured = false;
     bool m_operatorMassIsGeometry = false;
+    void UpdateConfiguredActiveChargePrefixes();
+    void MatVecSymManyConfigured(
+        const std::vector<double>& x, int nrhs, int component,
+        std::vector<double>& y);
     // Get-or-build the persistent factor (the single shared implementation for both solve methods,
     // defined in the .cpp under HAVE_LAPACK).  Returns a PINNED shared_ptr the caller must hold for the
     // duration of its Krylov loop -- pinning makes a concurrent/nested replacement of the slot unable to

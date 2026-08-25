@@ -128,6 +128,9 @@ public:
     // Row-major [nrhs][ndof] BLAS-3 symmetric H-matrix application.
     virtual void MatVecSymMany(const std::vector<double>& x, int nrhs,
                                std::vector<double>& y);
+    void MatVecSymManyMasked(const std::vector<double>& x, int nrhs,
+                             const std::vector<int>& active_prefix,
+                             std::vector<double>& y);
 
     /**
      * Update diagonal blocks when 1/chi changes (nonlinear iteration)
