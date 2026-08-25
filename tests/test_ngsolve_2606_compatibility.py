@@ -53,6 +53,28 @@ def test_ngsolve_netgen_runtime_matches_both_exact_package_pins():
     assert expected <= cubit_dependencies
 
 
+def test_self_hosted_ci_keeps_the_ngsolve_abi_in_a_run_local_environment():
+    workflow = (ROOT / ".github" / "workflows" / "build-test.yml").read_text(
+        encoding="utf-8"
+    )
+    assert "Create isolated NGSolve environment" in workflow
+    assert "-m venv --system-site-packages" in workflow
+    assert "RADIA_CI_VENV=" in workflow
+    assert "NGSOLVE_DIR=" in workflow
+    assert "Netgen_DIR=" in workflow
+    assert "ngsolve.__version__==want['ngsolve']" in workflow
+
+
+def test_build_scripts_resolve_netgen_from_the_active_python_environment():
+    for relative in ("Build.ps1", "tools/_build_cubit_plugin.ps1"):
+        script = (ROOT / relative).read_text(encoding="utf-8")
+        assert "import netgen,os" in script, relative
+        assert (
+            "C:\\Program Files\\Python312\\Lib\\site-packages\\netgen"
+            not in script
+        ), relative
+
+
 @pytest.mark.parametrize(
     ("family", "mesh_kwargs", "expected_types"),
     [
