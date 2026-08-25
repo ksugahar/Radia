@@ -40,9 +40,27 @@ try {
     $matlabPathLiteral = ConvertTo-MatlabLiteral $installedMatlabPath
     $testDirectoryLiteral = ConvertTo-MatlabLiteral $testDirectory
     $batch = "restoredefaultpath; addpath('$matlabPathLiteral'); addpath('$testDirectoryLiteral'); result=test_standalone_simulink('$matlabPathLiteral'); assert(result.ok);"
-    & $MatlabExecutable -batch $batch
-    if ($LASTEXITCODE -ne 0) {
-        throw "Installed-wheel Simulink test failed with exit code $LASTEXITCODE"
+
+    # MathWorks' online license service can transiently reject an otherwise
+    # valid batch start with error 5202. Retry only that startup failure; a
+    # MATLAB assertion, numerical mismatch, or any other error still fails on
+    # the first attempt.
+    $matlabLog = Join-Path $resolvedRunRoot 'matlab-batch.log'
+    $maxMatlabAttempts = 3
+    for ($attempt = 1; $attempt -le $maxMatlabAttempts; $attempt++) {
+        & $MatlabExecutable -batch $batch 2>&1 | Tee-Object -FilePath $matlabLog
+        $matlabExitCode = $LASTEXITCODE
+        if ($matlabExitCode -eq 0) { break }
+
+        $matlabOutput = Get-Content -LiteralPath $matlabLog -Raw -ErrorAction SilentlyContinue
+        $isLicenseService5202 = $matlabOutput -match '(?<!\d)5202(?!\d)'
+        if (-not $isLicenseService5202 -or $attempt -eq $maxMatlabAttempts) {
+            throw "Installed-wheel Simulink test failed with exit code $matlabExitCode"
+        }
+
+        $delaySeconds = 10 * $attempt
+        Write-Warning "MathWorks license service returned 5202; retrying the same MATLAB batch command in $delaySeconds seconds (attempt $($attempt + 1)/$maxMatlabAttempts)."
+        Start-Sleep -Seconds $delaySeconds
     }
 } finally {
     $checkedRunRoot = [IO.Path]::GetFullPath($resolvedRunRoot)
