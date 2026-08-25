@@ -1,10 +1,20 @@
 name: Release radia-optuna
 
-# Publish only the wheel built and verified by CI for a radia-optuna-v* tag.
+# Publish only a wheel built and verified by a successful CI run whose exact
+# commit is tagged radia-optuna-v*. The manual lane recovers from a tag CI that
+# GitHub cancels after an equivalent main-push CI for the same SHA has passed;
+# it selects an immutable CI run rather than rebuilding or accepting a local
+# artifact.
 on:
   workflow_run:
     workflows: ["CI"]
     types: [completed]
+  workflow_dispatch:
+    inputs:
+      ci_run_id:
+        description: "Successful CI run ID that produced the release wheel"
+        required: true
+        type: string
 
 permissions:
   actions: read
@@ -14,42 +24,97 @@ permissions:
 jobs:
   publish:
     if: >-
-      github.event.workflow_run.conclusion == 'success' &&
-      github.event.workflow_run.event == 'push'
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push')
     runs-on: ubuntu-latest
     timeout-minutes: 5
     environment: pypi
 
     steps:
+      - name: Resolve and verify the exact successful CI run
+        id: source
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          EVENT_NAME: ${{ github.event_name }}
+          MANUAL_RUN_ID: ${{ inputs.ci_run_id }}
+          WORKFLOW_RUN_ID: ${{ github.event.workflow_run.id }}
+          WORKFLOW_RUN_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            RUN_ID="$MANUAL_RUN_ID"
+            RUN_JSON=$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}")
+            SHA=$(jq -r '.head_sha' <<<"$RUN_JSON")
+            STATUS=$(jq -r '.status' <<<"$RUN_JSON")
+            CONCLUSION=$(jq -r '.conclusion' <<<"$RUN_JSON")
+            EVENT=$(jq -r '.event' <<<"$RUN_JSON")
+            WORKFLOW_PATH=$(jq -r '.path' <<<"$RUN_JSON")
+            HEAD_REPOSITORY=$(jq -r '.head_repository.full_name' <<<"$RUN_JSON")
+            if [ "$STATUS" != "completed" ] || [ "$CONCLUSION" != "success" ] || \
+               [ "$EVENT" != "push" ] || \
+               [ "$WORKFLOW_PATH" != ".github/workflows/build-test.yml" ] || \
+               [ "$HEAD_REPOSITORY" != "$GITHUB_REPOSITORY" ]; then
+              echo "::error::CI run $RUN_ID is not a successful in-repository push run of build-test.yml"
+              exit 1
+            fi
+
+            JOBS_JSON=$(gh api --paginate \
+              "repos/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}/jobs?per_page=100")
+            for REQUIRED_JOB in \
+              "build-test" \
+              "radia-optuna installed-wheel MATLAB/Simulink E2E"; do
+              SUCCESS_COUNT=$(jq --arg name "$REQUIRED_JOB" \
+                '[.jobs[] | select(.name == $name and .status == "completed" and .conclusion == "success")] | length' \
+                <<<"$JOBS_JSON")
+              if [ "$SUCCESS_COUNT" -ne 1 ]; then
+                echo "::error::CI run $RUN_ID lacks one successful '$REQUIRED_JOB' job"
+                exit 1
+              fi
+            done
+            MANUAL=true
+          else
+            RUN_ID="$WORKFLOW_RUN_ID"
+            SHA="$WORKFLOW_RUN_SHA"
+            MANUAL=false
+          fi
+          echo "run_id=$RUN_ID" >> "$GITHUB_OUTPUT"
+          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
+          echo "manual=$MANUAL" >> "$GITHUB_OUTPUT"
+
       - name: Download exact CI ref context
+        if: steps.source.outputs.manual != 'true'
         uses: actions/download-artifact@v4
         with:
           name: ci-release-context
           path: ci-release-context
-          run-id: ${{ github.event.workflow_run.id }}
+          run-id: ${{ steps.source.outputs.run_id }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Verify triggering CI ran on a radia-optuna tag
-        id: ref_check
+      - name: Verify automatic release source ran on a radia-optuna tag
+        id: eligibility
         env:
-          SHA: ${{ github.event.workflow_run.head_sha }}
-          RUN_ID: ${{ github.event.workflow_run.id }}
+          MANUAL: ${{ steps.source.outputs.manual }}
+          SHA: ${{ steps.source.outputs.sha }}
+          RUN_ID: ${{ steps.source.outputs.run_id }}
         run: |
           python3 - <<'PY'
           import json, os, pathlib, sys
-          context = json.loads(pathlib.Path(
-              "ci-release-context/ci-release-context.json"
-          ).read_text(encoding="utf-8"))
-          valid = (
-              context.get("schema") == "radia.ci-release-context.v1"
-              and context.get("sha") == os.environ["SHA"]
-              and str(context.get("run_id")) == os.environ["RUN_ID"]
-              and context.get("ref_type") == "tag"
-              and any(
-                  tag.startswith("radia-optuna-v")
-                  for tag in context.get("release_tags", [])
+          if os.environ["MANUAL"] == "true":
+              valid = True
+          else:
+              context = json.loads(pathlib.Path(
+                  "ci-release-context/ci-release-context.json"
+              ).read_text(encoding="utf-8"))
+              valid = (
+                  context.get("schema") == "radia.ci-release-context.v1"
+                  and context.get("sha") == os.environ["SHA"]
+                  and str(context.get("run_id")) == os.environ["RUN_ID"]
+                  and context.get("ref_type") == "tag"
+                  and any(
+                      tag.startswith("radia-optuna-v")
+                      for tag in context.get("release_tags", [])
+                  )
               )
-          )
           with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as out:
               out.write(f"eligible={str(valid).lower()}\n")
           if not valid:
@@ -58,10 +123,10 @@ jobs:
 
       - name: Confirm tag points at the CI commit
         id: tag_check
-        if: steps.ref_check.outputs.eligible == 'true'
+        if: steps.eligibility.outputs.eligible == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          SHA: ${{ github.event.workflow_run.head_sha }}
+          SHA: ${{ steps.source.outputs.sha }}
         run: |
           REPO_URL="https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
           VTAG=$(git ls-remote --tags "$REPO_URL" 'refs/tags/radia-optuna-v*' \
@@ -79,7 +144,7 @@ jobs:
         if: steps.tag_check.outputs.found == 'true'
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.workflow_run.head_sha }}
+          ref: ${{ steps.source.outputs.sha }}
 
       - name: Download radia-optuna wheel
         if: steps.tag_check.outputs.found == 'true'
@@ -87,7 +152,7 @@ jobs:
         with:
           name: radia-optuna-wheel
           path: dist
-          run-id: ${{ github.event.workflow_run.id }}
+          run-id: ${{ steps.source.outputs.run_id }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Reverify wheel at the release boundary
