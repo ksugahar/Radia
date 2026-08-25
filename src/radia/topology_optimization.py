@@ -3159,7 +3159,8 @@ def validate_hdiv_mmm_active_state(*, charge_gram, fes, inv_chi, rhs,
 def solve_hdiv_mmm_active_elements(*, charge_gram, fes, inv_chi, rhs,
         response_matrix, active_elements, incident_response=None,
         solve_tolerance=1e-9, solve_max_iterations=5000, mass_riesz=True,
-        cluster_coarse_size=0, cluster_deflation_size=0, recycle_size=0):
+        cluster_coarse_size=0, cluster_deflation_size=0, recycle_size=0,
+        initial_state=None):
     """Solve one exact whole-element active iron set on the fixed superset mesh.
 
     The native Krylov routine uses periodically refreshed true residuals, but
@@ -3167,7 +3168,10 @@ def solve_hdiv_mmm_active_elements(*, charge_gram, fes, inv_chi, rhs,
     the same configured H-matrix operator once more here and reject a state
     that reached ``solve_max_iterations`` without satisfying the requested
     relative residual.  Candidate Schur models must never be accepted against
-    an unconverged physical re-solve.
+    an unconverged physical re-solve.  ``initial_state`` may come from a
+    nearby active set; inactive DOFs are projected to zero before it enters
+    the native Krylov solve, and the final state still passes the exact
+    true-residual gate.
     """
     blocks=ngsolve_discontinuous_element_dof_blocks(fes)
     active=np.asarray(active_elements,dtype=bool).reshape(-1)
@@ -3187,13 +3191,21 @@ def solve_hdiv_mmm_active_elements(*, charge_gram, fes, inv_chi, rhs,
     recycle_size=int(recycle_size)
     if min(cluster_coarse_size,cluster_deflation_size,recycle_size)<0:
         raise ValueError("cluster solve sizes must be nonnegative")
+    x0=None
+    if initial_state is not None:
+        seed=np.asarray(initial_state,dtype=float).reshape(-1)
+        if seed.shape!=(n,) or not np.all(np.isfinite(seed)):
+            raise ValueError(
+                "initial_state must be finite and match the HDiv space")
+        seed=seed.copy();seed[mask]=0.0
+        x0=np.ascontiguousarray(seed[None,:])
     result=charge_gram.solve_configured_linear_material_auto_prec_many(
         float(inv_chi),np.ascontiguousarray(active_rhs[None,:]),
         tol=float(solve_tolerance),maxit=int(solve_max_iterations),
         cluster_coarse_size=cluster_coarse_size,
         cluster_deflation_size=cluster_deflation_size,
         recycle_size=recycle_size,
-        mass_riesz=bool(mass_riesz))
+        mass_riesz=bool(mass_riesz),x0=x0)
     state=np.asarray(result["m"],dtype=float)[0]
     validate_hdiv_mmm_active_state(
         charge_gram=charge_gram,fes=fes,inv_chi=inv_chi,rhs=rhs_full,
@@ -3309,7 +3321,7 @@ def _hdiv_mmm_proposal_solve_tolerance(*, solve_tolerance,
 def grow_hdiv_mmm_by_superposition(*, charge_gram, fes, inv_chi, rhs,
         response_matrix, active_elements, element_volumes,
         response_target, response_band, volume_max,
-        incident_response=None, initial_state=None,
+        incident_response=None, initial_state=None, exact_state_cache=None,
         maximum_batch_elements=None,
         max_iterations=30, ratio_tolerance=1e-8,
         solve_tolerance=1e-9, solve_max_iterations=5000,
@@ -3435,6 +3447,12 @@ def grow_hdiv_mmm_by_superposition(*, charge_gram, fes, inv_chi, rhs,
     and inactive-DOF constraints are checked before the initial Krylov solve is
     skipped; a stale or approximate state fails loudly.
 
+    ``exact_state_cache`` may be a caller-owned dictionary shared by repeated
+    trust-region trials over the same configured operator, RHS, and material
+    law.  A cached physical state is accepted only after the same inactive-DOF
+    and true-residual checks as ``initial_state``; response rows and source
+    calibration are recomputed for the current trial.
+
     ``initial_material_move_fraction`` enables a TOBS/SAIP-style trust region
     on the *total physical volume flipped* by one signed add/remove proposal.
     This is deliberately independent of the net iron-volume constraint: a
@@ -3471,6 +3489,9 @@ def grow_hdiv_mmm_by_superposition(*, charge_gram, fes, inv_chi, rhs,
     volumes=np.asarray(element_volumes,dtype=float).reshape(-1)
     target=np.asarray(response_target,dtype=float).reshape(-1)
     band=np.asarray(response_band,dtype=float).reshape(-1)
+    if exact_state_cache is not None and not isinstance(
+            exact_state_cache,dict):
+        raise TypeError("exact_state_cache must be a dictionary or None")
     if active.shape!=volumes.shape or np.any(volumes<=0.0):
         raise ValueError("element_volumes must be positive and match active_elements")
     if target.shape!=band.shape or target.size==0 or np.any(band<=0.0):
@@ -3749,35 +3770,52 @@ def grow_hdiv_mmm_by_superposition(*, charge_gram, fes, inv_chi, rhs,
         raise ValueError("initial iron seed must be connected and contain no enclosed inactive cavity")
     if active_set_validator is not None and not valid_active_set(active):
         raise ValueError("initial iron seed violates active_set_validator")
-    if initial_state is None:
-        state,response,solve_iterations=solve_hdiv_mmm_active_elements(
+    response_rows=np.atleast_2d(np.asarray(response_matrix,dtype=float))
+    if response_rows.shape[1]!=int(fes.ndof):
+        raise ValueError("response_matrix must match the HDiv space")
+    incident=(np.zeros(response_rows.shape[0],dtype=float)
+              if incident_response is None else
+              np.asarray(incident_response,dtype=float).reshape(-1))
+    if incident.shape!=(response_rows.shape[0],):
+        raise ValueError("incident_response must match the response rows")
+
+    def active_cache_key(active_value):
+        value=np.asarray(active_value,dtype=bool).reshape(-1)
+        return int(value.size),np.packbits(value).tobytes()
+
+    def solve_exact_active(active_value,warm_state=None):
+        key=active_cache_key(active_value)
+        if exact_state_cache is not None and key in exact_state_cache:
+            cached=np.asarray(exact_state_cache[key],dtype=float).reshape(-1)
+            validate_hdiv_mmm_active_state(
+                charge_gram=charge_gram,fes=fes,inv_chi=inv_chi,rhs=rhs,
+                active_elements=active_value,state=cached,
+                solve_tolerance=solve_tolerance)
+            return cached.copy(),response_rows@cached+incident,0
+        solved=solve_hdiv_mmm_active_elements(
             charge_gram=charge_gram,fes=fes,inv_chi=inv_chi,rhs=rhs,
-            response_matrix=response_matrix,active_elements=active,
-            incident_response=incident_response,
-            solve_tolerance=solve_tolerance,
+            response_matrix=response_rows,active_elements=active_value,
+            incident_response=incident,solve_tolerance=solve_tolerance,
             solve_max_iterations=solve_max_iterations,mass_riesz=mass_riesz,
             cluster_coarse_size=cluster_coarse_size,
             cluster_deflation_size=cluster_deflation_size,
-            recycle_size=recycle_size)
+            recycle_size=recycle_size,initial_state=warm_state)
+        if exact_state_cache is not None:
+            exact_state_cache[key]=np.asarray(solved[0],dtype=float).copy()
+        return solved
+
+    if initial_state is None:
+        state,response,solve_iterations=solve_exact_active(active)
     else:
         state=np.asarray(initial_state,dtype=float).reshape(-1).copy()
         validate_hdiv_mmm_active_state(
             charge_gram=charge_gram,fes=fes,inv_chi=inv_chi,rhs=rhs,
             active_elements=active,state=state,
             solve_tolerance=solve_tolerance)
-        response_rows=np.atleast_2d(
-            np.asarray(response_matrix,dtype=float))
-        if response_rows.shape[1]!=state.size:
-            raise ValueError(
-                "response_matrix must match the initial state size")
-        incident=(np.zeros(response_rows.shape[0],dtype=float)
-                  if incident_response is None else
-                  np.asarray(incident_response,dtype=float).reshape(-1))
-        if incident.shape!=(response_rows.shape[0],):
-            raise ValueError(
-                "incident_response must match the response rows")
         response=response_rows@state+incident
         solve_iterations=0
+        if exact_state_cache is not None:
+            exact_state_cache[active_cache_key(active)]=state.copy()
     state,response,source_scale=calibrate_source(state,response)
     element_blocks=ngsolve_discontinuous_element_dof_blocks(fes)
     ratio=lambda values:float(np.max(np.abs((np.asarray(values)-target)/band)))
@@ -4011,17 +4049,9 @@ def grow_hdiv_mmm_by_superposition(*, charge_gram, fes, inv_chi, rhs,
                 if not valid_active_set(trial_active):
                     continue
                 batch_trials+=1
-                trial_state,trial_response,trial_iterations=\
-                    solve_hdiv_mmm_active_elements(
-                        charge_gram=charge_gram,fes=fes,inv_chi=inv_chi,rhs=rhs,
-                        response_matrix=response_matrix,active_elements=trial_active,
-                        incident_response=incident_response,
-                        solve_tolerance=solve_tolerance,
-                        solve_max_iterations=solve_max_iterations,
-                        mass_riesz=mass_riesz,
-                        cluster_coarse_size=cluster_coarse_size,
-                        cluster_deflation_size=cluster_deflation_size,
-                        recycle_size=recycle_size)
+                trial_state,trial_response,trial_iterations=solve_exact_active(
+                    trial_active,np.asarray(state,dtype=float)/
+                        float(source_scale))
                 try:
                     trial_state,trial_response,trial_scale=calibrate_source(
                         trial_state,trial_response)
@@ -4781,18 +4811,9 @@ def grow_hdiv_mmm_by_superposition(*, charge_gram, fes, inv_chi, rhs,
                 if not valid_active_set(trial_active):
                     continue
                 exact_evaluated+=1
-                trial_state,trial_response,trial_iterations=\
-                    solve_hdiv_mmm_active_elements(
-                        charge_gram=charge_gram,fes=fes,inv_chi=inv_chi,
-                        rhs=rhs,response_matrix=response_matrix,
-                        active_elements=trial_active,
-                        incident_response=incident_response,
-                        solve_tolerance=solve_tolerance,
-                        solve_max_iterations=solve_max_iterations,
-                        mass_riesz=mass_riesz,
-                        cluster_coarse_size=cluster_coarse_size,
-                        cluster_deflation_size=cluster_deflation_size,
-                        recycle_size=recycle_size)
+                trial_state,trial_response,trial_iterations=solve_exact_active(
+                    trial_active,np.asarray(state,dtype=float)/
+                        float(source_scale))
                 try:
                     trial_state,trial_response,trial_scale=calibrate_source(
                         trial_state,trial_response)
@@ -4913,18 +4934,9 @@ def grow_hdiv_mmm_by_superposition(*, charge_gram, fes, inv_chi, rhs,
                             continue
                         exact_evaluated+=1
                         (alternate_state,alternate_response,
-                         alternate_iterations)=solve_hdiv_mmm_active_elements(
-                            charge_gram=charge_gram,fes=fes,
-                            inv_chi=inv_chi,rhs=rhs,
-                            response_matrix=response_matrix,
-                            active_elements=alternate_active,
-                            incident_response=incident_response,
-                            solve_tolerance=solve_tolerance,
-                            solve_max_iterations=solve_max_iterations,
-                            mass_riesz=mass_riesz,
-                            cluster_coarse_size=cluster_coarse_size,
-                            cluster_deflation_size=cluster_deflation_size,
-                            recycle_size=recycle_size)
+                         alternate_iterations)=solve_exact_active(
+                            alternate_active,np.asarray(state,dtype=float)/
+                                float(source_scale))
                         try:
                             (alternate_state,alternate_response,
                              alternate_scale)=calibrate_source(
@@ -5167,17 +5179,9 @@ def grow_hdiv_mmm_by_superposition(*, charge_gram, fes, inv_chi, rhs,
             trial_topology=ngsolve_growth_topology(fes.mesh,trial_active)
             if not trial_topology.valid or not valid_active_set(trial_active):
                 stop_reason="topology_gate_rejected_exact_bundle";break
-            trial_state,trial_response,trial_iterations=\
-                solve_hdiv_mmm_active_elements(
-                    charge_gram=charge_gram,fes=fes,inv_chi=inv_chi,rhs=rhs,
-                    response_matrix=response_matrix,active_elements=trial_active,
-                    incident_response=incident_response,
-                    solve_tolerance=solve_tolerance,
-                    solve_max_iterations=solve_max_iterations,
-                    mass_riesz=mass_riesz,
-                    cluster_coarse_size=cluster_coarse_size,
-                    cluster_deflation_size=cluster_deflation_size,
-                    recycle_size=recycle_size)
+            trial_state,trial_response,trial_iterations=solve_exact_active(
+                trial_active,np.asarray(state,dtype=float)/
+                    float(source_scale))
             try:
                 trial_state,trial_response,trial_scale=calibrate_source(
                     trial_state,trial_response)
