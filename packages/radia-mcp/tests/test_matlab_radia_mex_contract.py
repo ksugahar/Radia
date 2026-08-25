@@ -16,10 +16,14 @@ def test_radia_mex_contract_reads_the_cpp_command_inventory():
     contract = matlab_radia_mex_contract("mex")
 
     assert contract["status"] == "ready"
-    assert contract["command_count"] == 366
+    assert contract["command_count"] == 363
+    assert not any(
+        command.startswith("optuna.")
+        for command in contract["command_names"]
+    )
     assert contract["matlab_wrapper_count"] >= 133
-    assert contract["matlab_optuna_class_count"] == 26
-    assert contract["matlab_optuna_function_count"] == 7
+    assert contract["matlab_optuna_class_count"] == 38
+    assert contract["matlab_optuna_function_count"] == 30
     assert {
         "TPESampler",
         "MOTPESampler",
@@ -40,11 +44,6 @@ def test_radia_mex_contract_reads_the_cpp_command_inventory():
     assert "simulink.state_space.snapshot" in contract["command_names"]
     assert "simulink.state_space.restore" in contract["command_names"]
     assert {
-        "optuna.pareto.rank_crowding",
-        "optuna.parzen.log_pdf_numerical",
-        "optuna.parzen.log_pdf_categorical",
-    }.issubset(contract["command_names"])
-    assert {
         "ih.eddy.create",
         "ih.eddy.output",
         "ih.eddy.destroy",
@@ -60,8 +59,8 @@ def test_radia_mex_contract_reads_the_cpp_command_inventory():
     assert "hacapk.charge_gram.configured_linear_material_element_blocks" in contract["command_names"]
     assert "hacapk.charge_gram.configured_linear_material_candidate_clusters" in contract["command_names"]
     assert "hlu.set_trunc_tol" in contract["command_names"]
-    # The native Lie-map pipeline and 3D reference-orbit tracker (the four
-    # commands that took the gateway from 358 to 362).
+    # The native Lie-map pipeline and 3D reference-orbit tracker remain on the
+    # regular Radia gateway after the Optuna commands are split out.
     assert {
         "beam.lie.map_tensors_spoly",
         "beam.lie.dragt_finn_factorize",
@@ -239,14 +238,14 @@ def test_root_readme_publishes_native_topology_mex_parity():
     matlab_readme = " ".join(
         (root / "matlab" / "README.md").read_text(encoding="utf-8").split()
     )
-    assert "123 stateful class members" in matlab_readme
-    assert "All 248 entries are covered by the current 362-command gateway" in matlab_readme
+    assert "125 stateful class members" in matlab_readme
+    assert "All 252 entries are covered by the current 363-command gateway" in matlab_readme
 
     parity_doc = (root / "docs" / "api" / "MATLAB_MEX_NGSOLVE_PARITY.md").read_text(
         encoding="utf-8"
     )
-    assert "| Stateful pybind11 class surface | 123 / 123 covered |" in parity_doc
-    assert "| MEX gateway commands | 362 |" in parity_doc
+    assert "| Stateful pybind11 class surface | 125 / 125 covered |" in parity_doc
+    assert "| MEX gateway commands | 363 |" in parity_doc
 
 
 def test_server_registers_bridge_tools():

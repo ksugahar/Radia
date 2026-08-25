@@ -7,6 +7,9 @@ RELEASE_WORKFLOWS=(
     ROOT/".github"/"workflows"/"release-radia-mcp.yml",
     ROOT/".github"/"workflows"/"release-cubit-mesh-export.yml",
 )
+OPTUNA_RELEASE_WORKFLOW=(
+    ROOT/".github"/"workflows"/"release-radia-optuna.yml"
+)
 
 
 def test_ci_records_exact_ref_context_before_release():
@@ -37,3 +40,23 @@ def test_pypi_release_jobs_require_the_triggering_ci_to_be_a_tag_run():
         assert 'context.get("release_tags")' in workflow
         assert "if: steps.ref_check.outputs.eligible == 'true'" in workflow
         assert "run-id: ${{ github.event.workflow_run.id }}" in workflow
+
+
+def test_optuna_manual_release_selects_one_fully_successful_ci_run():
+    workflow=OPTUNA_RELEASE_WORKFLOW.read_text(encoding="utf-8")
+    assert "workflow_dispatch:" in workflow
+    assert "ci_run_id:" in workflow
+    assert 'STATUS" != "completed"' in workflow
+    assert 'CONCLUSION" != "success"' in workflow
+    assert 'EVENT" != "push"' in workflow
+    assert (
+        'WORKFLOW_PATH" != ".github/workflows/build-test.yml"'
+        in workflow
+    )
+    assert 'HEAD_REPOSITORY" != "$GITHUB_REPOSITORY"' in workflow
+    assert '"build-test"' in workflow
+    assert '"radia-optuna installed-wheel MATLAB/Simulink E2E"' in workflow
+    assert "run-id: ${{ steps.source.outputs.run_id }}" in workflow
+    assert "ref: ${{ steps.source.outputs.sha }}" in workflow
+    assert "python3 packages/radia-optuna/verify_wheel.py" in workflow
+    assert 'EXPECTED_TAG="refs/tags/radia-optuna-v${VERSION}"' in workflow
