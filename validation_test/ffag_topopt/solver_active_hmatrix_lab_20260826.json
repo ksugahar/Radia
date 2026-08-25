@@ -1,0 +1,86 @@
+{
+  "schema": "radia.ffag-hdiv-active-hmatrix-performance/v1",
+  "status": "pass-with-remote-remeasurement-pending",
+  "provenance": {
+    "machine": "lab",
+    "python": "3.12.10",
+    "ngsolve": "6.2.2606",
+    "ngsolve_threads": 16,
+    "repository_base_head": "386474f12",
+    "worktree_dirty_during_measurement": true,
+    "paired_diagnostic_result": "C:/temp/ffag_active_hmatrix_same_process_20260825.json",
+    "measurement_scope": "same process, same ChargeGram, same RHS; diagnostic-only pruning toggle removed from the production source"
+  },
+  "problem": {
+    "element_family": "HEX",
+    "hdiv_family": "BDM1",
+    "elements": 1180,
+    "dofs": 42480,
+    "active_elements": 720,
+    "active_dofs": 25920,
+    "hmatrix_eps": 1e-6,
+    "hmatrix_leafsize": 64,
+    "hmatrix_eta": 2.0,
+    "charge_gram_build_s": 67.49483449998661
+  },
+  "active_principal_hmatrix": {
+    "active_charges": 17376,
+    "total_charges": 26000,
+    "active_upper_leaves": 1155,
+    "total_upper_leaves": 1805
+  },
+  "operator_apply": {
+    "one_rhs": {
+      "unpruned_median_s": 0.012945900001795962,
+      "pruned_median_s": 0.009219600004144013,
+      "speedup": 1.404171547136216
+    },
+    "six_rhs": {
+      "unpruned_median_s": 0.0223083000164479,
+      "pruned_median_s": 0.01735999999800697,
+      "speedup": 1.2850403236756351
+    },
+    "thirty_two_rhs": {
+      "unpruned_median_s": 0.06221100001130253,
+      "pruned_median_s": 0.05153149997931905,
+      "speedup": 1.2072421729673974
+    },
+    "active_relative_error": 0.0,
+    "inactive_output_norm": 0.0
+  },
+  "mass_riesz_pcg": {
+    "one_rhs": {
+      "unpruned_s": 19.51102879998507,
+      "pruned_s": 17.73008619999746,
+      "speedup": 1.100447486825409,
+      "iterations": 454,
+      "unpruned_last_rhs_gram_s": 5.4794820000000035,
+      "pruned_last_rhs_gram_s": 3.817754700000002,
+      "pruned_last_rhs_preconditioner_s": 4.394176300000005
+    },
+    "six_rhs": {
+      "unpruned_s": 90.66031669999938,
+      "pruned_s": 77.25413879999542,
+      "speedup": 1.1735334586372317,
+      "iterations": [604, 617, 596, 553, 551, 592],
+      "unpruned_last_rhs_gram_s": 7.134723600000003,
+      "pruned_last_rhs_gram_s": 4.959275199999997,
+      "pruned_last_rhs_preconditioner_s": 5.795829200000005
+    },
+    "pruned_vs_unpruned_solution_relative_error": 0.0,
+    "inactive_solution_norm": 0.0,
+    "smooth_known_solution_relative_error": 9.483097220975646e-8
+  },
+  "gates": {
+    "same_hmatrix_object_for_each_pair": true,
+    "same_rhs_for_each_pair": true,
+    "active_principal_operator_bit_identical": true,
+    "iteration_counts_identical": true,
+    "respect_constraints_false_remains_full_operator": true,
+    "diagnostic_toggle_absent_from_product_source": true
+  },
+  "follow_up": {
+    "next_solver_target": "Profile and reduce per-iteration mass-Riesz PARDISO cost, then compare the fixed 500-step block-PCG startup with independent scalar finishing on identical RHS batches.",
+    "remote_measurement": "Repeat on mdx or hibino after cooling-system recovery."
+  }
+}

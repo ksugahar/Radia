@@ -382,3 +382,15 @@ points.  Two accepted exact re-solves remove 13 whole cells and reduce the
 maximum normalized bend/map residual by 5.11 %.  The target bands are not yet
 met; the result is evidence for the fused optimization path and its descent,
 not a completed FFAG magnet.
+
+## Exact active-system performance evidence
+
+`solver_active_hmatrix_lab_20260826.json` records a same-process paired LAB
+measurement of exact inactive-leaf pruning.  The 42,480-DoF BDM1 HEX problem
+keeps 25,920 active DoFs.  Pruning preserves the active principal system
+exactly while reducing active charge leaves, accelerating both direct operator
+application and the scalar-finishing path of mass-Riesz PCG.  The JSON keeps
+kernel and complete-solve timings separate and records the remaining
+mass-Riesz and block-PCG work as the next optimization targets.  Repeat the
+measurement on mdx or hibino after their cooling-system recovery before using
+the LAB wall times as publication claims.

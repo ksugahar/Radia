@@ -6899,6 +6899,8 @@ std::vector<double> RadHACApKChargeGram::SolveLinearMaterial(
     const bool configured_charge_map = m_operatorChargeConfigured &&
         &B_indptr == &m_operatorBIndptr && &B_indices == &m_operatorBIndices &&
         &B_data == &m_operatorBData && m_operatorBTIndptr.size() == (size_t)n_face + 1;
+    const bool configured_active_hmatrix = configured_charge_map && constrained &&
+        n_charge == m_ndof && m_operatorChargeComponents == 1;
     auto project = [&](std::vector<double>& value) {
         if (!constrained) return;
         ngcore::ParallelFor(ngcore::IntRange(n_face), [&](size_t i) {
@@ -7104,8 +7106,12 @@ std::vector<double> RadHACApKChargeGram::SolveLinearMaterial(
         const auto tb1 = Clock::now();
         std::fill(Gq.begin(), Gq.end(), 0.0);
         const auto tg0 = Clock::now();
-        if (symmetric) MatVecSym(q, Gq);               // EXACTLY symmetric -> CG-valid Gram apply
-        else           MatVec(q, Gq);                  // shadowed: also MatVecSym (sym-fill leaves lower empty)
+        if (symmetric && configured_active_hmatrix)
+            MatVecSymManyConfigured(q, 1, 0, true, Gq);
+        else if (symmetric)
+            MatVecSym(q, Gq);                          // EXACTLY symmetric -> CG-valid Gram apply
+        else
+            MatVec(q, Gq);                             // shadowed: also MatVecSym (sym-fill leaves lower empty)
         const auto tg1 = Clock::now();
         y.assign((size_t)n_face, 0.0);
         const auto tt0 = Clock::now();
