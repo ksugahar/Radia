@@ -1131,6 +1131,37 @@ same `rad_stream_function.cpp` kernel. Full NGSolve mesh construction and coil
 design remain explicit-trigger batch work; they do not invoke Python once per
 simulation step.
 
+Use MATLAB Optuna as an outer design loop without replacing the inner
+factorization. The runner below minimizes field nonuniformity and peak sheet
+current while preserving one isolated artifact directory per trial:
+
+```matlab
+base = struct("method", "Design", ...
+    "coil_vol", "coil.vol", "eval_vol", "dsv.vol", ...
+    "target_cf", "1", "aca_eps", 1.0e-10);
+space = struct();
+space.alpha = struct("Kind", "float", ...
+    "Low", 1.0e-10, "High", 1.0e1, "Log", true);
+
+runner = radia.stream.OptunaRunner(base, ...
+    SearchSpace=space, ...
+    ObjectiveKeys=["homogeneity_rms", "peak_J"]);
+study = radia.optuna.createStudy( ...
+    directions=["minimize", "minimize"], ...
+    sampler=radia.optuna.NSGAIISampler(Seed=42));
+runner.optimize(study, 40);
+```
+
+The **Stream Function Optuna** library block accepts the workspace variable
+names `radia_streamfunction_optuna_runner` and
+`radia_streamfunction_optuna_study`. One rising trigger runs the requested
+study as explicit batch work and reports status, completed/failed counts,
+single-objective best values, Pareto count, and elapsed time. The runner may
+also optimize manufacturing or geometry settings through `SearchSpace`.
+Keep `aca_eps` fixed during physical design. Tune numerical tolerance, rank,
+and thread settings in a separate calibration study with accuracy and memory
+constraints.
+
 The remaining library blocks delegate to the same tested MATLAB APIs.
 The `Material Dictionary` block is the normal material entry point for a
 `.vol`-based model. Define `radia_materials` as a MATLAB `dictionary` whose

@@ -25,6 +25,22 @@ single-stroke chaining theory is in [`single_stroke.md`](single_stroke.md).
 | `pareto` | `(homogeneity, peak current density)` front via `--pareto-lever {alpha, linf, geometry}` | `front[]` |
 | `manufacture` | iso-contours -> orientation-consistent turns -> field-aware single-stroke wire -> STEP (`--step-output`) / PEEC (`--peec`) | wire + `loops_homogeneity_rms` + `peec` |
 
+## MATLAB Optuna outer loop
+
+Use `radia.stream.OptunaRunner` when geometry, manufacturing, regularization,
+or other design settings must be searched outside the linear inverse. Each
+Optuna trial writes an isolated application configuration and launches one
+complete Stream Function analysis. The inner solve remains the production C++
+ACA+ factorization with QR/TSVD recompression; Optuna does not replace or
+reimplement it.
+
+The masked `Stream Function Optuna` block runs the requested trial batch on one
+rising trigger and reports completion, failure, Pareto-front, best-trial, and
+elapsed-time signals. Python may be launched once per complete trial, never once
+per Simulink time step. Keep `aca_eps` fixed while comparing physical designs.
+Tune numerical tolerances, rank limits, and thread settings in a separate
+calibration study constrained by accuracy and memory.
+
 ## I/O
 
 - `--coil-vol` — a **standalone 2D surface** `.vol`.  `psi` is an `H1`
