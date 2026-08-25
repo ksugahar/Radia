@@ -5,6 +5,7 @@ import hashlib
 import importlib.util
 import json
 from pathlib import Path
+from types import SimpleNamespace
 
 
 TOOL = Path(__file__).resolve().parents[1] / "tools" / "release_quad.py"
@@ -114,3 +115,27 @@ def test_installed_wheel_runner_emits_quad_success_marker_and_checks_notices():
     assert "PythonExecutable" in runner
     assert "upstream_notices_complete" in doctor
     assert "notices_complete" in doctor
+
+
+def test_local_candidate_decodes_matlab_output_as_utf8(monkeypatch, tmp_path):
+    wheel = tmp_path / "radia_optuna-0.1.1-py3-none-win_amd64.whl"
+    wheel.write_bytes(b"platform-wheel")
+    observed = {}
+
+    def completed(_command, **kwargs):
+        observed.update(kwargs)
+        return SimpleNamespace(
+            returncode=0,
+            stdout=f"・ MATLAB ready\n{release_quad.OPTUNA_SUCCESS_MARKER}\n",
+            stderr="",
+        )
+
+    monkeypatch.setattr(release_quad.subprocess, "run", completed)
+    passed, output = release_quad._run_optuna_candidate_target(
+        "lab", wheel, hashlib.sha256(wheel.read_bytes()).hexdigest()
+    )
+
+    assert passed is True
+    assert "・ MATLAB ready" in output
+    assert observed["encoding"] == "utf-8"
+    assert observed["errors"] == "replace"

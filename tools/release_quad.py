@@ -264,7 +264,13 @@ def _run_simulink_candidate_target(
             sys.executable, str(verifier), str(package),
             "--matlab", MATLAB_EXE,
         ]
-        result = subprocess.run(command, capture_output=True, text=True)
+        result = subprocess.run(
+            command,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+        )
     else:
         remote_root_posix = f"C:/temp/radia-release-quad/{package_sha256[:16]}"
         remote_root_windows = remote_root_posix.replace("/", "\\")
@@ -272,7 +278,11 @@ def _run_simulink_candidate_target(
         created = subprocess.run(
             ["ssh", host, "pwsh", "-NoProfile", "-ExecutionPolicy", "Bypass",
              "-Command", "-"],
-            input=prepare, capture_output=True, text=True,
+            input=prepare,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
         )
         if created.returncode != 0:
             return False, created.stderr.strip() or created.stdout.strip()
@@ -282,7 +292,10 @@ def _run_simulink_candidate_target(
                 (package, remote_package), (verifier, remote_verifier)):
             copied = subprocess.run(
                 ["scp", str(source), f"{host}:{destination}"],
-                capture_output=True, text=True,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
             )
             if copied.returncode != 0:
                 return False, copied.stderr.strip() or copied.stdout.strip()
@@ -293,7 +306,11 @@ def _run_simulink_candidate_target(
         result = subprocess.run(
             ["ssh", host, "pwsh", "-NoProfile", "-ExecutionPolicy", "Bypass",
              "-Command", "-"],
-            input=invocation, capture_output=True, text=True,
+            input=invocation,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
         )
     output = ((result.stdout or "") + (result.stderr or "")).strip()
     if result.returncode != 0:
@@ -553,7 +570,13 @@ def _run_optuna_candidate_target(
             "-MatlabExecutable", MATLAB_EXE,
             "-PythonExecutable", sys.executable,
         ]
-        result = subprocess.run(command, capture_output=True, text=True)
+        result = subprocess.run(
+            command,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+        )
     else:
         remote_root_posix = f"C:/temp/radia-release-quad/optuna-{wheel_sha256[:16]}"
         remote_root_windows = remote_root_posix.replace("/", "\\")
@@ -565,7 +588,11 @@ def _run_optuna_candidate_target(
         created = subprocess.run(
             ["ssh", host, "pwsh", "-NoProfile", "-ExecutionPolicy", "Bypass",
              "-Command", "-"],
-            input=prepare, capture_output=True, text=True,
+            input=prepare,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
         )
         if created.returncode != 0:
             return False, created.stderr.strip() or created.stdout.strip()
@@ -575,7 +602,10 @@ def _run_optuna_candidate_target(
             destination = f"{remote_root_posix}/{subdir}{source_file.name}"
             copied = subprocess.run(
                 ["scp", str(source_file), f"{host}:{destination}"],
-                capture_output=True, text=True,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
             )
             if copied.returncode != 0:
                 return False, copied.stderr.strip() or copied.stdout.strip()
@@ -596,7 +626,11 @@ def _run_optuna_candidate_target(
         result = subprocess.run(
             ["ssh", host, "pwsh", "-NoProfile", "-ExecutionPolicy", "Bypass",
              "-Command", "-"],
-            input=invocation, capture_output=True, text=True,
+            input=invocation,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
         )
     output = ((result.stdout or "") + (result.stderr or "")).strip()
     if result.returncode != 0:
