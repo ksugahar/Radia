@@ -10,7 +10,7 @@ A. STRUCTURE guard (``check_packaging``): MCP servers that TARGET / WRAP a
    wired into ``[project.scripts]`` or shipped in the wheel. It also keeps
    Optuna study/trial operation external to radia-mcp: use the official public
    ``optuna/optuna-mcp`` server, while radia-mcp keeps CAE objectives, design
-   spaces, and analysis helpers.
+   spaces, analysis helpers, and explicitly named MATLAB/Simulink differences.
 
 B. PROVENANCE guard (``scan_text_tree``): public artifacts must NOT attribute
    verification to commercial / licensed tools, and must not leak internal
@@ -164,7 +164,8 @@ def check_packaging(root: Path) -> tuple[list[str], list[str]]:
             errors.append(
                 f"[scripts] '{name} = {target}' publishes Optuna operation from "
                 "radia-mcp. Use the official external optuna/optuna-mcp server "
-                "instead; keep CAE objectives/design spaces in radia-mcp.")
+                "instead; keep only CAE and MATLAB/Simulink difference support "
+                "in radia-mcp.")
 
     # 1b) radia-mcp must not depend on Optuna runtime packages; users install
     #     optuna-mcp separately when they need Study/Trial/Dashboard operation.
