@@ -45,6 +45,7 @@ build*/
 dist/
 radia-*/
 !packages/radia-mcp/
+!packages/radia-optuna/
 *.egg-info/
 .eggs/
 
@@ -273,6 +274,7 @@ file_format_documents/
 !validation_test/**/*.m
 !validation_test/acoustics/benchmark_acoustic_mex_matlab.m
 !validation_test/optimization/validate_matlab_optuna_quality.m
+!packages/radia-optuna/tests/matlab/**/*.m
 !packages/radia-mcp/src/radia_mcp/mathematica/**/*.m
 
 # Reference repositories (local only)

@@ -1,4 +1,4 @@
-classdef NSGAIISampler < handle
+classdef NSGAIISampler < radia.optuna.BaseSampler
     %NSGAIISAMPLER Optuna-compatible generational constrained NSGA-II.
     %   The default is UniformCrossover. All Optuna 4.9 built-in numerical
     %   crossovers are available under radia.optuna.nsgaii. Categorical
@@ -25,6 +25,7 @@ classdef NSGAIISampler < handle
     properties (Access=private)
         AttachedStudy = []
         Restored (1,1) logical = false
+        IndependentSampler
         GenerationTrialNumbers double = zeros(0,1)
         GenerationAssignments double = zeros(0,1)
         ParentCaches struct = struct( ...
@@ -41,7 +42,7 @@ classdef NSGAIISampler < handle
     methods
         function obj = NSGAIISampler(options)
             arguments
-                options.Seed (1,1) double = 0
+                options.Seed double = double.empty(1,0)
                 options.PopulationSize (1,1) double ...
                     {mustBeInteger,mustBePositive} = 50
                 options.MutationProbability (1,1) double = NaN
@@ -99,8 +100,10 @@ classdef NSGAIISampler < handle
                     "PopulationSize must be at least the crossover parent count (%d).", ...
                     crossover.NParents);
             end
-            obj.Seed = double(options.Seed);
-            obj.Stream = RandStream("mt19937ar","Seed",obj.Seed);
+            obj.Seed = radia.optuna.internal.resolveSeed(options.Seed);
+            obj.Stream = ...
+                radia.optuna.internal.NumpyRandomState(obj.Seed);
+            obj.IndependentSampler=radia.optuna.RandomSampler(options.Seed);
             obj.PopulationSize = options.PopulationSize;
             obj.MutationProbability = mutationProbability;
             obj.CrossoverProbability = options.CrossoverProbability;
@@ -128,6 +131,7 @@ classdef NSGAIISampler < handle
         end
 
         function beforeTrial(obj,study,trial)
+            obj.IndependentSampler.beforeTrial(study,trial);
             obj.attach(study);
             generation = obj.assignGeneration(study,trial.Number);
             trial.setSystemAttr("nsgaii_generation",generation);
@@ -159,37 +163,28 @@ classdef NSGAIISampler < handle
             obj.recordState(study,trial.Number);
         end
 
-        function value = sampleFloat(obj,study,trial,name,low,high,options) %#ok<INUSD>
-            distribution = radia.optuna.internal.DistributionCodec.float( ...
-                low,high,options.Log,options.Step);
-            value = obj.randomValue(distribution);
-            obj.recordState(study,trial.Number);
+        function value = sampleFloat(obj,study,trial,name,low,high,options)
+            value=obj.IndependentSampler.sampleFloat( ...
+                study,trial,name,low,high,options);
         end
 
-        function value = sampleInteger(obj,study,trial,name,low,high) %#ok<INUSD>
-            distribution = ...
-                radia.optuna.internal.DistributionCodec.integer( ...
-                low,high,false,1);
-            value = obj.randomValue(distribution);
-            obj.recordState(study,trial.Number);
+        function value = sampleInteger(obj,study,trial,name,low,high)
+            value=obj.IndependentSampler.sampleInteger( ...
+                study,trial,name,low,high);
         end
 
-        function value = sampleCategorical(obj,study,trial,name,choices) %#ok<INUSD>
-            distribution = ...
-                radia.optuna.internal.DistributionCodec.categorical(choices);
-            value = obj.randomValue(distribution);
-            obj.recordState(study,trial.Number);
+        function value = sampleCategorical(obj,study,trial,name,choices)
+            value=obj.IndependentSampler.sampleCategorical( ...
+                study,trial,name,choices);
         end
 
         function values = sampleJoint(obj,study,trial,names,lows,highs,options)
             values = zeros(1,numel(names));
             for index = 1:numel(names)
-                distribution = ...
-                    radia.optuna.internal.DistributionCodec.float( ...
-                    lows(index),highs(index),options.Log(index),NaN);
-                values(index) = obj.randomValue(distribution);
+                values(index)=obj.IndependentSampler.sampleFloat( ...
+                    study,trial,names(index),lows(index),highs(index), ...
+                    struct("Log",options.Log(index),"Step",NaN));
             end
-            obj.recordState(study,trial.Number);
         end
 
         function afterTrial(obj,study,trial)
@@ -208,7 +203,8 @@ classdef NSGAIISampler < handle
             changed=isempty(obj.AttachedStudy) || ~isequal(obj.AttachedStudy,study);
             if changed
                 obj.AttachedStudy=study;
-                obj.Stream=RandStream("mt19937ar","Seed",obj.Seed);
+                obj.Stream= ...
+                    radia.optuna.internal.NumpyRandomState(obj.Seed);
                 obj.GenerationTrialNumbers=zeros(0,1);
                 obj.GenerationAssignments=zeros(0,1);
                 obj.ParentCaches=struct("generation",{},"trial_numbers",{});
@@ -456,7 +452,11 @@ classdef NSGAIISampler < handle
                 inherited=study.TrialTable.TrialNumber(ismember( ...
                     study.TrialTable.TrialNumber,cached));
             end
-            candidates=unique([inherited;offspring],"stable");
+            % BaseGASampler.select_parent passes the just-finished
+            % generation before the inherited parent population.  The
+            % order is observable when ranks/crowding ties are stable and
+            % later tournament draws index that parent list.
+            candidates=unique([offspring;inherited],"stable");
             values=obj.objectivesForTrials(study,candidates);
             valid=all(isfinite(values),2);
             candidates=candidates(valid);
@@ -523,17 +523,37 @@ classdef NSGAIISampler < handle
                 return
             end
             if rand(obj.Stream)<obj.CrossoverProbability
+                usedCrossover=true;
                 [child,selectedParents]=obj.performCrossover( ...
                     study,parentNumbers,searchSpace);
             else
+                usedCrossover=false;
                 selectedParents=parentNumbers( ...
-                    1+floor(rand(obj.Stream)*numel(parentNumbers)));
+                    randi(obj.Stream,numel(parentNumbers)));
                 child=obj.parameterValues(study,selectedParents,searchSpace);
             end
             dimension=numel(searchSpace);
             probability=obj.MutationProbability;
             if isnan(probability), probability=1/max(1,dimension); end
-            mutated=rand(obj.Stream,1,dimension)<probability;
+            % Optuna constructs the crossover result by inserting the
+            % categorical parameters first and the numerical parameters
+            % second.  Python preserves that dict insertion order when it
+            % consumes one mutation draw per parameter.  Keep the public
+            % search-space order, but assign the draws in the same order so
+            % a fixed seed follows the upstream proposal sequence exactly.
+            if usedCrossover
+                categorical=arrayfun(@(x) ...
+                    x.distribution.kind=="categorical",searchSpace);
+                mutationOrder=[reshape(find(categorical),1,[]), ...
+                    reshape(find(~categorical),1,[])];
+            else
+                % The no-crossover branch copies a dict comprehension in
+                % the original search-space order.
+                mutationOrder=1:dimension;
+            end
+            mutationDraws=rand(obj.Stream,1,dimension)<probability;
+            mutated=false(1,dimension);
+            mutated(mutationOrder)=mutationDraws;
             mutatedNames=reshape([searchSpace(mutated).name],1,[]);
             relativeSpace=searchSpace(~mutated);
             child=child(~mutated);
@@ -583,7 +603,7 @@ classdef NSGAIISampler < handle
             values=obj.objectivesForTrials(study,population);
             for parent=1:count
                 available=population(~ismember(population,selected));
-                candidateIndices=1+floor(rand(obj.Stream,1,2)*numel(available));
+                candidateIndices=randi(obj.Stream,numel(available),1,2);
                 left=available(candidateIndices(1));
                 right=available(candidateIndices(2));
                 leftRow=find(population==left,1);
@@ -764,7 +784,7 @@ classdef NSGAIISampler < handle
 
         function value=randomValue(obj,distribution)
             if distribution.kind=="categorical"
-                index=1+floor(rand(obj.Stream)*numel(distribution.choices));
+                index=randi(obj.Stream,numel(distribution.choices));
                 value=radia.optuna.internal.DistributionCodec.choiceAt( ...
                     distribution.choices,index);
                 return

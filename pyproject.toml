@@ -61,6 +61,16 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+optuna = [
+    # Independently versioned monorepo artifact. Pin the release that passed
+    # this Radia version's MATLAB/Simulink integration gate.
+    "radia-optuna==0.1.0",
+]
+optuna-upstream = [
+    # Adds pinned upstream Python/SciPy/PyTorch paths used by GP, scrambled QMC,
+    # and parameter-importance parity; native MATLAB/Simulink use stays lighter.
+    "radia-optuna[upstream]==0.1.0",
+]
 cubit = [
     "cubit-mesh-export",
 ]
