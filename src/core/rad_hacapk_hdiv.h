@@ -892,6 +892,12 @@ private:
         double hmatvec_calls = 0.0, hmatvec_lowrank_leaves = 0.0, hmatvec_dense_leaves = 0.0;
         double hmatvec_mirrored_upper_leaves = 0.0, hmatvec_diagonal_leaves = 0.0;
         double hmatvec_skipped_lower_leaves = 0.0, hmatvec_last_nd = 0.0, hmatvec_last_nthr = 0.0;
+        double hmatvec_lowrank_upper_leaves = 0.0, hmatvec_dense_upper_leaves = 0.0;
+        double hmatvec_inactive_skipped_leaves = 0.0, hmatvec_lowrank_directions = 0.0;
+        double hmatvec_dense_directions = 0.0, hmatvec_gemm_calls = 0.0;
+        double hmatvec_lowrank_rank_sum = 0.0, hmatvec_lowrank_rank_max = 0.0;
+        double hmatvec_lowrank_rank_le4 = 0.0, hmatvec_lowrank_rank_le8 = 0.0;
+        double hmatvec_lowrank_rank_le16 = 0.0, hmatvec_lowrank_rank_le32 = 0.0;
         int mass_riesz_local_blocks = 0, mass_riesz_max_block = 0;
         int apply_count = 0, prec_count = 0, dot_count = 0;
     };

@@ -7430,8 +7430,8 @@ std::vector<double> RadHACApKChargeGram::SolveLinearMaterial(
     m_lastSolveTiming.total_s = elapsed(t_total0, Clock::now());
     {
         double mv[8] = {0.0};
-        int64_t mc[8] = {0};
-        HACApK_matvec_stats_get(mv, 8, mc, 8);
+        int64_t mc[20] = {0};
+        HACApK_matvec_stats_get(mv, 8, mc, 20);
         m_lastSolveTiming.hmatvec_total_s = mv[0];
         m_lastSolveTiming.hmatvec_zero_s = mv[1];
         m_lastSolveTiming.hmatvec_permute_s = mv[2];
@@ -7448,6 +7448,18 @@ std::vector<double> RadHACApKChargeGram::SolveLinearMaterial(
         m_lastSolveTiming.hmatvec_skipped_lower_leaves = (double)mc[5];
         m_lastSolveTiming.hmatvec_last_nd = (double)mc[6];
         m_lastSolveTiming.hmatvec_last_nthr = (double)mc[7];
+        m_lastSolveTiming.hmatvec_lowrank_upper_leaves = (double)mc[8];
+        m_lastSolveTiming.hmatvec_dense_upper_leaves = (double)mc[9];
+        m_lastSolveTiming.hmatvec_inactive_skipped_leaves = (double)mc[10];
+        m_lastSolveTiming.hmatvec_lowrank_directions = (double)mc[11];
+        m_lastSolveTiming.hmatvec_dense_directions = (double)mc[12];
+        m_lastSolveTiming.hmatvec_gemm_calls = (double)mc[13];
+        m_lastSolveTiming.hmatvec_lowrank_rank_sum = (double)mc[14];
+        m_lastSolveTiming.hmatvec_lowrank_rank_max = (double)mc[15];
+        m_lastSolveTiming.hmatvec_lowrank_rank_le4 = (double)mc[16];
+        m_lastSolveTiming.hmatvec_lowrank_rank_le8 = (double)mc[17];
+        m_lastSolveTiming.hmatvec_lowrank_rank_le16 = (double)mc[18];
+        m_lastSolveTiming.hmatvec_lowrank_rank_le32 = (double)mc[19];
     }
     return x;
 }
@@ -9427,8 +9439,8 @@ std::vector<double> RadHACApKChargeGram::SolveConfiguredLinearMaterialAutoPrecMa
         };
         auto collect_hmatvec_stats = [&]() {
             double mv[8] = {0.0};
-            int64_t mc[8] = {0};
-            HACApK_matvec_stats_get(mv, 8, mc, 8);
+            int64_t mc[20] = {0};
+            HACApK_matvec_stats_get(mv, 8, mc, 20);
             m_lastSolveTiming.hmatvec_total_s = mv[0];
             m_lastSolveTiming.hmatvec_zero_s = mv[1];
             m_lastSolveTiming.hmatvec_permute_s = mv[2];
@@ -9450,6 +9462,29 @@ std::vector<double> RadHACApKChargeGram::SolveConfiguredLinearMaterialAutoPrecMa
                 static_cast<double>(mc[5]);
             m_lastSolveTiming.hmatvec_last_nd = static_cast<double>(mc[6]);
             m_lastSolveTiming.hmatvec_last_nthr = static_cast<double>(mc[7]);
+            m_lastSolveTiming.hmatvec_lowrank_upper_leaves =
+                static_cast<double>(mc[8]);
+            m_lastSolveTiming.hmatvec_dense_upper_leaves =
+                static_cast<double>(mc[9]);
+            m_lastSolveTiming.hmatvec_inactive_skipped_leaves =
+                static_cast<double>(mc[10]);
+            m_lastSolveTiming.hmatvec_lowrank_directions =
+                static_cast<double>(mc[11]);
+            m_lastSolveTiming.hmatvec_dense_directions =
+                static_cast<double>(mc[12]);
+            m_lastSolveTiming.hmatvec_gemm_calls = static_cast<double>(mc[13]);
+            m_lastSolveTiming.hmatvec_lowrank_rank_sum =
+                static_cast<double>(mc[14]);
+            m_lastSolveTiming.hmatvec_lowrank_rank_max =
+                static_cast<double>(mc[15]);
+            m_lastSolveTiming.hmatvec_lowrank_rank_le4 =
+                static_cast<double>(mc[16]);
+            m_lastSolveTiming.hmatvec_lowrank_rank_le8 =
+                static_cast<double>(mc[17]);
+            m_lastSolveTiming.hmatvec_lowrank_rank_le16 =
+                static_cast<double>(mc[18]);
+            m_lastSolveTiming.hmatvec_lowrank_rank_le32 =
+                static_cast<double>(mc[19]);
         };
 
         std::vector<double> projected_rhs = rhs;
@@ -9676,6 +9711,30 @@ std::vector<double> RadHACApKChargeGram::SolveConfiguredLinearMaterialAutoPrecMa
                     source.hmatvec_skipped_lower_leaves;
                 target.hmatvec_last_nd = source.hmatvec_last_nd;
                 target.hmatvec_last_nthr = source.hmatvec_last_nthr;
+                target.hmatvec_lowrank_upper_leaves +=
+                    source.hmatvec_lowrank_upper_leaves;
+                target.hmatvec_dense_upper_leaves +=
+                    source.hmatvec_dense_upper_leaves;
+                target.hmatvec_inactive_skipped_leaves +=
+                    source.hmatvec_inactive_skipped_leaves;
+                target.hmatvec_lowrank_directions +=
+                    source.hmatvec_lowrank_directions;
+                target.hmatvec_dense_directions +=
+                    source.hmatvec_dense_directions;
+                target.hmatvec_gemm_calls += source.hmatvec_gemm_calls;
+                target.hmatvec_lowrank_rank_sum +=
+                    source.hmatvec_lowrank_rank_sum;
+                target.hmatvec_lowrank_rank_max = std::max(
+                    target.hmatvec_lowrank_rank_max,
+                    source.hmatvec_lowrank_rank_max);
+                target.hmatvec_lowrank_rank_le4 +=
+                    source.hmatvec_lowrank_rank_le4;
+                target.hmatvec_lowrank_rank_le8 +=
+                    source.hmatvec_lowrank_rank_le8;
+                target.hmatvec_lowrank_rank_le16 +=
+                    source.hmatvec_lowrank_rank_le16;
+                target.hmatvec_lowrank_rank_le32 +=
+                    source.hmatvec_lowrank_rank_le32;
                 target.apply_count += source.apply_count;
                 target.prec_count += source.prec_count;
                 target.dot_count += source.dot_count;
@@ -11559,6 +11618,18 @@ std::vector<std::pair<std::string, double>> RadHACApKChargeGram::LastSolveTiming
         {"hmatvec_skipped_lower_leaves", t.hmatvec_skipped_lower_leaves},
         {"hmatvec_last_nd", t.hmatvec_last_nd},
         {"hmatvec_last_nthr", t.hmatvec_last_nthr},
+        {"hmatvec_lowrank_upper_leaves", t.hmatvec_lowrank_upper_leaves},
+        {"hmatvec_dense_upper_leaves", t.hmatvec_dense_upper_leaves},
+        {"hmatvec_inactive_skipped_leaves", t.hmatvec_inactive_skipped_leaves},
+        {"hmatvec_lowrank_directions", t.hmatvec_lowrank_directions},
+        {"hmatvec_dense_directions", t.hmatvec_dense_directions},
+        {"hmatvec_gemm_calls", t.hmatvec_gemm_calls},
+        {"hmatvec_lowrank_rank_sum", t.hmatvec_lowrank_rank_sum},
+        {"hmatvec_lowrank_rank_max", t.hmatvec_lowrank_rank_max},
+        {"hmatvec_lowrank_rank_le4", t.hmatvec_lowrank_rank_le4},
+        {"hmatvec_lowrank_rank_le8", t.hmatvec_lowrank_rank_le8},
+        {"hmatvec_lowrank_rank_le16", t.hmatvec_lowrank_rank_le16},
+        {"hmatvec_lowrank_rank_le32", t.hmatvec_lowrank_rank_le32},
     };
 }
 
