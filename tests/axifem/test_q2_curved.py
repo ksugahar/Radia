@@ -28,6 +28,7 @@ if _SRC not in sys.path:
 import numpy as np
 import scipy.sparse as sp
 from scipy.linalg import eigh
+from netgen.meshing import EdgeDescriptor
 from ngsolve import BilinearForm, CoefficientFunction as CF, TaskManager
 from ngsolve.meshes import MakeStructured2DMesh
 from radia.axifem import (H1Henrotte, AxiHenrotteStiffnessBFI,
@@ -70,6 +71,21 @@ def _annulus(nrho, nphi, R1=1.0, R2=2.0, dphi=math.radians(30.0)):
     return MakeStructured2DMesh(quads=True, nx=nrho, ny=nphi, mapping=mp)
 
 
+def _add_structured_mesh_edge_descriptors(mesh):
+    """Make NGSolve 6.2.2606 structured 2D meshes safe to curve/save."""
+    ngmesh = mesh.ngmesh
+    if ngmesh.EdgeDescriptors():
+        return
+    for index, name in enumerate(mesh.GetBoundaries(), start=1):
+        descriptor = EdgeDescriptor()
+        descriptor.edgenr = index
+        descriptor.surfnr = (1, -1)
+        descriptor.domin = 1
+        descriptor.domout = 0
+        descriptor.name = name
+        assert ngmesh.Add(descriptor) == index
+
+
 def test_curved_matches_axis_aligned_on_straight_quads():
     for nx in (4, 6, 8):
         m = _rect(nx, nx)
@@ -99,6 +115,7 @@ def test_curve2_q2_geometry_survives_vol_roundtrip():
     from ngsolve import Mesh
 
     mesh = _annulus(6, 12)
+    _add_structured_mesh_edge_descriptors(mesh)
     mesh.Curve(2)
     path = Path(r"C:\temp\radia_axifem_tests\axifem_q2_curve2_roundtrip.vol")
     path.parent.mkdir(parents=True, exist_ok=True)
