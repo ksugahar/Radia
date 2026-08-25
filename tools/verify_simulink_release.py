@@ -45,7 +45,7 @@ LEGACY_REQUIRED_MEMBERS = {
     "matlab/radia_ih_eddy_sfun.mexw64",
     "matlab/radia_ih_thermal_sfun.mexw64",
 }
-FULL_REQUIRED_MEMBERS = {
+FULL_REQUIRED_MEMBERS_V2 = {
     "manifest.json",
     "matlab/install_radia_simulink.m",
     "matlab/verify_radia_simulink_release.m",
@@ -70,6 +70,9 @@ FULL_REQUIRED_MEMBERS = {
     "matlab/mkl_def.3.dll",
     "matlab/mkl_intel_thread.3.dll",
     "matlab/mkl_rt.3.dll",
+}
+FULL_REQUIRED_MEMBERS = FULL_REQUIRED_MEMBERS_V2 | {
+    "matlab/optuna_mex.mexw64",
 }
 LEGACY_FULL_REQUIRED_MEMBERS = {
     "manifest.json",
@@ -145,6 +148,7 @@ def verify_archive(archive: Path) -> dict:
         preview_v2 = schema == "radia.simulink.ih-release-manifest.v2"
         full_v1 = schema == "radia.simulink.library-release-manifest.v1"
         full_v2 = schema == "radia.simulink.library-release-manifest.v2"
+        full_v3 = schema == "radia.simulink.library-release-manifest.v3"
         if preview_v1:
             required_members = LEGACY_REQUIRED_MEMBERS
         elif preview_v2:
@@ -152,6 +156,8 @@ def verify_archive(archive: Path) -> dict:
         elif full_v1:
             required_members = LEGACY_FULL_REQUIRED_MEMBERS
         elif full_v2:
+            required_members = FULL_REQUIRED_MEMBERS_V2
+        elif full_v3:
             required_members = FULL_REQUIRED_MEMBERS
         else:
             raise RuntimeError("Unsupported Simulink release manifest schema")
@@ -200,7 +206,7 @@ def verify_archive(archive: Path) -> dict:
                     manifest.get("python_per_step") is not False or \
                     manifest.get("python_fallback_per_step") is not False:
                 raise RuntimeError("The full library backend contract is invalid")
-            if full_v2:
+            if full_v2 or full_v3:
                 _verify_level2_ih_contract(manifest)
             elif set(manifest.get("required_mex", [])) != {
                     "matlab/radia_mex.mexw64",
@@ -214,7 +220,7 @@ def verify_archive(archive: Path) -> dict:
                     "Optimization Toolbox"
                 ],
             }
-            if full_v2:
+            if full_v2 or full_v3:
                 expected_toolboxes["electromagnet_topology_optimization"] = [
                     "Optimization Toolbox"
                 ]
@@ -241,18 +247,22 @@ def verify_archive(archive: Path) -> dict:
 def _verify_level2_ih_contract(manifest: dict) -> None:
     if manifest.get("ih_backend") != "matlab-level2+radia-mex-handles":
         raise RuntimeError("The IH Level-2 backend declaration is invalid")
-    if set(manifest.get("required_mex", [])) != {
-        "matlab/radia_mex.mexw64",
-    }:
-        raise RuntimeError("The IH standalone MEX inventory is invalid")
+    expected_mex = {"matlab/radia_mex.mexw64"}
+    if manifest.get("schema") == \
+            "radia.simulink.library-release-manifest.v3":
+        expected_mex.add("matlab/optuna_mex.mexw64")
+    if set(manifest.get("required_mex", [])) != expected_mex:
+        raise RuntimeError("The Simulink standalone MEX inventory is invalid")
     expected_sfunctions = {
         "matlab/radia_ih_eddy_sfun.m",
         "matlab/radia_ih_thermal_sfun.m",
         "matlab/+radia/+simulink/ihEddySFunction.m",
         "matlab/+radia/+simulink/ihThermalSFunction.m",
     }
-    if manifest.get("schema") == \
-            "radia.simulink.library-release-manifest.v2":
+    if manifest.get("schema") in {
+            "radia.simulink.library-release-manifest.v2",
+            "radia.simulink.library-release-manifest.v3",
+    }:
         expected_sfunctions.update({
             "matlab/radia_nonlinear_reactor_sfun.m",
             "matlab/+radia/+simulink/nonlinearReactorSFunction.m",
@@ -283,6 +293,7 @@ def run_matlab_smoke(archive: Path, matlab: Path, timeout: int = 300) -> str:
         manifest.get("schema") in {
             "radia.simulink.library-release-manifest.v1",
             "radia.simulink.library-release-manifest.v2",
+            "radia.simulink.library-release-manifest.v3",
         }
     )
     verification_function = (

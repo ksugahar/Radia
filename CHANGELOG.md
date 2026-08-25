@@ -32,6 +32,10 @@ Released 2026-08-25.
   silent substitute. Seven fresh MATLAB
   processes measured a 0.007793-second median first-call load; all 95 MATLAB
   Optuna tests pass.
+- Added `optuna_mex` to the full Radia Simulink release bundle alongside
+  `radia_mex`. The v3 bundle manifest, archive verifier, four-machine QUD gate,
+  and MATLAB release smoke test now require the standalone optimizer gateway
+  and verify its complete 20-command API before accepting the package.
 - Brought warmed sequential MATLAB TPE throughput past upstream Optuna 4.9.0
   on the same-host differential benchmark: 100 scalar trials now take
   0.093358 s versus 0.104030 s upstream, and grouped conditional trials take

@@ -302,6 +302,7 @@ def cmd_simulink_candidate(args):
         if manifest.get("schema") in {
             "radia.simulink.library-release-manifest.v1",
             "radia.simulink.library-release-manifest.v2",
+            "radia.simulink.library-release-manifest.v3",
         }
         else "RADIA_IH_RELEASE_OK"
     )
