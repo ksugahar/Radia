@@ -14,6 +14,8 @@ Released 2026-08-27.
   solves. Exact topology-state reuse now revalidates the true residual and
   inactive constraints before accepting cached state, while the tuning gate
   requires an accuracy-preserving measured speedup over the accepted action.
+  Active-charge and leaf-pruning diagnostics are available through matching
+  Python and standalone MATLAB MEX APIs.
 - Vectorized cyclic tetrahedral image assembly and expanded regression coverage
   for alternating reductions, BDM2 field coefficients, native matrices, and
   projected field evaluation.
