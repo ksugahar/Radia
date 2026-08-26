@@ -27,8 +27,8 @@ class RadHACApKChargeGramDerivative;
 #include <utility>
 #include <atomic>
 
-// Persistent PARDISO factor of the HDiv mass for the MASS RIESZ preconditioner, cached on
-// RadHACApKChargeGram across solve calls (defined in rad_hacapk_hdiv.cpp next to MassRieszPardiso).
+// Persistent exact HDiv mass factor for the MASS RIESZ preconditioner, cached
+// across solves.  Broken spaces use local dense blocks; general masses use PARDISO.
 struct RadMassRieszCache;
 
 //-------------------------------------------------------------------------
@@ -453,8 +453,10 @@ public:
     // (B x)[charge] = sum data*x[face]); M_mass as COO (mI,mJ,mV) on the n_face DOFs; prec = the
     // Jacobi diagonal of the system (length n_face).  Returns m (length n_face); iters_out = CG iters.
     // mass_riesz=false: diagonal-Jacobi PCG (z = r/prec).  mass_riesz=true (the DEFAULT 'auto' path):
-    // PCG preconditioned by a PARDISO SPD factor of the HDiv mass M_mass (z = M_mass^{-1} r, the MASS
-    // RIESZ map) built from the COO (mI,mJ,mV) -- ~3-5x fewer iters, nearly mu_r-flat; `prec` is
+    // PCG preconditioned by an exact factor of the HDiv mass M_mass (z = M_mass^{-1} r, the MASS
+    // RIESZ map) built from the COO (mI,mJ,mV).  Broken-space element blocks use TaskManager-parallel
+    // dense Cholesky; a connected conforming mass uses PARDISO.  This gives ~3-5x fewer iters and
+    // nearly mu_r-flat behavior; `prec` is
     // then ignored.  Moves the whole linear demag solve (H-matvec + mass solve + Krylov) into C++.
     // The factor is PERSISTENT on the object (m_massRieszCache, exact-COO key): constant-mass chains --
     // the Hantila hysteresis loop (W(nu0) fixed by construction) and the C++ scalar Picard (geometry
@@ -478,7 +480,7 @@ public:
     // Matrix-free postprocessing primitives used by the production planar and
     // three-dimensional HDiv paths.  ApplyDemagOperator computes B^T G B x
     // without materializing N.  ApplyMassRiesz computes M_mass^{-1} rhs with a
-    // dedicated persistent PARDISO factor, so nonlinear material factors used
+    // dedicated persistent exact factor, so nonlinear material factors used
     // by SolveLinearMaterial are not evicted by local-field postprocessing.
     std::vector<double> ApplyDemagOperator(
         const std::vector<int>& B_indptr, const std::vector<int>& B_indices,
@@ -511,6 +513,7 @@ public:
     bool HasConfiguredGeometryMassMatrix() const { return m_operatorGeometryMassConfigured; }
     int ConfiguredNFace() const { return m_operatorNFace; }
     int ConfiguredConstraintCount() const;
+    std::vector<int> ConfiguredActiveHMatrixStats(int component = 0) const;
     void SetConfiguredConstraints(const std::vector<int>& dofs,
                                   bool preserve_existing = false);
     std::vector<double> ApplyConfiguredDemag(
@@ -671,7 +674,7 @@ public:
     // -- the full nonlinear physics for an isotropic body, with NO NGSolve per iteration (the
     // per-element tensor-tangent refinement for non-uniform M stays NGSolve).  All sparse inputs as in
     // SolveLinearMaterial; Mmass_diag + N_diag are retained for API compatibility / diagnostics, but the
-    // active preconditioner is the PARDISO mass-Riesz map, matching the production tet Picard path.
+    // active preconditioner is the exact mass-Riesz map, matching the production tet Picard path.
     struct PicardResult { std::vector<double> m; double Mavg; double chi; double Dscal; int iters; };
     PicardResult SolveNonlinearPicard(
         const std::vector<int>& B_indptr, const std::vector<int>& B_indices,
@@ -889,10 +892,17 @@ private:
         double hmatvec_calls = 0.0, hmatvec_lowrank_leaves = 0.0, hmatvec_dense_leaves = 0.0;
         double hmatvec_mirrored_upper_leaves = 0.0, hmatvec_diagonal_leaves = 0.0;
         double hmatvec_skipped_lower_leaves = 0.0, hmatvec_last_nd = 0.0, hmatvec_last_nthr = 0.0;
+        double hmatvec_lowrank_upper_leaves = 0.0, hmatvec_dense_upper_leaves = 0.0;
+        double hmatvec_inactive_skipped_leaves = 0.0, hmatvec_lowrank_directions = 0.0;
+        double hmatvec_dense_directions = 0.0, hmatvec_gemm_calls = 0.0;
+        double hmatvec_lowrank_rank_sum = 0.0, hmatvec_lowrank_rank_max = 0.0;
+        double hmatvec_lowrank_rank_le4 = 0.0, hmatvec_lowrank_rank_le8 = 0.0;
+        double hmatvec_lowrank_rank_le16 = 0.0, hmatvec_lowrank_rank_le32 = 0.0;
+        int mass_riesz_local_blocks = 0, mass_riesz_max_block = 0;
         int apply_count = 0, prec_count = 0, dot_count = 0;
     };
     SolveTiming m_lastSolveTiming;
-    // Persistent mass-Riesz PARDISO factor, keyed on the EXACT (n_face, mI, mJ, mV) COO arrays: reused by
+    // Persistent exact mass-Riesz factor, keyed on the EXACT (n_face, mI, mJ, mV) COO arrays: reused by
     // SolveLinearMaterial reuses this when the mass is unchanged (any difference refactors), so
     // constant-mass iteration chains pay the analyze+factor ONCE.  Identical input -> identical factor ->
     // bit-identical preconditioner: timing-only.  shared_ptr keeps the .h to a forward declaration.
@@ -918,11 +928,19 @@ private:
     std::vector<int> m_operatorGeometryMassIndptr, m_operatorGeometryMassIndices;
     std::vector<double> m_operatorGeometryMassData;
     std::vector<unsigned char> m_operatorConstrained;
+    // Per charge component, prefix counts in HACApK's permuted ordering.
+    // A symmetric leaf contributes to the constrained principal submatrix
+    // only when both its row and column ranges contain an active charge.
+    std::vector<int> m_operatorActiveChargePrefix;
     int m_operatorNFace = 0;
     bool m_operatorChargeConfigured = false;
     bool m_operatorMassConfigured = false;
     bool m_operatorGeometryMassConfigured = false;
     bool m_operatorMassIsGeometry = false;
+    void UpdateConfiguredActiveChargePrefixes();
+    void MatVecSymManyConfigured(
+        const std::vector<double>& x, int nrhs, int component,
+        bool respect_constraints, std::vector<double>& y);
     // Get-or-build the persistent factor (the single shared implementation for both solve methods,
     // defined in the .cpp under HAVE_LAPACK).  Returns a PINNED shared_ptr the caller must hold for the
     // duration of its Krylov loop -- pinning makes a concurrent/nested replacement of the slot unable to
@@ -1183,7 +1201,10 @@ private:
     bool CurvedHostsTouch(int kindA, int hostA, int kindB, int hostB) const;
     std::vector<double> QuadBlockHOCurvedDirect(int kindT, int hostT, int kindS, int hostS) const;
     std::vector<double> QuadBlockHOTet(int kindT, int hostT, int kindS, int hostS) const;
-    const std::vector<double>& GetHOTetSymBlock(int kindA, int hostA, int kindB, int hostB) const;
+    std::vector<double> QuadBlockHOTetImage(
+        int kindT, int hostT, int kindS, int hostS, int img) const;
+    const std::vector<double>& GetHOTetSymBlock(
+        int kindA, int hostA, int kindB, int hostB, int img = 0) const;
     double PhiAtHO(int src, const double p[3]) const;       // polynomial-charge inner potential (subtraction, NEAR) -- superseded by PhiAtHO_Analytic for order<=2
     double PhiAtHO_Analytic(int src, const double p[3]) const; // EXACT analytic poly-charge potential (moment kernels, flat order<=2; machine precision, all pair types)
     double PhiAtHO_Duffy(int src, const double p[3]) const;    // Duffy singular-quadrature poly-charge potential (order>=3 / curved; ~1e-4)

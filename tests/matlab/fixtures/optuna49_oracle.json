@@ -2117,7 +2117,7 @@
       0.6089224208655776
     ]
   },
-  "numpy_version": "2.4.6",
+  "numpy_version": "2.5.2",
   "optuna_version": "4.9.0",
   "partial_fixed_sampler_seed_61": [
     {
@@ -2157,6 +2157,7 @@
       ],
       "first_decision": false
     },
+    "median": true,
     "patient": [
       true,
       false
@@ -2305,6 +2306,110 @@
       "x": 0.3231286733324874
     }
   ],
+  "sampler_public_members": {
+    "base_crossover_instantiation_error": "TypeError",
+    "crossover_n_parents": {
+      "blxalpha": 2,
+      "sbx": 2,
+      "spx": 3,
+      "undx": 3,
+      "uniform": 2,
+      "vsbx": 2
+    },
+    "fixed_trial_datetime_start_is_not_none": true,
+    "grid_is_exhausted_after": true,
+    "grid_is_exhausted_before": false,
+    "mapped_namespaces": {
+      "distributions": "optuna.distributions",
+      "exceptions": "optuna.exceptions",
+      "importance": "optuna.importance",
+      "pruners": "optuna.pruners",
+      "samplers": "optuna.samplers",
+      "search_space": "optuna.search_space",
+      "storages": "optuna.storages",
+      "study": "optuna.study",
+      "trial": "optuna.trial"
+    },
+    "nsgaii_population_size": 5,
+    "nsgaiii_population_size": 6,
+    "samplers": {
+      "BruteForceSampler": {
+        "after_trial_returns_none": true,
+        "before_trial_returns_none": true,
+        "infer_relative_search_space_keys": []
+      },
+      "CmaEsSampler": {
+        "after_trial_returns_none": true,
+        "before_trial_returns_none": true,
+        "infer_relative_search_space_keys": [
+          "x",
+          "y"
+        ]
+      },
+      "GPSampler": {
+        "after_trial_returns_none": true,
+        "before_trial_returns_none": true,
+        "infer_relative_search_space_keys": [
+          "x",
+          "y"
+        ]
+      },
+      "GridSampler": {
+        "after_trial_returns_none": true,
+        "before_trial_returns_none": true,
+        "infer_relative_search_space_keys": []
+      },
+      "NSGAIIISampler": {
+        "after_trial_returns_none": true,
+        "before_trial_returns_none": true,
+        "infer_relative_search_space_keys": [
+          "x",
+          "y"
+        ]
+      },
+      "NSGAIISampler": {
+        "after_trial_returns_none": true,
+        "before_trial_returns_none": true,
+        "infer_relative_search_space_keys": [
+          "x",
+          "y"
+        ]
+      },
+      "PartialFixedSampler": {
+        "after_trial_returns_none": true,
+        "before_trial_returns_none": true,
+        "infer_relative_search_space_keys": [
+          "y"
+        ]
+      },
+      "QMCSampler": {
+        "after_trial_returns_none": true,
+        "before_trial_returns_none": true,
+        "infer_relative_search_space_keys": [
+          "x",
+          "y"
+        ]
+      },
+      "RandomSampler": {
+        "after_trial_returns_none": true,
+        "before_trial_returns_none": true,
+        "infer_relative_search_space_keys": []
+      },
+      "TPESampler": {
+        "after_trial_returns_none": true,
+        "before_trial_returns_none": true,
+        "infer_relative_search_space_keys": [
+          "x",
+          "y"
+        ]
+      }
+    },
+    "trial_datetime_start_is_not_none": true,
+    "trial_relative_params_keys": [
+      "x",
+      "y"
+    ]
+  },
   "sampler_seed_defaults": {
     "constructors": {
       "BruteForceSampler": {
@@ -2802,6 +2907,180 @@
     "last_step": 2,
     "state": "PRUNED",
     "value": 3.0
+  },
+  "trials_dataframe": {
+    "attrs": [
+      "number",
+      "value",
+      "params",
+      "user_attrs",
+      "system_attrs",
+      "state"
+    ],
+    "empty_column_count": 0,
+    "errors": {
+      "empty_attrs": "TypeError",
+      "unknown_attr": "AttributeError"
+    },
+    "metric_names": {
+      "flat_columns": [
+        "number",
+        "values_gain",
+        "values_loss",
+        "params_x",
+        "state"
+      ],
+      "multi_columns": [
+        {
+          "sub": "",
+          "top": "number"
+        },
+        {
+          "sub": "gain",
+          "top": "values"
+        },
+        {
+          "sub": "loss",
+          "top": "values"
+        },
+        {
+          "sub": "x",
+          "top": "params"
+        },
+        {
+          "sub": "",
+          "top": "state"
+        }
+      ],
+      "values": {
+        "number": [
+          0
+        ],
+        "params_x": [
+          0.5
+        ],
+        "state": [
+          "COMPLETE"
+        ],
+        "values_gain": [
+          2.5
+        ],
+        "values_loss": [
+          1.5
+        ]
+      }
+    },
+    "multi_index_default": false,
+    "single": {
+      "flat_columns": [
+        "number",
+        "value",
+        "params_mode",
+        "params_x",
+        "user_attrs_owner",
+        "system_attrs_origin",
+        "state"
+      ],
+      "multi_columns": [
+        {
+          "sub": "",
+          "top": "number"
+        },
+        {
+          "sub": "",
+          "top": "value"
+        },
+        {
+          "sub": "mode",
+          "top": "params"
+        },
+        {
+          "sub": "x",
+          "top": "params"
+        },
+        {
+          "sub": "owner",
+          "top": "user_attrs"
+        },
+        {
+          "sub": "origin",
+          "top": "system_attrs"
+        },
+        {
+          "sub": "",
+          "top": "state"
+        }
+      ],
+      "values": {
+        "number": [
+          0,
+          1,
+          2
+        ],
+        "params_mode": [
+          "A",
+          "B",
+          "A"
+        ],
+        "params_x": [
+          0.25,
+          0.75,
+          0.5
+        ],
+        "state": [
+          "COMPLETE",
+          "PRUNED",
+          "FAIL"
+        ],
+        "system_attrs_origin": [
+          "oracle",
+          "oracle",
+          "imported"
+        ],
+        "user_attrs_owner": [
+          "lab",
+          "mdx",
+          "lab"
+        ],
+        "value": [
+          1.25,
+          null,
+          null
+        ]
+      }
+    },
+    "single_metric_name": {
+      "flat_columns": [
+        "number",
+        "value_loss",
+        "state"
+      ],
+      "multi_columns": [
+        {
+          "sub": "",
+          "top": "number"
+        },
+        {
+          "sub": "loss",
+          "top": "value"
+        },
+        {
+          "sub": "",
+          "top": "state"
+        }
+      ],
+      "values": {
+        "number": [
+          0
+        ],
+        "state": [
+          "COMPLETE"
+        ],
+        "value_loss": [
+          1.2
+        ]
+      }
+    }
   },
   "unfinished_trials": {
     "after_claim_has_start": [

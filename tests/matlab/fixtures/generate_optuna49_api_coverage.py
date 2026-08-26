@@ -8,7 +8,6 @@ import re
 from pathlib import Path
 from typing import Any
 
-
 ROOT = Path(__file__).resolve().parents[3]
 INVENTORY_PATH = Path(__file__).with_name("optuna49_public_api.json")
 MATLAB_DIRECTORY = ROOT / "matlab" / "+radia" / "+optuna"
@@ -17,6 +16,32 @@ FUNCTION_PATTERN = re.compile(
     r"(?m)^\s*function\s+(?:\[[^]]*\]|\w+)\s*=\s*(\w+)\s*\(|"
     r"^\s*function\s+(\w+)\s*\("
 )
+ABSTRACT_METHOD_PATTERN = re.compile(
+    r"(?m)^\s*(?:\[[^]]*\]|\w+)\s*=\s*(\w+)\s*\(|"
+    r"^\s*(\w+)\s*\("
+)
+
+
+def _class_blocks(source: str, keyword: str) -> list[tuple[str, str]]:
+    pattern = re.compile(
+        rf"(?ms)^(?P<indent>[ \t]*){keyword}(?P<qualifier>[^\r\n]*)\r?\n"
+        rf"(?P<body>.*?)(?=^(?P=indent)end[ \t]*$)"
+    )
+    return [
+        (match.group("qualifier"), match.group("body"))
+        for match in pattern.finditer(source)
+    ]
+
+
+def _public_get_access(qualifier: str) -> bool:
+    compact = re.sub(r"\s+", "", qualifier).lower()
+    return (
+        re.search(
+            r"(?:^|[(,])(?:access|getaccess)=(?:private|protected)(?:[,)]|$)",
+            compact,
+        )
+        is None
+    )
 MODULE_EQUIVALENTS = {
     "artifacts": False,
     "distributions": True,
@@ -47,8 +72,15 @@ VERIFIED_FUNCTIONS = {
     "json_to_distribution",
     "load_study",
 }
+SAMPLER_PUBLIC_MEMBERS = {
+    "after_trial",
+    "before_trial",
+    "infer_relative_search_space",
+}
+CROSSOVER_PUBLIC_MEMBERS = {"crossover", "n_parents"}
 VERIFIED_MEMBERS = {
     "BasePruner": {"prune"},
+    "BaseSampler": SAMPLER_PUBLIC_MEMBERS,
     "BaseTrial": {
         "datetime_start",
         "distributions",
@@ -88,14 +120,17 @@ VERIFIED_MEMBERS = {
         "system_attrs",
         "tell",
         "trials",
+        "trials_dataframe",
         "user_attrs",
     },
     "StudySummary": {"direction", "directions", "system_attrs"},
     "Trial": {
+        "datetime_start",
         "distributions",
         "number",
         "params",
         "report",
+        "relative_params",
         "set_system_attr",
         "set_user_attr",
         "should_prune",
@@ -109,6 +144,7 @@ VERIFIED_MEMBERS = {
         "user_attrs",
     },
     "FixedTrial": {
+        "datetime_start",
         "distributions",
         "number",
         "params",
@@ -153,6 +189,31 @@ VERIFIED_MEMBERS = {
     "BestValueStagnationEvaluator": {"evaluate"},
     "Terminator": {"should_terminate"},
     "IntersectionSearchSpace": {"calculate"},
+    "BruteForceSampler": SAMPLER_PUBLIC_MEMBERS,
+    "CmaEsSampler": SAMPLER_PUBLIC_MEMBERS,
+    "GPSampler": SAMPLER_PUBLIC_MEMBERS,
+    "GridSampler": SAMPLER_PUBLIC_MEMBERS | {"is_exhausted"},
+    "NSGAIIISampler": SAMPLER_PUBLIC_MEMBERS | {"population_size"},
+    "NSGAIISampler": SAMPLER_PUBLIC_MEMBERS | {"population_size"},
+    "PartialFixedSampler": SAMPLER_PUBLIC_MEMBERS,
+    "QMCSampler": SAMPLER_PUBLIC_MEMBERS,
+    "RandomSampler": SAMPLER_PUBLIC_MEMBERS,
+    "TPESampler": SAMPLER_PUBLIC_MEMBERS,
+    "BLXAlphaCrossover": CROSSOVER_PUBLIC_MEMBERS,
+    "BaseCrossover": CROSSOVER_PUBLIC_MEMBERS,
+    "SBXCrossover": CROSSOVER_PUBLIC_MEMBERS,
+    "SPXCrossover": CROSSOVER_PUBLIC_MEMBERS,
+    "UNDXCrossover": CROSSOVER_PUBLIC_MEMBERS,
+    "UniformCrossover": CROSSOVER_PUBLIC_MEMBERS,
+    "VSBXCrossover": CROSSOVER_PUBLIC_MEMBERS,
+    "HyperbandPruner": {"prune"},
+    "MedianPruner": {"prune"},
+    "NopPruner": {"prune"},
+    "PatientPruner": {"prune"},
+    "PercentilePruner": {"prune"},
+    "SuccessiveHalvingPruner": {"prune"},
+    "ThresholdPruner": {"prune"},
+    "WilcoxonPruner": {"prune"},
     "StudyDirection": {"NOT_SET", "MINIMIZE", "MAXIMIZE"},
     "TrialState": {
         "RUNNING",
@@ -227,38 +288,73 @@ def _normalized(name: str) -> str:
 def _matlab_surface() -> tuple[set[str], dict[str, dict[str, set[str]]]]:
     names: set[str] = set()
     members: dict[str, dict[str, set[str]]] = {}
+    parents: dict[str, str] = {}
     for path in sorted(MATLAB_DIRECTORY.rglob("*.m")):
         if "+internal" in path.parts:
             continue
         names.add(path.stem)
         source = path.read_text(encoding="utf-8")
-        found = {
-            candidate
-            for groups in FUNCTION_PATTERN.findall(source)
-            for candidate in groups
-            if candidate
-        }
+        class_match = re.search(
+            r"(?m)^\s*classdef(?:\s*\([^)]*\))?\s+(\w+)"
+            r"(?:\s*<\s*([\w.]+))?",
+            source,
+        )
+        if class_match and class_match.group(2):
+            parents[class_match.group(1)] = class_match.group(2).split(".")[-1]
+        found: set[str] = set()
+        for qualifier, block in _class_blocks(source, "methods"):
+            if not _public_get_access(qualifier):
+                continue
+            found.update(
+                candidate
+                for groups in FUNCTION_PATTERN.findall(block)
+                for candidate in groups
+                if candidate
+            )
+            if "abstract" in qualifier.lower():
+                found.update(
+                    candidate
+                    for groups in ABSTRACT_METHOD_PATTERN.findall(block)
+                    for candidate in groups
+                    if candidate
+                )
+        if "classdef" not in source:
+            found.update(
+                candidate
+                for groups in FUNCTION_PATTERN.findall(source)
+                for candidate in groups
+                if candidate
+            )
         class_members = members.setdefault(path.stem, {})
         for name in found:
             class_members.setdefault(_normalized(name), set()).add(name)
-        property_blocks = re.findall(
-            r"(?ms)^\s*properties(?:\s*\([^)]*\))?\s*(.*?)^\s*end\s*$", source
-        )
-        for block in property_blocks:
+        for qualifier, block in _class_blocks(source, "properties"):
+            if not _public_get_access(qualifier):
+                continue
             for line in block.splitlines():
                 match = re.match(r"\s*([A-Za-z]\w*)\b", line)
                 if match and not line.lstrip().startswith("%"):
                     name = match.group(1)
                     class_members.setdefault(_normalized(name), set()).add(name)
-        enumeration_blocks = re.findall(
-            r"(?ms)^\s*enumeration\s*(.*?)^\s*end\s*$", source
-        )
-        for block in enumeration_blocks:
+        for qualifier, block in _class_blocks(source, "enumeration"):
+            if not _public_get_access(qualifier):
+                continue
             for line in block.splitlines():
                 match = re.match(r"\s*([A-Za-z]\w*)\b", line)
                 if match and not line.lstrip().startswith("%"):
                     name = match.group(1)
                     class_members.setdefault(_normalized(name), set()).add(name)
+    changed = True
+    while changed:
+        changed = False
+        for child, parent in parents.items():
+            if child not in members or parent not in members:
+                continue
+            for normalized, candidates in members[parent].items():
+                destination = members[child].setdefault(normalized, set())
+                before = len(destination)
+                destination.update(candidates)
+                changed = changed or len(destination) != before
     return names, members
 
 
@@ -296,7 +392,7 @@ def build_coverage() -> dict[str, Any]:
             else:
                 present = name in names
                 matlab_name = f"radia.optuna.{name}" if present else None
-            if present and name in VERIFIED_FUNCTIONS and kind == "function":
+            if present and kind == "module" or present and name in VERIFIED_FUNCTIONS and kind == "function":
                 oracle_status = "verified"
             elif present and name in PARTIALLY_VERIFIED_CLASSES and kind == "class":
                 oracle_status = "partial"
@@ -316,7 +412,7 @@ def build_coverage() -> dict[str, Any]:
                     actual_member = (
                         member_name
                         if member_name in candidates
-                        else sorted(candidates, key=lambda value: (value.lower(), value))[0]
+                        else min(candidates, key=lambda value: (value.lower(), value))
                     )
                 else:
                     actual_member = None

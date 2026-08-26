@@ -155,7 +155,7 @@
     {
       "kind": "class-method",
       "matlab_name": "radia.optuna.Study.trials_dataframe",
-      "oracle_status": "not-mapped",
+      "oracle_status": "verified",
       "surface_status": "present",
       "upstream": "optuna.Study.trials_dataframe"
     },
@@ -175,9 +175,9 @@
     },
     {
       "kind": "class-property",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.Trial.datetime_start",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.Trial.datetime_start"
     },
     {
@@ -189,7 +189,7 @@
     },
     {
       "kind": "class-property",
-      "matlab_name": "radia.optuna.Trial.Number",
+      "matlab_name": "radia.optuna.Trial.number",
       "oracle_status": "verified",
       "surface_status": "present",
       "upstream": "optuna.Trial.number"
@@ -203,8 +203,8 @@
     },
     {
       "kind": "class-property",
-      "matlab_name": "radia.optuna.Trial.RelativeParams",
-      "oracle_status": "not-mapped",
+      "matlab_name": "radia.optuna.Trial.relative_params",
+      "oracle_status": "verified",
       "surface_status": "present",
       "upstream": "optuna.Trial.relative_params"
     },
@@ -365,14 +365,14 @@
     {
       "kind": "module",
       "matlab_name": "radia.optuna (distributions namespace)",
-      "oracle_status": "not-mapped",
+      "oracle_status": "verified",
       "surface_status": "present",
       "upstream": "optuna.distributions"
     },
     {
       "kind": "module",
       "matlab_name": "radia.optuna (exceptions namespace)",
-      "oracle_status": "not-mapped",
+      "oracle_status": "verified",
       "surface_status": "present",
       "upstream": "optuna.exceptions"
     },
@@ -393,7 +393,7 @@
     {
       "kind": "module",
       "matlab_name": "radia.optuna (importance namespace)",
-      "oracle_status": "not-mapped",
+      "oracle_status": "verified",
       "surface_status": "present",
       "upstream": "optuna.importance"
     },
@@ -421,42 +421,42 @@
     {
       "kind": "module",
       "matlab_name": "radia.optuna (pruners namespace)",
-      "oracle_status": "not-mapped",
+      "oracle_status": "verified",
       "surface_status": "present",
       "upstream": "optuna.pruners"
     },
     {
       "kind": "module",
       "matlab_name": "radia.optuna (samplers namespace)",
-      "oracle_status": "not-mapped",
+      "oracle_status": "verified",
       "surface_status": "present",
       "upstream": "optuna.samplers"
     },
     {
       "kind": "module",
       "matlab_name": "radia.optuna (search_space namespace)",
-      "oracle_status": "not-mapped",
+      "oracle_status": "verified",
       "surface_status": "present",
       "upstream": "optuna.search_space"
     },
     {
       "kind": "module",
       "matlab_name": "radia.optuna (storages namespace)",
-      "oracle_status": "not-mapped",
+      "oracle_status": "verified",
       "surface_status": "present",
       "upstream": "optuna.storages"
     },
     {
       "kind": "module",
       "matlab_name": "radia.optuna (study namespace)",
-      "oracle_status": "not-mapped",
+      "oracle_status": "verified",
       "surface_status": "present",
       "upstream": "optuna.study"
     },
     {
       "kind": "module",
       "matlab_name": "radia.optuna (trial namespace)",
-      "oracle_status": "not-mapped",
+      "oracle_status": "verified",
       "surface_status": "present",
       "upstream": "optuna.trial"
     },
@@ -1512,9 +1512,9 @@
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.HyperbandPruner.prune",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.pruners.HyperbandPruner.prune"
     },
     {
@@ -1526,9 +1526,9 @@
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.MedianPruner.prune",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.pruners.MedianPruner.prune"
     },
     {
@@ -1540,9 +1540,9 @@
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.NopPruner.prune",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.pruners.NopPruner.prune"
     },
     {
@@ -1554,9 +1554,9 @@
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.PatientPruner.prune",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.pruners.PatientPruner.prune"
     },
     {
@@ -1568,9 +1568,9 @@
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.PercentilePruner.prune",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.pruners.PercentilePruner.prune"
     },
     {
@@ -1582,9 +1582,9 @@
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.SuccessiveHalvingPruner.prune",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.pruners.SuccessiveHalvingPruner.prune"
     },
     {
@@ -1596,9 +1596,9 @@
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.ThresholdPruner.prune",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.pruners.ThresholdPruner.prune"
     },
     {
@@ -1610,9 +1610,9 @@
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.WilcoxonPruner.prune",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.pruners.WilcoxonPruner.prune"
     },
     {
@@ -1708,23 +1708,23 @@
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.BaseSampler.after_trial",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.samplers.BaseSampler.after_trial"
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.BaseSampler.before_trial",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.samplers.BaseSampler.before_trial"
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.BaseSampler.infer_relative_search_space",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.samplers.BaseSampler.infer_relative_search_space"
     },
     {
@@ -1757,23 +1757,23 @@
     },
     {
       "kind": "class-method",
-      "matlab_name": "radia.optuna.BruteForceSampler.afterTrial",
-      "oracle_status": "not-mapped",
+      "matlab_name": "radia.optuna.BruteForceSampler.after_trial",
+      "oracle_status": "verified",
       "surface_status": "present",
       "upstream": "optuna.samplers.BruteForceSampler.after_trial"
     },
     {
       "kind": "class-method",
-      "matlab_name": "radia.optuna.BruteForceSampler.beforeTrial",
-      "oracle_status": "not-mapped",
+      "matlab_name": "radia.optuna.BruteForceSampler.before_trial",
+      "oracle_status": "verified",
       "surface_status": "present",
       "upstream": "optuna.samplers.BruteForceSampler.before_trial"
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.BruteForceSampler.infer_relative_search_space",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.samplers.BruteForceSampler.infer_relative_search_space"
     },
     {
@@ -1806,22 +1806,22 @@
     },
     {
       "kind": "class-method",
-      "matlab_name": "radia.optuna.CmaEsSampler.afterTrial",
-      "oracle_status": "not-mapped",
+      "matlab_name": "radia.optuna.CmaEsSampler.after_trial",
+      "oracle_status": "verified",
       "surface_status": "present",
       "upstream": "optuna.samplers.CmaEsSampler.after_trial"
     },
     {
       "kind": "class-method",
-      "matlab_name": "radia.optuna.CmaEsSampler.beforeTrial",
-      "oracle_status": "not-mapped",
+      "matlab_name": "radia.optuna.CmaEsSampler.before_trial",
+      "oracle_status": "verified",
       "surface_status": "present",
       "upstream": "optuna.samplers.CmaEsSampler.before_trial"
     },
     {
       "kind": "class-method",
       "matlab_name": "radia.optuna.CmaEsSampler.infer_relative_search_space",
-      "oracle_status": "not-mapped",
+      "oracle_status": "verified",
       "surface_status": "present",
       "upstream": "optuna.samplers.CmaEsSampler.infer_relative_search_space"
     },
@@ -1855,22 +1855,22 @@
     },
     {
       "kind": "class-method",
-      "matlab_name": "radia.optuna.GPSampler.afterTrial",
-      "oracle_status": "not-mapped",
+      "matlab_name": "radia.optuna.GPSampler.after_trial",
+      "oracle_status": "verified",
       "surface_status": "present",
       "upstream": "optuna.samplers.GPSampler.after_trial"
     },
     {
       "kind": "class-method",
-      "matlab_name": "radia.optuna.GPSampler.beforeTrial",
-      "oracle_status": "not-mapped",
+      "matlab_name": "radia.optuna.GPSampler.before_trial",
+      "oracle_status": "verified",
       "surface_status": "present",
       "upstream": "optuna.samplers.GPSampler.before_trial"
     },
     {
       "kind": "class-method",
       "matlab_name": "radia.optuna.GPSampler.infer_relative_search_space",
-      "oracle_status": "not-mapped",
+      "oracle_status": "verified",
       "surface_status": "present",
       "upstream": "optuna.samplers.GPSampler.infer_relative_search_space"
     },
@@ -1890,9 +1890,9 @@
     },
     {
       "kind": "class-method",
-      "matlab_name": "radia.optuna.GPSampler.sampleRelative",
+      "matlab_name": null,
       "oracle_status": "not-mapped",
-      "surface_status": "present",
+      "surface_status": "missing",
       "upstream": "optuna.samplers.GPSampler.sample_relative"
     },
     {
@@ -1904,29 +1904,29 @@
     },
     {
       "kind": "class-method",
-      "matlab_name": "radia.optuna.GridSampler.afterTrial",
-      "oracle_status": "not-mapped",
+      "matlab_name": "radia.optuna.GridSampler.after_trial",
+      "oracle_status": "verified",
       "surface_status": "present",
       "upstream": "optuna.samplers.GridSampler.after_trial"
     },
     {
       "kind": "class-method",
-      "matlab_name": "radia.optuna.GridSampler.beforeTrial",
-      "oracle_status": "not-mapped",
+      "matlab_name": "radia.optuna.GridSampler.before_trial",
+      "oracle_status": "verified",
       "surface_status": "present",
       "upstream": "optuna.samplers.GridSampler.before_trial"
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.GridSampler.infer_relative_search_space",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.samplers.GridSampler.infer_relative_search_space"
     },
     {
       "kind": "class-method",
       "matlab_name": "radia.optuna.GridSampler.is_exhausted",
-      "oracle_status": "not-mapped",
+      "oracle_status": "verified",
       "surface_status": "present",
       "upstream": "optuna.samplers.GridSampler.is_exhausted"
     },
@@ -1960,15 +1960,15 @@
     },
     {
       "kind": "class-method",
-      "matlab_name": "radia.optuna.NSGAIIISampler.afterTrial",
-      "oracle_status": "not-mapped",
+      "matlab_name": "radia.optuna.NSGAIIISampler.after_trial",
+      "oracle_status": "verified",
       "surface_status": "present",
       "upstream": "optuna.samplers.NSGAIIISampler.after_trial"
     },
     {
       "kind": "class-method",
-      "matlab_name": "radia.optuna.NSGAIIISampler.beforeTrial",
-      "oracle_status": "not-mapped",
+      "matlab_name": "radia.optuna.NSGAIIISampler.before_trial",
+      "oracle_status": "verified",
       "surface_status": "present",
       "upstream": "optuna.samplers.NSGAIIISampler.before_trial"
     },
@@ -1996,14 +1996,14 @@
     {
       "kind": "class-method",
       "matlab_name": "radia.optuna.NSGAIIISampler.infer_relative_search_space",
-      "oracle_status": "not-mapped",
+      "oracle_status": "verified",
       "surface_status": "present",
       "upstream": "optuna.samplers.NSGAIIISampler.infer_relative_search_space"
     },
     {
       "kind": "class-property",
-      "matlab_name": "radia.optuna.NSGAIIISampler.PopulationSize",
-      "oracle_status": "not-mapped",
+      "matlab_name": "radia.optuna.NSGAIIISampler.population_size",
+      "oracle_status": "verified",
       "surface_status": "present",
       "upstream": "optuna.samplers.NSGAIIISampler.population_size"
     },
@@ -2044,15 +2044,15 @@
     },
     {
       "kind": "class-method",
-      "matlab_name": "radia.optuna.NSGAIISampler.afterTrial",
-      "oracle_status": "not-mapped",
+      "matlab_name": "radia.optuna.NSGAIISampler.after_trial",
+      "oracle_status": "verified",
       "surface_status": "present",
       "upstream": "optuna.samplers.NSGAIISampler.after_trial"
     },
     {
       "kind": "class-method",
-      "matlab_name": "radia.optuna.NSGAIISampler.beforeTrial",
-      "oracle_status": "not-mapped",
+      "matlab_name": "radia.optuna.NSGAIISampler.before_trial",
+      "oracle_status": "verified",
       "surface_status": "present",
       "upstream": "optuna.samplers.NSGAIISampler.before_trial"
     },
@@ -2080,14 +2080,14 @@
     {
       "kind": "class-method",
       "matlab_name": "radia.optuna.NSGAIISampler.infer_relative_search_space",
-      "oracle_status": "not-mapped",
+      "oracle_status": "verified",
       "surface_status": "present",
       "upstream": "optuna.samplers.NSGAIISampler.infer_relative_search_space"
     },
     {
       "kind": "class-property",
-      "matlab_name": "radia.optuna.NSGAIISampler.PopulationSize",
-      "oracle_status": "not-mapped",
+      "matlab_name": "radia.optuna.NSGAIISampler.population_size",
+      "oracle_status": "verified",
       "surface_status": "present",
       "upstream": "optuna.samplers.NSGAIISampler.population_size"
     },
@@ -2128,22 +2128,22 @@
     },
     {
       "kind": "class-method",
-      "matlab_name": "radia.optuna.PartialFixedSampler.afterTrial",
-      "oracle_status": "not-mapped",
+      "matlab_name": "radia.optuna.PartialFixedSampler.after_trial",
+      "oracle_status": "verified",
       "surface_status": "present",
       "upstream": "optuna.samplers.PartialFixedSampler.after_trial"
     },
     {
       "kind": "class-method",
-      "matlab_name": "radia.optuna.PartialFixedSampler.beforeTrial",
-      "oracle_status": "not-mapped",
+      "matlab_name": "radia.optuna.PartialFixedSampler.before_trial",
+      "oracle_status": "verified",
       "surface_status": "present",
       "upstream": "optuna.samplers.PartialFixedSampler.before_trial"
     },
     {
       "kind": "class-method",
-      "matlab_name": "radia.optuna.PartialFixedSampler.inferRelativeSearchSpace",
-      "oracle_status": "not-mapped",
+      "matlab_name": "radia.optuna.PartialFixedSampler.infer_relative_search_space",
+      "oracle_status": "verified",
       "surface_status": "present",
       "upstream": "optuna.samplers.PartialFixedSampler.infer_relative_search_space"
     },
@@ -2177,22 +2177,22 @@
     },
     {
       "kind": "class-method",
-      "matlab_name": "radia.optuna.QMCSampler.afterTrial",
-      "oracle_status": "not-mapped",
+      "matlab_name": "radia.optuna.QMCSampler.after_trial",
+      "oracle_status": "verified",
       "surface_status": "present",
       "upstream": "optuna.samplers.QMCSampler.after_trial"
     },
     {
       "kind": "class-method",
-      "matlab_name": "radia.optuna.QMCSampler.beforeTrial",
-      "oracle_status": "not-mapped",
+      "matlab_name": "radia.optuna.QMCSampler.before_trial",
+      "oracle_status": "verified",
       "surface_status": "present",
       "upstream": "optuna.samplers.QMCSampler.before_trial"
     },
     {
       "kind": "class-method",
-      "matlab_name": "radia.optuna.QMCSampler.inferRelativeSearchSpace",
-      "oracle_status": "not-mapped",
+      "matlab_name": "radia.optuna.QMCSampler.infer_relative_search_space",
+      "oracle_status": "verified",
       "surface_status": "present",
       "upstream": "optuna.samplers.QMCSampler.infer_relative_search_space"
     },
@@ -2226,23 +2226,23 @@
     },
     {
       "kind": "class-method",
-      "matlab_name": "radia.optuna.RandomSampler.afterTrial",
-      "oracle_status": "not-mapped",
+      "matlab_name": "radia.optuna.RandomSampler.after_trial",
+      "oracle_status": "verified",
       "surface_status": "present",
       "upstream": "optuna.samplers.RandomSampler.after_trial"
     },
     {
       "kind": "class-method",
-      "matlab_name": "radia.optuna.RandomSampler.beforeTrial",
-      "oracle_status": "not-mapped",
+      "matlab_name": "radia.optuna.RandomSampler.before_trial",
+      "oracle_status": "verified",
       "surface_status": "present",
       "upstream": "optuna.samplers.RandomSampler.before_trial"
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.RandomSampler.infer_relative_search_space",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.samplers.RandomSampler.infer_relative_search_space"
     },
     {
@@ -2275,15 +2275,15 @@
     },
     {
       "kind": "class-method",
-      "matlab_name": "radia.optuna.TPESampler.afterTrial",
-      "oracle_status": "not-mapped",
+      "matlab_name": "radia.optuna.TPESampler.after_trial",
+      "oracle_status": "verified",
       "surface_status": "present",
       "upstream": "optuna.samplers.TPESampler.after_trial"
     },
     {
       "kind": "class-method",
-      "matlab_name": "radia.optuna.TPESampler.beforeTrial",
-      "oracle_status": "not-mapped",
+      "matlab_name": "radia.optuna.TPESampler.before_trial",
+      "oracle_status": "verified",
       "surface_status": "present",
       "upstream": "optuna.samplers.TPESampler.before_trial"
     },
@@ -2297,7 +2297,7 @@
     {
       "kind": "class-method",
       "matlab_name": "radia.optuna.TPESampler.infer_relative_search_space",
-      "oracle_status": "not-mapped",
+      "oracle_status": "verified",
       "surface_status": "present",
       "upstream": "optuna.samplers.TPESampler.infer_relative_search_space"
     },
@@ -2339,15 +2339,15 @@
     {
       "kind": "class-method",
       "matlab_name": "radia.optuna.BLXAlphaCrossover.crossover",
-      "oracle_status": "not-mapped",
+      "oracle_status": "verified",
       "surface_status": "present",
       "upstream": "optuna.samplers.nsgaii.BLXAlphaCrossover.crossover"
     },
     {
       "kind": "class-constant-or-field",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.BLXAlphaCrossover.n_parents",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.samplers.nsgaii.BLXAlphaCrossover.n_parents"
     },
     {
@@ -2360,14 +2360,14 @@
     {
       "kind": "class-method",
       "matlab_name": "radia.optuna.BaseCrossover.crossover",
-      "oracle_status": "not-mapped",
+      "oracle_status": "verified",
       "surface_status": "present",
       "upstream": "optuna.samplers.nsgaii.BaseCrossover.crossover"
     },
     {
       "kind": "class-property",
-      "matlab_name": "radia.optuna.BaseCrossover.NParents",
-      "oracle_status": "not-mapped",
+      "matlab_name": "radia.optuna.BaseCrossover.n_parents",
+      "oracle_status": "verified",
       "surface_status": "present",
       "upstream": "optuna.samplers.nsgaii.BaseCrossover.n_parents"
     },
@@ -2381,15 +2381,15 @@
     {
       "kind": "class-method",
       "matlab_name": "radia.optuna.SBXCrossover.crossover",
-      "oracle_status": "not-mapped",
+      "oracle_status": "verified",
       "surface_status": "present",
       "upstream": "optuna.samplers.nsgaii.SBXCrossover.crossover"
     },
     {
       "kind": "class-constant-or-field",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.SBXCrossover.n_parents",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.samplers.nsgaii.SBXCrossover.n_parents"
     },
     {
@@ -2402,15 +2402,15 @@
     {
       "kind": "class-method",
       "matlab_name": "radia.optuna.SPXCrossover.crossover",
-      "oracle_status": "not-mapped",
+      "oracle_status": "verified",
       "surface_status": "present",
       "upstream": "optuna.samplers.nsgaii.SPXCrossover.crossover"
     },
     {
       "kind": "class-constant-or-field",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.SPXCrossover.n_parents",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.samplers.nsgaii.SPXCrossover.n_parents"
     },
     {
@@ -2423,15 +2423,15 @@
     {
       "kind": "class-method",
       "matlab_name": "radia.optuna.UNDXCrossover.crossover",
-      "oracle_status": "not-mapped",
+      "oracle_status": "verified",
       "surface_status": "present",
       "upstream": "optuna.samplers.nsgaii.UNDXCrossover.crossover"
     },
     {
       "kind": "class-constant-or-field",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.UNDXCrossover.n_parents",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.samplers.nsgaii.UNDXCrossover.n_parents"
     },
     {
@@ -2444,15 +2444,15 @@
     {
       "kind": "class-method",
       "matlab_name": "radia.optuna.UniformCrossover.crossover",
-      "oracle_status": "not-mapped",
+      "oracle_status": "verified",
       "surface_status": "present",
       "upstream": "optuna.samplers.nsgaii.UniformCrossover.crossover"
     },
     {
       "kind": "class-constant-or-field",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.UniformCrossover.n_parents",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.samplers.nsgaii.UniformCrossover.n_parents"
     },
     {
@@ -2465,15 +2465,15 @@
     {
       "kind": "class-method",
       "matlab_name": "radia.optuna.VSBXCrossover.crossover",
-      "oracle_status": "not-mapped",
+      "oracle_status": "verified",
       "surface_status": "present",
       "upstream": "optuna.samplers.nsgaii.VSBXCrossover.crossover"
     },
     {
       "kind": "class-constant-or-field",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.VSBXCrossover.n_parents",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.samplers.nsgaii.VSBXCrossover.n_parents"
     },
     {
@@ -4516,7 +4516,7 @@
     {
       "kind": "class-method",
       "matlab_name": "radia.optuna.Study.trials_dataframe",
-      "oracle_status": "not-mapped",
+      "oracle_status": "verified",
       "surface_status": "present",
       "upstream": "optuna.study.Study.trials_dataframe"
     },
@@ -4998,8 +4998,8 @@
     },
     {
       "kind": "class-property",
-      "matlab_name": "radia.optuna.FixedTrial.DatetimeStart",
-      "oracle_status": "not-mapped",
+      "matlab_name": "radia.optuna.FixedTrial.datetime_start",
+      "oracle_status": "verified",
       "surface_status": "present",
       "upstream": "optuna.trial.FixedTrial.datetime_start"
     },
@@ -5012,7 +5012,7 @@
     },
     {
       "kind": "class-property",
-      "matlab_name": "radia.optuna.FixedTrial.Number",
+      "matlab_name": "radia.optuna.FixedTrial.number",
       "oracle_status": "verified",
       "surface_status": "present",
       "upstream": "optuna.trial.FixedTrial.number"
@@ -5117,14 +5117,14 @@
     },
     {
       "kind": "class-property",
-      "matlab_name": "radia.optuna.FrozenTrial.DatetimeStart",
+      "matlab_name": "radia.optuna.FrozenTrial.datetime_start",
       "oracle_status": "verified",
       "surface_status": "present",
       "upstream": "optuna.trial.FrozenTrial.datetime_start"
     },
     {
       "kind": "class-property",
-      "matlab_name": "radia.optuna.FrozenTrial.Distributions",
+      "matlab_name": "radia.optuna.FrozenTrial.distributions",
       "oracle_status": "verified",
       "surface_status": "present",
       "upstream": "optuna.trial.FrozenTrial.distributions"
@@ -5145,14 +5145,14 @@
     },
     {
       "kind": "class-property",
-      "matlab_name": "radia.optuna.FrozenTrial.Number",
+      "matlab_name": "radia.optuna.FrozenTrial.number",
       "oracle_status": "verified",
       "surface_status": "present",
       "upstream": "optuna.trial.FrozenTrial.number"
     },
     {
       "kind": "class-property",
-      "matlab_name": "radia.optuna.FrozenTrial.Params",
+      "matlab_name": "radia.optuna.FrozenTrial.params",
       "oracle_status": "verified",
       "surface_status": "present",
       "upstream": "optuna.trial.FrozenTrial.params"
@@ -5229,14 +5229,14 @@
     },
     {
       "kind": "class-property",
-      "matlab_name": "radia.optuna.FrozenTrial.SystemAttrs",
+      "matlab_name": "radia.optuna.FrozenTrial.system_attrs",
       "oracle_status": "verified",
       "surface_status": "present",
       "upstream": "optuna.trial.FrozenTrial.system_attrs"
     },
     {
       "kind": "class-property",
-      "matlab_name": "radia.optuna.FrozenTrial.UserAttrs",
+      "matlab_name": "radia.optuna.FrozenTrial.user_attrs",
       "oracle_status": "verified",
       "surface_status": "present",
       "upstream": "optuna.trial.FrozenTrial.user_attrs"
@@ -5264,9 +5264,9 @@
     },
     {
       "kind": "class-property",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.Trial.datetime_start",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.trial.Trial.datetime_start"
     },
     {
@@ -5278,7 +5278,7 @@
     },
     {
       "kind": "class-property",
-      "matlab_name": "radia.optuna.Trial.Number",
+      "matlab_name": "radia.optuna.Trial.number",
       "oracle_status": "verified",
       "surface_status": "present",
       "upstream": "optuna.trial.Trial.number"
@@ -5292,8 +5292,8 @@
     },
     {
       "kind": "class-property",
-      "matlab_name": "radia.optuna.Trial.RelativeParams",
-      "oracle_status": "not-mapped",
+      "matlab_name": "radia.optuna.Trial.relative_params",
+      "oracle_status": "verified",
       "surface_status": "present",
       "upstream": "optuna.trial.Trial.relative_params"
     },
@@ -5720,12 +5720,12 @@
   ],
   "full_compatibility_complete": false,
   "oracle_partial_count": 52,
-  "oracle_unmapped_count": 606,
-  "oracle_verified_count": 158,
+  "oracle_unmapped_count": 532,
+  "oracle_verified_count": 232,
   "schema": "radia.optuna49-api-coverage.v1",
   "surface_entry_count": 816,
-  "surface_missing_count": 553,
-  "surface_present_count": 263,
+  "surface_missing_count": 532,
+  "surface_present_count": 284,
   "upstream_inventory": "tests/matlab/fixtures/optuna49_public_api.json",
   "upstream_inventory_sha256": "D3DCEE6E42AE8A004748958F151BA629EF63F85F99B0C9B454AF149AB0DB50E2",
   "upstream_version": "4.9.0"

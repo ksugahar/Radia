@@ -1141,6 +1141,10 @@ manager.configureGeometryMassMatrix(int32([0; 1]), int32([0; 1]), [1; 1], 2);
 manager.configureMassMatrix(int32([0; 1]), int32([0; 1]), [2; 3], 2);
 operatorInfo = manager.operatorInfo();
 verifyTrue(testCase, operatorInfo.operator_configured);
+activeStats = manager.configuredActiveHMatrixStats();
+verifyEqual(testCase, activeStats.active_charges, activeStats.total_charges);
+verifyEqual(testCase, activeStats.active_upper_leaves, ...
+    activeStats.total_upper_leaves);
 verifyEqual(testCase, manager.applyConfiguredGeometryMass([1; 2]), [1; 2], ...
     "AbsTol", 1e-14);
 verifyEqual(testCase, manager.applyConfiguredMassRiesz([2; 3]), [2; 3], ...
@@ -1177,6 +1181,11 @@ verifyLessThanOrEqual(testCase, clusters.n_cluster, 2);
 
 manager.setConfiguredConstraints(int32(0));
 verifyEqual(testCase, manager.operatorInfo().constraint_count, 1);
+constrainedStats = manager.configuredActiveHMatrixStats();
+verifyLessThan(testCase, constrainedStats.active_charges, ...
+    constrainedStats.total_charges);
+verifyLessThanOrEqual(testCase, constrainedStats.active_upper_leaves, ...
+    constrainedStats.total_upper_leaves);
 constrained = manager.applyConfiguredLinearMaterialOperator( ...
     invChi, [1; 2]);
 verifyEqual(testCase, constrained(1), 0, "AbsTol", 1e-14);

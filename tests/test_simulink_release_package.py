@@ -28,6 +28,8 @@ def test_package_builder_requires_native_ih_assets():
         *module.REQUIRED_MATLAB_SFUNCTIONS,
         "radia_nonlinear_reactor_sfun.m",
         "+radia/+simulink/nonlinearReactorSFunction.m",
+        "radia_streamfunction_optuna_sfun.m",
+        "+radia/+simulink/streamFunctionOptunaSFunction.m",
     }
     assert "radia_ih.slx" in module.REQUIRED_MODELS
     assert any(
@@ -162,9 +164,17 @@ def test_full_library_package_includes_mex_models_and_runtime(tmp_path):
     assert "matlab/radia_maglev.slx" in names
     assert "matlab/radia_nonlinear_reactor.slx" in names
     assert "matlab/radia_nonlinear_reactor_sfun.m" in names
+    assert "matlab/radia_streamfunction_optuna_sfun.m" in names
     assert "matlab/optuna_mex.mexw64" in names
     assert (
         "matlab/+radia/+simulink/nonlinearReactorSFunction.m" in names
+    )
+    assert (
+        "matlab/+radia/+simulink/streamFunctionOptunaSFunction.m" in names
+    )
+    assert "matlab/+radia/+stream/OptunaRunner.m" in names
+    assert (
+        "matlab/+radia/+simulink/resolveStreamFunctionOptunaObjects.m" in names
     )
     assert "matlab/+radia/+simulink/motorAngleFamilyMexSFunction.m" in names
     assert "matlab/python_api_parity_manifest.json" in names

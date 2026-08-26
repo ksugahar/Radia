@@ -3,13 +3,38 @@
 from types import SimpleNamespace
 
 import numpy as np
+import pytest
 
 from radia.panels.calc_streamfunction import (
+    _aca_factorization_metadata,
+    _aca_tolerance,
     _abe_result_metadata,
     _parse_abe_allowed_modes,
     _solve_and_metrics,
 )
 from radia.stream_function import aca_tsvd
+
+
+def test_surface_aca_factorization_provenance_is_explicit():
+    factor = SimpleNamespace(k_aca=7, modes=5)
+    args = SimpleNamespace(aca_eps=2.5e-9)
+
+    assert _aca_factorization_metadata({"base": factor}, args) == {
+        "factorization": "aca_plus_qr_tsvd",
+        "aca_eps": 2.5e-9,
+        "aca_rank": 7,
+        "tsvd_modes": 5,
+    }
+    assert _aca_tolerance(SimpleNamespace()) == 1.0e-10
+    with pytest.raises(ValueError, match="finite and positive"):
+        _aca_tolerance(SimpleNamespace(aca_eps=0.0))
+
+    weighted_factor = SimpleNamespace(k_aca=4, modes=3)
+    problem = {
+        "base": factor,
+        "_last_abe_solution": SimpleNamespace(factor=weighted_factor),
+    }
+    assert _aca_factorization_metadata(problem, args)["aca_rank"] == 4
 
 
 def _args(**updates):

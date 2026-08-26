@@ -1691,6 +1691,8 @@ def optimize_ffag_hdiv_mmm_from_fixed_design_orbits(
     if "max_iterations" in generation_options:
         raise TypeError(
             "use material_iterations_per_optics instead of max_iterations")
+    if "exact_state_cache" in generation_options:
+        raise TypeError("the fixed-design-orbit loop owns exact_state_cache")
 
     objective = target_family.objective
     source_rhs = source.assemble_hdiv_rhs(fes)
@@ -1753,6 +1755,7 @@ def optimize_ffag_hdiv_mmm_from_fixed_design_orbits(
         objective, gradient_offset=gradient_offset)
     optics_history = []
     map_trust_history = []
+    exact_state_cache = {}
     accepted_result = None
     initial_max_band_ratio = None
     termination_reason = "maximum fixed-orbit optics iterations reached"
@@ -1796,6 +1799,8 @@ def optimize_ffag_hdiv_mmm_from_fixed_design_orbits(
                 field_correction=field_correction,
                 active_elements=active, element_volumes=volumes,
                 volume_max=volume_max,
+                initial_state=state,
+                exact_state_cache=exact_state_cache,
                 response_entries=objective.response_entries,
                 curvature_sign=objective.curvature_sign,
                 gradient_sign=objective.gradient_sign,
@@ -1865,6 +1870,8 @@ def optimize_ffag_hdiv_mmm_from_fixed_design_orbits(
                 incident_field_response=incident,
                 active_elements=active, element_volumes=volumes,
                 volume_max=volume_max,
+                initial_state=state,
+                exact_state_cache=exact_state_cache,
                 response_entries=objective.response_entries,
                 curvature_sign=objective.curvature_sign,
                 gradient_sign=objective.gradient_sign,
@@ -1920,6 +1927,8 @@ def optimize_ffag_hdiv_mmm_from_fixed_design_orbits(
             field_correction=field_correction,
             active_elements=active, element_volumes=volumes,
             volume_max=volume_max,
+            initial_state=state,
+            exact_state_cache=exact_state_cache,
             response_entries=objective.response_entries,
             curvature_sign=objective.curvature_sign,
             gradient_sign=objective.gradient_sign,

@@ -464,6 +464,90 @@ def test_native_hdiv_mmm_boundary_insertions_match_exact_active_resolves():
                                rtol=2e-12,atol=2e-12)
 
 
+def test_configured_hmatrix_prunes_inactive_principal_submatrix_exactly(monkeypatch):
+    import ngsolve as ng
+    from ngsolve.meshes import MakeStructured3DMesh
+    from radia.vim._vim import build_charge_gram
+
+    mesh=MakeStructured3DMesh(hexes=True,nx=4,ny=2,nz=1)
+    fes=ng.HDiv(mesh,order=1,discontinuous=True)
+    with ng.TaskManager():
+        _,gram,_=build_charge_gram(
+            fes,eps=1e-10,leafsize=16,eta=2.0,
+            internal_interfaces=True)
+    blocks=ngsolve_discontinuous_element_dof_blocks(fes)
+    active_dofs=np.concatenate(blocks[:mesh.ne//2]).astype(np.int32)
+    active=np.zeros(fes.ndof,dtype=bool);active[active_dofs]=True
+    inactive=np.flatnonzero(~active).astype(np.int32)
+    rng=np.random.default_rng(20260825)
+    rows=np.ascontiguousarray(rng.normal(size=(3,fes.ndof)))
+    unconstrained_rows=rows.copy()
+    rows[:,~active]=0.0
+
+    gram.set_configured_constraints(
+        np.empty(0,dtype=np.int32),preserve_existing=False)
+    full_stats=gram.configured_active_hmatrix_stats()
+    full=np.asarray(gram.apply_configured_linear_material_operator_many(
+        .2,rows,respect_constraints=False))
+
+    gram.set_configured_constraints(inactive,preserve_existing=False)
+    active_stats=gram.configured_active_hmatrix_stats()
+    pruned=np.asarray(gram.apply_configured_linear_material_operator_many(
+        .2,rows,respect_constraints=True))
+    pruned_dirty=np.asarray(gram.apply_configured_linear_material_operator_many(
+        .2,np.ascontiguousarray(unconstrained_rows),respect_constraints=True))
+    explicitly_full=np.asarray(
+        gram.apply_configured_linear_material_operator_many(
+            .2,rows,respect_constraints=False))
+
+    assert active_stats["active_charges"]<full_stats["active_charges"]
+    assert active_stats["active_upper_leaves"]<full_stats["active_upper_leaves"]
+    np.testing.assert_array_equal(pruned[:,active],full[:,active])
+    np.testing.assert_array_equal(pruned[:,~active],0.0)
+    np.testing.assert_array_equal(pruned_dirty,pruned)
+    np.testing.assert_array_equal(explicitly_full,full)
+
+    rhs=np.ascontiguousarray(rows[0])
+    solved=gram.solve_configured_linear_material_mass_riesz(
+        .2,rhs,tol=1e-11,maxit=5000,symmetric=True)
+    assert solved["timings"]["mass_riesz_local_blocks"]>1
+    assert solved["timings"]["mass_riesz_max_block"]==len(blocks[0])
+    solution=np.asarray(solved["m"])
+    applied=np.asarray(gram.apply_configured_linear_material_operator_many(
+        .2,np.ascontiguousarray(solution[None,:]),
+        respect_constraints=True))[0]
+    relative_residual=np.linalg.norm(applied-rhs)/np.linalg.norm(rhs)
+    assert relative_residual<5e-11
+    np.testing.assert_array_equal(solution[~active],0.0)
+
+    known=np.ascontiguousarray(rows)
+    batched_rhs=np.asarray(
+        gram.apply_configured_linear_material_operator_many(
+            .2,known,respect_constraints=True))
+    monkeypatch.setenv("RADIA_HDIV_HMATVEC_STATS","1")
+    batched=gram.solve_configured_linear_material_auto_prec_many(
+        .2,np.ascontiguousarray(batched_rhs),tol=1e-10,maxit=5000,
+        mass_riesz=True)
+    recovered=np.asarray(batched["m"])
+    assert recovered.shape==known.shape and recovered.flags.c_contiguous
+    assert batched["last_rhs_timings"]["mass_riesz_local_blocks"]>1
+    assert batched["last_rhs_timings"]["mass_riesz_max_block"]==len(blocks[0])
+    assert batched["last_rhs_timings"]["hmatvec_calls"]>0
+    assert (batched["last_rhs_timings"]["hmatvec_total_s"]>=
+            batched["last_rhs_timings"]["hmatvec_leaf_s"]>=0)
+    check=np.asarray(gram.apply_configured_linear_material_operator_many(
+        .2,np.ascontiguousarray(recovered),respect_constraints=True))
+    assert np.linalg.norm(check-batched_rhs)/np.linalg.norm(batched_rhs)<5e-10
+    assert np.linalg.norm(recovered-known)/np.linalg.norm(known)<5e-8
+    np.testing.assert_array_equal(recovered[:,~active],0.0)
+
+    warm=gram.solve_configured_linear_material_auto_prec_many(
+        .2,np.ascontiguousarray(batched_rhs),tol=1e-10,maxit=5000,
+        mass_riesz=True,x0=known)
+    assert max(warm["iters"])==0
+    np.testing.assert_allclose(warm["m"],known,rtol=3e-15,atol=3e-15)
+
+
 def test_large_hdiv_mmm_candidate_screen_uses_one_shared_hmatrix_batch():
     import ngsolve as ng
     from ngsolve.meshes import MakeStructured3DMesh
@@ -586,6 +670,80 @@ def test_hdiv_mmm_active_state_warm_start_rechecks_constraints_and_residual():
             charge_gram=gram,fes=fes,inv_chi=.2,rhs=rhs,
             active_elements=active,state=invalid_residual,
             solve_tolerance=1e-11)
+
+
+def test_active_element_exact_solve_projects_nearby_warm_start():
+    import ngsolve as ng
+    from ngsolve.meshes import MakeStructured3DMesh
+
+    mesh=MakeStructured3DMesh(hexes=True,nx=2,ny=1,nz=1)
+    fes=ng.HDiv(mesh,order=0,discontinuous=True)
+    blocks=ngsolve_discontinuous_element_dof_blocks(fes)
+    active=np.array([True,False])
+    rhs=np.arange(1,fes.ndof+1,dtype=float)
+
+    class RecordingGram:
+        def set_configured_constraints(self,indices,**kwargs):
+            self.constraints=np.asarray(indices,dtype=np.int32)
+
+        def solve_configured_linear_material_auto_prec_many(
+                self,inv_chi,rows,**kwargs):
+            del inv_chi
+            self.rows=np.asarray(rows).copy()
+            self.x0=np.asarray(kwargs["x0"]).copy()
+            return {"m":np.zeros_like(rows),"iters":[0]}
+
+        def apply_configured_linear_material_operator(
+                self,inv_chi,state,**kwargs):
+            del inv_chi,state,kwargs
+            return self.rows[0]
+
+    gram=RecordingGram()
+    seed=np.arange(fes.ndof,dtype=float)+0.5
+    solve_hdiv_mmm_active_elements(
+        charge_gram=gram,fes=fes,inv_chi=.2,rhs=rhs,
+        response_matrix=np.zeros((1,fes.ndof)),active_elements=active,
+        initial_state=seed)
+    np.testing.assert_array_equal(gram.x0[0,blocks[0]],seed[blocks[0]])
+    np.testing.assert_array_equal(gram.x0[0,blocks[1]],0.0)
+    np.testing.assert_array_equal(gram.rows[0,blocks[1]],0.0)
+
+
+def test_native_active_element_warm_start_saves_hex_krylov_iteration():
+    import ngsolve as ng
+    from ngsolve.meshes import MakeStructured3DMesh
+    from radia.vim._vim import build_charge_gram
+
+    mesh=MakeStructured3DMesh(hexes=True,nx=4,ny=1,nz=1)
+    fes=ng.HDiv(mesh,order=0,discontinuous=True)
+    with ng.TaskManager():
+        _,gram,mass=build_charge_gram(
+            fes,eps=1e-10,leafsize=256,eta=2.0,
+            internal_interfaces=True)
+    rng=np.random.default_rng(20260829)
+    rhs=np.asarray(mass@rng.normal(size=fes.ndof))
+    response_matrix=rng.normal(size=(2,fes.ndof))
+    initial=np.array([True,True,True,False])
+    target=np.ones(mesh.ne,dtype=bool)
+    initial_state=solve_hdiv_mmm_active_elements(
+        charge_gram=gram,fes=fes,inv_chi=.2,rhs=rhs,
+        response_matrix=response_matrix,active_elements=initial,
+        solve_tolerance=1e-10)[0]
+    cold=solve_hdiv_mmm_active_elements(
+        charge_gram=gram,fes=fes,inv_chi=.2,rhs=rhs,
+        response_matrix=response_matrix,active_elements=target,
+        solve_tolerance=1e-10)
+    warm=solve_hdiv_mmm_active_elements(
+        charge_gram=gram,fes=fes,inv_chi=.2,rhs=rhs,
+        response_matrix=response_matrix,active_elements=target,
+        solve_tolerance=1e-10,initial_state=initial_state)
+    state_error=np.linalg.norm(warm[0]-cold[0])/max(
+        1.0,np.linalg.norm(cold[0]))
+    response_error=np.linalg.norm(warm[1]-cold[1])/max(
+        1.0,np.linalg.norm(cold[1]))
+    assert state_error<1e-9
+    assert response_error<1e-9
+    assert warm[2]<cold[2]
 
 
 def test_native_hdiv_mmm_block_schur_bundle_matches_exact_active_resolve():
@@ -1389,13 +1547,15 @@ def test_hdiv_mmm_generation_checks_global_addition_proposal_before_dense_schur(
     monkeypatch.setattr(
         topopt,"select_tsvd_element_candidates",force_global_addition)
     volumes=np.asarray(ng.Integrate(1.0,mesh,element_wise=True))
+    exact_cache={}
     result=topopt.grow_hdiv_mmm_by_superposition(
         charge_gram=gram,fes=fes,inv_chi=.2,rhs=rhs,
         response_matrix=response_matrix,active_elements=active,
         element_volumes=volumes,response_target=target,
         response_band=np.full(2,1e-8),volume_max=float(np.sum(volumes)),
         fixed_active_elements=np.array([False,True,False]),
-        maximum_batch_elements=1,max_iterations=1,solve_tolerance=1e-11)
+        maximum_batch_elements=1,max_iterations=1,solve_tolerance=1e-11,
+        proposal_adjoint_count=0,exact_state_cache=exact_cache)
     assert result.converged and len(result.history)==1
     np.testing.assert_array_equal(result.active_elements,target_active)
     np.testing.assert_array_equal(result.history[0].added_elements,[0])
@@ -1404,6 +1564,20 @@ def test_hdiv_mmm_generation_checks_global_addition_proposal_before_dense_schur(
     assert result.history[0].collaborative_bundles_evaluated==1
     assert result.history[0].candidate_coupling_rank==0
     assert result.history[0].native_reduction_timings["solve_s"]==0.0
+    assert result.exact_search_trace[0].solve_iterations>0
+
+    repeated=topopt.grow_hdiv_mmm_by_superposition(
+        charge_gram=gram,fes=fes,inv_chi=.2,rhs=rhs,
+        response_matrix=response_matrix,active_elements=active,
+        element_volumes=volumes,response_target=target,
+        response_band=np.full(2,1e-8),volume_max=float(np.sum(volumes)),
+        fixed_active_elements=np.array([False,True,False]),
+        maximum_batch_elements=1,max_iterations=1,solve_tolerance=1e-11,
+        proposal_adjoint_count=0,exact_state_cache=exact_cache)
+    np.testing.assert_array_equal(repeated.active_elements,target_active)
+    np.testing.assert_allclose(repeated.state,result.state,rtol=0.0,atol=0.0)
+    np.testing.assert_allclose(repeated.response,result.response,rtol=0.0,atol=0.0)
+    assert repeated.exact_search_trace[0].solve_iterations==0
 
 
 def test_hdiv_mmm_zero_rank_fallback_honors_exact_candidate_limit(monkeypatch):

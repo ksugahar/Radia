@@ -1647,7 +1647,9 @@ mxArray* Commands() {
         "hacapk.charge_gram.configure_geometry_mass_matrix_ngsolve",
         "hacapk.charge_gram.restore_geometry_mass_matrix",
         "hacapk.charge_gram.set_configured_constraints",
-        "hacapk.charge_gram.operator_info", "hacapk.charge_gram.demag_matrix",
+        "hacapk.charge_gram.operator_info",
+        "hacapk.charge_gram.configured_active_hmatrix_stats",
+        "hacapk.charge_gram.demag_matrix",
         "hacapk.charge_gram.demag_apply",
         "hacapk.charge_gram.geometry_mass_apply", "hacapk.charge_gram.mass_riesz",
         "hacapk.charge_gram.apply_configured_linear_material_operator",
@@ -9480,6 +9482,25 @@ void ChargeGramOperatorInfo(int nlhs, mxArray* plhs[], int nrhs,
                mxCreateDoubleScalar(holder.manager->ConfiguredConstraintCount()));
 }
 
+void ChargeGramConfiguredActiveHMatrixStats(
+    int nlhs, mxArray* plhs[], int nrhs, const mxArray* prhs[]) {
+    if ((nrhs < 2 || nrhs > 3) || nlhs != 1)
+        BadArgument(
+            "usage: stats = radia_mex('hacapk.charge_gram."
+            "configured_active_hmatrix_stats', handle [, component])");
+    ChargeGramHandle& holder = ChargeGram(Handle(prhs[1]));
+    const int component = nrhs == 3
+        ? PositiveInteger(prhs[2], "component") - 1
+        : 0;
+    const auto values = holder.manager->ConfiguredActiveHMatrixStats(component);
+    plhs[0] = PairStructOutput({
+        {"active_charges", static_cast<double>(values[0])},
+        {"total_charges", static_cast<double>(values[1])},
+        {"active_upper_leaves", static_cast<double>(values[2])},
+        {"total_upper_leaves", static_cast<double>(values[3])},
+    });
+}
+
 void ChargeGramDemagMatrix(int nlhs, mxArray* plhs[], int nrhs,
                            const mxArray* prhs[]) {
     CheckArity(nrhs, 2, nlhs, 1,
@@ -12101,6 +12122,11 @@ void Dispatch(const std::string& command, int nlhs, mxArray* plhs[], int nrhs,
     }
     if (command == "hacapk.charge_gram.set_configured_constraints") {
         ChargeGramSetConfiguredConstraints(nlhs, plhs, nrhs, prhs);
+        return;
+    }
+    if (command ==
+        "hacapk.charge_gram.configured_active_hmatrix_stats") {
+        ChargeGramConfiguredActiveHMatrixStats(nlhs, plhs, nrhs, prhs);
         return;
     }
     if (command ==

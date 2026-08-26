@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "radia-optuna"
-version = "0.1.1"
+version = "0.1.2"
 description = "Independent MATLAB optimization implementation differentially verified against Optuna 4.9.0"
 readme = "README.md"
 requires-python = ">=3.10"

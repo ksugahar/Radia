@@ -28,6 +28,7 @@ import scipy
 TRIALS = 100
 REPEATS = 11
 WARMUP_REPEATS = 3
+DATAFRAME_TRIALS = 1000
 EXPECTED_SCALAR_CHECKSUM = 20.040135043951892
 EXPECTED_GROUPED_CHECKSUM = 104.33176385944043
 
@@ -93,6 +94,61 @@ def _measure(workload, expected_checksum: float) -> dict[str, object]:
     }
 
 
+def _measure_trials_dataframe() -> dict[str, object]:
+    distributions = {
+        "x": optuna.distributions.FloatDistribution(0.0, 1.0),
+        "mode": optuna.distributions.CategoricalDistribution(["A", "B"]),
+    }
+    study = optuna.create_study()
+    for index in range(DATAFRAME_TRIALS):
+        study.add_trial(
+            optuna.trial.create_trial(
+                value=float(index),
+                params={
+                    "x": index / DATAFRAME_TRIALS,
+                    "mode": ["A", "B"][index % 2],
+                },
+                distributions=distributions,
+                user_attrs={"owner": "lab"},
+                system_attrs={"origin": "benchmark"},
+            )
+        )
+    attrs = (
+        "number",
+        "value",
+        "params",
+        "user_attrs",
+        "system_attrs",
+        "state",
+    )
+    durations: list[float] = []
+    frame = None
+    for _ in range(REPEATS):
+        started = time.perf_counter()
+        frame = study.trials_dataframe(attrs=attrs)
+        durations.append(time.perf_counter() - started)
+    assert frame is not None
+    expected_columns = [
+        "number",
+        "value",
+        "params_mode",
+        "params_x",
+        "user_attrs_owner",
+        "system_attrs_origin",
+        "state",
+    ]
+    if list(frame.columns) != expected_columns or len(frame) != DATAFRAME_TRIALS:
+        raise RuntimeError("trials_dataframe benchmark contract changed")
+    median_seconds = statistics.median(durations[WARMUP_REPEATS:])
+    return {
+        "all_seconds": durations,
+        "median_warmed_seconds": median_seconds,
+        "rows_per_second": DATAFRAME_TRIALS / median_seconds,
+        "rows": DATAFRAME_TRIALS,
+        "columns": len(expected_columns),
+    }
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--output", type=Path)
@@ -123,6 +179,7 @@ def main() -> None:
         "grouped_conditional": _measure(
             _grouped, EXPECTED_GROUPED_CHECKSUM
         ),
+        "trials_dataframe": _measure_trials_dataframe(),
     }
     encoded = json.dumps(result, indent=2) + "\n"
     if args.output:
