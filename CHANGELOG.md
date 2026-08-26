@@ -26,7 +26,11 @@ Released 2026-08-27.
   contract.
 - Updated `radia-optuna` to 0.1.2 with upstream Optuna 4.9.0-oracle behavior for
   `Study.trials_dataframe`, including objective, parameter, distribution,
-  attribute, intermediate-value, and trial-state columns.
+  attribute, intermediate-value, and trial-state columns. Expanded the same
+  oracle-backed contract across public sampler hooks, NSGA population and
+  crossover properties, BruteForce running-prefix traversal, and GP history
+  replay/import with constraints. The complete MATLAB Optuna lane passes 97
+  tests, including all 46 upstream-oracle cases added for this release.
 
 ## 4.95.63 - Shape-aware PEEC conductor impedance
 
