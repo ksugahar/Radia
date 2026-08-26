@@ -22,7 +22,7 @@ Path A is the recommended export path. Use `export netgen "mesh.vol" order N` fo
 |---------|--------|-----------|-------|
 | `export netgen "f.vol" order N` | Netgen .vol (+ .vol.json) | 1-5 | Recommended for NGSolve |
 | `export gmsh "f.msh" order N` | Gmsh v4.1 (.msh + .geo/.opt) | 1-3 | Raw data plus launch companion; open `.geo` |
-| `export jmag_nastran "f.bdf" order N` | Nastran BDF (.bdf) | 1-2 | nopyramid for JMAG |
+| `export nastran_bdf "f.bdf" order N` | Nastran BDF (.bdf) | 1-2 | Mesh interchange; `nopyramid` for limited consumers |
 | `export vtk "f.vtk" order N` | VTK Legacy (.vtk) | 1-2 | ParaView visualization |
 | `export meg "f.meg"` | ELF/MAGIC MEG | 1 | Block names define ELF prefixes |
 | `export femeem "dir"` | FEMEEM (Gifu Univ.) | 1 (tet only) | Creates directory with 4 files |
@@ -268,7 +268,7 @@ EXPORT_NASTRAN = """
 # Nastran BDF Export (order 1-2)
 
 ```
-export jmag_nastran "filename.bdf" [order <1|2>] [dimension <2|3>] [nopyramid] [overwrite]
+export nastran_bdf "filename.bdf" [order <1|2>] [dimension <2|3>] [nopyramid] [overwrite]
 ```
 
 No block assignment required.
@@ -277,7 +277,7 @@ No block assignment required.
 |-----------|---------|-------------|
 | order | 1 | 1=CTETRA/CHEXA, 2=CTETRA10/CHEXA20 (via NetgenCurver) |
 | dimension | 3 | 2D (CTRIA3/CQUAD4) or 3D |
-| nopyramid | off | Convert pyramids to degenerate hex (JMAG compatible) |
+| nopyramid | off | Convert pyramids to degenerate hex for consumers without CPYRAM support |
 
 ## Supported Elements
 
@@ -290,9 +290,15 @@ No block assignment required.
 | CTRIA3 (3) | CTRIA6 (6) | Triangle |
 | CQUAD4 (4) | CQUAD8 (8) | Quadrilateral |
 
-**IMPORTANT**: Use `export jmag_nastran`, NOT `export nastran` (Cubit built-in has different format).
+**IMPORTANT**: Use `export nastran_bdf`, not Cubit's built-in `export nastran`
+(a different contract). `export jmag_nastran` remains only as a deprecated
+compatibility alias for old journals.
 
-Nastran BDF is export-only. It is NOT a supported input path for Radia/NGSolve.
+The emitted BDF is a **mesh-interchange artifact**, not a complete analysis
+deck: material cards, loads, boundary conditions, and solver setup remain owned
+by the downstream application. Before promotion, run an independent parser and
+then `cubit_nastran_consumer_gate`; a successful parse does not prove that a
+consumer preserved P2 order or retained the imported mesh.
 """
 
 EXPORT_EXODUS = """
@@ -363,7 +369,7 @@ EXPORT_COMPARISON = """
 |----------|-------------------|-----|
 | NGSolve FEM (any order) | `export netgen "f.vol" order N` | Order 1-5 via ACIS CallbackGeometry |
 | GMSH visualization | `export gmsh "f.msh" order N` | v4.1, order 1-3 |
-| JMAG / Nastran solver | `export jmag_nastran "f.bdf" order N` | Order 1-2, nopyramid for JMAG |
+| Nastran mesh consumer | `export nastran_bdf "f.bdf" order N` | Order 1-2; validate each consumer independently |
 | ParaView visualization | `export vtk "f.vtk" order N` | Order 1-2 |
 | ELF/MAGIC solver | `export meg "f.meg"` | Order 1, ELF element type labels |
 | FEMEEM solver | `export femeem "dir"` | Order 1, tet only |
@@ -414,23 +420,23 @@ EXPORT_DECISION_GUIDE = """
   # For NGSolve use export netgen instead
   ```
 
-## "I need structural FEA (Nastran / JMAG)"
+## "I need a Nastran mesh handoff"
 
--> Use `export jmag_nastran` (order 1-2):
+-> Use `export nastran_bdf` (order 1-2):
   ```python
-  cubit.cmd('export jmag_nastran "mesh.bdf" order 2 overwrite')
-  cubit.cmd('export jmag_nastran "mesh.bdf" order 2 nopyramid overwrite')  # JMAG
+  cubit.cmd('export nastran_bdf "mesh.bdf" order 2 overwrite')
+  cubit.cmd('export nastran_bdf "mesh.bdf" order 2 nopyramid overwrite')
   ```
 
-### JMAG-specific: Pyramid Element Problem
+### Consumer-specific pyramid support
 
-JMAG **cannot read standard CPYRAM** (5-node pyramid) elements. When Cubit
-generates mixed hex-tet meshes, pyramid transition elements appear at
-the interface. Two solutions:
+Some consumers cannot read standard CPYRAM elements. When Cubit generates a
+mixed hex-tet mesh, pyramid transition elements appear at the interface. Two
+deliberate routes are available:
 
 1. **Use nopyramid** (recommended): Writes pyramids as degenerate CHEXA
    ```python
-   cubit.cmd('export jmag_nastran "mesh.bdf" nopyramid overwrite')
+   cubit.cmd('export nastran_bdf "mesh.bdf" nopyramid overwrite')
    ```
 
 2. **Use pure tet mesh**: Avoids pyramids entirely
@@ -470,18 +476,21 @@ geometry leads to poor quality or failed meshing.
 | meg (.meg) | 1 | Yes | Yes | - |
 | femeem (dir) | 1 (tet) | No | Yes | - |
 
-## IMPORTANT: `export jmag_nastran` (NOT `export nastran`)
+## IMPORTANT: `export nastran_bdf` (NOT `export nastran`)
 
 Cubit has a **built-in** `export nastran` command (e.g., `export nastran "f.bdf" overwrite everything`).
-Radia's Nastran export uses a DIFFERENT command name to avoid conflict:
+Radia's mesh-interchange export uses a different command name to avoid conflict:
 
 ```python
-# CORRECT: Radia's export (supports order 2, nopyramid, block labels)
-cubit.cmd('export jmag_nastran "mesh.bdf" order 2 dimension 3 overwrite')
+# CORRECT: mesh-interchange export (supports order 2 and nopyramid)
+cubit.cmd('export nastran_bdf "mesh.bdf" order 2 dimension 3 overwrite')
 
-# WRONG: Cubit's built-in (different format, no order 2, no nopyramid)
+# DIFFERENT CONTRACT: Cubit's built-in Nastran writer
 cubit.cmd('export nastran "mesh.bdf" overwrite everything')
 ```
+
+`export jmag_nastran` is accepted only as a deprecated compatibility alias.
+New journals and MCP-generated commands must use `export nastran_bdf`.
 
 ## Coil APREPRO Command
 
