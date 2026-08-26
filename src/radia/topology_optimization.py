@@ -3783,7 +3783,7 @@ def grow_hdiv_mmm_by_superposition(*, charge_gram, fes, inv_chi, rhs,
         value=np.asarray(active_value,dtype=bool).reshape(-1)
         return int(value.size),np.packbits(value).tobytes()
 
-    def solve_exact_active(active_value,warm_state=None):
+    def solve_exact_active(active_value):
         key=active_cache_key(active_value)
         if exact_state_cache is not None and key in exact_state_cache:
             cached=np.asarray(exact_state_cache[key],dtype=float).reshape(-1)
@@ -3792,6 +3792,9 @@ def grow_hdiv_mmm_by_superposition(*, charge_gram, fes, inv_chi, rhs,
                 active_elements=active_value,state=cached,
                 solve_tolerance=solve_tolerance)
             return cached.copy(),response_rows@cached+incident,0
+        # Keep candidate comparisons reproducible. A tolerance-equivalent
+        # nearby Krylov seed can still perturb an extremely narrow objective
+        # band; callers may request warm starts through the low-level API.
         solved=solve_hdiv_mmm_active_elements(
             charge_gram=charge_gram,fes=fes,inv_chi=inv_chi,rhs=rhs,
             response_matrix=response_rows,active_elements=active_value,
@@ -3799,7 +3802,7 @@ def grow_hdiv_mmm_by_superposition(*, charge_gram, fes, inv_chi, rhs,
             solve_max_iterations=solve_max_iterations,mass_riesz=mass_riesz,
             cluster_coarse_size=cluster_coarse_size,
             cluster_deflation_size=cluster_deflation_size,
-            recycle_size=recycle_size,initial_state=warm_state)
+            recycle_size=recycle_size)
         if exact_state_cache is not None:
             exact_state_cache[key]=np.asarray(solved[0],dtype=float).copy()
         return solved
@@ -4050,8 +4053,7 @@ def grow_hdiv_mmm_by_superposition(*, charge_gram, fes, inv_chi, rhs,
                     continue
                 batch_trials+=1
                 trial_state,trial_response,trial_iterations=solve_exact_active(
-                    trial_active,np.asarray(state,dtype=float)/
-                        float(source_scale))
+                    trial_active)
                 try:
                     trial_state,trial_response,trial_scale=calibrate_source(
                         trial_state,trial_response)
@@ -4812,8 +4814,7 @@ def grow_hdiv_mmm_by_superposition(*, charge_gram, fes, inv_chi, rhs,
                     continue
                 exact_evaluated+=1
                 trial_state,trial_response,trial_iterations=solve_exact_active(
-                    trial_active,np.asarray(state,dtype=float)/
-                        float(source_scale))
+                    trial_active)
                 try:
                     trial_state,trial_response,trial_scale=calibrate_source(
                         trial_state,trial_response)
@@ -4935,8 +4936,7 @@ def grow_hdiv_mmm_by_superposition(*, charge_gram, fes, inv_chi, rhs,
                         exact_evaluated+=1
                         (alternate_state,alternate_response,
                          alternate_iterations)=solve_exact_active(
-                            alternate_active,np.asarray(state,dtype=float)/
-                                float(source_scale))
+                            alternate_active)
                         try:
                             (alternate_state,alternate_response,
                              alternate_scale)=calibrate_source(
@@ -5180,8 +5180,7 @@ def grow_hdiv_mmm_by_superposition(*, charge_gram, fes, inv_chi, rhs,
             if not trial_topology.valid or not valid_active_set(trial_active):
                 stop_reason="topology_gate_rejected_exact_bundle";break
             trial_state,trial_response,trial_iterations=solve_exact_active(
-                trial_active,np.asarray(state,dtype=float)/
-                    float(source_scale))
+                trial_active)
             try:
                 trial_state,trial_response,trial_scale=calibrate_source(
                     trial_state,trial_response)
