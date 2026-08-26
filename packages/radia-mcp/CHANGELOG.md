@@ -7,6 +7,13 @@ crystallized as its own package.
 
 ## [Unreleased]
 
+## [1.4.45] - 2026-08-27
+
+- streamfunction: documented and exposed the checked ACA QR-TSVD and Optuna
+  outer-loop workflow used by the production Stream Function Simulink block.
+- release: synchronized the executable Stream Function knowledge and tests with
+  the Radia 4.95.64 H-matrix accuracy and tuning contract.
+
 ## [1.4.44] - 2026-08-26
 
 - matlab: kept standalone `optuna_mex` commands outside the regular Radia MEX
