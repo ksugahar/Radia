@@ -97,7 +97,7 @@ if environment.ExecutionMode~="InProcess" || ...
         "Parameter importance requires in-process Python 3.12.");
 end
 optuna=py.importlib.import_module("optuna");
-if string(py.getattr(optuna,"__version__"))~="4.9.0"
+if string(py.builtins.getattr(optuna,"__version__"))~="4.9.0"
     error("radia:optuna:ImportancePython", ...
         "Parameter importance requires optuna==4.9.0.");
 end
@@ -113,11 +113,11 @@ end
 
 function result=pythonValue(value)
 if isstring(value) || ischar(value)
-    result=py.str(char(string(value)));
+    result=py.builtins.str(char(string(value)));
 elseif islogical(value) && isscalar(value)
-    result=py.bool(value);
+    result=py.builtins.bool(value);
 elseif isnumeric(value) && isscalar(value)
-    result=py.float(double(value));
+    result=py.builtins.float(double(value));
 else
     error("radia:optuna:ImportanceParameter", ...
         "Only scalar string, logical, and numeric parameters are supported.");

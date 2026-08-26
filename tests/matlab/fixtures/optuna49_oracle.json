@@ -2157,6 +2157,7 @@
       ],
       "first_decision": false
     },
+    "median": true,
     "patient": [
       true,
       false
@@ -2305,6 +2306,110 @@
       "x": 0.3231286733324874
     }
   ],
+  "sampler_public_members": {
+    "base_crossover_instantiation_error": "TypeError",
+    "crossover_n_parents": {
+      "blxalpha": 2,
+      "sbx": 2,
+      "spx": 3,
+      "undx": 3,
+      "uniform": 2,
+      "vsbx": 2
+    },
+    "fixed_trial_datetime_start_is_not_none": true,
+    "grid_is_exhausted_after": true,
+    "grid_is_exhausted_before": false,
+    "mapped_namespaces": {
+      "distributions": "optuna.distributions",
+      "exceptions": "optuna.exceptions",
+      "importance": "optuna.importance",
+      "pruners": "optuna.pruners",
+      "samplers": "optuna.samplers",
+      "search_space": "optuna.search_space",
+      "storages": "optuna.storages",
+      "study": "optuna.study",
+      "trial": "optuna.trial"
+    },
+    "nsgaii_population_size": 5,
+    "nsgaiii_population_size": 6,
+    "samplers": {
+      "BruteForceSampler": {
+        "after_trial_returns_none": true,
+        "before_trial_returns_none": true,
+        "infer_relative_search_space_keys": []
+      },
+      "CmaEsSampler": {
+        "after_trial_returns_none": true,
+        "before_trial_returns_none": true,
+        "infer_relative_search_space_keys": [
+          "x",
+          "y"
+        ]
+      },
+      "GPSampler": {
+        "after_trial_returns_none": true,
+        "before_trial_returns_none": true,
+        "infer_relative_search_space_keys": [
+          "x",
+          "y"
+        ]
+      },
+      "GridSampler": {
+        "after_trial_returns_none": true,
+        "before_trial_returns_none": true,
+        "infer_relative_search_space_keys": []
+      },
+      "NSGAIIISampler": {
+        "after_trial_returns_none": true,
+        "before_trial_returns_none": true,
+        "infer_relative_search_space_keys": [
+          "x",
+          "y"
+        ]
+      },
+      "NSGAIISampler": {
+        "after_trial_returns_none": true,
+        "before_trial_returns_none": true,
+        "infer_relative_search_space_keys": [
+          "x",
+          "y"
+        ]
+      },
+      "PartialFixedSampler": {
+        "after_trial_returns_none": true,
+        "before_trial_returns_none": true,
+        "infer_relative_search_space_keys": [
+          "y"
+        ]
+      },
+      "QMCSampler": {
+        "after_trial_returns_none": true,
+        "before_trial_returns_none": true,
+        "infer_relative_search_space_keys": [
+          "x",
+          "y"
+        ]
+      },
+      "RandomSampler": {
+        "after_trial_returns_none": true,
+        "before_trial_returns_none": true,
+        "infer_relative_search_space_keys": []
+      },
+      "TPESampler": {
+        "after_trial_returns_none": true,
+        "before_trial_returns_none": true,
+        "infer_relative_search_space_keys": [
+          "x",
+          "y"
+        ]
+      }
+    },
+    "trial_datetime_start_is_not_none": true,
+    "trial_relative_params_keys": [
+      "x",
+      "y"
+    ]
+  },
   "sampler_seed_defaults": {
     "constructors": {
       "BruteForceSampler": {

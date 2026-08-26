@@ -88,6 +88,22 @@ classdef GPSampler < radia.optuna.BaseSampler
             searchSpace=obj.inferRelativeSearchSpace(study,trial);
         end
 
+        function before_trial(obj,study,trial)
+            % Upstream's public hook delegates only to its independent
+            % sampler. Python-study mirroring belongs to MATLAB's internal
+            % ask lifecycle in beforeTrial, not to this public hook.
+            obj.IndependentSampler.before_trial(study,trial);
+        end
+
+        function after_trial(obj,study,trial,state,values)
+            if ~isempty(obj.ConstraintsFcn) && ...
+                    state==radia.optuna.TrialState.COMPLETE
+                study.recordConstraints(trial,obj.ConstraintsFcn(trial));
+            end
+            obj.IndependentSampler.after_trial( ...
+                study,trial,state,values);
+        end
+
         function beforeTrial(obj,study,trial)
             if obj.Backend=="upstream-python"
                 obj.attach(study);
@@ -264,7 +280,8 @@ classdef GPSampler < radia.optuna.BaseSampler
             end
             try
                 obj.PythonOptuna=py.importlib.import_module("optuna");
-                version=string(py.getattr(obj.PythonOptuna,"__version__"));
+                version=string(py.builtins.getattr( ...
+                    obj.PythonOptuna,"__version__"));
                 if version~="4.9.0"
                     error("radia:optuna:GPPythonVersion", ...
                         "Expected optuna==4.9.0, found %s.",version);
@@ -339,12 +356,30 @@ classdef GPSampler < radia.optuna.BaseSampler
                     "def radia_matlab_constraints(trial):"; ...
                     "    return trial.user_attrs['__radia_matlab_constraints']"; ...
                     "result = radia_matlab_constraints"],newline);
-                callback=pyrun(code,"result");
+                namespace=py.dict;
+                py.builtins.exec(char(code),namespace);
+                callback=namespace{char("result")};
                 pairs=[pairs,{"constraints_func",callback}];
             end
         end
 
         function replayPythonHistory(obj,study,beforeTrialNumber)
+            try
+                obj.replayPythonHistoryExactly(study,beforeTrialNumber);
+            catch exception
+                if exception.identifier~="radia:optuna:GPPythonReplayMismatch"
+                    rethrow(exception)
+                end
+                % A study created by another sampler has valid observations
+                % but cannot reproduce this GP sampler's random draws. Start
+                % from a fresh upstream sampler and import those exact frozen
+                % trials instead of rejecting a public Optuna study history.
+                obj.initializePythonStudy(study);
+                obj.importPythonHistory(study,beforeTrialNumber);
+            end
+        end
+
+        function replayPythonHistoryExactly(obj,study,beforeTrialNumber)
             rows=study.TrialTable.TrialNumber<beforeTrialNumber;
             prior=sortrows(study.TrialTable(rows,:),"TrialNumber");
             for index=1:height(prior)
@@ -370,7 +405,7 @@ classdef GPSampler < radia.optuna.BaseSampler
                         pythonTrial,study.ParamTable.Name(row),distribution);
                     recorded=obj.parameterValue(study.ParamTable(row,:));
                     if ~obj.sameParameterValue(proposed,recorded)
-                        error("radia:optuna:GPPythonReplay", ...
+                        error("radia:optuna:GPPythonReplayMismatch", ...
                             "Replayed parameter '%s' in trial %d differs from the stored value.", ...
                             study.ParamTable.Name(row),number);
                     end
@@ -387,6 +422,135 @@ classdef GPSampler < radia.optuna.BaseSampler
                     obj.setPythonConstraints(pythonTrial,constraints);
                 end
                 obj.tellPythonReplay(study,pythonTrial,number,state);
+            end
+        end
+
+        function importPythonHistory(obj,study,beforeTrialNumber)
+            rows=study.TrialTable.TrialNumber<beforeTrialNumber;
+            prior=sortrows(study.TrialTable(rows,:),"TrialNumber");
+            for index=1:height(prior)
+                number=prior.TrialNumber(index);
+                state=prior.State(index);
+                if ~ismember(state,["COMPLETE","PRUNED","FAIL"])
+                    error("radia:optuna:GPPythonReplay", ...
+                        "Cannot replay prior trial %d in state %s.",number,state);
+                end
+                params=py.dict;
+                distributions=py.dict;
+                parameterRows=find(study.ParamTable.TrialNumber==number)';
+                for row=parameterRows
+                    name=char(study.ParamTable.Name(row));
+                    distribution= ...
+                        radia.optuna.internal.DistributionCodec.decode( ...
+                        study.ParamTable.Kind(row), ...
+                        study.ParamTable.Distribution(row));
+                    recorded=obj.parameterValue(study.ParamTable(row,:));
+                    params{name}=obj.pythonValue(recorded);
+                    distributions{name}=obj.pythonDistribution(distribution);
+                end
+                intermediate=sortrows(study.IntermediateTable( ...
+                    study.IntermediateTable.TrialNumber==number,:),"Step");
+                intermediateValues=py.dict;
+                for reportIndex=1:height(intermediate)
+                    intermediateValues{int64(intermediate.Step(reportIndex))}= ...
+                        intermediate.Value(reportIndex);
+                end
+                userAttrs=obj.pythonAttributes( ...
+                    study.UserAttrTable,number);
+                systemAttrs=obj.pythonAttributes( ...
+                    study.SystemAttrTable,number);
+                [constraintPresent,constraints]=study.constraintRecord(number);
+                if state=="COMPLETE" && constraintPresent && ...
+                        ~isempty(obj.ConstraintsFcn)
+                    userAttrs{char("__radia_matlab_constraints")}= ...
+                        py.list(num2cell(reshape(double(constraints),1,[])));
+                end
+                pairs={"state",obj.pythonTrialState(state), ...
+                    "params",params,"distributions",distributions, ...
+                    "user_attrs",userAttrs,"system_attrs",systemAttrs, ...
+                    "intermediate_values",intermediateValues};
+                objectiveRows=sortrows(study.ObjectiveTable( ...
+                    study.ObjectiveTable.TrialNumber==number,:), ...
+                    "ObjectiveIndex");
+                if ~isempty(objectiveRows)
+                    values=reshape(double(objectiveRows.Value),1,[]);
+                    if isscalar(values)
+                        pairs=[pairs,{"value",values}];
+                    else
+                        pairs=[pairs,{"values",py.list(num2cell(values))}];
+                    end
+                end
+                frozen=obj.PythonOptuna.trial.create_trial( ...
+                    pyargs(pairs{:}));
+                obj.PythonStudy.add_trial(frozen);
+                imported=obj.PythonStudy.trials{int64(number+1)};
+                if double(imported.number)~=number
+                    error("radia:optuna:GPPythonReplay", ...
+                        "Imported Python trial number %d does not match MATLAB trial %d.", ...
+                        double(imported.number),number);
+                end
+            end
+        end
+
+        function result=pythonDistribution(obj,distribution)
+            switch distribution.kind
+                case "float"
+                    pairs={"log",logical(distribution.log)};
+                    if isfinite(distribution.step)
+                        pairs=[pairs,{"step",distribution.step}];
+                    end
+                    result=obj.PythonOptuna.distributions.FloatDistribution( ...
+                        distribution.low,distribution.high,pyargs(pairs{:}));
+                case "integer"
+                    result=obj.PythonOptuna.distributions.IntDistribution( ...
+                        int64(distribution.low),int64(distribution.high), ...
+                        pyargs("log",logical(distribution.log), ...
+                        "step",int64(distribution.step)));
+                case "categorical"
+                    result=obj.PythonOptuna.distributions. ...
+                        CategoricalDistribution( ...
+                        obj.pythonChoices(distribution.choices));
+                otherwise
+                    error("radia:optuna:GPPythonReplay", ...
+                        "Unsupported stored distribution kind '%s'.", ...
+                        distribution.kind);
+            end
+        end
+
+        function result=pythonAttributes(~,source,number)
+            result=py.dict;
+            json=py.importlib.import_module("json");
+            rows=find(source.TrialNumber==number)';
+            for row=rows
+                result{char(source.Name(row))}= ...
+                    json.loads(char(source.ValueJSON(row)));
+            end
+        end
+
+        function result=pythonTrialState(obj,state)
+            switch state
+                case "COMPLETE"
+                    result=obj.PythonOptuna.trial.TrialState.COMPLETE;
+                case "PRUNED"
+                    result=obj.PythonOptuna.trial.TrialState.PRUNED;
+                case "FAIL"
+                    result=obj.PythonOptuna.trial.TrialState.FAIL;
+                otherwise
+                    error("radia:optuna:GPPythonReplay", ...
+                        "Cannot import trial state '%s'.",state);
+            end
+        end
+
+        function result=pythonValue(~,value)
+            if isstring(value) || ischar(value)
+                result=py.builtins.str(char(string(value)));
+            elseif islogical(value) && isscalar(value)
+                result=py.builtins.bool(value);
+            elseif isnumeric(value) && isscalar(value)
+                result=py.builtins.float(double(value));
+            else
+                error("radia:optuna:GPPythonReplay", ...
+                    "Only scalar string, logical, and numeric parameters are supported.");
             end
         end
 

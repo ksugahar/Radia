@@ -146,18 +146,28 @@ classdef BruteForceSampler < radia.optuna.BaseSampler
                 end
             end
             if any(terminal)
-                if any(~terminal)
+                finished=ismember([paths(terminal).state], ...
+                    ["COMPLETE","PRUNED","FAIL"]);
+                if any(finished) && any(~terminal)
                     error("radia:optuna:BruteForceSearchSpace", ...
                         "A search-tree node is both terminal and expanded.");
                 end
-                finished=ismember([paths.state],["COMPLETE","PRUNED","FAIL"]);
                 if any(finished)
                     count=0;
                     return
                 end
-                isRunning=any([paths.state]=="RUNNING");
-                count=double(~excludeRunning || ~isRunning);
-                return
+                % Upstream permits a RUNNING trial to stop at an internal
+                % node (including the root before its first suggestion).
+                % Mark that node as running, then keep counting its expanded
+                % children instead of treating the mixed node as invalid.
+                isRunning=any([paths(terminal).state]=="RUNNING");
+                if all(terminal)
+                    count=double(~excludeRunning || ~isRunning);
+                    return
+                end
+                paths=paths(~terminal);
+                nextNames=nextNames(~terminal);
+                nextEntries=nextEntries(~terminal);
             end
             if numel(unique(nextNames))~=1
                 error("radia:optuna:BruteForceSearchSpace", ...
