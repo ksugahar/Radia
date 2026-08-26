@@ -12,7 +12,7 @@ classdef NSGAIISampler < radia.optuna.BaseSampler
         MutationProbability (1,1) double = NaN
         CrossoverProbability (1,1) double = 0.9
         SwappingProbability (1,1) double = 0.5
-        Crossover (1,1) radia.optuna.nsgaii.BaseCrossover
+        Crossover = []
         % Retained for source compatibility; random fallback mutation does
         % not use the former Gaussian MutationScale.
         MutationScale (1,1) double = 0.1
@@ -20,6 +20,10 @@ classdef NSGAIISampler < radia.optuna.BaseSampler
         ElitePopulationSelectionStrategy = []
         ChildGenerationStrategy = []
         AfterTrialStrategy = []
+    end
+
+    properties (Dependent, SetAccess=private)
+        population_size
     end
 
     properties (Access=private)
@@ -40,6 +44,10 @@ classdef NSGAIISampler < radia.optuna.BaseSampler
     end
 
     methods
+        function value=get.population_size(obj)
+            value=obj.PopulationSize;
+        end
+
         function obj = NSGAIISampler(options)
             arguments
                 options.Seed double = double.empty(1,0)
