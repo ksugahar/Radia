@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "radia"
-version = "4.95.63"
+version = "4.95.64"
 description = "Radia 3D Magnetostatics with NGSolve Integration and TaskManager Parallelization"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -32,7 +32,7 @@ dependencies = [
     # uses the mkl_rt.3.dll ABI, so keep runtime and build packages in 2026.x.
     "mkl>=2026,<2027",
     "intel-cmplr-lib-rt>=2026,<2027",
-    # NGSolve + Netgen-mesher pinned to 6.2.2606 (2026-08-26 radia 4.95.63).
+    # NGSolve + Netgen-mesher pinned to 6.2.2606 (2026-08-27 radia 4.95.64).
     # Both packages and every Radia/Cubit native extension must move together:
     # NGSolve and Netgen expose C++ ABI used directly by the shipped binaries.
     # Bump consequences:
@@ -64,12 +64,12 @@ dependencies = [
 optuna = [
     # Independently versioned monorepo artifact. Pin the release that passed
     # this Radia version's MATLAB/Simulink integration gate.
-    "radia-optuna==0.1.1",
+    "radia-optuna==0.1.2",
 ]
 optuna-upstream = [
     # Adds pinned upstream Python/SciPy/PyTorch paths used by GP, scrambled QMC,
     # and parameter-importance parity; native MATLAB/Simulink use stays lighter.
-    "radia-optuna[upstream]==0.1.1",
+    "radia-optuna[upstream]==0.1.2",
 ]
 cubit = [
     "cubit-mesh-export",

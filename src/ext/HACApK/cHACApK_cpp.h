@@ -213,11 +213,41 @@ void HACApK_matvec_sym_many_wrapper(
     int nd,
     int nrhs);
 
+/* Symmetric row-major batch restricted to an active principal submatrix.
+ * active_prefix is the inclusive-prefix count in HACApK's permuted ordering
+ * (length nd+1, active_prefix[0]=0).  A leaf is skipped exactly when either
+ * its row or column range contains no active entry. */
+void HACApK_matvec_sym_many_masked_wrapper(
+    void *leafmtxp,
+    void *ctl,
+    const double *x,
+    double *y,
+    int nd,
+    int nrhs,
+    const int *active_prefix);
+
+/* Prepared symmetric batch apply.  active_prefix and diagonal_scale are
+ * optional.  Scaling is fused into permutation/reduction so callers can
+ * evaluate S*A*S without allocating two row-major scratch batches. */
+void HACApK_matvec_sym_many_prepared_wrapper(
+    void *leafmtxp,
+    void *ctl,
+    const double *x,
+    double *y,
+    int nd,
+    int nrhs,
+    const int *active_prefix,
+    const double *diagonal_scale);
+
 /* Optional matvec profiler. Enabled by RADIA_HDIV_HMATVEC_STATS=1.
  * values[0..7] = total_s, zero_s, permute_s, leaf_s, reduce_s, meta_s,
  *                lowrank_flop_est, dense_flop_est.
- * counts[0..7] = calls, lowrank_leaves, dense_leaves, mirrored_upper_leaves,
- *                diagonal_leaves, skipped_lower_leaves, last_nd, last_nthr.
+ * counts[0..19] = calls, lowrank_leaves, dense_leaves,
+ * mirrored_upper_leaves, diagonal_leaves, skipped_lower_leaves, last_nd,
+ * last_nthr, lowrank_upper_leaves, dense_upper_leaves,
+ * inactive_skipped_leaves, lowrank_directions, dense_directions, gemm_calls,
+ * lowrank_rank_sum, lowrank_rank_max, and cumulative direction counts for
+ * ranks <= 4, 8, 16, and 32.
  */
 void HACApK_matvec_stats_reset(void);
 void HACApK_matvec_stats_get(double *values, int n_values,

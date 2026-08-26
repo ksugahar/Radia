@@ -22,6 +22,10 @@ MEASURED 2026-08-11 (LAB, N=4, maxh 7 mm, ring 522 / sector 112 elements): <Mz> 
 lone sector 3.6013978e+05 (+11.99 %), cyclic reduced 3.2157792e+05 (+0.0002 %) -- 100.00 % of the gap
 closed.  A second, independent confirmation on Sculpt hex meshes (6-fold ring) is recorded in
 memory/cyclic_image_reduction_design.md.
+
+MEASURED 2026-08-26 (LAB, N=4 alternating signs, same 522 / 112 element meshes): <Mz> full ring pole 0
+3.9718599e+05, lone sector 3.6013978e+05 (-9.3272 %), cyclic alternating reduced 3.9718954e+05
+(+0.000895 %) -- 99.9904 % of the gap closed.
 """
 import pytest
 
@@ -58,10 +62,24 @@ def _pole_mesh(sector_indices):
     return ng.Mesh(OCCGeometry(shape).GenerateMesh(maxh=MAXH))
 
 
-def _mean_mz(mesh, **kw):
+def _alternating_pole_mesh(sector_indices):
+    """A ring whose pole materials retain their indices for an alternating drive."""
+    from netgen.occ import Box, OCCGeometry, Pnt, gp_Ax1, gp_Dir, Glue
+    boxes = []
+    for k in sector_indices:
+        box = (Box(Pnt(R - A, -A, -A), Pnt(R + A, A, A))
+               .Rotate(gp_Ax1(Pnt(0, 0, 0), gp_Dir(0, 0, 1)), 360.0 * k / N_FOLD))
+        box.mat(f"pole{k}")
+        boxes.append(box)
+    return ng.Mesh(OCCGeometry(Glue(boxes)).GenerateMesh(maxh=MAXH))
+
+
+def _mean_mz(mesh, *, H_ext=None, material="pole", **kw):
     rad.UtiDelAll()
-    result = vim.Solve(mesh, mu_r=MU_R, H_ext=ng.CF((0.0, 0.0, H0)), order=1, tol=1e-9, **kw)
-    region = mesh.Materials("pole")
+    if H_ext is None:
+        H_ext = ng.CF((0.0, 0.0, H0))
+    result = vim.Solve(mesh, mu_r=MU_R, H_ext=H_ext, order=1, tol=1e-9, **kw)
+    region = mesh.Materials(material)
     volume = float(ng.Integrate(ng.CF(1.0), mesh, definedon=region))
     return float(ng.Integrate(result["gfM"][2], mesh, definedon=region)) / volume
 
@@ -83,6 +101,38 @@ def test_cyclic_sector_reproduces_the_full_ring():
         f"cyclic reduction did not close the gap: <Mz> full {mz_full:.6e}, lone {mz_lone:.6e} "
         f"(gap {100.0*gap/abs(mz_full):+.3f} %), cyclic {mz_cyclic:.6e} "
         f"(residual {100.0*residual/abs(mz_full):+.3f} %)")
+
+
+def test_cyclic_alternating_sector_reproduces_the_full_ring():
+    """The (-1)^k cyclic lane must reproduce an explicit alternating N/S ring.
+
+    Example 7 uses this exact symmetry class.  The kernel tests pin image signs and rotations
+    separately; this end-to-end solve proves that their composition has the same physical solution as
+    four explicitly meshed poles driven with the material pattern (+H0, -H0, +H0, -H0).
+    """
+    with ng.TaskManager():
+        ring = _alternating_pole_mesh(range(N_FOLD))
+        sector = _alternating_pole_mesh([0])
+        alternating_drive = ring.MaterialCF({
+            f"pole{k}": ng.CF((0.0, 0.0, H0 if k % 2 == 0 else -H0))
+            for k in range(N_FOLD)
+        })
+        mz_full = _mean_mz(
+            ring, H_ext=alternating_drive, material="pole0")
+        mz_lone = _mean_mz(sector, material="pole0")
+        mz_cyclic = _mean_mz(
+            sector, material="pole0",
+            image_cyclic=N_FOLD, image_cyclic_alternating=True)
+
+    gap = abs(mz_lone - mz_full)
+    residual = abs(mz_cyclic - mz_full)
+    assert gap / abs(mz_full) > 1e-3, (
+        "the alternating poles barely interact, so the lane cannot discriminate "
+        f"(<Mz> full {mz_full:.6e}, lone {mz_lone:.6e})")
+    assert residual < (1.0 - CLOSE_FRACTION) * gap, (
+        f"alternating cyclic reduction did not close the gap: <Mz> full {mz_full:.6e}, "
+        f"lone {mz_lone:.6e} (gap {100.0*gap/abs(mz_full):+.3f} %), "
+        f"cyclic {mz_cyclic:.6e} (residual {100.0*residual/abs(mz_full):+.3f} %)")
 
 
 def test_cyclic_costs_one_sector():

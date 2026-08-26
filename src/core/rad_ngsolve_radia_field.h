@@ -123,7 +123,8 @@ private:
     std::vector<double> values_;
 };
 
-class RadiaFieldCoefficient final : public ngfem::CoefficientFunction {
+class RadiaFieldCoefficient final
+    : public ngfem::CoefficientFunctionNoDerivative {
 public:
     RadiaFieldCoefficient(
         int object, const std::string& field_type = "b",
@@ -133,7 +134,8 @@ public:
         std::optional<std::vector<double>> w_axis = std::nullopt,
         std::optional<double> precision = std::nullopt,
         const std::string& units = "m")
-        : CoefficientFunction(field_type == "phi" ? 1 : 3), object_(object),
+        : CoefficientFunctionNoDerivative(field_type == "phi" ? 1 : 3),
+          object_(object),
           field_type_(field_type), precision_(precision) {
         if (object_ <= 0)
             throw std::invalid_argument(

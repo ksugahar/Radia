@@ -4282,6 +4282,17 @@ PYBIND11_MODULE(_radia_pybind, m) {
              },
              py::arg("dofs"), py::arg("preserve_existing") = false,
              "Replace or extend the constrained HDiv DOF set used by active-material solves.")
+        .def("configured_active_hmatrix_stats",
+             [](const RadHACApKChargeGram& s, int component) {
+                 const auto values = s.ConfiguredActiveHMatrixStats(component);
+                 py::dict result;
+                 result["active_charges"] = values[0];
+                 result["total_charges"] = values[1];
+                 result["active_upper_leaves"] = values[2];
+                 result["total_upper_leaves"] = values[3];
+                 return result;
+             }, py::arg("component") = 0,
+             "Active-charge and exact symmetric H-matrix leaf-pruning diagnostics.")
         .def("demag_matrix",
              [](std::shared_ptr<RadHACApKChargeGram> s) {
                  return std::make_shared<radia::ngsolve_bridge::HDivDemagMatrix>(
@@ -4662,8 +4673,9 @@ PYBIND11_MODULE(_radia_pybind, m) {
              py::arg("mass_riesz") = false, py::arg("x0") = py::none(),
              "Solve row-major shared-operator right-hand sides in one native call, "
              "with optional batched mass-Riesz preconditioning, a bounded shared "
-             "block-Krylov startup, and true-residual scalar "
-             "completion. Cluster deflation is opt-in because it is not a CPU "
+             "independent-CG traversal, and true-residual convergence. A single "
+             "mass-Riesz RHS uses the lower-overhead scalar kernel. Cluster "
+             "deflation is opt-in because it is not a CPU "
              "speedup on the measured study system.")
         .def("configured_field_functional_rows",
              [](const RadHACApKChargeGram& s, F64Array observations_a,

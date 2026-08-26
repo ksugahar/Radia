@@ -382,3 +382,53 @@ points.  Two accepted exact re-solves remove 13 whole cells and reduce the
 maximum normalized bend/map residual by 5.11 %.  The target bands are not yet
 met; the result is evidence for the fused optimization path and its descent,
 not a completed FFAG magnet.
+
+## Exact active-system performance evidence
+
+`solver_active_hmatrix_lab_20260826.json` records a same-process paired LAB
+measurement of exact inactive-leaf pruning.  The 42,480-DoF BDM1 HEX problem
+keeps 25,920 active DoFs.  Pruning preserves the active principal system
+exactly while reducing active charge leaves, accelerating both direct operator
+application and the scalar-finishing path of mass-Riesz PCG.  The JSON keeps
+kernel and complete-solve timings separate and retains the superseded
+mass-Riesz and block-PCG timings as comparison baselines.  A later entry
+records the exact local Cholesky mass-Riesz path for broken HDiv: it retains
+PARDISO for a connected conforming mass, and omits the unused Jacobi-diagonal
+setup when mass-Riesz is active.  The final entry replaces the fixed 500-step
+block-PCG startup with independent CG recurrences over shared row-major
+operator and mass-Riesz traversals.  On the same LAB object, six RHS decrease
+from 35.85 s to 12.95 s while preserving a true relative residual below
+1.0e-8; one RHS remains on the lower-overhead scalar kernel.
+
+The prepared active-batch follow-up fuses charge normalization into the HACApK
+permutation/reduction, removes active-prefix and per-iteration charge-workspace
+copies, and avoids algebraically redundant constraint projections.  It also
+makes `respect_constraints=True` a true principal-operator contract even when
+the caller supplies nonzero constrained entries.  The paired six-RHS direct
+apply diagnostic fell from 30.22 ms to 18.50 ms with bit-identical active
+output.  A quiet final LAB run took 4.78 s for one RHS and 13.56 s for six RHS;
+the latter retained a relative residual below 1.0e-8.  Internal profiling puts
+7.27 s of the 13.64 s profiled solve in HACApK leaf kernels, making small-leaf
+GEMM overhead the next performance target.  Repeat on mdx and hibino after a
+formal release and PyPI installation before using LAB wall times as publication
+claims.
+
+The leaf follow-up profiles the active operator itself rather than all stored
+leaves.  Each six-RHS apply traverses 726 low-rank and 1,248 dense directions,
+which issue 2,700 DGEMM calls.  Neither a hand-written small-rank kernel nor MKL
+small-GEMM JIT passed the solve-level gate: the generic path completed the
+paired solve in 13.327 s, while the JIT path needed 14.888 s despite a loaded-LAB
+kernel-only median of 1.032x.  Both experimental kernels were removed.
+
+ACA+ and QR+TSVD remain production methods for the stream-function solver, but
+they were also rejected as an HDiv ChargeGram substitution.  On the 26,000
+charge-DoF FFAG operator, ACA+ changed the operator by 3.27e-3 relative to the
+basic-ACA baseline.  Post-ACA QR+TSVD reduced storage by 21% at the default
+cutoff but changed the operator by 1.87e-5 and increased solve time; a cutoff
+of 0.05 times the requested tolerance held the measured drift to 2.01e-7 but
+saved only 1.2% of storage and was still slower.  Independent ACA builds showed
+small non-deterministic variation, so these cross-build drifts are diagnostic,
+not a recompression error bound.  HDiv therefore keeps basic ACA and the
+experiments are absent from product code.  The retained rank/GEMM profiler
+identifies grouped low-rank apply or a deterministic build study as the next
+possible target.

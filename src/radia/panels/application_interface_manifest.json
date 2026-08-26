@@ -72,9 +72,10 @@
       "state": "active-simulink-block",
       "block": "radia_simulink_library/Applications/Stream Function",
       "optimization_block": "radia_simulink_library/Applications/Stream Function Optimization",
+      "optuna_block": "radia_simulink_library/Applications/Stream Function Optuna",
       "optimization_sample": "matlab/radia_streamfunction_optimization.slx",
       "optimization_generator": "radia.simulink.buildStreamFunctionOptimizationModel",
-      "optimization_backend": "Explicit Python/headless design or Pareto batch followed by MATLAB-native analytic-gradient MMA/SQP over preassembled stream-function coefficients.",
+      "optimization_backend": "Explicit Python/headless design or Pareto batch followed by MATLAB-native analytic-gradient MMA/SQP over preassembled stream-function coefficients, or a MATLAB-native Optuna outer loop with one explicit ACA+/QR/TSVD batch analysis per trial.",
       "design": "radia.streamfunction_design.StreamFunctionDesignSpec",
       "notebook": null,
       "headless": [

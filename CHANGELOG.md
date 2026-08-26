@@ -5,6 +5,33 @@ All notable changes to the `radia` package.  Format: each release lists
 
 ## Unreleased
 
+## 4.95.64 - Active HDiv H-matrix and Stream Function optimization
+
+Released 2026-08-27.
+
+- Accelerated the HDiv-VIM H-matrix path with active-leaf pruning, fused
+  batched application, block-local mass factorization, and batched Riesz
+  solves. Exact topology-state reuse now revalidates the true residual and
+  inactive constraints before accepting cached state, while the tuning gate
+  requires an accuracy-preserving measured speedup over the accepted action.
+  Active-charge and leaf-pruning diagnostics are available through matching
+  Python and standalone MATLAB MEX APIs. The checked 86-test MATLAB/Simulink
+  validation artifact was regenerated against the exact release MEX.
+- Vectorized cyclic tetrahedral image assembly and expanded regression coverage
+  for alternating reductions, BDM2 field coefficients, native matrices, and
+  projected field evaluation.
+- Added the production Stream Function Optuna block to the Radia Simulink
+  library. The workflow exposes ACA QR-TSVD controls, typed telemetry, result
+  artifacts, and a checked outer optimization loop through the shared solver
+  contract.
+- Updated `radia-optuna` to 0.1.2 with upstream Optuna 4.9.0-oracle behavior for
+  `Study.trials_dataframe`, including objective, parameter, distribution,
+  attribute, intermediate-value, and trial-state columns. Expanded the same
+  oracle-backed contract across public sampler hooks, NSGA population and
+  crossover properties, BruteForce running-prefix traversal, and GP history
+  replay/import with constraints. The complete MATLAB Optuna lane passes 97
+  tests, including all 46 upstream-oracle cases added for this release.
+
 ## 4.95.63 - Shape-aware PEEC conductor impedance
 
 Released 2026-08-26.
