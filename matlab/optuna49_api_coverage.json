@@ -155,7 +155,7 @@
     {
       "kind": "class-method",
       "matlab_name": "radia.optuna.Study.trials_dataframe",
-      "oracle_status": "not-mapped",
+      "oracle_status": "verified",
       "surface_status": "present",
       "upstream": "optuna.Study.trials_dataframe"
     },
@@ -4516,7 +4516,7 @@
     {
       "kind": "class-method",
       "matlab_name": "radia.optuna.Study.trials_dataframe",
-      "oracle_status": "not-mapped",
+      "oracle_status": "verified",
       "surface_status": "present",
       "upstream": "optuna.study.Study.trials_dataframe"
     },
@@ -5720,8 +5720,8 @@
   ],
   "full_compatibility_complete": false,
   "oracle_partial_count": 52,
-  "oracle_unmapped_count": 606,
-  "oracle_verified_count": 158,
+  "oracle_unmapped_count": 604,
+  "oracle_verified_count": 160,
   "schema": "radia.optuna49-api-coverage.v1",
   "surface_entry_count": 816,
   "surface_missing_count": 553,

@@ -88,6 +88,7 @@ VERIFIED_MEMBERS = {
         "system_attrs",
         "tell",
         "trials",
+        "trials_dataframe",
         "user_attrs",
     },
     "StudySummary": {"direction", "directions", "system_attrs"},

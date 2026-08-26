@@ -2117,7 +2117,7 @@
       0.6089224208655776
     ]
   },
-  "numpy_version": "2.4.6",
+  "numpy_version": "2.5.2",
   "optuna_version": "4.9.0",
   "partial_fixed_sampler_seed_61": [
     {
@@ -2802,6 +2802,180 @@
     "last_step": 2,
     "state": "PRUNED",
     "value": 3.0
+  },
+  "trials_dataframe": {
+    "attrs": [
+      "number",
+      "value",
+      "params",
+      "user_attrs",
+      "system_attrs",
+      "state"
+    ],
+    "empty_column_count": 0,
+    "errors": {
+      "empty_attrs": "TypeError",
+      "unknown_attr": "AttributeError"
+    },
+    "metric_names": {
+      "flat_columns": [
+        "number",
+        "values_gain",
+        "values_loss",
+        "params_x",
+        "state"
+      ],
+      "multi_columns": [
+        {
+          "sub": "",
+          "top": "number"
+        },
+        {
+          "sub": "gain",
+          "top": "values"
+        },
+        {
+          "sub": "loss",
+          "top": "values"
+        },
+        {
+          "sub": "x",
+          "top": "params"
+        },
+        {
+          "sub": "",
+          "top": "state"
+        }
+      ],
+      "values": {
+        "number": [
+          0
+        ],
+        "params_x": [
+          0.5
+        ],
+        "state": [
+          "COMPLETE"
+        ],
+        "values_gain": [
+          2.5
+        ],
+        "values_loss": [
+          1.5
+        ]
+      }
+    },
+    "multi_index_default": false,
+    "single": {
+      "flat_columns": [
+        "number",
+        "value",
+        "params_mode",
+        "params_x",
+        "user_attrs_owner",
+        "system_attrs_origin",
+        "state"
+      ],
+      "multi_columns": [
+        {
+          "sub": "",
+          "top": "number"
+        },
+        {
+          "sub": "",
+          "top": "value"
+        },
+        {
+          "sub": "mode",
+          "top": "params"
+        },
+        {
+          "sub": "x",
+          "top": "params"
+        },
+        {
+          "sub": "owner",
+          "top": "user_attrs"
+        },
+        {
+          "sub": "origin",
+          "top": "system_attrs"
+        },
+        {
+          "sub": "",
+          "top": "state"
+        }
+      ],
+      "values": {
+        "number": [
+          0,
+          1,
+          2
+        ],
+        "params_mode": [
+          "A",
+          "B",
+          "A"
+        ],
+        "params_x": [
+          0.25,
+          0.75,
+          0.5
+        ],
+        "state": [
+          "COMPLETE",
+          "PRUNED",
+          "FAIL"
+        ],
+        "system_attrs_origin": [
+          "oracle",
+          "oracle",
+          "imported"
+        ],
+        "user_attrs_owner": [
+          "lab",
+          "mdx",
+          "lab"
+        ],
+        "value": [
+          1.25,
+          null,
+          null
+        ]
+      }
+    },
+    "single_metric_name": {
+      "flat_columns": [
+        "number",
+        "value_loss",
+        "state"
+      ],
+      "multi_columns": [
+        {
+          "sub": "",
+          "top": "number"
+        },
+        {
+          "sub": "loss",
+          "top": "value"
+        },
+        {
+          "sub": "",
+          "top": "state"
+        }
+      ],
+      "values": {
+        "number": [
+          0
+        ],
+        "state": [
+          "COMPLETE"
+        ],
+        "value_loss": [
+          1.2
+        ]
+      }
+    }
   },
   "unfinished_trials": {
     "after_claim_has_start": [
