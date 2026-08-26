@@ -13,11 +13,19 @@ classdef NSGAIIISampler < radia.optuna.BaseSampler
         Core (1,1) radia.optuna.NSGAIISampler
     end
 
+    properties (Dependent, SetAccess=private)
+        population_size
+    end
+
     properties (Access=private)
         Stream
     end
 
     methods
+        function value=get.population_size(obj)
+            value=obj.PopulationSize;
+        end
+
         function obj=NSGAIIISampler(options)
             arguments
                 options.Seed double = double.empty(1,0)

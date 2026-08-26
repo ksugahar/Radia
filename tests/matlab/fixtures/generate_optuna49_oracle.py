@@ -48,6 +48,131 @@ def _sampler_seed_default_contract() -> dict[str, object]:
     }
 
 
+def _sampler_public_member_contract() -> dict[str, object]:
+    def make_study() -> tuple[optuna.Study, optuna.trial.FrozenTrial, optuna.trial.FrozenTrial]:
+        study = optuna.create_study()
+        for value in [0.2, 0.1]:
+            trial = study.ask()
+            trial.suggest_float("x", 0.0, 1.0, step=0.1)
+            trial.suggest_int("y", 1, 5)
+            study.tell(trial, value)
+        study.ask()
+        trials = study.get_trials(deepcopy=False)
+        return study, trials[-1], trials[0]
+
+    samplers = {
+        "BruteForceSampler": optuna.samplers.BruteForceSampler(seed=7),
+        "CmaEsSampler": optuna.samplers.CmaEsSampler(
+            seed=7, n_startup_trials=99
+        ),
+        "GPSampler": optuna.samplers.GPSampler(seed=7, n_startup_trials=99),
+        "GridSampler": optuna.samplers.GridSampler(
+            {"x": [0.0, 1.0], "y": [1, 3]}, seed=7
+        ),
+        "NSGAIIISampler": optuna.samplers.NSGAIIISampler(
+            seed=7, population_size=4
+        ),
+        "NSGAIISampler": optuna.samplers.NSGAIISampler(
+            seed=7, population_size=4
+        ),
+        "PartialFixedSampler": optuna.samplers.PartialFixedSampler(
+            {"x": 0.25},
+            optuna.samplers.TPESampler(
+                seed=7, n_startup_trials=1, multivariate=True
+            ),
+        ),
+        "QMCSampler": optuna.samplers.QMCSampler(
+            seed=7, warn_asynchronous_seeding=False
+        ),
+        "RandomSampler": optuna.samplers.RandomSampler(seed=7),
+        "TPESampler": optuna.samplers.TPESampler(
+            seed=7, n_startup_trials=1, multivariate=True
+        ),
+    }
+    sampler_contract: dict[str, object] = {}
+    for name, sampler in samplers.items():
+        study, running, complete = make_study()
+        search_space = sampler.infer_relative_search_space(study, running)
+        before_result = sampler.before_trial(study, running)
+        after_result = sampler.after_trial(
+            study, complete, TrialState.COMPLETE, [complete.value]
+        )
+        sampler_contract[name] = {
+            "after_trial_returns_none": after_result is None,
+            "before_trial_returns_none": before_result is None,
+            "infer_relative_search_space_keys": sorted(search_space),
+        }
+
+    grid = optuna.samplers.GridSampler({"x": [0, 1]}, seed=7)
+    grid_study = optuna.create_study(sampler=grid)
+    grid_exhausted_before = grid.is_exhausted(grid_study)
+    grid_study.optimize(lambda trial: float(trial.suggest_int("x", 0, 1)), n_trials=2)
+
+    relative_study = optuna.create_study(
+        sampler=optuna.samplers.TPESampler(
+            seed=7, n_startup_trials=0, multivariate=True
+        )
+    )
+    complete_relative = relative_study.ask()
+    complete_relative.suggest_float("x", 0.0, 1.0, step=0.1)
+    complete_relative.suggest_int("y", 1, 5)
+    relative_study.tell(complete_relative, 0.2)
+    running_relative = relative_study.ask()
+
+    crossovers = {
+        "blxalpha": optuna.samplers.nsgaii.BLXAlphaCrossover(),
+        "sbx": optuna.samplers.nsgaii.SBXCrossover(),
+        "spx": optuna.samplers.nsgaii.SPXCrossover(),
+        "undx": optuna.samplers.nsgaii.UNDXCrossover(),
+        "uniform": optuna.samplers.nsgaii.UniformCrossover(),
+        "vsbx": optuna.samplers.nsgaii.VSBXCrossover(),
+    }
+    try:
+        optuna.samplers.nsgaii.BaseCrossover()
+    except Exception as error:  # noqa: BLE001 - public abstract-class contract.
+        base_crossover_error = type(error).__name__
+    else:
+        raise RuntimeError("Optuna BaseCrossover unexpectedly became concrete.")
+
+    mapped_namespaces: dict[str, str] = {}
+    for name in [
+        "distributions",
+        "exceptions",
+        "importance",
+        "pruners",
+        "samplers",
+        "search_space",
+        "storages",
+        "study",
+        "trial",
+    ]:
+        module = getattr(optuna, name)
+        if not inspect.ismodule(module):
+            raise RuntimeError(f"Optuna public namespace {name!r} is not a module.")
+        mapped_namespaces[name] = module.__name__
+
+    fixed = optuna.trial.FixedTrial({"x": 0.5})
+    return {
+        "base_crossover_instantiation_error": base_crossover_error,
+        "crossover_n_parents": {
+            name: crossover.n_parents for name, crossover in crossovers.items()
+        },
+        "fixed_trial_datetime_start_is_not_none": fixed.datetime_start is not None,
+        "grid_is_exhausted_after": grid.is_exhausted(grid_study),
+        "grid_is_exhausted_before": grid_exhausted_before,
+        "mapped_namespaces": mapped_namespaces,
+        "nsgaii_population_size": optuna.samplers.NSGAIISampler(
+            population_size=5
+        ).population_size,
+        "nsgaiii_population_size": optuna.samplers.NSGAIIISampler(
+            population_size=6
+        ).population_size,
+        "samplers": sampler_contract,
+        "trial_datetime_start_is_not_none": running_relative.datetime_start is not None,
+        "trial_relative_params_keys": sorted(running_relative.relative_params),
+    }
+
+
 def _random_trials() -> list[dict[str, object]]:
     study = optuna.create_study(sampler=optuna.samplers.RandomSampler(seed=123))
     rows: list[dict[str, object]] = []
@@ -1000,6 +1125,14 @@ def _pruner_contract() -> dict[str, object]:
     maximize_trial = maximize.ask()
     maximize_trial.report(1.5, 0)
 
+    median = optuna.create_study(
+        pruner=optuna.pruners.MedianPruner(n_startup_trials=0)
+    )
+    add_completed(median, [0], [1.0])
+    add_completed(median, [0], [3.0])
+    median_trial = median.ask()
+    median_trial.report(5.0, 0)
+
     threshold = optuna.create_study(
         pruner=optuna.pruners.ThresholdPruner(lower=0.0, upper=10.0)
     )
@@ -1093,6 +1226,7 @@ def _pruner_contract() -> dict[str, object]:
     return {
         "percentile_minimize": bool(percentile_trial.should_prune()),
         "percentile_maximize": bool(maximize_trial.should_prune()),
+        "median": bool(median_trial.should_prune()),
         "threshold": [
             bool(threshold_first),
             bool(threshold_second),
@@ -1378,7 +1512,7 @@ def _study_management_contract() -> dict[str, object]:
     )
     multi_summary = optuna.get_all_study_summaries(multi_storage)[0]
     try:
-        multi_summary.direction
+        _ = multi_summary.direction
     except Exception as error:  # noqa: BLE001
         multi_direction_error = type(error).__name__
     else:
@@ -1666,6 +1800,7 @@ def build_oracle() -> dict[str, object]:
             "pruner": type(single.pruner).__name__,
         },
         "sampler_seed_defaults": _sampler_seed_default_contract(),
+        "sampler_public_members": _sampler_public_member_contract(),
         "tell": _tell_contract(),
         "trial_pruned_exception": _trial_pruned_exception_contract(),
         "lifecycle_errors": _lifecycle_error_contract(),
