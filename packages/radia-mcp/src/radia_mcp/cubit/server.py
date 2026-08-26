@@ -25,6 +25,7 @@ import time
 from pathlib import Path
 
 from mcp.server.fastmcp import FastMCP
+from mcp.types import ToolAnnotations
 
 # Import knowledge bases and rules (relative imports for pip package)
 from .rules import ALL_RULES
@@ -66,6 +67,7 @@ from .gmsh_v41 import (
 	gmsh_v41_mixed_order_series_gate,
 	summarize_gmsh_v41_ascii,
 )
+from .nastran_consumer import evaluate_nastran_consumer_contract
 from .high_order_export_gate import (
 	cubit_headless_netgen_export_gate as _cubit_headless_netgen_export_gate,
 	cubit_loft_high_order_vol_series_gate as _cubit_loft_high_order_vol_series_gate,
@@ -667,7 +669,7 @@ def cubit_docs(topic: str = "all") -> str:
 	        "gmsh_v2"               - Gmsh v4.1 format (export gmsh)
 	        "gmsh_v4"               - Gmsh v4.1 format policy
 	        "netgen"                - Netgen .vol export (export netgen)
-	        "nastran"               - Nastran BDF (export jmag_nastran)
+	        "nastran"               - Nastran BDF (export nastran_bdf + consumer gate)
 	        "exodus"                - Exodus II (Cubit built-in)
 	        "export_comparison"     - Format comparison and decision matrix
 	        "export_decision_guide" - Decision tree for format selection
@@ -804,6 +806,45 @@ def cubit_docs(topic: str = "all") -> str:
 		f"Unknown topic: '{topic}'. Use prefixes: export_*, scripting_*, api_*. "
 		f"Examples: export_overview, scripting_blocks, api_core"
 	)
+
+
+@mcp.tool(
+	title="Validate Nastran Mesh Consumer Contract",
+	annotations=ToolAnnotations(
+		readOnlyHint=True,
+		destructiveHint=False,
+		idempotentHint=True,
+		openWorldHint=False,
+	),
+)
+def cubit_nastran_consumer_gate(
+	summary: dict,
+	bbox_tolerance: float = 1e-10,
+	require_material_assignment: bool = True,
+	require_set_semantics: bool = False,
+) -> str:
+	"""Validate a Cubit BDF handoff without conflating producer and consumer faults.
+
+	The gate requires independent BDF parse evidence and then checks whether a
+	downstream consumer preserved dimension, element/node counts, second order,
+	bounding box, imported-mesh ownership, and material assignment. It rejects
+	consumer-side remeshing and complete-analysis-deck claims.
+	"""
+	try:
+		result = evaluate_nastran_consumer_contract(
+			summary,
+			bbox_tolerance=bbox_tolerance,
+			require_material_assignment=require_material_assignment,
+			require_set_semantics=require_set_semantics,
+		)
+	except (TypeError, ValueError) as exc:
+		result = {
+			"policy": "cubit_nastran_consumer_contract_v1",
+			"status": "invalid_input",
+			"passed": False,
+			"error": str(exc),
+		}
+	return json.dumps(result, indent=2)
 
 
 @mcp.tool()
@@ -7379,10 +7420,12 @@ def cubit_export_decision_guide() -> str:
 		"|------|---------|----------|\n"
 		"| NGSolve FEM (recommended) | export netgen \"f.vol\" order N | 1-5 |\n"
 		"| GMSH visualization | export gmsh \"f.msh\" order N | 1-3 |\n"
-		"| Nastran / JMAG | export jmag_nastran \"f.bdf\" order N | 1-2 |\n"
+		"| Nastran mesh interchange | export nastran_bdf \"f.bdf\" order N | 1-2 |\n"
 		"| ParaView | export vtk \"f.vtk\" order N | 1-2 |\n"
 		"| ELF/MAGIC | export meg \"f.meg\" | 1 |\n"
-		"| Cubit-native archival | export mesh \"f.exo\" | all |\n"
+		"| Cubit-native archival | export mesh \"f.exo\" | all |\n\n"
+		"For BDF promotion, call `cubit_nastran_consumer_gate`: independent "
+		"parsing proves the exporter, while order/mesh retention proves the consumer.\n"
 	)
 
 
