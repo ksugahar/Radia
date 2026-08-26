@@ -904,6 +904,12 @@ static bool HOAnalyticBlockEnabled()
     return enabled;
 }
 
+static bool HOTetImageBlockEnabled()
+{
+    const char* v = std::getenv("RADIA_HDIV_DISABLE_HO_IMAGE_BLOCK");
+    return !v || v[0] == '\0' || v[0] == '0';
+}
+
 static void ValidateImageVectors(const std::vector<int>& image_masks,
                                  const std::vector<double>& image_signs)
 {
@@ -2090,6 +2096,39 @@ std::vector<double> RadHACApKChargeGram::QuadBlockHOTet(
         const double p[3] = {points[q][0], points[q][1], points[q][2]};
         if (m_curved) PhiInnerHOCurvedHostVec(kindS, hostS, p, sources, inner.data());
         else PhiInnerHOHostVec(kindS, hostS, p, sources, inner.data());
+        for (int lt = 0; lt < nT; ++lt) {
+            const double weight = m_qw[targets[lt]][q];
+            double* row = &block[(size_t)lt*nS];
+            for (int ls = 0; ls < nS; ++ls) row[ls] += weight*inner[ls];
+        }
+    }
+    for (double& value : block) value *= RAD_INV_FOUR_PI;
+    return block;
+}
+
+std::vector<double> RadHACApKChargeGram::QuadBlockHOTetImage(
+    int kindT, int hostT, int kindS, int hostS, int img) const
+{
+    const std::vector<int>& targets =
+        (kindT == 0) ? m_hoCellCharges[hostT] : m_hoFaceCharges[hostT];
+    const std::vector<int>& sources =
+        (kindS == 0) ? m_hoCellCharges[hostS] : m_hoFaceCharges[hostS];
+    const int nT = (int)targets.size(), nS = (int)sources.size();
+    std::vector<double> block((size_t)nT*nS, 0.0), inner((size_t)nS, 0.0);
+    if (nT == 0 || nS == 0) return block;
+    if (m_curved)
+        throw std::logic_error("TET image host block requires flat affine hosts");
+
+    // Every target mode on one host owns the same outer points.  Map those
+    // points through the inverse cyclic image once, evaluate every co-located
+    // source mode together, then contract the mode-specific target weights.
+    // The scalar image path repeated this geometry/moment work per charge pair.
+    const std::vector<rad_hdiv::Vec3>& points = m_qp[targets[0]];
+    for (size_t q = 0; q < points.size(); ++q) {
+        const double p0[3] = {points[q][0], points[q][1], points[q][2]};
+        double p[3];
+        ImageEvalPoint(img, p0, p);
+        PhiInnerHOHostVec(kindS, hostS, p, sources, inner.data());
         for (int lt = 0; lt < nT; ++lt) {
             const double weight = m_qw[targets[lt]][q];
             double* row = &block[(size_t)lt*nS];
@@ -5571,7 +5610,7 @@ const std::vector<double>& RadHACApKChargeGram::GetHexSymBlock(int kindA, int hA
 }
 
 const std::vector<double>& RadHACApKChargeGram::GetHOTetSymBlock(
-    int kindA, int hostA, int kindB, int hostB) const
+    int kindA, int hostA, int kindB, int hostB, int img) const
 {
     HexStatAdd(m_hexCacheStatsEnabled, m_hoSymBlockLookups);
     if (s_ho_tet_sym_block_owner != m_build_id) {
@@ -5579,7 +5618,7 @@ const std::vector<double>& RadHACApKChargeGram::GetHOTetSymBlock(
         s_ho_tet_sym_block_owner = m_build_id;
         HexStatAdd(m_hexCacheStatsEnabled, m_hoSymBlockClears);
     }
-    const HexBlockKey key{kindA, hostA, kindB, hostB, 0};
+    const HexBlockKey key{kindA, hostA, kindB, hostB, img};
     auto it = s_ho_tet_sym_block_cache.find(key);
     if (it == s_ho_tet_sym_block_cache.end()) {
         HexStatAdd(m_hexCacheStatsEnabled, m_hoSymBlockMisses);
@@ -5591,13 +5630,17 @@ const std::vector<double>& RadHACApKChargeGram::GetHOTetSymBlock(
                                     : (int)m_hoFaceCharges[hostA].size();
         const int nB = (kindB == 0) ? (int)m_hoCellCharges[hostB].size()
                                     : (int)m_hoFaceCharges[hostB].size();
-        std::vector<double> ab = QuadBlockHOTet(kindA, hostA, kindB, hostB);
-        const bool direct_curved = m_curved && CurvedDirectEnabled() &&
+        std::vector<double> ab = img == 0
+            ? QuadBlockHOTet(kindA, hostA, kindB, hostB)
+            : QuadBlockHOTetImage(kindA, hostA, kindB, hostB, img);
+        const bool direct_curved = img == 0 && m_curved && CurvedDirectEnabled() &&
                                    !CurvedHostsTouch(kindA, hostA, kindB, hostB);
         const bool same_host = kindA == kindB && hostA == hostB;
         std::vector<double> ba;
         if (!direct_curved && !same_host)
-            ba = QuadBlockHOTet(kindB, hostB, kindA, hostA);
+            ba = img == 0
+                ? QuadBlockHOTet(kindB, hostB, kindA, hostA)
+                : QuadBlockHOTetImage(kindB, hostB, kindA, hostA, img);
         std::vector<double> sym((size_t)nA*nB);
         for (int localA = 0; localA < nA; ++localA)
             for (int localB = 0; localB < nB; ++localB)
@@ -5611,7 +5654,7 @@ const std::vector<double>& RadHACApKChargeGram::GetHOTetSymBlock(
             // The symmetrized reverse block is exactly the transpose.  Store
             // it now so a later H-matrix leaf with the opposite cluster
             // ordering does not repeat both expensive directed integrations.
-            const HexBlockKey reverse_key{kindB, hostB, kindA, hostA, 0};
+            const HexBlockKey reverse_key{kindB, hostB, kindA, hostA, img};
             if (s_ho_tet_sym_block_cache.find(reverse_key) ==
                 s_ho_tet_sym_block_cache.end()) {
                 std::vector<double> reverse((size_t)nB*nA);
@@ -6997,9 +7040,26 @@ double RadHACApKChargeGram::GetInteractionMatrixElementRaw(int a, int b) const
         // IMA: fold in the mirror-image charge interactions (QuadDotRefl uses PhiInner in this mode) so a
         // reduced (1/2, 1/4, 1/8) symmetry model reproduces the full model -- G_IMA = G + sum_i sign_i *
         // 0.5*(refl(a,b)+refl(b,a)).  Empty image => plain highorder.
-        for (size_t i = 0; i < m_image_masks.size(); ++i)
-            base += m_image_signs[i] * 0.5 *
-                    (QuadDotRefl(a, b, (int)i + 1) + QuadDotRefl(b, a, (int)i + 1));
+        for (size_t i = 0; i < m_image_masks.size(); ++i) {
+            const int img = (int)i + 1;
+            const bool rotation_image = i < m_image_rot_angle.size() &&
+                                        m_image_rot_angle[i] != 0.0;
+            if (rotation_image && !m_curved && !m_polyCombo && !m_hexmode &&
+                !m_wedgemode && m_hoAnalyticBlock && HOAnalyticBlockEnabled() &&
+                HOTetImageBlockEnabled()) {
+                const int kindA = m_kind[a], hostA = m_host[a];
+                const int kindB = m_kind[b], hostB = m_host[b];
+                const int localA = m_hoLocalOf[a], localB = m_hoLocalOf[b];
+                const int nB = (kindB == 0) ? (int)m_hoCellCharges[hostB].size()
+                                           : (int)m_hoFaceCharges[hostB].size();
+                base += m_image_signs[i] *
+                    GetHOTetSymBlock(kindA, hostA, kindB, hostB, img)
+                        [(size_t)localA*nB + localB];
+            } else {
+                base += m_image_signs[i] * 0.5 *
+                        (QuadDotRefl(a, b, img) + QuadDotRefl(b, a, img));
+            }
+        }
         return base;
     }
     if (m_analytic) {
