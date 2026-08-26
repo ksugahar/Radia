@@ -1,4 +1,4 @@
-"""Golden tests for the C++ radia.vim.FieldFromSolution BDM1 field path.
+"""Golden tests for the C++ radia.vim.FieldFromSolution BDM1/BDM2 field path.
 
 Locks:
   * C++ materialization directly from the configured charge map and HDiv coefficients;
@@ -187,6 +187,81 @@ def test_uniform_box_matches_radia_cpp():
     ) == mesh.ne
     assert max(adaptive_stats["element_integration_order_histogram"]) == 8
     assert np.allclose(got_m, expected_m, rtol=2e-14, atol=2e-10)
+
+
+def test_quadratic_bdm2_field_matches_independent_volume_dipole_integral():
+    """Lock BDM2 coefficient packing and field normalization independently."""
+    from netgen.csg import CSGeometry, OrthoBrick, Pnt
+
+    geometry = CSGeometry()
+    geometry.Add(
+        OrthoBrick(Pnt(-0.2, -0.2, -0.2), Pnt(0.2, 0.2, 0.2)).mat("body")
+    )
+    mesh = ng.Mesh(geometry.GenerateMesh(maxh=0.30))
+    prescribed = ng.CoefficientFunction(
+        (
+            1.0e5 * (1 + 0.7 * ng.x + 0.4 * ng.y * ng.z + 0.3 * ng.x**2),
+            -1.5e5 * (1 - 0.2 * ng.y + 0.5 * ng.x * ng.z - 0.25 * ng.y**2),
+            2.0e5 * (1 + 0.1 * ng.z - 0.3 * ng.x * ng.y + 0.2 * ng.z**2),
+        )
+    )
+    with ng.TaskManager():
+        source = vim.MagnetizationSource(mesh, prescribed, order=2)
+
+    points = np.asarray(
+        [
+            [1.2, 0.3, 0.2],
+            [-1.0, 0.4, -0.5],
+            [0.3, 1.1, 0.6],
+            [-0.4, -1.3, 0.2],
+            [0.6, 0.2, 1.4],
+        ],
+        dtype=float,
+    )
+    analytic = np.asarray(source.Field(points, "direct"), dtype=float)
+    coordinate = ng.CoefficientFunction((ng.x, ng.y, ng.z))
+    independent = np.zeros_like(analytic)
+    for element in mesh.Elements(ng.VOL):
+        rule = ng.IntegrationRule(element.type, 12)
+        transformation = mesh.GetTrafo(element)
+        mapped = transformation(rule)
+        count = len(rule)
+        source_points = np.asarray(coordinate(mapped), dtype=float)
+        magnetization = np.asarray(source.magnetization(mapped), dtype=float)
+        if source_points.shape == (3, count):
+            source_points = source_points.T
+        if magnetization.shape == (3, count):
+            magnetization = magnetization.T
+        weights = np.fromiter(
+            (
+                float(integration_point.weight)
+                * float(transformation(integration_point).measure)
+                for integration_point in rule
+            ),
+            dtype=float,
+            count=count,
+        )
+        for index, target in enumerate(points):
+            displacement = target[None, :] - source_points
+            radius2 = np.sum(displacement * displacement, axis=1)
+            moment_dot_displacement = np.sum(magnetization * displacement, axis=1)
+            kernel = (
+                3.0
+                * moment_dot_displacement[:, None]
+                * displacement
+                * radius2[:, None] ** -2.5
+                - magnetization * radius2[:, None] ** -1.5
+            )
+            independent[index] += np.sum(kernel * weights[:, None], axis=0) / (
+                4.0 * np.pi
+            )
+
+    scale = np.maximum(np.linalg.norm(independent, axis=1), 1.0e-30)
+    relative_error = np.linalg.norm(analytic - independent, axis=1) / scale
+    amplitude = float(np.sum(analytic * independent) / np.sum(independent**2))
+    assert source.stats["field_evaluator"]["source_kind"] == "analytic-tet-bdm2"
+    assert relative_error.max() < 1.0e-10
+    assert abs(amplitude - 1.0) < 1.0e-11
 
 
 def test_exact_vector_potential_equivalent_current():
