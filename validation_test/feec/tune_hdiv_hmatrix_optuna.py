@@ -3,7 +3,8 @@
 This is a compute-host validation benchmark, not a pytest test.  It builds the
 NGSolve HDiv space and Radia charge map once, then repeatedly rebuilds the same
 C++ ChargeGram H-matrix.  Each trial minimizes a measured build/apply workload
-while constraining the physical ``B.T @ G @ B`` action against a tight baseline.
+while constraining the physical ``B.T @ G @ B`` action against the accepted
+current parameters.  A tighter H-matrix remains an independent diagnostic.
 
 Example (run on mdx or hibino)::
 
@@ -186,7 +187,8 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--probes", type=int, default=4)
     parser.add_argument("--apply-repeats", type=int, default=3)
     parser.add_argument("--expected-applies", type=int, default=100)
-    parser.add_argument("--max-action-relative-error", type=float, default=1.0e-8)
+    parser.add_argument("--max-action-relative-delta", type=float, default=1.0e-8)
+    parser.add_argument("--minimum-speedup", type=float, default=1.03)
     parser.add_argument("--leaf-sizes", type=_csv_ints, default=_csv_ints("16,24,32,48,64,96,128"))
     parser.add_argument("--etas", type=_csv_floats, default=_csv_floats("1,1.5,2,3,4"))
     parser.add_argument("--eps-values", type=_csv_floats,
@@ -208,8 +210,11 @@ def main() -> int:
     args = _parser().parse_args()
     if min(args.cells, args.trials, args.probes, args.apply_repeats) <= 0:
         raise SystemExit("cells, trials, probes, and apply-repeats must be positive")
-    if args.expected_applies < 0 or args.max_action_relative_error <= 0.0:
-        raise SystemExit("expected-applies must be non-negative and the error limit positive")
+    if (args.expected_applies < 0 or args.max_action_relative_delta <= 0.0
+            or args.minimum_speedup < 1.0):
+        raise SystemExit(
+            "expected-applies must be non-negative, the delta limit positive, "
+            "and minimum-speedup at least one")
 
     hostname, local_diagnostic = _compute_host(
         allow_local_diagnostic=args.allow_local_diagnostic)
@@ -261,7 +266,9 @@ def main() -> int:
         gram, probes, args.apply_repeats)
     reference_stats = dict(gram.stats())
 
-    def evaluate(eps: float, leaf_size: int, eta: float) -> dict[str, Any]:
+    def evaluate(
+            eps: float, leaf_size: int, eta: float
+            ) -> tuple[dict[str, Any], np.ndarray]:
         build_start = time.perf_counter()
         gram.build_hmatrix(eps=eps, leaf=leaf_size, eta=eta)
         build_external_s = time.perf_counter() - build_start
@@ -273,17 +280,17 @@ def main() -> int:
             + args.expected_applies * apply_timing["apply_per_probe_median_s"])
         return {
             "params": {"eps": eps, "leaf_size": leaf_size, "eta": eta},
-            "accuracy_constraint": (
-                relative_error - args.max_action_relative_error),
-            "action_relative_error": relative_error,
+            "action_relative_error_to_tight_reference": relative_error,
             "build_external_s": build_external_s,
             "apply_timing": _jsonable(apply_timing),
             "hmat_stats": _jsonable(dict(gram.stats())),
             "workload_s": workload_s,
-        }
+        }, candidate
 
-    current = evaluate(
+    current, current_action = evaluate(
         args.current_eps, args.current_leaf_size, args.current_eta)
+    current["action_relative_delta_from_current"] = 0.0
+    current["accuracy_constraint"] = -args.max_action_relative_delta
 
     def constraints_func(frozen_trial):
         return [float(frozen_trial.user_attrs.get("accuracy_constraint", math.inf))]
@@ -328,7 +335,8 @@ def main() -> int:
         "probes": args.probes,
         "apply_repeats": args.apply_repeats,
         "expected_applies": args.expected_applies,
-        "max_action_relative_error": args.max_action_relative_error,
+        "max_action_relative_delta": args.max_action_relative_delta,
+        "minimum_speedup": args.minimum_speedup,
         "reference_eps": args.reference_eps,
         "reference_leaf_size": args.reference_leaf_size,
         "reference_eta": args.reference_eta,
@@ -353,7 +361,11 @@ def main() -> int:
         eps = trial.suggest_categorical("eps", args.eps_values)
         leaf_size = trial.suggest_categorical("leaf_size", args.leaf_sizes)
         eta = trial.suggest_categorical("eta", args.etas)
-        measured = evaluate(eps, leaf_size, eta)
+        measured, candidate_action = evaluate(eps, leaf_size, eta)
+        relative_delta = _relative_action_error(candidate_action, current_action)
+        measured["action_relative_delta_from_current"] = relative_delta
+        measured["accuracy_constraint"] = (
+            relative_delta - args.max_action_relative_delta)
         for key, value in measured.items():
             if key != "params":
                 trial.set_user_attr(key, value)
@@ -371,14 +383,21 @@ def main() -> int:
     recommended: dict[str, Any] | None = None
     if float(current["accuracy_constraint"]) <= 0.0:
         recommended = {"source": "current", **current}
-    if best is not None and (
+    changed = [
+        trial for trial in feasible
+        if trial.params != current["params"]
+    ]
+    best_changed = min(
+        changed, key=lambda trial: float(trial.value)) if changed else None
+    if best_changed is not None and (
             recommended is None
-            or float(best.value) < float(recommended["workload_s"])):
+            or float(best_changed.value) * args.minimum_speedup
+            <= float(recommended["workload_s"])):
         recommended = {
             "source": "optuna_trial",
-            "trial_number": int(best.number),
-            "params": _jsonable(best.params),
-            **_jsonable(best.user_attrs),
+            "trial_number": int(best_changed.number),
+            "params": _jsonable(best_changed.params),
+            **_jsonable(best_changed.user_attrs),
         }
 
     payload = {
@@ -414,7 +433,8 @@ def main() -> int:
             "expected_applies": args.expected_applies,
             "probe_count": args.probes,
             "apply_repeats": args.apply_repeats,
-            "max_action_relative_error": args.max_action_relative_error,
+            "max_action_relative_delta": args.max_action_relative_delta,
+            "minimum_speedup": args.minimum_speedup,
             "seed": args.seed,
         },
         "search_space": {
@@ -444,7 +464,10 @@ def main() -> int:
         "trial_number": recommended.get("trial_number"),
         "params": recommended["params"],
         "workload_s": recommended["workload_s"],
-        "action_relative_error": recommended["action_relative_error"],
+        "action_relative_delta_from_current": (
+            recommended["action_relative_delta_from_current"]),
+        "action_relative_error_to_tight_reference": (
+            recommended["action_relative_error_to_tight_reference"]),
     }
     print(json.dumps({
         "output": str(args.output),
