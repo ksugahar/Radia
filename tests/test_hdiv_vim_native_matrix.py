@@ -32,6 +32,12 @@ def test_demag_operator_is_native_ngsolve_matrix_and_matches_configured_apply():
         mass_reference.data = mass.mat * magnetization.vec
         mass_native = operator._G.apply_configured_geometry_mass(coefficients)
 
+        linear_rhs = operator._G.apply_configured_linear_material_operator(
+            0.2, coefficients)
+        recovered = operator._G.solve_configured_linear_material_mass_riesz(
+            0.2, np.ascontiguousarray(linear_rhs), tol=1e-11,
+            maxit=5000, symmetric=True)
+
         added = magnetization.vec.CreateVector()
         added[:] = 1.25
         operator.mat.MultAdd(0.4, magnetization.vec, added)
@@ -51,6 +57,8 @@ def test_demag_operator_is_native_ngsolve_matrix_and_matches_configured_apply():
     assert np.allclose(result.FV().NumPy(), reference,
                        rtol=1e-12, atol=1e-15)
     assert np.allclose(mass_native, mass_reference.FV().NumPy(), rtol=2e-15, atol=1e-15)
+    assert recovered["timings"]["mass_riesz_local_blocks"] == 0
+    assert np.allclose(recovered["m"], coefficients, rtol=2e-9, atol=2e-11)
     assert np.allclose(added.FV().NumPy(), 1.25 + 0.4 * reference,
                        rtol=1e-12, atol=1e-15)
     assert np.allclose(transposed.FV().NumPy(), -0.2 - 0.3 * reference,

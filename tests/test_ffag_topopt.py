@@ -797,12 +797,16 @@ def test_fixed_design_orbit_path_never_runs_periodic_orbit_recovery(
     correction_calls=[]
     active_calls=[]
     material_iteration_calls=[]
+    initial_state_calls=[]
+    exact_cache_calls=[]
 
     def fake_optimize(orbits,matrices,**kwargs):
         correction=kwargs["field_correction"]
         correction_calls.append(correction)
         active_calls.append(np.asarray(kwargs["active_elements"]).copy())
         material_iteration_calls.append(kwargs["max_iterations"])
+        initial_state_calls.append(np.asarray(kwargs["initial_state"]).copy())
+        exact_cache_calls.append(kwargs["exact_state_cache"])
         ratio=(1.0e12 if len(correction_calls)==1 else
                (2.0 if len(correction_calls)==2 else 1.0))
         generation=topopt.HDivMMMGenerationResult(
@@ -861,6 +865,11 @@ def test_fixed_design_orbit_path_never_runs_periodic_orbit_recovery(
     np.testing.assert_array_equal(active_calls[0],active_initial)
     np.testing.assert_array_equal(active_calls[1],active_initial)
     np.testing.assert_array_equal(active_calls[2],active_candidate)
+    np.testing.assert_array_equal(initial_state_calls[0],np.zeros(2))
+    np.testing.assert_array_equal(initial_state_calls[1],np.zeros(2))
+    np.testing.assert_array_equal(initial_state_calls[2],np.ones(2))
+    assert exact_cache_calls[0] is exact_cache_calls[1]
+    assert exact_cache_calls[1] is exact_cache_calls[2]
     assert material_iteration_calls==[1,1,1]
     assert [trial.accepted for trial in result.map_trust_history]==[
         False,True,True]

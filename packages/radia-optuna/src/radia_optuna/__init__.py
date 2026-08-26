@@ -6,7 +6,7 @@ from importlib.resources import files
 from pathlib import Path
 
 
-__version__ = "0.1.1"
+__version__ = "0.1.2"
 ORACLE_VERSION = "4.9.0"
 
 
