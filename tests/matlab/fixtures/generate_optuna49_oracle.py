@@ -1414,6 +1414,152 @@ def _study_management_contract() -> dict[str, object]:
     }
 
 
+def _normalize_dataframe_value(value: object) -> object:
+    if isinstance(value, TrialState):
+        return value.name
+    if isinstance(value, np.generic):
+        value = value.item()
+    if isinstance(value, float) and np.isnan(value):
+        return None
+    return value
+
+
+def _dataframe_snapshot(frame: object) -> dict[str, object]:
+    columns = list(frame.columns)  # type: ignore[attr-defined]
+    flat_columns = [
+        "_".join(str(part) for part in column if str(part))
+        if isinstance(column, tuple)
+        else str(column)
+        for column in columns
+    ]
+    values = {
+        flat_columns[index]: [
+            _normalize_dataframe_value(value)
+            for value in frame.iloc[:, index].tolist()  # type: ignore[attr-defined]
+        ]
+        for index in range(len(columns))
+    }
+    return {
+        "flat_columns": flat_columns,
+        "multi_columns": [
+            {
+                "top": str(column[0]),
+                "sub": str(column[1]),
+            }
+            if isinstance(column, tuple)
+            else {"top": str(column), "sub": ""}
+            for column in columns
+        ],
+        "values": values,
+    }
+
+
+def _trials_dataframe_contract() -> dict[str, object]:
+    distributions = optuna.distributions
+    common_distributions = {
+        "x": distributions.FloatDistribution(0.0, 1.0),
+        "mode": distributions.CategoricalDistribution(["A", "B"]),
+    }
+    trials = [
+        optuna.trial.create_trial(
+            value=1.25,
+            params={"x": 0.25, "mode": "A"},
+            distributions=common_distributions,
+            user_attrs={"owner": "lab"},
+            system_attrs={"origin": "oracle"},
+            state=TrialState.COMPLETE,
+        ),
+        optuna.trial.create_trial(
+            params={"x": 0.75, "mode": "B"},
+            distributions=common_distributions,
+            intermediate_values={0: 3.0, 2: 1.0},
+            user_attrs={"owner": "mdx"},
+            system_attrs={"origin": "oracle"},
+            state=TrialState.PRUNED,
+        ),
+        optuna.trial.create_trial(
+            params={"x": 0.5, "mode": "A"},
+            distributions=common_distributions,
+            user_attrs={"owner": "lab"},
+            system_attrs={"origin": "imported"},
+            state=TrialState.FAIL,
+        ),
+    ]
+    study = optuna.create_study()
+    study.add_trials(trials)
+    attrs = (
+        "number",
+        "value",
+        "params",
+        "user_attrs",
+        "system_attrs",
+        "state",
+    )
+    flat = study.trials_dataframe(attrs=attrs, multi_index=False)
+    multi = study.trials_dataframe(attrs=attrs, multi_index=True)
+    single = _dataframe_snapshot(flat)
+    single["multi_columns"] = _dataframe_snapshot(multi)["multi_columns"]
+
+    metric_study = optuna.create_study(directions=["minimize", "maximize"])
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        metric_study.set_metric_names(["loss", "gain"])
+    metric_study.add_trial(
+        optuna.trial.create_trial(
+            values=[1.5, 2.5],
+            params={"x": 0.5},
+            distributions={"x": distributions.FloatDistribution(0.0, 1.0)},
+            state=TrialState.COMPLETE,
+        )
+    )
+    metric_attrs = ("number", "value", "params", "state")
+    metric_flat = metric_study.trials_dataframe(
+        attrs=metric_attrs, multi_index=False
+    )
+    metric_multi = metric_study.trials_dataframe(
+        attrs=metric_attrs, multi_index=True
+    )
+    metric = _dataframe_snapshot(metric_flat)
+    metric["multi_columns"] = _dataframe_snapshot(metric_multi)["multi_columns"]
+
+    single_metric_study = optuna.create_study()
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        single_metric_study.set_metric_names(["loss"])
+    single_metric_study.add_trial(optuna.trial.create_trial(value=1.2))
+    single_metric_flat = single_metric_study.trials_dataframe(
+        attrs=("number", "value", "state"), multi_index=False
+    )
+    single_metric_multi = single_metric_study.trials_dataframe(
+        attrs=("number", "value", "state"), multi_index=True
+    )
+    single_metric = _dataframe_snapshot(single_metric_flat)
+    single_metric["multi_columns"] = _dataframe_snapshot(single_metric_multi)[
+        "multi_columns"
+    ]
+
+    errors: dict[str, str] = {}
+    for name, candidate_attrs in {
+        "unknown_attr": ("not_a_frozen_trial_field",),
+        "empty_attrs": (),
+    }.items():
+        try:
+            study.trials_dataframe(attrs=candidate_attrs)
+        except Exception as error:  # noqa: BLE001 - public error-type oracle.
+            errors[name] = type(error).__name__
+
+    empty = optuna.create_study().trials_dataframe(attrs=attrs)
+    return {
+        "attrs": list(attrs),
+        "multi_index_default": False,
+        "single": single,
+        "single_metric_name": single_metric,
+        "metric_names": metric,
+        "empty_column_count": len(empty.columns),
+        "errors": errors,
+    }
+
+
 def _importance_contract() -> dict[str, object]:
     study = optuna.create_study()
     rows: list[dict[str, object]] = []
@@ -1526,6 +1672,7 @@ def build_oracle() -> dict[str, object]:
         "fixed_trial": _fixed_trial_contract(),
         "frozen_trial": _frozen_trial_contract(),
         "study_management": _study_management_contract(),
+        "trials_dataframe": _trials_dataframe_contract(),
         "importance": _importance_contract(),
         "terminator": _terminator_contract(),
         "numpy_random_state_seed_contract": _random_state_contract(),

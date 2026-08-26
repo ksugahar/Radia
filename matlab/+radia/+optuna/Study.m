@@ -611,8 +611,21 @@ classdef Study < handle
             result=obj.freezeTrials(front.TrialNumber);
         end
 
-        function result = trials_dataframe(obj)
-            result=obj.TrialTable;
+        function result = trials_dataframe(obj,options)
+            %TRIALS_DATAFRAME Export upstream-shaped trial columns as a table.
+            %   MATLAB tables have no pandas MultiIndex. When multi_index is
+            %   true, the exact two-level upstream column labels are retained
+            %   in result.Properties.UserData.column_levels while the table
+            %   variables keep the flattened Optuna names for direct access.
+            arguments
+                obj
+                options.attrs (1,:) string = ["number","value", ...
+                    "datetime_start","datetime_complete","duration", ...
+                    "params","user_attrs","system_attrs","state"]
+                options.multi_index (1,1) logical = false
+            end
+            result=obj.buildTrialsDataframe( ...
+                options.attrs,options.multi_index);
         end
 
         function value = direction(obj)
@@ -807,6 +820,264 @@ classdef Study < handle
     end
 
     methods (Hidden=true)
+
+        function result=buildTrialsDataframe(obj,attrs,multiIndex)
+            attrs=reshape(string(attrs),1,[]);
+            if isempty(attrs)
+                error("radia:optuna:TrialsDataframeAttrs", ...
+                    "attrs must contain at least one FrozenTrial field.");
+            end
+            allowed=["number","value","values","datetime_start", ...
+                "datetime_complete","duration","params","user_attrs", ...
+                "system_attrs","state","intermediate_values", ...
+                "distributions"];
+            unknown=attrs(~ismember(attrs,allowed));
+            if ~isempty(unknown)
+                error("radia:optuna:TrialsDataframeAttribute", ...
+                    "FrozenTrial has no public field '%s'.",unknown(1));
+            end
+
+            if isempty(obj.TrialNumberData)
+                result=table();
+                result.Properties.UserData=obj.dataframeMetadata( ...
+                    strings(0,1),strings(0,1),logical(multiIndex));
+                return
+            end
+
+            if numel(obj.Directions)>1 && any(attrs=="value")
+                attrs(attrs=="value")="values";
+            end
+            columns=struct('Top',{},'Sub',{},'Values',{});
+            for attr=attrs
+                switch attr
+                    case "number"
+                        columns=obj.appendDataframeColumn(columns,attr,"", ...
+                            obj.TrialNumberData);
+                    case "value"
+                        if isempty(obj.MetricNames)
+                            columns=obj.appendDataframeColumn( ...
+                                columns,attr,"",obj.TrialValueData);
+                        else
+                            columns=obj.dataframeObjectiveColumns( ...
+                                columns,"value");
+                        end
+                    case "values"
+                        columns=obj.dataframeObjectiveColumns( ...
+                            columns,"values");
+                    case "datetime_start"
+                        columns=obj.appendDataframeColumn(columns,attr,"", ...
+                            obj.serialDatetimes(obj.TrialStartTimeData));
+                    case "datetime_complete"
+                        columns=obj.appendDataframeColumn(columns,attr,"", ...
+                            obj.serialDatetimes(obj.TrialEndTimeData));
+                    case "duration"
+                        columns=obj.appendDataframeColumn(columns,attr,"", ...
+                            seconds(obj.TrialDurationData));
+                    case "params"
+                        columns=obj.dataframeParameterColumns( ...
+                            columns,"params",false);
+                    case "distributions"
+                        columns=obj.dataframeParameterColumns( ...
+                            columns,"distributions",true);
+                    case "user_attrs"
+                        columns=obj.dataframeAttributeColumns( ...
+                            columns,"user_attrs",obj.UserAttrTable);
+                    case "system_attrs"
+                        columns=obj.dataframeAttributeColumns( ...
+                            columns,"system_attrs",obj.SystemAttrTable);
+                    case "intermediate_values"
+                        columns=obj.dataframeIntermediateColumns(columns);
+                    case "state"
+                        columns=obj.appendDataframeColumn(columns,attr,"", ...
+                            obj.TrialStateData);
+                end
+            end
+
+            top=reshape(string({columns.Top}),[],1);
+            sub=reshape(string({columns.Sub}),[],1);
+            metadata=obj.dataframeMetadata(top,sub,logical(multiIndex));
+            result=table();
+            storageNames=matlab.lang.makeUniqueStrings( ...
+                cellstr(metadata.flat_columns));
+            for index=1:numel(columns)
+                result.(storageNames{index})=columns(index).Values;
+            end
+            result.Properties.UserData=metadata;
+            descriptions=top;
+            nested=strlength(sub)>0;
+            descriptions(nested)=top(nested)+"."+sub(nested);
+            result.Properties.VariableDescriptions=cellstr(descriptions);
+        end
+
+        function metadata=dataframeMetadata(~,top,sub,multiIndex)
+            flat=top;
+            nested=strlength(sub)>0;
+            flat(nested)=top(nested)+"_"+sub(nested);
+            metadata=struct( ...
+                "schema","radia.optuna.trials-dataframe.v1", ...
+                "multi_index",logical(multiIndex), ...
+                "column_levels",[top,sub], ...
+                "flat_columns",flat);
+        end
+
+        function columns=appendDataframeColumn(~,columns,top,sub,values)
+            entry=struct();
+            entry.Top=string(top);
+            entry.Sub=string(sub);
+            entry.Values=reshape(values,[],1);
+            columns(end+1)=entry;
+        end
+
+        function columns=dataframeObjectiveColumns(obj,columns,top)
+            objectiveCount=numel(obj.Directions);
+            if ~isempty(obj.MetricNames)
+                labels=reshape(obj.MetricNames,[],1);
+                indices=(1:objectiveCount)';
+                [labels,order]=sort(labels);
+                indices=indices(order);
+            else
+                labels=string((0:objectiveCount-1)');
+                indices=(1:objectiveCount)';
+            end
+            for item=1:numel(indices)
+                values=NaN(numel(obj.TrialNumberData),1);
+                sources=find(obj.ObjectiveIndexData==indices(item));
+                [present,targets]=obj.dataframeTrialRows( ...
+                    obj.ObjectiveTrialNumberData(sources));
+                values(targets(present))= ...
+                    obj.ObjectiveValueData(sources(present));
+                columns=obj.appendDataframeColumn( ...
+                    columns,top,labels(item),values);
+            end
+        end
+
+        function columns=dataframeParameterColumns( ...
+                obj,columns,top,decodeDistribution)
+            names=sort(unique(obj.ParamNameData));
+            trialCount=numel(obj.TrialNumberData);
+            for name=reshape(names,1,[])
+                raw=cell(trialCount,1);
+                present=false(trialCount,1);
+                rows=find(obj.ParamNameData==name);
+                [known,targets]=obj.dataframeTrialRows( ...
+                    obj.ParamTrialNumberData(rows));
+                rows=rows(known);
+                targets=targets(known);
+                if decodeDistribution
+                    for item=1:numel(rows)
+                        source=rows(item);
+                        target=targets(item);
+                        raw{target}=radia.optuna.internal.DistributionCodec. ...
+                            decode(obj.ParamKindData(source), ...
+                            obj.ParamDistributionData(source));
+                    end
+                else
+                    numeric=isfinite(obj.ParamValueNumericData(rows));
+                    raw(targets(numeric))=num2cell( ...
+                        obj.ParamValueNumericData(rows(numeric)));
+                    textRows=~numeric;
+                    raw(targets(textRows))=obj.decodeDataframeJsonArray( ...
+                        obj.ParamValueTextData(rows(textRows)));
+                end
+                present(targets)=true;
+                values=obj.coerceDataframeColumn(raw,present);
+                columns=obj.appendDataframeColumn( ...
+                    columns,top,name,values);
+            end
+        end
+
+        function columns=dataframeAttributeColumns( ...
+                obj,columns,top,attributes)
+            names=sort(unique(attributes.Name));
+            trialCount=numel(obj.TrialNumberData);
+            for name=reshape(names,1,[])
+                raw=cell(trialCount,1);
+                present=false(trialCount,1);
+                rows=find(attributes.Name==name);
+                [known,targets]=obj.dataframeTrialRows( ...
+                    attributes.TrialNumber(rows));
+                rows=rows(known);
+                targets=targets(known);
+                raw(targets)=obj.decodeDataframeJsonArray( ...
+                    attributes.ValueJSON(rows));
+                present(targets)=true;
+                values=obj.coerceDataframeColumn(raw,present);
+                columns=obj.appendDataframeColumn( ...
+                    columns,top,name,values);
+            end
+        end
+
+        function columns=dataframeIntermediateColumns(obj,columns)
+            steps=sort(unique(obj.IntermediateTable.Step));
+            trialCount=numel(obj.TrialNumberData);
+            for step=reshape(steps,1,[])
+                values=NaN(trialCount,1);
+                rows=find(obj.IntermediateTable.Step==step);
+                [present,targets]=obj.dataframeTrialRows( ...
+                    obj.IntermediateTable.TrialNumber(rows));
+                values(targets(present))= ...
+                    obj.IntermediateTable.Value(rows(present));
+                columns=obj.appendDataframeColumn( ...
+                    columns,"intermediate_values",string(step),values);
+            end
+        end
+
+        function values=coerceDataframeColumn(~,raw,present)
+            selected=raw(present);
+            numeric=all(cellfun('isclass',selected,'double'));
+            text=all(cellfun('isclass',selected,'char')) || ...
+                all(cellfun('isclass',selected,'string'));
+            if numeric
+                values=NaN(numel(raw),1);
+                values(present)=reshape(cell2mat(selected),[],1);
+            elseif text
+                values=strings(numel(raw),1);
+                values(:)=missing;
+                values(present)=string(selected);
+            else
+                values=raw;
+                values(~present)={[]};
+            end
+        end
+
+        function [present,rows]=dataframeTrialRows(obj,trialNumbers)
+            trialNumbers=reshape(double(trialNumbers),[],1);
+            rows=trialNumbers+1;
+            present=isfinite(rows) & rows==floor(rows) & ...
+                rows>=1 & rows<=numel(obj.TrialNumberData);
+            indices=find(present);
+            present(indices)=obj.TrialNumberData(rows(indices))== ...
+                trialNumbers(indices);
+        end
+
+        function values=decodeDataframeJsonArray(~,encoded)
+            encoded=reshape(string(encoded),[],1);
+            values=cell(numel(encoded),1);
+            if isempty(encoded)
+                return
+            end
+            try
+                decoded=jsondecode(char("["+strjoin(encoded,",")+"]"));
+                if iscell(decoded)
+                    values=reshape(decoded,[],1);
+                elseif isstruct(decoded)
+                    values=reshape(num2cell(decoded),[],1);
+                elseif numel(decoded)==numel(encoded)
+                    values=num2cell(reshape(decoded,[],1));
+                else
+                    error("radia:optuna:TrialsDataframeJSON", ...
+                        "Decoded JSON array has an unexpected shape.");
+                end
+                if numel(values)~=numel(encoded)
+                    error("radia:optuna:TrialsDataframeJSON", ...
+                        "Decoded JSON array has an unexpected length.");
+                end
+            catch
+                for index=1:numel(encoded)
+                    values{index}=jsondecode(char(encoded(index)));
+                end
+            end
+        end
 
         function data=trialData(obj)
             data=struct('TrialNumber',obj.TrialNumberData, ...

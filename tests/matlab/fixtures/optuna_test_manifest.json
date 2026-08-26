@@ -439,6 +439,13 @@
       "file": "test_optuna_upstream_oracle.m",
       "oracle": "optuna49_oracle.json",
       "scope": "shared Optuna 4.9.0 behavior",
+      "test": "testTrialsDataframeMatchesUpstream"
+    },
+    {
+      "classification": "upstream-python",
+      "file": "test_optuna_upstream_oracle.m",
+      "oracle": "optuna49_oracle.json",
+      "scope": "shared Optuna 4.9.0 behavior",
       "test": "testParameterImportancesMatchUpstream"
     },
     {

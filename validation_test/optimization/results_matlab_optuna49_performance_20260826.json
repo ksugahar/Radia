@@ -1,0 +1,72 @@
+{
+  "schema": "radia.validation.optuna49-performance.v1",
+  "generated_at": "2026-08-26T21:45:20+09:00",
+  "host": "LAB",
+  "versions": {
+    "python": "3.12.10",
+    "optuna": "4.9.0",
+    "numpy": "2.5.2",
+    "scipy": "1.17.1",
+    "matlab": "R2026a Update 3",
+    "optuna_mex_command_count": 20
+  },
+  "settings": {
+    "tpe_trials": 100,
+    "trials_dataframe_rows": 1000,
+    "trials_dataframe_columns": 7,
+    "total_repeats": 11,
+    "warmup_repeats": 3,
+    "reported_repeats": 8,
+    "sequential": true,
+    "persistence": false
+  },
+  "workloads": {
+    "scalar_tpe": {
+      "seed": 37,
+      "startup_trials": 4,
+      "python_median_warmed_s": 0.10831424999923911,
+      "matlab_median_warmed_s": 0.07271665,
+      "python_over_matlab_speed_ratio": 1.48953850320716,
+      "python_checksum": 20.040135043951892,
+      "matlab_checksum": 20.040135043951906,
+      "checksum_absolute_tolerance": 1e-12,
+      "checksum_match": true,
+      "matlab_not_slower": true
+    },
+    "grouped_conditional_tpe": {
+      "seed": 101,
+      "startup_trials": 4,
+      "python_median_warmed_s": 0.34819754998898134,
+      "matlab_median_warmed_s": 0.1628489,
+      "python_over_matlab_speed_ratio": 2.13816335258624,
+      "python_checksum": 104.33176385944043,
+      "matlab_checksum": 104.33176385944044,
+      "checksum_absolute_tolerance": 1e-12,
+      "checksum_match": true,
+      "matlab_not_slower": true
+    },
+    "trials_dataframe": {
+      "attrs": [
+        "number",
+        "value",
+        "params",
+        "user_attrs",
+        "system_attrs",
+        "state"
+      ],
+      "python_median_warmed_s": 0.005733700003474951,
+      "matlab_median_warmed_s": 0.00498715,
+      "python_rows_per_s": 174407.4505805924,
+      "matlab_rows_per_s": 200515.324383666,
+      "python_over_matlab_speed_ratio": 1.14969471611541,
+      "shape_match": true,
+      "matlab_not_slower": true
+    }
+  },
+  "gate": {
+    "requirement": "MATLAB median warmed time must be no greater than upstream Optuna 4.9.0 for scalar TPE, grouped conditional TPE, and trials_dataframe; seeded TPE checksums and dataframe shape must match.",
+    "passed": true
+  },
+  "scope": "Same-host warmed sequential proposal throughput and 1000-row native-table export; persistence and parallel scheduling are excluded.",
+  "claim_boundary": "Re-run both benchmark scripts on the target host before making a host-specific speed claim. The trials_dataframe benchmark includes two parameters plus user and system attributes and excludes study construction from the timed region."
+}
