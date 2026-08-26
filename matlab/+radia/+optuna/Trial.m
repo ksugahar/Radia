@@ -20,6 +20,7 @@ classdef Trial < radia.optuna.BaseTrial
     properties (Dependent, SetAccess=private)
         StartTime
         EndTime
+        relative_params
     end
 
     properties (Access=private)
@@ -201,6 +202,10 @@ classdef Trial < radia.optuna.BaseTrial
     end
 
     methods
+        function value=get.relative_params(obj)
+            value=obj.RelativeParams;
+        end
+
         function value=get.StartTime(obj)
             value=datetime(obj.StartTimeSerial,'ConvertFrom','datenum', ...
                 'TimeZone','local');
