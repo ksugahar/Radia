@@ -15,7 +15,8 @@ Released 2026-08-27.
   inactive constraints before accepting cached state, while the tuning gate
   requires an accuracy-preserving measured speedup over the accepted action.
   Active-charge and leaf-pruning diagnostics are available through matching
-  Python and standalone MATLAB MEX APIs.
+  Python and standalone MATLAB MEX APIs. The checked 86-test MATLAB/Simulink
+  validation artifact was regenerated against the exact release MEX.
 - Vectorized cyclic tetrahedral image assembly and expanded regression coverage
   for alternating reductions, BDM2 field coefficients, native matrices, and
   projected field evaluation.
