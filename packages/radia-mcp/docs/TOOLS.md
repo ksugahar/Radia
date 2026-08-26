@@ -6,7 +6,7 @@ Total: **1031 tools** across 49 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
-| [`mcp-server-cubit`](#mcp-server-cubit) | `radia_mcp.cubit` | 88 |
+| [`mcp-server-cubit`](#mcp-server-cubit) | `radia_mcp.cubit` | 89 |
 | [`mcp-server-build123d`](#mcp-server-build123d) | `radia_mcp.build123d` | 78 |
 | [`mcp-server-gmsh`](#mcp-server-gmsh) | `radia_mcp.gmsh` | 69 |
 | [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 143 |
@@ -113,6 +113,7 @@ Module: `radia_mcp.cubit.server`
 | `cubit_mesh_race_with_human` | **The radia-mcp signature workflow.** |
 | `cubit_mixed_order_series_gate` | Validate mixed-mesh topology and routing across export orders. |
 | `cubit_mixed_transition_source_gate` | Gate source commands, headless diagnostics, and quality API recovery. |
+| `cubit_nastran_consumer_gate` | Validate a Cubit BDF handoff without conflating producer and consumer faults. |
 | `cubit_netgen_quality_compare` | Mesh ONE STEP with both meshers and compare element quality with a |
 | `cubit_partial_volume_hex_diagnosis_gate` | Gate a truthful partial-volume/low-quality hex rejection. |
 | `cubit_partitioned_sweep_compatibility_gate` | Gate a legacy webcut/partition journal promoted to an all-hex sweep. |
