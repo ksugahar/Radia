@@ -1201,7 +1201,10 @@ private:
     bool CurvedHostsTouch(int kindA, int hostA, int kindB, int hostB) const;
     std::vector<double> QuadBlockHOCurvedDirect(int kindT, int hostT, int kindS, int hostS) const;
     std::vector<double> QuadBlockHOTet(int kindT, int hostT, int kindS, int hostS) const;
-    const std::vector<double>& GetHOTetSymBlock(int kindA, int hostA, int kindB, int hostB) const;
+    std::vector<double> QuadBlockHOTetImage(
+        int kindT, int hostT, int kindS, int hostS, int img) const;
+    const std::vector<double>& GetHOTetSymBlock(
+        int kindA, int hostA, int kindB, int hostB, int img = 0) const;
     double PhiAtHO(int src, const double p[3]) const;       // polynomial-charge inner potential (subtraction, NEAR) -- superseded by PhiAtHO_Analytic for order<=2
     double PhiAtHO_Analytic(int src, const double p[3]) const; // EXACT analytic poly-charge potential (moment kernels, flat order<=2; machine precision, all pair types)
     double PhiAtHO_Duffy(int src, const double p[3]) const;    // Duffy singular-quadrature poly-charge potential (order>=3 / curved; ~1e-4)
