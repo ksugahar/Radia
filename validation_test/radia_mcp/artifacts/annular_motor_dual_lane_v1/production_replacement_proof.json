@@ -1,7 +1,7 @@
 {
   "radia_version": "4.95.30",
   "schema": "radia.validation.production-replacement-proof.v1",
-  "executed_at_utc": "2026-08-04T05:34:12.000755+00:00",
+  "executed_at_utc": "2026-08-26T21:52:57.671870+00:00",
   "execution_version": {
     "radia": "4.95.30",
     "matlab": "2026a",
@@ -29,9 +29,9 @@
     },
     "native_motor_angle_family": {
       "status": "pass",
-      "test_count": 77,
+      "test_count": 86,
       "artifact_sha256_by_role": {
-        "matlab": "f90264f304d5f1a7500ef56844d811530b3b6c12acc01ad2fb305a3cbbc9f710"
+        "matlab": "70078cd812138a053bb24d61e3907d6121b6e07532a3d5e7e25cbb189dd61a3c"
       },
       "checks": {
         "standalone_batch": true,
@@ -45,5 +45,5 @@
   },
   "status": "pass",
   "pass": true,
-  "proof_payload_sha256": "bf7732d50ae9fd2dfb2e5cd1d7d3d45a72bd6ba13b91c7093df83958302435c5"
+  "proof_payload_sha256": "f19e92b8e4fa1e93ea921c4473e708722ddccb1959fc40d416f87a0aa47e80cd"
 }
