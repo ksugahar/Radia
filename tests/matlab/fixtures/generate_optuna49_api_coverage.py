@@ -48,14 +48,14 @@ MODULE_EQUIVALENTS = {
     "exceptions": True,
     "importance": True,
     "integration": False,
-    "logging": False,
+    "logging": True,
     "pruners": True,
     "samplers": True,
     "search_space": True,
     "storages": True,
     "study": True,
     "trial": True,
-    "version": False,
+    "version": True,
     "visualization": False,
 }
 VERIFIED_FUNCTIONS = {
@@ -72,13 +72,107 @@ VERIFIED_FUNCTIONS = {
     "json_to_distribution",
     "load_study",
 }
+CLASS_EQUIVALENTS = {
+    "_GroupDecomposedSearchSpace": "GroupDecomposedSearchSpace",
+    "_SearchSpaceGroup": "SearchSpaceGroup",
+}
+SYMBOL_EQUIVALENTS = {
+    "__version__": "version",
+}
+VERIFIED_SYMBOLS = VERIFIED_FUNCTIONS | {
+    "CategoricalChoiceType",
+    "DISTRIBUTION_CLASSES",
+    "CRITICAL",
+    "DEBUG",
+    "ERROR",
+    "FATAL",
+    "INFO",
+    "WARN",
+    "WARNING",
+    "create_default_formatter",
+    "disable_default_handler",
+    "disable_propagation",
+    "enable_default_handler",
+    "enable_propagation",
+    "get_logger",
+    "get_verbosity",
+    "set_verbosity",
+    "__version__",
+    "CLIUsageError",
+    "DuplicatedStudyError",
+    "ExperimentalWarning",
+    "OptunaError",
+    "StorageInternalError",
+    "TrialPruned",
+    "UpdateFinishedTrialError",
+}
 SAMPLER_PUBLIC_MEMBERS = {
     "after_trial",
     "before_trial",
     "infer_relative_search_space",
 }
 CROSSOVER_PUBLIC_MEMBERS = {"crossover", "n_parents"}
+EXCEPTION_PUBLIC_MEMBERS = {"add_note", "args", "with_traceback"}
 VERIFIED_MEMBERS = {
+    "_GroupDecomposedSearchSpace": {"calculate"},
+    "_SearchSpaceGroup": {"add_distributions", "search_spaces"},
+    "BaseImportanceEvaluator": {"evaluate"},
+    "CLIUsageError": EXCEPTION_PUBLIC_MEMBERS,
+    "DuplicatedStudyError": EXCEPTION_PUBLIC_MEMBERS,
+    "ExperimentalWarning": EXCEPTION_PUBLIC_MEMBERS,
+    "FanovaImportanceEvaluator": {"evaluate"},
+    "MeanDecreaseImpurityImportanceEvaluator": {"evaluate"},
+    "OptunaError": EXCEPTION_PUBLIC_MEMBERS,
+    "PedAnovaImportanceEvaluator": {"evaluate"},
+    "StorageInternalError": EXCEPTION_PUBLIC_MEMBERS,
+    "TrialPruned": EXCEPTION_PUBLIC_MEMBERS,
+    "UpdateFinishedTrialError": EXCEPTION_PUBLIC_MEMBERS,
+    "BaseDistribution": {
+        "single",
+        "to_external_repr",
+        "to_internal_repr",
+    },
+    "CategoricalDistribution": {
+        "single",
+        "to_external_repr",
+        "to_internal_repr",
+    },
+    "FloatDistribution": {
+        "single",
+        "to_external_repr",
+        "to_internal_repr",
+    },
+    "IntDistribution": {
+        "single",
+        "to_external_repr",
+        "to_internal_repr",
+    },
+    "UniformDistribution": {
+        "single",
+        "to_external_repr",
+        "to_internal_repr",
+    },
+    "LogUniformDistribution": {
+        "single",
+        "to_external_repr",
+        "to_internal_repr",
+    },
+    "DiscreteUniformDistribution": {
+        "q",
+        "single",
+        "to_external_repr",
+        "to_internal_repr",
+    },
+    "IntUniformDistribution": {
+        "single",
+        "to_external_repr",
+        "to_internal_repr",
+    },
+    "IntLogUniformDistribution": {
+        "single",
+        "to_external_repr",
+        "to_internal_repr",
+    },
     "BasePruner": {"prune"},
     "BaseSampler": SAMPLER_PUBLIC_MEMBERS,
     "BaseTrial": {
@@ -214,7 +308,24 @@ VERIFIED_MEMBERS = {
     "SuccessiveHalvingPruner": {"prune"},
     "ThresholdPruner": {"prune"},
     "WilcoxonPruner": {"prune"},
-    "StudyDirection": {"NOT_SET", "MINIMIZE", "MAXIMIZE"},
+    "StudyDirection": {
+        "NOT_SET",
+        "MINIMIZE",
+        "MAXIMIZE",
+        "as_integer_ratio",
+        "bit_count",
+        "bit_length",
+        "conjugate",
+        "denominator",
+        "from_bytes",
+        "imag",
+        "is_integer",
+        "name",
+        "numerator",
+        "real",
+        "to_bytes",
+        "value",
+    },
     "TrialState": {
         "RUNNING",
         "COMPLETE",
@@ -222,9 +333,29 @@ VERIFIED_MEMBERS = {
         "FAIL",
         "WAITING",
         "is_finished",
+        "as_integer_ratio",
+        "bit_count",
+        "bit_length",
+        "conjugate",
+        "denominator",
+        "from_bytes",
+        "imag",
+        "is_integer",
+        "name",
+        "numerator",
+        "real",
+        "to_bytes",
+        "value",
     },
 }
 PARTIALLY_VERIFIED_CLASSES = {
+    "_GroupDecomposedSearchSpace",
+    "_SearchSpaceGroup",
+    "BaseImportanceEvaluator",
+    "FanovaImportanceEvaluator",
+    "MeanDecreaseImpurityImportanceEvaluator",
+    "PedAnovaImportanceEvaluator",
+    "BaseDistribution",
     "BasePruner",
     "BaseSampler",
     "BaseTrial",
@@ -390,9 +521,12 @@ def build_coverage() -> dict[str, Any]:
                 present = MODULE_EQUIVALENTS.get(name, False)
                 matlab_name = f"radia.optuna ({name} namespace)" if present else None
             else:
-                present = name in names
-                matlab_name = f"radia.optuna.{name}" if present else None
-            if present and kind == "module" or present and name in VERIFIED_FUNCTIONS and kind == "function":
+                surface_name = CLASS_EQUIVALENTS.get(
+                    name, SYMBOL_EQUIVALENTS.get(name, name)
+                )
+                present = surface_name in names
+                matlab_name = f"radia.optuna.{surface_name}" if present else None
+            if present and kind == "module" or present and name in VERIFIED_SYMBOLS:
                 oracle_status = "verified"
             elif present and name in PARTIALLY_VERIFIED_CLASSES and kind == "class":
                 oracle_status = "partial"
@@ -403,12 +537,16 @@ def build_coverage() -> dict[str, Any]:
             )
             if kind != "class":
                 continue
+            surface_name = CLASS_EQUIVALENTS.get(name, name)
             for member in symbol["members"]:
                 member_name = str(member["name"])
                 normalized_member = _normalized(member_name)
-                member_present = name in members and normalized_member in members[name]
+                member_present = (
+                    surface_name in members
+                    and normalized_member in members[surface_name]
+                )
                 if member_present:
-                    candidates = members[name][normalized_member]
+                    candidates = members[surface_name][normalized_member]
                     actual_member = (
                         member_name
                         if member_name in candidates
@@ -427,7 +565,9 @@ def build_coverage() -> dict[str, Any]:
                         f"{upstream}.{member_name}",
                         f"class-{member['kind']}",
                         member_present,
-                        f"radia.optuna.{name}.{actual_member}" if member_present else None,
+                        f"radia.optuna.{surface_name}.{actual_member}"
+                        if member_present
+                        else None,
                         member_oracle,
                     )
                 )

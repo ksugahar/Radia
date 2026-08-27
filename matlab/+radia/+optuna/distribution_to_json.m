@@ -1,12 +1,13 @@
 function encoded=distribution_to_json(distribution)
 %DISTRIBUTION_TO_JSON Serialize a distribution using Optuna 4.9 JSON.
 arguments
-    distribution (1,1) struct
+    distribution
 end
-if ~all(isfield(distribution,["kind","name"]))
+if ~radia.optuna.internal.DistributionCodec.isSpec(distribution)
     error("radia:optuna:Distribution", ...
         "A distribution requires kind and name fields.");
 end
+distribution=radia.optuna.internal.DistributionCodec.normalize(distribution);
 name=string(distribution.name);
 switch name
     case "FloatDistribution"
