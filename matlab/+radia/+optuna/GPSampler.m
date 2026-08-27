@@ -105,7 +105,9 @@ classdef GPSampler < radia.optuna.BaseSampler
         end
 
         function beforeTrial(obj,study,trial)
-            if obj.Backend=="upstream-python"
+            if obj.Backend=="upstream-python" && ...
+                    ~isempty(obj.PythonTrial) && ...
+                    obj.PythonTrialNumber==trial.Number
                 obj.attach(study);
                 obj.preparePythonTrial(study,trial);
                 trial.setSystemAttr("gp_sampling_mode","upstream_optuna_4_9_0");
@@ -151,7 +153,9 @@ classdef GPSampler < radia.optuna.BaseSampler
         end
 
         function value=sampleFloat(obj,study,trial,name,low,high,options)
-            if obj.Backend=="upstream-python"
+            if obj.Backend=="upstream-python" && ...
+                    ~isempty(obj.PythonTrial) && ...
+                    obj.PythonTrialNumber==trial.Number
                 obj.ensurePythonTrial(trial);
                 arguments={"log",logical(options.Log)};
                 if isfinite(options.Step)
@@ -176,7 +180,8 @@ classdef GPSampler < radia.optuna.BaseSampler
         end
 
         function value=sampleIntegerDetailed(obj,study,trial,name,low,high,step,logScale)
-            if obj.Backend~="upstream-python"
+            if obj.Backend~="upstream-python" || isempty(obj.PythonTrial) || ...
+                    obj.PythonTrialNumber~=trial.Number
                 if ~logScale && step==1
                     value=obj.IndependentSampler.sampleInteger( ...
                         study,trial,name,low,high);
@@ -195,7 +200,9 @@ classdef GPSampler < radia.optuna.BaseSampler
         end
 
         function value=sampleCategorical(obj,study,trial,name,choices)
-            if obj.Backend=="upstream-python"
+            if obj.Backend=="upstream-python" && ...
+                    ~isempty(obj.PythonTrial) && ...
+                    obj.PythonTrialNumber==trial.Number
                 obj.ensurePythonTrial(trial);
                 raw=obj.PythonTrial.suggest_categorical( ...
                     char(name),obj.pythonChoices(choices));
