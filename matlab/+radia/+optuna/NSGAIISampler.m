@@ -118,6 +118,12 @@ classdef NSGAIISampler < radia.optuna.BaseGASampler
             obj.AfterTrialStrategy = options.AfterTrialStrategy;
         end
 
+        function reseed_rng(obj)
+            obj.IndependentSampler.reseed_rng();
+            freshSeed=radia.optuna.internal.resolveSeed([]);
+            obj.Stream=radia.optuna.internal.NumpyRandomState(freshSeed);
+        end
+
         function searchSpace = inferRelativeSearchSpace(~,study,trial) %#ok<INUSD>
             searchSpace = ...
                 radia.optuna.internal.IntersectionSearchSpace.calculate( ...

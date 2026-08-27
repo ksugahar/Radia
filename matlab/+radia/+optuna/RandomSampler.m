@@ -25,6 +25,11 @@ classdef RandomSampler < radia.optuna.BaseSampler
             obj.Stream = radia.optuna.internal.NumpyRandomState(obj.Seed);
         end
 
+        function reseed_rng(obj)
+            freshSeed=radia.optuna.internal.resolveSeed([]);
+            obj.Stream=radia.optuna.internal.NumpyRandomState(freshSeed);
+        end
+
         function value = sampleFloat(obj, study, trial, ~, low, high, options)
             if ~isstruct(options) || ~isfield(options, "Log") || ~isfield(options, "Step")
                 error("radia:optuna:SamplerOptions", "Sampler options must contain Log and Step fields.");

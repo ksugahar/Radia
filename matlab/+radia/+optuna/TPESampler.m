@@ -152,6 +152,13 @@ classdef TPESampler < radia.optuna.BaseSampler
                 CategoricalDistanceFcn=obj.CategoricalDistanceFcn);
         end
 
+        function reseed_rng(obj)
+            freshSeed=radia.optuna.internal.resolveSeed([]);
+            obj.Stream=radia.optuna.internal.NumpyRandomState(freshSeed);
+            obj.IndependentSampler.reseed_rng();
+            obj.MultiObjectiveSampler.reseed_rng();
+        end
+
         function value = sampleFloat(obj, study, trial, name, low, high, options)
             if numel(study.Directions) > 1
                 value = obj.MultiObjectiveSampler.sampleFloat( ...

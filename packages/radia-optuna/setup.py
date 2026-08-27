@@ -2,13 +2,12 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 import shutil
+from pathlib import Path
 
 from setuptools import setup
 from setuptools.command.bdist_wheel import bdist_wheel as _bdist_wheel
 from setuptools.command.build_py import build_py as _build_py
-
 
 PACKAGE_ROOT = Path(__file__).resolve().parent
 REPO_ROOT = PACKAGE_ROOT.parents[1]

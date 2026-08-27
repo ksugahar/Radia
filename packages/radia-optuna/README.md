@@ -3,8 +3,9 @@
 `radia-optuna` is an independent, separately distributed MATLAB optimization
 component from the Radia monorepo. It installs the `radia.optuna` MATLAB
 namespace, the 20-command `optuna_mex`, and checked compatibility contracts
-whose behavioral oracle is Optuna 4.9.0. It does not install or load the Radia
-solver, NGSolve, oneMKL, or Cubit.
+whose behavioral oracle is Optuna 4.9.0. Its checked public inventory contains
+816 verified entries with no missing, partial, or unmapped entry. It does not
+install or load the Radia solver, NGSolve, oneMKL, or Cubit.
 
 Install it by itself:
 
@@ -22,8 +23,10 @@ python -m pip install "radia[optuna]"
 
 `radia[optuna]` installs the native MATLAB/Simulink package without heavy
 Python numerical dependencies. Use `radia[optuna-upstream]` when GP,
-scrambled-QMC, or importance parity also needs the pinned upstream Python,
-SciPy, and PyTorch stack.
+scrambled-QMC, importance, advanced terminators, storage transports,
+visualization, or lazy integration exports need the pinned upstream Python,
+SciPy, and PyTorch stack. Individual visualization and integration targets
+retain the same optional third-party dependencies as upstream Optuna.
 
 Add the printed directory to MATLAB, then use the upstream-shaped API:
 

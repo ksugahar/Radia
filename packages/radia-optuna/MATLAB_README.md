@@ -19,12 +19,13 @@ incompatible native gateways fail loudly and never redirect through
 Radia. Radia electromagnetic models and application-specific adapters are not
 part of that generic contract.
 
-The MATLAB API is a differentially verified subset of upstream Optuna 4.9.0,
-not a claim of complete package compatibility. See
-`optuna_upstream_compatibility.json` and `optuna49_api_coverage.json` for the
-machine-readable boundary. MATLAB-only parallel execution, MAT/table storage,
-Simulink operation, and Radia adapters are extensions rather than Optuna parity
-evidence.
+The checked Optuna 4.9.0 public inventory is closed: all 816 inventoried
+symbols and public class members are present and differential-oracle mapped.
+See `optuna_upstream_compatibility.json` and `optuna49_api_coverage.json` for
+the exact machine-readable boundary and the remaining backend-specific option
+limits. This is a MATLAB API, not a Python binary drop-in. MATLAB-only parallel
+execution, MAT/table storage, Simulink operation, and Radia adapters are
+extensions rather than Optuna parity evidence.
 
 `Study.trials_dataframe` follows the Optuna 4.9.0 `attrs` expansion and column
 ordering while returning a native MATLAB `table`:

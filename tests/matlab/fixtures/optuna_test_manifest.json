@@ -376,6 +376,13 @@
       "file": "test_optuna_upstream_oracle.m",
       "oracle": "optuna49_oracle.json",
       "scope": "shared Optuna 4.9.0 behavior",
+      "test": "testPublicAPIInventoryIsFullyOracleMapped"
+    },
+    {
+      "classification": "upstream-python",
+      "file": "test_optuna_upstream_oracle.m",
+      "oracle": "optuna49_oracle.json",
+      "scope": "shared Optuna 4.9.0 behavior",
       "test": "testNumpyRandomStateSeedContract"
     },
     {
@@ -391,6 +398,13 @@
       "oracle": "optuna49_oracle.json",
       "scope": "shared Optuna 4.9.0 behavior",
       "test": "testUnseededSamplerDefaultsMatchUpstreamSemantics"
+    },
+    {
+      "classification": "upstream-python",
+      "file": "test_optuna_upstream_oracle.m",
+      "oracle": "optuna49_oracle.json",
+      "scope": "shared Optuna 4.9.0 behavior",
+      "test": "testSamplerReseedMatchesUpstreamSemantics"
     },
     {
       "classification": "upstream-python",
@@ -481,6 +495,20 @@
       "file": "test_optuna_upstream_oracle.m",
       "oracle": "optuna49_oracle.json",
       "scope": "shared Optuna 4.9.0 behavior",
+      "test": "testIntegrationExportsMatchUpstream"
+    },
+    {
+      "classification": "upstream-python",
+      "file": "test_optuna_upstream_oracle.m",
+      "oracle": "optuna49_oracle.json",
+      "scope": "shared Optuna 4.9.0 behavior",
+      "test": "testVisualizationExportsMatchUpstream"
+    },
+    {
+      "classification": "upstream-python",
+      "file": "test_optuna_upstream_oracle.m",
+      "oracle": "optuna49_oracle.json",
+      "scope": "shared Optuna 4.9.0 behavior",
       "test": "testTerminationContractsMatchUpstream"
     },
     {
@@ -516,6 +544,13 @@
       "file": "test_optuna_upstream_oracle.m",
       "oracle": "optuna49_oracle.json",
       "scope": "shared Optuna 4.9.0 behavior",
+      "test": "testGrpcStorageProxyMatchesUpstream"
+    },
+    {
+      "classification": "upstream-python",
+      "file": "test_optuna_upstream_oracle.m",
+      "oracle": "optuna49_oracle.json",
+      "scope": "shared Optuna 4.9.0 behavior",
       "test": "testJournalBackendMatchesUpstream"
     },
     {
@@ -531,6 +566,13 @@
       "oracle": "optuna49_oracle.json",
       "scope": "shared Optuna 4.9.0 behavior",
       "test": "testJournalRedisBackendMatchesUpstream"
+    },
+    {
+      "classification": "upstream-python",
+      "file": "test_optuna_upstream_oracle.m",
+      "oracle": "optuna49_oracle.json",
+      "scope": "shared Optuna 4.9.0 behavior",
+      "test": "testRetryHeartbeatCallbackMatchesUpstream"
     },
     {
       "classification": "upstream-python",

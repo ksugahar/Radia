@@ -92,6 +92,12 @@ classdef MOTPESampler < radia.optuna.BaseSampler
             obj.CategoricalDistanceFcn=options.CategoricalDistanceFcn;
         end
 
+        function reseed_rng(obj)
+            freshSeed=radia.optuna.internal.resolveSeed([]);
+            obj.Stream=radia.optuna.internal.NumpyRandomState(freshSeed);
+            obj.IndependentSampler.reseed_rng();
+        end
+
         function value = sampleFloat(obj, study, trial, name, low, high, options)
             obj.validate(low, high, options);
             if low == high

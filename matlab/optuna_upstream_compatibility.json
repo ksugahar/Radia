@@ -1,6 +1,6 @@
 {
   "schema": "radia.optuna-upstream-compatibility.v1",
-  "claim": "Differentially verified subset of Optuna 4.9.0; not a drop-in replacement for the complete Python package.",
+  "claim": "All 816 inventoried Optuna 4.9.0 public symbols and class members are present and differential-oracle mapped. This MATLAB API is not a Python binary drop-in, and backend-specific option boundaries remain explicit below.",
   "oracle": {
     "package": "optuna",
     "version": "4.9.0",
@@ -11,7 +11,9 @@
   "complete_api_closure": {
     "inventory": "tests/matlab/fixtures/optuna49_public_api.json",
     "coverage": "matlab/optuna49_api_coverage.json",
-    "rule": "A complete-compatibility claim is forbidden until every inventoried public symbol and class member is present and has an exact upstream-oracle mapping."
+    "rule": "A complete-compatibility claim is forbidden until every inventoried public symbol and class member is present and has an exact upstream-oracle mapping.",
+    "result": "816 verified, 0 partial, 0 unmapped, 0 missing",
+    "complete": true
   },
   "shared_behavior_verified": [
     "Study ask/tell-by-object/tell-by-number/enqueue/add-trial lifecycle, including imported WAITING/RUNNING trials, finished-trial handling, directions, metric names, attributes, FrozenTrial-returning get_trials/best_trial/best_trials observables, and single-MAT-storage load/copy/delete/list management",
@@ -25,6 +27,7 @@
     "StudyDirection and TrialState values, TrialState.is_finished, enum inputs to study/trial factories, and Study.direction",
     "IntersectionSearchSpace and intersection_search_space, including pruned-state inclusion, ignored failed/waiting trials, sorted keys, dynamic-range exclusion, and retained single-value distributions",
     "Sampler seed=None constructor semantics: independently constructed unseeded samplers draw fresh private entropy without mutating MATLAB's global RNG; exact proposal comparison remains explicitly seeded",
+    "Sampler reseed_rng behavior, including fresh private entropy, the deliberate BruteForceSampler no-op, delegated independent samplers, and unchanged QMC sequence seeds",
     "RandomSampler proposal sequences",
     "TPESampler scalar, mixed, multivariate, group-decomposed conditional, constrained, callable gamma/weights, and categorical-distance proposal sequences, including independent-fallback warning control",
     "MOTPESampler multi-objective proposal sequences and constrained Pareto support",
@@ -37,7 +40,12 @@
     "NSGA-II Uniform, BLX-alpha, SBX, VSBX, SPX, and UNDX crossover proposal sequences",
     "Percentile, threshold, patient, no-op, successive-halving, Hyperband, and Wilcoxon pruning decisions",
     "fANOVA parameter importance through the pinned Optuna 4.9.0 evaluator",
-    "MaxTrialsCallback, BestValueStagnationEvaluator, and stagnation-based Terminator behavior",
+    "Public logging constants, verbosity, handlers, propagation, and formatter behavior",
+    "BaseStorage/InMemoryStorage plus pinned RDBStorage, cached storage, Journal file/Redis backends, JournalStorage replay, heartbeat retry callbacks, stale-trial failure, and real-transport gRPC proxy behavior",
+    "File-system, boto3-shaped, and GCS-shaped artifact stores plus upload, list, download, retry, metadata, and path/error behavior",
+    "MaxTrialsCallback, BestValueStagnationEvaluator, EMMREvaluator, RegretBoundEvaluator, and Terminator behavior",
+    "All public Plotly and matplotlib visualization exports, availability checks, optional-dependency errors, and returned figure/axes types",
+    "All public optuna.integration lazy exports, including exact optional-dependency availability and error types in the pinned environment",
     "Official Optuna MCP Study/Trial tool contract where optuna-mcp exposes the operation"
   ],
   "matlab_integration_only": [
@@ -45,7 +53,7 @@
     "MATLAB table normalization and MAT-file persistence/reload",
     "MATLAB callback transactions and storage locking",
     "Simulink block, mask, signal, and run-artifact integration",
-    "native MEX kernel lifecycle and fallback selection",
+    "native MEX kernel lifecycle and explicit backend selection",
     "GPSampler Backend=matlab-native state persistence and lifecycle"
   ],
   "unsupported_or_not_yet_oracled": [
@@ -62,12 +70,8 @@
       "boundary": "The MATLAB-native Sobol direction table is limited to 32 dimensions; use the SciPy-backed path where supported or treat higher dimensions as unsupported."
     },
     {
-      "feature": "Optuna ecosystem services",
-      "boundary": "RDB/Journal storage, heartbeat and stale-trial recovery, artifact stores, visualization/dashboard, and third-party integrations are not implemented by the MATLAB layer."
-    },
-    {
-      "feature": "Complete public Python API surface",
-      "boundary": "Public logging, storage classes, group-decomposed search-space helpers, visualization functions, artifact APIs, integrations, and Python plugin extension points are outside the current MATLAB subset. Compatibility claims apply only to entries listed in shared_behavior_verified."
+      "feature": "Python runtime identity",
+      "boundary": "MATLAB returns MATLAB objects for native APIs and exact upstream Python figure, axes, integration, storage, or evaluator objects only on the explicitly pinned upstream boundary. Python pickling, arbitrary Python subclass identity, and binary drop-in replacement are not claimed."
     }
   ]
 }
