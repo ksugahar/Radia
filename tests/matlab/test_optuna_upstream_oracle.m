@@ -24,6 +24,7 @@ oracle=testCase.TestData.Oracle;
 verifyEqual(testCase,string(oracle.schema), ...
     "radia.test.optuna-upstream-oracle.v1");
 verifyEqual(testCase,string(oracle.optuna_version),"4.9.0");
+verifyEqual(testCase,radia.optuna.version(),string(oracle.optuna_version));
 verifyNotEmpty(testCase,string(oracle.numpy_version));
 verifyNotEmpty(testCase,string(oracle.scipy_version));
 verifyNotEmpty(testCase,string(oracle.python_version));
@@ -143,6 +144,38 @@ verifyEqual(testCase,globalStateAfter,globalStateBefore);
 
 verifyEqual(testCase,radia.optuna.RandomSampler(37).Seed,37);
 verifyEqual(testCase,radia.optuna.TPESampler(Seed=37).Seed,37);
+end
+
+function testLoggingPublicContractMatchesUpstream(testCase)
+expected=testCase.TestData.Oracle.logging;
+constants=["CRITICAL","DEBUG","ERROR","FATAL","INFO","WARN","WARNING"];
+for name=constants
+    actual=feval("radia.optuna."+name);
+    verifyEqual(testCase,actual,double(expected.constants.(name)));
+end
+radia.optuna.set_verbosity(radia.optuna.INFO());
+verifyEqual(testCase,radia.optuna.get_verbosity(),double(expected.initial));
+logger=radia.optuna.get_logger("unit");
+verifyEqual(testCase,logger.name,string(expected.logger.name));
+verifyEqual(testCase,logger.level,double(expected.logger.level));
+verifyEqual(testCase,logger.propagate,logical(expected.logger.propagate));
+verifyEqual(testCase,logger.handlers,double(expected.logger.handlers));
+formatter=radia.optuna.create_default_formatter();
+verifyEqual(testCase,formatter.format,string(expected.formatter.format));
+radia.optuna.set_verbosity(radia.optuna.DEBUG());
+verifyEqual(testCase,radia.optuna.get_verbosity(),double(expected.after_set));
+radia.optuna.disable_default_handler();
+radia.optuna.disable_propagation();
+root=radia.optuna.get_logger("optuna");
+verifyEqual(testCase,root.propagate,logical(expected.disabled.propagate));
+verifyEqual(testCase,root.handlers,double(expected.disabled.handlers));
+radia.optuna.enable_default_handler();
+radia.optuna.enable_propagation();
+root=radia.optuna.get_logger("optuna");
+verifyEqual(testCase,root.propagate,logical(expected.enabled.propagate));
+verifyEqual(testCase,root.handlers,double(expected.enabled.handlers));
+radia.optuna.set_verbosity(radia.optuna.WARNING());
+radia.optuna.disable_propagation();
 end
 
 function testSamplerPublicMembersMatchUpstream(testCase)
@@ -307,6 +340,39 @@ verifyEqual(testCase,callbackRows(1).last_step, ...
         callbackRows(end+1)=struct("state",trial.State, ...
             "value",trial.Value,"last_step",trial.last_step());
     end
+end
+
+function testExceptionPublicContractMatchesUpstream(testCase)
+expected=testCase.TestData.Oracle.exceptions;
+names=string(fieldnames(expected));
+for name=reshape(names,1,[])
+    contract=expected.(name);
+    constructors={cell(1,0),{"oracle message"},{"a","b"}};
+    for index=1:numel(constructors)
+        arguments=constructors{index};
+        exception=feval("radia.optuna."+name,arguments{:});
+        item=contract.cases(index);
+        verifyEqual(testCase,exception.message,string(item.message),name);
+        verifyEqual(testCase,string(exception.args), ...
+            reshape(string(item.args),1,[]),name);
+        exception.add_note("oracle note");
+        verifyEqual(testCase,exception.notes, ...
+            reshape(string(item.notes),1,[]),name);
+        verifyTrue(testCase,exception.with_traceback([])==exception,name);
+        try
+            throw(exception);
+            verifyFail(testCase,"Optuna exception was not thrown: "+name);
+        catch caught
+            verifyEqual(testCase,string(caught.identifier), ...
+                "radia:optuna:"+name,name);
+            verifyEqual(testCase,string(caught.message),string(item.message),name);
+        end
+    end
+    verifyEqual(testCase,isa(feval("radia.optuna."+name), ...
+        "radia.optuna.OptunaError"),logical(contract.is_optuna_error),name);
+    verifyEqual(testCase,name=="ExperimentalWarning", ...
+        logical(contract.is_warning),name);
+end
 end
 
 function testFinishedTellAndConstraintFailureMatchUpstream(testCase)
@@ -585,17 +651,7 @@ end
 
 function testParameterImportancesMatchUpstream(testCase)
 expected=testCase.TestData.Oracle.importance;
-study=radia.optuna.Study(AutoSave=false);
-for index=1:numel(expected.trials)
-    row=expected.trials(index);
-    study.add_trial(radia.optuna.createTrial(Value=double(row.value), ...
-        Params=struct("x",double(row.x),"y",double(row.y), ...
-        "mode",string(row.mode)), ...
-        Distributions=struct( ...
-        "x",radia.optuna.FloatDistribution(-1,1), ...
-        "y",radia.optuna.FloatDistribution(0,1), ...
-        "mode",radia.optuna.CategoricalDistribution(["A","B","C"]))));
-end
+study=importanceStudy(expected);
 result=radia.optuna.get_param_importances(study, ...
     evaluator=string(expected.evaluator.name), ...
     n_trees=double(expected.evaluator.n_trees), ...
@@ -605,6 +661,31 @@ verifyEqual(testCase,result.Parameter,string(expected.parameter_order));
 verifyEqual(testCase,result.Importance, ...
     reshape(double(expected.values),[],1),AbsTol=0);
 verifyEqual(testCase,sum(result.Importance),1,AbsTol=10*eps);
+end
+
+function testImportanceEvaluatorPublicMembersMatchUpstream(testCase)
+expected=testCase.TestData.Oracle.importance;
+contract=expected.public_evaluators;
+verifyEqual(testCase,string(contract.base_construction_error),"TypeError");
+verifyError(testCase,@()radia.optuna.BaseImportanceEvaluator(), ...
+    "MATLAB:class:abstract");
+study=importanceStudy(expected);
+evaluators={ ...
+    "fanova",radia.optuna.FanovaImportanceEvaluator( ...
+        n_trees=16,max_depth=16,seed=97); ...
+    "mdi",radia.optuna.MeanDecreaseImpurityImportanceEvaluator( ...
+        n_trees=16,max_depth=16,seed=97); ...
+    "ped_anova",radia.optuna.PedAnovaImportanceEvaluator( ...
+        target_quantile=0.25,region_quantile=1)};
+for index=1:size(evaluators,1)
+    name=evaluators{index,1};
+    actual=evaluators{index,2}.evaluate(study);
+    verifyImportanceTable(testCase,actual,contract.(name));
+end
+target=radia.optuna.FanovaImportanceEvaluator( ...
+    n_trees=16,max_depth=16,seed=97).evaluate( ...
+    study,target=@(trial)trial.Params.y);
+verifyImportanceTable(testCase,target,contract.fanova_target);
 end
 
 function testTerminationContractsMatchUpstream(testCase)
@@ -702,6 +783,53 @@ verifyEqual(testCase,stepped.Distributions.q.high, ...
 clear cleanup
 end
 
+function testDistributionPublicMembersMatchUpstream(testCase)
+expected=testCase.TestData.Oracle.distribution_public_members;
+verifyEqual(testCase,string(expected.base_construction_error),"TypeError");
+verifyError(testCase,@()radia.optuna.BaseDistribution(), ...
+    "MATLAB:class:abstract");
+
+warning("off","radia:optuna:FutureWarning");
+cleanup=onCleanup(@()warning("on","radia:optuna:FutureWarning"));
+instances=struct( ...
+    "FloatDistribution",radia.optuna.FloatDistribution(1,1), ...
+    "IntDistribution",radia.optuna.IntDistribution(1,1), ...
+    "CategoricalDistribution", ...
+        radia.optuna.CategoricalDistribution({"A","B",3}), ...
+    "UniformDistribution",radia.optuna.UniformDistribution(1,1), ...
+    "LogUniformDistribution",radia.optuna.LogUniformDistribution(1,2), ...
+    "DiscreteUniformDistribution", ...
+        radia.optuna.DiscreteUniformDistribution(0,1,0.2), ...
+    "IntUniformDistribution",radia.optuna.IntUniformDistribution(1,3,1), ...
+    "IntLogUniformDistribution", ...
+        radia.optuna.IntLogUniformDistribution(1,3,1));
+for name=reshape(string(fieldnames(instances)),1,[])
+    verifyEqual(testCase,instances.(name).single(), ...
+        logical(expected.single.(name)));
+end
+
+categorical=instances.CategoricalDistribution;
+verifyEqual(testCase,categorical.to_internal_repr("B"), ...
+    double(expected.categorical_internal));
+verifyEqual(testCase,categorical.to_external_repr(2), ...
+    expected.categorical_external);
+verifyEqual(testCase,instances.FloatDistribution.to_internal_repr("1.25"), ...
+    double(expected.float_internal));
+verifyEqual(testCase,instances.FloatDistribution.to_external_repr(1.25), ...
+    double(expected.float_external));
+verifyEqual(testCase,instances.IntDistribution.to_internal_repr("3"), ...
+    double(expected.int_internal));
+verifyEqual(testCase,instances.IntDistribution.to_external_repr(3.9), ...
+    double(expected.int_external));
+verifyEqual(testCase,instances.DiscreteUniformDistribution.q, ...
+    double(expected.discrete_q));
+verifyEqual(testCase,radia.optuna.DISTRIBUTION_CLASSES(), ...
+    reshape(string(expected.distribution_classes),1,[]));
+verifyNotEmpty(testCase,string(expected.categorical_choice_type));
+verifyNotEmpty(testCase,radia.optuna.CategoricalChoiceType());
+clear cleanup
+end
+
 function testIntersectionSearchSpaceMatchesUpstream(testCase)
 expected=testCase.TestData.Oracle.search_space;
 base=struct( ...
@@ -746,6 +874,31 @@ verifyEqual(testCase,sort(string(keys(calculated))), ...
     sort(reshape(string(expected.calculator),1,[])));
 end
 
+function testGroupDecomposedSearchSpaceMatchesUpstream(testCase)
+expected=testCase.TestData.Oracle.search_space.group;
+base=struct( ...
+    "x",radia.optuna.FloatDistribution(0,1), ...
+    "fixed",radia.optuna.FloatDistribution(2,2));
+group=radia.optuna.SearchSpaceGroup();
+group.add_distributions(struct("x",base.x,"y",base.fixed));
+group.add_distributions(struct( ...
+    "x",base.x,"z",radia.optuna.IntDistribution(1,3)));
+verifyEqual(testCase,groupSignatures(group.search_spaces()), ...
+    reshape(string(expected.direct_signatures),[],1));
+
+study=radia.optuna.Study(AutoSave=false);
+study.add_trials([ ...
+    radia.optuna.create_trial(value=1,params=struct("x",0.5,"fixed",2), ...
+        distributions=struct("x",base.x,"fixed",base.fixed)); ...
+    radia.optuna.create_trial(value=1,params=struct("x",0.5,"z",1), ...
+        distributions=struct("x",base.x,"z", ...
+        radia.optuna.IntDistribution(1,3)))]);
+calculator=radia.optuna.GroupDecomposedSearchSpace();
+calculated=calculator.calculate(study);
+verifyEqual(testCase,groupSignatures(calculated.search_spaces()), ...
+    reshape(string(expected.calculated_signatures),[],1));
+end
+
 function testStudyDirectionAndTrialStateMatchUpstream(testCase)
 expected=testCase.TestData.Oracle.enums;
 directions=[radia.optuna.StudyDirection.NOT_SET, ...
@@ -764,6 +917,34 @@ verifyEqual(testCase,double(states), ...
     reshape(double([expected.trial_state.value]),1,[]));
 verifyEqual(testCase,states.is_finished(), ...
     reshape(logical([expected.trial_state.is_finished]),1,[]));
+
+enumCases={ ...
+    radia.optuna.StudyDirection.MAXIMIZE,expected.integer_api.study_direction; ...
+    radia.optuna.TrialState.WAITING,expected.integer_api.trial_state};
+for index=1:size(enumCases,1)
+    value=enumCases{index,1};
+    contract=enumCases{index,2};
+    verifyEqual(testCase,value.as_integer_ratio(), ...
+        reshape(double(contract.as_integer_ratio),1,[]));
+    verifyEqual(testCase,value.bit_count(),double(contract.bit_count));
+    verifyEqual(testCase,value.bit_length(),double(contract.bit_length));
+    verifyEqual(testCase,value.conjugate(),double(contract.conjugate));
+    verifyEqual(testCase,value.denominator(),double(contract.denominator));
+    verifyEqual(testCase,value.imag(),double(contract.imag));
+    verifyEqual(testCase,value.is_integer(),logical(contract.is_integer));
+    verifyEqual(testCase,value.name(),string(contract.name));
+    verifyEqual(testCase,value.numerator(),double(contract.numerator));
+    verifyEqual(testCase,value.real(),double(contract.real));
+    verifyEqual(testCase,value.to_bytes(2,"big"), ...
+        reshape(uint8(contract.to_bytes),1,[]));
+    verifyEqual(testCase,value.value(),double(contract.value));
+end
+verifyEqual(testCase,radia.optuna.StudyDirection.from_bytes( ...
+    uint8([0,2]),"big").name(), ...
+    string(expected.integer_api.study_direction.from_bytes_name));
+verifyEqual(testCase,radia.optuna.TrialState.from_bytes( ...
+    uint8([0,4]),"big").name(), ...
+    string(expected.integer_api.trial_state.from_bytes_name));
 
 study=radia.optuna.create_study( ...
     direction=radia.optuna.StudyDirection.MINIMIZE,AutoSave=false);
@@ -1536,6 +1717,38 @@ end
 
 function value=readSummaryDirection(summary)
 value=summary.direction;
+end
+
+function study=importanceStudy(expected)
+study=radia.optuna.Study(AutoSave=false);
+for index=1:numel(expected.trials)
+    row=expected.trials(index);
+    study.add_trial(radia.optuna.createTrial(Value=double(row.value), ...
+        Params=struct("x",double(row.x),"y",double(row.y), ...
+        "mode",string(row.mode)), ...
+        Distributions=struct( ...
+        "x",radia.optuna.FloatDistribution(-1,1), ...
+        "y",radia.optuna.FloatDistribution(0,1), ...
+        "mode",radia.optuna.CategoricalDistribution(["A","B","C"]))));
+end
+end
+
+function verifyImportanceTable(testCase,actual,expected)
+expectedNames=reshape(string(expected.parameter_order),[],1);
+expectedValues=reshape(double(expected.values),[],1);
+verifyEqual(testCase,sort(actual.Parameter),sort(expectedNames));
+for index=1:numel(expectedNames)
+    row=find(actual.Parameter==expectedNames(index),1);
+    verifyNotEmpty(testCase,row);
+    verifyEqual(testCase,actual.Importance(row),expectedValues(index),AbsTol=0);
+end
+end
+
+function signatures=groupSignatures(spaces)
+signatures=strings(numel(spaces),1);
+for index=1:numel(spaces)
+    signatures(index)=strjoin(sort(string(spaces{index}.keys)),",");
+end
 end
 
 function cleanupStudyFiles(paths)

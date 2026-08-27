@@ -20,6 +20,77 @@ from optuna.trial import TrialState
 EXPECTED_VERSION = "4.9.0"
 
 
+def _exception_contract() -> dict[str, object]:
+    classes = [
+        "CLIUsageError",
+        "DuplicatedStudyError",
+        "ExperimentalWarning",
+        "OptunaError",
+        "StorageInternalError",
+        "TrialPruned",
+        "UpdateFinishedTrialError",
+    ]
+    result: dict[str, object] = {}
+    for name in classes:
+        exception_type = getattr(optuna.exceptions, name)
+        cases = []
+        for arguments in [(), ("oracle message",), ("a", "b")]:
+            exception = exception_type(*arguments)
+            exception.add_note("oracle note")
+            cases.append(
+                {
+                    "args": list(exception.args),
+                    "message": str(exception),
+                    "notes": list(exception.__notes__),
+                    "with_traceback_identity": exception.with_traceback(None)
+                    is exception,
+                }
+            )
+        result[name] = {
+            "cases": cases,
+            "is_optuna_error": issubclass(exception_type, optuna.exceptions.OptunaError),
+            "is_warning": issubclass(exception_type, Warning),
+        }
+    return result
+
+
+def _logging_contract() -> dict[str, object]:
+    module = optuna.logging
+    constants = {
+        name: getattr(module, name)
+        for name in ["CRITICAL", "DEBUG", "ERROR", "FATAL", "INFO", "WARN", "WARNING"]
+    }
+    module.set_verbosity(module.INFO)
+    initial = module.get_verbosity()
+    logger = module.get_logger("unit")
+    formatter = module.create_default_formatter()
+    module.set_verbosity(module.DEBUG)
+    after_set = module.get_verbosity()
+    module.disable_default_handler()
+    module.disable_propagation()
+    root = module.get_logger("optuna")
+    disabled = {"handlers": len(root.handlers), "propagate": root.propagate}
+    module.enable_default_handler()
+    module.enable_propagation()
+    enabled = {"handlers": len(root.handlers), "propagate": root.propagate}
+    module.set_verbosity(module.WARNING)
+    module.disable_propagation()
+    return {
+        "after_set": after_set,
+        "constants": constants,
+        "disabled": disabled,
+        "enabled": enabled,
+        "formatter": {"date_format": formatter.datefmt, "format": formatter._style._fmt},
+        "initial": initial,
+        "logger": {
+            "handlers": len(logger.handlers),
+            "level": logger.level,
+            "name": logger.name,
+            "propagate": logger.propagate,
+        },
+    }
+
+
 def _sampler_seed_default_contract() -> dict[str, object]:
     constructors = [
         "RandomSampler",
@@ -562,15 +633,65 @@ def _search_space_contract() -> dict[str, object]:
     study.add_trials(trials)
     calculator = optuna.search_space.IntersectionSearchSpace()
     calculated = calculator.calculate(study)
+
+    def signatures(group: object) -> list[str]:
+        return [",".join(sorted(space)) for space in group.search_spaces]
+
+    direct_group = optuna.search_space._SearchSpaceGroup()
+    direct_group.add_distributions({"x": base["x"], "y": base["fixed"]})
+    direct_group.add_distributions(
+        {"x": base["x"], "z": distributions.IntDistribution(1, 3)}
+    )
+    grouped_study = optuna.create_study()
+    grouped_study.add_trials(
+        [
+            frozen(
+                TrialState.COMPLETE,
+                {"x": base["x"], "fixed": base["fixed"]},
+            ),
+            frozen(
+                TrialState.COMPLETE,
+                {"x": base["x"], "z": distributions.IntDistribution(1, 3)},
+            ),
+        ]
+    )
+    decomposed = optuna.search_space._GroupDecomposedSearchSpace().calculate(
+        grouped_study
+    )
     return {
         "without_pruned": list(without_pruned),
         "with_pruned": list(with_pruned),
         "calculator": list(calculated),
         "single_distribution_is_included": "fixed" in without_pruned,
+        "group": {
+            "calculated_signatures": signatures(decomposed),
+            "direct_signatures": signatures(direct_group),
+        },
     }
 
 
 def _enum_contract() -> dict[str, object]:
+    def integer_api(item: object) -> dict[str, object]:
+        enum_type = type(item)
+        value = int(item)
+        return {
+            "as_integer_ratio": list(item.as_integer_ratio()),
+            "bit_count": item.bit_count(),
+            "bit_length": item.bit_length(),
+            "conjugate": item.conjugate(),
+            "denominator": item.denominator,
+            "from_bytes_name": enum_type.from_bytes(
+                bytes([0, value]), "big"
+            ).name,
+            "imag": item.imag,
+            "is_integer": item.is_integer(),
+            "name": item.name,
+            "numerator": item.numerator,
+            "real": item.real,
+            "to_bytes": list(item.to_bytes(2, "big")),
+            "value": item.value,
+        }
+
     return {
         "study_direction": [
             {"name": item.name, "value": item.value}
@@ -584,6 +705,10 @@ def _enum_contract() -> dict[str, object]:
             }
             for item in TrialState
         ],
+        "integer_api": {
+            "study_direction": integer_api(optuna.study.StudyDirection.MAXIMIZE),
+            "trial_state": integer_api(TrialState.WAITING),
+        },
     }
 
 
@@ -1548,6 +1673,55 @@ def _study_management_contract() -> dict[str, object]:
     }
 
 
+def _distribution_public_member_contract() -> dict[str, object]:
+    distributions = optuna.distributions
+    try:
+        distributions.BaseDistribution()
+    except Exception as error:  # noqa: BLE001 - abstract public API contract.
+        base_error = type(error).__name__
+    else:
+        raise RuntimeError("Optuna BaseDistribution unexpectedly became concrete.")
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        instances = {
+            "FloatDistribution": distributions.FloatDistribution(1.0, 1.0),
+            "IntDistribution": distributions.IntDistribution(1, 1),
+            "CategoricalDistribution": distributions.CategoricalDistribution(
+                ["A", "B", 3]
+            ),
+            "UniformDistribution": distributions.UniformDistribution(1.0, 1.0),
+            "LogUniformDistribution": distributions.LogUniformDistribution(1.0, 2.0),
+            "DiscreteUniformDistribution": distributions.DiscreteUniformDistribution(
+                0.0, 1.0, 0.2
+            ),
+            "IntUniformDistribution": distributions.IntUniformDistribution(1, 3, 1),
+            "IntLogUniformDistribution": distributions.IntLogUniformDistribution(
+                1, 3, 1
+            ),
+        }
+
+    single = {name: value.single() for name, value in instances.items()}
+    registry = [value.__name__ for value in distributions.DISTRIBUTION_CLASSES]
+    return {
+        "base_construction_error": base_error,
+        "categorical_choice_type": str(distributions.CategoricalChoiceType),
+        "categorical_external": instances[
+            "CategoricalDistribution"
+        ].to_external_repr(2),
+        "categorical_internal": instances[
+            "CategoricalDistribution"
+        ].to_internal_repr("B"),
+        "discrete_q": instances["DiscreteUniformDistribution"].q,
+        "distribution_classes": registry,
+        "float_external": instances["FloatDistribution"].to_external_repr(1.25),
+        "float_internal": instances["FloatDistribution"].to_internal_repr("1.25"),
+        "int_external": instances["IntDistribution"].to_external_repr(3.9),
+        "int_internal": instances["IntDistribution"].to_internal_repr("3"),
+        "single": single,
+    }
+
+
 def _normalize_dataframe_value(value: object) -> object:
     if isinstance(value, TrialState):
         return value.name
@@ -1721,11 +1895,40 @@ def _importance_contract() -> dict[str, object]:
     importances = optuna.importance.get_param_importances(
         study, evaluator=evaluator
     )
+    mdi = optuna.importance.MeanDecreaseImpurityImportanceEvaluator(
+        n_trees=16, max_depth=16, seed=97
+    )
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        ped_anova = optuna.importance.PedAnovaImportanceEvaluator(
+            target_quantile=0.25, region_quantile=1.0
+        )
+
+    def public_result(
+        current: optuna.importance.BaseImportanceEvaluator,
+        *,
+        target: object = None,
+    ) -> dict[str, object]:
+        values = current.evaluate(study, target=target)
+        return {
+            "parameter_order": list(values),
+            "values": [float(value) for value in values.values()],
+        }
+
     return {
         "trials": rows,
         "evaluator": {"name": "fanova", "n_trees": 16, "max_depth": 16, "seed": 97},
         "parameter_order": list(importances),
         "values": [float(value) for value in importances.values()],
+        "public_evaluators": {
+            "base_construction_error": "TypeError",
+            "fanova": public_result(evaluator),
+            "fanova_target": public_result(
+                evaluator, target=lambda trial: float(trial.params["y"])
+            ),
+            "mdi": public_result(mdi),
+            "ped_anova": public_result(ped_anova),
+        },
     }
 
 
@@ -1799,6 +2002,8 @@ def build_oracle() -> dict[str, object]:
             "multi_population_size": multi.sampler._population_size,
             "pruner": type(single.pruner).__name__,
         },
+        "exceptions": _exception_contract(),
+        "logging": _logging_contract(),
         "sampler_seed_defaults": _sampler_seed_default_contract(),
         "sampler_public_members": _sampler_public_member_contract(),
         "tell": _tell_contract(),
@@ -1813,6 +2018,7 @@ def build_oracle() -> dict[str, object]:
         "numpy_random_state_seed_contract": _random_state_contract(),
         "core_api": _core_api_contract(),
         "distributions": _distribution_contract(),
+        "distribution_public_members": _distribution_public_member_contract(),
         "search_space": _search_space_contract(),
         "enums": _enum_contract(),
         "unfinished_trials": _unfinished_trial_contract(),

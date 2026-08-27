@@ -158,6 +158,24 @@ classdef DistributionCodec
             end
         end
 
+        function result=isSpec(value)
+            required=["kind","low","high","log","step","choices"];
+            result=(isa(value,"radia.optuna.BaseDistribution") && ...
+                isscalar(value)) || (isstruct(value) && isscalar(value) && ...
+                all(isfield(value,required)));
+        end
+
+        function spec=normalize(value)
+            if isa(value,"radia.optuna.BaseDistribution") && isscalar(value)
+                spec=value.toStruct();
+            elseif radia.optuna.internal.DistributionCodec.isSpec(value)
+                spec=value;
+            else
+                error("radia:optuna:Distribution", ...
+                    "Value is not a Radia Optuna distribution.");
+            end
+        end
+
         function tokens = choiceTokens(choices)
             tokens = strings(numel(choices), 1);
             for index = 1:numel(choices)
@@ -207,11 +225,19 @@ classdef DistributionCodec
             else
                 distributionName="IntDistribution";
             end
+            effectiveHigh=low;
+            if low~=high
+                if isfinite(step)
+                    effectiveHigh=low+floor((high-low)/step+1e-12)*step;
+                else
+                    effectiveHigh=high;
+                end
+            end
             spec = struct( ...
                 "name", distributionName, ...
                 "kind", string(kind), ...
                 "low", double(low), ...
-                "high", double(high), ...
+                "high", double(effectiveHigh), ...
                 "log", logical(logScale), ...
                 "step", double(step), ...
                 "choices", {cell(0, 1)});

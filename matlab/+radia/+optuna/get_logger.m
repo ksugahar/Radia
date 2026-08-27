@@ -1,0 +1,13 @@
+function logger=get_logger(name)
+%GET_LOGGER Return an observable Optuna-compatible logger descriptor.
+arguments
+    name {mustBeTextScalar}
+end
+state=radia.optuna.internal.LoggingState.get();
+root=string(name)=="optuna";
+logger=struct( ...
+    "name",string(name), ...
+    "level",0, ...
+    "propagate",~root || state.propagation, ...
+    "handlers",double(root && state.default_handler));
+end
