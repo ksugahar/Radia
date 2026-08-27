@@ -566,6 +566,37 @@
       "uniform": "UniformDistribution"
     }
   },
+  "distribution_public_members": {
+    "base_construction_error": "TypeError",
+    "categorical_choice_type": "typing.Union[NoneType, bool, int, float, str]",
+    "categorical_external": 3,
+    "categorical_internal": 1,
+    "discrete_q": 0.2,
+    "distribution_classes": [
+      "IntDistribution",
+      "IntLogUniformDistribution",
+      "IntUniformDistribution",
+      "FloatDistribution",
+      "UniformDistribution",
+      "LogUniformDistribution",
+      "DiscreteUniformDistribution",
+      "CategoricalDistribution"
+    ],
+    "float_external": 1.25,
+    "float_internal": 1.25,
+    "int_external": 3,
+    "int_internal": 3.0,
+    "single": {
+      "CategoricalDistribution": false,
+      "DiscreteUniformDistribution": false,
+      "FloatDistribution": true,
+      "IntDistribution": true,
+      "IntLogUniformDistribution": false,
+      "IntUniformDistribution": false,
+      "LogUniformDistribution": false,
+      "UniformDistribution": true
+    }
+  },
   "distributions": {
     "colliding_names": {
       "a-b": 0.7148159936743647,
@@ -591,6 +622,50 @@
     }
   },
   "enums": {
+    "integer_api": {
+      "study_direction": {
+        "as_integer_ratio": [
+          2,
+          1
+        ],
+        "bit_count": 1,
+        "bit_length": 2,
+        "conjugate": 2,
+        "denominator": 1,
+        "from_bytes_name": "MAXIMIZE",
+        "imag": 0,
+        "is_integer": true,
+        "name": "MAXIMIZE",
+        "numerator": 2,
+        "real": 2,
+        "to_bytes": [
+          0,
+          2
+        ],
+        "value": 2
+      },
+      "trial_state": {
+        "as_integer_ratio": [
+          4,
+          1
+        ],
+        "bit_count": 1,
+        "bit_length": 3,
+        "conjugate": 4,
+        "denominator": 1,
+        "from_bytes_name": "WAITING",
+        "imag": 0,
+        "is_integer": true,
+        "name": "WAITING",
+        "numerator": 4,
+        "real": 4,
+        "to_bytes": [
+          0,
+          4
+        ],
+        "value": 4
+      }
+    },
     "study_direction": [
       {
         "name": "NOT_SET",
@@ -632,6 +707,253 @@
         "value": 4
       }
     ]
+  },
+  "exceptions": {
+    "CLIUsageError": {
+      "cases": [
+        {
+          "args": [],
+          "message": "",
+          "notes": [
+            "oracle note"
+          ],
+          "with_traceback_identity": true
+        },
+        {
+          "args": [
+            "oracle message"
+          ],
+          "message": "oracle message",
+          "notes": [
+            "oracle note"
+          ],
+          "with_traceback_identity": true
+        },
+        {
+          "args": [
+            "a",
+            "b"
+          ],
+          "message": "('a', 'b')",
+          "notes": [
+            "oracle note"
+          ],
+          "with_traceback_identity": true
+        }
+      ],
+      "is_optuna_error": true,
+      "is_warning": false
+    },
+    "DuplicatedStudyError": {
+      "cases": [
+        {
+          "args": [],
+          "message": "",
+          "notes": [
+            "oracle note"
+          ],
+          "with_traceback_identity": true
+        },
+        {
+          "args": [
+            "oracle message"
+          ],
+          "message": "oracle message",
+          "notes": [
+            "oracle note"
+          ],
+          "with_traceback_identity": true
+        },
+        {
+          "args": [
+            "a",
+            "b"
+          ],
+          "message": "('a', 'b')",
+          "notes": [
+            "oracle note"
+          ],
+          "with_traceback_identity": true
+        }
+      ],
+      "is_optuna_error": true,
+      "is_warning": false
+    },
+    "ExperimentalWarning": {
+      "cases": [
+        {
+          "args": [],
+          "message": "",
+          "notes": [
+            "oracle note"
+          ],
+          "with_traceback_identity": true
+        },
+        {
+          "args": [
+            "oracle message"
+          ],
+          "message": "oracle message",
+          "notes": [
+            "oracle note"
+          ],
+          "with_traceback_identity": true
+        },
+        {
+          "args": [
+            "a",
+            "b"
+          ],
+          "message": "('a', 'b')",
+          "notes": [
+            "oracle note"
+          ],
+          "with_traceback_identity": true
+        }
+      ],
+      "is_optuna_error": false,
+      "is_warning": true
+    },
+    "OptunaError": {
+      "cases": [
+        {
+          "args": [],
+          "message": "",
+          "notes": [
+            "oracle note"
+          ],
+          "with_traceback_identity": true
+        },
+        {
+          "args": [
+            "oracle message"
+          ],
+          "message": "oracle message",
+          "notes": [
+            "oracle note"
+          ],
+          "with_traceback_identity": true
+        },
+        {
+          "args": [
+            "a",
+            "b"
+          ],
+          "message": "('a', 'b')",
+          "notes": [
+            "oracle note"
+          ],
+          "with_traceback_identity": true
+        }
+      ],
+      "is_optuna_error": true,
+      "is_warning": false
+    },
+    "StorageInternalError": {
+      "cases": [
+        {
+          "args": [],
+          "message": "",
+          "notes": [
+            "oracle note"
+          ],
+          "with_traceback_identity": true
+        },
+        {
+          "args": [
+            "oracle message"
+          ],
+          "message": "oracle message",
+          "notes": [
+            "oracle note"
+          ],
+          "with_traceback_identity": true
+        },
+        {
+          "args": [
+            "a",
+            "b"
+          ],
+          "message": "('a', 'b')",
+          "notes": [
+            "oracle note"
+          ],
+          "with_traceback_identity": true
+        }
+      ],
+      "is_optuna_error": true,
+      "is_warning": false
+    },
+    "TrialPruned": {
+      "cases": [
+        {
+          "args": [],
+          "message": "",
+          "notes": [
+            "oracle note"
+          ],
+          "with_traceback_identity": true
+        },
+        {
+          "args": [
+            "oracle message"
+          ],
+          "message": "oracle message",
+          "notes": [
+            "oracle note"
+          ],
+          "with_traceback_identity": true
+        },
+        {
+          "args": [
+            "a",
+            "b"
+          ],
+          "message": "('a', 'b')",
+          "notes": [
+            "oracle note"
+          ],
+          "with_traceback_identity": true
+        }
+      ],
+      "is_optuna_error": true,
+      "is_warning": false
+    },
+    "UpdateFinishedTrialError": {
+      "cases": [
+        {
+          "args": [],
+          "message": "",
+          "notes": [
+            "oracle note"
+          ],
+          "with_traceback_identity": true
+        },
+        {
+          "args": [
+            "oracle message"
+          ],
+          "message": "oracle message",
+          "notes": [
+            "oracle note"
+          ],
+          "with_traceback_identity": true
+        },
+        {
+          "args": [
+            "a",
+            "b"
+          ],
+          "message": "('a', 'b')",
+          "notes": [
+            "oracle note"
+          ],
+          "with_traceback_identity": true
+        }
+      ],
+      "is_optuna_error": true,
+      "is_warning": false
+    }
   },
   "fixed_trial": {
     "distribution_types": {
@@ -815,6 +1137,57 @@
       "mode",
       "y"
     ],
+    "public_evaluators": {
+      "base_construction_error": "TypeError",
+      "fanova": {
+        "parameter_order": [
+          "x",
+          "mode",
+          "y"
+        ],
+        "values": [
+          0.9024102828191107,
+          0.02711321971744135,
+          0.021232519686525488
+        ]
+      },
+      "fanova_target": {
+        "parameter_order": [
+          "y",
+          "x",
+          "mode"
+        ],
+        "values": [
+          0.9842438902427975,
+          0.0026582129805842194,
+          0.0017959568423238687
+        ]
+      },
+      "mdi": {
+        "parameter_order": [
+          "x",
+          "mode",
+          "y"
+        ],
+        "values": [
+          0.9209049544690037,
+          0.042415640574491736,
+          0.036679404956504624
+        ]
+      },
+      "ped_anova": {
+        "parameter_order": [
+          "x",
+          "y",
+          "mode"
+        ],
+        "values": [
+          0.04745518462459537,
+          0.006845037149241896,
+          0.005739795918350124
+        ]
+      }
+    },
     "trials": [
       {
         "mode": "A",
@@ -978,6 +1351,37 @@
       "repeat_error": "ValueError",
       "skip_state": "COMPLETE",
       "skip_value": 1.0
+    }
+  },
+  "logging": {
+    "after_set": 10,
+    "constants": {
+      "CRITICAL": 50,
+      "DEBUG": 10,
+      "ERROR": 40,
+      "FATAL": 50,
+      "INFO": 20,
+      "WARN": 30,
+      "WARNING": 30
+    },
+    "disabled": {
+      "handlers": 0,
+      "propagate": false
+    },
+    "enabled": {
+      "handlers": 1,
+      "propagate": true
+    },
+    "formatter": {
+      "date_format": null,
+      "format": "%(log_color)s[%(levelname)1.1s %(asctime)s]%(reset)s %(message)s"
+    },
+    "initial": 20,
+    "logger": {
+      "handlers": 0,
+      "level": 0,
+      "name": "unit",
+      "propagate": true
     }
   },
   "mixed_tpe_sampler_seed_43": [
@@ -2594,6 +2998,18 @@
       "fixed",
       "x"
     ],
+    "group": {
+      "calculated_signatures": [
+        "x",
+        "fixed",
+        "z"
+      ],
+      "direct_signatures": [
+        "x",
+        "y",
+        "z"
+      ]
+    },
     "single_distribution_is_included": true,
     "with_pruned": [
       "cat",
