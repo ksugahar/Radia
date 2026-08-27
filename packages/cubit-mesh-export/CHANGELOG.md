@@ -6,6 +6,21 @@ VTK / MEG / FEMEEM writers + Python bindings for consistency checks).
 
 ## Unreleased
 
+## 0.14.12 - Validated Nastran mesh interchange
+
+Released 2026-08-27.
+
+- Promoted `export nastran_bdf` to the primary solver-neutral BDF command while
+  retaining `export jmag_nastran` as a separately registered compatibility
+  alias for existing journals.
+- Corrected Nastran interchange semantics: `dimension 2` no longer flattens
+  volume meshes or discards off-plane GRID coordinates, surface blocks receive
+  PSHELL rather than PSOLID, sideset PIDs cannot collide with block PIDs, and
+  nodesets use strict-reader-compatible fixed-field SET1 cards.
+- Expanded real-Cubit coverage across TET, HEX, WEDGE, PYRAMID, TRI, QUAD,
+  orders 1--2, dimension filtering, groups, properties, and alias behavior;
+  added an independent pyNastran referential-integrity/JSON validation gate.
+
 ## 0.14.11 - Active Python ABI plugin refresh
 
 Released 2026-08-26.

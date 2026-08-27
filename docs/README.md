@@ -128,7 +128,7 @@ directory; interactive WebGUI scenes remain the notebook explanation layer.
 
 The following features were removed; their docs were deleted to prevent confusion:
 
-- **Nastran BDF input** (Radia-side `.bdf` mesh import): removed.  Use Netgen `.vol` (preferred) or GMSH v4.1 as the mesh interchange format into NGSolve.  Note: **Cubit-side Nastran BDF export** (`export jmag_nastran`, [export_Nastran.md](cubit/export_Nastran.md)) is unaffected and still ships.
+- **Nastran BDF input** (Radia-side `.bdf` mesh import): removed. Use Netgen `.vol` (preferred) or GMSH v4.1 as the mesh interchange format into NGSolve. Note: **Cubit-side Nastran BDF export** (`export nastran_bdf`, [export_Nastran.md](cubit/export_Nastran.md)) is unaffected and still ships; `export jmag_nastran` is its deprecated alias.
 - **Scattered-field Robin RHS** (`docs/FEM_SCATTERED_FIELD.md`): removed 2026-04-24; the formulation could not be made stable enough for production coupling.  The total-field formulation in `calc_fem_kelvin.py` is the shipped path.
 
 See [CHANGELOG.md](../CHANGELOG.md) for the full removal history per release.
