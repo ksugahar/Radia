@@ -502,6 +502,41 @@
       "file": "test_optuna_upstream_oracle.m",
       "oracle": "optuna49_oracle.json",
       "scope": "shared Optuna 4.9.0 behavior",
+      "test": "testCachedStorageMatchesUpstream"
+    },
+    {
+      "classification": "upstream-python",
+      "file": "test_optuna_upstream_oracle.m",
+      "oracle": "optuna49_oracle.json",
+      "scope": "shared Optuna 4.9.0 behavior",
+      "test": "testRDBStorageMatchesUpstream"
+    },
+    {
+      "classification": "upstream-python",
+      "file": "test_optuna_upstream_oracle.m",
+      "oracle": "optuna49_oracle.json",
+      "scope": "shared Optuna 4.9.0 behavior",
+      "test": "testJournalBackendMatchesUpstream"
+    },
+    {
+      "classification": "upstream-python",
+      "file": "test_optuna_upstream_oracle.m",
+      "oracle": "optuna49_oracle.json",
+      "scope": "shared Optuna 4.9.0 behavior",
+      "test": "testJournalStorageMatchesUpstream"
+    },
+    {
+      "classification": "upstream-python",
+      "file": "test_optuna_upstream_oracle.m",
+      "oracle": "optuna49_oracle.json",
+      "scope": "shared Optuna 4.9.0 behavior",
+      "test": "testJournalRedisBackendMatchesUpstream"
+    },
+    {
+      "classification": "upstream-python",
+      "file": "test_optuna_upstream_oracle.m",
+      "oracle": "optuna49_oracle.json",
+      "scope": "shared Optuna 4.9.0 behavior",
       "test": "testRandomSamplerSeededSequence"
     },
     {

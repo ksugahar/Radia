@@ -133,6 +133,54 @@
       "mode": "A"
     }
   ],
+  "cached_storage": {
+    "best_number": 2,
+    "complete_numbers": [
+      0,
+      2
+    ],
+    "completed": true,
+    "directions": [
+      "MINIMIZE"
+    ],
+    "duplicate_error": "DuplicatedStudyError",
+    "failed_id": 2,
+    "finished_update_error": "UpdateFinishedTrialError",
+    "heartbeat_interval": null,
+    "heartbeat_stale_callback_is_none": true,
+    "n_complete": 2,
+    "n_trials": 3,
+    "param_internal": 0.5,
+    "params": {
+      "x": 0.5
+    },
+    "record_heartbeat_is_none": true,
+    "remove_session_is_none": true,
+    "running_state": "RUNNING",
+    "study_id": 1,
+    "study_name": "cached-oracle",
+    "study_system_attrs": {
+      "revision": 4
+    },
+    "study_user_attrs": {
+      "owner": "oracle"
+    },
+    "summary": {
+      "name": "cached-oracle"
+    },
+    "template_id": 3,
+    "trial_id": 1,
+    "trial_lookup_id": 1,
+    "trial_number": 0,
+    "trial_state": "COMPLETE",
+    "trial_system_attrs": {
+      "worker": 7
+    },
+    "trial_user_attrs": {
+      "label": "first"
+    },
+    "trial_value": 1.25
+  },
   "cmaes_independent_sampler_seed_31": [
     {
       "mode": "C",
@@ -1426,6 +1474,102 @@
       0.022332248432020623
     ]
   },
+  "journal_storage": {
+    "append_is_none": true,
+    "base_backend_is_abstract": true,
+    "base_log_storage_is_abstract": true,
+    "file_text": "{\"operation\":1,\"worker\":\"alpha\"}\n{\"operation\":2,\"value\":3.5}\n",
+    "locks": {
+      "open": {
+        "acquired": true,
+        "release_is_none": true,
+        "second_release_error": "RuntimeError"
+      },
+      "symlink": {
+        "acquired": true,
+        "release_is_none": true,
+        "second_release_error": "RuntimeError"
+      }
+    },
+    "redis": {
+      "append_is_none": true,
+      "load_snapshot": [
+        115,
+        110,
+        97,
+        112,
+        115,
+        104,
+        111,
+        116,
+        45,
+        98,
+        121,
+        116,
+        101,
+        115
+      ],
+      "save_snapshot_is_none": true,
+      "selected_logs": [
+        {
+          "operation": 5,
+          "value": 7.25
+        }
+      ]
+    },
+    "selected_logs": [
+      {
+        "operation": 2,
+        "value": 3.5
+      }
+    ],
+    "storage": {
+      "best_number": 2,
+      "complete_numbers": [
+        0,
+        2
+      ],
+      "completed": true,
+      "directions": [
+        "MINIMIZE"
+      ],
+      "duplicate_error": "DuplicatedStudyError",
+      "failed_id": 1,
+      "finished_update_error": "UpdateFinishedTrialError",
+      "n_complete": 2,
+      "n_trials": 3,
+      "param_internal": 0.5,
+      "params": {
+        "x": 0.5
+      },
+      "remove_session_is_none": true,
+      "restore_invalid_is_none": true,
+      "running_state": "RUNNING",
+      "study_id": 0,
+      "study_name": "journal-oracle",
+      "study_system_attrs": {
+        "revision": 4
+      },
+      "study_user_attrs": {
+        "owner": "oracle"
+      },
+      "summary": {
+        "name": "journal-oracle"
+      },
+      "template_id": 2,
+      "trial_id": 0,
+      "trial_lookup_id": 0,
+      "trial_number": 0,
+      "trial_state": "COMPLETE",
+      "trial_system_attrs": {
+        "worker": 7
+      },
+      "trial_user_attrs": {
+        "label": "first"
+      },
+      "trial_value": 1.25
+    }
+  },
   "lifecycle_errors": {
     "constraint_callback_failure": {
       "constraint_is_none": true,
@@ -2678,9 +2822,9 @@
   "python_version": "3.12.10",
   "qmc_warnings": {
     "asynchronous_disabled_count": 0,
-    "asynchronous_enabled_count": 1,
+    "asynchronous_enabled_count": 0,
     "independent_disabled_count": 0,
-    "independent_enabled_count": 1
+    "independent_enabled_count": 0
   },
   "random_sampler_seed_123": [
     {
@@ -2796,6 +2940,70 @@
       "x": 0.3231286733324874
     }
   ],
+  "rdb_storage": {
+    "all_versions": [
+      "v3.2.0.a",
+      "v3.0.0.d",
+      "v3.0.0.c",
+      "v3.0.0.b",
+      "v3.0.0.a",
+      "v2.6.0.a",
+      "v2.4.0.a",
+      "v1.3.0.a",
+      "v1.2.0.a",
+      "v0.9.0.a"
+    ],
+    "best_number": 2,
+    "complete_numbers": [
+      0,
+      2
+    ],
+    "completed": true,
+    "current_version": "v3.2.0.a",
+    "directions": [
+      "MINIMIZE"
+    ],
+    "duplicate_error": "DuplicatedStudyError",
+    "failed_callback_is_none": true,
+    "failed_callback_warning": "FutureWarning",
+    "failed_id": 2,
+    "finished_update_error": "UpdateFinishedTrialError",
+    "head_version": "v3.2.0.a",
+    "heartbeat_interval": null,
+    "heartbeat_stale_callback_is_none": true,
+    "n_complete": 2,
+    "n_trials": 3,
+    "param_internal": 0.5,
+    "params": {
+      "x": 0.5
+    },
+    "remove_session_is_none": true,
+    "running_state": "RUNNING",
+    "study_id": 1,
+    "study_name": "rdb-oracle",
+    "study_system_attrs": {
+      "revision": 4
+    },
+    "study_user_attrs": {
+      "owner": "oracle"
+    },
+    "summary": {
+      "name": "rdb-oracle"
+    },
+    "template_id": 3,
+    "trial_id": 1,
+    "trial_lookup_id": 1,
+    "trial_number": 0,
+    "trial_state": "COMPLETE",
+    "trial_system_attrs": {
+      "worker": 7
+    },
+    "trial_user_attrs": {
+      "label": "first"
+    },
+    "trial_value": 1.25,
+    "upgrade_preserves_version": true
+  },
   "sampler_public_members": {
     "base_crossover_instantiation_error": "TypeError",
     "crossover_n_parents": {
@@ -3446,7 +3654,7 @@
   "tpe_group": {
     "group_warning_count": 0,
     "independent_warning_disabled_count": 0,
-    "independent_warning_enabled_count": 1,
+    "independent_warning_enabled_count": 0,
     "sequence": [
       {
         "branch": "right",
