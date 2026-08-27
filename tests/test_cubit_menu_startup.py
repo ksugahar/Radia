@@ -7,6 +7,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 REGISTER_TOOLBAR = ROOT / "src" / "radia" / "panels" / "register_toolbar.py"
+EXPORT_MENU = ROOT / "src" / "radia" / "panels" / "radia_export_menu.py"
 AUDIT_SCRIPT = ROOT / "tools" / "audit_pyside6_only.py"
 
 _AUDIT_SPEC = importlib.util.spec_from_file_location(
@@ -64,3 +65,11 @@ def test_cubit_startup_does_not_inject_a_qmenu():
     assert "radia_export_menu.install_menu()" not in source
     assert '"Export Mesh", "Radia Export"' in source
     assert "official WorkflowToolbar package" in source
+
+
+def test_nastran_action_uses_the_solver_neutral_command():
+    """The visible toolbar must not regress to the deprecated JMAG alias."""
+    source = EXPORT_MENU.read_text(encoding="utf-8")
+
+    assert "export nastran_bdf" in source
+    assert "export jmag_nastran" not in source
