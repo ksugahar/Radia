@@ -30,6 +30,7 @@
 #include <iostream>
 #include <chrono>
 #include <atomic>
+#include <mutex>
 #include "rad_parallel.h"
 
 // Include C++ compatible HACApK wrapper header
@@ -51,8 +52,11 @@ namespace {
     // NOT thread_local: HACApK calls cHACApK_entry_ij from ngcore::ParallelFor
     // (TaskManager) worker threads, which must see the same manager/invChi/interaction
     // set by the main thread.
-    // Thread safety for concurrent BuildHMatrix calls (multiple Python threads)
-    // is ensured by Python's GIL; standalone C++ use would require a mutex.
+    // Python releases the GIL around every H-matrix build.  HACApK's C callback
+    // ABI nevertheless requires one process-wide manager (and the symmetric
+    // fill switch is process-wide too), so serialize builds while retaining
+    // TaskManager parallelism inside each build.
+    std::mutex g_hacapkBuildMutex;
     RadHACApKBase* g_currentManager = nullptr;
     std::vector<double> g_invChi;
     radTInteraction* g_interaction = nullptr;
@@ -459,6 +463,13 @@ void RadHACApKMagnetostaticManager::PrecomputeFlatInteractMatrix() {
 }
 
 bool RadHACApKBase::BuildHMatrix(const RadHACApKParams& params) {
+    // The C callback ABI stores the current manager, inverse material data,
+    // and symmetric-fill mode in process-wide state.  pybind deliberately
+    // releases the GIL for this operation, so the C++ boundary must provide
+    // the serialization.  The lock covers setup, fill, and callback-backed
+    // diagonal extraction; the fill itself remains TaskManager-parallel.
+    std::lock_guard<std::mutex> build_lock(g_hacapkBuildMutex);
+
     // TaskManager self-wrap (AGENTS.md "Parallelization: NGSolve TaskManager"): the H-matrix leaf
     // fill runs ngcore::ParallelFor, which silently falls back to single-threaded when NO
     // RegionTaskManager is active.  Stand up (or reuse the caller's) pool here so EVERY
