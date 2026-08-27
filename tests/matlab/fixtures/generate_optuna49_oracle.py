@@ -766,9 +766,7 @@ def _sampler_seed_default_contract() -> dict[str, object]:
 
 
 def _sampler_public_member_contract() -> dict[str, object]:
-    def make_study() -> tuple[
-        optuna.Study, optuna.trial.FrozenTrial, optuna.trial.FrozenTrial
-    ]:
+    def make_study() -> tuple[optuna.Study, optuna.trial.FrozenTrial, optuna.trial.FrozenTrial]:
         study = optuna.create_study()
         for value in [0.2, 0.1]:
             trial = study.ask()
@@ -1943,7 +1941,9 @@ def _pruner_contract() -> dict[str, object]:
     maximize_trial = maximize.ask()
     maximize_trial.report(1.5, 0)
 
-    median = optuna.create_study(pruner=optuna.pruners.MedianPruner(n_startup_trials=0))
+    median = optuna.create_study(
+        pruner=optuna.pruners.MedianPruner(n_startup_trials=0)
+    )
     add_completed(median, [0], [1.0])
     add_completed(median, [0], [3.0])
     median_trial = median.ask()
@@ -2504,8 +2504,12 @@ def _trials_dataframe_contract() -> dict[str, object]:
         )
     )
     metric_attrs = ("number", "value", "params", "state")
-    metric_flat = metric_study.trials_dataframe(attrs=metric_attrs, multi_index=False)
-    metric_multi = metric_study.trials_dataframe(attrs=metric_attrs, multi_index=True)
+    metric_flat = metric_study.trials_dataframe(
+        attrs=metric_attrs, multi_index=False
+    )
+    metric_multi = metric_study.trials_dataframe(
+        attrs=metric_attrs, multi_index=True
+    )
     metric = _dataframe_snapshot(metric_flat)
     metric["multi_columns"] = _dataframe_snapshot(metric_multi)["multi_columns"]
 

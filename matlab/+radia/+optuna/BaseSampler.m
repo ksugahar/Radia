@@ -24,7 +24,6 @@ classdef (Abstract) BaseSampler < handle
                 searchSpace=struct("name",{},"distribution",{});
             end
         end
-
         function value=sample_independent(obj,study,trial,param_name,distribution)
             spec=radia.optuna.internal.DistributionCodec.normalize(distribution);
             switch spec.kind

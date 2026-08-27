@@ -128,6 +128,9 @@ public:
     // Row-major [nrhs][ndof] BLAS-3 symmetric H-matrix application.
     virtual void MatVecSymMany(const std::vector<double>& x, int nrhs,
                                std::vector<double>& y);
+    void MatVecSymManyMasked(const std::vector<double>& x, int nrhs,
+                             const std::vector<int>& active_prefix,
+                             std::vector<double>& y);
 
     /**
      * Update diagonal blocks when 1/chi changes (nonlinear iteration)
@@ -199,6 +202,14 @@ public:
 
 protected:
     RadHACApKBase();
+
+    // Internal row-major symmetric apply with optional active principal mask
+    // and fused S*A*S diagonal scaling.  The optional arrays contain ndof+1
+    // and ndof entries and remain caller-owned for the duration of the call.
+    void MatVecSymManyPrepared(
+        const std::vector<double>& x, int nrhs,
+        const int* active_prefix, const double* diagonal_scale,
+        std::vector<double>& y);
 
     // Kernel hooks
     virtual void ExtractCoordinates() = 0;

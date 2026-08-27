@@ -110,6 +110,18 @@ typedef struct {
     int64_t skipped_lower_leaves;
     int64_t last_nd;
     int64_t last_nthr;
+    int64_t lowrank_upper_leaves;
+    int64_t dense_upper_leaves;
+    int64_t inactive_skipped_leaves;
+    int64_t lowrank_directions;
+    int64_t dense_directions;
+    int64_t gemm_calls;
+    int64_t lowrank_rank_sum;
+    int64_t lowrank_rank_max;
+    int64_t lowrank_rank_le4;
+    int64_t lowrank_rank_le8;
+    int64_t lowrank_rank_le16;
+    int64_t lowrank_rank_le32;
     double total_s;
     double zero_s;
     double permute_s;
@@ -201,6 +213,18 @@ void HACApK_matvec_stats_get(double *values, int n_values,
         if (n_counts > 5) counts[5] = g_matvec_stats.skipped_lower_leaves;
         if (n_counts > 6) counts[6] = g_matvec_stats.last_nd;
         if (n_counts > 7) counts[7] = g_matvec_stats.last_nthr;
+        if (n_counts > 8) counts[8] = g_matvec_stats.lowrank_upper_leaves;
+        if (n_counts > 9) counts[9] = g_matvec_stats.dense_upper_leaves;
+        if (n_counts > 10) counts[10] = g_matvec_stats.inactive_skipped_leaves;
+        if (n_counts > 11) counts[11] = g_matvec_stats.lowrank_directions;
+        if (n_counts > 12) counts[12] = g_matvec_stats.dense_directions;
+        if (n_counts > 13) counts[13] = g_matvec_stats.gemm_calls;
+        if (n_counts > 14) counts[14] = g_matvec_stats.lowrank_rank_sum;
+        if (n_counts > 15) counts[15] = g_matvec_stats.lowrank_rank_max;
+        if (n_counts > 16) counts[16] = g_matvec_stats.lowrank_rank_le4;
+        if (n_counts > 17) counts[17] = g_matvec_stats.lowrank_rank_le8;
+        if (n_counts > 18) counts[18] = g_matvec_stats.lowrank_rank_le16;
+        if (n_counts > 19) counts[19] = g_matvec_stats.lowrank_rank_le32;
     }
 }
 
@@ -1044,9 +1068,16 @@ static void matvec_permute_input(int idx, void *data) {
 
 static void matvec_collect_leaf_profile(
     st_cHACApK_leafmtx *st_lf, int nlf, int symmetric,
+    const int *active_prefix,
     int64_t *lowrank_leaves, int64_t *dense_leaves,
     int64_t *mirrored_upper_leaves, int64_t *diagonal_leaves,
-    int64_t *skipped_lower_leaves,
+    int64_t *skipped_lower_leaves, int64_t *lowrank_upper_leaves,
+    int64_t *dense_upper_leaves, int64_t *inactive_skipped_leaves,
+    int64_t *lowrank_directions, int64_t *dense_directions,
+    int64_t *gemm_calls, int64_t *lowrank_rank_sum,
+    int64_t *lowrank_rank_max, int64_t *lowrank_rank_le4,
+    int64_t *lowrank_rank_le8, int64_t *lowrank_rank_le16,
+    int64_t *lowrank_rank_le32,
     double *lowrank_flop_est, double *dense_flop_est)
 {
     int ip;
@@ -1055,6 +1086,18 @@ static void matvec_collect_leaf_profile(
     *mirrored_upper_leaves = 0;
     *diagonal_leaves = 0;
     *skipped_lower_leaves = 0;
+    *lowrank_upper_leaves = 0;
+    *dense_upper_leaves = 0;
+    *inactive_skipped_leaves = 0;
+    *lowrank_directions = 0;
+    *dense_directions = 0;
+    *gemm_calls = 0;
+    *lowrank_rank_sum = 0;
+    *lowrank_rank_max = 0;
+    *lowrank_rank_le4 = 0;
+    *lowrank_rank_le8 = 0;
+    *lowrank_rank_le16 = 0;
+    *lowrank_rank_le32 = 0;
     *lowrank_flop_est = 0.0;
     *dense_flop_est = 0.0;
     for (ip = 1; ip <= nlf; ++ip) {
@@ -1067,30 +1110,52 @@ static void matvec_collect_leaf_profile(
                 ++(*skipped_lower_leaves);
                 continue;
             }
-            if (leaf->nstrtl == leaf->nstrtt) ++(*diagonal_leaves);
             upper = (leaf->nstrtl < leaf->nstrtt);
         }
+        if (active_prefix &&
+            (active_prefix[leaf->nstrtl-1+leaf->ndl] ==
+                 active_prefix[leaf->nstrtl-1] ||
+             active_prefix[leaf->nstrtt-1+leaf->ndt] ==
+                 active_prefix[leaf->nstrtt-1])) {
+            ++(*inactive_skipped_leaves);
+            continue;
+        }
+        if (symmetric && leaf->nstrtl == leaf->nstrtt)
+            ++(*diagonal_leaves);
         if (leaf->ltmtx == 1) {
             int kt = leaf->kt;
+            int directions;
             if (!leaf->a1 || !leaf->a2 || kt <= 0) continue;
             ++(*lowrank_leaves);
+            directions = 1 + upper;
+            *lowrank_directions += directions;
+            *lowrank_rank_sum += (int64_t)directions*kt;
+            if (kt > *lowrank_rank_max) *lowrank_rank_max = kt;
+            if (kt <= 4) *lowrank_rank_le4 += directions;
+            if (kt <= 8) *lowrank_rank_le8 += directions;
+            if (kt <= 16) *lowrank_rank_le16 += directions;
+            if (kt <= 32) *lowrank_rank_le32 += directions;
             block_flop = 2.0 * (double)kt * (double)(leaf->ndl + leaf->ndt);
             *lowrank_flop_est += block_flop;
             if (upper) {
                 ++(*mirrored_upper_leaves);
+                ++(*lowrank_upper_leaves);
                 *lowrank_flop_est += block_flop;
             }
         } else {
             if (!leaf->a1) continue;
             ++(*dense_leaves);
+            *dense_directions += 1 + upper;
             block_flop = 2.0 * (double)leaf->ndl * (double)leaf->ndt;
             *dense_flop_est += block_flop;
             if (upper) {
                 ++(*mirrored_upper_leaves);
+                ++(*dense_upper_leaves);
                 *dense_flop_est += block_flop;
             }
         }
     }
+    *gemm_calls = 2*(*lowrank_directions) + *dense_directions;
 }
 
 /* Thread function for H-matrix matvec: each thread processes leaf blocks
@@ -1249,6 +1314,7 @@ static void matvec_sym_thread_func(int tid, int nthr, void *data) {
 typedef struct {
     st_cHACApK_leafmtx *st_lf;
     int nlf, nd, nrhs;
+    const int *active_prefix;
 } matvec_many_job_ctx;
 
 static void matvec_sym_many_thread_func(int tid, int nthr, void *data) {
@@ -1267,6 +1333,12 @@ static void matvec_sym_many_thread_func(int tid, int nthr, void *data) {
         upper = leaf->nstrtl < leaf->nstrtt;
         ndl = leaf->ndl; ndt = leaf->ndt;
         nstrtl = leaf->nstrtl; nstrtt = leaf->nstrtt;
+        if (ctx->active_prefix &&
+            (ctx->active_prefix[nstrtl-1+ndl] ==
+                 ctx->active_prefix[nstrtl-1] ||
+             ctx->active_prefix[nstrtt-1+ndt] ==
+                 ctx->active_prefix[nstrtt-1]))
+            continue;
         a1 = leaf->a1; a2 = leaf->a2;
         if (leaf->ltmtx == 1) {
             int kt = leaf->kt;
@@ -1307,6 +1379,8 @@ static void matvec_many_zero_y(int tid, void *data) {
 
 typedef struct {
     const double *x;
+    const double *diagonal_scale;
+    const int *active_prefix;
     double *y;
     int *lod;
     int nd, nrhs, nthr;
@@ -1316,8 +1390,16 @@ static void matvec_many_permute(int idx, void *data) {
     matvec_many_io_ctx *ctx = (matvec_many_io_ctx*)data;
     const int rhs = idx / ctx->nd;
     const int pos = idx - rhs*ctx->nd;
-    g_batch_x_perm[pos + (size_t)ctx->nd*rhs] =
-        ctx->x[(size_t)rhs*ctx->nd + ctx->lod[pos+1]-1];
+    const int original = ctx->lod[pos+1]-1;
+    double value;
+    if (ctx->active_prefix &&
+        ctx->active_prefix[pos+1] == ctx->active_prefix[pos]) {
+        g_batch_x_perm[pos + (size_t)ctx->nd*rhs] = 0.0;
+        return;
+    }
+    value = ctx->x[(size_t)rhs*ctx->nd + original];
+    if (ctx->diagonal_scale) value *= ctx->diagonal_scale[original];
+    g_batch_x_perm[pos + (size_t)ctx->nd*rhs] = value;
 }
 
 static void matvec_many_reduce(int idx, void *data) {
@@ -1326,9 +1408,18 @@ static void matvec_many_reduce(int idx, void *data) {
     const int pos = idx - rhs*ctx->nd;
     double sum = 0.0;
     int tid;
+    if (ctx->active_prefix &&
+        ctx->active_prefix[pos+1] == ctx->active_prefix[pos]) {
+        ctx->y[(size_t)rhs*ctx->nd + ctx->lod[pos+1]-1] = 0.0;
+        return;
+    }
     for (tid = 0; tid < ctx->nthr; ++tid)
         sum += g_batch_y_thread[tid][pos + (size_t)ctx->nd*rhs];
-    ctx->y[(size_t)rhs*ctx->nd + ctx->lod[pos+1]-1] = sum;
+    {
+        const int original = ctx->lod[pos+1]-1;
+        if (ctx->diagonal_scale) sum *= ctx->diagonal_scale[original];
+        ctx->y[(size_t)rhs*ctx->nd + original] = sum;
+    }
 }
 
 /* Reduce thread-local y arrays and apply inverse permutation for one element */
@@ -1434,15 +1525,28 @@ static void hacapk_matvec_run(
     double zero_s = 0.0, permute_s = 0.0, leaf_s = 0.0, reduce_s = 0.0, meta_s = 0.0;
     int64_t lowrank_leaves = 0, dense_leaves = 0, mirrored_upper_leaves = 0;
     int64_t diagonal_leaves = 0, skipped_lower_leaves = 0;
+    int64_t lowrank_upper_leaves = 0, dense_upper_leaves = 0;
+    int64_t inactive_skipped_leaves = 0, lowrank_directions = 0;
+    int64_t dense_directions = 0, gemm_calls = 0, lowrank_rank_sum = 0;
+    int64_t lowrank_rank_max = 0, lowrank_rank_le4 = 0;
+    int64_t lowrank_rank_le8 = 0, lowrank_rank_le16 = 0;
+    int64_t lowrank_rank_le32 = 0;
     double lowrank_flop_est = 0.0, dense_flop_est = 0.0;
 
     if (stats_on) {
         t_total0 = matvec_wall_time();
         t0 = t_total0;
-        matvec_collect_leaf_profile(st_lf, nlf, symmetric_profile,
+        matvec_collect_leaf_profile(st_lf, nlf, symmetric_profile, NULL,
                                     &lowrank_leaves, &dense_leaves,
                                     &mirrored_upper_leaves, &diagonal_leaves,
                                     &skipped_lower_leaves,
+                                    &lowrank_upper_leaves, &dense_upper_leaves,
+                                    &inactive_skipped_leaves,
+                                    &lowrank_directions, &dense_directions,
+                                    &gemm_calls, &lowrank_rank_sum,
+                                    &lowrank_rank_max, &lowrank_rank_le4,
+                                    &lowrank_rank_le8, &lowrank_rank_le16,
+                                    &lowrank_rank_le32,
                                     &lowrank_flop_est, &dense_flop_est);
         meta_s = matvec_wall_time() - t0;
     }
@@ -1475,6 +1579,19 @@ static void hacapk_matvec_run(
         g_matvec_stats.mirrored_upper_leaves += mirrored_upper_leaves;
         g_matvec_stats.diagonal_leaves += diagonal_leaves;
         g_matvec_stats.skipped_lower_leaves += skipped_lower_leaves;
+        g_matvec_stats.lowrank_upper_leaves += lowrank_upper_leaves;
+        g_matvec_stats.dense_upper_leaves += dense_upper_leaves;
+        g_matvec_stats.inactive_skipped_leaves += inactive_skipped_leaves;
+        g_matvec_stats.lowrank_directions += lowrank_directions;
+        g_matvec_stats.dense_directions += dense_directions;
+        g_matvec_stats.gemm_calls += gemm_calls;
+        g_matvec_stats.lowrank_rank_sum += lowrank_rank_sum;
+        if (lowrank_rank_max > g_matvec_stats.lowrank_rank_max)
+            g_matvec_stats.lowrank_rank_max = lowrank_rank_max;
+        g_matvec_stats.lowrank_rank_le4 += lowrank_rank_le4;
+        g_matvec_stats.lowrank_rank_le8 += lowrank_rank_le8;
+        g_matvec_stats.lowrank_rank_le16 += lowrank_rank_le16;
+        g_matvec_stats.lowrank_rank_le32 += lowrank_rank_le32;
         g_matvec_stats.lowrank_flop_est += lowrank_flop_est;
         g_matvec_stats.dense_flop_est += dense_flop_est;
         g_matvec_stats.last_nd = nd;
@@ -1496,27 +1613,128 @@ void HACApK_matvec_sym_wrapper(
     hacapk_matvec_run(leafmtxp_void, ctl_void, x, y, nd, matvec_sym_thread_func, 1);
 }
 
-void HACApK_matvec_sym_many_wrapper(
+static void hacapk_matvec_sym_many_run(
     void *leafmtxp_void, void *ctl_void, const double *x, double *y,
-    int nd, int nrhs)
+    int nd, int nrhs, const int *active_prefix,
+    const double *diagonal_scale)
 {
     st_cHACApK_leafmtxp leafmtxp = (st_cHACApK_leafmtxp)leafmtxp_void;
     st_cHACApK_lcontrol ctl = (st_cHACApK_lcontrol)ctl_void;
     int nthr;
     matvec_many_job_ctx job;
     matvec_many_io_ctx io;
+    int stats_on;
+    double t_total0 = 0.0, t0 = 0.0;
+    double zero_s = 0.0, permute_s = 0.0, leaf_s = 0.0;
+    double reduce_s = 0.0, meta_s = 0.0;
+    int64_t lowrank_leaves = 0, dense_leaves = 0;
+    int64_t mirrored_upper_leaves = 0, diagonal_leaves = 0;
+    int64_t skipped_lower_leaves = 0;
+    int64_t lowrank_upper_leaves = 0, dense_upper_leaves = 0;
+    int64_t inactive_skipped_leaves = 0, lowrank_directions = 0;
+    int64_t dense_directions = 0, gemm_calls = 0, lowrank_rank_sum = 0;
+    int64_t lowrank_rank_max = 0, lowrank_rank_le4 = 0;
+    int64_t lowrank_rank_le8 = 0, lowrank_rank_le16 = 0;
+    int64_t lowrank_rank_le32 = 0;
+    double lowrank_flop_est = 0.0, dense_flop_est = 0.0;
     if (!leafmtxp || !ctl || !ctl->lod || !leafmtxp->st_lf ||
         !x || !y || nd < 1 || nrhs < 1) return;
     nthr = hacapk_get_num_threads();
+    stats_on = matvec_stats_enabled();
+    if (stats_on) {
+        t_total0 = matvec_wall_time();
+        t0 = t_total0;
+        matvec_collect_leaf_profile(
+            leafmtxp->st_lf, leafmtxp->nlf, 1, active_prefix,
+            &lowrank_leaves, &dense_leaves,
+            &mirrored_upper_leaves, &diagonal_leaves,
+            &skipped_lower_leaves,
+            &lowrank_upper_leaves, &dense_upper_leaves,
+            &inactive_skipped_leaves,
+            &lowrank_directions, &dense_directions,
+            &gemm_calls, &lowrank_rank_sum,
+            &lowrank_rank_max, &lowrank_rank_le4,
+            &lowrank_rank_le8, &lowrank_rank_le16,
+            &lowrank_rank_le32,
+            &lowrank_flop_est, &dense_flop_est);
+        meta_s = matvec_wall_time()-t0;
+    }
     init_batch_matvec_buffers(nd, nrhs, nthr, leafmtxp->ktmax);
     job.st_lf = leafmtxp->st_lf; job.nlf = leafmtxp->nlf;
     job.nd = nd; job.nrhs = nrhs;
-    io.x = x; io.y = y; io.lod = ctl->lod; io.nd = nd;
+    job.active_prefix = active_prefix;
+    io.x = x; io.diagonal_scale = diagonal_scale;
+    io.active_prefix = active_prefix;
+    io.y = y; io.lod = ctl->lod; io.nd = nd;
     io.nrhs = nrhs; io.nthr = nthr;
+    if (stats_on) t0 = matvec_wall_time();
     hacapk_parallel_for(nthr, matvec_many_zero_y, &job);
+    if (stats_on) { zero_s = matvec_wall_time()-t0; t0 = matvec_wall_time(); }
     hacapk_parallel_for(nd*nrhs, matvec_many_permute, &io);
+    if (stats_on) { permute_s = matvec_wall_time()-t0; t0 = matvec_wall_time(); }
     hacapk_parallel_job(matvec_sym_many_thread_func, &job);
+    if (stats_on) { leaf_s = matvec_wall_time()-t0; t0 = matvec_wall_time(); }
     hacapk_parallel_for(nd*nrhs, matvec_many_reduce, &io);
+    if (stats_on) {
+        reduce_s = matvec_wall_time()-t0;
+        g_matvec_stats.calls += 1;
+        g_matvec_stats.total_s += matvec_wall_time()-t_total0;
+        g_matvec_stats.zero_s += zero_s;
+        g_matvec_stats.permute_s += permute_s;
+        g_matvec_stats.leaf_s += leaf_s;
+        g_matvec_stats.reduce_s += reduce_s;
+        g_matvec_stats.meta_s += meta_s;
+        g_matvec_stats.lowrank_leaves += lowrank_leaves;
+        g_matvec_stats.dense_leaves += dense_leaves;
+        g_matvec_stats.mirrored_upper_leaves += mirrored_upper_leaves;
+        g_matvec_stats.diagonal_leaves += diagonal_leaves;
+        g_matvec_stats.skipped_lower_leaves += skipped_lower_leaves;
+        g_matvec_stats.lowrank_upper_leaves += lowrank_upper_leaves;
+        g_matvec_stats.dense_upper_leaves += dense_upper_leaves;
+        g_matvec_stats.inactive_skipped_leaves += inactive_skipped_leaves;
+        g_matvec_stats.lowrank_directions += lowrank_directions;
+        g_matvec_stats.dense_directions += dense_directions;
+        g_matvec_stats.gemm_calls += gemm_calls;
+        g_matvec_stats.lowrank_rank_sum += lowrank_rank_sum;
+        if (lowrank_rank_max > g_matvec_stats.lowrank_rank_max)
+            g_matvec_stats.lowrank_rank_max = lowrank_rank_max;
+        g_matvec_stats.lowrank_rank_le4 += lowrank_rank_le4;
+        g_matvec_stats.lowrank_rank_le8 += lowrank_rank_le8;
+        g_matvec_stats.lowrank_rank_le16 += lowrank_rank_le16;
+        g_matvec_stats.lowrank_rank_le32 += lowrank_rank_le32;
+        g_matvec_stats.lowrank_flop_est += nrhs*lowrank_flop_est;
+        g_matvec_stats.dense_flop_est += nrhs*dense_flop_est;
+        g_matvec_stats.last_nd = nd;
+        g_matvec_stats.last_nthr = nthr;
+    }
+}
+
+void HACApK_matvec_sym_many_wrapper(
+    void *leafmtxp_void, void *ctl_void, const double *x, double *y,
+    int nd, int nrhs)
+{
+    hacapk_matvec_sym_many_run(
+        leafmtxp_void, ctl_void, x, y, nd, nrhs, NULL, NULL);
+}
+
+void HACApK_matvec_sym_many_masked_wrapper(
+    void *leafmtxp_void, void *ctl_void, const double *x, double *y,
+    int nd, int nrhs, const int *active_prefix)
+{
+    if (!active_prefix || active_prefix[0] != 0) return;
+    hacapk_matvec_sym_many_run(
+        leafmtxp_void, ctl_void, x, y, nd, nrhs, active_prefix, NULL);
+}
+
+void HACApK_matvec_sym_many_prepared_wrapper(
+    void *leafmtxp_void, void *ctl_void, const double *x, double *y,
+    int nd, int nrhs, const int *active_prefix,
+    const double *diagonal_scale)
+{
+    if (active_prefix && active_prefix[0] != 0) return;
+    hacapk_matvec_sym_many_run(
+        leafmtxp_void, ctl_void, x, y, nd, nrhs,
+        active_prefix, diagonal_scale);
 }
 
 /*=========================================================================

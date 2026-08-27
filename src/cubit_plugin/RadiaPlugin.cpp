@@ -49,6 +49,7 @@ std::vector<std::string> RadiaPlugin::get_keys()
   keys.push_back("ExportNetgenCommand");
 #endif
   keys.push_back("ExportNastranCommand");
+  keys.push_back("ExportJmagNastranCommand");
   keys.push_back("ExportGmshCommand");
   keys.push_back("ExportVtkCommand");
   keys.push_back("ExportFemeemCommand");
@@ -66,6 +67,8 @@ CubitCommand* RadiaPlugin::create_command(const std::string &key)
 #endif
   if (key == "ExportNastranCommand")
     return new ExportNastranCommand();
+  else if (key == "ExportJmagNastranCommand")
+    return new ExportJmagNastranCommand();
   else if (key == "ExportGmshCommand")
     return new ExportGmshCommand();
   else if (key == "ExportVtkCommand")

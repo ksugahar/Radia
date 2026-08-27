@@ -17,7 +17,7 @@ def test_radia_mex_contract_reads_the_cpp_command_inventory():
     contract = matlab_radia_mex_contract("mex")
 
     assert contract["status"] == "ready"
-    assert contract["command_count"] == 363
+    assert contract["command_count"] == 364
     assert not any(
         command.startswith("optuna.")
         for command in contract["command_names"]
@@ -72,6 +72,7 @@ def test_radia_mex_contract_reads_the_cpp_command_inventory():
         "topopt.abe_element_fill_plan",
         "beam.orbit.track_reference_to_plane",
         "hacapk.charge_gram.configured_field_values_shape_derivative",
+        "hacapk.charge_gram.configured_active_hmatrix_stats",
         "hdiv.field_evaluator.field_gradient",
     }.issubset(contract["command_names"])
     assert contract["command_groups"]["radia-core"] >= 70
@@ -89,8 +90,8 @@ def test_radia_mex_contract_reads_the_cpp_command_inventory():
     # _ChargeGramHMatrix.charge_sigma (the sigma-normalization diagnostic
     # from the roundoff-amplification fix) is EXCLUDED with a reason, and
     # exclusions leave the relevant surface; cyclic image setup expands the
-    # covered stateful surface to 125 entries.
-    assert contract["pybind_class_surface_count"] == 125
+    # covered stateful surface to 126 entries.
+    assert contract["pybind_class_surface_count"] == 126
     assert ("_ChargeGramHMatrix.charge_sigma"
             in contract["pybind_class_exclusions"])
     assert (
@@ -250,14 +251,14 @@ def test_root_readme_publishes_native_topology_mex_parity():
     matlab_readme = " ".join(
         (root / "matlab" / "README.md").read_text(encoding="utf-8").split()
     )
-    assert "125 stateful class members" in matlab_readme
-    assert "All 252 entries are covered by the current 363-command gateway" in matlab_readme
+    assert "126 stateful class members" in matlab_readme
+    assert "All 253 entries are covered by the current 364-command gateway" in matlab_readme
 
     parity_doc = (root / "docs" / "api" / "MATLAB_MEX_NGSOLVE_PARITY.md").read_text(
         encoding="utf-8"
     )
-    assert "| Stateful pybind11 class surface | 125 / 125 covered |" in parity_doc
-    assert "| MEX gateway commands | 363 |" in parity_doc
+    assert "| Stateful pybind11 class surface | 126 / 126 covered |" in parity_doc
+    assert "| MEX gateway commands | 364 |" in parity_doc
 
 
 def test_server_registers_bridge_tools():

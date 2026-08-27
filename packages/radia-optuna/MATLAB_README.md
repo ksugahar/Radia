@@ -40,6 +40,19 @@ identifiers and the exact pandas-style two-level labels are available in
 `frame.Properties.UserData.column_levels`. Multi-objective metric names are
 preserved and sorted using the upstream column contract.
 
+`Study.trials_dataframe` follows the Optuna 4.9.0 `attrs` expansion and column
+ordering while returning a native MATLAB `table`:
+
+```matlab
+frame = study.trials_dataframe( ...
+    attrs=["number","value","params","user_attrs","state"]);
+```
+
+With `multi_index=true`, the flattened variable names remain convenient MATLAB
+identifiers and the exact pandas-style two-level labels are available in
+`frame.Properties.UserData.column_levels`. Multi-objective metric names are
+preserved and sorted using the upstream column contract.
+
 This is an independent, unofficial project and is not affiliated with,
 sponsored by, or endorsed by Preferred Networks, Inc. or the Optuna project.
 Optuna, the Optuna logo and any related marks are trademarks of Preferred Networks, Inc.

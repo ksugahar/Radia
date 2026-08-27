@@ -157,3 +157,19 @@ def test_production_design_specs_expose_runner_output_contract(
 
     index = command.index("--output")
     assert command[index + 1] == str(output)
+
+
+def test_streamfunction_simulink_config_exposes_production_aca_qr_tsvd():
+    spec, _ = app._load_spec(
+        "streamfunction",
+        {
+            "coil_vol": "coil.vol",
+            "eval_vol": "eval.vol",
+            "aca_eps": "2.5e-9",
+        },
+    )
+
+    command = spec.build_command(python=sys.executable, panels_dir="panels")
+
+    assert "aca_eps" in spec.visible_fields()
+    assert command[command.index("--aca-eps") + 1] == "2.5e-9"

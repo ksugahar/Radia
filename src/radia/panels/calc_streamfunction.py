@@ -662,6 +662,14 @@ def _element_centroids(mesh):
     return np.array(cents) if cents else vpts
 
 
+def _aca_tolerance(args):
+    """Validated ACA+ stopping tolerance shared by every surface workflow."""
+    value = float(getattr(args, "aca_eps", 1.0e-10))
+    if not np.isfinite(value) or value <= 0.0:
+        raise ValueError("--aca-eps must be finite and positive")
+    return value
+
+
 def _peak_current_density(fes, coil, gfu):
     """max |K| = max |grad_s psi|, sampled via an L2 projection of the |grad|
     CF onto the boundary-H1 nodal values (the documented vertex-DOF workaround
@@ -765,7 +773,7 @@ def _build_problem(args, eval_scale=1.0):
     n_free = R.shape[1]
     base = aca_tsvd(Ac.shape[0], n_free, lambda i, j: float(Af[i, j]),
                     modes=Ac.shape[0], kmax=min(Ac.shape[0], n_free),
-                    aca_eps=1e-10)
+                    aca_eps=_aca_tolerance(args))
     reg = RegularizedTSVD.from_stiffness(base, S)
     # mean diag(Af^T Af) = mean of column norms^2 -- WITHOUT forming the
     # n_free x n_free dense Af^T Af (the other O(N^2) wall).
@@ -942,7 +950,7 @@ def _build_shielded_problem(args, eval_scale=1.0):
                     lambda i, j: float(A_stack[i, j]),
                     modes=A_stack.shape[0],
                     kmax=min(A_stack.shape[0], n_free),
-                    aca_eps=1e-10)
+                    aca_eps=_aca_tolerance(args))
     reg = RegularizedTSVD.from_stiffness(base, S_block)
 
     return dict(
@@ -1056,7 +1064,8 @@ def _solve_abe_problem(P, args):
             args, "abe_min_target_correlation", 0.0)),
         residual_peak_to_peak=getattr(args, "abe_residual_peak_to_peak", None),
         residual_rms=getattr(args, "abe_residual_rms", None),
-        modes=P["base"].modes, kmax=min(abe_response.shape), aca_eps=1.0e-10,
+        modes=P["base"].modes, kmax=min(abe_response.shape),
+        aca_eps=_aca_tolerance(args),
         precomputed_factor=P["base"] if uniform_scale else None)
     P["_last_abe_solution"] = result
     P["_last_abe_residual_target_specified"] = bool(
@@ -1083,6 +1092,18 @@ def _abe_result_metadata(P):
         "abe_residual_rms_T": result.residual_rms,
         "abe_residual_max_abs_T": result.residual_max_abs,
         "abe_peak_abs_potential_A": result.peak_abs_potential,
+    }
+
+
+def _aca_factorization_metadata(P, args):
+    """Stable provenance for the production stream-function inverse kernel."""
+    abe_result = P.get("_last_abe_solution")
+    factor = abe_result.factor if abe_result is not None else P["base"]
+    return {
+        "factorization": "aca_plus_qr_tsvd",
+        "aca_eps": _aca_tolerance(args),
+        "aca_rank": int(factor.k_aca),
+        "tsvd_modes": int(factor.modes),
     }
 
 
@@ -2676,6 +2697,7 @@ def run_design(args):
             "t_solve_s": round(t2 - t1, 3),
             "t_total_s": round(time.perf_counter() - t0, 3),
         }
+        result.update(_aca_factorization_metadata(P, args))
         result.update(_abe_result_metadata(P))
         # Material-aware (iron) metadata
         if getattr(args, "iron_vol", None):
@@ -2767,8 +2789,10 @@ def _pareto_geometry(args):
         psi = P["R"] @ psi_f
         gfu = GridFunction(P["fes"]); gfu.vec.FV().NumPy()[:] = psi
         peak = _peak_current_density(P["fes"], P["coil"], gfu)
-        front.append({"eval_scale": float(s), "homogeneity_rms": homo,
-                      "peak_J": peak})
+        point = {"eval_scale": float(s), "homogeneity_rms": homo,
+                 "peak_J": peak}
+        point.update(_aca_factorization_metadata(P, args))
+        front.append(point)
     return front
 
 
@@ -2794,7 +2818,7 @@ def run_pareto(args):
                 front = _linf_irls_front(P, args.alpha, args.linf_iter)
             else:                            # pragma: no cover - argparse guards
                 raise ValueError(f"unknown pareto-lever {args.pareto_lever}")
-    return {
+    result = {
         "method": "pareto", "pareto_lever": args.pareto_lever,
         "target_cf": args.target_cf,
         "target_kind": "vector_B" if P["vector_b"] else "Bz",
@@ -2806,6 +2830,8 @@ def run_pareto(args):
         "n_alpha": len(front), "n_points": len(front), "front": front,
         "t_total_s": round(time.perf_counter() - t0, 3),
     }
+    result.update(_aca_factorization_metadata(P, args))
+    return result
 
 
 def run_manufacture(args):
@@ -3046,6 +3072,7 @@ def run_manufacture(args):
                     "is too small (extend it) -- that, not the connectors, is "
                     "the dominant single-current error.",
         }
+        result.update(_aca_factorization_metadata(P, args))
         result.update(_abe_result_metadata(P))
         if greedy_trace is not None:
             result.update({
@@ -3345,6 +3372,9 @@ def build_argparser():
                          "for gradient and solenoid (recommended).")
     ap.add_argument("--alpha", type=float, default=0.0,
                     help="Tikhonov weight (design; 0 = exact-fit min-seminorm)")
+    ap.add_argument("--aca-eps", type=float, default=1.0e-10,
+                    help="HACApK ACA+ stopping tolerance before QR+TSVD "
+                         "recompression (default 1e-10)")
     ap.add_argument("--inverse-method", choices=["regularized", "abe"],
                     default="regularized",
                     help="inverse design: regularized = cached minimum-"

@@ -13,17 +13,16 @@ All commands are available in journal files (.jou) and the Cubit command line.
 |---------|--------|--------|-----------|-----|
 | `export netgen "f.vol" order N` | Netgen .vol (+ .vol.json) | 1-5 | NetgenCurver + ACIS | [export_NetgenMesh](export_NetgenMesh.md) |
 | `export gmsh "f.msh" order N` | Gmsh v4.1 | 1-3 | NetgenCurver + ACIS | [export_Gmsh](export_Gmsh.md) |
-| `export jmag_nastran "f.bdf" order N` | Nastran BDF | 1-2 | NetgenCurver + ACIS | [export_Nastran](export_Nastran.md) |
+| `export nastran_bdf "f.bdf" order N` | Nastran BDF | 1-2 | NetgenCurver + ACIS | [export_Nastran](export_Nastran.md) |
 | `export vtk "f.vtk" order N` | VTK Legacy | 1-2 | NetgenCurver + ACIS | [export_vtk](export_vtk.md) |
 | `export meg "f.meg"` | ELF/MAGIC MEG | 1 | — | [export_meg](export_meg.md) |
 | `export femeem "dir"` | FEMEEM (Gifu Univ.) | 1 (tet only) | — | [export_femeem](export_femeem.md) |
 
 > **IMPORTANT**: The plugin's mesh exporters are `export netgen / gmsh /
-> vtk / femeem / meg`, plus `export jmag_nastran` for Nastran BDF.  Cubit
+> vtk / femeem / meg / nastran_bdf`. Cubit
 > has a built-in `export nastran` (different format, no high-order support),
-> so the plugin's BDF writer is exposed under the distinct `jmag_nastran`
-> keyword to avoid shadowing the built-in.  The other five names are not
-> built-in Cubit export formats, so they extend `export` without conflict.
+> so the plugin uses the distinct `nastran_bdf` keyword. The historical
+> `jmag_nastran` spelling remains a deprecated compatibility alias.
 
 ### Coil Generation Command
 
@@ -82,10 +81,10 @@ export gmsh "filename.msh" [order <1-3>] [dimension <2|3>] [overwrite]
 
 Order 4-5 not supported (use `export netgen`).
 
-### export jmag_nastran
+### export nastran_bdf
 
 ```
-export jmag_nastran "filename.bdf" [order <1|2>] [dimension <2|3>] [nopyramid] [overwrite]
+export nastran_bdf "filename.bdf" [order <1|2>] [dimension <2|3>] [nopyramid] [overwrite]
 ```
 
 | Parameter | Default | Description |
@@ -93,6 +92,10 @@ export jmag_nastran "filename.bdf" [order <1|2>] [dimension <2|3>] [nopyramid] [
 | order | 1 | Element order (1=CTETRA/CHEXA, 2=CTETRA10/CHEXA20) |
 | dimension | 3 | 2D (CTRIA3/CQUAD4) or 3D |
 | nopyramid | off | Convert pyramids to degenerate hex (JMAG compatible) |
+
+Blocks become PSOLID/PSHELL properties, sidesets become collision-free PSHELL
+properties, and nodesets become SET1 cards. MAT cards are deliberately omitted;
+assign real physical materials in the receiving application.
 
 ### export vtk
 
@@ -228,7 +231,7 @@ Export Mesh (PySide6):         Solve (PySide6):
 |---------|-------|-----|
 | "Interrupt Detected" on AddPoint | ABI mismatch (full Netgen DLL) | Rebuild with compact_netgen |
 | HEX20 has 8 nodes in .msh | edge_ho_nodes_ bug (fixed 2026-04-05) | Update ccm |
-| `export nastran` wrong format | Using Cubit built-in | Use `export jmag_nastran` |
+| `export nastran` wrong format | Using Cubit built-in | Use `export nastran_bdf` |
 | cp932 UnicodeDecodeError | Non-ASCII in .py | Use ASCII only + encoding='utf-8' |
 | ccm size < 400 KB | Old full-Netgen build | Rebuild with compact_netgen (~600 KB) |
 | GMSH order 4-5 fails | Not supported in GMSH export | Use `export netgen` |

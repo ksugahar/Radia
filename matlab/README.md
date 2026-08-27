@@ -1111,6 +1111,58 @@ preassembled moving common-basis CLN family in its Level-2 MATLAB S-Function;
 it does not call Python per step. Notebook workbenches are retired for all
 applications, including IH and MagLev.
 
+The Stream Function block uses the production HACApK ACA+ followed by thin QR
+and small-core TSVD recompression. The same tolerance is used by surface and
+volume designs and is set through the versioned configuration:
+
+```matlab
+settings = struct("method", "Design", ...
+    "coil_vol", "coil.vol", "eval_vol", "dsv.vol", ...
+    "target_cf", "1", "aca_eps", 1.0e-10);
+config = radia.simulink.writeApplicationConfig( ...
+    "streamfunction", settings, "C:\temp\streamfunction.json");
+```
+
+Set the block's `Configuration JSON` parameter to `config` and issue one rising
+trigger. The run artifact records `factorization`, `aca_eps`, `aca_rank`, and
+`tsvd_modes`, so a Simulink result can be audited back to the C++ solver path.
+The numeric factorization is also available directly as
+`radia.stream.acaTsvd`, which calls `radia_mex('stream.aca_tsvd', ...)` and the
+same `rad_stream_function.cpp` kernel. Full NGSolve mesh construction and coil
+design remain explicit-trigger batch work; they do not invoke Python once per
+simulation step.
+
+Use MATLAB Optuna as an outer design loop without replacing the inner
+factorization. The runner below minimizes field nonuniformity and peak sheet
+current while preserving one isolated artifact directory per trial:
+
+```matlab
+base = struct("method", "Design", ...
+    "coil_vol", "coil.vol", "eval_vol", "dsv.vol", ...
+    "target_cf", "1", "aca_eps", 1.0e-10);
+space = struct();
+space.alpha = struct("Kind", "float", ...
+    "Low", 1.0e-10, "High", 1.0e1, "Log", true);
+
+runner = radia.stream.OptunaRunner(base, ...
+    SearchSpace=space, ...
+    ObjectiveKeys=["homogeneity_rms", "peak_J"]);
+study = radia.optuna.createStudy( ...
+    directions=["minimize", "minimize"], ...
+    sampler=radia.optuna.NSGAIISampler(Seed=42));
+runner.optimize(study, 40);
+```
+
+The **Stream Function Optuna** library block accepts the workspace variable
+names `radia_streamfunction_optuna_runner` and
+`radia_streamfunction_optuna_study`. One rising trigger runs the requested
+study as explicit batch work and reports status, completed/failed counts,
+single-objective best values, Pareto count, and elapsed time. The runner may
+also optimize manufacturing or geometry settings through `SearchSpace`.
+Keep `aca_eps` fixed during physical design. Tune numerical tolerance, rank,
+and thread settings in a separate calibration study with accuracy and memory
+constraints.
+
 The remaining library blocks delegate to the same tested MATLAB APIs.
 The `Material Dictionary` block is the normal material entry point for a
 `.vol`-based model. Define `radia_materials` as a MATLAB `dictionary` whose
@@ -1316,8 +1368,8 @@ materialized in the optimization loop.
 
 The executable parity audit compares three pybind11 surfaces with the
 `radia_mex` command table: 99 public top-level names, 28 underscore-prefixed
-numerical kernels, and 125 stateful class members. All 252 entries are covered
-by the current 363-command gateway. The independent 20-command
+numerical kernels, and 126 stateful class members. All 253 entries are covered
+by the current 364-command gateway. The independent 20-command
 `optuna_mex` owns only its two API commands and 18 optimizer kernels. Three
 internal mesh/test helpers are
 classified explicitly rather than silently omitted. The remaining `radentry`

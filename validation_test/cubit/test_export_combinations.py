@@ -393,16 +393,21 @@ def generate_test_cases():
                     name = f"nastran_{model}_order{order}_dim{dim}{nopyr_str}"
                     fname = os.path.join(OUT_DIR, f"{name}.bdf")
 
-                    cmd = (f'export jmag_nastran "{fname}" order {order} '
+                    cmd = (f'export nastran_bdf "{fname}" order {order} '
                            f'dimension {dim} overwrite')
                     if nopyr:
                         cmd += ' nopyramid'
+
+                    tri_card = "CTRIA3" if order == 1 else "CTRIA6"
+                    cards = [tri_card]
+                    if model == "3d" and dim == 3:
+                        cards.insert(0, "CTETRA")
 
                     cases.append({
                         'name': name, 'model': model,
                         'cmd': cmd,
                         'validator': validate_nastran_export,
-                        'expected': {'cards': []}  # basic validation
+                        'expected': {'cards': cards}
                     })
 
     # --- VTK: order(1,2) x dim(2D,3D) ---

@@ -997,6 +997,82 @@
           "help": "Tikhonov weight (design; 0 = exact-fit min-seminorm)"
         },
         {
+          "cli": "--aca-eps",
+          "name": "aca_eps",
+          "type": "float",
+          "default": 1e-10,
+          "help": "HACApK ACA+ stopping tolerance before QR+TSVD recompression (default 1e-10)",
+          "ja": "ACA+ 許容誤差",
+          "physics": ""
+        },
+        {
+          "cli": "--inverse-method",
+          "name": "inverse_method",
+          "choices": [
+            "regularized",
+            "abe"
+          ],
+          "default": "regularized",
+          "help": "inverse design: regularized = cached minimum-seminorm REGCOIL/Tikhonov path; abe = improved DUCAS current-potential eigenmode selection with physical residual stopping and non-contiguous modes"
+        },
+        {
+          "cli": "--abe-min-mode-strength",
+          "name": "abe_min_mode_strength",
+          "type": "float",
+          "default": 0.0,
+          "help": "Abe mode threshold |u_i^T B|/sqrt(M), in weighted field units (used only with --inverse-method abe)"
+        },
+        {
+          "cli": "--abe-min-target-correlation",
+          "name": "abe_min_target_correlation",
+          "type": "float",
+          "default": 0.0,
+          "help": "minimum |u_i^T B|/||B|| for an Abe field mode"
+        },
+        {
+          "cli": "--abe-residual-rms",
+          "name": "abe_residual_rms",
+          "type": "float",
+          "default": null,
+          "help": "stop Abe mode accumulation at this physical field RMS residual in tesla"
+        },
+        {
+          "cli": "--abe-residual-peak-to-peak",
+          "name": "abe_residual_peak_to_peak",
+          "type": "float",
+          "default": null,
+          "help": "stop Abe mode accumulation at this physical field peak-to-peak residual in tesla"
+        },
+        {
+          "cli": "--abe-allowed-modes",
+          "name": "abe_allowed_modes",
+          "default": "",
+          "help": "one-based non-contiguous allowed eigenmodes, e.g. '1,7,17,37' or ranges '1-5,9'; empty = all"
+        },
+        {
+          "cli": "--abe-node-weights",
+          "name": "abe_node_weights",
+          "choices": [
+            "uniform",
+            "nearest-distance2"
+          ],
+          "default": "uniform",
+          "help": "improved-DUCAS node weights: uniform or squared distance to the nearest field-evaluation point (Abe eq.20; nearest-distance2 currently order=1)"
+        },
+        {
+          "cli": "--abe-distance-floor",
+          "name": "abe_distance_floor",
+          "type": "float",
+          "default": null,
+          "help": "positive minimum source-to-evaluation distance in metres for nearest-distance2 weights"
+        },
+        {
+          "cli": "--abe-initial-potential",
+          "name": "abe_initial_potential",
+          "default": "",
+          "help": ".npy file containing the independent FE current potential T0; unselected high-order content is kept"
+        },
+        {
           "cli": "--eval-max",
           "name": "eval_max",
           "type": "int",
@@ -1709,6 +1785,14 @@
           "name": "n_steps_per_FE",
           "type": "int",
           "default": 10
+        },
+        {
+          "cli": "--msh-output",
+          "name": "msh_output",
+          "default": "",
+          "help": "GMSH .msh v4.1 output for the final FE-refresh field",
+          "ja": "GMSH 出力パス",
+          "physics": "場の可視化用 .msh v4.1"
         }
       ]
     },
@@ -1847,6 +1931,14 @@
             "umfpack"
           ],
           "help": "FE direct solver. pardiso=MKL (fastest, default); sparsecholesky=ngsolve built-in (no MKL) -- use on machines with a conflicting MKL on PATH (e.g. CST)."
+        },
+        {
+          "cli": "--msh-output",
+          "name": "msh_output",
+          "default": "",
+          "help": "GMSH .msh v4.1 output for global/full FE modes",
+          "ja": "GMSH 出力パス",
+          "physics": "場の可視化用 .msh v4.1"
         }
       ]
     },
@@ -1989,6 +2081,14 @@
           "help": "HDiv order: BDM1 or BDM2",
           "ja": "HDiv 次数",
           "physics": "1=BDM1, 2=BDM2"
+        },
+        {
+          "cli": "--msh-output",
+          "name": "msh_output",
+          "default": "",
+          "help": "GMSH .msh v4.1 output for the final rotor-angle magnetization",
+          "ja": "GMSH 出力パス",
+          "physics": "場の可視化用 .msh v4.1"
         }
       ]
     }

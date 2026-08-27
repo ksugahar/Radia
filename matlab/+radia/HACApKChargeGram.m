@@ -426,6 +426,17 @@ classdef HACApKChargeGram < handle
             result = radia.internal.callMex('hacapk.charge_gram.operator_info', obj.NativeHandle);
         end
 
+        function result = configuredActiveHMatrixStats(obj, options)
+            arguments
+                obj
+                options.Component (1,1) double {mustBeInteger, mustBePositive} = 1
+            end
+            obj.assertAlive();
+            result = radia.internal.callMex( ...
+                'hacapk.charge_gram.configured_active_hmatrix_stats', ...
+                obj.NativeHandle, options.Component);
+        end
+
         function matrix = demagMatrix(obj)
             obj.assertAlive();
             nativeHandle = radia.internal.callMex( ...
