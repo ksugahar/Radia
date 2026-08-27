@@ -903,8 +903,130 @@ expected=testCase.TestData.Oracle.storage;
 metadata=meta.class.fromName("radia.optuna.BaseStorage");
 verifyEqual(testCase,metadata.Abstract,logical(expected.base_is_abstract));
 storage=radia.optuna.InMemoryStorage();
+exerciseStorageContract(testCase,storage,expected,"memory-oracle");
+end
+
+function testCachedStorageMatchesUpstream(testCase)
+expected=testCase.TestData.Oracle.cached_storage;
+storage=radia.optuna.CachedStorage( ...
+    radia.optuna.RDBStorage("sqlite:///:memory:"));
+exerciseStorageContract(testCase,storage,expected,"cached-oracle");
+verifyEmpty(testCase,storage.get_heartbeat_interval());
+verifyTrue(testCase,logical(expected.heartbeat_stale_callback_is_none));
+verifyEmpty(testCase,storage.get_heartbeat_stale_trial_callback());
+verifyTrue(testCase,logical(expected.record_heartbeat_is_none));
+heartbeatStudy=storage.create_new_study( ...
+    radia.optuna.StudyDirection.MINIMIZE,"heartbeat-oracle");
+heartbeatTrial=storage.create_new_trial(heartbeatStudy);
+verifyWarningFree(testCase,@()storage.record_heartbeat(heartbeatTrial));
+storage.delete_study(heartbeatStudy);
+verifyWarning(testCase,@()storage.get_failed_trial_callback(), ...
+    "radia:optuna:FutureWarning");
+end
+
+function testRDBStorageMatchesUpstream(testCase)
+expected=testCase.TestData.Oracle.rdb_storage;
+storage=radia.optuna.RDBStorage("sqlite:///:memory:");
+exerciseStorageContract(testCase,storage,expected,"rdb-oracle");
+verifyEqual(testCase,storage.get_current_version(), ...
+    string(expected.current_version));
+verifyEqual(testCase,storage.get_head_version(),string(expected.head_version));
+verifyEqual(testCase,storage.get_all_versions(), ...
+    reshape(string(expected.all_versions),1,[]));
+verifyEmpty(testCase,storage.get_heartbeat_interval());
+verifyEmpty(testCase,storage.get_heartbeat_stale_trial_callback());
+verifyTrue(testCase,logical(expected.failed_callback_is_none));
+verifyEqual(testCase,string(expected.failed_callback_warning),"FutureWarning");
+verifyWarning(testCase,@()storage.get_failed_trial_callback(), ...
+    "radia:optuna:FutureWarning");
+verifyWarningFree(testCase,@()storage.upgrade());
+verifyTrue(testCase,logical(expected.upgrade_preserves_version));
+end
+
+function testJournalBackendMatchesUpstream(testCase)
+expected=testCase.TestData.Oracle.journal_storage;
+baseBackend=meta.class.fromName("radia.optuna.BaseJournalBackend");
+baseLog=meta.class.fromName("radia.optuna.BaseJournalLogStorage");
+verifyEqual(testCase,baseBackend.Abstract, ...
+    logical(expected.base_backend_is_abstract));
+verifyEqual(testCase,baseLog.Abstract, ...
+    logical(expected.base_log_storage_is_abstract));
+
+path=string(tempname("C:\temp"))+".log";
+cleanup=onCleanup(@()cleanupStudyFiles(path));
+backend=radia.optuna.JournalFileBackend(path);
+logs={struct("operation",1,"worker","alpha"), ...
+    struct("operation",2,"value",3.5)};
+verifyWarningFree(testCase,@()backend.append_logs(logs));
+verifyTrue(testCase,logical(expected.append_is_none));
+verifyEqual(testCase,string(fileread(path)),string(expected.file_text));
+selected=backend.read_logs(1);
+verifyEqual(testCase,numel(selected),1);
+verifyEqual(testCase,selected{1},expected.selected_logs);
+
+lockClasses=["JournalFileOpenLock","JournalFileSymlinkLock"];
+lockFields=["open","symlink"];
+for index=1:numel(lockClasses)
+    target=string(tempname("C:\temp"))+".log";
+    fileId=fopen(target,"a");
+    fclose(fileId);
+    lock=feval("radia.optuna."+lockClasses(index),target);
+    expectedLock=expected.locks.(lockFields(index));
+    verifyEqual(testCase,lock.acquire(),logical(expectedLock.acquired));
+    verifyWarningFree(testCase,@()lock.release());
+    verifyTrue(testCase,logical(expectedLock.release_is_none));
+    verifyEqual(testCase,string(expectedLock.second_release_error), ...
+        "RuntimeError");
+    verifyError(testCase,@()lock.release(), ...
+        "radia:optuna:JournalLockOwnership");
+    cleanupStudyFiles(target);
+end
+clear cleanup
+end
+
+function testJournalStorageMatchesUpstream(testCase)
+expected=testCase.TestData.Oracle.journal_storage.storage;
+path=string(tempname("C:\temp"))+".log";
+cleanup=onCleanup(@()cleanupStudyFiles(path));
+storage=radia.optuna.JournalStorage( ...
+    radia.optuna.JournalFileBackend(path));
+exerciseStorageContract(testCase,storage,expected,"journal-oracle");
+verifyTrue(testCase,logical(expected.restore_invalid_is_none));
+verifyWarningFree(testCase,@()storage.restore_replay_result( ...
+    uint8(char("not-a-pickle"))));
+clear cleanup
+end
+
+function testJournalRedisBackendMatchesUpstream(testCase)
+expected=testCase.TestData.Oracle.journal_storage.redis;
+values=containers.Map("KeyType","char","ValueType","any");
+client=struct( ...
+    "get",@(key)redisGet(values,key), ...
+    "setnx",@(key,value)redisSetNx(values,key,value), ...
+    "incr",@(key,amount)redisIncr(values,key,amount), ...
+    "set",@(key,value)redisSet(values,key,value));
+backend=radia.optuna.JournalRedisBackend( ...
+    "redis://oracle",use_cluster=true,prefix="oracle",Client=client);
+logs={struct("operation",4,"worker","redis"), ...
+    struct("operation",5,"value",7.25)};
+verifyWarningFree(testCase,@()backend.append_logs(logs));
+verifyTrue(testCase,logical(expected.append_is_none));
+selected=backend.read_logs(1);
+verifyEqual(testCase,numel(selected),1);
+verifyEqual(testCase,selected{1},expected.selected_logs);
+verifyWarningFree(testCase,@()backend.save_snapshot( ...
+    uint8(char("snapshot-bytes"))));
+verifyTrue(testCase,logical(expected.save_snapshot_is_none));
+verifyEqual(testCase,backend.load_snapshot(), ...
+    reshape(uint8(expected.load_snapshot),1,[]));
+verifyWarning(testCase,@()radia.optuna.JournalRedisStorage( ...
+    "redis://oracle",use_cluster=true,prefix="oracle",Client=client), ...
+    "radia:optuna:FutureWarning");
+end
+
+function exerciseStorageContract(testCase,storage,expected,studyName)
 studyId=storage.create_new_study( ...
-    radia.optuna.StudyDirection.MINIMIZE,"memory-oracle");
+    radia.optuna.StudyDirection.MINIMIZE,studyName);
 verifyEqual(testCase,studyId,double(expected.study_id));
 storage.set_study_user_attr(studyId,"owner","oracle");
 storage.set_study_system_attr(studyId,"revision",4);
@@ -959,7 +1081,7 @@ verifyEqual(testCase,string(storage.get_study_directions(studyId)), ...
     reshape(string(expected.directions),1,[]));
 verifyEqual(testCase,storage.get_study_name_from_id(studyId), ...
     string(expected.study_name));
-verifyEqual(testCase,storage.get_study_id_from_name("memory-oracle"),studyId);
+verifyEqual(testCase,storage.get_study_id_from_name(studyName),studyId);
 studyUserAttrs=storage.get_study_user_attrs(studyId);
 verifyEqual(testCase,string(studyUserAttrs.owner), ...
     string(expected.study_user_attrs.owner));
@@ -970,7 +1092,7 @@ verifyEqual(testCase,numel(summaries),1);
 verifyEqual(testCase,summaries(1).study_name,string(expected.summary.name));
 verifyEqual(testCase,string(expected.duplicate_error),"DuplicatedStudyError");
 verifyError(testCase,@()storage.create_new_study( ...
-    radia.optuna.StudyDirection.MINIMIZE,"memory-oracle"), ...
+    radia.optuna.StudyDirection.MINIMIZE,studyName), ...
     "radia:optuna:DuplicatedStudyError");
 verifyTrue(testCase,logical(expected.remove_session_is_none));
 verifyWarningFree(testCase,@()storage.remove_session());
@@ -2022,4 +2144,39 @@ elseif count==1
 else
     weights=linspace(0.2,1,count)';
 end
+end
+
+function value=redisGet(values,key)
+key=char(string(key));
+if isKey(values,key)
+    value=values(key);
+else
+    value=[];
+end
+end
+
+function value=redisSetNx(values,key,newValue)
+key=char(string(key));
+if ~isKey(values,key)
+    values(key)=newValue;
+    value=true;
+else
+    value=false;
+end
+end
+
+function value=redisIncr(values,key,amount)
+key=char(string(key));
+if isKey(values,key)
+    current=double(values(key));
+else
+    current=0;
+end
+value=current+double(amount);
+values(key)=value;
+end
+
+function value=redisSet(values,key,newValue)
+values(char(string(key)))=newValue;
+value=true;
 end

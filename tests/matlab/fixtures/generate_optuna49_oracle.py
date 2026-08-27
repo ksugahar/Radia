@@ -25,10 +25,155 @@ from optuna.trial import TrialState
 EXPECTED_VERSION = "4.9.0"
 
 
+class _FakeRedis:
+    def __init__(self) -> None:
+        self.values: dict[str, object] = {}
+
+    def get(self, key: str) -> object | None:
+        return self.values.get(key)
+
+    def setnx(self, key: str, value: object) -> None:
+        self.values.setdefault(key, value)
+
+    def incr(self, key: str, amount: int) -> int:
+        value = int(self.values.get(key, 0)) + amount
+        self.values[key] = value
+        return value
+
+    def set(self, key: str, value: object) -> None:
+        self.values[key] = value
+
+
+def _journal_redis_contract() -> dict[str, object]:
+    backend = object.__new__(optuna.storages.journal.JournalRedisBackend)
+    backend._redis = _FakeRedis()
+    backend._use_cluster = True
+    backend._prefix = "oracle"
+    logs = [
+        {"operation": 4, "worker": "redis"},
+        {"operation": 5, "value": 7.25},
+    ]
+    append_result = backend.append_logs(logs)
+    selected = list(backend.read_logs(1))
+    save_result = backend.save_snapshot(b"snapshot-bytes")
+    return {
+        "append_is_none": append_result is None,
+        "load_snapshot": list(backend.load_snapshot()),
+        "save_snapshot_is_none": save_result is None,
+        "selected_logs": selected,
+    }
+
+
 def _storage_contract() -> dict[str, object]:
     storage = optuna.storages.InMemoryStorage()
+    result = _exercise_storage(storage, "memory-oracle")
+    result["base_is_abstract"] = inspect.isabstract(optuna.storages.BaseStorage)
+    return result
+
+
+def _cached_storage_contract() -> dict[str, object]:
+    backend = optuna.storages.RDBStorage("sqlite:///:memory:")
+    storage = optuna.storages._CachedStorage(backend)
+    result = _exercise_storage(storage, "cached-oracle")
+    result.update(
+        {
+            "heartbeat_interval": storage.get_heartbeat_interval(),
+            "heartbeat_stale_callback_is_none": (
+                storage.get_heartbeat_stale_trial_callback() is None
+            ),
+            "record_heartbeat_is_none": storage.record_heartbeat(result["trial_id"])
+            is None,
+        }
+    )
+    return result
+
+
+def _rdb_storage_contract() -> dict[str, object]:
+    storage = optuna.storages.RDBStorage("sqlite:///:memory:")
+    result = _exercise_storage(storage, "rdb-oracle")
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        failed_callback = storage.get_failed_trial_callback()
+    result.update(
+        {
+            "all_versions": storage.get_all_versions(),
+            "current_version": storage.get_current_version(),
+            "failed_callback_is_none": failed_callback is None,
+            "failed_callback_warning": type(caught[0].message).__name__,
+            "head_version": storage.get_head_version(),
+            "heartbeat_interval": storage.get_heartbeat_interval(),
+            "heartbeat_stale_callback_is_none": (
+                storage.get_heartbeat_stale_trial_callback() is None
+            ),
+        }
+    )
+    storage.upgrade()
+    result["upgrade_preserves_version"] = (
+        storage.get_current_version() == result["current_version"]
+    )
+    return result
+
+
+def _journal_storage_contract() -> dict[str, object]:
+    with tempfile.TemporaryDirectory() as directory:
+        root = Path(directory)
+        log_path = root / "backend.log"
+        backend = optuna.storages.journal.JournalFileBackend(str(log_path))
+        logs = [
+            {"operation": 1, "worker": "alpha"},
+            {"operation": 2, "value": 3.5},
+        ]
+        append_result = backend.append_logs(logs)
+        selected = list(backend.read_logs(1))
+
+        lock_results: dict[str, object] = {}
+        for lock_name, lock_class in {
+            "open": optuna.storages.journal.JournalFileOpenLock,
+            "symlink": optuna.storages.journal.JournalFileSymlinkLock,
+        }.items():
+            target = root / f"{lock_name}.log"
+            target.touch()
+            lock = lock_class(str(target))
+            acquired = lock.acquire()
+            release_result = lock.release()
+            try:
+                lock.release()
+            except Exception as error:  # noqa: BLE001 - public error contract.
+                second_release_error = type(error).__name__
+            lock_results[lock_name] = {
+                "acquired": acquired,
+                "release_is_none": release_result is None,
+                "second_release_error": second_release_error,
+            }
+
+        storage_path = root / "storage.log"
+        storage = optuna.storages.journal.JournalStorage(
+            optuna.storages.journal.JournalFileBackend(str(storage_path))
+        )
+        storage_result = _exercise_storage(storage, "journal-oracle")
+        restore_result = storage.restore_replay_result(b"not-a-pickle")
+        storage_result["restore_invalid_is_none"] = restore_result is None
+        return {
+            "append_is_none": append_result is None,
+            "base_backend_is_abstract": inspect.isabstract(
+                optuna.storages.journal.BaseJournalBackend
+            ),
+            "base_log_storage_is_abstract": inspect.isabstract(
+                optuna.storages.BaseJournalLogStorage
+            ),
+            "file_text": log_path.read_text(encoding="utf-8"),
+            "locks": lock_results,
+            "redis": _journal_redis_contract(),
+            "selected_logs": selected,
+            "storage": storage_result,
+        }
+
+
+def _exercise_storage(
+    storage: optuna.storages.BaseStorage, study_name: str
+) -> dict[str, object]:
     study_id = storage.create_new_study(
-        [optuna.study.StudyDirection.MINIMIZE], study_name="memory-oracle"
+        [optuna.study.StudyDirection.MINIMIZE], study_name=study_name
     )
     storage.set_study_user_attr(study_id, "owner", "oracle")
     storage.set_study_system_attr(study_id, "revision", 4)
@@ -55,14 +200,13 @@ def _storage_contract() -> dict[str, object]:
     summary = storage.get_all_studies()[0]
     try:
         storage.create_new_study(
-            [optuna.study.StudyDirection.MINIMIZE], study_name="memory-oracle"
+            [optuna.study.StudyDirection.MINIMIZE], study_name=study_name
         )
     except Exception as error:  # noqa: BLE001 - public exception contract.
         duplicate_error = type(error).__name__
     remove_result = storage.remove_session()
     complete_trials = storage.get_all_trials(study_id, states=(TrialState.COMPLETE,))
     return {
-        "base_is_abstract": inspect.isabstract(optuna.storages.BaseStorage),
         "best_number": best.number,
         "complete_numbers": [trial.number for trial in complete_trials],
         "completed": completed,
@@ -2269,6 +2413,9 @@ def build_oracle() -> dict[str, object]:
             "pruner": type(single.pruner).__name__,
         },
         "artifacts": _artifact_contract(),
+        "cached_storage": _cached_storage_contract(),
+        "journal_storage": _journal_storage_contract(),
+        "rdb_storage": _rdb_storage_contract(),
         "storage": _storage_contract(),
         "exceptions": _exception_contract(),
         "logging": _logging_contract(),
