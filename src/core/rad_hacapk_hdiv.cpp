@@ -904,10 +904,27 @@ static bool HOAnalyticBlockEnabled()
     return enabled;
 }
 
+// Cached like every sibling switch above: this one is read from
+// GetInteractionMatrixElementRaw, i.e. once per matrix entry per image inside
+// the parallel H-matrix fill, so an uncached getenv here is a per-entry
+// environment-table lookup on every worker thread.
 static bool HOTetImageBlockEnabled()
 {
-    const char* v = std::getenv("RADIA_HDIV_DISABLE_HO_IMAGE_BLOCK");
-    return !v || v[0] == '\0' || v[0] == '0';
+    static const bool enabled = []() -> bool {
+        const char* v = std::getenv("RADIA_HDIV_DISABLE_HO_IMAGE_BLOCK");
+        return !v || v[0] == '\0' || v[0] == '0';
+    }();
+    return enabled;
+}
+
+// Read from GetHexBlock / GetHexSymBlock, i.e. once per block lookup during
+// the fill.  Same caching discipline as the switches above.
+static bool HexTransCacheEnabled()
+{
+    static const bool enabled = []() -> bool {
+        return std::getenv("RADIA_HDIV_DISABLE_TRANS_CACHE") == nullptr;
+    }();
+    return enabled;
 }
 
 static void ValidateImageVectors(const std::vector<int>& image_masks,
@@ -2853,6 +2870,16 @@ double RadHACApKChargeGram::HexMonoEval(int charge, const double xi[3]) const
 
 static constexpr int HEX_AFFINE_POLY_N = 84;
 static constexpr int QUAD_AFFINE_POLY_N = 35;
+// HEX_AFFINE_POLY_N is exactly the total-degree-6 moment count, which is
+// exactly what the production order-2 charges reach (per-axis exponent 2, so
+// e[0]+e[1]+e[2] <= 6).  There is zero headroom: HexPolyIdx(7,0,0) is already
+// 119.  Keep the identity visible so a future order bump fails at compile time
+// on this line rather than silently past the end of an 84-entry stack block.
+static constexpr int HEX_AFFINE_MAX_DEGREE = 6;
+static_assert(HEX_AFFINE_POLY_N ==
+              (HEX_AFFINE_MAX_DEGREE + 1)*(HEX_AFFINE_MAX_DEGREE + 2)
+              *(HEX_AFFINE_MAX_DEGREE + 3)/6,
+              "HEX_AFFINE_POLY_N must stay the total-degree moment count");
 
 static inline int HexPolyIdx(int ax, int ay, int az)
 {
@@ -2864,8 +2891,26 @@ static inline int HexPolyIdx(int ax, int ay, int az)
     return idx;
 }
 
+// The multiply below writes at degree deg+1, so entering at the maximum
+// degree runs past the fixed scratch.  The only bound on the charge order
+// today is the Python wrapper's order>2 guard, which the MATLAB/MEX entry
+// points do not go through, so check it here at the shared choke point.
+static inline void HexPolyCheckCapacity(int deg, int ncoeff, const char* where)
+{
+    if (deg < 0 || deg + 1 > HEX_AFFINE_MAX_DEGREE || ncoeff < 1
+            || ncoeff > HEX_AFFINE_POLY_N)
+        throw std::invalid_argument(
+            std::string(where) + ": affine polynomial scratch overflow (degree "
+            + std::to_string(deg) + " -> " + std::to_string(deg + 1)
+            + ", ncoeff " + std::to_string(ncoeff) + ", capacity "
+            + std::to_string(HEX_AFFINE_POLY_N) + " = total degree "
+            + std::to_string(HEX_AFFINE_MAX_DEGREE)
+            + ").  This charge order is not supported by the affine path.");
+}
+
 static void HexPolyMulLinear(double* poly, int& deg, const double lin[4], int ncoeff)
 {
+    HexPolyCheckCapacity(deg, ncoeff, "HexPolyMulLinear");
     double tmp[HEX_AFFINE_POLY_N] = {};
     for (int total = 0; total <= deg; ++total) {
         for (int ax = 0; ax <= total; ++ax) {
@@ -2887,6 +2932,7 @@ static void HexPolyMulLinear(double* poly, int& deg, const double lin[4], int nc
 static void HexPolyMulLinearDirectional(double* poly,double* dpoly,int& deg,
                                         const double lin[4],const double dlin[4],int ncoeff)
 {
+    HexPolyCheckCapacity(deg, ncoeff, "HexPolyMulLinearDirectional");
     double tmp[HEX_AFFINE_POLY_N]={},dtmp[HEX_AFFINE_POLY_N]={};
     for(int total=0;total<=deg;++total)for(int ax=0;ax<=total;++ax)for(int ay=0;ay<=total-ax;++ay){
         const int az=total-ax-ay,idx=HexPolyIdx(ax,ay,az);const double c=poly[idx],dc=dpoly[idx];
@@ -5435,7 +5481,7 @@ bool RadHACApKChargeGram::HexPairTakesGeneralPath(int kindT, int hT, int kindS, 
 const std::vector<double>& RadHACApKChargeGram::GetHexBlock(int kindT, int hT, int kindS, int hS, int img) const
 {
     const int wedge_scope = m_wedgemode ? WedgeTransCacheScope() : 2;
-    const bool use_trans_cache = std::getenv("RADIA_HDIV_DISABLE_TRANS_CACHE") == nullptr &&
+    const bool use_trans_cache = HexTransCacheEnabled() &&
                                  !m_d2 && m_hexUniformTransHosts && img == 0 &&
                                  (!m_wedgemode || wedge_scope >= 2 || (kindT == 0 && kindS == 0));
     if (!use_trans_cache && !m_d2 && !m_wedgemode
@@ -5557,7 +5603,7 @@ const std::vector<double>& RadHACApKChargeGram::GetHexSymBlock(int kindA, int hA
     };
 
     const int wedge_scope = m_wedgemode ? WedgeTransCacheScope() : 2;
-    const bool use_trans_cache = std::getenv("RADIA_HDIV_DISABLE_TRANS_CACHE") == nullptr &&
+    const bool use_trans_cache = HexTransCacheEnabled() &&
                                  !m_d2 && m_hexUniformTransHosts && img == 0 &&
                                  (!m_wedgemode || wedge_scope >= 2 || (kindA == 0 && kindB == 0));
     if (use_trans_cache) {
@@ -6117,22 +6163,68 @@ void RadHACApKChargeGram::ExtractCoordinates()
 
 extern "C" void cHACApK_set_sym_fill(int flag);   // cHACApK_base.c (skip strictly-lower leaves at fill)
 
+namespace {
+
+// RAII scope for the fill-time state (the sym-fill global plus the two
+// normalization members).  Exceptions DO cross the C fill: the entry oracle
+// itself raises std::out_of_range on an out-of-range index, GetHexBlock
+// raises std::invalid_argument past 63 images, and the affine wedge/hex map
+// helpers raise std::logic_error on a singular geometry.  Those throws unwind
+// the C frames of cHACApK_base.c (cHACApK_entry_ij is called from the ACA fill
+// loops there), so a plain "reset after the call" is skipped on that path.
+// Leaving m_fillNormalized set makes every later GetInteractionMatrixElement
+// return the normalized Ghat = S^-1 G S^-1 instead of the physical Gram --
+// silently wrong Jacobi diagonals, diagnostics, and reciprocity gates for the
+// rest of the object's life.  Leaving m_sigmaActive set makes MatVecSym wrap
+// an S...S scaling around leaves that were never normalized.
+struct ChargeGramFillScope {
+    bool& fill_normalized;
+    bool& sigma_active;
+    const bool sigma_active_on_entry;
+    bool committed = false;
+
+    ChargeGramFillScope(bool& normalized, bool& active)
+        : fill_normalized(normalized), sigma_active(active),
+          sigma_active_on_entry(active)
+    {
+        cHACApK_set_sym_fill(1);
+    }
+
+    ~ChargeGramFillScope()
+    {
+        cHACApK_set_sym_fill(0);
+        fill_normalized = false;
+        // A failed or aborted fill leaves no normalized leaves to unwrap.
+        if (!committed) sigma_active = sigma_active_on_entry;
+    }
+
+    // Only a fill that actually completed owns the normalized leaves.
+    void Commit() { committed = true; }
+
+    ChargeGramFillScope(const ChargeGramFillScope&) = delete;
+    ChargeGramFillScope& operator=(const ChargeGramFillScope&) = delete;
+};
+
+}  // namespace
+
 bool RadHACApKChargeGram::BuildHMatrix(const RadHACApKParams& params)
 {
     // Symmetric fill: the Gram's applies all route through MatVecSym (see the header doc), so skip the
     // strictly-lower leaves at fill time -- ~2x build, identical upper leaves (MatVecSym bit-identical).
-    // Set/reset around this ONE build; base BuildHMatrix returns bool (no exceptions cross the C fill).
     ResetHexCacheStats();
     m_derivativeAcaEps=params.aca_eps;
     m_derivativeMaxRank=params.max_rank;
     // Charge-basis normalization (see the header doc at MatVecSym): the
     // sigma pre-pass + the m_fillNormalized toggle live in OnBeforeBuild --
     // the base build fixes m_n via ExtractCoordinates FIRST, then calls
-    // OnBeforeBuild, then fills; only the reset after the fill lives here.
-    cHACApK_set_sym_fill(1);
-    const bool ok = RadHACApKBase::BuildHMatrix(params);
-    cHACApK_set_sym_fill(0);
-    m_fillNormalized = false;
+    // OnBeforeBuild, then fills.  ChargeGramFillScope owns the reset so an
+    // exception out of the entry oracle cannot strand the normalized state.
+    bool ok = false;
+    {
+        ChargeGramFillScope fill_scope(m_fillNormalized, m_sigmaActive);
+        ok = RadHACApKBase::BuildHMatrix(params);
+        if (ok) fill_scope.Commit();
+    }
     return ok;
 }
 
@@ -6140,6 +6232,17 @@ void RadHACApKChargeGram::ComputeChargeSigma()
 {
     m_chargeSigma.assign((size_t)m_n, 1.0);
     m_chargeSigmaInv.assign((size_t)m_n, 1.0);
+    // A NON-FINITE diagonal is always a broken entry oracle, and a
+    // NON-POSITIVE one is broken too *when no images are folded in*: the raw
+    // self-energy of a non-zero charge is strictly positive.  With an image
+    // set the diagonal is G_self + sign*G_refl(a,a), so an ANTISYMMETRIC image
+    // (sign -1) makes it identically zero for a charge sitting on the mirror
+    // plane -- that DOF is annihilated by the symmetry, which is exact, not a
+    // defect.  Keep sigma = 1 for those and only fail on the cases that cannot
+    // be legitimate.  Record the first offender and throw outside the region.
+    const bool images_folded = !m_image_masks.empty();
+    std::atomic<int> bad_charge{-1};
+    double bad_value = 0.0;
     {
         // C++ HACApK self-wrap policy: this pre-pass runs BEFORE the base
         // build's own region, so it stands up its own.
@@ -6151,9 +6254,26 @@ void RadHACApKChargeGram::ComputeChargeSigma()
                 const double s = std::sqrt(d);
                 m_chargeSigma[p] = s;
                 m_chargeSigmaInv[p] = 1.0 / s;
+                return;
             }
+            // Legitimate only as the mirror-plane cancellation above.
+            if (std::isfinite(d) && images_folded) return;
+            int expected = -1;
+            if (bad_charge.compare_exchange_strong(expected, (int)p))
+                bad_value = d;
         });
     }
+    if (bad_charge.load() >= 0)
+        throw std::runtime_error(
+            "ChargeGram: self-interaction diagonal " + std::to_string(bad_value)
+            + " at charge " + std::to_string(bad_charge.load())
+            + (images_folded
+                 ? " is not finite."
+                 : " is not positive-finite, and no image folding can explain"
+                   " it (the raw self-energy of a non-zero charge is strictly"
+                   " positive).")
+            + "  This is a broken entry oracle (degenerate geometry or a bad"
+              " charge map), not a conditioning knob.");
     m_sigmaActive = true;
 }
 
@@ -7449,6 +7569,9 @@ std::vector<double> RadHACApKChargeGram::SolveLinearMaterial(
         project(r);
     };
     int it = 0;
+    // Set only where the TRUE residual is already known (the convergence
+    // exit); negative means "not measured yet".
+    double final_true_rnorm = -1.0;
     for (; it < maxit; ++it) {
         double rnorm = dot(r, r);
         if (std::sqrt(rnorm) <= tol * bnorm) {
@@ -7460,7 +7583,7 @@ std::vector<double> RadHACApKChargeGram::SolveLinearMaterial(
             // while making the linear tolerance an actual solver contract.
             recomputeResidual();
             rnorm = dot(r, r);
-            if (std::sqrt(rnorm) <= tol * bnorm) break;
+            if (std::sqrt(rnorm) <= tol * bnorm) { final_true_rnorm = std::sqrt(rnorm); break; }
             applyPrec(r, z);
             p = z;
             rz = dot(r, z);
@@ -7468,6 +7591,21 @@ std::vector<double> RadHACApKChargeGram::SolveLinearMaterial(
         }
         applyA(p, Ap);
         double pAp = dot(p, Ap);
+        // CG breakdown guard.  The charge Gram is SPD by construction, so a
+        // non-positive or non-finite p^T A p means the operator lost positive
+        // definiteness (the roundoff-amplified indefiniteness this class's
+        // sigma normalization exists to prevent) or produced NaN.  Without
+        // this the iterate silently becomes NaN, every later residual test is
+        // false, and the run reports "did not converge in maxit" -- which
+        // sends the user off tuning gram_eps/maxit for a defect that is not
+        // slow convergence at all.
+        if (!std::isfinite(pAp) || pAp <= 0.0)
+            throw std::runtime_error(
+                "SolveLinearMaterial: CG breakdown at iteration "
+                + std::to_string(it) + " -- p^T A p = " + std::to_string(pAp)
+                + " is not positive.  The charge-Gram operator is not SPD here"
+                  " (indefiniteness or NaN), so the iterate is meaningless."
+                  " This is NOT slow convergence: raising maxit will not help.");
         double alpha = rz / pAp;
         const auto tu0 = Clock::now();
         ngcore::ParallelFor(ngcore::IntRange(n_face), [&](size_t f) { x[f] += alpha * p[f]; r[f] -= alpha * Ap[f]; });
@@ -7487,6 +7625,19 @@ std::vector<double> RadHACApKChargeGram::SolveLinearMaterial(
         rz = rz_new;
     }
     iters_out = it;
+    // Report how the loop actually ended.  `iters_out == maxit` alone cannot
+    // distinguish "converged on the very last iteration" from "ran out", and
+    // it carries no magnitude, so the caller's diagnostic cannot say how far
+    // off the solve was.
+    if (final_true_rnorm < 0.0) {
+        // Only the ran-out-of-iterations exit needs an extra apply; the
+        // converged exit already recomputed the true residual below.
+        recomputeResidual();
+        final_true_rnorm = std::sqrt(std::max(0.0, dot(r, r)));
+    }
+    m_lastSolveTiming.final_relative_residual = final_true_rnorm / bnorm;
+    m_lastSolveTiming.converged =
+        (final_true_rnorm <= tol * bnorm) ? 1.0 : 0.0;
     m_lastSolveTiming.total_s = elapsed(t_total0, Clock::now());
     {
         double mv[8] = {0.0};
@@ -11662,6 +11813,11 @@ std::vector<std::pair<std::string, double>> RadHACApKChargeGram::LastSolveTiming
         {"solve_apply_count", (double)t.apply_count},
         {"solve_prec_count", (double)t.prec_count},
         {"solve_dot_count", (double)t.dot_count},
+        // "last_" prefix: these describe the most recent inner solve, so the
+        // Python collector must keep the latest value instead of summing them
+        // across a nonlinear solve's repeated inner CGs.
+        {"last_solve_converged", t.converged},
+        {"last_solve_final_relative_residual", t.final_relative_residual},
         {"hmatvec_total_s", t.hmatvec_total_s},
         {"hmatvec_zero_s", t.hmatvec_zero_s},
         {"hmatvec_permute_s", t.hmatvec_permute_s},
