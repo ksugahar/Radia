@@ -25,7 +25,11 @@ def _positive_int(value: Any, name: str) -> int:
         number = int(value)
     except (TypeError, ValueError) as exc:
         raise ValueError(f"{name} must be a positive integer") from exc
-    if number <= 0:
+    try:
+        exact = float(value)
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise ValueError(f"{name} must be a positive integer") from exc
+    if not math.isfinite(exact) or exact != number or number <= 0:
         raise ValueError(f"{name} must be a positive integer")
     return number
 
@@ -107,7 +111,6 @@ def evaluate_nastran_consumer_contract(
             not require_set_semantics or consumer.get("set_semantics_verified") is True
         ),
     }
-
     has_second_order = consumer.get("has_second_order_elements")
     checks["order_preserved"] = (
         order == 1
