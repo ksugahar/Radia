@@ -6256,8 +6256,11 @@ void RadHACApKChargeGram::ComputeChargeSigma()
                 m_chargeSigmaInv[p] = 1.0 / s;
                 return;
             }
-            // Legitimate only as the mirror-plane cancellation above.
-            if (std::isfinite(d) && images_folded) return;
+            // Legitimate only as the mirror-plane cancellation above.  A
+            // negative diagonal is never a valid Gram self-energy, even when
+            // images are folded in; accepting it would defer an already-known
+            // SPD violation until CG breakdown.
+            if (d == 0.0 && images_folded) return;
             int expected = -1;
             if (bad_charge.compare_exchange_strong(expected, (int)p))
                 bad_value = d;
@@ -6268,7 +6271,8 @@ void RadHACApKChargeGram::ComputeChargeSigma()
             "ChargeGram: self-interaction diagonal " + std::to_string(bad_value)
             + " at charge " + std::to_string(bad_charge.load())
             + (images_folded
-                 ? " is not finite."
+                 ? " is negative or not finite; image folding can explain an"
+                   " exact zero diagonal, but never a negative self-energy."
                  : " is not positive-finite, and no image folding can explain"
                    " it (the raw self-energy of a non-zero charge is strictly"
                    " positive).")
