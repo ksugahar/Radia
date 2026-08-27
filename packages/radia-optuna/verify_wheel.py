@@ -3,14 +3,13 @@
 from __future__ import annotations
 
 import argparse
-from email.parser import BytesParser
 import json
-from pathlib import Path, PurePosixPath
 import re
 import sys
 import tomllib
 import zipfile
-
+from email.parser import BytesParser
+from pathlib import Path, PurePosixPath
 
 PACKAGE_ROOT = Path(__file__).resolve().parent
 REPO_ROOT = PACKAGE_ROOT.parents[1]
@@ -133,8 +132,10 @@ def verify(wheel: Path) -> dict[str, object]:
             required_notices = (
                 "Copyright (c) 2018 Preferred Networks, Inc.",
                 "Copyright (c) 2025 Preferred Networks, Inc.",
-                "Optuna, the Optuna logo and any related marks are trademarks "
-                "of Preferred Networks, Inc.",
+                (
+                    "Optuna, the Optuna logo and any related marks are trademarks "
+                    "of Preferred Networks, Inc."
+                ),
                 "independent, unofficial project",
             )
             missing_notices = [

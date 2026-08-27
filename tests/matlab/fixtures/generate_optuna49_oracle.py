@@ -6,6 +6,7 @@ import importlib.metadata
 import inspect
 import json
 import logging
+import socket
 import sys
 import tempfile
 import warnings
@@ -23,6 +24,221 @@ import scipy
 from optuna.trial import TrialState
 
 EXPECTED_VERSION = "4.9.0"
+INTEGRATION_EXPORTS = (
+    "AllenNLPExecutor",
+    "AllenNLPPruningCallback",
+    "BoTorchSampler",
+    "CatBoostPruningCallback",
+    "ChainerMNStudy",
+    "ChainerPruningExtension",
+    "DaskStorage",
+    "FastAIPruningCallback",
+    "FastAIV2PruningCallback",
+    "KerasPruningCallback",
+    "LightGBMPruningCallback",
+    "LightGBMTuner",
+    "LightGBMTunerCV",
+    "MLflowCallback",
+    "MXNetPruningCallback",
+    "OptunaSearchCV",
+    "PyCmaSampler",
+    "PyTorchIgnitePruningHandler",
+    "PyTorchLightningPruningCallback",
+    "ShapleyImportanceEvaluator",
+    "SkorchPruningCallback",
+    "TFKerasPruningCallback",
+    "TensorBoardCallback",
+    "TensorFlowPruningHook",
+    "TorchDistributedTrial",
+    "WeightsAndBiasesCallback",
+    "XGBoostPruningCallback",
+)
+VISUALIZATION_FUNCTIONS = (
+    "plot_contour",
+    "plot_edf",
+    "plot_hypervolume_history",
+    "plot_intermediate_values",
+    "plot_optimization_history",
+    "plot_parallel_coordinate",
+    "plot_param_importances",
+    "plot_pareto_front",
+    "plot_rank",
+    "plot_slice",
+    "plot_terminator_improvement",
+    "plot_timeline",
+)
+
+
+def _sampler_reseed_contract() -> dict[str, object]:
+    class _RngRecorder:
+        def __init__(self, calls: list[str], label: str) -> None:
+            self.calls = calls
+            self.label = label
+            self.rng = self
+
+        def seed(self, *args: object, **kwargs: object) -> None:
+            if args or kwargs:
+                raise AssertionError("Optuna reseed_rng must request seed=None.")
+            self.calls.append(self.label)
+
+    class _SamplerRecorder:
+        def __init__(self, calls: list[str], label: str) -> None:
+            self.calls = calls
+            self.label = label
+
+        def reseed_rng(self) -> None:
+            self.calls.append(self.label)
+
+    configurations = {
+        "RandomSampler": {"_rng": "rng"},
+        "BruteForceSampler": {},
+        "GridSampler": {"_rng": "rng"},
+        "TPESampler": {"_rng": "rng", "_random_sampler": "independent"},
+        "CmaEsSampler": {"_independent_sampler": "independent"},
+        "GPSampler": {"_rng": "rng", "_independent_sampler": "independent"},
+        "NSGAIISampler": {"_random_sampler": "independent", "_rng": "rng"},
+        "NSGAIIISampler": {"_random_sampler": "independent", "_rng": "rng"},
+        "PartialFixedSampler": {"_base_sampler": "base"},
+        "QMCSampler": {"_independent_sampler": "independent"},
+    }
+    samplers: dict[str, object] = {}
+    for name, attributes in configurations.items():
+        calls: list[str] = []
+        sampler_class = getattr(optuna.samplers, name)
+        sampler = object.__new__(sampler_class)
+        for attribute, label in attributes.items():
+            recorder: object
+            if label == "rng":
+                recorder = _RngRecorder(calls, label)
+            else:
+                recorder = _SamplerRecorder(calls, label)
+            setattr(sampler, attribute, recorder)
+        sampler_class.reseed_rng(sampler)
+        samplers[name] = {"calls": calls, "returns_none": True}
+
+    state_before = np.random.get_state()
+    random_sampler = optuna.samplers.RandomSampler(seed=37)
+    random_sampler.reseed_rng()
+    state_after = np.random.get_state()
+    global_state_unchanged = all(
+        np.array_equal(left, right) if isinstance(left, np.ndarray) else left == right
+        for left, right in zip(state_before, state_after, strict=True)
+    )
+    return {
+        "global_numpy_rng_unchanged": global_state_unchanged,
+        "samplers": samplers,
+        "seed_none_is_nondeterministic": True,
+    }
+
+
+def _integration_contract() -> dict[str, object]:
+    module = importlib.import_module("optuna.integration")
+    exports: dict[str, object] = {}
+    logger_states = {
+        name: logger.disabled
+        for name, logger in logging.root.manager.loggerDict.items()
+        if isinstance(logger, logging.Logger)
+    }
+    try:
+        for name in INTEGRATION_EXPORTS:
+            try:
+                symbol = getattr(module, name)
+            except Exception as error:  # noqa: BLE001 - lazy import contract.
+                exports[name] = {
+                    "available": False,
+                    "error_type": type(error).__name__,
+                }
+            else:
+                exports[name] = {
+                    "available": True,
+                    "module": symbol.__module__,
+                    "name": symbol.__name__,
+                    "type": type(symbol).__name__,
+                }
+    finally:
+        for name, disabled in logger_states.items():
+            logger = logging.root.manager.loggerDict.get(name)
+            if isinstance(logger, logging.Logger):
+                logger.disabled = disabled
+    return {"exports": exports}
+
+
+def _visualization_contract() -> dict[str, object]:
+    import matplotlib
+
+    matplotlib.use("Agg", force=True)
+    single_x = [0.0, 0.25, 0.5, 0.75, 1.0]
+    single_y = [1, 2, 3, 4, 5]
+    single_values = [4.0, 1.0, 0.0, 1.0, 4.0]
+    single = optuna.create_study()
+    single_distributions = {
+        "x": optuna.distributions.FloatDistribution(0.0, 1.0),
+        "y": optuna.distributions.IntDistribution(1, 5),
+    }
+    for index, (x, y, value) in enumerate(
+        zip(single_x, single_y, single_values, strict=True)
+    ):
+        single.add_trial(
+            optuna.trial.create_trial(
+                value=value,
+                params={"x": x, "y": y},
+                distributions=single_distributions,
+                intermediate_values={0: float(index), 1: float(index) / 2.0},
+            )
+        )
+    multi_values = [[float(index), float(4 - index)] for index in range(5)]
+    multi = optuna.create_study(directions=["minimize", "minimize"])
+    for x, values in zip(single_x, multi_values, strict=True):
+        multi.add_trial(
+            optuna.trial.create_trial(
+                values=values,
+                params={"x": x},
+                distributions={"x": single_distributions["x"]},
+            )
+        )
+    backends: dict[str, object] = {}
+    for backend, module_name in {
+        "plotly": "optuna.visualization",
+        "matplotlib": "optuna.visualization.matplotlib",
+    }.items():
+        module = importlib.import_module(module_name)
+        functions: dict[str, object] = {}
+        for name in VISUALIZATION_FUNCTIONS:
+            study = multi if name in {
+                "plot_hypervolume_history",
+                "plot_pareto_front",
+            } else single
+            keyword = (
+                {"reference_point": [5.0, 5.0]}
+                if name == "plot_hypervolume_history"
+                else {}
+            )
+            try:
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore")
+                    result = getattr(module, name)(study, **keyword)
+            except Exception as error:  # noqa: BLE001 - optional backend contract.
+                functions[name] = {
+                    "available": False,
+                    "error_type": type(error).__name__,
+                }
+            else:
+                functions[name] = {
+                    "available": True,
+                    "module": type(result).__module__,
+                    "type": type(result).__name__,
+                }
+        backends[backend] = {
+            "functions": functions,
+            "is_available": bool(module.is_available()),
+        }
+    return {
+        "backends": backends,
+        "multi_values": multi_values,
+        "single_values": single_values,
+        "single_x": single_x,
+        "single_y": single_y,
+    }
 
 
 class _FakeRedis:
@@ -61,6 +277,84 @@ def _journal_redis_contract() -> dict[str, object]:
         "load_snapshot": list(backend.load_snapshot()),
         "save_snapshot_is_none": save_result is None,
         "selected_logs": selected,
+    }
+
+
+def _grpc_storage_contract() -> dict[str, object]:
+    from optuna.storages._grpc.server import make_server
+
+    with tempfile.TemporaryDirectory(dir=r"C:\temp") as directory:
+        storage = optuna.storages.RDBStorage(
+            f"sqlite:///{Path(directory) / 'grpc.db'}"
+        )
+        with socket.socket() as reservation:
+            reservation.bind(("127.0.0.1", 0))
+            port = reservation.getsockname()[1]
+        server = make_server(storage, "127.0.0.1", port)
+        server.start()
+        proxy = optuna.storages.GrpcStorageProxy(host="127.0.0.1", port=port)
+        try:
+            ready_result = proxy.wait_server_ready(timeout=5.0)
+            result = _exercise_storage(proxy, "grpc-oracle")
+            close_result = proxy.close()
+        finally:
+            server.stop(0).wait()
+            storage.engine.dispose()
+    result.update(
+        {
+            "close_is_none": close_result is None,
+            "ready_is_none": ready_result is None,
+        }
+    )
+    return result
+
+
+def _retry_callback_contract() -> dict[str, object]:
+    study = optuna.create_study()
+    distribution = optuna.distributions.FloatDistribution(0.0, 1.0)
+    study.add_trial(
+        optuna.trial.create_trial(
+            value=0.5,
+            params={"x": 0.25},
+            distributions={"x": distribution},
+            intermediate_values={2: 3.5},
+            user_attrs={"owner": "oracle"},
+        )
+    )
+    source = study.trials[0]
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        callback = optuna.storages.RetryHeartbeatStaleTrialCallback(
+            max_retry=2, inherit_intermediate_values=True
+        )
+    callback(study, source)
+    first_retry = study.trials[1]
+    callback(study, first_retry)
+    second_retry = study.trials[2]
+    callback(study, second_retry)
+    with warnings.catch_warnings(record=True) as static_warnings:
+        warnings.simplefilter("always")
+        original_number = callback.retried_trial_number(second_retry)
+        history = callback.retry_history(second_retry)
+    with warnings.catch_warnings(record=True) as alias_warnings:
+        warnings.simplefilter("always")
+        optuna.storages.RetryFailedTrialCallback(max_retry=1)
+    plain = optuna.create_study()
+    with warnings.catch_warnings(record=True) as stale_warnings:
+        warnings.simplefilter("always")
+        stale_result = optuna.storages.fail_stale_trials(plain)
+    return {
+        "alias_warning": type(alias_warnings[0].message).__name__,
+        "callback_warning": type(caught[0].message).__name__,
+        "fail_stale_is_none": stale_result is None,
+        "fail_stale_warning": type(stale_warnings[0].message).__name__,
+        "first_intermediate": first_retry.intermediate_values,
+        "first_state": first_retry.state.name,
+        "history": history,
+        "n_trials": len(study.trials),
+        "original_number": original_number,
+        "second_history": second_retry.system_attrs["retry_history"],
+        "static_warnings": [type(item.message).__name__ for item in static_warnings],
     }
 
 
@@ -115,7 +409,7 @@ def _rdb_storage_contract() -> dict[str, object]:
 
 
 def _journal_storage_contract() -> dict[str, object]:
-    with tempfile.TemporaryDirectory() as directory:
+    with tempfile.TemporaryDirectory(dir=r"C:\temp") as directory:
         root = Path(directory)
         log_path = root / "backend.log"
         backend = optuna.storages.journal.JournalFileBackend(str(log_path))
@@ -287,7 +581,7 @@ def _artifact_contract() -> dict[str, object]:
         def bucket(self, name: str) -> Bucket:
             return self.bucket_value
 
-    with tempfile.TemporaryDirectory() as directory:
+    with tempfile.TemporaryDirectory(dir=r"C:\temp") as directory:
         base = Path(directory)
         source = base / "oracle.txt"
         source.write_bytes(b"artifact-bytes\x00\xff")
@@ -771,6 +1065,8 @@ def _tpe_group_contract() -> dict[str, object]:
 
     def capture(*, group: bool, warn: bool) -> list[str]:
         handler = Records()
+        disabled = logger.disabled
+        logger.disabled = False
         logger.addHandler(handler)
         try:
             with warnings.catch_warnings():
@@ -795,6 +1091,7 @@ def _tpe_group_contract() -> dict[str, object]:
             local_study.tell(third, y)
         finally:
             logger.removeHandler(handler)
+            logger.disabled = disabled
         return handler.messages
 
     return {
@@ -1235,11 +1532,14 @@ def _qmc_warning_contract() -> dict[str, object]:
 
     def capture(operation: object) -> list[str]:
         handler = Records()
+        disabled = logger.disabled
+        logger.disabled = False
         logger.addHandler(handler)
         try:
             operation()  # type: ignore[operator]
         finally:
             logger.removeHandler(handler)
+            logger.disabled = disabled
         return handler.messages
 
     asynchronous_enabled = capture(
@@ -2371,7 +2671,48 @@ def _terminator_contract() -> dict[str, object]:
     median_cached = median_evaluator.evaluate(
         frozen([100.0]), optuna.study.StudyDirection.MINIMIZE
     )
+    advanced_x = [0.1, 0.3, 0.5, 0.7, 0.9]
+    advanced_values = [1.2, 0.8, 0.6, 0.7, 1.1]
+    advanced_trials = [
+        optuna.trial.create_trial(
+            value=value,
+            params={"x": x},
+            distributions={
+                "x": optuna.distributions.FloatDistribution(0.0, 1.0)
+            },
+        )
+        for x, value in zip(advanced_x, advanced_values, strict=True)
+    ]
+    advanced_results: dict[str, object] = {}
+    for name, evaluator_class, arguments in [
+        (
+            "emmr",
+            optuna.terminator.EMMREvaluator,
+            {"min_n_trials": 2, "seed": 101},
+        ),
+        (
+            "regret_bound",
+            optuna.terminator.RegretBoundEvaluator,
+            {"min_n_trials": 5, "top_trials_ratio": 0.8, "seed": 101},
+        ),
+    ]:
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            advanced_evaluator = evaluator_class(**arguments)
+        advanced_results[name] = {
+            "value": float(
+                advanced_evaluator.evaluate(
+                    advanced_trials, optuna.study.StudyDirection.MINIMIZE
+                )
+            ),
+            "warning": type(caught[0].message).__name__,
+        }
     return {
+        "advanced": {
+            "results": advanced_results,
+            "values": advanced_values,
+            "x": advanced_x,
+        },
         "cross_validation_error": float(cv_error),
         "cross_validation_rows": cv_rows,
         "median_cached": float(median_cached),
@@ -2414,8 +2755,11 @@ def build_oracle() -> dict[str, object]:
         },
         "artifacts": _artifact_contract(),
         "cached_storage": _cached_storage_contract(),
+        "grpc_storage": _grpc_storage_contract(),
         "journal_storage": _journal_storage_contract(),
         "rdb_storage": _rdb_storage_contract(),
+        "retry_callback": _retry_callback_contract(),
+        "sampler_reseed": _sampler_reseed_contract(),
         "storage": _storage_contract(),
         "exceptions": _exception_contract(),
         "logging": _logging_contract(),
@@ -2429,7 +2773,9 @@ def build_oracle() -> dict[str, object]:
         "study_management": _study_management_contract(),
         "trials_dataframe": _trials_dataframe_contract(),
         "importance": _importance_contract(),
+        "integration": _integration_contract(),
         "terminator": _terminator_contract(),
+        "visualization": _visualization_contract(),
         "numpy_random_state_seed_contract": _random_state_contract(),
         "core_api": _core_api_contract(),
         "distributions": _distribution_contract(),

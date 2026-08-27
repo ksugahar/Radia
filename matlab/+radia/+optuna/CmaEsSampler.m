@@ -99,6 +99,10 @@ classdef CmaEsSampler < radia.optuna.BaseSampler
             obj.WarnIndependentSampling = options.WarnIndependentSampling;
         end
 
+        function reseed_rng(obj)
+            obj.IndependentSampler.reseed_rng();
+        end
+
         function searchSpace = inferRelativeSearchSpace(obj, study, trial) %#ok<INUSD>
             searchSpace = ...
                 radia.optuna.internal.IntersectionSearchSpace.calculate( ...

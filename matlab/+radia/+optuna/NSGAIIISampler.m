@@ -68,6 +68,11 @@ classdef NSGAIIISampler < radia.optuna.BaseGASampler
             obj.Stream=obj.Core.Stream;
         end
 
+        function reseed_rng(obj)
+            obj.Core.reseed_rng();
+            obj.Stream=obj.Core.Stream;
+        end
+
         function searchSpace=inferRelativeSearchSpace(obj,study,trial)
             searchSpace=obj.Core.inferRelativeSearchSpace(study,trial);
         end

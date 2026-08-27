@@ -323,6 +323,25 @@ classdef RDBStorage < radia.optuna.BaseStorage
         end
     end
 
+    methods (Hidden=true)
+        function storage=pythonStorageHandle(obj)
+            %PYTHONSTORAGEHANDLE Internal bridge for gRPC server ownership.
+            storage=obj.PythonStorage;
+        end
+
+        function dispose(obj)
+            %DISPOSE Release SQLAlchemy connections owned by this adapter.
+            if ismethod(obj.PythonStorage,"remove_session")
+                obj.PythonStorage.remove_session();
+            end
+            try
+                obj.PythonStorage.engine.dispose();
+            catch
+                % Non-RDB subclasses such as gRPC proxies have no engine.
+            end
+        end
+    end
+
     methods (Access=private)
         function ensureTrialUpdatable(obj,trial_id)
             trial=obj.get_trial(trial_id);
