@@ -244,7 +244,9 @@ def _capture_cpp_solve_timings(res):
     # quantities so the final artifact reflects the full nonlinear solve, while
     # preserving "last_*" diagnostic values from the most recent inner solve.
     for key, value in clean.items():
-        if key.startswith("hmatvec_last_"):
+        # "last_*" (like "hmatvec_last_*") are state of the most recent inner
+        # solve -- converged flag, final residual -- not additive quantities.
+        if key.startswith("hmatvec_last_") or key.startswith("last_"):
             _LAST_CPP_SOLVE_TIMINGS[key] = value
         else:
             _LAST_CPP_SOLVE_TIMINGS[key] = _LAST_CPP_SOLVE_TIMINGS.get(key, 0.0) + value

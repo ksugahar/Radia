@@ -900,6 +900,10 @@ private:
         double hmatvec_lowrank_rank_le16 = 0.0, hmatvec_lowrank_rank_le32 = 0.0;
         int mass_riesz_local_blocks = 0, mass_riesz_max_block = 0;
         int apply_count = 0, prec_count = 0, dot_count = 0;
+        // Outcome of the last linear solve, measured from the TRUE residual
+        // (not the CG recurrence): 1.0 = met tol, 0.0 = ran out of iterations.
+        double converged = 0.0;
+        double final_relative_residual = 0.0;
     };
     SolveTiming m_lastSolveTiming;
     // Persistent exact mass-Riesz factor, keyed on the EXACT (n_face, mI, mJ, mV) COO arrays: reused by
