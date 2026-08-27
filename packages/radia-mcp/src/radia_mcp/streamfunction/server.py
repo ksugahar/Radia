@@ -71,7 +71,7 @@ def streamfunction(topic: str = "overview") -> str:
                                 sheet-metal wire distortion
             "fe_direct"       - FE-direct H1 psi on plane/cylinder/sphere
             "deformation"     - surface-deformation outer loop (accuracy)
-            "cmaes"           - SA-25-020 CMA-ES outer loop
+            "cmaes"/"optuna"  - MATLAB Optuna outer loop around the C++ inverse
             "performance"     - (ACA+)+TSVD amortisation numbers
             "validation"      - analytic-benchmark checks
             "literature"      - SFM lineage (Turner / Peeren / current potential)

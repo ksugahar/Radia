@@ -312,6 +312,7 @@ _PYBIND_CLASS_COMMANDS = {
     "_ChargeGramHMatrix.configure_geometry_mass_matrix_ngsolve": ("hacapk.charge_gram.configure_geometry_mass_matrix_ngsolve",),
     "_ChargeGramHMatrix.restore_geometry_mass_matrix": ("hacapk.charge_gram.restore_geometry_mass_matrix",),
     "_ChargeGramHMatrix.set_configured_constraints": ("hacapk.charge_gram.set_configured_constraints",),
+    "_ChargeGramHMatrix.configured_active_hmatrix_stats": ("hacapk.charge_gram.configured_active_hmatrix_stats",),
     "_ChargeGramHMatrix.demag_matrix": ("hacapk.charge_gram.demag_matrix",),
     "_ChargeGramHMatrix.apply_configured_demag": ("hacapk.charge_gram.demag_apply",),
     "_ChargeGramHMatrix.apply_configured_geometry_mass": ("hacapk.charge_gram.geometry_mass_apply",),

@@ -49,24 +49,26 @@ public:
     PardisoMKLThreadGuard& operator=(const PardisoMKLThreadGuard&) = delete;
 };
 
-// RAII PARDISO SPD (mtype=2 real symmetric positive definite) factor of the HDiv mass M_mass,
-// used as the MASS RIESZ preconditioner (z = M_mass^{-1} r) of the HDiv-VIM material CG / MINRES.  The
-// mass is supplied as the FULL symmetric COO (mI,mJ,mV); only the UPPER triangle (j>=i) is assembled
-// into the 0-based CSR PARDISO mtype=2 expects.  Follows the established sparse-direct PARDISO pattern in
-// this repo.  Replaces the prior Python splu(M_mass) glue so
-// the whole linear demag solve (H-matvec + mass solve + Krylov) runs in C++.
-struct MassRieszPardiso {
+// Persistent exact MASS RIESZ factor.  Broken HDiv masses are element-block
+// diagonal, so small connected components use TaskManager-parallel dense
+// Cholesky solves.  General conforming masses retain the PARDISO SPD path.
+struct MassRieszFactor {
     void* pt[64];
     MKL_INT iparm[64];
     MKL_INT n = 0, mtype = 2, maxfct = 1, mnum = 1, msglvl = 0;
     std::vector<MKL_INT> ia, ja;     // upper-triangular CSR, 0-based (iparm[34]=1); columns ascending
     std::vector<double>  a;
+    std::vector<int> local_offsets, local_dofs;
+    std::vector<size_t> local_factor_offsets;
+    std::vector<double> local_factors;
+    int local_max_block = 0;
+    bool local_factored = false;
     bool factored = false;
-    MassRieszPardiso() { for (int i = 0; i < 64; ++i) { pt[i] = nullptr; iparm[i] = 0; } }
-    MassRieszPardiso(const MassRieszPardiso&) = delete;
-    MassRieszPardiso& operator=(const MassRieszPardiso&) = delete;
-    ~MassRieszPardiso() {
-        if (factored) {
+    MassRieszFactor() { for (int i = 0; i < 64; ++i) { pt[i] = nullptr; iparm[i] = 0; } }
+    MassRieszFactor(const MassRieszFactor&) = delete;
+    MassRieszFactor& operator=(const MassRieszFactor&) = delete;
+    ~MassRieszFactor() {
+        if (factored && !local_factored) {
             // PARDISO is called from the HDiv Krylov loop while an NGSolve
             // TaskManager may be active.  Suspend its workers while PARDISO
             // owns the configured thread count; this avoids nested pools while
@@ -78,14 +80,206 @@ struct MassRieszPardiso {
                     &idum, &nrhs, iparm, &msglvl, &ddum, &ddum, &error);
         }
     }
+
+    bool TryFactorLocalBlocks(const std::vector<int>& mI,
+                              const std::vector<int>& mJ,
+                              const std::vector<double>& mV,
+                              int n_face) {
+        if (n_face < 1) return false;
+        std::vector<int> parent(static_cast<size_t>(n_face));
+        std::vector<unsigned char> rank(static_cast<size_t>(n_face), 0);
+        for (int i = 0; i < n_face; ++i) parent[static_cast<size_t>(i)] = i;
+        auto root = [&](int value) {
+            int result = value;
+            while (parent[static_cast<size_t>(result)] != result)
+                result = parent[static_cast<size_t>(result)];
+            while (parent[static_cast<size_t>(value)] != value) {
+                const int next = parent[static_cast<size_t>(value)];
+                parent[static_cast<size_t>(value)] = result;
+                value = next;
+            }
+            return result;
+        };
+        auto unite = [&](int left, int right) {
+            int aroot = root(left), broot = root(right);
+            if (aroot == broot) return;
+            if (rank[static_cast<size_t>(aroot)] <
+                    rank[static_cast<size_t>(broot)])
+                std::swap(aroot, broot);
+            parent[static_cast<size_t>(broot)] = aroot;
+            if (rank[static_cast<size_t>(aroot)] ==
+                    rank[static_cast<size_t>(broot)])
+                ++rank[static_cast<size_t>(aroot)];
+        };
+        for (size_t k = 0; k < mV.size(); ++k) {
+            const int i = mI[k], j = mJ[k];
+            if (i >= 0 && i < n_face && j >= 0 && j < n_face &&
+                    i != j && mV[k] != 0.0)
+                unite(i, j);
+        }
+
+        std::unordered_map<int, int> component_of;
+        std::vector<std::vector<int>> components;
+        for (int dof = 0; dof < n_face; ++dof) {
+            const int owner = root(dof);
+            auto inserted = component_of.emplace(
+                owner, static_cast<int>(components.size()));
+            if (inserted.second) components.emplace_back();
+            components[static_cast<size_t>(inserted.first->second)].push_back(dof);
+        }
+        int max_block = 0;
+        for (const auto& component : components)
+            max_block = std::max(max_block, static_cast<int>(component.size()));
+        constexpr int local_block_limit = 256;
+        if (components.size() < 2 || max_block > local_block_limit) return false;
+
+        local_offsets.assign(components.size()+1, 0);
+        local_dofs.clear();
+        local_dofs.reserve(static_cast<size_t>(n_face));
+        std::vector<int> block_of(static_cast<size_t>(n_face), -1);
+        std::vector<int> local_of(static_cast<size_t>(n_face), -1);
+        size_t factor_size = 0;
+        for (size_t block = 0; block < components.size(); ++block) {
+            local_offsets[block] = static_cast<int>(local_dofs.size());
+            const auto& component = components[block];
+            for (size_t local = 0; local < component.size(); ++local) {
+                const int dof = component[local];
+                block_of[static_cast<size_t>(dof)] = static_cast<int>(block);
+                local_of[static_cast<size_t>(dof)] = static_cast<int>(local);
+                local_dofs.push_back(dof);
+            }
+            factor_size += component.size()*component.size();
+        }
+        local_offsets.back() = static_cast<int>(local_dofs.size());
+        local_factors.assign(factor_size, 0.0);
+        local_factor_offsets.assign(components.size()+1, 0);
+        for (size_t block = 0; block < components.size(); ++block) {
+            const size_t width = components[block].size();
+            local_factor_offsets[block+1] =
+                local_factor_offsets[block]+width*width;
+        }
+        for (size_t k = 0; k < mV.size(); ++k) {
+            const int i = mI[k], j = mJ[k];
+            if (i < 0 || i >= n_face || j < 0 || j >= n_face) continue;
+            const int block = block_of[static_cast<size_t>(i)];
+            if (block < 0 || block != block_of[static_cast<size_t>(j)])
+                return false;
+            const int width = local_offsets[static_cast<size_t>(block)+1] -
+                local_offsets[static_cast<size_t>(block)];
+            local_factors[local_factor_offsets[static_cast<size_t>(block)] +
+                static_cast<size_t>(local_of[static_cast<size_t>(i)])*width +
+                local_of[static_cast<size_t>(j)]] += mV[k];
+        }
+
+        std::atomic<bool> ok(true);
+        {
+            ngcore::RegionTaskManager rtm(radia::GetMaxThreads());
+            ngcore::ParallelFor(ngcore::IntRange(components.size()),
+                [&](size_t block) {
+                    const int width = local_offsets[block+1]-local_offsets[block];
+                    double* factor =
+                        local_factors.data()+local_factor_offsets[block];
+                    for (int i = 0; i < width; ++i)
+                        for (int j = i+1; j < width; ++j) {
+                            const double upper = factor[static_cast<size_t>(i)*width+j];
+                            const double lower = factor[static_cast<size_t>(j)*width+i];
+                            const double value = upper != 0.0 && lower != 0.0
+                                ? 0.5*(upper+lower) : upper+lower;
+                            factor[static_cast<size_t>(i)*width+j] = value;
+                            factor[static_cast<size_t>(j)*width+i] = value;
+                        }
+                    double max_diag = 0.0;
+                    for (int i = 0; i < width; ++i)
+                        max_diag = std::max(max_diag,
+                            std::fabs(factor[static_cast<size_t>(i)*width+i]));
+                    const double floor = std::max(1.0e-30, 1.0e-13*max_diag);
+                    for (int i = 0; i < width && ok.load(); ++i) {
+                        for (int j = 0; j <= i; ++j) {
+                            double value = factor[static_cast<size_t>(i)*width+j];
+                            for (int k = 0; k < j; ++k)
+                                value -= factor[static_cast<size_t>(i)*width+k]*
+                                    factor[static_cast<size_t>(j)*width+k];
+                            if (i == j) {
+                                if (!(value > floor) || !std::isfinite(value)) {
+                                    ok.store(false);
+                                    break;
+                                }
+                                factor[static_cast<size_t>(i)*width+j] =
+                                    std::sqrt(value);
+                            }
+                            else
+                                factor[static_cast<size_t>(i)*width+j] = value /
+                                    factor[static_cast<size_t>(j)*width+j];
+                        }
+                        for (int j = i+1; j < width; ++j)
+                            factor[static_cast<size_t>(i)*width+j] = 0.0;
+                    }
+                });
+        }
+        if (!ok.load()) {
+            local_offsets.clear(); local_dofs.clear();
+            local_factor_offsets.clear(); local_factors.clear();
+            return false;
+        }
+        local_max_block = max_block;
+        local_factored = true;
+        return true;
+    }
+
+    void SolveLocalMany(const double* rhs, double* x, int rhs_count) const {
+        if (rhs_count < 1)
+            throw std::runtime_error(
+                "MassRieszFactor: rhs_count must be positive");
+        const size_t block_count = local_offsets.size()-1;
+        std::fill(x, x+static_cast<size_t>(rhs_count)*n, 0.0);
+        ngcore::RegionTaskManager rtm(radia::GetMaxThreads());
+        ngcore::ParallelFor(
+            ngcore::IntRange(static_cast<size_t>(rhs_count)*block_count),
+            [&](size_t task) {
+                const int rhs_index = static_cast<int>(task/block_count);
+                const size_t block = task%block_count;
+                const int begin = local_offsets[block];
+                const int width = local_offsets[block+1]-begin;
+                const double* factor =
+                    local_factors.data()+local_factor_offsets[block];
+                double* output = x+static_cast<size_t>(rhs_index)*n;
+                const double* input = rhs+static_cast<size_t>(rhs_index)*n;
+                for (int i = 0; i < width; ++i) {
+                    const int dof = local_dofs[static_cast<size_t>(begin+i)];
+                    double value = input[dof];
+                    for (int j = 0; j < i; ++j)
+                        value -= factor[static_cast<size_t>(i)*width+j]*
+                            output[local_dofs[static_cast<size_t>(begin+j)]];
+                    output[dof] = value/factor[static_cast<size_t>(i)*width+i];
+                }
+                for (int ii = width; ii-- > 0;) {
+                    const int dof = local_dofs[static_cast<size_t>(begin+ii)];
+                    double value = output[dof];
+                    for (int j = ii+1; j < width; ++j)
+                        value -= factor[static_cast<size_t>(j)*width+ii]*
+                            output[local_dofs[static_cast<size_t>(begin+j)]];
+                    output[dof] = value/factor[static_cast<size_t>(ii)*width+ii];
+                }
+            });
+    }
+
+    int LocalBlockCount() const {
+        return local_factored ? static_cast<int>(local_offsets.size())-1 : 0;
+    }
+    int LocalMaxBlock() const { return local_factored ? local_max_block : 0; }
+
     // Assemble the upper-triangular CSR from the symmetric mass COO and factor (analyze phase 11 +
     // numeric phase 22).  Returns false on a PARDISO error (caller raises -- No-Fallbacks: a non-SPD
     // mass would be a setup bug, not a soft condition to paper over).
     bool Factor(const std::vector<int>& mI, const std::vector<int>& mJ,
                 const std::vector<double>& mV, int n_face) {
+        n = n_face;
+        if (TryFactorLocalBlocks(mI, mJ, mV, n_face)) {
+            factored = true;
+            return true;
+        }
         ngcore::SuspendTaskManager stm;
         PardisoMKLThreadGuard mkl_guard(radia::GetMaxThreads());
-        n = n_face;
         std::vector<std::map<int, double>> row((size_t)n_face);   // std::map keeps columns ascending
         for (size_t k = 0; k < mV.size(); ++k) {
             int i = mI[k], j = mJ[k];
@@ -121,6 +315,10 @@ struct MassRieszPardiso {
         return true;
     }
     void Solve(const double* rhs, double* x) {                   // M_mass x = rhs (phase 33, single rhs)
+        if (local_factored) {
+            SolveLocalMany(rhs, x, 1);
+            return;
+        }
         ngcore::SuspendTaskManager stm;
         PardisoMKLThreadGuard mkl_guard(radia::GetMaxThreads());
         MKL_INT phase = 33, nrhs = 1, idum = 0, error = 0;
@@ -135,7 +333,11 @@ struct MassRieszPardiso {
         // right-hand side is one contiguous PARDISO column.
         if (rhs_count < 1)
             throw std::runtime_error(
-                "MassRieszPardiso: rhs_count must be positive");
+                "MassRieszFactor: rhs_count must be positive");
+        if (local_factored) {
+            SolveLocalMany(rhs, x, rhs_count);
+            return;
+        }
         ngcore::SuspendTaskManager stm;
         PardisoMKLThreadGuard mkl_guard(radia::GetMaxThreads());
         MKL_INT phase = 33, nrhs = static_cast<MKL_INT>(rhs_count);
@@ -151,14 +353,14 @@ struct MassRieszPardiso {
 } // namespace
 
 // Definition of the .h-forward-declared persistent factor holder (SINGLE entry on RadHACApKChargeGram):
-// the PARDISO factor plus the exact COO arrays it was built from.  A solve call whose (n_face, mI, mJ, mV)
+// the selected local/PARDISO factor plus the exact COO arrays it was built from.  A solve call whose (n_face, mI, mJ, mV)
 // compares EQUAL element-wise reuses the factor; any difference rebuilds and replaces the entry.  Only this
-// translation unit sees the complete type (the members use the TU-local MassRieszPardiso above).
+// translation unit sees the complete type (the members use the TU-local MassRieszFactor above).
 struct RadMassRieszCache {
     std::vector<int> keyI, keyJ;
     std::vector<double> keyV;
     int keyN = -1;
-    MassRieszPardiso factor;
+    MassRieszFactor factor;
 };
 
 // The single get-or-build implementation used by SolveLinearMaterial (see the .h declaration for the
@@ -700,6 +902,12 @@ static bool HOAnalyticBlockEnabled()
         return !v || v[0] == '\0' || v[0] == '0';
     }();
     return enabled;
+}
+
+static bool HOTetImageBlockEnabled()
+{
+    const char* v = std::getenv("RADIA_HDIV_DISABLE_HO_IMAGE_BLOCK");
+    return !v || v[0] == '\0' || v[0] == '0';
 }
 
 static void ValidateImageVectors(const std::vector<int>& image_masks,
@@ -1888,6 +2096,39 @@ std::vector<double> RadHACApKChargeGram::QuadBlockHOTet(
         const double p[3] = {points[q][0], points[q][1], points[q][2]};
         if (m_curved) PhiInnerHOCurvedHostVec(kindS, hostS, p, sources, inner.data());
         else PhiInnerHOHostVec(kindS, hostS, p, sources, inner.data());
+        for (int lt = 0; lt < nT; ++lt) {
+            const double weight = m_qw[targets[lt]][q];
+            double* row = &block[(size_t)lt*nS];
+            for (int ls = 0; ls < nS; ++ls) row[ls] += weight*inner[ls];
+        }
+    }
+    for (double& value : block) value *= RAD_INV_FOUR_PI;
+    return block;
+}
+
+std::vector<double> RadHACApKChargeGram::QuadBlockHOTetImage(
+    int kindT, int hostT, int kindS, int hostS, int img) const
+{
+    const std::vector<int>& targets =
+        (kindT == 0) ? m_hoCellCharges[hostT] : m_hoFaceCharges[hostT];
+    const std::vector<int>& sources =
+        (kindS == 0) ? m_hoCellCharges[hostS] : m_hoFaceCharges[hostS];
+    const int nT = (int)targets.size(), nS = (int)sources.size();
+    std::vector<double> block((size_t)nT*nS, 0.0), inner((size_t)nS, 0.0);
+    if (nT == 0 || nS == 0) return block;
+    if (m_curved)
+        throw std::logic_error("TET image host block requires flat affine hosts");
+
+    // Every target mode on one host owns the same outer points.  Map those
+    // points through the inverse cyclic image once, evaluate every co-located
+    // source mode together, then contract the mode-specific target weights.
+    // The scalar image path repeated this geometry/moment work per charge pair.
+    const std::vector<rad_hdiv::Vec3>& points = m_qp[targets[0]];
+    for (size_t q = 0; q < points.size(); ++q) {
+        const double p0[3] = {points[q][0], points[q][1], points[q][2]};
+        double p[3];
+        ImageEvalPoint(img, p0, p);
+        PhiInnerHOHostVec(kindS, hostS, p, sources, inner.data());
         for (int lt = 0; lt < nT; ++lt) {
             const double weight = m_qw[targets[lt]][q];
             double* row = &block[(size_t)lt*nS];
@@ -5369,7 +5610,7 @@ const std::vector<double>& RadHACApKChargeGram::GetHexSymBlock(int kindA, int hA
 }
 
 const std::vector<double>& RadHACApKChargeGram::GetHOTetSymBlock(
-    int kindA, int hostA, int kindB, int hostB) const
+    int kindA, int hostA, int kindB, int hostB, int img) const
 {
     HexStatAdd(m_hexCacheStatsEnabled, m_hoSymBlockLookups);
     if (s_ho_tet_sym_block_owner != m_build_id) {
@@ -5377,7 +5618,7 @@ const std::vector<double>& RadHACApKChargeGram::GetHOTetSymBlock(
         s_ho_tet_sym_block_owner = m_build_id;
         HexStatAdd(m_hexCacheStatsEnabled, m_hoSymBlockClears);
     }
-    const HexBlockKey key{kindA, hostA, kindB, hostB, 0};
+    const HexBlockKey key{kindA, hostA, kindB, hostB, img};
     auto it = s_ho_tet_sym_block_cache.find(key);
     if (it == s_ho_tet_sym_block_cache.end()) {
         HexStatAdd(m_hexCacheStatsEnabled, m_hoSymBlockMisses);
@@ -5389,13 +5630,17 @@ const std::vector<double>& RadHACApKChargeGram::GetHOTetSymBlock(
                                     : (int)m_hoFaceCharges[hostA].size();
         const int nB = (kindB == 0) ? (int)m_hoCellCharges[hostB].size()
                                     : (int)m_hoFaceCharges[hostB].size();
-        std::vector<double> ab = QuadBlockHOTet(kindA, hostA, kindB, hostB);
-        const bool direct_curved = m_curved && CurvedDirectEnabled() &&
+        std::vector<double> ab = img == 0
+            ? QuadBlockHOTet(kindA, hostA, kindB, hostB)
+            : QuadBlockHOTetImage(kindA, hostA, kindB, hostB, img);
+        const bool direct_curved = img == 0 && m_curved && CurvedDirectEnabled() &&
                                    !CurvedHostsTouch(kindA, hostA, kindB, hostB);
         const bool same_host = kindA == kindB && hostA == hostB;
         std::vector<double> ba;
         if (!direct_curved && !same_host)
-            ba = QuadBlockHOTet(kindB, hostB, kindA, hostA);
+            ba = img == 0
+                ? QuadBlockHOTet(kindB, hostB, kindA, hostA)
+                : QuadBlockHOTetImage(kindB, hostB, kindA, hostA, img);
         std::vector<double> sym((size_t)nA*nB);
         for (int localA = 0; localA < nA; ++localA)
             for (int localB = 0; localB < nB; ++localB)
@@ -5409,7 +5654,7 @@ const std::vector<double>& RadHACApKChargeGram::GetHOTetSymBlock(
             // The symmetrized reverse block is exactly the transpose.  Store
             // it now so a later H-matrix leaf with the opposite cluster
             // ordering does not repeat both expensive directed integrations.
-            const HexBlockKey reverse_key{kindB, hostB, kindA, hostA, 0};
+            const HexBlockKey reverse_key{kindB, hostB, kindA, hostA, img};
             if (s_ho_tet_sym_block_cache.find(reverse_key) ==
                 s_ho_tet_sym_block_cache.end()) {
                 std::vector<double> reverse((size_t)nB*nA);
@@ -5930,15 +6175,27 @@ void RadHACApKChargeGram::MatVecSymMany(const std::vector<double>& x,
                                         int nrhs, std::vector<double>& y)
 {
     if (!m_sigmaActive) { RadHACApKBase::MatVecSymMany(x, nrhs, y); return; }
-    std::vector<double> xs(x.size());
-    for (int r = 0; r < nrhs; ++r)
-        for (int p = 0; p < m_n; ++p)
-            xs[(size_t)r * m_n + p] =
-                x[(size_t)r * m_n + p] * m_chargeSigma[(size_t)p];
-    RadHACApKBase::MatVecSymMany(xs, nrhs, y);
-    for (int r = 0; r < nrhs; ++r)
-        for (int p = 0; p < m_n; ++p)
-            y[(size_t)r * m_n + p] *= m_chargeSigma[(size_t)p];
+    MatVecSymManyPrepared(
+        x, nrhs, nullptr, m_chargeSigma.data(), y);
+}
+
+void RadHACApKChargeGram::MatVecSymManyConfigured(
+    const std::vector<double>& x, int nrhs, int component,
+    bool respect_constraints, std::vector<double>& y)
+{
+    if (component < 0 || component >= m_operatorChargeComponents)
+        throw std::out_of_range("MatVecSymManyConfigured: component out of range");
+    const size_t stride = static_cast<size_t>(m_ndof)+1;
+    const size_t begin = static_cast<size_t>(component)*stride;
+    const bool masked = respect_constraints &&
+        m_operatorActiveChargePrefix.size() ==
+            static_cast<size_t>(m_operatorChargeComponents)*stride &&
+        m_operatorActiveChargePrefix[begin+stride-1] < m_ndof;
+    MatVecSymManyPrepared(
+        x, nrhs,
+        masked ? m_operatorActiveChargePrefix.data()+begin : nullptr,
+        m_sigmaActive ? m_chargeSigma.data() : nullptr,
+        y);
 }
 
 void RadHACApKChargeGram::OnBeforeBuild()
@@ -6783,9 +7040,26 @@ double RadHACApKChargeGram::GetInteractionMatrixElementRaw(int a, int b) const
         // IMA: fold in the mirror-image charge interactions (QuadDotRefl uses PhiInner in this mode) so a
         // reduced (1/2, 1/4, 1/8) symmetry model reproduces the full model -- G_IMA = G + sum_i sign_i *
         // 0.5*(refl(a,b)+refl(b,a)).  Empty image => plain highorder.
-        for (size_t i = 0; i < m_image_masks.size(); ++i)
-            base += m_image_signs[i] * 0.5 *
-                    (QuadDotRefl(a, b, (int)i + 1) + QuadDotRefl(b, a, (int)i + 1));
+        for (size_t i = 0; i < m_image_masks.size(); ++i) {
+            const int img = (int)i + 1;
+            const bool rotation_image = i < m_image_rot_angle.size() &&
+                                        m_image_rot_angle[i] != 0.0;
+            if (rotation_image && !m_curved && !m_polyCombo && !m_hexmode &&
+                !m_wedgemode && m_hoAnalyticBlock && HOAnalyticBlockEnabled() &&
+                HOTetImageBlockEnabled()) {
+                const int kindA = m_kind[a], hostA = m_host[a];
+                const int kindB = m_kind[b], hostB = m_host[b];
+                const int localA = m_hoLocalOf[a], localB = m_hoLocalOf[b];
+                const int nB = (kindB == 0) ? (int)m_hoCellCharges[hostB].size()
+                                           : (int)m_hoFaceCharges[hostB].size();
+                base += m_image_signs[i] *
+                    GetHOTetSymBlock(kindA, hostA, kindB, hostB, img)
+                        [(size_t)localA*nB + localB];
+            } else {
+                base += m_image_signs[i] * 0.5 *
+                        (QuadDotRefl(a, b, img) + QuadDotRefl(b, a, img));
+            }
+        }
         return base;
     }
     if (m_analytic) {
@@ -6863,6 +7137,8 @@ std::vector<double> RadHACApKChargeGram::SolveLinearMaterial(
     const bool configured_charge_map = m_operatorChargeConfigured &&
         &B_indptr == &m_operatorBIndptr && &B_indices == &m_operatorBIndices &&
         &B_data == &m_operatorBData && m_operatorBTIndptr.size() == (size_t)n_face + 1;
+    const bool configured_active_hmatrix = configured_charge_map && constrained &&
+        n_charge == m_ndof && m_operatorChargeComponents == 1;
     auto project = [&](std::vector<double>& value) {
         if (!constrained) return;
         ngcore::ParallelFor(ngcore::IntRange(n_face), [&](size_t i) {
@@ -6881,15 +7157,15 @@ std::vector<double> RadHACApKChargeGram::SolveLinearMaterial(
     // worker pools, while the sparse factor/solve can still scale.
     radia::MKLThreadGuard solve_mkl_guard(1);
 #endif
-    // MASS RIESZ preconditioner (the default 'auto' path): z = M_mass^{-1} r via a single PARDISO SPD
-    // factor of the HDiv mass (built once, applied per iteration).  ~3-5x fewer iters than the diagonal
+    // MASS RIESZ preconditioner (the default 'auto' path): z = M_mass^{-1} r via the persistent exact
+    // local-block/PARDISO factor of the HDiv mass.  ~3-5x fewer iters than the diagonal
     // Jacobi (the diagonal under-resolves the HDiv mass off-diagonal coupling) and nearly mu_r-flat.  When
     // mass_riesz is false the legacy diagonal Jacobi z = r/prec is used (linear_solver="cpp-cg").
 #ifdef HAVE_LAPACK
     // PERSISTENT factor (2026-07-10): get-or-build via EnsureMassRieszFactor (exact-COO key; hit =
     // reuse, factor_s += 0; miss = release-then-refactor).  mrKeep pins the entry for the CG loop.
     std::shared_ptr<RadMassRieszCache> mrKeep;
-    MassRieszPardiso* mr = nullptr;
+    MassRieszFactor* mr = nullptr;
     if (mass_riesz) {
         const std::vector<int>* factorI = &mI;
         const std::vector<int>* factorJ = &mJ;
@@ -6913,6 +7189,8 @@ std::vector<double> RadHACApKChargeGram::SolveLinearMaterial(
         mrKeep = EnsureMassRieszFactor(*factorI, *factorJ, *factorV, n_face, "SolveLinearMaterial",
                                        &m_lastSolveTiming.factor_s);
         mr = &mrKeep->factor;
+        m_lastSolveTiming.mass_riesz_local_blocks = mr->LocalBlockCount();
+        m_lastSolveTiming.mass_riesz_max_block = mr->LocalMaxBlock();
     }
 #else
     if (mass_riesz)
@@ -7068,8 +7346,12 @@ std::vector<double> RadHACApKChargeGram::SolveLinearMaterial(
         const auto tb1 = Clock::now();
         std::fill(Gq.begin(), Gq.end(), 0.0);
         const auto tg0 = Clock::now();
-        if (symmetric) MatVecSym(q, Gq);               // EXACTLY symmetric -> CG-valid Gram apply
-        else           MatVec(q, Gq);                  // shadowed: also MatVecSym (sym-fill leaves lower empty)
+        if (symmetric && configured_active_hmatrix)
+            MatVecSymManyConfigured(q, 1, 0, true, Gq);
+        else if (symmetric)
+            MatVecSym(q, Gq);                          // EXACTLY symmetric -> CG-valid Gram apply
+        else
+            MatVec(q, Gq);                             // shadowed: also MatVecSym (sym-fill leaves lower empty)
         const auto tg1 = Clock::now();
         y.assign((size_t)n_face, 0.0);
         const auto tt0 = Clock::now();
@@ -7208,8 +7490,8 @@ std::vector<double> RadHACApKChargeGram::SolveLinearMaterial(
     m_lastSolveTiming.total_s = elapsed(t_total0, Clock::now());
     {
         double mv[8] = {0.0};
-        int64_t mc[8] = {0};
-        HACApK_matvec_stats_get(mv, 8, mc, 8);
+        int64_t mc[20] = {0};
+        HACApK_matvec_stats_get(mv, 8, mc, 20);
         m_lastSolveTiming.hmatvec_total_s = mv[0];
         m_lastSolveTiming.hmatvec_zero_s = mv[1];
         m_lastSolveTiming.hmatvec_permute_s = mv[2];
@@ -7226,6 +7508,18 @@ std::vector<double> RadHACApKChargeGram::SolveLinearMaterial(
         m_lastSolveTiming.hmatvec_skipped_lower_leaves = (double)mc[5];
         m_lastSolveTiming.hmatvec_last_nd = (double)mc[6];
         m_lastSolveTiming.hmatvec_last_nthr = (double)mc[7];
+        m_lastSolveTiming.hmatvec_lowrank_upper_leaves = (double)mc[8];
+        m_lastSolveTiming.hmatvec_dense_upper_leaves = (double)mc[9];
+        m_lastSolveTiming.hmatvec_inactive_skipped_leaves = (double)mc[10];
+        m_lastSolveTiming.hmatvec_lowrank_directions = (double)mc[11];
+        m_lastSolveTiming.hmatvec_dense_directions = (double)mc[12];
+        m_lastSolveTiming.hmatvec_gemm_calls = (double)mc[13];
+        m_lastSolveTiming.hmatvec_lowrank_rank_sum = (double)mc[14];
+        m_lastSolveTiming.hmatvec_lowrank_rank_max = (double)mc[15];
+        m_lastSolveTiming.hmatvec_lowrank_rank_le4 = (double)mc[16];
+        m_lastSolveTiming.hmatvec_lowrank_rank_le8 = (double)mc[17];
+        m_lastSolveTiming.hmatvec_lowrank_rank_le16 = (double)mc[18];
+        m_lastSolveTiming.hmatvec_lowrank_rank_le32 = (double)mc[19];
     }
     return x;
 }
@@ -7365,6 +7659,7 @@ void RadHACApKChargeGram::ConfigureChargeMap(
                     m_operatorConstrained[(size_t)m_operatorBIndices[(size_t)k]] = 1;
         }
     }
+    UpdateConfiguredActiveChargePrefixes();
 }
 
 void RadHACApKChargeGram::ConfigureVectorChargeMap(
@@ -7419,6 +7714,7 @@ void RadHACApKChargeGram::ConfigureVectorChargeMap(
     m_operatorChargeComponents = n_components;
     m_operatorNFace = n_face;
     m_operatorChargeConfigured = true;
+    UpdateConfiguredActiveChargePrefixes();
 }
 
 int RadHACApKChargeGram::ConfiguredConstraintCount() const
@@ -7443,6 +7739,63 @@ void RadHACApKChargeGram::SetConfiguredConstraints(
                 "SetConfiguredConstraints: DOF index out of range");
         m_operatorConstrained[static_cast<size_t>(dof)] = 1;
     }
+    UpdateConfiguredActiveChargePrefixes();
+}
+
+void RadHACApKChargeGram::UpdateConfiguredActiveChargePrefixes()
+{
+    m_operatorActiveChargePrefix.clear();
+    if (!m_operatorChargeConfigured || !m_control || m_ndof < 1 ||
+        m_operatorChargeComponents < 1)
+        return;
+    const auto* control = static_cast<const st_cHACApK_lcontrol_t*>(m_control);
+    if (!control->lod) return;
+    const size_t stride = static_cast<size_t>(m_ndof)+1;
+    m_operatorActiveChargePrefix.assign(
+        static_cast<size_t>(m_operatorChargeComponents)*stride, 0);
+    for (int component = 0; component < m_operatorChargeComponents; ++component) {
+        int* prefix = m_operatorActiveChargePrefix.data()+
+            static_cast<size_t>(component)*stride;
+        for (int permuted = 0; permuted < m_ndof; ++permuted) {
+            const int charge = control->lod[permuted+1]-1;
+            const size_t row = static_cast<size_t>(component)*m_ndof+charge;
+            bool active = false;
+            for (int k = m_operatorBIndptr[row];
+                 k < m_operatorBIndptr[row+1] && !active; ++k) {
+                const int face = m_operatorBIndices[static_cast<size_t>(k)];
+                active = !m_operatorConstrained[static_cast<size_t>(face)] &&
+                    m_operatorBData[static_cast<size_t>(k)] != 0.0;
+            }
+            prefix[permuted+1] = prefix[permuted]+(active ? 1 : 0);
+        }
+    }
+}
+
+std::vector<int> RadHACApKChargeGram::ConfiguredActiveHMatrixStats(
+    int component) const
+{
+    if (component < 0 || component >= m_operatorChargeComponents)
+        throw std::out_of_range(
+            "ConfiguredActiveHMatrixStats: component out of range");
+    const size_t stride = static_cast<size_t>(m_ndof)+1;
+    const size_t begin = static_cast<size_t>(component)*stride;
+    if (m_operatorActiveChargePrefix.size() !=
+            static_cast<size_t>(m_operatorChargeComponents)*stride)
+        return {m_ndof, m_ndof, 0, 0};
+    const int* prefix = m_operatorActiveChargePrefix.data()+begin;
+    const auto* leaves = static_cast<const st_cHACApK_leafmtxp_t*>(m_leafmtxp);
+    int active_leaves = 0, total_leaves = 0;
+    if (leaves)
+        for (int ip = 1; ip <= leaves->nlf; ++ip) {
+            const auto* leaf = leaves->st_lf[ip];
+            if (!leaf || leaf->nstrtl > leaf->nstrtt) continue;
+            ++total_leaves;
+            const int r0 = leaf->nstrtl-1, c0 = leaf->nstrtt-1;
+            if (prefix[r0+leaf->ndl] != prefix[r0] &&
+                prefix[c0+leaf->ndt] != prefix[c0])
+                ++active_leaves;
+        }
+    return {prefix[m_ndof], m_ndof, active_leaves, total_leaves};
 }
 
 void RadHACApKChargeGram::ConfigureMassMatrix(
@@ -7585,9 +7938,11 @@ void RadHACApKChargeGram::ApplyConfiguredDemagImpl(
         ngcore::ParallelFor(ngcore::IntRange(m_ndof), [&](size_t a) {
             double sum = 0.0;
             const size_t row = row_offset + a;
-            for (int k = m_operatorBIndptr[row]; k < m_operatorBIndptr[row + 1]; ++k)
-                sum += m_operatorBData[(size_t)k] *
-                       x[(size_t)m_operatorBIndices[(size_t)k]];
+            for (int k = m_operatorBIndptr[row]; k < m_operatorBIndptr[row + 1]; ++k) {
+                const int face = m_operatorBIndices[(size_t)k];
+                if (!respect_constraints || !m_operatorConstrained[(size_t)face])
+                    sum += m_operatorBData[(size_t)k] * x[(size_t)face];
+            }
             q_data[a] = sum;
         });
         std::fill(Gq.begin(), Gq.end(), 0.0);
@@ -7734,9 +8089,13 @@ std::vector<double> RadHACApKChargeGram::ApplyConfiguredLinearMaterialOperator(
         }
         double value = 0.0;
         for (int k = m_operatorMassIndptr[row];
-             k < m_operatorMassIndptr[row + 1]; ++k)
-            value += m_operatorMassData[static_cast<size_t>(k)] *
-                     x[static_cast<size_t>(m_operatorMassIndices[static_cast<size_t>(k)])];
+             k < m_operatorMassIndptr[row + 1]; ++k) {
+            const int column = m_operatorMassIndices[static_cast<size_t>(k)];
+            if (!respect_constraints ||
+                !m_operatorConstrained[static_cast<size_t>(column)])
+                value += m_operatorMassData[static_cast<size_t>(k)] *
+                         x[static_cast<size_t>(column)];
+        }
         y[row] += inv_chi * value;
     });
     return y;
@@ -7772,15 +8131,20 @@ std::vector<double> RadHACApKChargeGram::ApplyConfiguredLinearMaterialOperatorMa
                     double value = 0.0;
                     const size_t mapped = row_offset+static_cast<size_t>(row);
                     for (int k = m_operatorBIndptr[mapped];
-                         k < m_operatorBIndptr[mapped+1]; ++k)
-                        value += m_operatorBData[static_cast<size_t>(k)] *
-                            x[static_cast<size_t>(rhs)*n_face+
-                              m_operatorBIndices[static_cast<size_t>(k)]];
+                         k < m_operatorBIndptr[mapped+1]; ++k) {
+                        const int face =
+                            m_operatorBIndices[static_cast<size_t>(k)];
+                        if (!respect_constraints ||
+                            !m_operatorConstrained[static_cast<size_t>(face)])
+                            value += m_operatorBData[static_cast<size_t>(k)] *
+                                x[static_cast<size_t>(rhs)*n_face+face];
+                    }
                     charge[index] = value;
                 });
         }
         std::vector<double> gcharge;
-        MatVecSymMany(charge, nrhs, gcharge);
+        MatVecSymManyConfigured(
+            charge, nrhs, component, respect_constraints, gcharge);
         const size_t bt_offset = static_cast<size_t>(component)*n_face;
         {
             ngcore::RegionTaskManager rtm(radia::GetMaxThreads());
@@ -7812,10 +8176,14 @@ std::vector<double> RadHACApKChargeGram::ApplyConfiguredLinearMaterialOperatorMa
             }
             double value = 0.0;
             for (int k = m_operatorMassIndptr[static_cast<size_t>(row)];
-                 k < m_operatorMassIndptr[static_cast<size_t>(row)+1]; ++k)
-                value += m_operatorMassData[static_cast<size_t>(k)] *
-                    x[static_cast<size_t>(rhs)*n_face+
-                      m_operatorMassIndices[static_cast<size_t>(k)]];
+                 k < m_operatorMassIndptr[static_cast<size_t>(row)+1]; ++k) {
+                const int column =
+                    m_operatorMassIndices[static_cast<size_t>(k)];
+                if (!respect_constraints ||
+                    !m_operatorConstrained[static_cast<size_t>(column)])
+                    value += m_operatorMassData[static_cast<size_t>(k)] *
+                        x[static_cast<size_t>(rhs)*n_face+column];
+            }
             y[index] += inv_chi*value;
         });
     }
@@ -8600,56 +8968,83 @@ std::vector<double> RadHACApKChargeGram::SolveConfiguredLinearMaterialAutoPrecMa
             "SolveConfiguredLinearMaterialAutoPrecMany: positive cluster size requires deflation size");
     if (mass_riesz && cluster_coarse_size > 0)
         throw std::runtime_error(
-            "SolveConfiguredLinearMaterialAutoPrecMany: mass-Riesz block PCG "
+            "SolveConfiguredLinearMaterialAutoPrecMany: mass-Riesz batched CG "
             "currently requires cluster_coarse_size=0");
 
-    // Build the exact system diagonal once for the complete RHS batch.  The
-    // former Python loop rebuilt this support map and diagonal for every
-    // state/adjoint even though all columns share A.
-    std::vector<double> mass_diag(static_cast<size_t>(n_face), 0.0);
-    for (size_t k = 0; k < m_operatorMassV.size(); ++k)
-        if (m_operatorMassI[k] == m_operatorMassJ[k])
-            mass_diag[static_cast<size_t>(m_operatorMassI[k])] += m_operatorMassV[k];
-    std::vector<std::vector<int>> support_id(static_cast<size_t>(n_face));
-    std::vector<std::vector<double>> support_value(static_cast<size_t>(n_face));
-    for (int a = 0; a < m_ndof; ++a)
-        for (int k = m_operatorBIndptr[static_cast<size_t>(a)];
-             k < m_operatorBIndptr[static_cast<size_t>(a) + 1]; ++k) {
-            const int f = m_operatorBIndices[static_cast<size_t>(k)];
-            support_id[static_cast<size_t>(f)].push_back(a);
-            support_value[static_cast<size_t>(f)].push_back(
-                m_operatorBData[static_cast<size_t>(k)]);
+    // The exact Jacobi diagonal is needed only by the diagonal/cluster path.
+    // Mass-Riesz applies M^-1 directly and deliberately rejects a simultaneous
+    // cluster coarse space, so building every local Gram diagonal there is
+    // pure setup cost.
+    std::vector<double> prec(static_cast<size_t>(n_face), 1.0);
+    if (!mass_riesz) {
+        std::vector<double> mass_diag(static_cast<size_t>(n_face), 0.0);
+        for (size_t k = 0; k < m_operatorMassV.size(); ++k)
+            if (m_operatorMassI[k] == m_operatorMassJ[k])
+                mass_diag[static_cast<size_t>(m_operatorMassI[k])] +=
+                    m_operatorMassV[k];
+        std::vector<std::vector<int>> support_id(static_cast<size_t>(n_face));
+        std::vector<std::vector<double>> support_value(static_cast<size_t>(n_face));
+        for (int a = 0; a < m_ndof; ++a)
+            for (int k = m_operatorBIndptr[static_cast<size_t>(a)];
+                 k < m_operatorBIndptr[static_cast<size_t>(a) + 1]; ++k) {
+                const int f = m_operatorBIndices[static_cast<size_t>(k)];
+                support_id[static_cast<size_t>(f)].push_back(a);
+                support_value[static_cast<size_t>(f)].push_back(
+                    m_operatorBData[static_cast<size_t>(k)]);
+            }
+        {
+            ngcore::RegionTaskManager rtm(radia::GetMaxThreads());
+            ngcore::ParallelFor(ngcore::IntRange(n_face), [&](size_t f) {
+                double ndiag = 0.0;
+                const auto& ids = support_id[f];
+                const auto& vals = support_value[f];
+                for (size_t p = 0; p < ids.size(); ++p)
+                    for (size_t q = 0; q < ids.size(); ++q)
+                        ndiag += vals[p] * vals[q] *
+                            GetInteractionMatrixElement(ids[p], ids[q]);
+                double value = inv_chi * mass_diag[f] + ndiag;
+                if (!(value > 0.0) || !std::isfinite(value)) value = 1.0;
+                prec[f] = value;
+            });
         }
-    std::vector<double> prec(static_cast<size_t>(n_face), 0.0);
-    {
-        ngcore::RegionTaskManager rtm(radia::GetMaxThreads());
-        ngcore::ParallelFor(ngcore::IntRange(n_face), [&](size_t f) {
-            double ndiag = 0.0;
-            const auto& ids = support_id[f];
-            const auto& vals = support_value[f];
-            for (size_t p = 0; p < ids.size(); ++p)
-                for (size_t q = 0; q < ids.size(); ++q)
-                    ndiag += vals[p] * vals[q] *
-                        GetInteractionMatrixElement(ids[p], ids[q]);
-            double value = inv_chi * mass_diag[f] + ndiag;
-            if (!(value > 0.0) || !std::isfinite(value)) value = 1.0;
-            prec[f] = value;
-        });
+        prec_min = n_face ? prec[0] : 0.0;
+        prec_max = prec_min;
+        for (double value : prec) {
+            prec_min = std::min(prec_min, value);
+            prec_max = std::max(prec_max, value);
+        }
     }
-    prec_min = n_face ? prec[0] : 0.0;
-    prec_max = prec_min;
-    for (double value : prec) {
-        prec_min = std::min(prec_min, value);
-        prec_max = std::max(prec_max, value);
+    else {
+        prec_min = prec_max = 1.0;
+    }
+
+    if (mass_riesz && nrhs == 1) {
+        // The scalar kernel has less row-bookkeeping and a cheaper reduction
+        // path than the batched kernel.  Preserve it for the common one-load
+        // solve; batching starts paying only when operators are shared by
+        // multiple physical right-hand sides.
+        int iterations = 0;
+        std::vector<double> solution = SolveLinearMaterial(
+            m_operatorBIndptr, m_operatorBIndices, m_operatorBData,
+            n_face, m_operatorMassI, m_operatorMassJ, m_operatorMassV,
+            inv_chi, prec, rhs, tol, maxit, iterations,
+            /*mass_riesz=*/true, /*symmetric=*/true, x0,
+            nullptr, nullptr, nullptr, 0);
+        iters_out.assign(1, iterations);
+        coarse_dim_out = recycle_dim_out = 0;
+        coarse_setup_s = 0.0;
+        projection_s = m_lastSolveTiming.total_s;
+        return solution;
     }
 
 #ifdef HAVE_LAPACK
     std::shared_ptr<RadMassRieszCache> block_mr_keep;
-    MassRieszPardiso* block_mr = nullptr;
+    MassRieszFactor* block_mr = nullptr;
+    double block_factor_s = 0.0;
     if (mass_riesz) {
         block_mr_keep = EnsureMassRieszFactor(
             m_operatorMassI, m_operatorMassJ, m_operatorMassV, n_face,
-            "SolveConfiguredLinearMaterialAutoPrecMany", nullptr);
+            "SolveConfiguredLinearMaterialAutoPrecMany", &block_factor_s);
         block_mr = &block_mr_keep->factor;
     }
 #else
@@ -9019,12 +9414,15 @@ std::vector<double> RadHACApKChargeGram::SolveConfiguredLinearMaterialAutoPrecMa
                     input[static_cast<size_t>(row)*n_face+face] /
                     prec[static_cast<size_t>(face)];
     };
+    const size_t charge_total = static_cast<size_t>(nrhs)*m_ndof;
+    std::vector<double> system_charge(charge_total, 0.0);
+    std::vector<double> system_gcharge;
+    system_gcharge.reserve(charge_total);
     auto apply_system_many = [&](const std::vector<double>& input,
                                  std::vector<double>& output) {
-        std::vector<double> charge(static_cast<size_t>(nrhs)*m_ndof, 0.0);
         {
             ngcore::RegionTaskManager rtm(radia::GetMaxThreads());
-            ngcore::ParallelFor(ngcore::IntRange(static_cast<size_t>(nrhs)*m_ndof),
+            ngcore::ParallelFor(ngcore::IntRange(charge_total),
                 [&](size_t index) {
                     const int column = static_cast<int>(index / m_ndof);
                     const int row = static_cast<int>(index % m_ndof);
@@ -9034,11 +9432,11 @@ std::vector<double> RadHACApKChargeGram::SolveConfiguredLinearMaterialAutoPrecMa
                         value += m_operatorBData[static_cast<size_t>(k)] *
                             input[static_cast<size_t>(column)*n_face+
                                   m_operatorBIndices[static_cast<size_t>(k)]];
-                    charge[index] = value;
+                    system_charge[index] = value;
                 });
         }
-        std::vector<double> gcharge;
-        MatVecSymMany(charge, nrhs, gcharge);
+        MatVecSymManyConfigured(
+            system_charge, nrhs, 0, true, system_gcharge);
         output.assign(total, 0.0);
         {
             ngcore::RegionTaskManager rtm(radia::GetMaxThreads());
@@ -9050,7 +9448,7 @@ std::vector<double> RadHACApKChargeGram::SolveConfiguredLinearMaterialAutoPrecMa
                 for (int k = m_operatorBTIndptr[static_cast<size_t>(face)];
                      k < m_operatorBTIndptr[static_cast<size_t>(face)+1]; ++k)
                     value += m_operatorBTData[static_cast<size_t>(k)] *
-                        gcharge[static_cast<size_t>(column)*m_ndof+
+                        system_gcharge[static_cast<size_t>(column)*m_ndof+
                                 m_operatorBTIndices[static_cast<size_t>(k)]];
                 double mass_value = 0.0;
                 for (int k = m_operatorMassIndptr[static_cast<size_t>(face)];
@@ -9067,6 +9465,380 @@ std::vector<double> RadHACApKChargeGram::SolveConfiguredLinearMaterialAutoPrecMa
         return dot(a.data()+static_cast<size_t>(row_a)*n_face,
                    b.data()+static_cast<size_t>(row_b)*n_face);
     };
+    if (mass_riesz) {
+        // Independent batched PCG: each physical RHS retains its scalar-CG
+        // recurrence and true-residual contract, while B/G/B^T and M^-1 are
+        // traversed once for the complete row-major batch.  This avoids the
+        // dense block-Gram recurrences, rank breakdown, fixed 500-step block
+        // startup, and sequential scalar tails of the former block PCG.
+        m_lastSolveTiming = SolveTiming();
+        HACApK_matvec_stats_reset();
+#ifdef HAVE_LAPACK
+        m_lastSolveTiming.factor_s = block_factor_s;
+        m_lastSolveTiming.mass_riesz_local_blocks =
+            block_mr->LocalBlockCount();
+        m_lastSolveTiming.mass_riesz_max_block = block_mr->LocalMaxBlock();
+#endif
+        const auto solve_started = Clock::now();
+        auto timed_apply = [&](const std::vector<double>& input,
+                               std::vector<double>& output) {
+            const auto started = Clock::now();
+            apply_system_many(input, output);
+            m_lastSolveTiming.ax_total_s +=
+                std::chrono::duration<double>(Clock::now()-started).count();
+            ++m_lastSolveTiming.apply_count;
+        };
+        auto timed_precondition = [&](const std::vector<double>& input,
+                                      std::vector<double>& output,
+                                      const std::vector<int>& rows) {
+            const auto started = Clock::now();
+            apply_preconditioner_many(input, output, rows);
+            m_lastSolveTiming.prec_s +=
+                std::chrono::duration<double>(Clock::now()-started).count();
+            ++m_lastSolveTiming.prec_count;
+        };
+        auto collect_hmatvec_stats = [&]() {
+            double mv[8] = {0.0};
+            int64_t mc[20] = {0};
+            HACApK_matvec_stats_get(mv, 8, mc, 20);
+            m_lastSolveTiming.hmatvec_total_s = mv[0];
+            m_lastSolveTiming.hmatvec_zero_s = mv[1];
+            m_lastSolveTiming.hmatvec_permute_s = mv[2];
+            m_lastSolveTiming.hmatvec_leaf_s = mv[3];
+            m_lastSolveTiming.hmatvec_reduce_s = mv[4];
+            m_lastSolveTiming.hmatvec_meta_s = mv[5];
+            m_lastSolveTiming.hmatvec_lowrank_flop_est = mv[6];
+            m_lastSolveTiming.hmatvec_dense_flop_est = mv[7];
+            m_lastSolveTiming.hmatvec_calls = static_cast<double>(mc[0]);
+            m_lastSolveTiming.hmatvec_lowrank_leaves =
+                static_cast<double>(mc[1]);
+            m_lastSolveTiming.hmatvec_dense_leaves =
+                static_cast<double>(mc[2]);
+            m_lastSolveTiming.hmatvec_mirrored_upper_leaves =
+                static_cast<double>(mc[3]);
+            m_lastSolveTiming.hmatvec_diagonal_leaves =
+                static_cast<double>(mc[4]);
+            m_lastSolveTiming.hmatvec_skipped_lower_leaves =
+                static_cast<double>(mc[5]);
+            m_lastSolveTiming.hmatvec_last_nd = static_cast<double>(mc[6]);
+            m_lastSolveTiming.hmatvec_last_nthr = static_cast<double>(mc[7]);
+            m_lastSolveTiming.hmatvec_lowrank_upper_leaves =
+                static_cast<double>(mc[8]);
+            m_lastSolveTiming.hmatvec_dense_upper_leaves =
+                static_cast<double>(mc[9]);
+            m_lastSolveTiming.hmatvec_inactive_skipped_leaves =
+                static_cast<double>(mc[10]);
+            m_lastSolveTiming.hmatvec_lowrank_directions =
+                static_cast<double>(mc[11]);
+            m_lastSolveTiming.hmatvec_dense_directions =
+                static_cast<double>(mc[12]);
+            m_lastSolveTiming.hmatvec_gemm_calls = static_cast<double>(mc[13]);
+            m_lastSolveTiming.hmatvec_lowrank_rank_sum =
+                static_cast<double>(mc[14]);
+            m_lastSolveTiming.hmatvec_lowrank_rank_max =
+                static_cast<double>(mc[15]);
+            m_lastSolveTiming.hmatvec_lowrank_rank_le4 =
+                static_cast<double>(mc[16]);
+            m_lastSolveTiming.hmatvec_lowrank_rank_le8 =
+                static_cast<double>(mc[17]);
+            m_lastSolveTiming.hmatvec_lowrank_rank_le16 =
+                static_cast<double>(mc[18]);
+            m_lastSolveTiming.hmatvec_lowrank_rank_le32 =
+                static_cast<double>(mc[19]);
+        };
+
+        std::vector<double> projected_rhs = rhs;
+        project_many(projected_rhs);
+        std::vector<double> rhs_scale(static_cast<size_t>(nrhs), 1.0);
+        std::vector<unsigned char> row_active(static_cast<size_t>(nrhs), 0);
+        std::vector<int> active;
+        iters_out.assign(static_cast<size_t>(nrhs), maxit);
+        for (int row = 0; row < nrhs; ++row) {
+            rhs_scale[static_cast<size_t>(row)] = std::sqrt(std::max(
+                0.0, row_dot(projected_rhs, projected_rhs, row, row)));
+            if (rhs_scale[static_cast<size_t>(row)] > 0.0) {
+                const double inverse = 1.0/rhs_scale[static_cast<size_t>(row)];
+                for (int face = 0; face < n_face; ++face)
+                    projected_rhs[static_cast<size_t>(row)*n_face+face] *= inverse;
+                row_active[static_cast<size_t>(row)] = 1;
+                active.push_back(row);
+            }
+            else
+                iters_out[static_cast<size_t>(row)] = 0;
+        }
+
+        std::vector<double> solutions(total, 0.0);
+        if (x0)
+            for (int row : active)
+                for (int face = 0; face < n_face; ++face)
+                    solutions[static_cast<size_t>(row)*n_face+face] =
+                        (*x0)[static_cast<size_t>(row)*n_face+face] /
+                        rhs_scale[static_cast<size_t>(row)];
+        project_many(solutions);
+        std::vector<double> applied, residual(total, 0.0), zvec(total, 0.0),
+            pvec(total, 0.0), apvec;
+        timed_apply(solutions, applied);
+        for (size_t index = 0; index < total; ++index)
+            residual[index] = projected_rhs[index]-applied[index];
+
+        // The projected RHS/initial state, constrained system rows, and
+        // projected mass-Riesz output keep constrained entries exactly zero.
+        // The scalar recurrences therefore preserve the constraint without a
+        // full-vector projection after every update or true-residual refresh.
+
+        std::vector<int> remaining;
+        for (int row : active) {
+            const double norm = std::sqrt(std::max(
+                0.0, row_dot(residual, residual, row, row)));
+            if (norm <= tol) {
+                iters_out[static_cast<size_t>(row)] = 0;
+                row_active[static_cast<size_t>(row)] = 0;
+                std::fill(residual.begin()+static_cast<size_t>(row)*n_face,
+                          residual.begin()+static_cast<size_t>(row+1)*n_face,
+                          0.0);
+            }
+            else
+                remaining.push_back(row);
+        }
+        active.swap(remaining);
+        std::vector<double> rho(static_cast<size_t>(nrhs), 0.0);
+        if (!active.empty()) {
+            timed_precondition(residual, zvec, active);
+            pvec = zvec;
+            for (int row : active)
+                rho[static_cast<size_t>(row)] =
+                    row_dot(residual, zvec, row, row);
+        }
+
+        auto restart_from_true_residual = [&](int completed_iterations) {
+            timed_apply(solutions, applied);
+            for (size_t index = 0; index < total; ++index)
+                residual[index] = projected_rhs[index]-applied[index];
+            remaining.clear();
+            for (int row : active) {
+                const double norm = std::sqrt(std::max(
+                    0.0, row_dot(residual, residual, row, row)));
+                if (norm <= tol) {
+                    iters_out[static_cast<size_t>(row)] = completed_iterations;
+                    row_active[static_cast<size_t>(row)] = 0;
+                    std::fill(
+                        residual.begin()+static_cast<size_t>(row)*n_face,
+                        residual.begin()+static_cast<size_t>(row+1)*n_face,
+                        0.0);
+                }
+                else
+                    remaining.push_back(row);
+            }
+            active.swap(remaining);
+            if (active.empty()) return true;
+            timed_precondition(residual, zvec, active);
+            pvec = zvec;
+            std::fill(rho.begin(), rho.end(), 0.0);
+            for (int row : active)
+                rho[static_cast<size_t>(row)] =
+                    row_dot(residual, zvec, row, row);
+            return false;
+        };
+
+        constexpr int refresh_period = 1000;
+        constexpr int max_breakdown_restarts = 1;
+        int consecutive_breakdown_restarts = 0;
+        int completed_iterations = 0;
+        bool scalar_fallback = false;
+        for (int iteration = 0; iteration < maxit && !active.empty(); ++iteration) {
+            timed_apply(pvec, apvec);
+            std::vector<double> alpha(static_cast<size_t>(nrhs), 0.0);
+            bool breakdown = false;
+            for (int row : active) {
+                const double denominator = row_dot(pvec, apvec, row, row);
+                if (denominator == 0.0 || !std::isfinite(denominator)) {
+                    breakdown = true;
+                    break;
+                }
+                alpha[static_cast<size_t>(row)] =
+                    rho[static_cast<size_t>(row)]/denominator;
+            }
+            if (breakdown) {
+                if (++consecutive_breakdown_restarts > max_breakdown_restarts) {
+                    scalar_fallback = true;
+                    break;
+                }
+                if (restart_from_true_residual(iteration)) break;
+                continue;
+            }
+            {
+                const auto started = Clock::now();
+                ngcore::RegionTaskManager rtm(radia::GetMaxThreads());
+                ngcore::ParallelFor(ngcore::IntRange(total), [&](size_t index) {
+                    const int row = static_cast<int>(index/n_face);
+                    if (!row_active[static_cast<size_t>(row)]) return;
+                    const double step = alpha[static_cast<size_t>(row)];
+                    solutions[index] += step*pvec[index];
+                    residual[index] -= step*apvec[index];
+                });
+                m_lastSolveTiming.pcg_update_s +=
+                    std::chrono::duration<double>(Clock::now()-started).count();
+            }
+            completed_iterations = iteration+1;
+
+            bool candidate = ((iteration+1)%refresh_period) == 0;
+            for (int row : active)
+                candidate = candidate || std::sqrt(std::max(
+                    0.0, row_dot(residual, residual, row, row))) <= tol;
+            if (candidate) {
+                if (restart_from_true_residual(iteration+1)) break;
+                continue;
+            }
+
+            timed_precondition(residual, zvec, active);
+            std::vector<double> rho_new(static_cast<size_t>(nrhs), 0.0);
+            std::vector<double> beta(static_cast<size_t>(nrhs), 0.0);
+            bool residual_breakdown = false;
+            for (int row : active) {
+                rho_new[static_cast<size_t>(row)] =
+                    row_dot(residual, zvec, row, row);
+                if (rho_new[static_cast<size_t>(row)] == 0.0 ||
+                        rho[static_cast<size_t>(row)] == 0.0 ||
+                        !std::isfinite(rho_new[static_cast<size_t>(row)]) ||
+                        !std::isfinite(rho[static_cast<size_t>(row)])) {
+                    residual_breakdown = true;
+                    break;
+                }
+                beta[static_cast<size_t>(row)] =
+                    rho_new[static_cast<size_t>(row)]/
+                    rho[static_cast<size_t>(row)];
+            }
+            if (residual_breakdown) {
+                if (++consecutive_breakdown_restarts > max_breakdown_restarts) {
+                    scalar_fallback = true;
+                    break;
+                }
+                if (restart_from_true_residual(iteration+1)) break;
+                continue;
+            }
+            {
+                const auto started = Clock::now();
+                ngcore::RegionTaskManager rtm(radia::GetMaxThreads());
+                ngcore::ParallelFor(ngcore::IntRange(total), [&](size_t index) {
+                    const int row = static_cast<int>(index/n_face);
+                    pvec[index] = row_active[static_cast<size_t>(row)]
+                        ? zvec[index] + beta[static_cast<size_t>(row)]*pvec[index]
+                        : 0.0;
+                });
+                m_lastSolveTiming.pcg_update_s +=
+                    std::chrono::duration<double>(Clock::now()-started).count();
+            }
+            rho.swap(rho_new);
+            consecutive_breakdown_restarts = 0;
+        }
+
+        if (scalar_fallback && !active.empty()) {
+            // Preserve every batched update as the seed if a recurrence
+            // becomes zero or non-finite, then hand only the unfinished rows
+            // to the mature scalar true-residual CG path.  ACA-compressed
+            // systems may have roundoff-scale negative Rayleigh quotients;
+            // those remain valid finite CG steps, matching the scalar path.
+            collect_hmatvec_stats();
+            SolveTiming combined = m_lastSolveTiming;
+            const int remaining_iterations = std::max(
+                1, maxit-completed_iterations);
+            auto add_timing = [](SolveTiming& target, const SolveTiming& source) {
+                target.factor_s += source.factor_s;
+                target.prec_s += source.prec_s;
+                target.bx_s += source.bx_s;
+                target.gmatvec_s += source.gmatvec_s;
+                target.btx_s += source.btx_s;
+                target.mass_s += source.mass_s;
+                target.dot_s += source.dot_s;
+                target.ax_total_s += source.ax_total_s;
+                target.ax_other_s += source.ax_other_s;
+                target.pcg_update_s += source.pcg_update_s;
+                target.hmatvec_total_s += source.hmatvec_total_s;
+                target.hmatvec_zero_s += source.hmatvec_zero_s;
+                target.hmatvec_permute_s += source.hmatvec_permute_s;
+                target.hmatvec_leaf_s += source.hmatvec_leaf_s;
+                target.hmatvec_reduce_s += source.hmatvec_reduce_s;
+                target.hmatvec_meta_s += source.hmatvec_meta_s;
+                target.hmatvec_lowrank_flop_est += source.hmatvec_lowrank_flop_est;
+                target.hmatvec_dense_flop_est += source.hmatvec_dense_flop_est;
+                target.hmatvec_calls += source.hmatvec_calls;
+                target.hmatvec_lowrank_leaves += source.hmatvec_lowrank_leaves;
+                target.hmatvec_dense_leaves += source.hmatvec_dense_leaves;
+                target.hmatvec_mirrored_upper_leaves +=
+                    source.hmatvec_mirrored_upper_leaves;
+                target.hmatvec_diagonal_leaves += source.hmatvec_diagonal_leaves;
+                target.hmatvec_skipped_lower_leaves +=
+                    source.hmatvec_skipped_lower_leaves;
+                target.hmatvec_last_nd = source.hmatvec_last_nd;
+                target.hmatvec_last_nthr = source.hmatvec_last_nthr;
+                target.hmatvec_lowrank_upper_leaves +=
+                    source.hmatvec_lowrank_upper_leaves;
+                target.hmatvec_dense_upper_leaves +=
+                    source.hmatvec_dense_upper_leaves;
+                target.hmatvec_inactive_skipped_leaves +=
+                    source.hmatvec_inactive_skipped_leaves;
+                target.hmatvec_lowrank_directions +=
+                    source.hmatvec_lowrank_directions;
+                target.hmatvec_dense_directions +=
+                    source.hmatvec_dense_directions;
+                target.hmatvec_gemm_calls += source.hmatvec_gemm_calls;
+                target.hmatvec_lowrank_rank_sum +=
+                    source.hmatvec_lowrank_rank_sum;
+                target.hmatvec_lowrank_rank_max = std::max(
+                    target.hmatvec_lowrank_rank_max,
+                    source.hmatvec_lowrank_rank_max);
+                target.hmatvec_lowrank_rank_le4 +=
+                    source.hmatvec_lowrank_rank_le4;
+                target.hmatvec_lowrank_rank_le8 +=
+                    source.hmatvec_lowrank_rank_le8;
+                target.hmatvec_lowrank_rank_le16 +=
+                    source.hmatvec_lowrank_rank_le16;
+                target.hmatvec_lowrank_rank_le32 +=
+                    source.hmatvec_lowrank_rank_le32;
+                target.apply_count += source.apply_count;
+                target.prec_count += source.prec_count;
+                target.dot_count += source.dot_count;
+                target.mass_riesz_local_blocks = std::max(
+                    target.mass_riesz_local_blocks,
+                    source.mass_riesz_local_blocks);
+                target.mass_riesz_max_block = std::max(
+                    target.mass_riesz_max_block,
+                    source.mass_riesz_max_block);
+            };
+            for (int row : active) {
+                const auto offset = static_cast<size_t>(row)*n_face;
+                std::vector<double> one_rhs(
+                    projected_rhs.begin()+offset,
+                    projected_rhs.begin()+offset+n_face);
+                std::vector<double> seed(
+                    solutions.begin()+offset,
+                    solutions.begin()+offset+n_face);
+                int scalar_iterations = 0;
+                std::vector<double> solution = SolveLinearMaterial(
+                    m_operatorBIndptr, m_operatorBIndices, m_operatorBData,
+                    n_face, m_operatorMassI, m_operatorMassJ, m_operatorMassV,
+                    inv_chi, prec, one_rhs, tol, remaining_iterations,
+                    scalar_iterations, /*mass_riesz=*/true,
+                    /*symmetric=*/true, &seed, nullptr, nullptr, nullptr, 0);
+                add_timing(combined, m_lastSolveTiming);
+                iters_out[static_cast<size_t>(row)] =
+                    completed_iterations+scalar_iterations;
+                std::copy(solution.begin(), solution.end(),
+                          solutions.begin()+offset);
+            }
+            m_lastSolveTiming = combined;
+        }
+
+        for (int row = 0; row < nrhs; ++row)
+            for (int face = 0; face < n_face; ++face)
+                solutions[static_cast<size_t>(row)*n_face+face] *=
+                    rhs_scale[static_cast<size_t>(row)];
+        projection_s = std::chrono::duration<double>(
+            Clock::now()-solve_started).count();
+        m_lastSolveTiming.total_s = projection_s;
+        if (!scalar_fallback) collect_hmatvec_stats();
+        return solutions;
+    }
     auto block_gram = [&](const std::vector<double>& left,
                           const std::vector<double>& right,
                           const std::vector<int>& rows) {
@@ -10885,6 +11657,8 @@ std::vector<std::pair<std::string, double>> RadHACApKChargeGram::LastSolveTiming
         {"solve_ax_total_s", t.ax_total_s},
         {"solve_ax_other_s", t.ax_other_s},
         {"solve_pcg_update_s", t.pcg_update_s},
+        {"mass_riesz_local_blocks", (double)t.mass_riesz_local_blocks},
+        {"mass_riesz_max_block", (double)t.mass_riesz_max_block},
         {"solve_apply_count", (double)t.apply_count},
         {"solve_prec_count", (double)t.prec_count},
         {"solve_dot_count", (double)t.dot_count},
@@ -10904,6 +11678,18 @@ std::vector<std::pair<std::string, double>> RadHACApKChargeGram::LastSolveTiming
         {"hmatvec_skipped_lower_leaves", t.hmatvec_skipped_lower_leaves},
         {"hmatvec_last_nd", t.hmatvec_last_nd},
         {"hmatvec_last_nthr", t.hmatvec_last_nthr},
+        {"hmatvec_lowrank_upper_leaves", t.hmatvec_lowrank_upper_leaves},
+        {"hmatvec_dense_upper_leaves", t.hmatvec_dense_upper_leaves},
+        {"hmatvec_inactive_skipped_leaves", t.hmatvec_inactive_skipped_leaves},
+        {"hmatvec_lowrank_directions", t.hmatvec_lowrank_directions},
+        {"hmatvec_dense_directions", t.hmatvec_dense_directions},
+        {"hmatvec_gemm_calls", t.hmatvec_gemm_calls},
+        {"hmatvec_lowrank_rank_sum", t.hmatvec_lowrank_rank_sum},
+        {"hmatvec_lowrank_rank_max", t.hmatvec_lowrank_rank_max},
+        {"hmatvec_lowrank_rank_le4", t.hmatvec_lowrank_rank_le4},
+        {"hmatvec_lowrank_rank_le8", t.hmatvec_lowrank_rank_le8},
+        {"hmatvec_lowrank_rank_le16", t.hmatvec_lowrank_rank_le16},
+        {"hmatvec_lowrank_rank_le32", t.hmatvec_lowrank_rank_le32},
     };
 }
 

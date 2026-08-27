@@ -7,6 +7,23 @@ crystallized as its own package.
 
 ## [Unreleased]
 
+## [1.4.46] - 2026-08-27
+
+- cubit: added a reusable Nastran consumer gate that verifies the exact BDF
+  digest, dimension, element order, counts, bounding box, retained imported
+  mesh, material assignment, and optional set semantics without confusing a
+  downstream importer limitation with an exporter defect.
+- cubit: synchronized executable knowledge with the solver-neutral
+  `export nastran_bdf` command and retained `export jmag_nastran` only as an
+  explicit legacy-journal compatibility path.
+
+## [1.4.45] - 2026-08-27
+
+- streamfunction: documented and exposed the checked ACA QR-TSVD and Optuna
+  outer-loop workflow used by the production Stream Function Simulink block.
+- release: synchronized the executable Stream Function knowledge and tests with
+  the Radia 4.95.64 H-matrix accuracy and tuning contract.
+
 ## [1.4.44] - 2026-08-26
 
 - matlab: kept standalone `optuna_mex` commands outside the regular Radia MEX

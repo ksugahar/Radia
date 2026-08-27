@@ -402,7 +402,10 @@ def run(args):
         build_ffag_fixed_design_orbit_target_family,
         optimize_ffag_hdiv_mmm_from_design_orbits,
     )
-    from radia.topology_optimization import ngsolve_growth_topology
+    from radia.topology_optimization import (
+        ngsolve_discontinuous_element_dof_blocks,
+        ngsolve_growth_topology,
+    )
     from radia.vim._vim import build_charge_gram
 
     ng.SetNumThreads(args.threads)
@@ -860,6 +863,20 @@ def run(args):
         manufactured_target["known_target_active_set_recovered"] = bool(
             np.array_equal(result.active_elements, known_target_active))
     gram_stats = dict(gram.stats())
+    element_dofs = ngsolve_discontinuous_element_dof_blocks(fes)
+    final_active_dofs = np.concatenate([
+        element_dofs[index]
+        for index in np.flatnonzero(result.active_elements)
+    ]).astype(np.int32)
+    final_active_mask = np.zeros(fes.ndof, dtype=bool)
+    final_active_mask[final_active_dofs] = True
+    gram.set_configured_constraints(
+        np.flatnonzero(~final_active_mask).astype(np.int32),
+        preserve_existing=False)
+    active_hmatrix_stats = {
+        str(key): int(value)
+        for key, value in gram.configured_active_hmatrix_stats().items()
+    }
     report = {
         "schema": "radia.ffag-fixed-one-pass-c-yoke/v1",
         "status": "pass" if all(gates.values()) else "fail",
@@ -1040,6 +1057,7 @@ def run(args):
             "leaf_size": args.leaf_size,
             "compression": float(gram_stats.get("compression", 1.0)),
             "max_rank": int(gram_stats.get("max_rank", 0)),
+            "active_principal_submatrix": active_hmatrix_stats,
         },
         "linear_solver": {
             "tolerance": args.solve_tolerance,

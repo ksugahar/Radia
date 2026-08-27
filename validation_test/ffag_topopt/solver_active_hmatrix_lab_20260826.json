@@ -1,0 +1,271 @@
+{
+  "schema": "radia.ffag-hdiv-active-hmatrix-performance/v1",
+  "status": "pass-with-remote-remeasurement-pending",
+  "provenance": {
+    "machine": "lab",
+    "python": "3.12.10",
+    "ngsolve": "6.2.2606",
+    "ngsolve_threads": 16,
+    "repository_base_head": "4db0fb7ac",
+    "worktree_dirty_during_measurement": true,
+    "paired_diagnostic_result": "C:/temp/ffag_active_hmatrix_same_process_20260825.json",
+    "measurement_scope": "same process, same ChargeGram, same RHS; diagnostic-only pruning toggle removed from the production source"
+  },
+  "problem": {
+    "element_family": "HEX",
+    "hdiv_family": "BDM1",
+    "elements": 1180,
+    "dofs": 42480,
+    "active_elements": 720,
+    "active_dofs": 25920,
+    "hmatrix_eps": 1e-6,
+    "hmatrix_leafsize": 64,
+    "hmatrix_eta": 2.0,
+    "charge_gram_build_s": 67.49483449998661
+  },
+  "active_principal_hmatrix": {
+    "active_charges": 17376,
+    "total_charges": 26000,
+    "active_upper_leaves": 1155,
+    "total_upper_leaves": 1805
+  },
+  "operator_apply": {
+    "one_rhs": {
+      "unpruned_median_s": 0.012945900001795962,
+      "pruned_median_s": 0.009219600004144013,
+      "speedup": 1.404171547136216
+    },
+    "six_rhs": {
+      "unpruned_median_s": 0.0223083000164479,
+      "pruned_median_s": 0.01735999999800697,
+      "speedup": 1.2850403236756351
+    },
+    "thirty_two_rhs": {
+      "unpruned_median_s": 0.06221100001130253,
+      "pruned_median_s": 0.05153149997931905,
+      "speedup": 1.2072421729673974
+    },
+    "active_relative_error": 0.0,
+    "inactive_output_norm": 0.0
+  },
+  "mass_riesz_pcg": {
+    "one_rhs": {
+      "unpruned_s": 19.51102879998507,
+      "pruned_s": 17.73008619999746,
+      "speedup": 1.100447486825409,
+      "iterations": 454,
+      "unpruned_last_rhs_gram_s": 5.4794820000000035,
+      "pruned_last_rhs_gram_s": 3.817754700000002,
+      "pruned_last_rhs_preconditioner_s": 4.394176300000005
+    },
+    "six_rhs": {
+      "unpruned_s": 90.66031669999938,
+      "pruned_s": 77.25413879999542,
+      "speedup": 1.1735334586372317,
+      "iterations": [604, 617, 596, 553, 551, 592],
+      "unpruned_last_rhs_gram_s": 7.134723600000003,
+      "pruned_last_rhs_gram_s": 4.959275199999997,
+      "pruned_last_rhs_preconditioner_s": 5.795829200000005
+    },
+    "pruned_vs_unpruned_solution_relative_error": 0.0,
+    "inactive_solution_norm": 0.0,
+    "smooth_known_solution_relative_error": 9.483097220975646e-8
+  },
+  "local_mass_riesz": {
+    "policy": "Use TaskManager-parallel exact dense Cholesky for mass-graph components of at most 256 DoFs; retain PARDISO for a connected or larger conforming mass.",
+    "local_block_count_with_active_constraints": 17280,
+    "maximum_local_block_dofs": 36,
+    "one_rhs": {
+      "pardiso_and_unused_diagonal_baseline_s": 17.73008619999746,
+      "local_mass_and_no_unused_diagonal_s": 4.660101300018141,
+      "speedup": 3.804652527936486,
+      "iterations": 459,
+      "local_mass_preconditioner_s": 0.1748011000000001,
+      "relative_residual": 9.04078148106646e-9
+    },
+    "six_rhs": {
+      "pardiso_and_unused_diagonal_baseline_s": 77.25413879999542,
+      "local_mass_and_no_unused_diagonal_s": 35.845127099979436,
+      "speedup": 2.1552131306387687,
+      "iterations": [614, 616, 595, 566, 546, 601],
+      "local_mass_preconditioner_last_rhs_s": 0.2288068999999999,
+      "relative_residual": 9.86927145870891e-9
+    },
+    "inactive_solution_norm": 0.0,
+    "continuous_hdiv_pardiso_fallback_tested": true
+  },
+  "independent_batched_mass_riesz_cg": {
+    "policy": "Use the lower-overhead scalar true-residual CG for one RHS. For multiple RHS, retain independent CG recurrences while applying B/G/B^T and the exact local mass-Riesz map to the complete row-major batch.",
+    "one_rhs": {
+      "route": "scalar",
+      "elapsed_s": 4.47422020000522,
+      "iterations": 447,
+      "speedup_vs_pre_local_mass_riesz": 3.9627209675502275,
+      "speedup_vs_first_local_mass_path": 1.0415449154721317,
+      "relative_residual": 9.296033063324846e-9,
+      "relative_known_solution_error": 4.291560286603549e-7
+    },
+    "six_rhs": {
+      "route": "independent_batched_cg",
+      "elapsed_s": 12.948182899999665,
+      "iterations": [471, 465, 447, 379, 579, 620],
+      "speedup_vs_fixed_block_pcg": 2.7683519283605706,
+      "speedup_vs_pre_local_mass_riesz": 5.966407749769847,
+      "speedup_vs_independent_scalar_solves": 2.190263036831864,
+      "independent_scalar_elapsed_s": 28.35992640000768,
+      "relative_residual": 9.92124881163507e-9,
+      "relative_known_solution_error": 4.9248814708404584e-8
+    },
+    "batched_local_mass_blocks": 1180,
+    "maximum_local_block_dofs": 36,
+    "inactive_solution_norm": 0.0,
+    "true_residual_gate_preserved": true
+  },
+  "prepared_active_batch_apply": {
+    "implementation": [
+      "Fuse charge-basis S*A*S normalization into HACApK permutation and reduction.",
+      "Pass the configured active-prefix view without copying it.",
+      "Reuse B*x and G*(B*x) work arrays throughout the batched CG solve.",
+      "Remove redundant full-vector projections while preserving exact constrained zeros algebraically.",
+      "Mask constrained input columns and inactive charge outputs so respect_constraints=True is a true principal operator."
+    ],
+    "six_rhs_direct_apply_diagnostic": {
+      "before_fused_scaling_median_s": 0.030217200023122132,
+      "after_fused_scaling_median_s": 0.0184978999895975,
+      "speedup": 1.633523837842741,
+      "active_relative_error": 0.0,
+      "inactive_output_norm": 0.0
+    },
+    "quiet_lab_final": {
+      "charge_gram_build_s": 75.95572639998863,
+      "one_rhs": {
+        "elapsed_s": 4.783704300003592,
+        "iterations": 451,
+        "relative_residual": 9.324648226772153e-9,
+        "relative_known_solution_error": 3.942698581148977e-7
+      },
+      "six_rhs": {
+        "elapsed_s": 13.561431200010702,
+        "iterations": [481, 486, 451, 389, 582, 625],
+        "relative_residual": 9.663166536170838e-9,
+        "relative_known_solution_error": 4.919345998102083e-8
+      },
+      "six_rhs_profiled": {
+        "elapsed_s": 13.678549700009171,
+        "operator_apply_s": 10.67653370000001,
+        "mass_riesz_preconditioner_s": 1.9205709000000037,
+        "hmatrix_total_s": 8.169646100257523,
+        "hmatrix_leaf_s": 7.272624300210737,
+        "hmatrix_zero_s": 0.2871696997026447,
+        "hmatrix_permute_s": 0.14662719957414083,
+        "hmatrix_reduce_s": 0.4436600001936313,
+        "hmatrix_calls": 632,
+        "hmatrix_threads": 16
+      }
+    },
+    "leaf_kernel_follow_up": {
+      "implementation": [
+        "Count only active upper leaves and expose the exact low-rank/dense direction and GEMM-call distribution through last_rhs_timings.",
+        "Benchmark a hand-written small-rank kernel and persistent MKL small-GEMM JIT against the established DGEMM path.",
+        "Remove both experimental kernels after they failed the solve-level performance gate.",
+        "Keep leaf order, thread assignment, thread-local reduction, and the established DGEMM implementation unchanged."
+      ],
+      "active_leaf_profile": {
+        "hmatrix_calls": 637,
+        "lowrank_leaves_per_call": 363,
+        "dense_leaves_per_call": 792,
+        "lowrank_directions_per_call": 726,
+        "dense_directions_per_call": 1248,
+        "gemm_calls_per_call": 2700,
+        "maximum_lowrank_rank": 173,
+        "mean_lowrank_rank": 52.611570247933884,
+        "lowrank_directions_rank_le_8_per_call": 70,
+        "lowrank_directions_rank_le_16_per_call": 276,
+        "lowrank_directions_rank_le_32_per_call": 424
+      },
+      "loaded_lab_paired_diagnostic": {
+        "pairs": 40,
+        "mkl_median_s": 0.02679719998559449,
+        "jit_median_s": 0.02646655001444742,
+        "median_paired_speedup": 1.0324305743871887,
+        "paired_speedup_q25": 0.9710900883747695,
+        "paired_speedup_q75": 1.0759063272705796,
+        "active_principal_bit_identical": true,
+        "jit_vs_mkl_relative_error": 2.6263053318672424e-15,
+        "publication_timing": false,
+        "note": "The kernel-only median was not sufficient for acceptance. The generic solve took 13.327 s and the JIT solve took 14.888 s, so JIT was removed. LAB was concurrently running unrelated validation."
+      },
+      "hdiv_aca_qr_tsvd_ab": {
+        "decision": "rejected-for-hdiv-retained-for-stream-function",
+        "baseline_basic_aca": {
+          "max_rank": 173,
+          "memory_mb": 257.2645568847656,
+          "solve_s": 13.969570100016426,
+          "relative_residual": 9.138599810781311e-9
+        },
+        "aca_plus_raw": {
+          "max_rank": 180,
+          "memory_mb": 243.4112548828125,
+          "operator_drift_vs_basic_aca": 0.0032735708663188144,
+          "solve_s": 7.873531999997795,
+          "note": "The shorter solve used a materially different operator and is not an accuracy-preserving speedup."
+        },
+        "basic_aca_qr_tsvd": [
+          {
+            "cutoff_factor_times_requested_eps": 1.0,
+            "max_rank": 127,
+            "memory_mb": 203.20596313476562,
+            "operator_drift_vs_basic_aca": 1.865131411949523e-5,
+            "solve_s": 22.060102300019935
+          },
+          {
+            "cutoff_factor_times_requested_eps": 0.2,
+            "max_rank": 151,
+            "memory_mb": 238.85678100585938,
+            "operator_drift_vs_basic_aca": 3.0670635498361118e-6,
+            "solve_s": 14.695434499997646
+          },
+          {
+            "cutoff_factor_times_requested_eps": 0.1,
+            "max_rank": 160,
+            "memory_mb": 248.2496337890625,
+            "operator_drift_vs_basic_aca": 3.7952910660813163e-6,
+            "solve_s": 16.12722819999908
+          },
+          {
+            "cutoff_factor_times_requested_eps": 0.05,
+            "max_rank": 166,
+            "memory_mb": 254.08837890625,
+            "operator_drift_vs_basic_aca": 2.0054911329412406e-7,
+            "solve_s": 16.247145200002706
+          }
+        ],
+        "measurement_limitation": "Each candidate rebuilt ACA in a separate process. Small non-monotone drift changes and near-block counts show that independent-build variation is mixed into the reported operator differences.",
+        "product_state": "HDiv uses basic ACA with no post-build QR+TSVD. The existing stream-function ACA+ plus thin-QR/small-core-TSVD implementation remains production code."
+      }
+    },
+    "verification": {
+      "focused_and_topology_regressions": 123,
+      "all_passed": true,
+      "nonzero_constrained_input_is_ignored": true,
+      "active_principal_operator_bit_identical": true,
+      "inactive_solution_norm": 0.0
+    }
+  },
+  "gates": {
+    "same_hmatrix_object_for_each_pair": true,
+    "same_rhs_for_each_pair": true,
+    "active_principal_operator_bit_identical": true,
+    "iteration_counts_identical": true,
+    "respect_constraints_false_remains_full_operator": true,
+    "diagnostic_toggle_absent_from_product_source": true,
+    "multi_rhs_krylov_mkl_jit_enabled": false,
+    "rejected_kernel_experiments_absent_from_product_source": true,
+    "hdiv_post_build_qr_tsvd_enabled": false,
+    "stream_function_aca_plus_qr_tsvd_preserved": true
+  },
+  "follow_up": {
+    "next_solver_target": "Investigate deterministic same-object factor diagnostics or private-output grouped low-rank applies; do not reintroduce per-leaf JIT or HDiv post-build QR+TSVD without a solve-level accuracy and timing win.",
+    "remote_measurement": "mdx and hibino are available again; repeat after a formal build/release and PyPI installation, without copying a local pyd."
+  }
+}

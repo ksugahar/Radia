@@ -59,9 +59,13 @@ FULL_REQUIRED_MEMBERS_V2 = {
     "matlab/radia_ih_eddy_sfun.m",
     "matlab/radia_ih_thermal_sfun.m",
     "matlab/radia_nonlinear_reactor_sfun.m",
+    "matlab/radia_streamfunction_optuna_sfun.m",
     "matlab/+radia/+simulink/ihEddySFunction.m",
     "matlab/+radia/+simulink/ihThermalSFunction.m",
     "matlab/+radia/+simulink/nonlinearReactorSFunction.m",
+    "matlab/+radia/+simulink/streamFunctionOptunaSFunction.m",
+    "matlab/+radia/+simulink/resolveStreamFunctionOptunaObjects.m",
+    "matlab/+radia/+stream/OptunaRunner.m",
     "matlab/+radia/+simulink/makeNonlinearReactorConfig.m",
     "matlab/+radia/+simulink/makeNonlinearReactorDemoConfig.m",
     "matlab/+radia/+simulink/validateNonlinearReactorConfig.m",
@@ -266,6 +270,8 @@ def _verify_level2_ih_contract(manifest: dict) -> None:
         expected_sfunctions.update({
             "matlab/radia_nonlinear_reactor_sfun.m",
             "matlab/+radia/+simulink/nonlinearReactorSFunction.m",
+            "matlab/radia_streamfunction_optuna_sfun.m",
+            "matlab/+radia/+simulink/streamFunctionOptunaSFunction.m",
         })
         if manifest.get("reactor_backend") != \
                 "matlab-level2+radia-mex-handle" or \
