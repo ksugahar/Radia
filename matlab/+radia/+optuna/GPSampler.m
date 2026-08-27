@@ -78,6 +78,15 @@ classdef GPSampler < radia.optuna.BaseSampler
             obj.IndependentSampler=radia.optuna.RandomSampler(options.Seed);
         end
 
+        function reseed_rng(obj)
+            freshSeed=radia.optuna.internal.resolveSeed([]);
+            obj.Stream=radia.optuna.internal.NumpyRandomState(freshSeed);
+            obj.IndependentSampler.reseed_rng();
+            if ~isempty(obj.PythonStudy)
+                obj.PythonStudy.sampler.reseed_rng();
+            end
+        end
+
         function searchSpace=inferRelativeSearchSpace(~,study,trial) %#ok<INUSD>
             searchSpace=radia.optuna.internal.IntersectionSearchSpace. ...
                 calculate(study,IncludePruned=false);
@@ -105,17 +114,14 @@ classdef GPSampler < radia.optuna.BaseSampler
         end
 
         function beforeTrial(obj,study,trial)
-            if obj.Backend=="upstream-python" && ...
-                    ~isempty(obj.PythonTrial) && ...
-                    obj.PythonTrialNumber==trial.Number
-                obj.attach(study);
+            obj.attach(study);
+            if obj.Backend=="upstream-python"
                 obj.preparePythonTrial(study,trial);
                 trial.setSystemAttr("gp_sampling_mode","upstream_optuna_4_9_0");
                 trial.setSystemAttr("gp_backend","upstream-python");
                 return
             end
             obj.IndependentSampler.beforeTrial(study,trial);
-            obj.attach(study);
             completed=sum(study.TrialTable.State=="COMPLETE");
             if completed<obj.NStartupTrials
                 trial.setSystemAttr("gp_sampling_mode","startup_random");

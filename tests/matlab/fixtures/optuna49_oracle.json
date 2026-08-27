@@ -1259,6 +1259,53 @@
       "x": 0.0
     }
   ],
+  "grpc_storage": {
+    "best_number": 2,
+    "close_is_none": true,
+    "complete_numbers": [
+      0,
+      2
+    ],
+    "completed": true,
+    "directions": [
+      "MINIMIZE"
+    ],
+    "duplicate_error": "DuplicatedStudyError",
+    "failed_id": 2,
+    "finished_update_error": "UpdateFinishedTrialError",
+    "n_complete": 2,
+    "n_trials": 3,
+    "param_internal": 0.5,
+    "params": {
+      "x": 0.5
+    },
+    "ready_is_none": true,
+    "remove_session_is_none": true,
+    "running_state": "RUNNING",
+    "study_id": 1,
+    "study_name": "grpc-oracle",
+    "study_system_attrs": {
+      "revision": 4
+    },
+    "study_user_attrs": {
+      "owner": "oracle"
+    },
+    "summary": {
+      "name": "grpc-oracle"
+    },
+    "template_id": 3,
+    "trial_id": 1,
+    "trial_lookup_id": 1,
+    "trial_number": 0,
+    "trial_state": "COMPLETE",
+    "trial_system_attrs": {
+      "worker": 7
+    },
+    "trial_user_attrs": {
+      "label": "first"
+    },
+    "trial_value": 1.25
+  },
   "importance": {
     "evaluator": {
       "max_depth": 16,
@@ -1473,6 +1520,118 @@
       0.028517536658926076,
       0.022332248432020623
     ]
+  },
+  "integration": {
+    "exports": {
+      "AllenNLPExecutor": {
+        "available": false,
+        "error_type": "ModuleNotFoundError"
+      },
+      "AllenNLPPruningCallback": {
+        "available": false,
+        "error_type": "ModuleNotFoundError"
+      },
+      "BoTorchSampler": {
+        "available": false,
+        "error_type": "ModuleNotFoundError"
+      },
+      "CatBoostPruningCallback": {
+        "available": false,
+        "error_type": "ModuleNotFoundError"
+      },
+      "ChainerMNStudy": {
+        "available": false,
+        "error_type": "ModuleNotFoundError"
+      },
+      "ChainerPruningExtension": {
+        "available": false,
+        "error_type": "ModuleNotFoundError"
+      },
+      "DaskStorage": {
+        "available": false,
+        "error_type": "ModuleNotFoundError"
+      },
+      "FastAIPruningCallback": {
+        "available": false,
+        "error_type": "ModuleNotFoundError"
+      },
+      "FastAIV2PruningCallback": {
+        "available": false,
+        "error_type": "ModuleNotFoundError"
+      },
+      "KerasPruningCallback": {
+        "available": false,
+        "error_type": "ModuleNotFoundError"
+      },
+      "LightGBMPruningCallback": {
+        "available": false,
+        "error_type": "ModuleNotFoundError"
+      },
+      "LightGBMTuner": {
+        "available": false,
+        "error_type": "ModuleNotFoundError"
+      },
+      "LightGBMTunerCV": {
+        "available": false,
+        "error_type": "ModuleNotFoundError"
+      },
+      "MLflowCallback": {
+        "available": false,
+        "error_type": "ModuleNotFoundError"
+      },
+      "MXNetPruningCallback": {
+        "available": false,
+        "error_type": "ModuleNotFoundError"
+      },
+      "OptunaSearchCV": {
+        "available": false,
+        "error_type": "ModuleNotFoundError"
+      },
+      "PyCmaSampler": {
+        "available": false,
+        "error_type": "ModuleNotFoundError"
+      },
+      "PyTorchIgnitePruningHandler": {
+        "available": false,
+        "error_type": "ModuleNotFoundError"
+      },
+      "PyTorchLightningPruningCallback": {
+        "available": false,
+        "error_type": "ModuleNotFoundError"
+      },
+      "ShapleyImportanceEvaluator": {
+        "available": false,
+        "error_type": "ModuleNotFoundError"
+      },
+      "SkorchPruningCallback": {
+        "available": false,
+        "error_type": "ModuleNotFoundError"
+      },
+      "TFKerasPruningCallback": {
+        "available": false,
+        "error_type": "ModuleNotFoundError"
+      },
+      "TensorBoardCallback": {
+        "available": false,
+        "error_type": "ModuleNotFoundError"
+      },
+      "TensorFlowPruningHook": {
+        "available": false,
+        "error_type": "ModuleNotFoundError"
+      },
+      "TorchDistributedTrial": {
+        "available": false,
+        "error_type": "ModuleNotFoundError"
+      },
+      "WeightsAndBiasesCallback": {
+        "available": false,
+        "error_type": "ModuleNotFoundError"
+      },
+      "XGBoostPruningCallback": {
+        "available": false,
+        "error_type": "ModuleNotFoundError"
+      }
+    }
   },
   "journal_storage": {
     "append_is_none": true,
@@ -2822,9 +2981,9 @@
   "python_version": "3.12.10",
   "qmc_warnings": {
     "asynchronous_disabled_count": 0,
-    "asynchronous_enabled_count": 0,
+    "asynchronous_enabled_count": 1,
     "independent_disabled_count": 0,
-    "independent_enabled_count": 0
+    "independent_enabled_count": 1
   },
   "random_sampler_seed_123": [
     {
@@ -3003,6 +3162,32 @@
     },
     "trial_value": 1.25,
     "upgrade_preserves_version": true
+  },
+  "retry_callback": {
+    "alias_warning": "FutureWarning",
+    "callback_warning": "ExperimentalWarning",
+    "fail_stale_is_none": true,
+    "fail_stale_warning": "ExperimentalWarning",
+    "first_intermediate": {
+      "2": 3.5
+    },
+    "first_state": "WAITING",
+    "history": [
+      0,
+      1,
+      2
+    ],
+    "n_trials": 3,
+    "original_number": 0,
+    "second_history": [
+      0,
+      1,
+      2
+    ],
+    "static_warnings": [
+      "ExperimentalWarning",
+      "ExperimentalWarning"
+    ]
   },
   "sampler_public_members": {
     "base_crossover_instantiation_error": "TypeError",
@@ -3222,6 +3407,74 @@
       "x",
       "y"
     ]
+  },
+  "sampler_reseed": {
+    "global_numpy_rng_unchanged": true,
+    "samplers": {
+      "BruteForceSampler": {
+        "calls": [],
+        "returns_none": true
+      },
+      "CmaEsSampler": {
+        "calls": [
+          "independent"
+        ],
+        "returns_none": true
+      },
+      "GPSampler": {
+        "calls": [
+          "rng",
+          "independent"
+        ],
+        "returns_none": true
+      },
+      "GridSampler": {
+        "calls": [
+          "rng"
+        ],
+        "returns_none": true
+      },
+      "NSGAIIISampler": {
+        "calls": [
+          "independent",
+          "rng"
+        ],
+        "returns_none": true
+      },
+      "NSGAIISampler": {
+        "calls": [
+          "independent",
+          "rng"
+        ],
+        "returns_none": true
+      },
+      "PartialFixedSampler": {
+        "calls": [
+          "base"
+        ],
+        "returns_none": true
+      },
+      "QMCSampler": {
+        "calls": [
+          "independent"
+        ],
+        "returns_none": true
+      },
+      "RandomSampler": {
+        "calls": [
+          "rng"
+        ],
+        "returns_none": true
+      },
+      "TPESampler": {
+        "calls": [
+          "rng",
+          "independent"
+        ],
+        "returns_none": true
+      }
+    },
+    "seed_none_is_nondeterministic": true
   },
   "sampler_seed_defaults": {
     "constructors": {
@@ -3530,6 +3783,32 @@
     "pruned_value": 2.5
   },
   "terminator": {
+    "advanced": {
+      "results": {
+        "emmr": {
+          "value": 0.4712573846713911,
+          "warning": "ExperimentalWarning"
+        },
+        "regret_bound": {
+          "value": 0.07502874449977122,
+          "warning": "ExperimentalWarning"
+        }
+      },
+      "values": [
+        1.2,
+        0.8,
+        0.6,
+        0.7,
+        1.1
+      ],
+      "x": [
+        0.1,
+        0.3,
+        0.5,
+        0.7,
+        0.9
+      ]
+    },
     "cross_validation_error": 0.074535599249993,
     "cross_validation_rows": [
       [
@@ -3654,7 +3933,7 @@
   "tpe_group": {
     "group_warning_count": 0,
     "independent_warning_disabled_count": 0,
-    "independent_warning_enabled_count": 0,
+    "independent_warning_enabled_count": 1,
     "sequence": [
       {
         "branch": "right",
@@ -4153,6 +4432,183 @@
         "x": 0.125,
         "y": 1.75
       }
+    ]
+  },
+  "visualization": {
+    "backends": {
+      "matplotlib": {
+        "functions": {
+          "plot_contour": {
+            "available": true,
+            "module": "matplotlib.axes._axes",
+            "type": "Axes"
+          },
+          "plot_edf": {
+            "available": true,
+            "module": "matplotlib.axes._axes",
+            "type": "Axes"
+          },
+          "plot_hypervolume_history": {
+            "available": true,
+            "module": "matplotlib.axes._axes",
+            "type": "Axes"
+          },
+          "plot_intermediate_values": {
+            "available": true,
+            "module": "matplotlib.axes._axes",
+            "type": "Axes"
+          },
+          "plot_optimization_history": {
+            "available": true,
+            "module": "matplotlib.axes._axes",
+            "type": "Axes"
+          },
+          "plot_parallel_coordinate": {
+            "available": true,
+            "module": "matplotlib.axes._axes",
+            "type": "Axes"
+          },
+          "plot_param_importances": {
+            "available": true,
+            "module": "matplotlib.axes._axes",
+            "type": "Axes"
+          },
+          "plot_pareto_front": {
+            "available": true,
+            "module": "matplotlib.axes._axes",
+            "type": "Axes"
+          },
+          "plot_rank": {
+            "available": true,
+            "module": "matplotlib.axes._axes",
+            "type": "Axes"
+          },
+          "plot_slice": {
+            "available": true,
+            "module": "numpy",
+            "type": "ndarray"
+          },
+          "plot_terminator_improvement": {
+            "available": true,
+            "module": "matplotlib.axes._axes",
+            "type": "Axes"
+          },
+          "plot_timeline": {
+            "available": true,
+            "module": "matplotlib.axes._axes",
+            "type": "Axes"
+          }
+        },
+        "is_available": true
+      },
+      "plotly": {
+        "functions": {
+          "plot_contour": {
+            "available": true,
+            "module": "plotly.graph_objs._figure",
+            "type": "Figure"
+          },
+          "plot_edf": {
+            "available": true,
+            "module": "plotly.graph_objs._figure",
+            "type": "Figure"
+          },
+          "plot_hypervolume_history": {
+            "available": true,
+            "module": "plotly.graph_objs._figure",
+            "type": "Figure"
+          },
+          "plot_intermediate_values": {
+            "available": true,
+            "module": "plotly.graph_objs._figure",
+            "type": "Figure"
+          },
+          "plot_optimization_history": {
+            "available": true,
+            "module": "plotly.graph_objs._figure",
+            "type": "Figure"
+          },
+          "plot_parallel_coordinate": {
+            "available": true,
+            "module": "plotly.graph_objs._figure",
+            "type": "Figure"
+          },
+          "plot_param_importances": {
+            "available": true,
+            "module": "plotly.graph_objs._figure",
+            "type": "Figure"
+          },
+          "plot_pareto_front": {
+            "available": true,
+            "module": "plotly.graph_objs._figure",
+            "type": "Figure"
+          },
+          "plot_rank": {
+            "available": true,
+            "module": "plotly.graph_objs._figure",
+            "type": "Figure"
+          },
+          "plot_slice": {
+            "available": true,
+            "module": "plotly.graph_objs._figure",
+            "type": "Figure"
+          },
+          "plot_terminator_improvement": {
+            "available": true,
+            "module": "plotly.graph_objs._figure",
+            "type": "Figure"
+          },
+          "plot_timeline": {
+            "available": true,
+            "module": "plotly.graph_objs._figure",
+            "type": "Figure"
+          }
+        },
+        "is_available": true
+      }
+    },
+    "multi_values": [
+      [
+        0.0,
+        4.0
+      ],
+      [
+        1.0,
+        3.0
+      ],
+      [
+        2.0,
+        2.0
+      ],
+      [
+        3.0,
+        1.0
+      ],
+      [
+        4.0,
+        0.0
+      ]
+    ],
+    "single_values": [
+      4.0,
+      1.0,
+      0.0,
+      1.0,
+      4.0
+    ],
+    "single_x": [
+      0.0,
+      0.25,
+      0.5,
+      0.75,
+      1.0
+    ],
+    "single_y": [
+      1,
+      2,
+      3,
+      4,
+      5
     ]
   }
 }
