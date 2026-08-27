@@ -1,4 +1,90 @@
 {
+  "artifacts": {
+    "artifact_id": "12345678-1234-5678-1234-567812345678",
+    "backoff_body": [
+      114,
+      101,
+      116,
+      114,
+      121,
+      45,
+      98,
+      111,
+      100,
+      121
+    ],
+    "backoff_remove_error": "ArtifactNotFound",
+    "boto_open": [
+      99,
+      108,
+      111,
+      117,
+      100,
+      45,
+      98,
+      121,
+      116,
+      101,
+      115
+    ],
+    "boto_written": [
+      117,
+      112,
+      100,
+      97,
+      116,
+      101,
+      100
+    ],
+    "downloaded": [
+      97,
+      114,
+      116,
+      105,
+      102,
+      97,
+      99,
+      116,
+      45,
+      98,
+      121,
+      116,
+      101,
+      115,
+      0,
+      255
+    ],
+    "existing_download_error": "FileExistsError",
+    "gcs_open": [
+      99,
+      108,
+      111,
+      117,
+      100,
+      45,
+      98,
+      121,
+      116,
+      101,
+      115
+    ],
+    "gcs_written": [
+      117,
+      112,
+      100,
+      97,
+      116,
+      101,
+      100
+    ],
+    "metadata": {
+      "artifact_id": "12345678-1234-5678-1234-567812345678",
+      "encoding": null,
+      "filename": "oracle.txt",
+      "mimetype": "text/plain"
+    },
+    "traversal_error": "ValueError"
+  },
   "base_components": {
     "construction_errors": {
       "pruner": "TypeError",
@@ -3075,9 +3161,25 @@
     "pruned_value": 2.5
   },
   "terminator": {
+    "cross_validation_error": 0.074535599249993,
+    "cross_validation_rows": [
+      [
+        0.7,
+        0.8,
+        0.9
+      ],
+      [
+        0.5,
+        0.55,
+        0.6
+      ]
+    ],
     "max_trials_callback_count": 3,
+    "median_cached": 0.4,
+    "median_error": 0.4,
     "remaining_maximize": 1.0,
     "remaining_minimize": 1.0,
+    "static_error": 1.25,
     "terminator_trial_count": 5,
     "terminator_values": [
       5.0,

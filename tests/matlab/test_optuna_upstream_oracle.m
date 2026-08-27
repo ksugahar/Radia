@@ -690,6 +690,43 @@ end
 
 function testTerminationContractsMatchUpstream(testCase)
 expected=testCase.TestData.Oracle.terminator;
+for name=["BaseErrorEvaluator","BaseImprovementEvaluator","BaseTerminator"]
+    metadata=meta.class.fromName("radia.optuna."+name);
+    verifyTrue(testCase,metadata.Abstract,name);
+end
+
+cvStudy=radia.optuna.Study(Directions="maximize",AutoSave=false);
+rows=double(expected.cross_validation_rows);
+for index=1:size(rows,1)
+    trial=cvStudy.ask();
+    radia.optuna.report_cross_validation_scores(trial,rows(index,:));
+    cvStudy.tell(trial,mean(rows(index,:)));
+end
+cvEvaluator=radia.optuna.CrossValidationErrorEvaluator();
+verifyEqual(testCase,cvEvaluator.evaluate( ...
+    cvStudy.get_trials(),cvStudy.direction()), ...
+    double(expected.cross_validation_error),AbsTol=1e-15);
+trial=cvStudy.ask();
+verifyError(testCase,@()radia.optuna.report_cross_validation_scores( ...
+    trial,1),"radia:optuna:CrossValidationScores");
+cvStudy.tell(trial,State="FAIL");
+
+staticEvaluator=radia.optuna.StaticErrorEvaluator(1.25);
+verifyEqual(testCase,staticEvaluator.evaluate([], ...
+    radia.optuna.StudyDirection.MINIMIZE),double(expected.static_error));
+
+medianEvaluator=radia.optuna.MedianErrorEvaluator( ...
+    radia.optuna.BestValueStagnationEvaluator(5), ...
+    WarmUpTrials=1,NInitialTrials=3,ThresholdRatio=0.1);
+medianValues=[5,4,4.5,4.2];
+medianTrials=arrayfun(@(index)radia.optuna.create_trial( ...
+    value=medianValues(index)),1:4);
+verifyEqual(testCase,medianEvaluator.evaluate(medianTrials,"minimize"), ...
+    double(expected.median_error));
+verifyEqual(testCase,medianEvaluator.evaluate( ...
+    radia.optuna.create_trial(value=100),"minimize"), ...
+    double(expected.median_cached));
+
 minimize=radia.optuna.Study(AutoSave=false);
 for value=[5,4,4.5,4.2]
     trial=minimize.ask(); minimize.tell(trial,value);
@@ -722,6 +759,66 @@ terminated.optimize(@(trial)values(trial.Number+1),6, ...
 verifyEqual(testCase,height(terminated.TrialTable), ...
     double(expected.terminator_trial_count));
 verifyEqual(testCase,terminated.TrialTable.Value,values');
+end
+
+function testArtifactPublicContractMatchesUpstream(testCase)
+expected=testCase.TestData.Oracle.artifacts;
+tempDirectory=string(tempname("C:\temp"));
+mkdir(tempDirectory);
+cleanup=onCleanup(@()rmdir(tempDirectory,"s"));
+source=fullfile(tempDirectory,"oracle.txt");
+sourceBytes=uint8([97,114,116,105,102,97,99,116,45,98,121,116,101,115,0,255]);
+radia.optuna.internal.ArtifactIO.writeFile(source,sourceBytes,false);
+store=radia.optuna.FileSystemArtifactStore(tempDirectory);
+study=radia.optuna.Study(AutoSave=false);
+artifactId=radia.optuna.upload_artifact( ...
+    artifact_store=store,file_path=source,study_or_trial=study);
+verifyEqual(testCase,strlength(artifactId),strlength(string(expected.artifact_id)));
+metadata=radia.optuna.get_all_artifact_meta(study);
+verifyEqual(testCase,numel(metadata),1);
+verifyEqual(testCase,metadata.filename,string(expected.metadata.filename));
+verifyEqual(testCase,metadata.mimetype,string(expected.metadata.mimetype));
+verifyTrue(testCase,ismissing(metadata.encoding));
+destination=fullfile(tempDirectory,"downloaded.txt");
+radia.optuna.download_artifact(artifact_store=store, ...
+    file_path=destination,artifact_id=artifactId);
+verifyEqual(testCase,radia.optuna.internal.ArtifactIO.readFile(destination), ...
+    reshape(uint8(expected.downloaded),[],1));
+verifyEqual(testCase,string(expected.existing_download_error),"FileExistsError");
+verifyError(testCase,@()radia.optuna.download_artifact( ...
+    artifact_store=store,file_path=destination,artifact_id=artifactId), ...
+    "radia:optuna:ArtifactFileExists");
+verifyEqual(testCase,string(expected.traversal_error),"ValueError");
+verifyError(testCase,@()store.open_reader("../outside"), ...
+    "radia:optuna:ArtifactId");
+
+backoff=radia.optuna.Backoff(store,MaxRetries=2, ...
+    MinDelay=1e-9,MaxDelay=2e-9);
+backoff.write("backoff",uint8(expected.backoff_body));
+verifyEqual(testCase,backoff.open_reader("backoff"), ...
+    reshape(uint8(expected.backoff_body),[],1));
+verifyEqual(testCase,string(expected.backoff_remove_error),"ArtifactNotFound");
+verifyError(testCase,@()backoff.remove("backoff"), ...
+    "radia:optuna:ArtifactNotFound");
+
+botoClient=struct( ...
+    "get_object",@(~,~)reshape(uint8(expected.boto_open),[],1), ...
+    "upload_fileobj",@(~,~,~)[],"delete_object",@(~,~)[]);
+boto=radia.optuna.Boto3ArtifactStore("bucket",botoClient);
+verifyEqual(testCase,boto.open_reader("cloud"), ...
+    reshape(uint8(expected.boto_open),[],1));
+verifyWarningFree(testCase,@()boto.write("cloud",uint8(expected.boto_written)));
+verifyWarningFree(testCase,@()boto.remove("cloud"));
+
+gcsClient=struct( ...
+    "get_blob",@(~,~)reshape(uint8(expected.gcs_open),[],1), ...
+    "upload_blob",@(~,~,~)[],"delete_blob",@(~,~)[]);
+gcs=radia.optuna.GCSArtifactStore("bucket",gcsClient);
+verifyEqual(testCase,gcs.open_reader("cloud"), ...
+    reshape(uint8(expected.gcs_open),[],1));
+verifyWarningFree(testCase,@()gcs.write("cloud",uint8(expected.gcs_written)));
+verifyWarningFree(testCase,@()gcs.remove("cloud"));
+clear cleanup
 end
 
 function testRandomSamplerSeededSequence(testCase)
