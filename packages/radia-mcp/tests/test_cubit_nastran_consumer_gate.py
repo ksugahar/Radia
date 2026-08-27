@@ -156,6 +156,18 @@ def test_nastran_consumer_mcp_wrapper_and_invalid_input_contract():
     assert "producer must be an object" in invalid["error"]
 
 
+def test_nastran_consumer_contract_rejects_fractional_integer_fields():
+    summary = _summary()
+    summary["producer"]["order"] = 1.5
+
+    try:
+        evaluate_nastran_consumer_contract(summary)
+    except ValueError as exc:
+        assert "producer.order must be a positive integer" in str(exc)
+    else:
+        raise AssertionError("fractional order was silently truncated")
+
+
 def test_nastran_mcp_knowledge_uses_tool_neutral_command_and_gate():
     docs = cubit_docs("nastran")
     resource = cubit_export_decision_guide()

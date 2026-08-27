@@ -5,11 +5,19 @@ All notable changes to the `radia` package.  Format: each release lists
 
 ## Unreleased
 
+## 4.95.65 - Validated Cubit Nastran interchange
+
+Released 2026-08-27.
+
 - Hardened the standalone `cubit-mesh-export` Nastran interchange path for
   JMAG/COMSOL handoff: the Radia menu now calls the solver-neutral
   `export nastran_bdf` command, while old `export jmag_nastran` journals remain
   compatible. Corrected 2D coordinates and properties, group cards and PID
   collisions, and added real-Cubit plus independent pyNastran validation.
+- Added an executable MCP consumer gate that keeps producer validity separate
+  from downstream import, remeshing, element-order, bounding-box, material,
+  and set-semantics checks. Rebuilt the bundled Cubit `.ccm` from the reviewed
+  source and retained strict NGSolve/Netgen 6.2.2606 ABI pins.
 
 ## 4.95.64 - Active HDiv H-matrix and Stream Function optimization
 

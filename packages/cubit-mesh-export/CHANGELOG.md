@@ -6,6 +6,10 @@ VTK / MEG / FEMEEM writers + Python bindings for consistency checks).
 
 ## Unreleased
 
+## 0.14.12 - Validated Nastran mesh interchange
+
+Released 2026-08-27.
+
 - Promoted `export nastran_bdf` to the primary solver-neutral BDF command while
   retaining `export jmag_nastran` as a separately registered compatibility
   alias for existing journals.
