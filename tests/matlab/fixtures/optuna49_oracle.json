@@ -2807,8 +2807,103 @@
       "vsbx": 2
     },
     "fixed_trial_datetime_start_is_not_none": true,
+    "ga": {
+      "NSGAIIISampler": {
+        "generations": [
+          0,
+          0,
+          1,
+          1
+        ],
+        "parent_numbers": [
+          0,
+          1
+        ],
+        "population_numbers": [
+          0,
+          1
+        ],
+        "population_size_after_set": 3,
+        "selected_numbers": [
+          1,
+          0
+        ]
+      },
+      "NSGAIISampler": {
+        "generations": [
+          0,
+          0,
+          1,
+          1
+        ],
+        "parent_numbers": [
+          0,
+          1
+        ],
+        "population_numbers": [
+          0,
+          1
+        ],
+        "population_size_after_set": 3,
+        "selected_numbers": [
+          1,
+          0
+        ]
+      }
+    },
     "grid_is_exhausted_after": true,
     "grid_is_exhausted_before": false,
+    "hyperopt_parameters": {
+      "consider_endpoints": false,
+      "consider_magic_clip": true,
+      "consider_prior": true,
+      "gamma": [
+        0,
+        1,
+        1,
+        25
+      ],
+      "n_ei_candidates": 24,
+      "n_startup_trials": 20,
+      "prior_weight": 1.0,
+      "weights": [
+        [],
+        [
+          1.0,
+          1.0,
+          1.0
+        ],
+        [
+          0.037037037037037035,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ]
+      ]
+    },
     "mapped_namespaces": {
       "distributions": "optuna.distributions",
       "exceptions": "optuna.exceptions",
@@ -2826,72 +2921,92 @@
       "BruteForceSampler": {
         "after_trial_returns_none": true,
         "before_trial_returns_none": true,
-        "infer_relative_search_space_keys": []
+        "independent_value": 0.0,
+        "infer_relative_search_space_keys": [],
+        "relative_params": {}
       },
       "CmaEsSampler": {
         "after_trial_returns_none": true,
         "before_trial_returns_none": true,
+        "independent_value": 0.0,
         "infer_relative_search_space_keys": [
           "x",
           "y"
-        ]
+        ],
+        "relative_params": {}
       },
       "GPSampler": {
         "after_trial_returns_none": true,
         "before_trial_returns_none": true,
+        "independent_value": 0.0,
         "infer_relative_search_space_keys": [
           "x",
           "y"
-        ]
+        ],
+        "relative_params": {}
       },
       "GridSampler": {
         "after_trial_returns_none": true,
         "before_trial_returns_none": true,
-        "infer_relative_search_space_keys": []
+        "independent_value": 1.0,
+        "infer_relative_search_space_keys": [],
+        "relative_params": {}
       },
       "NSGAIIISampler": {
         "after_trial_returns_none": true,
         "before_trial_returns_none": true,
+        "independent_value": 0.0,
         "infer_relative_search_space_keys": [
           "x",
           "y"
-        ]
+        ],
+        "relative_params": {}
       },
       "NSGAIISampler": {
         "after_trial_returns_none": true,
         "before_trial_returns_none": true,
+        "independent_value": 0.0,
         "infer_relative_search_space_keys": [
           "x",
           "y"
-        ]
+        ],
+        "relative_params": {}
       },
       "PartialFixedSampler": {
         "after_trial_returns_none": true,
         "before_trial_returns_none": true,
+        "independent_value": 0.25,
         "infer_relative_search_space_keys": [
           "y"
-        ]
+        ],
+        "relative_params": {}
       },
       "QMCSampler": {
         "after_trial_returns_none": true,
         "before_trial_returns_none": true,
+        "independent_value": 0.0,
         "infer_relative_search_space_keys": [
           "x",
           "y"
-        ]
+        ],
+        "relative_params": {}
       },
       "RandomSampler": {
         "after_trial_returns_none": true,
         "before_trial_returns_none": true,
-        "infer_relative_search_space_keys": []
+        "independent_value": 0.0,
+        "infer_relative_search_space_keys": [],
+        "relative_params": {}
       },
       "TPESampler": {
         "after_trial_returns_none": true,
         "before_trial_returns_none": true,
+        "independent_value": 0.0,
         "infer_relative_search_space_keys": [
           "x",
           "y"
-        ]
+        ],
+        "relative_params": {}
       }
     },
     "trial_datetime_start_is_not_none": true,
@@ -3106,6 +3221,52 @@
       "fixed",
       "x"
     ]
+  },
+  "storage": {
+    "base_is_abstract": true,
+    "best_number": 2,
+    "complete_numbers": [
+      0,
+      2
+    ],
+    "completed": true,
+    "directions": [
+      "MINIMIZE"
+    ],
+    "duplicate_error": "DuplicatedStudyError",
+    "failed_id": 1,
+    "finished_update_error": "UpdateFinishedTrialError",
+    "n_complete": 2,
+    "n_trials": 3,
+    "param_internal": 0.5,
+    "params": {
+      "x": 0.5
+    },
+    "remove_session_is_none": true,
+    "running_state": "RUNNING",
+    "study_id": 0,
+    "study_name": "memory-oracle",
+    "study_system_attrs": {
+      "revision": 4
+    },
+    "study_user_attrs": {
+      "owner": "oracle"
+    },
+    "summary": {
+      "name": "memory-oracle"
+    },
+    "template_id": 2,
+    "trial_id": 0,
+    "trial_lookup_id": 0,
+    "trial_number": 0,
+    "trial_state": "COMPLETE",
+    "trial_system_attrs": {
+      "worker": 7
+    },
+    "trial_user_attrs": {
+      "label": "first"
+    },
+    "trial_value": 1.25
   },
   "study_management": {
     "copied": {
