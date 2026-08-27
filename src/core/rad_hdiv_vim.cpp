@@ -304,9 +304,15 @@ static void edge_field_dl(const double A[3], const double B[3], const double r[3
 // M1 = INT_T r'/R dS'  (first moment, 3-vector) via the surface divergence theorem.
 void TriMoment1(const double V[3][3], const double r[3], double out[3])
 {
+    out[0]=out[1]=out[2]=0.0;
     double e1[3],e2[3],n[3];
     for (int k=0;k<3;k++){ e1[k]=V[1][k]-V[0][k]; e2[k]=V[2][k]-V[0][k]; }
-    v3cross(e1,e2,n); double nl=v3nrm(n); for (int k=0;k<3;k++) n[k]/=nl;
+    v3cross(e1,e2,n); double nl=v3nrm(n);
+    // Degenerate (zero-area) face: TriPotential/TriField already return the
+    // zero limit here, so match them instead of dividing by zero and pushing
+    // NaN into every moment that consumes this face.
+    if (nl<1e-300) return;
+    for (int k=0;k<3;k++) n[k]/=nl;
     double h=0; { double d[3]; for(int k=0;k<3;k++) d[k]=r[k]-V[0][k]; h=v3dot(d,n); }
     double r_p[3]; for (int k=0;k<3;k++) r_p[k]=r[k]-h*n[k];
     double cen[3]={0,0,0}; for (int j=0;j<3;j++) for(int k=0;k<3;k++) cen[k]+=V[j][k]/3.0;
@@ -324,9 +330,15 @@ void TriMoment1(const double V[3][3], const double r[3], double out[3])
 // M2 = INT_T r'(x)r'/R dS' (symmetric 3x3, row-major out[3][3]) via the Hessian-of-R^3 identity.
 void TriMoment2(const double V[3][3], const double r[3], double out[3][3])
 {
+    for (int a=0;a<3;a++) for (int b=0;b<3;b++) out[a][b]=0.0;
     double e1[3],e2[3],n[3];
     for (int k=0;k<3;k++){ e1[k]=V[1][k]-V[0][k]; e2[k]=V[2][k]-V[0][k]; }
-    v3cross(e1,e2,n); double nl=v3nrm(n); for (int k=0;k<3;k++) n[k]/=nl;
+    v3cross(e1,e2,n); double nl=v3nrm(n);
+    // Degenerate (zero-area) face: TriPotential/TriField already return the
+    // zero limit here, so match them instead of dividing by zero and pushing
+    // NaN into every moment that consumes this face.
+    if (nl<1e-300) return;
+    for (int k=0;k<3;k++) n[k]/=nl;
     double h=0; { double d[3]; for(int k=0;k<3;k++) d[k]=r[k]-V[0][k]; h=v3dot(d,n); }
     double r_p[3]; for (int k=0;k<3;k++) r_p[k]=r[k]-h*n[k];
     double cen[3]={0,0,0}; for (int j=0;j<3;j++) for(int k=0;k<3;k++) cen[k]+=V[j][k]/3.0;
@@ -750,10 +762,25 @@ static void TetPotentialMomentsUpToDirectional(
     const int count=(degree+1)*(degree+2)*(degree+3)/6;for(int i=0;i<count;++i){value[i]=out[i].value;direction[i]=out[i].direction;}
 }
 
+// Zero only the a+b <= degree triangle of a dense (POLY_MAX_DEG+1)^2 scratch
+// block.  The whole block is 2.9 kB, but these scratches sit in the innermost
+// loop of the H-matrix charge-Gram fill and the production charge orders touch
+// only the first few rows (degree 2 uses 6 of 361 entries), so zeroing the
+// full block costs far more than the arithmetic it protects.
+static inline void poly2_zero_triangle(
+    double poly[POLY_MAX_DEG + 1][POLY_MAX_DEG + 1], int degree)
+{
+    for (int a = 0; a <= degree; ++a)
+        std::fill(poly[a], poly[a] + (degree - a + 1), 0.0);
+}
+
 static void poly2_mul_linear(double poly[POLY_MAX_DEG + 1][POLY_MAX_DEG + 1], int& deg,
                              double c0, double c1, double c2)
 {
-    double tmp[POLY_MAX_DEG + 1][POLY_MAX_DEG + 1] = {};
+    double tmp[POLY_MAX_DEG + 1][POLY_MAX_DEG + 1];
+    // The accumulation below touches a+b <= deg+1 and uses +=, so exactly that
+    // triangle must start at zero.
+    poly2_zero_triangle(tmp, deg + 1);
     for (int a = 0; a <= deg; ++a) {
         for (int b = 0; b <= deg - a; ++b) {
             const double v = poly[a][b];
@@ -773,7 +800,8 @@ static double SurfacePotentialMonomial(const double P[3][3], const double r[3],
     double A[POLY_MAX_DEG + 1][POLY_MAX_DEG + 1];
     TriPolySetup g;
     triangle_inplane_A_moments(P, r, degree, A, g);
-    double poly[POLY_MAX_DEG + 1][POLY_MAX_DEG + 1] = {};
+    double poly[POLY_MAX_DEG + 1][POLY_MAX_DEG + 1];
+    poly2_zero_triangle(poly, alpha[0] + alpha[1] + alpha[2]);
     int deg = 0;
     poly[0][0] = 1.0;
     for (int coord = 0; coord < 3; ++coord)
@@ -805,7 +833,8 @@ static void SurfacePotentialMomentsUpTo(const double P[3][3], const double r[3],
         for (int ax = 0; ax <= total; ++ax)
             for (int ay = 0; ay <= total - ax; ++ay) {
                 const int alpha[3] = {ax, ay, total - ax - ay};
-                double poly[POLY_MAX_DEG + 1][POLY_MAX_DEG + 1] = {};
+                double poly[POLY_MAX_DEG + 1][POLY_MAX_DEG + 1];
+                poly2_zero_triangle(poly, total);
                 int poly_degree = 0;
                 poly[0][0] = 1.0;
                 for (int coord = 0; coord < 3; ++coord)
@@ -822,7 +851,13 @@ static void TetPotentialMomentsUpTo(const double V[4][3], const double r[3],
                                     int degree, double* out)
 {
     static const int FACES[4][3] = {{1,2,3},{0,2,3},{0,1,3},{0,1,2}};
-    double face_moments[4][POLY_MAX_MOMENTS] = {};
+    // A degenerate face keeps h[fi] = 0 but its row is still read below, so the
+    // used prefix must start zeroed -- only the used prefix, not all 1330
+    // entries (degree 2 needs 10).
+    const int n_moments = (degree + 1)*(degree + 2)*(degree + 3)/6;
+    double face_moments[4][POLY_MAX_MOMENTS];
+    for (int fi = 0; fi < 4; ++fi)
+        std::fill(face_moments[fi], face_moments[fi] + n_moments, 0.0);
     double h[4] = {};
     double cen[3] = {0,0,0};
     for (int i = 0; i < 4; ++i)
@@ -906,7 +941,8 @@ static void SurfaceReferencePotentialMomentsUpTo(
         for (int ax = 0; ax <= total; ++ax)
             for (int ay = 0; ay <= total - ax; ++ay) {
                 const int alpha[3] = {ax, ay, total - ax - ay};
-                double poly[POLY_MAX_DEG + 1][POLY_MAX_DEG + 1] = {};
+                double poly[POLY_MAX_DEG + 1][POLY_MAX_DEG + 1];
+                poly2_zero_triangle(poly, total);
                 int poly_degree = 0;
                 poly[0][0] = 1.0;
                 for (int coord = 0; coord < 3; ++coord) {
@@ -949,7 +985,12 @@ static void TetReferencePotentialMomentsUpTo(
         for (int k = 0; k < 3; ++k)
             xi_r[i] += invJ[i][k]*(r[k]-V[0][k]);
 
-    double face_moments[4][POLY_MAX_MOMENTS] = {};
+    // Same degenerate-face contract as TetPotentialMomentsUpTo: zero the used
+    // prefix of every row, not the full 1330-entry block.
+    const int n_moments = (degree + 1)*(degree + 2)*(degree + 3)/6;
+    double face_moments[4][POLY_MAX_MOMENTS];
+    for (int fi = 0; fi < 4; ++fi)
+        std::fill(face_moments[fi], face_moments[fi] + n_moments, 0.0);
     double h[4] = {};
     double cen[3] = {0,0,0};
     for (int i = 0; i < 4; ++i)
@@ -1002,9 +1043,21 @@ static void TetReferencePotentialMomentsUpTo(
             }
 }
 
+// `val` is read only where `seen` is true, and `seen` is set only after the
+// matching `val` is written, so `val` needs no initialization at all.  Zeroing
+// the full pair cost ~62 kB of memset per TetPotentialPolynomial call, and only
+// the [0..degree]^3 corner of `seen` is ever addressed.
 struct TetMomentMemo {
-    bool seen[POLY_MAX_DEG + 1][POLY_MAX_DEG + 1][POLY_MAX_DEG + 1] = {};
-    double val[POLY_MAX_DEG + 1][POLY_MAX_DEG + 1][POLY_MAX_DEG + 1] = {};
+    bool seen[POLY_MAX_DEG + 1][POLY_MAX_DEG + 1][POLY_MAX_DEG + 1];
+    double val[POLY_MAX_DEG + 1][POLY_MAX_DEG + 1][POLY_MAX_DEG + 1];
+
+    explicit TetMomentMemo(int degree)
+    {
+        const int span = std::min(std::max(degree, 0), POLY_MAX_DEG) + 1;
+        for (int i = 0; i < span; ++i)
+            for (int j = 0; j < span; ++j)
+                std::fill(seen[i][j], seen[i][j] + span, false);
+    }
 };
 
 static double TetPotentialMomentRec(const double V[4][3], const double r[3], const int alpha[3],
@@ -1059,7 +1112,7 @@ double TetPotentialPolynomial(const double V[4][3], const double r[3],
         degree = std::max(degree, exps[i][0] + exps[i][1] + exps[i][2]);
     if (degree > POLY_MAX_DEG)
         throw std::runtime_error("TetPotentialPolynomial: degree exceeds POLY_MAX_DEG");
-    TetMomentMemo memo;
+    TetMomentMemo memo(degree);
     double s = 0.0;
     for (size_t i = 0; i < n; ++i) {
         int a[3] = {exps[i][0], exps[i][1], exps[i][2]};
@@ -1083,7 +1136,10 @@ void TetReferencePotentialMoments(const double V[4][3], const double r[3],
     }
     if (degree > POLY_MAX_DEG)
         throw std::invalid_argument("TetReferencePotentialMoments: degree exceeds 18");
-    double moments[POLY_MAX_MOMENTS] = {};
+    // The callee writes (or zeroes) exactly this prefix on both of its paths.
+    const int n_moments = (degree + 1)*(degree + 2)*(degree + 3)/6;
+    double moments[POLY_MAX_MOMENTS];
+    std::fill(moments, moments + n_moments, 0.0);
     TetReferencePotentialMomentsUpTo(V, r, degree, moments);
     for (size_t i = 0; i < exps.size(); ++i) {
         const auto& e = exps[i];
@@ -1249,7 +1305,10 @@ std::vector<double> TetHCurlReducedGram(
         std::vector<double> target_values(static_cast<size_t>(n_modes)*3);
         std::vector<double> source_potential(static_cast<size_t>(n_modes)*3);
         std::vector<double> monomial_values(static_cast<size_t>(n_mono));
-        double moments[POLY_MAX_MOMENTS] = {};
+        // Only the degree-dependent prefix is written and read; the full
+        // 1330-entry block is re-zeroed once per (quadrature point, source).
+        const int n_moments = (degree + 1)*(degree + 2)*(degree + 3)/6;
+        double moments[POLY_MAX_MOMENTS];
 
         for (size_t q = 0; q < ref_weights.size(); ++q) {
             const double xi[3] = {
@@ -1279,7 +1338,7 @@ std::vector<double> TetHCurlReducedGram(
                 double Vs[4][3];
                 for (int a = 0; a < 4; ++a)
                     for (int k = 0; k < 3; ++k) Vs[a][k] = vertex_at(source, a, k);
-                std::fill(std::begin(moments), std::end(moments), 0.0);
+                std::fill(moments, moments + n_moments, 0.0);
                 TetReferencePotentialMomentsUpTo(Vs, point, degree, moments);
                 for (int mode = 0; mode < n_modes; ++mode)
                     for (int m = 0; m < n_mono; ++m) {
@@ -1506,9 +1565,15 @@ void TetVolFieldCubicBasis(const double V[4][3], const double r[3],
 // = (sigma0 + s.r_p) F_const - SUM_e (s.m_e) G_e - I0 s_par.
 void LinTriField(const double V[3][3], const double r[3], double sigma0, const double s[3], double out[3])
 {
+    out[0]=out[1]=out[2]=0.0;
     double e1[3],e2[3],n[3];
     for (int k=0;k<3;k++){ e1[k]=V[1][k]-V[0][k]; e2[k]=V[2][k]-V[0][k]; }
-    v3cross(e1,e2,n); double nl=v3nrm(n); for (int k=0;k<3;k++) n[k]/=nl;
+    v3cross(e1,e2,n); double nl=v3nrm(n);
+    // Degenerate (zero-area) face: TriPotential/TriField already return the
+    // zero limit here, so match them instead of dividing by zero and pushing
+    // NaN into every moment that consumes this face.
+    if (nl<1e-300) return;
+    for (int k=0;k<3;k++) n[k]/=nl;
     double h=0; { double d[3]; for(int k=0;k<3;k++) d[k]=r[k]-V[0][k]; h=v3dot(d,n); }
     double r_p[3]; for (int k=0;k<3;k++) r_p[k]=r[k]-h*n[k];
     double cen[3]={0,0,0}; for (int j=0;j<3;j++) for(int k=0;k<3;k++) cen[k]+=V[j][k]/3.0;
@@ -1666,8 +1731,14 @@ void QuadTriFieldBasis(const double V[3][3], const double r[3],
         for(int k=0;k<3;++k)out[index][k]=0.0;
     double e1u[3],e2u[3],n[3];
     for (int k=0;k<3;k++){ e1u[k]=V[1][k]-V[0][k]; e2u[k]=V[2][k]-V[0][k]; }
-    v3cross(e1u,e2u,n); double nl=v3nrm(n); for (int k=0;k<3;k++) n[k]/=nl;
-    double e1[3]; double e1l=v3nrm(e1u); for (int k=0;k<3;k++) e1[k]=e1u[k]/e1l;
+    v3cross(e1u,e2u,n); double nl=v3nrm(n);
+    double e1l=v3nrm(e1u);
+    // Degenerate (zero-area) face: TriPotential/TriField already return the
+    // zero limit here, so match them instead of dividing by zero and pushing
+    // NaN into every moment that consumes this face.
+    if (nl<1e-300 || e1l<1e-300) return;
+    for (int k=0;k<3;k++) n[k]/=nl;
+    double e1[3]; for (int k=0;k<3;k++) e1[k]=e1u[k]/e1l;
     double e2[3]; v3cross(n,e1,e2);
     double h=0; { double d[3]; for(int k=0;k<3;k++) d[k]=r[k]-V[0][k]; h=v3dot(d,n); }
     double r_p[3]; for (int k=0;k<3;k++) r_p[k]=r[k]-h*n[k];
