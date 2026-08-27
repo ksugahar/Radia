@@ -590,7 +590,7 @@ class ExportDialog(QDialog):
 
         elif fmt == FMT_NASTRAN:
             dim = "2" if self._dimension.currentText() == "2D" else "3"
-            cmd = (f'export jmag_nastran "{f}" order {order} '
+            cmd = (f'export nastran_bdf "{f}" order {order} '
                    f'dimension {dim}')
             if self._nopyramid and self._nopyramid.currentIndex() == 1:
                 cmd += " nopyramid"

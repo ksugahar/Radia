@@ -27,6 +27,8 @@ REQUIRED_MATLAB_SFUNCTIONS = (
 FULL_REQUIRED_MATLAB_SFUNCTIONS = REQUIRED_MATLAB_SFUNCTIONS + (
     "radia_nonlinear_reactor_sfun.m",
     "+radia/+simulink/nonlinearReactorSFunction.m",
+    "radia_streamfunction_optuna_sfun.m",
+    "+radia/+simulink/streamFunctionOptunaSFunction.m",
 )
 REQUIRED_MODELS = ("radia_ih.slx",)
 FULL_REQUIRED_MEX = REQUIRED_MEX + ("optuna_mex.mexw64",)

@@ -630,7 +630,7 @@ def test_native_jacobi_solver_satisfies_true_residual(problem):
 
 
 def test_native_batched_multi_rhs_is_row_major_and_true_residual(problem):
-    """Block Krylov H-leaf traversal changes execution, not the solution."""
+    """Batched H-leaf traversal changes execution, not the solution."""
     with TaskManager():
         mass, operator, _ = problem.prob._system(problem.s0)
         gram = problem.prob.demag._G
@@ -675,9 +675,9 @@ def test_native_batched_multi_rhs_is_row_major_and_true_residual(problem):
             residual.data = load.vec - operator * gf.vec
             assert ng.Norm(residual) / ng.Norm(load.vec) < 1.1e-10
 
-        # Broken-HDiv topology needs the mass Riesz map.  Its multi-RHS path
-        # applies one cached PARDISO factor to the row-major RHS batch while
-        # preserving the same true-residual contract.
+        # The multi-RHS mass-Riesz path retains independent CG recurrences
+        # while sharing the expensive row-major operator/preconditioner
+        # traversals and preserving the same true-residual contract.
         mass_batch = gram.solve_configured_linear_material_auto_prec_many(
             1.0, rhs, 1e-10, 20000, mass_riesz=True)
         assert np.asarray(mass_batch["m"]).flags.c_contiguous
