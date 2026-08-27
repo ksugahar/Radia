@@ -2534,23 +2534,23 @@
     },
     {
       "kind": "class",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.BaseJournalLogStorage",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages.BaseJournalLogStorage"
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.BaseJournalLogStorage.append_logs",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages.BaseJournalLogStorage.append_logs"
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.BaseJournalLogStorage.read_logs",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages.BaseJournalLogStorage.read_logs"
     },
     {
@@ -3178,569 +3178,569 @@
     },
     {
       "kind": "class",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.JournalFileOpenLock",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages.JournalFileOpenLock"
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.JournalFileOpenLock.acquire",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages.JournalFileOpenLock.acquire"
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.JournalFileOpenLock.release",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages.JournalFileOpenLock.release"
     },
     {
       "kind": "class",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.JournalFileStorage",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages.JournalFileStorage"
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.JournalFileStorage.append_logs",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages.JournalFileStorage.append_logs"
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.JournalFileStorage.read_logs",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages.JournalFileStorage.read_logs"
     },
     {
       "kind": "class",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.JournalFileSymlinkLock",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages.JournalFileSymlinkLock"
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.JournalFileSymlinkLock.acquire",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages.JournalFileSymlinkLock.acquire"
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.JournalFileSymlinkLock.release",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages.JournalFileSymlinkLock.release"
     },
     {
       "kind": "class",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.JournalRedisStorage",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages.JournalRedisStorage"
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.JournalRedisStorage.append_logs",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages.JournalRedisStorage.append_logs"
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.JournalRedisStorage.load_snapshot",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages.JournalRedisStorage.load_snapshot"
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.JournalRedisStorage.read_logs",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages.JournalRedisStorage.read_logs"
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.JournalRedisStorage.save_snapshot",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages.JournalRedisStorage.save_snapshot"
     },
     {
       "kind": "class",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.JournalStorage",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages.JournalStorage"
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.JournalStorage.check_trial_is_updatable",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages.JournalStorage.check_trial_is_updatable"
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.JournalStorage.create_new_study",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages.JournalStorage.create_new_study"
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.JournalStorage.create_new_trial",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages.JournalStorage.create_new_trial"
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.JournalStorage.delete_study",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages.JournalStorage.delete_study"
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.JournalStorage.get_all_studies",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages.JournalStorage.get_all_studies"
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.JournalStorage.get_all_trials",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages.JournalStorage.get_all_trials"
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.JournalStorage.get_best_trial",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages.JournalStorage.get_best_trial"
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.JournalStorage.get_n_trials",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages.JournalStorage.get_n_trials"
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.JournalStorage.get_study_directions",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages.JournalStorage.get_study_directions"
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.JournalStorage.get_study_id_from_name",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages.JournalStorage.get_study_id_from_name"
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.JournalStorage.get_study_name_from_id",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages.JournalStorage.get_study_name_from_id"
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.JournalStorage.get_study_system_attrs",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages.JournalStorage.get_study_system_attrs"
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.JournalStorage.get_study_user_attrs",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages.JournalStorage.get_study_user_attrs"
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.JournalStorage.get_trial",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages.JournalStorage.get_trial"
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.JournalStorage.get_trial_id_from_study_id_trial_number",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages.JournalStorage.get_trial_id_from_study_id_trial_number"
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.JournalStorage.get_trial_number_from_id",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages.JournalStorage.get_trial_number_from_id"
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.JournalStorage.get_trial_param",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages.JournalStorage.get_trial_param"
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.JournalStorage.get_trial_params",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages.JournalStorage.get_trial_params"
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.JournalStorage.get_trial_system_attrs",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages.JournalStorage.get_trial_system_attrs"
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.JournalStorage.get_trial_user_attrs",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages.JournalStorage.get_trial_user_attrs"
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.JournalStorage.remove_session",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages.JournalStorage.remove_session"
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.JournalStorage.restore_replay_result",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages.JournalStorage.restore_replay_result"
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.JournalStorage.set_study_system_attr",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages.JournalStorage.set_study_system_attr"
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.JournalStorage.set_study_user_attr",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages.JournalStorage.set_study_user_attr"
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.JournalStorage.set_trial_intermediate_value",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages.JournalStorage.set_trial_intermediate_value"
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.JournalStorage.set_trial_param",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages.JournalStorage.set_trial_param"
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.JournalStorage.set_trial_state_values",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages.JournalStorage.set_trial_state_values"
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.JournalStorage.set_trial_system_attr",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages.JournalStorage.set_trial_system_attr"
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.JournalStorage.set_trial_user_attr",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages.JournalStorage.set_trial_user_attr"
     },
     {
       "kind": "class",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.RDBStorage",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages.RDBStorage"
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.RDBStorage.check_trial_is_updatable",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages.RDBStorage.check_trial_is_updatable"
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.RDBStorage.create_new_study",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages.RDBStorage.create_new_study"
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.RDBStorage.create_new_trial",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages.RDBStorage.create_new_trial"
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.RDBStorage.delete_study",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages.RDBStorage.delete_study"
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.RDBStorage.get_all_studies",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages.RDBStorage.get_all_studies"
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.RDBStorage.get_all_trials",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages.RDBStorage.get_all_trials"
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.RDBStorage.get_all_versions",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages.RDBStorage.get_all_versions"
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.RDBStorage.get_best_trial",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages.RDBStorage.get_best_trial"
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.RDBStorage.get_current_version",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages.RDBStorage.get_current_version"
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.RDBStorage.get_failed_trial_callback",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages.RDBStorage.get_failed_trial_callback"
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.RDBStorage.get_head_version",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages.RDBStorage.get_head_version"
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.RDBStorage.get_heartbeat_interval",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages.RDBStorage.get_heartbeat_interval"
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.RDBStorage.get_heartbeat_stale_trial_callback",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages.RDBStorage.get_heartbeat_stale_trial_callback"
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.RDBStorage.get_n_trials",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages.RDBStorage.get_n_trials"
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.RDBStorage.get_study_directions",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages.RDBStorage.get_study_directions"
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.RDBStorage.get_study_id_from_name",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages.RDBStorage.get_study_id_from_name"
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.RDBStorage.get_study_name_from_id",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages.RDBStorage.get_study_name_from_id"
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.RDBStorage.get_study_system_attrs",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages.RDBStorage.get_study_system_attrs"
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.RDBStorage.get_study_user_attrs",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages.RDBStorage.get_study_user_attrs"
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.RDBStorage.get_trial",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages.RDBStorage.get_trial"
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.RDBStorage.get_trial_id_from_study_id_trial_number",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages.RDBStorage.get_trial_id_from_study_id_trial_number"
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.RDBStorage.get_trial_number_from_id",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages.RDBStorage.get_trial_number_from_id"
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.RDBStorage.get_trial_param",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages.RDBStorage.get_trial_param"
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.RDBStorage.get_trial_params",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages.RDBStorage.get_trial_params"
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.RDBStorage.get_trial_system_attrs",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages.RDBStorage.get_trial_system_attrs"
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.RDBStorage.get_trial_user_attrs",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages.RDBStorage.get_trial_user_attrs"
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.RDBStorage.record_heartbeat",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages.RDBStorage.record_heartbeat"
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.RDBStorage.remove_session",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages.RDBStorage.remove_session"
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.RDBStorage.set_study_system_attr",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages.RDBStorage.set_study_system_attr"
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.RDBStorage.set_study_user_attr",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages.RDBStorage.set_study_user_attr"
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.RDBStorage.set_trial_intermediate_value",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages.RDBStorage.set_trial_intermediate_value"
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.RDBStorage.set_trial_param",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages.RDBStorage.set_trial_param"
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.RDBStorage.set_trial_state_values",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages.RDBStorage.set_trial_state_values"
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.RDBStorage.set_trial_system_attr",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages.RDBStorage.set_trial_system_attr"
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.RDBStorage.set_trial_user_attr",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages.RDBStorage.set_trial_user_attr"
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.RDBStorage.upgrade",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages.RDBStorage.upgrade"
     },
     {
@@ -3787,233 +3787,233 @@
     },
     {
       "kind": "class",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.CachedStorage",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages._CachedStorage"
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.CachedStorage.check_trial_is_updatable",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages._CachedStorage.check_trial_is_updatable"
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.CachedStorage.create_new_study",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages._CachedStorage.create_new_study"
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.CachedStorage.create_new_trial",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages._CachedStorage.create_new_trial"
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.CachedStorage.delete_study",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages._CachedStorage.delete_study"
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.CachedStorage.get_all_studies",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages._CachedStorage.get_all_studies"
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.CachedStorage.get_all_trials",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages._CachedStorage.get_all_trials"
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.CachedStorage.get_best_trial",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages._CachedStorage.get_best_trial"
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.CachedStorage.get_failed_trial_callback",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages._CachedStorage.get_failed_trial_callback"
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.CachedStorage.get_heartbeat_interval",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages._CachedStorage.get_heartbeat_interval"
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.CachedStorage.get_heartbeat_stale_trial_callback",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages._CachedStorage.get_heartbeat_stale_trial_callback"
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.CachedStorage.get_n_trials",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages._CachedStorage.get_n_trials"
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.CachedStorage.get_study_directions",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages._CachedStorage.get_study_directions"
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.CachedStorage.get_study_id_from_name",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages._CachedStorage.get_study_id_from_name"
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.CachedStorage.get_study_name_from_id",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages._CachedStorage.get_study_name_from_id"
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.CachedStorage.get_study_system_attrs",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages._CachedStorage.get_study_system_attrs"
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.CachedStorage.get_study_user_attrs",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages._CachedStorage.get_study_user_attrs"
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.CachedStorage.get_trial",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages._CachedStorage.get_trial"
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.CachedStorage.get_trial_id_from_study_id_trial_number",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages._CachedStorage.get_trial_id_from_study_id_trial_number"
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.CachedStorage.get_trial_number_from_id",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages._CachedStorage.get_trial_number_from_id"
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.CachedStorage.get_trial_param",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages._CachedStorage.get_trial_param"
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.CachedStorage.get_trial_params",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages._CachedStorage.get_trial_params"
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.CachedStorage.get_trial_system_attrs",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages._CachedStorage.get_trial_system_attrs"
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.CachedStorage.get_trial_user_attrs",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages._CachedStorage.get_trial_user_attrs"
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.CachedStorage.record_heartbeat",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages._CachedStorage.record_heartbeat"
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.CachedStorage.remove_session",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages._CachedStorage.remove_session"
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.CachedStorage.set_study_system_attr",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages._CachedStorage.set_study_system_attr"
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.CachedStorage.set_study_user_attr",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages._CachedStorage.set_study_user_attr"
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.CachedStorage.set_trial_intermediate_value",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages._CachedStorage.set_trial_intermediate_value"
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.CachedStorage.set_trial_param",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages._CachedStorage.set_trial_param"
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.CachedStorage.set_trial_state_values",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages._CachedStorage.set_trial_state_values"
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.CachedStorage.set_trial_system_attr",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages._CachedStorage.set_trial_system_attr"
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.CachedStorage.set_trial_user_attr",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages._CachedStorage.set_trial_user_attr"
     },
     {
@@ -4032,331 +4032,331 @@
     },
     {
       "kind": "class",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.BaseJournalBackend",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages.journal.BaseJournalBackend"
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.BaseJournalBackend.append_logs",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages.journal.BaseJournalBackend.append_logs"
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.BaseJournalBackend.read_logs",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages.journal.BaseJournalBackend.read_logs"
     },
     {
       "kind": "class",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.JournalFileBackend",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages.journal.JournalFileBackend"
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.JournalFileBackend.append_logs",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages.journal.JournalFileBackend.append_logs"
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.JournalFileBackend.read_logs",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages.journal.JournalFileBackend.read_logs"
     },
     {
       "kind": "class",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.JournalFileOpenLock",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages.journal.JournalFileOpenLock"
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.JournalFileOpenLock.acquire",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages.journal.JournalFileOpenLock.acquire"
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.JournalFileOpenLock.release",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages.journal.JournalFileOpenLock.release"
     },
     {
       "kind": "class",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.JournalFileSymlinkLock",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages.journal.JournalFileSymlinkLock"
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.JournalFileSymlinkLock.acquire",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages.journal.JournalFileSymlinkLock.acquire"
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.JournalFileSymlinkLock.release",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages.journal.JournalFileSymlinkLock.release"
     },
     {
       "kind": "class",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.JournalRedisBackend",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages.journal.JournalRedisBackend"
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.JournalRedisBackend.append_logs",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages.journal.JournalRedisBackend.append_logs"
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.JournalRedisBackend.load_snapshot",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages.journal.JournalRedisBackend.load_snapshot"
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.JournalRedisBackend.read_logs",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages.journal.JournalRedisBackend.read_logs"
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.JournalRedisBackend.save_snapshot",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages.journal.JournalRedisBackend.save_snapshot"
     },
     {
       "kind": "class",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.JournalStorage",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages.journal.JournalStorage"
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.JournalStorage.check_trial_is_updatable",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages.journal.JournalStorage.check_trial_is_updatable"
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.JournalStorage.create_new_study",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages.journal.JournalStorage.create_new_study"
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.JournalStorage.create_new_trial",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages.journal.JournalStorage.create_new_trial"
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.JournalStorage.delete_study",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages.journal.JournalStorage.delete_study"
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.JournalStorage.get_all_studies",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages.journal.JournalStorage.get_all_studies"
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.JournalStorage.get_all_trials",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages.journal.JournalStorage.get_all_trials"
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.JournalStorage.get_best_trial",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages.journal.JournalStorage.get_best_trial"
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.JournalStorage.get_n_trials",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages.journal.JournalStorage.get_n_trials"
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.JournalStorage.get_study_directions",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages.journal.JournalStorage.get_study_directions"
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.JournalStorage.get_study_id_from_name",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages.journal.JournalStorage.get_study_id_from_name"
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.JournalStorage.get_study_name_from_id",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages.journal.JournalStorage.get_study_name_from_id"
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.JournalStorage.get_study_system_attrs",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages.journal.JournalStorage.get_study_system_attrs"
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.JournalStorage.get_study_user_attrs",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages.journal.JournalStorage.get_study_user_attrs"
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.JournalStorage.get_trial",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages.journal.JournalStorage.get_trial"
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.JournalStorage.get_trial_id_from_study_id_trial_number",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages.journal.JournalStorage.get_trial_id_from_study_id_trial_number"
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.JournalStorage.get_trial_number_from_id",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages.journal.JournalStorage.get_trial_number_from_id"
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.JournalStorage.get_trial_param",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages.journal.JournalStorage.get_trial_param"
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.JournalStorage.get_trial_params",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages.journal.JournalStorage.get_trial_params"
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.JournalStorage.get_trial_system_attrs",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages.journal.JournalStorage.get_trial_system_attrs"
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.JournalStorage.get_trial_user_attrs",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages.journal.JournalStorage.get_trial_user_attrs"
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.JournalStorage.remove_session",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages.journal.JournalStorage.remove_session"
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.JournalStorage.restore_replay_result",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages.journal.JournalStorage.restore_replay_result"
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.JournalStorage.set_study_system_attr",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages.journal.JournalStorage.set_study_system_attr"
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.JournalStorage.set_study_user_attr",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages.journal.JournalStorage.set_study_user_attr"
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.JournalStorage.set_trial_intermediate_value",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages.journal.JournalStorage.set_trial_intermediate_value"
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.JournalStorage.set_trial_param",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages.journal.JournalStorage.set_trial_param"
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.JournalStorage.set_trial_state_values",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages.journal.JournalStorage.set_trial_state_values"
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.JournalStorage.set_trial_system_attr",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages.journal.JournalStorage.set_trial_system_attr"
     },
     {
       "kind": "class-method",
-      "matlab_name": null,
-      "oracle_status": "not-mapped",
-      "surface_status": "missing",
+      "matlab_name": "radia.optuna.JournalStorage.set_trial_user_attr",
+      "oracle_status": "verified",
+      "surface_status": "present",
       "upstream": "optuna.storages.journal.JournalStorage.set_trial_user_attr"
     },
     {
@@ -5720,12 +5720,12 @@
   ],
   "full_compatibility_complete": false,
   "oracle_partial_count": 57,
-  "oracle_unmapped_count": 273,
-  "oracle_verified_count": 486,
+  "oracle_unmapped_count": 109,
+  "oracle_verified_count": 650,
   "schema": "radia.optuna49-api-coverage.v1",
   "surface_entry_count": 816,
-  "surface_missing_count": 263,
-  "surface_present_count": 553,
+  "surface_missing_count": 99,
+  "surface_present_count": 717,
   "upstream_inventory": "tests/matlab/fixtures/optuna49_public_api.json",
   "upstream_inventory_sha256": "D3DCEE6E42AE8A004748958F151BA629EF63F85F99B0C9B454AF149AB0DB50E2",
   "upstream_version": "4.9.0"

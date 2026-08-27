@@ -74,6 +74,7 @@ VERIFIED_FUNCTIONS = {
     "load_study",
 }
 CLASS_EQUIVALENTS = {
+    "_CachedStorage": "CachedStorage",
     "_GroupDecomposedSearchSpace": "GroupDecomposedSearchSpace",
     "_SearchSpaceGroup": "SearchSpaceGroup",
 }
@@ -123,7 +124,18 @@ VERIFIED_SYMBOLS = VERIFIED_FUNCTIONS | {
     "GCSArtifactStore",
     "BaseGASampler",
     "BaseStorage",
+    "BaseJournalBackend",
+    "BaseJournalLogStorage",
     "InMemoryStorage",
+    "JournalFileBackend",
+    "JournalFileOpenLock",
+    "JournalFileStorage",
+    "JournalFileSymlinkLock",
+    "JournalRedisBackend",
+    "JournalRedisStorage",
+    "JournalStorage",
+    "RDBStorage",
+    "_CachedStorage",
 }
 SAMPLER_PUBLIC_MEMBERS = {
     "after_trial",
@@ -179,7 +191,44 @@ VERIFIED_MEMBERS = {
     | GA_PUBLIC_MEMBERS
     | {"reseed_rng"},
     "BaseStorage": STORAGE_PUBLIC_MEMBERS,
+    "BaseJournalBackend": {"append_logs", "read_logs"},
+    "BaseJournalLogStorage": {"append_logs", "read_logs"},
     "InMemoryStorage": STORAGE_PUBLIC_MEMBERS,
+    "JournalFileBackend": {"append_logs", "read_logs"},
+    "JournalFileOpenLock": {"acquire", "release"},
+    "JournalFileStorage": {"append_logs", "read_logs"},
+    "JournalFileSymlinkLock": {"acquire", "release"},
+    "JournalRedisBackend": {
+        "append_logs",
+        "load_snapshot",
+        "read_logs",
+        "save_snapshot",
+    },
+    "JournalRedisStorage": {
+        "append_logs",
+        "load_snapshot",
+        "read_logs",
+        "save_snapshot",
+    },
+    "JournalStorage": STORAGE_PUBLIC_MEMBERS | {"restore_replay_result"},
+    "RDBStorage": STORAGE_PUBLIC_MEMBERS
+    | {
+        "get_all_versions",
+        "get_current_version",
+        "get_failed_trial_callback",
+        "get_head_version",
+        "get_heartbeat_interval",
+        "get_heartbeat_stale_trial_callback",
+        "record_heartbeat",
+        "upgrade",
+    },
+    "_CachedStorage": STORAGE_PUBLIC_MEMBERS
+    | {
+        "get_failed_trial_callback",
+        "get_heartbeat_interval",
+        "get_heartbeat_stale_trial_callback",
+        "record_heartbeat",
+    },
     "ArtifactMeta": {"artifact_id", "encoding", "filename", "mimetype"},
     "Backoff": {"open_reader", "remove", "write"},
     "Boto3ArtifactStore": {"open_reader", "remove", "write"},
