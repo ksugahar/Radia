@@ -7,17 +7,146 @@ import inspect
 import json
 import logging
 import sys
+import tempfile
 import warnings
+from io import BytesIO
 from pathlib import Path
+from unittest.mock import patch
 
 import numpy as np
 import optuna
+import optuna.artifacts
 import optuna.importance
 import optuna.terminator
 import scipy
 from optuna.trial import TrialState
 
 EXPECTED_VERSION = "4.9.0"
+
+
+def _artifact_contract() -> dict[str, object]:
+    class BotoClient:
+        def __init__(self) -> None:
+            self.payload = b"cloud-bytes"
+
+        def get_object(self, **kwargs: object) -> dict[str, BytesIO]:
+            return {"Body": BytesIO(self.payload)}
+
+        def upload_fileobj(self, source: BytesIO, bucket: str, key: str) -> None:
+            self.payload = source.read()
+
+        def delete_object(self, **kwargs: object) -> None:
+            self.payload = b""
+
+    class Blob:
+        def __init__(self, bucket: Bucket, artifact_id: str) -> None:
+            self.bucket = bucket
+            self.artifact_id = artifact_id
+
+        def download_as_bytes(self) -> bytes:
+            return self.bucket.payloads[self.artifact_id]
+
+        def upload_from_string(self, data: bytes) -> None:
+            self.bucket.payloads[self.artifact_id] = data
+
+    class Bucket:
+        def __init__(self) -> None:
+            self.payloads: dict[str, bytes] = {"cloud": b"cloud-bytes"}
+
+        def get_blob(self, artifact_id: str) -> Blob | None:
+            return Blob(self, artifact_id) if artifact_id in self.payloads else None
+
+        def blob(self, artifact_id: str) -> Blob:
+            return Blob(self, artifact_id)
+
+        def delete_blob(self, artifact_id: str) -> None:
+            del self.payloads[artifact_id]
+
+    class GCSClient:
+        def __init__(self) -> None:
+            self.bucket_value = Bucket()
+
+        def bucket(self, name: str) -> Bucket:
+            return self.bucket_value
+
+    with tempfile.TemporaryDirectory() as directory:
+        base = Path(directory)
+        source = base / "oracle.txt"
+        source.write_bytes(b"artifact-bytes\x00\xff")
+        store = optuna.artifacts.FileSystemArtifactStore(base)
+        study = optuna.create_study()
+        fixed_id = "12345678-1234-5678-1234-567812345678"
+        with patch("optuna.artifacts._upload.uuid.uuid4", return_value=fixed_id):
+            artifact_id = optuna.artifacts.upload_artifact(
+                artifact_store=store,
+                file_path=str(source),
+                study_or_trial=study,
+            )
+        metadata = optuna.artifacts.get_all_artifact_meta(study)[0]
+        destination = base / "downloaded.txt"
+        optuna.artifacts.download_artifact(
+            artifact_store=store,
+            file_path=str(destination),
+            artifact_id=artifact_id,
+        )
+        downloaded = destination.read_bytes()
+        try:
+            optuna.artifacts.download_artifact(
+                artifact_store=store,
+                file_path=str(destination),
+                artifact_id=artifact_id,
+            )
+        except Exception as error:  # noqa: BLE001 - record public error type.
+            existing_error = type(error).__name__
+        try:
+            store.open_reader("../outside")
+        except Exception as error:  # noqa: BLE001 - record public error type.
+            traversal_error = type(error).__name__
+        backoff = optuna.artifacts.Backoff(
+            store, max_retries=2, min_delay=1e-9, max_delay=2e-9
+        )
+        backoff_id = "backoff"
+        backoff.write(backoff_id, BytesIO(b"retry-body"))
+        backoff_body = backoff.open_reader(backoff_id).read()
+        try:
+            backoff.remove(backoff_id)
+        except Exception as error:  # noqa: BLE001 - Optuna 4.9 retry-loop behavior.
+            backoff_remove_error = type(error).__name__
+
+    boto_client = BotoClient()
+    with patch("optuna.artifacts._boto3._imports.check", return_value=None):
+        boto = optuna.artifacts.Boto3ArtifactStore("bucket", client=boto_client)
+    boto_open = boto.open_reader("cloud").read()
+    boto.write("cloud", BytesIO(b"updated"))
+    boto_written = boto_client.payload
+    boto.remove("cloud")
+
+    gcs_client = GCSClient()
+    with patch("optuna.artifacts._gcs._imports.check", return_value=None):
+        gcs = optuna.artifacts.GCSArtifactStore("bucket", client=gcs_client)
+    gcs_open = gcs.open_reader("cloud").read()
+    gcs.write("cloud", BytesIO(b"updated"))
+    gcs_written = gcs_client.bucket_value.payloads["cloud"]
+    gcs.remove("cloud")
+
+    return {
+        "artifact_id": artifact_id,
+        "backoff_body": list(backoff_body),
+        "backoff_remove_error": backoff_remove_error,
+        "boto_open": list(boto_open),
+        "boto_written": list(boto_written),
+        "downloaded": list(downloaded),
+        "existing_download_error": existing_error,
+        "gcs_open": list(gcs_open),
+        "gcs_written": list(gcs_written),
+        "metadata": {
+            "artifact_id": metadata.artifact_id,
+            "encoding": metadata.encoding,
+            "filename": metadata.filename,
+            "mimetype": metadata.mimetype,
+        },
+        "traversal_error": traversal_error,
+    }
 
 
 def _exception_contract() -> dict[str, object]:
@@ -1970,12 +2099,47 @@ def _terminator_contract() -> dict[str, object]:
             n_trials=6,
             callbacks=[optuna.terminator.TerminatorCallback(terminator)],
         )
+
+    cv_study = optuna.create_study(direction="maximize")
+    cv_rows = [[0.7, 0.8, 0.9], [0.5, 0.55, 0.6]]
+    for scores in cv_rows:
+        trial = cv_study.ask()
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", FutureWarning)
+            optuna.terminator.report_cross_validation_scores(trial, scores)
+        cv_study.tell(trial, float(np.mean(scores)))
+    cv_error = optuna.terminator.CrossValidationErrorEvaluator().evaluate(
+        cv_study.trials, cv_study.direction
+    )
+
+    median_trials = frozen(minimizing)
+    median_evaluator = optuna.terminator.MedianErrorEvaluator(
+        optuna.terminator.BestValueStagnationEvaluator(5),
+        warm_up_trials=1,
+        n_initial_trials=3,
+        threshold_ratio=0.1,
+    )
+    median_error = median_evaluator.evaluate(
+        median_trials, optuna.study.StudyDirection.MINIMIZE
+    )
+    median_cached = median_evaluator.evaluate(
+        frozen([100.0]), optuna.study.StudyDirection.MINIMIZE
+    )
     return {
+        "cross_validation_error": float(cv_error),
+        "cross_validation_rows": cv_rows,
+        "median_cached": float(median_cached),
+        "median_error": float(median_error),
         "remaining_minimize": float(remaining_minimize),
         "remaining_maximize": float(remaining_maximize),
         "max_trials_callback_count": len(callback_study.trials),
         "terminator_trial_count": len(stagnation_study.trials),
         "terminator_values": [float(trial.value) for trial in stagnation_study.trials],
+        "static_error": float(
+            optuna.terminator.StaticErrorEvaluator(1.25).evaluate(
+                [], optuna.study.StudyDirection.MINIMIZE
+            )
+        ),
     }
 
 
@@ -2002,6 +2166,7 @@ def build_oracle() -> dict[str, object]:
             "multi_population_size": multi.sampler._population_size,
             "pruner": type(single.pruner).__name__,
         },
+        "artifacts": _artifact_contract(),
         "exceptions": _exception_contract(),
         "logging": _logging_contract(),
         "sampler_seed_defaults": _sampler_seed_default_contract(),

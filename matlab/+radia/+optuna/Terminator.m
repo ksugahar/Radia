@@ -1,4 +1,4 @@
-classdef Terminator
+classdef Terminator < radia.optuna.BaseTerminator
     %TERMINATOR Stop when estimated improvement no longer exceeds error.
 
     properties (SetAccess=private)
@@ -22,19 +22,21 @@ classdef Terminator
         end
 
         function decision=shouldTerminate(obj,study)
-            complete=study.TrialTable(study.TrialTable.State=="COMPLETE",:);
-            if height(complete)<obj.MinNTrials
+            complete=study.get_trials("COMPLETE");
+            if numel(complete)<obj.MinNTrials
                 decision=false;
                 return
             end
+            trials=study.get_trials();
             improvement=obj.ImprovementEvaluator.evaluate( ...
-                study.TrialTable,study.direction());
+                trials,study.direction());
             if isempty(obj.ErrorEvaluator)
                 errorValue=0;
             elseif isa(obj.ErrorEvaluator,"function_handle")
                 errorValue=obj.ErrorEvaluator(study);
             else
-                errorValue=obj.ErrorEvaluator.evaluate(study);
+                errorValue=obj.ErrorEvaluator.evaluate( ...
+                    trials,study.direction());
             end
             decision=improvement<errorValue;
         end
