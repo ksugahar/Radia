@@ -1,4 +1,4 @@
-classdef NSGAIIISampler < radia.optuna.BaseSampler
+classdef NSGAIIISampler < radia.optuna.BaseGASampler
     %NSGAIIISAMPLER Constrained joint NSGA-III with reference-line niching.
     %   Child generation, dynamic-space fallback, generation caching, and
     %   constrained Pareto ranks are shared with NSGAIISampler. The elite
@@ -13,19 +13,11 @@ classdef NSGAIIISampler < radia.optuna.BaseSampler
         Core (1,1) radia.optuna.NSGAIISampler
     end
 
-    properties (Dependent, SetAccess=private)
-        population_size
-    end
-
     properties (Access=private)
         Stream
     end
 
     methods
-        function value=get.population_size(obj)
-            value=obj.PopulationSize;
-        end
-
         function obj=NSGAIIISampler(options)
             arguments
                 options.Seed double = double.empty(1,0)
@@ -42,6 +34,7 @@ classdef NSGAIIISampler < radia.optuna.BaseSampler
                 options.ChildGenerationStrategy = []
                 options.AfterTrialStrategy = []
             end
+            obj@radia.optuna.BaseGASampler(options.PopulationSize);
             if options.PopulationSize<2
                 error("radia:optuna:NSGAIIIPopulation", ...
                     "PopulationSize must be at least 2.");
@@ -86,6 +79,11 @@ classdef NSGAIIISampler < radia.optuna.BaseSampler
 
         function beforeTrial(obj,study,trial)
             obj.Core.beforeTrial(study,trial);
+            key=matlab.lang.makeValidName("NSGAIISampler:generation");
+            if isfield(trial.SystemAttrs,key)
+                trial.setSystemAttr("NSGAIIISampler:generation", ...
+                    trial.SystemAttrs.(key));
+            end
             attrs=trial.SystemAttrs;
             if isfield(attrs,"nsgaii_generation")
                 trial.setSystemAttr("nsgaiii_generation", ...
@@ -113,6 +111,10 @@ classdef NSGAIIISampler < radia.optuna.BaseSampler
 
         function afterTrial(obj,study,trial)
             obj.Core.afterTrial(study,trial);
+        end
+
+        function population=select_parent(obj,study,generation)
+            population=obj.Core.select_parent(study,generation);
         end
 
         function selectedNumbers=selectElitePopulation(obj,study,candidateNumbers)

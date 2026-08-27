@@ -17,11 +17,85 @@ import numpy as np
 import optuna
 import optuna.artifacts
 import optuna.importance
+import optuna.storages
 import optuna.terminator
 import scipy
 from optuna.trial import TrialState
 
 EXPECTED_VERSION = "4.9.0"
+
+
+def _storage_contract() -> dict[str, object]:
+    storage = optuna.storages.InMemoryStorage()
+    study_id = storage.create_new_study(
+        [optuna.study.StudyDirection.MINIMIZE], study_name="memory-oracle"
+    )
+    storage.set_study_user_attr(study_id, "owner", "oracle")
+    storage.set_study_system_attr(study_id, "revision", 4)
+    trial_id = storage.create_new_trial(study_id)
+    float_distribution = optuna.distributions.FloatDistribution(0.0, 1.0)
+    storage.set_trial_param(trial_id, "x", 0.5, float_distribution)
+    storage.set_trial_user_attr(trial_id, "label", "first")
+    storage.set_trial_system_attr(trial_id, "worker", 7)
+    storage.set_trial_intermediate_value(trial_id, 2, 3.5)
+    running = storage.get_trial(trial_id)
+    completed = storage.set_trial_state_values(trial_id, TrialState.COMPLETE, [1.25])
+    frozen = storage.get_trial(trial_id)
+    try:
+        storage.set_trial_user_attr(trial_id, "late", True)
+    except Exception as error:  # noqa: BLE001 - public exception contract.
+        finished_update_error = type(error).__name__
+
+    failed_id = storage.create_new_trial(study_id)
+    storage.set_trial_state_values(failed_id, TrialState.FAIL)
+    template_id = storage.create_new_trial(
+        study_id, optuna.trial.create_trial(value=0.25)
+    )
+    best = storage.get_best_trial(study_id)
+    summary = storage.get_all_studies()[0]
+    try:
+        storage.create_new_study(
+            [optuna.study.StudyDirection.MINIMIZE], study_name="memory-oracle"
+        )
+    except Exception as error:  # noqa: BLE001 - public exception contract.
+        duplicate_error = type(error).__name__
+    remove_result = storage.remove_session()
+    complete_trials = storage.get_all_trials(study_id, states=(TrialState.COMPLETE,))
+    return {
+        "base_is_abstract": inspect.isabstract(optuna.storages.BaseStorage),
+        "best_number": best.number,
+        "complete_numbers": [trial.number for trial in complete_trials],
+        "completed": completed,
+        "directions": [
+            direction.name for direction in storage.get_study_directions(study_id)
+        ],
+        "duplicate_error": duplicate_error,
+        "failed_id": failed_id,
+        "finished_update_error": finished_update_error,
+        "n_complete": storage.get_n_trials(study_id, TrialState.COMPLETE),
+        "n_trials": storage.get_n_trials(study_id),
+        "param_internal": storage.get_trial_param(trial_id, "x"),
+        "params": storage.get_trial_params(trial_id),
+        "remove_session_is_none": remove_result is None,
+        "running_state": running.state.name,
+        "study_id": study_id,
+        "study_name": storage.get_study_name_from_id(study_id),
+        "study_system_attrs": storage.get_study_system_attrs(study_id),
+        "study_user_attrs": storage.get_study_user_attrs(study_id),
+        "summary": {
+            "name": summary.study_name,
+        },
+        "template_id": template_id,
+        "trial_id": trial_id,
+        "trial_lookup_id": storage.get_trial_id_from_study_id_trial_number(
+            study_id, frozen.number
+        ),
+        "trial_number": storage.get_trial_number_from_id(trial_id),
+        "trial_state": frozen.state.name,
+        "trial_system_attrs": storage.get_trial_system_attrs(trial_id),
+        "trial_user_attrs": storage.get_trial_user_attrs(trial_id),
+        "trial_value": frozen.value,
+    }
 
 
 def _artifact_contract() -> dict[str, object]:
@@ -177,7 +251,9 @@ def _exception_contract() -> dict[str, object]:
             )
         result[name] = {
             "cases": cases,
-            "is_optuna_error": issubclass(exception_type, optuna.exceptions.OptunaError),
+            "is_optuna_error": issubclass(
+                exception_type, optuna.exceptions.OptunaError
+            ),
             "is_warning": issubclass(exception_type, Warning),
         }
     return result
@@ -209,7 +285,10 @@ def _logging_contract() -> dict[str, object]:
         "constants": constants,
         "disabled": disabled,
         "enabled": enabled,
-        "formatter": {"date_format": formatter.datefmt, "format": formatter._style._fmt},
+        "formatter": {
+            "date_format": formatter.datefmt,
+            "format": formatter._style._fmt,
+        },
         "initial": initial,
         "logger": {
             "handlers": len(logger.handlers),
@@ -249,7 +328,9 @@ def _sampler_seed_default_contract() -> dict[str, object]:
 
 
 def _sampler_public_member_contract() -> dict[str, object]:
-    def make_study() -> tuple[optuna.Study, optuna.trial.FrozenTrial, optuna.trial.FrozenTrial]:
+    def make_study() -> tuple[
+        optuna.Study, optuna.trial.FrozenTrial, optuna.trial.FrozenTrial
+    ]:
         study = optuna.create_study()
         for value in [0.2, 0.1]:
             trial = study.ask()
@@ -260,47 +341,64 @@ def _sampler_public_member_contract() -> dict[str, object]:
         trials = study.get_trials(deepcopy=False)
         return study, trials[-1], trials[0]
 
-    samplers = {
-        "BruteForceSampler": optuna.samplers.BruteForceSampler(seed=7),
-        "CmaEsSampler": optuna.samplers.CmaEsSampler(
-            seed=7, n_startup_trials=99
-        ),
-        "GPSampler": optuna.samplers.GPSampler(seed=7, n_startup_trials=99),
-        "GridSampler": optuna.samplers.GridSampler(
-            {"x": [0.0, 1.0], "y": [1, 3]}, seed=7
-        ),
-        "NSGAIIISampler": optuna.samplers.NSGAIIISampler(
-            seed=7, population_size=4
-        ),
-        "NSGAIISampler": optuna.samplers.NSGAIISampler(
-            seed=7, population_size=4
-        ),
-        "PartialFixedSampler": optuna.samplers.PartialFixedSampler(
-            {"x": 0.25},
-            optuna.samplers.TPESampler(
+    def make_samplers() -> dict[str, optuna.samplers.BaseSampler]:
+        return {
+            "BruteForceSampler": optuna.samplers.BruteForceSampler(seed=7),
+            "CmaEsSampler": optuna.samplers.CmaEsSampler(seed=7, n_startup_trials=99),
+            "GPSampler": optuna.samplers.GPSampler(seed=7, n_startup_trials=99),
+            "GridSampler": optuna.samplers.GridSampler(
+                {"x": [0.0, 1.0], "y": [1, 3]}, seed=7
+            ),
+            "NSGAIIISampler": optuna.samplers.NSGAIIISampler(seed=7, population_size=4),
+            "NSGAIISampler": optuna.samplers.NSGAIISampler(seed=7, population_size=4),
+            "PartialFixedSampler": optuna.samplers.PartialFixedSampler(
+                {"x": 0.25},
+                optuna.samplers.TPESampler(
+                    seed=7, n_startup_trials=1, multivariate=True
+                ),
+            ),
+            "QMCSampler": optuna.samplers.QMCSampler(
+                seed=7, warn_asynchronous_seeding=False
+            ),
+            "RandomSampler": optuna.samplers.RandomSampler(seed=7),
+            "TPESampler": optuna.samplers.TPESampler(
                 seed=7, n_startup_trials=1, multivariate=True
             ),
-        ),
-        "QMCSampler": optuna.samplers.QMCSampler(
-            seed=7, warn_asynchronous_seeding=False
-        ),
-        "RandomSampler": optuna.samplers.RandomSampler(seed=7),
-        "TPESampler": optuna.samplers.TPESampler(
-            seed=7, n_startup_trials=1, multivariate=True
-        ),
-    }
+        }
+
+    samplers = make_samplers()
+    direct_samplers = make_samplers()
     sampler_contract: dict[str, object] = {}
     for name, sampler in samplers.items():
         study, running, complete = make_study()
         search_space = sampler.infer_relative_search_space(study, running)
         before_result = sampler.before_trial(study, running)
+        running = study.get_trials(deepcopy=False)[-1]
         after_result = sampler.after_trial(
             study, complete, TrialState.COMPLETE, [complete.value]
+        )
+        direct_sampler = direct_samplers[name]
+        direct_study = optuna.create_study(sampler=direct_sampler)
+        direct_trial = direct_study.ask()
+        direct_trial = direct_study.get_trials(deepcopy=False)[-1]
+        direct_space = direct_sampler.infer_relative_search_space(
+            direct_study, direct_trial
+        )
+        independent = direct_sampler.sample_independent(
+            direct_study,
+            direct_trial,
+            "x",
+            optuna.distributions.FloatDistribution(0.0, 1.0, step=0.1),
+        )
+        relative = direct_sampler.sample_relative(
+            direct_study, direct_trial, direct_space
         )
         sampler_contract[name] = {
             "after_trial_returns_none": after_result is None,
             "before_trial_returns_none": before_result is None,
+            "independent_value": independent,
             "infer_relative_search_space_keys": sorted(search_space),
+            "relative_params": relative,
         }
 
     grid = optuna.samplers.GridSampler({"x": [0, 1]}, seed=7)
@@ -352,6 +450,34 @@ def _sampler_public_member_contract() -> dict[str, object]:
         mapped_namespaces[name] = module.__name__
 
     fixed = optuna.trial.FixedTrial({"x": 0.5})
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", FutureWarning)
+        hyperopt = optuna.samplers.TPESampler.hyperopt_parameters()
+
+    ga_contract: dict[str, object] = {}
+    for name, sampler in {
+        "NSGAIISampler": optuna.samplers.NSGAIISampler(seed=11, population_size=2),
+        "NSGAIIISampler": optuna.samplers.NSGAIIISampler(seed=11, population_size=2),
+    }.items():
+        study = optuna.create_study(sampler=sampler)
+        for objective in [3.0, 1.0, 2.0, 0.0]:
+            trial = study.ask()
+            trial.suggest_float("x", 0.0, 1.0)
+            study.tell(trial, objective)
+        trials = study.get_trials(deepcopy=False)
+        generation_key = f"{name}:generation"
+        generations = [trial.system_attrs[generation_key] for trial in trials]
+        population = sampler.get_population(study, 0)
+        parents = sampler.get_parent_population(study, 1)
+        selected = sampler.select_parent(study, 1)
+        sampler.population_size = 3
+        ga_contract[name] = {
+            "generations": generations,
+            "parent_numbers": [trial.number for trial in parents],
+            "population_numbers": [trial.number for trial in population],
+            "population_size_after_set": sampler.population_size,
+            "selected_numbers": [trial.number for trial in selected],
+        }
     return {
         "base_crossover_instantiation_error": base_crossover_error,
         "crossover_n_parents": {
@@ -360,6 +486,17 @@ def _sampler_public_member_contract() -> dict[str, object]:
         "fixed_trial_datetime_start_is_not_none": fixed.datetime_start is not None,
         "grid_is_exhausted_after": grid.is_exhausted(grid_study),
         "grid_is_exhausted_before": grid_exhausted_before,
+        "ga": ga_contract,
+        "hyperopt_parameters": {
+            "consider_endpoints": hyperopt["consider_endpoints"],
+            "consider_magic_clip": hyperopt["consider_magic_clip"],
+            "consider_prior": hyperopt["consider_prior"],
+            "gamma": [hyperopt["gamma"](count) for count in [0, 1, 16, 10000]],
+            "n_ei_candidates": hyperopt["n_ei_candidates"],
+            "n_startup_trials": hyperopt["n_startup_trials"],
+            "prior_weight": hyperopt["prior_weight"],
+            "weights": [hyperopt["weights"](count).tolist() for count in [0, 3, 27]],
+        },
         "mapped_namespaces": mapped_namespaces,
         "nsgaii_population_size": optuna.samplers.NSGAIISampler(
             population_size=5
@@ -518,12 +655,8 @@ def _tpe_group_contract() -> dict[str, object]:
 
     return {
         "sequence": rows,
-        "independent_warning_enabled_count": len(
-            capture(group=False, warn=True)
-        ),
-        "independent_warning_disabled_count": len(
-            capture(group=False, warn=False)
-        ),
+        "independent_warning_enabled_count": len(capture(group=False, warn=True)),
+        "independent_warning_disabled_count": len(capture(group=False, warn=False)),
         "group_warning_count": len(capture(group=True, warn=True)),
     }
 
@@ -549,9 +682,7 @@ def _tpe_categorical_distance_trials() -> list[dict[str, object]]:
         level = trial.suggest_categorical("level", levels)
         position = positions[level]
         study.tell(trial, (position - 1.3) ** 2)
-        rows.append(
-            {"number": trial.number, "level": level, "position": position}
-        )
+        rows.append({"number": trial.number, "level": level, "position": position})
     return rows
 
 
@@ -722,7 +853,9 @@ def _search_space_contract() -> dict[str, object]:
     }
     values = {"x": 0.5, "fixed": 2.0, "cat": "A", "z": 1}
 
-    def frozen(state: TrialState, current: dict[str, object]) -> optuna.trial.FrozenTrial:
+    def frozen(
+        state: TrialState, current: dict[str, object]
+    ) -> optuna.trial.FrozenTrial:
         return optuna.trial.create_trial(
             state=state,
             value=1.0 if state == TrialState.COMPLETE else None,
@@ -809,9 +942,7 @@ def _enum_contract() -> dict[str, object]:
             "bit_length": item.bit_length(),
             "conjugate": item.conjugate(),
             "denominator": item.denominator,
-            "from_bytes_name": enum_type.from_bytes(
-                bytes([0, value]), "big"
-            ).name,
+            "from_bytes_name": enum_type.from_bytes(bytes([0, value]), "big").name,
             "imag": item.imag,
             "is_integer": item.is_integer(),
             "name": item.name,
@@ -985,9 +1116,7 @@ def _qmc_warning_contract() -> dict[str, object]:
     )
 
     def sample_categorical(warn: bool) -> None:
-        sampler = optuna.samplers.QMCSampler(
-            seed=11, warn_independent_sampling=warn
-        )
+        sampler = optuna.samplers.QMCSampler(seed=11, warn_independent_sampling=warn)
         study = optuna.create_study(sampler=sampler)
         for _ in range(2):
             trial = study.ask()
@@ -1096,9 +1225,7 @@ def _grid_trials() -> list[dict[str, object]]:
 
 def _nsgaii_trials() -> list[dict[str, object]]:
     sampler = optuna.samplers.NSGAIISampler(seed=19, population_size=4)
-    study = optuna.create_study(
-        directions=["minimize", "minimize"], sampler=sampler
-    )
+    study = optuna.create_study(directions=["minimize", "minimize"], sampler=sampler)
     rows: list[dict[str, object]] = []
 
     def objective(trial: optuna.Trial) -> list[float]:
@@ -1169,9 +1296,7 @@ def _conditional_brute_force_trials() -> list[dict[str, str]]:
 
 
 def _cmaes_trials() -> list[dict[str, float]]:
-    sampler = optuna.samplers.CmaEsSampler(
-        seed=31, n_startup_trials=1, popsize=4
-    )
+    sampler = optuna.samplers.CmaEsSampler(seed=31, n_startup_trials=1, popsize=4)
     study = optuna.create_study(sampler=sampler)
     rows: list[dict[str, float]] = []
 
@@ -1209,9 +1334,7 @@ def _cmaes_independent_sampler_trials() -> list[dict[str, object]]:
 def _scrambled_qmc_trials() -> dict[str, list[dict[str, float]]]:
     result: dict[str, list[dict[str, float]]] = {}
     for qmc_type in ("sobol", "halton"):
-        sampler = optuna.samplers.QMCSampler(
-            qmc_type=qmc_type, scramble=True, seed=47
-        )
+        sampler = optuna.samplers.QMCSampler(qmc_type=qmc_type, scramble=True, seed=47)
         study = optuna.create_study(sampler=sampler)
         rows: list[dict[str, float]] = []
         for _ in range(16):
@@ -1285,7 +1408,10 @@ def _nsgaii_crossover_trials() -> dict[str, list[dict[str, float]]]:
             z = trial.suggest_float("z", 0.0, 3.0)
             study.tell(
                 trial,
-                [x * x + 0.2 * y * y + 0.1 * z, (x - 0.4) ** 2 + (y + 0.3) ** 2 + z * z],
+                [
+                    x * x + 0.2 * y * y + 0.1 * z,
+                    (x - 0.4) ** 2 + (y + 0.3) ** 2 + z * z,
+                ],
             )
             rows.append({"x": x, "y": y, "z": z})
         result[name] = rows
@@ -1308,9 +1434,7 @@ def _partial_fixed_trials() -> list[dict[str, float]]:
 
 
 def _multivariate_tpe_trials() -> list[dict[str, object]]:
-    sampler = optuna.samplers.TPESampler(
-        seed=67, n_startup_trials=4, multivariate=True
-    )
+    sampler = optuna.samplers.TPESampler(seed=67, n_startup_trials=4, multivariate=True)
     study = optuna.create_study(sampler=sampler)
     rows: list[dict[str, object]] = []
     for _ in range(30):
@@ -1320,9 +1444,7 @@ def _multivariate_tpe_trials() -> list[dict[str, object]]:
         mode = trial.suggest_categorical("mode", ["A", "B"])
         study.tell(
             trial,
-            (x - 0.2) ** 2
-            + 0.05 * mesh
-            + (0.0 if mode == "B" else 0.2),
+            (x - 0.2) ** 2 + 0.05 * mesh + (0.0 if mode == "B" else 0.2),
         )
         rows.append({"x": x, "mesh": mesh, "mode": mode})
     return rows
@@ -1331,9 +1453,7 @@ def _multivariate_tpe_trials() -> list[dict[str, object]]:
 def _unscrambled_qmc_trials() -> dict[str, list[dict[str, float]]]:
     result: dict[str, list[dict[str, float]]] = {}
     for qmc_type in ("sobol", "halton"):
-        sampler = optuna.samplers.QMCSampler(
-            qmc_type=qmc_type, scramble=False, seed=71
-        )
+        sampler = optuna.samplers.QMCSampler(qmc_type=qmc_type, scramble=False, seed=71)
         study = optuna.create_study(sampler=sampler)
         rows: list[dict[str, float]] = []
         for _ in range(16):
@@ -1379,9 +1499,7 @@ def _pruner_contract() -> dict[str, object]:
     maximize_trial = maximize.ask()
     maximize_trial.report(1.5, 0)
 
-    median = optuna.create_study(
-        pruner=optuna.pruners.MedianPruner(n_startup_trials=0)
-    )
+    median = optuna.create_study(pruner=optuna.pruners.MedianPruner(n_startup_trials=0))
     add_completed(median, [0], [1.0])
     add_completed(median, [0], [3.0])
     median_trial = median.ask()
@@ -1405,9 +1523,7 @@ def _pruner_contract() -> dict[str, object]:
     for step, value in enumerate([10.0, 4.0, 5.0, 6.0]):
         patient_trial.report(value, step)
     wrapped = optuna.create_study(
-        pruner=optuna.pruners.PatientPruner(
-            optuna.pruners.NopPruner(), patience=1
-        )
+        pruner=optuna.pruners.PatientPruner(optuna.pruners.NopPruner(), patience=1)
     )
     wrapped_trial = wrapped.ask()
     for step, value in enumerate([10.0, 4.0, 5.0, 6.0]):
@@ -1510,9 +1626,7 @@ def _constraint_contract() -> dict[str, object]:
     sampler = optuna.samplers.NSGAIISampler(
         seed=73, population_size=4, constraints_func=lambda trial: trial.user_attrs["c"]
     )
-    study = optuna.create_study(
-        directions=["minimize", "minimize"], sampler=sampler
-    )
+    study = optuna.create_study(directions=["minimize", "minimize"], sampler=sampler)
     values = [[0.0, 0.0], [1.0, 2.0], [2.0, 1.0], [-1.0, -1.0]]
     constraints = [[1.0], [-1.0], [0.0], [2.0]]
     for objective_values, constraint_values in zip(values, constraints, strict=True):
@@ -1522,7 +1636,9 @@ def _constraint_contract() -> dict[str, object]:
     return {
         "pareto_trial_numbers": sorted(trial.number for trial in study.best_trials),
         "states": [trial.state.name for trial in study.trials],
-        "constraints": [list(trial.system_attrs["constraints"]) for trial in study.trials],
+        "constraints": [
+            list(trial.system_attrs["constraints"]) for trial in study.trials
+        ],
     }
 
 
@@ -1628,9 +1744,7 @@ def _lifecycle_error_contract() -> dict[str, object]:
 
 
 def _fixed_trial_contract() -> dict[str, object]:
-    trial = optuna.trial.FixedTrial(
-        {"x": 0.5, "n": 3, "kind": "b"}, number=7
-    )
+    trial = optuna.trial.FixedTrial({"x": 0.5, "n": 3, "kind": "b"}, number=7)
     initial_params = dict(trial.params)
     values = {
         "x": float(trial.suggest_float("x", 0.0, 1.0)),
@@ -1705,9 +1819,7 @@ def _frozen_trial_contract() -> dict[str, object]:
     for name, operation in {
         "missing": lambda: trial.suggest_float("missing", 0.0, 1.0),
         "different_kind": lambda: trial.suggest_int("x", 0, 2),
-        "categorical_choices": lambda: trial.suggest_categorical(
-            "kind", ["a", "c"]
-        ),
+        "categorical_choices": lambda: trial.suggest_categorical("kind", ["a", "c"]),
     }.items():
         try:
             operation()
@@ -1734,9 +1846,7 @@ def _study_management_contract() -> dict[str, object]:
         optuna.trial.create_trial(
             value=1.25,
             params={"x": 0.5},
-            distributions={
-                "x": optuna.distributions.FloatDistribution(0.0, 1.0)
-            },
+            distributions={"x": optuna.distributions.FloatDistribution(0.0, 1.0)},
             user_attrs={"origin": "oracle"},
         )
     )
@@ -1835,12 +1945,12 @@ def _distribution_public_member_contract() -> dict[str, object]:
     return {
         "base_construction_error": base_error,
         "categorical_choice_type": str(distributions.CategoricalChoiceType),
-        "categorical_external": instances[
-            "CategoricalDistribution"
-        ].to_external_repr(2),
-        "categorical_internal": instances[
-            "CategoricalDistribution"
-        ].to_internal_repr("B"),
+        "categorical_external": instances["CategoricalDistribution"].to_external_repr(
+            2
+        ),
+        "categorical_internal": instances["CategoricalDistribution"].to_internal_repr(
+            "B"
+        ),
         "discrete_q": instances["DiscreteUniformDistribution"].q,
         "distribution_classes": registry,
         "float_external": instances["FloatDistribution"].to_external_repr(1.25),
@@ -1950,12 +2060,8 @@ def _trials_dataframe_contract() -> dict[str, object]:
         )
     )
     metric_attrs = ("number", "value", "params", "state")
-    metric_flat = metric_study.trials_dataframe(
-        attrs=metric_attrs, multi_index=False
-    )
-    metric_multi = metric_study.trials_dataframe(
-        attrs=metric_attrs, multi_index=True
-    )
+    metric_flat = metric_study.trials_dataframe(attrs=metric_attrs, multi_index=False)
+    metric_multi = metric_study.trials_dataframe(attrs=metric_attrs, multi_index=True)
     metric = _dataframe_snapshot(metric_flat)
     metric["multi_columns"] = _dataframe_snapshot(metric_multi)["multi_columns"]
 
@@ -2021,9 +2127,7 @@ def _importance_contract() -> dict[str, object]:
     evaluator = optuna.importance.FanovaImportanceEvaluator(
         n_trees=16, max_depth=16, seed=97
     )
-    importances = optuna.importance.get_param_importances(
-        study, evaluator=evaluator
-    )
+    importances = optuna.importance.get_param_importances(study, evaluator=evaluator)
     mdi = optuna.importance.MeanDecreaseImpurityImportanceEvaluator(
         n_trees=16, max_depth=16, seed=97
     )
@@ -2068,9 +2172,7 @@ def _terminator_contract() -> dict[str, object]:
     def frozen(values: list[float]) -> list[optuna.trial.FrozenTrial]:
         return [optuna.trial.create_trial(value=value) for value in values]
 
-    evaluator = optuna.terminator.BestValueStagnationEvaluator(
-        max_stagnation_trials=3
-    )
+    evaluator = optuna.terminator.BestValueStagnationEvaluator(max_stagnation_trials=3)
     remaining_minimize = evaluator.evaluate(
         frozen(minimizing), optuna.study.StudyDirection.MINIMIZE
     )
@@ -2167,6 +2269,7 @@ def build_oracle() -> dict[str, object]:
             "pruner": type(single.pruner).__name__,
         },
         "artifacts": _artifact_contract(),
+        "storage": _storage_contract(),
         "exceptions": _exception_contract(),
         "logging": _logging_contract(),
         "sampler_seed_defaults": _sampler_seed_default_contract(),
