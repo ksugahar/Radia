@@ -848,12 +848,8 @@ classdef NSGAIISampler < radia.optuna.BaseGASampler
         end
 
         function value=roundTiesToEven(~,value)
-            lower=floor(value);
-            fraction=value-lower;
-            value=round(value);
-            ties=fraction==0.5;
-            value(ties & mod(lower,2)==0)=lower(ties & mod(lower,2)==0);
-            value(ties & mod(lower,2)~=0)=lower(ties & mod(lower,2)~=0)+1;
+            value=radia.optuna.internal.UpstreamNumerics.roundTiesToEven( ...
+                value);
         end
 
         function value=nextDown(~,value)

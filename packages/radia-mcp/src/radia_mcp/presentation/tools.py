@@ -8,8 +8,12 @@ accidentally register a second MCP server).
 from __future__ import annotations
 
 import json
+import hashlib
 import pathlib
 import re
+import zipfile
+
+from radia_mcp.common.pptx_svg import picture_svg_blob, svg_geometry
 
 # Plan B Tier 1 (v0.12.0) — composite score + human-advisor comments
 from .plans.T1 import presentation_opening_hook_strength  # noqa: F401
@@ -22,7 +26,10 @@ from .plans.T5 import presentation_check_progress_indicator  # noqa: F401
 from .plans.T6 import presentation_visual_text_ratio_score  # noqa: F401
 from .plans.T7 import presentation_speaker_note_ratio  # noqa: F401
 from .plans.T8 import presentation_font_consistency  # noqa: F401
-from .plans.T9 import presentation_arrow_usage  # noqa: F401
+from .plans.T9 import (  # noqa: F401
+    presentation_arrow_usage,
+    presentation_check_arrow_layering,
+)
 from .plans.T10 import presentation_check_underline_in_pptx  # noqa: F401
 from .plans.T11 import presentation_slide_density_balance  # noqa: F401
 
@@ -109,6 +116,27 @@ def _load_skill() -> str:
 # ------------------------------------------------------------------
 # Shared pptx helpers (module-level to keep DRY across checks)
 # ------------------------------------------------------------------
+
+# Text boxes injected by presentation_replace_embedded_figure_text: figure
+# text lifted out of the raster and re-laid as native runs.  They are figure
+# content held to the pasted-figure floor, never the slide title -- and on a
+# blank-layout deck the injected box can easily be the largest text present,
+# so it must be excluded from title detection rather than out-ranked by it.
+_FIGURE_TEXT_SHAPE_PREFIX = "FIGURE_TEXT::"
+
+# Vertical bound shared by _slide_title's fallback and
+# _shape_is_slide_title, so the two can never disagree about whether a
+# given shape is the title.
+_TITLE_MAX_TOP_FRACTION = 0.45
+
+
+def _is_figure_text_shape(shape) -> bool:
+    """Return whether *shape* is an injected figure-text overlay."""
+    return str(getattr(shape, "name", "") or "").startswith(
+        _FIGURE_TEXT_SHAPE_PREFIX
+    )
+
+
 def _slide_title(slide) -> str:
     """Return the slide title robustly.
 
@@ -138,45 +166,62 @@ def _slide_title(slide) -> str:
                 continue
     except Exception:
         pass
-    # 2) No title placeholder (a Blank layout drawn by hand). Shape order alone
-    #    picks whatever text box happens to come first, which on a COVER slide
-    #    is the venue and paper number sitting above the title -- measured on
-    #    the MMPM deck, where that 24 pt line was then held to the 32 pt title
-    #    floor while the actual 54 pt title was called body text.
-    #
-    #    Two better readings, in order:
-    #      a) a full-width bar at the very top is the deck's title band;
-    #      b) otherwise the LARGEST text in the upper part of the slide.
+    # 2) Prefer an explicit large header near the top.  Blank-layout decks
+    # often use ordinary text boxes rather than a title placeholder.  The old
+    # shape-order fallback mistook conference metadata on title slides for the
+    # title and consequently applied title-size rules to 24 pt metadata.
     try:
-        slide_h = float(slide.part.package.presentation_part.presentation.slide_height)
-        slide_w = float(slide.part.package.presentation_part.presentation.slide_width)
-    except Exception:
-        slide_h = slide_w = 0.0
-
-    candidates = []
-    try:
-        for shape in slide.shapes:
+        slide_h = float(
+            slide.part.package.presentation_part.presentation.slide_height
+        )
+        slide_w = float(
+            slide.part.package.presentation_part.presentation.slide_width
+        )
+        candidates = []
+        for shape in _walk_shapes(slide.shapes):
             try:
                 if not shape.has_text_frame or not shape.text_frame.text.strip():
                     continue
-                # A reconstructed figure label lives INSIDE a picture; it is
-                # never the slide's title, whatever its size or position.
-                if str(getattr(shape, "name", "")).startswith("FIGURE_TEXT::"):
+                if _is_figure_text_shape(shape):
                     continue
-            except Exception:
-                continue
-            first = shape.text_frame.text.splitlines()[0]
-            top = float(getattr(shape, "top", 0) or 0)
-            width = float(getattr(shape, "width", 0) or 0)
-            size = 0.0
-            try:
+                sizes = []
                 for para in shape.text_frame.paragraphs:
+                    if para.font.size is not None:
+                        sizes.append(float(para.font.size.pt))
                     for run in para.runs:
                         if run.font.size is not None:
-                            size = max(size, float(run.font.size.pt))
+                            sizes.append(float(run.font.size.pt))
+                max_size = max(sizes) if sizes else 0.0
+                candidates.append({
+                    "text": shape.text_frame.text.splitlines()[0],
+                    "top": float(shape.top),
+                    "width": float(shape.width),
+                    "font": max_size,
+                })
             except Exception:
-                pass
-            candidates.append({"text": first, "top": top, "width": width, "size": size})
+                continue
+        headers = [
+            item for item in candidates
+            if item["top"] < 0.18 * slide_h
+            and item["width"] >= 0.40 * slide_w
+            and item["font"] >= 32.0
+        ]
+        if headers:
+            return max(headers, key=lambda item: (item["font"], -item["top"]))[
+                "text"
+            ]
+        # The fallback keeps the same vertical bound that _shape_is_slide_title
+        # applies.  Without it the two disagreed: this function could name a
+        # bottom-half text box as the title while _shape_is_slide_title refused
+        # it, leaving the slide with a title string that no shape owns.
+        upper = [
+            item for item in candidates
+            if item["top"] < _TITLE_MAX_TOP_FRACTION * slide_h
+        ]
+        if upper:
+            return max(upper, key=lambda item: (item["font"], -item["top"]))[
+                "text"
+            ]
     except Exception:
         pass
     if not candidates:
@@ -222,6 +267,72 @@ def _walk_shapes(shape_collection):
             yield s
 
 
+def _paragraph_is_bullet(paragraph, shape=None) -> bool:
+    """Return whether a paragraph is an actual bulleted/list item.
+
+    PowerPoint stores explicit bullets as ``a:buChar``, ``a:buAutoNum`` or
+    ``a:buBlip``.  Body/content placeholders may inherit bullets from their
+    layout, so they are treated as list items unless ``a:buNone`` is explicit.
+    Plain paragraphs in independent text boxes are not bullets merely because
+    they occupy separate lines.
+    """
+    text_value = paragraph.text.strip()
+    if not text_value:
+        return False
+    p_pr = getattr(paragraph._p, "pPr", None)
+    if p_pr is not None:
+        local_names = {
+            str(child.tag).rsplit("}", 1)[-1] for child in list(p_pr)
+        }
+        if "buNone" in local_names:
+            return False
+        if local_names.intersection({"buChar", "buAutoNum", "buBlip"}):
+            return True
+    if re.match(r"^[•◦▪▫●○‣⁃]\s*", text_value):
+        return True
+    if shape is not None:
+        try:
+            from pptx.enum.shapes import PP_PLACEHOLDER
+            placeholder_type = shape.placeholder_format.type
+            inherited_bullet_types = {
+                getattr(PP_PLACEHOLDER, name, None)
+                for name in ("BODY", "OBJECT", "VERTICAL_BODY", "VERTICAL_OBJECT")
+            }
+            if placeholder_type in inherited_bullet_types:
+                return True
+        except Exception:
+            pass
+    return False
+
+
+def _svg_dimensions(blob: bytes) -> tuple[float, float]:
+    """Return intrinsic SVG dimensions, preferring its viewBox.
+
+    Callers use these only for the aspect ratio and a positivity check, so the
+    viewBox extents are returned when present and the point-converted
+    width/height otherwise.  The parsing itself is shared with the figure
+    paste-scale audit so the two audits cannot disagree about one file.
+    """
+    geometry = svg_geometry(blob)
+    if geometry["view_width"] > 0 and geometry["view_height"] > 0:
+        return geometry["view_width"], geometry["view_height"]
+    if geometry["width_pt"] > 0 and geometry["height_pt"] > 0:
+        return geometry["width_pt"], geometry["height_pt"]
+    raise ValueError("SVG has no positive viewBox or width/height")
+
+
+def _picture_source(shape) -> tuple[bytes, tuple[float, float], str]:
+    """Resolve a picture's real asset, including SVG-only PowerPoint shapes."""
+    blob = picture_svg_blob(shape)
+    if blob is not None:
+        return blob, _svg_dimensions(blob), "svg"
+
+    image = shape.image
+    blob = bytes(image.blob)
+    width, height = image.size
+    return blob, (float(width), float(height)), image.ext
+
+
 def _shape_is_slide_title(shape, slide) -> bool:
     """Return whether *shape* is the audience-facing slide title."""
     try:
@@ -238,9 +349,7 @@ def _shape_is_slide_title(shape, slide) -> bool:
         if first_line != _slide_title(slide).strip():
             return False
         slide_h = float(slide.part.package.presentation_part.presentation.slide_height)
-        # The band matches the one _slide_title searches: a cover slide sets
-        # its title below the top fifth, under the venue line.
-        return float(shape.top) < 0.40 * slide_h
+        return float(shape.top) < _TITLE_MAX_TOP_FRACTION * slide_h
     except Exception:
         return False
 
@@ -490,6 +599,7 @@ def presentation_usage() -> str:
     - presentation_check_script_paragraph_length / check_takehome_slide
     - presentation_check_slide_title_specificity / check_slide_message_hierarchy
       (check_slide_title_verb は後方互換 alias)
+    - presentation_check_quantitative_claim_context
     - presentation_check_pptx_font_size
     - presentation_check_bullet_count_per_slide / check_bullet_ending_style
     - presentation_check_japanese_copy_style
@@ -514,6 +624,7 @@ def presentation_usage() -> str:
     - presentation_speaker_note_ratio (T7)
     - presentation_font_consistency (T8, 宮野 S11)
     - presentation_arrow_usage (T9, 宮野 S10)
+    - presentation_check_arrow_layering
     - presentation_check_underline_in_pptx (T10, 宮野 S14)
     - presentation_slide_density_balance (T11)
 
@@ -1160,6 +1271,218 @@ def presentation_check_takehome_slide(pptx_path: str) -> dict:
     }
 
 
+def presentation_check_quantitative_claim_context(pptx_path: str) -> dict:
+    """強調百分率に、量・位置/集約・比較基準が伴うかを点検。
+
+    数値そのものの正否ではなく、聴衆がその場で「どこの何を、何と比べた
+    値か」を復元できるかを診断する。q6 のような未定義の内部 mesh ID も
+    audience-facing copy として警告する。
+    """
+    try:
+        import pptx as _pptx
+    except ImportError:
+        return {"error": "python-pptx not installed."}
+    p = pathlib.Path(pptx_path)
+    if not p.exists():
+        return {"error": f"file not found: {pptx_path}"}
+
+    prs = _pptx.Presentation(str(p))
+    percent_only = re.compile(
+        r"^\s*[+\-−]?\d+(?:\.\d+)?(?:[eE][+\-]?\d+)?\s*[%％]\s*$"
+    )
+    # Field-symbol alternatives are anchored on both sides and kept
+    # case-sensitive.  Without that, the bare "M" inside FEM/Mesh/MATLAB (or
+    # "B" inside BEM, "H" inside HDiv) satisfied the quantity requirement and
+    # the check silently passed on almost any deck.
+    quantity_pat = re.compile(
+        r"(?:"
+        r"(?<![0-9A-Za-z])(?-i:[BMH])(?:[_ ]?(?-i:[xyzXYZ]))?(?![0-9A-Za-z])"
+        r"|磁束密度|磁場|磁化|温度|損失|誤差|偏差|変動|精度"
+        r"|(?<![0-9A-Za-z])(?:RMSE|IAE|flux|field|magneti[sz]ation|"
+        r"temperature|loss|error|deviation|accuracy)(?![0-9A-Za-z])"
+        r")",
+        re.IGNORECASE,
+    )
+    scope_pat = re.compile(
+        r"(?:中央|ギャップ|体積平均|面積平均|平均|最大|最小|表面|内部|外部|"
+        r"観測点|評価点|位置|正則格子|低\s*[μµ]|高\s*[μµ]|条件|"
+        r"center|gap|volume.?average|mean|average|max(?:imum)?|min(?:imum)?|"
+        r"surface|internal|external|observation.?point|location|condition)",
+        re.IGNORECASE,
+    )
+    reference_pat = re.compile(
+        r"(?:FEM|基準|差|比較|参照|対|Mesh|メッシュ|実測|解析解|正則格子|"
+        r"reference|baseline|difference|comparison|versus|\bvs\.?\b)",
+        re.IGNORECASE,
+    )
+    internal_id_pat = re.compile(r"(?<![A-Za-z0-9])q\d+(?![A-Za-z0-9])", re.IGNORECASE)
+    definition_pat = re.compile(
+        r"(?:q\d+\s*[=:：]|q\d+\s*は|分割|要素|DOF|自由度|mesh\s*size)",
+        re.IGNORECASE,
+    )
+
+    findings = []
+    checked_metrics = 0
+    for slide_no, slide in enumerate(prs.slides, 1):
+        texts = []
+        metric_texts = []
+        # Descend into groups: a percentage inside a grouped shape is just as
+        # audience-facing as a top-level one.
+        for shape in _walk_shapes(slide.shapes):
+            if not getattr(shape, "has_text_frame", False):
+                continue
+            text_value = (shape.text or "").strip()
+            if not text_value:
+                continue
+            texts.append(text_value)
+            if percent_only.fullmatch(text_value):
+                metric_texts.append(text_value)
+        slide_text = "\n".join(texts)
+        if metric_texts:
+            checked_metrics += len(metric_texts)
+            # The context terms are searched over the whole slide, so every
+            # metric on a slide shares one verdict.  Report it once, listing
+            # the metrics, instead of emitting identical findings per metric.
+            missing = []
+            if not quantity_pat.search(slide_text):
+                missing.append("quantity")
+            if not scope_pat.search(slide_text):
+                missing.append("location_or_aggregation")
+            if not reference_pat.search(slide_text):
+                missing.append("reference_or_baseline")
+            if missing:
+                findings.append({
+                    "slide": slide_no,
+                    "metrics": metric_texts,
+                    "issue": "ambiguous_percentage",
+                    "missing": missing,
+                    "fix": (
+                        "百分率の近くに、物理量、評価位置または集約方法、"
+                        "比較基準を明記する。"
+                    ),
+                })
+        internal_ids = sorted(set(internal_id_pat.findall(slide_text)))
+        if internal_ids and not definition_pat.search(slide_text):
+            findings.append({
+                "slide": slide_no,
+                "issue": "undefined_internal_identifier",
+                "identifiers": internal_ids,
+                "fix": (
+                    "内部 mesh ID を削除するか、要素数・自由度・分割条件として定義する。"
+                ),
+            })
+
+    return {
+        "passed": not findings,
+        "slides_checked": len(prs.slides),
+        "percentage_metrics_checked": checked_metrics,
+        "finding_count": len(findings),
+        "findings": findings,
+        "rule": (
+            "強調百分率は、量・位置/集約・比較基準・条件と一体で示す。"
+            "未定義の内部 mesh ID は audience-facing copy に残さない。"
+        ),
+        "hint": (
+            "例：『ギャップ中央 Bz：FEM 基準との差 0.28%』。"
+            "数値単独の大見出しを避ける。"
+        ),
+    }
+
+
+def presentation_check_pptx_notes_encoding(
+    pptx_path: str,
+    exported_notes_path: str | None = None,
+) -> dict:
+    """PPTXノートのUTF-8復号と外部ノートのUTF-8 BOMを点検する。
+
+    PowerPoint内部の ``notesSlide*.xml`` に復号不能バイト、置換文字、
+    代表的な日本語文字化け断片がないかを調べる。レビュー用Markdown等を
+    ``exported_notes_path`` に渡した場合は、Windows互換のUTF-8 BOMも確認する。
+    """
+    pptx = pathlib.Path(pptx_path)
+    if not pptx.exists():
+        return {"error": f"file not found: {pptx_path}"}
+
+    findings = []
+    notes_count = 0
+    mojibake_markers = ("\ufffd", "縺", "譁", "陦", "鬘")
+    try:
+        with zipfile.ZipFile(pptx) as archive:
+            note_names = sorted(
+                name for name in archive.namelist()
+                if re.fullmatch(r"ppt/notesSlides/notesSlide\d+\.xml", name)
+            )
+            notes_count = len(note_names)
+            for name in note_names:
+                raw = archive.read(name)
+                try:
+                    text_value = raw.decode("utf-8")
+                except UnicodeDecodeError as exc:
+                    findings.append({
+                        "source": name,
+                        "issue": "invalid_utf8",
+                        "detail": str(exc),
+                    })
+                    continue
+                markers = [m for m in mojibake_markers if m in text_value]
+                if markers:
+                    findings.append({
+                        "source": name,
+                        "issue": "possible_mojibake",
+                        "markers": markers,
+                    })
+    except zipfile.BadZipFile:
+        return {"error": f"not a valid pptx/zip file: {pptx_path}"}
+
+    exported = None
+    if exported_notes_path:
+        exported_path = pathlib.Path(exported_notes_path)
+        if not exported_path.exists():
+            findings.append({
+                "source": str(exported_path),
+                "issue": "file_not_found",
+            })
+        else:
+            raw = exported_path.read_bytes()
+            has_bom = raw.startswith(b"\xef\xbb\xbf")
+            exported = {"path": str(exported_path), "utf8_bom": has_bom}
+            try:
+                text_value = raw.decode("utf-8-sig")
+            except UnicodeDecodeError as exc:
+                findings.append({
+                    "source": str(exported_path),
+                    "issue": "invalid_utf8",
+                    "detail": str(exc),
+                })
+            else:
+                markers = [m for m in mojibake_markers if m in text_value]
+                if markers:
+                    findings.append({
+                        "source": str(exported_path),
+                        "issue": "possible_mojibake",
+                        "markers": markers,
+                    })
+            if not has_bom:
+                findings.append({
+                    "source": str(exported_path),
+                    "issue": "missing_utf8_bom",
+                    "fix": "日本語ノートはUTF-8 BOM付きで書き出す。",
+                })
+
+    return {
+        "passed": not findings,
+        "pptx": str(pptx),
+        "notes_xml_checked": notes_count,
+        "exported_notes": exported,
+        "finding_count": len(findings),
+        "findings": findings,
+        "rule": (
+            "PPTXノートXMLはUTF-8で復号でき、置換文字や文字化け断片を含まない。"
+            "外部の日本語ノートはUTF-8 BOM付きで配布する。"
+        ),
+    }
+
+
 def presentation_check_slide_title_specificity(
         pptx_path: str,
         max_title_chars: int = 28,
@@ -1203,11 +1526,12 @@ def presentation_check_slide_title_specificity(
     viewpoint_terms = re.compile(
         r"(?:評価|検証|比較|条件|モデル|依存|分解|対応|性能|精度|閉包|"
         r"感度|頑健|高速化|適用|展開|限界|課題|定義|設計|測定|同定|"
-        r"解析|原理|機構|構造|実装|停止則|モード|"
+        r"解析|原理|機構|構造|実装|停止則|モード|特性|挙動|分布|傾向|"
         r"evaluation|validation|comparison|condition|model|dependence|"
         r"decomposition|performance|accuracy|closure|sensitivity|robustness|"
         r"acceleration|application|limitation|design|measurement|identification|"
-        r"analysis|principle|mechanism|structure|implementation|loop[- ]?free)",
+        r"analysis|principle|mechanism|structure|implementation|"
+        r"characteristic|behavior|distribution|trend|loop[- ]?free)",
         re.IGNORECASE,
     )
     structural_title = re.compile(
@@ -1664,9 +1988,13 @@ def presentation_check_pptx_font_size(pptx_path: str,
                     for run in para.runs if run.text.strip()
                 )
                 continue
-            is_title = _shape_is_slide_title(shape, slide)
-            is_figure_text = getattr(shape, "name", "").startswith(
-                "FIGURE_TEXT::"
+            is_figure_text = _is_figure_text_shape(shape)
+            # Figure text wins over the title classification: an injected
+            # overlay is figure content even if it happens to repeat the
+            # title string, and the title floor would over-constrain it.
+            is_title = (
+                False if is_figure_text
+                else _shape_is_slide_title(shape, slide)
             )
             limit = (
                 min_title_pt if is_title
@@ -1756,7 +2084,7 @@ def presentation_check_bullet_count_per_slide(pptx_path: str,
                 except Exception:
                     pass
             for para in shape.text_frame.paragraphs:
-                if para.text.strip():
+                if _paragraph_is_bullet(para, shape):
                     bullets += 1
         if bullets > max_bullets:
             over_count += 1
@@ -1840,6 +2168,33 @@ def presentation_check_final_deck_directory(
         return {"error": f"directory not found: {directory_path}"}
     if not root.is_dir():
         return {"error": f"not a directory: {directory_path}"}
+
+    # A finalized deck normally keeps deterministic figure-text evidence
+    # beside its assets.  Requiring every caller to repeat that path made the
+    # directory-level gate fail even though the canonical manifest was
+    # present and the dedicated audit passed.  Explicit arguments remain
+    # authoritative; auto-discovery only fills the default empty settings.
+    # Because discovery changes which backend runs, the result records where
+    # the manifest and backend came from and which paths were searched: the
+    # same command on two machines can otherwise reach different verdicts with
+    # nothing in the report explaining why.
+    manifest_candidates = (
+        root / "assets" / "data" / "figure_text_source_evidence.json",
+        root / "figure_text_source_evidence.json",
+    )
+    manifest_source = "explicit" if figure_text_ocr_manifest_path else "none"
+    backend_source = "explicit" if figure_text_ocr_backend != "none" else "default"
+    if not figure_text_ocr_manifest_path:
+        discovered_manifest = next(
+            (path for path in manifest_candidates if path.is_file()), None
+        )
+        if discovered_manifest is not None:
+            figure_text_ocr_manifest_path = str(discovered_manifest)
+            manifest_source = "discovered"
+    if (figure_text_ocr_backend == "none"
+            and figure_text_ocr_manifest_path):
+        figure_text_ocr_backend = "manifest"
+        backend_source = manifest_source
 
     top_level_pptx = sorted(
         (path for path in root.glob("*.pptx") if path.is_file()),
@@ -1932,6 +2287,13 @@ def presentation_check_final_deck_directory(
         "backup_slide_count": backup_slide_count,
         "backup_slides": backup_slides,
         "figure_text_audit": figure_text_audit,
+        "figure_text_ocr_backend": figure_text_ocr_backend,
+        "figure_text_ocr_backend_source": backend_source,
+        "figure_text_ocr_manifest_path": figure_text_ocr_manifest_path,
+        "figure_text_ocr_manifest_source": manifest_source,
+        "figure_text_ocr_manifest_candidates": [
+            str(path) for path in manifest_candidates
+        ],
         "open_error": open_error,
         "issues": issues,
         "rule": (
@@ -1985,7 +2347,9 @@ def presentation_check_image_aspect_ratio(
             images_checked += 1
             shape_name = getattr(shape, "name", "")
             try:
-                image_width, image_height = shape.image.size
+                _, (image_width, image_height), source_type = (
+                    _picture_source(shape)
+                )
                 frame_width = int(shape.width)
                 frame_height = int(shape.height)
                 crop_left = float(shape.crop_left or 0.0)
@@ -2032,6 +2396,7 @@ def presentation_check_image_aspect_ratio(
                         "top": crop_top,
                         "bottom": crop_bottom,
                     },
+                    "source_type": source_type,
                 })
 
     passed = not violations and not unresolved
@@ -2109,6 +2474,8 @@ def presentation_check_embedded_figure_text_size(
 
     confirmed_textless = set(confirmed_textless_shapes or [])
     manifest = {}
+    manifest_by_slide = {}
+    manifest_by_asset = {}
     if ocr_backend == "manifest":
         manifest_path = pathlib.Path(ocr_manifest_path)
         if not manifest_path.exists():
@@ -2116,8 +2483,14 @@ def presentation_check_embedded_figure_text_size(
         try:
             payload = json.loads(manifest_path.read_text(encoding="utf-8"))
             for item in payload.get("pictures", []):
-                key = (int(item["slide"]), str(item["shape"]))
-                manifest[key] = item
+                slide_no = int(item["slide"])
+                shape_name = str(item.get("shape", ""))
+                if shape_name:
+                    manifest[(slide_no, shape_name)] = item
+                manifest_by_slide.setdefault(slide_no, []).append(item)
+                asset_sha1 = str(item.get("asset_sha1", "")).lower().strip()
+                if asset_sha1:
+                    manifest_by_asset[(slide_no, asset_sha1)] = item
         except Exception as exc:
             return {"error": f"invalid OCR manifest: {exc}"}
 
@@ -2210,13 +2583,40 @@ def presentation_check_embedded_figure_text_size(
                 continue
 
             try:
-                image_width, image_height = shape.image.size
+                image_blob, (image_width, image_height), source_type = (
+                    _picture_source(shape)
+                )
                 if image_width <= 0 or image_height <= 0:
                     raise ValueError("invalid embedded image dimensions")
                 if ocr_backend == "manifest":
+                    # Two identifying matches only: the declared (slide, shape)
+                    # key, then the content-addressed asset hash.  Matching a
+                    # picture to "the only manifest entry on this slide" is a
+                    # guess -- with two pictures and one entry it silently
+                    # audits the unlisted picture against the wrong source
+                    # width and can pass it.  A stale manifest must be fixed,
+                    # not guessed around.
                     manifest_item = manifest.get((slide_index, shape_name))
                     if manifest_item is None:
-                        raise ValueError("picture is missing from OCR manifest")
+                        image_sha1 = hashlib.sha1(image_blob).hexdigest()
+                        for (item_slide, prefix), item in manifest_by_asset.items():
+                            if (item_slide == slide_index
+                                    and image_sha1.startswith(prefix)):
+                                manifest_item = item
+                                break
+                    if manifest_item is None:
+                        known = sorted(
+                            str(item.get("shape", "") or "<no shape name>")
+                            for item in manifest_by_slide.get(slide_index, [])
+                        )
+                        raise ValueError(
+                            "picture is missing from OCR manifest: no entry "
+                            f"for shape {shape_name!r} and no asset_sha1 "
+                            f"matching {hashlib.sha1(image_blob).hexdigest()[:10]}. "
+                            f"Manifest entries on slide {slide_index}: "
+                            f"{known or '(none)'}. Add the picture to the "
+                            "manifest (shape name or asset_sha1)."
+                        )
                     if manifest_item.get("confirmed_textless"):
                         picture_reports.append({
                             "slide": slide_index,
@@ -2277,6 +2677,10 @@ def presentation_check_embedded_figure_text_size(
                                 if minimum < min_font_pt else "pass"
                             ),
                             "evidence_type": "source_size",
+                            "source_type": source_type,
+                            "asset_sha1": hashlib.sha1(
+                                image_blob
+                            ).hexdigest()[:10],
                             "minimum_source_font_pt": round(
                                 source_font_pt, 2
                             ),
@@ -2295,7 +2699,11 @@ def presentation_check_embedded_figure_text_size(
                         continue
                     words = list(manifest_item.get("words", []))
                 elif ocr_backend == "gcv":
-                    words = _gcv_words(shape.image.blob)
+                    if source_type == "svg":
+                        raise ValueError(
+                            "gcv OCR requires a rasterized SVG or manifest"
+                        )
+                    words = _gcv_words(image_blob)
                 else:
                     raise ValueError("OCR or source-size evidence is required")
 
@@ -2617,12 +3025,12 @@ def presentation_check_bullet_ending_style(pptx_path: str) -> dict:
     without_period = 0
     examples = []
     for i, slide in enumerate(prs.slides, 1):
-        for shape in slide.shapes:
+        for shape in _walk_shapes(slide.shapes):
             if not shape.has_text_frame:
                 continue
             for para in shape.text_frame.paragraphs:
                 t = para.text.strip()
-                if not t:
+                if not _paragraph_is_bullet(para, shape):
                     continue
                 if t.endswith(("。", ".")):
                     with_period += 1

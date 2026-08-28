@@ -172,9 +172,15 @@ classdef TPESampler < radia.optuna.BaseSampler
                 value = low;
                 return
             end
-            [x, y, trialNumbers, pending] = ...
+            if study.nonRunningTrialCount() < obj.NStartupTrials
+                value = obj.IndependentSampler.sampleFloat( ...
+                    study, trial, name, low, high, options);
+                return
+            end
+            [x, y, trialNumbers, pending, states] = ...
                 obj.numericObservations(study, name);
-            valid = isfinite(x) & isfinite(y) & x >= low & x <= high;
+            valid = isfinite(x) & (isfinite(y) | states=="PRUNED") & ...
+                x >= low & x <= high;
             if options.Log
                 valid = valid & x > 0;
             end
@@ -182,15 +188,11 @@ classdef TPESampler < radia.optuna.BaseSampler
             y = y(valid);
             trialNumbers = trialNumbers(valid);
             pending = pending(valid);
-            finishedCount = sum(~pending);
-            if finishedCount == 0 || finishedCount < obj.NStartupTrials
-                value = obj.IndependentSampler.sampleFloat( ...
-                    study, trial, name, low, high, options);
-                return
-            end
+            states = states(valid);
 
             [good, bad] = obj.splitObservations( ...
-                x, y, study.Directions(1), study, trialNumbers, pending);
+                x, y, study.Directions(1), study, trialNumbers, pending, ...
+                states);
             belowWeights=obj.observationWeights(numel(good));
             aboveWeights=obj.observationWeights(numel(bad));
             nativeHandle=obj.Stream.nativeHandle();
@@ -256,7 +258,8 @@ classdef TPESampler < radia.optuna.BaseSampler
             end
             value = obj.sampleFloat(study, trial, name, low, high, ...
                 struct("Log", false, "Step", 1));
-            value = min(max(round(value), low), high);
+            value = min(max(radia.optuna.internal.UpstreamNumerics. ...
+                roundTiesToEven(value), low), high);
         end
 
         function value = sampleCategorical(obj, study, trial, name, choices)
@@ -271,11 +274,16 @@ classdef TPESampler < radia.optuna.BaseSampler
                 error("radia:optuna:Choices", ...
                     "Categorical choices must not be empty.");
             end
-            [tokens, y, trialNumbers, pending] = ...
+            if study.nonRunningTrialCount() < obj.NStartupTrials
+                value = obj.IndependentSampler.sampleCategorical( ...
+                    study, trial, name, choices);
+                return
+            end
+            [tokens, y, trialNumbers, pending, states] = ...
                 obj.categoricalObservations(study, name);
             choiceTokens = obj.choiceTokens(choices);
             observed = zeros(numel(tokens), 1);
-            valid = isfinite(y);
+            valid = isfinite(y) | states=="PRUNED";
             for index = 1:numel(tokens)
                 match = find(choiceTokens == tokens(index), 1);
                 if isempty(match)
@@ -288,17 +296,12 @@ classdef TPESampler < radia.optuna.BaseSampler
             y = y(valid);
             trialNumbers = trialNumbers(valid);
             pending = pending(valid);
+            states = states(valid);
             count = numel(choiceTokens);
-            finishedCount = sum(~pending);
-            if finishedCount == 0 || finishedCount < obj.NStartupTrials
-                value = obj.IndependentSampler.sampleCategorical( ...
-                    study, trial, name, choices);
-                return
-            end
 
             [good, bad] = obj.splitObservations( ...
                 observed, y, study.Directions(1), study, ...
-                trialNumbers, pending);
+                trialNumbers, pending, states);
             below = radia.optuna.internal.ParzenEstimator.categorical( ...
                 good, count, PriorWeight=obj.PriorWeight, ...
                 ObservationWeights=obj.observationWeights(numel(good)), ...
@@ -335,10 +338,7 @@ classdef TPESampler < radia.optuna.BaseSampler
                 return
             end
             obj.attach(study);
-            trials=study.trialData();
-            finished = trials.State == "COMPLETE" | ...
-                trials.State == "PRUNED";
-            if sum(finished) < obj.NStartupTrials
+            if study.nonRunningTrialCount() < obj.NStartupTrials
                 values = zeros(1,numel(names));
                 for index = 1:numel(names)
                     values(index) = obj.IndependentSampler.sampleFloat( ...
@@ -402,10 +402,7 @@ classdef TPESampler < radia.optuna.BaseSampler
             if ~obj.Multivariate || numel(study.Directions) ~= 1
                 return
             end
-            trials=study.trialData();
-            finished = trials.State == "COMPLETE" | ...
-                trials.State == "PRUNED";
-            if sum(finished) < obj.NStartupTrials
+            if study.nonRunningTrialCount() < obj.NStartupTrials
                 return
             end
             if obj.Group
@@ -419,13 +416,14 @@ classdef TPESampler < radia.optuna.BaseSampler
                 for index=1:numel(groups)
                     allSpace=[allSpace;groups{index}(:)]; %#ok<AGROW>
                 end
-                [allValues,allObjectives,allNumbers,allPending]= ...
+                [allValues,allObjectives,allNumbers,allPending,allStates]= ...
                     obj.relativeObservations(study,allSpace,true);
                 globalValid=isfinite(allObjectives);
                 globalData=struct('observations',zeros(sum(globalValid),0), ...
                     'objectives',allObjectives(globalValid), ...
                     'trialNumbers',allNumbers(globalValid), ...
-                    'pending',allPending(globalValid));
+                    'pending',allPending(globalValid), ...
+                    'states',allStates(globalValid));
                 globalGoodTrialNumbers=obj.globalGoodTrialNumbers( ...
                     study,globalData);
                 allNames=string({allSpace.name});
@@ -451,7 +449,8 @@ classdef TPESampler < radia.optuna.BaseSampler
                         'observations',allValues(valid,columns), ...
                         'objectives',allObjectives(valid), ...
                         'trialNumbers',allNumbers(valid), ...
-                        'pending',allPending(valid));
+                        'pending',allPending(valid), ...
+                        'states',allStates(valid));
                     values=obj.sampleRelativeSpace( ...
                         study,searchSpace,EnforceStartup=false, ...
                         GlobalSplit=true, ...
@@ -494,16 +493,18 @@ classdef TPESampler < radia.optuna.BaseSampler
 
         function goodNumbers=globalGoodTrialNumbers(obj,study,precomputed)
             if nargin<3 || isempty(fieldnames(precomputed))
-                [~,objectives,numbers,pending]=obj.relativeObservations( ...
-                    study,obj.emptySearchSpace());
+                [~,objectives,numbers,pending,states]= ...
+                    obj.relativeObservations(study,obj.emptySearchSpace());
             else
                 objectives=precomputed.objectives;
                 numbers=precomputed.trialNumbers;
                 pending=precomputed.pending;
+                states=precomputed.states;
             end
-            nGood=obj.goodTrialCount(sum(~pending));
+            nGood=obj.goodTrialCount(study.nonRunningTrialCount());
+            nGood=min(nGood,numel(numbers));
             order=obj.rankObservations(objectives, ...
-                study.Directions(1),study,numbers,pending);
+                study.Directions(1),study,numbers,pending,states);
             goodNumbers=numbers(order(1:nGood));
         end
 
@@ -527,14 +528,17 @@ classdef TPESampler < radia.optuna.BaseSampler
         end
 
         function [good, bad] = splitObservations(obj, values, objectives, ...
-                direction, study, trialNumbers, pending)
+                direction, study, trialNumbers, pending, states)
             % Match Optuna's _split_complete_trials: n_below may equal the
             % number of observations.  In that case the above density is
             % represented by its prior component only.
-            finishedCount = sum(~pending);
-            nGood = obj.goodTrialCount(finishedCount);
+            if nargin<8
+                states=strings(0,1);
+            end
+            nGood = obj.goodTrialCount(study.nonRunningTrialCount());
+            nGood = min(nGood,numel(values));
             order = obj.rankObservations( ...
-                objectives, direction, study, trialNumbers, pending);
+                objectives, direction, study, trialNumbers, pending, states);
             isGood = false(numel(values), 1);
             isGood(order(1:nGood)) = true;
             % Keep chronological order so Optuna's history weights attach to
@@ -585,25 +589,14 @@ classdef TPESampler < radia.optuna.BaseSampler
             end
         end
 
-        function [x, y, trialNumbers, pending] = ...
+        function [x, y, trialNumbers, pending, states] = ...
                 numericObservations(obj, study, name)
             p = study.parameterData();
             t = study.trialData();
             rows = p.Name == string(name) & isfinite(p.ValueNumeric);
             indices = find(rows);
-            trialRows=p.TrialNumber(indices)+1;
-            known=trialRows>=1 & trialRows<=numel(t.TrialNumber);
-            known(known)=t.TrialNumber(trialRows(known))== ...
-                p.TrialNumber(indices(known));
-            indices=indices(known);
-            trialRows=trialRows(known);
-            states=t.State(trialRows);
-            complete=states=="COMPLETE" & isfinite(t.Value(trialRows));
-            running=states=="RUNNING" & obj.ConstantLiar;
-            keep=complete | running;
-            indices=indices(keep);
-            trialRows=trialRows(keep);
-            pending=running(keep);
+            [indices,trialRows,states,pending]= ...
+                obj.usableObservationRows(study,t,p,indices);
             x=p.ValueNumeric(indices);
             y=t.Value(trialRows);
             if any(pending)
@@ -612,25 +605,14 @@ classdef TPESampler < radia.optuna.BaseSampler
             trialNumbers=p.TrialNumber(indices);
         end
 
-        function [tokens, y, trialNumbers, pending] = ...
+        function [tokens, y, trialNumbers, pending, states] = ...
                 categoricalObservations(obj, study, name)
             p = study.parameterData();
             t = study.trialData();
             rows = p.Name == string(name) & p.Kind == "categorical";
             indices = find(rows);
-            trialRows=p.TrialNumber(indices)+1;
-            known=trialRows>=1 & trialRows<=numel(t.TrialNumber);
-            known(known)=t.TrialNumber(trialRows(known))== ...
-                p.TrialNumber(indices(known));
-            indices=indices(known);
-            trialRows=trialRows(known);
-            states=t.State(trialRows);
-            complete=states=="COMPLETE" & isfinite(t.Value(trialRows));
-            running=states=="RUNNING" & obj.ConstantLiar;
-            keep=complete | running;
-            indices=indices(keep);
-            trialRows=trialRows(keep);
-            pending=running(keep);
+            [indices,trialRows,states,pending]= ...
+                obj.usableObservationRows(study,t,p,indices);
             tokens=p.ValueText(indices);
             numeric=isfinite(p.ValueNumeric(indices));
             for index=reshape(find(numeric),1,[])
@@ -641,6 +623,23 @@ classdef TPESampler < radia.optuna.BaseSampler
                 y(pending)=obj.liarObjective(study);
             end
             trialNumbers=p.TrialNumber(indices);
+        end
+
+        function [indices,trialRows,states,pending]= ...
+                usableObservationRows(obj,study,t,p,indices)
+            trialRows=study.trialRowsFor(p.TrialNumber(indices));
+            known=trialRows>0;
+            indices=indices(known);
+            trialRows=trialRows(known);
+            allStates=t.State(trialRows);
+            complete=allStates=="COMPLETE" & isfinite(t.Value(trialRows));
+            pruned=allStates=="PRUNED";
+            running=allStates=="RUNNING" & obj.ConstantLiar;
+            keep=complete | pruned | running;
+            indices=indices(keep);
+            trialRows=trialRows(keep);
+            states=allStates(keep);
+            pending=running(keep);
         end
 
         function value = uniform(obj, low, high, logScale)
@@ -685,18 +684,17 @@ classdef TPESampler < radia.optuna.BaseSampler
                 options.Precomputed struct = struct()
             end
             if isempty(fieldnames(options.Precomputed))
-                [observations, objectives, trialNumbers, pending] = ...
+                [observations, objectives, trialNumbers, pending, states] = ...
                     obj.relativeObservations(study, searchSpace);
             else
                 observations=options.Precomputed.observations;
                 objectives=options.Precomputed.objectives;
                 trialNumbers=options.Precomputed.trialNumbers;
                 pending=options.Precomputed.pending;
+                states=options.Precomputed.states;
             end
-            finishedCount = sum(~pending);
-            if finishedCount == 0 || ...
-                    (options.EnforceStartup && ...
-                    finishedCount < obj.NStartupTrials) || ...
+            if (options.EnforceStartup && ...
+                    study.nonRunningTrialCount() < obj.NStartupTrials) || ...
                     isempty(objectives)
                 values = cell(1, numel(searchSpace));
                 for index = 1:numel(searchSpace)
@@ -720,7 +718,7 @@ classdef TPESampler < radia.optuna.BaseSampler
             else
                 [good, bad] = obj.splitJointObservations( ...
                     observations, objectives, study.Directions(1), study, ...
-                    trialNumbers, pending);
+                    trialNumbers, pending, states);
             end
             dimension = numel(searchSpace);
             belowWeights = obj.observationWeights(size(good,1));
@@ -923,7 +921,7 @@ classdef TPESampler < radia.optuna.BaseSampler
             values = log(sum(exp(weighted - maximum), 2)) + maximum;
         end
 
-        function [x, y, observationTrialNumbers, pending] = ...
+        function [x, y, observationTrialNumbers, pending, states] = ...
                 relativeObservations(obj, study, searchSpace, keepIncomplete)
             if nargin<4
                 keepIncomplete=false;
@@ -1025,6 +1023,7 @@ classdef TPESampler < radia.optuna.BaseSampler
             end
             pending=selectedStates=="RUNNING";
             y(pending)=liar;
+            states=reshape(string(selectedStates),[],1);
             if keepIncomplete
                 y(~objectiveValid)=NaN;
                 observationTrialNumbers=trialNumbers;
@@ -1033,6 +1032,7 @@ classdef TPESampler < radia.optuna.BaseSampler
                 y=y(valid);
                 observationTrialNumbers=trialNumbers(valid);
                 pending=pending(valid);
+                states=states(valid);
             end
         end
 
@@ -1050,16 +1050,20 @@ classdef TPESampler < radia.optuna.BaseSampler
             value = obj.quantize(value, distribution.low, ...
                 distribution.high, distribution.step);
             if distribution.kind == "integer"
-                value = round(value);
+                value = radia.optuna.internal.UpstreamNumerics. ...
+                    roundTiesToEven(value);
             end
         end
 
         function [good, bad] = splitJointObservations(obj, values, ...
-                objectives, direction, study, trialNumbers, pending)
-            finishedCount = sum(~pending);
-            nGood = obj.goodTrialCount(finishedCount);
+                objectives, direction, study, trialNumbers, pending, states)
+            if nargin<8
+                states=strings(0,1);
+            end
+            nGood = obj.goodTrialCount(study.nonRunningTrialCount());
+            nGood = min(nGood,size(values,1));
             order = obj.rankObservations( ...
-                objectives, direction, study, trialNumbers, pending);
+                objectives, direction, study, trialNumbers, pending, states);
             mask = false(size(values,1),1);
             mask(order(1:nGood)) = true;
             good = values(mask,:);
@@ -1067,19 +1071,46 @@ classdef TPESampler < radia.optuna.BaseSampler
         end
 
         function order = rankObservations(obj, objectives, direction, ...
-                study, trialNumbers, pending)
-            % Feasible completed/pruned trials rank before infeasible ones;
-            % infeasible trials rank by total positive violation. Missing or
-            % nonfinite constraint data is deliberately worst (Inf). Pending
-            % constant-liar observations can shape only the above density.
+                study, trialNumbers, pending, states)
+            count=numel(objectives);
+            pending=reshape(logical(pending),[],1);
+            if nargin<7 || isempty(states)
+                states=repmat("COMPLETE",count,1);
+            end
+            states=reshape(string(states),[],1);
             violations = obj.constraintViolations(study, trialNumbers);
             objectiveRank = reshape(double(objectives), [], 1);
             if direction == "maximize"
                 objectiveRank = -objectiveRank;
             end
-            sequence = (1:numel(objectiveRank))';
-            rankKeys = [double(reshape(pending, [], 1)), ...
-                double(violations > 0), violations, objectiveRank, sequence];
+            infeasible=violations>0;
+            classRank=zeros(count,1);
+            classRank(states=="PRUNED")=1;
+            classRank(infeasible)=2;
+            classRank(pending)=3;
+            primary=objectiveRank;
+            secondary=zeros(count,1);
+            prunedRows=find(classRank==1);
+            if ~isempty(prunedRows)
+                [steps,reported]=study.lastIntermediateValues( ...
+                    trialNumbers(prunedRows));
+                signed=reported;
+                if direction=="maximize"
+                    signed=-signed;
+                end
+                signed(isnan(reported))=Inf;
+                primary(prunedRows)=-steps;
+                secondary(prunedRows)=signed;
+                missing=prunedRows(isnan(steps));
+                primary(missing)=1;
+                secondary(missing)=0;
+            end
+            primary(infeasible)=violations(infeasible);
+            secondary(infeasible)=0;
+            primary(pending)=0;
+            secondary(pending)=0;
+            sequence=(1:count)';
+            rankKeys=[classRank,primary,secondary,sequence];
             [~, order] = sortrows(rankKeys, 1:size(rankKeys, 2));
         end
 
@@ -1367,7 +1398,8 @@ classdef TPESampler < radia.optuna.BaseSampler
 
         function value = quantize(~, value, low, high, step)
             if isfinite(step)
-                value = low + round((value - low) / step) * step;
+                value = low + radia.optuna.internal.UpstreamNumerics. ...
+                    roundTiesToEven((value-low)/step)*step;
             end
             value = min(max(value, low), high);
         end

@@ -7,7 +7,20 @@ import hashlib
 import json
 from pathlib import Path
 
-from . import __version__, matlab_path, mex_path
+from . import __version__, layout, matlab_path, mex_path
+
+
+_LAYOUT_HINTS = {
+    "wheel": "",
+    "checkout": (
+        "Resolved the monorepo checkout because an editable install has no "
+        "staged MATLAB tree."
+    ),
+    "missing": (
+        "No staged or checkout MATLAB tree was found; build and install the "
+        "radia-optuna wheel."
+    ),
+}
 
 
 def _manifest() -> dict[str, object]:
@@ -17,6 +30,7 @@ def _manifest() -> dict[str, object]:
 
 def _doctor_payload() -> dict[str, object]:
     root = matlab_path()
+    resolved_layout = layout()
     mex = mex_path()
     notice = root / "THIRD_PARTY_NOTICES.md"
     notice_text = notice.read_text(encoding="utf-8") if notice.is_file() else ""
@@ -45,6 +59,8 @@ def _doctor_payload() -> dict[str, object]:
         "schema": "radia-optuna.doctor.v1",
         "ok": ok,
         "version": __version__,
+        "layout": resolved_layout,
+        "hint": _LAYOUT_HINTS[resolved_layout],
         "matlab_path": str(root),
         "mex_path": str(mex),
         "mex_size_bytes": mex.stat().st_size if mex.is_file() else None,
@@ -65,7 +81,12 @@ def _doctor_payload() -> dict[str, object]:
 
 
 def path_main() -> None:
-    print(matlab_path())
+    resolved = matlab_path()
+    if not resolved.is_dir():
+        print(f"{resolved} (missing)")
+        print(_LAYOUT_HINTS["missing"])
+        raise SystemExit(1)
+    print(resolved)
 
 
 def doctor_main() -> None:
@@ -78,11 +99,14 @@ def doctor_main() -> None:
     else:
         status = "PASS" if payload["ok"] else "FAIL"
         print(f"radia-optuna {payload['version']}: {status}")
+        print(f"Layout: {payload['layout']}")
         print(f"MATLAB path: {payload['matlab_path']}")
         print(f"MEX: {payload['mex_path']}")
         print(
             f"MATLAB files: {payload['matlab_file_count']}/"
             f"{payload['expected_matlab_file_count']}"
         )
+        if payload["hint"]:
+            print(payload["hint"])
     if not payload["ok"]:
         raise SystemExit(1)
