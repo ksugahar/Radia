@@ -1614,21 +1614,39 @@ def _paper_writing_readability_language(text: str) -> str:
     return "other"
 
 
-def _paper_writing_english_sentences(paragraph: str) -> list[str]:
+def _paper_writing_english_sentence_spans(
+    paragraph: str,
+) -> list[tuple[str, int]]:
     protected = re.sub(
         r"\b(et al|e\.g|i\.e|cf|vs|Fig|Eq|Ref|Sec|Vol|No|pp|Dr|Prof)\.",
-        lambda match: match.group(0).replace(".", "<DOT>"),
+        lambda match: match.group(0).replace(".", "\x00"),
         paragraph,
         flags=re.IGNORECASE,
     )
-    parts = re.split(
+    boundary = re.compile(
         r"(?<=[.!?])\s+(?=[A-Z\[])|(?<=[。！？])",
-        protected,
     )
+    spans: list[tuple[str, int]] = []
+    start = 0
+    for match in boundary.finditer(protected):
+        raw_part = paragraph[start:match.start()]
+        stripped = raw_part.strip()
+        if stripped:
+            text_start = start + len(raw_part) - len(raw_part.lstrip())
+            spans.append((stripped, text_start))
+        start = match.end()
+    raw_part = paragraph[start:]
+    stripped = raw_part.strip()
+    if stripped:
+        text_start = start + len(raw_part) - len(raw_part.lstrip())
+        spans.append((stripped, text_start))
+    return spans
+
+
+def _paper_writing_english_sentences(paragraph: str) -> list[str]:
     return [
-        part.replace("<DOT>", ".").strip()
-        for part in parts
-        if part.strip()
+        sentence
+        for sentence, _ in _paper_writing_english_sentence_spans(paragraph)
     ]
 
 
@@ -1874,8 +1892,10 @@ def paper_writing_bilingual_readability_check(
             "source_line": prose.count(
                 "\n", 0, match.start(1) + len(leading)
             ) + 1,
+            "source_offset": match.start(1),
             "language": language,
             "text": text,
+            "raw_text": raw_block,
         })
 
     by_language: dict[str, dict] = {}
@@ -1888,20 +1908,31 @@ def paper_writing_bilingual_readability_check(
                 continue
             language_paragraphs.append(block)
             if language == "ja":
-                parts = [
-                    part.strip()
-                    for part in re.split(r"(?<=[。！？])", block["text"])
-                    if part.strip()
-                ]
+                parts = []
+                start = 0
+                for match in re.finditer(r"(?<=[。！？])", block["raw_text"]):
+                    raw_part = block["raw_text"][start:match.start()]
+                    stripped = raw_part.strip()
+                    if stripped:
+                        part_start = start + len(raw_part) - len(raw_part.lstrip())
+                        parts.append((stripped, part_start))
+                    start = match.end()
+                raw_part = block["raw_text"][start:]
+                stripped = raw_part.strip()
+                if stripped:
+                    part_start = start + len(raw_part) - len(raw_part.lstrip())
+                    parts.append((stripped, part_start))
             else:
-                parts = _paper_writing_english_sentences(block["text"])
-            for part in parts:
+                parts = _paper_writing_english_sentence_spans(block["raw_text"])
+            for part, part_start in parts:
                 part_language = _paper_writing_readability_language(part)
                 if part_language not in (language, "mixed"):
                     continue
                 language_sentences.append({
                     "paragraph_index": block["paragraph_index"],
-                    "source_line": block["source_line"],
+                    "source_line": prose.count(
+                        "\n", 0, block["source_offset"] + part_start
+                    ) + 1,
                     "text": part,
                 })
         by_language[language] = _paper_writing_readability_result(

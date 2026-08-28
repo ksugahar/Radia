@@ -259,6 +259,30 @@ This deliberately long caption-like payload must not enter prose analysis.
     assert r["english"]["risk_count"] == 0
 
 
+def test_bilingual_readability_reports_english_sentence_start_line():
+    text = (
+        "Figure e.g. establishes the context.\n"
+        "The proposed framework simultaneously performs parameter "
+        "identification, uncertainty quantification, constraint enforcement, "
+        "and online adaptation, while retaining the assumptions that are "
+        "required by the solver, because the resulting representation must "
+        "also remain compatible with the existing implementation."
+    )
+    r = pw.paper_writing_bilingual_readability_check(text)
+    assert r["english"]["risks"][0]["source_line"] == 2
+
+
+def test_bilingual_readability_reports_japanese_sentence_start_line():
+    text = (
+        "先に結論を示す。\n"
+        "本研究では、従来法の課題を解決するため、複数の材料条件を定義し、"
+        "さらに解析手法を選択し、そこで得られる設計指針を同時に示す必要が"
+        "あるため、各条件の意味と適用範囲を一文の中で説明する。"
+    )
+    r = pw.paper_writing_bilingual_readability_check(text)
+    assert r["japanese"]["risks"][0]["source_line"] == 2
+
+
 async def _probe_bilingual_readability_stdio() -> dict:
     package_root = Path(__file__).resolve().parents[1]
     env = os.environ.copy()
