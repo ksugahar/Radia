@@ -51,6 +51,7 @@ Additional release-candidate checks performed in this review:
 | Installed-wheel seeded TPE smoke | 8 / 8 trials completed |
 | Installed-wheel Sobol 64 x 4,096 checksum | 131,040 |
 | Native Sobol maximum-dimension validation | 21,201 dimensions, PASS |
+| Full Radia MEX/Simulink provenance regeneration | HIBINO, 86 / 86 passed |
 
 The oracle JSON regenerates byte-for-byte with SHA-256
 `212737E09EA0CBD5FD3617033AB20DF174680ED7ACDA30755F3B04F022C1774D`.
