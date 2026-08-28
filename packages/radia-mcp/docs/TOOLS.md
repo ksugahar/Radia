@@ -2,7 +2,7 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **1046 tools** across 49 MCP servers.
+Total: **1050 tools** across 49 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
@@ -44,7 +44,7 @@ Total: **1046 tools** across 49 MCP servers.
 | [`mcp-server-mathematica`](#mcp-server-mathematica) | `radia_mcp.mathematica` | 14 |
 | [`mcp-server-md2html`](#mcp-server-md2html) | `radia_mcp.md2html` | 2 |
 | [`mcp-server-chart2d`](#mcp-server-chart2d) | `radia_mcp.chart2d` | 24 |
-| [`mcp-server-paper-writing`](#mcp-server-paper-writing) | `radia_mcp.paper_writing` | 201 |
+| [`mcp-server-paper-writing`](#mcp-server-paper-writing) | `radia_mcp.paper_writing` | 205 |
 | [`mcp-server-grant-writing`](#mcp-server-grant-writing) | `radia_mcp.grant_writing` | 44 |
 | [`mcp-server-poster`](#mcp-server-poster) | `radia_mcp.poster` | 32 |
 | [`mcp-server-literature-index`](#mcp-server-literature-index) | `radia_mcp.literature_index` | 9 |
@@ -1247,10 +1247,13 @@ Module: `radia_mcp.paper_writing.server`
 | `presentation_check_underline_in_pptx` | pptx runs の font.underline を走査して下線密度を診断する。 |
 | `presentation_citation_audit` | Check numeric ``[N]`` citations on the slides against the |
 | `presentation_cite_format` | Format ONE reference into the styles used on talk slides. |
+| `presentation_copy_equation` | Copy TeX using Eqnedit64's native clipboard contract. |
 | `presentation_count_slides` | スライド数を count。beamer (.tex) の \begin{frame} か、 |
 | `presentation_count_underlines` | beamer ソース内の下線コマンドを実測。 |
 | `presentation_count_weak_expressions` | 弱気修飾語の出現。presentation では key slide 上で使うと信頼感低下。 |
 | `presentation_embed_tts_audio_in_pptx` | Generate per-slide TTS MP3 and embed it into a PowerPoint deck. |
+| `presentation_equation_backend` | Locate the standalone Eqnedit64 backend used by presentation tools. |
+| `presentation_equation_policy` | Return the canonical source, publication, and format responsibilities. |
 | `presentation_equation_slide_compliance` | 数式 slide の理系プレゼン compliance を診断。 |
 | `presentation_estimate_per_slide_time` | 原稿を slide 境界で分割し、各 slide の発表時間を推定. |
 | `presentation_estimate_speaking_time` | 原稿テキストから発表時間を推定。 |
@@ -1266,6 +1269,7 @@ Module: `radia_mcp.paper_writing.server`
 | `presentation_qa_anticipation_list` | slide 内容から予想 Q&A 質問 list を生成。 |
 | `presentation_qa_from_history` | ★ Q&A REHEARSAL: surface the real (or anticipated) questions asked |
 | `presentation_references_slide` | Build a "References" slide from a list of full citation lines. |
+| `presentation_render_equation` | Render TeX to a PNG or EMF file through the Eqnedit64 CLI. |
 | `presentation_replace_embedded_figure_text` | Replace OCR text in raster figures with native PowerPoint text. |
 | `presentation_results_slide_statistical_evidence` | Results slide の統計報告 4 要素 compliance を診断 (paper T12 の plot 版)。 |
 | `presentation_rewrite_suggest` | (no description) |

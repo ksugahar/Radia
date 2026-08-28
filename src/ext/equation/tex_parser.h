@@ -3,18 +3,16 @@
  *
  * LaTeX is the working format: an equation is stored as LaTeX inside a
  * Markdown file, and every output (OMML for Office, SVG for display) is
- * rendered from the tree this parser builds.  MTEF is not on this path at all;
- * it survives only to read legacy Equation Editor objects, and that direction
- * goes MTEF -> LaTeX through the corpus-validated mtef2tex converter.
+ * rendered from the tree this parser builds.  Retired binary equation formats
+ * are not accepted by this path.
  *
  * The tree is the one mtef_node.h was designed for -- its header already
  * names "LaTeXParser (text->tree)" as the second producer -- so the OMML
  * emitter and the SVG renderer serve both sources.
  *
- * Unlike the MTEF parser this fills every slot directly: a script carries its
- * own base, a big operator carries its own limits and body.  The LINE pass
- * pipeline reconstructs those from EQNEDT32's sibling layout and must NOT be
- * run on a tree from here.
+ * Every slot is filled directly: a script carries its own base, and a big
+ * operator carries its own limits and body.  Historical repair passes must not
+ * be run on a tree from here.
  */
 #ifndef TEX_PARSER_H
 #define TEX_PARSER_H
