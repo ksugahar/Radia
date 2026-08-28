@@ -11,7 +11,6 @@ extern "C" {
 #include <utility>
 #include <algorithm>
 #include <core/taskmanager.hpp>   // ngcore::RegionTaskManager (parallel H-matvec under TaskManager)
-#include <core/utils.hpp>         // ngcore::AtomicAdd
 #include <unordered_map>
 #include <map>
 #include <memory>
@@ -6156,6 +6155,10 @@ std::vector<double> RadHACApKChargeGram::QuadBlock2D(
 
 void RadHACApKChargeGram::ExtractCoordinates()
 {
+    // Select the immutable per-element entry kernel before HACApK starts its
+    // parallel callbacks.  The hot entry path then pays one virtual dispatch,
+    // not an eight-mode branch cascade or a per-entry call_once check.
+    (void)GetEntryStrategy();
     m_n_elem = m_n;
     m_ndof   = m_n;
     m_coordinates = m_cent;   // [n*3] charge centroids (the cluster-tree points)
@@ -6212,6 +6215,15 @@ bool RadHACApKChargeGram::BuildHMatrix(const RadHACApKParams& params)
     // Symmetric fill: the Gram's applies all route through MatVecSym (see the header doc), so skip the
     // strictly-lower leaves at fill time -- ~2x build, identical upper leaves (MatVecSym bit-identical).
     ResetHexCacheStats();
+    m_testFillFailureAfter = -1;
+    m_testFillEntryCalls.store(0, std::memory_order_relaxed);
+    if (const char* value = std::getenv("RADIA_HDIV_TEST_FAIL_FILL_AFTER")) {
+        char* end = nullptr;
+        const long parsed = std::strtol(value, &end, 10);
+        if (end != value && *end == '\0' && parsed >= 0 &&
+            parsed <= std::numeric_limits<int>::max())
+            m_testFillFailureAfter = (int)parsed;
+    }
     m_derivativeAcaEps=params.aca_eps;
     m_derivativeMaxRank=params.max_rank;
     // Charge-basis normalization (see the header doc at MatVecSym): the
@@ -7061,6 +7073,9 @@ double RadHACApKChargeGram::GetInteractionMatrixElement(int a, int b) const
     // doc for the roundoff-amplification incident this prevents).  Every
     // caller outside the fill -- Jacobi-diagonal builders, diagnostics,
     // reciprocity gates -- keeps the raw physical Gram.
+    if (m_fillNormalized && m_testFillFailureAfter >= 0 &&
+        m_testFillEntryCalls.fetch_add(1, std::memory_order_relaxed) == m_testFillFailureAfter)
+        throw std::runtime_error("injected ChargeGram fill failure");
     const double raw = GetInteractionMatrixElementRaw(a, b);
     if (m_fillNormalized)
         return raw * (m_chargeSigmaInv[(size_t)a] * m_chargeSigmaInv[(size_t)b]);
@@ -7074,155 +7089,135 @@ double RadHACApKChargeGram::GetInteractionMatrixElementRaw(int a, int b) const
     if (a < 0 || a >= m_n || b < 0 || b >= m_n)
         throw std::out_of_range("ChargeGram entry index out of range: a=" + std::to_string(a)
                                 + " b=" + std::to_string(b) + " n=" + std::to_string(m_n));
-    if (m_sampledLaplace) {
-        const double dx = m_cent[3 * a] - m_cent[3 * b];
-        const double dy = m_cent[3 * a + 1] - m_cent[3 * b + 1];
-        const double dz = m_cent[3 * a + 2] - m_cent[3 * b + 2];
-        const double eps2 = m_sampledKernelEpsilon * m_sampledKernelEpsilon;
-        return m_meas[a] * m_meas[b] * RAD_INV_FOUR_PI /
-               std::sqrt(dx * dx + dy * dy + dz * dz + eps2);
-    }
-    if (m_sampledPlanarLog) {
-        const double dx = m_cent[3 * a] - m_cent[3 * b];
-        const double dy = m_cent[3 * a + 1] - m_cent[3 * b + 1];
-        const double eps2 = m_sampledKernelEpsilon * m_sampledKernelEpsilon;
-        const double distance = std::sqrt(dx * dx + dy * dy + eps2);
-        return -2.0 * RAD_INV_FOUR_PI * m_meas[a] * m_meas[b]
-             * std::log(distance / m_sampledReferenceLength);
-    }
-    if (m_d2) {
-        // 2D planar mode: served block-wise like the hex mode, symmetrized 0.5*(AB + BA).  Each scalar
-        // is read BEFORE the next GetHexBlock fetch -- the memo's capacity clear would otherwise leave a
-        // dangling reference (the same use-after-free family as the cloud-cache n=10 crash).
-        const int kA = m_kind[a], hA = m_host[a], kB = m_kind[b], hB = m_host[b];
-        const int la = m_hexLocalOf[a], lb = m_hexLocalOf[b];
-        const int nB = (kB == 0) ? (int)m_cellCharges[hB].size() : (int)m_faceCharges[hB].size();
-        double base = GetHexSymBlock(kA, hA, kB, hB)[(size_t)la*nB + lb];
-        for (size_t i = 0; i < m_image_masks.size(); ++i)
-            base += m_image_signs[i]
-                  * GetHexSymBlock(kA, hA, kB, hB, (int)i + 1)[(size_t)la*nB + lb];
-        return base;
-    }
-    if (m_hexmode || m_wedgemode) {
-        // HEX / WEDGE BDM1: the pair-graded scheme (near subs -> both-domains-graded Duffy outer; far -> the
-        // regular symmetric outer; inner always graded/far-dispatched), symmetrized like the other modes.
-        // The wedge mode shares this block-serving path verbatim (GetHexBlock -> QuadBlockWedge dispatch).
-        // Served from the whole-host-pair block memo (the 64x co-location win) -- bit-identical to
-        // the symmetrized 0.5*(block_AB + block_BA) per-entry value, kernel work shared per block.
-        // Each scalar is read BEFORE the next GetHexBlock fetch: the memo's capacity clear (fires on
-        // ~20k-charge meshes) would otherwise leave a dangling reference.
-        const int kA = m_kind[a], hA = m_host[a], kB = m_kind[b], hB = m_host[b];
-        const int la = m_hexLocalOf[a], lb = m_hexLocalOf[b];
-        const int nB = (kB == 0) ? (int)m_cellCharges[hB].size() : (int)m_faceCharges[hB].size();
-        double base = GetHexSymBlock(kA, hA, kB, hB)[(size_t)la*nB + lb];
-        // IMA: fold in the mirror-image blocks (the source host REFLECTED on each image mask) so a reduced
-        // (1/2,1/4,1/8) symmetry model reproduces the full model -- G_IMA = G + sum_i sign_i*0.5*(refl(a,b)+refl(b,a)).
-        // Read each block scalar into a double BEFORE the next GetHexBlock fetch (the memo's capacity clear would
-        // otherwise dangle the returned reference -- the same use-after-free family as the direct vAB/vBA above).
-        for (size_t i = 0; i < m_image_masks.size(); ++i)
-            base += m_image_signs[i] * GetHexSymBlock(kA, hA, kB, hB, (int)i + 1)[(size_t)la*nB + lb];
-        return base;
-    }
-    if (m_highorder) {
-        // polynomial charges, symmetrized; the HACApK ACA compresses the well-separated low-rank blocks.
-        // NEAR/FAR adaptive quadrature: a well-separated pair uses the cheap LOW-quad plain double-Gauss
-        // (QuadDotFar) -- the kernel is smooth there so the expensive HIGH-quad singularity-subtraction is
-        // unnecessary; NEAR/self pairs keep the full QuadDot.  This is NOT a monopole far (zero-mean modes
-        // have zero monopole) -- it is just a lower quadrature order where the integrand is smooth.
-        // m_ho_far_factor = 1e30 (no LOW rule supplied) => every pair NEAR => original all-high-quad path.
-        const bool far_pair = a != b && m_ho_far_factor < 1e29 &&
-            [&]{ const double dx = m_cent[3*a]-m_cent[3*b], dy = m_cent[3*a+1]-m_cent[3*b+1],
-                              dz = m_cent[3*a+2]-m_cent[3*b+2];
-                 return std::sqrt(dx*dx + dy*dy + dz*dz) >
-                        m_ho_far_factor * (m_size[a] + m_size[b]); }();
-        double base;
-        const bool use_host_block = m_polyCombo || m_curved ||
-            (m_hoAnalyticBlock && HOAnalyticBlockEnabled());
-        if (use_host_block && !far_pair) {
-            // Flat order<=2 and curved P2 NEAR/self: all monomial charges on a host share the geometry and
-            // kernel work at every outer point.  Build and memoize the complete symmetrized host-pair block;
-            // the curved path evaluates one Duffy rule for all local modes instead of one rule per entry.
-            const int kindA = m_kind[a], hostA = m_host[a], kindB = m_kind[b], hostB = m_host[b];
-            const int localA = m_hoLocalOf[a], localB = m_hoLocalOf[b];
-            const int nB = (kindB == 0) ? (int)m_hoCellCharges[hostB].size()
-                                       : (int)m_hoFaceCharges[hostB].size();
-            if (!m_curved ||
-                !CurvedTouchBlockValue(kindA, hostA, localA, kindB, hostB, localB, base))
-                base = GetHOTetSymBlock(kindA, hostA, kindB, hostB)[(size_t)localA*nB + localB];
-        } else if (a == b) {
-            base = QuadDot(a, a);                                // curved self fallback
-        } else if (far_pair) {
-            // FAR: cheap low-quad plain double-Gauss.  Production evaluates both directed rules because a
-            // one-sided finite rule is not invariant under explicit mesh reflection.  Keep the environment
-            // switch only as a diagnostic timing probe.
-            base = HOFarOneSidedEnabled()
-                ? QuadDotFar(a, b)
-                : 0.5 * (QuadDotFar(a, b) + QuadDotFar(b, a));
-        } else {
-            base = 0.5 * (QuadDot(a, b) + QuadDot(b, a));         // NEAR: full high-quad subtraction
-        }
-        // IMA: fold in the mirror-image charge interactions (QuadDotRefl uses PhiInner in this mode) so a
-        // reduced (1/2, 1/4, 1/8) symmetry model reproduces the full model -- G_IMA = G + sum_i sign_i *
-        // 0.5*(refl(a,b)+refl(b,a)).  Empty image => plain highorder.
-        for (size_t i = 0; i < m_image_masks.size(); ++i) {
-            const int img = (int)i + 1;
-            const bool rotation_image = i < m_image_rot_angle.size() &&
-                                        m_image_rot_angle[i] != 0.0;
-            if (rotation_image && !m_curved && !m_polyCombo && !m_hexmode &&
-                !m_wedgemode && m_hoAnalyticBlock && HOAnalyticBlockEnabled() &&
-                HOTetImageBlockEnabled()) {
-                const int kindA = m_kind[a], hostA = m_host[a];
-                const int kindB = m_kind[b], hostB = m_host[b];
-                const int localA = m_hoLocalOf[a], localB = m_hoLocalOf[b];
-                const int nB = (kindB == 0) ? (int)m_hoCellCharges[hostB].size()
-                                           : (int)m_hoFaceCharges[hostB].size();
-                base += m_image_signs[i] *
-                    GetHOTetSymBlock(kindA, hostA, kindB, hostB, img)
-                        [(size_t)localA*nB + localB];
-            } else {
-                base += m_image_signs[i] * 0.5 *
-                        (QuadDotRefl(a, b, img) + QuadDotRefl(b, a, img));
-            }
-        }
-        return base;
-    }
-    if (m_analytic) {
-        // Diagonal = the analytic self (the Wilton/phi_tet potential is exact through the 1/r singularity).
-        double base;
-        if (a == b) {
-            base = QuadDot(a, a);
-        } else {
-            // NEAR/FAR split (build speedup): the analytic entry 0.5*(outer-quad_a . Phi_b + outer-quad_b .
-            // Phi_a) is EXPENSIVE (PhiTet/TriPotential per outer point) and only matters for NEAR pairs
-            // (the non-uniform-M / div M != 0 interaction).  FAR pairs use either a cheap centroid-MONOPOLE
-            // (far_quad=0, O((size/r)^2) -- breaks symmetry slightly) or a low-order DOUBLE-QUADRATURE of 1/r
-            // (far_quad>0, O((size/r)^4) -- reproduces the all-analytic Gram, the precision-preserving speedup).
-            // near_factor = 1e30 (default) => all pairs NEAR => all-analytic (matches the dense
-            // analytic reference golden); near_factor ~ 2 gives the fast split.
-            const double dx = m_cent[3*a]     - m_cent[3*b];
-            const double dy = m_cent[3*a + 1] - m_cent[3*b + 1];
-            const double dz = m_cent[3*a + 2] - m_cent[3*b + 2];
-            const double r = std::sqrt(dx*dx + dy*dy + dz*dz);
-            if (r <= m_near_factor * (m_size[a] + m_size[b]))
-                base = 0.5 * (QuadDot(a, b) + QuadDot(b, a));    // NEAR: exact analytic
-            else if (m_far_quad > 0)
-                base = QuadDotFarLow(a, b);                      // FAR: precision-preserving low-order double-quad
-            else
-                base = m_meas[a] * m_meas[b] * RAD_INV_FOUR_PI / r;  // FAR: cheap centroid-monopole
-        }
-        // IMA: fold in the mirror-image charge interactions (always full analytic) so the reduced
-        // (1/2,1/4,1/8) model reproduces the full model: G_IMA = G + sum_i sign_i*0.5*(refl(a,b)+refl(b,a)).
-        for (size_t i = 0; i < m_image_masks.size(); ++i)
-            base += m_image_signs[i] * 0.5 *
-                    (QuadDotRefl(a, b, (int)i + 1) + QuadDotRefl(b, a, (int)i + 1));
-        return base;
-    }
-    if (a == b) return m_self[a];
-    double dx = m_cent[3 * a + 0] - m_cent[3 * b + 0];
-    double dy = m_cent[3 * a + 1] - m_cent[3 * b + 1];
-    double dz = m_cent[3 * a + 2] - m_cent[3 * b + 2];
-    return m_meas[a] * m_meas[b] * RAD_INV_FOUR_PI / std::sqrt(dx * dx + dy * dy + dz * dz);
+    if (!m_entryStrategy) (void)GetEntryStrategy();
+    return m_entryStrategy->Evaluate(*this, a, b);
 }
+
+namespace {
+
+struct DeterministicCSR {
+    std::vector<int> indptr;
+    std::vector<int> indices;
+    std::vector<double> data;
+};
+
+// Preserve source-row and within-row order while transposing. Each output row
+// is then owned by one worker, so B^T is a deterministic gather.
+DeterministicCSR BuildDeterministicTransposeCSR(
+    const std::vector<int>& indptr, const std::vector<int>& indices,
+    const std::vector<double>& data, int n_rows, int n_cols,
+    const char* caller)
+{
+    if (n_rows < 0 || n_cols < 0 || indptr.size() != (size_t)n_rows + 1 ||
+        indices.size() != data.size() || indptr.empty() || indptr.front() != 0 ||
+        indptr.back() != (int)data.size())
+        throw std::runtime_error(std::string(caller) + ": invalid CSR arrays");
+    DeterministicCSR result;
+    result.indptr.assign((size_t)n_cols + 1, 0);
+    for (int row = 0; row < n_rows; ++row) {
+        if (indptr[(size_t)row] > indptr[(size_t)row + 1])
+            throw std::runtime_error(std::string(caller) + ": CSR indptr must be nondecreasing");
+        for (int entry = indptr[(size_t)row]; entry < indptr[(size_t)row + 1]; ++entry) {
+            const int col = indices[(size_t)entry];
+            if (col < 0 || col >= n_cols)
+                throw std::runtime_error(std::string(caller) + ": CSR column index out of range");
+            ++result.indptr[(size_t)col + 1];
+        }
+    }
+    for (int row = 0; row < n_cols; ++row)
+        result.indptr[(size_t)row + 1] += result.indptr[(size_t)row];
+    result.indices.resize(indices.size());
+    result.data.resize(data.size());
+    std::vector<int> cursor = result.indptr;
+    for (int row = 0; row < n_rows; ++row)
+        for (int entry = indptr[(size_t)row]; entry < indptr[(size_t)row + 1]; ++entry) {
+            const int col = indices[(size_t)entry];
+            const int dst = cursor[(size_t)col]++;
+            result.indices[(size_t)dst] = row;
+            result.data[(size_t)dst] = data[(size_t)entry];
+        }
+    return result;
+}
+
+// Convert COO to row CSR without sorting within a row. Repeated entries retain
+// the caller's summation order, independent of TaskManager scheduling.
+DeterministicCSR BuildDeterministicRowCSR(
+    const std::vector<int>& rows, const std::vector<int>& cols,
+    const std::vector<double>& data, int dimension, const char* caller)
+{
+    if (dimension < 0 || rows.size() != cols.size() || rows.size() != data.size())
+        throw std::runtime_error(std::string(caller) + ": invalid COO arrays");
+    DeterministicCSR result;
+    result.indptr.assign((size_t)dimension + 1, 0);
+    for (size_t entry = 0; entry < data.size(); ++entry) {
+        if (rows[entry] < 0 || rows[entry] >= dimension ||
+            cols[entry] < 0 || cols[entry] >= dimension)
+            throw std::runtime_error(std::string(caller) + ": COO index out of range");
+        ++result.indptr[(size_t)rows[entry] + 1];
+    }
+    for (int row = 0; row < dimension; ++row)
+        result.indptr[(size_t)row + 1] += result.indptr[(size_t)row];
+    result.indices.resize(data.size());
+    result.data.resize(data.size());
+    std::vector<int> cursor = result.indptr;
+    for (size_t entry = 0; entry < data.size(); ++entry) {
+        const int dst = cursor[(size_t)rows[entry]]++;
+        result.indices[(size_t)dst] = cols[entry];
+        result.data[(size_t)dst] = data[entry];
+    }
+    return result;
+}
+
+void ApplyDeterministicCSR(
+    const std::vector<int>& indptr, const std::vector<int>& indices,
+    const std::vector<double>& data, const std::vector<double>& x,
+    std::vector<double>& y)
+{
+    const int rows = (int)indptr.size() - 1;
+    y.resize((size_t)rows);
+    ngcore::ParallelFor(ngcore::IntRange(rows), [&](size_t row) {
+        double sum = 0.0;
+        for (int entry = indptr[row]; entry < indptr[row + 1]; ++entry)
+            sum += data[(size_t)entry] * x[(size_t)indices[(size_t)entry]];
+        y[row] = sum;
+    });
+}
+
+double DeterministicDot(
+    const std::vector<double>& a, const std::vector<double>& b,
+    std::vector<double>& partial)
+{
+    if (a.size() != b.size())
+        throw std::runtime_error("DeterministicDot: vector size mismatch");
+    constexpr int block_size = 4096;
+    const int blocks = ((int)a.size() + block_size - 1) / block_size;
+    partial.assign((size_t)blocks, 0.0);
+    auto sum_block = [&](size_t block) {
+        const int begin = (int)block * block_size;
+        const int end = std::min((int)a.size(), begin + block_size);
+        double sum = 0.0, correction = 0.0;
+        for (int i = begin; i < end; ++i) {
+            const double value = a[(size_t)i] * b[(size_t)i];
+            const double next = sum + value;
+            correction += std::fabs(sum) >= std::fabs(value)
+                ? (sum - next) + value : (value - next) + sum;
+            sum = next;
+        }
+        partial[block] = sum + correction;
+    };
+    if (blocks == 1) sum_block(0);
+    else if (blocks > 1) ngcore::ParallelFor(ngcore::IntRange(blocks), sum_block);
+    double sum = 0.0, correction = 0.0;
+    for (double value : partial) {
+        const double next = sum + value;
+        correction += std::fabs(sum) >= std::fabs(value)
+            ? (sum - next) + value : (value - next) + sum;
+        sum = next;
+    }
+    return sum + correction;
+}
+
+}  // namespace
 
 std::vector<double> RadHACApKChargeGram::SolveLinearMaterial(
     const std::vector<int>& B_indptr, const std::vector<int>& B_indices,
@@ -7261,6 +7256,16 @@ std::vector<double> RadHACApKChargeGram::SolveLinearMaterial(
     const bool configured_charge_map = m_operatorChargeConfigured &&
         &B_indptr == &m_operatorBIndptr && &B_indices == &m_operatorBIndices &&
         &B_data == &m_operatorBData && m_operatorBTIndptr.size() == (size_t)n_face + 1;
+    DeterministicCSR local_bt;
+    if (!configured_charge_map)
+        local_bt = BuildDeterministicTransposeCSR(
+            B_indptr, B_indices, B_data, n_charge, n_face, "SolveLinearMaterial");
+    const std::vector<int>& bt_indptr = configured_charge_map
+        ? m_operatorBTIndptr : local_bt.indptr;
+    const std::vector<int>& bt_indices = configured_charge_map
+        ? m_operatorBTIndices : local_bt.indices;
+    const std::vector<double>& bt_data = configured_charge_map
+        ? m_operatorBTData : local_bt.data;
     const bool configured_active_hmatrix = configured_charge_map && constrained &&
         n_charge == m_ndof && m_operatorChargeComponents == 1;
     auto project = [&](std::vector<double>& value) {
@@ -7324,34 +7329,16 @@ std::vector<double> RadHACApKChargeGram::SolveLinearMaterial(
     const bool configured_mass = m_operatorMassConfigured &&
         &mI == &m_operatorMassI && &mJ == &m_operatorMassJ && &mV == &m_operatorMassV &&
         m_operatorMassIndptr.size() == (size_t)n_face + 1;
-    std::vector<int> local_mass_indptr, local_mass_col;
-    std::vector<double> local_mass_val;
-    if (!configured_mass) {
-        local_mass_indptr.assign((size_t)n_face + 1, 0);
-        for (size_t k = 0; k < mV.size(); ++k) {
-            const int i = mI[k];
-            if (i >= 0 && i < n_face && mJ[k] >= 0 && mJ[k] < n_face)
-                ++local_mass_indptr[(size_t)i + 1];
-        }
-        for (int i = 0; i < n_face; ++i)
-            local_mass_indptr[(size_t)i + 1] += local_mass_indptr[(size_t)i];
-        local_mass_col.resize((size_t)local_mass_indptr[(size_t)n_face]);
-        local_mass_val.resize((size_t)local_mass_indptr[(size_t)n_face]);
-        std::vector<int> mass_cur = local_mass_indptr;
-        for (size_t k = 0; k < mV.size(); ++k) {
-            const int i = mI[k], j = mJ[k];
-            if (i < 0 || i >= n_face || j < 0 || j >= n_face) continue;
-            const int p = mass_cur[(size_t)i]++;
-            local_mass_col[(size_t)p] = j;
-            local_mass_val[(size_t)p] = mV[k];
-        }
-    }
+    DeterministicCSR local_mass;
+    if (!configured_mass)
+        local_mass = BuildDeterministicRowCSR(
+            mI, mJ, mV, n_face, "SolveLinearMaterial");
     const std::vector<int>& mass_indptr = configured_mass
-        ? m_operatorMassIndptr : local_mass_indptr;
+        ? m_operatorMassIndptr : local_mass.indptr;
     const std::vector<int>& mass_col = configured_mass
-        ? m_operatorMassIndices : local_mass_col;
+        ? m_operatorMassIndices : local_mass.indices;
     const std::vector<double>& mass_val = configured_mass
-        ? m_operatorMassData : local_mass_val;
+        ? m_operatorMassData : local_mass.data;
     auto coarse_solve = [&](std::vector<double>& value) {
         for (int i = 0; i < coarse_dim; ++i) {
             for (int j = 0; j < i; ++j)
@@ -7477,23 +7464,8 @@ std::vector<double> RadHACApKChargeGram::SolveLinearMaterial(
         else
             MatVec(q, Gq);                             // shadowed: also MatVecSym (sym-fill leaves lower empty)
         const auto tg1 = Clock::now();
-        y.assign((size_t)n_face, 0.0);
         const auto tt0 = Clock::now();
-        if (configured_charge_map) {
-            ngcore::ParallelFor(ngcore::IntRange(n_face), [&](size_t f) {
-                double sum = 0.0;
-                for (int k = m_operatorBTIndptr[f]; k < m_operatorBTIndptr[f + 1]; ++k)
-                    sum += m_operatorBTData[(size_t)k] * Gq[(size_t)m_operatorBTIndices[(size_t)k]];
-                y[f] = sum;
-            });
-        }
-        else {
-            ngcore::ParallelFor(ngcore::IntRange(n_charge), [&](size_t a) {
-                const double ga = Gq[a];
-                for (int k = B_indptr[a]; k < B_indptr[a + 1]; ++k)
-                    ngcore::AtomicAdd(y[(size_t)B_indices[(size_t)k]], B_data[(size_t)k] * ga);
-            });
-        }
+        ApplyDeterministicCSR(bt_indptr, bt_indices, bt_data, Gq, y);
         const auto tt1 = Clock::now();
         ngcore::ParallelFor(ngcore::IntRange(n_face), [&](size_t i) {
             double s = 0.0;
@@ -7516,36 +7488,13 @@ std::vector<double> RadHACApKChargeGram::SolveLinearMaterial(
         m_lastSolveTiming.ax_other_s += total - bx - gm - bt - ma;
         ++m_lastSolveTiming.apply_count;
     };
-    constexpr int dot_block_size = 4096;
-    const int dot_blocks = (n_face + dot_block_size - 1) / dot_block_size;
-    std::vector<double> dot_partial((size_t)dot_blocks, 0.0);
+    std::vector<double> dot_partial;
     auto dot = [&](const std::vector<double>& a, const std::vector<double>& b) {
         const auto t0 = Clock::now();
-        auto sum_block = [&](size_t block) {
-            const int begin = static_cast<int>(block) * dot_block_size;
-            const int end = std::min(n_face, begin + dot_block_size);
-            double sum = 0.0, correction = 0.0;
-            for (int f = begin; f < end; ++f) {
-                const double value = a[(size_t)f] * b[(size_t)f];
-                const double next = sum + value;
-                correction += std::fabs(sum) >= std::fabs(value)
-                    ? (sum - next) + value : (value - next) + sum;
-                sum = next;
-            }
-            dot_partial[block] = sum + correction;
-        };
-        if (dot_blocks == 1) sum_block(0);
-        else ngcore::ParallelFor(ngcore::IntRange(dot_blocks), sum_block);
-        double s = 0.0, correction = 0.0;
-        for (double value : dot_partial) {
-            const double next = s + value;
-            correction += std::fabs(s) >= std::fabs(value)
-                ? (s - next) + value : (value - next) + s;
-            s = next;
-        }
+        const double result = DeterministicDot(a, b, dot_partial);
         m_lastSolveTiming.dot_s += elapsed(t0, Clock::now());
         ++m_lastSolveTiming.dot_count;
-        return s + correction;
+        return result;
     };
     // Preconditioned conjugate gradients (SPD system; M^{-1} = mass Riesz or 1/prec diagonal Jacobi).
     std::vector<double> rhs_projected = rhs;
@@ -7708,12 +7657,20 @@ std::vector<double> RadHACApKChargeGram::ApplyDemagOperator(
     });
     if (symmetric) MatVecSym(q, Gq);
     else MatVec(q, Gq);
-    ngcore::ParallelFor(ngcore::IntRange(n_charge), [&](size_t a) {
-        const double ga = Gq[a];
-        for (int k = B_indptr[a]; k < B_indptr[a + 1]; ++k)
-            ngcore::AtomicAdd(y[static_cast<size_t>(B_indices[static_cast<size_t>(k)])],
-                              B_data[static_cast<size_t>(k)] * ga);
-    });
+    const bool configured_charge_map = m_operatorChargeConfigured &&
+        &B_indptr == &m_operatorBIndptr && &B_indices == &m_operatorBIndices &&
+        &B_data == &m_operatorBData && m_operatorBTIndptr.size() == (size_t)n_face + 1;
+    DeterministicCSR local_bt;
+    if (!configured_charge_map)
+        local_bt = BuildDeterministicTransposeCSR(
+            B_indptr, B_indices, B_data, n_charge, n_face, "ApplyDemagOperator");
+    const std::vector<int>& bt_indptr = configured_charge_map
+        ? m_operatorBTIndptr : local_bt.indptr;
+    const std::vector<int>& bt_indices = configured_charge_map
+        ? m_operatorBTIndices : local_bt.indices;
+    const std::vector<double>& bt_data = configured_charge_map
+        ? m_operatorBTData : local_bt.data;
+    ApplyDeterministicCSR(bt_indptr, bt_indices, bt_data, Gq, y);
     return y;
 }
 
@@ -11866,11 +11823,23 @@ RadHACApKChargeGram::PicardResult RadHACApKChargeGram::SolveNonlinearPicard(
     // TaskManager self-wrap (AGENTS.md "Parallelization: NGSolve TaskManager"): one region around the
     // whole Picard loop (inner CG matvecs) -> parallel without a caller `with TaskManager()`.
     ngcore::RegionTaskManager rtm(radia::GetMaxThreads());
+    const bool configured_charge_map = m_operatorChargeConfigured &&
+        &B_indptr == &m_operatorBIndptr && &B_indices == &m_operatorBIndices &&
+        &B_data == &m_operatorBData && m_operatorBTIndptr.size() == (size_t)n_face + 1;
+    DeterministicCSR local_bt;
+    if (!configured_charge_map)
+        local_bt = BuildDeterministicTransposeCSR(
+            B_indptr, B_indices, B_data, n_charge, n_face, "SolveNonlinearPicard");
+    const std::vector<int>& bt_indptr = configured_charge_map
+        ? m_operatorBTIndptr : local_bt.indptr;
+    const std::vector<int>& bt_indices = configured_charge_map
+        ? m_operatorBTIndices : local_bt.indices;
+    const std::vector<double>& bt_data = configured_charge_map
+        ? m_operatorBTData : local_bt.data;
+    const DeterministicCSR mass = BuildDeterministicRowCSR(
+        mI, mJ, mV, n_face, "SolveNonlinearPicard");
     auto mmass_apply = [&](const std::vector<double>& x, std::vector<double>& y) {  // y = M_mass x
-        y.assign((size_t)n_face, 0.0);
-        ngcore::ParallelFor(ngcore::IntRange((int)mV.size()), [&](size_t k) {
-            ngcore::AtomicAdd(y[mI[k]], mV[k] * x[mJ[k]]);
-        });
+        ApplyDeterministicCSR(mass.indptr, mass.indices, mass.data, x, y);
     };
     auto N_apply = [&](const std::vector<double>& x, std::vector<double>& y) {        // y = B^T G (B x)
         std::vector<double> q((size_t)n_charge, 0.0), Gq((size_t)n_charge, 0.0);
@@ -11879,21 +11848,12 @@ RadHACApKChargeGram::PicardResult RadHACApKChargeGram::SolveNonlinearPicard(
             for (int k = B_indptr[a]; k < B_indptr[a + 1]; ++k) s += B_data[k] * x[B_indices[k]];
             q[a] = s;
         });
-        MatVec(q, Gq);
-        y.assign((size_t)n_face, 0.0);
-        ngcore::ParallelFor(ngcore::IntRange(n_charge), [&](size_t a) {
-            double ga = Gq[a];
-            for (int k = B_indptr[a]; k < B_indptr[a + 1]; ++k) ngcore::AtomicAdd(y[B_indices[k]], B_data[k] * ga);
-        });
+        MatVecSym(q, Gq);
+        ApplyDeterministicCSR(bt_indptr, bt_indices, bt_data, Gq, y);
     };
+    std::vector<double> dot_partial;
     auto dot = [&](const std::vector<double>& a, const std::vector<double>& b) {
-        double s = 0.0;
-        ngcore::ParallelForRange(ngcore::IntRange(n_face), [&](ngcore::IntRange r) {
-            double local = 0.0;
-            for (auto f : r) local += a[f] * b[f];
-            ngcore::AtomicAdd(s, local);
-        });
-        return s;
+        return DeterministicDot(a, b, dot_partial);
     };
     // b0 = M_mass mu ; Dscal = mu.(N mu)/denom (the uniform-mode demag factor, Rayleigh quotient).
     std::vector<double> b0, Nmu, mass_m, rhs((size_t)n_face), prec((size_t)n_face);
