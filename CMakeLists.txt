@@ -1038,9 +1038,8 @@ message(STATUS "axifem module configured (Henrotte axisymmetric FE)")
 # An equation is stored as LaTeX, usually inside a Markdown file, and every
 # output is produced from that: OMML for Word and PowerPoint (a native,
 # editable equation, so nothing has to be installed on the reader's machine),
-# SVG for a picture, and a layout the editor draws with.  MTEF, the Equation
-# Editor 3.x binary format, is here only to read equations out of documents
-# that already contain them.
+# SVG for a picture, and the structural model used by headless document tools.
+# Legacy MTEF/.eqn import and export are deliberately not part of this module.
 #
 # No NGSolve and no MKL: this is text and font metrics, not numerics.  GDI
 # supplies the glyph boxes the layout needs.
@@ -1050,11 +1049,9 @@ set(EQUATION_DIR "${EXT_DIR}/equation")
 pybind11_add_module(_equation
 	${EQUATION_DIR}/equation_pybind.cpp
 	${EQUATION_DIR}/mtef_node.cpp
-	${EQUATION_DIR}/mtef_parser.cpp
 	${EQUATION_DIR}/line_pass.cpp
 	${EQUATION_DIR}/latex_emitter.cpp
-	${EQUATION_DIR}/mtef2tex.cpp
-	${EQUATION_DIR}/tex2mtef.cpp
+	${EQUATION_DIR}/tex_symbols.cpp
 	${EQUATION_DIR}/tex_parser.cpp
 	${EQUATION_DIR}/math_writer.cpp
 	${EQUATION_DIR}/mtef_omml.cpp
@@ -1062,7 +1059,6 @@ pybind11_add_module(_equation
 	${EQUATION_DIR}/mtef_mathml.cpp
 	${EQUATION_DIR}/mtef_svg.cpp
 	${EQUATION_DIR}/mtef_gdi.cpp
-	${EQUATION_DIR}/mtef_dump.cpp
 	${EQUATION_DIR}/gvml_clip.cpp
 	${EQUATION_DIR}/eq_edit.cpp
 	${EQUATION_DIR}/eq_chords.cpp
@@ -1090,10 +1086,8 @@ if(WIN32)
 endif()
 
 if(MSVC)
-	# /Zi + /DEBUG: keep the optimized build, but produce a PDB.  The first
-	# real-use crash of eqnedt64 (2026-08-20) could not be symbolized because
-	# nothing in this project emitted debug info; an access violation with a
-	# module-relative offset and no PDB is undiagnosable.  /OPT:REF,ICF are
+	# /Zi + /DEBUG: keep the optimized build, but produce a PDB so a native
+	# module failure remains symbolizable.  /OPT:REF,ICF are
 	# restated because /DEBUG silently turns them off, and the shipped binary
 	# should not change layout just because it grew a symbol file.  PDBs stay
 	# in the build tree -- they are not copied into src/radia, so the wheel
@@ -1112,120 +1106,6 @@ add_custom_command(TARGET _equation POST_BUILD
 
 message(STATUS "_equation module configured (LaTeX equations -> OMML / SVG)")
 
-# ---------------------------------------------------------------------------
-# EQNEDT64 -- the editor window, as a standalone executable
-#
-# Not a Python entry point, deliberately.  Importing the radia package costs
-# about 1.4 s against 4 ms for the equation module itself, and an equation
-# editor that takes a second and a half to open is not the tool this is trying
-# to be.  So the window links the same C++ directly and starts on its own.
-#
-# It ships inside the radia wheel next to the .pyd files, which means it
-# follows whatever install a machine already has -- editable on LAB and 100,
-# PyPI on mdx and hibino -- rather than needing a distribution of its own.  The
-# binary itself stays out of git, like every other one here.
-# ---------------------------------------------------------------------------
-if(WIN32)
-	# project() carries no VERSION, so PROJECT_VERSION is empty and stamping it
-	# produced a window that said "EQNEDT64 " and nothing else.  pyproject.toml
-	# is where the release bump happens, so read it rather than repeat it: a
-	# second copy of the number is a copy that can be left behind.
-	file(READ "${CMAKE_SOURCE_DIR}/pyproject.toml" _radia_pyproject)
-	string(REGEX MATCH "\nversion[ \t]*=[ \t]*\"([0-9]+\\.[0-9]+\\.[0-9]+)\""
-	       _radia_version_match "${_radia_pyproject}")
-	set(RADIA_VERSION "${CMAKE_MATCH_1}")
-	if(NOT RADIA_VERSION)
-		message(FATAL_ERROR "could not read version from pyproject.toml")
-	endif()
-
-	add_executable(eqnedt64 WIN32
-		${EQUATION_DIR}/eqnedt64_main.cpp
-		${EQUATION_DIR}/eq_window.cpp
-		${EQUATION_DIR}/eq_edit.cpp
-		${EQUATION_DIR}/eq_chords.cpp
-		${EQUATION_DIR}/mtef_node.cpp
-		${EQUATION_DIR}/mtef_parser.cpp
-		${EQUATION_DIR}/line_pass.cpp
-		${EQUATION_DIR}/latex_emitter.cpp
-		${EQUATION_DIR}/tex2mtef.cpp
-		${EQUATION_DIR}/tex_parser.cpp
-		${EQUATION_DIR}/math_writer.cpp
-		${EQUATION_DIR}/mtef_omml.cpp
-		${EQUATION_DIR}/mtef_rtf.cpp
-		${EQUATION_DIR}/mtef_mathml.cpp
-		${EQUATION_DIR}/mtef_svg.cpp
-		${EQUATION_DIR}/mtef_gdi.cpp
-		# PowerPoint's own clipboard format, which is what carries the paste
-		# size -- an equation that inherits the destination box lands at 18 pt.
-		${EQUATION_DIR}/gvml_clip.cpp
-		# The OpenType MATH table reader.  The layout has read the font's own
-		# constants since it stopped guessing at them, so leaving this out of
-		# the window's own target made the window the one thing that would not
-		# link -- and the .pyd next to it, which does list it, kept building.
-		${EQUATION_DIR}/math_font.cpp
-	)
-
-	target_include_directories(eqnedt64 PRIVATE ${EQUATION_DIR})
-
-	# The window says which build it is in its title bar.  Without that there
-	# is no way to tell whether a fix is actually in the thing on screen --
-	# and an install pointing at a stale tree has bitten this repository
-	# repeatedly.
-	target_compile_definitions(eqnedt64 PRIVATE
-		_CRT_SECURE_NO_WARNINGS
-		UNICODE _UNICODE
-		EQNEDT64_VERSION="${RADIA_VERSION}"
-	)
-
-	# shell32: CommandLineToArgvW, which --selftest uses to parse its options.
-	target_link_libraries(eqnedt64 PRIVATE gdi32 user32 gdiplus ole32 comdlg32 shell32)
-
-	if(MSVC)
-		# /utf-8: MSVC reads an unmarked source in the ANSI code page, which on
-		# a Japanese machine turns literals into mojibake at compile time.
-		# /Zi + /DEBUG (below): the 2026-08-20 first-use crash left only
-		# "fault offset 0xc435" because this target shipped without a PDB.
-		# Optimization stays on; /OPT:REF,ICF restated since /DEBUG disables
-		# them by default.  The PDB stays in the build tree.
-		target_compile_options(eqnedt64 PRIVATE /O2 /W3 /utf-8 /Zi)
-		target_link_options(eqnedt64 PRIVATE /DEBUG /OPT:REF /OPT:ICF)
-
-		# Static CRT, unlike the .pyd next to it.  The .pyd shares a process
-		# with Python and must share its runtime; this is its own process and
-		# gains nothing from the dependency.  Linking it in costs a couple of
-		# hundred kilobytes and buys a single file that runs on a bare Windows
-		# -- no redistributable, no Python, nothing to install.  That is what
-		# makes "give someone the editor" a matter of handing over one file.
-		set_property(TARGET eqnedt64 PROPERTY
-			MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
-
-		# -DRADIA_EQ_ASAN=ON builds the editor under AddressSanitizer.
-		#
-		# The ordinary practice for a memory bug, and the reason it is worth a
-		# switch here: without it a stale index reads past a vector, the
-		# program carries on with a wrecked heap, and it dies later somewhere
-		# innocent -- which is exactly the shape of the crash that started
-		# this work (fifty seconds in, a fault offset, no way back to the
-		# operation).  ASan stops AT the bad read and prints the line.
-		#
-		# Not on by default: it costs about 2x and the shipped editor should
-		# be the fast one.  Turn it on to diagnose, then turn it back off.
-		if(RADIA_EQ_ASAN)
-			target_compile_options(eqnedt64 PRIVATE /fsanitize=address /Oy-)
-			# ASan needs frame data and cannot live with incremental linking
-			# or edit-and-continue debug info.
-			target_link_options(eqnedt64 PRIVATE /INCREMENTAL:NO)
-			target_compile_definitions(eqnedt64 PRIVATE RADIA_EQ_ASAN=1)
-			message(STATUS "eqnedt64: AddressSanitizer ON")
-		endif()
-	endif()
-
-	add_custom_command(TARGET eqnedt64 POST_BUILD
-		COMMAND ${CMAKE_COMMAND} -E copy_if_different
-			"$<TARGET_FILE:eqnedt64>"
-			"${CMAKE_SOURCE_DIR}/src/radia/eqnedt64.exe"
-		COMMENT "Copying eqnedt64.exe to src/radia"
-	)
-
-	message(STATUS "eqnedt64 configured (the equation editor window)")
-endif()
+# The standalone equation editor is maintained in tools/eqnedit64 and released
+# independently as one signed portable executable.  Do not build or package a
+# second GUI from the headless radia.equation module.

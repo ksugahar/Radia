@@ -1,0 +1,632 @@
+/* SPDX-License-Identifier: BSD-2-Clause
+ * Canonical source: ksugahar/Radia tools/eqnedit64/web/equation-editor.js
+ *
+ * 数式エディタ（Web版） --- 3Dで学ぶ電磁気学 トップページ
+ *
+ * 研究室のネイティブ数式エディタ（Eqnedit64）の操作思想を、ページに載る
+ * 最小構成へ写したもの。TeXソースを唯一の正とし、描画はサイト共通の
+ * MathJax に任せる。パレットは「マウスで全記号に届く」規則の縮約版。
+ *
+ * 操作:
+ *   - パレットのボタンでテンプレート・記号を挿入
+ *   - 範囲選択して分数などを押すと、選択が最初の空欄に包まれる
+ *   - Tab / Shift+Tab で空欄 {} の間を移動
+ *   - 「$$付きでコピー」「equation付きでコピー」で持ち出し
+ */
+(function () {
+  "use strict";
+
+  /* デプロイごとに上げる。ボタン行の右端に出て、開きっぱなしのタブが
+   * 古い版を動かし続けていないかを一目で判別できる（.exe の
+   * タイトルバー・ビルドスタンプと同じ教訓）。 */
+  var BUILD = "2026-08-27a";
+
+  var PALETTES = [
+    {
+      label: "構造",
+      items: [
+        ["a/b", "\\frac{}{}", "分数"],
+        ["dfrac", "\\dfrac{}{}", "常に大きい分数（入れ子・文中でも縮まない）"],
+        ["√", "\\sqrt{}", "平方根"],
+        ["ⁿ√", "\\sqrt[]{}", "n乗根"],
+        ["x²", "^{}", "上付き"],
+        ["xᵢ", "_{}", "下付き"],
+        ["Σ", "\\sum_{}^{}", "総和"],
+        ["∏", "\\prod_{}^{}", "総乗"],
+        ["∫", "\\int_{}^{}", "積分"],
+        ["∬", "\\iint_{} ", "二重積分（面積分）"],
+        ["∭", "\\iiint_{} ", "三重積分（体積積分）"],
+        ["∮", "\\oint_{}", "周回積分"],
+        ["lim", "\\lim_{ \\to }", "極限"],
+        ["d/dx", "\\frac{\\mathrm{d} {}}{\\mathrm{d} {}}", "常微分"],
+        ["∂/∂x", "\\frac{\\partial {}}{\\partial {}}", "偏微分"],
+        ["行列", "\\begin{pmatrix}  &  \\\\  &  \\end{pmatrix}", "2×2行列（丸括弧）"],
+        ["∷", "\\begin{matrix}  &  \\\\  &  \\end{matrix}", "行列（括弧なし）"],
+        ["[∷]", "\\begin{bmatrix}  &  \\\\  &  \\end{bmatrix}", "行列（角括弧）"],
+        ["|∷|", "\\begin{vmatrix}  &  \\\\  &  \\end{vmatrix}", "行列式"],
+        ["場合", "\\begin{cases}  &  \\\\  &  \\end{cases}", "場合分け"],
+        ["整列", "\\begin{aligned}  &=  \\\\  &=  \\end{aligned}", "複数行"]
+      ]
+    },
+    {
+      /* すべて \left…\right 対。中央の {} が空欄になり、カーソルは
+       * 括弧の内側に着地する（選択して押すと選択が包まれる）。 */
+      label: "括弧",
+      items: [
+        ["( )", "\\left( {} \\right)", "丸括弧"],
+        ["[ ]", "\\left[ {} \\right]", "角括弧"],
+        ["{ }", "\\left\\{ {} \\right\\}", "波括弧"],
+        ["| |", "\\left| {} \\right|", "絶対値"],
+        ["‖ ‖", "\\left\\| {} \\right\\|", "ノルム"],
+        ["⟨ ⟩", "\\left\\langle {} \\right\\rangle", "山括弧（内積）"]
+      ]
+    },
+    {
+      label: "装飾",
+      items: [
+        ["x̂", "\\hat{}", "ハット"],
+        ["x̄", "\\bar{}", "バー"],
+        ["x⃗", "\\vec{}", "ベクトル"],
+        ["ẋ", "\\dot{}", "ドット"],
+        ["ẍ", "\\ddot{}", "二重ドット"],
+        ["ã", "\\tilde{}", "チルダ"],
+        ["𝐁", "\\mathbf{}", "太字"],
+        ["ℝ", "\\mathbb{}", "黒板太字"],
+        ["rm", "\\mathrm{}", "立体（単位・添字向け）"],
+        ["ℰ", "\\mathcal{}", "カリグラフィー体（起電力ℰなど）"],
+        ["abc", "\\text{}", "テキスト（空白が使える）"]
+      ]
+    },
+    {
+      /* 関数名は立体で組む。rot/div/grad は和書の流儀（curl ではなく）。 */
+      label: "関数",
+      items: [
+        ["sin", "\\sin ", ""], ["cos", "\\cos ", ""], ["tan", "\\tan ", ""],
+        ["log", "\\log ", ""], ["ln", "\\ln ", ""], ["exp", "\\exp ", ""],
+        ["rot", "\\operatorname{rot} ", "回転（和書流儀）"],
+        ["curl", "\\operatorname{curl} ", "回転（洋書流儀）"],
+        ["div", "\\operatorname{div} ", "発散"],
+        ["grad", "\\operatorname{grad} ", "勾配"],
+        ["arg min", "\\operatorname*{arg\\,min}_{} ", "最小値を与える変数"],
+        ["arg max", "\\operatorname*{arg\\,max}_{} ", "最大値を与える変数"],
+        ["∇⋅", "\\nabla\\cdot ", "発散（∇表記）"],
+        ["∇×", "\\nabla\\times ", "回転（∇表記）"],
+        ["Re", "\\operatorname{Re} ", "実部"],
+        ["Im", "\\operatorname{Im} ", "虚部"]
+      ]
+    },
+    {
+      label: "関係",
+      items: [
+        ["±", "\\pm ", ""], ["×", "\\times ", ""], ["⋅", "\\cdot ", ""],
+        ["∝", "\\propto ", "比例"], ["≈", "\\approx ", ""],
+        ["≃", "\\simeq ", "ほぼ等しい"], ["∼", "\\sim ", "同程度"],
+        ["≡", "\\equiv ", ""], ["≤", "\\leq ", ""], ["≥", "\\geq ", ""],
+        ["≠", "\\neq ", ""], ["≪", "\\ll ", "十分小さい"],
+        ["≫", "\\gg ", "十分大きい"], ["⊥", "\\perp ", "垂直"],
+        ["∥", "\\parallel ", "平行"], ["∠", "\\angle ", "角・偏角（フェーザ）"]
+      ]
+    },
+    {
+      label: "矢印・集合",
+      items: [
+        ["→", "\\to ", ""], ["⇒", "\\Rightarrow ", ""],
+        ["⇔", "\\Leftrightarrow ", "同値"], ["↦", "\\mapsto ", "写像"],
+        ["∈", "\\in ", ""], ["∉", "\\notin ", ""], ["⊂", "\\subset ", ""],
+        ["∪", "\\cup ", ""], ["∩", "\\cap ", ""], ["∀", "\\forall ", ""],
+        ["∃", "\\exists ", ""], ["∅", "\\emptyset ", ""],
+        ["∴", "\\therefore ", "ゆえに"], ["∵", "\\because ", "なぜならば"]
+      ]
+    },
+    {
+      /* 第9章（微分形式・Hodge star・pullback・幾何代数）向け。
+       * すべて標準 LaTeX + amsmath/amssymb の範囲で組める。 */
+      label: "微分幾何",
+      items: [
+        ["∧", "\\wedge ", "ウェッジ積"],
+        ["★", "\\star ", "Hodge star作用素"],
+        ["dω", "\\mathrm{d} ", "外微分（立体のd）"],
+        ["ι", "\\iota_{} ", "内部積（縮約）ι_X"],
+        ["ℒ", "\\mathcal{L}_{} ", "Lie微分"],
+        ["f^*", "^{*} ", "引き戻し（pullback）"],
+        ["f_*", "_{*} ", "押し出し（pushforward）"],
+        ["♭", "^{\\flat} ", "フラット（添字を下げる）"],
+        ["♯", "^{\\sharp} ", "シャープ（添字を上げる）"],
+        ["⊗", "\\otimes ", "テンソル積"],
+        ["⊕", "\\oplus ", "直和"]
+      ]
+    },
+    {
+      label: "その他",
+      items: [
+        ["∂", "\\partial ", ""], ["∇", "\\nabla ", ""], ["∞", "\\infty ", ""],
+        ["ℏ", "\\hbar ", ""], ["°", "^{\\circ} ", "度"],
+        ["⋯", "\\cdots ", "横の点"], ["⋮", "\\vdots ", "縦の点"],
+        ["⋱", "\\ddots ", "斜めの点"]
+      ]
+    },
+    {
+      label: "ギリシャ",
+      items: [
+        ["α", "\\alpha ", ""], ["β", "\\beta ", ""], ["γ", "\\gamma ", ""],
+        ["δ", "\\delta ", ""], ["ε", "\\varepsilon ", ""], ["ζ", "\\zeta ", ""],
+        ["η", "\\eta ", ""], ["θ", "\\theta ", ""], ["κ", "\\kappa ", ""],
+        ["λ", "\\lambda ", ""], ["μ", "\\mu ", ""], ["ν", "\\nu ", ""],
+        ["ξ", "\\xi ", ""], ["π", "\\pi ", ""], ["ρ", "\\rho ", ""],
+        ["σ", "\\sigma ", ""], ["τ", "\\tau ", ""],
+        ["ϕ", "\\phi ", "ファイ（スカラーポテンシャル）"],
+        ["φ", "\\varphi ", ""], ["χ", "\\chi ", ""], ["ψ", "\\psi ", ""],
+        ["ω", "\\omega ", ""]
+      ]
+    },
+    {
+      label: "ギリシャ大",
+      items: [
+        ["Γ", "\\Gamma ", ""], ["Δ", "\\Delta ", ""], ["Θ", "\\Theta ", ""],
+        ["Λ", "\\Lambda ", ""], ["Φ", "\\Phi ", "磁束Φなど"],
+        ["Ψ", "\\Psi ", ""], ["Ω", "\\Omega ", ""]
+      ]
+    }
+  ];
+
+  /* 行を用途別のタブに束ねる。ラベルは従来のまま残すので、タブを
+   * 開いた後は以前と同じ位置関係で記号を探せる。 */
+  var PALETTE_TABS = [
+    { id: "basic", label: "基本", palettes: ["構造", "括弧", "装飾"] },
+    { id: "analysis", label: "解析", palettes: ["関数", "関係"] },
+    { id: "sets", label: "集合・記号", palettes: ["矢印・集合", "その他"] },
+    { id: "geometry", label: "幾何", palettes: ["微分幾何"] },
+    { id: "greek", label: "ギリシャ", palettes: ["ギリシャ", "ギリシャ大"] }
+  ];
+
+
+  var CSS = [
+    ".eqed { border: 1px solid #d9d9d6; border-radius: 10px; padding: 14px 16px; background: #fcfcfb; }",
+    ".eqed-tabs { display: flex; gap: 4px; max-width: 100%; overflow-x: auto; padding: 0 0 7px; scrollbar-width: thin; }",
+    ".eqed-tab { flex: 0 0 auto; font: inherit; font-size: 0.86rem; padding: 6px 12px; border: 1px solid #cfcfcb; border-radius: 7px 7px 3px 3px; background: #f7f7f5; color: inherit; cursor: pointer; }",
+    ".eqed-tab:hover { background: #eef3f8; border-color: #9db8d2; }",
+    ".eqed-tab[aria-selected='true'] { background: #fff; border-color: #6f98bd; box-shadow: inset 0 -2px #3977ad; font-weight: 600; }",
+    ".eqed-tab:focus-visible { outline: 3px solid rgba(57,119,173,0.3); outline-offset: 1px; }",
+    ".eqed-tab-panel[hidden] { display: none; }",
+    ".eqed-row { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; margin-bottom: 6px; }",
+    ".eqed-row-label { font-size: 0.78rem; color: var(--muted, #717170); min-width: 3.6em; }",
+    ".eqed-key { font: inherit; font-size: 0.95rem; line-height: 1; padding: 5px 8px; border: 1px solid #cfcfcb; border-radius: 6px; background: #fff; cursor: pointer; min-width: 2.1em; }",
+    ".eqed-key:hover { background: #eef3f8; border-color: #9db8d2; }",
+    ".eqed-recent { display: block; width: fit-content; max-width: 100%; box-sizing: border-box; margin: 4px 0 2px; padding: 3px 8px; border: 1px solid #8fb7dc; border-radius: 5px; background: #dceeff; color: #163f63; font-family: Consolas, 'Cascadia Mono', monospace; font-size: 0.88rem; white-space: pre-wrap; overflow-wrap: anywhere; }",
+    ".eqed-recent[hidden] { display: none; }",
+    ".eqed-recent--flash { animation: eqed-recent-flash 700ms ease-out; }",
+    "@keyframes eqed-recent-flash { from { background: #8fc9ff; } to { background: #dceeff; } }",
+    "@media (prefers-reduced-motion: reduce) { .eqed-recent--flash { animation: none; } }",
+    ".eqed-source { width: 100%; box-sizing: border-box; font-family: Consolas, 'Cascadia Mono', monospace; font-size: 0.95rem; padding: 8px 10px; border: 1px solid #cfcfcb; border-radius: 6px; margin-top: 4px; }",
+    /* Match the native canvas: white ground, sunken frame, top-left anchor. */
+    ".eqed-preview { min-height: 5.5em; padding: 12px 14px; overflow-x: auto; background: #fff; border: 1px solid #c9c9c5; border-radius: 4px; box-shadow: inset 1px 1px 3px rgba(0,0,0,0.07); margin: 8px 0; }",
+    ".eqed-preview mjx-container[display='true'] { text-align: left !important; margin: 0 !important; }",
+    ".eqed-empty { color: var(--muted, #717170); font-size: 0.9rem; margin: 0.4em 0; }",
+    ".eqed-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }",
+    ".eqed-actions button { font: inherit; font-size: 0.88rem; padding: 6px 12px; border: 1px solid #cfcfcb; border-radius: 6px; background: #fff; cursor: pointer; }",
+    ".eqed-actions button:hover { background: #eef3f8; border-color: #9db8d2; }",
+    ".eqed-status { font-size: 0.85rem; color: var(--muted, #717170); }",
+    ".eqed-build { margin-left: auto; align-self: center; font-size: 0.72rem; color: var(--muted, #a5a5a2); }"
+  ];
+
+  function installStyles() {
+    if (document.getElementById("eqed-style")) return;
+    var style = document.createElement("style");
+    style.id = "eqed-style";
+    style.textContent = CSS.join("");
+    document.head.appendChild(style);
+  }
+
+  /* TeX → SVG。サイト共通の MathJax は CHTML 出力なので、初回押下時に
+   * SVG 出力部品を動的に読み込み、グリフをパスとして埋め込む変換器を
+   * 組み立てる（fontCache: "none"）。外部参照の無い SVG なので、後段の
+   * canvas は汚染されずクリップボードへ渡せる。 */
+  var svgConvert = null;
+  function getSvgConverter() {
+    if (svgConvert) return Promise.resolve(svgConvert);
+    if (!window.MathJax || !window.MathJax.loader ||
+        typeof window.MathJax.loader.load !== "function") {
+      return Promise.reject(new Error("MathJax loader missing"));
+    }
+    return window.MathJax.loader.load("output/svg").then(function () {
+      var SVG = window.MathJax._.output.svg_ts.SVG;
+      var TeXFont = window.MathJax._.output.svg.fonts.tex_ts.TeXFont;
+      var mathjax = window.MathJax._.mathjax.mathjax;
+      var jax = new SVG({ fontCache: "none", font: new TeXFont({}) });
+      var doc = mathjax.document("", {
+        InputJax: window.MathJax.startup.input[0],
+        OutputJax: jax
+      });
+      svgConvert = function (tex) {
+        var node = doc.convert(tex, { display: true });
+        return node.querySelector("svg");
+      };
+      return svgConvert;
+    });
+  }
+
+  /* TeX → 単体で開ける SVG テキスト。寸法は ex → px に直して書く
+   * （PowerPoint などの取り込み側は ex 単位を解釈しない）。 */
+  function texToSvgText(tex) {
+    return getSvgConverter().then(function (convert) {
+      var svg = convert(tex);
+      if (!svg) throw new Error("no svg");
+      svg.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+      svg.setAttribute("width", Math.max(1, Math.ceil(parseFloat(svg.getAttribute("width")) * 8)) + "px");
+      svg.setAttribute("height", Math.max(1, Math.ceil(parseFloat(svg.getAttribute("height")) * 8)) + "px");
+      return '<?xml version="1.0" encoding="UTF-8"?>\n' + svg.outerHTML;
+    });
+  }
+
+  /* TeX → PNG Blob。1ex ≈ 8px（本文16px基準）に SCALE を掛けた解像度で
+   * 描く。背景は透明 -- TeXclip と同じく、貼り付け先の地色に馴染む。 */
+  var PNG_SCALE = 4;
+  function texToPngBlob(tex) {
+    return getSvgConverter().then(function (convert) {
+      var svg = convert(tex);
+      if (!svg) throw new Error("no svg");
+      svg.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+      var w = Math.max(1, Math.ceil(parseFloat(svg.getAttribute("width")) * 8 * PNG_SCALE));
+      var h = Math.max(1, Math.ceil(parseFloat(svg.getAttribute("height")) * 8 * PNG_SCALE));
+      var url = URL.createObjectURL(new Blob([svg.outerHTML], { type: "image/svg+xml" }));
+      return new Promise(function (resolve, reject) {
+        var img = new Image();
+        img.onload = function () {
+          URL.revokeObjectURL(url);
+          var canvas = document.createElement("canvas");
+          canvas.width = w;
+          canvas.height = h;
+          canvas.getContext("2d").drawImage(img, 0, 0, w, h);
+          canvas.toBlob(function (blob) {
+            if (blob) resolve(blob);
+            else reject(new Error("toBlob failed"));
+          }, "image/png");
+        };
+        img.onerror = function () {
+          URL.revokeObjectURL(url);
+          reject(new Error("svg image load failed"));
+        };
+        img.src = url;
+      });
+    });
+  }
+
+  function el(tag, className, text) {
+    var node = document.createElement(tag);
+    if (className) node.className = className;
+    if (text) node.textContent = text;
+    return node;
+  }
+
+  /* 空欄 {} を探して中へ。無ければ null。 */
+  function nextHole(text, from, backwards) {
+    if (backwards) {
+      for (var i = Math.min(from, text.length - 1) - 2; i >= 0; i--) {
+        if (text.charAt(i) === "{" && text.charAt(i + 1) === "}") return i + 1;
+      }
+      return null;
+    }
+    for (var j = from; j + 1 < text.length; j++) {
+      if (text.charAt(j) === "{" && text.charAt(j + 1) === "}") return j + 1;
+    }
+    return null;
+  }
+
+  function init(root) {
+    installStyles();
+    var input = root.querySelector(".eqed-source");
+    var preview = root.querySelector(".eqed-preview");
+    var status = root.querySelector(".eqed-status");
+    var paletteHost = root.querySelector(".eqed-palettes");
+    var recent = el("output", "eqed-recent");
+    recent.hidden = true;
+    recent.setAttribute("aria-live", "polite");
+    input.parentNode.insertBefore(recent, input);
+    var timer = null;
+
+    function render() {
+      var tex = input.value.trim();
+      preview.innerHTML = "";
+      if (!tex) {
+        preview.appendChild(el("p", "eqed-empty", "ここに数式が表示されます"));
+        return;
+      }
+      var box = el("div", "");
+      box.textContent = "\\[" + tex + "\\]";
+      preview.appendChild(box);
+      if (window.MathJax && typeof window.MathJax.typesetClear === "function") {
+        window.MathJax.typesetClear([preview]);
+      }
+      if (window.SugaharaMath && typeof window.SugaharaMath.typeset === "function") {
+        window.SugaharaMath.typeset(preview);
+      }
+    }
+
+    function scheduleRender() {
+      if (timer) window.clearTimeout(timer);
+      timer = window.setTimeout(render, 250);
+    }
+
+    function say(message) {
+      status.textContent = message;
+      if (message) {
+        window.setTimeout(function () {
+          if (status.textContent === message) status.textContent = "";
+        }, 4000);
+      }
+    }
+
+    function showRecentInsertion(snippet) {
+      recent.textContent = snippet.replace(/\s+$/, "");
+      recent.hidden = !recent.textContent;
+      recent.classList.remove("eqed-recent--flash");
+      /* Restart the highlight when the same palette item is pressed twice. */
+      void recent.offsetWidth;
+      recent.classList.add("eqed-recent--flash");
+    }
+
+    function clearRecentInsertion() {
+      recent.hidden = true;
+      recent.classList.remove("eqed-recent--flash");
+    }
+
+    /* 挿入。選択があり、断片が空欄を持つなら選択を最初の空欄へ包む。 */
+    function insert(snippet) {
+      var start = input.selectionStart;
+      var end = input.selectionEnd;
+      var before = input.value.slice(0, start);
+      var selected = input.value.slice(start, end);
+      var after = input.value.slice(end);
+      var body = snippet;
+      var caret;
+
+      var firstHole = body.indexOf("{}");
+      if (selected && firstHole >= 0) {
+        body = body.slice(0, firstHole + 1) + selected + body.slice(firstHole + 1);
+        var second = nextHole(body, firstHole + 1 + selected.length + 1, false);
+        caret = second !== null ? second : firstHole + 1 + selected.length + 1;
+      } else if (firstHole >= 0) {
+        caret = firstHole + 1;
+      } else {
+        caret = body.length;
+      }
+      input.value = before + body + after;
+      input.focus();
+      input.setSelectionRange(before.length + caret, before.length + caret);
+      showRecentInsertion(snippet);
+      scheduleRender();
+    }
+
+    var idPrefix = "eqed-palette";
+    var tabList = el("div", "eqed-tabs");
+    var panelHost = el("div", "eqed-tab-panels");
+    var tabButtons = [];
+    var tabPanels = [];
+    tabList.setAttribute("role", "tablist");
+    tabList.setAttribute("aria-label", "数式記号の分類");
+    paletteHost.setAttribute("aria-label", "数式記号パレット");
+    paletteHost.appendChild(tabList);
+    paletteHost.appendChild(panelHost);
+
+    function activatePaletteTab(index, moveFocus) {
+      tabButtons.forEach(function (button, buttonIndex) {
+        var selected = buttonIndex === index;
+        button.setAttribute("aria-selected", selected ? "true" : "false");
+        button.tabIndex = selected ? 0 : -1;
+        tabPanels[buttonIndex].hidden = !selected;
+      });
+      if (moveFocus) tabButtons[index].focus();
+    }
+
+    PALETTE_TABS.forEach(function (group, groupIndex) {
+      var tabId = idPrefix + "-tab-" + group.id;
+      var panelId = idPrefix + "-panel-" + group.id;
+      var tab = el("button", "eqed-tab", group.label);
+      tab.type = "button";
+      tab.id = tabId;
+      tab.setAttribute("role", "tab");
+      tab.setAttribute("aria-controls", panelId);
+      tab.addEventListener("click", function () {
+        activatePaletteTab(groupIndex, false);
+      });
+      tab.addEventListener("keydown", function (event) {
+        var target = null;
+        if (event.key === "ArrowRight") {
+          target = (groupIndex + 1) % PALETTE_TABS.length;
+        } else if (event.key === "ArrowLeft") {
+          target = (groupIndex + PALETTE_TABS.length - 1) %
+            PALETTE_TABS.length;
+        } else if (event.key === "Home") {
+          target = 0;
+        } else if (event.key === "End") {
+          target = PALETTE_TABS.length - 1;
+        }
+        if (target === null) return;
+        event.preventDefault();
+        activatePaletteTab(target, true);
+      });
+      tabList.appendChild(tab);
+      tabButtons.push(tab);
+
+      var panel = el("div", "eqed-tab-panel");
+      panel.id = panelId;
+      panel.setAttribute("role", "tabpanel");
+      panel.setAttribute("aria-labelledby", tabId);
+      PALETTES.forEach(function (palette) {
+        if (group.palettes.indexOf(palette.label) < 0) return;
+        var row = el("div", "eqed-row");
+        row.setAttribute("role", "toolbar");
+        row.setAttribute("aria-label", palette.label);
+        row.appendChild(el("span", "eqed-row-label", palette.label));
+        palette.items.forEach(function (item) {
+          var button = el("button", "eqed-key", item[0]);
+          button.type = "button";
+          button.setAttribute("data-tex-literal-ok", "true");
+          if (item[2]) button.title = item[2] + "  " + item[1].trim();
+          else button.title = item[1].trim();
+          button.addEventListener("click", function () { insert(item[1]); });
+          row.appendChild(button);
+        });
+        panel.appendChild(row);
+      });
+      panelHost.appendChild(panel);
+      tabPanels.push(panel);
+    });
+    activatePaletteTab(0, false);
+
+    input.addEventListener("input", function () {
+      clearRecentInsertion();
+      scheduleRender();
+    });
+    input.addEventListener("keydown", function (event) {
+      if (event.key !== "Tab") return;
+      var pos = event.shiftKey
+        ? nextHole(input.value, input.selectionStart, true)
+        : nextHole(input.value, input.selectionEnd, false);
+      if (pos === null) return;
+      event.preventDefault();
+      input.setSelectionRange(pos, pos);
+    });
+
+    /* Office へのコピー。text/html に MathML、text/plain に TeX の2形式
+     * だけを積む（動作実績のある構成）。Word / PowerPoint は HTML の
+     * MathML をネイティブ数式として取り込む。
+     *
+     * 教訓（2026-08-24）: ここに image/png を同居させてはいけない。
+     * PowerPoint が HTML より画像を優先して掴むことがあり、透過背景の
+     * PNG は暗いスライドで見えない。「貼り付けたのに何も見えない」に
+     * なる。画像が欲しいときは専用の「PNGでコピー」を使う。 */
+    root.querySelector(".eqed-copy-office").addEventListener("click", function () {
+      var tex = input.value.trim();
+      if (!tex) { say("数式が空です"); return; }
+      if (!window.MathJax || typeof window.MathJax.tex2mml !== "function") {
+        say("MathMLの生成にはページの再読み込みが必要です");
+        return;
+      }
+      var mml;
+      try {
+        /* inline の MathML として渡す。display(block) だと Office は
+         * 「数式段落」を作り、段落の左寄せを無視して中央に置く。
+         * 数式の後ろの NBSP が段落を「文中数式入りテキスト」に格下げし、
+         * 左寄せが効く（2026-08-24 に実機で実測: block はボックス中央
+         * x=220、この形は左端 x=8）。前置きのゼロ幅スペースは Word で
+         * 豆腐（□）に見えたため、後置きの NBSP（どのフォントにもある
+         * 不可視の空白）に置き換えた。\displaystyle は Office では
+         * 落ちるが害はなく、正しく解釈する他アプリでは表示を保つ。 */
+        mml = window.MathJax.tex2mml(
+          "\\displaystyle " + tex, { display: false });
+      } catch (error) {
+        say("この数式はMathMLに変換できませんでした");
+        return;
+      }
+      /* 24 pt・左寄せ化で導入した同期 copy-event 経路は、PowerPointで
+       * MathZoneだけを持つ空のテキストボックスになる実機退行を起こした。
+       * 表示実績のあるClipboardItem経路を使い、Office側の18--24 pt変換を
+       * 許容する。MathMLの構造と実描画の可視性が製品契約である。 */
+      var html = "<!DOCTYPE html><html><body>" + mml + "&#160;</body></html>";
+      if (window.ClipboardItem && navigator.clipboard && navigator.clipboard.write) {
+        var item = new window.ClipboardItem({
+          "text/html": new Blob([html], { type: "text/html" }),
+          "text/plain": new Blob([tex], { type: "text/plain" })
+        });
+        navigator.clipboard.write([item]).then(
+          function () { say("PowerPoint数式をコピーしました"); },
+          function () { say("コピーできませんでした（ブラウザの権限を確認してください）"); }
+        );
+      } else {
+        navigator.clipboard.writeText(tex).then(
+          function () { say("このブラウザではTeXのみコピーしました"); },
+          function () { say("コピーできませんでした"); }
+        );
+      }
+    });
+    root.querySelector(".eqed-copy-display").addEventListener("click", function () {
+      navigator.clipboard.writeText("$$\n" + input.value.trim() + "\n$$").then(
+        function () { say("$$付きでコピーしました"); },
+        function () { say("コピーできませんでした（手動で選択してください）"); }
+      );
+    });
+    root.querySelector(".eqed-copy-equation").addEventListener("click", function () {
+      var tex = input.value.trim();
+      if (!tex) { say("数式が空です"); return; }
+      navigator.clipboard.writeText(
+        "\\begin{equation}\n" + tex + "\n\\end{equation}"
+      ).then(
+        function () { say("equation環境付きでコピーしました"); },
+        function () { say("コピーできませんでした（手動で選択してください）"); }
+      );
+    });
+    /* 画像（PNG）でコピー。MathML を受け付けない Google スライド等へは
+     * 画像で貼る。ClipboardItem へ Promise を渡し、クリック（ユーザー
+     * 操作）と同期でクリップボード書き込みを開始する（Safari の制約）。 */
+    root.querySelector(".eqed-copy-png").addEventListener("click", function () {
+      var tex = input.value.trim();
+      if (!tex) { say("数式が空です"); return; }
+      if (!window.ClipboardItem || !navigator.clipboard || !navigator.clipboard.write) {
+        say("このブラウザは画像コピーに対応していません");
+        return;
+      }
+      say("PNGを作成中…");
+      var item;
+      try {
+        item = new window.ClipboardItem({ "image/png": texToPngBlob(tex) });
+      } catch (error) {
+        /* Promise を受け取れない古い ClipboardItem 実装への退避。 */
+        texToPngBlob(tex).then(function (blob) {
+          return navigator.clipboard.write([
+            new window.ClipboardItem({ "image/png": blob })
+          ]);
+        }).then(
+          function () { say("PNGをコピーしました"); },
+          function () { say("PNGコピーできませんでした"); }
+        );
+        return;
+      }
+      navigator.clipboard.write([item]).then(
+        function () { say("PNGをコピーしました。スライドにそのまま貼れます"); },
+        function () { say("PNGコピーできませんでした（ブラウザの権限を確認してください）"); }
+      );
+    });
+    /* SVG で保存。ベクトルのままなので PowerPoint（挿入→画像）や
+     * Inkscape で劣化なく使える。SVG をクリップボード経由で受け取る
+     * アプリは無いため、コピーではなくファイル保存にする。 */
+    root.querySelector(".eqed-save-svg").addEventListener("click", function () {
+      var tex = input.value.trim();
+      if (!tex) { say("数式が空です"); return; }
+      texToSvgText(tex).then(function (text) {
+        var url = URL.createObjectURL(new Blob([text], { type: "image/svg+xml" }));
+        var a = document.createElement("a");
+        a.href = url;
+        a.download = "equation.svg";
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        window.setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+        say("equation.svg を保存しました");
+      }, function () {
+        say("SVGを作成できませんでした");
+      });
+    });
+    root.querySelector(".eqed-clear").addEventListener("click", function () {
+      input.value = "";
+      clearRecentInsertion();
+      input.focus();
+      render();
+    });
+
+    root.querySelector(".eqed-actions")
+        .appendChild(el("span", "eqed-build", "build " + BUILD));
+
+    render();
+  }
+
+  function ready() {
+    var root = document.querySelector("[data-equation-editor]");
+    if (root) init(root);
+  }
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", ready);
+  } else {
+    ready();
+  }
+})();

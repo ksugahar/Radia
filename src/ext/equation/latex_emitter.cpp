@@ -1,13 +1,7 @@
 /*
  * latex_emitter.cpp -- Node tree → LaTeX text conversion
  *
- * Phase 4: Ports convert_char, convert_tmpl, convert_line, convert_pile,
- * convert_node from mtef2tex.c into the C++ unified node hierarchy.
- *
- * NOTE: This is an initial port. The 7-pass system (Pass 0a through Pass 3)
- * is NOT yet implemented here — those passes operate on the OLD MtefNode
- * tree in mtef2tex.c. This emitter handles the TYPED node tree from
- * MtefParser, which already has structural information in the node types.
+ * Emits normalized TeX from the structural editing tree.
  */
 #include <algorithm>
 #include "latex_emitter.h"
@@ -18,7 +12,7 @@
 namespace mtef {
 
 /* ============================================================
- * Symbol lookup tables (subset — full tables in mtef2tex.c)
+ * Symbol lookup tables used by the normalized TeX emitter
  * ============================================================ */
 struct MapEntry { uint16_t key; const char* val; };
 
@@ -537,7 +531,7 @@ void LaTeXEmitter::emitChar(const CharNode& ch, std::string& out) {
         }
     }
     /* Display (fence brackets) */
-    else if (tf == (TF_DISPLAY & 0x7F)) {
+    else if (tf == TF_DISPLAY) {
         /* Display chars are handled by fence/pass system, not emitted directly */
     }
     /* Fallback */
