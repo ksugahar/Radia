@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib.util
 import json
 import re
 import tomllib
@@ -9,6 +10,14 @@ import sys
 PACKAGE_ROOT = Path(__file__).resolve().parents[1]
 REPO_ROOT = PACKAGE_ROOT.parents[1]
 sys.path.insert(0, str(PACKAGE_ROOT / "src"))
+
+
+VERIFY_SPEC = importlib.util.spec_from_file_location(
+    "radia_optuna_verify_wheel", PACKAGE_ROOT / "verify_wheel.py"
+)
+assert VERIFY_SPEC is not None and VERIFY_SPEC.loader is not None
+verify_wheel = importlib.util.module_from_spec(VERIFY_SPEC)
+VERIFY_SPEC.loader.exec_module(verify_wheel)
 
 
 def test_matlab_path_names_the_layout_it_resolved():
@@ -94,6 +103,28 @@ def test_wheel_verifier_rejects_solver_boundary_leaks():
     assert "THIRD_PARTY_NOTICES.md" in verifier
     assert "source_fidelity_verified" in verifier
     assert "wheel payload differs from the checked monorepo source" in verifier
+
+
+def test_release_candidate_fidelity_normalizes_text_but_not_semantics():
+    member = "radia_optuna/matlab/optuna_upstream_compatibility.json"
+    assert verify_wheel._payload_matches(
+        member,
+        b'{\r\n  "ok": true\r\n}\r\n',
+        b'{\n  "ok": true\n}\n',
+        release_candidate=True,
+    )
+    assert not verify_wheel._payload_matches(
+        member,
+        b'{\r\n  "ok": false\r\n}\r\n',
+        b'{\n  "ok": true\n}\n',
+        release_candidate=True,
+    )
+    assert verify_wheel._payload_matches(
+        "radia_optuna/matlab/optuna_mex.mexw64",
+        b"different-ci-build",
+        b"local-build",
+        release_candidate=True,
+    )
 
 
 def test_upstream_notices_and_trademark_attribution_are_checked():
