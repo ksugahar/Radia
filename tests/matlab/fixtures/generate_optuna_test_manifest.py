@@ -19,6 +19,7 @@ CLASSIFICATION_BY_FILE = {
     "test_optuna_sampler_wrappers.m": "matlab-integration",
     "test_optuna_reliability.m": "matlab-integration",
     "test_optuna_nsgaii_joint.m": "matlab-integration",
+    "test_optuna_got_interface.m": "matlab-integration",
 }
 
 INTEGRATION_SCOPE = {
@@ -34,6 +35,12 @@ INTEGRATION_SCOPE = {
     ),
     "test_optuna_nsgaii_joint.m": (
         "MATLAB NSGA-II generation cache, parallel scheduling, and persistence"
+    ),
+    "test_optuna_got_interface.m": (
+        "MATLAB Global Optimization Toolbox-shaped surface: optimoptions, the "
+        "[x, fval, exitflag, output] contract, the init/iter/done output "
+        "protocol, and sdo-style parameter objects. Upstream Optuna has no "
+        "equivalent, so this is not evidence of upstream parity."
     ),
 }
 
