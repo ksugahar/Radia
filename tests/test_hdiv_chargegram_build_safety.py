@@ -71,6 +71,34 @@ def test_antisymmetric_fixed_plane_roundoff_remains_buildable():
     assert gram.entry(0, 0) >= 0.0
 
 
+def test_antisymmetric_fixed_plane_negative_roundoff_remains_buildable():
+    # The exact folded self-energy is zero, but floating-point evaluation may
+    # approach zero from either side. Keep a fixture that lands on the negative
+    # side so the image-cancellation guard cannot regress to d == 0 or d >= 0.
+    on_plane = np.array(
+        [[0.0, -0.7053, 0.9186], [0.0, -0.4457, -0.1660],
+         [0.0, 0.9758, -0.6317]],
+        dtype=np.float64,
+    )
+    off_plane = np.array(
+        [[2.1834, -0.6511, 0.1998], [1.0668, 0.8241, -0.9299],
+         [1.7891, 0.3672, 0.5540]],
+        dtype=np.float64,
+    )
+    gram = _rb._ChargeGramHMatrix(
+        np.empty(0, dtype=np.float64), np.vstack([on_plane, off_plane]).ravel(), 0,
+        1e-8, 8, 2.0, 1e30,
+        np.array([1], dtype=np.int32), np.array([-1.0], dtype=np.float64),
+        True, 0,
+    )
+
+    annihilated = gram.entry(0, 0)
+    companion = gram.entry(1, 1)
+    assert annihilated < 0.0
+    assert companion > 1.0e-3
+    assert abs(annihilated) / companion < 256.0 * np.finfo(np.float64).eps
+
+
 def test_fill_exception_restores_chargegram_and_global_hacapk_state(monkeypatch):
     points = np.array(
         [[0.0, 0.0, 0.0], [0.5, 0.1, 0.0], [1.0, 0.0, 0.2],

@@ -9028,6 +9028,11 @@ std::vector<double> RadHACApKChargeGram::SolveConfiguredLinearMaterialAutoPrecMa
     const std::vector<double>* x0)
 {
     using Clock = std::chrono::steady_clock;
+    class ZeroNumericalRank final : public std::runtime_error {
+    public:
+        explicit ZeroNumericalRank(const std::string& where)
+            : std::runtime_error(where + ": numerical rank is zero") {}
+    };
     if (!m_operatorChargeConfigured || !m_operatorMassConfigured)
         throw std::runtime_error(
             "SolveConfiguredLinearMaterialAutoPrecMany: charge map and mass matrix must be configured");
@@ -9964,7 +9969,7 @@ std::vector<double> RadHACApKChargeGram::SolveConfiguredLinearMaterialAutoPrecMa
                         right[static_cast<size_t>(row)*dim+column] / lambda;
         }
         if (rank == 0)
-            throw std::runtime_error(std::string(who)+": numerical rank is zero");
+            throw ZeroNumericalRank(who);
         for (int row = 0; row < dim; ++row)
             for (int column = 0; column < dim; ++column)
                 for (int mode = 0; mode < dim; ++mode)
@@ -10069,10 +10074,7 @@ std::vector<double> RadHACApKChargeGram::SolveConfiguredLinearMaterialAutoPrecMa
             alpha = symmetric_pseudoinverse_apply(
                 delta, gamma, dim, "block PCG search matrix");
         }
-        catch (const std::runtime_error& error) {
-            if (std::string(error.what()).find("numerical rank is zero") ==
-                    std::string::npos)
-                throw;
+        catch (const ZeroNumericalRank&) {
             block_breakdown = true;
             break;
         }
@@ -10110,10 +10112,7 @@ std::vector<double> RadHACApKChargeGram::SolveConfiguredLinearMaterialAutoPrecMa
             beta = symmetric_pseudoinverse_apply(
                 gamma, gamma_new, dim, "block PCG residual matrix");
         }
-        catch (const std::runtime_error& error) {
-            if (std::string(error.what()).find("numerical rank is zero") ==
-                    std::string::npos)
-                throw;
+        catch (const ZeroNumericalRank&) {
             block_breakdown = true;
             break;
         }
