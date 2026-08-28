@@ -48,6 +48,7 @@ _ORACLE_SCOPE_FILES = {
         "test_optuna_reliability",
         "test_optuna_sampler_wrappers",
         "test_optuna_simulink_block",
+        "test_optuna_storage_bridge",
         "test_optuna_table",
     ),
     "samplers": (
@@ -57,6 +58,7 @@ _ORACLE_SCOPE_FILES = {
     ),
     "storage": (
         "test_optuna_reliability",
+        "test_optuna_storage_bridge",
         "test_optuna_table",
         "test_optuna_upstream_oracle",
     ),

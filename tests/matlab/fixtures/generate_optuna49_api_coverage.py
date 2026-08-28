@@ -569,6 +569,7 @@ CLASS_ORACLE_SECTIONS = {
     "CmaEsSampler": (
         "cmaes_independent_sampler_seed_31",
         "cmaes_sampler_seed_31",
+        "cmaes_advanced",
         "sampler_public_members",
         "sampler_reseed",
     ),
@@ -595,6 +596,7 @@ CLASS_ORACLE_SECTIONS = {
         "sampler_reseed",
     ),
     "QMCSampler": (
+        "native_sobol_high_dimension",
         "qmc_warnings",
         "sampler_public_members",
         "sampler_reseed",
@@ -612,6 +614,7 @@ CLASS_ORACLE_SECTIONS = {
         "tpe_categorical_distance",
         "tpe_group",
         "tpe_sampler_seed_37",
+        "tpe_constant_liar_seed_127",
     ),
     "BaseCrossover": ("base_components", "nsgaii_crossovers_seed_73"),
     "BLXAlphaCrossover": ("nsgaii_crossovers_seed_73",),

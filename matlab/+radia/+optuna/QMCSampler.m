@@ -19,6 +19,7 @@ classdef QMCSampler < radia.optuna.BaseSampler
     properties (Constant, Access=private)
         StateSchema = "radia.optuna.qmc-sampler-state.v1"
         SamplerName = "qmc"
+        MaxSobolDimension = 21201
     end
 
     methods
@@ -233,32 +234,14 @@ classdef QMCSampler < radia.optuna.BaseSampler
                 end
                 return
             end
-            if dimension>32
+            if dimension>obj.MaxSobolDimension
                 error("radia:optuna:QMCDimension", ...
-                    "The MATLAB-native Sobol implementation supports at most 32 dimensions.");
+                    "The MATLAB-native Sobol implementation supports at most %d dimensions.", ...
+                    obj.MaxSobolDimension);
             end
-            [polynomials,initialValues]= ...
-                radia.optuna.QMCSampler.sobolParameters();
-            directions=obj.sobolDirections( ...
-                dimension,polynomials,initialValues);
-            shift=zeros(1,dimension,"uint32");
-            if obj.Scramble
-                [directions,shift]=obj.scrambleSobolDirections( ...
-                    directions,obj.Seed);
-            end
-            for row=1:numel(sampleIds)
-                gray=bitxor(uint32(sampleIds(row)), ...
-                    bitshift(uint32(sampleIds(row)),-1));
-                for dim=1:dimension
-                    integer=shift(dim);
-                    for bit=1:32
-                        if bitget(gray,bit)
-                            integer=bitxor(integer,directions(dim,bit));
-                        end
-                    end
-                    points(row,dim)=double(integer)/2^32;
-                end
-            end
+            directions=obj.sobolDirections(dimension);
+            points=radia.optuna.internal.NativeKernels.call( ...
+                "optuna.sobol.points",directions,uint32(sampleIds));
         end
 
         function points=scipyScrambledPoints(obj,dimension,sampleIds)
@@ -293,58 +276,65 @@ classdef QMCSampler < radia.optuna.BaseSampler
         end
 
         function point=sobolPoint(obj,dimension,sampleId,scrambled,seed)
-            if dimension>32
+            if dimension>obj.MaxSobolDimension
                 error("radia:optuna:QMCDimension", ...
-                    "The MATLAB-native Sobol implementation supports at most 32 dimensions.");
+                    "The MATLAB-native Sobol implementation supports at most %d dimensions.", ...
+                    obj.MaxSobolDimension);
             end
-            [polynomials,initialValues]= ...
-                radia.optuna.QMCSampler.sobolParameters();
-            directions=obj.sobolDirections( ...
-                dimension,polynomials,initialValues);
+            directions=obj.sobolDirections(dimension);
             shift=zeros(1,dimension,"uint32");
             if scrambled
                 [directions,shift]=obj.scrambleSobolDirections( ...
                     directions,seed);
             end
             gray=bitxor(uint32(sampleId),bitshift(uint32(sampleId),-1));
-            point=zeros(1,dimension);
-            for dim=1:dimension
-                integer=shift(dim);
-                for bit=1:32
-                    if bitget(gray,bit)
-                        integer=bitxor(integer,directions(dim,bit));
-                    end
-                end
-                point(dim)=double(integer)/2^32;
+            integers=shift;
+            activeBits=find(bitget(gray,1:32));
+            for bit=reshape(activeBits,1,[])
+                integers=bitxor(integers,directions(:,bit).');
             end
+            point=double(integers)/2^32;
         end
 
-        function directions=sobolDirections(~,dimension,polynomials,initialValues)
-            directions=zeros(dimension,32,"uint32");
-            for bit=1:32
-                directions(1,bit)=bitshift(uint32(1),32-bit);
+        function directions=sobolDirections(~,dimension)
+            % Direction construction is independent of seed and sample ID.
+            % Cache the longest prefix requested so repeated Study batches
+            % pay only the MEX point-generation cost.
+            persistent cached
+            if isempty(cached)
+                cached=zeros(1,32,"uint32");
+                for bit=1:32
+                    cached(1,bit)=bitshift(uint32(1),32-bit);
+                end
             end
-            for dim=2:dimension
+            first=max(2,size(cached,1)+1);
+            if size(cached,1)<dimension
+                [polynomials,initialValues]= ...
+                    radia.optuna.QMCSampler.sobolParameters(dimension);
+                cached(dimension,32)=uint32(0);
+            end
+            for dim=first:dimension
                 polynomial=uint32(polynomials(dim));
                 degree=floor(log2(double(polynomial)));
-                initial=uint32(initialValues{dim});
+                initial=uint32(initialValues(dim,1:degree));
                 for bit=1:degree
-                    directions(dim,bit)=bitshift(initial(bit),32-bit);
+                    cached(dim,bit)=bitshift(initial(bit),32-bit);
                 end
                 coefficients=bitand(bitshift(polynomial,-1), ...
                     uint32(2^(degree-1)-1));
                 for bit=(degree+1):32
-                    value=bitxor(directions(dim,bit-degree), ...
-                        bitshift(directions(dim,bit-degree),-degree));
+                    value=bitxor(cached(dim,bit-degree), ...
+                        bitshift(cached(dim,bit-degree),-degree));
                     for offset=1:(degree-1)
                         mask=bitshift(uint32(1),degree-1-offset);
                         if bitand(coefficients,mask)~=0
-                            value=bitxor(value,directions(dim,bit-offset));
+                            value=bitxor(value,cached(dim,bit-offset));
                         end
                     end
-                    directions(dim,bit)=value;
+                    cached(dim,bit)=value;
                 end
             end
+            directions=cached(1:dimension,:);
         end
 
         function [directions,shift]=scrambleSobolDirections(~,directions,seed)
@@ -444,22 +434,49 @@ classdef QMCSampler < radia.optuna.BaseSampler
     end
 
     methods (Static, Access=private)
-        function [polynomials,initialValues]=sobolParameters()
-            % Joe-Kuo direction-number seeds used by SciPy/Optuna.
-            polynomials=[1 3 7 11 13 19 25 37 41 47 55 59 61 67 91 97 ...
-                103 109 115 131 137 143 145 157 167 171 185 191 193 203 211 213];
-            initialValues={[],1,[1 3],[1 3 1],[1 1 1],[1 1 3 3], ...
-                [1 3 5 13],[1 1 5 5 17],[1 1 5 5 5],[1 1 7 11 19], ...
-                [1 1 5 1 1],[1 1 1 3 11],[1 3 5 5 31], ...
-                [1 3 3 9 7 49],[1 1 1 15 21 21],[1 3 1 13 27 49], ...
-                [1 1 1 15 7 5],[1 3 1 15 13 25],[1 1 5 5 19 61], ...
-                [1 3 7 11 23 15 103],[1 3 7 13 13 15 69], ...
-                [1 1 3 13 7 35 63],[1 3 5 9 1 25 53], ...
-                [1 3 1 13 9 35 107],[1 3 1 5 27 61 31], ...
-                [1 1 5 11 19 41 61],[1 3 5 3 3 13 69], ...
-                [1 1 7 13 1 19 1],[1 3 7 5 13 19 59], ...
-                [1 1 3 9 25 29 41],[1 3 5 13 23 1 55], ...
-                [1 3 7 3 13 59 17]};
+        function [polynomials,initialValues]=sobolParameters(dimension)
+            % Joe--Kuo criterion-6 direction numbers used by SciPy/Optuna.
+            persistent allPolynomials allInitialValues
+            if isempty(allPolynomials)
+                root=fileparts(which("radia.optuna.QMCSampler"));
+                path=fullfile(root,"+internal", ...
+                    "sobol_direction_numbers.bin");
+                [file,message]=fopen(path,"r","ieee-le");
+                if file<0
+                    error("radia:optuna:QMCDirectionNumbers", ...
+                        "Cannot open the native Sobol direction table: %s", ...
+                        message);
+                end
+                cleanup=onCleanup(@()fclose(file));
+                magic=char(fread(file,16,"*uint8").');
+                magic=erase(string(magic),char(0));
+                schema=double(fread(file,1,"*uint32"));
+                maximum=double(fread(file,1,"*uint32"));
+                degree=double(fread(file,1,"*uint32"));
+                if magic~="RADIA_SOBOL_JK6" || schema~=1 || ...
+                        maximum~=21201 || degree~=18
+                    error("radia:optuna:QMCDirectionNumbers", ...
+                        "The native Sobol direction table header is invalid.");
+                end
+                allPolynomials=fread(file,maximum,"*uint32").';
+                raw=fread(file,[degree,maximum],"*uint32");
+                trailing=fread(file,1,"*uint8");
+                if numel(allPolynomials)~=maximum || ...
+                        ~isequal(size(raw),[degree,maximum]) || ...
+                        ~isempty(trailing)
+                    error("radia:optuna:QMCDirectionNumbers", ...
+                        "The native Sobol direction table payload is incomplete.");
+                end
+                allInitialValues=raw.';
+                clear cleanup
+            end
+            if dimension>numel(allPolynomials)
+                error("radia:optuna:QMCDimension", ...
+                    "The MATLAB-native Sobol implementation supports at most %d dimensions.", ...
+                    numel(allPolynomials));
+            end
+            polynomials=allPolynomials(1:dimension);
+            initialValues=allInitialValues(1:dimension,:);
         end
 
         function primes=firstPrimes(count)
