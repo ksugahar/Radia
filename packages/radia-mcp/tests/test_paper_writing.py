@@ -12,7 +12,15 @@ locks in current behavior so future refactors won't regress silently.
 """
 from __future__ import annotations
 
+import asyncio
+import json
+import os
+import sys
+from pathlib import Path
+
 import pytest
+from mcp import ClientSession, StdioServerParameters
+from mcp.client.stdio import stdio_client
 
 from radia_mcp.paper_writing import tools as pw
 from radia_mcp.paper_writing._arxiv_source import (
@@ -152,6 +160,118 @@ def test_check_paragraph_length_returns_dict():
     txt = "P1.\n\n" + ("Long. " * 50) + "\n\n" + "P3."
     r = pw.paper_writing_check_paragraph_length(txt)
     assert isinstance(r, dict)
+
+
+def test_bilingual_readability_separates_japanese_and_english():
+    dense_ja = (
+        "本研究では、従来法の課題を解決するため、複数の材料条件を定義し、"
+        "さらに解析手法を選択し、そこで得られる設計指針を同時に示す必要が"
+        "あるため、各条件の意味と適用範囲を一文の中で説明する。"
+    )
+    dense_en = (
+        "The proposed framework simultaneously performs parameter "
+        "identification, uncertainty quantification, constraint enforcement, "
+        "and online adaptation, while retaining the assumptions that are "
+        "required by the solver, because the resulting representation must "
+        "also remain compatible with the existing implementation."
+    )
+    r = pw.paper_writing_bilingual_readability_check(
+        dense_ja + "\n\n" + dense_en
+    )
+    assert r["japanese"]["applicable"] is True
+    assert r["english"]["applicable"] is True
+    assert r["japanese"]["risk_count"] >= 1
+    assert r["english"]["risk_count"] >= 1
+    assert "sentence_target_chars" in r["japanese"]["thresholds"]
+    assert "sentence_target_words" in r["english"]["thresholds"]
+    assert "not averaged" in r["aggregation_policy"]
+
+
+def test_bilingual_readability_accepts_short_claim_reason_sequence():
+    text = (
+        "測定時間が長いことが課題である。そこで測定点を選択する。"
+        "提案法は誤差を保ったまま測定数を減らす。\n\n"
+        "Measurements are expensive. We select the next waveform from the "
+        "current uncertainty. The method reduces the number of measurements."
+    )
+    r = pw.paper_writing_bilingual_readability_check(text)
+    assert r["japanese"]["status"] == "pass"
+    assert r["english"]["status"] == "pass"
+
+
+def test_bilingual_readability_ignores_tex_math_and_figure(tmp_path):
+    tex = tmp_path / "readable.tex"
+    tex.write_text(
+        r"""\documentclass{article}
+\begin{document}
+\section{Method}
+We compute the field. We compare it with a reference.
+\begin{equation}
+VeryLongSymbolicExpression = A + B + C + D + E + F + G
+\end{equation}
+\begin{figure}
+This deliberately long caption-like payload must not enter prose analysis.
+\end{figure}
+\end{document}
+""",
+        encoding="utf-8",
+    )
+    r = pw.paper_writing_bilingual_readability_check(str(tex))
+    assert r["english"]["status"] == "pass"
+    assert r["english"]["risk_count"] == 0
+
+
+async def _probe_bilingual_readability_stdio() -> dict:
+    package_root = Path(__file__).resolve().parents[1]
+    env = os.environ.copy()
+    source_root = package_root / "src"
+    env["PYTHONPATH"] = os.pathsep.join(
+        [str(source_root), env.get("PYTHONPATH", "")]
+    ).rstrip(os.pathsep)
+    params = StdioServerParameters(
+        command=sys.executable,
+        args=["-m", "radia_mcp.paper_writing.server"],
+        cwd=str(package_root),
+        env=env,
+    )
+    async with stdio_client(params) as (read_stream, write_stream):
+        async with ClientSession(read_stream, write_stream) as session:
+            initialized = await session.initialize()
+            listed = await session.list_tools()
+            called = await session.call_tool(
+                "paper_writing_bilingual_readability_check",
+                {
+                    "text_or_path": (
+                        "結論を先に示す。次に理由を述べる。\n\n"
+                        "We state the claim first. We then give the reason."
+                    )
+                },
+            )
+            payload = json.loads(called.content[0].text)
+            return {
+                "server_name": initialized.serverInfo.name,
+                "listed": any(
+                    tool.name == "paper_writing_bilingual_readability_check"
+                    for tool in listed.tools
+                ),
+                "is_error": bool(called.isError),
+                "ja_status": payload["japanese"]["status"],
+                "en_status": payload["english"]["status"],
+            }
+
+
+def test_bilingual_readability_passes_real_stdio_protocol():
+    result = asyncio.run(asyncio.wait_for(
+        _probe_bilingual_readability_stdio(),
+        timeout=45,
+    ))
+    assert result == {
+        "server_name": "mcp-server-paper-writing",
+        "listed": True,
+        "is_error": False,
+        "ja_status": "pass",
+        "en_status": "pass",
+    }
 
 
 def test_check_sentence_ending_variety_returns_dict():
@@ -1095,6 +1215,33 @@ def test_em_submission_gate_tex_only_returns_partial(tmp_path):
     assert "figure_forward_reference" in names
     assert "equation_numbering" in names
     assert "count_underlines" in names
+    assert "bilingual_adjacent_reviewer_readability" in names
+
+
+def test_em_submission_gate_blocks_cognitively_dense_prose(tmp_path):
+    from radia_mcp.paper_writing._em_paper_style import (
+        paper_writing_em_submission_gate,
+    )
+    tex = tmp_path / "dense.tex"
+    dense = (
+        "本研究では、従来法の課題を解決するため、複数の材料条件を定義し、"
+        "さらに解析手法を選択し、そこで得られる設計指針を同時に示す必要が"
+        "あるため、各条件の意味と適用範囲を一文の中で説明する。"
+    )
+    tex.write_text(
+        "\\documentclass{article}\n\\begin{document}\n" + dense
+        + "\n\\end{document}\n",
+        encoding="utf-8",
+    )
+    r = paper_writing_em_submission_gate(tex_path=str(tex))
+    check = next(
+        item for item in r["checks"]
+        if item["name"] == "bilingual_adjacent_reviewer_readability"
+    )
+    assert check["status"] in {"warn", "fail"}
+    assert check["detail"]["japanese"]["risk_count"] >= 1
+    first_risk = check["detail"]["japanese"]["risks"][0]
+    assert first_risk["source_line"] == 3
 
 
 def test_em_submission_gate_with_bib(tmp_path):
