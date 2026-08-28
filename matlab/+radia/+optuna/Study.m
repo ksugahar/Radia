@@ -1306,10 +1306,17 @@ classdef Study < handle
             trial.restoreSnapshot(obj.freezeTrial(number));
         end
 
-        function addTrial(obj,frozen)
+        function addTrial(obj,frozen,options)
+            %ADDTRIAL Import a finished trial.
+            %   OriginalNames maps each Params key to the parameter name it
+            %   should be stored under. A FrozenTrial can only carry
+            %   MATLAB-valid field names, so an importer that knows the real
+            %   names (radia.optuna.import_study) supplies them here instead
+            %   of letting the study record the escaped key.
             arguments
                 obj
                 frozen (1,1) radia.optuna.FrozenTrial
+                options.OriginalNames (1,1) struct = struct()
             end
             if frozen.State=="COMPLETE" && ...
                     (numel(frozen.Values)~=numel(obj.Directions) || ...
@@ -1372,8 +1379,12 @@ classdef Study < handle
             end
             for name=reshape(names,1,[])
                 distribution=frozen.Distributions.(name);
-                obj.appendImportedParameter(number,name,frozen.Params.(name), ...
-                    distribution);
+                storedName=name;
+                if isfield(options.OriginalNames,name)
+                    storedName=string(options.OriginalNames.(name));
+                end
+                obj.appendImportedParameter(number,storedName, ...
+                    frozen.Params.(name),distribution);
             end
             obj.UserAttrTable=obj.appendImportedAttributes( ...
                 obj.UserAttrTable,number,frozen.UserAttrs);

@@ -166,6 +166,13 @@
       "file": "test_optuna_sampler_wrappers.m",
       "oracle": null,
       "scope": "MATLAB sampler-state persistence and AutoSampler policy integration",
+      "test": "testBaseSamplerUpstreamNamedInterface"
+    },
+    {
+      "classification": "matlab-integration",
+      "file": "test_optuna_sampler_wrappers.m",
+      "oracle": null,
+      "scope": "MATLAB sampler-state persistence and AutoSampler policy integration",
       "test": "testGPProposalResumesWithHyperparametersAndRandomState"
     },
     {
@@ -272,6 +279,13 @@
       "oracle": null,
       "scope": "MATLAB table storage, MAT persistence, and SimulinkRunner integration",
       "test": "testDefineByRunAndPersistence"
+    },
+    {
+      "classification": "matlab-integration",
+      "file": "test_optuna_table.m",
+      "oracle": null,
+      "scope": "MATLAB table storage, MAT persistence, and SimulinkRunner integration",
+      "test": "testStudyExportRoundTripsThroughTheBridgeDocument"
     },
     {
       "classification": "matlab-integration",
