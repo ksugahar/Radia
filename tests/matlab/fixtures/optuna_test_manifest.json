@@ -22,6 +22,62 @@
       "test": "testAskFixedDistributionsMatchesUpstream"
     },
     {
+      "classification": "matlab-integration",
+      "file": "test_optuna_got_interface.m",
+      "oracle": null,
+      "scope": "MATLAB Global Optimization Toolbox-shaped surface: optimoptions, the [x, fval, exitflag, output] contract, the init/iter/done output protocol, and sdo-style parameter objects. Upstream Optuna has no equivalent, so this is not evidence of upstream parity.",
+      "test": "testOptimoptionsMatchesToolboxUsage"
+    },
+    {
+      "classification": "matlab-integration",
+      "file": "test_optuna_got_interface.m",
+      "oracle": null,
+      "scope": "MATLAB Global Optimization Toolbox-shaped surface: optimoptions, the [x, fval, exitflag, output] contract, the init/iter/done output protocol, and sdo-style parameter objects. Upstream Optuna has no equivalent, so this is not evidence of upstream parity.",
+      "test": "testOptimizeReturnsToolboxOutputContract"
+    },
+    {
+      "classification": "matlab-integration",
+      "file": "test_optuna_got_interface.m",
+      "oracle": null,
+      "scope": "MATLAB Global Optimization Toolbox-shaped surface: optimoptions, the [x, fval, exitflag, output] contract, the init/iter/done output protocol, and sdo-style parameter objects. Upstream Optuna has no equivalent, so this is not evidence of upstream parity.",
+      "test": "testOutputFcnSeesInitIterDoneAndCanStop"
+    },
+    {
+      "classification": "matlab-integration",
+      "file": "test_optuna_got_interface.m",
+      "oracle": null,
+      "scope": "MATLAB Global Optimization Toolbox-shaped surface: optimoptions, the [x, fval, exitflag, output] contract, the init/iter/done output protocol, and sdo-style parameter objects. Upstream Optuna has no equivalent, so this is not evidence of upstream parity.",
+      "test": "testStallAndTimeAndInfeasibleExitFlags"
+    },
+    {
+      "classification": "matlab-integration",
+      "file": "test_optuna_got_interface.m",
+      "oracle": null,
+      "scope": "MATLAB Global Optimization Toolbox-shaped surface: optimoptions, the [x, fval, exitflag, output] contract, the init/iter/done output protocol, and sdo-style parameter objects. Upstream Optuna has no equivalent, so this is not evidence of upstream parity.",
+      "test": "testFixedParametersAreNotSearchedButAreReturned"
+    },
+    {
+      "classification": "matlab-integration",
+      "file": "test_optuna_got_interface.m",
+      "oracle": null,
+      "scope": "MATLAB Global Optimization Toolbox-shaped surface: optimoptions, the [x, fval, exitflag, output] contract, the init/iter/done output protocol, and sdo-style parameter objects. Upstream Optuna has no equivalent, so this is not evidence of upstream parity.",
+      "test": "testParameterTypesMapOntoDistributions"
+    },
+    {
+      "classification": "matlab-integration",
+      "file": "test_optuna_got_interface.m",
+      "oracle": null,
+      "scope": "MATLAB Global Optimization Toolbox-shaped surface: optimoptions, the [x, fval, exitflag, output] contract, the init/iter/done output protocol, and sdo-style parameter objects. Upstream Optuna has no equivalent, so this is not evidence of upstream parity.",
+      "test": "testSamplerFactoryIsSharedAndRefusesAuto"
+    },
+    {
+      "classification": "matlab-integration",
+      "file": "test_optuna_got_interface.m",
+      "oracle": null,
+      "scope": "MATLAB Global Optimization Toolbox-shaped surface: optimoptions, the [x, fval, exitflag, output] contract, the init/iter/done output protocol, and sdo-style parameter objects. Upstream Optuna has no equivalent, so this is not evidence of upstream parity.",
+      "test": "testUseParallelRefusesWithoutAPool"
+    },
+    {
       "classification": "upstream-mcp",
       "file": "test_optuna_mcp_oracle.m",
       "oracle": "optuna49_mcp_oracle.json",
