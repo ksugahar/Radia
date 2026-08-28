@@ -4,6 +4,23 @@
 履歴である。現在の公開リリース手順は `build\accept_release.ps1` と
 [`CANONICAL_OPERATION.md`](CANONICAL_OPERATION.md) を正とする。
 
+## 2026-08-29 フォントホスト回帰の再現
+
+- 対象: 公開済み`O:\Eqnedit64.exe` 3.0.1、SHA-256
+  `E7CC8811312AB6C8E42AD5038936E50D4A64B72692224C1602C48095F20B94D0`
+- 旧`--ui-interaction-test`は終了コード0だったが、同時刻に同一セッションの
+  `fontdrvhost.exe`がPID 20808から7344へ入れ替わった。
+- Application Event ID 1000/1001は`fontdrvhost.exe`、例外`0xc0000005`、
+  offset`0x366a2`を2回記録していた。したがって旧CIのPASSは誤判定だった。
+- `EQNEDIT64_NO_FONT_REG=1`では新規フォントホストクラッシュ0件、ファイル経由の
+  `AddFontResourceExW(FR_PRIVATE | FR_NOT_ENUM)`単独プローブも終了コード0、PID維持、
+  新規クラッシュ0件だった。
+- 修正版の単一`--ui-interaction-test`は、分類タブの本文相当画素高を含め終了コード0、
+  PID 7344を維持し、新規クラッシュ0件。32回のライフサイクル試験は対話中LABでは
+  実行せず、GitHub-hosted Windows CIの必須ゲートとする。
+- PR CI run `33215826230`では32回のライフサイクル後も`fontdrvhost.exe`のPID
+  7712を維持し、同ゲートを含むEqnedit64 job全体が2分3秒で合格した。
+
 ## 2026-08-25 正本移行
 
 - 対象コミット: `bdde3d450e6831931bd42df9446963b25cce7706`

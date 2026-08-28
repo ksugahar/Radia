@@ -779,7 +779,7 @@ bool start_operation_debug(bool announce,
                     "\telapsed_ms\tdelta_ms\tfocus\tinput_style\talignment"
                     "\tzoom_percent\tequation_mode"
                     "\tshortcut_prefix\tlatex\r\n");
-    debug_event("debug.start", "Eqnedit64 3.0.1 path=" + utf8_wide(path));
+    debug_event("debug.start", "Eqnedit64 3.0.2 path=" + utf8_wide(path));
     update_debug_menu();
     update_title();
     /* The status bar and the [操作ログ記録中] flag in the title say all of
@@ -2296,7 +2296,8 @@ LRESULT CALLBACK ToolbarButtonProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp,
     return DefSubclassProc(hwnd, msg, wp, lp);
 }
 
-bool toolbar_button_label_changes_pixels(HWND button) {
+bool toolbar_button_label_changes_pixels(HWND button,
+                                         bool requireBodyHeight = false) {
     if (!button || window_text(button).empty()) return false;
     RECT rc{};
     GetClientRect(button, &rc);
@@ -2337,18 +2338,38 @@ bool toolbar_button_label_changes_pixels(HWND button) {
     SetWindowTextW(button, label.c_str());
 
     size_t changed = 0;
+    int minX = width;
+    int minY = height;
+    int maxX = -1;
+    int maxY = -1;
     const int inset = scaled_px(button, 4);
     for (int y = inset; y < height - inset; ++y) {
         for (int x = inset; x < width - inset; ++x) {
             const size_t i = (size_t(y) * size_t(width) + size_t(x)) * 4;
             if (labelled[i] != blank[i] || labelled[i + 1] != blank[i + 1] ||
-                labelled[i + 2] != blank[i + 2]) ++changed;
+                labelled[i + 2] != blank[i + 2]) {
+                ++changed;
+                minX = std::min(minX, x);
+                minY = std::min(minY, y);
+                maxX = std::max(maxX, x);
+                maxY = std::max(maxY, y);
+            }
         }
     }
     SelectObject(dc, oldBitmap);
     DeleteObject(bitmap);
     DeleteDC(dc);
-    return changed >= 4;
+    if (changed < 8 || maxX < minX || maxY < minY) return false;
+    if (requireBodyHeight) {
+        const int inkWidth = maxX - minX + 1;
+        const int inkHeight = maxY - minY + 1;
+        /* A previous test accepted four stray pixels while the five Japanese
+         * category names were only tiny dashes on the real screen. */
+        if (inkHeight < scaled_px(button, 7) ||
+            inkWidth < scaled_px(button, 12))
+            return false;
+    }
+    return true;
 }
 
 /* Five category tabs on the first row; only that category's popup palettes
@@ -4700,7 +4721,7 @@ int ui_interaction_test() {
         if (g.toolbarButtonSubclassFailed) return 154;
         for (HWND button : g.paletteTabButtons) if (!button) return 155;
         for (HWND button : g.paletteTabButtons)
-            if (!toolbar_button_label_changes_pixels(button)) return 152;
+            if (!toolbar_button_label_changes_pixels(button, true)) return 152;
         for (HWND button : g.paletteButtons)
             if (!toolbar_button_label_changes_pixels(button)) return 153;
         if (GetMenuItemCount(g.menu) != 5) return 128;

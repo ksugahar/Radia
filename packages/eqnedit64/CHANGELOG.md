@@ -1,5 +1,14 @@
 # Changelog
 
+## 3.0.2 - 2026-08-29
+
+- Replaces crash-prone in-memory font registration with a verified,
+  content-addressed per-user font cache and file-backed private registration.
+- Adds an isolated 32-lifecycle CI gate that fails if Windows restarts
+  `fontdrvhost.exe` or records a new font-host application crash.
+- Requires native category-tab labels to occupy a readable pixel height; a few
+  stray pixels no longer qualify as visible toolbar text.
+
 ## 3.0.1 - 2026-08-29
 
 - Owner-draws native palette tabs and buttons so correct window text cannot

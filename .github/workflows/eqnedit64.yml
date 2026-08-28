@@ -131,6 +131,11 @@ jobs:
           & $app --ui-interaction-test
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
+      - name: Reject Windows session font-host damage
+        run: >-
+          pwsh -NoProfile -File build\test_font_session.ps1
+          -AppPath build_cmake\Release\Eqnedit64.exe -Iterations 32
+
       - name: Check command-line image artifacts
         run: |
           $app = Resolve-Path 'build_cmake\Release\Eqnedit64.exe'
