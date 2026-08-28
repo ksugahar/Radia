@@ -170,6 +170,16 @@ verifyEqual(testCase,numel(unique(declared)),numel(declared));
 end
 
 function testPublicAPIInventoryIsFullyOracleMapped(testCase)
+% The ledger's oracle_status used to mean "present in MATLAB and named in a
+% hand-maintained Python set", and a module was verified merely by existing.
+% That is an assertion, not evidence, so this test used to demand that all
+% 816 entries were verified -- locking the overclaim in place.
+%
+% oracle_status is now derived: generate_optuna49_api_coverage walks the
+% oracle generators, and an entry may only be verified when some section of
+% optuna49_oracle.json is produced by code that exercises that upstream name.
+% An entry that is present and listed but has no such section is reported as
+% "asserted", which is weaker than verified and is not evidence of parity.
 root=fileparts(fileparts(fileparts(mfilename("fullpath"))));
 coverage=jsondecode(fileread(fullfile( ...
     root,"matlab","optuna49_api_coverage.json")));
@@ -179,12 +189,46 @@ verifyEqual(testCase,string(coverage.upstream_version),"4.9.0");
 verifyEqual(testCase,double(coverage.surface_entry_count),816);
 verifyEqual(testCase,double(coverage.surface_present_count),816);
 verifyEqual(testCase,double(coverage.surface_missing_count),0);
-verifyEqual(testCase,double(coverage.oracle_verified_count),816);
+verifyTrue(testCase,all(string({coverage.entries.surface_status})=="present"));
+
+% Nothing may sit in the weakest state: every entry is either backed by an
+% oracle section or explicitly asserted under a non-required scope.
 verifyEqual(testCase,double(coverage.oracle_partial_count),0);
 verifyEqual(testCase,double(coverage.oracle_unmapped_count),0);
+
+% The compatibility claim rests on the required scope alone, and every
+% required entry must be present, mapped, and evidence-backed.
+verifyEqual(testCase,double(coverage.required_present_count), ...
+    double(coverage.required_entry_count));
+verifyEqual(testCase,double(coverage.required_oracle_mapped_count), ...
+    double(coverage.required_entry_count));
+verifyEqual(testCase,double(coverage.required_oracle_asserted_count),0);
 verifyTrue(testCase,logical(coverage.full_compatibility_complete));
-verifyTrue(testCase,all(string({coverage.entries.surface_status})=="present"));
-verifyTrue(testCase,all(string({coverage.entries.oracle_status})=="verified"));
+
+status=string({coverage.entries.oracle_status});
+scope=string({coverage.entries.scope});
+sections={coverage.entries.oracle_sections};
+
+% Every required entry is verified, and names the section that verifies it.
+required=scope=="required";
+verifyTrue(testCase,all(status(required)=="verified"), ...
+    "every required entry must be verified");
+verifyTrue(testCase,all(~cellfun(@isempty,sections(required))), ...
+    "every required entry must name the oracle section behind it");
+
+% A verified claim anywhere in the ledger has to name its evidence.
+verified=status=="verified";
+verifyTrue(testCase,all(~cellfun(@isempty,sections(verified))), ...
+    "a verified entry must name at least one oracle section");
+verifyEqual(testCase,double(coverage.oracle_verified_count),double(sum(verified)));
+
+% Asserted entries are allowed only where the scope says something other than
+% a differential test discharges them.
+asserted=status=="asserted";
+verifyEqual(testCase,double(coverage.oracle_asserted_count),double(sum(asserted)));
+verifyTrue(testCase,all(ismember(scope(asserted), ...
+    ["bridged" "out-of-scope" "python-language" "replaced"])), ...
+    "an asserted entry must sit in a scope that names what discharges it");
 end
 
 function testNumpyRandomStateSeedContract(testCase)
@@ -2642,4 +2686,151 @@ for suffix=["","-journal","-shm","-wal"]
     path=databasePath+suffix;
     if isfile(path), delete(path); end
 end
+end
+
+function testDeprecatedSuggestAliasesMatchUpstream(testCase)
+% Upstream oracle: optuna49_oracle.json/deprecated_suggest.
+% Optuna 4.9 still ships the v3.0-deprecated suggest aliases, so they are
+% part of the surface MATLAB has to reproduce. Each alias must return the
+% value its modern equivalent returns from the same seeded stream.
+expected=testCase.TestData.Oracle.deprecated_suggest;
+
+study=radia.optuna.Study(Sampler=radia.optuna.RandomSampler(7), ...
+    AutoSave=false);
+verifyEqual(testCase,study.ask().suggest_uniform("u",0,1), ...
+    expected.trial.suggest_uniform.value,AbsTol=0);
+
+study=radia.optuna.Study(Sampler=radia.optuna.RandomSampler(7), ...
+    AutoSave=false);
+verifyEqual(testCase,study.ask().suggest_loguniform("l",1,100), ...
+    expected.trial.suggest_loguniform.value,AbsTol=0);
+
+study=radia.optuna.Study(Sampler=radia.optuna.RandomSampler(7), ...
+    AutoSave=false);
+verifyEqual(testCase,study.ask().suggest_discrete_uniform("d",0,1,0.25), ...
+    expected.trial.suggest_discrete_uniform.value,AbsTol=0);
+
+% Each alias forwards to the modern call, so the two agree exactly.
+verifyTrue(testCase,expected.trial.suggest_uniform.matches_modern);
+verifyTrue(testCase,expected.trial.suggest_loguniform.matches_modern);
+verifyTrue(testCase,expected.trial.suggest_discrete_uniform.matches_modern);
+
+fixed=radia.optuna.FixedTrial(struct("u",0.25,"l",10,"d",0.5));
+verifyEqual(testCase,fixed.suggest_uniform("u",0,1), ...
+    expected.fixed_trial.suggest_uniform,AbsTol=0);
+verifyEqual(testCase,fixed.suggest_loguniform("l",1,100), ...
+    expected.fixed_trial.suggest_loguniform,AbsTol=0);
+verifyEqual(testCase,fixed.suggest_discrete_uniform("d",0,1,0.25), ...
+    expected.fixed_trial.suggest_discrete_uniform,AbsTol=0);
+
+% The aliases are declared on every trial class upstream declares them on.
+for name=["suggest_uniform" "suggest_loguniform" "suggest_discrete_uniform"]
+    verifyTrue(testCase,ismember(name, ...
+        string(expected.declared_on_base_trial)));
+    verifyTrue(testCase,ismethod(radia.optuna.FixedTrial( ...
+        struct("u",0)),name));
+end
+end
+
+function testBestParamsMatchesUpstream(testCase)
+% Upstream oracle: optuna49_oracle.json/best_params.
+expected=testCase.TestData.Oracle.best_params;
+study=radia.optuna.Study(Sampler=radia.optuna.RandomSampler(7), ...
+    AutoSave=false);
+for index=1:3
+    trial=study.ask();
+    x=trial.suggest_float("x",-1,1);
+    study.tell(trial,(x-0.3)^2);
+end
+verifyEqual(testCase,study.best_params().x,expected.best_params.x,AbsTol=0);
+verifyEqual(testCase,study.best_value(),expected.best_value,AbsTol=0);
+verifyEqual(testCase,study.best_trial().Number, ...
+    double(expected.best_trial_number));
+
+% A multi-objective study refuses a single best trial, exactly as upstream.
+multi=radia.optuna.Study(Directions=["minimize" "maximize"],AutoSave=false);
+verifyError(testCase,@() multi.best_params(),?MException);
+end
+
+function testStudyDirectionAndSummaryMatchUpstream(testCase)
+% Upstream oracle: optuna49_oracle.json/study_summary.
+expected=testCase.TestData.Oracle.study_summary;
+verifyEqual(testCase,string(radia.optuna.StudyDirection.NOT_SET), ...
+    string(expected.not_set_name));
+verifyEqual(testCase,double(radia.optuna.StudyDirection.NOT_SET), ...
+    double(expected.not_set_value));
+members=enumeration("radia.optuna.StudyDirection");
+verifyEqual(testCase,arrayfun(@string,members(:)), ...
+    string(expected.direction_names(:)));
+verifyEqual(testCase,double(members(:)),double(expected.direction_values(:)));
+
+% StudySummary carries the members upstream exposes.
+for name=string(expected.study_summary_members(:))'
+    verifyTrue(testCase, ...
+        any(strcmp(properties("radia.optuna.StudySummary"),name)) || ...
+        any(strcmp(methods("radia.optuna.StudySummary"),name)), ...
+        sprintf("StudySummary is missing upstream member '%s'",name));
+end
+end
+
+function testGeneticSamplerGenerationsMatchUpstream(testCase)
+% Upstream oracle: optuna49_oracle.json/ga_sampler.
+% BaseGASampler.get_trial_generation is what makes a GA sampler's history
+% readable: it says which generation produced each trial. Upstream fills a
+% generation before starting the next, so the sequence is a step function of
+% population_size.
+expected=testCase.TestData.Oracle.ga_sampler;
+for kind=["nsgaii" "nsgaiii"]
+    if kind=="nsgaii"
+        sampler=radia.optuna.NSGAIISampler(Seed=13,PopulationSize=4);
+    else
+        sampler=radia.optuna.NSGAIIISampler(Seed=13,PopulationSize=4);
+    end
+    study=radia.optuna.Study(Directions=["minimize" "minimize"], ...
+        Sampler=sampler,AutoSave=false);
+    for index=1:10
+        trial=study.ask();
+        x=trial.suggest_float("x",0,1);
+        y=trial.suggest_float("y",0,1);
+        study.tell(trial,[x y]);
+    end
+    section=expected.(kind);
+    verifyEqual(testCase,double(sampler.population_size), ...
+        double(section.population_size));
+    frozen=study.get_trials();
+    generations=arrayfun(@(t) double(sampler.get_trial_generation(study,t)), ...
+        frozen);
+    verifyEqual(testCase,generations(:),double(section.generations(:)), ...
+        sprintf("%s trial generations",kind));
+end
+end
+
+function testTerminatorBasesMatchUpstream(testCase)
+% Upstream oracle: optuna49_oracle.json/terminator_bases.
+expected=testCase.TestData.Oracle.terminator_bases;
+verifyEqual(testCase,string(expected.base_terminator_members(:)), ...
+    "should_terminate");
+verifyTrue(testCase,ismember("should_terminate", ...
+    string(methods("radia.optuna.Terminator"))));
+for name=["radia.optuna.BaseErrorEvaluator" ...
+        "radia.optuna.BaseImprovementEvaluator"]
+    verifyTrue(testCase,ismember("evaluate",string(methods(name))), ...
+        sprintf("%s must declare evaluate",name));
+end
+
+study=radia.optuna.Study(Sampler=radia.optuna.RandomSampler(7), ...
+    AutoSave=false);
+terminator=radia.optuna.Terminator( ...
+    ImprovementEvaluator=radia.optuna.BestValueStagnationEvaluator(3), ...
+    ErrorEvaluator=radia.optuna.StaticErrorEvaluator(0), ...
+    MinNTrials=2);
+values=[5 4 4.5 4.2 9 10];
+decisions=false(numel(values),1);
+for index=1:numel(values)
+    trial=study.ask();
+    trial.suggest_float("x",0,1);
+    study.tell(trial,values(index));
+    decisions(index)=logical(terminator.should_terminate(study));
+end
+verifyEqual(testCase,decisions,logical(expected.should_terminate(:)));
 end
