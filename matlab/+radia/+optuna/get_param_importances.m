@@ -11,6 +11,9 @@ arguments
     options.max_depth (1,1) double {mustBeInteger,mustBePositive} = 64
     options.target_quantile (1,1) double = 0.1
     options.region_quantile (1,1) double = 1.0
+    options.baseline_quantile (1,1) double = NaN
+    options.evaluate_on_local (1,1) logical = true
+    options.target = []
 end
 if options.objective_index>numel(study.Directions)
     error("radia:optuna:ImportanceObjective", ...
@@ -44,8 +47,23 @@ for number=reshape(numbers,1,[])
             "Trial %d does not contain objective %d.", ...
             number,options.objective_index);
     end
+    objectiveValue=objectiveRows.Value(options.objective_index);
+    if ~isempty(options.target)
+        trials=study.get_trials();
+        numbersFromTrials=reshape([trials.Number],1,[]);
+        source=trials(numbersFromTrials==number);
+        if ~isscalar(source)
+            error("radia:optuna:ImportanceTarget", ...
+                "Could not resolve trial %d for the target callback.",number);
+        end
+        objectiveValue=options.target(source);
+        if ~isnumeric(objectiveValue) || ~isscalar(objectiveValue)
+            error("radia:optuna:ImportanceTarget", ...
+                "The target callback must return a numeric scalar.");
+        end
+    end
     frozen=optuna.trial.create_trial(pyargs( ...
-        "value",objectiveRows.Value(options.objective_index), ...
+        "value",double(objectiveValue), ...
         "params",params,"distributions",distributions));
     pythonStudy.add_trial(frozen);
 end
@@ -63,9 +81,13 @@ switch lower(options.evaluator)
             "max_depth",int64(options.max_depth), ...
             "seed",int64(options.seed)));
     case {"ped_anova","ped-anova"}
-        evaluator=importance.PedAnovaImportanceEvaluator(pyargs( ...
-            "target_quantile",options.target_quantile, ...
-            "region_quantile",options.region_quantile));
+        pairs={"target_quantile",options.target_quantile, ...
+            "region_quantile",options.region_quantile, ...
+            "evaluate_on_local",options.evaluate_on_local};
+        if isfinite(options.baseline_quantile)
+            pairs=[pairs,{"baseline_quantile",options.baseline_quantile}];
+        end
+        evaluator=importance.PedAnovaImportanceEvaluator(pyargs(pairs{:}));
     otherwise
         error("radia:optuna:ImportanceEvaluator", ...
             "evaluator must be fanova, mdi, or ped_anova.");

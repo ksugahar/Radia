@@ -57,6 +57,10 @@ classdef QMCSampler < radia.optuna.BaseSampler
             end
         end
 
+        function reseed_rng(obj)
+            obj.IndependentSampler.reseed_rng();
+        end
+
         function beforeTrial(obj,study,trial)
             if ismethod(obj.IndependentSampler,"beforeTrial")
                 obj.IndependentSampler.beforeTrial(study,trial);

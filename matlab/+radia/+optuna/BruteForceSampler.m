@@ -28,6 +28,10 @@ classdef BruteForceSampler < radia.optuna.BaseSampler
             obj.Stream=radia.optuna.internal.NumpyRandomState(obj.Seed);
         end
 
+        function reseed_rng(~)
+            % Optuna 4.9 deliberately implements this method as a no-op.
+        end
+
         function beforeTrial(obj,study,~)
             obj.attach(study);
         end

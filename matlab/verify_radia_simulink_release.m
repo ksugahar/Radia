@@ -28,10 +28,12 @@ if ~setupInfo.mex_available
 end
 api = radia.apiInfo();
 optunaInfo = radia.optuna.internal.NativeKernels.call("api.info");
+optunaCommands = string(radia.optuna.internal.NativeKernels.call( ...
+    "api.commands"));
 if string(optunaInfo.backend) ~= "optuna_mex" || ...
-        optunaInfo.command_count ~= 20
+        optunaInfo.command_count ~= numel(optunaCommands)
     error("radia:simulink:ReleaseOptunaMex", ...
-        "The full library package did not load the 20-command optuna_mex.");
+        "The full library package did not load a self-consistent optuna_mex.");
 end
 
 libraryPath = fullfile(matlabRoot, "radia_simulink_library.slx");

@@ -21,3 +21,8 @@ docs/clebsch_hodograph/edge_focusing_tracking.json text eol=lf
 # Field Study artifacts are hashed by the production manifest. Keep their
 # checkout bytes identical on Windows and Linux.
 validation_test/radia_mcp/artifacts/field_study_production_v1/*.json text eol=lf
+
+# MATLAB Optuna oracle fixtures carry checked SHA-256 links.  Pin their bytes
+# to LF so Windows and Linux checkouts preserve one byte-stable oracle.
+tests/matlab/fixtures/optuna*.json text eol=lf
+matlab/optuna*.json text eol=lf
