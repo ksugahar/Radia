@@ -13,6 +13,7 @@ import sys
 
 
 TESTS = (
+    "test_font_safety.py",
     "test_edit.py",
     "test_symbols.py",
     "test_operations_fuzz.py",
