@@ -187,6 +187,44 @@ def test_bilingual_readability_separates_japanese_and_english():
     assert "not averaged" in r["aggregation_policy"]
 
 
+def test_bilingual_readability_does_not_hide_japanese_failure():
+    dense_ja = (
+        "本研究では、従来法の課題を解決するため、複数の材料条件を定義し、"
+        "さらに解析手法を選択し、そこで得られる設計指針を同時に示す必要が"
+        "あるため、各条件の意味と適用範囲を一文の中で説明する。"
+    )
+    readable_en = (
+        "Measurements are expensive. We select the next waveform from the "
+        "current uncertainty. The method reduces the number of measurements."
+    )
+    r = pw.paper_writing_bilingual_readability_check(
+        dense_ja + "\n\n" + readable_en
+    )
+    assert r["japanese"]["status"] != "pass"
+    assert r["english"]["status"] == "pass"
+    assert r["status"] == r["japanese"]["status"]
+
+
+def test_bilingual_readability_does_not_hide_english_failure():
+    readable_ja = (
+        "測定時間が長いことが課題である。そこで測定点を選択する。"
+        "提案法は誤差を保ったまま測定数を減らす。"
+    )
+    dense_en = (
+        "The proposed framework simultaneously performs parameter "
+        "identification, uncertainty quantification, constraint enforcement, "
+        "and online adaptation, while retaining the assumptions that are "
+        "required by the solver, because the resulting representation must "
+        "also remain compatible with the existing implementation."
+    )
+    r = pw.paper_writing_bilingual_readability_check(
+        readable_ja + "\n\n" + dense_en
+    )
+    assert r["japanese"]["status"] == "pass"
+    assert r["english"]["status"] != "pass"
+    assert r["status"] == r["english"]["status"]
+
+
 def test_bilingual_readability_accepts_short_claim_reason_sequence():
     text = (
         "測定時間が長いことが課題である。そこで測定点を選択する。"
