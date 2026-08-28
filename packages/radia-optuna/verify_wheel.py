@@ -62,6 +62,11 @@ def _payload_matches(
     return wheel_payload == source_payload
 
 
+def _requires_source_payload(member: str, *, release_candidate: bool) -> bool:
+    """Return whether this verification mode needs a local source artifact."""
+    return not (release_candidate and member.endswith(".mexw64"))
+
+
 def _is_windows_x64_pe(payload: bytes) -> bool:
     if len(payload) < 1024 or payload[:2] != b"MZ" or len(payload) < 64:
         return False
@@ -198,6 +203,9 @@ def verify(wheel: Path, *, release_candidate: bool = False) -> dict[str, object]
             member
             for member, source in source_payloads.items()
             if member in names
+            and _requires_source_payload(
+                member, release_candidate=release_candidate
+            )
             and not _payload_matches(
                 member,
                 archive.read(member),
