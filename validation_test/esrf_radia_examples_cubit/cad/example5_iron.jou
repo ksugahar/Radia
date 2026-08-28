@@ -1,0 +1,66 @@
+# ESRF Example 5 C-yoke iron -- Cubit/ACIS authoring (meters).
+#
+# Reproduces RADIA_Example05.py::Geom exactly: ObjMltExtRtg connects its
+# slices with PLANAR (ruled) lateral faces.  Authoring this in Cubit rather
+# than netgen.occ is deliberate: netgen.occ ThruSections does not expose the
+# OCC `ruled` flag, so a 3-section loft silently becomes a spline surface and
+# over-fills the pole by +7.65% in volume (measured 2026-08-28).
+#
+# Entities are never referenced by hardcoded id (Journal File Portability
+# Policy); every id is captured with Id() immediately after its create.
+reset
+
+#{ thick = 0.050 }
+#{ width = 0.040 }
+#{ gap   = 0.010 }
+#{ cham  = 0.008 }
+#{ lz1   = 0.020 }
+#{ lz2   = 0.030 }
+#{ lz3   = 1.25 * width }
+#{ ly4   = 0.080 }
+#{ ly5   = 1.25 * lz3 }
+#{ z2 = gap/2 + lz1 + lz2/2 }
+#{ z3 = gap/2 + lz1 + lz2 + lz3/2 }
+#{ y4 = width/2 + ly4/2 }
+#{ y5 = y4 + (ly4 + ly5)/2 }
+
+# ---- pole: ruled chamfer loft (tip section -> full section) + prism ----
+create surface rectangle width {thick - 2*cham} height {width - 2*cham} zplane
+#{ s_tip = Id("surface") }
+#{ v_tip = Id("volume") }
+create surface rectangle width {thick} height {width} zplane
+#{ s_top = Id("surface") }
+#{ v_top = Id("volume") }
+move surface {s_tip} z {gap/2} include_merged
+move surface {s_top} z {gap/2 + cham} include_merged
+create volume loft surface {s_tip} {s_top}
+#{ v_cham = Id("volume") }
+delete volume {v_tip} {v_top}
+
+create brick x {thick} y {width} z {lz1 - cham}
+#{ v_polepr = Id("volume") }
+move volume {v_polepr} z {gap/2 + cham + (lz1 - cham)/2} include_merged
+
+# ---- yoke boxes (upper half) ----
+create brick x {thick} y {width} z {lz2}
+#{ v_arm = Id("volume") }
+move volume {v_arm} z {z2} include_merged
+
+create brick x {thick} y {width} z {lz3}
+#{ v_corner = Id("volume") }
+move volume {v_corner} z {z3} include_merged
+
+create brick x {thick} y {ly4} z {lz3}
+#{ v_back = Id("volume") }
+move volume {v_back} y {y4} z {z3} include_merged
+
+create brick x {thick} y {ly5} z {lz3}
+#{ v_retc = Id("volume") }
+move volume {v_retc} y {y5} z {z3} include_merged
+
+create brick x {thick} y {ly5} z {gap/2 + lz1 + lz2}
+#{ v_retleg = Id("volume") }
+move volume {v_retleg} y {y5} z {(gap/2 + lz1 + lz2)/2} include_merged
+
+# ---- mirror the upper half about z = 0 ----
+volume all copy reflect z
