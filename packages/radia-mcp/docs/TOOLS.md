@@ -2,7 +2,7 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **1036 tools** across 49 MCP servers.
+Total: **1037 tools** across 49 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
@@ -44,7 +44,7 @@ Total: **1036 tools** across 49 MCP servers.
 | [`mcp-server-mathematica`](#mcp-server-mathematica) | `radia_mcp.mathematica` | 14 |
 | [`mcp-server-md2html`](#mcp-server-md2html) | `radia_mcp.md2html` | 2 |
 | [`mcp-server-chart2d`](#mcp-server-chart2d) | `radia_mcp.chart2d` | 24 |
-| [`mcp-server-paper-writing`](#mcp-server-paper-writing) | `radia_mcp.paper_writing` | 195 |
+| [`mcp-server-paper-writing`](#mcp-server-paper-writing) | `radia_mcp.paper_writing` | 196 |
 | [`mcp-server-grant-writing`](#mcp-server-grant-writing) | `radia_mcp.grant_writing` | 42 |
 | [`mcp-server-poster`](#mcp-server-poster) | `radia_mcp.poster` | 32 |
 | [`mcp-server-literature-index`](#mcp-server-literature-index) | `radia_mcp.literature_index` | 9 |
@@ -1107,6 +1107,7 @@ Module: `radia_mcp.paper_writing.server`
 | `paper_writing_arxiv_extract_equations` | Extract all displayed equations from a LaTeX source. |
 | `paper_writing_arxiv_fetch_latex_source` | Fetch the LaTeX source of an arXiv preprint. |
 | `paper_writing_arxiv_search` | Search arXiv via the official Atom XML API. |
+| `paper_writing_bilingual_readability_check` | Assess Japanese and English readability with separate criteria. |
 | `paper_writing_check_abstract_background_ratio` | Abstract 内で background (導入文) が占める割合を推定。 |
 | `paper_writing_check_abstract_no_math_no_citation` | Abstract 内に数式 (math), citation, domain acronym が混入していないか検出。 |
 | `paper_writing_check_citation_usage` | TeX 本文中の \cite{} キーと bib file の entries を突合。 |
