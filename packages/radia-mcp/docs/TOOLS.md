@@ -2,7 +2,7 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **1025 tools** across 49 MCP servers.
+Total: **1032 tools** across 49 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
@@ -11,7 +11,7 @@ Total: **1025 tools** across 49 MCP servers.
 | [`mcp-server-gmsh`](#mcp-server-gmsh) | `radia_mcp.gmsh` | 69 |
 | [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 143 |
 | [`mcp-server-force`](#mcp-server-force) | `radia_mcp.force` | 21 |
-| [`mcp-server-radia-matlab`](#mcp-server-radia-matlab) | `radia_mcp.matlab` | 15 |
+| [`mcp-server-radia-matlab`](#mcp-server-radia-matlab) | `radia_mcp.matlab` | 17 |
 | [`mcp-server-acoustic-fembem`](#mcp-server-acoustic-fembem) | `radia_mcp.acoustic_fembem` | 4 |
 | [`mcp-server-radia-acoustic`](#mcp-server-radia-acoustic) | `radia_mcp.radia_acoustic` | 5 |
 | [`mcp-server-radia-streamfunction`](#mcp-server-radia-streamfunction) | `radia_mcp.streamfunction` | 3 |
@@ -44,8 +44,8 @@ Total: **1025 tools** across 49 MCP servers.
 | [`mcp-server-mathematica`](#mcp-server-mathematica) | `radia_mcp.mathematica` | 14 |
 | [`mcp-server-md2html`](#mcp-server-md2html) | `radia_mcp.md2html` | 2 |
 | [`mcp-server-chart2d`](#mcp-server-chart2d) | `radia_mcp.chart2d` | 24 |
-| [`mcp-server-paper-writing`](#mcp-server-paper-writing) | `radia_mcp.paper_writing` | 191 |
-| [`mcp-server-grant-writing`](#mcp-server-grant-writing) | `radia_mcp.grant_writing` | 41 |
+| [`mcp-server-paper-writing`](#mcp-server-paper-writing) | `radia_mcp.paper_writing` | 195 |
+| [`mcp-server-grant-writing`](#mcp-server-grant-writing) | `radia_mcp.grant_writing` | 42 |
 | [`mcp-server-poster`](#mcp-server-poster) | `radia_mcp.poster` | 32 |
 | [`mcp-server-literature-index`](#mcp-server-literature-index) | `radia_mcp.literature_index` | 9 |
 | [`mcp-server-document-meta`](#mcp-server-document-meta) | `radia_mcp.document_meta` | 11 |
@@ -517,6 +517,8 @@ Module: `radia_mcp.matlab.server`
 | `matlab_official_server_config` | (no description) |
 | `matlab_optimize_build` | Build validated MATLAB code for objective, Simulink, or LTspice optimization. |
 | `matlab_optimize_resume` | Build official-MATLAB-MCP-ready code to resume a persisted Study. |
+| `matlab_optuna_compatibility_contract` | Report verified Optuna 4.9.0 parity, MATLAB-only behavior, and gaps. |
+| `matlab_optuna_oracle_audit` | Audit Optuna fixtures, versions, hashes, policy sync, and test coverage. |
 | `matlab_optuna_simulink_contract` | Describe the table-backed MATLAB Optuna-like and Simulink workflow. |
 | `matlab_radia_acoustic_interface_contract` | (no description) |
 | `matlab_radia_mex_contract` | Expose the shared Radia/NGSolve Python-to-MATLAB MEX capability contract. |
@@ -1110,6 +1112,7 @@ Module: `radia_mcp.paper_writing.server`
 | `paper_writing_check_floats_far_from_reference` | Detect figures whose \ref{} appears far from the actual float. |
 | `paper_writing_check_imrad_balance` | IMRAD 各セクションの字数バランスを検証する。 |
 | `paper_writing_check_kanji_ratio` | 漢字比率 check (本多『日本語の作文技術』第四章 re-export)。 |
+| `paper_writing_check_misleading_ratio_claims` | 比率だけの効果主張、条件混在、比率の詰め込みを警告する。 |
 | `paper_writing_check_misuse_japanese` | 『問題な日本語』由来の現代誤用検出 (re-export)。 |
 | `paper_writing_check_notation_variants` | 和文表記ゆれ検出 (grant_writing 実装の re-export)。 |
 | `paper_writing_check_overfull_hbox` | LaTeX ログ中の Overfull \hbox 警告をカウント。journal では許容ゼロ。 |
@@ -1195,6 +1198,7 @@ Module: `radia_mcp.paper_writing.server`
 | `presentation_apply_math_subscripts` | ``X_y`` / ``X^{2}`` 形式のテキストを PowerPoint の下付き・上付き run へ変換する。 |
 | `presentation_arrow_usage` | 矢印 shape (line connector with arrow) の過剰使用検出。 |
 | `presentation_chart_simplification_check` | Chart 簡素化 (Cole Knaflic style) の 5 軸診断。 |
+| `presentation_check_arrow_layering` | Check that semantic arrows stay in front of intersecting straight lines. |
 | `presentation_check_bullet_count_per_slide` | 1 slide の bullet 数が上限超過を検出 (Miller 7±2). |
 | `presentation_check_bullet_ending_style` | bullet 末尾の「。」有無が統一されているか. |
 | `presentation_check_color_accessibility` | R+G 近接色ペアを検出 (protanopia/deuteranopia で区別困難). |
@@ -1214,8 +1218,10 @@ Module: `radia_mcp.paper_writing.server`
 | `presentation_check_overfull_hbox` | beamer ログ中の Overfull \hbox をカウント。スライドでは致命的。 |
 | `presentation_check_pie_3d_charts` | pptx 内の chart shape を走査し、pie / doughnut / 3D chart を NG 検出。 |
 | `presentation_check_pptx_font_size` | pptx audience-facing font size < 下限を検出。 |
+| `presentation_check_pptx_notes_encoding` | PPTXノートのUTF-8復号と外部ノートのUTF-8 BOMを点検する。 |
 | `presentation_check_progress_indicator` | outline / section-header slides for progress indication を検出。 |
 | `presentation_check_qa_backup_slides` | pptx に Q&A backup slide (hidden or named) が N 枚以上あるか確認. |
+| `presentation_check_quantitative_claim_context` | 強調百分率に、量・位置/集約・比較基準が伴うかを点検。 |
 | `presentation_check_raw_math_markup` | スライド本文に残った未整形の数式マークアップを検出する。 |
 | `presentation_check_script_paragraph_length` | 発表原稿の 1 パラグラフが 200-300 字目安から大きく外れていないか。 |
 | `presentation_check_slide_density` | 1 スライドあたりの文字密度チェック (テキストを直接渡す)。 |
@@ -1312,6 +1318,7 @@ Module: `radia_mcp.grant_writing.server`
 | `grant_writing_persuasion_quality_check` | Check reviewer-facing hierarchy, equations, and defensive prose. |
 | `grant_writing_question_originality_check` | Check that the central question carries an originality position. |
 | `grant_writing_recommendation_letter_template` | Return a one-page recommendation-letter draft template. |
+| `grant_writing_reviewer_momentum_check` | Check whether the opening makes a reviewer want to keep reading. |
 | `grant_writing_reviewer_vocabulary_check` | Check whether proposal vocabulary is accessible to the likely reviewer. |
 | `grant_writing_section_presence` | Check whether a proposal draft contains the expected review axes. |
 | `grant_writing_status` | (no description) |
