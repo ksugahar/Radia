@@ -103,6 +103,12 @@ from ._deck_integrity import (  # noqa: F401
     presentation_apply_math_subscripts,
     presentation_check_duplicate_slide_images,
 )
+from ._equation_cli import (  # noqa: F401
+    presentation_equation_policy,
+    presentation_equation_backend,
+    presentation_copy_equation,
+    presentation_render_equation,
+)
 
 
 _HERE = pathlib.Path(__file__).resolve().parent

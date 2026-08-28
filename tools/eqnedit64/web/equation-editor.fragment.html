@@ -1,0 +1,16 @@
+<section class="eqed" data-equation-editor aria-label="数式エディタ">
+  <div class="eqed-palettes"></div>
+  <textarea class="eqed-source" rows="3" spellcheck="false" aria-label="TeXソース" placeholder="例: \frac{1}{4\pi\varepsilon_0}\frac{q_1 q_2}{r^2}"></textarea>
+  <div class="eqed-preview" aria-live="polite"></div>
+  <div class="eqed-actions">
+    <button type="button" class="eqed-copy-office"><strong>PowerPoint数式でコピー</strong></button>
+    <button type="button" class="eqed-copy-png">PNG画像でコピー</button>
+    <button type="button" class="eqed-save-svg">SVGで保存</button>
+    <button type="button" class="eqed-copy-display">$$付きでコピー</button>
+    <button type="button" class="eqed-copy-equation">equation付きでコピー</button>
+    <button type="button" class="eqed-clear">クリア</button>
+    <span class="eqed-status" role="status"></span>
+  </div>
+</section>
+
+<script src="./equation-editor.js"></script>

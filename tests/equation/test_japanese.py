@@ -28,8 +28,13 @@ WORDS = ["磁", "磁束密度", "鉄心", "ひらがな", "カタカナ", "全�
 @pytest.mark.parametrize("word", WORDS)
 def test_a_japanese_character_is_one_node_not_three(word):
     """A byte-at-a-time parse made this len(utf8) instead of len(text)."""
-    tree = equation.tex_dump_tree(word)
-    assert tree.count("CHAR") == len(word), tree
+    editor = Equation()
+    editor.load_latex(word)
+    editor.move_home()
+    moves = 0
+    while editor.move_right():
+        moves += 1
+    assert moves == len(word)
 
 
 @pytest.mark.parametrize("word", WORDS)

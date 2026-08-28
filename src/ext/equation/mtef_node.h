@@ -1,11 +1,8 @@
 /*
- * mtef_node.h -- Unified node hierarchy for MTEF↔LaTeX bidirectional converter
+ * mtef_node.h -- structural equation node hierarchy
  *
- * Phase 2 of C++ migration: defines the unified AST node types that both
- * MtefParser (binary→tree) and LaTeXParser (text→tree) produce.
- *
- * Currently C++ only (uses classes, virtual, unique_ptr).
- * The C API layer (mtef2tex.h, tex2mtef.h) remains unchanged.
+ * The filename and namespace are retained for source compatibility with the
+ * mature layout engine. TeX is now the sole producer and supported source.
  */
 #ifndef MTEF_NODE_H
 #define MTEF_NODE_H

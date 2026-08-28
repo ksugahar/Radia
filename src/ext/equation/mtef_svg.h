@@ -1,11 +1,8 @@
 /*
- * mtef_svg.h -- MTEF node tree -> SVG renderer
+ * mtef_svg.h -- structural equation tree -> SVG renderer
  *
- * The third consumer of the unified node tree (mtef_node.h), next to
- * latex_emitter (tree -> LaTeX) and tex2mtef (tree -> MTEF).  Its purpose is
- * to make EQNEDT32 unnecessary for PRODUCING pictures: the editor stays as the
- * GUI a human uses to author an equation, while every programmatic path --
- * LaTeX -> MTEF -> picture -> slide -- runs in our own code.
+ * The filename is retained for source compatibility. The supported path is
+ * direct TeX -> structural tree -> SVG; no binary equation format is involved.
  *
  * Sizes follow EQNEDT32's Sizes dialog (Full 12 / Subscript 7 /
  * Sub-subscript 5 / Symbol 18 / Sub-symbol 12 pt) and are parameters, not
@@ -51,11 +48,6 @@ struct SvgStyle {
 
 /* Render a parsed equation to a standalone SVG document. */
 std::string render_svg(const LineNode& root, const SvgStyle& style = SvgStyle());
-
-/* Convenience: MTEF binary -> SVG.  Returns an empty string when the MTEF
- * cannot be parsed. */
-std::string mtef_to_svg(const uint8_t* data, size_t len,
-                        const SvgStyle& style = SvgStyle());
 
 /* LaTeX -> SVG.  The working path: it parses LaTeX straight into the tree
  * rather than going through MTEF, so the renderer sees filled base/body/limit

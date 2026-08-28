@@ -18,7 +18,6 @@
  */
 #include "mtef_rtf.h"
 #include "math_writer.h"
-#include "mtef_parser.h"
 #include "tex_parser.h"
 
 #include <cstdio>
@@ -235,13 +234,6 @@ std::string tex_to_rtf(const std::string& latex, const RtfOptions& opt) {
     std::unique_ptr<LineNode> root = parse_latex(latex);
     if (!root) return std::string();
     return rtf_document(render_rtf_math(*root, opt, /*run_passes=*/false),
-                        opt.font_size_pt);
-}
-
-std::string mtef_to_rtf(const uint8_t* data, size_t len, const RtfOptions& opt) {
-    MtefParser::Result res = MtefParser::parse(data, len);
-    if (!res.root) return std::string();
-    return rtf_document(render_rtf_math(*res.root, opt, /*run_passes=*/true),
                         opt.font_size_pt);
 }
 

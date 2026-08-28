@@ -7,6 +7,16 @@ crystallized as its own package.
 
 ## [Unreleased]
 
+- presentation: added an Eqnedit64 command-line bridge for copying arbitrary
+  TeX as editable Office Math, Google Slides PNG+HTML, or opaque PNG/DIBV5,
+  and for rendering PNG/EMF files. The bridge uses UTF-8 temporary files to
+  avoid command-line quoting/length problems and never activates a foreground
+  window.
+- presentation: made Radia the source of truth for both Eqnedit64 native and
+  Web editions while keeping the laboratory homepage as the Web publication
+  surface. `presentation_equation_policy()` exposes the checked ownership,
+  publication, TeX-only, and retired-format contract.
+
 ## [1.4.48] - 2026-08-28
 
 - presentation: added a z-order audit that rejects directional arrows hidden

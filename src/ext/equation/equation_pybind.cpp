@@ -1,40 +1,24 @@
 /*
- * mtef_pybind.cpp -- Python binding for the MTEF codec + SVG renderer.
+ * equation_pybind.cpp -- headless TeX editing, rendering, and Office output.
  *
- * This is the ONLY supported programmatic entry point.  The former stdin/stdout
- * CLIs were test scaffolding and are retired: one C++ source of truth, one
- * binding, and the Python tests import this module instead of spawning
- * processes.
- *
- * Architecture note: the codec and renderer are architecture-neutral and build
- * as x64 here to match CPython.  Only mtef2tex_hook.dll stays x86, because it
- * is loaded into EQNEDT32 -- which from now on is the GUI a human uses, not
- * something a program starts.
+ * TeX is the only stored/input equation format.  Legacy MTEF and .eqn codecs
+ * are intentionally absent; the standalone native and Web editors live under
+ * tools/eqnedit64.
  */
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 
-#include <cstdlib>
-#include <cstring>
-#include <fstream>
-#ifdef _WIN32
-#include <windows.h>
-#endif
 #include <stdexcept>
 #include <map>
 #include <string>
 #include <vector>
 
-#include "mtef2tex.h"
-#include "tex2mtef.h"
 #include "mtef_svg.h"
-#include "mtef_parser.h"
 #include "mtef_omml.h"
 #include "mtef_rtf.h"
 #include "mtef_mathml.h"
 #include "gvml_clip.h"
 #include "mtef_gdi.h"
-#include "mtef_dump.h"
 #include "tex_parser.h"
 #include "latex_emitter.h"
 #include "eq_chords.h"
@@ -47,49 +31,6 @@
 namespace py = pybind11;
 
 namespace {
-
-py::bytes tex_to_mtef_py(const std::string& latex) {
-    int len = 0;
-    uint8_t* out = tex_to_mtef(latex.c_str(), &len);
-    if (!out || len <= 0) {
-        if (out) free(out);
-        throw std::runtime_error("tex_to_mtef: conversion produced no MTEF for: "
-                                 + latex);
-    }
-    py::bytes result(reinterpret_cast<const char*>(out), size_t(len));
-    free(out);
-    return result;
-}
-
-std::string mtef_to_tex_py(const py::bytes& data) {
-    std::string buf = data;
-    char* out = mtef_to_latex_c(reinterpret_cast<const uint8_t*>(buf.data()),
-                                buf.size());
-    if (!out) throw std::runtime_error("mtef_to_tex: parse failed");
-    std::string result(out);
-    free(out);
-    return result;
-}
-
-/* MTEF -> the editor's tree -> LaTeX.  mtef_to_tex answers with the legacy
- * converter's reading; this answers with the editor's, which is the one that
- * will be drawn and edited. */
-std::string mtef_to_latex_py(const py::bytes& data) {
-    std::string buf = data;
-    mtef::MtefParser::Result res = mtef::MtefParser::parse(
-        reinterpret_cast<const uint8_t*>(buf.data()), buf.size());
-    if (!res.root) throw std::runtime_error("mtef_to_latex: parse failed");
-    mtef::LaTeXEmitter em(res.prodVer, true);
-    return em.emit(*res.root);
-}
-
-std::string mtef_to_svg_py(const py::bytes& data, const mtef::SvgStyle& style) {
-    std::string buf = data;
-    std::string svg = mtef::mtef_to_svg(
-        reinterpret_cast<const uint8_t*>(buf.data()), buf.size(), style);
-    if (svg.empty()) throw std::runtime_error("mtef_to_svg: parse failed");
-    return svg;
-}
 
 std::string tex_to_svg_py(const std::string& latex, const mtef::SvgStyle& style) {
     std::string svg = mtef::tex_to_svg(latex, style);
@@ -105,14 +46,6 @@ std::string tex_normalize_py(const std::string& latex) {
     return mtef::tree_to_latex(*root);
 }
 
-std::string mtef_to_omml_py(const py::bytes& data, const mtef::OmmlOptions& opt) {
-    std::string buf = data;
-    std::string omml = mtef::mtef_to_omml(
-        reinterpret_cast<const uint8_t*>(buf.data()), buf.size(), opt);
-    if (omml.empty()) throw std::runtime_error("mtef_to_omml: parse failed");
-    return omml;
-}
-
 std::string tex_to_omml_py(const std::string& latex, const mtef::OmmlOptions& opt) {
     std::string omml = mtef::tex_to_omml(latex, opt);
     if (omml.empty()) throw std::runtime_error("tex_to_omml: emit failed for: " + latex);
@@ -122,14 +55,6 @@ std::string tex_to_omml_py(const std::string& latex, const mtef::OmmlOptions& op
 std::string tex_to_rtf_py(const std::string& latex, const mtef::RtfOptions& opt) {
     std::string rtf = mtef::tex_to_rtf(latex, opt);
     if (rtf.empty()) throw std::runtime_error("tex_to_rtf: emit failed for: " + latex);
-    return rtf;
-}
-
-std::string mtef_to_rtf_py(const py::bytes& data, const mtef::RtfOptions& opt) {
-    std::string buf = data;
-    std::string rtf = mtef::mtef_to_rtf(
-        reinterpret_cast<const uint8_t*>(buf.data()), buf.size(), opt);
-    if (rtf.empty()) throw std::runtime_error("mtef_to_rtf: parse failed");
     return rtf;
 }
 
@@ -147,14 +72,6 @@ py::bytes tex_to_gvml_py(const std::string& latex, double size_pt,
     return py::bytes(pkg);
 }
 
-std::string mtef_to_mathml_py(const py::bytes& data, const mtef::MathMLOptions& opt) {
-    std::string buf = data;
-    std::string m = mtef::mtef_to_mathml(
-        reinterpret_cast<const uint8_t*>(buf.data()), buf.size(), opt);
-    if (m.empty()) throw std::runtime_error("mtef_to_mathml: parse failed");
-    return m;
-}
-
 py::bytes tex_to_emf_py(const std::string& latex, const mtef::SvgStyle& style) {
     std::string emf = mtef::tex_to_emf(latex, style);
     if (emf.empty()) throw std::runtime_error("tex_to_emf: render failed for: " + latex);
@@ -168,59 +85,10 @@ py::bytes tex_to_png_py(const std::string& latex, const mtef::SvgStyle& style,
     return py::bytes(png);
 }
 
-std::string tex_dump_tree_py(const std::string& latex) {
-    std::unique_ptr<mtef::LineNode> root = mtef::parse_latex(latex);
-    if (!root) throw std::runtime_error("parse_latex failed for: " + latex);
-    return mtef::dump_latex_tree(*root);
-}
-
-std::string dump_tree_py(const py::bytes& data, bool run_passes) {
-    std::string buf = data;
-    return mtef::dump_tree(reinterpret_cast<const uint8_t*>(buf.data()),
-                           buf.size(), run_passes);
-}
-
-/* A path arrives from Python as UTF-8.  Handing that to a narrow ifstream on
- * Windows reads it in the ANSI code page instead, so every file whose name is
- * not ASCII was unreachable -- which in this lab is most of them.  Widen it
- * and use the wide overload MSVC provides. */
-#ifdef _WIN32
-std::wstring widen(const std::string& utf8) {
-    if (utf8.empty()) return std::wstring();
-    const int n = MultiByteToWideChar(CP_UTF8, 0, utf8.data(),
-                                      int(utf8.size()), nullptr, 0);
-    std::wstring out(size_t(n > 0 ? n : 0), L'\0');
-    if (n > 0)
-        MultiByteToWideChar(CP_UTF8, 0, utf8.data(), int(utf8.size()),
-                            &out[0], n);
-    return out;
-}
-#define EQ_PATH(p) widen(p)
-#else
-#define EQ_PATH(p) (p)
-#endif
-
-py::bytes read_eqn_py(const std::string& path) {
-    std::ifstream f(EQ_PATH(path), std::ios::binary);
-    if (!f) throw std::runtime_error("read_eqn: cannot open " + path);
-    std::string data((std::istreambuf_iterator<char>(f)),
-                     std::istreambuf_iterator<char>());
-    return py::bytes(data);
-}
-
-void write_eqn_py(const std::string& path, const py::bytes& data) {
-    std::string buf = data;
-    std::ofstream f(EQ_PATH(path), std::ios::binary);
-    if (!f) throw std::runtime_error("write_eqn: cannot write " + path);
-    f.write(buf.data(), std::streamsize(buf.size()));
-}
-
 }  // namespace
 
 PYBIND11_MODULE(_equation, m) {
-    m.doc() = "MTEF (Equation Editor 3.x / MathType) codec and SVG renderer.\n"
-              "Equation Editor itself is only a GUI for humans; every "
-              "programmatic path runs here.";
+    m.doc() = "TeX structural editing, rendering, and native Office output.";
 
     py::class_<mtef::SvgStyle>(m, "SvgStyle",
         "Type sizes in points, mirroring the editor's Sizes dialog.")
@@ -244,16 +112,6 @@ PYBIND11_MODULE(_equation, m) {
                    " sym=" + std::to_string(s.sym) + ">";
         });
 
-    m.def("tex_to_mtef", &tex_to_mtef_py, py::arg("latex"),
-          "LaTeX -> MTEF binary.");
-    m.def("mtef_to_tex", &mtef_to_tex_py, py::arg("data"),
-          "MTEF binary -> LaTeX.");
-    m.def("mtef_to_latex", &mtef_to_latex_py, py::arg("data"),
-          "MTEF binary -> LaTeX, through the EDITOR's parser and emitter -- "
-          "the reading that will actually be drawn and edited.  mtef_to_tex "
-          "answers with the legacy standalone converter instead.");
-    m.def("mtef_to_svg", &mtef_to_svg_py, py::arg("data"),
-          py::arg("style") = mtef::SvgStyle(), "MTEF binary -> SVG.");
     m.def("tex_to_svg", &tex_to_svg_py, py::arg("latex"),
           py::arg("style") = mtef::SvgStyle(), "LaTeX -> SVG.");
     py::class_<mtef::OmmlOptions>(m, "OmmlOptions",
@@ -263,9 +121,6 @@ PYBIND11_MODULE(_equation, m) {
         .def_readwrite("declare_namespace", &mtef::OmmlOptions::declare_namespace)
         .def_readwrite("italic_variables", &mtef::OmmlOptions::italic_variables);
 
-    m.def("mtef_to_omml", &mtef_to_omml_py, py::arg("data"),
-          py::arg("options") = mtef::OmmlOptions(),
-          "MTEF binary -> OMML (Office-native, editable equation).");
     m.def("tex_to_omml", &tex_to_omml_py, py::arg("latex"),
           py::arg("options") = mtef::OmmlOptions(),
           "LaTeX -> OMML (Office-native, editable equation).");
@@ -279,10 +134,6 @@ PYBIND11_MODULE(_equation, m) {
     m.def("tex_to_rtf", &tex_to_rtf_py, py::arg("latex"),
           py::arg("options") = mtef::RtfOptions(),
           "LaTeX -> a complete RTF document carrying one native equation.");
-    m.def("mtef_to_rtf", &mtef_to_rtf_py, py::arg("data"),
-          py::arg("options") = mtef::RtfOptions(),
-          "MTEF binary -> a complete RTF document carrying one equation.");
-
     py::class_<mtef::MathMLOptions>(m, "MathMLOptions",
         "How an equation is written as MathML -- the one clipboard format the "
         "whole of Office reads as maths.")
@@ -303,10 +154,6 @@ PYBIND11_MODULE(_equation, m) {
           "equation should arrive at.  MathML cannot -- mathsize is ignored "
           "and the destination box wins, which is why a pasted equation used "
           "to come out at 18 pt.  Returns the OPC package bytes.");
-    m.def("mtef_to_mathml", &mtef_to_mathml_py, py::arg("data"),
-          py::arg("options") = mtef::MathMLOptions(),
-          "MTEF binary -> MathML.");
-
     m.def("tex_to_emf", &tex_to_emf_py, py::arg("latex"),
           py::arg("style") = mtef::SvgStyle(),
           "LaTeX -> an enhanced metafile, the vector picture Office and "
@@ -317,13 +164,6 @@ PYBIND11_MODULE(_equation, m) {
 
     m.def("tex_normalize", &tex_normalize_py, py::arg("latex"),
           "LaTeX -> tree -> LaTeX (the shape an edited equation is saved in).");
-
-    m.def("tex_dump_tree", &tex_dump_tree_py, py::arg("latex"),
-          "Indented text dump of the tree the LaTeX parser builds.");
-
-    m.def("dump_tree", &dump_tree_py, py::arg("data"),
-          py::arg("run_passes") = true,
-          "Indented text dump of the parsed node tree (diagnostic).");
 
     py::class_<mtef::Equation::SelectionBox>(m, "SelectionBox",
         "The rectangle an editor highlights.  `found` is false when nothing "
@@ -749,8 +589,4 @@ PYBIND11_MODULE(_equation, m) {
           py::arg("style") = mtef::DocStyle(),
           "Lay a Markdown document out to a width in points.");
 
-    m.def("read_eqn", &read_eqn_py, py::arg("path"),
-          "Read a .eqn file (raw MTEF, no OLE header).");
-    m.def("write_eqn", &write_eqn_py, py::arg("path"), py::arg("data"),
-          "Write a .eqn file the editor GUI can open.");
 }

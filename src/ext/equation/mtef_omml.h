@@ -44,10 +44,6 @@ std::string render_omml(const LineNode& root, const OmmlOptions& opt = OmmlOptio
 std::string tex_to_omml(const std::string& latex,
                         const OmmlOptions& opt = OmmlOptions());
 
-/* MTEF binary -> OMML.  Empty string when the MTEF cannot be parsed. */
-std::string mtef_to_omml(const uint8_t* data, size_t len,
-                         const OmmlOptions& opt = OmmlOptions());
-
 }  // namespace mtef
 
 #endif /* MTEF_OMML_H */

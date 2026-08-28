@@ -5,6 +5,13 @@ All notable changes to the `radia` package.  Format: each release lists
 
 ## Unreleased
 
+- Added the native and Web editions of Eqnedit64 as one BSD-2-Clause component
+  under `tools/eqnedit64`. It provides portable Windows x64 structural/TeX
+  editing, a homepage-published browser UI, and Office/image export without an
+  installer or Python runtime. The old duplicate Radia GUI target and public
+  MTEF/`.eqn` readers, writers, tests, and reverse-engineering utilities were
+  retired; TeX-to-OMML/PPTX headless generation remains supported.
+
 - Completed the previously named MATLAB Optuna sampler gaps against the pinned
   4.9.0 oracle: concurrent-RUNNING constant-liar TPE, source/separable/margin/
   learning-rate CMA-ES modes, pruned CMA history, and native unscrambled Sobol
