@@ -8,7 +8,6 @@ classdef Study < handle
         Sampler
         Pruner
         AutoSave (1,1) logical = true
-        IntermediateTable table
         UserAttrTable table
         SystemAttrTable table
         ConstraintTable table
@@ -27,6 +26,7 @@ classdef Study < handle
         TrialTable
         ParamTable
         ObjectiveTable
+        IntermediateTable
     end
 
     properties (Access=private)
@@ -51,12 +51,24 @@ classdef Study < handle
         ObjectiveTrialNumberData double = zeros(0,1)
         ObjectiveIndexData double = zeros(0,1)
         ObjectiveValueData double = zeros(0,1)
+        IntermediateTrialNumberData double = zeros(0,1)
+        IntermediateStepData double = zeros(0,1)
+        IntermediateValueData double = zeros(0,1)
+        IntermediateTimestampData double = zeros(0,1)
         TrialTableCache = table()
         ParamTableCache = table()
         ObjectiveTableCache = table()
+        IntermediateTableCache = table()
         TrialTableDirty (1,1) logical = true
         ParamTableDirty (1,1) logical = true
         ObjectiveTableDirty (1,1) logical = true
+        IntermediateTableDirty (1,1) logical = true
+        ParamIndex
+        ObjectiveIndex
+        IntermediateIndex
+        UserAttrIndex
+        SystemAttrIndex
+        ConstraintIndex
         SamplerHasBeforeTrial (1,1) logical = false
         SamplerHasAfterTrial (1,1) logical = false
     end
@@ -112,6 +124,12 @@ classdef Study < handle
             end
             obj.SamplerHasBeforeTrial=ismethod(obj.Sampler,"beforeTrial");
             obj.SamplerHasAfterTrial=ismethod(obj.Sampler,"afterTrial");
+            obj.ParamIndex=radia.optuna.internal.TrialRowIndex();
+            obj.ObjectiveIndex=radia.optuna.internal.TrialRowIndex();
+            obj.IntermediateIndex=radia.optuna.internal.TrialRowIndex();
+            obj.UserAttrIndex=radia.optuna.internal.TrialRowIndex();
+            obj.SystemAttrIndex=radia.optuna.internal.TrialRowIndex();
+            obj.ConstraintIndex=radia.optuna.internal.TrialRowIndex();
             obj.initializeTables();
             if strlength(obj.StoragePath) > 0 && ...
                     (isfile(obj.StoragePath) || isfile(obj.backupStoragePath()))
@@ -646,12 +664,12 @@ classdef Study < handle
         end
 
         function values = intermediateValuesAtStep(obj, step)
-            rows = obj.IntermediateTable.Step == step;
-            completed = obj.TrialTable.State == "COMPLETE";
-            completedNumbers = obj.TrialTable.TrialNumber(completed);
+            rows = obj.IntermediateStepData == step;
+            completedNumbers = obj.TrialNumberData( ...
+                obj.TrialStateData == "COMPLETE");
             completedRows = ismember( ...
-                obj.IntermediateTable.TrialNumber, completedNumbers);
-            values = obj.IntermediateTable.Value(rows & completedRows);
+                obj.IntermediateTrialNumberData, completedNumbers);
+            values = obj.IntermediateValueData(rows & completedRows);
         end
 
         function recovered = recoverStaleRunning(obj, timeoutSeconds, options)
@@ -686,6 +704,7 @@ classdef Study < handle
             obj.ObjectiveTrialNumberData=obj.ObjectiveTrialNumberData(keep);
             obj.ObjectiveIndexData=obj.ObjectiveIndexData(keep);
             obj.ObjectiveValueData=obj.ObjectiveValueData(keep);
+            obj.ObjectiveIndex.invalidate();
             obj.TrialTableDirty=true;
             obj.ObjectiveTableDirty=true;
             obj.persist();
@@ -795,6 +814,7 @@ classdef Study < handle
             obj.ParamDistributionData=reshape(string(value.Distribution),[],1);
             obj.ParamTableCache=value;
             obj.ParamTableDirty=false;
+            obj.invalidateIndex(obj.ParamIndex);
         end
 
         function value=get.ObjectiveTable(obj)
@@ -815,11 +835,45 @@ classdef Study < handle
             obj.ObjectiveValueData=reshape(double(value.Value),[],1);
             obj.ObjectiveTableCache=value;
             obj.ObjectiveTableDirty=false;
+            obj.invalidateIndex(obj.ObjectiveIndex);
+        end
+
+        function value=get.IntermediateTable(obj)
+            if obj.IntermediateTableDirty
+                value=table(obj.IntermediateTrialNumberData, ...
+                    obj.IntermediateStepData,obj.IntermediateValueData, ...
+                    obj.serialDatetimes(obj.IntermediateTimestampData), ...
+                    'VariableNames', ...
+                    {'TrialNumber','Step','Value','Timestamp'});
+                obj.IntermediateTableCache=value;
+                obj.IntermediateTableDirty=false;
+            else
+                value=obj.IntermediateTableCache;
+            end
+        end
+
+        function set.IntermediateTable(obj,value)
+            obj.IntermediateTrialNumberData= ...
+                reshape(double(value.TrialNumber),[],1);
+            obj.IntermediateStepData=reshape(double(value.Step),[],1);
+            obj.IntermediateValueData=reshape(double(value.Value),[],1);
+            obj.IntermediateTimestampData= ...
+                reshape(datenum(value.Timestamp),[],1); %#ok<DATNM>
+            obj.IntermediateTableCache=value;
+            obj.IntermediateTableDirty=false;
+            obj.invalidateIndex(obj.IntermediateIndex);
         end
 
     end
 
     methods (Hidden=true)
+
+        function invalidateIndex(~,index)
+            % Dependent-property setters can run before construction ends.
+            if ~isempty(index)
+                index.invalidate();
+            end
+        end
 
         function result=buildTrialsDataframe(obj,attrs,multiIndex)
             attrs=reshape(string(attrs),1,[]);
@@ -1157,19 +1211,19 @@ classdef Study < handle
             trialNumbers=reshape(double(trialNumbers),[],1);
             steps=NaN(size(trialNumbers));
             values=NaN(size(trialNumbers));
-            if height(obj.IntermediateTable)==0
+            allNumbers=obj.IntermediateTrialNumberData;
+            if isempty(allNumbers)
                 return
             end
-            allNumbers=obj.IntermediateTable.TrialNumber;
-            allSteps=obj.IntermediateTable.Step;
-            allValues=obj.IntermediateTable.Value;
             for index=1:numel(trialNumbers)
-                selected=find(allNumbers==trialNumbers(index));
+                selected=obj.IntermediateIndex.lookup( ...
+                    allNumbers,trialNumbers(index));
                 if isempty(selected)
                     continue
                 end
-                [steps(index),position]=max(allSteps(selected));
-                values(index)=allValues(selected(position));
+                [steps(index),position]=max( ...
+                    obj.IntermediateStepData(selected));
+                values(index)=obj.IntermediateValueData(selected(position));
             end
         end
 
@@ -1252,9 +1306,11 @@ classdef Study < handle
             obj.ParamTable = table('Size', [0, 6], ...
                 'VariableTypes', {'double','string','string','double','string','string'}, ...
                 'VariableNames', {'TrialNumber','Name','Kind','ValueNumeric','ValueText','Distribution'});
-            obj.IntermediateTable = table('Size', [0, 4], ...
+            intermediateTable = table('Size', [0, 4], ...
                 'VariableTypes', {'double','double','double','datetime'}, ...
                 'VariableNames', {'TrialNumber','Step','Value','Timestamp'});
+            intermediateTable.Timestamp.TimeZone = "local";
+            obj.IntermediateTable = intermediateTable;
             obj.UserAttrTable = table('Size', [0, 3], ...
                 'VariableTypes', {'double','string','string'}, ...
                 'VariableNames', {'TrialNumber','Name','ValueJSON'});
@@ -1278,7 +1334,6 @@ classdef Study < handle
             obj.QueueParamTable=table('Size',[0,3], ...
                 'VariableTypes',{'double','string','cell'}, ...
                 'VariableNames',{'TrialNumber','Name','Value'});
-            obj.IntermediateTable.Timestamp.TimeZone = "local";
             obj.SamplerStateTable.Timestamp.TimeZone = "local";
             templates=struct('TrialTable',obj.TrialTable, ...
                 'ParamTable',obj.ParamTable, ...
@@ -1375,17 +1430,24 @@ classdef Study < handle
             if isfield(data,"QueueParamTable")
                 obj.QueueParamTable=data.QueueParamTable;
             end
+            obj.invalidateIndex(obj.UserAttrIndex);
+            obj.invalidateIndex(obj.SystemAttrIndex);
+            obj.invalidateIndex(obj.ConstraintIndex);
         end
 
-        function frozen = freezeTrial(obj,trialNumber)
+        function frozen = freezeTrial(obj,trialNumber,timestamps)
+            if nargin<3
+                timestamps=[];
+            end
             row=obj.trialRow(trialNumber);
             if numel(row)~=1
                 error("radia:optuna:UnknownTrial", ...
                     "Trial %d does not identify exactly one row.",trialNumber);
             end
             values=NaN;
-            objectiveRows=obj.ObjectiveTrialNumberData==trialNumber;
-            if any(objectiveRows)
+            objectiveRows=obj.ObjectiveIndex.lookup( ...
+                obj.ObjectiveTrialNumberData,trialNumber);
+            if ~isempty(objectiveRows)
                 [~,order]=sort(obj.ObjectiveIndexData(objectiveRows));
                 objectiveValues=obj.ObjectiveValueData(objectiveRows);
                 values=reshape(objectiveValues(order),1,[]);
@@ -1393,7 +1455,8 @@ classdef Study < handle
                 values=obj.TrialValueData(row);
             end
             distributions=struct();
-            parameterRows=find(obj.ParamTrialNumberData==trialNumber)';
+            parameterRows=reshape(obj.ParamIndex.lookup( ...
+                obj.ParamTrialNumberData,trialNumber),1,[]);
             parameterKeys=radia.optuna.Trial.claimKeys( ...
                 obj.ParamNameData(parameterRows));
             for index=1:numel(parameterRows)
@@ -1403,11 +1466,35 @@ classdef Study < handle
                     obj.ParamKindData(parameterRow), ...
                     obj.ParamDistributionData(parameterRow));
             end
-            userAttrs=obj.attributesForTrial(obj.UserAttrTable,trialNumber);
-            systemAttrs=obj.attributesForTrial(obj.SystemAttrTable,trialNumber);
-            intermediateRows=obj.IntermediateTable.TrialNumber==trialNumber;
-            intermediate=obj.IntermediateTable(intermediateRows, ...
-                ["Step","Value","Timestamp"]);
+            userAttrs=obj.attributesForTrial(obj.UserAttrTable,trialNumber, ...
+                obj.UserAttrIndex);
+            systemAttrs=obj.attributesForTrial(obj.SystemAttrTable, ...
+                trialNumber,obj.SystemAttrIndex);
+            intermediateRows=obj.IntermediateIndex.lookup( ...
+                obj.IntermediateTrialNumberData,trialNumber);
+            if isempty(intermediateRows)
+                intermediate=radia.optuna.Trial.emptyIntermediateTable();
+            else
+                if isempty(timestamps)
+                    intermediateStamps=obj.serialDatetimes( ...
+                        obj.IntermediateTimestampData(intermediateRows));
+                else
+                    intermediateStamps= ...
+                        timestamps.Intermediate(intermediateRows);
+                end
+                intermediate=table( ...
+                    obj.IntermediateStepData(intermediateRows), ...
+                    obj.IntermediateValueData(intermediateRows), ...
+                    intermediateStamps, ...
+                    'VariableNames',{'Step','Value','Timestamp'});
+            end
+            if isempty(timestamps)
+                startedAt=obj.serialDatetimes(obj.TrialStartTimeData(row));
+                completedAt=obj.serialDatetimes(obj.TrialEndTimeData(row));
+            else
+                startedAt=timestamps.TrialStart(row);
+                completedAt=timestamps.TrialEnd(row);
+            end
             [constraintPresent,constraints]=obj.constraintRecord(trialNumber);
             frozen=radia.optuna.FrozenTrial(Number=trialNumber, ...
                 State=obj.TrialStateData(row),Values=values, ...
@@ -1416,8 +1503,7 @@ classdef Study < handle
                 IntermediateValues=intermediate,UserAttrs=userAttrs, ...
                 SystemAttrs=systemAttrs,Constraints=constraints, ...
                 ConstraintPresent=constraintPresent, ...
-                DatetimeStart=obj.serialDatetimes(obj.TrialStartTimeData(row)), ...
-                DatetimeComplete=obj.serialDatetimes(obj.TrialEndTimeData(row)), ...
+                DatetimeStart=startedAt,DatetimeComplete=completedAt, ...
                 ErrorMessage=obj.TrialErrorData(row));
         end
 
@@ -1427,9 +1513,16 @@ classdef Study < handle
                 frozen=radia.optuna.FrozenTrial.empty(0,1);
                 return
             end
-            frozen(numel(trialNumbers),1)=obj.freezeTrial(trialNumbers(end));
+            timestamps=struct( ...
+                'TrialStart',obj.serialDatetimes(obj.TrialStartTimeData), ...
+                'TrialEnd',obj.serialDatetimes(obj.TrialEndTimeData), ...
+                'Intermediate', ...
+                obj.serialDatetimes(obj.IntermediateTimestampData));
+            frozen(numel(trialNumbers),1)= ...
+                obj.freezeTrial(trialNumbers(end),timestamps);
             for index=1:numel(trialNumbers)
-                frozen(index,1)=obj.freezeTrial(trialNumbers(index));
+                frozen(index,1)= ...
+                    obj.freezeTrial(trialNumbers(index),timestamps);
             end
         end
 
@@ -1457,10 +1550,14 @@ classdef Study < handle
             trial.restoreSnapshot(obj.freezeTrial(number));
         end
 
-        function addTrial(obj,frozen)
+        function addTrial(obj,frozen,options)
+            %ADDTRIAL Import a trial, optionally retaining non-field names.
             arguments
                 obj
                 frozen (1,1) radia.optuna.FrozenTrial
+                options.OriginalNames (1,1) struct = struct()
+                options.OriginalUserAttrNames (1,1) struct = struct()
+                options.OriginalSystemAttrNames (1,1) struct = struct()
             end
             if frozen.State=="COMPLETE" && ...
                     (numel(frozen.Values)~=numel(obj.Directions) || ...
@@ -1511,38 +1608,61 @@ classdef Study < handle
                 frozen.IntermediateValues,frozen.ErrorMessage);
             if frozen.State=="COMPLETE"
                 count=numel(frozen.Values);
-                obj.ObjectiveTrialNumberData(end+(1:count),1)=number;
-                obj.ObjectiveIndexData(end+(1:count),1)=(1:count)';
-                obj.ObjectiveValueData(end+(1:count),1)= ...
+                newRows=numel(obj.ObjectiveTrialNumberData)+(1:count);
+                obj.ObjectiveTrialNumberData(newRows,1)=number;
+                obj.ObjectiveIndexData(newRows,1)=(1:count)';
+                obj.ObjectiveValueData(newRows,1)= ...
                     reshape(frozen.Values,[],1);
+                for objectiveRow=newRows
+                    obj.ObjectiveIndex.append(number,objectiveRow);
+                end
                 obj.ObjectiveTableDirty=true;
             end
             for name=reshape(names,1,[])
                 distribution=frozen.Distributions.(name);
-                obj.appendImportedParameter(number,name,frozen.Params.(name), ...
-                    distribution);
+                storedName=name;
+                if isfield(options.OriginalNames,name)
+                    storedName=string(options.OriginalNames.(name));
+                end
+                obj.appendImportedParameter(number,storedName, ...
+                    frozen.Params.(name),distribution);
             end
             obj.UserAttrTable=obj.appendImportedAttributes( ...
-                obj.UserAttrTable,number,frozen.UserAttrs);
+                obj.UserAttrTable,number,frozen.UserAttrs, ...
+                options.OriginalUserAttrNames);
             obj.SystemAttrTable=obj.appendImportedAttributes( ...
-                obj.SystemAttrTable,number,frozen.SystemAttrs);
+                obj.SystemAttrTable,number,frozen.SystemAttrs, ...
+                options.OriginalSystemAttrNames);
+            obj.UserAttrIndex.invalidate();
+            obj.SystemAttrIndex.invalidate();
             if frozen.ConstraintPresent
                 obj.ConstraintCountTable(end+1,:)={number,numel(frozen.Constraints)};
                 if ~isempty(frozen.Constraints)
+                    firstConstraintRow=height(obj.ConstraintTable)+1;
                     obj.ConstraintTable=[obj.ConstraintTable;table( ...
                         repmat(number,numel(frozen.Constraints),1), ...
                         (1:numel(frozen.Constraints))', ...
                         reshape(frozen.Constraints,[],1), ...
                         'VariableNames',obj.ConstraintTable.Properties.VariableNames)];
+                    for constraintRow=firstConstraintRow:height(obj.ConstraintTable)
+                        obj.ConstraintIndex.append(number,constraintRow);
+                    end
                 end
             end
             if ~isempty(frozen.IntermediateValues)
                 count=height(frozen.IntermediateValues);
-                timestamps=frozen.IntermediateValues.Timestamp;
-                obj.IntermediateTable=[obj.IntermediateTable;table( ...
-                    repmat(number,count,1),frozen.IntermediateValues.Step, ...
-                    frozen.IntermediateValues.Value,timestamps, ...
-                    'VariableNames',obj.IntermediateTable.Properties.VariableNames)];
+                newRows=numel(obj.IntermediateTrialNumberData)+(1:count);
+                obj.IntermediateTrialNumberData(newRows,1)=number;
+                obj.IntermediateStepData(newRows,1)= ...
+                    reshape(double(frozen.IntermediateValues.Step),[],1);
+                obj.IntermediateValueData(newRows,1)= ...
+                    reshape(double(frozen.IntermediateValues.Value),[],1);
+                obj.IntermediateTimestampData(newRows,1)= ...
+                    reshape(datenum(frozen.IntermediateValues.Timestamp),[],1); %#ok<DATNM>
+                for intermediateRow=newRows
+                    obj.IntermediateIndex.append(number,intermediateRow);
+                end
+                obj.IntermediateTableDirty=true;
             end
             obj.persist();
         end
@@ -1596,8 +1716,9 @@ classdef Study < handle
         end
 
         function recordParameter(obj, trial, name, kind, value, distribution)
-            existing=find(obj.ParamTrialNumberData==trial.Number & ...
-                obj.ParamNameData==name);
+            candidates=obj.ParamIndex.lookup( ...
+                obj.ParamTrialNumberData,trial.Number);
+            existing=candidates(obj.ParamNameData(candidates)==name);
             numeric = NaN;
             text = "";
             if isnumeric(value) && isscalar(value)
@@ -1617,14 +1738,19 @@ classdef Study < handle
                     obj.ParamValueNumericData(stale)=[];
                     obj.ParamValueTextData(stale)=[];
                     obj.ParamDistributionData(stale)=[];
+                    obj.ParamIndex.invalidate();
                 end
             end
+            appended=row>numel(obj.ParamTrialNumberData);
             obj.ParamTrialNumberData(row,1)=trial.Number;
             obj.ParamNameData(row,1)=string(name);
             obj.ParamKindData(row,1)=string(kind);
             obj.ParamValueNumericData(row,1)=numeric;
             obj.ParamValueTextData(row,1)=text;
             obj.ParamDistributionData(row,1)=string(distribution);
+            if appended
+                obj.ParamIndex.append(trial.Number,row);
+            end
             obj.ParamTableDirty=true;
             trialRow=obj.trialRow(trial.Number);
             obj.TrialParamsData{trialRow}=trial.Params;
@@ -1636,35 +1762,52 @@ classdef Study < handle
         end
 
         function recordIntermediate(obj, trial, value, step)
-            rows = obj.IntermediateTable.TrialNumber == trial.Number & ...
-                obj.IntermediateTable.Step == step;
-            if any(rows)
-                obj.IntermediateTable(rows,:) = [];
+            candidates=obj.IntermediateIndex.lookup( ...
+                obj.IntermediateTrialNumberData,trial.Number);
+            stale=candidates(obj.IntermediateStepData(candidates)==step);
+            if ~isempty(stale)
+                obj.IntermediateTrialNumberData(stale)=[];
+                obj.IntermediateStepData(stale)=[];
+                obj.IntermediateValueData(stale)=[];
+                obj.IntermediateTimestampData(stale)=[];
+                obj.IntermediateIndex.invalidate();
             end
-            obj.IntermediateTable(end+1,:) = {trial.Number, step, value, ...
-                datetime("now", "TimeZone", "local")};
+            row=numel(obj.IntermediateTrialNumberData)+1;
+            obj.IntermediateTrialNumberData(row,1)=trial.Number;
+            obj.IntermediateStepData(row,1)=step;
+            obj.IntermediateValueData(row,1)=value;
+            obj.IntermediateTimestampData(row,1)=now; %#ok<TNOW1>
+            obj.IntermediateIndex.append(trial.Number,row);
+            obj.IntermediateTableDirty=true;
             obj.updateTrialSnapshot(trial);
             obj.persist();
         end
 
         function recordUserAttribute(obj, trial, name, value)
-            rows = obj.UserAttrTable.TrialNumber == trial.Number & ...
-                obj.UserAttrTable.Name == name;
-            if any(rows)
-                obj.UserAttrTable(rows,:) = [];
+            rows=obj.UserAttrIndex.lookup( ...
+                obj.UserAttrTable.TrialNumber,trial.Number);
+            stale=rows(obj.UserAttrTable.Name(rows)==name);
+            if ~isempty(stale)
+                obj.UserAttrTable(stale,:)=[];
+                obj.UserAttrIndex.invalidate();
             end
             obj.UserAttrTable(end+1,:) = {trial.Number, name, string(jsonencode(value))};
+            obj.UserAttrIndex.append(trial.Number,height(obj.UserAttrTable));
             obj.persist();
         end
 
         function recordSystemAttribute(obj,trial,name,value)
-            rows=obj.SystemAttrTable.TrialNumber==trial.Number & ...
-                obj.SystemAttrTable.Name==name;
-            if any(rows)
-                obj.SystemAttrTable(rows,:)=[];
+            rows=obj.SystemAttrIndex.lookup( ...
+                obj.SystemAttrTable.TrialNumber,trial.Number);
+            stale=rows(obj.SystemAttrTable.Name(rows)==name);
+            if ~isempty(stale)
+                obj.SystemAttrTable(stale,:)=[];
+                obj.SystemAttrIndex.invalidate();
             end
             obj.SystemAttrTable(end+1,:)={trial.Number,name, ...
                 string(jsonencode(value))};
+            obj.SystemAttrIndex.append( ...
+                trial.Number,height(obj.SystemAttrTable));
             obj.persist();
         end
 
@@ -1681,17 +1824,25 @@ classdef Study < handle
                     "constraint-aware ranking. Use TPESampler, " + ...
                     "MOTPESampler, or NSGAIISampler.");
             end
-            obj.ConstraintTable( ...
-                obj.ConstraintTable.TrialNumber == trial.Number, :) = [];
+            stale=obj.ConstraintIndex.lookup( ...
+                obj.ConstraintTable.TrialNumber,trial.Number);
+            if ~isempty(stale)
+                obj.ConstraintTable(stale,:)=[];
+                obj.ConstraintIndex.invalidate();
+            end
             obj.ConstraintCountTable( ...
                 obj.ConstraintCountTable.TrialNumber == trial.Number, :) = [];
             obj.ConstraintCountTable(end+1,:) = ...
                 {trial.Number,double(numel(values))};
             if ~isempty(values)
+                firstRow=height(obj.ConstraintTable)+1;
                 obj.ConstraintTable = [obj.ConstraintTable; table( ...
                     repmat(trial.Number, numel(values), 1), ...
                     (1:numel(values))', values, ...
                     'VariableNames', obj.ConstraintTable.Properties.VariableNames)];
+                for row=firstRow:height(obj.ConstraintTable)
+                    obj.ConstraintIndex.append(trial.Number,row);
+                end
             end
             trial.setConstraints(values);
             obj.persist();
@@ -1721,8 +1872,9 @@ classdef Study < handle
                 error("radia:optuna:ConstraintShape", ...
                     "Trial %d has an invalid constraint count.",trialNumber);
             end
-            rows = obj.ConstraintTable.TrialNumber == trialNumber;
-            selected = sortrows(obj.ConstraintTable(rows,:),"ConstraintIndex");
+            rows=obj.ConstraintIndex.lookup( ...
+                obj.ConstraintTable.TrialNumber,trialNumber);
+            selected=sortrows(obj.ConstraintTable(rows,:),"ConstraintIndex");
             expectedIndices = (1:count)';
             if height(selected) ~= count || ...
                     ~isequal(selected.ConstraintIndex,expectedIndices)
@@ -1761,11 +1913,13 @@ classdef Study < handle
             endTime = now; %#ok<TNOW1> hot-path serial timestamp
             trial.markFinished(state, value, endTime, message);
             elapsed = (endTime-trial.startTimeSerial())*86400;
-            objectiveRows=obj.ObjectiveTrialNumberData==trial.Number;
-            if any(objectiveRows)
+            objectiveRows=obj.ObjectiveIndex.lookup( ...
+                obj.ObjectiveTrialNumberData,trial.Number);
+            if ~isempty(objectiveRows)
                 obj.ObjectiveTrialNumberData(objectiveRows)=[];
                 obj.ObjectiveIndexData(objectiveRows)=[];
                 obj.ObjectiveValueData(objectiveRows)=[];
+                obj.ObjectiveIndex.invalidate();
             end
             if state == "COMPLETE"
                 values = reshape(double(value),[],1);
@@ -1774,6 +1928,9 @@ classdef Study < handle
                 obj.ObjectiveTrialNumberData(newRows,1)=trial.Number;
                 obj.ObjectiveIndexData(newRows,1)=(1:count)';
                 obj.ObjectiveValueData(newRows,1)=values;
+                for objectiveRow=newRows
+                    obj.ObjectiveIndex.append(trial.Number,objectiveRow);
+                end
             end
             obj.ObjectiveTableDirty=true;
             obj.TrialStateData(rows)=state;
@@ -2068,9 +2225,14 @@ classdef Study < handle
             obj.StopRequested=false;
         end
 
-        function attrs=attributesForTrial(~,source,trialNumber)
+        function attrs=attributesForTrial(~,source,trialNumber,index)
             attrs=struct();
-            rows=find(source.TrialNumber==trialNumber)';
+            if nargin<4 || isempty(index)
+                rows=find(source.TrialNumber==trialNumber)';
+            else
+                rows=reshape(index.lookup( ...
+                    source.TrialNumber,trialNumber),1,[]);
+            end
             for row=rows
                 attrs.(matlab.lang.makeValidName(source.Name(row)))= ...
                     jsondecode(source.ValueJSON(row));
@@ -2099,13 +2261,19 @@ classdef Study < handle
             obj.ParamValueTextData(row,1)=textValue;
             obj.ParamDistributionData(row,1)= ...
                 radia.optuna.internal.DistributionCodec.encode(distribution);
+            obj.ParamIndex.append(number,row);
             obj.ParamTableDirty=true;
         end
 
-        function target=appendImportedAttributes(~,target,number,attrs)
+        function target=appendImportedAttributes( ...
+                ~,target,number,attrs,originalNames)
             names=string(fieldnames(attrs));
             for name=reshape(names,1,[])
-                target(end+1,:)={number,name, ...
+                storedName=name;
+                if isfield(originalNames,name)
+                    storedName=string(originalNames.(name));
+                end
+                target(end+1,:)={number,storedName, ...
                     string(jsonencode(attrs.(name)))}; %#ok<AGROW>
             end
         end

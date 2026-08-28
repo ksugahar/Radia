@@ -976,6 +976,94 @@ def _tpe_trials() -> list[float]:
     return values
 
 
+def _tpe_constant_liar_contract() -> dict[str, object]:
+    def objective(row: dict[str, object]) -> float:
+        mode_penalty = {"A": 0.0, "B": 0.15, "C": 0.35}[str(row["mode"])]
+        return (float(row["x"]) - 0.3) ** 2 + mode_penalty
+
+    def run(*, multivariate: bool) -> list[dict[str, object]]:
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            sampler = optuna.samplers.TPESampler(
+                seed=127,
+                n_startup_trials=4,
+                multivariate=multivariate,
+                constant_liar=True,
+            )
+        study = optuna.create_study(sampler=sampler)
+        rows: list[dict[str, object]] = []
+
+        for _ in range(4):
+            trial = study.ask()
+            row = {
+                "number": trial.number,
+                "x": trial.suggest_float("x", -2.0, 2.0),
+                "mode": trial.suggest_categorical("mode", ["A", "B", "C"]),
+                "running_before": sum(
+                    candidate.state == TrialState.RUNNING for candidate in study.trials
+                ),
+            }
+            study.tell(trial, objective(row))
+            rows.append(row | {"phase": "startup"})
+
+        for batch in range(3):
+            pending: list[tuple[optuna.Trial, dict[str, object]]] = []
+            for slot in range(3):
+                trial = study.ask()
+                row = {
+                    "number": trial.number,
+                    "x": trial.suggest_float("x", -2.0, 2.0),
+                    "mode": trial.suggest_categorical("mode", ["A", "B", "C"]),
+                    "running_before": sum(
+                        candidate.state == TrialState.RUNNING for candidate in study.trials
+                    ),
+                    "phase": f"batch-{batch}-pending-{slot}",
+                }
+                pending.append((trial, row))
+                rows.append(row)
+
+            # Complete two workers out of order, then sample while the middle
+            # worker remains genuinely RUNNING. Finally report that late result.
+            for slot in (2, 0):
+                trial, row = pending[slot]
+                study.tell(trial, objective(row))
+            probe = study.ask()
+            probe_row = {
+                "number": probe.number,
+                "x": probe.suggest_float("x", -2.0, 2.0),
+                "mode": probe.suggest_categorical("mode", ["A", "B", "C"]),
+                "running_before": sum(
+                    candidate.state == TrialState.RUNNING for candidate in study.trials
+                ),
+                "phase": f"batch-{batch}-probe",
+            }
+            rows.append(probe_row)
+            study.tell(probe, objective(probe_row))
+            late_trial, late_row = pending[1]
+            study.tell(late_trial, objective(late_row))
+
+        return rows
+
+    warning_categories: dict[str, list[str]] = {}
+    for name, arguments in {
+        "default": {},
+        "consider_prior_true": {"consider_prior": True},
+        "consider_prior_false": {"consider_prior": False},
+    }.items():
+        with warnings.catch_warnings(record=True) as records:
+            warnings.simplefilter("always")
+            optuna.samplers.TPESampler(**arguments)
+        warning_categories[name] = [type(record.message).__name__ for record in records]
+
+    return {
+        "seed": 127,
+        "n_startup_trials": 4,
+        "univariate": run(multivariate=False),
+        "multivariate": run(multivariate=True),
+        "consider_prior_warning_categories": warning_categories,
+    }
+
+
 def _numeric_untransform_contract() -> dict[str, object]:
     ties = [0.5, 1.5, 2.5, 3.5, -0.5, -1.5, -2.5, 2.4, 2.6, -0.4]
     below = [1.0, 0.7, -1.0, 2.0, 1e-300]
@@ -1868,6 +1956,147 @@ def _cmaes_independent_sampler_trials() -> list[dict[str, object]]:
     return rows
 
 
+def _cmaes_advanced_contract() -> dict[str, object]:
+    def run(arguments: dict[str, object], count: int = 32) -> list[dict[str, float]]:
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            sampler = optuna.samplers.CmaEsSampler(
+                seed=131, n_startup_trials=1, popsize=4, **arguments
+            )
+        study = optuna.create_study(sampler=sampler)
+        rows: list[dict[str, float]] = []
+        for _ in range(count):
+            trial = study.ask()
+            x = trial.suggest_float("x", -2.0, 2.0)
+            y = trial.suggest_float("y", -1.0, 3.0)
+            study.tell(trial, (x - 0.4) ** 2 + 0.5 * (y + 0.2) ** 2)
+            rows.append({"x": x, "y": y})
+        return rows
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        margin_sampler = optuna.samplers.CmaEsSampler(
+            seed=137,
+            n_startup_trials=1,
+            popsize=4,
+            with_margin=True,
+        )
+    margin_study = optuna.create_study(sampler=margin_sampler)
+    margin_rows: list[dict[str, float]] = []
+    for _ in range(40):
+        trial = margin_study.ask()
+        mesh = trial.suggest_int("mesh", 0, 10, step=2)
+        x = trial.suggest_float("x", -2.0, 2.0)
+        margin_study.tell(trial, (x - 0.3) ** 2 + 0.02 * mesh)
+        margin_rows.append({"mesh": mesh, "x": x})
+
+    source_distributions = {
+        "x": optuna.distributions.FloatDistribution(-2.0, 2.0),
+        "y": optuna.distributions.FloatDistribution(-1.0, 3.0),
+    }
+    source_trials: list[optuna.trial.FrozenTrial] = []
+    source_rows: list[dict[str, float]] = []
+    for index in range(20):
+        x = -1.8 + 3.6 * index / 19
+        y = -0.8 + 3.4 * ((7 * index) % 20) / 19
+        value = (x - 0.45) ** 2 + 0.4 * (y + 0.15) ** 2
+        source_trials.append(
+            optuna.trial.create_trial(
+                params={"x": x, "y": y},
+                distributions=source_distributions,
+                value=value,
+            )
+        )
+        source_rows.append({"x": x, "y": y, "value": value})
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        source_sampler = optuna.samplers.CmaEsSampler(
+            seed=149,
+            n_startup_trials=1,
+            popsize=4,
+            source_trials=source_trials,
+        )
+    source_study = optuna.create_study(sampler=source_sampler)
+    source_proposals: list[dict[str, float]] = []
+    for _ in range(32):
+        trial = source_study.ask()
+        x = trial.suggest_float("x", -2.0, 2.0)
+        y = trial.suggest_float("y", -1.0, 3.0)
+        source_study.tell(trial, (x - 0.4) ** 2 + 0.5 * (y + 0.2) ** 2)
+        source_proposals.append({"x": x, "y": y})
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        pruned_sampler = optuna.samplers.CmaEsSampler(
+            seed=151,
+            n_startup_trials=1,
+            popsize=4,
+            consider_pruned_trials=True,
+        )
+    pruned_study = optuna.create_study(sampler=pruned_sampler)
+    pruned_rows: list[dict[str, object]] = []
+    for index in range(32):
+        trial = pruned_study.ask()
+        x = trial.suggest_float("x", -2.0, 2.0)
+        y = trial.suggest_float("y", -1.0, 3.0)
+        value = (x - 0.4) ** 2 + 0.5 * (y + 0.2) ** 2
+        if index % 3 == 2:
+            trial.report(value + 0.125, step=2)
+            pruned_study.tell(trial, state=optuna.trial.TrialState.PRUNED)
+            state = "PRUNED"
+        else:
+            pruned_study.tell(trial, value)
+            state = "COMPLETE"
+        pruned_rows.append({"x": x, "y": y, "state": state})
+
+    def warning_names(**arguments: object) -> list[str]:
+        with warnings.catch_warnings(record=True) as records:
+            warnings.simplefilter("always")
+            optuna.samplers.CmaEsSampler(**arguments)
+        return [type(record.message).__name__ for record in records]
+
+    errors: dict[str, str | None] = {}
+    for name, arguments in {
+        "source_x0": {"source_trials": source_trials, "x0": {"x": 0.0}},
+        "source_sigma": {"source_trials": source_trials, "sigma0": 0.2},
+        "source_separable": {"source_trials": source_trials, "use_separable_cma": True},
+        "lr_separable": {"lr_adapt": True, "use_separable_cma": True},
+        "lr_margin": {"lr_adapt": True, "with_margin": True},
+        "separable_margin": {"use_separable_cma": True, "with_margin": True},
+    }.items():
+        try:
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                optuna.samplers.CmaEsSampler(**arguments)
+        except Exception as error:  # noqa: BLE001
+            errors[name] = type(error).__name__
+        else:
+            errors[name] = None
+
+    return {
+        "standard": run({}, count=16),
+        "restart_ignored": run(
+            {"restart_strategy": "ipop", "inc_popsize": 2}, count=16
+        ),
+        "separable": run({"use_separable_cma": True}),
+        "lr_adapt": run({"lr_adapt": True}, count=40),
+        "with_margin": margin_rows,
+        "source_trials": source_rows,
+        "source_trial_proposals": source_proposals,
+        "consider_pruned_trials": pruned_rows,
+        "warnings": {
+            "restart": warning_names(restart_strategy="ipop", inc_popsize=2),
+            "x0": warning_names(x0={"x": 0.5}),
+            "sigma0": warning_names(sigma0=0.2),
+            "separable": warning_names(use_separable_cma=True),
+            "margin": warning_names(with_margin=True),
+            "lr_adapt": warning_names(lr_adapt=True),
+            "source_trials": warning_names(source_trials=source_trials),
+        },
+        "invalid_combinations": errors,
+    }
+
+
 def _scrambled_qmc_trials() -> dict[str, list[dict[str, float]]]:
     result: dict[str, list[dict[str, float]]] = {}
     for qmc_type in ("sobol", "halton"):
@@ -2001,6 +2230,30 @@ def _unscrambled_qmc_trials() -> dict[str, list[dict[str, float]]]:
             rows.append({"x": x, "y": y})
         result[qmc_type] = rows
     return result
+
+
+def _native_sobol_high_dimension_contract() -> dict[str, object]:
+    dimension = 64
+    seed = 157
+    sampler = optuna.samplers.QMCSampler(
+        qmc_type="sobol", scramble=False, seed=seed
+    )
+    study = optuna.create_study(sampler=sampler)
+    proposals: list[list[float]] = []
+    for _ in range(8):
+        trial = study.ask()
+        values = [
+            trial.suggest_float(f"x{index:03d}", -1.0, 1.0)
+            for index in range(dimension)
+        ]
+        study.tell(trial, float(np.dot(values, values)))
+        proposals.append(values)
+    return {
+        "dimension": dimension,
+        "seed": seed,
+        "maximum_dimension": scipy.stats.qmc.Sobol.MAXDIM,
+        "proposals": proposals,
+    }
 
 
 def _pruner_contract() -> dict[str, object]:
@@ -2888,6 +3141,7 @@ def build_oracle() -> dict[str, object]:
         "distribution_json": _distribution_json_contract(),
         "random_sampler_seed_123": _random_trials(),
         "tpe_sampler_seed_37": _tpe_trials(),
+        "tpe_constant_liar_seed_127": _tpe_constant_liar_contract(),
         "numeric_untransform": _numeric_untransform_contract(),
         "single_distribution_rng": _single_distribution_rng_contract(),
         "tpe_pruned_history_seed_113": _tpe_pruned_history_trials(),
@@ -2904,12 +3158,14 @@ def build_oracle() -> dict[str, object]:
         "conditional_brute_force_sampler_seed_79": _conditional_brute_force_trials(),
         "cmaes_sampler_seed_31": _cmaes_trials(),
         "cmaes_independent_sampler_seed_31": _cmaes_independent_sampler_trials(),
+        "cmaes_advanced": _cmaes_advanced_contract(),
         "scrambled_qmc_sampler_seed_47": _scrambled_qmc_trials(),
         "gp_sampler_seed_53": _gp_trials(),
         "gp_constraints_sampler_seed_89": _gp_constraint_trials(),
         "partial_fixed_sampler_seed_61": _partial_fixed_trials(),
         "multivariate_tpe_sampler_seed_67": _multivariate_tpe_trials(),
         "unscrambled_qmc_sampler_seed_71": _unscrambled_qmc_trials(),
+        "native_sobol_high_dimension": _native_sobol_high_dimension_contract(),
         "pruners": _pruner_contract(),
         "constraints": _constraint_contract(),
     }

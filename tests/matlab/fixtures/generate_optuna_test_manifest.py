@@ -19,6 +19,7 @@ CLASSIFICATION_BY_FILE = {
     "test_optuna_sampler_wrappers.m": "matlab-integration",
     "test_optuna_reliability.m": "matlab-integration",
     "test_optuna_nsgaii_joint.m": "matlab-integration",
+    "test_optuna_storage_bridge.m": "matlab-integration",
 }
 
 INTEGRATION_SCOPE = {
@@ -34,6 +35,9 @@ INTEGRATION_SCOPE = {
     ),
     "test_optuna_nsgaii_joint.m": (
         "MATLAB NSGA-II generation cache, parallel scheduling, and persistence"
+    ),
+    "test_optuna_storage_bridge.m": (
+        "explicit MATLAB table/JSON handoff to upstream Optuna storages"
     ),
 }
 

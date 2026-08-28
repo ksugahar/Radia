@@ -48,6 +48,7 @@
     "CmaEsSampler": [
       "cmaes_independent_sampler_seed_31",
       "cmaes_sampler_seed_31",
+      "cmaes_advanced",
       "sampler_public_members",
       "sampler_reseed"
     ],
@@ -138,6 +139,7 @@
       "pruners"
     ],
     "QMCSampler": [
+      "native_sobol_high_dimension",
       "qmc_warnings",
       "sampler_public_members",
       "sampler_reseed",
@@ -179,7 +181,8 @@
       "sampler_reseed",
       "tpe_categorical_distance",
       "tpe_group",
-      "tpe_sampler_seed_37"
+      "tpe_sampler_seed_37",
+      "tpe_constant_liar_seed_127"
     ],
     "Terminator": [
       "terminator"
@@ -5947,6 +5950,6 @@
   "upstream_inventory": "tests/matlab/fixtures/optuna49_public_api.json",
   "upstream_inventory_sha256": "A69642BD83B136B5A52D351A84E3D910971A7514F1AF48282EE6B3CA609D11FF",
   "upstream_oracle": "tests/matlab/fixtures/optuna49_oracle.json",
-  "upstream_oracle_sha256": "047466B688C3A0FF0A55318D6B891425A1CD023CF1C6414E5082F7C2C653C912",
+  "upstream_oracle_sha256": "212737E09EA0CBD5FD3617033AB20DF174680ED7ACDA30755F3B04F022C1774D",
   "upstream_version": "4.9.0"
 }

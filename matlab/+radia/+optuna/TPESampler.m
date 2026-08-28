@@ -55,6 +55,7 @@ classdef TPESampler < radia.optuna.BaseSampler
         function obj = TPESampler(options)
             arguments
                 options.Seed double = double.empty(1,0)
+                options.ConsiderPrior = []
                 options.NStartupTrials (1,1) double = 10
                 options.Gamma (1,1) double = 0.1
                 options.MaxGoodTrials (1,1) double = 25
@@ -70,6 +71,11 @@ classdef TPESampler < radia.optuna.BaseSampler
                 options.ConstantLiar (1,1) logical = false
                 options.ConstraintsFcn = []
                 options.CategoricalDistanceFcn = []
+            end
+            if ~isempty(options.ConsiderPrior)
+                warning("radia:optuna:FutureWarning", ...
+                    "consider_prior has been deprecated in Optuna 4.3.0, " + ...
+                    "always resolves to true, and will be removed in 6.0.0.");
             end
             if options.NStartupTrials < 0 || ...
                     options.NStartupTrials ~= floor(options.NStartupTrials)

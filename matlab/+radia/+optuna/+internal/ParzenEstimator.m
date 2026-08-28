@@ -342,13 +342,13 @@ classdef ParzenEstimator
                 error("radia:optuna:ParzenCategory", ...
                     "Categorical samples must index the available choices.");
             end
-            if radia.optuna.internal.NativeKernels.has( ...
-                    "optuna.parzen.log_pdf_categorical")
-                value = radia.optuna.internal.NativeKernels.call( ...
-                    "optuna.parzen.log_pdf_categorical", samples, ...
-                    estimator.weights, estimator.probabilities);
-                return
-            end
+            % Keep the categorical acquisition calculation in the same
+            % vectorized log-sum-exp form as upstream NumPy. The MSVC
+            % scalar log/exp implementation used by the standalone MEX
+            % can differ by a few ULPs. That is immaterial as a density,
+            % but it can turn an exact upstream acquisition tie into a
+            % different first-candidate choice and change the seeded TPE
+            % proposal sequence. Numerical Parzen work remains native.
             componentLogPdf = ...
                 radia.optuna.internal.ParzenEstimator. ...
                 componentLogPdfCategorical(estimator, samples);

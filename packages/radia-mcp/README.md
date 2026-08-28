@@ -172,7 +172,7 @@ The ownership rule is strict: the official `optuna/optuna-mcp` live
 operation it exposes. `mcp-server-radia-matlab` supports only the MATLAB
 differences through `matlab_optuna_mcp_route`: table/MAT persistence, Simulink
 monitoring and failure telemetry, MATLAB parallel execution, the required
-20-command `optuna_mex`, and Radia CAE artifact adapters. Seeded numerical
+21-command `optuna_mex`, and Radia CAE artifact adapters. Seeded numerical
 oracle checks execute pinned `optuna==4.9.0` directly because the verified
 upstream MCP sampler tool does not expose a seed.
 

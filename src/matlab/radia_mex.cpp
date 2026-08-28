@@ -1454,6 +1454,7 @@ mxArray* Commands() {
         "optuna.tpe.history.reset",
         "optuna.tpe.history.append_complete",
         "optuna.tpe.best_grouped_history",
+        "optuna.sobol.points",
         "optuna.random_state.create",
         "optuna.random_state.rand",
         "optuna.random_state.randn",
@@ -3066,10 +3067,72 @@ void ApiInfo(int nlhs, mxArray* plhs[], int nrhs) {
     plhs[0] = mxCreateStructMatrix(1, 1, 4, fields);
     mxSetField(plhs[0], 0, "api_version", mxCreateDoubleScalar(1.0));
     mxSetField(plhs[0], 0, "backend", mxCreateString("optuna_mex"));
-    mxSetField(plhs[0], 0, "command_count", mxCreateDoubleScalar(20.0));
+    mxSetField(plhs[0], 0, "command_count", mxCreateDoubleScalar(21.0));
     std::lock_guard<std::mutex> guard(registry_mutex);
     mxSetField(plhs[0], 0, "handle_count", mxCreateDoubleScalar(
         static_cast<double>(optuna_random_state_registry.size())));
+}
+
+void OptunaSobolPoints(int nlhs, mxArray* plhs[], int nrhs,
+                       const mxArray* prhs[]) {
+    CheckArity(nrhs, 3, nlhs, 1,
+               "points = optuna_mex('optuna.sobol.points', directions, sample_ids)");
+    const mxArray* direction_value = prhs[1];
+    const mxArray* sample_value = prhs[2];
+    if (!mxIsUint32(direction_value) || mxIsComplex(direction_value) ||
+        mxGetNumberOfDimensions(direction_value) != 2 ||
+        mxGetN(direction_value) != 32)
+        BadArgument("directions must be a dimension-by-32 uint32 matrix");
+    if (!mxIsUint32(sample_value) || mxIsComplex(sample_value))
+        BadArgument("sample_ids must be a uint32 array");
+    const std::size_t dimension = mxGetM(direction_value);
+    const std::size_t count = mxGetNumberOfElements(sample_value);
+    if (dimension == 0 || dimension > 21201)
+        BadArgument("Sobol dimension must be between 1 and 21201");
+    const auto* directions = static_cast<const std::uint32_t*>(
+        mxGetData(direction_value));
+    const auto* sample_ids = static_cast<const std::uint32_t*>(
+        mxGetData(sample_value));
+    plhs[0] = mxCreateDoubleMatrix(count, dimension, mxREAL);
+    double* points = mxGetDoubles(plhs[0]);
+    constexpr double scale = 1.0 / 4294967296.0;
+    for (std::size_t dim = 0; dim < dimension; ++dim) {
+        std::uint32_t previous_sample = 0;
+        std::uint32_t previous_integer = 0;
+        for (std::size_t row = 0; row < count; ++row) {
+            const std::uint32_t sample = sample_ids[row];
+            std::uint32_t integer;
+            if (row != 0 &&
+                previous_sample != std::numeric_limits<std::uint32_t>::max() &&
+                sample == previous_sample + 1U) {
+                // Consecutive Sobol points differ by one Gray-code bit.
+                // QMC batches are contiguous, so update in O(1) instead of
+                // recomputing every active bit for every point.
+                unsigned bit = 0;
+                std::uint32_t value = sample;
+                while ((value & 1U) == 0U) {
+                    value >>= 1U;
+                    ++bit;
+                }
+                integer = previous_integer ^ directions[dim +
+                    static_cast<std::size_t>(bit) * dimension];
+            } else {
+                std::uint32_t gray = sample ^ (sample >> 1U);
+                integer = 0;
+                unsigned bit = 0;
+                while (gray != 0) {
+                    if ((gray & 1U) != 0)
+                        integer ^= directions[dim +
+                            static_cast<std::size_t>(bit) * dimension];
+                    gray >>= 1U;
+                    ++bit;
+                }
+            }
+            points[row + dim * count] = static_cast<double>(integer) * scale;
+            previous_sample = sample;
+            previous_integer = integer;
+        }
+    }
 }
 
 void Dispatch(const std::string& command, int nlhs, mxArray* plhs[], int nrhs,
@@ -3122,6 +3185,10 @@ void Dispatch(const std::string& command, int nlhs, mxArray* plhs[], int nrhs,
     }
     if (command == "optuna.tpe.best_grouped_history") {
         OptunaTPEBestGroupedHistory(nlhs, plhs, nrhs, prhs);
+        return;
+    }
+    if (command == "optuna.sobol.points") {
+        OptunaSobolPoints(nlhs, plhs, nrhs, prhs);
         return;
     }
     if (command.rfind("optuna.random_state.", 0) == 0) {

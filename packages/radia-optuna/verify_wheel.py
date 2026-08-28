@@ -25,6 +25,7 @@ FORBIDDEN_NAME_PARTS = (
     "libmkl",
     "radia_pybind",
 )
+TEXT_PAYLOAD_SUFFIXES = {".json", ".m", ".md", ".py"}
 
 
 def _fail(messages: list[str]) -> None:
@@ -40,6 +41,40 @@ def _metadata(archive: zipfile.ZipFile, names: set[str]):
     return BytesParser().parsebytes(archive.read(candidates[0]))
 
 
+def _payload_matches(
+    member: str,
+    wheel_payload: bytes,
+    source_payload: bytes,
+    *,
+    release_candidate: bool,
+) -> bool:
+    """Compare canonical sources without confusing checkout/build variance."""
+    if not release_candidate:
+        return wheel_payload == source_payload
+    if member.endswith(".mexw64"):
+        # The exact main-CI wheel has already passed strict same-workspace
+        # fidelity. A separately rebuilt MEX is not byte reproducible.
+        return True
+    if PurePosixPath(member).suffix.lower() in TEXT_PAYLOAD_SUFFIXES:
+        return wheel_payload.replace(b"\r\n", b"\n") == source_payload.replace(
+            b"\r\n", b"\n"
+        )
+    return wheel_payload == source_payload
+
+
+def _is_windows_x64_pe(payload: bytes) -> bool:
+    if len(payload) < 1024 or payload[:2] != b"MZ" or len(payload) < 64:
+        return False
+    pe_offset = int.from_bytes(payload[60:64], "little")
+    if pe_offset < 64 or pe_offset + 6 > len(payload):
+        return False
+    return (
+        payload[pe_offset : pe_offset + 4] == b"PE\0\0"
+        and int.from_bytes(payload[pe_offset + 4 : pe_offset + 6], "little")
+        == 0x8664
+    )
+
+
 def _source_payloads(source_manifest: dict[str, object]) -> dict[str, Path]:
     matlab_root = REPO_ROOT / "matlab"
     payloads = {
@@ -47,7 +82,9 @@ def _source_payloads(source_manifest: dict[str, object]) -> dict[str, Path]:
         for path in (PACKAGE_ROOT / "src" / "radia_optuna").iterdir()
         if path.is_file() and path.suffix in {".py", ".json"}
     }
-    for source in (matlab_root / "+radia" / "+optuna").rglob("*.m"):
+    for source in (matlab_root / "+radia" / "+optuna").rglob("*"):
+        if not source.is_file() or source.suffix not in {".m", ".bin"}:
+            continue
         member = MATLAB_PREFIX / PurePosixPath(source.relative_to(matlab_root).as_posix())
         payloads[str(member)] = source
     for name in ("optuna_upstream_compatibility.json", "optuna49_api_coverage.json"):
@@ -66,7 +103,7 @@ def _source_payloads(source_manifest: dict[str, object]) -> dict[str, Path]:
     return payloads
 
 
-def verify(wheel: Path) -> dict[str, object]:
+def verify(wheel: Path, *, release_candidate: bool = False) -> dict[str, object]:
     errors: list[str] = []
     if not re.fullmatch(r"radia_optuna-[^-]+-py3-none-win_amd64\.whl", wheel.name):
         errors.append(f"wheel must be tagged py3-none-win_amd64: {wheel.name}")
@@ -146,6 +183,11 @@ def verify(wheel: Path) -> dict[str, object]:
             str(MATLAB_PREFIX / "README.md"),
             str(MATLAB_PREFIX / "LICENSE"),
             str(MATLAB_PREFIX / "THIRD_PARTY_NOTICES.md"),
+            str(
+                OPTUNA_PREFIX
+                / "+internal"
+                / "sobol_direction_numbers.bin"
+            ),
             str(PACKAGE_PREFIX / "manifest.json"),
         }
         missing = sorted(expected_fixed - names)
@@ -155,7 +197,13 @@ def verify(wheel: Path) -> dict[str, object]:
         stale_payloads = sorted(
             member
             for member, source in source_payloads.items()
-            if member in names and archive.read(member) != source.read_bytes()
+            if member in names
+            and not _payload_matches(
+                member,
+                archive.read(member),
+                source.read_bytes(),
+                release_candidate=release_candidate,
+            )
         )
         missing_source_payloads = sorted(set(source_payloads).difference(names))
         if missing_source_payloads:
@@ -176,6 +224,8 @@ def verify(wheel: Path) -> dict[str, object]:
             required_notices = (
                 "Copyright (c) 2018 Preferred Networks, Inc.",
                 "Copyright (c) 2025 Preferred Networks, Inc.",
+                "Copyright (c) 2001-2002 Enthought, Inc. 2003, SciPy Developers.",
+                "Joe--Kuo criterion-6 Sobol direction-number table",
                 (
                     "Optuna, the Optuna logo and any related marks are trademarks "
                     "of Preferred Networks, Inc."
@@ -205,6 +255,8 @@ def verify(wheel: Path) -> dict[str, object]:
         mex_files = sorted(name for name in names if name.endswith(".mexw64"))
         if mex_files != [str(MATLAB_PREFIX / "optuna_mex.mexw64")]:
             errors.append(f"unexpected MEX inventory: {mex_files}")
+        elif not _is_windows_x64_pe(archive.read(mex_files[0])):
+            errors.append("optuna_mex is not a valid Windows x64 PE binary")
 
         forbidden = sorted(
             name
@@ -223,6 +275,8 @@ def verify(wheel: Path) -> dict[str, object]:
             errors.append("standalone manifest must set radia_runtime_required=false")
         if wheel_manifest.get("simulink_standalone") is not True:
             errors.append("standalone manifest must set simulink_standalone=true")
+        if wheel_manifest.get("native_sobol_max_dimension") != 21201:
+            errors.append("standalone manifest must declare native Sobol dimension 21201")
 
         simulink_entries = {
             str(MATLAB_PREFIX / PurePosixPath(relative))
@@ -280,6 +334,14 @@ def verify(wheel: Path) -> dict[str, object]:
         "simulink_entry_count": len(simulink_entries),
         "radia_integration_adapter_count": len(adapters),
         "source_fidelity_verified": True,
+        "source_fidelity_mode": (
+            "release-candidate" if release_candidate else "same-workspace-strict"
+        ),
+        "native_gateway_verification": (
+            "exact-main-ci+pe-x64"
+            if release_candidate
+            else "same-workspace-byte-exact+pe-x64"
+        ),
         "source_fidelity_file_count": len(source_payloads),
     }
     return result
@@ -289,8 +351,16 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("wheel", type=Path)
     parser.add_argument("--json", action="store_true", dest="as_json")
+    parser.add_argument(
+        "--release-candidate",
+        action="store_true",
+        help=(
+            "verify an exact successful main-CI artifact across checkouts: "
+            "normalize text line endings and validate the MEX as PE/x64"
+        ),
+    )
     args = parser.parse_args()
-    result = verify(args.wheel)
+    result = verify(args.wheel, release_candidate=args.release_candidate)
     if args.as_json:
         print(json.dumps(result, indent=2))
     else:
