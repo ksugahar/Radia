@@ -105,6 +105,7 @@ def paper_writing_usage() -> str:
     - paper_writing_analyze_sentences / count_weak_expressions
     - paper_writing_validate_abstract_length
     - paper_writing_check_citation_usage / check_abstract_background_ratio
+    - paper_writing_check_misleading_ratio_claims
     - paper_writing_check_paragraph_length / check_paragraph_opener
     - paper_writing_check_conclusion_first_use
     - paper_writing_check_passive_voice_ratio / check_tense_consistency
@@ -5734,4 +5735,136 @@ def paper_writing_check_typography_hacks(tex_path: str) -> dict:
             "IEEJ style requirement; Sugahara 2026-05-21 feedback "
             "'fontを小さくするはだめ'."
         ),
+    }
+
+
+def paper_writing_check_misleading_ratio_claims(
+        text: str,
+        large_ratio_threshold: float = 100.0) -> dict:
+    """比率だけの効果主張、条件混在、比率の詰め込みを警告する。
+
+    比率そのものは違反ではない。同一条件の元の2値を併記した
+    ``10.922% -> 0.468% (about 23-fold)`` のような書き方は通す。
+    一方、比率だけでは絶対的な規模を復元できず、異なる条件で生じた
+    最大値同士の比は一つの改善倍率として解釈できない。この関数は
+    それらを人手レビュー候補として返す警告型 lint である。
+    """
+    if large_ratio_threshold <= 1:
+        return {"error": "large_ratio_threshold must be greater than 1"}
+
+    ratio_patterns = (
+        ("inverse", re.compile(r"(?<![\d.])1\s*/\s*(\d+(?:\.\d+)?)")),
+        ("inverse", re.compile(r"(\d+(?:\.\d+)?)\s*分の\s*1")),
+        ("factor", re.compile(
+            r"(?<![\d.])(\d+(?:\.\d+)?)\s*(?:倍|[-‐‑–— ]?fold\b)",
+            re.IGNORECASE)),
+        ("factor", re.compile(
+            r"\bfactor\s+of\s+(\d+(?:\.\d+)?)\b",
+            re.IGNORECASE)),
+    )
+    comparison_context = re.compile(
+        r"改善|低減|減少|増加|向上|誤差|偏差|変動|精度|最大|効果|"
+        r"improv|reduc|decreas|increas|error|deviation|drift|accuracy|"
+        r"maximum|worst|effect",
+        re.IGNORECASE,
+    )
+    absolute_value = re.compile(
+        r"(?<![\d/])\d+(?:\.\d+)?(?:[eE][+-]?\d+)?\s*"
+        r"(?:\\?%|percent\b|パーセント|m?s\b|GiB\b|MiB\b|[MG]B\b|"
+        r"[AVTWHK]\b|Hz\b)",
+        re.IGNORECASE,
+    )
+    condition_pattern = re.compile(
+        r"(?<![A-Za-z])(?P<name>n|s|p|q|k|\\?mu_r|μ_r|μr)\s*"
+        r"(?:=|イコール)\s*"
+        r"(?P<values>[+-]?\d+(?:\.\d+)?(?:\s*[,，、]\s*"
+        r"[+-]?\d+(?:\.\d+)?)*)",
+        re.IGNORECASE,
+    )
+
+    sentences = [
+        sentence.strip()
+        for sentence in re.split(
+            r"(?<=[。！？!?])\s*|(?<=[.!?])\s+(?=[A-Z0-9])|[\r\n]+",
+            text,
+        )
+        if sentence.strip()
+    ]
+    findings = []
+    ratio_expression_count = 0
+    ratio_sentence_count = 0
+
+    for index, sentence in enumerate(sentences, start=1):
+        ratios = []
+        redacted = sentence
+        for form, pattern in ratio_patterns:
+            for match in pattern.finditer(sentence):
+                factor = float(match.group(1))
+                ratios.append({
+                    "text": match.group(0),
+                    "factor": factor,
+                    "form": form,
+                })
+            redacted = pattern.sub(" ", redacted)
+
+        if not ratios or not comparison_context.search(sentence):
+            continue
+
+        ratio_sentence_count += 1
+        ratio_expression_count += len(ratios)
+        absolute_count = len(absolute_value.findall(redacted))
+
+        conditions: dict[str, set[str]] = {}
+        for match in condition_pattern.finditer(sentence):
+            name = match.group("name").lower().lstrip("\\")
+            values = re.findall(r"[+-]?\d+(?:\.\d+)?", match.group("values"))
+            conditions.setdefault(name, set()).update(values)
+
+        mixed_conditions = {
+            name: sorted(values)
+            for name, values in conditions.items()
+            if len(values) > 1
+        }
+        reasons = []
+        if absolute_count < 2:
+            reasons.append("ratio_without_two_source_values")
+        if mixed_conditions:
+            reasons.append("mixed_conditions")
+        if len(ratios) > 1:
+            reasons.append("stacked_ratio_claims")
+        if (absolute_count < 2
+                and max(item["factor"] for item in ratios)
+                >= large_ratio_threshold):
+            reasons.append("large_ratio_without_absolute_scale")
+
+        if reasons:
+            findings.append({
+                "sentence_index": index,
+                "sentence": sentence,
+                "ratios": ratios,
+                "absolute_value_count": absolute_count,
+                "mixed_conditions": mixed_conditions,
+                "reasons": reasons,
+                "suggestion": (
+                    "元の2値、単位、共通条件を先に示し、比率は補助的な効果量にする。"
+                    "条件の異なる最大値同士は比率化しない。"
+                ),
+            })
+
+    return {
+        "passed": not findings,
+        "finding_count": len(findings),
+        "findings": findings,
+        "ratio_sentence_count": ratio_sentence_count,
+        "ratio_expression_count": ratio_expression_count,
+        "large_ratio_threshold": large_ratio_threshold,
+        "rule": (
+            "比率は禁止しない。元の2値と同一条件を併記し、異なる条件の値を"
+            "一つの改善倍率にまとめず、比率を主表示として詰め込まない。"
+        ),
+        "hint": (
+            "比率は効果を直感的に示す一方、絶対値・基準量・単位・条件を失う"
+            "情報圧縮でもある。本結果がどの程度の規模かを復元できる記述を残す。"
+        ),
+        "diagnostic_only": True,
     }

@@ -817,6 +817,7 @@ def lab_savefig(
     embed_width_cm: float | None = None,
     min_visible_font_pt: float | None = None,
     allow_unreadable: bool = False,
+    max_visible_font_pt: float | None = None,
     **kwargs,
 ) -> None:
     """Save a figure after checking text at its final displayed width.
@@ -834,6 +835,9 @@ def lab_savefig(
         embed_width_cm: actual width in the paper or PowerPoint slide.  When
             omitted, the authored figure width is used (100% embedding).
         min_visible_font_pt: explicit final-size floor; normally omit it.
+        max_visible_font_pt: optional final-size ceiling.  For ordinary paper
+            figures, 10.5 pt is a useful upper tolerance around the 10 pt
+            target; omit for slides or deliberately emphasized diagram text.
         **kwargs: Forwarded to fig.savefig.
 
     Example:
@@ -864,12 +868,13 @@ def lab_savefig(
     violations = check_min_font(
         fig,
         min_pt=floor,
+        max_pt=max_visible_font_pt,
         embed_width_cm=display_width,
     )
     if violations:
         lines = [
             f"  {v['kind']} {v['text']!r}: {v['visible_pt']:.1f} pt "
-            f"after {v['embed_scale']:.3f}x scaling"
+            f"after {v['embed_scale']:.3f}x scaling ({v['reason']})"
             for v in violations
         ]
         raise ValueError(
@@ -900,10 +905,11 @@ def check_min_font(
     min_pt: float = PAPER_MIN_VISIBLE_FONT_PT,
     embed_scale: float | None = None,
     *,
+    max_pt: float | None = None,
     embed_width_cm: float | None = None,
     authored_width_cm: float | None = None,
 ) -> list[dict]:
-    """Return visible text objects whose on-page font is below ``min_pt``.
+    """Return visible text outside the requested on-page font-size band.
 
     ``apply_lab_style`` authors figures at a known render size, but some
     manuscripts intentionally embed the saved figure at a smaller width.
@@ -913,6 +919,9 @@ def check_min_font(
     Args:
         fig: matplotlib Figure to audit.
         min_pt: Minimum allowed on-page point size.
+        max_pt: Optional maximum on-page point size.  Use this to keep an
+            ordinary paper figure near its 10 pt body-text target rather than
+            merely enforcing a minimum.
         embed_scale: ``final display width / authored figure width``.
             Mutually exclusive with ``embed_width_cm``.
         embed_width_cm: actual width in the paper or PowerPoint slide.  The
@@ -943,6 +952,8 @@ def check_min_font(
         scale = 1.0 if embed_scale is None else float(embed_scale)
     if scale <= 0:
         raise ValueError("embed_scale must be positive.")
+    if max_pt is not None and float(max_pt) < float(min_pt):
+        raise ValueError("max_pt must be greater than or equal to min_pt.")
 
     fig.canvas.draw()
     bad: list[dict] = []
@@ -954,7 +965,9 @@ def check_min_font(
             continue
         render_pt = float(txt.get_fontsize())
         visible_pt = render_pt * scale
-        if visible_pt + 1e-9 < float(min_pt):
+        below = visible_pt + 1e-9 < float(min_pt)
+        above = max_pt is not None and visible_pt - 1e-9 > float(max_pt)
+        if below or above:
             bad.append({
                 "kind": txt.__class__.__name__,
                 "text": str(s),
@@ -963,6 +976,7 @@ def check_min_font(
                 "authored_width_cm": round(source_width_cm, 3),
                 "embed_width_cm": round(source_width_cm * scale, 3),
                 "embed_scale": round(scale, 6),
+                "reason": "below minimum" if below else "above maximum",
             })
     return bad
 

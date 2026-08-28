@@ -8,8 +8,9 @@ the width it was authored for, so the 24 pt authored labels land at 24*scale pt 
 the 20 pt slide floor (``PRESENTATION_MIN_VISIBLE_FONT_PT``) is breached silently.
 
 This module reconstructs the authored width from the embedded image itself
-(pixels / DPI, minus any PowerPoint crop) and compares it against the width the
-shape actually occupies on the slide.  It needs no manifest and no OCR: it is the
+(pixels / DPI for raster images, SVG width / viewBox for vector images, minus
+any PowerPoint crop) and compares it against the width the shape actually
+occupies on the slide.  It needs no manifest and no OCR: it is the
 automatic, file-only complement to
 ``presentation_check_embedded_figure_text_size`` (which converts *known* source
 font sizes through the paste width).
@@ -24,6 +25,8 @@ from __future__ import annotations
 
 import hashlib
 import os
+
+from radia_mcp.common.pptx_svg import picture_svg_blob, svg_geometry
 
 # A figure authored for a slide carries 24 pt text (lab_figure(medium=
 # 'presentation')); the displayed floor is 20 pt.  Scaling below this ratio puts
@@ -45,17 +48,71 @@ def _pptx():
     return _p
 
 
+def _svg_asset(shape) -> dict | None:
+    blob = picture_svg_blob(shape)
+    if blob is None:
+        return None
+    geometry = svg_geometry(blob)
+    if geometry["width_pt"] <= 0 or geometry["height_pt"] <= 0:
+        # A viewBox-only SVG has an aspect but no authored physical width, and
+        # this audit's whole verdict is authored-vs-pasted width.
+        raise ValueError("SVG authored width/height is unavailable")
+    view_width = geometry["view_width"]
+    view_height = geometry["view_height"]
+    return {
+        "blob": blob,
+        "source_type": "svg",
+        "width_pt": geometry["width_pt"],
+        "height_pt": geometry["height_pt"],
+        "aspect_width": view_width if view_width > 0 else geometry["width_pt"],
+        "aspect_height": (
+            view_height if view_height > 0 else geometry["height_pt"]
+        ),
+        "pixels": None,
+        "dpi": None,
+    }
+
+
+def _picture_asset(shape) -> dict:
+    """Resolve a picture's authored asset, preferring its vector original.
+
+    A broken or dimensionless SVG must not remove the picture from the audit:
+    PowerPoint stores a raster fallback beside every ``svgBlip``, so the audit
+    continues against that fallback and reports the SVG failure instead of
+    silently dropping the figure (the same contract as ``NO DPI METADATA``).
+    """
+    svg_error = ""
+    try:
+        svg = _svg_asset(shape)
+    except Exception as exc:
+        svg = None
+        svg_error = f"{type(exc).__name__}: {exc}"
+    if svg is not None:
+        return svg
+    image = shape.image
+    px_w, px_h = image.size
+    dpi_w, dpi_h = image.dpi
+    return {
+        "blob": bytes(image.blob),
+        "source_type": image.ext,
+        "width_pt": px_w / float(dpi_w) * 72.0,
+        "height_pt": px_h / float(dpi_h) * 72.0,
+        "aspect_width": float(px_w),
+        "aspect_height": float(px_h),
+        "pixels": (px_w, px_h),
+        "dpi": (dpi_w, dpi_h),
+        "svg_error": svg_error,
+    }
+
+
 def _iter_pictures(shapes, slide_no, out, prefix=""):
     """Collect picture shapes, descending into groups.
 
-    Each entry is ``(slide, name, shape, image, svg_blob)``.  A picture is
-    measurable through exactly one of the last two: ``image`` for a raster,
-    ``svg_blob`` for a vector.  A picture with neither is still collected --
-    with both None -- because dropping it is how a vectorised deck came to
-    report "0 pictures, 0 flagged" while carrying eight figures.
+    Each entry is ``(slide, name, shape, asset)``. An unreadable embedded,
+    linked, or OLE picture is still collected because silently dropping it can
+    make a deck report zero findings while carrying unchecked figures.
     """
     from pptx.enum.shapes import MSO_SHAPE_TYPE
-    from ._svg_pptx import svg_blob
     for shape in shapes:
         if shape.shape_type == MSO_SHAPE_TYPE.GROUP:
             _iter_pictures(shape.shapes, slide_no, out,
@@ -63,12 +120,13 @@ def _iter_pictures(shapes, slide_no, out, prefix=""):
             continue
         if getattr(shape, "shape_type", None) != MSO_SHAPE_TYPE.PICTURE:
             continue
-        vector = svg_blob(shape)
         try:
-            image = shape.image
-        except Exception:
-            image = None                              # SVG-only / linked / OLE
-        out.append((slide_no, prefix + shape.name, shape, image, vector))
+            asset = _picture_asset(shape)
+        except Exception as exc:
+            # Linked / OLE picture, or an SVG with no usable raster fallback.
+            # Report it as unreadable; never drop a figure from the audit.
+            asset = {"unreadable": f"{type(exc).__name__}: {exc}"}
+        out.append((slide_no, prefix + shape.name, shape, asset))
     return out
 
 
@@ -87,11 +145,12 @@ def audit_pptx_figures(pptx_path: str,
       * ``DOWNSCALED`` -- pasted narrower than authored: figure text is displayed
         at ``authored_pt * scale``; below ``scale=0.833`` a 24 pt label breaches
         the 20 pt slide floor.
-      * ``UPSCALED`` -- pasted wider than authored (soft / pixelated artwork).
+      * ``UPSCALED`` -- a raster image pasted wider than authored
+        (soft / pixelated artwork). SVG enlargement is not a quality defect.
       * ``ASPECT DISTORTED`` -- displayed aspect differs from the image aspect,
         i.e. the picture was stretched (fonts distorted, circles become ovals).
-      * ``LOW EFFECTIVE DPI`` -- pixels per displayed inch below
-        ``min_effective_dpi``.
+      * ``LOW EFFECTIVE DPI`` -- raster pixels per displayed inch below
+        ``min_effective_dpi``. SVG has no DPI floor.
       * ``NO DPI METADATA`` -- the image carries no resolution, so the authored
         width is UNVERIFIABLE (python-pptx then reports the 72 dpi default).
         Reported, never silently passed.
@@ -119,53 +178,83 @@ def audit_pptx_figures(pptx_path: str,
         _iter_pictures(slide.shapes, i, found)
 
     rows = []
-    for slide_no, name, shape, image, vector in found:
-        if vector is not None:
-            # A picture that carries both is DISPLAYED from the SVG; the raster
-            # is only the fallback for a viewer that cannot read one, so the
-            # vector is what the audience sees and what must be measured.
-            from ._svg_pptx import svg_picture_row
-            rows.append(svg_picture_row(
-                slide_no, name, shape, vector, slide_area_pt,
-                scale_tol, aspect_tol, min_area_fraction,
-                _SLIDE_MIN_VISIBLE_FONT_PT))
-            continue
-        if image is None:
+    for slide_no, name, shape, asset in found:
+        if "unreadable" in asset:
             disp_pt_w = float(Emu(shape.width).pt)
             disp_pt_h = float(Emu(shape.height).pt)
             rows.append({
-                "slide": slide_no, "shape": name, "kind": "unmeasurable",
+                "slide": slide_no,
+                "shape": name,
+                "kind": "unmeasurable",
+                "source_type": None,
+                "pixels": None,
+                "dpi": None,
+                "authored_cm": float("nan"),
+                "authored_cm_height": float("nan"),
                 "displayed_cm": round(float(Emu(shape.width).cm), 2),
                 "displayed_pt": round(disp_pt_w, 1),
                 "displayed_cm_height": round(float(Emu(shape.height).cm), 2),
+                "scale": float("nan"),
+                "displayed_figure_font_pt": float("nan"),
+                "effective_dpi": None,
+                "aspect_error": 0.0,
                 "area_fraction": round(
-                    disp_pt_w * disp_pt_h / slide_area_pt, 4) if slide_area_pt else 0.0,
+                    disp_pt_w * disp_pt_h / slide_area_pt, 4
+                ) if slide_area_pt else 0.0,
+                "cropped": False,
+                "sha1": None,
                 "minor": False,
-                "risks": ["NOT MEASURABLE -- the picture has neither an embedded "
-                          "raster nor an SVG (linked or OLE artwork), so its "
-                          "paste scale cannot be checked from the file."],
+                "risks": [
+                    "UNREADABLE PICTURE -- authored width UNVERIFIABLE "
+                    f"({asset['unreadable']}); the image is linked/OLE or has "
+                    "no embeddable asset. Re-insert it as an embedded file."
+                ],
             })
             continue
-        px_w, px_h = image.size
-        dpi_w, dpi_h = image.dpi
+        if asset["source_type"] == "svg":
+            # Measure the actual vector text instead of estimating every SVG
+            # from the generic 24 pt authoring profile.
+            from ._svg_pptx import svg_picture_row
+            rows.append(svg_picture_row(
+                slide_no, name, shape, asset["blob"], slide_area_pt,
+                scale_tol, aspect_tol, min_area_fraction,
+                _SLIDE_MIN_VISIBLE_FONT_PT))
+            continue
+        source_type = asset["source_type"]
+        pixels = asset["pixels"]
+        dpi = asset["dpi"]
+        px_w, px_h = pixels if pixels is not None else (None, None)
+        dpi_w, dpi_h = dpi if dpi is not None else (None, None)
         # python-pptx substitutes 72 dpi when the file carries no resolution.
-        no_dpi = (int(dpi_w), int(dpi_h)) == (72, 72)
+        no_dpi = (
+            source_type != "svg"
+            and (int(dpi_w), int(dpi_h)) == (72, 72)
+        )
 
         crop_x = float(shape.crop_left or 0.0) + float(shape.crop_right or 0.0)
         crop_y = float(shape.crop_top or 0.0) + float(shape.crop_bottom or 0.0)
-        used_px_w = px_w * max(0.0, 1.0 - crop_x)
-        used_px_h = px_h * max(0.0, 1.0 - crop_y)
-
-        authored_cm_w = used_px_w / float(dpi_w) * 2.54
-        authored_cm_h = used_px_h / float(dpi_h) * 2.54
+        visible_x = max(0.0, 1.0 - crop_x)
+        visible_y = max(0.0, 1.0 - crop_y)
+        authored_pt_w = asset["width_pt"] * visible_x
+        authored_pt_h = asset["height_pt"] * visible_y
+        authored_cm_w = authored_pt_w / 72.0 * 2.54
+        authored_cm_h = authored_pt_h / 72.0 * 2.54
         disp_pt_w = float(Emu(shape.width).pt)
         disp_pt_h = float(Emu(shape.height).pt)
         disp_cm_w = float(Emu(shape.width).cm)
         disp_cm_h = float(Emu(shape.height).cm)
 
         scale = disp_cm_w / authored_cm_w if authored_cm_w > 0 else float("nan")
-        eff_dpi = used_px_w / (disp_pt_w / 72.0) if disp_pt_w > 0 else 0.0
-        native_aspect = (used_px_h / used_px_w) if used_px_w else 0.0
+        used_px_w = px_w * visible_x if px_w is not None else None
+        eff_dpi = (
+            used_px_w / (disp_pt_w / 72.0)
+            if used_px_w is not None and disp_pt_w > 0 else None
+        )
+        native_aspect = (
+            asset["aspect_height"] * visible_y
+            / (asset["aspect_width"] * visible_x)
+            if asset["aspect_width"] * visible_x else 0.0
+        )
         disp_aspect = (disp_pt_h / disp_pt_w) if disp_pt_w else 0.0
         aspect_err = (disp_aspect / native_aspect - 1.0) if native_aspect else 0.0
         area_fraction = (disp_pt_w * disp_pt_h / slide_area_pt) if slide_area_pt else 0.0
@@ -173,7 +262,12 @@ def audit_pptx_figures(pptx_path: str,
         risks = []
         minor = area_fraction < min_area_fraction
         declared_raster = name.split("/")[-1].startswith("RASTER_OK::")
-        if not minor and not declared_raster:
+        if asset.get("svg_error"):
+            risks.append(
+                "SVG UNREADABLE -- the vector original could not be measured "
+                f"({asset['svg_error']}); the authored width below comes from "
+                "the raster fallback and may not match the vector artwork.")
+        elif not minor and not declared_raster:
             # The lab rule is that a figure is vector.  It is not a matter of
             # taste: the text inside a raster cannot be measured from the file
             # (that needs OCR), so the 20 pt floor is unenforceable on one --
@@ -189,7 +283,14 @@ def audit_pptx_figures(pptx_path: str,
                 "NO DPI METADATA -- authored width UNVERIFIABLE (python-pptx "
                 "reports the 72 dpi default); save with lab_savefig(dpi=300).")
         if not minor and not no_dpi:
-            if scale < 1.0 - scale_tol:
+            if source_type == "svg" and scale < _MIN_SAFE_SCALE:
+                displayed_pt = _SLIDE_AUTHORED_FONT_PT * scale
+                risks.append(
+                    f"DOWNSCALED to {scale * 100:.1f}% of the authored "
+                    f"{authored_cm_w:.2f} cm -- {_SLIDE_AUTHORED_FONT_PT:.0f} pt "
+                    f"figure text is displayed at {displayed_pt:.1f} pt "
+                    f"(below the {_SLIDE_MIN_VISIBLE_FONT_PT:.0f} pt slide floor).")
+            elif source_type != "svg" and scale < 1.0 - scale_tol:
                 displayed_pt = _SLIDE_AUTHORED_FONT_PT * scale
                 risks.append(
                     f"DOWNSCALED to {scale * 100:.1f}% of the authored "
@@ -197,7 +298,7 @@ def audit_pptx_figures(pptx_path: str,
                     f"figure text is displayed at {displayed_pt:.1f} pt"
                     + (f" (below the {_SLIDE_MIN_VISIBLE_FONT_PT:.0f} pt slide floor)"
                        if scale < _MIN_SAFE_SCALE else "") + ".")
-            elif scale > 1.0 + scale_tol:
+            elif source_type != "svg" and scale > 1.0 + scale_tol:
                 risks.append(
                     f"UPSCALED to {scale * 100:.1f}% of the authored "
                     f"{authored_cm_w:.2f} cm -- the artwork is interpolated; "
@@ -206,7 +307,8 @@ def audit_pptx_figures(pptx_path: str,
             risks.append(
                 f"ASPECT DISTORTED by {aspect_err * 100:+.1f}% -- the picture was "
                 "stretched; hold the aspect or re-author the figure.")
-        if not minor and eff_dpi < min_effective_dpi:
+        if (not minor and eff_dpi is not None
+                and eff_dpi < min_effective_dpi):
             risks.append(
                 f"LOW EFFECTIVE DPI {eff_dpi:.0f} (< {min_effective_dpi:.0f}) -- "
                 f"{int(used_px_w)} px over {disp_pt_w:.0f} pt.")
@@ -216,8 +318,13 @@ def audit_pptx_figures(pptx_path: str,
             "shape": name,
             "kind": "raster",
             "declared_raster": bool(declared_raster),
-            "pixels": [int(px_w), int(px_h)],
-            "dpi": [int(dpi_w), int(dpi_h)],
+            "source_type": source_type,
+            "pixels": (
+                [int(px_w), int(px_h)] if pixels is not None else None
+            ),
+            "dpi": (
+                [int(dpi_w), int(dpi_h)] if dpi is not None else None
+            ),
             "authored_cm": round(authored_cm_w, 2),
             "authored_cm_height": round(authored_cm_h, 2),
             "displayed_cm": round(disp_cm_w, 2),
@@ -225,11 +332,13 @@ def audit_pptx_figures(pptx_path: str,
             "displayed_cm_height": round(disp_cm_h, 2),
             "scale": round(scale, 4),
             "displayed_figure_font_pt": round(_SLIDE_AUTHORED_FONT_PT * scale, 1),
-            "effective_dpi": round(eff_dpi, 1),
+            "effective_dpi": (
+                round(eff_dpi, 1) if eff_dpi is not None else None
+            ),
             "aspect_error": round(aspect_err, 4),
             "area_fraction": round(area_fraction, 4),
             "cropped": bool(crop_x or crop_y),
-            "sha1": hashlib.sha1(image.blob).hexdigest()[:10],
+            "sha1": hashlib.sha1(asset["blob"]).hexdigest()[:10],
             "minor": bool(minor),
             "risks": risks,
         })
