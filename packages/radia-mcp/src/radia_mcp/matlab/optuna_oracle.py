@@ -37,7 +37,8 @@ def _is_matlab_test_name(name: str) -> bool:
 
 
 def _sha256(path: Path) -> str:
-    return hashlib.sha256(path.read_bytes()).hexdigest().upper()
+    content = path.read_bytes().replace(b"\r\n", b"\n").replace(b"\r", b"\n")
+    return hashlib.sha256(content).hexdigest().upper()
 
 
 def _json(path: Path) -> dict[str, Any]:

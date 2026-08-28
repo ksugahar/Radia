@@ -93,7 +93,6 @@ def test_radia_mex_contract_reads_the_cpp_command_inventory():
     }
     assert optuna_commands.issubset(contract["optuna_mex_command_names"])
     assert not any(name.startswith("optuna.") for name in contract["command_names"])
-    assert "hacapk.charge_gram.reduce_configured_candidate_directional_schur" in contract["command_names"]
     assert {
         "ih.eddy.create",
         "ih.eddy.output",

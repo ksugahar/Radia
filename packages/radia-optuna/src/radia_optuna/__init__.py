@@ -9,9 +9,33 @@ __version__ = "0.1.3"
 ORACLE_VERSION = "4.9.0"
 
 
-def matlab_path() -> Path:
-    """Return the installed directory that MATLAB must add to its path."""
+def _staged_matlab_path() -> Path:
     return Path(str(files(__package__).joinpath("matlab")))
+
+
+def _checkout_matlab_path() -> Path | None:
+    candidate = Path(__file__).resolve().parents[4] / "matlab"
+    if (candidate / "+radia" / "+optuna").is_dir():
+        return candidate
+    return None
+
+
+def layout() -> str:
+    """Report whether the MATLAB tree came from a wheel or checkout."""
+    if _staged_matlab_path().is_dir():
+        return "wheel"
+    if _checkout_matlab_path() is not None:
+        return "checkout"
+    return "missing"
+
+
+def matlab_path() -> Path:
+    """Return the staged wheel tree or the editable monorepo MATLAB tree."""
+    staged = _staged_matlab_path()
+    if staged.is_dir():
+        return staged
+    checkout = _checkout_matlab_path()
+    return checkout if checkout is not None else staged
 
 
 def mex_path() -> Path:
@@ -28,6 +52,7 @@ def matlab_addpath_command() -> str:
 __all__ = [
     "ORACLE_VERSION",
     "__version__",
+    "layout",
     "matlab_addpath_command",
     "matlab_path",
     "mex_path",
