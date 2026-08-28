@@ -113,6 +113,8 @@ def test_installed_wheel_runner_emits_quad_success_marker_and_checks_notices():
     ).read_text(encoding="utf-8")
     assert "RADIA_OPTUNA_WHEEL_SIMULINK_OK" in runner
     assert "PythonExecutable" in runner
+    assert "PreverifiedWheelSha256" in runner
+    assert "Get-FileHash" in runner
     assert "upstream_notices_complete" in doctor
     assert "notices_complete" in doctor
 
@@ -123,6 +125,7 @@ def test_local_candidate_decodes_matlab_output_as_utf8(monkeypatch, tmp_path):
     observed = {}
 
     def completed(_command, **kwargs):
+        observed["command"] = _command
         observed.update(kwargs)
         return SimpleNamespace(
             returncode=0,
@@ -139,3 +142,5 @@ def test_local_candidate_decodes_matlab_output_as_utf8(monkeypatch, tmp_path):
     assert "・ MATLAB ready" in output
     assert observed["encoding"] == "utf-8"
     assert observed["errors"] == "replace"
+    assert "-PreverifiedWheelSha256" in observed["command"]
+    assert hashlib.sha256(wheel.read_bytes()).hexdigest() in observed["command"]

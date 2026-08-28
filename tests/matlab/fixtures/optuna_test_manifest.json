@@ -268,6 +268,13 @@
     },
     {
       "classification": "matlab-integration",
+      "file": "test_optuna_storage_bridge.m",
+      "oracle": null,
+      "scope": "explicit MATLAB table/JSON handoff to upstream Optuna storages",
+      "test": "testMatlabHandoffPreservesNamesAttributesAndConstraints"
+    },
+    {
+      "classification": "matlab-integration",
       "file": "test_optuna_table.m",
       "oracle": null,
       "scope": "MATLAB table storage, MAT persistence, and SimulinkRunner integration",
@@ -677,6 +684,13 @@
       "file": "test_optuna_upstream_oracle.m",
       "oracle": "optuna49_oracle.json",
       "scope": "shared Optuna 4.9.0 behavior",
+      "test": "testTPEConstantLiarConcurrentRunningMatchesUpstream"
+    },
+    {
+      "classification": "upstream-python",
+      "file": "test_optuna_upstream_oracle.m",
+      "oracle": "optuna49_oracle.json",
+      "scope": "shared Optuna 4.9.0 behavior",
       "test": "testTPECallableGammaWeightsSeededSequence"
     },
     {
@@ -761,6 +775,41 @@
       "file": "test_optuna_upstream_oracle.m",
       "oracle": "optuna49_oracle.json",
       "scope": "shared Optuna 4.9.0 behavior",
+      "test": "testCmaEsAdvancedContinuousModesMatchUpstream"
+    },
+    {
+      "classification": "upstream-python",
+      "file": "test_optuna_upstream_oracle.m",
+      "oracle": "optuna49_oracle.json",
+      "scope": "shared Optuna 4.9.0 behavior",
+      "test": "testCmaEsWithMarginMatchesUpstream"
+    },
+    {
+      "classification": "upstream-python",
+      "file": "test_optuna_upstream_oracle.m",
+      "oracle": "optuna49_oracle.json",
+      "scope": "shared Optuna 4.9.0 behavior",
+      "test": "testCmaEsSourceTrialsWarmStartMatchesUpstream"
+    },
+    {
+      "classification": "upstream-python",
+      "file": "test_optuna_upstream_oracle.m",
+      "oracle": "optuna49_oracle.json",
+      "scope": "shared Optuna 4.9.0 behavior",
+      "test": "testCmaEsConsiderPrunedTrialsMatchesUpstream"
+    },
+    {
+      "classification": "upstream-python",
+      "file": "test_optuna_upstream_oracle.m",
+      "oracle": "optuna49_oracle.json",
+      "scope": "shared Optuna 4.9.0 behavior",
+      "test": "testCmaEsAdvancedWarningsAndInvalidCombinationsMatchUpstream"
+    },
+    {
+      "classification": "upstream-python",
+      "file": "test_optuna_upstream_oracle.m",
+      "oracle": "optuna49_oracle.json",
+      "scope": "shared Optuna 4.9.0 behavior",
       "test": "testScrambledQMCSeededProposalSequence"
     },
     {
@@ -811,6 +860,13 @@
       "oracle": "optuna49_oracle.json",
       "scope": "shared Optuna 4.9.0 behavior",
       "test": "testUnscrambledQMCSeededSequence"
+    },
+    {
+      "classification": "upstream-python",
+      "file": "test_optuna_upstream_oracle.m",
+      "oracle": "optuna49_oracle.json",
+      "scope": "shared Optuna 4.9.0 behavior",
+      "test": "testNativeSobolAbove32DimensionsMatchesUpstream"
     },
     {
       "classification": "upstream-python",

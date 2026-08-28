@@ -116,6 +116,11 @@ classdef TrialState < uint8
         end
 
         function text=toStorage(value)
+            if isstring(value) && isscalar(value) && ...
+                    any(value==["RUNNING","COMPLETE","PRUNED","FAIL","WAITING"])
+                text=value;
+                return
+            end
             text=string(radia.optuna.TrialState.from(value));
         end
 

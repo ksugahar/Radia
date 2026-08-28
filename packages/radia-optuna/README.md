@@ -2,10 +2,17 @@
 
 `radia-optuna` is an independent, separately distributed MATLAB optimization
 component from the Radia monorepo. It installs the `radia.optuna` MATLAB
-namespace, the 20-command `optuna_mex`, and checked compatibility contracts
+namespace, the 21-command `optuna_mex`, and checked compatibility contracts
 whose behavioral oracle is Optuna 4.9.0. Its checked public inventory contains
 816 verified entries with no missing, partial, or unmapped entry. It does not
 install or load the Radia solver, NGSolve, oneMKL, or Cubit.
+
+Optuna 4.9.0 is also the algorithmic source of truth: native MATLAB and MEX
+paths preserve its equations, transforms, state updates, boundary handling,
+and seeded random-consumption order. MATLAB vectorization, parallel trial
+scheduling, table/MAT persistence, and Simulink telemetry are performance and
+workflow extensions around that common algorithm rather than alternative
+default optimizers.
 
 Install it by itself:
 
@@ -56,6 +63,30 @@ start Python. Install `radia-optuna[upstream]` for features intentionally
 executed through pinned upstream Python packages, including checked GP
 acquisition, scrambled QMC, and parameter importance.
 
+The native sampler surface includes concurrent-RUNNING constant-liar TPE,
+source-trial/separable/margin/learning-rate CMA-ES modes, and deterministic
+unscrambled Sobol generation through 21,201 dimensions. The Sobol path uses a
+checked binary conversion of SciPy 1.17.1's Joe--Kuo criterion-6 direction
+numbers and does not import Python or SciPy at MATLAB runtime.
+
+MAT/table persistence remains a MATLAB extension. An explicit, versioned
+handoff is available when the same completed history must be opened by an
+upstream Optuna storage:
+
+```matlab
+radia.optuna.export_study(study, Path="study.json")
+```
+
+```powershell
+radia-optuna-bridge load study.json --storage sqlite:///study.db
+radia-optuna-bridge dump returned.json --storage sqlite:///study.db --study-name <name>
+```
+
+`radia.optuna.import_study("returned.json")` restores trial states, original
+parameter and attribute names, distributions, intermediate values,
+constraints, metric names, and study attributes. This is an explicit handoff,
+not a per-trial Python fallback.
+
 `LTspiceRunner`, `SheetMetalRunner`, and `internal.runLTspiceTrial` are shipped
 as explicitly classified Radia integration adapters. The standalone core does
 not call them; choosing one requires the full `radia` installation.
@@ -72,8 +103,9 @@ Optuna, the Optuna logo and any related marks are trademarks of Preferred Networ
 Optuna and the official `optuna/optuna-mcp` server are separate MIT-licensed
 upstream projects and are not bundled in this wheel. See
 [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md) for their copyright and
-license notices. Shared MCP Study/Trial/visualization operations remain owned
-by the official server; `radia-mcp` covers only MATLAB/Simulink differences.
+license notices and for the SciPy Sobol direction-data notice. Shared MCP
+Study/Trial/visualization operations remain owned by the official server;
+`radia-mcp` covers only MATLAB/Simulink differences.
 
 ## Release boundary
 
