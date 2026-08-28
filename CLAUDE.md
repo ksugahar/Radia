@@ -34,6 +34,7 @@ S:\Radia\01_GitHub\
         cubit_mesh_curver.pyd  # C++ pybind11 module (bundled)
     radia-mcp/            # pip install radia-mcp (MCP servers + skills)
     radia-optuna/         # pip install radia-optuna (standalone MATLAB Optuna)
+    eqnedit64/            # pip install eqnedit64 (Windows editor + Python API)
   src/radia/axifem.pyd  # CORE METHOD (not a package): axisymmetric FE
                           # (Henrotte basis), ships in the radia wheel.
                           # docs/axifem/ (+ validation_test/), tests/axifem/.
@@ -58,7 +59,7 @@ S:\Radia\01_GitHub\
   install_full.py          # One-command full setup
 ```
 
-**PyPI packages** (4 independent distributions in the same monorepo, each
+**PyPI packages** (5 independent distributions in the same monorepo, each
 versioned + released separately on PyPI):
 
 | Package | Install | Purpose |
@@ -67,6 +68,7 @@ versioned + released separately on PyPI):
 | **cubit-mesh-export** | `pip install cubit-mesh-export` | High-order curved mesh export from Cubit (does NOT require radia) |
 | **radia-mcp** | `pip install radia-mcp` | MCP servers + skills for AI-assisted workflows |
 | **radia-optuna** | `pip install radia-optuna` | Standalone MATLAB Optuna namespace + lightweight `optuna_mex`; no Radia solver/NGSolve/MKL dependency |
+| **eqnedit64** | `pip install eqnedit64` | Windows equation editor, structural Python API, native TeX rendering/clipboard backend, and Web assets |
 
 ### POLICY: Compute Core in `radia`; Optuna Distribution Exception (2026-08-25)
 
@@ -98,10 +100,12 @@ Decision rule for new work:
   signals; `optuna_mex` is required, not an optional missing-MEX fallback.
   `radia-optuna` has its own release version; `radia[optuna]` pins the
   independently released version that passed Radia's integration gate.
-- Four PyPI distributions exist: **`radia`** itself (`pip install radia`, the main
+- Five PyPI distributions exist: **`radia`** itself (`pip install radia`, the main
   wheel -- it bundles every core method + every `radia.<domain>` application) plus
-  the three independent packages above (`cubit-mesh-export`, `radia-mcp`,
-  `radia-optuna`). The `packages/` directory holds ONLY those three extra
+  the four independent packages above (`cubit-mesh-export`, `radia-mcp`,
+  `radia-optuna`, `eqnedit64`). Eqnedit64 is a standalone equation-authoring
+  tool rather than a Radia numerical method. The `packages/` directory holds
+  ONLY those four extra
   distributions; except for the explicit Optuna boundary, no core method and no
   `radia.<domain>` is ever its own PyPI package -- they all ship inside the `radia`
   wheel.

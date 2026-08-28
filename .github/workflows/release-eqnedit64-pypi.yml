@@ -1,0 +1,174 @@
+name: Release Eqnedit64 to PyPI
+
+on:
+  workflow_run:
+    workflows: ["Eqnedit64"]
+    types: [completed]
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  qualify:
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push'
+    runs-on: ubuntu-latest
+    outputs:
+      eligible: ${{ steps.context.outputs.eligible }}
+      sha: ${{ steps.context.outputs.sha }}
+      tag: ${{ steps.context.outputs.tag }}
+    steps:
+      - name: Download exact Eqnedit64 CI ref context
+        uses: actions/download-artifact@v4
+        with:
+          name: eqnedit64-ci-release-context
+          path: eqnedit64-ci-release-context
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Verify triggering CI ran on an Eqnedit64 release tag
+        id: context
+        env:
+          SHA: ${{ github.event.workflow_run.head_sha }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          import pathlib
+          import re
+          import sys
+
+          context = json.loads(pathlib.Path(
+              "eqnedit64-ci-release-context/context.json"
+          ).read_text(encoding="utf-8"))
+          if context.get("schema") != "eqnedit64.ci-release-context.v1":
+              print("::error::Unknown Eqnedit64 CI release-context schema")
+              sys.exit(1)
+          if (context.get("sha") != os.environ["SHA"] or
+                  str(context.get("run_id")) != os.environ["RUN_ID"]):
+              print("::error::Eqnedit64 CI context does not match workflow_run")
+              sys.exit(1)
+
+          ref = context.get("ref", "")
+          tag = ref.removeprefix("refs/tags/")
+          eligible = (
+              context.get("ref_type") == "tag" and
+              re.fullmatch(r"eqnedit64-v\d+\.\d+\.\d+", tag) is not None
+          )
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
+              output.write(f"eligible={str(eligible).lower()}\n")
+              output.write(f"sha={context['sha']}\n")
+              output.write(f"tag={tag if eligible else ''}\n")
+          print(f"Eqnedit64 CI ref: {ref} (eligible={eligible})")
+          PY
+
+  build-wheels:
+    needs: qualify
+    if: needs.qualify.outputs.eligible == 'true'
+    runs-on: windows-2022
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ['3.10', '3.11', '3.12', '3.13']
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.qualify.outputs.sha }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Download and verify signed standalone release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EQNEDIT64_TAG: ${{ needs.qualify.outputs.tag }}
+        shell: pwsh
+        run: |
+          $release = gh release view $env:EQNEDIT64_TAG `
+            --repo $env:GITHUB_REPOSITORY --json isDraft,tagName | ConvertFrom-Json
+          if ($release.isDraft -or $release.tagName -cne $env:EQNEDIT64_TAG) {
+            throw "published Eqnedit64 release is unavailable: $env:EQNEDIT64_TAG"
+          }
+          $directory = Join-Path $env:RUNNER_TEMP 'eqnedit64-release'
+          New-Item -ItemType Directory -Path $directory | Out-Null
+          gh release download $env:EQNEDIT64_TAG --repo $env:GITHUB_REPOSITORY `
+            --pattern Eqnedit64.exe --pattern SHA256SUMS.txt --dir $directory
+          $exe = Join-Path $directory 'Eqnedit64.exe'
+          $checksums = Join-Path $directory 'SHA256SUMS.txt'
+          $line = Get-Content -LiteralPath $checksums |
+            Where-Object { $_ -match 'Eqnedit64\.exe$' } | Select-Object -First 1
+          if (-not $line) { throw 'Eqnedit64.exe checksum is missing' }
+          $expected = ($line -split '\s+')[0].ToUpperInvariant()
+          $actual = (Get-FileHash -Algorithm SHA256 -LiteralPath $exe).Hash
+          if ($actual -ne $expected) {
+            throw "SHA-256 mismatch: $actual != $expected"
+          }
+          $signature = Get-AuthenticodeSignature -LiteralPath $exe
+          if (-not $signature.SignerCertificate -or
+              $signature.SignerCertificate.Subject -cne 'CN=ksugahar' -or
+              $signature.Status -in @('NotSigned', 'HashMismatch')) {
+            throw "invalid Eqnedit64 Authenticode signature: $($signature.Status)"
+          }
+          "EQNEDIT64_RELEASE_EXE=$exe" |
+            Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+      - name: Validate tag and package versions
+        env:
+          EQNEDIT64_TAG: ${{ needs.qualify.outputs.tag }}
+        shell: pwsh
+        run: |
+          $line = Select-String -LiteralPath packages\eqnedit64\pyproject.toml `
+            -Pattern '^version\s*=\s*"([^"]+)"$' | Select-Object -First 1
+          if (-not $line) { throw 'eqnedit64 package version is missing' }
+          $version = $line.Matches[0].Groups[1].Value
+          if ($env:EQNEDIT64_TAG -cne "eqnedit64-v$version") {
+            throw "tag/package mismatch: $env:EQNEDIT64_TAG != eqnedit64-v$version"
+          }
+
+      - name: Build wheel
+        run: |
+          python -m pip install build
+          python -m build --wheel packages/eqnedit64
+
+      - name: Verify installed wheel outside the repository
+        shell: pwsh
+        run: |
+          $wheel = Get-ChildItem packages\eqnedit64\dist\eqnedit64-*.whl |
+            Select-Object -First 1
+          $target = Join-Path $env:RUNNER_TEMP 'eqnedit64-wheel-test'
+          python -m pip install --target $target $wheel.FullName
+          $env:PYTHONPATH = $target
+          Push-Location $env:RUNNER_TEMP
+          try {
+            python "$env:GITHUB_WORKSPACE\packages\eqnedit64\tests\verify_installed.py"
+          } finally {
+            Pop-Location
+          }
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: eqnedit64-wheel-${{ matrix.python-version }}
+          path: packages/eqnedit64/dist/*.whl
+          if-no-files-found: error
+
+  publish:
+    needs: build-wheels
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: eqnedit64-wheel-*
+          path: dist
+          merge-multiple: true
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist/
+          skip-existing: true
