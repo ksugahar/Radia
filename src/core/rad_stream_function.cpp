@@ -19,6 +19,7 @@
  * are converted to row-major for the NumPy interface.
  *-------------------------------------------------------------------------*/
 #include "rad_stream_function.h"
+#include "rad_hacapk.h"
 
 #include <mkl.h>
 
@@ -189,6 +190,12 @@ int ACAPlus(int M, int N, const EntryFn& entry,
     if (kmax < 1) kmax = std::min(M, N);
     kmax = std::min(kmax, std::min(M, N));
 
+    // ACA+ uses the same process-wide cHACApK_entry_ij override as the
+    // matrix builders. Serialize the complete callback lifetime so a released-
+    // GIL HDiv/PEEC build cannot replace the active entry source.
+    std::lock_guard<std::mutex> operation_lock(
+        RadHACApKCallback::OperationMutex());
+
     // HACApK ACA+ output layout: zaa(ndl,kmax) col-major, zab(ndt,kmax) col-major.
     C.assign(static_cast<size_t>(M) * kmax, 0.0);
     D.assign(static_cast<size_t>(N) * kmax, 0.0);
@@ -203,6 +210,7 @@ int ACAPlus(int M, int N, const EntryFn& entry,
     param[64] = 1.0;  // minimum rank guard
 
     g_stream_entry = &entry;
+    RadHACApKCallback::ClearCallbackException();
     HACApK_set_entry_func(&rad_stream_entry_func);
     const int kt = cHACApK_acaplus(
         C.data(), D.data(), param.data(), M, N, /*nstrtl=*/1, /*nstrtt=*/1,
@@ -210,6 +218,7 @@ int ACAPlus(int M, int N, const EntryFn& entry,
         /*pACA_EPS=*/aca_eps);
     HACApK_clear_entry_func();
     g_stream_entry = nullptr;
+    RadHACApKCallback::RethrowCallbackException();
     return kt;
 }
 
