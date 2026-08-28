@@ -4399,34 +4399,43 @@ python tests/cubit/test_ho_volume_all_formats.py  # Order=2 volume accuracy (sph
 
 ---
 
-## Agent Division of Labor: Claude Owns Push + CI; Codex Owns Release (2026-08-17)
+## Agent Division of Labor: Claude Stops at the Commit; Codex Owns Everything After (2026-06-21, scope widened 2026-08-28)
 
-**POLICY**: Split of work between AI agents on this repo.
+**POLICY**: Split of work between AI agents.
 
-- **Claude carries its own work to green CI on `main`.** Claude implements,
-  tests locally, commits (this-session files BY NAME, per the existing commit
-  hygiene), runs `python tools/ci_preflight.py`, pushes to `main`, and then
-  watches GitHub Actions to green with `python tools/check_ci.py --watch`. A red
-  CI on Claude's own commit is Claude's to fix-forward, not to hand over.
-- **Release is codex's job.** codex cuts tags, runs the PyPI publish, drives the
-  `release-quad` four-machine verification, and deploys (100号機 / mdx / hibino).
+**Scope**: this applies to **EVERY Claude session — every project, every
+worktree, every concurrent session** — not only the session that happens to be
+reading this file. The same policy is kept machine-wide in the user-level
+`~/.claude/CLAUDE.md`; keep this section synchronized verbatim with the
+corresponding section in the other agent-policy file in the same change.
 
-Claude does **NOT**: push tags, invoke the `release-quad` flow, publish to PyPI,
-or deploy to remote machines. If asked to "release", Claude gets the work
-committed, pushed and CI-green, then hands off to codex for the tag and publish.
+- **Claude's responsibility ENDS at the local `git commit`.** Claude implements,
+  tests locally, and commits (this-session files BY NAME, per the existing commit
+  hygiene), then STOPS and reports the commit SHA and branch.
+- **Everything after the commit is codex's job — NOT Claude's.** codex pushes,
+  watches CI to green, fixes CI infrastructure, cuts tags, runs the PyPI
+  publish, and deploys (100号機 / mdx / hibino).
 
-**Why the line moved (2026-08-17, Sugahara)**: an author who stops at the local
-commit cannot tell whether the work actually builds anywhere but their own
-machine, and a handoff at that point makes the person who fixes the breakage
-someone who did not write it. Push and CI are part of finishing a change.
-Release is genuinely different work — version numbers, four machines, PyPI
-propagation — and stays where it was.
+Claude does **NOT**: `git push` (for release or otherwise), monitor/poll GitHub
+Actions CI, wait for CI-green, run `tools/ci_preflight.py` or
+`tools/check_ci.py` watch-loops, push tags, invoke the `release-qud` flow, or
+publish to PyPI. If asked to "release", Claude prepares and commits the work,
+then hands off to codex.
 
-**What this does not license**: pushing to `main` while a red preflight is
-outstanding, force-pushing, or pushing another agent's uncommitted work. The
-codex↔Claude source-edit mutex still applies: when the shared tree has
-in-flight work from another agent, do the change in a worktree and push the
-branch rather than reaching into `main`.
+**Why**: CI monitoring and release driving (queue watching, tag/publish, remote
+deploy) is long-running, polling-heavy work that does not need Claude's
+reasoning and burns Claude turns. Keep Claude on implement → test → commit;
+codex owns everything downstream.
+
+**Exception**: only if the user EXPLICITLY asks Claude to push / handle CI /
+release **in that specific task** does Claude do it. That permission does not
+carry over to the next task, and it is **never inherited from another session**
+or from a previous turn. The default is **commit-and-stop**.
+
+**Codex-side consequence**: a Claude session hands off a local commit SHA and
+branch. Taking it from there — `tools/ci_preflight.py`, push, CI-green, tag,
+publish, `release-qud` — is codex's lane, and codex should not wait for Claude
+to do any of it.
 
 ---
 

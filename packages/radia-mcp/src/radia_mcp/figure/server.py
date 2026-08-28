@@ -262,6 +262,9 @@ Empirical thresholds (after auto_tighten):
 SUGAHARA LAB ABSOLUTE FONT RULE:
 
   Bounding-box width = 8 cm  ->  figure-text font MUST be 10 pt.
+  For ordinary paper profiles, the save-time gate accepts 10.0--10.5 pt
+  on the final page.  This is a target band, not merely a minimum: oversized
+  tick labels and legends make the paper look typographically unbalanced.
 
 The 10 pt size matches IEEE / IEEJ body text.  When the figure prints
 at 100% scale alongside body text, the figure text is the same size
@@ -452,9 +455,11 @@ reviewer-visible obvious flaw -- programmatic detection is reliable,
 eyeball-check at small embed size is not.
 
 How emit_paper_figure() detects it:
-  For each axis-legend pair, sample 200 equally-spaced points along
-  every Line2D in the axes and test each against the legend bbox.
-  Any point INSIDE the bbox = overlap = fail the gate.
+  For each axis-legend pair, test the rendered Line2D paths, markers,
+  and collection offsets (including scatter points) against the legend
+  bbox in display coordinates.  This catches both dense curves and a
+  sparse two-point segment that crosses the legend.  Any intersection
+  = overlap = fail the gate.
 
 How to fix (in order of lab preference):
 
