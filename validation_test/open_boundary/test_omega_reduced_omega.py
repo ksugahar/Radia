@@ -5,21 +5,18 @@ Tests ScalarPotentialSolver.solve_total_reduced_potential() against
 Radia BEM reference for a mu_r=100 cylinder in a closed-loop coil field.
 """
 import math
-import os
-import sys
 
 import numpy as np
 import pytest
-
-HERE = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, os.path.join(HERE, '..', 'src', 'radia'))
 
 import radia as rad
 from ngsolve import Mesh, TaskManager
 from netgen.occ import (Cylinder, Sphere, Pnt, Z, Vertex, Glue,
                          OCCGeometry, IdentificationType)
 
-from scalar_potential_solver import ScalarPotentialSolver
+from radia.scalar_potential_solver import ScalarPotentialSolver
+
+pytestmark = pytest.mark.slow
 
 MU_0 = 4 * math.pi * 1e-7
 
@@ -122,7 +119,6 @@ def _compare_B(solver, grp_ref, pts, mesh):
 # to 2 times to absorb the rare bad iteration without masking a real
 # regression.  See cf576fa4 / eeb664c3 commit messages for the L_coil
 # convergence study where the same runner-state effect showed up.
-@pytest.mark.slow
 @pytest.mark.flaky(reruns=2, reruns_delay=2)
 class TestOmegaReducedOmegaKelvin:
 

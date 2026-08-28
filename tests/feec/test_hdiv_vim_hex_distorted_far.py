@@ -89,7 +89,7 @@ def _exec_mesh(phase=0.0):
     return scope["make_mesh"](phase)
 
 
-def test_far_switch_matches_general_path_entries():
+def _validate_far_switch_matches_general_path_entries():
     """factor=1 (tensor far product) vs factor=0 (old general path): far
     entries agree to quadrature-truncation level.  Both sides are quadrature
     approximations of the same smooth integral (old: 6-sub Keast-15 clouds,

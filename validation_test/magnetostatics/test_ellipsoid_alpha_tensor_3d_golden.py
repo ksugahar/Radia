@@ -18,14 +18,16 @@ import sys
 import numpy as np
 import pytest
 
+pytestmark = pytest.mark.slow
+
 pytest.importorskip("ngsolve")
 pytest.importorskip("netgen.occ")
 pytest.importorskip("radia.sparsesolv_ngsolve")
 
-_HERE = os.path.dirname(os.path.abspath(__file__))
+_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 # CLN was absorbed into radia.maglev ->
 # docs/maglev/demos/{sphere,ellipsoid}. Add both so sphere + ellipsoid modules resolve.
-_LEV = os.path.join(_HERE, "..", "docs", "maglev", "demos")
+_LEV = os.path.join(_ROOT, "docs", "maglev", "demos")
 sys.path.insert(0, os.path.join(_LEV, "sphere"))
 sys.path.insert(0, os.path.join(_LEV, "ellipsoid"))
 
