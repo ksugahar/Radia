@@ -61,7 +61,11 @@ def test_optuna_manual_release_selects_one_fully_successful_ci_run():
     assert '"radia-optuna installed-wheel MATLAB/Simulink E2E"' in workflow
     assert "run-id: ${{ steps.source.outputs.run_id }}" in workflow
     assert "ref: ${{ steps.source.outputs.sha }}" in workflow
-    assert "python3 packages/radia-optuna/verify_wheel.py" in workflow
+    assert (
+        'python3 packages/radia-optuna/verify_wheel.py "$WHL" '
+        "--release-candidate --json"
+        in workflow
+    )
     assert 'EXPECTED_TAG="refs/tags/radia-optuna-v${VERSION}"' in workflow
     assert 'ACTUAL_SHA256=$(sha256sum "$WHL"' in workflow
     assert '"${ACTUAL_SHA256,,}" != "${CANDIDATE_SHA256,,}"' in workflow
