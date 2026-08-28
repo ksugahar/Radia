@@ -64,7 +64,7 @@ FIXED_MODULES = [
 ]
 
 
-def test_fixed_modules_import_only_src_on_path():
+def _validate_fixed_modules_import_only_src_on_path():
     """Every fixed module must import with ONLY `src` on sys.path.
 
     Run in a subprocess so the parent's already-imported modules cannot
@@ -168,8 +168,7 @@ def test_to_coil_builder_import_resolves():
     )
 
 
-@pytest.mark.slow
-def test_filaments_from_step_runs_only_src_on_path(monkeypatch):
+def _validate_filaments_from_step_runs_only_src_on_path(monkeypatch):
     """End-to-end: filaments_from_step on a real STEP under only-src config.
 
     The conftest deliberately keeps src/radia OFF sys.path, so any bare

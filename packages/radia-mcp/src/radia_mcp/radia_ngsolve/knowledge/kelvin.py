@@ -1950,7 +1950,8 @@ What this solves:
 - Future: hysteresis (MatEnergyHysteresis) with same API
 
 Accuracy: max 3%, RMS 1.5% vs Radia BEM reference (order=2, mu_r=100).
-Validated by pytest: `tests/test_omega_reduced_omega.py` (5/5 PASS).
+Validated by pytest: `validation_test/open_boundary/test_omega_reduced_omega.py`
+(5/5 PASS).
 
 CAVEAT -- the source in the Kelvin exterior.  `set_source_from_radia` projects
 the Radia field onto the physical materials only and leaves the Kelvin region
@@ -3144,7 +3145,8 @@ projects the Radia source field onto physical materials only and leaves the
 Kelvin region at zero -- i.e. route **Z** above.  For a COMPACT coil well
 inside the Kelvin radius the resulting error tracks H_s at rho'=R and stays
 small (that path is validated to max 3% / RMS 1.5% in
-`tests/test_omega_reduced_omega.py`).  For a background applied at infinity the
+`validation_test/open_boundary/test_omega_reduced_omega.py`).  For a background
+applied at infinity the
 same choice costs the full 1/3.  If your source is not small at the Kelvin
 radius, build H_s with `make_reduced_potential_background_cf` and pass it via
 `set_source_cf` instead.

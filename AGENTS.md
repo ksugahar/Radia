@@ -757,6 +757,26 @@ a durable role:
 | `src/radia/panels/` | Validated headless application CLI, `DesignSpec`, samples, and artifact contracts. | blocks / AI / validation | Yes |
 | `matlab/+radia/+simulink/` + `matlab/radia_simulink_library.slx` | Final application-specific human operating surface. | end users | MATLAB distribution |
 
+### Test Runtime Placement Policy (2026-08-28)
+
+**POLICY**: `tests/` is the short default CI/debug suite; `validation_test/`
+(the repository's canonical singular directory name) owns long-running and
+environment-heavy checks. Do not keep a long test under `tests/` and hide it
+with `@pytest.mark.slow` or a node-ID side list.
+
+- A test that is at least 10 seconds in two comparable successful CI runs is
+  moved to `validation_test/<topic>/` and marked `slow`. Re-run a one-off timing
+  spike before reclassifying it.
+- Real Office/Cubit GUI startup, licensed external applications, solver
+  convergence studies, long golden/reference runs, benchmarks, and publication
+  validations belong to `validation_test/` regardless of a lucky short run.
+- Fast API/shape/error contracts remain in `tests/`. If a module mixes fast and
+  slow coverage, keep reusable setup as a non-collected helper and expose the
+  long assertion through a test collected from `validation_test/`.
+- `validation_test/slow_nodeids.txt` may classify older measured validation
+  tests. It must contain only `validation_test/` node IDs; there is no
+  corresponding slow-node list under `tests/`.
+
 **Promotion gates**:
 
 - **C:\temp → tests/**: the behavior is small, deterministic, and useful for

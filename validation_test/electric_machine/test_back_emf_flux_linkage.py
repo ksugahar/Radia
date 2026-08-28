@@ -30,6 +30,8 @@ import pytest
 ng = pytest.importorskip("ngsolve")
 from ngsolve import (H1, BilinearForm, LinearForm, GridFunction, grad, dx, CF)
 
+pytestmark = pytest.mark.slow
+
 MU0 = 4e-7 * math.pi
 A_RAD = 0.01
 D_COIL = 0.05         # coil side radius [m]

@@ -19,6 +19,8 @@ the 2-D dipole law, and B scales linearly with M. Pure NGSolve (Bash-robust).
 import math
 import pytest
 
+pytestmark = pytest.mark.slow
+
 ng = pytest.importorskip("ngsolve")
 from ngsolve import (H1, BilinearForm, LinearForm, GridFunction, Integrate,
                      grad, dx, CF)
