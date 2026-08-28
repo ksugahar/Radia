@@ -5,45 +5,61 @@ description: "Release and deploy Eqnedit64 from one exact tag, including signed 
 
 # Release Eqnedit64
 
-Finish with three matching outcomes: the tagged GitHub Release, the PyPI wheels,
-and `O:\Eqnedit64.exe`. Do not call the release complete while any one is stale.
+Finish with three matching outcomes: `O:\Eqnedit64.exe`, the tagged GitHub
+Release, and the PyPI wheels. Do not call the release complete while any one is
+stale.
 
 ## Release invariants
 
-- Build the standalone executable on LAB from the exact release tag with
-  `tools/eqnedit64/build/build_eqnedt64.bat`. The signing key is deliberately
-  non-exportable; the CMake executable produced by GitHub-hosted CI is an
-  unsigned test artifact and must not be published or copied to `O:`.
+- Push the release commit to `main` first and require the main Eqnedit64 CI to
+  pass. Do not create or push the release tag yet.
+- Build the standalone executable on LAB from that exact `origin/main` commit
+  with `tools/eqnedit64/build/build_eqnedt64.bat`. The signing key is
+  deliberately non-exportable; the CMake executable produced by GitHub-hosted
+  CI is an unsigned test artifact and must not be published or copied to `O:`.
 - Require product version equal to the tag version, Authenticode status
   `Valid`, signer subject exactly `CN=ksugahar`, and a recorded SHA-256.
-- Attach only that signed `Eqnedit64.exe` and its `SHA256SUMS.txt` to the
-  `eqnedit64-v<version>` GitHub Release.
-- Require the exact tag's Eqnedit64 CI to pass before publication. The PyPI
-  workflow downloads the signed GitHub Release EXE and builds Python-specific
-  wheels; wait for Python 3.10--3.13 verification and trusted publication.
+- Copy the verified executable to `O:\Eqnedit64.exe` and write the adjacent
+  `O:\Eqnedit64.release.json` gate manifest. Only after both pass byte-for-byte
+  verification may the exact recorded commit receive the release tag.
+- Push `eqnedit64-v<version>` last. The tag CI verifies the application; the
+  release workflow reads the already-staged O: executable through its short
+  self-hosted job, requires the manifest source SHA to equal the tag SHA, then
+  builds Python 3.10--3.13 wheels and publishes GitHub Release and PyPI from
+  that one signed binary.
 - Run full private-font process suites only in the isolated Eqnedit64 CI/VM
   session. Do not bypass `EQNEDIT64_ISOLATED_TEST_SESSION` on the interactive
   LAB desktop.
 
-## Synchronize O:
+## Required order
 
-After the GitHub Release is public, run:
+1. Commit and push the versioned release source to `main`.
+2. Wait for the main Eqnedit64 CI and Policy Lint to pass.
+3. Confirm tracked files are clean and `HEAD == origin/main`.
+4. Run `tools/eqnedit64/build/build_eqnedt64.bat` on LAB.
+5. Before creating any release tag, stage the exact signed build to O::
 
 ```powershell
 pwsh -File .agents/skills/release-eqnedit64/scripts/sync_to_o.ps1 `
-  -Tag eqnedit64-v<version>
+  -Tag eqnedit64-v<version> `
+  -SourceExe tools/eqnedit64/dist/Eqnedit64.exe `
+  -SourceSha (git rev-parse HEAD)
 ```
 
-The helper downloads the public release rather than trusting a local build,
-checks the published checksum, version, and Authenticode signature, replaces
-only `O:\Eqnedit64.exe`, then verifies byte identity at the destination. Use
-`-WhatIf` for a read-only preflight. If replacement fails because the shared
-EXE is locked, leave the existing file intact and report the lock; do not kill
+6. Verify the helper reports `Updated=True`, the intended version, `Valid`,
+   `CN=ksugahar`, and the recorded SHA-256.
+7. Create the annotated tag at the manifest's exact source SHA and push it.
+8. Wait for tag CI, GitHub Release, and PyPI publication to pass.
+
+The helper refuses an existing remote release tag, a dirty or unpushed source,
+a mismatched build stamp, version, signature, or hash. Use `-WhatIf` for a
+preflight that does not change O:. If replacement fails because the shared EXE
+is locked, leave the existing file intact and report the lock; do not kill
 unrelated or remote user processes.
 
 An explicit release/deploy/update request authorizes the matching `O:` update.
 For a request that only asks to inspect or test Eqnedit64, obtain authorization
 before changing `O:`.
 
-Report the tag, GitHub Release URL, PyPI version, destination path, SHA-256,
-product version, and signer status.
+Report the pushed main SHA, O: manifest, tag, GitHub Release URL, PyPI version,
+destination path, SHA-256, product version, and signer status.

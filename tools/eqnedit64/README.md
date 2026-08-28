@@ -214,6 +214,14 @@ $env:EQNEDIT64_ISOLATED_TEST_SESSION = '1'
 pwsh -NoProfile -File build\accept_release.ps1
 ```
 
+リリース時は、リリースコミットを先に `main` へpushしてCIを通し、同じ
+`origin/main`から作った署名済みEXEを `O:\Eqnedit64.exe` と
+`O:\Eqnedit64.release.json` へ同期します。その成功後にだけ
+`eqnedit64-v<version>` tagをpushします。tag CIはO:上のEXEとtag SHAの一致を
+検証し、PyPI、GitHub Releaseの順に公開します。具体的な手順は
+[`release-eqnedit64` skill](../../.agents/skills/release-eqnedit64/SKILL.md)と
+[`CANONICAL_OPERATION.md`](docs/CANONICAL_OPERATION.md)を正本とします。
+
 個別に実行する場合:
 
 ```powershell
