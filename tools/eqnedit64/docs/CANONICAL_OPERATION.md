@@ -41,9 +41,18 @@ pwsh -NoProfile -File build\accept_release.ps1
 `CN=ksugahar`署名、単体exeを確認する。途中で一つでも失敗した場合は公開しない。結果は既定で
 `C:\temp\Eqnedit64-final-acceptance.json` に残る。
 
-公開は`eqnedit64-v<version>`タグに対するGitHub Releaseで行い、署名済み
-`Eqnedit64.exe`と`SHA256SUMS.txt`を添付する。旧版へ戻す必要が生じた場合は、
-対象Gitコミットを再ビルドして同じ最終ゲートを通す。
+公開順は固定する。まずリリースコミットを`main`へpushしてmain CIを通し、その
+`origin/main`と同じコミットからLABで署名済みEXEをビルドする。次に
+`.agents\skills\release-eqnedit64\scripts\sync_to_o.ps1`で
+`O:\Eqnedit64.exe`を更新し、隣の`O:\Eqnedit64.release.json`へ予定tag、
+source SHA、EXE SHA-256、version、signerを記録する。ここまで成功してから最後に
+`eqnedit64-v<version>`tagをpushする。
+
+tag CIはO:のマニフェストに記録されたsource SHAがtag SHAと完全一致する場合だけ、
+その署名済みEXEからPython 3.10--3.13用wheelを作り、PyPIへ公開した後に
+GitHub Releaseへ`Eqnedit64.exe`と`SHA256SUMS.txt`を添付する。O:更新前にtagを
+pushしてはならない。旧版へ戻す必要が生じた場合も、対象Gitコミットを再ビルドして
+同じ順序と最終ゲートを通す。
 
 ## 正本移行後の品質運用
 
