@@ -8,6 +8,11 @@
     "numerical_transport": "direct-python",
     "public_contract_transport": "official-optuna-mcp-0.2.0"
   },
+  "algorithm_core_policy": {
+    "source_of_truth": "Optuna 4.9.0 equations, transforms, state transitions, boundary handling, and seeded random-consumption order",
+    "native_execution": "MATLAB vectorization and standalone MEX kernels may execute the common algorithm without a Python runtime dependency",
+    "extensions": "Parallel trial scheduling, table/MAT persistence, Simulink telemetry, and explicitly named MATLAB-only algorithms may improve capability or performance without changing the upstream-compatible default path"
+  },
   "complete_api_closure": {
     "inventory": "tests/matlab/fixtures/optuna49_public_api.json",
     "coverage": "matlab/optuna49_api_coverage.json",
@@ -29,12 +34,12 @@
     "Sampler seed=None constructor semantics: independently constructed unseeded samplers draw fresh private entropy without mutating MATLAB's global RNG; exact proposal comparison remains explicitly seeded",
     "Sampler reseed_rng behavior, including fresh private entropy, the deliberate BruteForceSampler no-op, delegated independent samplers, and unchanged QMC sequence seeds",
     "RandomSampler proposal sequences",
-    "TPESampler scalar, mixed, multivariate, group-decomposed conditional, constrained, callable gamma/weights, and categorical-distance proposal sequences, including independent-fallback warning control",
+    "TPESampler scalar, mixed, multivariate, group-decomposed conditional, constrained, callable gamma/weights, categorical-distance, deprecated consider_prior warning, and constant-liar proposal sequences with multiple genuinely concurrent RUNNING trials, including independent-fallback warning control",
     "MOTPESampler multi-objective proposal sequences and constrained Pareto support",
     "GridSampler and fixed/conditional BruteForceSampler exhaustion behavior",
     "PartialFixedSampler proposal sequences",
-    "QMCSampler seeded scrambled and deterministic unscrambled Sobol/Halton prefixes within the documented dimension boundary, custom independent samplers, and warning controls for seed=None scrambling and independent fallback",
-    "CmaEsSampler seeded numeric proposal sequences and independent-sampler controls",
+    "QMCSampler seeded scrambled and deterministic unscrambled Sobol/Halton prefixes, native Joe--Kuo Sobol generation above 32 dimensions through the SciPy/Optuna maximum of 21,201 dimensions, custom independent samplers, and warning controls for seed=None scrambling and independent fallback",
+    "CmaEsSampler seeded numeric proposal sequences, source-trial warm start, separable CMA, CMA with margin, learning-rate adaptation, consideration of pruned trials, deprecated restart-option fallback, invalid-option errors, and independent-sampler controls; categorical parameters remain independently sampled as in upstream Optuna 4.9.0",
     "GPSampler float/integer/categorical proposals through acquisition after startup, constraint-aware acquisition, and deterministic MAT-table history replay when Backend is upstream-python",
     "NSGAIISampler and NSGAIIISampler seeded population behavior",
     "NSGA-II Uniform, BLX-alpha, SBX, VSBX, SPX, and UNDX crossover proposal sequences",
@@ -57,18 +62,6 @@
     "GPSampler Backend=matlab-native state persistence and lifecycle"
   ],
   "unsupported_or_not_yet_oracled": [
-    {
-      "feature": "Remaining TPE constructor and concurrent-trial behavior",
-      "boundary": "The deprecated consider_prior argument and its warning category, plus constant-liar behavior with genuinely concurrent running trials, are not yet upstream-oracled. Group-decomposed multivariate TPE, categorical-distance callbacks, independent-fallback warning control, and callable gamma/weights are covered."
-    },
-    {
-      "feature": "Advanced CMA-ES modes",
-      "boundary": "Warm start from source trials, separable CMA, margin, learning-rate adaptation, restart strategies, and native categorical handling are not claimed. A separately seeded independent sampler and its warning control are covered."
-    },
-    {
-      "feature": "Native unscrambled Sobol above 32 dimensions",
-      "boundary": "The MATLAB-native Sobol direction table is limited to 32 dimensions; use the SciPy-backed path where supported or treat higher dimensions as unsupported."
-    },
     {
       "feature": "Python runtime identity",
       "boundary": "MATLAB returns MATLAB objects for native APIs and exact upstream Python figure, axes, integration, storage, or evaluator objects only on the explicitly pinned upstream boundary. Python pickling, arbitrary Python subclass identity, and binary drop-in replacement are not claimed."

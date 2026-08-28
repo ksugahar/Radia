@@ -49,7 +49,7 @@ def test_radia_mex_contract_reads_the_cpp_command_inventory():
         "unmapped_count": 0,
         "complete": True,
     }
-    assert contract["optuna_mex_command_count"] == 20
+    assert contract["optuna_mex_command_count"] == 21
     assert contract["matlab_optuna_class_count"] >= 92
     assert contract["matlab_optuna_function_count"] >= 85
     assert {
@@ -82,6 +82,7 @@ def test_radia_mex_contract_reads_the_cpp_command_inventory():
         "optuna.tpe.history.reset",
         "optuna.tpe.history.append_complete",
         "optuna.tpe.best_grouped_history",
+        "optuna.sobol.points",
         "optuna.random_state.create",
         "optuna.random_state.rand",
         "optuna.random_state.randn",
@@ -316,7 +317,7 @@ def test_root_readme_publishes_native_topology_mex_parity():
     )
     assert "126 stateful class members" in matlab_readme
     assert "All 253 entries are covered by the current 364-command gateway" in matlab_readme
-    assert "20-command `optuna_mex`" in matlab_readme
+    assert "21-command `optuna_mex`" in matlab_readme
 
     parity_doc = (root / "docs" / "api" / "MATLAB_MEX_NGSOLVE_PARITY.md").read_text(
         encoding="utf-8"
