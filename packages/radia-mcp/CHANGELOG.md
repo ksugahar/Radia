@@ -7,6 +7,23 @@ crystallized as its own package.
 
 ## [Unreleased]
 
+- presentation: added a z-order audit that rejects directional arrows hidden
+  behind intersecting divider/reference lines.  The skill now also treats a
+  numeric resize such as 112% as uniform scaling around a semantic alignment
+  anchor, followed by overlap and label checks.
+
+- matlab: extended the Optuna contract with checked seed-`None` semantics and a
+  generated 4.9.0 public-API closure ledger. The MCP report exposes present,
+  missing, verified, partial, and unmapped counts and rejects premature
+  complete-compatibility state.
+- matlab: extended the differential contract to unfinished imported trials,
+  StudySummary objects, empty-study storage visibility, and the upstream
+  BaseTrial/BaseSampler/BasePruner hierarchy.
+- matlab: added upstream-oracled QMCSampler controls for asynchronous seed and
+  independent-fallback warnings.
+- matlab: added upstream-oracled TPESampler group decomposition, dynamic-space
+  independent-fallback warnings, and categorical-distance kernels; the
+  compatibility contract now counts the two new Python differential tests.
 - matlab: narrowed all Optuna claims to the checked 4.9.0 subset and exposed
   that boundary through the compatibility contract. The direct oracle now
   covers `TrialPruned`, trial-number `tell`, FrozenTrial-returning collections,
@@ -26,6 +43,15 @@ crystallized as its own package.
   readability and traceability diagnostics without adding them to the defect
   score or corpus finding baseline. Subject-predicate distance checks now also
   recognize the full-width Japanese comma `，` used by Word documents.
+
+- matlab: added `matlab_optuna_compatibility_contract` and
+  `matlab_optuna_oracle_audit`, which inspect the checked Optuna 4.9.0 Python
+  and official optuna-mcp fixtures, backend versions, hashes, policy sync, and
+  complete MATLAB-test manifest without importing Optuna into radia-mcp.
+  `matlab_optimize_build` v3 now generates every supported seeded sampler,
+  structured sampler options, callable TPE gamma/weights, nested CMA-ES
+  independent samplers, Grid/PartialFixed spaces, and all six NSGA-II
+  crossovers while classifying parallel execution as MATLAB integration.
 
 - grant-writing: generalized a project-specific wording prohibition into a
   central-question semantic contract. Reviews now distinguish the scientific

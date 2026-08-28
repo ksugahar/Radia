@@ -41,7 +41,7 @@ def _get_title(slide) -> str:
 
 
 def _get_body_text(slide) -> str:
-    """Title 以外の text frame を結合して返す。"""
+    """Return visible body plus notes that explain image-only evidence."""
     parts: list[str] = []
     title = _get_title(slide).strip()
     for shape in _iter_all_shapes(slide.shapes):
@@ -62,6 +62,14 @@ def _get_body_text(slide) -> str:
             parts.append(txt)
         except Exception:
             continue
+    try:
+        if slide.has_notes_slide:
+            note_text = slide.notes_slide.notes_text_frame.text or ""
+            note_text = re.split(r"\n\s*\[Sources\]\s*", note_text, maxsplit=1)[0]
+            if note_text.strip():
+                parts.append(note_text)
+    except Exception:
+        pass
     return "\n".join(parts)
 
 
@@ -98,6 +106,24 @@ def _has_5w1h_signal(title: str) -> dict:
     }
 
 
+def _matched_title_tokens(title_tokens: set[str], body_tokens: set[str]) -> set[str]:
+    """Match Japanese compound variants without requiring exact token identity."""
+    matched: set[str] = set()
+    for title_token in title_tokens:
+        title_folded = title_token.casefold()
+        for body_token in body_tokens:
+            body_folded = body_token.casefold()
+            if title_folded == body_folded:
+                matched.add(title_token)
+                break
+            if min(len(title_folded), len(body_folded)) >= 3 and (
+                title_folded in body_folded or body_folded in title_folded
+            ):
+                matched.add(title_token)
+                break
+    return matched
+
+
 def presentation_title_body_alignment_check(pptx_path: str) -> dict:
     """Title の対象・観点が body の内容と対応しているかを診断。
 
@@ -116,12 +142,31 @@ def presentation_title_body_alignment_check(pptx_path: str) -> dict:
         return {"error": f"file not found: {pptx_path}"}
     prs = _pptx.Presentation(str(p))
 
+    from .._deck_sections import classify_deck_sections, is_closing_title
+
+    all_slides = list(prs.slides)
+    sections = classify_deck_sections(all_slides, _get_title)
+    backup_slide_numbers = set(sections["backup_slide_numbers"])
+
     per_slide: list[dict] = []
     misaligned: list[dict] = []
 
-    for i, slide in enumerate(prs.slides, 1):
+    for i, slide in enumerate(all_slides, 1):
         title = _get_title(slide).strip()
         body = _get_body_text(slide).strip()
+
+        if i == 1 or i in backup_slide_numbers or is_closing_title(title):
+            per_slide.append({
+                "slide_no": i,
+                "title": title,
+                "body_chars": len(body),
+                "skip_reason": (
+                    "backup_slide" if i in backup_slide_numbers
+                    else "structural_slide"
+                ),
+                "alignment_score": None,
+            })
+            continue
 
         # Skip if no title or no body (titlecard slides etc.)
         if not title or not body:
@@ -141,7 +186,7 @@ def presentation_title_body_alignment_check(pptx_path: str) -> dict:
 
         # 1. title_body_overlap (Jaccard-like)
         if title_tokens and body_tokens:
-            common = title_tokens & body_tokens
+            common = _matched_title_tokens(title_tokens, body_tokens)
             overlap = len(common) / len(title_tokens)
         else:
             overlap = 0
@@ -276,6 +321,9 @@ def presentation_title_body_alignment_check(pptx_path: str) -> dict:
         "score": score,
         "score_max": 10,
         "n_total_slides": n_total,
+        "main_slide_count": sections["main_slide_count"],
+        "backup_slide_count": sections["backup_slide_count"],
+        "backup_slide_numbers": sections["backup_slide_numbers"],
         "n_evaluated": n_evaluated,
         "n_misaligned": n_misaligned,
         "misaligned_slides": misaligned,

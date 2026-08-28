@@ -62,7 +62,15 @@ Simulink.
 Use `matlab_radia_mex_contract` to inspect the current C++ `radia_mex` command
 list and the explicit non-parity boundaries. Use
 `matlab_optuna_simulink_contract` for the MATLAB optimization and Simulink
-workflow. The MEX boundary shares numerical contracts, not Python object
+workflow, `matlab_optuna_compatibility_contract` for the checked Optuna 4.9.0
+surface and version/hash provenance, and `matlab_optuna_oracle_audit` before
+reporting supported parity. Never describe the MATLAB layer as a complete or
+drop-in Optuna implementation; report the verified subset and named gaps from
+the compatibility contract. Also report its generated public-API closure counts
+when evaluating complete compatibility; any missing, partial, or unmapped entry
+is a hard incomplete result. Use `matlab_optimize_build` to generate official-MATLAB-MCP
+ready code; a sequential explicit-seed build is eligible for the upstream
+oracle, while a parallel build is a MATLAB integration contract. The MEX boundary shares numerical contracts, not Python object
 identity: NGSolve continues to own meshes, spaces, Piola maps, and FE
 orientation.
 

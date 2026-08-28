@@ -7,7 +7,7 @@ skill.md L21「目標: スライドタイトルを並べたら目次にして筋
 
 検出する 5 軸:
   1. **title_density** — タイトル付き slide の比率 (no-title slide 過多 NG)
-  2. **claim_density** — claim 形式 (動詞 / 数値) タイトルの比率
+  2. **topic_specificity** — 対象＋観点が具体的なタイトルの比率
   3. **logical_flow_markers** — 「まず」「次に」「最後に」「結論」「対策」
      等の繋がり語の出現
   4. **topical_diversity** — 連続スライドの title token overlap
@@ -54,13 +54,16 @@ def _get_title(slide) -> str:
 
 _FLOW_MARKERS = {
     "opening": ["はじめに", "introduction", "背景", "background",
-                 "motivation", "なぜ", "問題", "課題"],
+                 "motivation", "なぜ", "問題", "課題", "閉包条件", "従来法"],
     "middle": ["まず", "次に", "そして", "first", "second", "third",
-                "next", "approach", "method", "手法", "アプローチ"],
+                "next", "approach", "method", "手法", "アプローチ", "分解",
+                "保存", "局所閉包", "検証条件", "実装"],
     "evidence": ["結果", "results", "実験", "experiment", "evidence",
-                  "performance", "比較", "comparison"],
+                  "performance", "比較", "comparison", "偏差", "計算規模",
+                  "実測性能", "整合性", "FEM"],
     "closing": ["まとめ", "結論", "conclusion", "summary", "takeaway",
-                 "今後", "future", "次の段階", "謝辞", "acknowledg"],
+                 "今後", "future", "次の段階", "謝辞", "acknowledg", "成果",
+                 "限界", "展望", "HDiv"],
 }
 
 _CLAIM_VERBS = re.compile(
@@ -121,15 +124,25 @@ def presentation_slide_titles_outline_coherence(pptx_path: str) -> dict:
         return {"error": f"file not found: {pptx_path}"}
     prs = _pptx.Presentation(str(p))
 
+    from .._deck_sections import classify_deck_sections
+
+    all_slides = list(prs.slides)
+    sections = classify_deck_sections(all_slides, _get_title)
+    backup_slide_numbers = set(sections["backup_slide_numbers"])
+
     titles: list[dict] = []
-    for i, slide in enumerate(prs.slides, 1):
+    for i, slide in enumerate(all_slides, 1):
+        if i in backup_slide_numbers:
+            continue
         title = _get_title(slide).strip()
+        tokens = _extract_meaningful_tokens(title)
         titles.append({
             "slide_no": i,
             "title": title,
             "has_title": bool(title),
             "is_claim": _is_claim_title(title) if title else False,
-            "tokens": _extract_meaningful_tokens(title),
+            "tokens": tokens,
+            "is_specific_topic": bool(tokens),
         })
 
     n_slides = len(titles)
@@ -145,9 +158,11 @@ def presentation_slide_titles_outline_coherence(pptx_path: str) -> dict:
     n_with_title = sum(1 for t in titles if t["has_title"])
     title_density = n_with_title / n_slides
 
-    # ---- 2. claim_density ----
+    # ---- 2. topic specificity / result-sentence diagnostic ----
     n_claims = sum(1 for t in titles if t["is_claim"])
     claim_density = n_claims / n_with_title if n_with_title else 0
+    n_specific = sum(1 for t in titles if t["is_specific_topic"])
+    topic_specificity = n_specific / n_with_title if n_with_title else 0
 
     # ---- 3. logical_flow_markers ----
     flow_hits: dict[str, list[int]] = {k: [] for k in _FLOW_MARKERS}
@@ -185,11 +200,12 @@ def presentation_slide_titles_outline_coherence(pptx_path: str) -> dict:
     completeness = n_phases_present / 4
 
     # ---- score ----
-    # title_density (3) + claim_density (3) + flow phases (2) + completeness (2)
+    # Title = concise target + viewpoint; bottom band = learned result.
+    # Therefore claim density is diagnostic only and is not rewarded here.
     score = (
         title_density * 3
-        + claim_density * 3
-        + (n_phases_present / 4) * 2
+        + topic_specificity * 2
+        + (n_phases_present / 4) * 3
         + (1 if diversity_status == "BALANCED" else 0.5
            if diversity_status != "REDUNDANT" else 0) * 2
     )
@@ -200,7 +216,7 @@ def presentation_slide_titles_outline_coherence(pptx_path: str) -> dict:
 
     comments.append(
         f"スライド {n_slides} 枚 | タイトル付き {n_with_title} ({title_density*100:.0f}%) "
-        f"| claim 形式 {n_claims} ({claim_density*100:.0f}%) "
+        f"| 具体的な対象・観点 {n_specific} ({topic_specificity*100:.0f}%) "
         f"| 4 phase 内 {n_phases_present} 出現 | 隣接 overlap 平均 {avg_overlap:.2f} "
         f"({diversity_status})"
     )
@@ -212,12 +228,11 @@ def presentation_slide_titles_outline_coherence(pptx_path: str) -> dict:
             "全 slide にタイトル必須。"
         )
 
-    if claim_density < 0.4:
+    if claim_density > 0.4:
         comments.append(
-            f"⚠ Claim density {claim_density*100:.0f}% は低い。"
-            "「Results」「Method」のような名詞句タイトルが多い。"
-            "「PEEC is 4× faster」「結果: X が Y を上回る」のような "
-            "claim 形式 (動詞 + 数値) で書く (skill.md L98)。"
+            f"⚠ 結果言い切り型タイトルが {claim_density*100:.0f}%。"
+            "タイトルはスライドで伝える具体的な対象・観点、下端文は図表から"
+            "分かった結論として役割を分ける。"
         )
 
     if n_phases_present < 3:
@@ -250,7 +265,7 @@ def presentation_slide_titles_outline_coherence(pptx_path: str) -> dict:
     # Outline 出力 (人間が読んで判定する用)
     outline_md = "\n".join(
         f"  {t['slide_no']:3d}. {t['title'][:60]} "
-        f"{'[claim]' if t['is_claim'] else '[noun]' if t['has_title'] else '[no title]'}"
+        f"{'[result]' if t['is_claim'] else '[topic]' if t['has_title'] else '[no title]'}"
         for t in titles[:30]
     )
     if len(titles) > 30:
@@ -262,7 +277,8 @@ def presentation_slide_titles_outline_coherence(pptx_path: str) -> dict:
 
     hint = (
         "「タイトル並べたら目次として筋が通る」(skill.md L21) を実測化。"
-        "score 高 = タイトルが claim 形式で論理的並びになっている。"
+        "score 高 = 具体的な対象・観点を示すタイトルが論理的に並んでいる。"
+        "結果文は下端の takeaway に置き、タイトルとの役割を分ける。"
         "extracted_outline を音読して『目次として通るか』を最終判定。"
         "短い発表 (5 slides 以下) は phase 検出が thin になりがち。"
     )
@@ -271,8 +287,12 @@ def presentation_slide_titles_outline_coherence(pptx_path: str) -> dict:
         "score": score,
         "score_max": 10,
         "n_slides": n_slides,
+        "total_deck_slides": len(all_slides),
+        "backup_slide_count": sections["backup_slide_count"],
+        "backup_slide_numbers": sections["backup_slide_numbers"],
         "title_density": round(title_density, 3),
         "claim_density": round(claim_density, 3),
+        "topic_specificity": round(topic_specificity, 3),
         "n_phases_present": n_phases_present,
         "phases_detected": {k: v for k, v in flow_hits.items() if v},
         "avg_adjacent_overlap": round(avg_overlap, 3),

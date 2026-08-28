@@ -6,6 +6,8 @@ from radia_mcp.matlab import (
     matlab_cad_topology_build,
     matlab_optimize_build,
     matlab_optimize_resume,
+    matlab_optuna_compatibility_contract,
+    matlab_optuna_oracle_audit,
     matlab_sheet_metal_topology_build,
     matlab_optuna_simulink_contract,
     matlab_radia_mex_contract,
@@ -16,10 +18,11 @@ def test_radia_mex_contract_reads_the_cpp_command_inventory():
     contract = matlab_radia_mex_contract("mex")
 
     assert contract["status"] == "ready"
-    assert contract["command_count"] == 363
+    assert contract["command_count"] == 364
+    assert contract["optuna_mex_command_count"] == 20
     assert contract["matlab_wrapper_count"] >= 133
-    assert contract["matlab_optuna_class_count"] == 26
-    assert contract["matlab_optuna_function_count"] == 7
+    assert contract["matlab_optuna_class_count"] == 38
+    assert contract["matlab_optuna_function_count"] == 30
     assert {
         "TPESampler",
         "MOTPESampler",
@@ -39,11 +42,29 @@ def test_radia_mex_contract_reads_the_cpp_command_inventory():
     assert "simulink.state_space.update" in contract["command_names"]
     assert "simulink.state_space.snapshot" in contract["command_names"]
     assert "simulink.state_space.restore" in contract["command_names"]
-    assert {
+    optuna_commands = {
         "optuna.pareto.rank_crowding",
         "optuna.parzen.log_pdf_numerical",
         "optuna.parzen.log_pdf_categorical",
-    }.issubset(contract["command_names"])
+        "optuna.tpe.best_numerical",
+        "optuna.tpe.best_joint",
+        "optuna.tpe.best_numerical_observations",
+        "optuna.tpe.best_joint_observations",
+        "optuna.tpe.history.reset",
+        "optuna.tpe.history.append_complete",
+        "optuna.tpe.best_grouped_history",
+        "optuna.random_state.create",
+        "optuna.random_state.rand",
+        "optuna.random_state.randn",
+        "optuna.random_state.randi",
+        "optuna.random_state.randperm",
+        "optuna.random_state.snapshot",
+        "optuna.random_state.restore",
+        "optuna.random_state.destroy",
+    }
+    assert optuna_commands.issubset(contract["optuna_mex_command_names"])
+    assert not any(name.startswith("optuna.") for name in contract["command_names"])
+    assert "hacapk.charge_gram.reduce_configured_candidate_directional_schur" in contract["command_names"]
     assert {
         "ih.eddy.create",
         "ih.eddy.output",
@@ -60,18 +81,18 @@ def test_radia_mex_contract_reads_the_cpp_command_inventory():
     assert "hacapk.charge_gram.configured_linear_material_element_blocks" in contract["command_names"]
     assert "hacapk.charge_gram.configured_linear_material_candidate_clusters" in contract["command_names"]
     assert "hlu.set_trunc_tol" in contract["command_names"]
-    # The native Lie-map pipeline and 3D reference-orbit tracker (the four
-    # commands that took the gateway from 358 to 362).
+    # The native Lie-map pipeline and both 3D reference-orbit contracts.
     assert {
         "beam.lie.map_tensors_spoly",
         "beam.lie.dragt_finn_factorize",
         "beam.lie.apply_dragt_finn_batch",
         "beam.orbit.track_reference_3d",
+        "beam.orbit.track_reference_to_plane",
     }.issubset(contract["command_names"])
     assert "topopt.abe_element_fill_plan" in contract["command_names"]
     assert contract["command_groups"]["radia-core"] >= 70
-    assert contract["pybind_public_count"] == 98
-    assert contract["pybind_covered_count"] == 98
+    assert contract["pybind_public_count"] == 99
+    assert contract["pybind_covered_count"] == 99
     assert contract["pybind_missing"] == []
     assert contract["pybind_internal_numerical_count"] == 28
     assert contract["pybind_internal_missing"] == []
@@ -83,9 +104,10 @@ def test_radia_mex_contract_reads_the_cpp_command_inventory():
     assert "axifem.q2_magnetic_element_matrices" in contract["command_names"]
     # _ChargeGramHMatrix.charge_sigma (the sigma-normalization diagnostic
     # from the roundoff-amplification fix) is EXCLUDED with a reason, and
-    # exclusions leave the relevant surface; cyclic image setup expands the
-    # covered stateful surface to 123 entries.
-    assert contract["pybind_class_surface_count"] == 123
+    # exclusions leave the relevant surface; field-gradient and configured
+    # directional Schur and field-value shape-derivative bindings expand it to
+    # 126 covered entries.
+    assert contract["pybind_class_surface_count"] == 126
     assert ("_ChargeGramHMatrix.charge_sigma"
             in contract["pybind_class_exclusions"])
     assert contract["pybind_class_covered_count"] == contract["pybind_class_surface_count"]
@@ -120,6 +142,9 @@ def test_radia_mex_contract_reads_the_cpp_command_inventory():
     assert contract["verified_contract"]["optuna_native_kernel_benchmark"].endswith(
         "results_matlab_optuna_mex_benchmark_20260806.json"
     )
+    assert contract["verified_contract"]["optuna49_performance_benchmark"].endswith(
+        "results_matlab_optuna49_performance_20260825.json"
+    )
     assert contract["verified_contract"]["native_motor_family_artifact"].endswith(
         "native_motor_angle_family.json"
     )
@@ -143,7 +168,10 @@ def test_optuna_simulink_contract_is_table_backed():
     assert "ObjectiveTable" in contract["tables"]
     assert "ConstraintTable" in contract["tables"]
     assert "SamplerStateTable" in contract["tables"]
-    assert contract["native_acceleration"]["python_per_trial"] is False
+    assert contract["schema"].endswith("/v3")
+    assert contract["upstream_oracle"]["ok"] is True
+    assert contract["upstream_oracle"]["oracle_versions"]["optuna"] == "4.9.0"
+    assert contract["native_acceleration"]["upstream_python_gp_python_per_trial"] is True
     assert contract["native_acceleration"]["full_optimizer_in_cpp"] is False
     assert contract["cae_trial_contract"]["success_schema"] == (
         "radia.optuna.cae-trial.v1"
@@ -206,7 +234,7 @@ def test_optuna_simulink_contract_is_table_backed():
     assert topology["sheet_metal"]["simulink_block"] == (
         "Optimization/Sheet Metal Optimization"
     )
-    assert contract["sampler_quality"]["python_parity_claim"].startswith("none")
+    assert contract["sampler_quality"]["python_parity_claim"].startswith("supported")
     hcurl = topology["sheet_metal"]["hcurl_eddy_bubble"]
     assert hcurl["status"] == "native-mex-ready"
     assert hcurl["python_boundary"] == "none in the MATLAB optimization loop"
@@ -230,14 +258,51 @@ def test_root_readme_publishes_native_topology_mex_parity():
     matlab_readme = " ".join(
         (root / "matlab" / "README.md").read_text(encoding="utf-8").split()
     )
-    assert "123 stateful class members" in matlab_readme
-    assert "All 248 entries are covered by the current 362-command gateway" in matlab_readme
+    assert "126 stateful class members" in matlab_readme
+    assert "All three surfaces are fully covered by the current 364-command gateway" in matlab_readme
+    assert "20-command `optuna_mex`" in matlab_readme
 
     parity_doc = (root / "docs" / "api" / "MATLAB_MEX_NGSOLVE_PARITY.md").read_text(
         encoding="utf-8"
     )
-    assert "| Stateful pybind11 class surface | 123 / 123 covered |" in parity_doc
-    assert "| MEX gateway commands | 362 |" in parity_doc
+    assert "| Stateful pybind11 class surface | 126 / 126 covered |" in parity_doc
+    assert "| Radia MEX gateway commands | 364 |" in parity_doc
+    assert "| Optuna MEX gateway commands | 20 |" in parity_doc
+
+    benchmark = json.loads(
+        (root / "validation_test" / "optimization" /
+         "results_matlab_optuna49_performance_20260825.json").read_text(
+             encoding="utf-8"
+         )
+    )
+    assert benchmark["gate"]["passed"] is True
+    for workload in benchmark["workloads"].values():
+        assert workload["checksum_match"] is True
+        assert workload["matlab_not_slower"] is True
+        assert workload["python_over_matlab_speed_ratio"] > 1.0
+
+
+def test_optuna_mex_is_an_independent_required_gateway():
+    root = Path(__file__).resolve().parents[3]
+    native_kernels = (
+        root / "matlab" / "+radia" / "+optuna" / "+internal" /
+        "NativeKernels.m"
+    ).read_text(encoding="utf-8")
+    assert "optuna_mex(varargin{:})" in native_kernels
+    assert "radia.internal.callMex" not in native_kernels
+    assert "Build.ps1 -OptunaMexOnly" in native_kernels
+    assert "radia:optuna:IncompatibleNativeKernel" in native_kernels
+
+    cmake = (root / "CMakeLists.txt").read_text(encoding="utf-8")
+    optuna_only = cmake.index("if(RADIA_BUILD_OPTUNA_MEX_ONLY)")
+    python_discovery = cmake.index("find_package(Python3 REQUIRED")
+    assert optuna_only < python_discovery
+    assert "Standalone optuna_mex configured without Python, NGSolve, MKL, or Radia core" in cmake
+
+    build = (root / "Build.ps1").read_text(encoding="utf-8")
+    assert "-DRADIA_BUILD_OPTUNA_MEX_ONLY=ON" in build
+    assert "NGSolve: not part of the optuna_mex target" in build
+    assert "MKL:   not part of the optuna_mex target" in build
 
 
 def test_server_registers_bridge_tools():
@@ -246,6 +311,8 @@ def test_server_registers_bridge_tools():
     tool_names = {item.name for item in asyncio.run(mcp.list_tools())}
     assert "matlab_radia_mex_contract" in tool_names
     assert "matlab_optuna_simulink_contract" in tool_names
+    assert "matlab_optuna_compatibility_contract" in tool_names
+    assert "matlab_optuna_oracle_audit" in tool_names
     assert "matlab_optimize_build" in tool_names
     assert "matlab_optimize_resume" in tool_names
     assert "matlab_cad_topology_build" in tool_names
@@ -254,6 +321,38 @@ def test_server_registers_bridge_tools():
     payload = json.loads(mex_tool("ngsolve"))
     assert payload["topic"] == "ngsolve"
     assert payload["topic_data"]["owner"] == "NGSolve"
+
+
+def test_optuna_compatibility_and_oracle_audit_are_checked():
+    contract = matlab_optuna_compatibility_contract()
+    assert contract["ok"] is True
+    assert "not a drop-in replacement" in contract["claim"]
+    assert contract["test_counts"] == {
+        "upstream_python": 47,
+        "upstream_mcp": 3,
+        "matlab_integration": 45,
+        "total": 95,
+    }
+    assert contract["transport"]["public_mcp_contract"] == "stdio"
+    assert contract["transport"]["mcp_sampler_seed_supported"] is False
+    assert contract["public_api_closure"] == {
+        "surface_entry_count": 816,
+        "surface_present_count": 263,
+        "surface_missing_count": 553,
+        "oracle_verified_count": 158,
+        "oracle_partial_count": 52,
+        "oracle_unmapped_count": 606,
+        "full_compatibility_complete": False,
+    }
+    assert contract["unsupported_or_not_yet_oracled"]
+
+    audit = matlab_optuna_oracle_audit()
+    assert audit["ok"] is True
+    assert audit["test_function_count"] == 95
+    assert audit["manifest_entry_count"] == 95
+    assert audit["policy_identical"] is True
+    assert audit["missing_manifest_entries"] == []
+    assert audit["stale_manifest_entries"] == []
 
 
 def test_optimize_server_builds_multiobjective_ltspice_code():
@@ -301,7 +400,7 @@ def test_optimize_server_builds_cae_aware_native_simulink_code():
         },
     })
     code = payload["matlab_code"]
-    assert payload["schema"].endswith("/v2")
+    assert payload["schema"].endswith("/v3")
     assert "radia.optuna.SimulinkRunner" in code
     assert "ConstraintFcn=@constrainIHTrial" in code
     assert "ValidationFcn=@validateIHTrial" in code
@@ -313,6 +412,113 @@ def test_optimize_server_builds_cae_aware_native_simulink_code():
     assert payload["result_contract"]["cae_success"] == (
         "radia.optuna.cae-trial.v1 in trial user attributes"
     )
+
+
+def test_optimize_builder_v3_covers_seeded_sampler_surface():
+    cases = {
+        "random": "RandomSampler(41)",
+        "tpe": "TPESampler(Seed=41",
+        "cmaes": "CmaEsSampler(Seed=41",
+        "gp": "GPSampler(Seed=41",
+        "nsgaii": "NSGAIISampler(Seed=41",
+        "nsgaiii": "NSGAIIISampler(Seed=41",
+        "qmc": "QMCSampler(QMCType=\"sobol\",Scramble=true,Seed=41)",
+        "bruteforce": "BruteForceSampler(Seed=41",
+    }
+    for name, expected in cases.items():
+        sampler = {"name": name, "seed": 41}
+        if name == "qmc":
+            sampler["scramble"] = True
+        payload = matlab_optimize_build({
+            "directions": ["minimize", "minimize"] if name in {"nsgaii", "nsgaiii"} else ["minimize"],
+            "sampler": sampler,
+            "n_trials": 3,
+            "live_monitor": False,
+            "runner": {"kind": "objective", "objective_fcn": "objectiveFcn"},
+        })
+        assert expected in payload["matlab_code"]
+        assert payload["oracle"]["explicit_seed"] == 41
+        assert payload["oracle"]["classification"] == "upstream-python"
+
+    grid = matlab_optimize_build({
+        "sampler": {"name": "grid", "seed": 7, "search_space": {"x": [1, 2]}},
+        "runner": {"kind": "objective", "objective_fcn": "objectiveFcn"},
+    })
+    assert "GridSampler(jsondecode" in grid["matlab_code"]
+
+    fixed = matlab_optimize_build({
+        "sampler": {
+            "name": "partial_fixed", "seed": 9,
+            "fixed_params": {"mode": "A"},
+            "base_sampler": {"name": "random", "seed": 9},
+        },
+        "runner": {"kind": "objective", "objective_fcn": "objectiveFcn"},
+    })
+    assert "PartialFixedSampler(jsondecode" in fixed["matlab_code"]
+    assert "RandomSampler(9)" in fixed["matlab_code"]
+
+    advanced_tpe = matlab_optimize_build({
+        "sampler": {
+            "name": "tpe", "seed": 13,
+            "gamma_fcn": "customGamma", "weights_fcn": "customWeights",
+            "multivariate": True, "group": True,
+            "warn_independent_sampling": True,
+            "categorical_distance_fcn": {"mode": "modeDistance"},
+        },
+        "runner": {"kind": "objective", "objective_fcn": "objectiveFcn"},
+    })
+    assert "GammaFcn=@customGamma" in advanced_tpe["matlab_code"]
+    assert "WeightsFcn=@customWeights" in advanced_tpe["matlab_code"]
+    assert "Multivariate=true,Group=true" in advanced_tpe["matlab_code"]
+    assert "WarnIndependentSampling=true" in advanced_tpe["matlab_code"]
+    assert (
+        "CategoricalDistanceFcn=containers.Map({'mode'},{@modeDistance})"
+        in advanced_tpe["matlab_code"]
+    )
+
+    cma_independent = matlab_optimize_build({
+        "sampler": {
+            "name": "cmaes", "seed": 31,
+            "independent_sampler": {"name": "random", "seed": 211},
+            "warn_independent_sampling": False,
+        },
+        "runner": {"kind": "objective", "objective_fcn": "objectiveFcn"},
+    })
+    assert "IndependentSampler=radia.optuna.RandomSampler(211)" in (
+        cma_independent["matlab_code"]
+    )
+    assert "WarnIndependentSampling=false" in cma_independent["matlab_code"]
+
+
+def test_optimize_builder_classifies_parallel_and_rejects_invalid_sampler_contracts():
+    parallel = matlab_optimize_build({
+        "sampler": {"name": "tpe", "seed": 17, "multivariate": True},
+        "parallel": True,
+        "runner": {
+            "kind": "ltspice", "netlist": r"C:\temp\a.cir",
+            "configure_fcn": "configureTrial", "score_fcn": "scoreTrial",
+        },
+    })
+    assert parallel["oracle"]["classification"] == "matlab-integration"
+    assert "Multivariate=true" in parallel["matlab_code"]
+
+    import pytest
+
+    with pytest.raises(ValueError, match="CmaEsSampler supports only one objective"):
+        matlab_optimize_build({
+            "directions": ["minimize", "maximize"], "sampler": "cmaes",
+            "runner": {"kind": "objective", "objective_fcn": "objectiveFcn"},
+        })
+    with pytest.raises(ValueError, match="requires non-empty sampler.search_space"):
+        matlab_optimize_build({
+            "sampler": "grid",
+            "runner": {"kind": "objective", "objective_fcn": "objectiveFcn"},
+        })
+    with pytest.raises(ValueError, match="requires sampler.multivariate=true"):
+        matlab_optimize_build({
+            "sampler": {"name": "tpe", "group": True},
+            "runner": {"kind": "objective", "objective_fcn": "objectiveFcn"},
+        })
 
 
 def test_optimize_server_builds_cubit_vim_lp_code():

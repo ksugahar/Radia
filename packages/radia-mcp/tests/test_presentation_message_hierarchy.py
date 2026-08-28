@@ -245,3 +245,22 @@ def test_title_specificity_accepts_loop_free_as_viewpoint(tmp_path: Path) -> Non
 
     assert result["slides"][1]["passed"] is True
     assert result["slides"][1]["criteria"]["viewpoint_is_explicit"] is True
+
+
+def test_title_specificity_accepts_characteristic_as_viewpoint(tmp_path: Path) -> None:
+    prs = Presentation()
+    prs.slide_width = Inches(13.333)
+    prs.slide_height = Inches(7.5)
+    _add_title_slide(prs)
+    _add_content_slide(
+        prs,
+        "非線形C型鉄心の実測B-H特性",
+        "分かったこと：実測曲線で非線形計算を再現できる",
+    )
+    pptx_path = tmp_path / "characteristic-title.pptx"
+    prs.save(pptx_path)
+
+    result = presentation_check_slide_title_specificity(str(pptx_path))
+
+    assert result["slides"][1]["passed"] is True
+    assert result["slides"][1]["criteria"]["viewpoint_is_explicit"] is True
