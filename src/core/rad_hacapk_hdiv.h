@@ -686,8 +686,11 @@ public:
         int picard_iters, double cg_tol, int cg_maxit);
 
 protected:
+    void OnBuildStarting(const RadHACApKParams& params) override;
     void ExtractCoordinates() override;
     void OnBeforeBuild() override;
+    bool UseSymmetricFill() const override { return true; }
+    void OnBuildFinished(bool succeeded) noexcept override;
     void InitializeInvChi() override { m_inv_chi.assign(m_ndof, 0.0); }
     bool IsVariableDOF() const override { return false; }
     int  GetUniformNFFC() const override { return 1; }
@@ -718,13 +721,16 @@ private:
     double EvaluateHighOrderTetEntry(int a, int b) const;
     double EvaluateAnalyticEntry(int a, int b) const;
     double EvaluateMonopoleEntry(int a, int b) const;
+    double EvaluateDirectSelfEntry(int a) const;
+    static bool HOFarOneSidedEnabled();
+    static bool HOAnalyticBlockEnabled();
+    static bool HOTetImageBlockEnabled();
     // The selected element strategy supplies the complete physical entry; the
     // public virtual wraps it and serves Ghat = sigma_a^-1 sigma_b^-1 * raw
     // only while the H-matrix fill is running (m_fillNormalized).
     double GetInteractionMatrixElementRaw(int a, int b) const;
-    // Pre-fill diagonal pass: sigma_p = sqrt(raw G_pp) (1.0 on a nonpositive
-    // or nonfinite diagonal -- fail-soft here would hide nothing: the entry
-    // itself is served unscaled then).
+    // Pre-fill diagonal pass: sigma_p = sqrt(raw G_pp). Exact zero from an
+    // antisymmetric fixed-plane image remains unscaled; invalid diagonals fail.
     void ComputeChargeSigma();
     std::vector<double> m_chargeSigma;     // sigma_p (empty before build)
     std::vector<double> m_chargeSigmaInv;  // 1/sigma_p
