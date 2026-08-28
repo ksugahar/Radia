@@ -30,7 +30,7 @@ The gateways are intentionally independent. `radia_mex` contains no
 `optuna.*` commands and owns the Radia/NGSolve/oneMKL dependency graph.
 `optuna_mex` contains two API commands and 18 optimizer commands, has no
 NGSolve, oneMKL, Radia-core, or Python dependency, and is loaded only when
-optimization is used. A missing or non-20-command `optuna_mex` fails loudly; it
+optimization is used. A missing or non-21-command `optuna_mex` fails loudly; it
 is never replaced by a call through `radia_mex` or a silent MATLAB substitute.
 
 Seven acoustic commands share their implementation with the pybind11

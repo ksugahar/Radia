@@ -63,7 +63,7 @@ cubit-plugin-install            # Deploy Cubit .ccm backend + PySide6 toolbar (s
 numerical solver kernels stay in the main `radia` wheel. Optuna is a generic,
 independently useful MATLAB compatibility component rather than a Radia physical
 solver. Its canonical optimization sources remain under `matlab/+radia/+optuna`;
-the separate wheel stages that tree plus the 20-command `optuna_mex`. The audited
+the separate wheel stages that tree plus the 21-command `optuna_mex`. The audited
 generic Simulink subset (`buildOptunaBlock`, its Level-2 MATLAB S-Function/runtime
 store, and `addOptunaMonitor`) is staged from `matlab/+radia/+simulink` too. It must
 not acquire Radia-core, NGSolve, or MKL dependencies. Three named LTspice/sheet-
@@ -439,6 +439,15 @@ evidence of Optuna parity.
   space and parameter order, trial numbers, completed/pruned/failed history,
   constraints, and objective values on both sides. Run proposal-sequence
   comparisons sequentially so scheduling cannot change random consumption.
+- Treat the upstream Optuna algorithm as the common algorithmic core, even when
+  MATLAB or MEX executes an independent native implementation. Preserve the
+  upstream equations, transforms, state updates, boundary handling, and seeded
+  random-consumption order; do not silently replace them with a different
+  optimizer or approximation. Native vectorization, MEX kernels, batched work,
+  parallel trial execution, table/MAT persistence, and Simulink telemetry may
+  improve performance around that core. A deliberate MATLAB-only algorithmic
+  extension must use a distinct option or type, be documented as an extension,
+  and must not change the upstream-compatible default path.
 - Record and check every backend version that can affect the result: Python,
   NumPy, SciPy, PyTorch, and `cmaes` where applicable. Regenerators must fail
   when the pinned Optuna version is not present and must produce byte-stable

@@ -1876,6 +1876,85 @@ end
 verifyEqual(testCase,actual,expected,AbsTol=5e-12);
 end
 
+function testTPEConstantLiarConcurrentRunningMatchesUpstream(testCase)
+contract=testCase.TestData.Oracle.tpe_constant_liar_seed_127;
+verifyEmpty(testCase,string( ...
+    contract.consider_prior_warning_categories.default));
+verifyEqual(testCase,string( ...
+    contract.consider_prior_warning_categories.consider_prior_true), ...
+    "FutureWarning");
+verifyEqual(testCase,string( ...
+    contract.consider_prior_warning_categories.consider_prior_false), ...
+    "FutureWarning");
+verifyWarningFree(testCase,@()radia.optuna.TPESampler());
+verifyWarning(testCase,@()radia.optuna.TPESampler(ConsiderPrior=true), ...
+    "radia:optuna:FutureWarning");
+verifyWarning(testCase,@()radia.optuna.TPESampler(ConsiderPrior=false), ...
+    "radia:optuna:FutureWarning");
+
+runTPEConstantLiarContract(testCase,contract.univariate,false,contract);
+runTPEConstantLiarContract(testCase,contract.multivariate,true,contract);
+end
+
+function runTPEConstantLiarContract(testCase,expected,multivariate,contract)
+sampler=radia.optuna.TPESampler(Seed=double(contract.seed), ...
+    NStartupTrials=double(contract.n_startup_trials), ...
+    Multivariate=multivariate,ConstantLiar=true);
+study=radia.optuna.Study(Sampler=sampler,AutoSave=false);
+cursor=1;
+for index=1:4
+    trial=study.ask();
+    row=sampleTPEConstantLiarRow(study,trial);
+    verifyTPEConstantLiarRow(testCase,row,expected(cursor));
+    study.tell(trial,tpeConstantLiarObjective(row));
+    cursor=cursor+1;
+end
+for batch=0:2
+    pending=cell(1,3);
+    pendingRows=cell(1,3);
+    for slot=0:2
+        pending{slot+1}=study.ask();
+        pendingRows{slot+1}=sampleTPEConstantLiarRow( ...
+            study,pending{slot+1});
+        verifyTPEConstantLiarRow( ...
+            testCase,pendingRows{slot+1},expected(cursor));
+        cursor=cursor+1;
+    end
+    for slot=[2,0]
+        study.tell(pending{slot+1}, ...
+            tpeConstantLiarObjective(pendingRows{slot+1}));
+    end
+    probe=study.ask();
+    probeRow=sampleTPEConstantLiarRow(study,probe);
+    verifyTPEConstantLiarRow(testCase,probeRow,expected(cursor));
+    cursor=cursor+1;
+    study.tell(probe,tpeConstantLiarObjective(probeRow));
+    study.tell(pending{2},tpeConstantLiarObjective(pendingRows{2}));
+end
+verifyEqual(testCase,cursor-1,numel(expected));
+verifyFalse(testCase,any(study.TrialTable.State=="RUNNING"));
+end
+
+function row=sampleTPEConstantLiarRow(study,trial)
+row=struct("number",trial.Number, ...
+    "x",trial.suggest_float("x",-2,2), ...
+    "mode",string(trial.suggest_categorical("mode",["A","B","C"])), ...
+    "running_before",sum(study.TrialTable.State=="RUNNING"));
+end
+
+function verifyTPEConstantLiarRow(testCase,actual,expected)
+verifyEqual(testCase,actual.number,double(expected.number));
+verifyEqual(testCase,actual.x,double(expected.x),AbsTol=5e-12);
+verifyEqual(testCase,actual.mode,string(expected.mode));
+verifyEqual(testCase,actual.running_before,double(expected.running_before));
+end
+
+function value=tpeConstantLiarObjective(row)
+levels=["A","B","C"];
+penalties=[0,0.15,0.35];
+value=(row.x-0.3)^2+penalties(find(levels==row.mode,1));
+end
+
 function testTPECallableGammaWeightsSeededSequence(testCase)
 expected=testCase.TestData.Oracle.custom_tpe_sampler_gamma_weights;
 sampler=radia.optuna.TPESampler(Seed=97,NStartupTrials=4, ...
@@ -2150,6 +2229,170 @@ for index=1:numel(expected)
 end
 end
 
+function testCmaEsAdvancedContinuousModesMatchUpstream(testCase)
+contract=testCase.TestData.Oracle.cmaes_advanced;
+warningState=warning;
+cleanup=onCleanup(@()warning(warningState));
+warning("off","radia:optuna:ExperimentalWarning");
+warning("off","radia:optuna:FutureWarning");
+cases={ ...
+    "standard",@()radia.optuna.CmaEsSampler( ...
+        Seed=131,NStartupTrials=1,PopulationSize=4); ...
+    "restart_ignored",@()radia.optuna.CmaEsSampler( ...
+        Seed=131,NStartupTrials=1,PopulationSize=4, ...
+        RestartStrategy="ipop",IncPopsize=2); ...
+    "separable",@()radia.optuna.CmaEsSampler( ...
+        Seed=131,NStartupTrials=1,PopulationSize=4, ...
+        UseSeparableCMA=true); ...
+    "lr_adapt",@()radia.optuna.CmaEsSampler( ...
+        Seed=131,NStartupTrials=1,PopulationSize=4,LrAdapt=true)};
+for caseIndex=1:size(cases,1)
+    name=cases{caseIndex,1};
+    expected=contract.(name);
+    study=radia.optuna.Study(Sampler=cases{caseIndex,2}(),AutoSave=false);
+    for index=1:numel(expected)
+        trial=study.ask();
+        x=trial.suggest_float("x",-2,2);
+        y=trial.suggest_float("y",-1,3);
+        study.tell(trial,(x-0.4)^2+0.5*(y+0.2)^2);
+        verifyEqual(testCase,x,double(expected(index).x), ...
+            sprintf("%s trial %d x",name,index),AbsTol=5e-12);
+        verifyEqual(testCase,y,double(expected(index).y), ...
+            sprintf("%s trial %d y",name,index),AbsTol=5e-12);
+    end
+end
+clear cleanup
+end
+
+function testCmaEsWithMarginMatchesUpstream(testCase)
+expected=testCase.TestData.Oracle.cmaes_advanced.with_margin;
+warningState=warning;
+cleanup=onCleanup(@()warning(warningState));
+warning("off","radia:optuna:ExperimentalWarning");
+sampler=radia.optuna.CmaEsSampler(Seed=137,NStartupTrials=1, ...
+    PopulationSize=4,WithMargin=true);
+study=radia.optuna.Study(Sampler=sampler,AutoSave=false);
+for index=1:numel(expected)
+    trial=study.ask();
+    mesh=trial.suggest_int("mesh",0,10,Step=2);
+    x=trial.suggest_float("x",-2,2);
+    study.tell(trial,(x-0.3)^2+0.02*mesh);
+    verifyEqual(testCase,mesh,double(expected(index).mesh), ...
+        sprintf("margin trial %d mesh",index));
+    verifyEqual(testCase,x,double(expected(index).x), ...
+        sprintf("margin trial %d x",index),AbsTol=5e-12);
+end
+clear cleanup
+end
+
+function testCmaEsSourceTrialsWarmStartMatchesUpstream(testCase)
+contract=testCase.TestData.Oracle.cmaes_advanced;
+sourceTrials=cmaSourceTrials(contract.source_trials);
+warningState=warning;
+cleanup=onCleanup(@()warning(warningState));
+warning("off","radia:optuna:ExperimentalWarning");
+sampler=radia.optuna.CmaEsSampler(Seed=149,NStartupTrials=1, ...
+    PopulationSize=4,SourceTrials=sourceTrials);
+study=radia.optuna.Study(Sampler=sampler,AutoSave=false);
+expected=contract.source_trial_proposals;
+for index=1:numel(expected)
+    trial=study.ask();
+    x=trial.suggest_float("x",-2,2);
+    y=trial.suggest_float("y",-1,3);
+    study.tell(trial,(x-0.4)^2+0.5*(y+0.2)^2);
+    verifyEqual(testCase,x,double(expected(index).x), ...
+        sprintf("source trial %d x",index),AbsTol=5e-12);
+    verifyEqual(testCase,y,double(expected(index).y), ...
+        sprintf("source trial %d y",index),AbsTol=5e-12);
+end
+clear cleanup
+end
+
+function testCmaEsConsiderPrunedTrialsMatchesUpstream(testCase)
+expected=testCase.TestData.Oracle.cmaes_advanced.consider_pruned_trials;
+warningState=warning;
+cleanup=onCleanup(@()warning(warningState));
+warning("off","radia:optuna:ExperimentalWarning");
+sampler=radia.optuna.CmaEsSampler(Seed=151,NStartupTrials=1, ...
+    PopulationSize=4,ConsiderPrunedTrials=true);
+study=radia.optuna.Study(Sampler=sampler,AutoSave=false);
+for index=1:numel(expected)
+    trial=study.ask();
+    x=trial.suggest_float("x",-2,2);
+    y=trial.suggest_float("y",-1,3);
+    value=(x-0.4)^2+0.5*(y+0.2)^2;
+    if string(expected(index).state)=="PRUNED"
+        trial.report(value+0.125,2);
+        study.tell(trial,State="PRUNED");
+    else
+        study.tell(trial,value);
+    end
+    verifyEqual(testCase,x,double(expected(index).x), ...
+        sprintf("pruned trial %d x",index),AbsTol=5e-12);
+    verifyEqual(testCase,y,double(expected(index).y), ...
+        sprintf("pruned trial %d y",index),AbsTol=5e-12);
+    verifyEqual(testCase,study.TrialTable.State(index), ...
+        string(expected(index).state));
+end
+clear cleanup
+end
+
+function testCmaEsAdvancedWarningsAndInvalidCombinationsMatchUpstream(testCase)
+contract=testCase.TestData.Oracle.cmaes_advanced;
+sourceTrials=cmaSourceTrials(contract.source_trials);
+warnings=contract.warnings;
+verifyEqual(testCase,string(warnings.restart),"FutureWarning");
+verifyEqual(testCase,string(warnings.x0),"FutureWarning");
+verifyEqual(testCase,string(warnings.sigma0),"FutureWarning");
+verifyEqual(testCase,string(warnings.separable),"ExperimentalWarning");
+verifyEqual(testCase,string(warnings.margin),"ExperimentalWarning");
+verifyEqual(testCase,string(warnings.lr_adapt),"ExperimentalWarning");
+verifyEqual(testCase,string(warnings.source_trials),"ExperimentalWarning");
+verifyWarning(testCase,@()radia.optuna.CmaEsSampler( ...
+    RestartStrategy="ipop",IncPopsize=2),"radia:optuna:FutureWarning");
+verifyWarning(testCase,@()radia.optuna.CmaEsSampler( ...
+    X0=struct("x",0.5)),"radia:optuna:FutureWarning");
+verifyWarning(testCase,@()radia.optuna.CmaEsSampler( ...
+    Sigma0=0.2),"radia:optuna:FutureWarning");
+verifyWarning(testCase,@()radia.optuna.CmaEsSampler( ...
+    UseSeparableCMA=true),"radia:optuna:ExperimentalWarning");
+verifyWarning(testCase,@()radia.optuna.CmaEsSampler( ...
+    WithMargin=true),"radia:optuna:ExperimentalWarning");
+verifyWarning(testCase,@()radia.optuna.CmaEsSampler( ...
+    LrAdapt=true),"radia:optuna:ExperimentalWarning");
+verifyWarning(testCase,@()radia.optuna.CmaEsSampler( ...
+    SourceTrials=sourceTrials),"radia:optuna:ExperimentalWarning");
+
+errors=contract.invalid_combinations;
+names=string(fieldnames(errors));
+for index=1:numel(names)
+    verifyEqual(testCase,string(errors.(names(index))),"ValueError");
+end
+warningState=warning;
+cleanup=onCleanup(@()warning(warningState));
+warning("off","radia:optuna:FutureWarning");
+warning("off","radia:optuna:ExperimentalWarning");
+verifyError(testCase,@()radia.optuna.CmaEsSampler( ...
+    SourceTrials=sourceTrials,X0=struct("x",0)), ...
+    "radia:optuna:CMASourceTrials");
+verifyError(testCase,@()radia.optuna.CmaEsSampler( ...
+    SourceTrials=sourceTrials,Sigma0=0.2), ...
+    "radia:optuna:CMASourceTrials");
+verifyError(testCase,@()radia.optuna.CmaEsSampler( ...
+    SourceTrials=sourceTrials,UseSeparableCMA=true), ...
+    "radia:optuna:CMASourceTrials");
+verifyError(testCase,@()radia.optuna.CmaEsSampler( ...
+    LrAdapt=true,UseSeparableCMA=true), ...
+    "radia:optuna:CMALearningRate");
+verifyError(testCase,@()radia.optuna.CmaEsSampler( ...
+    LrAdapt=true,WithMargin=true), ...
+    "radia:optuna:CMALearningRate");
+verifyError(testCase,@()radia.optuna.CmaEsSampler( ...
+    UseSeparableCMA=true,WithMargin=true), ...
+    "radia:optuna:CMAMargin");
+clear cleanup
+end
+
 function testScrambledQMCSeededProposalSequence(testCase)
 contract=testCase.TestData.Oracle.scrambled_qmc_sampler_seed_47;
 for type=["sobol","halton"]
@@ -2307,6 +2550,20 @@ for type=["sobol","halton"]
         verifyEqual(testCase,y,double(expected(index).y),AbsTol=0);
     end
 end
+end
+
+function testNativeSobolAbove32DimensionsMatchesUpstream(testCase)
+contract=testCase.TestData.Oracle.native_sobol_high_dimension;
+dimension=double(contract.dimension);
+verifyGreaterThan(testCase,dimension,32);
+verifyEqual(testCase,double(contract.maximum_dimension),21201);
+sampler=radia.optuna.QMCSampler(QMCType="sobol", ...
+    Scramble=false,Seed=double(contract.seed));
+actual=sampler.unitPoints(dimension,size(contract.proposals,1)-1);
+expected=(double(contract.proposals(2:end,:))+1)/2;
+verifyEqual(testCase,actual,expected,AbsTol=0);
+verifyError(testCase,@()sampler.unitPoints(21202,1), ...
+    "radia:optuna:QMCDimension");
 end
 
 function testQMCWarningOptionsMatchUpstream(testCase)
@@ -2477,6 +2734,20 @@ end
 function value=failingConstraintCallback()
 value=[]; %#ok<NASGU>
 error("radia:test:ConstraintCallback","constraint callback failed");
+end
+
+function sourceTrials=cmaSourceTrials(rows)
+sourceTrials=cell(numel(rows),1);
+distributions=struct( ...
+    "x",radia.optuna.FloatDistribution(-2,2), ...
+    "y",radia.optuna.FloatDistribution(-1,3));
+for index=1:numel(rows)
+    sourceTrials{index}=radia.optuna.create_trial( ...
+        value=double(rows(index).value), ...
+        params=struct("x",double(rows(index).x), ...
+        "y",double(rows(index).y)), ...
+        distributions=distributions);
+end
 end
 
 function value=readSummaryDirection(summary)
