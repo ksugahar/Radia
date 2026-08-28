@@ -2131,6 +2131,71 @@ for index=1:numel(expected)
 end
 end
 
+function testMultiObjectiveTPEPrunedHistorySeededSequence(testCase)
+% Optuna's TPE reads multi-objective history from
+% study._get_trials(states=(COMPLETE, PRUNED)) as well.  Trial.report is
+% rejected for a multi-objective study, so a pruned trial carries no
+% intermediate value and _get_pruned_trial_score falls back to its
+% (1, 0.0) sentinel: pruned trials rank after every complete trial but
+% still count towards n_startup_trials and still enter the split.
+expected=testCase.TestData.Oracle.multiobjective_tpe_pruned_seed_41;
+values=reshape(double(expected.values),[],1);
+states=reshape(string(expected.states),[],1);
+study=radia.optuna.Study(Directions=["minimize" "minimize"], ...
+    Sampler=radia.optuna.TPESampler(Seed=double(expected.seed), ...
+    NStartupTrials=double(expected.n_startup_trials)),AutoSave=false);
+actual=zeros(size(values));
+for index=1:numel(values)
+    trial=study.ask();
+    actual(index)=trial.suggest_float("x",-2,2);
+    if states(index)=="PRUNED"
+        study.tell(trial,State="PRUNED");
+    else
+        study.tell(trial, ...
+            [(actual(index)-0.3)^2, (actual(index)+0.4)^2]);
+    end
+end
+verifyEqual(testCase,study.TrialTable.State,states);
+verifyEqual(testCase,sum(states=="PRUNED"),double(expected.pruned_count));
+verifyEqual(testCase,actual,values,AbsTol=5e-12);
+end
+
+function testCmaEsConsiderPrunedTrialsSeededSequence(testCase)
+% CmaEsSampler._get_trials feeds the optimizer with COMPLETE trials plus
+% PRUNED trials that reported an intermediate value, rewritten to the value
+% at the deepest step, and the same set drives the n_startup_trials gate.
+expected=testCase.TestData.Oracle.cmaes_pruned_sampler_seed_31;
+rows=expected.trials;
+study=radia.optuna.Study(Sampler=radia.optuna.CmaEsSampler( ...
+    Seed=double(expected.seed), ...
+    NStartupTrials=double(expected.n_startup_trials), ...
+    PopulationSize=double(expected.population_size), ...
+    ConsiderPrunedTrials=logical(expected.consider_pruned_trials)), ...
+    AutoSave=false);
+pruned=0;
+for index=1:numel(rows)
+    trial=study.ask();
+    x=trial.suggest_float("x",-2,2);
+    y=trial.suggest_float("y",-1,3);
+    objective=(x-0.4)^2+0.5*(y+0.2)^2;
+    if mod(index-1,4)==2
+        trial.report(objective+0.75,0);
+        trial.report(objective,1);
+        study.tell(trial,State="PRUNED");
+        pruned=pruned+1;
+        verifyEqual(testCase,string(rows(index).state),"PRUNED");
+    else
+        study.tell(trial,objective);
+        verifyEqual(testCase,string(rows(index).state),"COMPLETE");
+    end
+    verifyEqual(testCase,x,double(rows(index).x), ...
+        sprintf("x at trial %d",index-1),AbsTol=5e-12);
+    verifyEqual(testCase,y,double(rows(index).y), ...
+        sprintf("y at trial %d",index-1),AbsTol=5e-12);
+end
+verifyEqual(testCase,pruned,double(expected.pruned_count));
+end
+
 function testCmaEsIndependentSamplerSeededSequence(testCase)
 expected=testCase.TestData.Oracle.cmaes_independent_sampler_seed_31;
 sampler=radia.optuna.CmaEsSampler(Seed=31,NStartupTrials=1, ...

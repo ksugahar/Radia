@@ -104,27 +104,32 @@ classdef MOTPESampler < radia.optuna.BaseSampler
                 value = low;
                 return
             end
-            [x, objectives, trialNumbers] = ...
+            % Optuna leaves the random startup phase on the study-level
+            % COMPLETE+PRUNED count, not on how many observations this one
+            % parameter happens to have.
+            if study.nonRunningTrialCount() < obj.NStartupTrials
+                value = obj.IndependentSampler.sampleFloat( ...
+                    study, trial, name, low, high, options);
+                return
+            end
+            [x, objectives, trialNumbers, states] = ...
                 radia.optuna.internal.ParetoSupport.numericObservations( ...
                 study, name);
             valid = isfinite(x) & x >= low & x <= high & ...
-                all(isfinite(objectives), 2);
+                (all(isfinite(objectives), 2) | states == "PRUNED");
             if options.Log
                 valid = valid & x > 0;
             end
             x = x(valid);
             objectives = objectives(valid, :);
             trialNumbers = trialNumbers(valid);
-            if numel(x) < obj.NStartupTrials
-                value = obj.IndependentSampler.sampleFloat( ...
-                    study, trial, name, low, high, options);
-                return
-            end
+            states = states(valid);
 
-            nGood = obj.goodTrialCount(numel(x));
+            nGood = obj.goodTrialCount(study.nonRunningTrialCount());
+            nGood = min(nGood, numel(x));
             [goodMask, goodWeights] = ...
                 radia.optuna.internal.ParetoSupport.splitMOTPE( ...
-                study, trialNumbers, objectives, nGood);
+                study, trialNumbers, objectives, nGood, states);
             estimatorOptions = { ...
                 "Log", options.Log, ...
                 "Step", options.Step, ...
@@ -170,12 +175,17 @@ classdef MOTPESampler < radia.optuna.BaseSampler
                 error("radia:optuna:Choices", ...
                     "Categorical choices must not be empty.");
             end
-            [tokens, objectives, trialNumbers] = ...
+            if study.nonRunningTrialCount() < obj.NStartupTrials
+                value = obj.IndependentSampler.sampleCategorical( ...
+                    study, trial, name, choices);
+                return
+            end
+            [tokens, objectives, trialNumbers, states] = ...
                 radia.optuna.internal.ParetoSupport.categoricalObservations( ...
                 study, name);
             choiceTokens = obj.choiceTokens(choices);
             observed = zeros(numel(tokens), 1);
-            valid = all(isfinite(objectives), 2);
+            valid = all(isfinite(objectives), 2) | states == "PRUNED";
             for index = 1:numel(tokens)
                 match = find(choiceTokens == tokens(index), 1);
                 if isempty(match)
@@ -187,17 +197,14 @@ classdef MOTPESampler < radia.optuna.BaseSampler
             observed = observed(valid);
             objectives = objectives(valid, :);
             trialNumbers = trialNumbers(valid);
+            states = states(valid);
             count = numel(choiceTokens);
-            if numel(observed) < obj.NStartupTrials
-                value = obj.IndependentSampler.sampleCategorical( ...
-                    study, trial, name, choices);
-                return
-            end
 
-            nGood = obj.goodTrialCount(numel(observed));
+            nGood = obj.goodTrialCount(study.nonRunningTrialCount());
+            nGood = min(nGood, numel(observed));
             [goodMask, goodWeights] = ...
                 radia.optuna.internal.ParetoSupport.splitMOTPE( ...
-                study, trialNumbers, objectives, nGood);
+                study, trialNumbers, objectives, nGood, states);
             distanceFcn=radia.optuna.internal.CategoricalDistance. ...
                 get(obj.CategoricalDistanceFcn,name);
             below = radia.optuna.internal.ParzenEstimator.categorical( ...
