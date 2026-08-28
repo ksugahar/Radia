@@ -301,6 +301,7 @@ set(RADIA_CORE_SOURCES
 	${CORE_DIR}/rad_lie_map_kernel.cpp        # Fourth-order Lie-map construction (jets + stage RK4 + composition)
 	${CORE_DIR}/rad_orbit_tracker.cpp         # Native 3D reference-orbit RK4 with measured planarity gate
 	${CORE_DIR}/rad_hacapk_hdiv.cpp           # HACApK H-matrix for the HDiv-type VIM demag operator
+	${CORE_DIR}/rad_hacapk_hdiv_entry.cpp     # Element-specific ChargeGram entry strategies
 	${CORE_DIR}/rad_bem_galerkin.cpp          # Fast Galerkin SL/DL assembler (Sauter-Schwab + OpenMP)
 	${CORE_DIR}/rad_biot_savart_filaments.cpp # Fast Biot-Savart H/A from finite-segment filaments (complex I)
 	${CORE_DIR}/rad_biot_savart_surface.cpp   # Fast Biot-Savart B/A from triangulated surface (complex J_s)
