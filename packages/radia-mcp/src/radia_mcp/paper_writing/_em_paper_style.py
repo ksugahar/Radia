@@ -20,6 +20,7 @@ Sources:
 from __future__ import annotations
 
 import os
+import re
 
 
 SIGN_CONVENTIONS = r"""
@@ -1155,7 +1156,8 @@ def paper_writing_em_paper_style(topic: str = "overview") -> str:
 
     Companion to the generic checks in paper_writing.tools.  Captures
     the rules that EM reviewers (IEEE TAP/TMag/TMTT, IEEJ Trans D/B,
-    IGTE) actually enforce, plus the 12-pattern catalogue of common
+    and accelerator-community venues) actually enforce, plus the
+    12-pattern catalogue of common
     reviewer comments collected from lab paper-review history.
 
     Args:
@@ -1218,6 +1220,7 @@ def paper_writing_em_submission_gate(
     bib_path: str = "",
     abstract_text: str = "",
     author_last_names: str = "",
+    target_venue: str = "",
     page_limit: int = 0,
     whitespace_threshold: float = 0.75,
     layout_max_pages_apart: int = 1,
@@ -1239,6 +1242,8 @@ def paper_writing_em_submission_gate(
             extension).
         author_last_names: comma-separated lastnames for self-citation
             check (e.g. "Sugahara,Nagamine").
+        target_venue: concrete target venue. CAE-AI Lab policy accepts
+            only IEEJ, IEEE, and accelerator-community venues.
         page_limit: page limit for the target venue (0 = skip the check).
         whitespace_threshold: threshold for whitespace flag (default 0.75).
         layout_max_pages_apart: max pages a float can drift from its
@@ -1295,6 +1300,23 @@ def paper_writing_em_submission_gate(
             "summary": summary,
             "detail": detail or {},
         })
+
+    target_profile = _t.paper_writing_target_venue_policy(target_venue)
+    target_category = target_profile.get("target_category")
+    target_status = target_profile.get("status")
+    _add(
+        "target_venue_policy",
+        (
+            "pass" if target_status == "pass"
+            else "fail" if target_status == "reject"
+            else "warn"
+        ),
+        (
+            f"target={target_venue or '(not selected)'}; "
+            f"category={target_category or 'none'}; policy={target_status}"
+        ),
+        target_profile,
+    )
 
     # v0.93.0: multi-file .tex resolution -- if tex_path uses
     # \input{...}, merge into a single file for downstream tools
@@ -1418,20 +1440,72 @@ def paper_writing_em_submission_gate(
         except Exception as e:  # noqa: BLE001
             _add("ref_label_consistency", "skip", f"tool error: {e}")
 
-        # 2026-05-27: IEEE Index Terms / Keywords block
+        # Keyword blocks are venue-specific. In particular, IEEJ's
+        # jkeyword/ekeyword pair must not be rejected for lacking
+        # IEEEkeywords. Accelerator templates vary by venue and year.
         try:
-            r = paper_writing_check_ieee_keywords(_scan_tex)
-            st = r.get("status", "skip")
-            status = ("fail" if st == "missing"
-                      else "warn" if st == "warning"
-                      else "pass")
-            _add("ieee_keywords",
-                 status,
-                 (f"{r.get('n_keywords', 0)} keywords found "
-                  f"(block: {r.get('found_block')})"),
-                 r)
+            if target_category == "ieej":
+                with open(_scan_tex, encoding="utf-8", errors="replace") as fh:
+                    keyword_src = fh.read()
+                ja_match = re.search(
+                    r"\\begin\{jkeyword\}(.+?)\\end\{jkeyword\}",
+                    keyword_src,
+                    re.DOTALL,
+                )
+                en_match = re.search(
+                    r"\\begin\{ekeyword\}(.+?)\\end\{ekeyword\}",
+                    keyword_src,
+                    re.DOTALL,
+                )
+
+                def _keyword_count(match, separators):
+                    if not match:
+                        return 0
+                    items = re.split(separators, match.group(1))
+                    return sum(1 for item in items if item.strip())
+
+                ja_count = _keyword_count(ja_match, r"[，,]")
+                en_count = _keyword_count(en_match, r"[,;]")
+                both_present = bool(ja_match and en_match)
+                enough = ja_count >= 3 and en_count >= 3
+                status = "pass" if both_present and enough else "fail"
+                r = {
+                    "status": status,
+                    "found_blocks": [
+                        name for name, present in (
+                            ("jkeyword", ja_match), ("ekeyword", en_match)
+                        ) if present
+                    ],
+                    "japanese_keyword_count": ja_count,
+                    "english_keyword_count": en_count,
+                    "policy": "IEEJ bilingual keyword blocks",
+                }
+                _add(
+                    "target_keywords",
+                    status,
+                    f"IEEJ keywords: JA {ja_count}, EN {en_count}",
+                    r,
+                )
+            elif target_category == "accelerator":
+                _add(
+                    "target_keywords",
+                    "skip",
+                    "accelerator keyword rules are template-specific; verify the official venue template",
+                    target_profile,
+                )
+            else:
+                r = paper_writing_check_ieee_keywords(_scan_tex)
+                st = r.get("status", "skip")
+                status = ("fail" if st == "missing"
+                          else "warn" if st == "warning"
+                          else "pass")
+                _add("ieee_keywords",
+                      status,
+                      (f"{r.get('n_keywords', 0)} keywords found "
+                       f"(block: {r.get('found_block')})"),
+                      r)
         except Exception as e:  # noqa: BLE001
-            _add("ieee_keywords", "skip", f"tool error: {e}")
+            _add("target_keywords", "skip", f"tool error: {e}")
 
         # 2026-06-24: one-page digest human-review triggers
         try:
@@ -1707,6 +1781,8 @@ def paper_writing_em_submission_gate(
 
     return {
         "verdict": verdict,
+        "target_venue": target_venue,
+        "target_category": target_category,
         "n_checks_run": len(checks),
         "n_critical": n_critical,
         "n_warning": n_warning,

@@ -272,6 +272,14 @@ def main():
         assert bilingual["english"]["status"] == "pass"
         assert "not averaged" in bilingual["aggregation_policy"]
         print("    bilingual_readability: JA/EN separate gates OK")
+        venue = _tools.paper_writing_target_venue_policy("IPAC")
+        assert venue["status"] == "pass"
+        assert venue["target_category"] == "accelerator"
+        rejected = _tools.paper_writing_target_venue_policy(
+            "Unrelated Materials Journal"
+        )
+        assert rejected["status"] == "reject"
+        print("    target_venue_policy: IEEJ/IEEE/accelerator only")
 
         # v0.88.0 layout knowledge tools
         full = paper_writing_tex_figure_placement('all')
