@@ -7,6 +7,11 @@ crystallized as its own package.
 
 ## [Unreleased]
 
+- paper-writing: added the CAE-AI Lab target-venue policy for IEEJ, IEEE, and
+  accelerator-community publications. The MCP tool rejects unrelated venue
+  optimization, keeps Japanese and English review lanes independent, and
+  makes the EM submission gate recognize IEEJ jkeyword/ekeyword blocks instead
+  of applying IEEEkeywords indiscriminately.
 - paper-writing: added a language-specific adjacent-reviewer readability gate.
   Japanese and English prose use separate units and density heuristics; TeX
   math and floats are excluded, findings retain source lines, and the EM

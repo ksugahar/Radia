@@ -286,15 +286,26 @@ async def _probe_bilingual_readability_stdio() -> dict:
                 },
             )
             payload = json.loads(called.content[0].text)
+            venue_called = await session.call_tool(
+                "paper_writing_target_venue_policy",
+                {"target_venue": "IPAC"},
+            )
+            venue_payload = json.loads(venue_called.content[0].text)
             return {
                 "server_name": initialized.serverInfo.name,
                 "listed": any(
                     tool.name == "paper_writing_bilingual_readability_check"
                     for tool in listed.tools
                 ),
+                "venue_listed": any(
+                    tool.name == "paper_writing_target_venue_policy"
+                    for tool in listed.tools
+                ),
                 "is_error": bool(called.isError),
+                "venue_is_error": bool(venue_called.isError),
                 "ja_status": payload["japanese"]["status"],
                 "en_status": payload["english"]["status"],
+                "venue_category": venue_payload["target_category"],
             }
 
 
@@ -306,9 +317,12 @@ def test_bilingual_readability_passes_real_stdio_protocol():
     assert result == {
         "server_name": "mcp-server-paper-writing",
         "listed": True,
+        "venue_listed": True,
         "is_error": False,
+        "venue_is_error": False,
         "ja_status": "pass",
         "en_status": "pass",
+        "venue_category": "accelerator",
     }
 
 
@@ -1222,6 +1236,84 @@ def test_em_paper_style_unknown_topic_returns_help():
     )
     r = paper_writing_em_paper_style("does_not_exist_xyz")
     assert "Unknown topic" in r
+
+
+@pytest.mark.parametrize(
+    ("venue", "category"),
+    [
+        ("電気学会 静止器・回転機合同研究会", "ieej"),
+        ("IEEE Transactions on Magnetics", "ieee"),
+        ("IPAC", "accelerator"),
+        ("IEEE Particle Accelerator Conference", "accelerator"),
+    ],
+)
+def test_target_venue_policy_accepts_only_lab_targets(venue, category):
+    r = pw.paper_writing_target_venue_policy(venue)
+    assert r["status"] == "pass"
+    assert r["target_category"] == category
+    assert "not averaged" in r["bilingual_policy"]
+
+
+def test_target_venue_policy_rejects_unrelated_venue():
+    r = pw.paper_writing_target_venue_policy("Unrelated Materials Journal")
+    assert r["status"] == "reject"
+    assert r["target_category"] is None
+    assert r["supported_categories"] == ["ieej", "ieee", "accelerator"]
+
+
+def test_target_venue_policy_requires_concrete_selection():
+    r = pw.paper_writing_target_venue_policy()
+    assert r["status"] == "selection_required"
+
+
+def test_em_submission_gate_uses_ieej_keyword_blocks(tmp_path):
+    from radia_mcp.paper_writing._em_paper_style import (
+        paper_writing_em_submission_gate,
+    )
+    tex = tmp_path / "ieej.tex"
+    tex.write_text(
+        r"""\documentclass{article}
+\begin{document}
+\begin{abstract}
+We present a readable method. The method preserves passivity.
+\end{abstract}
+\begin{jkeyword}
+磁気ヒステリシス，受動性，能動学習
+\end{jkeyword}
+\begin{ekeyword}
+Magnetic hysteresis, Passivity, Active learning
+\end{ekeyword}
+本報告では簡潔な同定法を示す。提案法は受動性を保つ。
+\end{document}
+""",
+        encoding="utf-8",
+    )
+    r = paper_writing_em_submission_gate(
+        tex_path=str(tex),
+        target_venue="電気学会研究会",
+    )
+    venue_check = next(
+        item for item in r["checks"] if item["name"] == "target_venue_policy"
+    )
+    keyword_check = next(
+        item for item in r["checks"] if item["name"] == "target_keywords"
+    )
+    assert venue_check["status"] == "pass"
+    assert keyword_check["status"] == "pass"
+    assert r["target_category"] == "ieej"
+    assert not any(item["name"] == "ieee_keywords" for item in r["checks"])
+
+
+def test_em_submission_gate_rejects_out_of_policy_venue():
+    from radia_mcp.paper_writing._em_paper_style import (
+        paper_writing_em_submission_gate,
+    )
+    r = paper_writing_em_submission_gate(target_venue="Unrelated Journal")
+    venue_check = next(
+        item for item in r["checks"] if item["name"] == "target_venue_policy"
+    )
+    assert venue_check["status"] == "fail"
+    assert r["verdict"] == "fail"
 
 
 def test_em_submission_gate_no_inputs_fails_on_bib_policy():

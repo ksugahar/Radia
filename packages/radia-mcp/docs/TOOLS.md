@@ -2,7 +2,7 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **1037 tools** across 49 MCP servers.
+Total: **1038 tools** across 49 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
@@ -44,7 +44,7 @@ Total: **1037 tools** across 49 MCP servers.
 | [`mcp-server-mathematica`](#mcp-server-mathematica) | `radia_mcp.mathematica` | 14 |
 | [`mcp-server-md2html`](#mcp-server-md2html) | `radia_mcp.md2html` | 2 |
 | [`mcp-server-chart2d`](#mcp-server-chart2d) | `radia_mcp.chart2d` | 24 |
-| [`mcp-server-paper-writing`](#mcp-server-paper-writing) | `radia_mcp.paper_writing` | 196 |
+| [`mcp-server-paper-writing`](#mcp-server-paper-writing) | `radia_mcp.paper_writing` | 197 |
 | [`mcp-server-grant-writing`](#mcp-server-grant-writing) | `radia_mcp.grant_writing` | 42 |
 | [`mcp-server-poster`](#mcp-server-poster) | `radia_mcp.poster` | 32 |
 | [`mcp-server-literature-index`](#mcp-server-literature-index) | `radia_mcp.literature_index` | 9 |
@@ -1193,9 +1193,10 @@ Module: `radia_mcp.paper_writing.server`
 | `paper_writing_status` | (no description) |
 | `paper_writing_suggest_concept_drops` | Suggest specific concepts to drop when prose is over the |
 | `paper_writing_suggest_redundancy_fixes` | 冗長表現 25 パターンの置換候補提示 (re-export)。 |
+| `paper_writing_target_venue_policy` | Enforce the CAE-AI Lab's deliberately narrow publication targets. |
 | `paper_writing_tex_figure_placement` | LaTeX figure placement knowledge: float specifiers, placeins, |
 | `paper_writing_title_abstract_conclusion_triangle` | Title / Abstract / Conclusion の三角形整合性を診断。 |
-| `paper_writing_usage` | Journal 論文 (IEEE / IEEJ / APS / Elsevier 等) の作文技術ガイド全体。 |
+| `paper_writing_usage` | CAE-AI Lab の対象投稿先 (IEEJ / IEEE / 加速器系) の作文技術ガイド全体。 |
 | `paper_writing_validate_abstract_length` | Abstract 字数 / 語数が制限内か検証。言語を自動判定。 |
 | `paper_writing_validate_pdf_pages` | PDF のページ数が投稿制限内か検証。pymupdf が必要。 |
 | `paper_writing_verify_citation` | Verify a citation BEFORE inserting it into the paper. |
