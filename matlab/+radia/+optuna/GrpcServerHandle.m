@@ -17,10 +17,11 @@ classdef GrpcServerHandle < handle
             if obj.Stopped, return, end
             if obj.Process.isAlive()
                 obj.Process.destroy();
-                pause(0.1);
+                obj.Process.waitFor(5,java.util.concurrent.TimeUnit.SECONDS);
             end
             if obj.Process.isAlive()
                 obj.Process.destroyForcibly();
+                obj.Process.waitFor(5,java.util.concurrent.TimeUnit.SECONDS);
             end
             obj.Stopped=true;
         end

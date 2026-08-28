@@ -40,6 +40,32 @@ def _metadata(archive: zipfile.ZipFile, names: set[str]):
     return BytesParser().parsebytes(archive.read(candidates[0]))
 
 
+def _source_payloads(source_manifest: dict[str, object]) -> dict[str, Path]:
+    matlab_root = REPO_ROOT / "matlab"
+    payloads = {
+        str(PACKAGE_PREFIX / path.name): path
+        for path in (PACKAGE_ROOT / "src" / "radia_optuna").iterdir()
+        if path.is_file() and path.suffix in {".py", ".json"}
+    }
+    for source in (matlab_root / "+radia" / "+optuna").rglob("*.m"):
+        member = MATLAB_PREFIX / PurePosixPath(source.relative_to(matlab_root).as_posix())
+        payloads[str(member)] = source
+    for name in ("optuna_upstream_compatibility.json", "optuna49_api_coverage.json"):
+        payloads[str(MATLAB_PREFIX / name)] = matlab_root / name
+    payloads[str(MATLAB_PREFIX / "optuna_mex.mexw64")] = (
+        matlab_root / "optuna_mex.mexw64"
+    )
+    for relative in source_manifest["simulink_entry_points"]:
+        member = MATLAB_PREFIX / PurePosixPath(str(relative))
+        payloads[str(member)] = matlab_root / str(relative)
+    payloads[str(MATLAB_PREFIX / "README.md")] = PACKAGE_ROOT / "MATLAB_README.md"
+    payloads[str(MATLAB_PREFIX / "LICENSE")] = REPO_ROOT / "LICENSE"
+    payloads[str(MATLAB_PREFIX / "THIRD_PARTY_NOTICES.md")] = (
+        PACKAGE_ROOT / "THIRD_PARTY_NOTICES.md"
+    )
+    return payloads
+
+
 def verify(wheel: Path) -> dict[str, object]:
     errors: list[str] = []
     if not re.fullmatch(r"radia_optuna-[^-]+-py3-none-win_amd64\.whl", wheel.name):
@@ -74,6 +100,7 @@ def verify(wheel: Path) -> dict[str, object]:
 
     with zipfile.ZipFile(wheel) as archive:
         names = set(archive.namelist())
+        source_payloads = _source_payloads(source_manifest)
         metadata = _metadata(archive, names)
         wheel_version = metadata.get("Version")
         if wheel_version != source_version:
@@ -124,6 +151,23 @@ def verify(wheel: Path) -> dict[str, object]:
         missing = sorted(expected_fixed - names)
         if missing:
             errors.append("missing required entries: " + ", ".join(missing))
+
+        stale_payloads = sorted(
+            member
+            for member, source in source_payloads.items()
+            if member in names and archive.read(member) != source.read_bytes()
+        )
+        missing_source_payloads = sorted(set(source_payloads).difference(names))
+        if missing_source_payloads:
+            errors.append(
+                "missing checked source payloads: "
+                + ", ".join(missing_source_payloads)
+            )
+        if stale_payloads:
+            errors.append(
+                "wheel payload differs from the checked monorepo source: "
+                + ", ".join(stale_payloads)
+            )
 
         if str(MATLAB_PREFIX / "THIRD_PARTY_NOTICES.md") in names:
             notices = archive.read(
@@ -235,6 +279,8 @@ def verify(wheel: Path) -> dict[str, object]:
         "simulink_standalone": source_manifest["simulink_standalone"],
         "simulink_entry_count": len(simulink_entries),
         "radia_integration_adapter_count": len(adapters),
+        "source_fidelity_verified": True,
+        "source_fidelity_file_count": len(source_payloads),
     }
     return result
 
