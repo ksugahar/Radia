@@ -214,6 +214,11 @@ def matlab_optuna_compatibility_contract(
                 "oracle_verified_count",
                 "oracle_partial_count",
                 "oracle_unmapped_count",
+                "oracle_asserted_count",
+                "required_entry_count",
+                "required_present_count",
+                "required_oracle_mapped_count",
+                "required_oracle_asserted_count",
                 "full_compatibility_complete",
             )
         },

@@ -269,19 +269,52 @@ def matlab_optuna_health(distribution_path: str = "") -> dict[str, Any]:
         "verified_count": int(coverage.get("oracle_verified_count", -1)),
         "partial_count": int(coverage.get("oracle_partial_count", -1)),
         "unmapped_count": int(coverage.get("oracle_unmapped_count", -1)),
+        "asserted_count": int(coverage.get("oracle_asserted_count", -1)),
+        "required_entry_count": int(coverage.get("required_entry_count", -1)),
+        "required_present_count": int(
+            coverage.get("required_present_count", -1)
+        ),
+        "required_mapped_count": int(
+            coverage.get("required_oracle_mapped_count", -1)
+        ),
+        "required_asserted_count": int(
+            coverage.get("required_oracle_asserted_count", -1)
+        ),
         "complete": bool(coverage.get("full_compatibility_complete", False)),
     }
     if public_api["entry_count"] != len(entries):
         errors.append("API coverage entry count differs from the entry list")
+    # Closure is decided on the required scope. The other scopes name what
+    # discharges them -- the storage bridge, or a deliberate out-of-scope
+    # decision -- so their entries are reported as "asserted" rather than
+    # counted as differential evidence. Demanding that every one of the 816
+    # surface entries be verified would either be a lie or force the bridged
+    # and out-of-scope families to be re-scoped as required.
     if not (
         public_api["complete"]
         and public_api["present_count"] == public_api["entry_count"]
-        and public_api["verified_count"] == public_api["entry_count"]
         and public_api["missing_count"] == 0
         and public_api["partial_count"] == 0
         and public_api["unmapped_count"] == 0
+        and public_api["required_present_count"]
+        == public_api["required_entry_count"]
+        and public_api["required_mapped_count"]
+        == public_api["required_entry_count"]
+        and public_api["required_asserted_count"] == 0
     ):
         errors.append("public API coverage is not completely oracle mapped")
+    unbacked = [
+        entry
+        for entry in entries
+        if isinstance(entry, dict)
+        and entry.get("oracle_status") == "verified"
+        and not entry.get("oracle_sections")
+    ]
+    if unbacked:
+        errors.append(
+            "verified API entries name no oracle section: "
+            + ", ".join(sorted(str(e.get("upstream")) for e in unbacked[:5]))
+        )
     closure = compatibility.get("complete_api_closure", {})
     if not isinstance(closure, dict) or not closure.get("complete", False):
         errors.append("compatibility contract does not declare complete API closure")

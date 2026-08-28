@@ -66,11 +66,31 @@ def test_health_uses_distribution_and_upstream_manifests_as_truth(monkeypatch):
     )
     assert health["public_api"]["entry_count"] == len(coverage["entries"])
     assert health["public_api"]["present_count"] == len(coverage["entries"])
-    assert health["public_api"]["verified_count"] == len(coverage["entries"])
     assert health["public_api"]["missing_count"] == 0
     assert health["public_api"]["partial_count"] == 0
     assert health["public_api"]["unmapped_count"] == 0
+    # Every entry is accounted for, but only an entry backed by an oracle
+    # section counts as verified; the rest are asserted under a scope that
+    # names what discharges it. Demanding verified == entry_count is what
+    # let a name be called verified for being present in a hand-kept list.
+    assert (
+        health["public_api"]["verified_count"]
+        + health["public_api"]["asserted_count"]
+        == len(coverage["entries"])
+    )
+    assert health["public_api"]["required_present_count"] == health[
+        "public_api"
+    ]["required_entry_count"]
+    assert health["public_api"]["required_mapped_count"] == health[
+        "public_api"
+    ]["required_entry_count"]
+    assert health["public_api"]["required_asserted_count"] == 0
     assert health["public_api"]["complete"] is True
+    for entry in coverage["entries"]:
+        if entry["oracle_status"] == "verified":
+            assert entry["oracle_sections"], entry["upstream"]
+        if entry["scope"] == "required":
+            assert entry["oracle_status"] == "verified", entry["upstream"]
     assert health["oracle"]["recorded_fixture_sha256"] == health["oracle"][
         "actual_fixture_sha256"
     ]
