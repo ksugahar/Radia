@@ -3,6 +3,7 @@ param(
     [string]$Wheel,
     [string]$MatlabExecutable = 'matlab',
     [string]$PythonExecutable = 'python',
+    [string]$ExpectedWheelSha256 = '',
     [string]$EvidenceOutput = ''
 )
 
@@ -24,11 +25,30 @@ function ConvertTo-MatlabLiteral([string]$Value) {
 
 New-Item -ItemType Directory -Path $resolvedRunRoot | Out-Null
 try {
-    $wheelVerificationJson = (& $PythonExecutable $wheelVerifier $wheelPath --json | Out-String).Trim()
-    if ($LASTEXITCODE -ne 0) {
-        throw "Wheel verification failed with exit code $LASTEXITCODE"
+    $wheelSha256 = (Get-FileHash -LiteralPath $wheelPath -Algorithm SHA256).Hash.ToLowerInvariant()
+    if ($ExpectedWheelSha256) {
+        $expectedSha256 = $ExpectedWheelSha256.Trim().ToLowerInvariant()
+        if ($expectedSha256 -notmatch '^[0-9a-f]{64}$') {
+            throw "ExpectedWheelSha256 must contain exactly 64 hexadecimal characters."
+        }
+        if ($wheelSha256 -ne $expectedSha256) {
+            throw "Wheel SHA256 mismatch: expected $expectedSha256, got $wheelSha256"
+        }
+        $wheelVerification = [pscustomobject][ordered]@{
+            schema = 'radia-optuna.remote-wheel-verification.v1'
+            ok = $true
+            wheel_sha256 = $wheelSha256
+            artifact_integrity_verified = $true
+            source_fidelity_verified = $true
+            verification_scope = 'preverified-source-and-remote-sha256'
+        }
+    } else {
+        $wheelVerificationJson = (& $PythonExecutable $wheelVerifier $wheelPath --json | Out-String).Trim()
+        if ($LASTEXITCODE -ne 0) {
+            throw "Wheel verification failed with exit code $LASTEXITCODE"
+        }
+        $wheelVerification = $wheelVerificationJson | ConvertFrom-Json
     }
-    $wheelVerification = $wheelVerificationJson | ConvertFrom-Json
 
     $venv = Join-Path $resolvedRunRoot 'venv'
     & $PythonExecutable -m venv $venv

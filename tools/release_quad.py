@@ -620,7 +620,8 @@ def _run_optuna_candidate_target(
             "$ErrorActionPreference = 'Stop'\n"
             + python_line
             + f"& '{remote_runner}' -Wheel '{remote_wheel}' "
-              f"-MatlabExecutable '{MATLAB_EXE}' -PythonExecutable $pythonExe\n"
+              f"-MatlabExecutable '{MATLAB_EXE}' -PythonExecutable $pythonExe "
+              f"-ExpectedWheelSha256 '{wheel_sha256}'\n"
             + "exit $LASTEXITCODE\n"
         )
         result = subprocess.run(

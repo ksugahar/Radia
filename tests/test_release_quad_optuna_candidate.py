@@ -113,6 +113,9 @@ def test_installed_wheel_runner_emits_quad_success_marker_and_checks_notices():
     ).read_text(encoding="utf-8")
     assert "RADIA_OPTUNA_WHEEL_SIMULINK_OK" in runner
     assert "PythonExecutable" in runner
+    assert "ExpectedWheelSha256" in runner
+    assert "Get-FileHash" in runner
+    assert "Wheel SHA256 mismatch" in runner
     assert "upstream_notices_complete" in doctor
     assert "notices_complete" in doctor
 
@@ -139,3 +142,35 @@ def test_local_candidate_decodes_matlab_output_as_utf8(monkeypatch, tmp_path):
     assert "・ MATLAB ready" in output
     assert observed["encoding"] == "utf-8"
     assert observed["errors"] == "replace"
+
+
+def test_remote_candidate_rechecks_the_exact_wheel_sha256(monkeypatch, tmp_path):
+    wheel = tmp_path / "radia_optuna-0.1.1-py3-none-win_amd64.whl"
+    wheel.write_bytes(b"remote-platform-wheel")
+    digest = hashlib.sha256(wheel.read_bytes()).hexdigest()
+    invocations = []
+
+    def completed(command, **kwargs):
+        invocations.append((command, kwargs))
+        output = ""
+        if (
+            command[0] == "ssh"
+            and "ExpectedWheelSha256" in kwargs.get("input", "")
+        ):
+            output = release_quad.OPTUNA_SUCCESS_MARKER
+        return SimpleNamespace(returncode=0, stdout=output, stderr="")
+
+    monkeypatch.setattr(release_quad.subprocess, "run", completed)
+    passed, _output = release_quad._run_optuna_candidate_target(
+        "100", wheel, digest
+    )
+
+    assert passed is True
+    remote_commands = [
+        kwargs["input"]
+        for command, kwargs in invocations
+        if command[0] == "ssh"
+        and "ExpectedWheelSha256" in kwargs.get("input", "")
+    ]
+    assert len(remote_commands) == 1
+    assert f"-ExpectedWheelSha256 '{digest}'" in remote_commands[0]
