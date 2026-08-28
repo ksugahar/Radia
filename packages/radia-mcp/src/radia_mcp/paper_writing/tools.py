@@ -1407,6 +1407,443 @@ def _paper_writing_plain_text(src: str) -> str:
     return re.sub(r"\s+", " ", txt).strip()
 
 
+_READABILITY_SKIP_ENVIRONMENTS = (
+    "equation", "equation*", "align", "align*", "alignat", "alignat*",
+    "gather", "gather*", "multline", "multline*", "figure", "figure*",
+    "table", "table*", "tabular", "tabular*", "thebibliography",
+    "jkeyword", "ekeyword", "verbatim", "lstlisting", "tikzpicture",
+)
+
+
+def _paper_writing_readability_prose(src: str) -> str:
+    """Return TeX prose while preserving source line positions."""
+
+    def _keep_newlines(match: re.Match) -> str:
+        return "\n" * match.group(0).count("\n")
+
+    txt = _paper_writing_strip_comments(src)
+    document = re.search(r"\\begin\{document\}", txt)
+    if document:
+        prefix = txt[:document.end()]
+        txt = "\n" * prefix.count("\n") + txt[document.end():]
+    txt = re.sub(r"\\end\{document\}[\s\S]*$", _keep_newlines, txt)
+
+    for env in _READABILITY_SKIP_ENVIRONMENTS:
+        txt = re.sub(
+            rf"\\begin\{{{re.escape(env)}\}}[\s\S]*?"
+            rf"\\end\{{{re.escape(env)}\}}",
+            _keep_newlines,
+            txt,
+        )
+
+    txt = re.sub(r"\\\[[\s\S]*?\\\]", _keep_newlines, txt)
+    txt = re.sub(r"\$\$[\s\S]*?\$\$", _keep_newlines, txt)
+    txt = re.sub(r"\$[^$\n]*\$", " MATH ", txt)
+    txt = re.sub(r"\\\([^\n]*?\\\)", " MATH ", txt)
+    txt = re.sub(
+        r"\\(?:cite|citep|citet|autocite|parencite)[a-zA-Z]*\*?"
+        r"(?:\[[^\]]*\])?\{[^{}]*\}",
+        " REF ",
+        txt,
+    )
+    txt = re.sub(
+        r"\\(?:ref|eqref|pageref|label)\{[^{}]*\}",
+        " REF ",
+        txt,
+    )
+    txt = re.sub(
+        r"\\(?:SI|SIrange|num)\*?(?:\[[^\]]*\])?"
+        r"\{[^{}]*\}(?:\{[^{}]*\})?",
+        " VALUE ",
+        txt,
+    )
+    txt = re.sub(
+        r"\\(?:section|subsection|subsubsection)\*?\{([^{}]*)\}",
+        r"\n\n\1\n\n",
+        txt,
+    )
+    txt = re.sub(
+        r"\\(?:maketitle|newpage|clearpage|vspace|hspace)\*?"
+        r"(?:\[[^\]]*\])?(?:\{[^{}]*\})?",
+        " ",
+        txt,
+    )
+    # Preserve text arguments of ordinary formatting commands. Repeating the
+    # substitution handles simple nesting such as \textbf{\emph{...}}.
+    for _ in range(3):
+        txt = re.sub(
+            r"\\[A-Za-z@]+\*?(?:\[[^\]]*\])?\{([^{}]*)\}",
+            r"\1",
+            txt,
+        )
+    txt = re.sub(r"\\[A-Za-z@]+\*?(?:\[[^\]]*\])?", " ", txt)
+    txt = re.sub(r"[{}]", " ", txt)
+    txt = txt.replace(r"\%", "%").replace("~", " ")
+    lines = [
+        re.sub(r"[ \t]+", " ", line).strip()
+        for line in txt.splitlines()
+    ]
+    # Keep leading and repeated newlines: source_line is part of the returned
+    # review contract and must continue to point at the original TeX file.
+    return "\n".join(lines).rstrip()
+
+
+def _paper_writing_readability_language(text: str) -> str:
+    cjk = len(re.findall(r"[\u3040-\u30ff\u3400-\u9fff]", text))
+    latin = len(re.findall(r"[A-Za-z]", text))
+    english_words = len(re.findall(r"\b[A-Za-z]{2,}\b", text))
+    if cjk >= 8 and latin >= 30:
+        cjk_share = cjk / max(cjk + latin, 1)
+        if 0.12 <= cjk_share <= 0.55 and english_words >= 8:
+            return "mixed"
+    if cjk >= 8 and cjk >= latin * 0.12:
+        return "ja"
+    if english_words >= 4:
+        return "en"
+    return "other"
+
+
+def _paper_writing_english_sentences(paragraph: str) -> list[str]:
+    protected = re.sub(
+        r"\b(et al|e\.g|i\.e|cf|vs|Fig|Eq|Ref|Sec|Vol|No|pp|Dr|Prof)\.",
+        lambda match: match.group(0).replace(".", "<DOT>"),
+        paragraph,
+        flags=re.IGNORECASE,
+    )
+    parts = re.split(
+        r"(?<=[.!?])\s+(?=[A-Z\[])|(?<=[。！？])",
+        protected,
+    )
+    return [
+        part.replace("<DOT>", ".").strip()
+        for part in parts
+        if part.strip()
+    ]
+
+
+def _paper_writing_readability_result(
+    language: str,
+    sentences: list[dict],
+    paragraphs: list[dict],
+    max_report: int,
+) -> dict:
+    risks: list[dict] = []
+
+    def _risk(
+        kind: str,
+        severity: str,
+        item: dict,
+        reasons: list[str],
+        recommendation: str,
+    ) -> None:
+        risks.append({
+            "type": kind,
+            "severity": severity,
+            "source_line": item["source_line"],
+            "paragraph_index": item["paragraph_index"],
+            "excerpt": re.sub(r"\s+", " ", item["text"]).strip()[:360],
+            "reasons": reasons,
+            "recommendation": recommendation,
+        })
+
+    if language == "ja":
+        connectors = re.compile(
+            r"(?:しかし|一方|さらに|また|したがって|そこで|このため|"
+            r"すなわち|ところが|なお|ゆえに|ただし|まず|次に)"
+        )
+        predicates = re.compile(
+            r"(?:である|となる|を示す|がある|できる|必要(?:である)?|"
+            r"保証(?:される|する)|求める|用いる|行う|課す|得られる|"
+            r"依存する|満たす|という|になる)"
+        )
+        for sentence in sentences:
+            compact = re.sub(r"\s+", "", sentence["text"])
+            n_chars = len(compact)
+            n_commas = len(re.findall(r"[、，,]", sentence["text"]))
+            n_connectors = len(connectors.findall(sentence["text"]))
+            n_predicates = len(predicates.findall(sentence["text"]))
+            terms = set(re.findall(
+                r"(?<![A-Za-z0-9_])[A-Za-z][A-Za-z0-9_.+-]{1,}",
+                sentence["text"],
+            )) - {"MATH", "REF", "VALUE"}
+            reasons = []
+            if n_chars > 100:
+                reasons.append(f"{n_chars}字（和文目安100字以下）")
+            if n_commas >= 4:
+                reasons.append(f"読点・コンマ{n_commas}個")
+            if n_connectors >= 3:
+                reasons.append(f"接続表現{n_connectors}個")
+            if n_predicates >= 4:
+                reasons.append(f"述語候補{n_predicates}個")
+            if len(terms) >= 5:
+                reasons.append(f"英字の記号・手法名{len(terms)}個")
+            high = n_chars > 180 or (
+                n_chars > 140 and (n_commas >= 5 or n_predicates >= 4)
+            )
+            cognitively_dense = n_chars >= 80 and (
+                n_commas >= 4 or n_connectors >= 2 or n_predicates >= 3
+            )
+            if cognitively_dense and not reasons:
+                reasons.append("80字以上で節・論理接続が集中")
+            if high or len(reasons) >= 2 or cognitively_dense:
+                _risk(
+                    "japanese_multi_claim_sentence",
+                    "HIGH" if high else "MEDIUM",
+                    sentence,
+                    reasons,
+                    (
+                        "一文を『主張』『理由』『定義または条件』へ分け、"
+                        "最初の文だけで要点が分かる順序にする。"
+                    ),
+                )
+
+        role_patterns = {
+            "background_or_problem": r"(?:従来|現状|課題|問題|ため)",
+            "requirement": r"(?:要求|必要|条件|満たす)",
+            "definition": r"(?:とは|すなわち|ここで|をいう)",
+            "method": r"(?:本報告|本研究|提案|同定|用いる|構成)",
+            "consequence": r"(?:したがって|このため|そこで|ゆえに|可能となる)",
+        }
+        for paragraph in paragraphs:
+            n_chars = len(re.sub(r"\s+", "", paragraph["text"]))
+            roles = [
+                name for name, pattern in role_patterns.items()
+                if re.search(pattern, paragraph["text"])
+            ]
+            reasons = []
+            if n_chars > 500:
+                reasons.append(f"段落{n_chars}字（和文目安500字以下）")
+            if len(roles) >= 4 and n_chars >= 350:
+                reasons.append("一段落に" + "・".join(roles) + "が混在")
+            high = n_chars > 800 or (n_chars > 600 and len(roles) >= 4)
+            if high or reasons:
+                _risk(
+                    "japanese_argument_overloaded_paragraph",
+                    "HIGH" if high else "MEDIUM",
+                    paragraph,
+                    reasons,
+                    (
+                        "段落を一つの問いと一つの結論に限定する。背景、定義、"
+                        "選択理由、提案内容は別段落にする。"
+                    ),
+                )
+    else:
+        nominal_suffixes = (
+            "tion", "sion", "ment", "ance", "ence", "ity", "ness",
+            "ship", "ization", "isation",
+        )
+        clause_words = re.compile(
+            r"\b(?:which|that|because|although|whereas|while|thereby|"
+            r"however|therefore|moreover|unless|so that)\b",
+            re.IGNORECASE,
+        )
+        for sentence in sentences:
+            words = re.findall(r"\b[A-Za-z][A-Za-z'-]*\b", sentence["text"])
+            n_words = len(words)
+            n_clauses = len(clause_words.findall(sentence["text"]))
+            n_breaks = len(re.findall(r"[,;:]|--|[—–]", sentence["text"]))
+            n_nominal = sum(
+                1 for word in words
+                if len(word) > 6 and word.lower().endswith(nominal_suffixes)
+            )
+            n_jargon = len(re.findall(
+                r"\b(?:[A-Z]{2,}[A-Z0-9-]*|[A-Za-z]+-[A-Za-z-]+)\b",
+                sentence["text"],
+            ))
+            reasons = []
+            if n_words > 30:
+                reasons.append(f"{n_words} words (English target <=30)")
+            if n_clauses >= 3:
+                reasons.append(f"{n_clauses} subordinate/logical connectors")
+            if n_breaks >= 5:
+                reasons.append(f"{n_breaks} comma/semicolon/dash clause breaks")
+            if n_words and n_nominal / n_words >= 0.12 and n_nominal >= 4:
+                reasons.append(f"{n_nominal} nominalisations")
+            if n_jargon >= 5:
+                reasons.append(f"{n_jargon} acronym/compound terms")
+            high = n_words > 50 or (n_words > 42 and n_breaks >= 4)
+            if high or len(reasons) >= 2:
+                _risk(
+                    "english_clause_or_noun_stack",
+                    "HIGH" if high else "MEDIUM",
+                    sentence,
+                    reasons,
+                    (
+                        "Lead with one claim in an active clause. Move the reason,"
+                        " qualification, or list of constraints to a new sentence."
+                    ),
+                )
+
+        for paragraph in paragraphs:
+            n_words = len(re.findall(
+                r"\b[A-Za-z][A-Za-z'-]*\b", paragraph["text"]
+            ))
+            if n_words > 180:
+                _risk(
+                    "english_overlong_paragraph",
+                    "HIGH" if n_words > 250 else "MEDIUM",
+                    paragraph,
+                    [f"paragraph has {n_words} words (English target <=180)"],
+                    (
+                        "Split the paragraph at a rhetorical boundary: problem,"
+                        " method, evidence, or implication."
+                    ),
+                )
+
+    high_count = sum(risk["severity"] == "HIGH" for risk in risks)
+    medium_count = sum(risk["severity"] == "MEDIUM" for risk in risks)
+    score = max(0, 100 - 15 * high_count - 6 * medium_count)
+    if high_count or medium_count >= 4:
+        status = "fail"
+    elif medium_count:
+        status = "warning"
+    else:
+        status = "pass"
+    thresholds = (
+        {
+            "sentence_target_chars": 100,
+            "sentence_high_chars": 180,
+            "paragraph_target_chars": 500,
+            "paragraph_high_chars": 800,
+        }
+        if language == "ja"
+        else {
+            "sentence_target_words": 30,
+            "sentence_high_words": 50,
+            "paragraph_target_words": 180,
+            "paragraph_high_words": 250,
+        }
+    )
+    return {
+        "applicable": bool(sentences),
+        "status": status,
+        "heuristic_score": score,
+        "score_max": 100,
+        "sentence_count": len(sentences),
+        "paragraph_count": len(paragraphs),
+        "high_risk_count": high_count,
+        "medium_risk_count": medium_count,
+        "risk_count": len(risks),
+        "risks": risks[:max_report],
+        "thresholds": thresholds,
+    }
+
+
+def paper_writing_bilingual_readability_check(
+    text_or_path: str,
+    max_report_per_language: int = 20,
+) -> dict:
+    """Assess Japanese and English readability with separate criteria.
+
+    The input may be plain prose or a TeX path. Equations, figures, tables,
+    keywords, citations, and TeX commands are excluded before analysis. The
+    Japanese result uses character, punctuation, predicate, and rhetorical-role
+    density. The English result uses word, clause, nominalisation, and paragraph
+    density. Scores are diagnostic only and are never averaged across languages.
+    """
+    raw, source_path = _paper_writing_text_or_path(text_or_path)
+    prose = _paper_writing_readability_prose(raw)
+    paragraph_matches = list(re.finditer(
+        r"(?:^|\n\s*\n)(.*?)(?=\n\s*\n|\Z)",
+        prose,
+        flags=re.DOTALL,
+    ))
+    blocks: list[dict] = []
+    for index, match in enumerate(paragraph_matches, start=1):
+        raw_block = match.group(1)
+        leading = re.match(r"\s*", raw_block).group(0)
+        text = re.sub(r"\s+", " ", raw_block).strip()
+        if len(text) < 20:
+            continue
+        language = _paper_writing_readability_language(text)
+        if language == "other":
+            continue
+        blocks.append({
+            "paragraph_index": index,
+            "source_line": prose.count(
+                "\n", 0, match.start(1) + len(leading)
+            ) + 1,
+            "language": language,
+            "text": text,
+        })
+
+    by_language: dict[str, dict] = {}
+    for language in ("ja", "en"):
+        language_paragraphs = []
+        language_sentences = []
+        for block in blocks:
+            block_language = block["language"]
+            if block_language not in (language, "mixed"):
+                continue
+            language_paragraphs.append(block)
+            if language == "ja":
+                parts = [
+                    part.strip()
+                    for part in re.split(r"(?<=[。！？])", block["text"])
+                    if part.strip()
+                ]
+            else:
+                parts = _paper_writing_english_sentences(block["text"])
+            for part in parts:
+                part_language = _paper_writing_readability_language(part)
+                if part_language not in (language, "mixed"):
+                    continue
+                language_sentences.append({
+                    "paragraph_index": block["paragraph_index"],
+                    "source_line": block["source_line"],
+                    "text": part,
+                })
+        by_language[language] = _paper_writing_readability_result(
+            language,
+            language_sentences,
+            language_paragraphs,
+            max_report_per_language,
+        )
+
+    statuses = [
+        result["status"]
+        for result in by_language.values()
+        if result["applicable"]
+    ]
+    if "fail" in statuses:
+        status = "fail"
+    elif "warning" in statuses:
+        status = "warning"
+    elif statuses:
+        status = "pass"
+    else:
+        status = "not_applicable"
+
+    priorities = []
+    for language, result in by_language.items():
+        for risk in result["risks"]:
+            priorities.append({"language": language, **risk})
+    priorities.sort(key=lambda item: (
+        item["severity"] != "HIGH",
+        item["source_line"],
+    ))
+    return {
+        "applicable": bool(statuses),
+        "status": status,
+        "source_path": source_path,
+        "japanese": by_language["ja"],
+        "english": by_language["en"],
+        "mixed_paragraph_count": sum(
+            block["language"] == "mixed" for block in blocks
+        ),
+        "review_priorities": priorities[:max_report_per_language],
+        "aggregation_policy": (
+            "Japanese and English scores use different units and are not "
+            "averaged. The overall status is the worse applicable language."
+        ),
+        "target_reader": (
+            "a technically literate reviewer in the broad field who does not "
+            "already know the authors' notation or argument"
+        ),
+        "source": "language-specific adjacent-reviewer readability heuristic",
+    }
+
+
 def _paper_writing_word_count(src: str) -> int:
     plain = _paper_writing_plain_text(src)
     words = re.findall(
