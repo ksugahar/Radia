@@ -1,13 +1,13 @@
 classdef ParetoSupport
     %PARETOSUPPORT Shared non-dominated ranking and observation extraction.
     methods (Static)
-        function [x, values, trialNumbers] = numericObservations(study, name)
+        function [x, values, trialNumbers, states] = numericObservations(study, name)
             params=study.ParamTable; rows=params.Name==string(name) & isfinite(params.ValueNumeric);
-            [x,values,trialNumbers]=radia.optuna.internal.ParetoSupport.collect( ...
+            [x,values,trialNumbers,states]=radia.optuna.internal.ParetoSupport.collect( ...
                 study,params.TrialNumber(rows),params.ValueNumeric(rows));
         end
 
-        function [tokens, values, trialNumbers] = categoricalObservations(study, name)
+        function [tokens, values, trialNumbers, states] = categoricalObservations(study, name)
             params=study.ParamTable; rows=params.Name==string(name) & params.Kind=="categorical";
             raw=params.ValueText(rows); numeric=params.ValueNumeric(rows);
             for k=1:numel(raw)
@@ -15,12 +15,21 @@ classdef ParetoSupport
                     raw(k)=append("numeric:",jsonencode(double(numeric(k))));
                 end
             end
-            [tokens,values,trialNumbers]=radia.optuna.internal.ParetoSupport.collect( ...
+            [tokens,values,trialNumbers,states]=radia.optuna.internal.ParetoSupport.collect( ...
                 study,params.TrialNumber(rows),raw);
         end
 
-        function [goodMask,goodWeights] = splitMOTPE(study,trialNumbers,values,nBelow)
+        function [goodMask,goodWeights] = splitMOTPE(study,trialNumbers,values,nBelow,states)
+            % Fill the below set in Optuna's _split_trials class order:
+            % feasible COMPLETE by non-domination and hypervolume subset
+            % selection, then feasible PRUNED (no objective vector, so
+            % _get_pruned_trial_score' (1, 0.0) sentinel leaves them in
+            % trial order), then infeasible by total positive violation.
             count=size(values,1); nBelow=max(0,min(count,nBelow));
+            if nargin<5 || isempty(states)
+                states=repmat("COMPLETE",count,1);
+            end
+            states=reshape(string(states),[],1);
             goodMask=false(count,1); goodWeights=zeros(count,1);
             if nBelow==0, return, end
             violations=zeros(count,1); feasible=true(count,1);
@@ -35,7 +44,8 @@ classdef ParetoSupport
                     end
                 end
             end
-            feasibleIndices=find(feasible);
+            complete=states=="COMPLETE";
+            feasibleIndices=find(feasible & complete);
             takeFeasible=min(nBelow,numel(feasibleIndices));
             if takeFeasible>0
                 selected=radia.optuna.internal.ParetoSupport.selectByParetoHV( ...
@@ -44,13 +54,22 @@ classdef ParetoSupport
             end
             remaining=nBelow-sum(goodMask);
             if remaining>0
+                prunedIndices=find(feasible & ~complete);
+                [~,order]=sortrows(trialNumbers(prunedIndices));
+                chosen=prunedIndices(order(1:min(remaining,numel(order))));
+                goodMask(chosen)=true;
+                remaining=nBelow-sum(goodMask);
+            end
+            if remaining>0
                 infeasibleIndices=find(~feasible);
                 [~,order]=sortrows([violations(infeasibleIndices),trialNumbers(infeasibleIndices)],[1 2]);
                 chosen=infeasibleIndices(order(1:min(remaining,numel(order))));
                 goodMask(chosen)=true;
             end
             selected=find(goodMask);
-            selectedFeasible=selected(feasible(selected));
+            % Optuna computes hypervolume contributions only over COMPLETE
+            % feasible below trials; everything else is clipped to 1e-12.
+            selectedFeasible=selected(feasible(selected) & complete(selected));
             if ~isempty(selectedFeasible)
                 weights=radia.optuna.internal.ParetoSupport.hypervolumeContributions( ...
                     values(selectedFeasible,:),study.Directions);
@@ -336,15 +355,20 @@ classdef ParetoSupport
     end
 
     methods (Static,Access=private)
-        function [data,values,trialNumbers] = collect(study,trialNumbers,data)
+        function [data,values,trialNumbers,states] = collect(study,trialNumbers,data)
+            % Optuna's TPE reads multi-objective history from
+            % study._get_trials(states=(COMPLETE, PRUNED)).  A PRUNED trial
+            % carries no objective vector -- Trial.report is rejected for a
+            % multi-objective study upstream -- so it is kept with NaN
+            % values and split as its own class after every complete trial.
             objectiveCount = numel(study.Directions);
             count = numel(trialNumbers);
             values = NaN(count, objectiveCount);
             [knownTrials, trialRows] = ismember( ...
                 trialNumbers, study.TrialTable.TrialNumber);
-            complete = false(count, 1);
-            complete(knownTrials) = ...
-                study.TrialTable.State(trialRows(knownTrials)) == "COMPLETE";
+            states = strings(count, 1);
+            states(knownTrials) = study.TrialTable.State(trialRows(knownTrials));
+            complete = states == "COMPLETE";
             objectives = study.ObjectiveTable;
             for objective = 1:objectiveCount
                 rows = objectives.ObjectiveIndex == objective;
@@ -353,10 +377,11 @@ classdef ParetoSupport
                 [present, locations] = ismember(trialNumbers, numbers);
                 values(present, objective) = objectiveValues(locations(present));
             end
-            keep = complete & all(isfinite(values), 2);
+            keep = (complete & all(isfinite(values), 2)) | states == "PRUNED";
             data = data(keep);
             values = values(keep,:);
             trialNumbers = trialNumbers(keep);
+            states = states(keep);
         end
 
 

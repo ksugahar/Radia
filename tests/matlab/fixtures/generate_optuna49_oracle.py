@@ -929,6 +929,81 @@ def _cmaes_trials() -> list[dict[str, float]]:
     return rows
 
 
+def _multiobjective_tpe_pruned_trials() -> dict[str, object]:
+    """Multi-objective TPE whose history mixes COMPLETE and PRUNED trials.
+
+    ``Trial.report`` is rejected for a multi-objective study, so a pruned
+    trial here never carries an intermediate value and
+    ``_get_pruned_trial_score`` returns its ``(1, 0.0)`` sentinel: pruned
+    trials rank after every complete trial but still count towards
+    ``n_startup_trials`` and still enter the below/above split.
+    """
+    study = optuna.create_study(
+        directions=["minimize", "minimize"],
+        sampler=optuna.samplers.TPESampler(seed=41, n_startup_trials=4),
+    )
+    values: list[float] = []
+    states: list[str] = []
+    for index in range(24):
+        trial = study.ask()
+        x = trial.suggest_float("x", -2.0, 2.0)
+        values.append(x)
+        if index % 3 == 1:
+            study.tell(trial, state=TrialState.PRUNED)
+            states.append("PRUNED")
+        else:
+            study.tell(trial, [(x - 0.3) ** 2, (x + 0.4) ** 2])
+            states.append("COMPLETE")
+    return {
+        "seed": 41,
+        "n_startup_trials": 4,
+        "values": values,
+        "states": states,
+        "pruned_count": states.count("PRUNED"),
+    }
+
+
+def _cmaes_pruned_trials() -> dict[str, object]:
+    """CmaEsSampler with consider_pruned_trials enabled.
+
+    ``CmaEsSampler._get_trials`` feeds the optimizer with COMPLETE trials
+    plus PRUNED trials that reported at least one intermediate value,
+    rewritten to the value at the deepest step. The same set drives the
+    ``n_startup_trials`` gate, so a port that counts only COMPLETE trials
+    both leaves the startup phase late and never tells the optimizer the
+    pruned solutions.
+    """
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        sampler = optuna.samplers.CmaEsSampler(
+            seed=31, n_startup_trials=1, popsize=4, consider_pruned_trials=True
+        )
+    study = optuna.create_study(sampler=sampler)
+    rows: list[dict[str, object]] = []
+    for index in range(32):
+        trial = study.ask()
+        x = trial.suggest_float("x", -2.0, 2.0)
+        y = trial.suggest_float("y", -1.0, 3.0)
+        objective = (x - 0.4) ** 2 + 0.5 * (y + 0.2) ** 2
+        if index % 4 == 2:
+            trial.report(objective + 0.75, 0)
+            trial.report(objective, 1)
+            study.tell(trial, state=TrialState.PRUNED)
+            state = "PRUNED"
+        else:
+            study.tell(trial, objective)
+            state = "COMPLETE"
+        rows.append({"x": x, "y": y, "state": state})
+    return {
+        "seed": 31,
+        "n_startup_trials": 1,
+        "population_size": 4,
+        "consider_pruned_trials": True,
+        "trials": rows,
+        "pruned_count": sum(row["state"] == "PRUNED" for row in rows),
+    }
+
+
 def _cmaes_independent_sampler_trials() -> list[dict[str, object]]:
     sampler = optuna.samplers.CmaEsSampler(
         seed=31,
@@ -1670,6 +1745,7 @@ def build_oracle() -> dict[str, object]:
         "tpe_group": _tpe_group_contract(),
         "tpe_categorical_distance": _tpe_categorical_distance_trials(),
         "multiobjective_tpe_sampler_seed_41": _multiobjective_tpe_trials(),
+        "multiobjective_tpe_pruned_seed_41": _multiobjective_tpe_pruned_trials(),
         "mixed_tpe_sampler_seed_43": _mixed_tpe_trials(),
         "grid_sampler_seed_17": _grid_trials(),
         "nsgaii_sampler_seed_19": _nsgaii_trials(),
@@ -1678,6 +1754,7 @@ def build_oracle() -> dict[str, object]:
         "brute_force_sampler_seed_29": _brute_force_trials(),
         "conditional_brute_force_sampler_seed_79": _conditional_brute_force_trials(),
         "cmaes_sampler_seed_31": _cmaes_trials(),
+        "cmaes_pruned_sampler_seed_31": _cmaes_pruned_trials(),
         "cmaes_independent_sampler_seed_31": _cmaes_independent_sampler_trials(),
         "scrambled_qmc_sampler_seed_47": _scrambled_qmc_trials(),
         "gp_sampler_seed_53": _gp_trials(),

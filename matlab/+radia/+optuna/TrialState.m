@@ -47,6 +47,14 @@ classdef TrialState < uint8
         end
 
         function text=toStorage(value)
+            % Storage strings round-trip through here once per frozen
+            % trial, so short-circuit the already-canonical scalar case
+            % instead of building an enumeration array for it.
+            if isstring(value) && isscalar(value) && ...
+                    any(value==["RUNNING","COMPLETE","PRUNED","FAIL","WAITING"])
+                text=value;
+                return
+            end
             text=string(radia.optuna.TrialState.from(value));
         end
     end
