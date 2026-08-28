@@ -1,6 +1,21 @@
 # Paper Writing Skill — Journal 論文を通すための作文技術
 
-Journal paper 執筆ガイド。IEEE Transactions / IEEJ 論文誌 / APS / Elsevier 系を対象に、IMRAD 構造・contribution 明示・reviewer 対応の実戦ノウハウを統合。
+Journal paper 執筆ガイド。CAE-AI Lab の対象は **電気学会 (IEEJ) / IEEE / 加速器系学会**に限定し、IMRAD 構造・contribution 明示・reviewer 対応の実戦ノウハウを統合する。
+
+---
+
+## CAE-AI Lab 投稿先ポリシー
+
+- 正規ターゲットは `ieej`、`ieee`、`accelerator` の3系統だけとする。
+- 対象外学会への journal-fit 最適化や投稿推薦は行わない。投稿先が未定なら、まず3系統の中から具体的な venue を決める。
+- 電気学会では、和文本文と英文題目・abstract・keywordを別々にレビューする。
+- IEEEでは英文を投稿原稿の正本とする。和文の思考整理稿がある場合も、英文との平均点ではなく独立に診断する。
+- 加速器系では JACoW / PRAB / PASJ 等の具体的な公式テンプレートを先に選ぶ。ページ数やkeywordを「加速器系共通」と決め打ちしない。
+- 投稿年度の公式テンプレートを source of truth とし、ページ数、abstract、keyword、reference、figure規則をその都度確認する。
+- `paper_writing_target_venue_policy(target_venue)` で分類し、対象外をrejectする。`paper_writing_em_submission_gate(target_venue=...)` にも同じ投稿先を渡す。
+- 和文と英文の可読性は単位も失敗様式も異なるため、スコアを平均しない。適用される言語のうち悪い側を総合ゲートとする。
+
+Radiaの成果は、電気学会で日本語の理屈を磨き、IEEEで国際的な電磁界論文として確立し、加速器系で電磁石・運転・ビーム調整への効果を示す循環を基本とする。
 
 ---
 
@@ -39,9 +54,9 @@ Introduction 内の引用密度・自己引用比率・年度分布を診断。
 - 自己引用比率 < 20%、直近 5 年分 40% 以上が目安
 
 ### T6. 制約検証 → ✅ `paper_writing_validate_pdf_pages` / `paper_writing_validate_abstract_length` / `paper_writing_check_overfull_hbox` / `paper_writing_check_pdf_edge_overflow`
-IEEE/IEEJ/APS 固有の制約検証:
-- ページ数 (IEEE Trans: extended OK / PRL 4 pages / IEEJ 和文 10 pages)
-- Abstract (IEEE 200 words / IEEJ 400 字 / APS 250 words)
+IEEJ / IEEE / 加速器系 venue 固有の制約検証:
+- ページ数は投稿年度の公式テンプレートで確認し、過去年度や別venueの値を流用しない
+- Abstract は IEEJ / IEEE / JACoW / PRAB / PASJ の選択後に公式上限を適用する
 - Overfull hbox ゼロ (LaTeX log 経由 = `check_overfull_hbox`)
 - **紙面端へのはみ出しゼロ (PDF を直接検査 = `check_pdf_edge_overflow`)**
   log には出ないケース (\\sloppy + underfull、長い URL、長い数式、figure*
@@ -194,7 +209,7 @@ CRITICAL 検出時は recommendation が「全部消せ、その上で `suggest_
 
 #### Bilingual digest page-limit policy (EN venue-limit strict, JA synced)
 
-IGTE/CEFC/COMPUMAG などの digest / extended abstract を **英語版 + 日本語版の
+IEEE conference / IEEJ研究会 / JACoW加速器論文などを **英語版 + 日本語版の
 twin** として保守する場合、最初に必ず投稿先・年度・document type ごとの
 page limit を確認する。英語版は投稿物なので、確認した venue limit
 (例: 1 page / 2 pages / 4 pages) を厳守する。過去の別学会・別年度の
@@ -913,15 +928,15 @@ bibtex compile 後、 PDF の References ページを **連番で 1 つずつ音
 - Contribution list: 3 件を intro 末尾に箇条書き
 - Reviewer 対応: 反論 figure を必ず 1 枚追加する余裕を持つ
 
-### Case 2: 国際英文誌 (IEEE Trans / IEICE Trans / IOP 系)
+### Case 2: 国際英文誌 (IEEE Transactions)
 - 構造: 英文 6 ページ double-column、図 8 枚、引用 35 件
 - Abstract: 200 words、problem→method→result→impact の 4 文構造
 - Cover letter: "This work addresses a long-standing tradeoff in [domain]"
 
-### Case 3: APS PRB long form / Elsevier JMMM
-- 構造: 英文 12 ページ、図 10、引用 50
-- 式番号 eq.(1), (2) を本文と密に結ぶ
-- appendix を積極活用（derivation は appendix、本文は結果重視）
+### Case 3: 加速器系 (JACoW / PRAB / PASJ)
+- 具体的なvenueと投稿年度を先に確定し、公式テンプレートを使う
+- 電磁石・電源・ビーム運転のどの問題を改善するかをIntroductionで明示する
+- solver精度だけでなく、調整時間、再現性、運用手順への効果を示す
 
 ## ✅ 完成検証チェックリスト
 
@@ -1167,7 +1182,7 @@ A+B→C が揃って初めて Discussion として機能する。
 - `paper_writing_check_undefined_acronyms(tex_path)` — **略語 (IH, MQS, FEM, BEM, ...) が初出時に full name と並記されているかチェック**。`Full Name (ACRONYM)` または `ACRONYM (Full Name)` パターン (初出の ±80 文字以内)、または Nomenclature / Acronyms / Abbreviations section に listed があれば OK。万人共通の略語 (PDF, USA, CPU, USB, ...) のみ whitelist、研究室 EM 専門用語 (FEM/BEM/MQS/IH) は意図的に whitelist 外 → 必ず spell out 必要。`extra_whitelist="ABC,XYZ"` で institutional 略語追加可。
 - `paper_writing_check_citation_keys_exist(tex_path, bib_path)` — **`\cite{key}` の key が `.bib` の entry に存在するか静的チェック**。`status="fail"` = 引用キーが bib にない (compile 時 `[?]` で render される)、`status="warning"` = bib にあるが cite されていない entry あり (cleanup 推奨)、`status="clean"` = 1-to-1 一致。`\input{}` chain も自動 resolve (`auto_resolve_inputs=True` default)。bibtex compile 前の sanity check として使う。
 - `paper_writing_check_ref_label_consistency(tex_path)` — **`\ref{}` / `\eqref{}` / `\autoref{}` / `\cref{}` / `\pageref{}` の key が `\label{}` に対応するか静的チェック**。`status="fail"` = dangling ref (PDF で `[??]` 表示)、`status="warning"` = orphan label (本文で言及していない figure/eq/table = digest で空間浪費)、`status="clean"` = 1-to-1 一致。digest review の典型指摘 "Fig. 3 is never referenced" を pre-compile で catch。
-- `paper_writing_check_ieee_keywords(tex_path)` — **`\begin{IEEEkeywords}` (IEEEtran) or `\keywords{}` (Elsevier/Springer) の存在 + 個数 (3-7 推奨) + 各 keyword 長 (3-50 chars) チェック**。IEEE Transactions / IGTE / COMPUMAG / CEFC digest は必須セクション。`status="missing"` = block 不在 (即追加必要)、`status="warning"` = 個数 or 長さ問題、`status="clean"` = OK。
+- `paper_writing_check_ieee_keywords(tex_path)` — **`\begin{IEEEkeywords}` (IEEEtran) の存在 + 個数 (3-7 推奨) + 各 keyword 長 (3-50 chars) チェック**。これはIEEEプロファイル専用である。IEEJの `jkeyword` / `ekeyword` は `paper_writing_em_submission_gate(target_venue="電気学会...")` が別に検査し、加速器系は選択した公式テンプレートの規則に従う。`status="missing"` = block 不在、`status="warning"` = 個数 or 長さ問題、`status="clean"` = OK。
 - `paper_writing_check_pdf_unresolved_markers(pdf_path)` — **compile 後 PDF を pymupdf で text 抽出し、`[?]` / `[??]` rendered marker を検出**。上 2 tool (cite key / ref label) は pre-compile 静的 check、本 tool は post-compile の safety net (bibtex 再 run 忘れ等で漏れた未解決参照を catch)。各 marker の page 番号 + ±60 char context を返す。digest 提出直前の最終チェックに最適。
 - `paper_writing_check_tense_consistency` — discussion の 3 部時制
 - `paper_writing_check_figure_caption_showing` — caption が showing vs telling か、caption の主張を本文にも置く方針を返す

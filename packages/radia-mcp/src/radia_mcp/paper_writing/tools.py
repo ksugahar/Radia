@@ -83,7 +83,7 @@ def _load_skill() -> str:
 # Knowledge loader
 # ------------------------------------------------------------------
 def paper_writing_usage() -> str:
-    """Journal 論文 (IEEE / IEEJ / APS / Elsevier 等) の作文技術ガイド全体。
+    """CAE-AI Lab の対象投稿先 (IEEJ / IEEE / 加速器系) の作文技術ガイド全体。
 
     IMRAD 構造 (Abstract/Intro/Method/Result/Discussion/Conclusion) の
     書き方、contribution 明示、reviewer 2 対策、citation pattern、
@@ -171,6 +171,122 @@ def paper_writing_usage() -> str:
     return _load_skill()
 
 
+_TARGET_VENUE_PROFILES = {
+    "accelerator": {
+        "label": "accelerator community",
+        "aliases": (
+            "ipac", "jacow", "prab", "physical review accelerators and beams",
+            "pasj", "particle accelerator society of japan", "linac", "ibic",
+            "napac", "particle accelerator conference", "加速器学会",
+        ),
+        "primary_language": "English for JACoW/PRAB; follow the official PASJ template",
+        "keyword_policy": "Do not impose IEEEkeywords; follow the selected accelerator venue template.",
+    },
+    "ieej": {
+        "label": "Institute of Electrical Engineers of Japan (IEEJ)",
+        "aliases": (
+            "ieej", "電気学会", "電気学会論文誌", "電気学会研究会",
+            "電気学会全国大会", "電気学会部門大会",
+        ),
+        "primary_language": "Japanese or English body according to the venue, with bilingual metadata when required",
+        "keyword_policy": "Accept IEEJ jkeyword/ekeyword blocks; do not require IEEEkeywords.",
+    },
+    "ieee": {
+        "label": "Institute of Electrical and Electronics Engineers (IEEE)",
+        "aliases": ("ieee",),
+        "primary_language": "English",
+        "keyword_policy": "Require the IEEE Index Terms/IEEEkeywords form used by the official template.",
+    },
+}
+
+
+def _target_venue_alias_matches(normalized: str, alias: str) -> bool:
+    if any(ord(ch) > 127 for ch in alias):
+        return alias in normalized
+    return re.search(
+        rf"(?<![a-z0-9]){re.escape(alias)}(?![a-z0-9])",
+        normalized,
+    ) is not None
+
+
+def paper_writing_target_venue_policy(target_venue: str = "") -> dict:
+    """Enforce the CAE-AI Lab's deliberately narrow publication targets.
+
+    Supported targets are IEEJ, IEEE, and accelerator-community venues.
+    The function classifies a concrete venue name, returns its language and
+    keyword lane, and rejects unrelated venue recommendations. Japanese and
+    English readability are always evaluated independently and never averaged.
+    """
+    requested = target_venue.strip()
+    supported = ["ieej", "ieee", "accelerator"]
+    if not requested:
+        return {
+            "status": "selection_required",
+            "policy_id": "cae_ai_lab_target_venues_v1",
+            "target_venue": "",
+            "target_category": None,
+            "supported_categories": supported,
+            "recommendation": (
+                "Choose a concrete target in IEEJ, IEEE, or the accelerator "
+                "community before applying venue-specific submission rules."
+            ),
+            "bilingual_policy": (
+                "Japanese and English are separate review lanes; scores are "
+                "not averaged and the worse applicable lane controls the gate."
+            ),
+        }
+
+    normalized = requested.casefold().strip()
+    matched_category = None
+    # Accelerator aliases take precedence for names such as IEEE PAC.
+    for category in ("accelerator", "ieej", "ieee"):
+        aliases = _TARGET_VENUE_PROFILES[category]["aliases"]
+        if any(_target_venue_alias_matches(normalized, alias) for alias in aliases):
+            matched_category = category
+            break
+
+    if matched_category is None:
+        return {
+            "status": "reject",
+            "policy_id": "cae_ai_lab_target_venues_v1",
+            "target_venue": requested,
+            "target_category": None,
+            "supported_categories": supported,
+            "recommendation": (
+                "Do not optimize this manuscript for an unrelated venue. "
+                "Retarget it to IEEJ, IEEE, or an accelerator-community venue."
+            ),
+            "bilingual_policy": (
+                "Japanese and English are separate review lanes; scores are "
+                "not averaged and the worse applicable lane controls the gate."
+            ),
+        }
+
+    profile = _TARGET_VENUE_PROFILES[matched_category]
+    return {
+        "status": "pass",
+        "policy_id": "cae_ai_lab_target_venues_v1",
+        "target_venue": requested,
+        "target_category": matched_category,
+        "target_label": profile["label"],
+        "supported_categories": supported,
+        "primary_language": profile["primary_language"],
+        "keyword_policy": profile["keyword_policy"],
+        "template_policy": (
+            "Use the current official template and verify its page, abstract, "
+            "keyword, reference, and figure rules for the submission year."
+        ),
+        "bilingual_policy": (
+            "Japanese and English are separate review lanes; scores are not "
+            "averaged and the worse applicable lane controls the gate."
+        ),
+        "recommendation": (
+            f"Apply the {matched_category} venue profile and ignore unrelated "
+            "journal-fit suggestions."
+        ),
+    }
+
+
 # ------------------------------------------------------------------
 # Active diagnostic tools (shared across writing MCPs)
 # ------------------------------------------------------------------
@@ -205,12 +321,9 @@ def paper_writing_count_underlines(tex_path: str) -> dict:
 def paper_writing_validate_pdf_pages(pdf_path: str, page_limit: int) -> dict:
     """PDF のページ数が投稿制限内か検証。pymupdf が必要。
 
-    参考:
-        IEEE Transactions: 規定なし (extended)、letter形式は 4 page
-        IEEJ Transactions: 原著論文 8 pages 推奨、10 pages 上限
-        APS PRL: 4 pages (本文+refs+fig)
-        APS PRB: 制限なし (ページ課金あり)
-        Elsevier JMMM: 制限なし
+    CAE-AI Lab の対象は IEEJ / IEEE / 加速器系。ページ制限は
+    journal/conference、document type、投稿年度で変わるため、呼び出し側が
+    公式テンプレートで確認した ``page_limit`` を明示する。
     """
     try:
         import pymupdf  # type: ignore
@@ -528,11 +641,9 @@ def paper_writing_validate_abstract_length(text: str,
                                             max_chars_ja: int = 400) -> dict:
     """Abstract 字数 / 語数が制限内か検証。言語を自動判定。
 
-    参考制限:
-        IEEE Transactions: 200 words (structured abstract は 250)
-        IEEJ 和文: 400 字
-        APS: 250 words
-        Elsevier: 200-300 words
+    CAE-AI Lab の対象は IEEJ / IEEE / 加速器系。既定値は診断用の一般値で、
+    実投稿では選択したvenue・document type・投稿年度の公式上限を
+    ``max_words`` / ``max_chars_ja`` に渡す。
     """
     # Crude language detection: if >30% of chars are CJK, treat as Japanese
     cjk = sum(1 for c in text if "぀" <= c <= "ヿ"

@@ -5,6 +5,12 @@ All notable changes to the `radia` package.  Format: each release lists
 
 ## Unreleased
 
+- Restricted the paper-writing recommendation policy to the three venues that
+  match Radia's publication strategy: IEEJ, IEEE, and the accelerator
+  community. A new MCP policy tool classifies concrete venue names, rejects
+  unrelated targets, preserves independent Japanese/English review lanes, and
+  lets the submission gate apply IEEJ keyword blocks without imposing the
+  IEEE-only keyword form.
 - Added a language-specific adjacent-reviewer readability gate to
   `mcp-server-paper-writing`. Japanese and English prose are now evaluated
   separately, TeX math and floats are excluded, and cognitively dense prose
