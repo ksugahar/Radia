@@ -1,10 +1,11 @@
 name: Release
 
-# Runs automatically after CI succeeds. PyPI jobs additionally verify the
-# exact triggering CI's immutable ref-context artifact was a tag run.
+# Runs automatically after the Radia distribution CI succeeds. PyPI jobs
+# additionally verify the exact triggering CI's immutable ref-context artifact
+# was a tag run.
 on:
   workflow_run:
-    workflows: ["CI"]
+    workflows: ["Radia"]
     types: [completed]
 
 jobs:

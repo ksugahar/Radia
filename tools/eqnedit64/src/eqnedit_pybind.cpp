@@ -47,6 +47,7 @@ PYBIND11_MODULE(eqnedit_core, module) {
         .def_readwrite("subsym", &eqnedit::SvgStyle::subsym)
         .def_readwrite("serif", &eqnedit::SvgStyle::serif)
         .def_readwrite("symbol", &eqnedit::SvgStyle::symbol)
+        .def_readwrite("cjk", &eqnedit::SvgStyle::cjk)
         .def_readwrite("padding", &eqnedit::SvgStyle::padding);
 
     module.def("tex_to_svg", &tex_to_svg_checked, py::arg("tex"),

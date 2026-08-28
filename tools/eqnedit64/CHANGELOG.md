@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+### Visible native toolbar text
+
+- Palette category tabs and palette buttons retain native keyboard, focus,
+  radio, and accessibility behavior while Eqnedit64 now draws their pixels
+  itself. This avoids a Windows GDI/theme session failure where the controls'
+  text and fonts were correct but every toolbar label appeared blank.
+- The hidden interaction test renders each real button once with and once
+  without its label and requires changed text pixels, closing the gap left by
+  the old memory-DC-only font probe.
+
+### Japanese text size
+
+- `\text{...}` Japanese now uses an explicitly measured CJK face. It no longer
+  passes through Latin Modern Math font linking, which could turn five 12 pt
+  characters into a 306 pt-wide run on LAB.
+
 ### Radia-owned Web edition
 
 - Imported the current laboratory-homepage JavaScript editor into `web/` and

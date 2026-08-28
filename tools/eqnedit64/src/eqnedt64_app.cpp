@@ -164,6 +164,8 @@ struct AppState {
     std::vector<HWND> paletteButtons;
     size_t activePaletteCategory = 0;
     HFONT paletteFont = nullptr;
+    HFONT paletteTabFont = nullptr;
+    bool toolbarButtonSubclassFailed = false;
 } g;
 
 std::wstring wide_utf8(const std::string& s) {
@@ -777,7 +779,7 @@ bool start_operation_debug(bool announce,
                     "\telapsed_ms\tdelta_ms\tfocus\tinput_style\talignment"
                     "\tzoom_percent\tequation_mode"
                     "\tshortcut_prefix\tlatex\r\n");
-    debug_event("debug.start", "Eqnedit64 3.0.0 path=" + utf8_wide(path));
+    debug_event("debug.start", "Eqnedit64 3.0.1 path=" + utf8_wide(path));
     update_debug_menu();
     update_title();
     /* The status bar and the [操作ログ記録中] flag in the title say all of
@@ -2194,6 +2196,161 @@ HFONT pick_button_font(int heightPx) {
     return HFONT(GetStockObject(DEFAULT_GUI_FONT));
 }
 
+/* Category labels are Japanese, so DEFAULT_GUI_FONT is not a sufficient
+ * contract: it commonly reaches Japanese through font linking, and this is
+ * exactly the session state in which linking has intermittently failed.  Pick
+ * a face that owns the glyphs itself and has proved it can draw them. */
+HFONT pick_palette_tab_font(int heightPx) {
+    const wchar_t* sample = L"基本解析集合記号幾何ギリシャ";
+    const wchar_t* candidates[] = {L"Yu Gothic UI", L"Meiryo UI",
+                                   L"MS UI Gothic"};
+    for (const wchar_t* face : candidates) {
+        HFONT font = CreateFontW(-heightPx, 0, 0, 0, FW_NORMAL, FALSE, FALSE,
+                                 FALSE, DEFAULT_CHARSET, OUT_TT_PRECIS,
+                                 CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY,
+                                 VARIABLE_PITCH, face);
+        if (font_owns_glyphs(font, sample) && font_draws_ink(font, sample)) {
+            flight_note(std::string("font.palette_tabs ") + utf8_wide(face));
+            return font;
+        }
+        flight_note(std::string("font.palette_tabs.rejected ") +
+                    utf8_wide(face));
+        if (font) DeleteObject(font);
+    }
+    flight_note("font.palette_tabs.fallback DEFAULT_GUI_FONT");
+    return HFONT(GetStockObject(DEFAULT_GUI_FONT));
+}
+
+/* The themed BUTTON control has twice reached a state where its window text
+ * is correct and the selected font draws into a memory DC, yet USER/UxTheme
+ * paints no text on screen.  Keep the native button's input, focus, radio and
+ * accessibility behaviour, but own only its pixels.  WM_PRINTCLIENT uses the
+ * same path, so the regression test verifies what WM_PAINT will draw. */
+void draw_toolbar_button(HWND hwnd, HDC dc) {
+    RECT rc{};
+    GetClientRect(hwnd, &rc);
+    UINT frameState = DFCS_BUTTONPUSH;
+    const LRESULT buttonState = SendMessageW(hwnd, BM_GETSTATE, 0, 0);
+    const bool pressed = (buttonState & BST_PUSHED) != 0 ||
+                         SendMessageW(hwnd, BM_GETCHECK, 0, 0) == BST_CHECKED;
+    if (pressed) frameState |= DFCS_PUSHED;
+    if (!IsWindowEnabled(hwnd)) frameState |= DFCS_INACTIVE;
+    DrawFrameControl(dc, &rc, DFC_BUTTON, frameState);
+
+    std::wstring text = window_text(hwnd);
+    RECT textRc = rc;
+    InflateRect(&textRc, -scaled_px(hwnd, 4), -scaled_px(hwnd, 3));
+    if (pressed) OffsetRect(&textRc, 1, 1);
+    SetBkMode(dc, TRANSPARENT);
+    SetTextColor(dc, GetSysColor(IsWindowEnabled(hwnd)
+                                     ? COLOR_BTNTEXT : COLOR_GRAYTEXT));
+    HFONT font = HFONT(SendMessageW(hwnd, WM_GETFONT, 0, 0));
+    if (!font) font = HFONT(GetStockObject(DEFAULT_GUI_FONT));
+    HGDIOBJ oldFont = SelectObject(dc, font);
+    DrawTextW(dc, text.c_str(), int(text.size()), &textRc,
+              DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX |
+                  DT_END_ELLIPSIS);
+    SelectObject(dc, oldFont);
+
+    if (GetFocus() == hwnd) {
+        RECT focus = rc;
+        InflateRect(&focus, -scaled_px(hwnd, 4), -scaled_px(hwnd, 4));
+        DrawFocusRect(dc, &focus);
+    }
+}
+
+LRESULT CALLBACK ToolbarButtonProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp,
+                                   UINT_PTR id, DWORD_PTR) {
+    switch (msg) {
+        case WM_PAINT: {
+            PAINTSTRUCT ps{};
+            HDC dc = BeginPaint(hwnd, &ps);
+            draw_toolbar_button(hwnd, dc);
+            EndPaint(hwnd, &ps);
+            return 0;
+        }
+        case WM_PRINTCLIENT:
+            if (HDC dc = HDC(wp)) draw_toolbar_button(hwnd, dc);
+            return 0;
+        case WM_ERASEBKGND:
+            return 1;
+        case WM_SETTEXT:
+        case WM_SETFONT:
+        case WM_ENABLE:
+        case WM_SETFOCUS:
+        case WM_KILLFOCUS:
+        case BM_SETCHECK:
+        case BM_SETSTATE: {
+            LRESULT result = DefSubclassProc(hwnd, msg, wp, lp);
+            InvalidateRect(hwnd, nullptr, TRUE);
+            return result;
+        }
+        case WM_THEMECHANGED:
+        case WM_UPDATEUISTATE:
+            InvalidateRect(hwnd, nullptr, TRUE);
+            break;
+        case WM_NCDESTROY:
+            RemoveWindowSubclass(hwnd, ToolbarButtonProc, id);
+            break;
+    }
+    return DefSubclassProc(hwnd, msg, wp, lp);
+}
+
+bool toolbar_button_label_changes_pixels(HWND button) {
+    if (!button || window_text(button).empty()) return false;
+    RECT rc{};
+    GetClientRect(button, &rc);
+    const int width = rc.right - rc.left;
+    const int height = rc.bottom - rc.top;
+    if (width <= 0 || height <= 0) return false;
+
+    BITMAPINFO info{};
+    info.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+    info.bmiHeader.biWidth = width;
+    info.bmiHeader.biHeight = -height;
+    info.bmiHeader.biPlanes = 1;
+    info.bmiHeader.biBitCount = 32;
+    info.bmiHeader.biCompression = BI_RGB;
+    HDC dc = CreateCompatibleDC(nullptr);
+    void* bits = nullptr;
+    HBITMAP bitmap = dc ? CreateDIBSection(
+        dc, &info, DIB_RGB_COLORS, &bits, nullptr, 0) : nullptr;
+    HGDIOBJ oldBitmap = bitmap ? SelectObject(dc, bitmap) : nullptr;
+    if (!dc || !bitmap || !bits) {
+        if (oldBitmap) SelectObject(dc, oldBitmap);
+        if (bitmap) DeleteObject(bitmap);
+        if (dc) DeleteDC(dc);
+        return false;
+    }
+
+    auto render = [&]() {
+        memset(bits, 0xA5, size_t(width) * size_t(height) * 4);
+        SendMessageW(button, WM_PRINTCLIENT, WPARAM(dc), PRF_CLIENT);
+        std::vector<unsigned char> image(size_t(width) * size_t(height) * 4);
+        memcpy(image.data(), bits, image.size());
+        return image;
+    };
+    const std::wstring label = window_text(button);
+    const std::vector<unsigned char> labelled = render();
+    SetWindowTextW(button, L"");
+    const std::vector<unsigned char> blank = render();
+    SetWindowTextW(button, label.c_str());
+
+    size_t changed = 0;
+    const int inset = scaled_px(button, 4);
+    for (int y = inset; y < height - inset; ++y) {
+        for (int x = inset; x < width - inset; ++x) {
+            const size_t i = (size_t(y) * size_t(width) + size_t(x)) * 4;
+            if (labelled[i] != blank[i] || labelled[i + 1] != blank[i + 1] ||
+                labelled[i + 2] != blank[i + 2]) ++changed;
+        }
+    }
+    SelectObject(dc, oldBitmap);
+    DeleteObject(bitmap);
+    DeleteDC(dc);
+    return changed >= 4;
+}
+
 /* Five category tabs on the first row; only that category's popup palettes
  * occupy the second.  This keeps Eqnedt32's two-click completeness without
  * asking the eye to scan all eighteen palette buttons at once. */
@@ -2216,8 +2373,14 @@ void create_toolbar(HWND hwnd) {
             left + int(i) * (tabWidth + gap), top, tabWidth, rowHeight, hwnd,
             HMENU(UINT_PTR(ID_PALETTE_TAB_FIRST + UINT(i))),
             g.instance, nullptr);
-        SendMessageW(button, WM_SETFONT,
-                     WPARAM(GetStockObject(DEFAULT_GUI_FONT)), TRUE);
+        if (!button ||
+            !SetWindowSubclass(button, ToolbarButtonProc,
+                               ID_PALETTE_TAB_FIRST + UINT(i), 0)) {
+            g.toolbarButtonSubclassFailed = true;
+            flight_note("toolbar.subclass.failed category=" +
+                        std::to_string(i));
+        }
+        SendMessageW(button, WM_SETFONT, WPARAM(g.paletteTabFont), TRUE);
         g.paletteTabButtons.push_back(button);
     }
 
@@ -2228,6 +2391,13 @@ void create_toolbar(HWND hwnd) {
             WS_CHILD | BS_PUSHBUTTON,
             left, top + rowHeight + gap, paletteWidth, rowHeight, hwnd,
             HMENU(UINT_PTR(ID_PALETTE_FIRST + UINT(i))), g.instance, nullptr);
+        if (!button ||
+            !SetWindowSubclass(button, ToolbarButtonProc,
+                               ID_PALETTE_FIRST + UINT(i), 0)) {
+            g.toolbarButtonSubclassFailed = true;
+            flight_note("toolbar.subclass.failed palette=" +
+                        std::to_string(i));
+        }
         /* The shell font is missing several of these glyphs and draws them
          * as boxes; the math font has all of them. */
         SendMessageW(button, WM_SETFONT, WPARAM(g.paletteFont), TRUE);
@@ -3075,6 +3245,7 @@ LRESULT CALLBACK MainProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
              * the choice lands in the flight log so a blank bar names its
              * cause in text. */
             g.paletteFont = pick_button_font(scaled_px(hwnd, 17));
+            g.paletteTabFont = pick_palette_tab_font(scaled_px(hwnd, 14));
             start_watchdog();
             create_toolbar(hwnd);
             g.canvas = CreateWindowExW(WS_EX_CLIENTEDGE, kCanvasClass, L"",
@@ -3252,6 +3423,11 @@ LRESULT CALLBACK MainProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
                 DeleteObject(g.paletteFont);
             }
             g.paletteFont = nullptr;
+            if (g.paletteTabFont &&
+                g.paletteTabFont != GetStockObject(DEFAULT_GUI_FONT)) {
+                DeleteObject(g.paletteTabFont);
+            }
+            g.paletteTabFont = nullptr;
             if (g.ownsSourceFont && g.sourceFont) DeleteObject(g.sourceFont);
             g.sourceFont = nullptr;
             g.ownsSourceFont = false;
@@ -3271,6 +3447,11 @@ int self_test() {
     if (e.latex().find("x_{i}") == std::string::npos) return 11;
     auto m = e.metrics();
     if (m.width <= 0 || m.height <= 0) return 12;
+    eqnedit::Equation japanese;
+    if (!japanese.load_latex(u8"\\text{を代入する}")) return 156;
+    const auto japaneseMetrics = japanese.metrics();
+    if (japaneseMetrics.width < 45.0 || japaneseMetrics.width > 90.0 ||
+        japaneseMetrics.height > 24.0) return 157;
     HDC screen = GetDC(nullptr);
     HDC dc = CreateCompatibleDC(screen);
     HBITMAP bm = CreateCompatibleBitmap(screen, 640, 240);
@@ -4516,6 +4697,12 @@ int ui_interaction_test() {
          * entire test window intentionally remains hidden. */
         const auto& categories = eqnedit::palette_categories();
         if (g.paletteTabButtons.size() != categories.size()) return 124;
+        if (g.toolbarButtonSubclassFailed) return 154;
+        for (HWND button : g.paletteTabButtons) if (!button) return 155;
+        for (HWND button : g.paletteTabButtons)
+            if (!toolbar_button_label_changes_pixels(button)) return 152;
+        for (HWND button : g.paletteButtons)
+            if (!toolbar_button_label_changes_pixels(button)) return 153;
         if (GetMenuItemCount(g.menu) != 5) return 128;
         HMENU insertMenu = GetSubMenu(g.menu, 2);
         if (!insertMenu ||

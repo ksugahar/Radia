@@ -21,6 +21,12 @@ def test_release_quad_tracks_the_independent_optuna_version():
     assert versions["optuna.__version__"] == "0.1.4"
 
 
+def test_optuna_candidate_requires_the_independent_distribution_workflow():
+    source = TOOL.read_text(encoding="utf-8")
+    assert '"workflowName": "radia-optuna"' in source
+    assert '"workflowName": "CI"' not in source
+
+
 def test_optuna_candidate_records_every_machine_for_one_exact_wheel(
     monkeypatch, tmp_path
 ):

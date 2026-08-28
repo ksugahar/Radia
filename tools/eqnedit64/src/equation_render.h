@@ -29,6 +29,7 @@ struct SvgStyle {
      * lacks the first still finds the glyph. */
     std::string serif = "Latin Modern Math, Cambria Math, serif";
     std::string symbol = "Latin Modern Math, Cambria Math, Symbol, serif";
+    std::string cjk = "Yu Mincho, Yu Gothic UI, Meiryo, MS Mincho, serif";
 
     double padding = 1.0;   /* pt of white space around the equation */
 };
