@@ -637,7 +637,8 @@ CLASS_ORACLE_SECTIONS = {
 
 
 def _sha256(path: Path) -> str:
-    return hashlib.sha256(path.read_bytes()).hexdigest().upper()
+    content = path.read_bytes().replace(b"\r\n", b"\n").replace(b"\r", b"\n")
+    return hashlib.sha256(content).hexdigest().upper()
 
 
 def _normalized(name: str) -> str:
@@ -855,6 +856,7 @@ def main() -> None:
     DESTINATION.write_text(
         json.dumps(build_coverage(), indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
+        newline="\n",
     )
     print(DESTINATION)
 

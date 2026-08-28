@@ -5945,8 +5945,8 @@
   "surface_missing_count": 0,
   "surface_present_count": 816,
   "upstream_inventory": "tests/matlab/fixtures/optuna49_public_api.json",
-  "upstream_inventory_sha256": "D3DCEE6E42AE8A004748958F151BA629EF63F85F99B0C9B454AF149AB0DB50E2",
+  "upstream_inventory_sha256": "A69642BD83B136B5A52D351A84E3D910971A7514F1AF48282EE6B3CA609D11FF",
   "upstream_oracle": "tests/matlab/fixtures/optuna49_oracle.json",
-  "upstream_oracle_sha256": "2F44E68DD820ECB4731886F6B13C0604791420EA4279E7EC8001A71E41C7938B",
+  "upstream_oracle_sha256": "6E58B6E2998F507B1F839C3663141F72E15D1FD12226CA2D4FD9043DF3FD9B65",
   "upstream_version": "4.9.0"
 }
