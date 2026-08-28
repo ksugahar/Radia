@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import hashlib
+import json
 from pathlib import Path
 
 from PIL import Image
@@ -83,3 +85,34 @@ def test_unverified_figure_text_blocks_finalization(tmp_path: Path) -> None:
     assert result["passed"] is False
     assert "embedded_figure_text_must_be_verified_at_20pt" in result["issues"]
     assert result["figure_text_audit"]["unresolved_count"] == 1
+
+
+def test_finalization_auto_discovers_standard_figure_manifest(
+        tmp_path: Path) -> None:
+    image_path = tmp_path / "figure.png"
+    Image.new("RGB", (400, 200), "white").save(image_path, dpi=(300, 300))
+    prs = Presentation()
+    slide = prs.slides.add_slide(prs.slide_layouts[5])
+    slide.shapes.title.text = "MMPMの計算精度評価"
+    slide.shapes.add_picture(
+        str(image_path), Inches(1), Inches(1.5), width=Inches(8)
+    )
+    prs.save(tmp_path / "final.pptx")
+
+    manifest_dir = tmp_path / "assets" / "data"
+    manifest_dir.mkdir(parents=True)
+    asset_sha1 = hashlib.sha1(image_path.read_bytes()).hexdigest()
+    (manifest_dir / "figure_text_source_evidence.json").write_text(
+        json.dumps({"pictures": [{
+            "slide": 1,
+            "asset_sha1": asset_sha1,
+            "confirmed_textless": True,
+        }]}),
+        encoding="utf-8",
+    )
+
+    result = presentation_check_final_deck_directory(str(tmp_path))
+
+    assert result["passed"] is True
+    assert result["figure_text_ocr_backend"] == "manifest"
+    assert result["figure_text_audit"]["passed"] is True

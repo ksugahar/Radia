@@ -7,8 +7,10 @@ from radia_mcp.matlab import (
     matlab_optimize_build,
     matlab_optimize_resume,
     matlab_optuna_benchmark_plan,
+    matlab_optuna_compatibility_contract,
     matlab_optuna_health,
     matlab_optuna_mcp_route,
+    matlab_optuna_oracle_audit,
     matlab_optuna_oracle_plan,
     matlab_optuna_release_gate,
     matlab_optuna_simulink_contract,
@@ -47,6 +49,9 @@ def test_radia_mex_contract_reads_the_cpp_command_inventory():
         "unmapped_count": 0,
         "complete": True,
     }
+    assert contract["optuna_mex_command_count"] == 20
+    assert contract["matlab_optuna_class_count"] >= 92
+    assert contract["matlab_optuna_function_count"] >= 85
     assert {
         "TPESampler",
         "MOTPESampler",
@@ -66,6 +71,29 @@ def test_radia_mex_contract_reads_the_cpp_command_inventory():
     assert "simulink.state_space.update" in contract["command_names"]
     assert "simulink.state_space.snapshot" in contract["command_names"]
     assert "simulink.state_space.restore" in contract["command_names"]
+    optuna_commands = {
+        "optuna.pareto.rank_crowding",
+        "optuna.parzen.log_pdf_numerical",
+        "optuna.parzen.log_pdf_categorical",
+        "optuna.tpe.best_numerical",
+        "optuna.tpe.best_joint",
+        "optuna.tpe.best_numerical_observations",
+        "optuna.tpe.best_joint_observations",
+        "optuna.tpe.history.reset",
+        "optuna.tpe.history.append_complete",
+        "optuna.tpe.best_grouped_history",
+        "optuna.random_state.create",
+        "optuna.random_state.rand",
+        "optuna.random_state.randn",
+        "optuna.random_state.randi",
+        "optuna.random_state.randperm",
+        "optuna.random_state.snapshot",
+        "optuna.random_state.restore",
+        "optuna.random_state.destroy",
+    }
+    assert optuna_commands.issubset(contract["optuna_mex_command_names"])
+    assert not any(name.startswith("optuna.") for name in contract["command_names"])
+    assert "hacapk.charge_gram.reduce_configured_candidate_directional_schur" in contract["command_names"]
     assert {
         "ih.eddy.create",
         "ih.eddy.output",
@@ -89,6 +117,7 @@ def test_radia_mex_contract_reads_the_cpp_command_inventory():
         "beam.lie.dragt_finn_factorize",
         "beam.lie.apply_dragt_finn_batch",
         "beam.orbit.track_reference_3d",
+        "beam.orbit.track_reference_to_plane",
     }.issubset(contract["command_names"])
     assert {
         "topopt.abe_element_fill_plan",
@@ -112,7 +141,8 @@ def test_radia_mex_contract_reads_the_cpp_command_inventory():
     # _ChargeGramHMatrix.charge_sigma (the sigma-normalization diagnostic
     # from the roundoff-amplification fix) is EXCLUDED with a reason, and
     # exclusions leave the relevant surface; cyclic image setup expands the
-    # covered stateful surface to 126 entries.
+    # covered stateful surface to 126 entries, including field-gradient and
+    # configured directional-Schur and shape-derivative bindings.
     assert contract["pybind_class_surface_count"] == 126
     assert ("_ChargeGramHMatrix.charge_sigma"
             in contract["pybind_class_exclusions"])
@@ -152,6 +182,9 @@ def test_radia_mex_contract_reads_the_cpp_command_inventory():
     assert contract["verified_contract"]["optuna_native_kernel_benchmark"].endswith(
         "results_matlab_optuna_mex_benchmark_20260806.json"
     )
+    assert contract["verified_contract"]["optuna49_performance_benchmark"].endswith(
+        "results_matlab_optuna49_performance_20260825.json"
+    )
     assert contract["verified_contract"]["native_motor_family_artifact"].endswith(
         "native_motor_angle_family.json"
     )
@@ -172,7 +205,10 @@ def test_optuna_simulink_contract_is_table_backed():
     assert contract["status"] == "ready"
     assert contract["package"] == "radia.optuna"
     assert contract["distribution"] == "radia-optuna"
-    assert contract["upstream_oracle"] == "optuna==4.9.0"
+    assert contract["upstream_oracle_version"] == "optuna==4.9.0"
+    assert contract["upstream_oracle"]["oracle_owner"].startswith(
+        "optuna==4.9.0"
+    )
     assert contract["mcp_ownership"]["routes"]["shared"]["owner"] == (
         "optuna/optuna-mcp"
     )
@@ -180,7 +216,10 @@ def test_optuna_simulink_contract_is_table_backed():
     assert "ObjectiveTable" in contract["tables"]
     assert "ConstraintTable" in contract["tables"]
     assert "SamplerStateTable" in contract["tables"]
-    assert contract["native_acceleration"]["python_per_trial"] is False
+    assert contract["schema"].endswith("/v3")
+    assert contract["upstream_oracle"]["ok"] is True
+    assert contract["upstream_oracle"]["oracle_versions"]["optuna"] == "4.9.0"
+    assert contract["native_acceleration"]["upstream_python_gp_python_per_trial"] is True
     assert contract["native_acceleration"]["full_optimizer_in_cpp"] is False
     assert contract["native_acceleration"]["gateway"] == "optuna_mex"
     assert contract["native_acceleration"]["command_count"] == (
@@ -278,12 +317,14 @@ def test_root_readme_publishes_native_topology_mex_parity():
     )
     assert "126 stateful class members" in matlab_readme
     assert "All 253 entries are covered by the current 364-command gateway" in matlab_readme
+    assert "20-command `optuna_mex`" in matlab_readme
 
     parity_doc = (root / "docs" / "api" / "MATLAB_MEX_NGSOLVE_PARITY.md").read_text(
         encoding="utf-8"
     )
     assert "| Stateful pybind11 class surface | 126 / 126 covered |" in parity_doc
-    assert "| MEX gateway commands | 364 |" in parity_doc
+    assert "| Radia MEX gateway commands | 364 |" in parity_doc
+    assert "| Optuna MEX gateway commands | 20 |" in parity_doc
 
 
 def test_server_registers_bridge_tools():
@@ -298,6 +339,8 @@ def test_server_registers_bridge_tools():
     assert "matlab_optuna_oracle_plan" in tool_names
     assert "matlab_optuna_benchmark_plan" in tool_names
     assert "matlab_optuna_release_gate" in tool_names
+    assert "matlab_optuna_compatibility_contract" in tool_names
+    assert "matlab_optuna_oracle_audit" in tool_names
     assert "matlab_optimize_build" in tool_names
     assert "matlab_optimize_resume" in tool_names
     assert "matlab_cad_topology_build" in tool_names
@@ -373,6 +416,29 @@ def test_radia_matlab_tools_do_not_shadow_verified_upstream_optuna_mcp_tools():
     assert upstream_tools.isdisjoint(radia_tools)
 
 
+def test_optuna_compatibility_and_oracle_audit_are_checked():
+    contract = matlab_optuna_compatibility_contract()
+    assert contract["ok"] is True
+    assert contract["transport"]["public_mcp_contract"] == "stdio"
+    assert contract["transport"]["mcp_sampler_seed_supported"] is False
+    closure = contract["public_api_closure"]
+    assert closure["surface_entry_count"] == 816
+    assert closure["surface_present_count"] == 816
+    assert closure["surface_missing_count"] == 0
+    assert closure["oracle_verified_count"] == 816
+    assert closure["oracle_partial_count"] == 0
+    assert closure["oracle_unmapped_count"] == 0
+    assert closure["full_compatibility_complete"] is True
+
+    audit = matlab_optuna_oracle_audit()
+    assert audit["ok"] is True
+    assert audit["test_function_count"] == contract["test_counts"]["total"]
+    assert audit["manifest_entry_count"] == contract["test_counts"]["total"]
+    assert audit["policy_identical"] is True
+    assert audit["missing_manifest_entries"] == []
+    assert audit["stale_manifest_entries"] == []
+
+
 def test_optimize_server_builds_multiobjective_ltspice_code():
     payload = matlab_optimize_build({
         "name": "loss-ripple",
@@ -418,7 +484,7 @@ def test_optimize_server_builds_cae_aware_native_simulink_code():
         },
     })
     code = payload["matlab_code"]
-    assert payload["schema"].endswith("/v2")
+    assert payload["schema"].endswith("/v3")
     assert "radia.optuna.SimulinkRunner" in code
     assert "ConstraintFcn=@constrainIHTrial" in code
     assert "ValidationFcn=@validateIHTrial" in code
@@ -430,6 +496,113 @@ def test_optimize_server_builds_cae_aware_native_simulink_code():
     assert payload["result_contract"]["cae_success"] == (
         "radia.optuna.cae-trial.v1 in trial user attributes"
     )
+
+
+def test_optimize_builder_v3_covers_seeded_sampler_surface():
+    cases = {
+        "random": "RandomSampler(41)",
+        "tpe": "TPESampler(Seed=41",
+        "cmaes": "CmaEsSampler(Seed=41",
+        "gp": "GPSampler(Seed=41",
+        "nsgaii": "NSGAIISampler(Seed=41",
+        "nsgaiii": "NSGAIIISampler(Seed=41",
+        "qmc": "QMCSampler(QMCType=\"sobol\",Scramble=true,Seed=41)",
+        "bruteforce": "BruteForceSampler(Seed=41",
+    }
+    for name, expected in cases.items():
+        sampler = {"name": name, "seed": 41}
+        if name == "qmc":
+            sampler["scramble"] = True
+        payload = matlab_optimize_build({
+            "directions": ["minimize", "minimize"] if name in {"nsgaii", "nsgaiii"} else ["minimize"],
+            "sampler": sampler,
+            "n_trials": 3,
+            "live_monitor": False,
+            "runner": {"kind": "objective", "objective_fcn": "objectiveFcn"},
+        })
+        assert expected in payload["matlab_code"]
+        assert payload["oracle"]["explicit_seed"] == 41
+        assert payload["oracle"]["classification"] == "upstream-python"
+
+    grid = matlab_optimize_build({
+        "sampler": {"name": "grid", "seed": 7, "search_space": {"x": [1, 2]}},
+        "runner": {"kind": "objective", "objective_fcn": "objectiveFcn"},
+    })
+    assert "GridSampler(jsondecode" in grid["matlab_code"]
+
+    fixed = matlab_optimize_build({
+        "sampler": {
+            "name": "partial_fixed", "seed": 9,
+            "fixed_params": {"mode": "A"},
+            "base_sampler": {"name": "random", "seed": 9},
+        },
+        "runner": {"kind": "objective", "objective_fcn": "objectiveFcn"},
+    })
+    assert "PartialFixedSampler(jsondecode" in fixed["matlab_code"]
+    assert "RandomSampler(9)" in fixed["matlab_code"]
+
+    advanced_tpe = matlab_optimize_build({
+        "sampler": {
+            "name": "tpe", "seed": 13,
+            "gamma_fcn": "customGamma", "weights_fcn": "customWeights",
+            "multivariate": True, "group": True,
+            "warn_independent_sampling": True,
+            "categorical_distance_fcn": {"mode": "modeDistance"},
+        },
+        "runner": {"kind": "objective", "objective_fcn": "objectiveFcn"},
+    })
+    assert "GammaFcn=@customGamma" in advanced_tpe["matlab_code"]
+    assert "WeightsFcn=@customWeights" in advanced_tpe["matlab_code"]
+    assert "Multivariate=true,Group=true" in advanced_tpe["matlab_code"]
+    assert "WarnIndependentSampling=true" in advanced_tpe["matlab_code"]
+    assert (
+        "CategoricalDistanceFcn=containers.Map({'mode'},{@modeDistance})"
+        in advanced_tpe["matlab_code"]
+    )
+
+    cma_independent = matlab_optimize_build({
+        "sampler": {
+            "name": "cmaes", "seed": 31,
+            "independent_sampler": {"name": "random", "seed": 211},
+            "warn_independent_sampling": False,
+        },
+        "runner": {"kind": "objective", "objective_fcn": "objectiveFcn"},
+    })
+    assert "IndependentSampler=radia.optuna.RandomSampler(211)" in (
+        cma_independent["matlab_code"]
+    )
+    assert "WarnIndependentSampling=false" in cma_independent["matlab_code"]
+
+
+def test_optimize_builder_classifies_parallel_and_rejects_invalid_sampler_contracts():
+    parallel = matlab_optimize_build({
+        "sampler": {"name": "tpe", "seed": 17, "multivariate": True},
+        "parallel": True,
+        "runner": {
+            "kind": "ltspice", "netlist": r"C:\temp\a.cir",
+            "configure_fcn": "configureTrial", "score_fcn": "scoreTrial",
+        },
+    })
+    assert parallel["oracle"]["classification"] == "matlab-integration"
+    assert "Multivariate=true" in parallel["matlab_code"]
+
+    import pytest
+
+    with pytest.raises(ValueError, match="CmaEsSampler supports only one objective"):
+        matlab_optimize_build({
+            "directions": ["minimize", "maximize"], "sampler": "cmaes",
+            "runner": {"kind": "objective", "objective_fcn": "objectiveFcn"},
+        })
+    with pytest.raises(ValueError, match="requires non-empty sampler.search_space"):
+        matlab_optimize_build({
+            "sampler": "grid",
+            "runner": {"kind": "objective", "objective_fcn": "objectiveFcn"},
+        })
+    with pytest.raises(ValueError, match="requires sampler.multivariate=true"):
+        matlab_optimize_build({
+            "sampler": {"name": "tpe", "group": True},
+            "runner": {"kind": "objective", "objective_fcn": "objectiveFcn"},
+        })
 
 
 def test_optimize_server_builds_cubit_vim_lp_code():

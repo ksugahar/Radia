@@ -262,6 +262,22 @@ def test_emit_paper_figure_raises_below_floor(tmp_path):
     assert not out.with_suffix(".png").exists()
 
 
+def test_emit_paper_figure_raises_above_paper_font_band(tmp_path):
+    fig, axes = paper_figure("ieee_single_column", nrows=1, ncols=1)
+    axes[0, 0].text(0.5, 0.5, "too large", fontsize=11.0)
+    with pytest.raises(ValueError, match="outside the final-size font band"):
+        emit_paper_figure(
+            fig,
+            tmp_path / "oversized",
+            "ieee_single_column",
+            min_axes_fraction=0.0,
+            check_colorblind_safe=False,
+            save_png=False,
+            verbose=False,
+        )
+    plt.close(fig)
+
+
 def test_emit_paper_figure_auto_tighten_recovers(tmp_path):
     """on_fail='auto_tighten' should pull efficiency above the floor
     (or save anyway with a warn after one attempt)."""
@@ -748,6 +764,59 @@ def test_emit_passes_when_legend_in_safe_corner(tmp_path):
     )
     plt.close(fig)
     assert out.with_suffix(".pdf").exists()
+
+
+def test_emit_catches_sparse_segment_crossing_legend(tmp_path):
+    """A two-point segment crossing the legend must not evade the gate."""
+    fig, axes = paper_figure("ieee_double_column", nrows=1, ncols=1)
+    ax = axes[0, 0]
+    ax.plot([0.0, 1.0], [0.0, 1.0], label="two-point line")
+    ax.set_xlabel(r"$f$ (Hz)")
+    ax.set_ylabel(r"$|Z|$ ($\Omega$)")
+    ax.legend(loc="center", frameon=False)
+    with pytest.raises(ValueError, match=r"legend overlaps data"):
+        emit_paper_figure(
+            fig, str(tmp_path / "fig_sparse_crossing"),
+            "ieee_double_column", on_fail="raise", verbose=False,
+        )
+    plt.close(fig)
+
+
+def test_emit_catches_scatter_under_legend(tmp_path):
+    """Scatter markers are data and must not sit under a legend."""
+    fig, axes = paper_figure("ieee_double_column", nrows=1, ncols=1)
+    ax = axes[0, 0]
+    ax.scatter([0.5], [0.5], s=120, label="sample")
+    ax.set_xlim(0.0, 1.0)
+    ax.set_ylim(0.0, 1.0)
+    ax.set_xlabel(r"$f$ (Hz)")
+    ax.set_ylabel(r"$|Z|$ ($\Omega$)")
+    ax.legend(loc="center", frameon=False)
+    with pytest.raises(ValueError, match=r"legend overlaps data"):
+        emit_paper_figure(
+            fig, str(tmp_path / "fig_scatter_overlap"),
+            "ieee_double_column", on_fail="raise", verbose=False,
+        )
+    plt.close(fig)
+
+
+def test_emit_catches_unlabelled_data_under_proxy_legend(tmp_path):
+    """Proxy-handle legends must still audit the unlabelled data paths."""
+    from matplotlib.lines import Line2D
+
+    fig, axes = paper_figure("ieee_double_column", nrows=1, ncols=1)
+    ax = axes[0, 0]
+    ax.plot([0.0, 1.0], [0.0, 1.0])
+    ax.set_xlabel(r"$f$ (Hz)")
+    ax.set_ylabel(r"$|Z|$ ($\Omega$)")
+    proxy = Line2D([0], [0], color="C0", label="proxy")
+    ax.legend(handles=[proxy], loc="center", frameon=False)
+    with pytest.raises(ValueError, match=r"legend overlaps data"):
+        emit_paper_figure(
+            fig, str(tmp_path / "fig_proxy_overlap"),
+            "ieee_double_column", on_fail="raise", verbose=False,
+        )
+    plt.close(fig)
 
 
 def test_emit_legend_check_can_be_disabled(tmp_path):

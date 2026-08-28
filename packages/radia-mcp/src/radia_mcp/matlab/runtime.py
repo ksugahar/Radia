@@ -30,7 +30,7 @@ def matlab_official_server_config(profile="existing",*,include_generic_extension
     candidates += [Path(x) for x in [shutil.which("matlab-mcp-server"),shutil.which("matlab-mcp-server-windows-x64.exe"),shutil.which("matlab-mcp-core-server"),shutil.which("matlab-mcp-core-server-win64.exe")] if x]
     cmd=os.getenv("RADIA_MATLAB_MCP_SERVER") or next((str(x) for x in candidates if x.is_file()),"matlab-mcp-server")
     return {"schema":"radia-mcp.matlab-server-config/v1","status":"ok","runtime_owner":"MathWorks MATLAB MCP Server","integration_owner":"radia-mcp.matlab","command_id":"matlab-mcp-server","command":cmd,"profile":profile,"args":args,"extension_files":files,"matlab_setup_code":setup}
-def matlab_radia_acoustic_interface_contract(): return {"runtime_owner":"MathWorks MATLAB MCP Server","matlab_workflow_owner":"MathWorks MATLAB Agentic Toolkit","simulink_workflow_owner":"MathWorks Simulink Agentic Toolkit","generic_operations_owner":"radia_mcp.matlab","generic_matlab_package":"radia_mcp_matlab","production_owner":"radia.acoustics","education_solver_owner":"radia_mcp.acoustic_fembem","radia_extension_scope":["Radia MATLAB/MEX domain APIs","LTspice orchestration and result import","MATLAB-native Optuna-compatible optimization"]}
+def matlab_radia_acoustic_interface_contract(): return {"runtime_owner":"MathWorks MATLAB MCP Server","matlab_workflow_owner":"MathWorks MATLAB Agentic Toolkit","simulink_workflow_owner":"MathWorks Simulink Agentic Toolkit","generic_operations_owner":"radia_mcp.matlab","generic_matlab_package":"radia_mcp_matlab","production_owner":"radia.acoustics","education_solver_owner":"radia_mcp.acoustic_fembem","radia_extension_scope":["Radia MATLAB/MEX domain APIs","LTspice orchestration and result import","MATLAB Optuna 4.9.0 differential subset"]}
 
 
 def _radia_repo_root():
@@ -44,11 +44,11 @@ def _radia_repo_root():
     return None, None
 
 
-def _radia_mex_commands():
-    """Read the authoritative MATLAB command list from the MEX source."""
+def _mex_command_branches():
+    """Read the separated Radia and Optuna command lists from shared source."""
     _root, source = _radia_repo_root()
     if source is None:
-        return []
+        return [], []
     text = source.read_text(encoding="utf-8")
     match = re.search(
         r"mxArray\* Commands\(\)\s*\{(?P<body>.*?)constexpr std::size_t count",
@@ -56,17 +56,38 @@ def _radia_mex_commands():
         flags=re.DOTALL,
     )
     if match is None:
-        return []
+        return [], []
     body = match.group("body")
-    regular_branch = re.search(
-        r"#else\s*static const char\* names\[\]\s*=\s*\{"
-        r"(?P<names>.*?)\};\s*#endif",
+    conditional = re.search(
+        r"#ifdef\s+RADIA_OPTUNA_MEX_ONLY(?P<optuna>.*?)"
+        r"#else(?P<radia>.*?)#endif",
         body,
         flags=re.DOTALL,
     )
-    if regular_branch is not None:
-        body = regular_branch.group("names")
-    return re.findall(r'"([^"\\]*(?:\\.[^"\\]*)*)"', body)
+    if conditional is None:
+        return re.findall(r'"([^"\\]*(?:\\.[^"\\]*)*)"', body), []
+    extract = lambda text: re.findall(r'"([^"\\]*(?:\\.[^"\\]*)*)"', text)
+    return extract(conditional.group("radia")), extract(conditional.group("optuna"))
+
+
+def _radia_mex_commands():
+    """Read commands compiled into the general Radia MEX gateway."""
+    return _mex_command_branches()[0]
+
+
+def _optuna_mex_commands():
+    """Read commands compiled only into the lightweight Optuna gateway."""
+    return _mex_command_branches()[1]
+
+
+def _optuna_native_kernels(optuna_commands):
+    """Return the optimizer kernels, excluding the api.* gateway commands.
+
+    Selected by namespace rather than by a positional slice: a slice silently
+    reports the wrong kernel list the moment another non-kernel command is
+    added ahead of them.
+    """
+    return [name for name in optuna_commands if name.startswith("optuna.")]
 
 
 def _pybind_public_names():
@@ -322,6 +343,7 @@ _PYBIND_CLASS_COMMANDS = {
     "_ChargeGramHMatrix.configured_linear_material_element_blocks": ("hacapk.charge_gram.configured_linear_material_element_blocks",),
     "_ChargeGramHMatrix.configured_linear_material_candidate_clusters": ("hacapk.charge_gram.configured_linear_material_candidate_clusters",),
     "_ChargeGramHMatrix.reduce_configured_candidate_schur": ("hacapk.charge_gram.reduce_configured_candidate_schur",),
+    "_ChargeGramHMatrix._reduce_configured_candidate_directional_schur": ("hacapk.charge_gram.reduce_configured_candidate_directional_schur",),
     "_ChargeGramHMatrix.apply_configured_mass_riesz": ("hacapk.charge_gram.mass_riesz",),
     "_ChargeGramHMatrix.solve_configured_linear_material_mass_riesz": ("hacapk.charge_gram.solve_configured_linear_material",),
     "_ChargeGramHMatrix.solve_configured_linear_material_auto_prec": ("hacapk.charge_gram.solve_configured_linear_material_auto_prec",),
@@ -371,8 +393,9 @@ def _pybind_command_name(name):
     # under beam.* rather than the default radia.<name>, so the audit needs
     # the mapping explicitly. Each pair below shares one C++ kernel
     # (rad_lie::LieMapTensorsFromSpolyArrays, DragtFinnFactorizeFourthOrder,
-    # ApplyDragtFinnMapBatch, rad_orbit::TrackReferenceOrbit3D), which is what
-    # makes the coverage claim true rather than name-level.
+    # ApplyDragtFinnMapBatch, rad_orbit::TrackReferenceOrbit3D, and
+    # rad_orbit::TrackReferenceOrbit3DToPlane), which is what makes the
+    # coverage claim true rather than name-level.
     beam_names = {
         "lie_map_tensors_spoly": "beam.lie.map_tensors_spoly",
         "lie_dragt_finn_factorize": "beam.lie.dragt_finn_factorize",
@@ -427,6 +450,7 @@ def matlab_radia_mex_contract(topic="all"):
 
     repo_root, source = _radia_repo_root()
     commands = _radia_mex_commands()
+    optuna_commands = _optuna_mex_commands()
     pybind_names = _pybind_public_names()
     pybind_command_names = [_pybind_command_name(name) for name in pybind_names]
     pybind_missing = sorted(set(pybind_command_names) - set(commands))
@@ -510,6 +534,9 @@ def matlab_radia_mex_contract(topic="all"):
         "source_of_truth": "src/matlab/radia_mex.cpp: Commands()",
         "mex_entrypoint": "radia_mex",
         "command_count": len(commands),
+        "optuna_mex_entrypoint": "optuna_mex",
+        "optuna_mex_command_count": len(optuna_commands),
+        "optuna_mex_command_names": optuna_commands,
         "command_groups": dict(sorted(groups.items())),
         "command_names": commands,
         "pybind_public_count": len(pybind_names),
@@ -538,7 +565,7 @@ def matlab_radia_mex_contract(topic="all"):
         "matlab_optuna_distribution_health": optuna_health,
         "interfaces": {
             "python": "radia._radia_pybind and radia Python modules",
-            "matlab": "radia_mex plus matlab/+radia wrappers; the MEX target does not link python312.lib or launch python.exe, but the current pip-provided libngsolve.dll transitively requires python312.dll",
+            "matlab": "radia_mex owns Radia/NGSolve operations; optuna_mex independently owns optimization kernels and has no NGSolve, MKL, Radia-core, or Python dependency",
             "ngsolve": "NGSolve owns meshes/spaces/transforms; MATLAB uses numeric/struct contracts",
             "mcp": ["matlab_radia_mex_contract", "matlab_optuna_health", "matlab_optuna_oracle_plan", "matlab_optuna_benchmark_plan", "matlab_optuna_release_gate", "matlab_optuna_simulink_contract", "radia_usage", "ngsolve_usage"],
         },
@@ -556,15 +583,17 @@ def matlab_radia_mex_contract(topic="all"):
             "axifem_python_mex_parity_gate": "runtests('tests/matlab/test_axifem_mex.m')",
             "hcurl_topology_python_mex_parity_gate": "runtests('tests/matlab/test_hcurl_topology_optimization.m')",
             "topology_two_level_gate": "runtests('tests/matlab/test_topology_optimization.m')",
-            "optuna_native_kernel_gate": "runtests('tests/matlab/test_radia_mex.m', Name={'test_radia_mex/testOptunaParetoRankCrowding','test_radia_mex/testOptunaParzenLogPdfKernels'})",
+            "optuna_native_kernel_gate": "runtests('tests/matlab/test_radia_mex.m', Name={'test_radia_mex/testOptunaGatewaySeparation','test_radia_mex/testOptunaParetoRankCrowding','test_radia_mex/testOptunaParzenLogPdfKernels'})",
             "optuna_table_gate": "runtests('tests/matlab/test_optuna_table.m')",
             "optuna_simulink_block_gate": "runtests('tests/matlab/test_optuna_simulink_block.m')",
             "optuna_distribution_health_gate": "matlab_optuna_health",
             "optuna_differential_oracle_gate": "matlab_optuna_oracle_plan",
             "optuna_performance_gate": "matlab_optuna_benchmark_plan -> matlab_optuna_release_gate",
             "optuna_native_kernel_benchmark": "validation_test/optimization/results_matlab_optuna_mex_benchmark_20260806.json",
+            "optuna49_performance_benchmark": "validation_test/optimization/results_matlab_optuna49_performance_20260825.json",
             "runtime_probe": "radia.quickCheck()",
             "native_build": "pwsh -ExecutionPolicy Bypass -File .\\Build.ps1 -MatlabMexOnly -Verbose",
+            "optuna_native_build": "pwsh -ExecutionPolicy Bypass -File .\\Build.ps1 -OptunaMexOnly",
             "native_motor_family_artifact": "validation_test/radia_mcp/artifacts/annular_motor_dual_lane_v1/native_motor_angle_family.json",
             "native_motor_family_gate": "run('validation_test/radia_mcp/generate_motor_angle_family_mex_artifact.m')",
             "openmp_runtime_policy": "radia.setup excludes foreign libiomp5md.dll directories from the MATLAB process PATH",
@@ -580,9 +609,9 @@ def matlab_radia_mex_contract(topic="all"):
         ],
     }
     sections = {
-        "mex": {"command_count": len(commands), "command_groups": dict(sorted(groups.items())), "command_names": commands, "pybind_missing": pybind_missing, "pybind_internal_missing": internal_missing, "pybind_class_missing_commands": class_missing, "pybind_class_unmapped": class_unmapped},
+        "mex": {"command_count": len(commands), "command_groups": dict(sorted(groups.items())), "command_names": commands, "optuna_mex_command_count": len(optuna_commands), "optuna_mex_command_names": optuna_commands, "pybind_missing": pybind_missing, "pybind_internal_missing": internal_missing, "pybind_class_missing_commands": class_missing, "pybind_class_unmapped": class_unmapped},
         "ngsolve": {"owner": "NGSolve", "matlab_boundary": "ngsolve.space_info, ngsolve.matrix_dump, persistent Mesh/FESpace/BilinearForm/Matrix/LinearForm handles, native CoefficientFunction/GridFunction handles, native HCurl response projection, and numeric HDiv field evaluators", "policy": "Use NGSolve for FE plumbing; exchange typed native handles, numeric matrices, vectors, fields, and metadata. Persistent forms expose built-in real/complex volume integrators, scalar CoefficientFunction-weighted volume and trace matrices, native CoefficientFunction volume and boundary RHS assembly in real/complex H1/HCurl/HDiv, and native sparse matvec/inverse operations; arbitrary callbacks and tensor-valued forms remain explicit gaps."},
-        "optimization": {"package": "radia.optuna", "classes": optuna_classes, "factory_functions": optuna_functions, "storage": "MAT-file containing readable MATLAB tables and CAE trial/failure artifacts", "native_kernels": ["optuna.pareto.rank_crowding", "optuna.parzen.log_pdf_numerical", "optuna.parzen.log_pdf_categorical"], "mcp_tool": "matlab_optuna_simulink_contract"},
+        "optimization": {"package": "radia.optuna", "native_gateway": "optuna_mex", "native_gateway_required": True, "native_command_count": len(optuna_commands), "classes": optuna_classes, "factory_functions": optuna_functions, "storage": "MAT-file containing readable MATLAB tables and CAE trial/failure artifacts", "native_kernels": _optuna_native_kernels(optuna_commands), "mcp_tool": "matlab_optuna_simulink_contract"},
         "simulink": {"class": "radia.optuna.SimulinkRunner", "workflow": "SimulationInput -> sim/parsim -> score/constraints/validation/artifacts -> Study.tell or typed failure", "blocks": ["Radia/Applications/Induction Heating: readable Level-2 MATLAB Eddy and Thermal S-Functions backed by radia_mex handles", "radia.simulink.buildTeam28CLNModel", "radia.simulink.buildHCurlEddyCLNModel Block=radia-mex", "radia.simulink.buildMotorAngleFamilyModel", "Optimization/Optuna Optimization: start/cancel, failure telemetry, and automatic optimizer MEX kernels"], "native_state_space_commands": ["simulink.state_space.create", "simulink.state_space.info", "simulink.state_space.output", "simulink.state_space.update", "simulink.state_space.step", "simulink.state_space.snapshot", "simulink.state_space.restore", "simulink.state_space.reset", "simulink.state_space.destroy"], "native_state_space_overloads": {"static": "create(A,B,C,D,x0); output(handle,u); update(handle,u)", "periodic_motor_family": "create(grid,period,A,B,C,D,Q,R,S,x0); output(handle,mechanical_angle,u) -> [linear_outputs; torque]; update(handle,mechanical_angle,u)", "standalone_debug": "step is the atomic output-plus-update probe", "sim_state": "snapshot/restore preserve native state for Simulink CustomSimState"}, "mcp_tool": "matlab_optuna_simulink_contract"},
         "reinforcement_learning": {"package": "radia.rl", "workflow": "reset -> MEX/Radia step -> reward -> next observation", "adapter": "rlFunctionEnv when Reinforcement Learning Toolbox is installed"},
         "limitations": {"items": base["limitations"]},
@@ -595,23 +624,41 @@ def matlab_radia_mex_contract(topic="all"):
 def matlab_optuna_simulink_contract():
     """Return the MATLAB-native Optuna and Simulink difference contract."""
     health = matlab_optuna_health()
+    from .optuna_oracle import matlab_optuna_compatibility_contract
+
+    upstream = matlab_optuna_compatibility_contract()
     return {
         "schema": "radia-mcp.matlab-optuna-simulink/v3",
         "status": "ready",
         "package": "radia.optuna",
         "distribution": "radia-optuna",
-        "upstream_oracle": "optuna==4.9.0",
+        "upstream_oracle": upstream,
+        "upstream_oracle_version": "optuna==4.9.0",
         "mcp_ownership": matlab_optuna_mcp_route(),
         "distribution_health": health,
+        "seed_semantics": {
+            "explicit": "equal explicit uint32 seeds consume the checked NumPy RandomState-compatible stream",
+            "unseeded": "seed=None draws fresh private entropy per sampler without mutating MATLAB's global RNG; exact proposal sequences are intentionally nondeterministic",
+        },
         "classes": {
             "Study": "ask/tell, scalar or vector objectives, normalized ObjectiveTable, MAT persistence, bestTrial/bestValue/bestParams/bestSolution or paretoFront",
             "Trial": "suggestFloat/suggestInteger/suggestCategorical, report, shouldPrune, user attributes",
-            "RandomSampler": "seeded random distributions with log and step support",
-            "TPESampler": "startup random trials followed by table-backed Parzen density-ratio proposals",
-            "MOTPESampler": "Pareto-rank and crowding good/bad split followed by multi-objective Parzen density-ratio proposals",
-            "CmaEsSampler": "lightweight stateful joint numeric search for correlated continuous variables, with integer rounding and categorical fallback; not a bit-for-bit standard CMA-ES implementation",
-            "NSGAIISampler": "elitist non-dominated sorting, crowding distance, tournament selection, crossover, and mutation",
-            "MedianPruner": "startup, warmup, interval, and completed-trial median pruning",
+            "FixedTrial": "objective evaluation against supplied parameters with upstream-oracled suggestions, warnings, attributes, and compatibility errors",
+            "TrialPruned": "throw(radia.optuna.TrialPruned()) is caught by Study.optimize and matches upstream PRUNED state, last intermediate value, and callback behavior",
+            "RandomSampler": "explicitly seeded proposals match the checked Optuna 4.9.0 oracle",
+            "TPESampler": "seeded scalar, mixed, grouped multivariate, constrained, callable gamma/weights, and categorical-distance Parzen proposals plus independent-fallback warnings match the checked Optuna 4.9.0 oracle",
+            "MOTPESampler": "seeded multi-objective TPE and constrained Pareto behavior match the checked Optuna 4.9.0 oracle",
+            "CmaEsSampler": "seeded numeric proposals and independently seeded fallback-sampler controls match Optuna 4.9.0; restart, margin, separable, source-trial warm-start, and learning-rate modes remain explicit gaps",
+            "GPSampler": "Backend='upstream-python' delegates startup, constrained PyTorch/SciPy LogEI acquisition, and deterministic persisted-history replay to pinned Optuna 4.9.0; Backend='matlab-native' is integration-only",
+            "NSGAIISampler": "seeded population behavior and all six built-in crossover proposal sequences match Optuna 4.9.0",
+            "NSGAIIISampler": "seeded reference-line population behavior matches Optuna 4.9.0",
+            "QMCSampler": "seeded scrambled and deterministic unscrambled Sobol/Halton proposals match Optuna/SciPy within the documented dimension boundary",
+            "GridSampler": "finite Cartesian-grid exhaustion matches Optuna 4.9.0",
+            "BruteForceSampler": "fixed and conditional define-by-run tree exhaustion matches Optuna 4.9.0",
+            "PartialFixedSampler": "fixed and delegated proposal sequences match Optuna 4.9.0",
+            "Pruners": "Percentile, threshold, patient, no-op, successive-halving, Hyperband, and Wilcoxon decisions are upstream-oracled",
+            "Importance": "get_param_importances delegates fANOVA, mean-decrease-impurity, and PED-ANOVA evaluation to pinned Optuna 4.9.0",
+            "Termination": "MaxTrialsCallback, BestValueStagnationEvaluator, Terminator, and TerminatorCallback provide upstream-oracled stopping behavior",
             "LiveMonitor": "trial progress, objective history, duration, parameter history, and live two-objective Pareto display",
             "SimulinkRunner": "CAE-aware SimulationInput configuration, adaptive-batch sim/parsim, c <= 0 constraints, validation, typed failures, artifact manifests, model SHA-256, and four-part timing",
             "LTspiceRunner": "serial or parfeval LTspice trials with isolated output directories, complex RAW, and client-owned Study updates",
@@ -625,7 +672,7 @@ def matlab_optuna_simulink_contract():
             "ExportHCurlEddyCLNJSON plus loadHCurlEddyCLNModel maps numeric R/L/P reduced HCurl-VIM data into a passive discrete state-space block; solveHCurlEddyCLNHarmonic uses hybrid_vim.solve. radia.ngsolve.hcurl_eddy_cln_model additionally assembles a Python-free local HCurl diffusion projection directly from a VOL mesh.",
             "buildHCurlEddyCLNModel(..., Block=\"radia-mex\") uses the Python-free native state-space handle for fixed reduced HCurl models; makeMotorAngleFamily plus buildMotorAngleFamilyModel use the same persistent MEX handle for periodic angle interpolation and quadratic torque output.",
             "ExportHCurlEddyCLNFamilyJSON plus loadHCurlEddyCLNFamily/interpolateHCurlEddyCLNFamily provides a common-basis height-indexed family; buildHCurlEddyCLNFamilyModel exposes height, derivative-current, and coil-current ports.",
-            "Optimization/Optuna Optimization advances one trial per block sample, accepts independent start/cancel signals, continues after recorded CAE failures, exports attempted/failed/failure-code telemetry, and uses optional native optimizer kernels without Python per trial.",
+            "Optimization/Optuna Optimization advances one trial per block sample, accepts independent start/cancel signals, continues after recorded CAE failures, exports attempted/failed/failure-code telemetry, and uses the required independent optuna_mex gateway without Python per trial.",
             "Optimization/Sheet Metal Optimization evaluates a radia.optuna.SheetMetalRunner and uses the same best-update and Pareto monitor contract.",
         ],
         "team28": {
@@ -675,10 +722,16 @@ def matlab_optuna_simulink_contract():
             "gateway": "optuna_mex",
             "command_count": health.get("native", {}).get("command_count"),
             "required": True,
-            "policy": "The standalone optuna_mex gateway is required. Preserve MATLAB Study/Trial, upstream-oracled sampler streams, and persistence; never silently substitute a missing-MEX implementation.",
+            "commands": [
+                "optuna.pareto.rank_crowding",
+                "optuna.parzen.log_pdf_numerical",
+                "optuna.parzen.log_pdf_categorical",
+            ],
+            "policy": "Require the exact independent 20-command optuna_mex gateway for checked optimizer kernels; keep Study/Trial, persistence, callbacks, and unsupported fused-option orchestration in readable MATLAB. A missing or incompatible optuna_mex is an error and never redirects through radia_mex or a silent substitute.",
             "missing_mex_fallback": False,
             "full_optimizer_in_cpp": False,
-            "python_per_trial": False,
+            "python_per_trial": "false for MATLAB-native samplers; true only for GPSampler Backend='upstream-python'",
+            "upstream_python_gp_python_per_trial": True,
         },
         "cae_trial_contract": {
             "success_schema": "radia.optuna.cae-trial.v1",
@@ -697,8 +750,8 @@ def matlab_optuna_simulink_contract():
         },
         "sampler_quality": {
             "intended_scale": "expensive CAE trials where field-solver time dominates MATLAB table-backed ask/tell overhead",
-            "tpe_boundary": "univariate Parzen sampling is the default; Trial.suggestVector provides an explicit shared-component joint numeric entry point",
-            "correlated_continuous": "prefer CmaEsSampler, then verify equal-budget quality because it is a lightweight implementation rather than full reference CMA-ES",
+            "tpe_boundary": "seeded scalar, mixed, multivariate, constrained, and callable gamma/weights behavior is checked against Optuna 4.9.0; group decomposition and categorical-distance hooks remain gaps",
+            "correlated_continuous": "CmaEsSampler has checked seeded numeric and independent-fallback parity; GPSampler Backend='upstream-python' owns exact checked LogEI behavior",
             "multi_objective": "use MOTPESampler or NSGAIISampler and inspect front error plus coverage, not Pareto point count alone",
             "validation": "validation_test/optimization/validate_matlab_optuna_quality.m",
             "python_parity_claim": "Only behavior mapped to pinned optuna==4.9.0 fixtures is parity evidence; API coverage must close before a complete-compatibility claim.",
@@ -819,7 +872,7 @@ def matlab_optuna_simulink_contract():
             "Optionally adapt the environment to rlFunctionEnv.",
             "For IH, train against the native distributed Eddy/Thermal block; do not substitute a LUT or lumped thermal environment.",
         ],
-        "python_relation": "The official optuna/optuna-mcp server owns every shared operation in its live tools/list. radia-mcp owns only MATLAB/Simulink differences and never performs a Python-to-MATLAB-Engine call per trial.",
+        "python_relation": "The official optuna/optuna-mcp server owns every shared operation in its live tools/list. radia-mcp owns only MATLAB/Simulink differences and never performs a Python-to-MATLAB-Engine call per trial; exact GPSampler Backend='upstream-python' intentionally uses pinned Optuna 4.9.0 in-process.",
         "mcp_route": "matlab_optuna_mcp_route",
     }
 
