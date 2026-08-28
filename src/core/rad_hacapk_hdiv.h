@@ -694,9 +694,33 @@ protected:
 
 private:
     friend class RadHACApKChargeGramDerivative;
-    // The complete physical entry evaluation (every mode branch); the public
-    // virtual wraps it and serves Ghat = sigma_a^-1 sigma_b^-1 * raw ONLY
-    // while the H-matrix fill is running (m_fillNormalized).
+    struct EntryStrategy {
+        virtual ~EntryStrategy() = default;
+        virtual double Evaluate(const RadHACApKChargeGram& owner, int row, int col) const = 0;
+    };
+    struct SampledLaplaceEntryStrategy;
+    struct SampledPlanarEntryStrategy;
+    struct PlanarEntryStrategy;
+    struct HexEntryStrategy;
+    struct WedgeEntryStrategy;
+    struct HighOrderTetEntryStrategy;
+    struct AnalyticEntryStrategy;
+    struct MonopoleEntryStrategy;
+    const EntryStrategy& GetEntryStrategy() const;
+    mutable std::once_flag m_entryStrategyOnce;
+    mutable std::unique_ptr<EntryStrategy> m_entryStrategy;
+    double EvaluateSampledLaplaceEntry(int a, int b) const;
+    double EvaluateSampledPlanarEntry(int a, int b) const;
+    double EvaluatePlanarEntry(int a, int b) const;
+    double EvaluateHexEntry(int a, int b) const;
+    double EvaluateWedgeEntry(int a, int b) const;
+    double EvaluateHostBlockEntry(int a, int b) const;
+    double EvaluateHighOrderTetEntry(int a, int b) const;
+    double EvaluateAnalyticEntry(int a, int b) const;
+    double EvaluateMonopoleEntry(int a, int b) const;
+    // The selected element strategy supplies the complete physical entry; the
+    // public virtual wraps it and serves Ghat = sigma_a^-1 sigma_b^-1 * raw
+    // only while the H-matrix fill is running (m_fillNormalized).
     double GetInteractionMatrixElementRaw(int a, int b) const;
     // Pre-fill diagonal pass: sigma_p = sqrt(raw G_pp) (1.0 on a nonpositive
     // or nonfinite diagonal -- fail-soft here would hide nothing: the entry
@@ -706,6 +730,10 @@ private:
     std::vector<double> m_chargeSigmaInv;  // 1/sigma_p
     bool m_sigmaActive = false;            // leaves hold Ghat; applies wrap S
     mutable bool m_fillNormalized = false; // fill-time oracle serves Ghat
+    // Regression-only fault injection.  BuildHMatrix reads
+    // RADIA_HDIV_TEST_FAIL_FILL_AFTER once; no test hook is exposed in pybind.
+    int m_testFillFailureAfter = -1;
+    mutable std::atomic<int> m_testFillEntryCalls{0};
     void ApplyConfiguredDemagImpl(
         const double* x, double* y, double scale, bool add, bool symmetric,
         bool respect_constraints = true);
