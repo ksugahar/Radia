@@ -2,14 +2,10 @@
 # workflow_dispatch full_slow=true includes these in the manual validation gate.
 validation_test/bem/test_coil_bem_a_volume_vol.py::test_bem_a_inductance_from_volume_vol  # 143.087s
 validation_test/feec/test_hdiv_vim_per_region.py::test_per_region_nl_equal_table_matches_single  # 74.162s
-validation_test/feec/test_hdiv_vim_poly_field.py::test_solve_demag_newton_saturating_matches_picard  # 69.016s
-validation_test/feec/test_hdiv_vim_poly_field.py::test_solve_demag_newton_linear_stiff  # 61.664s
 validation_test/feec/test_clebsch_hodograph_research.py::test_accel_pole_ends_fem_curved_chamfer  # 55.876s
-validation_test/feec/test_hdiv_vim_poly_field.py::test_solve_demag_picard_orderp_sphere  # 53.543s
 validation_test/feec/test_hdiv_vim_per_region.py::test_per_region_nl_different_tables_physics  # 51.834s
 validation_test/feec/test_clebsch_hodograph_research.py::test_clebsch_dipole_saturation_3d_throat_fem  # 49.419s
 validation_test/feec/test_clebsch_hodograph_research.py::test_clebsch_kelvin_nonlinear_3d  # 40.264s
-validation_test/feec/test_hdiv_vim_poly_field.py::test_solve_demag_picard_orderp_beats_centroid_on_nonuniform_body  # 31.943s
 validation_test/feec/test_hdiv_radsolve_dispatch.py::test_radsolve_hdiv_equals_direct  # 31.491s
 validation_test/feec/test_clebsch_hodograph_research.py::test_clebsch_dipole_saturation_3d_throat_inverse_fem  # 31.134s
 validation_test/feec/test_clebsch_hodograph_research.py::test_accel_quad_ends_fem  # 29.695s
@@ -19,9 +15,6 @@ validation_test/feec/test_hdiv_vim_per_region.py::test_per_region_different_mu_p
 validation_test/feec/test_clebsch_hodograph_research.py::test_clebsch_dipole_saturation_3d_aform  # 16.814s
 validation_test/feec/test_hdiv_vim_bem_demag.py::test_spheroid_full_tensor_and_sum_rule  # 15.746s
 validation_test/feec/test_clebsch_hodograph_research.py::test_clebsch_dipole_workflow_fem  # 15.719s
-validation_test/feec/test_hlu_materialize_free.py::test_hlu_materialize_free[12-80]  # 15.537s
 validation_test/feec/test_hdiv_vim_bem_demag.py::test_triaxial_ellipsoid_full_anisotropy  # 12.574s
-validation_test/feec/test_hdiv_vim_chargegram_polytope.py::test_polytope_chargegram_compressed[wedge]  # 12.174s
-validation_test/feec/test_hdiv_vim_chargegram_polytope.py::test_polytope_chargegram_demag[wedge]  # 12.038s
 validation_test/bem/test_sibc_hacapk_match_ngsbem.py::test_assemble_bem_matrices_e2e  # 11.983s
 validation_test/feec/test_hdiv_vim_per_region.py::test_per_region_fail_loud  # 10.839s
