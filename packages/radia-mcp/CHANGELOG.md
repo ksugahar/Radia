@@ -7,6 +7,8 @@ crystallized as its own package.
 
 ## [Unreleased]
 
+## [1.4.48] - 2026-08-28
+
 - presentation: added a z-order audit that rejects directional arrows hidden
   behind intersecting divider/reference lines. The skill now also treats a
   numeric resize such as 112% as uniform scaling around a semantic alignment
