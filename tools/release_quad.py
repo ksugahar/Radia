@@ -432,7 +432,13 @@ def _optuna_state_path(wheel_sha256: str) -> Path:
 def _verify_optuna_wheel(wheel: Path) -> tuple[dict | None, str]:
     verifier = REPO / "packages/radia-optuna/verify_wheel.py"
     result = subprocess.run(
-        [sys.executable, str(verifier), str(wheel), "--json"],
+        [
+            sys.executable,
+            str(verifier),
+            str(wheel),
+            "--json",
+            "--release-candidate",
+        ],
         capture_output=True, text=True,
     )
     output = ((result.stdout or "") + (result.stderr or "")).strip()
@@ -569,6 +575,7 @@ def _run_optuna_candidate_target(
             str(runner), "-Wheel", str(wheel),
             "-MatlabExecutable", MATLAB_EXE,
             "-PythonExecutable", sys.executable,
+            "-PreverifiedWheelSha256", wheel_sha256,
         ]
         result = subprocess.run(
             command,
@@ -620,7 +627,8 @@ def _run_optuna_candidate_target(
             "$ErrorActionPreference = 'Stop'\n"
             + python_line
             + f"& '{remote_runner}' -Wheel '{remote_wheel}' "
-              f"-MatlabExecutable '{MATLAB_EXE}' -PythonExecutable $pythonExe\n"
+              f"-MatlabExecutable '{MATLAB_EXE}' -PythonExecutable $pythonExe "
+              f"-PreverifiedWheelSha256 '{wheel_sha256}'\n"
             + "exit $LASTEXITCODE\n"
         )
         result = subprocess.run(
