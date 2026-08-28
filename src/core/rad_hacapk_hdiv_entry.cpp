@@ -3,40 +3,12 @@
 #include "rad_hacapk_hdiv.h"
 
 #include <cmath>
-#include <cstdlib>
 #include <memory>
 #include <stdexcept>
 
 namespace {
 
 constexpr double kInvFourPi = 0.07957747154594766788;
-
-bool HOFarOneSidedEnabled()
-{
-    static const bool enabled = [] {
-        const char* value = std::getenv("RADIA_HDIV_HO_FAR_ONESIDED");
-        return value && value[0] != '\0' && value[0] != '0';
-    }();
-    return enabled;
-}
-
-bool HOAnalyticBlockEnabled()
-{
-    static const bool enabled = [] {
-        const char* value = std::getenv("RADIA_HDIV_DISABLE_HO_ANALYTIC_BLOCK");
-        return !value || value[0] == '\0' || value[0] == '0';
-    }();
-    return enabled;
-}
-
-bool HOTetImageBlockEnabled()
-{
-    static const bool enabled = [] {
-        const char* value = std::getenv("RADIA_HDIV_DISABLE_HO_IMAGE_BLOCK");
-        return !value || value[0] == '\0' || value[0] == '0';
-    }();
-    return enabled;
-}
 
 }  // namespace
 
@@ -240,4 +212,40 @@ double RadHACApKChargeGram::EvaluateMonopoleEntry(int a, int b) const
     const double dz = m_cent[3*a+2] - m_cent[3*b+2];
     return m_meas[a] * m_meas[b] * kInvFourPi /
            std::sqrt(dx*dx + dy*dy + dz*dz);
+}
+
+double RadHACApKChargeGram::EvaluateDirectSelfEntry(int a) const
+{
+    if (m_sampledLaplace)
+        return EvaluateSampledLaplaceEntry(a, a);
+    if (m_sampledPlanarLog)
+        return EvaluateSampledPlanarEntry(a, a);
+    if (m_d2 || m_hexmode || m_wedgemode) {
+        const int kind = m_kind[a], host = m_host[a];
+        const int local = m_hexLocalOf[a];
+        const int count = kind == 0 ? (int)m_cellCharges[host].size()
+                                    : (int)m_faceCharges[host].size();
+        return GetHexSymBlock(kind, host, kind, host)
+            [(size_t)local * count + local];
+    }
+    if (m_highorder) {
+        const bool use_host_block = m_polyCombo || m_curved ||
+            (m_hoAnalyticBlock && HOAnalyticBlockEnabled());
+        if (!use_host_block)
+            return QuadDot(a, a);
+
+        const int kind = m_kind[a], host = m_host[a];
+        const int local = m_hoLocalOf[a];
+        const int count = kind == 0 ? (int)m_hoCellCharges[host].size()
+                                    : (int)m_hoFaceCharges[host].size();
+        double value;
+        if (!m_curved ||
+            !CurvedTouchBlockValue(kind, host, local, kind, host, local, value))
+            value = GetHOTetSymBlock(kind, host, kind, host)
+                [(size_t)local * count + local];
+        return value;
+    }
+    if (m_analytic)
+        return QuadDot(a, a);
+    return m_self[a];
 }

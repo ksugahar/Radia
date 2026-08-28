@@ -30,6 +30,8 @@
 #include <iostream>
 #include <chrono>
 #include <atomic>
+#include <exception>
+#include <limits>
 #include <mutex>
 #include "rad_parallel.h"
 
@@ -48,6 +50,21 @@ extern "C" {
 //=========================================================================
 
 namespace {
+    template <class F>
+    class ScopeExit {
+    public:
+        explicit ScopeExit(F&& callback) : m_callback(std::move(callback)) {}
+        ~ScopeExit() { m_callback(); }
+        ScopeExit(const ScopeExit&) = delete;
+        ScopeExit& operator=(const ScopeExit&) = delete;
+
+    private:
+        F m_callback;
+    };
+
+    template <class F>
+    ScopeExit(F) -> ScopeExit<F>;
+
     // Global callback state shared across all TaskManager worker threads.
     // NOT thread_local: HACApK calls cHACApK_entry_ij from ngcore::ParallelFor
     // (TaskManager) worker threads, which must see the same manager/invChi/interaction
@@ -57,6 +74,8 @@ namespace {
     // fill switch is process-wide too), so serialize builds while retaining
     // TaskManager parallelism inside each build.
     std::mutex g_hacapkBuildMutex;
+    std::mutex g_hacapkCallbackExceptionMutex;
+    std::exception_ptr g_hacapkCallbackException;
     RadHACApKBase* g_currentManager = nullptr;
     std::vector<double> g_invChi;
     radTInteraction* g_interaction = nullptr;
@@ -74,6 +93,10 @@ namespace {
 }
 
 namespace RadHACApKCallback {
+
+std::mutex& OperationMutex() {
+    return g_hacapkBuildMutex;
+}
 
 void SetCurrentManager(RadHACApKBase* manager) {
     g_currentManager = manager;
@@ -116,7 +139,38 @@ void ClearGlobalState() {
     g_nElem = 0;
     g_nffc = 3;
     g_invChi.clear();
+    {
+        std::lock_guard<std::mutex> lock(g_hacapkCallbackExceptionMutex);
+        g_hacapkCallbackException = nullptr;
+    }
     // Note: g_hacapk_generation is NOT reset here - it continues incrementing
+}
+
+void ClearCallbackException() {
+    std::lock_guard<std::mutex> lock(g_hacapkCallbackExceptionMutex);
+    g_hacapkCallbackException = nullptr;
+}
+
+void CaptureCallbackException() noexcept {
+    try {
+        std::lock_guard<std::mutex> lock(g_hacapkCallbackExceptionMutex);
+        if (!g_hacapkCallbackException)
+            g_hacapkCallbackException = std::current_exception();
+    }
+    catch (...) {
+        // Never allow error bookkeeping itself to unwind through HACApK C
+        // code or the TaskManager worker trampoline.
+    }
+}
+
+void RethrowCallbackException() {
+    std::exception_ptr failure;
+    {
+        std::lock_guard<std::mutex> lock(g_hacapkCallbackExceptionMutex);
+        failure = g_hacapkCallbackException;
+        g_hacapkCallbackException = nullptr;
+    }
+    if (failure) std::rethrow_exception(failure);
 }
 
 // FIX (2025-02-04): Get current generation for cache invalidation
@@ -183,9 +237,18 @@ void HACApK_set_entry_func(HACApK_entry_func func) { g_entry_override = func; }
 void HACApK_clear_entry_func(void) { g_entry_override = NULL; }
 
 double cHACApK_entry_ij(int i, int j, int i_bemv) {
-    if (g_entry_override != NULL) return g_entry_override(i, j, i_bemv);
-    (void)i_bemv;  // Unused in Radia
-    return RadHACApKCallback::ComputeEntry(i, j);
+    try {
+        if (g_entry_override != NULL) return g_entry_override(i, j, i_bemv);
+        (void)i_bemv;  // Unused in Radia
+        return RadHACApKCallback::ComputeEntry(i, j);
+    }
+    catch (...) {
+        // A C++ exception cannot safely unwind through HACApK's C fill or the
+        // TaskManager worker trampoline. Preserve the first failure and
+        // rethrow it on the build thread after all fill workers have joined.
+        RadHACApKCallback::CaptureCallbackException();
+        return std::numeric_limits<double>::quiet_NaN();
+    }
 }
 
 }  // extern "C"
@@ -207,6 +270,10 @@ RadHACApKBase::RadHACApKBase()
 }
 
 RadHACApKBase::~RadHACApKBase() {
+    // Destruction mutates the same process-wide callback and HACApK C state
+    // as BuildHMatrix. A manager released by another Python thread must not
+    // clear that state while a different manager is filling its leaves.
+    std::lock_guard<std::mutex> build_lock(RadHACApKCallback::OperationMutex());
     FreeResources();
 }
 
@@ -468,7 +535,15 @@ bool RadHACApKBase::BuildHMatrix(const RadHACApKParams& params) {
     // releases the GIL for this operation, so the C++ boundary must provide
     // the serialization.  The lock covers setup, fill, and callback-backed
     // diagonal extraction; the fill itself remains TaskManager-parallel.
-    std::lock_guard<std::mutex> build_lock(g_hacapkBuildMutex);
+    std::lock_guard<std::mutex> build_lock(RadHACApKCallback::OperationMutex());
+
+    bool build_succeeded = false;
+    cHACApK_set_sym_fill(UseSymmetricFill() ? 1 : 0);
+    ScopeExit build_state_scope([this, &build_succeeded]() noexcept {
+        cHACApK_set_sym_fill(0);
+        OnBuildFinished(build_succeeded);
+    });
+    OnBuildStarting(params);
 
     // TaskManager self-wrap (AGENTS.md "Parallelization: NGSolve TaskManager"): the H-matrix leaf
     // fill runs ngcore::ParallelFor, which silently falls back to single-threaded when NO
@@ -495,6 +570,7 @@ bool RadHACApKBase::BuildHMatrix(const RadHACApKParams& params) {
     // Set global callback state (MUST happen before OnBeforeBuild / InitializeInvChi
     // so kernel-side hooks may register additional callback state if needed)
     RadHACApKCallback::SetCurrentManager(this);
+    RadHACApKCallback::ClearCallbackException();
 
     // FIX (2025-02-04): Increment generation counter to invalidate thread-local caches
     // so that matrix-element caches from previous solves are not reused.
@@ -553,6 +629,13 @@ bool RadHACApKBase::BuildHMatrix(const RadHACApKParams& params) {
         );
     }
     auto t_hmatrix_end = std::chrono::high_resolution_clock::now();
+    try {
+        RadHACApKCallback::RethrowCallbackException();
+    }
+    catch (...) {
+        FreeResources();
+        throw;
+    }
     double t_hmatrix = std::chrono::duration<double>(t_hmatrix_end - t_hmatrix_start).count();
     if (params.print_level > 0) {
         std::cout << "[HACApK] HACApK_build_hmatrix_wrapper: " << t_hmatrix << " s" << std::endl;
@@ -612,6 +695,7 @@ bool RadHACApKBase::BuildHMatrix(const RadHACApKParams& params) {
     m_diag_cached = true;
 
     m_valid = true;
+    build_succeeded = true;
     return true;
 }
 

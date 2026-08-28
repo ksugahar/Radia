@@ -232,6 +232,14 @@ def test_aca_tsvd_validates_args():
         aca_tsvd(5, 5, 123, modes=1, kmax=1)  # not callable
 
 
+def test_aca_tsvd_rethrows_entry_callback_failure():
+    def failing_entry(i, j):
+        raise RuntimeError(f"entry failure at {i},{j}")
+
+    with pytest.raises(RuntimeError, match="entry failure"):
+        aca_tsvd(4, 4, failing_entry, modes=2, kmax=2, aca_eps=1.0e-8)
+
+
 # --------------------------------------------------------------------------
 # Improved DUCAS / Abe node-current-potential selection
 # --------------------------------------------------------------------------

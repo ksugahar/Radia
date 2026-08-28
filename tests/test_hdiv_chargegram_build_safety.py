@@ -21,16 +21,17 @@ def test_concurrent_chargegram_builds_keep_callback_state_isolated():
     # The pybind constructor releases the GIL.  Different sizes make a shared
     # callback-manager race fail loudly instead of accidentally reading a
     # same-shaped peer object.
-    with ThreadPoolExecutor(max_workers=2) as executor:
-        small_future = executor.submit(_point_gram, 1, 23)
-        large_future = executor.submit(_point_gram, 2, 41)
-        small = small_future.result()
-        large = large_future.result()
+    for iteration in range(6):
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            small_future = executor.submit(_point_gram, 2 * iteration + 1, 23)
+            large_future = executor.submit(_point_gram, 2 * iteration + 2, 41)
+            small = small_future.result()
+            large = large_future.result()
 
-    assert small.ndof() == 23
-    assert large.ndof() == 41
-    assert np.isfinite(small.matvec_sym(np.ones(23))).all()
-    assert np.isfinite(large.matvec_sym(np.ones(41))).all()
+        assert small.ndof() == 23
+        assert large.ndof() == 41
+        assert np.isfinite(small.matvec_sym(np.ones(23))).all()
+        assert np.isfinite(large.matvec_sym(np.ones(41))).all()
 
 
 def test_image_folded_negative_diagonal_is_rejected():
@@ -43,7 +44,7 @@ def test_image_folded_negative_diagonal_is_rejected():
          [x, 1.0, 0.0], [x, 0.0, 1.0]],
         dtype=np.float64,
     )
-    with pytest.raises(RuntimeError, match="negative self-energy"):
+    with pytest.raises(RuntimeError, match="beyond the image-cancellation"):
         _rb._ChargeGramHMatrix(
             tet.ravel(), np.empty(0, dtype=np.float64), 1,
             1e-8, 8, 2.0, 1e30,
@@ -91,6 +92,12 @@ def test_fill_exception_restores_chargegram_and_global_hacapk_state(monkeypatch)
     # oracle, and the symmetric-fill global must not poison the next PEEC build.
     assert gram.entry(0, 0) == pytest.approx(expected_entry, rel=2.0e-15)
     assert _rb._TestPEECHACApKSanity(16) < 1.0e-6
+
+    # The same object must recover through a clean build. A failed rebuild has
+    # no leaves, so retaining the previous sigma-active state is invalid.
+    gram.build_hmatrix(eps=1.0e-12, leaf=4, eta=2.0)
+    result = gram.matvec_sym(np.ones(len(points)))
+    assert np.isfinite(result).all()
 
 
 def test_nonlinear_timing_collector_keeps_latest_solver_outcome():
