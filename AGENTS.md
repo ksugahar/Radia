@@ -34,6 +34,7 @@ S:\Radia\01_GitHub\
         cubit_mesh_curver.pyd  # C++ pybind11 module (bundled)
     radia-mcp/            # Independent PyPI package (pip install radia-mcp)
     radia-optuna/         # Standalone MATLAB Optuna (pip install radia-optuna)
+    eqnedit64/            # Windows equation editor + Python API (pip install eqnedit64)
   tests/                  # Radia tests + tests/mcp/
   examples/               # retired; do not add new files
   docs/
@@ -41,7 +42,7 @@ S:\Radia\01_GitHub\
   install_full.py          # One-command full setup
 ```
 
-**PyPI packages** (4 independent distributions in the same monorepo):
+**PyPI packages** (5 independent distributions in the same monorepo):
 
 | Package | Install | Purpose |
 |---------|---------|---------|
@@ -49,6 +50,7 @@ S:\Radia\01_GitHub\
 | **cubit-mesh-export** | `pip install cubit-mesh-export` | High-order curved mesh export from Cubit (does NOT require radia) |
 | **radia-mcp** | `pip install radia-mcp` | MCP servers + skills for AI-assisted workflows |
 | **radia-optuna** | `pip install radia-optuna` | Standalone MATLAB Optuna namespace + lightweight `optuna_mex`; no Radia solver/NGSolve/MKL dependency |
+| **eqnedit64** | `pip install eqnedit64` | Windows equation editor, structural Python API, native TeX rendering/clipboard backend, and Web assets |
 
 **Installation**:
 ```bash
@@ -56,6 +58,7 @@ pip install radia               # Python package (includes Cubit plugin binaries
 pip install radia[cubit]        # Also installs cubit-mesh-export
 pip install radia-optuna        # MATLAB Optuna only
 pip install radia[optuna]       # Radia + independently versioned, validated radia-optuna
+pip install eqnedit64           # Equation editor Python/API installation (Windows x64)
 cubit-plugin-install            # Deploy Cubit .ccm backend + PySide6 toolbar (skip if no Cubit)
 ```
 

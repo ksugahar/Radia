@@ -10,6 +10,12 @@ RELEASE_WORKFLOWS=(
 OPTUNA_RELEASE_WORKFLOW=(
     ROOT/".github"/"workflows"/"release-radia-optuna.yml"
 )
+EQNEDIT64_WORKFLOW=(
+    ROOT/".github"/"workflows"/"eqnedit64.yml"
+)
+EQNEDIT64_RELEASE_WORKFLOW=(
+    ROOT/".github"/"workflows"/"release-eqnedit64-pypi.yml"
+)
 
 
 def test_ci_records_exact_ref_context_before_release():
@@ -86,3 +92,30 @@ def test_optuna_manual_release_fails_loudly_when_ci_sha_has_no_tag():
     tag_check=tag_check[:tag_check.index("- name: Check out the exact")]
     assert 'echo "::error::No radia-optuna-v* tag points at $SHA"' in tag_check
     assert "exit 1" in tag_check
+
+
+def test_eqnedit64_release_requires_exact_successful_tag_ci():
+    ci=EQNEDIT64_WORKFLOW.read_text(encoding="utf-8")
+    release=EQNEDIT64_RELEASE_WORKFLOW.read_text(encoding="utf-8")
+
+    assert "Record exact Eqnedit64 CI ref context" in ci
+    assert "eqnedit64.ci-release-context.v1" in ci
+    assert "ref_type = $env:GITHUB_REF_TYPE" in ci
+    assert "sha = $env:GITHUB_SHA" in ci
+    assert "run_id = [string]$env:GITHUB_RUN_ID" in ci
+    assert "name: eqnedit64-ci-release-context" in ci
+
+    assert "workflow_run:" in release
+    assert 'workflows: ["Eqnedit64"]' in release
+    assert "github.event.workflow_run.conclusion == 'success'" in release
+    assert "github.event.workflow_run.event == 'push'" in release
+    assert "Download exact Eqnedit64 CI ref context" in release
+    assert "run-id: ${{ github.event.workflow_run.id }}" in release
+    assert "context.get(\"ref_type\") == \"tag\"" in release
+    assert r"eqnedit64-v\d+\.\d+\.\d+" in release
+    assert "ref: ${{ needs.qualify.outputs.sha }}" in release
+    assert "gh release download $env:EQNEDIT64_TAG" in release
+    assert "Get-AuthenticodeSignature" in release
+    assert "CN=ksugahar" in release
+    assert "id-token: write" in release
+    assert "pypa/gh-action-pypi-publish@release/v1" in release
