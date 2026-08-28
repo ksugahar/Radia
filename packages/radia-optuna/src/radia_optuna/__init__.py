@@ -5,7 +5,7 @@ from __future__ import annotations
 from importlib.resources import files
 from pathlib import Path
 
-__version__ = "0.1.3"
+__version__ = "0.1.4"
 ORACLE_VERSION = "4.9.0"
 
 
