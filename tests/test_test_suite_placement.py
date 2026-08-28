@@ -45,3 +45,9 @@ def test_measured_slow_nodeids_belong_to_validation_suite():
     ]
     assert nodeids
     assert all(nodeid.startswith("validation_test/") for nodeid in nodeids)
+    missing_files = sorted({
+        nodeid.split("::", 1)[0]
+        for nodeid in nodeids
+        if not (ROOT / nodeid.split("::", 1)[0]).is_file()
+    })
+    assert missing_files == []
