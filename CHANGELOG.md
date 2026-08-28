@@ -9,6 +9,12 @@ All notable changes to the `radia` package.  Format: each release lists
   exposed it through the integrated grant health report. The six-axis score
   diagnoses Japanese writing mechanics without mixing in English prose or
   claiming to predict scientific merit or funding decisions.
+- Required an explicit Japanese document genre before grant scoring. Research
+  manuscripts now receive a non-scoring `wrong_genre` response and are routed
+  to paper-writing instead of being judged by grant-proposal criteria.
+- Hardened `mcp-server-grant-writing` initialization and tool metadata so MCP
+  clients receive server instructions, package version, titles, and complete
+  read-only annotations.
 
 ## 4.95.66 - Deterministic HDiv H-matrices and complete Optuna oracle surface
 

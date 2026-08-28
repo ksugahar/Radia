@@ -2,7 +2,7 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **1039 tools** across 49 MCP servers.
+Total: **1040 tools** across 49 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
@@ -45,7 +45,7 @@ Total: **1039 tools** across 49 MCP servers.
 | [`mcp-server-md2html`](#mcp-server-md2html) | `radia_mcp.md2html` | 2 |
 | [`mcp-server-chart2d`](#mcp-server-chart2d) | `radia_mcp.chart2d` | 24 |
 | [`mcp-server-paper-writing`](#mcp-server-paper-writing) | `radia_mcp.paper_writing` | 197 |
-| [`mcp-server-grant-writing`](#mcp-server-grant-writing) | `radia_mcp.grant_writing` | 43 |
+| [`mcp-server-grant-writing`](#mcp-server-grant-writing) | `radia_mcp.grant_writing` | 44 |
 | [`mcp-server-poster`](#mcp-server-poster) | `radia_mcp.poster` | 32 |
 | [`mcp-server-literature-index`](#mcp-server-literature-index) | `radia_mcp.literature_index` | 9 |
 | [`mcp-server-document-meta`](#mcp-server-document-meta) | `radia_mcp.document_meta` | 11 |
@@ -1284,7 +1284,7 @@ Module: `radia_mcp.paper_writing.server`
 
 ## `mcp-server-grant-writing`
 
-_Grant proposal helpers: Japanese technical-prose lint and Japanese-only readability scoring, section coverage, budget alignment, internal-to-external scale, collaborative-integration risk, tool-to-domain outcomes, derived-metric validation, cross-organization pilots, literature-gap evidence scope, named-software abstraction, reviewer vocabulary, benchmark role, persuasion hierarchy, equation introductions, and internal-memo shorthand, KAKENHI review-format realities (monochrome printing, human-rights box, researchmap-era publication identification, funding-overlap box), recommendation-letter template, and KDDI Digital Innovation and KAKENHI OSS-platform checks._
+_Grant proposal helpers: Japanese technical-prose lint, explicit manuscript/grant genre routing, and Japanese-only grant readability scoring, section coverage, budget alignment, internal-to-external scale, collaborative-integration risk, tool-to-domain outcomes, derived-metric validation, cross-organization pilots, literature-gap evidence scope, named-software abstraction, reviewer vocabulary, benchmark role, persuasion hierarchy, equation introductions, and internal-memo shorthand, KAKENHI review-format realities (monochrome printing, human-rights box, researchmap-era publication identification, funding-overlap box), recommendation-letter template, and KDDI Digital Innovation and KAKENHI OSS-platform checks._
 
 Module: `radia_mcp.grant_writing.server`
 
@@ -1312,6 +1312,7 @@ Module: `radia_mcp.grant_writing.server`
 | `grant_writing_health_report` | Integrated grant-writing health report. |
 | `grant_writing_internal_evidence_to_external_scale_check` | Check whether an internal success is evidence for external transfer. |
 | `grant_writing_international_standing_check` | Check that an international claim is evidenced, not aspirational. |
+| `grant_writing_japanese_genre_contract` | Route Japanese prose to grant or research-manuscript review criteria. |
 | `grant_writing_japanese_readability_score` | Score Japanese grant prose with Japanese-specific writing criteria. |
 | `grant_writing_kaken_oss_platform_check` | Check KAKENHI framing for an AI-era OSS research platform proposal. |
 | `grant_writing_kaken_review_axes` | Return the current official review axes for KAKENHI B/C (General). |

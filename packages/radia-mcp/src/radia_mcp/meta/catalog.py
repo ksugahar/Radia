@@ -579,7 +579,8 @@ CATALOG: dict[str, dict[str, Any]] = {
         "subpackage": "radia_mcp.grant_writing",
         "entry_point": "mcp-server-grant-writing",
         "description": "Grant proposal helpers: Japanese technical-prose "
-                       "lint and Japanese-only readability scoring, "
+                       "lint, explicit manuscript/grant genre routing, and "
+                       "Japanese-only grant readability scoring, "
                        "section coverage, budget alignment, "
                        "internal-to-external scale, collaborative-integration "
                        "risk, tool-to-domain outcomes, derived-metric "
@@ -596,6 +597,7 @@ CATALOG: dict[str, dict[str, Any]] = {
                        "OSS-platform checks.",
         "primary_tools": ["grant_writing_usage",
                             "grant_writing_health_report",
+                            "grant_writing_japanese_genre_contract",
                             "grant_writing_japanese_readability_score",
                             "grant_writing_kddi_digital_check",
                             "grant_writing_kaken_oss_platform_check",
