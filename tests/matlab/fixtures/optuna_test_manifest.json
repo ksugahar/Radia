@@ -278,13 +278,6 @@
       "file": "test_optuna_table.m",
       "oracle": null,
       "scope": "MATLAB table storage, MAT persistence, and SimulinkRunner integration",
-      "test": "testCollidingParameterNamesKeepMatchingFrozenKeys"
-    },
-    {
-      "classification": "matlab-integration",
-      "file": "test_optuna_table.m",
-      "oracle": null,
-      "scope": "MATLAB table storage, MAT persistence, and SimulinkRunner integration",
       "test": "testDefineByRunAndPersistence"
     },
     {
