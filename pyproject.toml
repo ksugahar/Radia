@@ -32,7 +32,11 @@ dependencies = [
     # uses the mkl_rt.3.dll ABI, so keep runtime and build packages in 2026.x.
     "mkl>=2026,<2027",
     "intel-cmplr-lib-rt>=2026,<2027",
-    # NGSolve + Netgen-mesher pinned to 6.2.2604 (2026-05-27 radia 4.79.0).
+    # NGSolve + Netgen-mesher pinned to 6.2.2606 (2026-08-26).
+    # Keep this exact pin synchronized with packages/cubit-mesh-export and
+    # Build.ps1.  `_radia_pybind.pyd` is an NGSolve C++ ABI consumer and must be
+    # rebuilt against this exact wheel; mixing a 2604-built extension with a
+    # 2606 runtime is unsupported.
     # Bumped from 6.2.2603 because cubit-mesh-export 0.10.2's transitive
     # deps auto-upgraded the lab machines to 2604, leaving radia 4.78.1
     # (2603 ABI) unrunnable.  Bump consequences:
@@ -55,13 +59,23 @@ dependencies = [
     #     memory/direction_bem_a_hmatrix_in_radia.md).  Radia-specific
     #     H-matrix acceleration is kept in Radia's C++ kernels, primarily
     #     the HDiv-VIM open-boundary path.
-    "ngsolve==6.2.2604",
-    "netgen-mesher==6.2.2604",
+    "ngsolve==6.2.2606",
+    "netgen-mesher==6.2.2606",
     # MCP server dependency (optional, for Claude Code / Cursor integration)
     "mcp>=1.0.0",
 ]
 
 [project.optional-dependencies]
+optuna = [
+    # Independently versioned monorepo artifact. Pin the release that passed
+    # this Radia version's MATLAB/Simulink integration gate.
+    "radia-optuna==0.1.0",
+]
+optuna-upstream = [
+    # Adds pinned upstream Python/SciPy/PyTorch paths used by GP, scrambled QMC,
+    # and parameter-importance parity; native MATLAB/Simulink use stays lighter.
+    "radia-optuna[upstream]==0.1.0",
+]
 cubit = [
     "cubit-mesh-export",
 ]
