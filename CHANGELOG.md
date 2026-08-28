@@ -32,6 +32,10 @@ Released 2026-08-28.
 - Updated `radia-mcp` to 1.4.48 with stronger MATLAB/Optuna oracle reporting,
   Japanese grant-genre safeguards, and presentation/figure diagnostics for
   reusable research outputs.
+- Hardened the independent Optuna release gate across Windows checkout line
+  endings and non-reproducible native builds. CI still requires byte-exact
+  same-workspace payloads; four-machine consumers recheck the exact CI wheel
+  SHA256 and validate its MEX as a Windows x64 binary.
 
 - Added a Japanese-only readability score to `mcp-server-grant-writing` and
   exposed it through the integrated grant health report. The six-axis score
