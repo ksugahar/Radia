@@ -6,20 +6,24 @@ on:
     tags: ['eqnedit64-v*']
     paths:
       - 'tools/eqnedit64/**'
+      - 'packages/eqnedit64/**'
       - 'packages/radia-mcp/src/radia_mcp/presentation/_equation_cli.py'
       - 'packages/radia-mcp/src/radia_mcp/presentation/skill.md'
       - 'packages/radia-mcp/src/radia_mcp/presentation/tools.py'
       - 'packages/radia-mcp/tests/test_presentation_equation_cli.py'
       - '.github/workflows/eqnedit64.yml'
+      - '.github/workflows/release-eqnedit64-pypi.yml'
   pull_request:
     branches: [main]
     paths:
       - 'tools/eqnedit64/**'
+      - 'packages/eqnedit64/**'
       - 'packages/radia-mcp/src/radia_mcp/presentation/_equation_cli.py'
       - 'packages/radia-mcp/src/radia_mcp/presentation/skill.md'
       - 'packages/radia-mcp/src/radia_mcp/presentation/tools.py'
       - 'packages/radia-mcp/tests/test_presentation_equation_cli.py'
       - '.github/workflows/eqnedit64.yml'
+      - '.github/workflows/release-eqnedit64-pypi.yml'
   workflow_dispatch:
 
 permissions:
@@ -44,6 +48,27 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Record exact Eqnedit64 CI ref context
+        working-directory: .
+        run: |
+          $directory = Join-Path $env:RUNNER_TEMP 'eqnedit64-ci-release-context'
+          New-Item -ItemType Directory -Path $directory | Out-Null
+          [ordered]@{
+            schema = 'eqnedit64.ci-release-context.v1'
+            ref = $env:GITHUB_REF
+            ref_type = $env:GITHUB_REF_TYPE
+            sha = $env:GITHUB_SHA
+            run_id = [string]$env:GITHUB_RUN_ID
+          } | ConvertTo-Json | Set-Content `
+            -LiteralPath (Join-Path $directory 'context.json') -Encoding utf8
+
+      - name: Upload exact Eqnedit64 CI ref context
+        uses: actions/upload-artifact@v4
+        with:
+          name: eqnedit64-ci-release-context
+          path: ${{ runner.temp }}/eqnedit64-ci-release-context/context.json
+          if-no-files-found: error
+
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
@@ -56,6 +81,26 @@ jobs:
 
       - name: Build native targets
         run: cmake --build build_cmake --config Release --parallel 2
+
+      - name: Build Eqnedit64 Python wheel candidate
+        working-directory: .
+        run: |
+          python -m pip install build
+          $env:EQNEDIT64_RELEASE_EXE = (Resolve-Path 'tools\eqnedit64\build_cmake\Release\Eqnedit64.exe').Path
+          python -m build --wheel packages\eqnedit64
+
+      - name: Verify installed Eqnedit64 wheel
+        working-directory: .
+        run: |
+          $wheel = Get-ChildItem 'packages\eqnedit64\dist\eqnedit64-*.whl' | Select-Object -First 1
+          python -m pip install --force-reinstall $wheel.FullName
+          python packages\eqnedit64\tests\verify_installed.py
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: eqnedit64-wheel-candidate
+          path: packages/eqnedit64/dist/*.whl
+          if-no-files-found: error
 
       - name: Run C++ document tests
         run: ctest --test-dir build_cmake -C Release --output-on-failure

@@ -493,7 +493,7 @@ explicit configuration.
 
 ### Python packages
 
-This monorepo contains four independently versioned distributions. SPICE/LTspice
+This monorepo contains five independently versioned distributions. SPICE/LTspice
 integration ships inside `radia`; its extra only adds schemdraw support.
 
 | Package or extra | Install | Purpose |
@@ -502,6 +502,7 @@ integration ships inside `radia`; its extra only adds schemdraw support.
 | `radia-mcp` | `python -m pip install radia-mcp` | AI-facing MCP servers and executable domain knowledge |
 | `cubit-mesh-export` | `python -m pip install cubit-mesh-export` | Solver-neutral high-order Cubit export and `check-vol` |
 | `radia-optuna` | `python -m pip install radia-optuna` | Standalone MATLAB Optuna namespace and 21-command native gateway; no Radia solver, NGSolve, or MKL runtime |
+| `eqnedit64` | `python -m pip install eqnedit64` | Windows equation editor, structural Python API, native TeX/MathML/SVG/clipboard backend, and Web assets |
 | `radia[optuna]` | `python -m pip install "radia[optuna]"` | Radia plus the independently versioned, validated native MATLAB/Simulink `radia-optuna` release |
 | `radia[optuna-upstream]` | `python -m pip install "radia[optuna-upstream]"` | Also installs pinned upstream Python/SciPy/PyTorch paths used by GP, scrambled QMC, and importance parity |
 | `radia[ltspice]` | `python -m pip install "radia[ltspice]"` | Radia plus schemdraw support for built-in SPICE/LTspice conversion and circuit coupling |
@@ -522,6 +523,7 @@ Set-Location Radia
 python -m pip install -e ".[dev]"
 python -m pip install -e packages/radia-mcp
 python -m pip install -e packages/cubit-mesh-export
+python -m pip install packages/eqnedit64
 pwsh -NoProfile -ExecutionPolicy Bypass -File .\Build.ps1 -RadiaOnly
 ```
 
@@ -536,6 +538,9 @@ src/radia/ltspice/              SPICE, LTspice, KiCad, and circuit workflows
 matlab/+radia/                  MATLAB API, MEX wrappers, Simulink builders
 packages/radia-mcp/             MCP servers and executable domain knowledge
 packages/cubit-mesh-export/     Cubit exporters, plugin, and check-vol
+packages/radia-optuna/          Standalone MATLAB/Simulink Optuna package
+packages/eqnedit64/             Windows Eqnedit64 Python/API distribution
+tools/eqnedit64/                Canonical native and browser editor source
 tests/                          Fast implementation regressions for CI
 validation_test/                Numerical validation and research-grade gates
 docs/                           Executed notebooks and technical references
