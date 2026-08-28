@@ -49,6 +49,7 @@ Documentation = "https://github.com/ksugahar/Radia/blob/main/matlab/README.md"
 [project.scripts]
 radia-optuna-path = "radia_optuna.cli:path_main"
 radia-optuna-doctor = "radia_optuna.cli:doctor_main"
+radia-optuna-bridge = "radia_optuna.bridge:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

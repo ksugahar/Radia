@@ -80,6 +80,64 @@ verifyEqual(testCase, reloaded.best_params(), bestParams);
 verifyEqual(testCase, reloaded.best_solution().trial_number, 0);
 end
 
+function testStudyExportRoundTripsThroughTheBridgeDocument(testCase)
+% MATLAB-only invariant: the table/MAT storage is not an optuna.storages
+% backend, so interoperability runs through an explicit export document.
+% The document must be lossless, including parameter names that are not
+% valid MATLAB field names -- a study handed to Python and back must not
+% come home with "x-1" renamed to "x_1".
+study = radia.optuna.Study(Name="bridge-round-trip", ...
+    Directions=["minimize" "minimize"], ...
+    Sampler=radia.optuna.RandomSampler(5), AutoSave=false);
+study.set_user_attr("owner", "radia");
+for index = 1:9
+    trial = study.ask();
+    x = trial.suggest_float("x-1", -1, 1);
+    mode = trial.suggest_categorical("mode", ["a" "b"]);
+    trial.set_user_attr("tag", sprintf("t%d", index));
+    if mod(index, 3) == 0
+        study.tell(trial, State="PRUNED");
+    else
+        study.tell(trial, [x * x, double(mode == "a")]);
+    end
+end
+
+path = string(tempname("C:\temp")) + ".json";
+cleanup = onCleanup(@() deleteIfPresent(path));
+payload = radia.optuna.export_study(study, Path=path);
+verifyEqual(testCase, string(payload.schema), "radia.optuna.study-export.v1");
+verifyEqual(testCase, payload.trial_count, height(study.TrialTable));
+verifyTrue(testCase, isfile(path));
+
+restored = radia.optuna.import_study(path);
+verifyEqual(testCase, restored.Directions, study.Directions);
+verifyEqual(testCase, restored.TrialTable.State, study.TrialTable.State);
+verifyEqual(testCase, restored.TrialTable.TrialNumber, ...
+    study.TrialTable.TrialNumber);
+verifyEqual(testCase, ...
+    sortrows(restored.ParamTable, {'TrialNumber', 'Name'}), ...
+    sortrows(study.ParamTable, {'TrialNumber', 'Name'}));
+verifyEqual(testCase, ...
+    sortrows(restored.ObjectiveTable, {'TrialNumber', 'ObjectiveIndex'}), ...
+    sortrows(study.ObjectiveTable, {'TrialNumber', 'ObjectiveIndex'}));
+verifyEqual(testCase, string(restored.UserAttrs.owner), "radia");
+verifyEqual(testCase, height(restored.UserAttrTable), ...
+    height(study.UserAttrTable));
+% The escaped-name case is the one a naive JSON-object export loses.
+verifyTrue(testCase, any(restored.ParamTable.Name == "x-1"));
+
+% The camelCase aliases must behave identically.
+aliasPayload = radia.optuna.exportStudy(study);
+verifyEqual(testCase, aliasPayload.trial_count, payload.trial_count);
+verifyEqual(testCase, height(radia.optuna.importStudy(path).TrialTable), ...
+    height(restored.TrialTable));
+
+verifyError(testCase, ...
+    @() radia.optuna.import_study(struct("schema", "other.v1")), ...
+    "radia:optuna:ImportStudy");
+clear cleanup
+end
+
 function testIndexedHistoryMatchesScannedHistory(testCase)
 % MATLAB-only invariant: the optimization history is kept in column stores
 % with trial-number bucket indices, and the public tables are materialized
