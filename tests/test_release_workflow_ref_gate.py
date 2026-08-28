@@ -163,7 +163,9 @@ def test_eqnedit64_release_requires_exact_successful_tag_ci():
     assert r"eqnedit64-v\d+\.\d+\.\d+" in release
     assert "ref: ${{ needs.qualify.outputs.sha }}" in release
     assert "runs-on: [self-hosted, windows-radia]" in release
-    assert "$releaseRoots = @('O:\\', 'C:\\Users\\Administrator\\OneDrive')" in release
+    assert "$releaseRoots = @('C:\\Users\\Administrator\\OneDrive')" in release
+    assert "Get-PSDrive -Name O -PSProvider FileSystem" in release
+    assert "$releaseRoots = @('O:\\') + $releaseRoots" in release
     assert "$exe = Join-Path $releaseRoot 'Eqnedit64.exe'" in release
     assert "$manifestPath = Join-Path $releaseRoot 'Eqnedit64.release.json'" in release
     assert "The runner service uses LocalSystem" in release
