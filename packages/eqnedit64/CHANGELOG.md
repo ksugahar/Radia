@@ -5,6 +5,8 @@
 - Owner-draws native palette tabs and buttons so correct window text cannot
   become invisible when a Windows GDI/theme session stops painting BUTTON text.
 - Adds a hidden pixel-difference regression test over every real toolbar button.
+- Measures and draws Japanese text with an explicit CJK system face, preventing
+  math-font linking from expanding nominal 12 pt text several times over.
 
 ## 3.0.0 - 2026-08-29
 

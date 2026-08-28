@@ -99,6 +99,23 @@ def main() -> int:
     failures = []
     style = SvgStyle()          # full 12, sub 7, sym 18
 
+    # CJK is text, not a mathematical symbol.  Sending it through the
+    # process-private Latin Modern Math face made GDI font linking apply the
+    # fallback scale twice: five nominal 12 pt characters measured 306 pt
+    # wide and appeared several times larger than the surrounding equation.
+    japanese = Rendered(r"\text{を代入する}", style)
+    japanese_content_width = japanese.width - 2 * style.padding
+    if not 4.0 * style.full <= japanese_content_width <= 6.0 * style.full:
+        failures.append(
+            f"Japanese 12 pt text measures {japanese_content_width:.2f}pt wide; "
+            f"five full-width characters should be about {5*style.full:.2f}pt")
+    if japanese.height > 1.6 * style.full:
+        failures.append(
+            f"Japanese 12 pt text is {japanese.height:.2f}pt tall; it must not "
+            "dwarf the surrounding equation")
+    if 'font-family="Yu Mincho, Yu Gothic UI, Meiryo, MS Mincho, serif"' not in japanese.svg:
+        failures.append("Japanese text was not routed to the explicit CJK face")
+
     # --- nothing may be drawn outside the box the SVG declares -------------
     for latex in [r"\sigma_{f}", r"\sum_{i=1}^{n} a_{i}", r"\frac{a}{b}",
                   r"\sqrt{x^{2}}", r"\left(\frac{1}{2}\right)",

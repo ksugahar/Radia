@@ -3447,6 +3447,11 @@ int self_test() {
     if (e.latex().find("x_{i}") == std::string::npos) return 11;
     auto m = e.metrics();
     if (m.width <= 0 || m.height <= 0) return 12;
+    eqnedit::Equation japanese;
+    if (!japanese.load_latex(u8"\\text{を代入する}")) return 156;
+    const auto japaneseMetrics = japanese.metrics();
+    if (japaneseMetrics.width < 45.0 || japaneseMetrics.width > 90.0 ||
+        japaneseMetrics.height > 24.0) return 157;
     HDC screen = GetDC(nullptr);
     HDC dc = CreateCompatibleDC(screen);
     HBITMAP bm = CreateCompatibleBitmap(screen, 640, 240);

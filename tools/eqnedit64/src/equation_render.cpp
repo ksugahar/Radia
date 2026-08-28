@@ -41,6 +41,7 @@ struct Glyph {
     bool italic = false;
     bool bold = false;
     bool symbol = false;        /* pick the symbol font family */
+    bool cjk = false;           /* use a real CJK face, never math-font linking */
     double stretchY = 1.0;      /* vertical scale for grown fences */
     /* Draw only the part of the glyph left of this x, in layout units.
      * Used for the radical: Cambria's surd ends in a flat flag thicker than
@@ -299,7 +300,46 @@ void ensure_math_font() {
     }
 }
 
-HFONT make_font(bool italic, bool symbol) {
+const std::wstring& cjk_face_name() {
+    static const std::wstring face = []() {
+        HDC dc = CreateCompatibleDC(nullptr);
+        if (!dc) return std::wstring(L"Yu Mincho");
+        const wchar_t* candidates[] = {
+            L"Yu Mincho", L"Yu Gothic UI", L"Meiryo", L"MS Mincho"
+        };
+        const wchar_t sample[] = L"を代入する";
+        for (const wchar_t* candidate : candidates) {
+            HFONT font = CreateFontW(-64, 0, 0, 0, FW_NORMAL, FALSE, FALSE,
+                                     FALSE, DEFAULT_CHARSET, OUT_TT_PRECIS,
+                                     CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY,
+                                     DEFAULT_PITCH | FF_DONTCARE, candidate);
+            if (!font) continue;
+            HGDIOBJ old = SelectObject(dc, font);
+            WORD indices[_countof(sample) - 1] = {};
+            const DWORD got = GetGlyphIndicesW(
+                dc, sample, int(_countof(sample) - 1), indices,
+                GGI_MARK_NONEXISTING_GLYPHS);
+            bool owns = got != GDI_ERROR;
+            for (WORD index : indices) owns = owns && index != 0xFFFF;
+            wchar_t actual[LF_FACESIZE] = {};
+            if (owns) GetTextFaceW(dc, _countof(actual), actual);
+            SelectObject(dc, old);
+            DeleteObject(font);
+            if (owns && actual[0]) {
+                DeleteDC(dc);
+                return std::wstring(actual);
+            }
+        }
+        DeleteDC(dc);
+        /* A system text face may still reach CJK through normal font linking.
+         * Unlike the process-private math font, its linked glyphs retain the
+         * requested em size. */
+        return std::wstring(L"Segoe UI");
+    }();
+    return face;
+}
+
+HFONT make_font(bool italic, bool symbol, bool cjk) {
     ensure_math_font();
     LOGFONTW lf = {};
     lf.lfHeight = -kEm;
@@ -317,7 +357,8 @@ HFONT make_font(bool italic, bool symbol) {
      * boxes.  Its MATH table agrees with the constants taken from tex.web:
      * RadicalRuleThickness and FractionRuleThickness are both 0.040 em and
      * AxisHeight is 0.250 em. */
-    const wchar_t* face = L"Latin Modern Math";
+    const wchar_t* face = cjk ? cjk_face_name().c_str()
+                              : L"Latin Modern Math";
     (void)symbol;
     wcscpy_s(lf.lfFaceName, face);
     return CreateFontIndirectW(&lf);
@@ -345,7 +386,8 @@ struct MetricCache {
     HFONT font(int key) {
         auto it = fonts.find(key);
         if (it != fonts.end()) return it->second;
-        HFONT f = make_font((key & 1) != 0, (key & 2) != 0);
+        HFONT f = make_font((key & 1) != 0, (key & 2) != 0,
+                            (key & 4) != 0);
         fonts[key] = f;
         return f;
     }
@@ -681,8 +723,8 @@ struct MetricCache {
     std::map<int, double> upems;
     std::map<int, std::vector<uint8_t>> mathTables;
     std::map<std::pair<std::pair<int, uint32_t>, int>, Variant> variants;
-    double width_em(uint32_t cp, bool italic, bool symbol) {
-        int key = (italic ? 1 : 0) | (symbol ? 2 : 0);
+    double width_em(uint32_t cp, bool italic, bool symbol, bool cjk) {
+        int key = (italic ? 1 : 0) | (symbol ? 2 : 0) | (cjk ? 4 : 0);
         auto k = std::make_pair(key, cp);
         auto it = widths.find(k);
         if (it != widths.end()) return it->second;
@@ -703,8 +745,8 @@ struct MetricCache {
         widths[k] = w;
         return w;
     }
-    std::pair<double, double> vmetric(bool italic, bool symbol) {
-        int key = (italic ? 1 : 0) | (symbol ? 2 : 0);
+    std::pair<double, double> vmetric(bool italic, bool symbol, bool cjk) {
+        int key = (italic ? 1 : 0) | (symbol ? 2 : 0) | (cjk ? 4 : 0);
         auto it = vmetrics.find(key);
         if (it != vmetrics.end()) return it->second;
         HGDIOBJ old = SelectObject(hdc, font(key));
@@ -728,17 +770,17 @@ struct MetricCache {
      * origin -- an italic x or f -- which is why a fraction's denominator
      * could poke a few pixels past the left end of its rule. */
 
-    Box glyph_box(uint32_t cp, bool italic, bool symbol) {
-        int key = (italic ? 1 : 0) | (symbol ? 2 : 0);
+    Box glyph_box(uint32_t cp, bool italic, bool symbol, bool cjk) {
+        int key = (italic ? 1 : 0) | (symbol ? 2 : 0) | (cjk ? 4 : 0);
         auto k = std::make_pair(key, cp);
         auto it = boxes.find(k);
         if (it != boxes.end()) return it->second;
 
-        auto v = vmetric(italic, symbol);
+        auto v = vmetric(italic, symbol, cjk);
         Box b;
         b.asc = v.first;
         b.desc = v.second;
-        b.ink_w = width_em(cp, italic, symbol);
+        b.ink_w = width_em(cp, italic, symbol, cjk);
         if (cp < 0x10000) {
             HGDIOBJ old = SelectObject(hdc, font(key));
             GLYPHMETRICS gm = {};
@@ -904,41 +946,46 @@ MetricCache& metrics() {
     return c;
 }
 
-double char_width(uint32_t cp, double sizePt, bool italic, bool symbol) {
-    return metrics().width_em(cp, italic, symbol) * sizePt;
+double char_width(uint32_t cp, double sizePt, bool italic, bool symbol,
+                  bool cjk = false) {
+    return metrics().width_em(cp, italic, symbol, cjk) * sizePt;
 }
 /* The font's own extent, for things sized against the face rather than
  * against one glyph (fence stretching, the fallback line height). */
-void char_vmetrics(double sizePt, bool italic, bool symbol,
+void char_vmetrics(double sizePt, bool italic, bool symbol, bool cjk,
                    double& asc, double& desc) {
-    auto v = metrics().vmetric(italic, symbol);
+    auto v = metrics().vmetric(italic, symbol, cjk);
     asc = v.first * sizePt;
     desc = v.second * sizePt;
 }
 /* The ink box of one glyph, which is what neighbours and scripts must clear. */
 void glyph_vmetrics(uint32_t cp, double sizePt, bool italic, bool symbol,
+                    bool cjk,
                     double& asc, double& desc) {
-    auto b = metrics().glyph_box(cp, italic, symbol);
+    auto b = metrics().glyph_box(cp, italic, symbol, cjk);
     asc = b.asc * sizePt;
     desc = b.desc * sizePt;
 }
 /* How far the drawing actually reaches.  A large operator is drawn wider than
  * it advances, so laying the next atom out at the advance alone lets a sigma
  * touch the symbol after it. */
-double glyph_ink_width(uint32_t cp, double sizePt, bool italic, bool symbol) {
-    return metrics().glyph_box(cp, italic, symbol).ink_w * sizePt;
+double glyph_ink_width(uint32_t cp, double sizePt, bool italic, bool symbol,
+                       bool cjk = false) {
+    return metrics().glyph_box(cp, italic, symbol, cjk).ink_w * sizePt;
 }
 
 /* Where a glyph's ink stops, measured up from its baseline.  Positive for
  * an accent, which floats entirely above it. */
-double glyph_ink_bottom(uint32_t cp, double sizePt, bool italic, bool symbol) {
-    return metrics().glyph_box(cp, italic, symbol).ink_bottom * sizePt;
+double glyph_ink_bottom(uint32_t cp, double sizePt, bool italic, bool symbol,
+                        bool cjk = false) {
+    return metrics().glyph_box(cp, italic, symbol, cjk).ink_bottom * sizePt;
 }
 
 /* Left side bearing in points, <= 0.  Zero for a glyph whose ink starts at or
  * after its origin. */
-double glyph_ink_left(uint32_t cp, double sizePt, bool italic, bool symbol) {
-    return metrics().glyph_box(cp, italic, symbol).ink_left * sizePt;
+double glyph_ink_left(uint32_t cp, double sizePt, bool italic, bool symbol,
+                      bool cjk = false) {
+    return metrics().glyph_box(cp, italic, symbol, cjk).ink_left * sizePt;
 }
 
 /* The font's designed size at least `wantEm` tall for this character, if it
@@ -974,8 +1021,10 @@ double glyph_italic_correction(uint32_t cp, double sizePt) {
     return metrics().italic_correction(cp, 2) * sizePt;
 }
 
-/* Glyph index for a character in the math face, 0 when the font has none. */
-unsigned short glyph_id_of(uint32_t cp) { return metrics().glyph_id(cp, 2); }
+/* Glyph index for a character in the face that will actually draw it. */
+unsigned short glyph_id_of(uint32_t cp, bool cjk = false) {
+    return metrics().glyph_id(cp, cjk ? 4 : 2);
+}
 
 /* Thickness and right edge of a glyph's flat top, in points, so a rule can
  * continue it seamlessly.  False when the glyph has no such top. */
@@ -992,18 +1041,23 @@ bool glyph_top_plateau(uint32_t cp, double sizePt, bool italic, bool symbol,
 #else
 /* Portable fallback: enough to keep the tree walking and the tests honest
  * about being unmeasured, not enough for production output. */
-double char_width(uint32_t, double sizePt, bool, bool) { return 0.5 * sizePt; }
-void char_vmetrics(double sizePt, bool, bool, double& asc, double& desc) {
+double char_width(uint32_t, double sizePt, bool, bool, bool = false) {
+    return 0.5 * sizePt;
+}
+void char_vmetrics(double sizePt, bool, bool, bool,
+                   double& asc, double& desc) {
     asc = 0.75 * sizePt;
     desc = 0.25 * sizePt;
 }
-void glyph_vmetrics(uint32_t, double sizePt, bool, bool,
+void glyph_vmetrics(uint32_t, double sizePt, bool, bool, bool,
                     double& asc, double& desc) {
     asc = 0.70 * sizePt;
     desc = 0.05 * sizePt;
 }
-double glyph_ink_width(uint32_t, double sizePt, bool, bool) { return 0.5 * sizePt; }
-double glyph_ink_left(uint32_t, double, bool, bool) { return 0.0; }
+double glyph_ink_width(uint32_t, double sizePt, bool, bool, bool = false) {
+    return 0.5 * sizePt;
+}
+double glyph_ink_left(uint32_t, double, bool, bool, bool = false) { return 0.0; }
 #endif
 
 /* ------------------------------------------------------------------ */
@@ -1011,10 +1065,27 @@ double glyph_ink_left(uint32_t, double, bool, bool) { return 0.0; }
 /* ------------------------------------------------------------------ */
 bool typeface_is_italic(int tf) { return tf == 3 || tf == 4; }   /* VARIABLE, LCGREEK */
 
+/* Japanese must never reach the process-private math font through GDI font
+ * linking.  The linked CJK glyph can inherit the math face's 1000-unit metric
+ * scale twice: a nominal 12 pt character then advances more than 50 pt and is
+ * painted correspondingly huge.  Give CJK its own measured system face. */
+bool needs_cjk_face(uint32_t cp) {
+    return (cp >= 0x2E80 && cp <= 0x2FFF) ||
+           (cp >= 0x3000 && cp <= 0x30FF) ||
+           (cp >= 0x31F0 && cp <= 0x31FF) ||
+           (cp >= 0x3400 && cp <= 0x4DBF) ||
+           (cp >= 0x4E00 && cp <= 0x9FFF) ||
+           (cp >= 0xF900 && cp <= 0xFAFF) ||
+           (cp >= 0xFF00 && cp <= 0xFFEF) ||
+           (cp >= 0x20000 && cp <= 0x323AF);
+}
+
 /* Which family draws a code point.  This is a property of the character, not
  * of the stored typeface: a TF_SYMBOL "(" is still an ordinary parenthesis and
- * belongs in the text face, while anything past Latin-1 needs the math face. */
-bool needs_math_face(uint32_t cp) { return cp > 0xFF; }
+ * belongs in the text face. */
+bool needs_math_face(uint32_t cp) {
+    return cp > 0xFF && !needs_cjk_face(cp);
+}
 
 /* The math-italic code point for a letter TeX would set in math italic, or 0
  * when the character has none and should be drawn as it is.  Uppercase Greek
@@ -1174,7 +1245,8 @@ double layout_ink_right(const Layout& L) {
         if (g.text.empty()) continue;
         const uint32_t cp = first_codepoint(g.text);
         right = std::max(right,
-                         g.x + glyph_ink_width(cp, g.size, g.italic, g.symbol));
+                         g.x + glyph_ink_width(cp, g.size, g.italic, g.symbol,
+                                               g.cjk));
     }
     for (const auto& rule : L.rules) right = std::max(right, rule.x + rule.w);
     return right;
@@ -1189,7 +1261,8 @@ double layout_ink_left(const Layout& L) {
         if (g.text.empty()) continue;
         const uint32_t cp = first_codepoint(g.text);
         left = std::min(left,
-                        g.x + glyph_ink_left(cp, g.size, g.italic, g.symbol));
+                        g.x + glyph_ink_left(cp, g.size, g.italic, g.symbol,
+                                             g.cjk));
     }
     for (const auto& rule : L.rules) left = std::min(left, rule.x);
     return left;
@@ -1268,12 +1341,17 @@ private:
             const uint32_t mathItalic = math_italic_of(cp);
             if (mathItalic) { cp = mathItalic; italic = false; symbol = true; }
         }
+        const bool cjk = needs_cjk_face(cp);
+        if (cjk) {
+            italic = false;
+            symbol = false;
+        }
         Layout L;
-        L.w = char_width(cp, sizePt, italic, symbol);
-        glyph_vmetrics(cp, sizePt, italic, symbol, L.asc, L.desc);
+        L.w = char_width(cp, sizePt, italic, symbol, cjk);
+        glyph_vmetrics(cp, sizePt, italic, symbol, cjk, L.asc, L.desc);
         Glyph g;
         g.x = 0; g.y = 0; g.size = sizePt;
-        g.italic = italic; g.symbol = symbol;
+        g.italic = italic; g.symbol = symbol; g.cjk = cjk;
         g.text = utf8_of(cp);
         L.glyphs.push_back(g);
         return L;
@@ -2076,7 +2154,8 @@ private:
          * for extensible signs, so measuring against them made every bracket
          * believe it was already tall enough. */
         double plainAsc = 0, plainDesc = 0;
-        glyph_vmetrics(0x27E8, sizePt, false, true, plainAsc, plainDesc);
+        glyph_vmetrics(0x27E8, sizePt, false, true, false,
+                       plainAsc, plainDesc);
         const double stretch =
             std::max(1.0, need / std::max(plainAsc + plainDesc, 1e-6));
 
@@ -2149,7 +2228,8 @@ private:
         double opSize = st_.sym * (sizePt / std::max(st_.full, 1e-6));
         {
             double signAsc = 0, signDesc = 0;
-            glyph_vmetrics(glyph, opSize, false, true, signAsc, signDesc);
+            glyph_vmetrics(glyph, opSize, false, true, false,
+                           signAsc, signDesc);
             const double ink = signAsc + signDesc;
             if (ink > 1e-6) opSize *= targetInk / ink;
         }
@@ -2346,7 +2426,8 @@ std::string render_svg(const LineNode& root, const SvgStyle& style) {
               << g.outline << "\" fill=\"currentColor\"/>\n";
             continue;
         }
-        const std::string& family = g.symbol ? style.symbol : style.serif;
+        const std::string& family = g.cjk ? style.cjk
+                                  : g.symbol ? style.symbol : style.serif;
         o << "  <text x=\"" << (g.x + pad) << "\" y=\"" << (g.y + baseline)
           << "\" font-family=\"" << xml_escape(family) << "\""
           << " font-size=\"" << g.size << "\"";
@@ -2528,7 +2609,8 @@ bool emit_glyph_outline(HDC hdc, HFONT face, const Glyph& g,
      * every variable out of the metafile entirely. */
     const UINT format = GGO_NATIVE | GGO_GLYPH_INDEX;
     const UINT which = g.glyphIndex ? UINT(g.glyphIndex)
-                                    : UINT(glyph_id_of(first_codepoint(g.text)));
+                                    : UINT(glyph_id_of(first_codepoint(g.text),
+                                                       g.cjk));
     if (!which || !face) return false;
     /* Ask a real DC for the outline.  The target here is a metafile DC, which
      * records rather than renders and does not answer glyph queries. */
@@ -2730,12 +2812,13 @@ void draw_equation_gdi(const LineNode& root, HDC hdc,
      * of parsing the family list per glyph. */
     const std::wstring symbolFace = first_family(style.symbol);
     const std::wstring serifFace = first_family(style.serif);
+    const std::wstring cjkFace = cjk_face_name();
     HGDIOBJ previousFont = nullptr;
     HFONT selected = nullptr;
     std::wstring text;
     for (const auto& g : L.glyphs) {
         DrawFontKey key;
-        key.face = g.symbol ? symbolFace : serifFace;
+        key.face = g.cjk ? cjkFace : g.symbol ? symbolFace : serifFace;
         key.height = -std::max(1, int(std::lround(g.size * scale)));
         key.bold = g.bold;
         key.italic = g.italic;
