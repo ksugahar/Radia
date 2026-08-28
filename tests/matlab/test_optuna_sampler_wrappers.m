@@ -18,6 +18,86 @@ if testCase.TestData.RemovePath
 end
 end
 
+function testBaseSamplerUpstreamNamedInterface(testCase)
+% MATLAB-only invariant: radia.optuna's samplers are written around the
+% suggest-shaped entry points Trial calls, and BaseSampler exposes Optuna's
+% names on top of them. sample_independent must return exactly what the
+% corresponding suggest_* path returns for the same seeded sampler, and the
+% base defaults must only answer for samplers that genuinely have no
+% relative search space.
+seeded = @() radia.optuna.RandomSampler(23);
+newStudy = @(sampler) radia.optuna.Study( ...
+    Sampler=sampler, AutoSave=false);
+
+kinds = { ...
+    radia.optuna.FloatDistribution(-1, 2), ...
+    radia.optuna.FloatDistribution(1, 100, Log=true), ...
+    radia.optuna.FloatDistribution(0, 1, Step=0.25), ...
+    radia.optuna.IntDistribution(0, 9), ...
+    radia.optuna.IntDistribution(1, 64, Log=true), ...
+    radia.optuna.IntDistribution(0, 10, Step=5), ...
+    radia.optuna.CategoricalDistribution(["a" "b" "c"])};
+names = ["f" "flog" "fstep" "i" "ilog" "istep" "c"];
+
+for index = 1:numel(kinds)
+    distribution = kinds{index};
+    viaSuggest = newStudy(seeded());
+    trial = viaSuggest.ask();
+    expected = suggestFromDistribution(trial, names(index), distribution);
+
+    viaInterface = newStudy(seeded());
+    interfaceTrial = viaInterface.ask();
+    actual = viaInterface.Sampler.sample_independent( ...
+        viaInterface, interfaceTrial, names(index), distribution);
+
+    if distribution.kind == "categorical"
+        verifyEqual(testCase, string(actual), string(expected), ...
+            sprintf("sample_independent for %s", names(index)));
+    else
+        verifyEqual(testCase, actual, expected, ...
+            sprintf("sample_independent for %s", names(index)), AbsTol=0);
+    end
+end
+
+% A single-valued distribution must never reach the sampler.
+single = radia.optuna.FloatDistribution(0.75, 0.75);
+study = newStudy(seeded());
+verifyEqual(testCase, study.Sampler.sample_independent( ...
+    study, study.ask(), "pinned", single), 0.75);
+
+% Samplers with no relative search space inherit the empty default; the
+% ones that do own a relative space must override it.
+verifyEmpty(testCase, ...
+    radia.optuna.RandomSampler(1).infer_relative_search_space(study, []));
+verifyEmpty(testCase, ...
+    radia.optuna.GridSampler(struct("x", {{0, 1}})). ...
+    infer_relative_search_space(study, []));
+
+% The lifecycle aliases must reach the sampler's own hooks.
+hooked = radia.optuna.RandomSampler(3);
+lifecycle = newStudy(hooked);
+lifecycleTrial = lifecycle.ask();
+hooked.before_trial(lifecycle, lifecycleTrial);
+lifecycle.tell(lifecycleTrial, 1.0);
+hooked.after_trial(lifecycle, lifecycleTrial, "COMPLETE", 1.0);
+verifyEqual(testCase, lifecycle.TrialTable.State(1), "COMPLETE");
+end
+
+function value = suggestFromDistribution(trial, name, distribution)
+switch distribution.kind
+    case "float"
+        value = trial.suggest_float(name, distribution.low, ...
+            distribution.high, log=distribution.log, ...
+            step=distribution.step);
+    case "integer"
+        value = trial.suggest_int(name, distribution.low, ...
+            distribution.high, step=distribution.step, ...
+            log=distribution.log);
+    otherwise
+        value = trial.suggest_categorical(name, distribution.choices);
+end
+end
+
 function testGPProposalResumesWithHyperparametersAndRandomState(testCase)
 path=string(tempname("C:\temp"))+".mat";
 cleanup=onCleanup(@()deleteStudyArtifacts(path));

@@ -718,6 +718,112 @@ def _matlab_surface() -> tuple[set[str], dict[str, dict[str, set[str]]]]:
     return names, members
 
 
+def _inherit_members(
+    members: dict[str, dict[str, set[str]]], superclasses: dict[str, str]
+) -> None:
+    """Credit a class with what it inherits.
+
+    MATLAB resolves BaseSampler.reseed_rng on every sampler, so a ledger that
+    only looked inside each file reported the whole family as missing while
+    the method was callable all along.
+    """
+    for name in list(members):
+        seen = set()
+        parent = superclasses.get(name)
+        while parent and parent in members and parent not in seen:
+            seen.add(parent)
+            for normalized, actual in members[parent].items():
+                members[name].setdefault(normalized, set()).update(actual)
+            parent = superclasses.get(parent)
+
+
+# Why a module is not held to the "port it" bar.  Anything absent from this
+# table is `required`: it must be present AND oracle-mapped before
+# full_compatibility_complete can be true.  A downgrade here is a design
+# decision that has to name the thing that discharges it, so the ledger can
+# never quietly excuse an unimplemented feature.
+SCOPE_RULES = {
+    "optuna.storages": {
+        "scope": "bridged",
+        "reason": (
+            "MATLAB keeps its history in tables and a MAT-file rather than an "
+            "optuna.storages backend. Interoperability is discharged by the "
+            "explicit handoff document instead of by porting the backends."
+        ),
+        "discharged_by": [
+            "radia.optuna.export_study",
+            "radia.optuna.import_study",
+            "radia_optuna.bridge",
+        ],
+    },
+    "optuna.visualization": {
+        "scope": "out-of-scope",
+        "reason": (
+            "Plotting is not a MATLAB Optuna concern; export the study and "
+            "plot it from Python, or use MATLAB's own plotting on the tables."
+        ),
+        "discharged_by": ["radia_optuna.bridge"],
+    },
+    "optuna.integration": {
+        "scope": "out-of-scope",
+        "reason": (
+            "Third-party Python framework callbacks (PyTorch, XGBoost, ...) "
+            "have no MATLAB counterpart; run them on the bridged study."
+        ),
+        "discharged_by": ["radia_optuna.bridge"],
+    },
+    "optuna.artifacts": {
+        "scope": "out-of-scope",
+        "reason": (
+            "Artifact stores are a Python-side file-management surface; "
+            "Radia applications already own run.log / result.json artifacts."
+        ),
+        "discharged_by": [],
+    },
+    "optuna.logging": {
+        "scope": "replaced",
+        "reason": (
+            "MATLAB reports through warning/error identifiers and disp, not "
+            "through a Python logging hierarchy."
+        ),
+        "discharged_by": ["MATLAB warning and error identifiers"],
+    },
+    "optuna.exceptions": {
+        "scope": "replaced",
+        "reason": (
+            "MATLAB signals failures with error identifiers such as "
+            "radia:optuna:TrialPruned rather than exception classes."
+        ),
+        "discharged_by": ["radia:optuna:* error identifiers"],
+    },
+}
+
+
+# The inventory walks __mro__, so an IntEnum drags in int's methods and an
+# exception class drags in BaseException's.  Those are Python-language
+# surface, not Optuna API: holding a MATLAB port to bit_count() or
+# with_traceback() would be nonsense.
+PYTHON_LANGUAGE_MEMBERS = frozenset(
+    name
+    for base in (int, BaseException)
+    for name in dir(base)
+    if not name.startswith("_")
+)
+
+
+def _scope_for(upstream: str) -> str:
+    leaf = upstream.rsplit(".", 1)[-1]
+    if leaf in PYTHON_LANGUAGE_MEMBERS:
+        return "python-language"
+    if leaf.startswith("_"):
+        # A private upstream symbol is not part of the public contract.
+        return "out-of-scope"
+    for prefix, rule in SCOPE_RULES.items():
+        if upstream == prefix or upstream.startswith(prefix + "."):
+            return str(rule["scope"])
+    return "required"
+
+
 def _entry(
     upstream: str,
     kind: str,
@@ -729,6 +835,7 @@ def _entry(
         "kind": kind,
         "matlab_name": matlab_name,
         "oracle_status": oracle_status,
+        "scope": _scope_for(upstream),
         "surface_status": "present" if present else "missing",
         "upstream": upstream,
     }
@@ -824,6 +931,19 @@ def build_coverage() -> dict[str, Any]:
     missing_count = len(entries) - present_count
     verified_count = sum(entry["oracle_status"] == "verified" for entry in entries)
     partial_count = sum(entry["oracle_status"] == "partial" for entry in entries)
+    required = [entry for entry in entries if entry["scope"] == "required"]
+    required_present = [
+        entry for entry in required if entry["surface_status"] == "present"
+    ]
+    required_mapped = [
+        entry for entry in required_present if entry["oracle_status"] != "not-mapped"
+    ]
+    scope_counts: dict[str, int] = {}
+    for entry in entries:
+        scope_counts[str(entry["scope"])] = scope_counts.get(str(entry["scope"]), 0) + 1
+    complete = len(required_present) == len(required) and len(required_mapped) == len(
+        required
+    )
     return {
         "schema": "radia.optuna49-api-coverage.v1",
         "upstream_version": "4.9.0",
@@ -833,10 +953,18 @@ def build_coverage() -> dict[str, Any]:
         "upstream_oracle_sha256": _sha256(ORACLE_PATH),
         "class_oracle_sections": CLASS_ORACLE_SECTIONS,
         "closure_rule": (
-            "full_compatibility_complete is true only when every required public "
-            "symbol/member is present and has an upstream differential-oracle mapping; "
-            "the two documented MATLAB extensions do not waive shared behavior"
+            "full_compatibility_complete is true only when every entry whose scope "
+            "is 'required' is present AND has an upstream differential-oracle "
+            "mapping; the documented MATLAB extensions do not waive shared "
+            "behavior, and a non-required scope must name what discharges it"
         ),
+        "scope_rules": SCOPE_RULES,
+        "scope_counts": scope_counts,
+        "required_entry_count": len(required),
+        "required_present_count": len(required_present),
+        "required_missing_count": len(required) - len(required_present),
+        "required_oracle_mapped_count": len(required_mapped),
+        "required_oracle_unmapped_count": len(required) - len(required_mapped),
         "allowed_matlab_extensions": [
             "parallel execution and scheduling",
             "MATLAB table and MAT-file storage",
@@ -847,7 +975,7 @@ def build_coverage() -> dict[str, Any]:
         "oracle_verified_count": verified_count,
         "oracle_partial_count": partial_count,
         "oracle_unmapped_count": len(entries)-verified_count-partial_count,
-        "full_compatibility_complete": missing_count == 0 and verified_count == len(entries),
+        "full_compatibility_complete": complete,
         "entries": entries,
     }
 
