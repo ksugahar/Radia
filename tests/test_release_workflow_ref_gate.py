@@ -52,6 +52,8 @@ def test_pypi_distributions_have_independent_ci_boundaries():
     for package in ("eqnedit64", "radia-mcp", "cubit-mesh-export",
                     "radia-optuna"):
         assert f"packages/{package}/**" in radia
+    assert "tests/test_release_quad_optuna_candidate.py" in radia
+    assert "tools/release_quad.py" in radia
     assert "radia-mcp-wheel" not in radia
     assert "cubit-mesh-export-wheel" not in radia
     assert "radia-optuna-wheel" not in radia
