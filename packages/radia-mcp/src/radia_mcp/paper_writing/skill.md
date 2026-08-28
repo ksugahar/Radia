@@ -1160,6 +1160,7 @@ A+B→C が揃って初めて Discussion として機能する。
 既存 + 新規で計画されている:
 - `paper_writing_check_subject_verb_distance` — 主述の物理距離
 - `paper_writing_check_paragraph_length` — 段落字数の範囲
+- `paper_writing_bilingual_readability_check(text_or_tex_path)` — **和文と英文を別基準で査読者視点から評価**。和文は字数・読点・接続・述語・段落内の論証役割、英文は語数・従属節・名詞化・句読点連鎖を使う。数式・図表・keyword・TeX command は除外し、`japanese` / `english` に別の diagnostic score と source line を返す。両言語の score は平均せず、悪い側を `paper_writing_em_submission_gate` の判定に用いる。
 - `paper_writing_check_abstract_background_ratio` — abstract 内 background 比率
 - `paper_writing_check_abstract_no_math_no_citation` — **abstract に数式 (TeX math)、`\cite{}` / `[1]`、domain-specific acronym (FEM/BEM/MCP/LLM など) が混入していないかチェック** (IEEE / Elsevier / Springer / Nature / Science 共通の慣習: abstract は self-contained + 検索エンジン indexing 可能であるべき)。Display math (`\begin{equation}`/`\[...\]`) と citation は `status="fail"`、inline math (`$...$`) と acronym は `status="warning"`、両方なしなら `status="clean"`。
 - `paper_writing_check_digest_human_review_triggers(tex_or_text)` — **1-page digest の human review trigger を検出**。abstract の個別 percent error 列挙、Warburg/CLN 既知事項を novelty として見せる書き方、経験的な接続周波数の問題を Galerkin 限定に見せる表現、HOIBC/Warburg 初出 citation 不足、説明過多 caption、`rank-(1,1)` 型の不透明 shorthand、「基底 2 個で円形導体を表せる」と誤読される minimal-basis 表現、重要な Schur/ブロック式の無番号・未ラベル・本文未引用、`K_{bb}`/`K_{sb}` などの `(s)` 依存や体積・表面・結合ブロック定義不足、`N_b` の定義不足、`N_b=1` が DC+IBC と誤読される構成、CLN 基底数 / HOIBC 次数の未記載、円形導体ベンチマークの導電率・参照解不足、"wall band" / 「壁帯」の不明瞭語、main result figure が Numerical Example / Verification より前に浮く配置、検証節が太字段落に埋まる構成、`$f_N$` など未説明の基準線、球・立方体・多面体まで盛る scope creep を `status="warning"` で返す。`paper_writing_em_submission_gate` からも自動実行。
@@ -1173,6 +1174,19 @@ A+B→C が揃って初めて Discussion として機能する。
 - `paper_writing_check_strong_adjective_budget` — 強調副詞の過剰
 - **`paper_writing_check_word_repetition`** (v0.8.0) — 同一単語の近接障害 (中島・塚本)
 - **`paper_writing_check_sentence_ending_variety`** (v0.8.0) — 文末表現の単調さ (中島・塚本)
+
+### 和文・英文の readability は別物として扱う
+
+同じ「長文」でも、和文では読点の連鎖、述語の遅延、定義・条件・結論を
+一文へ入れる構造が負荷になる。英文では 30 words を超える文、従属節の
+入れ子、nominalisation と technical noun の積み重ねが主な負荷になる。
+このため、文字数と word 数を一つの平均へ混ぜない。
+
+投稿前は `paper_writing_bilingual_readability_check(tex_path)` を実行し、
+`HIGH` を先に修正する。修正順は、(1) 段落冒頭に reviewer takeaway、
+(2) 理由、(3) 条件・定義、(4) 数値・記号である。レイアウト、参照、数式が
+clean でも、この check が `fail` なら「技術的には正しいが読み手が論旨を
+復元しなければならない」状態なので投稿を止める。
 
 ---
 

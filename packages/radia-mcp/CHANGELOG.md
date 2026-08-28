@@ -7,6 +7,12 @@ crystallized as its own package.
 
 ## [Unreleased]
 
+- paper-writing: added a language-specific adjacent-reviewer readability gate.
+  Japanese and English prose use separate units and density heuristics; TeX
+  math and floats are excluded, findings retain source lines, and the EM
+  submission gate now blocks cognitively dense prose that structural and
+  layout checks previously missed.
+
 ## [1.4.46] - 2026-08-27
 
 - cubit: added a reusable Nastran consumer gate that verifies the exact BDF

@@ -5,6 +5,12 @@ All notable changes to the `radia` package.  Format: each release lists
 
 ## Unreleased
 
+- Added a language-specific adjacent-reviewer readability gate to
+  `mcp-server-paper-writing`. Japanese and English prose are now evaluated
+  separately, TeX math and floats are excluded, and cognitively dense prose
+  can no longer pass on layout and structural checks alone. Findings retain
+  TeX source lines and are exercised by the stdio server self-test.
+
 ## 4.95.65 - Validated Cubit Nastran interchange
 
 Released 2026-08-27.

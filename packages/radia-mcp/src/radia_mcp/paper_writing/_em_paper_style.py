@@ -1446,6 +1446,38 @@ def paper_writing_em_submission_gate(
         except Exception as e:  # noqa: BLE001
             _add("digest_human_review_triggers", "skip",
                  f"tool error: {e}")
+
+        # Sentence length alone misses structurally valid but cognitively
+        # dense manuscripts. Japanese and English need different units and
+        # thresholds, so this check keeps both results separate.
+        try:
+            r = _t.paper_writing_bilingual_readability_check(_scan_tex)
+            st = r.get("status", "not_applicable")
+            status = (
+                "fail" if st == "fail"
+                else "warn" if st == "warning"
+                else "pass" if st == "pass"
+                else "skip"
+            )
+            ja = r.get("japanese", {})
+            en = r.get("english", {})
+            _add(
+                "bilingual_adjacent_reviewer_readability",
+                status,
+                (
+                    f"JA {ja.get('heuristic_score', 0)}/100 "
+                    f"({ja.get('risk_count', 0)} risks), "
+                    f"EN {en.get('heuristic_score', 0)}/100 "
+                    f"({en.get('risk_count', 0)} risks)"
+                ),
+                r,
+            )
+        except Exception as e:  # noqa: BLE001
+            _add(
+                "bilingual_adjacent_reviewer_readability",
+                "skip",
+                f"tool error: {e}",
+            )
     else:
         _add("tex_checks", "skip", "no tex_path supplied")
 
