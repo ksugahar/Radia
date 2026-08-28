@@ -11,7 +11,17 @@ from radia_mcp.matlab.optuna_quality import (
 REPO_ROOT = Path(__file__).resolve().parents[3]
 
 
-def test_health_uses_distribution_and_upstream_manifests_as_truth():
+def test_health_uses_distribution_and_upstream_manifests_as_truth(monkeypatch):
+    # A clean source checkout intentionally has no ignored Windows MEX binary.
+    # Source health therefore validates the guarded standalone command table;
+    # installed-distribution health remains responsible for requiring the MEX.
+    mex_path = REPO_ROOT / "matlab" / "optuna_mex.mexw64"
+    path_is_file = Path.is_file
+    monkeypatch.setattr(
+        Path,
+        "is_file",
+        lambda path: False if path == mex_path else path_is_file(path),
+    )
     health = matlab_optuna_health(str(REPO_ROOT))
     manifest = json.loads(
         (
@@ -44,6 +54,13 @@ def test_health_uses_distribution_and_upstream_manifests_as_truth():
         "matlab_file_count"
     ]
     assert health["native"]["command_count"] == manifest["native_command_count"]
+    assert health["native"]["present"] is False
+    assert health["native"]["runtime_ready"] is False
+    assert health["native"]["build_required"] is True
+    assert health["native"]["source_contract_present"] is True
+    assert health["native"]["source_command_count"] == manifest[
+        "native_command_count"
+    ]
     assert health["simulink"]["entry_count"] == len(
         manifest["simulink_entry_points"]
     )
@@ -120,6 +137,7 @@ def _passing_release_evidence() -> dict[str, object]:
     command_count = health["native"]["command_count"]
     simulink_count = health["simulink"]["entry_count"]
     test_count = health["test_policy"]["entry_count"]
+    mex_sha256 = health["native"]["sha256"] or ("A" * 64)
     settings = {
         "trials": 100,
         "total_repeats": 11,
@@ -181,6 +199,7 @@ def _passing_release_evidence() -> dict[str, object]:
             "simulink_standalone": True,
             "simulink_entry_count": simulink_count,
             "upstream_notices_complete": True,
+            "mex_sha256": mex_sha256,
         },
         "matlab_tests": {
             "schema": "radia.optuna.oracle-test-summary.v1",
@@ -218,7 +237,7 @@ def _passing_release_evidence() -> dict[str, object]:
                 "schema": "radia.validation.optuna-mex-first-call.v1",
                 "host": "LAB",
                 "median_first_call_seconds": 0.01,
-                "binary_sha256": health["native"]["sha256"],
+                "binary_sha256": mex_sha256,
             },
         },
     }

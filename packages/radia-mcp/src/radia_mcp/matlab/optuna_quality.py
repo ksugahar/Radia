@@ -198,6 +198,24 @@ def _matlab_top_level_inventory(root: Path) -> tuple[list[str], list[str]]:
     return classes, functions
 
 
+def _optuna_source_commands(source_path: Path) -> list[str]:
+    """Read the standalone Optuna command table from the shared MEX source."""
+    if not source_path.is_file():
+        return []
+    source = source_path.read_text(encoding="utf-8", errors="ignore")
+    match = re.search(
+        r"mxArray\*\s+Commands\(\)\s*\{\s*"
+        r"#ifdef\s+RADIA_OPTUNA_MEX_ONLY\s*"
+        r"static\s+const\s+char\*\s+names\[\]\s*=\s*\{(.*?)\};\s*"
+        r"#else",
+        source,
+        flags=re.DOTALL,
+    )
+    if match is None:
+        return []
+    return re.findall(r'"([^"]+)"', match.group(1))
+
+
 def matlab_optuna_health(distribution_path: str = "") -> dict[str, Any]:
     """Inspect manifest, public API oracle coverage, MEX, and notices."""
     errors: list[str] = []
@@ -218,6 +236,7 @@ def matlab_optuna_health(distribution_path: str = "") -> dict[str, Any]:
     compatibility_path = matlab_root / "optuna_upstream_compatibility.json"
     notice_path = Path(layout["notice"])
     mex_path = matlab_root / "optuna_mex.mexw64"
+    source_path = root / "src" / "matlab" / "radia_mex.cpp"
 
     manifest = _read_json(manifest_path, errors, "distribution manifest")
     coverage = _read_json(coverage_path, errors, "API coverage")
@@ -282,7 +301,21 @@ def matlab_optuna_health(distribution_path: str = "") -> dict[str, Any]:
         errors.append("distribution manifest does not declare standalone Simulink")
     if manifest.get("radia_runtime_required") is not False:
         errors.append("radia-optuna unexpectedly requires the Radia runtime")
-    if not mex_path.is_file():
+    source_commands = (
+        _optuna_source_commands(source_path)
+        if layout["source_kind"] == "repository"
+        else []
+    )
+    expected_commands = int(manifest.get("native_command_count", -1))
+    if layout["source_kind"] == "repository":
+        if not source_commands:
+            errors.append(f"missing standalone Optuna MEX source contract: {source_path}")
+        elif len(source_commands) != expected_commands:
+            errors.append(
+                "Optuna MEX source command inventory mismatch: "
+                f"{len(source_commands)} != {expected_commands}"
+            )
+    elif not mex_path.is_file():
         errors.append(f"missing native gateway: {mex_path}")
 
     oracle_path = Path(layout["oracle"])
@@ -346,11 +379,28 @@ def matlab_optuna_health(distribution_path: str = "") -> dict[str, Any]:
         },
         "native": {
             "gateway": manifest.get("native_gateway"),
-            "command_count": int(manifest.get("native_command_count", -1)),
+            "command_count": expected_commands,
             "path": str(mex_path),
             "present": mex_path.is_file(),
+            "runtime_ready": mex_path.is_file(),
+            "build_required": (
+                layout["source_kind"] == "repository" and not mex_path.is_file()
+            ),
             "size_bytes": mex_path.stat().st_size if mex_path.is_file() else None,
             "sha256": _sha256(mex_path) if mex_path.is_file() else None,
+            "source_contract": (
+                str(source_path) if layout["source_kind"] == "repository" else None
+            ),
+            "source_contract_present": bool(source_commands),
+            "source_command_count": (
+                len(source_commands)
+                if layout["source_kind"] == "repository"
+                else None
+            ),
+            "source_commands": source_commands,
+            "source_sha256": (
+                _sha256(source_path) if source_commands else None
+            ),
         },
         "simulink": {
             "standalone": manifest.get("simulink_standalone"),
@@ -678,6 +728,12 @@ def matlab_optuna_release_gate(
             errors.append("installed-wheel Simulink entry count differs from the manifest")
         if doctor.get("upstream_notices_complete") is not True:
             errors.append("installed-wheel upstream notices are incomplete")
+        doctor_sha = str(doctor.get("mex_sha256", "")).casefold()
+        if re.fullmatch(r"[0-9a-f]{64}", doctor_sha) is None:
+            errors.append("installed-wheel doctor has no valid MEX SHA256")
+        source_binary_sha = health.get("native", {}).get("sha256")
+        if source_binary_sha and doctor_sha != str(source_binary_sha).casefold():
+            errors.append("installed-wheel MEX differs from the source-build binary")
 
     tests = _mapping(evidence.get("matlab_tests"), "matlab_tests", errors)
     if tests:
@@ -793,9 +849,9 @@ def matlab_optuna_release_gate(
             ).casefold():
                 errors.append("cold MEX and warmed performance used different hosts")
             cold_sha = str(cold.get("binary_sha256", "")).casefold()
-            expected_sha = str(health.get("native", {}).get("sha256", "")).casefold()
+            expected_sha = str(doctor.get("mex_sha256", "")).casefold()
             if not cold_sha or cold_sha != expected_sha:
-                errors.append("cold-start MEX binary differs from the health inventory")
+                errors.append("cold-start MEX binary differs from the installed wheel")
 
     return {
         "schema": "radia-mcp.matlab-optuna-release-gate/v1",
