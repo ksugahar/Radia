@@ -264,6 +264,15 @@ def main():
         assert 'total_sentences' in r3
         print(f"    analyze_sentences: n_sentences={r3['total_sentences']}")
 
+        bilingual = _tools.paper_writing_bilingual_readability_check(
+            "結論を先に示す。次に理由を述べる。\n\n"
+            "We state the claim first. We then give the reason."
+        )
+        assert bilingual["japanese"]["status"] == "pass"
+        assert bilingual["english"]["status"] == "pass"
+        assert "not averaged" in bilingual["aggregation_policy"]
+        print("    bilingual_readability: JA/EN separate gates OK")
+
         # v0.88.0 layout knowledge tools
         full = paper_writing_tex_figure_placement('all')
         ov = paper_writing_tex_figure_placement('overview')
