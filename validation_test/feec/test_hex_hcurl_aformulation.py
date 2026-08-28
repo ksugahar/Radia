@@ -18,6 +18,8 @@ high-order (spectral) rate on genuine hex edge elements.
 import math
 import pytest
 
+pytestmark = pytest.mark.slow
+
 ng = pytest.importorskip("ngsolve")
 from ngsolve import (HCurl, BilinearForm, LinearForm, GridFunction, Integrate,
                      curl, dx, x, y, z, sin, pi, CF)

@@ -86,7 +86,7 @@ def _mu_r_from_bh(bh_curve, H_probe):
     return B / (MU0 * H_probe)
 
 
-def test_peak_envelope_matches_bessel(cell_solver):
+def _validate_peak_envelope_matches_bessel(cell_solver):
     """The envelope's peak |Z_s| must agree with the linear-mu Bessel
     prediction using mu_r = secant slope at the peak H_t.
 

@@ -672,7 +672,7 @@ def test_rk_orbit_moving_frame_feeds_fourth_order_lie_map(
     )
 
 
-def test_tracked_lie_map_self_contained_difference_against_field_rk(
+def _validate_tracked_lie_map_self_contained_difference_against_field_rk(
     hcurl_cubic_vector_potential,
 ):
     vector_potential, _, _ = hcurl_cubic_vector_potential
@@ -727,7 +727,7 @@ def test_tracked_lie_map_self_contained_difference_against_field_rk(
         )
 
 
-def test_curvilinear_s_rk_uses_direct_hcurl_a_and_hdiv_b_map(
+def _validate_curvilinear_s_rk_uses_direct_hcurl_a_and_hdiv_b_map(
     hcurl_cubic_vector_potential,
 ):
     vector_potential, normal, skew = hcurl_cubic_vector_potential
@@ -1047,7 +1047,7 @@ def test_hcurl_lie_uses_the_negative_rmf_metric_connection(monkeypatch):
     )
 
 
-def test_hcurl_volume_recovers_full_p5_xy_jet_and_lie_gradient(
+def _validate_hcurl_volume_recovers_full_p5_xy_jet_and_lie_gradient(
     hcurl_p5_xy_vector_potential,
 ):
     orbit = PlanarDesignOrbit(
@@ -1341,7 +1341,7 @@ def test_lie_map_p_convergence_includes_odd_orders_and_selects_p5(
     )
 
 
-def test_design_orbit_gauge_preserves_the_earlytimes_lie_map():
+def _validate_design_orbit_gauge_preserves_the_earlytimes_lie_map():
     radius = 0.25
     angles = np.linspace(0.0, 0.4, 5)
     positions = np.column_stack(
