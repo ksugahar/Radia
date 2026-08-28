@@ -80,7 +80,10 @@ jobs:
           # O: is SUBST-ed to this OneDrive directory in the interactive LAB
           # session.  The runner service uses LocalSystem, so it cannot see
           # per-user drive letters and must inspect the same backing directory.
-          $releaseRoots = @('O:\', 'C:\Users\Administrator\OneDrive')
+          $releaseRoots = @('C:\Users\Administrator\OneDrive')
+          if (Get-PSDrive -Name O -PSProvider FileSystem -ErrorAction SilentlyContinue) {
+            $releaseRoots = @('O:\') + $releaseRoots
+          }
           $releaseRoot = $releaseRoots | Where-Object {
             (Test-Path -LiteralPath (Join-Path $_ 'Eqnedit64.exe') -PathType Leaf) -and
             (Test-Path -LiteralPath (Join-Path $_ 'Eqnedit64.release.json') -PathType Leaf)
