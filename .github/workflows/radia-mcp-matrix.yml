@@ -1,6 +1,6 @@
-name: radia-mcp matrix (lightweight selftest)
+name: radia-mcp
 
-# Complements `build-test.yml` (self-hosted Windows, full integration).
+# Complete CI boundary for the independently published radia-mcp wheel.
 # This workflow:
 #   - Runs on the FREE GitHub-hosted ubuntu-latest
 #   - Across Python 3.10 / 3.11 / 3.12
@@ -8,27 +8,28 @@ name: radia-mcp matrix (lightweight selftest)
 #   - Checks: (a) all cataloged subpackages import (b) every server has
 #     register_status_tool wired (c) per-server --selftest runs
 #
-# Why a separate workflow:
-#   - Catches MCP-only regressions in MINUTES vs 45-min self-hosted build
+# Why a separate distribution workflow:
+#   - Catches MCP-only regressions without building the Radia native core
 #   - Validates the lightweight install path (the one new external
 #     users will hit when they `pip install radia-mcp` and try a tool)
 #   - Independent of the self-hosted runner availability
 
 on:
   push:
-    branches: [main, "claude/**", "feature/**"]
+    branches: [main]
+    tags: ['radia-mcp-v*']
     paths:
       - "packages/radia-mcp/**"
-      - ".github/workflows/radia-mcp-matrix.yml"
+      - "tests/mcp_server/**"
   pull_request:
     branches: [main]
     paths:
       - "packages/radia-mcp/**"
-      - ".github/workflows/radia-mcp-matrix.yml"
+      - "tests/mcp_server/**"
   workflow_dispatch:
 
 concurrency:
-  group: radia-mcp-matrix-${{ github.ref }}
+  group: radia-mcp-${{ github.ref }}
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
@@ -41,6 +42,34 @@ jobs:
         python-version: ["3.10", "3.11", "3.12"]
     steps:
       - uses: actions/checkout@v4
+
+      - name: Record exact radia-mcp CI ref context
+        if: matrix.python-version == '3.12'
+        run: |
+          python - <<'PY'
+          import json, os, pathlib
+          tag = os.environ['GITHUB_REF_NAME'] if os.environ['GITHUB_REF_TYPE'] == 'tag' else None
+          data = {
+              'schema': 'radia-mcp.ci-release-context.v1',
+              'ref': os.environ['GITHUB_REF'],
+              'ref_name': os.environ['GITHUB_REF_NAME'],
+              'ref_type': os.environ['GITHUB_REF_TYPE'],
+              'sha': os.environ['GITHUB_SHA'],
+              'run_id': os.environ['GITHUB_RUN_ID'],
+              'event_name': os.environ['GITHUB_EVENT_NAME'],
+              'release_tags': [tag] if tag else [],
+          }
+          pathlib.Path('radia-mcp-ci-release-context.json').write_text(
+              json.dumps(data, indent=2), encoding='utf-8')
+          PY
+
+      - name: Upload exact radia-mcp CI ref context
+        if: matrix.python-version == '3.12'
+        uses: actions/upload-artifact@v4
+        with:
+          name: radia-mcp-ci-release-context
+          path: radia-mcp-ci-release-context.json
+          if-no-files-found: error
 
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v5
@@ -62,6 +91,11 @@ jobs:
       - name: Compile check (catch SyntaxError on Py ${{ matrix.python-version }})
         run: |
           python -m compileall -q packages/radia-mcp/src
+
+      - name: Publish-boundary lint
+        run: |
+          python packages/radia-mcp/tools/policy_lint.py --selftest
+          python packages/radia-mcp/tools/policy_lint.py
 
       - name: Meta health (all cataloged subpackages must import)
         run: |
@@ -146,3 +180,28 @@ jobs:
           if failed:
               sys.exit(1)
           PY
+
+      - name: MCP response regression tests
+        if: matrix.python-version == '3.12'
+        run: |
+          PYTHONPATH="packages/radia-mcp/src:src" \
+            python -m pytest tests/mcp_server -q
+
+      - name: Build and verify radia-mcp wheel
+        if: matrix.python-version == '3.12'
+        run: |
+          python -m pip install build
+          python -m build --wheel packages/radia-mcp
+          WHEEL=$(find packages/radia-mcp/dist -name 'radia_mcp-*.whl' | head -1)
+          test -n "$WHEEL"
+          python -m pip install --force-reinstall --no-deps "$WHEEL"
+          cd "$RUNNER_TEMP"
+          python -c "import radia_mcp; print(radia_mcp.__version__)"
+
+      - name: Upload radia-mcp wheel
+        if: matrix.python-version == '3.12'
+        uses: actions/upload-artifact@v4
+        with:
+          name: radia-mcp-wheel
+          path: packages/radia-mcp/dist/*.whl
+          if-no-files-found: error
