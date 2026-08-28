@@ -5,6 +5,23 @@ All notable changes to the `radia` package.  Format: each release lists
 
 ## Unreleased
 
+## 4.95.67 - Mainline HDiv-MMM release certification
+
+Released 2026-08-28.
+
+- Certified the deterministic HDiv-MMM and HACApK implementation from 4.95.66
+  on the current mainline native build. The focused suite covers concurrent
+  Charge-Gram construction, failed-build state recovery, image-folded diagonal
+  safety, deterministic repeated solves, coupled HDiv/HCurl routes, transient
+  workflows, and field reconstruction.
+- Updated `radia-optuna` to 0.1.4. The MATLAB implementation retains the complete
+  816-member Optuna 4.9.0 public inventory while tightening seeded numerical
+  parity, distribution encoding, QMC and TPE behavior, trial import, and
+  installed-wheel contracts.
+- Updated `radia-mcp` to 1.4.48 with stronger MATLAB/Optuna oracle reporting,
+  Japanese grant-genre safeguards, and presentation/figure diagnostics for
+  reusable research outputs.
+
 - Added a Japanese-only readability score to `mcp-server-grant-writing` and
   exposed it through the integrated grant health report. The six-axis score
   diagnoses Japanese writing mechanics without mixing in English prose or
