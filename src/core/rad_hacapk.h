@@ -28,7 +28,15 @@
 #include "rad_polyhedron.h"  // For compact polyhedron field kernels
 #include <vector>
 #include <functional>
+#include <mutex>
 #include <unordered_map>
+
+namespace RadHACApKCallback {
+std::mutex& OperationMutex();
+void ClearCallbackException();
+void CaptureCallbackException() noexcept;
+void RethrowCallbackException();
+}
 
 // HACApK uses opaque void* pointers to avoid C/C++ struct compatibility issues
 // Actual structures are defined in cHACApK_cpp.h and managed by cHACApK_cpp_impl.c
@@ -212,9 +220,12 @@ protected:
         std::vector<double>& y);
 
     // Kernel hooks
+    virtual void OnBuildStarting(const RadHACApKParams&) {}
     virtual void ExtractCoordinates() = 0;
     virtual void OnBeforeBuild() = 0;
     virtual void InitializeInvChi() = 0;
+    virtual bool UseSymmetricFill() const { return false; }
+    virtual void OnBuildFinished(bool) noexcept {}
 
     /**
      * Return true to use variable-DOF HACApK build (per-element DOF via

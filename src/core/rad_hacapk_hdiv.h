@@ -686,26 +686,60 @@ public:
         int picard_iters, double cg_tol, int cg_maxit);
 
 protected:
+    void OnBuildStarting(const RadHACApKParams& params) override;
     void ExtractCoordinates() override;
     void OnBeforeBuild() override;
+    bool UseSymmetricFill() const override { return true; }
+    void OnBuildFinished(bool succeeded) noexcept override;
     void InitializeInvChi() override { m_inv_chi.assign(m_ndof, 0.0); }
     bool IsVariableDOF() const override { return false; }
     int  GetUniformNFFC() const override { return 1; }
 
 private:
     friend class RadHACApKChargeGramDerivative;
-    // The complete physical entry evaluation (every mode branch); the public
-    // virtual wraps it and serves Ghat = sigma_a^-1 sigma_b^-1 * raw ONLY
-    // while the H-matrix fill is running (m_fillNormalized).
+    struct EntryStrategy {
+        virtual ~EntryStrategy() = default;
+        virtual double Evaluate(const RadHACApKChargeGram& owner, int row, int col) const = 0;
+    };
+    struct SampledLaplaceEntryStrategy;
+    struct SampledPlanarEntryStrategy;
+    struct PlanarEntryStrategy;
+    struct HexEntryStrategy;
+    struct WedgeEntryStrategy;
+    struct HighOrderTetEntryStrategy;
+    struct AnalyticEntryStrategy;
+    struct MonopoleEntryStrategy;
+    const EntryStrategy& GetEntryStrategy() const;
+    mutable std::once_flag m_entryStrategyOnce;
+    mutable std::unique_ptr<EntryStrategy> m_entryStrategy;
+    double EvaluateSampledLaplaceEntry(int a, int b) const;
+    double EvaluateSampledPlanarEntry(int a, int b) const;
+    double EvaluatePlanarEntry(int a, int b) const;
+    double EvaluateHexEntry(int a, int b) const;
+    double EvaluateWedgeEntry(int a, int b) const;
+    double EvaluateHostBlockEntry(int a, int b) const;
+    double EvaluateHighOrderTetEntry(int a, int b) const;
+    double EvaluateAnalyticEntry(int a, int b) const;
+    double EvaluateMonopoleEntry(int a, int b) const;
+    double EvaluateDirectSelfEntry(int a) const;
+    static bool HOFarOneSidedEnabled();
+    static bool HOAnalyticBlockEnabled();
+    static bool HOTetImageBlockEnabled();
+    // The selected element strategy supplies the complete physical entry; the
+    // public virtual wraps it and serves Ghat = sigma_a^-1 sigma_b^-1 * raw
+    // only while the H-matrix fill is running (m_fillNormalized).
     double GetInteractionMatrixElementRaw(int a, int b) const;
-    // Pre-fill diagonal pass: sigma_p = sqrt(raw G_pp) (1.0 on a nonpositive
-    // or nonfinite diagonal -- fail-soft here would hide nothing: the entry
-    // itself is served unscaled then).
+    // Pre-fill diagonal pass: sigma_p = sqrt(raw G_pp). Exact zero from an
+    // antisymmetric fixed-plane image remains unscaled; invalid diagonals fail.
     void ComputeChargeSigma();
     std::vector<double> m_chargeSigma;     // sigma_p (empty before build)
     std::vector<double> m_chargeSigmaInv;  // 1/sigma_p
     bool m_sigmaActive = false;            // leaves hold Ghat; applies wrap S
     mutable bool m_fillNormalized = false; // fill-time oracle serves Ghat
+    // Regression-only fault injection.  BuildHMatrix reads
+    // RADIA_HDIV_TEST_FAIL_FILL_AFTER once; no test hook is exposed in pybind.
+    int m_testFillFailureAfter = -1;
+    mutable std::atomic<int> m_testFillEntryCalls{0};
     void ApplyConfiguredDemagImpl(
         const double* x, double* y, double scale, bool add, bool symmetric,
         bool respect_constraints = true);
@@ -900,6 +934,10 @@ private:
         double hmatvec_lowrank_rank_le16 = 0.0, hmatvec_lowrank_rank_le32 = 0.0;
         int mass_riesz_local_blocks = 0, mass_riesz_max_block = 0;
         int apply_count = 0, prec_count = 0, dot_count = 0;
+        // Outcome of the last linear solve, measured from the TRUE residual
+        // (not the CG recurrence): 1.0 = met tol, 0.0 = ran out of iterations.
+        double converged = 0.0;
+        double final_relative_residual = 0.0;
     };
     SolveTiming m_lastSolveTiming;
     // Persistent exact mass-Riesz factor, keyed on the EXACT (n_face, mI, mJ, mV) COO arrays: reused by
