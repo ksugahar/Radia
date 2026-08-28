@@ -15,6 +15,8 @@ on:
       - 'packages/radia-optuna/**'
       - '.github/workflows/**'
       - 'tests/test_release_workflow_ref_gate.py'
+      - 'tests/test_release_quad_optuna_candidate.py'
+      - 'tools/release_quad.py'
   pull_request:
     branches: [main]
     paths-ignore:
@@ -28,6 +30,8 @@ on:
       - 'packages/radia-optuna/**'
       - '.github/workflows/**'
       - 'tests/test_release_workflow_ref_gate.py'
+      - 'tests/test_release_quad_optuna_candidate.py'
+      - 'tools/release_quad.py'
   workflow_dispatch:
     inputs:
       run_golden:
