@@ -7,6 +7,8 @@ crystallized as its own package.
 
 ## [Unreleased]
 
+## [1.4.47] - 2026-08-28
+
 - paper-writing: added the CAE-AI Lab target-venue policy for IEEJ, IEEE, and
   accelerator-community publications. The MCP tool rejects unrelated venue
   optimization, keeps Japanese and English review lanes independent, and
@@ -14,9 +16,15 @@ crystallized as its own package.
   of applying IEEEkeywords indiscriminately.
 - paper-writing: added a language-specific adjacent-reviewer readability gate.
   Japanese and English prose use separate units and density heuristics; TeX
-  math and floats are excluded, findings retain source lines, and the EM
-  submission gate now blocks cognitively dense prose that structural and
-  layout checks previously missed.
+  math and floats are excluded, findings retain exact sentence source lines,
+  and the EM submission gate now blocks cognitively dense prose that structural
+  and layout checks previously missed.
+- matlab: completed the pinned Optuna 4.9.0 public API quality inventory with
+  816/816 symbols and members present and oracle-mapped, and added fail-loud
+  checks for unsupported or unverified compatibility claims.
+- release: made Optuna oracle hashes platform-stable and strengthened clean
+  source-checkout plus installed-wheel verification for the standalone MATLAB,
+  MEX, and Simulink distribution.
 
 ## [1.4.46] - 2026-08-27
 
