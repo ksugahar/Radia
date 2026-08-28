@@ -6,7 +6,6 @@
  */
 #include "mtef_omml.h"
 #include "math_writer.h"
-#include "mtef_parser.h"
 #include "tex_parser.h"
 
 #include <string>
@@ -169,12 +168,6 @@ std::string render_omml(const LineNode& root, const OmmlOptions& opt,
                         bool run_passes) {
     OmmlSyntax syn(opt);
     return write_math(root, syn, opt.display, run_passes);
-}
-
-std::string mtef_to_omml(const uint8_t* data, size_t len, const OmmlOptions& opt) {
-    MtefParser::Result res = MtefParser::parse(data, len);
-    if (!res.root) return std::string();
-    return render_omml(*res.root, opt, /*run_passes=*/true);
 }
 
 std::string tex_to_omml(const std::string& latex, const OmmlOptions& opt) {

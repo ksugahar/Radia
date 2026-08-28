@@ -1,0 +1,44 @@
+#include <windows.h>
+#include "eqnedit64_resource.h"
+
+IDI_EQNEDIT64 ICON "assets\\Eqnedit64.ico"
+
+/* Latin Modern Math, embedded so the single portable exe carries the
+ * typeface TeX itself uses.  Loaded at startup with
+ * AddFontMemResourceEx, which installs it for this process only -- no
+ * font install, no registry, nothing left behind.  GUST Font License,
+ * see assets\GUST-FONT-LICENSE.txt. */
+IDR_MATH_FONT RCDATA "assets\\latinmodern-math.otf"
+
+VS_VERSION_INFO VERSIONINFO
+ FILEVERSION 3,0,0,0
+ PRODUCTVERSION 3,0,0,0
+ FILEFLAGSMASK 0x3fL
+#ifdef _DEBUG
+ FILEFLAGS VS_FF_DEBUG
+#else
+ FILEFLAGS 0x0L
+#endif
+ FILEOS VOS_NT_WINDOWS32
+ FILETYPE VFT_APP
+ FILESUBTYPE 0x0L
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "041104B0"
+        BEGIN
+            VALUE "CompanyName", "Sugahara Laboratory\0"
+            VALUE "FileDescription", "Eqnedit64 - TeX Equation Editor\0"
+            VALUE "FileVersion", "3.0.0\0"
+            VALUE "InternalName", "Eqnedit64\0"
+            VALUE "LegalCopyright", "Copyright (C) 2026 Sugahara Laboratory\0"
+            VALUE "OriginalFilename", "Eqnedit64.exe\0"
+            VALUE "ProductName", "Eqnedit64\0"
+            VALUE "ProductVersion", "3.0.0\0"
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x0411, 1200
+    END
+END

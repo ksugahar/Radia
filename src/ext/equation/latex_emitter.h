@@ -1,9 +1,7 @@
 /*
  * latex_emitter.h -- Node tree → LaTeX text emitter
  *
- * Phase 4: Multi-pass conversion pipeline that transforms the unified
- * node tree (from MtefParser) into LaTeX text. Ports the 7-pass
- * convert_line system from mtef2tex.c.
+ * Converts the structural editing tree back to normalized TeX.
  */
 #ifndef LATEX_EMITTER_H
 #define LATEX_EMITTER_H
@@ -17,10 +15,8 @@ namespace mtef {
 
 class LaTeXEmitter {
 public:
-    /* run_passes repairs EQNEDT32's sibling layout and belongs only to trees
-     * that came from MTEF.  A tree from the LaTeX parser already has every
-     * slot filled; running the passes on it would move content that is
-     * already where it belongs. */
+    /* The TeX parser already fills every structural slot, so normal supported
+     * callers leave the historical repair passes disabled. */
     explicit LaTeXEmitter(int prodVer = 3, bool run_passes = true);
 
     /* Main entry: node tree → LaTeX string */

@@ -1,8 +1,8 @@
 /*
  * line_pass.cpp -- Pass pipeline implementation
  *
- * Ports the 7-pass convert_line system from mtef2tex.c into
- * independent, testable pass classes.
+ * Historical repair passes retained for the structural tree's internal
+ * normalization. New input always comes from the direct TeX parser.
  */
 #include "line_pass.h"
 #include <iterator>
@@ -47,7 +47,7 @@ static bool inSet(uint16_t code, const uint16_t* set, int n) {
 bool FenceMergePass::isFenceDisplayChar(const Node* n, int /*prodVer*/) {
     if (n->tag() != Node::kChar) return false;
     auto* ch = static_cast<const CharNode*>(n);
-    return (ch->typeface == (TF_DISPLAY & 0x7F));  /* typeface 22 = display */
+    return ch->typeface == TF_DISPLAY;
 }
 
 bool FenceMergePass::isBigOpDisplayChar(const Node* n, int /*prodVer*/) {
