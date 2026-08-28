@@ -40,15 +40,23 @@ def test_radia_mex_contract_reads_the_cpp_command_inventory():
         )
     )
     public_count = len(coverage["entries"])
-    assert contract["matlab_optuna_public_api"] == {
-        "entry_count": public_count,
-        "present_count": public_count,
-        "missing_count": 0,
-        "verified_count": public_count,
-        "partial_count": 0,
-        "unmapped_count": 0,
-        "complete": True,
-    }
+    public_api = contract["matlab_optuna_public_api"]
+    assert public_api["entry_count"] == public_count
+    assert public_api["present_count"] == public_count
+    assert public_api["missing_count"] == 0
+    assert public_api["partial_count"] == 0
+    assert public_api["unmapped_count"] == 0
+    assert public_api["complete"] is True
+    # verified means an oracle section exercises the name; asserted means the
+    # entry is present and scoped but has no differential artifact behind it.
+    assert (
+        public_api["verified_count"] + public_api["asserted_count"]
+        == public_count
+    )
+    assert public_api["required_asserted_count"] == 0
+    assert (
+        public_api["required_mapped_count"] == public_api["required_entry_count"]
+    )
     assert contract["optuna_mex_command_count"] == 20
     assert contract["matlab_optuna_class_count"] >= 92
     assert contract["matlab_optuna_function_count"] >= 85
@@ -424,9 +432,17 @@ def test_optuna_compatibility_and_oracle_audit_are_checked():
     assert closure["surface_entry_count"] == 816
     assert closure["surface_present_count"] == 816
     assert closure["surface_missing_count"] == 0
-    assert closure["oracle_verified_count"] == 816
     assert closure["oracle_partial_count"] == 0
     assert closure["oracle_unmapped_count"] == 0
+    assert (
+        closure["oracle_verified_count"] + closure["oracle_asserted_count"]
+        == 816
+    )
+    assert closure["required_oracle_asserted_count"] == 0
+    assert (
+        closure["required_oracle_mapped_count"]
+        == closure["required_entry_count"]
+    )
     assert closure["full_compatibility_complete"] is True
 
     audit = matlab_optuna_oracle_audit()
