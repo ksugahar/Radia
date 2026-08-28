@@ -1175,7 +1175,10 @@ server=radia.optuna.run_grpc_proxy_server(backend, ...
 verifyEqual(testCase,string(warningId),"radia:optuna:ExperimentalWarning");
 cleanup=onCleanup(@()cleanupGrpcServer(server,databasePath));
 proxy=radia.optuna.GrpcStorageProxy(host="127.0.0.1",port=port);
-verifyWarningFree(testCase,@()proxy.wait_server_ready(5));
+% A fresh Python process may need to import SQLAlchemy and initialize the
+% pinned Optuna RDB schema before gRPC starts listening. Keep a bounded wait,
+% but do not turn cold-start variance into a transport compatibility failure.
+verifyWarningFree(testCase,@()proxy.wait_server_ready(30));
 verifyTrue(testCase,logical(expected.ready_is_none));
 exerciseStorageContract(testCase,proxy,expected,"grpc-oracle");
 verifyWarningFree(testCase,@()proxy.close());

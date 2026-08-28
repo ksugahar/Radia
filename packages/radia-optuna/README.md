@@ -80,7 +80,24 @@ by the official server; `radia-mcp` covers only MATLAB/Simulink differences.
 CI builds and verifies a distinct `radia-optuna-wheel` artifact. A
 `radia-optuna-v<version>` tag may publish only that exact CI artifact, after
 rechecking its tag, version, API inventory, MEX inventory, and dependency
-boundary, including the bundled third-party notice.
+boundary, including the bundled third-party notice. The verifier byte-matches
+every staged Python, MATLAB, Simulink, MEX, contract, license, and notice
+payload against the checked monorepo source; matching version and file counts
+alone are not sufficient.
+
+`radia-mcp.matlab` owns the executable MATLAB difference gate. Use
+`matlab_optuna_health`, `matlab_optuna_oracle_plan`, and
+`matlab_optuna_benchmark_plan`, then submit the resulting evidence to
+`matlab_optuna_release_gate`. Installed-wheel evidence can be captured with:
+
+```powershell
+pwsh -File packages/radia-optuna/tests/run_installed_wheel_simulink.ps1 `
+  -Wheel <wheel> -EvidenceOutput C:\temp\radia-optuna-installed.json
+```
+
+This evidence includes source-fidelity verification, the installed doctor,
+standalone Simulink success and typed-failure paths, and all seven persisted
+tables after MAT reload. Shared Study/Trial MCP operations remain upstream.
 
 Publication also uses the standalone four-machine release-quad lane. After the
 successful `main` CI run, execute
