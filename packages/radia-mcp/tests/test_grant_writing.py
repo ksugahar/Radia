@@ -75,6 +75,13 @@ DENSE_JAPANESE_GRANT = (
     "あった設計最適化を可能にすることを目指す。"
 )
 
+RESEARCH_MEETING_MANUSCRIPT = (
+    "本稿では、軸対称磁界解析に高次要素を適用した。"
+    "提案法を解析解と比較した結果、磁束密度の相対誤差は一パーセント未満であった。"
+    "図二にメッシュ収束を示す。"
+    "以上から、曲面要素が境界近傍の誤差を低減することを確認した。"
+)
+
 
 def test_grant_writing_kddi_health_report_runs():
     report = gw.grant_writing_health_report(KDDI_SAMPLE, program="kddi_digital")
@@ -104,16 +111,28 @@ def test_grant_writing_kaken_oss_health_report_runs():
 def test_grant_writing_server_exposes_adjacent_reviewer_readability():
     from radia_mcp.grant_writing.server import mcp
 
-    names = {tool.name for tool in asyncio.run(mcp.list_tools())}
+    tools = asyncio.run(mcp.list_tools())
+    by_name = {tool.name: tool for tool in tools}
+    names = set(by_name)
 
     assert "grant_writing_adjacent_reviewer_readability_check" in names
     assert "grant_writing_reviewer_momentum_check" in names
+    assert "grant_writing_japanese_genre_contract" in names
     assert "grant_writing_japanese_readability_score" in names
+    assert "document_type" in by_name[
+        "grant_writing_japanese_readability_score"
+    ].inputSchema["required"]
+    assert mcp._mcp_server.instructions
+    assert all(tool.title for tool in tools)
+    assert all(tool.annotations is not None for tool in tools)
+    assert all(tool.annotations.readOnlyHint for tool in tools)
+    assert all(not tool.annotations.destructiveHint for tool in tools)
 
 
 def test_japanese_readability_scores_clear_grant_prose():
     result = gw.grant_writing_japanese_readability_score(
-        READABLE_JAPANESE_GRANT
+        READABLE_JAPANESE_GRANT,
+        document_type="grant_proposal",
     )
 
     assert result["applicable"]
@@ -126,7 +145,10 @@ def test_japanese_readability_scores_clear_grant_prose():
 
 
 def test_japanese_readability_rejects_long_method_inventory():
-    result = gw.grant_writing_japanese_readability_score(DENSE_JAPANESE_GRANT)
+    result = gw.grant_writing_japanese_readability_score(
+        DENSE_JAPANESE_GRANT,
+        document_type="grant_proposal",
+    )
 
     assert result["status"] == "fail"
     assert result["score"] < 70
@@ -140,13 +162,51 @@ def test_japanese_readability_rejects_long_method_inventory():
 def test_japanese_readability_does_not_score_english_grant():
     result = gw.grant_writing_japanese_readability_score(
         "This proposal develops a readable method for magnetic design. "
-        "It validates the method against measurements."
+        "It validates the method against measurements.",
+        document_type="grant_proposal",
     )
 
     assert not result["applicable"]
     assert result["status"] == "not_applicable"
     assert result["score"] is None
     assert "Japanese grant prose only" in result["scoring_policy"]
+
+
+def test_japanese_genre_contract_separates_grant_and_manuscript_review():
+    grant = gw.grant_writing_japanese_genre_contract("助成金申請")
+    manuscript = gw.grant_writing_japanese_genre_contract(
+        "research_meeting_manuscript"
+    )
+
+    assert grant["status"] == "supported"
+    assert grant["review_owner"] == "grant-writing"
+    assert "reviewer_visible_problem_and_why_now" in (
+        grant["grant_proposal_criteria"]
+    )
+    assert manuscript["status"] == "wrong_genre"
+    assert manuscript["review_owner"] == "paper-writing"
+    assert manuscript["route_to"]["server"] == "mcp-server-paper-writing"
+    assert "result_figure_table_and_citation_traceability" in (
+        manuscript["research_manuscript_criteria"]
+    )
+    assert set(grant["grant_proposal_criteria"]).isdisjoint(
+        manuscript["research_manuscript_criteria"]
+    )
+
+
+def test_japanese_grant_score_rejects_research_meeting_manuscript_genre():
+    result = gw.grant_writing_japanese_readability_score(
+        RESEARCH_MEETING_MANUSCRIPT,
+        document_type="research_meeting_manuscript",
+    )
+
+    assert not result["applicable"]
+    assert result["status"] == "wrong_genre"
+    assert result["score"] is None
+    assert result["genre_contract"]["review_owner"] == "paper-writing"
+    assert "paper_writing_bilingual_readability_check" in (
+        result["genre_contract"]["route_to"]["tools"]
+    )
 
 
 def test_health_report_exposes_japanese_readability_without_merit_claim():
@@ -176,9 +236,20 @@ async def _probe_japanese_readability_stdio() -> dict:
             listed = await session.list_tools()
             called = await session.call_tool(
                 "grant_writing_japanese_readability_score",
-                {"text": READABLE_JAPANESE_GRANT},
+                {
+                    "text": READABLE_JAPANESE_GRANT,
+                    "document_type": "grant_proposal",
+                },
             )
             payload = json.loads(called.content[0].text)
+            rejected = await session.call_tool(
+                "grant_writing_japanese_readability_score",
+                {
+                    "text": RESEARCH_MEETING_MANUSCRIPT,
+                    "document_type": "research_meeting_manuscript",
+                },
+            )
+            rejected_payload = json.loads(rejected.content[0].text)
             return {
                 "server_name": initialized.serverInfo.name,
                 "listed": any(
@@ -188,6 +259,9 @@ async def _probe_japanese_readability_stdio() -> dict:
                 "is_error": bool(called.isError),
                 "status": payload["status"],
                 "score": payload["score"],
+                "rejected_is_error": bool(rejected.isError),
+                "rejected_status": rejected_payload["status"],
+                "rejected_score": rejected_payload["score"],
             }
 
 
@@ -201,6 +275,9 @@ def test_japanese_readability_passes_real_stdio_protocol():
     assert not result["is_error"]
     assert result["status"] == "pass"
     assert result["score"] >= 90
+    assert not result["rejected_is_error"]
+    assert result["rejected_status"] == "wrong_genre"
+    assert result["rejected_score"] is None
 
 
 def test_grant_writing_kaken_oss_platform_check():

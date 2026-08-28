@@ -931,7 +931,121 @@ def grant_writing_adjacent_reviewer_readability_check(text: str) -> dict:
     }
 
 
-def grant_writing_japanese_readability_score(text: str) -> dict:
+_GRANT_DOCUMENT_TYPES = {
+    "grant",
+    "grant_application",
+    "grant_proposal",
+    "funding_application",
+    "japanese_grant_proposal",
+    "助成金申請",
+    "科研費申請",
+}
+_MANUSCRIPT_DOCUMENT_TYPES = {
+    "conference_manuscript",
+    "paper",
+    "research_manuscript",
+    "research_meeting",
+    "research_meeting_manuscript",
+    "technical_paper",
+    "研究会原稿",
+    "論文",
+}
+
+
+def grant_writing_japanese_genre_contract(document_type: str) -> dict:
+    """Route Japanese prose to grant or research-manuscript review criteria.
+
+    Grant applications and research-meeting manuscripts share low-level
+    Japanese mechanics, but they do not share a scoring objective. This
+    contract prevents readable completed-work prose from being mistaken for a
+    persuasive and feasible funding proposal.
+    """
+    requested = str(document_type).strip()
+    normalized = requested.casefold().replace("-", "_").replace(" ", "_")
+    shared_foundation = [
+        "clear_sentence_boundaries",
+        "short_modifier_scope",
+        "subject_predicate_proximity",
+        "notation_and_term_consistency",
+    ]
+    grant_criteria = [
+        "reviewer_visible_problem_and_why_now",
+        "academic_question_and_proposed_move",
+        "feasibility_team_and_preliminary_evidence",
+        "verifiable_deliverables_schedule_and_budget",
+        "committed_future_wording",
+    ]
+    manuscript_criteria = [
+        "definitions_assumptions_and_symbol_introduction",
+        "equation_and_method_reproducibility",
+        "result_figure_table_and_citation_traceability",
+        "evidence_bounded_claims_and_limitations",
+        "completed_work_reported_in_appropriate_tense",
+    ]
+    base = {
+        "requested_document_type": requested,
+        "shared_foundation": shared_foundation,
+        "grant_proposal_criteria": grant_criteria,
+        "research_manuscript_criteria": manuscript_criteria,
+        "policy": (
+            "Share only foundational Japanese lint. Never average or reuse the "
+            "genre-specific score across grant proposals and research manuscripts."
+        ),
+    }
+    if normalized in _GRANT_DOCUMENT_TYPES:
+        return {
+            **base,
+            "applicable": True,
+            "status": "supported",
+            "canonical_document_type": "grant_proposal",
+            "review_owner": "grant-writing",
+            "review_goal": (
+                "help a time-limited funding reviewer decide why the work matters "
+                "now and whether the proposed team can deliver it"
+            ),
+        }
+    if normalized in _MANUSCRIPT_DOCUMENT_TYPES:
+        return {
+            **base,
+            "applicable": False,
+            "status": "wrong_genre",
+            "canonical_document_type": "research_meeting_manuscript",
+            "expected_document_type": "grant_proposal",
+            "review_owner": "paper-writing",
+            "review_goal": (
+                "make definitions, methods, equations, evidence, figures, and "
+                "citations traceable as a completed scientific argument"
+            ),
+            "route_to": {
+                "server": "mcp-server-paper-writing",
+                "tools": [
+                    "paper_writing_bilingual_readability_check",
+                    "paper_writing_em_submission_gate",
+                ],
+            },
+            "reason": (
+                "Research-meeting manuscripts and grant proposals require "
+                "different Japanese review criteria."
+            ),
+        }
+    return {
+        **base,
+        "applicable": False,
+        "status": "unsupported_document_type",
+        "canonical_document_type": None,
+        "expected_document_type": "grant_proposal",
+        "review_owner": None,
+        "reason": (
+            "Declare a grant-proposal or research-manuscript document type "
+            "before applying a genre-specific Japanese score."
+        ),
+    }
+
+
+def grant_writing_japanese_readability_score(
+    text: str,
+    document_type: str,
+) -> dict:
     """Score Japanese grant prose with Japanese-specific writing criteria.
 
     This is a 100-point readability diagnostic, not a funding prediction or a
@@ -939,7 +1053,25 @@ def grant_writing_japanese_readability_score(text: str) -> dict:
     sentence rhythm, Japanese logical order, subject-predicate proximity,
     lexical load, notation consistency, and committed proposal wording.
     English prose is deliberately not scored or averaged into this result.
+    ``document_type`` is required so research-meeting manuscripts cannot be
+    silently evaluated against grant-proposal criteria.
     """
+    genre = grant_writing_japanese_genre_contract(document_type)
+    if not genre["applicable"]:
+        return {
+            "applicable": False,
+            "status": genre["status"],
+            "score": None,
+            "score_max": 100,
+            "document_type": genre.get("canonical_document_type"),
+            "reason": genre["reason"],
+            "genre_contract": genre,
+            "scoring_policy": (
+                "No score was produced because Japanese readability scores "
+                "are genre-specific."
+            ),
+        }
+
     prose = _prose_for_lint(_read_text_if_path(text))
     japanese_chars = re.findall(r"[\u3040-\u30ff\u3400-\u9fff]", prose)
     if len(japanese_chars) < 20:
@@ -948,7 +1080,9 @@ def grant_writing_japanese_readability_score(text: str) -> dict:
             "status": "not_applicable",
             "score": None,
             "score_max": 100,
+            "document_type": "grant_proposal",
             "reason": "at least 20 Japanese characters are required",
+            "genre_contract": genre,
             "scoring_policy": (
                 "Japanese grant prose only. English is neither scored nor "
                 "averaged into this diagnostic."
@@ -1066,7 +1200,9 @@ def grant_writing_japanese_readability_score(text: str) -> dict:
         "status": status,
         "score": score,
         "score_max": 100,
+        "document_type": "grant_proposal",
         "japanese_character_count": len(japanese_chars),
+        "genre_contract": genre,
         "scoring_axes": axes,
         "revision_priorities": priorities,
         "thresholds": {
@@ -6719,7 +6855,10 @@ def grant_writing_health_report(
         detailed_results["adjacent_reviewer_readability"] = readability
 
     if "japanese" not in skip_set:
-        japanese = grant_writing_japanese_readability_score(text)
+        japanese = grant_writing_japanese_readability_score(
+            text,
+            document_type="grant_proposal",
+        )
         detailed_results["japanese_readability"] = japanese
         if japanese["applicable"]:
             detailed_scores["japanese_readability"] = japanese["score"] / 10

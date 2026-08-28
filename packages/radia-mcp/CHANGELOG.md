@@ -12,6 +12,13 @@ crystallized as its own package.
   subject-predicate proximity, concept load, notation consistency, and
   committed proposal wording; English is not scored or averaged, and the
   result explicitly does not claim scientific merit or funding probability.
+- grant-writing: made the Japanese score genre-bound. Callers must declare the
+  document type; research-meeting manuscripts are rejected with `wrong_genre`
+  and routed to paper-writing, whose traceability criteria remain separate from
+  grant-review decision flow.
+- grant-writing: hardened the stdio contract with server instructions, package
+  version reporting, and explicit read-only titles and annotations for all 44
+  tools.
 
 ## [1.4.47] - 2026-08-28
 

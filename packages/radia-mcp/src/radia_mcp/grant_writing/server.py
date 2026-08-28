@@ -49,7 +49,9 @@ Checks that a section cannot answer -- budget itemization in a research plan
 Japanese readability is scored on a separate 100-point diagnostic using
 Japanese sentence structure, logical order, subject-predicate proximity,
 concept load, notation consistency, and committed proposal wording. English
-is outside that score and is never averaged into it.
+is outside that score and is never averaged into it. A required genre contract
+rejects research-meeting manuscripts and routes them to paper-writing because
+scientific traceability and funding-review decision flow are different tasks.
 
 Promoted to radia-mcp so the document-writing servers are registered in
 parallel: paper-writing / figure / grant-writing / presentation.
@@ -64,14 +66,29 @@ import sys
 
 from mcp.server.fastmcp import FastMCP
 
+from .. import __version__
 from ..common import register_status_tool
+from ..common.mcp_contract import apply_tool_contract
+from ..common.server_hardening import classify_tool_annotations
 from . import register
 from .tools import (
     grant_writing_health_report,
+    grant_writing_japanese_genre_contract,
     grant_writing_japanese_readability_score,
 )
 
-mcp = FastMCP("mcp-server-grant-writing")
+_SERVER_INSTRUCTIONS = (
+    "Use this server only for grant proposals and funding applications. "
+    "Declare document_type before Japanese scoring. Route research-meeting "
+    "manuscripts and papers to mcp-server-paper-writing; do not reuse or "
+    "average genre-specific scores. All grant-writing tools are read-only "
+    "diagnostics and do not modify the supplied draft."
+)
+
+mcp = FastMCP(
+    "mcp-server-grant-writing",
+    instructions=_SERVER_INSTRUCTIONS,
+)
 
 _n_tools = register(mcp)
 
@@ -90,7 +107,7 @@ register_status_tool(
         "reviewer vocabulary and benchmark role, "
         "persuasion hierarchy and equation introductions, "
         "adjacent-domain reviewer readability and concept density, "
-        "Japanese-only 100-point readability scoring, "
+        "genre-bound Japanese-only 100-point readability scoring, "
         "reviewer momentum from concrete tension to observable payoff, "
         "MCP role accuracy and preparation-to-plan traceability, "
         "KAKENHI official review structure and review-format realities, "
@@ -103,6 +120,13 @@ register_status_tool(
     related_servers=["paper-writing", "figure", "presentation", "document-meta"],
     optional_deps=[],
 )
+
+apply_tool_contract(
+    mcp,
+    server_name="mcp-server-grant-writing",
+    version=__version__,
+)
+classify_tool_annotations(mcp)
 
 
 def main():
@@ -125,14 +149,21 @@ def main():
         readable = grant_writing_japanese_readability_score(
             "設計条件の選択には時間を要する。"
             "本研究では候補順位が一致する条件を明らかにする。"
-            "二つの解析法を比較し、適用範囲を判定する。"
+            "二つの解析法を比較し、適用範囲を判定する。",
+            document_type="grant_proposal",
         )
         assert readable["status"] == "pass"
         assert readable["score"] >= 85
         english = grant_writing_japanese_readability_score(
-            "This English proposal is outside the Japanese score."
+            "This English proposal is outside the Japanese score.",
+            document_type="grant_proposal",
         )
         assert english["status"] == "not_applicable"
+        manuscript = grant_writing_japanese_genre_contract(
+            "research_meeting_manuscript"
+        )
+        assert manuscript["status"] == "wrong_genre"
+        assert manuscript["review_owner"] == "paper-writing"
         print(
             "mcp-server-grant-writing self-test: "
             f"registered {_n_tools} domain tools (+ status tool)"
@@ -141,7 +172,7 @@ def main():
               f" (defect_score {report['defect_score']}/10)")
         print(
             "  japanese readability: "
-            f"{readable['score']}/100; English excluded as designed"
+            f"{readable['score']}/100; English and manuscripts excluded as designed"
         )
         return
     mcp.run()
