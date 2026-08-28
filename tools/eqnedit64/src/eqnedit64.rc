@@ -4,15 +4,15 @@
 IDI_EQNEDIT64 ICON "assets\\Eqnedit64.ico"
 
 /* Latin Modern Math, embedded so the single portable exe carries the
- * typeface TeX itself uses.  Loaded at startup with
- * AddFontMemResourceEx, which installs it for this process only -- no
- * font install, no registry, nothing left behind.  GUST Font License,
- * see assets\GUST-FONT-LICENSE.txt. */
+ * typeface TeX itself uses.  It is extracted to a verified per-user cache
+ * and loaded with file-backed process-private registration -- no installer
+ * and no registry entry.  GUST Font License, see
+ * assets\GUST-FONT-LICENSE.txt. */
 IDR_MATH_FONT RCDATA "assets\\latinmodern-math.otf"
 
 VS_VERSION_INFO VERSIONINFO
- FILEVERSION 3,0,1,0
- PRODUCTVERSION 3,0,1,0
+ FILEVERSION 3,0,2,0
+ PRODUCTVERSION 3,0,2,0
  FILEFLAGSMASK 0x3fL
 #ifdef _DEBUG
  FILEFLAGS VS_FF_DEBUG
@@ -29,12 +29,12 @@ BEGIN
         BEGIN
             VALUE "CompanyName", "Sugahara Laboratory\0"
             VALUE "FileDescription", "Eqnedit64 - TeX Equation Editor\0"
-            VALUE "FileVersion", "3.0.1\0"
+            VALUE "FileVersion", "3.0.2\0"
             VALUE "InternalName", "Eqnedit64\0"
             VALUE "LegalCopyright", "Copyright (C) 2026 Sugahara Laboratory\0"
             VALUE "OriginalFilename", "Eqnedit64.exe\0"
             VALUE "ProductName", "Eqnedit64\0"
-            VALUE "ProductVersion", "3.0.1\0"
+            VALUE "ProductVersion", "3.0.2\0"
         END
     END
     BLOCK "VarFileInfo"

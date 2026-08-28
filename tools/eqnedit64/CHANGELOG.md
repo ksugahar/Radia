@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+### Session-safe embedded font
+
+- Replaced `AddFontMemResourceEx` after reproducing two Server 2022
+  `fontdrvhost.exe` access-violation crashes while the old hidden UI test still
+  returned success. The standalone EXE now extracts its embedded Latin Modern
+  Math bytes to a content-addressed per-user cache and uses file-backed,
+  process-private registration without installing a font or writing registry
+  entries.
+- CI now runs 32 isolated application lifecycles and fails on a changed
+  session font-host PID or a new Application Error event for `fontdrvhost.exe`.
+  Category-label pixel checks also reject tiny-fragment output instead of
+  accepting four changed pixels as visible text.
+
 ### Visible native toolbar text
 
 - Palette category tabs and palette buttons retain native keyboard, focus,

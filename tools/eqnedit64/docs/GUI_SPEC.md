@@ -1,7 +1,7 @@
 # Eqnedit64 GUI仕様
 
 - 仕様版: 1.0
-- 対象: Eqnedit64 3.0.1
+- 対象: Eqnedit64 3.0.2
 - 基準日: 2026-08-25
 - 適用範囲: `dist\Eqnedit64.exe`
 
@@ -442,6 +442,7 @@ Eqnedit64拡張として、`curl`, `div`, `grad`, `rot`, `tr`, `diag`, `Res`,
 | AUT-32 | 行列パレットの全入口と行／列操作が実`WM_COMMAND`経路で状態を変え、全253メニュ項目の監査で操作可能項目0件のno-opを満たす | `test_palettes.py` / `--ui-interaction-test` / `--menu-audit` |
 | AUT-33 | パレット、直接ショートカット、2段ショートカットが新規TeX範囲だけを非アクティブ選択表示し、キャンバスのフォーカスを保ち、ソース欄へ移ると置換前に選択を解除する | `--ui-interaction-test` |
 | AUT-34 | TeXソース欄の `Tab` が2つの `{}` 空欄を順に移動し、`Shift+Tab` が前へ戻り、ソースへTab文字を混入させない | `--ui-interaction-test` |
+| AUT-35 | 内蔵数式フォントは検証済みユーザーキャッシュからファイルベースで私有登録し、32回の起動終了後も`fontdrvhost.exe`のPIDとApplication Error件数が変化せず、分類タブ文字が本文相当の画素高を持つ | `test_font_safety.py` / `test_font_session.ps1` / `--ui-interaction-test` |
 
 2026-08-21のAPI実測では、試験式 `\frac{x_{1}+\alpha}{\sqrt{y}}` は
 289×252 px、300 dpi、69.36×60.48 ptとなった。Google Slides APIへ同寸法で

@@ -19,5 +19,7 @@ as a pdflatex run rather than merely the same geometry.
 
 Latin Modern is licensed under the **GUST Font License** (a LaTeX Project
 Public License variant); the full text is in `assets/GUST-FONT-LICENSE.txt`.
-The font is unmodified.  It is loaded for the running process only, with
-`AddFontMemResourceEx`, and is never installed on the machine.
+The font is unmodified.  The executable verifies and extracts it to a
+content-addressed per-user cache, then loads it for the running process only
+with `AddFontResourceExW(FR_PRIVATE | FR_NOT_ENUM)`.  It is never registered
+as an installed Windows font and writes no font-registry entry.

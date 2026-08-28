@@ -16,7 +16,11 @@
 #include "tex_parser.h"
 
 #include <algorithm>
+#include <cstdint>
+#include <cstring>
 #include <cmath>
+#include <filesystem>
+#include <fstream>
 #include <limits>
 #include <map>
 #include <iomanip>
@@ -196,12 +200,11 @@ void make_font_marker() {}
 
 /* Make Latin Modern Math available to this process, once.
  *
- * The executable carries the .otf as RCDATA, so it loads straight out of
- * itself: no font install, no registry, nothing left on the machine, and the
- * portable single-file rule still holds.  The canonical Python test module
- * embeds the same RCDATA resource.  A target that omits it fails the explicit
- * math_font_loaded() health check instead of copying/registering temporary
- * font files behind the user's back. */
+ * The executable carries the .otf as RCDATA and writes only a verified,
+ * content-addressed per-user cache: no font install or registry entry is
+ * created, and the portable single-file input rule still holds.  The
+ * canonical Python test module embeds the same RCDATA resource.  A target
+ * that omits it fails the explicit math_font_loaded() health check. */
 bool g_mathFontLoaded = false;
 bool g_mathFontRegistered = false;
 
@@ -232,34 +235,120 @@ bool math_face_measures() {
     return ok;
 }
 
-bool load_math_font() {
-        HMODULE self = nullptr;
-        GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS |
-                               GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
-                           reinterpret_cast<LPCWSTR>(&make_font_marker), &self);
-        if (self) {
-            /* RT_RCDATA is MAKEINTRESOURCE(10), which is the narrow macro
-             * unless UNICODE is defined -- and the test module is not built
-             * with it.  Spell out the wide form so both builds agree. */
-            if (HRSRC found = FindResourceW(self, MAKEINTRESOURCEW(200),
-                                            MAKEINTRESOURCEW(10))) {
-                const DWORD size = SizeofResource(self, found);
-                if (HGLOBAL block = LoadResource(self, found)) {
-                    if (void* bytes = LockResource(block)) {
-                        DWORD installed = 0;
-                        /* The returned handle is the documented success
-                         * signal.  Some Windows sessions have returned a
-                         * valid handle before updating the advisory count;
-                         * treating that as failure would leave a registered
-                         * font behind and tempt a second registration. */
-                        if (AddFontMemResourceEx(bytes, size, nullptr,
-                                                 &installed))
-                            return true;
-                    }
-                }
-            }
+std::filesystem::path font_cache_root() {
+    const DWORD needed = GetEnvironmentVariableW(L"LOCALAPPDATA", nullptr, 0);
+    if (needed > 1) {
+        std::vector<wchar_t> value(needed);
+        if (GetEnvironmentVariableW(L"LOCALAPPDATA", value.data(), needed))
+            return std::filesystem::path(value.data()) / L"Eqnedit64" /
+                   L"fonts";
+    }
+    wchar_t temporary[MAX_PATH] = {};
+    if (GetTempPathW(_countof(temporary), temporary))
+        return std::filesystem::path(temporary) / L"Eqnedit64" / L"fonts";
+    return {};
+}
+
+uint64_t font_bytes_hash(const unsigned char* bytes, size_t size) {
+    uint64_t hash = UINT64_C(14695981039346656037);
+    for (size_t i = 0; i < size; ++i) {
+        hash ^= bytes[i];
+        hash *= UINT64_C(1099511628211);
+    }
+    return hash;
+}
+
+bool file_matches_bytes(const std::filesystem::path& path,
+                        const unsigned char* bytes, size_t size) {
+    std::error_code error;
+    if (!std::filesystem::is_regular_file(path, error) || error ||
+        std::filesystem::file_size(path, error) != size || error)
+        return false;
+    std::ifstream file(path, std::ios::binary);
+    if (!file) return false;
+    std::vector<unsigned char> buffer(64 * 1024);
+    size_t offset = 0;
+    while (offset < size) {
+        const size_t count = std::min(buffer.size(), size - offset);
+        file.read(reinterpret_cast<char*>(buffer.data()),
+                  std::streamsize(count));
+        if (size_t(file.gcount()) != count ||
+            memcmp(buffer.data(), bytes + offset, count) != 0)
+            return false;
+        offset += count;
+    }
+    return true;
+}
+
+std::filesystem::path cache_embedded_math_font(const unsigned char* bytes,
+                                               size_t size) {
+    const std::filesystem::path directory = font_cache_root();
+    if (directory.empty()) return {};
+    std::error_code error;
+    std::filesystem::create_directories(directory, error);
+    if (error) return {};
+
+    std::wostringstream filename;
+    filename << L"latinmodern-math-" << std::hex << std::setw(16)
+             << std::setfill(L'0') << font_bytes_hash(bytes, size) << L".otf";
+    const std::filesystem::path target = directory / filename.str();
+    if (file_matches_bytes(target, bytes, size)) return target;
+
+    std::wostringstream temporaryName;
+    temporaryName << filename.str() << L"." << GetCurrentProcessId() << L"."
+                  << GetTickCount64() << L".new";
+    const std::filesystem::path temporary = directory / temporaryName.str();
+    {
+        std::ofstream file(temporary, std::ios::binary | std::ios::trunc);
+        if (!file) return {};
+        file.write(reinterpret_cast<const char*>(bytes),
+                   std::streamsize(size));
+        file.flush();
+        if (!file) {
+            file.close();
+            std::filesystem::remove(temporary, error);
+            return {};
         }
-    return false;
+    }
+    if (!file_matches_bytes(temporary, bytes, size)) {
+        std::filesystem::remove(temporary, error);
+        return {};
+    }
+    if (!MoveFileExW(temporary.c_str(), target.c_str(),
+                     MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)) {
+        std::filesystem::remove(temporary, error);
+        if (!file_matches_bytes(target, bytes, size)) return {};
+    }
+    return file_matches_bytes(target, bytes, size) ? target
+                                                    : std::filesystem::path{};
+}
+
+bool load_math_font() {
+    HMODULE self = nullptr;
+    GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS |
+                           GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                       reinterpret_cast<LPCWSTR>(&make_font_marker), &self);
+    if (!self) return false;
+    /* RT_RCDATA is MAKEINTRESOURCE(10), which is the narrow macro unless
+     * UNICODE is defined -- and the test module is not built with it. */
+    HRSRC found = FindResourceW(self, MAKEINTRESOURCEW(200),
+                               MAKEINTRESOURCEW(10));
+    if (!found) return false;
+    const DWORD size = SizeofResource(self, found);
+    HGLOBAL block = LoadResource(self, found);
+    const auto* bytes = block
+        ? static_cast<const unsigned char*>(LockResource(block)) : nullptr;
+    if (!bytes || !size) return false;
+
+    /* AddFontMemResourceEx repeatedly crashed Server 2022's per-session
+     * fontdrvhost.exe (0xc0000005) while every old hidden test still passed.
+     * Extract the verified embedded bytes once and use the file-backed,
+     * process-private API instead.  This is a cache, not an installation:
+     * there is no registry entry and the EXE remains the only input. */
+    const std::filesystem::path path = cache_embedded_math_font(bytes, size);
+    if (path.empty()) return false;
+    return AddFontResourceExW(path.c_str(), FR_PRIVATE | FR_NOT_ENUM,
+                              nullptr) > 0;
 }
 
 /* Keep trying until the face actually measures.  Registering it is not the

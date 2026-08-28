@@ -60,6 +60,9 @@ foreach ($required in @($buildExe, $distExe)) {
     }
 }
 
+Invoke-PowerShellScript 'build\test_font_session.ps1' @(
+    '-AppPath', $distExe, '-Iterations', 32)
+
 # The long normal-build run is separate from ASan: it exercises the signed,
 # portable executable that will actually be deployed.
 Invoke-PowerShellScript 'build\test_ui_fuzz.ps1' @(
@@ -118,6 +121,7 @@ $report = [ordered]@{
         operations_per_seed = $EnduranceOps
         total_operations = $EnduranceSeeds * $EnduranceOps
     }
+    font_lifecycles = 32
     paint_benchmark = $paintMeasurements.Trim()
     background_suite = if ($SkipBuild) { 'skipped by caller' } else { 'passed' }
     asan_suite = if ($SkipBuild) { 'skipped by caller' } else { 'passed' }

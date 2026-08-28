@@ -6,7 +6,7 @@ Eqnedit64は、軽快な構造編集とTeXファイルを直接つないだ64-bi
 レジストリ登録は不要です。
 
 公開ソースはRadiaリポジトリの`tools/eqnedit64`、署名済み単体EXEは
-[Eqnedit64 GitHub Release](https://github.com/ksugahar/Radia/releases/tag/eqnedit64-v3.0.1)
+[Eqnedit64 GitHub Release](https://github.com/ksugahar/Radia/releases/tag/eqnedit64-v3.0.2)
 で配布します。旧Eqnedit32バイナリ、MTEF変換コード、逆アセンブリ資料は
 Eqnedit64のソース・ビルド・配布物に含めません。
 
@@ -194,8 +194,9 @@ pwsh -NoProfile -File build\setup_developer_signing.ps1
 ビルド時にリポジトリ内の `build` / `dist` 版が起動中なら、差し替えのため
 そのプロセスは強制終了します。ビルド前に必要な文書を保存してください。
 
-数式フォントを私有登録する短命プロセスの連続起動は、同じWindowsセッションの
-別アプリが保持するフォントキャッシュへ影響する場合があります。総合試験は
+3.0.2以降は、内蔵数式フォントを検証済みユーザーキャッシュへ展開し、
+ファイルベースで私有登録します。旧メモリ登録で発生したWindowsフォントホストの
+クラッシュを再発させないため、短命プロセスの連続起動を含む総合試験は
 GitHub-hosted Windows CI、VM、または専用Windowsユーザーセッションだけで実行し、
 普段使う対話セッションでは実行しません。隔離済みセッションでは次のマーカーを
 設定します。
@@ -234,7 +235,7 @@ pwsh -NoProfile -File build\test_ui_fuzz.ps1
 pwsh -Sta -NoProfile -File build\test_external_paste.ps1
 ```
 
-`run_model_tests.py` は数式フォントの私有登録・解除を繰り返さないよう、6つの
+`run_model_tests.py` は数式フォントの私有登録・解除を繰り返さないよう、7つの
 ヘッドレスモデル試験を1つのPythonプロセスで実行します。各試験は個別にも
 実行できます。
 
