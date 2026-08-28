@@ -931,6 +931,168 @@ def grant_writing_adjacent_reviewer_readability_check(text: str) -> dict:
     }
 
 
+def grant_writing_japanese_readability_score(text: str) -> dict:
+    """Score Japanese grant prose with Japanese-specific writing criteria.
+
+    This is a 100-point readability diagnostic, not a funding prediction or a
+    scientific-merit score. It combines six observable axes: one-claim
+    sentence rhythm, Japanese logical order, subject-predicate proximity,
+    lexical load, notation consistency, and committed proposal wording.
+    English prose is deliberately not scored or averaged into this result.
+    """
+    prose = _prose_for_lint(_read_text_if_path(text))
+    japanese_chars = re.findall(r"[\u3040-\u30ff\u3400-\u9fff]", prose)
+    if len(japanese_chars) < 20:
+        return {
+            "applicable": False,
+            "status": "not_applicable",
+            "score": None,
+            "score_max": 100,
+            "reason": "at least 20 Japanese characters are required",
+            "scoring_policy": (
+                "Japanese grant prose only. English is neither scored nor "
+                "averaged into this diagnostic."
+            ),
+        }
+
+    sentence = grant_writing_analyze_sentences(prose)
+    kanji = grant_writing_check_kanji_ratio(
+        prose,
+        min_ratio=0.30,
+        max_ratio=0.60,
+    )
+    subject = grant_writing_check_subject_predicate_distance(prose)
+    bedrock = grant_writing_lint_bedrock(prose)
+    adjacent = grant_writing_adjacent_reviewer_readability_check(prose)
+    misuse = grant_writing_check_misuse_japanese(prose)
+    notation = grant_writing_check_notation_variants(prose)
+    weak = grant_writing_count_weak_expressions(prose)
+
+    overlong = sentence.get("over_threshold_count", 0)
+    max_length = sentence.get("max_length", 0)
+    average_length = sentence.get("avg_length", 0.0)
+    sentence_score = 25 - min(18, 6 * overlong)
+    if max_length > 140:
+        sentence_score -= 10
+    elif max_length > 110:
+        sentence_score -= 5
+    if average_length > 80:
+        sentence_score -= 3
+    sentence_score = max(0, sentence_score)
+
+    bedrock_count = bedrock.get("issue_count", 0)
+    logical_order_score = max(0, 20 - min(20, 6 * bedrock_count))
+
+    subject_violations = subject.get("violation_count", 0)
+    subject_score = max(0, 15 - min(15, 5 * subject_violations))
+
+    adjacent_high = sum(
+        risk.get("severity") == "HIGH" for risk in adjacent.get("risks", [])
+    )
+    adjacent_medium = sum(
+        risk.get("severity") == "MEDIUM" for risk in adjacent.get("risks", [])
+    )
+    lexical_penalty = 8 * adjacent_high + 5 * adjacent_medium
+    kanji_ratio = kanji.get("kanji_ratio", 0.0)
+    if kanji_ratio < 0.20 or kanji_ratio > 0.70:
+        lexical_penalty += 8
+    elif kanji_ratio < 0.30 or kanji_ratio > 0.60:
+        lexical_penalty += 4
+    lexical_score = max(0, 20 - min(20, lexical_penalty))
+
+    misuse_count = misuse.get("total_matches", 0)
+    notation_count = notation.get("total_findings", 0)
+    consistency_score = max(
+        0,
+        10 - min(10, 3 * misuse_count + 2 * notation_count),
+    )
+
+    weak_count = weak.get("total_weak_expressions", 0)
+    commitment_score = max(0, 10 - min(10, 2 * weak_count))
+
+    axes = {
+        "one_claim_sentence_rhythm": {
+            "score": sentence_score,
+            "score_max": 25,
+            "evidence": sentence,
+        },
+        "japanese_logical_order": {
+            "score": logical_order_score,
+            "score_max": 20,
+            "evidence": bedrock,
+        },
+        "subject_predicate_proximity": {
+            "score": subject_score,
+            "score_max": 15,
+            "evidence": subject,
+        },
+        "lexical_and_concept_load": {
+            "score": lexical_score,
+            "score_max": 20,
+            "evidence": {
+                "kanji": kanji,
+                "adjacent_reviewer": adjacent,
+            },
+        },
+        "notation_and_usage_consistency": {
+            "score": consistency_score,
+            "score_max": 10,
+            "evidence": {
+                "misuse": misuse,
+                "notation": notation,
+            },
+        },
+        "committed_proposal_wording": {
+            "score": commitment_score,
+            "score_max": 10,
+            "evidence": weak,
+        },
+    }
+    score = sum(axis["score"] for axis in axes.values())
+    status = "pass" if score >= 85 else "warning" if score >= 70 else "fail"
+    priorities = [
+        {
+            "axis": name,
+            "lost_points": axis["score_max"] - axis["score"],
+            "score": axis["score"],
+            "score_max": axis["score_max"],
+        }
+        for name, axis in axes.items()
+        if axis["score"] < axis["score_max"]
+    ]
+    priorities.sort(key=lambda item: (-item["lost_points"], item["axis"]))
+    return {
+        "applicable": True,
+        "status": status,
+        "score": score,
+        "score_max": 100,
+        "japanese_character_count": len(japanese_chars),
+        "scoring_axes": axes,
+        "revision_priorities": priorities,
+        "thresholds": {
+            "pass": "85-100",
+            "warning": "70-84",
+            "fail": "0-69",
+        },
+        "scoring_policy": (
+            "Japanese grant prose only. English is neither scored nor "
+            "averaged. Kanji ratio is a lightly weighted technical-prose "
+            "signal; sentence structure and reviewer load carry more weight."
+        ),
+        "interpretation": (
+            "This score estimates Japanese reading load and writing mechanics. "
+            "It does not assess novelty, feasibility, scientific merit, or the "
+            "probability of funding."
+        ),
+        "sources": [
+            "Kinoshita: Japanese technical-writing principles",
+            "Honda: modifier order, punctuation, and kanji balance",
+            "Kitahara: Japanese usage diagnostics",
+            "CAE-AI Lab adjacent-domain reviewer readability evidence",
+        ],
+    }
+
+
 _REVIEWER_MOMENTUM_STAKE_PATTERN = re.compile(
     r"(?:患者|治療|電力消費|省エネルギー|環境|安全|市場|コスト|期間|"
     r"熟練|設計(?:判断|期間|候補|者)|候補選択|比較対象|解析経路|"
@@ -6170,7 +6332,7 @@ def grant_writing_health_report(
         "claim", "domain", "focus", "format", "integration", "international",
         "irreplaceable", "kaken", "kddi", "literature", "metric", "narrative",
         "originality", "pages", "persuasion", "pilot", "residue", "scale",
-        "readability", "momentum", "sections", "sentence", "vague",
+        "japanese", "readability", "momentum", "sections", "sentence", "vague",
         "vocabulary", "weak",
     }
     unknown_skip_ids = sorted(skip_set - valid_skip_ids)
@@ -6556,6 +6718,12 @@ def grant_writing_health_report(
         readability = grant_writing_adjacent_reviewer_readability_check(text)
         detailed_results["adjacent_reviewer_readability"] = readability
 
+    if "japanese" not in skip_set:
+        japanese = grant_writing_japanese_readability_score(text)
+        detailed_results["japanese_readability"] = japanese
+        if japanese["applicable"]:
+            detailed_scores["japanese_readability"] = japanese["score"] / 10
+
     if "momentum" not in skip_set:
         momentum = grant_writing_reviewer_momentum_check(text)
         detailed_results["reviewer_momentum"] = momentum
@@ -6660,12 +6828,15 @@ def grant_writing_health_report(
             "Fix the findings; the questions are prompts, not defects."
         )
 
+    japanese = detailed_results.get("japanese_readability", {})
     return {
         "defect_counts": defect_counts,
         "findings": findings,
         "questions": questions,
         "defect_score": defect_score,
         "score_max": 10,
+        "japanese_readability_score": japanese.get("score"),
+        "japanese_readability_status": japanese.get("status", "skipped"),
         "summary_comment": summary,
         "program": program,
         "detailed_scores": detailed_scores,
