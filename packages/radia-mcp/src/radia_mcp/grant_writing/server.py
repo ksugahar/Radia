@@ -46,6 +46,10 @@ It also locates whether preparation evidence is tied to a research item the
 team can start or execute.
 Checks that a section cannot answer -- budget itemization in a research plan
 -- report themselves inapplicable instead of scoring it low.
+Japanese readability is scored on a separate 100-point diagnostic using
+Japanese sentence structure, logical order, subject-predicate proximity,
+concept load, notation consistency, and committed proposal wording. English
+is outside that score and is never averaged into it.
 
 Promoted to radia-mcp so the document-writing servers are registered in
 parallel: paper-writing / figure / grant-writing / presentation.
@@ -62,7 +66,10 @@ from mcp.server.fastmcp import FastMCP
 
 from ..common import register_status_tool
 from . import register
-from .tools import grant_writing_health_report
+from .tools import (
+    grant_writing_health_report,
+    grant_writing_japanese_readability_score,
+)
 
 mcp = FastMCP("mcp-server-grant-writing")
 
@@ -83,6 +90,7 @@ register_status_tool(
         "reviewer vocabulary and benchmark role, "
         "persuasion hierarchy and equation introductions, "
         "adjacent-domain reviewer readability and concept density, "
+        "Japanese-only 100-point readability scoring, "
         "reviewer momentum from concrete tension to observable payoff, "
         "MCP role accuracy and preparation-to-plan traceability, "
         "KAKENHI official review structure and review-format realities, "
@@ -114,12 +122,27 @@ def main():
         )
         report = grant_writing_health_report(sample, program="kddi_digital")
         assert report["defect_counts"]["total"] >= 0
+        readable = grant_writing_japanese_readability_score(
+            "設計条件の選択には時間を要する。"
+            "本研究では候補順位が一致する条件を明らかにする。"
+            "二つの解析法を比較し、適用範囲を判定する。"
+        )
+        assert readable["status"] == "pass"
+        assert readable["score"] >= 85
+        english = grant_writing_japanese_readability_score(
+            "This English proposal is outside the Japanese score."
+        )
+        assert english["status"] == "not_applicable"
         print(
             "mcp-server-grant-writing self-test: "
             f"registered {_n_tools} domain tools (+ status tool)"
         )
         print(f"  sample located defects: {report['defect_counts']['total']}"
               f" (defect_score {report['defect_score']}/10)")
+        print(
+            "  japanese readability: "
+            f"{readable['score']}/100; English excluded as designed"
+        )
         return
     mcp.run()
 

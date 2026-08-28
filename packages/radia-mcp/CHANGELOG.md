@@ -7,6 +7,12 @@ crystallized as its own package.
 
 ## [Unreleased]
 
+- grant-writing: added a Japanese-only 100-point readability diagnostic for
+  grant prose. It weights one-claim sentence rhythm, Japanese logical order,
+  subject-predicate proximity, concept load, notation consistency, and
+  committed proposal wording; English is not scored or averaged, and the
+  result explicitly does not claim scientific merit or funding probability.
+
 ## [1.4.47] - 2026-08-28
 
 - paper-writing: added the CAE-AI Lab target-venue policy for IEEJ, IEEE, and

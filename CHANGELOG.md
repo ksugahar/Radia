@@ -5,6 +5,11 @@ All notable changes to the `radia` package.  Format: each release lists
 
 ## Unreleased
 
+- Added a Japanese-only readability score to `mcp-server-grant-writing` and
+  exposed it through the integrated grant health report. The six-axis score
+  diagnoses Japanese writing mechanics without mixing in English prose or
+  claiming to predict scientific merit or funding decisions.
+
 ## 4.95.66 - Deterministic HDiv H-matrices and complete Optuna oracle surface
 
 Released 2026-08-28.

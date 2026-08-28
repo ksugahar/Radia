@@ -1,6 +1,12 @@
 import asyncio
+import json
+import os
+import sys
+from pathlib import Path
 
 import pytest
+from mcp import ClientSession, StdioServerParameters
+from mcp.client.stdio import stdio_client
 from radia_mcp.document_meta.tools import document_meta_lint_all
 from radia_mcp.grant_writing import tools as gw
 from radia_mcp.meta.catalog import CATALOG
@@ -53,6 +59,22 @@ COLLABORATIVE_INTEGRATION_SAMPLE = (
     "利用不能時は公開ベンチマークと参照実装を用いる。"
 )
 
+READABLE_JAPANESE_GRANT = (
+    "磁気機器の設計では、解析条件の選択に長い時間を要する。"
+    "本研究では、設計候補の順位が一致する条件を明らかにする。"
+    "二つの解析法を同じ指標で比較し、適用範囲を判定する。"
+    "予備試験では解析解との一致を確認した。"
+    "これにより、設計者は必要な解析法を選択できる。"
+)
+
+DENSE_JAPANESE_GRANT = (
+    "本研究ではHDiv-MMM、HCurl eddy-bubble、AGE、CLN、MCP及びAIを"
+    "統合的に高度化することによって磁性導電体を含む複雑な電磁機器に"
+    "対する高精度かつ高速で汎用的な解析基盤の構築及び社会実装を実現し"
+    "さらに国内外の研究者や企業との連携を促進することでこれまで困難で"
+    "あった設計最適化を可能にすることを目指す。"
+)
+
 
 def test_grant_writing_kddi_health_report_runs():
     report = gw.grant_writing_health_report(KDDI_SAMPLE, program="kddi_digital")
@@ -86,6 +108,99 @@ def test_grant_writing_server_exposes_adjacent_reviewer_readability():
 
     assert "grant_writing_adjacent_reviewer_readability_check" in names
     assert "grant_writing_reviewer_momentum_check" in names
+    assert "grant_writing_japanese_readability_score" in names
+
+
+def test_japanese_readability_scores_clear_grant_prose():
+    result = gw.grant_writing_japanese_readability_score(
+        READABLE_JAPANESE_GRANT
+    )
+
+    assert result["applicable"]
+    assert result["status"] == "pass"
+    assert result["score"] >= 90
+    assert sum(
+        axis["score_max"] for axis in result["scoring_axes"].values()
+    ) == 100
+    assert "English is neither scored nor averaged" in result["scoring_policy"]
+
+
+def test_japanese_readability_rejects_long_method_inventory():
+    result = gw.grant_writing_japanese_readability_score(DENSE_JAPANESE_GRANT)
+
+    assert result["status"] == "fail"
+    assert result["score"] < 70
+    assert result["revision_priorities"][0]["axis"] == (
+        "one_claim_sentence_rhythm"
+    )
+    lexical = result["scoring_axes"]["lexical_and_concept_load"]
+    assert lexical["score"] < lexical["score_max"]
+
+
+def test_japanese_readability_does_not_score_english_grant():
+    result = gw.grant_writing_japanese_readability_score(
+        "This proposal develops a readable method for magnetic design. "
+        "It validates the method against measurements."
+    )
+
+    assert not result["applicable"]
+    assert result["status"] == "not_applicable"
+    assert result["score"] is None
+    assert "Japanese grant prose only" in result["scoring_policy"]
+
+
+def test_health_report_exposes_japanese_readability_without_merit_claim():
+    result = gw.grant_writing_health_report(READABLE_JAPANESE_GRANT)
+
+    assert result["japanese_readability_score"] >= 90
+    assert result["japanese_readability_status"] == "pass"
+    readability = result["detailed_results"]["japanese_readability"]
+    assert "does not assess novelty" in readability["interpretation"]
+
+
+async def _probe_japanese_readability_stdio() -> dict:
+    package_root = Path(__file__).resolve().parents[1]
+    env = os.environ.copy()
+    env["PYTHONPATH"] = os.pathsep.join(
+        [str(package_root / "src"), env.get("PYTHONPATH", "")]
+    ).rstrip(os.pathsep)
+    params = StdioServerParameters(
+        command=sys.executable,
+        args=["-m", "radia_mcp.grant_writing.server"],
+        cwd=str(package_root),
+        env=env,
+    )
+    async with stdio_client(params) as (read_stream, write_stream):
+        async with ClientSession(read_stream, write_stream) as session:
+            initialized = await session.initialize()
+            listed = await session.list_tools()
+            called = await session.call_tool(
+                "grant_writing_japanese_readability_score",
+                {"text": READABLE_JAPANESE_GRANT},
+            )
+            payload = json.loads(called.content[0].text)
+            return {
+                "server_name": initialized.serverInfo.name,
+                "listed": any(
+                    tool.name == "grant_writing_japanese_readability_score"
+                    for tool in listed.tools
+                ),
+                "is_error": bool(called.isError),
+                "status": payload["status"],
+                "score": payload["score"],
+            }
+
+
+def test_japanese_readability_passes_real_stdio_protocol():
+    result = asyncio.run(asyncio.wait_for(
+        _probe_japanese_readability_stdio(),
+        timeout=45,
+    ))
+    assert result["server_name"] == "mcp-server-grant-writing"
+    assert result["listed"]
+    assert not result["is_error"]
+    assert result["status"] == "pass"
+    assert result["score"] >= 90
 
 
 def test_grant_writing_kaken_oss_platform_check():
