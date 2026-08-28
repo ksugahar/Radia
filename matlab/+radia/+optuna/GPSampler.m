@@ -78,6 +78,15 @@ classdef GPSampler < radia.optuna.BaseSampler
             obj.IndependentSampler=radia.optuna.RandomSampler(options.Seed);
         end
 
+        function reseed_rng(obj)
+            freshSeed=radia.optuna.internal.resolveSeed([]);
+            obj.Stream=radia.optuna.internal.NumpyRandomState(freshSeed);
+            obj.IndependentSampler.reseed_rng();
+            if ~isempty(obj.PythonStudy)
+                obj.PythonStudy.sampler.reseed_rng();
+            end
+        end
+
         function searchSpace=inferRelativeSearchSpace(~,study,trial) %#ok<INUSD>
             searchSpace=radia.optuna.internal.IntersectionSearchSpace. ...
                 calculate(study,IncludePruned=false);
@@ -105,15 +114,14 @@ classdef GPSampler < radia.optuna.BaseSampler
         end
 
         function beforeTrial(obj,study,trial)
+            obj.attach(study);
             if obj.Backend=="upstream-python"
-                obj.attach(study);
                 obj.preparePythonTrial(study,trial);
                 trial.setSystemAttr("gp_sampling_mode","upstream_optuna_4_9_0");
                 trial.setSystemAttr("gp_backend","upstream-python");
                 return
             end
             obj.IndependentSampler.beforeTrial(study,trial);
-            obj.attach(study);
             completed=sum(study.TrialTable.State=="COMPLETE");
             if completed<obj.NStartupTrials
                 trial.setSystemAttr("gp_sampling_mode","startup_random");
@@ -151,7 +159,9 @@ classdef GPSampler < radia.optuna.BaseSampler
         end
 
         function value=sampleFloat(obj,study,trial,name,low,high,options)
-            if obj.Backend=="upstream-python"
+            if obj.Backend=="upstream-python" && ...
+                    ~isempty(obj.PythonTrial) && ...
+                    obj.PythonTrialNumber==trial.Number
                 obj.ensurePythonTrial(trial);
                 arguments={"log",logical(options.Log)};
                 if isfinite(options.Step)
@@ -176,7 +186,8 @@ classdef GPSampler < radia.optuna.BaseSampler
         end
 
         function value=sampleIntegerDetailed(obj,study,trial,name,low,high,step,logScale)
-            if obj.Backend~="upstream-python"
+            if obj.Backend~="upstream-python" || isempty(obj.PythonTrial) || ...
+                    obj.PythonTrialNumber~=trial.Number
                 if ~logScale && step==1
                     value=obj.IndependentSampler.sampleInteger( ...
                         study,trial,name,low,high);
@@ -195,7 +206,9 @@ classdef GPSampler < radia.optuna.BaseSampler
         end
 
         function value=sampleCategorical(obj,study,trial,name,choices)
-            if obj.Backend=="upstream-python"
+            if obj.Backend=="upstream-python" && ...
+                    ~isempty(obj.PythonTrial) && ...
+                    obj.PythonTrialNumber==trial.Number
                 obj.ensurePythonTrial(trial);
                 raw=obj.PythonTrial.suggest_categorical( ...
                     char(name),obj.pythonChoices(choices));

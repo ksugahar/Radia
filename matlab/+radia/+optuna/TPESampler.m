@@ -152,6 +152,13 @@ classdef TPESampler < radia.optuna.BaseSampler
                 CategoricalDistanceFcn=obj.CategoricalDistanceFcn);
         end
 
+        function reseed_rng(obj)
+            freshSeed=radia.optuna.internal.resolveSeed([]);
+            obj.Stream=radia.optuna.internal.NumpyRandomState(freshSeed);
+            obj.IndependentSampler.reseed_rng();
+            obj.MultiObjectiveSampler.reseed_rng();
+        end
+
         function value = sampleFloat(obj, study, trial, name, low, high, options)
             if numel(study.Directions) > 1
                 value = obj.MultiObjectiveSampler.sampleFloat( ...
@@ -1403,6 +1410,37 @@ classdef TPESampler < radia.optuna.BaseSampler
                 value = choices{index};
             else
                 value = choices(index);
+            end
+        end
+    end
+
+    methods (Static)
+        function parameters=hyperopt_parameters()
+            warning("radia:optuna:FutureWarning", ...
+                "hyperopt_parameters has been deprecated in Optuna 4.9.0 and will be removed in 6.0.0.");
+            parameters=struct( ...
+                "consider_prior",true, ...
+                "prior_weight",1.0, ...
+                "consider_magic_clip",true, ...
+                "consider_endpoints",false, ...
+                "n_startup_trials",20, ...
+                "n_ei_candidates",24, ...
+                "gamma",@radia.optuna.TPESampler.hyperoptGamma, ...
+                "weights",@radia.optuna.TPESampler.defaultWeights);
+        end
+
+        function value=hyperoptGamma(count)
+            value=min(ceil(0.25*sqrt(double(count))),25);
+        end
+
+        function value=defaultWeights(count)
+            count=double(count);
+            if count==0
+                value=zeros(1,0);
+            elseif count<25
+                value=ones(1,count);
+            else
+                value=[linspace(1/count,1,count-25),ones(1,25)];
             end
         end
     end

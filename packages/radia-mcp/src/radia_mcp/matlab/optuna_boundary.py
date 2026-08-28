@@ -9,7 +9,6 @@ from __future__ import annotations
 
 from typing import Any
 
-
 _TOPICS = (
     "overview",
     "shared",
@@ -74,12 +73,19 @@ def matlab_optuna_mcp_route(topic: str = "overview") -> dict[str, Any]:
         "execution_owner": "MathWorks official MATLAB MCP Server",
         "tools": [
             "matlab_optuna_mcp_route",
+            "matlab_optuna_health",
+            "matlab_optuna_oracle_plan",
+            "matlab_optuna_benchmark_plan",
+            "matlab_optuna_release_gate",
             "matlab_optuna_simulink_contract",
             "matlab_optimize_build",
             "matlab_optimize_resume",
         ],
         "capabilities": [
             "MATLAB namespace and installed radia-optuna distribution contract",
+            "manifest-driven distribution and complete public-API health checks",
+            "pinned upstream differential-oracle execution planning",
+            "same-host cold/warmed performance evidence and release gating",
             "table/MAT progress persistence and resume code generation",
             "Simulink block, Scope/XY monitor, progress, and failure telemetry",
             "MATLAB-only parallel trial execution with client-owned Study tables",
@@ -111,6 +117,8 @@ def matlab_optuna_mcp_route(topic: str = "overview") -> dict[str, Any]:
             "tests/matlab/fixtures/optuna49_oracle.json",
             "tests/matlab/fixtures/optuna49_mcp_oracle.json",
             "tests/matlab/fixtures/optuna49_public_api.json",
+            "matlab/optuna49_api_coverage.json",
+            "tests/matlab/fixtures/optuna_test_manifest.json",
         ],
         "disagreement_policy": (
             "Regenerate the pinned upstream fixture first, then fix MATLAB; "
@@ -121,9 +129,11 @@ def matlab_optuna_mcp_route(topic: str = "overview") -> dict[str, Any]:
         "order": [
             "Discover the official optuna-mcp live tools/list response.",
             "Route every supported shared operation to optuna-mcp.",
+            "Run matlab_optuna_health before MATLAB execution or release evidence collection.",
             "Use radia-mcp only for MATLAB/Simulink adaptation or a recorded gap.",
             "Execute generated MATLAB through the official MathWorks MATLAB MCP Server.",
             "Use pinned upstream Optuna fixtures for differential verification.",
+            "Require matlab_optuna_release_gate to accept installed-wheel, Simulink, table-resume, and same-host performance evidence.",
         ],
         "no_duplicate_tool_names": True,
         "no_optuna_runtime_dependency_in_radia_mcp": True,
@@ -184,13 +194,13 @@ def matlab_optuna_mcp_route(topic: str = "overview") -> dict[str, Any]:
     }
     if key != "overview":
         return {
-            "schema": "radia-mcp.matlab-optuna-mcp-route/v2",
+            "schema": "radia-mcp.matlab-optuna-mcp-route/v3",
             "status": "ready",
             "topic": key,
             "route": routes[key],
         }
     return {
-        "schema": "radia-mcp.matlab-optuna-mcp-route/v2",
+        "schema": "radia-mcp.matlab-optuna-mcp-route/v3",
         "status": "ready",
         "policy": "upstream for shared behavior; radia-mcp for MATLAB differences",
         "topics": list(_TOPICS),

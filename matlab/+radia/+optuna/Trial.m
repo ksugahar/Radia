@@ -172,6 +172,37 @@ classdef Trial < radia.optuna.BaseTrial
             obj.setSystemAttr("fixed_params",names);
         end
 
+        function setStorageParameter(obj,name,value,distribution)
+            %SETSTORAGEPARAMETER Register an externally supplied storage value.
+            obj.ensureRunning();
+            spec=radia.optuna.internal.DistributionCodec.normalize(distribution);
+            [exists,existing,key]=obj.existingParameter(string(name),spec);
+            if exists
+                if ~isequaln(existing,value)
+                    error("radia:optuna:ParameterValue", ...
+                        "Parameter '%s' already has a different value.",name);
+                end
+                return
+            end
+            obj.Params.(key)=value;
+            obj.ParameterDistributions.(key)=spec;
+            switch spec.kind
+                case "float"
+                    obj.Distributions.(key)=struct("name","FloatDistribution", ...
+                        "low",spec.low,"high",spec.high,"log",spec.log, ...
+                        "step",spec.step);
+                case "integer"
+                    obj.Distributions.(key)=struct("name","IntDistribution", ...
+                        "low",spec.low,"high",spec.high,"log",spec.log, ...
+                        "step",spec.step);
+                case "categorical"
+                    obj.Distributions.(key)=struct( ...
+                        "name","CategoricalDistribution","choices",{spec.choices});
+            end
+            obj.Study.recordParameter(obj,string(name),spec.kind,value, ...
+                radia.optuna.internal.DistributionCodec.encode(spec));
+        end
+
         function removeRelativeParameters(obj,names)
             for name=reshape(string(names),1,[])
                 key=matlab.lang.makeValidName(name);

@@ -6,10 +6,14 @@ from radia_mcp.matlab import (
     matlab_cad_topology_build,
     matlab_optimize_build,
     matlab_optimize_resume,
+    matlab_optuna_benchmark_plan,
+    matlab_optuna_health,
     matlab_optuna_mcp_route,
-    matlab_sheet_metal_topology_build,
+    matlab_optuna_oracle_plan,
+    matlab_optuna_release_gate,
     matlab_optuna_simulink_contract,
     matlab_radia_mex_contract,
+    matlab_sheet_metal_topology_build,
 )
 
 
@@ -23,8 +27,26 @@ def test_radia_mex_contract_reads_the_cpp_command_inventory():
         for command in contract["command_names"]
     )
     assert contract["matlab_wrapper_count"] >= 133
-    assert contract["matlab_optuna_class_count"] == 38
-    assert contract["matlab_optuna_function_count"] == 30
+    assert contract["matlab_optuna_distribution_health"]["ok"] is True
+    assert contract["matlab_optuna_file_count"] == (
+        contract["matlab_optuna_expected_file_count"]
+    )
+    root = Path(__file__).resolve().parents[3]
+    coverage = json.loads(
+        (root / "matlab" / "optuna49_api_coverage.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    public_count = len(coverage["entries"])
+    assert contract["matlab_optuna_public_api"] == {
+        "entry_count": public_count,
+        "present_count": public_count,
+        "missing_count": 0,
+        "verified_count": public_count,
+        "partial_count": 0,
+        "unmapped_count": 0,
+        "complete": True,
+    }
     assert {
         "TPESampler",
         "MOTPESampler",
@@ -161,7 +183,10 @@ def test_optuna_simulink_contract_is_table_backed():
     assert contract["native_acceleration"]["python_per_trial"] is False
     assert contract["native_acceleration"]["full_optimizer_in_cpp"] is False
     assert contract["native_acceleration"]["gateway"] == "optuna_mex"
-    assert contract["native_acceleration"]["command_count"] == 20
+    assert contract["native_acceleration"]["command_count"] == (
+        contract["distribution_health"]["native"]["command_count"]
+    )
+    assert contract["distribution_health"]["ok"] is True
     assert contract["native_acceleration"]["required"] is True
     assert contract["native_acceleration"]["missing_mex_fallback"] is False
     assert contract["cae_trial_contract"]["success_schema"] == (
@@ -262,12 +287,17 @@ def test_root_readme_publishes_native_topology_mex_parity():
 
 
 def test_server_registers_bridge_tools():
-    from radia_mcp.matlab.server import mcp, matlab_radia_mex_contract as mex_tool
+    from radia_mcp.matlab.server import matlab_radia_mex_contract as mex_tool
+    from radia_mcp.matlab.server import mcp
 
     tool_names = {item.name for item in asyncio.run(mcp.list_tools())}
     assert "matlab_radia_mex_contract" in tool_names
     assert "matlab_optuna_simulink_contract" in tool_names
     assert "matlab_optuna_mcp_route" in tool_names
+    assert "matlab_optuna_health" in tool_names
+    assert "matlab_optuna_oracle_plan" in tool_names
+    assert "matlab_optuna_benchmark_plan" in tool_names
+    assert "matlab_optuna_release_gate" in tool_names
     assert "matlab_optimize_build" in tool_names
     assert "matlab_optimize_resume" in tool_names
     assert "matlab_cad_topology_build" in tool_names
@@ -293,6 +323,10 @@ def test_optuna_mcp_route_keeps_shared_tools_upstream_and_matlab_differences_loc
     assert shared["verified_snapshot"]["sampler_seed_exposed"] is False
     assert matlab["owner"] == "radia-mcp/radia-matlab"
     assert matlab["distribution"] == "radia-optuna"
+    assert "matlab_optuna_health" in matlab["tools"]
+    assert "matlab_optuna_oracle_plan" in matlab["tools"]
+    assert "matlab_optuna_benchmark_plan" in matlab["tools"]
+    assert "matlab_optuna_release_gate" in matlab["tools"]
     assert "table/MAT progress persistence and resume code generation" in (
         matlab["capabilities"]
     )
@@ -310,6 +344,17 @@ def test_optuna_mcp_route_keeps_shared_tools_upstream_and_matlab_differences_loc
         "Preferred Networks, Inc."
     )
     assert {item["license"] for item in stewardship["upstream_licenses"]} == {"MIT"}
+
+
+def test_optuna_quality_helpers_are_exported_from_the_matlab_package():
+    health = matlab_optuna_health()
+    assert health["ok"] is True
+    assert health["distribution"]["matlab_file_count"] == (
+        health["distribution"]["expected_matlab_file_count"]
+    )
+    assert matlab_optuna_oracle_plan()["status"] == "ready"
+    assert matlab_optuna_benchmark_plan()["status"] == "ready"
+    assert callable(matlab_optuna_release_gate)
 
 
 def test_radia_matlab_tools_do_not_shadow_verified_upstream_optuna_mcp_tools():

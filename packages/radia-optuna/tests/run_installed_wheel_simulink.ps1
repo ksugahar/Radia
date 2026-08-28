@@ -2,12 +2,15 @@ param(
     [Parameter(Mandatory = $true)]
     [string]$Wheel,
     [string]$MatlabExecutable = 'matlab',
-    [string]$PythonExecutable = 'python'
+    [string]$PythonExecutable = 'python',
+    [string]$EvidenceOutput = ''
 )
 
 $ErrorActionPreference = 'Stop'
 $wheelPath = (Resolve-Path -LiteralPath $Wheel).ProviderPath
 $testDirectory = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot 'matlab')).ProviderPath
+$packageRoot = Split-Path -Parent $PSScriptRoot
+$wheelVerifier = Join-Path $packageRoot 'verify_wheel.py'
 $runRoot = Join-Path 'C:\temp' ('radia-optuna-wheel-simulink-' + [guid]::NewGuid().ToString('N'))
 $resolvedTempRoot = [IO.Path]::GetFullPath('C:\temp') + [IO.Path]::DirectorySeparatorChar
 $resolvedRunRoot = [IO.Path]::GetFullPath($runRoot)
@@ -21,6 +24,12 @@ function ConvertTo-MatlabLiteral([string]$Value) {
 
 New-Item -ItemType Directory -Path $resolvedRunRoot | Out-Null
 try {
+    $wheelVerificationJson = (& $PythonExecutable $wheelVerifier $wheelPath --json | Out-String).Trim()
+    if ($LASTEXITCODE -ne 0) {
+        throw "Wheel verification failed with exit code $LASTEXITCODE"
+    }
+    $wheelVerification = $wheelVerificationJson | ConvertFrom-Json
+
     $venv = Join-Path $resolvedRunRoot 'venv'
     & $PythonExecutable -m venv $venv
     if ($LASTEXITCODE -ne 0) { throw "Python venv creation failed with exit code $LASTEXITCODE" }
@@ -30,8 +39,9 @@ try {
     if ($LASTEXITCODE -ne 0) { throw "Installing the wheel failed with exit code $LASTEXITCODE" }
 
     $doctor = Join-Path $venv 'Scripts\radia-optuna-doctor.exe'
-    & $doctor --json
+    $doctorJson = (& $doctor --json | Out-String).Trim()
     if ($LASTEXITCODE -ne 0) { throw "radia-optuna-doctor failed with exit code $LASTEXITCODE" }
+    $doctorEvidence = $doctorJson | ConvertFrom-Json
 
     $installedMatlabPath = (& $venvPython -c 'from radia_optuna import matlab_path; print(matlab_path())').Trim()
     if (-not (Test-Path -LiteralPath $installedMatlabPath -PathType Container)) {
@@ -40,7 +50,9 @@ try {
 
     $matlabPathLiteral = ConvertTo-MatlabLiteral $installedMatlabPath
     $testDirectoryLiteral = ConvertTo-MatlabLiteral $testDirectory
-    $batch = "restoredefaultpath; addpath('$matlabPathLiteral'); addpath('$testDirectoryLiteral'); result=test_standalone_simulink('$matlabPathLiteral'); assert(result.ok);"
+    $simulinkEvidencePath = Join-Path $resolvedRunRoot 'simulink-evidence.json'
+    $simulinkEvidenceLiteral = ConvertTo-MatlabLiteral $simulinkEvidencePath
+    $batch = "restoredefaultpath; addpath('$matlabPathLiteral'); addpath('$testDirectoryLiteral'); result=test_standalone_simulink('$matlabPathLiteral'); assert(result.ok); fileId=fopen('$simulinkEvidenceLiteral','w'); assert(fileId>=0); cleanupFile=onCleanup(@()fclose(fileId)); fprintf(fileId,'%s\n',jsonencode(result,PrettyPrint=true)); clear cleanupFile;"
 
     # MathWorks' online license service can transiently reject an otherwise
     # valid batch start with error 5202. Retry only that startup failure; a
@@ -63,6 +75,29 @@ try {
         Write-Warning "MathWorks license service returned 5202; retrying the same MATLAB batch command in $delaySeconds seconds (attempt $($attempt + 1)/$maxMatlabAttempts)."
         Start-Sleep -Seconds $delaySeconds
     }
+    $simulinkEvidence = Get-Content -LiteralPath $simulinkEvidencePath -Raw |
+        ConvertFrom-Json
+    $evidence = [ordered]@{
+        schema = 'radia-optuna.installed-wheel-evidence.v1'
+        ok = $true
+        wheel_verification = $wheelVerification
+        doctor = $doctorEvidence
+        simulink_e2e = $simulinkEvidence
+        table_resume = $simulinkEvidence.table_resume
+    }
+    $encodedEvidence = $evidence | ConvertTo-Json -Depth 12
+    if ($EvidenceOutput) {
+        $resolvedEvidenceOutput = [IO.Path]::GetFullPath($EvidenceOutput)
+        $evidenceParent = Split-Path -Parent $resolvedEvidenceOutput
+        if ($evidenceParent -and -not (Test-Path -LiteralPath $evidenceParent)) {
+            New-Item -ItemType Directory -Path $evidenceParent -Force | Out-Null
+        }
+        [IO.File]::WriteAllText(
+            $resolvedEvidenceOutput,
+            $encodedEvidence + [Environment]::NewLine,
+            [Text.UTF8Encoding]::new($false))
+    }
+    Write-Output $encodedEvidence
     Write-Output 'RADIA_OPTUNA_WHEEL_SIMULINK_OK'
 } finally {
     $checkedRunRoot = [IO.Path]::GetFullPath($resolvedRunRoot)

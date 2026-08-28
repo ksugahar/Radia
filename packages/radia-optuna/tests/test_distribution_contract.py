@@ -1,10 +1,9 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
 import re
 import tomllib
-
+from pathlib import Path
 
 PACKAGE_ROOT = Path(__file__).resolve().parents[1]
 REPO_ROOT = PACKAGE_ROOT.parents[1]
@@ -77,6 +76,8 @@ def test_wheel_verifier_rejects_solver_boundary_leaks():
     assert "py3-none-win_amd64" in verifier
     assert "optuna\\s*==\\s*4\\.9\\.0" in verifier
     assert "THIRD_PARTY_NOTICES.md" in verifier
+    assert "source_fidelity_verified" in verifier
+    assert "wheel payload differs from the checked monorepo source" in verifier
 
 
 def test_upstream_notices_and_trademark_attribution_are_checked():
