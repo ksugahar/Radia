@@ -1,9 +1,9 @@
 name: Release radia-mcp
 
-# Triggered after CI succeeds, only when the tag matches radia-mcp-v*
+# Triggered after the radia-mcp distribution CI succeeds.
 on:
   workflow_run:
-    workflows: ["CI"]
+    workflows: ["radia-mcp"]
     types: [completed]
 
 permissions:
@@ -28,8 +28,8 @@ jobs:
       - name: Download exact CI ref context
         uses: actions/download-artifact@v4
         with:
-          name: ci-release-context
-          path: ci-release-context
+          name: radia-mcp-ci-release-context
+          path: radia-mcp-ci-release-context
           run-id: ${{ github.event.workflow_run.id }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
@@ -42,10 +42,10 @@ jobs:
         run: |
           python3 - <<'PY'
           import json, os, pathlib, sys
-          path = pathlib.Path("ci-release-context/ci-release-context.json")
+          path = pathlib.Path("radia-mcp-ci-release-context/radia-mcp-ci-release-context.json")
           context = json.loads(path.read_text(encoding="utf-8"))
-          if context.get("schema") != "radia.ci-release-context.v1":
-              print("::error::Unknown CI release-context schema")
+          if context.get("schema") != "radia-mcp.ci-release-context.v1":
+              print("::error::Unknown radia-mcp CI release-context schema")
               sys.exit(1)
           if context.get("sha") != os.environ["SHA"] or str(context.get("run_id")) != os.environ["RUN_ID"]:
               print("::error::CI release-context does not match triggering workflow_run")

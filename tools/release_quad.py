@@ -505,7 +505,7 @@ def _download_verified_optuna_ci_wheel(ci_run_id: str) -> tuple[dict | None, str
         "event": "push",
         "status": "completed",
         "conclusion": "success",
-        "workflowName": "CI",
+        "workflowName": "radia-optuna",
     }
     mismatches = [
         f"{key}={run_info.get(key)!r} (expected {value!r})"
@@ -1601,13 +1601,17 @@ def _git_repo_owner_name():
     return f"{m.group(1)}/{m.group(2)}"
 
 
-def _check_github_hosted_workflows(sha, *, timeout_sec=1800, poll_sec=20):
-    """Poll the GitHub check-runs API for `sha` until all complete, then
-    verify every conclusion is green.
+def _check_github_hosted_workflows(
+    sha, *, required_names=("policy-checks",), timeout_sec=1800, poll_sec=20
+):
+    """Wait for the named Radia check-runs and require green conclusions.
 
-    Closes the documented cmd_ci_verify caveat: this catches
-    policy-lint.yml and radia-mcp-matrix.yml which run on
-    github-hosted ubuntu-latest and leave nothing in CI_WORKSPACE.
+    PyPI distributions have independent CI workflows.  The Radia release gate
+    must therefore ignore radia-mcp, cubit-mesh-export, radia-optuna, and
+    Eqnedit64 checks that happen to share the same commit.  The self-hosted
+    Radia build is verified separately from its fresh JUnit files; this helper
+    catches the required GitHub-hosted policy check that leaves nothing in
+    CI_WORKSPACE.
     Public-repo check-runs endpoint does not require authentication.
 
     Historical incident (2026-05-30): policy-lint Policy 4 was silently
@@ -1647,15 +1651,19 @@ def _check_github_hosted_workflows(sha, *, timeout_sec=1800, poll_sec=20):
         except Exception as e:
             return False, f"GitHub API error: {type(e).__name__}: {e}"
 
-        runs = data.get("check_runs", [])
+        all_runs = data.get("check_runs", [])
+        runs = [run for run in all_runs if run.get("name") in required_names]
+        found_names = {run.get("name") for run in runs}
+        missing_names = set(required_names) - found_names
         # Push-triggered workflows may take ~30 s to register; allow up
         # to 90 s before declaring "no runs found" (the push never
         # triggered any github-hosted workflow, e.g. paths filter
         # excluded them, or workflows are disabled).
-        if not runs:
+        if missing_names:
             if _time.time() - started > 90:
-                return False, ("no check-runs registered for "
-                               f"{sha[:8]} after 90 s (paths filter?)")
+                return False, ("required check-runs not registered for "
+                               f"{sha[:8]} after 90 s: "
+                               + ", ".join(sorted(missing_names)))
             _time.sleep(poll_sec)
             continue
 
@@ -1675,7 +1683,7 @@ def _check_github_hosted_workflows(sha, *, timeout_sec=1800, poll_sec=20):
         msg = "; ".join(f"{r['name']}: {r['conclusion']}" for r in failures)
         return False, "github-hosted CI RED -- " + msg
     names = sorted(set(r["name"] for r in runs))
-    return True, (f"all {len(runs)} github-hosted check-runs GREEN "
+    return True, (f"all {len(runs)} required github-hosted check-runs GREEN "
                   f"({', '.join(names)})")
 
 
@@ -1759,9 +1767,10 @@ def cmd_ci_verify(args):
     ok("self-hosted (build-test) CI GREEN "
        "(all test XMLs fresh, failures=errors=0).")
 
-    # ALSO verify github-hosted workflows (policy-lint, radia-mcp-matrix).
+    # ALSO verify the GitHub-hosted Radia policy check. Other PyPI
+    # distributions have independent CI and never gate a Radia release.
     # See _check_github_hosted_workflows for the why (2026-05-30 incident).
-    step("CI verify (github-hosted): policy-lint / radia-mcp-matrix")
+    step("CI verify (github-hosted): Radia policy lint")
     head_sha = subprocess.check_output(
         ["git", "rev-parse", "HEAD"], cwd=str(REPO), text=True).strip()
     print(f"  HEAD = {head_sha[:8]}")
