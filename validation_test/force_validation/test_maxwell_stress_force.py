@@ -22,6 +22,8 @@ Pure NGSolve (Bash-robust; no MCP / Cubit / COMSOL dependency).
 import math
 import pytest
 
+pytestmark = pytest.mark.slow
+
 ng = pytest.importorskip("ngsolve")
 from ngsolve import (H1, BilinearForm, LinearForm, GridFunction, Integrate,
                      grad, dx, ds, x, y, CF, sqrt)

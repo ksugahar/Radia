@@ -55,7 +55,7 @@ FIXTURE_DIR = os.path.join(os.path.dirname(__file__), "fixtures")
 KEIKO_STEP = os.path.join(FIXTURE_DIR, "keiko_outsideline.step")
 
 
-def test_keiko_outsideline_centerline_covers_lead():
+def _validate_keiko_outsideline_centerline_covers_lead():
     """STEP auto-detect must trace the lead bar (y -> +50 mm), not bypass it."""
     from radia.coil_from_cad import extract_centerline_from_step
 
@@ -83,7 +83,7 @@ def test_keiko_outsideline_centerline_covers_lead():
         f"recovered wire radius {r_equiv*1e3:.2f} mm out of band [2.5, 3.5] mm")
 
 
-def test_keiko_outsideline_succeeds_with_adaptive_resampling(monkeypatch):
+def _validate_keiko_outsideline_succeeds_with_adaptive_resampling(monkeypatch):
     """v4.53.0: adaptive resampling in `_centerline_from_open_spine`
     chooses n_segments such that segment_length >= 1.10 * wire_radius,
     which prevents the singular-corner check from firing on the

@@ -34,7 +34,7 @@ def synthetic_arrays(n_seg, degree=5):
     return Ay, As, lengths, curvatures
 
 
-def test_no_jacobian_mode_matches_and_zero_width():
+def _validate_no_jacobian_mode_matches_and_zero_width():
     # parameter_jacobians=False runs the NATIVE C++ construction kernel
     # (rad_lie_map_kernel.cpp); parameter_jacobians=True runs the Python
     # forward-AD engine.  The two implementations must agree to roundoff

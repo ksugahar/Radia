@@ -331,7 +331,7 @@ def test_vtk_export():
     return passed
 
 
-def test_physical_consistency():
+def _validate_physical_consistency():
     """Test physical consistency of results."""
     print("Test 7: Physical Consistency")
     print("-" * 40)

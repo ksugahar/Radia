@@ -14,6 +14,14 @@ for the default CI/debug loop.
 - Benchmarks and long solver regressions.
 - Tests requiring special optional dependencies, licenses, or long wall time.
 
+`tests/` is reserved for short checks. A test measured at 10 seconds or more in
+two comparable successful CI runs moves here and is marked `slow`; a one-off
+timing spike is measured again before reclassification. Real Office/Cubit GUI
+startup, licensed applications, benchmarks, long golden/reference runs, solver
+convergence studies, and publication validation belong here regardless of one
+short measurement. The canonical directory name is `validation_test/`
+(singular).
+
 Legacy validation scripts that are meant to be run directly, not collected by
 pytest, live in `validation_test/manual/` and use `*_validation.py` names.
 

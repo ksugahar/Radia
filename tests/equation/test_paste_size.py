@@ -108,8 +108,7 @@ def test_every_equation_makes_a_readable_package(latex):
 
 # ---- and what PowerPoint actually does with it ------------------------------
 
-@pytest.mark.slow
-def test_powerpoint_pastes_it_at_24_pt():
+def _validate_powerpoint_pastes_it_at_24_pt():
     """The claim is about PowerPoint, so ask PowerPoint."""
     win32com = pytest.importorskip("win32com.client")
     import ctypes

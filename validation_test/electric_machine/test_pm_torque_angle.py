@@ -24,6 +24,8 @@ ng = pytest.importorskip("ngsolve")
 from ngsolve import (H1, BilinearForm, LinearForm, GridFunction, Integrate,
                      VectorH1, grad, dx, x, y, CF)
 
+pytestmark = pytest.mark.slow
+
 MU0 = 4e-7 * math.pi
 A_RAD = 0.01
 RC = 0.020
