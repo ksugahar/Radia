@@ -3,8 +3,13 @@ param(
     [Parameter(Mandatory = $true)]
     [ValidatePattern('^eqnedit64-v\d+\.\d+\.\d+$')]
     [string]$Tag,
-    [string]$Repository = 'ksugahar/Radia',
+    [Parameter(Mandatory = $true)]
+    [string]$SourceExe,
+    [Parameter(Mandatory = $true)]
+    [ValidatePattern('^[0-9a-fA-F]{40}$')]
+    [string]$SourceSha,
     [string]$Destination = 'O:\Eqnedit64.exe',
+    [string]$ManifestPath = 'O:\Eqnedit64.release.json',
     [switch]$WhatIf
 )
 
@@ -14,143 +19,181 @@ Set-StrictMode -Version Latest
 if ($PSVersionTable.PSVersion.Major -lt 7) {
     throw 'sync_to_o.ps1 requires PowerShell 7 or newer.'
 }
-if (-not (Get-Command gh -ErrorAction SilentlyContinue)) {
-    throw 'GitHub CLI (gh) is required.'
+if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
+    throw 'Git is required.'
 }
 
+$repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..\..\..')).Path
+git -C $repoRoot fetch origin main --quiet
+if ($LASTEXITCODE -ne 0) { throw 'git fetch origin main failed.' }
+$headSha = (git -C $repoRoot rev-parse HEAD).Trim()
+$originMainSha = (git -C $repoRoot rev-parse origin/main).Trim()
+$normalizedSourceSha = $SourceSha.ToLowerInvariant()
+if ($headSha -cne $normalizedSourceSha -or
+    $originMainSha -cne $normalizedSourceSha) {
+    throw ("Release source is not the exact pushed main commit: " +
+        "HEAD=$headSha origin/main=$originMainSha requested=$normalizedSourceSha")
+}
+$trackedStatus = git -C $repoRoot status --porcelain --untracked-files=no
+if ($LASTEXITCODE -ne 0 -or $trackedStatus) {
+    throw 'Tracked release source is dirty.'
+}
+
+$remoteTag = git -C $repoRoot ls-remote --tags origin "refs/tags/$Tag"
+if ($LASTEXITCODE -ne 0) { throw "Could not query remote tag $Tag" }
+if ($remoteTag) {
+    throw "Release tag already exists; O: must be prepared before tag push: $Tag"
+}
+
+$resolvedSource = (Resolve-Path -LiteralPath $SourceExe).Path
 $expectedVersion = $Tag.Substring('eqnedit64-v'.Length)
-$releaseText = gh release view $Tag --repo $Repository `
-    --json isDraft,isPrerelease,tagName,url,assets
-if ($LASTEXITCODE -ne 0) {
-    throw "GitHub Release was not found: $Repository $Tag"
-}
-$release = $releaseText | ConvertFrom-Json
-if ($release.isDraft -or $release.isPrerelease -or $release.tagName -cne $Tag) {
-    throw "GitHub Release is not a final exact-tag release: $Tag"
-}
-$assetNames = @()
-foreach ($asset in $release.assets) {
-    $assetNames += [string]$asset.name
-}
-foreach ($required in @('Eqnedit64.exe', 'SHA256SUMS.txt')) {
-    if ($required -cnotin $assetNames) {
-        throw "GitHub Release is missing $required"
-    }
+$actualVersion = (Get-Item -LiteralPath $resolvedSource).VersionInfo.ProductVersion
+if ($actualVersion -cne $expectedVersion) {
+    throw "Tag/EXE version mismatch: $Tag != $actualVersion"
 }
 
-$downloadRoot = Join-Path 'C:\temp' (
-    'eqnedit64-o-sync-{0}-{1}' -f $PID,
-    [Guid]::NewGuid().ToString('N'))
-$stage = $null
-New-Item -ItemType Directory -Path $downloadRoot | Out-Null
+$shortSha = (git -C $repoRoot rev-parse --short $normalizedSourceSha).Trim()
+$stampPath = Join-Path $repoRoot 'tools\eqnedit64\src\build_stamp.h'
+$stamp = Get-Content -LiteralPath $stampPath -Raw
+if ($stamp -notmatch ('EQNEDIT64_BUILD_COMMIT\s+"' +
+        [regex]::Escape($shortSha) + '"')) {
+    throw "EXE build stamp is not the pushed main commit $shortSha"
+}
+$exeText = [Text.Encoding]::ASCII.GetString(
+    [IO.File]::ReadAllBytes($resolvedSource))
+if (-not $exeText.Contains($shortSha, [StringComparison]::Ordinal)) {
+    throw "EXE binary does not contain the pushed main build stamp $shortSha"
+}
+
+$signature = Get-AuthenticodeSignature -LiteralPath $resolvedSource
+$signer = if ($signature.SignerCertificate) {
+    $signature.SignerCertificate.Subject
+} else {
+    ''
+}
+if ($signature.Status -ne 'Valid' -or $signer -cne 'CN=ksugahar') {
+    throw "Source EXE signature is invalid: $($signature.Status) / $signer"
+}
+$sourceHash = (Get-FileHash -Algorithm SHA256 `
+    -LiteralPath $resolvedSource).Hash
+
+$fullDestination = [IO.Path]::GetFullPath($Destination)
+$fullManifest = [IO.Path]::GetFullPath($ManifestPath)
+if ([IO.Path]::GetFileName($fullDestination) -cne 'Eqnedit64.exe') {
+    throw "Destination must name Eqnedit64.exe: $fullDestination"
+}
+if ([IO.Path]::GetFileName($fullManifest) -cne 'Eqnedit64.release.json') {
+    throw "Manifest must name Eqnedit64.release.json: $fullManifest"
+}
+$destinationDirectory = Split-Path -Parent $fullDestination
+if (-not (Test-Path -LiteralPath $destinationDirectory -PathType Container)) {
+    throw "Destination directory is unavailable: $destinationDirectory"
+}
+if ((Split-Path -Parent $fullManifest) -cne $destinationDirectory) {
+    throw 'EXE and release manifest must be in the same directory.'
+}
+
+$transactionId = '{0}.{1}' -f $PID, [Guid]::NewGuid().ToString('N')
+$stageExe = Join-Path $destinationDirectory `
+    ('.Eqnedit64.exe.{0}.new' -f $transactionId)
+$stageManifest = Join-Path $destinationDirectory `
+    ('.Eqnedit64.release.json.{0}.new' -f $transactionId)
+$backupExe = Join-Path $destinationDirectory `
+    ('.Eqnedit64.exe.{0}.backup' -f $transactionId)
+$backupManifest = Join-Path $destinationDirectory `
+    ('.Eqnedit64.release.json.{0}.backup' -f $transactionId)
+$hadDestination = Test-Path -LiteralPath $fullDestination -PathType Leaf
+$hadManifest = Test-Path -LiteralPath $fullManifest -PathType Leaf
 
 try {
-    gh release download $Tag --repo $Repository `
-        --pattern Eqnedit64.exe --pattern SHA256SUMS.txt `
-        --dir $downloadRoot
-    if ($LASTEXITCODE -ne 0) {
-        throw "Failed to download release assets for $Tag"
+    Copy-Item -LiteralPath $resolvedSource -Destination $stageExe
+    $stageHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $stageExe).Hash
+    if ($stageHash -cne $sourceHash) {
+        throw "Staged O: copy changed bytes: $stageHash != $sourceHash"
     }
 
-    $downloadedExe = Join-Path $downloadRoot 'Eqnedit64.exe'
-    $checksums = Join-Path $downloadRoot 'SHA256SUMS.txt'
-    $line = Get-Content -LiteralPath $checksums |
-        Where-Object { $_ -match 'Eqnedit64\.exe\s*$' } |
-        Select-Object -First 1
-    if (-not $line -or
-        $line -notmatch '^(?<hash>[0-9a-fA-F]{64})\s+\*?Eqnedit64\.exe\s*$') {
-        throw 'Published SHA256SUMS.txt has no valid Eqnedit64.exe entry.'
+    $manifest = [ordered]@{
+        schema = 'eqnedit64.o-release.v1'
+        tag = $Tag
+        version = $expectedVersion
+        source_sha = $normalizedSourceSha
+        exe_sha256 = $sourceHash
+        signer = $signer
+        prepared_at = (Get-Date).ToUniversalTime().ToString('o')
     }
-    $expectedHash = $Matches.hash.ToUpperInvariant()
-    $downloadedHash = (Get-FileHash -Algorithm SHA256 `
-        -LiteralPath $downloadedExe).Hash
-    if ($downloadedHash -cne $expectedHash) {
-        throw "Published checksum mismatch: $downloadedHash != $expectedHash"
-    }
-
-    $downloadedVersion = (Get-Item -LiteralPath $downloadedExe).VersionInfo.ProductVersion
-    if ($downloadedVersion -cne $expectedVersion) {
-        throw "Tag/EXE version mismatch: $Tag != $downloadedVersion"
-    }
-    $downloadedSignature = Get-AuthenticodeSignature -LiteralPath $downloadedExe
-    $downloadedSigner = if ($downloadedSignature.SignerCertificate) {
-        $downloadedSignature.SignerCertificate.Subject
-    } else {
-        ''
-    }
-    if ($downloadedSignature.Status -ne 'Valid' -or
-        $downloadedSigner -cne 'CN=ksugahar') {
-        throw ("Published EXE signature is invalid: {0} / {1}" -f
-            $downloadedSignature.Status, $downloadedSigner)
-    }
-
-    $fullDestination = [IO.Path]::GetFullPath($Destination)
-    if ([IO.Path]::GetFileName($fullDestination) -cne 'Eqnedit64.exe') {
-        throw "Destination must name Eqnedit64.exe: $fullDestination"
-    }
-    $destinationDirectory = Split-Path -Parent $fullDestination
-    if (-not (Test-Path -LiteralPath $destinationDirectory -PathType Container)) {
-        throw "Destination directory is unavailable: $destinationDirectory"
-    }
-
-    $stage = Join-Path $destinationDirectory `
-        ('.Eqnedit64.exe.{0}.{1}.new' -f $PID,
-         [Guid]::NewGuid().ToString('N'))
-    Copy-Item -LiteralPath $downloadedExe -Destination $stage
-    $stageHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $stage).Hash
-    if ($stageHash -cne $expectedHash) {
-        throw "Staged O: copy changed bytes: $stageHash != $expectedHash"
-    }
+    $manifestJson = $manifest | ConvertTo-Json
+    [IO.File]::WriteAllText(
+        $stageManifest, $manifestJson + "`n", [Text.UTF8Encoding]::new($false))
 
     if (-not $WhatIf) {
-        [IO.File]::Move($stage, $fullDestination, $true)
-        $stage = $null
-
-        $destinationHash = (Get-FileHash -Algorithm SHA256 `
-            -LiteralPath $fullDestination).Hash
-        $destinationSignature = Get-AuthenticodeSignature `
-            -LiteralPath $fullDestination
-        $destinationVersion = (Get-Item `
-            -LiteralPath $fullDestination).VersionInfo.ProductVersion
-        if ($destinationHash -cne $expectedHash -or
-            $destinationVersion -cne $expectedVersion -or
-            $destinationSignature.Status -ne 'Valid' -or
-            -not $destinationSignature.SignerCertificate -or
-            $destinationSignature.SignerCertificate.Subject -cne 'CN=ksugahar') {
-            throw 'O: post-copy verification failed.'
+        if ($hadDestination) {
+            [IO.File]::Copy($fullDestination, $backupExe, $false)
+        }
+        if ($hadManifest) {
+            [IO.File]::Copy($fullManifest, $backupManifest, $false)
         }
 
-        [pscustomobject]@{
-            Updated = $true
-            Tag = $Tag
-            ReleaseUrl = $release.url
-            Destination = $fullDestination
-            Version = $destinationVersion
-            Sha256 = $destinationHash
-            Signature = [string]$destinationSignature.Status
-            Signer = $destinationSignature.SignerCertificate.Subject
+        try {
+            [IO.File]::Move($stageExe, $fullDestination, $true)
+            $stageExe = $null
+            [IO.File]::Move($stageManifest, $fullManifest, $true)
+            $stageManifest = $null
+
+            $destinationHash = (Get-FileHash -Algorithm SHA256 `
+                -LiteralPath $fullDestination).Hash
+            $destinationSignature = Get-AuthenticodeSignature `
+                -LiteralPath $fullDestination
+            $destinationVersion = (Get-Item `
+                -LiteralPath $fullDestination).VersionInfo.ProductVersion
+            $recorded = Get-Content -LiteralPath $fullManifest -Raw |
+                ConvertFrom-Json
+            if ($destinationHash -cne $sourceHash -or
+                $destinationVersion -cne $expectedVersion -or
+                $destinationSignature.Status -ne 'Valid' -or
+                -not $destinationSignature.SignerCertificate -or
+                $destinationSignature.SignerCertificate.Subject -cne 'CN=ksugahar' -or
+                $recorded.schema -cne 'eqnedit64.o-release.v1' -or
+                $recorded.source_sha -cne $normalizedSourceSha -or
+                $recorded.exe_sha256 -cne $sourceHash) {
+                throw 'O: post-copy verification failed.'
+            }
+        } catch {
+            $updateFailure = $_
+            try {
+                if ($hadDestination) {
+                    [IO.File]::Copy($backupExe, $fullDestination, $true)
+                } elseif (Test-Path -LiteralPath $fullDestination -PathType Leaf) {
+                    Remove-Item -LiteralPath $fullDestination -Force
+                }
+                if ($hadManifest) {
+                    [IO.File]::Copy($backupManifest, $fullManifest, $true)
+                } elseif (Test-Path -LiteralPath $fullManifest -PathType Leaf) {
+                    Remove-Item -LiteralPath $fullManifest -Force
+                }
+            } catch {
+                throw ("O: update failed and rollback also failed. " +
+                    "Update: $updateFailure Rollback: $_")
+            }
+            throw $updateFailure
         }
-    } else {
-        [pscustomobject]@{
-            Updated = $false
-            Tag = $Tag
-            ReleaseUrl = $release.url
-            Destination = $fullDestination
-            Version = $downloadedVersion
-            Sha256 = $downloadedHash
-            Signature = [string]$downloadedSignature.Status
-            Signer = $downloadedSigner
-        }
+    }
+
+    [pscustomobject]@{
+        Updated = -not $WhatIf
+        Tag = $Tag
+        SourceSha = $normalizedSourceSha
+        Destination = $fullDestination
+        Manifest = $fullManifest
+        Version = $expectedVersion
+        Sha256 = $sourceHash
+        Signature = [string]$signature.Status
+        Signer = $signer
     }
 } finally {
-    if ($stage -and (Test-Path -LiteralPath $stage -PathType Leaf)) {
-        Remove-Item -LiteralPath $stage -Force
-    }
-    $safePrefix = [IO.Path]::GetFullPath('C:\temp\eqnedit64-o-sync-')
-    $resolvedDownloadRoot = [IO.Path]::GetFullPath($downloadRoot)
-    if ($resolvedDownloadRoot.StartsWith(
-            $safePrefix, [StringComparison]::OrdinalIgnoreCase) -and
-        (Test-Path -LiteralPath $resolvedDownloadRoot -PathType Container)) {
-        Remove-Item -LiteralPath $resolvedDownloadRoot -Recurse -Force
+    foreach ($temporary in @(
+            $stageExe, $stageManifest, $backupExe, $backupManifest)) {
+        if ($temporary -and (Test-Path -LiteralPath $temporary -PathType Leaf)) {
+            Remove-Item -LiteralPath $temporary -Force
+        }
     }
 }

@@ -65,8 +65,60 @@ jobs:
           print(f"Eqnedit64 CI ref: {ref} (eligible={eligible})")
           PY
 
-  build-wheels:
+  signed-standalone:
     needs: qualify
+    if: needs.qualify.outputs.eligible == 'true'
+    runs-on: [self-hosted, windows-radia]
+    timeout-minutes: 5
+    steps:
+      - name: Verify the pre-tag O drive release gate
+        shell: pwsh
+        env:
+          EQNEDIT64_TAG: ${{ needs.qualify.outputs.tag }}
+          EQNEDIT64_SHA: ${{ needs.qualify.outputs.sha }}
+        run: |
+          $exe = 'O:\Eqnedit64.exe'
+          $manifestPath = 'O:\Eqnedit64.release.json'
+          if (-not (Test-Path -LiteralPath $exe -PathType Leaf) -or
+              -not (Test-Path -LiteralPath $manifestPath -PathType Leaf)) {
+            throw 'O: Eqnedit64 release gate is incomplete; prepare O: before tag push.'
+          }
+          $manifest = Get-Content -LiteralPath $manifestPath -Raw |
+            ConvertFrom-Json
+          $expectedVersion = $env:EQNEDIT64_TAG.Substring('eqnedit64-v'.Length)
+          $actualHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $exe).Hash
+          $actualVersion = (Get-Item -LiteralPath $exe).VersionInfo.ProductVersion
+          $signature = Get-AuthenticodeSignature -LiteralPath $exe
+          if ($manifest.schema -cne 'eqnedit64.o-release.v1' -or
+              $manifest.tag -cne $env:EQNEDIT64_TAG -or
+              $manifest.version -cne $expectedVersion -or
+              $manifest.source_sha -cne $env:EQNEDIT64_SHA -or
+              $manifest.exe_sha256 -cne $actualHash -or
+              $actualVersion -cne $expectedVersion -or
+              $manifest.signer -cne 'CN=ksugahar' -or
+              -not $signature.SignerCertificate -or
+              $signature.SignerCertificate.Subject -cne 'CN=ksugahar' -or
+              $signature.Status -in @('NotSigned', 'HashMismatch')) {
+            throw 'O: Eqnedit64 release gate does not match the exact tag CI.'
+          }
+
+          $artifact = Join-Path $env:RUNNER_TEMP 'eqnedit64-signed-standalone'
+          New-Item -ItemType Directory -Path $artifact | Out-Null
+          Copy-Item -LiteralPath $exe -Destination $artifact
+          [IO.File]::WriteAllText(
+            (Join-Path $artifact 'SHA256SUMS.txt'),
+            "$($actualHash.ToLowerInvariant())  Eqnedit64.exe`n",
+            [Text.UTF8Encoding]::new($false))
+
+      - name: Upload exact signed standalone artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: eqnedit64-signed-standalone
+          path: ${{ runner.temp }}/eqnedit64-signed-standalone/*
+          if-no-files-found: error
+
+  build-wheels:
+    needs: [qualify, signed-standalone]
     if: needs.qualify.outputs.eligible == 'true'
     runs-on: windows-2022
     strategy:
@@ -82,21 +134,16 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
-      - name: Download and verify signed standalone release
-        env:
-          GH_TOKEN: ${{ github.token }}
-          EQNEDIT64_TAG: ${{ needs.qualify.outputs.tag }}
+      - name: Download exact pre-tag O drive artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: eqnedit64-signed-standalone
+          path: ${{ runner.temp }}/eqnedit64-release
+
+      - name: Verify signed standalone artifact
         shell: pwsh
         run: |
-          $release = gh release view $env:EQNEDIT64_TAG `
-            --repo $env:GITHUB_REPOSITORY --json isDraft,tagName | ConvertFrom-Json
-          if ($release.isDraft -or $release.tagName -cne $env:EQNEDIT64_TAG) {
-            throw "published Eqnedit64 release is unavailable: $env:EQNEDIT64_TAG"
-          }
           $directory = Join-Path $env:RUNNER_TEMP 'eqnedit64-release'
-          New-Item -ItemType Directory -Path $directory | Out-Null
-          gh release download $env:EQNEDIT64_TAG --repo $env:GITHUB_REPOSITORY `
-            --pattern Eqnedit64.exe --pattern SHA256SUMS.txt --dir $directory
           $exe = Join-Path $directory 'Eqnedit64.exe'
           $checksums = Join-Path $directory 'SHA256SUMS.txt'
           $line = Get-Content -LiteralPath $checksums |
@@ -156,11 +203,12 @@ jobs:
           if-no-files-found: error
 
   publish:
-    needs: build-wheels
+    needs: [qualify, signed-standalone, build-wheels]
     runs-on: ubuntu-latest
     environment: pypi
     permissions:
-      contents: read
+      actions: read
+      contents: write
       id-token: write
     steps:
       - uses: actions/download-artifact@v4
@@ -168,7 +216,32 @@ jobs:
           pattern: eqnedit64-wheel-*
           path: dist
           merge-multiple: true
+      - uses: actions/download-artifact@v4
+        with:
+          name: eqnedit64-signed-standalone
+          path: standalone
       - uses: pypa/gh-action-pypi-publish@release/v1
         with:
           packages-dir: dist/
           skip-existing: true
+      - name: Publish signed standalone GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EQNEDIT64_TAG: ${{ needs.qualify.outputs.tag }}
+        run: |
+          set -euo pipefail
+          if gh release view "$EQNEDIT64_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            existing="$RUNNER_TEMP/eqnedit64-existing-release"
+            mkdir -p "$existing"
+            gh release download "$EQNEDIT64_TAG" --repo "$GITHUB_REPOSITORY" \
+              --pattern Eqnedit64.exe --pattern SHA256SUMS.txt --dir "$existing"
+            cmp standalone/Eqnedit64.exe "$existing/Eqnedit64.exe"
+            cmp standalone/SHA256SUMS.txt "$existing/SHA256SUMS.txt"
+            echo "Existing GitHub Release is byte-identical."
+          else
+            version="${EQNEDIT64_TAG#eqnedit64-v}"
+            gh release create "$EQNEDIT64_TAG" \
+              standalone/Eqnedit64.exe standalone/SHA256SUMS.txt \
+              --repo "$GITHUB_REPOSITORY" --verify-tag \
+              --title "Eqnedit64 $version" --generate-notes
+          fi
