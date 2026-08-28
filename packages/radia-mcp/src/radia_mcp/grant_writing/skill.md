@@ -31,9 +31,28 @@ JSPS各事業、公益法人、受託研究、いずれにも共通する欠陥�
 
 ## Japanese Readability Score
 
+### Genre Boundary
+
+研究会原稿と助成金申請は、同じ日本語で書かれていても審査目的が異なる。
+共有してよいのは、文の切れ目、修飾範囲、主語・述語の近接、表記統一という
+基礎lintだけである。ジャンル固有の点数、合否、推敲優先順位は共有しない。
+
+| 文書 | 読者が判断すること | 固有の確認軸 |
+|---|---|---|
+| 研究会原稿・論文 | 完了した科学的主張を追跡・再現できるか | 定義、仮定、記号・式、方法、結果、図表、引用、限界 |
+| 助成金申請 | なぜ今必要で、申請者が将来の計画を完遂できるか | 問題、why-now、学術的問い、実現可能性、予備結果、体制、到達点、予算 |
+
+`grant_writing_japanese_genre_contract(document_type)` を先に適用する。
+`research_meeting_manuscript`、`research_manuscript`、`paper` 等は
+`wrong_genre` とし、`mcp-server-paper-writing` の
+`paper_writing_bilingual_readability_check` と
+`paper_writing_em_submission_gate` へ戻す。研究会原稿の過去形や結果中心の構成を、
+申請書の「言い切り不足」として減点してはならない。
+
 grant-writingの文章採点は**日本語申請書専用**とする。英文を日本語基準で採点
-せず、英文との平均点も作らない。`grant_writing_japanese_readability_score`
-は次の6軸を100点で診断する。
+せず、英文との平均点も作らない。採点時は `document_type="grant_proposal"`
+を必須とする。`grant_writing_japanese_readability_score` は次の6軸を100点で
+診断する。
 
 | 軸 | 配点 | 主な観測量 |
 |---|---:|---|
