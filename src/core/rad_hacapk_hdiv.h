@@ -697,6 +697,8 @@ private:
     struct EntryStrategy {
         virtual ~EntryStrategy() = default;
         virtual double Evaluate(const RadHACApKChargeGram& owner, int row, int col) const = 0;
+    protected:
+        static double EvaluateHostBlock(const RadHACApKChargeGram& owner, int row, int col);
     };
     struct SampledLaplaceEntryStrategy;
     struct SampledPlanarEntryStrategy;
@@ -709,15 +711,6 @@ private:
     const EntryStrategy& GetEntryStrategy() const;
     mutable std::once_flag m_entryStrategyOnce;
     mutable std::unique_ptr<EntryStrategy> m_entryStrategy;
-    double EvaluateSampledLaplaceEntry(int a, int b) const;
-    double EvaluateSampledPlanarEntry(int a, int b) const;
-    double EvaluatePlanarEntry(int a, int b) const;
-    double EvaluateHexEntry(int a, int b) const;
-    double EvaluateWedgeEntry(int a, int b) const;
-    double EvaluateHostBlockEntry(int a, int b) const;
-    double EvaluateHighOrderTetEntry(int a, int b) const;
-    double EvaluateAnalyticEntry(int a, int b) const;
-    double EvaluateMonopoleEntry(int a, int b) const;
     // The selected element strategy supplies the complete physical entry; the
     // public virtual wraps it and serves Ghat = sigma_a^-1 sigma_b^-1 * raw
     // only while the H-matrix fill is running (m_fillNormalized).
