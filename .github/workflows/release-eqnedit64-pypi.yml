@@ -77,12 +77,20 @@ jobs:
           EQNEDIT64_TAG: ${{ needs.qualify.outputs.tag }}
           EQNEDIT64_SHA: ${{ needs.qualify.outputs.sha }}
         run: |
-          $exe = 'O:\Eqnedit64.exe'
-          $manifestPath = 'O:\Eqnedit64.release.json'
-          if (-not (Test-Path -LiteralPath $exe -PathType Leaf) -or
-              -not (Test-Path -LiteralPath $manifestPath -PathType Leaf)) {
+          # O: is SUBST-ed to this OneDrive directory in the interactive LAB
+          # session.  The runner service uses LocalSystem, so it cannot see
+          # per-user drive letters and must inspect the same backing directory.
+          $releaseRoots = @('O:\', 'C:\Users\Administrator\OneDrive')
+          $releaseRoot = $releaseRoots | Where-Object {
+            (Test-Path -LiteralPath (Join-Path $_ 'Eqnedit64.exe') -PathType Leaf) -and
+            (Test-Path -LiteralPath (Join-Path $_ 'Eqnedit64.release.json') -PathType Leaf)
+          } | Select-Object -First 1
+          if (-not $releaseRoot) {
             throw 'O: Eqnedit64 release gate is incomplete; prepare O: before tag push.'
           }
+          $exe = Join-Path $releaseRoot 'Eqnedit64.exe'
+          $manifestPath = Join-Path $releaseRoot 'Eqnedit64.release.json'
+          Write-Host "Verifying O: release backing path: $releaseRoot"
           $manifest = Get-Content -LiteralPath $manifestPath -Raw |
             ConvertFrom-Json
           $expectedVersion = $env:EQNEDIT64_TAG.Substring('eqnedit64-v'.Length)
