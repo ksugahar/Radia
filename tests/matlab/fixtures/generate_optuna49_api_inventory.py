@@ -201,6 +201,7 @@ def main() -> None:
     destination.write_text(
         json.dumps(build_inventory(), indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
+        newline="\n",
     )
     print(destination)
 

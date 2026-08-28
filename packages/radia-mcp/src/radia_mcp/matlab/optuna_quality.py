@@ -68,6 +68,12 @@ def _sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest().upper()
 
 
+def _sha256_lf(path: Path) -> str:
+    """Hash generated text with the repository's platform-neutral LF form."""
+    content = path.read_bytes().replace(b"\r\n", b"\n").replace(b"\r", b"\n")
+    return hashlib.sha256(content).hexdigest().upper()
+
+
 def _read_json(path: Path, errors: list[str], label: str) -> dict[str, Any]:
     if not path.is_file():
         errors.append(f"missing {label}: {path}")
@@ -320,7 +326,7 @@ def matlab_optuna_health(distribution_path: str = "") -> dict[str, Any]:
 
     oracle_path = Path(layout["oracle"])
     recorded_oracle_sha = str(coverage.get("upstream_oracle_sha256", "")).upper()
-    actual_oracle_sha = _sha256(oracle_path) if oracle_path.is_file() else None
+    actual_oracle_sha = _sha256_lf(oracle_path) if oracle_path.is_file() else None
     if actual_oracle_sha is not None and actual_oracle_sha != recorded_oracle_sha:
         errors.append("upstream oracle SHA256 differs from the coverage record")
 
@@ -328,7 +334,9 @@ def matlab_optuna_health(distribution_path: str = "") -> dict[str, Any]:
     recorded_inventory_sha = str(
         coverage.get("upstream_inventory_sha256", "")
     ).upper()
-    actual_inventory_sha = _sha256(inventory_path) if inventory_path.is_file() else None
+    actual_inventory_sha = (
+        _sha256_lf(inventory_path) if inventory_path.is_file() else None
+    )
     if actual_inventory_sha is not None and actual_inventory_sha != recorded_inventory_sha:
         errors.append("public API inventory SHA256 differs from the coverage record")
 
