@@ -30,6 +30,9 @@ _PACKAGES = [
     ("cubit-mesh-export",
      "packages/cubit-mesh-export/pyproject.toml",
      "packages/cubit-mesh-export/src/cubit_mesh_export/__init__.py"),
+    ("eqnedit64",
+     "packages/eqnedit64/pyproject.toml",
+     "packages/eqnedit64/src/eqnedit64/__init__.py"),
 ]
 
 _VER_RE = re.compile(r'(?:^version|^__version__)\s*=\s*"([^"]+)"', re.M)
