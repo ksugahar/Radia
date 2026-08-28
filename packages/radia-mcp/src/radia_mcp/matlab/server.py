@@ -15,6 +15,10 @@ from .optuna_quality import (
     matlab_optuna_release_gate as _optuna_release_gate,
 )
 from .optimize import matlab_cad_topology_build as _cad_topology_build, matlab_optimize_build as _optimize_build, matlab_optimize_resume as _optimize_resume, matlab_sheet_metal_topology_build as _sheet_metal_topology_build
+from .optuna_oracle import (
+    matlab_optuna_compatibility_contract as _optuna_compatibility,
+    matlab_optuna_oracle_audit as _optuna_audit,
+)
 from .runtime import (
     matlab_extension_contract as _contract,
     matlab_official_server_config as _config,
@@ -70,6 +74,14 @@ def matlab_optuna_benchmark_plan(repository_path:str="",output_directory:str=r"C
 def matlab_optuna_release_gate(evidence_json:str,repository_path:str="",max_warmed_time_ratio:float=1.0)->str:
     """Validate installed-wheel, Simulink, resume, oracle, and speed evidence."""
     return json.dumps(_optuna_release_gate(evidence_json,repository_path,max_warmed_time_ratio),ensure_ascii=False,indent=2)
+@mcp.tool()
+def matlab_optuna_compatibility_contract(repo_root:str="")->str:
+    """Report verified Optuna 4.9.0 parity, MATLAB-only behavior, and gaps."""
+    return json.dumps(_optuna_compatibility(repo_root or None),ensure_ascii=False,indent=2)
+@mcp.tool()
+def matlab_optuna_oracle_audit(repo_root:str="")->str:
+    """Audit Optuna fixtures, versions, hashes, policy sync, and test coverage."""
+    return json.dumps(_optuna_audit(repo_root or None),ensure_ascii=False,indent=2)
 @mcp.tool()
 def matlab_simulink_library_contract()->str:
     """Describe Radia application blocks, Library Browser registration, and LTspice compatibility."""

@@ -96,12 +96,18 @@ def presentation_takehome_strength(pptx_path: str) -> dict:
     slides = list(prs.slides)
     slides_scanned = len(slides)
 
-    # Detect explicit Q&A/ご清聴 title on the *last* slide.
-    has_qa_or_questions_title = False
-    if slides:
-        last_title = _slide_title(slides[-1])
-        if _QA_EXPLICIT_PATTERN.search(last_title):
-            has_qa_or_questions_title = True
+    from .._deck_sections import classify_deck_sections
+
+    sections = classify_deck_sections(slides, _slide_title)
+    backup_slide_numbers = set(sections["backup_slide_numbers"])
+
+    # A closing slide may correctly precede a trailing appendix.  Looking only
+    # at the physical last slide used to miss that common research-talk layout.
+    has_qa_or_questions_title = any(
+        _QA_EXPLICIT_PATTERN.search(_slide_title(slide))
+        for slide_no, slide in enumerate(slides, 1)
+        if slide_no not in backup_slide_numbers
+    )
 
     # Walk backward from the last slide, skipping Q&A/References/Thanks.
     takehome_slide_idx = -1
@@ -110,6 +116,8 @@ def presentation_takehome_strength(pptx_path: str) -> dict:
 
     for i in range(len(slides) - 1, -1, -1):
         slide = slides[i]
+        if i + 1 in backup_slide_numbers:
+            continue
         title = _slide_title(slide)
         if title and _QA_TITLE_PATTERN.search(title):
             continue
@@ -186,6 +194,9 @@ def presentation_takehome_strength(pptx_path: str) -> dict:
 
     observations = {
         "slides_scanned": slides_scanned,
+        "main_slide_count": sections["main_slide_count"],
+        "backup_slide_count": sections["backup_slide_count"],
+        "backup_slide_numbers": sections["backup_slide_numbers"],
         "takehome_slide_idx": takehome_slide_idx,
         "takehome_title": takehome_title[:120],
         "takehome_body": takehome_body[:400],

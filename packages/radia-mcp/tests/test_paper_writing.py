@@ -2096,3 +2096,42 @@ The novel symbol $\fakecommand$ appears here.
                 if x["symbol"] == r"\fakecommand")
     assert "first_occurrence_context" in rec
     assert "fakecommand" in rec["first_occurrence_context"]
+
+
+def test_misleading_ratio_claims_flags_mixed_mesh_conditions():
+    text = (
+        "全試験点の最大偏差は補償点磁荷法0.159%（n=2）、"
+        "MMPM 0.00110%（n=3）であり、その比は約1/145であった。"
+    )
+    result = pw.paper_writing_check_misleading_ratio_claims(text)
+    assert result["passed"] is False
+    assert result["finding_count"] == 1
+    assert "mixed_conditions" in result["findings"][0]["reasons"]
+
+
+def test_misleading_ratio_claims_flags_ratio_without_source_values():
+    result = pw.paper_writing_check_misleading_ratio_claims(
+        "MMPMは磁化偏差を1/2858へ低減した。"
+    )
+    reasons = result["findings"][0]["reasons"]
+    assert result["passed"] is False
+    assert "ratio_without_two_source_values" in reasons
+    assert "large_ratio_without_absolute_scale" in reasons
+
+
+def test_misleading_ratio_claims_passes_absolute_value_only_wording():
+    result = pw.paper_writing_check_misleading_ratio_claims(
+        "低透磁率の全試験点でMMPMの最大磁化変動は0.00110%であり、"
+        "補償点磁荷法では0.159%に達した。"
+    )
+    assert result["passed"] is True
+    assert result["ratio_expression_count"] == 0
+
+
+def test_misleading_ratio_claims_allows_supported_same_condition_ratio():
+    result = pw.paper_writing_check_misleading_ratio_claims(
+        "n=3の同一条件で、最大磁化変動は10.922%から0.468%へ低下し、"
+        "約23分の1であった。"
+    )
+    assert result["passed"] is True
+    assert result["ratio_expression_count"] == 1

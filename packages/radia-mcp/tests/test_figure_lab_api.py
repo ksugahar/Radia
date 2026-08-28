@@ -47,6 +47,19 @@ def test_font_gate_rejects_paper_annotation_below_10pt():
     plt.close(fig)
 
 
+def test_font_gate_rejects_oversized_paper_annotation():
+    import matplotlib.pyplot as plt
+    fig, ax = plt.subplots(figsize=(8.0 / 2.54, 2.0))
+    ax.text(0.5, 0.5, "oversized annotation", fontsize=11.0)
+    bad = check_min_font(
+        fig, min_pt=10.0, max_pt=10.5, embed_width_cm=8.0
+    )
+    assert len(bad) == 1
+    assert bad[0]["reason"] == "above maximum"
+    assert bad[0]["visible_pt"] == pytest.approx(11.0)
+    plt.close(fig)
+
+
 def test_font_gate_uses_actual_powerpoint_paste_width():
     import matplotlib.pyplot as plt
     fig, ax = plt.subplots(figsize=(25.0 / 2.54, 4.0))

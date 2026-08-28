@@ -7,6 +7,7 @@ dragging it smaller rescales the text silently (MMPM SA-26-069, 2026-08-16:
 from __future__ import annotations
 
 from pathlib import Path
+import xml.etree.ElementTree as ET
 
 import pytest
 from PIL import Image
@@ -15,6 +16,8 @@ from pptx.util import Inches
 
 from radia_mcp.figure import audit_pptx_figures
 from radia_mcp.figure.tools import figure_audit_pptx_figures
+from radia_mcp.common.pptx_svg import svg_length_pt as _svg_length_pt
+from radia_mcp.figure._pptx_audit import _svg_asset
 
 
 def _png(tmp_path: Path, name: str, px: tuple[int, int], dpi: int | None = 300) -> Path:
@@ -151,3 +154,42 @@ def test_pdf_rasterised_at_the_paste_width_audits_clean(tmp_path: Path) -> None:
     # integer pixel rounding leaves a sub-0.1% residue, not a paste-scale error
     assert abs(rep["pictures"][0]["scale"] - 1.0) < 0.002
     assert abs(rep["pictures"][0]["effective_dpi"] - 300.0) < 1.0
+
+
+def test_svg_length_uses_css_pixel_to_point_conversion() -> None:
+    assert _svg_length_pt("96") == 72.0
+    assert _svg_length_pt("2.54cm") == pytest.approx(72.0)
+
+
+def test_svg_asset_follows_svgblip_without_png_fallback() -> None:
+    svg_blob = (
+        b'<svg xmlns="http://www.w3.org/2000/svg" width="960" '
+        b'height="480" viewBox="0 0 720 360"/>'
+    )
+    element = ET.fromstring(
+        '<p:pic xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" '
+        'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" '
+        'xmlns:asvg="http://schemas.microsoft.com/office/drawing/2016/SVG/main">'
+        '<asvg:svgBlip r:embed="rId9"/></p:pic>'
+    )
+
+    class _SvgPart:
+        blob = svg_blob
+
+    class _SlidePart:
+        @staticmethod
+        def related_part(relationship_id: str):
+            assert relationship_id == "rId9"
+            return _SvgPart()
+
+    class _Shape:
+        _element = element
+        part = _SlidePart()
+
+    asset = _svg_asset(_Shape())
+
+    assert asset is not None
+    assert asset["source_type"] == "svg"
+    assert asset["width_pt"] == 720.0
+    assert asset["height_pt"] == 360.0
+    assert asset["pixels"] is None
