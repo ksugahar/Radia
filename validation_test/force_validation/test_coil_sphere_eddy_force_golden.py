@@ -18,11 +18,13 @@ import sys
 
 import pytest
 
+pytestmark = pytest.mark.slow
+
 pytest.importorskip("ngsolve")
 pytest.importorskip("netgen.occ")
 
-_HERE = os.path.dirname(os.path.abspath(__file__))
-_SPHERE_DEMO = os.path.join(_HERE, "..", "docs", "maglev", "demos", "sphere")
+_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+_SPHERE_DEMO = os.path.join(_ROOT, "docs", "maglev", "demos", "sphere")
 _SCRIPT = os.path.join(_SPHERE_DEMO, "coil_sphere_eddy_force.py")
 _JSON = os.path.join(_SPHERE_DEMO, "coil_sphere_eddy_force_results.json")
 

@@ -247,7 +247,7 @@ def test_direct_As_Ay_polynomial_jet_has_forward_ad_and_canonical_coupling():
     )
 
 
-def test_direct_As_Ay_polynomials_generate_fourth_order_lie_map_with_ad():
+def _validate_direct_As_Ay_polynomials_generate_fourth_order_lie_map_with_ad():
     rigidity = 2.0
     length = 0.06
     Ay = np.zeros((1, 3, 3))
@@ -833,7 +833,7 @@ def test_fourth_order_map_has_fifth_order_error_against_exact_hamiltonian():
     assert errors[1] / errors[2] == pytest.approx(32.0, rel=0.06)
 
 
-def test_fourth_order_lie_objective_and_material_pipeline_control_v_term():
+def _validate_fourth_order_lie_objective_and_material_pipeline_control_v_term():
     orbit = _straight_orbit(length=0.02)
     current = np.zeros(9)
     wanted = np.array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 3.0])

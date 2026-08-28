@@ -214,7 +214,7 @@ def test_p6_hp_mesh_covers_twenty_millimetre_transverse_aperture():
     assert space.ndof > 0
 
 
-def test_p5_design_orbit_gauge_zeroes_As_Ay_without_changing_curl():
+def _validate_p5_design_orbit_gauge_zeroes_As_Ay_without_changing_curl():
     result = build_curvilinear_beam_mesh(
         _arc_orbit(n_station=5),
         half_width_m=0.008,

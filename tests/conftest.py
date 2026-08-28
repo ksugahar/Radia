@@ -4,8 +4,7 @@ pytest configuration and shared fixtures for Radia tests
 Usage:
   pytest tests/                     # Run all tests
   pytest tests/ -m basic            # Run only basic tests
-  pytest tests/ -m "not slow"       # Skip slow tests
-  pytest tests/ -m "not slow and not golden"  # Fast CI/simple gate
+  pytest tests/                     # Short CI/debug suite
   pytest validation_test/           # Heavy validation / golden / GUI / Cubit checks
 """
 
@@ -81,25 +80,6 @@ except ImportError:
 
 
 PROJECT_ROOT = setup_radia_path()
-
-
-def _load_ci_slow_nodeids():
-    """Load measured-slow tests so fast CI can keep the runner responsive."""
-    path = PROJECT_ROOT / "tests" / "ci_slow_nodeids.txt"
-    try:
-        lines = path.read_text(encoding="utf-8").splitlines()
-    except OSError:
-        return set()
-
-    nodeids = set()
-    for line in lines:
-        line = line.split("#", 1)[0].strip()
-        if line:
-            nodeids.add(line.replace("\\", "/"))
-    return nodeids
-
-
-CI_SLOW_NODEIDS = _load_ci_slow_nodeids()
 
 
 # ---------------------------------------------------------------
@@ -219,8 +199,6 @@ def pytest_collection_modifyitems(config, items):
     """Add markers based on test location."""
     for item in items:
         nodeid = item.nodeid.replace("\\", "/")
-        if nodeid in CI_SLOW_NODEIDS:
-            item.add_marker(pytest.mark.slow)
         if "golden" in nodeid.lower():
             item.add_marker(pytest.mark.golden)
         if "benchmarks" in str(item.fspath):
