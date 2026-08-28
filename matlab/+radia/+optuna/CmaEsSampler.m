@@ -124,8 +124,7 @@ classdef CmaEsSampler < radia.optuna.BaseSampler
             end
             obj.IndependentSampler.beforeTrial(study,trial);
             obj.attach(study);
-            completed = study.TrialTable.State == "COMPLETE";
-            if sum(completed) < obj.NStartupTrials
+            if obj.usableTrialCount(study) < obj.NStartupTrials
                 return
             end
             searchSpace = obj.inferRelativeSearchSpace(study, trial);
@@ -184,7 +183,7 @@ classdef CmaEsSampler < radia.optuna.BaseSampler
         function afterTrial(obj, study, trial)
             obj.IndependentSampler.afterTrial(study,trial);
             obj.attach(study);
-            if trial.State ~= "COMPLETE" || isempty(obj.Engine) || ...
+            if ~obj.acceptsTrial(trial) || isempty(obj.Engine) || ...
                     isempty(obj.SearchSpace)
                 obj.recordState(study, trial.Number);
                 return
@@ -237,21 +236,44 @@ classdef CmaEsSampler < radia.optuna.BaseSampler
     end
 
     methods (Access=private)
+        function count = usableTrialCount(obj, study)
+            %USABLETRIALCOUNT Port of CmaEsSampler._get_trials' length.
+            %   Optuna counts COMPLETE trials and, when
+            %   consider_pruned_trials is on, PRUNED trials that reported at
+            %   least one non-missing intermediate value. The same set backs
+            %   the startup gate, the optimizer history, and the
+            %   independent-sampling warning, so all three share this
+            %   helper.
+            states = study.TrialTable.State;
+            count = sum(states == "COMPLETE");
+            if ~obj.ConsiderPrunedTrials
+                return
+            end
+            prunedNumbers = study.TrialTable.TrialNumber(states == "PRUNED");
+            if isempty(prunedNumbers)
+                return
+            end
+            [~, reported] = study.lastIntermediateValues(prunedNumbers);
+            count = count + sum(~isnan(reported));
+        end
+
+        function accepted = acceptsTrial(obj, trial)
+            %ACCEPTSTRIAL Trials CmaEsSampler._get_trials feeds the engine.
+            %   A PRUNED trial enters with the value at its deepest reported
+            %   step, which Study.tell already stored as Trial.Value.
+            if trial.State == "COMPLETE"
+                accepted = true;
+                return
+            end
+            accepted = obj.ConsiderPrunedTrials && trial.State == "PRUNED" && ...
+                height(trial.IntermediateValues) > 0 && isfinite(trial.Value);
+        end
+
         function warnIndependent(obj, study, trial, name)
             if ~obj.WarnIndependentSampling
                 return
             end
-            count = sum(study.TrialTable.State == "COMPLETE");
-            if obj.ConsiderPrunedTrials
-                prunedNumbers = study.TrialTable.TrialNumber( ...
-                    study.TrialTable.State == "PRUNED");
-                for number = reshape(prunedNumbers,1,[])
-                    if any(study.IntermediateTable.TrialNumber == number)
-                        count = count + 1;
-                    end
-                end
-            end
-            if count < obj.NStartupTrials
+            if obj.usableTrialCount(study) < obj.NStartupTrials
                 return
             end
             warning("radia:optuna:CMAIndependentSampling", ...
