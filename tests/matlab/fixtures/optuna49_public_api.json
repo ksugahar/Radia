@@ -1,0 +1,4695 @@
+{
+  "class_member_count": 606,
+  "module_count": 18,
+  "modules": [
+    {
+      "module": "optuna",
+      "symbols": [
+        {
+          "kind": "class",
+          "members": [
+            {
+              "kind": "method",
+              "name": "add_trial",
+              "signature": "(self, trial: 'FrozenTrial') -> 'None'"
+            },
+            {
+              "kind": "method",
+              "name": "add_trials",
+              "signature": "(self, trials: 'Iterable[FrozenTrial]') -> 'None'"
+            },
+            {
+              "kind": "method",
+              "name": "ask",
+              "signature": "(self, fixed_distributions: 'dict[str, BaseDistribution] | None' = None) -> 'Trial'"
+            },
+            {
+              "kind": "property",
+              "name": "best_params",
+              "signature": null
+            },
+            {
+              "kind": "property",
+              "name": "best_trial",
+              "signature": null
+            },
+            {
+              "kind": "property",
+              "name": "best_trials",
+              "signature": null
+            },
+            {
+              "kind": "property",
+              "name": "best_value",
+              "signature": null
+            },
+            {
+              "kind": "property",
+              "name": "direction",
+              "signature": null
+            },
+            {
+              "kind": "property",
+              "name": "directions",
+              "signature": null
+            },
+            {
+              "kind": "method",
+              "name": "enqueue_trial",
+              "signature": "(self, params: 'dict[str, Any]', user_attrs: 'dict[str, Any] | None' = None, skip_if_exists: 'bool' = False) -> 'None'"
+            },
+            {
+              "kind": "method",
+              "name": "get_trials",
+              "signature": "(self, deepcopy: 'bool' = True, states: 'Container[TrialState] | None' = None) -> 'list[FrozenTrial]'"
+            },
+            {
+              "kind": "property",
+              "name": "metric_names",
+              "signature": null
+            },
+            {
+              "kind": "method",
+              "name": "optimize",
+              "signature": "(self, func: 'ObjectiveFuncType', n_trials: 'int | None' = None, timeout: 'float | None' = None, n_jobs: 'int' = 1, catch: 'Iterable[type[Exception]] | type[Exception]' = (), callbacks: 'Iterable[Callable[[Study, FrozenTrial], None]] | None' = None, gc_after_trial: 'bool' = False, show_progress_bar: 'bool' = False) -> 'None'"
+            },
+            {
+              "kind": "method",
+              "name": "set_metric_names",
+              "signature": "(self, metric_names: 'list[str]') -> 'None'"
+            },
+            {
+              "kind": "method",
+              "name": "set_system_attr",
+              "signature": "(self, key: 'str', value: 'Any') -> 'None'"
+            },
+            {
+              "kind": "method",
+              "name": "set_user_attr",
+              "signature": "(self, key: 'str', value: 'Any') -> 'None'"
+            },
+            {
+              "kind": "method",
+              "name": "stop",
+              "signature": "(self) -> 'None'"
+            },
+            {
+              "kind": "property",
+              "name": "system_attrs",
+              "signature": null
+            },
+            {
+              "kind": "method",
+              "name": "tell",
+              "signature": "(self, trial: 'Trial | int', values: 'float | Sequence[float] | None' = None, state: 'TrialState | None' = None, skip_if_finished: 'bool' = False) -> 'FrozenTrial'"
+            },
+            {
+              "kind": "property",
+              "name": "trials",
+              "signature": null
+            },
+            {
+              "kind": "method",
+              "name": "trials_dataframe",
+              "signature": "(self, attrs: 'tuple[str, ...]' = ('number', 'value', 'datetime_start', 'datetime_complete', 'duration', 'params', 'user_attrs', 'system_attrs', 'state'), multi_index: 'bool' = False) -> \"'pd.DataFrame'\""
+            },
+            {
+              "kind": "property",
+              "name": "user_attrs",
+              "signature": null
+            }
+          ],
+          "name": "Study",
+          "resolvable": true,
+          "signature": "(study_name: 'str', storage: 'str | storages.BaseStorage', sampler: \"'samplers.BaseSampler' | None\" = None, pruner: 'pruners.BasePruner | None' = None) -> 'None'"
+        },
+        {
+          "kind": "class",
+          "members": [
+            {
+              "kind": "property",
+              "name": "datetime_start",
+              "signature": null
+            },
+            {
+              "kind": "property",
+              "name": "distributions",
+              "signature": null
+            },
+            {
+              "kind": "property",
+              "name": "number",
+              "signature": null
+            },
+            {
+              "kind": "property",
+              "name": "params",
+              "signature": null
+            },
+            {
+              "kind": "property",
+              "name": "relative_params",
+              "signature": null
+            },
+            {
+              "kind": "method",
+              "name": "report",
+              "signature": "(self, value: 'float', step: 'int') -> 'None'"
+            },
+            {
+              "kind": "method",
+              "name": "set_system_attr",
+              "signature": "(self, key: 'str', value: 'Any') -> 'None'"
+            },
+            {
+              "kind": "method",
+              "name": "set_user_attr",
+              "signature": "(self, key: 'str', value: 'Any') -> 'None'"
+            },
+            {
+              "kind": "method",
+              "name": "should_prune",
+              "signature": "(self) -> 'bool'"
+            },
+            {
+              "kind": "method",
+              "name": "suggest_categorical",
+              "signature": "(self, name: 'str', choices: 'Sequence[CategoricalChoiceType]') -> 'CategoricalChoiceType'"
+            },
+            {
+              "kind": "method",
+              "name": "suggest_discrete_uniform",
+              "signature": "(self, name: 'str', low: 'float', high: 'float', q: 'float') -> 'float'"
+            },
+            {
+              "kind": "method",
+              "name": "suggest_float",
+              "signature": "(self, name: 'str', low: 'float', high: 'float', *, step: 'float | None' = None, log: 'bool' = False) -> 'float'"
+            },
+            {
+              "kind": "method",
+              "name": "suggest_int",
+              "signature": "(self, name: 'str', low: 'int', high: 'int', *, step: 'int' = 1, log: 'bool' = False) -> 'int'"
+            },
+            {
+              "kind": "method",
+              "name": "suggest_loguniform",
+              "signature": "(self, name: 'str', low: 'float', high: 'float') -> 'float'"
+            },
+            {
+              "kind": "method",
+              "name": "suggest_uniform",
+              "signature": "(self, name: 'str', low: 'float', high: 'float') -> 'float'"
+            },
+            {
+              "kind": "property",
+              "name": "system_attrs",
+              "signature": null
+            },
+            {
+              "kind": "property",
+              "name": "user_attrs",
+              "signature": null
+            }
+          ],
+          "name": "Trial",
+          "resolvable": true,
+          "signature": "(study: 'Study', trial_id: 'int') -> 'None'"
+        },
+        {
+          "kind": "class",
+          "members": [
+            {
+              "kind": "method",
+              "name": "add_note",
+              "signature": null
+            },
+            {
+              "kind": "constant-or-field",
+              "name": "args",
+              "signature": null
+            },
+            {
+              "kind": "method",
+              "name": "with_traceback",
+              "signature": null
+            }
+          ],
+          "name": "TrialPruned",
+          "resolvable": true,
+          "signature": null
+        },
+        {
+          "kind": "constant-or-type-alias",
+          "members": [],
+          "name": "__version__",
+          "resolvable": true,
+          "signature": null
+        },
+        {
+          "kind": "module",
+          "members": [],
+          "name": "artifacts",
+          "resolvable": true,
+          "signature": null
+        },
+        {
+          "kind": "function",
+          "members": [],
+          "name": "copy_study",
+          "resolvable": true,
+          "signature": "(*, from_study_name: 'str', from_storage: 'str | storages.BaseStorage', to_storage: 'str | storages.BaseStorage', to_study_name: 'str | None' = None) -> 'None'"
+        },
+        {
+          "kind": "function",
+          "members": [],
+          "name": "create_study",
+          "resolvable": true,
+          "signature": "(*, storage: 'str | storages.BaseStorage | None' = None, sampler: \"'samplers.BaseSampler' | None\" = None, pruner: 'pruners.BasePruner | None' = None, study_name: 'str | None' = None, direction: 'str | StudyDirection | None' = None, load_if_exists: 'bool' = False, directions: 'Sequence[str | StudyDirection] | None' = None) -> 'Study'"
+        },
+        {
+          "kind": "function",
+          "members": [],
+          "name": "create_trial",
+          "resolvable": true,
+          "signature": "(*, state: 'TrialState' = <TrialState.COMPLETE: 1>, value: 'float | None' = None, values: 'Sequence[float] | None' = None, params: 'dict[str, Any] | None' = None, distributions: 'dict[str, BaseDistribution] | None' = None, user_attrs: 'dict[str, Any] | None' = None, system_attrs: 'dict[str, Any] | None' = None, intermediate_values: 'dict[int, float] | None' = None) -> 'FrozenTrial'"
+        },
+        {
+          "kind": "function",
+          "members": [],
+          "name": "delete_study",
+          "resolvable": true,
+          "signature": "(*, study_name: 'str', storage: 'str | storages.BaseStorage') -> 'None'"
+        },
+        {
+          "kind": "module",
+          "members": [],
+          "name": "distributions",
+          "resolvable": true,
+          "signature": null
+        },
+        {
+          "kind": "module",
+          "members": [],
+          "name": "exceptions",
+          "resolvable": true,
+          "signature": null
+        },
+        {
+          "kind": "function",
+          "members": [],
+          "name": "get_all_study_names",
+          "resolvable": true,
+          "signature": "(storage: 'str | storages.BaseStorage') -> 'list[str]'"
+        },
+        {
+          "kind": "function",
+          "members": [],
+          "name": "get_all_study_summaries",
+          "resolvable": true,
+          "signature": "(storage: 'str | storages.BaseStorage', include_best_trial: 'bool' = True) -> 'list[StudySummary]'"
+        },
+        {
+          "kind": "module",
+          "members": [],
+          "name": "importance",
+          "resolvable": true,
+          "signature": null
+        },
+        {
+          "kind": "module",
+          "members": [],
+          "name": "integration",
+          "resolvable": true,
+          "signature": null
+        },
+        {
+          "kind": "function",
+          "members": [],
+          "name": "load_study",
+          "resolvable": true,
+          "signature": "(*, study_name: 'str | None', storage: 'str | storages.BaseStorage', sampler: \"'samplers.BaseSampler' | None\" = None, pruner: 'pruners.BasePruner | None' = None) -> 'Study'"
+        },
+        {
+          "kind": "module",
+          "members": [],
+          "name": "logging",
+          "resolvable": true,
+          "signature": null
+        },
+        {
+          "kind": "module",
+          "members": [],
+          "name": "pruners",
+          "resolvable": true,
+          "signature": null
+        },
+        {
+          "kind": "module",
+          "members": [],
+          "name": "samplers",
+          "resolvable": true,
+          "signature": null
+        },
+        {
+          "kind": "module",
+          "members": [],
+          "name": "search_space",
+          "resolvable": true,
+          "signature": null
+        },
+        {
+          "kind": "module",
+          "members": [],
+          "name": "storages",
+          "resolvable": true,
+          "signature": null
+        },
+        {
+          "kind": "module",
+          "members": [],
+          "name": "study",
+          "resolvable": true,
+          "signature": null
+        },
+        {
+          "kind": "module",
+          "members": [],
+          "name": "trial",
+          "resolvable": true,
+          "signature": null
+        },
+        {
+          "kind": "module",
+          "members": [],
+          "name": "version",
+          "resolvable": true,
+          "signature": null
+        },
+        {
+          "kind": "module",
+          "members": [],
+          "name": "visualization",
+          "resolvable": true,
+          "signature": null
+        }
+      ]
+    },
+    {
+      "module": "optuna.artifacts",
+      "symbols": [
+        {
+          "kind": "class",
+          "members": [
+            {
+              "kind": "descriptor",
+              "name": "artifact_id",
+              "signature": null
+            },
+            {
+              "kind": "descriptor",
+              "name": "encoding",
+              "signature": null
+            },
+            {
+              "kind": "descriptor",
+              "name": "filename",
+              "signature": null
+            },
+            {
+              "kind": "descriptor",
+              "name": "mimetype",
+              "signature": null
+            }
+          ],
+          "name": "ArtifactMeta",
+          "resolvable": true,
+          "signature": "(artifact_id: 'str', filename: 'str', mimetype: 'str', encoding: 'str | None') -> None"
+        },
+        {
+          "kind": "class",
+          "members": [
+            {
+              "kind": "method",
+              "name": "open_reader",
+              "signature": "(self, artifact_id: 'str') -> 'BinaryIO'"
+            },
+            {
+              "kind": "method",
+              "name": "remove",
+              "signature": "(self, artifact_id: 'str') -> 'None'"
+            },
+            {
+              "kind": "method",
+              "name": "write",
+              "signature": "(self, artifact_id: 'str', content_body: 'BinaryIO') -> 'None'"
+            }
+          ],
+          "name": "Backoff",
+          "resolvable": true,
+          "signature": "(backend: 'ArtifactStore', *, max_retries: 'int' = 10, multiplier: 'float' = 2, min_delay: 'float' = 0.1, max_delay: 'float' = 30) -> 'None'"
+        },
+        {
+          "kind": "class",
+          "members": [
+            {
+              "kind": "method",
+              "name": "open_reader",
+              "signature": "(self, artifact_id: 'str') -> 'BinaryIO'"
+            },
+            {
+              "kind": "method",
+              "name": "remove",
+              "signature": "(self, artifact_id: 'str') -> 'None'"
+            },
+            {
+              "kind": "method",
+              "name": "write",
+              "signature": "(self, artifact_id: 'str', content_body: 'BinaryIO') -> 'None'"
+            }
+          ],
+          "name": "Boto3ArtifactStore",
+          "resolvable": true,
+          "signature": "(bucket_name: 'str', client: 'S3Client | None' = None, *, avoid_buf_copy: 'bool' = False) -> 'None'"
+        },
+        {
+          "kind": "class",
+          "members": [
+            {
+              "kind": "method",
+              "name": "open_reader",
+              "signature": "(self, artifact_id: 'str') -> 'BinaryIO'"
+            },
+            {
+              "kind": "method",
+              "name": "remove",
+              "signature": "(self, artifact_id: 'str') -> 'None'"
+            },
+            {
+              "kind": "method",
+              "name": "write",
+              "signature": "(self, artifact_id: 'str', content_body: 'BinaryIO') -> 'None'"
+            }
+          ],
+          "name": "FileSystemArtifactStore",
+          "resolvable": true,
+          "signature": "(base_path: 'str | Path') -> 'None'"
+        },
+        {
+          "kind": "class",
+          "members": [
+            {
+              "kind": "method",
+              "name": "open_reader",
+              "signature": "(self, artifact_id: 'str') -> \"'BinaryIO'\""
+            },
+            {
+              "kind": "method",
+              "name": "remove",
+              "signature": "(self, artifact_id: 'str') -> 'None'"
+            },
+            {
+              "kind": "method",
+              "name": "write",
+              "signature": "(self, artifact_id: 'str', content_body: \"'BinaryIO'\") -> 'None'"
+            }
+          ],
+          "name": "GCSArtifactStore",
+          "resolvable": true,
+          "signature": "(bucket_name: 'str', client: 'google.cloud.storage.Client | None' = None) -> 'None'"
+        },
+        {
+          "kind": "function",
+          "members": [],
+          "name": "download_artifact",
+          "resolvable": true,
+          "signature": "(*, artifact_store: 'ArtifactStore', file_path: 'str', artifact_id: 'str') -> 'None'"
+        },
+        {
+          "kind": "function",
+          "members": [],
+          "name": "get_all_artifact_meta",
+          "resolvable": true,
+          "signature": "(study_or_trial: 'Trial | FrozenTrial | Study', *, storage: 'BaseStorage | None' = None) -> 'list[ArtifactMeta]'"
+        },
+        {
+          "kind": "function",
+          "members": [],
+          "name": "upload_artifact",
+          "resolvable": true,
+          "signature": "(*, artifact_store: 'ArtifactStore', file_path: 'str', study_or_trial: 'Trial | FrozenTrial | Study', storage: 'BaseStorage | None' = None, mimetype: 'str | None' = None, encoding: 'str | None' = None) -> 'str'"
+        }
+      ]
+    },
+    {
+      "module": "optuna.distributions",
+      "symbols": [
+        {
+          "kind": "class",
+          "members": [
+            {
+              "kind": "method",
+              "name": "single",
+              "signature": "(self) -> 'bool'"
+            },
+            {
+              "kind": "method",
+              "name": "to_external_repr",
+              "signature": "(self, param_value_in_internal_repr: 'float') -> 'Any'"
+            },
+            {
+              "kind": "method",
+              "name": "to_internal_repr",
+              "signature": "(self, param_value_in_external_repr: 'Any') -> 'float'"
+            }
+          ],
+          "name": "BaseDistribution",
+          "resolvable": true,
+          "signature": "()"
+        },
+        {
+          "kind": "constant-or-type-alias",
+          "members": [],
+          "name": "CategoricalChoiceType",
+          "resolvable": true,
+          "signature": "(*args, **kwargs)"
+        },
+        {
+          "kind": "class",
+          "members": [
+            {
+              "kind": "method",
+              "name": "single",
+              "signature": "(self) -> 'bool'"
+            },
+            {
+              "kind": "method",
+              "name": "to_external_repr",
+              "signature": "(self, param_value_in_internal_repr: 'float') -> 'CategoricalChoiceType'"
+            },
+            {
+              "kind": "method",
+              "name": "to_internal_repr",
+              "signature": "(self, param_value_in_external_repr: 'CategoricalChoiceType') -> 'float'"
+            }
+          ],
+          "name": "CategoricalDistribution",
+          "resolvable": true,
+          "signature": "(choices: 'Sequence[CategoricalChoiceType]') -> 'None'"
+        },
+        {
+          "kind": "constant-or-type-alias",
+          "members": [],
+          "name": "DISTRIBUTION_CLASSES",
+          "resolvable": true,
+          "signature": null
+        },
+        {
+          "kind": "class",
+          "members": [
+            {
+              "kind": "property",
+              "name": "q",
+              "signature": null
+            },
+            {
+              "kind": "method",
+              "name": "single",
+              "signature": "(self) -> 'bool'"
+            },
+            {
+              "kind": "method",
+              "name": "to_external_repr",
+              "signature": "(self, param_value_in_internal_repr: 'float') -> 'Any'"
+            },
+            {
+              "kind": "method",
+              "name": "to_internal_repr",
+              "signature": "(self, param_value_in_external_repr: 'float') -> 'float'"
+            }
+          ],
+          "name": "DiscreteUniformDistribution",
+          "resolvable": true,
+          "signature": "(low: 'float', high: 'float', q: 'float') -> 'None'"
+        },
+        {
+          "kind": "class",
+          "members": [
+            {
+              "kind": "method",
+              "name": "single",
+              "signature": "(self) -> 'bool'"
+            },
+            {
+              "kind": "method",
+              "name": "to_external_repr",
+              "signature": "(self, param_value_in_internal_repr: 'float') -> 'Any'"
+            },
+            {
+              "kind": "method",
+              "name": "to_internal_repr",
+              "signature": "(self, param_value_in_external_repr: 'float') -> 'float'"
+            }
+          ],
+          "name": "FloatDistribution",
+          "resolvable": true,
+          "signature": "(low: 'float', high: 'float', log: 'bool' = False, step: 'None | float' = None) -> 'None'"
+        },
+        {
+          "kind": "class",
+          "members": [
+            {
+              "kind": "method",
+              "name": "single",
+              "signature": "(self) -> 'bool'"
+            },
+            {
+              "kind": "method",
+              "name": "to_external_repr",
+              "signature": "(self, param_value_in_internal_repr: 'float') -> 'int'"
+            },
+            {
+              "kind": "method",
+              "name": "to_internal_repr",
+              "signature": "(self, param_value_in_external_repr: 'int') -> 'float'"
+            }
+          ],
+          "name": "IntDistribution",
+          "resolvable": true,
+          "signature": "(low: 'int', high: 'int', log: 'bool' = False, step: 'int' = 1) -> 'None'"
+        },
+        {
+          "kind": "class",
+          "members": [
+            {
+              "kind": "method",
+              "name": "single",
+              "signature": "(self) -> 'bool'"
+            },
+            {
+              "kind": "method",
+              "name": "to_external_repr",
+              "signature": "(self, param_value_in_internal_repr: 'float') -> 'int'"
+            },
+            {
+              "kind": "method",
+              "name": "to_internal_repr",
+              "signature": "(self, param_value_in_external_repr: 'int') -> 'float'"
+            }
+          ],
+          "name": "IntLogUniformDistribution",
+          "resolvable": true,
+          "signature": "(low: 'int', high: 'int', step: 'int' = 1) -> 'None'"
+        },
+        {
+          "kind": "class",
+          "members": [
+            {
+              "kind": "method",
+              "name": "single",
+              "signature": "(self) -> 'bool'"
+            },
+            {
+              "kind": "method",
+              "name": "to_external_repr",
+              "signature": "(self, param_value_in_internal_repr: 'float') -> 'int'"
+            },
+            {
+              "kind": "method",
+              "name": "to_internal_repr",
+              "signature": "(self, param_value_in_external_repr: 'int') -> 'float'"
+            }
+          ],
+          "name": "IntUniformDistribution",
+          "resolvable": true,
+          "signature": "(low: 'int', high: 'int', step: 'int' = 1) -> 'None'"
+        },
+        {
+          "kind": "class",
+          "members": [
+            {
+              "kind": "method",
+              "name": "single",
+              "signature": "(self) -> 'bool'"
+            },
+            {
+              "kind": "method",
+              "name": "to_external_repr",
+              "signature": "(self, param_value_in_internal_repr: 'float') -> 'Any'"
+            },
+            {
+              "kind": "method",
+              "name": "to_internal_repr",
+              "signature": "(self, param_value_in_external_repr: 'float') -> 'float'"
+            }
+          ],
+          "name": "LogUniformDistribution",
+          "resolvable": true,
+          "signature": "(low: 'float', high: 'float') -> 'None'"
+        },
+        {
+          "kind": "class",
+          "members": [
+            {
+              "kind": "method",
+              "name": "single",
+              "signature": "(self) -> 'bool'"
+            },
+            {
+              "kind": "method",
+              "name": "to_external_repr",
+              "signature": "(self, param_value_in_internal_repr: 'float') -> 'Any'"
+            },
+            {
+              "kind": "method",
+              "name": "to_internal_repr",
+              "signature": "(self, param_value_in_external_repr: 'float') -> 'float'"
+            }
+          ],
+          "name": "UniformDistribution",
+          "resolvable": true,
+          "signature": "(low: 'float', high: 'float') -> 'None'"
+        },
+        {
+          "kind": "function",
+          "members": [],
+          "name": "check_distribution_compatibility",
+          "resolvable": true,
+          "signature": "(dist_old: 'BaseDistribution', dist_new: 'BaseDistribution') -> 'None'"
+        },
+        {
+          "kind": "function",
+          "members": [],
+          "name": "distribution_to_json",
+          "resolvable": true,
+          "signature": "(dist: 'BaseDistribution') -> 'str'"
+        },
+        {
+          "kind": "function",
+          "members": [],
+          "name": "json_to_distribution",
+          "resolvable": true,
+          "signature": "(json_str: 'str') -> 'BaseDistribution'"
+        }
+      ]
+    },
+    {
+      "module": "optuna.exceptions",
+      "symbols": [
+        {
+          "kind": "class",
+          "members": [
+            {
+              "kind": "method",
+              "name": "add_note",
+              "signature": null
+            },
+            {
+              "kind": "constant-or-field",
+              "name": "args",
+              "signature": null
+            },
+            {
+              "kind": "method",
+              "name": "with_traceback",
+              "signature": null
+            }
+          ],
+          "name": "CLIUsageError",
+          "resolvable": true,
+          "signature": null
+        },
+        {
+          "kind": "class",
+          "members": [
+            {
+              "kind": "method",
+              "name": "add_note",
+              "signature": null
+            },
+            {
+              "kind": "constant-or-field",
+              "name": "args",
+              "signature": null
+            },
+            {
+              "kind": "method",
+              "name": "with_traceback",
+              "signature": null
+            }
+          ],
+          "name": "DuplicatedStudyError",
+          "resolvable": true,
+          "signature": null
+        },
+        {
+          "kind": "class",
+          "members": [
+            {
+              "kind": "method",
+              "name": "add_note",
+              "signature": null
+            },
+            {
+              "kind": "constant-or-field",
+              "name": "args",
+              "signature": null
+            },
+            {
+              "kind": "method",
+              "name": "with_traceback",
+              "signature": null
+            }
+          ],
+          "name": "ExperimentalWarning",
+          "resolvable": true,
+          "signature": null
+        },
+        {
+          "kind": "class",
+          "members": [
+            {
+              "kind": "method",
+              "name": "add_note",
+              "signature": null
+            },
+            {
+              "kind": "constant-or-field",
+              "name": "args",
+              "signature": null
+            },
+            {
+              "kind": "method",
+              "name": "with_traceback",
+              "signature": null
+            }
+          ],
+          "name": "OptunaError",
+          "resolvable": true,
+          "signature": null
+        },
+        {
+          "kind": "class",
+          "members": [
+            {
+              "kind": "method",
+              "name": "add_note",
+              "signature": null
+            },
+            {
+              "kind": "constant-or-field",
+              "name": "args",
+              "signature": null
+            },
+            {
+              "kind": "method",
+              "name": "with_traceback",
+              "signature": null
+            }
+          ],
+          "name": "StorageInternalError",
+          "resolvable": true,
+          "signature": null
+        },
+        {
+          "kind": "class",
+          "members": [
+            {
+              "kind": "method",
+              "name": "add_note",
+              "signature": null
+            },
+            {
+              "kind": "constant-or-field",
+              "name": "args",
+              "signature": null
+            },
+            {
+              "kind": "method",
+              "name": "with_traceback",
+              "signature": null
+            }
+          ],
+          "name": "TrialPruned",
+          "resolvable": true,
+          "signature": null
+        },
+        {
+          "kind": "class",
+          "members": [
+            {
+              "kind": "method",
+              "name": "add_note",
+              "signature": null
+            },
+            {
+              "kind": "constant-or-field",
+              "name": "args",
+              "signature": null
+            },
+            {
+              "kind": "method",
+              "name": "with_traceback",
+              "signature": null
+            }
+          ],
+          "name": "UpdateFinishedTrialError",
+          "resolvable": true,
+          "signature": null
+        }
+      ]
+    },
+    {
+      "module": "optuna.importance",
+      "symbols": [
+        {
+          "kind": "class",
+          "members": [
+            {
+              "kind": "method",
+              "name": "evaluate",
+              "signature": "(self, study: 'Study', params: 'list[str] | None' = None, *, target: 'Callable[[FrozenTrial], float] | None' = None) -> 'dict[str, float]'"
+            }
+          ],
+          "name": "BaseImportanceEvaluator",
+          "resolvable": true,
+          "signature": "()"
+        },
+        {
+          "kind": "class",
+          "members": [
+            {
+              "kind": "method",
+              "name": "evaluate",
+              "signature": "(self, study: 'Study', params: 'list[str] | None' = None, *, target: 'Callable[[FrozenTrial], float] | None' = None) -> 'dict[str, float]'"
+            }
+          ],
+          "name": "FanovaImportanceEvaluator",
+          "resolvable": true,
+          "signature": "(*, n_trees: 'int' = 64, max_depth: 'int' = 64, seed: 'int | None' = None) -> 'None'"
+        },
+        {
+          "kind": "class",
+          "members": [
+            {
+              "kind": "method",
+              "name": "evaluate",
+              "signature": "(self, study: 'Study', params: 'list[str] | None' = None, *, target: 'Callable[[FrozenTrial], float] | None' = None) -> 'dict[str, float]'"
+            }
+          ],
+          "name": "MeanDecreaseImpurityImportanceEvaluator",
+          "resolvable": true,
+          "signature": "(*, n_trees: 'int' = 64, max_depth: 'int' = 64, seed: 'int | None' = None) -> 'None'"
+        },
+        {
+          "kind": "class",
+          "members": [
+            {
+              "kind": "method",
+              "name": "evaluate",
+              "signature": "(self, study: 'Study', params: 'list[str] | None' = None, *, target: 'Callable[[FrozenTrial], float] | None' = None) -> 'dict[str, float]'"
+            }
+          ],
+          "name": "PedAnovaImportanceEvaluator",
+          "resolvable": true,
+          "signature": "(*, target_quantile: 'float' = 0.1, region_quantile: 'float' = 1.0, baseline_quantile: 'float | None' = None, evaluate_on_local: 'bool' = True) -> 'None'"
+        },
+        {
+          "kind": "function",
+          "members": [],
+          "name": "get_param_importances",
+          "resolvable": true,
+          "signature": "(study: 'Study', *, evaluator: 'BaseImportanceEvaluator | None' = None, params: 'list[str] | None' = None, target: 'Callable[[FrozenTrial], float] | None' = None, normalize: 'bool' = True) -> 'dict[str, float]'"
+        }
+      ]
+    },
+    {
+      "module": "optuna.integration",
+      "symbols": [
+        {
+          "kind": "lazy-optional",
+          "members": [],
+          "name": "AllenNLPExecutor",
+          "resolvable": false,
+          "signature": null
+        },
+        {
+          "kind": "lazy-optional",
+          "members": [],
+          "name": "AllenNLPPruningCallback",
+          "resolvable": false,
+          "signature": null
+        },
+        {
+          "kind": "lazy-optional",
+          "members": [],
+          "name": "BoTorchSampler",
+          "resolvable": false,
+          "signature": null
+        },
+        {
+          "kind": "lazy-optional",
+          "members": [],
+          "name": "CatBoostPruningCallback",
+          "resolvable": false,
+          "signature": null
+        },
+        {
+          "kind": "lazy-optional",
+          "members": [],
+          "name": "ChainerMNStudy",
+          "resolvable": false,
+          "signature": null
+        },
+        {
+          "kind": "lazy-optional",
+          "members": [],
+          "name": "ChainerPruningExtension",
+          "resolvable": false,
+          "signature": null
+        },
+        {
+          "kind": "lazy-optional",
+          "members": [],
+          "name": "DaskStorage",
+          "resolvable": false,
+          "signature": null
+        },
+        {
+          "kind": "lazy-optional",
+          "members": [],
+          "name": "FastAIPruningCallback",
+          "resolvable": false,
+          "signature": null
+        },
+        {
+          "kind": "lazy-optional",
+          "members": [],
+          "name": "FastAIV2PruningCallback",
+          "resolvable": false,
+          "signature": null
+        },
+        {
+          "kind": "lazy-optional",
+          "members": [],
+          "name": "KerasPruningCallback",
+          "resolvable": false,
+          "signature": null
+        },
+        {
+          "kind": "lazy-optional",
+          "members": [],
+          "name": "LightGBMPruningCallback",
+          "resolvable": false,
+          "signature": null
+        },
+        {
+          "kind": "lazy-optional",
+          "members": [],
+          "name": "LightGBMTuner",
+          "resolvable": false,
+          "signature": null
+        },
+        {
+          "kind": "lazy-optional",
+          "members": [],
+          "name": "LightGBMTunerCV",
+          "resolvable": false,
+          "signature": null
+        },
+        {
+          "kind": "lazy-optional",
+          "members": [],
+          "name": "MLflowCallback",
+          "resolvable": false,
+          "signature": null
+        },
+        {
+          "kind": "lazy-optional",
+          "members": [],
+          "name": "MXNetPruningCallback",
+          "resolvable": false,
+          "signature": null
+        },
+        {
+          "kind": "lazy-optional",
+          "members": [],
+          "name": "OptunaSearchCV",
+          "resolvable": false,
+          "signature": null
+        },
+        {
+          "kind": "lazy-optional",
+          "members": [],
+          "name": "PyCmaSampler",
+          "resolvable": false,
+          "signature": null
+        },
+        {
+          "kind": "lazy-optional",
+          "members": [],
+          "name": "PyTorchIgnitePruningHandler",
+          "resolvable": false,
+          "signature": null
+        },
+        {
+          "kind": "lazy-optional",
+          "members": [],
+          "name": "PyTorchLightningPruningCallback",
+          "resolvable": false,
+          "signature": null
+        },
+        {
+          "kind": "lazy-optional",
+          "members": [],
+          "name": "ShapleyImportanceEvaluator",
+          "resolvable": false,
+          "signature": null
+        },
+        {
+          "kind": "lazy-optional",
+          "members": [],
+          "name": "SkorchPruningCallback",
+          "resolvable": false,
+          "signature": null
+        },
+        {
+          "kind": "lazy-optional",
+          "members": [],
+          "name": "TFKerasPruningCallback",
+          "resolvable": false,
+          "signature": null
+        },
+        {
+          "kind": "lazy-optional",
+          "members": [],
+          "name": "TensorBoardCallback",
+          "resolvable": false,
+          "signature": null
+        },
+        {
+          "kind": "lazy-optional",
+          "members": [],
+          "name": "TensorFlowPruningHook",
+          "resolvable": false,
+          "signature": null
+        },
+        {
+          "kind": "lazy-optional",
+          "members": [],
+          "name": "TorchDistributedTrial",
+          "resolvable": false,
+          "signature": null
+        },
+        {
+          "kind": "lazy-optional",
+          "members": [],
+          "name": "WeightsAndBiasesCallback",
+          "resolvable": false,
+          "signature": null
+        },
+        {
+          "kind": "lazy-optional",
+          "members": [],
+          "name": "XGBoostPruningCallback",
+          "resolvable": false,
+          "signature": null
+        }
+      ]
+    },
+    {
+      "module": "optuna.logging",
+      "symbols": [
+        {
+          "kind": "constant-or-type-alias",
+          "members": [],
+          "name": "CRITICAL",
+          "resolvable": true,
+          "signature": null
+        },
+        {
+          "kind": "constant-or-type-alias",
+          "members": [],
+          "name": "DEBUG",
+          "resolvable": true,
+          "signature": null
+        },
+        {
+          "kind": "constant-or-type-alias",
+          "members": [],
+          "name": "ERROR",
+          "resolvable": true,
+          "signature": null
+        },
+        {
+          "kind": "constant-or-type-alias",
+          "members": [],
+          "name": "FATAL",
+          "resolvable": true,
+          "signature": null
+        },
+        {
+          "kind": "constant-or-type-alias",
+          "members": [],
+          "name": "INFO",
+          "resolvable": true,
+          "signature": null
+        },
+        {
+          "kind": "constant-or-type-alias",
+          "members": [],
+          "name": "WARN",
+          "resolvable": true,
+          "signature": null
+        },
+        {
+          "kind": "constant-or-type-alias",
+          "members": [],
+          "name": "WARNING",
+          "resolvable": true,
+          "signature": null
+        },
+        {
+          "kind": "function",
+          "members": [],
+          "name": "create_default_formatter",
+          "resolvable": true,
+          "signature": "() -> 'logging.Formatter'"
+        },
+        {
+          "kind": "function",
+          "members": [],
+          "name": "disable_default_handler",
+          "resolvable": true,
+          "signature": "() -> 'None'"
+        },
+        {
+          "kind": "function",
+          "members": [],
+          "name": "disable_propagation",
+          "resolvable": true,
+          "signature": "() -> 'None'"
+        },
+        {
+          "kind": "function",
+          "members": [],
+          "name": "enable_default_handler",
+          "resolvable": true,
+          "signature": "() -> 'None'"
+        },
+        {
+          "kind": "function",
+          "members": [],
+          "name": "enable_propagation",
+          "resolvable": true,
+          "signature": "() -> 'None'"
+        },
+        {
+          "kind": "function",
+          "members": [],
+          "name": "get_logger",
+          "resolvable": true,
+          "signature": "(name: 'str') -> 'logging.Logger'"
+        },
+        {
+          "kind": "function",
+          "members": [],
+          "name": "get_verbosity",
+          "resolvable": true,
+          "signature": "() -> 'int'"
+        },
+        {
+          "kind": "function",
+          "members": [],
+          "name": "set_verbosity",
+          "resolvable": true,
+          "signature": "(verbosity: 'int') -> 'None'"
+        }
+      ]
+    },
+    {
+      "module": "optuna.pruners",
+      "symbols": [
+        {
+          "kind": "class",
+          "members": [
+            {
+              "kind": "method",
+              "name": "prune",
+              "signature": "(self, study: \"'optuna.study.Study'\", trial: \"'optuna.trial.FrozenTrial'\") -> 'bool'"
+            }
+          ],
+          "name": "BasePruner",
+          "resolvable": true,
+          "signature": "()"
+        },
+        {
+          "kind": "class",
+          "members": [
+            {
+              "kind": "method",
+              "name": "prune",
+              "signature": "(self, study: \"'optuna.study.Study'\", trial: \"'optuna.trial.FrozenTrial'\") -> 'bool'"
+            }
+          ],
+          "name": "HyperbandPruner",
+          "resolvable": true,
+          "signature": "(min_resource: 'int' = 1, max_resource: 'str | int' = 'auto', reduction_factor: 'int' = 3, bootstrap_count: 'int' = 0) -> 'None'"
+        },
+        {
+          "kind": "class",
+          "members": [
+            {
+              "kind": "method",
+              "name": "prune",
+              "signature": "(self, study: \"'optuna.study.Study'\", trial: \"'optuna.trial.FrozenTrial'\") -> 'bool'"
+            }
+          ],
+          "name": "MedianPruner",
+          "resolvable": true,
+          "signature": "(n_startup_trials: int = 5, n_warmup_steps: int = 0, interval_steps: int = 1, *, n_min_trials: int = 1) -> None"
+        },
+        {
+          "kind": "class",
+          "members": [
+            {
+              "kind": "method",
+              "name": "prune",
+              "signature": "(self, study: 'Study', trial: 'FrozenTrial') -> 'bool'"
+            }
+          ],
+          "name": "NopPruner",
+          "resolvable": true,
+          "signature": "()"
+        },
+        {
+          "kind": "class",
+          "members": [
+            {
+              "kind": "method",
+              "name": "prune",
+              "signature": "(self, study: 'optuna.study.Study', trial: 'optuna.trial.FrozenTrial') -> 'bool'"
+            }
+          ],
+          "name": "PatientPruner",
+          "resolvable": true,
+          "signature": "(wrapped_pruner: 'BasePruner | None', patience: 'int', min_delta: 'float' = 0.0) -> 'None'"
+        },
+        {
+          "kind": "class",
+          "members": [
+            {
+              "kind": "method",
+              "name": "prune",
+              "signature": "(self, study: \"'optuna.study.Study'\", trial: \"'optuna.trial.FrozenTrial'\") -> 'bool'"
+            }
+          ],
+          "name": "PercentilePruner",
+          "resolvable": true,
+          "signature": "(percentile: 'float', n_startup_trials: 'int' = 5, n_warmup_steps: 'int' = 0, interval_steps: 'int' = 1, *, n_min_trials: 'int' = 1) -> 'None'"
+        },
+        {
+          "kind": "class",
+          "members": [
+            {
+              "kind": "method",
+              "name": "prune",
+              "signature": "(self, study: \"'optuna.study.Study'\", trial: \"'optuna.trial.FrozenTrial'\") -> 'bool'"
+            }
+          ],
+          "name": "SuccessiveHalvingPruner",
+          "resolvable": true,
+          "signature": "(min_resource: 'str | int' = 'auto', reduction_factor: 'int' = 4, min_early_stopping_rate: 'int' = 0, bootstrap_count: 'int' = 0) -> 'None'"
+        },
+        {
+          "kind": "class",
+          "members": [
+            {
+              "kind": "method",
+              "name": "prune",
+              "signature": "(self, study: 'Study', trial: 'FrozenTrial') -> 'bool'"
+            }
+          ],
+          "name": "ThresholdPruner",
+          "resolvable": true,
+          "signature": "(lower: 'float | None' = None, upper: 'float | None' = None, n_warmup_steps: 'int' = 0, interval_steps: 'int' = 1) -> 'None'"
+        },
+        {
+          "kind": "class",
+          "members": [
+            {
+              "kind": "method",
+              "name": "prune",
+              "signature": "(self, study: \"'optuna.study.Study'\", trial: 'FrozenTrial') -> 'bool'"
+            }
+          ],
+          "name": "WilcoxonPruner",
+          "resolvable": true,
+          "signature": "(*, p_threshold: 'float' = 0.1, n_startup_steps: 'int' = 2) -> 'None'"
+        }
+      ]
+    },
+    {
+      "module": "optuna.samplers",
+      "symbols": [
+        {
+          "kind": "class",
+          "members": [
+            {
+              "kind": "method",
+              "name": "after_trial",
+              "signature": "(self, study: 'Study', trial: 'FrozenTrial', state: 'TrialState', values: 'Sequence[float] | None') -> 'None'"
+            },
+            {
+              "kind": "method",
+              "name": "before_trial",
+              "signature": "(self, study: 'Study', trial: 'FrozenTrial') -> 'None'"
+            },
+            {
+              "kind": "method",
+              "name": "get_parent_population",
+              "signature": "(self, study: 'Study', generation: 'int') -> 'list[FrozenTrial]'"
+            },
+            {
+              "kind": "method",
+              "name": "get_population",
+              "signature": "(self, study: 'Study', generation: 'int') -> 'list[FrozenTrial]'"
+            },
+            {
+              "kind": "method",
+              "name": "get_trial_generation",
+              "signature": "(self, study: 'Study', trial: 'FrozenTrial') -> 'int'"
+            },
+            {
+              "kind": "method",
+              "name": "infer_relative_search_space",
+              "signature": "(self, study: 'Study', trial: 'FrozenTrial') -> 'dict[str, BaseDistribution]'"
+            },
+            {
+              "kind": "property",
+              "name": "population_size",
+              "signature": null
+            },
+            {
+              "kind": "method",
+              "name": "reseed_rng",
+              "signature": "(self) -> 'None'"
+            },
+            {
+              "kind": "method",
+              "name": "sample_independent",
+              "signature": "(self, study: 'Study', trial: 'FrozenTrial', param_name: 'str', param_distribution: 'BaseDistribution') -> 'Any'"
+            },
+            {
+              "kind": "method",
+              "name": "sample_relative",
+              "signature": "(self, study: 'Study', trial: 'FrozenTrial', search_space: 'dict[str, BaseDistribution]') -> 'dict[str, Any]'"
+            },
+            {
+              "kind": "method",
+              "name": "select_parent",
+              "signature": "(self, study: 'Study', generation: 'int') -> 'list[FrozenTrial]'"
+            }
+          ],
+          "name": "BaseGASampler",
+          "resolvable": true,
+          "signature": "(population_size: 'int | None')"
+        },
+        {
+          "kind": "class",
+          "members": [
+            {
+              "kind": "method",
+              "name": "after_trial",
+              "signature": "(self, study: 'Study', trial: 'FrozenTrial', state: 'TrialState', values: 'Sequence[float] | None') -> 'None'"
+            },
+            {
+              "kind": "method",
+              "name": "before_trial",
+              "signature": "(self, study: 'Study', trial: 'FrozenTrial') -> 'None'"
+            },
+            {
+              "kind": "method",
+              "name": "infer_relative_search_space",
+              "signature": "(self, study: 'Study', trial: 'FrozenTrial') -> 'dict[str, BaseDistribution]'"
+            },
+            {
+              "kind": "method",
+              "name": "reseed_rng",
+              "signature": "(self) -> 'None'"
+            },
+            {
+              "kind": "method",
+              "name": "sample_independent",
+              "signature": "(self, study: 'Study', trial: 'FrozenTrial', param_name: 'str', param_distribution: 'BaseDistribution') -> 'Any'"
+            },
+            {
+              "kind": "method",
+              "name": "sample_relative",
+              "signature": "(self, study: 'Study', trial: 'FrozenTrial', search_space: 'dict[str, BaseDistribution]') -> 'dict[str, Any]'"
+            }
+          ],
+          "name": "BaseSampler",
+          "resolvable": true,
+          "signature": "()"
+        },
+        {
+          "kind": "class",
+          "members": [
+            {
+              "kind": "method",
+              "name": "after_trial",
+              "signature": "(self, study: 'Study', trial: 'FrozenTrial', state: 'TrialState', values: 'Sequence[float] | None') -> 'None'"
+            },
+            {
+              "kind": "method",
+              "name": "before_trial",
+              "signature": "(self, study: 'Study', trial: 'FrozenTrial') -> 'None'"
+            },
+            {
+              "kind": "method",
+              "name": "infer_relative_search_space",
+              "signature": "(self, study: 'Study', trial: 'FrozenTrial') -> 'dict[str, BaseDistribution]'"
+            },
+            {
+              "kind": "method",
+              "name": "reseed_rng",
+              "signature": "(self) -> 'None'"
+            },
+            {
+              "kind": "method",
+              "name": "sample_independent",
+              "signature": "(self, study: 'Study', trial: 'FrozenTrial', param_name: 'str', param_distribution: 'BaseDistribution') -> 'Any'"
+            },
+            {
+              "kind": "method",
+              "name": "sample_relative",
+              "signature": "(self, study: 'Study', trial: 'FrozenTrial', search_space: 'dict[str, BaseDistribution]') -> 'dict[str, Any]'"
+            }
+          ],
+          "name": "BruteForceSampler",
+          "resolvable": true,
+          "signature": "(seed: 'int | None' = None, avoid_premature_stop: 'bool' = False) -> 'None'"
+        },
+        {
+          "kind": "class",
+          "members": [
+            {
+              "kind": "method",
+              "name": "after_trial",
+              "signature": "(self, study: \"'optuna.Study'\", trial: \"'optuna.trial.FrozenTrial'\", state: 'TrialState', values: 'Sequence[float] | None') -> 'None'"
+            },
+            {
+              "kind": "method",
+              "name": "before_trial",
+              "signature": "(self, study: 'optuna.Study', trial: 'FrozenTrial') -> 'None'"
+            },
+            {
+              "kind": "method",
+              "name": "infer_relative_search_space",
+              "signature": "(self, study: \"'optuna.Study'\", trial: \"'optuna.trial.FrozenTrial'\") -> 'dict[str, BaseDistribution]'"
+            },
+            {
+              "kind": "method",
+              "name": "reseed_rng",
+              "signature": "(self) -> 'None'"
+            },
+            {
+              "kind": "method",
+              "name": "sample_independent",
+              "signature": "(self, study: \"'optuna.Study'\", trial: \"'optuna.trial.FrozenTrial'\", param_name: 'str', param_distribution: 'BaseDistribution') -> 'Any'"
+            },
+            {
+              "kind": "method",
+              "name": "sample_relative",
+              "signature": "(self, study: \"'optuna.Study'\", trial: \"'optuna.trial.FrozenTrial'\", search_space: 'dict[str, BaseDistribution]') -> 'dict[str, Any]'"
+            }
+          ],
+          "name": "CmaEsSampler",
+          "resolvable": true,
+          "signature": "(*, x0: 'dict[str, Any] | None' = None, sigma0: 'float | None' = None, n_startup_trials: 'int' = 1, independent_sampler: 'BaseSampler | None' = None, warn_independent_sampling: 'bool' = True, seed: 'int | None' = None, consider_pruned_trials: 'bool' = False, restart_strategy: 'str | None' = None, popsize: 'int | None' = None, inc_popsize: 'int' = -1, use_separable_cma: 'bool' = False, with_margin: 'bool' = False, lr_adapt: 'bool' = False, source_trials: 'list[FrozenTrial] | None' = None) -> 'None'"
+        },
+        {
+          "kind": "class",
+          "members": [
+            {
+              "kind": "method",
+              "name": "after_trial",
+              "signature": "(self, study: 'Study', trial: 'FrozenTrial', state: 'TrialState', values: 'Sequence[float] | None') -> 'None'"
+            },
+            {
+              "kind": "method",
+              "name": "before_trial",
+              "signature": "(self, study: 'Study', trial: 'FrozenTrial') -> 'None'"
+            },
+            {
+              "kind": "method",
+              "name": "infer_relative_search_space",
+              "signature": "(self, study: 'Study', trial: 'FrozenTrial') -> 'dict[str, BaseDistribution]'"
+            },
+            {
+              "kind": "method",
+              "name": "reseed_rng",
+              "signature": "(self) -> 'None'"
+            },
+            {
+              "kind": "method",
+              "name": "sample_independent",
+              "signature": "(self, study: 'Study', trial: 'FrozenTrial', param_name: 'str', param_distribution: 'BaseDistribution') -> 'Any'"
+            },
+            {
+              "kind": "method",
+              "name": "sample_relative",
+              "signature": "(self, study: 'Study', trial: 'FrozenTrial', search_space: 'dict[str, BaseDistribution]') -> 'dict[str, Any]'"
+            }
+          ],
+          "name": "GPSampler",
+          "resolvable": true,
+          "signature": "(*, seed: 'int | None' = None, independent_sampler: 'BaseSampler | None' = None, n_startup_trials: 'int' = 10, deterministic_objective: 'bool' = False, constraints_func: 'Callable[[FrozenTrial], Sequence[float]] | None' = None, warn_independent_sampling: 'bool' = True) -> 'None'"
+        },
+        {
+          "kind": "class",
+          "members": [
+            {
+              "kind": "method",
+              "name": "after_trial",
+              "signature": "(self, study: 'Study', trial: 'FrozenTrial', state: 'TrialState', values: 'Sequence[float] | None') -> 'None'"
+            },
+            {
+              "kind": "method",
+              "name": "before_trial",
+              "signature": "(self, study: 'Study', trial: 'FrozenTrial') -> 'None'"
+            },
+            {
+              "kind": "method",
+              "name": "infer_relative_search_space",
+              "signature": "(self, study: 'Study', trial: 'FrozenTrial') -> 'dict[str, BaseDistribution]'"
+            },
+            {
+              "kind": "method",
+              "name": "is_exhausted",
+              "signature": "(self, study: 'Study') -> 'bool'"
+            },
+            {
+              "kind": "method",
+              "name": "reseed_rng",
+              "signature": "(self) -> 'None'"
+            },
+            {
+              "kind": "method",
+              "name": "sample_independent",
+              "signature": "(self, study: 'Study', trial: 'FrozenTrial', param_name: 'str', param_distribution: 'BaseDistribution') -> 'Any'"
+            },
+            {
+              "kind": "method",
+              "name": "sample_relative",
+              "signature": "(self, study: 'Study', trial: 'FrozenTrial', search_space: 'dict[str, BaseDistribution]') -> 'dict[str, Any]'"
+            }
+          ],
+          "name": "GridSampler",
+          "resolvable": true,
+          "signature": "(search_space: 'Mapping[str, Sequence[GridValueType]]', seed: 'int | None' = None) -> 'None'"
+        },
+        {
+          "kind": "class",
+          "members": [
+            {
+              "kind": "method",
+              "name": "after_trial",
+              "signature": "(self, study: 'Study', trial: 'FrozenTrial', state: 'TrialState', values: 'Sequence[float] | None') -> 'None'"
+            },
+            {
+              "kind": "method",
+              "name": "before_trial",
+              "signature": "(self, study: 'Study', trial: 'FrozenTrial') -> 'None'"
+            },
+            {
+              "kind": "method",
+              "name": "get_parent_population",
+              "signature": "(self, study: 'Study', generation: 'int') -> 'list[FrozenTrial]'"
+            },
+            {
+              "kind": "method",
+              "name": "get_population",
+              "signature": "(self, study: 'Study', generation: 'int') -> 'list[FrozenTrial]'"
+            },
+            {
+              "kind": "method",
+              "name": "get_trial_generation",
+              "signature": "(self, study: 'Study', trial: 'FrozenTrial') -> 'int'"
+            },
+            {
+              "kind": "method",
+              "name": "infer_relative_search_space",
+              "signature": "(self, study: 'Study', trial: 'FrozenTrial') -> 'dict[str, BaseDistribution]'"
+            },
+            {
+              "kind": "property",
+              "name": "population_size",
+              "signature": null
+            },
+            {
+              "kind": "method",
+              "name": "reseed_rng",
+              "signature": "(self) -> 'None'"
+            },
+            {
+              "kind": "method",
+              "name": "sample_independent",
+              "signature": "(self, study: 'Study', trial: 'FrozenTrial', param_name: 'str', param_distribution: 'BaseDistribution') -> 'Any'"
+            },
+            {
+              "kind": "method",
+              "name": "sample_relative",
+              "signature": "(self, study: 'Study', trial: 'FrozenTrial', search_space: 'dict[str, BaseDistribution]') -> 'dict[str, Any]'"
+            },
+            {
+              "kind": "method",
+              "name": "select_parent",
+              "signature": "(self, study: 'Study', generation: 'int') -> 'list[FrozenTrial]'"
+            }
+          ],
+          "name": "NSGAIIISampler",
+          "resolvable": true,
+          "signature": "(*, population_size: 'int' = 50, mutation_prob: 'float | None' = None, crossover: 'BaseCrossover | None' = None, crossover_prob: 'float' = 0.9, swapping_prob: 'float' = 0.5, seed: 'int | None' = None, constraints_func: 'Callable[[FrozenTrial], Sequence[float]] | None' = None, reference_points: 'np.ndarray | None' = None, dividing_parameter: 'int' = 3, elite_population_selection_strategy: 'Callable[[Study, list[FrozenTrial]], list[FrozenTrial]] | None' = None, child_generation_strategy: 'Callable[[Study, dict[str, BaseDistribution], list[FrozenTrial]], dict[str, Any]] | None' = None, after_trial_strategy: 'Callable[[Study, FrozenTrial, TrialState, Sequence[float] | None], None] | None' = None) -> 'None'"
+        },
+        {
+          "kind": "class",
+          "members": [
+            {
+              "kind": "method",
+              "name": "after_trial",
+              "signature": "(self, study: 'Study', trial: 'FrozenTrial', state: 'TrialState', values: 'Sequence[float] | None') -> 'None'"
+            },
+            {
+              "kind": "method",
+              "name": "before_trial",
+              "signature": "(self, study: 'Study', trial: 'FrozenTrial') -> 'None'"
+            },
+            {
+              "kind": "method",
+              "name": "get_parent_population",
+              "signature": "(self, study: 'Study', generation: 'int') -> 'list[FrozenTrial]'"
+            },
+            {
+              "kind": "method",
+              "name": "get_population",
+              "signature": "(self, study: 'Study', generation: 'int') -> 'list[FrozenTrial]'"
+            },
+            {
+              "kind": "method",
+              "name": "get_trial_generation",
+              "signature": "(self, study: 'Study', trial: 'FrozenTrial') -> 'int'"
+            },
+            {
+              "kind": "method",
+              "name": "infer_relative_search_space",
+              "signature": "(self, study: 'Study', trial: 'FrozenTrial') -> 'dict[str, BaseDistribution]'"
+            },
+            {
+              "kind": "property",
+              "name": "population_size",
+              "signature": null
+            },
+            {
+              "kind": "method",
+              "name": "reseed_rng",
+              "signature": "(self) -> 'None'"
+            },
+            {
+              "kind": "method",
+              "name": "sample_independent",
+              "signature": "(self, study: 'Study', trial: 'FrozenTrial', param_name: 'str', param_distribution: 'BaseDistribution') -> 'Any'"
+            },
+            {
+              "kind": "method",
+              "name": "sample_relative",
+              "signature": "(self, study: 'Study', trial: 'FrozenTrial', search_space: 'dict[str, BaseDistribution]') -> 'dict[str, Any]'"
+            },
+            {
+              "kind": "method",
+              "name": "select_parent",
+              "signature": "(self, study: 'Study', generation: 'int') -> 'list[FrozenTrial]'"
+            }
+          ],
+          "name": "NSGAIISampler",
+          "resolvable": true,
+          "signature": "(*, population_size: 'int' = 50, mutation_prob: 'float | None' = None, crossover: 'BaseCrossover | None' = None, crossover_prob: 'float' = 0.9, swapping_prob: 'float' = 0.5, seed: 'int | None' = None, constraints_func: 'Callable[[FrozenTrial], Sequence[float]] | None' = None, elite_population_selection_strategy: 'Callable[[Study, list[FrozenTrial]], list[FrozenTrial]] | None' = None, child_generation_strategy: 'Callable[[Study, dict[str, BaseDistribution], list[FrozenTrial]], dict[str, Any]] | None' = None, after_trial_strategy: 'Callable[[Study, FrozenTrial, TrialState, Sequence[float] | None], None] | None' = None) -> 'None'"
+        },
+        {
+          "kind": "class",
+          "members": [
+            {
+              "kind": "method",
+              "name": "after_trial",
+              "signature": "(self, study: 'Study', trial: 'FrozenTrial', state: 'TrialState', values: 'Sequence[float] | None') -> 'None'"
+            },
+            {
+              "kind": "method",
+              "name": "before_trial",
+              "signature": "(self, study: 'Study', trial: 'FrozenTrial') -> 'None'"
+            },
+            {
+              "kind": "method",
+              "name": "infer_relative_search_space",
+              "signature": "(self, study: 'Study', trial: 'FrozenTrial') -> 'dict[str, BaseDistribution]'"
+            },
+            {
+              "kind": "method",
+              "name": "reseed_rng",
+              "signature": "(self) -> 'None'"
+            },
+            {
+              "kind": "method",
+              "name": "sample_independent",
+              "signature": "(self, study: 'Study', trial: 'FrozenTrial', param_name: 'str', param_distribution: 'BaseDistribution') -> 'Any'"
+            },
+            {
+              "kind": "method",
+              "name": "sample_relative",
+              "signature": "(self, study: 'Study', trial: 'FrozenTrial', search_space: 'dict[str, BaseDistribution]') -> 'dict[str, Any]'"
+            }
+          ],
+          "name": "PartialFixedSampler",
+          "resolvable": true,
+          "signature": "(fixed_params: 'dict[str, Any]', base_sampler: 'BaseSampler') -> 'None'"
+        },
+        {
+          "kind": "class",
+          "members": [
+            {
+              "kind": "method",
+              "name": "after_trial",
+              "signature": "(self, study: 'Study', trial: 'FrozenTrial', state: 'TrialState', values: 'Sequence[float] | None') -> 'None'"
+            },
+            {
+              "kind": "method",
+              "name": "before_trial",
+              "signature": "(self, study: 'Study', trial: 'FrozenTrial') -> 'None'"
+            },
+            {
+              "kind": "method",
+              "name": "infer_relative_search_space",
+              "signature": "(self, study: 'Study', trial: 'FrozenTrial') -> 'dict[str, BaseDistribution]'"
+            },
+            {
+              "kind": "method",
+              "name": "reseed_rng",
+              "signature": "(self) -> 'None'"
+            },
+            {
+              "kind": "method",
+              "name": "sample_independent",
+              "signature": "(self, study: 'Study', trial: 'FrozenTrial', param_name: 'str', param_distribution: 'BaseDistribution') -> 'Any'"
+            },
+            {
+              "kind": "method",
+              "name": "sample_relative",
+              "signature": "(self, study: 'Study', trial: 'FrozenTrial', search_space: 'dict[str, BaseDistribution]') -> 'dict[str, Any]'"
+            }
+          ],
+          "name": "QMCSampler",
+          "resolvable": true,
+          "signature": "(*, qmc_type: 'str' = 'sobol', scramble: 'bool' = False, seed: 'int | None' = None, independent_sampler: 'BaseSampler | None' = None, warn_asynchronous_seeding: 'bool' = True, warn_independent_sampling: 'bool' = True) -> 'None'"
+        },
+        {
+          "kind": "class",
+          "members": [
+            {
+              "kind": "method",
+              "name": "after_trial",
+              "signature": "(self, study: 'Study', trial: 'FrozenTrial', state: 'TrialState', values: 'Sequence[float] | None') -> 'None'"
+            },
+            {
+              "kind": "method",
+              "name": "before_trial",
+              "signature": "(self, study: 'Study', trial: 'FrozenTrial') -> 'None'"
+            },
+            {
+              "kind": "method",
+              "name": "infer_relative_search_space",
+              "signature": "(self, study: 'Study', trial: 'FrozenTrial') -> 'dict[str, BaseDistribution]'"
+            },
+            {
+              "kind": "method",
+              "name": "reseed_rng",
+              "signature": "(self) -> 'None'"
+            },
+            {
+              "kind": "method",
+              "name": "sample_independent",
+              "signature": "(self, study: 'Study', trial: 'FrozenTrial', param_name: 'str', param_distribution: 'distributions.BaseDistribution') -> 'Any'"
+            },
+            {
+              "kind": "method",
+              "name": "sample_relative",
+              "signature": "(self, study: 'Study', trial: 'FrozenTrial', search_space: 'dict[str, BaseDistribution]') -> 'dict[str, Any]'"
+            }
+          ],
+          "name": "RandomSampler",
+          "resolvable": true,
+          "signature": "(seed: 'int | None' = None) -> 'None'"
+        },
+        {
+          "kind": "class",
+          "members": [
+            {
+              "kind": "method",
+              "name": "after_trial",
+              "signature": "(self, study: 'Study', trial: 'FrozenTrial', state: 'TrialState', values: 'Sequence[float] | None') -> 'None'"
+            },
+            {
+              "kind": "method",
+              "name": "before_trial",
+              "signature": "(self, study: 'Study', trial: 'FrozenTrial') -> 'None'"
+            },
+            {
+              "kind": "method",
+              "name": "hyperopt_parameters",
+              "signature": "() -> 'dict[str, Any]'"
+            },
+            {
+              "kind": "method",
+              "name": "infer_relative_search_space",
+              "signature": "(self, study: 'Study', trial: 'FrozenTrial') -> 'dict[str, BaseDistribution]'"
+            },
+            {
+              "kind": "method",
+              "name": "reseed_rng",
+              "signature": "(self) -> 'None'"
+            },
+            {
+              "kind": "method",
+              "name": "sample_independent",
+              "signature": "(self, study: 'Study', trial: 'FrozenTrial', param_name: 'str', param_distribution: 'BaseDistribution') -> 'Any'"
+            },
+            {
+              "kind": "method",
+              "name": "sample_relative",
+              "signature": "(self, study: 'Study', trial: 'FrozenTrial', search_space: 'dict[str, BaseDistribution]') -> 'dict[str, Any]'"
+            }
+          ],
+          "name": "TPESampler",
+          "resolvable": true,
+          "signature": "(*, consider_prior: 'bool | None' = None, prior_weight: 'float | None' = None, consider_magic_clip: 'bool | None' = None, consider_endpoints: 'bool | None' = None, n_startup_trials: 'int' = 10, n_ei_candidates: 'int' = 24, gamma: 'Callable[[int], int] | None' = None, weights: 'Callable[[int], np.ndarray] | None' = None, seed: 'int | None' = None, multivariate: 'bool' = False, group: 'bool' = False, warn_independent_sampling: 'bool | None' = None, constant_liar: 'bool' = False, constraints_func: 'Callable[[FrozenTrial], Sequence[float]] | None' = None, categorical_distance_func: 'dict[str, Callable[[CategoricalChoiceType, CategoricalChoiceType], float]] | None' = None) -> 'None'"
+        },
+        {
+          "kind": "module",
+          "members": [],
+          "name": "nsgaii",
+          "resolvable": true,
+          "signature": null
+        }
+      ]
+    },
+    {
+      "module": "optuna.samplers.nsgaii",
+      "symbols": [
+        {
+          "kind": "class",
+          "members": [
+            {
+              "kind": "method",
+              "name": "crossover",
+              "signature": "(self, parents_params: 'np.ndarray', rng: 'np.random.RandomState', study: 'Study', search_space_bounds: 'np.ndarray') -> 'np.ndarray'"
+            },
+            {
+              "kind": "constant-or-field",
+              "name": "n_parents",
+              "signature": null
+            }
+          ],
+          "name": "BLXAlphaCrossover",
+          "resolvable": true,
+          "signature": "(alpha: 'float' = 0.5) -> 'None'"
+        },
+        {
+          "kind": "class",
+          "members": [
+            {
+              "kind": "method",
+              "name": "crossover",
+              "signature": "(self, parents_params: 'np.ndarray', rng: 'np.random.RandomState', study: 'Study', search_space_bounds: 'np.ndarray') -> 'np.ndarray'"
+            },
+            {
+              "kind": "property",
+              "name": "n_parents",
+              "signature": null
+            }
+          ],
+          "name": "BaseCrossover",
+          "resolvable": true,
+          "signature": "()"
+        },
+        {
+          "kind": "class",
+          "members": [
+            {
+              "kind": "method",
+              "name": "crossover",
+              "signature": "(self, parents_params: 'np.ndarray', rng: 'np.random.RandomState', study: 'Study', search_space_bounds: 'np.ndarray') -> 'np.ndarray'"
+            },
+            {
+              "kind": "constant-or-field",
+              "name": "n_parents",
+              "signature": null
+            }
+          ],
+          "name": "SBXCrossover",
+          "resolvable": true,
+          "signature": "(eta: 'float | None' = None, uniform_crossover_prob: 'float' = 0.5, use_child_gene_prob: 'float' = 0.5) -> 'None'"
+        },
+        {
+          "kind": "class",
+          "members": [
+            {
+              "kind": "method",
+              "name": "crossover",
+              "signature": "(self, parents_params: 'np.ndarray', rng: 'np.random.RandomState', study: 'Study', search_space_bounds: 'np.ndarray') -> 'np.ndarray'"
+            },
+            {
+              "kind": "constant-or-field",
+              "name": "n_parents",
+              "signature": null
+            }
+          ],
+          "name": "SPXCrossover",
+          "resolvable": true,
+          "signature": "(epsilon: 'float | None' = None) -> 'None'"
+        },
+        {
+          "kind": "class",
+          "members": [
+            {
+              "kind": "method",
+              "name": "crossover",
+              "signature": "(self, parents_params: 'np.ndarray', rng: 'np.random.RandomState', study: 'Study', search_space_bounds: 'np.ndarray') -> 'np.ndarray'"
+            },
+            {
+              "kind": "constant-or-field",
+              "name": "n_parents",
+              "signature": null
+            }
+          ],
+          "name": "UNDXCrossover",
+          "resolvable": true,
+          "signature": "(sigma_xi: 'float' = 0.5, sigma_eta: 'float | None' = None) -> 'None'"
+        },
+        {
+          "kind": "class",
+          "members": [
+            {
+              "kind": "method",
+              "name": "crossover",
+              "signature": "(self, parents_params: 'np.ndarray', rng: 'np.random.RandomState', study: 'Study', search_space_bounds: 'np.ndarray') -> 'np.ndarray'"
+            },
+            {
+              "kind": "constant-or-field",
+              "name": "n_parents",
+              "signature": null
+            }
+          ],
+          "name": "UniformCrossover",
+          "resolvable": true,
+          "signature": "(swapping_prob: 'float' = 0.5) -> 'None'"
+        },
+        {
+          "kind": "class",
+          "members": [
+            {
+              "kind": "method",
+              "name": "crossover",
+              "signature": "(self, parents_params: 'np.ndarray', rng: 'np.random.RandomState', study: 'Study', search_space_bounds: 'np.ndarray') -> 'np.ndarray'"
+            },
+            {
+              "kind": "constant-or-field",
+              "name": "n_parents",
+              "signature": null
+            }
+          ],
+          "name": "VSBXCrossover",
+          "resolvable": true,
+          "signature": "(eta: 'float | None' = None, uniform_crossover_prob: 'float' = 0.5, use_child_gene_prob: 'float' = 0.5) -> 'None'"
+        }
+      ]
+    },
+    {
+      "module": "optuna.search_space",
+      "symbols": [
+        {
+          "kind": "class",
+          "members": [
+            {
+              "kind": "method",
+              "name": "calculate",
+              "signature": "(self, study: 'Study', use_cache: 'bool' = False) -> 'dict[str, BaseDistribution]'"
+            }
+          ],
+          "name": "IntersectionSearchSpace",
+          "resolvable": true,
+          "signature": "(include_pruned: 'bool' = False) -> 'None'"
+        },
+        {
+          "kind": "class",
+          "members": [
+            {
+              "kind": "method",
+              "name": "calculate",
+              "signature": "(self, study: 'Study', use_cache: 'bool' = False) -> '_SearchSpaceGroup'"
+            }
+          ],
+          "name": "_GroupDecomposedSearchSpace",
+          "resolvable": true,
+          "signature": "(include_pruned: 'bool' = False) -> 'None'"
+        },
+        {
+          "kind": "class",
+          "members": [
+            {
+              "kind": "method",
+              "name": "add_distributions",
+              "signature": "(self, distributions: 'dict[str, BaseDistribution]') -> 'None'"
+            },
+            {
+              "kind": "property",
+              "name": "search_spaces",
+              "signature": null
+            }
+          ],
+          "name": "_SearchSpaceGroup",
+          "resolvable": true,
+          "signature": "() -> 'None'"
+        },
+        {
+          "kind": "function",
+          "members": [],
+          "name": "intersection_search_space",
+          "resolvable": true,
+          "signature": "(trials: 'list[optuna.trial.FrozenTrial]', include_pruned: 'bool' = False) -> 'dict[str, BaseDistribution]'"
+        }
+      ]
+    },
+    {
+      "module": "optuna.storages",
+      "symbols": [
+        {
+          "kind": "class",
+          "members": [
+            {
+              "kind": "method",
+              "name": "append_logs",
+              "signature": "(self, logs: 'list[dict[str, Any]]') -> 'None'"
+            },
+            {
+              "kind": "method",
+              "name": "read_logs",
+              "signature": "(self, log_number_from: 'int') -> 'Iterable[dict[str, Any]]'"
+            }
+          ],
+          "name": "BaseJournalLogStorage",
+          "resolvable": true,
+          "signature": "(*args, **kwargs)"
+        },
+        {
+          "kind": "class",
+          "members": [
+            {
+              "kind": "method",
+              "name": "check_trial_is_updatable",
+              "signature": "(self, trial_id: 'int', trial_state: 'TrialState') -> 'None'"
+            },
+            {
+              "kind": "method",
+              "name": "create_new_study",
+              "signature": "(self, directions: 'Sequence[StudyDirection]', study_name: 'str | None' = None) -> 'int'"
+            },
+            {
+              "kind": "method",
+              "name": "create_new_trial",
+              "signature": "(self, study_id: 'int', template_trial: 'FrozenTrial | None' = None) -> 'int'"
+            },
+            {
+              "kind": "method",
+              "name": "delete_study",
+              "signature": "(self, study_id: 'int') -> 'None'"
+            },
+            {
+              "kind": "method",
+              "name": "get_all_studies",
+              "signature": "(self) -> 'list[FrozenStudy]'"
+            },
+            {
+              "kind": "method",
+              "name": "get_all_trials",
+              "signature": "(self, study_id: 'int', deepcopy: 'bool' = True, states: 'Container[TrialState] | None' = None) -> 'list[FrozenTrial]'"
+            },
+            {
+              "kind": "method",
+              "name": "get_best_trial",
+              "signature": "(self, study_id: 'int') -> 'FrozenTrial'"
+            },
+            {
+              "kind": "method",
+              "name": "get_n_trials",
+              "signature": "(self, study_id: 'int', state: 'tuple[TrialState, ...] | TrialState | None' = None) -> 'int'"
+            },
+            {
+              "kind": "method",
+              "name": "get_study_directions",
+              "signature": "(self, study_id: 'int') -> 'list[StudyDirection]'"
+            },
+            {
+              "kind": "method",
+              "name": "get_study_id_from_name",
+              "signature": "(self, study_name: 'str') -> 'int'"
+            },
+            {
+              "kind": "method",
+              "name": "get_study_name_from_id",
+              "signature": "(self, study_id: 'int') -> 'str'"
+            },
+            {
+              "kind": "method",
+              "name": "get_study_system_attrs",
+              "signature": "(self, study_id: 'int') -> 'dict[str, Any]'"
+            },
+            {
+              "kind": "method",
+              "name": "get_study_user_attrs",
+              "signature": "(self, study_id: 'int') -> 'dict[str, Any]'"
+            },
+            {
+              "kind": "method",
+              "name": "get_trial",
+              "signature": "(self, trial_id: 'int') -> 'FrozenTrial'"
+            },
+            {
+              "kind": "method",
+              "name": "get_trial_id_from_study_id_trial_number",
+              "signature": "(self, study_id: 'int', trial_number: 'int') -> 'int'"
+            },
+            {
+              "kind": "method",
+              "name": "get_trial_number_from_id",
+              "signature": "(self, trial_id: 'int') -> 'int'"
+            },
+            {
+              "kind": "method",
+              "name": "get_trial_param",
+              "signature": "(self, trial_id: 'int', param_name: 'str') -> 'float'"
+            },
+            {
+              "kind": "method",
+              "name": "get_trial_params",
+              "signature": "(self, trial_id: 'int') -> 'dict[str, Any]'"
+            },
+            {
+              "kind": "method",
+              "name": "get_trial_system_attrs",
+              "signature": "(self, trial_id: 'int') -> 'dict[str, Any]'"
+            },
+            {
+              "kind": "method",
+              "name": "get_trial_user_attrs",
+              "signature": "(self, trial_id: 'int') -> 'dict[str, Any]'"
+            },
+            {
+              "kind": "method",
+              "name": "remove_session",
+              "signature": "(self) -> 'None'"
+            },
+            {
+              "kind": "method",
+              "name": "set_study_system_attr",
+              "signature": "(self, study_id: 'int', key: 'str', value: 'JSONSerializable') -> 'None'"
+            },
+            {
+              "kind": "method",
+              "name": "set_study_user_attr",
+              "signature": "(self, study_id: 'int', key: 'str', value: 'Any') -> 'None'"
+            },
+            {
+              "kind": "method",
+              "name": "set_trial_intermediate_value",
+              "signature": "(self, trial_id: 'int', step: 'int', intermediate_value: 'float') -> 'None'"
+            },
+            {
+              "kind": "method",
+              "name": "set_trial_param",
+              "signature": "(self, trial_id: 'int', param_name: 'str', param_value_internal: 'float', distribution: 'BaseDistribution') -> 'None'"
+            },
+            {
+              "kind": "method",
+              "name": "set_trial_state_values",
+              "signature": "(self, trial_id: 'int', state: 'TrialState', values: 'Sequence[float] | None' = None) -> 'bool'"
+            },
+            {
+              "kind": "method",
+              "name": "set_trial_system_attr",
+              "signature": "(self, trial_id: 'int', key: 'str', value: 'JSONSerializable') -> 'None'"
+            },
+            {
+              "kind": "method",
+              "name": "set_trial_user_attr",
+              "signature": "(self, trial_id: 'int', key: 'str', value: 'Any') -> 'None'"
+            }
+          ],
+          "name": "BaseStorage",
+          "resolvable": true,
+          "signature": "()"
+        },
+        {
+          "kind": "class",
+          "members": [
+            {
+              "kind": "method",
+              "name": "check_trial_is_updatable",
+              "signature": "(self, trial_id: 'int', trial_state: 'TrialState') -> 'None'"
+            },
+            {
+              "kind": "method",
+              "name": "close",
+              "signature": "(self) -> 'None'"
+            },
+            {
+              "kind": "method",
+              "name": "create_new_study",
+              "signature": "(self, directions: 'Sequence[StudyDirection]', study_name: 'str | None' = None) -> 'int'"
+            },
+            {
+              "kind": "method",
+              "name": "create_new_trial",
+              "signature": "(self, study_id: 'int', template_trial: 'FrozenTrial | None' = None) -> 'int'"
+            },
+            {
+              "kind": "method",
+              "name": "delete_study",
+              "signature": "(self, study_id: 'int') -> 'None'"
+            },
+            {
+              "kind": "method",
+              "name": "get_all_studies",
+              "signature": "(self) -> 'list[FrozenStudy]'"
+            },
+            {
+              "kind": "method",
+              "name": "get_all_trials",
+              "signature": "(self, study_id: 'int', deepcopy: 'bool' = True, states: 'Container[TrialState] | None' = None) -> 'list[FrozenTrial]'"
+            },
+            {
+              "kind": "method",
+              "name": "get_best_trial",
+              "signature": "(self, study_id: 'int') -> 'FrozenTrial'"
+            },
+            {
+              "kind": "method",
+              "name": "get_n_trials",
+              "signature": "(self, study_id: 'int', state: 'tuple[TrialState, ...] | TrialState | None' = None) -> 'int'"
+            },
+            {
+              "kind": "method",
+              "name": "get_study_directions",
+              "signature": "(self, study_id: 'int') -> 'list[StudyDirection]'"
+            },
+            {
+              "kind": "method",
+              "name": "get_study_id_from_name",
+              "signature": "(self, study_name: 'str') -> 'int'"
+            },
+            {
+              "kind": "method",
+              "name": "get_study_name_from_id",
+              "signature": "(self, study_id: 'int') -> 'str'"
+            },
+            {
+              "kind": "method",
+              "name": "get_study_system_attrs",
+              "signature": "(self, study_id: 'int') -> 'dict[str, Any]'"
+            },
+            {
+              "kind": "method",
+              "name": "get_study_user_attrs",
+              "signature": "(self, study_id: 'int') -> 'dict[str, Any]'"
+            },
+            {
+              "kind": "method",
+              "name": "get_trial",
+              "signature": "(self, trial_id: 'int') -> 'FrozenTrial'"
+            },
+            {
+              "kind": "method",
+              "name": "get_trial_id_from_study_id_trial_number",
+              "signature": "(self, study_id: 'int', trial_number: 'int') -> 'int'"
+            },
+            {
+              "kind": "method",
+              "name": "get_trial_number_from_id",
+              "signature": "(self, trial_id: 'int') -> 'int'"
+            },
+            {
+              "kind": "method",
+              "name": "get_trial_param",
+              "signature": "(self, trial_id: 'int', param_name: 'str') -> 'float'"
+            },
+            {
+              "kind": "method",
+              "name": "get_trial_params",
+              "signature": "(self, trial_id: 'int') -> 'dict[str, Any]'"
+            },
+            {
+              "kind": "method",
+              "name": "get_trial_system_attrs",
+              "signature": "(self, trial_id: 'int') -> 'dict[str, Any]'"
+            },
+            {
+              "kind": "method",
+              "name": "get_trial_user_attrs",
+              "signature": "(self, trial_id: 'int') -> 'dict[str, Any]'"
+            },
+            {
+              "kind": "method",
+              "name": "remove_session",
+              "signature": "(self) -> 'None'"
+            },
+            {
+              "kind": "method",
+              "name": "set_study_system_attr",
+              "signature": "(self, study_id: 'int', key: 'str', value: 'Any') -> 'None'"
+            },
+            {
+              "kind": "method",
+              "name": "set_study_user_attr",
+              "signature": "(self, study_id: 'int', key: 'str', value: 'Any') -> 'None'"
+            },
+            {
+              "kind": "method",
+              "name": "set_trial_intermediate_value",
+              "signature": "(self, trial_id: 'int', step: 'int', intermediate_value: 'float') -> 'None'"
+            },
+            {
+              "kind": "method",
+              "name": "set_trial_param",
+              "signature": "(self, trial_id: 'int', param_name: 'str', param_value_internal: 'float', distribution: 'BaseDistribution') -> 'None'"
+            },
+            {
+              "kind": "method",
+              "name": "set_trial_state_values",
+              "signature": "(self, trial_id: 'int', state: 'TrialState', values: 'Sequence[float] | None' = None) -> 'bool'"
+            },
+            {
+              "kind": "method",
+              "name": "set_trial_system_attr",
+              "signature": "(self, trial_id: 'int', key: 'str', value: 'Any') -> 'None'"
+            },
+            {
+              "kind": "method",
+              "name": "set_trial_user_attr",
+              "signature": "(self, trial_id: 'int', key: 'str', value: 'Any') -> 'None'"
+            },
+            {
+              "kind": "method",
+              "name": "wait_server_ready",
+              "signature": "(self, timeout: 'float | None' = None) -> 'None'"
+            }
+          ],
+          "name": "GrpcStorageProxy",
+          "resolvable": true,
+          "signature": "(*, host: 'str' = 'localhost', port: 'int' = 13000) -> 'None'"
+        },
+        {
+          "kind": "class",
+          "members": [
+            {
+              "kind": "method",
+              "name": "check_trial_is_updatable",
+              "signature": "(self, trial_id: 'int', trial_state: 'TrialState') -> 'None'"
+            },
+            {
+              "kind": "method",
+              "name": "create_new_study",
+              "signature": "(self, directions: 'Sequence[StudyDirection]', study_name: 'str | None' = None) -> 'int'"
+            },
+            {
+              "kind": "method",
+              "name": "create_new_trial",
+              "signature": "(self, study_id: 'int', template_trial: 'FrozenTrial | None' = None) -> 'int'"
+            },
+            {
+              "kind": "method",
+              "name": "delete_study",
+              "signature": "(self, study_id: 'int') -> 'None'"
+            },
+            {
+              "kind": "method",
+              "name": "get_all_studies",
+              "signature": "(self) -> 'list[FrozenStudy]'"
+            },
+            {
+              "kind": "method",
+              "name": "get_all_trials",
+              "signature": "(self, study_id: 'int', deepcopy: 'bool' = True, states: 'Container[TrialState] | None' = None) -> 'list[FrozenTrial]'"
+            },
+            {
+              "kind": "method",
+              "name": "get_best_trial",
+              "signature": "(self, study_id: 'int') -> 'FrozenTrial'"
+            },
+            {
+              "kind": "method",
+              "name": "get_n_trials",
+              "signature": "(self, study_id: 'int', state: 'tuple[TrialState, ...] | TrialState | None' = None) -> 'int'"
+            },
+            {
+              "kind": "method",
+              "name": "get_study_directions",
+              "signature": "(self, study_id: 'int') -> 'list[StudyDirection]'"
+            },
+            {
+              "kind": "method",
+              "name": "get_study_id_from_name",
+              "signature": "(self, study_name: 'str') -> 'int'"
+            },
+            {
+              "kind": "method",
+              "name": "get_study_name_from_id",
+              "signature": "(self, study_id: 'int') -> 'str'"
+            },
+            {
+              "kind": "method",
+              "name": "get_study_system_attrs",
+              "signature": "(self, study_id: 'int') -> 'dict[str, Any]'"
+            },
+            {
+              "kind": "method",
+              "name": "get_study_user_attrs",
+              "signature": "(self, study_id: 'int') -> 'dict[str, Any]'"
+            },
+            {
+              "kind": "method",
+              "name": "get_trial",
+              "signature": "(self, trial_id: 'int') -> 'FrozenTrial'"
+            },
+            {
+              "kind": "method",
+              "name": "get_trial_id_from_study_id_trial_number",
+              "signature": "(self, study_id: 'int', trial_number: 'int') -> 'int'"
+            },
+            {
+              "kind": "method",
+              "name": "get_trial_number_from_id",
+              "signature": "(self, trial_id: 'int') -> 'int'"
+            },
+            {
+              "kind": "method",
+              "name": "get_trial_param",
+              "signature": "(self, trial_id: 'int', param_name: 'str') -> 'float'"
+            },
+            {
+              "kind": "method",
+              "name": "get_trial_params",
+              "signature": "(self, trial_id: 'int') -> 'dict[str, Any]'"
+            },
+            {
+              "kind": "method",
+              "name": "get_trial_system_attrs",
+              "signature": "(self, trial_id: 'int') -> 'dict[str, Any]'"
+            },
+            {
+              "kind": "method",
+              "name": "get_trial_user_attrs",
+              "signature": "(self, trial_id: 'int') -> 'dict[str, Any]'"
+            },
+            {
+              "kind": "method",
+              "name": "remove_session",
+              "signature": "(self) -> 'None'"
+            },
+            {
+              "kind": "method",
+              "name": "set_study_system_attr",
+              "signature": "(self, study_id: 'int', key: 'str', value: 'JSONSerializable') -> 'None'"
+            },
+            {
+              "kind": "method",
+              "name": "set_study_user_attr",
+              "signature": "(self, study_id: 'int', key: 'str', value: 'Any') -> 'None'"
+            },
+            {
+              "kind": "method",
+              "name": "set_trial_intermediate_value",
+              "signature": "(self, trial_id: 'int', step: 'int', intermediate_value: 'float') -> 'None'"
+            },
+            {
+              "kind": "method",
+              "name": "set_trial_param",
+              "signature": "(self, trial_id: 'int', param_name: 'str', param_value_internal: 'float', distribution: 'distributions.BaseDistribution') -> 'None'"
+            },
+            {
+              "kind": "method",
+              "name": "set_trial_state_values",
+              "signature": "(self, trial_id: 'int', state: 'TrialState', values: 'Sequence[float] | None' = None) -> 'bool'"
+            },
+            {
+              "kind": "method",
+              "name": "set_trial_system_attr",
+              "signature": "(self, trial_id: 'int', key: 'str', value: 'JSONSerializable') -> 'None'"
+            },
+            {
+              "kind": "method",
+              "name": "set_trial_user_attr",
+              "signature": "(self, trial_id: 'int', key: 'str', value: 'Any') -> 'None'"
+            }
+          ],
+          "name": "InMemoryStorage",
+          "resolvable": true,
+          "signature": "() -> 'None'"
+        },
+        {
+          "kind": "class",
+          "members": [
+            {
+              "kind": "method",
+              "name": "acquire",
+              "signature": "(self) -> 'bool'"
+            },
+            {
+              "kind": "method",
+              "name": "release",
+              "signature": "(self) -> 'None'"
+            }
+          ],
+          "name": "JournalFileOpenLock",
+          "resolvable": true,
+          "signature": "(filepath: 'str', grace_period: 'int | None' = 30) -> 'None'"
+        },
+        {
+          "kind": "class",
+          "members": [
+            {
+              "kind": "method",
+              "name": "append_logs",
+              "signature": "(self, logs: 'list[dict[str, Any]]') -> 'None'"
+            },
+            {
+              "kind": "method",
+              "name": "read_logs",
+              "signature": "(self, log_number_from: 'int') -> 'Generator[dict[str, Any], None, None]'"
+            }
+          ],
+          "name": "JournalFileStorage",
+          "resolvable": true,
+          "signature": "(file_path: 'str', lock_obj: 'BaseJournalFileLock | None' = None) -> 'None'"
+        },
+        {
+          "kind": "class",
+          "members": [
+            {
+              "kind": "method",
+              "name": "acquire",
+              "signature": "(self) -> 'bool'"
+            },
+            {
+              "kind": "method",
+              "name": "release",
+              "signature": "(self) -> 'None'"
+            }
+          ],
+          "name": "JournalFileSymlinkLock",
+          "resolvable": true,
+          "signature": "(filepath: 'str', grace_period: 'int | None' = 30) -> 'None'"
+        },
+        {
+          "kind": "class",
+          "members": [
+            {
+              "kind": "method",
+              "name": "append_logs",
+              "signature": "(self, logs: 'list[dict[str, Any]]') -> 'None'"
+            },
+            {
+              "kind": "method",
+              "name": "load_snapshot",
+              "signature": "(self) -> 'bytes | None'"
+            },
+            {
+              "kind": "method",
+              "name": "read_logs",
+              "signature": "(self, log_number_from: 'int') -> 'Generator[dict[str, Any], None, None]'"
+            },
+            {
+              "kind": "method",
+              "name": "save_snapshot",
+              "signature": "(self, snapshot: 'bytes') -> 'None'"
+            }
+          ],
+          "name": "JournalRedisStorage",
+          "resolvable": true,
+          "signature": "(url: 'str', use_cluster: 'bool' = False, prefix: 'str' = '') -> 'None'"
+        },
+        {
+          "kind": "class",
+          "members": [
+            {
+              "kind": "method",
+              "name": "check_trial_is_updatable",
+              "signature": "(self, trial_id: 'int', trial_state: 'TrialState') -> 'None'"
+            },
+            {
+              "kind": "method",
+              "name": "create_new_study",
+              "signature": "(self, directions: 'Sequence[StudyDirection]', study_name: 'str | None' = None) -> 'int'"
+            },
+            {
+              "kind": "method",
+              "name": "create_new_trial",
+              "signature": "(self, study_id: 'int', template_trial: 'FrozenTrial | None' = None) -> 'int'"
+            },
+            {
+              "kind": "method",
+              "name": "delete_study",
+              "signature": "(self, study_id: 'int') -> 'None'"
+            },
+            {
+              "kind": "method",
+              "name": "get_all_studies",
+              "signature": "(self) -> 'list[FrozenStudy]'"
+            },
+            {
+              "kind": "method",
+              "name": "get_all_trials",
+              "signature": "(self, study_id: 'int', deepcopy: 'bool' = True, states: 'Container[TrialState] | None' = None) -> 'list[FrozenTrial]'"
+            },
+            {
+              "kind": "method",
+              "name": "get_best_trial",
+              "signature": "(self, study_id: 'int') -> 'FrozenTrial'"
+            },
+            {
+              "kind": "method",
+              "name": "get_n_trials",
+              "signature": "(self, study_id: 'int', state: 'tuple[TrialState, ...] | TrialState | None' = None) -> 'int'"
+            },
+            {
+              "kind": "method",
+              "name": "get_study_directions",
+              "signature": "(self, study_id: 'int') -> 'list[StudyDirection]'"
+            },
+            {
+              "kind": "method",
+              "name": "get_study_id_from_name",
+              "signature": "(self, study_name: 'str') -> 'int'"
+            },
+            {
+              "kind": "method",
+              "name": "get_study_name_from_id",
+              "signature": "(self, study_id: 'int') -> 'str'"
+            },
+            {
+              "kind": "method",
+              "name": "get_study_system_attrs",
+              "signature": "(self, study_id: 'int') -> 'dict[str, Any]'"
+            },
+            {
+              "kind": "method",
+              "name": "get_study_user_attrs",
+              "signature": "(self, study_id: 'int') -> 'dict[str, Any]'"
+            },
+            {
+              "kind": "method",
+              "name": "get_trial",
+              "signature": "(self, trial_id: 'int') -> 'FrozenTrial'"
+            },
+            {
+              "kind": "method",
+              "name": "get_trial_id_from_study_id_trial_number",
+              "signature": "(self, study_id: 'int', trial_number: 'int') -> 'int'"
+            },
+            {
+              "kind": "method",
+              "name": "get_trial_number_from_id",
+              "signature": "(self, trial_id: 'int') -> 'int'"
+            },
+            {
+              "kind": "method",
+              "name": "get_trial_param",
+              "signature": "(self, trial_id: 'int', param_name: 'str') -> 'float'"
+            },
+            {
+              "kind": "method",
+              "name": "get_trial_params",
+              "signature": "(self, trial_id: 'int') -> 'dict[str, Any]'"
+            },
+            {
+              "kind": "method",
+              "name": "get_trial_system_attrs",
+              "signature": "(self, trial_id: 'int') -> 'dict[str, Any]'"
+            },
+            {
+              "kind": "method",
+              "name": "get_trial_user_attrs",
+              "signature": "(self, trial_id: 'int') -> 'dict[str, Any]'"
+            },
+            {
+              "kind": "method",
+              "name": "remove_session",
+              "signature": "(self) -> 'None'"
+            },
+            {
+              "kind": "method",
+              "name": "restore_replay_result",
+              "signature": "(self, snapshot: 'bytes') -> 'None'"
+            },
+            {
+              "kind": "method",
+              "name": "set_study_system_attr",
+              "signature": "(self, study_id: 'int', key: 'str', value: 'JSONSerializable') -> 'None'"
+            },
+            {
+              "kind": "method",
+              "name": "set_study_user_attr",
+              "signature": "(self, study_id: 'int', key: 'str', value: 'Any') -> 'None'"
+            },
+            {
+              "kind": "method",
+              "name": "set_trial_intermediate_value",
+              "signature": "(self, trial_id: 'int', step: 'int', intermediate_value: 'float') -> 'None'"
+            },
+            {
+              "kind": "method",
+              "name": "set_trial_param",
+              "signature": "(self, trial_id: 'int', param_name: 'str', param_value_internal: 'float', distribution: 'BaseDistribution') -> 'None'"
+            },
+            {
+              "kind": "method",
+              "name": "set_trial_state_values",
+              "signature": "(self, trial_id: 'int', state: 'TrialState', values: 'Sequence[float] | None' = None) -> 'bool'"
+            },
+            {
+              "kind": "method",
+              "name": "set_trial_system_attr",
+              "signature": "(self, trial_id: 'int', key: 'str', value: 'JSONSerializable') -> 'None'"
+            },
+            {
+              "kind": "method",
+              "name": "set_trial_user_attr",
+              "signature": "(self, trial_id: 'int', key: 'str', value: 'Any') -> 'None'"
+            }
+          ],
+          "name": "JournalStorage",
+          "resolvable": true,
+          "signature": "(log_storage: 'BaseJournalBackend') -> 'None'"
+        },
+        {
+          "kind": "class",
+          "members": [
+            {
+              "kind": "method",
+              "name": "check_trial_is_updatable",
+              "signature": "(self, trial_id: 'int', trial_state: 'TrialState') -> 'None'"
+            },
+            {
+              "kind": "method",
+              "name": "create_new_study",
+              "signature": "(self, directions: 'Sequence[StudyDirection]', study_name: 'str | None' = None) -> 'int'"
+            },
+            {
+              "kind": "method",
+              "name": "create_new_trial",
+              "signature": "(self, study_id: 'int', template_trial: 'FrozenTrial | None' = None) -> 'int'"
+            },
+            {
+              "kind": "method",
+              "name": "delete_study",
+              "signature": "(self, study_id: 'int') -> 'None'"
+            },
+            {
+              "kind": "method",
+              "name": "get_all_studies",
+              "signature": "(self) -> 'list[FrozenStudy]'"
+            },
+            {
+              "kind": "method",
+              "name": "get_all_trials",
+              "signature": "(self, study_id: 'int', deepcopy: 'bool' = True, states: 'Container[TrialState] | None' = None) -> 'list[FrozenTrial]'"
+            },
+            {
+              "kind": "method",
+              "name": "get_all_versions",
+              "signature": "(self) -> 'list[str]'"
+            },
+            {
+              "kind": "method",
+              "name": "get_best_trial",
+              "signature": "(self, study_id: 'int') -> 'FrozenTrial'"
+            },
+            {
+              "kind": "method",
+              "name": "get_current_version",
+              "signature": "(self) -> 'str'"
+            },
+            {
+              "kind": "method",
+              "name": "get_failed_trial_callback",
+              "signature": "(self) -> \"Callable[['optuna.Study', FrozenTrial], None] | None\""
+            },
+            {
+              "kind": "method",
+              "name": "get_head_version",
+              "signature": "(self) -> 'str'"
+            },
+            {
+              "kind": "method",
+              "name": "get_heartbeat_interval",
+              "signature": "(self) -> 'int | None'"
+            },
+            {
+              "kind": "method",
+              "name": "get_heartbeat_stale_trial_callback",
+              "signature": "(self) -> \"Callable[['optuna.study.Study', FrozenTrial], None] | None\""
+            },
+            {
+              "kind": "method",
+              "name": "get_n_trials",
+              "signature": "(self, study_id: 'int', state: 'tuple[TrialState, ...] | TrialState | None' = None) -> 'int'"
+            },
+            {
+              "kind": "method",
+              "name": "get_study_directions",
+              "signature": "(self, study_id: 'int') -> 'list[StudyDirection]'"
+            },
+            {
+              "kind": "method",
+              "name": "get_study_id_from_name",
+              "signature": "(self, study_name: 'str') -> 'int'"
+            },
+            {
+              "kind": "method",
+              "name": "get_study_name_from_id",
+              "signature": "(self, study_id: 'int') -> 'str'"
+            },
+            {
+              "kind": "method",
+              "name": "get_study_system_attrs",
+              "signature": "(self, study_id: 'int') -> 'dict[str, Any]'"
+            },
+            {
+              "kind": "method",
+              "name": "get_study_user_attrs",
+              "signature": "(self, study_id: 'int') -> 'dict[str, Any]'"
+            },
+            {
+              "kind": "method",
+              "name": "get_trial",
+              "signature": "(self, trial_id: 'int') -> 'FrozenTrial'"
+            },
+            {
+              "kind": "method",
+              "name": "get_trial_id_from_study_id_trial_number",
+              "signature": "(self, study_id: 'int', trial_number: 'int') -> 'int'"
+            },
+            {
+              "kind": "method",
+              "name": "get_trial_number_from_id",
+              "signature": "(self, trial_id: 'int') -> 'int'"
+            },
+            {
+              "kind": "method",
+              "name": "get_trial_param",
+              "signature": "(self, trial_id: 'int', param_name: 'str') -> 'float'"
+            },
+            {
+              "kind": "method",
+              "name": "get_trial_params",
+              "signature": "(self, trial_id: 'int') -> 'dict[str, Any]'"
+            },
+            {
+              "kind": "method",
+              "name": "get_trial_system_attrs",
+              "signature": "(self, trial_id: 'int') -> 'dict[str, Any]'"
+            },
+            {
+              "kind": "method",
+              "name": "get_trial_user_attrs",
+              "signature": "(self, trial_id: 'int') -> 'dict[str, Any]'"
+            },
+            {
+              "kind": "method",
+              "name": "record_heartbeat",
+              "signature": "(self, trial_id: 'int') -> 'None'"
+            },
+            {
+              "kind": "method",
+              "name": "remove_session",
+              "signature": "(self) -> 'None'"
+            },
+            {
+              "kind": "method",
+              "name": "set_study_system_attr",
+              "signature": "(self, study_id: 'int', key: 'str', value: 'JSONSerializable') -> 'None'"
+            },
+            {
+              "kind": "method",
+              "name": "set_study_user_attr",
+              "signature": "(self, study_id: 'int', key: 'str', value: 'Any') -> 'None'"
+            },
+            {
+              "kind": "method",
+              "name": "set_trial_intermediate_value",
+              "signature": "(self, trial_id: 'int', step: 'int', intermediate_value: 'float') -> 'None'"
+            },
+            {
+              "kind": "method",
+              "name": "set_trial_param",
+              "signature": "(self, trial_id: 'int', param_name: 'str', param_value_internal: 'float', distribution: 'distributions.BaseDistribution') -> 'None'"
+            },
+            {
+              "kind": "method",
+              "name": "set_trial_state_values",
+              "signature": "(self, trial_id: 'int', state: 'TrialState', values: 'Sequence[float] | None' = None) -> 'bool'"
+            },
+            {
+              "kind": "method",
+              "name": "set_trial_system_attr",
+              "signature": "(self, trial_id: 'int', key: 'str', value: 'JSONSerializable') -> 'None'"
+            },
+            {
+              "kind": "method",
+              "name": "set_trial_user_attr",
+              "signature": "(self, trial_id: 'int', key: 'str', value: 'Any') -> 'None'"
+            },
+            {
+              "kind": "method",
+              "name": "upgrade",
+              "signature": "(self) -> 'None'"
+            }
+          ],
+          "name": "RDBStorage",
+          "resolvable": true,
+          "signature": "(url: 'str', engine_kwargs: 'dict[str, Any] | None' = None, skip_compatibility_check: 'bool' = False, *, heartbeat_interval: 'int | None' = None, grace_period: 'int | None' = None, heartbeat_stale_trial_callback: \"Callable[['optuna.study.Study', FrozenTrial], None] | None\" = None, failed_trial_callback: \"Callable[['optuna.study.Study', FrozenTrial], None] | None\" = None, skip_table_creation: 'bool' = False) -> 'None'"
+        },
+        {
+          "kind": "class",
+          "members": [
+            {
+              "kind": "method",
+              "name": "retried_trial_number",
+              "signature": "(trial: 'FrozenTrial') -> 'int | None'"
+            },
+            {
+              "kind": "method",
+              "name": "retry_history",
+              "signature": "(trial: 'FrozenTrial') -> 'list[int]'"
+            }
+          ],
+          "name": "RetryFailedTrialCallback",
+          "resolvable": true,
+          "signature": "(max_retry: 'int | None' = None, inherit_intermediate_values: 'bool' = False) -> 'None'"
+        },
+        {
+          "kind": "class",
+          "members": [
+            {
+              "kind": "method",
+              "name": "retried_trial_number",
+              "signature": "(trial: 'FrozenTrial') -> 'int | None'"
+            },
+            {
+              "kind": "method",
+              "name": "retry_history",
+              "signature": "(trial: 'FrozenTrial') -> 'list[int]'"
+            }
+          ],
+          "name": "RetryHeartbeatStaleTrialCallback",
+          "resolvable": true,
+          "signature": "(max_retry: 'int | None' = None, inherit_intermediate_values: 'bool' = False) -> 'None'"
+        },
+        {
+          "kind": "class",
+          "members": [
+            {
+              "kind": "method",
+              "name": "check_trial_is_updatable",
+              "signature": "(self, trial_id: 'int', trial_state: 'TrialState') -> 'None'"
+            },
+            {
+              "kind": "method",
+              "name": "create_new_study",
+              "signature": "(self, directions: 'Sequence[StudyDirection]', study_name: 'str | None' = None) -> 'int'"
+            },
+            {
+              "kind": "method",
+              "name": "create_new_trial",
+              "signature": "(self, study_id: 'int', template_trial: 'FrozenTrial | None' = None) -> 'int'"
+            },
+            {
+              "kind": "method",
+              "name": "delete_study",
+              "signature": "(self, study_id: 'int') -> 'None'"
+            },
+            {
+              "kind": "method",
+              "name": "get_all_studies",
+              "signature": "(self) -> 'list[FrozenStudy]'"
+            },
+            {
+              "kind": "method",
+              "name": "get_all_trials",
+              "signature": "(self, study_id: 'int', deepcopy: 'bool' = True, states: 'Container[TrialState] | None' = None) -> 'list[FrozenTrial]'"
+            },
+            {
+              "kind": "method",
+              "name": "get_best_trial",
+              "signature": "(self, study_id: 'int') -> 'FrozenTrial'"
+            },
+            {
+              "kind": "method",
+              "name": "get_failed_trial_callback",
+              "signature": "(self) -> \"Callable[['optuna.Study', FrozenTrial], None] | None\""
+            },
+            {
+              "kind": "method",
+              "name": "get_heartbeat_interval",
+              "signature": "(self) -> 'int | None'"
+            },
+            {
+              "kind": "method",
+              "name": "get_heartbeat_stale_trial_callback",
+              "signature": "(self) -> \"Callable[['optuna.Study', FrozenTrial], None] | None\""
+            },
+            {
+              "kind": "method",
+              "name": "get_n_trials",
+              "signature": "(self, study_id: 'int', state: 'tuple[TrialState, ...] | TrialState | None' = None) -> 'int'"
+            },
+            {
+              "kind": "method",
+              "name": "get_study_directions",
+              "signature": "(self, study_id: 'int') -> 'list[StudyDirection]'"
+            },
+            {
+              "kind": "method",
+              "name": "get_study_id_from_name",
+              "signature": "(self, study_name: 'str') -> 'int'"
+            },
+            {
+              "kind": "method",
+              "name": "get_study_name_from_id",
+              "signature": "(self, study_id: 'int') -> 'str'"
+            },
+            {
+              "kind": "method",
+              "name": "get_study_system_attrs",
+              "signature": "(self, study_id: 'int') -> 'dict[str, Any]'"
+            },
+            {
+              "kind": "method",
+              "name": "get_study_user_attrs",
+              "signature": "(self, study_id: 'int') -> 'dict[str, Any]'"
+            },
+            {
+              "kind": "method",
+              "name": "get_trial",
+              "signature": "(self, trial_id: 'int') -> 'FrozenTrial'"
+            },
+            {
+              "kind": "method",
+              "name": "get_trial_id_from_study_id_trial_number",
+              "signature": "(self, study_id: 'int', trial_number: 'int') -> 'int'"
+            },
+            {
+              "kind": "method",
+              "name": "get_trial_number_from_id",
+              "signature": "(self, trial_id: 'int') -> 'int'"
+            },
+            {
+              "kind": "method",
+              "name": "get_trial_param",
+              "signature": "(self, trial_id: 'int', param_name: 'str') -> 'float'"
+            },
+            {
+              "kind": "method",
+              "name": "get_trial_params",
+              "signature": "(self, trial_id: 'int') -> 'dict[str, Any]'"
+            },
+            {
+              "kind": "method",
+              "name": "get_trial_system_attrs",
+              "signature": "(self, trial_id: 'int') -> 'dict[str, Any]'"
+            },
+            {
+              "kind": "method",
+              "name": "get_trial_user_attrs",
+              "signature": "(self, trial_id: 'int') -> 'dict[str, Any]'"
+            },
+            {
+              "kind": "method",
+              "name": "record_heartbeat",
+              "signature": "(self, trial_id: 'int') -> 'None'"
+            },
+            {
+              "kind": "method",
+              "name": "remove_session",
+              "signature": "(self) -> 'None'"
+            },
+            {
+              "kind": "method",
+              "name": "set_study_system_attr",
+              "signature": "(self, study_id: 'int', key: 'str', value: 'JSONSerializable') -> 'None'"
+            },
+            {
+              "kind": "method",
+              "name": "set_study_user_attr",
+              "signature": "(self, study_id: 'int', key: 'str', value: 'Any') -> 'None'"
+            },
+            {
+              "kind": "method",
+              "name": "set_trial_intermediate_value",
+              "signature": "(self, trial_id: 'int', step: 'int', intermediate_value: 'float') -> 'None'"
+            },
+            {
+              "kind": "method",
+              "name": "set_trial_param",
+              "signature": "(self, trial_id: 'int', param_name: 'str', param_value_internal: 'float', distribution: 'distributions.BaseDistribution') -> 'None'"
+            },
+            {
+              "kind": "method",
+              "name": "set_trial_state_values",
+              "signature": "(self, trial_id: 'int', state: 'TrialState', values: 'Sequence[float] | None' = None) -> 'bool'"
+            },
+            {
+              "kind": "method",
+              "name": "set_trial_system_attr",
+              "signature": "(self, trial_id: 'int', key: 'str', value: 'JSONSerializable') -> 'None'"
+            },
+            {
+              "kind": "method",
+              "name": "set_trial_user_attr",
+              "signature": "(self, trial_id: 'int', key: 'str', value: 'Any') -> 'None'"
+            }
+          ],
+          "name": "_CachedStorage",
+          "resolvable": true,
+          "signature": "(backend: 'RDBStorage') -> 'None'"
+        },
+        {
+          "kind": "function",
+          "members": [],
+          "name": "fail_stale_trials",
+          "resolvable": true,
+          "signature": "(study: \"'optuna.Study'\") -> 'None'"
+        },
+        {
+          "kind": "function",
+          "members": [],
+          "name": "run_grpc_proxy_server",
+          "resolvable": true,
+          "signature": "(storage: 'BaseStorage', *, host: 'str' = 'localhost', port: 'int' = 13000, thread_pool: 'ThreadPoolExecutor | None' = None) -> 'None'"
+        }
+      ]
+    },
+    {
+      "module": "optuna.storages.journal",
+      "symbols": [
+        {
+          "kind": "class",
+          "members": [
+            {
+              "kind": "method",
+              "name": "append_logs",
+              "signature": "(self, logs: 'list[dict[str, Any]]') -> 'None'"
+            },
+            {
+              "kind": "method",
+              "name": "read_logs",
+              "signature": "(self, log_number_from: 'int') -> 'Iterable[dict[str, Any]]'"
+            }
+          ],
+          "name": "BaseJournalBackend",
+          "resolvable": true,
+          "signature": "()"
+        },
+        {
+          "kind": "class",
+          "members": [
+            {
+              "kind": "method",
+              "name": "append_logs",
+              "signature": "(self, logs: 'list[dict[str, Any]]') -> 'None'"
+            },
+            {
+              "kind": "method",
+              "name": "read_logs",
+              "signature": "(self, log_number_from: 'int') -> 'Generator[dict[str, Any], None, None]'"
+            }
+          ],
+          "name": "JournalFileBackend",
+          "resolvable": true,
+          "signature": "(file_path: 'str', lock_obj: 'BaseJournalFileLock | None' = None) -> 'None'"
+        },
+        {
+          "kind": "class",
+          "members": [
+            {
+              "kind": "method",
+              "name": "acquire",
+              "signature": "(self) -> 'bool'"
+            },
+            {
+              "kind": "method",
+              "name": "release",
+              "signature": "(self) -> 'None'"
+            }
+          ],
+          "name": "JournalFileOpenLock",
+          "resolvable": true,
+          "signature": "(filepath: 'str', grace_period: 'int | None' = 30) -> 'None'"
+        },
+        {
+          "kind": "class",
+          "members": [
+            {
+              "kind": "method",
+              "name": "acquire",
+              "signature": "(self) -> 'bool'"
+            },
+            {
+              "kind": "method",
+              "name": "release",
+              "signature": "(self) -> 'None'"
+            }
+          ],
+          "name": "JournalFileSymlinkLock",
+          "resolvable": true,
+          "signature": "(filepath: 'str', grace_period: 'int | None' = 30) -> 'None'"
+        },
+        {
+          "kind": "class",
+          "members": [
+            {
+              "kind": "method",
+              "name": "append_logs",
+              "signature": "(self, logs: 'list[dict[str, Any]]') -> 'None'"
+            },
+            {
+              "kind": "method",
+              "name": "load_snapshot",
+              "signature": "(self) -> 'bytes | None'"
+            },
+            {
+              "kind": "method",
+              "name": "read_logs",
+              "signature": "(self, log_number_from: 'int') -> 'Generator[dict[str, Any], None, None]'"
+            },
+            {
+              "kind": "method",
+              "name": "save_snapshot",
+              "signature": "(self, snapshot: 'bytes') -> 'None'"
+            }
+          ],
+          "name": "JournalRedisBackend",
+          "resolvable": true,
+          "signature": "(url: 'str', use_cluster: 'bool' = False, prefix: 'str' = '') -> 'None'"
+        },
+        {
+          "kind": "class",
+          "members": [
+            {
+              "kind": "method",
+              "name": "check_trial_is_updatable",
+              "signature": "(self, trial_id: 'int', trial_state: 'TrialState') -> 'None'"
+            },
+            {
+              "kind": "method",
+              "name": "create_new_study",
+              "signature": "(self, directions: 'Sequence[StudyDirection]', study_name: 'str | None' = None) -> 'int'"
+            },
+            {
+              "kind": "method",
+              "name": "create_new_trial",
+              "signature": "(self, study_id: 'int', template_trial: 'FrozenTrial | None' = None) -> 'int'"
+            },
+            {
+              "kind": "method",
+              "name": "delete_study",
+              "signature": "(self, study_id: 'int') -> 'None'"
+            },
+            {
+              "kind": "method",
+              "name": "get_all_studies",
+              "signature": "(self) -> 'list[FrozenStudy]'"
+            },
+            {
+              "kind": "method",
+              "name": "get_all_trials",
+              "signature": "(self, study_id: 'int', deepcopy: 'bool' = True, states: 'Container[TrialState] | None' = None) -> 'list[FrozenTrial]'"
+            },
+            {
+              "kind": "method",
+              "name": "get_best_trial",
+              "signature": "(self, study_id: 'int') -> 'FrozenTrial'"
+            },
+            {
+              "kind": "method",
+              "name": "get_n_trials",
+              "signature": "(self, study_id: 'int', state: 'tuple[TrialState, ...] | TrialState | None' = None) -> 'int'"
+            },
+            {
+              "kind": "method",
+              "name": "get_study_directions",
+              "signature": "(self, study_id: 'int') -> 'list[StudyDirection]'"
+            },
+            {
+              "kind": "method",
+              "name": "get_study_id_from_name",
+              "signature": "(self, study_name: 'str') -> 'int'"
+            },
+            {
+              "kind": "method",
+              "name": "get_study_name_from_id",
+              "signature": "(self, study_id: 'int') -> 'str'"
+            },
+            {
+              "kind": "method",
+              "name": "get_study_system_attrs",
+              "signature": "(self, study_id: 'int') -> 'dict[str, Any]'"
+            },
+            {
+              "kind": "method",
+              "name": "get_study_user_attrs",
+              "signature": "(self, study_id: 'int') -> 'dict[str, Any]'"
+            },
+            {
+              "kind": "method",
+              "name": "get_trial",
+              "signature": "(self, trial_id: 'int') -> 'FrozenTrial'"
+            },
+            {
+              "kind": "method",
+              "name": "get_trial_id_from_study_id_trial_number",
+              "signature": "(self, study_id: 'int', trial_number: 'int') -> 'int'"
+            },
+            {
+              "kind": "method",
+              "name": "get_trial_number_from_id",
+              "signature": "(self, trial_id: 'int') -> 'int'"
+            },
+            {
+              "kind": "method",
+              "name": "get_trial_param",
+              "signature": "(self, trial_id: 'int', param_name: 'str') -> 'float'"
+            },
+            {
+              "kind": "method",
+              "name": "get_trial_params",
+              "signature": "(self, trial_id: 'int') -> 'dict[str, Any]'"
+            },
+            {
+              "kind": "method",
+              "name": "get_trial_system_attrs",
+              "signature": "(self, trial_id: 'int') -> 'dict[str, Any]'"
+            },
+            {
+              "kind": "method",
+              "name": "get_trial_user_attrs",
+              "signature": "(self, trial_id: 'int') -> 'dict[str, Any]'"
+            },
+            {
+              "kind": "method",
+              "name": "remove_session",
+              "signature": "(self) -> 'None'"
+            },
+            {
+              "kind": "method",
+              "name": "restore_replay_result",
+              "signature": "(self, snapshot: 'bytes') -> 'None'"
+            },
+            {
+              "kind": "method",
+              "name": "set_study_system_attr",
+              "signature": "(self, study_id: 'int', key: 'str', value: 'JSONSerializable') -> 'None'"
+            },
+            {
+              "kind": "method",
+              "name": "set_study_user_attr",
+              "signature": "(self, study_id: 'int', key: 'str', value: 'Any') -> 'None'"
+            },
+            {
+              "kind": "method",
+              "name": "set_trial_intermediate_value",
+              "signature": "(self, trial_id: 'int', step: 'int', intermediate_value: 'float') -> 'None'"
+            },
+            {
+              "kind": "method",
+              "name": "set_trial_param",
+              "signature": "(self, trial_id: 'int', param_name: 'str', param_value_internal: 'float', distribution: 'BaseDistribution') -> 'None'"
+            },
+            {
+              "kind": "method",
+              "name": "set_trial_state_values",
+              "signature": "(self, trial_id: 'int', state: 'TrialState', values: 'Sequence[float] | None' = None) -> 'bool'"
+            },
+            {
+              "kind": "method",
+              "name": "set_trial_system_attr",
+              "signature": "(self, trial_id: 'int', key: 'str', value: 'JSONSerializable') -> 'None'"
+            },
+            {
+              "kind": "method",
+              "name": "set_trial_user_attr",
+              "signature": "(self, trial_id: 'int', key: 'str', value: 'Any') -> 'None'"
+            }
+          ],
+          "name": "JournalStorage",
+          "resolvable": true,
+          "signature": "(log_storage: 'BaseJournalBackend') -> 'None'"
+        }
+      ]
+    },
+    {
+      "module": "optuna.study",
+      "symbols": [
+        {
+          "kind": "class",
+          "members": [],
+          "name": "MaxTrialsCallback",
+          "resolvable": true,
+          "signature": "(n_trials: 'int', states: 'Container[TrialState] | None' = (<TrialState.COMPLETE: 1>,)) -> 'None'"
+        },
+        {
+          "kind": "class",
+          "members": [
+            {
+              "kind": "method",
+              "name": "add_trial",
+              "signature": "(self, trial: 'FrozenTrial') -> 'None'"
+            },
+            {
+              "kind": "method",
+              "name": "add_trials",
+              "signature": "(self, trials: 'Iterable[FrozenTrial]') -> 'None'"
+            },
+            {
+              "kind": "method",
+              "name": "ask",
+              "signature": "(self, fixed_distributions: 'dict[str, BaseDistribution] | None' = None) -> 'Trial'"
+            },
+            {
+              "kind": "property",
+              "name": "best_params",
+              "signature": null
+            },
+            {
+              "kind": "property",
+              "name": "best_trial",
+              "signature": null
+            },
+            {
+              "kind": "property",
+              "name": "best_trials",
+              "signature": null
+            },
+            {
+              "kind": "property",
+              "name": "best_value",
+              "signature": null
+            },
+            {
+              "kind": "property",
+              "name": "direction",
+              "signature": null
+            },
+            {
+              "kind": "property",
+              "name": "directions",
+              "signature": null
+            },
+            {
+              "kind": "method",
+              "name": "enqueue_trial",
+              "signature": "(self, params: 'dict[str, Any]', user_attrs: 'dict[str, Any] | None' = None, skip_if_exists: 'bool' = False) -> 'None'"
+            },
+            {
+              "kind": "method",
+              "name": "get_trials",
+              "signature": "(self, deepcopy: 'bool' = True, states: 'Container[TrialState] | None' = None) -> 'list[FrozenTrial]'"
+            },
+            {
+              "kind": "property",
+              "name": "metric_names",
+              "signature": null
+            },
+            {
+              "kind": "method",
+              "name": "optimize",
+              "signature": "(self, func: 'ObjectiveFuncType', n_trials: 'int | None' = None, timeout: 'float | None' = None, n_jobs: 'int' = 1, catch: 'Iterable[type[Exception]] | type[Exception]' = (), callbacks: 'Iterable[Callable[[Study, FrozenTrial], None]] | None' = None, gc_after_trial: 'bool' = False, show_progress_bar: 'bool' = False) -> 'None'"
+            },
+            {
+              "kind": "method",
+              "name": "set_metric_names",
+              "signature": "(self, metric_names: 'list[str]') -> 'None'"
+            },
+            {
+              "kind": "method",
+              "name": "set_system_attr",
+              "signature": "(self, key: 'str', value: 'Any') -> 'None'"
+            },
+            {
+              "kind": "method",
+              "name": "set_user_attr",
+              "signature": "(self, key: 'str', value: 'Any') -> 'None'"
+            },
+            {
+              "kind": "method",
+              "name": "stop",
+              "signature": "(self) -> 'None'"
+            },
+            {
+              "kind": "property",
+              "name": "system_attrs",
+              "signature": null
+            },
+            {
+              "kind": "method",
+              "name": "tell",
+              "signature": "(self, trial: 'Trial | int', values: 'float | Sequence[float] | None' = None, state: 'TrialState | None' = None, skip_if_finished: 'bool' = False) -> 'FrozenTrial'"
+            },
+            {
+              "kind": "property",
+              "name": "trials",
+              "signature": null
+            },
+            {
+              "kind": "method",
+              "name": "trials_dataframe",
+              "signature": "(self, attrs: 'tuple[str, ...]' = ('number', 'value', 'datetime_start', 'datetime_complete', 'duration', 'params', 'user_attrs', 'system_attrs', 'state'), multi_index: 'bool' = False) -> \"'pd.DataFrame'\""
+            },
+            {
+              "kind": "property",
+              "name": "user_attrs",
+              "signature": null
+            }
+          ],
+          "name": "Study",
+          "resolvable": true,
+          "signature": "(study_name: 'str', storage: 'str | storages.BaseStorage', sampler: \"'samplers.BaseSampler' | None\" = None, pruner: 'pruners.BasePruner | None' = None) -> 'None'"
+        },
+        {
+          "kind": "class",
+          "members": [
+            {
+              "kind": "constant-or-field",
+              "name": "MAXIMIZE",
+              "signature": null
+            },
+            {
+              "kind": "constant-or-field",
+              "name": "MINIMIZE",
+              "signature": null
+            },
+            {
+              "kind": "constant-or-field",
+              "name": "NOT_SET",
+              "signature": null
+            },
+            {
+              "kind": "method",
+              "name": "as_integer_ratio",
+              "signature": "(self, /)"
+            },
+            {
+              "kind": "method",
+              "name": "bit_count",
+              "signature": "(self, /)"
+            },
+            {
+              "kind": "method",
+              "name": "bit_length",
+              "signature": "(self, /)"
+            },
+            {
+              "kind": "method",
+              "name": "conjugate",
+              "signature": null
+            },
+            {
+              "kind": "constant-or-field",
+              "name": "denominator",
+              "signature": null
+            },
+            {
+              "kind": "method",
+              "name": "from_bytes",
+              "signature": "(bytes, byteorder='big', *, signed=False)"
+            },
+            {
+              "kind": "constant-or-field",
+              "name": "imag",
+              "signature": null
+            },
+            {
+              "kind": "method",
+              "name": "is_integer",
+              "signature": "(self, /)"
+            },
+            {
+              "kind": "descriptor",
+              "name": "name",
+              "signature": null
+            },
+            {
+              "kind": "constant-or-field",
+              "name": "numerator",
+              "signature": null
+            },
+            {
+              "kind": "constant-or-field",
+              "name": "real",
+              "signature": null
+            },
+            {
+              "kind": "method",
+              "name": "to_bytes",
+              "signature": "(self, /, length=1, byteorder='big', *, signed=False)"
+            },
+            {
+              "kind": "descriptor",
+              "name": "value",
+              "signature": null
+            }
+          ],
+          "name": "StudyDirection",
+          "resolvable": true,
+          "signature": "(*values)"
+        },
+        {
+          "kind": "class",
+          "members": [
+            {
+              "kind": "property",
+              "name": "direction",
+              "signature": null
+            },
+            {
+              "kind": "property",
+              "name": "directions",
+              "signature": null
+            },
+            {
+              "kind": "property",
+              "name": "system_attrs",
+              "signature": null
+            }
+          ],
+          "name": "StudySummary",
+          "resolvable": true,
+          "signature": "(study_name: 'str', direction: 'StudyDirection | None', best_trial: 'FrozenTrial | None', user_attrs: 'dict[str, Any]', system_attrs: 'dict[str, Any]', n_trials: 'int', datetime_start: 'datetime | None', study_id: 'int', *, directions: 'Sequence[StudyDirection] | None' = None)"
+        },
+        {
+          "kind": "function",
+          "members": [],
+          "name": "copy_study",
+          "resolvable": true,
+          "signature": "(*, from_study_name: 'str', from_storage: 'str | storages.BaseStorage', to_storage: 'str | storages.BaseStorage', to_study_name: 'str | None' = None) -> 'None'"
+        },
+        {
+          "kind": "function",
+          "members": [],
+          "name": "create_study",
+          "resolvable": true,
+          "signature": "(*, storage: 'str | storages.BaseStorage | None' = None, sampler: \"'samplers.BaseSampler' | None\" = None, pruner: 'pruners.BasePruner | None' = None, study_name: 'str | None' = None, direction: 'str | StudyDirection | None' = None, load_if_exists: 'bool' = False, directions: 'Sequence[str | StudyDirection] | None' = None) -> 'Study'"
+        },
+        {
+          "kind": "function",
+          "members": [],
+          "name": "delete_study",
+          "resolvable": true,
+          "signature": "(*, study_name: 'str', storage: 'str | storages.BaseStorage') -> 'None'"
+        },
+        {
+          "kind": "function",
+          "members": [],
+          "name": "get_all_study_names",
+          "resolvable": true,
+          "signature": "(storage: 'str | storages.BaseStorage') -> 'list[str]'"
+        },
+        {
+          "kind": "function",
+          "members": [],
+          "name": "get_all_study_summaries",
+          "resolvable": true,
+          "signature": "(storage: 'str | storages.BaseStorage', include_best_trial: 'bool' = True) -> 'list[StudySummary]'"
+        },
+        {
+          "kind": "function",
+          "members": [],
+          "name": "load_study",
+          "resolvable": true,
+          "signature": "(*, study_name: 'str | None', storage: 'str | storages.BaseStorage', sampler: \"'samplers.BaseSampler' | None\" = None, pruner: 'pruners.BasePruner | None' = None) -> 'Study'"
+        }
+      ]
+    },
+    {
+      "module": "optuna.terminator",
+      "symbols": [
+        {
+          "kind": "class",
+          "members": [
+            {
+              "kind": "method",
+              "name": "evaluate",
+              "signature": "(self, trials: 'list[FrozenTrial]', study_direction: 'StudyDirection') -> 'float'"
+            }
+          ],
+          "name": "BaseErrorEvaluator",
+          "resolvable": true,
+          "signature": "()"
+        },
+        {
+          "kind": "class",
+          "members": [
+            {
+              "kind": "method",
+              "name": "evaluate",
+              "signature": "(self, trials: 'list[FrozenTrial]', study_direction: 'StudyDirection') -> 'float'"
+            }
+          ],
+          "name": "BaseImprovementEvaluator",
+          "resolvable": true,
+          "signature": "(*args, **kwargs)"
+        },
+        {
+          "kind": "class",
+          "members": [
+            {
+              "kind": "method",
+              "name": "should_terminate",
+              "signature": "(self, study: 'Study') -> 'bool'"
+            }
+          ],
+          "name": "BaseTerminator",
+          "resolvable": true,
+          "signature": "()"
+        },
+        {
+          "kind": "class",
+          "members": [
+            {
+              "kind": "method",
+              "name": "evaluate",
+              "signature": "(self, trials: 'list[FrozenTrial]', study_direction: 'StudyDirection') -> 'float'"
+            }
+          ],
+          "name": "BestValueStagnationEvaluator",
+          "resolvable": true,
+          "signature": "(max_stagnation_trials: 'int' = 30) -> 'None'"
+        },
+        {
+          "kind": "class",
+          "members": [
+            {
+              "kind": "method",
+              "name": "evaluate",
+              "signature": "(self, trials: 'list[FrozenTrial]', study_direction: 'StudyDirection') -> 'float'"
+            }
+          ],
+          "name": "CrossValidationErrorEvaluator",
+          "resolvable": true,
+          "signature": "(*args, **kwargs)"
+        },
+        {
+          "kind": "class",
+          "members": [
+            {
+              "kind": "method",
+              "name": "evaluate",
+              "signature": "(self, trials: 'list[FrozenTrial]', study_direction: 'StudyDirection') -> 'float'"
+            }
+          ],
+          "name": "EMMREvaluator",
+          "resolvable": true,
+          "signature": "(deterministic_objective: 'bool' = False, delta: 'float' = 0.1, min_n_trials: 'int' = 2, seed: 'int | None' = None) -> 'None'"
+        },
+        {
+          "kind": "class",
+          "members": [
+            {
+              "kind": "method",
+              "name": "evaluate",
+              "signature": "(self, trials: 'list[FrozenTrial]', study_direction: 'StudyDirection') -> 'float'"
+            }
+          ],
+          "name": "MedianErrorEvaluator",
+          "resolvable": true,
+          "signature": "(paired_improvement_evaluator: 'BaseImprovementEvaluator', warm_up_trials: 'int' = 10, n_initial_trials: 'int' = 20, threshold_ratio: 'float' = 0.01) -> 'None'"
+        },
+        {
+          "kind": "class",
+          "members": [
+            {
+              "kind": "method",
+              "name": "evaluate",
+              "signature": "(self, trials: 'list[FrozenTrial]', study_direction: 'StudyDirection') -> 'float'"
+            }
+          ],
+          "name": "RegretBoundEvaluator",
+          "resolvable": true,
+          "signature": "(top_trials_ratio: 'float' = 0.5, min_n_trials: 'int' = 20, seed: 'int | None' = None) -> 'None'"
+        },
+        {
+          "kind": "class",
+          "members": [
+            {
+              "kind": "method",
+              "name": "evaluate",
+              "signature": "(self, trials: 'list[FrozenTrial]', study_direction: 'StudyDirection') -> 'float'"
+            }
+          ],
+          "name": "StaticErrorEvaluator",
+          "resolvable": true,
+          "signature": "(constant: 'float') -> 'None'"
+        },
+        {
+          "kind": "class",
+          "members": [
+            {
+              "kind": "method",
+              "name": "should_terminate",
+              "signature": "(self, study: 'Study') -> 'bool'"
+            }
+          ],
+          "name": "Terminator",
+          "resolvable": true,
+          "signature": "(improvement_evaluator: 'BaseImprovementEvaluator | None' = None, error_evaluator: 'BaseErrorEvaluator | None' = None, min_n_trials: 'int' = 20) -> 'None'"
+        },
+        {
+          "kind": "class",
+          "members": [],
+          "name": "TerminatorCallback",
+          "resolvable": true,
+          "signature": "(terminator: 'BaseTerminator | None' = None) -> 'None'"
+        },
+        {
+          "kind": "function",
+          "members": [],
+          "name": "report_cross_validation_scores",
+          "resolvable": true,
+          "signature": "(trial: 'Trial', scores: 'list[float]') -> 'None'"
+        }
+      ]
+    },
+    {
+      "module": "optuna.trial",
+      "symbols": [
+        {
+          "kind": "class",
+          "members": [
+            {
+              "kind": "property",
+              "name": "datetime_start",
+              "signature": null
+            },
+            {
+              "kind": "property",
+              "name": "distributions",
+              "signature": null
+            },
+            {
+              "kind": "property",
+              "name": "number",
+              "signature": null
+            },
+            {
+              "kind": "property",
+              "name": "params",
+              "signature": null
+            },
+            {
+              "kind": "method",
+              "name": "report",
+              "signature": "(self, value: 'float', step: 'int') -> 'None'"
+            },
+            {
+              "kind": "method",
+              "name": "set_system_attr",
+              "signature": "(self, key: 'str', value: 'Any') -> 'None'"
+            },
+            {
+              "kind": "method",
+              "name": "set_user_attr",
+              "signature": "(self, key: 'str', value: 'Any') -> 'None'"
+            },
+            {
+              "kind": "method",
+              "name": "should_prune",
+              "signature": "(self) -> 'bool'"
+            },
+            {
+              "kind": "method",
+              "name": "suggest_categorical",
+              "signature": "(self, name: 'str', choices: 'Sequence[CategoricalChoiceType]') -> 'CategoricalChoiceType'"
+            },
+            {
+              "kind": "method",
+              "name": "suggest_discrete_uniform",
+              "signature": "(self, name: 'str', low: 'float', high: 'float', q: 'float') -> 'float'"
+            },
+            {
+              "kind": "method",
+              "name": "suggest_float",
+              "signature": "(self, name: 'str', low: 'float', high: 'float', *, step: 'float | None' = None, log: 'bool' = False) -> 'float'"
+            },
+            {
+              "kind": "method",
+              "name": "suggest_int",
+              "signature": "(self, name: 'str', low: 'int', high: 'int', *, step: 'int' = 1, log: 'bool' = False) -> 'int'"
+            },
+            {
+              "kind": "method",
+              "name": "suggest_loguniform",
+              "signature": "(self, name: 'str', low: 'float', high: 'float') -> 'float'"
+            },
+            {
+              "kind": "method",
+              "name": "suggest_uniform",
+              "signature": "(self, name: 'str', low: 'float', high: 'float') -> 'float'"
+            },
+            {
+              "kind": "property",
+              "name": "system_attrs",
+              "signature": null
+            },
+            {
+              "kind": "property",
+              "name": "user_attrs",
+              "signature": null
+            }
+          ],
+          "name": "BaseTrial",
+          "resolvable": true,
+          "signature": "()"
+        },
+        {
+          "kind": "class",
+          "members": [
+            {
+              "kind": "property",
+              "name": "datetime_start",
+              "signature": null
+            },
+            {
+              "kind": "property",
+              "name": "distributions",
+              "signature": null
+            },
+            {
+              "kind": "property",
+              "name": "number",
+              "signature": null
+            },
+            {
+              "kind": "property",
+              "name": "params",
+              "signature": null
+            },
+            {
+              "kind": "method",
+              "name": "report",
+              "signature": "(self, value: 'float', step: 'int') -> 'None'"
+            },
+            {
+              "kind": "method",
+              "name": "set_system_attr",
+              "signature": "(self, key: 'str', value: 'Any') -> 'None'"
+            },
+            {
+              "kind": "method",
+              "name": "set_user_attr",
+              "signature": "(self, key: 'str', value: 'Any') -> 'None'"
+            },
+            {
+              "kind": "method",
+              "name": "should_prune",
+              "signature": "(self) -> 'bool'"
+            },
+            {
+              "kind": "method",
+              "name": "suggest_categorical",
+              "signature": "(self, name: 'str', choices: 'Sequence[CategoricalChoiceType]') -> 'CategoricalChoiceType'"
+            },
+            {
+              "kind": "method",
+              "name": "suggest_discrete_uniform",
+              "signature": "(self, name: 'str', low: 'float', high: 'float', q: 'float') -> 'float'"
+            },
+            {
+              "kind": "method",
+              "name": "suggest_float",
+              "signature": "(self, name: 'str', low: 'float', high: 'float', *, step: 'float | None' = None, log: 'bool' = False) -> 'float'"
+            },
+            {
+              "kind": "method",
+              "name": "suggest_int",
+              "signature": "(self, name: 'str', low: 'int', high: 'int', *, step: 'int' = 1, log: 'bool' = False) -> 'int'"
+            },
+            {
+              "kind": "method",
+              "name": "suggest_loguniform",
+              "signature": "(self, name: 'str', low: 'float', high: 'float') -> 'float'"
+            },
+            {
+              "kind": "method",
+              "name": "suggest_uniform",
+              "signature": "(self, name: 'str', low: 'float', high: 'float') -> 'float'"
+            },
+            {
+              "kind": "property",
+              "name": "system_attrs",
+              "signature": null
+            },
+            {
+              "kind": "property",
+              "name": "user_attrs",
+              "signature": null
+            }
+          ],
+          "name": "FixedTrial",
+          "resolvable": true,
+          "signature": "(params: 'dict[str, Any]', number: 'int' = 0) -> 'None'"
+        },
+        {
+          "kind": "class",
+          "members": [
+            {
+              "kind": "property",
+              "name": "datetime_start",
+              "signature": null
+            },
+            {
+              "kind": "property",
+              "name": "distributions",
+              "signature": null
+            },
+            {
+              "kind": "property",
+              "name": "duration",
+              "signature": null
+            },
+            {
+              "kind": "property",
+              "name": "last_step",
+              "signature": null
+            },
+            {
+              "kind": "property",
+              "name": "number",
+              "signature": null
+            },
+            {
+              "kind": "property",
+              "name": "params",
+              "signature": null
+            },
+            {
+              "kind": "method",
+              "name": "report",
+              "signature": "(self, value: 'float', step: 'int') -> 'None'"
+            },
+            {
+              "kind": "method",
+              "name": "set_system_attr",
+              "signature": "(self, key: 'str', value: 'Any') -> 'None'"
+            },
+            {
+              "kind": "method",
+              "name": "set_user_attr",
+              "signature": "(self, key: 'str', value: 'Any') -> 'None'"
+            },
+            {
+              "kind": "method",
+              "name": "should_prune",
+              "signature": "(self) -> 'bool'"
+            },
+            {
+              "kind": "method",
+              "name": "suggest_categorical",
+              "signature": "(self, name: 'str', choices: 'Sequence[CategoricalChoiceType]') -> 'CategoricalChoiceType'"
+            },
+            {
+              "kind": "method",
+              "name": "suggest_discrete_uniform",
+              "signature": "(self, name: 'str', low: 'float', high: 'float', q: 'float') -> 'float'"
+            },
+            {
+              "kind": "method",
+              "name": "suggest_float",
+              "signature": "(self, name: 'str', low: 'float', high: 'float', *, step: 'float | None' = None, log: 'bool' = False) -> 'float'"
+            },
+            {
+              "kind": "method",
+              "name": "suggest_int",
+              "signature": "(self, name: 'str', low: 'int', high: 'int', *, step: 'int' = 1, log: 'bool' = False) -> 'int'"
+            },
+            {
+              "kind": "method",
+              "name": "suggest_loguniform",
+              "signature": "(self, name: 'str', low: 'float', high: 'float') -> 'float'"
+            },
+            {
+              "kind": "method",
+              "name": "suggest_uniform",
+              "signature": "(self, name: 'str', low: 'float', high: 'float') -> 'float'"
+            },
+            {
+              "kind": "property",
+              "name": "system_attrs",
+              "signature": null
+            },
+            {
+              "kind": "property",
+              "name": "user_attrs",
+              "signature": null
+            },
+            {
+              "kind": "property",
+              "name": "value",
+              "signature": null
+            },
+            {
+              "kind": "property",
+              "name": "values",
+              "signature": null
+            }
+          ],
+          "name": "FrozenTrial",
+          "resolvable": true,
+          "signature": "(number: 'int', state: 'TrialState', value: 'float | None', datetime_start: 'datetime.datetime | None', datetime_complete: 'datetime.datetime | None', params: 'dict[str, Any]', distributions: 'dict[str, BaseDistribution]', user_attrs: 'dict[str, Any]', system_attrs: 'dict[str, Any]', intermediate_values: 'dict[int, float]', trial_id: 'int', *, values: 'Sequence[float] | None' = None) -> 'None'"
+        },
+        {
+          "kind": "class",
+          "members": [
+            {
+              "kind": "property",
+              "name": "datetime_start",
+              "signature": null
+            },
+            {
+              "kind": "property",
+              "name": "distributions",
+              "signature": null
+            },
+            {
+              "kind": "property",
+              "name": "number",
+              "signature": null
+            },
+            {
+              "kind": "property",
+              "name": "params",
+              "signature": null
+            },
+            {
+              "kind": "property",
+              "name": "relative_params",
+              "signature": null
+            },
+            {
+              "kind": "method",
+              "name": "report",
+              "signature": "(self, value: 'float', step: 'int') -> 'None'"
+            },
+            {
+              "kind": "method",
+              "name": "set_system_attr",
+              "signature": "(self, key: 'str', value: 'Any') -> 'None'"
+            },
+            {
+              "kind": "method",
+              "name": "set_user_attr",
+              "signature": "(self, key: 'str', value: 'Any') -> 'None'"
+            },
+            {
+              "kind": "method",
+              "name": "should_prune",
+              "signature": "(self) -> 'bool'"
+            },
+            {
+              "kind": "method",
+              "name": "suggest_categorical",
+              "signature": "(self, name: 'str', choices: 'Sequence[CategoricalChoiceType]') -> 'CategoricalChoiceType'"
+            },
+            {
+              "kind": "method",
+              "name": "suggest_discrete_uniform",
+              "signature": "(self, name: 'str', low: 'float', high: 'float', q: 'float') -> 'float'"
+            },
+            {
+              "kind": "method",
+              "name": "suggest_float",
+              "signature": "(self, name: 'str', low: 'float', high: 'float', *, step: 'float | None' = None, log: 'bool' = False) -> 'float'"
+            },
+            {
+              "kind": "method",
+              "name": "suggest_int",
+              "signature": "(self, name: 'str', low: 'int', high: 'int', *, step: 'int' = 1, log: 'bool' = False) -> 'int'"
+            },
+            {
+              "kind": "method",
+              "name": "suggest_loguniform",
+              "signature": "(self, name: 'str', low: 'float', high: 'float') -> 'float'"
+            },
+            {
+              "kind": "method",
+              "name": "suggest_uniform",
+              "signature": "(self, name: 'str', low: 'float', high: 'float') -> 'float'"
+            },
+            {
+              "kind": "property",
+              "name": "system_attrs",
+              "signature": null
+            },
+            {
+              "kind": "property",
+              "name": "user_attrs",
+              "signature": null
+            }
+          ],
+          "name": "Trial",
+          "resolvable": true,
+          "signature": "(study: 'Study', trial_id: 'int') -> 'None'"
+        },
+        {
+          "kind": "class",
+          "members": [
+            {
+              "kind": "constant-or-field",
+              "name": "COMPLETE",
+              "signature": null
+            },
+            {
+              "kind": "constant-or-field",
+              "name": "FAIL",
+              "signature": null
+            },
+            {
+              "kind": "constant-or-field",
+              "name": "PRUNED",
+              "signature": null
+            },
+            {
+              "kind": "constant-or-field",
+              "name": "RUNNING",
+              "signature": null
+            },
+            {
+              "kind": "constant-or-field",
+              "name": "WAITING",
+              "signature": null
+            },
+            {
+              "kind": "method",
+              "name": "as_integer_ratio",
+              "signature": "(self, /)"
+            },
+            {
+              "kind": "method",
+              "name": "bit_count",
+              "signature": "(self, /)"
+            },
+            {
+              "kind": "method",
+              "name": "bit_length",
+              "signature": "(self, /)"
+            },
+            {
+              "kind": "method",
+              "name": "conjugate",
+              "signature": null
+            },
+            {
+              "kind": "constant-or-field",
+              "name": "denominator",
+              "signature": null
+            },
+            {
+              "kind": "method",
+              "name": "from_bytes",
+              "signature": "(bytes, byteorder='big', *, signed=False)"
+            },
+            {
+              "kind": "constant-or-field",
+              "name": "imag",
+              "signature": null
+            },
+            {
+              "kind": "method",
+              "name": "is_finished",
+              "signature": "(self) -> bool"
+            },
+            {
+              "kind": "method",
+              "name": "is_integer",
+              "signature": "(self, /)"
+            },
+            {
+              "kind": "descriptor",
+              "name": "name",
+              "signature": null
+            },
+            {
+              "kind": "constant-or-field",
+              "name": "numerator",
+              "signature": null
+            },
+            {
+              "kind": "constant-or-field",
+              "name": "real",
+              "signature": null
+            },
+            {
+              "kind": "method",
+              "name": "to_bytes",
+              "signature": "(self, /, length=1, byteorder='big', *, signed=False)"
+            },
+            {
+              "kind": "descriptor",
+              "name": "value",
+              "signature": null
+            }
+          ],
+          "name": "TrialState",
+          "resolvable": true,
+          "signature": "(*values)"
+        },
+        {
+          "kind": "function",
+          "members": [],
+          "name": "create_trial",
+          "resolvable": true,
+          "signature": "(*, state: 'TrialState' = <TrialState.COMPLETE: 1>, value: 'float | None' = None, values: 'Sequence[float] | None' = None, params: 'dict[str, Any] | None' = None, distributions: 'dict[str, BaseDistribution] | None' = None, user_attrs: 'dict[str, Any] | None' = None, system_attrs: 'dict[str, Any] | None' = None, intermediate_values: 'dict[int, float] | None' = None) -> 'FrozenTrial'"
+        }
+      ]
+    },
+    {
+      "module": "optuna.visualization",
+      "symbols": [
+        {
+          "kind": "function",
+          "members": [],
+          "name": "is_available",
+          "resolvable": true,
+          "signature": "() -> 'bool'"
+        },
+        {
+          "kind": "module",
+          "members": [],
+          "name": "matplotlib",
+          "resolvable": true,
+          "signature": null
+        },
+        {
+          "kind": "function",
+          "members": [],
+          "name": "plot_contour",
+          "resolvable": true,
+          "signature": "(study: 'Study', params: 'list[str] | None' = None, *, target: 'Callable[[FrozenTrial], float] | None' = None, target_name: 'str' = 'Objective Value') -> \"'go.Figure'\""
+        },
+        {
+          "kind": "function",
+          "members": [],
+          "name": "plot_edf",
+          "resolvable": true,
+          "signature": "(study: 'Study | Sequence[Study]', *, target: 'Callable[[FrozenTrial], float] | None' = None, target_name: 'str' = 'Objective Value') -> \"'go.Figure'\""
+        },
+        {
+          "kind": "function",
+          "members": [],
+          "name": "plot_hypervolume_history",
+          "resolvable": true,
+          "signature": "(study: 'Study', reference_point: 'Sequence[float]') -> \"'go.Figure'\""
+        },
+        {
+          "kind": "function",
+          "members": [],
+          "name": "plot_intermediate_values",
+          "resolvable": true,
+          "signature": "(study: 'Study') -> \"'go.Figure'\""
+        },
+        {
+          "kind": "function",
+          "members": [],
+          "name": "plot_optimization_history",
+          "resolvable": true,
+          "signature": "(study: 'Study | Sequence[Study]', *, target: 'Callable[[FrozenTrial], float] | None' = None, target_name: 'str' = 'Objective Value', error_bar: 'bool' = False) -> \"'go.Figure'\""
+        },
+        {
+          "kind": "function",
+          "members": [],
+          "name": "plot_parallel_coordinate",
+          "resolvable": true,
+          "signature": "(study: 'Study', params: 'list[str] | None' = None, *, target: 'Callable[[FrozenTrial], float] | None' = None, target_name: 'str' = 'Objective Value') -> \"'go.Figure'\""
+        },
+        {
+          "kind": "function",
+          "members": [],
+          "name": "plot_param_importances",
+          "resolvable": true,
+          "signature": "(study: 'Study', evaluator: 'BaseImportanceEvaluator | None' = None, params: 'list[str] | None' = None, *, target: 'Callable[[FrozenTrial], float] | None' = None, target_name: 'str' = 'Objective Value') -> \"'go.Figure'\""
+        },
+        {
+          "kind": "function",
+          "members": [],
+          "name": "plot_pareto_front",
+          "resolvable": true,
+          "signature": "(study: 'Study', *, target_names: 'list[str] | None' = None, include_dominated_trials: 'bool' = True, axis_order: 'list[int] | None' = None, constraints_func: 'Callable[[FrozenTrial], Sequence[float]] | None' = None, targets: 'Callable[[FrozenTrial], Sequence[float]] | None' = None) -> \"'go.Figure'\""
+        },
+        {
+          "kind": "function",
+          "members": [],
+          "name": "plot_rank",
+          "resolvable": true,
+          "signature": "(study: 'Study', params: 'list[str] | None' = None, *, target: 'Callable[[FrozenTrial], float] | None' = None, target_name: 'str' = 'Objective Value') -> \"'go.Figure'\""
+        },
+        {
+          "kind": "function",
+          "members": [],
+          "name": "plot_slice",
+          "resolvable": true,
+          "signature": "(study: 'Study', params: 'list[str] | None' = None, *, target: 'Callable[[FrozenTrial], float] | None' = None, target_name: 'str' = 'Objective Value') -> \"'go.Figure'\""
+        },
+        {
+          "kind": "function",
+          "members": [],
+          "name": "plot_terminator_improvement",
+          "resolvable": true,
+          "signature": "(study: 'Study', plot_error: 'bool' = False, improvement_evaluator: 'BaseImprovementEvaluator | None' = None, error_evaluator: 'BaseErrorEvaluator | None' = None, min_n_trials: 'int' = 20) -> \"'go.Figure'\""
+        },
+        {
+          "kind": "function",
+          "members": [],
+          "name": "plot_timeline",
+          "resolvable": true,
+          "signature": "(study: 'Study', n_recent_trials: 'int | None' = None) -> \"'go.Figure'\""
+        }
+      ]
+    },
+    {
+      "module": "optuna.visualization.matplotlib",
+      "symbols": [
+        {
+          "kind": "function",
+          "members": [],
+          "name": "is_available",
+          "resolvable": true,
+          "signature": "() -> 'bool'"
+        },
+        {
+          "kind": "function",
+          "members": [],
+          "name": "plot_contour",
+          "resolvable": true,
+          "signature": "(study: 'Study', params: 'list[str] | None' = None, *, target: 'Callable[[FrozenTrial], float] | None' = None, target_name: 'str' = 'Objective Value') -> \"'Axes | np.ndarray'\""
+        },
+        {
+          "kind": "function",
+          "members": [],
+          "name": "plot_edf",
+          "resolvable": true,
+          "signature": "(study: 'Study | Sequence[Study]', *, target: 'Callable[[FrozenTrial], float] | None' = None, target_name: 'str' = 'Objective Value') -> \"'Axes'\""
+        },
+        {
+          "kind": "function",
+          "members": [],
+          "name": "plot_hypervolume_history",
+          "resolvable": true,
+          "signature": "(study: 'Study', reference_point: 'Sequence[float]') -> \"'Axes'\""
+        },
+        {
+          "kind": "function",
+          "members": [],
+          "name": "plot_intermediate_values",
+          "resolvable": true,
+          "signature": "(study: 'Study') -> 'Axes'"
+        },
+        {
+          "kind": "function",
+          "members": [],
+          "name": "plot_optimization_history",
+          "resolvable": true,
+          "signature": "(study: 'Study | Sequence[Study]', *, target: 'Callable[[FrozenTrial], float] | None' = None, target_name: 'str' = 'Objective Value', error_bar: 'bool' = False) -> \"'Axes'\""
+        },
+        {
+          "kind": "function",
+          "members": [],
+          "name": "plot_parallel_coordinate",
+          "resolvable": true,
+          "signature": "(study: 'Study', params: 'list[str] | None' = None, *, target: 'Callable[[FrozenTrial], float] | None' = None, target_name: 'str' = 'Objective Value') -> \"'Axes'\""
+        },
+        {
+          "kind": "function",
+          "members": [],
+          "name": "plot_param_importances",
+          "resolvable": true,
+          "signature": "(study: 'Study', evaluator: 'BaseImportanceEvaluator | None' = None, params: 'list[str] | None' = None, *, target: 'Callable[[FrozenTrial], float] | None' = None, target_name: 'str' = 'Objective Value') -> \"'Axes'\""
+        },
+        {
+          "kind": "function",
+          "members": [],
+          "name": "plot_pareto_front",
+          "resolvable": true,
+          "signature": "(study: 'Study', *, target_names: 'list[str] | None' = None, include_dominated_trials: 'bool' = True, axis_order: 'list[int] | None' = None, constraints_func: 'Callable[[FrozenTrial], Sequence[float]] | None' = None, targets: 'Callable[[FrozenTrial], Sequence[float]] | None' = None) -> \"'Axes'\""
+        },
+        {
+          "kind": "function",
+          "members": [],
+          "name": "plot_rank",
+          "resolvable": true,
+          "signature": "(study: 'Study', params: 'list[str] | None' = None, *, target: 'Callable[[FrozenTrial], float] | None' = None, target_name: 'str' = 'Objective Value') -> \"'Axes | np.ndarray'\""
+        },
+        {
+          "kind": "function",
+          "members": [],
+          "name": "plot_slice",
+          "resolvable": true,
+          "signature": "(study: 'Study', params: 'list[str] | None' = None, *, target: 'Callable[[FrozenTrial], float] | None' = None, target_name: 'str' = 'Objective Value') -> \"'Axes | np.ndarray'\""
+        },
+        {
+          "kind": "function",
+          "members": [],
+          "name": "plot_terminator_improvement",
+          "resolvable": true,
+          "signature": "(study: 'Study', plot_error: 'bool' = False, improvement_evaluator: 'BaseImprovementEvaluator | None' = None, error_evaluator: 'BaseErrorEvaluator | None' = None, min_n_trials: 'int' = 20) -> \"'Axes'\""
+        },
+        {
+          "kind": "function",
+          "members": [],
+          "name": "plot_timeline",
+          "resolvable": true,
+          "signature": "(study: 'Study', n_recent_trials: 'int | None' = None) -> \"'Axes'\""
+        }
+      ]
+    }
+  ],
+  "optuna_version": "4.9.0",
+  "schema": "radia.test.optuna49-public-api.v1",
+  "symbol_count": 210
+}
