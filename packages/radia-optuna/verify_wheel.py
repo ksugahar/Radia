@@ -1,0 +1,237 @@
+"""Fail closed when a radia-optuna wheel is partial or crosses its boundary."""
+
+from __future__ import annotations
+
+import argparse
+from email.parser import BytesParser
+import json
+from pathlib import Path, PurePosixPath
+import re
+import sys
+import tomllib
+import zipfile
+
+
+PACKAGE_ROOT = Path(__file__).resolve().parent
+REPO_ROOT = PACKAGE_ROOT.parents[1]
+PACKAGE_PREFIX = PurePosixPath("radia_optuna")
+MATLAB_PREFIX = PACKAGE_PREFIX / "matlab"
+OPTUNA_PREFIX = MATLAB_PREFIX / "+radia" / "+optuna"
+FORBIDDEN_NAME_PARTS = (
+    "radia_mex",
+    "ngsolve",
+    "netgen",
+    "mkl_",
+    "mkl.",
+    "libmkl",
+    "radia_pybind",
+)
+
+
+def _fail(messages: list[str]) -> None:
+    for message in messages:
+        print(f"ERROR: {message}", file=sys.stderr)
+    raise SystemExit(1)
+
+
+def _metadata(archive: zipfile.ZipFile, names: set[str]):
+    candidates = sorted(name for name in names if name.endswith(".dist-info/METADATA"))
+    if len(candidates) != 1:
+        _fail([f"expected one METADATA entry, found {len(candidates)}"])
+    return BytesParser().parsebytes(archive.read(candidates[0]))
+
+
+def verify(wheel: Path) -> dict[str, object]:
+    errors: list[str] = []
+    if not re.fullmatch(r"radia_optuna-[^-]+-py3-none-win_amd64\.whl", wheel.name):
+        errors.append(f"wheel must be tagged py3-none-win_amd64: {wheel.name}")
+
+    source_project = tomllib.loads(
+        (PACKAGE_ROOT / "pyproject.toml").read_text(encoding="utf-8")
+    )["project"]
+    source_version = source_project["version"]
+    root_project = tomllib.loads(
+        (REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8")
+    )["project"]
+    source_manifest = json.loads(
+        (PACKAGE_ROOT / "src" / "radia_optuna" / "manifest.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    if source_manifest["version"] != source_version:
+        errors.append(
+            "package source versions are not synchronized: "
+            f"package={source_version}, manifest={source_manifest['version']}"
+        )
+    expected_base = [f"radia-optuna=={source_version}"]
+    expected_upstream = [f"radia-optuna[upstream]=={source_version}"]
+    extras = root_project["optional-dependencies"]
+    if extras.get("optuna") != expected_base:
+        errors.append(f"radia[optuna] must pin {expected_base[0]}")
+    if extras.get("optuna-upstream") != expected_upstream:
+        errors.append(
+            f"radia[optuna-upstream] must pin {expected_upstream[0]}"
+        )
+
+    with zipfile.ZipFile(wheel) as archive:
+        names = set(archive.namelist())
+        metadata = _metadata(archive, names)
+        wheel_version = metadata.get("Version")
+        if wheel_version != source_version:
+            errors.append(
+                f"wheel version {wheel_version!r} does not match {source_version!r}"
+            )
+
+        init_source = archive.read(str(PACKAGE_PREFIX / "__init__.py")).decode(
+            "utf-8"
+        )
+        init_match = re.search(
+            r'^__version__\s*=\s*["\']([^"\']+)["\']', init_source, re.MULTILINE
+        )
+        init_version = init_match.group(1) if init_match else None
+        if init_version != source_version:
+            errors.append(
+                f"wheel __version__ {init_version!r} does not match {source_version!r}"
+            )
+
+        wheel_metadata_entries = sorted(
+            name for name in names if name.endswith(".dist-info/WHEEL")
+        )
+        if len(wheel_metadata_entries) != 1:
+            errors.append(
+                "expected one WHEEL metadata entry, found "
+                f"{len(wheel_metadata_entries)}"
+            )
+        else:
+            wheel_tags = [
+                line.removeprefix("Tag: ")
+                for line in archive.read(wheel_metadata_entries[0])
+                .decode("utf-8")
+                .splitlines()
+                if line.startswith("Tag: ")
+            ]
+            if wheel_tags != ["py3-none-win_amd64"]:
+                errors.append(f"unexpected internal wheel tags: {wheel_tags}")
+
+        expected_fixed = {
+            str(MATLAB_PREFIX / "optuna_mex.mexw64"),
+            str(MATLAB_PREFIX / "optuna_upstream_compatibility.json"),
+            str(MATLAB_PREFIX / "optuna49_api_coverage.json"),
+            str(MATLAB_PREFIX / "README.md"),
+            str(MATLAB_PREFIX / "LICENSE"),
+            str(PACKAGE_PREFIX / "manifest.json"),
+        }
+        missing = sorted(expected_fixed - names)
+        if missing:
+            errors.append("missing required entries: " + ", ".join(missing))
+
+        matlab_files = sorted(
+            name
+            for name in names
+            if name.startswith(f"{OPTUNA_PREFIX}/") and name.endswith(".m")
+        )
+        expected_count = int(source_manifest["matlab_file_count"])
+        if len(matlab_files) != expected_count:
+            errors.append(
+                f"expected {expected_count} MATLAB files, found {len(matlab_files)}"
+            )
+
+        mex_files = sorted(name for name in names if name.endswith(".mexw64"))
+        if mex_files != [str(MATLAB_PREFIX / "optuna_mex.mexw64")]:
+            errors.append(f"unexpected MEX inventory: {mex_files}")
+
+        forbidden = sorted(
+            name
+            for name in names
+            if any(part in name.lower() for part in FORBIDDEN_NAME_PARTS)
+        )
+        if forbidden:
+            errors.append("forbidden solver/runtime entries: " + ", ".join(forbidden))
+
+        wheel_manifest = json.loads(
+            archive.read(str(PACKAGE_PREFIX / "manifest.json")).decode("utf-8")
+        )
+        if wheel_manifest != source_manifest:
+            errors.append("wheel manifest differs from the checked source manifest")
+        if wheel_manifest.get("radia_runtime_required") is not False:
+            errors.append("standalone manifest must set radia_runtime_required=false")
+        if wheel_manifest.get("simulink_standalone") is not True:
+            errors.append("standalone manifest must set simulink_standalone=true")
+
+        simulink_entries = {
+            str(MATLAB_PREFIX / PurePosixPath(relative))
+            for relative in source_manifest["simulink_entry_points"]
+        }
+        missing_simulink = sorted(simulink_entries - names)
+        if missing_simulink:
+            errors.append(
+                "missing standalone Simulink entries: " + ", ".join(missing_simulink)
+            )
+        packaged_simulink_block_entries = {
+            name
+            for name in names
+            if name.startswith(f"{MATLAB_PREFIX}/+radia/+simulink/")
+            or name == str(MATLAB_PREFIX / "radia_optuna_sfun.m")
+        }
+        declared_simulink_block_entries = {
+            name
+            for name in simulink_entries
+            if "/+radia/+simulink/" in name
+            or name == str(MATLAB_PREFIX / "radia_optuna_sfun.m")
+        }
+        if packaged_simulink_block_entries != declared_simulink_block_entries:
+            errors.append(
+                "standalone Simulink block inventory differs from the manifest"
+            )
+
+        adapters = set(source_manifest["radia_integration_adapters"])
+        adapter_entries = {
+            str(MATLAB_PREFIX / PurePosixPath(relative)) for relative in adapters
+        }
+        if not adapter_entries.issubset(names):
+            errors.append("one or more declared Radia integration adapters are absent")
+
+        requirements = metadata.get_all("Requires-Dist", [])
+        if not any(
+            re.search(r"^optuna\s*==\s*4\.9\.0\s*;.*extra\s*==\s*['\"]upstream['\"]", req)
+            for req in requirements
+        ):
+            errors.append("the upstream extra does not pin optuna==4.9.0")
+
+    if errors:
+        _fail(errors)
+
+    result = {
+        "schema": "radia-optuna.wheel-verification.v1",
+        "ok": True,
+        "wheel": str(wheel.resolve()),
+        "version": source_version,
+        "platform_tag": "py3-none-win_amd64",
+        "matlab_file_count": len(matlab_files),
+        "native_gateway": "optuna_mex",
+        "native_command_count": source_manifest["native_command_count"],
+        "simulink_standalone": source_manifest["simulink_standalone"],
+        "simulink_entry_count": len(simulink_entries),
+        "radia_integration_adapter_count": len(adapters),
+    }
+    return result
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("wheel", type=Path)
+    parser.add_argument("--json", action="store_true", dest="as_json")
+    args = parser.parse_args()
+    result = verify(args.wheel)
+    if args.as_json:
+        print(json.dumps(result, indent=2))
+    else:
+        print(
+            "radia-optuna wheel PASS: "
+            f"{result['matlab_file_count']} MATLAB files, "
+            f"{result['native_command_count']} native commands"
+        )
+
+
+if __name__ == "__main__":
+    main()

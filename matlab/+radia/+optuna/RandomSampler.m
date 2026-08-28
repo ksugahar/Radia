@@ -1,5 +1,5 @@
-classdef RandomSampler < handle
-    %RANDOMSAMPLER Define-by-run random sampler for MATLAB trials.
+classdef RandomSampler < radia.optuna.BaseSampler
+    %RANDOMSAMPLER Optuna 4.9 RandomSampler for MATLAB trials.
 
     properties (SetAccess=private)
         Stream
@@ -19,18 +19,18 @@ classdef RandomSampler < handle
     methods
         function obj = RandomSampler(seed)
             if nargin < 1 || isempty(seed)
-                seed = 0;
+                seed = double.empty(1,0);
             end
-            obj.Seed = double(seed);
-            obj.Stream = RandStream("mt19937ar", "Seed", obj.Seed);
+            obj.Seed = radia.optuna.internal.resolveSeed(seed);
+            obj.Stream = radia.optuna.internal.NumpyRandomState(obj.Seed);
         end
 
         function value = sampleFloat(obj, study, trial, ~, low, high, options)
             if ~isstruct(options) || ~isfield(options, "Log") || ~isfield(options, "Step")
                 error("radia:optuna:SamplerOptions", "Sampler options must contain Log and Step fields.");
             end
-            if ~(isfinite(low) && isfinite(high) && low < high)
-                error("radia:optuna:Bounds", "Float bounds must satisfy low < high.");
+            if ~(isfinite(low) && isfinite(high) && low <= high)
+                error("radia:optuna:Bounds", "Float bounds must satisfy low <= high.");
             end
             if options.Log && low <= 0
                 error("radia:optuna:LogBounds", "Log-uniform bounds must be positive.");
@@ -38,15 +38,37 @@ classdef RandomSampler < handle
             if isfinite(options.Step) && options.Step <= 0
                 error("radia:optuna:Step", "Step must be positive.");
             end
-            u = rand(obj.Stream, 1, 1);
-            if options.Log
-                value = exp(log(low) + u * (log(high) - log(low)));
-            else
-                value = low + u * (high - low);
+            if low == high
+                value = low;
+                return
             end
-            if isfinite(options.Step)
-                value = low + round((value - low) / options.Step) * options.Step;
+            u = rand(obj.Stream, 1, 1);
+            numerics = radia.optuna.internal.UpstreamNumerics;
+            if options.Log && isfinite(options.Step)
+                % This path represents IntDistribution(log=true), which is
+                % routed through sampleFloat by Trial.suggest_int.
+                transformedLow = log(low - 0.5 * options.Step);
+                transformedHigh = log(high + 0.5 * options.Step);
+                proposal = exp(transformedLow + u * ...
+                    (transformedHigh - transformedLow));
+                value = min(max(numerics.roundTiesToEven(proposal), low), high);
+            elseif options.Log
+                % _untransform_numerical_param clips a non-single float only
+                % from above, with np.nextafter(high, -inf): the upper bound
+                % is exclusive rather than clamped to high.
+                proposal = exp(log(low) + u * (log(high) - log(low)));
+                value = min(proposal, numerics.nextDown(high));
+            elseif isfinite(options.Step)
+                transformedLow = low - 0.5 * options.Step;
+                transformedHigh = high + 0.5 * options.Step;
+                proposal = transformedLow + u * ...
+                    (transformedHigh - transformedLow);
+                value = low + numerics.roundTiesToEven( ...
+                    (proposal - low) / options.Step) * options.Step;
                 value = min(max(value, low), high);
+            else
+                proposal = low + u * (high - low);
+                value = min(proposal, numerics.nextDown(high));
             end
             obj.recordState(study, trial.Number);
         end
@@ -56,7 +78,14 @@ classdef RandomSampler < handle
                     high == floor(high) && low <= high)
                 error("radia:optuna:Bounds", "Integer bounds must be finite integers with low <= high.");
             end
-            value = floor(low + rand(obj.Stream, 1, 1) * (high - low + 1));
+            if low == high
+                value = low;
+                return
+            end
+            proposal = (low - 0.5) + rand(obj.Stream, 1, 1) * ...
+                (high - low + 1);
+            value = min(max(radia.optuna.internal.UpstreamNumerics. ...
+                roundTiesToEven(proposal), low), high);
             obj.recordState(study, trial.Number);
         end
 
@@ -65,7 +94,9 @@ classdef RandomSampler < handle
                 error("radia:optuna:Choices", "Categorical choices must not be empty.");
             end
             count = numel(choices);
-            index = 1 + floor(rand(obj.Stream, 1, 1) * count);
+            % _SearchSpaceTransform uses one independently sampled one-hot
+            % score per choice and selects the first maximum.
+            [~, index] = max(rand(obj.Stream, count, 1));
             if iscell(choices)
                 value = choices{index};
             else
@@ -89,7 +120,8 @@ classdef RandomSampler < handle
                 ~isequal(obj.AttachedStudy, study);
             if changed
                 obj.AttachedStudy = study;
-                obj.Stream = RandStream("mt19937ar", "Seed", obj.Seed);
+                obj.Stream = ...
+                    radia.optuna.internal.NumpyRandomState(obj.Seed);
                 obj.Restored = false;
             end
             if obj.Restored
@@ -112,6 +144,9 @@ classdef RandomSampler < handle
         end
 
         function recordState(obj, study, trialNumber)
+            if strlength(study.StoragePath)==0
+                return
+            end
             obj.attach(study);
             state = struct( ...
                 "schema", obj.StateSchema, ...

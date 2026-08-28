@@ -1,4 +1,4 @@
-classdef MedianPruner < handle
+classdef MedianPruner < radia.optuna.BasePruner
     %MEDIANPRUNER Stop trials that are worse than completed-trial median.
 
     properties

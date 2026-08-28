@@ -1,5 +1,5 @@
 classdef SimulinkRunner < handle
-    %SIMULINKRUNNER Run CAE-aware optimization trials inside MATLAB.
+    %SIMULINKRUNNER Optimize generic Simulink simulations inside MATLAB.
 
     properties (SetAccess=private)
         Model (1,1) string

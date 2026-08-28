@@ -87,7 +87,7 @@ verifyEqual(testCase,string(contract.domain),"sheet-metal");
 verifyEqual(testCase,string(contract.backend),"matlab-native-ngsolve-cubit");
 verifyFalse(testCase,contract.browser_required);
 verifyEqual(testCase,string(contract.pareto_kernel), ...
-    "auto-mex-with-matlab-fallback");
+    "required-optuna-mex");
 verifyFalse(testCase,contract.python_per_trial);
 verifyEqual(testCase,string(get_param(monitor,"Mask")),"on");
 evalin("base","clear radia_sheet_metal_runner_test");
@@ -117,7 +117,7 @@ verifyEqual(testCase,numel(ports.Inport),2);
 verifyEqual(testCase,numel(ports.Outport),14);
 contract=get_param(path,"UserData");
 verifyEqual(testCase,string(contract.pareto_kernel), ...
-    "auto-mex-with-matlab-fallback");
+    "required-optuna-mex");
 verifyEqual(testCase,string(contract.cae_failure_policy),"record-and-continue");
 verifyFalse(testCase,contract.python_per_trial);
 add_block('simulink/Sources/Constant',m+"/Start",'Value','1');

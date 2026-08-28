@@ -1,4 +1,4 @@
-classdef SuccessiveHalvingPruner < handle
+classdef SuccessiveHalvingPruner < radia.optuna.BasePruner
     %SUCCESSIVEHALVINGPRUNER Asynchronous successive-halving (ASHA).
 
     properties (SetAccess=private)

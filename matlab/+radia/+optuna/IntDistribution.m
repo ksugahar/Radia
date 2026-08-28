@@ -16,6 +16,12 @@ if options.Log && options.Step~=1
         "Log integer distributions require Step=1.");
 end
 effectiveHigh=low+floor((high-low)/options.Step)*options.Step;
+if effectiveHigh~=high
+    warning("radia:optuna:DistributionAdjusted", ...
+        "IntDistribution high was adjusted from %g to %g to align with Step=%g.", ...
+        high,effectiveHigh,options.Step);
+end
 distribution=radia.optuna.internal.DistributionCodec.integer( ...
     low,effectiveHigh,options.Log,options.Step);
+distribution.name="IntDistribution";
 end

@@ -1,4 +1,4 @@
-classdef WilcoxonPruner < handle
+classdef WilcoxonPruner < radia.optuna.BasePruner
     %WILCOXONPRUNER Paired signed-rank pruning across problem instances.
 
     properties (SetAccess=private)

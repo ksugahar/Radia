@@ -1,4 +1,4 @@
-classdef ThresholdPruner < handle
+classdef ThresholdPruner < radia.optuna.BasePruner
     %THRESHOLDPRUNER Prune when the latest value crosses fixed bounds.
 
     properties (SetAccess=private)
