@@ -70,6 +70,29 @@ def test_antisymmetric_fixed_plane_roundoff_remains_buildable():
     assert gram.entry(0, 0) >= 0.0
 
 
+def test_fill_exception_restores_chargegram_and_global_hacapk_state(monkeypatch):
+    points = np.array(
+        [[0.0, 0.0, 0.0], [0.5, 0.1, 0.0], [1.0, 0.0, 0.2],
+         [0.2, 0.7, 0.1], [0.8, 0.8, 0.0]],
+        dtype=np.float64,
+    )
+    weights = np.linspace(0.1, 0.3, len(points), dtype=np.float64)
+    gram = _rb._ChargeGramHMatrix.from_sampled_laplace(
+        points.ravel(), weights, 1.0e-3, 1.0e-12, 4, 2.0, False
+    )
+    expected_entry = weights[0] ** 2 / (4.0 * np.pi * 1.0e-3)
+
+    monkeypatch.setenv("RADIA_HDIV_TEST_FAIL_FILL_AFTER", "0")
+    with pytest.raises(RuntimeError, match="injected ChargeGram fill failure"):
+        gram.build_hmatrix(eps=1.0e-12, leaf=4, eta=2.0)
+    monkeypatch.delenv("RADIA_HDIV_TEST_FAIL_FILL_AFTER")
+
+    # The failed normalized fill must not leak Ghat through the physical entry
+    # oracle, and the symmetric-fill global must not poison the next PEEC build.
+    assert gram.entry(0, 0) == pytest.approx(expected_entry, rel=2.0e-15)
+    assert _rb._TestPEECHACApKSanity(16) < 1.0e-6
+
+
 def test_nonlinear_timing_collector_keeps_latest_solver_outcome():
     _solve_module._clear_cpp_solve_timings()
     _solve_module._capture_cpp_solve_timings({
