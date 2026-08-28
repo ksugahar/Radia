@@ -5,17 +5,36 @@ All notable changes to the `radia` package.  Format: each release lists
 
 ## Unreleased
 
+## 4.95.66 - Deterministic HDiv H-matrices and complete Optuna oracle surface
+
+Released 2026-08-28.
+
+- Made HACApK callback and build state process-safe across HDiv-MMM, PEEC, and
+  Stream Function use. Charge-Gram builds now isolate symmetric-fill and active
+  diagonal state, clear failed rebuild state, guard CG breakdown, size hot
+  scratch buffers deterministically, and propagate callback failures only after
+  the C worker boundary has joined. The Stream Function ACA+ path shares the
+  same operation lock and fail-loud exception channel.
+- Updated `radia-optuna` to 0.1.3 and closed the pinned Optuna 4.9.0 public API
+  inventory: all 816 symbols and members are present and oracle-mapped. The
+  differential suite covers 115 MATLAB tests, storage and trial-data contracts,
+  samplers, artifacts, terminators, integrations, visualizations, gRPC, retry,
+  and evaluator surfaces while retaining the standalone 20-command MEX and
+  Simulink distribution boundary.
+- Strengthened clean-checkout, platform-stable oracle-hash, MCP quality, and
+  installed-wheel verification so release evidence is tied to the exact source
+  and independently packaged MATLAB Optuna artifact.
+- Added a language-specific adjacent-reviewer readability gate to
+  `mcp-server-paper-writing`. Japanese and English prose are now evaluated
+  separately, TeX math and floats are excluded, and cognitively dense prose
+  can no longer pass on layout and structural checks alone. Findings retain
+  exact sentence source lines and are exercised by the stdio server self-test.
 - Restricted the paper-writing recommendation policy to the three venues that
   match Radia's publication strategy: IEEJ, IEEE, and the accelerator
   community. A new MCP policy tool classifies concrete venue names, rejects
   unrelated targets, preserves independent Japanese/English review lanes, and
   lets the submission gate apply IEEJ keyword blocks without imposing the
   IEEE-only keyword form.
-- Added a language-specific adjacent-reviewer readability gate to
-  `mcp-server-paper-writing`. Japanese and English prose are now evaluated
-  separately, TeX math and floats are excluded, and cognitively dense prose
-  can no longer pass on layout and structural checks alone. Findings retain
-  TeX source lines and are exercised by the stdio server self-test.
 
 ## 4.95.65 - Validated Cubit Nastran interchange
 
