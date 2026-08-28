@@ -2,6 +2,97 @@ function tests=test_optuna_upstream_oracle
 tests=functiontests(localfunctions);
 end
 
+function testNumericUntransformPrimitivesMatchUpstream(testCase)
+expected=testCase.TestData.Oracle.numeric_untransform;
+numerics=radia.optuna.internal.UpstreamNumerics;
+ties=reshape(double(expected.round_ties_to_even.inputs),1,[]);
+verifyEqual(testCase,numerics.roundTiesToEven(ties), ...
+    reshape(double(expected.round_ties_to_even.outputs),1,[]));
+below=reshape(double(expected.next_after_below.inputs),1,[]);
+verifyEqual(testCase,numerics.nextDown(below), ...
+    reshape(double(expected.next_after_below.outputs),1,[]));
+cases=expected.float_step_high;
+for index=1:numel(cases)
+    entry=cases(index);
+    [high,adjusted]=numerics.adjustDiscreteUniformHigh( ...
+        entry.low,entry.high,entry.step);
+    verifyEqual(testCase,high,double(entry.adjusted_high),AbsTol=0);
+    verifyEqual(testCase,adjusted,logical(entry.adjusted));
+    distribution=radia.optuna.internal.DistributionCodec.float( ...
+        entry.low,high,false,entry.step);
+    verifyEqual(testCase, ...
+        radia.optuna.internal.DistributionCodec.isSingle(distribution), ...
+        logical(entry.single));
+end
+end
+
+function testSingleDistributionConsumesNoRandomNumber(testCase)
+expected=testCase.TestData.Oracle.single_distribution_rng;
+baseline=reshape(double(expected.baseline),[],1);
+withSingle=reshape(double(expected.with_single),[],1);
+verifyTrue(testCase,logical(expected.identical));
+actualBaseline=runSingleDistributionStudy( ...
+    double(expected.seed),numel(baseline),false,testCase);
+actualWithSingle=runSingleDistributionStudy( ...
+    double(expected.seed),numel(withSingle),true,testCase);
+verifyEqual(testCase,actualBaseline,baseline,AbsTol=5e-12);
+verifyEqual(testCase,actualWithSingle,withSingle,AbsTol=5e-12);
+verifyEqual(testCase,actualWithSingle,actualBaseline,AbsTol=0);
+end
+
+function values=runSingleDistributionStudy(seed,count,withSingle,testCase)
+expected=testCase.TestData.Oracle.single_distribution_rng.single_values;
+study=radia.optuna.Study(Sampler=radia.optuna.RandomSampler(seed), ...
+    AutoSave=false);
+values=zeros(count,1);
+for index=1:count
+    trial=study.ask();
+    if withSingle
+        verifyEqual(testCase,trial.suggest_float("fixed",0.5,0.5), ...
+            double(expected.fixed));
+        verifyEqual(testCase,trial.suggest_int("pinned",4,4), ...
+            double(expected.pinned));
+        verifyEqual(testCase,string(trial.suggest_categorical( ...
+            "only",{'solo'})),string(expected.only));
+    end
+    values(index)=trial.suggest_float("x",-1,1);
+    study.tell(trial,values(index)^2);
+end
+end
+
+function testTPEPrunedHistorySeededSequence(testCase)
+expected=testCase.TestData.Oracle.tpe_pruned_history_seed_113;
+values=reshape(double(expected.values),[],1);
+states=reshape(string(expected.states),[],1);
+study=radia.optuna.Study(Sampler=radia.optuna.TPESampler( ...
+    Seed=double(expected.seed), ...
+    NStartupTrials=double(expected.n_startup_trials)),AutoSave=false);
+actual=zeros(size(values));
+actualStates=strings(size(values));
+for index=1:numel(values)
+    zeroBased=index-1;
+    trial=study.ask();
+    actual(index)=trial.suggest_float("x",-3,3);
+    if mod(zeroBased,3)==1
+        trial.report((actual(index)-0.5)^2+1,0);
+        if mod(zeroBased,6)==1
+            trial.report((actual(index)-0.5)^2,1);
+        end
+        study.tell(trial,State="PRUNED");
+        actualStates(index)="PRUNED";
+    else
+        study.tell(trial,(actual(index)-0.5)^2);
+        actualStates(index)="COMPLETE";
+    end
+end
+verifyEqual(testCase,actualStates,states);
+verifyEqual(testCase,sum(actualStates=="COMPLETE"), ...
+    double(expected.complete_count));
+verifyEqual(testCase,sum(actualStates=="PRUNED"), ...
+    double(expected.pruned_count));
+verifyEqual(testCase,actual,values,AbsTol=5e-12);
+end
+
 function setupOnce(testCase)
 root=fileparts(fileparts(fileparts(mfilename("fullpath"))));
 matlabDirectory=fullfile(root,"matlab");

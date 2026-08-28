@@ -2853,6 +2853,124 @@
       "x": 0.034595767693178514
     }
   ],
+  "numeric_untransform": {
+    "float_step_high": [
+      {
+        "adjusted": false,
+        "adjusted_high": 0.3,
+        "high": 0.3,
+        "low": 0.0,
+        "single": false,
+        "step": 0.1
+      },
+      {
+        "adjusted": false,
+        "adjusted_high": 0.7,
+        "high": 0.7,
+        "low": 0.0,
+        "single": false,
+        "step": 0.1
+      },
+      {
+        "adjusted": false,
+        "adjusted_high": 1.0,
+        "high": 1.0,
+        "low": 0.0,
+        "single": false,
+        "step": 0.1
+      },
+      {
+        "adjusted": true,
+        "adjusted_high": 0.9,
+        "high": 1.0,
+        "low": 0.0,
+        "single": false,
+        "step": 0.3
+      },
+      {
+        "adjusted": true,
+        "adjusted_high": 98.0,
+        "high": 100.0,
+        "low": 0.0,
+        "single": false,
+        "step": 7.0
+      },
+      {
+        "adjusted": true,
+        "adjusted_high": -1.1,
+        "high": -1.0,
+        "low": -2.0,
+        "single": false,
+        "step": 0.3
+      },
+      {
+        "adjusted": false,
+        "adjusted_high": 1.0,
+        "high": 1.0,
+        "low": 0.1,
+        "single": false,
+        "step": 0.3
+      },
+      {
+        "adjusted": false,
+        "adjusted_high": 0.5,
+        "high": 0.5,
+        "low": -0.5,
+        "single": false,
+        "step": 0.25
+      },
+      {
+        "adjusted": true,
+        "adjusted_high": 0.0,
+        "high": 0.05,
+        "low": 0.0,
+        "single": true,
+        "step": 0.1
+      }
+    ],
+    "next_after_below": {
+      "inputs": [
+        1.0,
+        0.7,
+        -1.0,
+        2.0,
+        1e-300
+      ],
+      "outputs": [
+        0.9999999999999999,
+        0.6999999999999998,
+        -1.0000000000000002,
+        1.9999999999999998,
+        9.999999999999999e-301
+      ]
+    },
+    "round_ties_to_even": {
+      "inputs": [
+        0.5,
+        1.5,
+        2.5,
+        3.5,
+        -0.5,
+        -1.5,
+        -2.5,
+        2.4,
+        2.6,
+        -0.4
+      ],
+      "outputs": [
+        0.0,
+        2.0,
+        2.0,
+        4.0,
+        -0.0,
+        -2.0,
+        -2.0,
+        2.0,
+        3.0,
+        -0.0
+      ]
+    }
+  },
   "numpy_random_state_seed_contract": {
     "integers_one_based": [
       3,
@@ -3683,6 +3801,35 @@
       "x"
     ]
   },
+  "single_distribution_rng": {
+    "baseline": [
+      -0.4106699946257806,
+      0.06117351121058823,
+      -0.6169584261050103,
+      -0.8641992836174173,
+      0.5739709199998266,
+      0.31266704355171093,
+      0.27504179208727164,
+      0.15120578750606795
+    ],
+    "identical": true,
+    "seed": 17,
+    "single_values": {
+      "fixed": 0.5,
+      "only": "solo",
+      "pinned": 4
+    },
+    "with_single": [
+      -0.4106699946257806,
+      0.06117351121058823,
+      -0.6169584261050103,
+      -0.8641992836174173,
+      0.5739709199998266,
+      0.31266704355171093,
+      0.27504179208727164,
+      0.15120578750606795
+    ]
+  },
   "storage": {
     "base_is_abstract": true,
     "best_number": 2,
@@ -4019,6 +4166,76 @@
         "y": 0.7054728982200755,
         "z": null
       }
+    ]
+  },
+  "tpe_pruned_history_seed_113": {
+    "complete_count": 20,
+    "n_startup_trials": 6,
+    "pruned_count": 10,
+    "seed": 113,
+    "states": [
+      "COMPLETE",
+      "PRUNED",
+      "COMPLETE",
+      "COMPLETE",
+      "PRUNED",
+      "COMPLETE",
+      "COMPLETE",
+      "PRUNED",
+      "COMPLETE",
+      "COMPLETE",
+      "PRUNED",
+      "COMPLETE",
+      "COMPLETE",
+      "PRUNED",
+      "COMPLETE",
+      "COMPLETE",
+      "PRUNED",
+      "COMPLETE",
+      "COMPLETE",
+      "PRUNED",
+      "COMPLETE",
+      "COMPLETE",
+      "PRUNED",
+      "COMPLETE",
+      "COMPLETE",
+      "PRUNED",
+      "COMPLETE",
+      "COMPLETE",
+      "PRUNED",
+      "COMPLETE"
+    ],
+    "values": [
+      2.111912956380529,
+      -2.55657840694644,
+      2.369590576191741,
+      -0.3810387145283505,
+      -2.2339335945989287,
+      0.4551472465495987,
+      0.25441113297800866,
+      0.0655590753560738,
+      1.11985647717614,
+      -1.5727710578564982,
+      -1.0370697224592471,
+      0.6692312662578406,
+      1.0635678266208752,
+      1.1641011677052608,
+      2.9466083120496136,
+      0.5198341793296806,
+      -0.6952258430367575,
+      1.9890714927296882,
+      -1.4519029424762366,
+      -0.04426012314875649,
+      1.4109500481094703,
+      0.5711015386837455,
+      0.5247654034489304,
+      -0.3878583255046213,
+      0.6175496822223092,
+      1.7110609122377338,
+      0.7891541321664142,
+      -0.21900544662974764,
+      1.5166388099878167,
+      0.2518883114021844
     ]
   },
   "tpe_sampler_seed_37": [
