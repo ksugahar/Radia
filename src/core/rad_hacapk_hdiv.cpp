@@ -885,7 +885,7 @@ static int WedgeTransCacheScope()
     return scope;
 }
 
-static bool HOFarOneSidedEnabled()
+bool RadHACApKChargeGram::HOFarOneSidedEnabled()
 {
     static const bool enabled = []() -> bool {
         const char* v = std::getenv("RADIA_HDIV_HO_FAR_ONESIDED");
@@ -894,7 +894,7 @@ static bool HOFarOneSidedEnabled()
     return enabled;
 }
 
-static bool HOAnalyticBlockEnabled()
+bool RadHACApKChargeGram::HOAnalyticBlockEnabled()
 {
     static const bool enabled = []() -> bool {
         const char* v = std::getenv("RADIA_HDIV_DISABLE_HO_ANALYTIC_BLOCK");
@@ -907,7 +907,7 @@ static bool HOAnalyticBlockEnabled()
 // GetInteractionMatrixElementRaw, i.e. once per matrix entry per image inside
 // the parallel H-matrix fill, so an uncached getenv here is a per-entry
 // environment-table lookup on every worker thread.
-static bool HOTetImageBlockEnabled()
+bool RadHACApKChargeGram::HOTetImageBlockEnabled()
 {
     static const bool enabled = []() -> bool {
         const char* v = std::getenv("RADIA_HDIV_DISABLE_HO_IMAGE_BLOCK");
@@ -6164,56 +6164,16 @@ void RadHACApKChargeGram::ExtractCoordinates()
     m_coordinates = m_cent;   // [n*3] charge centroids (the cluster-tree points)
 }
 
-extern "C" void cHACApK_set_sym_fill(int flag);   // cHACApK_base.c (skip strictly-lower leaves at fill)
-
-namespace {
-
-// RAII scope for the fill-time state (the sym-fill global plus the two
-// normalization members).  Exceptions DO cross the C fill: the entry oracle
-// itself raises std::out_of_range on an out-of-range index, GetHexBlock
-// raises std::invalid_argument past 63 images, and the affine wedge/hex map
-// helpers raise std::logic_error on a singular geometry.  Those throws unwind
-// the C frames of cHACApK_base.c (cHACApK_entry_ij is called from the ACA fill
-// loops there), so a plain "reset after the call" is skipped on that path.
-// Leaving m_fillNormalized set makes every later GetInteractionMatrixElement
-// return the normalized Ghat = S^-1 G S^-1 instead of the physical Gram --
-// silently wrong Jacobi diagonals, diagnostics, and reciprocity gates for the
-// rest of the object's life.  Leaving m_sigmaActive set makes MatVecSym wrap
-// an S...S scaling around leaves that were never normalized.
-struct ChargeGramFillScope {
-    bool& fill_normalized;
-    bool& sigma_active;
-    const bool sigma_active_on_entry;
-    bool committed = false;
-
-    ChargeGramFillScope(bool& normalized, bool& active)
-        : fill_normalized(normalized), sigma_active(active),
-          sigma_active_on_entry(active)
-    {
-        cHACApK_set_sym_fill(1);
-    }
-
-    ~ChargeGramFillScope()
-    {
-        cHACApK_set_sym_fill(0);
-        fill_normalized = false;
-        // A failed or aborted fill leaves no normalized leaves to unwrap.
-        if (!committed) sigma_active = sigma_active_on_entry;
-    }
-
-    // Only a fill that actually completed owns the normalized leaves.
-    void Commit() { committed = true; }
-
-    ChargeGramFillScope(const ChargeGramFillScope&) = delete;
-    ChargeGramFillScope& operator=(const ChargeGramFillScope&) = delete;
-};
-
-}  // namespace
-
 bool RadHACApKChargeGram::BuildHMatrix(const RadHACApKParams& params)
 {
-    // Symmetric fill: the Gram's applies all route through MatVecSym (see the header doc), so skip the
-    // strictly-lower leaves at fill time -- ~2x build, identical upper leaves (MatVecSym bit-identical).
+    return RadHACApKBase::BuildHMatrix(params);
+}
+
+void RadHACApKChargeGram::OnBuildStarting(const RadHACApKParams& params)
+{
+    // This hook runs under the process-wide HACApK build mutex. Keep every
+    // fill-state mutation here so concurrent constructors cannot race before
+    // the base build acquires its lock.
     ResetHexCacheStats();
     m_testFillFailureAfter = -1;
     m_testFillEntryCalls.store(0, std::memory_order_relaxed);
@@ -6226,18 +6186,19 @@ bool RadHACApKChargeGram::BuildHMatrix(const RadHACApKParams& params)
     }
     m_derivativeAcaEps=params.aca_eps;
     m_derivativeMaxRank=params.max_rank;
-    // Charge-basis normalization (see the header doc at MatVecSym): the
-    // sigma pre-pass + the m_fillNormalized toggle live in OnBeforeBuild --
-    // the base build fixes m_n via ExtractCoordinates FIRST, then calls
-    // OnBeforeBuild, then fills.  ChargeGramFillScope owns the reset so an
-    // exception out of the entry oracle cannot strand the normalized state.
-    bool ok = false;
-    {
-        ChargeGramFillScope fill_scope(m_fillNormalized, m_sigmaActive);
-        ok = RadHACApKBase::BuildHMatrix(params);
-        if (ok) fill_scope.Commit();
-    }
-    return ok;
+    m_fillNormalized = false;
+    m_sigmaActive = false;
+}
+
+void RadHACApKChargeGram::OnBuildFinished(bool succeeded) noexcept
+{
+    // The base owns both this callback and cHACApK_set_sym_fill while holding
+    // the same mutex as the fill. Callback failures are rethrown only after
+    // the C fill workers have joined, so exceptions and false returns
+    // cannot leak normalized-entry semantics into the object or the next
+    // HACApK manager in the process.
+    m_fillNormalized = false;
+    m_sigmaActive = succeeded;
 }
 
 void RadHACApKChargeGram::ComputeChargeSigma()
@@ -6248,10 +6209,12 @@ void RadHACApKChargeGram::ComputeChargeSigma()
     // NON-POSITIVE one is broken too *when no images are folded in*: the raw
     // self-energy of a non-zero charge is strictly positive.  With an image
     // set the diagonal is G_self + sign*G_refl(a,a), so an ANTISYMMETRIC image
-    // (sign -1) makes it identically zero for a charge sitting on the mirror
-    // plane -- that DOF is annihilated by the symmetry, which is exact, not a
-    // defect.  Keep sigma = 1 for those and only fail on the cases that cannot
-    // be legitimate.  Record the first offender and throw outside the region.
+    // (sign -1) can annihilate a charge on the mirror plane.  Floating-point
+    // quadrature need not leave an exact zero, so classify cancellation against
+    // the image-free self-energy rather than using d == 0.  Isometric image
+    // interactions are bounded by the direct self term; the image-count factor
+    // therefore bounds the roundoff accumulated by the fold without accepting
+    // a physically negative Gram diagonal.
     const bool images_folded = !m_image_masks.empty();
     std::atomic<int> bad_charge{-1};
     double bad_value = 0.0;
@@ -6262,17 +6225,21 @@ void RadHACApKChargeGram::ComputeChargeSigma()
             std::max(1, (int)ngcore::TaskManager::GetMaxThreads()));
         ngcore::ParallelFor(ngcore::IntRange(m_n), [&](size_t p) {
             const double d = GetInteractionMatrixElementRaw((int)p, (int)p);
+            if (images_folded) {
+                const double direct = EvaluateDirectSelfEntry((int)p);
+                const double cancellation_tolerance =
+                    64.0 * std::numeric_limits<double>::epsilon()
+                    * (1.0 + (double)m_image_masks.size()) * std::fabs(direct);
+                if (std::isfinite(d) && std::isfinite(direct) && direct > 0.0 &&
+                    std::fabs(d) <= cancellation_tolerance)
+                    return;
+            }
             if (d > 0.0 && std::isfinite(d)) {
                 const double s = std::sqrt(d);
                 m_chargeSigma[p] = s;
                 m_chargeSigmaInv[p] = 1.0 / s;
                 return;
             }
-            // Legitimate only as the mirror-plane cancellation above.  A
-            // negative diagonal is never a valid Gram self-energy, even when
-            // images are folded in; accepting it would defer an already-known
-            // SPD violation until CG breakdown.
-            if (d == 0.0 && images_folded) return;
             int expected = -1;
             if (bad_charge.compare_exchange_strong(expected, (int)p))
                 bad_value = d;
@@ -6283,8 +6250,8 @@ void RadHACApKChargeGram::ComputeChargeSigma()
             "ChargeGram: self-interaction diagonal " + std::to_string(bad_value)
             + " at charge " + std::to_string(bad_charge.load())
             + (images_folded
-                 ? " is negative or not finite; image folding can explain an"
-                   " exact zero diagonal, but never a negative self-energy."
+                 ? " is negative or not finite beyond the image-cancellation"
+                   " roundoff bound."
                  : " is not positive-finite, and no image folding can explain"
                    " it (the raw self-energy of a non-zero charge is strictly"
                    " positive).")
