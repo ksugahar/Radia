@@ -17,6 +17,7 @@ on:
       - 'tests/test_release_workflow_ref_gate.py'
       - 'tests/test_release_quad_optuna_candidate.py'
       - 'tools/release_quad.py'
+      - '.agents/skills/release-eqnedit64/**'
   pull_request:
     branches: [main]
     paths-ignore:
@@ -32,6 +33,7 @@ on:
       - 'tests/test_release_workflow_ref_gate.py'
       - 'tests/test_release_quad_optuna_candidate.py'
       - 'tools/release_quad.py'
+      - '.agents/skills/release-eqnedit64/**'
   workflow_dispatch:
     inputs:
       run_golden:
