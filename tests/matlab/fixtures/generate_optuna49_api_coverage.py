@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import ast
 import re
 from pathlib import Path
 from typing import Any
@@ -824,6 +825,112 @@ def _scope_for(upstream: str) -> str:
     return "required"
 
 
+
+def _oracle_generator_sections() -> dict[str, set[str]]:
+    """Map each upstream name to the oracle sections whose code exercises it.
+
+    `oracle_status` used to mean "this name is present in MATLAB and someone
+    typed it into VERIFIED_SYMBOLS / VERIFIED_MEMBERS".  That is an assertion,
+    not evidence: nothing checked that a differential fixture covered the name,
+    and a whole module was marked verified merely by existing.
+
+    This walks the two oracle generators instead.  `build_oracle()` maps every
+    section of optuna49_oracle.json to the function that produces it, so the
+    upstream names that function references are the names that section actually
+    exercises.  A name with no section behind it cannot claim to be verified.
+
+    The link is a necessary condition, not a sufficient one -- it proves an
+    upstream artifact covers the name, not that the artifact is exhaustive.
+    That is still strictly stronger than a hand-maintained list, and it fails
+    loudly when a name is claimed without any upstream evidence at all.
+    """
+    fixtures = Path(__file__).resolve().parent
+    oracle_source = fixtures / "generate_optuna49_oracle.py"
+    mcp_source = fixtures / "generate_optuna49_mcp_oracle.py"
+    tree = ast.parse(oracle_source.read_text(encoding="utf-8"))
+    functions = {
+        node.name: node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.FunctionDef)
+    }
+    if "build_oracle" not in functions:
+        raise RuntimeError(
+            f"{oracle_source.name} no longer defines build_oracle(); the "
+            "oracle-section derivation cannot be trusted."
+        )
+
+    section_producers: dict[str, str] = {}
+    for node in ast.walk(functions["build_oracle"]):
+        if not isinstance(node, ast.Dict):
+            continue
+        for key, value in zip(node.keys, node.values):
+            if (
+                isinstance(key, ast.Constant)
+                and isinstance(key.value, str)
+                and isinstance(value, ast.Call)
+                and isinstance(value.func, ast.Name)
+            ):
+                section_producers[key.value] = value.func.id
+
+    fixture_sections = set(
+        json.loads(
+            (fixtures / "optuna49_oracle.json").read_text(encoding="utf-8")
+        )
+    )
+    unknown = sorted(set(section_producers) - fixture_sections)
+    if unknown:
+        raise RuntimeError(
+            "build_oracle() names sections absent from optuna49_oracle.json: "
+            + ", ".join(unknown)
+        )
+
+    def referenced(function_name: str, depth: int = 2, seen=None) -> set[str]:
+        seen = seen or set()
+        found: set[str] = set()
+        if function_name in seen or function_name not in functions:
+            return found
+        seen.add(function_name)
+        for node in ast.walk(functions[function_name]):
+            if isinstance(node, ast.Attribute):
+                found.add(node.attr)
+            elif isinstance(node, ast.Name):
+                found.add(node.id)
+            elif isinstance(node, ast.Constant) and isinstance(node.value, str):
+                found.add(node.value)
+            if (
+                depth > 0
+                and isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Name)
+            ):
+                found |= referenced(node.func.id, depth - 1, seen)
+        return found
+
+    sections: dict[str, set[str]] = {}
+    for section, producer in section_producers.items():
+        for name in referenced(producer):
+            sections.setdefault(name, set()).add(section)
+
+    mcp_tree = ast.parse(mcp_source.read_text(encoding="utf-8"))
+    for node in ast.walk(mcp_tree):
+        name = None
+        if isinstance(node, ast.Attribute):
+            name = node.attr
+        elif isinstance(node, ast.Name):
+            name = node.id
+        elif isinstance(node, ast.Constant) and isinstance(node.value, str):
+            name = node.value
+        if name:
+            sections.setdefault(name, set()).add("mcp:" + mcp_source.stem)
+    return sections
+
+
+ORACLE_SECTIONS_BY_NAME = _oracle_generator_sections()
+
+
+def _oracle_sections_for(upstream: str) -> list[str]:
+    """Oracle sections that exercise UPSTREAM's final name component."""
+    return sorted(ORACLE_SECTIONS_BY_NAME.get(upstream.rsplit(".", 1)[-1], ()))
+
 def _entry(
     upstream: str,
     kind: str,
@@ -831,9 +938,15 @@ def _entry(
     matlab_name: str | None,
     oracle_status: str = "not-mapped",
 ) -> dict[str, object]:
+    sections = _oracle_sections_for(upstream)
+    if oracle_status in ("verified", "partial") and not sections:
+        # Claimed as covered, but no oracle generator exercises the name.
+        # Report it as asserted rather than silently counting it as evidence.
+        oracle_status = "asserted"
     return {
         "kind": kind,
         "matlab_name": matlab_name,
+        "oracle_sections": sections,
         "oracle_status": oracle_status,
         "scope": _scope_for(upstream),
         "surface_status": "present" if present else "missing",
@@ -883,7 +996,9 @@ def build_coverage() -> dict[str, Any]:
                 and str(member["name"]) in VERIFIED_MEMBERS.get(name, set())
                 for member in symbol.get("members", [])
             )
-            if present and kind == "module" or present and name in VERIFIED_SYMBOLS:
+            if present and (kind == "module" or name in VERIFIED_SYMBOLS):
+                # _entry downgrades this to "asserted" when no oracle section
+                # exercises the name, so presence alone can no longer pass.
                 oracle_status = "verified"
             elif present and kind == "class" and name in CLASS_ORACLE_SECTIONS:
                 oracle_status = "verified" if class_members_complete else "partial"
@@ -931,6 +1046,9 @@ def build_coverage() -> dict[str, Any]:
     missing_count = len(entries) - present_count
     verified_count = sum(entry["oracle_status"] == "verified" for entry in entries)
     partial_count = sum(entry["oracle_status"] == "partial" for entry in entries)
+    asserted_count = sum(
+        entry["oracle_status"] == "asserted" for entry in entries
+    )
     required = [entry for entry in entries if entry["scope"] == "required"]
     required_present = [
         entry for entry in required if entry["surface_status"] == "present"
@@ -941,8 +1059,15 @@ def build_coverage() -> dict[str, Any]:
     scope_counts: dict[str, int] = {}
     for entry in entries:
         scope_counts[str(entry["scope"])] = scope_counts.get(str(entry["scope"]), 0) + 1
-    complete = len(required_present) == len(required) and len(required_mapped) == len(
-        required
+    required_asserted = [
+        entry
+        for entry in required_present
+        if entry["oracle_status"] == "asserted"
+    ]
+    complete = (
+        len(required_present) == len(required)
+        and len(required_mapped) == len(required)
+        and not required_asserted
     )
     return {
         "schema": "radia.optuna49-api-coverage.v1",
@@ -959,6 +1084,8 @@ def build_coverage() -> dict[str, Any]:
             "behavior, and a non-required scope must name what discharges it"
         ),
         "scope_rules": SCOPE_RULES,
+        "oracle_asserted_count": asserted_count,
+        "required_oracle_asserted_count": len(required_asserted),
         "scope_counts": scope_counts,
         "required_entry_count": len(required),
         "required_present_count": len(required_present),
@@ -974,7 +1101,10 @@ def build_coverage() -> dict[str, Any]:
         "surface_missing_count": missing_count,
         "oracle_verified_count": verified_count,
         "oracle_partial_count": partial_count,
-        "oracle_unmapped_count": len(entries)-verified_count-partial_count,
+        "oracle_unmapped_count": len(entries)
+        - verified_count
+        - partial_count
+        - asserted_count,
         "full_compatibility_complete": complete,
         "entries": entries,
     }
