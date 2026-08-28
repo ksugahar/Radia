@@ -10,6 +10,7 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parents[3]
 INVENTORY_PATH = Path(__file__).with_name("optuna49_public_api.json")
+ORACLE_PATH = Path(__file__).with_name("optuna49_oracle.json")
 MATLAB_DIRECTORY = ROOT / "matlab" / "+radia" / "+optuna"
 DESTINATION = ROOT / "matlab" / "optuna49_api_coverage.json"
 FUNCTION_PATTERN = re.compile(
@@ -43,20 +44,22 @@ def _public_get_access(qualifier: str) -> bool:
         is None
     )
 MODULE_EQUIVALENTS = {
-    "artifacts": False,
+    "artifacts": True,
     "distributions": True,
     "exceptions": True,
     "importance": True,
-    "integration": False,
-    "logging": False,
+    "integration": True,
+    "logging": True,
+    "matplotlib": True,
+    "nsgaii": True,
     "pruners": True,
     "samplers": True,
     "search_space": True,
     "storages": True,
     "study": True,
     "trial": True,
-    "version": False,
-    "visualization": False,
+    "version": True,
+    "visualization": True,
 }
 VERIFIED_FUNCTIONS = {
     "copy_study",
@@ -69,18 +72,295 @@ VERIFIED_FUNCTIONS = {
     "get_param_importances",
     "intersection_search_space",
     "distribution_to_json",
+    "fail_stale_trials",
     "json_to_distribution",
     "load_study",
+    "is_available",
+    "plot_contour",
+    "plot_edf",
+    "plot_hypervolume_history",
+    "plot_intermediate_values",
+    "plot_optimization_history",
+    "plot_parallel_coordinate",
+    "plot_param_importances",
+    "plot_pareto_front",
+    "plot_rank",
+    "plot_slice",
+    "plot_terminator_improvement",
+    "plot_timeline",
+    "run_grpc_proxy_server",
+}
+CLASS_EQUIVALENTS = {
+    "_CachedStorage": "CachedStorage",
+    "_GroupDecomposedSearchSpace": "GroupDecomposedSearchSpace",
+    "_SearchSpaceGroup": "SearchSpaceGroup",
+}
+SYMBOL_EQUIVALENTS = {
+    "__version__": "version",
+}
+INTEGRATION_EXPORTS = {
+    "AllenNLPExecutor",
+    "AllenNLPPruningCallback",
+    "BoTorchSampler",
+    "CatBoostPruningCallback",
+    "ChainerMNStudy",
+    "ChainerPruningExtension",
+    "DaskStorage",
+    "FastAIPruningCallback",
+    "FastAIV2PruningCallback",
+    "KerasPruningCallback",
+    "LightGBMPruningCallback",
+    "LightGBMTuner",
+    "LightGBMTunerCV",
+    "MLflowCallback",
+    "MXNetPruningCallback",
+    "OptunaSearchCV",
+    "PyCmaSampler",
+    "PyTorchIgnitePruningHandler",
+    "PyTorchLightningPruningCallback",
+    "ShapleyImportanceEvaluator",
+    "SkorchPruningCallback",
+    "TFKerasPruningCallback",
+    "TensorBoardCallback",
+    "TensorFlowPruningHook",
+    "TorchDistributedTrial",
+    "WeightsAndBiasesCallback",
+    "XGBoostPruningCallback",
+}
+VERIFIED_SYMBOLS = VERIFIED_FUNCTIONS | INTEGRATION_EXPORTS | {
+    "CategoricalChoiceType",
+    "DISTRIBUTION_CLASSES",
+    "CRITICAL",
+    "DEBUG",
+    "ERROR",
+    "FATAL",
+    "INFO",
+    "WARN",
+    "WARNING",
+    "create_default_formatter",
+    "disable_default_handler",
+    "disable_propagation",
+    "enable_default_handler",
+    "enable_propagation",
+    "get_logger",
+    "get_verbosity",
+    "set_verbosity",
+    "report_cross_validation_scores",
+    "download_artifact",
+    "get_all_artifact_meta",
+    "upload_artifact",
+    "__version__",
+    "CLIUsageError",
+    "DuplicatedStudyError",
+    "ExperimentalWarning",
+    "OptunaError",
+    "StorageInternalError",
+    "TrialPruned",
+    "UpdateFinishedTrialError",
+    "BaseErrorEvaluator",
+    "BaseImprovementEvaluator",
+    "BaseTerminator",
+    "CrossValidationErrorEvaluator",
+    "EMMREvaluator",
+    "MedianErrorEvaluator",
+    "RegretBoundEvaluator",
+    "StaticErrorEvaluator",
+    "ArtifactMeta",
+    "Backoff",
+    "Boto3ArtifactStore",
+    "FileSystemArtifactStore",
+    "GCSArtifactStore",
+    "GrpcStorageProxy",
+    "BaseGASampler",
+    "BaseStorage",
+    "BaseJournalBackend",
+    "BaseJournalLogStorage",
+    "InMemoryStorage",
+    "JournalFileBackend",
+    "JournalFileOpenLock",
+    "JournalFileStorage",
+    "JournalFileSymlinkLock",
+    "JournalRedisBackend",
+    "JournalRedisStorage",
+    "JournalStorage",
+    "RDBStorage",
+    "RetryFailedTrialCallback",
+    "RetryHeartbeatStaleTrialCallback",
+    "_CachedStorage",
 }
 SAMPLER_PUBLIC_MEMBERS = {
     "after_trial",
     "before_trial",
     "infer_relative_search_space",
+    "sample_independent",
+    "sample_relative",
+}
+GA_PUBLIC_MEMBERS = {
+    "get_parent_population",
+    "get_population",
+    "get_trial_generation",
+    "population_size",
+    "select_parent",
+}
+STORAGE_PUBLIC_MEMBERS = {
+    "check_trial_is_updatable",
+    "create_new_study",
+    "create_new_trial",
+    "delete_study",
+    "get_all_studies",
+    "get_all_trials",
+    "get_best_trial",
+    "get_n_trials",
+    "get_study_directions",
+    "get_study_id_from_name",
+    "get_study_name_from_id",
+    "get_study_system_attrs",
+    "get_study_user_attrs",
+    "get_trial",
+    "get_trial_id_from_study_id_trial_number",
+    "get_trial_number_from_id",
+    "get_trial_param",
+    "get_trial_params",
+    "get_trial_system_attrs",
+    "get_trial_user_attrs",
+    "remove_session",
+    "set_study_system_attr",
+    "set_study_user_attr",
+    "set_trial_intermediate_value",
+    "set_trial_param",
+    "set_trial_state_values",
+    "set_trial_system_attr",
+    "set_trial_user_attr",
 }
 CROSSOVER_PUBLIC_MEMBERS = {"crossover", "n_parents"}
+EXCEPTION_PUBLIC_MEMBERS = {"add_note", "args", "with_traceback"}
 VERIFIED_MEMBERS = {
+    "_GroupDecomposedSearchSpace": {"calculate"},
+    "_SearchSpaceGroup": {"add_distributions", "search_spaces"},
+    "BaseImportanceEvaluator": {"evaluate"},
+    "BaseGASampler": SAMPLER_PUBLIC_MEMBERS
+    | GA_PUBLIC_MEMBERS
+    | {"reseed_rng"},
+    "BaseStorage": STORAGE_PUBLIC_MEMBERS,
+    "BaseJournalBackend": {"append_logs", "read_logs"},
+    "BaseJournalLogStorage": {"append_logs", "read_logs"},
+    "InMemoryStorage": STORAGE_PUBLIC_MEMBERS,
+    "JournalFileBackend": {"append_logs", "read_logs"},
+    "JournalFileOpenLock": {"acquire", "release"},
+    "JournalFileStorage": {"append_logs", "read_logs"},
+    "JournalFileSymlinkLock": {"acquire", "release"},
+    "JournalRedisBackend": {
+        "append_logs",
+        "load_snapshot",
+        "read_logs",
+        "save_snapshot",
+    },
+    "JournalRedisStorage": {
+        "append_logs",
+        "load_snapshot",
+        "read_logs",
+        "save_snapshot",
+    },
+    "JournalStorage": STORAGE_PUBLIC_MEMBERS | {"restore_replay_result"},
+    "RDBStorage": STORAGE_PUBLIC_MEMBERS
+    | {
+        "get_all_versions",
+        "get_current_version",
+        "get_failed_trial_callback",
+        "get_head_version",
+        "get_heartbeat_interval",
+        "get_heartbeat_stale_trial_callback",
+        "record_heartbeat",
+        "upgrade",
+    },
+    "_CachedStorage": STORAGE_PUBLIC_MEMBERS
+    | {
+        "get_failed_trial_callback",
+        "get_heartbeat_interval",
+        "get_heartbeat_stale_trial_callback",
+        "record_heartbeat",
+    },
+    "RetryFailedTrialCallback": {
+        "retried_trial_number",
+        "retry_history",
+    },
+    "RetryHeartbeatStaleTrialCallback": {
+        "retried_trial_number",
+        "retry_history",
+    },
+    "ArtifactMeta": {"artifact_id", "encoding", "filename", "mimetype"},
+    "Backoff": {"open_reader", "remove", "write"},
+    "Boto3ArtifactStore": {"open_reader", "remove", "write"},
+    "BaseErrorEvaluator": {"evaluate"},
+    "BaseImprovementEvaluator": {"evaluate"},
+    "BaseTerminator": {"should_terminate"},
+    "CLIUsageError": EXCEPTION_PUBLIC_MEMBERS,
+    "DuplicatedStudyError": EXCEPTION_PUBLIC_MEMBERS,
+    "ExperimentalWarning": EXCEPTION_PUBLIC_MEMBERS,
+    "CrossValidationErrorEvaluator": {"evaluate"},
+    "EMMREvaluator": {"evaluate"},
+    "FanovaImportanceEvaluator": {"evaluate"},
+    "FileSystemArtifactStore": {"open_reader", "remove", "write"},
+    "GCSArtifactStore": {"open_reader", "remove", "write"},
+    "GrpcStorageProxy": STORAGE_PUBLIC_MEMBERS
+    | {"close", "wait_server_ready"},
+    "MeanDecreaseImpurityImportanceEvaluator": {"evaluate"},
+    "MedianErrorEvaluator": {"evaluate"},
+    "RegretBoundEvaluator": {"evaluate"},
+    "OptunaError": EXCEPTION_PUBLIC_MEMBERS,
+    "PedAnovaImportanceEvaluator": {"evaluate"},
+    "StorageInternalError": EXCEPTION_PUBLIC_MEMBERS,
+    "StaticErrorEvaluator": {"evaluate"},
+    "TrialPruned": EXCEPTION_PUBLIC_MEMBERS,
+    "UpdateFinishedTrialError": EXCEPTION_PUBLIC_MEMBERS,
+    "BaseDistribution": {
+        "single",
+        "to_external_repr",
+        "to_internal_repr",
+    },
+    "CategoricalDistribution": {
+        "single",
+        "to_external_repr",
+        "to_internal_repr",
+    },
+    "FloatDistribution": {
+        "single",
+        "to_external_repr",
+        "to_internal_repr",
+    },
+    "IntDistribution": {
+        "single",
+        "to_external_repr",
+        "to_internal_repr",
+    },
+    "UniformDistribution": {
+        "single",
+        "to_external_repr",
+        "to_internal_repr",
+    },
+    "LogUniformDistribution": {
+        "single",
+        "to_external_repr",
+        "to_internal_repr",
+    },
+    "DiscreteUniformDistribution": {
+        "q",
+        "single",
+        "to_external_repr",
+        "to_internal_repr",
+    },
+    "IntUniformDistribution": {
+        "single",
+        "to_external_repr",
+        "to_internal_repr",
+    },
+    "IntLogUniformDistribution": {
+        "single",
+        "to_external_repr",
+        "to_internal_repr",
+    },
     "BasePruner": {"prune"},
-    "BaseSampler": SAMPLER_PUBLIC_MEMBERS,
+    "BaseSampler": SAMPLER_PUBLIC_MEMBERS | {"reseed_rng"},
     "BaseTrial": {
         "datetime_start",
         "distributions",
@@ -189,16 +469,16 @@ VERIFIED_MEMBERS = {
     "BestValueStagnationEvaluator": {"evaluate"},
     "Terminator": {"should_terminate"},
     "IntersectionSearchSpace": {"calculate"},
-    "BruteForceSampler": SAMPLER_PUBLIC_MEMBERS,
-    "CmaEsSampler": SAMPLER_PUBLIC_MEMBERS,
-    "GPSampler": SAMPLER_PUBLIC_MEMBERS,
-    "GridSampler": SAMPLER_PUBLIC_MEMBERS | {"is_exhausted"},
-    "NSGAIIISampler": SAMPLER_PUBLIC_MEMBERS | {"population_size"},
-    "NSGAIISampler": SAMPLER_PUBLIC_MEMBERS | {"population_size"},
-    "PartialFixedSampler": SAMPLER_PUBLIC_MEMBERS,
-    "QMCSampler": SAMPLER_PUBLIC_MEMBERS,
-    "RandomSampler": SAMPLER_PUBLIC_MEMBERS,
-    "TPESampler": SAMPLER_PUBLIC_MEMBERS,
+    "BruteForceSampler": SAMPLER_PUBLIC_MEMBERS | {"reseed_rng"},
+    "CmaEsSampler": SAMPLER_PUBLIC_MEMBERS | {"reseed_rng"},
+    "GPSampler": SAMPLER_PUBLIC_MEMBERS | {"reseed_rng"},
+    "GridSampler": SAMPLER_PUBLIC_MEMBERS | {"is_exhausted", "reseed_rng"},
+    "NSGAIIISampler": SAMPLER_PUBLIC_MEMBERS | GA_PUBLIC_MEMBERS | {"reseed_rng"},
+    "NSGAIISampler": SAMPLER_PUBLIC_MEMBERS | GA_PUBLIC_MEMBERS | {"reseed_rng"},
+    "PartialFixedSampler": SAMPLER_PUBLIC_MEMBERS | {"reseed_rng"},
+    "QMCSampler": SAMPLER_PUBLIC_MEMBERS | {"reseed_rng"},
+    "RandomSampler": SAMPLER_PUBLIC_MEMBERS | {"reseed_rng"},
+    "TPESampler": SAMPLER_PUBLIC_MEMBERS | {"hyperopt_parameters", "reseed_rng"},
     "BLXAlphaCrossover": CROSSOVER_PUBLIC_MEMBERS,
     "BaseCrossover": CROSSOVER_PUBLIC_MEMBERS,
     "SBXCrossover": CROSSOVER_PUBLIC_MEMBERS,
@@ -214,7 +494,24 @@ VERIFIED_MEMBERS = {
     "SuccessiveHalvingPruner": {"prune"},
     "ThresholdPruner": {"prune"},
     "WilcoxonPruner": {"prune"},
-    "StudyDirection": {"NOT_SET", "MINIMIZE", "MAXIMIZE"},
+    "StudyDirection": {
+        "NOT_SET",
+        "MINIMIZE",
+        "MAXIMIZE",
+        "as_integer_ratio",
+        "bit_count",
+        "bit_length",
+        "conjugate",
+        "denominator",
+        "from_bytes",
+        "imag",
+        "is_integer",
+        "name",
+        "numerator",
+        "real",
+        "to_bytes",
+        "value",
+    },
     "TrialState": {
         "RUNNING",
         "COMPLETE",
@@ -222,63 +519,126 @@ VERIFIED_MEMBERS = {
         "FAIL",
         "WAITING",
         "is_finished",
+        "as_integer_ratio",
+        "bit_count",
+        "bit_length",
+        "conjugate",
+        "denominator",
+        "from_bytes",
+        "imag",
+        "is_integer",
+        "name",
+        "numerator",
+        "real",
+        "to_bytes",
+        "value",
     },
 }
-PARTIALLY_VERIFIED_CLASSES = {
-    "BasePruner",
-    "BaseSampler",
-    "BaseTrial",
-    "BestValueStagnationEvaluator",
-    "BruteForceSampler",
-    "CategoricalDistribution",
-    "CmaEsSampler",
-    "FixedTrial",
-    "FloatDistribution",
-    "FrozenTrial",
-    "GPSampler",
-    "GridSampler",
-    "HyperbandPruner",
-    "IntDistribution",
-    "UniformDistribution",
-    "LogUniformDistribution",
-    "DiscreteUniformDistribution",
-    "IntUniformDistribution",
-    "IntLogUniformDistribution",
-    "IntersectionSearchSpace",
-    "MaxTrialsCallback",
-    "MedianPruner",
-    "NopPruner",
-    "NSGAIISampler",
-    "NSGAIIISampler",
-    "PartialFixedSampler",
-    "PatientPruner",
-    "PercentilePruner",
-    "QMCSampler",
-    "RandomSampler",
-    "Study",
-    "StudyDirection",
-    "StudySummary",
-    "SuccessiveHalvingPruner",
-    "Terminator",
-    "TerminatorCallback",
-    "ThresholdPruner",
-    "TPESampler",
-    "Trial",
-    "TrialState",
-    "TrialPruned",
-    "WilcoxonPruner",
-    "BaseCrossover",
-    "BLXAlphaCrossover",
-    "SBXCrossover",
-    "SPXCrossover",
-    "UNDXCrossover",
-    "UniformCrossover",
-    "VSBXCrossover",
+CLASS_ORACLE_SECTIONS = {
+    "_GroupDecomposedSearchSpace": ("search_space",),
+    "_SearchSpaceGroup": ("search_space",),
+    "BaseImportanceEvaluator": ("base_components", "importance"),
+    "FanovaImportanceEvaluator": ("importance",),
+    "MeanDecreaseImpurityImportanceEvaluator": ("importance",),
+    "PedAnovaImportanceEvaluator": ("importance",),
+    "BaseDistribution": ("distributions", "distribution_public_members"),
+    "CategoricalDistribution": ("distributions", "distribution_public_members"),
+    "DiscreteUniformDistribution": ("distributions", "distribution_public_members"),
+    "FloatDistribution": ("distributions", "distribution_public_members"),
+    "IntDistribution": ("distributions", "distribution_public_members"),
+    "IntLogUniformDistribution": ("distributions", "distribution_public_members"),
+    "IntUniformDistribution": ("distributions", "distribution_public_members"),
+    "LogUniformDistribution": ("distributions", "distribution_public_members"),
+    "UniformDistribution": ("distributions", "distribution_public_members"),
+    "BasePruner": ("base_components", "pruners"),
+    "HyperbandPruner": ("pruners",),
+    "MedianPruner": ("pruners",),
+    "NopPruner": ("pruners",),
+    "PatientPruner": ("pruners",),
+    "PercentilePruner": ("pruners",),
+    "SuccessiveHalvingPruner": ("pruners",),
+    "ThresholdPruner": ("pruners",),
+    "WilcoxonPruner": ("pruners",),
+    "BaseSampler": ("base_components", "sampler_public_members", "sampler_reseed"),
+    "BruteForceSampler": (
+        "brute_force_sampler_seed_29",
+        "conditional_brute_force_sampler_seed_79",
+        "sampler_public_members",
+        "sampler_reseed",
+    ),
+    "CmaEsSampler": (
+        "cmaes_independent_sampler_seed_31",
+        "cmaes_sampler_seed_31",
+        "sampler_public_members",
+        "sampler_reseed",
+    ),
+    "GPSampler": (
+        "gp_constraints_sampler_seed_89",
+        "gp_sampler_seed_53",
+        "sampler_public_members",
+        "sampler_reseed",
+    ),
+    "GridSampler": ("grid_sampler_seed_17", "sampler_public_members", "sampler_reseed"),
+    "NSGAIISampler": (
+        "nsgaii_sampler_seed_19",
+        "sampler_public_members",
+        "sampler_reseed",
+    ),
+    "NSGAIIISampler": (
+        "nsgaiii_sampler_seed_23",
+        "sampler_public_members",
+        "sampler_reseed",
+    ),
+    "PartialFixedSampler": (
+        "partial_fixed_sampler_seed_61",
+        "sampler_public_members",
+        "sampler_reseed",
+    ),
+    "QMCSampler": (
+        "qmc_warnings",
+        "sampler_public_members",
+        "sampler_reseed",
+        "scrambled_qmc_sampler_seed_47",
+        "unscrambled_qmc_sampler_seed_71",
+    ),
+    "RandomSampler": ("random_sampler_seed_123", "sampler_public_members", "sampler_reseed"),
+    "TPESampler": (
+        "custom_tpe_sampler_gamma_weights",
+        "mixed_tpe_sampler_seed_43",
+        "multiobjective_tpe_sampler_seed_41",
+        "multivariate_tpe_sampler_seed_67",
+        "sampler_public_members",
+        "sampler_reseed",
+        "tpe_categorical_distance",
+        "tpe_group",
+        "tpe_sampler_seed_37",
+    ),
+    "BaseCrossover": ("base_components", "nsgaii_crossovers_seed_73"),
+    "BLXAlphaCrossover": ("nsgaii_crossovers_seed_73",),
+    "SBXCrossover": ("nsgaii_crossovers_seed_73",),
+    "SPXCrossover": ("nsgaii_crossovers_seed_73",),
+    "UNDXCrossover": ("nsgaii_crossovers_seed_73",),
+    "UniformCrossover": ("nsgaii_crossovers_seed_73",),
+    "VSBXCrossover": ("nsgaii_crossovers_seed_73",),
+    "IntersectionSearchSpace": ("search_space",),
+    "BestValueStagnationEvaluator": ("terminator",),
+    "MaxTrialsCallback": ("terminator",),
+    "Terminator": ("terminator",),
+    "TerminatorCallback": ("terminator",),
+    "Study": ("core_api", "study_management", "tell", "trials_dataframe"),
+    "StudyDirection": ("enums",),
+    "StudySummary": ("study_management",),
+    "BaseTrial": ("base_components", "base_trial"),
+    "FixedTrial": ("fixed_trial",),
+    "FrozenTrial": ("frozen_trial",),
+    "Trial": ("base_trial", "core_api", "tell"),
+    "TrialState": ("enums",),
 }
 
 
 def _sha256(path: Path) -> str:
-    return hashlib.sha256(path.read_bytes()).hexdigest().upper()
+    content = path.read_bytes().replace(b"\r\n", b"\n").replace(b"\r", b"\n")
+    return hashlib.sha256(content).hexdigest().upper()
 
 
 def _normalized(name: str) -> str:
@@ -378,6 +738,20 @@ def build_coverage() -> dict[str, Any]:
     inventory = json.loads(INVENTORY_PATH.read_text(encoding="utf-8"))
     if inventory.get("optuna_version") != "4.9.0":
         raise RuntimeError("The public API inventory is not pinned to Optuna 4.9.0.")
+    oracle = json.loads(ORACLE_PATH.read_text(encoding="utf-8"))
+    if oracle.get("optuna_version") != "4.9.0":
+        raise RuntimeError("The differential oracle is not pinned to Optuna 4.9.0.")
+    required_sections = {
+        section
+        for sections in CLASS_ORACLE_SECTIONS.values()
+        for section in sections
+    }
+    missing_sections = sorted(required_sections.difference(oracle))
+    if missing_sections:
+        raise RuntimeError(
+            "Class oracle mappings reference missing fixture sections: "
+            + ", ".join(missing_sections)
+        )
     names, members = _matlab_surface()
     entries: list[dict[str, object]] = []
     for module in inventory["modules"]:
@@ -390,12 +764,22 @@ def build_coverage() -> dict[str, Any]:
                 present = MODULE_EQUIVALENTS.get(name, False)
                 matlab_name = f"radia.optuna ({name} namespace)" if present else None
             else:
-                present = name in names
-                matlab_name = f"radia.optuna.{name}" if present else None
-            if present and kind == "module" or present and name in VERIFIED_FUNCTIONS and kind == "function":
+                surface_name = CLASS_EQUIVALENTS.get(
+                    name, SYMBOL_EQUIVALENTS.get(name, name)
+                )
+                present = surface_name in names
+                matlab_name = f"radia.optuna.{surface_name}" if present else None
+            surface_name = CLASS_EQUIVALENTS.get(name, name)
+            class_members_complete = kind == "class" and all(
+                surface_name in members
+                and _normalized(str(member["name"])) in members[surface_name]
+                and str(member["name"]) in VERIFIED_MEMBERS.get(name, set())
+                for member in symbol.get("members", [])
+            )
+            if present and kind == "module" or present and name in VERIFIED_SYMBOLS:
                 oracle_status = "verified"
-            elif present and name in PARTIALLY_VERIFIED_CLASSES and kind == "class":
-                oracle_status = "partial"
+            elif present and kind == "class" and name in CLASS_ORACLE_SECTIONS:
+                oracle_status = "verified" if class_members_complete else "partial"
             else:
                 oracle_status = "not-mapped"
             entries.append(
@@ -406,9 +790,12 @@ def build_coverage() -> dict[str, Any]:
             for member in symbol["members"]:
                 member_name = str(member["name"])
                 normalized_member = _normalized(member_name)
-                member_present = name in members and normalized_member in members[name]
+                member_present = (
+                    surface_name in members
+                    and normalized_member in members[surface_name]
+                )
                 if member_present:
-                    candidates = members[name][normalized_member]
+                    candidates = members[surface_name][normalized_member]
                     actual_member = (
                         member_name
                         if member_name in candidates
@@ -427,7 +814,9 @@ def build_coverage() -> dict[str, Any]:
                         f"{upstream}.{member_name}",
                         f"class-{member['kind']}",
                         member_present,
-                        f"radia.optuna.{name}.{actual_member}" if member_present else None,
+                        f"radia.optuna.{surface_name}.{actual_member}"
+                        if member_present
+                        else None,
                         member_oracle,
                     )
                 )
@@ -440,6 +829,9 @@ def build_coverage() -> dict[str, Any]:
         "upstream_version": "4.9.0",
         "upstream_inventory": "tests/matlab/fixtures/optuna49_public_api.json",
         "upstream_inventory_sha256": _sha256(INVENTORY_PATH),
+        "upstream_oracle": "tests/matlab/fixtures/optuna49_oracle.json",
+        "upstream_oracle_sha256": _sha256(ORACLE_PATH),
+        "class_oracle_sections": CLASS_ORACLE_SECTIONS,
         "closure_rule": (
             "full_compatibility_complete is true only when every required public "
             "symbol/member is present and has an upstream differential-oracle mapping; "
@@ -455,7 +847,7 @@ def build_coverage() -> dict[str, Any]:
         "oracle_verified_count": verified_count,
         "oracle_partial_count": partial_count,
         "oracle_unmapped_count": len(entries)-verified_count-partial_count,
-        "full_compatibility_complete": False,
+        "full_compatibility_complete": missing_count == 0 and verified_count == len(entries),
         "entries": entries,
     }
 
@@ -464,6 +856,7 @@ def main() -> None:
     DESTINATION.write_text(
         json.dumps(build_coverage(), indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
+        newline="\n",
     )
     print(DESTINATION)
 

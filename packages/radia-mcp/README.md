@@ -176,6 +176,15 @@ monitoring and failure telemetry, MATLAB parallel execution, the required
 oracle checks execute pinned `optuna==4.9.0` directly because the verified
 upstream MCP sampler tool does not expose a seed.
 
+The MATLAB difference lane is executable rather than descriptive:
+`matlab_optuna_health` checks the distribution manifest, complete public-API
+mapping, oracle hashes, MEX, Simulink entries, and notices;
+`matlab_optuna_oracle_plan` produces official-MATLAB-MCP-ready test code;
+`matlab_optuna_benchmark_plan` fixes the same-host seeded workloads; and
+`matlab_optuna_release_gate` accepts only a byte-matched installed wheel, all
+policy-classified tests, standalone Simulink/table-resume evidence, matching
+checksums, and warmed MATLAB medians no slower than upstream Python.
+
 `radia-optuna` is independent and unofficial; it is not affiliated with,
 sponsored by, or endorsed by Preferred Networks, Inc. or the Optuna project.
 Optuna, the Optuna logo and any related marks are trademarks of Preferred Networks, Inc.

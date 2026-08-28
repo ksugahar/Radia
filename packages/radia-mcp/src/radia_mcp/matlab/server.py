@@ -8,6 +8,12 @@ from radia_mcp.matlab_agentic_ml import (
 )
 from . import matlab_agent_guide as _guide
 from .optuna_boundary import matlab_optuna_mcp_route as _optuna_mcp_route
+from .optuna_quality import (
+    matlab_optuna_benchmark_plan as _optuna_benchmark_plan,
+    matlab_optuna_health as _optuna_health,
+    matlab_optuna_oracle_plan as _optuna_oracle_plan,
+    matlab_optuna_release_gate as _optuna_release_gate,
+)
 from .optimize import matlab_cad_topology_build as _cad_topology_build, matlab_optimize_build as _optimize_build, matlab_optimize_resume as _optimize_resume, matlab_sheet_metal_topology_build as _sheet_metal_topology_build
 from .runtime import (
     matlab_extension_contract as _contract,
@@ -48,6 +54,22 @@ def matlab_optuna_simulink_contract()->str:
 def matlab_optuna_mcp_route(topic:str="overview")->str:
     """Route shared Optuna tools upstream and MATLAB differences to Radia."""
     return json.dumps(_optuna_mcp_route(topic),ensure_ascii=False,indent=2)
+@mcp.tool()
+def matlab_optuna_health(distribution_path:str="")->str:
+    """Check manifest, full upstream API mapping, MEX, Simulink, and notices."""
+    return json.dumps(_optuna_health(distribution_path),ensure_ascii=False,indent=2)
+@mcp.tool()
+def matlab_optuna_oracle_plan(scope:str="all",repository_path:str="",output_path:str="")->str:
+    """Build an official-MATLAB-MCP-ready Optuna differential test plan."""
+    return json.dumps(_optuna_oracle_plan(scope,repository_path,output_path),ensure_ascii=False,indent=2)
+@mcp.tool()
+def matlab_optuna_benchmark_plan(repository_path:str="",output_directory:str=r"C:\temp\radia-optuna-benchmark")->str:
+    """Build the same-host cold/warmed MATLAB-versus-Optuna benchmark plan."""
+    return json.dumps(_optuna_benchmark_plan(repository_path,output_directory),ensure_ascii=False,indent=2)
+@mcp.tool()
+def matlab_optuna_release_gate(evidence_json:str,repository_path:str="",max_warmed_time_ratio:float=1.0)->str:
+    """Validate installed-wheel, Simulink, resume, oracle, and speed evidence."""
+    return json.dumps(_optuna_release_gate(evidence_json,repository_path,max_warmed_time_ratio),ensure_ascii=False,indent=2)
 @mcp.tool()
 def matlab_simulink_library_contract()->str:
     """Describe Radia application blocks, Library Browser registration, and LTspice compatibility."""

@@ -3,7 +3,7 @@
   "version": "0.1.2",
   "oracle_version": "4.9.0",
   "matlab_namespace": "radia.optuna",
-  "matlab_file_count": 92,
+  "matlab_file_count": 207,
   "native_gateway": "optuna_mex",
   "native_command_count": 20,
   "radia_runtime_required": false,

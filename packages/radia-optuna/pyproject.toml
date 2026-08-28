@@ -23,9 +23,11 @@ dependencies = []
 
 [project.optional-dependencies]
 # Required only by MATLAB features whose upstream Optuna 4.9.0 behavior is
-# deliberately executed through Python: GP acquisition, scrambled QMC, and
-# parameter-importance evaluators. Native Random/TPE/evolutionary/pruner use
-# does not import Python at run time.
+# deliberately executed through Python: GP acquisition, scrambled QMC,
+# parameter-importance/terminator evaluators, storage transports,
+# visualization, and lazy integrations. Native Random/TPE/evolutionary/pruner
+# use does not import Python at run time. Target-specific Optuna integration
+# dependencies remain optional exactly as they are upstream.
 upstream = [
     "optuna==4.9.0",
     "scipy>=1.11",

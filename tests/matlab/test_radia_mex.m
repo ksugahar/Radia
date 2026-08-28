@@ -56,19 +56,19 @@ end
 
 function testOptunaGatewaySeparation(testCase)
 commands=string(radia.optuna.internal.NativeKernels.call("api.commands"));
-verifyEqual(testCase,numel(commands),20);
 verifyEqual(testCase,sum(startsWith(commands,"api.")),2);
 verifyTrue(testCase,all(startsWith(commands(~startsWith(commands,"api.")), ...
     "optuna.")));
 
 info=radia.optuna.internal.NativeKernels.call("api.info");
 verifyEqual(testCase,string(info.backend),"optuna_mex");
-verifyEqual(testCase,info.command_count,20);
+verifyEqual(testCase,info.command_count,numel(commands));
 
 status=radia.optuna.nativeStatus();
 verifyEqual(testCase,status.gateway,"optuna_mex");
 verifyEqual(testCase,status.backend,"native-mex");
 verifyEmpty(testCase,status.missing_commands);
+verifyEqual(testCase,numel(status.available_commands)+2,numel(commands));
 verifyEqual(testCase,string(status.mex_path),string(which("optuna_mex")));
 end
 

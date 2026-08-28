@@ -23,6 +23,10 @@ classdef PartialFixedSampler < radia.optuna.BaseSampler
             obj.BaseSampler=baseSampler;
         end
 
+        function reseed_rng(obj)
+            obj.BaseSampler.reseed_rng();
+        end
+
         function value=sampleFloat(obj,study,trial,name,low,high,options)
             [fixed,value]=obj.fixedValue(name);
             if fixed

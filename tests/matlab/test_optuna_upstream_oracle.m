@@ -24,6 +24,7 @@ oracle=testCase.TestData.Oracle;
 verifyEqual(testCase,string(oracle.schema), ...
     "radia.test.optuna-upstream-oracle.v1");
 verifyEqual(testCase,string(oracle.optuna_version),"4.9.0");
+verifyEqual(testCase,radia.optuna.version(),string(oracle.optuna_version));
 verifyNotEmpty(testCase,string(oracle.numpy_version));
 verifyNotEmpty(testCase,string(oracle.scipy_version));
 verifyNotEmpty(testCase,string(oracle.python_version));
@@ -75,6 +76,24 @@ for index=1:numel(entries)
 end
 verifyEqual(testCase,sort(declared),sort(actual));
 verifyEqual(testCase,numel(unique(declared)),numel(declared));
+end
+
+function testPublicAPIInventoryIsFullyOracleMapped(testCase)
+root=fileparts(fileparts(fileparts(mfilename("fullpath"))));
+coverage=jsondecode(fileread(fullfile( ...
+    root,"matlab","optuna49_api_coverage.json")));
+verifyEqual(testCase,string(coverage.schema), ...
+    "radia.optuna49-api-coverage.v1");
+verifyEqual(testCase,string(coverage.upstream_version),"4.9.0");
+verifyEqual(testCase,double(coverage.surface_entry_count),816);
+verifyEqual(testCase,double(coverage.surface_present_count),816);
+verifyEqual(testCase,double(coverage.surface_missing_count),0);
+verifyEqual(testCase,double(coverage.oracle_verified_count),816);
+verifyEqual(testCase,double(coverage.oracle_partial_count),0);
+verifyEqual(testCase,double(coverage.oracle_unmapped_count),0);
+verifyTrue(testCase,logical(coverage.full_compatibility_complete));
+verifyTrue(testCase,all(string({coverage.entries.surface_status})=="present"));
+verifyTrue(testCase,all(string({coverage.entries.oracle_status})=="verified"));
 end
 
 function testNumpyRandomStateSeedContract(testCase)
@@ -145,6 +164,122 @@ verifyEqual(testCase,radia.optuna.RandomSampler(37).Seed,37);
 verifyEqual(testCase,radia.optuna.TPESampler(Seed=37).Seed,37);
 end
 
+function testSamplerReseedMatchesUpstreamSemantics(testCase)
+expected=testCase.TestData.Oracle.sampler_reseed;
+verifyTrue(testCase,logical(expected.global_numpy_rng_unchanged));
+verifyTrue(testCase,logical(expected.seed_none_is_nondeterministic));
+
+constructors={ ...
+    "RandomSampler",@()radia.optuna.RandomSampler(37); ...
+    "BruteForceSampler",@()radia.optuna.BruteForceSampler(Seed=37); ...
+    "GridSampler",@()radia.optuna.GridSampler( ...
+        struct("x",{{0,1}},"y",{{2,3}}),Seed=37); ...
+    "TPESampler",@()radia.optuna.TPESampler(Seed=37); ...
+    "CmaEsSampler",@()radia.optuna.CmaEsSampler(Seed=37); ...
+    "GPSampler",@()radia.optuna.GPSampler( ...
+        Seed=37,Backend="matlab-native"); ...
+    "NSGAIISampler",@()radia.optuna.NSGAIISampler( ...
+        Seed=37,PopulationSize=2); ...
+    "NSGAIIISampler",@()radia.optuna.NSGAIIISampler( ...
+        Seed=37,PopulationSize=2); ...
+    "PartialFixedSampler",@()radia.optuna.PartialFixedSampler( ...
+        struct("fixed",0.5),radia.optuna.RandomSampler(37)); ...
+    "QMCSampler",@()radia.optuna.QMCSampler( ...
+        Seed=37,WarnAsynchronousSeeding=false)};
+globalStateBefore=rng;
+for index=1:size(constructors,1)
+    name=constructors{index,1};
+    sampler=constructors{index,2}();
+    contract=expected.samplers.(name);
+    verifyTrue(testCase,logical(contract.returns_none),name);
+    verifyTrue(testCase,ismethod(sampler,"reseed_rng"),name);
+    seedBefore=[];
+    if isprop(sampler,"Seed"), seedBefore=sampler.Seed; end
+    verifyWarningFree(testCase,@()sampler.reseed_rng(),name);
+    verifyWarningFree(testCase,@()sampler.reseed_rng(),name);
+    if ~isempty(seedBefore)
+        verifyEqual(testCase,sampler.Seed,seedBefore,name);
+    end
+end
+verifyEqual(testCase,rng,globalStateBefore);
+
+freshMain={ ...
+    radia.optuna.RandomSampler(37), ...
+    radia.optuna.TPESampler(Seed=37), ...
+    radia.optuna.GPSampler(Seed=37,Backend="matlab-native"), ...
+    radia.optuna.NSGAIISampler(Seed=37,PopulationSize=2)};
+for index=1:numel(freshMain)
+    freshMain{index}.reseed_rng();
+    first=freshMain{index}.Stream.State;
+    freshMain{index}.reseed_rng();
+    second=freshMain{index}.Stream.State;
+    verifyFalse(testCase,isequal(first,second),class(freshMain{index}));
+end
+
+nsgaiii=radia.optuna.NSGAIIISampler(Seed=37,PopulationSize=2);
+nsgaiii.reseed_rng();
+first=nsgaiii.Core.Stream.State;
+nsgaiii.reseed_rng();
+second=nsgaiii.Core.Stream.State;
+verifyFalse(testCase,isequal(first,second),"NSGAIIISampler");
+
+partial=radia.optuna.PartialFixedSampler( ...
+    struct("fixed",0.5),radia.optuna.RandomSampler(37));
+partial.reseed_rng();
+first=partial.BaseSampler.Stream.State;
+partial.reseed_rng();
+second=partial.BaseSampler.Stream.State;
+verifyFalse(testCase,isequal(first,second),"PartialFixedSampler");
+
+qmc=radia.optuna.QMCSampler(Seed=37,WarnAsynchronousSeeding=false);
+qmc.reseed_rng();
+first=qmc.IndependentSampler.Stream.State;
+qmc.reseed_rng();
+second=qmc.IndependentSampler.Stream.State;
+verifyFalse(testCase,isequal(first,second),"QMCSampler");
+
+cma=radia.optuna.CmaEsSampler(Seed=37);
+cmaState=cma.Stream.State;
+cma.reseed_rng();
+verifyEqual(testCase,cma.Stream.State,cmaState,"CmaEsSampler");
+brute=radia.optuna.BruteForceSampler(Seed=37);
+bruteState=brute.Stream.State;
+brute.reseed_rng();
+verifyEqual(testCase,brute.Stream.State,bruteState,"BruteForceSampler");
+end
+
+function testLoggingPublicContractMatchesUpstream(testCase)
+expected=testCase.TestData.Oracle.logging;
+constants=["CRITICAL","DEBUG","ERROR","FATAL","INFO","WARN","WARNING"];
+for name=constants
+    actual=feval("radia.optuna."+name);
+    verifyEqual(testCase,actual,double(expected.constants.(name)));
+end
+radia.optuna.set_verbosity(radia.optuna.INFO());
+verifyEqual(testCase,radia.optuna.get_verbosity(),double(expected.initial));
+logger=radia.optuna.get_logger("unit");
+verifyEqual(testCase,logger.name,string(expected.logger.name));
+verifyEqual(testCase,logger.level,double(expected.logger.level));
+verifyEqual(testCase,logger.propagate,logical(expected.logger.propagate));
+verifyEqual(testCase,logger.handlers,double(expected.logger.handlers));
+formatter=radia.optuna.create_default_formatter();
+verifyEqual(testCase,formatter.format,string(expected.formatter.format));
+radia.optuna.set_verbosity(radia.optuna.DEBUG());
+verifyEqual(testCase,radia.optuna.get_verbosity(),double(expected.after_set));
+radia.optuna.disable_default_handler();
+radia.optuna.disable_propagation();
+root=radia.optuna.get_logger("optuna");
+verifyEqual(testCase,root.propagate,logical(expected.disabled.propagate));
+verifyEqual(testCase,root.handlers,double(expected.disabled.handlers));
+radia.optuna.enable_default_handler();
+radia.optuna.enable_propagation();
+root=radia.optuna.get_logger("optuna");
+verifyEqual(testCase,root.propagate,logical(expected.enabled.propagate));
+verifyEqual(testCase,root.handlers,double(expected.enabled.handlers));
+radia.optuna.set_verbosity(radia.optuna.WARNING());
+radia.optuna.disable_propagation();
+end
+
 function testSamplerPublicMembersMatchUpstream(testCase)
 expected=testCase.TestData.Oracle.sampler_public_members;
 constructors={ ...
@@ -181,6 +316,24 @@ for index=1:size(constructors,1)
     verifyTrue(testCase,logical(samplerExpected.after_trial_returns_none));
     verifyWarningFree(testCase,@()sampler.after_trial(study,complete(1), ...
         radia.optuna.TrialState.COMPLETE,complete(1).Values),name);
+    directSampler=constructors{index,2}();
+    directStudy=radia.optuna.Study(Sampler=directSampler,AutoSave=false);
+    directTrial=directStudy.ask();
+    directSpace=directSampler.infer_relative_search_space( ...
+        directStudy,directTrial);
+    independent=directSampler.sample_independent( ...
+        directStudy,directTrial,"x", ...
+        radia.optuna.FloatDistribution(0,1,Step=0.1));
+    verifyEqual(testCase,independent,samplerExpected.independent_value,name);
+    relative=directSampler.sample_relative( ...
+        directStudy,directTrial,directSpace);
+    verifyEqual(testCase,string(fieldnames(relative)), ...
+        string(fieldnames(samplerExpected.relative_params)),name);
+    relativeNames=string(fieldnames(relative));
+    for relativeName=reshape(relativeNames,1,[])
+        verifyEqual(testCase,relative.(relativeName), ...
+            samplerExpected.relative_params.(relativeName),name);
+    end
 end
 
 grid=radia.optuna.GridSampler(struct("x",{{0,1}}),Seed=7);
@@ -199,6 +352,65 @@ verifyEqual(testCase,radia.optuna.NSGAIISampler( ...
     PopulationSize=5).population_size,double(expected.nsgaii_population_size));
 verifyEqual(testCase,radia.optuna.NSGAIIISampler( ...
     PopulationSize=6).population_size,double(expected.nsgaiii_population_size));
+gaMetadata=meta.class.fromName("radia.optuna.BaseGASampler");
+verifyTrue(testCase,gaMetadata.Abstract);
+gaConstructors={ ...
+    "NSGAIISampler",@()radia.optuna.NSGAIISampler( ...
+        Seed=11,PopulationSize=2); ...
+    "NSGAIIISampler",@()radia.optuna.NSGAIIISampler( ...
+        Seed=11,PopulationSize=2)};
+for gaIndex=1:size(gaConstructors,1)
+    gaName=gaConstructors{gaIndex,1};
+    gaSampler=gaConstructors{gaIndex,2}();
+    gaStudy=radia.optuna.Study(Sampler=gaSampler,AutoSave=false);
+    for objective=[3,1,2,0]
+        gaTrial=gaStudy.ask();
+        gaTrial.suggest_float("x",0,1);
+        gaStudy.tell(gaTrial,objective);
+    end
+    contract=expected.ga.(gaName);
+    gaTrials=gaStudy.get_trials();
+    generations=arrayfun(@(trial)gaSampler.get_trial_generation( ...
+        gaStudy,trial),gaTrials);
+    verifyEqual(testCase,reshape(generations,1,[]), ...
+        reshape(double(contract.generations),1,[]),gaName);
+    population=gaSampler.get_population(gaStudy,0);
+    verifyEqual(testCase,[population.Number], ...
+        reshape(double(contract.population_numbers),1,[]),gaName);
+    parents=gaSampler.get_parent_population(gaStudy,1);
+    verifyEqual(testCase,[parents.Number], ...
+        reshape(double(contract.parent_numbers),1,[]),gaName);
+    selected=gaSampler.select_parent(gaStudy,1);
+    verifyEqual(testCase,[selected.Number], ...
+        reshape(double(contract.selected_numbers),1,[]),gaName);
+    gaSampler.population_size=3;
+    verifyEqual(testCase,gaSampler.population_size, ...
+        double(contract.population_size_after_set),gaName);
+end
+
+warning("off","radia:optuna:FutureWarning");
+warningCleanup=onCleanup(@()warning("on","radia:optuna:FutureWarning"));
+hyperopt=radia.optuna.TPESampler.hyperopt_parameters();
+verifyEqual(testCase,hyperopt.consider_endpoints, ...
+    logical(expected.hyperopt_parameters.consider_endpoints));
+verifyEqual(testCase,hyperopt.consider_magic_clip, ...
+    logical(expected.hyperopt_parameters.consider_magic_clip));
+verifyEqual(testCase,hyperopt.consider_prior, ...
+    logical(expected.hyperopt_parameters.consider_prior));
+verifyEqual(testCase,hyperopt.n_ei_candidates, ...
+    double(expected.hyperopt_parameters.n_ei_candidates));
+verifyEqual(testCase,hyperopt.n_startup_trials, ...
+    double(expected.hyperopt_parameters.n_startup_trials));
+verifyEqual(testCase,hyperopt.prior_weight, ...
+    double(expected.hyperopt_parameters.prior_weight));
+verifyEqual(testCase,arrayfun(hyperopt.gamma,[0,1,16,10000]), ...
+    reshape(double(expected.hyperopt_parameters.gamma),1,[]));
+weightCounts=[0,3,27];
+for index=1:numel(weightCounts)
+    verifyEqual(testCase,hyperopt.weights(weightCounts(index)), ...
+        reshape(double(expected.hyperopt_parameters.weights{index}),1,[]));
+end
+clear warningCleanup
 
 crossovers={ ...
     "blxalpha",radia.optuna.nsgaii.BLXAlphaCrossover(); ...
@@ -307,6 +519,39 @@ verifyEqual(testCase,callbackRows(1).last_step, ...
         callbackRows(end+1)=struct("state",trial.State, ...
             "value",trial.Value,"last_step",trial.last_step());
     end
+end
+
+function testExceptionPublicContractMatchesUpstream(testCase)
+expected=testCase.TestData.Oracle.exceptions;
+names=string(fieldnames(expected));
+for name=reshape(names,1,[])
+    contract=expected.(name);
+    constructors={cell(1,0),{"oracle message"},{"a","b"}};
+    for index=1:numel(constructors)
+        arguments=constructors{index};
+        exception=feval("radia.optuna."+name,arguments{:});
+        item=contract.cases(index);
+        verifyEqual(testCase,exception.message,string(item.message),name);
+        verifyEqual(testCase,string(exception.args), ...
+            reshape(string(item.args),1,[]),name);
+        exception.add_note("oracle note");
+        verifyEqual(testCase,exception.notes, ...
+            reshape(string(item.notes),1,[]),name);
+        verifyTrue(testCase,exception.with_traceback([])==exception,name);
+        try
+            throw(exception);
+            verifyFail(testCase,"Optuna exception was not thrown: "+name);
+        catch caught
+            verifyEqual(testCase,string(caught.identifier), ...
+                "radia:optuna:"+name,name);
+            verifyEqual(testCase,string(caught.message),string(item.message),name);
+        end
+    end
+    verifyEqual(testCase,isa(feval("radia.optuna."+name), ...
+        "radia.optuna.OptunaError"),logical(contract.is_optuna_error),name);
+    verifyEqual(testCase,name=="ExperimentalWarning", ...
+        logical(contract.is_warning),name);
+end
 end
 
 function testFinishedTellAndConstraintFailureMatchUpstream(testCase)
@@ -585,17 +830,7 @@ end
 
 function testParameterImportancesMatchUpstream(testCase)
 expected=testCase.TestData.Oracle.importance;
-study=radia.optuna.Study(AutoSave=false);
-for index=1:numel(expected.trials)
-    row=expected.trials(index);
-    study.add_trial(radia.optuna.createTrial(Value=double(row.value), ...
-        Params=struct("x",double(row.x),"y",double(row.y), ...
-        "mode",string(row.mode)), ...
-        Distributions=struct( ...
-        "x",radia.optuna.FloatDistribution(-1,1), ...
-        "y",radia.optuna.FloatDistribution(0,1), ...
-        "mode",radia.optuna.CategoricalDistribution(["A","B","C"]))));
-end
+study=importanceStudy(expected);
 result=radia.optuna.get_param_importances(study, ...
     evaluator=string(expected.evaluator.name), ...
     n_trees=double(expected.evaluator.n_trees), ...
@@ -607,8 +842,158 @@ verifyEqual(testCase,result.Importance, ...
 verifyEqual(testCase,sum(result.Importance),1,AbsTol=10*eps);
 end
 
+function testImportanceEvaluatorPublicMembersMatchUpstream(testCase)
+expected=testCase.TestData.Oracle.importance;
+contract=expected.public_evaluators;
+verifyEqual(testCase,string(contract.base_construction_error),"TypeError");
+verifyError(testCase,@()radia.optuna.BaseImportanceEvaluator(), ...
+    "MATLAB:class:abstract");
+study=importanceStudy(expected);
+evaluators={ ...
+    "fanova",radia.optuna.FanovaImportanceEvaluator( ...
+        n_trees=16,max_depth=16,seed=97); ...
+    "mdi",radia.optuna.MeanDecreaseImpurityImportanceEvaluator( ...
+        n_trees=16,max_depth=16,seed=97); ...
+    "ped_anova",radia.optuna.PedAnovaImportanceEvaluator( ...
+        target_quantile=0.25,region_quantile=1)};
+for index=1:size(evaluators,1)
+    name=evaluators{index,1};
+    actual=evaluators{index,2}.evaluate(study);
+    verifyImportanceTable(testCase,actual,contract.(name));
+end
+target=radia.optuna.FanovaImportanceEvaluator( ...
+    n_trees=16,max_depth=16,seed=97).evaluate( ...
+    study,target=@(trial)trial.Params.y);
+verifyImportanceTable(testCase,target,contract.fanova_target);
+end
+
+function testIntegrationExportsMatchUpstream(testCase)
+exports=testCase.TestData.Oracle.integration.exports;
+names=string(fieldnames(exports));
+for index=1:numel(names)
+    name=names(index);
+    expected=exports.(name);
+    operation=str2func("radia.optuna."+name);
+    if logical(expected.available)
+        symbol=operation();
+        verifyEqual(testCase,string(py.builtins.getattr( ...
+            symbol,"__name__")),string(expected.name),name);
+        verifyEqual(testCase,string(py.builtins.getattr( ...
+            symbol,"__module__")),string(expected.module),name);
+        symbolType=py.builtins.type(symbol);
+        verifyEqual(testCase,string(py.builtins.getattr( ...
+            symbolType,"__name__")),string(expected.type),name);
+    else
+        verifyNotEmpty(testCase,string(expected.error_type),name);
+        verifyError(testCase,@()operation(), ...
+            "radia:optuna:IntegrationUnavailable",name);
+    end
+end
+end
+
+function testVisualizationExportsMatchUpstream(testCase)
+expected=testCase.TestData.Oracle.visualization;
+single=radia.optuna.Study(AutoSave=false);
+for index=1:numel(expected.single_x)
+    intermediate=radia.optuna.Trial.emptyIntermediateTable();
+    intermediate(end+1,:)={0,index-1,NaT};
+    intermediate(end+1,:)={1,(index-1)/2,NaT};
+    single.add_trial(radia.optuna.create_trial( ...
+        value=double(expected.single_values(index)), ...
+        params=struct("x",double(expected.single_x(index)), ...
+        "y",double(expected.single_y(index))), ...
+        distributions=struct( ...
+        "x",radia.optuna.FloatDistribution(0,1), ...
+        "y",radia.optuna.IntDistribution(1,5)), ...
+        intermediate_values=intermediate));
+end
+multi=radia.optuna.Study(Directions=["minimize","minimize"],AutoSave=false);
+for index=1:numel(expected.single_x)
+    multi.add_trial(radia.optuna.create_trial( ...
+        values=reshape(double(expected.multi_values(index,:)),1,[]), ...
+        params=struct("x",double(expected.single_x(index))), ...
+        distributions=struct("x",radia.optuna.FloatDistribution(0,1))));
+end
+backends=string(fieldnames(expected.backends));
+for backendIndex=1:numel(backends)
+    backend=backends(backendIndex);
+    contract=expected.backends.(backend);
+    verifyEqual(testCase,radia.optuna.is_available(Backend=backend), ...
+        logical(contract.is_available),backend);
+    names=string(fieldnames(contract.functions));
+    for nameIndex=1:numel(names)
+        name=names(nameIndex);
+        functionContract=contract.functions.(name);
+        operation=str2func("radia.optuna."+name);
+        study=single;
+        arguments={"Backend",backend};
+        if name=="plot_hypervolume_history"
+            study=multi;
+            arguments=[arguments,{"reference_point",[5,5]}];
+        elseif name=="plot_pareto_front"
+            study=multi;
+        end
+        if logical(functionContract.available)
+            result=operation(study,arguments{:});
+            resultType=py.builtins.type(result);
+            verifyEqual(testCase,string(py.builtins.getattr( ...
+                resultType,"__name__")),string(functionContract.type), ...
+                backend+":"+name);
+            verifyEqual(testCase,string(py.builtins.getattr( ...
+                resultType,"__module__")),string(functionContract.module), ...
+                backend+":"+name);
+        else
+            verifyError(testCase,@()operation(study,arguments{:}), ...
+                "radia:optuna:VisualizationUnavailable",backend+":"+name);
+        end
+    end
+end
+try
+    pyplot=py.importlib.import_module("matplotlib.pyplot");
+    pyplot.close("all");
+catch
+end
+end
+
 function testTerminationContractsMatchUpstream(testCase)
 expected=testCase.TestData.Oracle.terminator;
+for name=["BaseErrorEvaluator","BaseImprovementEvaluator","BaseTerminator"]
+    metadata=meta.class.fromName("radia.optuna."+name);
+    verifyTrue(testCase,metadata.Abstract,name);
+end
+
+cvStudy=radia.optuna.Study(Directions="maximize",AutoSave=false);
+rows=double(expected.cross_validation_rows);
+for index=1:size(rows,1)
+    trial=cvStudy.ask();
+    radia.optuna.report_cross_validation_scores(trial,rows(index,:));
+    cvStudy.tell(trial,mean(rows(index,:)));
+end
+cvEvaluator=radia.optuna.CrossValidationErrorEvaluator();
+verifyEqual(testCase,cvEvaluator.evaluate( ...
+    cvStudy.get_trials(),cvStudy.direction()), ...
+    double(expected.cross_validation_error),AbsTol=1e-15);
+trial=cvStudy.ask();
+verifyError(testCase,@()radia.optuna.report_cross_validation_scores( ...
+    trial,1),"radia:optuna:CrossValidationScores");
+cvStudy.tell(trial,State="FAIL");
+
+staticEvaluator=radia.optuna.StaticErrorEvaluator(1.25);
+verifyEqual(testCase,staticEvaluator.evaluate([], ...
+    radia.optuna.StudyDirection.MINIMIZE),double(expected.static_error));
+
+medianEvaluator=radia.optuna.MedianErrorEvaluator( ...
+    radia.optuna.BestValueStagnationEvaluator(5), ...
+    WarmUpTrials=1,NInitialTrials=3,ThresholdRatio=0.1);
+medianValues=[5,4,4.5,4.2];
+medianTrials=arrayfun(@(index)radia.optuna.create_trial( ...
+    value=medianValues(index)),1:4);
+verifyEqual(testCase,medianEvaluator.evaluate(medianTrials,"minimize"), ...
+    double(expected.median_error));
+verifyEqual(testCase,medianEvaluator.evaluate( ...
+    radia.optuna.create_trial(value=100),"minimize"), ...
+    double(expected.median_cached));
+
 minimize=radia.optuna.Study(AutoSave=false);
 for value=[5,4,4.5,4.2]
     trial=minimize.ask(); minimize.tell(trial,value);
@@ -641,6 +1026,375 @@ terminated.optimize(@(trial)values(trial.Number+1),6, ...
 verifyEqual(testCase,height(terminated.TrialTable), ...
     double(expected.terminator_trial_count));
 verifyEqual(testCase,terminated.TrialTable.Value,values');
+
+advanced=expected.advanced;
+advancedTrials=radia.optuna.FrozenTrial.empty(0,1);
+for index=1:numel(advanced.x)
+    advancedTrials(index,1)=radia.optuna.create_trial( ...
+        value=double(advanced.values(index)), ...
+        params=struct("x",double(advanced.x(index))), ...
+        distributions=struct( ...
+        "x",radia.optuna.FloatDistribution(0,1)));
+end
+lastwarn("");
+emmr=radia.optuna.EMMREvaluator(min_n_trials=2,seed=101);
+[~,warningId]=lastwarn;
+verifyEqual(testCase,string(warningId),"radia:optuna:ExperimentalWarning");
+verifyEqual(testCase,string(advanced.results.emmr.warning), ...
+    "ExperimentalWarning");
+verifyEqual(testCase,emmr.evaluate(advancedTrials,"minimize"), ...
+    double(advanced.results.emmr.value),AbsTol=0);
+lastwarn("");
+regret=radia.optuna.RegretBoundEvaluator( ...
+    min_n_trials=5,top_trials_ratio=0.8,seed=101);
+[~,warningId]=lastwarn;
+verifyEqual(testCase,string(warningId),"radia:optuna:ExperimentalWarning");
+verifyEqual(testCase,string(advanced.results.regret_bound.warning), ...
+    "ExperimentalWarning");
+verifyEqual(testCase,regret.evaluate(advancedTrials,"minimize"), ...
+    double(advanced.results.regret_bound.value),AbsTol=0);
+end
+
+function testArtifactPublicContractMatchesUpstream(testCase)
+expected=testCase.TestData.Oracle.artifacts;
+tempDirectory=string(tempname("C:\temp"));
+mkdir(tempDirectory);
+cleanup=onCleanup(@()rmdir(tempDirectory,"s"));
+source=fullfile(tempDirectory,"oracle.txt");
+sourceBytes=uint8([97,114,116,105,102,97,99,116,45,98,121,116,101,115,0,255]);
+radia.optuna.internal.ArtifactIO.writeFile(source,sourceBytes,false);
+store=radia.optuna.FileSystemArtifactStore(tempDirectory);
+study=radia.optuna.Study(AutoSave=false);
+artifactId=radia.optuna.upload_artifact( ...
+    artifact_store=store,file_path=source,study_or_trial=study);
+verifyEqual(testCase,strlength(artifactId),strlength(string(expected.artifact_id)));
+metadata=radia.optuna.get_all_artifact_meta(study);
+verifyEqual(testCase,numel(metadata),1);
+verifyEqual(testCase,metadata.filename,string(expected.metadata.filename));
+verifyEqual(testCase,metadata.mimetype,string(expected.metadata.mimetype));
+verifyTrue(testCase,ismissing(metadata.encoding));
+destination=fullfile(tempDirectory,"downloaded.txt");
+radia.optuna.download_artifact(artifact_store=store, ...
+    file_path=destination,artifact_id=artifactId);
+verifyEqual(testCase,radia.optuna.internal.ArtifactIO.readFile(destination), ...
+    reshape(uint8(expected.downloaded),[],1));
+verifyEqual(testCase,string(expected.existing_download_error),"FileExistsError");
+verifyError(testCase,@()radia.optuna.download_artifact( ...
+    artifact_store=store,file_path=destination,artifact_id=artifactId), ...
+    "radia:optuna:ArtifactFileExists");
+verifyEqual(testCase,string(expected.traversal_error),"ValueError");
+verifyError(testCase,@()store.open_reader("../outside"), ...
+    "radia:optuna:ArtifactId");
+
+backoff=radia.optuna.Backoff(store,MaxRetries=2, ...
+    MinDelay=1e-9,MaxDelay=2e-9);
+backoff.write("backoff",uint8(expected.backoff_body));
+verifyEqual(testCase,backoff.open_reader("backoff"), ...
+    reshape(uint8(expected.backoff_body),[],1));
+verifyEqual(testCase,string(expected.backoff_remove_error),"ArtifactNotFound");
+verifyError(testCase,@()backoff.remove("backoff"), ...
+    "radia:optuna:ArtifactNotFound");
+
+botoClient=struct( ...
+    "get_object",@(~,~)reshape(uint8(expected.boto_open),[],1), ...
+    "upload_fileobj",@(~,~,~)[],"delete_object",@(~,~)[]);
+boto=radia.optuna.Boto3ArtifactStore("bucket",botoClient);
+verifyEqual(testCase,boto.open_reader("cloud"), ...
+    reshape(uint8(expected.boto_open),[],1));
+verifyWarningFree(testCase,@()boto.write("cloud",uint8(expected.boto_written)));
+verifyWarningFree(testCase,@()boto.remove("cloud"));
+
+gcsClient=struct( ...
+    "get_blob",@(~,~)reshape(uint8(expected.gcs_open),[],1), ...
+    "upload_blob",@(~,~,~)[],"delete_blob",@(~,~)[]);
+gcs=radia.optuna.GCSArtifactStore("bucket",gcsClient);
+verifyEqual(testCase,gcs.open_reader("cloud"), ...
+    reshape(uint8(expected.gcs_open),[],1));
+verifyWarningFree(testCase,@()gcs.write("cloud",uint8(expected.gcs_written)));
+verifyWarningFree(testCase,@()gcs.remove("cloud"));
+clear cleanup
+end
+
+function testInMemoryStorageMatchesUpstream(testCase)
+expected=testCase.TestData.Oracle.storage;
+metadata=meta.class.fromName("radia.optuna.BaseStorage");
+verifyEqual(testCase,metadata.Abstract,logical(expected.base_is_abstract));
+storage=radia.optuna.InMemoryStorage();
+exerciseStorageContract(testCase,storage,expected,"memory-oracle");
+end
+
+function testCachedStorageMatchesUpstream(testCase)
+expected=testCase.TestData.Oracle.cached_storage;
+storage=radia.optuna.CachedStorage( ...
+    radia.optuna.RDBStorage("sqlite:///:memory:"));
+exerciseStorageContract(testCase,storage,expected,"cached-oracle");
+verifyEmpty(testCase,storage.get_heartbeat_interval());
+verifyTrue(testCase,logical(expected.heartbeat_stale_callback_is_none));
+verifyEmpty(testCase,storage.get_heartbeat_stale_trial_callback());
+verifyTrue(testCase,logical(expected.record_heartbeat_is_none));
+heartbeatStudy=storage.create_new_study( ...
+    radia.optuna.StudyDirection.MINIMIZE,"heartbeat-oracle");
+heartbeatTrial=storage.create_new_trial(heartbeatStudy);
+verifyWarningFree(testCase,@()storage.record_heartbeat(heartbeatTrial));
+storage.delete_study(heartbeatStudy);
+verifyWarning(testCase,@()storage.get_failed_trial_callback(), ...
+    "radia:optuna:FutureWarning");
+end
+
+function testRDBStorageMatchesUpstream(testCase)
+expected=testCase.TestData.Oracle.rdb_storage;
+storage=radia.optuna.RDBStorage("sqlite:///:memory:");
+exerciseStorageContract(testCase,storage,expected,"rdb-oracle");
+verifyEqual(testCase,storage.get_current_version(), ...
+    string(expected.current_version));
+verifyEqual(testCase,storage.get_head_version(),string(expected.head_version));
+verifyEqual(testCase,storage.get_all_versions(), ...
+    reshape(string(expected.all_versions),1,[]));
+verifyEmpty(testCase,storage.get_heartbeat_interval());
+verifyEmpty(testCase,storage.get_heartbeat_stale_trial_callback());
+verifyTrue(testCase,logical(expected.failed_callback_is_none));
+verifyEqual(testCase,string(expected.failed_callback_warning),"FutureWarning");
+verifyWarning(testCase,@()storage.get_failed_trial_callback(), ...
+    "radia:optuna:FutureWarning");
+verifyWarningFree(testCase,@()storage.upgrade());
+verifyTrue(testCase,logical(expected.upgrade_preserves_version));
+end
+
+function testGrpcStorageProxyMatchesUpstream(testCase)
+expected=testCase.TestData.Oracle.grpc_storage;
+socket=java.net.ServerSocket(0);
+port=double(socket.getLocalPort());
+socket.close();
+databasePath=string(tempname("C:\temp"))+".db";
+url="sqlite:///"+replace(databasePath,"\","/");
+backend=radia.optuna.RDBStorage(url);
+lastwarn("");
+server=radia.optuna.run_grpc_proxy_server(backend, ...
+    host="127.0.0.1",port=port,Background=true);
+[~,warningId]=lastwarn;
+verifyEqual(testCase,string(warningId),"radia:optuna:ExperimentalWarning");
+cleanup=onCleanup(@()cleanupGrpcServer(server,databasePath));
+proxy=radia.optuna.GrpcStorageProxy(host="127.0.0.1",port=port);
+% A fresh Python process may need to import SQLAlchemy and initialize the
+% pinned Optuna RDB schema before gRPC starts listening. Keep a bounded wait,
+% but do not turn cold-start variance into a transport compatibility failure.
+verifyWarningFree(testCase,@()proxy.wait_server_ready(30));
+verifyTrue(testCase,logical(expected.ready_is_none));
+exerciseStorageContract(testCase,proxy,expected,"grpc-oracle");
+verifyWarningFree(testCase,@()proxy.close());
+verifyTrue(testCase,logical(expected.close_is_none));
+server.stop(0);
+backend.dispose();
+clear cleanup
+end
+
+function testJournalBackendMatchesUpstream(testCase)
+expected=testCase.TestData.Oracle.journal_storage;
+baseBackend=meta.class.fromName("radia.optuna.BaseJournalBackend");
+baseLog=meta.class.fromName("radia.optuna.BaseJournalLogStorage");
+verifyEqual(testCase,baseBackend.Abstract, ...
+    logical(expected.base_backend_is_abstract));
+verifyEqual(testCase,baseLog.Abstract, ...
+    logical(expected.base_log_storage_is_abstract));
+
+path=string(tempname("C:\temp"))+".log";
+cleanup=onCleanup(@()cleanupStudyFiles(path));
+backend=radia.optuna.JournalFileBackend(path);
+logs={struct("operation",1,"worker","alpha"), ...
+    struct("operation",2,"value",3.5)};
+verifyWarningFree(testCase,@()backend.append_logs(logs));
+verifyTrue(testCase,logical(expected.append_is_none));
+verifyEqual(testCase,string(fileread(path)),string(expected.file_text));
+selected=backend.read_logs(1);
+verifyEqual(testCase,numel(selected),1);
+verifyEqual(testCase,selected{1},expected.selected_logs);
+
+lockClasses=["JournalFileOpenLock","JournalFileSymlinkLock"];
+lockFields=["open","symlink"];
+for index=1:numel(lockClasses)
+    target=string(tempname("C:\temp"))+".log";
+    fileId=fopen(target,"a");
+    fclose(fileId);
+    lock=feval("radia.optuna."+lockClasses(index),target);
+    expectedLock=expected.locks.(lockFields(index));
+    verifyEqual(testCase,lock.acquire(),logical(expectedLock.acquired));
+    verifyWarningFree(testCase,@()lock.release());
+    verifyTrue(testCase,logical(expectedLock.release_is_none));
+    verifyEqual(testCase,string(expectedLock.second_release_error), ...
+        "RuntimeError");
+    verifyError(testCase,@()lock.release(), ...
+        "radia:optuna:JournalLockOwnership");
+    cleanupStudyFiles(target);
+end
+clear cleanup
+end
+
+function testJournalStorageMatchesUpstream(testCase)
+expected=testCase.TestData.Oracle.journal_storage.storage;
+path=string(tempname("C:\temp"))+".log";
+cleanup=onCleanup(@()cleanupStudyFiles(path));
+storage=radia.optuna.JournalStorage( ...
+    radia.optuna.JournalFileBackend(path));
+exerciseStorageContract(testCase,storage,expected,"journal-oracle");
+verifyTrue(testCase,logical(expected.restore_invalid_is_none));
+verifyWarningFree(testCase,@()storage.restore_replay_result( ...
+    uint8(char("not-a-pickle"))));
+clear cleanup
+end
+
+function testJournalRedisBackendMatchesUpstream(testCase)
+expected=testCase.TestData.Oracle.journal_storage.redis;
+values=containers.Map("KeyType","char","ValueType","any");
+client=struct( ...
+    "get",@(key)redisGet(values,key), ...
+    "setnx",@(key,value)redisSetNx(values,key,value), ...
+    "incr",@(key,amount)redisIncr(values,key,amount), ...
+    "set",@(key,value)redisSet(values,key,value));
+backend=radia.optuna.JournalRedisBackend( ...
+    "redis://oracle",use_cluster=true,prefix="oracle",Client=client);
+logs={struct("operation",4,"worker","redis"), ...
+    struct("operation",5,"value",7.25)};
+verifyWarningFree(testCase,@()backend.append_logs(logs));
+verifyTrue(testCase,logical(expected.append_is_none));
+selected=backend.read_logs(1);
+verifyEqual(testCase,numel(selected),1);
+verifyEqual(testCase,selected{1},expected.selected_logs);
+verifyWarningFree(testCase,@()backend.save_snapshot( ...
+    uint8(char("snapshot-bytes"))));
+verifyTrue(testCase,logical(expected.save_snapshot_is_none));
+verifyEqual(testCase,backend.load_snapshot(), ...
+    reshape(uint8(expected.load_snapshot),1,[]));
+verifyWarning(testCase,@()radia.optuna.JournalRedisStorage( ...
+    "redis://oracle",use_cluster=true,prefix="oracle",Client=client), ...
+    "radia:optuna:FutureWarning");
+end
+
+function testRetryHeartbeatCallbackMatchesUpstream(testCase)
+expected=testCase.TestData.Oracle.retry_callback;
+intermediate=radia.optuna.Trial.emptyIntermediateTable();
+intermediate(end+1,:)={2,3.5,NaT};
+study=radia.optuna.Study(AutoSave=false);
+study.add_trial(radia.optuna.create_trial(value=0.5, ...
+    params=struct("x",0.25), ...
+    distributions=struct("x",radia.optuna.FloatDistribution(0,1)), ...
+    intermediate_values=intermediate,user_attrs=struct("owner","oracle")));
+lastwarn("");
+callback=radia.optuna.RetryHeartbeatStaleTrialCallback( ...
+    max_retry=2,inherit_intermediate_values=true);
+[~,warningId]=lastwarn;
+verifyEqual(testCase,string(warningId),"radia:optuna:ExperimentalWarning");
+verifyEqual(testCase,string(expected.callback_warning),"ExperimentalWarning");
+trials=study.get_trials();
+callback.call(study,trials(1));
+trials=study.get_trials();
+callback.call(study,trials(2));
+trials=study.get_trials();
+secondRetry=trials(3);
+callback.call(study,secondRetry);
+trials=study.get_trials();
+verifyEqual(testCase,numel(trials),double(expected.n_trials));
+verifyEqual(testCase,trials(2).State,string(expected.first_state));
+verifyEqual(testCase,trials(2).IntermediateValues.Value, ...
+    double(expected.first_intermediate.x2));
+verifyEqual(testCase,reshape(secondRetry.SystemAttrs.retry_history,1,[]), ...
+    reshape(double(expected.second_history),1,[]));
+warningState=warning("off","radia:optuna:ExperimentalWarning");
+cleanup=onCleanup(@()warning(warningState));
+number=callback.retried_trial_number(secondRetry);
+history=callback.retry_history(secondRetry);
+clear cleanup
+verifyEqual(testCase,number,double(expected.original_number));
+verifyEqual(testCase,history,reshape(double(expected.history),1,[]));
+verifyEqual(testCase,reshape(string(expected.static_warnings),1,[]), ...
+    ["ExperimentalWarning","ExperimentalWarning"]);
+verifyWarning(testCase,@()callback.retried_trial_number(secondRetry), ...
+    "radia:optuna:ExperimentalWarning");
+verifyWarning(testCase,@()callback.retry_history(secondRetry), ...
+    "radia:optuna:ExperimentalWarning");
+verifyEqual(testCase,string(expected.alias_warning),"FutureWarning");
+verifyWarning(testCase,@()radia.optuna.RetryFailedTrialCallback( ...
+    max_retry=1),"radia:optuna:FutureWarning");
+verifyTrue(testCase,logical(expected.fail_stale_is_none));
+verifyEqual(testCase,string(expected.fail_stale_warning),"ExperimentalWarning");
+verifyWarning(testCase,@()radia.optuna.fail_stale_trials(study), ...
+    "radia:optuna:ExperimentalWarning");
+end
+
+function exerciseStorageContract(testCase,storage,expected,studyName)
+studyId=storage.create_new_study( ...
+    radia.optuna.StudyDirection.MINIMIZE,studyName);
+verifyEqual(testCase,studyId,double(expected.study_id));
+storage.set_study_user_attr(studyId,"owner","oracle");
+storage.set_study_system_attr(studyId,"revision",4);
+trialId=storage.create_new_trial(studyId);
+verifyEqual(testCase,trialId,double(expected.trial_id));
+storage.set_trial_param(trialId,"x",0.5, ...
+    radia.optuna.FloatDistribution(0,1));
+storage.set_trial_user_attr(trialId,"label","first");
+storage.set_trial_system_attr(trialId,"worker",7);
+storage.set_trial_intermediate_value(trialId,2,3.5);
+verifyEqual(testCase,storage.get_trial(trialId).State, ...
+    string(expected.running_state));
+verifyEqual(testCase,storage.set_trial_state_values( ...
+    trialId,radia.optuna.TrialState.COMPLETE,1.25), ...
+    logical(expected.completed));
+frozen=storage.get_trial(trialId);
+verifyEqual(testCase,frozen.State,string(expected.trial_state));
+verifyEqual(testCase,frozen.Value,double(expected.trial_value));
+verifyEqual(testCase,storage.get_trial_param(trialId,"x"), ...
+    double(expected.param_internal));
+verifyEqual(testCase,storage.get_trial_params(trialId),expected.params);
+trialUserAttrs=storage.get_trial_user_attrs(trialId);
+verifyEqual(testCase,string(trialUserAttrs.label), ...
+    string(expected.trial_user_attrs.label));
+verifyEqual(testCase,storage.get_trial_system_attrs(trialId), ...
+    expected.trial_system_attrs);
+verifyEqual(testCase,string(expected.finished_update_error), ...
+    "UpdateFinishedTrialError");
+verifyError(testCase,@()storage.set_trial_user_attr( ...
+    trialId,"late",true),"radia:optuna:UpdateFinishedTrialError");
+
+failedId=storage.create_new_trial(studyId);
+verifyEqual(testCase,failedId,double(expected.failed_id));
+storage.set_trial_state_values(failedId,radia.optuna.TrialState.FAIL);
+templateId=storage.create_new_trial(studyId, ...
+    radia.optuna.create_trial(value=0.25));
+verifyEqual(testCase,templateId,double(expected.template_id));
+verifyEqual(testCase,storage.get_best_trial(studyId).Number, ...
+    double(expected.best_number));
+verifyEqual(testCase,storage.get_n_trials(studyId),double(expected.n_trials));
+verifyEqual(testCase,storage.get_n_trials( ...
+    studyId,radia.optuna.TrialState.COMPLETE),double(expected.n_complete));
+complete=storage.get_all_trials( ...
+    studyId,true,radia.optuna.TrialState.COMPLETE);
+verifyEqual(testCase,[complete.Number], ...
+    reshape(double(expected.complete_numbers),1,[]));
+verifyEqual(testCase,storage.get_trial_id_from_study_id_trial_number( ...
+    studyId,frozen.Number),double(expected.trial_lookup_id));
+verifyEqual(testCase,storage.get_trial_number_from_id(trialId), ...
+    double(expected.trial_number));
+verifyEqual(testCase,string(storage.get_study_directions(studyId)), ...
+    reshape(string(expected.directions),1,[]));
+verifyEqual(testCase,storage.get_study_name_from_id(studyId), ...
+    string(expected.study_name));
+verifyEqual(testCase,storage.get_study_id_from_name(studyName),studyId);
+studyUserAttrs=storage.get_study_user_attrs(studyId);
+verifyEqual(testCase,string(studyUserAttrs.owner), ...
+    string(expected.study_user_attrs.owner));
+verifyEqual(testCase,storage.get_study_system_attrs(studyId), ...
+    expected.study_system_attrs);
+summaries=storage.get_all_studies();
+verifyEqual(testCase,numel(summaries),1);
+verifyEqual(testCase,summaries(1).study_name,string(expected.summary.name));
+verifyEqual(testCase,string(expected.duplicate_error),"DuplicatedStudyError");
+verifyError(testCase,@()storage.create_new_study( ...
+    radia.optuna.StudyDirection.MINIMIZE,studyName), ...
+    "radia:optuna:DuplicatedStudyError");
+verifyTrue(testCase,logical(expected.remove_session_is_none));
+verifyWarningFree(testCase,@()storage.remove_session());
+storage.delete_study(studyId);
+verifyError(testCase,@()storage.get_study_name_from_id(studyId), ...
+    "radia:optuna:StudyNotFound");
 end
 
 function testRandomSamplerSeededSequence(testCase)
@@ -702,6 +1456,53 @@ verifyEqual(testCase,stepped.Distributions.q.high, ...
 clear cleanup
 end
 
+function testDistributionPublicMembersMatchUpstream(testCase)
+expected=testCase.TestData.Oracle.distribution_public_members;
+verifyEqual(testCase,string(expected.base_construction_error),"TypeError");
+verifyError(testCase,@()radia.optuna.BaseDistribution(), ...
+    "MATLAB:class:abstract");
+
+warning("off","radia:optuna:FutureWarning");
+cleanup=onCleanup(@()warning("on","radia:optuna:FutureWarning"));
+instances=struct( ...
+    "FloatDistribution",radia.optuna.FloatDistribution(1,1), ...
+    "IntDistribution",radia.optuna.IntDistribution(1,1), ...
+    "CategoricalDistribution", ...
+        radia.optuna.CategoricalDistribution({"A","B",3}), ...
+    "UniformDistribution",radia.optuna.UniformDistribution(1,1), ...
+    "LogUniformDistribution",radia.optuna.LogUniformDistribution(1,2), ...
+    "DiscreteUniformDistribution", ...
+        radia.optuna.DiscreteUniformDistribution(0,1,0.2), ...
+    "IntUniformDistribution",radia.optuna.IntUniformDistribution(1,3,1), ...
+    "IntLogUniformDistribution", ...
+        radia.optuna.IntLogUniformDistribution(1,3,1));
+for name=reshape(string(fieldnames(instances)),1,[])
+    verifyEqual(testCase,instances.(name).single(), ...
+        logical(expected.single.(name)));
+end
+
+categorical=instances.CategoricalDistribution;
+verifyEqual(testCase,categorical.to_internal_repr("B"), ...
+    double(expected.categorical_internal));
+verifyEqual(testCase,categorical.to_external_repr(2), ...
+    expected.categorical_external);
+verifyEqual(testCase,instances.FloatDistribution.to_internal_repr("1.25"), ...
+    double(expected.float_internal));
+verifyEqual(testCase,instances.FloatDistribution.to_external_repr(1.25), ...
+    double(expected.float_external));
+verifyEqual(testCase,instances.IntDistribution.to_internal_repr("3"), ...
+    double(expected.int_internal));
+verifyEqual(testCase,instances.IntDistribution.to_external_repr(3.9), ...
+    double(expected.int_external));
+verifyEqual(testCase,instances.DiscreteUniformDistribution.q, ...
+    double(expected.discrete_q));
+verifyEqual(testCase,radia.optuna.DISTRIBUTION_CLASSES(), ...
+    reshape(string(expected.distribution_classes),1,[]));
+verifyNotEmpty(testCase,string(expected.categorical_choice_type));
+verifyNotEmpty(testCase,radia.optuna.CategoricalChoiceType());
+clear cleanup
+end
+
 function testIntersectionSearchSpaceMatchesUpstream(testCase)
 expected=testCase.TestData.Oracle.search_space;
 base=struct( ...
@@ -746,6 +1547,31 @@ verifyEqual(testCase,sort(string(keys(calculated))), ...
     sort(reshape(string(expected.calculator),1,[])));
 end
 
+function testGroupDecomposedSearchSpaceMatchesUpstream(testCase)
+expected=testCase.TestData.Oracle.search_space.group;
+base=struct( ...
+    "x",radia.optuna.FloatDistribution(0,1), ...
+    "fixed",radia.optuna.FloatDistribution(2,2));
+group=radia.optuna.SearchSpaceGroup();
+group.add_distributions(struct("x",base.x,"y",base.fixed));
+group.add_distributions(struct( ...
+    "x",base.x,"z",radia.optuna.IntDistribution(1,3)));
+verifyEqual(testCase,groupSignatures(group.search_spaces()), ...
+    reshape(string(expected.direct_signatures),[],1));
+
+study=radia.optuna.Study(AutoSave=false);
+study.add_trials([ ...
+    radia.optuna.create_trial(value=1,params=struct("x",0.5,"fixed",2), ...
+        distributions=struct("x",base.x,"fixed",base.fixed)); ...
+    radia.optuna.create_trial(value=1,params=struct("x",0.5,"z",1), ...
+        distributions=struct("x",base.x,"z", ...
+        radia.optuna.IntDistribution(1,3)))]);
+calculator=radia.optuna.GroupDecomposedSearchSpace();
+calculated=calculator.calculate(study);
+verifyEqual(testCase,groupSignatures(calculated.search_spaces()), ...
+    reshape(string(expected.calculated_signatures),[],1));
+end
+
 function testStudyDirectionAndTrialStateMatchUpstream(testCase)
 expected=testCase.TestData.Oracle.enums;
 directions=[radia.optuna.StudyDirection.NOT_SET, ...
@@ -764,6 +1590,34 @@ verifyEqual(testCase,double(states), ...
     reshape(double([expected.trial_state.value]),1,[]));
 verifyEqual(testCase,states.is_finished(), ...
     reshape(logical([expected.trial_state.is_finished]),1,[]));
+
+enumCases={ ...
+    radia.optuna.StudyDirection.MAXIMIZE,expected.integer_api.study_direction; ...
+    radia.optuna.TrialState.WAITING,expected.integer_api.trial_state};
+for index=1:size(enumCases,1)
+    value=enumCases{index,1};
+    contract=enumCases{index,2};
+    verifyEqual(testCase,value.as_integer_ratio(), ...
+        reshape(double(contract.as_integer_ratio),1,[]));
+    verifyEqual(testCase,value.bit_count(),double(contract.bit_count));
+    verifyEqual(testCase,value.bit_length(),double(contract.bit_length));
+    verifyEqual(testCase,value.conjugate(),double(contract.conjugate));
+    verifyEqual(testCase,value.denominator(),double(contract.denominator));
+    verifyEqual(testCase,value.imag(),double(contract.imag));
+    verifyEqual(testCase,value.is_integer(),logical(contract.is_integer));
+    verifyEqual(testCase,value.name(),string(contract.name));
+    verifyEqual(testCase,value.numerator(),double(contract.numerator));
+    verifyEqual(testCase,value.real(),double(contract.real));
+    verifyEqual(testCase,value.to_bytes(2,"big"), ...
+        reshape(uint8(contract.to_bytes),1,[]));
+    verifyEqual(testCase,value.value(),double(contract.value));
+end
+verifyEqual(testCase,radia.optuna.StudyDirection.from_bytes( ...
+    uint8([0,2]),"big").name(), ...
+    string(expected.integer_api.study_direction.from_bytes_name));
+verifyEqual(testCase,radia.optuna.TrialState.from_bytes( ...
+    uint8([0,4]),"big").name(), ...
+    string(expected.integer_api.trial_state.from_bytes_name));
 
 study=radia.optuna.create_study( ...
     direction=radia.optuna.StudyDirection.MINIMIZE,AutoSave=false);
@@ -1538,6 +2392,38 @@ function value=readSummaryDirection(summary)
 value=summary.direction;
 end
 
+function study=importanceStudy(expected)
+study=radia.optuna.Study(AutoSave=false);
+for index=1:numel(expected.trials)
+    row=expected.trials(index);
+    study.add_trial(radia.optuna.createTrial(Value=double(row.value), ...
+        Params=struct("x",double(row.x),"y",double(row.y), ...
+        "mode",string(row.mode)), ...
+        Distributions=struct( ...
+        "x",radia.optuna.FloatDistribution(-1,1), ...
+        "y",radia.optuna.FloatDistribution(0,1), ...
+        "mode",radia.optuna.CategoricalDistribution(["A","B","C"]))));
+end
+end
+
+function verifyImportanceTable(testCase,actual,expected)
+expectedNames=reshape(string(expected.parameter_order),[],1);
+expectedValues=reshape(double(expected.values),[],1);
+verifyEqual(testCase,sort(actual.Parameter),sort(expectedNames));
+for index=1:numel(expectedNames)
+    row=find(actual.Parameter==expectedNames(index),1);
+    verifyNotEmpty(testCase,row);
+    verifyEqual(testCase,actual.Importance(row),expectedValues(index),AbsTol=0);
+end
+end
+
+function signatures=groupSignatures(spaces)
+signatures=strings(numel(spaces),1);
+for index=1:numel(spaces)
+    signatures(index)=strjoin(sort(string(spaces{index}.keys)),",");
+end
+end
+
 function cleanupStudyFiles(paths)
 for path=reshape(string(paths),1,[])
     if isfile(path), delete(path); end
@@ -1553,5 +2439,51 @@ elseif count==1
     weights=0.2;
 else
     weights=linspace(0.2,1,count)';
+end
+end
+
+function value=redisGet(values,key)
+key=char(string(key));
+if isKey(values,key)
+    value=values(key);
+else
+    value=[];
+end
+end
+
+function value=redisSetNx(values,key,newValue)
+key=char(string(key));
+if ~isKey(values,key)
+    values(key)=newValue;
+    value=true;
+else
+    value=false;
+end
+end
+
+function value=redisIncr(values,key,amount)
+key=char(string(key));
+if isKey(values,key)
+    current=double(values(key));
+else
+    current=0;
+end
+value=current+double(amount);
+values(key)=value;
+end
+
+function value=redisSet(values,key,newValue)
+values(char(string(key)))=newValue;
+value=true;
+end
+
+function cleanupGrpcServer(server,databasePath)
+try
+    server.stop(0);
+catch
+end
+for suffix=["","-journal","-shm","-wal"]
+    path=databasePath+suffix;
+    if isfile(path), delete(path); end
 end
 end

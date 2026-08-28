@@ -1,4 +1,90 @@
 {
+  "artifacts": {
+    "artifact_id": "12345678-1234-5678-1234-567812345678",
+    "backoff_body": [
+      114,
+      101,
+      116,
+      114,
+      121,
+      45,
+      98,
+      111,
+      100,
+      121
+    ],
+    "backoff_remove_error": "ArtifactNotFound",
+    "boto_open": [
+      99,
+      108,
+      111,
+      117,
+      100,
+      45,
+      98,
+      121,
+      116,
+      101,
+      115
+    ],
+    "boto_written": [
+      117,
+      112,
+      100,
+      97,
+      116,
+      101,
+      100
+    ],
+    "downloaded": [
+      97,
+      114,
+      116,
+      105,
+      102,
+      97,
+      99,
+      116,
+      45,
+      98,
+      121,
+      116,
+      101,
+      115,
+      0,
+      255
+    ],
+    "existing_download_error": "FileExistsError",
+    "gcs_open": [
+      99,
+      108,
+      111,
+      117,
+      100,
+      45,
+      98,
+      121,
+      116,
+      101,
+      115
+    ],
+    "gcs_written": [
+      117,
+      112,
+      100,
+      97,
+      116,
+      101,
+      100
+    ],
+    "metadata": {
+      "artifact_id": "12345678-1234-5678-1234-567812345678",
+      "encoding": null,
+      "filename": "oracle.txt",
+      "mimetype": "text/plain"
+    },
+    "traversal_error": "ValueError"
+  },
   "base_components": {
     "construction_errors": {
       "pruner": "TypeError",
@@ -47,6 +133,54 @@
       "mode": "A"
     }
   ],
+  "cached_storage": {
+    "best_number": 2,
+    "complete_numbers": [
+      0,
+      2
+    ],
+    "completed": true,
+    "directions": [
+      "MINIMIZE"
+    ],
+    "duplicate_error": "DuplicatedStudyError",
+    "failed_id": 2,
+    "finished_update_error": "UpdateFinishedTrialError",
+    "heartbeat_interval": null,
+    "heartbeat_stale_callback_is_none": true,
+    "n_complete": 2,
+    "n_trials": 3,
+    "param_internal": 0.5,
+    "params": {
+      "x": 0.5
+    },
+    "record_heartbeat_is_none": true,
+    "remove_session_is_none": true,
+    "running_state": "RUNNING",
+    "study_id": 1,
+    "study_name": "cached-oracle",
+    "study_system_attrs": {
+      "revision": 4
+    },
+    "study_user_attrs": {
+      "owner": "oracle"
+    },
+    "summary": {
+      "name": "cached-oracle"
+    },
+    "template_id": 3,
+    "trial_id": 1,
+    "trial_lookup_id": 1,
+    "trial_number": 0,
+    "trial_state": "COMPLETE",
+    "trial_system_attrs": {
+      "worker": 7
+    },
+    "trial_user_attrs": {
+      "label": "first"
+    },
+    "trial_value": 1.25
+  },
   "cmaes_independent_sampler_seed_31": [
     {
       "mode": "C",
@@ -566,6 +700,37 @@
       "uniform": "UniformDistribution"
     }
   },
+  "distribution_public_members": {
+    "base_construction_error": "TypeError",
+    "categorical_choice_type": "typing.Union[NoneType, bool, int, float, str]",
+    "categorical_external": 3,
+    "categorical_internal": 1,
+    "discrete_q": 0.2,
+    "distribution_classes": [
+      "IntDistribution",
+      "IntLogUniformDistribution",
+      "IntUniformDistribution",
+      "FloatDistribution",
+      "UniformDistribution",
+      "LogUniformDistribution",
+      "DiscreteUniformDistribution",
+      "CategoricalDistribution"
+    ],
+    "float_external": 1.25,
+    "float_internal": 1.25,
+    "int_external": 3,
+    "int_internal": 3.0,
+    "single": {
+      "CategoricalDistribution": false,
+      "DiscreteUniformDistribution": false,
+      "FloatDistribution": true,
+      "IntDistribution": true,
+      "IntLogUniformDistribution": false,
+      "IntUniformDistribution": false,
+      "LogUniformDistribution": false,
+      "UniformDistribution": true
+    }
+  },
   "distributions": {
     "colliding_names": {
       "a-b": 0.7148159936743647,
@@ -591,6 +756,50 @@
     }
   },
   "enums": {
+    "integer_api": {
+      "study_direction": {
+        "as_integer_ratio": [
+          2,
+          1
+        ],
+        "bit_count": 1,
+        "bit_length": 2,
+        "conjugate": 2,
+        "denominator": 1,
+        "from_bytes_name": "MAXIMIZE",
+        "imag": 0,
+        "is_integer": true,
+        "name": "MAXIMIZE",
+        "numerator": 2,
+        "real": 2,
+        "to_bytes": [
+          0,
+          2
+        ],
+        "value": 2
+      },
+      "trial_state": {
+        "as_integer_ratio": [
+          4,
+          1
+        ],
+        "bit_count": 1,
+        "bit_length": 3,
+        "conjugate": 4,
+        "denominator": 1,
+        "from_bytes_name": "WAITING",
+        "imag": 0,
+        "is_integer": true,
+        "name": "WAITING",
+        "numerator": 4,
+        "real": 4,
+        "to_bytes": [
+          0,
+          4
+        ],
+        "value": 4
+      }
+    },
     "study_direction": [
       {
         "name": "NOT_SET",
@@ -632,6 +841,253 @@
         "value": 4
       }
     ]
+  },
+  "exceptions": {
+    "CLIUsageError": {
+      "cases": [
+        {
+          "args": [],
+          "message": "",
+          "notes": [
+            "oracle note"
+          ],
+          "with_traceback_identity": true
+        },
+        {
+          "args": [
+            "oracle message"
+          ],
+          "message": "oracle message",
+          "notes": [
+            "oracle note"
+          ],
+          "with_traceback_identity": true
+        },
+        {
+          "args": [
+            "a",
+            "b"
+          ],
+          "message": "('a', 'b')",
+          "notes": [
+            "oracle note"
+          ],
+          "with_traceback_identity": true
+        }
+      ],
+      "is_optuna_error": true,
+      "is_warning": false
+    },
+    "DuplicatedStudyError": {
+      "cases": [
+        {
+          "args": [],
+          "message": "",
+          "notes": [
+            "oracle note"
+          ],
+          "with_traceback_identity": true
+        },
+        {
+          "args": [
+            "oracle message"
+          ],
+          "message": "oracle message",
+          "notes": [
+            "oracle note"
+          ],
+          "with_traceback_identity": true
+        },
+        {
+          "args": [
+            "a",
+            "b"
+          ],
+          "message": "('a', 'b')",
+          "notes": [
+            "oracle note"
+          ],
+          "with_traceback_identity": true
+        }
+      ],
+      "is_optuna_error": true,
+      "is_warning": false
+    },
+    "ExperimentalWarning": {
+      "cases": [
+        {
+          "args": [],
+          "message": "",
+          "notes": [
+            "oracle note"
+          ],
+          "with_traceback_identity": true
+        },
+        {
+          "args": [
+            "oracle message"
+          ],
+          "message": "oracle message",
+          "notes": [
+            "oracle note"
+          ],
+          "with_traceback_identity": true
+        },
+        {
+          "args": [
+            "a",
+            "b"
+          ],
+          "message": "('a', 'b')",
+          "notes": [
+            "oracle note"
+          ],
+          "with_traceback_identity": true
+        }
+      ],
+      "is_optuna_error": false,
+      "is_warning": true
+    },
+    "OptunaError": {
+      "cases": [
+        {
+          "args": [],
+          "message": "",
+          "notes": [
+            "oracle note"
+          ],
+          "with_traceback_identity": true
+        },
+        {
+          "args": [
+            "oracle message"
+          ],
+          "message": "oracle message",
+          "notes": [
+            "oracle note"
+          ],
+          "with_traceback_identity": true
+        },
+        {
+          "args": [
+            "a",
+            "b"
+          ],
+          "message": "('a', 'b')",
+          "notes": [
+            "oracle note"
+          ],
+          "with_traceback_identity": true
+        }
+      ],
+      "is_optuna_error": true,
+      "is_warning": false
+    },
+    "StorageInternalError": {
+      "cases": [
+        {
+          "args": [],
+          "message": "",
+          "notes": [
+            "oracle note"
+          ],
+          "with_traceback_identity": true
+        },
+        {
+          "args": [
+            "oracle message"
+          ],
+          "message": "oracle message",
+          "notes": [
+            "oracle note"
+          ],
+          "with_traceback_identity": true
+        },
+        {
+          "args": [
+            "a",
+            "b"
+          ],
+          "message": "('a', 'b')",
+          "notes": [
+            "oracle note"
+          ],
+          "with_traceback_identity": true
+        }
+      ],
+      "is_optuna_error": true,
+      "is_warning": false
+    },
+    "TrialPruned": {
+      "cases": [
+        {
+          "args": [],
+          "message": "",
+          "notes": [
+            "oracle note"
+          ],
+          "with_traceback_identity": true
+        },
+        {
+          "args": [
+            "oracle message"
+          ],
+          "message": "oracle message",
+          "notes": [
+            "oracle note"
+          ],
+          "with_traceback_identity": true
+        },
+        {
+          "args": [
+            "a",
+            "b"
+          ],
+          "message": "('a', 'b')",
+          "notes": [
+            "oracle note"
+          ],
+          "with_traceback_identity": true
+        }
+      ],
+      "is_optuna_error": true,
+      "is_warning": false
+    },
+    "UpdateFinishedTrialError": {
+      "cases": [
+        {
+          "args": [],
+          "message": "",
+          "notes": [
+            "oracle note"
+          ],
+          "with_traceback_identity": true
+        },
+        {
+          "args": [
+            "oracle message"
+          ],
+          "message": "oracle message",
+          "notes": [
+            "oracle note"
+          ],
+          "with_traceback_identity": true
+        },
+        {
+          "args": [
+            "a",
+            "b"
+          ],
+          "message": "('a', 'b')",
+          "notes": [
+            "oracle note"
+          ],
+          "with_traceback_identity": true
+        }
+      ],
+      "is_optuna_error": true,
+      "is_warning": false
+    }
   },
   "fixed_trial": {
     "distribution_types": {
@@ -803,6 +1259,53 @@
       "x": 0.0
     }
   ],
+  "grpc_storage": {
+    "best_number": 2,
+    "close_is_none": true,
+    "complete_numbers": [
+      0,
+      2
+    ],
+    "completed": true,
+    "directions": [
+      "MINIMIZE"
+    ],
+    "duplicate_error": "DuplicatedStudyError",
+    "failed_id": 2,
+    "finished_update_error": "UpdateFinishedTrialError",
+    "n_complete": 2,
+    "n_trials": 3,
+    "param_internal": 0.5,
+    "params": {
+      "x": 0.5
+    },
+    "ready_is_none": true,
+    "remove_session_is_none": true,
+    "running_state": "RUNNING",
+    "study_id": 1,
+    "study_name": "grpc-oracle",
+    "study_system_attrs": {
+      "revision": 4
+    },
+    "study_user_attrs": {
+      "owner": "oracle"
+    },
+    "summary": {
+      "name": "grpc-oracle"
+    },
+    "template_id": 3,
+    "trial_id": 1,
+    "trial_lookup_id": 1,
+    "trial_number": 0,
+    "trial_state": "COMPLETE",
+    "trial_system_attrs": {
+      "worker": 7
+    },
+    "trial_user_attrs": {
+      "label": "first"
+    },
+    "trial_value": 1.25
+  },
   "importance": {
     "evaluator": {
       "max_depth": 16,
@@ -815,6 +1318,57 @@
       "mode",
       "y"
     ],
+    "public_evaluators": {
+      "base_construction_error": "TypeError",
+      "fanova": {
+        "parameter_order": [
+          "x",
+          "mode",
+          "y"
+        ],
+        "values": [
+          0.9024102828191107,
+          0.02711321971744135,
+          0.021232519686525488
+        ]
+      },
+      "fanova_target": {
+        "parameter_order": [
+          "y",
+          "x",
+          "mode"
+        ],
+        "values": [
+          0.9842438902427975,
+          0.0026582129805842194,
+          0.0017959568423238687
+        ]
+      },
+      "mdi": {
+        "parameter_order": [
+          "x",
+          "mode",
+          "y"
+        ],
+        "values": [
+          0.9209049544690037,
+          0.042415640574491736,
+          0.036679404956504624
+        ]
+      },
+      "ped_anova": {
+        "parameter_order": [
+          "x",
+          "y",
+          "mode"
+        ],
+        "values": [
+          0.04745518462459537,
+          0.006845037149241896,
+          0.005739795918350124
+        ]
+      }
+    },
     "trials": [
       {
         "mode": "A",
@@ -967,6 +1521,214 @@
       0.022332248432020623
     ]
   },
+  "integration": {
+    "exports": {
+      "AllenNLPExecutor": {
+        "available": false,
+        "error_type": "ModuleNotFoundError"
+      },
+      "AllenNLPPruningCallback": {
+        "available": false,
+        "error_type": "ModuleNotFoundError"
+      },
+      "BoTorchSampler": {
+        "available": false,
+        "error_type": "ModuleNotFoundError"
+      },
+      "CatBoostPruningCallback": {
+        "available": false,
+        "error_type": "ModuleNotFoundError"
+      },
+      "ChainerMNStudy": {
+        "available": false,
+        "error_type": "ModuleNotFoundError"
+      },
+      "ChainerPruningExtension": {
+        "available": false,
+        "error_type": "ModuleNotFoundError"
+      },
+      "DaskStorage": {
+        "available": false,
+        "error_type": "ModuleNotFoundError"
+      },
+      "FastAIPruningCallback": {
+        "available": false,
+        "error_type": "ModuleNotFoundError"
+      },
+      "FastAIV2PruningCallback": {
+        "available": false,
+        "error_type": "ModuleNotFoundError"
+      },
+      "KerasPruningCallback": {
+        "available": false,
+        "error_type": "ModuleNotFoundError"
+      },
+      "LightGBMPruningCallback": {
+        "available": false,
+        "error_type": "ModuleNotFoundError"
+      },
+      "LightGBMTuner": {
+        "available": false,
+        "error_type": "ModuleNotFoundError"
+      },
+      "LightGBMTunerCV": {
+        "available": false,
+        "error_type": "ModuleNotFoundError"
+      },
+      "MLflowCallback": {
+        "available": false,
+        "error_type": "ModuleNotFoundError"
+      },
+      "MXNetPruningCallback": {
+        "available": false,
+        "error_type": "ModuleNotFoundError"
+      },
+      "OptunaSearchCV": {
+        "available": false,
+        "error_type": "ModuleNotFoundError"
+      },
+      "PyCmaSampler": {
+        "available": false,
+        "error_type": "ModuleNotFoundError"
+      },
+      "PyTorchIgnitePruningHandler": {
+        "available": false,
+        "error_type": "ModuleNotFoundError"
+      },
+      "PyTorchLightningPruningCallback": {
+        "available": false,
+        "error_type": "ModuleNotFoundError"
+      },
+      "ShapleyImportanceEvaluator": {
+        "available": false,
+        "error_type": "ModuleNotFoundError"
+      },
+      "SkorchPruningCallback": {
+        "available": false,
+        "error_type": "ModuleNotFoundError"
+      },
+      "TFKerasPruningCallback": {
+        "available": false,
+        "error_type": "ModuleNotFoundError"
+      },
+      "TensorBoardCallback": {
+        "available": false,
+        "error_type": "ModuleNotFoundError"
+      },
+      "TensorFlowPruningHook": {
+        "available": false,
+        "error_type": "ModuleNotFoundError"
+      },
+      "TorchDistributedTrial": {
+        "available": false,
+        "error_type": "ModuleNotFoundError"
+      },
+      "WeightsAndBiasesCallback": {
+        "available": false,
+        "error_type": "ModuleNotFoundError"
+      },
+      "XGBoostPruningCallback": {
+        "available": false,
+        "error_type": "ModuleNotFoundError"
+      }
+    }
+  },
+  "journal_storage": {
+    "append_is_none": true,
+    "base_backend_is_abstract": true,
+    "base_log_storage_is_abstract": true,
+    "file_text": "{\"operation\":1,\"worker\":\"alpha\"}\n{\"operation\":2,\"value\":3.5}\n",
+    "locks": {
+      "open": {
+        "acquired": true,
+        "release_is_none": true,
+        "second_release_error": "RuntimeError"
+      },
+      "symlink": {
+        "acquired": true,
+        "release_is_none": true,
+        "second_release_error": "RuntimeError"
+      }
+    },
+    "redis": {
+      "append_is_none": true,
+      "load_snapshot": [
+        115,
+        110,
+        97,
+        112,
+        115,
+        104,
+        111,
+        116,
+        45,
+        98,
+        121,
+        116,
+        101,
+        115
+      ],
+      "save_snapshot_is_none": true,
+      "selected_logs": [
+        {
+          "operation": 5,
+          "value": 7.25
+        }
+      ]
+    },
+    "selected_logs": [
+      {
+        "operation": 2,
+        "value": 3.5
+      }
+    ],
+    "storage": {
+      "best_number": 2,
+      "complete_numbers": [
+        0,
+        2
+      ],
+      "completed": true,
+      "directions": [
+        "MINIMIZE"
+      ],
+      "duplicate_error": "DuplicatedStudyError",
+      "failed_id": 1,
+      "finished_update_error": "UpdateFinishedTrialError",
+      "n_complete": 2,
+      "n_trials": 3,
+      "param_internal": 0.5,
+      "params": {
+        "x": 0.5
+      },
+      "remove_session_is_none": true,
+      "restore_invalid_is_none": true,
+      "running_state": "RUNNING",
+      "study_id": 0,
+      "study_name": "journal-oracle",
+      "study_system_attrs": {
+        "revision": 4
+      },
+      "study_user_attrs": {
+        "owner": "oracle"
+      },
+      "summary": {
+        "name": "journal-oracle"
+      },
+      "template_id": 2,
+      "trial_id": 0,
+      "trial_lookup_id": 0,
+      "trial_number": 0,
+      "trial_state": "COMPLETE",
+      "trial_system_attrs": {
+        "worker": 7
+      },
+      "trial_user_attrs": {
+        "label": "first"
+      },
+      "trial_value": 1.25
+    }
+  },
   "lifecycle_errors": {
     "constraint_callback_failure": {
       "constraint_is_none": true,
@@ -978,6 +1740,37 @@
       "repeat_error": "ValueError",
       "skip_state": "COMPLETE",
       "skip_value": 1.0
+    }
+  },
+  "logging": {
+    "after_set": 10,
+    "constants": {
+      "CRITICAL": 50,
+      "DEBUG": 10,
+      "ERROR": 40,
+      "FATAL": 50,
+      "INFO": 20,
+      "WARN": 30,
+      "WARNING": 30
+    },
+    "disabled": {
+      "handlers": 0,
+      "propagate": false
+    },
+    "enabled": {
+      "handlers": 1,
+      "propagate": true
+    },
+    "formatter": {
+      "date_format": null,
+      "format": "%(log_color)s[%(levelname)1.1s %(asctime)s]%(reset)s %(message)s"
+    },
+    "initial": 20,
+    "logger": {
+      "handlers": 0,
+      "level": 0,
+      "name": "unit",
+      "propagate": true
     }
   },
   "mixed_tpe_sampler_seed_43": [
@@ -2306,6 +3099,96 @@
       "x": 0.3231286733324874
     }
   ],
+  "rdb_storage": {
+    "all_versions": [
+      "v3.2.0.a",
+      "v3.0.0.d",
+      "v3.0.0.c",
+      "v3.0.0.b",
+      "v3.0.0.a",
+      "v2.6.0.a",
+      "v2.4.0.a",
+      "v1.3.0.a",
+      "v1.2.0.a",
+      "v0.9.0.a"
+    ],
+    "best_number": 2,
+    "complete_numbers": [
+      0,
+      2
+    ],
+    "completed": true,
+    "current_version": "v3.2.0.a",
+    "directions": [
+      "MINIMIZE"
+    ],
+    "duplicate_error": "DuplicatedStudyError",
+    "failed_callback_is_none": true,
+    "failed_callback_warning": "FutureWarning",
+    "failed_id": 2,
+    "finished_update_error": "UpdateFinishedTrialError",
+    "head_version": "v3.2.0.a",
+    "heartbeat_interval": null,
+    "heartbeat_stale_callback_is_none": true,
+    "n_complete": 2,
+    "n_trials": 3,
+    "param_internal": 0.5,
+    "params": {
+      "x": 0.5
+    },
+    "remove_session_is_none": true,
+    "running_state": "RUNNING",
+    "study_id": 1,
+    "study_name": "rdb-oracle",
+    "study_system_attrs": {
+      "revision": 4
+    },
+    "study_user_attrs": {
+      "owner": "oracle"
+    },
+    "summary": {
+      "name": "rdb-oracle"
+    },
+    "template_id": 3,
+    "trial_id": 1,
+    "trial_lookup_id": 1,
+    "trial_number": 0,
+    "trial_state": "COMPLETE",
+    "trial_system_attrs": {
+      "worker": 7
+    },
+    "trial_user_attrs": {
+      "label": "first"
+    },
+    "trial_value": 1.25,
+    "upgrade_preserves_version": true
+  },
+  "retry_callback": {
+    "alias_warning": "FutureWarning",
+    "callback_warning": "ExperimentalWarning",
+    "fail_stale_is_none": true,
+    "fail_stale_warning": "ExperimentalWarning",
+    "first_intermediate": {
+      "2": 3.5
+    },
+    "first_state": "WAITING",
+    "history": [
+      0,
+      1,
+      2
+    ],
+    "n_trials": 3,
+    "original_number": 0,
+    "second_history": [
+      0,
+      1,
+      2
+    ],
+    "static_warnings": [
+      "ExperimentalWarning",
+      "ExperimentalWarning"
+    ]
+  },
   "sampler_public_members": {
     "base_crossover_instantiation_error": "TypeError",
     "crossover_n_parents": {
@@ -2317,8 +3200,103 @@
       "vsbx": 2
     },
     "fixed_trial_datetime_start_is_not_none": true,
+    "ga": {
+      "NSGAIIISampler": {
+        "generations": [
+          0,
+          0,
+          1,
+          1
+        ],
+        "parent_numbers": [
+          0,
+          1
+        ],
+        "population_numbers": [
+          0,
+          1
+        ],
+        "population_size_after_set": 3,
+        "selected_numbers": [
+          1,
+          0
+        ]
+      },
+      "NSGAIISampler": {
+        "generations": [
+          0,
+          0,
+          1,
+          1
+        ],
+        "parent_numbers": [
+          0,
+          1
+        ],
+        "population_numbers": [
+          0,
+          1
+        ],
+        "population_size_after_set": 3,
+        "selected_numbers": [
+          1,
+          0
+        ]
+      }
+    },
     "grid_is_exhausted_after": true,
     "grid_is_exhausted_before": false,
+    "hyperopt_parameters": {
+      "consider_endpoints": false,
+      "consider_magic_clip": true,
+      "consider_prior": true,
+      "gamma": [
+        0,
+        1,
+        1,
+        25
+      ],
+      "n_ei_candidates": 24,
+      "n_startup_trials": 20,
+      "prior_weight": 1.0,
+      "weights": [
+        [],
+        [
+          1.0,
+          1.0,
+          1.0
+        ],
+        [
+          0.037037037037037035,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ]
+      ]
+    },
     "mapped_namespaces": {
       "distributions": "optuna.distributions",
       "exceptions": "optuna.exceptions",
@@ -2336,72 +3314,92 @@
       "BruteForceSampler": {
         "after_trial_returns_none": true,
         "before_trial_returns_none": true,
-        "infer_relative_search_space_keys": []
+        "independent_value": 0.0,
+        "infer_relative_search_space_keys": [],
+        "relative_params": {}
       },
       "CmaEsSampler": {
         "after_trial_returns_none": true,
         "before_trial_returns_none": true,
+        "independent_value": 0.0,
         "infer_relative_search_space_keys": [
           "x",
           "y"
-        ]
+        ],
+        "relative_params": {}
       },
       "GPSampler": {
         "after_trial_returns_none": true,
         "before_trial_returns_none": true,
+        "independent_value": 0.0,
         "infer_relative_search_space_keys": [
           "x",
           "y"
-        ]
+        ],
+        "relative_params": {}
       },
       "GridSampler": {
         "after_trial_returns_none": true,
         "before_trial_returns_none": true,
-        "infer_relative_search_space_keys": []
+        "independent_value": 1.0,
+        "infer_relative_search_space_keys": [],
+        "relative_params": {}
       },
       "NSGAIIISampler": {
         "after_trial_returns_none": true,
         "before_trial_returns_none": true,
+        "independent_value": 0.0,
         "infer_relative_search_space_keys": [
           "x",
           "y"
-        ]
+        ],
+        "relative_params": {}
       },
       "NSGAIISampler": {
         "after_trial_returns_none": true,
         "before_trial_returns_none": true,
+        "independent_value": 0.0,
         "infer_relative_search_space_keys": [
           "x",
           "y"
-        ]
+        ],
+        "relative_params": {}
       },
       "PartialFixedSampler": {
         "after_trial_returns_none": true,
         "before_trial_returns_none": true,
+        "independent_value": 0.25,
         "infer_relative_search_space_keys": [
           "y"
-        ]
+        ],
+        "relative_params": {}
       },
       "QMCSampler": {
         "after_trial_returns_none": true,
         "before_trial_returns_none": true,
+        "independent_value": 0.0,
         "infer_relative_search_space_keys": [
           "x",
           "y"
-        ]
+        ],
+        "relative_params": {}
       },
       "RandomSampler": {
         "after_trial_returns_none": true,
         "before_trial_returns_none": true,
-        "infer_relative_search_space_keys": []
+        "independent_value": 0.0,
+        "infer_relative_search_space_keys": [],
+        "relative_params": {}
       },
       "TPESampler": {
         "after_trial_returns_none": true,
         "before_trial_returns_none": true,
+        "independent_value": 0.0,
         "infer_relative_search_space_keys": [
           "x",
           "y"
-        ]
+        ],
+        "relative_params": {}
       }
     },
     "trial_datetime_start_is_not_none": true,
@@ -2409,6 +3407,74 @@
       "x",
       "y"
     ]
+  },
+  "sampler_reseed": {
+    "global_numpy_rng_unchanged": true,
+    "samplers": {
+      "BruteForceSampler": {
+        "calls": [],
+        "returns_none": true
+      },
+      "CmaEsSampler": {
+        "calls": [
+          "independent"
+        ],
+        "returns_none": true
+      },
+      "GPSampler": {
+        "calls": [
+          "rng",
+          "independent"
+        ],
+        "returns_none": true
+      },
+      "GridSampler": {
+        "calls": [
+          "rng"
+        ],
+        "returns_none": true
+      },
+      "NSGAIIISampler": {
+        "calls": [
+          "independent",
+          "rng"
+        ],
+        "returns_none": true
+      },
+      "NSGAIISampler": {
+        "calls": [
+          "independent",
+          "rng"
+        ],
+        "returns_none": true
+      },
+      "PartialFixedSampler": {
+        "calls": [
+          "base"
+        ],
+        "returns_none": true
+      },
+      "QMCSampler": {
+        "calls": [
+          "independent"
+        ],
+        "returns_none": true
+      },
+      "RandomSampler": {
+        "calls": [
+          "rng"
+        ],
+        "returns_none": true
+      },
+      "TPESampler": {
+        "calls": [
+          "rng",
+          "independent"
+        ],
+        "returns_none": true
+      }
+    },
+    "seed_none_is_nondeterministic": true
   },
   "sampler_seed_defaults": {
     "constructors": {
@@ -2594,6 +3660,18 @@
       "fixed",
       "x"
     ],
+    "group": {
+      "calculated_signatures": [
+        "x",
+        "fixed",
+        "z"
+      ],
+      "direct_signatures": [
+        "x",
+        "y",
+        "z"
+      ]
+    },
     "single_distribution_is_included": true,
     "with_pruned": [
       "cat",
@@ -2604,6 +3682,52 @@
       "fixed",
       "x"
     ]
+  },
+  "storage": {
+    "base_is_abstract": true,
+    "best_number": 2,
+    "complete_numbers": [
+      0,
+      2
+    ],
+    "completed": true,
+    "directions": [
+      "MINIMIZE"
+    ],
+    "duplicate_error": "DuplicatedStudyError",
+    "failed_id": 1,
+    "finished_update_error": "UpdateFinishedTrialError",
+    "n_complete": 2,
+    "n_trials": 3,
+    "param_internal": 0.5,
+    "params": {
+      "x": 0.5
+    },
+    "remove_session_is_none": true,
+    "running_state": "RUNNING",
+    "study_id": 0,
+    "study_name": "memory-oracle",
+    "study_system_attrs": {
+      "revision": 4
+    },
+    "study_user_attrs": {
+      "owner": "oracle"
+    },
+    "summary": {
+      "name": "memory-oracle"
+    },
+    "template_id": 2,
+    "trial_id": 0,
+    "trial_lookup_id": 0,
+    "trial_number": 0,
+    "trial_state": "COMPLETE",
+    "trial_system_attrs": {
+      "worker": 7
+    },
+    "trial_user_attrs": {
+      "label": "first"
+    },
+    "trial_value": 1.25
   },
   "study_management": {
     "copied": {
@@ -2659,9 +3783,51 @@
     "pruned_value": 2.5
   },
   "terminator": {
+    "advanced": {
+      "results": {
+        "emmr": {
+          "value": 0.4712573846713911,
+          "warning": "ExperimentalWarning"
+        },
+        "regret_bound": {
+          "value": 0.07502874449977122,
+          "warning": "ExperimentalWarning"
+        }
+      },
+      "values": [
+        1.2,
+        0.8,
+        0.6,
+        0.7,
+        1.1
+      ],
+      "x": [
+        0.1,
+        0.3,
+        0.5,
+        0.7,
+        0.9
+      ]
+    },
+    "cross_validation_error": 0.074535599249993,
+    "cross_validation_rows": [
+      [
+        0.7,
+        0.8,
+        0.9
+      ],
+      [
+        0.5,
+        0.55,
+        0.6
+      ]
+    ],
     "max_trials_callback_count": 3,
+    "median_cached": 0.4,
+    "median_error": 0.4,
     "remaining_maximize": 1.0,
     "remaining_minimize": 1.0,
+    "static_error": 1.25,
     "terminator_trial_count": 5,
     "terminator_values": [
       5.0,
@@ -3266,6 +4432,183 @@
         "x": 0.125,
         "y": 1.75
       }
+    ]
+  },
+  "visualization": {
+    "backends": {
+      "matplotlib": {
+        "functions": {
+          "plot_contour": {
+            "available": true,
+            "module": "matplotlib.axes._axes",
+            "type": "Axes"
+          },
+          "plot_edf": {
+            "available": true,
+            "module": "matplotlib.axes._axes",
+            "type": "Axes"
+          },
+          "plot_hypervolume_history": {
+            "available": true,
+            "module": "matplotlib.axes._axes",
+            "type": "Axes"
+          },
+          "plot_intermediate_values": {
+            "available": true,
+            "module": "matplotlib.axes._axes",
+            "type": "Axes"
+          },
+          "plot_optimization_history": {
+            "available": true,
+            "module": "matplotlib.axes._axes",
+            "type": "Axes"
+          },
+          "plot_parallel_coordinate": {
+            "available": true,
+            "module": "matplotlib.axes._axes",
+            "type": "Axes"
+          },
+          "plot_param_importances": {
+            "available": true,
+            "module": "matplotlib.axes._axes",
+            "type": "Axes"
+          },
+          "plot_pareto_front": {
+            "available": true,
+            "module": "matplotlib.axes._axes",
+            "type": "Axes"
+          },
+          "plot_rank": {
+            "available": true,
+            "module": "matplotlib.axes._axes",
+            "type": "Axes"
+          },
+          "plot_slice": {
+            "available": true,
+            "module": "numpy",
+            "type": "ndarray"
+          },
+          "plot_terminator_improvement": {
+            "available": true,
+            "module": "matplotlib.axes._axes",
+            "type": "Axes"
+          },
+          "plot_timeline": {
+            "available": true,
+            "module": "matplotlib.axes._axes",
+            "type": "Axes"
+          }
+        },
+        "is_available": true
+      },
+      "plotly": {
+        "functions": {
+          "plot_contour": {
+            "available": true,
+            "module": "plotly.graph_objs._figure",
+            "type": "Figure"
+          },
+          "plot_edf": {
+            "available": true,
+            "module": "plotly.graph_objs._figure",
+            "type": "Figure"
+          },
+          "plot_hypervolume_history": {
+            "available": true,
+            "module": "plotly.graph_objs._figure",
+            "type": "Figure"
+          },
+          "plot_intermediate_values": {
+            "available": true,
+            "module": "plotly.graph_objs._figure",
+            "type": "Figure"
+          },
+          "plot_optimization_history": {
+            "available": true,
+            "module": "plotly.graph_objs._figure",
+            "type": "Figure"
+          },
+          "plot_parallel_coordinate": {
+            "available": true,
+            "module": "plotly.graph_objs._figure",
+            "type": "Figure"
+          },
+          "plot_param_importances": {
+            "available": true,
+            "module": "plotly.graph_objs._figure",
+            "type": "Figure"
+          },
+          "plot_pareto_front": {
+            "available": true,
+            "module": "plotly.graph_objs._figure",
+            "type": "Figure"
+          },
+          "plot_rank": {
+            "available": true,
+            "module": "plotly.graph_objs._figure",
+            "type": "Figure"
+          },
+          "plot_slice": {
+            "available": true,
+            "module": "plotly.graph_objs._figure",
+            "type": "Figure"
+          },
+          "plot_terminator_improvement": {
+            "available": true,
+            "module": "plotly.graph_objs._figure",
+            "type": "Figure"
+          },
+          "plot_timeline": {
+            "available": true,
+            "module": "plotly.graph_objs._figure",
+            "type": "Figure"
+          }
+        },
+        "is_available": true
+      }
+    },
+    "multi_values": [
+      [
+        0.0,
+        4.0
+      ],
+      [
+        1.0,
+        3.0
+      ],
+      [
+        2.0,
+        2.0
+      ],
+      [
+        3.0,
+        1.0
+      ],
+      [
+        4.0,
+        0.0
+      ]
+    ],
+    "single_values": [
+      4.0,
+      1.0,
+      0.0,
+      1.0,
+      4.0
+    ],
+    "single_x": [
+      0.0,
+      0.25,
+      0.5,
+      0.75,
+      1.0
+    ],
+    "single_y": [
+      1,
+      2,
+      3,
+      4,
+      5
     ]
   }
 }

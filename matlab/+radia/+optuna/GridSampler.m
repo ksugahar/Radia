@@ -47,6 +47,11 @@ classdef GridSampler < radia.optuna.BaseSampler
             obj.AllGrids=obj.AllGrids(order,:);
         end
 
+        function reseed_rng(obj)
+            freshSeed=radia.optuna.internal.resolveSeed([]);
+            obj.Stream=radia.optuna.internal.NumpyRandomState(freshSeed);
+        end
+
         function beforeTrial(obj,study,trial)
             if isfield(trial.SystemAttrs,"fixed_params") || ...
                     isfield(trial.SystemAttrs,"grid_id")

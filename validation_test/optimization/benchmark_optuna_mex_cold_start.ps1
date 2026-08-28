@@ -17,8 +17,15 @@ foreach ($Drive in Get-PSDrive -PSProvider FileSystem) {
 }
 $MatlabDirPath = Join-Path $ProbeRoot "matlab"
 $MatlabDir = $MatlabDirPath.Replace("\", "/").Replace("'", "''")
+$ManifestPath = Join-Path $ProbeRoot "packages\radia-optuna\src\radia_optuna\manifest.json"
+if (-not (Test-Path -LiteralPath $ManifestPath)) {
+    throw "Missing radia-optuna manifest: $ManifestPath"
+}
+$ExpectedCommandCount = [int](
+    Get-Content -LiteralPath $ManifestPath -Raw | ConvertFrom-Json
+).native_command_count
 $Batch = @"
-addpath('$MatlabDir'); clear optuna_mex; started=tic; info=optuna_mex('api.info'); elapsed=toc(started); assert(info.command_count==20); fprintf('OPTUNA_MEX_FIRST_CALL_S=%.9f\n',elapsed)
+addpath('$MatlabDir'); clear optuna_mex; started=tic; info=optuna_mex('api.info'); elapsed=toc(started); assert(info.command_count==$ExpectedCommandCount); fprintf('OPTUNA_MEX_FIRST_CALL_S=%.9f\n',elapsed)
 "@
 
 $Measurements = @()

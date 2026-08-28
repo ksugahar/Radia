@@ -2,6 +2,7 @@ import hashlib,json,os,re,shutil
 from collections import Counter
 from pathlib import Path
 from .optuna_boundary import matlab_optuna_mcp_route
+from .optuna_quality import matlab_optuna_health
 HERE=Path(__file__).parent; EXT=HERE/"extensions/radia-matlab-tools.json"; MATLAB=HERE/"matlab"
 PROFILES={"existing":("existing","desktop"),"auto_nodesktop":("auto","nodesktop"),"new_nodesktop":("new","nodesktop")}
 def matlab_extension_path():
@@ -496,6 +497,7 @@ def matlab_radia_mex_contract(topic="all"):
         if "classdef" in path.read_text(encoding="utf-8", errors="ignore")
     )
     optuna_functions = sorted(path.stem for path in optuna_files if path.stem not in optuna_classes)
+    optuna_health = matlab_optuna_health(str(repo_root) if repo_root is not None else "")
     groups = Counter(_radia_mex_group(command) for command in commands)
     mex_ready = bool(commands and source is not None)
     base = {
@@ -530,11 +532,15 @@ def matlab_radia_mex_contract(topic="all"):
         "matlab_optuna_class_count": len(optuna_classes),
         "matlab_optuna_function_count": len(optuna_functions),
         "matlab_optuna_classes": optuna_classes,
+        "matlab_optuna_file_count": optuna_health.get("distribution", {}).get("matlab_file_count"),
+        "matlab_optuna_expected_file_count": optuna_health.get("distribution", {}).get("expected_matlab_file_count"),
+        "matlab_optuna_public_api": optuna_health.get("public_api"),
+        "matlab_optuna_distribution_health": optuna_health,
         "interfaces": {
             "python": "radia._radia_pybind and radia Python modules",
             "matlab": "radia_mex plus matlab/+radia wrappers; the MEX target does not link python312.lib or launch python.exe, but the current pip-provided libngsolve.dll transitively requires python312.dll",
             "ngsolve": "NGSolve owns meshes/spaces/transforms; MATLAB uses numeric/struct contracts",
-            "mcp": ["matlab_radia_mex_contract", "matlab_optuna_simulink_contract", "radia_usage", "ngsolve_usage"],
+            "mcp": ["matlab_radia_mex_contract", "matlab_optuna_health", "matlab_optuna_oracle_plan", "matlab_optuna_benchmark_plan", "matlab_optuna_release_gate", "matlab_optuna_simulink_contract", "radia_usage", "ngsolve_usage"],
         },
         "ngsolve_boundary": {
             "project_bridge_commands": [name for name in commands if name.startswith("ngsolve.") or name.startswith("hcurl.") or name.startswith("hdiv.")],
@@ -553,6 +559,9 @@ def matlab_radia_mex_contract(topic="all"):
             "optuna_native_kernel_gate": "runtests('tests/matlab/test_radia_mex.m', Name={'test_radia_mex/testOptunaParetoRankCrowding','test_radia_mex/testOptunaParzenLogPdfKernels'})",
             "optuna_table_gate": "runtests('tests/matlab/test_optuna_table.m')",
             "optuna_simulink_block_gate": "runtests('tests/matlab/test_optuna_simulink_block.m')",
+            "optuna_distribution_health_gate": "matlab_optuna_health",
+            "optuna_differential_oracle_gate": "matlab_optuna_oracle_plan",
+            "optuna_performance_gate": "matlab_optuna_benchmark_plan -> matlab_optuna_release_gate",
             "optuna_native_kernel_benchmark": "validation_test/optimization/results_matlab_optuna_mex_benchmark_20260806.json",
             "runtime_probe": "radia.quickCheck()",
             "native_build": "pwsh -ExecutionPolicy Bypass -File .\\Build.ps1 -MatlabMexOnly -Verbose",
@@ -585,6 +594,7 @@ def matlab_radia_mex_contract(topic="all"):
 
 def matlab_optuna_simulink_contract():
     """Return the MATLAB-native Optuna and Simulink difference contract."""
+    health = matlab_optuna_health()
     return {
         "schema": "radia-mcp.matlab-optuna-simulink/v3",
         "status": "ready",
@@ -592,6 +602,7 @@ def matlab_optuna_simulink_contract():
         "distribution": "radia-optuna",
         "upstream_oracle": "optuna==4.9.0",
         "mcp_ownership": matlab_optuna_mcp_route(),
+        "distribution_health": health,
         "classes": {
             "Study": "ask/tell, scalar or vector objectives, normalized ObjectiveTable, MAT persistence, bestTrial/bestValue/bestParams/bestSolution or paretoFront",
             "Trial": "suggestFloat/suggestInteger/suggestCategorical, report, shouldPrune, user attributes",
@@ -662,7 +673,7 @@ def matlab_optuna_simulink_contract():
         "native_acceleration": {
             "status_api": "radia.optuna.nativeStatus",
             "gateway": "optuna_mex",
-            "command_count": 20,
+            "command_count": health.get("native", {}).get("command_count"),
             "required": True,
             "policy": "The standalone optuna_mex gateway is required. Preserve MATLAB Study/Trial, upstream-oracled sampler streams, and persistence; never silently substitute a missing-MEX implementation.",
             "missing_mex_fallback": False,

@@ -6,18 +6,735 @@ import importlib.metadata
 import inspect
 import json
 import logging
+import socket
 import sys
+import tempfile
 import warnings
+from io import BytesIO
 from pathlib import Path
+from unittest.mock import patch
 
 import numpy as np
 import optuna
+import optuna.artifacts
 import optuna.importance
+import optuna.storages
 import optuna.terminator
 import scipy
 from optuna.trial import TrialState
 
 EXPECTED_VERSION = "4.9.0"
+INTEGRATION_EXPORTS = (
+    "AllenNLPExecutor",
+    "AllenNLPPruningCallback",
+    "BoTorchSampler",
+    "CatBoostPruningCallback",
+    "ChainerMNStudy",
+    "ChainerPruningExtension",
+    "DaskStorage",
+    "FastAIPruningCallback",
+    "FastAIV2PruningCallback",
+    "KerasPruningCallback",
+    "LightGBMPruningCallback",
+    "LightGBMTuner",
+    "LightGBMTunerCV",
+    "MLflowCallback",
+    "MXNetPruningCallback",
+    "OptunaSearchCV",
+    "PyCmaSampler",
+    "PyTorchIgnitePruningHandler",
+    "PyTorchLightningPruningCallback",
+    "ShapleyImportanceEvaluator",
+    "SkorchPruningCallback",
+    "TFKerasPruningCallback",
+    "TensorBoardCallback",
+    "TensorFlowPruningHook",
+    "TorchDistributedTrial",
+    "WeightsAndBiasesCallback",
+    "XGBoostPruningCallback",
+)
+VISUALIZATION_FUNCTIONS = (
+    "plot_contour",
+    "plot_edf",
+    "plot_hypervolume_history",
+    "plot_intermediate_values",
+    "plot_optimization_history",
+    "plot_parallel_coordinate",
+    "plot_param_importances",
+    "plot_pareto_front",
+    "plot_rank",
+    "plot_slice",
+    "plot_terminator_improvement",
+    "plot_timeline",
+)
+
+
+def _sampler_reseed_contract() -> dict[str, object]:
+    class _RngRecorder:
+        def __init__(self, calls: list[str], label: str) -> None:
+            self.calls = calls
+            self.label = label
+            self.rng = self
+
+        def seed(self, *args: object, **kwargs: object) -> None:
+            if args or kwargs:
+                raise AssertionError("Optuna reseed_rng must request seed=None.")
+            self.calls.append(self.label)
+
+    class _SamplerRecorder:
+        def __init__(self, calls: list[str], label: str) -> None:
+            self.calls = calls
+            self.label = label
+
+        def reseed_rng(self) -> None:
+            self.calls.append(self.label)
+
+    configurations = {
+        "RandomSampler": {"_rng": "rng"},
+        "BruteForceSampler": {},
+        "GridSampler": {"_rng": "rng"},
+        "TPESampler": {"_rng": "rng", "_random_sampler": "independent"},
+        "CmaEsSampler": {"_independent_sampler": "independent"},
+        "GPSampler": {"_rng": "rng", "_independent_sampler": "independent"},
+        "NSGAIISampler": {"_random_sampler": "independent", "_rng": "rng"},
+        "NSGAIIISampler": {"_random_sampler": "independent", "_rng": "rng"},
+        "PartialFixedSampler": {"_base_sampler": "base"},
+        "QMCSampler": {"_independent_sampler": "independent"},
+    }
+    samplers: dict[str, object] = {}
+    for name, attributes in configurations.items():
+        calls: list[str] = []
+        sampler_class = getattr(optuna.samplers, name)
+        sampler = object.__new__(sampler_class)
+        for attribute, label in attributes.items():
+            recorder: object
+            if label == "rng":
+                recorder = _RngRecorder(calls, label)
+            else:
+                recorder = _SamplerRecorder(calls, label)
+            setattr(sampler, attribute, recorder)
+        sampler_class.reseed_rng(sampler)
+        samplers[name] = {"calls": calls, "returns_none": True}
+
+    state_before = np.random.get_state()
+    random_sampler = optuna.samplers.RandomSampler(seed=37)
+    random_sampler.reseed_rng()
+    state_after = np.random.get_state()
+    global_state_unchanged = all(
+        np.array_equal(left, right) if isinstance(left, np.ndarray) else left == right
+        for left, right in zip(state_before, state_after, strict=True)
+    )
+    return {
+        "global_numpy_rng_unchanged": global_state_unchanged,
+        "samplers": samplers,
+        "seed_none_is_nondeterministic": True,
+    }
+
+
+def _integration_contract() -> dict[str, object]:
+    module = importlib.import_module("optuna.integration")
+    exports: dict[str, object] = {}
+    logger_states = {
+        name: logger.disabled
+        for name, logger in logging.root.manager.loggerDict.items()
+        if isinstance(logger, logging.Logger)
+    }
+    try:
+        for name in INTEGRATION_EXPORTS:
+            try:
+                symbol = getattr(module, name)
+            except Exception as error:  # noqa: BLE001 - lazy import contract.
+                exports[name] = {
+                    "available": False,
+                    "error_type": type(error).__name__,
+                }
+            else:
+                exports[name] = {
+                    "available": True,
+                    "module": symbol.__module__,
+                    "name": symbol.__name__,
+                    "type": type(symbol).__name__,
+                }
+    finally:
+        for name, disabled in logger_states.items():
+            logger = logging.root.manager.loggerDict.get(name)
+            if isinstance(logger, logging.Logger):
+                logger.disabled = disabled
+    return {"exports": exports}
+
+
+def _visualization_contract() -> dict[str, object]:
+    import matplotlib
+
+    matplotlib.use("Agg", force=True)
+    single_x = [0.0, 0.25, 0.5, 0.75, 1.0]
+    single_y = [1, 2, 3, 4, 5]
+    single_values = [4.0, 1.0, 0.0, 1.0, 4.0]
+    single = optuna.create_study()
+    single_distributions = {
+        "x": optuna.distributions.FloatDistribution(0.0, 1.0),
+        "y": optuna.distributions.IntDistribution(1, 5),
+    }
+    for index, (x, y, value) in enumerate(
+        zip(single_x, single_y, single_values, strict=True)
+    ):
+        single.add_trial(
+            optuna.trial.create_trial(
+                value=value,
+                params={"x": x, "y": y},
+                distributions=single_distributions,
+                intermediate_values={0: float(index), 1: float(index) / 2.0},
+            )
+        )
+    multi_values = [[float(index), float(4 - index)] for index in range(5)]
+    multi = optuna.create_study(directions=["minimize", "minimize"])
+    for x, values in zip(single_x, multi_values, strict=True):
+        multi.add_trial(
+            optuna.trial.create_trial(
+                values=values,
+                params={"x": x},
+                distributions={"x": single_distributions["x"]},
+            )
+        )
+    backends: dict[str, object] = {}
+    for backend, module_name in {
+        "plotly": "optuna.visualization",
+        "matplotlib": "optuna.visualization.matplotlib",
+    }.items():
+        module = importlib.import_module(module_name)
+        functions: dict[str, object] = {}
+        for name in VISUALIZATION_FUNCTIONS:
+            study = multi if name in {
+                "plot_hypervolume_history",
+                "plot_pareto_front",
+            } else single
+            keyword = (
+                {"reference_point": [5.0, 5.0]}
+                if name == "plot_hypervolume_history"
+                else {}
+            )
+            try:
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore")
+                    result = getattr(module, name)(study, **keyword)
+            except Exception as error:  # noqa: BLE001 - optional backend contract.
+                functions[name] = {
+                    "available": False,
+                    "error_type": type(error).__name__,
+                }
+            else:
+                functions[name] = {
+                    "available": True,
+                    "module": type(result).__module__,
+                    "type": type(result).__name__,
+                }
+        backends[backend] = {
+            "functions": functions,
+            "is_available": bool(module.is_available()),
+        }
+    return {
+        "backends": backends,
+        "multi_values": multi_values,
+        "single_values": single_values,
+        "single_x": single_x,
+        "single_y": single_y,
+    }
+
+
+class _FakeRedis:
+    def __init__(self) -> None:
+        self.values: dict[str, object] = {}
+
+    def get(self, key: str) -> object | None:
+        return self.values.get(key)
+
+    def setnx(self, key: str, value: object) -> None:
+        self.values.setdefault(key, value)
+
+    def incr(self, key: str, amount: int) -> int:
+        value = int(self.values.get(key, 0)) + amount
+        self.values[key] = value
+        return value
+
+    def set(self, key: str, value: object) -> None:
+        self.values[key] = value
+
+
+def _journal_redis_contract() -> dict[str, object]:
+    backend = object.__new__(optuna.storages.journal.JournalRedisBackend)
+    backend._redis = _FakeRedis()
+    backend._use_cluster = True
+    backend._prefix = "oracle"
+    logs = [
+        {"operation": 4, "worker": "redis"},
+        {"operation": 5, "value": 7.25},
+    ]
+    append_result = backend.append_logs(logs)
+    selected = list(backend.read_logs(1))
+    save_result = backend.save_snapshot(b"snapshot-bytes")
+    return {
+        "append_is_none": append_result is None,
+        "load_snapshot": list(backend.load_snapshot()),
+        "save_snapshot_is_none": save_result is None,
+        "selected_logs": selected,
+    }
+
+
+def _grpc_storage_contract() -> dict[str, object]:
+    from optuna.storages._grpc.server import make_server
+
+    with tempfile.TemporaryDirectory(dir=r"C:\temp") as directory:
+        storage = optuna.storages.RDBStorage(
+            f"sqlite:///{Path(directory) / 'grpc.db'}"
+        )
+        with socket.socket() as reservation:
+            reservation.bind(("127.0.0.1", 0))
+            port = reservation.getsockname()[1]
+        server = make_server(storage, "127.0.0.1", port)
+        server.start()
+        proxy = optuna.storages.GrpcStorageProxy(host="127.0.0.1", port=port)
+        try:
+            ready_result = proxy.wait_server_ready(timeout=5.0)
+            result = _exercise_storage(proxy, "grpc-oracle")
+            close_result = proxy.close()
+        finally:
+            server.stop(0).wait()
+            storage.engine.dispose()
+    result.update(
+        {
+            "close_is_none": close_result is None,
+            "ready_is_none": ready_result is None,
+        }
+    )
+    return result
+
+
+def _retry_callback_contract() -> dict[str, object]:
+    study = optuna.create_study()
+    distribution = optuna.distributions.FloatDistribution(0.0, 1.0)
+    study.add_trial(
+        optuna.trial.create_trial(
+            value=0.5,
+            params={"x": 0.25},
+            distributions={"x": distribution},
+            intermediate_values={2: 3.5},
+            user_attrs={"owner": "oracle"},
+        )
+    )
+    source = study.trials[0]
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        callback = optuna.storages.RetryHeartbeatStaleTrialCallback(
+            max_retry=2, inherit_intermediate_values=True
+        )
+    callback(study, source)
+    first_retry = study.trials[1]
+    callback(study, first_retry)
+    second_retry = study.trials[2]
+    callback(study, second_retry)
+    with warnings.catch_warnings(record=True) as static_warnings:
+        warnings.simplefilter("always")
+        original_number = callback.retried_trial_number(second_retry)
+        history = callback.retry_history(second_retry)
+    with warnings.catch_warnings(record=True) as alias_warnings:
+        warnings.simplefilter("always")
+        optuna.storages.RetryFailedTrialCallback(max_retry=1)
+    plain = optuna.create_study()
+    with warnings.catch_warnings(record=True) as stale_warnings:
+        warnings.simplefilter("always")
+        stale_result = optuna.storages.fail_stale_trials(plain)
+    return {
+        "alias_warning": type(alias_warnings[0].message).__name__,
+        "callback_warning": type(caught[0].message).__name__,
+        "fail_stale_is_none": stale_result is None,
+        "fail_stale_warning": type(stale_warnings[0].message).__name__,
+        "first_intermediate": first_retry.intermediate_values,
+        "first_state": first_retry.state.name,
+        "history": history,
+        "n_trials": len(study.trials),
+        "original_number": original_number,
+        "second_history": second_retry.system_attrs["retry_history"],
+        "static_warnings": [type(item.message).__name__ for item in static_warnings],
+    }
+
+
+def _storage_contract() -> dict[str, object]:
+    storage = optuna.storages.InMemoryStorage()
+    result = _exercise_storage(storage, "memory-oracle")
+    result["base_is_abstract"] = inspect.isabstract(optuna.storages.BaseStorage)
+    return result
+
+
+def _cached_storage_contract() -> dict[str, object]:
+    backend = optuna.storages.RDBStorage("sqlite:///:memory:")
+    storage = optuna.storages._CachedStorage(backend)
+    result = _exercise_storage(storage, "cached-oracle")
+    result.update(
+        {
+            "heartbeat_interval": storage.get_heartbeat_interval(),
+            "heartbeat_stale_callback_is_none": (
+                storage.get_heartbeat_stale_trial_callback() is None
+            ),
+            "record_heartbeat_is_none": storage.record_heartbeat(result["trial_id"])
+            is None,
+        }
+    )
+    return result
+
+
+def _rdb_storage_contract() -> dict[str, object]:
+    storage = optuna.storages.RDBStorage("sqlite:///:memory:")
+    result = _exercise_storage(storage, "rdb-oracle")
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        failed_callback = storage.get_failed_trial_callback()
+    result.update(
+        {
+            "all_versions": storage.get_all_versions(),
+            "current_version": storage.get_current_version(),
+            "failed_callback_is_none": failed_callback is None,
+            "failed_callback_warning": type(caught[0].message).__name__,
+            "head_version": storage.get_head_version(),
+            "heartbeat_interval": storage.get_heartbeat_interval(),
+            "heartbeat_stale_callback_is_none": (
+                storage.get_heartbeat_stale_trial_callback() is None
+            ),
+        }
+    )
+    storage.upgrade()
+    result["upgrade_preserves_version"] = (
+        storage.get_current_version() == result["current_version"]
+    )
+    return result
+
+
+def _journal_storage_contract() -> dict[str, object]:
+    with tempfile.TemporaryDirectory(dir=r"C:\temp") as directory:
+        root = Path(directory)
+        log_path = root / "backend.log"
+        backend = optuna.storages.journal.JournalFileBackend(str(log_path))
+        logs = [
+            {"operation": 1, "worker": "alpha"},
+            {"operation": 2, "value": 3.5},
+        ]
+        append_result = backend.append_logs(logs)
+        selected = list(backend.read_logs(1))
+
+        lock_results: dict[str, object] = {}
+        for lock_name, lock_class in {
+            "open": optuna.storages.journal.JournalFileOpenLock,
+            "symlink": optuna.storages.journal.JournalFileSymlinkLock,
+        }.items():
+            target = root / f"{lock_name}.log"
+            target.touch()
+            lock = lock_class(str(target))
+            acquired = lock.acquire()
+            release_result = lock.release()
+            try:
+                lock.release()
+            except Exception as error:  # noqa: BLE001 - public error contract.
+                second_release_error = type(error).__name__
+            lock_results[lock_name] = {
+                "acquired": acquired,
+                "release_is_none": release_result is None,
+                "second_release_error": second_release_error,
+            }
+
+        storage_path = root / "storage.log"
+        storage = optuna.storages.journal.JournalStorage(
+            optuna.storages.journal.JournalFileBackend(str(storage_path))
+        )
+        storage_result = _exercise_storage(storage, "journal-oracle")
+        restore_result = storage.restore_replay_result(b"not-a-pickle")
+        storage_result["restore_invalid_is_none"] = restore_result is None
+        return {
+            "append_is_none": append_result is None,
+            "base_backend_is_abstract": inspect.isabstract(
+                optuna.storages.journal.BaseJournalBackend
+            ),
+            "base_log_storage_is_abstract": inspect.isabstract(
+                optuna.storages.BaseJournalLogStorage
+            ),
+            "file_text": log_path.read_text(encoding="utf-8"),
+            "locks": lock_results,
+            "redis": _journal_redis_contract(),
+            "selected_logs": selected,
+            "storage": storage_result,
+        }
+
+
+def _exercise_storage(
+    storage: optuna.storages.BaseStorage, study_name: str
+) -> dict[str, object]:
+    study_id = storage.create_new_study(
+        [optuna.study.StudyDirection.MINIMIZE], study_name=study_name
+    )
+    storage.set_study_user_attr(study_id, "owner", "oracle")
+    storage.set_study_system_attr(study_id, "revision", 4)
+    trial_id = storage.create_new_trial(study_id)
+    float_distribution = optuna.distributions.FloatDistribution(0.0, 1.0)
+    storage.set_trial_param(trial_id, "x", 0.5, float_distribution)
+    storage.set_trial_user_attr(trial_id, "label", "first")
+    storage.set_trial_system_attr(trial_id, "worker", 7)
+    storage.set_trial_intermediate_value(trial_id, 2, 3.5)
+    running = storage.get_trial(trial_id)
+    completed = storage.set_trial_state_values(trial_id, TrialState.COMPLETE, [1.25])
+    frozen = storage.get_trial(trial_id)
+    try:
+        storage.set_trial_user_attr(trial_id, "late", True)
+    except Exception as error:  # noqa: BLE001 - public exception contract.
+        finished_update_error = type(error).__name__
+
+    failed_id = storage.create_new_trial(study_id)
+    storage.set_trial_state_values(failed_id, TrialState.FAIL)
+    template_id = storage.create_new_trial(
+        study_id, optuna.trial.create_trial(value=0.25)
+    )
+    best = storage.get_best_trial(study_id)
+    summary = storage.get_all_studies()[0]
+    try:
+        storage.create_new_study(
+            [optuna.study.StudyDirection.MINIMIZE], study_name=study_name
+        )
+    except Exception as error:  # noqa: BLE001 - public exception contract.
+        duplicate_error = type(error).__name__
+    remove_result = storage.remove_session()
+    complete_trials = storage.get_all_trials(study_id, states=(TrialState.COMPLETE,))
+    return {
+        "best_number": best.number,
+        "complete_numbers": [trial.number for trial in complete_trials],
+        "completed": completed,
+        "directions": [
+            direction.name for direction in storage.get_study_directions(study_id)
+        ],
+        "duplicate_error": duplicate_error,
+        "failed_id": failed_id,
+        "finished_update_error": finished_update_error,
+        "n_complete": storage.get_n_trials(study_id, TrialState.COMPLETE),
+        "n_trials": storage.get_n_trials(study_id),
+        "param_internal": storage.get_trial_param(trial_id, "x"),
+        "params": storage.get_trial_params(trial_id),
+        "remove_session_is_none": remove_result is None,
+        "running_state": running.state.name,
+        "study_id": study_id,
+        "study_name": storage.get_study_name_from_id(study_id),
+        "study_system_attrs": storage.get_study_system_attrs(study_id),
+        "study_user_attrs": storage.get_study_user_attrs(study_id),
+        "summary": {
+            "name": summary.study_name,
+        },
+        "template_id": template_id,
+        "trial_id": trial_id,
+        "trial_lookup_id": storage.get_trial_id_from_study_id_trial_number(
+            study_id, frozen.number
+        ),
+        "trial_number": storage.get_trial_number_from_id(trial_id),
+        "trial_state": frozen.state.name,
+        "trial_system_attrs": storage.get_trial_system_attrs(trial_id),
+        "trial_user_attrs": storage.get_trial_user_attrs(trial_id),
+        "trial_value": frozen.value,
+    }
+
+
+def _artifact_contract() -> dict[str, object]:
+    class BotoClient:
+        def __init__(self) -> None:
+            self.payload = b"cloud-bytes"
+
+        def get_object(self, **kwargs: object) -> dict[str, BytesIO]:
+            return {"Body": BytesIO(self.payload)}
+
+        def upload_fileobj(self, source: BytesIO, bucket: str, key: str) -> None:
+            self.payload = source.read()
+
+        def delete_object(self, **kwargs: object) -> None:
+            self.payload = b""
+
+    class Blob:
+        def __init__(self, bucket: Bucket, artifact_id: str) -> None:
+            self.bucket = bucket
+            self.artifact_id = artifact_id
+
+        def download_as_bytes(self) -> bytes:
+            return self.bucket.payloads[self.artifact_id]
+
+        def upload_from_string(self, data: bytes) -> None:
+            self.bucket.payloads[self.artifact_id] = data
+
+    class Bucket:
+        def __init__(self) -> None:
+            self.payloads: dict[str, bytes] = {"cloud": b"cloud-bytes"}
+
+        def get_blob(self, artifact_id: str) -> Blob | None:
+            return Blob(self, artifact_id) if artifact_id in self.payloads else None
+
+        def blob(self, artifact_id: str) -> Blob:
+            return Blob(self, artifact_id)
+
+        def delete_blob(self, artifact_id: str) -> None:
+            del self.payloads[artifact_id]
+
+    class GCSClient:
+        def __init__(self) -> None:
+            self.bucket_value = Bucket()
+
+        def bucket(self, name: str) -> Bucket:
+            return self.bucket_value
+
+    with tempfile.TemporaryDirectory(dir=r"C:\temp") as directory:
+        base = Path(directory)
+        source = base / "oracle.txt"
+        source.write_bytes(b"artifact-bytes\x00\xff")
+        store = optuna.artifacts.FileSystemArtifactStore(base)
+        study = optuna.create_study()
+        fixed_id = "12345678-1234-5678-1234-567812345678"
+        with patch("optuna.artifacts._upload.uuid.uuid4", return_value=fixed_id):
+            artifact_id = optuna.artifacts.upload_artifact(
+                artifact_store=store,
+                file_path=str(source),
+                study_or_trial=study,
+            )
+        metadata = optuna.artifacts.get_all_artifact_meta(study)[0]
+        destination = base / "downloaded.txt"
+        optuna.artifacts.download_artifact(
+            artifact_store=store,
+            file_path=str(destination),
+            artifact_id=artifact_id,
+        )
+        downloaded = destination.read_bytes()
+        try:
+            optuna.artifacts.download_artifact(
+                artifact_store=store,
+                file_path=str(destination),
+                artifact_id=artifact_id,
+            )
+        except Exception as error:  # noqa: BLE001 - record public error type.
+            existing_error = type(error).__name__
+        try:
+            store.open_reader("../outside")
+        except Exception as error:  # noqa: BLE001 - record public error type.
+            traversal_error = type(error).__name__
+        backoff = optuna.artifacts.Backoff(
+            store, max_retries=2, min_delay=1e-9, max_delay=2e-9
+        )
+        backoff_id = "backoff"
+        backoff.write(backoff_id, BytesIO(b"retry-body"))
+        backoff_body = backoff.open_reader(backoff_id).read()
+        try:
+            backoff.remove(backoff_id)
+        except Exception as error:  # noqa: BLE001 - Optuna 4.9 retry-loop behavior.
+            backoff_remove_error = type(error).__name__
+
+    boto_client = BotoClient()
+    with patch("optuna.artifacts._boto3._imports.check", return_value=None):
+        boto = optuna.artifacts.Boto3ArtifactStore("bucket", client=boto_client)
+    boto_open = boto.open_reader("cloud").read()
+    boto.write("cloud", BytesIO(b"updated"))
+    boto_written = boto_client.payload
+    boto.remove("cloud")
+
+    gcs_client = GCSClient()
+    with patch("optuna.artifacts._gcs._imports.check", return_value=None):
+        gcs = optuna.artifacts.GCSArtifactStore("bucket", client=gcs_client)
+    gcs_open = gcs.open_reader("cloud").read()
+    gcs.write("cloud", BytesIO(b"updated"))
+    gcs_written = gcs_client.bucket_value.payloads["cloud"]
+    gcs.remove("cloud")
+
+    return {
+        "artifact_id": artifact_id,
+        "backoff_body": list(backoff_body),
+        "backoff_remove_error": backoff_remove_error,
+        "boto_open": list(boto_open),
+        "boto_written": list(boto_written),
+        "downloaded": list(downloaded),
+        "existing_download_error": existing_error,
+        "gcs_open": list(gcs_open),
+        "gcs_written": list(gcs_written),
+        "metadata": {
+            "artifact_id": metadata.artifact_id,
+            "encoding": metadata.encoding,
+            "filename": metadata.filename,
+            "mimetype": metadata.mimetype,
+        },
+        "traversal_error": traversal_error,
+    }
+
+
+def _exception_contract() -> dict[str, object]:
+    classes = [
+        "CLIUsageError",
+        "DuplicatedStudyError",
+        "ExperimentalWarning",
+        "OptunaError",
+        "StorageInternalError",
+        "TrialPruned",
+        "UpdateFinishedTrialError",
+    ]
+    result: dict[str, object] = {}
+    for name in classes:
+        exception_type = getattr(optuna.exceptions, name)
+        cases = []
+        for arguments in [(), ("oracle message",), ("a", "b")]:
+            exception = exception_type(*arguments)
+            exception.add_note("oracle note")
+            cases.append(
+                {
+                    "args": list(exception.args),
+                    "message": str(exception),
+                    "notes": list(exception.__notes__),
+                    "with_traceback_identity": exception.with_traceback(None)
+                    is exception,
+                }
+            )
+        result[name] = {
+            "cases": cases,
+            "is_optuna_error": issubclass(
+                exception_type, optuna.exceptions.OptunaError
+            ),
+            "is_warning": issubclass(exception_type, Warning),
+        }
+    return result
+
+
+def _logging_contract() -> dict[str, object]:
+    module = optuna.logging
+    constants = {
+        name: getattr(module, name)
+        for name in ["CRITICAL", "DEBUG", "ERROR", "FATAL", "INFO", "WARN", "WARNING"]
+    }
+    module.set_verbosity(module.INFO)
+    initial = module.get_verbosity()
+    logger = module.get_logger("unit")
+    formatter = module.create_default_formatter()
+    module.set_verbosity(module.DEBUG)
+    after_set = module.get_verbosity()
+    module.disable_default_handler()
+    module.disable_propagation()
+    root = module.get_logger("optuna")
+    disabled = {"handlers": len(root.handlers), "propagate": root.propagate}
+    module.enable_default_handler()
+    module.enable_propagation()
+    enabled = {"handlers": len(root.handlers), "propagate": root.propagate}
+    module.set_verbosity(module.WARNING)
+    module.disable_propagation()
+    return {
+        "after_set": after_set,
+        "constants": constants,
+        "disabled": disabled,
+        "enabled": enabled,
+        "formatter": {
+            "date_format": formatter.datefmt,
+            "format": formatter._style._fmt,
+        },
+        "initial": initial,
+        "logger": {
+            "handlers": len(logger.handlers),
+            "level": logger.level,
+            "name": logger.name,
+            "propagate": logger.propagate,
+        },
+    }
 
 
 def _sampler_seed_default_contract() -> dict[str, object]:
@@ -60,47 +777,64 @@ def _sampler_public_member_contract() -> dict[str, object]:
         trials = study.get_trials(deepcopy=False)
         return study, trials[-1], trials[0]
 
-    samplers = {
-        "BruteForceSampler": optuna.samplers.BruteForceSampler(seed=7),
-        "CmaEsSampler": optuna.samplers.CmaEsSampler(
-            seed=7, n_startup_trials=99
-        ),
-        "GPSampler": optuna.samplers.GPSampler(seed=7, n_startup_trials=99),
-        "GridSampler": optuna.samplers.GridSampler(
-            {"x": [0.0, 1.0], "y": [1, 3]}, seed=7
-        ),
-        "NSGAIIISampler": optuna.samplers.NSGAIIISampler(
-            seed=7, population_size=4
-        ),
-        "NSGAIISampler": optuna.samplers.NSGAIISampler(
-            seed=7, population_size=4
-        ),
-        "PartialFixedSampler": optuna.samplers.PartialFixedSampler(
-            {"x": 0.25},
-            optuna.samplers.TPESampler(
+    def make_samplers() -> dict[str, optuna.samplers.BaseSampler]:
+        return {
+            "BruteForceSampler": optuna.samplers.BruteForceSampler(seed=7),
+            "CmaEsSampler": optuna.samplers.CmaEsSampler(seed=7, n_startup_trials=99),
+            "GPSampler": optuna.samplers.GPSampler(seed=7, n_startup_trials=99),
+            "GridSampler": optuna.samplers.GridSampler(
+                {"x": [0.0, 1.0], "y": [1, 3]}, seed=7
+            ),
+            "NSGAIIISampler": optuna.samplers.NSGAIIISampler(seed=7, population_size=4),
+            "NSGAIISampler": optuna.samplers.NSGAIISampler(seed=7, population_size=4),
+            "PartialFixedSampler": optuna.samplers.PartialFixedSampler(
+                {"x": 0.25},
+                optuna.samplers.TPESampler(
+                    seed=7, n_startup_trials=1, multivariate=True
+                ),
+            ),
+            "QMCSampler": optuna.samplers.QMCSampler(
+                seed=7, warn_asynchronous_seeding=False
+            ),
+            "RandomSampler": optuna.samplers.RandomSampler(seed=7),
+            "TPESampler": optuna.samplers.TPESampler(
                 seed=7, n_startup_trials=1, multivariate=True
             ),
-        ),
-        "QMCSampler": optuna.samplers.QMCSampler(
-            seed=7, warn_asynchronous_seeding=False
-        ),
-        "RandomSampler": optuna.samplers.RandomSampler(seed=7),
-        "TPESampler": optuna.samplers.TPESampler(
-            seed=7, n_startup_trials=1, multivariate=True
-        ),
-    }
+        }
+
+    samplers = make_samplers()
+    direct_samplers = make_samplers()
     sampler_contract: dict[str, object] = {}
     for name, sampler in samplers.items():
         study, running, complete = make_study()
         search_space = sampler.infer_relative_search_space(study, running)
         before_result = sampler.before_trial(study, running)
+        running = study.get_trials(deepcopy=False)[-1]
         after_result = sampler.after_trial(
             study, complete, TrialState.COMPLETE, [complete.value]
+        )
+        direct_sampler = direct_samplers[name]
+        direct_study = optuna.create_study(sampler=direct_sampler)
+        direct_trial = direct_study.ask()
+        direct_trial = direct_study.get_trials(deepcopy=False)[-1]
+        direct_space = direct_sampler.infer_relative_search_space(
+            direct_study, direct_trial
+        )
+        independent = direct_sampler.sample_independent(
+            direct_study,
+            direct_trial,
+            "x",
+            optuna.distributions.FloatDistribution(0.0, 1.0, step=0.1),
+        )
+        relative = direct_sampler.sample_relative(
+            direct_study, direct_trial, direct_space
         )
         sampler_contract[name] = {
             "after_trial_returns_none": after_result is None,
             "before_trial_returns_none": before_result is None,
+            "independent_value": independent,
             "infer_relative_search_space_keys": sorted(search_space),
+            "relative_params": relative,
         }
 
     grid = optuna.samplers.GridSampler({"x": [0, 1]}, seed=7)
@@ -152,6 +886,34 @@ def _sampler_public_member_contract() -> dict[str, object]:
         mapped_namespaces[name] = module.__name__
 
     fixed = optuna.trial.FixedTrial({"x": 0.5})
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", FutureWarning)
+        hyperopt = optuna.samplers.TPESampler.hyperopt_parameters()
+
+    ga_contract: dict[str, object] = {}
+    for name, sampler in {
+        "NSGAIISampler": optuna.samplers.NSGAIISampler(seed=11, population_size=2),
+        "NSGAIIISampler": optuna.samplers.NSGAIIISampler(seed=11, population_size=2),
+    }.items():
+        study = optuna.create_study(sampler=sampler)
+        for objective in [3.0, 1.0, 2.0, 0.0]:
+            trial = study.ask()
+            trial.suggest_float("x", 0.0, 1.0)
+            study.tell(trial, objective)
+        trials = study.get_trials(deepcopy=False)
+        generation_key = f"{name}:generation"
+        generations = [trial.system_attrs[generation_key] for trial in trials]
+        population = sampler.get_population(study, 0)
+        parents = sampler.get_parent_population(study, 1)
+        selected = sampler.select_parent(study, 1)
+        sampler.population_size = 3
+        ga_contract[name] = {
+            "generations": generations,
+            "parent_numbers": [trial.number for trial in parents],
+            "population_numbers": [trial.number for trial in population],
+            "population_size_after_set": sampler.population_size,
+            "selected_numbers": [trial.number for trial in selected],
+        }
     return {
         "base_crossover_instantiation_error": base_crossover_error,
         "crossover_n_parents": {
@@ -160,6 +922,17 @@ def _sampler_public_member_contract() -> dict[str, object]:
         "fixed_trial_datetime_start_is_not_none": fixed.datetime_start is not None,
         "grid_is_exhausted_after": grid.is_exhausted(grid_study),
         "grid_is_exhausted_before": grid_exhausted_before,
+        "ga": ga_contract,
+        "hyperopt_parameters": {
+            "consider_endpoints": hyperopt["consider_endpoints"],
+            "consider_magic_clip": hyperopt["consider_magic_clip"],
+            "consider_prior": hyperopt["consider_prior"],
+            "gamma": [hyperopt["gamma"](count) for count in [0, 1, 16, 10000]],
+            "n_ei_candidates": hyperopt["n_ei_candidates"],
+            "n_startup_trials": hyperopt["n_startup_trials"],
+            "prior_weight": hyperopt["prior_weight"],
+            "weights": [hyperopt["weights"](count).tolist() for count in [0, 3, 27]],
+        },
         "mapped_namespaces": mapped_namespaces,
         "nsgaii_population_size": optuna.samplers.NSGAIISampler(
             population_size=5
@@ -290,6 +1063,8 @@ def _tpe_group_contract() -> dict[str, object]:
 
     def capture(*, group: bool, warn: bool) -> list[str]:
         handler = Records()
+        disabled = logger.disabled
+        logger.disabled = False
         logger.addHandler(handler)
         try:
             with warnings.catch_warnings():
@@ -314,16 +1089,13 @@ def _tpe_group_contract() -> dict[str, object]:
             local_study.tell(third, y)
         finally:
             logger.removeHandler(handler)
+            logger.disabled = disabled
         return handler.messages
 
     return {
         "sequence": rows,
-        "independent_warning_enabled_count": len(
-            capture(group=False, warn=True)
-        ),
-        "independent_warning_disabled_count": len(
-            capture(group=False, warn=False)
-        ),
+        "independent_warning_enabled_count": len(capture(group=False, warn=True)),
+        "independent_warning_disabled_count": len(capture(group=False, warn=False)),
         "group_warning_count": len(capture(group=True, warn=True)),
     }
 
@@ -349,9 +1121,7 @@ def _tpe_categorical_distance_trials() -> list[dict[str, object]]:
         level = trial.suggest_categorical("level", levels)
         position = positions[level]
         study.tell(trial, (position - 1.3) ** 2)
-        rows.append(
-            {"number": trial.number, "level": level, "position": position}
-        )
+        rows.append({"number": trial.number, "level": level, "position": position})
     return rows
 
 
@@ -522,7 +1292,9 @@ def _search_space_contract() -> dict[str, object]:
     }
     values = {"x": 0.5, "fixed": 2.0, "cat": "A", "z": 1}
 
-    def frozen(state: TrialState, current: dict[str, object]) -> optuna.trial.FrozenTrial:
+    def frozen(
+        state: TrialState, current: dict[str, object]
+    ) -> optuna.trial.FrozenTrial:
         return optuna.trial.create_trial(
             state=state,
             value=1.0 if state == TrialState.COMPLETE else None,
@@ -562,15 +1334,63 @@ def _search_space_contract() -> dict[str, object]:
     study.add_trials(trials)
     calculator = optuna.search_space.IntersectionSearchSpace()
     calculated = calculator.calculate(study)
+
+    def signatures(group: object) -> list[str]:
+        return [",".join(sorted(space)) for space in group.search_spaces]
+
+    direct_group = optuna.search_space._SearchSpaceGroup()
+    direct_group.add_distributions({"x": base["x"], "y": base["fixed"]})
+    direct_group.add_distributions(
+        {"x": base["x"], "z": distributions.IntDistribution(1, 3)}
+    )
+    grouped_study = optuna.create_study()
+    grouped_study.add_trials(
+        [
+            frozen(
+                TrialState.COMPLETE,
+                {"x": base["x"], "fixed": base["fixed"]},
+            ),
+            frozen(
+                TrialState.COMPLETE,
+                {"x": base["x"], "z": distributions.IntDistribution(1, 3)},
+            ),
+        ]
+    )
+    decomposed = optuna.search_space._GroupDecomposedSearchSpace().calculate(
+        grouped_study
+    )
     return {
         "without_pruned": list(without_pruned),
         "with_pruned": list(with_pruned),
         "calculator": list(calculated),
         "single_distribution_is_included": "fixed" in without_pruned,
+        "group": {
+            "calculated_signatures": signatures(decomposed),
+            "direct_signatures": signatures(direct_group),
+        },
     }
 
 
 def _enum_contract() -> dict[str, object]:
+    def integer_api(item: object) -> dict[str, object]:
+        enum_type = type(item)
+        value = int(item)
+        return {
+            "as_integer_ratio": list(item.as_integer_ratio()),
+            "bit_count": item.bit_count(),
+            "bit_length": item.bit_length(),
+            "conjugate": item.conjugate(),
+            "denominator": item.denominator,
+            "from_bytes_name": enum_type.from_bytes(bytes([0, value]), "big").name,
+            "imag": item.imag,
+            "is_integer": item.is_integer(),
+            "name": item.name,
+            "numerator": item.numerator,
+            "real": item.real,
+            "to_bytes": list(item.to_bytes(2, "big")),
+            "value": item.value,
+        }
+
     return {
         "study_direction": [
             {"name": item.name, "value": item.value}
@@ -584,6 +1404,10 @@ def _enum_contract() -> dict[str, object]:
             }
             for item in TrialState
         ],
+        "integer_api": {
+            "study_direction": integer_api(optuna.study.StudyDirection.MAXIMIZE),
+            "trial_state": integer_api(TrialState.WAITING),
+        },
     }
 
 
@@ -706,11 +1530,14 @@ def _qmc_warning_contract() -> dict[str, object]:
 
     def capture(operation: object) -> list[str]:
         handler = Records()
+        disabled = logger.disabled
+        logger.disabled = False
         logger.addHandler(handler)
         try:
             operation()  # type: ignore[operator]
         finally:
             logger.removeHandler(handler)
+            logger.disabled = disabled
         return handler.messages
 
     asynchronous_enabled = capture(
@@ -731,9 +1558,7 @@ def _qmc_warning_contract() -> dict[str, object]:
     )
 
     def sample_categorical(warn: bool) -> None:
-        sampler = optuna.samplers.QMCSampler(
-            seed=11, warn_independent_sampling=warn
-        )
+        sampler = optuna.samplers.QMCSampler(seed=11, warn_independent_sampling=warn)
         study = optuna.create_study(sampler=sampler)
         for _ in range(2):
             trial = study.ask()
@@ -842,9 +1667,7 @@ def _grid_trials() -> list[dict[str, object]]:
 
 def _nsgaii_trials() -> list[dict[str, object]]:
     sampler = optuna.samplers.NSGAIISampler(seed=19, population_size=4)
-    study = optuna.create_study(
-        directions=["minimize", "minimize"], sampler=sampler
-    )
+    study = optuna.create_study(directions=["minimize", "minimize"], sampler=sampler)
     rows: list[dict[str, object]] = []
 
     def objective(trial: optuna.Trial) -> list[float]:
@@ -915,9 +1738,7 @@ def _conditional_brute_force_trials() -> list[dict[str, str]]:
 
 
 def _cmaes_trials() -> list[dict[str, float]]:
-    sampler = optuna.samplers.CmaEsSampler(
-        seed=31, n_startup_trials=1, popsize=4
-    )
+    sampler = optuna.samplers.CmaEsSampler(seed=31, n_startup_trials=1, popsize=4)
     study = optuna.create_study(sampler=sampler)
     rows: list[dict[str, float]] = []
 
@@ -955,9 +1776,7 @@ def _cmaes_independent_sampler_trials() -> list[dict[str, object]]:
 def _scrambled_qmc_trials() -> dict[str, list[dict[str, float]]]:
     result: dict[str, list[dict[str, float]]] = {}
     for qmc_type in ("sobol", "halton"):
-        sampler = optuna.samplers.QMCSampler(
-            qmc_type=qmc_type, scramble=True, seed=47
-        )
+        sampler = optuna.samplers.QMCSampler(qmc_type=qmc_type, scramble=True, seed=47)
         study = optuna.create_study(sampler=sampler)
         rows: list[dict[str, float]] = []
         for _ in range(16):
@@ -1031,7 +1850,10 @@ def _nsgaii_crossover_trials() -> dict[str, list[dict[str, float]]]:
             z = trial.suggest_float("z", 0.0, 3.0)
             study.tell(
                 trial,
-                [x * x + 0.2 * y * y + 0.1 * z, (x - 0.4) ** 2 + (y + 0.3) ** 2 + z * z],
+                [
+                    x * x + 0.2 * y * y + 0.1 * z,
+                    (x - 0.4) ** 2 + (y + 0.3) ** 2 + z * z,
+                ],
             )
             rows.append({"x": x, "y": y, "z": z})
         result[name] = rows
@@ -1054,9 +1876,7 @@ def _partial_fixed_trials() -> list[dict[str, float]]:
 
 
 def _multivariate_tpe_trials() -> list[dict[str, object]]:
-    sampler = optuna.samplers.TPESampler(
-        seed=67, n_startup_trials=4, multivariate=True
-    )
+    sampler = optuna.samplers.TPESampler(seed=67, n_startup_trials=4, multivariate=True)
     study = optuna.create_study(sampler=sampler)
     rows: list[dict[str, object]] = []
     for _ in range(30):
@@ -1066,9 +1886,7 @@ def _multivariate_tpe_trials() -> list[dict[str, object]]:
         mode = trial.suggest_categorical("mode", ["A", "B"])
         study.tell(
             trial,
-            (x - 0.2) ** 2
-            + 0.05 * mesh
-            + (0.0 if mode == "B" else 0.2),
+            (x - 0.2) ** 2 + 0.05 * mesh + (0.0 if mode == "B" else 0.2),
         )
         rows.append({"x": x, "mesh": mesh, "mode": mode})
     return rows
@@ -1077,9 +1895,7 @@ def _multivariate_tpe_trials() -> list[dict[str, object]]:
 def _unscrambled_qmc_trials() -> dict[str, list[dict[str, float]]]:
     result: dict[str, list[dict[str, float]]] = {}
     for qmc_type in ("sobol", "halton"):
-        sampler = optuna.samplers.QMCSampler(
-            qmc_type=qmc_type, scramble=False, seed=71
-        )
+        sampler = optuna.samplers.QMCSampler(qmc_type=qmc_type, scramble=False, seed=71)
         study = optuna.create_study(sampler=sampler)
         rows: list[dict[str, float]] = []
         for _ in range(16):
@@ -1151,9 +1967,7 @@ def _pruner_contract() -> dict[str, object]:
     for step, value in enumerate([10.0, 4.0, 5.0, 6.0]):
         patient_trial.report(value, step)
     wrapped = optuna.create_study(
-        pruner=optuna.pruners.PatientPruner(
-            optuna.pruners.NopPruner(), patience=1
-        )
+        pruner=optuna.pruners.PatientPruner(optuna.pruners.NopPruner(), patience=1)
     )
     wrapped_trial = wrapped.ask()
     for step, value in enumerate([10.0, 4.0, 5.0, 6.0]):
@@ -1256,9 +2070,7 @@ def _constraint_contract() -> dict[str, object]:
     sampler = optuna.samplers.NSGAIISampler(
         seed=73, population_size=4, constraints_func=lambda trial: trial.user_attrs["c"]
     )
-    study = optuna.create_study(
-        directions=["minimize", "minimize"], sampler=sampler
-    )
+    study = optuna.create_study(directions=["minimize", "minimize"], sampler=sampler)
     values = [[0.0, 0.0], [1.0, 2.0], [2.0, 1.0], [-1.0, -1.0]]
     constraints = [[1.0], [-1.0], [0.0], [2.0]]
     for objective_values, constraint_values in zip(values, constraints, strict=True):
@@ -1268,7 +2080,9 @@ def _constraint_contract() -> dict[str, object]:
     return {
         "pareto_trial_numbers": sorted(trial.number for trial in study.best_trials),
         "states": [trial.state.name for trial in study.trials],
-        "constraints": [list(trial.system_attrs["constraints"]) for trial in study.trials],
+        "constraints": [
+            list(trial.system_attrs["constraints"]) for trial in study.trials
+        ],
     }
 
 
@@ -1374,9 +2188,7 @@ def _lifecycle_error_contract() -> dict[str, object]:
 
 
 def _fixed_trial_contract() -> dict[str, object]:
-    trial = optuna.trial.FixedTrial(
-        {"x": 0.5, "n": 3, "kind": "b"}, number=7
-    )
+    trial = optuna.trial.FixedTrial({"x": 0.5, "n": 3, "kind": "b"}, number=7)
     initial_params = dict(trial.params)
     values = {
         "x": float(trial.suggest_float("x", 0.0, 1.0)),
@@ -1451,9 +2263,7 @@ def _frozen_trial_contract() -> dict[str, object]:
     for name, operation in {
         "missing": lambda: trial.suggest_float("missing", 0.0, 1.0),
         "different_kind": lambda: trial.suggest_int("x", 0, 2),
-        "categorical_choices": lambda: trial.suggest_categorical(
-            "kind", ["a", "c"]
-        ),
+        "categorical_choices": lambda: trial.suggest_categorical("kind", ["a", "c"]),
     }.items():
         try:
             operation()
@@ -1480,9 +2290,7 @@ def _study_management_contract() -> dict[str, object]:
         optuna.trial.create_trial(
             value=1.25,
             params={"x": 0.5},
-            distributions={
-                "x": optuna.distributions.FloatDistribution(0.0, 1.0)
-            },
+            distributions={"x": optuna.distributions.FloatDistribution(0.0, 1.0)},
             user_attrs={"origin": "oracle"},
         )
     )
@@ -1545,6 +2353,55 @@ def _study_management_contract() -> dict[str, object]:
         },
         "names_before_delete": names_before_delete,
         "names_after_delete": names_after_delete,
+    }
+
+
+def _distribution_public_member_contract() -> dict[str, object]:
+    distributions = optuna.distributions
+    try:
+        distributions.BaseDistribution()
+    except Exception as error:  # noqa: BLE001 - abstract public API contract.
+        base_error = type(error).__name__
+    else:
+        raise RuntimeError("Optuna BaseDistribution unexpectedly became concrete.")
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        instances = {
+            "FloatDistribution": distributions.FloatDistribution(1.0, 1.0),
+            "IntDistribution": distributions.IntDistribution(1, 1),
+            "CategoricalDistribution": distributions.CategoricalDistribution(
+                ["A", "B", 3]
+            ),
+            "UniformDistribution": distributions.UniformDistribution(1.0, 1.0),
+            "LogUniformDistribution": distributions.LogUniformDistribution(1.0, 2.0),
+            "DiscreteUniformDistribution": distributions.DiscreteUniformDistribution(
+                0.0, 1.0, 0.2
+            ),
+            "IntUniformDistribution": distributions.IntUniformDistribution(1, 3, 1),
+            "IntLogUniformDistribution": distributions.IntLogUniformDistribution(
+                1, 3, 1
+            ),
+        }
+
+    single = {name: value.single() for name, value in instances.items()}
+    registry = [value.__name__ for value in distributions.DISTRIBUTION_CLASSES]
+    return {
+        "base_construction_error": base_error,
+        "categorical_choice_type": str(distributions.CategoricalChoiceType),
+        "categorical_external": instances["CategoricalDistribution"].to_external_repr(
+            2
+        ),
+        "categorical_internal": instances["CategoricalDistribution"].to_internal_repr(
+            "B"
+        ),
+        "discrete_q": instances["DiscreteUniformDistribution"].q,
+        "distribution_classes": registry,
+        "float_external": instances["FloatDistribution"].to_external_repr(1.25),
+        "float_internal": instances["FloatDistribution"].to_internal_repr("1.25"),
+        "int_external": instances["IntDistribution"].to_external_repr(3.9),
+        "int_internal": instances["IntDistribution"].to_internal_repr("3"),
+        "single": single,
     }
 
 
@@ -1718,14 +2575,41 @@ def _importance_contract() -> dict[str, object]:
     evaluator = optuna.importance.FanovaImportanceEvaluator(
         n_trees=16, max_depth=16, seed=97
     )
-    importances = optuna.importance.get_param_importances(
-        study, evaluator=evaluator
+    importances = optuna.importance.get_param_importances(study, evaluator=evaluator)
+    mdi = optuna.importance.MeanDecreaseImpurityImportanceEvaluator(
+        n_trees=16, max_depth=16, seed=97
     )
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        ped_anova = optuna.importance.PedAnovaImportanceEvaluator(
+            target_quantile=0.25, region_quantile=1.0
+        )
+
+    def public_result(
+        current: optuna.importance.BaseImportanceEvaluator,
+        *,
+        target: object = None,
+    ) -> dict[str, object]:
+        values = current.evaluate(study, target=target)
+        return {
+            "parameter_order": list(values),
+            "values": [float(value) for value in values.values()],
+        }
+
     return {
         "trials": rows,
         "evaluator": {"name": "fanova", "n_trees": 16, "max_depth": 16, "seed": 97},
         "parameter_order": list(importances),
         "values": [float(value) for value in importances.values()],
+        "public_evaluators": {
+            "base_construction_error": "TypeError",
+            "fanova": public_result(evaluator),
+            "fanova_target": public_result(
+                evaluator, target=lambda trial: float(trial.params["y"])
+            ),
+            "mdi": public_result(mdi),
+            "ped_anova": public_result(ped_anova),
+        },
     }
 
 
@@ -1736,9 +2620,7 @@ def _terminator_contract() -> dict[str, object]:
     def frozen(values: list[float]) -> list[optuna.trial.FrozenTrial]:
         return [optuna.trial.create_trial(value=value) for value in values]
 
-    evaluator = optuna.terminator.BestValueStagnationEvaluator(
-        max_stagnation_trials=3
-    )
+    evaluator = optuna.terminator.BestValueStagnationEvaluator(max_stagnation_trials=3)
     remaining_minimize = evaluator.evaluate(
         frozen(minimizing), optuna.study.StudyDirection.MINIMIZE
     )
@@ -1767,12 +2649,88 @@ def _terminator_contract() -> dict[str, object]:
             n_trials=6,
             callbacks=[optuna.terminator.TerminatorCallback(terminator)],
         )
+
+    cv_study = optuna.create_study(direction="maximize")
+    cv_rows = [[0.7, 0.8, 0.9], [0.5, 0.55, 0.6]]
+    for scores in cv_rows:
+        trial = cv_study.ask()
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", FutureWarning)
+            optuna.terminator.report_cross_validation_scores(trial, scores)
+        cv_study.tell(trial, float(np.mean(scores)))
+    cv_error = optuna.terminator.CrossValidationErrorEvaluator().evaluate(
+        cv_study.trials, cv_study.direction
+    )
+
+    median_trials = frozen(minimizing)
+    median_evaluator = optuna.terminator.MedianErrorEvaluator(
+        optuna.terminator.BestValueStagnationEvaluator(5),
+        warm_up_trials=1,
+        n_initial_trials=3,
+        threshold_ratio=0.1,
+    )
+    median_error = median_evaluator.evaluate(
+        median_trials, optuna.study.StudyDirection.MINIMIZE
+    )
+    median_cached = median_evaluator.evaluate(
+        frozen([100.0]), optuna.study.StudyDirection.MINIMIZE
+    )
+    advanced_x = [0.1, 0.3, 0.5, 0.7, 0.9]
+    advanced_values = [1.2, 0.8, 0.6, 0.7, 1.1]
+    advanced_trials = [
+        optuna.trial.create_trial(
+            value=value,
+            params={"x": x},
+            distributions={
+                "x": optuna.distributions.FloatDistribution(0.0, 1.0)
+            },
+        )
+        for x, value in zip(advanced_x, advanced_values, strict=True)
+    ]
+    advanced_results: dict[str, object] = {}
+    for name, evaluator_class, arguments in [
+        (
+            "emmr",
+            optuna.terminator.EMMREvaluator,
+            {"min_n_trials": 2, "seed": 101},
+        ),
+        (
+            "regret_bound",
+            optuna.terminator.RegretBoundEvaluator,
+            {"min_n_trials": 5, "top_trials_ratio": 0.8, "seed": 101},
+        ),
+    ]:
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            advanced_evaluator = evaluator_class(**arguments)
+        advanced_results[name] = {
+            "value": float(
+                advanced_evaluator.evaluate(
+                    advanced_trials, optuna.study.StudyDirection.MINIMIZE
+                )
+            ),
+            "warning": type(caught[0].message).__name__,
+        }
     return {
+        "advanced": {
+            "results": advanced_results,
+            "values": advanced_values,
+            "x": advanced_x,
+        },
+        "cross_validation_error": float(cv_error),
+        "cross_validation_rows": cv_rows,
+        "median_cached": float(median_cached),
+        "median_error": float(median_error),
         "remaining_minimize": float(remaining_minimize),
         "remaining_maximize": float(remaining_maximize),
         "max_trials_callback_count": len(callback_study.trials),
         "terminator_trial_count": len(stagnation_study.trials),
         "terminator_values": [float(trial.value) for trial in stagnation_study.trials],
+        "static_error": float(
+            optuna.terminator.StaticErrorEvaluator(1.25).evaluate(
+                [], optuna.study.StudyDirection.MINIMIZE
+            )
+        ),
     }
 
 
@@ -1799,6 +2757,16 @@ def build_oracle() -> dict[str, object]:
             "multi_population_size": multi.sampler._population_size,
             "pruner": type(single.pruner).__name__,
         },
+        "artifacts": _artifact_contract(),
+        "cached_storage": _cached_storage_contract(),
+        "grpc_storage": _grpc_storage_contract(),
+        "journal_storage": _journal_storage_contract(),
+        "rdb_storage": _rdb_storage_contract(),
+        "retry_callback": _retry_callback_contract(),
+        "sampler_reseed": _sampler_reseed_contract(),
+        "storage": _storage_contract(),
+        "exceptions": _exception_contract(),
+        "logging": _logging_contract(),
         "sampler_seed_defaults": _sampler_seed_default_contract(),
         "sampler_public_members": _sampler_public_member_contract(),
         "tell": _tell_contract(),
@@ -1809,10 +2777,13 @@ def build_oracle() -> dict[str, object]:
         "study_management": _study_management_contract(),
         "trials_dataframe": _trials_dataframe_contract(),
         "importance": _importance_contract(),
+        "integration": _integration_contract(),
         "terminator": _terminator_contract(),
+        "visualization": _visualization_contract(),
         "numpy_random_state_seed_contract": _random_state_contract(),
         "core_api": _core_api_contract(),
         "distributions": _distribution_contract(),
+        "distribution_public_members": _distribution_public_member_contract(),
         "search_space": _search_space_contract(),
         "enums": _enum_contract(),
         "unfinished_trials": _unfinished_trial_contract(),
@@ -1849,7 +2820,9 @@ def build_oracle() -> dict[str, object]:
 def main() -> None:
     destination = Path(__file__).with_name("optuna49_oracle.json")
     destination.write_text(
-        json.dumps(build_oracle(), indent=2, sort_keys=True) + "\n", encoding="utf-8"
+        json.dumps(build_oracle(), indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+        newline="\n",
     )
     print(destination)
 

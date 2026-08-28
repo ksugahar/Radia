@@ -227,7 +227,8 @@ def test_full_library_verifier_gates_optional_optimization_toolbox():
         'max(abs(maglevForce(:,3,:)), [], "all")'
     ) == 2
     assert '"optuna_mex." + mexext' in verifier
-    assert 'optunaInfo.command_count ~= 20' in verifier
+    assert '"api.commands"' in verifier
+    assert "optunaInfo.command_count ~= numel(optunaCommands)" in verifier
 
 
 def test_matlab_smoke_decodes_utf8_without_cp932(monkeypatch, tmp_path):

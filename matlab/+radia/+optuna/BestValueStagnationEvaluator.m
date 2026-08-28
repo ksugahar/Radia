@@ -1,4 +1,4 @@
-classdef BestValueStagnationEvaluator
+classdef BestValueStagnationEvaluator < radia.optuna.BaseImprovementEvaluator
     %BESTVALUESTAGNATIONEVALUATOR Remaining trials before stagnation limit.
 
     properties (SetAccess=private)

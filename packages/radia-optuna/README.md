@@ -3,8 +3,9 @@
 `radia-optuna` is an independent, separately distributed MATLAB optimization
 component from the Radia monorepo. It installs the `radia.optuna` MATLAB
 namespace, the 20-command `optuna_mex`, and checked compatibility contracts
-whose behavioral oracle is Optuna 4.9.0. It does not install or load the Radia
-solver, NGSolve, oneMKL, or Cubit.
+whose behavioral oracle is Optuna 4.9.0. Its checked public inventory contains
+816 verified entries with no missing, partial, or unmapped entry. It does not
+install or load the Radia solver, NGSolve, oneMKL, or Cubit.
 
 Install it by itself:
 
@@ -22,8 +23,10 @@ python -m pip install "radia[optuna]"
 
 `radia[optuna]` installs the native MATLAB/Simulink package without heavy
 Python numerical dependencies. Use `radia[optuna-upstream]` when GP,
-scrambled-QMC, or importance parity also needs the pinned upstream Python,
-SciPy, and PyTorch stack.
+scrambled-QMC, importance, advanced terminators, storage transports,
+visualization, or lazy integration exports need the pinned upstream Python,
+SciPy, and PyTorch stack. Individual visualization and integration targets
+retain the same optional third-party dependencies as upstream Optuna.
 
 Add the printed directory to MATLAB, then use the upstream-shaped API:
 
@@ -77,7 +80,24 @@ by the official server; `radia-mcp` covers only MATLAB/Simulink differences.
 CI builds and verifies a distinct `radia-optuna-wheel` artifact. A
 `radia-optuna-v<version>` tag may publish only that exact CI artifact, after
 rechecking its tag, version, API inventory, MEX inventory, and dependency
-boundary, including the bundled third-party notice.
+boundary, including the bundled third-party notice. The verifier byte-matches
+every staged Python, MATLAB, Simulink, MEX, contract, license, and notice
+payload against the checked monorepo source; matching version and file counts
+alone are not sufficient.
+
+`radia-mcp.matlab` owns the executable MATLAB difference gate. Use
+`matlab_optuna_health`, `matlab_optuna_oracle_plan`, and
+`matlab_optuna_benchmark_plan`, then submit the resulting evidence to
+`matlab_optuna_release_gate`. Installed-wheel evidence can be captured with:
+
+```powershell
+pwsh -File packages/radia-optuna/tests/run_installed_wheel_simulink.ps1 `
+  -Wheel <wheel> -EvidenceOutput C:\temp\radia-optuna-installed.json
+```
+
+This evidence includes source-fidelity verification, the installed doctor,
+standalone Simulink success and typed-failure paths, and all seven persisted
+tables after MAT reload. Shared Study/Trial MCP operations remain upstream.
 
 Publication also uses the standalone four-machine release-quad lane. After the
 successful `main` CI run, execute

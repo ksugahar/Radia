@@ -1,9 +1,11 @@
 function compatible=check_distribution_compatibility(left,right)
 %CHECK_DISTRIBUTION_COMPATIBILITY Apply Optuna 4.9 dynamic-space rules.
 arguments
-    left (1,1) struct
-    right (1,1) struct
+    left
+    right
 end
+left=radia.optuna.internal.DistributionCodec.normalize(left);
+right=radia.optuna.internal.DistributionCodec.normalize(right);
 if left.kind~=right.kind
     error("radia:optuna:IncompatibleDistribution", ...
         "Cannot set different distribution kind to the same parameter name.");

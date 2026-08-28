@@ -1,4 +1,4 @@
-classdef NSGAIISampler < radia.optuna.BaseSampler
+classdef NSGAIISampler < radia.optuna.BaseGASampler
     %NSGAIISAMPLER Optuna-compatible generational constrained NSGA-II.
     %   The default is UniformCrossover. All Optuna 4.9 built-in numerical
     %   crossovers are available under radia.optuna.nsgaii. Categorical
@@ -22,10 +22,6 @@ classdef NSGAIISampler < radia.optuna.BaseSampler
         AfterTrialStrategy = []
     end
 
-    properties (Dependent, SetAccess=private)
-        population_size
-    end
-
     properties (Access=private)
         AttachedStudy = []
         Restored (1,1) logical = false
@@ -44,10 +40,6 @@ classdef NSGAIISampler < radia.optuna.BaseSampler
     end
 
     methods
-        function value=get.population_size(obj)
-            value=obj.PopulationSize;
-        end
-
         function obj = NSGAIISampler(options)
             arguments
                 options.Seed double = double.empty(1,0)
@@ -63,6 +55,7 @@ classdef NSGAIISampler < radia.optuna.BaseSampler
                 options.ChildGenerationStrategy = []
                 options.AfterTrialStrategy = []
             end
+            obj@radia.optuna.BaseGASampler(options.PopulationSize);
             mutationProbability = options.MutationProbability;
             if ~(isnan(mutationProbability) || ...
                     (isfinite(mutationProbability) && ...
@@ -125,6 +118,12 @@ classdef NSGAIISampler < radia.optuna.BaseSampler
             obj.AfterTrialStrategy = options.AfterTrialStrategy;
         end
 
+        function reseed_rng(obj)
+            obj.IndependentSampler.reseed_rng();
+            freshSeed=radia.optuna.internal.resolveSeed([]);
+            obj.Stream=radia.optuna.internal.NumpyRandomState(freshSeed);
+        end
+
         function searchSpace = inferRelativeSearchSpace(~,study,trial) %#ok<INUSD>
             searchSpace = ...
                 radia.optuna.internal.IntersectionSearchSpace.calculate( ...
@@ -143,6 +142,7 @@ classdef NSGAIISampler < radia.optuna.BaseSampler
             obj.attach(study);
             generation = obj.assignGeneration(study,trial.Number);
             trial.setSystemAttr("nsgaii_generation",generation);
+            trial.setSystemAttr("NSGAIISampler:generation",generation);
             if generation == 0
                 obj.markFallback(trial,"initial_generation");
                 obj.recordState(study,trial.Number);
@@ -203,6 +203,29 @@ classdef NSGAIISampler < radia.optuna.BaseSampler
                 study.recordConstraints(trial,obj.ConstraintsFcn(trial));
             end
             obj.recordState(study,trial.Number);
+        end
+
+        function population=select_parent(obj,study,generation)
+            cache=obj.parentCacheIndex(generation);
+            saved=[];
+            if ~isempty(cache)
+                saved=obj.ParentCaches(cache);
+                obj.ParentCaches(cache)=[];
+            end
+            numbers=obj.parentPoolForGeneration(study,generation);
+            generated=obj.parentCacheIndex(generation);
+            if ~isempty(generated)
+                obj.ParentCaches(generated)=[];
+            end
+            if ~isempty(saved)
+                obj.ParentCaches(end+1)=saved;
+            end
+            trials=study.get_trials();
+            indices=zeros(1,numel(numbers));
+            for index=1:numel(numbers)
+                indices(index)=find([trials.Number]==numbers(index),1);
+            end
+            population=trials(indices);
         end
     end
 

@@ -1149,12 +1149,13 @@ classdef Study < handle
             for index = 1:numel(names)
                 name = names(index);
                 distribution = distributions.(name);
-                if ~isstruct(distribution) || ~isscalar(distribution) || ...
-                        ~isfield(distribution, "kind")
+                if ~radia.optuna.internal.DistributionCodec.isSpec(distribution)
                     error("radia:optuna:FixedDistributions", ...
                         "Distribution '%s' is not a Radia Optuna distribution.", ...
                         name);
                 end
+                distribution=radia.optuna.internal.DistributionCodec.normalize( ...
+                    distribution);
                 switch string(distribution.kind)
                     case "float"
                         trial.suggest_float(name, distribution.low, ...
@@ -2026,12 +2027,12 @@ classdef Study < handle
         end
 
         function appendImportedParameter(obj,number,name,value,distribution)
-            required=["kind","low","high","log","step","choices"];
-            if ~isstruct(distribution) || ~isscalar(distribution) || ...
-                    ~all(isfield(distribution,required))
+            if ~radia.optuna.internal.DistributionCodec.isSpec(distribution)
                 error("radia:optuna:AddTrialDistribution", ...
                     "Imported distribution for '%s' is invalid.",name);
             end
+            distribution=radia.optuna.internal.DistributionCodec.normalize( ...
+                distribution);
             numeric=NaN;
             textValue="";
             if isnumeric(value) && isscalar(value)

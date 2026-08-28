@@ -23,8 +23,10 @@ def _doctor_payload() -> dict[str, object]:
     required_notices = (
         "Copyright (c) 2018 Preferred Networks, Inc.",
         "Copyright (c) 2025 Preferred Networks, Inc.",
-        "Optuna, the Optuna logo and any related marks are trademarks of "
-        "Preferred Networks, Inc.",
+        (
+            "Optuna, the Optuna logo and any related marks are trademarks of "
+            "Preferred Networks, Inc."
+        ),
         "independent, unofficial project",
     )
     notices_complete = all(token in notice_text for token in required_notices)
