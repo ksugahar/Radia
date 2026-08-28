@@ -162,8 +162,36 @@ def test_eqnedit64_release_requires_exact_successful_tag_ci():
     assert "context.get(\"ref_type\") == \"tag\"" in release
     assert r"eqnedit64-v\d+\.\d+\.\d+" in release
     assert "ref: ${{ needs.qualify.outputs.sha }}" in release
-    assert "gh release download $env:EQNEDIT64_TAG" in release
+    assert "runs-on: [self-hosted, windows-radia]" in release
+    assert "$exe = 'O:\\Eqnedit64.exe'" in release
+    assert "$manifestPath = 'O:\\Eqnedit64.release.json'" in release
+    assert "eqnedit64.o-release.v1" in release
+    assert "$manifest.source_sha -cne $env:EQNEDIT64_SHA" in release
+    assert "name: eqnedit64-signed-standalone" in release
+    assert "needs: [qualify, signed-standalone]" in release
     assert "Get-AuthenticodeSignature" in release
     assert "CN=ksugahar" in release
     assert "id-token: write" in release
     assert "pypa/gh-action-pypi-publish@release/v1" in release
+    assert 'gh release create "$EQNEDIT64_TAG"' in release
+    assert release.index("pypa/gh-action-pypi-publish@release/v1") < release.index(
+        'gh release create "$EQNEDIT64_TAG"')
+
+
+def test_eqnedit64_release_order_is_push_o_drive_then_tag():
+    root = Path(__file__).resolve().parents[1]
+    skill = (root / ".agents/skills/release-eqnedit64/SKILL.md").read_text(
+        encoding="utf-8")
+    sync = (
+        root / ".agents/skills/release-eqnedit64/scripts/sync_to_o.ps1"
+    ).read_text(encoding="utf-8")
+
+    push_main = skill.index("Commit and push the versioned release source to `main`.")
+    sync_o = skill.index("sync_to_o.ps1")
+    push_tag = skill.index("Create the annotated tag")
+    assert push_main < sync_o < push_tag
+
+    assert "Release tag already exists; O: must be prepared before tag push" in sync
+    assert "HEAD=$headSha origin/main=$originMainSha" in sync
+    assert "eqnedit64.o-release.v1" in sync
+    assert "source_sha = $normalizedSourceSha" in sync
