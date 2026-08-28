@@ -10,7 +10,7 @@
 #include "eq_edit.h"
 #include "tex_parser.h"
 #include "latex_emitter.h"
-#include "tex2mtef.h"
+#include "tex_symbols.h"
 #include "math_layout.h"
 #include "mtef_common.h"
 

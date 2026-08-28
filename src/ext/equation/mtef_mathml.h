@@ -41,9 +41,6 @@ std::string render_mathml(const LineNode& root,
 std::string tex_to_mathml(const std::string& latex,
                           const MathMLOptions& opt = MathMLOptions());
 
-std::string mtef_to_mathml(const uint8_t* data, size_t len,
-                           const MathMLOptions& opt = MathMLOptions());
-
 }  // namespace mtef
 
 #endif /* MTEF_MATHML_H */

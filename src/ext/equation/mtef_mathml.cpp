@@ -8,7 +8,6 @@
  */
 #include "mtef_mathml.h"
 #include "math_writer.h"
-#include "mtef_parser.h"
 #include "tex_parser.h"
 
 #include <string>
@@ -187,13 +186,6 @@ std::string tex_to_mathml(const std::string& latex, const MathMLOptions& opt) {
     std::unique_ptr<LineNode> root = parse_latex(latex);
     if (!root) return std::string();
     return render_mathml(*root, opt, /*run_passes=*/false);
-}
-
-std::string mtef_to_mathml(const uint8_t* data, size_t len,
-                           const MathMLOptions& opt) {
-    MtefParser::Result res = MtefParser::parse(data, len);
-    if (!res.root) return std::string();
-    return render_mathml(*res.root, opt, /*run_passes=*/true);
 }
 
 }  // namespace mtef

@@ -7,10 +7,8 @@ one.  In electromagnetics that is most of the equations.
 
 The cause is worth remembering: the emitter dropped a standalone embellishment
 node on the reasoning that an embellishment is "usually attached to CHAR".
-True of a tree read from MTEF, where Equation Editor hangs the accent off the
-character; false of a tree from the LaTeX parser, which builds a node.  An
-assumption that held for one producer and not the other, in a path the MTEF
-corpus tests never reached.
+The direct TeX parser instead builds a structural node, so the emitter must
+preserve that node explicitly.
 """
 
 from __future__ import annotations

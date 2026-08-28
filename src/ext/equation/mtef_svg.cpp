@@ -18,7 +18,6 @@
 #include "mtef_gdi.h"
 #include "math_layout.h"
 #include "math_writer.h"      /* accent_drawing_char: one table, two spellings */
-#include "mtef_parser.h"
 #include "tex_parser.h"
 
 #include <algorithm>
@@ -2295,12 +2294,6 @@ std::string render_svg(const LineNode& root, const SvgStyle& style) {
     }
     o << "</svg>\n";
     return o.str();
-}
-
-std::string mtef_to_svg(const uint8_t* data, size_t len, const SvgStyle& style) {
-    MtefParser::Result res = MtefParser::parse(data, len);
-    if (!res.root) return std::string();
-    return render_svg(*res.root, style);
 }
 
 std::string tex_to_svg(const std::string& latex, const SvgStyle& style) {
