@@ -278,6 +278,13 @@
       "file": "test_optuna_table.m",
       "oracle": null,
       "scope": "MATLAB table storage, MAT persistence, and SimulinkRunner integration",
+      "test": "testIndexedHistoryMatchesScannedHistory"
+    },
+    {
+      "classification": "matlab-integration",
+      "file": "test_optuna_table.m",
+      "oracle": null,
+      "scope": "MATLAB table storage, MAT persistence, and SimulinkRunner integration",
       "test": "testCollidingParameterNamesKeepMatchingFrozenKeys"
     },
     {
@@ -608,6 +615,20 @@
       "oracle": "optuna49_oracle.json",
       "scope": "shared Optuna 4.9.0 behavior",
       "test": "testCmaEsSeededProposalSequence"
+    },
+    {
+      "classification": "upstream-python",
+      "file": "test_optuna_upstream_oracle.m",
+      "oracle": "optuna49_oracle.json",
+      "scope": "shared Optuna 4.9.0 behavior",
+      "test": "testMultiObjectiveTPEPrunedHistorySeededSequence"
+    },
+    {
+      "classification": "upstream-python",
+      "file": "test_optuna_upstream_oracle.m",
+      "oracle": "optuna49_oracle.json",
+      "scope": "shared Optuna 4.9.0 behavior",
+      "test": "testCmaEsConsiderPrunedTrialsSeededSequence"
     },
     {
       "classification": "upstream-python",

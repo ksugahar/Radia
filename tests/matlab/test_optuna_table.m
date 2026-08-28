@@ -61,6 +61,102 @@ verifyEqual(testCase, reloaded.best_params(), bestParams);
 verifyEqual(testCase, reloaded.best_solution().trial_number, 0);
 end
 
+function testIndexedHistoryMatchesScannedHistory(testCase)
+% MATLAB-only invariant: the optimization history is kept in column stores
+% with trial-number bucket indices, and the public tables are materialized
+% views. Every indexed read must return exactly what a full scan of the
+% public view returns, through appends, duplicate-step overwrites, imported
+% trials, deletions, and a storage round-trip.
+path = string(tempname("C:\temp")) + ".mat";
+cleanup = onCleanup(@() deleteIfPresent(path));
+study = radia.optuna.Study(Name="indexed-history", StoragePath=path, ...
+    Sampler=radia.optuna.RandomSampler(11), ...
+    Pruner=radia.optuna.NopPruner());
+for index = 1:12
+    trial = study.ask();
+    x = trial.suggest_float("x", -1, 1);
+    trial.suggest_int("k", 0, 4);
+    trial.set_user_attr("tag", sprintf("t%d", index));
+    if mod(index, 3) == 0
+        trial.report(x * x + 1, 0);
+        trial.report(x * x, 1);
+        trial.report(x * x - 0.5, 1);   % duplicate step: warned and ignored
+        study.tell(trial, State="PRUNED");
+    else
+        study.tell(trial, x * x);
+    end
+end
+
+% An imported trial appends to every store at once.
+imported = radia.optuna.createTrial(State="COMPLETE", Values=0.25, ...
+    Params=struct("x", 0.5), ...
+    Distributions=struct("x", radia.optuna.FloatDistribution(-1, 1)), ...
+    UserAttrs=struct("tag", "imported"));
+study.add_trial(imported);
+
+verifyHistoryViewsAgree(testCase, study);
+
+% A storage round-trip rebuilds every store from the saved views.
+reloaded = radia.optuna.Study(Name="indexed-history", StoragePath=path, ...
+    Sampler=radia.optuna.RandomSampler(11));
+verifyEqual(testCase, reloaded.IntermediateTable, study.IntermediateTable);
+verifyEqual(testCase, reloaded.ParamTable, study.ParamTable);
+verifyEqual(testCase, reloaded.ObjectiveTable, study.ObjectiveTable);
+verifyHistoryViewsAgree(testCase, reloaded);
+clear cleanup
+end
+
+function verifyHistoryViewsAgree(testCase, study)
+intermediate = study.IntermediateTable;
+parameters = study.ParamTable;
+objectives = study.ObjectiveTable;
+userAttrs = study.UserAttrTable;
+verifyEqual(testCase, string(intermediate.Properties.VariableNames), ...
+    ["TrialNumber" "Step" "Value" "Timestamp"]);
+frozenTrials = study.get_trials();
+verifyEqual(testCase, numel(frozenTrials), height(study.TrialTable));
+for index = 1:numel(frozenTrials)
+    frozen = frozenTrials(index);
+    number = frozen.Number;
+
+    scannedSteps = sortrows(intermediate( ...
+        intermediate.TrialNumber == number, ["Step" "Value"]), "Step");
+    indexedSteps = sortrows(frozen.IntermediateValues(:, ["Step" "Value"]), ...
+        "Step");
+    verifyEqual(testCase, indexedSteps, scannedSteps, ...
+        sprintf("intermediates of trial %d", number));
+
+    scannedNames = sort(parameters.Name(parameters.TrialNumber == number));
+    verifyEqual(testCase, numel(scannedNames), ...
+        numel(fieldnames(frozen.Params)), ...
+        sprintf("parameter count of trial %d", number));
+    verifyEqual(testCase, sort(string(fieldnames(frozen.Distributions))), ...
+        sort(string(fieldnames(frozen.Params))), ...
+        sprintf("distribution keys of trial %d", number));
+
+    scannedObjectives = sortrows(objectives( ...
+        objectives.TrialNumber == number, :), "ObjectiveIndex");
+    if isempty(scannedObjectives)
+        % Only COMPLETE trials own objective rows; everything else falls
+        % back to the scalar Value column, which Study.tell fills with the
+        % deepest reported intermediate value for a PRUNED trial.
+        scalarValue = study.TrialTable.Value( ...
+            study.TrialTable.TrialNumber == number);
+        verifyEqual(testCase, reshape(frozen.Values, [], 1), scalarValue, ...
+            sprintf("scalar value of trial %d", number));
+    else
+        verifyEqual(testCase, reshape(frozen.Values, [], 1), ...
+            scannedObjectives.Value, ...
+            sprintf("objectives of trial %d", number));
+    end
+
+    scannedAttrs = userAttrs(userAttrs.TrialNumber == number, :);
+    verifyEqual(testCase, numel(fieldnames(frozen.UserAttrs)), ...
+        height(scannedAttrs), ...
+        sprintf("user attributes of trial %d", number));
+end
+end
+
 function testCollidingParameterNamesKeepMatchingFrozenKeys(testCase)
 % MATLAB-only invariant: makeValidName maps "x-1" and "x.1" onto the same
 % field name as "x_1", so Trial claims a disambiguated key for every name
