@@ -43,7 +43,9 @@ def test_image_folded_negative_diagonal_is_rejected():
          [x, 1.0, 0.0], [x, 0.0, 1.0]],
         dtype=np.float64,
     )
-    with pytest.raises(RuntimeError, match="negative self-energy"):
+    # Assert the CONTRACT (a genuinely negative folded diagonal is refused),
+    # not the wording: the message now quotes the roundoff band it fell outside.
+    with pytest.raises(RuntimeError, match="broken entry oracle"):
         _rb._ChargeGramHMatrix(
             tet.ravel(), np.empty(0, dtype=np.float64), 1,
             1e-8, 8, 2.0, 1e30,
@@ -68,6 +70,38 @@ def test_antisymmetric_fixed_plane_roundoff_remains_buildable():
         True, 0,
     )
     assert gram.entry(0, 0) >= 0.0
+
+
+def test_antisymmetric_fixed_plane_negative_roundoff_remains_buildable():
+    # Same annihilated-charge situation as the test above, but the analytic
+    # quadrature happens to land on the NEGATIVE side of zero.  The sign of the
+    # residue is geometry dependent, so an exact-zero acceptance test rejects
+    # every mesh whose on-plane cancellation rounds down -- measured on the
+    # ESRF example-5 quarter models, that was all five (TET and HEX alike, at
+    # d ~ -5e-7 against an O(1) diagonal scale).  The accept band is relative
+    # to the largest diagonal actually present, so an O(1) companion charge has
+    # to be in the operator for the band to mean anything.
+    on_plane = np.array(
+        [[0.0, -0.7053, 0.9186], [0.0, -0.4457, -0.1660],
+         [0.0, 0.9758, -0.6317]],
+        dtype=np.float64,
+    )
+    off_plane = np.array(
+        [[2.1834, -0.6511, 0.1998], [1.0668, 0.8241, -0.9299],
+         [1.7891, 0.3672, 0.5540]],
+        dtype=np.float64,
+    )
+    faces = np.vstack([on_plane, off_plane]).ravel()
+    gram = _rb._ChargeGramHMatrix(
+        np.empty(0, dtype=np.float64), faces, 0,
+        1e-8, 8, 2.0, 1e30,
+        np.array([1], dtype=np.int32), np.array([-1.0], dtype=np.float64),
+        True, 0,
+    )
+    annihilated = gram.entry(0, 0)
+    companion = gram.entry(1, 1)
+    assert companion > 1.0e-3
+    assert abs(annihilated) <= 1.0e-12 * companion
 
 
 def test_fill_exception_restores_chargegram_and_global_hacapk_state(monkeypatch):

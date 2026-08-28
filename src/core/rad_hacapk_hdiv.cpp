@@ -6253,38 +6253,49 @@ void RadHACApKChargeGram::ComputeChargeSigma()
     // defect.  Keep sigma = 1 for those and only fail on the cases that cannot
     // be legitimate.  Record the first offender and throw outside the region.
     const bool images_folded = !m_image_masks.empty();
-    std::atomic<int> bad_charge{-1};
-    double bad_value = 0.0;
+    std::vector<double> diagonal((size_t)m_n, 0.0);
     {
         // C++ HACApK self-wrap policy: this pre-pass runs BEFORE the base
-        // build's own region, so it stands up its own.
+        // build's own region, so it stands up its own.  Only the (expensive)
+        // entry evaluation is parallel; the classification below is O(n).
         ngcore::RegionTaskManager rtm(
             std::max(1, (int)ngcore::TaskManager::GetMaxThreads()));
         ngcore::ParallelFor(ngcore::IntRange(m_n), [&](size_t p) {
-            const double d = GetInteractionMatrixElementRaw((int)p, (int)p);
-            if (d > 0.0 && std::isfinite(d)) {
-                const double s = std::sqrt(d);
-                m_chargeSigma[p] = s;
-                m_chargeSigmaInv[p] = 1.0 / s;
-                return;
-            }
-            // Legitimate only as the mirror-plane cancellation above.  A
-            // negative diagonal is never a valid Gram self-energy, even when
-            // images are folded in; accepting it would defer an already-known
-            // SPD violation until CG breakdown.
-            if (d == 0.0 && images_folded) return;
-            int expected = -1;
-            if (bad_charge.compare_exchange_strong(expected, (int)p))
-                bad_value = d;
+            diagonal[p] = GetInteractionMatrixElementRaw((int)p, (int)p);
         });
     }
-    if (bad_charge.load() >= 0)
+    double largest = 0.0;
+    for (double d : diagonal)
+        if (std::isfinite(d) && d > largest) largest = d;
+    // The folded diagonal is G_self + sign*G_refl(a,a) evaluated in floating
+    // point, so a DOF the antisymmetry annihilates lands anywhere within
+    // roundoff of zero -- including slightly NEGATIVE.  Testing against an
+    // exact zero rejects exactly those mirror-plane DOFs (measured: a hex
+    // quarter model failed at d = -5e-7 with an O(1) diagonal scale).  Accept
+    // a roundoff band scaled by the largest diagonal actually present; keep
+    // the strict test when no image folding can produce a cancellation.
+    const double zero_band = images_folded ? 1.0e-12 * largest : 0.0;
+    int bad_charge = -1;
+    for (int p = 0; p < m_n; ++p) {
+        const double d = diagonal[(size_t)p];
+        if (d > 0.0 && std::isfinite(d)) {
+            const double s = std::sqrt(d);
+            m_chargeSigma[(size_t)p] = s;
+            m_chargeSigmaInv[(size_t)p] = 1.0 / s;
+            continue;
+        }
+        if (std::isfinite(d) && std::fabs(d) <= zero_band) continue;
+        if (bad_charge < 0) bad_charge = p;
+    }
+    if (bad_charge >= 0)
         throw std::runtime_error(
-            "ChargeGram: self-interaction diagonal " + std::to_string(bad_value)
-            + " at charge " + std::to_string(bad_charge.load())
+            "ChargeGram: self-interaction diagonal "
+            + std::to_string(diagonal[(size_t)bad_charge])
+            + " at charge " + std::to_string(bad_charge)
             + (images_folded
-                 ? " is negative or not finite; image folding can explain an"
-                   " exact zero diagonal, but never a negative self-energy."
+                 ? " is outside the +/-" + std::to_string(zero_band)
+                   + " roundoff band that image folding can explain (largest"
+                     " diagonal " + std::to_string(largest) + ")."
                  : " is not positive-finite, and no image folding can explain"
                    " it (the raw self-energy of a non-zero charge is strictly"
                    " positive).")
