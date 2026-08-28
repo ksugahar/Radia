@@ -2820,7 +2820,9 @@ def build_oracle() -> dict[str, object]:
 def main() -> None:
     destination = Path(__file__).with_name("optuna49_oracle.json")
     destination.write_text(
-        json.dumps(build_oracle(), indent=2, sort_keys=True) + "\n", encoding="utf-8"
+        json.dumps(build_oracle(), indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+        newline="\n",
     )
     print(destination)
 
