@@ -271,6 +271,13 @@
       "file": "test_optuna_table.m",
       "oracle": null,
       "scope": "MATLAB table storage, MAT persistence, and SimulinkRunner integration",
+      "test": "testCollidingParameterNamesKeepMatchingFrozenKeys"
+    },
+    {
+      "classification": "matlab-integration",
+      "file": "test_optuna_table.m",
+      "oracle": null,
+      "scope": "MATLAB table storage, MAT persistence, and SimulinkRunner integration",
       "test": "testDefineByRunAndPersistence"
     },
     {
@@ -356,6 +363,27 @@
       "oracle": null,
       "scope": "MATLAB table storage, MAT persistence, and SimulinkRunner integration",
       "test": "testConstraintTablePersists"
+    },
+    {
+      "classification": "upstream-python",
+      "file": "test_optuna_upstream_oracle.m",
+      "oracle": "optuna49_oracle.json",
+      "scope": "shared Optuna 4.9.0 behavior",
+      "test": "testNumericUntransformPrimitivesMatchUpstream"
+    },
+    {
+      "classification": "upstream-python",
+      "file": "test_optuna_upstream_oracle.m",
+      "oracle": "optuna49_oracle.json",
+      "scope": "shared Optuna 4.9.0 behavior",
+      "test": "testSingleDistributionConsumesNoRandomNumber"
+    },
+    {
+      "classification": "upstream-python",
+      "file": "test_optuna_upstream_oracle.m",
+      "oracle": "optuna49_oracle.json",
+      "scope": "shared Optuna 4.9.0 behavior",
+      "test": "testTPEPrunedHistorySeededSequence"
     },
     {
       "classification": "upstream-python",

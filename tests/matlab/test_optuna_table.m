@@ -2,6 +2,25 @@ function tests = test_optuna_table
 tests = functiontests(localfunctions);
 end
 
+function testCollidingParameterNamesKeepMatchingFrozenKeys(testCase)
+study=radia.optuna.Study(Sampler=radia.optuna.RandomSampler(3), ...
+    AutoSave=false);
+trial=study.ask();
+first=trial.suggest_float("x-1",0,1);
+second=trial.suggest_float("x.1",2,3);
+study.tell(trial,first+second);
+frozen=study.get_trials();
+parameterKeys=sort(string(fieldnames(frozen(1).Params)));
+distributionKeys=sort(string(fieldnames(frozen(1).Distributions)));
+verifyEqual(testCase,numel(parameterKeys),2);
+verifyEqual(testCase,distributionKeys,parameterKeys);
+target=radia.optuna.Study(Sampler=radia.optuna.RandomSampler(3), ...
+    AutoSave=false);
+target.add_trial(frozen(1));
+verifyEqual(testCase,height(target.TrialTable),1);
+verifyEqual(testCase,target.TrialTable.State(1),"COMPLETE");
+end
+
 function setupOnce(testCase)
 repositoryRoot = fileparts(fileparts(fileparts(mfilename("fullpath"))));
 matlabDirectory = fullfile(repositoryRoot, "matlab");

@@ -228,7 +228,9 @@ classdef DistributionCodec
             effectiveHigh=low;
             if low~=high
                 if isfinite(step)
-                    effectiveHigh=low+floor((high-low)/step+1e-12)*step;
+                    effectiveHigh= ...
+                        radia.optuna.internal.UpstreamNumerics. ...
+                        adjustDiscreteUniformHigh(low,high,step);
                 else
                     effectiveHigh=high;
                 end

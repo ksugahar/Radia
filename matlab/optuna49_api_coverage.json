@@ -5947,6 +5947,6 @@
   "upstream_inventory": "tests/matlab/fixtures/optuna49_public_api.json",
   "upstream_inventory_sha256": "A69642BD83B136B5A52D351A84E3D910971A7514F1AF48282EE6B3CA609D11FF",
   "upstream_oracle": "tests/matlab/fixtures/optuna49_oracle.json",
-  "upstream_oracle_sha256": "6E58B6E2998F507B1F839C3663141F72E15D1FD12226CA2D4FD9043DF3FD9B65",
+  "upstream_oracle_sha256": "047466B688C3A0FF0A55318D6B891425A1CD023CF1C6414E5082F7C2C653C912",
   "upstream_version": "4.9.0"
 }

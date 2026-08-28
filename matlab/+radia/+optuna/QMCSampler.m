@@ -434,28 +434,12 @@ classdef QMCSampler < radia.optuna.BaseSampler
         end
 
         function value=roundTiesToEven(~,value)
-            lower=floor(value);
-            fraction=value-lower;
-            value=round(value);
-            if fraction==0.5
-                if mod(lower,2)==0
-                    value=lower;
-                else
-                    value=lower+1;
-                end
-            end
+            value=radia.optuna.internal.UpstreamNumerics.roundTiesToEven( ...
+                value);
         end
 
         function value=nextDown(~,value)
-            bits=typecast(double(value),"uint64");
-            if value>0
-                bits=bits-uint64(1);
-            elseif value<0
-                bits=bits+uint64(1);
-            else
-                bits=bitor(bitshift(uint64(1),63),uint64(1));
-            end
-            value=typecast(bits,"double");
+            value=radia.optuna.internal.UpstreamNumerics.nextDown(value);
         end
     end
 
