@@ -107,7 +107,7 @@ jobs:
             exit 1
           fi
           WHL="${WHEELS[0]}"
-          python3 packages/radia-optuna/verify_wheel.py "$WHL" --json
+          python3 packages/radia-optuna/verify_wheel.py "$WHL" --json --artifact-only
           ACTUAL_SHA256=$(sha256sum "$WHL" | awk '{print $1}')
           if [ "${ACTUAL_SHA256,,}" != "${CANDIDATE_SHA256,,}" ]; then
             echo "::error::Wheel SHA256 $ACTUAL_SHA256 differs from release-quad $CANDIDATE_SHA256"

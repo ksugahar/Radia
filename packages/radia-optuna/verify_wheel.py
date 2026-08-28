@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import struct
 import sys
 import tomllib
 import zipfile
@@ -25,6 +26,10 @@ FORBIDDEN_NAME_PARTS = (
     "libmkl",
     "radia_pybind",
 )
+TEXT_PAYLOAD_SUFFIXES = {
+    ".json", ".m", ".md", ".ps1", ".py", ".toml", ".txt",
+}
+TEXT_PAYLOAD_NAMES = {"LICENSE"}
 
 
 def _fail(messages: list[str]) -> None:
@@ -38,6 +43,80 @@ def _metadata(archive: zipfile.ZipFile, names: set[str]):
     if len(candidates) != 1:
         _fail([f"expected one METADATA entry, found {len(candidates)}"])
     return BytesParser().parsebytes(archive.read(candidates[0]))
+
+
+def _normalize_pe_timestamps(payload: bytes) -> bytes:
+    """Remove reproducibility-neutral PE timestamps from a comparison copy."""
+    if len(payload) < 0x40 or payload[:2] != b"MZ":
+        return payload
+    pe_offset = struct.unpack_from("<I", payload, 0x3C)[0]
+    if pe_offset + 24 > len(payload) or payload[pe_offset:pe_offset + 4] != b"PE\0\0":
+        return payload
+
+    normalized = bytearray(payload)
+    coff_offset = pe_offset + 4
+    section_count = struct.unpack_from("<H", payload, coff_offset + 2)[0]
+    optional_size = struct.unpack_from("<H", payload, coff_offset + 16)[0]
+    normalized[coff_offset + 4:coff_offset + 8] = b"\0" * 4
+
+    optional_offset = coff_offset + 20
+    if optional_offset + optional_size > len(payload) or optional_size < 2:
+        return bytes(normalized)
+    optional_magic = struct.unpack_from("<H", payload, optional_offset)[0]
+    directory_layout = {
+        0x10B: (optional_offset + 92, optional_offset + 96),
+        0x20B: (optional_offset + 108, optional_offset + 112),
+    }.get(optional_magic)
+    if directory_layout is None:
+        return bytes(normalized)
+    directory_count_offset, data_directory_offset = directory_layout
+    if directory_count_offset + 4 > optional_offset + optional_size:
+        return bytes(normalized)
+    if struct.unpack_from("<I", payload, directory_count_offset)[0] <= 6:
+        return bytes(normalized)
+
+    debug_directory_entry = data_directory_offset + 6 * 8
+    if debug_directory_entry + 8 > optional_offset + optional_size:
+        return bytes(normalized)
+    debug_rva, debug_size = struct.unpack_from("<II", payload, debug_directory_entry)
+    if not debug_rva or debug_size < 28:
+        return bytes(normalized)
+
+    section_offset = optional_offset + optional_size
+    debug_file_offset = None
+    for section_index in range(section_count):
+        entry = section_offset + section_index * 40
+        if entry + 40 > len(payload):
+            break
+        virtual_size, virtual_address, raw_size, raw_offset = struct.unpack_from(
+            "<IIII", payload, entry + 8
+        )
+        section_span = max(virtual_size, raw_size)
+        if virtual_address <= debug_rva < virtual_address + section_span:
+            candidate = raw_offset + (debug_rva - virtual_address)
+            if candidate + debug_size <= len(payload):
+                debug_file_offset = candidate
+            break
+    if debug_file_offset is None:
+        return bytes(normalized)
+
+    for entry in range(debug_file_offset, debug_file_offset + debug_size, 28):
+        if entry + 28 > len(payload):
+            break
+        normalized[entry + 4:entry + 8] = b"\0" * 4
+    return bytes(normalized)
+
+
+def _normalized_payload(member: str, payload: bytes) -> bytes:
+    path = PurePosixPath(member)
+    if path.suffix.lower() == ".mexw64":
+        return _normalize_pe_timestamps(payload)
+    if (
+        path.suffix.lower() in TEXT_PAYLOAD_SUFFIXES
+        or path.name in TEXT_PAYLOAD_NAMES
+    ):
+        return payload.replace(b"\r\n", b"\n").replace(b"\r", b"\n")
+    return payload
 
 
 def _source_payloads(source_manifest: dict[str, object]) -> dict[str, Path]:
@@ -66,7 +145,7 @@ def _source_payloads(source_manifest: dict[str, object]) -> dict[str, Path]:
     return payloads
 
 
-def verify(wheel: Path) -> dict[str, object]:
+def verify(wheel: Path, *, source_fidelity: bool = True) -> dict[str, object]:
     errors: list[str] = []
     if not re.fullmatch(r"radia_optuna-[^-]+-py3-none-win_amd64\.whl", wheel.name):
         errors.append(f"wheel must be tagged py3-none-win_amd64: {wheel.name}")
@@ -100,7 +179,7 @@ def verify(wheel: Path) -> dict[str, object]:
 
     with zipfile.ZipFile(wheel) as archive:
         names = set(archive.namelist())
-        source_payloads = _source_payloads(source_manifest)
+        source_payloads = _source_payloads(source_manifest) if source_fidelity else {}
         metadata = _metadata(archive, names)
         wheel_version = metadata.get("Version")
         if wheel_version != source_version:
@@ -152,22 +231,25 @@ def verify(wheel: Path) -> dict[str, object]:
         if missing:
             errors.append("missing required entries: " + ", ".join(missing))
 
-        stale_payloads = sorted(
-            member
-            for member, source in source_payloads.items()
-            if member in names and archive.read(member) != source.read_bytes()
-        )
-        missing_source_payloads = sorted(set(source_payloads).difference(names))
-        if missing_source_payloads:
-            errors.append(
-                "missing checked source payloads: "
-                + ", ".join(missing_source_payloads)
+        if source_fidelity:
+            stale_payloads = sorted(
+                member
+                for member, source in source_payloads.items()
+                if member in names
+                and _normalized_payload(member, archive.read(member))
+                != _normalized_payload(member, source.read_bytes())
             )
-        if stale_payloads:
-            errors.append(
-                "wheel payload differs from the checked monorepo source: "
-                + ", ".join(stale_payloads)
-            )
+            missing_source_payloads = sorted(set(source_payloads).difference(names))
+            if missing_source_payloads:
+                errors.append(
+                    "missing checked source payloads: "
+                    + ", ".join(missing_source_payloads)
+                )
+            if stale_payloads:
+                errors.append(
+                    "wheel payload differs from the checked monorepo source: "
+                    + ", ".join(stale_payloads)
+                )
 
         if str(MATLAB_PREFIX / "THIRD_PARTY_NOTICES.md") in names:
             notices = archive.read(
@@ -279,7 +361,8 @@ def verify(wheel: Path) -> dict[str, object]:
         "simulink_standalone": source_manifest["simulink_standalone"],
         "simulink_entry_count": len(simulink_entries),
         "radia_integration_adapter_count": len(adapters),
-        "source_fidelity_verified": True,
+        "artifact_integrity_verified": True,
+        "source_fidelity_verified": source_fidelity,
         "source_fidelity_file_count": len(source_payloads),
     }
     return result
@@ -289,8 +372,13 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("wheel", type=Path)
     parser.add_argument("--json", action="store_true", dest="as_json")
+    parser.add_argument(
+        "--artifact-only",
+        action="store_true",
+        help="verify the wheel's internal release contract without local-source bytes",
+    )
     args = parser.parse_args()
-    result = verify(args.wheel)
+    result = verify(args.wheel, source_fidelity=not args.artifact_only)
     if args.as_json:
         print(json.dumps(result, indent=2))
     else:
