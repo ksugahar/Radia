@@ -1129,6 +1129,50 @@ classdef Study < handle
             end
         end
 
+        function rows=trialRowsFor(obj,numbers)
+            %TRIALROWSFOR Vectorized trialRow; zero marks an unknown trial.
+            numbers=reshape(double(numbers),[],1);
+            rows=zeros(size(numbers));
+            candidate=numbers+1;
+            direct=candidate>=1 & candidate<=numel(obj.TrialNumberData);
+            direct(direct)= ...
+                obj.TrialNumberData(candidate(direct))==numbers(direct);
+            rows(direct)=candidate(direct);
+            for index=reshape(find(~direct),1,[])
+                match=find(obj.TrialNumberData==numbers(index),1);
+                if ~isempty(match)
+                    rows(index)=match;
+                end
+            end
+        end
+
+        function count=nonRunningTrialCount(obj)
+            %NONRUNNINGTRIALCOUNT COMPLETE and PRUNED TPE history trials.
+            count=sum(obj.TrialStateData=="COMPLETE" | ...
+                obj.TrialStateData=="PRUNED");
+        end
+
+        function [steps,values]=lastIntermediateValues(obj,trialNumbers)
+            %LASTINTERMEDIATEVALUES Deepest reported step and its value.
+            trialNumbers=reshape(double(trialNumbers),[],1);
+            steps=NaN(size(trialNumbers));
+            values=NaN(size(trialNumbers));
+            if height(obj.IntermediateTable)==0
+                return
+            end
+            allNumbers=obj.IntermediateTable.TrialNumber;
+            allSteps=obj.IntermediateTable.Step;
+            allValues=obj.IntermediateTable.Value;
+            for index=1:numel(trialNumbers)
+                selected=find(allNumbers==trialNumbers(index));
+                if isempty(selected)
+                    continue
+                end
+                [steps(index),position]=max(allSteps(selected));
+                values(index)=allValues(selected(position));
+            end
+        end
+
         function value=serialDatetimes(~,serial)
             value=datetime(serial,'ConvertFrom','datenum','TimeZone','local');
         end
@@ -1350,12 +1394,14 @@ classdef Study < handle
             end
             distributions=struct();
             parameterRows=find(obj.ParamTrialNumberData==trialNumber)';
-            for index=parameterRows
-                key=matlab.lang.makeValidName(obj.ParamNameData(index));
-                distributions.(key)= ...
+            parameterKeys=radia.optuna.Trial.claimKeys( ...
+                obj.ParamNameData(parameterRows));
+            for index=1:numel(parameterRows)
+                parameterRow=parameterRows(index);
+                distributions.(char(parameterKeys(index)))= ...
                     radia.optuna.internal.DistributionCodec.decode( ...
-                    obj.ParamKindData(index), ...
-                    obj.ParamDistributionData(index));
+                    obj.ParamKindData(parameterRow), ...
+                    obj.ParamDistributionData(parameterRow));
             end
             userAttrs=obj.attributesForTrial(obj.UserAttrTable,trialNumber);
             systemAttrs=obj.attributesForTrial(obj.SystemAttrTable,trialNumber);
@@ -1550,16 +1596,8 @@ classdef Study < handle
         end
 
         function recordParameter(obj, trial, name, kind, value, distribution)
-            rows = obj.ParamTrialNumberData == trial.Number & ...
-                obj.ParamNameData == name;
-            if any(rows)
-                obj.ParamTrialNumberData(rows)=[];
-                obj.ParamNameData(rows)=[];
-                obj.ParamKindData(rows)=[];
-                obj.ParamValueNumericData(rows)=[];
-                obj.ParamValueTextData(rows)=[];
-                obj.ParamDistributionData(rows)=[];
-            end
+            existing=find(obj.ParamTrialNumberData==trial.Number & ...
+                obj.ParamNameData==name);
             numeric = NaN;
             text = "";
             if isnumeric(value) && isscalar(value)
@@ -1567,7 +1605,20 @@ classdef Study < handle
             else
                 text = string(jsonencode(value));
             end
-            row=numel(obj.ParamTrialNumberData)+1;
+            if isempty(existing)
+                row=numel(obj.ParamTrialNumberData)+1;
+            else
+                row=existing(1);
+                if ~isscalar(existing)
+                    stale=existing(2:end);
+                    obj.ParamTrialNumberData(stale)=[];
+                    obj.ParamNameData(stale)=[];
+                    obj.ParamKindData(stale)=[];
+                    obj.ParamValueNumericData(stale)=[];
+                    obj.ParamValueTextData(stale)=[];
+                    obj.ParamDistributionData(stale)=[];
+                end
+            end
             obj.ParamTrialNumberData(row,1)=trial.Number;
             obj.ParamNameData(row,1)=string(name);
             obj.ParamKindData(row,1)=string(kind);

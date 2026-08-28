@@ -1476,17 +1476,59 @@ def _check_no_in_figure_title(fig) -> list[str]:
     return bad
 
 
-def _check_legend_no_overlap(fig) -> list[dict]:
-    """Lab rule: legends must not overlap data lines.
+def _is_axis_reference_line(line, ax) -> bool:
+    """Return whether *line* is an ``axhline``/``axvline`` reference line.
 
-    Walks every legend in the figure and, for each, samples points
-    along every Line2D in the same axes; flags any line that has
-    >= 1 sample inside the legend bbox.  Returns a list of dicts:
-        [{"axis": i, "label": ..., "n_overlap_points": ...,
-          "fraction": ...}, ...]
+    Those helpers span the whole axes at a constant coordinate, so any legend
+    placed inside the axes necessarily crosses them.  They are background
+    furniture -- a zero line, a threshold, a spec limit -- not plotted data,
+    and the lab rule is that a legend must not cover *data*.  The discriminator
+    is the transform: ``ax.plot`` draws in ``ax.transData`` while ``axhline`` /
+    ``axvline`` use the blended axis transforms, so an unlabelled but genuine
+    data curve is still audited.
+    """
+    try:
+        transform = line.get_transform()
+        return (
+            transform is ax.get_xaxis_transform()
+            or transform is ax.get_yaxis_transform()
+        )
+    except Exception:
+        return False
+
+
+def _line_style_draws(linestyle) -> bool:
+    """Return whether a Line2D linestyle renders a stroked path."""
+    if linestyle is None:
+        return False
+    if isinstance(linestyle, tuple):        # (offset, onoffseq) dash spec
+        offset, onoffseq = linestyle
+        return bool(onoffseq) and any(float(x) > 0 for x in onoffseq)
+    return str(linestyle).strip().lower() not in {"", "none"}
+
+
+def _marker_draws(marker) -> bool:
+    """Return whether a Line2D marker renders anything."""
+    if marker is None:
+        return False
+    if isinstance(marker, str):
+        return marker.strip().lower() not in {"", "none"}
+    return True                             # Path / MarkerStyle / int style
+
+
+def _check_legend_no_overlap(fig) -> list[dict]:
+    """Lab rule: legends must not overlap plotted data.
+
+    The check runs in display coordinates after the canvas is drawn.  It
+    tests the rendered path of every ``Line2D`` (so a sparse two-point line
+    crossing a legend is still caught), its vertices/markers, and collection
+    offsets such as scatter points.  The legend bbox is padded by 1 pt to
+    account for stroke and marker extent.
     """
     plt, _ = _get_mpl()
     import numpy as np
+    from matplotlib.transforms import Bbox
+
     fig.canvas.draw()
     out = []
     for i, ax in enumerate(fig.get_axes()):
@@ -1497,35 +1539,93 @@ def _check_legend_no_overlap(fig) -> list[dict]:
             leg_bbox = legend.get_window_extent()
         except RuntimeError:
             continue
-        for line in ax.lines:
+        pad_px = fig.dpi / 72.0
+        hit_bbox = Bbox.from_extents(
+            leg_bbox.x0 - pad_px,
+            leg_bbox.y0 - pad_px,
+            leg_bbox.x1 + pad_px,
+            leg_bbox.y1 + pad_px,
+        )
+        for line_index, line in enumerate(ax.lines):
             if not line.get_visible():
+                continue
+            if _is_axis_reference_line(line, ax):
+                continue
+            # Only artists that actually render can overlap the legend.  A
+            # marker-only Line2D (linestyle='None', e.g. ax.plot(x, y, 'o'))
+            # still carries connecting segments in its path, but none of them
+            # are stroked, so testing those segments reports an overlap the
+            # reader can never see.
+            draws_stroke = (
+                _line_style_draws(line.get_linestyle())
+                and float(line.get_linewidth()) > 0.0
+            )
+            draws_marker = _marker_draws(line.get_marker())
+            if not draws_stroke and not draws_marker:
                 continue
             label = line.get_label()
             if not label or label.startswith("_"):
-                continue
-            xdata = np.asarray(line.get_xdata(), dtype=float)
-            ydata = np.asarray(line.get_ydata(), dtype=float)
-            if xdata.size < 2:
-                continue
-            if xdata.size > 200:
-                idx = np.linspace(0, xdata.size - 1, 200).astype(int)
-                xdata = xdata[idx]
-                ydata = ydata[idx]
-            pts_data = np.column_stack([xdata, ydata])
-            pts_disp = ax.transData.transform(pts_data)
+                label = f"Line2D[{line_index}]"
+            path_disp = line.get_path().transformed(line.get_transform())
+            pts_disp = np.asarray(path_disp.vertices, dtype=float)
+            finite = np.isfinite(pts_disp).all(axis=1)
+            pts_disp = pts_disp[finite]
             inside = (
-                (pts_disp[:, 0] >= leg_bbox.x0)
-                & (pts_disp[:, 0] <= leg_bbox.x1)
-                & (pts_disp[:, 1] >= leg_bbox.y0)
-                & (pts_disp[:, 1] <= leg_bbox.y1)
+                (pts_disp[:, 0] >= hit_bbox.x0)
+                & (pts_disp[:, 0] <= hit_bbox.x1)
+                & (pts_disp[:, 1] >= hit_bbox.y0)
+                & (pts_disp[:, 1] <= hit_bbox.y1)
+            )
+            # Vertices lie on the rendered artist either way: they are the
+            # marker positions for a marker-only line and points on the curve
+            # for a stroked one.
+            n_over = int(inside.sum())
+            segment_hit = bool(
+                draws_stroke
+                and path_disp.intersects_bbox(hit_bbox, filled=False)
+            )
+            if n_over > 0 or segment_hit:
+                out.append({
+                    "axis": i,
+                    "label": label,
+                    "artist": "Line2D",
+                    "n_overlap_points": n_over,
+                    "segment_intersection": segment_hit,
+                    "fraction": n_over / max(pts_disp.shape[0], 1),
+                })
+
+        for collection_index, collection in enumerate(ax.collections):
+            if not collection.get_visible():
+                continue
+            label = collection.get_label()
+            if not label or label.startswith("_"):
+                label = f"{type(collection).__name__}[{collection_index}]"
+            get_offsets = getattr(collection, "get_offsets", None)
+            get_offset_transform = getattr(collection, "get_offset_transform", None)
+            if get_offsets is None or get_offset_transform is None:
+                continue
+            offsets = np.asarray(get_offsets(), dtype=float)
+            if offsets.size == 0:
+                continue
+            offsets = np.atleast_2d(offsets)
+            pts_disp = get_offset_transform().transform(offsets)
+            finite = np.isfinite(pts_disp).all(axis=1)
+            pts_disp = pts_disp[finite]
+            inside = (
+                (pts_disp[:, 0] >= hit_bbox.x0)
+                & (pts_disp[:, 0] <= hit_bbox.x1)
+                & (pts_disp[:, 1] >= hit_bbox.y0)
+                & (pts_disp[:, 1] <= hit_bbox.y1)
             )
             n_over = int(inside.sum())
             if n_over > 0:
                 out.append({
                     "axis": i,
                     "label": label,
+                    "artist": type(collection).__name__,
                     "n_overlap_points": n_over,
-                    "fraction": n_over / pts_disp.shape[0],
+                    "segment_intersection": False,
+                    "fraction": n_over / max(pts_disp.shape[0], 1),
                 })
     return out
 
@@ -1544,6 +1644,7 @@ def emit_paper_figure(
     check_times_new_roman: bool = True,
     check_min_font_size: bool = True,
     min_font_pt: Optional[float] = None,
+    max_font_pt: Optional[float] = None,
     embed_width_cm: Optional[float] = None,
     check_text_overflow: bool = True,
     text_overflow_tol_pt: float = 0.5,
@@ -1595,6 +1696,10 @@ def emit_paper_figure(
             profiles require 10 pt and 16:9 slide profiles require 20 pt.
             Slide profiles still author at 24 pt by default to leave scaling
             margin before the 20 pt final-size gate.
+        max_font_pt: optional final-size font ceiling.  When omitted, ordinary
+            paper profiles use 10.5 pt, keeping all plot text at the 10 pt body
+            target without making a figure look typographically oversized.
+            Slide profiles have no default ceiling.
         embed_width_cm: actual width at which the output will be embedded in
             the paper or pasted into PowerPoint.  Defaults to the profile
             width (100% scale).  Passing the real pasted width is mandatory
@@ -1742,6 +1847,9 @@ def emit_paper_figure(
     is_slide_profile = prof.name.startswith("beamer_169_")
     if effective_min_font_pt is None:
         effective_min_font_pt = 20.0 if is_slide_profile else 10.0
+    effective_max_font_pt = max_font_pt
+    if effective_max_font_pt is None and not is_slide_profile:
+        effective_max_font_pt = 10.5
     intended_embed_width_cm = (
         float(embed_width_cm)
         if embed_width_cm is not None
@@ -1757,24 +1865,41 @@ def emit_paper_figure(
         font_size_violations = check_min_font(
             fig,
             min_pt=float(effective_min_font_pt),
+            max_pt=(
+                None
+                if effective_max_font_pt is None
+                else float(effective_max_font_pt)
+            ),
             embed_width_cm=intended_embed_width_cm,
             authored_width_cm=authored_width_cm,
         )
         if font_size_violations:
             lines = [
                 f"  {v['kind']} {v['text']!r}: {v['render_pt']:.1f} pt "
-                f"source -> {v['visible_pt']:.1f} pt displayed"
+                f"source -> {v['visible_pt']:.1f} pt displayed "
+                f"({v['reason']})"
                 for v in font_size_violations
             ]
+            has_above = any(
+                v["reason"] == "above maximum" for v in font_size_violations
+            )
             msg = (
+                "emit_paper_figure: visible text outside the final-size font "
+                "band.\n" if has_above else
                 "emit_paper_figure: visible text below the final-size font floor.\n"
-                + "\n".join(lines) + "\n"
+            ) + (
+                "\n".join(lines) + "\n"
                 f"Source width {authored_width_cm:g} cm -> final width "
                 f"{intended_embed_width_cm:g} cm ({embed_scale:.3f}x).\n"
-                f"Every label, tick, legend, panel label, and annotation must "
-                f"be at least {float(effective_min_font_pt):g} pt after scaling.\n"
-                "Increase source font sizes, enlarge the final figure, or "
-                "simplify it; do not shrink text to make content fit."
+                f"Allowed final-size range: {float(effective_min_font_pt):g} pt"
+                + (
+                    " or larger"
+                    if effective_max_font_pt is None
+                    else f" to {float(effective_max_font_pt):g} pt"
+                )
+                + ".\nAdjust source font sizes or the final embed width; "
+                "simplify crowded content rather than shrinking or enlarging "
+                "text away from the paper body size."
             )
             if on_fail == "warn":
                 import warnings
@@ -1820,8 +1945,13 @@ def emit_paper_figure(
         if overlaps:
             lines = [
                 f"  axis {o['axis']}: legend overlaps '{o['label']}' "
-                f"({o['n_overlap_points']} points = "
-                f"{o['fraction']*100:.0f}% of curve)"
+                + (
+                    f"({o['n_overlap_points']} points = "
+                    f"{o['fraction']*100:.0f}% of curve)"
+                    if o["n_overlap_points"]
+                    else "(a drawn segment crosses the legend box; no "
+                         "sampled point lands inside it)"
+                )
                 for o in overlaps
             ]
             msg = (
@@ -1977,6 +2107,7 @@ def emit_paper_figure(
     final["font_violations"] = font_violations
     final["font_size_violations"] = font_size_violations
     final["min_font_pt"] = effective_min_font_pt
+    final["max_font_pt"] = effective_max_font_pt
     final["authored_width_cm"] = authored_width_cm
     final["embed_width_cm"] = intended_embed_width_cm
     final["embed_scale"] = embed_scale

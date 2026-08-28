@@ -230,6 +230,48 @@ classdef Trial < radia.optuna.BaseTrial
             value=template;
         end
 
+        function [key,registry]=claimKey(registry,name)
+            %CLAIMKEY Preserve distinct original names after makeValidName.
+            original=string(name);
+            base=char(matlab.lang.makeValidName(original));
+            if isfield(registry,base)
+                if string(registry.(base))==original
+                    key=base;
+                    return
+                end
+            else
+                registry.(base)=original;
+                key=base;
+                return
+            end
+            existingKeys=string(fieldnames(registry));
+            for existingKey=reshape(existingKeys,1,[])
+                if string(registry.(char(existingKey)))==original
+                    key=char(existingKey);
+                    return
+                end
+            end
+            key=base;
+            suffix=2;
+            while isfield(registry,key)
+                key=char(matlab.lang.makeValidName( ...
+                    string(base)+"_"+suffix));
+                suffix=suffix+1;
+            end
+            registry.(key)=original;
+        end
+
+        function keys=claimKeys(names)
+            names=reshape(string(names),1,[]);
+            keys=strings(1,numel(names));
+            registry=struct();
+            for index=1:numel(names)
+                [key,registry]=radia.optuna.Trial.claimKey( ...
+                    registry,names(index));
+                keys(index)=string(key);
+            end
+        end
+
     end
 
     methods
@@ -257,17 +299,15 @@ classdef Trial < radia.optuna.BaseTrial
                 options.Step (1,1) double = NaN
             end
             obj.ensureRunning();
-            effectiveHigh=high;
-            if isfinite(options.Step)
-                count=floor((high-low)/options.Step+1e-12);
-                effectiveHigh=low+count*options.Step;
-                if effectiveHigh~=high
+            [effectiveHigh,adjusted]= ...
+                radia.optuna.internal.UpstreamNumerics. ...
+                adjustDiscreteUniformHigh(low,high,options.Step);
+            if adjusted
                     warning("radia:optuna:DistributionAdjusted", ...
                         "The distribution is specified by [%g, %g] and " + ...
                          "Step=%g, but the range is not divisible by Step. " + ...
                          "It will be replaced with [%g, %g].", ...
                         low,high,options.Step,low,effectiveHigh);
-                end
             end
             spec = radia.optuna.internal.DistributionCodec.float( ...
                 low, effectiveHigh, options.Log, options.Step);
@@ -279,6 +319,8 @@ classdef Trial < radia.optuna.BaseTrial
             [isRelative,relativeValue] = obj.relativeValue(name, spec, key);
             if isFixed
                 % Enqueued values override sampler-relative proposals.
+            elseif radia.optuna.internal.DistributionCodec.isSingle(spec)
+                value=obj.singleDistributionValue(spec);
             elseif isRelative
                 value=relativeValue;
             else
@@ -321,6 +363,8 @@ classdef Trial < radia.optuna.BaseTrial
             [isRelative,relativeValue] = obj.relativeValue(name, spec, key);
             if isFixed
                 % Enqueued values override sampler-relative proposals.
+            elseif radia.optuna.internal.DistributionCodec.isSingle(spec)
+                value=obj.singleDistributionValue(spec);
             elseif isRelative
                 value=relativeValue;
             else
@@ -588,6 +632,8 @@ classdef Trial < radia.optuna.BaseTrial
             [isRelative,relativeValue] = obj.relativeValue(name, spec, key);
             if isFixed
                 % Enqueued values override sampler-relative proposals.
+            elseif radia.optuna.internal.DistributionCodec.isSingle(spec)
+                value=obj.singleDistributionValue(spec);
             elseif isRelative
                 value=relativeValue;
             else
@@ -597,14 +643,13 @@ classdef Trial < radia.optuna.BaseTrial
                 elseif ~logScale && step == 1
                     value = obj.Study.sampleInteger( ...
                         obj, name, low, effectiveHigh);
-                elseif low == effectiveHigh
-                    value = low;
                 else
                     value = obj.Study.sampleFloat(obj, name, low, ...
                         effectiveHigh, struct("Log", logScale, "Step", step));
                 end
             end
-            value = low + round((double(value) - low) / step) * step;
+            value = low + radia.optuna.internal.UpstreamNumerics. ...
+                roundTiesToEven((double(value) - low) / step) * step;
             value = min(max(value, low), effectiveHigh);
             obj.Params.(key) = value;
             obj.ParameterDistributions.(key) = spec;
@@ -651,34 +696,17 @@ classdef Trial < radia.optuna.BaseTrial
         end
 
         function key = claimParameterName(obj, name)
-            original = string(name);
-            base=string(matlab.lang.makeValidName(original));
-            if isfield(obj.ParameterNames,base)
-                if string(obj.ParameterNames.(base))==original
-                    key=char(base);
-                    return
-                end
-            else
-                obj.ParameterNames.(base)=original;
-                key=char(base);
-                return
-            end
-            existingKeys=string(fieldnames(obj.ParameterNames));
-            for existingKey=reshape(existingKeys,1,[])
-                if string(obj.ParameterNames.(existingKey))==original
-                    key=char(existingKey);
-                    return
-                end
-            end
+            [key,obj.ParameterNames]=radia.optuna.Trial.claimKey( ...
+                obj.ParameterNames,name);
+        end
 
-            key=base;
-            suffix=2;
-            while isfield(obj.ParameterNames,key)
-                key=matlab.lang.makeValidName(base+"_"+suffix);
-                suffix=suffix+1;
+        function value=singleDistributionValue(~,spec)
+            if spec.kind=="categorical"
+                value=radia.optuna.internal.DistributionCodec.choiceAt( ...
+                    spec.choices,1);
+            else
+                value=spec.low;
             end
-            obj.ParameterNames.(key) = original;
-            key=char(key);
         end
 
         function [available, value] = relativeValue(obj, name, distribution,key)

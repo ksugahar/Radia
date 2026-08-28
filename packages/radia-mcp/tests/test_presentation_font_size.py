@@ -62,3 +62,27 @@ def test_chrome_can_be_included_explicitly(tmp_path: Path) -> None:
 
     assert result["total_violations"] == 1
     assert result["violations"][0]["text"] == "近畿大学 1"
+
+
+def test_title_slide_metadata_is_not_misclassified_as_title(
+        tmp_path: Path) -> None:
+    prs = Presentation()
+    prs.slide_width = Inches(13.333)
+    prs.slide_height = Inches(7.5)
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+    metadata = slide.shapes.add_textbox(
+        Inches(0.8), Inches(0.3), Inches(11.7), Inches(0.35)
+    )
+    metadata.text_frame.text = "静止器・回転機合同研究会 2026年8月27日"
+    metadata.text_frame.paragraphs[0].runs[0].font.size = Pt(24)
+    title = slide.shapes.add_textbox(
+        Inches(0.9), Inches(1.4), Inches(11.5), Inches(1.4)
+    )
+    title.text_frame.text = "多重極モーメント拘束に基づく磁気モーメント法"
+    title.text_frame.paragraphs[0].runs[0].font.size = Pt(40)
+    path = tmp_path / "title-slide-metadata.pptx"
+    prs.save(path)
+
+    result = presentation_check_pptx_font_size(str(path))
+
+    assert result["total_violations"] == 0

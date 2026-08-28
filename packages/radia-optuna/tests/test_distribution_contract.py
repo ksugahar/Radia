@@ -4,9 +4,25 @@ import json
 import re
 import tomllib
 from pathlib import Path
+import sys
 
 PACKAGE_ROOT = Path(__file__).resolve().parents[1]
 REPO_ROOT = PACKAGE_ROOT.parents[1]
+sys.path.insert(0, str(PACKAGE_ROOT / "src"))
+
+
+def test_matlab_path_names_the_layout_it_resolved():
+    import radia_optuna
+    from radia_optuna import cli
+
+    resolved = radia_optuna.layout()
+    assert resolved in {"wheel", "checkout"}
+    root = radia_optuna.matlab_path()
+    assert (root / "+radia" / "+optuna").is_dir()
+    assert radia_optuna.mex_path().name == "optuna_mex.mexw64"
+    payload = cli._doctor_payload()
+    assert payload["layout"] == resolved
+    assert payload["matlab_file_count"] == payload["expected_matlab_file_count"]
 
 
 def test_independent_version_and_radia_extras_are_synchronized():

@@ -48,6 +48,7 @@ classdef RandomSampler < radia.optuna.BaseSampler
                 return
             end
             u = rand(obj.Stream, 1, 1);
+            numerics=radia.optuna.internal.UpstreamNumerics;
             if options.Log && isfinite(options.Step)
                 % This path represents IntDistribution(log=true), which is
                 % routed through sampleFloat by Trial.suggest_int.
@@ -55,20 +56,22 @@ classdef RandomSampler < radia.optuna.BaseSampler
                 transformedHigh = log(high + 0.5 * options.Step);
                 proposal = exp(transformedLow + u * ...
                     (transformedHigh - transformedLow));
-                value = round(proposal);
+                value = min(max(numerics.roundTiesToEven(proposal),low),high);
             elseif options.Log
-                value = exp(log(low) + u * (log(high) - log(low)));
+                proposal=exp(log(low)+u*(log(high)-log(low)));
+                value=min(proposal,numerics.nextDown(high));
             elseif isfinite(options.Step)
                 transformedLow = low - 0.5 * options.Step;
                 transformedHigh = high + 0.5 * options.Step;
                 proposal = transformedLow + u * ...
                     (transformedHigh - transformedLow);
-                value = low + round((proposal - low) / options.Step) * ...
-                    options.Step;
+                value = low + numerics.roundTiesToEven( ...
+                    (proposal-low)/options.Step)*options.Step;
+                value=min(max(value,low),high);
             else
-                value = low + u * (high - low);
+                proposal=low+u*(high-low);
+                value=min(proposal,numerics.nextDown(high));
             end
-            value = min(max(value, low), high);
             obj.recordState(study, trial.Number);
         end
 
@@ -83,7 +86,8 @@ classdef RandomSampler < radia.optuna.BaseSampler
             end
             proposal = (low - 0.5) + rand(obj.Stream, 1, 1) * ...
                 (high - low + 1);
-            value = min(max(round(proposal), low), high);
+            value = min(max(radia.optuna.internal.UpstreamNumerics. ...
+                roundTiesToEven(proposal), low), high);
             obj.recordState(study, trial.Number);
         end
 

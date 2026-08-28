@@ -2682,6 +2682,18 @@ def test_misuse_check_is_alive_even_though_proposals_never_trip_it():
     assert result["total_matches"] >= 2
 
 
+def test_misuse_check_rejects_novelty_placement_meta_phrase():
+    bad = gw.grant_writing_check_misuse_japanese(
+        "本研究では物理量制約と高速求解の統合に新規性を置く。"
+    )
+    clean = gw.grant_writing_check_misuse_japanese(
+        "本研究では、先行法にない物理量制約を低ランク求解へ組み込む。"
+    )
+
+    assert bad["total_matches"] == 1
+    assert clean["total_matches"] == 0
+
+
 def test_an_asserted_absence_needs_an_account_of_the_search():
     # Present in four of eight real proposals, three of them adopted.
     result = gw.grant_writing_literature_gap_evidence_check(

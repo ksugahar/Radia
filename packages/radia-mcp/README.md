@@ -196,6 +196,11 @@ over stdio with a fresh temporary SQLite database. Routine tests use the checked
 fixture, do not launch Dashboard, do not touch shared/production storage, and
 do not automatically open upstream issues or pull requests.
 
+`matlab_optuna_compatibility_contract` and `matlab_optuna_oracle_audit` expose
+the pinned direct-Python and real-stdio-MCP evidence behind that health gate.
+Unseeded constructors use fresh private entropy; exact proposal parity uses an
+explicit seed.
+
 Requires Python ≥ 3.10. Coreform Cubit is auto-discovered from
 standard install paths; set `CUBIT_BIN_DIR` env var if installed
 non-standard.

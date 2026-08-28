@@ -976,6 +976,101 @@ def _tpe_trials() -> list[float]:
     return values
 
 
+def _numeric_untransform_contract() -> dict[str, object]:
+    ties = [0.5, 1.5, 2.5, 3.5, -0.5, -1.5, -2.5, 2.4, 2.6, -0.4]
+    below = [1.0, 0.7, -1.0, 2.0, 1e-300]
+    step_cases = [
+        (0.0, 0.3, 0.1),
+        (0.0, 0.7, 0.1),
+        (0.0, 1.0, 0.1),
+        (0.0, 1.0, 0.3),
+        (0.0, 100.0, 7.0),
+        (-2.0, -1.0, 0.3),
+        (0.1, 1.0, 0.3),
+        (-0.5, 0.5, 0.25),
+        (0.0, 0.05, 0.1),
+    ]
+    float_step_high = []
+    for low, high, step in step_cases:
+        distribution = optuna.distributions.FloatDistribution(low, high, step=step)
+        float_step_high.append(
+            {
+                "low": low,
+                "high": high,
+                "step": step,
+                "adjusted_high": distribution.high,
+                "adjusted": distribution.high != high,
+                "single": distribution.single(),
+            }
+        )
+    return {
+        "round_ties_to_even": {
+            "inputs": ties,
+            "outputs": [float(np.round(value)) for value in ties],
+        },
+        "next_after_below": {
+            "inputs": below,
+            "outputs": [float(np.nextafter(value, -np.inf)) for value in below],
+        },
+        "float_step_high": float_step_high,
+    }
+
+
+def _single_distribution_rng_contract() -> dict[str, object]:
+    def run(with_single: bool) -> list[float]:
+        study = optuna.create_study(sampler=optuna.samplers.RandomSampler(seed=17))
+        values: list[float] = []
+        for _ in range(8):
+            trial = study.ask()
+            if with_single:
+                trial.suggest_float("fixed", 0.5, 0.5)
+                trial.suggest_int("pinned", 4, 4)
+                trial.suggest_categorical("only", ["solo"])
+            x = trial.suggest_float("x", -1.0, 1.0)
+            study.tell(trial, x * x)
+            values.append(x)
+        return values
+
+    baseline = run(False)
+    with_single = run(True)
+    return {
+        "seed": 17,
+        "baseline": baseline,
+        "with_single": with_single,
+        "identical": baseline == with_single,
+        "single_values": {"fixed": 0.5, "pinned": 4, "only": "solo"},
+    }
+
+
+def _tpe_pruned_history_trials() -> dict[str, object]:
+    study = optuna.create_study(
+        sampler=optuna.samplers.TPESampler(seed=113, n_startup_trials=6)
+    )
+    values: list[float] = []
+    states: list[str] = []
+    for index in range(30):
+        trial = study.ask()
+        x = trial.suggest_float("x", -3.0, 3.0)
+        values.append(x)
+        if index % 3 == 1:
+            trial.report((x - 0.5) ** 2 + 1.0, 0)
+            if index % 6 == 1:
+                trial.report((x - 0.5) ** 2, 1)
+            study.tell(trial, state=TrialState.PRUNED)
+            states.append("PRUNED")
+        else:
+            study.tell(trial, (x - 0.5) ** 2)
+            states.append("COMPLETE")
+    return {
+        "values": values,
+        "states": states,
+        "n_startup_trials": 6,
+        "seed": 113,
+        "complete_count": states.count("COMPLETE"),
+        "pruned_count": states.count("PRUNED"),
+    }
+
+
 def _custom_tpe_trials() -> dict[str, object]:
     def gamma(count: int) -> int:
         return min(3, count)
@@ -2793,6 +2888,9 @@ def build_oracle() -> dict[str, object]:
         "distribution_json": _distribution_json_contract(),
         "random_sampler_seed_123": _random_trials(),
         "tpe_sampler_seed_37": _tpe_trials(),
+        "numeric_untransform": _numeric_untransform_contract(),
+        "single_distribution_rng": _single_distribution_rng_contract(),
+        "tpe_pruned_history_seed_113": _tpe_pruned_history_trials(),
         "custom_tpe_sampler_gamma_weights": _custom_tpe_trials(),
         "tpe_group": _tpe_group_contract(),
         "tpe_categorical_distance": _tpe_categorical_distance_trials(),
