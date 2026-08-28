@@ -260,28 +260,9 @@ if ~isMultiObjective && ismember(selectedName, ...
         ['Use random, tpe, cmaes, gp, bruteforce, or qmc for ' ...
         'a single objective.']);
 end
-switch selectedName
-    case "random"
-        sampler = radia.optuna.RandomSampler(0);
-    case "tpe"
-        sampler = radia.optuna.TPESampler(Seed=0, NStartupTrials=10);
-    case "cmaes"
-        sampler = radia.optuna.CmaEsSampler(Seed=0, NStartupTrials=1);
-    case "gp"
-        sampler = radia.optuna.GPSampler(Seed=0,NStartupTrials=10, ...
-            DeterministicObjective=true);
-    case "motpe"
-        sampler = radia.optuna.MOTPESampler(Seed=0, NStartupTrials=20);
-    case "nsgaii"
-        sampler = radia.optuna.NSGAIISampler(Seed=0, PopulationSize=24);
-    case "nsgaiii"
-        sampler = radia.optuna.NSGAIIISampler(Seed=0,PopulationSize=24);
-    case "bruteforce"
-        sampler = radia.optuna.BruteForceSampler(Seed=0);
-    case "qmc"
-        sampler = radia.optuna.QMCSampler( ...
-            QMCType="sobol",Scramble=true,Seed=0);
-end
+% The short-name mapping lives in one place, shared with
+% radia.optuna.optimize; the block keeps its historical seed of 0.
+sampler = radia.optuna.internal.samplerFromName(selectedName, 0);
 decision = struct( ...
     "schema", "radia.optuna.auto-sampler-lite.v2", ...
     "requested", spec.name, ...
