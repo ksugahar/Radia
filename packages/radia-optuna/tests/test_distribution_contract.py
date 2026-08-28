@@ -125,6 +125,12 @@ def test_release_candidate_fidelity_normalizes_text_but_not_semantics():
         b"local-build",
         release_candidate=True,
     )
+    assert verify_wheel._payload_matches(
+        "radia_optuna/matlab/LICENSE",
+        b"license text\r\n",
+        b"license text\n",
+        release_candidate=True,
+    )
     mex_member = "radia_optuna/matlab/optuna_mex.mexw64"
     assert not verify_wheel._requires_source_payload(
         mex_member, release_candidate=True

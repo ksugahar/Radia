@@ -113,12 +113,16 @@ jobs:
           import zipfile
 
           wheel = Path(sys.argv[1])
-          target = Path("matlab/optuna_mex.mexw64")
-          target.parent.mkdir(parents=True, exist_ok=True)
+          payloads = {
+              "radia_optuna/matlab/optuna_mex.mexw64": Path(
+                  "matlab/optuna_mex.mexw64"
+              ),
+              "radia_optuna/matlab/LICENSE": Path("LICENSE"),
+          }
           with zipfile.ZipFile(wheel) as archive:
-              target.write_bytes(
-                  archive.read("radia_optuna/matlab/optuna_mex.mexw64")
-              )
+              for member, target in payloads.items():
+                  target.parent.mkdir(parents=True, exist_ok=True)
+                  target.write_bytes(archive.read(member))
           PY
           python3 packages/radia-optuna/verify_wheel.py "$WHL" --release-candidate --json
           ACTUAL_SHA256=$(sha256sum "$WHL" | awk '{print $1}')

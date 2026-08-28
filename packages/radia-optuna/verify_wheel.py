@@ -26,6 +26,7 @@ FORBIDDEN_NAME_PARTS = (
     "radia_pybind",
 )
 TEXT_PAYLOAD_SUFFIXES = {".json", ".m", ".md", ".py"}
+TEXT_PAYLOAD_NAMES = {"LICENSE"}
 
 
 def _fail(messages: list[str]) -> None:
@@ -55,7 +56,11 @@ def _payload_matches(
         # The exact main-CI wheel has already passed strict same-workspace
         # fidelity. A separately rebuilt MEX is not byte reproducible.
         return True
-    if PurePosixPath(member).suffix.lower() in TEXT_PAYLOAD_SUFFIXES:
+    member_path = PurePosixPath(member)
+    if (
+        member_path.suffix.lower() in TEXT_PAYLOAD_SUFFIXES
+        or member_path.name in TEXT_PAYLOAD_NAMES
+    ):
         return wheel_payload.replace(b"\r\n", b"\n") == source_payload.replace(
             b"\r\n", b"\n"
         )
