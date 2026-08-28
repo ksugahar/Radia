@@ -1,0 +1,145 @@
+name: radia-optuna
+
+on:
+  push:
+    branches: [main]
+    tags: ['radia-optuna-v*']
+    paths:
+      - 'packages/radia-optuna/**'
+      - 'matlab/+radia/+optuna/**'
+      - 'matlab/+radia/+simulink/buildOptunaBlock.m'
+      - 'matlab/+radia/+simulink/optunaSFunction.m'
+      - 'matlab/+radia/+simulink/optunaRuntimeStore.m'
+      - 'matlab/+radia/+simulink/addOptunaMonitor.m'
+      - 'matlab/radia_optuna_sfun.m'
+      - 'matlab/optuna_upstream_compatibility.json'
+      - 'matlab/optuna49_api_coverage.json'
+      - 'src/matlab/radia_mex.cpp'
+      - 'Build.ps1'
+      - 'CMakeLists.txt'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'packages/radia-optuna/**'
+      - 'matlab/+radia/+optuna/**'
+      - 'matlab/+radia/+simulink/buildOptunaBlock.m'
+      - 'matlab/+radia/+simulink/optunaSFunction.m'
+      - 'matlab/+radia/+simulink/optunaRuntimeStore.m'
+      - 'matlab/+radia/+simulink/addOptunaMonitor.m'
+      - 'matlab/radia_optuna_sfun.m'
+      - 'matlab/optuna_upstream_compatibility.json'
+      - 'matlab/optuna49_api_coverage.json'
+      - 'src/matlab/radia_mex.cpp'
+      - 'Build.ps1'
+      - 'CMakeLists.txt'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: radia-optuna-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  build-test:
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
+    runs-on: [self-hosted, windows-radia]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Build standalone optuna_mex
+        shell: pwsh
+        run: |
+          & .\Build.ps1 -OptunaMexOnly
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Test, build, and verify radia-optuna wheel
+        shell: pwsh
+        run: |
+          python -m pip install build wheel pytest
+          python -m pytest packages\radia-optuna\tests -q
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python -m pytest tests\test_release_quad_optuna_candidate.py -q
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Push-Location packages\radia-optuna
+          try {
+            python -m build --wheel
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            $wheels = @(Get-ChildItem dist\*.whl)
+            if ($wheels.Count -ne 1) {
+              throw "Expected one radia-optuna wheel, found $($wheels.Count)"
+            }
+            python verify_wheel.py $wheels[0].FullName --json
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          } finally {
+            Pop-Location
+          }
+
+      - name: Upload radia-optuna wheel
+        uses: actions/upload-artifact@v4
+        with:
+          name: radia-optuna-wheel
+          path: packages/radia-optuna/dist/*.whl
+          if-no-files-found: error
+          retention-days: 7
+
+  installed-wheel-matlab-e2e:
+    name: radia-optuna installed-wheel MATLAB/Simulink E2E
+    needs: build-test
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download the verified radia-optuna wheel
+        uses: actions/download-artifact@v4
+        with:
+          name: radia-optuna-wheel
+          path: dist/radia-optuna
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Set up MATLAB and Simulink
+        uses: matlab-actions/setup-matlab@v3
+        with:
+          products: Simulink
+
+      - name: Install and inspect only the built wheel
+        shell: pwsh
+        run: |
+          $wheels = @(Get-ChildItem dist/radia-optuna/*.whl)
+          if ($wheels.Count -ne 1) {
+            throw "Expected one verified radia-optuna wheel, found $($wheels.Count)"
+          }
+          $venv = Join-Path $env:RUNNER_TEMP 'radia-optuna-e2e-venv'
+          python -m venv $venv
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $venvPython = Join-Path $venv 'Scripts/python.exe'
+          & $venvPython -m pip install --disable-pip-version-check --no-deps $wheels[0].FullName
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & (Join-Path $venv 'Scripts/radia-optuna-doctor.exe') --json
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $installedMatlabPath = (& $venvPython -c 'from radia_optuna import matlab_path; print(matlab_path())').Trim()
+          if (-not (Test-Path -LiteralPath $installedMatlabPath -PathType Container)) {
+            throw "Installed MATLAB directory is missing: $installedMatlabPath"
+          }
+          $testDirectory = (Resolve-Path packages/radia-optuna/tests/matlab).ProviderPath
+          "RADIA_OPTUNA_MATLAB_PATH=$installedMatlabPath" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+          "RADIA_OPTUNA_TEST_PATH=$testDirectory" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+
+      - name: Test installed wheel with standalone Simulink
+        uses: matlab-actions/run-command@v3
+        with:
+          command: >-
+            restoredefaultpath;
+            addpath(getenv('RADIA_OPTUNA_MATLAB_PATH'));
+            addpath(getenv('RADIA_OPTUNA_TEST_PATH'));
+            result=test_standalone_simulink(getenv('RADIA_OPTUNA_MATLAB_PATH'));
+            assert(result.ok);

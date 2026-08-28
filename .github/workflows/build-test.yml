@@ -1,14 +1,22 @@
-name: CI
+name: Radia
 
 on:
   push:
     branches: [main]
-    tags: ['v*', 'cubit-mesh-export-v*', 'radia-mcp-v*', 'radia-optuna-v*']
+    tags: ['v*']
     paths-ignore:
       - '**/*.md'
       - 'docs/**'
       - 'LICENSE'
       - 'tools/eqnedit64/**'
+      - 'packages/eqnedit64/**'
+      - 'packages/radia-mcp/**'
+      - 'packages/cubit-mesh-export/**'
+      - 'packages/radia-optuna/**'
+      - '.github/workflows/**'
+      - 'tests/test_release_workflow_ref_gate.py'
+      - 'tests/test_release_quad_optuna_candidate.py'
+      - 'tools/release_quad.py'
   pull_request:
     branches: [main]
     paths-ignore:
@@ -16,6 +24,14 @@ on:
       - 'docs/**'
       - 'LICENSE'
       - 'tools/eqnedit64/**'
+      - 'packages/eqnedit64/**'
+      - 'packages/radia-mcp/**'
+      - 'packages/cubit-mesh-export/**'
+      - 'packages/radia-optuna/**'
+      - '.github/workflows/**'
+      - 'tests/test_release_workflow_ref_gate.py'
+      - 'tests/test_release_quad_optuna_candidate.py'
+      - 'tools/release_quad.py'
   workflow_dispatch:
     inputs:
       run_golden:
@@ -38,30 +54,11 @@ permissions:
   contents: read
   actions: write
 
-# Concurrency: serialize per-SHA, NOT per-ref.
-#
-# Why: a release pushes BOTH main and a tag (e.g. main + v4.78.1 +
-# radia-mcp-v0.72.0 / radia-optuna-v0.1.0) for the SAME commit SHA. Per-ref grouping put
-# main and each tag in separate concurrency groups, so they raced
-# on the shared self-hosted [windows-radia] runner.  Build.ps1
-# writes to S:\...\src\radia\*.pyd (NAS-shared editable path on
-# LAB); two concurrent builds linking the same .pyd produced
-# linker-side file-lock failures that surfaced as non-timeout
-# Build step failures (verified 2026-05-25: sha 0c0ef5d had main
-# CI FAIL + radia-mcp-v0.75.0 tag CI OK, only 5 s apart -- same
-# SHA, two runs, different outcomes).
-#
-# Grouping by SHA forces serial execution per commit so the
-# linker only ever has one writer at a time.
-#
-# On main: keep per-SHA serialization to protect the shared LAB build tree.
-# A stale-main guard below cancels an older main push as soon as it starts,
-# before it spends ~40 min in tests while a newer SHA is queued.
-# On tags: a duplicate-tag guard below keeps one release-tag CI per SHA even
-# when multiple package release tags are pushed together.
-# On PRs: cancel the previous run to save runner time.
+# Radia alone uses the self-hosted build tree.  Package workflows have their
+# own concurrency groups and artifacts; a radia-mcp/cubit/optuna/eqnedit tag
+# can no longer launch this job or race its linker.
 concurrency:
-  group: ci-${{ github.sha }}
+  group: radia-${{ github.sha }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
@@ -148,74 +145,6 @@ jobs:
           }
           Write-Host "This main CI is current; continuing."
 
-      - name: Cancel duplicate release-tag CI before build/test
-        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
-        shell: pwsh
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          $patterns = @('refs/tags/v*', 'refs/tags/radia-mcp-v*', 'refs/tags/cubit-mesh-export-v*', 'refs/tags/radia-optuna-v*')
-          $releaseTags = [System.Collections.Generic.List[string]]::new()
-
-          foreach ($line in (git ls-remote --tags origin @patterns)) {
-            $parts = $line -split '\s+'
-            if ($parts.Count -lt 2 -or $parts[0] -ne $env:GITHUB_SHA) {
-              continue
-            }
-            $ref = $parts[1] -replace '\^\{\}$', ''
-            if ($ref -notlike 'refs/tags/*') {
-              continue
-            }
-            $name = $ref.Substring('refs/tags/'.Length)
-            if (-not $releaseTags.Contains($name)) {
-              [void]$releaseTags.Add($name)
-            }
-          }
-
-          if ($releaseTags.Count -le 1) {
-            Write-Host "Release tags on this SHA: $($releaseTags -join ', ')"
-            Write-Host "No duplicate release-tag CI to cancel."
-            exit 0
-          }
-
-          $canonical = @(
-            $releaseTags | Sort-Object `
-              @{ Expression = {
-                if ($_ -like 'v*') { 0 }
-                elseif ($_ -like 'radia-mcp-v*') { 1 }
-                elseif ($_ -like 'cubit-mesh-export-v*') { 2 }
-                elseif ($_ -like 'radia-optuna-v*') { 3 }
-                else { 9 }
-              } },
-              @{ Expression = { $_ } }
-          )[0]
-
-          Write-Host "Release tags on this SHA: $($releaseTags -join ', ')"
-          Write-Host "Canonical release-tag CI for this SHA: $canonical"
-          Write-Host "Current tag: $env:GITHUB_REF_NAME"
-          if ($env:GITHUB_REF_NAME -eq $canonical) {
-            Write-Host "This is the canonical release-tag CI; continuing."
-            exit 0
-          }
-
-          Write-Host "::warning::Duplicate release-tag CI for $env:GITHUB_SHA. $canonical will represent this SHA; cancelling $env:GITHUB_REF_NAME before build/test."
-          $headers = @{
-            Authorization = "Bearer $env:GITHUB_TOKEN"
-            Accept = "application/vnd.github+json"
-            "X-GitHub-Api-Version" = "2022-11-28"
-          }
-          $repo = "${{ github.repository }}"
-          $uri = "https://api.github.com/repos/$repo/actions/runs/${{ github.run_id }}/cancel"
-          Invoke-RestMethod -Method Post -Uri $uri -Headers $headers | Out-Null
-
-          $deadline = (Get-Date).AddSeconds(90)
-          while ((Get-Date) -lt $deadline) {
-            Start-Sleep -Seconds 5
-            Write-Host "Waiting for GitHub to cancel this duplicate tag run..."
-          }
-          Write-Host "::error::Cancellation request did not stop the duplicate tag run in time."
-          exit 1
-
       # Release workflows consume this artifact from the exact triggering CI
       # run.  Looking up tags by SHA alone is racy: a successful main CI can
       # finish, then tags can be added to that SHA before workflow_run inspects
@@ -226,7 +155,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          $patterns = @('refs/tags/v*', 'refs/tags/radia-mcp-v*', 'refs/tags/cubit-mesh-export-v*', 'refs/tags/radia-optuna-v*')
+          $patterns = @('refs/tags/v*')
           $releaseTags = @()
           if ($env:GITHUB_REF_TYPE -eq 'tag') {
             $repoUrl = "https://x-access-token:$env:GITHUB_TOKEN@github.com/${{ github.repository }}.git"
@@ -277,23 +206,6 @@ jobs:
         run: python tools/audit_ci_no_system_install.py
 
       # ----------------------------------------------------------------
-      # radia-mcp PUBLISH BOUNDARY lint (CLAUDE.md 公開境界): fail fast,
-      # BEFORE the ~25-min build, if the public package attributes
-      # verification to / design-references / leaks an internal path of a
-      # commercial tool (COMSOL / FEMM / JMAG / CST).  Because
-      # release-radia-mcp.yml gates the PyPI publish on THIS "CI" workflow
-      # succeeding, running it here makes the boundary lint a hard
-      # publish gate (not just the separate policy-lint.yml feedback run).
-      # ----------------------------------------------------------------
-      - name: Publish-boundary lint (radia-mcp provenance)
-        shell: pwsh
-        run: |
-          python packages/radia-mcp/tools/policy_lint.py --selftest
-          if ($LASTEXITCODE -ne 0) { Write-Host "::error::radia-mcp boundary-lint selftest failed"; exit 1 }
-          python packages/radia-mcp/tools/policy_lint.py
-          if ($LASTEXITCODE -ne 0) { Write-Host "::error::radia-mcp publish-boundary lint failed -- commercial-tool attribution / design-reference / internal-path leak in the public package"; exit 1 }
-
-      # ----------------------------------------------------------------
       # Isolate NGSolve/Netgen from LAB's shared Python. Other editable
       # development tasks may legitimately install an older Radia release and
       # therefore change the shared NGSolve ABI while CI is queued. Building
@@ -337,19 +249,8 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       # ----------------------------------------------------------------
-      # Install test dependencies (MCP server tests need the mcp package).
-      #
-      # radia_mcp itself is NOT pip-installed.  The self-hosted runner
-      # shares LAB's system Python; `pip install -e packages/radia-mcp`
-      # rewrites LAB's editable radia-mcp pointer to this CI checkout
-      # (C:\actions-runner\...), silently breaking the LAB dev loop on
-      # every CI run (2026-05-26/27/28 recurring drift).  Instead,
-      # radia_mcp is put on PYTHONPATH in every step that imports it
-      # (see the PYTHONPATH env: keys below).  PYTHONPATH is prepended to
-      # sys.path, so `import radia_mcp.<subpkg>.server` resolves to THIS
-      # checkout (not a stale wheel / LAB editable) -- exactly what
-      # test_tools_doc.py needs -- WITHOUT touching the shared system
-      # Python's install registry.
+      # Install dependencies for the Radia distribution tests. Package-level
+      # dependencies and tests live in their own workflows.
       # ----------------------------------------------------------------
       - name: Install test dependencies
         shell: pwsh
@@ -498,52 +399,13 @@ jobs:
           Write-Host "radia_motor_rom.dll: ${motorSz} KB"
 
       # ----------------------------------------------------------------
-      # Fetch cubit_mesh_curver.pyd from GitHub Releases binaries tag.
-      #
-      # CI runners do NOT have the Coreform Cubit SDK (cmake module),
-      # pybind11, or the qt5_sdk needed to build the Cubit plugin
-      # locally. Build.ps1 silently SKIPs this target on CI ("SKIP:
-      # Cubit SDK not found at C:/Program Files/Coreform Cubit
-      # 2025.3/cmake"). The pyd is built on LAB (which has the full
-      # Cubit Pro install) and uploaded to the `binaries` release tag
-      # by the pre-push hook (.git/hooks/pre-push). CI downloads it
-      # so the cubit-mesh-export wheel ships with the bundled pyd.
-      #
-      # Without this step, Build_Wheel.ps1 / build-cubit-mesh-export
-      # would fail their pyd-mandate check (added 2026-04-24 after
-      # the PyPI 0.6.0 partial-wheel incident).
-      # ----------------------------------------------------------------
-      - name: Ensure cubit_mesh_curver.pyd (Build.ps1 local; binaries fallback)
-        shell: pwsh
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          # Tier-2 (2026-06): the .pyd now lives in the cubit-mesh-export
-          # package (Build.ps1 propagates it there; the self-hosted runner
-          # has Cubit 2025.12 + the SDK cmake module).  Only fetch from the
-          # binaries release as a FALLBACK when Build.ps1 did not supply it.
-          # download_release_asset.py is stdlib-only (urllib+json); gh CLI
-          # was retired from the runner 2026-05-24.
-          $pkgDir = "${{ github.workspace }}\packages\cubit-mesh-export\src\cubit_mesh_export"
-          if (Test-Path "$pkgDir\cubit_mesh_curver.pyd") {
-            Write-Host "cubit_mesh_curver.pyd present (Build.ps1) -- skipping binaries fetch"
-          } else {
-            Write-Host "cubit_mesh_curver.pyd absent -- fetching from binaries release"
-            python tools\download_release_asset.py `
-              --repo ${{ github.repository }} `
-              --tag binaries `
-              --name cubit_mesh_curver.pyd `
-              --dest $pkgDir
-          }
-
-      # ----------------------------------------------------------------
       # Test: Run simple Windows integration pytest tests.
       # ----------------------------------------------------------------
       - name: Run simple tests
         shell: pwsh
         working-directory: ${{ github.workspace }}
         env:
-          PYTHONPATH: '${{ github.workspace }}\src;${{ github.workspace }}\src\radia;${{ github.workspace }}\packages\radia-mcp\src'
+          PYTHONPATH: '${{ github.workspace }}\src;${{ github.workspace }}\src\radia'
         run: |
           if (-not $env:RADIA_CI_GIT_DIR -or
               -not (Test-Path (Join-Path $env:RADIA_CI_GIT_DIR 'git.exe'))) {
@@ -570,6 +432,9 @@ jobs:
           # step below.
           $pytestArgs = @(
             'tests/',
+            '--ignore=tests/mcp_server',
+            '--ignore=tests/test_cubit_installers.py',
+            '--ignore=tests/test_release_quad_optuna_candidate.py',
             '-v',
             '--tb=short',
             '-r', 'aR',
@@ -605,7 +470,7 @@ jobs:
         shell: pwsh
         working-directory: ${{ github.workspace }}
         env:
-          PYTHONPATH: '${{ github.workspace }}\src;${{ github.workspace }}\src\radia;${{ github.workspace }}\packages\radia-mcp\src'
+          PYTHONPATH: '${{ github.workspace }}\src;${{ github.workspace }}\src\radia'
         run: |
           Write-Host "Running validation_test pytest gate..."
           $pytestArgs = @(
@@ -870,289 +735,3 @@ jobs:
           name: radia-wheel
           path: dist/*.whl
           retention-days: 7
-
-      # ----------------------------------------------------------------
-      # Build the separately installable MATLAB Optuna distribution. Its
-      # native gateway deliberately does not configure Radia/NGSolve/MKL.
-      # ----------------------------------------------------------------
-      - name: Build and verify radia-optuna wheel
-        if: success()
-        shell: pwsh
-        working-directory: ${{ github.workspace }}
-        run: |
-          & "${{ github.workspace }}\Build.ps1" -OptunaMexOnly
-          if ($LASTEXITCODE -ne 0) {
-            Write-Host "::error::Standalone optuna_mex build failed"
-            exit $LASTEXITCODE
-          }
-
-          python -m pytest packages/radia-optuna/tests -q
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-
-          python -m pip install build wheel --quiet
-          Push-Location packages/radia-optuna
-          try {
-            python -m build --wheel
-            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-            $wheels = @(Get-ChildItem dist\*.whl)
-            if ($wheels.Count -ne 1) {
-              Write-Host "::error::Expected one fresh radia-optuna wheel, found $($wheels.Count)"
-              exit 1
-            }
-            $wheel = $wheels[0]
-            python verify_wheel.py $wheel.FullName --json
-            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          } finally {
-            Pop-Location
-          }
-
-      - name: Upload radia-optuna wheel
-        if: success()
-        uses: actions/upload-artifact@v4
-        with:
-          name: radia-optuna-wheel
-          path: packages/radia-optuna/dist/*.whl
-          retention-days: 7
-
-      # ----------------------------------------------------------------
-      # Build cubit-mesh-export wheel (includes .pyd, .ccm, .ccl)
-      # ----------------------------------------------------------------
-      - name: Build cubit-mesh-export wheel
-        if: success()
-        shell: pwsh
-        env:
-          # Skip the dev-side mtime freshness gate in CI: self-hosted
-          # runners have persistent workspaces and git checkout does not
-          # reliably normalise mtimes, producing false positives that
-          # block unrelated commits (2026-04-14 incident: 2D axisym
-          # validation commit blocked by stale-binary false alarm). CI
-          # has its own wheel-content guard in release-cubit-mesh-export
-          # .yml that verifies .ccm/.ccl are present at publish time.
-          CUBIT_MESH_EXPORT_SKIP_FRESHNESS_CHECK: "1"
-        run: |
-          $pkgDir = "${{ github.workspace }}\packages\cubit-mesh-export\src\cubit_mesh_export"
-          # Tier-2 (2026-06): Build.ps1 propagates the .ccm + .pyd DIRECTLY
-          # into the cubit-mesh-export package (src/radia no longer carries
-          # them -- cme is the sole shipper).  Verify they are present
-          # in-place; missing any is a MANDATORY fail (refuse a partial
-          # wheel, per the 2026-04-24 PyPI 0.6.0 partial-wheel incident).
-          $binaries = @("cubit_mesh_curver.pyd", "cubit_mesh_export.ccm")
-          $missing = @()
-          foreach ($b in $binaries) {
-            if (Test-Path "$pkgDir\$b") {
-              Write-Host "Present in cubit-mesh-export package: $b"
-            } else {
-              $missing += $b
-            }
-          }
-          if ($missing.Count -gt 0) {
-            Write-Host "::error::cubit-mesh-export package missing required binaries: $($missing -join ', ')"
-            Write-Host "         Build.ps1 did not propagate them. Refusing to build a partial wheel."
-            exit 1
-          }
-          pip install build wheel --quiet
-          Push-Location "${{ github.workspace }}\packages\cubit-mesh-export"
-          python -m build --wheel
-          # All 3 binaries are present (verified above) → retag as cp312/win_amd64
-          $whl = Get-ChildItem dist\*.whl | Select-Object -First 1
-          python -m wheel tags --python-tag cp312 --abi-tag cp312 --platform-tag win_amd64 --remove $whl.FullName
-          Write-Host "Retagged: $(Get-ChildItem dist\*.whl | Select-Object -First 1)"
-          Pop-Location
-
-      - name: Upload cubit-mesh-export wheel
-        if: success()
-        uses: actions/upload-artifact@v4
-        with:
-          name: cubit-mesh-export-wheel
-          path: packages/cubit-mesh-export/dist/*.whl
-          retention-days: 7
-
-      # ----------------------------------------------------------------
-      # Build radia-mcp wheel (pure Python, no binaries)
-      # ----------------------------------------------------------------
-      - name: Build radia-mcp wheel
-        if: success()
-        shell: pwsh
-        run: |
-          pip install build --quiet
-          Push-Location "${{ github.workspace }}\packages\radia-mcp"
-          python -m build --wheel
-          Pop-Location
-
-      - name: Upload radia-mcp wheel
-        if: success()
-        uses: actions/upload-artifact@v4
-        with:
-          name: radia-mcp-wheel
-          path: packages/radia-mcp/dist/*.whl
-          retention-days: 7
-
-      # ----------------------------------------------------------------
-      # Post-install selftest: install the just-built radia-mcp wheel
-      # and invoke --selftest on every public MCP server.  This catches:
-      #   - broken CLI entrypoint (console_scripts mis-wired)
-      #   - missing imports only reachable from __main__
-      #   - lint-rule regressions against the fixture examples
-      # It's complementary to `tests/mcp_server/test_selftest.py` (which
-      # calls _selftest() directly in the source tree) — here we verify
-      # the *installed* wheel behaves the same.
-      # ----------------------------------------------------------------
-      - name: Post-install MCP selftest (5 core public servers)
-        # Gated to main-only (2026-05-25) to avoid the concurrency
-        # race that bit radia-mcp-v0.73.0 + v0.74.0 tag CIs:
-        # main + tag CI fire simultaneously on the same self-hosted
-        # LAB runner, both run `pip install --force-reinstall
-        # packages/radia-mcp/dist/*.whl`, and one loses the race for
-        # Scripts/mcp-server-*.exe -> WinError 32 file-in-use ->
-        # job FAIL -> workflow_run.conclusion != 'success' ->
-        # publish-pypi skipped silently.  The Post-install selftest's
-        # job is "did we break server import in this commit", which
-        # main CI catches just fine; tag CI doesn't need to repeat it.
-        # The "MCP response regression tests" pytest step below still
-        # runs on tag CI and validates the same surface area without
-        # touching Scripts/mcp-server-*.exe.
-        if: success() && github.ref == 'refs/heads/main'
-        shell: pwsh
-        env:
-          # radia_mcp resolved from THIS checkout via PYTHONPATH -- we do
-          # NOT pip-install it into the shared system Python (that rewrites
-          # LAB's editable radia-mcp pointer to the CI clone and breaks the
-          # LAB dev loop every run; 2026-05-26/27/28 recurring drift).
-          # `python -m radia_mcp.X.server --selftest` below exercises the
-          # same module main()/imports/lint as the built wheel (the wheel is
-          # a verbatim package of this source), without touching system Python.
-          PYTHONPATH: '${{ github.workspace }}\packages\radia-mcp\src;${{ github.workspace }}\src;${{ github.workspace }}\src\radia'
-        run: |
-          $whl = Get-ChildItem "${{ github.workspace }}\packages\radia-mcp\dist\*.whl" `
-                 | Select-Object -First 1
-          if (-not $whl) {
-            Write-Host "::error::No radia-mcp wheel found"
-            exit 1
-          }
-          Write-Host "Wheel built OK: $($whl.Name). Running --selftest against source (PYTHONPATH)."
-
-          # Drive each server via `python -m` rather than the .exe shim.
-          # Equivalent entrypoint (same module main()), but bypasses the
-          # console-script wrapper entirely — matches how end users would
-          # invoke these from `uv run --with radia-mcp -m ...` or
-          # `python -m radia_mcp.X.server`.
-          $servers = @(
-            @{ name = 'mcp-server-radia-ngsolve';  mod = 'radia_mcp.radia_ngsolve.server' },
-            @{ name = 'mcp-server-cubit';          mod = 'radia_mcp.cubit.server' },
-            @{ name = 'mcp-server-build123d';      mod = 'radia_mcp.build123d.server' },
-            @{ name = 'mcp-server-gmsh';           mod = 'radia_mcp.gmsh.server' },
-            @{ name = 'mcp-server-radia-streamfunction';  mod = 'radia_mcp.streamfunction.server' }
-          )
-          $failed = @()
-          foreach ($s in $servers) {
-            Write-Host ""
-            Write-Host "=== $($s.name) --selftest ==="
-            python -m $s.mod --selftest
-            if ($LASTEXITCODE -ne 0) {
-              Write-Host "::error::$($s.name) --selftest exited $LASTEXITCODE"
-              $failed += $s.name
-            }
-          }
-          if ($failed.Count -gt 0) {
-            Write-Host "::error::selftest failed on: $($failed -join ', ')"
-            exit 1
-          }
-          Write-Host ""
-          Write-Host "All 5 core MCP servers passed --selftest."
-
-      # ----------------------------------------------------------------
-      # MCP response regression tests (topic coverage + unknown-topic
-      # graceful-degrade checks across all knowledge servers). These
-      # run against the installed wheel so they also serve as a second
-      # validation pass on the --selftest step above.
-      # ----------------------------------------------------------------
-      - name: MCP response regression tests
-        if: success()
-        shell: pwsh
-        env:
-          # radia_mcp from THIS checkout via PYTHONPATH (no system install).
-          PYTHONPATH: '${{ github.workspace }}\packages\radia-mcp\src;${{ github.workspace }}\src;${{ github.workspace }}\src\radia'
-        run: |
-          python -m pytest tests/mcp_server/ -v --tb=short `
-            --durations=25 --durations-min=0.5 `
-            --junitxml=mcp-test-results.xml
-          if ($LASTEXITCODE -ne 0) {
-            Write-Host "::error::MCP response regression tests failed"
-            exit $LASTEXITCODE
-          }
-
-      - name: Upload MCP test results
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: mcp-test-results
-          path: mcp-test-results.xml
-          retention-days: 30
-
-  radia-optuna-matlab-e2e:
-    name: radia-optuna installed-wheel MATLAB/Simulink E2E
-    needs: build-test
-    runs-on: windows-latest
-    timeout-minutes: 45
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Download the verified radia-optuna wheel
-        uses: actions/download-artifact@v4
-        with:
-          name: radia-optuna-wheel
-          path: dist/radia-optuna
-
-      - name: Set up Python 3.12
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-
-      # MathWorks' official action supplies a noninteractive license for this
-      # public repository.  Keep this required E2E out of the LocalSystem
-      # self-hosted runner, whose Named User Service Host cannot cross the
-      # Windows session boundary and returns licensing service error 5202.
-      - name: Set up MATLAB and Simulink
-        uses: matlab-actions/setup-matlab@v3
-        with:
-          products: Simulink
-
-      - name: Install and inspect only the built wheel
-        shell: pwsh
-        run: |
-          $wheels = @(Get-ChildItem dist/radia-optuna/*.whl)
-          if ($wheels.Count -ne 1) {
-            Write-Host "::error::Expected one verified radia-optuna wheel, found $($wheels.Count)"
-            exit 1
-          }
-
-          $venv = Join-Path $env:RUNNER_TEMP 'radia-optuna-e2e-venv'
-          python -m venv $venv
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          $venvPython = Join-Path $venv 'Scripts/python.exe'
-          & $venvPython -m pip install --disable-pip-version-check --no-deps $wheels[0].FullName
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-
-          $doctor = Join-Path $venv 'Scripts/radia-optuna-doctor.exe'
-          & $doctor --json
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-
-          $installedMatlabPath = (& $venvPython -c 'from radia_optuna import matlab_path; print(matlab_path())').Trim()
-          if (-not (Test-Path -LiteralPath $installedMatlabPath -PathType Container)) {
-            Write-Host "::error::Installed MATLAB directory is missing: $installedMatlabPath"
-            exit 1
-          }
-          $testDirectory = (Resolve-Path packages/radia-optuna/tests/matlab).ProviderPath
-          "RADIA_OPTUNA_MATLAB_PATH=$installedMatlabPath" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
-          "RADIA_OPTUNA_TEST_PATH=$testDirectory" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
-
-      - name: Test installed wheel with standalone Simulink
-        uses: matlab-actions/run-command@v3
-        with:
-          command: >-
-            restoredefaultpath;
-            addpath(getenv('RADIA_OPTUNA_MATLAB_PATH'));
-            addpath(getenv('RADIA_OPTUNA_TEST_PATH'));
-            result=test_standalone_simulink(getenv('RADIA_OPTUNA_MATLAB_PATH'));
-            assert(result.ok);

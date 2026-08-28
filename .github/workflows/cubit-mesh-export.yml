@@ -1,0 +1,121 @@
+name: cubit-mesh-export
+
+on:
+  push:
+    branches: [main]
+    tags: ['cubit-mesh-export-v*']
+    paths:
+      - 'packages/cubit-mesh-export/**'
+      - 'src/cubit_plugin/**'
+      - 'tests/test_cubit_installers.py'
+      - 'validation_test/cubit_mesh_export/**'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'packages/cubit-mesh-export/**'
+      - 'src/cubit_plugin/**'
+      - 'tests/test_cubit_installers.py'
+      - 'validation_test/cubit_mesh_export/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cubit-mesh-export-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  build-test:
+    runs-on: windows-2022
+    env:
+      CUBIT_MESH_EXPORT_SKIP_FRESHNESS_CHECK: '1'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Record exact cubit-mesh-export CI ref context
+        shell: pwsh
+        run: |
+          $tag = if ($env:GITHUB_REF_TYPE -eq 'tag') { $env:GITHUB_REF_NAME } else { $null }
+          [ordered]@{
+            schema = 'cubit-mesh-export.ci-release-context.v1'
+            ref = $env:GITHUB_REF
+            ref_name = $env:GITHUB_REF_NAME
+            ref_type = $env:GITHUB_REF_TYPE
+            sha = $env:GITHUB_SHA
+            run_id = [string]$env:GITHUB_RUN_ID
+            event_name = $env:GITHUB_EVENT_NAME
+            release_tags = @($tag)
+          } | ConvertTo-Json | Set-Content `
+            -LiteralPath cubit-mesh-export-ci-release-context.json -Encoding utf8
+
+      - name: Upload exact cubit-mesh-export CI ref context
+        uses: actions/upload-artifact@v4
+        with:
+          name: cubit-mesh-export-ci-release-context
+          path: cubit-mesh-export-ci-release-context.json
+          if-no-files-found: error
+
+      - name: Fetch the independently built native curver
+        shell: pwsh
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $destination = 'packages\cubit-mesh-export\src\cubit_mesh_export'
+          python tools\download_release_asset.py `
+            --repo ${{ github.repository }} `
+            --tag binaries `
+            --name cubit_mesh_curver.pyd `
+            --dest $destination
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Build and verify cubit-mesh-export wheel
+        shell: pwsh
+        run: |
+          python -m pip install build wheel
+          python -m build --wheel packages\cubit-mesh-export
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $wheel = Get-ChildItem packages\cubit-mesh-export\dist\*.whl |
+            Select-Object -First 1
+          python -m wheel tags --python-tag cp312 --abi-tag cp312 `
+            --platform-tag win_amd64 --remove $wheel.FullName
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $wheel = Get-ChildItem packages\cubit-mesh-export\dist\*.whl |
+            Select-Object -First 1
+          @'
+          import re, sys, zipfile
+          wheel = sys.argv[1]
+          with zipfile.ZipFile(wheel) as archive:
+              names = archive.namelist()
+              required = ('cubit_mesh_export/cubit_mesh_export.ccm',
+                          'cubit_mesh_export/cubit_mesh_curver.pyd')
+              missing = [name for name in required if name not in names]
+              if missing:
+                  raise SystemExit(f'missing required wheel payloads: {missing}')
+              init = archive.read('cubit_mesh_export/__init__.py').decode()
+          package_version = re.search(r'^__version__\s*=\s*"([^"]+)"', init, re.M).group(1)
+          wheel_version = re.match(r'[^-]+-([^-]+)-', wheel.rsplit('\\', 1)[-1]).group(1)
+          if package_version != wheel_version:
+              raise SystemExit(f'version mismatch: {package_version} != {wheel_version}')
+          print(f'PASS cubit-mesh-export {package_version}: mandatory payloads present')
+          '@ | python - $wheel.FullName
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Check standalone Python sources
+        shell: pwsh
+        run: |
+          python -m compileall -q packages\cubit-mesh-export\src
+          python -m pip install pytest numpy
+          $env:PYTHONPATH = 'packages\cubit-mesh-export\src'
+          python -m pytest tests\test_cubit_installers.py -q
+
+      - name: Upload cubit-mesh-export wheel
+        uses: actions/upload-artifact@v4
+        with:
+          name: cubit-mesh-export-wheel
+          path: packages/cubit-mesh-export/dist/*.whl
+          if-no-files-found: error
