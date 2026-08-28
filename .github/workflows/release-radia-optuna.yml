@@ -44,9 +44,9 @@ jobs:
           HEAD_REPOSITORY=$(jq -r '.head_repository.full_name' <<<"$RUN_JSON")
           if [ "$STATUS" != "completed" ] || [ "$CONCLUSION" != "success" ] || \
              [ "$EVENT" != "push" ] || [ "$HEAD_BRANCH" != "main" ] || \
-             [ "$WORKFLOW_PATH" != ".github/workflows/build-test.yml" ] || \
+             [ "$WORKFLOW_PATH" != ".github/workflows/radia-optuna.yml" ] || \
              [ "$HEAD_REPOSITORY" != "$GITHUB_REPOSITORY" ]; then
-            echo "::error::CI run $RUN_ID is not a successful main-push run of build-test.yml"
+            echo "::error::CI run $RUN_ID is not a successful main-push run of radia-optuna.yml"
             exit 1
           fi
 

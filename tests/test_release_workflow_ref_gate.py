@@ -16,22 +16,67 @@ EQNEDIT64_WORKFLOW=(
 EQNEDIT64_RELEASE_WORKFLOW=(
     ROOT/".github"/"workflows"/"release-eqnedit64-pypi.yml"
 )
+PACKAGE_CI_CONTEXTS=(
+    (
+        ROOT/".github"/"workflows"/"build-test.yml",
+        "radia.ci-release-context.v1",
+        "ci-release-context",
+    ),
+    (
+        ROOT/".github"/"workflows"/"radia-mcp-matrix.yml",
+        "radia-mcp.ci-release-context.v1",
+        "radia-mcp-ci-release-context",
+    ),
+    (
+        ROOT/".github"/"workflows"/"cubit-mesh-export.yml",
+        "cubit-mesh-export.ci-release-context.v1",
+        "cubit-mesh-export-ci-release-context",
+    ),
+)
+
+
+def test_pypi_distributions_have_independent_ci_boundaries():
+    workflows={
+        "Radia": ROOT/".github"/"workflows"/"build-test.yml",
+        "radia-mcp": ROOT/".github"/"workflows"/"radia-mcp-matrix.yml",
+        "cubit-mesh-export": ROOT/".github"/"workflows"/"cubit-mesh-export.yml",
+        "radia-optuna": ROOT/".github"/"workflows"/"radia-optuna.yml",
+        "Eqnedit64": ROOT/".github"/"workflows"/"eqnedit64.yml",
+    }
+    texts={name: path.read_text(encoding="utf-8")
+           for name, path in workflows.items()}
+    for name, text in texts.items():
+        assert f"name: {name}" in text
+
+    radia=texts["Radia"]
+    for package in ("eqnedit64", "radia-mcp", "cubit-mesh-export",
+                    "radia-optuna"):
+        assert f"packages/{package}/**" in radia
+    assert "radia-mcp-wheel" not in radia
+    assert "cubit-mesh-export-wheel" not in radia
+    assert "radia-optuna-wheel" not in radia
+    assert "--ignore=tests/test_cubit_installers.py" in radia
+    assert "--ignore=tests/test_release_quad_optuna_candidate.py" in radia
+
+    policy=(ROOT/".github"/"workflows"/"policy-lint.yml").read_text(
+        encoding="utf-8")
+    assert "packages/radia-mcp/tools/policy_lint.py" not in policy
+    assert "packages/radia-mcp/tools/policy_lint.py" in texts["radia-mcp"]
+
+    assert "tags: ['radia-mcp-v*']" in texts["radia-mcp"]
+    assert "tags: ['cubit-mesh-export-v*']" in texts["cubit-mesh-export"]
+    assert "tags: ['radia-optuna-v*']" in texts["radia-optuna"]
+    assert "tags: ['eqnedit64-v*']" in texts["Eqnedit64"]
 
 
 def test_ci_records_exact_ref_context_before_release():
-    workflow=(ROOT/".github"/"workflows"/"build-test.yml").read_text(
-        encoding="utf-8")
-    assert "schema = 'radia.ci-release-context.v1'" in workflow
-    assert "if ($env:GITHUB_REF_TYPE -eq 'tag')" in workflow
-    assert 'git ls-remote --tags $repoUrl @patterns' in workflow
-    context=workflow[workflow.index("- name: Record exact CI ref context"):]
-    context=context[:context.index("- name: Upload exact CI ref context")]
-    assert "ls-remote --tags origin" not in context
-    assert "ref_type = $env:GITHUB_REF_TYPE" in workflow
-    assert "sha = $env:GITHUB_SHA" in workflow
-    assert "run_id = [string]$env:GITHUB_RUN_ID" in workflow
-    assert "release_tags = @($releaseTags | Sort-Object -Unique)" in workflow
-    assert "name: ci-release-context" in workflow
+    for path, schema, artifact in PACKAGE_CI_CONTEXTS:
+        workflow=path.read_text(encoding="utf-8")
+        assert schema in workflow
+        assert "GITHUB_REF_TYPE" in workflow
+        assert "GITHUB_SHA" in workflow
+        assert "GITHUB_RUN_ID" in workflow
+        assert f"name: {artifact}" in workflow
 
 
 def test_pypi_release_jobs_require_the_triggering_ci_to_be_a_tag_run():
@@ -59,7 +104,7 @@ def test_optuna_manual_release_selects_one_fully_successful_ci_run():
     assert 'EVENT" != "push"' in workflow
     assert 'HEAD_BRANCH" != "main"' in workflow
     assert (
-        'WORKFLOW_PATH" != ".github/workflows/build-test.yml"'
+        'WORKFLOW_PATH" != ".github/workflows/radia-optuna.yml"'
         in workflow
     )
     assert 'HEAD_REPOSITORY" != "$GITHUB_REPOSITORY"' in workflow

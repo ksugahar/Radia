@@ -26,13 +26,7 @@ jobs:
       - name: Policy lint (8 policies)
         run: python tools/policy_lint.py
 
-      # radia-mcp PUBLISH BOUNDARY (CLAUDE.md 公開境界): the public package must
-      # not attribute verification to, design-reference, or leak internal paths
-      # of a commercial tool (COMSOL / FEMM / JMAG / CST).  This is a DIFFERENT
-      # lint from the 8 source policies above (packages/radia-mcp/tools/, not
-      # tools/).  Fast feedback here on every push / PR; build-test.yml ("CI")
-      # runs it too so it also gates the PyPI publish.
-      - name: Publish-boundary lint (radia-mcp provenance) + selftest
+      - name: Distribution CI contract
         run: |
-          python packages/radia-mcp/tools/policy_lint.py --selftest
-          python packages/radia-mcp/tools/policy_lint.py
+          python -m pip install pytest
+          python -m pytest tests/test_release_workflow_ref_gate.py -q
