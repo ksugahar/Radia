@@ -47,7 +47,9 @@ def _source_payloads(source_manifest: dict[str, object]) -> dict[str, Path]:
         for path in (PACKAGE_ROOT / "src" / "radia_optuna").iterdir()
         if path.is_file() and path.suffix in {".py", ".json"}
     }
-    for source in (matlab_root / "+radia" / "+optuna").rglob("*.m"):
+    for source in (matlab_root / "+radia" / "+optuna").rglob("*"):
+        if not source.is_file() or source.suffix not in {".m", ".bin"}:
+            continue
         member = MATLAB_PREFIX / PurePosixPath(source.relative_to(matlab_root).as_posix())
         payloads[str(member)] = source
     for name in ("optuna_upstream_compatibility.json", "optuna49_api_coverage.json"):
@@ -146,6 +148,11 @@ def verify(wheel: Path) -> dict[str, object]:
             str(MATLAB_PREFIX / "README.md"),
             str(MATLAB_PREFIX / "LICENSE"),
             str(MATLAB_PREFIX / "THIRD_PARTY_NOTICES.md"),
+            str(
+                OPTUNA_PREFIX
+                / "+internal"
+                / "sobol_direction_numbers.bin"
+            ),
             str(PACKAGE_PREFIX / "manifest.json"),
         }
         missing = sorted(expected_fixed - names)
@@ -176,6 +183,8 @@ def verify(wheel: Path) -> dict[str, object]:
             required_notices = (
                 "Copyright (c) 2018 Preferred Networks, Inc.",
                 "Copyright (c) 2025 Preferred Networks, Inc.",
+                "Copyright (c) 2001-2002 Enthought, Inc. 2003, SciPy Developers.",
+                "Joe--Kuo criterion-6 Sobol direction-number table",
                 (
                     "Optuna, the Optuna logo and any related marks are trademarks "
                     "of Preferred Networks, Inc."
@@ -223,6 +232,8 @@ def verify(wheel: Path) -> dict[str, object]:
             errors.append("standalone manifest must set radia_runtime_required=false")
         if wheel_manifest.get("simulink_standalone") is not True:
             errors.append("standalone manifest must set simulink_standalone=true")
+        if wheel_manifest.get("native_sobol_max_dimension") != 21201:
+            errors.append("standalone manifest must declare native Sobol dimension 21201")
 
         simulink_entries = {
             str(MATLAB_PREFIX / PurePosixPath(relative))

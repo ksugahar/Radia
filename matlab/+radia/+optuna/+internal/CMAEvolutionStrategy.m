@@ -12,6 +12,7 @@ classdef CMAEvolutionStrategy < handle
         PC (1,:) double
         Bounds double
         Stream
+        LrAdapt (1,1) logical = false
     end
 
     properties (Access=private)
@@ -27,6 +28,16 @@ classdef CMAEvolutionStrategy < handle
         B double = zeros(0,0)
         D (:,1) double = zeros(0,1)
         MaxResampling (1,1) double = 100
+        LrAlpha (1,1) double = 1.4
+        LrBetaMean (1,1) double = 0.1
+        LrBetaSigma (1,1) double = 0.03
+        LrGamma (1,1) double = 0.1
+        LrEMean (:,1) double = zeros(0,1)
+        LrESigma (:,1) double = zeros(0,1)
+        LrVMean (1,1) double = 0
+        LrVSigma (1,1) double = 0
+        LrEtaMean (1,1) double = 1
+        LrEtaSigma (1,1) double = 1
     end
 
     methods
@@ -39,6 +50,7 @@ classdef CMAEvolutionStrategy < handle
                 options.Seed (1,1) double = 0
                 options.Covariance double = zeros(0,0)
                 options.MaxResampling (1,1) double = 100
+                options.LrAdapt (1,1) logical = false
             end
             if isempty(mean) || any(~isfinite(mean))
                 error("radia:optuna:CMAMean", ...
@@ -97,6 +109,9 @@ classdef CMAEvolutionStrategy < handle
             obj.Stream = radia.optuna.internal.NumpyRandomState( ...
                 double(options.Seed));
             obj.MaxResampling = options.MaxResampling;
+            obj.LrAdapt = options.LrAdapt;
+            obj.LrEMean = zeros(dimension,1);
+            obj.LrESigma = zeros(dimension*dimension,1);
             obj.initializeCoefficients();
             obj.repairCovariance();
         end
@@ -110,6 +125,20 @@ classdef CMAEvolutionStrategy < handle
                 end
             end
             point = min(max(point, obj.Bounds(:,1).'), obj.Bounds(:,2).');
+        end
+
+        function point = sampleRaw(obj)
+            %SAMPLERAW Draw without applying bound rejection or clipping.
+            point = obj.samplePoint();
+        end
+
+        function setMean(obj,mean)
+            mean=reshape(double(mean),1,[]);
+            if numel(mean)~=obj.Dimension || any(~isfinite(mean))
+                error("radia:optuna:CMAMean", ...
+                    "CMA-ES mean must be a finite vector of matching dimension.");
+            end
+            obj.Mean=mean;
         end
 
         function reseed(obj,seed)
@@ -132,6 +161,12 @@ classdef CMAEvolutionStrategy < handle
             yWeighted = obj.Weights(1:obj.Mu).' * y(1:obj.Mu,:);
 
             [basis, scales] = obj.eigendecomposition();
+            if obj.LrAdapt
+                oldMean=obj.Mean;
+                oldSigma=obj.Sigma;
+                oldSigmaMatrix=obj.Sigma^2*obj.Covariance;
+                oldInverseSqrt=basis*diag(1./scales)*basis.';
+            end
             inverseSqrt = basis * diag(1 ./ scales) * basis.';
             obj.Mean = obj.Mean + obj.Sigma * yWeighted;
             obj.PSigma = (1 - obj.CSigma) * obj.PSigma + ...
@@ -169,6 +204,10 @@ classdef CMAEvolutionStrategy < handle
             obj.Covariance = scale * obj.Covariance + ...
                 obj.C1 * (obj.PC.' * obj.PC) + obj.CMu * rankMu;
             obj.repairCovariance();
+            if obj.LrAdapt
+                obj.adaptLearningRates(oldMean,oldSigma, ...
+                    oldSigmaMatrix,oldInverseSqrt);
+            end
             obj.B = zeros(0,0);
             obj.D = zeros(0,1);
         end
@@ -186,6 +225,13 @@ classdef CMAEvolutionStrategy < handle
                 "p_c", obj.PC, ...
                 "bounds", obj.Bounds, ...
                 "max_resampling", obj.MaxResampling, ...
+                "lr_adapt",obj.LrAdapt, ...
+                "lr_e_mean",obj.LrEMean, ...
+                "lr_e_sigma",obj.LrESigma, ...
+                "lr_v_mean",obj.LrVMean, ...
+                "lr_v_sigma",obj.LrVSigma, ...
+                "lr_eta_mean",obj.LrEtaMean, ...
+                "lr_eta_sigma",obj.LrEtaSigma, ...
                 "random_state", obj.Stream.State);
         end
 
@@ -211,12 +257,15 @@ classdef CMAEvolutionStrategy < handle
                 error("radia:optuna:CMAState", ...
                     "CMA-ES state snapshot is invalid or unsupported.");
             end
+            lrAdapt=false;
+            if isfield(state,"lr_adapt"),lrAdapt=logical(state.lr_adapt);end
             obj = radia.optuna.internal.CMAEvolutionStrategy( ...
                 reshape(double(state.mean), 1, []), double(state.sigma), ...
                 Bounds=double(state.bounds), ...
                 PopulationSize=double(state.population_size), ...
                 Covariance=double(state.covariance), ...
-                MaxResampling=double(state.max_resampling));
+                MaxResampling=double(state.max_resampling), ...
+                LrAdapt=lrAdapt);
             if obj.Dimension ~= double(state.dimension)
                 error("radia:optuna:CMAState", ...
                     "CMA-ES state dimension is inconsistent.");
@@ -224,6 +273,14 @@ classdef CMAEvolutionStrategy < handle
             obj.Generation = double(state.generation);
             obj.PSigma = reshape(double(state.p_sigma), 1, []);
             obj.PC = reshape(double(state.p_c), 1, []);
+            if lrAdapt
+                obj.LrEMean=reshape(double(state.lr_e_mean),[],1);
+                obj.LrESigma=reshape(double(state.lr_e_sigma),[],1);
+                obj.LrVMean=double(state.lr_v_mean);
+                obj.LrVSigma=double(state.lr_v_sigma);
+                obj.LrEtaMean=double(state.lr_eta_mean);
+                obj.LrEtaSigma=double(state.lr_eta_sigma);
+            end
             obj.Stream.State = state.random_state;
         end
     end
@@ -286,6 +343,56 @@ classdef CMAEvolutionStrategy < handle
             [basis, eigenvalues] = eig(covariance, "vector");
             eigenvalues = max(real(eigenvalues), eps);
             obj.Covariance = real(basis) * diag(eigenvalues) * real(basis).';
+        end
+
+        function adaptLearningRates(obj,oldMean,oldSigma, ...
+                oldSigmaMatrix,oldInverseSqrt)
+            deltaMean=reshape(obj.Mean-oldMean,[],1);
+            sigmaMatrix=obj.Sigma^2*obj.Covariance;
+            deltaSigma=sigmaMatrix-oldSigmaMatrix;
+            oldInverseSqrtSigma=oldInverseSqrt/oldSigma;
+            localDeltaMean=oldInverseSqrtSigma*deltaMean;
+            localDeltaSigma=oldInverseSqrtSigma*deltaSigma* ...
+                oldInverseSqrtSigma;
+            % NumPy reshapes matrices in row-major order.
+            localDeltaSigma=reshape(localDeltaSigma.',[],1)/sqrt(2);
+
+            obj.LrEMean=(1-obj.LrBetaMean)*obj.LrEMean+ ...
+                obj.LrBetaMean*localDeltaMean;
+            obj.LrESigma=(1-obj.LrBetaSigma)*obj.LrESigma+ ...
+                obj.LrBetaSigma*localDeltaSigma;
+            obj.LrVMean=(1-obj.LrBetaMean)*obj.LrVMean+ ...
+                obj.LrBetaMean*norm(localDeltaMean)^2;
+            obj.LrVSigma=(1-obj.LrBetaSigma)*obj.LrVSigma+ ...
+                obj.LrBetaSigma*norm(localDeltaSigma)^2;
+
+            squaredMean=norm(obj.LrEMean)^2;
+            signalMean=(squaredMean-obj.LrBetaMean/ ...
+                (2-obj.LrBetaMean)*obj.LrVMean)/ ...
+                (obj.LrVMean-squaredMean);
+            squaredSigma=norm(obj.LrESigma)^2;
+            signalSigma=(squaredSigma-obj.LrBetaSigma/ ...
+                (2-obj.LrBetaSigma)*obj.LrVSigma)/ ...
+                (obj.LrVSigma-squaredSigma);
+
+            previousEtaMean=obj.LrEtaMean;
+            relativeMean=min(max(signalMean/obj.LrAlpha/ ...
+                obj.LrEtaMean-1,-1),1);
+            obj.LrEtaMean=min(1,obj.LrEtaMean*exp(min( ...
+                obj.LrGamma*obj.LrEtaMean,obj.LrBetaMean)*relativeMean));
+            relativeSigma=min(max(signalSigma/obj.LrAlpha/ ...
+                obj.LrEtaSigma-1,-1),1);
+            obj.LrEtaSigma=min(1,obj.LrEtaSigma*exp(min( ...
+                obj.LrGamma*obj.LrEtaSigma,obj.LrBetaSigma)*relativeSigma));
+
+            obj.Mean=oldMean+obj.LrEtaMean*reshape(deltaMean,1,[]);
+            sigmaMatrix=oldSigmaMatrix+obj.LrEtaSigma*deltaSigma;
+            eigenvalues=eig((sigmaMatrix+sigmaMatrix.')/2,"vector");
+            obj.Sigma=min(1e32,exp(sum(log(eigenvalues))/ ...
+                (2*obj.Dimension)));
+            obj.Covariance=sigmaMatrix/(obj.Sigma^2);
+            obj.Sigma=obj.Sigma*previousEtaMean/obj.LrEtaMean;
+            obj.repairCovariance();
         end
     end
 end

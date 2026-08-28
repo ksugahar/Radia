@@ -5,6 +5,17 @@ All notable changes to the `radia` package.  Format: each release lists
 
 ## Unreleased
 
+- Completed the previously named MATLAB Optuna sampler gaps against the pinned
+  4.9.0 oracle: concurrent-RUNNING constant-liar TPE, source/separable/margin/
+  learning-rate CMA-ES modes, pruned CMA history, and native unscrambled Sobol
+  through 21,201 dimensions. The 21-command optimizer MEX uses contiguous
+  Gray-code updates and is faster than SciPy for the checked 64-by-4096 batch.
+- Indexed the MATLAB Study history stores, batched timestamp materialization,
+  and added an explicit versioned MATLAB/JSON/Optuna-storage handoff that
+  preserves names, constraints, attributes, metric names, and trial state.
+  Missing or incompatible MEX gateways still fail loudly; no silent fallback
+  was introduced.
+
 ## 4.95.67 - Mainline HDiv-MMM release certification
 
 Released 2026-08-28.

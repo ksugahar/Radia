@@ -14,6 +14,11 @@ classdef CmaEsSampler < radia.optuna.BaseSampler
         X0 struct = struct()
         ConsiderPrunedTrials (1,1) logical = false
         WarnIndependentSampling (1,1) logical = true
+        UseSeparableCMA (1,1) logical = false
+        WithMargin (1,1) logical = false
+        LrAdapt (1,1) logical = false
+        RestartStrategy (1,1) string = ""
+        IncPopsize (1,1) double = -1
     end
 
     properties (Access=private)
@@ -26,6 +31,9 @@ classdef CmaEsSampler < radia.optuna.BaseSampler
         PopulationFitness double = zeros(0,1)
         PopulationTrialNumbers double = zeros(0,1)
         OptimizerCheckpointed (1,1) logical = false
+        CandidateRawPoints double = zeros(0,0)
+        CandidateRawTrialNumbers double = zeros(0,1)
+        SourceTrials cell = cell(0,1)
         AttachedStudy = []
         Restored (1,1) logical = false
     end
@@ -47,6 +55,17 @@ classdef CmaEsSampler < radia.optuna.BaseSampler
                 options.ConsiderPrunedTrials (1,1) logical = false
                 options.IndependentSampler = []
                 options.WarnIndependentSampling (1,1) logical = true
+                options.RestartStrategy = []
+                options.IncPopsize (1,1) double = -1
+                options.UseSeparableCMA (1,1) logical = false
+                options.WithMargin (1,1) logical = false
+                options.LrAdapt (1,1) logical = false
+                options.SourceTrials = []
+            end
+            if ~isempty(options.RestartStrategy) || options.IncPopsize~=-1
+                warning("radia:optuna:FutureWarning", ...
+                    "restart_strategy has been deprecated in Optuna 4.4.0, " + ...
+                    "falls back to none, and will be removed in 6.0.0.");
             end
             if options.NStartupTrials < 0 || ...
                     options.NStartupTrials ~= floor(options.NStartupTrials)
@@ -70,6 +89,32 @@ classdef CmaEsSampler < radia.optuna.BaseSampler
             if isfinite(sigma) && sigma <= 0
                 error("radia:optuna:CMASigma", ...
                     "Sigma0 must be positive when specified.");
+            end
+            if ~isempty(fieldnames(options.X0))
+                warning("radia:optuna:FutureWarning", ...
+                    "x0 has been deprecated in Optuna 4.9.0 and will be removed in 6.0.0.");
+            end
+            if isfinite(options.Sigma0)
+                warning("radia:optuna:FutureWarning", ...
+                    "sigma0 has been deprecated in Optuna 4.9.0 and will be removed in 6.0.0.");
+            end
+            if ~isempty(options.SourceTrials) && ...
+                    (~isempty(fieldnames(options.X0)) || isfinite(sigma))
+                error("radia:optuna:CMASourceTrials", ...
+                    "SourceTrials cannot be combined with X0, Sigma0, or Sigma.");
+            end
+            if ~isempty(options.SourceTrials) && options.UseSeparableCMA
+                error("radia:optuna:CMASourceTrials", ...
+                    "SourceTrials cannot be combined with separable CMA-ES.");
+            end
+            if options.LrAdapt && ...
+                    (options.UseSeparableCMA || options.WithMargin)
+                error("radia:optuna:CMALearningRate", ...
+                    "LrAdapt cannot be combined with separable CMA-ES or margin.");
+            end
+            if options.UseSeparableCMA && options.WithMargin
+                error("radia:optuna:CMAMargin", ...
+                    "Separable CMA-ES and CMA-ES with margin cannot be combined.");
             end
             obj.Seed = radia.optuna.internal.resolveSeed(options.Seed);
             obj.Stream = ...
@@ -97,6 +142,25 @@ classdef CmaEsSampler < radia.optuna.BaseSampler
             obj.X0 = options.X0;
             obj.ConsiderPrunedTrials = options.ConsiderPrunedTrials;
             obj.WarnIndependentSampling = options.WarnIndependentSampling;
+            obj.UseSeparableCMA=options.UseSeparableCMA;
+            obj.WithMargin=options.WithMargin;
+            obj.LrAdapt=options.LrAdapt;
+            if ~isempty(options.RestartStrategy)
+                obj.RestartStrategy=string(options.RestartStrategy);
+            end
+            obj.IncPopsize=options.IncPopsize;
+            if isempty(options.SourceTrials)
+                obj.SourceTrials=cell(0,1);
+            elseif iscell(options.SourceTrials)
+                obj.SourceTrials=reshape(options.SourceTrials,[],1);
+            else
+                obj.SourceTrials=reshape(num2cell(options.SourceTrials),[],1);
+            end
+            if obj.ConsiderPrunedTrials || obj.UseSeparableCMA || ...
+                    obj.WithMargin || obj.LrAdapt || ~isempty(obj.SourceTrials)
+                warning("radia:optuna:ExperimentalWarning", ...
+                    "The requested advanced CmaEsSampler option is experimental in Optuna 4.9.0.");
+            end
         end
 
         function reseed_rng(obj)
@@ -124,12 +188,11 @@ classdef CmaEsSampler < radia.optuna.BaseSampler
             end
             obj.IndependentSampler.beforeTrial(study,trial);
             obj.attach(study);
-            completed = study.TrialTable.State == "COMPLETE";
-            if sum(completed) < obj.NStartupTrials
+            if obj.eligibleTrialCount(study) < obj.NStartupTrials
                 return
             end
             searchSpace = obj.inferRelativeSearchSpace(study, trial);
-            if numel(searchSpace) < 2
+            if isempty(searchSpace)
                 return
             end
             signature = obj.searchSpaceFingerprint(searchSpace);
@@ -148,7 +211,15 @@ classdef CmaEsSampler < radia.optuna.BaseSampler
             % separate sampler-level RandomState, then adds trial.number.
             candidateSeed=randi(obj.Stream,2^16-1)+trial.Number;
             obj.Engine.reseed(candidateSeed);
-            candidate = obj.Engine.ask();
+            if isa(obj.Engine, ...
+                    "radia.optuna.internal.CMAWithMarginEvolutionStrategy")
+                [candidate,rawCandidate]=obj.Engine.ask();
+                rawRow=size(obj.CandidateRawPoints,1)+1;
+                obj.CandidateRawPoints(rawRow,:)=rawCandidate;
+                obj.CandidateRawTrialNumbers(rawRow,1)=trial.Number;
+            else
+                candidate = obj.Engine.ask();
+            end
             if obj.Engine.Generation>0
                 obj.OptimizerCheckpointed=true;
             elseif initialized
@@ -184,12 +255,23 @@ classdef CmaEsSampler < radia.optuna.BaseSampler
         function afterTrial(obj, study, trial)
             obj.IndependentSampler.afterTrial(study,trial);
             obj.attach(study);
-            if trial.State ~= "COMPLETE" || isempty(obj.Engine) || ...
+            eligible=trial.State=="COMPLETE" || ...
+                (obj.ConsiderPrunedTrials && trial.State=="PRUNED" && ...
+                ~isempty(trial.IntermediateValues));
+            if ~eligible || isempty(obj.Engine) || ...
                     isempty(obj.SearchSpace)
                 obj.recordState(study, trial.Number);
                 return
             end
             point = zeros(1, numel(obj.SearchSpace));
+            rawRow=find(obj.CandidateRawTrialNumbers==trial.Number,1);
+            if ~isempty(rawRow)
+                if rawRow>size(obj.CandidateRawPoints,1)
+                    error("radia:optuna:CMAState", ...
+                        "Stored CMA-ES-with-margin candidate state is inconsistent.");
+                end
+                point=obj.CandidateRawPoints(rawRow,:);
+            end
             for index = 1:numel(obj.SearchSpace)
                 key = matlab.lang.makeValidName(obj.SearchSpace(index).name);
                 if ~isfield(trial.Params, key)
@@ -210,26 +292,38 @@ classdef CmaEsSampler < radia.optuna.BaseSampler
                     obj.recordState(study, trial.Number);
                     return
                 end
-                point(index) = obj.toInternal( ...
-                    trial.Params.(key), ...
-                    obj.SearchSpace(index).distribution);
+                if isempty(rawRow)
+                    point(index) = obj.toInternal( ...
+                        trial.Params.(key), ...
+                        obj.SearchSpace(index).distribution);
+                end
             end
             if any(~isfinite(point))
                 obj.recordState(study, trial.Number);
                 return
             end
             fitness = trial.Value;
+            if trial.State=="PRUNED"
+                [~,last]=max(trial.IntermediateValues.Step);
+                fitness=trial.IntermediateValues.Value(last);
+            end
             if study.Directions(1) == "maximize"
                 fitness = -fitness;
             end
             obj.PopulationPoints(end+1,:) = point;
             obj.PopulationFitness(end+1,1) = fitness;
             obj.PopulationTrialNumbers(end+1,1) = trial.Number;
+            if ~isempty(rawRow)
+                obj.CandidateRawPoints(rawRow,:)=[];
+                obj.CandidateRawTrialNumbers(rawRow)=[];
+            end
             if size(obj.PopulationPoints,1) == obj.Engine.PopulationSize
                 obj.Engine.tell(obj.PopulationPoints, obj.PopulationFitness);
                 obj.PopulationPoints = zeros(0, numel(obj.SearchSpace));
                 obj.PopulationFitness = zeros(0,1);
                 obj.PopulationTrialNumbers = zeros(0,1);
+                obj.CandidateRawPoints = zeros(0, numel(obj.SearchSpace));
+                obj.CandidateRawTrialNumbers = zeros(0,1);
             end
             obj.Sigma = obj.Engine.Sigma;
             obj.recordState(study, trial.Number);
@@ -275,6 +369,8 @@ classdef CmaEsSampler < radia.optuna.BaseSampler
                 obj.PopulationPoints = zeros(0,0);
                 obj.PopulationFitness = zeros(0,1);
                 obj.PopulationTrialNumbers = zeros(0,1);
+                obj.CandidateRawPoints = zeros(0,0);
+                obj.CandidateRawTrialNumbers = zeros(0,1);
                 obj.OptimizerCheckpointed = false;
                 obj.Restored = false;
             end
@@ -306,20 +402,58 @@ classdef CmaEsSampler < radia.optuna.BaseSampler
                     "X0 values must lie inside their parameter distributions.");
             end
             sigma = obj.Sigma0;
-            if ~isfinite(sigma)
-                sigma = 1 / 6;
+            covariance=zeros(0,0);
+            if isempty(obj.SourceTrials)
+                if ~isfinite(sigma),sigma=1/6;end
+            else
+                [mean,sigma,covariance]=obj.warmStart(searchSpace);
             end
+            sigma=max(sigma,1e-10);
             engineSeed=randi(obj.Stream,2^31-3);
-            obj.Engine = ...
-                radia.optuna.internal.CMAEvolutionStrategy(mean, sigma, ...
-                Bounds=repmat([0,1], dimension, 1), ...
-                PopulationSize=obj.PopulationSize, Seed=engineSeed, ...
-                MaxResampling=10*dimension);
+            bounds=repmat([0,1],dimension,1);
+            if obj.UseSeparableCMA && dimension>1
+                obj.Engine=radia.optuna.internal. ...
+                    SeparableCMAEvolutionStrategy(mean,sigma, ...
+                    Bounds=bounds,PopulationSize=obj.PopulationSize, ...
+                    Seed=engineSeed,MaxResampling=10*dimension);
+            elseif obj.UseSeparableCMA
+                warning("radia:optuna:UserWarning", ...
+                    "Separable CMA-ES is ignored for a one-dimensional search space.");
+                obj.Engine=radia.optuna.internal.CMAEvolutionStrategy( ...
+                    mean,sigma,Bounds=bounds,PopulationSize=obj.PopulationSize, ...
+                    Seed=engineSeed,Covariance=covariance, ...
+                    MaxResampling=10*dimension);
+            elseif obj.WithMargin
+                steps=zeros(1,dimension);
+                for index=1:dimension
+                    distribution=searchSpace(index).distribution;
+                    if isfinite(distribution.step) && ~distribution.log && ...
+                            distribution.low~=distribution.high
+                        steps(index)=distribution.step/ ...
+                            (distribution.high-distribution.low);
+                    elseif isfinite(distribution.step) && ...
+                            distribution.low==distribution.high
+                        steps(index)=1;
+                    end
+                end
+                obj.Engine=radia.optuna.internal. ...
+                    CMAWithMarginEvolutionStrategy(mean,sigma,Bounds=bounds, ...
+                    Steps=steps,PopulationSize=obj.PopulationSize, ...
+                    Seed=engineSeed,Covariance=covariance, ...
+                    MaxResampling=10*dimension);
+            else
+                obj.Engine=radia.optuna.internal.CMAEvolutionStrategy( ...
+                    mean,sigma,Bounds=bounds,PopulationSize=obj.PopulationSize, ...
+                    Seed=engineSeed,Covariance=covariance, ...
+                    MaxResampling=10*dimension,LrAdapt=obj.LrAdapt);
+            end
             obj.SearchSpace = searchSpace;
             obj.SearchSpaceSignature = obj.searchSpaceFingerprint(searchSpace);
             obj.PopulationPoints = zeros(0, dimension);
             obj.PopulationFitness = zeros(0,1);
             obj.PopulationTrialNumbers = zeros(0,1);
+            obj.CandidateRawPoints = zeros(0,dimension);
+            obj.CandidateRawTrialNumbers = zeros(0,1);
             obj.OptimizerCheckpointed = false;
             obj.Sigma = obj.Engine.Sigma;
         end
@@ -340,6 +474,8 @@ classdef CmaEsSampler < radia.optuna.BaseSampler
                 "population_points", obj.PopulationPoints, ...
                 "population_fitness", obj.PopulationFitness, ...
                 "population_trial_numbers", obj.PopulationTrialNumbers, ...
+                "candidate_raw_points",obj.CandidateRawPoints, ...
+                "candidate_raw_trial_numbers",obj.CandidateRawTrialNumbers, ...
                 "optimizer_checkpointed",obj.OptimizerCheckpointed, ...
                 "independent_random_state", obj.Stream.State, ...
                 "generation", generation);
@@ -360,9 +496,21 @@ classdef CmaEsSampler < radia.optuna.BaseSampler
             if isempty(state.engine)
                 obj.Engine = [];
             else
-                obj.Engine = ...
-                    radia.optuna.internal.CMAEvolutionStrategy.fromSnapshot( ...
-                    state.engine);
+                schema=string(state.engine.schema);
+                switch schema
+                    case "radia.optuna.cma-evolution-state.v1"
+                        obj.Engine=radia.optuna.internal. ...
+                            CMAEvolutionStrategy.fromSnapshot(state.engine);
+                    case "radia.optuna.separable-cma-state.v1"
+                        obj.Engine=radia.optuna.internal. ...
+                            SeparableCMAEvolutionStrategy.fromSnapshot(state.engine);
+                    case "radia.optuna.cma-with-margin-state.v1"
+                        obj.Engine=radia.optuna.internal. ...
+                            CMAWithMarginEvolutionStrategy.fromSnapshot(state.engine);
+                    otherwise
+                        error("radia:optuna:CMAState", ...
+                            "Stored CMA-ES engine type is unsupported.");
+                end
                 if obj.PopulationSize ~= 0 && ...
                         obj.Engine.PopulationSize ~= obj.PopulationSize
                     error("radia:optuna:CMAState", ...
@@ -375,6 +523,14 @@ classdef CmaEsSampler < radia.optuna.BaseSampler
                 double(state.population_fitness), [], 1);
             obj.PopulationTrialNumbers = reshape( ...
                 double(state.population_trial_numbers), [], 1);
+            if isfield(state,"candidate_raw_points")
+                obj.CandidateRawPoints=double(state.candidate_raw_points);
+                obj.CandidateRawTrialNumbers=reshape( ...
+                    double(state.candidate_raw_trial_numbers),[],1);
+            else
+                obj.CandidateRawPoints=zeros(0,numel(obj.SearchSpace));
+                obj.CandidateRawTrialNumbers=zeros(0,1);
+            end
             if isfield(state,"optimizer_checkpointed")
                 obj.OptimizerCheckpointed=logical(state.optimizer_checkpointed);
             else
@@ -392,6 +548,87 @@ classdef CmaEsSampler < radia.optuna.BaseSampler
             end
             study.recordSamplerState(obj.SamplerName, obj.StateSchema, ...
                 trialNumber, generation, obj.snapshot());
+        end
+
+        function count=eligibleTrialCount(obj,study)
+            trials=study.TrialTable;
+            count=sum(trials.State=="COMPLETE");
+            if ~obj.ConsiderPrunedTrials,return,end
+            pruned=trials.TrialNumber(trials.State=="PRUNED");
+            for number=reshape(pruned,1,[])
+                if any(study.IntermediateTable.TrialNumber==number)
+                    count=count+1;
+                end
+            end
+        end
+
+        function [mean,sigma,covariance]=warmStart(obj,searchSpace)
+            points=zeros(0,numel(searchSpace));
+            fitness=zeros(0,1);
+            for sourceIndex=1:numel(obj.SourceTrials)
+                trial=obj.SourceTrials{sourceIndex};
+                if ~isa(trial,"radia.optuna.FrozenTrial") || ...
+                        ~(trial.State=="COMPLETE" || ...
+                        (obj.ConsiderPrunedTrials && trial.State=="PRUNED"))
+                    continue
+                end
+                value=trial.Value;
+                if trial.State=="PRUNED"
+                    if isempty(trial.IntermediateValues),continue,end
+                    [~,last]=max(trial.IntermediateValues.Step);
+                    value=trial.IntermediateValues.Value(last);
+                end
+                if ~isfinite(value),continue,end
+                parameterFields=string(fieldnames(trial.Params));
+                distributionFields=string(fieldnames(trial.Distributions));
+                if numel(parameterFields)~=numel(searchSpace) || ...
+                        numel(distributionFields)~=numel(searchSpace)
+                    continue
+                end
+                point=zeros(1,numel(searchSpace));
+                compatible=true;
+                for index=1:numel(searchSpace)
+                    key=matlab.lang.makeValidName(searchSpace(index).name);
+                    if ~isfield(trial.Params,key) || ...
+                            ~isfield(trial.Distributions,key)
+                        compatible=false;
+                        break
+                    end
+                    sourceDistribution=radia.optuna.internal. ...
+                        DistributionCodec.normalize(trial.Distributions.(key));
+                    if ~radia.optuna.internal.DistributionCodec.equivalent( ...
+                            searchSpace(index).distribution,sourceDistribution)
+                        compatible=false;
+                        break
+                    end
+                    point(index)=obj.toInternal(trial.Params.(key), ...
+                        searchSpace(index).distribution);
+                end
+                if compatible && all(isfinite(point))
+                    points(end+1,:)=point; %#ok<AGROW>
+                    fitness(end+1,1)=value; %#ok<AGROW>
+                end
+            end
+            if isempty(points)
+                error("radia:optuna:CMASourceTrials", ...
+                    "No compatible SourceTrials were supplied.");
+            end
+            if obj.AttachedStudy.Directions(1)=="maximize"
+                fitness=-fitness;
+            end
+            [~,order]=sort(fitness,"ascend");
+            selected=floor(0.1*size(points,1));
+            if selected<1
+                error("radia:optuna:CMASourceTrials", ...
+                    "At least ten compatible SourceTrials are required by warm start.");
+            end
+            top=points(order(1:selected),:);
+            mean=sum(top,1)/selected;
+            promising=0.1^2*eye(size(points,2))+ ...
+                (top.'*top)/selected-(mean.'*mean);
+            determinant=det(promising);
+            sigma=determinant^(1/(2*size(points,2)));
+            covariance=promising/(determinant^(1/size(points,2)));
         end
 
         function signature = searchSpaceFingerprint(~, searchSpace)

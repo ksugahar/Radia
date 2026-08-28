@@ -3,9 +3,11 @@
   "version": "0.1.4",
   "oracle_version": "4.9.0",
   "matlab_namespace": "radia.optuna",
-  "matlab_file_count": 208,
+  "matlab_file_count": 213,
   "native_gateway": "optuna_mex",
-  "native_command_count": 20,
+  "native_command_count": 21,
+  "native_sobol_max_dimension": 21201,
+  "sobol_direction_numbers": "SciPy 1.17.1 Joe--Kuo criterion-6 table",
   "radia_runtime_required": false,
   "simulink_standalone": true,
   "simulink_entry_points": [

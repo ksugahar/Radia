@@ -478,7 +478,7 @@ integration ships inside `radia`; its extra only adds schemdraw support.
 | `radia` | `python -m pip install radia` | C++ core, Python APIs, NGSolve integration, physical methods, and application logic |
 | `radia-mcp` | `python -m pip install radia-mcp` | AI-facing MCP servers and executable domain knowledge |
 | `cubit-mesh-export` | `python -m pip install cubit-mesh-export` | Solver-neutral high-order Cubit export and `check-vol` |
-| `radia-optuna` | `python -m pip install radia-optuna` | Standalone MATLAB Optuna namespace and 20-command native gateway; no Radia solver, NGSolve, or MKL runtime |
+| `radia-optuna` | `python -m pip install radia-optuna` | Standalone MATLAB Optuna namespace and 21-command native gateway; no Radia solver, NGSolve, or MKL runtime |
 | `radia[optuna]` | `python -m pip install "radia[optuna]"` | Radia plus the independently versioned, validated native MATLAB/Simulink `radia-optuna` release |
 | `radia[optuna-upstream]` | `python -m pip install "radia[optuna-upstream]"` | Also installs pinned upstream Python/SciPy/PyTorch paths used by GP, scrambled QMC, and importance parity |
 | `radia[ltspice]` | `python -m pip install "radia[ltspice]"` | Radia plus schemdraw support for built-in SPICE/LTspice conversion and circuit coupling |
