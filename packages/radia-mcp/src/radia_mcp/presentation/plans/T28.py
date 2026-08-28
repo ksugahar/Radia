@@ -18,6 +18,17 @@ import pathlib
 import re
 
 
+_SOURCES_BLOCK_RE = re.compile(r"(?im)^\s*\[sources\]\s*$")
+
+
+def _spoken_note_text(note_text: str) -> tuple[str, bool]:
+    """Return only the part of speaker notes intended to be spoken."""
+    match = _SOURCES_BLOCK_RE.search(note_text)
+    if not match:
+        return note_text, False
+    return note_text[:match.start()].rstrip(), True
+
+
 def _iter_shapes(shape_collection):
     try:
         from radia_mcp.presentation.tools import _walk_shapes
@@ -32,6 +43,7 @@ def presentation_speaking_pace_estimate(
     target_duration_min: int = 0,
     pace_target_min: int = 330,
     pace_target_max: int = 390,
+    include_backup: bool = False,
 ) -> dict:
     """speaker_note の文字数から WPM (日本語は文字数/分) で発表時間を推定。
 
@@ -40,6 +52,8 @@ def presentation_speaking_pace_estimate(
         target_duration_min: 予定発表時間 (分)、0 なら target との比較 skip
         pace_target_min / pace_target_max: 適正 pace range (文字/分)、
             default 330-390 は日本語理系学会発表の経験則
+        include_backup: True のときだけ補足・質疑用スライドを発表時間へ
+            算入する。通常の本編時間監査では False。
 
     Returns:
         dict: per_slide / total_chars / required_pace /
@@ -54,16 +68,36 @@ def presentation_speaking_pace_estimate(
         return {"error": f"file not found: {pptx_path}"}
     prs = _pptx.Presentation(str(p))
 
+    from .._deck_sections import classify_deck_sections
+    from ..tools import _slide_title
+
+    slides = list(prs.slides)
+    sections = classify_deck_sections(slides, _slide_title)
+    backup_slide_numbers = set(sections["backup_slide_numbers"])
+
     per_slide: list[dict] = []
     total_chars = 0
     total_english_words = 0
-    for i, slide in enumerate(prs.slides, 1):
+    source_blocks_excluded = 0
+    for i, slide in enumerate(slides, 1):
+        excluded_backup = i in backup_slide_numbers and not include_backup
+        if excluded_backup:
+            per_slide.append({
+                "slide_no": i,
+                "note_chars": 0,
+                "note_english_words": 0,
+                "note_empty": False,
+                "excluded_reason": "backup_slide",
+            })
+            continue
         note_text = ""
         try:
             if slide.has_notes_slide:
                 note_text = slide.notes_slide.notes_text_frame.text or ""
         except Exception:
             pass
+        note_text, source_block_excluded = _spoken_note_text(note_text)
+        source_blocks_excluded += int(source_block_excluded)
         chars = len(note_text)
         # Count English words (space-delimited) as fallback if 日本語 chars 少ない
         eng_words = len(re.findall(r"\b[A-Za-z]+\b", note_text))
@@ -74,10 +108,14 @@ def presentation_speaking_pace_estimate(
             "note_chars": chars,
             "note_english_words": eng_words,
             "note_empty": chars == 0,
+            "source_block_excluded": source_block_excluded,
         })
 
-    n_slides = len(per_slide)
-    n_with_notes = sum(1 for s in per_slide if not s["note_empty"])
+    timed_slides = [
+        s for s in per_slide if s.get("excluded_reason") != "backup_slide"
+    ]
+    n_slides = len(timed_slides)
+    n_with_notes = sum(1 for s in timed_slides if not s["note_empty"])
     n_empty_notes = n_slides - n_with_notes
 
     # Pace estimation
@@ -155,11 +193,16 @@ def presentation_speaking_pace_estimate(
         "score": round(score, 1),
         "score_max": 10,
         "n_slides": n_slides,
+        "total_deck_slides": len(slides),
+        "include_backup": include_backup,
+        "backup_slide_count": sections["backup_slide_count"],
+        "backup_slide_numbers": sections["backup_slide_numbers"],
         "n_with_notes": n_with_notes,
         "n_empty_notes": n_empty_notes,
         "total_chars_in_notes": total_chars,
         "total_english_words_in_notes": total_english_words,
         "effective_chars": effective_chars,
+        "source_blocks_excluded": source_blocks_excluded,
         "pace_range_target": [pace_target_min, pace_target_max],
         "estimated_minutes": {
             "slow": round(est_minutes_slow, 1),

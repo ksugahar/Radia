@@ -27,6 +27,7 @@ _HEAD_END = f"{{{_A_NS}}}headEnd"
 _SOLID_FILL = f"{{{_A_NS}}}solidFill"
 _GRAD_FILL = f"{{{_A_NS}}}gradFill"
 _PATT_FILL = f"{{{_A_NS}}}pattFill"
+_PRST_GEOM = f"{{{_A_NS}}}prstGeom"
 
 # 2pt ≈ 25400 EMU (1 pt = 12700 EMU). 太い矢印 threshold。
 _HEAVY_LINE_EMU = 25400
@@ -34,22 +35,52 @@ _HEAVY_LINE_EMU = 25400
 # arrow-end 判定対象となる type 属性値。"none" は除外。
 _ARROW_TYPES = {"triangle", "arrow", "stealth", "oval", "diamond"}
 
+# Filled AutoShape arrows.  These do not carry an <a:headEnd> marker, so the
+# preset geometry must also be inspected when checking semantic arrow layers.
+_ARROW_PRESETS = {
+    "rightArrow", "leftArrow", "upArrow", "downArrow",
+    "leftRightArrow", "upDownArrow", "quadArrow",
+    "bentArrow", "uturnArrow", "leftUpArrow", "bentUpArrow",
+    "curvedRightArrow", "curvedLeftArrow", "curvedUpArrow",
+    "curvedDownArrow", "stripedRightArrow", "notchedRightArrow",
+    "circularArrow", "leftCircularArrow", "leftRightCircularArrow",
+    "swooshArrow",
+}
+
 
 def _iter_shapes(shapes):
     """Yield all shapes including those inside groups (flat walk)."""
     for shape in shapes:
-        try:
-            st = shape.shape_type
-        except Exception:
-            st = None
         # group: recurse into its .shapes
         try:
-            if st is not None and str(st) == "GROUP (6)":
+            if _is_group_shape(shape):
                 yield from _iter_shapes(shape.shapes)
                 continue
         except Exception:
             pass
         yield shape
+
+
+def _is_group_shape(shape) -> bool:
+    """Return whether *shape* is a group, comparing against the enum member.
+
+    Matching ``str(shape.shape_type)`` against the literal ``"GROUP (6)"``
+    depends on python-pptx's enum repr; if that repr ever changes, groups stop
+    being recognised and their contents get audited as one opaque shape.
+    """
+    try:
+        from pptx.enum.shapes import MSO_SHAPE_TYPE  # type: ignore
+    except Exception:
+        MSO_SHAPE_TYPE = None
+    try:
+        shape_type = shape.shape_type
+    except Exception:
+        return False
+    if shape_type is None:
+        return False
+    if MSO_SHAPE_TYPE is not None:
+        return shape_type == MSO_SHAPE_TYPE.GROUP
+    return str(shape_type) == "GROUP (6)"
 
 
 def _find_ln_element(shape):
@@ -134,7 +165,173 @@ def _is_line_like_shape(shape) -> bool:
     if tag.endswith("}cxnSp"):
         return True
 
+    # Artifact Tool exports zero-width/zero-height straight lines as an
+    # ordinary <p:sp> AutoShape with preset geometry "line" rather than as a
+    # <p:cxnSp> connector.  Treat that representation as line-like as well.
+    if _preset_geometry(shape) == "line":
+        return True
+
     return False
+
+
+def _preset_geometry(shape) -> str:
+    """Return DrawingML preset geometry, or an empty string."""
+    try:
+        elem = shape._element  # type: ignore[attr-defined]
+        geom = elem.find(f".//{_PRST_GEOM}")
+    except Exception:
+        return ""
+    return "" if geom is None else (geom.get("prst") or "")
+
+
+def _is_semantic_arrow(shape) -> bool:
+    """True for an arrow-ended line or a filled arrow AutoShape."""
+    if _has_arrow_end(_find_ln_element(shape)):
+        return True
+    return _preset_geometry(shape) in _ARROW_PRESETS
+
+
+def _shape_bbox_pt(shape) -> tuple[float, float, float, float] | None:
+    """Return (left, top, width, height) in points, or None if unresolvable.
+
+    A shape without an ``<a:xfrm>`` that python-pptx cannot resolve from a
+    layout reports ``None`` geometry.  Such a shape has no comparable bounding
+    box, so it is reported as unresolved rather than crashing the audit.
+    """
+    emu_per_pt = 12700.0
+    try:
+        values = (shape.left, shape.top, shape.width, shape.height)
+    except Exception:
+        return None
+    if any(value is None for value in values):
+        return None
+    try:
+        return tuple(float(value) / emu_per_pt for value in values)
+    except (TypeError, ValueError):
+        return None
+
+
+def _bbox_intersects(
+    a: tuple[float, float, float, float],
+    b: tuple[float, float, float, float],
+    tolerance_pt: float,
+) -> bool:
+    """Return True when two boxes meet, including zero-width divider lines."""
+    ax0, ay0, aw, ah = a
+    bx0, by0, bw, bh = b
+    ax1, ay1 = ax0 + aw, ay0 + ah
+    bx1, by1 = bx0 + bw, by0 + bh
+    return not (
+        ax1 < bx0 - tolerance_pt
+        or bx1 < ax0 - tolerance_pt
+        or ay1 < by0 - tolerance_pt
+        or by1 < ay0 - tolerance_pt
+    )
+
+
+def presentation_check_arrow_layering(
+    pptx_path: str,
+    tolerance_pt: float = 1.0,
+) -> dict:
+    """Check that semantic arrows stay in front of intersecting straight lines.
+
+    A directional arrow carries more visual meaning than a neutral divider or
+    reference line.  If both must intersect, the line is background furniture
+    and the arrow must have the larger z-order.  The check covers top-level
+    arrow AutoShapes and explicit arrow-ended lines; grouped geometry is left
+    for visual review because group-local and slide-global z-order differ.
+    """
+    try:
+        import pptx  # type: ignore
+    except ImportError:
+        return {"error": "python-pptx not installed. `pip install python-pptx`"}
+
+    p = pathlib.Path(pptx_path)
+    if not p.exists():
+        return {"error": f"file not found: {pptx_path}"}
+    if tolerance_pt < 0:
+        return {"error": "tolerance_pt must be non-negative"}
+
+    prs = pptx.Presentation(str(p))
+    violations: list[dict] = []
+    arrow_count = 0
+    straight_line_count = 0
+    intersection_count = 0
+    skipped_group_count = 0
+    unresolved: list[dict] = []
+
+    for slide_index, slide in enumerate(prs.slides, start=1):
+        arrows: list[dict] = []
+        straight_lines: list[dict] = []
+        for z_order, shape in enumerate(slide.shapes, start=1):
+            if _is_group_shape(shape):
+                skipped_group_count += 1
+                continue
+
+            is_arrow = _is_semantic_arrow(shape)
+            is_line = False if is_arrow else _is_line_like_shape(shape)
+            if not is_arrow and not is_line:
+                continue
+
+            bbox_pt = _shape_bbox_pt(shape)
+            if bbox_pt is None:
+                unresolved.append({
+                    "slide": slide_index,
+                    "shape": getattr(shape, "name", ""),
+                    "kind": "arrow" if is_arrow else "line",
+                    "reason": "shape has no resolvable position/size",
+                })
+                continue
+
+            record = {
+                "name": getattr(shape, "name", ""),
+                "z_order": z_order,
+                "bbox_pt": bbox_pt,
+            }
+            if is_arrow:
+                arrows.append(record)
+                arrow_count += 1
+            else:
+                straight_lines.append(record)
+                straight_line_count += 1
+
+        for arrow in arrows:
+            for line in straight_lines:
+                if not _bbox_intersects(
+                    arrow["bbox_pt"], line["bbox_pt"], tolerance_pt
+                ):
+                    continue
+                intersection_count += 1
+                if arrow["z_order"] > line["z_order"]:
+                    continue
+                violations.append({
+                    "slide": slide_index,
+                    "issue": "arrow_behind_straight_line",
+                    "arrow_name": arrow["name"],
+                    "arrow_z_order": arrow["z_order"],
+                    "line_name": line["name"],
+                    "line_z_order": line["z_order"],
+                    "arrow_bbox_pt": [round(v, 3) for v in arrow["bbox_pt"]],
+                    "line_bbox_pt": [round(v, 3) for v in line["bbox_pt"]],
+                })
+
+    return {
+        "file": str(p),
+        "passed": len(violations) == 0,
+        "slides_checked": len(prs.slides),
+        "arrow_count": arrow_count,
+        "straight_line_count": straight_line_count,
+        "intersection_count": intersection_count,
+        "violation_count": len(violations),
+        "violations": violations,
+        "skipped_group_count": skipped_group_count,
+        "unresolved_count": len(unresolved),
+        "unresolved": unresolved,
+        "rule": (
+            "An intersecting directional arrow must be in front of a neutral "
+            "straight divider/reference line."
+        ),
+    }
 
 
 def presentation_arrow_usage(pptx_path: str) -> dict:

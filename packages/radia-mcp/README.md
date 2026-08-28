@@ -166,6 +166,18 @@ Optuna MCP server separately:
 pip install --upgrade optuna optuna-mcp
 ```
 
+The MATLAB server does not replace those upstream components. Its
+`matlab_optuna_compatibility_contract` and `matlab_optuna_oracle_audit` tools
+verify the pinned direct-Python and real-stdio-MCP fixtures, while
+`matlab_optimize_build` emits validated MATLAB code for the supported seeded
+sampler surface. This is a differentially verified subset of Optuna 4.9.0,
+not a drop-in implementation of the complete Python package; callers must use
+the compatibility contract rather than infer support from an Optuna-like name.
+The same contract reports a generated Optuna 4.9.0 public-API closure inventory
+and refuses complete status while any symbol or member is missing, partially
+verified, or lacks an exact oracle mapping. Unseeded constructors use fresh
+private entropy; exact proposal parity continues to use an explicit seed.
+
 Requires Python ≥ 3.10. Coreform Cubit is auto-discovered from
 standard install paths; set `CUBIT_BIN_DIR` env var if installed
 non-standard.
