@@ -8,6 +8,7 @@ This software contains multiple components with different licenses:
 3. sparseSolv integration (Mozilla Public License 2.0)
 4. Intel Math Kernel Library runtime notices
 5. Radia SPICE/LTspice integration (MIT License)
+6. Eqnedit64 (BSD 2-Clause License with separately licensed assets)
 
 ================================================================================
 PART 1: RADIA CORE
@@ -145,5 +146,20 @@ SOFTWARE.
 
 For the full Intel Simplified Software License terms, please visit:
 https://www.intel.com/content/www/us/en/developer/articles/license/end-user-license-agreement.html
+
+================================================================================
+PART 6: EQNEDIT64
+================================================================================
+
+Location: tools/eqnedit64/
+
+Copyright (c) 2026 ksugahar
+
+Eqnedit64 is licensed under the BSD 2-Clause License. See
+tools/eqnedit64/LICENSE for the full license text.
+
+Redistributable font and icon assets retain their respective licenses. See
+tools/eqnedit64/assets/THIRD_PARTY_NOTICES.md and the license files beside
+those assets.
 
 ================================================================================

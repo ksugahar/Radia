@@ -15,7 +15,7 @@
  * is what OMML's <m:nary> expects in <m:e>.
  */
 #include "tex_parser.h"
-#include "tex2mtef.h"
+#include "tex_symbols.h"
 #include "mtef_common.h"
 
 #include <algorithm>

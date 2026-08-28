@@ -1,0 +1,106 @@
+name: Eqnedit64
+
+on:
+  push:
+    branches: [main]
+    tags: ['eqnedit64-v*']
+    paths:
+      - 'tools/eqnedit64/**'
+      - 'packages/radia-mcp/src/radia_mcp/presentation/_equation_cli.py'
+      - 'packages/radia-mcp/src/radia_mcp/presentation/skill.md'
+      - 'packages/radia-mcp/src/radia_mcp/presentation/tools.py'
+      - 'packages/radia-mcp/tests/test_presentation_equation_cli.py'
+      - '.github/workflows/eqnedit64.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'tools/eqnedit64/**'
+      - 'packages/radia-mcp/src/radia_mcp/presentation/_equation_cli.py'
+      - 'packages/radia-mcp/src/radia_mcp/presentation/skill.md'
+      - 'packages/radia-mcp/src/radia_mcp/presentation/tools.py'
+      - 'packages/radia-mcp/tests/test_presentation_equation_cli.py'
+      - '.github/workflows/eqnedit64.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: eqnedit64-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  build-test:
+    # Font registration tests run only in this disposable GitHub-hosted
+    # session. They must not churn the interactive laboratory desktop's font
+    # cache or disturb applications such as LINE and Office.
+    runs-on: windows-2022
+    env:
+      EQNEDIT64_ISOLATED_TEST_SESSION: '1'
+    defaults:
+      run:
+        shell: pwsh
+        working-directory: tools/eqnedit64
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install test build dependencies
+        run: python -m pip install pybind11 pytest
+
+      - name: Configure native build
+        run: cmake -S . -B build_cmake -A x64
+
+      - name: Build native targets
+        run: cmake --build build_cmake --config Release --parallel 2
+
+      - name: Run C++ document tests
+        run: ctest --test-dir build_cmake -C Release --output-on-failure
+
+      - name: Check Web and MCP equation contracts
+        working-directory: .
+        run: >-
+          python -m pytest
+          tools/eqnedit64/tests/test_web_contract.py
+          packages/radia-mcp/tests/test_presentation_equation_cli.py -q
+
+      - name: Check Web JavaScript syntax
+        run: node --check web/equation-editor.js
+
+      - name: Build headless model module
+        run: cmd.exe /d /c build\build_pymodule.bat
+
+      - name: Run model suites in one font-owning process
+        run: python tests\run_model_tests.py
+
+      - name: Run hidden executable checks
+        run: |
+          $app = Resolve-Path 'build_cmake\Release\Eqnedit64.exe'
+          & $app --self-test
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & $app --visual-scale-test
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & $app --ui-interaction-test
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Check command-line image artifacts
+        run: |
+          $app = Resolve-Path 'build_cmake\Release\Eqnedit64.exe'
+          $tex = Join-Path $env:RUNNER_TEMP 'eqnedit64-ci.tex'
+          $png = Join-Path $env:RUNNER_TEMP 'eqnedit64-ci.png'
+          $emf = Join-Path $env:RUNNER_TEMP 'eqnedit64-ci.emf'
+          [IO.File]::WriteAllText($tex, '\[\frac{x_1+\alpha}{\sqrt{y}}\]', [Text.UTF8Encoding]::new($false))
+          & $app --render-png-file $tex $png
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & $app --render-emf-file $tex $emf
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if ((Get-Item $png).Length -le 8 -or (Get-Item $emf).Length -le 88) {
+            throw 'Eqnedit64 CLI produced an empty image artifact'
+          }
+          $signature = [IO.File]::ReadAllBytes($png)[0..7]
+          if ([Convert]::ToHexString($signature) -ne '89504E470D0A1A0A') {
+            throw 'Eqnedit64 CLI output is not PNG'
+          }

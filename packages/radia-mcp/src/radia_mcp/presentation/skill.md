@@ -16,6 +16,28 @@
 > lint / 抽出 / 時間予算 / 台本照合はそのまま効く（同じ 1 ファイルに台本と
 > スライドが両方あるので、むしろ照合が効きやすい）。
 
+### Eqnedit64 / 数式生成の責任分担
+
+- native版とJS版の正本はどちらもRadiaの `tools/eqnedit64` に置く。
+  JS実装は `tools/eqnedit64/web/equation-editor.js`、共通契約は
+  `tools/eqnedit64/docs/PRODUCT_PARITY.md`。研究室ホームページはJS版の
+  公開先であり、ホームページ側のコピーを独自編集しない。
+- `presentation_equation_policy()` で、この正本・公開先・変換経路を確認できる。
+- JS版はブラウザUIであり、`radia_mcp.presentation` のWindows実行
+  バックエンドにはしない。
+- script-first Markdownからデッキを組む場合は
+  `radia.equation.markdown_to_pptx` を使う。数式は画像ではなく編集可能な
+  PowerPointネイティブOMMLとして直接PPTXへ入る。
+- 既存PowerPointへ貼る一時クリップボードが必要な場合は
+  `presentation_copy_equation(tex, target="office")` を使う。Eqnedit64が
+  Office Math、TeX、EMF、不透明画像を同時に公開する。
+- Google Slides向けは `target="google-slides"`、画像貼り付けだけなら
+  `target="png"` とする。PNG/EMFファイルが必要なら
+  `presentation_render_equation` を使う。
+- 数十式を一式ずつ短命なEqnedit64プロセスで変換しない。デッキ一括生成は
+  `radia.equation` の同一Pythonプロセスを使い、フォント登録・解除の連続を避ける。
+- 入出力の正本は常にTeX。MTEFや`.eqn`をMCPワークフローへ導入しない。
+
 ---
 
 ## 🗣️ 良いスライドの定義 — しゃべりやすさ (speakability)

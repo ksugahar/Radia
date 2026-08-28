@@ -42,10 +42,6 @@ std::string render_rtf_math(const LineNode& root,
 std::string tex_to_rtf(const std::string& latex,
                        const RtfOptions& opt = RtfOptions());
 
-/* MTEF binary -> complete RTF document, for re-exporting a legacy equation. */
-std::string mtef_to_rtf(const uint8_t* data, size_t len,
-                        const RtfOptions& opt = RtfOptions());
-
 }  // namespace mtef
 
 #endif /* MTEF_RTF_H */

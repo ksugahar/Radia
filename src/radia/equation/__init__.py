@@ -18,11 +18,9 @@ nothing about keyboards.
 Office receives OMML -- a native, editable equation, not a picture and not an
 OLE object -- so nothing needs to be installed on the reader's machine.
 
-MTEF, the Equation Editor 3.x / MathType binary format, is supported in one
-direction for a reason: to read equations out of documents that already
-contain them.  `mtef_to_tex` and `mtef_to_omml` are the import path;
-`tex_to_mtef` exists so an equation can be handed back to Equation Editor as a
-.eqn file.  Nothing else in this package goes through MTEF.
+MTEF and `.eqn` are retired formats.  This package deliberately exposes no
+reader, writer, or converter for them; preserved documents must be migrated to
+TeX before entering the supported workflow.
 """
 
 from radia._equation import (  # noqa: F401
@@ -41,7 +39,6 @@ from radia._equation import (  # noqa: F401
     PaletteItem,
     RtfOptions,
     SvgStyle,
-    dump_tree,
     layout_markdown,
     md_blocks,
     symbol_palettes,
@@ -56,27 +53,16 @@ from radia._equation import (  # noqa: F401
     math_stretch,
     math_variant_for_height,
     tex_to_dib,
-    mtef_to_mathml,
-    mtef_to_omml,
-    mtef_to_rtf,
-    mtef_to_svg,
-    mtef_to_latex,
-    mtef_to_tex,
-    read_eqn,
-    tex_dump_tree,
     tex_normalize,
     tex_to_emf,
     tex_to_mathml,
-    tex_to_mtef,
     tex_to_omml,
     tex_to_png,
     tex_to_rtf,
     tex_to_svg,
-    write_eqn,
 )
 
 from radia.equation.office import (  # noqa: F401
-    copy_to_clipboard,
     markdown_to_docx,
     markdown_to_pptx,
     omml_paragraph,
@@ -99,8 +85,6 @@ __all__ = [
     "PaletteItem",
     "RtfOptions",
     "SvgStyle",
-    "copy_to_clipboard",
-    "dump_tree",
     "layout_markdown",
     "markdown_to_docx",
     "markdown_to_pptx",
@@ -117,23 +101,13 @@ __all__ = [
     "math_stretch",
     "math_variant_for_height",
     "tex_to_dib",
-    "mtef_to_mathml",
-    "mtef_to_omml",
-    "mtef_to_rtf",
-    "mtef_to_svg",
-    "mtef_to_latex",
-    "mtef_to_tex",
     "omml_paragraph",
-    "read_eqn",
     "split_math",
-    "tex_dump_tree",
     "tex_normalize",
     "tex_to_emf",
     "tex_to_mathml",
-    "tex_to_mtef",
     "tex_to_omml",
     "tex_to_png",
     "tex_to_rtf",
     "tex_to_svg",
-    "write_eqn",
 ]

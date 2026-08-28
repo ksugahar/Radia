@@ -46,6 +46,7 @@ orchestration around that foundation.
 
 [Quick start](#quick-start) | [Capabilities](#capabilities) |
 [Simulink](#simulink) | [MCP](#python-and-mcp) |
+[Eqnedit64](#eqnedit64) |
 [Documentation](#documentation) | [Contributing](#contributing)
 
 ## Why Radia?
@@ -85,6 +86,7 @@ orchestration around that foundation.
 | Motors and magnetic levitation | Angle-periodic native reduced models, HCurl/CLN moving plants, Lorentz force, and Simulink control integration |
 | Electromagnetic optimization | TPE, CMA-ES, MMA, SQP, adjoints, density/shape optimization, sheet-metal deformation, and CAD/mesh regeneration |
 | Post-processing | Saved NGSolve WebGUI scenes, Gmsh field views, LIC, isosurfaces, streamlines, sweeps, and flying particle-orbit animations |
+| TeX equation authoring | Eqnedit64 structural/TeX dual editing, keyboard-first templates, and native Office Math or image clipboard export |
 
 ## Quick start
 
@@ -167,6 +169,27 @@ python -m pip install "radia[topopt-cad]"
 
 See [Installation](#installation) for MATLAB/Simulink, visualization, and
 source-build paths.
+
+## Eqnedit64
+
+[Eqnedit64](tools/eqnedit64) is a portable Windows x64 equation editor and a
+browser edition maintained together in Radia. The native application connects
+fast structural input directly to UTF-8 TeX. Its structural canvas
+and live TeX pane are both editable, `Tab` traverses template slots, and the
+palette teaches the TeX spelling of inserted structures without a separate
+command-entry mode.
+
+The single executable needs no installer, Python runtime, or file-type
+registration. Copy places equivalent TeX, editable Office Math, EMF, and
+opaque bitmap representations on the clipboard; Google Slides and headless
+TeX-to-PNG paths are included. The signed binary is published in the
+[Eqnedit64 3.0.0 release](https://github.com/ksugahar/Radia/releases/tag/eqnedit64-v3.0.0).
+Legacy Eqnedit32/MTEF binaries and conversion sources are deliberately not
+part of the public component.
+
+The laboratory homepage publishes the browser edition, while
+[`tools/eqnedit64/web`](tools/eqnedit64/web) remains its source of truth. Native
+and Web changes share the same TeX-learning and Office Math parity policy.
 
 ## Architecture
 

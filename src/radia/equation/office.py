@@ -1,8 +1,8 @@
 """Put LaTeX equations into Word and PowerPoint as native Office math.
 
 The equation arrives as an equation: Office's own tools edit it, it follows the
-theme font and colour, and the reader needs nothing installed.  Not a picture,
-not an OLE object, no MTEF.
+theme font and colour, and the reader needs nothing installed.  Not a picture
+and not an OLE object.
 
 Word wraps math as bare ``<m:oMath>`` inside ``<w:p>``; PowerPoint wraps it in
 ``<a14:m>`` inside ``<a:p>``.  That is the only structural difference.
@@ -19,12 +19,6 @@ from typing import Iterable, Sequence
 
 from radia._equation import (MarkdownDoc, MdBlock, MdSegment, md_blocks,
                              tex_to_mathml, tex_to_omml, tex_to_rtf)
-
-# The raster the clipboard carries.  Google Slides has no equation object and
-# rejects SVG on upload, so for a slide the picture IS the equation and stays
-# one -- it has to be print quality, not screen quality.  Equation Editor's era
-# could not have afforded this; here it is a few tens of kilobytes.
-PASTE_DPI = 600.0
 
 W_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
 A_NS = "http://schemas.openxmlformats.org/drawingml/2006/main"
@@ -340,107 +334,3 @@ def count_equations(path: str) -> int:
         for part in parts:
             n += len(re.findall(r"<m:oMath[ >]", z.read(part).decode("utf-8")))
     return n
-
-
-def copy_to_clipboard(latex: str, display: bool = False,
-                      pictures: bool = True,
-                      size_pt: float | None = None) -> list[str]:
-    """Put one equation on the Windows clipboard for every target at once.
-
-    The clipboard holds many formats and each application takes the one it
-    understands best, so a single Copy serves every target with no mode switch.
-    Which format each one needs was measured, not assumed:
-
-      Rich Text Format      Word reads it as maths; PowerPoint reads it as text
-      Art::GVML ClipFormat  PowerPoint's own shape format -- a native equation
-                            AT A STATED SIZE.  MathML cannot say the size: both
-                            `mathsize` spellings were measured and ignored, and
-                            the destination box wins, so an equation pasted into
-                            18 pt body text came out at 18 pt
-      MathML                PowerPoint reads it as maths; Word refuses it alone
-      CF_ENHMETAFILE        a vector picture, for anywhere without an equation
-                            object -- Excel keeps the metafile beside the
-                            bitmap, and it is how a vector reaches Google
-                            Slides via Google Drawings
-      PNG                   the picture that always works; Google Slides
-                            rejects SVG on upload and takes raster only
-      CF_UNICODETEXT        the LaTeX itself, for Markdown, Jupyter, any editor
-
-    The pictures are offered *after* the equation formats deliberately: Word and
-    PowerPoint were re-checked with them present and still produce native
-    equations, but an application that prefers a picture would silently
-    downgrade, so `pictures=False` is there to take them away.
-
-    `size_pt` is the size a pasted PowerPoint equation lands at, 24 pt by
-    default because 18 is small to read from the back of a room.
-
-    Returns the format names actually placed.  Windows only.
-    """
-    import ctypes
-
-    import win32clipboard as cb          # pywin32, Windows only
-
-    from radia._equation import (PASTE_SIZE_PT, MathMLOptions, RtfOptions,
-                                 SvgStyle, tex_to_dib, tex_to_emf, tex_to_gvml,
-                                 tex_to_png)
-
-    if size_pt is None:
-        size_pt = PASTE_SIZE_PT
-
-    rtf_opt = RtfOptions()
-    rtf_opt.display = display
-    mml_opt = MathMLOptions()
-    mml_opt.display = display
-
-    payload = [
-        ("Rich Text Format",
-         tex_to_rtf(latex, rtf_opt).encode("latin-1", "replace")),
-        # PowerPoint's own shape format, offered BEFORE the MathML because it
-        # is the only one that can state a size.  MathML sizing is ignored --
-        # measured -- so an equation pasted through it takes the destination
-        # box's size, which is 18 pt in a body placeholder and too small on a
-        # slide.  See gvml_clip.h.
-        ("Art::GVML ClipFormat", tex_to_gvml(latex, size_pt, display)),
-        ("MathML", tex_to_mathml(latex, mml_opt).encode("utf-8")),
-    ]
-
-    style = SvgStyle()
-    emf_bytes = png_bytes = dib_bytes = b""
-    if pictures:
-        emf_bytes = tex_to_emf(latex, style)
-        png_bytes = tex_to_png(latex, style, PASTE_DPI / 72.0)
-        dib_bytes = tex_to_dib(latex, style, PASTE_DPI / 72.0)
-
-    cb.OpenClipboard()
-    try:
-        cb.EmptyClipboard()
-        placed = []
-        for name, data in payload:
-            cb.SetClipboardData(cb.RegisterClipboardFormat(name), data)
-            placed.append(name)
-
-        if emf_bytes:
-            # CF_ENHMETAFILE wants a metafile handle, not bytes, and the system
-            # owns it once it is on the clipboard -- it must not be deleted.
-            gdi = ctypes.windll.gdi32
-            handle = gdi.SetEnhMetaFileBits(len(emf_bytes), emf_bytes)
-            if handle:
-                cb.SetClipboardData(14, handle)      # CF_ENHMETAFILE
-                placed.append("CF_ENHMETAFILE")
-        if png_bytes:
-            cb.SetClipboardData(cb.RegisterClipboardFormat("PNG"), png_bytes)
-            placed.append("PNG")
-        if dib_bytes:
-            # CF_DIB is what an application takes when it pastes a picture, and
-            # the only image format a browser finds here: Windows synthesises
-            # it from a bitmap but not from a metafile.  Without it an equation
-            # dropped into Google Slides -- which has no equation object and
-            # takes raster only -- arrived as its LaTeX.
-            cb.SetClipboardData(8, dib_bytes)          # CF_DIB
-            placed.append("CF_DIB")
-
-        cb.SetClipboardData(cb.CF_UNICODETEXT, latex)
-        placed.append("CF_UNICODETEXT")
-    finally:
-        cb.CloseClipboard()
-    return placed
