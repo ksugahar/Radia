@@ -158,9 +158,10 @@ int HACApK_build_hmatrix_wrapper(
     int n_elem,
     int nffc,                  /* DOF per element (3 for tet, 6 for hex) */
     int ndim,                  /* Spatial dimension (3) */
-    double eps,                /* ACA+ tolerance */
+    double eps,                /* ACA tolerance */
     int leaf_size,             /* Minimum cluster size */
     double eta,                /* Admissibility parameter */
+    int max_rank,              /* Maximum ACA rank */
     int print_level);
 
 /* Build H-matrix with variable DOF per element (for mixed hex+tetra meshes) */
@@ -172,9 +173,10 @@ int HACApK_build_hmatrix_varDOF_wrapper(
     int *dof_offset,           /* [n_elem + 1], cumulative DOF offset (0-based) */
     int total_dof,             /* Total DOF count = dof_offset[n_elem] */
     int ndim,                  /* Spatial dimension (3) */
-    double eps,                /* ACA+ tolerance */
+    double eps,                /* ACA tolerance */
     int leaf_size,             /* Minimum cluster size */
     double eta,                /* Admissibility parameter */
+    int max_rank,              /* Maximum ACA rank */
     int print_level);
 
 /* Matrix-vector product: y = A * x using H-matrix */
