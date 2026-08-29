@@ -29,6 +29,30 @@ def test_palette_and_learning_contract() -> None:
     assert "nextHole(input.value" in SOURCE
 
 
+def test_common_math_alphabets_are_always_visible() -> None:
+    assert "var MATH_ALPHABETS" in SOURCE
+    for command in [r"\\mathrm{}", r"\\mathit{}", r"\\mathbf{}"]:
+        assert f'snippet: "{command}"' in SOURCE
+    common = SOURCE.split("var MATH_ALPHABETS", 1)[1].split("];", 1)[0]
+    assert 'name: "立体"' in common
+    assert 'name: "変数（斜体）"' in common
+    assert 'name: "ベクトル"' in common
+    assert "paletteHead.appendChild(styleBar)" in SOURCE
+    assert "paletteHost.appendChild(paletteHead)" in SOURCE
+    assert 'button.addEventListener("click", function () { insert(alphabet.snippet); })' in SOURCE
+
+
+def test_extended_math_alphabets_remain_in_decoration_palette() -> None:
+    for command in [r"\\mathsf{}", r"\\mathtt{}", r"\\mathcal{}",
+                    r"\\mathbb{}", r"\\mathfrak{}",
+                    r"\\bm{}", r"\\mathnormal{}"]:
+        assert command in SOURCE
+    assert 'function mathJaxTex(tex)' in SOURCE
+    assert 'doc.convert(mathJaxTex(tex)' in SOURCE
+    assert '"\\\\[" + mathJaxTex(tex) + "\\\\]"' in SOURCE
+    assert '"\\\\displaystyle " + mathJaxTex(tex)' in SOURCE
+
+
 def test_office_copy_is_editable_mathml_without_png_competition() -> None:
     office = SOURCE.split(
         'root.querySelector(".eqed-copy-office")', 1

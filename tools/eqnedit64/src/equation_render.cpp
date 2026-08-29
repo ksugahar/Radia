@@ -1152,7 +1152,10 @@ double glyph_ink_left(uint32_t, double, bool, bool, bool = false) { return 0.0; 
 /* ------------------------------------------------------------------ */
 /* Typeface mapping                                                    */
 /* ------------------------------------------------------------------ */
-bool typeface_is_italic(int tf) { return tf == 3 || tf == 4; }   /* VARIABLE, LCGREEK */
+bool typeface_is_italic(int tf) {
+    return tf == TF_VARIABLE || tf == TF_LCGREEK ||
+           tf == TF_MATH_ITALIC;
+}
 
 /* Japanese must never reach the process-private math font through GDI font
  * linking.  The linked CJK glyph can inherit the math face's 1000-unit metric
@@ -1222,6 +1225,70 @@ uint32_t math_bold_of(uint32_t cp) {
         case 0x03F1: return 0x1D6E0;    /* rho symbol */
         case 0x03D6: return 0x1D6E1;    /* pi symbol */
         default: return 0;
+    }
+}
+
+uint32_t math_sans_of(uint32_t cp) {
+    if (cp >= 'A' && cp <= 'Z') return 0x1D5A0 + (cp - 'A');
+    if (cp >= 'a' && cp <= 'z') return 0x1D5BA + (cp - 'a');
+    if (cp >= '0' && cp <= '9') return 0x1D7E2 + (cp - '0');
+    return 0;
+}
+
+uint32_t math_mono_of(uint32_t cp) {
+    if (cp >= 'A' && cp <= 'Z') return 0x1D670 + (cp - 'A');
+    if (cp >= 'a' && cp <= 'z') return 0x1D68A + (cp - 'a');
+    if (cp >= '0' && cp <= '9') return 0x1D7F6 + (cp - '0');
+    return 0;
+}
+
+uint32_t math_script_of(uint32_t cp) {
+    static const uint32_t upper[] = {
+        0x1D49C, 0x212C, 0x1D49E, 0x1D49F, 0x2130, 0x2131, 0x1D4A2,
+        0x210B, 0x2110, 0x1D4A5, 0x1D4A6, 0x2112, 0x2133, 0x1D4A9,
+        0x1D4AA, 0x1D4AB, 0x1D4AC, 0x211B, 0x1D4AE, 0x1D4AF, 0x1D4B0,
+        0x1D4B1, 0x1D4B2, 0x1D4B3, 0x1D4B4, 0x1D4B5};
+    static const uint32_t lower[] = {
+        0x1D4B6, 0x1D4B7, 0x1D4B8, 0x1D4B9, 0x212F, 0x1D4BB, 0x210A,
+        0x1D4BD, 0x1D4BE, 0x1D4BF, 0x1D4C0, 0x1D4C1, 0x1D4C2, 0x1D4C3,
+        0x2134, 0x1D4C5, 0x1D4C6, 0x1D4C7, 0x1D4C8, 0x1D4C9, 0x1D4CA,
+        0x1D4CB, 0x1D4CC, 0x1D4CD, 0x1D4CE, 0x1D4CF};
+    if (cp >= 'A' && cp <= 'Z') return upper[cp - 'A'];
+    if (cp >= 'a' && cp <= 'z') return lower[cp - 'a'];
+    return 0;
+}
+
+uint32_t math_double_of(uint32_t cp) {
+    static const uint32_t upper[] = {
+        0x1D538, 0x1D539, 0x2102, 0x1D53B, 0x1D53C, 0x1D53D, 0x1D53E,
+        0x210D, 0x1D540, 0x1D541, 0x1D542, 0x1D543, 0x1D544, 0x2115,
+        0x1D546, 0x2119, 0x211A, 0x211D, 0x1D54A, 0x1D54B, 0x1D54C,
+        0x1D54D, 0x1D54E, 0x1D54F, 0x1D550, 0x2124};
+    if (cp >= 'A' && cp <= 'Z') return upper[cp - 'A'];
+    if (cp >= 'a' && cp <= 'z') return 0x1D552 + (cp - 'a');
+    if (cp >= '0' && cp <= '9') return 0x1D7D8 + (cp - '0');
+    return 0;
+}
+
+uint32_t math_fraktur_of(uint32_t cp) {
+    static const uint32_t upper[] = {
+        0x1D504, 0x1D505, 0x212D, 0x1D507, 0x1D508, 0x1D509, 0x1D50A,
+        0x210C, 0x2111, 0x1D50D, 0x1D50E, 0x1D50F, 0x1D510, 0x1D511,
+        0x1D512, 0x1D513, 0x1D514, 0x211C, 0x1D516, 0x1D517, 0x1D518,
+        0x1D519, 0x1D51A, 0x1D51B, 0x1D51C, 0x2128};
+    if (cp >= 'A' && cp <= 'Z') return upper[cp - 'A'];
+    if (cp >= 'a' && cp <= 'z') return 0x1D51E + (cp - 'a');
+    return 0;
+}
+
+uint32_t explicit_math_alphabet_of(int typeface, uint32_t cp) {
+    switch (typeface) {
+    case TF_MATH_SANS: return math_sans_of(cp);
+    case TF_MATH_MONO: return math_mono_of(cp);
+    case TF_MATH_SCRIPT: return math_script_of(cp);
+    case TF_MATH_DOUBLE: return math_double_of(cp);
+    case TF_MATH_FRAKTUR: return math_fraktur_of(cp);
+    default: return 0;
     }
 }
 
@@ -1623,7 +1690,8 @@ private:
                 }
                 uint32_t cp = c.charCode ? c.charCode : uint32_t(uint8_t(c.ch));
                 if (!cp) return Layout();
-                if (c.typeface == TF_VECTOR) {
+                if (c.typeface == TF_VECTOR ||
+                    c.typeface == TF_BOLD_SYMBOL) {
                     if (const uint32_t mathBold = math_bold_of(cp))
                         return glyph_layout(mathBold, sizePt, false, true);
                     Layout fallback = glyph_layout(cp, sizePt, false,
@@ -1631,6 +1699,9 @@ private:
                     for (auto& glyph : fallback.glyphs) glyph.bold = true;
                     return fallback;
                 }
+                if (const uint32_t alphabet =
+                        explicit_math_alphabet_of(c.typeface, cp))
+                    return glyph_layout(alphabet, sizePt, false, true);
                 return glyph_layout(cp, sizePt, typeface_is_italic(c.typeface),
                                     needs_math_face(cp));
             }

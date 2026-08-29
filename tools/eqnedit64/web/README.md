@@ -24,6 +24,14 @@ The host page must load MathJax 3 and include the markup in
 `equation-editor.fragment.html`. The script is deliberately dependency-free
 apart from that host-provided MathJax runtime.
 
+The `R x` / `I x` / `B x` math-alphabet group is always visible beside the
+category tabs. It inserts `\mathrm{}`, `\mathit{}`, or `\mathbf{}`; a source
+selection is wrapped in the chosen command and an empty selection leaves the
+caret inside the new braces.
+Less common alphabets stay in Decoration: `\mathsf`, `\mathtt`, `\mathcal`,
+`\mathbb`, `\mathfrak`, `\bm`, and the `\mathnormal` reset. The Web source
+keeps `\bm`; only the MathJax boundary expands it to `\boldsymbol`.
+
 Inputs and saved/copied source are TeX. MTEF and `.eqn` are not supported
 formats. Office copy emits inline MathML in `text/html` plus plain TeX; image
 copy is a separate action so PowerPoint cannot accidentally prefer PNG over an

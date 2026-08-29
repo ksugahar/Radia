@@ -78,6 +78,8 @@ enum CommandId : UINT {
     ID_TEMPLATE_FIRST = 1000,
     ID_SYMBOL_FIRST = 2000,
     ID_BUTTON_SAVE = 3000, ID_BUTTON_UNDO, ID_BUTTON_REDO,
+    /* Common math alphabets stay visible beside every category palette. */
+    ID_STYLE_ROMAN = 3800, ID_STYLE_ITALIC, ID_STYLE_VECTOR,
     /* Five category tabs, one id per palette button, then one per cell. */
     ID_PALETTE_TAB_FIRST = 3900,
     ID_PALETTE_FIRST = 4000,
@@ -102,6 +104,7 @@ struct AppState {
     HWND canvas = nullptr;
     HWND sourceLabel = nullptr;
     HWND source = nullptr;
+    HWND lastEditSurface = nullptr;
     WNDPROC sourceProc = nullptr;
     HWND status = nullptr;
     HFONT sourceFont = nullptr;
@@ -162,6 +165,8 @@ struct AppState {
     std::map<UINT, std::wstring> paletteLessons;
     std::vector<HWND> paletteTabButtons;
     std::vector<HWND> paletteButtons;
+    std::array<HWND, 3> styleButtons{};
+    std::array<HFONT, 3> styleFonts{};
     size_t activePaletteCategory = 0;
     HFONT paletteFont = nullptr;
     HFONT paletteTabFont = nullptr;
@@ -599,7 +604,14 @@ void update_status(const wchar_t* transient = nullptr) {
         L"入力: " + std::wstring(
             g.inputStyle == 'T' ? L"文字列" :
             g.inputStyle == 'F' ? L"関数" :
-            g.inputStyle == 'I' ? L"変数" :
+            g.inputStyle == 'I' ? L"変数（斜体）" :
+            g.inputStyle == 'R' ? L"立体" :
+            g.inputStyle == 'S' ? L"サンセリフ" :
+            g.inputStyle == 'W' ? L"等幅" :
+            g.inputStyle == 'C' ? L"カリグラフィー" :
+            g.inputStyle == 'D' ? L"黒板太字" :
+            g.inputStyle == 'K' ? L"フラクトゥール" :
+            g.inputStyle == 'O' ? L"記号太字" :
             g.inputStyle == 'G' ? L"ギリシャ" :
             g.inputStyle == 'B' ? L"ベクトル" : L"数学"),
         L"Tab: 次の枠  Enter: 改行  &: 整列位置",
@@ -608,8 +620,19 @@ void update_status(const wchar_t* transient = nullptr) {
         SendMessageW(g.status, SB_SETTEXTW, WPARAM(i), LPARAM(fields[i].c_str()));
 }
 
+void sync_style_buttons() {
+    const char modes[] = {'R', 'I', 'B'};
+    for (size_t i = 0; i < g.styleButtons.size(); ++i) {
+        if (!g.styleButtons[i]) continue;
+        SendMessageW(g.styleButtons[i], BM_SETCHECK,
+                     g.inputStyle == modes[i] ? BST_CHECKED : BST_UNCHECKED,
+                     0);
+    }
+}
+
 void set_input_style(char style, const wchar_t* label) {
     g.inputStyle = style;
+    sync_style_buttons();
     std::wstring message = L"入力スタイル: ";
     message += label;
     update_status(message.c_str());
@@ -721,6 +744,11 @@ std::string insert_command_tex_example(const std::string& command) {
         inserted = example.insert_symbol(command.substr(7));
     else if (command.rfind("latex.", 0) == 0)
         inserted = example.insert_latex(command.substr(6));
+    else if (command.rfind("style.", 0) == 0) {
+        example.insert_text("x");
+        example.select_all();
+        inserted = example.restyle_selection(command.substr(6));
+    }
     else if (command.rfind("matrix.", 0) == 0) {
         inserted = example.insert_template("matrix2x2") &&
                    example.command(command);
@@ -779,7 +807,7 @@ bool start_operation_debug(bool announce,
                     "\telapsed_ms\tdelta_ms\tfocus\tinput_style\talignment"
                     "\tzoom_percent\tequation_mode"
                     "\tshortcut_prefix\tlatex\r\n");
-    debug_event("debug.start", "Eqnedit64 3.0.3 path=" + utf8_wide(path));
+    debug_event("debug.start", "Eqnedit64 3.0.4 path=" + utf8_wide(path));
     update_debug_menu();
     update_title();
     /* The status bar and the [操作ログ記録中] flag in the title say all of
@@ -1753,6 +1781,55 @@ void edit_paste() {
     debug_event("edit.paste.no_change", latex);
 }
 
+/* The three common style buttons have the same result in both editing
+ * surfaces.  On the structural canvas they restyle a selection or arm a
+ * persistent input style.  In the TeX pane they wrap the selection, or insert
+ * an empty command and leave the caret inside its braces. */
+void apply_math_alphabet(const char* style, char inputMode,
+                         const wchar_t* label, const char* texCommand) {
+    const std::wstring command = wide_utf8(texCommand);
+    const bool sourceActive = g.lastEditSurface == g.source;
+    bool changed = false;
+    if (sourceActive) {
+        DWORD first = 0, last = 0;
+        SendMessageW(g.source, EM_GETSEL, WPARAM(&first), LPARAM(&last));
+        const std::wstring source = window_text(g.source);
+        first = std::min<DWORD>(first, DWORD(source.size()));
+        last = std::min<DWORD>(last, DWORD(source.size()));
+        if (last < first) std::swap(first, last);
+        const std::wstring selected = source.substr(first, last - first);
+        const std::wstring replacement = command + L"{" + selected + L"}";
+        SendMessageW(g.source, EM_SETSEL, first, last);
+        SendMessageW(g.source, EM_REPLACESEL, TRUE,
+                     LPARAM(replacement.c_str()));
+        const DWORD caret = first + DWORD(command.size()) + 1 +
+            (selected.empty() ? 0 : DWORD(selected.size()) + 1);
+        SendMessageW(g.source, EM_SETSEL, caret, caret);
+        SendMessageW(g.source, EM_SCROLLCARET, 0, 0);
+        changed = true;
+        debug_event("source.restyle", std::string(texCommand));
+    } else if (g.equation.has_selection()) {
+        const std::string beforeLatex = g.equation.latex();
+        changed = g.equation.restyle_selection(style);
+        if (changed) {
+            model_changed(std::string("restyle.") + style);
+            highlight_source_insertion(beforeLatex);
+        }
+    }
+
+    g.inputStyle = inputMode;
+    sync_style_buttons();
+    std::wstring message = L"TeX: ";
+    message += command;
+    message += L"{}  入力スタイル: ";
+    message += label;
+    update_status(message.c_str());
+    debug_event("input.math_alphabet",
+                std::string("style=") + style +
+                " changed=" + (changed ? "1" : "0"));
+    SetFocus(sourceActive ? g.source : g.canvas);
+}
+
 void dispatch_model(const std::string& command) {
     const std::string beforeLatex = g.equation.latex();
     std::string action;
@@ -1904,6 +1981,15 @@ void handle_command(UINT id, bool fromAccelerator = false) {
             flight_note("command.end");
         }
     } mark(id);
+    if (id >= ID_STYLE_ROMAN && id <= ID_STYLE_VECTOR) {
+        if (id == ID_STYLE_ROMAN)
+            apply_math_alphabet("roman", 'R', L"立体", "\\mathrm");
+        else if (id == ID_STYLE_ITALIC)
+            apply_math_alphabet("italic", 'I', L"変数（斜体）", "\\mathit");
+        else
+            apply_math_alphabet("vector", 'B', L"ベクトル", "\\mathbf");
+        return;
+    }
     const auto& categories = eqnedit::palette_categories();
     if (id >= ID_PALETTE_TAB_FIRST &&
         id < ID_PALETTE_TAB_FIRST + categories.size()) {
@@ -2286,6 +2372,16 @@ HFONT pick_palette_tab_font(int heightPx) {
     return HFONT(GetStockObject(DEFAULT_GUI_FONT));
 }
 
+HFONT make_style_button_font(HFONT base, bool italic, int weight) {
+    LOGFONTW lf{};
+    if (!base || GetObjectW(base, sizeof(lf), &lf) != sizeof(lf))
+        return base;
+    lf.lfItalic = italic ? TRUE : FALSE;
+    lf.lfWeight = weight;
+    HFONT styled = CreateFontIndirectW(&lf);
+    return styled ? styled : base;
+}
+
 /* The themed BUTTON control has twice reached a state where its window text
  * is correct and the selected font draws into a memory DC, yet USER/UxTheme
  * paints no text on screen.  Keep the native button's input, focus, radio and
@@ -2489,6 +2585,35 @@ void create_toolbar(HWND hwnd) {
         SendMessageW(button, WM_SETFONT, WPARAM(g.paletteFont), TRUE);
         g.paletteButtons.push_back(button);
     }
+
+    /* Math alphabets are not category-specific: keep a fixed three-button
+     * group after the maximum five category palettes on the second row.  The
+     * group therefore never moves when a tab changes. */
+    g.styleFonts = {
+        make_style_button_font(g.paletteFont, false, FW_NORMAL),
+        make_style_button_font(g.paletteFont, true, FW_NORMAL),
+        make_style_button_font(g.paletteFont, false, FW_BOLD),
+    };
+    const wchar_t* labels[] = {L"R x", L"I x", L"B x"};
+    const int styleLeft = left + 5 * (paletteWidth + gap) + scaled_px(hwnd, 10);
+    const int styleWidth = scaled_px(hwnd, 58);
+    for (size_t i = 0; i < g.styleButtons.size(); ++i) {
+        HWND button = CreateWindowExW(0, L"BUTTON", labels[i],
+            WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_CHECKBOX | BS_PUSHLIKE,
+            styleLeft + int(i) * (styleWidth + gap),
+            top + rowHeight + gap, styleWidth, rowHeight, hwnd,
+            HMENU(UINT_PTR(ID_STYLE_ROMAN + UINT(i))), g.instance, nullptr);
+        if (!button ||
+            !SetWindowSubclass(button, ToolbarButtonProc,
+                               ID_STYLE_ROMAN + UINT(i), 0)) {
+            g.toolbarButtonSubclassFailed = true;
+            flight_note("toolbar.subclass.failed style=" +
+                        std::to_string(i));
+        }
+        SendMessageW(button, WM_SETFONT, WPARAM(g.styleFonts[i]), TRUE);
+        g.styleButtons[i] = button;
+    }
+    sync_style_buttons();
     select_palette_category(0, false);
 }
 
@@ -2515,6 +2640,14 @@ void select_palette_category(size_t index, bool announce) {
                    width, rowHeight, TRUE);
         ShowWindow(button, SW_SHOWNA);
         ++column;
+    }
+    const int styleLeft = left + 5 * (width + gap) + scaled_px(g.main, 10);
+    const int styleWidth = scaled_px(g.main, 58);
+    for (size_t i = 0; i < g.styleButtons.size(); ++i) {
+        if (!g.styleButtons[i]) continue;
+        MoveWindow(g.styleButtons[i], styleLeft + int(i) * (styleWidth + gap),
+                   top, styleWidth, rowHeight, TRUE);
+        ShowWindow(g.styleButtons[i], SW_SHOWNA);
     }
     if (announce) {
         update_status((L"パレット: " +
@@ -2583,6 +2716,21 @@ void insert_palette_item(const std::string& command) {
         }
         show_shortcut_coach(command);
         SetFocus(g.canvas);
+    } else if (command.rfind("style.", 0) == 0) {
+        const std::string style = command.substr(6);
+        if (style == "sans")
+            apply_math_alphabet("sans", 'S', L"サンセリフ", "\\mathsf");
+        else if (style == "mono")
+            apply_math_alphabet("mono", 'W', L"等幅", "\\mathtt");
+        else if (style == "script")
+            apply_math_alphabet("script", 'C', L"カリグラフィー", "\\mathcal");
+        else if (style == "double")
+            apply_math_alphabet("double", 'D', L"黒板太字", "\\mathbb");
+        else if (style == "fraktur")
+            apply_math_alphabet("fraktur", 'K', L"フラクトゥール", "\\mathfrak");
+        else if (style == "boldsymbol")
+            apply_math_alphabet("boldsymbol", 'O', L"記号太字", "\\bm");
+        show_shortcut_coach(command);
     } else if (command.rfind("matrix.", 0) == 0) {
         dispatch_model(command);
         show_shortcut_coach(command);
@@ -3036,6 +3184,7 @@ LRESULT CALLBACK CanvasProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         case WM_GETDLGCODE:
             return DLGC_WANTARROWS | DLGC_WANTTAB | DLGC_WANTCHARS;
         case WM_SETFOCUS:
+            g.lastEditSurface = g.canvas;
             InvalidateRect(hwnd, nullptr, FALSE);
             debug_event("focus.canvas"); return 0;
         case WM_KILLFOCUS:
@@ -3179,7 +3328,21 @@ LRESULT CALLBACK CanvasProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
                 else if (g.inputStyle == 'F')
                     inserted = g.equation.insert_styled_text(typed, "function");
                 else if (g.inputStyle == 'I')
-                    inserted = g.equation.insert_styled_text(typed, "variable");
+                    inserted = g.equation.insert_styled_text(typed, "italic");
+                else if (g.inputStyle == 'R')
+                    inserted = g.equation.insert_styled_text(typed, "roman");
+                else if (g.inputStyle == 'S')
+                    inserted = g.equation.insert_styled_text(typed, "sans");
+                else if (g.inputStyle == 'W')
+                    inserted = g.equation.insert_styled_text(typed, "mono");
+                else if (g.inputStyle == 'C')
+                    inserted = g.equation.insert_styled_text(typed, "script");
+                else if (g.inputStyle == 'D')
+                    inserted = g.equation.insert_styled_text(typed, "double");
+                else if (g.inputStyle == 'K')
+                    inserted = g.equation.insert_styled_text(typed, "fraktur");
+                else if (g.inputStyle == 'O')
+                    inserted = g.equation.insert_styled_text(typed, "boldsymbol");
                 else if (g.inputStyle == 'B')
                     inserted = g.equation.insert_styled_text(typed, "vector");
                 else if (g.inputStyle == 'G' && wp < 0x80 &&
@@ -3470,6 +3633,7 @@ LRESULT CALLBACK MainProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
                 return 0;
             }
             if (HWND(lp) == g.source && HIWORD(wp) == EN_SETFOCUS) {
+                g.lastEditSurface = g.source;
                 /* A transient lesson must never become an accidental source
                  * replacement selection when the user starts editing TeX. */
                 if (g.sourceInsertionHighlight) {
@@ -3497,6 +3661,12 @@ LRESULT CALLBACK MainProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         case WM_DESTROY:
             debug_event("app.destroy");
             stop_operation_debug(false);
+            for (HFONT& font : g.styleFonts) {
+                if (font && font != g.paletteFont &&
+                    font != GetStockObject(DEFAULT_GUI_FONT))
+                    DeleteObject(font);
+                font = nullptr;
+            }
             if (g.paletteFont && g.paletteFont != GetStockObject(DEFAULT_GUI_FONT)) {
                 DeleteObject(g.paletteFont);
             }
@@ -4240,9 +4410,11 @@ int status_layout_test() {
     const auto& categories = eqnedit::palette_categories();
     if (g.paletteTabButtons.size() != categories.size()) return 120;
     if (g.paletteButtons.size() != eqnedit::palettes().size()) return 121;
+    for (HWND button : g.styleButtons) if (!button) return 137;
     if (g.activePaletteCategory >= categories.size()) return 122;
     const int expectedVisible = int(categories.size() +
-        categories[g.activePaletteCategory].paletteIndices.size());
+        categories[g.activePaletteCategory].paletteIndices.size() +
+        g.styleButtons.size());
     if (visibleButtonCount != expectedVisible) return 123;
     return 0;
 }
@@ -4800,6 +4972,48 @@ int ui_interaction_test() {
     }
     if (g.equation.latex().find("\\mathbf{v}") == std::string::npos) return 114;
 
+    /* The common style group is a real structural route, not decoration.
+     * Each command persists its explicit modern LaTeX alphabet. */
+    const struct {
+        UINT id;
+        const char* expected;
+        char mode;
+    } styleCases[] = {
+        {ID_STYLE_ROMAN, "\\mathrm{x}", 'R'},
+        {ID_STYLE_ITALIC, "\\mathit{x}", 'I'},
+        {ID_STYLE_VECTOR, "\\mathbf{x}", 'B'},
+    };
+    for (const auto& styleCase : styleCases) {
+        g.equation.load_latex("x");
+        g.equation.select_all();
+        SetFocus(g.canvas);
+        SendMessageW(g.main, WM_COMMAND, styleCase.id, 0);
+        if (g.equation.latex() != styleCase.expected ||
+            g.inputStyle != styleCase.mode) return 198;
+        for (size_t i = 0; i < g.styleButtons.size(); ++i) {
+            const bool checked = SendMessageW(
+                g.styleButtons[i], BM_GETCHECK, 0, 0) == BST_CHECKED;
+            if (checked != (i == size_t(styleCase.id - ID_STYLE_ROMAN)))
+                return 199;
+        }
+    }
+    set_source_text_for_test(L"x");
+    SetFocus(g.source);
+    SendMessageW(g.source, EM_SETSEL, 0, 1);
+    SetFocus(g.styleButtons[1]); /* a real click temporarily focuses the button */
+    SendMessageW(g.main, WM_COMMAND, ID_STYLE_ITALIC, 0);
+    if (window_text(g.source) != L"\\mathit{x}" ||
+        GetFocus() != g.source) return 200;
+    set_source_text_for_test(L"");
+    SendMessageW(g.source, EM_SETSEL, 0, 0);
+    SetFocus(g.styleButtons[0]);
+    SendMessageW(g.main, WM_COMMAND, ID_STYLE_ROMAN, 0);
+    DWORD styleCaretFirst = 0, styleCaretLast = 0;
+    SendMessageW(g.source, EM_GETSEL,
+                 WPARAM(&styleCaretFirst), LPARAM(&styleCaretLast));
+    if (window_text(g.source) != L"\\mathrm{}" ||
+        styleCaretFirst != 8 || styleCaretLast != 8) return 201;
+
     /* Every palette cell inserts through the real WM_COMMAND path.  This is
      * what proves the bar is a working route to every item and not just a
      * table that happens to compile: a wrong id, a missing dispatch arm, or a
@@ -4809,7 +5023,10 @@ int ui_interaction_test() {
         UINT id = ID_PALETTE_ITEM_FIRST;
         for (const auto& palette : eqnedit::palettes()) {
             for (const auto& item : palette.items) {
-                g.equation.load_latex("");
+                g.equation.load_latex(
+                    item.command.rfind("style.", 0) == 0 ? "x" : "");
+                if (item.command.rfind("style.", 0) == 0)
+                    g.equation.select_all();
                 if (item.command.rfind("matrix.", 0) == 0)
                     g.equation.insert_template("matrix2x2");
                 const std::string before = g.equation.latex();
@@ -4830,10 +5047,22 @@ int ui_interaction_test() {
         if (g.paletteTabButtons.size() != categories.size()) return 124;
         if (g.toolbarButtonSubclassFailed) return 154;
         for (HWND button : g.paletteTabButtons) if (!button) return 155;
+        for (HWND button : g.styleButtons) if (!button) return 156;
+        LOGFONTW romanFont{}, italicFont{}, vectorFont{};
+        if (GetObjectW(g.styleFonts[0], sizeof(romanFont), &romanFont) !=
+                sizeof(romanFont) ||
+            GetObjectW(g.styleFonts[1], sizeof(italicFont), &italicFont) !=
+                sizeof(italicFont) ||
+            GetObjectW(g.styleFonts[2], sizeof(vectorFont), &vectorFont) !=
+                sizeof(vectorFont) ||
+            romanFont.lfItalic || !italicFont.lfItalic ||
+            vectorFont.lfWeight < FW_BOLD) return 158;
         for (HWND button : g.paletteTabButtons)
             if (!toolbar_button_label_changes_pixels(button, true)) return 152;
         for (HWND button : g.paletteButtons)
             if (!toolbar_button_label_changes_pixels(button)) return 153;
+        for (HWND button : g.styleButtons)
+            if (!toolbar_button_label_changes_pixels(button)) return 157;
         if (GetMenuItemCount(g.menu) != 5) return 128;
         HMENU insertMenu = GetSubMenu(g.menu, 2);
         if (!insertMenu ||

@@ -4,6 +4,23 @@
 履歴である。現在の公開リリース手順は `build\accept_release.ps1` と
 [`CANONICAL_OPERATION.md`](CANONICAL_OPERATION.md) を正とする。
 
+## 2026-08-29 Eqnedit64 3.0.4公開候補
+
+- 対象: `codex/eqnedit64-math-style-palette`。
+- EXE/JS共通の常設数式スタイルパレットと、`\mathnormal`、`\mathrm`、
+  `\mathit`、`\mathbf`、`\mathsf`、`\mathtt`、`\mathcal`、`\mathbb`、
+  `\mathfrak`、`\bm`、`\boldsymbol`の入力・表示・変換経路を追加した。
+- native rendererは埋め込みLatin Modern MathのUnicode数式アルファベットを使い、
+  `\bm`のギリシャ文字も太字で描画する。JSは入力TeXの`\bm`を保持し、MathJax境界で
+  `\boldsymbol`へ変換する。
+- 隔離CI run `33233890433`で、32回font-host lifecycle、model suites、Office、
+  IrfanView、Google Slides、texclip、ASanを含むEqnedit64 jobが合格した。
+- `\bm{\wedge beta}`の先頭空白が二重正規化で増える回帰を修正し、永続C++単体試験を
+  追加した。ローカルのCTest 2件、Web契約8件、JS挿入試験、228パレット項目の
+  TeXコンパイル試験は合格した。
+- 公開時はexact `origin/main`から3.0.4を再ビルド・署名し、O: manifest更新後にのみ
+  `eqnedit64-v3.0.4`を付与する。
+
 ## 2026-08-29 Eqnedit64 3.0.3公開検証
 
 - tag / source: `eqnedit64-v3.0.3` /
