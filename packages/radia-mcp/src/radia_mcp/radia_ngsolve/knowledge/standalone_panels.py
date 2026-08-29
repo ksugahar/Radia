@@ -135,6 +135,18 @@ same PEEC/BEM/FEM/thermal `calc_*.py` commands used by Python/MCP. Keep setup,
 failure recovery, result inspection, automation, and throughput evidence in
 the normal Simulink application tests and durable run artifacts.
 
+The native block keeps raw heat-density `q` and temperature `T` vectors for
+field-aware consumers and publishes one fixed-schema `IHMonitorBusV1` for
+ordinary model wiring. Its nested `RadiaMonitorHeaderV1` is shared with the
+Optuna study monitor. The IH payload reports current, angle, ambient
+temperature, cell-weighted heat and temperature statistics, and total heat;
+the supplied dashboard selects those scalar fields without changing the
+Eddy/Thermal feedback path. The Level-2 reduction runtime and Bus Creators stay
+inside one masked `IH Monitor` subsystem, so the application canvas carries
+five meaningful inputs and one monitor output rather than the internal scalar
+fan-out. Use the raw vectors and durable artifacts for spatial analysis, and
+the Bus for Scope, SDI, and control-level monitoring.
+
 ============================================================
 ## troubleshooting -- common interface issues
 ============================================================
