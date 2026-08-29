@@ -110,6 +110,9 @@ def _source_payloads(source_manifest: dict[str, object]) -> dict[str, Path]:
     payloads[str(MATLAB_PREFIX / "THIRD_PARTY_NOTICES.md")] = (
         PACKAGE_ROOT / "THIRD_PARTY_NOTICES.md"
     )
+    payloads[str(MATLAB_PREFIX / "OPTUNA_SIMULINK_LAB.md")] = (
+        PACKAGE_ROOT / "OPTUNA_SIMULINK_LAB.md"
+    )
     return payloads
 
 
@@ -193,6 +196,7 @@ def verify(wheel: Path, *, release_candidate: bool = False) -> dict[str, object]
             str(MATLAB_PREFIX / "README.md"),
             str(MATLAB_PREFIX / "LICENSE"),
             str(MATLAB_PREFIX / "THIRD_PARTY_NOTICES.md"),
+            str(MATLAB_PREFIX / "OPTUNA_SIMULINK_LAB.md"),
             str(
                 OPTUNA_PREFIX
                 / "+internal"

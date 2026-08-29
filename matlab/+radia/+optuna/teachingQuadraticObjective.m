@@ -1,0 +1,16 @@
+function result = teachingQuadraticObjective(values, context)
+%TEACHINGQUADRATICOBJECTIVE Smooth one-variable exercise with a known optimum.
+%   The minimum is x=0.25 with objective value zero. The context argument is
+%   accepted so this function has the same boundary as model-backed lessons.
+arguments
+    values (1,1) struct
+    context (1,1) radia.optuna.ObjectiveContext
+end
+result = struct( ...
+    "Objectives", (double(values.x) - 0.25)^2, ...
+    "InequalityConstraints", double(values.x) - 0.8, ...
+    "IntermediateValues", [0, (double(values.x) - 0.5)^2; ...
+        1, (double(values.x) - 0.25)^2], ...
+    "UserData", struct("exercise", "known-optimum"));
+context.setUserAttr("teaching_exercise", "known-optimum");
+end

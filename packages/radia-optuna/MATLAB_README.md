@@ -19,8 +19,11 @@ incompatible native gateways fail loudly and never redirect through
 Radia. Radia electromagnetic models and application-specific adapters are not
 part of that generic contract.
 
-The checked Optuna 4.9.0 public inventory is closed: all 816 inventoried
-symbols and public class members are present and differential-oracle mapped.
+The checked Optuna 4.9.0 public inventory contains all 816 inventoried symbols
+and public class members. Of these, 748 are mapped from executable upstream
+oracle evidence and 68 wider Python-language/replaced/bridged entries are
+explicit assertions. The required shared MATLAB scope is 400/400
+evidence-mapped with no asserted required entry.
 See `optuna_upstream_compatibility.json` and `optuna49_api_coverage.json` for
 the exact machine-readable boundary. Optuna 4.9.0 is the common algorithmic
 source of truth, while native MATLAB/MEX vectorization may execute that
@@ -28,6 +31,22 @@ algorithm without Python. This is a MATLAB API, not a Python binary drop-in.
 MATLAB-only parallel
 execution, MAT/table storage, Simulink operation, and Radia adapters are
 extensions rather than Optuna parity evidence.
+
+MATLAB-native orchestration is available through
+`OptimizationParameter`, `optimoptions`, `optimize`, and
+`OptimizationSession`. `OptimizationSession` is the script/Simulink lifecycle
+unit: it supports start, one-trial stepping, pause, resume, cancel,
+checkpoint/restore, trial selection, and application to a model workspace.
+
+Open `radia_optuna_teaching.slx`, or regenerate an exercise with:
+
+```matlab
+radia.simulink.buildOptunaTeachingModel(Exercise="quadratic")
+radia.simulink.buildOptunaTeachingModel(Exercise="pareto")
+radia.simulink.buildOptunaTeachingModel(Exercise="reliability")
+```
+
+See `OPTUNA_SIMULINK_LAB.md` for the student worksheet.
 
 Native execution covers concurrent-RUNNING constant-liar TPE, advanced CMA-ES
 modes, and deterministic unscrambled Sobol generation through 21,201

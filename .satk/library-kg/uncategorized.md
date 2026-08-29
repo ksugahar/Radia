@@ -96,15 +96,6 @@ Use these blocks for uncategorized blocks.
 - Use when: user needs checked adjoint topology optimization through the mma/sqp runner..
 - Metadata quality: medium
 
-### Optuna Optimization
-
-- Block: [[blocks/Optuna_Optimization]]
-- Library: radia_simulink_library
-- ReferenceBlock: radia_simulink_library/Optimization/Optuna Optimization
-- Description: Native MATLAB CAE study with cancel, failure telemetry, and automatic MEX acceleration.
-- Use when: user needs native matlab cae study with cancel, failure telemetry, and automatic mex acceleration..
-- Metadata quality: medium
-
 ### Sheet Metal Optimization
 
 - Block: [[blocks/Sheet_Metal_Optimization]]
@@ -142,3 +133,4 @@ Use these blocks for uncategorized blocks.
 - [[plant-models]]
 - [[signal-processing]]
 - [[power]]
+- [[control]]

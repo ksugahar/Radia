@@ -4,8 +4,10 @@
 component from the Radia monorepo. It installs the `radia.optuna` MATLAB
 namespace, the 21-command `optuna_mex`, and checked compatibility contracts
 whose behavioral oracle is Optuna 4.9.0. Its checked public inventory contains
-816 verified entries with no missing, partial, or unmapped entry. It does not
-install or load the Radia solver, NGSolve, oneMKL, or Cubit.
+816 present and mapped entries: 748 have evidence derived from an upstream
+oracle generator and 68 remain explicitly assertion-mapped. The required
+shared scope is 400/400 evidence-mapped with no asserted required entry. It
+does not install or load the Radia solver, NGSolve, oneMKL, or Cubit.
 
 Optuna 4.9.0 is also the algorithmic source of truth: native MATLAB and MEX
 paths preserve its equations, transforms, state updates, boundary handling,
@@ -44,6 +46,21 @@ study = radia.optuna.create_study( ...
 study.optimize(@(trial) (trial.suggest_float("x", -2, 2) - 0.25)^2, 100);
 ```
 
+For a Global Optimization Toolbox-shaped MATLAB workflow, use parameter
+objects and a persistent session:
+
+```matlab
+p = radia.optuna.OptimizationParameter("Kp", ...
+    Value=1, Minimum=0, Maximum=10);
+options = radia.optuna.optimoptions("optuna", ...
+    Sampler="tpe", Pruner="median", Seed=42, MaxTrials=50);
+[x,fval,exitflag,output] = radia.optuna.optimize(@myObjective,p,options);
+
+session = radia.optuna.OptimizationSession(@myObjective,p,options);
+session.start(); session.runNext(); session.pause();
+session.resume(); session.run();
+```
+
 Generic Simulink optimization is part of the standalone contract.
 `radia.optuna.SimulinkRunner` configures `Simulink.SimulationInput` objects,
 runs the model, extracts objectives and constraints, classifies failed trials,
@@ -52,10 +69,17 @@ electromagnetic models and application blocks remain in the main distribution.
 
 The wheel also ships the generic `radia.simulink.buildOptunaBlock` Level-2
 MATLAB S-Function block and `radia.simulink.addOptunaMonitor`. The block runs
-one trial per sample, persists the normalized study tables after every state
-transition, and exposes best value, trial counts, status, Pareto points, and
-failure telemetry as ordinary Simulink signals. The monitor uses Simulink Scope
-and XY Graph blocks; it does not require a browser or the Radia solver.
+one trial per sample and exposes edge-triggered start, cancel, pause, resume,
+select, and apply controls. It persists normalized study tables and reports
+best value, trial states, Pareto points, selected/current trial, checkpoint
+revision, and typed failures as ordinary Simulink signals. Existing fourteen
+outputs keep their order; the four new outputs are appended.
+
+`radia_optuna_teaching.slx` and
+`radia.simulink.buildOptunaTeachingModel` provide known-optimum, Pareto, and
+pruned/failed student exercises. See
+[`OPTUNA_SIMULINK_LAB.md`](OPTUNA_SIMULINK_LAB.md). These exercises do not
+require Global Optimization Toolbox or Simulink Design Optimization.
 
 The distribution is Windows x64 because the current native artifact is
 `optuna_mex.mexw64`. Native Random/TPE/evolutionary/pruner workflows do not

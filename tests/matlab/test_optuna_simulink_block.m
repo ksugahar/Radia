@@ -80,8 +80,8 @@ verifyTrue(testCase,contains(string(get_param(path,"Parameters")), ...
 verifyEqual(testCase,string(get_param(path,"num_trials")),"7");
 verifyEqual(testCase,string(get_param(path,"sampler_name")),"auto");
 ports=get_param(path,"PortHandles");
-verifyEqual(testCase,numel(ports.Inport),2);
-verifyEqual(testCase,numel(ports.Outport),14);
+verifyEqual(testCase,numel(ports.Inport),6);
+verifyEqual(testCase,numel(ports.Outport),18);
 contract=get_param(path,"UserData");
 verifyEqual(testCase,string(contract.domain),"sheet-metal");
 verifyEqual(testCase,string(contract.backend),"matlab-native-ngsolve-cubit");
@@ -113,8 +113,8 @@ m="radia_optuna_failure_block_test"; cleanup=onCleanup(@()closeModel(m)); new_sy
 path=radia.simulink.buildOptunaBlock(m,ObjectiveFcn="radia_optuna_mesh_failure", ...
  NumTrials=3,SampleTime_s=0.1,Save=false);
 ports=get_param(path,"PortHandles");
-verifyEqual(testCase,numel(ports.Inport),2);
-verifyEqual(testCase,numel(ports.Outport),14);
+verifyEqual(testCase,numel(ports.Inport),6);
+verifyEqual(testCase,numel(ports.Outport),18);
 contract=get_param(path,"UserData");
 verifyEqual(testCase,string(contract.pareto_kernel), ...
     "required-optuna-mex");
@@ -202,5 +202,66 @@ for choice=["gp","nsgaiii","bruteforce","qmc"]
     delete_block(path);
 end
 clear cleanup; closeModel(m);
+end
+
+function testSessionModeSupportsPauseResumeSelectAndApply(testCase)
+m="radia_optuna_session_block_test";
+cleanup=onCleanup(@()closeModel(m));
+baseCleanup=onCleanup(@()evalin("base", ...
+    "clear('radia_optuna_parameters','simulink_session_x')"));
+directory=string(tempname("C:\temp"));
+mkdir(directory);
+directoryCleanup=onCleanup(@()rmdir(directory,"s"));
+new_system(m);
+parameter=radia.optuna.OptimizationParameter("simulink_session_x", ...
+    Minimum=-1,Maximum=1);
+assignin("base","radia_optuna_parameters",parameter);
+path=radia.simulink.buildOptunaBlock(m, ...
+    ObjectiveFcn="radia_optuna_session_quadratic",NumTrials=5, ...
+    SampleTime_s=0.1,Sampler="random",Seed=53,Pruner="none", ...
+    ParameterSpec="radia_optuna_parameters", ...
+    StoragePath=directory+"\study.mat",Save=false);
+verifyEqual(testCase,string(get_param(path,"seed")),"53");
+verifyEqual(testCase,string(get_param(path,"pruner_name")),"none");
+verifyTrue(testCase,contains(string(get_param(path,"Parameters")), ...
+    "'Parameters',parameter_spec"));
+
+add_block("simulink/Sources/Constant",m+"/Start",Value="1");
+add_block("simulink/Sources/Constant",m+"/Cancel",Value="0");
+add_block("simulink/Sources/Step",m+"/Pause", ...
+    Time="0.15",Before="0",After="1");
+add_block("simulink/Sources/Step",m+"/Resume", ...
+    Time="0.35",Before="0",After="1");
+add_block("simulink/Sources/Constant",m+"/SelectedTrial",Value="0");
+add_block("simulink/Sources/Step",m+"/Apply", ...
+    Time="0.9",Before="0",After="1");
+for index=1:6
+    names=["Start","Cancel","Pause","Resume","SelectedTrial","Apply"];
+    add_line(m,names(index)+"/1","Optuna Optimization/"+index);
+end
+add_block("simulink/Sinks/To Workspace",m+"/Status", ...
+    VariableName="session_status",SaveFormat="Array");
+add_block("simulink/Sinks/To Workspace",m+"/Attempted", ...
+    VariableName="session_attempted",SaveFormat="Array");
+add_block("simulink/Sinks/To Workspace",m+"/Selected", ...
+    VariableName="session_selected",SaveFormat="Array");
+add_block("simulink/Sinks/To Workspace",m+"/Checkpoint", ...
+    VariableName="session_checkpoint",SaveFormat="Array");
+add_line(m,"Optuna Optimization/3","Status/1");
+add_line(m,"Optuna Optimization/13","Attempted/1");
+add_line(m,"Optuna Optimization/15","Selected/1");
+add_line(m,"Optuna Optimization/18","Checkpoint/1");
+out=sim(m,StopTime="1.1",ReturnWorkspaceOutputs="on");
+status=out.get("session_status");
+attempted=out.get("session_attempted");
+selected=out.get("session_selected");
+checkpoint=out.get("session_checkpoint");
+verifyTrue(testCase,any(status==4),"Pause must be externally visible.");
+verifyEqual(testCase,status(end),1);
+verifyEqual(testCase,attempted(end),5);
+verifyEqual(testCase,selected(end),0);
+verifyGreaterThan(testCase,checkpoint(end),0);
+verifyTrue(testCase,isfinite(evalin("base","simulink_session_x")));
+clear directoryCleanup baseCleanup cleanup
 end
 function closeModel(m), if bdIsLoaded(m), close_system(m,0); end, end

@@ -269,8 +269,22 @@ def matlab_optuna_health(distribution_path: str = "") -> dict[str, Any]:
         "present_count": int(coverage.get("surface_present_count", -1)),
         "missing_count": int(coverage.get("surface_missing_count", -1)),
         "verified_count": int(coverage.get("oracle_verified_count", -1)),
+        "asserted_count": int(coverage.get("oracle_asserted_count", -1)),
         "partial_count": int(coverage.get("oracle_partial_count", -1)),
         "unmapped_count": int(coverage.get("oracle_unmapped_count", -1)),
+        "required_count": int(coverage.get("required_entry_count", -1)),
+        "required_present_count": int(
+            coverage.get("required_present_count", -1)
+        ),
+        "required_verified_count": int(
+            coverage.get("required_oracle_mapped_count", -1)
+        ),
+        "required_asserted_count": int(
+            coverage.get("required_oracle_asserted_count", -1)
+        ),
+        "required_unmapped_count": int(
+            coverage.get("required_oracle_unmapped_count", -1)
+        ),
         "complete": bool(coverage.get("full_compatibility_complete", False)),
     }
     if public_api["entry_count"] != len(entries):
@@ -278,12 +292,19 @@ def matlab_optuna_health(distribution_path: str = "") -> dict[str, Any]:
     if not (
         public_api["complete"]
         and public_api["present_count"] == public_api["entry_count"]
-        and public_api["verified_count"] == public_api["entry_count"]
+        and public_api["verified_count"] + public_api["asserted_count"]
+        == public_api["entry_count"]
         and public_api["missing_count"] == 0
         and public_api["partial_count"] == 0
         and public_api["unmapped_count"] == 0
+        and public_api["required_present_count"] == public_api["required_count"]
+        and public_api["required_verified_count"] == public_api["required_count"]
+        and public_api["required_asserted_count"] == 0
+        and public_api["required_unmapped_count"] == 0
     ):
-        errors.append("public API coverage is not completely oracle mapped")
+        errors.append(
+            "required public API scope is not completely evidence-mapped"
+        )
     closure = compatibility.get("complete_api_closure", {})
     if not isinstance(closure, dict) or not closure.get("complete", False):
         errors.append("compatibility contract does not declare complete API closure")
