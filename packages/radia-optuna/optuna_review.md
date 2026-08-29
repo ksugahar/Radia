@@ -20,7 +20,7 @@ unmapped, or missing entries. More importantly, all **400/400 required entries
 have executable upstream evidence**; none of that required scope is closed by
 an assertion. The ledger therefore reports
 `full_compatibility_complete=true` under its checked scope rule. The complete
-fast MATLAB Optuna regression set passes **149/149**.
+fast MATLAB Optuna regression set passes **150/150**.
 
 That conclusion has a precise scope. `radia-optuna` is a MATLAB implementation
 of the Optuna API and algorithms, with explicit calls to pinned upstream Python
@@ -40,21 +40,21 @@ gates.
 | Executable upstream evidence | 748 |
 | Explicit wider-inventory assertions | 68 |
 | Required compatibility scope | 400 / 400 executable-evidence mapped |
-| MATLAB Optuna suite | 149 / 149 passed |
+| MATLAB Optuna suite | 150 / 150 passed |
 | Upstream Python differential tests | 77 |
 | Official upstream MCP tests | 3 |
 | MATLAB integration tests | 69 |
 | Standalone native gateway | 21 commands |
 | Native unscrambled Sobol limit | 21,201 dimensions |
 | Packaged `radia.optuna` MATLAB files | 226 |
-| Standalone Simulink entry points | 13 |
+| Standalone Simulink entry points | 15 |
 
 Additional release-candidate checks performed in this review:
 
 | Check | Result |
 |---|---:|
 | `packages/radia-optuna` plus focused `radia-mcp` pytest | 28 / 28 passed |
-| Fresh wheel archive verification | PASS, 226 MATLAB files / 21 commands / 13 Simulink entries |
+| Fresh wheel archive verification | PASS, 226 MATLAB files / 21 commands / 15 Simulink entries |
 | Isolated installed-wheel MATLAB E2E | PASS, no repository or Radia on MATLAB path |
 | Installed-wheel `OptimizationSession` save/resume | PASS, 4 / 4 trials completed |
 | Installed-wheel student Simulink model | PASS, 12 / 12 trials attempted |
@@ -102,7 +102,7 @@ MATLAB selected a later category.
 Categorical acquisition now uses the same vectorized log-sum-exp evaluation
 order as the upstream NumPy oracle. Numerical Parzen sampling and density work
 remain native. The concurrent constant-liar fixture now matches all 32 rows
-(16 univariate and 16 multivariate), and the complete 149-test suite passes.
+(16 univariate and 16 multivariate), and the complete 150-test suite passes.
 This is why seeded compatibility must compare proposal sequences, not merely
 distribution moments or objective quality.
 
@@ -121,8 +121,10 @@ cancelled lifecycle, checkpoint/restore, stale-RUNNING recovery, trial
 selection, and application of selected parameters. The full Level-2 MATLAB
 S-Function retains its six-input/eighteen-output ABI, but it is now internal to
 the default `Optuna Study` facade. The public student surface has two inputs and
-four outputs; configuration, table review, and trial application are mask
-operations, so experiments do not require signal-line changes.
+five outputs: four scalar convenience signals and one fixed-schema
+`OptunaMonitorBusV1`. Configuration, table review, and trial application are
+mask operations, while variable-length history and Pareto data stay in MAT
+tables, so experiments do not require signal-line changes.
 
 The tracked `radia_optuna_teaching.slx` and
 `OPTUNA_SIMULINK_LAB.md` cover a known quadratic optimum, a biobjective Pareto
@@ -218,7 +220,7 @@ dimensions successfully (0.208 s on this run).
 The fresh local `0.1.5` `py3-none-win_amd64` wheel was checked byte-for-byte
 against the monorepo sources, then installed into an isolated venv.
 `radia-optuna-doctor` resolved the
-wheel layout, all 226 MATLAB files, all thirteen standalone Simulink entry points,
+wheel layout, all 226 MATLAB files, all fifteen standalone Simulink entry points,
 the 21-command `optuna_mex`, and the third-party notices without requiring the
 Radia solver package. MATLAB then loaded that installed tree with the
 repository and Radia absent from its path and exercised Study/SimulinkRunner,

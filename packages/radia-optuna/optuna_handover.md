@@ -278,10 +278,12 @@ steps and records the last intermediate value.
 ## 10. Simulink block v2
 
 The production interface is deliberately split. `Optuna Study` is a masked
-two-input/four-output subsystem for students and ordinary models. It contains
+two-input/five-output subsystem for students and ordinary models: four scalar
+convenience signals plus one fixed-schema `OptunaMonitorBusV1`. It contains
 the generic Level-2 MATLAB S-Function as an advanced internal runtime, so the
 algorithm and checkpoint behavior are unchanged while top-level wiring stays
-small. The standalone advanced builder retains the stable six-input/eighteen-
+small. Variable-length history and Pareto data remain in normalized MAT tables,
+so trial-budget changes never alter Bus width. The standalone advanced builder retains the stable six-input/eighteen-
 output ABI for models that truly consume every command and telemetry signal.
 
 ### Mask parameters
@@ -484,14 +486,14 @@ upstream handoff version. Do not use the Optuna logo or imply endorsement.
 
 Implementation record (2026-08-29):
 
-- fast MATLAB Optuna suite: 149/149 passed, 0 failed, 0 incomplete;
+- fast MATLAB Optuna suite: 150/150 passed, 0 failed, 0 incomplete;
 - oracle ledger: 816/816 present, 748 executable-evidence verified,
   68 explicitly asserted, 0 partial/unmapped/missing;
 - required compatibility scope: 400/400 executable-evidence mapped,
   0 asserted or unmapped;
 - focused package/radia-mcp Python tests: 28/28 passed;
 - isolated installed-wheel verification: 226 MATLAB files, 21 MEX commands,
-  13 Simulink entries, seed-less four-to-six-trial block continuation,
+  15 Simulink entries, seed-less four-to-six-trial block continuation,
   best-trial model application with unchanged topology, four-trial session
   checkpoint/resume, twelve-trial teaching-model run, and seven-table restore
   all passed;
@@ -531,7 +533,9 @@ Implementation record (2026-08-29):
 - [x] use the shared sampler/pruner/seed configuration
 - [x] bind the block to `OptimizationSession`
 - [x] add pause/resume/select/apply without breaking existing ports
-- [x] place the full runtime behind a two-input/four-output student facade
+- [x] place the full runtime behind a two-input/five-output student facade
+- [x] expose fixed scalar telemetry through `OptunaMonitorBusV1` without
+  putting variable-length history or Pareto arrays on the Bus
 - [x] prove compare, budget-extension, review, and apply without rewiring
 - [x] update the single Radia library through the official toolkit
 - [x] clean-open, check, save, reopen, and visual acceptance
