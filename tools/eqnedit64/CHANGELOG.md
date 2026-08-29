@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+### Native/Web geometry and Office MathML parity
+
+- The native Geometry tab now exposes the browser editor's same 11
+  differential-geometry entries in the same order.  The native over/underline
+  palette remains independently available under Basic.
+- Both products publish inline 24 pt fallback MathML with the same large-operator
+  semantics: sums use above/below limits and ordinary integrals use TeX-style
+  side limits.  Native copy also supplies CF_HTML containing the exact same
+  MathML as its registered `MathML` formats.  The browser HTML adds conditional
+  OMML so PowerPoint preserves fractions, radicals, n-ary operators, overlines,
+  and underlines as editable Office Math; its Office HTML import remains 18 pt
+  because browsers cannot publish Windows' registered MathML format.
+- Palette parity and real PowerPoint OOXML/render coverage now include the
+  sum/integral and overline/underline constructs that exposed the mismatch.
+
 ### Always-visible math alphabets
 
 - Added a fixed `R x` / `I x` / `B x` group to the native and Web palettes.

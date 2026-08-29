@@ -1,5 +1,17 @@
 # Changelog
 
+## 3.0.5 - 2026-08-29
+
+- Replaces the native Geometry tab's accidental over/underline mapping with
+  the same 11-item differential-geometry palette used by the browser editor,
+  while retaining the dedicated native over/underline palette under Basic.
+- Normalizes browser and native fallback MathML to inline 24 pt output, uses
+  TeX/MathJax side limits for integrals, and adds a browser-only conditional
+  OMML transport so PowerPoint preserves sums, integrals, fractions, radicals,
+  overlines, and underlines as editable Office Math.
+- Adds cross-product palette parity and real PowerPoint OOXML/render regression
+  coverage so a merely non-empty equation no longer qualifies as parity.
+
 ## 3.0.4 - 2026-08-29
 
 - Adds an always-visible math-style palette to both the native and browser

@@ -1,7 +1,7 @@
 # Eqnedit64 GUI仕様
 
 - 仕様版: 1.0
-- 対象: Eqnedit64 3.0.4
+- 対象: Eqnedit64 3.0.5
 - 基準日: 2026-08-25
 - 適用範囲: `dist\Eqnedit64.exe`
 
@@ -142,7 +142,7 @@ Eqnedt32にならい、ツールバーは**挿入できるものの総目録**�
   強調を出すが、フォーカスと構造キャレットはキャンバスに残す。ソース欄へフォーカスを
   移した時点で一時的な強調選択を解除し、次のTeX入力による意図しない置換を防ぐ。
   コーチ有効時はショートカットをTeXの後ろへ短く併記する。
-- 「挿入」メニューも同じ5分類・同じ18パレットを使う。バーとメニューで
+- 「挿入」メニューも同じ5分類・同じ19パレットを使う。バーとメニューで
   到達できるものが食い違ってはならない。
 - パレットの内容は `src/palettes.cpp` を単一の出典とし、
   `tests/test_palettes.py` が「記号表とテンプレート一覧のすべてが
@@ -313,20 +313,22 @@ Eqnedit64拡張として、`curl`, `div`, `grad`, `rot`, `tr`, `diag`, `Res`,
 |---|---|---|---|
 | 登録形式 `MathML` | 24 pt基準のPresentation MathML | Microsoft 365 PowerPoint / Word / Excel | 必須 |
 | 登録形式 `MathML Presentation` | `MathML`と同じPresentation MathML | Microsoft 365 PowerPoint / Word / Excel | 必須 |
+| 登録形式 `HTML Format` | 上記と同じinline MathML + 末尾NBSPのCF_HTML | Microsoft 365 PowerPoint / Word / Excel、Web版fallback MathMLとの共通契約 | 必須 |
 | `CF_UNICODETEXT` | `\[<正規化TeX>\]` | 旧Office、通常の文字貼り付け | 必須 |
 | 登録形式 `LaTeX` | 外側区切りなしのraw UTF-8 TeX断片 | TeX対応ソフト | 必須 |
 | `CF_ENHMETAFILE` | 白背景のスケーラブルEMF | IrfanView、Office、画像ソフト | 必須 |
 | `CF_DIBV5` | 全画素α=255の白背景・黒文字、32-bit top-down DIB、原則192 dpi | ラスター貼り付けフォールバック | 必須 |
 
-- Microsoft 365 PowerPoint / Word / Excelは登録Presentation MathMLを編集可能な
-  Office Mathとして取り込む。Officeの変換結果は18--24 ptを許容し、固定pt値や
-  inline/paragraph XMLだけで合否を決めない。Office自身の書き出し画像で非空かつ
-  代表的な分数・根号構造が見えることを必須とする。
-- 通常コピーへ `HTML Format` やPNGを混在させない。この環境ではinline CF_HTMLが
-  MathZoneを作っても空のテキストボックスに見える退行を起こし、PNG混在はOfficeの
-  形式選択を画像へ変えるためである。
+- Microsoft 365 PowerPoint / Word / Excelはinline CF_HTMLまたは登録Presentation
+  MathMLを編集可能なOffice Mathとして取り込む。3形式のMathML本体は同一とし、
+  Web版のfallback MathMLもinline・24 pt・同じ総和／積分limit規則へ正規化し、
+  PowerPoint用の条件付きOMMLで同じ意味構造を保つ。ブラウザHTML取り込みは18 pt、
+  EXEの登録MathML取り込みは24 ptである。Office自身の書き出し画像と保存OOXMLで、
+  分数・根号・総和・積分・上線・下線構造が見えることを必須とする。
+- 通常コピーへPNGを混在させない。PowerPointが画像を優先して編集不能な貼り付けへ
+  退化するためである。EMF/DIBV5は画像ソフト用のWindowsフォールバックとして残す。
 - TeX対応ソフトは登録形式 `LaTeX` のraw断片を利用できる。
-- コピー時はユーザーの選択か数式全体を、同じ構造木から全5形式へ変換する。
+- コピー時はユーザーの選択か数式全体を、同じ構造木から全7形式へ変換する。
 - 切り取りは全必須形式を公開できた場合に
   限って選択範囲を削除する。
 
@@ -423,13 +425,13 @@ Eqnedit64拡張として、`curl`, `div`, `grad`, `rot`, `tr`, `diag`, `Res`,
 | AUT-02 | 文字入力、構造、キャレット、Undo、ショートカットが合格する | `test_edit.py` |
 | AUT-03 | 100個の固定seed、25,000回の構造編集をクラッシュなしで完了する | `test_operations_fuzz.py` |
 | AUT-04 | 3,072件のraw TeXで正規化固定点、有限寸法、有効SVG、有効な24 pt MathMLを満たす | `test_tex_fuzz.py` |
-| AUT-05 | 5分類タブ＋選択分類のパレット、キャンバス、常時表示のTeXソース、ステータスが重ならず、全18パレットが一意に分類され、DPI対応する | `test_palettes.py` / `--status-layout-test` |
+| AUT-05 | 5分類タブ＋選択分類のパレット、キャンバス、常時表示のTeXソース、ステータスが重ならず、全19パレットが一意に分類され、DPI対応する | `test_palettes.py` / `--status-layout-test` |
 | AUT-06 | `WM_CHAR`、サロゲートペア、キー、構造スロットのダブルクリック選択に加え、完成／未完成TeX、双方向同期、1編集バースト1 Undo、両ペインの直接クリック編集、キャンバス上でTeXコマンドを解釈しないことを非表示で処理できる | `--ui-interaction-test` |
-| AUT-07 | raw TeX、同値な登録 `MathML` / `MathML Presentation`、有効EMF、全画素α=255で白背景・黒文字のDIBV5を生成できる | `--self-test` |
+| AUT-07 | raw TeX、同値なinline `HTML Format` / 登録 `MathML` / `MathML Presentation`、有効EMF、全画素α=255で白背景・黒文字のDIBV5を生成できる | `--self-test` |
 | AUT-08 | `dist` は有効な指定開発者署名を持つexe一つで、試験済みexeと同一、静的ランタイム、別ディレクトリ起動可 | `test_background.ps1` |
 | AUT-09 | `.tex`保存は新規 `equation`、既存 `equation*` 外枠維持、`aligned`、UTF-8の契約を満たす | `test_tex_document.exe` / `--operation-test` |
-| AUT-10 | 実クリップボードに同値な登録 `MathML` / `MathML Presentation`、Office用TeX、登録 `LaTeX` raw断片、有効EMF、不透明DIBV5を同時登録する | `test_external_paste.ps1` |
-| AUT-11 | PowerPoint COMの通常 `Paste()` が編集可能なOffice Mathを18--24 ptで作り、PowerPoint自身の描画で分数・根号が空・置換文字ではなく実際に見える | `test_external_paste.ps1` |
+| AUT-10 | 実クリップボードに同値なinline `HTML Format` / 登録 `MathML` / `MathML Presentation`、Office用TeX、登録 `LaTeX` raw断片、有効EMF、不透明DIBV5を同時登録する | `test_external_paste.ps1` |
+| AUT-11 | PowerPoint COMの通常 `Paste()` が編集可能なOffice Mathを18--24 ptで作り、PowerPoint自身の描画で分数・根号・総和・積分が空・置換文字・画像ではなく実際に見える | `test_external_paste.ps1` |
 | AUT-12 | IrfanView `/clippaste` が非空画像を生成し、試験前のクリップボード全形式を復元する | `test_external_paste.ps1` |
 | AUT-13 | Google スライド用PNGとHTMLが同一画像で、300 dpiかつ24 pt基準の同じ物理寸法を持つ | `test_external_paste.ps1` / `--self-test` |
 | AUT-14 | `--texclip` がUnicode／登録LaTeXを優先規則どおり読み、非空300 dpi PNG／全画素α=255 DIBV5へ置換する | `test_external_paste.ps1` |

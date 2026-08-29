@@ -190,7 +190,16 @@ foreach ($symbol in @('Eqnedit64.pdb', 'Eqnedit64.map')) {
 }
 
 $version = (Get-Item -LiteralPath $app).VersionInfo
-if ($version.ProductName -ne 'Eqnedit64' -or $version.ProductVersion -notlike '3.0.3*') {
+$cmakeProject = [IO.File]::ReadAllText(
+    (Join-Path $projectRoot 'CMakeLists.txt'), [Text.Encoding]::UTF8)
+$versionMatch = [regex]::Match(
+    $cmakeProject, 'project\(Eqnedit64\s+VERSION\s+([0-9]+\.[0-9]+\.[0-9]+)')
+if (-not $versionMatch.Success) {
+    throw 'Could not read the Eqnedit64 product version from CMakeLists.txt.'
+}
+$expectedVersion = $versionMatch.Groups[1].Value
+if ($version.ProductName -ne 'Eqnedit64' -or
+    $version.ProductVersion -notlike "$expectedVersion*") {
     throw "Version resource is missing or invalid."
 }
 
@@ -225,7 +234,7 @@ Write-Host 'PASS: hidden Eqnedit64 self-test'
 Write-Host 'PASS: hidden native status-bar parts, font-height, and simple-mode test'
 Write-Host 'PASS: offscreen 96/120/144/192 dpi equation, caret, selection, and font visibility'
 Write-Host 'PASS: hidden WM_CHAR, WM_KEYDOWN, WM_COMMAND, source, and status interaction test'
-Write-Host 'PASS: raw TeX, PowerPoint-native Office Math, EMF/DIBV5, and Google Slides 300 dpi/24 pt payload generation'
+Write-Host 'PASS: raw TeX, inline HTML/registered PowerPoint MathML, EMF/DIBV5, and Google Slides 300 dpi/24 pt payload generation'
 Write-Host 'PASS: background command-sequence save test'
 Write-Host 'PASS: background operation-log and F12 marker test'
 Write-Host 'PASS: privacy-aware LLM usability bundle from the real operation log'

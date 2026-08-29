@@ -5,6 +5,23 @@
 [`CANONICAL_OPERATION.md`](CANONICAL_OPERATION.md) と `release-eqnedit64` skillを
 正とする。`build\accept_release.ps1`は隔離CI/VM用であり、対話中LABでは実行しない。
 
+## 2026-08-29 Eqnedit64 3.0.5公開候補
+
+- 対象: `codex/eqnedit64-geometry-mathml-parity`。nativeの幾何タブをWeb版と
+  同じ11項目・同じ順序へ修正し、独立した「上線と下線」パレットは基本タブに保持した。
+- `test_palettes.py`は19パレット・245セルと、native/Webの微分幾何face・TeX・labelの
+  完全一致を確認した。`test_edit.py`は271件、`test_tex_fuzz.py`は3,075件、
+  Web契約は10件が合格した。
+- native通常コピーはCF_HTML・`MathML`・`MathML Presentation`へ同じinline 24 pt
+  MathMLを発行する。実PowerPointは24 ptの編集可能Office Math、保存OOXMLでn-ary
+  2個・分数・根号、描画640×190 px / ink 308×174 / fraction run 85として合格した。
+- Web版は同じfallback MathMLから条件付きOMMLを生成する。研究室ホームページの集中
+  QAは2 viewport、実PowerPointのn-ary 2個・分数・根号・上線・下線2個、描画
+  ink 2,148 pxを確認した。ブラウザはWindows登録MathML/RTFを公開できないため、
+  PowerPointのHTML取り込みサイズは18 pt（EXE登録MathML経路は24 pt）である。
+- この節は未コミット候補のローカル証拠であり、公開値ではない。main統合後にexact
+  `origin/main`から再ビルド・署名し、O:同期後にタグを付けて公開検証へ更新する。
+
 ## 2026-08-29 Eqnedit64 3.0.4公開検証
 
 - tag / source: `eqnedit64-v3.0.4` /
