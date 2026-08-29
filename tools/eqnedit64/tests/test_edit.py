@@ -462,6 +462,17 @@ def main() -> int:
         failures.append(
             "Office MathML does not match MathJax side limits for integrals: "
             f"{operator_mathml!r}")
+    if "</munderover><msup>" not in operator_mathml or \
+            "</msup><msubsup>" not in operator_mathml:
+        failures.append(
+            "Office MathML re-nested a large-operator body instead of matching "
+            f"the browser's flat MathML import contract: {operator_mathml!r}")
+    decoration_mathml = tex_to_mathml(r"\overline{u}+\underline{v}")
+    if ("<mo stretchy=\"true\">&#x00AF;</mo>" not in decoration_mathml or
+            "<mo stretchy=\"true\">_</mo>" not in decoration_mathml):
+        failures.append(
+            "Office MathML lost the shared overline/underline marks: "
+            f"{decoration_mathml!r}")
     alphabet_mathml = tex_to_mathml(
         r"\mathrm{r}\mathit{i}\mathbf{v}\mathsf{s}\mathtt{t}"
         r"\mathcal{C}\mathbb{R}\mathfrak{F}\bm{\alpha}")

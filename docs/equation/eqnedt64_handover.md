@@ -2,7 +2,7 @@
 
 - 文書状態: 現行
 - 対象製品: Eqnedit64 native / Python package / Web editor
-- 対象リリース: 3.0.4（公開済み）
+- 対象リリース: 3.0.7（公開候補）
 - 基準日: 2026-08-29
 - リポジトリ: `ksugahar/Radia`
 
@@ -170,7 +170,7 @@ Backspaceは一打鍵で利用者に見える一項目だけを削除する。�
 - UTF-8/Unicode TeX
 - 不透明なEMF
 - 不透明なDIBV5/PNG画像
-- Officeが編集可能な数式へ変換できるMathML/HTML/登録形式
+- Officeが編集可能な数式へ変換できるinline MathML入りCF_HTML
 
 PowerPointとWordでは、空のテキストボックスや画像への退化ではなく、見えて編集できる
 Office Mathになることが合格条件である。MathMLの文字列がクリップボードに存在するだけ、
@@ -181,6 +181,16 @@ Office向けはnative EXE版とWeb/JS版のどちらも、左揃え24 ptの編�
 製品契約とする。18 ptへの縮小、中央揃え、画像への退化、空のMathZoneを許容しない。
 実PowerPoint試験で文字サイズ、段落揃え、貼り付け位置、Office Math構造、描画inkを
 すべて検査する。
+
+クリップボード入口は両版とも、inline 24 pt MathML本体と末尾NBSPだけを含む同期
+CF_HTMLに統一する。native通常コピーへ登録`MathML` / `MathML Presentation`を載せると
+PowerPointがそれを優先して中央寄せ`m:oMathPara`へ変換するため禁止する。Web版だけ
+条件付きOMMLを直接渡すことも、総和記号と上下限の見た目がMathML変換と異なるため
+禁止する。OfficeファイルはOOXMLであり、貼り付け成功後の数式はその内部のインライン
+OMML `m:oMath`になる。`m:oMathPara`は回帰不具合として拒否する。
+
+同じ基準TeXを両版から実PowerPointへ貼り付け、保存OOXML内の`m:oMath`部分と
+PowerPoint自身が書き出したPNGがbyte-identicalになることをリリース判定に含める。
 
 ### 6.2 Google Slidesと画像
 
