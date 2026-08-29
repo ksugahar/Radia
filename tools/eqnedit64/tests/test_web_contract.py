@@ -64,7 +64,7 @@ def test_office_copy_is_editable_mathml_without_png_competition() -> None:
     assert "officeOmml(mml)" not in office
     assert "writeOfficeClipboard(html, tex)" in office
     assert "<!--[if gte msEquation 12]>" not in office
-    assert 'var html = mml + "&#160;"' in office
+    assert "var html = mml + '<span style=\"font-size:24pt\">&#160;</span>'" in office
     assert '<m:oMath' not in office
     assert '<m:oMathPara' not in office
     assert "<!DOCTYPE html>" not in office
