@@ -14,7 +14,7 @@ Consistency checking (does NOT require Cubit):
 cubit-plugin-install deploys plugin binaries to Cubit.
 """
 
-__version__ = "0.14.12"
+__version__ = "0.14.13"
 
 # Compatibility window with the main radia package. The Cubit plugin
 # binaries bundled here (.ccm/.pyd; .ccl was removed in radia 4.80.0)
