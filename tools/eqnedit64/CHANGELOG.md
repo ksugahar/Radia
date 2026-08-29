@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+## 3.0.8 — 2026-08-29
+
+### PowerPoint caret remains 24 pt
+
+- Native and Web Office copy now style the invisible trailing NBSP at 24 pt,
+  matching the MathML equation instead of PowerPoint's 18 pt paragraph
+  default. The PowerPoint toolbar therefore remains at 24 pt when the caret is
+  placed immediately after the pasted equation.
+- The hidden native/Web PowerPoint gates now inspect the final character and
+  the saved OOXML sentinel run. A 24 pt equation followed by an 18 pt caret is
+  a release failure.
+- For the release fixture, native and Web produce a byte-identical 6,003-byte
+  paragraph, 5,842-byte `m:oMath` subtree, and PowerPoint-rendered PNG.
+
+## 3.0.7 — 2026-08-29
+
 ### Native/Web Office transport is identical
 
 - Native and browser normal copy now both publish inline 24 pt MathML plus a

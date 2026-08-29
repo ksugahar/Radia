@@ -19,7 +19,7 @@
   /* デプロイごとに上げる。ボタン行の右端に出て、開きっぱなしのタブが
    * 古い版を動かし続けていないかを一目で判別できる（.exe の
    * タイトルバー・ビルドスタンプと同じ教訓）。 */
-  var BUILD = "2026-08-29d";
+  var BUILD = "2026-08-29e";
 
   var PALETTES = [
     {
@@ -649,7 +649,11 @@
       /* native版と同じinline 24 pt MathMLを同期CF_HTMLで渡す。
        * PowerPointにOMMLを直接渡すと、MathMLからのOffice変換と
        * 総和記号の大きさや上下限の位置が異なるため使わない。 */
-      var html = mml + "&#160;";
+      /* The trailing inline sentinel keeps the equation out of a centred
+       * display paragraph.  Give that otherwise invisible run the same size
+       * as the equation so PowerPoint's caret/toolbar does not fall back to
+       * the paragraph default of 18 pt. */
+      var html = mml + '<span style="font-size:24pt">&#160;</span>';
       writeOfficeClipboard(html, tex).then(
         function () { say("24 pt・左揃えのPowerPoint数式をコピーしました"); },
         function () { say("コピーできませんでした（ブラウザの権限を確認してください）"); }

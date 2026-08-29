@@ -6,7 +6,7 @@ Eqnedit64は、軽快な構造編集とTeXファイルを直接つないだ64-bi
 レジストリ登録は不要です。
 
 公開ソースはRadiaリポジトリの`tools/eqnedit64`、署名済み単体EXEは
-[Eqnedit64 GitHub Release](https://github.com/ksugahar/Radia/releases/tag/eqnedit64-v3.0.7)
+[Eqnedit64 GitHub Release](https://github.com/ksugahar/Radia/releases/tag/eqnedit64-v3.0.8)
 で配布します。旧Eqnedit32バイナリ、MTEF変換コード、逆アセンブリ資料は
 Eqnedit64のソース・ビルド・配布物に含めません。
 
@@ -51,8 +51,9 @@ GUIの画面構成、状態遷移、TeX/クリップボード契約、自動・�
 
 キャンバスからのコピーは、一つの数式を複数形式でクリップボードへ登録します。
 選択範囲があればその範囲を、選択がなければ数式全体を `Ctrl+C` でコピーします。
-PowerPoint、Word、Excel向けには、inline 24 pt MathMLと末尾NBSPを1つのCF_HTML
-断片として提供し、編集可能なOffice Mathへ変換します。Web版も同じ経路を使います。
+PowerPoint、Word、Excel向けには、inline 24 pt MathMLと24 ptを明示した末尾NBSPを
+1つのCF_HTML断片として提供し、編集可能なOffice Mathへ変換します。Web版も同じ
+経路を使います。数式末尾へカーソルを置いた場合もPowerPointの表示は24 ptです。
 通常コピーでは、PowerPointが中央寄せの数式段落として優先する登録`MathML` /
 `MathML Presentation`や、Web版だけの直接OMMLを混在させません。Office保存後は
 OOXML内のインライン`m:oMath`となり、`m:oMathPara`にはなりません。

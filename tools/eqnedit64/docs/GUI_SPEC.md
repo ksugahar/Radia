@@ -1,7 +1,7 @@
 # Eqnedit64 GUI仕様
 
 - 仕様版: 1.0
-- 対象: Eqnedit64 3.0.7
+- 対象: Eqnedit64 3.0.8
 - 基準日: 2026-08-25
 - 適用範囲: `dist\Eqnedit64.exe`
 
@@ -311,14 +311,15 @@ Eqnedit64拡張として、`curl`, `div`, `grad`, `rot`, `tr`, `diag`, `Res`,
 
 | Windows形式 | 内容 | 主な利用先 | 契約 |
 |---|---|---|---|
-| 登録形式 `HTML Format` | inline 24 pt MathML + 末尾NBSPのCF_HTML | Microsoft 365 PowerPoint / Word / Excel、Web版との共通契約 | 必須 |
+| 登録形式 `HTML Format` | inline 24 pt MathML + 24 pt末尾NBSPのCF_HTML | Microsoft 365 PowerPoint / Word / Excel、Web版との共通契約 | 必須 |
 | `CF_UNICODETEXT` | `\[<正規化TeX>\]` | 旧Office、通常の文字貼り付け | 必須 |
 | 登録形式 `LaTeX` | 外側区切りなしのraw UTF-8 TeX断片 | TeX対応ソフト | 必須 |
 | `CF_ENHMETAFILE` | 白背景のスケーラブルEMF | IrfanView、Office、画像ソフト | 必須 |
 | `CF_DIBV5` | 全画素α=255の白背景・黒文字、32-bit top-down DIB、原則192 dpi | ラスター貼り付けフォールバック | 必須 |
 
 - Microsoft 365 PowerPoint / Word / Excelはinline 24 pt MathML入りCF_HTMLを
-  編集可能なOffice Mathとして取り込む。native/Webとも末尾NBSPを含む同じ入口を使う。
+  編集可能なOffice Mathとして取り込む。native/Webとも24 ptを明示した末尾NBSPを
+  含む同じ入口を使い、数式末尾のカーソル位置も24 ptを維持する。
   通常コピーへ登録`MathML` / `MathML Presentation`を混在させるとPowerPointが
   中央寄せ`m:oMathPara`を優先するため発行しない。Web版だけの条件付きOMMLも発行しない。
   Office自身の書き出し画像と保存OOXMLで、インライン`m:oMath`、分数、根号、総和、
@@ -429,7 +430,7 @@ Eqnedit64拡張として、`curl`, `div`, `grad`, `rot`, `tr`, `diag`, `Res`,
 | AUT-08 | `dist` は有効な指定開発者署名を持つexe一つで、試験済みexeと同一、静的ランタイム、別ディレクトリ起動可 | `test_background.ps1` |
 | AUT-09 | `.tex`保存は新規 `equation`、既存 `equation*` 外枠維持、`aligned`、UTF-8の契約を満たす | `test_tex_document.exe` / `--operation-test` |
 | AUT-10 | 実クリップボードにinline 24 pt MathML + NBSPの`HTML Format`、Office用TeX、登録`LaTeX` raw断片、有効EMF、不透明DIBV5を同時登録し、登録MathMLを発行しない | `test_external_paste.ps1` |
-| AUT-11 | PowerPoint COMの通常`Paste()`が左寄せ24 ptのインライン`m:oMath`を作り、`m:oMathPara`を作らず、PowerPoint自身の描画で分数・根号・総和・積分・上線・下線が見え、native/Web基準結果が一致する | `test_external_paste.ps1` / 研究室ホームページ集中QA |
+| AUT-11 | PowerPoint COMの通常`Paste()`が左寄せ24 ptのインライン`m:oMath`と24 ptの末尾カーソルrunを作り、`m:oMathPara`を作らず、PowerPoint自身の描画で分数・根号・総和・積分・上線・下線が見え、native/Web基準結果が一致する | `test_external_paste.ps1` / 研究室ホームページ集中QA |
 | AUT-12 | IrfanView `/clippaste` が非空画像を生成し、試験前のクリップボード全形式を復元する | `test_external_paste.ps1` |
 | AUT-13 | Google スライド用PNGとHTMLが同一画像で、300 dpiかつ24 pt基準の同じ物理寸法を持つ | `test_external_paste.ps1` / `--self-test` |
 | AUT-14 | `--texclip` がUnicode／登録LaTeXを優先規則どおり読み、非空300 dpi PNG／全画素α=255 DIBV5へ置換する | `test_external_paste.ps1` |

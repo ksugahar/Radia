@@ -807,7 +807,7 @@ bool start_operation_debug(bool announce,
                     "\telapsed_ms\tdelta_ms\tfocus\tinput_style\talignment"
                     "\tzoom_percent\tequation_mode"
                     "\tshortcut_prefix\tlatex\r\n");
-    debug_event("debug.start", "Eqnedit64 3.0.7 path=" + utf8_wide(path));
+    debug_event("debug.start", "Eqnedit64 3.0.8 path=" + utf8_wide(path));
     update_debug_menu();
     update_title();
     /* The status bar and the [操作ログ記録中] flag in the title say all of
@@ -1073,6 +1073,8 @@ HGLOBAL global_copy(const void* data, size_t bytes) {
 
 constexpr double kGoogleSlidesDpi = 300.0;
 constexpr double kGoogleSlidesFontPoints = 24.0;
+constexpr char kOfficeInlineSentinel[] =
+    "<span style=\"font-size:24pt\">&#160;</span>";
 
 eqnedit::SvgStyle google_slides_style(const eqnedit::SvgStyle& source) {
     eqnedit::SvgStyle result = source;
@@ -1506,7 +1508,12 @@ bool clipboard_set(const std::string& latex) {
     const std::wstring officeText = office_latex_text(latex);
     const std::string mathMlUtf8 =
         eqnedit::latex_to_mathml(latex, kGoogleSlidesFontPoints);
-    const std::string officeHtml = cf_html_fragment(mathMlUtf8 + "&#160;");
+    /* Keep the invisible inline sentinel at the same point size as the
+     * equation.  PowerPoint reports the caret's font from this trailing run;
+     * leaving it unstyled makes an otherwise 24 pt equation look like 18 pt
+     * as soon as the user places the caret at the end. */
+    const std::string officeHtml = cf_html_fragment(
+        mathMlUtf8 + kOfficeInlineSentinel);
     HGLOBAL unicode = global_copy(officeText.c_str(),
         (officeText.size() + 1) * sizeof(wchar_t));
     HGLOBAL html = global_copy(officeHtml.c_str(), officeHtml.size() + 1);
@@ -3750,7 +3757,7 @@ int self_test() {
         operatorMathMl.find("&#x222B;</mo>") == std::string::npos)
         return 133;
     const std::string officeHtml =
-        cf_html_fragment(mathMl + "&#160;");
+        cf_html_fragment(mathMl + kOfficeInlineSentinel);
     const auto offset = [&officeHtml](const char* name) -> size_t {
         const size_t at = officeHtml.find(name);
         if (at == std::string::npos) return std::string::npos;
@@ -3762,7 +3769,7 @@ int self_test() {
     if (startFragment == std::string::npos ||
         endFragment == std::string::npos || endFragment < startFragment ||
         officeHtml.substr(startFragment, endFragment - startFragment) !=
-            mathMl + "&#160;" ||
+            mathMl + kOfficeInlineSentinel ||
         officeHtml.find("display=\"block\"") != std::string::npos)
         return 134;
     HGLOBAL rawLatex = global_copy(clipboardLatex.c_str(), clipboardLatex.size() + 1);
