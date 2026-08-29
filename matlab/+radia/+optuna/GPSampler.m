@@ -75,7 +75,7 @@ classdef GPSampler < radia.optuna.BaseSampler
             obj.MonteCarloSamples=double(options.MonteCarloSamples);
             obj.ConstraintsFcn=options.ConstraintsFcn;
             obj.Stream=radia.optuna.internal.NumpyRandomState(obj.Seed);
-            obj.IndependentSampler=radia.optuna.RandomSampler(options.Seed);
+            obj.IndependentSampler=radia.optuna.RandomSampler(obj.Seed);
         end
 
         function reseed_rng(obj)

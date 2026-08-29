@@ -25,6 +25,13 @@ Use these blocks for signal processing blocks.
 
 ## Low-Confidence Blocks
 
+### Optuna Study
+
+- Library: radia_simulink_library
+- ReferenceBlock: radia_simulink_library/Optimization/Optuna Study
+- Metadata quality: low
+- Guidance: Available from customer library. Select when intent matches.
+
 ### Field Stats
 
 - Library: radia_simulink_library
@@ -37,3 +44,4 @@ Use these blocks for signal processing blocks.
 - [[uncategorized]]
 - [[plant-models]]
 - [[power]]
+- [[control]]

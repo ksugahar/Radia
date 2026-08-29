@@ -17,14 +17,25 @@ SPEC.loader.exec_module(release_quad)
 
 def test_release_quad_tracks_the_independent_optuna_version():
     versions = release_quad._read_repo_versions()
-    assert versions["radia-optuna"] == "0.1.4"
-    assert versions["optuna.__version__"] == "0.1.4"
+    assert versions["radia-optuna"] == "0.1.5"
+    assert versions["optuna.__version__"] == "0.1.5"
 
 
 def test_optuna_candidate_requires_the_independent_distribution_workflow():
     source = TOOL.read_text(encoding="utf-8")
     assert '"workflowName": "radia-optuna"' in source
     assert '"workflowName": "CI"' not in source
+
+
+def test_optuna_workflow_installs_pinned_pybind_before_native_build():
+    root = Path(__file__).resolve().parents[1]
+    workflow = (root / ".github/workflows/radia-optuna.yml").read_text(
+        encoding="utf-8"
+    )
+    dependency = workflow.index("python -m pip install pybind11==3.0.2")
+    build = workflow.index("& .\\Build.ps1 -OptunaMexOnly")
+    assert dependency < build
+    assert "python -m pip install build wheel pytest optuna==4.9.0" in workflow
 
 
 def test_optuna_candidate_records_every_machine_for_one_exact_wheel(

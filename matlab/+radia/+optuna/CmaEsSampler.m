@@ -120,7 +120,7 @@ classdef CmaEsSampler < radia.optuna.BaseSampler
             obj.Stream = ...
                 radia.optuna.internal.NumpyRandomState(obj.Seed);
             if isempty(options.IndependentSampler)
-                obj.IndependentSampler = radia.optuna.RandomSampler(options.Seed);
+                obj.IndependentSampler = radia.optuna.RandomSampler(obj.Seed);
             else
                 if ~isobject(options.IndependentSampler)
                     error("radia:optuna:CMAIndependentSampler", ...

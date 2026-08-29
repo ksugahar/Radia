@@ -169,7 +169,7 @@ verifyEqual(testCase,sort(declared),sort(actual));
 verifyEqual(testCase,numel(unique(declared)),numel(declared));
 end
 
-function testPublicAPIInventoryIsFullyOracleMapped(testCase)
+function testPublicAPIInventoryHasEvidenceClosedRequiredScope(testCase)
 root=fileparts(fileparts(fileparts(mfilename("fullpath"))));
 coverage=jsondecode(fileread(fullfile( ...
     root,"matlab","optuna49_api_coverage.json")));
@@ -179,12 +179,23 @@ verifyEqual(testCase,string(coverage.upstream_version),"4.9.0");
 verifyEqual(testCase,double(coverage.surface_entry_count),816);
 verifyEqual(testCase,double(coverage.surface_present_count),816);
 verifyEqual(testCase,double(coverage.surface_missing_count),0);
-verifyEqual(testCase,double(coverage.oracle_verified_count),816);
+verifyEqual(testCase,double(coverage.oracle_verified_count),748);
+verifyEqual(testCase,double(coverage.oracle_asserted_count),68);
+verifyEqual(testCase,double(coverage.oracle_verified_count)+ ...
+    double(coverage.oracle_asserted_count),816);
 verifyEqual(testCase,double(coverage.oracle_partial_count),0);
 verifyEqual(testCase,double(coverage.oracle_unmapped_count),0);
+verifyEqual(testCase,double(coverage.required_entry_count),400);
+verifyEqual(testCase,double(coverage.required_present_count),400);
+verifyEqual(testCase,double(coverage.required_oracle_mapped_count),400);
+verifyEqual(testCase,double(coverage.required_oracle_asserted_count),0);
+verifyEqual(testCase,double(coverage.required_oracle_unmapped_count),0);
 verifyTrue(testCase,logical(coverage.full_compatibility_complete));
 verifyTrue(testCase,all(string({coverage.entries.surface_status})=="present"));
-verifyTrue(testCase,all(string({coverage.entries.oracle_status})=="verified"));
+statuses=string({coverage.entries.oracle_status});
+verifyTrue(testCase,all(ismember(statuses,["verified","asserted"])));
+required=string({coverage.entries.scope})=="required";
+verifyTrue(testCase,all(statuses(required)=="verified"));
 end
 
 function testNumpyRandomStateSeedContract(testCase)

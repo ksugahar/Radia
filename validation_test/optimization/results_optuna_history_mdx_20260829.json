@@ -1,0 +1,77 @@
+{
+  "schema": "radia.optuna.history-store-benchmark.v1",
+  "timestamp": "2026-08-29T13:21:15+09:00",
+  "hostname": "MDX",
+  "matlab_version": "26.1.0.3312084 (R2026a) Update 4",
+  "trial_counts": [
+    250,
+    500,
+    1000,
+    2000,
+    4000
+  ],
+  "results": [
+    {
+      "trials": 250,
+      "write_s": 0.8910842,
+      "freeze_s": 0.3002636,
+      "indexed_lookup_s": 0.0067054,
+      "scan_lookup_s": 0.0143771,
+      "lookup_speedup": 2.144107734065082,
+      "frozen_trials": 250,
+      "intermediate_rows": 332,
+      "parameter_rows": 500,
+      "converged": true
+    },
+    {
+      "trials": 500,
+      "write_s": 1.2902633,
+      "freeze_s": 0.4446706,
+      "indexed_lookup_s": 0.00187,
+      "scan_lookup_s": 0.0044487,
+      "lookup_speedup": 2.3789839572192513,
+      "frozen_trials": 500,
+      "intermediate_rows": 664,
+      "parameter_rows": 1000,
+      "converged": true
+    },
+    {
+      "trials": 1000,
+      "write_s": 2.0593196,
+      "freeze_s": 0.8394764,
+      "indexed_lookup_s": 0.0008826,
+      "scan_lookup_s": 0.0036791,
+      "lookup_speedup": 4.1684794924087925,
+      "frozen_trials": 1000,
+      "intermediate_rows": 1332,
+      "parameter_rows": 2000,
+      "converged": true
+    },
+    {
+      "trials": 2000,
+      "write_s": 3.9340389,
+      "freeze_s": 1.6152059,
+      "indexed_lookup_s": 0.0008852,
+      "scan_lookup_s": 0.0043028,
+      "lookup_speedup": 4.8608224130140076,
+      "frozen_trials": 2000,
+      "intermediate_rows": 2664,
+      "parameter_rows": 4000,
+      "converged": true
+    },
+    {
+      "trials": 4000,
+      "write_s": 7.9700907,
+      "freeze_s": 3.1294978,
+      "indexed_lookup_s": 0.0018857,
+      "scan_lookup_s": 0.0107164,
+      "lookup_speedup": 5.6829824468367187,
+      "frozen_trials": 4000,
+      "intermediate_rows": 5332,
+      "parameter_rows": 8000,
+      "converged": true
+    }
+  ],
+  "freeze_exponent": 0.86241684880356861,
+  "indexed_lookup_exponent": -0.47394093608946586
+}
