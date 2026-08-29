@@ -6,7 +6,7 @@ Eqnedit64は、軽快な構造編集とTeXファイルを直接つないだ64-bi
 レジストリ登録は不要です。
 
 公開ソースはRadiaリポジトリの`tools/eqnedit64`、署名済み単体EXEは
-[Eqnedit64 GitHub Release](https://github.com/ksugahar/Radia/releases/tag/eqnedit64-v3.0.3)
+[Eqnedit64 GitHub Release](https://github.com/ksugahar/Radia/releases/tag/eqnedit64-v3.0.4)
 で配布します。旧Eqnedit32バイナリ、MTEF変換コード、逆アセンブリ資料は
 Eqnedit64のソース・ビルド・配布物に含めません。
 

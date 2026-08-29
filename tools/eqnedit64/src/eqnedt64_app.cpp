@@ -807,7 +807,7 @@ bool start_operation_debug(bool announce,
                     "\telapsed_ms\tdelta_ms\tfocus\tinput_style\talignment"
                     "\tzoom_percent\tequation_mode"
                     "\tshortcut_prefix\tlatex\r\n");
-    debug_event("debug.start", "Eqnedit64 3.0.3 path=" + utf8_wide(path));
+    debug_event("debug.start", "Eqnedit64 3.0.4 path=" + utf8_wide(path));
     update_debug_menu();
     update_title();
     /* The status bar and the [操作ログ記録中] flag in the title say all of
