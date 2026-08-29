@@ -55,6 +55,8 @@ jobs:
       - name: Build standalone optuna_mex
         shell: pwsh
         run: |
+          python -m pip install pybind11==3.0.2
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           & .\Build.ps1 -OptunaMexOnly
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
