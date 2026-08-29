@@ -1,0 +1,20 @@
+{
+  "schema": "radia.validation.optuna-mex-first-call.v1",
+  "generated_at": "2026-08-29T04:22:47.0381029Z",
+  "host": "MDX",
+  "repeats": 7,
+  "first_call_seconds": [
+    0.0085372,
+    0.0128984,
+    0.0337621,
+    0.0129734,
+    0.0089799,
+    0.0114385,
+    0.0058373
+  ],
+  "median_first_call_seconds": 0.0114385,
+  "binary_size_bytes": 152576,
+  "binary_sha256": "8e107f1ee20f6354d5c3c5ba40ec7cd3ff3b38309b67ff8962e43ea63839bd91",
+  "gateway_directory": "C:\\temp\\radia-optuna-mdx-20260829\\matlab",
+  "boundary": "First optuna_mex api.info call in each fresh MATLAB process; excludes MATLAB executable startup."
+}
