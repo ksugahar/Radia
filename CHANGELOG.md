@@ -5,6 +5,13 @@ All notable changes to the `radia` package.  Format: each release lists
 
 ## Unreleased
 
+- Restored Cubit's top-level **Export** menu through the official Claro API so
+  Cubit owns it across cold-start menu rebuilds. PySide6 remains limited to the
+  export dialogs, Claro actions use self-contained import callbacks, and menu
+  cleanup never enumerates Claro-owned Qt objects. Reinstallation now refreshes
+  previously imported WorkflowToolbar payloads and verifies that no stale
+  toolbar script remains.
+
 - Added the native and Web editions of Eqnedit64 as one BSD-2-Clause component
   under `tools/eqnedit64`. It provides portable Windows x64 structural/TeX
   editing, a homepage-published browser UI, and Office/image export without an
