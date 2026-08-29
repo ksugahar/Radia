@@ -7,7 +7,7 @@ monorepo implementation.
 - Reviewed: 2026-08-29
 - Behavioral and algorithm oracle: `optuna==4.9.0`
 - SciPy data/runtime pin used by Sobol fixtures: `scipy==1.17.1`
-- Base package version during review: `radia-optuna==0.1.4`
+- Release candidate version: `radia-optuna==0.1.5`
 - Working branch: `codex/optuna-simulink-student-workflow`
 
 ## Verdict
@@ -211,10 +211,9 @@ dimensions successfully (0.208 s on this run).
 
 ## Distribution and licensing boundary
 
-The fresh local `0.1.4` `py3-none-win_amd64` wheel was checked byte-for-byte
-against the monorepo sources, then installed into an isolated venv. This is
-verification of the worktree against the current base version, not authority to
-republish that already assigned version. `radia-optuna-doctor` resolved the
+The fresh local `0.1.5` `py3-none-win_amd64` wheel was checked byte-for-byte
+against the monorepo sources, then installed into an isolated venv.
+`radia-optuna-doctor` resolved the
 wheel layout, all 226 MATLAB files, all ten standalone Simulink entry points,
 the 21-command `optuna_mex`, and the third-party notices without requiring the
 Radia solver package. MATLAB then loaded that installed tree with the
@@ -241,8 +240,8 @@ work remains under `validation_test`.
 ## Remaining release gates
 
 - Run the repository CI matrix on the final commit.
-- Choose the next independent `radia-optuna` version (do not republish 0.1.4)
-  and synchronize the root extras, package metadata, and manifest.
+- Publish the independently versioned `radia-optuna==0.1.5` candidate only
+  after the main-CI artifact passes the four-machine release-quad gate.
 - Merge, tag, publish the wheel to PyPI, and complete release-quad.
 
 Until those gates finish, the correct statement is: **the reviewed worktree

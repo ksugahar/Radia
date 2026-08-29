@@ -5,6 +5,14 @@ All notable changes to the `radia` package.  Format: each release lists
 
 ## Unreleased
 
+- Prepared `radia-optuna` 0.1.5 as the first standalone PyPI release. It adds
+  the student-facing Simulink optimization workflow, a 148-test MATLAB
+  validation set, executable upstream evidence for all 400 required shared API
+  entries, installed-wheel isolation checks, and public mdx performance
+  evidence. On the checked mdx workload MATLAB was faster than upstream Python
+  for scalar, grouped-conditional, and trial-table operations; four-worker
+  objective batching achieved 2.36x speedup while preserving seeded proposals.
+
 - Added the native and Web editions of Eqnedit64 as one BSD-2-Clause component
   under `tools/eqnedit64`. It provides portable Windows x64 structural/TeX
   editing, a homepage-published browser UI, and Office/image export without an
