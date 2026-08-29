@@ -5,9 +5,11 @@
 [`CANONICAL_OPERATION.md`](CANONICAL_OPERATION.md) と `release-eqnedit64` skillを
 正とする。`build\accept_release.ps1`は隔離CI/VM用であり、対話中LABでは実行しない。
 
-## 2026-08-29 Eqnedit64 3.0.5公開候補
+## 2026-08-29 Eqnedit64 3.0.5公開検証
 
-- 対象: `codex/eqnedit64-geometry-mathml-parity`。nativeの幾何タブをWeb版と
+- tag / source: `eqnedit64-v3.0.5` /
+  `a8b8a5a3d4607cb6c1f5d68421d7bc8b829f0a36`。
+- nativeの幾何タブをWeb版と
   同じ11項目・同じ順序へ修正し、独立した「上線と下線」パレットは基本タブに保持した。
 - `test_palettes.py`は19パレット・245セルと、native/Webの微分幾何face・TeX・labelの
   完全一致を確認した。`test_edit.py`は271件、`test_tex_fuzz.py`は3,075件、
@@ -19,8 +21,17 @@
   QAは2 viewport、実PowerPointのn-ary 2個・分数・根号・上線・下線2個、描画
   ink 2,148 pxを確認した。ブラウザはWindows登録MathML/RTFを公開できないため、
   PowerPointのHTML取り込みサイズは18 pt（EXE登録MathML経路は24 pt）である。
-- この節は未コミット候補のローカル証拠であり、公開値ではない。main統合後にexact
-  `origin/main`から再ビルド・署名し、O:同期後にタグを付けて公開検証へ更新する。
+- PR CI `33241671050`、main CI `33241773295`、tag CI `33242009119`、
+  release workflow `33242090467`はすべて成功。PR/mainのPolicy Lintも成功した。
+- exact mainからLABで再ビルドしたEXEはProductVersion/FileVersion 3.0.5、build stamp
+  `a8b8a5a3d`、Authenticode `Valid`、signer `CN=ksugahar`。SHA-256は
+  `C2221FB9127E5868E5CFC2D34469012BA1E8384CBFFDD7EDB76B266457E16AED`。
+- `O:\Eqnedit64.exe`、GitHub Releaseから再取得したEXE、PyPIのCPython
+  3.10/3.11/3.12/3.13 wheel内EXEはすべてbyte-identicalで、上記version・署名・hashを
+  満たした。CPython 3.12 wheelの新規venvインストール試験も合格した。
+- GitHub Release:
+  `https://github.com/ksugahar/Radia/releases/tag/eqnedit64-v3.0.5`
+- PyPI: `https://pypi.org/project/eqnedit64/3.0.5/`
 
 ## 2026-08-29 Eqnedit64 3.0.4公開検証
 
