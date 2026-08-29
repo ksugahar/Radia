@@ -32,7 +32,8 @@ ATOMS = (
     "π", "θ", "速度", "Δ", "∂", "∞",
     r"\alpha", r"\Gamma", r"\partial", r"\nabla", r"\infty",
     r"\leq", r"\neq", r"\rightarrow", r"\cdot", r"\times",
-    r"\operatorname{curl}", r"\text{speed}", r"\mathbf{x}",
+    r"\operatorname{curl}", r"\text{speed}", r"\mathrm{d}",
+    r"\mathit{var}", r"\mathbf{x}",
     # A named glyph whose command must survive verbatim, an operator name
     # that must stay upright, and a variant Greek letter that used to share
     # its code point with the plain form.

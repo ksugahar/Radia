@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+### Always-visible math alphabets
+
+- Added a fixed `R x` / `I x` / `B x` group to the native and Web palettes.
+  It applies upright Roman (`\mathrm`), explicit math italic (`\mathit`), or
+  vector bold (`\mathbf`) without changing subject tabs.
+- Native canvas selections are restyled structurally and unselected input is
+  persistent; native/Web TeX selections are wrapped and empty selections put
+  the caret inside a new command. Explicit Roman and italic now survive
+  parse/save/reopen instead of collapsing to `\text` or an implicit variable.
+
 ### Session-safe embedded font
 
 - Replaced `AddFontMemResourceEx` after reproducing two Server 2022

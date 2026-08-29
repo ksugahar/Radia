@@ -28,6 +28,7 @@ Eqnedit64.exe と Web/JS 数式エディタは、Radia の `tools/eqnedit64` で
 | MathML経由で編集可能なOffice数式へ貼り付け | 登録MathML | MathMLを含むHTML | 共通中核 |
 | 画像を混在させないOffice専用コピー | 必須 | 必須 | 共通中核 |
 | パレットとTeXソースの対応 | 必須 | 必須 | 共通学習面 |
+| 常設書体 `\mathrm` / `\mathit` / `\mathbf` | 選択変更・継続入力 | 選択を包む・空欄挿入 | 共通学習面 |
 | 挿入直後のTeX強調 | ソース内の非アクティブ選択 | キャレットを動かさない強調表示 | 共通学習面 |
 | `Tab` / `Shift+Tab`で空欄移動 | 構造GUI・TeXソース | TeXソース | 共通学習面 |
 | 構造キャンバス編集 | 必須 | 非該当 | native固有 |

@@ -260,6 +260,8 @@ def main() -> int:
         "text": ("abc", r"\text{abc}"),
         "function": ("sin", r"\sin"),
         "variable": ("x", "x"),
+        "roman": ("abc", r"\mathrm{abc}"),
+        "italic": ("abc", r"\mathit{abc}"),
         "vector": ("x", r"\mathbf{x}"),
     }
     for style, (typed, expected) in styled_cases.items():
@@ -388,6 +390,8 @@ def main() -> int:
     nested_styles = {
         "function": ("sin", r"\frac{\sin}{}"),
         "text": ("速度", r"\frac{\text{速度}}{}"),
+        "roman": ("abc", r"\frac{\mathrm{abc}}{}"),
+        "italic": ("abc", r"\frac{\mathit{abc}}{}"),
         "vector": ("xy", r"\frac{\mathbf{x}\mathbf{y}}{}"),
     }
     for style, (typed, expected) in nested_styles.items():
@@ -441,6 +445,13 @@ def main() -> int:
     for required in ('mathsize="24pt"', "<mfrac>", "<msub>", "<msqrt>"):
         if required not in mathml:
             failures.append(f"Office MathML is missing {required!r}: {mathml!r}")
+    alphabet_mathml = tex_to_mathml(
+        r"\mathrm{r}\mathit{i}\mathbf{v}")
+    for variant in ('mathvariant="normal"', 'mathvariant="italic"',
+                    'mathvariant="bold"'):
+        if variant not in alphabet_mathml:
+            failures.append(
+                f"Office MathML lost {variant!r}: {alphabet_mathml!r}")
 
     # Enter promotes a one-line equation to an aligned multi-line structure;
     # subsequent Enter and Up/Down operate on rows, not on raw TeX newlines.
