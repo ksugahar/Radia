@@ -66,8 +66,10 @@ PowerPoint、IrfanView、登録 `LaTeX` 形式、Google スライド用画像は
 pwsh -Sta -NoProfile -File build\test_external_paste.ps1
 ```
 
-試験はEqnedit64から実クリップボードへ数式を発行し、PowerPointの通常 `Paste()`、
-IrfanViewの `/clippaste` を非表示で実行します。PowerPointでは保存した `.pptx` 内の
+試験はEqnedit64から実クリップボードへ数式を発行し、画面外PowerPoint窓で組み込み
+`Application.CommandBars.ExecuteMso("Paste")`、IrfanViewの `/clippaste` を
+非表示で実行します。`Shapes.Paste()`は通常Ctrl+Vと書式結果が異なるため使いません。
+PowerPointでは保存した `.pptx` 内の
 Office Math XML、IrfanViewでは画像寸法と非白画素を検査します。実行前の
 クリップボードは全形式を複製し、形式数とUnicode本文を確認して復元します。
 Google スライド用コピーでは、登録PNGとHTMLに埋め込んだPNGが同一であること、
