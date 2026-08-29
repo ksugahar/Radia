@@ -254,6 +254,12 @@ def test_optuna_simulink_contract_is_table_backed():
     assert len(contract["simulink_blocks"]) == 10
     assert "radia_optuna_teaching.slx" in contract["simulink_blocks"][-1]
     assert "distributed-field kernels" in contract["simulink_blocks"][0]
+    assert "IHMonitorBusV1" in contract["simulink_blocks"][0]
+    optuna_block = next(
+        item for item in contract["simulink_blocks"]
+        if "OptunaMonitorBusV1" in item
+    )
+    assert "six-input/eighteen-output" in optuna_block
     assert "LUT and lumped IH builders are removed" in contract["simulink_blocks"][2]
     assert contract["team28"]["frequency_hz"] == 50
     team28 = contract["team28"]

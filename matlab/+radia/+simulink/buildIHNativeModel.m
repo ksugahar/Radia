@@ -25,6 +25,8 @@ end
 new_system(options.ModelName);
 workspace = get_param(options.ModelName, "ModelWorkspace");
 workspace.assignin("radia_ih_config", config);
+workspace.assignin("radia_ih_geometry_revision", 0);
+radia.simulink.makeIHMonitorBusObject();
 
 add_block("simulink/Sources/Constant", ...
     options.ModelName + "/Coil Current", ...
@@ -52,30 +54,6 @@ add_block("simulink/Ports & Subsystems/Out1", ...
 add_block("simulink/Ports & Subsystems/Out1", ...
     options.ModelName + "/temperature_K", ...
     Port="2", Position=[720 165 750 185]);
-add_block("simulink/Sinks/Scope", ...
-    options.ModelName + "/Heat Density", Position=[805 55 900 105]);
-add_block("simulink/Sinks/Scope", ...
-    options.ModelName + "/Temperature", Position=[805 145 900 195]);
-% Scope blocks default to Manual axes with YLimits [-10 10]; both IH
-% signals live far outside that window (temperature ~293 K, real heat
-% densities ~1e6 W/m^3), so the trace renders off-screen and the scope
-% looks empty.  Follow the data instead.
-scopeNames = ["Heat Density", "Temperature"];
-for scopeIndex = 1:numel(scopeNames)
-    scopeConfiguration = get_param( ...
-        options.ModelName + "/" + scopeNames(scopeIndex), ...
-        "ScopeConfiguration");
-    scopeConfiguration.AxesScaling = "Auto";
-end
-% A real configuration carries the full field vector (measured
-% 2026-08-04: 3122 temperature DOFs); a scope fed that raw vector draws
-% thousands of overlapping lines and is unreadable, so each scope shows
-% the [min mean max] reduction instead.  The outports still carry the
-% untouched full vectors.
-radia.simulink.addFieldStatsBlock(options.ModelName, ...
-    BlockName="Heat Stats", Position=[700 55 770 105]);
-radia.simulink.addFieldStatsBlock(options.ModelName, ...
-    BlockName="Temperature Stats", Position=[700 145 770 195]);
 
 parameterPath = options.ModelName + "/IH Parameters";
 add_block("simulink/Ports & Subsystems/Subsystem", parameterPath, ...
@@ -112,15 +90,20 @@ connect(options.ModelName, "Workpiece Angle/1", "Thermal/3");
 connect(options.ModelName, "Ambient Temperature/1", "Thermal/2");
 connect(options.ModelName, "Eddy/1", "Thermal/1");
 connect(options.ModelName, "Eddy/1", "heat_density_W_per_m3/1");
-connect(options.ModelName, "Eddy/1", "Heat Stats/1");
-connect(options.ModelName, "Heat Stats/1", "Heat Density/1");
 connect(options.ModelName, "Thermal/1", "Eddy/3");
 connect(options.ModelName, "Thermal/1", "temperature_K/1");
-connect(options.ModelName, "Thermal/1", "Temperature Stats/1");
-connect(options.ModelName, "Temperature Stats/1", "Temperature/1");
+radia.simulink.addIHMonitorBus(options.ModelName, ...
+    HeatSource="Eddy/1", TemperatureSource="Thermal/1", ...
+    CurrentSource="Coil Current/1", AngleSource="Workpiece Angle/1", ...
+    AmbientSource="Ambient Temperature/1", OutportNumber=3, ...
+    Position=[700 250 850 390], OutportPosition=[930 305 960 325]);
+radia.simulink.addIHMonitorDashboard(options.ModelName, ...
+    Position=[1010 250 1160 330]);
+connect(options.ModelName, "IH Monitor/1", "IH Dashboard/1");
 
 set_param(options.ModelName, "StopTime", "1", ...
-    "SaveOutput", "on", "OutputSaveName", "yout");
+    "SaveOutput", "on", "OutputSaveName", "yout", ...
+    "PreLoadFcn", "radia.simulink.makeIHMonitorBusObject();");
 radia.simulink.configureIHNativeModel(options.ModelName);
 modelPath = fullfile(options.OutputDirectory, options.ModelName + ".slx");
 save_system(options.ModelName, modelPath);

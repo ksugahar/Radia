@@ -21,8 +21,10 @@ def test_package_builder_requires_native_ih_assets():
     assert set(module.REQUIRED_MATLAB_SFUNCTIONS) == {
         "radia_ih_eddy_sfun.m",
         "radia_ih_thermal_sfun.m",
+        "radia_ih_monitor_sfun.m",
         "+radia/+simulink/ihEddySFunction.m",
         "+radia/+simulink/ihThermalSFunction.m",
+        "+radia/+simulink/ihMonitorSFunction.m",
     }
     assert set(module.FULL_REQUIRED_MATLAB_SFUNCTIONS) == {
         *module.REQUIRED_MATLAB_SFUNCTIONS,
@@ -38,10 +40,14 @@ def test_package_builder_requires_native_ih_assets():
     )
     assert {
         "+radia/+simulink/addIHGeometryUpdateBlock.m",
+        "+radia/+simulink/addIHMonitorBus.m",
+        "+radia/+simulink/addIHMonitorDashboard.m",
         "+radia/+simulink/browseIHGeometryFile.m",
         "+radia/+simulink/fileFingerprint.m",
         "+radia/+simulink/normalizeIHGeometryRoles.m",
         "+radia/+simulink/updateIHGeometry.m",
+        "+radia/+simulink/makeMonitorHeaderBusObject.m",
+        "+radia/+simulink/makeIHMonitorBusObject.m",
     } <= set(module.PACKAGE_FILES)
     assert not any(name.startswith("radia_ih_") for name in module.REQUIRED_MEX)
 
