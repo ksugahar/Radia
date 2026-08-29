@@ -128,6 +128,21 @@ def test_fill_exception_restores_chargegram_and_global_hacapk_state(monkeypatch)
     assert np.isfinite(result).all()
 
 
+def test_chargegram_build_honors_requested_max_rank():
+    rng = np.random.default_rng(4)
+    points = rng.normal(size=(64, 3))
+    weights = np.ones(64, dtype=np.float64)
+    gram = _rb._ChargeGramHMatrix.from_sampled_laplace(
+        points.ravel(), weights, 1.0e-3, 1.0e-14, 4, 2.0, False
+    )
+
+    gram.build_hmatrix(eps=1.0e-14, leaf=4, eta=2.0, max_rank=1)
+    stats = gram.stats()
+
+    assert stats["n_lowrank"] > 0
+    assert stats["max_rank"] == 1
+
+
 def test_nonlinear_timing_collector_keeps_latest_solver_outcome():
     _solve_module._clear_cpp_solve_timings()
     _solve_module._capture_cpp_solve_timings({

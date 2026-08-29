@@ -484,6 +484,8 @@ bool ExportNetgenCommand::execute(CubitCommandData &data)
   // NetgenCurver hardcodes DomainIn=1, DomainOut=0 for all faces.
   // Fix: use Cubit surface-volume topology to set correct domain indices.
   // This is required for periodic identification to work correctly.
+  std::set<int> same_material_face_descriptors;
+  std::set<int> mesh_support_surface_ids;
   {
     // Build volume_id -> domain_index map
     std::map<int, int> vol_to_domain;
@@ -498,6 +500,8 @@ bool ExportNetgenCommand::execute(CubitCommandData &data)
     for (int fi = 1; fi <= nfd_fix; fi++) {
       // BCProperty still holds original Cubit surface ID at this point
       int cubit_sid = ng_mesh->GetFaceDescriptor(fi).BCProperty();
+      if (cubit_sid > 0)
+        mesh_support_surface_ids.insert(cubit_sid);
       if (cubit_sid < 0) {
         // NetgenCurver recovered this direct/free face's owner from adjacent
         // volume elements.  Validate that handoff instead of overwriting every
@@ -531,7 +535,65 @@ bool ExportNetgenCommand::execute(CubitCommandData &data)
       }
       ng_mesh->GetFaceDescriptor(fi).SetDomainIn(domin);
       ng_mesh->GetFaceDescriptor(fi).SetDomainOut(domout);
+      if (domin > 0 && domin == domout)
+        same_material_face_descriptors.insert(fi);
     }
+  }
+
+  // A Cubit webcut may split one material volume only to provide CAD curves
+  // for a conforming mesh copy (the full-sphere Kelvin route does this at
+  // z=0). Those conforming faces are not FE boundaries: both adjacent volume
+  // elements carry the same material/domain index. Keeping their triangles in
+  // the .vol creates invalid DomainIn == DomainOut surface rows and makes
+  // NGSolve treat a meshing seam as physics. Remove only the surface elements;
+  // shared volume nodes/edges remain untouched and conforming.
+  if (!same_material_face_descriptors.empty()) {
+    int removed_same_material_surfaces = 0;
+    for (int sei = ng_mesh->GetNSE() - 1; sei >= 0; --sei) {
+      auto &surface_element = ng_mesh->SurfaceElements()[sei];
+      if (same_material_face_descriptors.count(surface_element.GetIndex())) {
+        ng_mesh->SurfaceElements().DeleteElement(sei);
+        removed_same_material_surfaces++;
+      }
+    }
+
+    const int old_nfd = ng_mesh->GetNFD();
+    std::vector<int> old_to_new(old_nfd + 1, 0);
+    std::vector<netgen::FaceDescriptor> retained_descriptors;
+    retained_descriptors.reserve(
+        old_nfd - static_cast<int>(same_material_face_descriptors.size()));
+    for (int fi = 1; fi <= old_nfd; ++fi) {
+      if (same_material_face_descriptors.count(fi))
+        continue;
+      const auto &old_fd = ng_mesh->GetFaceDescriptor(fi);
+      netgen::FaceDescriptor new_fd(
+          old_fd.SurfNr(), old_fd.DomainIn(), old_fd.DomainOut(),
+          old_fd.TLOSurface());
+      new_fd.SetBCProperty(old_fd.BCProperty());
+      new_fd.SetSurfColour(old_fd.SurfColour());
+      new_fd.SetDomainInSingular(old_fd.DomainInSingular());
+      new_fd.SetDomainOutSingular(old_fd.DomainOutSingular());
+      retained_descriptors.push_back(new_fd);
+      old_to_new[fi] = static_cast<int>(retained_descriptors.size());
+    }
+    for (auto &surface_element : ng_mesh->SurfaceElements()) {
+      const int old_index = surface_element.GetIndex();
+      if (old_index <= 0 || old_index > old_nfd || old_to_new[old_index] == 0) {
+        PRINT_ERROR("Cannot remap retained surface element descriptor %d.\n",
+                    old_index);
+        return false;
+      }
+      surface_element.SetIndex(old_to_new[old_index]);
+    }
+    ng_mesh->ClearFaceDescriptors();
+    for (const auto &descriptor : retained_descriptors)
+      ng_mesh->AddFaceDescriptor(descriptor);
+
+    PRINT_INFO("Removed %d same-material internal seam surface elements and "
+               "%d unused face descriptors.\n",
+               removed_same_material_surfaces,
+               static_cast<int>(same_material_face_descriptors.size()));
+    same_material_face_descriptors.clear();
   }
 
   // ---- Set boundary labels (sideset name -> bc number) ----
@@ -1044,11 +1106,11 @@ bool ExportNetgenCommand::execute(CubitCommandData &data)
       // set against stale CAD topology.
       jf << "  \"edges\": {";
       first = true;
-      std::set<int> exported_surface_ids;
-      for (int surface_id : orig_surf_ids) {
-        if (surface_id > 0)
-          exported_surface_ids.insert(surface_id);
-      }
+      // Include curves on same-material webcut surfaces too. Those surfaces
+      // are removed as FE boundaries, but their curves still partition and
+      // support the conforming volume mesh and therefore remain as BBND
+      // segments in the .vol file.
+      const std::set<int> &exported_surface_ids = mesh_support_surface_ids;
       std::vector<int> curve_ids = CubitInterface::parse_cubit_list("curve", "all");
       for (int cid : curve_ids) {
         std::vector<int> parent_surfs = CubitInterface::parse_cubit_list(

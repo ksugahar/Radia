@@ -612,6 +612,7 @@ bool RadHACApKBase::BuildHMatrix(const RadHACApKParams& params) {
             params.aca_eps,
             params.leaf_size,
             params.eta,
+            params.max_rank,
             params.print_level
         );
     } else {
@@ -625,6 +626,7 @@ bool RadHACApKBase::BuildHMatrix(const RadHACApKParams& params) {
             params.aca_eps,
             params.leaf_size,
             params.eta,
+            params.max_rank,
             params.print_level
         );
     }

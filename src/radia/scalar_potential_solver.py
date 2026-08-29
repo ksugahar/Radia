@@ -86,6 +86,8 @@ class ScalarPotentialSolver:
         self._kelvin_region = kelvin_region
         self._kelvin_radius = kelvin_radius
         self._kelvin_center = kelvin_center or [0, 0, 0]
+        if self._kelvin_region and self._kelvin_radius is None:
+            raise ValueError("kelvin_radius is required when kelvin_region is set")
 
         # Source field (set by set_source_*)
         self._H_source_cf = None
@@ -321,37 +323,25 @@ class ScalarPotentialSolver:
             Boundary label for Dirichlet BC (phi=0).
             'default' uses all outer boundaries.
         """
-        from ngsolve import (H1, GridFunction, BilinearForm, LinearForm,
+        from ngsolve import (GridFunction, BilinearForm, LinearForm,
                              grad, dx, x, y, z, sqrt, Preconditioner)
 
         if self._H_source_cf is None:
             raise RuntimeError("Set source field first (set_source_from_radia)")
 
-        mu_cf = self._build_mu_cf()
-
-        if dirichlet == 'default':
-            fes = H1(self.mesh, order=self.order, dirichlet='.*')
-        else:
-            fes = H1(self.mesh, order=self.order, dirichlet=dirichlet)
+        mu_cf = (self._build_mu_cf_with_kelvin()
+                 if self._kelvin_region else self._build_mu_cf())
+        fes = self._make_h1_space(dirichlet)
 
         phi = fes.TrialFunction()
         v = fes.TestFunction()
 
-        # Physical materials (exclude kelvin)
-        all_mats = list(set(self.mesh.GetMaterials()))
-        phys_mats = [m for m in all_mats if m != self._kelvin_region]
+        all_mats = list(dict.fromkeys(self.mesh.GetMaterials()))
 
         # Bilinear form
         a = BilinearForm(fes)
-        for mat in phys_mats:
+        for mat in all_mats:
             a += mu_cf * grad(phi) * grad(v) * dx(mat)
-
-        # Kelvin exterior domain term
-        kelvin_weight = None
-        if self._kelvin_region:
-            kelvin_weight = self._build_kelvin_weight(x, y, z, sqrt)
-            a += MU_0 * kelvin_weight * grad(phi) * grad(v) * dx(
-                self._kelvin_region)
 
         # BDDC preconditioner for large problems
         pre = None
@@ -362,11 +352,9 @@ class ScalarPotentialSolver:
 
         # Source
         f = LinearForm(fes)
-        for mat in phys_mats:
-            f += mu_cf * self._H_source_cf * grad(v) * dx(mat)
-        if self._kelvin_region and kelvin_weight is not None:
-            f += MU_0 * kelvin_weight * self._H_source_cf * grad(v) * dx(
-                self._kelvin_region)
+        mu_contrast = mu_cf - MU_0
+        for mat in self.iron_domains:
+            f += mu_contrast * self._H_source_cf * grad(v) * dx(mat)
         f.Assemble()
 
         # Solve
@@ -817,6 +805,11 @@ class ScalarPotentialSolver:
 
         if self._H_source_cf is None:
             raise RuntimeError("Set source field first")
+        if self._kelvin_region:
+            raise NotImplementedError(
+                "Kelvin Omega-reduced uses solve_nonlinear() (Picard). "
+                "The Newton energy path requires a Kelvin-pulled-back source."
+            )
 
         # Build BSpline B(H) and energy density w(H) = integral B(H') dH'
         bh = np.array(bh_data)
@@ -835,10 +828,7 @@ class ScalarPotentialSolver:
         w_H = bh_spline.Integrate()  # w(H) = integral_0^H B(H') dH'
 
         # FE space
-        if dirichlet == 'default':
-            fes = H1(self.mesh, order=self.order, dirichlet='.*')
-        else:
-            fes = H1(self.mesh, order=self.order, dirichlet=dirichlet)
+        fes = self._make_h1_space(dirichlet)
 
         phi = fes.TrialFunction()
         v = fes.TestFunction()
@@ -1286,14 +1276,11 @@ class ScalarPotentialSolver:
         commit_states : callable or None
             commit_states(). Commits converged states for next step.
         """
-        from ngsolve import (H1, GridFunction, BilinearForm, LinearForm,
+        from ngsolve import (GridFunction, BilinearForm, LinearForm,
                              L2, grad, dx, x, y, z, sqrt, Preconditioner,
                              VOL)
 
-        if dirichlet == 'default':
-            fes = H1(self.mesh, order=self.order, dirichlet='.*')
-        else:
-            fes = H1(self.mesh, order=self.order, dirichlet=dirichlet)
+        fes = self._make_h1_space(dirichlet)
 
         phi_trial = fes.TrialFunction()
         v = fes.TestFunction()
@@ -1338,7 +1325,10 @@ class ScalarPotentialSolver:
             saved_state = save_states()
 
         converged = False
+        final_relative_change = None
+        iterations = 0
         for iteration in range(maxiter):
+            iterations = iteration + 1
             # Assemble with current mu_gf
             a = BilinearForm(fes)
             for mat in phys_mats:
@@ -1354,11 +1344,9 @@ class ScalarPotentialSolver:
             a.Assemble()
 
             f = LinearForm(fes)
-            for mat in phys_mats:
-                f += mu_gf * self._H_source_cf * grad(v) * dx(mat)
-            if self._kelvin_region and kelvin_weight is not None:
-                f += MU_0 * kelvin_weight * self._H_source_cf * grad(v) * dx(
-                    self._kelvin_region)
+            mu_contrast = mu_gf - MU_0
+            for mat in self.iron_domains:
+                f += mu_contrast * self._H_source_cf * grad(v) * dx(mat)
             f.Assemble()
 
             # Solve
@@ -1394,6 +1382,7 @@ class ScalarPotentialSolver:
             # Convergence check
             if iteration > 0:
                 max_change = np.max(np.abs(B_new - B_old)) / max(B_sat, 1e-10)
+                final_relative_change = float(max_change)
                 if verbose:
                     print(f"   iter {iteration}: max |dB|/B_sat = {max_change:.2e}")
                 if max_change < tol:
@@ -1409,6 +1398,14 @@ class ScalarPotentialSolver:
         if not converged and verbose:
             print(f"   WARNING: Not converged after {maxiter} iterations")
 
+        self._last_nonlinear_stats = {
+            'converged': bool(converged),
+            'iterations': int(iterations),
+            'final_relative_change': final_relative_change,
+            'tolerance': float(tol),
+            'maximum_iterations': int(maxiter),
+        }
+
         # Commit converged states for next step (hysteresis)
         if converged and commit_states is not None:
             commit_states()
@@ -1416,7 +1413,12 @@ class ScalarPotentialSolver:
         # Store final results
         self._phi_gf = phi_gf
         self._H_cf = H_cf
-        self._B_cf = mu_gf * H_cf
+        if kelvin_weight is None:
+            self._B_cf = mu_gf * H_cf
+        else:
+            mu_total = self.mesh.MaterialCF(
+                {self._kelvin_region: MU_0 * kelvin_weight}, default=mu_gf)
+            self._B_cf = mu_total * H_cf
 
         return phi_gf
 
@@ -1455,6 +1457,25 @@ class ScalarPotentialSolver:
         """Build domain-wise mu CoefficientFunction (linear)."""
         iron_dict = {d: MU_0 * mr for d, mr in self._mu_r_dict.items()}
         return self.mesh.MaterialCF(iron_dict, default=MU_0)
+
+    def _make_h1_space(self, dirichlet):
+        """Create the NGSolve-native H1 space for the configured domain."""
+        from ngsolve import H1, Periodic
+
+        if not self._kelvin_region:
+            boundary = '.*' if dirichlet == 'default' else dirichlet
+            return H1(self.mesh, order=self.order, dirichlet=boundary)
+
+        from radia.kelvin_identify_ngsolve import has_kelvin_identification
+        if not has_kelvin_identification(self.mesh):
+            raise RuntimeError(
+                "Kelvin H1 requires kelvin_int/kelvin_ext point "
+                "identifications in the .vol mesh"
+            )
+        kwargs = {"order": self.order, "dirichlet_bbbnd": "GND"}
+        if dirichlet not in ('default', 'GND'):
+            kwargs["dirichlet"] = dirichlet
+        return Periodic(H1(self.mesh, **kwargs))
 
     def _build_domain_indicator(self):
         """Build indicator CF: 1.0 in iron, 0.0 elsewhere."""

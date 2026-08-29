@@ -588,7 +588,7 @@ def _copy_verified(src: Path, dst: Path, start_time: float):
 # ============================================================
 
 def install_plugin(*, all_users: bool = False, check_only: bool = False,
-                    verify_only: bool = False):
+                    verify_only: bool = False, helpers_only: bool = False):
     """Deploy Cubit plugin binaries to Cubit installation.
 
     Args:
@@ -597,6 +597,9 @@ def install_plugin(*, all_users: bool = False, check_only: bool = False,
         check_only: if True, run preflight (find Cubit, process / lock
             scan) and exit without writing anything. Returns True iff
             preflight is clean.
+        verify_only: verify the complete deployed plugin without writing.
+        helpers_only: deploy and hash-verify only Cubit's pure-Python helpers.
+            Native ``.ccm`` / ``.pyd`` files and toolbars are not touched.
 
     Returns:
         True on full success. False (or raises RuntimeError) on failure.
@@ -618,6 +621,8 @@ def install_plugin(*, all_users: bool = False, check_only: bool = False,
         print("  (--check-only: no writes will be performed)")
     elif verify_only:
         print("  (--verify-only: confirming current deployment, no writes)")
+    elif helpers_only:
+        print("  (--helpers-only: native binaries will not be touched)")
     print("=" * 60)
     print()
 
@@ -667,6 +672,21 @@ def install_plugin(*, all_users: bool = False, check_only: bool = False,
 
     if check_only:
         print("  [OK] preflight clean -- install would succeed. Exiting.")
+        return True
+
+    if helpers_only:
+        helpers_src = pkg_dir / "cubit_helpers"
+        helpers_dst = plugins_dir / "cubit_helpers"
+        if not helpers_src.is_dir():
+            raise RuntimeError(f"required cubit_helpers/ missing: {helpers_src}")
+        for py in sorted(helpers_src.glob("*.py")):
+            dst = helpers_dst / py.name
+            _copy_verified(py, dst, start_time)
+            print(f"  [OK] {py.name} -> {dst}")
+        print()
+        print("  Pure-Python Cubit helpers installed and hash-verified.")
+        print("  Native .ccm/.pyd files were not touched.")
+        print("=" * 60)
         return True
 
     # Clean old files -- abort if any unlink failed.
@@ -780,14 +800,20 @@ def main():
                         help="check that the currently-deployed binaries "
                              "match this package's source-of-truth (size + "
                              "sha256). No writes.")
+    parser.add_argument("--helpers-only", action="store_true",
+                        help="deploy only pure-Python cubit_helpers; do not "
+                             "copy or remove .ccm/.pyd binaries")
     args = parser.parse_args()
-    if args.check_only and args.verify_only:
-        parser.error("--check-only and --verify-only are mutually exclusive")
+    selected_modes = sum((args.check_only, args.verify_only, args.helpers_only))
+    if selected_modes > 1:
+        parser.error("--check-only, --verify-only, and --helpers-only are "
+                     "mutually exclusive")
 
     try:
         ok = install_plugin(all_users=args.all_users,
                             check_only=args.check_only,
-                            verify_only=args.verify_only)
+                            verify_only=args.verify_only,
+                            helpers_only=args.helpers_only)
     except SystemExit:
         raise
     except Exception as e:
