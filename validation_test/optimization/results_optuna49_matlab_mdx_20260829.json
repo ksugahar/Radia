@@ -1,0 +1,72 @@
+{
+  "schema": "radia.validation.optuna49-performance-runtime.v1",
+  "generated_at": "2026-08-29T04:20:23.692Z",
+  "runtime": "matlab",
+  "host": "MDX",
+  "versions": {
+    "matlab": "26.1.0.3312084 (R2026a) Update 4",
+    "native_gateway": "optuna_mex",
+    "optuna_mex_command_count": 21
+  },
+  "settings": {
+    "trials": 100,
+    "total_repeats": 11,
+    "warmup_repeats": 3,
+    "reported_repeats": 8
+  },
+  "scalar": {
+    "all_seconds": [
+      4.3488245,
+      0.2108155,
+      0.1423365,
+      0.130308,
+      0.2317428,
+      0.1114224,
+      0.0983344,
+      0.0971841,
+      0.0964776,
+      0.0966806,
+      0.0994918
+    ],
+    "median_warmed_seconds": 0.0989131,
+    "trials_per_second": 1010.9884332813348,
+    "checksum": 20.040135043951906
+  },
+  "grouped_conditional": {
+    "all_seconds": [
+      0.7371704,
+      0.2679329,
+      0.1898018,
+      0.1794237,
+      0.1856763,
+      0.1791936,
+      0.1747737,
+      0.1730711,
+      0.172765,
+      0.1714871,
+      0.1728084
+    ],
+    "median_warmed_seconds": 0.1739224,
+    "trials_per_second": 574.96906666421341,
+    "checksum": 104.33176385944044
+  },
+  "trials_dataframe": {
+    "all_seconds": [
+      0.2328001,
+      0.0510704,
+      0.0353357,
+      0.0116725,
+      0.0333788,
+      0.0062358,
+      0.0053163,
+      0.0048069,
+      0.0047234,
+      0.004702,
+      0.0048455
+    ],
+    "median_warmed_seconds": 0.0050809,
+    "rows_per_second": 196815.52480859691,
+    "rows": 1000,
+    "columns": 7
+  }
+}

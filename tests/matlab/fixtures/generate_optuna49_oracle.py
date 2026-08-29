@@ -3082,6 +3082,208 @@ def _terminator_contract() -> dict[str, object]:
     }
 
 
+def _deprecated_suggest_contract() -> dict[str, object]:
+    """Optuna 4.9 still ships the v3.0-deprecated suggest aliases.
+
+    They are part of the public surface, so MATLAB implements them.  This
+    records what upstream actually does -- the value each alias produces, the
+    modern call it forwards to, and the FutureWarning it raises -- instead of
+    treating the aliases as covered because their names appear in a list.
+    """
+    trial_alias: dict[str, object] = {}
+
+    def alias_value(name, args):
+        study = optuna.create_study(sampler=optuna.samplers.RandomSampler(seed=7))
+        trial = study.ask()
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            value = getattr(trial, name)(*args)
+        raised = [w for w in caught if issubclass(w.category, FutureWarning)]
+        return value, raised
+
+    uniform_value, uniform_warnings = alias_value("suggest_uniform", ("u", 0.0, 1.0))
+    log_value, log_warnings = alias_value("suggest_loguniform", ("l", 1.0, 100.0))
+    step_value, step_warnings = alias_value(
+        "suggest_discrete_uniform", ("d", 0.0, 1.0, 0.25)
+    )
+
+    modern = optuna.create_study(sampler=optuna.samplers.RandomSampler(seed=7))
+    modern_uniform = modern.ask().suggest_float("u", 0.0, 1.0)
+    modern = optuna.create_study(sampler=optuna.samplers.RandomSampler(seed=7))
+    modern_log = modern.ask().suggest_float("l", 1.0, 100.0, log=True)
+    modern = optuna.create_study(sampler=optuna.samplers.RandomSampler(seed=7))
+    modern_step = modern.ask().suggest_float("d", 0.0, 1.0, step=0.25)
+
+    for name, value, raised, forwards, modern_value in (
+        ("suggest_uniform", uniform_value, uniform_warnings,
+         "suggest_float", modern_uniform),
+        ("suggest_loguniform", log_value, log_warnings,
+         "suggest_float(log=True)", modern_log),
+        ("suggest_discrete_uniform", step_value, step_warnings,
+         "suggest_float(step=...)", modern_step),
+    ):
+        trial_alias[name] = {
+            "value": value,
+            "warning_category": raised[0].category.__name__ if raised else None,
+            "warning_message": str(raised[0].message) if raised else None,
+            "forwards_to": forwards,
+            "modern_value": modern_value,
+            "matches_modern": value == modern_value,
+        }
+
+    fixed = optuna.trial.FixedTrial({"u": 0.25, "l": 10.0, "d": 0.5})
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", FutureWarning)
+        fixed_alias = {
+            "suggest_uniform": fixed.suggest_uniform("u", 0.0, 1.0),
+            "suggest_loguniform": fixed.suggest_loguniform("l", 1.0, 100.0),
+            "suggest_discrete_uniform": fixed.suggest_discrete_uniform(
+                "d", 0.0, 1.0, 0.25
+            ),
+        }
+
+    return {
+        "declared_on": [
+            "optuna.trial.BaseTrial",
+            "optuna.trial.Trial",
+            "optuna.trial.FixedTrial",
+            "optuna.trial.FrozenTrial",
+        ],
+        "trial": trial_alias,
+        "fixed_trial": fixed_alias,
+        "declared_on_base_trial": [
+            name
+            for name in (
+                "suggest_uniform",
+                "suggest_loguniform",
+                "suggest_discrete_uniform",
+            )
+            if getattr(optuna.trial.BaseTrial, name, None) is not None
+        ],
+        "declared_on_frozen_trial": [
+            name
+            for name in (
+                "suggest_uniform",
+                "suggest_loguniform",
+                "suggest_discrete_uniform",
+            )
+            if getattr(optuna.trial.FrozenTrial, name, None) is not None
+        ],
+    }
+
+
+def _best_params_contract() -> dict[str, object]:
+    """Study.best_params, and the error a multi-objective study raises."""
+    study = optuna.create_study(sampler=optuna.samplers.RandomSampler(seed=7))
+    for _ in range(3):
+        trial = study.ask()
+        x = trial.suggest_float("x", -1.0, 1.0)
+        study.tell(trial, (x - 0.3) ** 2)
+    multi = optuna.create_study(directions=["minimize", "maximize"])
+    multi_error = None
+    try:
+        multi.best_params
+    except RuntimeError as error:
+        multi_error = str(error)
+    return {
+        "best_params": study.best_params,
+        "best_value": study.best_value,
+        "best_trial_number": study.best_trial.number,
+        "multi_objective_error_type": "RuntimeError",
+        "multi_objective_error": multi_error,
+    }
+
+
+def _study_summary_contract() -> dict[str, object]:
+    """StudyDirection.NOT_SET and the StudySummary surface."""
+    return {
+        "not_set_name": optuna.study.StudyDirection.NOT_SET.name,
+        "not_set_value": int(optuna.study.StudyDirection.NOT_SET),
+        "study_summary_members": sorted(
+            name
+            for name in dir(optuna.study.StudySummary)
+            if not name.startswith("_")
+        ),
+        "direction_names": [
+            direction.name for direction in optuna.study.StudyDirection
+        ],
+        "direction_values": [
+            int(direction) for direction in optuna.study.StudyDirection
+        ],
+    }
+
+
+def _ga_sampler_contract() -> dict[str, object]:
+    """BaseGASampler.get_trial_generation, on NSGA-II and NSGA-III."""
+
+    def generations(sampler_class) -> dict[str, object]:
+        sampler = sampler_class(seed=13, population_size=4)
+        study = optuna.create_study(
+            directions=["minimize", "minimize"], sampler=sampler
+        )
+        for _ in range(10):
+            trial = study.ask()
+            x = trial.suggest_float("x", 0.0, 1.0)
+            y = trial.suggest_float("y", 0.0, 1.0)
+            study.tell(trial, [x, y])
+        return {
+            "population_size": sampler.population_size,
+            "generations": [
+                sampler.get_trial_generation(study, trial)
+                for trial in study.get_trials(deepcopy=False)
+            ],
+        }
+
+    return {
+        "base_ga_sampler_members": sorted(
+            name
+            for name in dir(optuna.samplers.BaseGASampler)
+            if not name.startswith("_")
+        ),
+        "nsgaii": generations(optuna.samplers.NSGAIISampler),
+        "nsgaiii": generations(optuna.samplers.NSGAIIISampler),
+    }
+
+
+def _terminator_base_contract() -> dict[str, object]:
+    """The terminator base classes, and what should_terminate reports."""
+    import optuna.terminator as terminator_module
+
+    study = optuna.create_study(sampler=optuna.samplers.RandomSampler(seed=7))
+    values = iter([5.0, 4.0, 4.5, 4.2, 9.0, 10.0])
+    terminator = terminator_module.Terminator(
+        improvement_evaluator=terminator_module.BestValueStagnationEvaluator(
+            max_stagnation_trials=3
+        ),
+        error_evaluator=terminator_module.StaticErrorEvaluator(constant=0),
+        min_n_trials=2,
+    )
+    decisions = []
+    for _ in range(6):
+        trial = study.ask()
+        trial.suggest_float("x", 0.0, 1.0)
+        study.tell(trial, next(values))
+        decisions.append(bool(terminator.should_terminate(study)))
+    return {
+        "base_terminator_members": sorted(
+            name
+            for name in dir(terminator_module.BaseTerminator)
+            if not name.startswith("_")
+        ),
+        "base_error_evaluator_members": sorted(
+            name
+            for name in dir(terminator_module.BaseErrorEvaluator)
+            if not name.startswith("_")
+        ),
+        "base_improvement_evaluator_members": sorted(
+            name
+            for name in dir(terminator_module.BaseImprovementEvaluator)
+            if not name.startswith("_")
+        ),
+        "should_terminate": decisions,
+    }
+
+
 def build_oracle() -> dict[str, object]:
     optuna.logging.set_verbosity(optuna.logging.WARNING)
     if optuna.__version__ != EXPECTED_VERSION:
@@ -3127,6 +3329,11 @@ def build_oracle() -> dict[str, object]:
         "importance": _importance_contract(),
         "integration": _integration_contract(),
         "terminator": _terminator_contract(),
+        "deprecated_suggest": _deprecated_suggest_contract(),
+        "best_params": _best_params_contract(),
+        "study_summary": _study_summary_contract(),
+        "ga_sampler": _ga_sampler_contract(),
+        "terminator_bases": _terminator_base_contract(),
         "visualization": _visualization_contract(),
         "numpy_random_state_seed_contract": _random_state_contract(),
         "core_api": _core_api_contract(),

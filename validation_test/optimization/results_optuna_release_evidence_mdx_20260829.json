@@ -1,0 +1,462 @@
+{
+  "schema": "radia-optuna.release-evidence.v1",
+  "ok": true,
+  "wheel_verification": {
+    "schema": "radia-optuna.wheel-verification.v1",
+    "ok": true,
+    "wheel": "C:\\temp\\radia-optuna-wheel-0.1.5-20260829\\radia_optuna-0.1.5-py3-none-win_amd64.whl",
+    "version": "0.1.5",
+    "platform_tag": "py3-none-win_amd64",
+    "matlab_file_count": 226,
+    "native_gateway": "optuna_mex",
+    "native_command_count": 21,
+    "simulink_standalone": true,
+    "simulink_entry_count": 10,
+    "radia_integration_adapter_count": 3,
+    "source_fidelity_verified": true,
+    "source_fidelity_mode": "same-workspace-strict",
+    "native_gateway_verification": "same-workspace-byte-exact+pe-x64",
+    "source_fidelity_file_count": 246
+  },
+  "doctor": {
+    "schema": "radia-optuna.doctor.v1",
+    "ok": true,
+    "version": "0.1.5",
+    "layout": "wheel",
+    "hint": "",
+    "matlab_path": "C:\\temp\\radia-optuna-wheel-simulink-37ea7f69ef45469c802a475bfe53c74e\\venv\\Lib\\site-packages\\radia_optuna\\matlab",
+    "mex_path": "C:\\temp\\radia-optuna-wheel-simulink-37ea7f69ef45469c802a475bfe53c74e\\venv\\Lib\\site-packages\\radia_optuna\\matlab\\optuna_mex.mexw64",
+    "mex_size_bytes": 152576,
+    "mex_sha256": "8e107f1ee20f6354d5c3c5ba40ec7cd3ff3b38309b67ff8962e43ea63839bd91",
+    "matlab_file_count": 226,
+    "expected_matlab_file_count": 226,
+    "native_command_count": 21,
+    "simulink_standalone": true,
+    "simulink_entry_points": [
+      "+radia/+optuna/SimulinkRunner.m",
+      "+radia/+optuna/+internal/runSimulinkInput.m",
+      "+radia/+optuna/+internal/setupSimulinkWorker.m",
+      "+radia/+simulink/buildOptunaBlock.m",
+      "+radia/+simulink/buildOptunaTeachingModel.m",
+      "+radia/+simulink/optunaSFunction.m",
+      "+radia/+simulink/optunaRuntimeStore.m",
+      "+radia/+simulink/addOptunaMonitor.m",
+      "radia_optuna_sfun.m",
+      "radia_optuna_teaching.slx"
+    ],
+    "simulink_entry_count": 10,
+    "oracle_version": "4.9.0",
+    "radia_integration_adapters": [
+      "+radia/+optuna/LTspiceRunner.m",
+      "+radia/+optuna/SheetMetalRunner.m",
+      "+radia/+optuna/+internal/runLTspiceTrial.m"
+    ],
+    "third_party_notice": "C:\\temp\\radia-optuna-wheel-simulink-37ea7f69ef45469c802a475bfe53c74e\\venv\\Lib\\site-packages\\radia_optuna\\matlab\\THIRD_PARTY_NOTICES.md",
+    "upstream_notices_complete": true
+  },
+  "simulink_e2e": {
+    "schema": "radia-optuna.standalone-simulink-test.v1",
+    "ok": true,
+    "study_path": "C:\\temp\\radia-optuna-wheel-simulink-37ea7f69ef45469c802a475bfe53c74e\\venv\\Lib\\site-packages\\radia_optuna\\matlab\\+radia\\+optuna\\Study.m",
+    "runner_path": "C:\\temp\\radia-optuna-wheel-simulink-37ea7f69ef45469c802a475bfe53c74e\\venv\\Lib\\site-packages\\radia_optuna\\matlab\\+radia\\+optuna\\SimulinkRunner.m",
+    "session_path": "C:\\temp\\radia-optuna-wheel-simulink-37ea7f69ef45469c802a475bfe53c74e\\venv\\Lib\\site-packages\\radia_optuna\\matlab\\+radia\\+optuna\\OptimizationSession.m",
+    "teaching_builder_path": "C:\\temp\\radia-optuna-wheel-simulink-37ea7f69ef45469c802a475bfe53c74e\\venv\\Lib\\site-packages\\radia_optuna\\matlab\\+radia\\+simulink\\buildOptunaTeachingModel.m",
+    "mex_path": "C:\\temp\\radia-optuna-wheel-simulink-37ea7f69ef45469c802a475bfe53c74e\\venv\\Lib\\site-packages\\radia_optuna\\matlab\\optuna_mex.mexw64",
+    "complete_trials": 4,
+    "failed_trials": 1,
+    "simulink_block_trials": 4,
+    "simulink_block_best": 0.33869199018107,
+    "simulink_monitor": "simulink-scope-xy",
+    "session_trials": 4,
+    "teaching_model_trials": 12,
+    "table_resume": {
+      "schema": "radia-optuna.table-resume-test.v1",
+      "ok": true,
+      "source_trial_count": 4,
+      "restored_trial_count": 4,
+      "table_names": [
+        "TrialTable",
+        "ObjectiveTable",
+        "ParamTable",
+        "IntermediateTable",
+        "UserAttrTable",
+        "ConstraintTable",
+        "SamplerStateTable"
+      ]
+    },
+    "distinct_parameter_values": 4
+  },
+  "table_resume": {
+    "schema": "radia-optuna.table-resume-test.v1",
+    "ok": true,
+    "source_trial_count": 4,
+    "restored_trial_count": 4,
+    "table_names": [
+      "TrialTable",
+      "ObjectiveTable",
+      "ParamTable",
+      "IntermediateTable",
+      "UserAttrTable",
+      "ConstraintTable",
+      "SamplerStateTable"
+    ]
+  },
+  "matlab_tests": {
+    "schema": "radia.optuna.oracle-test-summary.v1",
+    "total": 148,
+    "passed": 148,
+    "failed": 0,
+    "incomplete": 0
+  },
+  "performance": {
+    "python": {
+      "schema": "radia.validation.optuna49-performance-runtime.v1",
+      "generated_at": "2026-08-29T04:19:44.885747+00:00",
+      "runtime": "python-upstream",
+      "host": "MDX",
+      "versions": {
+        "python": "3.12.10",
+        "optuna": "4.9.0",
+        "numpy": "2.4.6",
+        "scipy": "1.17.1"
+      },
+      "settings": {
+        "trials": 100,
+        "total_repeats": 11,
+        "warmup_repeats": 3,
+        "reported_repeats": 8
+      },
+      "scalar": {
+        "all_seconds": [
+          0.1751275000278838,
+          0.1477693000342697,
+          0.1478785999934189,
+          0.14869679999537766,
+          0.14767159998882562,
+          0.14758390001952648,
+          0.14793190005002543,
+          0.14790149999316782,
+          0.14760099997511134,
+          0.1475938999792561,
+          0.12499109999043867
+        ],
+        "median_warmed_seconds": 0.14763629998196848,
+        "trials_per_second": 677.3401935175392,
+        "checksum": 20.040135043951892
+      },
+      "grouped_conditional": {
+        "all_seconds": [
+          0.35579390003113076,
+          0.3594605000107549,
+          0.35794929997064173,
+          0.3502569000120275,
+          0.3578222999931313,
+          0.35280549997696653,
+          0.35512910003308207,
+          0.3552959999651648,
+          0.3529399000108242,
+          0.3535365000134334,
+          0.354719000053592
+        ],
+        "median_warmed_seconds": 0.3541277500335127,
+        "trials_per_second": 282.38397016482486,
+        "checksum": 104.33176385944043
+      },
+      "trials_dataframe": {
+        "all_seconds": [
+          2.0586970999720506,
+          0.009352100023534149,
+          0.00802600005408749,
+          0.008170400047674775,
+          0.007928099948912859,
+          0.008138900040648878,
+          0.024899400013964623,
+          0.007975800021085888,
+          0.007989999954588711,
+          0.00813999999081716,
+          0.007987899996805936
+        ],
+        "median_warmed_seconds": 0.008064449997618794,
+        "rows_per_second": 124001.01684495184,
+        "rows": 1000,
+        "columns": 7
+      }
+    },
+    "matlab": {
+      "schema": "radia.validation.optuna49-performance-runtime.v1",
+      "generated_at": "2026-08-29T04:20:23.692Z",
+      "runtime": "matlab",
+      "host": "MDX",
+      "versions": {
+        "matlab": "26.1.0.3312084 (R2026a) Update 4",
+        "native_gateway": "optuna_mex",
+        "optuna_mex_command_count": 21
+      },
+      "settings": {
+        "trials": 100,
+        "total_repeats": 11,
+        "warmup_repeats": 3,
+        "reported_repeats": 8
+      },
+      "scalar": {
+        "all_seconds": [
+          4.3488245,
+          0.2108155,
+          0.1423365,
+          0.130308,
+          0.2317428,
+          0.1114224,
+          0.0983344,
+          0.0971841,
+          0.0964776,
+          0.0966806,
+          0.0994918
+        ],
+        "median_warmed_seconds": 0.0989131,
+        "trials_per_second": 1010.9884332813348,
+        "checksum": 20.040135043951906
+      },
+      "grouped_conditional": {
+        "all_seconds": [
+          0.7371704,
+          0.2679329,
+          0.1898018,
+          0.1794237,
+          0.1856763,
+          0.1791936,
+          0.1747737,
+          0.1730711,
+          0.172765,
+          0.1714871,
+          0.1728084
+        ],
+        "median_warmed_seconds": 0.1739224,
+        "trials_per_second": 574.9690666642134,
+        "checksum": 104.33176385944044
+      },
+      "trials_dataframe": {
+        "all_seconds": [
+          0.2328001,
+          0.0510704,
+          0.0353357,
+          0.0116725,
+          0.0333788,
+          0.0062358,
+          0.0053163,
+          0.0048069,
+          0.0047234,
+          0.004702,
+          0.0048455
+        ],
+        "median_warmed_seconds": 0.0050809,
+        "rows_per_second": 196815.5248085969,
+        "rows": 1000,
+        "columns": 7
+      }
+    },
+    "mex_cold": {
+      "schema": "radia.validation.optuna-mex-first-call.v1",
+      "generated_at": "2026-08-29T04:22:47.0381029Z",
+      "host": "MDX",
+      "repeats": 7,
+      "first_call_seconds": [
+        0.0085372,
+        0.0128984,
+        0.0337621,
+        0.0129734,
+        0.0089799,
+        0.0114385,
+        0.0058373
+      ],
+      "median_first_call_seconds": 0.0114385,
+      "binary_size_bytes": 152576,
+      "binary_sha256": "8e107f1ee20f6354d5c3c5ba40ec7cd3ff3b38309b67ff8962e43ea63839bd91",
+      "gateway_directory": "C:\\temp\\radia-optuna-mdx-20260829\\matlab",
+      "boundary": "First optuna_mex api.info call in each fresh MATLAB process; excludes MATLAB executable startup."
+    }
+  },
+  "matlab_extensions": {
+    "parallel_batch": {
+      "schema": "radia.validation.optuna-parallel-performance.v1",
+      "generated_at": "2026-08-29T04:19:17.578Z",
+      "host": "MDX",
+      "versions": {
+        "matlab": "26.1.0.3312084 (R2026a) Update 4",
+        "parallel_computing_toolbox": "26.1",
+        "optuna_mex_commands": 21
+      },
+      "settings": {
+        "trials": 64,
+        "repeats": 7,
+        "warmup_repeats": 2,
+        "workers": 4,
+        "sampler": "random",
+        "seed": 20260829.0,
+        "proposal_mode": "serial deterministic batch",
+        "objective_work_items": 2352200.0,
+        "target_objective_seconds": 0.05,
+        "calibrated_objective_seconds": 0.0798833
+      },
+      "pool": {
+        "startup_seconds": 26.0677216,
+        "reused": false
+      },
+      "sequential": {
+        "all_seconds": [
+          9.1600282,
+          6.0278499,
+          5.2337581,
+          5.7505765,
+          5.1372383,
+          6.7596829,
+          5.2560695
+        ],
+        "median_warmed_seconds": 5.2560695,
+        "trials_per_second": 12.176399113443992,
+        "proposal_checksum": -4.066928678667484,
+        "best_value": 0.0002134524014078622
+      },
+      "parallel_batch": {
+        "all_seconds": [
+          2.75739,
+          2.2776555,
+          2.2791358,
+          2.2062204,
+          2.2301412,
+          2.2319397,
+          2.2164571
+        ],
+        "median_warmed_seconds": 2.2301412,
+        "trials_per_second": 28.697734475287934,
+        "proposal_checksum": -4.066928678667484,
+        "best_value": 0.0002134524014078622
+      },
+      "comparison": {
+        "speedup": 2.356832607729053,
+        "worker_efficiency": 0.5892081519322633,
+        "checksum_match": true,
+        "best_value_match": true,
+        "parallel_not_slower": true
+      },
+      "gate": {
+        "passed": true,
+        "requirement": "Identical seeded proposal checksum and best value; warmed batch-parallel median no slower than sequential."
+      },
+      "environment_note": "mdx release-candidate run; measured_jointconvex_ridge.py PID 9772 active on one core; pre-run total CPU sampled",
+      "claim_boundary": "Synthetic calibrated scalar objective used to measure radia.optuna.optimize scheduling and worker throughput. It does not predict a specific CAE model's solver speedup."
+    },
+    "history_store": {
+      "schema": "radia.optuna.history-store-benchmark.v1",
+      "timestamp": "2026-08-29T13:21:15+09:00",
+      "hostname": "MDX",
+      "matlab_version": "26.1.0.3312084 (R2026a) Update 4",
+      "trial_counts": [
+        250,
+        500,
+        1000,
+        2000,
+        4000
+      ],
+      "results": [
+        {
+          "trials": 250,
+          "write_s": 0.8910842,
+          "freeze_s": 0.3002636,
+          "indexed_lookup_s": 0.0067054,
+          "scan_lookup_s": 0.0143771,
+          "lookup_speedup": 2.144107734065082,
+          "frozen_trials": 250,
+          "intermediate_rows": 332,
+          "parameter_rows": 500,
+          "converged": true
+        },
+        {
+          "trials": 500,
+          "write_s": 1.2902633,
+          "freeze_s": 0.4446706,
+          "indexed_lookup_s": 0.00187,
+          "scan_lookup_s": 0.0044487,
+          "lookup_speedup": 2.3789839572192513,
+          "frozen_trials": 500,
+          "intermediate_rows": 664,
+          "parameter_rows": 1000,
+          "converged": true
+        },
+        {
+          "trials": 1000,
+          "write_s": 2.0593196,
+          "freeze_s": 0.8394764,
+          "indexed_lookup_s": 0.0008826,
+          "scan_lookup_s": 0.0036791,
+          "lookup_speedup": 4.1684794924087925,
+          "frozen_trials": 1000,
+          "intermediate_rows": 1332,
+          "parameter_rows": 2000,
+          "converged": true
+        },
+        {
+          "trials": 2000,
+          "write_s": 3.9340389,
+          "freeze_s": 1.6152059,
+          "indexed_lookup_s": 0.0008852,
+          "scan_lookup_s": 0.0043028,
+          "lookup_speedup": 4.860822413014008,
+          "frozen_trials": 2000,
+          "intermediate_rows": 2664,
+          "parameter_rows": 4000,
+          "converged": true
+        },
+        {
+          "trials": 4000,
+          "write_s": 7.9700907,
+          "freeze_s": 3.1294978,
+          "indexed_lookup_s": 0.0018857,
+          "scan_lookup_s": 0.0107164,
+          "lookup_speedup": 5.682982446836719,
+          "frozen_trials": 4000,
+          "intermediate_rows": 5332,
+          "parameter_rows": 8000,
+          "converged": true
+        }
+      ],
+      "freeze_exponent": 0.8624168488035686,
+      "indexed_lookup_exponent": -0.47394093608946586
+    }
+  },
+  "benchmark_environment": {
+    "note": "mdx release-candidate run; unrelated measured_jointconvex_ridge.py PID 9772 remained active on one core and was not stopped",
+    "pre_run_total_cpu_percent": [
+      4.73,
+      3.92,
+      2.72
+    ],
+    "free_memory_mib": 51918.0
+  },
+  "summary": {
+    "matlab_to_python_warmed_time_ratios": {
+      "scalar": 0.6699781829541971,
+      "grouped_conditional": 0.4911289781259473,
+      "trials_dataframe": 0.6300367664875158
+    },
+    "seeded_checksums_match": true,
+    "trials_dataframe_shape_match": true,
+    "parallel_speedup": 2.356832607729053,
+    "parallel_worker_efficiency": 0.5892081519322633,
+    "history_freeze_exponent": 0.8624168488035686,
+    "largest_history_trials": 4000,
+    "largest_history_lookup_speedup": 5.682982446836719,
+    "mex_first_call_median_seconds": 0.0114385,
+    "runtime_gate_passed": true,
+    "parallel_gate_passed": true,
+    "history_gate_passed": true,
+    "passed": true
+  },
+  "source_sha256": {
+    "installed": "1964959ebdfe3bcae1acbe6f654a91a81fdf1fb786fcb0d164cf942398501127",
+    "python_performance": "805168d2b68007b0dfda8258a2792bfa498658da8088992e1e647bc3a5584457",
+    "matlab_performance": "34fa924946d074f793f86bcd71f11d36b2a36d68ddedf580c7e1e97cfd799360",
+    "mex_cold": "5a02419b5ff22e9907975547e115df03ad9182710fbafe41de186e9472e864f9",
+    "parallel": "a6862b070e8bf0558e562bb43858a3a9293793d537b6a022f085ac204fe509bf",
+    "history": "111e4ea63cf78515807ac4c9867902a445fa90b87c6e1cadef476d661d991674"
+  }
+}

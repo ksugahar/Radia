@@ -819,12 +819,15 @@ Generic Simulink optimization is also standalone. `SimulinkRunner`,
 `runSimulinkInput`, and `setupSimulinkWorker` ship in `radia-optuna`, operate on
 `Simulink.SimulationInput`, and do not call Radia. Electromagnetic application
 models, Radia library blocks, PEEC, and sheet-metal adapters remain Radia-owned.
-The generic `radia.simulink.buildOptunaBlock` Level-2 MATLAB S-Function and
-`radia.simulink.addOptunaMonitor` are shipped too: each trial is persisted to
-the normalized MAT-backed tables, while best value, status, counts, Pareto
-points, and failure information remain visible as Simulink signals and Scope/
-XY Graph views. These generic block files are an audited standalone subset of
-`radia.simulink`; they do not load the Radia solver.
+The generic `radia.simulink.buildOptunaStudyBlock` is the default Simulink
+surface: two command inputs and four progress outputs wrap the complete
+runtime, while study review and trial application use the block mask and
+normalized MAT tables. Changing sampler, seed, pruner, bounds, budget, or
+storage therefore does not require rewiring. The six-input/eighteen-output
+`radia.simulink.buildOptunaBlock` and `addOptunaMonitor` remain explicit
+advanced interfaces for models that need every lifecycle and telemetry signal.
+These files are an audited standalone subset of `radia.simulink`; they do not
+load the Radia solver.
 Install `radia[optuna-upstream]` only when the pinned Python/SciPy/PyTorch
 oracle-backed features are also required.
 
