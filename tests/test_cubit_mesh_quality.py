@@ -525,7 +525,12 @@ def test_cli_writes_versioned_json_report_and_requires_explicit_sidecar(
     assert json.loads(error_report.read_text(encoding="utf-8"))["passed"] is False
 
 
-def test_cubit_toolbar_verifier_delegates_to_canonical_checker(tmp_path):
+def test_cubit_toolbar_verifier_delegates_to_canonical_checker(
+        tmp_path, monkeypatch):
+    # Root CI intentionally does not install package-level distributions.
+    # Expose the monorepo package source so this integration check exercises
+    # the same public import used by the deployed toolbar.
+    monkeypatch.syspath_prepend(str(PACKAGE_SRC))
     mesh, vol_path = _save_box(tmp_path)
     sidecar = Path(str(vol_path) + ".json")
     sidecar.write_text(

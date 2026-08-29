@@ -23,6 +23,20 @@ All notable changes to the `radia` package.  Format: each release lists
   Missing or incompatible MEX gateways still fail loudly; no silent fallback
   was introduced.
 
+## 4.95.68 - BDM2 TET directional sensitivity correction
+
+Released 2026-08-29.
+
+- Corrected the physical x/y/z contraction of degree-one Newtonian moments in
+  BDM2 TET ChargeGram directional derivatives. The native regression now
+  cross-checks the complete Gram and volume self-block against finite
+  differences and verifies rigid-translation invariance and fifth-degree
+  homogeneity.
+- Replaced message-text matching in the shared block-PCG breakdown path with a
+  typed zero-numerical-rank exception, preserving unrelated runtime failures.
+- Added the production HDiv-MMM implementation review, including explicit
+  capability limits and independently measured remaining validation gaps.
+
 ## 4.95.67 - Mainline HDiv-MMM release certification
 
 Released 2026-08-28.
