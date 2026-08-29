@@ -33,7 +33,9 @@ ATOMS = (
     r"\alpha", r"\Gamma", r"\partial", r"\nabla", r"\infty",
     r"\leq", r"\neq", r"\rightarrow", r"\cdot", r"\times",
     r"\operatorname{curl}", r"\text{speed}", r"\mathrm{d}",
-    r"\mathit{var}", r"\mathbf{x}",
+    r"\mathit{var}", r"\mathbf{x}", r"\mathsf{S}", r"\mathtt{T}",
+    r"\mathcal{C}", r"\mathbb{R}", r"\mathfrak{F}",
+    r"\bm{\alpha}", r"\boldsymbol{\beta}", r"\mathnormal{x}",
     # A named glyph whose command must survive verbatim, an operator name
     # that must stay upright, and a variant Greek letter that used to share
     # its code point with the plain form.

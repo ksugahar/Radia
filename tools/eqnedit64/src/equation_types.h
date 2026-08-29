@@ -28,6 +28,12 @@ enum Typeface {
      * math variables) so saving teaches the command the user actually chose. */
     TF_ROMAN = 13,       /* \mathrm{...} */
     TF_MATH_ITALIC = 14, /* \mathit{...} */
+    TF_MATH_SANS = 15,   /* \mathsf{...} */
+    TF_MATH_MONO = 16,   /* \mathtt{...} */
+    TF_MATH_SCRIPT = 17, /* \mathcal{...} */
+    TF_MATH_DOUBLE = 18, /* \mathbb{...} */
+    TF_MATH_FRAKTUR = 19,/* \mathfrak{...} */
+    TF_BOLD_SYMBOL = 20, /* \bm{...}; accepts \boldsymbol input */
     TF_DISPLAY = 0x96,
 };
 

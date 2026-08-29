@@ -531,10 +531,27 @@ private:
         if (cmd == "\\textasciicircum") return make_char(TF_TEXT, '^', '^');
         if (cmd == "\\textasciitilde") return make_char(TF_TEXT, '~', '~');
         if (cmd == "\\operatorname") return styled_group(TF_FUNCTION);
-        if (cmd == "\\mathbf" || cmd == "\\bm" || cmd == "\\boldsymbol")
+        if (cmd == "\\mathbf")
             return styled_group(TF_VECTOR);
+        if (cmd == "\\bm" || cmd == "\\boldsymbol")
+            return styled_group(TF_BOLD_SYMBOL);
         if (cmd == "\\mathit")
             return styled_group(TF_MATH_ITALIC);
+        if (cmd == "\\mathsf")
+            return styled_group(TF_MATH_SANS);
+        if (cmd == "\\mathtt")
+            return styled_group(TF_MATH_MONO);
+        if (cmd == "\\mathcal")
+            return styled_group(TF_MATH_SCRIPT);
+        if (cmd == "\\mathbb")
+            return styled_group(TF_MATH_DOUBLE);
+        if (cmd == "\\mathfrak")
+            return styled_group(TF_MATH_FRAKTUR);
+        if (cmd == "\\mathnormal") {
+            auto line = std::make_unique<LineNode>();
+            line->children = parse_arg();
+            return line;
+        }
 
         /* Named glyphs win over operator names.  \div is the division sign,
          * not the word "div"; the same holds for \Re and \Im.  Keeping the

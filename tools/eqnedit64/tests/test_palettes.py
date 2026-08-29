@@ -85,7 +85,7 @@ def test_symbol_palettes_come_first_then_template_palettes():
     assert len(entries) > split, "no template palettes"
     for title, _, _, items in entries[:split]:
         kinds = {c.split(".")[0] for c, _, _ in items}
-        assert kinds <= {"symbol", "latex", "template"}, title
+        assert kinds <= {"symbol", "latex", "template", "style"}, title
     for title, _, _, items in entries[split:]:
         kinds = {c.split(".")[0] for c, _, _ in items}
         assert kinds <= {"template", "matrix"} and "template" in kinds, (
@@ -197,6 +197,10 @@ def test_every_palette_command_round_trips():
                 if position != 3:
                     equation.next_slot()
             assert equation.command(command), command
+        elif command.startswith("style."):
+            equation.insert_text("x")
+            equation.select_all()
+            assert equation.restyle_selection(command[6:]), command
         else:
             equation.insert_latex(command[6:])
             equation.insert_text("x")

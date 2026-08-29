@@ -216,6 +216,20 @@ static void append_math_char(std::string& out, uint32_t cp) {
     else out += utf8_of(cp);
 }
 
+static const char* math_alphabet_command(int typeface) {
+    switch (typeface) {
+    case TF_ROMAN: return "\\mathrm";
+    case TF_MATH_ITALIC: return "\\mathit";
+    case TF_MATH_SANS: return "\\mathsf";
+    case TF_MATH_MONO: return "\\mathtt";
+    case TF_MATH_SCRIPT: return "\\mathcal";
+    case TF_MATH_DOUBLE: return "\\mathbb";
+    case TF_MATH_FRAKTUR: return "\\mathfrak";
+    case TF_BOLD_SYMBOL: return "\\bm";
+    default: return nullptr;
+    }
+}
+
 std::string LaTeXEmitter::emit_range(const NodeList& nodes,
                                      size_t first, size_t last) {
     first = std::min(first, nodes.size());
@@ -290,7 +304,8 @@ void LaTeXEmitter::emitSequence(const NodeList& nodes, size_t first,
     };
     auto flushAlphabet = [&]() {
         if (alphabetBuf.empty()) return;
-        out += alphabetTypeface == TF_ROMAN ? "\\mathrm{" : "\\mathit{";
+        out += math_alphabet_command(alphabetTypeface);
+        out += '{';
         out += alphabetBuf;
         out += '}';
         alphabetBuf.clear();
@@ -314,8 +329,7 @@ void LaTeXEmitter::emitSequence(const NodeList& nodes, size_t first,
                 append_text_char(funcBuf, ch->charCode);
                 continue;
             }
-            if ((ch->typeface == TF_ROMAN ||
-                 ch->typeface == TF_MATH_ITALIC) && ch->embells.empty()) {
+            if (math_alphabet_command(ch->typeface) && ch->embells.empty()) {
                 flushText();
                 flushFunc();
                 if (alphabetTypeface != ch->typeface) flushAlphabet();
@@ -506,8 +520,9 @@ void LaTeXEmitter::emitChar(const CharNode& ch, std::string& out) {
     /* Explicit math alphabets.  Unembellished runs are grouped by
      * emitSequence(); this path handles a styled character carrying an
      * accent or other embellishment. */
-    else if (tf == TF_ROMAN || tf == TF_MATH_ITALIC) {
-        out += tf == TF_ROMAN ? "\\mathrm{" : "\\mathit{";
+    else if (const char* alphabet = math_alphabet_command(tf)) {
+        out += alphabet;
+        out += '{';
         append_math_char(out, code);
         out += '}';
     }
