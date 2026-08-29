@@ -825,9 +825,17 @@ try {
     if ($shapeRange.Count -ne 1) {
         throw "PowerPoint pasted an unexpected shape count: $($shapeRange.Count)"
     }
-    $powerPointFontSize = [double]$shapeRange.Item(1).TextFrame2.TextRange.Font.Size
-    if ($powerPointFontSize -lt 17.5 -or $powerPointFontSize -gt 24.5) {
-        throw "PowerPoint native equation font is outside the visible 18--24 pt baseline: $powerPointFontSize pt."
+    $pastedShape = $shapeRange.Item(1)
+    $powerPointFontSize = [double]$pastedShape.TextFrame2.TextRange.Font.Size
+    $powerPointAlignment =
+        [int]$pastedShape.TextFrame2.TextRange.ParagraphFormat.Alignment
+    $powerPointLeft = [double]$pastedShape.Left
+    if ([Math]::Abs($powerPointFontSize - 24.0) -gt 0.1) {
+        throw "PowerPoint native equation is not 24 pt: $powerPointFontSize pt."
+    }
+    if ($powerPointAlignment -ne 1 -or $powerPointLeft -gt 1.0) {
+        throw ("PowerPoint native equation is not left-aligned: " +
+            "paragraphAlignment=$powerPointAlignment, left=$powerPointLeft pt.")
     }
     $presentation.SaveAs($pptxOutput, 24)
     $slideXml = Get-SlideXml $pptxOutput
@@ -972,7 +980,8 @@ try {
     Write-Host "PASS: normal DIBV5 is opaque black-on-white ($dibContract)"
     Write-Host 'PASS: clipboard contains raw LaTeX, identical HTML/registered MathML, Office TeX, EMF, and DIBV5'
     Write-Host ("PASS: no-selection GUI copy -> visible editable Office Math " +
-        "in PowerPoint ($powerPointFontSize pt, rendered $powerPointImageSize with ink)")
+        "in PowerPoint ($powerPointFontSize pt, left=$powerPointLeft pt, " +
+        "rendered $powerPointImageSize with ink)")
     Write-Host "PASS: IrfanView /clippaste produced a nonblank $imageSize PNG"
     Write-Host ("PASS: Google Slides clipboard contains a byte-identical " +
         "$($pngContract.Width)x$($pngContract.Height) 300 dpi PNG and " +

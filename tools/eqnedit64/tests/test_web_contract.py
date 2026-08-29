@@ -60,13 +60,14 @@ def test_office_copy_is_editable_mathml_without_png_competition() -> None:
         'root.querySelector(".eqed-copy-display")', 1
     )[0]
     assert "officeMathMl(tex)" in office
-    assert '"text/html"' in office
-    assert '"text/plain"' in office
     assert '"image/png"' not in office
     assert "officeOmml(mml)" in office
+    assert "writeOfficeClipboard(html, tex)" in office
     assert "<!--[if gte msEquation 12]>" in office
     assert "<![if !msEquation]>" in office
-    assert "&#160;<![endif]></p></body></html>" in office
+    assert 'text-align:left;font-size:24pt' in office
+    assert '<m:oMathParaPr><m:jc m:val=\\\"left\\\"/>' in office
+    assert "<!DOCTYPE html>" not in office
 
 
 def test_office_mathml_is_canonical_inline_24pt() -> None:
@@ -87,6 +88,20 @@ def test_office_omml_transport_covers_structured_math() -> None:
         assert f"<{tag}>" in SOURCE
     assert "font-size:24.0pt" in SOURCE
     assert "Cambria Math" in SOURCE
+
+
+def test_office_copy_prefers_exact_cf_html_fragment() -> None:
+    transport = SOURCE.split("function writeOfficeClipboard", 1)[1].split(
+        "function getSvgConverter", 1
+    )[0]
+    assert 'document.addEventListener("copy", onCopy, true)' in transport
+    assert 'event.clipboardData.setData("text/html", html)' in transport
+    assert 'event.clipboardData.setData("text/plain", tex)' in transport
+    assert '"text/html": new Blob([html]' in transport
+    assert '"text/plain": new Blob([tex]' in transport
+    assert 'document.execCommand("copy")' in transport
+    assert 'return Promise.resolve("copy-event")' in transport
+    assert "window.ClipboardItem" in transport
 
 
 def test_png_is_a_separate_user_action() -> None:

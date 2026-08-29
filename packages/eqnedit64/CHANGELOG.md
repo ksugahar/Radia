@@ -1,5 +1,13 @@
 # Changelog
 
+## 3.0.6 - 2026-08-29
+
+- Preserves the browser editor's requested left alignment while making its
+  editable PowerPoint equation exactly 24 pt through a synchronous CF_HTML
+  fragment with conditional OMML and the shared fallback MathML.
+- Tightens the homepage release gate to reject the former 18 pt browser
+  conversion and any nested HTML document that causes Office style loss.
+
 ## 3.0.5 - 2026-08-29
 
 - Replaces the native Geometry tab's accidental over/underline mapping with

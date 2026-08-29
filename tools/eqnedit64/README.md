@@ -6,7 +6,7 @@ Eqnedit64は、軽快な構造編集とTeXファイルを直接つないだ64-bi
 レジストリ登録は不要です。
 
 公開ソースはRadiaリポジトリの`tools/eqnedit64`、署名済み単体EXEは
-[Eqnedit64 GitHub Release](https://github.com/ksugahar/Radia/releases/tag/eqnedit64-v3.0.5)
+[Eqnedit64 GitHub Release](https://github.com/ksugahar/Radia/releases/tag/eqnedit64-v3.0.6)
 で配布します。旧Eqnedit32バイナリ、MTEF変換コード、逆アセンブリ資料は
 Eqnedit64のソース・ビルド・配布物に含めません。
 
@@ -54,8 +54,8 @@ GUIの画面構成、状態遷移、TeX/クリップボード契約、自動・�
 PowerPoint、Word、Excel向けには、inline CF_HTMLと登録`MathML` /
 `MathML Presentation` 形式へ同じ24 pt MathMLを提供し、編集可能なOffice Mathへ
 変換します。Web版も同じMathML契約を持ち、ブラウザHTML内の条件付きOMMLで総和、
-積分、分数、根号、上線、下線のOffice構造を保ちます。ブラウザはWindows登録MathMLを
-発行できないためWeb版のPowerPoint HTML経路は18 pt、EXE版は24 ptです。
+積分、分数、根号、上線、下線のOffice構造を保ちます。Web版は同期CF_HTML断片へ
+左寄せ24 ptを明示し、EXE版の登録MathML経路も24 ptです。
 旧Office向けには区切り付きLaTeXも残します。IrfanViewなどの画像ソフトは
 EMFまたは全画素不透明の32-bit DIBV5を選べます。TeX対応ソフト向けには生の断片も
 `LaTeX` 形式で保持します。
@@ -282,7 +282,7 @@ GUIファザーにも完成／未完成TeXのソース編集を混ぜます。�
 検査し、PowerPointなど他製品との貼り付けも `test_external_paste.ps1` が非表示の
 API経由で検査します。この試験は内部生成関数を迂回路として使わず、選択なしの
 通常GUIコピー命令を送ってから、PowerPoint COMの通常 `Paste()` が
-18--24 ptの編集可能なOffice Mathと分数・根号の構造を作ることに加え、貼り付けた
+左寄せ24 ptの編集可能なOffice Mathと分数・根号の構造を作ることに加え、貼り付けた
 図形をPowerPoint自身でPNG化し、空白や豆腐文字ではなく分数線を含む数式の輪郭が
 描画されること、
 IrfanViewの `/clippaste` が非空画像を作ること、DIBV5の全画素がα=255であること、
