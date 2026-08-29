@@ -23,7 +23,7 @@ Only UTF-8 TeX is a source format. MTEF and `.eqn` are intentionally not
 supported. Current wheels target 64-bit Windows and Python 3.10 or newer.
 
 The wheel embeds the signed executable produced for the matching
-`eqnedit64-v3.0.5` GitHub Release; it does not build a second application
+`eqnedit64-v3.0.6` GitHub Release; it does not build a second application
 implementation. The package is BSD 2-Clause licensed. The embedded Latin
 Modern Math font remains under the GUST Font License documented in the Radia
 source tree.

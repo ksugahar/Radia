@@ -1,7 +1,7 @@
 # Eqnedit64 GUI仕様
 
 - 仕様版: 1.0
-- 対象: Eqnedit64 3.0.5
+- 対象: Eqnedit64 3.0.6
 - 基準日: 2026-08-25
 - 適用範囲: `dist\Eqnedit64.exe`
 
@@ -322,8 +322,8 @@ Eqnedit64拡張として、`curl`, `div`, `grad`, `rot`, `tr`, `diag`, `Res`,
 - Microsoft 365 PowerPoint / Word / Excelはinline CF_HTMLまたは登録Presentation
   MathMLを編集可能なOffice Mathとして取り込む。3形式のMathML本体は同一とし、
   Web版のfallback MathMLもinline・24 pt・同じ総和／積分limit規則へ正規化し、
-  PowerPoint用の条件付きOMMLで同じ意味構造を保つ。ブラウザHTML取り込みは18 pt、
-  EXEの登録MathML取り込みは24 ptである。Office自身の書き出し画像と保存OOXMLで、
+  PowerPoint用の条件付きOMMLで同じ意味構造を保つ。ブラウザは同期copyイベントの
+  単一CF_HTML断片で左寄せ24 pt、EXEの登録MathML取り込みも24 ptである。Office自身の書き出し画像と保存OOXMLで、
   分数・根号・総和・積分・上線・下線構造が見えることを必須とする。
 - 通常コピーへPNGを混在させない。PowerPointが画像を優先して編集不能な貼り付けへ
   退化するためである。EMF/DIBV5は画像ソフト用のWindowsフォールバックとして残す。
@@ -431,7 +431,7 @@ Eqnedit64拡張として、`curl`, `div`, `grad`, `rot`, `tr`, `diag`, `Res`,
 | AUT-08 | `dist` は有効な指定開発者署名を持つexe一つで、試験済みexeと同一、静的ランタイム、別ディレクトリ起動可 | `test_background.ps1` |
 | AUT-09 | `.tex`保存は新規 `equation`、既存 `equation*` 外枠維持、`aligned`、UTF-8の契約を満たす | `test_tex_document.exe` / `--operation-test` |
 | AUT-10 | 実クリップボードに同値なinline `HTML Format` / 登録 `MathML` / `MathML Presentation`、Office用TeX、登録 `LaTeX` raw断片、有効EMF、不透明DIBV5を同時登録する | `test_external_paste.ps1` |
-| AUT-11 | PowerPoint COMの通常 `Paste()` が編集可能なOffice Mathを18--24 ptで作り、PowerPoint自身の描画で分数・根号・総和・積分が空・置換文字・画像ではなく実際に見える | `test_external_paste.ps1` |
+| AUT-11 | PowerPoint COMの通常 `Paste()` が編集可能なOffice Mathを左寄せ24 ptで作り、PowerPoint自身の描画で分数・根号・総和・積分が空・置換文字・画像ではなく実際に見える | `test_external_paste.ps1` |
 | AUT-12 | IrfanView `/clippaste` が非空画像を生成し、試験前のクリップボード全形式を復元する | `test_external_paste.ps1` |
 | AUT-13 | Google スライド用PNGとHTMLが同一画像で、300 dpiかつ24 pt基準の同じ物理寸法を持つ | `test_external_paste.ps1` / `--self-test` |
 | AUT-14 | `--texclip` がUnicode／登録LaTeXを優先規則どおり読み、非空300 dpi PNG／全画素α=255 DIBV5へ置換する | `test_external_paste.ps1` |

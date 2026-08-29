@@ -19,7 +19,7 @@
   /* デプロイごとに上げる。ボタン行の右端に出て、開きっぱなしのタブが
    * 古い版を動かし続けていないかを一目で判別できる（.exe の
    * タイトルバー・ビルドスタンプと同じ教訓）。 */
-  var BUILD = "2026-08-29b";
+  var BUILD = "2026-08-29c";
 
   var PALETTES = [
     {
@@ -445,6 +445,38 @@
     return officeOmmlNode(doc.documentElement);
   }
 
+  /* ClipboardItemのtext/htmlはChromiumによってHTML文書として包み直され、
+   * PowerPointでは段落の既定18ptへ落ちる。同期copyイベントなら選択範囲と
+   * 同じCF_HTML断片として渡せるため、明示した24ptと左揃えを保持できる。
+   * 条件付きOMMLも同じ断片に含め、以前のMathML単独経路で発生した
+   * 「MathZoneだが空に見える」退行を防ぐ。 */
+  function writeOfficeClipboard(html, tex) {
+    var handled = false;
+    function onCopy(event) {
+      if (!event.clipboardData) return;
+      event.preventDefault();
+      event.clipboardData.setData("text/html", html);
+      event.clipboardData.setData("text/plain", tex);
+      handled = true;
+    }
+    document.addEventListener("copy", onCopy, true);
+    var executed = false;
+    try {
+      executed = document.execCommand("copy");
+    } catch (error) {
+      executed = false;
+    }
+    document.removeEventListener("copy", onCopy, true);
+    if (executed && handled) return Promise.resolve("copy-event");
+    if (window.ClipboardItem && navigator.clipboard && navigator.clipboard.write) {
+      return navigator.clipboard.write([new window.ClipboardItem({
+        "text/html": new Blob([html], { type: "text/html" }),
+        "text/plain": new Blob([tex], { type: "text/plain" })
+      })]).then(function () { return "clipboard-item"; });
+    }
+    return Promise.reject(new Error("clipboard API missing"));
+  }
+
   /* TeX → SVG。サイト共通の MathJax は CHTML 出力なので、初回押下時に
    * SVG 出力部品を動的に読み込み、グリフをパスとして埋め込む変換器を
    * 組み立てる（fontCache: "none"）。外部参照の無い SVG なので、後段の
@@ -774,12 +806,8 @@
         say("この数式はMathMLに変換できませんでした");
         return;
       }
-      /* 24 pt・左寄せ化で導入した同期 copy-event 経路は、PowerPointで
-       * MathZoneだけを持つ空のテキストボックスになる実機退行を起こした。
-       * 表示実績のあるClipboardItem経路を使う。ブラウザはWindowsの登録
-       * MathML形式を発行できないので、PowerPoint向けOMML分岐で構造を
-       * 保ち、それ以外にはnative版と同じ24pt MathMLを残す。Officeの
-       * HTML取り込み後の既定サイズは18pt（native登録MathMLは24pt）。 */
+      /* ChromiumからWindows登録MathML形式は発行できないため、同期CF_HTML
+       * 断片にPowerPoint用OMMLと、他アプリ用の同一24pt MathMLを載せる。 */
       var omml;
       try {
         omml = officeOmml(mml);
@@ -787,27 +815,18 @@
         say("この数式はOffice数式に変換できませんでした");
         return;
       }
-      var html = "<!DOCTYPE html><html xmlns:m=\"" +
-        "http://schemas.microsoft.com/office/2004/12/omml\"><body>" +
-        "<p style=\"margin:0;text-align:left\">" +
-        "<!--[if gte msEquation 12]><m:oMathPara><m:oMath>" + omml +
+      var html = "<p style=\"margin:0;text-align:left;font-size:24pt;" +
+        "color:#000000\"><!--[if gte msEquation 12]>" +
+        "<m:oMathPara xmlns:m=\"http://schemas.microsoft.com/office/" +
+        "2004/12/omml\"><m:oMathParaPr><m:jc m:val=\"left\"/>" +
+        "</m:oMathParaPr><m:oMath>" + omml +
         "</m:oMath></m:oMathPara><![endif]--><![if !msEquation]>" +
-        mml + "&#160;<![endif]></p></body></html>";
-      if (window.ClipboardItem && navigator.clipboard && navigator.clipboard.write) {
-        var item = new window.ClipboardItem({
-          "text/html": new Blob([html], { type: "text/html" }),
-          "text/plain": new Blob([tex], { type: "text/plain" })
-        });
-        navigator.clipboard.write([item]).then(
-          function () { say("PowerPoint数式をコピーしました"); },
-          function () { say("コピーできませんでした（ブラウザの権限を確認してください）"); }
-        );
-      } else {
-        navigator.clipboard.writeText(tex).then(
-          function () { say("このブラウザではTeXのみコピーしました"); },
-          function () { say("コピーできませんでした"); }
-        );
-      }
+        "<span style=\"font-size:24pt;color:#000000\">" + mml +
+        "</span><![endif]></p>";
+      writeOfficeClipboard(html, tex).then(
+        function () { say("24 pt・左揃えのPowerPoint数式をコピーしました"); },
+        function () { say("コピーできませんでした（ブラウザの権限を確認してください）"); }
+      );
     });
     root.querySelector(".eqed-copy-display").addEventListener("click", function () {
       navigator.clipboard.writeText("$$\n" + input.value.trim() + "\n$$").then(

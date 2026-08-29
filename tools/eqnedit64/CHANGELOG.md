@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+### Web PowerPoint paste is left-aligned 24 pt
+
+- The browser editor now writes one synchronous CF_HTML fragment instead of
+  letting `ClipboardItem` wrap it as a nested HTML document. PowerPoint keeps
+  the explicit 24 pt size while the paragraph remains left-aligned.
+- The same fragment carries conditional OMML for visible, editable Office Math
+  plus the shared 24 pt fallback MathML. This combines the visible structured
+  route with the earlier exact-size transport instead of accepting 18 pt.
+- Browser and real-PowerPoint gates now require 24 pt and left alignment; an
+  18 pt conversion is a release failure.
+
 ### Native/Web geometry and Office MathML parity
 
 - The native Geometry tab now exposes the browser editor's same 11
@@ -12,8 +23,7 @@
   side limits.  Native copy also supplies CF_HTML containing the exact same
   MathML as its registered `MathML` formats.  The browser HTML adds conditional
   OMML so PowerPoint preserves fractions, radicals, n-ary operators, overlines,
-  and underlines as editable Office Math; its Office HTML import remains 18 pt
-  because browsers cannot publish Windows' registered MathML format.
+  and underlines as editable Office Math.
 - Palette parity and real PowerPoint OOXML/render coverage now include the
   sum/integral and overline/underline constructs that exposed the mismatch.
 
