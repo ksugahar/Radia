@@ -5,7 +5,7 @@
 [`CANONICAL_OPERATION.md`](CANONICAL_OPERATION.md) と `release-eqnedit64` skillを
 正とする。`build\accept_release.ps1`は隔離CI/VM用であり、対話中LABでは実行しない。
 
-## 2026-08-30 通常Ctrl+V経路の再検証と18 pt採用
+## 2026-08-30 Eqnedit64 3.0.10: 通常Ctrl+V再検証と18 pt採用
 
 - 3.0.9までのPowerPoint試験は`slide.Shapes.Paste()`を使っていた。同じ
   クリップボードに対し、このオブジェクトモデル経路は数式・末尾・挿入点を
@@ -34,8 +34,22 @@
   Ctrl+Vの製品合否には使わない。
 - 修正後のローカル検証は、Web/MCP対象17件、Eqnedit64 pytest全22件、native
   `--self-test`終了コード0、`test_background.ps1` PASSとなった。実PowerPointの
-  再実行は、既存のPowerPoint窓を検出したため安全規則どおり未実施であり、
-  次回の隔離実行で`ExecuteMso("Paste")`経路を確認する。
+  初回再実行は既存のPowerPoint窓を検出したため安全規則どおり延期し、終了確認後に
+  `ExecuteMso("Paste")`経路を実行した。
+- その後PowerPoint終了を確認して実UI Pasteを実行したところ、段落は左揃え
+  `Alignment=1`だが新規テキストボックスの配置座標は`Left=239.9063 pt`だった。
+  通常Pasteが決める図形位置を段落揃えと誤認した旧判定を削除し、左寄せは段落の
+  `Alignment=1`、インライン`m:oMath`、`m:oMathPara`不在で判定する。
+- 同じ失敗経路でPowerPoint TextRangeのCOM参照が未解放となり、試験用プロセスが
+  残留した。数式全体・末尾文字・挿入点のRangeをfinallyで明示解放し、試験前後の
+  PowerPointプロセス0件を確認する。
+- 18 pt実UI描画で既知の分数線は35 pxだったため、24 pt時代の40 px閾値を30 pxへ
+  補正した。保存OOXMLの分数・根号・n-ary構造、画像寸法、30 px以上の水平線を
+  同時に要求するため、空画像・置換文字・豆腐字形の誤合格は許さない。
+- 補正後の実UI Pasteは数式・末尾・挿入点18/18/18 pt、段落`Alignment=1`、
+  PowerPoint描画643x365、数式ink 337x63、分数線35 pxでPASSした。同じ外部試験で
+  DIBV5 427x98、IrfanView PNG 427x98、Google Slides PNG 1333x304/300 dpi、
+  texclip PNG 1333x304もPASSし、終了後PowerPointプロセスは0件だった。
 
 根拠資料:
 

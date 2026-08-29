@@ -757,10 +757,12 @@ function Assert-PowerPointEquationRendering([string]$Path) {
         # glyph or tofu box has ink but cannot contain the long fraction rule.
         # Requiring its silhouette prevents the former "any black pixel" false
         # positive while remaining independent of font antialiasing.
-        # A fixed 40 px rule detects the known fraction in this 18 pt fixture
+        # The 18 pt UI-Paste fixture produces a 35 px fraction rule on LAB.
+        # A 30 px floor keeps antialiasing margin while remaining wider than a
+        # replacement glyph or tofu box.
         # without making the threshold depend on unrelated terms added to the
         # left-alignment sentinel prefix.
-        $requiredFractionRun = 40
+        $requiredFractionRun = 30
         if ($inkWidth -lt 40 -or $inkHeight -lt 20 -or
             $maxHorizontalRun -lt $requiredFractionRun) {
             throw ("PowerPoint did not render the expected fraction silhouette: " +
@@ -801,6 +803,9 @@ $presentation = $null
 $powerPointWindow = $null
 $slide = $null
 $pastedShape = $null
+$powerPointTextRange = $null
+$powerPointTailRange = $null
+$powerPointInsertionRange = $null
 $restoreFailure = $null
 $completed = $false
 
@@ -910,7 +915,11 @@ try {
         throw ("PowerPoint insertion point after the native equation is not 18 pt: " +
             "$powerPointInsertionFontSize pt.")
     }
-    if ($powerPointAlignment -ne 1 -or $powerPointLeft -gt 1.0) {
+    # UI Paste chooses the placement of a newly created text box, commonly
+    # around the centre of the slide. Shape.Left is therefore object position,
+    # not paragraph alignment. The alignment contract is the left-aligned
+    # paragraph containing inline m:oMath (also checked in saved OOXML below).
+    if ($powerPointAlignment -ne 1) {
         throw ("PowerPoint native equation is not left-aligned: " +
             "paragraphAlignment=$powerPointAlignment, left=$powerPointLeft pt.")
     }
@@ -1081,6 +1090,9 @@ try {
         "$texclipImageSize PNG/DIBV5 image at $($texclipContract.XPixelsPerMetre) px/m; $texclipDibContract")
     $completed = $true
 } finally {
+    Release-ComObject $powerPointInsertionRange
+    Release-ComObject $powerPointTailRange
+    Release-ComObject $powerPointTextRange
     Release-ComObject $pastedShape
     Release-ComObject $slide
     if ($presentation) { try { $presentation.Close() } catch {} }
