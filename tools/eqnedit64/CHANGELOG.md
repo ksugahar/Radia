@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 3.0.10 — 2026-08-30
+
 ### PowerPoint normal-paste acceptance follows the real UI path
 
 - Native and Web Office copy now declare the accepted 18 pt inline MathML and

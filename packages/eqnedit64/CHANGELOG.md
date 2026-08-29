@@ -1,5 +1,13 @@
 # Changelog
 
+## 3.0.10 - 2026-08-30
+
+- Make ordinary PowerPoint Ctrl+V create editable, left-aligned inline Office
+  Math at the accepted 18 pt destination size in both native and Web editions.
+- Replace the false `Shapes.Paste()` acceptance surrogate with PowerPoint's
+  built-in UI Paste command, and check 18 pt equation/tail/insertion ranges,
+  inline OMML structure, and nonblank rendered output.
+
 ## 3.0.9 - 2026-08-30
 
 - Show the semantic product version beside the source build stamp in the

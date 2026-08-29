@@ -1,7 +1,7 @@
 # Eqnedit64 GUI仕様
 
 - 仕様版: 1.0
-- 対象: Eqnedit64 3.0.9
+- 対象: Eqnedit64 3.0.10
 - 基準日: 2026-08-25
 - 適用範囲: `dist\Eqnedit64.exe`
 
