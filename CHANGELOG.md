@@ -12,6 +12,24 @@ All notable changes to the `radia` package.  Format: each release lists
   MTEF/`.eqn` readers, writers, tests, and reverse-engineering utilities were
   retired; TeX-to-OMML/PPTX headless generation remains supported.
 
+## 4.95.70 - Periodic-Kelvin C-yoke validation
+
+Released 2026-08-29.
+
+- Added a self-replaying Cubit/ACIS C-yoke validation that compares iron-only
+  HDiv-MMM against Omega-reduced-Omega on a locally refined spherical Kelvin
+  domain, with exact reflected topology, periodic identification, one coil,
+  one material law, and hash-checked per-engine checkpoints.
+- Unified the nonlinear HDiv and Omega B-H law as monotone PCHIP interpolation
+  with vacuum-slope continuation beyond the final table point. The nonlinear
+  order-2 primary comparison closes to 0.18032% relative RMS in the useful gap
+  core; the retained order-1 failure remains 5.85% and is identified as a
+  discretization limitation rather than an interpolation mismatch.
+- Hardened the periodic Kelvin scalar/vector potential paths, propagated the
+  requested HACApK rank cap through the native build, and made the C-yoke
+  checkpoint provenance sensitive to the exact solver, coil, and pybind
+  implementation.
+
 ## 4.95.69 - Typed Simulink optimization and IH telemetry
 
 Released 2026-08-29.

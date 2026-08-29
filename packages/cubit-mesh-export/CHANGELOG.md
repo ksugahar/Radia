@@ -6,6 +6,21 @@ VTK / MEG / FEMEEM writers + Python bindings for consistency checks).
 
 ## Unreleased
 
+## 0.14.13 - Reflection-invariant Kelvin validation meshes
+
+Released 2026-08-29.
+
+- Added the exact Cubit/ACIS C-yoke route used by Radia's HDiv/Omega
+  cross-validation. The exporter builds a locally refined physical-air sphere
+  plus translated Kelvin sphere without a finite outer box and preserves the
+  required one-to-one periodic identification.
+- Mesh one half and reflect the meshed volumes for exact z-symmetry, remove
+  same-material webcut seam descriptors without removing conforming shared
+  topology, and fail loudly when automatic Kelvin construction cannot satisfy
+  its geometry or identification contract.
+- Added a helpers-only installation path so Cubit Python helpers can be
+  refreshed without copying or replacing native `.ccm`/`.pyd` binaries.
+
 ## 0.14.12 - Validated Nastran mesh interchange
 
 Released 2026-08-27.
