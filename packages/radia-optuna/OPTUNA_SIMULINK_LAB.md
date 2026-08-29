@@ -1,9 +1,9 @@
 # Radia Optuna Simulink laboratory
 
 This laboratory is designed for iteration, not for drawing an optimizer out
-of signal lines. The public `Optuna Study` block has two inputs and four
-outputs; the complete six-input/eighteen-output runtime stays inside the
-masked subsystem.
+of signal lines. The public `Optuna Study` block has two inputs, four scalar
+convenience outputs, and one typed monitor Bus; the complete
+six-input/eighteen-output runtime stays inside the masked subsystem.
 
 | Port | Meaning |
 |---|---|
@@ -13,11 +13,14 @@ masked subsystem.
 | output `status` | `0` idle, `1` complete, `2` running, `3` cancelled, `4` paused, `-1` failure. |
 | output `progress` | Number of attempted trials. |
 | output `best trial` | Zero-based trial number of the current best result. |
+| output `monitor` | Fixed-schema `OptunaMonitorBusV1` for Bus Selector, Scope, SDI, and logging. |
 
 Sampler, seed, pruner, bounds, total trial budget, objective, and MAT study
 path are mask parameters. Pareto points, failed/pruned states, constraints,
 intermediate values, and all parameter values remain in the normalized study
-tables instead of becoming permanent top-level wiring.
+tables instead of becoming permanent top-level wiring. The monitor Bus carries
+only fixed scalar telemetry, so increasing the trial budget or Pareto-front
+size never changes model topology.
 
 ## 1. Open the known-optimum exercise
 
@@ -28,8 +31,10 @@ open_system("radia_optuna_teaching")
 ```
 
 Run the model. The constrained quadratic has its unconstrained minimum at
-`x = 0.25`. The four visible signals are sufficient to tell whether the run
-completed and which trial is currently best.
+`x = 0.25`. The four visible scalar signals are sufficient to tell whether the
+run completed and which trial is currently best. Use a Bus Selector on
+`monitor` when you also want attempted/completed/pruned/failed counts, the
+current trial, the most recent value, or Pareto revisions.
 
 Double-click `Optuna Study` and press **Review saved study**, or run:
 

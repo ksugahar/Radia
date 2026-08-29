@@ -52,3 +52,12 @@ def test_standalone_panels_redirects_to_cubit_panels_route():
     assert "validation_test" in doc
     assert "src/radia/panels/samples/" in doc
     assert "Simulink library" in doc
+
+
+def test_standalone_panels_documents_ih_monitor_bus_boundary():
+    doc = get_standalone_panels_documentation("ih_methods")
+
+    assert "IHMonitorBusV1" in doc
+    assert "RadiaMonitorHeaderV1" in doc
+    assert "cell-weighted" in doc
+    assert "raw heat-density `q`" in doc
