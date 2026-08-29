@@ -235,6 +235,10 @@ $env:EQNEDIT64_ISOLATED_TEST_SESSION = '1'
 pwsh -NoProfile -File build\accept_release.ps1
 ```
 
+菅原のハンドテストに渡す候補は、署名・ローカルバックグラウンド試験後に
+`sync_handtest_to_o.ps1`で `O:\Eqnedit64.exe` へ先に同期します。O:が正規の
+ハンドテスト入口であり、`C:\temp`だけに候補を置いてテストを依頼しません。
+
 リリース時は、リリースコミットを先に `main` へpushしてCIを通し、同じ
 `origin/main`から作った署名済みEXEを `O:\Eqnedit64.exe` と
 `O:\Eqnedit64.release.json` へ同期します。その成功後にだけ

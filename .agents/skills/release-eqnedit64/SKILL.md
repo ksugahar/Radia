@@ -3,11 +3,28 @@ name: release-eqnedit64
 description: "Release and deploy Eqnedit64 from one exact tag, including signed standalone EXE verification, GitHub/PyPI publication checks, and byte-identical synchronization to O:\\Eqnedit64.exe. Use for Eqnedit64 releases, publication, or updating the shared O: copy."
 ---
 
-# Release Eqnedit64
+# Hand-test and release Eqnedit64
 
 Finish with three matching outcomes: `O:\Eqnedit64.exe`, the tagged GitHub
 Release, and the PyPI wheels. Do not call the release complete while any one is
 stale.
+
+## O: hand-test invariant
+
+- `O:\Eqnedit64.exe` is Sugahara's canonical hand-test entry point. After a
+  candidate is committed, developer-signed, and passes the local background
+  tests, update O: **before asking Sugahara to test it**. Do not leave the only
+  testable candidate under `C:\temp` or a worktree path.
+- Hand-test staging does not require a version bump, a push to `main`, or a
+  release tag. It does require a clean committed source, a build stamp matching
+  that exact commit, a valid `CN=ksugahar` signature, and byte-identical copy.
+- Use `scripts/sync_handtest_to_o.ps1`. It writes
+  `O:\Eqnedit64.handtest.json` and preserves the former formal release manifest
+  as `O:\Eqnedit64.last-release.json`. While a hand-test candidate is current,
+  `O:\Eqnedit64.release.json` must be absent so tag publication cannot mistake
+  the candidate for a release artifact.
+- A later formal `sync_to_o.ps1` recreates `Eqnedit64.release.json` and removes
+  the hand-test marker after all release-only checks pass.
 
 ## Release invariants
 
@@ -60,6 +77,17 @@ unrelated or remote user processes.
 An explicit release/deploy/update request authorizes the matching `O:` update.
 For a request that only asks to inspect or test Eqnedit64, obtain authorization
 before changing `O:`.
+
+For an authorized hand-test update, run:
+
+```powershell
+pwsh -File .agents/skills/release-eqnedit64/scripts/sync_handtest_to_o.ps1 `
+  -SourceExe tools/eqnedit64/dist/Eqnedit64.exe `
+  -SourceSha (git rev-parse HEAD)
+```
+
+Report the O: destination, hand-test manifest, source SHA, SHA-256, product
+version, and signer status. A hand-test update is not a public release.
 
 Report the pushed main SHA, O: manifest, tag, GitHub Release URL, PyPI version,
 destination path, SHA-256, product version, and signer status.
