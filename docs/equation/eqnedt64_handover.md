@@ -2,7 +2,7 @@
 
 - 文書状態: 現行
 - 対象製品: Eqnedit64 native / Python package / Web editor
-- 対象リリース: 3.0.3（公開済み）
+- 対象リリース: 3.0.4（公開済み）
 - 基準日: 2026-08-29
 - リポジトリ: `ksugahar/Radia`
 
@@ -358,7 +358,9 @@ native出力は `tools/eqnedit64/dist/Eqnedit64.exe`。ビルド前に同じ出�
 2. PR CIを通し、`main`へ統合する。
 3. `main`をpushし、Eqnedit64専用main CIがgreenであることを確認する。
 4. exact `origin/main`からLABでrelease EXEをビルドし、`CN=ksugahar`で署名する。
-5. `accept_release.ps1`の最終受入を通す。
+5. `sync_to_o.ps1 -WhatIf`でversion、build stamp、署名、source SHA、O:配置先を
+   事前検査する。private-font full suiteはPR/main/tagの隔離CIだけで行い、対話中LABで
+   `EQNEDIT64_ISOLATED_TEST_SESSION`を偽装して`accept_release.ps1`を実行しない。
 6. `.agents/skills/release-eqnedit64/scripts/sync_to_o.ps1`で
    `O:\Eqnedit64.exe`を更新する。
 7. `O:\Eqnedit64.release.json`へ予定tag、version、source SHA、EXE SHA-256、signerを記録し、
@@ -377,21 +379,22 @@ pushするとrelease gateが失敗するのが正しい。
 
 ## 13. 現在の公開状態
 
-Eqnedit64 3.0.3が2026-08-29時点の公開済み基準版である。
+Eqnedit64 3.0.4が2026-08-29時点の公開済み基準版である。
 
-- product tag: `eqnedit64-v3.0.3`
-- product tag source: `c15e626d28245ee2db5b688f52d7756e000780a4`
+- product tag: `eqnedit64-v3.0.4`
+- product tag source: `abb66868da37032e353e44061ac5b4d24cc33d5c`
 - O: / GitHub Release EXE SHA-256:
-  `C6D88C59227718FFE8A9BDB435632EAC64F5709615520FBA04E2C0A5C77C8A8F`
+  `7BA0547D8779F97285C8B20857F7C395688386FBFF38B524DEABE494F3043121`
 - signer: `CN=ksugahar`
-- GitHub Release: `https://github.com/ksugahar/Radia/releases/tag/eqnedit64-v3.0.3`
-- PyPI: `https://pypi.org/project/eqnedit64/3.0.3/`
+- GitHub Release: `https://github.com/ksugahar/Radia/releases/tag/eqnedit64-v3.0.4`
+- PyPI: `https://pypi.org/project/eqnedit64/3.0.4/`
 - PyPI wheels: CPython 3.10、3.11、3.12、3.13の`win_amd64`計4個。
-- O:、GitHub Release、CPython 3.12 wheelから再取得した同梱EXEはbyte-identicalで、
+- O:、GitHub Release、4個すべてのwheelから再取得した同梱EXEはbyte-identicalで、
   すべて上記SHA-256と有効な`CN=ksugahar`署名を持つ。
 
-3.0.2は安全なfile-backed private font登録を導入した前版である。3.0.3はその安全策を維持し、
-8章のvisual regressionと、同じ種類の見落としを防ぐ全パレット実描画試験を同梱する。
+3.0.3は太字とパレット表示を修正した前版である。3.0.4はその安全策とvisual regressionを
+維持し、native/Web共通の数式スタイルパレット、拡張数式アルファベット、`\bm`の太字
+ギリシャ文字、および二重正規化の回帰試験を同梱する。
 
 ## 14. ソース地図
 
