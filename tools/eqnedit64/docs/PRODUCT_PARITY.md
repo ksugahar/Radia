@@ -25,7 +25,7 @@ Eqnedit64.exe と Web/JS 数式エディタは、Radia の `tools/eqnedit64` で
 | 機能 | Eqnedit64.exe | Web/JS | 区分 |
 |---|---|---|---|
 | TeXを唯一の正本とする | 必須 | 必須 | 共通中核 |
-| MathML経由で編集可能なOffice数式へ貼り付け | 登録MathML | MathMLを含むHTML | 共通中核 |
+| MathML経由で編集可能なOffice数式へ貼り付け | inline MathMLを含むHTML + 同一登録MathML | 同じfallback MathML + 条件付きOMMLを含むHTML | 共通中核 |
 | 画像を混在させないOffice専用コピー | 必須 | 必須 | 共通中核 |
 | パレットとTeXソースの対応 | 必須 | 必須 | 共通学習面 |
 | 常設書体 `\mathrm` / `\mathit` / `\mathbf` | 選択変更・継続入力 | 選択を包む・空欄挿入 | 共通学習面 |
@@ -36,10 +36,13 @@ Eqnedit64.exe と Web/JS 数式エディタは、Radia の `tools/eqnedit64` で
 | 数式3.0由来ショートカット | 互換層として必須 | 非該当 | native固有 |
 | インストール不要のブラウザ利用 | 非該当 | 必須 | Web固有 |
 
-クリップボード形式は環境に合わせて異なってよい。共通契約はバイト列の一致ではなく、
-「同じTeXから、目に見え、編集可能で、代表構造を保つOffice数式が得られる」という
-利用者の結果である。Office側の変換により18--24 ptとなる経路は許容するが、空の
-テキストボックス、置換文字だけの描画、画像への退化は不合格とする。
+両製品のfallback MathMLはinline・24 ptとし、総和は上下限、通常の積分はTeX同様の
+右側上下限という共通構造契約を持つ。Web版はブラウザ制約を越えるため、同じMathML
+から条件付きOMMLも生成してPowerPointへ渡す。生成器（native構造木とMathJax）が
+異なるためXMLの補助要素や直列化バイト列は同一でなくてよいが、保存OOXML上の分数、
+根号、n-ary、上線、下線と目視結果は一致させる。ブラウザはWindows登録MathMLを
+発行できないためPowerPointのWeb HTML経路は18 pt、EXE登録MathML経路は24 ptである。
+空のテキストボックス、置換文字だけの描画、画像への退化は不合格とする。
 
 ## 変更規則
 
