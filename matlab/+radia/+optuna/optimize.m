@@ -46,6 +46,13 @@ arguments
     options (1,1) radia.optuna.OptimizeOptions = radia.optuna.OptimizeOptions()
 end
 
+if ~isscalar(options.Directions)
+    error("radia:optuna:OptimizeDirections", ...
+        "radia.optuna.optimize follows the single-objective Global " + ...
+        "Optimization Toolbox contract. Use OptimizationSession for " + ...
+        "multiple objectives and Pareto-front selection.");
+end
+
 if isstruct(parameters)
     parameters = radia.optuna.OptimizationParameter.fromStruct(parameters);
 end
