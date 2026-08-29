@@ -1,0 +1,15 @@
+{
+  "schema": "cubit-mesh-export.native-payloads.v1",
+  "payloads": {
+    "cubit_mesh_curver.pyd": {
+      "asset_name": "cubit_mesh_curver-7a297fe0a0c4c4ef170fff322816f7d219529300fb5b34eb519f4ef3e542cb15.pyd",
+      "github_release_tag": "binaries",
+      "sha256": "7a297fe0a0c4c4ef170fff322816f7d219529300fb5b34eb519f4ef3e542cb15",
+      "size": 781824,
+      "python_abi": "cp312",
+      "platform": "win_amd64",
+      "cubit_version": "2025.12",
+      "netgen_version": "6.2.2606"
+    }
+  }
+}
