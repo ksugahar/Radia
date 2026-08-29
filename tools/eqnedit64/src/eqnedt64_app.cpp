@@ -779,7 +779,7 @@ bool start_operation_debug(bool announce,
                     "\telapsed_ms\tdelta_ms\tfocus\tinput_style\talignment"
                     "\tzoom_percent\tequation_mode"
                     "\tshortcut_prefix\tlatex\r\n");
-    debug_event("debug.start", "Eqnedit64 3.0.2 path=" + utf8_wide(path));
+    debug_event("debug.start", "Eqnedit64 3.0.3 path=" + utf8_wide(path));
     update_debug_menu();
     update_title();
     /* The status bar and the [操作ログ記録中] flag in the title say all of
@@ -2172,10 +2172,15 @@ bool font_owns_glyphs(HFONT font, const wchar_t* sample) {
  * renders with it every run, and it covers every palette face -- so the
  * buttons no longer depend on the machine''s font table being healthy. */
 HFONT pick_button_font(int heightPx) {
-    /* One character from each palette face family, including the trickiest. */
-    const wchar_t* sample =
-        L"\x2264\x22EF\x00B1\x2192\x2200\x2208\x2202\x03B1\x0393"
-        L"\x00BD\x221A\x2211\x222B\x00AF\x220F\x229E(x";
+    /* Derive the required cmap from the real catalogue.  A hand-maintained
+     * sample missed the old CJK actions and U+25AF, allowing font linking to
+     * turn popup cells into black replacement shapes on LAB. */
+    std::wstring sample;
+    for (const auto& palette : eqnedit::palettes()) {
+        sample += wide_utf8(palette.face);
+        for (const auto& item : palette.items)
+            sample += wide_utf8(item.face);
+    }
     eqnedit::ensure_math_font_ready();
     const wchar_t* candidates[] = {L"Latin Modern Math", L"Cambria Math",
                                    L"Segoe UI Symbol"};
@@ -2184,7 +2189,7 @@ HFONT pick_button_font(int heightPx) {
                                  FALSE, DEFAULT_CHARSET, OUT_TT_PRECIS,
                                  CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY,
                                  VARIABLE_PITCH, face);
-        if (font_owns_glyphs(font, sample) &&
+        if (font_owns_glyphs(font, sample.c_str()) &&
             font_draws_ink(font, L"\x2264\x2260 ab")) {
             flight_note(std::string("font.buttons ") + utf8_wide(face));
             return font;
@@ -2194,6 +2199,66 @@ HFONT pick_button_font(int heightPx) {
     }
     flight_note("font.buttons.fallback DEFAULT_GUI_FONT");
     return HFONT(GetStockObject(DEFAULT_GUI_FONT));
+}
+
+void draw_palette_cell(HDC dc, const RECT& rect, HFONT font,
+                       const std::wstring& face, bool hot) {
+    FillRect(dc, &rect, GetSysColorBrush(hot ? COLOR_HIGHLIGHT : COLOR_MENU));
+    SetBkMode(dc, TRANSPARENT);
+    SetTextColor(dc, GetSysColor(hot ? COLOR_HIGHLIGHTTEXT : COLOR_MENUTEXT));
+    HGDIOBJ old = SelectObject(dc, font);
+    RECT textRect = rect;
+    DrawTextW(dc, face.c_str(), int(face.size()), &textRect,
+              DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
+    SelectObject(dc, old);
+}
+
+/* Run the exact owner-draw path used by WM_DRAWITEM into an off-screen menu
+ * cell.  Cmap ownership prevents fallback tofu, while a minimum ink count
+ * prevents an empty or one-pixel rendering from qualifying as readable. */
+bool palette_cell_draws_readably(HFONT font, const std::wstring& face,
+                                 int dpi) {
+    if (!font || face.empty() || !font_owns_glyphs(font, face.c_str()))
+        return false;
+    const int width = MulDiv(34, dpi, 96);
+    const int height = MulDiv(28, dpi, 96);
+    HDC dc = CreateCompatibleDC(nullptr);
+    if (!dc) return false;
+    BITMAPINFO info{};
+    info.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+    info.bmiHeader.biWidth = width;
+    info.bmiHeader.biHeight = -height;
+    info.bmiHeader.biPlanes = 1;
+    info.bmiHeader.biBitCount = 32;
+    info.bmiHeader.biCompression = BI_RGB;
+    void* bits = nullptr;
+    HBITMAP bitmap = CreateDIBSection(dc, &info, DIB_RGB_COLORS, &bits,
+                                      nullptr, 0);
+    if (!bitmap || !bits) {
+        if (bitmap) DeleteObject(bitmap);
+        DeleteDC(dc);
+        return false;
+    }
+    HGDIOBJ old = SelectObject(dc, bitmap);
+    RECT rect{0, 0, width, height};
+    draw_palette_cell(dc, rect, font, face, false);
+    GdiFlush();
+    const COLORREF background = GetSysColor(COLOR_MENU);
+    const auto* pixels = static_cast<const unsigned char*>(bits);
+    size_t ink = 0;
+    for (int i = 0; i < width * height; ++i) {
+        const size_t at = size_t(i) * 4;
+        if (pixels[at] != GetBValue(background) ||
+            pixels[at + 1] != GetGValue(background) ||
+            pixels[at + 2] != GetRValue(background)) ++ink;
+    }
+    SelectObject(dc, old);
+    DeleteObject(bitmap);
+    DeleteDC(dc);
+    /* A centred dot is intentionally only a handful of pixels at 96 dpi.
+     * Its exact cmap ownership is the stronger anti-tofu condition; require
+     * the real draw path to add more than a lone accidental pixel. */
+    return ink >= size_t(std::max(2, dpi / 48));
 }
 
 /* Category labels are Japanese, so DEFAULT_GUI_FONT is not a sufficient
@@ -3349,16 +3414,8 @@ LRESULT CALLBACK MainProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             auto face = g.paletteFaces.find(UINT(di->itemID));
             if (face == g.paletteFaces.end()) break;
             const bool hot = (di->itemState & ODS_SELECTED) != 0;
-            FillRect(di->hDC, &di->rcItem, GetSysColorBrush(
-                hot ? COLOR_HIGHLIGHT : COLOR_MENU));
-            SetBkMode(di->hDC, TRANSPARENT);
-            SetTextColor(di->hDC, GetSysColor(
-                hot ? COLOR_HIGHLIGHTTEXT : COLOR_MENUTEXT));
-            HGDIOBJ old = SelectObject(di->hDC, g.paletteFont);
-            DrawTextW(di->hDC, face->second.c_str(), int(face->second.size()),
-                      &di->rcItem,
-                      DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
-            SelectObject(di->hDC, old);
+            draw_palette_cell(di->hDC, di->rcItem, g.paletteFont,
+                              face->second, hot);
             return TRUE;
         }
         /* Teach the exact TeX spelling while the palette is open.  The glyph
@@ -4254,19 +4311,20 @@ int visual_scale_test() {
         }
 
         const size_t bytes = size_t(width) * size_t(height) * 4;
-        const auto render = [&](bool select, bool showCaret) {
+        const auto render = [&](eqnedit::Equation& rendered,
+                                bool select, bool showCaret) {
             RECT all{0, 0, width, height};
             FillRect(dc, &all, HBRUSH(GetStockObject(WHITE_BRUSH)));
-            if (select) equation.select_all(); else equation.clear_selection();
-            equation.draw_gdi(dc, 8, 8, scale, g.style, true, showCaret);
+            if (select) rendered.select_all(); else rendered.clear_selection();
+            rendered.draw_gdi(dc, 8, 8, scale, g.style, true, showCaret);
             GdiFlush();
             std::vector<unsigned char> image(bytes);
             memcpy(image.data(), bits, bytes);
             return image;
         };
-        const std::vector<unsigned char> plain = render(false, false);
-        const std::vector<unsigned char> withCaret = render(false, true);
-        const std::vector<unsigned char> selected = render(true, false);
+        const std::vector<unsigned char> plain = render(equation, false, false);
+        const std::vector<unsigned char> withCaret = render(equation, false, true);
+        const std::vector<unsigned char> selected = render(equation, true, false);
 
         size_t ink = 0, caretPixels = 0, selectionPixels = 0;
         for (size_t i = 0; i + 2 < bytes; i += 4) {
@@ -4279,24 +4337,76 @@ int visual_scale_test() {
                 plain[i + 1] != selected[i + 1] ||
                 plain[i + 2] != selected[i + 2]) ++selectionPixels;
         }
+        if (ink < 40 || caretPixels < size_t(std::max(2, dpi / 48)) ||
+            selectionPixels < 20) {
+            SelectObject(dc, old);
+            DeleteObject(bitmap);
+            DeleteDC(dc);
+            return 185;
+        }
+
+        /* A vector character must be visibly bold on the actual GDI canvas,
+         * not merely serialize as \mathbf in TeX/MathML.  The old TF_VECTOR
+         * path drew the ordinary E byte-for-byte identically. */
+        eqnedit::Equation normalLetter;
+        eqnedit::Equation vectorLetter;
+        normalLetter.load_latex("E");
+        vectorLetter.load_latex("\\mathbf{E}");
+        const std::vector<unsigned char> normalPixels =
+            render(normalLetter, false, false);
+        const std::vector<unsigned char> vectorPixels =
+            render(vectorLetter, false, false);
+        size_t boldDifference = 0;
+        size_t normalInk = 0;
+        size_t vectorInk = 0;
+        for (size_t i = 0; i + 2 < bytes; i += 4) {
+            const bool normalDark = normalPixels[i] < 180 ||
+                normalPixels[i + 1] < 180 || normalPixels[i + 2] < 180;
+            const bool vectorDark = vectorPixels[i] < 180 ||
+                vectorPixels[i + 1] < 180 || vectorPixels[i + 2] < 180;
+            if (normalDark) ++normalInk;
+            if (vectorDark) ++vectorInk;
+            if (normalPixels[i] != vectorPixels[i] ||
+                normalPixels[i + 1] != vectorPixels[i + 1] ||
+                normalPixels[i + 2] != vectorPixels[i + 2]) ++boldDifference;
+        }
+        const bool boldVisible =
+            boldDifference >= size_t(std::max(12, dpi / 4)) &&
+            vectorInk > normalInk;
         SelectObject(dc, old);
         DeleteObject(bitmap);
         DeleteDC(dc);
-        if (ink < 40 || caretPixels < size_t(std::max(2, dpi / 48)) ||
-            selectionPixels < 20) return 185;
+        if (!boldVisible) return 203;
 
         HFONT paletteFont = pick_button_font(MulDiv(17, dpi, 96));
-        const bool paletteVisible = font_draws_ink(
-            paletteFont, L"\x2264\x2260\x03B1\x222B\x2211");
+        bool paletteVisible = true;
+        int paletteCellIndex = 0;
+        int failedPaletteCell = -1;
+        for (const auto& palette : eqnedit::palettes()) {
+            for (const auto& item : palette.items) {
+                const std::wstring face = wide_utf8(item.face);
+                if (!palette_cell_draws_readably(paletteFont, face, dpi)) {
+                    flight_note("font.palette_cell.failed " + item.command);
+                    paletteVisible = false;
+                    failedPaletteCell = paletteCellIndex;
+                    break;
+                }
+                ++paletteCellIndex;
+            }
+            if (!paletteVisible) break;
+        }
         if (paletteFont && paletteFont != GetStockObject(DEFAULT_GUI_FONT))
             DeleteObject(paletteFont);
+        /* Encode the catalogue index in the exit status so a headless CI log
+         * identifies the exact bad cell without a screenshot or desktop. */
+        if (!paletteVisible) return 204 + failedPaletteCell;
         HFONT sourceFont = CreateFontW(-MulDiv(16, dpi, 96), 0, 0, 0,
             FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_TT_PRECIS,
             CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, FIXED_PITCH | FF_MODERN,
             L"Consolas");
         const bool sourceVisible = font_draws_ink(sourceFont, L"\\frac{x}{y}");
         if (sourceFont) DeleteObject(sourceFont);
-        if (!paletteVisible || !sourceVisible) return 186;
+        if (!sourceVisible) return 186;
     }
     return 0;
 }
