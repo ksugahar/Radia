@@ -33,6 +33,8 @@ def test_three_engine_runner_has_shared_physics_contract():
     assert '"--hdiv-gram-eps"' in runner
     assert 'default=1.0e-14' in runner
     assert '"--primary-only"' in runner
+    assert '"--reduced-a-relax"' in runner
+    assert '"relax": float(options.reduced_a_relax)' in runner
     assert 'primary_pair_name = "hdiv_mmm__vs__omega_reduced_omega"' in runner
     assert '"primary_gap_core_relative_rms"' in runner
     assert '"bh_interpolation_shared"' in runner
@@ -80,6 +82,48 @@ def test_omega_and_hdiv_share_the_nonlinear_bh_interpolation_contract():
     )
     omega_values = np.asarray([omega_b_of_h(value) for value in h_values])
     np.testing.assert_array_equal(omega_values, hdiv_values)
+
+
+def test_reduced_a_nonlinear_direct_path_is_symmetric_and_residual_checked():
+    source = (
+        ROOT / "src" / "radia" / "vector_potential_solver.py"
+    ).read_text(encoding="utf-8")
+    nonlinear = source.split("def solve_nonlinear(", 1)[1].split(
+        "def solve_hysteresis(", 1
+    )[0]
+    assert "BilinearForm(fes, symmetric=True)" in nonlinear
+    assert "eps = 1e-6" in nonlinear
+    assert "inverse='pardisospd'" in nonlinear
+    assert "maximum_linear_relative_residual" in nonlinear
+    assert "reduced-A linear solve failed its relative-residual" in nonlinear
+    assert "reduced-A linear solve produced a non-finite residual" in nonlinear
+    assert "_build_nu_of_b_interpolator(bh_data)" in nonlinear
+    assert "interp1d" not in nonlinear
+
+
+def test_reduced_a_inverts_the_shared_pchip_b_of_h_law():
+    from radia.scalar_potential_solver import MU_0, _build_bh_interpolator
+    from radia.vector_potential_solver import _build_nu_of_b_interpolator
+
+    table = np.loadtxt(
+        SUITE.parents[1]
+        / "src"
+        / "radia"
+        / "panels"
+        / "samples"
+        / "em_sample_bh.txt"
+    )[:, :2]
+    b_of_h = _build_bh_interpolator(table)
+    nu_of_b, b_max = _build_nu_of_b_interpolator(table)
+    h_samples = np.geomspace(max(table[1, 0] * 1e-3, 1e-8), 4 * table[-1, 0], 200)
+    for h_value in h_samples:
+        b_value = b_of_h(h_value)
+        recovered_h = nu_of_b(b_value) * b_value
+        np.testing.assert_allclose(recovered_h, h_value, rtol=2e-12, atol=1e-8)
+    assert b_max == table[-1, 1]
+    b_above = 1.5 * b_max
+    expected_h = table[-1, 0] + (b_above - b_max) / MU_0
+    np.testing.assert_allclose(nu_of_b(b_above) * b_above, expected_h)
 
 
 def test_mesh_builder_keeps_hdiv_air_mesh_free():
@@ -163,3 +207,29 @@ def test_tracked_kelvin_results_preserve_pass_and_failed_gate_evidence():
     ]
     assert nonlinear_order2["primary_gap_core_relative_rms"] < 0.003
     assert nonlinear_order2["comparison_contract"]["bh_interpolation_shared"]
+
+
+def test_mesh_family_builder_uses_one_geometric_cubit_sequence():
+    source = (SUITE / "build_mesh_family.py").read_text(encoding="utf-8")
+    assert 'DEFAULT_LEVELS = (' in source
+    assert '("coarse", 1.25)' in source
+    assert '("medium", 1.00)' in source
+    assert '("fine", 0.80)' in source
+    assert 'from build_cubit_meshes import CUBIT_DEFAULT, build' in source
+    assert '"geometric_size_sequence": True' in source
+    assert '"element_counts_strictly_increase"' in source
+    assert "netgen.occ" not in source
+
+
+def test_accuracy_certificate_requires_all_three_converged_routes():
+    source = (SUITE / "run_mesh_convergence.py").read_text(encoding="utf-8")
+    assert 'ENGINES = ("hdiv_mmm", "reduced_a", "omega_reduced_omega")' in source
+    assert 'tuple(payload.get("engines", {})) != ENGINES' in source
+    assert 'if not payload.get("nonlinear_converged", False)' in source
+    assert '"mesh_convergence_passed"' in source
+    assert '"fine_mesh_cross_formulation_passed"' in source
+    assert '"combined_uncertainty_passed"' in source
+    assert '"independent_host_reproducibility_passed"' in source
+    assert '"analytic_absolute_truth_claimed": False' in source
+    assert 'subprocess.Popen(' in source
+    assert '"--primary-only"' not in source
