@@ -607,15 +607,61 @@ function Get-ClipboardFormatCount {
     }
 }
 
-function Get-SlideXml([string]$PptxPath) {
+function Get-SlideXml([string]$PptxPath, [int]$SlideNumber = 1) {
     $archive = [IO.Compression.ZipFile]::OpenRead($PptxPath)
     try {
-        $entry = $archive.GetEntry('ppt/slides/slide1.xml')
-        if ($null -eq $entry) { throw 'PowerPoint output has no slide1.xml.' }
+        $entryName = "ppt/slides/slide$SlideNumber.xml"
+        $entry = $archive.GetEntry($entryName)
+        if ($null -eq $entry) { throw "PowerPoint output has no $entryName." }
         $reader = [IO.StreamReader]::new($entry.Open(), [Text.Encoding]::UTF8)
         try { return $reader.ReadToEnd() } finally { $reader.Dispose() }
     } finally {
         $archive.Dispose()
+    }
+}
+
+function Assert-PowerPointRowsShareLeftEdge([string]$Path) {
+    $bitmap = [Drawing.Bitmap]::FromFile($Path)
+    try {
+        $bands = @()
+        $current = $null
+        for ($y = 0; $y -lt $bitmap.Height; $y++) {
+            $rowMinX = $bitmap.Width
+            $hasInk = $false
+            for ($x = 0; $x -lt $bitmap.Width; $x++) {
+                $pixel = $bitmap.GetPixel($x, $y)
+                if ($pixel.A -gt 0 -and
+                    ($pixel.R -lt 245 -or $pixel.G -lt 245 -or
+                     $pixel.B -lt 245)) {
+                    $hasInk = $true
+                    $rowMinX = [Math]::Min($rowMinX, $x)
+                }
+            }
+            if ($hasInk) {
+                if ($null -eq $current -or $y -gt $current.Bottom + 2) {
+                    $current = [pscustomobject]@{
+                        Top = $y; Bottom = $y; Left = $rowMinX
+                    }
+                    $bands += $current
+                } else {
+                    $current.Bottom = $y
+                    $current.Left = [Math]::Min($current.Left, $rowMinX)
+                }
+            }
+        }
+        if ($bands.Count -ne 3) {
+            throw "PowerPoint aligned fixture rendered $($bands.Count) rows, expected 3."
+        }
+        $lefts = @($bands | ForEach-Object { [int]$_.Left })
+        $spread = ($lefts | Measure-Object -Maximum).Maximum -
+            ($lefts | Measure-Object -Minimum).Minimum
+        if ($spread -gt 4) {
+            throw ("PowerPoint equation-array rows do not share a left edge: " +
+                "lefts=$($lefts -join ',') px, spread=$spread px.")
+        }
+        return "row-lefts=$($lefts -join ','); spread=$spread px"
+    } finally {
+        $bitmap.Dispose()
     }
 }
 
@@ -692,9 +738,12 @@ $irfanView = 'C:\Program Files\IrfanView\i_view64.exe'
 $runId = [Guid]::NewGuid().ToString('N')
 $pptxOutput = "C:\temp\Eqnedit64-PowerPoint-paste-$runId.pptx"
 $powerPointPngOutput = "C:\temp\Eqnedit64-PowerPoint-paste-$runId.png"
+$alignedPowerPointPngOutput =
+    "C:\temp\Eqnedit64-PowerPoint-aligned-paste-$runId.png"
 $pngOutput = "C:\temp\Eqnedit64-IrfanView-paste-$runId.png"
 $texclipPngOutput = "C:\temp\Eqnedit64-texclip-paste-$runId.png"
 $cliTexInput = "C:\temp\Eqnedit64-cli-input-$runId.tex"
+$alignedCliTexInput = "C:\temp\Eqnedit64-aligned-cli-input-$runId.tex"
 # A delimiter space after a control word is valid TeX and proves that the
 # public file-based CLI normalises the supplied equation rather than copying a
 # private fixed fixture.
@@ -702,6 +751,9 @@ $expectedRaw = 'x+\sum_{n=1}^{m} a^3 \int_{a}^{b} \frac{f(x)}{\sqrt{y}}\, dx^3 +
 $expectedOffice = '\[' + $expectedRaw + '\]'
 [IO.File]::WriteAllText(
     $cliTexInput, $expectedOffice, [Text.UTF8Encoding]::new($false))
+$alignedRaw = '\begin{aligned}\mathrm{I}\\\mathrm{IIIIIIII}\\\mathrm{IIIIIIIIIIIIIIII}\end{aligned}'
+[IO.File]::WriteAllText(
+    $alignedCliTexInput, $alignedRaw, [Text.UTF8Encoding]::new($false))
 
 if (-not (Test-Path -LiteralPath $app)) { throw "Portable app is missing: $app" }
 if (-not (Test-Path -LiteralPath $irfanView)) { throw "IrfanView is missing: $irfanView" }
@@ -803,6 +855,8 @@ $presentation = $null
 $powerPointWindow = $null
 $slide = $null
 $pastedShape = $null
+$alignedSlide = $null
+$alignedPastedShape = $null
 $powerPointTextRange = $null
 $powerPointTailRange = $null
 $powerPointInsertionRange = $null
@@ -963,6 +1017,51 @@ try {
     }
     $imageSize = Assert-ImageHasInk $pngOutput 'IrfanView clipboard paste'
 
+    # A left paragraph around inline math is insufficient for an Office
+    # equation array: without explicit alignment markers PowerPoint centres
+    # each row independently. Publish three deliberately unequal rows and
+    # require their rendered first-ink positions to share one left edge.
+    $alignedPublisher = Start-Process -FilePath $app `
+        -ArgumentList @('--copy-tex-file', $alignedCliTexInput) `
+        -WorkingDirectory (Split-Path -Parent $app) -WindowStyle Hidden -Wait -PassThru
+    if ($alignedPublisher.ExitCode -ne 0) {
+        throw "Eqnedit64 aligned clipboard publication failed: $($alignedPublisher.ExitCode)"
+    }
+    $alignedOfficeHtml = Read-ClipboardUtf8 $htmlFormat
+    $malignCount = ([regex]::Matches(
+        $alignedOfficeHtml, '<malignmark(?:\s|/|>)')).Count
+    if ($malignCount -ne 3) {
+        throw "Aligned MathML has $malignCount left-edge markers, expected 3."
+    }
+    $alignedSlide = $presentation.Slides.Add(2, 12)
+    $powerPointWindow.View.GotoSlide(2)
+    $alignedSlide.Select()
+    Start-Sleep -Milliseconds 100
+    $powerPoint.CommandBars.ExecuteMso('Paste')
+    Start-Sleep -Milliseconds 150
+    if ($alignedSlide.Shapes.Count -ne 1) {
+        throw ("PowerPoint aligned UI Paste created an unexpected shape count: " +
+            $alignedSlide.Shapes.Count)
+    }
+    $alignedPastedShape = $alignedSlide.Shapes.Item(1)
+    $alignedPastedShape.Export($alignedPowerPointPngOutput, 2)
+    if (-not (Test-Path -LiteralPath $alignedPowerPointPngOutput)) {
+        throw 'PowerPoint did not export the aligned pasted equation.'
+    }
+    # Save before the pixel assertion so a failing release candidate leaves
+    # its exact imported OMML available for diagnosis.
+    $presentation.Save()
+    $alignedRowsContract =
+        Assert-PowerPointRowsShareLeftEdge $alignedPowerPointPngOutput
+    $alignedSlideXml = Get-SlideXml $pptxOutput 2
+    $savedAlignmentMarkers = ([regex]::Matches(
+        $alignedSlideXml, '&amp;|<m:aln(?:\s|/|>)')).Count
+    if ($alignedSlideXml -notmatch '<m:eqArr(?:\s|>)' -or
+        $savedAlignmentMarkers -lt 3) {
+        throw ("PowerPoint did not retain aligned equation-array markers: " +
+            "markers=$savedAlignmentMarkers.")
+    }
+
     $googlePublisher = Start-Process -FilePath $app `
         -ArgumentList @('--copy-google-slides-file', $cliTexInput) `
         -WorkingDirectory (Split-Path -Parent $app) -WindowStyle Hidden -Wait -PassThru
@@ -1082,6 +1181,8 @@ try {
         "insertion=$powerPointInsertionFontSize pt, " +
         "left=$powerPointLeft pt, " +
         "rendered $powerPointImageSize with ink)")
+    Write-Host ("PASS: unequal PowerPoint equation-array rows share one " +
+        "left edge ($alignedRowsContract)")
     Write-Host "PASS: IrfanView /clippaste produced a nonblank $imageSize PNG"
     Write-Host ("PASS: Google Slides clipboard contains a byte-identical " +
         "$($pngContract.Width)x$($pngContract.Height) 300 dpi PNG and " +
@@ -1090,6 +1191,8 @@ try {
         "$texclipImageSize PNG/DIBV5 image at $($texclipContract.XPixelsPerMetre) px/m; $texclipDibContract")
     $completed = $true
 } finally {
+    Release-ComObject $alignedPastedShape
+    Release-ComObject $alignedSlide
     Release-ComObject $powerPointInsertionRange
     Release-ComObject $powerPointTailRange
     Release-ComObject $powerPointTextRange
@@ -1119,7 +1222,8 @@ try {
     [GC]::Collect()
     [GC]::WaitForPendingFinalizers()
     $cleanupPaths = @(
-        $powerPointPngOutput, $pngOutput, $texclipPngOutput, $cliTexInput)
+        $powerPointPngOutput, $alignedPowerPointPngOutput, $pngOutput,
+        $texclipPngOutput, $cliTexInput, $alignedCliTexInput)
     if ($completed) { $cleanupPaths += $pptxOutput }
     foreach ($path in $cleanupPaths) {
         if (Test-Path -LiteralPath $path) { Remove-Item -LiteralPath $path -Force }

@@ -326,6 +326,45 @@
       tex.replace(/\\bm(?=\s*\{)/g, "\\boldsymbol"));
   }
 
+  function normalizeOfficeAlignedTables(math) {
+    Array.prototype.forEach.call(math.querySelectorAll("mtable"), function (table) {
+      var alignment = (table.getAttribute("columnalign") || "")
+        .trim().split(/\s+/);
+      /* MathJax represents aligned as right/left mtd pairs. Office's bundled
+       * MML2OMML transform ignores columnalign and turns multi-cell rows into
+       * centred matrices. Collapse each row to one mtd, start it with the
+       * maligngroup that makes PowerPoint retain an equation array, and retain
+       * every TeX ampersand as MathML malignmark; Office then creates eqArr
+       * whose odd '&' markers align the following content. The synthetic
+       * leading empty column used for unanchored rows therefore becomes an
+       * explicit left-edge marker. */
+      if (alignment.indexOf("right") < 0 || alignment.indexOf("left") < 0) {
+        return;
+      }
+      Array.prototype.forEach.call(table.children, function (row) {
+        if (row.localName !== "mtr") return;
+        var cells = Array.prototype.filter.call(row.children, function (cell) {
+          return cell.localName === "mtd";
+        });
+        if (cells.length < 2) return;
+        var combined = math.ownerDocument.createElementNS(
+          math.namespaceURI, "mtd");
+        combined.appendChild(math.ownerDocument.createElementNS(
+          math.namespaceURI, "maligngroup"));
+        cells.forEach(function (cell, index) {
+          if (index > 0) {
+            combined.appendChild(math.ownerDocument.createElementNS(
+              math.namespaceURI, "malignmark"));
+          }
+          while (cell.firstChild) combined.appendChild(cell.firstChild);
+        });
+        cells.forEach(function (cell) { row.removeChild(cell); });
+        row.appendChild(combined);
+      });
+      table.setAttribute("columnalign", "left");
+    });
+  }
+
   /* Officeへ渡すMathMLの製品境界。MathJax固有属性や一時mstyleを落とし、
    * native版と同じ inline / 18 pt / large-operator 属性へ正規化する。
    * TeXの構造決定はMathJaxに任せるため、積分はmsubsup、総和は
@@ -338,6 +377,7 @@
     var math = doc.documentElement;
     math.setAttribute("display", "inline");
     math.setAttribute("mathsize", "18pt");
+    normalizeOfficeAlignedTables(math);
 
     Array.prototype.forEach.call(math.querySelectorAll("*"), function (node) {
       Array.prototype.slice.call(node.attributes).forEach(function (attribute) {

@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Keep every unanchored multi-line Office equation row on the same left edge.
+  Native and Web MathML now publish explicit alignment markers in a one-cell
+  equation array because Office ignores MathML `columnalign` during OMML
+  conversion. Explicit TeX `&` anchors remain alignment markers.
+- Extend the real PowerPoint UI-paste gate with deliberately unequal row
+  lengths, saved equation-array markers, and pixel-level left-edge checks.
 - Position Japanese IME composition text at the structural caret top instead
   of one line below it. Candidate UI remains below the caret. The headless
   visual test now checks both coordinates across 96--192 dpi and 40--400%

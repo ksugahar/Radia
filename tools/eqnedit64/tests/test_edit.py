@@ -13,6 +13,7 @@ from __future__ import annotations
 import re
 import os
 import sys
+import xml.etree.ElementTree as ET
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 _ROOT = os.path.dirname(_HERE)
@@ -487,15 +488,45 @@ def main() -> int:
 
     unanchored_mathml = tex_to_mathml(
         r"\begin{aligned}a\\cccccc\end{aligned}")
-    if 'columnalign="left"' not in unanchored_mathml:
+    mathml_ns = {"m": "http://www.w3.org/1998/Math/MathML"}
+    unanchored_root = ET.fromstring(unanchored_mathml)
+    unanchored_rows = unanchored_root.findall("./m:mtable/m:mtr", mathml_ns)
+    unanchored_cells = [row.findall("./m:mtd", mathml_ns)
+                        for row in unanchored_rows]
+    unanchored_starts = [
+        cells and len(cells) == 1 and len(cells[0]) > 1 and
+        cells[0][0].tag.endswith("}maligngroup") and
+        cells[0][1].tag.endswith("}malignmark")
+        for cells in unanchored_cells
+    ]
+    if ('columnalign="left"' not in unanchored_mathml or
+            len(unanchored_rows) != 2 or not all(unanchored_starts)):
         failures.append(
-            "one-column aligned MathML is not left-aligned: "
+            "one-column aligned MathML lacks Office left-edge markers: "
             f"{unanchored_mathml!r}")
     anchored_mathml = tex_to_mathml(
         r"\begin{aligned}F&=ma\\E&=mc^2\end{aligned}")
-    if 'columnalign="right left"' not in anchored_mathml:
+    anchored_root = ET.fromstring(anchored_mathml)
+    anchored_rows = anchored_root.findall("./m:mtable/m:mtr", mathml_ns)
+    anchored_cells = [row.findall("./m:mtd", mathml_ns)
+                      for row in anchored_rows]
+    anchored_markers = [
+        sum(child.tag.endswith("}malignmark") for child in cells[0])
+        if len(cells) == 1 else 0
+        for cells in anchored_cells
+    ]
+    anchored_groups = [
+        sum(child.tag.endswith("}maligngroup") for child in cells[0])
+        if len(cells) == 1 else 0
+        for cells in anchored_cells
+    ]
+    if (len(anchored_rows) != 2 or anchored_markers != [1, 1] or
+            anchored_groups != [1, 1] or
+            any(not cells[0][0].tag.endswith("}maligngroup") or
+                cells[0][1].tag.endswith("}malignmark")
+                for cells in anchored_cells if cells)):
         failures.append(
-            "explicit alignment tabs lost right/left pairing: "
+            "explicit alignment tabs lack Office alignment markers: "
             f"{anchored_mathml!r}")
 
     # Enter promotes a one-line equation to an aligned multi-line structure;

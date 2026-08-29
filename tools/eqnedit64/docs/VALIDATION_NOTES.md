@@ -5,6 +5,27 @@
 [`CANONICAL_OPERATION.md`](CANONICAL_OPERATION.md) と `release-eqnedit64` skillを
 正とする。`build\accept_release.ps1`は隔離CI/VM用であり、対話中LABでは実行しない。
 
+## 2026-08-30 PowerPoint複数行数式の左端整列
+
+- 利用者画像では段落自体は左揃えだったが、長さの違う3行が各行ごとに中央配置され、
+  行頭が一致していなかった。nativeが出していたMathML
+  `mtable columnalign="left"`はOffice付属`MML2OMML.XSL`で1列`m:eqArr`へ変換される際に
+  無視され、整列点のない数式配列は各行を中央配置することを確認した。
+- `malignmark`だけではPowerPoint実貼り付けが中央揃えの`m:m`へ変換したため不合格
+  となった。nativeは各行頭に`maligngroup`、`&`なしの行頭と明示`&`の位置に
+  `malignmark`を出し、全行を1セルの`mtable`として発行する。WebもMathJaxの
+  right/leftセル対を同じ1セル＋整列グループ＋整列点へ正規化する。
+- モデル回帰は`test_edit.py` 271件、`test_layout.py`、Web契約10件が合格した。
+  実PowerPoint UI Paste試験には、3行の書き出し画像の左端差4 px以内と保存OMMLの
+  整列点検査を追加した。画面外の実UI Pasteで保存`m:eqArr`と3整列点を確認し、
+  PowerPoint自身の描画左端は`10,10,10 px`、差0 pxで合格した。既存PowerPointへの
+  接続、前面化、`SendInput`、マウス移動は使用していない。
+
+根拠資料:
+
+- <https://learn.microsoft.com/en-us/openspecs/office_standards/ms-oe376/d8d37e2b-532d-49db-9cba-2ef4bd8d9baa>
+- <https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.math.equationarray?view=openxml-3.0.1>
+
 ## 2026-08-30 IME未確定文字列のキャレット位置
 
 - 3.0.10の175%表示で、確定済み日本語と構造キャレットは正しい一方、IME未確定
