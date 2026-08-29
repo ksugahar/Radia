@@ -97,6 +97,12 @@ result remains 5.85% from HDiv in the gap core.
 `results/lab_20260829_nonlinear_order2_primary.json` records the passing direct
 comparison after unifying the B-H interpolation: HDiv-MMM and
 Omega-reduced-Omega differ by 0.18032%. The failed order-1 artifact is retained
-so the order-convergence result cannot silently replace or conceal it. LAB
-timings are correctness evidence only; publish performance after repeating the
-same release on idle mdx and hibino.
+so the order-convergence result cannot silently replace or conceal it.
+
+`results/mdx_hibino_20260830_nonlinear_order2_summary.json` indexes three fresh
+runs on each idle compute host with the exact `v4.95.70` PyPI wheel, 38 threads,
+the same checked meshes, and no checkpoint reuse. All six runs pass at
+0.1803201266% relative RMS. Median HDiv/Omega runtimes are 12.09/42.59 s on mdx
+and 11.31/43.28 s on hibino, so HDiv is 3.52x and 3.83x faster for this fixed
+nonlinear order-2 comparison. The six source JSON artifacts are tracked beside
+the summary.
