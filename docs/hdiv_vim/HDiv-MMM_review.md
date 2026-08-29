@@ -20,8 +20,8 @@ exposed several failure modes.
   `main` as written.
 - Latest Claude implementation source: an uncommitted shared-tree patch on
   `backup/main-pre-release-20260821` at `cbc029319`, documented in
-  `handover.md`. The BDM2 TET directional-moment correction is reviewed below
-  as a candidate patch; it is not present in `origin/main`.
+  `handover.md`. The BDM2 TET directional-moment correction is isolated on
+  this review branch as `51dce89c1`; it is not yet present in `origin/main`.
 - Scope: correctness, deterministic execution, NGSolve/TaskManager policy,
   public capability, field and material contracts, maintainability,
   performance, MATLAB parity, and reproducibility.
@@ -86,7 +86,7 @@ explicit in-process Python fallback because NGSolve setup is Python-owned.
 
 | ID | Priority | Finding | Evidence and required disposition |
 |---|---|---|---|
-| F1 | P1 | BDM2 TET directional ChargeGram derivatives are wrong on `main`. | `TetPotentialMomentsDirectionalUpTo1` stores degree-one moments in `z,y,x` (`PotentialMomentIndex`) order, while two consumers in `rad_hacapk_hdiv.cpp` use `mv[k+1]` as `x,y,z`. On the same 1-cell BDM2 case, `main` differs from finite differences by `1.327698e-1` for the complete Gram and `4.145764e-1` for the volume block; fifth-degree homogeneity is wrong by `3.727428e-1`. Claude's explicit index map reduces these to `4.019822e-9`, `2.778490e-9`, and `4.002814e-16`. Land the small correction with a regression that fails the unfixed source. |
+| F1 | P1 | BDM2 TET directional ChargeGram derivatives are wrong on `main`. | `TetPotentialMomentsDirectionalUpTo1` stores degree-one moments in `z,y,x` (`PotentialMomentIndex`) order, while two consumers in `rad_hacapk_hdiv.cpp` use `mv[k+1]` as `x,y,z`. On the same 1-cell BDM2 case, `main` differs from finite differences by `1.327698e-1` for the complete Gram and `4.145764e-1` for the volume block; fifth-degree homogeneity is wrong by `3.727428e-1`. The isolated fix in `51dce89c1` reduces these to `4.019822e-9`, `2.778490e-9`, and `4.002814e-16`; merge that commit into `main`. |
 | F2 | P1 | The IMA field contract is red. | At `ec57769de`, clean-build measurements were `2.0140013262e-14` and `4.9318891895e-14` relative error for the two HEX `rad.Fld`/`FieldFromSolution` gates, and `2.3931079340e-15` component error for curved TET BDM2. The limit is `2.2204460493e-15` (`10 eps`). Preserve the limit; align solve reduction and source accumulation order rather than loosening it. |
 | F3 | P1 | RT0 is publicly advertised again despite the BDM1/BDM2-only decision. | `_capabilities.py` exposes 3D TET/HEX order 0 and `DemagOperator` documents an order-0 broken-interface path. `HDivSolver` and field evaluation accept only orders 1 and 2. Remove the public RT0 entries/path and retain any topology-only experiment outside the production API. |
 | F4 | P1 | Fine-TET loss of SPD is an unclosed correctness report. | Claude reported `p^T A p = -1.90e5` at 8.75 mm and `-7.51e8` at 7.0 mm, but the mesh/configuration is absent from `main`. Commit the reproducer before changing quadrature, ACA, or CG. |
@@ -140,10 +140,11 @@ The Claude branch contains useful evidence, but it must not be merged wholesale:
 
 ### 0.4 Latest Claude BDM2 directional implementation
 
-The latest Claude HDiv implementation is not a branch commit. It is a small
-part of the much larger dirty shared tree at `S:\Radia\01_GitHub`, based on
-`backup/main-pre-release-20260821` at `cbc029319`. The review therefore treats
-only the patch identified in `handover.md`, not the other co-located WIP.
+The latest Claude HDiv implementation originated outside a branch commit. It
+was a small part of the much larger dirty shared tree at
+`S:\Radia\01_GitHub`, based on `backup/main-pre-release-20260821` at
+`cbc029319`. Commit `51dce89c1` isolates only the patch identified in
+`handover.md`; no other co-located WIP was copied.
 
 The correction is mathematically and structurally appropriate:
 
@@ -173,12 +174,10 @@ margin. Cross-worktree execution needs care: `tests/conftest.py` inserts its
 own repository's `src` at the front of `sys.path`, so pointing pytest at the
 shared-tree test from another worktree still loads the shared-tree native
 module. The comparison above therefore used one standalone driver with an
-explicit module path for each build. Before merge, transplant the patch and
-test together into a clean current-main worktree, record the loaded native
-module path/build identity, and demonstrate red-before/green-after there.
-Aggregate relative-error assertions would improve diagnostics, but the
-existing finite-difference and exact-identity checks are already capable of
-rejecting this defect.
+explicit module path for each build. Commit `51dce89c1` then transplanted the
+patch and test together, added aggregate relative-error gates, rebuilt the
+native module in this worktree, and passed the new BDM2 test plus the adjacent
+BDM1 self-block and complete-Gram/Piola regressions in 4.14 s.
 
 The handover also reported an access violation in the zero-coupling candidate
 Schur test. That report is stale against current `main`: after a clean
@@ -455,7 +454,7 @@ contract.
 
 | Priority | Item | Acceptance criterion |
 |---|---|---|
-| P1 | Land the BDM2 TET directional-moment correction | Isolate the `MomentIndex3Linear` patch and its test from the dirty shared tree. Require complete-Gram and volume-block finite-difference relative error below `1e-7`, fifth-degree homogeneity below `1e-13`, rigid-translation invariance, and a recorded native build identity. The regression must fail on unfixed `origin/main`. |
+| P1 | Merge the BDM2 TET directional-moment correction | `51dce89c1` isolates the `MomentIndex3Linear` patch and its test from the dirty shared tree. Preserve complete-Gram and volume-block finite-difference relative error below `1e-7`, fifth-degree homogeneity below `1e-13`, rigid-translation invariance, and the clean native build gate when merging to `main`. |
 | P1 | Full-versus-IMA `rad.Fld` roundoff | Make all three isolated failures in section 4 pass below `10 eps` without weakening tolerances. Compare solved coefficient vectors before debugging source evaluation, then align directed block symmetrization and full/reduced field summation order. |
 | P1 | Remove production RT0 | Delete the 3D order-0 entries from `hdiv_capabilities`, remove the order-0 `DemagOperator` production path and dedicated order-0 tests/docs, and keep public `Solve`, operator, field, and MATLAB inventory consistently BDM1/BDM2. |
 | P1 | Fine-TET operator indefiniteness | Commit the failing mesh/configuration and result JSON; materialize the relevant Gram/operator block; locate a negative mode; compare it with dense analytic assembly or an independent NGSolve weak-form route; add a focused regression. |
@@ -481,8 +480,12 @@ worktree:
 - latest-HEAD smoke (`ec57769de`): 15 focused build-safety, deterministic,
   capability, and field-evaluator tests PASS in 3.78 s;
 - BDM2 TET directional finite-difference comparison: current `main` is wrong
-  by 13.28% for the complete Gram and 41.46% for the volume block; the Claude
-  candidate reduces them to `4.02e-9` and `2.78e-9` relative error;
+  by 13.28% for the complete Gram and 41.46% for the volume block; support
+  commit `51dce89c1` reduces them to `4.02e-9` and `2.78e-9` relative error;
+- isolated support commit `51dce89c1`: new BDM2 regression plus adjacent BDM1
+  self-block and complete-Gram/Piola regressions, 3 tests PASS in 4.14 s;
+- complete topology-optimization regression after the native rebuild:
+  160 tests PASS in 56.53 s;
 - current-main zero-coupling candidate Schur regression: PASS in 2.47 s after
   the clean rebuild; the older access-violation report is not reproduced;
 - loop-free, symmetry-loop, PSD, high-order TET, linear recoil, and irreversible
