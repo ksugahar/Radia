@@ -20,11 +20,17 @@ CONTRACT_SOURCES = (
 )
 SIMULINK_SOURCES = (
     MATLAB_ROOT / "+radia" / "+simulink" / "buildOptunaBlock.m",
+    MATLAB_ROOT / "+radia" / "+simulink" / "buildOptunaStudyBlock.m",
+    MATLAB_ROOT / "+radia" / "+simulink" / "buildOptunaTeachingModel.m",
+    MATLAB_ROOT / "+radia" / "+simulink" / "reviewOptunaStudy.m",
+    MATLAB_ROOT / "+radia" / "+simulink" / "applyOptunaTrial.m",
     MATLAB_ROOT / "+radia" / "+simulink" / "optunaSFunction.m",
     MATLAB_ROOT / "+radia" / "+simulink" / "optunaRuntimeStore.m",
     MATLAB_ROOT / "+radia" / "+simulink" / "addOptunaMonitor.m",
     MATLAB_ROOT / "radia_optuna_sfun.m",
+    MATLAB_ROOT / "radia_optuna_teaching.slx",
 )
+DOC_SOURCES = (PACKAGE_ROOT / "OPTUNA_SIMULINK_LAB.md",)
 
 
 class build_py(_build_py):
@@ -37,6 +43,7 @@ class build_py(_build_py):
                 MEX_SOURCE,
                 *CONTRACT_SOURCES,
                 *SIMULINK_SOURCES,
+                *DOC_SOURCES,
             )
             if not path.exists()
         ]
@@ -59,6 +66,8 @@ class build_py(_build_py):
             target = matlab_dir / source.relative_to(MATLAB_ROOT)
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(source, target)
+        for source in DOC_SOURCES:
+            shutil.copy2(source, matlab_dir / source.name)
         shutil.copy2(PACKAGE_ROOT / "MATLAB_README.md", matlab_dir / "README.md")
         shutil.copy2(REPO_ROOT / "LICENSE", matlab_dir / "LICENSE")
         shutil.copy2(

@@ -1,9 +1,9 @@
 {
   "schema": "radia-optuna.distribution.v1",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "oracle_version": "4.9.0",
   "matlab_namespace": "radia.optuna",
-  "matlab_file_count": 213,
+  "matlab_file_count": 226,
   "native_gateway": "optuna_mex",
   "native_command_count": 21,
   "native_sobol_max_dimension": 21201,
@@ -15,10 +15,15 @@
     "+radia/+optuna/+internal/runSimulinkInput.m",
     "+radia/+optuna/+internal/setupSimulinkWorker.m",
     "+radia/+simulink/buildOptunaBlock.m",
+    "+radia/+simulink/buildOptunaStudyBlock.m",
+    "+radia/+simulink/buildOptunaTeachingModel.m",
+    "+radia/+simulink/reviewOptunaStudy.m",
+    "+radia/+simulink/applyOptunaTrial.m",
     "+radia/+simulink/optunaSFunction.m",
     "+radia/+simulink/optunaRuntimeStore.m",
     "+radia/+simulink/addOptunaMonitor.m",
-    "radia_optuna_sfun.m"
+    "radia_optuna_sfun.m",
+    "radia_optuna_teaching.slx"
   ],
   "radia_integration_adapters": [
     "+radia/+optuna/LTspiceRunner.m",

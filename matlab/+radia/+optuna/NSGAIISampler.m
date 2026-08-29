@@ -104,7 +104,7 @@ classdef NSGAIISampler < radia.optuna.BaseGASampler
             obj.Seed = radia.optuna.internal.resolveSeed(options.Seed);
             obj.Stream = ...
                 radia.optuna.internal.NumpyRandomState(obj.Seed);
-            obj.IndependentSampler=radia.optuna.RandomSampler(options.Seed);
+            obj.IndependentSampler=radia.optuna.RandomSampler(obj.Seed);
             obj.PopulationSize = options.PopulationSize;
             obj.MutationProbability = mutationProbability;
             obj.CrossoverProbability = options.CrossoverProbability;

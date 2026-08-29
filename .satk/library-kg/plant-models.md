@@ -33,3 +33,4 @@ Use these blocks for plant model blocks.
 - [[uncategorized]]
 - [[signal-processing]]
 - [[power]]
+- [[control]]

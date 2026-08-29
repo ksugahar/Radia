@@ -170,15 +170,17 @@ pip install --upgrade optuna optuna-mcp
 The ownership rule is strict: the official `optuna/optuna-mcp` live
 `tools/list` owns every shared Study/Trial/query/visualization/Dashboard
 operation it exposes. `mcp-server-radia-matlab` supports only the MATLAB
-differences through `matlab_optuna_mcp_route`: table/MAT persistence, Simulink
-monitoring and failure telemetry, MATLAB parallel execution, the required
+differences through `matlab_optuna_mcp_route`: table/MAT persistence,
+`OptimizationSession` lifecycle/checkpoint/selection, Simulink controls and
+telemetry, MATLAB parallel execution, the required
 21-command `optuna_mex`, and Radia CAE artifact adapters. Seeded numerical
 oracle checks execute pinned `optuna==4.9.0` directly because the verified
 upstream MCP sampler tool does not expose a seed.
 
 The MATLAB difference lane is executable rather than descriptive:
-`matlab_optuna_health` checks the distribution manifest, complete public-API
-mapping, oracle hashes, MEX, Simulink entries, and notices;
+`matlab_optuna_health` checks the distribution manifest, required-scope
+evidence mapping separately from wider assertion mapping, oracle hashes, MEX,
+Simulink entries, and notices;
 `matlab_optuna_oracle_plan` produces official-MATLAB-MCP-ready test code;
 `matlab_optuna_benchmark_plan` fixes the same-host seeded workloads; and
 `matlab_optuna_release_gate` accepts only a byte-matched installed wheel, all

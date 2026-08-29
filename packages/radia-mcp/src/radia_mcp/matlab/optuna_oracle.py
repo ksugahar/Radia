@@ -164,6 +164,10 @@ def matlab_optuna_compatibility_contract(
             int(api_coverage.get("surface_missing_count", -1)) != 0
             or int(api_coverage.get("oracle_unmapped_count", -1)) != 0
             or int(api_coverage.get("oracle_partial_count", -1)) != 0
+            or int(api_coverage.get("required_oracle_asserted_count", -1)) != 0
+            or int(api_coverage.get("required_oracle_unmapped_count", -1)) != 0
+            or int(api_coverage.get("required_oracle_mapped_count", -1))
+            != int(api_coverage.get("required_entry_count", -2))
         ):
             errors.append("full API compatibility was claimed before closure")
     return {
@@ -212,8 +216,14 @@ def matlab_optuna_compatibility_contract(
                 "surface_present_count",
                 "surface_missing_count",
                 "oracle_verified_count",
+                "oracle_asserted_count",
                 "oracle_partial_count",
                 "oracle_unmapped_count",
+                "required_entry_count",
+                "required_present_count",
+                "required_oracle_mapped_count",
+                "required_oracle_asserted_count",
+                "required_oracle_unmapped_count",
                 "full_compatibility_complete",
             )
         },

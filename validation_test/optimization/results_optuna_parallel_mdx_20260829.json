@@ -1,0 +1,69 @@
+{
+  "schema": "radia.validation.optuna-parallel-performance.v1",
+  "generated_at": "2026-08-29T04:19:17.578Z",
+  "host": "MDX",
+  "versions": {
+    "matlab": "26.1.0.3312084 (R2026a) Update 4",
+    "parallel_computing_toolbox": "26.1",
+    "optuna_mex_commands": 21
+  },
+  "settings": {
+    "trials": 64,
+    "repeats": 7,
+    "warmup_repeats": 2,
+    "workers": 4,
+    "sampler": "random",
+    "seed": 2.0260829E+7,
+    "proposal_mode": "serial deterministic batch",
+    "objective_work_items": 2.3522E+6,
+    "target_objective_seconds": 0.05,
+    "calibrated_objective_seconds": 0.0798833
+  },
+  "pool": {
+    "startup_seconds": 26.0677216,
+    "reused": false
+  },
+  "sequential": {
+    "all_seconds": [
+      9.1600282,
+      6.0278499,
+      5.2337581,
+      5.7505765,
+      5.1372383,
+      6.7596829,
+      5.2560695
+    ],
+    "median_warmed_seconds": 5.2560695,
+    "trials_per_second": 12.176399113443992,
+    "proposal_checksum": -4.0669286786674839,
+    "best_value": 0.00021345240140786221
+  },
+  "parallel_batch": {
+    "all_seconds": [
+      2.75739,
+      2.2776555,
+      2.2791358,
+      2.2062204,
+      2.2301412,
+      2.2319397,
+      2.2164571
+    ],
+    "median_warmed_seconds": 2.2301412,
+    "trials_per_second": 28.697734475287934,
+    "proposal_checksum": -4.0669286786674839,
+    "best_value": 0.00021345240140786221
+  },
+  "comparison": {
+    "speedup": 2.3568326077290531,
+    "worker_efficiency": 0.58920815193226328,
+    "checksum_match": true,
+    "best_value_match": true,
+    "parallel_not_slower": true
+  },
+  "gate": {
+    "passed": true,
+    "requirement": "Identical seeded proposal checksum and best value; warmed batch-parallel median no slower than sequential."
+  },
+  "environment_note": "mdx release-candidate run; measured_jointconvex_ridge.py PID 9772 active on one core; pre-run total CPU sampled",
+  "claim_boundary": "Synthetic calibrated scalar objective used to measure radia.optuna.optimize scheduling and worker throughput. It does not predict a specific CAE model's solver speedup."
+}
