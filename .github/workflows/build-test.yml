@@ -1,9 +1,6 @@
 name: Radia
 
 on:
-  # release_quad ci-verify must be able to start a fresh exact-main run when a
-  # later docs-only merge makes the last code-bearing push run stale.
-  workflow_dispatch:
   push:
     branches: [main]
     tags: ['v*']
