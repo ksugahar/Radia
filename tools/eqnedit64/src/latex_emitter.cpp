@@ -1,6 +1,7 @@
 /* Structural equation tree -> normalized TeX text. */
 #include "latex_emitter.h"
 #include <algorithm>
+#include <cctype>
 #include <cstring>
 #include <cstdio>
 
@@ -212,8 +213,23 @@ static void append_math_char(std::string& out, uint32_t cp) {
     }
     const char* symbol = cp <= 0xFFFF
         ? map_lookup(UNICODE_MAP, UNICODE_MAP_N, uint16_t(cp)) : nullptr;
-    if (symbol) out += symbol;
-    else out += utf8_of(cp);
+    if (!symbol) {
+        out += utf8_of(cp);
+        return;
+    }
+    /* Symbol-table entries include inter-atom spaces for the top-level
+     * emitter (" \\leq ").  Inside a math alphabet wrapper those spaces
+     * must not become stored content.  Retain only one terminator after a
+     * control word so the next letter cannot turn \alpha b into \alphab. */
+    std::string token(symbol);
+    const size_t first = token.find_first_not_of(' ');
+    if (first == std::string::npos) return;
+    const size_t last = token.find_last_not_of(' ');
+    token = token.substr(first, last - first + 1);
+    out += token;
+    if (!token.empty() &&
+        std::isalpha(static_cast<unsigned char>(token.back())))
+        out += ' ';
 }
 
 static const char* math_alphabet_command(int typeface) {
