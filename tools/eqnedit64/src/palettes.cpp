@@ -1,4 +1,4 @@
-/* The eighteen palettes.  Categories follow Eqnedt32's own toolbar, which
+/* The nineteen palettes.  Categories follow Eqnedt32's own toolbar, which
  * groups by what a reader is looking for rather than by internal node type.
  *
  * Rules this table has to keep (tests/test_palettes.py checks all of them):
@@ -204,6 +204,23 @@ std::vector<Palette> build() {
         /* Rarely wanted here, kept so pasted TeX still reads. */
     }});
 
+    /* Keep this palette aligned in meaning and order with the browser
+     * editor's 微分幾何 palette.  Geometry must never be accidentally wired
+     * to the unrelated over/underline templates again. */
+    p.push_back({u8"微分幾何", u8"∧★", 4, {
+        raw("\\wedge ", u8"∧", u8"ウェッジ積"),
+        raw("\\star ", u8"★", u8"Hodge star作用素"),
+        raw("\\mathrm{d} ", u8"dω", u8"外微分（立体のd）"),
+        raw("\\iota_{} ", u8"ι", u8"内部積（縮約）ι_X"),
+        raw("\\mathcal{L}_{} ", u8"ℒ", u8"Lie微分"),
+        raw("^{*} ", u8"f^*", u8"引き戻し（pullback）"),
+        raw("_{*} ", u8"f_*", u8"押し出し（pushforward）"),
+        raw("^{\\flat} ", u8"♭", u8"フラット（添字を下げる）"),
+        raw("^{\\sharp} ", u8"♯", u8"シャープ（添字を上げる）"),
+        raw("\\otimes ", u8"⊗", u8"テンソル積"),
+        raw("\\oplus ", u8"⊕", u8"直和"),
+    }});
+
     p.push_back({u8"ギリシャ小文字", u8"αβ", 4, {
         sym("\\alpha", u8"α", u8"アルファ"),
         sym("\\beta", u8"β", u8"ベータ"),
@@ -342,7 +359,7 @@ const std::vector<Palette>& palettes() {
     return kPalettes;
 }
 
-int symbol_palette_count() { return 10; }
+int symbol_palette_count() { return 11; }
 
 const std::vector<PaletteCategory>& palette_categories() {
     /* Keep the five concepts and their order aligned with the web editor.
@@ -351,11 +368,11 @@ const std::vector<PaletteCategory>& palette_categories() {
     static const std::vector<PaletteCategory> kCategories = {
         /* Follow the web editor's learning order: structures first, then
          * brackets, then decoration.  Matrix is a structure, not geometry. */
-        {u8"基本", {11, 12, 17, 10, 2}},
-        {u8"解析", {0, 3, 7, 13, 14}},
-        {u8"集合・記号", {4, 6, 5, 16, 1}},
-        {u8"幾何", {15}},
-        {u8"ギリシャ", {8, 9}},
+        {u8"基本", {12, 13, 18, 11, 2, 16}},
+        {u8"解析", {0, 3, 7, 14, 15}},
+        {u8"集合・記号", {4, 6, 5, 17, 1}},
+        {u8"幾何", {8}},
+        {u8"ギリシャ", {9, 10}},
     };
     return kCategories;
 }
