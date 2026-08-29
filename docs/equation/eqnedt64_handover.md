@@ -2,7 +2,7 @@
 
 - 文書状態: 現行
 - 対象製品: Eqnedit64 native / Python package / Web editor
-- 対象リリース: 3.0.7（公開済み）
+- 対象リリース: 3.0.8（公開候補）
 - 基準日: 2026-08-29
 - リポジトリ: `ksugahar/Radia`
 
@@ -391,22 +391,23 @@ pushするとrelease gateが失敗するのが正しい。
 
 ## 13. 現在の公開状態
 
-Eqnedit64 3.0.4が2026-08-29時点の公開済み基準版である。
+Eqnedit64 3.0.7が2026-08-29時点の公開済み基準版であり、3.0.8は末尾カーソルも
+24 ptに固定する公開候補である。
 
-- product tag: `eqnedit64-v3.0.4`
-- product tag source: `abb66868da37032e353e44061ac5b4d24cc33d5c`
+- product tag: `eqnedit64-v3.0.7`
+- product tag source: `16a739f89f73f53798d823ed9ed9eb0f430e8c55`
 - O: / GitHub Release EXE SHA-256:
-  `7BA0547D8779F97285C8B20857F7C395688386FBFF38B524DEABE494F3043121`
+  `E3A923C583CBA3B8162D4A711F152A7CBBD970794A72D3B3B34D51A0166C356D`
 - signer: `CN=ksugahar`
-- GitHub Release: `https://github.com/ksugahar/Radia/releases/tag/eqnedit64-v3.0.4`
-- PyPI: `https://pypi.org/project/eqnedit64/3.0.4/`
+- GitHub Release: `https://github.com/ksugahar/Radia/releases/tag/eqnedit64-v3.0.7`
+- PyPI: `https://pypi.org/project/eqnedit64/3.0.7/`
 - PyPI wheels: CPython 3.10、3.11、3.12、3.13の`win_amd64`計4個。
 - O:、GitHub Release、4個すべてのwheelから再取得した同梱EXEはbyte-identicalで、
   すべて上記SHA-256と有効な`CN=ksugahar`署名を持つ。
 
-3.0.3は太字とパレット表示を修正した前版である。3.0.4はその安全策とvisual regressionを
-維持し、native/Web共通の数式スタイルパレット、拡張数式アルファベット、`\bm`の太字
-ギリシャ文字、および二重正規化の回帰試験を同梱する。
+3.0.7はnative/Webを同じinline 24 pt MathML + NBSPのCF_HTML経路へ統一し、
+PowerPoint保存`m:oMath`と描画PNGのbyte-identicalを確認した。3.0.8ではNBSP自体にも
+24 ptを明示し、カーソル位置だけ18 ptへ戻る見落としを回帰試験で封じる。
 
 ## 14. ソース地図
 
