@@ -1,12 +1,15 @@
 """
-Radia Export menu — PySide6 port of the legacy Qt5 .ccl plugin.
+Cubit "Export" menu — Claro-registered menu + PySide6 export dialogs.
 
-Replaces the in-tree C++ Claro component (RadiaComp.cpp) with a pure
-Python (PySide6) toolbar that runs inside Cubit's embedded Python
-interpreter.  The .ccm (APREPRO commands `export gmsh / nastran /
-vtk / netgen / femeem / meg`) is unchanged — this module just calls
-`cubit.cmd("export ...")` after collecting user input through Qt
-dialogs parented to the Cubit main window.
+The menu itself is registered through Cubit's own Claro API
+(`emclaro.add_to_menu`), which is the same entry point the legacy Qt5
+.ccl component (RadiaComp.cpp) used, so Cubit owns the menu and it
+survives the cold-start menu-bar rebuild.  The dialogs are PySide6 and
+run inside Cubit's embedded Python interpreter.  The .ccm (APREPRO
+commands `export gmsh / nastran / vtk / netgen / femeem / meg`) is
+unchanged — this module just calls `cubit.cmd("export ...")` after
+collecting user input through Qt dialogs parented to the Cubit main
+window.
 
 Layer 2 (Cubit GUI Python).  See CLAUDE.md "Cubit Panel Architecture"
 and `radia_mcp.cubit.knowledge.custom_toolbar` (TOOLBAR_PYTHON_SCRIPT_
@@ -1071,7 +1074,10 @@ def launch_export(fmt):
 # ``emclaro.remove_menu_items(_CLARO_COMPONENT)`` removes exactly our
 # items and nothing else.  That is the officially supported cleanup path.
 _CLARO_COMPONENT = "radia"
-_CLARO_MENU_TITLE = "&Radia Export"
+# Top-level menu title.  Cubit has no top-level "Export" menu of its own
+# (export lives under File), so this creates a new one.  The component tag
+# above stays "radia" -- it is the internal cleanup key, not a label.
+_CLARO_MENU_TITLE = "&Export"
 
 # Cubit owns the PyAction objects on the C++ side, but the SWIG wrappers
 # must outlive this call or Cubit is left holding dangling pointers.
@@ -1120,7 +1126,7 @@ def _activate_code(fmt):
 
 
 def install_menu():
-    """Install the "Radia Export" menu through Cubit's official Claro API.
+    """Install the "Export" menu through Cubit's official Claro API.
 
     Uses ``emclaro`` -- the SWIG binding of Cubit's Claro GUI framework,
     shipped inside Cubit itself (``<cubit>/bin/emclaro.py``).  This is the
@@ -1146,12 +1152,12 @@ def install_menu():
         import emclaro
     except ImportError:
         print("[Radia] emclaro not available - "
-              "Radia Export menu not installed")
+              "Export menu not installed")
         return None
 
     if not emclaro.is_loaded():
         print("[Radia] Claro GUI not loaded - "
-              "Radia Export menu not installed")
+              "Export menu not installed")
         return None
 
     # Idempotent: drop any previous registration by component tag first.
@@ -1170,13 +1176,13 @@ def install_menu():
     _claro_keepalive.append(actions)
 
     emclaro.add_to_menu(_CLARO_MENU_TITLE, actions, _CLARO_COMPONENT)
-    print("[Radia] Radia Export menu installed "
+    print("[Radia] Export menu installed "
           "(%d actions, Claro add_to_menu)" % len(_MENU_SPECS))
     return True
 
 
 def remove_menu():
-    """Remove the Radia Export menu through the official Claro API.
+    """Remove the Export menu through the official Claro API.
 
     Cleanup is by component tag, so it removes exactly the actions this
     module registered and touches nothing else on the menu bar.
