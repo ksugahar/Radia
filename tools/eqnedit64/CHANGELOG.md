@@ -2,14 +2,30 @@
 
 ## Unreleased
 
+## 3.0.9 — 2026-08-30
+
+### Visible product version and exact PowerPoint insertion-size gate
+
+- The native title bar and About/version dialogs now show the semantic product
+  version beside the source build stamp, for example
+  `数式エディタ64 3.0.9 [abcdef123]`. The version text and Windows VERSIONINFO
+  resource share one native header.
+- The real-PowerPoint gate now checks the zero-length insertion range after the
+  trailing NBSP as well as the math and NBSP runs. This distinguishes the next
+  typed character's size from PowerPoint's unrelated 18 pt selection default.
+- Background probes of `x`, `E=mc^2`, a fraction, and the full release fixture
+  all produced left-aligned editable MathZones whose equation, final character,
+  and final insertion point are 24.0 pt.
+
 ## 3.0.8 — 2026-08-29
 
 ### PowerPoint caret remains 24 pt
 
 - Native and Web Office copy now style the invisible trailing NBSP at 24 pt,
   matching the MathML equation instead of PowerPoint's 18 pt paragraph
-  default. The PowerPoint toolbar therefore remains at 24 pt when the caret is
-  placed immediately after the pasted equation.
+  default. The saved math and sentinel runs therefore remain 24 pt; a ribbon
+  display taken while only the text box is selected can still show the
+  presentation's unrelated 18 pt default.
 - The hidden native/Web PowerPoint gates now inspect the final character and
   the saved OOXML sentinel run. A 24 pt equation followed by an 18 pt caret is
   a release failure.
