@@ -27,6 +27,16 @@ def test_optuna_candidate_requires_the_independent_distribution_workflow():
     assert '"workflowName": "CI"' not in source
 
 
+def test_optuna_workflow_installs_pinned_pybind_before_native_build():
+    root = Path(__file__).resolve().parents[1]
+    workflow = (root / ".github/workflows/radia-optuna.yml").read_text(
+        encoding="utf-8"
+    )
+    dependency = workflow.index("python -m pip install pybind11==3.0.2")
+    build = workflow.index("& .\\Build.ps1 -OptunaMexOnly")
+    assert dependency < build
+
+
 def test_optuna_candidate_records_every_machine_for_one_exact_wheel(
     monkeypatch, tmp_path
 ):
