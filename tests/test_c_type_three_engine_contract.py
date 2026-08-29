@@ -220,12 +220,52 @@ def test_tracked_kelvin_results_preserve_pass_and_failed_gate_evidence():
     assert nonlinear_order2["comparison_contract"]["bh_interpolation_shared"]
 
 
+def test_tracked_four_level_accuracy_certificate_is_complete():
+    results = SUITE / "results"
+    manifest = json.loads(
+        (results / "cubit_20260830_mesh_family.json").read_text(encoding="utf-8")
+    )
+    certificate = json.loads(
+        (
+            results
+            / "mdx_hibino_20260830_nonlinear_order2_convergence.json"
+        ).read_text(encoding="utf-8")
+    )
+
+    assert manifest["passed"] is True
+    assert [row["name"] for row in manifest["levels"]] == [
+        "coarse",
+        "medium",
+        "fine",
+        "finer",
+    ]
+    assert certificate["schema"] == (
+        "radia.validation.c-type-absolute-accuracy-certificate.v1"
+    )
+    assert certificate["passed"] is True
+    assert certificate["claim"]["analytic_absolute_truth_claimed"] is False
+    assert certificate["convergence_levels"] == ["medium", "fine", "finer"]
+    assert all(certificate["checks"].values())
+    assert certificate["fine_mesh_maximum_pairwise_relative_rms"] < 0.005
+    assert certificate["combined_relative_numerical_uncertainty"] < 0.01
+    assert certificate["reproducibility"]["reference_machine"].casefold() == "mdx"
+    assert certificate["reproducibility"]["replicate_machine"].casefold() == (
+        "hibino"
+    )
+    assert certificate["reproducibility"]["maximum_relative_rms"] < 1e-9
+    assert all(
+        row["convergence_levels"] == ["medium", "fine", "finer"]
+        for row in certificate["engine_convergence"].values()
+    )
+
+
 def test_mesh_family_builder_uses_one_geometric_cubit_sequence():
     source = (SUITE / "build_mesh_family.py").read_text(encoding="utf-8")
     assert 'DEFAULT_LEVELS = (' in source
     assert '("coarse", 1.25)' in source
     assert '("medium", 1.00)' in source
     assert '("fine", 0.80)' in source
+    assert '("finer", 0.64)' in source
     assert 'from build_cubit_meshes import CUBIT_DEFAULT, build' in source
     assert '"geometric_size_sequence": True' in source
     assert '"element_counts_strictly_increase"' in source
@@ -247,8 +287,34 @@ def test_accuracy_certificate_requires_all_three_converged_routes():
     assert 'replicate result uses a different Radia version' in source
     assert 'replicate result uses different implementation inputs' in source
     assert '"analytic_absolute_truth_claimed": False' in source
+    assert '"convergence_levels": level_names[-3:]' in source
     assert 'subprocess.Popen(' in source
     assert '"--primary-only"' not in source
+
+
+def test_accuracy_certificate_uses_the_last_three_of_four_mesh_levels():
+    module = _load_convergence_module()
+    level_names = ["coarse", "medium", "fine", "finer"]
+
+    def payload(value):
+        return {
+            "observation_points_m": [[0.0, 0.0, 0.0]],
+            "gap_core_half_length_m": 0.01,
+            "median_plane_projected_fields_T": {
+                "hdiv_mmm": [[0.0, 0.0, value]],
+            },
+        }
+
+    payloads = [payload(value) for value in (-20.0, 1.0, 1.05, 1.075)]
+    result = module._engine_convergence(
+        payloads, level_names, "hdiv_mmm", refinement_ratio=1.25
+    )
+
+    assert result["convergence_levels"] == ["medium", "fine", "finer"]
+    assert result["penultimate_increment_absolute_rms_T"] == pytest.approx(0.05)
+    assert result["last_increment_absolute_rms_T"] == pytest.approx(0.025)
+    assert result["contracting"] is True
+    assert result["observed_order"] > 0.5
 
 
 def test_accuracy_replication_rejects_same_host_and_software_drift():

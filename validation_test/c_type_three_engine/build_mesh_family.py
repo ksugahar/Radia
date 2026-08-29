@@ -1,10 +1,11 @@
 """Build a checked, geometric Cubit mesh family for C-type convergence.
 
-The three levels preserve one exact ACIS C-yoke and one Kelvin construction.
+The four levels preserve one exact ACIS C-yoke and one Kelvin construction.
 Only the Cubit size controls change.  The default scale sequence
-``1.25, 1.0, 0.8`` has a common refinement ratio of 1.25, which permits an
-observed-order and Richardson analysis without pretending that the unstructured
-meshes are nested.
+``1.25, 1.0, 0.8, 0.64`` has a common refinement ratio of 1.25.  Four levels
+keep an accidental small increment on one unstructured-mesh pair from being
+mistaken for asymptotic convergence; the final three levels define the
+observed-order and Richardson analysis.
 """
 
 from __future__ import annotations
@@ -24,6 +25,7 @@ DEFAULT_LEVELS = (
     ("coarse", 1.25),
     ("medium", 1.00),
     ("fine", 0.80),
+    ("finer", 0.64),
 )
 
 

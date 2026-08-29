@@ -14,7 +14,12 @@ Result-bearing showcase notebooks:
 [isochronous_topopt.ipynb](isochronous_topopt.ipynb) (density adjoint gate,
 constrained trust-region SLP design loop, exact-void iron-only verification;
 sidecar `isochronous_topopt_result.json`; golden-band lane
-`validation_test/isochronous_topopt/`).
+`validation_test/isochronous_topopt/`), and
+[c_type_three_formulation_convergence.ipynb](c_type_three_formulation_convergence.ipynb)
+(nonlinear order-2 Cubit/ACIS C-yoke; HDiv-MMM, HCurl reduced-A, and H1
+Omega-reduced-Omega four-level convergence; mdx/hibino reproduction; sidecar
+`c_type_three_formulation_convergence_result.json`; certificate lane
+`validation_test/c_type_three_engine/`).
 
 ## NGSolve Family Convention
 
