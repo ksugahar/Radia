@@ -108,8 +108,19 @@ private:
             result = element("mi", value, "mathvariant=\"normal\"");
         } else if (ch.typeface == TF_MATH_ITALIC) {
             result = element("mi", value, "mathvariant=\"italic\"");
-        } else if (ch.typeface == TF_VECTOR) {
+        } else if (ch.typeface == TF_VECTOR ||
+                   ch.typeface == TF_BOLD_SYMBOL) {
             result = element("mi", value, "mathvariant=\"bold\"");
+        } else if (ch.typeface == TF_MATH_SANS) {
+            result = element("mi", value, "mathvariant=\"sans-serif\"");
+        } else if (ch.typeface == TF_MATH_MONO) {
+            result = element("mi", value, "mathvariant=\"monospace\"");
+        } else if (ch.typeface == TF_MATH_SCRIPT) {
+            result = element("mi", value, "mathvariant=\"script\"");
+        } else if (ch.typeface == TF_MATH_DOUBLE) {
+            result = element("mi", value, "mathvariant=\"double-struck\"");
+        } else if (ch.typeface == TF_MATH_FRAKTUR) {
+            result = element("mi", value, "mathvariant=\"fraktur\"");
         } else if (ch.typeface == TF_SYMBOL ||
                    (ch.charCode < 128 && !std::isalnum(int(ch.charCode)))) {
             result = element("mo", value);

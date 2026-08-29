@@ -10,7 +10,17 @@ assert.deepEqual(
   ["\\mathrm{}", "\\mathit{}", "\\mathbf{}"]
 );
 
-let edit = editor.composeInsertion("", 0, 0, "\\mathrm{}");
+let edit;
+for (const snippet of ["\\mathsf{}", "\\mathtt{}", "\\mathcal{}",
+                       "\\mathbb{}", "\\mathfrak{}", "\\bm{}",
+                       "\\mathnormal{}"]) {
+  edit = editor.composeInsertion("x", 0, 1, snippet);
+  assert.equal(edit.value, snippet.slice(0, -1) + "x}");
+}
+assert.equal(editor.mathJaxTex("\\bm{\\alpha}+\\bmatrix"),
+             "\\boldsymbol{\\alpha}+\\bmatrix");
+
+edit = editor.composeInsertion("", 0, 0, "\\mathrm{}");
 assert.deepEqual(edit, { value: "\\mathrm{}", caret: 8 });
 
 edit = editor.composeInsertion("abc", 0, 3, "\\mathit{}");

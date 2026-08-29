@@ -606,6 +606,12 @@ void update_status(const wchar_t* transient = nullptr) {
             g.inputStyle == 'F' ? L"関数" :
             g.inputStyle == 'I' ? L"変数（斜体）" :
             g.inputStyle == 'R' ? L"立体" :
+            g.inputStyle == 'S' ? L"サンセリフ" :
+            g.inputStyle == 'W' ? L"等幅" :
+            g.inputStyle == 'C' ? L"カリグラフィー" :
+            g.inputStyle == 'D' ? L"黒板太字" :
+            g.inputStyle == 'K' ? L"フラクトゥール" :
+            g.inputStyle == 'O' ? L"記号太字" :
             g.inputStyle == 'G' ? L"ギリシャ" :
             g.inputStyle == 'B' ? L"ベクトル" : L"数学"),
         L"Tab: 次の枠  Enter: 改行  &: 整列位置",
@@ -738,6 +744,11 @@ std::string insert_command_tex_example(const std::string& command) {
         inserted = example.insert_symbol(command.substr(7));
     else if (command.rfind("latex.", 0) == 0)
         inserted = example.insert_latex(command.substr(6));
+    else if (command.rfind("style.", 0) == 0) {
+        example.insert_text("x");
+        example.select_all();
+        inserted = example.restyle_selection(command.substr(6));
+    }
     else if (command.rfind("matrix.", 0) == 0) {
         inserted = example.insert_template("matrix2x2") &&
                    example.command(command);
@@ -2705,6 +2716,21 @@ void insert_palette_item(const std::string& command) {
         }
         show_shortcut_coach(command);
         SetFocus(g.canvas);
+    } else if (command.rfind("style.", 0) == 0) {
+        const std::string style = command.substr(6);
+        if (style == "sans")
+            apply_math_alphabet("sans", 'S', L"サンセリフ", "\\mathsf");
+        else if (style == "mono")
+            apply_math_alphabet("mono", 'W', L"等幅", "\\mathtt");
+        else if (style == "script")
+            apply_math_alphabet("script", 'C', L"カリグラフィー", "\\mathcal");
+        else if (style == "double")
+            apply_math_alphabet("double", 'D', L"黒板太字", "\\mathbb");
+        else if (style == "fraktur")
+            apply_math_alphabet("fraktur", 'K', L"フラクトゥール", "\\mathfrak");
+        else if (style == "boldsymbol")
+            apply_math_alphabet("boldsymbol", 'O', L"記号太字", "\\bm");
+        show_shortcut_coach(command);
     } else if (command.rfind("matrix.", 0) == 0) {
         dispatch_model(command);
         show_shortcut_coach(command);
@@ -3305,6 +3331,18 @@ LRESULT CALLBACK CanvasProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
                     inserted = g.equation.insert_styled_text(typed, "italic");
                 else if (g.inputStyle == 'R')
                     inserted = g.equation.insert_styled_text(typed, "roman");
+                else if (g.inputStyle == 'S')
+                    inserted = g.equation.insert_styled_text(typed, "sans");
+                else if (g.inputStyle == 'W')
+                    inserted = g.equation.insert_styled_text(typed, "mono");
+                else if (g.inputStyle == 'C')
+                    inserted = g.equation.insert_styled_text(typed, "script");
+                else if (g.inputStyle == 'D')
+                    inserted = g.equation.insert_styled_text(typed, "double");
+                else if (g.inputStyle == 'K')
+                    inserted = g.equation.insert_styled_text(typed, "fraktur");
+                else if (g.inputStyle == 'O')
+                    inserted = g.equation.insert_styled_text(typed, "boldsymbol");
                 else if (g.inputStyle == 'B')
                     inserted = g.equation.insert_styled_text(typed, "vector");
                 else if (g.inputStyle == 'G' && wp < 0x80 &&
@@ -4985,7 +5023,10 @@ int ui_interaction_test() {
         UINT id = ID_PALETTE_ITEM_FIRST;
         for (const auto& palette : eqnedit::palettes()) {
             for (const auto& item : palette.items) {
-                g.equation.load_latex("");
+                g.equation.load_latex(
+                    item.command.rfind("style.", 0) == 0 ? "x" : "");
+                if (item.command.rfind("style.", 0) == 0)
+                    g.equation.select_all();
                 if (item.command.rfind("matrix.", 0) == 0)
                     g.equation.insert_template("matrix2x2");
                 const std::string before = g.equation.latex();

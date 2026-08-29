@@ -1085,6 +1085,12 @@ bool Equation::insert_styled_text(const std::string& utf8,
     else if (style == "variable") typeface = TF_VARIABLE;
     else if (style == "roman") typeface = TF_ROMAN;
     else if (style == "italic") typeface = TF_MATH_ITALIC;
+    else if (style == "sans") typeface = TF_MATH_SANS;
+    else if (style == "mono") typeface = TF_MATH_MONO;
+    else if (style == "script") typeface = TF_MATH_SCRIPT;
+    else if (style == "double") typeface = TF_MATH_DOUBLE;
+    else if (style == "fraktur") typeface = TF_MATH_FRAKTUR;
+    else if (style == "boldsymbol") typeface = TF_BOLD_SYMBOL;
     else return false;
     insert_text_typeface(utf8, typeface);
     return true;
@@ -1098,6 +1104,12 @@ bool Equation::restyle_selection(const std::string& style) {
     else if (style == "variable") typeface = TF_VARIABLE;
     else if (style == "roman") typeface = TF_ROMAN;
     else if (style == "italic") typeface = TF_MATH_ITALIC;
+    else if (style == "sans") typeface = TF_MATH_SANS;
+    else if (style == "mono") typeface = TF_MATH_MONO;
+    else if (style == "script") typeface = TF_MATH_SCRIPT;
+    else if (style == "double") typeface = TF_MATH_DOUBLE;
+    else if (style == "fraktur") typeface = TF_MATH_FRAKTUR;
+    else if (style == "boldsymbol") typeface = TF_BOLD_SYMBOL;
     else return false;
 
     NodeList* slot = nullptr;

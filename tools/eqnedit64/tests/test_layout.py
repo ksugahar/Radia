@@ -133,6 +133,17 @@ def main() -> int:
             "Roman, math italic, and vector bold did not render as three "
             f"distinct alphabets: {alphabet_text!r}")
 
+    extended = Rendered(
+        r"\mathsf{S}\mathtt{T}\mathcal{C}\mathbb{R}"
+        r"\mathfrak{F}\bm{\alpha}", style)
+    extended_text = "".join(g[3] for g in extended.glyphs)
+    expected_alphabets = "".join(map(chr, (
+        0x1D5B2, 0x1D683, 0x1D49E, 0x211D, 0x1D509, 0x1D6C2)))
+    if extended_text != expected_alphabets:
+        failures.append(
+            "Extended math alphabets did not use their designed glyphs: "
+            f"{extended_text!r} != {expected_alphabets!r}")
+
     # CJK is text, not a mathematical symbol.  Sending it through the
     # process-private Latin Modern Math face made GDI font linking apply the
     # fallback scale twice: five nominal 12 pt characters measured 306 pt

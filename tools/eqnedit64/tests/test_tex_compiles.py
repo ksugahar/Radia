@@ -37,6 +37,9 @@ PACKAGES = {
     r"\because": "amssymb",
     r"\nexists": "amssymb",
     r"\varkappa": "amssymb",
+    r"\mathbb": "amsfonts",
+    r"\mathfrak": "amsfonts",
+    r"\bm": "bm",
     r"\cancel": "cancel",
     # \oiiint is deliberately absent: the closed volume integral exists only
     # in packages that replace the whole math font, so no template offers it
@@ -49,6 +52,18 @@ EXTRA = sorted(set(PACKAGES.values()))
 
 def pieces():
     out = [("symbol %s" % s, s) for s in E.symbol_commands()]
+    out.extend([
+        ("alphabet mathrm", r"\mathrm{x}"),
+        ("alphabet mathit", r"\mathit{x}"),
+        ("alphabet mathbf", r"\mathbf{x}"),
+        ("alphabet mathsf", r"\mathsf{x}"),
+        ("alphabet mathtt", r"\mathtt{x}"),
+        ("alphabet mathcal", r"\mathcal{X}"),
+        ("alphabet mathbb", r"\mathbb{R}"),
+        ("alphabet mathfrak", r"\mathfrak{F}"),
+        ("alphabet bm", r"\bm{\alpha}"),
+        ("alphabet mathnormal", r"\mathnormal{x}"),
+    ])
     for kind in E.Equation.templates():
         equation = E.Equation()
         equation.load_latex("")

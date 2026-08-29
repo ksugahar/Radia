@@ -112,7 +112,7 @@ public:
     /* ---- editing ----------------------------------------------------- */
     void insert_text(const std::string& utf8);      /* literal characters */
     bool insert_styled_text(const std::string& utf8,
-                            const std::string& style); /* text/function/vector/variable/roman/italic */
+                            const std::string& style); /* semantic Typeface name */
     /* Restyle every character in the current selection -- Ctrl+B over a
      * selected symbol makes it a vector, rather than only setting the style
      * for the next character typed.  No selection: returns false. */

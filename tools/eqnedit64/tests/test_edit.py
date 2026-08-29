@@ -262,6 +262,12 @@ def main() -> int:
         "variable": ("x", "x"),
         "roman": ("abc", r"\mathrm{abc}"),
         "italic": ("abc", r"\mathit{abc}"),
+        "sans": ("abc", r"\mathsf{abc}"),
+        "mono": ("abc", r"\mathtt{abc}"),
+        "script": ("ABC", r"\mathcal{ABC}"),
+        "double": ("ABC", r"\mathbb{ABC}"),
+        "fraktur": ("ABC", r"\mathfrak{ABC}"),
+        "boldsymbol": ("α", r"\bm{\alpha }"),
         "vector": ("x", r"\mathbf{x}"),
     }
     for style, (typed, expected) in styled_cases.items():
@@ -446,9 +452,13 @@ def main() -> int:
         if required not in mathml:
             failures.append(f"Office MathML is missing {required!r}: {mathml!r}")
     alphabet_mathml = tex_to_mathml(
-        r"\mathrm{r}\mathit{i}\mathbf{v}")
+        r"\mathrm{r}\mathit{i}\mathbf{v}\mathsf{s}\mathtt{t}"
+        r"\mathcal{C}\mathbb{R}\mathfrak{F}\bm{\alpha}")
     for variant in ('mathvariant="normal"', 'mathvariant="italic"',
-                    'mathvariant="bold"'):
+                    'mathvariant="bold"', 'mathvariant="sans-serif"',
+                    'mathvariant="monospace"', 'mathvariant="script"',
+                    'mathvariant="double-struck"',
+                    'mathvariant="fraktur"'):
         if variant not in alphabet_mathml:
             failures.append(
                 f"Office MathML lost {variant!r}: {alphabet_mathml!r}")
