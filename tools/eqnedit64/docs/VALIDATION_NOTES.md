@@ -5,7 +5,7 @@
 [`CANONICAL_OPERATION.md`](CANONICAL_OPERATION.md) と `release-eqnedit64` skillを
 正とする。`build\accept_release.ps1`は隔離CI/VM用であり、対話中LABでは実行しない。
 
-## 2026-08-30 Eqnedit64 3.0.9公開候補検証
+## 2026-08-30 Eqnedit64 3.0.9公開検証
 
 - 利用者から、3.0.8のPowerPoint貼り付けは左寄せだが24 ptに見えず、EXEタイトルも
   source stampだけでは製品版が分からないとの指摘を受けた。
@@ -33,6 +33,21 @@
   left=0 pt、640x98描画で合格した。同じ参照式を公開Web版から貼り付けても
   24/24/24 pt、左寄せとなり、保存Office MathとPowerPoint描画PNGは候補EXEと
   byte-identicalだった。
+- tag / source: `eqnedit64-v3.0.9` /
+  `4760011a2d9275596545925bf193b018c32ebb7d`。公開EXEの実ウィンドウタイトルは
+  `無題.tex — 数式エディタ64 3.0.9 [4760011a2]`である。
+- PR #55のEqnedit64 CI `33269615560`、Policy Lint `33269615504`、main CI
+  `33269711268`、main Policy Lint `33269711269`、tag CI `33270155945`、release
+  workflow `33270256514`はすべて成功した。
+- exact mainからLABで再ビルドしてO:へ同期したEXEはProductVersion/FileVersion 3.0.9、
+  Authenticode `Valid`、signer `CN=ksugahar`。SHA-256は
+  `5F4AD412EC47BA6B37A4BE5EE9CA78CF5CBF17A38E5CF6AD715058BEE037F350`。
+- GitHub Releaseから再取得したEXEとPyPIのCPython 3.10、3.11、3.12、3.13
+  `win_amd64` wheel内EXEは、`O:\Eqnedit64.exe`とすべてbyte-identicalだった。
+  各EXEの版、署名、SHA-256、および`SHA256SUMS.txt`を公開後に再検証した。
+- GitHub Release:
+  `https://github.com/ksugahar/Radia/releases/tag/eqnedit64-v3.0.9`
+- PyPI: `https://pypi.org/project/eqnedit64/3.0.9/`
 
 ## 2026-08-29 Eqnedit64 3.0.8公開検証
 
