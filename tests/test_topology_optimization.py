@@ -3013,6 +3013,59 @@ def test_native_production_tet_self_block_derivatives_match_scaling_and_fd():
     np.testing.assert_allclose(derivative,fd,rtol=2e-7,atol=3e-11)
 
 
+def test_native_tet_directional_derivative_matches_fd_at_bdm2():
+    import ngsolve as ng
+    from ngsolve.meshes import MakeStructured3DMesh
+    from radia.topology_optimization import production_tet_charge_gram_derivatives
+    from radia.vim._vim import _charge_basis,build_charge_gram
+
+    gradient=np.array([[.073,-.031,.019],[.014,.052,-.027],[-.022,.041,.064]])
+    offset=np.array([.009,-.015,.011]); epsilon=1e-6
+    def build(step):
+        mesh=MakeStructured3DMesh(hexes=False,nx=1,ny=1,nz=1,
+            mapping=lambda x,y,z:tuple(np.array([x,y,z])+step*epsilon*(gradient@np.array([x,y,z])+offset)))
+        fes=ng.HDiv(mesh,order=2)
+        with ng.TaskManager():
+            cb=_charge_basis(fes,6)
+            _,gram,_=build_charge_gram(fes,eps=1e-10,leafsize=256,eta=2.0)
+        n=len(cb["host"])
+        G=np.array([[gram.entry(i,j) for j in range(n)] for i in range(n)])
+        return cb,gram,G
+
+    cb,gram,G=build(0); _,_,G_plus=build(1); _,_,G_minus=build(-1)
+    kinds=np.asarray(cb["kind"]); hosts=np.asarray(cb["host"])
+    cells=np.asarray(cb["vV"]); faces=np.asarray(cb["bV"])
+    ids=np.flatnonzero((kinds==0)&(hosts==0))
+    assert int(np.asarray(cb["expo"]).reshape(-1,3)[ids].sum(axis=1).max())==1
+    fd=(G_plus-G_minus)/(2*epsilon)
+
+    dG,_=production_tet_charge_gram_derivatives(
+        gram,(cells@gradient.T+offset)[None,...],
+        (faces@gradient.T+offset)[None,...],cb["B"])
+    volume=gram.tet_volume_self_block_directional_derivative(
+        0,cells[0]@gradient.T+offset)
+    volume_fd=fd[np.ix_(ids,ids)]
+
+    def relative_error(actual,reference):
+        scale=max(np.linalg.norm(reference),np.finfo(float).tiny)
+        return np.linalg.norm(np.asarray(actual)-reference)/scale
+
+    assert relative_error(np.asarray(dG[0]),fd)<1e-7
+    assert relative_error(volume,volume_fd)<1e-7
+
+    # Rigid translation leaves the Gram invariant. Uniform physical scaling
+    # gives degree-five homogeneity for the volume-volume charge block.
+    np.testing.assert_allclose(
+        gram.tet_volume_self_block_directional_derivative(0,np.ones((4,3))),
+        0,rtol=0,atol=1e-17)
+    np.testing.assert_allclose(
+        gram.tet_face_self_block_directional_derivative(0,np.ones((3,3))),
+        0,rtol=0,atol=1e-16)
+    assert relative_error(
+        gram.tet_volume_self_block_directional_derivative(0,cells[0]),
+        5*G[np.ix_(ids,ids)])<1e-13
+
+
 def test_native_production_tet_complete_gram_and_piola_product_derivative():
     import ngsolve as ng
     from ngsolve.meshes import MakeStructured3DMesh
