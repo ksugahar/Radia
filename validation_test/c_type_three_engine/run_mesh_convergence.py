@@ -50,7 +50,7 @@ def _load_level(path: Path) -> dict:
     payload = json.loads(path.read_text(encoding="utf-8"))
     if payload.get("schema") != "radia.validation.c-type-formulation-comparison.v2":
         raise RuntimeError(f"unexpected level result schema: {path}")
-    if tuple(payload.get("engines", {})) != ENGINES:
+    if set(payload.get("engines", {})) != set(ENGINES):
         raise RuntimeError(f"all three formulations are required: {path}")
     if not payload.get("nonlinear_converged", False):
         raise RuntimeError(f"nonlinear formulation did not converge: {path}")
@@ -175,10 +175,22 @@ def _engine_convergence(
 
 
 def _replicate_metrics(reference: dict, replicate: dict) -> dict[str, object]:
+    reference_machine = str(reference.get("machine", "")).strip()
+    replicate_machine = str(replicate.get("machine", "")).strip()
+    if not reference_machine or not replicate_machine:
+        raise RuntimeError("replicate results must record both machine names")
+    if reference_machine.casefold() == replicate_machine.casefold():
+        raise RuntimeError("accuracy replication must use an independent host")
     if reference["mesh_result_sha256"] != replicate["mesh_result_sha256"]:
         raise RuntimeError("replicate result uses a different fine mesh contract")
     if reference["comparison_contract"] != replicate["comparison_contract"]:
         raise RuntimeError("replicate result uses a different formulation contract")
+    if reference.get("radia_version") != replicate.get("radia_version"):
+        raise RuntimeError("replicate result uses a different Radia version")
+    if reference.get("engine_checkpoint_contracts") != replicate.get(
+        "engine_checkpoint_contracts"
+    ):
+        raise RuntimeError("replicate result uses different implementation inputs")
     selector = _selector(reference)
     rows = {}
     for engine in ENGINES:
@@ -190,8 +202,8 @@ def _replicate_metrics(reference: dict, replicate: dict) -> dict[str, object]:
         )[selector]
         rows[engine] = {"relative_rms": _relative_rms(left, right)}
     return {
-        "reference_machine": reference["machine"],
-        "replicate_machine": replicate["machine"],
+        "reference_machine": reference_machine,
+        "replicate_machine": replicate_machine,
         "engines": rows,
         "maximum_relative_rms": max(row["relative_rms"] for row in rows.values()),
     }
@@ -258,7 +270,7 @@ def analyze(
     )
 
     replicate = None
-    reproducibility_passed = options.replicate_final_result is None
+    reproducibility_passed = False
     if options.replicate_final_result is not None:
         replicate_payload = _load_level(options.replicate_final_result.resolve())
         replicate = _replicate_metrics(fine, replicate_payload)
@@ -316,6 +328,7 @@ def analyze(
         ),
         "combined_relative_numerical_uncertainty": combined_uncertainty,
         "reproducibility": replicate,
+        "independent_host_replicate_required": True,
         "thresholds": {
             "minimum_observed_order": options.minimum_observed_order,
             "mesh_uncertainty_tolerance": options.mesh_uncertainty_tolerance,

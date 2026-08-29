@@ -1,11 +1,22 @@
+import importlib.util
 import json
 from pathlib import Path
 
 import numpy as np
+import pytest
 
 
 ROOT = Path(__file__).resolve().parents[1]
 SUITE = ROOT / "validation_test" / "c_type_three_engine"
+
+
+def _load_convergence_module():
+    path = SUITE / "run_mesh_convergence.py"
+    spec = importlib.util.spec_from_file_location("c_type_mesh_convergence", path)
+    module = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(module)
+    return module
 
 
 def test_c_type_cad_is_cubit_authority():
@@ -224,12 +235,43 @@ def test_mesh_family_builder_uses_one_geometric_cubit_sequence():
 def test_accuracy_certificate_requires_all_three_converged_routes():
     source = (SUITE / "run_mesh_convergence.py").read_text(encoding="utf-8")
     assert 'ENGINES = ("hdiv_mmm", "reduced_a", "omega_reduced_omega")' in source
-    assert 'tuple(payload.get("engines", {})) != ENGINES' in source
+    assert 'set(payload.get("engines", {})) != set(ENGINES)' in source
     assert 'if not payload.get("nonlinear_converged", False)' in source
     assert '"mesh_convergence_passed"' in source
     assert '"fine_mesh_cross_formulation_passed"' in source
     assert '"combined_uncertainty_passed"' in source
     assert '"independent_host_reproducibility_passed"' in source
+    assert '"independent_host_replicate_required": True' in source
+    assert 'reproducibility_passed = False' in source
+    assert 'accuracy replication must use an independent host' in source
+    assert 'replicate result uses a different Radia version' in source
+    assert 'replicate result uses different implementation inputs' in source
     assert '"analytic_absolute_truth_claimed": False' in source
     assert 'subprocess.Popen(' in source
     assert '"--primary-only"' not in source
+
+
+def test_accuracy_replication_rejects_same_host_and_software_drift():
+    module = _load_convergence_module()
+    base = {
+        "machine": "mdx",
+        "mesh_result_sha256": "mesh",
+        "comparison_contract": {"order": 2},
+        "radia_version": "4.95.71",
+        "engine_checkpoint_contracts": {"hdiv_mmm": {"implementation": "a"}},
+        "observation_points_m": [[0.0, 0.0, 0.0]],
+        "gap_core_half_length_m": 0.01,
+        "median_plane_projected_fields_T": {
+            engine: [[0.0, 0.0, 1.0]] for engine in module.ENGINES
+        },
+    }
+    with pytest.raises(RuntimeError, match="independent host"):
+        module._replicate_metrics(base, dict(base))
+
+    different_host = {**base, "machine": "hibino"}
+    drifted = {**different_host, "radia_version": "4.95.70"}
+    with pytest.raises(RuntimeError, match="different Radia version"):
+        module._replicate_metrics(base, drifted)
+
+    metrics = module._replicate_metrics(base, different_host)
+    assert metrics["maximum_relative_rms"] == 0.0
