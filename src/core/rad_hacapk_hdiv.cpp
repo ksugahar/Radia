@@ -2170,8 +2170,12 @@ static double Det3Rate(const double A[9],const double dA[9])
        +dA[2]*(A[3]*A[7]-A[4]*A[6])+A[2]*(dA[3]*A[7]+A[3]*dA[7]-dA[4]*A[6]-A[4]*dA[6]);
     return ddet/det;
 }
-static int MomentIndex3(int ax,int ay,int az)
+static constexpr int MomentIndex3(int ax,int ay,int az)
 {const int d=ax+ay+az;int n=0;for(int q=0;q<d;++q)n+=(q+1)*(q+2)/2;for(int x=0;x<ax;++x)n+=d-x+1;return n+ay;}
+// Degree-one moment slots for physical x, y, and z. The shared moment kernel
+// stores degree one in MomentIndex3 order (z, y, x), not by k + 1.
+static constexpr int MomentIndex3Linear[3]={
+    MomentIndex3(1,0,0),MomentIndex3(0,1,0),MomentIndex3(0,0,1)};
 static void MulLinear3(double* p,double* dp,int& degree,const double f[4],const double df[4])
 {
     double q[10]={},dq[10]={};
@@ -2194,9 +2198,8 @@ std::vector<double> RadHACApKChargeGram::TetVolumeSelfBlockDirectionalDerivative
     Inverse3Directional(E,dE,I,dI);const double rate=Det3Rate(E,dE);
     for(size_t q=0;q<m_qp[g[0]].size();++q){const auto& pp=m_qp[g[0]][q];double p[3]={pp[0],pp[1],pp[2]},xi[3]={};for(int i=0;i<3;++i)for(int k=0;k<3;++k)xi[i]+=I[3*i+k]*(p[k]-V[0][k]);double dpnt[3];for(int k=0;k<3;++k)dpnt[k]=dV[0][k]+xi[0]*(dV[1][k]-dV[0][k])+xi[1]*(dV[2][k]-dV[0][k])+xi[2]*(dV[3][k]-dV[0][k]);
         double mv[4],dm[4];rad_hdiv::TetPotentialMomentsDirectionalUpTo1(V,dV,p,dpnt,mv,dm);
-        // The shared directional kernel returns the physical positive
-        // Newtonian moments [1,x,y,z], matching PhiTet and m_qw.
-        for(int ls=0;ls<n;++ls){const int* e=&m_expo[(size_t)3*g[ls]];const int deg=e[0]+e[1]+e[2];if(deg>1)throw std::logic_error("analytic TET volume derivative supports charge degree <= 1");double val=mv[0],der=dm[0];if(deg==1){int c=e[1]?1:(e[2]?2:0);double beta[3],dbeta[3],alpha=0,dalpha=0;for(int k=0;k<3;++k){beta[k]=I[3*c+k];dbeta[k]=dI[3*c+k];alpha-=beta[k]*V[0][k];dalpha-=dbeta[k]*V[0][k]+beta[k]*dV[0][k];}val=alpha*mv[0];der=dalpha*mv[0]+alpha*dm[0];for(int k=0;k<3;++k){val+=beta[k]*mv[k+1];der+=dbeta[k]*mv[k+1]+beta[k]*dm[k+1];}}innerv[ls]=val;inner[ls]=der;}
+        // Newtonian moments use MomentIndex3 order, matching PhiTet and m_qw.
+        for(int ls=0;ls<n;++ls){const int* e=&m_expo[(size_t)3*g[ls]];const int deg=e[0]+e[1]+e[2];if(deg>1)throw std::logic_error("analytic TET volume derivative supports charge degree <= 1");double val=mv[0],der=dm[0];if(deg==1){int c=e[1]?1:(e[2]?2:0);double beta[3],dbeta[3],alpha=0,dalpha=0;for(int k=0;k<3;++k){beta[k]=I[3*c+k];dbeta[k]=dI[3*c+k];alpha-=beta[k]*V[0][k];dalpha-=dbeta[k]*V[0][k]+beta[k]*dV[0][k];}val=alpha*mv[0];der=dalpha*mv[0]+alpha*dm[0];for(int k=0;k<3;++k){const int mi=MomentIndex3Linear[k];val+=beta[k]*mv[mi];der+=dbeta[k]*mv[mi]+beta[k]*dm[mi];}}innerv[ls]=val;inner[ls]=der;}
         for(int i=0;i<n;++i){const double w=m_qw[g[i]][q];for(int j=0;j<n;++j)out[(size_t)i*n+j]+=w*(inner[j]+rate*innerv[j]);}
     }
     for(int i=0;i<n;++i)for(int j=i+1;j<n;++j){double x=.5*(out[(size_t)i*n+j]+out[(size_t)j*n+i]);out[(size_t)i*n+j]=out[(size_t)j*n+i]=x;}
@@ -2271,7 +2274,7 @@ std::vector<double> RadHACApKChargeGram::TetChargeGramDirectionalDerivativeImpl(
                 return;
             }
             double mv[4],dm[4];rad_hdiv::TetPotentialMomentsDirectionalUpTo1(V,dV,p,dp,mv,dm);
-            for(size_t l=0;l<g.size();++l){const int*e=&m_expo[(size_t)3*g[l]];const int deg=e[0]+e[1]+e[2];if(deg>1)throw std::logic_error("analytic TET volume derivative supports charge degree <= 1");val[l]=mv[0];der[l]=dm[0];if(deg==1){int c=e[1]?1:(e[2]?2:0);double alpha=0,dalpha=0;for(int k=0;k<3;++k){const double beta=I[3*c+k],dbeta=dI[3*c+k];alpha-=beta*V[0][k];dalpha-=dbeta*V[0][k]+beta*dV[0][k];val[l]+=beta*mv[k+1];der[l]+=dbeta*mv[k+1]+beta*dm[k+1];}val[l]+=(alpha-1.0)*mv[0];der[l]+=(dalpha)*mv[0]+(alpha-1.0)*dm[0];}}
+            for(size_t l=0;l<g.size();++l){const int*e=&m_expo[(size_t)3*g[l]];const int deg=e[0]+e[1]+e[2];if(deg>1)throw std::logic_error("analytic TET volume derivative supports charge degree <= 1");val[l]=mv[0];der[l]=dm[0];if(deg==1){int c=e[1]?1:(e[2]?2:0);double alpha=0,dalpha=0;for(int k=0;k<3;++k){const double beta=I[3*c+k],dbeta=dI[3*c+k];alpha-=beta*V[0][k];dalpha-=dbeta*V[0][k]+beta*dV[0][k];const int mi=MomentIndex3Linear[k];val[l]+=beta*mv[mi];der[l]+=dbeta*mv[mi]+beta*dm[mi];}val[l]+=(alpha-1.0)*mv[0];der[l]+=(dalpha)*mv[0]+(alpha-1.0)*dm[0];}}
             return;
         }
         const double*s=&m_faceV[(size_t)host*9],*ds=&face_velocity[(size_t)host*9];double V[3][3],dV[3][3],a[2][3],da[2][3];for(int i=0;i<3;++i)for(int k=0;k<3;++k){V[i][k]=s[3*i+k];dV[i][k]=ds[3*i+k];}for(int c=0;c<2;++c)for(int k=0;k<3;++k){a[c][k]=V[c+1][k]-V[0][k];da[c][k]=dV[c+1][k]-dV[0][k];}
@@ -9028,6 +9031,11 @@ std::vector<double> RadHACApKChargeGram::SolveConfiguredLinearMaterialAutoPrecMa
     const std::vector<double>* x0)
 {
     using Clock = std::chrono::steady_clock;
+    class ZeroNumericalRank final : public std::runtime_error {
+    public:
+        explicit ZeroNumericalRank(const std::string& where)
+            : std::runtime_error(where + ": numerical rank is zero") {}
+    };
     if (!m_operatorChargeConfigured || !m_operatorMassConfigured)
         throw std::runtime_error(
             "SolveConfiguredLinearMaterialAutoPrecMany: charge map and mass matrix must be configured");
@@ -9964,7 +9972,7 @@ std::vector<double> RadHACApKChargeGram::SolveConfiguredLinearMaterialAutoPrecMa
                         right[static_cast<size_t>(row)*dim+column] / lambda;
         }
         if (rank == 0)
-            throw std::runtime_error(std::string(who)+": numerical rank is zero");
+            throw ZeroNumericalRank(who);
         for (int row = 0; row < dim; ++row)
             for (int column = 0; column < dim; ++column)
                 for (int mode = 0; mode < dim; ++mode)
@@ -10069,10 +10077,7 @@ std::vector<double> RadHACApKChargeGram::SolveConfiguredLinearMaterialAutoPrecMa
             alpha = symmetric_pseudoinverse_apply(
                 delta, gamma, dim, "block PCG search matrix");
         }
-        catch (const std::runtime_error& error) {
-            if (std::string(error.what()).find("numerical rank is zero") ==
-                    std::string::npos)
-                throw;
+        catch (const ZeroNumericalRank&) {
             block_breakdown = true;
             break;
         }
@@ -10110,10 +10115,7 @@ std::vector<double> RadHACApKChargeGram::SolveConfiguredLinearMaterialAutoPrecMa
             beta = symmetric_pseudoinverse_apply(
                 gamma, gamma_new, dim, "block PCG residual matrix");
         }
-        catch (const std::runtime_error& error) {
-            if (std::string(error.what()).find("numerical rank is zero") ==
-                    std::string::npos)
-                throw;
+        catch (const ZeroNumericalRank&) {
             block_breakdown = true;
             break;
         }

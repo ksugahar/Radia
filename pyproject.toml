@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "radia"
-version = "4.95.67"
+version = "4.95.68"
 description = "Radia 3D Magnetostatics with NGSolve Integration and TaskManager Parallelization"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -32,7 +32,7 @@ dependencies = [
     # uses the mkl_rt.3.dll ABI, so keep runtime and build packages in 2026.x.
     "mkl>=2026,<2027",
     "intel-cmplr-lib-rt>=2026,<2027",
-    # NGSolve + Netgen-mesher pinned to 6.2.2606 (2026-08-28 radia 4.95.67).
+    # NGSolve + Netgen-mesher pinned to 6.2.2606 (2026-08-29 radia 4.95.68).
     # Both packages and every Radia/Cubit native extension must move together:
     # NGSolve and Netgen expose C++ ABI used directly by the shipped binaries.
     # Bump consequences:
