@@ -17,11 +17,11 @@ from typing import Iterable
 
 _COPY_TARGETS = {
     "office": ("--copy-tex-file", [
-        "MathML", "MathML Presentation", "CF_UNICODETEXT", "LaTeX",
+        "HTML Format", "CF_UNICODETEXT", "LaTeX",
         "CF_ENHMETAFILE", "CF_DIBV5",
     ]),
     "powerpoint": ("--copy-tex-file", [
-        "MathML", "MathML Presentation", "CF_UNICODETEXT", "LaTeX",
+        "HTML Format", "CF_UNICODETEXT", "LaTeX",
         "CF_ENHMETAFILE", "CF_DIBV5",
     ]),
     "google-slides": ("--copy-google-slides-file", ["HTML Format", "PNG"]),
@@ -32,7 +32,7 @@ _COPY_TARGETS = {
 def presentation_equation_policy() -> dict:
     """Return the canonical source, publication, and format responsibilities."""
     return {
-        "schema": "radia-mcp.presentation-equation-policy.v1",
+        "schema": "radia-mcp.presentation-equation-policy.v2",
         "source_of_truth": {
             "native": "tools/eqnedit64/src",
             "web": "tools/eqnedit64/web/equation-editor.js",
@@ -56,6 +56,21 @@ def presentation_equation_policy() -> dict:
             "batch_pptx": "radia.equation.markdown_to_pptx (native OMML)",
             "interactive_clipboard": "presentation_copy_equation (Eqnedit64)",
             "image_file": "presentation_render_equation (Eqnedit64)",
+        },
+        "powerpoint_normal_paste": {
+            "command": 'Application.CommandBars.ExecuteMso("Paste")',
+            "clipboard_carrier": "HTML Format with inline MathML",
+            "office_math": "editable inline m:oMath",
+            "alignment": "left",
+            "font_points": 18,
+            "font_scope": "standard blank PowerPoint presentation",
+            "priority": "left alignment over forced 24 pt",
+            "native_web_parity": True,
+            "forbidden_acceptance_probe": "slide.Shapes.Paste()",
+            "reason": (
+                "Shapes.Paste preserves 24 pt through a different object-model "
+                "path; ordinary Ctrl+V applies PowerPoint destination formatting"
+            ),
         },
         "canonical_input": "TeX",
         "retired_formats": ["MTEF", ".eqn"],
@@ -153,8 +168,9 @@ def presentation_copy_equation(
 ) -> dict:
     """Copy TeX using Eqnedit64's native clipboard contract.
 
-    ``target="office"`` (or ``"powerpoint"``) publishes editable Office
-    Math plus TeX, EMF, and opaque DIBV5 fallbacks. ``"google-slides"``
+    ``target="office"`` (or ``"powerpoint"``) publishes editable, left-aligned
+    18 pt Office Math through normal PowerPoint paste, plus TeX, EMF, and opaque
+    DIBV5 fallbacks. ``"google-slides"``
     publishes the 300 dpi/24 pt PNG+HTML contract. ``"png"`` publishes only
     PNG and DIBV5 image formats. The user's foreground window is never
     activated.

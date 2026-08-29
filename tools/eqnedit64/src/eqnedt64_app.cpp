@@ -1083,8 +1083,9 @@ HGLOBAL global_copy(const void* data, size_t bytes) {
 
 constexpr double kGoogleSlidesDpi = 300.0;
 constexpr double kGoogleSlidesFontPoints = 24.0;
+constexpr double kOfficePasteFontPoints = 18.0;
 constexpr char kOfficeInlineSentinel[] =
-    "<span style=\"font-size:24pt\">&#160;</span>";
+    "<span style=\"font-size:18pt\">&#160;</span>";
 
 eqnedit::SvgStyle google_slides_style(const eqnedit::SvgStyle& source) {
     eqnedit::SvgStyle result = source;
@@ -1517,11 +1518,11 @@ bool open_clipboard_with_retry(HWND owner) {
 bool clipboard_set(const std::string& latex) {
     const std::wstring officeText = office_latex_text(latex);
     const std::string mathMlUtf8 =
-        eqnedit::latex_to_mathml(latex, kGoogleSlidesFontPoints);
-    /* Keep the invisible inline sentinel at the same point size as the
-     * equation.  PowerPoint reports the caret's font from this trailing run;
-     * leaving it unstyled makes an otherwise 24 pt equation look like 18 pt
-     * as soon as the user places the caret at the end. */
+        eqnedit::latex_to_mathml(latex, kOfficePasteFontPoints);
+    /* The normal Ctrl+V contract prioritises left-aligned editable Office
+     * Math over a fixed 24 pt source size. Keep the inline sentinel at the
+     * accepted 18 pt PowerPoint size so the equation, final character, and
+     * next insertion point agree. */
     const std::string officeHtml = cf_html_fragment(
         mathMlUtf8 + kOfficeInlineSentinel);
     HGLOBAL unicode = global_copy(officeText.c_str(),
@@ -1550,7 +1551,7 @@ bool clipboard_set(const std::string& latex) {
     }
 
     /* PowerPoint gives registered MathML priority over CF_HTML and converts it
-     * to a centred m:oMathPara.  Keep MathML as the inline 24 pt interchange
+     * to a centred m:oMathPara.  Keep MathML as the inline 18 pt interchange
      * payload inside CF_HTML with a trailing NBSP; Office then creates an
      * editable inline m:oMath in the left-aligned text paragraph. */
     const UINT htmlFormat = RegisterClipboardFormatW(L"HTML Format");
@@ -3756,8 +3757,8 @@ int self_test() {
             utf8_wide(office_latex_text(clipboardLatex))) != clipboardLatex)
         return 17;
     const std::string mathMl = eqnedit::latex_to_mathml(
-        clipboardLatex, kGoogleSlidesFontPoints);
-    if (mathMl.find("mathsize=\"24pt\"") == std::string::npos ||
+        clipboardLatex, kOfficePasteFontPoints);
+    if (mathMl.find("mathsize=\"18pt\"") == std::string::npos ||
         mathMl.find("display=\"inline\"") == std::string::npos ||
         mathMl.find("<mfrac>") == std::string::npos ||
         mathMl.find("<msqrt>") == std::string::npos ||
@@ -3765,7 +3766,7 @@ int self_test() {
         return 18;
     const std::string operatorMathMl = eqnedit::latex_to_mathml(
         "\\sum_{n=1}^{m} a^3 \\int_{a}^{b} f(x)\\, dx^3",
-        kGoogleSlidesFontPoints);
+        kOfficePasteFontPoints);
     if (operatorMathMl.find("<munderover><mo") == std::string::npos ||
         operatorMathMl.find("&#x2211;</mo>") == std::string::npos ||
         operatorMathMl.find("<msubsup><mo") == std::string::npos ||
