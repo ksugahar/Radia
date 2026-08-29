@@ -8,7 +8,7 @@ exposed several failure modes.
 
 ## Review status
 
-- Revised: 2026-08-29 on the `codex/ctype-three-engine` review branch.
+- Revised: 2026-08-30 after the `v4.95.70` mdx/hibino release validation.
 - The `22fc5630e..ec57769de` HEAD increment consists of Eqnedit64 pull
   requests `#34` and `#35`. It changes no HDiv source, test, validation,
   MATLAB, or HDiv documentation path, so the earlier HDiv measurements remain
@@ -85,7 +85,7 @@ explicit in-process Python fallback because NGSolve setup is Python-owned.
 | F2 | P1 | The IMA field contract is red. | At `ec57769de`, clean-build measurements were `2.0140013262e-14` and `4.9318891895e-14` relative error for the two HEX `rad.Fld`/`FieldFromSolution` gates, and `2.3931079340e-15` component error for curved TET BDM2. The limit is `2.2204460493e-15` (`10 eps`). Preserve the limit; align solve reduction and source accumulation order rather than loosening it. |
 | F3 | P1 | RT0 is publicly advertised again despite the BDM1/BDM2-only decision. | `_capabilities.py` exposes 3D TET/HEX order 0 and `DemagOperator` documents an order-0 broken-interface path. `HDivSolver` and field evaluation accept only orders 1 and 2. Remove the public RT0 entries/path and retain any topology-only experiment outside the production API. |
 | F4 | P1 | Fine-TET loss of SPD is an unclosed correctness report. | Claude reported `p^T A p = -1.90e5` at 8.75 mm and `-7.51e8` at 7.0 mm, but the mesh/configuration is absent from `main`. Commit the reproducer before changing quadrature, ACA, or CG. |
-| F5 | Resolved on LAB; remote timing pending | The direct nonlinear HDiv-MMM versus Omega-reduced-Omega comparison closes at order 2. | `validation_test/c_type_three_engine/` owns the Cubit/ACIS journal, reflection-invariant iron and Kelvin meshes, one coil, one material law, one observation grid, per-engine checkpoints, and JSON gates. The nonlinear order-2 primary pair differs by 0.18032% in the gap core; both reflection defects are about `1.8e-10`. HDiv uses 10,860 DoF and Omega 50,322 DoF. Two fresh LAB executions took 19.11--22.09 s and 102.78--150.82 s, respectively; this spread is why remote repeated timing remains pending. The order-1 PCHIP rerun remains at 5.84969%, proving that the old discrepancy was not caused by linear versus PCHIP interpolation. |
+| F5 | Resolved on `v4.95.70` | The direct nonlinear HDiv-MMM versus Omega-reduced-Omega comparison closes at order 2 and repeats on both compute hosts. | `validation_test/c_type_three_engine/` owns the Cubit/ACIS journal, reflection-invariant iron and Kelvin meshes, one coil, one material law, one observation grid, per-engine checkpoints, and JSON gates. The nonlinear order-2 primary pair differs by 0.18032% in the gap core; both reflection defects are about `1.8e-10`. HDiv uses 10,860 DoF and Omega 50,322 DoF. Across three fresh 38-thread runs, median HDiv/Omega times are 12.09/42.59 s on mdx and 11.31/43.28 s on hibino, making HDiv 3.52x and 3.83x faster for this case. The order-1 PCHIP rerun remains at 5.84969%, proving that the old discrepancy was not caused by linear versus PCHIP interpolation. |
 | F6 | P2 | Mapped/non-affine HEX BDM2 is operator-only, not a material solve. | `Solve` rejects it before wrong physics; mapped HEX BDM1, affine HEX BDM2, TET BDM2, and WEDGE BDM2 are the current alternatives. This is correctly documented and tested, but it remains a major completeness boundary. |
 | F7 | P2 | IMA disables tree acceleration for field maps. | `HDivFieldEvaluator::AlgorithmFor` returns `Direct` whenever images exist. This protects full/reduced roundoff parity, but large IMA observation maps cannot use the otherwise guarded treecode. Any image-aware acceleration needs a common full/reduced grouping and the F2 contract first. |
 | F8 | P2 | Exact vector-potential evaluation is narrower than H-field evaluation. | Exact `A` uses straight TET BDM1 equivalent currents. BDM2, curved, HEX, and WEDGE use NGSolve-mapped quadrature clouds assembled in Python. This is valid as an explicit converged quadrature route, not an all-topology exact/native claim. |
@@ -421,13 +421,19 @@ The direct nonlinear order-2 primary comparison closes the discrepancy. Both
 engines converged with the shared PCHIP material law and `gram_eps=1e-14`; the
 parity-projected gap-core relative RMS is 0.18032%, with a maximum vector
 difference of `8.2457e-4 T`. HDiv used 10,860 DoF, five Newton iterations,
-1,638 inner linear iterations, and 19.11--22.09 s over two fresh executions.
-Omega used 50,322 DoF, 17 Picard iterations, and 102.78--150.82 s. Their
-off-plane reflection errors are
-`1.85e-10` and `1.83e-10`, respectively. This LAB result establishes the
-accuracy comparison and identifies the order-1 result as a discretization
-failure. The timing ratio remains provisional until repeated on an idle
-mdx/hibino installation of the same release.
+1,638 inner linear iterations. Omega used 50,322 DoF and 17 Picard iterations.
+Their off-plane reflection errors are `1.85e-10` and about `1.83e-10`,
+respectively. This establishes the accuracy comparison and identifies the
+order-1 result as a discretization failure.
+
+The exact `v4.95.70` PyPI wheel was then run three times without checkpoint
+reuse on each idle 38-core Xeon Platinum 8368 host. Median HDiv/Omega runtimes
+were 12.09/42.59 s on mdx and 11.31/43.28 s on hibino. Thus HDiv was 3.52x and
+3.83x faster in this fixed order-2 nonlinear comparison while using 4.63x fewer
+DoFs. Every run produced the same 0.1803201266% gap-core discrepancy and the
+same nonlinear iteration counts. The raw artifacts and their hashes are
+indexed by
+`validation_test/c_type_three_engine/results/mdx_hibino_20260830_nonlinear_order2_summary.json`.
 
 Finer TET cases reported CG breakdown with `p^T A p = -1.90e5` at 8.75 mm and
 `-7.51e8` at 7.0 mm. The worsening sign and magnitude under refinement identify
@@ -503,7 +509,7 @@ contract.
 | P1 | Full-versus-IMA `rad.Fld` roundoff | Make all three isolated failures in section 4 pass below `10 eps` without weakening tolerances. Compare solved coefficient vectors before debugging source evaluation, then align directed block symmetrization and full/reduced field summation order. |
 | P1 | Remove production RT0 | Delete the 3D order-0 entries from `hdiv_capabilities`, remove the order-0 `DemagOperator` production path and dedicated order-0 tests/docs, and keep public `Solve`, operator, field, and MATLAB inventory consistently BDM1/BDM2. |
 | P1 | Fine-TET operator indefiniteness | Commit the failing mesh/configuration and result JSON; materialize the relevant Gram/operator block; locate a negative mode; compare it with dense analytic assembly or an independent NGSolve weak-form route; add a focused regression. |
-| P1 | Nonlinear C-yoke remote timing | The order-2 primary pair is accurate on LAB. Repeat the tracked periodic-Kelvin result on idle mdx and hibino with the same release, threads, B-H interpolation, and `gram_eps=1e-14`; report repeated timing and memory before making a performance claim. reduced-A remains an optional independent third-formulation audit rather than the primary acceptance pair. |
+| P1 | Nonlinear C-yoke memory evidence | Accuracy and repeated timing are closed on mdx and hibino for `v4.95.70`. Add measured process peak memory to a future scaling campaign before making a memory-efficiency claim. reduced-A remains an optional independent third-formulation audit rather than the primary acceptance pair. |
 | P2 | Mapped HEX BDM2 material solve | Build one composite mapped charge representation that preserves volume/surface cancellation, then require spectrum, linear/nonlinear solve, IMA, field, curved, and shape-derivative gates before removing the fail-loud guard. |
 | P2 | Image-aware field acceleration | Design grouping that is invariant under explicit reflection and reduced IMA representation; prove `<10 eps` direct parity before enabling tree/H-matrix evaluation for image-bearing field maps. |
 | P2 | Vector-potential topology coverage | Add exact/native BDM2 and HEX/WEDGE/curved source representations only with independent NGSolve mapped-volume convergence and A/B route checks. Keep the current quadrature construction explicit until then. |
@@ -516,7 +522,7 @@ contract.
 ## 7. Focused verification
 
 This revision was verified on LAB with the native module loaded from this
-worktree:
+worktree, then repeated with the exact `v4.95.70` PyPI wheel on mdx and hibino:
 
 - `Build.ps1 -Verbose`: PASS after the C++ review hardening;
 - latest `origin/main` clean native rebuild with
@@ -549,8 +555,11 @@ worktree:
 - order-1 nonlinear primary pair with the shared PCHIP law: converged; FAIL
   accuracy at 5.84969%, ruling out interpolation choice as the material cause;
 - order-2 nonlinear primary pair with the shared PCHIP law: PASS at 0.18032%
-  gap-core relative RMS; HDiv 19.11--22.09 s / 10,860 DoF versus Omega
-  102.78--150.82 s / 50,322 DoF over two fresh LAB executions.
+  gap-core relative RMS on all six remote runs; median HDiv/Omega timing was
+  12.09/42.59 s on mdx and 11.31/43.28 s on hibino, with 10,860/50,322 DoF.
+- release-qud: PASS for `radia 4.95.70`, `cubit-mesh-export 0.14.13`, and
+  `radia-mcp 1.4.49`; package versions and production file hashes agree across
+  LAB, the 100-machine, mdx, and hibino.
 
 The focused commands were:
 
