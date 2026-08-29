@@ -6,7 +6,7 @@ Eqnedit64は、軽快な構造編集とTeXファイルを直接つないだ64-bi
 レジストリ登録は不要です。
 
 公開ソースはRadiaリポジトリの`tools/eqnedit64`、署名済み単体EXEは
-[Eqnedit64 GitHub Release](https://github.com/ksugahar/Radia/releases/tag/eqnedit64-v3.0.4)
+[Eqnedit64 GitHub Release](https://github.com/ksugahar/Radia/releases/tag/eqnedit64-v3.0.5)
 で配布します。旧Eqnedit32バイナリ、MTEF変換コード、逆アセンブリ資料は
 Eqnedit64のソース・ビルド・配布物に含めません。
 
@@ -51,9 +51,11 @@ GUIの画面構成、状態遷移、TeX/クリップボード契約、自動・�
 
 キャンバスからのコピーは、一つの数式を複数形式でクリップボードへ登録します。
 選択範囲があればその範囲を、選択がなければ数式全体を `Ctrl+C` でコピーします。
-PowerPoint、Word、Excel向けには、実際のPowerPointで表示できていた登録
-`MathML` / `MathML Presentation` 形式を提供し、編集可能なOffice Mathへ変換します。
-Officeの版や貼り付け経路によって18--24 ptまたは数式段落になる場合があります。
+PowerPoint、Word、Excel向けには、inline CF_HTMLと登録`MathML` /
+`MathML Presentation` 形式へ同じ24 pt MathMLを提供し、編集可能なOffice Mathへ
+変換します。Web版も同じMathML契約を持ち、ブラウザHTML内の条件付きOMMLで総和、
+積分、分数、根号、上線、下線のOffice構造を保ちます。ブラウザはWindows登録MathMLを
+発行できないためWeb版のPowerPoint HTML経路は18 pt、EXE版は24 ptです。
 旧Office向けには区切り付きLaTeXも残します。IrfanViewなどの画像ソフトは
 EMFまたは全画素不透明の32-bit DIBV5を選べます。TeX対応ソフト向けには生の断片も
 `LaTeX` 形式で保持します。
@@ -135,7 +137,7 @@ PythonもLLM接続も必要ありません。
 ## 操作
 
 パレットバーの1段目は「基本／解析／集合・記号／幾何／ギリシャ」の分類タブ、
-2段目は選択中の分類に属するパレットだけです。18パレットを一度に探す必要はなく、
+2段目は選択中の分類に属するパレットだけです。19パレットを一度に探す必要はなく、
 全セルへの到達性と既存ショートカットは維持しています。メニューバーも
 「挿入」1本の同じ5分類です。
 
