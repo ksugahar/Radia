@@ -63,7 +63,7 @@ jobs:
       - name: Test, build, and verify radia-optuna wheel
         shell: pwsh
         run: |
-          python -m pip install build wheel pytest
+          python -m pip install build wheel pytest optuna==4.9.0
           python -m pytest packages\radia-optuna\tests -q
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python -m pytest tests\test_release_quad_optuna_candidate.py -q
