@@ -48,11 +48,14 @@ radia.simulink.buildOptunaTeachingModel(Exercise="reliability")
 
 See `OPTUNA_SIMULINK_LAB.md` for the student worksheet.
 
-The teaching model uses `buildOptunaStudyBlock`, a masked two-input/four-output
-facade over the stable advanced runtime. Change the mask and MAT study path to
-compare experiments; keep the path and raise the total budget to resume the
-same experiment. `reviewOptunaStudy` and `applyOptunaTrial` expose the full
-saved history and result selection without adding signal lines.
+The teaching model uses `buildOptunaStudyBlock`, a masked two-input/five-output
+facade over the stable advanced runtime. Four scalar outputs cover the common
+status view; the fifth is the fixed-schema `OptunaMonitorBusV1`, including the
+shared `RadiaMonitorHeaderV1` and scalar progress/failure telemetry. Change the
+mask and MAT study path to compare experiments; keep the path and raise the
+total budget to resume the same experiment. Variable-length histories and
+Pareto points stay in normalized MAT tables, so `reviewOptunaStudy` and
+`applyOptunaTrial` expose full saved results without adding signal lines.
 
 Release performance is measured on mdx from the raw JSON under
 `validation_test/optimization`, not inferred from unit-test timing. The

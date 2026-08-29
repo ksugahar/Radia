@@ -29,7 +29,10 @@ for exercise = exercises
     set_param(name, "SimulationCommand", "update");
     ports = get_param(name + "/Optuna Study", "PortHandles");
     verifyEqual(testCase, numel(ports.Inport), 2);
-    verifyEqual(testCase, numel(ports.Outport), 4);
+    verifyEqual(testCase, numel(ports.Outport), 5);
+    verifyEqual(testCase, string(get_param( ...
+        name + "/Optuna Study/Monitor Bus", "OutDataTypeStr")), ...
+        "Bus: OptunaMonitorBusV1");
     runtimePorts = get_param( ...
         name + "/Optuna Study/Advanced Runtime", "PortHandles");
     verifyEqual(testCase, numel(runtimePorts.Inport), 6);
@@ -56,6 +59,8 @@ verifyEqual(testCase, status(end), 1);
 verifyEqual(testCase, attempted(end), 12);
 verifyTrue(testCase, isfinite(best(end)));
 verifyEqual(testCase, height(review.trials), 12);
+monitor = out.get("teaching_monitor");
+verifyEqual(testCase, monitor(end,1), 12);
 clear cleanup
 end
 

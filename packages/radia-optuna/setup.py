@@ -21,6 +21,8 @@ CONTRACT_SOURCES = (
 SIMULINK_SOURCES = (
     MATLAB_ROOT / "+radia" / "+simulink" / "buildOptunaBlock.m",
     MATLAB_ROOT / "+radia" / "+simulink" / "buildOptunaStudyBlock.m",
+    MATLAB_ROOT / "+radia" / "+simulink" / "makeMonitorHeaderBusObject.m",
+    MATLAB_ROOT / "+radia" / "+simulink" / "makeOptunaMonitorBusObject.m",
     MATLAB_ROOT / "+radia" / "+simulink" / "buildOptunaTeachingModel.m",
     MATLAB_ROOT / "+radia" / "+simulink" / "reviewOptunaStudy.m",
     MATLAB_ROOT / "+radia" / "+simulink" / "applyOptunaTrial.m",
