@@ -23,6 +23,11 @@ enum Typeface {
      * selection, and Backspace treat it as one thing without any new cases;
      * the command it came from is kept in CharNode::latex. */
     TF_SPACE = 12,
+    /* Explicit math alphabets used by the always-visible style palette.
+     * Keep these distinct from TF_TEXT (\text) and TF_VARIABLE (automatic
+     * math variables) so saving teaches the command the user actually chose. */
+    TF_ROMAN = 13,       /* \mathrm{...} */
+    TF_MATH_ITALIC = 14, /* \mathit{...} */
     TF_DISPLAY = 0x96,
 };
 

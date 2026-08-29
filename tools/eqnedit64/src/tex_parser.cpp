@@ -523,8 +523,10 @@ private:
             return o;
         }
 
-        if (cmd == "\\text" || cmd == "\\mathrm" || cmd == "\\textrm")
+        if (cmd == "\\text" || cmd == "\\textrm")
             return styled_group(TF_TEXT);
+        if (cmd == "\\mathrm")
+            return styled_group(TF_ROMAN);
         if (cmd == "\\textbackslash") return make_char(TF_TEXT, '\\', '\\');
         if (cmd == "\\textasciicircum") return make_char(TF_TEXT, '^', '^');
         if (cmd == "\\textasciitilde") return make_char(TF_TEXT, '~', '~');
@@ -532,7 +534,7 @@ private:
         if (cmd == "\\mathbf" || cmd == "\\bm" || cmd == "\\boldsymbol")
             return styled_group(TF_VECTOR);
         if (cmd == "\\mathit")
-            return styled_group(TF_VARIABLE);
+            return styled_group(TF_MATH_ITALIC);
 
         /* Named glyphs win over operator names.  \div is the division sign,
          * not the word "div"; the same holds for \Re and \Im.  Keeping the
@@ -603,10 +605,13 @@ private:
     static void retype(NodeList& list, int typeface) {
         for (auto& n : list) {
             if (!n) continue;
-            if (n->tag() == Node::kChar)
+            if (n->tag() == Node::kChar) {
                 static_cast<CharNode&>(*n).typeface = typeface;
-            else if (n->tag() == Node::kLine)
-                retype(static_cast<LineNode&>(*n).children, typeface);
+                static_cast<CharNode&>(*n).automaticFunction = false;
+            } else {
+                for (NodeList* slot : node_slots(*n))
+                    if (slot) retype(*slot, typeface);
+            }
         }
     }
 

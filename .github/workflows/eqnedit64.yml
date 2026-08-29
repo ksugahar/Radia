@@ -113,7 +113,9 @@ jobs:
           packages/radia-mcp/tests/test_presentation_equation_cli.py -q
 
       - name: Check Web JavaScript syntax
-        run: node --check web/equation-editor.js
+        run: |
+          node --check web/equation-editor.js
+          node tests/test_web_insert.cjs
 
       - name: Build headless model module
         run: cmd.exe /d /c build\build_pymodule.bat

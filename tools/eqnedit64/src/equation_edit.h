@@ -112,7 +112,7 @@ public:
     /* ---- editing ----------------------------------------------------- */
     void insert_text(const std::string& utf8);      /* literal characters */
     bool insert_styled_text(const std::string& utf8,
-                            const std::string& style); /* text/function/vector/variable */
+                            const std::string& style); /* text/function/vector/variable/roman/italic */
     /* Restyle every character in the current selection -- Ctrl+B over a
      * selected symbol makes it a vector, rather than only setting the style
      * for the next character typed.  No selection: returns false. */
@@ -206,9 +206,6 @@ private:
     bool matrix_context(size_t* depth, MatrixNode** matrix, int* cell,
                         int layoutKind = -1) const;
 };
-
-/* Slots of a node in visual order.  Empty for a leaf. */
-std::vector<NodeList*> node_slots(Node& n);
 
 }  // namespace eqnedit
 
