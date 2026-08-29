@@ -12,6 +12,7 @@ gap from reopening one entry at a time.
 """
 import os
 import sys
+import unicodedata
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "build"))
 import eqnedit_core as E  # noqa: E402
@@ -102,6 +103,40 @@ def test_matrix_palette_offers_rectangles_and_structural_resize():
         "matrix.add_row", "matrix.remove_row",
         "matrix.add_column", "matrix.remove_column",
     } <= commands
+
+
+def test_palette_faces_use_unambiguous_owned_glyphs():
+    by_title = {
+        title: {command: cell for command, cell, _ in items}
+        for title, _, _, items in E.palettes()
+    }
+    scripts = by_title["上下付き"]
+    for command in ("template.sup", "template.sub", "template.subsup"):
+        assert not any(character.isdigit() for character in scripts[command]), (
+            f"{command} uses a real digit as an empty-slot marker: "
+            f"{scripts[command]!r}")
+
+    all_faces = [palette_face for _, palette_face, _, _ in E.palettes()]
+    all_faces.extend(
+        face
+        for _, _, _, items in E.palettes()
+        for _, face, _ in items)
+    assert all("▯" not in face for face in all_faces), (
+        "U+25AF is absent from the embedded Latin Modern Math cmap; "
+        "use the owned U+25A1 empty slot instead")
+    assert any("□" in face for face in all_faces)
+    assert not [
+        (face, character)
+        for face in all_faces
+        for character in face
+        if unicodedata.combining(character)
+    ], "GDI owner-draw palette faces must not rely on combining-mark shaping"
+
+    matrix = by_title["行列"]
+    assert matrix["matrix.add_row"] == "+R"
+    assert matrix["matrix.remove_row"] == "−R"
+    assert matrix["matrix.add_column"] == "+C"
+    assert matrix["matrix.remove_column"] == "−C"
 
 
 def test_five_categories_cover_every_palette_once():

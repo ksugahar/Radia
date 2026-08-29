@@ -61,6 +61,22 @@ def fold_math_italic(text: str) -> str:
     return "".join(out)
 
 
+def fold_math_bold(text: str) -> str:
+    """Designed mathematical-bold Latin glyphs back to their source text."""
+    out = []
+    for ch in text:
+        cp = ord(ch)
+        if 0x1D400 <= cp <= 0x1D419:
+            out.append(chr(ord("A") + cp - 0x1D400))
+        elif 0x1D41A <= cp <= 0x1D433:
+            out.append(chr(ord("a") + cp - 0x1D41A))
+        elif 0x1D7CE <= cp <= 0x1D7D7:
+            out.append(chr(ord("0") + cp - 0x1D7CE))
+        else:
+            out.append(ch)
+    return "".join(out)
+
+
 class Rendered:
     def __init__(self, latex: str, style=None):
         self.svg = tex_to_svg(latex, style or SvgStyle())
@@ -98,6 +114,16 @@ def main() -> int:
 
     failures = []
     style = SvgStyle()          # full 12, sub 7, sym 18
+
+    # Vector input must use the math font's designed bold alphabet.  Merely
+    # preserving \mathbf in TeX/MathML is not enough: TF_VECTOR once reached
+    # the native display list as an ordinary E and looked identical on screen.
+    vector = Rendered(r"\vec{\mathbf{E}}", style)
+    vector_text = "".join(g[3] for g in vector.glyphs)
+    if "𝐄" not in vector_text or fold_math_bold(vector_text).count("E") != 1:
+        failures.append(
+            r"\vec{\mathbf{E}} did not use MATHEMATICAL BOLD CAPITAL E: "
+            f"{vector_text!r}")
 
     # CJK is text, not a mathematical symbol.  Sending it through the
     # process-private Latin Modern Math face made GDI font linking apply the
