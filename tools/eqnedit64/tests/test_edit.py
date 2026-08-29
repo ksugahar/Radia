@@ -448,9 +448,20 @@ def main() -> int:
             f"{eq.latex()!r}")
 
     mathml = tex_to_mathml(r"\frac{x_{1}+\alpha}{\sqrt{y}}")
-    for required in ('mathsize="24pt"', "<mfrac>", "<msub>", "<msqrt>"):
+    for required in ('display="inline"', 'mathsize="24pt"',
+                     "<mfrac>", "<msub>", "<msqrt>"):
         if required not in mathml:
             failures.append(f"Office MathML is missing {required!r}: {mathml!r}")
+    operator_mathml = tex_to_mathml(
+        r"\sum_{n=1}^{m} a^3 \int_{a}^{b} f(x)\, dx^3")
+    if not re.search(r"<munderover><mo[^>]*>&#x2211;</mo>", operator_mathml):
+        failures.append(
+            "Office MathML no longer puts display sum limits above/below: "
+            f"{operator_mathml!r}")
+    if not re.search(r"<msubsup><mo[^>]*>&#x222B;</mo>", operator_mathml):
+        failures.append(
+            "Office MathML does not match MathJax side limits for integrals: "
+            f"{operator_mathml!r}")
     alphabet_mathml = tex_to_mathml(
         r"\mathrm{r}\mathit{i}\mathbf{v}\mathsf{s}\mathtt{t}"
         r"\mathcal{C}\mathbb{R}\mathfrak{F}\bm{\alpha}")

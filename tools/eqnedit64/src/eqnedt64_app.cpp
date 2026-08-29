@@ -807,7 +807,7 @@ bool start_operation_debug(bool announce,
                     "\telapsed_ms\tdelta_ms\tfocus\tinput_style\talignment"
                     "\tzoom_percent\tequation_mode"
                     "\tshortcut_prefix\tlatex\r\n");
-    debug_event("debug.start", "Eqnedit64 3.0.4 path=" + utf8_wide(path));
+    debug_event("debug.start", "Eqnedit64 3.0.5 path=" + utf8_wide(path));
     update_debug_menu();
     update_title();
     /* The status bar and the [操作ログ記録中] flag in the title say all of
@@ -1504,22 +1504,26 @@ bool open_clipboard_with_retry(HWND owner) {
 
 bool clipboard_set(const std::string& latex) {
     const std::wstring officeText = office_latex_text(latex);
-    const std::wstring mathMlText = wide_utf8(
-        eqnedit::latex_to_mathml(latex, kGoogleSlidesFontPoints));
+    const std::string mathMlUtf8 =
+        eqnedit::latex_to_mathml(latex, kGoogleSlidesFontPoints);
+    const std::wstring mathMlText = wide_utf8(mathMlUtf8);
+    const std::string officeHtml = cf_html_fragment(mathMlUtf8 + "&#160;");
     HGLOBAL unicode = global_copy(officeText.c_str(),
         (officeText.size() + 1) * sizeof(wchar_t));
     HGLOBAL mathMl = global_copy(mathMlText.c_str(),
         (mathMlText.size() + 1) * sizeof(wchar_t));
     HGLOBAL mathMlPresentation = global_copy(mathMlText.c_str(),
         (mathMlText.size() + 1) * sizeof(wchar_t));
+    HGLOBAL html = global_copy(officeHtml.c_str(), officeHtml.size() + 1);
     HGLOBAL rawLatex = global_copy(latex.c_str(), latex.size() + 1);
     HENHMETAFILE emf = equation_emf(latex, g.style);
     HGLOBAL dib = equation_dibv5(latex, g.style);
-    if (!unicode || !mathMl || !mathMlPresentation ||
+    if (!unicode || !mathMl || !mathMlPresentation || !html ||
         !open_clipboard_with_retry(g.main)) {
         if (unicode) GlobalFree(unicode);
         if (mathMl) GlobalFree(mathMl);
         if (mathMlPresentation) GlobalFree(mathMlPresentation);
+        if (html) GlobalFree(html);
         if (rawLatex) GlobalFree(rawLatex);
         if (emf) DeleteEnhMetaFile(emf);
         if (dib) GlobalFree(dib);
@@ -1530,15 +1534,20 @@ bool clipboard_set(const std::string& latex) {
         GlobalFree(unicode);
         GlobalFree(mathMl);
         GlobalFree(mathMlPresentation);
+        GlobalFree(html);
         if (rawLatex) GlobalFree(rawLatex);
         if (emf) DeleteEnhMetaFile(emf);
         if (dib) GlobalFree(dib);
         return false;
     }
 
-    /* Restore the registered MathML route which is known from real user paste
-     * to draw an equation.  The later inline CF_HTML route could create an
-     * Office Math zone whose text box remained visually empty. */
+    /* Publish inline HTML with the same 24 pt fallback MathML contract as the
+     * browser editor.  Registered MathML remains for Office versions which
+     * prefer it; all three native payloads contain the exact same MathML. */
+    const UINT htmlFormat = RegisterClipboardFormatW(L"HTML Format");
+    const bool htmlOk = htmlFormat &&
+        SetClipboardData(htmlFormat, html) != nullptr;
+    if (htmlOk) html = nullptr;
     const UINT mathMlFormat = RegisterClipboardFormatW(L"MathML");
     const bool mathMlOk = mathMlFormat &&
         SetClipboardData(mathMlFormat, mathMl) != nullptr;
@@ -1563,13 +1572,15 @@ bool clipboard_set(const std::string& latex) {
     if (unicode) GlobalFree(unicode);
     if (mathMl) GlobalFree(mathMl);
     if (mathMlPresentation) GlobalFree(mathMlPresentation);
+    if (html) GlobalFree(html);
     if (rawLatex) GlobalFree(rawLatex);
     if (emf) DeleteEnhMetaFile(emf);
     if (dib) GlobalFree(dib);
     /* TeX, visible Office Math, Unicode fallback, EMF, and opaque
      * DIBV5 are the normal-copy product contract. Cut must not delete the
      * selection if any required representation failed. */
-    return mathMlOk && presentationOk && unicodeOk && latexOk && emfOk && dibOk;
+    return htmlOk && mathMlOk && presentationOk && unicodeOk && latexOk &&
+        emfOk && dibOk;
 }
 
 bool clipboard_set_google_slides(const std::string& latex) {
@@ -2535,7 +2546,7 @@ bool toolbar_button_label_changes_pixels(HWND button,
 
 /* Five category tabs on the first row; only that category's popup palettes
  * occupy the second.  This keeps Eqnedt32's two-click completeness without
- * asking the eye to scan all eighteen palette buttons at once. */
+ * asking the eye to scan all nineteen palette buttons at once. */
 void create_toolbar(HWND hwnd) {
     const auto& palettes = eqnedit::palettes();
     const auto& categories = eqnedit::palette_categories();
@@ -2587,15 +2598,21 @@ void create_toolbar(HWND hwnd) {
     }
 
     /* Math alphabets are not category-specific: keep a fixed three-button
-     * group after the maximum five category palettes on the second row.  The
-     * group therefore never moves when a tab changes. */
+     * group after the widest category on the second row.  The group therefore
+     * never moves when a tab changes, even when Basic retains its dedicated
+     * over/underline palette. */
     g.styleFonts = {
         make_style_button_font(g.paletteFont, false, FW_NORMAL),
         make_style_button_font(g.paletteFont, true, FW_NORMAL),
         make_style_button_font(g.paletteFont, false, FW_BOLD),
     };
     const wchar_t* labels[] = {L"R x", L"I x", L"B x"};
-    const int styleLeft = left + 5 * (paletteWidth + gap) + scaled_px(hwnd, 10);
+    size_t maxCategoryPalettes = 0;
+    for (const auto& category : categories)
+        maxCategoryPalettes = std::max(
+            maxCategoryPalettes, category.paletteIndices.size());
+    const int styleLeft = left + int(maxCategoryPalettes) *
+        (paletteWidth + gap) + scaled_px(hwnd, 10);
     const int styleWidth = scaled_px(hwnd, 58);
     for (size_t i = 0; i < g.styleButtons.size(); ++i) {
         HWND button = CreateWindowExW(0, L"BUTTON", labels[i],
@@ -2641,7 +2658,12 @@ void select_palette_category(size_t index, bool announce) {
         ShowWindow(button, SW_SHOWNA);
         ++column;
     }
-    const int styleLeft = left + 5 * (width + gap) + scaled_px(g.main, 10);
+    size_t maxCategoryPalettes = 0;
+    for (const auto& category : categories)
+        maxCategoryPalettes = std::max(
+            maxCategoryPalettes, category.paletteIndices.size());
+    const int styleLeft = left + int(maxCategoryPalettes) *
+        (width + gap) + scaled_px(g.main, 10);
     const int styleWidth = scaled_px(g.main, 58);
     for (size_t i = 0; i < g.styleButtons.size(); ++i) {
         if (!g.styleButtons[i]) continue;
@@ -3734,17 +3756,21 @@ int self_test() {
     const std::string mathMl = eqnedit::latex_to_mathml(
         clipboardLatex, kGoogleSlidesFontPoints);
     if (mathMl.find("mathsize=\"24pt\"") == std::string::npos ||
+        mathMl.find("display=\"inline\"") == std::string::npos ||
         mathMl.find("<mfrac>") == std::string::npos ||
         mathMl.find("<msqrt>") == std::string::npos ||
         mathMl.find("<msub>") == std::string::npos)
         return 18;
-    std::string inlineMathMl = mathMl;
-    const size_t display = inlineMathMl.find("display=\"block\"");
-    if (display == std::string::npos) return 133;
-    inlineMathMl.replace(display, std::strlen("display=\"block\""),
-                         "display=\"inline\"");
+    const std::string operatorMathMl = eqnedit::latex_to_mathml(
+        "\\sum_{n=1}^{m} a^3 \\int_{a}^{b} f(x)\\, dx^3",
+        kGoogleSlidesFontPoints);
+    if (operatorMathMl.find("<munderover><mo") == std::string::npos ||
+        operatorMathMl.find("&#x2211;</mo>") == std::string::npos ||
+        operatorMathMl.find("<msubsup><mo") == std::string::npos ||
+        operatorMathMl.find("&#x222B;</mo>") == std::string::npos)
+        return 133;
     const std::string officeHtml =
-        cf_html_fragment(inlineMathMl + "&#160;");
+        cf_html_fragment(mathMl + "&#160;");
     const auto offset = [&officeHtml](const char* name) -> size_t {
         const size_t at = officeHtml.find(name);
         if (at == std::string::npos) return std::string::npos;
@@ -3756,7 +3782,7 @@ int self_test() {
     if (startFragment == std::string::npos ||
         endFragment == std::string::npos || endFragment < startFragment ||
         officeHtml.substr(startFragment, endFragment - startFragment) !=
-            inlineMathMl + "&#160;" ||
+            mathMl + "&#160;" ||
         officeHtml.find("display=\"block\"") != std::string::npos)
         return 134;
     HGLOBAL rawLatex = global_copy(clipboardLatex.c_str(), clipboardLatex.size() + 1);

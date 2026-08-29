@@ -59,12 +59,34 @@ def test_office_copy_is_editable_mathml_without_png_competition() -> None:
     )[1].split(
         'root.querySelector(".eqed-copy-display")', 1
     )[0]
-    assert "MathJax.tex2mml" in office
-    assert '{ display: false }' in office
+    assert "officeMathMl(tex)" in office
     assert '"text/html"' in office
     assert '"text/plain"' in office
     assert '"image/png"' not in office
-    assert "&#160;</body></html>" in office
+    assert "officeOmml(mml)" in office
+    assert "<!--[if gte msEquation 12]>" in office
+    assert "<![if !msEquation]>" in office
+    assert "&#160;<![endif]></p></body></html>" in office
+
+
+def test_office_mathml_is_canonical_inline_24pt() -> None:
+    canonical = SOURCE.split("function officeMathMl", 1)[1].split(
+        "function getSvgConverter", 1)[0]
+    assert "MathJax.tex2mml" in canonical
+    assert '{ display: false }' in canonical
+    assert 'setAttribute("display", "inline")' in canonical
+    assert 'setAttribute("mathsize", "24pt")' in canonical
+    assert 'querySelectorAll("mstyle")' in canonical
+    assert 'attribute.name.indexOf("data-") === 0' in canonical
+    assert 'setAttribute("largeop", "true")' in canonical
+
+
+def test_office_omml_transport_covers_structured_math() -> None:
+    for tag in ["m:f", "m:rad", "m:sSup", "m:sSub", "m:sSubSup",
+                "m:nary", "m:acc", "m:bar", "m:d", "m:m", "m:borderBox"]:
+        assert f"<{tag}>" in SOURCE
+    assert "font-size:24.0pt" in SOURCE
+    assert "Cambria Math" in SOURCE
 
 
 def test_png_is_a_separate_user_action() -> None:
