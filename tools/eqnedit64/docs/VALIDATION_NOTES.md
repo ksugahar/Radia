@@ -50,6 +50,10 @@
   PowerPoint描画643x365、数式ink 337x63、分数線35 pxでPASSした。同じ外部試験で
   DIBV5 427x98、IrfanView PNG 427x98、Google Slides PNG 1333x304/300 dpi、
   texclip PNG 1333x304もPASSし、終了後PowerPointプロセスは0件だった。
+- 3.0.9画面で`&`なしの1列`aligned`へ長さの違う日本語・数式行を入力すると、
+  TeX標準の単独右列として各行の右端が揃い、短い行が右へ飛ぶことを利用者画像で
+  確認した。3.0.10では入力安定性を優先し、この場合だけnative/Web表示とOffice
+  MathMLを左列扱いにする。明示`&`の右／左列整列と保存TeXは変更しない。
 
 根拠資料:
 

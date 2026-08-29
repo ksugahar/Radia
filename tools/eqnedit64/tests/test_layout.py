@@ -346,6 +346,17 @@ def main() -> int:
             failures.append(
                 f"matrix rows should be centred, not aligned: {top}")
 
+    # Enter creates a one-column aligned block until the user explicitly adds
+    # an `&` anchor. Those unanchored derivation/prose rows must share a left
+    # edge while typing; explicit two-column alignment keeps TeX semantics.
+    one_column = r"\begin{aligned}a \\ cccccc\end{aligned}"
+    top, bottom = glyph_x(one_column, "a"), glyph_x(one_column, "c")
+    if top is None or bottom is None:
+        failures.append("aligned: could not find both one-column rows")
+    elif abs(top - bottom) > 0.01:
+        failures.append(
+            f"unanchored aligned rows do not share a left edge: {top} vs {bottom}")
+
     if failures:
         print(f"FAIL  {len(failures)}")
         for f in failures:

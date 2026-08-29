@@ -13,6 +13,10 @@
   offscreen temporary presentation. The former `Shapes.Paste()` probe retained
   24 pt through a different object-model path and caused false-positive 3.0.8
   and 3.0.9 release evidence.
+- One-column `aligned` input without an explicit `&` now keeps every row on
+  the same left edge in native and Web rendering and in Office MathML. An
+  explicit `&` retains TeX's paired right/left alignment, and saved TeX is not
+  silently rewritten.
 
 ## 3.0.9 — 2026-08-30
 

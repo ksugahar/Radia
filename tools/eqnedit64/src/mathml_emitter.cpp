@@ -220,7 +220,8 @@ private:
         }
         const char* alignment =
             matrix.layoutKind == MatrixNode::kAlignedLayout
-                ? "columnalign=\"right left\""
+                ? (matrix.cols <= 1 ? "columnalign=\"left\""
+                                    : "columnalign=\"right left\"")
             : matrix.layoutKind == MatrixNode::kCasesLayout
                 ? "columnalign=\"left\""
                 : nullptr;

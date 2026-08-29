@@ -169,6 +169,9 @@ Eqnedt32にならい、ツールバーは**挿入できるものの総目録**�
   1×N・N×1を含む再読込みで行列を縮めず、通常の空セルでソースを冗長にしない。
 - `Enter` で `aligned` 行を作るか、現在行の次に行を挿入する。
 - `&` で揃え位置を追加する。
+- `&`を含まない1列の`aligned`は、入力中に各行の左端を同じ位置へ置く。
+  明示的な`&`がある場合はTeX標準の右列／左列ペアで揃える。この表示規則は
+  入力位置の安定化であり、保存TeXへ暗黙の`&`を追加しない。
 - 積分の上限・下限はTeXのdisplay積分と同じ右上・右下のスクリプト配置とする。
   12 pt基準では本文基線に対して上限約13.2 pt上、下限約10.8 pt下、上限を
   下限より約5.28 pt右へ置く。
@@ -301,7 +304,8 @@ Eqnedit64拡張として、`curl`, `div`, `grad`, `rot`, `tr`, `diag`, `Res`,
 - 対象環境がない場合は、全体を数式断片として読み込む。
 - 新規文書の保存時は編集中の数式を1つの `equation` で包む。開いた文書の対象環境が
   `equation*` だった場合だけ、その外枠を保存時にも維持する。番号切替UIは設けない。
-- 2行以上または複数揃え列は `aligned` と `&` / `\\` で保存する。
+- 2行以上は `aligned` と `\\` で保存し、利用者が指定した揃え位置だけを `&` で
+  保存する。
 
 ## 6. クリップボード契約
 
@@ -454,6 +458,7 @@ Eqnedit64拡張として、`curl`, `div`, `grad`, `rot`, `tr`, `diag`, `Res`,
 | AUT-31 | 1×1から7×9を含む任意長方形を作成でき、行・列追加／削除が既存セル、上下移動、Undo/Redo、TeX再読込み時の空の端セルを保持する | `test_edit.py` / `test_operations_fuzz.py` / `--ui-interaction-test` |
 | AUT-32 | 行列パレットの全入口と行／列操作が実`WM_COMMAND`経路で状態を変え、全253メニュ項目の監査で操作可能項目0件のno-opを満たす | `test_palettes.py` / `--ui-interaction-test` / `--menu-audit` |
 | AUT-33 | パレット、直接ショートカット、2段ショートカットが新規TeX範囲だけを非アクティブ選択表示し、キャンバスのフォーカスを保ち、ソース欄へ移ると置換前に選択を解除する | `--ui-interaction-test` |
+| AUT-34 | `&`なし1列`aligned`の長短行がnative/Web入力表示とOffice MathMLで同じ左端を持ち、明示`&`の右／左列整列と保存TeXを変えない | `test_layout.py` / `test_edit.py` / `test_web_insert.cjs` |
 | AUT-34 | TeXソース欄の `Tab` が2つの `{}` 空欄を順に移動し、`Shift+Tab` が前へ戻り、ソースへTab文字を混入させない | `--ui-interaction-test` |
 | AUT-35 | 内蔵数式フォントは検証済みユーザーキャッシュからファイルベースで私有登録し、32回の起動終了後も`fontdrvhost.exe`のPIDとApplication Error件数が変化せず、分類タブ文字が本文相当の画素高を持つ | `test_font_safety.py` / `test_font_session.ps1` / `--ui-interaction-test` |
 

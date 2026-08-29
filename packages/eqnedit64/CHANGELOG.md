@@ -7,6 +7,8 @@
 - Replace the false `Shapes.Paste()` acceptance surrogate with PowerPoint's
   built-in UI Paste command, and check 18 pt equation/tail/insertion ranges,
   inline OMML structure, and nonblank rendered output.
+- Keep unanchored multi-line input on one left edge in native and Web views;
+  explicit `&` alignment and the saved TeX source remain unchanged.
 
 ## 3.0.9 - 2026-08-30
 
