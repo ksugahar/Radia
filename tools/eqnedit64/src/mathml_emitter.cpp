@@ -204,9 +204,32 @@ private:
     }
 
     std::string table(const MatrixNode& matrix) {
-        std::string rows;
         const int rowCount = std::max(0, matrix.rows);
         const int columnCount = std::max(1, matrix.cols);
+        if (matrix.layoutKind == MatrixNode::kAlignedLayout) {
+            std::string rows;
+            for (int r = 0; r < rowCount; ++r) {
+                std::string alignedRow = "<maligngroup/>";
+                /* Office ignores mtable columnalign. PowerPoint also imports
+                 * a table with malignmark alone as a centred matrix, so each
+                 * row starts with maligngroup to preserve an equation array.
+                 * An unanchored row then places malignmark at its left edge;
+                 * explicit TeX ampersands sit between parsed columns. Keep
+                 * one mtd so MML2OMML and PowerPoint both produce eqArr. */
+                if (columnCount <= 1) alignedRow += "<malignmark/>";
+                for (int c = 0; c < columnCount; ++c) {
+                    if (c > 0) alignedRow += "<malignmark/>";
+                    const size_t at = size_t(r * columnCount + c);
+                    alignedRow += at < matrix.elements.size() &&
+                            matrix.elements[at]
+                        ? emit_node(*matrix.elements[at]) : "<mrow/>";
+                }
+                rows += element("mtr", element("mtd", alignedRow));
+            }
+            return element("mtable", rows, "columnalign=\"left\"");
+        }
+
+        std::string rows;
         for (int r = 0; r < rowCount; ++r) {
             std::string cells;
             for (int c = 0; c < columnCount; ++c) {
@@ -219,10 +242,7 @@ private:
             rows += element("mtr", cells);
         }
         const char* alignment =
-            matrix.layoutKind == MatrixNode::kAlignedLayout
-                ? (matrix.cols <= 1 ? "columnalign=\"left\""
-                                    : "columnalign=\"right left\"")
-            : matrix.layoutKind == MatrixNode::kCasesLayout
+            matrix.layoutKind == MatrixNode::kCasesLayout
                 ? "columnalign=\"left\""
                 : nullptr;
         return element("mtable", rows, alignment);

@@ -24,7 +24,7 @@
   キャッシュなしより有意に遅くないこと
 - `dist\Eqnedit64.exe` 一つだけ、build版とSHA-256一致、`CN=ksugahar`署名が
   `Valid`、PythonやVCランタイムDLLに非依存
-- PowerPointへ通常Ctrl+V相当で左寄せ18 ptの編集可能Office Math、IrfanViewへ黒文字の不透明画像、
+- PowerPointへ通常Ctrl+V相当で左寄せ18 ptの編集可能Office Math（複数行も全行同じ左端）、IrfanViewへ黒文字の不透明画像、
   Google Slides用300 dpi/24 pt、raw TeXをAPI/CLI経由で自動確認
 - 公開配布物に旧Eqnedit32バイナリ、MTEF変換コード、逆アセンブリ資料を混入しない
 - すべて合格した後だけ `dist\Eqnedit64.exe` をGitHub Releaseへ添付する
