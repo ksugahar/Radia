@@ -49,6 +49,7 @@ def test_pypi_distributions_have_independent_ci_boundaries():
         assert f"name: {name}" in text
 
     radia=texts["Radia"]
+    assert "workflow_dispatch:" in radia
     for package in ("eqnedit64", "radia-mcp", "cubit-mesh-export",
                     "radia-optuna"):
         assert f"packages/{package}/**" in radia
