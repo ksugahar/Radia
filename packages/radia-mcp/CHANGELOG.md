@@ -17,6 +17,16 @@ crystallized as its own package.
   surface. `presentation_equation_policy()` exposes the checked ownership,
   publication, TeX-only, and retired-format contract.
 
+## [1.4.49] - 2026-08-29
+
+- matlab: added executable guidance and release-gate checks for the fixed-width
+  `OptunaMonitorBusV1` and `IHMonitorBusV1` Simulink telemetry contracts while
+  retaining normalized tables as the variable-length history boundary.
+- matlab: synchronized the Optuna manifest audit with all 150 MATLAB tests and
+  kept upstream Study/Trial/MCP behavior owned by Optuna 4.9.0 and the official
+  `optuna/optuna-mcp` server; radia-mcp continues to own only MATLAB/Simulink
+  differences and release evidence.
+
 ## [1.4.48] - 2026-08-28
 
 - presentation: added a z-order audit that rejects directional arrows hidden
