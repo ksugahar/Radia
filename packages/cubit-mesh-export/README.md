@@ -11,7 +11,7 @@ that every domain-specific Radia notebook or headless workflow consumes.
 
 - **Cubit plugin** (`.ccm` + `.pyd`, Coreform Cubit 2025.12+):
   - `export {netgen|gmsh|vtk|femeem|meg|nastran_bdf}` APREPRO commands
-  - **Export Mesh** GUI menu / toolbar inside Cubit's embedded Python
+  - Cubit-owned **Export** menu plus the Radia Export WorkflowToolbar
 - **Arbitrary-order curving** (order 1-5) via ACIS geometry projection
 - **Kelvin open-boundary** transformation built into `export netgen`
   (auto-add an exterior sphere with copy-mesh + periodic identification)
@@ -51,7 +51,25 @@ cubit-plugin-install
 Always re-run `cubit-plugin-install` after upgrading.
 `cubit-plugin-install --verify-only` checks both the deployed binary
 hashes and, when `radia` is installed, the Cubit toolbar startup
-registration.
+registration. If the official WorkflowToolbar was imported previously, the
+installer refreshes its scripts and toolbar definition automatically and the
+verification step rejects any stale deployed copy.
+
+### Native developer rebuild
+
+Rebuild and propagate both mandatory native payloads from the current
+worktree with:
+
+```powershell
+pwsh -File src/cubit_plugin/cubit_build.ps1 -Rebuild
+```
+
+The command fails unless both artifacts are produced and their copied
+SHA-256 hashes match. Wheel creation independently rejects either stale
+payload and emits a native `cp312-cp312-win_amd64` wheel directly.
+Because `.pyd` files are intentionally gitignored, release CI fetches the
+content-addressed curver named in `native_payloads.json` and checks its exact
+size and SHA-256 before packaging.
 
 ## Cubit commands
 

@@ -2,8 +2,12 @@
 
 from __future__ import annotations
 
+import ast
 import importlib.util
+import os
 from pathlib import Path
+import sys
+import types
 
 ROOT = Path(__file__).resolve().parents[1]
 REGISTER_TOOLBAR = ROOT / "src" / "radia" / "panels" / "register_toolbar.py"
@@ -122,3 +126,33 @@ def test_nastran_action_uses_the_solver_neutral_command():
 
     assert "export nastran_bdf" in source
     assert "export jmag_nastran" not in source
+
+
+def test_claro_activation_strings_dispatch_every_export_format(monkeypatch):
+    """Cubit must be able to execute every PyAction activation string.
+
+    ``setActivateMethod`` stores source text for Cubit's embedded Python,
+    rather than a Python callable.  Extract only the source generator so this
+    contract stays testable without importing Cubit's private PySide6 runtime.
+    """
+    source = EXPORT_MENU.read_text(encoding="utf-8")
+    tree = ast.parse(source, filename=str(EXPORT_MENU))
+    activate_node = next(
+        node for node in tree.body
+        if isinstance(node, ast.FunctionDef) and node.name == "_activate_code"
+    )
+    namespace = {"os": os, "__file__": str(EXPORT_MENU)}
+    exec(compile(ast.Module([activate_node], type_ignores=[]),
+                 str(EXPORT_MENU), "exec"), namespace)
+
+    calls = []
+    fake_menu = types.SimpleNamespace(launch_export=calls.append)
+    monkeypatch.setitem(sys.modules, "radia_export_menu", fake_menu)
+    original_path = list(sys.path)
+    try:
+        for fmt in ("netgen", "gmsh", "nastran", "vtk", "femeem", "meg"):
+            exec(namespace["_activate_code"](fmt), {})
+    finally:
+        sys.path[:] = original_path
+
+    assert calls == ["netgen", "gmsh", "nastran", "vtk", "femeem", "meg"]
