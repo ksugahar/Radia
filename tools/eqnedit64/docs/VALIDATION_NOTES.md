@@ -5,7 +5,7 @@
 [`CANONICAL_OPERATION.md`](CANONICAL_OPERATION.md) と `release-eqnedit64` skillを
 正とする。`build\accept_release.ps1`は隔離CI/VM用であり、対話中LABでは実行しない。
 
-## 2026-08-29 Eqnedit64 3.0.8公開候補検証
+## 2026-08-29 Eqnedit64 3.0.8公開検証
 
 - 利用者の実機確認でnative/Webの見た目は一致したが、数式末尾のカーソル位置が
   18 ptと表示された。保存済み3.0.7 PPTXを調べると、`m:oMath`内の数式runは
@@ -26,6 +26,26 @@
 - `build/test_external_paste.ps1`と研究室ホームページ集中QAは、全体サイズに加えて
   末尾文字のCOMサイズと保存OOXMLの末尾`sz="2400"` runを必須にした。18 ptの
   カーソルが混じる場合はリリース失敗となる。
+- tag / source: `eqnedit64-v3.0.8` /
+  `882846e95ebfcbe893544cb27b5ab17ec68bf14d`。
+- PR CI `33256145786`、main CI `33256264712`、tag CI `33256705540`、
+  release workflow `33256806657`はすべて成功。PR/mainのPolicy Lint
+  `33256145840` / `33256264651`も成功した。
+- exact mainからLABで再ビルドしたEXEはProductVersion/FileVersion 3.0.8、
+  Authenticode `Valid`、signer `CN=ksugahar`。SHA-256は
+  `EB4CA78EBDF7AC9D889292AB671C7E22B4CDB85AC34F9A3FA56990516BAA6EE9`。
+  `O:\Eqnedit64.exe`、GitHub Release EXE、PyPIのCPython
+  3.10/3.11/3.12/3.13 wheel内EXEはすべてbyte-identicalだった。
+- 研究室ホームページはEqnedit64部分だけを限定ビルドし、`elemag/index.php`と
+  `elemag/equation-editor.js`だけを加算更新した。公開JS、生成JS、Radia正本の
+  SHA-256はすべて
+  `FF81CC49F34E856763BEE9F2554FCE121EA2284F69682E019C8D168A9DDA8548`、
+  cache keyは`ff81cc49f34e`。公開URLのdesktop/mobile browser QAと実PowerPoint QAは
+  数式24.0 pt、末尾カーソル24.0 pt、左揃え、n-ary 2個、分数、根号、上線、下線、
+  3,393 ink pixelで合格し、O:配布EXEの保存Office Mathと描画PNGにbyte-identicalだった。
+- GitHub Release:
+  `https://github.com/ksugahar/Radia/releases/tag/eqnedit64-v3.0.8`
+- PyPI: `https://pypi.org/project/eqnedit64/3.0.8/`
 
 ## 2026-08-29 Eqnedit64 3.0.7公開検証
 
