@@ -84,6 +84,12 @@ std::vector<Palette> build() {
         tpl("strike", u8"/x", u8"打ち消し線"),
         tpl("frown", u8"∩x", u8"フラウン"),
         tpl("smile", u8"x∪", u8"スマイル"),
+        I{"style.sans", u8"sf", u8"サンセリフ（\\mathsf）"},
+        I{"style.mono", u8"tt", u8"等幅（\\mathtt）"},
+        I{"style.script", u8"cal", u8"カリグラフィー（\\mathcal）"},
+        I{"style.double", u8"bb", u8"黒板太字（\\mathbb）"},
+        I{"style.fraktur", u8"fr", u8"フラクトゥール（\\mathfrak）"},
+        I{"style.boldsymbol", u8"Bα", u8"記号太字（\\bm）"},
     }});
 
     p.push_back({u8"演算子", u8"±×", 3, {

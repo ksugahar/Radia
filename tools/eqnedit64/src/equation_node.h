@@ -24,6 +24,11 @@ class NodeVisitor;
 using NodeList = std::vector<std::unique_ptr<Node>>;
 using NodePtr  = std::unique_ptr<Node>;
 
+/* Slots of a node in visual order.  Empty for a leaf.  Parser and editor both
+ * use this traversal so a math alphabet reaches nested fractions, scripts,
+ * matrices, and decorations consistently. */
+std::vector<NodeList*> node_slots(Node& n);
+
 /* ============================================================
  * Base Node class
  * ============================================================ */
@@ -76,7 +81,7 @@ public:
 
 class CharNode : public Node {
 public:
-    int typeface = 0;       /* logical typeface (1-11) */
+    int typeface = 0;       /* logical Typeface value */
     /* True only for Function style inferred by Math input.  Explicit or
      * parsed Function style stays false, so extending an automatically
      * recognised word can safely revert just the inferred letters. */
