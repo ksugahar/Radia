@@ -1,0 +1,488 @@
+{
+  "schema": "radia.validation.c-type-absolute-accuracy-certificate.v1",
+  "generated_at_utc": "2026-08-29T21:19:44.316579+00:00",
+  "passed": true,
+  "machine": "mdx",
+  "claim": {
+    "quantity": "gauge-invariant B in the C-yoke useful gap core",
+    "analytic_absolute_truth_claimed": false,
+    "certified_statement": "three independent formulations converge toward one common mesh-refined field within the reported numerical envelope",
+    "scope": "nonlinear order-2 Cubit/ACIS C-type model with Kelvin open boundary"
+  },
+  "mesh_family": "C:\\temp\\radia_ctype_accuracy_20260830_v49571\\meshes\\mesh_family.json",
+  "mesh_family_sha256": "b8bf3118dca503d11d9ed906768eb773cc1eb4cca59fd089c478140efbe6edf8",
+  "level_results": [
+    {
+      "name": "coarse",
+      "scale": 1.25,
+      "result": "C:\\temp\\radia_ctype_accuracy_20260830_v49571\\levels\\coarse.json",
+      "result_sha256": "42201d95fc14f97c83e1cb0c77b18902779009ecb5ab5484f71722a3423a046c",
+      "engines": {
+        "hdiv_mmm": {
+          "formulation": "HDiv-MMM BDM2",
+          "open_boundary": "Coulomb charge Gram; iron-only mesh",
+          "mesh_elements": 434,
+          "mesh_vertices": 179,
+          "ndof": 8784,
+          "linear_iterations": 5,
+          "nonlinear": true,
+          "nonlinear_stats": {
+            "nonlinear_inner_preconditioner": "jacobi",
+            "nonlinear_inner_tol": "auto",
+            "nonlinear_continuation_steps": 1,
+            "nonlinear_reuse_tangent_steps": 1,
+            "nonlinear_cg_x0": false,
+            "nonlinear_newton_iters": 5,
+            "nonlinear_warmstart_solves": 1,
+            "nonlinear_linear_inner_iters": 1688,
+            "nonlinear_line_search_backtracks": 0,
+            "nonlinear_tangent_assemblies": 5,
+            "nonlinear_tangent_reuses": 0,
+            "nonlinear_fresh_tangent_retries": 0,
+            "nonlinear_final_rel_step": 1.1556943078203095e-05,
+            "nonlinear_final_settled_iters": 2,
+            "nonlinear_converged_final_stage": true,
+            "converged": true
+          },
+          "preconditioner": "jacobi",
+          "gram_eps": 1e-14,
+          "runtime_s": 10.54587100003846,
+          "resumed_from_checkpoint": true
+        },
+        "reduced_a": {
+          "formulation": "HCurl reduced-A",
+          "open_boundary": "periodic spherical Kelvin transform",
+          "source_contract": "vacuum source removed; iron contrast RHS only",
+          "kelvin_center_m": [
+            0.6600000000000004,
+            7.697835424647081e-18,
+            -1.1985861142263254e-16
+          ],
+          "kelvin_radius_m": 0.22,
+          "mesh_elements": 24134,
+          "mesh_vertices": 4396,
+          "ndof": 126834,
+          "nonlinear": true,
+          "linear_solver": "direct",
+          "relax": 0.1,
+          "bh_interpolation": "exact inverse of shared monotone PCHIP B(H), with vacuum-slope continuation",
+          "nonlinear_stats": {
+            "converged": true,
+            "iterations": 37,
+            "final_relative_change": 1.8037123149362012e-05,
+            "tolerance": 2e-05,
+            "maximum_iterations": 80,
+            "maximum_linear_relative_residual": 1.641684097135795e-13,
+            "direct_inverse": "pardisospd"
+          },
+          "runtime_s": 153.3731262999936,
+          "resumed_from_checkpoint": true
+        },
+        "omega_reduced_omega": {
+          "formulation": "H1 Omega-reduced-Omega",
+          "open_boundary": "periodic spherical Kelvin transform",
+          "source_contract": "vacuum source removed; iron contrast RHS only",
+          "kelvin_center_m": [
+            0.6600000000000004,
+            7.697835424647081e-18,
+            -1.1985861142263254e-16
+          ],
+          "kelvin_radius_m": 0.22,
+          "mesh_elements": 24134,
+          "mesh_vertices": 4396,
+          "ndof": 33514,
+          "nonlinear": true,
+          "nonlinear_stats": {
+            "converged": true,
+            "iterations": 15,
+            "final_relative_change": 1.2134827772015688e-05,
+            "tolerance": 2e-05,
+            "maximum_iterations": 80
+          },
+          "runtime_s": 22.91105009999592,
+          "resumed_from_checkpoint": true
+        }
+      }
+    },
+    {
+      "name": "medium",
+      "scale": 1.0,
+      "result": "C:\\temp\\radia_ctype_accuracy_20260830_v49571\\levels\\medium.json",
+      "result_sha256": "e5869124cc7b4f82ba7cdd2fcb76d2188e7e87995f1d39bea4f410a3bdc01682",
+      "engines": {
+        "hdiv_mmm": {
+          "formulation": "HDiv-MMM BDM2",
+          "open_boundary": "Coulomb charge Gram; iron-only mesh",
+          "mesh_elements": 542,
+          "mesh_vertices": 211,
+          "ndof": 10860,
+          "linear_iterations": 5,
+          "nonlinear": true,
+          "nonlinear_stats": {
+            "nonlinear_inner_preconditioner": "jacobi",
+            "nonlinear_inner_tol": "auto",
+            "nonlinear_continuation_steps": 1,
+            "nonlinear_reuse_tangent_steps": 1,
+            "nonlinear_cg_x0": false,
+            "nonlinear_newton_iters": 5,
+            "nonlinear_warmstart_solves": 1,
+            "nonlinear_linear_inner_iters": 1636,
+            "nonlinear_line_search_backtracks": 0,
+            "nonlinear_tangent_assemblies": 5,
+            "nonlinear_tangent_reuses": 0,
+            "nonlinear_fresh_tangent_retries": 0,
+            "nonlinear_final_rel_step": 1.4020884195196387e-05,
+            "nonlinear_final_settled_iters": 2,
+            "nonlinear_converged_final_stage": true,
+            "converged": true
+          },
+          "preconditioner": "jacobi",
+          "gram_eps": 1e-14,
+          "runtime_s": 11.819819999975152,
+          "resumed_from_checkpoint": true
+        },
+        "reduced_a": {
+          "formulation": "HCurl reduced-A",
+          "open_boundary": "periodic spherical Kelvin transform",
+          "source_contract": "vacuum source removed; iron contrast RHS only",
+          "kelvin_center_m": [
+            0.659999999999998,
+            2.667137344314341e-17,
+            -6.712927315471293e-16
+          ],
+          "kelvin_radius_m": 0.22,
+          "mesh_elements": 36208,
+          "mesh_vertices": 6598,
+          "ndof": 190396,
+          "nonlinear": true,
+          "linear_solver": "direct",
+          "relax": 0.1,
+          "bh_interpolation": "exact inverse of shared monotone PCHIP B(H), with vacuum-slope continuation",
+          "nonlinear_stats": {
+            "converged": true,
+            "iterations": 37,
+            "final_relative_change": 1.7962425998924916e-05,
+            "tolerance": 2e-05,
+            "maximum_iterations": 80,
+            "maximum_linear_relative_residual": 1.8205332150383803e-13,
+            "direct_inverse": "pardisospd"
+          },
+          "runtime_s": 209.7930937000201,
+          "resumed_from_checkpoint": true
+        },
+        "omega_reduced_omega": {
+          "formulation": "H1 Omega-reduced-Omega",
+          "open_boundary": "periodic spherical Kelvin transform",
+          "source_contract": "vacuum source removed; iron contrast RHS only",
+          "kelvin_center_m": [
+            0.659999999999998,
+            2.667137344314341e-17,
+            -6.712927315471293e-16
+          ],
+          "kelvin_radius_m": 0.22,
+          "mesh_elements": 36208,
+          "mesh_vertices": 6598,
+          "ndof": 50322,
+          "nonlinear": true,
+          "nonlinear_stats": {
+            "converged": true,
+            "iterations": 17,
+            "final_relative_change": 1.3240768532307379e-05,
+            "tolerance": 2e-05,
+            "maximum_iterations": 80
+          },
+          "runtime_s": 38.943987799983006,
+          "resumed_from_checkpoint": true
+        }
+      }
+    },
+    {
+      "name": "fine",
+      "scale": 0.8,
+      "result": "C:\\temp\\radia_ctype_accuracy_20260830_v49571\\levels\\fine.json",
+      "result_sha256": "64c093aba98606656932021ca599505b70f63659bf6b927e95f03d48a8c456da",
+      "engines": {
+        "hdiv_mmm": {
+          "formulation": "HDiv-MMM BDM2",
+          "open_boundary": "Coulomb charge Gram; iron-only mesh",
+          "mesh_elements": 846,
+          "mesh_vertices": 285,
+          "ndof": 16608,
+          "linear_iterations": 5,
+          "nonlinear": true,
+          "nonlinear_stats": {
+            "nonlinear_inner_preconditioner": "jacobi",
+            "nonlinear_inner_tol": "auto",
+            "nonlinear_continuation_steps": 1,
+            "nonlinear_reuse_tangent_steps": 1,
+            "nonlinear_cg_x0": false,
+            "nonlinear_newton_iters": 5,
+            "nonlinear_warmstart_solves": 1,
+            "nonlinear_linear_inner_iters": 1831,
+            "nonlinear_line_search_backtracks": 0,
+            "nonlinear_tangent_assemblies": 5,
+            "nonlinear_tangent_reuses": 0,
+            "nonlinear_fresh_tangent_retries": 0,
+            "nonlinear_final_rel_step": 1.0066608127282235e-05,
+            "nonlinear_final_settled_iters": 2,
+            "nonlinear_converged_final_stage": true,
+            "converged": true
+          },
+          "preconditioner": "jacobi",
+          "gram_eps": 1e-14,
+          "runtime_s": 17.642564399982803,
+          "resumed_from_checkpoint": true
+        },
+        "reduced_a": {
+          "formulation": "HCurl reduced-A",
+          "open_boundary": "periodic spherical Kelvin transform",
+          "source_contract": "vacuum source removed; iron contrast RHS only",
+          "kelvin_center_m": [
+            0.6599999999999968,
+            2.8189256484623115e-17,
+            -3.589621227842246e-17
+          ],
+          "kelvin_radius_m": 0.22,
+          "mesh_elements": 54886,
+          "mesh_vertices": 10028,
+          "ndof": 288902,
+          "nonlinear": true,
+          "linear_solver": "direct",
+          "relax": 0.1,
+          "bh_interpolation": "exact inverse of shared monotone PCHIP B(H), with vacuum-slope continuation",
+          "nonlinear_stats": {
+            "converged": true,
+            "iterations": 38,
+            "final_relative_change": 1.908317475096021e-05,
+            "tolerance": 2e-05,
+            "maximum_iterations": 80,
+            "maximum_linear_relative_residual": 2.0823882268143938e-13,
+            "direct_inverse": "pardisospd"
+          },
+          "runtime_s": 404.5934346000431,
+          "resumed_from_checkpoint": true
+        },
+        "omega_reduced_omega": {
+          "formulation": "H1 Omega-reduced-Omega",
+          "open_boundary": "periodic spherical Kelvin transform",
+          "source_contract": "vacuum source removed; iron contrast RHS only",
+          "kelvin_center_m": [
+            0.6599999999999968,
+            2.8189256484623115e-17,
+            -3.589621227842246e-17
+          ],
+          "kelvin_radius_m": 0.22,
+          "mesh_elements": 54886,
+          "mesh_vertices": 10028,
+          "ndof": 76422,
+          "nonlinear": true,
+          "nonlinear_stats": {
+            "converged": true,
+            "iterations": 12,
+            "final_relative_change": 1.7553219845196544e-05,
+            "tolerance": 2e-05,
+            "maximum_iterations": 80
+          },
+          "runtime_s": 42.21641600003932,
+          "resumed_from_checkpoint": true
+        }
+      }
+    },
+    {
+      "name": "finer",
+      "scale": 0.64,
+      "result": "C:\\temp\\radia_ctype_accuracy_20260830_v49571\\levels\\finer.json",
+      "result_sha256": "8aefb29ef3c7c545fb42d033297a5a1081e5bdbdf10988c2c54ec59c00592b7d",
+      "engines": {
+        "hdiv_mmm": {
+          "formulation": "HDiv-MMM BDM2",
+          "open_boundary": "Coulomb charge Gram; iron-only mesh",
+          "mesh_elements": 1688,
+          "mesh_vertices": 500,
+          "ndof": 32580,
+          "linear_iterations": 5,
+          "nonlinear": true,
+          "nonlinear_stats": {
+            "nonlinear_inner_preconditioner": "jacobi",
+            "nonlinear_inner_tol": "auto",
+            "nonlinear_continuation_steps": 1,
+            "nonlinear_reuse_tangent_steps": 1,
+            "nonlinear_cg_x0": false,
+            "nonlinear_newton_iters": 5,
+            "nonlinear_warmstart_solves": 1,
+            "nonlinear_linear_inner_iters": 1916,
+            "nonlinear_line_search_backtracks": 0,
+            "nonlinear_tangent_assemblies": 5,
+            "nonlinear_tangent_reuses": 0,
+            "nonlinear_fresh_tangent_retries": 0,
+            "nonlinear_final_rel_step": 1.034438280694445e-05,
+            "nonlinear_final_settled_iters": 2,
+            "nonlinear_converged_final_stage": true,
+            "converged": true
+          },
+          "preconditioner": "jacobi",
+          "gram_eps": 1e-14,
+          "runtime_s": 36.78056480002124
+        },
+        "reduced_a": {
+          "formulation": "HCurl reduced-A",
+          "open_boundary": "periodic spherical Kelvin transform",
+          "source_contract": "vacuum source removed; iron contrast RHS only",
+          "kelvin_center_m": [
+            0.6600000000000015,
+            1.3227266504323154e-17,
+            -8.523804054341344e-16
+          ],
+          "kelvin_radius_m": 0.22,
+          "mesh_elements": 89454,
+          "mesh_vertices": 16204,
+          "ndof": 470288,
+          "nonlinear": true,
+          "linear_solver": "direct",
+          "relax": 0.1,
+          "bh_interpolation": "exact inverse of shared monotone PCHIP B(H), with vacuum-slope continuation",
+          "nonlinear_stats": {
+            "converged": true,
+            "iterations": 37,
+            "final_relative_change": 1.936216891871884e-05,
+            "tolerance": 2e-05,
+            "maximum_iterations": 80,
+            "maximum_linear_relative_residual": 2.63678027315209e-13,
+            "direct_inverse": "pardisospd"
+          },
+          "runtime_s": 852.0830790000036
+        },
+        "omega_reduced_omega": {
+          "formulation": "H1 Omega-reduced-Omega",
+          "open_boundary": "periodic spherical Kelvin transform",
+          "source_contract": "vacuum source removed; iron contrast RHS only",
+          "kelvin_center_m": [
+            0.6600000000000015,
+            1.3227266504323154e-17,
+            -8.523804054341344e-16
+          ],
+          "kelvin_radius_m": 0.22,
+          "mesh_elements": 89454,
+          "mesh_vertices": 16204,
+          "ndof": 124132,
+          "nonlinear": true,
+          "nonlinear_stats": {
+            "converged": true,
+            "iterations": 15,
+            "final_relative_change": 1.9648723280540937e-05,
+            "tolerance": 2e-05,
+            "maximum_iterations": 80
+          },
+          "runtime_s": 90.41421479999553
+        }
+      }
+    }
+  ],
+  "refinement_ratio": 1.25,
+  "convergence_levels": [
+    "medium",
+    "fine",
+    "finer"
+  ],
+  "engine_convergence": {
+    "hdiv_mmm": {
+      "convergence_levels": [
+        "medium",
+        "fine",
+        "finer"
+      ],
+      "penultimate_increment_absolute_rms_T": 0.0005944416984625298,
+      "last_increment_absolute_rms_T": 9.486791761608623e-06,
+      "last_increment_relative_rms": 3.804418322737281e-05,
+      "contraction_ratio": 0.015959162666659085,
+      "contracting": true,
+      "observed_order": 18.542871297255093,
+      "richardson_relative_uncertainty": 6.1700011382775e-07,
+      "conservative_relative_uncertainty": 3.804418322737281e-05
+    },
+    "reduced_a": {
+      "convergence_levels": [
+        "medium",
+        "fine",
+        "finer"
+      ],
+      "penultimate_increment_absolute_rms_T": 0.00011185258369774701,
+      "last_increment_absolute_rms_T": 9.23890044521588e-05,
+      "last_increment_relative_rms": 0.0003707985847113873,
+      "contraction_ratio": 0.8259890062246256,
+      "contracting": true,
+      "observed_order": 0.856730181442516,
+      "richardson_relative_uncertainty": 0.0017600931288894205,
+      "conservative_relative_uncertainty": 0.0017600931288894205
+    },
+    "omega_reduced_omega": {
+      "convergence_levels": [
+        "medium",
+        "fine",
+        "finer"
+      ],
+      "penultimate_increment_absolute_rms_T": 0.000272282076295287,
+      "last_increment_absolute_rms_T": 0.000177727017183974,
+      "last_increment_relative_rms": 0.0007139734642028051,
+      "contraction_ratio": 0.6527312396106124,
+      "contracting": true,
+      "observed_order": 1.911728167121206,
+      "richardson_relative_uncertainty": 0.001341994551469657,
+      "conservative_relative_uncertainty": 0.001341994551469657
+    }
+  },
+  "fine_mesh_pairwise": {
+    "hdiv_mmm__vs__reduced_a": {
+      "relative_rms": 0.002659134409253359,
+      "maximum_absolute_difference_T": 0.0012462265121580757
+    },
+    "hdiv_mmm__vs__omega_reduced_omega": {
+      "relative_rms": 0.002932616931764925,
+      "maximum_absolute_difference_T": 0.0012940476550440101
+    },
+    "reduced_a__vs__omega_reduced_omega": {
+      "relative_rms": 0.0012243942700862977,
+      "maximum_absolute_difference_T": 0.0007902223442621814
+    }
+  },
+  "fine_mesh_maximum_pairwise_relative_rms": 0.002932616931764925,
+  "fine_mesh_consensus_relative_deviation": {
+    "hdiv_mmm": 0.0018225928287453933,
+    "reduced_a": 0.0009746659704856635,
+    "omega_reduced_omega": 0.0012085492032289805
+  },
+  "maximum_consensus_relative_deviation": 0.0018225928287453933,
+  "maximum_discretization_relative_uncertainty": 0.0017600931288894205,
+  "combined_relative_numerical_uncertainty": 0.003582685957634814,
+  "reproducibility": {
+    "reference_machine": "mdx",
+    "replicate_machine": "Hibino",
+    "engines": {
+      "hdiv_mmm": {
+        "relative_rms": 0.0
+      },
+      "reduced_a": {
+        "relative_rms": 2.3448483982137623e-14
+      },
+      "omega_reduced_omega": {
+        "relative_rms": 9.540418435754702e-15
+      }
+    },
+    "maximum_relative_rms": 2.3448483982137623e-14
+  },
+  "independent_host_replicate_required": true,
+  "thresholds": {
+    "minimum_observed_order": 0.5,
+    "mesh_uncertainty_tolerance": 0.005,
+    "cross_formulation_tolerance": 0.005,
+    "combined_uncertainty_tolerance": 0.01,
+    "reproducibility_tolerance": 1e-09
+  },
+  "checks": {
+    "all_three_nonlinear_formulations_converged": true,
+    "mesh_convergence_passed": true,
+    "fine_mesh_cross_formulation_passed": true,
+    "combined_uncertainty_passed": true,
+    "independent_host_reproducibility_passed": true
+  }
+}
