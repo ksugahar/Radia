@@ -4,19 +4,23 @@ Review of the MATLAB Optuna component after reconciling the earlier Claude
 Code Opus 5 review (`00c9576bc`, `09f4608c3`, `cbc029319`) with the current
 monorepo implementation.
 
-- Reviewed: 2026-08-28
+- Reviewed: 2026-08-29
 - Behavioral and algorithm oracle: `optuna==4.9.0`
 - SciPy data/runtime pin used by Sobol fixtures: `scipy==1.17.1`
 - Base package version during review: `radia-optuna==0.1.4`
-- Working branch: `codex/complete-radia-optuna`
+- Working branch: `codex/optuna-simulink-student-workflow`
 
 ## Verdict
 
-The earlier **not complete** verdict is stale for the declared Optuna 4.9.0
-compatibility surface. The generated inventory now reports **816 present, 816
-oracle-mapped, zero partial, zero unmapped, zero missing**, and
-`full_compatibility_complete=true`. The complete MATLAB Optuna regression set
-passes **127/127**.
+The earlier **not complete** verdict is stale for the required Optuna 4.9.0
+compatibility scope. The generated evidence ledger reports **816/816 API
+entries present**, with **748 backed by executable upstream evidence** and
+**68 explicitly marked as inventory assertions**. There are zero partial,
+unmapped, or missing entries. More importantly, all **400/400 required entries
+have executable upstream evidence**; none of that required scope is closed by
+an assertion. The ledger therefore reports
+`full_compatibility_complete=true` under its checked scope rule. The complete
+fast MATLAB Optuna regression set passes **148/148**.
 
 That conclusion has a precise scope. `radia-optuna` is a MATLAB implementation
 of the Optuna API and algorithms, with explicit calls to pinned upstream Python
@@ -32,31 +36,39 @@ gates.
 
 | Contract | Current result |
 |---|---:|
-| Optuna 4.9 public entries | 816 / 816 present and mapped |
-| MATLAB Optuna suite | 127 / 127 passed |
+| Optuna 4.9 public entries | 816 / 816 present |
+| Executable upstream evidence | 748 |
+| Explicit wider-inventory assertions | 68 |
+| Required compatibility scope | 400 / 400 executable-evidence mapped |
+| MATLAB Optuna suite | 148 / 148 passed |
 | Upstream Python differential tests | 77 |
 | Official upstream MCP tests | 3 |
-| MATLAB integration tests | 47 |
+| MATLAB integration tests | 68 |
 | Standalone native gateway | 21 commands |
 | Native unscrambled Sobol limit | 21,201 dimensions |
-| Packaged `radia.optuna` MATLAB files | 213 |
+| Packaged `radia.optuna` MATLAB files | 226 |
+| Standalone Simulink entry points | 10 |
 
 Additional release-candidate checks performed in this review:
 
 | Check | Result |
 |---|---:|
-| `packages/radia-optuna` plus focused `radia-mcp` pytest | 23 / 23 passed |
-| Fresh wheel archive verification | PASS, 213 MATLAB files / 21 commands |
-| Isolated installed-wheel MATLAB smoke | PASS, no repository on MATLAB path |
-| Installed-wheel seeded TPE smoke | 8 / 8 trials completed |
-| Installed-wheel Sobol 64 x 4,096 checksum | 131,040 |
+| `packages/radia-optuna` plus focused `radia-mcp` pytest | 28 / 28 passed |
+| Fresh wheel archive verification | PASS, 226 MATLAB files / 21 commands / 10 Simulink entries |
+| Isolated installed-wheel MATLAB E2E | PASS, no repository or Radia on MATLAB path |
+| Installed-wheel `OptimizationSession` save/resume | PASS, 4 / 4 trials completed |
+| Installed-wheel student Simulink model | PASS, 12 / 12 trials attempted |
+| Installed-wheel table resume | PASS, all seven typed tables restored |
 | Native Sobol maximum-dimension validation | 21,201 dimensions, PASS |
 | Full Radia MEX/Simulink provenance regeneration | HIBINO, 86 / 86 passed |
 
 The oracle JSON regenerates byte-for-byte with SHA-256
-`212737E09EA0CBD5FD3617033AB20DF174680ED7ACDA30755F3B04F022C1774D`.
-The generated API coverage, test manifest, and Sobol binary also regenerate
-byte-stably.
+`7A561D22470DF24F8B62E7797F47A3011CD858C3CF6691B736E6C1BA4BB5FA1F`.
+The API coverage SHA-256 is
+`43A5F72D2961FF1797C7E9FEC537D5308FD162744D2C99118A3AC64523C05BFC`;
+the test-manifest SHA-256 is
+`3663ABEFEC833BD28928F0DE036DCAB8E8D09E74A4AE56B7282B5042F7282972`.
+The generated coverage and manifest regenerate byte-stably.
 
 ## Disposition of the earlier findings
 
@@ -84,9 +96,33 @@ MATLAB selected a later category.
 Categorical acquisition now uses the same vectorized log-sum-exp evaluation
 order as the upstream NumPy oracle. Numerical Parzen sampling and density work
 remain native. The concurrent constant-liar fixture now matches all 32 rows
-(16 univariate and 16 multivariate), and the complete 127-test suite passes.
+(16 univariate and 16 multivariate), and the complete 148-test suite passes.
 This is why seeded compatibility must compare proposal sequences, not merely
 distribution moments or objective quality.
+
+### MATLAB and Simulink student workflow
+
+The MATLAB surface now has a toolbox-shaped entry layer:
+`OptimizationParameter`, `OptimizeOptions`, `optimoptions`, `optimize`, and
+`getParameterFromModel`. These names provide a familiar MATLAB workflow but do
+not depend on Global Optimization Toolbox or Simulink Design Optimization.
+Sampler, pruner, seed, search-space, callback, persistence, and stopping
+configuration delegate to the same `radia.optuna` implementation used by the
+lower-level API.
+
+`OptimizationSession` owns the explicit configured/running/paused/completed/
+cancelled lifecycle, checkpoint/restore, stale-RUNNING recovery, trial
+selection, and application of selected parameters. The version-2 Level-2
+MATLAB S-Function retains the original 14 output positions and appends selected
+trial, pruned-trial, current-trial, and checkpoint telemetry. Its six inputs
+are start, cancel, pause, resume, selected trial, and apply.
+
+The tracked `radia_optuna_teaching.slx` and
+`OPTUNA_SIMULINK_LAB.md` cover a known quadratic optimum, a biobjective Pareto
+exercise, and deterministic complete/pruned/failed behavior. Both the teaching
+model and the production library passed the required official-agent
+read/edit/check/save/reopen lane, clean-path reopen, full-window visual QA, and
+embedded-SLX scans with zero U+FFFD or suspicious `???` runs.
 
 ### History storage
 
@@ -109,8 +145,9 @@ The durable long benchmark is
 250/500/1000/2000-trial validation produced a freeze exponent of 0.928; at
 2,000 trials the indexed probe was 5.0 times faster than the scan reference.
 All indexed results matched the scan reference. These LAB numbers are useful
-for regression only; release performance should still be measured on an idle
-compute host.
+for regression only; they were retained from the preceding review and were not
+rerun in this student-workflow change. Release performance should still be
+measured on an idle compute host.
 
 ### Explicit Optuna storage handoff
 
@@ -152,11 +189,13 @@ dimensions successfully (0.208 s on this run).
 The fresh local `0.1.4` `py3-none-win_amd64` wheel was checked byte-for-byte
 against the monorepo sources, then installed into an isolated venv. This is
 verification of the worktree against the current base version, not authority to
-republish that already assigned version. `radia-optuna-doctor`
-resolved the wheel layout, all 213 MATLAB files, all eight standalone Simulink
-entry points, the 21-command `optuna_mex`, and the third-party notices without
-requiring the Radia solver package. MATLAB then loaded that installed tree with
-the repository absent from its path and executed seeded TPE and native Sobol.
+republish that already assigned version. `radia-optuna-doctor` resolved the
+wheel layout, all 226 MATLAB files, all ten standalone Simulink entry points,
+the 21-command `optuna_mex`, and the third-party notices without requiring the
+Radia solver package. MATLAB then loaded that installed tree with the
+repository and Radia absent from its path and exercised Study/SimulinkRunner,
+`OptimizationSession` checkpoint/resume, the version-2 optimization block, the
+tracked student workflow, and table persistence.
 
 The distribution retains the Optuna, SciPy, and Joe--Kuo notices, identifies
 itself as independent and unofficial, does not use the Optuna logo, and pins
@@ -182,6 +221,7 @@ work remains under `validation_test`.
 - Merge, tag, publish the wheel to PyPI, and complete release-quad.
 
 Until those gates finish, the correct statement is: **the reviewed worktree
-closes the declared Optuna 4.9.0 compatibility inventory and passes its local
-differential, integration, wheel, and maximum-dimension checks; it is not yet a
-published release.**
+closes the required Optuna 4.9.0 compatibility scope with executable upstream
+evidence, exposes the entire generated surface with assertions identified
+separately, and passes its local differential, integration, wheel, and retained
+maximum-dimension checks; it is not yet a published release.**

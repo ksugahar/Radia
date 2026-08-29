@@ -20,15 +20,17 @@ points, and upstream notices; never replace those checks with a fixed class or
 function count. Every shared operation present in the
 official `optuna/optuna-mcp` live `tools/list` belongs to that upstream server;
 radia-mcp must not proxy or reimplement it. Radia owns the MATLAB differences:
-table/MAT persistence, Simulink monitoring and failure telemetry, MATLAB
+table/MAT persistence, `OptimizationSession` lifecycle/checkpoint/selection,
+Simulink pause/resume/select/apply controls and telemetry, MATLAB
 parallel execution, `optuna_mex`, and CAE artifact adapters. For Simulink
 optimization, use the MATLAB-native `radia.optuna` route rather than calling
 MATLAB Engine once per Python Optuna trial. `Study` and `Trial` remain readable
 MATLAB objects and own MAT persistence. The required 21-command `optuna_mex`
 gateway is inspected with `radia.optuna.nativeStatus`; a missing-MEX fallback is
-not permitted. The Optimization block exposes start/cancel, attempted and
-failed trial counts, and a numeric failure class while preserving failed CAE
-trials. Generic Python Optuna and its official MCP server remain external
+not permitted. The Optimization block exposes start/cancel/pause/resume/apply,
+selected/current/checkpoint telemetry, attempted/pruned/failed trial counts,
+and a numeric failure class while preserving failed CAE trials. Generic Python
+Optuna and its official MCP server remain external
 tools, not dependencies of the Radia Simulink loop. Seeded numerical comparison
 uses direct pinned `optuna==4.9.0`, because the verified upstream MCP sampler
 tool does not expose a seed.
@@ -102,8 +104,9 @@ MATLAB optimization and Simulink difference workflow. Use
 `matlab_optuna_compatibility_contract` for the checked Optuna 4.9.0
 surface and version/hash provenance, and `matlab_optuna_oracle_audit` before
 reporting supported parity. Never describe the MATLAB layer as a complete or
-drop-in Optuna implementation unless the generated public-API closure reports
-zero missing, partial, and unmapped entries. Use `matlab_optimize_build` to generate official-MATLAB-MCP
+drop-in Optuna implementation unless the generated required-scope evidence
+closure has zero missing, asserted, and unmapped entries; wider inventory
+assertions must remain separately counted. Use `matlab_optimize_build` to generate official-MATLAB-MCP
 ready code; a sequential explicit-seed build is eligible for the upstream
 oracle, while a parallel build is a MATLAB integration contract. The MEX
 boundary shares numerical contracts, not Python object

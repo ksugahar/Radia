@@ -107,6 +107,15 @@
       "trial": 0
     }
   },
+  "best_params": {
+    "best_params": {
+      "x": 0.5598375844802292
+    },
+    "best_trial_number": 1,
+    "best_value": 0.06751557030852028,
+    "multi_objective_error": "A single best trial cannot be retrieved from a multi-objective study. Consider using Study.best_trials to retrieve a list containing the best trials.",
+    "multi_objective_error_type": "RuntimeError"
+  },
   "brute_force_sampler_seed_29": [
     {
       "mesh": 3,
@@ -1660,6 +1669,55 @@
     "pruner": "MedianPruner",
     "single_sampler": "TPESampler"
   },
+  "deprecated_suggest": {
+    "declared_on": [
+      "optuna.trial.BaseTrial",
+      "optuna.trial.Trial",
+      "optuna.trial.FixedTrial",
+      "optuna.trial.FrozenTrial"
+    ],
+    "declared_on_base_trial": [
+      "suggest_uniform",
+      "suggest_loguniform",
+      "suggest_discrete_uniform"
+    ],
+    "declared_on_frozen_trial": [
+      "suggest_uniform",
+      "suggest_loguniform",
+      "suggest_discrete_uniform"
+    ],
+    "fixed_trial": {
+      "suggest_discrete_uniform": 0.5,
+      "suggest_loguniform": 10.0,
+      "suggest_uniform": 0.25
+    },
+    "trial": {
+      "suggest_discrete_uniform": {
+        "forwards_to": "suggest_float(step=...)",
+        "matches_modern": true,
+        "modern_value": 0.0,
+        "value": 0.0,
+        "warning_category": "FutureWarning",
+        "warning_message": "suggest_discrete_uniform has been deprecated in v3.0.0. This feature will be removed in v6.0.0. See https://github.com/optuna/optuna/releases/tag/v3.0.0. Use suggest_float(..., step=...) instead."
+      },
+      "suggest_loguniform": {
+        "forwards_to": "suggest_float(log=True)",
+        "matches_modern": true,
+        "modern_value": 1.4210736239935737,
+        "value": 1.4210736239935737,
+        "warning_category": "FutureWarning",
+        "warning_message": "suggest_loguniform has been deprecated in v3.0.0. This feature will be removed in v6.0.0. See https://github.com/optuna/optuna/releases/tag/v3.0.0. Use suggest_float(..., log=True) instead."
+      },
+      "suggest_uniform": {
+        "forwards_to": "suggest_float",
+        "matches_modern": true,
+        "modern_value": 0.07630828937395717,
+        "value": 0.07630828937395717,
+        "warning_category": "FutureWarning",
+        "warning_message": "suggest_uniform has been deprecated in v3.0.0. This feature will be removed in v6.0.0. See https://github.com/optuna/optuna/releases/tag/v3.0.0. Use suggest_float instead."
+      }
+    }
+  },
   "distribution_json": {
     "alias_warning_categories": {
       "discrete_uniform": [
@@ -2148,6 +2206,51 @@
       "kind": "b",
       "n": 3,
       "x": 0.5
+    }
+  },
+  "ga_sampler": {
+    "base_ga_sampler_members": [
+      "after_trial",
+      "before_trial",
+      "get_parent_population",
+      "get_population",
+      "get_trial_generation",
+      "infer_relative_search_space",
+      "population_size",
+      "reseed_rng",
+      "sample_independent",
+      "sample_relative",
+      "select_parent"
+    ],
+    "nsgaii": {
+      "generations": [
+        0,
+        0,
+        0,
+        0,
+        1,
+        1,
+        1,
+        1,
+        2,
+        2
+      ],
+      "population_size": 4
+    },
+    "nsgaiii": {
+      "generations": [
+        0,
+        0,
+        0,
+        0,
+        1,
+        1,
+        1,
+        1,
+        2,
+        2
+      ],
+      "population_size": 4
     }
   },
   "gp_constraints_sampler_seed_89": [
@@ -5462,6 +5565,25 @@
       "without_best_has_best": false
     }
   },
+  "study_summary": {
+    "direction_names": [
+      "NOT_SET",
+      "MINIMIZE",
+      "MAXIMIZE"
+    ],
+    "direction_values": [
+      0,
+      1,
+      2
+    ],
+    "not_set_name": "NOT_SET",
+    "not_set_value": 0,
+    "study_summary_members": [
+      "direction",
+      "directions",
+      "system_attrs"
+    ]
+  },
   "tell": {
     "by_number": {
       "last_step": 1,
@@ -5530,6 +5652,25 @@
       4.5,
       4.2,
       9.0
+    ]
+  },
+  "terminator_bases": {
+    "base_error_evaluator_members": [
+      "evaluate"
+    ],
+    "base_improvement_evaluator_members": [
+      "evaluate"
+    ],
+    "base_terminator_members": [
+      "should_terminate"
+    ],
+    "should_terminate": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      true
     ]
   },
   "torch_version": "2.11.0+cu126",

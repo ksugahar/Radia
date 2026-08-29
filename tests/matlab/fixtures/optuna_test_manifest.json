@@ -22,6 +22,62 @@
       "test": "testAskFixedDistributionsMatchesUpstream"
     },
     {
+      "classification": "matlab-integration",
+      "file": "test_optuna_got_interface.m",
+      "oracle": null,
+      "scope": "MATLAB Global Optimization Toolbox-shaped surface: optimoptions, the [x, fval, exitflag, output] contract, init/iter/done callbacks, and sdo-style parameter objects; this is not upstream parity",
+      "test": "testOptimoptionsMatchesToolboxUsage"
+    },
+    {
+      "classification": "matlab-integration",
+      "file": "test_optuna_got_interface.m",
+      "oracle": null,
+      "scope": "MATLAB Global Optimization Toolbox-shaped surface: optimoptions, the [x, fval, exitflag, output] contract, init/iter/done callbacks, and sdo-style parameter objects; this is not upstream parity",
+      "test": "testOptimizeReturnsToolboxOutputContract"
+    },
+    {
+      "classification": "matlab-integration",
+      "file": "test_optuna_got_interface.m",
+      "oracle": null,
+      "scope": "MATLAB Global Optimization Toolbox-shaped surface: optimoptions, the [x, fval, exitflag, output] contract, init/iter/done callbacks, and sdo-style parameter objects; this is not upstream parity",
+      "test": "testOutputFcnSeesInitIterDoneAndCanStop"
+    },
+    {
+      "classification": "matlab-integration",
+      "file": "test_optuna_got_interface.m",
+      "oracle": null,
+      "scope": "MATLAB Global Optimization Toolbox-shaped surface: optimoptions, the [x, fval, exitflag, output] contract, init/iter/done callbacks, and sdo-style parameter objects; this is not upstream parity",
+      "test": "testStallAndTimeAndInfeasibleExitFlags"
+    },
+    {
+      "classification": "matlab-integration",
+      "file": "test_optuna_got_interface.m",
+      "oracle": null,
+      "scope": "MATLAB Global Optimization Toolbox-shaped surface: optimoptions, the [x, fval, exitflag, output] contract, init/iter/done callbacks, and sdo-style parameter objects; this is not upstream parity",
+      "test": "testFixedParametersAreNotSearchedButAreReturned"
+    },
+    {
+      "classification": "matlab-integration",
+      "file": "test_optuna_got_interface.m",
+      "oracle": null,
+      "scope": "MATLAB Global Optimization Toolbox-shaped surface: optimoptions, the [x, fval, exitflag, output] contract, init/iter/done callbacks, and sdo-style parameter objects; this is not upstream parity",
+      "test": "testParameterTypesMapOntoDistributions"
+    },
+    {
+      "classification": "matlab-integration",
+      "file": "test_optuna_got_interface.m",
+      "oracle": null,
+      "scope": "MATLAB Global Optimization Toolbox-shaped surface: optimoptions, the [x, fval, exitflag, output] contract, init/iter/done callbacks, and sdo-style parameter objects; this is not upstream parity",
+      "test": "testSamplerFactoryIsSharedAndRefusesAuto"
+    },
+    {
+      "classification": "matlab-integration",
+      "file": "test_optuna_got_interface.m",
+      "oracle": null,
+      "scope": "MATLAB Global Optimization Toolbox-shaped surface: optimoptions, the [x, fval, exitflag, output] contract, init/iter/done callbacks, and sdo-style parameter objects; this is not upstream parity",
+      "test": "testUseParallelRefusesWithoutAPool"
+    },
+    {
       "classification": "upstream-mcp",
       "file": "test_optuna_mcp_oracle.m",
       "oracle": "optuna49_mcp_oracle.json",
@@ -191,6 +247,62 @@
     },
     {
       "classification": "matlab-integration",
+      "file": "test_optuna_session.m",
+      "oracle": null,
+      "scope": "MATLAB/Simulink student workflow: session lifecycle, checkpoint, selection, model application, constraints, and intermediate values",
+      "test": "testLifecycleSelectAndApply"
+    },
+    {
+      "classification": "matlab-integration",
+      "file": "test_optuna_session.m",
+      "oracle": null,
+      "scope": "MATLAB/Simulink student workflow: session lifecycle, checkpoint, selection, model application, constraints, and intermediate values",
+      "test": "testCheckpointRestoreAndResume"
+    },
+    {
+      "classification": "matlab-integration",
+      "file": "test_optuna_session.m",
+      "oracle": null,
+      "scope": "MATLAB/Simulink student workflow: session lifecycle, checkpoint, selection, model application, constraints, and intermediate values",
+      "test": "testRestoreFailsOrphanedRunningTrial"
+    },
+    {
+      "classification": "matlab-integration",
+      "file": "test_optuna_session.m",
+      "oracle": null,
+      "scope": "MATLAB/Simulink student workflow: session lifecycle, checkpoint, selection, model application, constraints, and intermediate values",
+      "test": "testStructuredObjectiveConstraintsAndIntermediateValues"
+    },
+    {
+      "classification": "matlab-integration",
+      "file": "test_optuna_session.m",
+      "oracle": null,
+      "scope": "MATLAB/Simulink student workflow: session lifecycle, checkpoint, selection, model application, constraints, and intermediate values",
+      "test": "testExplicitPruningIsRecorded"
+    },
+    {
+      "classification": "matlab-integration",
+      "file": "test_optuna_session.m",
+      "oracle": null,
+      "scope": "MATLAB/Simulink student workflow: session lifecycle, checkpoint, selection, model application, constraints, and intermediate values",
+      "test": "testMultiobjectiveParetoAndSelection"
+    },
+    {
+      "classification": "matlab-integration",
+      "file": "test_optuna_session.m",
+      "oracle": null,
+      "scope": "MATLAB/Simulink student workflow: session lifecycle, checkpoint, selection, model application, constraints, and intermediate values",
+      "test": "testEqualSeedProducesEqualSequence"
+    },
+    {
+      "classification": "matlab-integration",
+      "file": "test_optuna_session.m",
+      "oracle": null,
+      "scope": "MATLAB/Simulink student workflow: session lifecycle, checkpoint, selection, model application, constraints, and intermediate values",
+      "test": "testCancelIsIdempotent"
+    },
+    {
+      "classification": "matlab-integration",
       "file": "test_optuna_simulink_block.m",
       "oracle": null,
       "scope": "MATLAB and Simulink block integration",
@@ -265,6 +377,13 @@
       "oracle": null,
       "scope": "MATLAB and Simulink block integration",
       "test": "testBuilderExposesLargeNativeSamplerChoices"
+    },
+    {
+      "classification": "matlab-integration",
+      "file": "test_optuna_simulink_block.m",
+      "oracle": null,
+      "scope": "MATLAB and Simulink block integration",
+      "test": "testSessionModeSupportsPauseResumeSelectAndApply"
     },
     {
       "classification": "matlab-integration",
@@ -372,6 +491,34 @@
       "test": "testConstraintTablePersists"
     },
     {
+      "classification": "matlab-integration",
+      "file": "test_optuna_teaching_model.m",
+      "oracle": null,
+      "scope": "MATLAB/Simulink teaching artifacts for known-optimum, Pareto, and deterministic pruned/failed trial exercises",
+      "test": "testAllExercisesBuildAndUpdateCleanly"
+    },
+    {
+      "classification": "matlab-integration",
+      "file": "test_optuna_teaching_model.m",
+      "oracle": null,
+      "scope": "MATLAB/Simulink teaching artifacts for known-optimum, Pareto, and deterministic pruned/failed trial exercises",
+      "test": "testQuadraticExerciseRunsToCompletion"
+    },
+    {
+      "classification": "matlab-integration",
+      "file": "test_optuna_teaching_model.m",
+      "oracle": null,
+      "scope": "MATLAB/Simulink teaching artifacts for known-optimum, Pareto, and deterministic pruned/failed trial exercises",
+      "test": "testParetoExercisePublishesFront"
+    },
+    {
+      "classification": "matlab-integration",
+      "file": "test_optuna_teaching_model.m",
+      "oracle": null,
+      "scope": "MATLAB/Simulink teaching artifacts for known-optimum, Pareto, and deterministic pruned/failed trial exercises",
+      "test": "testReliabilityExerciseRecordsPrunedAndFailed"
+    },
+    {
       "classification": "upstream-python",
       "file": "test_optuna_upstream_oracle.m",
       "oracle": "optuna49_oracle.json",
@@ -411,7 +558,7 @@
       "file": "test_optuna_upstream_oracle.m",
       "oracle": "optuna49_oracle.json",
       "scope": "shared Optuna 4.9.0 behavior",
-      "test": "testPublicAPIInventoryIsFullyOracleMapped"
+      "test": "testPublicAPIInventoryHasEvidenceClosedRequiredScope"
     },
     {
       "classification": "upstream-python",

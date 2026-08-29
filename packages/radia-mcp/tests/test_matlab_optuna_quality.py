@@ -66,7 +66,16 @@ def test_health_uses_distribution_and_upstream_manifests_as_truth(monkeypatch):
     )
     assert health["public_api"]["entry_count"] == len(coverage["entries"])
     assert health["public_api"]["present_count"] == len(coverage["entries"])
-    assert health["public_api"]["verified_count"] == len(coverage["entries"])
+    assert health["public_api"]["verified_count"] == coverage[
+        "oracle_verified_count"
+    ]
+    assert health["public_api"]["asserted_count"] == coverage[
+        "oracle_asserted_count"
+    ]
+    assert health["public_api"]["required_verified_count"] == coverage[
+        "required_entry_count"
+    ]
+    assert health["public_api"]["required_asserted_count"] == 0
     assert health["public_api"]["missing_count"] == 0
     assert health["public_api"]["partial_count"] == 0
     assert health["public_api"]["unmapped_count"] == 0

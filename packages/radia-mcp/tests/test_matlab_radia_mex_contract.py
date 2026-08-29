@@ -44,9 +44,15 @@ def test_radia_mex_contract_reads_the_cpp_command_inventory():
         "entry_count": public_count,
         "present_count": public_count,
         "missing_count": 0,
-        "verified_count": public_count,
+        "verified_count": coverage["oracle_verified_count"],
+        "asserted_count": coverage["oracle_asserted_count"],
         "partial_count": 0,
         "unmapped_count": 0,
+        "required_count": coverage["required_entry_count"],
+        "required_present_count": coverage["required_entry_count"],
+        "required_verified_count": coverage["required_entry_count"],
+        "required_asserted_count": 0,
+        "required_unmapped_count": 0,
         "complete": True,
     }
     assert contract["optuna_mex_command_count"] == 21
@@ -235,6 +241,8 @@ def test_optuna_simulink_contract_is_table_backed():
         "radia.optuna.cae-failure.v1"
     )
     assert "SimulinkRunner" in contract["classes"]
+    assert "OptimizationSession" in contract["classes"]
+    assert "OptimizationParameter" in contract["classes"]
     assert "SheetMetalRunner" in contract["classes"]
     assert contract["multi_objective"]["selection"].startswith("bestTrial")
     assert contract["multi_objective"]["samplers"] == [
@@ -243,7 +251,8 @@ def test_optuna_simulink_contract_is_table_backed():
     assert "parsim" in contract["parallel_trials"]["simulink"]
     assert "parfeval" in contract["parallel_trials"]["ltspice"]
     assert "complex" in contract["ltspice_integrated_workflow"]["raw"]
-    assert len(contract["simulink_blocks"]) == 9
+    assert len(contract["simulink_blocks"]) == 10
+    assert "radia_optuna_teaching.slx" in contract["simulink_blocks"][-1]
     assert "distributed-field kernels" in contract["simulink_blocks"][0]
     assert "LUT and lumped IH builders are removed" in contract["simulink_blocks"][2]
     assert contract["team28"]["frequency_hz"] == 50
@@ -425,9 +434,14 @@ def test_optuna_compatibility_and_oracle_audit_are_checked():
     assert closure["surface_entry_count"] == 816
     assert closure["surface_present_count"] == 816
     assert closure["surface_missing_count"] == 0
-    assert closure["oracle_verified_count"] == 816
+    assert closure["oracle_verified_count"] == 748
+    assert closure["oracle_asserted_count"] == 68
     assert closure["oracle_partial_count"] == 0
     assert closure["oracle_unmapped_count"] == 0
+    assert closure["required_entry_count"] == 400
+    assert closure["required_oracle_mapped_count"] == 400
+    assert closure["required_oracle_asserted_count"] == 0
+    assert closure["required_oracle_unmapped_count"] == 0
     assert closure["full_compatibility_complete"] is True
 
     audit = matlab_optuna_oracle_audit()

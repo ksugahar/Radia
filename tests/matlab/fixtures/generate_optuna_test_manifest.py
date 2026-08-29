@@ -20,6 +20,9 @@ CLASSIFICATION_BY_FILE = {
     "test_optuna_reliability.m": "matlab-integration",
     "test_optuna_nsgaii_joint.m": "matlab-integration",
     "test_optuna_storage_bridge.m": "matlab-integration",
+    "test_optuna_got_interface.m": "matlab-integration",
+    "test_optuna_session.m": "matlab-integration",
+    "test_optuna_teaching_model.m": "matlab-integration",
 }
 
 INTEGRATION_SCOPE = {
@@ -38,6 +41,19 @@ INTEGRATION_SCOPE = {
     ),
     "test_optuna_storage_bridge.m": (
         "explicit MATLAB table/JSON handoff to upstream Optuna storages"
+    ),
+    "test_optuna_got_interface.m": (
+        "MATLAB Global Optimization Toolbox-shaped surface: optimoptions, "
+        "the [x, fval, exitflag, output] contract, init/iter/done callbacks, "
+        "and sdo-style parameter objects; this is not upstream parity"
+    ),
+    "test_optuna_session.m": (
+        "MATLAB/Simulink student workflow: session lifecycle, checkpoint, "
+        "selection, model application, constraints, and intermediate values"
+    ),
+    "test_optuna_teaching_model.m": (
+        "MATLAB/Simulink teaching artifacts for known-optimum, Pareto, "
+        "and deterministic pruned/failed trial exercises"
     ),
 }
 

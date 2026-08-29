@@ -463,48 +463,67 @@ upstream handoff version. Do not use the Optuna logo or imply endorsement.
 
 ## 17. Implementation order
 
+Implementation record (2026-08-29):
+
+- fast MATLAB Optuna suite: 148/148 passed, 0 failed, 0 incomplete;
+- oracle ledger: 816/816 present, 748 executable-evidence verified,
+  68 explicitly asserted, 0 partial/unmapped/missing;
+- required compatibility scope: 400/400 executable-evidence mapped,
+  0 asserted or unmapped;
+- focused package/radia-mcp Python tests: 28/28 passed;
+- isolated installed-wheel verification: 226 MATLAB files, 21 MEX commands,
+  10 Simulink entries, four-trial session checkpoint/resume, twelve-trial
+  teaching-model run, and seven-table restore all passed;
+- tracked production library and teaching model: official-agent
+  read/edit/check/save/reopen, clean-path reopen, full-window visual QA, and
+  embedded-text scans passed.
+
+The long mdx performance/parallel lane was not rerun in this change. Existing
+validation tests remain under `validation_test`; a new release must execute
+that lane and record cold/warm identical-workload evidence before publication.
+
 ### Phase 0 — specification and truthful evidence
 
 - [x] Rewrite this handover before implementation.
-- [ ] Replace allow-list “verified” assertions with a derived evidence ledger.
-- [ ] Add the new MATLAB-integration tests to the oracle manifest.
-- [ ] Keep required upstream scope closure distinct from wider API presence.
+- [x] Replace allow-list “verified” assertions with a derived evidence ledger.
+- [x] Add the new MATLAB-integration tests to the oracle manifest.
+- [x] Keep required upstream scope closure distinct from wider API presence.
 
 ### Phase 1 — toolbox-shaped MATLAB API
 
-- [ ] `OptimizationParameter`
-- [ ] `OptimizeOptions` and `optimoptions`
-- [ ] shared `samplerFromName`
-- [ ] `optimize` with output callbacks and exit contract
-- [ ] `getParameterFromModel`
+- [x] `OptimizationParameter`
+- [x] `OptimizeOptions` and `optimoptions`
+- [x] shared `samplerFromName`
+- [x] `optimize` with output callbacks and exit contract
+- [x] `getParameterFromModel`
 
 ### Phase 2 — persistent session
 
-- [ ] `OptimizationSession` lifecycle and snapshots
-- [ ] checkpoint/restore and orphan RUNNING handling
-- [ ] trial selection and application to model
-- [ ] model-shaped objective/constraint context
+- [x] `OptimizationSession` lifecycle and snapshots
+- [x] checkpoint/restore and orphan RUNNING handling
+- [x] trial selection and application to model
+- [x] model-shaped objective/constraint context
 
 ### Phase 3 — Simulink block v2
 
-- [ ] use the shared sampler/pruner/seed configuration
-- [ ] bind the block to `OptimizationSession`
-- [ ] add pause/resume/select/apply without breaking existing ports
-- [ ] update the single Radia library through the official toolkit
-- [ ] clean-open, check, save, reopen, and visual acceptance
+- [x] use the shared sampler/pruner/seed configuration
+- [x] bind the block to `OptimizationSession`
+- [x] add pause/resume/select/apply without breaking existing ports
+- [x] update the single Radia library through the official toolkit
+- [x] clean-open, check, save, reopen, and visual acceptance
 
 ### Phase 4 — teaching and validation
 
-- [ ] a fast, toolbox-free teaching model with a known optimum
-- [ ] a multiobjective model with a selectable Pareto trial
-- [ ] pruning and failed-trial exercise
-- [ ] student worksheet/notebook with saved results
+- [x] a fast, toolbox-free teaching model with a known optimum
+- [x] a multiobjective model with a selectable Pareto trial
+- [x] pruning and failed-trial exercise
+- [x] student worksheet/notebook with saved results
 - [ ] long mdx performance and parallel validation
 
 ### Phase 5 — distribution and release
 
-- [ ] installed-wheel API/session/Simulink proof
-- [ ] radia-mcp MATLAB difference-gate update
+- [x] installed-wheel API/session/Simulink proof
+- [x] radia-mcp MATLAB difference-gate update
 - [ ] version, CI, review, merge, tag, PyPI, and release-quad
 
 ## 18. Definition of done
