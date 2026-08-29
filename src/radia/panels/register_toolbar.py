@@ -8,8 +8,8 @@ Runs inside Cubit on startup (via ~/.cubit -> startup.py) and performs:
      (including the C++ Qt5 .ccl "Export Mesh" menu, which is now
      removed -- see radia 4.80.0 / src/radia/panels/radia_export_menu.py)
   4. Plugin freshness diagnostics
-  5. Installation of the "Radia Export" menu through Cubit's official
-     Claro API (radia_export_menu.install_menu() -> emclaro.add_to_menu)
+  5. Installation of the "Export" menu through Cubit's official Claro
+     API (radia_export_menu.install_menu() -> emclaro.add_to_menu)
 
 The menu is registered through ``emclaro``, the SWIG binding of Cubit's
 Claro GUI framework that ships inside Cubit itself.  That is the same
@@ -267,12 +267,13 @@ def _cleanup_legacy_menus():
         return
     menu_bar = main_window.menuBar()
     removed = []
-    # "Radia Export" is deliberately NOT in this list any more: the menu
-    # is now registered through Cubit's Claro API and is owned by Cubit.
+    # The Claro-owned Export menu is deliberately NOT in this list: it is
+    # registered through Cubit's Claro API and owned by Cubit.
     # Enumerating those QMenu/QAction objects from PySide6 deadlocks
     # Cubit, so it is removed via emclaro instead -- see
     # radia_export_menu.install_menu(), which calls remove_menu_items()
-    # by component tag before re-registering.
+    # by component tag before re-registering.  "Export Mesh" below is the
+    # historical Qt5 .ccl menu name and is unrelated to the new menu.
     legacy_names = (
         "Solve", "Radia-NGSolve", "Generate Coil", "Reload Panels",
         "Export Mesh",
@@ -297,7 +298,7 @@ def _cleanup_legacy_menus():
 
 
 def _install_radia_export_menu():
-    """Install the Radia Export menu through Cubit's official Claro API.
+    """Install the Export menu through Cubit's official Claro API.
 
     Delegates to ``radia_export_menu.install_menu()``, which registers
     PyActions via ``emclaro.add_to_menu()``.  Cubit owns the resulting
@@ -314,7 +315,7 @@ def _install_radia_export_menu():
 
 
 def register_menu():
-    """Initialize export defaults and install the Radia Export menu.
+    """Initialize export defaults and install the Export menu.
 
     ``~/.cubit`` IS the correct hook for this.  MEASURED on Coreform
     Cubit 2025.12: ``emclaro.is_loaded()`` already returns True while
