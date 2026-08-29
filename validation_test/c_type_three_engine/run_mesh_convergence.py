@@ -132,7 +132,10 @@ def _selector(payload: dict) -> np.ndarray:
 
 
 def _engine_convergence(
-    payloads: list[dict], engine: str, refinement_ratio: float
+    payloads: list[dict],
+    level_names: list[str],
+    engine: str,
+    refinement_ratio: float,
 ) -> dict[str, object]:
     selector = _selector(payloads[-1])
     fields = [
@@ -163,9 +166,10 @@ def _engine_convergence(
     last_step = fine_increment / fine_norm
     uncertainty = max(last_step, richardson if richardson is not None else math.inf)
     return {
-        "coarse_to_medium_absolute_rms_T": coarse_increment,
-        "medium_to_fine_absolute_rms_T": fine_increment,
-        "medium_to_fine_relative_rms": last_step,
+        "convergence_levels": level_names[-3:],
+        "penultimate_increment_absolute_rms_T": coarse_increment,
+        "last_increment_absolute_rms_T": fine_increment,
+        "last_increment_relative_rms": last_step,
         "contraction_ratio": contraction,
         "contracting": contracting,
         "observed_order": observed_order,
@@ -229,8 +233,10 @@ def analyze(
             raise RuntimeError("mesh levels use different physical observations")
 
     ratio = float(manifest["refinement_ratio"])
+    level_names = [str(row["name"]) for row in manifest["levels"]]
     convergence = {
-        engine: _engine_convergence(payloads, engine, ratio) for engine in ENGINES
+        engine: _engine_convergence(payloads, level_names, engine, ratio)
+        for engine in ENGINES
     }
     convergence_passed = all(
         row["contracting"]
@@ -318,6 +324,7 @@ def analyze(
             for row, path, payload in zip(manifest["levels"], level_paths, payloads)
         ],
         "refinement_ratio": ratio,
+        "convergence_levels": level_names[-3:],
         "engine_convergence": convergence,
         "fine_mesh_pairwise": fine["pairwise_median_projected_gap_core"],
         "fine_mesh_maximum_pairwise_relative_rms": final_pairwise_spread,
