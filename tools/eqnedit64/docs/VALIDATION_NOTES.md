@@ -5,8 +5,10 @@
 [`CANONICAL_OPERATION.md`](CANONICAL_OPERATION.md) と `release-eqnedit64` skillを
 正とする。`build\accept_release.ps1`は隔離CI/VM用であり、対話中LABでは実行しない。
 
-## 2026-08-29 Eqnedit64 3.0.7公開候補検証
+## 2026-08-29 Eqnedit64 3.0.7公開検証
 
+- tag / source: `eqnedit64-v3.0.7` /
+  `16a739f89f73f53798d823ed9ed9eb0f430e8c55`。
 - 3.0.6の合格判定は外側テキスト段落の左揃えだけを見ており、数式本体が中央の
   `m:oMathPara`になった回帰を見逃していた。公開候補では通常コピーから登録MathMLと
   Web版の直接OMMLを除き、両版をinline 24 pt MathML + 末尾NBSPの同期CF_HTMLへ統一した。
@@ -21,8 +23,24 @@
   `29C82D3B2DF3AB5C573F610DBF42F7EEB9637EF7D923CD75E2CD44B034B32070`で
   byte-identicalだった。
 - native外部試験はPowerPointに加え、不透明DIBV5、IrfanView、Google Slides
-  300 dpi / 24 pt、`--texclip`も合格した。公開、O:更新、tag、PyPI、公開URL検証は
-  exact mainのCI合格後に追記する。
+  300 dpi / 24 pt、`--texclip`も合格した。
+- PR CI `33250598409`、main CI `33250713645`、tag CI `33250870137`、
+  release workflow `33250963981`はすべて成功。PR/mainのPolicy Lint
+  `33250598355` / `33250713649`も成功した。
+- exact mainからLABで再ビルドしたEXEはProductVersion/FileVersion 3.0.7、
+  Authenticode `Valid`、signer `CN=ksugahar`。SHA-256は
+  `E3A923C583CBA3B8162D4A711F152A7CBBD970794A72D3B3B34D51A0166C356D`。
+  `O:\Eqnedit64.exe`、GitHub Release EXE、PyPIのCPython
+  3.10/3.11/3.12/3.13 wheel内EXEはすべてbyte-identicalだった。
+- 研究室ホームページには`elemag/index.php`と`elemag/equation-editor.js`だけを
+  加算更新した。公開JS、生成JS、Radia正本のSHA-256はすべて
+  `FAF9CF9F4A9139AFC416B4C8F0ED4CD9F080272484EEE7A6A809ED753CC5A811`、
+  cache keyは`faf9cf9f4a91`。公開URLの2 viewport browser QAと実PowerPoint QAも
+  24 pt、左端ink 10 px、n-ary 2個、分数、根号、上線、下線、3,393 ink pixel、
+  native OMML/PNGとのbyte-identical判定で合格した。
+- GitHub Release:
+  `https://github.com/ksugahar/Radia/releases/tag/eqnedit64-v3.0.7`
+- PyPI: `https://pypi.org/project/eqnedit64/3.0.7/`
 
 ## 2026-08-29 Eqnedit64 3.0.6公開検証
 
