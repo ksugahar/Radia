@@ -179,6 +179,7 @@ def check_serialisation_traps(failures: list) -> None:
                 r"\mathit{\sqrt{x}}", r"\mathsf{abc}", r"\mathtt{abc}",
                 r"\mathcal{ABC}", r"\mathbb{R}", r"\mathfrak{F}",
                 r"\boldsymbol{\alpha}", r"\bm{\alpha}",
+                r"\bm{\wedge beta}", r"\bm{\leq x}",
                 r"\mathnormal{x}", r"\mathbf{x}^{2}", r"\text{速度}_{1}",
                 r"\operatorname{Re}^{2}", r"{a+b}^{2}", r"x^{2}",
                 r"\alpha^{2}", r"\lim_{x}"):
