@@ -875,6 +875,12 @@ try {
     $powerPointTailRange = $powerPointTextRange.Characters(
         $powerPointTextRange.Length, 1)
     $powerPointTailFontSize = [double]$powerPointTailRange.Font.Size
+    # The caret after the final NBSP is a zero-length range. Checking the
+    # NBSP character alone does not prove that PowerPoint's next typed
+    # character will remain at 24 pt.
+    $powerPointInsertionRange = $powerPointTextRange.Characters(
+        $powerPointTextRange.Length + 1, 0)
+    $powerPointInsertionFontSize = [double]$powerPointInsertionRange.Font.Size
     $powerPointAlignment =
         [int]$pastedShape.TextFrame2.TextRange.ParagraphFormat.Alignment
     $powerPointLeft = [double]$pastedShape.Left
@@ -884,6 +890,10 @@ try {
     if ([Math]::Abs($powerPointTailFontSize - 24.0) -gt 0.1) {
         throw ("PowerPoint caret after the native equation is not 24 pt: " +
             "$powerPointTailFontSize pt.")
+    }
+    if ([Math]::Abs($powerPointInsertionFontSize - 24.0) -gt 0.1) {
+        throw ("PowerPoint insertion point after the native equation is not 24 pt: " +
+            "$powerPointInsertionFontSize pt.")
     }
     if ($powerPointAlignment -ne 1 -or $powerPointLeft -gt 1.0) {
         throw ("PowerPoint native equation is not left-aligned: " +
@@ -1044,7 +1054,8 @@ try {
     Write-Host "PASS: normal DIBV5 is opaque black-on-white ($dibContract)"
     Write-Host 'PASS: clipboard contains raw LaTeX, inline MathML CF_HTML, Office TeX, EMF, and DIBV5 without centring registered MathML'
     Write-Host ("PASS: no-selection GUI copy -> visible editable Office Math " +
-        "in PowerPoint ($powerPointFontSize pt, caret=$powerPointTailFontSize pt, " +
+        "in PowerPoint ($powerPointFontSize pt, tail=$powerPointTailFontSize pt, " +
+        "insertion=$powerPointInsertionFontSize pt, " +
         "left=$powerPointLeft pt, " +
         "rendered $powerPointImageSize with ink)")
     Write-Host "PASS: IrfanView /clippaste produced a nonblank $imageSize PNG"

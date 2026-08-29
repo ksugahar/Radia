@@ -1,5 +1,13 @@
 # Changelog
 
+## 3.0.9 - 2026-08-30
+
+- Show the semantic product version beside the source build stamp in the
+  native title bar and About/version dialogs.
+- Extend the real-PowerPoint acceptance test through the zero-length insertion
+  point after the equation. Simple, powered, fractional, and full structural
+  equations must all remain left-aligned editable math at 24 pt.
+
 ## 3.0.8 - 2026-08-29
 
 - Keep the invisible inline PowerPoint sentinel at 24 pt in both the native
