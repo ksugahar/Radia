@@ -5,14 +5,6 @@ All notable changes to the `radia` package.  Format: each release lists
 
 ## Unreleased
 
-- Prepared `radia-optuna` 0.1.5 as the first standalone PyPI release. It adds
-  the student-facing Simulink optimization workflow, a 148-test MATLAB
-  validation set, executable upstream evidence for all 400 required shared API
-  entries, installed-wheel isolation checks, and public mdx performance
-  evidence. On the checked mdx workload MATLAB was faster than upstream Python
-  for scalar, grouped-conditional, and trial-table operations; four-worker
-  objective batching achieved 2.36x speedup while preserving seeded proposals.
-
 - Added the native and Web editions of Eqnedit64 as one BSD-2-Clause component
   under `tools/eqnedit64`. It provides portable Windows x64 structural/TeX
   editing, a homepage-published browser UI, and Office/image export without an
@@ -20,6 +12,24 @@ All notable changes to the `radia` package.  Format: each release lists
   MTEF/`.eqn` readers, writers, tests, and reverse-engineering utilities were
   retired; TeX-to-OMML/PPTX headless generation remains supported.
 
+## 4.95.69 - Typed Simulink optimization and IH telemetry
+
+Released 2026-08-29.
+
+- Released `radia-optuna` 0.1.5 as a standalone PyPI distribution and updated
+  the `radia[optuna]` and `radia[optuna-upstream]` extras to that independently
+  versioned, four-machine-validated wheel.
+- Added fixed-width `OptunaMonitorBusV1` and `IHMonitorBusV1` contracts with a
+  shared versioned status header. The student optimization model now exposes a
+  compact typed monitor bus, while the IH model keeps fan-out wiring inside one
+  masked monitor subsystem and preserves normalized trial and field histories
+  in durable table/MAT artifacts.
+- The standalone Optuna package includes the student-facing Simulink workflow,
+  a 150-test MATLAB suite, executable upstream evidence for every required
+  shared API entry, installed-wheel isolation checks, and public mdx performance
+  evidence. On the checked mdx workload MATLAB was faster than upstream Python
+  for scalar, grouped-conditional, and trial-table operations; four-worker
+  objective batching achieved 2.36x speedup while preserving seeded proposals.
 - Completed the previously named MATLAB Optuna sampler gaps against the pinned
   4.9.0 oracle: concurrent-RUNNING constant-liar TPE, source/separable/margin/
   learning-rate CMA-ES modes, pruned CMA history, and native unscrambled Sobol
