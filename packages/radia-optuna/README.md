@@ -67,13 +67,15 @@ runs the model, extracts objectives and constraints, classifies failed trials,
 and records reproducible execution metadata without loading Radia. Radia-owned
 electromagnetic models and application blocks remain in the main distribution.
 
-The wheel also ships the generic `radia.simulink.buildOptunaBlock` Level-2
-MATLAB S-Function block and `radia.simulink.addOptunaMonitor`. The block runs
-one trial per sample and exposes edge-triggered start, cancel, pause, resume,
-select, and apply controls. It persists normalized study tables and reports
-best value, trial states, Pareto points, selected/current trial, checkpoint
-revision, and typed failures as ordinary Simulink signals. Existing fourteen
-outputs keep their order; the four new outputs are appended.
+The wheel ships two deliberately separated Simulink interfaces. The default
+`radia.simulink.buildOptunaStudyBlock` facade exposes only `start`, `cancel`,
+`best`, `status`, `progress`, and `best trial`. Sampler, seed, pruner, bounds,
+budget, storage, study review, and trial application live in its mask, so a
+student can compare configurations, extend a saved study, and apply a result
+without rewiring the model. The complete six-input/eighteen-output
+`radia.simulink.buildOptunaBlock` Level-2 runtime remains available as an
+advanced interface. `radia.simulink.addOptunaMonitor` remains available where
+wired Scope/XY telemetry is genuinely useful.
 
 `radia_optuna_teaching.slx` and
 `radia.simulink.buildOptunaTeachingModel` provide known-optimum, Pareto, and

@@ -20,7 +20,7 @@ unmapped, or missing entries. More importantly, all **400/400 required entries
 have executable upstream evidence**; none of that required scope is closed by
 an assertion. The ledger therefore reports
 `full_compatibility_complete=true` under its checked scope rule. The complete
-fast MATLAB Optuna regression set passes **148/148**.
+fast MATLAB Optuna regression set passes **149/149**.
 
 That conclusion has a precise scope. `radia-optuna` is a MATLAB implementation
 of the Optuna API and algorithms, with explicit calls to pinned upstream Python
@@ -40,24 +40,25 @@ gates.
 | Executable upstream evidence | 748 |
 | Explicit wider-inventory assertions | 68 |
 | Required compatibility scope | 400 / 400 executable-evidence mapped |
-| MATLAB Optuna suite | 148 / 148 passed |
+| MATLAB Optuna suite | 149 / 149 passed |
 | Upstream Python differential tests | 77 |
 | Official upstream MCP tests | 3 |
-| MATLAB integration tests | 68 |
+| MATLAB integration tests | 69 |
 | Standalone native gateway | 21 commands |
 | Native unscrambled Sobol limit | 21,201 dimensions |
 | Packaged `radia.optuna` MATLAB files | 226 |
-| Standalone Simulink entry points | 10 |
+| Standalone Simulink entry points | 13 |
 
 Additional release-candidate checks performed in this review:
 
 | Check | Result |
 |---|---:|
 | `packages/radia-optuna` plus focused `radia-mcp` pytest | 28 / 28 passed |
-| Fresh wheel archive verification | PASS, 226 MATLAB files / 21 commands / 10 Simulink entries |
+| Fresh wheel archive verification | PASS, 226 MATLAB files / 21 commands / 13 Simulink entries |
 | Isolated installed-wheel MATLAB E2E | PASS, no repository or Radia on MATLAB path |
 | Installed-wheel `OptimizationSession` save/resume | PASS, 4 / 4 trials completed |
 | Installed-wheel student Simulink model | PASS, 12 / 12 trials attempted |
+| Installed-wheel compact-block iteration | PASS, seed-less 4 -> 6 trials, best applied, topology unchanged |
 | Installed-wheel table resume | PASS, all seven typed tables restored |
 | mdx warmed MATLAB/Python ratios | 0.670 scalar / 0.491 grouped / 0.630 table |
 | mdx deterministic 4-worker batch | 2.357x sequential throughput |
@@ -72,7 +73,7 @@ The oracle JSON regenerates byte-for-byte with SHA-256
 The API coverage SHA-256 is
 `43A5F72D2961FF1797C7E9FEC537D5308FD162744D2C99118A3AC64523C05BFC`;
 the test-manifest SHA-256 is
-`3663ABEFEC833BD28928F0DE036DCAB8E8D09E74A4AE56B7282B5042F7282972`.
+`7939FB667A47F53E256BC6B8CEEA94A0008A4A92BB182ED6B8BF1C8183D3CEA5`.
 The generated coverage and manifest regenerate byte-stably.
 
 ## Disposition of the earlier findings
@@ -101,7 +102,7 @@ MATLAB selected a later category.
 Categorical acquisition now uses the same vectorized log-sum-exp evaluation
 order as the upstream NumPy oracle. Numerical Parzen sampling and density work
 remain native. The concurrent constant-liar fixture now matches all 32 rows
-(16 univariate and 16 multivariate), and the complete 148-test suite passes.
+(16 univariate and 16 multivariate), and the complete 149-test suite passes.
 This is why seeded compatibility must compare proposal sequences, not merely
 distribution moments or objective quality.
 
@@ -117,14 +118,17 @@ lower-level API.
 
 `OptimizationSession` owns the explicit configured/running/paused/completed/
 cancelled lifecycle, checkpoint/restore, stale-RUNNING recovery, trial
-selection, and application of selected parameters. The version-2 Level-2
-MATLAB S-Function retains the original 14 output positions and appends selected
-trial, pruned-trial, current-trial, and checkpoint telemetry. Its six inputs
-are start, cancel, pause, resume, selected trial, and apply.
+selection, and application of selected parameters. The full Level-2 MATLAB
+S-Function retains its six-input/eighteen-output ABI, but it is now internal to
+the default `Optuna Study` facade. The public student surface has two inputs and
+four outputs; configuration, table review, and trial application are mask
+operations, so experiments do not require signal-line changes.
 
 The tracked `radia_optuna_teaching.slx` and
 `OPTUNA_SIMULINK_LAB.md` cover a known quadratic optimum, a biobjective Pareto
-exercise, and deterministic complete/pruned/failed behavior. Both the teaching
+exercise, deterministic complete/pruned/failed behavior, and a tested
+no-rewiring loop: separate-study configuration comparison, same-study budget
+extension, table review, best-trial application, and rerun. Both the teaching
 model and the production library passed the required official-agent
 read/edit/check/save/reopen lane, clean-path reopen, full-window visual QA, and
 embedded-SLX scans with zero U+FFFD or suspicious `???` runs.
@@ -214,7 +218,7 @@ dimensions successfully (0.208 s on this run).
 The fresh local `0.1.5` `py3-none-win_amd64` wheel was checked byte-for-byte
 against the monorepo sources, then installed into an isolated venv.
 `radia-optuna-doctor` resolved the
-wheel layout, all 226 MATLAB files, all ten standalone Simulink entry points,
+wheel layout, all 226 MATLAB files, all thirteen standalone Simulink entry points,
 the 21-command `optuna_mex`, and the third-party notices without requiring the
 Radia solver package. MATLAB then loaded that installed tree with the
 repository and Radia absent from its path and exercised Study/SimulinkRunner,

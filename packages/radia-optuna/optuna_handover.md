@@ -277,9 +277,12 @@ steps and records the last intermediate value.
 
 ## 10. Simulink block v2
 
-The production block remains a generic Level-2 MATLAB S-Function in
-`matlab/radia_simulink_library.slx`. It delegates numerical work to the tested
-MATLAB API and standalone MEX.
+The production interface is deliberately split. `Optuna Study` is a masked
+two-input/four-output subsystem for students and ordinary models. It contains
+the generic Level-2 MATLAB S-Function as an advanced internal runtime, so the
+algorithm and checkpoint behavior are unchanged while top-level wiring stays
+small. The standalone advanced builder retains the stable six-input/eighteen-
+output ABI for models that truly consume every command and telemetry signal.
 
 ### Mask parameters
 
@@ -295,11 +298,22 @@ MATLAB API and standalone MEX.
 - live monitor choice
 - failure policy
 
-### Input commands
+### Compact public interface
 
-The existing start and cancel inputs remain supported. The v2 command contract
-adds pause/resume and apply-selected-trial through either typed command inputs
-or explicit mask callbacks. Commands must be edge-triggered and idempotent.
+- inputs: start and cancel;
+- outputs: best objective, status, attempted-trial progress, and best trial;
+- mask actions: review saved study and apply a selected trial (`-1` = best);
+- mask experiment controls: objective, sampler, seed, pruner, ordered search
+  space, total budget, storage, direction, sample time, and target model.
+
+A new sampler/seed/search-space comparison receives a new MAT study path. A
+budget extension keeps the same path and resumes the existing history. Both
+workflows leave model wiring unchanged.
+
+### Advanced input commands
+
+The advanced runtime retains start, cancel, pause, resume, selected trial, and
+apply. Commands are edge-triggered and idempotent.
 
 ### Output telemetry
 
@@ -340,6 +354,11 @@ order as upstream Optuna for shared sequential behavior.
 
 `seed=[]` or `None` is nondeterministic constructor behavior. Each sampler draws
 private entropy and must not mutate MATLAB's global random stream.
+
+For a persisted Simulink study, the resolved private seed and sampler state are
+part of the checkpoint: a budget-only extension restores both even when the
+mask seed remains empty. A changed sampler, seed, pruner, or direction must use
+a new MAT study path and fails loudly against incompatible saved metadata.
 
 Parallel modes are different products and must be named:
 
@@ -465,15 +484,17 @@ upstream handoff version. Do not use the Optuna logo or imply endorsement.
 
 Implementation record (2026-08-29):
 
-- fast MATLAB Optuna suite: 148/148 passed, 0 failed, 0 incomplete;
+- fast MATLAB Optuna suite: 149/149 passed, 0 failed, 0 incomplete;
 - oracle ledger: 816/816 present, 748 executable-evidence verified,
   68 explicitly asserted, 0 partial/unmapped/missing;
 - required compatibility scope: 400/400 executable-evidence mapped,
   0 asserted or unmapped;
 - focused package/radia-mcp Python tests: 28/28 passed;
 - isolated installed-wheel verification: 226 MATLAB files, 21 MEX commands,
-  10 Simulink entries, four-trial session checkpoint/resume, twelve-trial
-  teaching-model run, and seven-table restore all passed;
+  13 Simulink entries, seed-less four-to-six-trial block continuation,
+  best-trial model application with unchanged topology, four-trial session
+  checkpoint/resume, twelve-trial teaching-model run, and seven-table restore
+  all passed;
 - tracked production library and teaching model: official-agent
   read/edit/check/save/reopen, clean-path reopen, full-window visual QA, and
   embedded-text scans passed.
@@ -510,6 +531,8 @@ Implementation record (2026-08-29):
 - [x] use the shared sampler/pruner/seed configuration
 - [x] bind the block to `OptimizationSession`
 - [x] add pause/resume/select/apply without breaking existing ports
+- [x] place the full runtime behind a two-input/four-output student facade
+- [x] prove compare, budget-extension, review, and apply without rewiring
 - [x] update the single Radia library through the official toolkit
 - [x] clean-open, check, save, reopen, and visual acceptance
 
@@ -531,8 +554,10 @@ Implementation record (2026-08-29):
 
 The implementation is complete only when:
 
-- a student can configure, run, pause, resume, cancel, inspect, save, restore,
-  select, and apply an optimization from Simulink;
+- a student can configure, run, compare, extend, inspect, select, and apply an
+  optimization from the compact Simulink block without changing signal lines;
+- wired pause/resume and full telemetry remain available only through the
+  explicit advanced interface;
 - equal seeded sequential shared behavior matches pinned Optuna fixtures;
 - MATLAB-only extensions are separately classified;
 - the evidence ledger contains no assertion disguised as verification;

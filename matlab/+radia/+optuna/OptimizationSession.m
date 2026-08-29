@@ -94,6 +94,10 @@ classdef OptimizationSession < handle
                     obj.State = "paused";
                     obj.StopReason = "restored-running-session-as-paused";
                 end
+                if obj.State == "completed" && ~obj.atTrialLimit()
+                    obj.State = "paused";
+                    obj.StopReason = "trial-budget-extended";
+                end
             end
             if obj.atTrialLimit()
                 obj.State = "completed";
