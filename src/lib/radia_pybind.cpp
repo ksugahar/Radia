@@ -3514,19 +3514,24 @@ PYBIND11_MODULE(_radia_pybind, m) {
              "matching signs (pass the complete cyclic group, theta_k = 2*pi*k/N for k = 1..N-1); alternating "
              "N/S poles ride image_signs as (-1)^k.")
         .def("build_hmatrix",
-             [](RadHACApKChargeGram& self, double eps, int leaf, double eta) {
+             [](RadHACApKChargeGram& self, double eps, int leaf, double eta,
+                int max_rank) {
+                 if (max_rank <= 0)
+                     throw std::invalid_argument("max_rank must be positive");
                  py::gil_scoped_release release;
                  RadHACApKParams params;
                  params.aca_eps = eps;
                  params.leaf_size = leaf;
                  params.eta = eta;
+                 params.max_rank = max_rank;
                  params.print_level = 0;
                  if (!self.BuildHMatrix(params))
                      throw std::runtime_error("charge Gram H-matrix build failed");
              },
-             py::arg("eps") = 1e-12, py::arg("leaf") = 64, py::arg("eta") = 2.0,
+             py::arg("eps") = 1e-12, py::arg("leaf") = 64,
+             py::arg("eta") = 2.0, py::arg("max_rank") = 200,
              "Build the H-matrix of a gram constructed with build=False.  Used when the image rotations "
-             "must be attached between construction and fill.")
+             "must be attached between construction and fill, or when RT2 needs a higher ACA rank cap.")
         .def(py::init([](F64Array centroids_a, F64Array measures_a,
                          F64Array self_energy_a, double eps, int leaf, double eta) {
                  auto centroids = to_1d_vector<double>(centroids_a, "centroids");

@@ -346,9 +346,10 @@ int HACApK_build_hmatrix_wrapper(
     int n_elem,
     int nffc,                      /* DOF per element (3 for tet, 6 for hex) */
     int ndim,                      /* Spatial dimension (3) */
-    double eps,                    /* ACA+ tolerance */
+    double eps,                    /* ACA tolerance */
     int leaf_size,                 /* Minimum cluster size */
     double eta,                    /* Admissibility parameter */
+    int max_rank,                  /* Maximum ACA rank */
     int print_level)
 {
     st_cHACApK_leafmtxp leafmtxp = (st_cHACApK_leafmtxp)leafmtxp_void;
@@ -405,8 +406,8 @@ int HACApK_build_hmatrix_wrapper(
     ctl->param[51] = eta;                   /* Admissibility (eta) */
     ctl->param[60] = 1;                     /* ACA mode (1=ACA, 2=ACA+) */
     ctl->param[61] = 1;                     /* ACA norm (MREM) */
-    ctl->param[62] = (double)200;          /* Max rank initial */
-    ctl->param[63] = (double)200;          /* Max rank */
+    ctl->param[62] = (double)max_rank;     /* Max rank initial */
+    ctl->param[63] = (double)max_rank;     /* Max rank */
     ctl->param[64] = 1;                     /* Min rank (ELF uses 1) */
     ctl->param[71] = eps;                   /* ACA tolerance */
     /* param[72]: ACA_EPS multiplier (HACApK standard: 1.0e-3, LatticeH: 1.0e-9) */
@@ -803,6 +804,7 @@ int HACApK_build_hmatrix_varDOF_wrapper(
     double eps,
     int leaf_size,
     double eta,
+    int max_rank,
     int print_level)
 {
     st_cHACApK_leafmtxp leafmtxp = (st_cHACApK_leafmtxp)leafmtxp_void;
@@ -858,8 +860,8 @@ int HACApK_build_hmatrix_varDOF_wrapper(
     ctl->param[51] = eta;
     ctl->param[60] = 1;  /* ACA mode (1=ACA, 2=ACA+) */
     ctl->param[61] = 1;
-    ctl->param[62] = (double)200;
-    ctl->param[63] = (double)200;
+    ctl->param[62] = (double)max_rank;
+    ctl->param[63] = (double)max_rank;
     ctl->param[64] = 1;
     ctl->param[71] = eps;
     ctl->param[72] = 1.0e-3;
