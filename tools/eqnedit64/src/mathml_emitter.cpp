@@ -104,8 +104,10 @@ private:
             result = element("mtext", value);
         } else if (ch.typeface == TF_NUMBER) {
             result = element("mn", value);
-        } else if (ch.typeface == TF_FUNCTION) {
+        } else if (ch.typeface == TF_FUNCTION || ch.typeface == TF_ROMAN) {
             result = element("mi", value, "mathvariant=\"normal\"");
+        } else if (ch.typeface == TF_MATH_ITALIC) {
+            result = element("mi", value, "mathvariant=\"italic\"");
         } else if (ch.typeface == TF_VECTOR) {
             result = element("mi", value, "mathvariant=\"bold\"");
         } else if (ch.typeface == TF_SYMBOL ||

@@ -19,7 +19,7 @@
   /* デプロイごとに上げる。ボタン行の右端に出て、開きっぱなしのタブが
    * 古い版を動かし続けていないかを一目で判別できる（.exe の
    * タイトルバー・ビルドスタンプと同じ教訓）。 */
-  var BUILD = "2026-08-27a";
+  var BUILD = "2026-08-29a";
 
   var PALETTES = [
     {
@@ -70,9 +70,7 @@
         ["ẋ", "\\dot{}", "ドット"],
         ["ẍ", "\\ddot{}", "二重ドット"],
         ["ã", "\\tilde{}", "チルダ"],
-        ["𝐁", "\\mathbf{}", "太字"],
         ["ℝ", "\\mathbb{}", "黒板太字"],
-        ["rm", "\\mathrm{}", "立体（単位・添字向け）"],
         ["ℰ", "\\mathcal{}", "カリグラフィー体（起電力ℰなど）"],
         ["abc", "\\text{}", "テキスト（空白が使える）"]
       ]
@@ -179,14 +177,28 @@
     { id: "greek", label: "ギリシャ", palettes: ["ギリシャ", "ギリシャ大"] }
   ];
 
+  /* Category-independent math alphabets.  These stay beside the tabs so a
+   * user never has to remember which subject palette owns a writing style. */
+  var MATH_ALPHABETS = [
+    { label: "R x", css: "roman", snippet: "\\mathrm{}", name: "立体" },
+    { label: "I x", css: "italic", snippet: "\\mathit{}", name: "変数（斜体）" },
+    { label: "B x", css: "vector", snippet: "\\mathbf{}", name: "ベクトル" }
+  ];
+
 
   var CSS = [
     ".eqed { border: 1px solid #d9d9d6; border-radius: 10px; padding: 14px 16px; background: #fcfcfb; }",
-    ".eqed-tabs { display: flex; gap: 4px; max-width: 100%; overflow-x: auto; padding: 0 0 7px; scrollbar-width: thin; }",
+    ".eqed-palette-head { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: flex-start; padding: 0 0 7px; }",
+    ".eqed-tabs { display: flex; flex: 1 1 auto; gap: 4px; max-width: 100%; overflow-x: auto; scrollbar-width: thin; }",
     ".eqed-tab { flex: 0 0 auto; font: inherit; font-size: 0.86rem; padding: 6px 12px; border: 1px solid #cfcfcb; border-radius: 7px 7px 3px 3px; background: #f7f7f5; color: inherit; cursor: pointer; }",
     ".eqed-tab:hover { background: #eef3f8; border-color: #9db8d2; }",
     ".eqed-tab[aria-selected='true'] { background: #fff; border-color: #6f98bd; box-shadow: inset 0 -2px #3977ad; font-weight: 600; }",
     ".eqed-tab:focus-visible { outline: 3px solid rgba(57,119,173,0.3); outline-offset: 1px; }",
+    ".eqed-stylebar { display: flex; flex: 0 0 auto; gap: 4px; margin-left: auto; }",
+    ".eqed-style-key { min-width: 3.3em; font-family: 'Times New Roman', serif; font-size: 0.95rem; line-height: 1; padding: 6px 8px; border: 1px solid #b9c6d1; border-radius: 6px; background: #fff; color: inherit; cursor: pointer; }",
+    ".eqed-style-key:hover { background: #eef3f8; border-color: #6f98bd; }",
+    ".eqed-style-key--italic { font-style: italic; }",
+    ".eqed-style-key--vector { font-weight: 700; }",
     ".eqed-tab-panel[hidden] { display: none; }",
     ".eqed-row { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; margin-bottom: 6px; }",
     ".eqed-row-label { font-size: 0.78rem; color: var(--muted, #717170); min-width: 3.6em; }",
@@ -312,6 +324,33 @@
     return null;
   }
 
+  /* Pure insertion contract, shared by the live textarea and the Node CI
+   * test.  Keeping caret arithmetic out of DOM event code makes selection
+   * wrapping a tested result instead of a browser-manual assumption. */
+  function composeInsertion(value, start, end, snippet) {
+    start = Math.max(0, Math.min(start, value.length));
+    end = Math.max(start, Math.min(end, value.length));
+    var before = value.slice(0, start);
+    var selected = value.slice(start, end);
+    var after = value.slice(end);
+    var body = snippet;
+    var caret;
+    var firstHole = body.indexOf("{}");
+    if (selected && firstHole >= 0) {
+      body = body.slice(0, firstHole + 1) + selected + body.slice(firstHole + 1);
+      var second = nextHole(body, firstHole + 1 + selected.length + 1, false);
+      caret = second !== null ? second : firstHole + 1 + selected.length + 1;
+    } else if (firstHole >= 0) {
+      caret = firstHole + 1;
+    } else {
+      caret = body.length;
+    }
+    return {
+      value: before + body + after,
+      caret: before.length + caret
+    };
+  }
+
   function init(root) {
     installStyles();
     var input = root.querySelector(".eqed-source");
@@ -372,41 +411,42 @@
 
     /* 挿入。選択があり、断片が空欄を持つなら選択を最初の空欄へ包む。 */
     function insert(snippet) {
-      var start = input.selectionStart;
-      var end = input.selectionEnd;
-      var before = input.value.slice(0, start);
-      var selected = input.value.slice(start, end);
-      var after = input.value.slice(end);
-      var body = snippet;
-      var caret;
-
-      var firstHole = body.indexOf("{}");
-      if (selected && firstHole >= 0) {
-        body = body.slice(0, firstHole + 1) + selected + body.slice(firstHole + 1);
-        var second = nextHole(body, firstHole + 1 + selected.length + 1, false);
-        caret = second !== null ? second : firstHole + 1 + selected.length + 1;
-      } else if (firstHole >= 0) {
-        caret = firstHole + 1;
-      } else {
-        caret = body.length;
-      }
-      input.value = before + body + after;
+      var edit = composeInsertion(
+        input.value, input.selectionStart, input.selectionEnd, snippet);
+      input.value = edit.value;
       input.focus();
-      input.setSelectionRange(before.length + caret, before.length + caret);
+      input.setSelectionRange(edit.caret, edit.caret);
       showRecentInsertion(snippet);
       scheduleRender();
     }
 
     var idPrefix = "eqed-palette";
+    var paletteHead = el("div", "eqed-palette-head");
     var tabList = el("div", "eqed-tabs");
+    var styleBar = el("div", "eqed-stylebar");
     var panelHost = el("div", "eqed-tab-panels");
     var tabButtons = [];
     var tabPanels = [];
     tabList.setAttribute("role", "tablist");
     tabList.setAttribute("aria-label", "数式記号の分類");
+    styleBar.setAttribute("role", "toolbar");
+    styleBar.setAttribute("aria-label", "数式の文字スタイル");
     paletteHost.setAttribute("aria-label", "数式記号パレット");
-    paletteHost.appendChild(tabList);
+    paletteHead.appendChild(tabList);
+    paletteHead.appendChild(styleBar);
+    paletteHost.appendChild(paletteHead);
     paletteHost.appendChild(panelHost);
+
+    MATH_ALPHABETS.forEach(function (alphabet) {
+      var button = el("button",
+        "eqed-style-key eqed-style-key--" + alphabet.css, alphabet.label);
+      button.type = "button";
+      button.setAttribute("data-tex-literal-ok", "true");
+      button.setAttribute("aria-label", alphabet.name + " " + alphabet.snippet);
+      button.title = alphabet.snippet;
+      button.addEventListener("click", function () { insert(alphabet.snippet); });
+      styleBar.appendChild(button);
+    });
 
     function activatePaletteTab(index, moveFocus) {
       tabButtons.forEach(function (button, buttonIndex) {
@@ -624,6 +664,15 @@
     var root = document.querySelector("[data-equation-editor]");
     if (root) init(root);
   }
+  if (typeof module !== "undefined" && module.exports) {
+    module.exports = {
+      composeInsertion: composeInsertion,
+      mathAlphabets: MATH_ALPHABETS.map(function (item) {
+        return { label: item.label, snippet: item.snippet };
+      })
+    };
+  }
+  if (typeof document === "undefined") return;
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", ready);
   } else {

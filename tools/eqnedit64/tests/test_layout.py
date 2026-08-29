@@ -125,6 +125,14 @@ def main() -> int:
             r"\vec{\mathbf{E}} did not use MATHEMATICAL BOLD CAPITAL E: "
             f"{vector_text!r}")
 
+    alphabet = Rendered(r"\mathrm{x}+\mathit{x}+\mathbf{x}", style)
+    alphabet_text = "".join(g[3] for g in alphabet.glyphs)
+    if alphabet_text.count("x") != 1 or "𝑥" not in alphabet_text or \
+            "𝐱" not in alphabet_text:
+        failures.append(
+            "Roman, math italic, and vector bold did not render as three "
+            f"distinct alphabets: {alphabet_text!r}")
+
     # CJK is text, not a mathematical symbol.  Sending it through the
     # process-private Latin Modern Math face made GDI font linking apply the
     # fallback scale twice: five nominal 12 pt characters measured 306 pt

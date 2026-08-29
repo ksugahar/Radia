@@ -1152,7 +1152,10 @@ double glyph_ink_left(uint32_t, double, bool, bool, bool = false) { return 0.0; 
 /* ------------------------------------------------------------------ */
 /* Typeface mapping                                                    */
 /* ------------------------------------------------------------------ */
-bool typeface_is_italic(int tf) { return tf == 3 || tf == 4; }   /* VARIABLE, LCGREEK */
+bool typeface_is_italic(int tf) {
+    return tf == TF_VARIABLE || tf == TF_LCGREEK ||
+           tf == TF_MATH_ITALIC;
+}
 
 /* Japanese must never reach the process-private math font through GDI font
  * linking.  The linked CJK glyph can inherit the math face's 1000-unit metric
