@@ -4,7 +4,7 @@
 # `build\build_tests.bat` runs the required checks.  Nothing here writes to
 # dist, so a build from this file can never become the shipped executable.
 cmake_minimum_required(VERSION 3.20)
-project(Eqnedit64 VERSION 3.0.6 LANGUAGES CXX)
+project(Eqnedit64 VERSION 3.0.7 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
