@@ -76,8 +76,11 @@ public:
         std::string digits = size.str();
         while (!digits.empty() && digits.back() == '0') digits.pop_back();
         if (!digits.empty() && digits.back() == '.') digits.pop_back();
+        /* The browser editor publishes inline MathML to Office.  Keep the
+         * native root identical so PowerPoint does not turn one product into
+         * a centred equation paragraph and the other into inline Office Math. */
         return "<math xmlns=\"http://www.w3.org/1998/Math/MathML\" "
-               "display=\"block\" mathsize=\"" + digits + "pt\">" +
+               "display=\"inline\" mathsize=\"" + digits + "pt\">" +
                sequence(root.children) + "</math>";
     }
 
@@ -181,6 +184,21 @@ private:
         return op;
     }
 
+    std::string integral_operator(const std::string& symbol,
+                                  const NodeList& lower, bool hasLower,
+                                  const NodeList& upper, bool hasUpper) {
+        const std::string op = element("mo", symbol,
+            "largeop=\"true\" movablelimits=\"true\"");
+        /* TeX (and MathJax.tex2mml) puts ordinary integral limits beside the
+         * glyph.  munderover is correct for sums/products, but using it for
+         * integrals was the visible native/Web PowerPoint mismatch. */
+        if (hasLower && hasUpper)
+            return element("msubsup", op + sequence(lower) + sequence(upper));
+        if (hasLower) return element("msub", op + sequence(lower));
+        if (hasUpper) return element("msup", op + sequence(upper));
+        return op;
+    }
+
     std::string table(const MatrixNode& matrix) {
         std::string rows;
         const int rowCount = std::max(0, matrix.rows);
@@ -267,7 +285,7 @@ private:
             else if (value.selector == tmSSINT) symbol = "&#x222E;";
             else if (value.selector == tmDSINT) symbol = "&#x222F;";
             else if (value.selector == tmTSINT) symbol = "&#x2230;";
-            return row(limited_operator(symbol, value.lower, value.hasLower,
+            return row(integral_operator(symbol, value.lower, value.hasLower,
                 value.upper, value.hasUpper) + sequence(value.body));
         }
         case Node::kBigOp: {

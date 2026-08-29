@@ -154,7 +154,8 @@ def check(tex: str, seed: int, case: int, kind: str) -> None:
     mathml = tex_to_mathml(tex)
     math_root = ET.fromstring(mathml)
     if math_root.tag != "{http://www.w3.org/1998/Math/MathML}math" or \
-            math_root.attrib.get("mathsize") != "24pt":
+            math_root.attrib.get("mathsize") != "24pt" or \
+            math_root.attrib.get("display") != "inline":
         raise AssertionError(
             f"invalid 24 pt MathML root: seed={seed} case={case} kind={kind}"
         )

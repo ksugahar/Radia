@@ -40,7 +40,7 @@ struct PaletteCategory {
     std::vector<std::size_t> paletteIndices;
 };
 
-/* Eighteen palettes: the first ten are symbols, the last eight templates. */
+/* Nineteen palettes: the first eleven are symbols, the last eight templates. */
 const std::vector<Palette>& palettes();
 
 /* Number of leading entries of palettes() that are symbol palettes. */

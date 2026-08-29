@@ -10,7 +10,10 @@ These are rules, not examples.  Adding a symbol to the table or a kind to
 insert_template() with no palette home fails here, which is what stops the
 gap from reopening one entry at a time.
 """
+import json
 import os
+from pathlib import Path
+import re
 import sys
 import unicodedata
 
@@ -76,12 +79,13 @@ def test_every_palette_cell_is_labelled():
 
 def test_symbol_palettes_come_first_then_template_palettes():
     """The shape of Eqnedt32's bar: symbols on the first row, templates on
-    the second, so the eye knows which row to look at.  Eqnedt32 has ten and
-    nine; the template row here has eight because its labelled-arrow palette
-    (\\xrightarrow and friends) has no node type yet."""
+    the second, so the eye knows which row to look at.  Eqnedit64 adds a
+    browser-shared differential-geometry symbol palette.  The dedicated
+    over/underline palette remains on the template row, while labelled arrows
+    (\\xrightarrow and friends) have no node type yet."""
     entries = E.palettes()
     split = E.symbol_palette_count()
-    assert split == 10
+    assert split == 11
     assert len(entries) > split, "no template palettes"
     for title, _, _, items in entries[:split]:
         kinds = {c.split(".")[0] for c, _, _ in items}
@@ -152,7 +156,7 @@ def test_five_categories_cover_every_palette_once():
     assert sorted(indices) == list(range(len(E.palettes())))
     assert len(indices) == len(set(indices)), "a palette appears on two tabs"
     assert all(members for _, members in categories), "an empty tab is not useful"
-    assert max(len(members) for _, members in categories) <= 5
+    assert max(len(members) for _, members in categories) <= 6
 
 
 def test_categories_follow_the_web_learning_order():
@@ -167,9 +171,52 @@ def test_categories_follow_the_web_learning_order():
         for title, members in E.palette_categories()
     }
     assert by_category["基本"] == [
-        "分数と根号", "上下付き", "行列", "括弧", "装飾"]
+        "分数と根号", "上下付き", "行列", "括弧", "装飾", "上線と下線"]
     assert by_category["集合・記号"] == [
         "矢印", "集合記号", "論理記号", "総乗と集合演算", "空白と点"]
+    assert by_category["幾何"] == ["微分幾何"]
+
+
+def test_native_geometry_palette_matches_the_web_editor():
+    """Geometry is a shared product contract, not a spare category.
+
+    It once pointed at the unrelated over/underline palette while the Web
+    product taught differential geometry.  Keep faces, insertion TeX, labels,
+    and order identical at the product boundary.
+    """
+    expected = [
+        ("∧", r"\wedge ", "ウェッジ積"),
+        ("★", r"\star ", "Hodge star作用素"),
+        ("dω", r"\mathrm{d} ", "外微分（立体のd）"),
+        ("ι", r"\iota_{} ", "内部積（縮約）ι_X"),
+        ("ℒ", r"\mathcal{L}_{} ", "Lie微分"),
+        ("f^*", "^{*} ", "引き戻し（pullback）"),
+        ("f_*", "_{*} ", "押し出し（pushforward）"),
+        ("♭", r"^{\flat} ", "フラット（添字を下げる）"),
+        ("♯", r"^{\sharp} ", "シャープ（添字を上げる）"),
+        ("⊗", r"\otimes ", "テンソル積"),
+        ("⊕", r"\oplus ", "直和"),
+    ]
+    palette = next(items for title, _, _, items in E.palettes()
+                   if title == "微分幾何")
+    actual = []
+    for command, face, label in palette:
+        if command.startswith("symbol."):
+            payload = command[len("symbol."):]
+        else:
+            assert command.startswith("latex.")
+            payload = command[len("latex."):]
+        actual.append((face, payload, label))
+    assert actual == expected
+
+    source = (Path(__file__).resolve().parents[1] / "web" /
+              "equation-editor.js").read_text(encoding="utf-8")
+    block = source.split('label: "微分幾何"', 1)[1].split("]\n    },", 1)[0]
+    web = []
+    for match in re.finditer(r'^\s*(\[".*"\]),?$', block, re.MULTILINE):
+        face, payload, label = json.loads(match.group(1))
+        web.append((face, payload, label))
+    assert web == expected
 
 
 def test_every_palette_command_round_trips():

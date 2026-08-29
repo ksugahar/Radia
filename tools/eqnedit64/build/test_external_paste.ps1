@@ -678,8 +678,8 @@ $cliTexInput = "C:\temp\Eqnedit64-cli-input-$runId.tex"
 # A delimiter space after a control word is valid TeX and proves that the
 # public file-based CLI normalises the supplied equation rather than copying a
 # private fixed fixture.
-$expectedRaw = '\frac{x_{1}+\alpha }{\sqrt{y}}'
-$expectedOffice = '\[\frac{x_{1}+\alpha }{\sqrt{y}}\]'
+$expectedRaw = '\sum_{n=1}^{m} a^3 \int_{a}^{b} \frac{f(x)}{\sqrt{y}}\, dx^3'
+$expectedOffice = '\[\sum_{n=1}^{m} a^3 \int_{a}^{b} \frac{f(x)}{\sqrt{y}}\, dx^3\]'
 [IO.File]::WriteAllText(
     $cliTexInput, $expectedOffice, [Text.UTF8Encoding]::new($false))
 
@@ -788,8 +788,10 @@ try {
     $mathMlFormat = [EqneditClipboardNative]::RegisterClipboardFormat('MathML')
     $mathMlPresentationFormat = [EqneditClipboardNative]::RegisterClipboardFormat(
         'MathML Presentation')
+    $htmlFormat = [EqneditClipboardNative]::RegisterClipboardFormat('HTML Format')
     $requiredFormats = @(
-        13, 14, 17, $latexFormat, $mathMlFormat, $mathMlPresentationFormat)
+        13, 14, 17, $latexFormat, $mathMlFormat,
+        $mathMlPresentationFormat, $htmlFormat)
     foreach ($requiredFormat in $requiredFormats) {
         if (-not [EqneditClipboardNative]::IsClipboardFormatAvailable($requiredFormat)) {
             throw "Required clipboard format is missing: $requiredFormat"
@@ -803,10 +805,15 @@ try {
     }
     $mathMl = Read-ClipboardUtf16 $mathMlFormat
     $mathMlPresentation = Read-ClipboardUtf16 $mathMlPresentationFormat
-    if ($mathMl -ne $mathMlPresentation -or $mathMl -notmatch 'mathsize="24pt"' -or
-        $mathMl -notmatch '<mfrac>' -or $mathMl -notmatch '<msub>' -or
-        $mathMl -notmatch '<msqrt>') {
-        throw 'Eqnedit64 did not publish equivalent 24 pt structural MathML formats.'
+    $officeHtml = Read-ClipboardUtf8 $htmlFormat
+    if ($mathMl -ne $mathMlPresentation -or
+        -not $officeHtml.Contains($mathMl + '&#160;') -or
+        $mathMl -notmatch 'display="inline"' -or
+        $mathMl -notmatch 'mathsize="24pt"' -or
+        $mathMl -notmatch '<mfrac>' -or $mathMl -notmatch '<msqrt>' -or
+        $mathMl -notmatch '<munderover><mo[^>]*>&#x2211;</mo>' -or
+        $mathMl -notmatch '<msubsup><mo[^>]*>&#x222B;</mo>') {
+        throw 'Eqnedit64 did not publish equivalent inline 24 pt MathML/HTML formats.'
     }
     $dibContract = Assert-DibV5OpaqueBlackOnWhite (Read-ClipboardBytes 17)
 
@@ -828,12 +835,13 @@ try {
     $hasInlineMath = $slideXml -match '<m:oMath(?:\s|>)'
     $hasFraction = $slideXml -match '<m:f>'
     $hasRadical = $slideXml -match '<m:rad>'
+    $naryCount = ([regex]::Matches($slideXml, '<m:nary>')).Count
     if (-not $hasInlineContainer -or -not $hasInlineMath -or
-        -not $hasFraction -or -not $hasRadical) {
+        -not $hasFraction -or -not $hasRadical -or $naryCount -lt 2) {
         throw (("PowerPoint paste contract failed: inlineContainer={0}, " +
-            "inlineMath={1}, fraction={2}, radical={3}, artifact={4}") -f
-            $hasInlineContainer, $hasInlineMath, $hasFraction, $hasRadical,
-            $pptxOutput)
+            "inlineMath={1}, fraction={2}, radical={3}, nary={4}, " +
+            "artifact={5}") -f $hasInlineContainer, $hasInlineMath,
+            $hasFraction, $hasRadical, $naryCount, $pptxOutput)
     }
     # XML and MathZones can both exist while PowerPoint draws no equation.
     # Shape.Export invokes PowerPoint's own renderer without a visible window;
@@ -962,7 +970,7 @@ try {
     }
 
     Write-Host "PASS: normal DIBV5 is opaque black-on-white ($dibContract)"
-    Write-Host 'PASS: clipboard contains raw LaTeX, registered MathML, Office TeX, EMF, and DIBV5'
+    Write-Host 'PASS: clipboard contains raw LaTeX, identical HTML/registered MathML, Office TeX, EMF, and DIBV5'
     Write-Host ("PASS: no-selection GUI copy -> visible editable Office Math " +
         "in PowerPoint ($powerPointFontSize pt, rendered $powerPointImageSize with ink)")
     Write-Host "PASS: IrfanView /clippaste produced a nonblank $imageSize PNG"
