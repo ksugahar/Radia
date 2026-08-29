@@ -40,6 +40,40 @@ from math import sqrt as msqrt
 MU_0 = 4 * np.pi * 1e-7
 
 
+def _build_bh_interpolator(bh_data):
+    """Return the production B(H) law shared with HDiv-MMM.
+
+    The tabulated range uses monotone PCHIP interpolation.  Beyond the last
+    sample, B continues with the vacuum slope so magnetization remains
+    constant instead of following an arbitrary polynomial extrapolation.
+    """
+    from scipy.interpolate import PchipInterpolator
+
+    bh = np.asarray(bh_data, dtype=float)
+    if bh.ndim != 2 or bh.shape[1] < 2 or bh.shape[0] < 2:
+        raise ValueError("bh_data must contain at least two [H, B] rows")
+    H_tab = bh[:, 0]
+    B_tab = bh[:, 1]
+    if not np.all(np.isfinite(H_tab)) or not np.all(np.isfinite(B_tab)):
+        raise ValueError("bh_data must contain finite H and B values")
+    if np.any(np.diff(H_tab) <= 0.0):
+        raise ValueError("bh_data H values must be strictly increasing")
+    if np.any(np.diff(B_tab) < 0.0):
+        raise ValueError("bh_data B values must be non-decreasing")
+
+    interpolator = PchipInterpolator(H_tab, B_tab, extrapolate=False)
+    H_max = float(H_tab[-1])
+    B_max = float(B_tab[-1])
+
+    def B_of_H(H):
+        value = float(H)
+        if value <= H_max:
+            return float(interpolator(max(value, float(H_tab[0]))))
+        return B_max + MU_0 * (value - H_max)
+
+    return B_of_H
+
+
 class ScalarPotentialSolver:
     """Simkin-Trowbridge magnetostatic solver (Radia + NGSolve).
 
@@ -745,16 +779,13 @@ class ScalarPotentialSolver:
         from ngsolve import (H1, GridFunction, BilinearForm, LinearForm,
                              L2, grad, dx, x, y, z, sqrt, Preconditioner,
                              VOL)
-        from scipy.interpolate import interp1d
-
         if self._H_source_cf is None:
             raise RuntimeError("Set source field first")
 
-        # Build B(H) interpolator from table
+        # Use the same monotone PCHIP + saturated vacuum-slope law as HDiv-MMM.
         bh = np.array(bh_data)
         H_tab, B_tab = bh[:, 0], bh[:, 1]
-        B_of_H = interp1d(H_tab, B_tab, kind='linear',
-                          fill_value='extrapolate')
+        B_of_H = _build_bh_interpolator(bh)
         B_sat = float(B_tab[-1])
 
         # Initial mu_r from second B-H point (ELF convention)

@@ -1,6 +1,8 @@
 import json
 from pathlib import Path
 
+import numpy as np
+
 
 ROOT = Path(__file__).resolve().parents[1]
 SUITE = ROOT / "validation_test" / "c_type_three_engine"
@@ -30,6 +32,10 @@ def test_three_engine_runner_has_shared_physics_contract():
     assert "has_kelvin_identification" in runner
     assert '"--hdiv-gram-eps"' in runner
     assert 'default=1.0e-14' in runner
+    assert '"--primary-only"' in runner
+    assert 'primary_pair_name = "hdiv_mmm__vs__omega_reduced_omega"' in runner
+    assert '"primary_gap_core_relative_rms"' in runner
+    assert '"bh_interpolation_shared"' in runner
     assert '"hdiv_gram_eps": float(options.hdiv_gram_eps)' in runner
     assert '"nonlinear_converged": nonlinear_converged' in runner
     assert 'nonlinear_stats.get("nonlinear_converged_final_stage", False)' in runner
@@ -37,9 +43,43 @@ def test_three_engine_runner_has_shared_physics_contract():
     assert '".omega-checkpoint.json"' in runner
     assert '"implementation_sha256"' in runner
     assert '"radia_pybind"' in runner
+    assert '"coil_builder"' in runner
+    assert '"primary_accuracy_passed"' in runner
+    assert '"all_pairwise_within_tolerance"' in runner
     assert 'dirichlet="GND"' in runner
     assert "finite_outer_air_box_forbidden" in runner
     assert "outer_boundary" not in runner
+
+
+def test_omega_and_hdiv_share_the_nonlinear_bh_interpolation_contract():
+    source = (
+        ROOT / "src" / "radia" / "scalar_potential_solver.py"
+    ).read_text(encoding="utf-8")
+
+    assert "def _build_bh_interpolator(" in source
+    assert "PchipInterpolator" in source
+    assert "B_max + MU_0 * (value - H_max)" in source
+    nonlinear = source.split("def solve_nonlinear(", 1)[1].split(
+        "def solve_nonlinear_newton(", 1
+    )[0]
+    assert "B_of_H = _build_bh_interpolator(bh)" in nonlinear
+    assert "interp1d" not in nonlinear
+
+    from radia.scalar_potential_solver import MU_0, _build_bh_interpolator
+    from radia.vim._nonlinear import _bh_table_funcs
+
+    table = np.loadtxt(SUITE.parents[1] / "src" / "radia" / "panels" /
+                       "samples" / "em_sample_bh.txt")
+    omega_b_of_h = _build_bh_interpolator(table)
+    _, hdiv_b_of_h, _, h_max, _ = _bh_table_funcs(table[:, 0], table[:, 1])
+    h_values = np.geomspace(max(table[1, 0] * 1e-3, 1e-8), 4.0 * h_max, 2000)
+    hdiv_values = np.where(
+        h_values <= h_max,
+        hdiv_b_of_h(h_values),
+        table[-1, 1] + MU_0 * (h_values - h_max),
+    )
+    omega_values = np.asarray([omega_b_of_h(value) for value in h_values])
+    np.testing.assert_array_equal(omega_values, hdiv_values)
 
 
 def test_mesh_builder_keeps_hdiv_air_mesh_free():
@@ -97,6 +137,11 @@ def test_tracked_kelvin_results_preserve_pass_and_failed_gate_evidence():
             encoding="utf-8"
         )
     )
+    nonlinear_order2 = json.loads(
+        (results / "lab_20260829_nonlinear_order2_primary.json").read_text(
+            encoding="utf-8"
+        )
+    )
 
     assert mesh["passed"] is True
     assert mesh["kelvin_identification"]["pair_count"] == 462
@@ -108,3 +153,13 @@ def test_tracked_kelvin_results_preserve_pass_and_failed_gate_evidence():
     assert nonlinear["nonlinear_converged"] is True
     assert nonlinear["passed"] is False
     assert nonlinear["maximum_gap_core_pairwise_relative_rms"] > 0.03
+    assert nonlinear_order2["passed"] is True
+    assert nonlinear_order2["primary_accuracy_passed"] is True
+    assert nonlinear_order2["all_pairwise_within_tolerance"] is True
+    assert nonlinear_order2["nonlinear_converged"] is True
+    assert nonlinear_order2["comparison_contract"]["primary_pair"] == [
+        "hdiv_mmm",
+        "omega_reduced_omega",
+    ]
+    assert nonlinear_order2["primary_gap_core_relative_rms"] < 0.003
+    assert nonlinear_order2["comparison_contract"]["bh_interpolation_shared"]

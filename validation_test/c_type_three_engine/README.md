@@ -1,7 +1,8 @@
-# C-type three-formulation validation
+# C-type formulation validation
 
-This suite compares the production HDiv-MMM magnetostatic route with two
-independent NGSolve finite-element formulations:
+The primary comparison is the production HDiv-MMM magnetostatic route against
+NGSolve Omega-reduced-Omega. HCurl reduced-A is retained as an independent
+third-formulation audit:
 
 1. HDiv-MMM (BDM1 or BDM2), with the Coulomb charge Gram as the exact open
    boundary operator;
@@ -23,11 +24,15 @@ validation must not reconstruct the pole with `netgen.occ`.
   Omega-reduced-Omega share its one-to-one periodic identification. A finite
   outer air box is forbidden.
 
-The three engines share the same solid `CoilBuilder`, B-H table, and physical
+The engines share the same solid `CoilBuilder`, B-H table, and physical
 observation points. The acceptance quantity is B, not a gauge-dependent
 potential. Fixed-mesh machine equality is not claimed across different FE
 spaces and different open-boundary treatments; mesh and outer-domain
 convergence must tighten the pairwise B discrepancy.
+
+For nonlinear comparisons, HDiv-MMM and Omega-reduced-Omega use the same
+monotone PCHIP B(H) interpolation and continue beyond the table with vacuum
+slope. Sharing only the table samples is not considered a shared material law.
 
 The acceptance gate uses the median-plane-projected B field in the useful gap
 core (`|x| <= 10 mm` by default). The artifact also stores the raw full-tube
@@ -59,6 +64,11 @@ python validation_test/c_type_three_engine/run_three_engine.py `
   --output C:/temp/radia_ctype_three_engine/nonlinear.json
 ```
 
+Use `--primary-only` for the faster direct HDiv-MMM versus
+Omega-reduced-Omega production comparison. Omitting it also runs reduced-A as
+the independent third route. The pass/fail accuracy metric is always the
+primary pair; every selected nonlinear engine must also converge.
+
 Add `--resume` for remote production runs. The runner writes a hash-checked
 checkpoint after each of the HDiv, reduced-A, and Omega engines and emits one
 JSON progress event at each engine boundary. A checkpoint with different
@@ -83,5 +93,10 @@ is still running.
 contract. `results/lab_20260829_linear_order2.json` is the passing order-2
 linear comparison. `results/lab_20260829_nonlinear_order1.json` deliberately
 records a failed accuracy gate: all three engines converged, but the Omega
-result remains 5.85% from HDiv in the gap core. A failed artifact is retained
-so the mdx/hibino order-2 follow-up cannot silently replace or conceal it.
+result remains 5.85% from HDiv in the gap core.
+`results/lab_20260829_nonlinear_order2_primary.json` records the passing direct
+comparison after unifying the B-H interpolation: HDiv-MMM and
+Omega-reduced-Omega differ by 0.18032%. The failed order-1 artifact is retained
+so the order-convergence result cannot silently replace or conceal it. LAB
+timings are correctness evidence only; publish performance after repeating the
+same release on idle mdx and hibino.
