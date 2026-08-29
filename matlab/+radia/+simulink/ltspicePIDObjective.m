@@ -2,8 +2,11 @@ function value = ltspicePIDObjective(trial,modelFile)
 %LTSPICEPIDOBJECTIVE Evaluate PID gains with the LTspice Simulink plant.
 arguments
     trial (1,1) radia.optuna.Trial
-    modelFile (1,1) string = fullfile(radia.simulink.exampleDirectory(), ...
-        "radia_ltspice_pid_plant.slx")
+    modelFile (1,1) string = ""
+end
+
+if strlength(modelFile) == 0
+    modelFile = siblingPlantFile();
 end
 
 gains = trial.suggestVector(["Kp","Ki","Kd"], ...
@@ -16,6 +19,20 @@ runner = radia.optuna.SimulinkRunner(modelFile, ...
     ConfigureFcn=@(input,~) configureTrial(input,gains), ...
     ScoreFcn=@scoreTrial, StopTime="0.025");
 value = runner.evaluate(trial);
+end
+
+function modelFile = siblingPlantFile()
+harness = "radia_ltspice_pid_optuna";
+if bdIsLoaded(harness)
+    harnessFile = string(get_param(harness,"FileName"));
+    if strlength(harnessFile) > 0
+        modelFile = fullfile(fileparts(harnessFile), ...
+            "radia_ltspice_pid_plant.slx");
+        return
+    end
+end
+modelFile = fullfile(radia.simulink.exampleDirectory(), ...
+    "radia_ltspice_pid_plant.slx");
 end
 
 function input = configureTrial(input,gains)

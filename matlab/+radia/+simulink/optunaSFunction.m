@@ -165,8 +165,15 @@ storage = string(block.DialogPrm(4).Data);
 showExternalMonitor = logical(block.DialogPrm(6).Data);
 rawSamplerSpec = block.DialogPrm(7).Data;
 samplerSpec = normalizeSamplerSpec(rawSamplerSpec);
+requestedSampler = samplerSpec.name;
+[samplerSpec, resumedConfiguration] = resumeSamplerConfiguration( ...
+    samplerSpec, storage, directions, objective);
 [sampler, samplerName, samplerDecision] = ...
     makeSampler(samplerSpec, directions, nTrials, samplerSpec.seed);
+if resumedConfiguration && requestedSampler == "auto"
+    samplerDecision.requested = "auto";
+    samplerDecision.reason = "resumed_saved_sampler";
+end
 
 previous = radia.simulink.optunaRuntimeStore("get", key);
 if ~isempty(previous) && ~isempty(previous.monitor) && isvalid(previous.monitor)
@@ -195,7 +202,8 @@ if ~isempty(samplerSpec.parameters)
 else
     settings = {"directions", directions, "sampler", sampler, ...
         "StoragePath", storage, "AutoSave", strlength(storage) > 0, ...
-        "ProgressFcn", progress};
+        "ProgressFcn", progress, ...
+        "load_if_exists", strlength(storage) > 0};
     pruner = radia.optuna.internal.prunerFromName(samplerSpec.pruner);
     if ~isempty(pruner)
         settings = [settings, {"pruner", pruner}];
@@ -240,6 +248,112 @@ block.Dwork(20).Data = 0;
 block.Dwork(21).Data = NaN;
 block.Dwork(22).Data = 0;
 block.Dwork(23).Data = 0;
+end
+
+function [spec, resumed] = resumeSamplerConfiguration( ...
+        spec, storage, directions, objective)
+resumed = false;
+if strlength(storage) == 0 || ...
+        (~isfile(storage) && ~isfile(storage + ".bak"))
+    return
+end
+
+saved = radia.optuna.loadStudy(storage=storage);
+validateSessionExperiment(storage, spec.parameters, objective);
+if ~isequal(reshape(string(saved.Directions), 1, []), ...
+        reshape(string(directions), 1, []))
+    error('radia:simulink:OptunaResumeDirections', ...
+        ['The saved study uses different objective directions. ' ...
+        'Select a new Study MAT file for this experiment.']);
+end
+if ~isfield(saved.UserAttrs, "auto_sampler_decision")
+    return
+end
+
+decision = saved.UserAttrs.auto_sampler_decision;
+required = ["selected", "pruner"];
+if ~isstruct(decision) || ~isscalar(decision) || ...
+        any(~isfield(decision, required))
+    error('radia:simulink:OptunaResumeMetadata', ...
+        'The saved study has invalid sampler-decision metadata.');
+end
+savedSampler = string(decision.selected);
+if spec.name == "auto"
+    spec.name = savedSampler;
+elseif spec.name ~= savedSampler
+    error('radia:simulink:OptunaResumeSampler', ...
+        ['The saved study uses sampler ''%s'', but the block requests ' ...
+        '''%s''. Select a new Study MAT file to compare samplers.'], ...
+        savedSampler, spec.name);
+end
+if string(decision.pruner) ~= spec.pruner
+    error('radia:simulink:OptunaResumePruner', ...
+        ['The saved study uses pruner ''%s'', but the block requests ' ...
+        '''%s''. Select a new Study MAT file to compare pruners.'], ...
+        string(decision.pruner), spec.pruner);
+end
+
+savedSeed = samplerStateSeed(saved, savedSampler);
+if isempty(spec.seed)
+    spec.seed = savedSeed;
+elseif ~isempty(savedSeed) && double(spec.seed) ~= double(savedSeed)
+    error('radia:simulink:OptunaResumeSeed', ...
+        ['The saved study uses seed %.0f, but the block requests %.0f. ' ...
+        'Select a new Study MAT file to compare seeds.'], ...
+        double(savedSeed), double(spec.seed));
+end
+resumed = true;
+end
+
+function validateSessionExperiment(storage, parameters, objective)
+sessionPath = storage + ".session.mat";
+if ~isfile(sessionPath)
+    return
+end
+loaded = builtin("load", sessionPath, "SessionData", "-mat");
+if ~isfield(loaded, "SessionData")
+    error('radia:simulink:OptunaResumeMetadata', ...
+        "Session checkpoint '%s' has no SessionData.", sessionPath);
+end
+data = loaded.SessionData;
+if ~isfield(data, "Parameters") || ...
+        ~isequaln(data.Parameters, parameters)
+    error('radia:simulink:OptunaResumeSearchSpace', ...
+        ['The saved study uses a different OptimizationParameter ' ...
+        'definition. Select a new Study MAT file for this experiment.']);
+end
+if isfield(data, "ObjectiveFcn") && ...
+        string(func2str(data.ObjectiveFcn)) ~= string(func2str(objective))
+    error('radia:simulink:OptunaResumeObjective', ...
+        ['The saved study uses a different objective function. ' ...
+        'Select a new Study MAT file for this experiment.']);
+end
+end
+
+function seed = samplerStateSeed(study, samplerName)
+seed = [];
+states = study.SamplerStateTable;
+rows = states.Sampler == samplerName;
+if ~any(rows)
+    % Composite samplers may still be in their independent-random startup
+    % phase, so only the child sampler has emitted state. All child streams
+    % are initialized from the resolved parent seed.
+    rows = true(height(states), 1);
+end
+indices = find(rows);
+candidates = NaN(numel(indices), 1);
+for position = 1:numel(indices)
+    state = states.State{indices(position)};
+    if isstruct(state) && isscalar(state) && isfield(state, "seed") && ...
+            isnumeric(state.seed) && isscalar(state.seed) && ...
+            isfinite(double(state.seed))
+        candidates(position) = double(state.seed);
+    end
+end
+candidates = unique(candidates(isfinite(candidates)));
+if isscalar(candidates)
+    seed = candidates;
+end
 end
 
 function spec = normalizeSamplerSpec(value)
@@ -370,8 +484,8 @@ if ~isMultiObjective && ismember(selectedName, ...
         'a single objective.']);
 end
 % The short-name mapping lives in one place, shared with
-% radia.optuna.optimize; the block keeps its historical seed of 0 until the
-% v2 mask passes an explicit seed through this function.
+% radia.optuna.optimize. A new seed-less sampler draws private entropy; a
+% resumed study supplies the exact seed recorded with its sampler state.
 sampler = radia.optuna.internal.samplerFromName(selectedName, seed);
 decision = struct( ...
     "schema", "radia.optuna.auto-sampler-lite.v2", ...

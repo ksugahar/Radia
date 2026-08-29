@@ -13,7 +13,7 @@ harnessName = "radia_ltspice_pid_optuna";
 closeIfLoaded([plantName,harnessName]);
 buildPlant(plantName,outputDirectory);
 plantFile=fullfile(outputDirectory,plantName+".slx");
-buildHarness(harnessName,outputDirectory,plantFile,options.NumTrials);
+buildHarness(harnessName,outputDirectory,options.NumTrials);
 files = struct("harness",fullfile(outputDirectory,harnessName+".slx"), ...
     "plant",plantFile);
 if options.OpenModel, open_system(harnessName); end
@@ -67,45 +67,31 @@ save_system(model,fullfile(outputDirectory,model+".slx"));
 clear cleanup; close_system(model,0);
 end
 
-function buildHarness(model,outputDirectory,plantFile,numTrials)
+function buildHarness(model,outputDirectory,numTrials)
 new_system(model); cleanup = onCleanup(@() closeIfLoaded(model));
 add_block("simulink/Sources/Step",model+"/Start optimization", ...
     Time="0",Before="0",After="1",SampleTime="0.1");
 add_block("simulink/Sources/Constant",model+"/Cancel optimization", ...
     Value="0",SampleTime="0.1");
-objective="@(trial)radia.simulink.ltspicePIDObjective(trial," + ...
-    quoteString(plantFile) + ")";
-radia.simulink.buildOptunaBlock(model, ...
-    ObjectiveFcn=objective, ...
+radia.simulink.buildOptunaStudyBlock(model, ...
+    BlockName="Optuna Study", ...
+    ObjectiveFcn="radia.simulink.ltspicePIDObjective", ...
     NumTrials=numTrials,SampleTime_s=0.1,Sampler="cmaes",Save=false);
 add_block("simulink/Sinks/Display",model+"/Best objective");
 add_block("simulink/Sinks/Display",model+"/Completed trials");
 add_block("simulink/Sinks/Display",model+"/Status");
-add_block("simulink/Sinks/Scope",model+"/Optimization history");
-unusedPorts = [2,6,7,8,9,10,11,12,13,14];
-for index = 1:numel(unusedPorts)
-    add_block("simulink/Sinks/Terminator", ...
-        model+"/Unused output "+unusedPorts(index));
-end
-add_line(model,"Start optimization/1","Optuna Optimization/1");
-add_line(model,"Cancel optimization/1","Optuna Optimization/2");
-add_line(model,"Optuna Optimization/1","Best objective/1");
-add_line(model,"Optuna Optimization/3","Status/1");
-add_line(model,"Optuna Optimization/4","Completed trials/1");
-add_line(model,"Optuna Optimization/5","Optimization history/1");
-for index = 1:numel(unusedPorts)
-    add_line(model,"Optuna Optimization/"+unusedPorts(index), ...
-        "Unused output "+unusedPorts(index)+"/1");
-end
+add_block("simulink/Sinks/Display",model+"/Best trial");
+add_line(model,"Start optimization/1","Optuna Study/1");
+add_line(model,"Cancel optimization/1","Optuna Study/2");
+add_line(model,"Optuna Study/1","Best objective/1");
+add_line(model,"Optuna Study/2","Status/1");
+add_line(model,"Optuna Study/3","Completed trials/1");
+add_line(model,"Optuna Study/4","Best trial/1");
 set_param(model,Solver="FixedStepDiscrete",FixedStep="0.1", ...
     StopTime=compose("%.17g",numTrials*0.1));
 Simulink.BlockDiagram.arrangeSystem(model);
 save_system(model,fullfile(outputDirectory,model+".slx"));
 clear cleanup; close_system(model,0);
-end
-
-function expression=quoteString(value)
-expression="'"+replace(string(value),"'","''")+"'";
 end
 
 function closeIfLoaded(models)

@@ -20,10 +20,9 @@ The active policy mode is defined in `.satk/block-policy.json`.
 
 ## Commonly Used Blocks
 
-Showing 11 of 23 blocks — see category pages for the full catalog.
+Showing 10 of 23 blocks — see category pages for the full catalog.
 
 - [[blocks/Stream_Function_Optuna]] — MATLAB Optuna outer-loop search over explicit Stream Function ACA+/QR/TSVD batch analyses. One rising trigger runs th... from radia_simulink_library
-- [[blocks/Optuna_Optimization]] — MATLAB-native Optuna session with explicit start, cancel, pause, resume, trial selection, checkpointing, and apply co... from radia_simulink_library
 - [[blocks/Hysteretic_LTspice_Plant]] — Hysteretic LTspice Plant from radia_simulink_library
 - [[blocks/Motor]] — Motor batch analysis. Create settings with radia.simulink.writeApplicationConfig; a rising trigger executes the valid... from radia_simulink_library
 - [[blocks/Nonlinear_HDiv-MMM_Reactor]] — Native nonlinear HDiv-MMM reactor. Input is winding current; outputs are terminal voltage, flux linkage, differential... from radia_simulink_library
@@ -38,6 +37,6 @@ Showing 11 of 23 blocks — see category pages for the full catalog.
 
 - [[uncategorized]] (14 blocks) — blocks with insufficient metadata for confident categorization
 - [[plant-models]] (3 blocks) — physical dynamics, thermal, mechanical models
-- [[signal-processing]] (3 blocks) — filters, scaling, interpolation, signal conditioning
+- [[signal-processing]] (4 blocks) — filters, scaling, interpolation, signal conditioning
 - [[power]] (1 blocks) — inverters, converters, motors, power stage components
-- [[control]] (2 blocks) — PID controllers, regulators, feedback components
+- [[control]] (1 blocks) — PID controllers, regulators, feedback components

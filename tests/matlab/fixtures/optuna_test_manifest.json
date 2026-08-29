@@ -519,6 +519,13 @@
       "test": "testReliabilityExerciseRecordsPrunedAndFailed"
     },
     {
+      "classification": "matlab-integration",
+      "file": "test_optuna_teaching_model.m",
+      "oracle": null,
+      "scope": "MATLAB/Simulink teaching artifacts for known-optimum, Pareto, and deterministic pruned/failed trial exercises",
+      "test": "testMaskIterationNeedsNoRewiring"
+    },
+    {
       "classification": "upstream-python",
       "file": "test_optuna_upstream_oracle.m",
       "oracle": "optuna49_oracle.json",

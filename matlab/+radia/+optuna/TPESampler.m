@@ -113,7 +113,7 @@ classdef TPESampler < radia.optuna.BaseSampler
             obj.Seed = radia.optuna.internal.resolveSeed(options.Seed);
             obj.Stream = ...
                 radia.optuna.internal.NumpyRandomState(obj.Seed);
-            obj.IndependentSampler = radia.optuna.RandomSampler(options.Seed);
+            obj.IndependentSampler = radia.optuna.RandomSampler(obj.Seed);
             obj.NStartupTrials = options.NStartupTrials;
             obj.Gamma = options.Gamma;
             obj.MaxGoodTrials = options.MaxGoodTrials;
