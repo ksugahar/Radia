@@ -26,10 +26,15 @@ Eqnedit32は日常編集、配布、ファイル関連付けの正本ではな�
 
 ## リリースと配布
 
-正本を更新するときは、画面・マウス・実キーボードを操作しない最終ゲートを実行する。
+正本を更新するときは、画面・マウス・実キーボードを操作しない最終ゲートを
+GitHub-hosted Windowsの隔離CIで実行する。
 リポジトリ内の `build\Eqnedit64.exe` または `dist\Eqnedit64.exe` が起動中の場合、
 ビルドはファイルロック解除のためその実行中プロセスを強制終了する。
 別の配布先と無関係な同名プロセスは対象にしない。
+
+`accept_release.ps1`は使い捨てVMまたは専用の隔離ユーザーセッションでCI相当を再現する
+場合だけ使う。対話中LABでは実行せず、ガードを通すために
+`EQNEDIT64_ISOLATED_TEST_SESSION=1`を設定してはならない。
 
 ```powershell
 pwsh -NoProfile -File build\accept_release.ps1
@@ -41,8 +46,8 @@ pwsh -NoProfile -File build\accept_release.ps1
 `CN=ksugahar`署名、単体exeを確認する。途中で一つでも失敗した場合は公開しない。結果は既定で
 `C:\temp\Eqnedit64-final-acceptance.json` に残る。
 
-公開順は固定する。まずリリースコミットを`main`へpushしてmain CIを通し、その
-`origin/main`と同じコミットからLABで署名済みEXEをビルドする。次に
+公開順は固定する。まずリリースコミットを`main`へpushして隔離main CIを通し、その
+`origin/main`と同じコミットからLABではコンパイルと署名だけを行う。次に
 `.agents\skills\release-eqnedit64\scripts\sync_to_o.ps1`で
 `O:\Eqnedit64.exe`を更新し、隣の`O:\Eqnedit64.release.json`へ予定tag、
 source SHA、EXE SHA-256、version、signerを記録する。ここまで成功してから最後に
