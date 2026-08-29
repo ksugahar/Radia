@@ -2,7 +2,7 @@
 
 - 文書状態: 現行
 - 対象製品: Eqnedit64 native / Python package / Web editor
-- 対象リリース: 3.0.8（公開済み）
+- 対象リリース: 3.0.9（公開候補）
 - 基準日: 2026-08-29
 - リポジトリ: `ksugahar/Radia`
 
