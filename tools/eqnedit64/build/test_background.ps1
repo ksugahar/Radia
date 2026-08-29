@@ -190,7 +190,7 @@ foreach ($symbol in @('Eqnedit64.pdb', 'Eqnedit64.map')) {
 }
 
 $version = (Get-Item -LiteralPath $app).VersionInfo
-if ($version.ProductName -ne 'Eqnedit64' -or $version.ProductVersion -notlike '3.0.2*') {
+if ($version.ProductName -ne 'Eqnedit64' -or $version.ProductVersion -notlike '3.0.3*') {
     throw "Version resource is missing or invalid."
 }
 

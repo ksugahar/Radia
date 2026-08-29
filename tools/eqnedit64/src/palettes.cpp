@@ -51,8 +51,8 @@ std::vector<Palette> build() {
         sym("\\mid", u8"∣", u8"割り切る"),
         sym("\\vdash", u8"⊢", u8"導出される"),
         sym("\\models", u8"⊨", u8"充足する"),
-        sym("\\frown", u8"⌢", u8"フラウン（記号）"),
-        sym("\\smile", u8"⌣", u8"スマイル（記号）"),
+        sym("\\frown", u8"∩", u8"フラウン（記号）"),
+        sym("\\smile", u8"∪", u8"スマイル（記号）"),
     }});
 
     p.push_back({u8"空白と点", u8"⋯", 3, {
@@ -70,20 +70,20 @@ std::vector<Palette> build() {
         sym("\\because", u8"∵", u8"なぜならば"),
     }});
 
-    p.push_back({u8"装飾", u8"â", 3, {
-        tpl("hat", u8"x̂", u8"ハット"),
-        tpl("tilde", u8"x̃", u8"チルダ"),
-        tpl("bar", u8"x̄", u8"バー（1文字）"),
-        tpl("vec", u8"x⃗", u8"ベクトル矢印"),
-        tpl("dot", u8"ẋ", u8"ドット"),
-        tpl("ddot", u8"ẍ", u8"二重ドット"),
-        tpl("dddot", u8"x⃛", u8"三重ドット"),
+    p.push_back({u8"装飾", u8"x′", 3, {
+        tpl("hat", u8"^x", u8"ハット"),
+        tpl("tilde", u8"~x", u8"チルダ"),
+        tpl("bar", u8"¯x", u8"バー（1文字）"),
+        tpl("vec", u8"x→", u8"ベクトル矢印"),
+        tpl("dot", u8"·x", u8"ドット"),
+        tpl("ddot", u8":x", u8"二重ドット"),
+        tpl("dddot", u8"⋯x", u8"三重ドット"),
         tpl("prime", u8"x′", u8"プライム"),
         tpl("dprime", u8"x″", u8"二重プライム"),
         tpl("tprime", u8"x‴", u8"三重プライム"),
-        tpl("strike", u8"x̸", u8"打ち消し線"),
-        tpl("frown", u8"x⌢", u8"フラウン"),
-        tpl("smile", u8"x⌣", u8"スマイル"),
+        tpl("strike", u8"/x", u8"打ち消し線"),
+        tpl("frown", u8"∩x", u8"フラウン"),
+        tpl("smile", u8"x∪", u8"スマイル"),
     }});
 
     p.push_back({u8"演算子", u8"±×", 3, {
@@ -146,7 +146,7 @@ std::vector<Palette> build() {
         sym("\\vee", u8"∨", u8"論理和"),
         sym("\\top", u8"⊤", u8"真"),
         sym("\\perp", u8"⊥", u8"垂直・偽"),
-        sym("\\not", u8"̸", u8"打ち消し"),
+        sym("\\not", u8"not", u8"打ち消し"),
     }});
 
     p.push_back({u8"集合記号", u8"∈∪", 3, {
@@ -248,36 +248,36 @@ std::vector<Palette> build() {
     /* ---------------- template palettes ---------------- */
 
     p.push_back({u8"括弧", u8"(□)", 3, {
-        tpl("paren", u8"(▯)", u8"丸括弧"),
-        tpl("bracket", u8"[▯]", u8"角括弧"),
-        tpl("brace", u8"{▯}", u8"波括弧"),
-        tpl("angle", u8"⟨▯⟩", u8"山括弧"),
-        tpl("abs", u8"|▯|", u8"絶対値"),
-        tpl("norm", u8"‖▯‖", u8"ノルム"),
-        tpl("floor", u8"⌊▯⌋", u8"床関数"),
-        tpl("ceil", u8"⌈▯⌉", u8"天井関数"),
-        tpl("dirac", u8"⟨▯|▯⟩", u8"ブラケット"),
+        tpl("paren", u8"(□)", u8"丸括弧"),
+        tpl("bracket", u8"[□]", u8"角括弧"),
+        tpl("brace", u8"{□}", u8"波括弧"),
+        tpl("angle", u8"⟨□⟩", u8"山括弧"),
+        tpl("abs", u8"|□|", u8"絶対値"),
+        tpl("norm", u8"‖□‖", u8"ノルム"),
+        tpl("floor", u8"⌊□⌋", u8"床関数"),
+        tpl("ceil", u8"⌈□⌉", u8"天井関数"),
+        tpl("dirac", u8"⟨□|□⟩", u8"ブラケット"),
     }});
 
     p.push_back({u8"分数と根号", u8"½√", 2, {
-        tpl("frac", u8"▯/▯", u8"分数"),
-        tpl("slashfrac", u8"▯⁄▯", u8"スラッシュ分数"),
-        tpl("sqrt", u8"√▯", u8"平方根"),
-        tpl("nthroot", u8"ⁿ√▯", u8"n 乗根"),
+        tpl("frac", u8"□/□", u8"分数"),
+        tpl("slashfrac", u8"□⁄□", u8"スラッシュ分数"),
+        tpl("sqrt", u8"√□", u8"平方根"),
+        tpl("nthroot", u8"n√□", u8"n 乗根"),
     }});
 
     p.push_back({u8"上下付き", u8"x²", 3, {
-        tpl("sup", u8"▯▫", u8"上付き"),
-        tpl("sub", u8"▯₅", u8"下付き"),
-        tpl("subsup", u8"▯₅▫", u8"上下付き"),
-        tpl("over", u8"▫̅▯", u8"上側の注記"),
-        tpl("under", u8"▯̲▫", u8"下側の注記"),
+        tpl("sup", u8"□↑", u8"上付き"),
+        tpl("sub", u8"□↓", u8"下付き"),
+        tpl("subsup", u8"□↕", u8"上下付き"),
+        tpl("over", u8"↑□", u8"上側の注記"),
+        tpl("under", u8"↓□", u8"下側の注記"),
         tpl("lim", u8"lim", u8"極限（条件は下）"),
     }});
 
     p.push_back({u8"総和", u8"∑", 2, {
-        tpl("sum", u8"∑▯", u8"総和（上下限つき）"),
-        tpl("prod", u8"∏▯", u8"総乗（上下限つき）"),
+        tpl("sum", u8"∑□", u8"総和（上下限つき）"),
+        tpl("prod", u8"∏□", u8"総乗（上下限つき）"),
     }});
 
     p.push_back({u8"積分", u8"∫", 3, {
@@ -292,19 +292,19 @@ std::vector<Palette> build() {
     }});
 
     p.push_back({u8"上線と下線", u8"¯_", 2, {
-        tpl("overline", u8"▯̅", u8"上線（伸縮）"),
-        tpl("underline", u8"▯̲", u8"下線（伸縮）"),
-        tpl("overbrace", u8"⏞▯", u8"上の水平波括弧"),
-        tpl("underbrace", u8"⏟▯", u8"下の水平波括弧"),
-        tpl("overrightarrow", u8"▯⃗", u8"上の右向き伸縮矢印"),
-        tpl("overleftarrow", u8"▯⃖", u8"上の左向き伸縮矢印"),
-        tpl("overleftrightarrow", u8"▯⃡", u8"上の両向き伸縮矢印"),
+        tpl("overline", u8"¯□", u8"上線（伸縮）"),
+        tpl("underline", u8"_□", u8"下線（伸縮）"),
+        tpl("overbrace", u8"⏞□", u8"上の水平波括弧"),
+        tpl("underbrace", u8"⏟□", u8"下の水平波括弧"),
+        tpl("overrightarrow", u8"□→", u8"上の右向き伸縮矢印"),
+        tpl("overleftarrow", u8"←□", u8"上の左向き伸縮矢印"),
+        tpl("overleftrightarrow", u8"□↔", u8"上の両向き伸縮矢印"),
     }});
 
     p.push_back({u8"総乗と集合演算", u8"∏∐", 2, {
-        tpl("coprod", u8"∐▯", u8"余積（上下限つき）"),
-        tpl("bigcup", u8"⋃▯", u8"大きい和集合（上下限つき）"),
-        tpl("bigcap", u8"⋂▯", u8"大きい共通部分（上下限つき）"),
+        tpl("coprod", u8"∐□", u8"余積（上下限つき）"),
+        tpl("bigcup", u8"⋃□", u8"大きい和集合（上下限つき）"),
+        tpl("bigcap", u8"⋂□", u8"大きい共通部分（上下限つき）"),
     }});
 
     p.push_back({u8"行列", u8"⊞", 4, {
@@ -319,11 +319,11 @@ std::vector<Palette> build() {
         tpl("matrix4x4", u8"4×4", u8"4×4"),
         tpl("matrix5x5", u8"5×5", u8"5×5"),
         tpl("matrix6x6", u8"6×6", u8"6×6"),
-        I{"matrix.add_row", u8"＋行", u8"行を下へ追加"},
-        I{"matrix.remove_row", u8"－行", u8"現在行を削除"},
-        I{"matrix.add_column", u8"＋列", u8"列を右へ追加"},
-        I{"matrix.remove_column", u8"－列", u8"現在列を削除"},
-        tpl("cases", u8"{▯", u8"場合分け"),
+        I{"matrix.add_row", u8"+R", u8"行を下へ追加"},
+        I{"matrix.remove_row", u8"−R", u8"現在行を削除"},
+        I{"matrix.add_column", u8"+C", u8"列を右へ追加"},
+        I{"matrix.remove_column", u8"−C", u8"現在列を削除"},
+        tpl("cases", u8"{□", u8"場合分け"),
     }});
 
     return p;
