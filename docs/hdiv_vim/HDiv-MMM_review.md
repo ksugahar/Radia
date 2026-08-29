@@ -8,7 +8,7 @@ exposed several failure modes.
 
 ## Review status
 
-- Revised: 2026-08-29 against `origin/main` at `ec57769de`.
+- Revised: 2026-08-29 on the `codex/ctype-three-engine` review branch.
 - The `22fc5630e..ec57769de` HEAD increment consists of Eqnedit64 pull
   requests `#34` and `#35`. It changes no HDiv source, test, validation,
   MATLAB, or HDiv documentation path, so the earlier HDiv measurements remain
@@ -60,7 +60,7 @@ The implementation is production-capable for most declared BDM1/BDM2 solve
 lanes,
 but it does not yet justify an unconditional "complete for every HDiv case"
 claim. The BDM2 TET directional defect found by this review is corrected in
-this revision. Four P1 findings remain:
+this revision. Three P1 findings remain:
 
 1. Three explicit full-versus-IMA field regressions fail the required
    `< 10 eps` contract in isolated pytest processes.
@@ -68,9 +68,6 @@ this revision. Four P1 findings remain:
    `DemagOperator`, contradicting the BDM1/BDM2-only production policy.
 3. Fine TET C-yoke runs reportedly lose positive definiteness under refinement;
    the failing mesh and driver are not tracked, so the defect is not replayable.
-4. The corrected C-yoke comparison still needs one identical B-H interpolant
-   and committed result artifacts before FEM-versus-HDiv accuracy is quoted.
-
 Known, fail-loud limitations are not hidden failures: mapped/non-affine HEX
 BDM2 material solves, 3D pyramid/mixed meshes, and 2D history solves remain
 unsupported. Large IMA field maps remain direct because the tree route is
@@ -88,7 +85,7 @@ explicit in-process Python fallback because NGSolve setup is Python-owned.
 | F2 | P1 | The IMA field contract is red. | At `ec57769de`, clean-build measurements were `2.0140013262e-14` and `4.9318891895e-14` relative error for the two HEX `rad.Fld`/`FieldFromSolution` gates, and `2.3931079340e-15` component error for curved TET BDM2. The limit is `2.2204460493e-15` (`10 eps`). Preserve the limit; align solve reduction and source accumulation order rather than loosening it. |
 | F3 | P1 | RT0 is publicly advertised again despite the BDM1/BDM2-only decision. | `_capabilities.py` exposes 3D TET/HEX order 0 and `DemagOperator` documents an order-0 broken-interface path. `HDivSolver` and field evaluation accept only orders 1 and 2. Remove the public RT0 entries/path and retain any topology-only experiment outside the production API. |
 | F4 | P1 | Fine-TET loss of SPD is an unclosed correctness report. | Claude reported `p^T A p = -1.90e5` at 8.75 mm and `-7.51e8` at 7.0 mm, but the mesh/configuration is absent from `main`. Commit the reproducer before changing quadrature, ACA, or CG. |
-| F5 | P1 | The C-yoke accuracy comparison is not self-replaying. | The Cubit journals exist only on the Claude branch and `src/radia/esrf_examples.py` was untracked. The B-H interpolants also differed. Promote a validation driver, one material law, configs, and JSON results together. |
+| F5 | Resolved on LAB; remote timing pending | The direct nonlinear HDiv-MMM versus Omega-reduced-Omega comparison closes at order 2. | `validation_test/c_type_three_engine/` owns the Cubit/ACIS journal, reflection-invariant iron and Kelvin meshes, one coil, one material law, one observation grid, per-engine checkpoints, and JSON gates. The nonlinear order-2 primary pair differs by 0.18032% in the gap core; both reflection defects are about `1.8e-10`. HDiv uses 10,860 DoF and Omega 50,322 DoF. Two fresh LAB executions took 19.11--22.09 s and 102.78--150.82 s, respectively; this spread is why remote repeated timing remains pending. The order-1 PCHIP rerun remains at 5.84969%, proving that the old discrepancy was not caused by linear versus PCHIP interpolation. |
 | F6 | P2 | Mapped/non-affine HEX BDM2 is operator-only, not a material solve. | `Solve` rejects it before wrong physics; mapped HEX BDM1, affine HEX BDM2, TET BDM2, and WEDGE BDM2 are the current alternatives. This is correctly documented and tested, but it remains a major completeness boundary. |
 | F7 | P2 | IMA disables tree acceleration for field maps. | `HDivFieldEvaluator::AlgorithmFor` returns `Direct` whenever images exist. This protects full/reduced roundoff parity, but large IMA observation maps cannot use the otherwise guarded treecode. Any image-aware acceleration needs a common full/reduced grouping and the F2 contract first. |
 | F8 | P2 | Exact vector-potential evaluation is narrower than H-field evaluation. | Exact `A` uses straight TET BDM1 equivalent currents. BDM2, curved, HEX, and WEDGE use NGSolve-mapped quadrature clouds assembled in Python. This is valid as an explicit converged quadrature route, not an all-topology exact/native claim. |
@@ -258,12 +255,11 @@ unrecorded would still be a reproducibility defect.
 
 ## 2. ESRF example-5 C-yoke investigation
 
-The figures in this section came from the Claude C-yoke campaign. They are
-measurement records, but they are not yet self-replaying evidence on `main`
-because `src/radia/esrf_examples.py` remains untracked in the Claude worktree.
-The Cubit journals were committed on the Claude branch in `2c939a8ed` and
-`4b30479b6`, but that branch has not been merged and the journals are also
-absent from `main`.
+The historical figures below came from the Claude C-yoke campaign. The
+replacement self-replaying route is now `validation_test/c_type_three_engine/`:
+Cubit/ACIS is the CAD authority, HDiv receives an iron-only `.vol`, and both
+FEM formulations receive one periodic spherical Kelvin `.vol`. No finite
+outer air box is part of the comparison.
 
 The starting discrepancy was 1.409849% full-vector B RMS between BDM2 and
 Kelvin FEM. The pole-edge region held 95.0905% of the vector-error energy,
@@ -363,8 +359,11 @@ benchmark and is not a production remedy.
 
 A united C-yoke solid did not hex-mesh with the tested `auto`, `sweep`,
 `webcut_cyl_auto`, or `polyhedron` routes. Decomposition creates
-same-material internal interfaces, which the exporter writes with
-`DomainIn == DomainOut == 1`. At present the exporter does not omit them.
+same-material internal interfaces. The Cubit 2025.12 exporter now removes
+their surface elements and unused face descriptors while retaining the shared
+volume nodes, edges, and mesh-support curves. The generated C-yoke `.vol`
+therefore contains only physical `iron_air_interface`, `kelvin_int`, and
+`kelvin_ext` boundaries.
 
 ### 3.3 Measured cross-check
 
@@ -380,6 +379,55 @@ At comparable DoF, TET and HEX differed by 0.48% RMS and 0.10% at the centre.
 This shows no material corruption from the current same-material interface at
 these resolutions, but it does not prove that such interfaces are harmless for
 all orders, image groups, or material assignments.
+
+### 3.4 Canonical Kelvin three-engine result
+
+The canonical C-yoke route intentionally has two meshes derived from the same
+Cubit/ACIS solid:
+
+- HDiv-MMM: 542 TET iron elements, no air mesh, Coulomb ChargeGram open
+  boundary;
+- reduced-A and Omega-reduced-Omega: 36,208 TET elements over iron, a locally
+  refined physical-air sphere, and a translated Kelvin sphere.
+
+The Kelvin mesh has 462 periodic point pairs. Their fitted translation is
+`(0.6600000000000019, 1.87e-17, 0) m`, with maximum pair error
+`2.00e-15 m`. `Periodic(H1)` slaves 462 free DOFs, and the functional
+`kelvin_ext`/`kelvin_int` trace-norm ratio is `0.9999999999999987`. Both
+meshes have zero missing reflected vertices and zero
+missing reflected elements. The 10 mm air gap contains 2,082 elements and a
+maximum z span of 5 mm; this is a local gap-resolution gate, not a global air
+box.
+
+With order-2 HDiv and FEM spaces, `gram_eps=1e-14`, and linear `mu_r=1000`,
+the maximum parity-projected gap-core pairwise relative RMS is 0.12113%.
+Off-plane reflection errors are `1.95e-10` for HDiv, `4.67e-10` for
+reduced-A, and `1.95e-10` for Omega. The three LAB runtimes are 14.01 s,
+12.00 s, and 2.60 s respectively; these are correctness timings, not release
+performance claims.
+
+The first nonlinear order-1 smoke exposed two missing production contracts:
+the reduced-A Picard path used an undefined gauge coefficient, and the Omega
+Picard path constructed raw `H1` instead of the periodic Kelvin H1 factory.
+Both are corrected and regression-locked. After correction all three engines
+converge and retain `1.6e-10` to `2.2e-10` reflection error. HDiv and reduced-A
+agree to 0.49342% in the gap core, while Omega remains 5.85068% away from
+HDiv. Replacing Omega's linear table interpolation with the same monotone PCHIP
+and vacuum-slope continuation used by HDiv changes that result only to 5.84969%.
+The interpolation mismatch was real but was not the source of the order-1
+field discrepancy.
+
+The direct nonlinear order-2 primary comparison closes the discrepancy. Both
+engines converged with the shared PCHIP material law and `gram_eps=1e-14`; the
+parity-projected gap-core relative RMS is 0.18032%, with a maximum vector
+difference of `8.2457e-4 T`. HDiv used 10,860 DoF, five Newton iterations,
+1,638 inner linear iterations, and 19.11--22.09 s over two fresh executions.
+Omega used 50,322 DoF, 17 Picard iterations, and 102.78--150.82 s. Their
+off-plane reflection errors are
+`1.85e-10` and `1.83e-10`, respectively. This LAB result establishes the
+accuracy comparison and identifies the order-1 result as a discretization
+failure. The timing ratio remains provisional until repeated on an idle
+mdx/hibino installation of the same release.
 
 Finer TET cases reported CG breakdown with `p^T A p = -1.90e5` at 8.75 mm and
 `-7.51e8` at 7.0 mm. The worsening sign and magnitude under refinement identify
@@ -455,14 +503,14 @@ contract.
 | P1 | Full-versus-IMA `rad.Fld` roundoff | Make all three isolated failures in section 4 pass below `10 eps` without weakening tolerances. Compare solved coefficient vectors before debugging source evaluation, then align directed block symmetrization and full/reduced field summation order. |
 | P1 | Remove production RT0 | Delete the 3D order-0 entries from `hdiv_capabilities`, remove the order-0 `DemagOperator` production path and dedicated order-0 tests/docs, and keep public `Solve`, operator, field, and MATLAB inventory consistently BDM1/BDM2. |
 | P1 | Fine-TET operator indefiniteness | Commit the failing mesh/configuration and result JSON; materialize the relevant Gram/operator block; locate a negative mode; compare it with dense analytic assembly or an independent NGSolve weak-form route; add a focused regression. |
-| P1 | Reproducible ESRF comparison | Promote `src/radia/esrf_examples.py` into a tracked API or validation driver, commit configs and result JSON, use the corrected Cubit CAD, and run both routes with one B-H interpolation contract. |
+| P1 | Nonlinear C-yoke remote timing | The order-2 primary pair is accurate on LAB. Repeat the tracked periodic-Kelvin result on idle mdx and hibino with the same release, threads, B-H interpolation, and `gram_eps=1e-14`; report repeated timing and memory before making a performance claim. reduced-A remains an optional independent third-formulation audit rather than the primary acceptance pair. |
 | P2 | Mapped HEX BDM2 material solve | Build one composite mapped charge representation that preserves volume/surface cancellation, then require spectrum, linear/nonlinear solve, IMA, field, curved, and shape-derivative gates before removing the fail-loud guard. |
 | P2 | Image-aware field acceleration | Design grouping that is invariant under explicit reflection and reduced IMA representation; prove `<10 eps` direct parity before enabling tree/H-matrix evaluation for image-bearing field maps. |
 | P2 | Vector-potential topology coverage | Add exact/native BDM2 and HEX/WEDGE/curved source representations only with independent NGSolve mapped-volume convergence and A/B route checks. Keep the current quadrature construction explicit until then. |
 | P2 | MATLAB method parity | Preserve the native field/EnergyStop handles, but do not claim native MATLAB HDiv solve parity while `vim-public` is classified as Python fallback. Promote stable numeric/artifact boundaries with MATLAB regression tests. |
-| P2 | B-H contract | Select one interpolation rule, test value and differential-permeability parity at nodes and between nodes, then rerun the C-yoke comparison. |
+| P2 | reduced-A B-H contract | The primary HDiv/Omega pair now shares monotone PCHIP B(H) with vacuum-slope continuation and has been rerun. reduced-A still interpolates H(B)-derived reluctivity separately; align and test its value/differential-reluctivity contract before using it as a nonlinear acceptance route. |
 | P2 | Configuration provenance | Classify all 14 `RADIA_HDIV_*` variables; keep fault injection/test telemetry private, expose supported tuning through `SolverConfig`, and serialize resolved values into result artifacts. |
-| P3 | Same-material interfaces | Teach the exporter to omit internal interfaces only when material and orientation contracts permit it; retain an A/B regression before changing production meshes. |
+| Resolved | Same-material interfaces | The exporter removes only `DomainIn == DomainOut > 0` seams, remaps retained descriptors, and the regenerated C-yoke mesh passes strict labels, adjacency, exact reflection, and Kelvin identification gates. |
 | P3 | Class ownership | Continue decomposition only along measured ownership boundaries; do not replace the old branch cascade with another flag registry. |
 
 ## 7. Focused verification
@@ -492,6 +540,17 @@ worktree:
 - 3 IMA field roundoff tests: FAIL, including isolated-process reruns, with the
   measurements recorded in section 4;
 - batched/block-PCG true-residual and constrained-H-matrix checks: 2 tests PASS.
+- canonical Cubit C-yoke mesh: PASS with exact reflected topology, 462 Kelvin
+  point pairs, and `2.00e-15 m` maximum translation error;
+- order-2 linear Kelvin three-engine comparison: PASS, 0.12113% maximum
+  gap-core pairwise relative RMS;
+- order-1 nonlinear Kelvin smoke: all engines converged; FAIL accuracy at
+  5.85068% because Omega remains outside the 3% gate.
+- order-1 nonlinear primary pair with the shared PCHIP law: converged; FAIL
+  accuracy at 5.84969%, ruling out interpolation choice as the material cause;
+- order-2 nonlinear primary pair with the shared PCHIP law: PASS at 0.18032%
+  gap-core relative RMS; HDiv 19.11--22.09 s / 10,860 DoF versus Omega
+  102.78--150.82 s / 50,322 DoF over two fresh LAB executions.
 
 The focused commands were:
 

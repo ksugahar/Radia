@@ -252,17 +252,29 @@ def _curved_outer_rules(order):
 
 
 def _outer_tet(quad):
-    """OUTER Gram tet quadrature: symmetric degree-5 (Keast-15) for quad in {3,4} -- quad==3 is the linear
-    near + default far rule (product _tet_ref(3) is only degree 3), quad==4 is the nonlinear energy-Newton
-    near rule (product _tet_ref(4)=64pts is degree 5, matched by the 15-pt symmetric rule).  Any other order
-    (inner subtraction iq=2, intorder overrides, curved) falls back to product Gauss-Duffy."""
-    return _SYM5_TET if quad in (3, 4) else _tet_ref(quad)
+    """Permutation-invariant outer TET rules for production BDM1/BDM2.
+
+    The RT2 near rule must remain invariant when a meshed half-domain is copied
+    through a reflection and Cubit changes the local TET vertex ordering.
+    Product Gauss-Duffy at ``quad=6`` violates that contract and produced a
+    measurable reflection defect in ``B.T @ G @ B``.  The symmetric degree-10
+    rule is both cheaper (81 versus 216 points) and closed under every vertex
+    permutation.
+    """
+    if quad in (3, 4):
+        return _SYM5_TET
+    if quad == 6:
+        return _SYM10_TET
+    return _tet_ref(quad)
 
 
 def _outer_tri(quad):
-    """OUTER Gram tri quadrature: symmetric degree-5 (Dunavant-7) for quad in {3,4} (linear + nonlinear near +
-    default far); else product Gauss-Duffy."""
-    return _SYM5_TRI if quad in (3, 4) else _tri_ref(quad)
+    """Permutation-invariant outer TRI rules for production BDM1/BDM2."""
+    if quad in (3, 4):
+        return _SYM5_TRI
+    if quad == 6:
+        return _SYM10_TRI
+    return _tri_ref(quad)
 
 
 def _monos_vol(pv):
@@ -1748,18 +1760,20 @@ def _build_charge_gram_wedge(fes, glout_n=None, glin_n=None, near_grade=0.6, far
     return cb["B"], G, cb["M_mass"], cb["M_mass_ngsolve"]
 
 
-def _finish_image_rotations(G, image_rot_angle, *, eps, leafsize, eta, build_hmatrix):
+def _finish_image_rotations(
+        G, image_rot_angle, *, eps, leafsize, eta, build_hmatrix,
+        deferred_build=False, max_rank=200):
     """Attach cyclic image rotations between construction and the H-matrix fill.
 
     The rotation angles must be known before the fill (they change every Gram entry), and the C++
     constructors build the H-matrix themselves.  Callers therefore construct with build=False when
     rotations are present and finish here.  No rotations => the caller already built => no-op.
     """
-    if not len(image_rot_angle):
-        return G
-    G.set_image_rotations(_f64_buffer(image_rot_angle))
-    if build_hmatrix:
-        G.build_hmatrix(eps=eps, leaf=leafsize, eta=eta)
+    if len(image_rot_angle):
+        G.set_image_rotations(_f64_buffer(image_rot_angle))
+    if build_hmatrix and (len(image_rot_angle) or deferred_build):
+        G.build_hmatrix(
+            eps=eps, leaf=leafsize, eta=eta, max_rank=int(max_rank))
     return G
 
 
@@ -1984,16 +1998,28 @@ def build_charge_gram(fes, intorder=None, eps=1e-7, leafsize=16, eta=2.0, far_qu
                   ref_tri_pts_lo=_f64_buffer(rsp_lo), ref_tri_w_lo=_f64_buffer(rsw_lo),
                   ho_far_factor=ho_far_factor)
     if iq < quad:
-        rtp_in, rtw_in = _tet_ref(iq)
-        rsp_in, rsw_in = _tri_ref(iq)
+        # Reuse the symmetric production rules when available.  In
+        # particular RT2 uses iq=4; a product Duffy inner rule would make the
+        # subtraction path depend on local simplex vertex order.
+        rtp_in, rtw_in = _outer_tet(iq)
+        rsp_in, rsw_in = _outer_tri(iq)
         kw.update(ref_tet_pts_in=_f64_buffer(rtp_in), ref_tet_w_in=_f64_buffer(rtw_in),
                   ref_tri_pts_in=_f64_buffer(rsp_in), ref_tri_w_in=_f64_buffer(rsw_in))
     if image_masks:
         kw.update(image_masks=_i32_buffer(image_masks), image_signs=_f64_buffer(image_signs))
-    kw["build"] = bool(_build_hmatrix) and not image_rot_angle
+    # RT2 admissible blocks can reach the historical ACA rank cap of 200 even
+    # at eps=1e-10.  Defer that fill so the pybind build call can use the
+    # production RT2 cap of 400.  BDM1 retains the established cap and direct
+    # constructor build.
+    deferred_rank_build = bool(_build_hmatrix) and p == 2
+    kw["build"] = (
+        bool(_build_hmatrix) and not image_rot_angle and not deferred_rank_build
+    )
     G = _rp._ChargeGramHMatrix(**kw)
     _finish_image_rotations(G, image_rot_angle, eps=eps, leafsize=leafsize, eta=eta,
-                            build_hmatrix=bool(_build_hmatrix))
+                            build_hmatrix=bool(_build_hmatrix),
+                            deferred_build=deferred_rank_build,
+                            max_rank=400 if p == 2 else 200)
     return _configure_cpp_operator(B, G, M_mass, cb["M_mass_ngsolve"])
 
 

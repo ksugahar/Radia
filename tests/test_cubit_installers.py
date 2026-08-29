@@ -96,6 +96,31 @@ def test_cubit_mesh_export_verify_requires_curver_pyd(monkeypatch, tmp_path):
     assert any("cubit_mesh_curver.pyd" in issue for issue in issues)
 
 
+def test_helpers_only_install_does_not_touch_native_plugins(monkeypatch, tmp_path):
+    from cubit_mesh_export import install as cme_install
+
+    pkg_dir = tmp_path / "pkg"
+    helpers_src = pkg_dir / "cubit_helpers"
+    helpers_src.mkdir(parents=True)
+    (helpers_src / "add_kelvin.py").write_text("VALUE = 1\n", encoding="utf-8")
+
+    cubit_dir = tmp_path / "Coreform Cubit 2025.12"
+    plugins = cubit_dir / "bin" / "plugins"
+    plugins.mkdir(parents=True)
+    native = plugins / "cubit_mesh_export.ccm"
+    native.write_bytes(b"do-not-touch")
+
+    monkeypatch.setattr(cme_install, "_package_dir", lambda: pkg_dir)
+    monkeypatch.setattr(cme_install, "_find_cubit_dir", lambda: cubit_dir)
+    monkeypatch.setattr(cme_install, "preflight", lambda *_args, **_kwargs: (True, []))
+
+    assert cme_install.install_plugin(helpers_only=True) is True
+    assert native.read_bytes() == b"do-not-touch"
+    assert (
+        plugins / "cubit_helpers" / "add_kelvin.py"
+    ).read_text(encoding="utf-8") == "VALUE = 1\n"
+
+
 def test_panel_startup_shim_is_generated_outside_package(monkeypatch, tmp_path):
     install_panels = _load_install_panels()
 

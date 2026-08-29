@@ -85,10 +85,12 @@ class VectorPotentialSolver:
             self.mu_r = float(mu_r)
             self._mu_r_dict = {d: float(mu_r) for d in self.iron_domains}
 
-        # Kelvin transform (stored, not used in initial implementation)
+        # Kelvin transform
         self._kelvin_region = kelvin_region
         self._kelvin_radius = kelvin_radius
         self._kelvin_center = kelvin_center or [0, 0, 0]
+        if self._kelvin_region and self._kelvin_radius is None:
+            raise ValueError("kelvin_radius is required when kelvin_region is set")
 
         # AMS preconditioner options
         self._ams_options = {
@@ -274,7 +276,7 @@ class VectorPotentialSolver:
             'auto' (AMS if available, else BDDC for large, direct for small),
             'ams' (Chebyshev AMS + TaskManager), 'bddc', or 'direct'.
         """
-        from ngsolve import (HCurl, GridFunction, BilinearForm, LinearForm,
+        from ngsolve import (GridFunction, BilinearForm, LinearForm,
                              curl, InnerProduct, dx, Preconditioner,
                              TaskManager)
         from ngsolve.krylovspace import CGSolver
@@ -285,27 +287,23 @@ class VectorPotentialSolver:
         nu_cf = self._build_nu_cf()
         nu_0 = 1.0 / MU_0
 
-        if dirichlet == 'default':
-            fes = HCurl(self.mesh, order=self.order, dirichlet='.*',
-                        nograds=True)
-        else:
-            fes = HCurl(self.mesh, order=self.order, dirichlet=dirichlet,
-                        nograds=True)
+        fes = self._make_hcurl_space(dirichlet)
 
         solver = self._select_solver(fes.ndof, solver)
 
         A = fes.TrialFunction()
         v = fes.TestFunction()
 
-        # Physical materials (exclude kelvin)
-        all_mats = list(set(self.mesh.GetMaterials()))
-        phys_mats = [m for m in all_mats if m != self._kelvin_region]
+        all_mats = list(dict.fromkeys(self.mesh.GetMaterials()))
 
-        # Bilinear form: nu * curl(A) . curl(v) + eps * A . v
+        # Bilinear form: nu * curl(A) . curl(v) + eps*nu_0 * A . v.
+        # eps is dimensionless; scaling by nu_0 is essential on the Kelvin
+        # ball where nu tends to zero at the compactification centre.
+        gauge_coeff = eps * nu_0
         a = BilinearForm(fes)
-        for mat in phys_mats:
+        for mat in all_mats:
             a += nu_cf * InnerProduct(curl(A), curl(v)) * dx(mat)
-            a += eps * InnerProduct(A, v) * dx(mat)
+            a += gauge_coeff * InnerProduct(A, v) * dx(mat)
 
         pre_bddc = None
         if solver == 'bddc':
@@ -315,7 +313,7 @@ class VectorPotentialSolver:
         # RHS: (nu_0 - nu) * B_s . curl(v)
         nu_contrast = nu_0 - nu_cf
         f = LinearForm(fes)
-        for mat in phys_mats:
+        for mat in self.iron_domains:
             f += nu_contrast * InnerProduct(self._B_source_cf, curl(v)) * dx(mat)
         f.Assemble()
 
@@ -324,7 +322,7 @@ class VectorPotentialSolver:
         # NOTE: Caller MUST be inside `with TaskManager():` per CLAUDE.md
         # "Caller Wraps, Helper Does NOT" (2026-05-27).
         if solver == 'ams':
-            pre = self._setup_ams_preconditioner(a.mat, fes, eps)
+            pre = self._setup_ams_preconditioner(a.mat, fes, gauge_coeff)
             inv = CGSolver(mat=a.mat, pre=pre, maxiter=2000,
                            tol=1e-10, printrates=False)
             self._A_gf.vec.data = inv * f.vec
@@ -376,6 +374,11 @@ class VectorPotentialSolver:
 
         if self._B_source_cf is None:
             raise RuntimeError("Set source field first")
+        if self._kelvin_region:
+            raise NotImplementedError(
+                "Kelvin reduced-A uses solve_nonlinear() (Picard). "
+                "The Newton energy path requires a Kelvin-pulled-back source."
+            )
 
         # Build H(B) BSpline and coenergy w*(B) = integral_0^B H(B') dB'
         # Same pattern as ScalarPotentialSolver but with inverted curve.
@@ -455,8 +458,9 @@ class VectorPotentialSolver:
 
         # Gauge regularization: eps * |A|^2 / 2
         eps = 1e-10
+        gauge_coeff = eps * nu_0
         a += SymbolicEnergy(
-            eps / 2.0 * InnerProduct(A, A))
+            gauge_coeff / 2.0 * InnerProduct(A, A))
 
         # Newton iteration with energy line search
         sol = GridFunction(fes, name='A_newton')
@@ -624,12 +628,7 @@ class VectorPotentialSolver:
         B_sat = B_unique[-1]
 
         # FE space
-        if dirichlet == 'default':
-            fes = HCurl(self.mesh, order=self.order, dirichlet='.*',
-                        nograds=True)
-        else:
-            fes = HCurl(self.mesh, order=self.order, dirichlet=dirichlet,
-                        nograds=True)
+        fes = self._make_hcurl_space(dirichlet)
 
         if verbose:
             print(f"  HCurl DOFs: {fes.ndof}")
@@ -641,20 +640,36 @@ class VectorPotentialSolver:
         fes_nu = L2(self.mesh, order=0)
         nu_gf = GridFunction(fes_nu)
 
-        # Initialize nu
+        # Initialize nu on physical materials. The Kelvin metric remains a
+        # continuous CoefficientFunction and is assembled separately.
         for el in self.mesh.Elements(VOL):
             mat = str(el.mat) if hasattr(el, 'mat') else str(
                 self.mesh.GetMaterials()[el.nr])
             if mat in self._mu_r_dict:
                 nu_gf.vec[el.nr] = nu_iron_init
-            else:
+            elif mat != self._kelvin_region:
                 nu_gf.vec[el.nr] = nu_air
+
+        all_mats = list(dict.fromkeys(self.mesh.GetMaterials()))
+        phys_mats = [m for m in all_mats if m != self._kelvin_region]
+        kelvin_nu = None
+        if self._kelvin_region:
+            from radia.kelvin_source import kelvin_nu_factor_3d_cf
+            kelvin_nu = nu_air * kelvin_nu_factor_3d_cf(
+                self._kelvin_center, self._kelvin_radius)
 
         A_gf = GridFunction(fes, name='A_picard')
         A_gf.vec[:] = 0
 
         B_old_arr = None
+        converged = False
+        final_relative_change = None
+        iterations = 0
         eps = 1e-10
+        # Keep the dimensionless gauge convention identical to solve_linear().
+        # Scaling by the vacuum reluctivity is essential in the Kelvin ball,
+        # where the transformed curl-curl coefficient vanishes at its centre.
+        gauge_coeff = eps * nu_air
         solver = self._select_solver(fes.ndof, solver)
 
         if verbose:
@@ -663,15 +678,24 @@ class VectorPotentialSolver:
             print(f"  Picard iteration (solver: {solver_names.get(solver, solver)}):")
 
         for it in range(maxiter):
+            iterations = it + 1
             # Assemble: nu * curl(A) . curl(v) + eps * A . v
             a = BilinearForm(fes)
-            a += nu_gf * InnerProduct(curl(A_trial), curl(v)) * dx
-            a += eps * InnerProduct(A_trial, v) * dx
+            for mat in phys_mats:
+                a += nu_gf * InnerProduct(curl(A_trial), curl(v)) * dx(mat)
+                a += gauge_coeff * InnerProduct(A_trial, v) * dx(mat)
+            if kelvin_nu is not None:
+                a += kelvin_nu * InnerProduct(curl(A_trial), curl(v)) * dx(
+                    self._kelvin_region)
+                a += gauge_coeff * InnerProduct(A_trial, v) * dx(
+                    self._kelvin_region)
 
             # RHS: (1/mu_0 - nu) * B_s . curl(v)
             nu_contrast = 1.0 / MU_0 - nu_gf
             f = LinearForm(fes)
-            f += nu_contrast * InnerProduct(self._B_source_cf, curl(v)) * dx
+            for mat in self.iron_domains:
+                f += nu_contrast * InnerProduct(
+                    self._B_source_cf, curl(v)) * dx(mat)
 
             if solver == 'bddc':
                 pre_bddc = Preconditioner(a, 'bddc')
@@ -684,7 +708,7 @@ class VectorPotentialSolver:
             if solver == 'ams':
                 from ngsolve.krylovspace import CGSolver
                 pre = self._setup_ams_preconditioner(
-                    a.mat, fes, eps)
+                    a.mat, fes, gauge_coeff)
                 inv = CGSolver(a.mat, pre, maxiter=2000, tol=1e-8,
                                printrates=False)
                 A_gf.vec.data = inv * f.vec
@@ -733,12 +757,14 @@ class VectorPotentialSolver:
             # Convergence check
             if B_old_arr is not None and len(B_old_arr) == len(B_new_arr):
                 max_change = np.max(np.abs(B_new_arr - B_old_arr)) / B_sat
+                final_relative_change = float(max_change)
                 if verbose:
                     mip_0 = self.mesh(0, 0, 0)
                     Bz_now = B_total_cf(mip_0)[2]
                     print(f"   iter {it}: max |dB|/B_sat = {max_change:.2e}, "
                           f"Bz = {Bz_now * 1e3:.1f} mT")
                 if max_change < tol:
+                    converged = True
                     if verbose:
                         print(f"   Converged at iteration {it}")
                     break
@@ -751,11 +777,25 @@ class VectorPotentialSolver:
 
             B_old_arr = B_new_arr.copy()
 
+        self._last_nonlinear_stats = {
+            'converged': bool(converged),
+            'iterations': int(iterations),
+            'final_relative_change': final_relative_change,
+            'tolerance': float(tol),
+            'maximum_iterations': int(maxiter),
+        }
+        if not converged and verbose:
+            print(f"   WARNING: Not converged after {maxiter} iterations")
+
         # Store results
         self._A_gf = A_gf
         B_cf = self._B_source_cf + curl(A_gf)
         self._B_cf = B_cf
-        self._H_cf = nu_gf * B_cf
+        if kelvin_nu is None:
+            self._H_cf = nu_gf * B_cf
+        else:
+            self._H_cf = self.mesh.MaterialCF(
+                {self._kelvin_region: kelvin_nu}, default=nu_gf) * B_cf
 
         return A_gf
 
@@ -1104,8 +1144,33 @@ class VectorPotentialSolver:
 
         nu = 1/(mu_0 * mu_r) for iron, 1/mu_0 for air.
         """
-        nu_dict = {d: 1.0 / (MU_0 * mr) for d, mr in self._mu_r_dict.items()}
-        return self.mesh.MaterialCF(nu_dict, default=1.0 / MU_0)
+        nu_0 = 1.0 / MU_0
+        nu_dict = {d: nu_0 / mr for d, mr in self._mu_r_dict.items()}
+        if self._kelvin_region:
+            from radia.kelvin_source import kelvin_nu_factor_3d_cf
+            nu_dict[self._kelvin_region] = nu_0 * kelvin_nu_factor_3d_cf(
+                self._kelvin_center, self._kelvin_radius)
+        return self.mesh.MaterialCF(nu_dict, default=nu_0)
+
+    def _make_hcurl_space(self, dirichlet):
+        """Create the NGSolve-native HCurl space for the configured domain."""
+        from ngsolve import HCurl, Periodic
+
+        if not self._kelvin_region:
+            boundary = '.*' if dirichlet == 'default' else dirichlet
+            return HCurl(
+                self.mesh, order=self.order, dirichlet=boundary, nograds=True)
+
+        from radia.kelvin_identify_ngsolve import has_kelvin_identification
+        if not has_kelvin_identification(self.mesh):
+            raise RuntimeError(
+                "Kelvin HCurl requires kelvin_int/kelvin_ext point "
+                "identifications in the .vol mesh"
+            )
+        kwargs = {"order": self.order, "nograds": True}
+        if dirichlet not in ('default', 'GND'):
+            kwargs["dirichlet"] = dirichlet
+        return Periodic(HCurl(self.mesh, **kwargs))
 
     def _build_domain_indicator(self):
         """Build indicator CF: 1.0 in iron, 0.0 elsewhere."""
@@ -1145,9 +1210,12 @@ class VectorPotentialSolver:
             Eddy current: eps * nu + omega * sigma.
         """
         import radia.sparsesolv_ngsolve as ssn
-        from ngsolve import BilinearForm, Preconditioner, grad, dx
 
         opts = self._ams_options
+        if int(self.order) != 1:
+            raise ValueError(
+                "AMS requires HCurl order=1; use solver='bddc' for order>=2"
+            )
 
         # Cache G_mat and h1_fes (invariant across Newton/Picard iterations)
         if self._ams_cache.get('fes_id') != id(fes):
@@ -1158,48 +1226,54 @@ class VectorPotentialSolver:
         G_mat = self._ams_cache['G_mat']
         h1_fes = self._ams_cache['h1_fes']
 
-        gs = a_mat.CreateSmoother(fes.FreeDofs())
+        if int(h1_fes.ndof) != int(self.mesh.nv):
+            raise RuntimeError(
+                "AMS order-1 gradient space must have one H1 DOF per mesh "
+                f"vertex (got {h1_fes.ndof} DOFs for {self.mesh.nv} vertices)"
+            )
+        coordinates = [self.mesh.vertices[index].point
+                       for index in range(self.mesh.nv)]
+        coord_x = [float(point[0]) for point in coordinates]
+        coord_y = [float(point[1]) for point in coordinates]
+        coord_z = [float(point[2]) for point in coordinates]
 
-        # H1 subspace: h1_mass_coeff * (grad u, grad v)
-        u_h1, v_h1 = h1_fes.TnT()
-        a_h1 = BilinearForm(h1_fes)
-        a_h1 += h1_mass_coeff * grad(u_h1) * grad(v_h1) * dx
-
-        # H1 solver auto-selection
-        h1_choice = opts.get('h1_solver', 'auto')
-        if h1_choice == 'auto':
-            h1_choice = 'direct' if h1_fes.ndof < 100_000 else 'h1amg'
-
-        if h1_choice == 'direct':
-            a_h1.Assemble()
-            h1_inv = a_h1.mat.Inverse(h1_fes.FreeDofs(),
-                                       inverse='sparsecholesky')
-        else:
-            h1amg = Preconditioner(a_h1, 'h1amg')
-            a_h1.Assemble()
-            h1amg.Update()
-            h1_inv = h1amg.mat
-
-        return ssn.TaskManagerAMSPreconditioner(
-            A_real=a_mat,
+        return ssn.HypreBasedAMSPreconditioner(
+            mat=a_mat,
             grad_mat=G_mat,
-            gs_smoother=gs,
-            h1_inv=h1_inv,
+            freedofs=fes.FreeDofs(),
+            coord_x=coord_x,
+            coord_y=coord_y,
+            coord_z=coord_z,
             num_smooth=opts['num_smooth'],
-            cycle_type=0,
-            chebyshev_degree=opts['chebyshev_degree'],
-            eigenratio=opts['eigenratio'],
+            cycle_type=1,
+            print_level=0,
         )
 
     def _select_solver(self, fes_ndof, solver):
         """Select solver type based on DOF count and availability."""
+        if getattr(self, '_kelvin_region', None):
+            if solver in ('ams', 'bddc'):
+                raise ValueError(
+                    f"solver='{solver}' is not supported for Periodic Kelvin "
+                    "HCurl; use solver='direct'"
+                )
+            return 'direct' if solver == 'auto' else solver
         if solver != 'auto':
+            if solver == 'ams' and int(self.order) != 1:
+                raise ValueError(
+                    "solver='ams' requires HCurl order=1; use solver='bddc' "
+                    "for order>=2"
+                )
             return solver
         if fes_ndof <= 200_000:
             return 'direct'
+        if int(self.order) != 1:
+            return 'bddc'
         try:
-            import radia.sparsesolv_ngsolve  # noqa: F401
-            return 'ams'
+            import radia.sparsesolv_ngsolve as ssn
+            if hasattr(ssn, 'HypreBasedAMSPreconditioner'):
+                return 'ams'
+            return 'bddc'
         except ImportError:
             return 'bddc'
 

@@ -352,9 +352,33 @@ def add_kelvin_cubit(R, air_block="air", symmetry=None, reduction=None,
     sym = set(s.lower() for s in symmetry)
     kelvin_vols = [kelvin_sphere]
 
-    if "z" in sym:
-        # Webcut with zplane to match the air sphere's equator webcut
-        id_before = cubit.get_last_id("volume")
+    reflect_meshed_kelvin = False
+    if sym == {"z"}:
+        # Keep only the positive-z hemisphere for now.  After it is meshed,
+        # copy the *meshed volume* through z=0.  Meshing both hemispheres
+        # independently breaks reflection symmetry even when their boundary
+        # meshes match.
+        before_cut = set(cubit.parse_cubit_list("volume", "all"))
+        cubit.cmd("webcut volume %d with plane zplane" % kelvin_sphere)
+        halves = {kelvin_sphere} | (
+            set(cubit.parse_cubit_list("volume", "all")) - before_cut
+        )
+        if len(halves) != 2:
+            raise RuntimeError(
+                "Kelvin z-webcut produced %d volumes instead of two: %s"
+                % (len(halves), sorted(halves)))
+        kelvin_top = max(
+            halves, key=lambda v: cubit.volume(v).centroid()[2])
+        kelvin_bottom_seed = min(
+            halves, key=lambda v: cubit.volume(v).centroid()[2])
+        if cubit.volume(kelvin_top).centroid()[2] <= 0.0:
+            raise RuntimeError("Kelvin z-webcut has no positive-z hemisphere")
+        cubit.cmd("delete volume %d" % kelvin_bottom_seed)
+        kelvin_vols = [kelvin_top]
+        reflect_meshed_kelvin = True
+    elif "z" in sym:
+        # Legacy multi-plane webcut path.  The exact z-only production route
+        # above owns the roundoff-level reflection contract.
         cubit.cmd("webcut volume %d with plane zplane" % kelvin_sphere)
         kelvin_top = kelvin_sphere
         kelvin_bot = cubit.get_last_id("volume")
@@ -373,6 +397,9 @@ def add_kelvin_cubit(R, air_block="air", symmetry=None, reduction=None,
     # After subtract of coil/workpiece, the air volumes still have the
     # original sphere outer surface as their LARGEST surface.
     air_outer_surfs = []
+    if reflect_meshed_kelvin:
+        air_vols.sort(
+            key=lambda v: cubit.volume(v).centroid()[2], reverse=True)
     for vid in air_vols:
         surfs = list(cubit.get_relatives("volume", vid, "surface"))
         if surfs:
@@ -424,6 +451,24 @@ def add_kelvin_cubit(R, air_block="air", symmetry=None, reduction=None,
         if mesh_size is not None:
             cubit.cmd("volume %d size %g" % (vid, float(mesh_size)))
     cubit.cmd("mesh volume %s" % k_str)
+
+    if reflect_meshed_kelvin:
+        source = kelvin_vols[0]
+        before_reflect = set(cubit.parse_cubit_list("volume", "all"))
+        cubit.cmd("volume %d copy reflect z" % source)
+        reflected = (
+            set(cubit.parse_cubit_list("volume", "all")) - before_reflect
+        )
+        if len(reflected) != 1:
+            raise RuntimeError(
+                "Kelvin mesh reflection produced %d volumes instead of one: %s"
+                % (len(reflected), sorted(reflected)))
+        kelvin_bottom = next(iter(reflected))
+        kelvin_vols = [source, kelvin_bottom]
+        k_str = " ".join(str(v) for v in kelvin_vols)
+        cubit.cmd("imprint volume %s" % k_str)
+        cubit.cmd("merge volume %s" % k_str)
+        cubit.cmd('volume %d rename "kelvin_ext"' % kelvin_bottom)
 
     # ---- 8. Block assignment ----
     existing_blocks = set(cubit.parse_cubit_list("block", "all"))
@@ -1078,7 +1123,7 @@ def auto_add_kelvin_from_current_model(air_block="air",
 
     Steps (matching the 2026-04-14 c60a6007 implementation):
       1. If a `<kelvin_block>` block already exists, skip (idempotent).
-      2. Find the `<air_block>` block.  Abort with a warning if missing.
+      2. Find the `<air_block>` block. Skip when the model has no air block.
       3. Across all volumes in that block, pick the surface with the
          largest area -> the outer sphere boundary.
       4. R = max vertex distance from the origin on that surface.
@@ -1093,9 +1138,11 @@ def auto_add_kelvin_from_current_model(air_block="air",
     Kelvin region can usually be coarser than the physical domain —
     pass an explicit value (e.g. 2-3x air surface size) to override.
 
-    Returns the info dict from ``add_kelvin_cubit``, or None on skip /
-    failure.  Never raises — the launcher should continue (and fall
-    back to Dirichlet truncation) if auto-detection fails.
+    Returns the info dict from ``add_kelvin_cubit``, or ``None`` when the
+    Kelvin block already exists or the model has no eligible air block.
+    Once an air sphere is detected, construction failures raise and abort the
+    export; silently replacing the requested open boundary with Dirichlet
+    truncation is forbidden.
 
     Args:
         air_block: block name holding the air volumes.
@@ -1167,17 +1214,8 @@ def auto_add_kelvin_from_current_model(air_block="air",
         else:
             bb = cubit.surface(best_sid).bounding_box()
             # bounding_box returns (xmin, ymin, zmin, xmax, ymax, zmax).
-            # Distance from origin to the farthest box corner.
-            R = max(
-                _m.sqrt(bb[0]**2 + bb[1]**2 + bb[2]**2),
-                _m.sqrt(bb[3]**2 + bb[4]**2 + bb[5]**2),
-                _m.sqrt(bb[0]**2 + bb[1]**2 + bb[5]**2),
-                _m.sqrt(bb[3]**2 + bb[4]**2 + bb[2]**2),
-                _m.sqrt(bb[0]**2 + bb[4]**2 + bb[2]**2),
-                _m.sqrt(bb[3]**2 + bb[1]**2 + bb[5]**2),
-                _m.sqrt(bb[0]**2 + bb[4]**2 + bb[5]**2),
-                _m.sqrt(bb[3]**2 + bb[1]**2 + bb[2]**2),
-            )
+            # A sphere's box corner is sqrt(3)*R away and must not be used.
+            R = 0.5 * max(bb[3] - bb[0], bb[4] - bb[1], bb[5] - bb[2])
             print("Auto-Kelvin: closed outer surface (no vertices); "
                   "R=%.4f from bounding box." % R)
 
@@ -1246,10 +1284,7 @@ def auto_add_kelvin_from_current_model(air_block="air",
               "symmetry=%s" % (ox, oy, oz, symmetry))
         return info
     except Exception as e:
-        print("WARNING: Auto-Kelvin failed: %s" % e)
-        print("Proceeding without Kelvin (Dirichlet truncation on outer "
-              "boundary).")
-        return None
+        raise RuntimeError("Auto-Kelvin failed; open-boundary export aborted") from e
 
 
 # ====================================================================
