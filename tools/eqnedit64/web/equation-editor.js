@@ -19,7 +19,7 @@
   /* デプロイごとに上げる。ボタン行の右端に出て、開きっぱなしのタブが
    * 古い版を動かし続けていないかを一目で判別できる（.exe の
    * タイトルバー・ビルドスタンプと同じ教訓）。 */
-  var BUILD = "2026-08-29e";
+  var BUILD = "2026-08-30a";
 
   var PALETTES = [
     {
@@ -237,8 +237,93 @@
   /* MathJax exposes \boldsymbol but not the bm package's shorter \bm name.
    * Keep \bm in editable/saved TeX and translate only at the renderer
    * boundary, so preview, SVG/PNG and Office MathML agree. */
+  function leftAlignUnanchoredAligned(tex) {
+    var begin = "\\begin{aligned}";
+    var end = "\\end{aligned}";
+    var output = "";
+    var cursor = 0;
+
+    function alignBody(body) {
+      var rowStarts = [0];
+      var braceDepth = 0;
+      var environmentDepth = 0;
+      var hasTopLevelTab = false;
+      for (var i = 0; i < body.length; i += 1) {
+        if (body.slice(i, i + 7) === "\\begin{") {
+          environmentDepth += 1;
+          i = body.indexOf("}", i + 7);
+          if (i < 0) break;
+          continue;
+        }
+        if (body.slice(i, i + 5) === "\\end{") {
+          environmentDepth = Math.max(0, environmentDepth - 1);
+          i = body.indexOf("}", i + 5);
+          if (i < 0) break;
+          continue;
+        }
+        if (body.charAt(i) === "{") { braceDepth += 1; continue; }
+        if (body.charAt(i) === "}") {
+          braceDepth = Math.max(0, braceDepth - 1);
+          continue;
+        }
+        if (body.charAt(i) === "\\" && body.charAt(i + 1) === "&") {
+          i += 1;
+          continue;
+        }
+        if (braceDepth === 0 && environmentDepth === 0 &&
+            body.charAt(i) === "&") {
+          hasTopLevelTab = true;
+        }
+        if (braceDepth === 0 && environmentDepth === 0 &&
+            body.charAt(i) === "\\" && body.charAt(i + 1) === "\\") {
+          rowStarts.push(i + 2);
+          i += 1;
+        }
+      }
+      if (hasTopLevelTab) return body;
+      for (var r = rowStarts.length - 1; r >= 0; r -= 1) {
+        var at = rowStarts[r];
+        while (at < body.length && /\s/.test(body.charAt(at))) at += 1;
+        body = body.slice(0, at) + "& " + body.slice(at);
+      }
+      return body;
+    }
+
+    while (cursor < tex.length) {
+      var start = tex.indexOf(begin, cursor);
+      if (start < 0) { output += tex.slice(cursor); break; }
+      output += tex.slice(cursor, start) + begin;
+      var bodyStart = start + begin.length;
+      var scan = bodyStart;
+      var depth = 1;
+      while (depth > 0) {
+        var nextBegin = tex.indexOf(begin, scan);
+        var nextEnd = tex.indexOf(end, scan);
+        if (nextEnd < 0) {
+          output += tex.slice(bodyStart);
+          return output;
+        }
+        if (nextBegin >= 0 && nextBegin < nextEnd) {
+          depth += 1;
+          scan = nextBegin + begin.length;
+        } else {
+          depth -= 1;
+          if (depth === 0) {
+            var body = tex.slice(bodyStart, nextEnd);
+            output += alignBody(leftAlignUnanchoredAligned(body)) + end;
+            cursor = nextEnd + end.length;
+          } else {
+            scan = nextEnd + end.length;
+          }
+        }
+      }
+    }
+    return output;
+  }
+
   function mathJaxTex(tex) {
-    return tex.replace(/\\bm(?=\s*\{)/g, "\\boldsymbol");
+    return leftAlignUnanchoredAligned(
+      tex.replace(/\\bm(?=\s*\{)/g, "\\boldsymbol"));
   }
 
   /* Officeへ渡すMathMLの製品境界。MathJax固有属性や一時mstyleを落とし、
