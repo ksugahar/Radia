@@ -5,30 +5,35 @@
 [`CANONICAL_OPERATION.md`](CANONICAL_OPERATION.md) と `release-eqnedit64` skillを
 正とする。`build\accept_release.ps1`は隔離CI/VM用であり、対話中LABでは実行しない。
 
-## 2026-08-29 Eqnedit64 3.0.6左24 pt公開候補
+## 2026-08-29 Eqnedit64 3.0.6公開検証
 
-- 対象: `codex/eqnedit64-web-paste-parity`。公開前のローカル候補であり、以下の
-  hashは最終release値ではない。
+- tag / source: `eqnedit64-v3.0.6` /
+  `a9289bf1dd1651d777d1f8599766d194d854f65c`。
 - Web版のPowerPointコピーを同期CF_HTML fragmentへ戻し、条件付きOMMLと
   inline MathML fallbackを同じ24 pt・左揃え段落に載せた。HTML documentの入れ子は
   作らない。
-- 研究室ホームページの数式エディタだけを生成し、browser QAはdesktop/mobileの
-  2 viewport、クリップボードの`text/plain`/`text/html`、24 pt、左揃え、
-  条件付きOMMLを確認した。
-- 非表示の実PowerPoint貼り付けは24.0 pt、paragraph alignment 1、shape left 0 pt、
-  n-ary 2個、分数、根号、上線・下線2個、3,847 ink pixelとして合格した。
-  描画証跡は`C:\temp\sugahara-equation-editor-powerpoint-qa-24left.png`。
-- native EXEの外部貼り付け試験も、24.0 pt、shape left 0 pt、編集可能Office Math、
+- PR CI `33247565457`、main CI `33247680323`、tag CI `33247910366`、
+  release workflow `33247996052`はすべて成功。PR/mainのPolicy Lint
+  `33247565431` / `33247680305`も成功した。
+- exact mainからLABで再ビルドしたEXEはProductVersion/FileVersion 3.0.6、
+  Authenticode `Valid`、signer `CN=ksugahar`。SHA-256は
+  `406D29566312E645070FAE9CC925B2A4DEC05B74818AFD37E99050FEB4D2ECAD`。
+- native EXEの外部貼り付け試験は24.0 pt、shape left 0 pt、編集可能Office Math、
   n-ary 2個、分数、根号、描画640x190 px / ink 308x174 / fraction run 85で合格した。
-  旧試験の18--24 pt許容を廃止し、24.0 ptと左揃えを必須にした。
-- `test_edit.py` 271件、`test_palettes.py` 19パレット・245セル、
-  `test_tex_fuzz.py` 3,075件、Web契約11件、JS挿入試験、usability trace、
-  `test_tex_document.exe` 10件、`--self-test`が合格した。
-- ローカル候補EXEはProductVersion/FileVersion 3.0.6、Authenticode `Valid`、
-  signer `CN=ksugahar`。事前確認SHA-256は
-  `E5E7F427E87E9418FD330273CD9A7584CC887173141BE26FB4763FED0127CF5E`。
-- 隔離font-host lifecycle、main/tag CI、exact-main署名ビルド、O:同期、GitHub/PyPI、
-  公開ホームページの検証はrelease手順に従って後続で実施する。
+  IrfanView、Google Slides 300 dpi、`--texclip`も合格した。旧試験の18--24 pt許容を
+  廃止し、24.0 ptと左揃えを必須にした。
+- `O:\Eqnedit64.exe`、GitHub Releaseから再取得したEXE、PyPIのCPython
+  3.10/3.11/3.12/3.13 wheel内EXEはすべてbyte-identicalで、上記version・署名・hashを
+  満たした。CPython 3.12 wheelの新規venvインストール試験も合格した。
+- 研究室ホームページには`index.php`と`equation-editor.js`だけを公開した。公開JSの
+  SHA-256 `4F43994C6212BA24F70488479D1C0779026AF475821F77BEF138CD93496BC50B`は
+  exact main由来の生成物と一致し、cache keyは`4f43994c6212`。
+- 公開URLのbrowser QAはdesktop/mobileの2 viewport、実PowerPoint貼り付けは
+  24.0 pt、paragraph alignment 1、shape left 0 pt、n-ary 2個、分数、根号、
+  上線・下線2個、3,847 ink pixelとして合格した。
+- GitHub Release:
+  `https://github.com/ksugahar/Radia/releases/tag/eqnedit64-v3.0.6`
+- PyPI: `https://pypi.org/project/eqnedit64/3.0.6/`
 
 ## 2026-08-29 Eqnedit64 3.0.5公開検証
 
