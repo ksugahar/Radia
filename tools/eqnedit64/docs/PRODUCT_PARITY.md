@@ -25,7 +25,7 @@ Eqnedit64.exe と Web/JS 数式エディタは、Radia の `tools/eqnedit64` で
 | 機能 | Eqnedit64.exe | Web/JS | 区分 |
 |---|---|---|---|
 | TeXを唯一の正本とする | 必須 | 必須 | 共通中核 |
-| MathML経由で編集可能なOffice数式へ貼り付け | inline 24 pt MathML + NBSPのCF_HTML | 同じinline 24 pt MathML + NBSPのCF_HTML | 共通中核 |
+| MathML経由で編集可能なOffice数式へ貼り付け | inline 24 pt MathML + 24 pt NBSPのCF_HTML | 同じinline 24 pt MathML + 24 pt NBSPのCF_HTML | 共通中核 |
 | 画像を混在させないOffice専用コピー | 必須 | 必須 | 共通中核 |
 | パレットとTeXソースの対応 | 必須 | 必須 | 共通学習面 |
 | 常設書体 `\mathrm` / `\mathit` / `\mathbf` | 選択変更・継続入力 | 選択を包む・空欄挿入 | 共通学習面 |
@@ -36,8 +36,9 @@ Eqnedit64.exe と Web/JS 数式エディタは、Radia の `tools/eqnedit64` で
 | 数式3.0由来ショートカット | 互換層として必須 | 非該当 | native固有 |
 | インストール不要のブラウザ利用 | 非該当 | 必須 | Web固有 |
 
-両製品のMathMLはinline・24 ptとし、末尾NBSPを加えた単一CF_HTML断片だけをOfficeへ
-渡す。登録MathMLはPowerPointが中央寄せ`m:oMathPara`として優先するため通常コピーへ
+両製品のMathMLはinline・24 ptとし、24 ptを明示した末尾NBSPを加えた単一CF_HTML
+断片だけをOfficeへ渡す。これにより数式末尾のカーソル位置も18 ptへ戻らない。
+登録MathMLはPowerPointが中央寄せ`m:oMathPara`として優先するため通常コピーへ
 載せず、Web版だけの直接OMMLも使わない。生成器（native構造木とMathJax）の空白や
 補助要素は異なってよいが、総和、積分、分数、根号、上線、下線を正規化し、保存OOXMLの
 インライン`m:oMath`とPowerPoint描画を一致させる。実機基準式ではOMML部分とPNGが
