@@ -38,4 +38,4 @@ __all__ = [
     "web_asset",
 ]
 
-__version__ = "3.0.5"
+__version__ = "3.0.6"

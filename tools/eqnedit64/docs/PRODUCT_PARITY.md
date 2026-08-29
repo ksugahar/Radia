@@ -40,8 +40,8 @@ Eqnedit64.exe と Web/JS 数式エディタは、Radia の `tools/eqnedit64` で
 右側上下限という共通構造契約を持つ。Web版はブラウザ制約を越えるため、同じMathML
 から条件付きOMMLも生成してPowerPointへ渡す。生成器（native構造木とMathJax）が
 異なるためXMLの補助要素や直列化バイト列は同一でなくてよいが、保存OOXML上の分数、
-根号、n-ary、上線、下線と目視結果は一致させる。ブラウザはWindows登録MathMLを
-発行できないためPowerPointのWeb HTML経路は18 pt、EXE登録MathML経路は24 ptである。
+根号、n-ary、上線、下線と目視結果は一致させる。Web版は同期copyイベントの単一
+CF_HTML断片で左寄せ24 ptを保持し、EXE登録MathML経路も24 ptである。
 空のテキストボックス、置換文字だけの描画、画像への退化は不合格とする。
 
 ## 変更規則

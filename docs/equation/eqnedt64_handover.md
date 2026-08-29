@@ -177,8 +177,10 @@ Office Mathになることが合格条件である。MathMLの文字列がクリ
 図形数が1以上だけ、例外が出ないだけでは合格にしない。PowerPoint自身に貼り付けさせ、
 数式の輪郭と代表構造を画像化して検査する。
 
-Office向けの設計サイズは24 ptを基準にする。Office側が経路により18--24 ptへ再解釈する
-ことはあり得るが、Eqnedit64自身が意図せず18 ptを生成する退行は試験で検出する。
+Office向けはnative EXE版とWeb/JS版のどちらも、左揃え24 ptの編集可能Office Mathを
+製品契約とする。18 ptへの縮小、中央揃え、画像への退化、空のMathZoneを許容しない。
+実PowerPoint試験で文字サイズ、段落揃え、貼り付け位置、Office Math構造、描画inkを
+すべて検査する。
 
 ### 6.2 Google Slidesと画像
 
