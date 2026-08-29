@@ -1,8 +1,26 @@
 # Eqnedit64 検証記録
 
 この文書の2026-08-25/26記録は、公開リポジトリ移行前の内部配布ゲートで得た
-履歴である。現在の公開リリース手順は `build\accept_release.ps1` と
-[`CANONICAL_OPERATION.md`](CANONICAL_OPERATION.md) を正とする。
+履歴である。現在の公開リリース手順は
+[`CANONICAL_OPERATION.md`](CANONICAL_OPERATION.md) と `release-eqnedit64` skillを
+正とする。`build\accept_release.ps1`は隔離CI/VM用であり、対話中LABでは実行しない。
+
+## 2026-08-29 Eqnedit64 3.0.4公開検証
+
+- tag / source: `eqnedit64-v3.0.4` /
+  `abb66868da37032e353e44061ac5b4d24cc33d5c`。
+- PR CI `33236393427`、main CI `33236509923`、tag CI `33236746356`、
+  release workflow `33236832046`はすべて成功。PR/mainのPolicy Lintも成功した。
+- exact mainからLABでビルドしたEXEはProductVersion/FileVersion 3.0.4、build stamp
+  `abb66868d`、Authenticode `Valid`、signer `CN=ksugahar`。
+- `O:\Eqnedit64.exe`、GitHub Releaseから再取得したEXE、PyPIのCPython
+  3.10/3.11/3.12/3.13 wheel内EXEはすべてbyte-identical。SHA-256は
+  `7BA0547D8779F97285C8B20857F7C395688386FBFF38B524DEABE494F3043121`。
+- 4 wheel内EXEはいずれもProductVersion 3.0.4、署名`Valid` / `CN=ksugahar`。
+  CPython 3.12 wheelを新規venvへインストールした`verify_installed.py`も合格した。
+- GitHub Release:
+  `https://github.com/ksugahar/Radia/releases/tag/eqnedit64-v3.0.4`
+- PyPI: `https://pypi.org/project/eqnedit64/3.0.4/`
 
 ## 2026-08-29 Eqnedit64 3.0.4公開候補
 
