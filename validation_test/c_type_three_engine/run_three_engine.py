@@ -18,6 +18,7 @@ import math
 import platform
 import sys
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 
 import ngsolve as ng
@@ -297,6 +298,7 @@ def solve_reduced_a(
     nonlinear: bool,
     order: int,
     linear_solver: str,
+    relax: float,
     nonlinear_tolerance: float,
     nonlinear_maximum_iterations: int,
     nonlinear_verbose: bool,
@@ -321,6 +323,7 @@ def solve_reduced_a(
                 material,
                 tol=nonlinear_tolerance,
                 maxiter=nonlinear_maximum_iterations,
+                relax=relax,
                 dirichlet="GND",
                 verbose=nonlinear_verbose,
                 solver=linear_solver,
@@ -341,6 +344,11 @@ def solve_reduced_a(
         "ndof": int(solution.space.ndof),
         "nonlinear": nonlinear,
         "linear_solver": linear_solver,
+        "relax": float(relax),
+        "bh_interpolation": (
+            "exact inverse of shared monotone PCHIP B(H), with vacuum-slope "
+            "continuation" if nonlinear else None
+        ),
         "nonlinear_stats": getattr(solver, "_last_nonlinear_stats", {}),
         "runtime_s": float(time.perf_counter() - started),
     }
@@ -418,6 +426,7 @@ def main() -> None:
         choices=("direct", "bddc", "ams", "auto"),
         default="direct",
     )
+    parser.add_argument("--reduced-a-relax", type=float, default=0.1)
     parser.add_argument("--mu-r", type=float, default=1000.0)
     parser.add_argument("--nonlinear-tolerance", type=float, default=2.0e-5)
     parser.add_argument("--nonlinear-maximum-iterations", type=int, default=80)
@@ -442,6 +451,8 @@ def main() -> None:
         raise ValueError("--nonlinear-tolerance must be positive")
     if options.nonlinear_maximum_iterations < 1:
         raise ValueError("--nonlinear-maximum-iterations must be positive")
+    if not 0.0 < options.reduced_a_relax <= 1.0:
+        raise ValueError("--reduced-a-relax must lie in (0, 1]")
 
     mesh_dir = options.mesh_dir.resolve()
     mesh_report_path = mesh_dir / "mesh_result.json"
@@ -539,6 +550,7 @@ def main() -> None:
         **fem_contract,
         "engine": "reduced_a",
         "linear_solver": options.reduced_a_solver,
+        "relax": float(options.reduced_a_relax),
         "implementation_sha256": sha256(
             Path(sys.modules[VectorPotentialSolver.__module__].__file__).resolve()
         ),
@@ -558,6 +570,7 @@ def main() -> None:
                 nonlinear=nonlinear,
                 order=options.fem_order,
                 linear_solver=options.reduced_a_solver,
+                relax=options.reduced_a_relax,
                 nonlinear_tolerance=options.nonlinear_tolerance,
                 nonlinear_maximum_iterations=options.nonlinear_maximum_iterations,
                 nonlinear_verbose=options.nonlinear_verbose,
@@ -661,6 +674,7 @@ def main() -> None:
         radia_version = "editable-unversioned"
     output = {
         "schema": "radia.validation.c-type-formulation-comparison.v2",
+        "generated_at_utc": datetime.now(timezone.utc).isoformat(),
         "passed": passed,
         "machine": platform.node(),
         "python": sys.version,
@@ -675,7 +689,8 @@ def main() -> None:
             "coilbuilder_source_shared": True,
             "bh_table_shared": nonlinear,
             "bh_interpolation_shared": (
-                "monotone PCHIP B(H), vacuum-slope continuation beyond H_max"
+                "monotone PCHIP B(H), exact reduced-A inversion, and "
+                "vacuum-slope continuation beyond H_max"
                 if nonlinear else None
             ),
             "observation_points_shared": True,
@@ -734,10 +749,15 @@ def main() -> None:
              primary_gap_core_relative_rms=primary_relative_rms,
              maximum_gap_core_pairwise_relative_rms=maximum_relative_rms)
     if not passed:
-        raise RuntimeError(
-            f"HDiv-MMM versus Omega C-type gate failed: {primary_relative_rms:.6e} > "
-            f"{options.relative_rms_tolerance:.6e}; see {options.output}"
-        )
+        failures = []
+        if not nonlinear_converged:
+            failures.append("at least one selected nonlinear formulation did not converge")
+        if not primary_accuracy_passed:
+            failures.append(
+                f"primary relative RMS {primary_relative_rms:.6e} exceeds "
+                f"{options.relative_rms_tolerance:.6e}"
+            )
+        raise RuntimeError("; ".join(failures) + f"; see {options.output}")
 
 
 if __name__ == "__main__":

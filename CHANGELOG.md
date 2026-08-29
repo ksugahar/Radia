@@ -12,6 +12,23 @@ All notable changes to the `radia` package.  Format: each release lists
   MTEF/`.eqn` readers, writers, tests, and reverse-engineering utilities were
   retired; TeX-to-OMML/PPTX headless generation remains supported.
 
+## 4.95.71 - Three-formulation C-yoke convergence
+
+Released 2026-08-30.
+
+- Stabilized nonlinear periodic-Kelvin reduced-A by assembling the HCurl
+  Picard operator as symmetric, using the MKL PARDISO SPD path with an explicit
+  gauge regularization, and failing loudly on non-finite or excessive linear
+  residuals. The former general-PARDISO path could intermittently lose several
+  digits and prevent material convergence.
+- Made reduced-A invert the same monotone PCHIP B(H) law used by HDiv-MMM and
+  Omega-reduced-Omega, including the same vacuum-slope continuation, instead of
+  defining an independent piecewise-linear H(B) material.
+- Added a Cubit/ACIS geometric mesh-family builder and a fresh-process
+  three-formulation convergence certificate with observed-order, Richardson,
+  final-spread, combined-uncertainty, and independent-host reproducibility
+  gates.
+
 ## 4.95.70 - Periodic-Kelvin C-yoke validation
 
 Released 2026-08-29.
