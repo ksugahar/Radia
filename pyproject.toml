@@ -106,6 +106,15 @@ viz = [
     "pyvista>=0.40",
     "matplotlib>=3.5",
 ]
+docs = [
+    # netgen.webgui in the pinned NGSolve release uses AnyWidget for saved
+    # Jupyter scenes; without it Draw silently degrades to text/plain output.
+    "anywidget>=0.11",
+    "jupyter>=1.0",
+    "matplotlib>=3.5",
+    "nbconvert>=7.0",
+    "nbformat>=5.0",
+]
 urn = [
     "torch>=2.0",
 ]
