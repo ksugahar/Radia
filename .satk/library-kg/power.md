@@ -18,3 +18,4 @@ Use these blocks for power & motor blocks.
 - [[uncategorized]]
 - [[plant-models]]
 - [[signal-processing]]
+- [[control]]

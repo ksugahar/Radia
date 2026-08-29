@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ast
 import hashlib
 import json
 import re
@@ -721,6 +722,195 @@ def _matlab_surface() -> tuple[set[str], dict[str, dict[str, set[str]]]]:
     return names, members
 
 
+# Why a module is not held to the "port it" bar. Anything absent from this
+# table is required: it must be present and oracle-mapped before compatibility
+# closure can be true. A downgrade must name what discharges it.
+SCOPE_RULES = {
+    "optuna.storages": {
+        "scope": "bridged",
+        "reason": (
+            "MATLAB keeps history in normalized tables and MAT files. "
+            "Interoperability is discharged by the explicit storage bridge."
+        ),
+        "discharged_by": [
+            "radia.optuna.export_study",
+            "radia.optuna.import_study",
+            "radia_optuna.bridge",
+        ],
+    },
+    "optuna.visualization": {
+        "scope": "replaced",
+        "reason": (
+            "MATLAB plotting functions consume the same normalized study "
+            "history; upstream Python visualizations remain available after "
+            "an explicit storage handoff."
+        ),
+        "discharged_by": [
+            "radia.optuna.plot_*",
+            "radia_optuna.bridge",
+        ],
+    },
+    "optuna.integration": {
+        "scope": "replaced",
+        "reason": (
+            "MATLAB-native integrations and explicit Python ecosystem "
+            "adapters replace framework-specific Python callback objects."
+        ),
+        "discharged_by": [
+            "radia.optuna integration classes",
+            "radia_optuna.bridge",
+        ],
+    },
+    "optuna.artifacts": {
+        "scope": "replaced",
+        "reason": (
+            "MATLAB artifact stores and Radia result contracts replace "
+            "Python artifact-store objects."
+        ),
+        "discharged_by": ["radia.optuna artifact-store classes"],
+    },
+    "optuna.logging": {
+        "scope": "replaced",
+        "reason": (
+            "MATLAB reports through warning/error identifiers and display "
+            "settings rather than a Python logging hierarchy."
+        ),
+        "discharged_by": ["MATLAB warning and error identifiers"],
+    },
+    "optuna.exceptions": {
+        "scope": "replaced",
+        "reason": (
+            "MATLAB signals failures through named exception classes and "
+            "radia:optuna:* identifiers."
+        ),
+        "discharged_by": [
+            "radia.optuna exception classes",
+            "radia:optuna:* error identifiers",
+        ],
+    },
+}
+
+
+# The inventory walks __mro__, so an IntEnum drags in int methods and an
+# exception class drags in BaseException methods. Those are Python-language
+# surface, not Optuna API.
+PYTHON_LANGUAGE_MEMBERS = frozenset(
+    name
+    for base in (int, BaseException)
+    for name in dir(base)
+    if not name.startswith("_")
+)
+
+
+def _scope_for(upstream: str) -> str:
+    leaf = upstream.rsplit(".", 1)[-1]
+    if leaf in PYTHON_LANGUAGE_MEMBERS:
+        return "python-language"
+    if leaf.startswith("_"):
+        return "out-of-scope"
+    for prefix, rule in SCOPE_RULES.items():
+        if upstream == prefix or upstream.startswith(prefix + "."):
+            return str(rule["scope"])
+    return "required"
+
+
+def _oracle_generator_sections() -> dict[str, set[str]]:
+    """Map upstream names to oracle sections whose generator exercises them.
+
+    Presence in VERIFIED_SYMBOLS or VERIFIED_MEMBERS is an assertion, not
+    evidence. The mapping below is derived from the pinned upstream fixture
+    generators, so an entry without a generating section cannot be counted as
+    verified.
+    """
+    fixtures = Path(__file__).resolve().parent
+    oracle_source = fixtures / "generate_optuna49_oracle.py"
+    mcp_source = fixtures / "generate_optuna49_mcp_oracle.py"
+    tree = ast.parse(oracle_source.read_text(encoding="utf-8"))
+    functions = {
+        node.name: node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.FunctionDef)
+    }
+    if "build_oracle" not in functions:
+        raise RuntimeError(
+            f"{oracle_source.name} no longer defines build_oracle(); "
+            "oracle-section derivation cannot be trusted."
+        )
+
+    section_producers: dict[str, str] = {}
+    for node in ast.walk(functions["build_oracle"]):
+        if not isinstance(node, ast.Dict):
+            continue
+        for key, value in zip(node.keys, node.values):
+            if (
+                isinstance(key, ast.Constant)
+                and isinstance(key.value, str)
+                and isinstance(value, ast.Call)
+                and isinstance(value.func, ast.Name)
+            ):
+                section_producers[key.value] = value.func.id
+
+    fixture_sections = set(
+        json.loads(
+            (fixtures / "optuna49_oracle.json").read_text(encoding="utf-8")
+        )
+    )
+    unknown = sorted(set(section_producers) - fixture_sections)
+    if unknown:
+        raise RuntimeError(
+            "build_oracle() names sections absent from optuna49_oracle.json: "
+            + ", ".join(unknown)
+        )
+
+    def referenced(
+        function_name: str, depth: int = 2, seen: set[str] | None = None
+    ) -> set[str]:
+        seen = seen or set()
+        found: set[str] = set()
+        if function_name in seen or function_name not in functions:
+            return found
+        seen.add(function_name)
+        for node in ast.walk(functions[function_name]):
+            if isinstance(node, ast.Attribute):
+                found.add(node.attr)
+            elif isinstance(node, ast.Name):
+                found.add(node.id)
+            elif isinstance(node, ast.Constant) and isinstance(node.value, str):
+                found.add(node.value)
+            if (
+                depth > 0
+                and isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Name)
+            ):
+                found |= referenced(node.func.id, depth - 1, seen)
+        return found
+
+    sections: dict[str, set[str]] = {}
+    for section, producer in section_producers.items():
+        for name in referenced(producer):
+            sections.setdefault(name, set()).add(section)
+
+    mcp_tree = ast.parse(mcp_source.read_text(encoding="utf-8"))
+    for node in ast.walk(mcp_tree):
+        name = None
+        if isinstance(node, ast.Attribute):
+            name = node.attr
+        elif isinstance(node, ast.Name):
+            name = node.id
+        elif isinstance(node, ast.Constant) and isinstance(node.value, str):
+            name = node.value
+        if name:
+            sections.setdefault(name, set()).add("mcp:" + mcp_source.stem)
+    return sections
+
+
+ORACLE_SECTIONS_BY_NAME = _oracle_generator_sections()
+
+
+def _oracle_sections_for(upstream: str) -> list[str]:
+    return sorted(ORACLE_SECTIONS_BY_NAME.get(upstream.rsplit(".", 1)[-1], ()))
+
+
 def _entry(
     upstream: str,
     kind: str,
@@ -728,10 +918,15 @@ def _entry(
     matlab_name: str | None,
     oracle_status: str = "not-mapped",
 ) -> dict[str, object]:
+    sections = _oracle_sections_for(upstream)
+    if oracle_status in ("verified", "partial") and not sections:
+        oracle_status = "asserted"
     return {
         "kind": kind,
         "matlab_name": matlab_name,
+        "oracle_sections": sections,
         "oracle_status": oracle_status,
+        "scope": _scope_for(upstream),
         "surface_status": "present" if present else "missing",
         "upstream": upstream,
     }
@@ -779,7 +974,7 @@ def build_coverage() -> dict[str, Any]:
                 and str(member["name"]) in VERIFIED_MEMBERS.get(name, set())
                 for member in symbol.get("members", [])
             )
-            if present and kind == "module" or present and name in VERIFIED_SYMBOLS:
+            if present and (kind == "module" or name in VERIFIED_SYMBOLS):
                 oracle_status = "verified"
             elif present and kind == "class" and name in CLASS_ORACLE_SECTIONS:
                 oracle_status = "verified" if class_members_complete else "partial"
@@ -827,6 +1022,32 @@ def build_coverage() -> dict[str, Any]:
     missing_count = len(entries) - present_count
     verified_count = sum(entry["oracle_status"] == "verified" for entry in entries)
     partial_count = sum(entry["oracle_status"] == "partial" for entry in entries)
+    asserted_count = sum(
+        entry["oracle_status"] == "asserted" for entry in entries
+    )
+    required = [entry for entry in entries if entry["scope"] == "required"]
+    required_present = [
+        entry for entry in required if entry["surface_status"] == "present"
+    ]
+    required_mapped = [
+        entry
+        for entry in required_present
+        if entry["oracle_status"] not in ("not-mapped", "asserted")
+    ]
+    required_asserted = [
+        entry
+        for entry in required_present
+        if entry["oracle_status"] == "asserted"
+    ]
+    scope_counts: dict[str, int] = {}
+    for entry in entries:
+        scope = str(entry["scope"])
+        scope_counts[scope] = scope_counts.get(scope, 0) + 1
+    complete = (
+        len(required_present) == len(required)
+        and len(required_mapped) == len(required)
+        and not required_asserted
+    )
     return {
         "schema": "radia.optuna49-api-coverage.v1",
         "upstream_version": "4.9.0",
@@ -836,10 +1057,19 @@ def build_coverage() -> dict[str, Any]:
         "upstream_oracle_sha256": _sha256(ORACLE_PATH),
         "class_oracle_sections": CLASS_ORACLE_SECTIONS,
         "closure_rule": (
-            "full_compatibility_complete is true only when every required public "
-            "symbol/member is present and has an upstream differential-oracle mapping; "
-            "the two documented MATLAB extensions do not waive shared behavior"
+            "full_compatibility_complete is true only when every entry whose scope "
+            "is 'required' is present and has evidence derived from an upstream "
+            "differential-oracle section; assertion-only mappings do not pass"
         ),
+        "scope_rules": SCOPE_RULES,
+        "oracle_asserted_count": asserted_count,
+        "required_oracle_asserted_count": len(required_asserted),
+        "scope_counts": scope_counts,
+        "required_entry_count": len(required),
+        "required_present_count": len(required_present),
+        "required_missing_count": len(required) - len(required_present),
+        "required_oracle_mapped_count": len(required_mapped),
+        "required_oracle_unmapped_count": len(required) - len(required_mapped),
         "allowed_matlab_extensions": [
             "parallel execution and scheduling",
             "MATLAB table and MAT-file storage",
@@ -849,8 +1079,11 @@ def build_coverage() -> dict[str, Any]:
         "surface_missing_count": missing_count,
         "oracle_verified_count": verified_count,
         "oracle_partial_count": partial_count,
-        "oracle_unmapped_count": len(entries)-verified_count-partial_count,
-        "full_compatibility_complete": missing_count == 0 and verified_count == len(entries),
+        "oracle_unmapped_count": len(entries)
+        - verified_count
+        - partial_count
+        - asserted_count,
+        "full_compatibility_complete": complete,
         "entries": entries,
     }
 

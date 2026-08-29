@@ -37,3 +37,4 @@ Use these blocks for signal processing blocks.
 - [[uncategorized]]
 - [[plant-models]]
 - [[power]]
+- [[control]]
