@@ -8,7 +8,11 @@ exposed several failure modes.
 
 ## Review status
 
-- Revised: 2026-08-29 against `origin/main` at `22fc5630e`.
+- Revised: 2026-08-29 against `origin/main` at `c15e626d2`.
+- The `22fc5630e..c15e626d2` HEAD increment is the Eqnedit64 pull request
+  (`#34`) only. It changes no HDiv source, test, validation, MATLAB, or HDiv
+  documentation path, so the numerical findings and measurements below remain
+  current at this HEAD.
 - HDiv hardening anchor: `87309e662` (`fix(hdiv): contain HACApK callback failures`).
 - Claude review source: branch `claude/cubit-vol-main-path`, commits
   `2c939a8ed`, `4b30479b6`, and `cf79734b9`. Their measurements and useful
@@ -74,7 +78,7 @@ explicit in-process Python fallback because NGSolve setup is Python-owned.
 
 | ID | Priority | Finding | Evidence and required disposition |
 |---|---|---|---|
-| F1 | P1 | The IMA field contract is red. | Isolated measurements were `2.0248220545e-14` and `4.9318891895e-14` relative error for the two HEX `rad.Fld`/`FieldFromSolution` gates, and `2.3931079340e-15` component error for curved TET BDM2. The limit is `2.2204460493e-15` (`10 eps`). Preserve the limit; align solve reduction and source accumulation order rather than loosening it. |
+| F1 | P1 | The IMA field contract is red. | At `c15e626d2`, isolated measurements were `2.0215455732e-14` and `4.9262068294e-14` relative error for the two HEX `rad.Fld`/`FieldFromSolution` gates, and `2.3931079340e-15` component error for curved TET BDM2. The limit is `2.2204460493e-15` (`10 eps`). Preserve the limit; align solve reduction and source accumulation order rather than loosening it. |
 | F2 | P1 | RT0 is publicly advertised again despite the BDM1/BDM2-only decision. | `_capabilities.py` exposes 3D TET/HEX order 0 and `DemagOperator` documents an order-0 broken-interface path. `HDivSolver` and field evaluation accept only orders 1 and 2. Remove the public RT0 entries/path and retain any topology-only experiment outside the production API. |
 | F3 | P1 | Fine-TET loss of SPD is an unclosed correctness report. | Claude reported `p^T A p = -1.90e5` at 8.75 mm and `-7.51e8` at 7.0 mm, but the mesh/configuration is absent from `main`. Commit the reproducer before changing quadrature, ACA, or CG. |
 | F4 | P1 | The C-yoke accuracy comparison is not self-replaying. | The Cubit journals exist only on the Claude branch and `src/radia/esrf_examples.py` was untracked. The B-H interpolants also differed. Promote a validation driver, one material law, configs, and JSON results together. |
@@ -361,8 +365,8 @@ the combined validation process and when run alone:
 
 | Test | Measured error | Required limit |
 |---|---:|---:|
-| HEX `rad.Fld`, one reflected cell | 2.024822054511977e-14 relative | 2.220446049250313e-15 |
-| HEX `FieldFromSolution`, multicell reflection | 4.931889189540598e-14 relative | 2.220446049250313e-15 |
+| HEX `rad.Fld`, one reflected cell | 2.021545573177244e-14 relative | 2.220446049250313e-15 |
+| HEX `FieldFromSolution`, multicell reflection | 4.926206829443837e-14 relative | 2.220446049250313e-15 |
 | curved TET BDM2 IMA field | 2.393107934040017e-15 componentwise | 2.220446049250313e-15 |
 
 These are deterministic arithmetic-order discrepancies, not the previously
@@ -413,6 +417,8 @@ worktree:
 
 - `Build.ps1 -Verbose`: PASS after the C++ review hardening;
 - 71 focused production tests: PASS in 33.05 s;
+- latest-HEAD smoke (`c15e626d2`): 15 focused build-safety, deterministic,
+  capability, and field-evaluator tests PASS in 4.45 s;
 - loop-free, symmetry-loop, PSD, high-order TET, linear recoil, and irreversible
   EnergyStop validation: PASS;
 - NGSolve HDiv pyramid tripwire: expected xfail;
