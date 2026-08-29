@@ -44,6 +44,11 @@ Eqnedit64.exe と Web/JS 数式エディタは、Radia の `tools/eqnedit64` で
 補助要素は異なってよいが、総和、積分、分数、根号、上線、下線を正規化し、保存OOXMLの
 インライン`m:oMath`とPowerPoint描画を一致させる。実機基準式ではOMML部分とPNGが
 一致することを確認する。
+複数行`aligned`はnative/Webとも各行を1つの`mtd`へ正規化する。`&`なしの行頭と
+各行頭にMathML `maligngroup`、`&`なしの行頭と明示`&`の位置に`malignmark`を置き、
+Officeの`m:eqArr`変換後も長短行の
+左端または指定整列点を一致させる。MathML `columnalign="left"`だけではOfficeが
+無視するため合格条件にならない。
 空のテキストボックス、置換文字だけの描画、画像への退化は不合格とする。
 
 PowerPointの通常貼り付け受入試験は、画面外の一時プレゼンテーションに対して
