@@ -5,6 +5,35 @@
 [`CANONICAL_OPERATION.md`](CANONICAL_OPERATION.md) と `release-eqnedit64` skillを
 正とする。`build\accept_release.ps1`は隔離CI/VM用であり、対話中LABでは実行しない。
 
+## 2026-08-30 Eqnedit64 3.0.9公開候補検証
+
+- 利用者から、3.0.8のPowerPoint貼り付けは左寄せだが24 ptに見えず、EXEタイトルも
+  source stampだけでは製品版が分からないとの指摘を受けた。
+- Microsoft 365の公式MathML資料は、`mathsize`のlength値をフォントサイズとして
+  受理し、`display="block"`を中央のdisplay数式、指定なし/inlineを文中数式として
+  読み込むと明記している。したがって24 ptと左寄せは排他的な仕様ではない。
+  <https://learn.microsoft.com/en-us/office/math/mathml>
+- MicrosoftのDrawingML相互運用仕様では、run/paragraph末尾の`sz`が指定されない場合、
+  PowerPointの既定値は`1800`（18 pt）である。図形だけを選択したリボン表示と、
+  数式runや数式末尾の挿入点の実サイズを区別する必要がある。
+  <https://learn.microsoft.com/en-us/openspecs/office_standards/ms-oe376/4823e093-d57b-4b05-91a6-4858174d8b64>
+- 公開済み`O:\Eqnedit64.exe` 3.0.8を非表示の実PowerPointへ貼り付け、`x`、
+  `E=mc^2`、`\frac{x}{y}`、n-ary/分数/根号/上線/下線を含むrelease fixtureの4式を
+  調べた。全式で数式run、末尾NBSP、末尾直後のzero-length insertion rangeが
+  24.0 pt、段落alignment=1（左）、`MathZones.Count=1`だった。両立不能ではない。
+- 3.0.9では実PowerPoint試験にzero-length insertion rangeを追加し、次に入力する文字が
+  18 ptへ戻る場合も失敗させる。ネイティブタイトル、About、`--version`表示は
+  `数式エディタ64 3.0.9 [source stamp]`形式へ統一する。
+- ローカル3.0.9候補は署名`Valid`、ProductVersion 3.0.9、`--self-test=0`。
+  最小化して起動した実ウィンドウのタイトルは
+  `無題.tex — 数式エディタ64 3.0.9 [6990c5e62]`だった。背景/GUI/font安全性、
+  271編集、3,075 fuzz、24 usability preference、CPython 3.12 wheel実インストールを
+  通過した。
+- 候補EXEの実PowerPoint試験は数式24.0 pt、末尾24.0 pt、末尾挿入点24.0 pt、
+  left=0 pt、640x98描画で合格した。同じ参照式を公開Web版から貼り付けても
+  24/24/24 pt、左寄せとなり、保存Office MathとPowerPoint描画PNGは候補EXEと
+  byte-identicalだった。
+
 ## 2026-08-29 Eqnedit64 3.0.8公開検証
 
 - 利用者の実機確認でnative/Webの見た目は一致したが、数式末尾のカーソル位置が
