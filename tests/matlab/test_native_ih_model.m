@@ -46,21 +46,23 @@ config=workspace.getVariable("radia_ih_config");
 verifyEqual(testCase,string(config.dt_order), ...
     "eddy;transport(theta_prev,theta_now);thermal");
 verifyEqual(testCase,string(get_param(modelName,"Solver")),"FixedStepDiscrete");
-% Off-screen traces looked like an empty scope (temperature ~293 K vs
-% the Manual [-10 10] default axes); the builder must emit Auto axes.
-scopeNames=["Heat Density","Temperature"];
+outports=find_system(modelName,SearchDepth=1,BlockType="Outport");
+verifyEqual(testCase,numel(outports),3);
+verifyEqual(testCase,string(get_param(modelName+"/IH Monitor","Mask")),"on");
+verifyEmpty(testCase,find_system(modelName,SearchDepth=1, ...
+    BlockType="BusCreator"));
+verifyEqual(testCase,string(get_param( ...
+    modelName+"/IH Monitor/Runtime","FunctionName")), ...
+    "radia_ih_monitor_sfun");
+verifyEqual(testCase,string(get_param( ...
+    modelName+"/IH Monitor/Bus","OutDataTypeStr")),"Bus: IHMonitorBusV1");
+scopeNames=["Heat Scope","Temperature Scope"];
 for scopeIndex=1:numel(scopeNames)
     scopeConfiguration=get_param( ...
-        modelName+"/"+scopeNames(scopeIndex),"ScopeConfiguration");
+        modelName+"/IH Dashboard/"+scopeNames(scopeIndex), ...
+        "ScopeConfiguration");
     verifyEqual(testCase,string(scopeConfiguration.AxesScaling),"Auto");
 end
-% Scopes read the [min mean max] reductions, never the raw field vector
-% (a real configuration has thousands of DOFs and the raw plot is
-% unreadable); the outports keep the full vectors.
-verifyEqual(testCase,scopeSourceName(modelName+"/Heat Density"), ...
-    "Heat Stats");
-verifyEqual(testCase,scopeSourceName(modelName+"/Temperature"), ...
-    "Temperature Stats");
 verifyEqual(testCase,scopeSourceName(modelName+"/temperature_K"), ...
     "Thermal");
 % The config_file mask callback runs in the base workspace, so it must
@@ -81,7 +83,12 @@ evalin("base",callbackText);
 verifyEqual(testCase,string(get_param(modelName,"FixedStep")), ...
     string(compose("%.17g",0.05)));
 set_param(modelName,"SimulationCommand","update");
-sim(modelName,"StopTime","0.2");
+out=sim(modelName,"StopTime","0.2",ReturnWorkspaceOutputs="on");
+monitor=out.get("radia_ih_monitor");
+verifyEqual(testCase,size(monitor,2),7);
+verifyEqual(testCase,monitor(end,1:3),[1,1,1],"AbsTol",1e-12);
+verifyEqual(testCase,monitor(end,7),1,"AbsTol",1e-12);
+verifyGreaterThan(testCase,monitor(end,5),293.15);
 end
 
 function name = scopeSourceName(blockPath)
@@ -106,18 +113,19 @@ verifyEqual(testCase,string(get_param(geometryBlock,"Mask")),"on");
 mask = Simulink.Mask.get(geometryBlock);
 verifyNotEmpty(testCase,mask.getDialogControl("browse_wp_vol"));
 verifyNotEmpty(testCase,mask.getDialogControl("browse_coil_file"));
-% The tracked model must carry the display fixes: Auto scope axes and
-% the [min mean max] reductions in front of both scopes, with the
-% outports still fed the raw field vectors.
-for scopeName=["Heat Density","Temperature"]
-    scopeConfiguration=get_param("radia_ih/"+scopeName, ...
+for scopeName=["Heat Scope","Temperature Scope"]
+    scopeConfiguration=get_param("radia_ih/IH Dashboard/"+scopeName, ...
         "ScopeConfiguration");
     verifyEqual(testCase,string(scopeConfiguration.AxesScaling),"Auto");
 end
-verifyEqual(testCase,scopeSourceName("radia_ih/Heat Density"), ...
-    "Heat Stats");
-verifyEqual(testCase,scopeSourceName("radia_ih/Temperature"), ...
-    "Temperature Stats");
+verifyEqual(testCase,string(get_param("radia_ih/IH Monitor","Mask")),"on");
+verifyEmpty(testCase,find_system("radia_ih",SearchDepth=1, ...
+    BlockType="BusCreator"));
+verifyEqual(testCase,string(get_param( ...
+    "radia_ih/IH Monitor/Runtime","FunctionName")), ...
+    "radia_ih_monitor_sfun");
+verifyEqual(testCase,string(get_param( ...
+    "radia_ih/IH Monitor/Bus","OutDataTypeStr")),"Bus: IHMonitorBusV1");
 verifyEqual(testCase,scopeSourceName("radia_ih/temperature_K"),"Thermal");
 % And the repaired config_file mask contract (base-workspace callback).
 parametersMask=Simulink.Mask.get("radia_ih/IH Parameters");

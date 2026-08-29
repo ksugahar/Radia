@@ -672,6 +672,17 @@ transport from the previous angle to the current angle, then one implicit
 thermal step. A linear magnetic configuration reuses its Eddy solution under a
 current-only change and rescales heat by current squared.
 
+The model keeps the raw heat-density and temperature vectors as outputs and
+adds one fixed-schema `IHMonitorBusV1` output for ordinary scopes, Bus
+Selectors, SDI, and logging. Its nested `RadiaMonitorHeaderV1` matches the
+Optuna monitor header; the IH payload contains current, angle, ambient
+temperature, heat-density min/weighted-mean/max, total heat, and temperature
+min/weighted-mean/max. Cell weights come from the validated native
+configuration, so the dashboard does not confuse a DOF arithmetic mean with a
+physical volume-weighted result. The reduction runtime and Bus Creators are
+encapsulated inside the masked `IH Monitor` subsystem; the top-level teaching
+model never exposes the internal telemetry fan-out.
+
 The standalone model's `Geometry Update` mask has `Browse...` controls for the
 workpiece `.vol`/`.vol.gz` mesh and coil `.step`/`.stp` (PEEC) or
 `.vol`/`.vol.gz` (BEM-A) geometry. Once
@@ -820,10 +831,13 @@ Generic Simulink optimization is also standalone. `SimulinkRunner`,
 `Simulink.SimulationInput`, and do not call Radia. Electromagnetic application
 models, Radia library blocks, PEEC, and sheet-metal adapters remain Radia-owned.
 The generic `radia.simulink.buildOptunaStudyBlock` is the default Simulink
-surface: two command inputs and four progress outputs wrap the complete
-runtime, while study review and trial application use the block mask and
-normalized MAT tables. Changing sampler, seed, pruner, bounds, budget, or
-storage therefore does not require rewiring. The six-input/eighteen-output
+surface: two command inputs, four convenience progress outputs, and one typed
+`OptunaMonitorBusV1` output wrap the complete runtime, while study review and
+trial application use the block mask and normalized MAT tables. The monitor
+Bus has a fixed scalar schema with the shared `RadiaMonitorHeaderV1` header;
+variable-length histories and Pareto points remain in the MAT tables. Changing
+sampler, seed, pruner, bounds, budget, or storage therefore does not require
+rewiring. The six-input/eighteen-output
 `radia.simulink.buildOptunaBlock` and `addOptunaMonitor` remain explicit
 advanced interfaces for models that need every lifecycle and telemetry signal.
 These files are an audited standalone subset of `radia.simulink`; they do not

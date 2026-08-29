@@ -78,6 +78,13 @@
       "test": "testUseParallelRefusesWithoutAPool"
     },
     {
+      "classification": "matlab-integration",
+      "file": "test_optuna_got_interface.m",
+      "oracle": null,
+      "scope": "MATLAB Global Optimization Toolbox-shaped surface: optimoptions, the [x, fval, exitflag, output] contract, init/iter/done callbacks, and sdo-style parameter objects; this is not upstream parity",
+      "test": "testOptimizeRefusesMultiobjectiveContract"
+    },
+    {
       "classification": "upstream-mcp",
       "file": "test_optuna_mcp_oracle.m",
       "oracle": "optuna49_mcp_oracle.json",

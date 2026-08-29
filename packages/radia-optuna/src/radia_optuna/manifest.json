@@ -16,6 +16,8 @@
     "+radia/+optuna/+internal/setupSimulinkWorker.m",
     "+radia/+simulink/buildOptunaBlock.m",
     "+radia/+simulink/buildOptunaStudyBlock.m",
+    "+radia/+simulink/makeMonitorHeaderBusObject.m",
+    "+radia/+simulink/makeOptunaMonitorBusObject.m",
     "+radia/+simulink/buildOptunaTeachingModel.m",
     "+radia/+simulink/reviewOptunaStudy.m",
     "+radia/+simulink/applyOptunaTrial.m",
