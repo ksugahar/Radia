@@ -1,0 +1,92 @@
+{
+  "schema": "radia.validation.c-type-formulation-timing-summary.v1",
+  "date": "2026-08-30",
+  "release": {
+    "radia_version": "4.95.70",
+    "git_tag": "v4.95.70",
+    "git_sha": "c2299e973cc3fb3d4576af68142ffd8b18c4fe64"
+  },
+  "contract": {
+    "primary_pair": [
+      "hdiv_mmm",
+      "omega_reduced_omega"
+    ],
+    "mode": "nonlinear",
+    "hdiv_order": 2,
+    "fem_order": 2,
+    "hdiv_gram_eps": 1e-14,
+    "threads": 38,
+    "fresh_repetitions_per_machine": 3,
+    "material_interpolation": "monotone PCHIP B(H), vacuum-slope continuation beyond H_max",
+    "finite_outer_air_box": false,
+    "hdiv_open_boundary": "iron-only Coulomb ChargeGram",
+    "omega_open_boundary": "periodic spherical Kelvin domain",
+    "mesh_result_sha256": "3d9fdaf21cca475dc4e33fe57b61d4fadc5160998fc4459141264d4a104f4534",
+    "iron_vol_sha256": "932f99b95303e9dba2f40a43fca574d8e97430b5b68d109d7b06e3ead8aeb978",
+    "kelvin_domain_vol_sha256": "0cc559e6dcdabc61fd37f7c09b09674c228710b9af7682b947927d41984628d4",
+    "bh_table_sha256": "7a0711748f130a636f19957ac6f2de2d00d32bf164c7c244d09aaae5af5222ee"
+  },
+  "common_result": {
+    "all_runs_passed": true,
+    "hdiv_ndof": 10860,
+    "omega_ndof": 50322,
+    "hdiv_nonlinear_newton_iterations": 5,
+    "hdiv_inner_linear_iterations": 1636,
+    "omega_nonlinear_picard_iterations": 17,
+    "gap_core_relative_rms": 0.00180320126618,
+    "gap_core_maximum_absolute_difference_T": 0.000824571194253,
+    "hdiv_off_plane_reflection_relative_rms": 1.8483049744648358e-10,
+    "omega_off_plane_reflection_relative_rms_range": [
+      1.8246135596546608e-10,
+      1.8288699945115501e-10
+    ]
+  },
+  "machines": {
+    "mdx": {
+      "cpu": "Intel(R) Xeon(R) Platinum 8368 CPU @ 2.40GHz",
+      "physical_cores": 38,
+      "logical_processors": 38,
+      "physical_memory_bytes": 61680386048,
+      "hdiv_runtime_s": [
+        12.521729300031438,
+        12.06912870000815,
+        12.090422399982344
+      ],
+      "omega_runtime_s": [
+        42.589569700008724,
+        42.75198110000929,
+        40.7772025000304
+      ],
+      "hdiv_median_runtime_s": 12.090422399982344,
+      "omega_median_runtime_s": 42.589569700008724,
+      "omega_over_hdiv_median_runtime_ratio": 3.5225874077047066
+    },
+    "hibino": {
+      "cpu": "Intel(R) Xeon(R) Platinum 8368 CPU @ 2.40GHz",
+      "physical_cores": 38,
+      "logical_processors": 38,
+      "physical_memory_bytes": 61680418816,
+      "hdiv_runtime_s": [
+        11.306778199970722,
+        10.930524700030219,
+        11.749455100041814
+      ],
+      "omega_runtime_s": [
+        44.519226100004744,
+        41.77599359996384,
+        43.2841832000413
+      ],
+      "hdiv_median_runtime_s": 11.306778199970722,
+      "omega_median_runtime_s": 43.2841832000413,
+      "omega_over_hdiv_median_runtime_ratio": 3.828162402633261
+    }
+  },
+  "artifacts": {
+    "mdx_20260830_nonlinear_order2_run1.json": "b1a6b8fdaf987be1536152c2c7cd2a42ce5a558373425751dd90431023f52cc9",
+    "mdx_20260830_nonlinear_order2_run2.json": "7a7cc6c31bb29581e31b9f01dd09a2bdcc2c1ecc0290ee18dc4333d3252450f4",
+    "mdx_20260830_nonlinear_order2_run3.json": "12644f42bf2c2f9b8891d463861d9ade03677ae5c206e12014716c0db8983c3a",
+    "hibino_20260830_nonlinear_order2_run1.json": "0ec29306a5fe4435c4158e713cf6fee69ecf0c79bdde89f170b9b6fae989f2c3",
+    "hibino_20260830_nonlinear_order2_run2.json": "10db6b477e2109f3d0fd7ef95f2f6f15ac89b5cbce53085f777a50c66f1464eb",
+    "hibino_20260830_nonlinear_order2_run3.json": "8967f797432cf387146672431fd91d4c83b0ab1a156df528848a042be7e2e41a"
+  }
+}
