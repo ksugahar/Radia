@@ -35,6 +35,52 @@ from math import sqrt as msqrt
 MU_0 = 4 * np.pi * 1e-7
 
 
+def _build_nu_of_b_interpolator(bh_data):
+    """Invert the production monotone PCHIP B(H) law for reduced-A.
+
+    HDiv-MMM and Omega-reduced-Omega consume B(H) directly.  Reduced-A needs
+    H(B), so each scalar value is inverted against that same PCHIP curve rather
+    than constructing a second interpolation law.  Above the table, the shared
+    vacuum-slope continuation has the analytic inverse.
+    """
+    from scipy.optimize import brentq
+    from radia.scalar_potential_solver import _build_bh_interpolator
+
+    bh = np.asarray(bh_data, dtype=float)
+    if bh.ndim != 2 or bh.shape[1] < 2 or bh.shape[0] < 2:
+        raise ValueError("bh_data must contain at least two [H, B] rows")
+    h_values = bh[:, 0]
+    b_values = bh[:, 1]
+    b_of_h = _build_bh_interpolator(bh)
+    h_min = float(h_values[0])
+    h_max = float(h_values[-1])
+    b_min = float(b_values[0])
+    b_max = float(b_values[-1])
+    positive = np.flatnonzero((h_values > 0.0) & (b_values > 0.0))
+    if positive.size == 0:
+        raise ValueError("bh_data must contain a positive H, B sample")
+    initial_reluctivity = float(h_values[positive[0]] / b_values[positive[0]])
+
+    def nu_of_b(value):
+        b_value = max(float(value), 0.0)
+        if b_value <= max(b_min, 1.0e-15):
+            return initial_reluctivity
+        if b_value <= b_max:
+            h_value = brentq(
+                lambda candidate: b_of_h(candidate) - b_value,
+                h_min,
+                h_max,
+                xtol=1.0e-10,
+                rtol=1.0e-13,
+                maxiter=100,
+            )
+        else:
+            h_value = h_max + (b_value - b_max) / MU_0
+        return float(h_value / b_value)
+
+    return nu_of_b, b_max
+
+
 class VectorPotentialSolver:
     """Reduced vector potential magnetostatic solver (Radia + NGSolve).
 
@@ -582,50 +628,12 @@ class VectorPotentialSolver:
         from ngsolve import (HCurl, L2, GridFunction, BilinearForm, LinearForm,
                              curl, InnerProduct, Norm, dx, VOL, Preconditioner,
                              TaskManager)
-        from scipy.interpolate import interp1d
-
         if self._B_source_cf is None:
             raise RuntimeError("Set source field first")
 
-        # Build nu(B) interpolation from B-H curve
-        bh = np.array(bh_data)
-        H_tab, B_tab = bh[:, 0], bh[:, 1]
-
-        sort_idx = np.argsort(B_tab)
-        B_sorted = B_tab[sort_idx]
-        H_sorted = H_tab[sort_idx]
-
-        mask = np.diff(B_sorted, prepend=-1) > 0
-        B_unique = B_sorted[mask]
-        H_unique = H_sorted[mask]
-
-        # nu(B) = H(B) / B
-        nu_arr = np.zeros_like(B_unique)
-        if B_unique[0] == 0 and H_unique[0] == 0:
-            nu_arr[0] = (H_unique[1] / B_unique[1]
-                         if B_unique[1] > 0 else 1.0 / (MU_0 * 1000))
-        else:
-            nu_arr[0] = (H_unique[0] / B_unique[0]
-                         if B_unique[0] > 0 else 1.0 / (MU_0 * 1000))
-        for i in range(1, len(B_unique)):
-            nu_arr[i] = H_unique[i] / B_unique[i]
-
-        # Extend to high B
-        B_ext = list(B_unique)
-        nu_ext = list(nu_arr)
-        if B_unique[-1] < 5.0:
-            dH_dB_end = ((H_unique[-1] - H_unique[-2]) /
-                         (B_unique[-1] - B_unique[-2]))
-            for B_val in np.linspace(B_unique[-1] + 0.1, 10.0, 50):
-                H_val = H_unique[-1] + dH_dB_end * (B_val - B_unique[-1])
-                nu_ext.append(H_val / B_val)
-                B_ext.append(B_val)
-
-        nu_interp = interp1d(B_ext, nu_ext, kind='linear',
-                             fill_value='extrapolate')
-        nu_iron_init = nu_ext[0]
+        nu_of_b, B_sat = _build_nu_of_b_interpolator(bh_data)
+        nu_iron_init = nu_of_b(0.0)
         nu_air = 1.0 / MU_0
-        B_sat = B_unique[-1]
 
         # FE space
         fes = self._make_hcurl_space(dirichlet)
@@ -664,23 +672,26 @@ class VectorPotentialSolver:
         B_old_arr = None
         converged = False
         final_relative_change = None
+        maximum_linear_relative_residual = 0.0
         iterations = 0
-        eps = 1e-10
-        # Keep the dimensionless gauge convention identical to solve_linear().
-        # Scaling by the vacuum reluctivity is essential in the Kelvin ball,
-        # where the transformed curl-curl coefficient vanishes at its centre.
+        eps = 1e-6
+        # Retain the vacuum-reluctivity scaling used by solve_linear(), but use
+        # a stronger dimensionless gauge for nonlinear periodic Kelvin systems
+        # so every Picard matrix remains in PARDISO's SPD regime.  The physical
+        # curl(A) field is audited by mesh convergence and the three-formulation
+        # HDiv-MMM / reduced-A / omega-reduced-omega comparison.
         gauge_coeff = eps * nu_air
         solver = self._select_solver(fes.ndof, solver)
 
         if verbose:
             solver_names = {'ams': 'AMS+CG', 'bddc': 'BDDC+CG',
-                            'direct': 'pardiso'}
+                            'direct': 'PARDISO SPD'}
             print(f"  Picard iteration (solver: {solver_names.get(solver, solver)}):")
 
         for it in range(maxiter):
             iterations = it + 1
             # Assemble: nu * curl(A) . curl(v) + eps * A . v
-            a = BilinearForm(fes)
+            a = BilinearForm(fes, symmetric=True)
             for mat in phys_mats:
                 a += nu_gf * InnerProduct(curl(A_trial), curl(v)) * dx(mat)
                 a += gauge_coeff * InnerProduct(A_trial, v) * dx(mat)
@@ -719,7 +730,28 @@ class VectorPotentialSolver:
                 A_gf.vec.data = inv * f.vec
             else:
                 A_gf.vec.data = a.mat.Inverse(
-                    fes.FreeDofs(), inverse='pardiso') * f.vec
+                    fes.FreeDofs(), inverse='pardisospd') * f.vec
+
+            linear_residual = f.vec.CreateVector()
+            linear_residual.data = f.vec - a.mat * A_gf.vec
+            rhs_norm = float(Norm(f.vec))
+            linear_relative_residual = (
+                float(Norm(linear_residual)) / rhs_norm if rhs_norm > 0.0 else 0.0
+            )
+            maximum_linear_relative_residual = max(
+                maximum_linear_relative_residual, linear_relative_residual
+            )
+            if not np.isfinite(linear_relative_residual):
+                raise RuntimeError(
+                    "reduced-A linear solve produced a non-finite residual "
+                    f"at Picard iteration {it}"
+                )
+            if linear_relative_residual > 1.0e-4:
+                raise RuntimeError(
+                    "reduced-A linear solve failed its relative-residual "
+                    f"contract at Picard iteration {it}: "
+                    f"{linear_relative_residual:.6e}"
+                )
 
             # B_total = B_s + curl(A_r)
             B_total_cf = self._B_source_cf + curl(A_gf)
@@ -742,7 +774,7 @@ class VectorPotentialSolver:
                     B_mag = 0.0
 
                 if B_mag > 1e-10:
-                    nu_new = float(nu_interp(B_mag))
+                    nu_new = nu_of_b(B_mag)
                 else:
                     nu_new = nu_iron_init
 
@@ -783,6 +815,8 @@ class VectorPotentialSolver:
             'final_relative_change': final_relative_change,
             'tolerance': float(tol),
             'maximum_iterations': int(maxiter),
+            'maximum_linear_relative_residual': maximum_linear_relative_residual,
+            'direct_inverse': 'pardisospd' if solver == 'direct' else None,
         }
         if not converged and verbose:
             print(f"   WARNING: Not converged after {maxiter} iterations")
