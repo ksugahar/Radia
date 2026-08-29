@@ -3174,28 +3174,46 @@ bool drag_autoscroll(HWND hwnd) {
     return true;
 }
 
+struct ImeWindowPlacement {
+    COMPOSITIONFORM composition{};
+    CANDIDATEFORM candidate{};
+};
+
+ImeWindowPlacement calculate_ime_window_placement(
+        const eqnedit::CaretGeometry& caret, double renderLeft,
+        double renderTop, double renderScale) {
+    const int x = int(std::lround(
+        renderLeft + caret.x * renderScale));
+    const int top = int(std::lround(
+        renderTop + caret.top * renderScale));
+    const int bottom = int(std::lround(
+        renderTop + caret.bottom * renderScale));
+
+    ImeWindowPlacement placement{};
+    placement.composition.dwStyle = CFS_POINT;
+    /* ptCurrentPos is the upper-left of the composition window, not the
+     * place where a candidate list should start.  Using the caret bottom here
+     * displaced the underlined, uncommitted text by one complete input line. */
+    placement.composition.ptCurrentPos = {x, top};
+    placement.candidate.dwIndex = 0;
+    placement.candidate.dwStyle = CFS_EXCLUDE;
+    placement.candidate.ptCurrentPos = {x, bottom};
+    placement.candidate.rcArea = {x, top, x + 2, bottom};
+    return placement;
+}
+
 bool position_ime_windows(HWND hwnd) {
     eqnedit::CaretGeometry caret;
     if (!g.equation.caret_geometry(&caret, g.style)) return false;
     g.renderScale = (GetDpiForWindow(hwnd) / 72.0) * g.zoom;
-    const int x = int(std::lround(
-        g.renderLeft + caret.x * g.renderScale));
-    const int top = int(std::lround(
-        g.renderTop + caret.top * g.renderScale));
-    const int bottom = int(std::lround(
-        g.renderTop + caret.bottom * g.renderScale));
+    ImeWindowPlacement placement = calculate_ime_window_placement(
+        caret, g.renderLeft, g.renderTop, g.renderScale);
     HIMC context = ImmGetContext(hwnd);
     if (!context) return false;
-    COMPOSITIONFORM composition{};
-    composition.dwStyle = CFS_POINT;
-    composition.ptCurrentPos = {x, bottom};
-    const BOOL compositionOk = ImmSetCompositionWindow(context, &composition);
-    CANDIDATEFORM candidate{};
-    candidate.dwIndex = 0;
-    candidate.dwStyle = CFS_EXCLUDE;
-    candidate.ptCurrentPos = {x, bottom};
-    candidate.rcArea = {x, top, x + 2, bottom};
-    const BOOL candidateOk = ImmSetCandidateWindow(context, &candidate);
+    const BOOL compositionOk =
+        ImmSetCompositionWindow(context, &placement.composition);
+    const BOOL candidateOk =
+        ImmSetCandidateWindow(context, &placement.candidate);
     ImmReleaseContext(hwnd, context);
     return compositionOk && candidateOk;
 }
@@ -4485,6 +4503,37 @@ int visual_scale_test() {
             !std::isfinite(caret.x) || !std::isfinite(caret.top) ||
             !std::isfinite(caret.bottom) || caret.bottom <= caret.top)
             return 182;
+
+        /* The IMM32 composition point is the upper-left of the underlined
+         * uncommitted text.  Verify it independently from the candidate point
+         * at the caret bottom at every supported DPI and the reported 175%
+         * zoom, plus the full supported zoom range. */
+        static const double kImeZoom[] = {0.4, 1.0, 1.75, 4.0};
+        for (double zoom : kImeZoom) {
+            constexpr double left = 13.25;
+            constexpr double renderTop = 17.5;
+            const double imeScale = (double(dpi) / 72.0) * zoom;
+            const int expectedX = int(std::lround(
+                left + caret.x * imeScale));
+            const int expectedTop = int(std::lround(
+                renderTop + caret.top * imeScale));
+            const int expectedBottom = int(std::lround(
+                renderTop + caret.bottom * imeScale));
+            const ImeWindowPlacement placement =
+                calculate_ime_window_placement(
+                    caret, left, renderTop, imeScale);
+            if (placement.composition.dwStyle != CFS_POINT ||
+                placement.composition.ptCurrentPos.x != expectedX ||
+                placement.composition.ptCurrentPos.y != expectedTop ||
+                placement.candidate.dwStyle != CFS_EXCLUDE ||
+                placement.candidate.ptCurrentPos.x != expectedX ||
+                placement.candidate.ptCurrentPos.y != expectedBottom ||
+                placement.candidate.rcArea.left != expectedX ||
+                placement.candidate.rcArea.top != expectedTop ||
+                placement.candidate.rcArea.bottom != expectedBottom ||
+                expectedBottom <= expectedTop)
+                return 420;
+        }
 
         const int width = std::max(64, int(std::ceil(metrics.width * scale)) + 32);
         const int height = std::max(64, int(std::ceil(metrics.height * scale)) + 32);

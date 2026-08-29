@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Position Japanese IME composition text at the structural caret top instead
+  of one line below it. Candidate UI remains below the caret. The headless
+  visual test now checks both coordinates across 96--192 dpi and 40--400%
+  zoom, including the reported 175% case.
+
 ## 3.0.10 — 2026-08-30
 
 ### PowerPoint normal-paste acceptance follows the real UI path
