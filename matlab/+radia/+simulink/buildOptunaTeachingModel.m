@@ -65,7 +65,7 @@ for index = 1:numel(inputNames)
         "Optuna Study/" + index);
 end
 
-dashboard = addTeachingDashboard(modelName);
+addTeachingDashboard(modelName);
 for port = 1:4
     add_line(modelName, "Optuna Study/" + port, ...
         "Study Dashboard/" + port);
