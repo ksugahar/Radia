@@ -1,6 +1,7 @@
 param(
     [string]$GooglePngArtifact,
     [string]$PowerPointPngArtifact,
+    [string]$PowerPointPptxArtifact,
     [string]$AppPath
 )
 
@@ -678,8 +679,8 @@ $cliTexInput = "C:\temp\Eqnedit64-cli-input-$runId.tex"
 # A delimiter space after a control word is valid TeX and proves that the
 # public file-based CLI normalises the supplied equation rather than copying a
 # private fixed fixture.
-$expectedRaw = '\sum_{n=1}^{m} a^3 \int_{a}^{b} \frac{f(x)}{\sqrt{y}}\, dx^3'
-$expectedOffice = '\[\sum_{n=1}^{m} a^3 \int_{a}^{b} \frac{f(x)}{\sqrt{y}}\, dx^3\]'
+$expectedRaw = 'x+\sum_{n=1}^{m} a^3 \int_{a}^{b} \frac{f(x)}{\sqrt{y}}\, dx^3 + \overline{u} + \underline{v}'
+$expectedOffice = '\[' + $expectedRaw + '\]'
 [IO.File]::WriteAllText(
     $cliTexInput, $expectedOffice, [Text.UTF8Encoding]::new($false))
 
@@ -726,13 +727,21 @@ function Assert-PowerPointEquationRendering([string]$Path) {
             throw 'PowerPoint-rendered pasted equation is visually blank.'
         }
 
+        if ($minX -gt 24) {
+            throw ("PowerPoint-rendered equation is not left-aligned: " +
+                "first ink is at x=$minX px.")
+        }
+
         $inkWidth = $maxX - $minX + 1
         $inkHeight = $maxY - $minY + 1
         # The fixed acceptance equation contains a fraction.  A replacement
         # glyph or tofu box has ink but cannot contain the long fraction rule.
         # Requiring its silhouette prevents the former "any black pixel" false
         # positive while remaining independent of font antialiasing.
-        $requiredFractionRun = [Math]::Max(20, [int][Math]::Ceiling($inkWidth * 0.25))
+        # A fixed 40 px rule detects the known fraction in this 24 pt fixture
+        # without making the threshold depend on unrelated terms added to the
+        # left-alignment sentinel prefix.
+        $requiredFractionRun = 40
         if ($inkWidth -lt 40 -or $inkHeight -lt 20 -or
             $maxHorizontalRun -lt $requiredFractionRun) {
             throw ("PowerPoint did not render the expected fraction silhouette: " +
@@ -740,7 +749,7 @@ function Assert-PowerPointEquationRendering([string]$Path) {
                 "$maxHorizontalRun px; required width>=40 px, height>=20 px, " +
                 "horizontal run>=$requiredFractionRun px.")
         }
-        return "$($bitmap.Width)x$($bitmap.Height); ink=${inkWidth}x${inkHeight}; fraction-run=$maxHorizontalRun"
+        return "$($bitmap.Width)x$($bitmap.Height); ink-left=$minX; ink=${inkWidth}x${inkHeight}; fraction-run=$maxHorizontalRun"
     } finally {
         $bitmap.Dispose()
     }
@@ -790,8 +799,7 @@ try {
         'MathML Presentation')
     $htmlFormat = [EqneditClipboardNative]::RegisterClipboardFormat('HTML Format')
     $requiredFormats = @(
-        13, 14, 17, $latexFormat, $mathMlFormat,
-        $mathMlPresentationFormat, $htmlFormat)
+        13, 14, 17, $latexFormat, $htmlFormat)
     foreach ($requiredFormat in $requiredFormats) {
         if (-not [EqneditClipboardNative]::IsClipboardFormatAvailable($requiredFormat)) {
             throw "Required clipboard format is missing: $requiredFormat"
@@ -800,20 +808,37 @@ try {
     if ((Read-ClipboardUnicodeText) -ne $expectedOffice) {
         throw 'CF_UNICODETEXT does not contain the Office-recognisable TeX wrapper.'
     }
-    if ((Read-ClipboardUtf8 $latexFormat) -ne $expectedRaw) {
-        throw 'Registered LaTeX clipboard format does not contain the raw TeX fragment.'
+    $actualRaw = Read-ClipboardUtf8 $latexFormat
+    if ($actualRaw -ne $expectedRaw) {
+        throw ("Registered LaTeX clipboard format does not contain the raw " +
+            "TeX fragment: actual=<$actualRaw> expected=<$expectedRaw>")
     }
-    $mathMl = Read-ClipboardUtf16 $mathMlFormat
-    $mathMlPresentation = Read-ClipboardUtf16 $mathMlPresentationFormat
     $officeHtml = Read-ClipboardUtf8 $htmlFormat
-    if ($mathMl -ne $mathMlPresentation -or
-        -not $officeHtml.Contains($mathMl + '&#160;') -or
+    $startMarker = '<!--StartFragment-->'
+    $endMarker = '<!--EndFragment-->'
+    $fragmentStart = $officeHtml.IndexOf($startMarker)
+    $fragmentEnd = $officeHtml.IndexOf($endMarker)
+    if ($fragmentStart -lt 0 -or $fragmentEnd -le $fragmentStart) {
+        throw 'CF_HTML fragment markers are missing.'
+    }
+    $fragmentStart += $startMarker.Length
+    $fragment = $officeHtml.Substring(
+        $fragmentStart, $fragmentEnd - $fragmentStart)
+    $mathMl = if ($fragment.EndsWith('&#160;')) {
+        $fragment.Substring(0, $fragment.Length - '&#160;'.Length)
+    } else { '' }
+    if ([EqneditClipboardNative]::IsClipboardFormatAvailable($mathMlFormat) -or
+        [EqneditClipboardNative]::IsClipboardFormatAvailable($mathMlPresentationFormat)) {
+        throw 'Normal copy exposed registered MathML that PowerPoint centres.'
+    }
+    if ($officeHtml -notmatch '<math\b' -or
+        $officeHtml -notmatch '</math>&#160;<!--EndFragment-->' -or
         $mathMl -notmatch 'display="inline"' -or
         $mathMl -notmatch 'mathsize="24pt"' -or
         $mathMl -notmatch '<mfrac>' -or $mathMl -notmatch '<msqrt>' -or
         $mathMl -notmatch '<munderover><mo[^>]*>&#x2211;</mo>' -or
         $mathMl -notmatch '<msubsup><mo[^>]*>&#x222B;</mo>') {
-        throw 'Eqnedit64 did not publish equivalent inline 24 pt MathML/HTML formats.'
+        throw 'Eqnedit64 did not publish inline 24 pt structural MathML in CF_HTML.'
     }
     $dibContract = Assert-DibV5OpaqueBlackOnWhite (Read-ClipboardBytes 17)
 
@@ -841,15 +866,20 @@ try {
     $slideXml = Get-SlideXml $pptxOutput
     $hasInlineContainer = $slideXml -match '<a14:m(?:\s|>)'
     $hasInlineMath = $slideXml -match '<m:oMath(?:\s|>)'
+    $hasDisplayMath = $slideXml -match '<m:oMathPara(?:\s|>)'
     $hasFraction = $slideXml -match '<m:f>'
     $hasRadical = $slideXml -match '<m:rad>'
     $naryCount = ([regex]::Matches($slideXml, '<m:nary>')).Count
-    if (-not $hasInlineContainer -or -not $hasInlineMath -or
-        -not $hasFraction -or -not $hasRadical -or $naryCount -lt 2) {
+    $barCount = ([regex]::Matches($slideXml, '<m:bar>')).Count
+    $accentCount = ([regex]::Matches($slideXml, '<m:acc>')).Count
+    if (-not $hasInlineContainer -or -not $hasInlineMath -or $hasDisplayMath -or
+        -not $hasFraction -or -not $hasRadical -or $naryCount -lt 2 -or
+        ($barCount + $accentCount) -lt 2) {
         throw (("PowerPoint paste contract failed: inlineContainer={0}, " +
-            "inlineMath={1}, fraction={2}, radical={3}, nary={4}, " +
-            "artifact={5}") -f $hasInlineContainer, $hasInlineMath,
-            $hasFraction, $hasRadical, $naryCount, $pptxOutput)
+            "inlineMath={1}, displayMath={2}, fraction={3}, radical={4}, nary={5}, " +
+            "bars={6}, accents={7}, artifact={8}") -f $hasInlineContainer, $hasInlineMath,
+            $hasDisplayMath, $hasFraction, $hasRadical, $naryCount, $barCount,
+            $accentCount, $pptxOutput)
     }
     # XML and MathZones can both exist while PowerPoint draws no equation.
     # Shape.Export invokes PowerPoint's own renderer without a visible window;
@@ -976,9 +1006,12 @@ try {
     if ($PowerPointPngArtifact) {
         Write-ImageOnWhite $powerPointPngOutput $PowerPointPngArtifact
     }
+    if ($PowerPointPptxArtifact) {
+        Copy-Item -LiteralPath $pptxOutput -Destination $PowerPointPptxArtifact
+    }
 
     Write-Host "PASS: normal DIBV5 is opaque black-on-white ($dibContract)"
-    Write-Host 'PASS: clipboard contains raw LaTeX, identical HTML/registered MathML, Office TeX, EMF, and DIBV5'
+    Write-Host 'PASS: clipboard contains raw LaTeX, inline MathML CF_HTML, Office TeX, EMF, and DIBV5 without centring registered MathML'
     Write-Host ("PASS: no-selection GUI copy -> visible editable Office Math " +
         "in PowerPoint ($powerPointFontSize pt, left=$powerPointLeft pt, " +
         "rendered $powerPointImageSize with ink)")

@@ -42,7 +42,7 @@ def row(
 def main() -> None:
     text = "\n".join([
         "\ufeff# Eqnedit64 operation log v2",
-        row(1, 0, "debug.start", "Eqnedit64 3.0.6 path=C:\\\\redacted"),
+        row(1, 0, "debug.start", "Eqnedit64 3.0.7 path=C:\\\\redacted"),
         row(2, 100, "template.frac", latex="\\\\frac{}{}"),
         row(3, 500, "edit.undo", latex="x"),
         row(4, 600, "caret.right", "shift=0 changed=1"),

@@ -5,6 +5,25 @@
 [`CANONICAL_OPERATION.md`](CANONICAL_OPERATION.md) と `release-eqnedit64` skillを
 正とする。`build\accept_release.ps1`は隔離CI/VM用であり、対話中LABでは実行しない。
 
+## 2026-08-29 Eqnedit64 3.0.7公開候補検証
+
+- 3.0.6の合格判定は外側テキスト段落の左揃えだけを見ており、数式本体が中央の
+  `m:oMathPara`になった回帰を見逃していた。公開候補では通常コピーから登録MathMLと
+  Web版の直接OMMLを除き、両版をinline 24 pt MathML + 末尾NBSPの同期CF_HTMLへ統一した。
+- 基準式
+  `x+\sum_{n=1}^{m} a^3 \int_{a}^{b} \frac{f(x)}{\sqrt{y}}\, dx^3 + \overline{u} + \underline{v}`
+  を両版から非表示の実PowerPointへ貼り付けた。両方とも24.0 pt、shape left 0 pt、
+  first ink x=10 px、インライン`m:oMath`、n-ary 2個、分数、根号、上線、下線となり、
+  `m:oMathPara`は0個だった。
+- PowerPoint保存OOXMLから抽出した`m:oMath`は両版とも5,842文字、SHA-256
+  `226979325F9D7F119B20145361635FE230A310DA4A509B9439C507A03AC6433F`でbyte-identical。
+  PowerPoint自身が書き出した640x98 PNGもSHA-256
+  `29C82D3B2DF3AB5C573F610DBF42F7EEB9637EF7D923CD75E2CD44B034B32070`で
+  byte-identicalだった。
+- native外部試験はPowerPointに加え、不透明DIBV5、IrfanView、Google Slides
+  300 dpi / 24 pt、`--texclip`も合格した。公開、O:更新、tag、PyPI、公開URL検証は
+  exact mainのCI合格後に追記する。
+
 ## 2026-08-29 Eqnedit64 3.0.6公開検証
 
 - tag / source: `eqnedit64-v3.0.6` /

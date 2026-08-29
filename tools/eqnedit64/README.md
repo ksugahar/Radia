@@ -6,7 +6,7 @@ Eqnedit64は、軽快な構造編集とTeXファイルを直接つないだ64-bi
 レジストリ登録は不要です。
 
 公開ソースはRadiaリポジトリの`tools/eqnedit64`、署名済み単体EXEは
-[Eqnedit64 GitHub Release](https://github.com/ksugahar/Radia/releases/tag/eqnedit64-v3.0.6)
+[Eqnedit64 GitHub Release](https://github.com/ksugahar/Radia/releases/tag/eqnedit64-v3.0.7)
 で配布します。旧Eqnedit32バイナリ、MTEF変換コード、逆アセンブリ資料は
 Eqnedit64のソース・ビルド・配布物に含めません。
 
@@ -51,11 +51,11 @@ GUIの画面構成、状態遷移、TeX/クリップボード契約、自動・�
 
 キャンバスからのコピーは、一つの数式を複数形式でクリップボードへ登録します。
 選択範囲があればその範囲を、選択がなければ数式全体を `Ctrl+C` でコピーします。
-PowerPoint、Word、Excel向けには、inline CF_HTMLと登録`MathML` /
-`MathML Presentation` 形式へ同じ24 pt MathMLを提供し、編集可能なOffice Mathへ
-変換します。Web版も同じMathML契約を持ち、ブラウザHTML内の条件付きOMMLで総和、
-積分、分数、根号、上線、下線のOffice構造を保ちます。Web版は同期CF_HTML断片へ
-左寄せ24 ptを明示し、EXE版の登録MathML経路も24 ptです。
+PowerPoint、Word、Excel向けには、inline 24 pt MathMLと末尾NBSPを1つのCF_HTML
+断片として提供し、編集可能なOffice Mathへ変換します。Web版も同じ経路を使います。
+通常コピーでは、PowerPointが中央寄せの数式段落として優先する登録`MathML` /
+`MathML Presentation`や、Web版だけの直接OMMLを混在させません。Office保存後は
+OOXML内のインライン`m:oMath`となり、`m:oMathPara`にはなりません。
 旧Office向けには区切り付きLaTeXも残します。IrfanViewなどの画像ソフトは
 EMFまたは全画素不透明の32-bit DIBV5を選べます。TeX対応ソフト向けには生の断片も
 `LaTeX` 形式で保持します。
@@ -269,7 +269,7 @@ pwsh -NoProfile -File build\test_asan.ps1
 信頼やSmartScreen評価を得るための商用コード署名証明書とは別です。
 
 `test_background.ps1` はウィンドウを表示せず、貼り付け、構造編集、複数行保存、
-24 pt登録MathML、Office認識用LaTeX、EMF/DIBV5生成、x64実行形式、
+24 pt inline MathML CF_HTML、Office認識用LaTeX、EMF/DIBV5生成、x64実行形式、
 製品バージョン、開発者署名を検査します。
 マウスやキーボードは操作しません。
 

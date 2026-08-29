@@ -2,14 +2,28 @@
 
 ## Unreleased
 
+### Native/Web Office transport is identical
+
+- Native and browser normal copy now both publish inline 24 pt MathML plus a
+  trailing NBSP in one exact CF_HTML fragment. Native copy omits registered
+  `MathML` / `MathML Presentation`, and browser copy omits direct conditional
+  OMML, because those priority routes produce different PowerPoint layout.
+- The native MathML emitter flattens n-ary operator bodies to the same Office
+  import semantics as MathJax. The browser normalizes overline and underline
+  marks to the native macron/underscore representation.
+- Hidden real-PowerPoint tests require inline `m:oMath`, reject centered
+  `m:oMathPara`, inspect the n-ary/fraction/radical/accent/bar structures, and
+  reject rendered ink that does not begin at the left edge. The native and Web
+  reference fixtures now produce byte-identical OMML subtrees and PNGs.
+
 ### Web PowerPoint paste is left-aligned 24 pt
 
 - The browser editor now writes one synchronous CF_HTML fragment instead of
   letting `ClipboardItem` wrap it as a nested HTML document. PowerPoint keeps
   the explicit 24 pt size while the paragraph remains left-aligned.
-- The same fragment carries conditional OMML for visible, editable Office Math
-  plus the shared 24 pt fallback MathML. This combines the visible structured
-  route with the earlier exact-size transport instead of accepting 18 pt.
+- The same fragment carries inline 24 pt MathML for visible, editable Office
+  Math. Direct conditional OMML was removed in 3.0.7 after it proved visually
+  different from native MathML import.
 - Browser and real-PowerPoint gates now require 24 pt and left alignment; an
   18 pt conversion is a release failure.
 
@@ -18,12 +32,10 @@
 - The native Geometry tab now exposes the browser editor's same 11
   differential-geometry entries in the same order.  The native over/underline
   palette remains independently available under Basic.
-- Both products publish inline 24 pt fallback MathML with the same large-operator
+- Both products publish inline 24 pt MathML with the same large-operator
   semantics: sums use above/below limits and ordinary integrals use TeX-style
-  side limits.  Native copy also supplies CF_HTML containing the exact same
-  MathML as its registered `MathML` formats.  The browser HTML adds conditional
-  OMML so PowerPoint preserves fractions, radicals, n-ary operators, overlines,
-  and underlines as editable Office Math.
+  side limits. Their final 3.0.7 transport is the same CF_HTML MathML + NBSP
+  route; registered MathML and browser-only direct OMML are excluded.
 - Palette parity and real PowerPoint OOXML/render coverage now include the
   sum/integral and overline/underline constructs that exposed the mismatch.
 
@@ -115,11 +127,10 @@
   directly.  It sends the real no-selection GUI copy command, then requires
   editable Office Math with fraction and radical structure, so menu/command
   routing regressions cannot pass behind a working helper.
-- Restored the registered `MathML` / `MathML Presentation` clipboard route used
-  by the last version confirmed visible in real PowerPoint.  The newer inline
-  CF_HTML route could create a native math zone whose text box nevertheless
-  looked empty.  Visible native equations are again the compatibility gate;
-  PowerPoint may report 18--24 pt depending on its conversion path.
+- A temporary registered `MathML` / `MathML Presentation` compatibility route
+  restored visible equations but also forced centered display math. It was
+  removed in 3.0.7 after exact inline CF_HTML proved visible, left-aligned, and
+  exactly 24 pt in the real-PowerPoint render gate.
 - The external gate now exports the pasted shape with PowerPoint's own renderer
   and requires the fixed fraction test equation's visible silhouette, including
   a long fraction rule.  XML, `MathZones`, font metadata, or a tofu/replacement

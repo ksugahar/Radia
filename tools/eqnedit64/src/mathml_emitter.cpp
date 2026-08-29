@@ -81,15 +81,19 @@ public:
          * a centred equation paragraph and the other into inline Office Math. */
         return "<math xmlns=\"http://www.w3.org/1998/Math/MathML\" "
                "display=\"inline\" mathsize=\"" + digits + "pt\">" +
-               sequence(root.children) + "</math>";
+               sequence_content(root.children) + "</math>";
     }
 
 private:
-    std::string sequence(const NodeList& nodes) {
+    std::string sequence_content(const NodeList& nodes) {
         std::string content;
         for (const auto& node : nodes)
             if (node) content += emit_node(*node);
-        return row(content);
+        return content;
+    }
+
+    std::string sequence(const NodeList& nodes) {
+        return row(sequence_content(nodes));
     }
 
     std::string token(const CharNode& ch) {
@@ -285,8 +289,8 @@ private:
             else if (value.selector == tmSSINT) symbol = "&#x222E;";
             else if (value.selector == tmDSINT) symbol = "&#x222F;";
             else if (value.selector == tmTSINT) symbol = "&#x2230;";
-            return row(integral_operator(symbol, value.lower, value.hasLower,
-                value.upper, value.hasUpper) + sequence(value.body));
+            return integral_operator(symbol, value.lower, value.hasLower,
+                value.upper, value.hasUpper) + sequence_content(value.body);
         }
         case Node::kBigOp: {
             const auto& value = static_cast<const BigOpNode&>(node);
@@ -299,8 +303,8 @@ private:
                 symbol = "&#x22C3;";
             else if (value.selector == tmINTER || value.selector == tmIINTER)
                 symbol = "&#x22C2;";
-            return row(limited_operator(symbol, value.lower, value.hasLower,
-                value.upper, value.hasUpper) + sequence(value.body));
+            return limited_operator(symbol, value.lower, value.hasLower,
+                value.upper, value.hasUpper) + sequence_content(value.body);
         }
         case Node::kDecoration: {
             const auto& value = static_cast<const DecorationNode&>(node);

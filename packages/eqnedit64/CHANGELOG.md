@@ -1,5 +1,17 @@
 # Changelog
 
+## 3.0.7 - 2026-08-29
+
+- Uses the same inline 24 pt MathML plus trailing NBSP clipboard route in the
+  native and browser editions; normal native copy no longer publishes the
+  registered MathML formats that PowerPoint prioritizes as a centered display
+  equation.
+- Normalizes browser overlines, underlines, sums, and integrals to the native
+  MathML contract. Real PowerPoint now saves byte-identical inline `m:oMath`
+  and renders byte-identical PNG output for the native and browser fixtures.
+- Strengthens the Office gate to reject `m:oMathPara`, direct browser OMML,
+  centered ink, missing structures, and any size other than exactly 24 pt.
+
 ## 3.0.6 - 2026-08-29
 
 - Preserves the browser editor's requested left alignment while making its
