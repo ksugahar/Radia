@@ -807,7 +807,7 @@ bool start_operation_debug(bool announce,
                     "\telapsed_ms\tdelta_ms\tfocus\tinput_style\talignment"
                     "\tzoom_percent\tequation_mode"
                     "\tshortcut_prefix\tlatex\r\n");
-    debug_event("debug.start", "Eqnedit64 3.0.6 path=" + utf8_wide(path));
+    debug_event("debug.start", "Eqnedit64 3.0.7 path=" + utf8_wide(path));
     update_debug_menu();
     update_title();
     /* The status bar and the [操作ログ記録中] flag in the title say all of
@@ -1506,23 +1506,16 @@ bool clipboard_set(const std::string& latex) {
     const std::wstring officeText = office_latex_text(latex);
     const std::string mathMlUtf8 =
         eqnedit::latex_to_mathml(latex, kGoogleSlidesFontPoints);
-    const std::wstring mathMlText = wide_utf8(mathMlUtf8);
     const std::string officeHtml = cf_html_fragment(mathMlUtf8 + "&#160;");
     HGLOBAL unicode = global_copy(officeText.c_str(),
         (officeText.size() + 1) * sizeof(wchar_t));
-    HGLOBAL mathMl = global_copy(mathMlText.c_str(),
-        (mathMlText.size() + 1) * sizeof(wchar_t));
-    HGLOBAL mathMlPresentation = global_copy(mathMlText.c_str(),
-        (mathMlText.size() + 1) * sizeof(wchar_t));
     HGLOBAL html = global_copy(officeHtml.c_str(), officeHtml.size() + 1);
     HGLOBAL rawLatex = global_copy(latex.c_str(), latex.size() + 1);
     HENHMETAFILE emf = equation_emf(latex, g.style);
     HGLOBAL dib = equation_dibv5(latex, g.style);
-    if (!unicode || !mathMl || !mathMlPresentation || !html ||
+    if (!unicode || !html ||
         !open_clipboard_with_retry(g.main)) {
         if (unicode) GlobalFree(unicode);
-        if (mathMl) GlobalFree(mathMl);
-        if (mathMlPresentation) GlobalFree(mathMlPresentation);
         if (html) GlobalFree(html);
         if (rawLatex) GlobalFree(rawLatex);
         if (emf) DeleteEnhMetaFile(emf);
@@ -1532,8 +1525,6 @@ bool clipboard_set(const std::string& latex) {
     if (!EmptyClipboard()) {
         CloseClipboard();
         GlobalFree(unicode);
-        GlobalFree(mathMl);
-        GlobalFree(mathMlPresentation);
         GlobalFree(html);
         if (rawLatex) GlobalFree(rawLatex);
         if (emf) DeleteEnhMetaFile(emf);
@@ -1541,22 +1532,14 @@ bool clipboard_set(const std::string& latex) {
         return false;
     }
 
-    /* Publish inline HTML with the same 24 pt fallback MathML contract as the
-     * browser editor.  Registered MathML remains for Office versions which
-     * prefer it; all three native payloads contain the exact same MathML. */
+    /* PowerPoint gives registered MathML priority over CF_HTML and converts it
+     * to a centred m:oMathPara.  Keep MathML as the inline 24 pt interchange
+     * payload inside CF_HTML with a trailing NBSP; Office then creates an
+     * editable inline m:oMath in the left-aligned text paragraph. */
     const UINT htmlFormat = RegisterClipboardFormatW(L"HTML Format");
     const bool htmlOk = htmlFormat &&
         SetClipboardData(htmlFormat, html) != nullptr;
     if (htmlOk) html = nullptr;
-    const UINT mathMlFormat = RegisterClipboardFormatW(L"MathML");
-    const bool mathMlOk = mathMlFormat &&
-        SetClipboardData(mathMlFormat, mathMl) != nullptr;
-    if (mathMlOk) mathMl = nullptr;
-    const UINT presentationFormat =
-        RegisterClipboardFormatW(L"MathML Presentation");
-    const bool presentationOk = presentationFormat &&
-        SetClipboardData(presentationFormat, mathMlPresentation) != nullptr;
-    if (presentationOk) mathMlPresentation = nullptr;
     const bool unicodeOk = SetClipboardData(CF_UNICODETEXT, unicode) != nullptr;
     if (unicodeOk) unicode = nullptr;
     const UINT latexFormat = RegisterClipboardFormatW(L"LaTeX");
@@ -1570,8 +1553,6 @@ bool clipboard_set(const std::string& latex) {
     CloseClipboard();
 
     if (unicode) GlobalFree(unicode);
-    if (mathMl) GlobalFree(mathMl);
-    if (mathMlPresentation) GlobalFree(mathMlPresentation);
     if (html) GlobalFree(html);
     if (rawLatex) GlobalFree(rawLatex);
     if (emf) DeleteEnhMetaFile(emf);
@@ -1579,8 +1560,7 @@ bool clipboard_set(const std::string& latex) {
     /* TeX, visible Office Math, Unicode fallback, EMF, and opaque
      * DIBV5 are the normal-copy product contract. Cut must not delete the
      * selection if any required representation failed. */
-    return htmlOk && mathMlOk && presentationOk && unicodeOk && latexOk &&
-        emfOk && dibOk;
+    return htmlOk && unicodeOk && latexOk && emfOk && dibOk;
 }
 
 bool clipboard_set_google_slides(const std::string& latex) {

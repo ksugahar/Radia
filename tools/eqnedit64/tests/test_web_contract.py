@@ -61,12 +61,12 @@ def test_office_copy_is_editable_mathml_without_png_competition() -> None:
     )[0]
     assert "officeMathMl(tex)" in office
     assert '"image/png"' not in office
-    assert "officeOmml(mml)" in office
+    assert "officeOmml(mml)" not in office
     assert "writeOfficeClipboard(html, tex)" in office
-    assert "<!--[if gte msEquation 12]>" in office
-    assert "<![if !msEquation]>" in office
-    assert 'text-align:left;font-size:24pt' in office
-    assert '<m:oMathParaPr><m:jc m:val=\\\"left\\\"/>' in office
+    assert "<!--[if gte msEquation 12]>" not in office
+    assert 'var html = mml + "&#160;"' in office
+    assert '<m:oMath' not in office
+    assert '<m:oMathPara' not in office
     assert "<!DOCTYPE html>" not in office
 
 
@@ -80,14 +80,9 @@ def test_office_mathml_is_canonical_inline_24pt() -> None:
     assert 'querySelectorAll("mstyle")' in canonical
     assert 'attribute.name.indexOf("data-") === 0' in canonical
     assert 'setAttribute("largeop", "true")' in canonical
-
-
-def test_office_omml_transport_covers_structured_math() -> None:
-    for tag in ["m:f", "m:rad", "m:sSup", "m:sSub", "m:sSubSup",
-                "m:nary", "m:acc", "m:bar", "m:d", "m:m", "m:borderBox"]:
-        assert f"<{tag}>" in SOURCE
-    assert "font-size:24.0pt" in SOURCE
-    assert "Cambria Math" in SOURCE
+    assert 'node.textContent === "―"' in canonical
+    assert 'parent === "mover" ? "¯" : "_"' in canonical
+    assert 'node.setAttribute("stretchy", "true")' in canonical
 
 
 def test_office_copy_prefers_exact_cf_html_fragment() -> None:
