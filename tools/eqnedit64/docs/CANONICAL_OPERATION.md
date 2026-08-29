@@ -26,6 +26,24 @@ Eqnedit32は日常編集、配布、ファイル関連付けの正本ではな�
 
 ## リリースと配布
 
+`O:\Eqnedit64.exe`は、菅原が候補版を実IME・実PowerPointなどで確認するための
+**正規ハンドテスト入口**でもある。候補をコミットし、署名済み単体EXEのローカル
+バックグラウンド試験が通ったら、テストを依頼する前に次を実行する。候補版を
+`C:\temp`やworktreeだけに置いたまま、O:上の旧版をテスト対象にしてはならない。
+
+```powershell
+pwsh -NoProfile -File `
+  .agents\skills\release-eqnedit64\scripts\sync_handtest_to_o.ps1 `
+  -SourceExe tools\eqnedit64\dist\Eqnedit64.exe `
+  -SourceSha (git rev-parse HEAD)
+```
+
+ハンドテスト同期にはversion更新、main push、tagを要求しない。ただしsourceはcleanな
+commit、EXEは同じbuild stamp、有効な`CN=ksugahar`署名でなければならない。同期時は
+`O:\Eqnedit64.handtest.json`を作り、直前の正式マニフェストを
+`O:\Eqnedit64.last-release.json`へ保存し、`O:\Eqnedit64.release.json`を外す。
+これにより候補版を正式公開物と誤認したtag公開をfail-closedにする。
+
 正本を更新するときは、画面・マウス・実キーボードを操作しない最終ゲートを
 GitHub-hosted Windowsの隔離CIで実行する。
 リポジトリ内の `build\Eqnedit64.exe` または `dist\Eqnedit64.exe` が起動中の場合、
@@ -52,6 +70,9 @@ pwsh -NoProfile -File build\accept_release.ps1
 `O:\Eqnedit64.exe`を更新し、隣の`O:\Eqnedit64.release.json`へ予定tag、
 source SHA、EXE SHA-256、version、signerを記録する。ここまで成功してから最後に
 `eqnedit64-v<version>`tagをpushする。
+
+正式同期の成功時は`O:\Eqnedit64.handtest.json`を除去し、現在のEXEと一致する
+`O:\Eqnedit64.release.json`を再作成する。
 
 tag CIはO:のマニフェストに記録されたsource SHAがtag SHAと完全一致する場合だけ、
 その署名済みEXEからPython 3.10--3.13用wheelを作り、PyPIへ公開した後に
