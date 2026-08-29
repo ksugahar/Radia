@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Align Japanese IME composition text with the structural caret while keeping
+  the candidate list below it, with DPI/zoom coordinate regression coverage.
+
 ## 3.0.10 - 2026-08-30
 
 - Make ordinary PowerPoint Ctrl+V create editable, left-aligned inline Office
