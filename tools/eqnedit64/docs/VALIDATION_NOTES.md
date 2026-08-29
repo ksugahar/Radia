@@ -4,6 +4,27 @@
 履歴である。現在の公開リリース手順は `build\accept_release.ps1` と
 [`CANONICAL_OPERATION.md`](CANONICAL_OPERATION.md) を正とする。
 
+## 2026-08-29 3.0.3表示回帰のローカル事前検証
+
+- 対象: `codex/eqnedit64-3.0.3-bold-palette`の未公開候補。
+- `test_layout.py`: `\vec{\mathbf{E}}`が通常EではなくU+1D404
+  MATHEMATICAL BOLD CAPITAL Eをdisplay listへ出すことを含め合格。
+- `test_palettes.py`: 11件合格。上下付きfaceの実数値0件、埋め込みフォントに無い
+  U+25AF 0件、結合文字0件、行列操作faceが`+R`/`−R`/`+C`/`−C`であることを確認。
+- `--visual-scale-test`: 終了コード0。96/120/144/192 dpiの各条件でplain/boldの
+  GDI画素差とink増加、および228個すべてのowner-drawセルのcmap ownershipと実inkを確認。
+- `test_tex_document.exe`: 10件合格。
+- `--self-test`: 終了コード0。
+- `--ui-interaction-test`: 終了コード0。
+- version resource: ProductVersion/FileVersionとも3.0.3。
+- Authenticode: `Valid`、signer `CN=ksugahar`。
+- `dist`: `Eqnedit64.exe` 1ファイルだけ。事前ビルドSHA-256は
+  `84E835965992791B36A082E5294838DDE43D6F4E875C01126165F2959F17C2F4`。
+- このSHAは未コミット候補を`22fc5630e` stampでビルドした事前確認値であり、公開値ではない。
+  release commitをmainへ統合後、exact `origin/main`から再ビルド・再署名して置き換える。
+- 32回font-host lifecycle、全model suite、Office外部貼り付け、ASan、release acceptanceは
+  対話中LABでguardを迂回せず、PR/main/tag CIと最終release gateで実施する。
+
 ## 2026-08-29 フォントホスト回帰の再現
 
 - 対象: 公開済み`O:\Eqnedit64.exe` 3.0.1、SHA-256

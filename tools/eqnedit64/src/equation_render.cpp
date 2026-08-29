@@ -1199,6 +1199,32 @@ uint32_t math_italic_of(uint32_t cp) {
     }
 }
 
+/* The designed Unicode mathematical-bold glyph for a character, or 0 when
+ * the font has no dedicated bold alphabet entry.  `CreateFontW(FW_BOLD)` on
+ * the process-private regular math face is only a synthetic request and was
+ * visibly ignored on the native canvas: \mathbf{E} looked identical to E.
+ * Latin Modern Math ships these real glyphs, so use the same kind of explicit
+ * math-alphabet mapping already used for italic variables above. */
+uint32_t math_bold_of(uint32_t cp) {
+    if (cp >= 'A' && cp <= 'Z') return 0x1D400 + (cp - 'A');
+    if (cp >= 'a' && cp <= 'z') return 0x1D41A + (cp - 'a');
+    if (cp >= '0' && cp <= '9') return 0x1D7CE + (cp - '0');
+    if (cp >= 0x0391 && cp <= 0x03A9 && cp != 0x03A2)
+        return 0x1D6A8 + (cp - 0x0391);
+    if (cp >= 0x03B1 && cp <= 0x03C9)
+        return 0x1D6C2 + (cp - 0x03B1);
+    switch (cp) {
+        case 0x2202: return 0x1D6DB;    /* partial differential */
+        case 0x03F5: return 0x1D6DC;    /* epsilon symbol */
+        case 0x03D1: return 0x1D6DD;    /* theta symbol */
+        case 0x03F0: return 0x1D6DE;    /* kappa symbol */
+        case 0x03D5: return 0x1D6DF;    /* phi symbol */
+        case 0x03F1: return 0x1D6E0;    /* rho symbol */
+        case 0x03D6: return 0x1D6E1;    /* pi symbol */
+        default: return 0;
+    }
+}
+
 /* ------------------------------------------------------------------ */
 /* TeX atom classes and the spacing between them                       */
 /* ------------------------------------------------------------------ */
@@ -1597,6 +1623,14 @@ private:
                 }
                 uint32_t cp = c.charCode ? c.charCode : uint32_t(uint8_t(c.ch));
                 if (!cp) return Layout();
+                if (c.typeface == TF_VECTOR) {
+                    if (const uint32_t mathBold = math_bold_of(cp))
+                        return glyph_layout(mathBold, sizePt, false, true);
+                    Layout fallback = glyph_layout(cp, sizePt, false,
+                                                   needs_math_face(cp));
+                    for (auto& glyph : fallback.glyphs) glyph.bold = true;
+                    return fallback;
+                }
                 return glyph_layout(cp, sizePt, typeface_is_italic(c.typeface),
                                     needs_math_face(cp));
             }
