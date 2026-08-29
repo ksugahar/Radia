@@ -675,9 +675,11 @@ class VectorPotentialSolver:
         maximum_linear_relative_residual = 0.0
         iterations = 0
         eps = 1e-6
-        # Keep the dimensionless gauge convention identical to solve_linear().
-        # Scaling by the vacuum reluctivity is essential in the Kelvin ball,
-        # where the transformed curl-curl coefficient vanishes at its centre.
+        # Retain the vacuum-reluctivity scaling used by solve_linear(), but use
+        # a stronger dimensionless gauge for nonlinear periodic Kelvin systems
+        # so every Picard matrix remains in PARDISO's SPD regime.  The physical
+        # curl(A) field is audited by mesh convergence and the three-formulation
+        # HDiv-MMM / reduced-A / omega-reduced-omega comparison.
         gauge_coeff = eps * nu_air
         solver = self._select_solver(fes.ndof, solver)
 
