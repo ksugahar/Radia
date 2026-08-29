@@ -2,7 +2,7 @@
 
 - 文書状態: 現行
 - 対象製品: Eqnedit64 native / Python package / Web editor
-- 対象リリース: 3.0.2（公開済み）、3.0.3（次回修正版）
+- 対象リリース: 3.0.3（公開済み）
 - 基準日: 2026-08-29
 - リポジトリ: `ksugahar/Radia`
 
@@ -215,9 +215,9 @@ Eqnedit64だけでなくLINE等の文字を消す事故を起こした。3.0.2�
 OSセッション内の壊れた状態を修復できない。一回のサインアウトまたは再起動が必要な場合が
 ある。ただし3.0.2以降は新しい破損を起こさないことをCIで確認する。
 
-## 8. 今回の既知不具合と3.0.3の修正契約
+## 8. 3.0.3で回収した表示不具合
 
-3.0.2には次の三件が残っている。3.0.3ではすべてを同じ修正として閉じる。
+3.0.2に残っていた次の三件は3.0.3で修正し、再発防止試験へ変換した。
 
 ### 8.1 `\vec{\mathbf{E}}`のEが太字に見えない
 
@@ -368,17 +368,21 @@ pushするとrelease gateが失敗するのが正しい。
 
 ## 13. 現在の公開状態
 
-Eqnedit64 3.0.2は2026-08-29時点の公開済み基準版である。
+Eqnedit64 3.0.3が2026-08-29時点の公開済み基準版である。
 
-- product tag source: `0a37eff447187ac5c7f609bc7f93625696dc6bc6`
-- 直近の`origin/main`（3.0.3着手前）: `22fc5630e8058e5a92f3c958ed1e10a00f7e6e42`
+- product tag: `eqnedit64-v3.0.3`
+- product tag source: `c15e626d28245ee2db5b688f52d7756e000780a4`
 - O: / GitHub Release EXE SHA-256:
-  `7702F6F90CDA0C9F840FBB7AE9D17BF38D45F074029340A2C6266C6FE401281B`
+  `C6D88C59227718FFE8A9BDB435632EAC64F5709615520FBA04E2C0A5C77C8A8F`
 - signer: `CN=ksugahar`
-- 公開先: O:、GitHub Release、PyPI
+- GitHub Release: `https://github.com/ksugahar/Radia/releases/tag/eqnedit64-v3.0.3`
+- PyPI: `https://pypi.org/project/eqnedit64/3.0.3/`
+- PyPI wheels: CPython 3.10、3.11、3.12、3.13の`win_amd64`計4個。
+- O:、GitHub Release、CPython 3.12 wheelから再取得した同梱EXEはbyte-identicalで、
+  すべて上記SHA-256と有効な`CN=ksugahar`署名を持つ。
 
-3.0.2は安全なfile-backed private font登録の基準版だが、8章の三つの表示不具合を持つ。
-次回3.0.3はそのvisual regressionだけでなく、同じ種類の見落としを防ぐ自動試験を同梱する。
+3.0.2は安全なfile-backed private font登録を導入した前版である。3.0.3はその安全策を維持し、
+8章のvisual regressionと、同じ種類の見落としを防ぐ全パレット実描画試験を同梱する。
 
 ## 14. ソース地図
 

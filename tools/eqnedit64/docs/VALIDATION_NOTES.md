@@ -4,6 +4,26 @@
 履歴である。現在の公開リリース手順は `build\accept_release.ps1` と
 [`CANONICAL_OPERATION.md`](CANONICAL_OPERATION.md) を正とする。
 
+## 2026-08-29 Eqnedit64 3.0.3公開検証
+
+- tag / source: `eqnedit64-v3.0.3` /
+  `c15e626d28245ee2db5b688f52d7756e000780a4`。
+- PR CI `33227677769`、main CI `33227853273`、tag CI `33228191426`、
+  release workflow `33228278493`はすべて成功。
+- exact mainからLABで再ビルドしたEXEはProductVersion 3.0.3、build stamp
+  `c15e626d2`、Authenticode `Valid`、signer `CN=ksugahar`。
+- exact release EXEによる非表示外部試験は、PowerPointの24 pt編集可能Office Math
+  （export 640×92 px、ink 90×74、fraction run 89）、IrfanView 94×78不透明PNG、
+  Google Slides 294×243 px / 300 dpi / 70.56×58.32 pt、`--texclip` PNG/DIBV5が合格。
+- `O:\Eqnedit64.exe`、GitHub Releaseから再取得したEXE、PyPI CPython 3.12 wheel内EXEは
+  byte-identical。SHA-256は
+  `C6D88C59227718FFE8A9BDB435632EAC64F5709615520FBA04E2C0A5C77C8A8F`。
+- 再取得したGitHub EXEとwheel内EXEの署名はともに`Valid` / `CN=ksugahar`。
+- PyPIはCPython 3.10、3.11、3.12、3.13の`win_amd64` wheel計4個を公開。
+- GitHub Release:
+  `https://github.com/ksugahar/Radia/releases/tag/eqnedit64-v3.0.3`
+- PyPI: `https://pypi.org/project/eqnedit64/3.0.3/`
+
 ## 2026-08-29 3.0.3表示回帰のローカル事前検証
 
 - 対象: `codex/eqnedit64-3.0.3-bold-palette`の未公開候補。
