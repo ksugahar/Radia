@@ -28,6 +28,9 @@ The `R x` / `I x` / `B x` math-alphabet group is always visible beside the
 category tabs. It inserts `\mathrm{}`, `\mathit{}`, or `\mathbf{}`; a source
 selection is wrapped in the chosen command and an empty selection leaves the
 caret inside the new braces.
+Less common alphabets stay in Decoration: `\mathsf`, `\mathtt`, `\mathcal`,
+`\mathbb`, `\mathfrak`, `\bm`, and the `\mathnormal` reset. The Web source
+keeps `\bm`; only the MathJax boundary expands it to `\boldsymbol`.
 
 Inputs and saved/copied source are TeX. MTEF and `.eqn` are not supported
 formats. Office copy emits inline MathML in `text/html` plus plain TeX; image

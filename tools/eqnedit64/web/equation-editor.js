@@ -19,7 +19,7 @@
   /* デプロイごとに上げる。ボタン行の右端に出て、開きっぱなしのタブが
    * 古い版を動かし続けていないかを一目で判別できる（.exe の
    * タイトルバー・ビルドスタンプと同じ教訓）。 */
-  var BUILD = "2026-08-29a";
+  var BUILD = "2026-08-29b";
 
   var PALETTES = [
     {
@@ -72,6 +72,11 @@
         ["ã", "\\tilde{}", "チルダ"],
         ["ℝ", "\\mathbb{}", "黒板太字"],
         ["ℰ", "\\mathcal{}", "カリグラフィー体（起電力ℰなど）"],
+        ["sf", "\\mathsf{}", "サンセリフ"],
+        ["tt", "\\mathtt{}", "等幅"],
+        ["fr", "\\mathfrak{}", "フラクトゥール"],
+        ["Bα", "\\bm{}", "記号太字"],
+        ["math", "\\mathnormal{}", "標準の数式書体へ戻す"],
         ["abc", "\\text{}", "テキスト（空白が使える）"]
       ]
     },
@@ -229,6 +234,13 @@
     document.head.appendChild(style);
   }
 
+  /* MathJax exposes \boldsymbol but not the bm package's shorter \bm name.
+   * Keep \bm in editable/saved TeX and translate only at the renderer
+   * boundary, so preview, SVG/PNG and Office MathML agree. */
+  function mathJaxTex(tex) {
+    return tex.replace(/\\bm(?=\s*\{)/g, "\\boldsymbol");
+  }
+
   /* TeX → SVG。サイト共通の MathJax は CHTML 出力なので、初回押下時に
    * SVG 出力部品を動的に読み込み、グリフをパスとして埋め込む変換器を
    * 組み立てる（fontCache: "none"）。外部参照の無い SVG なので、後段の
@@ -250,7 +262,7 @@
         OutputJax: jax
       });
       svgConvert = function (tex) {
-        var node = doc.convert(tex, { display: true });
+        var node = doc.convert(mathJaxTex(tex), { display: true });
         return node.querySelector("svg");
       };
       return svgConvert;
@@ -371,7 +383,7 @@
         return;
       }
       var box = el("div", "");
-      box.textContent = "\\[" + tex + "\\]";
+      box.textContent = "\\[" + mathJaxTex(tex) + "\\]";
       preview.appendChild(box);
       if (window.MathJax && typeof window.MathJax.typesetClear === "function") {
         window.MathJax.typesetClear([preview]);
@@ -554,7 +566,7 @@
          * 不可視の空白）に置き換えた。\displaystyle は Office では
          * 落ちるが害はなく、正しく解釈する他アプリでは表示を保つ。 */
         mml = window.MathJax.tex2mml(
-          "\\displaystyle " + tex, { display: false });
+          "\\displaystyle " + mathJaxTex(tex), { display: false });
       } catch (error) {
         say("この数式はMathMLに変換できませんでした");
         return;
@@ -667,6 +679,7 @@
   if (typeof module !== "undefined" && module.exports) {
     module.exports = {
       composeInsertion: composeInsertion,
+      mathJaxTex: mathJaxTex,
       mathAlphabets: MATH_ALPHABETS.map(function (item) {
         return { label: item.label, snippet: item.snippet };
       })

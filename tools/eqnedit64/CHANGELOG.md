@@ -11,6 +11,10 @@
   persistent; native/Web TeX selections are wrapped and empty selections put
   the caret inside a new command. Explicit Roman and italic now survive
   parse/save/reopen instead of collapsing to `\text` or an implicit variable.
+- Completed the extended alphabet family in both products: `\mathsf`,
+  `\mathtt`, `\mathcal`, `\mathbb`, `\mathfrak`, `\bm` (`\boldsymbol` input
+  alias), and the `\mathnormal` reset. Native rendering, TeX round trips, and
+  Office MathML preserve these semantics.
 
 ### Session-safe embedded font
 
