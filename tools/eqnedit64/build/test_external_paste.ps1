@@ -316,8 +316,20 @@ public static class EqneditClipboardNative {
                 try {
                     OpenWithRetry();
                     opened = true;
+                    bool hasUnicode = IsClipboardFormatAvailable(13);
+                    bool hasDibV5 = IsClipboardFormatAvailable(17);
+                    bool hasEnhMetafile = IsClipboardFormatAvailable(14);
                     uint format = 0;
                     while ((format = EnumClipboardFormats(format)) != 0) {
+                        // Windows synthesises these compatibility views on
+                        // demand.  Copying their temporary handles can fail,
+                        // while restoring the canonical source formats below
+                        // makes Windows provide them again automatically.
+                        if ((hasUnicode && (format == 1 || format == 7 ||
+                                            format == 16)) ||
+                            (hasDibV5 && (format == 2 || format == 8)) ||
+                            (hasEnhMetafile && format == 3))
+                            continue;
                         result.items.Add(CopyItem(format, GetClipboardData(format)));
                     }
                     return result;
@@ -348,6 +360,13 @@ public static class EqneditClipboardNative {
             } finally {
                 CloseClipboard();
             }
+        }
+
+        public bool CapturedFormatsAreAvailable() {
+            foreach (ClipboardItem item in items) {
+                if (!IsClipboardFormatAvailable(item.Format)) return false;
+            }
+            return true;
         }
 
         public void Dispose() {
@@ -775,7 +794,6 @@ function Write-ImageOnWhite([string]$InputPath, [string]$OutputPath) {
 $oleResult = [EqneditClipboardNative]::OleInitialize([IntPtr]::Zero)
 if ($oleResult -lt 0) { throw ('OleInitialize failed: 0x{0:X8}' -f $oleResult) }
 $clipboardSnapshot = [EqneditClipboardNative+ClipboardSnapshot]::Capture()
-$originalFormatCount = $clipboardSnapshot.FormatCount
 $originalHadUnicodeText = [EqneditClipboardNative]::IsClipboardFormatAvailable(13)
 $originalUnicodeText = if ($originalHadUnicodeText) { Read-ClipboardUnicodeText } else { $null }
 $powerPoint = $null
@@ -824,15 +842,16 @@ try {
     $fragmentStart += $startMarker.Length
     $fragment = $officeHtml.Substring(
         $fragmentStart, $fragmentEnd - $fragmentStart)
-    $mathMl = if ($fragment.EndsWith('&#160;')) {
-        $fragment.Substring(0, $fragment.Length - '&#160;'.Length)
+    $inlineSentinel = '<span style="font-size:24pt">&#160;</span>'
+    $mathMl = if ($fragment.EndsWith($inlineSentinel)) {
+        $fragment.Substring(0, $fragment.Length - $inlineSentinel.Length)
     } else { '' }
     if ([EqneditClipboardNative]::IsClipboardFormatAvailable($mathMlFormat) -or
         [EqneditClipboardNative]::IsClipboardFormatAvailable($mathMlPresentationFormat)) {
         throw 'Normal copy exposed registered MathML that PowerPoint centres.'
     }
     if ($officeHtml -notmatch '<math\b' -or
-        $officeHtml -notmatch '</math>&#160;<!--EndFragment-->' -or
+        $officeHtml -notmatch '</math><span style="font-size:24pt">&#160;</span><!--EndFragment-->' -or
         $mathMl -notmatch 'display="inline"' -or
         $mathMl -notmatch 'mathsize="24pt"' -or
         $mathMl -notmatch '<mfrac>' -or $mathMl -notmatch '<msqrt>' -or
@@ -851,12 +870,20 @@ try {
         throw "PowerPoint pasted an unexpected shape count: $($shapeRange.Count)"
     }
     $pastedShape = $shapeRange.Item(1)
-    $powerPointFontSize = [double]$pastedShape.TextFrame2.TextRange.Font.Size
+    $powerPointTextRange = $pastedShape.TextFrame2.TextRange
+    $powerPointFontSize = [double]$powerPointTextRange.Font.Size
+    $powerPointTailRange = $powerPointTextRange.Characters(
+        $powerPointTextRange.Length, 1)
+    $powerPointTailFontSize = [double]$powerPointTailRange.Font.Size
     $powerPointAlignment =
         [int]$pastedShape.TextFrame2.TextRange.ParagraphFormat.Alignment
     $powerPointLeft = [double]$pastedShape.Left
     if ([Math]::Abs($powerPointFontSize - 24.0) -gt 0.1) {
         throw "PowerPoint native equation is not 24 pt: $powerPointFontSize pt."
+    }
+    if ([Math]::Abs($powerPointTailFontSize - 24.0) -gt 0.1) {
+        throw ("PowerPoint caret after the native equation is not 24 pt: " +
+            "$powerPointTailFontSize pt.")
     }
     if ($powerPointAlignment -ne 1 -or $powerPointLeft -gt 1.0) {
         throw ("PowerPoint native equation is not left-aligned: " +
@@ -872,14 +899,18 @@ try {
     $naryCount = ([regex]::Matches($slideXml, '<m:nary>')).Count
     $barCount = ([regex]::Matches($slideXml, '<m:bar>')).Count
     $accentCount = ([regex]::Matches($slideXml, '<m:acc>')).Count
+    $nbsp = [regex]::Escape([string][char]0x00A0)
+    $hasSizedInlineSentinel = $slideXml -match (
+        '</a14:m><a:r><a:rPr\b[^>]*\bsz="2400"[^>]*>.*?</a:rPr>' +
+        '<a:t>' + $nbsp + '</a:t></a:r>')
     if (-not $hasInlineContainer -or -not $hasInlineMath -or $hasDisplayMath -or
         -not $hasFraction -or -not $hasRadical -or $naryCount -lt 2 -or
-        ($barCount + $accentCount) -lt 2) {
+        ($barCount + $accentCount) -lt 2 -or -not $hasSizedInlineSentinel) {
         throw (("PowerPoint paste contract failed: inlineContainer={0}, " +
             "inlineMath={1}, displayMath={2}, fraction={3}, radical={4}, nary={5}, " +
-            "bars={6}, accents={7}, artifact={8}") -f $hasInlineContainer, $hasInlineMath,
+            "bars={6}, accents={7}, sentinel24pt={8}, artifact={9}") -f $hasInlineContainer, $hasInlineMath,
             $hasDisplayMath, $hasFraction, $hasRadical, $naryCount, $barCount,
-            $accentCount, $pptxOutput)
+            $accentCount, $hasSizedInlineSentinel, $pptxOutput)
     }
     # XML and MathZones can both exist while PowerPoint draws no equation.
     # Shape.Export invokes PowerPoint's own renderer without a visible window;
@@ -1013,7 +1044,8 @@ try {
     Write-Host "PASS: normal DIBV5 is opaque black-on-white ($dibContract)"
     Write-Host 'PASS: clipboard contains raw LaTeX, inline MathML CF_HTML, Office TeX, EMF, and DIBV5 without centring registered MathML'
     Write-Host ("PASS: no-selection GUI copy -> visible editable Office Math " +
-        "in PowerPoint ($powerPointFontSize pt, left=$powerPointLeft pt, " +
+        "in PowerPoint ($powerPointFontSize pt, caret=$powerPointTailFontSize pt, " +
+        "left=$powerPointLeft pt, " +
         "rendered $powerPointImageSize with ink)")
     Write-Host "PASS: IrfanView /clippaste produced a nonblank $imageSize PNG"
     Write-Host ("PASS: Google Slides clipboard contains a byte-identical " +
@@ -1031,8 +1063,8 @@ try {
     Release-ComObject $powerPoint
     try {
         $clipboardSnapshot.Restore()
-        if ((Get-ClipboardFormatCount) -ne $originalFormatCount) {
-            throw 'Clipboard restoration changed the number of materialised formats.'
+        if (-not $clipboardSnapshot.CapturedFormatsAreAvailable()) {
+            throw 'Clipboard restoration lost an original canonical format.'
         }
         if ([EqneditClipboardNative]::IsClipboardFormatAvailable(13) -ne $originalHadUnicodeText) {
             throw 'Clipboard restoration changed CF_UNICODETEXT availability.'

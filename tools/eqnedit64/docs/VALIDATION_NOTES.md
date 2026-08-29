@@ -5,6 +5,28 @@
 [`CANONICAL_OPERATION.md`](CANONICAL_OPERATION.md) と `release-eqnedit64` skillを
 正とする。`build\accept_release.ps1`は隔離CI/VM用であり、対話中LABでは実行しない。
 
+## 2026-08-29 Eqnedit64 3.0.8公開候補検証
+
+- 利用者の実機確認でnative/Webの見た目は一致したが、数式末尾のカーソル位置が
+  18 ptと表示された。保存済み3.0.7 PPTXを調べると、`m:oMath`内の数式runは
+  `sz="2400"`だった一方、左寄せ維持用の末尾NBSP runには`sz`がなく、PowerPointの
+  既定18 ptへ戻っていた。従来試験の`TextRange.Font.Size`は先頭の数式runだけを返し、
+  この不一致を見逃していた。
+- native/WebともCF_HTML末尾を
+  `<span style="font-size:24pt">&#160;</span>`とし、数式本体だけでなく末尾カーソル
+  位置も24 ptにした。実PowerPoint COMで全体24.0 pt、末尾文字24.0 pt、shape left
+  0 pt、first ink x=10 px、インライン`m:oMath`、`m:oMathPara`なしを確認した。
+- 基準式のnative/Web保存段落はともに6,003文字、SHA-256
+  `44C7FB601F147BD44D6BA881528A02CB5B868BBB85C9ADA36E23A544C0AA5FC1`で
+  byte-identical。`m:oMath`は5,842文字、SHA-256
+  `226979325F9D7F119B20145361635FE230A310DA4A509B9439C507A03AC6433F`、
+  PowerPoint描画640x98 PNGはSHA-256
+  `29C82D3B2DF3AB5C573F610DBF42F7EEB9637EF7D923CD75E2CD44B034B32070`で、
+  いずれもbyte-identicalだった。
+- `build/test_external_paste.ps1`と研究室ホームページ集中QAは、全体サイズに加えて
+  末尾文字のCOMサイズと保存OOXMLの末尾`sz="2400"` runを必須にした。18 ptの
+  カーソルが混じる場合はリリース失敗となる。
+
 ## 2026-08-29 Eqnedit64 3.0.7公開検証
 
 - tag / source: `eqnedit64-v3.0.7` /

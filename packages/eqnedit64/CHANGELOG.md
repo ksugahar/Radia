@@ -1,5 +1,14 @@
 # Changelog
 
+## 3.0.8 - 2026-08-29
+
+- Keep the invisible inline PowerPoint sentinel at 24 pt in both the native
+  and Web clipboard paths. The equation, trailing caret, saved inline OMML,
+  and rendered result now share the same 24 pt contract.
+- Extend the real-PowerPoint release gates to inspect the last character and
+  the saved OOXML sentinel run, preventing an 18 pt caret from passing as a
+  24 pt equation.
+
 ## 3.0.7 - 2026-08-29
 
 - Uses the same inline 24 pt MathML plus trailing NBSP clipboard route in the
