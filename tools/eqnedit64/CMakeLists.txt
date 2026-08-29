@@ -4,7 +4,7 @@
 # `build\build_tests.bat` runs the required checks.  Nothing here writes to
 # dist, so a build from this file can never become the shipped executable.
 cmake_minimum_required(VERSION 3.20)
-project(Eqnedit64 VERSION 3.0.3 LANGUAGES CXX)
+project(Eqnedit64 VERSION 3.0.4 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -55,3 +55,11 @@ if(MSVC)
     target_compile_options(test_tex_document PRIVATE /W4 /utf-8)
 endif()
 add_test(NAME tex_document COMMAND test_tex_document)
+
+add_executable(test_math_alphabets tests/test_math_alphabets.cpp)
+target_link_libraries(test_math_alphabets PRIVATE eqnedit_core)
+target_include_directories(test_math_alphabets PRIVATE src)
+if(MSVC)
+    target_compile_options(test_math_alphabets PRIVATE /W4 /utf-8)
+endif()
+add_test(NAME math_alphabets COMMAND test_math_alphabets)

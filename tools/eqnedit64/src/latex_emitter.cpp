@@ -1,6 +1,7 @@
 /* Structural equation tree -> normalized TeX text. */
 #include "latex_emitter.h"
 #include <algorithm>
+#include <cctype>
 #include <cstring>
 #include <cstdio>
 
@@ -190,6 +191,61 @@ static void append_text_char(std::string& out, uint32_t cp) {
     }
 }
 
+/* A math alphabet changes glyph style, not parsing mode.  Keep operators and
+ * TeX symbol names mathematical inside \mathrm/\mathit; append_text_char()
+ * is deliberately different because \text treats the same bytes as prose. */
+static void append_math_char(std::string& out, uint32_t cp) {
+    if (cp < 0x80) {
+        switch (cp) {
+        case '\\': out += "\\backslash "; break;
+        case '{':  out += "\\{"; break;
+        case '}':  out += "\\}"; break;
+        case '%':  out += "\\%"; break;
+        case '#':  out += "\\#"; break;
+        case '$':  out += "\\$"; break;
+        case '_':  out += "\\_"; break;
+        case '&':  out += "\\&"; break;
+        case '^':  out += "\\wedge "; break;
+        case '~':  out += "\\sim "; break;
+        default:   if (cp >= 0x20) out += char(cp); break;
+        }
+        return;
+    }
+    const char* symbol = cp <= 0xFFFF
+        ? map_lookup(UNICODE_MAP, UNICODE_MAP_N, uint16_t(cp)) : nullptr;
+    if (!symbol) {
+        out += utf8_of(cp);
+        return;
+    }
+    /* Symbol-table entries include inter-atom spaces for the top-level
+     * emitter (" \\leq ").  Inside a math alphabet wrapper those spaces
+     * must not become stored content.  Retain only one terminator after a
+     * control word so the next letter cannot turn \alpha b into \alphab. */
+    std::string token(symbol);
+    const size_t first = token.find_first_not_of(' ');
+    if (first == std::string::npos) return;
+    const size_t last = token.find_last_not_of(' ');
+    token = token.substr(first, last - first + 1);
+    out += token;
+    if (!token.empty() &&
+        std::isalpha(static_cast<unsigned char>(token.back())))
+        out += ' ';
+}
+
+static const char* math_alphabet_command(int typeface) {
+    switch (typeface) {
+    case TF_ROMAN: return "\\mathrm";
+    case TF_MATH_ITALIC: return "\\mathit";
+    case TF_MATH_SANS: return "\\mathsf";
+    case TF_MATH_MONO: return "\\mathtt";
+    case TF_MATH_SCRIPT: return "\\mathcal";
+    case TF_MATH_DOUBLE: return "\\mathbb";
+    case TF_MATH_FRAKTUR: return "\\mathfrak";
+    case TF_BOLD_SYMBOL: return "\\bm";
+    default: return nullptr;
+    }
+}
+
 std::string LaTeXEmitter::emit_range(const NodeList& nodes,
                                      size_t first, size_t last) {
     first = std::min(first, nodes.size());
@@ -212,11 +268,14 @@ void LaTeXEmitter::emitSequence(const NodeList& nodes, size_t first,
                                 size_t last, std::string& out) {
     first = std::min(first, nodes.size());
     last = std::min(last, nodes.size());
-    /* Output phase with text/function grouping.
+    /* Output phase with text/function/math-alphabet grouping.
      * Consecutive TF_TEXT chars → \text{...}
-     * Consecutive TF_FUNCTION chars → \sin, \cos, \operatorname{...} */
+     * Consecutive TF_FUNCTION chars → \sin, \cos, \operatorname{...}
+     * Consecutive explicit Roman/italic chars → one readable wrapper. */
     std::string textBuf;
     std::string funcBuf;
+    std::string alphabetBuf;
+    int alphabetTypeface = -1;
 
     auto flushText = [&]() {
         if (!textBuf.empty()) {
@@ -259,6 +318,15 @@ void LaTeXEmitter::emitSequence(const NodeList& nodes, size_t first,
         }
         funcBuf.clear();
     };
+    auto flushAlphabet = [&]() {
+        if (alphabetBuf.empty()) return;
+        out += math_alphabet_command(alphabetTypeface);
+        out += '{';
+        out += alphabetBuf;
+        out += '}';
+        alphabetBuf.clear();
+        alphabetTypeface = -1;
+    };
 
     for (size_t i = first; i < last; ++i) {
         const auto& child = nodes[i];
@@ -267,22 +335,34 @@ void LaTeXEmitter::emitSequence(const NodeList& nodes, size_t first,
             auto* ch = static_cast<const CharNode*>(child.get());
             if (ch->typeface == TF_TEXT) {
                 flushFunc();
+                flushAlphabet();
                 append_text_char(textBuf, ch->charCode);
                 continue;
             }
             if (ch->typeface == TF_FUNCTION) {
                 flushText();
+                flushAlphabet();
                 append_text_char(funcBuf, ch->charCode);
+                continue;
+            }
+            if (math_alphabet_command(ch->typeface) && ch->embells.empty()) {
+                flushText();
+                flushFunc();
+                if (alphabetTypeface != ch->typeface) flushAlphabet();
+                alphabetTypeface = ch->typeface;
+                append_math_char(alphabetBuf, ch->charCode);
                 continue;
             }
         }
         /* Non-text/func node: flush buffers and emit */
         flushText();
         flushFunc();
+        flushAlphabet();
         emitNode(child.get(), out);
     }
     flushText();
     flushFunc();
+    flushAlphabet();
 
 }
 
@@ -451,6 +531,15 @@ void LaTeXEmitter::emitChar(const CharNode& ch, std::string& out) {
     else if (tf == TF_TEXT) {
         out += "\\text{";
         append_text_char(out, code);
+        out += '}';
+    }
+    /* Explicit math alphabets.  Unembellished runs are grouped by
+     * emitSequence(); this path handles a styled character carrying an
+     * accent or other embellishment. */
+    else if (const char* alphabet = math_alphabet_command(tf)) {
+        out += alphabet;
+        out += '{';
+        append_math_char(out, code);
         out += '}';
     }
     /* Number */

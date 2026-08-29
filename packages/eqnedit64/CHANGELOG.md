@@ -1,5 +1,17 @@
 # Changelog
 
+## 3.0.4 - 2026-08-29
+
+- Adds an always-visible math-style palette to both the native and browser
+  editors for upright, italic, bold, sans-serif, monospace, calligraphic,
+  blackboard-bold, Fraktur, and bold-math input.
+- Supports `\mathnormal`, `\mathrm`, `\mathit`, `\mathbf`, `\mathsf`,
+  `\mathtt`, `\mathcal`, `\mathbb`, `\mathfrak`, `\bm`, and `\boldsymbol`
+  across native parsing, rendering, TeX/MathML export, and palette insertion.
+- Uses the embedded math font's Unicode mathematical alphabets, including bold
+  Greek glyphs, and keeps browser `\bm` input compatible with MathJax.
+- Adds a C++ regression gate for stable math-alphabet normalization.
+
 ## 3.0.3 - 2026-08-29
 
 - Draws `\mathbf` and vector-style characters with the embedded math font's
