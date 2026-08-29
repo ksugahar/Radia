@@ -87,6 +87,29 @@ foreground Cubit job, and the solver run remains a foreground Python job so a
 result cannot be mistaken for a completed validation while a detached process
 is still running.
 
+For an accuracy certificate, build the default four-level geometric family and
+run the convergence driver. The levels use scales `1.25, 1.0, 0.8, 0.64`; the
+last three define the observed order and Richardson estimate. The fourth level
+is intentional: one unusually small increment between two independent
+unstructured Cubit meshes must not be mistaken for asymptotic convergence.
+
+```powershell
+python validation_test/c_type_three_engine/build_mesh_family.py `
+  --output-dir C:/temp/radia_ctype_accuracy/meshes
+
+python validation_test/c_type_three_engine/run_mesh_convergence.py `
+  --mesh-family C:/temp/radia_ctype_accuracy/meshes/mesh_family.json `
+  --output C:/temp/radia_ctype_accuracy/mdx_certificate.json `
+  --replicate-final-result C:/temp/radia_ctype_accuracy/hibino_finer.json `
+  --resume
+```
+
+The independent-host result is mandatory. Its mesh, software version,
+implementation hashes, comparison contract, and observation points must match
+the mdx finest result. The certificate bounds discretization and
+cross-formulation spread; it does not rename their agreement as an unavailable
+analytic solution.
+
 ## Tracked evidence
 
 `results/lab_20260829_mesh.json` records the passing Cubit/Kelvin topology
@@ -106,3 +129,19 @@ the same checked meshes, and no checkpoint reuse. All six runs pass at
 and 11.31/43.28 s on hibino, so HDiv is 3.52x and 3.83x faster for this fixed
 nonlinear order-2 comparison. The six source JSON artifacts are tracked beside
 the summary.
+
+The final `v4.95.71` accuracy campaign is recorded by
+`results/mdx_hibino_20260830_nonlinear_order2_convergence.json`. Four exact
+Cubit/ACIS levels increase the iron mesh from 434 to 1,688 elements and the
+Kelvin mesh from 24,134 to 89,454 elements. The accepted convergence levels are
+`medium -> fine -> finer`. On the finest level the three-formulation gap-core
+spread is 0.29326%, the maximum conservative discretization uncertainty is
+0.17601%, and the maximum consensus deviation is 0.18226%. Their conservative
+sum is 0.35827%, below the 1% certificate gate. The mdx/hibino field
+reproduction differs by at most `2.35e-14` relative RMS.
+
+On that finest mesh, mdx runtimes are 36.78 s for 32,580 HDiv DoFs, 852.08 s
+for 470,288 reduced-A DoFs, and 90.41 s for 124,132 Omega DoFs. Hibino repeats
+them in 37.43, 865.45, and 91.21 s. These timings support the implementation
+comparison; the certificate's accuracy statement remains the common
+mesh-refined B-field envelope, not an analytic-truth claim.

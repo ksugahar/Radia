@@ -26,3 +26,4 @@ validation_test/radia_mcp/artifacts/field_study_production_v1/*.json text eol=lf
 # to LF so Windows and Linux checkouts preserve one byte-stable oracle.
 tests/matlab/fixtures/optuna*.json text eol=lf
 matlab/optuna*.json text eol=lf
+docs/hdiv_vim/c_type_three_formulation_convergence_iron.vol binary

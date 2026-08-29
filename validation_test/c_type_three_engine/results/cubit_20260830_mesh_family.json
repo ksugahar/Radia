@@ -1,0 +1,79 @@
+{
+  "schema": "radia.validation.c-type-cubit-mesh-family.v1",
+  "generated_at_utc": "2026-08-29T21:01:36.092339+00:00",
+  "passed": true,
+  "cad_authority": "cad/c_type_iron.jou",
+  "builder": "build_cubit_meshes.py",
+  "builder_sha256": "b7d7a2cfdef8a72fae0b2bd3c054319b42c19e9d9c803da28ec926ae72c602a3",
+  "family_builder_sha256": "a21b3c2d4ae77e1d14aa48fe8da67f3658313295cc6a12fc0d9553250c422302",
+  "refinement_ratio": 1.25,
+  "curve_order": 2,
+  "kelvin_radius_m": 0.22,
+  "levels": [
+    {
+      "name": "coarse",
+      "scale": 1.25,
+      "relative_directory": "coarse",
+      "mesh_result": "coarse/mesh_result.json",
+      "mesh_result_sha256": "23e8fb218ce814a4a46cb030c01a570a91a2b8b669987d7bb926c0d3aa071d49",
+      "iron_size_m": 0.0375,
+      "air_size_m": 0.05,
+      "gap_size_m": 0.0025,
+      "kelvin_mesh_size_m": 0.0625,
+      "iron_elements": 434,
+      "kelvin_elements": 24134,
+      "iron_vol_sha256": "f9cf6eeb0fe99f775d99aad5740cd8e63ee6f845489cfb9a2ccb534bda0d44b0",
+      "kelvin_domain_vol_sha256": "078a8fa56d065c0e0dfb8721f540e1a4b8e96a7932905305dd4c78cdda9dde2f"
+    },
+    {
+      "name": "medium",
+      "scale": 1.0,
+      "relative_directory": "medium",
+      "mesh_result": "medium/mesh_result.json",
+      "mesh_result_sha256": "54ffc782e46336472586616e963c0bbc7911bf6f4c8e4d41cce8ee1b75665dc1",
+      "iron_size_m": 0.03,
+      "air_size_m": 0.04,
+      "gap_size_m": 0.002,
+      "kelvin_mesh_size_m": 0.05,
+      "iron_elements": 542,
+      "kelvin_elements": 36208,
+      "iron_vol_sha256": "932f99b95303e9dba2f40a43fca574d8e97430b5b68d109d7b06e3ead8aeb978",
+      "kelvin_domain_vol_sha256": "0cc559e6dcdabc61fd37f7c09b09674c228710b9af7682b947927d41984628d4"
+    },
+    {
+      "name": "fine",
+      "scale": 0.8,
+      "relative_directory": "fine",
+      "mesh_result": "fine/mesh_result.json",
+      "mesh_result_sha256": "f8a17650983eb910c183ab29bb74a9b3a8b85d508aa75420ed0ca1060326216e",
+      "iron_size_m": 0.024,
+      "air_size_m": 0.032,
+      "gap_size_m": 0.0016,
+      "kelvin_mesh_size_m": 0.04000000000000001,
+      "iron_elements": 846,
+      "kelvin_elements": 54886,
+      "iron_vol_sha256": "065b418c14c151d32d49a777d961794a3ac5d5e7df647a6d49240edfaf4c4c71",
+      "kelvin_domain_vol_sha256": "741c247e6ac4ba11b3a55aa1f98858d9247b56268573044ed1e5659d7c84deb2"
+    },
+    {
+      "name": "finer",
+      "scale": 0.64,
+      "relative_directory": "finer",
+      "mesh_result": "finer/mesh_result.json",
+      "mesh_result_sha256": "339c778c4bf87de31be3c98d9e613864f3baec8309241690b666ed18fc44b1ab",
+      "iron_size_m": 0.0192,
+      "air_size_m": 0.0256,
+      "gap_size_m": 0.00128,
+      "kelvin_mesh_size_m": 0.032,
+      "iron_elements": 1688,
+      "kelvin_elements": 89454,
+      "iron_vol_sha256": "1a8a52e98c9e03d9f238772cf34f7ab191e913d9b156e93a1175abe708fc6391",
+      "kelvin_domain_vol_sha256": "649fbec7f13c723d573ec955832cad2b454629613e671fa48b2d2e0376964232"
+    }
+  ],
+  "checks": {
+    "all_mesh_contracts_passed": true,
+    "element_counts_strictly_increase": true,
+    "geometric_size_sequence": true
+  }
+}

@@ -8,7 +8,7 @@ exposed several failure modes.
 
 ## Review status
 
-- Revised: 2026-08-30 after the `v4.95.70` mdx/hibino release validation.
+- Revised: 2026-08-30 after the `v4.95.71` four-level mdx/hibino validation.
 - The `22fc5630e..ec57769de` HEAD increment consists of Eqnedit64 pull
   requests `#34` and `#35`. It changes no HDiv source, test, validation,
   MATLAB, or HDiv documentation path, so the earlier HDiv measurements remain
@@ -84,8 +84,8 @@ explicit in-process Python fallback because NGSolve setup is Python-owned.
 | F1 | Resolved | BDM2 TET directional ChargeGram derivatives used the wrong degree-one moment order on the reviewed baseline. | `TetPotentialMomentsDirectionalUpTo1` stores degree-one moments in `z,y,x` (`PotentialMomentIndex`) order, while two consumers in `rad_hacapk_hdiv.cpp` used `mv[k+1]` as `x,y,z`. On the same 1-cell BDM2 case, the `ec57769de` baseline differs from finite differences by `1.327698e-1` for the complete Gram and `4.145764e-1` for the volume block; fifth-degree homogeneity is wrong by `3.727428e-1`. The correction in `51dce89c1`, included in this revision, reduces these to `4.019822e-9`, `2.778490e-9`, and `4.002814e-16`. |
 | F2 | P1 | The IMA field contract is red. | At `ec57769de`, clean-build measurements were `2.0140013262e-14` and `4.9318891895e-14` relative error for the two HEX `rad.Fld`/`FieldFromSolution` gates, and `2.3931079340e-15` component error for curved TET BDM2. The limit is `2.2204460493e-15` (`10 eps`). Preserve the limit; align solve reduction and source accumulation order rather than loosening it. |
 | F3 | P1 | RT0 is publicly advertised again despite the BDM1/BDM2-only decision. | `_capabilities.py` exposes 3D TET/HEX order 0 and `DemagOperator` documents an order-0 broken-interface path. `HDivSolver` and field evaluation accept only orders 1 and 2. Remove the public RT0 entries/path and retain any topology-only experiment outside the production API. |
-| F4 | P1 | Fine-TET loss of SPD is an unclosed correctness report. | Claude reported `p^T A p = -1.90e5` at 8.75 mm and `-7.51e8` at 7.0 mm, but the mesh/configuration is absent from `main`. Commit the reproducer before changing quadrature, ACA, or CG. |
-| F5 | Resolved on `v4.95.70` | The direct nonlinear HDiv-MMM versus Omega-reduced-Omega comparison closes at order 2 and repeats on both compute hosts. | `validation_test/c_type_three_engine/` owns the Cubit/ACIS journal, reflection-invariant iron and Kelvin meshes, one coil, one material law, one observation grid, per-engine checkpoints, and JSON gates. The nonlinear order-2 primary pair differs by 0.18032% in the gap core; both reflection defects are about `1.8e-10`. HDiv uses 10,860 DoF and Omega 50,322 DoF. Across three fresh 38-thread runs, median HDiv/Omega times are 12.09/42.59 s on mdx and 11.31/43.28 s on hibino, making HDiv 3.52x and 3.83x faster for this case. The order-1 PCHIP rerun remains at 5.84969%, proving that the old discrepancy was not caused by linear versus PCHIP interpolation. |
+| F4 | Resolved on `v4.95.71` | The released operator completes the finer C-yoke TET lane without loss of SPD. | The 1,688-element iron mesh solves on mdx and hibino, all three nonlinear routes converge, and the final three mesh levels pass the contraction/order gate. The older untracked `p^T A p < 0` report is not used as current evidence. |
+| F5 | Resolved on `v4.95.71` | The nonlinear C-type comparison now has a four-level, three-formulation accuracy certificate and independent-host reproduction. | `validation_test/c_type_three_engine/` owns the exact Cubit/ACIS mesh family, shared coil and PCHIP B(H) law, Kelvin contract, per-engine checkpoints, and JSON gates. On the finest level, the HDiv-MMM / HCurl reduced-A / H1 Omega-reduced-Omega gap-core spread is 0.29326%. The maximum conservative discretization uncertainty is 0.17601%, the consensus deviation is 0.18226%, and their conservative sum is 0.35827%. mdx and hibino reproduce all three fields within `2.35e-14` relative RMS. HDiv uses 32,580 DoF and 36.78 s on mdx, versus 124,132 DoF / 90.41 s for Omega and 470,288 DoF / 852.08 s for reduced-A. The certificate explicitly bounds a common mesh-refined B field; it does not claim an unavailable analytic truth. |
 | F6 | P2 | Mapped/non-affine HEX BDM2 is operator-only, not a material solve. | `Solve` rejects it before wrong physics; mapped HEX BDM1, affine HEX BDM2, TET BDM2, and WEDGE BDM2 are the current alternatives. This is correctly documented and tested, but it remains a major completeness boundary. |
 | F7 | P2 | IMA disables tree acceleration for field maps. | `HDivFieldEvaluator::AlgorithmFor` returns `Direct` whenever images exist. This protects full/reduced roundoff parity, but large IMA observation maps cannot use the otherwise guarded treecode. Any image-aware acceleration needs a common full/reduced grouping and the F2 contract first. |
 | F8 | P2 | Exact vector-potential evaluation is narrower than H-field evaluation. | Exact `A` uses straight TET BDM1 equivalent currents. BDM2, curved, HEX, and WEDGE use NGSolve-mapped quadrature clouds assembled in Python. This is valid as an explicit converged quadrature route, not an all-topology exact/native claim. |
@@ -435,12 +435,23 @@ same nonlinear iteration counts. The raw artifacts and their hashes are
 indexed by
 `validation_test/c_type_three_engine/results/mdx_hibino_20260830_nonlinear_order2_summary.json`.
 
-Finer TET cases reported CG breakdown with `p^T A p = -1.90e5` at 8.75 mm and
-`-7.51e8` at 7.0 mm. The worsening sign and magnitude under refinement identify
-an operator/SPD defect rather than a request for more CG iterations. The TET
-C-yoke lane is therefore certified only down to the last passing 12.5 mm case
-until the failing Gram/operator is materialized and compared with an
-independent dense or NGSolve reference.
+The subsequent `v4.95.71` campaign replaces a single fixed-mesh comparison with
+four exact Cubit/ACIS levels. The accepted observed-order fit uses the final
+`medium -> fine -> finer` levels; the extra coarse level prevents one
+accidentally small unstructured-mesh increment from creating a false
+asymptotic claim. The finest meshes contain 1,688 iron TET elements and 89,454
+Kelvin-domain TET elements. All three nonlinear routes converge. Their
+gap-core spread is 0.29326%, the maximum conservative discretization
+uncertainty is 0.17601%, and the maximum consensus deviation is 0.18226%, for
+a 0.35827% combined numerical envelope. The independent hibino result matches
+the mdx fields within `2.35e-14` relative RMS.
+
+The finest mdx run uses 32,580 HDiv DoFs in 36.78 s, 470,288 reduced-A DoFs in
+852.08 s, and 124,132 Omega DoFs in 90.41 s. Hibino repeats them in 37.43,
+865.45, and 91.21 s. This closes the earlier fine-TET breakdown as a current
+production blocker: the released operator solves the finer family without CG
+indefiniteness. The tracked certificate still avoids an analytic-truth claim;
+it certifies convergence toward one common B-field envelope.
 
 ## 4. Image-folded roundoff contract
 
@@ -508,21 +519,22 @@ contract.
 |---|---|---|
 | P1 | Full-versus-IMA `rad.Fld` roundoff | Make all three isolated failures in section 4 pass below `10 eps` without weakening tolerances. Compare solved coefficient vectors before debugging source evaluation, then align directed block symmetrization and full/reduced field summation order. |
 | P1 | Remove production RT0 | Delete the 3D order-0 entries from `hdiv_capabilities`, remove the order-0 `DemagOperator` production path and dedicated order-0 tests/docs, and keep public `Solve`, operator, field, and MATLAB inventory consistently BDM1/BDM2. |
-| P1 | Fine-TET operator indefiniteness | Commit the failing mesh/configuration and result JSON; materialize the relevant Gram/operator block; locate a negative mode; compare it with dense analytic assembly or an independent NGSolve weak-form route; add a focused regression. |
-| P1 | Nonlinear C-yoke memory evidence | Accuracy and repeated timing are closed on mdx and hibino for `v4.95.70`. Add measured process peak memory to a future scaling campaign before making a memory-efficiency claim. reduced-A remains an optional independent third-formulation audit rather than the primary acceptance pair. |
+| P1 | Nonlinear C-yoke memory evidence | Four-level accuracy and repeated timing are closed on mdx and hibino for `v4.95.71`. Add measured process peak memory to a future scaling campaign before making a memory-efficiency claim. reduced-A remains an independent third-formulation audit rather than the primary production route. |
 | P2 | Mapped HEX BDM2 material solve | Build one composite mapped charge representation that preserves volume/surface cancellation, then require spectrum, linear/nonlinear solve, IMA, field, curved, and shape-derivative gates before removing the fail-loud guard. |
 | P2 | Image-aware field acceleration | Design grouping that is invariant under explicit reflection and reduced IMA representation; prove `<10 eps` direct parity before enabling tree/H-matrix evaluation for image-bearing field maps. |
 | P2 | Vector-potential topology coverage | Add exact/native BDM2 and HEX/WEDGE/curved source representations only with independent NGSolve mapped-volume convergence and A/B route checks. Keep the current quadrature construction explicit until then. |
 | P2 | MATLAB method parity | Preserve the native field/EnergyStop handles, but do not claim native MATLAB HDiv solve parity while `vim-public` is classified as Python fallback. Promote stable numeric/artifact boundaries with MATLAB regression tests. |
-| P2 | reduced-A B-H contract | The primary HDiv/Omega pair now shares monotone PCHIP B(H) with vacuum-slope continuation and has been rerun. reduced-A still interpolates H(B)-derived reluctivity separately; align and test its value/differential-reluctivity contract before using it as a nonlinear acceptance route. |
+| Resolved | reduced-A B-H contract | reduced-A now inverts the shared monotone PCHIP B(H) law by checked scalar root solves, uses the same vacuum-slope continuation, and passes the four-level three-formulation certificate. |
 | P2 | Configuration provenance | Classify all 14 `RADIA_HDIV_*` variables; keep fault injection/test telemetry private, expose supported tuning through `SolverConfig`, and serialize resolved values into result artifacts. |
 | Resolved | Same-material interfaces | The exporter removes only `DomainIn == DomainOut > 0` seams, remaps retained descriptors, and the regenerated C-yoke mesh passes strict labels, adjacency, exact reflection, and Kelvin identification gates. |
+| Resolved | Fine-TET operator indefiniteness | The released `v4.95.71` operator solves the 1,688-element finest C-yoke iron mesh on both mdx and hibino and the final three levels satisfy the contraction/order gate. |
 | P3 | Class ownership | Continue decomposition only along measured ownership boundaries; do not replace the old branch cascade with another flag registry. |
 
 ## 7. Focused verification
 
 This revision was verified on LAB with the native module loaded from this
-worktree, then repeated with the exact `v4.95.70` PyPI wheel on mdx and hibino:
+worktree, then repeated with the exact `v4.95.70` timing wheel and the final
+`v4.95.71` four-level certificate wheel on mdx and hibino:
 
 - `Build.ps1 -Verbose`: PASS after the C++ review hardening;
 - latest `origin/main` clean native rebuild with
@@ -557,9 +569,13 @@ worktree, then repeated with the exact `v4.95.70` PyPI wheel on mdx and hibino:
 - order-2 nonlinear primary pair with the shared PCHIP law: PASS at 0.18032%
   gap-core relative RMS on all six remote runs; median HDiv/Omega timing was
   12.09/42.59 s on mdx and 11.31/43.28 s on hibino, with 10,860/50,322 DoF.
-- release-qud: PASS for `radia 4.95.70`, `cubit-mesh-export 0.14.13`, and
-  `radia-mcp 1.4.49`; package versions and production file hashes agree across
-  LAB, the 100-machine, mdx, and hibino.
+- four-level order-2 nonlinear certificate on `v4.95.71`: PASS; finest
+  three-formulation spread 0.29326%, combined numerical envelope 0.35827%,
+  and mdx/hibino reproduction within `2.35e-14` relative RMS. Finest mdx
+  HDiv/reduced-A/Omega times are 36.78/852.08/90.41 s at
+  32,580/470,288/124,132 DoF.
+- release-qud: PASS for `radia 4.95.71`; package versions and production file
+  hashes agree across LAB, the 100-machine, mdx, and hibino.
 
 The focused commands were:
 
