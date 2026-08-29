@@ -242,7 +242,7 @@
   }
 
   /* Officeへ渡すMathMLの製品境界。MathJax固有属性や一時mstyleを落とし、
-   * native版と同じ inline / 24 pt / large-operator 属性へ正規化する。
+   * native版と同じ inline / 18 pt / large-operator 属性へ正規化する。
    * TeXの構造決定はMathJaxに任せるため、積分はmsubsup、総和は
    * munderoverとなり、native emitterも同じ規則を試験する。 */
   function officeMathMl(tex) {
@@ -252,7 +252,7 @@
     if (doc.querySelector("parsererror")) throw new Error("invalid MathML");
     var math = doc.documentElement;
     math.setAttribute("display", "inline");
-    math.setAttribute("mathsize", "24pt");
+    math.setAttribute("mathsize", "18pt");
 
     Array.prototype.forEach.call(math.querySelectorAll("*"), function (node) {
       Array.prototype.slice.call(node.attributes).forEach(function (attribute) {
@@ -287,9 +287,9 @@
     return new window.XMLSerializer().serializeToString(math);
   }
 
-  /* ClipboardItemのtext/htmlはChromiumによってHTML文書として包み直され、
-   * PowerPointでは段落の既定18ptへ落ちる。同期copyイベントなら選択範囲と
-   * 同じCF_HTML断片として渡せるため、明示した24ptと左揃えを保持できる。 */
+  /* ClipboardItemのtext/htmlはChromiumによってHTML文書として包み直される。
+   * 同期copyイベントなら選択範囲と同じCF_HTML断片として渡せるため、
+   * PowerPointの通常Ctrl+Vで18pt・左揃えを保持できる。 */
   function writeOfficeClipboard(html, tex) {
     var handled = false;
     function onCopy(event) {
@@ -646,16 +646,15 @@
         say("この数式はMathMLに変換できませんでした");
         return;
       }
-      /* native版と同じinline 24 pt MathMLを同期CF_HTMLで渡す。
+      /* native版と同じinline 18 pt MathMLを同期CF_HTMLで渡す。
        * PowerPointにOMMLを直接渡すと、MathMLからのOffice変換と
        * 総和記号の大きさや上下限の位置が異なるため使わない。 */
       /* The trailing inline sentinel keeps the equation out of a centred
-       * display paragraph.  Give that otherwise invisible run the same size
-       * as the equation so PowerPoint's caret/toolbar does not fall back to
-       * the paragraph default of 18 pt. */
-      var html = mml + '<span style="font-size:24pt">&#160;</span>';
+       * display paragraph. Give that otherwise invisible run the same 18 pt
+       * size as the equation so the caret and next insertion agree. */
+      var html = mml + '<span style="font-size:18pt">&#160;</span>';
       writeOfficeClipboard(html, tex).then(
-        function () { say("24 pt・左揃えのPowerPoint数式をコピーしました"); },
+        function () { say("18 pt・左揃えのPowerPoint数式をコピーしました"); },
         function () { say("コピーできませんでした（ブラウザの権限を確認してください）"); }
       );
     });

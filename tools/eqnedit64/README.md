@@ -51,9 +51,10 @@ GUIの画面構成、状態遷移、TeX/クリップボード契約、自動・�
 
 キャンバスからのコピーは、一つの数式を複数形式でクリップボードへ登録します。
 選択範囲があればその範囲を、選択がなければ数式全体を `Ctrl+C` でコピーします。
-PowerPoint、Word、Excel向けには、inline 24 pt MathMLと24 ptを明示した末尾NBSPを
+PowerPoint、Word、Excel向けには、inline 18 pt MathMLと18 ptを明示した末尾NBSPを
 1つのCF_HTML断片として提供し、編集可能なOffice Mathへ変換します。Web版も同じ
-経路を使います。数式末尾へカーソルを置いた場合もPowerPointの表示は24 ptです。
+経路を使います。PowerPointの通常Ctrl+Vでは左寄せを優先し、数式本体、末尾文字、
+次の挿入点を標準18 ptでそろえます。
 通常コピーでは、PowerPointが中央寄せの数式段落として優先する登録`MathML` /
 `MathML Presentation`や、Web版だけの直接OMMLを混在させません。Office保存後は
 OOXML内のインライン`m:oMath`となり、`m:oMathPara`にはなりません。
@@ -270,7 +271,7 @@ pwsh -NoProfile -File build\test_asan.ps1
 信頼やSmartScreen評価を得るための商用コード署名証明書とは別です。
 
 `test_background.ps1` はウィンドウを表示せず、貼り付け、構造編集、複数行保存、
-24 pt inline MathML CF_HTML、Office認識用LaTeX、EMF/DIBV5生成、x64実行形式、
+18 pt inline MathML CF_HTML、Office認識用LaTeX、EMF/DIBV5生成、x64実行形式、
 製品バージョン、開発者署名を検査します。
 マウスやキーボードは操作しません。
 
@@ -282,8 +283,8 @@ GUIも、最初から人の画面を自動操作するのではなく、非表�
 GUIファザーにも完成／未完成TeXのソース編集を混ぜます。数式描画はメモリ上のGDI画像で
 検査し、PowerPointなど他製品との貼り付けも `test_external_paste.ps1` が非表示の
 API経由で検査します。この試験は内部生成関数を迂回路として使わず、選択なしの
-通常GUIコピー命令を送ってから、PowerPoint COMの通常 `Paste()` が
-左寄せ24 ptの編集可能なOffice Mathと分数・根号の構造を作ることに加え、貼り付けた
+通常GUIコピー命令を送ってから、PowerPointの組み込みUI `Paste` が
+左寄せ18 ptの編集可能なOffice Mathと分数・根号の構造を作ることに加え、貼り付けた
 図形をPowerPoint自身でPNG化し、空白や豆腐文字ではなく分数線を含む数式の輪郭が
 描画されること、
 IrfanViewの `/clippaste` が非空画像を作ること、DIBV5の全画素がα=255であること、
@@ -296,7 +297,7 @@ IrfanViewがインストールされた試験機が必要ですが、マウス�
 人間の手動確認には文字の細かな見た目と操作感だけを残します。
 
 `test_tex_fuzz.py` は固定seedから正常・壊れかけのraw TeXを3,072件作り、
-24 pt MathMLのXML妥当性を含めて、
+既定24 pt MathMLのXML妥当性を含めて、
 パース、正規化の固定点、有限な描画寸法、SVG XMLを検査します。失敗はseedで
 完全に再現できます。
 操作感CIは実exeのoperation log v2を読み、構造プライバシーモードのLLMレビュー束、

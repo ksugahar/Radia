@@ -64,19 +64,19 @@ def test_office_copy_is_editable_mathml_without_png_competition() -> None:
     assert "officeOmml(mml)" not in office
     assert "writeOfficeClipboard(html, tex)" in office
     assert "<!--[if gte msEquation 12]>" not in office
-    assert "var html = mml + '<span style=\"font-size:24pt\">&#160;</span>'" in office
+    assert "var html = mml + '<span style=\"font-size:18pt\">&#160;</span>'" in office
     assert '<m:oMath' not in office
     assert '<m:oMathPara' not in office
     assert "<!DOCTYPE html>" not in office
 
 
-def test_office_mathml_is_canonical_inline_24pt() -> None:
+def test_office_mathml_is_canonical_inline_18pt() -> None:
     canonical = SOURCE.split("function officeMathMl", 1)[1].split(
         "function getSvgConverter", 1)[0]
     assert "MathJax.tex2mml" in canonical
     assert '{ display: false }' in canonical
     assert 'setAttribute("display", "inline")' in canonical
-    assert 'setAttribute("mathsize", "24pt")' in canonical
+    assert 'setAttribute("mathsize", "18pt")' in canonical
     assert 'querySelectorAll("mstyle")' in canonical
     assert 'attribute.name.indexOf("data-") === 0' in canonical
     assert 'setAttribute("largeop", "true")' in canonical

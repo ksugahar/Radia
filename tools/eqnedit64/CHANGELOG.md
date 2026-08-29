@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+### PowerPoint normal-paste acceptance follows the real UI path
+
+- Native and Web Office copy now declare the accepted 18 pt inline MathML and
+  sentinel contract. Left-aligned editable `m:oMath` has priority over forcing
+  24 pt through a centred registered-MathML route.
+- The PowerPoint release gate invokes the built-in UI `Paste` command in an
+  offscreen temporary presentation. The former `Shapes.Paste()` probe retained
+  24 pt through a different object-model path and caused false-positive 3.0.8
+  and 3.0.9 release evidence.
+
 ## 3.0.9 — 2026-08-30
 
 ### Visible product version and exact PowerPoint insertion-size gate

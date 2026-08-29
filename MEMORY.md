@@ -5,3 +5,4 @@
 - [MATLAB Optuna MOTPE Parzen migration](memory/matlab_optuna_motpe_parzen.md): use weighted shared Parzen mixtures and retire the scalar KDE candidate path.
 - [HDiv-MMM topopt native CG](memory/hdiv_mmm_topopt_native_cg.md): use native Jacobi-PCG, verify true residuals, and do not restore the slower Python MultiVector attempt.
 - [HDiv-MMM topopt without BESO](memory/hdiv_mmm_topopt_no_beso.md): keep raw Schur responses; put geometry regularization in the discrete master and use graph cut only for submodular backends.
+- [Eqnedit64 PowerPoint normal paste](memory/eqnedit64_powerpoint_normal_paste.md): accept editable left-aligned 18 pt Office Math for normal Ctrl+V; test with `ExecuteMso("Paste")`, never `Shapes.Paste()`.

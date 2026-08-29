@@ -34,6 +34,14 @@ def test_equation_policy_keeps_both_editions_in_radia() -> None:
     assert publication["homepage_source_copy"] is False
     assert publication["release_gate"].endswith("run_eqnedit64_release_qa.ps1")
     assert "PowerPoint" in publication["test_scope"]
+    paste = policy["powerpoint_normal_paste"]
+    assert paste["command"] == 'Application.CommandBars.ExecuteMso("Paste")'
+    assert paste["office_math"] == "editable inline m:oMath"
+    assert paste["alignment"] == "left"
+    assert paste["font_points"] == 18
+    assert paste["priority"] == "left alignment over forced 24 pt"
+    assert paste["native_web_parity"] is True
+    assert paste["forbidden_acceptance_probe"] == "slide.Shapes.Paste()"
 
 
 def test_copy_office_uses_utf8_file_contract(tmp_path, monkeypatch) -> None:
@@ -54,7 +62,9 @@ def test_copy_office_uses_utf8_file_contract(tmp_path, monkeypatch) -> None:
     assert result["ok"] is True
     assert observed["command"][1] == "--copy-tex-file"
     assert observed["tex"] == r"\[\frac{x}{y}\]"
-    assert "MathML" in result["formats"]
+    assert "HTML Format" in result["formats"]
+    assert "MathML" not in result["formats"]
+    assert "MathML Presentation" not in result["formats"]
     assert "CF_ENHMETAFILE" in result["formats"]
     assert not Path(observed["command"][2]).exists()
 

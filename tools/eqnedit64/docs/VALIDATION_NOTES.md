@@ -5,6 +5,45 @@
 [`CANONICAL_OPERATION.md`](CANONICAL_OPERATION.md) と `release-eqnedit64` skillを
 正とする。`build\accept_release.ps1`は隔離CI/VM用であり、対話中LABでは実行しない。
 
+## 2026-08-30 通常Ctrl+V経路の再検証と18 pt採用
+
+- 3.0.9までのPowerPoint試験は`slide.Shapes.Paste()`を使っていた。同じ
+  クリップボードに対し、このオブジェクトモデル経路は数式・末尾・挿入点を
+  24/24/24 ptで作ったが、利用者のCtrl+V相当
+  `Application.CommandBars.ExecuteMso("Paste")`は18/18/18 ptだった。前者を
+  「通常Paste」と呼んだことが誤検知の原因である。
+- 公開済み3.0.6/3.0.7/3.0.9を実UI Pasteで比較した。3.0.6は登録`MathML` /
+  `MathML Presentation`により24 ptを保持したが、保存OOXMLは中央配置の
+  `m:oMathPara`だった。登録MathMLを除いた3.0.7以降は、native/Web共通の
+  CF_HTML MathMLから左寄せインライン`m:oMath`となり、標準プレゼンテーションで
+  18 ptとなった。
+- Microsoft公式資料が示すUnicodeテキスト上のMathML経路も、`mathsize="24pt"`、
+  display指定なし、HTMLなしを含めて実UI Pasteしたが18 ptだった。CSS、`mstyle`、
+  末尾NBSPなどのHTML変種も18 ptであり、`PasteSourceFormatting`だけが24 ptを
+  保持した。これは通常Ctrl+Vとは別の利用操作である。
+- Web Clipboard標準では`text/plain`、`text/html`、`image/png`が必須形式で、Web
+  custom形式はWindowsの登録`MathML`と同じ形式名にはならない。Office.jsのOOXML
+  coercionもPowerPointへの挿入をサポートせずWord専用である。したがって通常
+  Ctrl+V、編集可能、native/Web一致、左寄せ、固定24 ptをすべて満たす公開経路は
+  ない。
+- 利用者判断により、通常PowerPoint貼り付けは編集可能な左寄せ`m:oMath`を最優先し、
+  数式・末尾文字・次の挿入点を18 ptとする。Google Slides用画像は従来どおり
+  300 dpi / 24 ptである。
+- 以後の受入試験は、既存PowerPointがない場合だけ一時窓を画面外へ移し、組み込み
+  `ExecuteMso("Paste")`を実行する。`Shapes.Paste()`はAPI個別試験には使えても、
+  Ctrl+Vの製品合否には使わない。
+- 修正後のローカル検証は、Web/MCP対象17件、Eqnedit64 pytest全22件、native
+  `--self-test`終了コード0、`test_background.ps1` PASSとなった。実PowerPointの
+  再実行は、既存のPowerPoint窓を検出したため安全規則どおり未実施であり、
+  次回の隔離実行で`ExecuteMso("Paste")`経路を確認する。
+
+根拠資料:
+
+- <https://learn.microsoft.com/en-us/office/math/mathml>
+- <https://www.w3.org/TR/clipboard-apis/>
+- <https://support.microsoft.com/en-us/word/paste-special>
+- <https://learn.microsoft.com/en-us/javascript/api/office/office.coerciontype?view=powerpoint-js-preview>
+
 ## 2026-08-30 Eqnedit64 3.0.9公開検証
 
 - 利用者から、3.0.8のPowerPoint貼り付けは左寄せだが24 ptに見えず、EXEタイトルも

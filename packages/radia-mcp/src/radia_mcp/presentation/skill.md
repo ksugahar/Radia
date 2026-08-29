@@ -31,6 +31,10 @@
 - 既存PowerPointへ貼る一時クリップボードが必要な場合は
   `presentation_copy_equation(tex, target="office")` を使う。Eqnedit64が
   Office Math、TeX、EMF、不透明画像を同時に公開する。
+- PowerPointの通常Ctrl+Vは、編集可能なインラインOffice Mathを18 pt・左寄せで
+  貼る契約とする。左寄せを24 pt固定より優先する。受入試験は実UI相当の
+  `Application.CommandBars.ExecuteMso("Paste")` を使い、結果が異なる
+  `slide.Shapes.Paste()`をCtrl+Vの代用にしない。
 - Google Slides向けは `target="google-slides"`、画像貼り付けだけなら
   `target="png"` とする。PNG/EMFファイルが必要なら
   `presentation_render_equation` を使う。

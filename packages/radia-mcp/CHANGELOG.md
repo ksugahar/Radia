@@ -7,6 +7,11 @@ crystallized as its own package.
 
 ## [Unreleased]
 
+- presentation: recorded the Eqnedit64 normal-PowerPoint-paste contract as
+  editable left-aligned 18 pt Office Math, exposed it through
+  `presentation_equation_policy`, and prohibited `Shapes.Paste()` as a Ctrl+V
+  acceptance surrogate.
+
 - presentation: added an Eqnedit64 command-line bridge for copying arbitrary
   TeX as editable Office Math, Google Slides PNG+HTML, or opaque PNG/DIBV5,
   and for rendering PNG/EMF files. The bridge uses UTF-8 temporary files to

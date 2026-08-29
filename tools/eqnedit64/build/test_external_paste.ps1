@@ -757,7 +757,7 @@ function Assert-PowerPointEquationRendering([string]$Path) {
         # glyph or tofu box has ink but cannot contain the long fraction rule.
         # Requiring its silhouette prevents the former "any black pixel" false
         # positive while remaining independent of font antialiasing.
-        # A fixed 40 px rule detects the known fraction in this 24 pt fixture
+        # A fixed 40 px rule detects the known fraction in this 18 pt fixture
         # without making the threshold depend on unrelated terms added to the
         # left-alignment sentinel prefix.
         $requiredFractionRun = 40
@@ -798,8 +798,9 @@ $originalHadUnicodeText = [EqneditClipboardNative]::IsClipboardFormatAvailable(1
 $originalUnicodeText = if ($originalHadUnicodeText) { Read-ClipboardUnicodeText } else { $null }
 $powerPoint = $null
 $presentation = $null
+$powerPointWindow = $null
 $slide = $null
-$shapeRange = $null
+$pastedShape = $null
 $restoreFailure = $null
 $completed = $false
 
@@ -842,7 +843,7 @@ try {
     $fragmentStart += $startMarker.Length
     $fragment = $officeHtml.Substring(
         $fragmentStart, $fragmentEnd - $fragmentStart)
-    $inlineSentinel = '<span style="font-size:24pt">&#160;</span>'
+    $inlineSentinel = '<span style="font-size:18pt">&#160;</span>'
     $mathMl = if ($fragment.EndsWith($inlineSentinel)) {
         $fragment.Substring(0, $fragment.Length - $inlineSentinel.Length)
     } else { '' }
@@ -851,25 +852,39 @@ try {
         throw 'Normal copy exposed registered MathML that PowerPoint centres.'
     }
     if ($officeHtml -notmatch '<math\b' -or
-        $officeHtml -notmatch '</math><span style="font-size:24pt">&#160;</span><!--EndFragment-->' -or
+        $officeHtml -notmatch '</math><span style="font-size:18pt">&#160;</span><!--EndFragment-->' -or
         $mathMl -notmatch 'display="inline"' -or
-        $mathMl -notmatch 'mathsize="24pt"' -or
+        $mathMl -notmatch 'mathsize="18pt"' -or
         $mathMl -notmatch '<mfrac>' -or $mathMl -notmatch '<msqrt>' -or
         $mathMl -notmatch '<munderover><mo[^>]*>&#x2211;</mo>' -or
         $mathMl -notmatch '<msubsup><mo[^>]*>&#x222B;</mo>') {
-        throw 'Eqnedit64 did not publish inline 24 pt structural MathML in CF_HTML.'
+        throw 'Eqnedit64 did not publish inline 18 pt structural MathML in CF_HTML.'
     }
     $dibContract = Assert-DibV5OpaqueBlackOnWhite (Read-ClipboardBytes 17)
 
     $powerPoint = New-Object -ComObject PowerPoint.Application
     $powerPoint.DisplayAlerts = 0
-    $presentation = $powerPoint.Presentations.Add(0)
+    # Shapes.Paste() is an object-model insertion path and preserves source
+    # formatting differently from the user's ordinary Ctrl+V.  Acceptance
+    # must execute the built-in Paste command against a real presentation
+    # window.  The test refuses to run when PowerPoint is already open and
+    # moves its own temporary window offscreen before issuing the command.
+    $presentation = $powerPoint.Presentations.Add(-1)
+    $powerPointWindow = $powerPoint.ActiveWindow
+    $powerPointWindow.Left = -32000
+    $powerPointWindow.Top = -32000
+    $powerPointWindow.Width = 800
+    $powerPointWindow.Height = 600
     $slide = $presentation.Slides.Add(1, 12)
-    $shapeRange = $slide.Shapes.Paste()
-    if ($shapeRange.Count -ne 1) {
-        throw "PowerPoint pasted an unexpected shape count: $($shapeRange.Count)"
+    $powerPointWindow.View.GotoSlide(1)
+    $slide.Select()
+    Start-Sleep -Milliseconds 100
+    $powerPoint.CommandBars.ExecuteMso('Paste')
+    Start-Sleep -Milliseconds 150
+    if ($slide.Shapes.Count -ne 1) {
+        throw "PowerPoint UI Paste created an unexpected shape count: $($slide.Shapes.Count)"
     }
-    $pastedShape = $shapeRange.Item(1)
+    $pastedShape = $slide.Shapes.Item(1)
     $powerPointTextRange = $pastedShape.TextFrame2.TextRange
     $powerPointFontSize = [double]$powerPointTextRange.Font.Size
     $powerPointTailRange = $powerPointTextRange.Characters(
@@ -877,22 +892,22 @@ try {
     $powerPointTailFontSize = [double]$powerPointTailRange.Font.Size
     # The caret after the final NBSP is a zero-length range. Checking the
     # NBSP character alone does not prove that PowerPoint's next typed
-    # character will remain at 24 pt.
+    # character will remain at the accepted 18 pt size.
     $powerPointInsertionRange = $powerPointTextRange.Characters(
         $powerPointTextRange.Length + 1, 0)
     $powerPointInsertionFontSize = [double]$powerPointInsertionRange.Font.Size
     $powerPointAlignment =
         [int]$pastedShape.TextFrame2.TextRange.ParagraphFormat.Alignment
     $powerPointLeft = [double]$pastedShape.Left
-    if ([Math]::Abs($powerPointFontSize - 24.0) -gt 0.1) {
-        throw "PowerPoint native equation is not 24 pt: $powerPointFontSize pt."
+    if ([Math]::Abs($powerPointFontSize - 18.0) -gt 0.1) {
+        throw "PowerPoint native equation is not 18 pt: $powerPointFontSize pt."
     }
-    if ([Math]::Abs($powerPointTailFontSize - 24.0) -gt 0.1) {
-        throw ("PowerPoint caret after the native equation is not 24 pt: " +
+    if ([Math]::Abs($powerPointTailFontSize - 18.0) -gt 0.1) {
+        throw ("PowerPoint caret after the native equation is not 18 pt: " +
             "$powerPointTailFontSize pt.")
     }
-    if ([Math]::Abs($powerPointInsertionFontSize - 24.0) -gt 0.1) {
-        throw ("PowerPoint insertion point after the native equation is not 24 pt: " +
+    if ([Math]::Abs($powerPointInsertionFontSize - 18.0) -gt 0.1) {
+        throw ("PowerPoint insertion point after the native equation is not 18 pt: " +
             "$powerPointInsertionFontSize pt.")
     }
     if ($powerPointAlignment -ne 1 -or $powerPointLeft -gt 1.0) {
@@ -911,21 +926,21 @@ try {
     $accentCount = ([regex]::Matches($slideXml, '<m:acc>')).Count
     $nbsp = [regex]::Escape([string][char]0x00A0)
     $hasSizedInlineSentinel = $slideXml -match (
-        '</a14:m><a:r><a:rPr\b[^>]*\bsz="2400"[^>]*>.*?</a:rPr>' +
+        '</a14:m><a:r><a:rPr\b[^>]*\bsz="1800"[^>]*>.*?</a:rPr>' +
         '<a:t>' + $nbsp + '</a:t></a:r>')
     if (-not $hasInlineContainer -or -not $hasInlineMath -or $hasDisplayMath -or
         -not $hasFraction -or -not $hasRadical -or $naryCount -lt 2 -or
         ($barCount + $accentCount) -lt 2 -or -not $hasSizedInlineSentinel) {
         throw (("PowerPoint paste contract failed: inlineContainer={0}, " +
             "inlineMath={1}, displayMath={2}, fraction={3}, radical={4}, nary={5}, " +
-            "bars={6}, accents={7}, sentinel24pt={8}, artifact={9}") -f $hasInlineContainer, $hasInlineMath,
+            "bars={6}, accents={7}, sentinel18pt={8}, artifact={9}") -f $hasInlineContainer, $hasInlineMath,
             $hasDisplayMath, $hasFraction, $hasRadical, $naryCount, $barCount,
             $accentCount, $hasSizedInlineSentinel, $pptxOutput)
     }
     # XML and MathZones can both exist while PowerPoint draws no equation.
     # Shape.Export invokes PowerPoint's own renderer without a visible window;
     # the silhouette check below rejects blank output and replacement glyphs.
-    $shapeRange.Item(1).Export($powerPointPngOutput, 2) # ppShapeFormatPNG
+    $pastedShape.Export($powerPointPngOutput, 2) # ppShapeFormatPNG
     if (-not (Test-Path -LiteralPath $powerPointPngOutput)) {
         throw 'PowerPoint did not export the pasted slide image.'
     }
@@ -1066,9 +1081,10 @@ try {
         "$texclipImageSize PNG/DIBV5 image at $($texclipContract.XPixelsPerMetre) px/m; $texclipDibContract")
     $completed = $true
 } finally {
-    Release-ComObject $shapeRange
+    Release-ComObject $pastedShape
     Release-ComObject $slide
     if ($presentation) { try { $presentation.Close() } catch {} }
+    Release-ComObject $powerPointWindow
     Release-ComObject $presentation
     if ($powerPoint) { try { $powerPoint.Quit() } catch {} }
     Release-ComObject $powerPoint
