@@ -4,8 +4,8 @@
   "wheel_verification": {
     "schema": "radia-optuna.wheel-verification.v1",
     "ok": true,
-    "wheel": "C:\\temp\\radia-optuna-wheel-final-20260829\\radia_optuna-0.1.4-py3-none-win_amd64.whl",
-    "version": "0.1.4",
+    "wheel": "C:\\temp\\radia-optuna-wheel-0.1.5-20260829\\radia_optuna-0.1.5-py3-none-win_amd64.whl",
+    "version": "0.1.5",
     "platform_tag": "py3-none-win_amd64",
     "matlab_file_count": 226,
     "native_gateway": "optuna_mex",
@@ -21,11 +21,11 @@
   "doctor": {
     "schema": "radia-optuna.doctor.v1",
     "ok": true,
-    "version": "0.1.4",
+    "version": "0.1.5",
     "layout": "wheel",
     "hint": "",
-    "matlab_path": "C:\\temp\\radia-optuna-wheel-simulink-3be7e66ea7b94ff799d39525072e87c3\\venv\\Lib\\site-packages\\radia_optuna\\matlab",
-    "mex_path": "C:\\temp\\radia-optuna-wheel-simulink-3be7e66ea7b94ff799d39525072e87c3\\venv\\Lib\\site-packages\\radia_optuna\\matlab\\optuna_mex.mexw64",
+    "matlab_path": "C:\\temp\\radia-optuna-wheel-simulink-37ea7f69ef45469c802a475bfe53c74e\\venv\\Lib\\site-packages\\radia_optuna\\matlab",
+    "mex_path": "C:\\temp\\radia-optuna-wheel-simulink-37ea7f69ef45469c802a475bfe53c74e\\venv\\Lib\\site-packages\\radia_optuna\\matlab\\optuna_mex.mexw64",
     "mex_size_bytes": 152576,
     "mex_sha256": "8e107f1ee20f6354d5c3c5ba40ec7cd3ff3b38309b67ff8962e43ea63839bd91",
     "matlab_file_count": 226,
@@ -51,21 +51,21 @@
       "+radia/+optuna/SheetMetalRunner.m",
       "+radia/+optuna/+internal/runLTspiceTrial.m"
     ],
-    "third_party_notice": "C:\\temp\\radia-optuna-wheel-simulink-3be7e66ea7b94ff799d39525072e87c3\\venv\\Lib\\site-packages\\radia_optuna\\matlab\\THIRD_PARTY_NOTICES.md",
+    "third_party_notice": "C:\\temp\\radia-optuna-wheel-simulink-37ea7f69ef45469c802a475bfe53c74e\\venv\\Lib\\site-packages\\radia_optuna\\matlab\\THIRD_PARTY_NOTICES.md",
     "upstream_notices_complete": true
   },
   "simulink_e2e": {
     "schema": "radia-optuna.standalone-simulink-test.v1",
     "ok": true,
-    "study_path": "C:\\temp\\radia-optuna-wheel-simulink-3be7e66ea7b94ff799d39525072e87c3\\venv\\Lib\\site-packages\\radia_optuna\\matlab\\+radia\\+optuna\\Study.m",
-    "runner_path": "C:\\temp\\radia-optuna-wheel-simulink-3be7e66ea7b94ff799d39525072e87c3\\venv\\Lib\\site-packages\\radia_optuna\\matlab\\+radia\\+optuna\\SimulinkRunner.m",
-    "session_path": "C:\\temp\\radia-optuna-wheel-simulink-3be7e66ea7b94ff799d39525072e87c3\\venv\\Lib\\site-packages\\radia_optuna\\matlab\\+radia\\+optuna\\OptimizationSession.m",
-    "teaching_builder_path": "C:\\temp\\radia-optuna-wheel-simulink-3be7e66ea7b94ff799d39525072e87c3\\venv\\Lib\\site-packages\\radia_optuna\\matlab\\+radia\\+simulink\\buildOptunaTeachingModel.m",
-    "mex_path": "C:\\temp\\radia-optuna-wheel-simulink-3be7e66ea7b94ff799d39525072e87c3\\venv\\Lib\\site-packages\\radia_optuna\\matlab\\optuna_mex.mexw64",
+    "study_path": "C:\\temp\\radia-optuna-wheel-simulink-37ea7f69ef45469c802a475bfe53c74e\\venv\\Lib\\site-packages\\radia_optuna\\matlab\\+radia\\+optuna\\Study.m",
+    "runner_path": "C:\\temp\\radia-optuna-wheel-simulink-37ea7f69ef45469c802a475bfe53c74e\\venv\\Lib\\site-packages\\radia_optuna\\matlab\\+radia\\+optuna\\SimulinkRunner.m",
+    "session_path": "C:\\temp\\radia-optuna-wheel-simulink-37ea7f69ef45469c802a475bfe53c74e\\venv\\Lib\\site-packages\\radia_optuna\\matlab\\+radia\\+optuna\\OptimizationSession.m",
+    "teaching_builder_path": "C:\\temp\\radia-optuna-wheel-simulink-37ea7f69ef45469c802a475bfe53c74e\\venv\\Lib\\site-packages\\radia_optuna\\matlab\\+radia\\+simulink\\buildOptunaTeachingModel.m",
+    "mex_path": "C:\\temp\\radia-optuna-wheel-simulink-37ea7f69ef45469c802a475bfe53c74e\\venv\\Lib\\site-packages\\radia_optuna\\matlab\\optuna_mex.mexw64",
     "complete_trials": 4,
     "failed_trials": 1,
     "simulink_block_trials": 4,
-    "simulink_block_best": 0.13203700688223777,
+    "simulink_block_best": 0.33869199018107,
     "simulink_monitor": "simulink-scope-xy",
     "session_trials": 4,
     "teaching_model_trials": 12,
@@ -452,11 +452,11 @@
     "passed": true
   },
   "source_sha256": {
-    "installed": "95e40e231e6ec89485c52341bf00f0ebcc5bdbda916e3d2009d0458d8a234ec9",
+    "installed": "1964959ebdfe3bcae1acbe6f654a91a81fdf1fb786fcb0d164cf942398501127",
     "python_performance": "805168d2b68007b0dfda8258a2792bfa498658da8088992e1e647bc3a5584457",
-    "matlab_performance": "704e2759a7b2b262c400e1dc2ce64ac7ac874cfe4deeb9f7ca1ffbf792759707",
+    "matlab_performance": "34fa924946d074f793f86bcd71f11d36b2a36d68ddedf580c7e1e97cfd799360",
     "mex_cold": "5a02419b5ff22e9907975547e115df03ad9182710fbafe41de186e9472e864f9",
-    "parallel": "0e5765841f935c6f93c770aca0a431d716267770f10ef67551485e227f2e74a0",
-    "history": "36d39075c5fdac7531c7ecfe876194560959f41a990024e7918dd19cb6fae181"
+    "parallel": "a6862b070e8bf0558e562bb43858a3a9293793d537b6a022f085ac204fe509bf",
+    "history": "111e4ea63cf78515807ac4c9867902a445fa90b87c6e1cadef476d661d991674"
   }
 }
