@@ -1,5 +1,16 @@
 # Changelog
 
+## 3.0.3 - 2026-08-29
+
+- Draws `\mathbf` and vector-style characters with the embedded math font's
+  designed Unicode bold glyphs instead of an indistinguishable regular glyph.
+- Replaces misleading numeric, unsupported-slot, combining-mark, and CJK
+  palette faces with compact glyphs owned by the embedded font.
+- Extends the hidden visual gate to compare plain/bold GDI pixels and render
+  every owner-drawn palette cell at 96, 120, 144, and 192 dpi.
+- Rewrites the product handover as the current TeX-only, standalone,
+  separately released Eqnedit64 operating contract.
+
 ## 3.0.2 - 2026-08-29
 
 - Replaces crash-prone in-memory font registration with a verified,
