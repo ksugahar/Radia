@@ -48,6 +48,12 @@ radia.simulink.buildOptunaTeachingModel(Exercise="reliability")
 
 See `OPTUNA_SIMULINK_LAB.md` for the student worksheet.
 
+Release performance is measured on mdx from the raw JSON under
+`validation_test/optimization`, not inferred from unit-test timing. The
+2026-08-29 evidence passed the same-host upstream-Python, deterministic
+parallel-batch, 4,000-trial history, and cold-MEX gates; see the package README
+for the measured ratios and claim boundary.
+
 Native execution covers concurrent-RUNNING constant-liar TPE, advanced CMA-ES
 modes, and deterministic unscrambled Sobol generation through 21,201
 dimensions. The Sobol table is bundled data and does not require Python or

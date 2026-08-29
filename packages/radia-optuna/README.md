@@ -155,6 +155,22 @@ This evidence includes source-fidelity verification, the installed doctor,
 standalone Simulink success and typed-failure paths, and all seven persisted
 tables after MAT reload. Shared Study/Trial MCP operations remain upstream.
 
+### Reproducible performance evidence
+
+Long benchmarks live under `validation_test/optimization`. The 2026-08-29 mdx
+release-candidate evidence measured MATLAB/Python warmed-time ratios of 0.670
+for scalar TPE, 0.491 for grouped conditional TPE, and 0.630 for 1,000-row
+table export; lower is faster. A deterministic four-worker batch was 2.357x
+faster than sequential evaluation, while the 4,000-trial indexed history probe
+was 5.683x faster than its scan reference. Seeded checksums, best value, table
+shape, and indexed history values matched.
+
+The complete machine/runtime/load record and raw timings are in
+`validation_test/optimization/results_optuna_release_evidence_mdx_20260829.json`.
+The parallel result is a calibrated scheduler benchmark, not a promise that
+every CAE objective scales by the same factor; cheap objectives should remain
+sequential.
+
 Publication also uses the standalone four-machine release-quad lane. After the
 successful `main` CI run, execute
 `python tools/release_quad.py optuna-candidate --ci-run-id <id> --target all`,

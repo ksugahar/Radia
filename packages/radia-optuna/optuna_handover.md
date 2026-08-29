@@ -477,10 +477,11 @@ Implementation record (2026-08-29):
 - tracked production library and teaching model: official-agent
   read/edit/check/save/reopen, clean-path reopen, full-window visual QA, and
   embedded-text scans passed.
-
-The long mdx performance/parallel lane was not rerun in this change. Existing
-validation tests remain under `validation_test`; a new release must execute
-that lane and record cold/warm identical-workload evidence before publication.
+- mdx long validation: MATLAB/Python warmed-time ratios were 0.670 scalar,
+  0.491 grouped-conditional, and 0.630 table export; four-worker deterministic
+  batch evaluation was 2.357x sequential throughput; 4,000-trial indexed
+  lookup was 5.683x the scan reference with freeze exponent 0.862; first MEX
+  call median was 11.44 ms; the radia-mcp release gate returned `ready`.
 
 ### Phase 0 — specification and truthful evidence
 
@@ -518,7 +519,7 @@ that lane and record cold/warm identical-workload evidence before publication.
 - [x] a multiobjective model with a selectable Pareto trial
 - [x] pruning and failed-trial exercise
 - [x] student worksheet/notebook with saved results
-- [ ] long mdx performance and parallel validation
+- [x] long mdx performance and parallel validation
 
 ### Phase 5 — distribution and release
 

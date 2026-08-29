@@ -59,6 +59,11 @@ Additional release-candidate checks performed in this review:
 | Installed-wheel `OptimizationSession` save/resume | PASS, 4 / 4 trials completed |
 | Installed-wheel student Simulink model | PASS, 12 / 12 trials attempted |
 | Installed-wheel table resume | PASS, all seven typed tables restored |
+| mdx warmed MATLAB/Python ratios | 0.670 scalar / 0.491 grouped / 0.630 table |
+| mdx deterministic 4-worker batch | 2.357x sequential throughput |
+| mdx 4,000-trial indexed history lookup | 5.683x scan reference |
+| mdx first MEX call | 11.44 ms median over seven fresh MATLAB processes |
+| radia-mcp release evidence gate | PASS, `status=ready` |
 | Native Sobol maximum-dimension validation | 21,201 dimensions, PASS |
 | Full Radia MEX/Simulink provenance regeneration | HIBINO, 86 / 86 passed |
 
@@ -141,13 +146,33 @@ the source column, so a missed append notification can cost speed but cannot
 change results.
 
 The durable long benchmark is
-`validation_test/optimization/benchmark_optuna_history_store.m`. On LAB, the
-250/500/1000/2000-trial validation produced a freeze exponent of 0.928; at
-2,000 trials the indexed probe was 5.0 times faster than the scan reference.
-All indexed results matched the scan reference. These LAB numbers are useful
-for regression only; they were retained from the preceding review and were not
-rerun in this student-workflow change. Release performance should still be
-measured on an idle compute host.
+`validation_test/optimization/benchmark_optuna_history_store.m`. The mdx run
+covered 250/500/1000/2000/4000 trials, produced a freeze exponent of 0.862,
+and made the 4,000-trial indexed probe 5.683 times faster than the scan
+reference. Every indexed result matched the independent scan result.
+
+### mdx release-candidate performance
+
+Pinned upstream Python and MATLAB were run consecutively on mdx with identical
+100-trial workloads and 11 repeats, discarding the first three. MATLAB/Python
+warmed-time ratios were 0.670 for scalar TPE, 0.491 for grouped conditional
+TPE, and 0.630 for a 1,000-row `trials_dataframe`; lower is faster. Seeded
+checksums and table shape matched.
+
+The MATLAB-only deterministic batch benchmark froze RandomSampler proposals
+before objective evaluation. With 64 trials, a calibrated scalar objective,
+and four process workers, the warmed median improved from 5.256 s sequential
+to 2.230 s parallel: 2.357x speedup and 58.9% worker efficiency. This measures
+scheduler/worker throughput and does not predict the speedup of a particular
+CAE solver. A 5 ms smoke was slower in parallel, documenting that cheap
+objectives should remain sequential.
+
+The required MEX first call had an 11.44 ms median over seven fresh MATLAB
+processes. A separate unrelated `measured_jointconvex_ridge.py` process
+remained active on one core; it was not stopped. Pre-run total CPU was
+2.72--4.73% with 51,918 MiB free memory. The raw evidence records this load,
+and `radia-mcp.matlab_optuna_release_gate` returned `status=ready` with no
+errors.
 
 ### Explicit Optuna storage handoff
 
@@ -223,5 +248,5 @@ work remains under `validation_test`.
 Until those gates finish, the correct statement is: **the reviewed worktree
 closes the required Optuna 4.9.0 compatibility scope with executable upstream
 evidence, exposes the entire generated surface with assertions identified
-separately, and passes its local differential, integration, wheel, and retained
-maximum-dimension checks; it is not yet a published release.**
+separately, and passes its differential, integration, installed-wheel, mdx
+performance, and maximum-dimension checks; it is not yet a published release.**
