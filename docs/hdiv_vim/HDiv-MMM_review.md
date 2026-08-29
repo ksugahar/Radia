@@ -8,16 +8,20 @@ exposed several failure modes.
 
 ## Review status
 
-- Revised: 2026-08-29 against `origin/main` at `c15e626d2`.
-- The `22fc5630e..c15e626d2` HEAD increment is the Eqnedit64 pull request
-  (`#34`) only. It changes no HDiv source, test, validation, MATLAB, or HDiv
-  documentation path, so the numerical findings and measurements below remain
+- Revised: 2026-08-29 against `origin/main` at `ec57769de`.
+- The `22fc5630e..ec57769de` HEAD increment consists of Eqnedit64 pull
+  requests `#34` and `#35`. It changes no HDiv source, test, validation,
+  MATLAB, or HDiv documentation path, so the earlier HDiv measurements remain
   current at this HEAD.
 - HDiv hardening anchor: `87309e662` (`fix(hdiv): contain HACApK callback failures`).
 - Claude review source: branch `claude/cubit-vol-main-path`, commits
   `2c939a8ed`, `4b30479b6`, and `cf79734b9`. Their measurements and useful
   regressions are reconciled below; none of those three commits is merged on
   `main` as written.
+- Latest Claude implementation source: an uncommitted shared-tree patch on
+  `backup/main-pre-release-20260821` at `cbc029319`, documented in
+  `handover.md`. The BDM2 TET directional-moment correction is reviewed below
+  as a candidate patch; it is not present in `origin/main`.
 - Scope: correctness, deterministic execution, NGSolve/TaskManager policy,
   public capability, field and material contracts, maintainability,
   performance, MATLAB parity, and reproducibility.
@@ -52,17 +56,21 @@ spaces, orientation, Piola maps, mapped evaluation, and weak-form assembly.
 This Python-orchestration/C++-execution split is NGSolve-native; "complete C++"
 must not be misread as moving NGSolve FE plumbing into Radia.
 
-The implementation is production-capable for its declared BDM1/BDM2 lanes,
+The implementation is production-capable for most declared BDM1/BDM2 solve
+lanes,
 but it does not yet justify an unconditional "complete for every HDiv case"
-claim. Four P1 findings remain:
+claim. Five P1 findings remain:
 
-1. Three explicit full-versus-IMA field regressions fail the required
+1. The production BDM2 TET directional ChargeGram derivative contracts first
+   moments in the wrong coordinate order, silently corrupting shape and
+   topology sensitivities.
+2. Three explicit full-versus-IMA field regressions fail the required
    `< 10 eps` contract in isolated pytest processes.
-2. Broken RT0 was reintroduced into the public capability table and
+3. Broken RT0 was reintroduced into the public capability table and
    `DemagOperator`, contradicting the BDM1/BDM2-only production policy.
-3. Fine TET C-yoke runs reportedly lose positive definiteness under refinement;
+4. Fine TET C-yoke runs reportedly lose positive definiteness under refinement;
    the failing mesh and driver are not tracked, so the defect is not replayable.
-4. The corrected C-yoke comparison still needs one identical B-H interpolant
+5. The corrected C-yoke comparison still needs one identical B-H interpolant
    and committed result artifacts before FEM-versus-HDiv accuracy is quoted.
 
 Known, fail-loud limitations are not hidden failures: mapped/non-affine HEX
@@ -78,15 +86,16 @@ explicit in-process Python fallback because NGSolve setup is Python-owned.
 
 | ID | Priority | Finding | Evidence and required disposition |
 |---|---|---|---|
-| F1 | P1 | The IMA field contract is red. | At `c15e626d2`, isolated measurements were `2.0215455732e-14` and `4.9262068294e-14` relative error for the two HEX `rad.Fld`/`FieldFromSolution` gates, and `2.3931079340e-15` component error for curved TET BDM2. The limit is `2.2204460493e-15` (`10 eps`). Preserve the limit; align solve reduction and source accumulation order rather than loosening it. |
-| F2 | P1 | RT0 is publicly advertised again despite the BDM1/BDM2-only decision. | `_capabilities.py` exposes 3D TET/HEX order 0 and `DemagOperator` documents an order-0 broken-interface path. `HDivSolver` and field evaluation accept only orders 1 and 2. Remove the public RT0 entries/path and retain any topology-only experiment outside the production API. |
-| F3 | P1 | Fine-TET loss of SPD is an unclosed correctness report. | Claude reported `p^T A p = -1.90e5` at 8.75 mm and `-7.51e8` at 7.0 mm, but the mesh/configuration is absent from `main`. Commit the reproducer before changing quadrature, ACA, or CG. |
-| F4 | P1 | The C-yoke accuracy comparison is not self-replaying. | The Cubit journals exist only on the Claude branch and `src/radia/esrf_examples.py` was untracked. The B-H interpolants also differed. Promote a validation driver, one material law, configs, and JSON results together. |
-| F5 | P2 | Mapped/non-affine HEX BDM2 is operator-only, not a material solve. | `Solve` rejects it before wrong physics; mapped HEX BDM1, affine HEX BDM2, TET BDM2, and WEDGE BDM2 are the current alternatives. This is correctly documented and tested, but it remains a major completeness boundary. |
-| F6 | P2 | IMA disables tree acceleration for field maps. | `HDivFieldEvaluator::AlgorithmFor` returns `Direct` whenever images exist. This protects full/reduced roundoff parity, but large IMA observation maps cannot use the otherwise guarded treecode. Any image-aware acceleration needs a common full/reduced grouping and the F1 contract first. |
-| F7 | P2 | Exact vector-potential evaluation is narrower than H-field evaluation. | Exact `A` uses straight TET BDM1 equivalent currents. BDM2, curved, HEX, and WEDGE use NGSolve-mapped quadrature clouds assembled in Python. This is valid as an explicit converged quadrature route, not an all-topology exact/native claim. |
-| F8 | P2 | MATLAB parity is partial at the method level. | `HDivFieldEvaluator` and `EnergyStopMaterial` have native checked MEX handles. The parity manifest classifies `vim/__init__.py` as `python-fallback`; complete solve/mesh/form orchestration is not a native MATLAB API. |
-| F9 | P3 | Configuration provenance and class ownership remain broad. | Fourteen `RADIA_HDIV_*` variables remain, and `RadHACApKChargeGram` still owns entry, build, cache, solve, derivative, field, and diagnostics. Keep diagnostic switches out of release claims and split only at measured ownership boundaries. |
+| F1 | P1 | BDM2 TET directional ChargeGram derivatives are wrong on `main`. | `TetPotentialMomentsDirectionalUpTo1` stores degree-one moments in `z,y,x` (`PotentialMomentIndex`) order, while two consumers in `rad_hacapk_hdiv.cpp` use `mv[k+1]` as `x,y,z`. On the same 1-cell BDM2 case, `main` differs from finite differences by `1.327698e-1` for the complete Gram and `4.145764e-1` for the volume block; fifth-degree homogeneity is wrong by `3.727428e-1`. Claude's explicit index map reduces these to `4.019822e-9`, `2.778490e-9`, and `4.002814e-16`. Land the small correction with a regression that fails the unfixed source. |
+| F2 | P1 | The IMA field contract is red. | At `ec57769de`, clean-build measurements were `2.0140013262e-14` and `4.9318891895e-14` relative error for the two HEX `rad.Fld`/`FieldFromSolution` gates, and `2.3931079340e-15` component error for curved TET BDM2. The limit is `2.2204460493e-15` (`10 eps`). Preserve the limit; align solve reduction and source accumulation order rather than loosening it. |
+| F3 | P1 | RT0 is publicly advertised again despite the BDM1/BDM2-only decision. | `_capabilities.py` exposes 3D TET/HEX order 0 and `DemagOperator` documents an order-0 broken-interface path. `HDivSolver` and field evaluation accept only orders 1 and 2. Remove the public RT0 entries/path and retain any topology-only experiment outside the production API. |
+| F4 | P1 | Fine-TET loss of SPD is an unclosed correctness report. | Claude reported `p^T A p = -1.90e5` at 8.75 mm and `-7.51e8` at 7.0 mm, but the mesh/configuration is absent from `main`. Commit the reproducer before changing quadrature, ACA, or CG. |
+| F5 | P1 | The C-yoke accuracy comparison is not self-replaying. | The Cubit journals exist only on the Claude branch and `src/radia/esrf_examples.py` was untracked. The B-H interpolants also differed. Promote a validation driver, one material law, configs, and JSON results together. |
+| F6 | P2 | Mapped/non-affine HEX BDM2 is operator-only, not a material solve. | `Solve` rejects it before wrong physics; mapped HEX BDM1, affine HEX BDM2, TET BDM2, and WEDGE BDM2 are the current alternatives. This is correctly documented and tested, but it remains a major completeness boundary. |
+| F7 | P2 | IMA disables tree acceleration for field maps. | `HDivFieldEvaluator::AlgorithmFor` returns `Direct` whenever images exist. This protects full/reduced roundoff parity, but large IMA observation maps cannot use the otherwise guarded treecode. Any image-aware acceleration needs a common full/reduced grouping and the F2 contract first. |
+| F8 | P2 | Exact vector-potential evaluation is narrower than H-field evaluation. | Exact `A` uses straight TET BDM1 equivalent currents. BDM2, curved, HEX, and WEDGE use NGSolve-mapped quadrature clouds assembled in Python. This is valid as an explicit converged quadrature route, not an all-topology exact/native claim. |
+| F9 | P2 | MATLAB parity is partial at the method level. | `HDivFieldEvaluator` and `EnergyStopMaterial` have native checked MEX handles. The parity manifest classifies `vim/__init__.py` as `python-fallback`; complete solve/mesh/form orchestration is not a native MATLAB API. |
+| F10 | P3 | Configuration provenance and class ownership remain broad. | Fourteen `RADIA_HDIV_*` variables remain, and `RadHACApKChargeGram` still owns entry, build, cache, solve, derivative, field, and diagnostics. Keep diagnostic switches out of release claims and split only at measured ownership boundaries. |
 
 ### 0.2 Production capability matrix
 
@@ -128,6 +137,55 @@ The Claude branch contains useful evidence, but it must not be merged wholesale:
 - `cf79734b9` is the original review record. Its useful measurements are
   retained here; stale implementation claims and the broad roundoff fix are
   superseded by this review.
+
+### 0.4 Latest Claude BDM2 directional implementation
+
+The latest Claude HDiv implementation is not a branch commit. It is a small
+part of the much larger dirty shared tree at `S:\Radia\01_GitHub`, based on
+`backup/main-pre-release-20260821` at `cbc029319`. The review therefore treats
+only the patch identified in `handover.md`, not the other co-located WIP.
+
+The correction is mathematically and structurally appropriate:
+
+1. `MomentIndex3` is made `constexpr`.
+2. `MomentIndex3Linear` derives the physical x, y, and z degree-one slots from
+   that canonical indexer instead of hard-coding `{3,2,1}`.
+3. Both BDM2 TET volume-moment contractions use the derived map instead of
+   `mv[k+1]` and `dm[k+1]`.
+4. The misleading `[1,x,y,z]` comment is replaced with the actual
+   `PotentialMomentIndex` storage contract.
+
+An independent LAB comparison used the same mesh, deformation field,
+quadrature, charge basis, and finite-difference step for clean `main` and the
+Claude candidate:
+
+| Quantity | `origin/main` source | Claude candidate | Reference scale |
+|---|---:|---:|---:|
+| complete Gram derivative relative error | 1.3276980331e-1 | 4.0198217292e-9 | 1.1070212280e-1 norm |
+| volume self-block relative error | 4.1457643916e-1 | 2.7784903499e-9 | 2.5207637398e-3 norm |
+| fifth-degree homogeneity relative error | 3.7274276552e-1 | 4.0028143694e-16 | 4.0072631527e-2 norm |
+| rigid-translation maximum derivative | 2.1996594761e-19 | 2.1996594761e-19 | exact zero |
+
+The candidate test
+`test_native_tet_directional_derivative_matches_fd_at_bdm2` covers the right
+concepts and its tolerances reject the measured unfixed errors by a wide
+margin. Cross-worktree execution needs care: `tests/conftest.py` inserts its
+own repository's `src` at the front of `sys.path`, so pointing pytest at the
+shared-tree test from another worktree still loads the shared-tree native
+module. The comparison above therefore used one standalone driver with an
+explicit module path for each build. Before merge, transplant the patch and
+test together into a clean current-main worktree, record the loaded native
+module path/build identity, and demonstrate red-before/green-after there.
+Aggregate relative-error assertions would improve diagnostics, but the
+existing finite-difference and exact-identity checks are already capable of
+rejecting this defect.
+
+The handover also reported an access violation in the zero-coupling candidate
+Schur test. That report is stale against current `main`: after a clean
+`Build.ps1 -RadiaOnly -Rebuild`,
+`test_native_candidate_schur_reports_zero_coupling_rank_and_stable_iters`
+passes in 2.47 s. No crash finding is carried forward without a reproducer on
+the current native build.
 
 ## 1. C++ implementation review
 
@@ -365,8 +423,8 @@ the combined validation process and when run alone:
 
 | Test | Measured error | Required limit |
 |---|---:|---:|
-| HEX `rad.Fld`, one reflected cell | 2.021545573177244e-14 relative | 2.220446049250313e-15 |
-| HEX `FieldFromSolution`, multicell reflection | 4.926206829443837e-14 relative | 2.220446049250313e-15 |
+| HEX `rad.Fld`, one reflected cell | 2.014001326215872e-14 relative | 2.220446049250313e-15 |
+| HEX `FieldFromSolution`, multicell reflection | 4.931889189540598e-14 relative | 2.220446049250313e-15 |
 | curved TET BDM2 IMA field | 2.393107934040017e-15 componentwise | 2.220446049250313e-15 |
 
 These are deterministic arithmetic-order discrepancies, not the previously
@@ -397,6 +455,7 @@ contract.
 
 | Priority | Item | Acceptance criterion |
 |---|---|---|
+| P1 | Land the BDM2 TET directional-moment correction | Isolate the `MomentIndex3Linear` patch and its test from the dirty shared tree. Require complete-Gram and volume-block finite-difference relative error below `1e-7`, fifth-degree homogeneity below `1e-13`, rigid-translation invariance, and a recorded native build identity. The regression must fail on unfixed `origin/main`. |
 | P1 | Full-versus-IMA `rad.Fld` roundoff | Make all three isolated failures in section 4 pass below `10 eps` without weakening tolerances. Compare solved coefficient vectors before debugging source evaluation, then align directed block symmetrization and full/reduced field summation order. |
 | P1 | Remove production RT0 | Delete the 3D order-0 entries from `hdiv_capabilities`, remove the order-0 `DemagOperator` production path and dedicated order-0 tests/docs, and keep public `Solve`, operator, field, and MATLAB inventory consistently BDM1/BDM2. |
 | P1 | Fine-TET operator indefiniteness | Commit the failing mesh/configuration and result JSON; materialize the relevant Gram/operator block; locate a negative mode; compare it with dense analytic assembly or an independent NGSolve weak-form route; add a focused regression. |
@@ -416,9 +475,16 @@ This revision was verified on LAB with the native module loaded from this
 worktree:
 
 - `Build.ps1 -Verbose`: PASS after the C++ review hardening;
+- latest `origin/main` clean native rebuild with
+  `Build.ps1 -RadiaOnly -Rebuild`: PASS;
 - 71 focused production tests: PASS in 33.05 s;
-- latest-HEAD smoke (`c15e626d2`): 15 focused build-safety, deterministic,
-  capability, and field-evaluator tests PASS in 4.45 s;
+- latest-HEAD smoke (`ec57769de`): 15 focused build-safety, deterministic,
+  capability, and field-evaluator tests PASS in 3.78 s;
+- BDM2 TET directional finite-difference comparison: current `main` is wrong
+  by 13.28% for the complete Gram and 41.46% for the volume block; the Claude
+  candidate reduces them to `4.02e-9` and `2.78e-9` relative error;
+- current-main zero-coupling candidate Schur regression: PASS in 2.47 s after
+  the clean rebuild; the older access-violation report is not reproduced;
 - loop-free, symmetry-loop, PSD, high-order TET, linear recoil, and irreversible
   EnergyStop validation: PASS;
 - NGSolve HDiv pyramid tripwire: expected xfail;
