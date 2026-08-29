@@ -5,7 +5,6 @@ Prefer these blocks when their intent matches the user request.
 | Intent | Preferred Block | Library | Notes |
 |---|---|---|---|
 | matlab optuna outer-loop search over explicit stream func... | [[blocks/Stream_Function_Optuna]] | radia_simulink_library | MATLAB Optuna outer-loop search over explicit Stream Function ACA+/QR/TSVD batch analyses. One rising trigger runs th... |
-| matlab-native optuna session with explicit start | [[blocks/Optuna_Optimization]] | radia_simulink_library | MATLAB-native Optuna session with explicit start, cancel, pause, resume, trial selection, checkpointing, and apply co... |
 | hysteretic ltspice plant | [[blocks/Hysteretic_LTspice_Plant]] | radia_simulink_library | Hysteretic LTspice Plant |
 | motor batch analysis | [[blocks/Motor]] | radia_simulink_library | Motor batch analysis. Create settings with radia.simulink.writeApplicationConfig; a rising trigger executes the valid... |
 | native nonlinear hdiv-mmm reactor | [[blocks/Nonlinear_HDiv-MMM_Reactor]] | radia_simulink_library | Native nonlinear HDiv-MMM reactor. Input is winding current; outputs are terminal voltage, flux linkage, differential... |

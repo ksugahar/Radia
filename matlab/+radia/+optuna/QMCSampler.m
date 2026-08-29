@@ -48,7 +48,7 @@ classdef QMCSampler < radia.optuna.BaseSampler
                     "Scrambled QMC with seed=None may use a different sequence in each parallel worker.");
             end
             if isempty(options.IndependentSampler)
-                obj.IndependentSampler=radia.optuna.RandomSampler(options.Seed);
+                obj.IndependentSampler=radia.optuna.RandomSampler(obj.Seed);
             else
                 if ~isa(options.IndependentSampler,"radia.optuna.BaseSampler")
                     error("radia:optuna:QMCIndependentSampler", ...
