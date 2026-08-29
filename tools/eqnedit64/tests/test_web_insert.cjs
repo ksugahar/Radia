@@ -19,6 +19,14 @@ for (const snippet of ["\\mathsf{}", "\\mathtt{}", "\\mathcal{}",
 }
 assert.equal(editor.mathJaxTex("\\bm{\\alpha}+\\bmatrix"),
              "\\boldsymbol{\\alpha}+\\bmatrix");
+assert.equal(
+  editor.mathJaxTex("\\begin{aligned}short \\\\ muchlonger\\end{aligned}"),
+  "\\begin{aligned}& short \\\\ & muchlonger\\end{aligned}"
+);
+assert.equal(
+  editor.mathJaxTex("\\begin{aligned}F&=ma \\\\ E&=mc^2\\end{aligned}"),
+  "\\begin{aligned}F&=ma \\\\ E&=mc^2\\end{aligned}"
+);
 
 edit = editor.composeInsertion("", 0, 0, "\\mathrm{}");
 assert.deepEqual(edit, { value: "\\mathrm{}", caret: 8 });

@@ -485,6 +485,19 @@ def main() -> int:
             failures.append(
                 f"Office MathML lost {variant!r}: {alphabet_mathml!r}")
 
+    unanchored_mathml = tex_to_mathml(
+        r"\begin{aligned}a\\cccccc\end{aligned}")
+    if 'columnalign="left"' not in unanchored_mathml:
+        failures.append(
+            "one-column aligned MathML is not left-aligned: "
+            f"{unanchored_mathml!r}")
+    anchored_mathml = tex_to_mathml(
+        r"\begin{aligned}F&=ma\\E&=mc^2\end{aligned}")
+    if 'columnalign="right left"' not in anchored_mathml:
+        failures.append(
+            "explicit alignment tabs lost right/left pairing: "
+            f"{anchored_mathml!r}")
+
     # Enter promotes a one-line equation to an aligned multi-line structure;
     # subsequent Enter and Up/Down operate on rows, not on raw TeX newlines.
     eq = Equation()

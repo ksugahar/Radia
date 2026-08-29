@@ -2195,7 +2195,14 @@ private:
                 size_t k = size_t(r * cols + c);
                 double inset = (cw[size_t(c)] - cells[k].w) * 0.5;
                 if (m.layoutKind == MatrixNode::kAlignedLayout)
-                    inset = (c % 2 == 0) ? (cw[size_t(c)] - cells[k].w) : 0.0;
+                    /* A one-column aligned block is what Enter creates when
+                     * the user has not requested an `&` anchor. TeX normally
+                     * right-aligns that lone column, which makes prose and
+                     * derivation rows jump horizontally while typing. Keep
+                     * unanchored rows on one left edge; explicit multi-column
+                     * `&` alignment retains TeX's right/left pairing. */
+                    inset = cols == 1 ? 0.0
+                        : ((c % 2 == 0) ? (cw[size_t(c)] - cells[k].w) : 0.0);
                 else if (m.layoutKind == MatrixNode::kCasesLayout)
                     inset = 0.0;        /* cases left-aligns every column */
                 out.absorb(cells[k], x + inset, baseline);
