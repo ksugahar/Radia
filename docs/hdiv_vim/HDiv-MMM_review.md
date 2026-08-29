@@ -21,7 +21,7 @@ exposed several failure modes.
 - Latest Claude implementation source: an uncommitted shared-tree patch on
   `backup/main-pre-release-20260821` at `cbc029319`, documented in
   `handover.md`. The BDM2 TET directional-moment correction is isolated on
-  this review branch as `51dce89c1`; it is not yet present in `origin/main`.
+  this review branch as `51dce89c1` and is included in this revision.
 - Scope: correctness, deterministic execution, NGSolve/TaskManager policy,
   public capability, field and material contracts, maintainability,
   performance, MATLAB parity, and reproducibility.
@@ -59,18 +59,16 @@ must not be misread as moving NGSolve FE plumbing into Radia.
 The implementation is production-capable for most declared BDM1/BDM2 solve
 lanes,
 but it does not yet justify an unconditional "complete for every HDiv case"
-claim. Five P1 findings remain:
+claim. The BDM2 TET directional defect found by this review is corrected in
+this revision. Four P1 findings remain:
 
-1. The production BDM2 TET directional ChargeGram derivative contracts first
-   moments in the wrong coordinate order, silently corrupting shape and
-   topology sensitivities.
-2. Three explicit full-versus-IMA field regressions fail the required
+1. Three explicit full-versus-IMA field regressions fail the required
    `< 10 eps` contract in isolated pytest processes.
-3. Broken RT0 was reintroduced into the public capability table and
+2. Broken RT0 was reintroduced into the public capability table and
    `DemagOperator`, contradicting the BDM1/BDM2-only production policy.
-4. Fine TET C-yoke runs reportedly lose positive definiteness under refinement;
+3. Fine TET C-yoke runs reportedly lose positive definiteness under refinement;
    the failing mesh and driver are not tracked, so the defect is not replayable.
-5. The corrected C-yoke comparison still needs one identical B-H interpolant
+4. The corrected C-yoke comparison still needs one identical B-H interpolant
    and committed result artifacts before FEM-versus-HDiv accuracy is quoted.
 
 Known, fail-loud limitations are not hidden failures: mapped/non-affine HEX
@@ -86,7 +84,7 @@ explicit in-process Python fallback because NGSolve setup is Python-owned.
 
 | ID | Priority | Finding | Evidence and required disposition |
 |---|---|---|---|
-| F1 | P1 | BDM2 TET directional ChargeGram derivatives are wrong on `main`. | `TetPotentialMomentsDirectionalUpTo1` stores degree-one moments in `z,y,x` (`PotentialMomentIndex`) order, while two consumers in `rad_hacapk_hdiv.cpp` use `mv[k+1]` as `x,y,z`. On the same 1-cell BDM2 case, `main` differs from finite differences by `1.327698e-1` for the complete Gram and `4.145764e-1` for the volume block; fifth-degree homogeneity is wrong by `3.727428e-1`. The isolated fix in `51dce89c1` reduces these to `4.019822e-9`, `2.778490e-9`, and `4.002814e-16`; merge that commit into `main`. |
+| F1 | Resolved | BDM2 TET directional ChargeGram derivatives used the wrong degree-one moment order on the reviewed baseline. | `TetPotentialMomentsDirectionalUpTo1` stores degree-one moments in `z,y,x` (`PotentialMomentIndex`) order, while two consumers in `rad_hacapk_hdiv.cpp` used `mv[k+1]` as `x,y,z`. On the same 1-cell BDM2 case, the `ec57769de` baseline differs from finite differences by `1.327698e-1` for the complete Gram and `4.145764e-1` for the volume block; fifth-degree homogeneity is wrong by `3.727428e-1`. The correction in `51dce89c1`, included in this revision, reduces these to `4.019822e-9`, `2.778490e-9`, and `4.002814e-16`. |
 | F2 | P1 | The IMA field contract is red. | At `ec57769de`, clean-build measurements were `2.0140013262e-14` and `4.9318891895e-14` relative error for the two HEX `rad.Fld`/`FieldFromSolution` gates, and `2.3931079340e-15` component error for curved TET BDM2. The limit is `2.2204460493e-15` (`10 eps`). Preserve the limit; align solve reduction and source accumulation order rather than loosening it. |
 | F3 | P1 | RT0 is publicly advertised again despite the BDM1/BDM2-only decision. | `_capabilities.py` exposes 3D TET/HEX order 0 and `DemagOperator` documents an order-0 broken-interface path. `HDivSolver` and field evaluation accept only orders 1 and 2. Remove the public RT0 entries/path and retain any topology-only experiment outside the production API. |
 | F4 | P1 | Fine-TET loss of SPD is an unclosed correctness report. | Claude reported `p^T A p = -1.90e5` at 8.75 mm and `-7.51e8` at 7.0 mm, but the mesh/configuration is absent from `main`. Commit the reproducer before changing quadrature, ACA, or CG. |
@@ -454,7 +452,6 @@ contract.
 
 | Priority | Item | Acceptance criterion |
 |---|---|---|
-| P1 | Merge the BDM2 TET directional-moment correction | `51dce89c1` isolates the `MomentIndex3Linear` patch and its test from the dirty shared tree. Preserve complete-Gram and volume-block finite-difference relative error below `1e-7`, fifth-degree homogeneity below `1e-13`, rigid-translation invariance, and the clean native build gate when merging to `main`. |
 | P1 | Full-versus-IMA `rad.Fld` roundoff | Make all three isolated failures in section 4 pass below `10 eps` without weakening tolerances. Compare solved coefficient vectors before debugging source evaluation, then align directed block symmetrization and full/reduced field summation order. |
 | P1 | Remove production RT0 | Delete the 3D order-0 entries from `hdiv_capabilities`, remove the order-0 `DemagOperator` production path and dedicated order-0 tests/docs, and keep public `Solve`, operator, field, and MATLAB inventory consistently BDM1/BDM2. |
 | P1 | Fine-TET operator indefiniteness | Commit the failing mesh/configuration and result JSON; materialize the relevant Gram/operator block; locate a negative mode; compare it with dense analytic assembly or an independent NGSolve weak-form route; add a focused regression. |
@@ -479,9 +476,10 @@ worktree:
 - 71 focused production tests: PASS in 33.05 s;
 - latest-HEAD smoke (`ec57769de`): 15 focused build-safety, deterministic,
   capability, and field-evaluator tests PASS in 3.78 s;
-- BDM2 TET directional finite-difference comparison: current `main` is wrong
-  by 13.28% for the complete Gram and 41.46% for the volume block; support
-  commit `51dce89c1` reduces them to `4.02e-9` and `2.78e-9` relative error;
+- BDM2 TET directional finite-difference comparison: the `ec57769de` baseline
+  is wrong by 13.28% for the complete Gram and 41.46% for the volume block;
+  commit `51dce89c1`, included here, reduces them to `4.02e-9` and `2.78e-9`
+  relative error;
 - isolated support commit `51dce89c1`: new BDM2 regression plus adjacent BDM1
   self-block and complete-Gram/Piola regressions, 3 tests PASS in 4.14 s;
 - complete topology-optimization regression after the native rebuild:
