@@ -5,6 +5,19 @@
 [`CANONICAL_OPERATION.md`](CANONICAL_OPERATION.md) と `release-eqnedit64` skillを
 正とする。`build\accept_release.ps1`は隔離CI/VM用であり、対話中LABでは実行しない。
 
+## 2026-08-30 IME未確定文字列のキャレット位置
+
+- 3.0.10の175%表示で、確定済み日本語と構造キャレットは正しい一方、IME未確定
+  文字列だけが1行下へ出る利用者画像を確認した。`CFS_POINT`の
+  `COMPOSITIONFORM.ptCurrentPos`へキャレット下端を渡していたことが原因である。
+  Windows仕様上、この点は候補位置ではなく変換文字列ウィンドウの左上である。
+- 未確定文字列の点をキャレット上端、`CFS_EXCLUDE`候補点を下端とする共通座標関数へ
+  分離した。`--visual-scale-test`は96/120/144/192 dpi × 40/100/175/400%の16条件で、
+  上端・下端・除外矩形を検査してexit 0となった。
+- 署名済み単体EXEを再ビルドし、`--ui-interaction-test`、`--self-test`、271件の
+  `test_edit.py`、`test_background.ps1`を実行した。IME開始・Unicode確定・終了・取消を
+  含め、すべてPASSした。前面化、`SendInput`、マウス移動は使用していない。
+
 ## 2026-08-30 Eqnedit64 3.0.10: 通常Ctrl+V再検証と18 pt採用
 
 - 3.0.9までのPowerPoint試験は`slide.Shapes.Paste()`を使っていた。同じ
