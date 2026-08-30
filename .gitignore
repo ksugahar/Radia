@@ -474,6 +474,8 @@ sphere_o3.vol
 p_convergence_sphere.png
 cubit[0-9]*.jou
 *.sat
+# Simulink generated artifacts. Source models (.slx) live under matlab/;
+# caches belong outside the repository (radia.setup defaults to C:\temp).
 *.slxc
 *.slx.autosave
 slprj/
