@@ -1269,9 +1269,13 @@ def _build_charge_gram_hex(fes, glout_n=None, glin_n=None, near_grade=0.5, far_i
     -- every apply of the Gram routes through the exactly-symmetric matvec, so they are never read)."""
     t0 = time.perf_counter()
     p = int(fes.globalorder)
-    default_outer = 4 if p == 1 else (5 if fes.mesh.GetCurveOrder() < 2 else 6)
+    mapped_bdm2 = (p == 2 and
+                   _hex_mapping_affinity_report(fes.mesh)["nonaffine_cell_count"] > 0)
+    default_outer = 4 if p == 1 else (
+        9 if mapped_bdm2 else (6 if fes.mesh.GetCurveOrder() >= 2 else 5))
     glout_n = default_outer if glout_n is None else int(glout_n)
-    glin_n = (5 if p == 1 else 7) if glin_n is None else int(glin_n)
+    default_inner = 5 if p == 1 else (12 if mapped_bdm2 else 7)
+    glin_n = default_inner if glin_n is None else int(glin_n)
     cb = _charge_basis_hex(
         fes, cob_quad=max(3, p+1), materialize_mass=materialize_mass,
         internal_interfaces=bool(internal_interfaces))

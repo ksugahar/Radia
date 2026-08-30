@@ -1,0 +1,188 @@
+{
+  "schema": "radia.validation.curved-hex-bdm2-cubit.v1",
+  "created_at_utc": "2026-08-30T04:26:39.841846+00:00",
+  "machine": "mdx",
+  "versions": {
+    "radia": "4.95.71",
+    "ngsolve": "6.2.2606",
+    "python": "3.12.10",
+    "cubit_mesh_export": "0.14.14"
+  },
+  "mesh": {
+    "path": "C:\\temp\\radia_hex_bdm2\\curved_cylinder_hex_q2.vol",
+    "sha256": "93737aaa2e1fb7d39bb9f76bd3618d582c56c23b2552f531812c4056cd0cd7c6",
+    "sidecar_sha256": "90b99253a7fe062a90df8fc21f83651c88d0083850873cd7de0923481dd138e1",
+    "elements": 4,
+    "curve_order": 2,
+    "affinity": {
+      "cell_count": 4,
+      "nonaffine_cell_count": 4,
+      "nonaffine_cells": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "maximum_relative_residual": 0.4999999999999999,
+      "relative_tolerance": 1e-10
+    },
+    "minimum_scaled_jacobian": 0.33473015410235996,
+    "volume_error_percent": -0.21969618878366556
+  },
+  "linear": {
+    "converged": true,
+    "iterations": 19,
+    "final_relative_residual": 3.8631077058699244e-10,
+    "linear_solver": "mass-riesz-cg",
+    "M_avg": [
+      3.088889876551986e-11,
+      -6.676953772165198e-12,
+      3991.9091687366854
+    ],
+    "timing": {}
+  },
+  "nonlinear": {
+    "converged": true,
+    "iterations": 1,
+    "final_relative_residual": 0.0007520739384334368,
+    "linear_solver": "energy-newton-cpp",
+    "M_avg": [
+      -1.99184454803699e-06,
+      -2.287757805340056e-05,
+      3991.909171637703
+    ],
+    "timing": {}
+  },
+  "equivalent_material_relative_difference": 5.7983873591777586e-09,
+  "field_points": [
+    [
+      0.05,
+      0.0,
+      0.0
+    ],
+    [
+      0.0,
+      0.0,
+      0.06
+    ],
+    [
+      0.04,
+      0.03,
+      0.02
+    ]
+  ],
+  "linear_field": [
+    [
+      -2.717216003772286e-11,
+      -8.811151516985591e-13,
+      -103.21692796579005
+    ],
+    [
+      -5.824074380104527e-13,
+      1.0700785896030005e-12,
+      116.30997116987429
+    ],
+    [
+      69.45217015324707,
+      51.87893551561449,
+      -51.53788864018921
+    ]
+  ],
+  "prescribed_source": {
+    "actual": [
+      [
+        4903.4197642114395,
+        -5117.543608095562,
+        -7033.943880489221
+      ],
+      [
+        -1618.3189923288146,
+        -3236.6379846576274,
+        9709.913954028354
+      ],
+      [
+        11412.24804267786,
+        5922.155534782478,
+        26.5365980980505
+      ]
+    ],
+    "ngsolve_boundary_reference": [
+      [
+        4903.419764210561,
+        -5117.543608095682,
+        -7033.943880485004
+      ],
+      [
+        -1618.3189923287998,
+        -3236.6379846576056,
+        9709.91395293221
+      ],
+      [
+        11412.248042696065,
+        5922.155534843147,
+        26.536598099216057
+      ]
+    ],
+    "relative_error": [
+      4.3149311313806886e-13,
+      1.0578202721294707e-10,
+      4.9272786805741694e-12
+    ],
+    "maximum_relative_error": 1.0578202721294707e-10,
+    "source_stats": {
+      "permanent_magnet_model": "fixed-given",
+      "permanent_magnet_level": 1,
+      "ndof": 396,
+      "order": 2,
+      "curve_order": 2,
+      "image": null,
+      "projection_relative_residual": 2.7396925230999573e-16,
+      "projection_wall_s": 0.058779100014362484,
+      "geometry_wall_s": 0.23928859998704866,
+      "total_wall_s": 0.2980682000052184,
+      "hmatrix_built": false,
+      "field_evaluator": {
+        "source_count": 4212,
+        "image_count": 0,
+        "tree_nodes": 487,
+        "leaf_size": 32,
+        "theta": 0.05,
+        "tree_min_sources": 256,
+        "auto_min_work": 500000000,
+        "tree_relative_tolerance": 1e-05,
+        "probe_count": 16,
+        "bounds_min": [
+          -0.019840801197538137,
+          -0.017320508075688808,
+          -0.020000000000000007
+        ],
+        "bounds_max": [
+          0.019840801197538137,
+          0.017320508075688808,
+          0.020000000000000007
+        ],
+        "source_kind": "element-cloud-bdm2",
+        "build_wall_s": 0.0038634000229649246
+      }
+    }
+  },
+  "shape_derivative": {
+    "rejected": true,
+    "message": "mapped HEX BDM2 shape derivatives are not implemented for the cancellation-preserving composite quadrature"
+  },
+  "checks": {
+    "cubit_vol_check_passed": true,
+    "true_curve_order_two": true,
+    "all_hex_cells_are_nonaffine": true,
+    "linear_material_solve_converged": true,
+    "nonlinear_energy_newton_converged": true,
+    "linear_and_equivalent_nonlinear_material_match": true,
+    "radfld_is_finite": true,
+    "prescribed_field_matches_ngsolve_boundary_integral": true,
+    "mapped_shape_derivative_fails_loud": true
+  },
+  "pass": true,
+  "timing_s": {
+    "total": 44.04129320004722
+  }
+}
