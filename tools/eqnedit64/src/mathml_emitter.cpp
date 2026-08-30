@@ -397,26 +397,47 @@ std::string latex_to_mathml(const std::string& latex, double pointSize) {
     return root ? tree_to_mathml(*root, pointSize) : std::string();
 }
 
+namespace {
+
+bool collect_unanchored_aligned_rows(
+        const LineNode& line, std::vector<const LineNode*>& rows) {
+    if (line.children.size() == 1 && line.children[0] &&
+        line.children[0]->tag() == Node::kMatrix) {
+        const auto& matrix =
+            static_cast<const MatrixNode&>(*line.children[0]);
+        if (matrix.layoutKind == MatrixNode::kAlignedLayout &&
+            matrix.cols <= 1 && matrix.rows > 0 &&
+            matrix.elements.size() >= size_t(matrix.rows)) {
+            for (int rowIndex = 0; rowIndex < matrix.rows; ++rowIndex) {
+                const Node* rowNode = matrix.elements[size_t(rowIndex)].get();
+                if (!rowNode || rowNode->tag() != Node::kLine ||
+                    !collect_unanchored_aligned_rows(
+                        static_cast<const LineNode&>(*rowNode), rows)) {
+                    return false;
+                }
+            }
+            return true;
+        }
+    }
+    rows.push_back(&line);
+    return true;
+}
+
+}  // namespace
+
 std::string latex_to_office_mathml_fragment(
         const std::string& latex, double pointSize) {
     std::unique_ptr<LineNode> root = parse_latex(latex);
     if (!root) return {};
-    if (root->children.size() == 1 &&
-        root->children[0] && root->children[0]->tag() == Node::kMatrix) {
-        const auto& matrix = static_cast<const MatrixNode&>(*root->children[0]);
-        if (matrix.layoutKind == MatrixNode::kAlignedLayout &&
-            matrix.cols <= 1 && matrix.rows > 0 &&
-            matrix.elements.size() >= size_t(matrix.rows)) {
-            std::string fragment;
-            for (int rowIndex = 0; rowIndex < matrix.rows; ++rowIndex) {
-                const Node* rowNode = matrix.elements[size_t(rowIndex)].get();
-                if (!rowNode || rowNode->tag() != Node::kLine) return {};
-                if (!fragment.empty()) fragment += "<br>";
-                fragment += tree_to_mathml(
-                    static_cast<const LineNode&>(*rowNode), pointSize);
-            }
-            return fragment;
+    std::vector<const LineNode*> rows;
+    if (!collect_unanchored_aligned_rows(*root, rows)) return {};
+    if (rows.size() > 1) {
+        std::string fragment;
+        for (const LineNode* row : rows) {
+            if (!fragment.empty()) fragment += "<br>";
+            fragment += tree_to_mathml(*row, pointSize);
         }
+        return fragment;
     }
     return tree_to_mathml(*root, pointSize);
 }

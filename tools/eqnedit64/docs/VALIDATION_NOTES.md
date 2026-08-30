@@ -20,6 +20,10 @@
   NBSPがない試行は先頭2行を中央`m:oMathPara`へ昇格したため不合格だった。全行へ
   NBSPを置くと、保存OOXMLは3つのインライン`m:oMath`となり、`m:oMathPara`、
   `m:eqArr`、行列、可視`&`を含まない。
+- 公開直前の利用者確認で、外側`aligned`の第1行全体がさらに1列`aligned`である場合、
+  外側だけを分割すると第1ブロックだけPowerPoint内の表として中央配置されることを
+  確認した。native/Webとも入れ子の1列`aligned`を葉の行まで再帰的に平坦化する。
+  実PowerPoint試験の不等長3行も、先頭2行を内側`aligned`に入れた回帰入力へ変更した。
 - モデル回帰は`test_edit.py` 271件、`test_layout.py`、Web契約10件が合格した。
   実PowerPoint UI Paste試験には、3行の書き出し画像の左端差4 px以内と保存OMMLの
   可視プレフィックス検査を追加した。画面外の実UI PasteでPowerPoint自身の描画左端は

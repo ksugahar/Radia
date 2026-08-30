@@ -2,9 +2,12 @@
 
 ## Unreleased
 
+## 3.0.11 - 2026-08-30
+
 - Preserve a common left edge for unequal unanchored rows after editable
-  PowerPoint paste. Native and browser output use separate inline editable
-  MathML rows rather than visible Office alignment ampersands, with rendered
+  PowerPoint paste, including nested one-column `aligned` input. Native and
+  browser output recursively flatten leaf rows into separate inline editable
+  MathML rather than visible Office alignment ampersands, with rendered
   prefix-width and saved-OMML regression checks.
 - Align Japanese IME composition text with the structural caret while keeping
   the candidate list below it, with DPI/zoom coordinate regression coverage.

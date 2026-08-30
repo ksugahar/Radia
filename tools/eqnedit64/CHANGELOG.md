@@ -2,11 +2,14 @@
 
 ## Unreleased
 
+## 3.0.11 — 2026-08-30
+
 - Keep every unanchored multi-line Office equation row on the same left edge.
-  Native and Web now publish each such row as an independent inline editable
-  MathML zone with its own 18 pt sentinel. PowerPoint renders MathML alignment
-  elements as visible ampersands, so the Office path emits none. Explicit TeX
-  `&` input remains one aligned MathML expression.
+  Native and Web recursively flatten nested one-column `aligned` wrappers and
+  publish each leaf row as an independent inline editable MathML zone with its
+  own 18 pt sentinel. PowerPoint renders MathML alignment elements as visible
+  ampersands, so the Office path emits none. Explicit TeX `&` input remains one
+  aligned MathML expression.
 - Extend the real PowerPoint UI-paste gate with deliberately unequal row
   lengths, saved independent Office Math zones, pixel-level left-edge checks,
   and a visible-prefix detector that rejects an ampersand at every row start.

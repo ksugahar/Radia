@@ -79,6 +79,9 @@ def test_office_mathml_is_canonical_inline_18pt() -> None:
     assert 'setAttribute("mathsize", "18pt")' in canonical
     assert "splitUnanchoredOfficeRows(math)" in canonical
     assert 'cells[0].textContent.trim() === ""' in SOURCE
+    assert "onlyNestedSyntheticTable(content)" in SOURCE
+    assert "collectLeafCells(nested, output)" in SOURCE
+    assert "leafCells.length < 2" in SOURCE
     assert "officeRows.join(" in canonical
     assert 'font-size:18pt' in canonical
     assert "maligngroup" not in canonical
