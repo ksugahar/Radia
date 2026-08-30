@@ -5,6 +5,24 @@ All notable changes to the `radia` package.  Format: each release lists
 
 ## Unreleased
 
+## 4.95.74 - Cubit cyclic FFAG topology densities
+
+Released 2026-08-31.
+
+- Added a real Coreform Cubit lane for connected FFAG return-yoke sectors.
+  Cubit builds the ACIS sector and explicit full ring as pure curved-Q2 HEX
+  meshes; Radia adds checked rotational point identifications without
+  reconstructing the geometry.
+- Added an explicit periodic material-density quotient map. Topology
+  optimization expands reduced design variables to all elements, contracts
+  element gradients and volumes with the exact transpose map, and keeps
+  element-wise checkpoints and result artifacts compatible with existing
+  workflows.
+- Validated the sector against the explicit full ring with the production C++
+  monotone-BH Picard/mass-Riesz solver. The gate records both the small
+  cancellation-residual relative field error and the physically scaled source
+  error; hysteresis remains outside this release contract.
+
 ## 4.95.73 - Curved HEX BDM2 and cyclic FFAG sectors
 
 Released 2026-08-30.
