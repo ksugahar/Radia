@@ -29,22 +29,26 @@ sector cut.  A reduced continuous-yoke fixture is tested separately by
 `validation_ffag_connected_cyclic_yoke.py`.  It gives the cut faces nonzero
 normal magnetization, identifies their NGSolve periodic vertices, compresses
 the periodic HDiv trace, removes those faces from the physical charge skin,
-and compares the reduced sector against an explicit conforming full ring.
-The 12-fold BDM2 HEX gate reduces 1188 full-ring DoFs to 99 sector DoFs; the
-mean tangential magnetization agrees to 5.7e-12 relative and the direct
-external-field samples agree within 1.2e-7 of the applied-field scale.  This
-connected-yoke lane must remain distinct from the disjoint-cell image test.
-The same contract is available on persistent `vim.HDivSolver` objects so load
-sweeps reuse the periodic ChargeGram.
+and compares the reduced sector against an explicit conforming curved-Q2 full
+ring.  Its Q2 face-centre departure is 3.94e-5 m.  The 12-fold BDM2 HEX gate
+reduces 1188 full-ring DoFs to 99 sector DoFs; the mean tangential
+magnetization agrees to 1.30e-13 relative and the direct external-field
+samples agree within 1.76e-9 of the applied-field scale.  This connected-yoke
+lane must remain distinct from the disjoint-cell image test.  The same
+contract is available on persistent `vim.HDivSolver` objects so load sweeps
+reuse the periodic ChargeGram.
 
 `validation_ffag_broken_vim_cyclic_yoke.py` covers the material-topology
-route.  Its BDM2 broken-HDiv operator reduces 864 explicit-ring charges to 72
-sector charges.  The paired tangential seam charge is 1.71e-17, and direct
-fields for independent axial and tangential periodic magnetizations agree with
-the explicit full ring within 2.28e-14 relative.  A multi-cell sector optimizer
-must also tie the material-density variables of elements adjacent to paired
-faces; charge pairing supplies the correct VIM physics but does not silently
-alter the caller's design-variable parametrization.
+route on genuinely curved-Q2 geometry.  Its BDM2 broken-HDiv operator reduces
+864 explicit-ring charges to 72 sector charges.  The maximum departure of a
+Q2 face centre from its bilinear corner interpolation is 3.94e-5 m, while the
+paired Q2 geometry matches the sector rotation to 6.73e-16 relative.  The
+paired tangential seam charge is 9.84e-18, and direct fields for independent
+axial and tangential periodic magnetizations agree with the explicit curved
+full ring within 1.52e-14 relative.  A multi-cell sector optimizer must also
+tie the material-density variables of elements adjacent to paired faces;
+charge pairing supplies the correct VIM physics but does not silently alter
+the caller's design-variable parametrization.
 
 ## EarlyTimes C-type A/B route convergence
 

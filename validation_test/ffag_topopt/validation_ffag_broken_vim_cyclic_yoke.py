@@ -1,4 +1,4 @@
-"""Broken-HDiv VIM cyclic-face-pair validation for an FFAG annular yoke.
+"""Curved-Q2 broken-HDiv VIM cyclic-face validation for an FFAG annular yoke.
 
 The conforming FEM reduction identifies HDiv trace unknowns.  This validation
 targets the distinct material-topology route: every volume element remains
@@ -92,6 +92,40 @@ def build_connected_yoke_mesh(*, fold, inner_radius, outer_radius,
     return ng.Mesh(netmesh)
 
 
+def _curve_mesh(mesh, order):
+    """Curve a programmatic 3D mesh under the NGSolve edge-descriptor contract."""
+    from netgen.meshing import EdgeDescriptor
+
+    ngmesh = mesh.ngmesh
+    if not ngmesh.EdgeDescriptors():
+        for index, face in enumerate(ngmesh.FaceDescriptors(), start=1):
+            descriptor = EdgeDescriptor()
+            descriptor.edgenr = index
+            descriptor.surfnr = (face.surfnr, -1)
+            descriptor.domin = face.domin
+            descriptor.domout = face.domout
+            descriptor.name = face.bcname or f"boundary_{index}"
+            assert ngmesh.Add(descriptor) == index
+    mesh.Curve(order)
+
+
+def apply_cyclic_q2_geometry(mesh, args):
+    """Install a rotation-equivariant, genuinely curved Q2 geometry map."""
+    import ngsolve as ng
+
+    _curve_mesh(mesh, args.geometry_order)
+    space = ng.VectorH1(mesh, order=args.geometry_order)
+    deformation = ng.GridFunction(space)
+    radius_squared = ng.x * ng.x + ng.y * ng.y
+    deformation.Interpolate(ng.CF((
+        args.radial_deformation_scale * ng.x * radius_squared,
+        args.radial_deformation_scale * ng.y * radius_squared,
+        args.axial_deformation_scale * ng.z * radius_squared,
+    )))
+    mesh.SetDeformation(deformation)
+    return deformation
+
+
 def _operator(mesh, args, *, cyclic):
     import ngsolve as ng
     from radia.vim import DemagOperator
@@ -141,6 +175,8 @@ def run_validation(args):
         fold=args.fold, inner_radius=args.inner_radius,
         outer_radius=args.outer_radius, half_height=args.half_height,
         full_ring=False)
+    full_deformation = apply_cyclic_q2_geometry(full_mesh, args)
+    sector_deformation = apply_cyclic_q2_geometry(sector_mesh, args)
     ng.SetNumThreads(args.threads)
     started = time.perf_counter()
     with ng.TaskManager():
@@ -190,6 +226,15 @@ def run_validation(args):
                 seam = charge[
                     block * block_size:(block + 1) * block_size]
                 seam_charge_max = float(np.max(np.abs(seam)))
+                periodic_geometry_relative_residual = float(
+                    paired["periodic_geometry_relative_residual"])
+                face_nodes = np.asarray(
+                    paired["face_nodes"], dtype=float)
+                bilinear_centres = 0.25 * (
+                    face_nodes[:, 0] + face_nodes[:, 2]
+                    + face_nodes[:, 6] + face_nodes[:, 8])
+                maximum_q2_face_curvature = float(np.max(np.linalg.norm(
+                    face_nodes[:, 4] - bilinear_centres, axis=1)))
 
     expected_sector_charges = int(full_operator._B.shape[0]) // args.fold
     gates = {
@@ -199,15 +244,23 @@ def run_validation(args):
             int(sector_operator._B.shape[0]) == expected_sector_charges),
         "periodic_surface_charge_jump_cancels": bool(
             seam_charge_max <= args.maximum_seam_charge),
+        "curved_q2_geometry_is_used": bool(
+            full_mesh.GetCurveOrder() == args.geometry_order == 2
+            and sector_mesh.GetCurveOrder() == args.geometry_order
+            and maximum_q2_face_curvature
+            >= args.minimum_q2_face_curvature),
+        "periodic_q2_geometry_matches_rotation": bool(
+            periodic_geometry_relative_residual
+            <= args.maximum_periodic_geometry_relative_error),
         "prescribed_periodic_fields_match_full_ring": bool(
             maximum_field_error <= args.maximum_field_relative_error),
     }
     return {
-        "schema": "radia.ffag-broken-vim-cyclic-yoke/v1",
+        "schema": "radia.ffag-broken-vim-cyclic-yoke/v2",
         "status": "pass" if all(gates.values()) else "fail",
         "scope": (
             "BDM2 broken-HDiv VIM periodic charge pairing on a connected "
-            "Q1-mapped annular HEX yoke."),
+            "curved-Q2 annular HEX yoke."),
         "settings": vars(args) | {"output": str(args.output)},
         "contract": {
             "fold": contract.fold,
@@ -228,6 +281,14 @@ def run_validation(args):
         "probe_points_m": probes.tolist(),
         "prescribed_magnetization": records,
         "periodic_seam_charge_max": seam_charge_max,
+        "geometry": {
+            "order": int(args.geometry_order),
+            "maximum_q2_face_curvature_m": maximum_q2_face_curvature,
+            "periodic_q2_node_relative_residual": (
+                periodic_geometry_relative_residual),
+            "full_deformation_dofs": int(full_deformation.space.ndof),
+            "sector_deformation_dofs": int(sector_deformation.space.ndof),
+        },
         "gates": gates,
         "timings": {"validation_wall_s": time.perf_counter() - started},
         "runtime": {
@@ -242,6 +303,7 @@ def parse_args(argv=None):
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--fold", type=int, default=12)
     parser.add_argument("--hdiv-order", type=int, choices=(1, 2), default=2)
+    parser.add_argument("--geometry-order", type=int, choices=(2,), default=2)
     parser.add_argument("--inner-radius", type=float, default=0.030)
     parser.add_argument("--outer-radius", type=float, default=0.050)
     parser.add_argument("--half-height", type=float, default=0.004)
@@ -249,6 +311,15 @@ def parse_args(argv=None):
     parser.add_argument("--leaf", type=int, default=32)
     parser.add_argument("--probe-count", type=int, default=5)
     parser.add_argument("--threads", type=int, default=8)
+    parser.add_argument(
+        "--radial-deformation-scale", type=float, default=2.5)
+    parser.add_argument(
+        "--axial-deformation-scale", type=float, default=1.5)
+    parser.add_argument(
+        "--minimum-q2-face-curvature", type=float, default=1.0e-6)
+    parser.add_argument(
+        "--maximum-periodic-geometry-relative-error",
+        type=float, default=1.0e-12)
     parser.add_argument("--maximum-seam-charge", type=float, default=1.0e-14)
     parser.add_argument(
         "--maximum-field-relative-error", type=float, default=1.0e-11)

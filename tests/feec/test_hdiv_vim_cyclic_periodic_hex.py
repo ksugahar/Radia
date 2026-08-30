@@ -18,6 +18,7 @@ from radia.vim._vim import (  # noqa: E402
     _charge_basis_hex,
     build_charge_gram,
 )
+from tests._ngsolve_2606 import curve_mesh  # noqa: E402
 
 
 def _connected_sector_mesh(*, identification_count=4):
@@ -57,6 +58,22 @@ def _connected_sector_mesh(*, identification_count=4):
     return ng.Mesh(mesh)
 
 
+def _curve_cyclic_sector_q2(mesh, *, equivariant=True):
+    """Install a genuine Q2 deformation while preserving the sector rotation."""
+    curve_mesh(mesh, 2)
+    space = ng.VectorH1(mesh, order=2)
+    deformation = ng.GridFunction(space)
+    radius_squared = ng.x * ng.x + ng.y * ng.y
+    coefficient = (
+        ng.CF((2.5 * ng.x * radius_squared,
+               2.5 * ng.y * radius_squared,
+               1.5 * ng.z * radius_squared))
+        if equivariant else ng.CF((2.5 * ng.x * ng.x, 0.0, 0.0)))
+    deformation.Interpolate(coefficient)
+    mesh.SetDeformation(deformation)
+    return deformation
+
+
 @pytest.mark.parametrize(
     "order, expected_ndof, expected_slaves, expected_charges",
     ((1, 32, 4, 24), (2, 99, 9, 63)),
@@ -76,6 +93,31 @@ def test_connected_cyclic_hex_compresses_trace_and_removes_seam_charge(
     assert len(slave_dofs) == expected_slaves
     assert charge["B"].shape == (expected_charges, expected_ndof)
     assert charge["n_bf"] == 4
+
+
+def test_conforming_fem_curved_q2_keeps_periodic_trace_and_curved_skin():
+    mesh = _connected_sector_mesh()
+    _deformation = _curve_cyclic_sector_q2(mesh)
+    try:
+        with ng.TaskManager():
+            fes, constrained, slave_dofs = _hdiv_space_with_image_constraints(
+                mesh, 2, (), ("periodic_min", "periodic_max"))
+            charge = _charge_basis_hex(
+                fes, cob_quad=3, materialize_mass=False,
+                excluded_boundaries=("periodic_min", "periodic_max"))
+    finally:
+        mesh.UnsetDeformation()
+
+    nodes = np.asarray(charge["face_nodes"], dtype=float).reshape(-1, 9, 3)
+    bilinear_centres = 0.25 * (
+        nodes[:, 0] + nodes[:, 2] + nodes[:, 6] + nodes[:, 8])
+    assert constrained == ()
+    assert len(slave_dofs) == 9
+    assert fes.ndof == 99
+    assert charge["B"].shape == (63, 99)
+    assert charge["n_bf"] == 4
+    assert np.max(np.linalg.norm(
+        nodes[:, 4] - bilinear_centres, axis=1)) > 1.0e-6
 
 
 def test_labeled_cyclic_seam_cannot_silently_use_images_only():
@@ -167,3 +209,67 @@ def test_broken_vim_public_chargegram_builds_cyclic_face_pair(
     assert gram.ndof() == expected_rows
     assert build_charge_gram.last_timings[
         "charge_basis_periodic_face_pair_count"] == 1
+
+
+def test_broken_vim_curved_q2_periodic_faces_use_ngsolve_geometry():
+    mesh = _connected_sector_mesh()
+    _deformation = _curve_cyclic_sector_q2(mesh)
+    fes = ng.HDiv(mesh, order=2, discontinuous=True)
+    radius = ng.sqrt(ng.x * ng.x + ng.y * ng.y)
+    tangent = ng.CF((-ng.y / radius, ng.x / radius, 0.0))
+    field = ng.GridFunction(fes)
+    fold = 6
+    try:
+        with ng.TaskManager():
+            field.Set(tangent)
+            paired = _broken_hex_face_charge_basis(
+                fes, 2,
+                cyclic_periodic_boundaries=(
+                    "periodic_min", "periodic_max"),
+                image_rot_angle=(2.0 * math.pi / fold,))
+            charge, gram, _ = build_charge_gram(
+                fes, eps=1.0e-10, leafsize=32,
+                internal_interfaces=True,
+                image_masks=(0,) * (fold - 1),
+                image_signs=(1.0,) * (fold - 1),
+                image_rot_angle=tuple(
+                    2.0 * math.pi * index / fold
+                    for index in range(1, fold)),
+                cyclic_periodic_boundaries=(
+                    "periodic_min", "periodic_max"),
+                _build_hmatrix=False)
+    finally:
+        mesh.UnsetDeformation()
+
+    nodes = np.asarray(paired["face_nodes"], dtype=float)
+    bilinear_centres = 0.25 * (
+        nodes[:, 0] + nodes[:, 2] + nodes[:, 6] + nodes[:, 8])
+    assert np.max(np.linalg.norm(
+        nodes[:, 4] - bilinear_centres, axis=1)) > 1.0e-6
+    assert paired["periodic_geometry_relative_residual"] < 1.0e-12
+    block = paired["facet_numbers"].index(
+        paired["periodic_master_facets"][0])
+    seam = np.asarray(
+        paired["B"] @ field.vec.FV().NumPy(), dtype=float).reshape(-1)[
+            block * 9:(block + 1) * 9]
+    assert np.max(np.abs(seam)) < 1.0e-14
+    assert charge.shape == (72, fes.ndof)
+    assert gram.ndof() == 72
+    assert build_charge_gram.last_timings[
+        "charge_basis_periodic_geometry_relative_residual"] < 1.0e-12
+
+
+def test_broken_vim_curved_q2_rejects_nonperiodic_geometry():
+    mesh = _connected_sector_mesh()
+    _deformation = _curve_cyclic_sector_q2(mesh, equivariant=False)
+    fes = ng.HDiv(mesh, order=2, discontinuous=True)
+    try:
+        with ng.TaskManager(), pytest.raises(
+                ValueError, match="cyclic curved HEX facets"):
+            _broken_hex_face_charge_basis(
+                fes, 2,
+                cyclic_periodic_boundaries=(
+                    "periodic_min", "periodic_max"),
+                image_rot_angle=(2.0 * math.pi / 6.0,))
+    finally:
+        mesh.UnsetDeformation()
