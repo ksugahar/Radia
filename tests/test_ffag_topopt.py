@@ -60,8 +60,23 @@ def test_ffag_cyclic_contract_rejects_unidentified_continuous_yoke_seam():
     contract = validate_ffag_cyclic_sector_contract(
         12, body_crosses_periodic_planes=True,
         periodic_trace_identified=True)
-    assert contract.reduction_mode == "connected-periodic-sector"
+    assert contract.reduction_mode == "connected-periodic-fem-sector"
+    assert contract.formulation == "fem"
     assert contract.periodic_trace_identified
+
+
+def test_ffag_broken_vim_contract_requires_periodic_charge_pair():
+    with pytest.raises(ValueError, match="surface-charge rows"):
+        validate_ffag_cyclic_sector_contract(
+            12, body_crosses_periodic_planes=True,
+            formulation="vim-broken")
+
+    contract = validate_ffag_cyclic_sector_contract(
+        12, body_crosses_periodic_planes=True,
+        formulation="vim-broken", periodic_charge_paired=True)
+    assert contract.reduction_mode == "connected-periodic-vim-sector"
+    assert contract.periodic_charge_paired
+    assert not contract.periodic_trace_identified
 
 
 def test_ffag_antiperiodic_contract_requires_even_fold():

@@ -861,6 +861,8 @@ _QUAD_Q2_LINEAR_WEIGHTS = np.array([
     [(1.0-u)*(1.0-v), u*(1.0-v), (1.0-u)*v, u*v]
     for u, v in _Q2_LATTICE_2D
 ], dtype=float)
+_QUAD_REFERENCE_CORNERS = np.array(
+    ((0.0, 0.0), (1.0, 0.0), (0.0, 1.0), (1.0, 1.0)), dtype=float)
 
 
 def _mesh_vertices_array(mesh, e):
@@ -963,7 +965,250 @@ def _hex_mapping_affinity_report(mesh, relative_tolerance=1.0e-10):
     }
 
 
-def _broken_hex_face_charge_basis(fes, p):
+def _cyclic_periodic_hex_face_pairs(mesh, boundaries, image_rot_angle):
+    """Pair two identified HEX sector skins for the broken-HDiv VIM charge map.
+
+    NGSolve's conforming FEM route identifies HDiv trace unknowns.  The VIM
+    material-topology route deliberately keeps a discontinuous HDiv space, so
+    its periodic closure is instead a scalar-charge jump on one quotient
+    facet.  This helper validates the Netgen point identifications, pairs every
+    boundary facet, and returns the reference-coordinate pullback from the
+    slave face to the master face.
+    """
+    if isinstance(boundaries, str):
+        raise TypeError(
+            "vim.ChargeGram: cyclic_periodic_boundaries must be a pair of "
+            "labels, not one string")
+    boundaries = tuple(str(name) for name in boundaries)
+    if len(boundaries) != 2 or boundaries[0] == boundaries[1]:
+        raise ValueError(
+            "vim.ChargeGram: cyclic_periodic_boundaries must name two "
+            "distinct sector faces")
+    angles = tuple(float(value) for value in image_rot_angle)
+    if not angles or not np.isfinite(angles[0]) or angles[0] == 0.0:
+        raise ValueError(
+            "vim.ChargeGram: broken-HDiv cyclic face pairing requires the "
+            "nonzero first image_rot_angle of the sector")
+
+    available = tuple(mesh.GetBoundaries())
+    missing = sorted(set(boundaries) - set(available))
+    if missing:
+        raise ValueError(
+            "vim.ChargeGram: cyclic periodic boundary labels are missing: %s"
+            % missing)
+    facet_by_vertices = {}
+    facet_by_nr = {}
+    for facet in mesh.facets:
+        key = frozenset(int(vertex.nr) for vertex in facet.vertices)
+        if key in facet_by_vertices:
+            raise RuntimeError(
+                "vim.ChargeGram: duplicate topological facet vertex set")
+        facet_by_vertices[key] = facet
+        facet_by_nr[int(facet.nr)] = facet
+
+    boundary_facets = {name: {} for name in boundaries}
+    boundary_vertices = {name: set() for name in boundaries}
+    for element in mesh.Elements(ng.BND):
+        name = available[element.index]
+        if name not in boundary_facets:
+            continue
+        key = frozenset(int(vertex.nr) for vertex in element.vertices)
+        facet = facet_by_vertices.get(key)
+        if facet is None:
+            raise ValueError(
+                "vim.ChargeGram: cyclic boundary element does not match a "
+                "volume facet")
+        boundary_facets[name][key] = int(facet.nr)
+        boundary_vertices[name].update(key)
+    for name in boundaries:
+        if not boundary_facets[name]:
+            raise ValueError(
+                "vim.ChargeGram: cyclic periodic boundary %r has no facets"
+                % name)
+    master_name, slave_name = boundaries
+    if boundary_vertices[master_name] & boundary_vertices[slave_name]:
+        raise ValueError(
+            "vim.ChargeGram: cyclic periodic sector faces must have disjoint "
+            "vertex sets")
+
+    master_to_slave = {}
+    for endpoint_a, endpoint_b in mesh.ngmesh.GetIdentifications():
+        endpoint_a = int(getattr(endpoint_a, "nr", endpoint_a)) - 1
+        endpoint_b = int(getattr(endpoint_b, "nr", endpoint_b)) - 1
+        if (endpoint_a in boundary_vertices[master_name]
+                and endpoint_b in boundary_vertices[slave_name]):
+            master_to_slave[endpoint_a] = endpoint_b
+        elif (endpoint_b in boundary_vertices[master_name]
+                and endpoint_a in boundary_vertices[slave_name]):
+            master_to_slave[endpoint_b] = endpoint_a
+    if (set(master_to_slave) != boundary_vertices[master_name]
+            or set(master_to_slave.values()) != boundary_vertices[slave_name]
+            or len(set(master_to_slave.values())) != len(master_to_slave)):
+        raise ValueError(
+            "vim.ChargeGram: NGSolve PERIODIC identifications must pair every "
+            "vertex on the two cyclic_periodic_boundaries exactly once")
+
+    cosine = np.cos(angles[0])
+    sine = np.sin(angles[0])
+    rotations = (
+        np.array(((cosine, -sine, 0.0),
+                  (sine, cosine, 0.0), (0.0, 0.0, 1.0))),
+        np.array(((cosine, sine, 0.0),
+                  (-sine, cosine, 0.0), (0.0, 0.0, 1.0))),
+    )
+    pairs = []
+    used_slave_facets = set()
+    vertex_points = {
+        int(vertex.nr): np.asarray(mesh[vertex].point, dtype=float)
+        for vertex in mesh.vertices
+    }
+    for master_key, master_nr in boundary_facets[master_name].items():
+        mapped_key = frozenset(master_to_slave[vertex]
+                               for vertex in master_key)
+        slave_nr = boundary_facets[slave_name].get(mapped_key)
+        if slave_nr is None:
+            raise ValueError(
+                "vim.ChargeGram: a cyclic master facet has no identified "
+                "slave facet")
+        if slave_nr in used_slave_facets:
+            raise ValueError(
+                "vim.ChargeGram: cyclic facet pairing is not one-to-one")
+        used_slave_facets.add(slave_nr)
+        master_facet = facet_by_nr[master_nr]
+        slave_facet = facet_by_nr[slave_nr]
+        master_vertices = np.asarray(
+            [int(vertex.nr) for vertex in master_facet.vertices], dtype=int)[
+                [0, 1, 3, 2]]
+        slave_vertices = np.asarray(
+            [int(vertex.nr) for vertex in slave_facet.vertices], dtype=int)[
+                [0, 1, 3, 2]]
+        slave_reference = {
+            int(vertex): _QUAD_REFERENCE_CORNERS[index]
+            for index, vertex in enumerate(slave_vertices)
+        }
+        mapped_reference = np.asarray([
+            slave_reference[master_to_slave[int(vertex)]]
+            for vertex in master_vertices])
+        reference_affine, _, rank, _ = np.linalg.lstsq(
+            np.column_stack((np.ones(4), _QUAD_REFERENCE_CORNERS)),
+            mapped_reference, rcond=None)
+        reference_residual = float(np.max(np.abs(
+            np.column_stack((np.ones(4), _QUAD_REFERENCE_CORNERS))
+            @ reference_affine - mapped_reference)))
+        if rank != 3 or reference_residual > 1.0e-12:
+            raise ValueError(
+                "vim.ChargeGram: cyclic HEX facet identification is not an "
+                "affine square symmetry")
+
+        master_points = np.asarray([
+            vertex_points[int(vertex)] for vertex in master_vertices])
+        slave_points = np.asarray([
+            vertex_points[master_to_slave[int(vertex)]]
+            for vertex in master_vertices])
+        geometry_scale = max(
+            np.max(np.linalg.norm(master_points, axis=1)),
+            np.max(np.linalg.norm(slave_points, axis=1)), 1.0)
+        rotation_residual = min(float(np.max(np.linalg.norm(
+            slave_points @ rotation.T - master_points, axis=1)))
+                                for rotation in rotations)
+        if rotation_residual > 1.0e-9 * geometry_scale:
+            raise ValueError(
+                "vim.ChargeGram: cyclic facet identifications do not match "
+                "the first image rotation (relative residual=%g)"
+                % (rotation_residual / geometry_scale))
+        pairs.append((master_nr, slave_nr, reference_affine))
+    if len(used_slave_facets) != len(boundary_facets[slave_name]):
+        raise ValueError(
+            "vim.ChargeGram: not every cyclic slave facet was paired")
+    return tuple(pairs)
+
+
+def _quad_pullback_matrix(order, reference_affine):
+    """Coefficient pullback for Qp under a square-symmetry affine map."""
+    order = int(order)
+    mons = _mons_quad(order)
+    nodes = np.asarray([
+        (u, v) for v in np.linspace(0.0, 1.0, order + 1)
+        for u in np.linspace(0.0, 1.0, order + 1)], dtype=float)
+    mapped = np.column_stack((np.ones(len(nodes)), nodes)) @ reference_affine
+    master_vandermonde = np.asarray([
+        [u ** i * v ** j for i, j in mons] for u, v in nodes])
+    slave_vandermonde = np.asarray([
+        [u ** i * v ** j for i, j in mons] for u, v in mapped])
+    condition = np.linalg.cond(master_vandermonde)
+    if not np.isfinite(condition) or condition > 1.0e12:
+        raise RuntimeError(
+            "vim.ChargeGram: ill-conditioned cyclic Q%d pullback" % order)
+    return np.linalg.solve(master_vandermonde, slave_vandermonde)
+
+
+def _facet_reference_monomial_transform(mesh, facet_space, order):
+    """Map global FacetFESpace moments to the canonical facet Qp basis.
+
+    NGSolve exposes the scalar boundary finite element on BND elements, while
+    the same global facet basis also owns internal facets.  Normalize one
+    boundary FE to the canonical cyclic vertex ordering; that orientation-
+    aware transform then applies to every global quadrilateral facet.  The
+    map acts on reference moments, so it remains exact on bilinear/trapezoidal
+    physical faces without reconstructing HDiv Piola shapes in Python.
+    """
+    facet_by_vertices = {
+        frozenset(int(vertex.nr) for vertex in facet.vertices): facet
+        for facet in mesh.facets
+    }
+    boundary_element = None
+    boundary_facet = None
+    for element in mesh.Elements(ng.BND):
+        if len(element.vertices) != 4:
+            continue
+        boundary_element = element
+        boundary_facet = facet_by_vertices.get(frozenset(
+            int(vertex.nr) for vertex in element.vertices))
+        if boundary_facet is not None:
+            break
+    if boundary_element is None or boundary_facet is None:
+        raise ValueError(
+            "vim.ChargeGram: broken HEX reference transform requires at "
+            "least one quadrilateral BND element")
+    facet_dofs = tuple(int(value) for value in
+                       facet_space.GetDofNrs(boundary_facet))
+    boundary_dofs = tuple(int(value) for value in
+                          facet_space.GetDofNrs(boundary_element))
+    if facet_dofs != boundary_dofs:
+        raise RuntimeError(
+            "vim.ChargeGram: boundary and global facet DoF order disagree")
+    points, weights = _ref_prod_gauss(max(int(order) + 2, 3), 2)
+    boundary_transform = _ref_monomial_moment_transform(
+        facet_space.GetFE(boundary_element), _mons_quad(int(order)),
+        points, weights, 2)
+    facet_vertices = np.asarray(
+        [int(vertex.nr) for vertex in boundary_facet.vertices], dtype=int)[
+            [0, 1, 3, 2]]
+    boundary_vertices = np.asarray(
+        [int(vertex.nr) for vertex in boundary_element.vertices], dtype=int)[
+            [0, 1, 3, 2]]
+    boundary_reference = {
+        int(vertex): _QUAD_REFERENCE_CORNERS[index]
+        for index, vertex in enumerate(boundary_vertices)
+    }
+    mapped_reference = np.asarray([
+        boundary_reference[int(vertex)] for vertex in facet_vertices])
+    interpolation = np.column_stack(
+        (np.ones(4), _QUAD_REFERENCE_CORNERS))
+    reference_affine, _, rank, _ = np.linalg.lstsq(
+        interpolation, mapped_reference, rcond=None)
+    residual = float(np.max(np.abs(
+        interpolation @ reference_affine - mapped_reference)))
+    if rank != 3 or residual > 1.0e-12:
+        raise RuntimeError(
+            "vim.ChargeGram: boundary-to-facet reference orientation is not "
+            "an affine square symmetry")
+    return (_quad_pullback_matrix(order, reference_affine)
+            @ boundary_transform)
+
+
+def _broken_hex_face_charge_basis(
+        fes, p, *, cyclic_periodic_boundaries=(), image_rot_angle=()):
     """NGSolve-assembled normal jump on every quadrilateral facet.
 
     ``FacetFESpace`` owns element-side orientation.  The conversion below only
@@ -971,11 +1216,12 @@ def _broken_hex_face_charge_basis(fes, p):
     by the existing C++ HEX ChargeGram.  No HDiv shape or Piola transform is
     reconstructed in Python.
 
-    For RT0, the reference normal flux is one constant per facet and its
-    coefficient is exactly the assembled total flux: physical ``dS`` and the
-    Piola surface factor cancel.  Thus mapped bilinear facets need no geometric
-    projection.  Higher-order facet polynomials retain the affine-only change
-    of basis below; silently projecting them on a warped facet would be wrong.
+    The reference normal flux coefficients come from NGSolve's global
+    ``FacetFESpace`` moments.  Physical ``dS`` and the Piola surface factor
+    cancel, so the same reference map is exact on affine and bilinear/trapezoid
+    facets for BDM1/BDM2.  For a cyclic quotient, two separately meshed boundary
+    facets are pulled into one reference frame and summed as an internal jump;
+    their broken volume unknowns remain independent.
     """
     _assert_broken_hdiv(fes)
     mesh = fes.mesh
@@ -988,64 +1234,19 @@ def _broken_hex_face_charge_basis(fes, p):
     jump.Assemble()
     jump_moments = _csr(jump)
 
-    # On an affine quad, every tensor monomial u^i v^j (i,j <= p) is
-    # representable by global monomials of total degree <= 2p.  Assemble the
-    # physical moments with NGSolve and solve only the small geometry change of
-    # basis per facet.
-    xyz_mons = _monos_vol(2 * int(p))
-    moment_vectors = []
-    for i, j, k in xyz_mons:
-        physical_monomial = ng.x ** i * ng.y ** j * ng.z ** k
-        linear = ng.LinearForm(facet_space)
-        linear += physical_monomial * q * ng.dx(element_boundary=True)
-        linear.Assemble()
-        moment_vectors.append(
-            np.asarray(linear.vec.FV().NumPy(), dtype=float).copy())
-
     owner_count = {int(facet.nr): 0 for facet in mesh.facets}
     for element in mesh.Elements(ng.VOL):
         for facet in element.facets:
             owner_count[int(facet.nr)] += 1
 
     mons = _mons_quad(int(p))
-    xyz_index = {exponent: index for index, exponent in enumerate(xyz_mons)}
-
-    def affine_embedding(corners):
-        """Exact coefficients of u^i v^j in physical x/y/z monomials."""
-        axes = np.column_stack((corners[1]-corners[0],
-                                corners[2]-corners[0]))
-        singular_values = np.linalg.svd(axes, compute_uv=False)
-        if (singular_values.size != 2 or singular_values[1] <= 0.0
-                or singular_values[0] / singular_values[1] > 1.0e12):
-            raise ValueError(
-                "vim.ChargeGram: degenerate or ill-conditioned affine HEX "
-                "facet embedding")
-        inverse = np.linalg.pinv(axes)
-        forms = np.column_stack((-inverse @ corners[0], inverse))
-
-        def multiply(poly, form):
-            product = {}
-            for exponent, coefficient in poly.items():
-                product[exponent] = product.get(exponent, 0.0) + coefficient*form[0]
-                for axis in range(3):
-                    raised = list(exponent)
-                    raised[axis] += 1
-                    raised = tuple(raised)
-                    product[raised] = product.get(raised, 0.0) + coefficient*form[axis+1]
-            return product
-
-        embedding = np.zeros((len(xyz_mons), len(mons)))
-        for column, (power_u, power_v) in enumerate(mons):
-            polynomial = {(0, 0, 0): 1.0}
-            for _ in range(power_u):
-                polynomial = multiply(polynomial, forms[0])
-            for _ in range(power_v):
-                polynomial = multiply(polynomial, forms[1])
-            for exponent, coefficient in polynomial.items():
-                embedding[xyz_index[exponent], column] = coefficient
-        return embedding
-    rows = []
-    face_nodes = []
+    facet_transform = _facet_reference_monomial_transform(
+        mesh, facet_space, p)
+    periodic_pairs = (_cyclic_periodic_hex_face_pairs(
+        mesh, cyclic_periodic_boundaries, image_rot_angle)
+        if cyclic_periodic_boundaries else ())
+    rows = {}
+    face_nodes = {}
     for facet in mesh.facets:
         nr = int(facet.nr)
         dofs = [int(d) for d in facet_space.GetDofNrs(facet)]
@@ -1068,57 +1269,32 @@ def _broken_hex_face_charge_basis(fes, p):
         # NGSolve facets provide cyclic vertices.  C++ Q2 lattice order uses
         # [00,10,01,11], hence the 0,1,3,2 permutation.
         corners = corners_cyclic[[0, 1, 3, 2]]
-        face_nodes.append(_QUAD_Q2_LINEAR_WEIGHTS @ corners)
-        if int(p)==0:
-            # FacetFESpace's constant test is one.  Assembly therefore gives
-            # int_face M.n dS = int_[0,1]^2 q_ref du dv = q_ref directly,
-            # including the signed two-sided jump on an internal interface.
-            rows.append(jump_moments[dofs, :].tocsr())
-            continue
-        scale = max(np.linalg.norm(corners[1] - corners[0]),
-                    np.linalg.norm(corners[2] - corners[0]), 1.0)
-        affine_residual = np.linalg.norm(
-            corners[3] - corners[1] - corners[2] + corners[0]) / scale
-        if affine_residual > 1e-10:
-            raise NotImplementedError(
-                "vim.ChargeGram: internal HEX interfaces currently require "
-                "affine straight quadrilateral facets; facet %d residual=%g"
-                % (nr, affine_residual))
-        # Restricted to an affine facet, u and v are affine physical forms.
-        # Expand their tensor products directly; fitting the degree-four
-        # restriction on a 4x4 grid aliases BDM2 quartics and creates a false
-        # facet bubble even when the sampled residual looks machine-small.
-        physical_to_local = affine_embedding(corners)
-        D = np.column_stack(
-            [values[dofs] / owners for values in moment_vectors])
-        C = D @ physical_to_local
-        condition = np.linalg.cond(C)
-        if not np.isfinite(condition) or condition > 1e12:
-            raise RuntimeError(
-                "vim.ChargeGram: ill-conditioned HEX facet moment conversion "
-                "on facet %d (cond=%g)" % (nr, condition))
-        # C contains physical-surface moments (dS = Js du dv), whereas the
-        # HEX C++ kernel consumes the Piola-exact reference flux
-        # q_ref = sigma * Js.  Js is constant on the affine facet.
-        surface_jacobian = np.linalg.norm(
-            np.cross(corners[1] - corners[0],
-                     corners[2] - corners[0]))
-        if not np.isfinite(surface_jacobian) or surface_jacobian <= 0.0:
-            raise ValueError(
-                "vim.ChargeGram: degenerate HEX facet %d" % nr)
-        rows.append(sp.csr_matrix(
-            surface_jacobian
-            * np.linalg.solve(C, jump_moments[dofs, :].toarray())))
+        face_nodes[nr] = _QUAD_Q2_LINEAR_WEIGHTS @ corners
+        rows[nr] = sp.csr_matrix(
+            facet_transform @ jump_moments[dofs, :].toarray())
+
+    paired_slaves = set()
+    for master_nr, slave_nr, reference_affine in periodic_pairs:
+        pullback = sp.csr_matrix(_quad_pullback_matrix(p, reference_affine))
+        rows[master_nr] = (rows[master_nr] + pullback @ rows[slave_nr]).tocsr()
+        rows[master_nr].eliminate_zeros()
+        paired_slaves.add(slave_nr)
+    ordered_facets = [int(facet.nr) for facet in mesh.facets
+                      if int(facet.nr) not in paired_slaves]
 
     return dict(
-        B=sp.vstack(rows).tocsr(),
-        face_nodes=face_nodes,
+        B=sp.vstack([rows[nr] for nr in ordered_facets]).tocsr(),
+        face_nodes=[face_nodes[nr] for nr in ordered_facets],
         mons=mons,
+        periodic_face_pair_count=len(periodic_pairs),
+        facet_numbers=tuple(ordered_facets),
+        periodic_master_facets=tuple(pair[0] for pair in periodic_pairs),
     )
 
 
 def _charge_basis_hex(fes, cob_quad=3, *, materialize_mass=True,
-                      internal_interfaces=False, excluded_boundaries=()):
+                      internal_interfaces=False, excluded_boundaries=(),
+                      cyclic_periodic_boundaries=(), image_rot_angle=()):
     """HEX analogue of `_charge_basis_curved`: charge map B + 27/9-node Q2 geometry nodes (via GetTrafo ->
     flat + curved ONE path).  fes = HDiv(hexmesh, order=0|1|2).  CALLER wraps TaskManager.  Flat NGSolve `.vol`
     hexes use direct NGSolve-reference lattice interpolation; curved meshes keep the GetTrafo source of truth.
@@ -1157,6 +1333,10 @@ def _charge_basis_hex(fes, cob_quad=3, *, materialize_mass=True,
         raise NotImplementedError(
             "vim.ChargeGram: periodic seam exclusion is not yet wired with "
             "internal_interfaces=True")
+    if cyclic_periodic_boundaries and not internal_interfaces:
+        raise ValueError(
+            "vim.ChargeGram: broken-HDiv cyclic periodic face pairing "
+            "requires internal_interfaces=True")
     bels = _exterior_bnd_elements(
         mesh, excluded_boundaries=excluded_boundaries)
     rhp, rhw = _ref_prod_gauss(cob_quad, 3)
@@ -1234,7 +1414,9 @@ def _charge_basis_hex(fes, cob_quad=3, *, materialize_mass=True,
         Bface = sp.csr_matrix((0, Bb.shape[1]))
     face_project_s += time.perf_counter() - _ts
     if internal_interfaces:
-        internal = _broken_hex_face_charge_basis(fes, p)
+        internal = _broken_hex_face_charge_basis(
+            fes, p, cyclic_periodic_boundaries=cyclic_periodic_boundaries,
+            image_rot_angle=image_rot_angle)
         Bface = internal["B"]
         face_nodes = internal["face_nodes"]
         n_volume_charges = n_el * len(mons_hex)
@@ -1265,6 +1447,9 @@ def _charge_basis_hex(fes, cob_quad=3, *, materialize_mass=True,
                     "charge_basis_lattice_mode": "ngsolve-linear-vol" if linear_lattice else "gettrafo",
                     "charge_basis_vol_transform_cache_size": len(vol_transform_cache),
                     "charge_basis_face_transform_cache_size": len(face_transform_cache),
+                    "charge_basis_periodic_face_pair_count": int(
+                        internal.get("periodic_face_pair_count", 0)
+                        if internal_interfaces else 0),
                 })
 
 
@@ -1272,7 +1457,8 @@ def _build_charge_gram_hex(fes, glout_n=None, glin_n=None, near_grade=0.5, far_i
                            eps=1e-12, leafsize=64, eta=2.0, image_masks=None, image_signs=None,
                            image_rot_angle=(),
                            materialize_mass=True, build_hmatrix=True,
-                           internal_interfaces=False, excluded_boundaries=()):
+                           internal_interfaces=False, excluded_boundaries=(),
+                           cyclic_periodic_boundaries=()):
     """Pure-hex BDM1/BDM2 charge Gram via the hex-mode C++ _ChargeGramHMatrix.  FLAT and CURVED (mesh.Curve(2))
     share ONE path (the 27-node Q2 lattice is extracted via GetTrafo either way -- the caller Curve(2)'s the
     mesh for curved).  glout_n = the 1D outer rule.  BDM1 keeps the validated default 4.  Flat BDM2 uses
@@ -1310,7 +1496,9 @@ def _build_charge_gram_hex(fes, glout_n=None, glin_n=None, near_grade=0.5, far_i
     cb = _charge_basis_hex(
         fes, cob_quad=max(3, p+1), materialize_mass=materialize_mass,
         internal_interfaces=bool(internal_interfaces),
-        excluded_boundaries=excluded_boundaries)
+        excluded_boundaries=excluded_boundaries,
+        cyclic_periodic_boundaries=cyclic_periodic_boundaries,
+        image_rot_angle=image_rot_angle)
     t1 = time.perf_counter()
     glo, gwo = _g01(glout_n)
     gli, gwi = _g01(glin_n)
@@ -1830,10 +2018,17 @@ def build_charge_gram(fes, intorder=None, eps=1e-7, leafsize=16, eta=2.0, far_qu
                       image_masks=None, image_signs=None, image_rot_angle=None,
                       _materialize_mass=True,
                       _build_hmatrix=True, internal_interfaces=False,
-                      excluded_boundaries=()):
+                      excluded_boundaries=(), cyclic_periodic_boundaries=()):
     """From an HDiv FESpace (order p, the order from the fes), build the monomial charge-density map
     B (scipy CSR, n_charge x ndof), the C++ charge-Gram H-matrix G, and the HDiv mass M_mass (CSR).
     The CALLER wraps in TaskManager.
+
+    ``cyclic_periodic_boundaries=(master, slave)`` is the broken-HDiv VIM
+    periodic contract and therefore requires ``internal_interfaces=True`` plus
+    rotational images.  It does not compress HDiv unknowns: the slave facet's
+    reference charge polynomial is pulled onto the master and summed into one
+    interface-jump row.  Conforming FEM instead uses ``Periodic(HDiv)`` and
+    excludes its artificial cut faces before calling this builder.
 
     For TET, curve_order=None matches the mesh, 0 forces the flat diagnostic path, and 2 selects the
     isoparametric-P2 curved charge Gram.  HEX/WEDGE always read the active geometry through GetTrafo, so their
@@ -1859,6 +2054,12 @@ def build_charge_gram(fes, intorder=None, eps=1e-7, leafsize=16, eta=2.0, far_qu
     p = int(fes.globalorder)
     _vtypes = _volume_vertex_counts(mesh)
     excluded_boundaries = tuple(str(name) for name in excluded_boundaries)
+    if isinstance(cyclic_periodic_boundaries, str):
+        raise TypeError(
+            "vim.ChargeGram: cyclic_periodic_boundaries must be a pair of "
+            "labels, not one string")
+    cyclic_periodic_boundaries = tuple(
+        str(name) for name in cyclic_periodic_boundaries)
     if excluded_boundaries and not (mesh.dim == 3 and _vtypes == {8}):
         raise NotImplementedError(
             "vim.ChargeGram: periodic boundary-charge exclusion is currently "
@@ -1883,7 +2084,7 @@ def build_charge_gram(fes, intorder=None, eps=1e-7, leafsize=16, eta=2.0, far_qu
             and mesh.GetCurveOrder() < 2):
         raise NotImplementedError(
             "vim.ChargeGram: internal_interfaces=True is currently wired "
-            "for straight pure-TET and affine-facet pure-HEX meshes; "
+            "for straight pure-TET and Q1-mapped pure-HEX meshes; "
             "WEDGE/curved topology interfaces require their matching facet "
             "geometry kernels")
     if mesh.dim == 3 and _vtypes == {4}:
@@ -1904,6 +2105,31 @@ def build_charge_gram(fes, intorder=None, eps=1e-7, leafsize=16, eta=2.0, far_qu
     if image_rot_angle and len(image_rot_angle) != len(image_masks):
         raise ValueError(
             "vim.ChargeGram: image_rot_angle must have the same length as image_masks")
+    if cyclic_periodic_boundaries:
+        if not internal_interfaces:
+            raise ValueError(
+                "vim.ChargeGram: cyclic periodic charge pairing requires "
+                "internal_interfaces=True on a broken HDiv space")
+        if excluded_boundaries:
+            raise ValueError(
+                "vim.ChargeGram: use cyclic_periodic_boundaries for broken "
+                "VIM or excluded_boundaries for conforming FEM, not both")
+        if _vtypes != {8} or mesh.dim != 3:
+            raise NotImplementedError(
+                "vim.ChargeGram: cyclic periodic charge pairing is currently "
+                "wired for pure HEX BDM1/BDM2")
+        if not image_rot_angle:
+            raise ValueError(
+                "vim.ChargeGram: cyclic periodic charge pairing requires "
+                "image_rot_angle")
+        if any(int(mask) != 0 for mask in image_masks):
+            raise ValueError(
+                "vim.ChargeGram: cyclic periodic charge pairing accepts "
+                "rotations, not mirror image masks")
+        if any(float(sign) != 1.0 for sign in image_signs):
+            raise NotImplementedError(
+                "vim.ChargeGram: antiperiodic broken-HDiv face pairing is "
+                "not wired")
     if image_masks:
         # IMA (mirror-image charge folding): wired for flat/Curve(2) pure-TET (C++ m_highorder QuadDotRefl->PhiInner)
         # AND pure-HEX / pure-WEDGE (the QuadBlockHex/Wedge(mask) reflected block), plus the planar log kernel.
@@ -1936,7 +2162,8 @@ def build_charge_gram(fes, intorder=None, eps=1e-7, leafsize=16, eta=2.0, far_qu
             image_rot_angle=image_rot_angle,
             materialize_mass=_materialize_mass, build_hmatrix=_build_hmatrix,
             internal_interfaces=bool(internal_interfaces),
-            excluded_boundaries=excluded_boundaries))
+            excluded_boundaries=excluded_boundaries,
+            cyclic_periodic_boundaries=cyclic_periodic_boundaries))
     if _vtypes == {6}:
         # PURE-WEDGE (PRISM) BDM1/BDM2: tri-Pp x z-Pp volume charge + mixed tri/quad-face
         # surface charge; 18-node Q2 geometry; FLAT or Curve(2) one path).  curve_order is IGNORED (curved is
@@ -2082,7 +2309,8 @@ class DemagOperator:
                  far_quad=3, ho_far_factor=2.0, inner_quad=None,
                  curve_order=None, curve_gauss=8,
                  internal_interfaces=False, image_masks=None,
-                 image_signs=None):
+                 image_signs=None, image_rot_angle=None,
+                 cyclic_periodic_boundaries=None):
         p = int(fes.globalorder)
         vtypes = _volume_vertex_counts(fes.mesh)
         validate_hdiv_configuration(fes.mesh.dim, vtypes, p, fes.mesh.GetCurveOrder())
@@ -2101,12 +2329,19 @@ class DemagOperator:
         self.internal_interfaces = bool(internal_interfaces)
         self.image_masks = tuple(() if image_masks is None else image_masks)
         self.image_signs = tuple(() if image_signs is None else image_signs)
+        self.image_rot_angle = tuple(
+            () if image_rot_angle is None else image_rot_angle)
+        self.cyclic_periodic_boundaries = tuple(
+            () if cyclic_periodic_boundaries is None
+            else cyclic_periodic_boundaries)
         self._B, self._G, self._Mmass = build_charge_gram(
             fes, intorder=intorder, eps=eps, leafsize=leafsize, eta=eta,
             far_quad=far_quad, ho_far_factor=ho_far_factor, inner_quad=inner_quad,
             curve_order=curve_order, curve_gauss=curve_gauss,
             internal_interfaces=self.internal_interfaces,
-            image_masks=self.image_masks, image_signs=self.image_signs)
+            image_masks=self.image_masks, image_signs=self.image_signs,
+            image_rot_angle=self.image_rot_angle,
+            cyclic_periodic_boundaries=self.cyclic_periodic_boundaries)
         self.mat = self._G.demag_matrix()
 
     @property
