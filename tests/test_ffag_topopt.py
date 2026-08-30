@@ -10,6 +10,7 @@ from radia.accelerator_magnet_topopt import (
     static_magnet_transfer_component_entries,
 )
 from radia.ffag_topopt import (
+    FFAGCyclicSectorContract,
     FFAGFixedDesignOrbitTargetFamily,
     FFAGSoftEdgeCellSpec,
     build_ffag_cell_target_family,
@@ -18,6 +19,7 @@ from radia.ffag_topopt import (
     magnetic_rigidity_from_kinetic_energy,
     recover_periodic_planar_closed_orbit,
     recover_periodic_planar_closed_orbit_native,
+    validate_ffag_cyclic_sector_contract,
 )
 from radia.isochronous_topopt import (
     combined_function_transfer_map_from_field_response,
@@ -38,6 +40,48 @@ def _one_segment_arc(*, radius=10.0, angle=0.1, rigidity=1.5):
     return PlanarDesignOrbit(
         positions, tangents, magnetic_rigidity=rigidity,
         bend_axis=np.array([0.0, 0.0, 1.0]))
+
+
+def test_ffag_cyclic_contract_accepts_disjoint_periodic_cells():
+    contract = validate_ffag_cyclic_sector_contract(12)
+
+    assert isinstance(contract, FFAGCyclicSectorContract)
+    assert contract.fold == 12
+    assert contract.reduction_mode == "disjoint-cell-cyclic-images"
+    assert not contract.field_antiperiodic
+    assert not contract.body_crosses_periodic_planes
+
+
+def test_ffag_cyclic_contract_rejects_unidentified_continuous_yoke_seam():
+    with pytest.raises(ValueError, match="HDiv normal traces"):
+        validate_ffag_cyclic_sector_contract(
+            12, body_crosses_periodic_planes=True)
+
+    contract = validate_ffag_cyclic_sector_contract(
+        12, body_crosses_periodic_planes=True,
+        periodic_trace_identified=True)
+    assert contract.reduction_mode == "connected-periodic-fem-sector"
+    assert contract.formulation == "fem"
+    assert contract.periodic_trace_identified
+
+
+def test_ffag_broken_vim_contract_requires_periodic_charge_pair():
+    with pytest.raises(ValueError, match="surface-charge rows"):
+        validate_ffag_cyclic_sector_contract(
+            12, body_crosses_periodic_planes=True,
+            formulation="vim-broken")
+
+    contract = validate_ffag_cyclic_sector_contract(
+        12, body_crosses_periodic_planes=True,
+        formulation="vim-broken", periodic_charge_paired=True)
+    assert contract.reduction_mode == "connected-periodic-vim-sector"
+    assert contract.periodic_charge_paired
+    assert not contract.periodic_trace_identified
+
+
+def test_ffag_antiperiodic_contract_requires_even_fold():
+    with pytest.raises(ValueError, match="even fold"):
+        validate_ffag_cyclic_sector_contract(5, field_antiperiodic=True)
 
 
 def test_build_fixed_design_orbit_target_family_uses_caller_maps_directly():
@@ -205,6 +249,30 @@ def test_ffag_validation_can_disable_performance_provenance(tmp_path):
     ])
 
     assert args.record_performance is False
+
+
+def test_ffag_validation_accepts_curved_bdm2_production_contract(tmp_path):
+    import importlib.util
+    from pathlib import Path
+
+    runner_path=(Path(__file__).parents[1]/"validation_test"/"ffag_topopt"/
+                 "validation_ffag_full_field_c_yoke.py")
+    spec=importlib.util.spec_from_file_location(
+        "ffag_curved_bdm2_runner",runner_path)
+    runner=importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(runner)
+
+    args=runner.parse_args([
+        "--mesh",str(tmp_path/"mesh.vol"),
+        "--yoke-step",str(tmp_path/"yoke.step"),
+        "--output",str(tmp_path/"result.json"),
+        "--hdiv-order","2",
+        "--minimum-curve-order","2",
+    ])
+
+    assert args.hdiv_order == 2
+    assert args.minimum_curve_order == 2
 
 
 def test_ffag_validation_manufactured_target_requires_named_components(

@@ -1,7 +1,8 @@
 """Build the iron-only HEX superset for the full-field FFAG PoC.
 
-The fixture is a rotationally periodic C-yoke: two annular pole packs border
-the unmeshed beam gap and an outer annular return leg joins them.  The source
+The fixture is an explicit fully axisymmetric annular C-yoke: two annular pole
+packs border the unmeshed beam gap and an outer annular return leg joins them.
+It contains no azimuthal sector cut or periodic FE trace.  The source
 coils and particle trajectories are deliberately not meshed.  Run this file
 with the ordinary project Python; it locates and embeds Coreform Cubit.
 """
@@ -289,6 +290,12 @@ def main() -> int:
         "resolved_lower_gap_face_m": lower_gap_face,
         "resolved_upper_gap_face_m": upper_gap_face,
         "iron_connected": bool(topology.iron_connected),
+        "azimuthal_periodicity": {
+            "representation": "explicit-full-annulus",
+            "sector_cut": False,
+            "periodic_hdiv_trace_required": False,
+            "image_cyclic_used": False,
+        },
         "cubit_sidesets": ([] if child_report is None
                             else child_report["sidesets"]),
         "bytes": int(output.stat().st_size),

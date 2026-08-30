@@ -1,0 +1,209 @@
+{
+  "schema": "radia.ffag-broken-vim-cyclic-yoke/v2",
+  "status": "pass",
+  "scope": "BDM2 broken-HDiv VIM periodic charge pairing on a connected curved-Q2 annular HEX yoke.",
+  "settings": {
+    "output": "validation_test\\ffag_topopt\\results_ffag_broken_vim_cyclic_yoke.json",
+    "fold": 12,
+    "hdiv_order": 2,
+    "geometry_order": 2,
+    "inner_radius": 0.03,
+    "outer_radius": 0.05,
+    "half_height": 0.004,
+    "gram_eps": 1e-10,
+    "leaf": 32,
+    "probe_count": 5,
+    "threads": 8,
+    "radial_deformation_scale": 2.5,
+    "axial_deformation_scale": 1.5,
+    "minimum_q2_face_curvature": 1e-06,
+    "maximum_periodic_geometry_relative_error": 1e-12,
+    "maximum_seam_charge": 1e-14,
+    "maximum_field_relative_error": 1e-11
+  },
+  "contract": {
+    "fold": 12,
+    "formulation": "vim-broken",
+    "reduction_mode": "connected-periodic-vim-sector",
+    "periodic_trace_identified": false,
+    "periodic_charge_paired": true,
+    "periodic_boundaries": [
+      "periodic_min",
+      "periodic_max"
+    ]
+  },
+  "mesh": {
+    "full_ring_elements": 12,
+    "sector_elements": 1,
+    "full_ring_dofs": 1296,
+    "sector_dofs": 108,
+    "full_ring_charges": 864,
+    "sector_charges": 72
+  },
+  "probe_points_m": [
+    [
+      0.024,
+      0.0,
+      0.006
+    ],
+    [
+      0.033,
+      0.0,
+      0.006
+    ],
+    [
+      0.041999999999999996,
+      0.0,
+      0.006
+    ],
+    [
+      0.051,
+      0.0,
+      0.006
+    ],
+    [
+      0.06,
+      0.0,
+      0.006
+    ]
+  ],
+  "prescribed_magnetization": {
+    "axial": {
+      "full_ring_demag_h_am_per_unit_m": [
+        [
+          -0.09689509263357111,
+          -4.856488704222435e-19,
+          -0.08870242053692853
+        ],
+        [
+          -0.12065133781170072,
+          -3.543921051500786e-17,
+          0.17084538090163523
+        ],
+        [
+          0.038640735773826,
+          -1.118670939206402e-16,
+          0.17370359398412746
+        ],
+        [
+          0.218984282416067,
+          -7.702161772853824e-17,
+          0.004636955321970382
+        ],
+        [
+          0.03736607350762979,
+          -1.1867498030296163e-17,
+          -0.04277226768768776
+        ]
+      ],
+      "periodic_sector_demag_h_am_per_unit_m": [
+        [
+          -0.09689509263357098,
+          -2.25789702728679e-17,
+          -0.08870242053692856
+        ],
+        [
+          -0.12065133781170054,
+          -1.9235695156040882e-17,
+          0.17084538090163437
+        ],
+        [
+          0.03864073577382638,
+          4.4321043290684914e-17,
+          0.17370359398412616
+        ],
+        [
+          0.21898428241606638,
+          3.8868269422724457e-16,
+          0.0046369553219701
+        ],
+        [
+          0.03736607350762978,
+          2.3895789278560094e-17,
+          -0.04277226768768778
+        ]
+      ],
+      "maximum_relative_error": 6.2462425196020424e-15
+    },
+    "tangential": {
+      "full_ring_demag_h_am_per_unit_m": [
+        [
+          -7.441742247772666e-18,
+          0.002552381906385872,
+          1.389511418316085e-17
+        ],
+        [
+          4.308901794341261e-17,
+          0.005424093322156384,
+          -9.136612686096809e-17
+        ],
+        [
+          6.232781542111102e-17,
+          -0.004536378878797881,
+          -1.9386317069155222e-17
+        ],
+        [
+          -1.102674937426148e-16,
+          -0.02091969467769043,
+          -3.080308351127456e-17
+        ],
+        [
+          -1.6726652756903796e-17,
+          -0.0020506229311951854,
+          -3.6177757160791205e-18
+        ]
+      ],
+      "periodic_sector_demag_h_am_per_unit_m": [
+        [
+          2.42560002105021e-17,
+          0.0025523819063858846,
+          -2.5807387712294253e-17
+        ],
+        [
+          -6.163920839584888e-17,
+          0.0054240933221565675,
+          -2.369964148440754e-17
+        ],
+        [
+          -7.609981694248936e-17,
+          -0.0045363788787976716,
+          5.819084928895868e-17
+        ],
+        [
+          1.410439471579581e-16,
+          -0.02091969467769045,
+          1.5955128354194951e-16
+        ],
+        [
+          4.702887970290662e-18,
+          -0.002050622931195208,
+          1.1414272374633967e-17
+        ]
+      ],
+      "maximum_relative_error": 1.5103080424468264e-14
+    }
+  },
+  "periodic_seam_charge_max": 9.836071486593474e-18,
+  "geometry": {
+    "order": 2,
+    "maximum_q2_face_curvature_m": 3.9350176006506943e-05,
+    "periodic_q2_node_relative_residual": 6.720303518313108e-16,
+    "full_deformation_dofs": 648,
+    "sector_deformation_dofs": 81
+  },
+  "gates": {
+    "broken_hdiv_spaces_are_used": true,
+    "cyclic_charge_count_matches_full_ring": true,
+    "periodic_surface_charge_jump_cancels": true,
+    "curved_q2_geometry_is_used": true,
+    "periodic_q2_geometry_matches_rotation": true,
+    "prescribed_periodic_fields_match_full_ring": true
+  },
+  "timings": {
+    "validation_wall_s": 13.951540899986867
+  },
+  "runtime": {
+    "host": "lab",
+    "python": "3.12.10"
+  }
+}

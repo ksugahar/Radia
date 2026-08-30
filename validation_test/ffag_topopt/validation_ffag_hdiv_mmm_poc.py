@@ -1,4 +1,4 @@
-"""Study-scale FFAG multi-momentum BDM1 HDiv-MMM topology PoC.
+"""Study-scale FFAG multi-momentum BDM1/BDM2 HDiv-MMM topology PoC.
 
 The candidate domain is a one-sided structured HEX pole slab bordering the
 unmeshed orbit aperture.  A uniform applied source excites the iron; native
@@ -28,15 +28,25 @@ def _peak_working_set_bytes():
         return None
 
 
+def _json_value(value, *, key=None):
+    if isinstance(value, np.ndarray):
+        if key == "linearized_reachability_residual":
+            return None
+        return value.tolist()
+    if isinstance(value, np.generic):
+        return value.item()
+    if isinstance(value, dict):
+        return {
+            nested_key: _json_value(nested_value, key=nested_key)
+            for nested_key, nested_value in value.items()
+        }
+    if isinstance(value, (list, tuple)):
+        return [_json_value(nested) for nested in value]
+    return value
+
+
 def _history_record(item):
-    record = asdict(item)
-    for key, value in tuple(record.items()):
-        if isinstance(value, np.ndarray):
-            if key == "linearized_reachability_residual":
-                record[key] = None
-            else:
-                record[key] = value.tolist()
-    return record
+    return _json_value(asdict(item))
 
 
 def run(args):
@@ -58,7 +68,7 @@ def run(args):
         hexes=True, nx=args.nx, ny=args.ny, nz=args.nz,
         mapping=lambda x, y, z: (
             -0.15 + 1.40*x, -4.55 + 0.90*y, 0.10 + 0.30*z))
-    fes = ng.HDiv(mesh, order=1, discontinuous=True)
+    fes = ng.HDiv(mesh, order=args.hdiv_order, discontinuous=True)
     with ng.TaskManager():
         source = uniform_field_load(fes, (0.0, 0.0, args.source_h_a_per_m))
         rhs = np.asarray(source.vec.FV().NumPy(), dtype=float).copy()
@@ -161,7 +171,8 @@ def run(args):
         "energies_mev": [float(value) for value in args.energies],
         "mesh": {
             "element_family": "HEX",
-            "hdiv_family": "BDM1",
+            "hdiv_family": f"BDM{args.hdiv_order}",
+            "hdiv_order": int(args.hdiv_order),
             "air_volume_elements": 0,
             "nx": args.nx, "ny": args.ny, "nz": args.nz,
             "elements": int(mesh.ne), "dofs": int(fes.ndof),
@@ -232,6 +243,9 @@ def parse_args(argv=None):
     parser.add_argument("--segments", type=int, default=32)
     parser.add_argument("--iterations", type=int, default=2)
     parser.add_argument("--threads", type=int, default=16)
+    parser.add_argument(
+        "--hdiv-order", type=int, choices=(1, 2), default=1,
+        help="HDiv discretization: 1=BDM1, 2=BDM2.")
     parser.add_argument("--source-h-a-per-m", type=float, default=1.0e5)
     parser.add_argument("--mu-r", type=float, default=1000.0)
     parser.add_argument("--gradient-offset", type=float, default=0.015)

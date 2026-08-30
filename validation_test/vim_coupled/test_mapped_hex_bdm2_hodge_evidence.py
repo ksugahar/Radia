@@ -14,7 +14,7 @@ def _result() -> dict:
 def test_hodge_reference_is_versioned_and_reproducible():
     result = _result()
 
-    assert result["schema"] == "radia.validation.mapped-hex-bdm2-hodge-reference.v2"
+    assert result["schema"] == "radia.validation.mapped-hex-bdm2-hodge-reference.v3"
     assert result["created_at_utc"]
     assert result["tool_versions"]["radia"] != "unknown"
     assert len(result["tool_versions"]["radia_source_head"]) == 40
@@ -46,15 +46,21 @@ def test_h1_hodge_projection_bounds_the_same_mapped_bdm2_space():
     assert result["checks"]["h1_hodge_public_operator_path_verified"] is True
 
 
-def test_charge_bem_violation_is_localized_without_overclaiming_h1_accuracy():
+def test_chargegram_is_bounded_without_overclaiming_h1_accuracy():
     result = _result()
-    charge = result["charge_bem_diagnostic"]
+    charge = result["charge_hacapk_production"]
 
     assert charge["affinity"]["nonaffine_cell_count"] == 2
     assert charge["hdiv_dofs"] == 207
-    assert charge["spectrum"]["maximum"] > 1.1
-    assert charge["spectrum"]["outside_count"] > 0
-    assert result["checks"]["charge_bem_spectrum_violation_reproduced"] is True
+    assert charge["spectrum"]["minimum"] >= -1.0e-8
+    assert charge["spectrum"]["maximum"] <= 1.0 + 1.0e-5
+    assert charge["spectrum"]["outside_count"] == 0
+    assert charge["solve"]["converged"] is True
+    assert charge["solve"]["field_finite"] is True
+    assert result["checks"]["charge_hacapk_spectrum_is_a_contraction"] is True
+    assert result["checks"][
+        "charge_hacapk_material_solve_and_field_are_production_finite"
+    ] is True
     assert result["pass"] is True
     assert "not_established" in result["claim_boundary"]
     assert "open-boundary H1 accuracy reference" in result["claim_boundary"][

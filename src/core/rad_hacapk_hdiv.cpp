@@ -3438,6 +3438,7 @@ RadHACApKChargeGram::RadHACApKChargeGram(
         m_hexUniformTransHosts = ok;
     }
     BuildHexSiteTables();   // static-site radial tables (non-self near inner) + mapped site positions
+    BuildHexInnerRules();   // immutable complete-host BDM2 source rules; fill callbacks only read them
 }
 
 // WEDGE (PRISM) BDM1 ctor -- mirror of the hex ctor with 3-sub-tet prism cells + mixed tri/quad faces (see
@@ -4218,6 +4219,10 @@ void RadHACApKChargeGram::PhiInnerHexAffineFaceVec(int hS, const double p[3],
 // DISTORTED/curved pairs too (the HexDistortedFarFactor dispatch in QuadBlockHex, C-4 fill speedup).
 const RadHACApKChargeGram::HexFarRule& RadHACApKChargeGram::GetHexFarRule(int kind, int host) const
 {
+    const size_t materialized_index = kind == 0
+        ? (size_t)host : (size_t)m_n_el + (size_t)host;
+    if (materialized_index < m_hexInnerRules.size())
+        return m_hexInnerRules[materialized_index];
     const unsigned long long key =
         (unsigned long long)(kind != 0) | ((unsigned long long)(unsigned)host << 1);
     {
@@ -4257,6 +4262,51 @@ const RadHACApKChargeGram::HexFarRule& RadHACApKChargeGram::GetHexFarRule(int ki
     std::unique_lock<std::shared_mutex> wl(m_hexFarRuleMutex);
     auto it = m_hexFarRuleCache.emplace(key, std::move(rule)).first;   // racing first insert wins
     return it->second;
+}
+
+void RadHACApKChargeGram::BuildHexInnerRules()
+{
+    m_hexInnerRules.clear();
+    if (m_hexAffineOrder != 2) return;
+    m_hexInnerRules.resize((size_t)m_n_el + (size_t)m_hex_n_bf);
+    auto build = [&](int kind, int host, HexFarRule& rule) {
+        const std::vector<int>& charges = kind == 0
+            ? m_cellCharges[host] : m_faceCharges[host];
+        const bool cell = kind == 0;
+        // This rule serves only smooth non-near pairs.  Reuse the complete
+        // outer tensor rule; m_glIn is reserved for the singular/near Duffy
+        // kernel and may be deliberately much richer.
+        const int n1 = (int)m_glOut.size();
+        const int np = cell ? n1*n1*n1 : n1*n1;
+        const double* nodes = cell ? &m_hexNodes[(size_t)host*81]
+                                   : &m_quadNodes[(size_t)host*27];
+        rule.np = np;
+        rule.n_local = (int)charges.size();
+        rule.x.resize((size_t)np*3);
+        rule.w.resize(np);
+        rule.values.resize((size_t)np*charges.size());
+        int q = 0;
+        for (int iz = 0; iz < (cell ? n1 : 1); ++iz)
+            for (int iy = 0; iy < n1; ++iy)
+                for (int ix = 0; ix < n1; ++ix, ++q) {
+                    const double reference[3] = {
+                        m_glOut[ix], m_glOut[iy], cell ? m_glOut[iz] : 0.0};
+                    if (cell) HexQ2MapX(nodes, reference, &rule.x[(size_t)3*q]);
+                    else {
+                        const double uv[2] = {reference[0], reference[1]};
+                        QuadQ2MapX(nodes, uv, &rule.x[(size_t)3*q]);
+                    }
+                    rule.w[q] = m_gwOut[ix]*m_gwOut[iy]
+                              * (cell ? m_gwOut[iz] : 1.0);
+                    for (int local = 0; local < (int)charges.size(); ++local)
+                        rule.values[(size_t)q*charges.size() + local] =
+                            HexMonoEval(charges[local], reference);
+                }
+    };
+    for (int host = 0; host < m_n_el; ++host)
+        build(0, host, m_hexInnerRules[(size_t)host]);
+    for (int host = 0; host < m_hex_n_bf; ++host)
+        build(1, host, m_hexInnerRules[(size_t)m_n_el + (size_t)host]);
 }
 
 std::vector<double> RadHACApKChargeGram::QuadBlockHexAffineFarProduct(
@@ -4646,6 +4696,14 @@ std::vector<double> RadHACApKChargeGram::QuadBlockHexDirectionalDerivative(
     int kindT,int hT,int kindS,int hS,const double* velocityT,const double* velocityS,int mask) const
 {
     if(mask!=0)throw std::invalid_argument("shape derivative currently requires direct image 0");
+    const bool mapped_bdm2_target = m_hexAffineOrder == 2 &&
+        (kindT == 0 ? !m_hexAffineCell[hT] : !m_quadAffineFace[hT]);
+    const bool mapped_bdm2_source = m_hexAffineOrder == 2 &&
+        (kindS == 0 ? !m_hexAffineCell[hS] : !m_quadAffineFace[hS]);
+    if (mapped_bdm2_target || mapped_bdm2_source)
+        throw std::logic_error(
+            "mapped HEX BDM2 shape derivatives are not implemented for the "
+            "cancellation-preserving composite quadrature");
     const auto& tg=kindT==0?m_cellCharges[hT]:m_faceCharges[hT];const auto& sg=kindS==0?m_cellCharges[hS]:m_faceCharges[hS];const int nt=(int)tg.size(),ns=(int)sg.size();std::vector<double> out((size_t)nt*ns,0),inn(ns);
     if(kindT==kindS&&hT==hS)return kindT==0?HexVolumeSelfBlockDirectionalDerivative(hT,std::vector<double>(velocityT,velocityT+81)):HexFaceSelfBlockDirectionalDerivative(hT,std::vector<double>(velocityT,velocityT+27));
     if(kindT==1&&kindS==1&&m_quadAffineFace[hT]&&m_quadAffineFace[hS]){
@@ -5073,6 +5131,15 @@ std::vector<double> RadHACApKChargeGram::QuadBlockHex(int kindT, int hT, int kin
             return timed(m_hexBlkDistortedFar, m_hexNsDistortedFar,
                          [&]{ return QuadBlockHexAffineFarProduct(kindT, hT, kindS, hS, img); });
     }
+    // BDM2 mapped charges are one composite distribution per HDiv basis, not
+    // independent volume and surface sources.  A source-dependent target
+    // subdivision integrates those large pieces on different point sets and
+    // destroys their cancellation after B^T G B.  The fixed-host rule below
+    // evaluates every source host on the same target grid.  BDM1 keeps its
+    // established graded path; affine BDM2 was returned above.
+    if (m_hexAffineOrder == 2)
+        return timed(m_hexBlkGeneralNear, m_hexNsGeneralNear,
+                     [&]{ return QuadBlockHexCompositeProduct(kindT, hT, kindS, hS, img); });
     const auto t_general0 = std::chrono::steady_clock::now();
     const bool cellT = (kindT == 0), cellS = (kindS == 0);
     const int nsubT = cellT ? 6 : 2, nsubS = cellS ? 6 : 2;
@@ -5172,6 +5239,414 @@ std::vector<double> RadHACApKChargeGram::QuadBlockHex(int kindT, int hT, int kin
     return blk;
 }
 
+bool RadHACApKChargeGram::HexQ2Inverse(
+    const double* nodes, const double target[3], double reference[3])
+{
+    reference[0] = reference[1] = reference[2] = 0.5;
+    double last_finite[3] = {0.5, 0.5, 0.5};
+    bool valid_jacobian_seen = false;
+    double scale = 0.0;
+    for (int node = 1; node < 27; ++node) {
+        const double dx = nodes[3*node] - nodes[0];
+        const double dy = nodes[3*node + 1] - nodes[1];
+        const double dz = nodes[3*node + 2] - nodes[2];
+        scale = std::max(scale, std::sqrt(dx*dx + dy*dy + dz*dz));
+    }
+    const double tolerance = 2e-11*std::max(scale, 1.0) + 1e-13;
+    for (int iteration = 0; iteration < 20; ++iteration) {
+        double mapped[3], jacobian[3][3];
+        HexQ2Map(nodes, reference, mapped, jacobian);
+        const double residual[3] = {
+            mapped[0]-target[0], mapped[1]-target[1], mapped[2]-target[2]};
+        const double norm = std::sqrt(
+            residual[0]*residual[0] + residual[1]*residual[1]
+            + residual[2]*residual[2]);
+        if (norm <= tolerance)
+            return true;
+        const double determinant =
+            jacobian[0][0]*(jacobian[1][1]*jacobian[2][2]-jacobian[1][2]*jacobian[2][1])
+          - jacobian[0][1]*(jacobian[1][0]*jacobian[2][2]-jacobian[1][2]*jacobian[2][0])
+          + jacobian[0][2]*(jacobian[1][0]*jacobian[2][1]-jacobian[1][1]*jacobian[2][0]);
+        if (!std::isfinite(determinant) || std::abs(determinant) < 1e-18) {
+            if (!valid_jacobian_seen) return false;
+            break;
+        }
+        valid_jacobian_seen = true;
+        const double inverse[3][3] = {
+            {(jacobian[1][1]*jacobian[2][2]-jacobian[1][2]*jacobian[2][1])/determinant,
+             (jacobian[0][2]*jacobian[2][1]-jacobian[0][1]*jacobian[2][2])/determinant,
+             (jacobian[0][1]*jacobian[1][2]-jacobian[0][2]*jacobian[1][1])/determinant},
+            {(jacobian[1][2]*jacobian[2][0]-jacobian[1][0]*jacobian[2][2])/determinant,
+             (jacobian[0][0]*jacobian[2][2]-jacobian[0][2]*jacobian[2][0])/determinant,
+             (jacobian[0][2]*jacobian[1][0]-jacobian[0][0]*jacobian[1][2])/determinant},
+            {(jacobian[1][0]*jacobian[2][1]-jacobian[1][1]*jacobian[2][0])/determinant,
+             (jacobian[0][1]*jacobian[2][0]-jacobian[0][0]*jacobian[2][1])/determinant,
+             (jacobian[0][0]*jacobian[1][1]-jacobian[0][1]*jacobian[1][0])/determinant}};
+        for (int row = 0; row < 3; ++row)
+            reference[row] -= inverse[row][0]*residual[0]
+                            + inverse[row][1]*residual[1]
+                            + inverse[row][2]*residual[2];
+        if (!std::isfinite(reference[0]) || !std::isfinite(reference[1])
+                || !std::isfinite(reference[2])) {
+            std::copy(last_finite, last_finite + 3, reference);
+            break;
+        }
+        std::copy(reference, reference + 3, last_finite);
+    }
+    // A non-self near pair has no singular point inside this source host.
+    // Exact inversion improves the radial anchor but is not required: every
+    // finite in-cube anchor gives the same exact six-cone partition.  Keep the
+    // final finite Newton point rather than rejecting a valid curved element
+    // merely because the exterior target has no reference-space inverse.
+    for (int axis = 0; axis < 3; ++axis)
+        reference[axis] = std::clamp(reference[axis], 0.0, 1.0);
+    return valid_jacobian_seen;
+}
+
+bool RadHACApKChargeGram::QuadQ2ClosestReference(
+    const double* nodes, const double target[3], double reference[2])
+{
+    auto squared_distance = [&](const double uv[2]) {
+        double mapped[3];
+        QuadQ2MapX(nodes, uv, mapped);
+        const double dx = mapped[0]-target[0];
+        const double dy = mapped[1]-target[1];
+        const double dz = mapped[2]-target[2];
+        return dx*dx + dy*dy + dz*dz;
+    };
+    double best_distance = std::numeric_limits<double>::infinity();
+    for (int iv = 0; iv <= 4; ++iv) {
+        for (int iu = 0; iu <= 4; ++iu) {
+            const double candidate[2] = {0.25*iu, 0.25*iv};
+            const double distance = squared_distance(candidate);
+            if (std::isfinite(distance) && distance < best_distance) {
+                best_distance = distance;
+                reference[0] = candidate[0];
+                reference[1] = candidate[1];
+            }
+        }
+    }
+    if (!std::isfinite(best_distance)) return false;
+
+    for (int iteration = 0; iteration < 40; ++iteration) {
+        double mapped[3], tangent[3][2];
+        QuadQ2Map(nodes, reference, mapped, tangent);
+        const double residual[3] = {
+            mapped[0]-target[0], mapped[1]-target[1], mapped[2]-target[2]};
+        const double current_distance = residual[0]*residual[0]
+                                      + residual[1]*residual[1]
+                                      + residual[2]*residual[2];
+        const double normal00 = tangent[0][0]*tangent[0][0]
+                              + tangent[1][0]*tangent[1][0]
+                              + tangent[2][0]*tangent[2][0];
+        const double normal01 = tangent[0][0]*tangent[0][1]
+                              + tangent[1][0]*tangent[1][1]
+                              + tangent[2][0]*tangent[2][1];
+        const double normal11 = tangent[0][1]*tangent[0][1]
+                              + tangent[1][1]*tangent[1][1]
+                              + tangent[2][1]*tangent[2][1];
+        const double rhs0 = tangent[0][0]*residual[0]
+                          + tangent[1][0]*residual[1]
+                          + tangent[2][0]*residual[2];
+        const double rhs1 = tangent[0][1]*residual[0]
+                          + tangent[1][1]*residual[1]
+                          + tangent[2][1]*residual[2];
+        const double determinant = normal00*normal11-normal01*normal01;
+        if (!std::isfinite(determinant) || determinant <= 1e-30) return false;
+        const double delta0 = (normal11*rhs0-normal01*rhs1)/determinant;
+        const double delta1 = (normal00*rhs1-normal01*rhs0)/determinant;
+        bool accepted = false;
+        double alpha = 1.0;
+        for (int line_search = 0; line_search < 16; ++line_search, alpha *= 0.5) {
+            const double trial[2] = {
+                std::clamp(reference[0]-alpha*delta0, 0.0, 1.0),
+                std::clamp(reference[1]-alpha*delta1, 0.0, 1.0)};
+            const double step0 = trial[0]-reference[0];
+            const double step1 = trial[1]-reference[1];
+            if (std::sqrt(step0*step0+step1*step1) <= 2e-12) return true;
+            const double trial_distance = squared_distance(trial);
+            if (std::isfinite(trial_distance) && trial_distance <=
+                    current_distance + 1e-15*std::max(current_distance, 1e-30)) {
+                reference[0] = trial[0];
+                reference[1] = trial[1];
+                accepted = true;
+                if (current_distance-trial_distance <=
+                        1e-13*std::max(current_distance, 1e-30))
+                    return true;
+                break;
+            }
+        }
+        if (!accepted) {
+            // Gauss-Newton need not be a descent direction on a strongly
+            // curved Q2 face.  Fall back to the projected gradient, scaled by
+            // the local metric, and keep the same monotone line search.
+            const double metric_scale = std::max(normal00+normal11, 1e-30);
+            alpha = 1.0;
+            for (int line_search = 0; line_search < 24;
+                    ++line_search, alpha *= 0.5) {
+                const double trial[2] = {
+                    std::clamp(reference[0]-alpha*rhs0/metric_scale, 0.0, 1.0),
+                    std::clamp(reference[1]-alpha*rhs1/metric_scale, 0.0, 1.0)};
+                const double step0 = trial[0]-reference[0];
+                const double step1 = trial[1]-reference[1];
+                if (std::sqrt(step0*step0+step1*step1) <= 2e-12) return true;
+                const double trial_distance = squared_distance(trial);
+                if (std::isfinite(trial_distance) && trial_distance <=
+                        current_distance + 1e-15*std::max(current_distance, 1e-30)) {
+                    reference[0] = trial[0];
+                    reference[1] = trial[1];
+                    accepted = true;
+                    if (current_distance-trial_distance <=
+                            1e-13*std::max(current_distance, 1e-30))
+                        return true;
+                    break;
+                }
+            }
+        }
+        if (!accepted) {
+            // For a non-self pair there is no singular point on this host.
+            // Any in-square anchor gives an exact four-fan partition; the
+            // finite coarse-grid minimizer retained above is therefore a
+            // valid deterministic endpoint when local closest-point descent
+            // stalls.  A degenerate metric still fails above.
+            return true;
+        }
+    }
+    // The retained finite anchor still parameterizes the complete quad.  The
+    // richer inner Gauss rule controls integration accuracy independently of
+    // closest-point convergence.
+    return true;
+}
+
+void RadHACApKChargeGram::PhiInnerHexTensorVec(
+    int kindS, int hS, const double p[3],
+    const std::vector<int>& srcG, double* inn) const
+{
+    const size_t rule_index = kindS == 0
+        ? (size_t)hS : (size_t)m_n_el + (size_t)hS;
+    if (rule_index >= m_hexInnerRules.size())
+        throw std::logic_error("mapped HEX inner rule was not materialized");
+    const HexFarRule& source = m_hexInnerRules[rule_index];
+    if (source.n_local != (int)srcG.size())
+        throw std::logic_error("mapped HEX source-rule local charge count changed");
+    for (int q = 0; q < source.np; ++q) {
+        const double dx = p[0]-source.x[(size_t)3*q];
+        const double dy = p[1]-source.x[(size_t)3*q + 1];
+        const double dz = p[2]-source.x[(size_t)3*q + 2];
+        const double radius = std::sqrt(dx*dx + dy*dy + dz*dz);
+        if (radius < 1e-300) continue;
+        const double weight = source.w[q]/radius;
+        const double* values = &source.values[(size_t)q*source.n_local];
+        for (int local = 0; local < source.n_local; ++local)
+            inn[local] += weight*values[local];
+    }
+}
+
+void RadHACApKChargeGram::PhiInnerHexRadialHostVec(
+    int kindS, int hS, const double p[3], const double* reference,
+    const std::vector<int>& srcG, double* inn) const
+{
+    if (!reference)
+        throw std::invalid_argument(
+            "PhiInnerHexRadialHostVec requires a reference-space singular point");
+    const bool cell = kindS == 0;
+    const double* nodes = cell
+        ? &m_hexNodes[(size_t)hS*81]
+        : &m_quadNodes[(size_t)hS*27];
+    const int nq = (int)m_glIn.size();
+    const int nS = (int)srcG.size();
+
+    if (cell) {
+        // Each (fixed axis, side) is one complete square face.  The cone map
+        // y = x0 + r*(face(a,b)-x0) has reference Jacobian
+        // r^2 * |(face-x0).(dface/da x dface/db)|.  Its six cones tile the
+        // cube for every interior x0, including limiting points on a face.
+        for (int fixed_axis = 0; fixed_axis < 3; ++fixed_axis) {
+            const int axis_a = (fixed_axis + 1) % 3;
+            const int axis_b = (fixed_axis + 2) % 3;
+            for (int side = 0; side < 2; ++side) {
+                const double face_distance = std::abs((double)side - reference[fixed_axis]);
+                if (face_distance < 1e-300) continue;
+                for (int ia = 0; ia < nq; ++ia) {
+                    for (int ib = 0; ib < nq; ++ib) {
+                        double face[3] = {0.0, 0.0, 0.0};
+                        face[fixed_axis] = (double)side;
+                        face[axis_a] = m_glIn[ia];
+                        face[axis_b] = m_glIn[ib];
+                        for (int ir = 0; ir < nq; ++ir) {
+                            const double radius_parameter = m_glIn[ir];
+                            double source_reference[3];
+                            for (int axis = 0; axis < 3; ++axis)
+                                source_reference[axis] = reference[axis]
+                                    + radius_parameter*(face[axis]-reference[axis]);
+                            double source[3];
+                            HexQ2MapX(nodes, source_reference, source);
+                            const double dx = p[0]-source[0];
+                            const double dy = p[1]-source[1];
+                            const double dz = p[2]-source[2];
+                            const double physical_radius = std::sqrt(dx*dx + dy*dy + dz*dz);
+                            if (physical_radius < 1e-300) continue;
+                            const double weight = m_gwIn[ia]*m_gwIn[ib]*m_gwIn[ir]
+                                *radius_parameter*radius_parameter*face_distance
+                                /physical_radius;
+                            for (int local = 0; local < nS; ++local)
+                                inn[local] += weight*HexMonoEval(
+                                    srcG[local], source_reference);
+                        }
+                    }
+                }
+            }
+        }
+        return;
+    }
+
+    // The analogous square rule uses the four complete edges.  Parameterize
+    // every edge in ascending free coordinate; abs(cross) makes orientation
+    // immaterial while the four triangular fans exactly tile the square.
+    for (int fixed_axis = 0; fixed_axis < 2; ++fixed_axis) {
+        const int free_axis = 1-fixed_axis;
+        for (int side = 0; side < 2; ++side) {
+            for (int it = 0; it < nq; ++it) {
+                double edge[2] = {0.0, 0.0};
+                edge[fixed_axis] = (double)side;
+                edge[free_axis] = m_glIn[it];
+                const double tangent[2] = {
+                    free_axis == 0 ? 1.0 : 0.0,
+                    free_axis == 1 ? 1.0 : 0.0};
+                const double edge_vector[2] = {
+                    edge[0]-reference[0], edge[1]-reference[1]};
+                const double signed_area = std::abs(
+                    edge_vector[0]*tangent[1]-edge_vector[1]*tangent[0]);
+                if (signed_area < 1e-300) continue;
+                for (int ir = 0; ir < nq; ++ir) {
+                    const double radius_parameter = m_glIn[ir];
+                    const double source_reference[2] = {
+                        reference[0] + radius_parameter*edge_vector[0],
+                        reference[1] + radius_parameter*edge_vector[1]};
+                    double source[3];
+                    QuadQ2MapX(nodes, source_reference, source);
+                    const double dx = p[0]-source[0];
+                    const double dy = p[1]-source[1];
+                    const double dz = p[2]-source[2];
+                    const double physical_radius = std::sqrt(dx*dx + dy*dy + dz*dz);
+                    if (physical_radius < 1e-300) continue;
+                    const double weight = m_gwIn[it]*m_gwIn[ir]
+                        *radius_parameter*signed_area/physical_radius;
+                    const double source_reference_3d[3] = {
+                        source_reference[0], source_reference[1], 0.0};
+                    for (int local = 0; local < nS; ++local)
+                        inn[local] += weight*HexMonoEval(
+                            srcG[local], source_reference_3d);
+                }
+            }
+        }
+    }
+}
+
+std::vector<double> RadHACApKChargeGram::QuadBlockHexCompositeProduct(
+    int kindT, int hT, int kindS, int hS, int img) const
+{
+    const std::vector<int>& tgtG = (kindT == 0) ? m_cellCharges[hT] : m_faceCharges[hT];
+    const std::vector<int>& srcG = (kindS == 0) ? m_cellCharges[hS] : m_faceCharges[hS];
+    const int nT = (int)tgtG.size(), nS = (int)srcG.size();
+    std::vector<double> block((size_t)nT*nS, 0.0);
+    if (nT == 0 || nS == 0) return block;
+
+    const bool cellT = kindT == 0;
+    const bool cellS = kindS == 0;
+    const int nsubS = cellS ? 6 : 2;
+    const double* target_nodes = cellT
+        ? &m_hexNodes[(size_t)hT*81]
+        : &m_quadNodes[(size_t)hT*27];
+
+    bool self_pair = kindT == kindS && hT == hS;
+    if (self_pair && img != 0) {
+        const int representative = tgtG[0];
+        double reflected[3];
+        ImageEvalPoint(img, &m_cent[(size_t)3*representative], reflected);
+        const double distance =
+            std::abs(reflected[0] - m_cent[(size_t)3*representative])
+          + std::abs(reflected[1] - m_cent[(size_t)3*representative + 1])
+          + std::abs(reflected[2] - m_cent[(size_t)3*representative + 2]);
+        self_pair = distance < 1e-6*m_size[representative] + 1e-12;
+    }
+
+    std::vector<double> inner(nS, 0.0);
+    const int nq = (int)m_glOut.size();
+    auto accumulate = [&](const double* xi, double weight) {
+        double target[3];
+        if (cellT) HexQ2MapX(target_nodes, xi, target);
+        else QuadQ2MapX(target_nodes, xi, target);
+        double source_eval[3];
+        ImageEvalPoint(img, target, source_eval);
+        std::fill(inner.begin(), inner.end(), 0.0);
+        const int representative = srcG[0];
+        const double dx = source_eval[0]-m_cent[(size_t)3*representative];
+        const double dy = source_eval[1]-m_cent[(size_t)3*representative + 1];
+        const double dz = source_eval[2]-m_cent[(size_t)3*representative + 2];
+        const bool smooth_source = !self_pair
+            && std::sqrt(dx*dx+dy*dy+dz*dz)
+               > 1.5*m_far_inner_factor*m_size[(size_t)representative];
+        if (self_pair) {
+            PhiInnerHexRadialHostVec(
+                kindS, hS, target, xi, srcG, inner.data());
+        } else if (m_hexAffineOrder == 2 && !smooth_source) {
+            double source_reference[3] = {0.5, 0.5, 0.5};
+            bool inverted = false;
+            if (cellS) {
+                inverted = HexQ2Inverse(
+                    &m_hexNodes[(size_t)hS*81], source_eval, source_reference);
+                for (double& coordinate : source_reference)
+                    coordinate = std::clamp(coordinate, 0.0, 1.0);
+            } else {
+                inverted = QuadQ2ClosestReference(
+                    &m_quadNodes[(size_t)hS*27], source_eval, source_reference);
+            }
+            if (!inverted)
+                throw std::runtime_error(
+                    std::string("mapped HEX BDM2 near-pair reference inversion failed for ")
+                    + (cellS ? "cell host " : "face host ") + std::to_string(hS));
+            PhiInnerHexRadialHostVec(
+                kindS, hS, source_eval, source_reference, srcG, inner.data());
+        } else if (m_hexAffineOrder == 2) {
+            PhiInnerHexTensorVec(kindS, hS, source_eval, srcG, inner.data());
+        } else for (int sub = 0; sub < nsubS; ++sub) {
+            PhiInnerHexSubVec(kindS, hS, sub, source_eval, srcG, inner.data());
+        }
+        for (int lt = 0; lt < nT; ++lt) {
+            const double target_weight = weight*HexMonoEval(tgtG[lt], xi);
+            double* row = &block[(size_t)lt*nS];
+            for (int ls = 0; ls < nS; ++ls)
+                row[ls] += target_weight*inner[ls];
+        }
+    };
+
+    if (cellT) {
+        double xi[3];
+        for (int iz = 0; iz < nq; ++iz) {
+            xi[2] = m_glOut[iz];
+            for (int iy = 0; iy < nq; ++iy) {
+                xi[1] = m_glOut[iy];
+                for (int ix = 0; ix < nq; ++ix) {
+                    xi[0] = m_glOut[ix];
+                    accumulate(xi, m_gwOut[ix]*m_gwOut[iy]*m_gwOut[iz]);
+                }
+            }
+        }
+    } else {
+        double xi[3] = {0.0, 0.0, 0.0};
+        for (int iy = 0; iy < nq; ++iy) {
+            xi[1] = m_glOut[iy];
+            for (int ix = 0; ix < nq; ++ix) {
+                xi[0] = m_glOut[ix];
+                accumulate(xi, m_gwOut[ix]*m_gwOut[iy]);
+            }
+        }
+    }
+    for (double& value : block) value *= RAD_INV_FOUR_PI;
+    return block;
+}
+
 std::vector<double> RadHACApKChargeGram::HexVolumeSelfBlockDirectionalDerivative(
     int host, const std::vector<double>& node_velocity) const
 {
@@ -5179,6 +5654,10 @@ std::vector<double> RadHACApKChargeGram::HexVolumeSelfBlockDirectionalDerivative
         "HexVolumeSelfBlockDirectionalDerivative requires a 3D HEX charge Gram");
     if (host < 0 || host >= (int)m_cellCharges.size()) throw std::out_of_range("HEX host out of range");
     if (node_velocity.size() != 81) throw std::invalid_argument("node_velocity must have shape (27,3)");
+    if (m_hexAffineOrder == 2 && !m_hexAffineCell[host])
+        throw std::logic_error(
+            "mapped HEX BDM2 shape derivatives are not implemented for the "
+            "cancellation-preserving composite quadrature");
     const std::vector<int>& g=m_cellCharges[host]; const int n=(int)g.size();
     std::vector<double> out((size_t)n*n,0.0), dinn(n), owt(n);
     if(n==0)return out;
@@ -5330,6 +5809,10 @@ std::vector<double> RadHACApKChargeGram::HexFaceSelfBlockDirectionalDerivative(
         "HexFaceSelfBlockDirectionalDerivative requires a 3D HEX charge Gram");
     if(host<0||host>=(int)m_faceCharges.size())throw std::out_of_range("HEX face host out of range");
     if(node_velocity.size()!=27)throw std::invalid_argument("node_velocity must have shape (9,3)");
+    if (m_hexAffineOrder == 2 && !m_quadAffineFace[host])
+        throw std::logic_error(
+            "mapped HEX BDM2 shape derivatives are not implemented for the "
+            "cancellation-preserving composite quadrature");
     const std::vector<int>& g=m_faceCharges[host]; const int n=(int)g.size();
     std::vector<double> out((size_t)n*n,0.0),dinn(n); if(n==0)return out;
     const double* nd=&m_quadNodes[(size_t)host*27];
@@ -10186,23 +10669,29 @@ std::vector<double> RadHACApKChargeGram::ConfiguredFieldFunctionalRows(
             throw std::invalid_argument(
                 "ConfiguredFieldFunctionalRows: weights must be finite");
     if (m_hexmode) {
-        // An affine HEX BDM1 charge is a physical cubic polynomial in the
-        // cell and a physical quadratic polynomial on each quad facet.  Split
+        // An affine HEX BDM1/BDM2 charge is a physical polynomial through
+        // degree three/six in the cell and degree two/four on each quad facet. Split
         // the cell into the canonical six Kuhn tetrahedra and every facet into
         // two triangles, then reuse the exact analytic TET/TRI field kernels.
         // This is essential near a long pole face: ordinary volume quadrature
         // of the reciprocal 1/r^3 dipole field is not convergent at practical
         // orders when the orbit lies only a fraction of an element away.
+        int max_volume_degree=0,max_facet_degree=0;
         for (int a = 0; a < m_ndof; ++a) {
             const int* e = &m_expo[static_cast<size_t>(3*a)];
             const int degree = e[0]+e[1]+e[2];
-            if ((m_kind[static_cast<size_t>(a)] == 0 && degree > 3) ||
+            if ((m_kind[static_cast<size_t>(a)] == 0 && degree > 6) ||
                 (m_kind[static_cast<size_t>(a)] == 1 &&
-                 (degree > 2 || e[2] != 0)))
+                 (degree > 4 || e[2] != 0)))
                 throw std::runtime_error(
                     "ConfiguredFieldFunctionalRows: affine HEX supports "
-                    "volume degree <= 3 and facet degree <= 2");
+                    "volume degree <= 6 and facet degree <= 4");
+            if(m_kind[static_cast<size_t>(a)]==0)
+                max_volume_degree=std::max(max_volume_degree,degree);
+            else max_facet_degree=std::max(max_facet_degree,degree);
         }
+        const int n_volume_basis=max_volume_degree<=3?20:84;
+        const int n_facet_basis=max_facet_degree<=2?10:35;
 
         std::vector<double> cell_forms(static_cast<size_t>(m_n_el)*12);
         std::vector<double> cell_inv_jac(static_cast<size_t>(m_n_el));
@@ -10281,14 +10770,14 @@ std::vector<double> RadHACApKChargeGram::ConfiguredFieldFunctionalRows(
         // physical monomial ordering once.  Observation evaluation below is
         // then grouped by geometry host, so all local modes reuse the same
         // analytic triangle/tetrahedron moments.
-        std::vector<double> mode_polynomial(static_cast<size_t>(m_ndof)*20,0.0);
+        std::vector<double> mode_polynomial(static_cast<size_t>(m_ndof)*84,0.0);
         for(int a=0;a<m_ndof;++a){
             const int host=m_host[static_cast<size_t>(a)];
             const bool volume=m_kind[static_cast<size_t>(a)]==0;
             const double* forms=volume
                 ?&cell_forms[static_cast<size_t>(host)*12]
                 :&face_forms[static_cast<size_t>(host)*8];
-            double* polynomial=&mode_polynomial[static_cast<size_t>(a)*20];
+            double* polynomial=&mode_polynomial[static_cast<size_t>(a)*84];
             polynomial[0]=volume
                 ?cell_inv_jac[static_cast<size_t>(host)]
                 :face_inv_jac[static_cast<size_t>(host)];
@@ -10297,7 +10786,7 @@ std::vector<double> RadHACApKChargeGram::ConfiguredFieldFunctionalRows(
             const int* e=&m_expo[static_cast<size_t>(3*a)];
             for(int axis=0;axis<axes;++axis)
                 for(int power=0;power<e[axis];++power)
-                    HexPolyMulLinear(polynomial,degree,&forms[4*axis],20);
+                    HexPolyMulLinear(polynomial,degree,&forms[4*axis],84);
         }
 
         constexpr double inv_four_pi =
@@ -10313,26 +10802,30 @@ std::vector<double> RadHACApKChargeGram::ConfiguredFieldFunctionalRows(
                 ?m_cellCharges[static_cast<size_t>(host)]
                 :m_faceCharges[static_cast<size_t>(host)];
             if(host_charges.empty())return;
-            const int n_basis=volume?20:10;
-            auto evaluate_base=[&](const double target[3],double out[20][3]){
-                double correction[20][3]={};
-                for(int index=0;index<20;++index)
+            const int n_basis=volume?n_volume_basis:n_facet_basis;
+            auto evaluate_base=[&](const double target[3],double out[84][3]){
+                double correction[84][3]={};
+                for(int index=0;index<84;++index)
                     for(int k=0;k<3;++k)out[index][k]=0.0;
                 const int count=volume?6:2;
                 for(int sub=0;sub<count;++sub){
-                    double term[20][3]={};
+                    double term[84][3]={};
                     if(volume){
                         double vertices[4][3];
                         const double* corners=&cell_corners[static_cast<size_t>(host)*24];
                         for(int local=0;local<4;++local)for(int k=0;k<3;++k)
                             vertices[local][k]=corners[3*HEXREF_TETS[sub][local]+k];
-                        rad_hdiv::TetVolFieldCubicBasis(vertices,target,term);
+                        if(max_volume_degree<=3)
+                            rad_hdiv::TetVolFieldCubicBasis(vertices,target,term);
+                        else rad_hdiv::TetVolFieldBasisUpTo6(vertices,target,term);
                     }else{
                         double vertices[3][3];
                         const double* corners=&face_corners[static_cast<size_t>(host)*12];
                         for(int local=0;local<3;++local)for(int k=0;k<3;++k)
                             vertices[local][k]=corners[3*QUADREF_TRIS[sub][local]+k];
-                        rad_hdiv::QuadTriFieldBasis(vertices,target,term);
+                        if(max_facet_degree<=2)
+                            rad_hdiv::QuadTriFieldBasis(vertices,target,term);
+                        else rad_hdiv::TriFieldBasisUpTo4(vertices,target,term);
                     }
                     for(int index=0;index<n_basis;++index)
                         for(int k=0;k<3;++k){
@@ -10352,12 +10845,12 @@ std::vector<double> RadHACApKChargeGram::ConfiguredFieldFunctionalRows(
             std::vector<double> corrections(sums.size(),0.0);
             for(int observation=0;observation<n_observations;++observation){
                 const double* target=&observations[static_cast<size_t>(observation)*3];
-                double total[20][3];evaluate_base(target,total);
+                double total[84][3];evaluate_base(target,total);
                 for(size_t image=0;image<m_image_masks.size();++image){
                     // E_{T(sigma)}(x) = T E_sigma(T^-1 x): inverse-map the eval point, forward-map the vector.
                     const int img=(int)image+1;
                     double reflected[3];ImageEvalPoint(img,target,reflected);
-                    double term[20][3];
+                    double term[84][3];
                     evaluate_base(reflected,term);
                     for(int index=0;index<n_basis;++index){
                         double mapped[3];ImageApplyVector(img,term[index],mapped);
@@ -10367,7 +10860,7 @@ std::vector<double> RadHACApKChargeGram::ConfiguredFieldFunctionalRows(
                 }
                 for(const auto& weighted:
                         rows_by_observation[static_cast<size_t>(observation)]){
-                    double projected[20];
+                    double projected[84];
                     for(int index=0;index<n_basis;++index)
                         projected[index]=weighted.value[0]*total[index][0]
                             +weighted.value[1]*total[index][1]
@@ -10375,7 +10868,7 @@ std::vector<double> RadHACApKChargeGram::ConfiguredFieldFunctionalRows(
                     for(size_t local=0;local<host_charges.size();++local){
                         const int a=host_charges[local];
                         const double* polynomial=
-                            &mode_polynomial[static_cast<size_t>(a)*20];
+                            &mode_polynomial[static_cast<size_t>(a)*84];
                         double term=0.0;
                         for(int index=0;index<n_basis;++index)
                             term+=polynomial[index]*projected[index];
@@ -11299,27 +11792,32 @@ RadHACApKChargeGram::CreateConfiguredFieldEvaluator(
         return evaluator;
     }
 
-    // Straight affine HEX BDM1: retain an exact near-field representation.
-    // The reference volume charge has total degree <= 3 and each reference
-    // facet charge has degree <= 2.  Under an affine map these remain physical
-    // linear/quadratic polynomials, so the canonical 6-TET / 2-TRI split can
-    // reuse the analytic kernels.  The old fixed tensor cloud is adequate for
-    // smooth Gram far blocks but is not a convergent near-pole field evaluator.
+    // Straight affine HEX BDM1/BDM2: retain an exact near-field representation.
+    // The tensor Q1/Q2 reference charges become physical total-degree 3/6
+    // volume and 2/4 facet polynomials.  Split the hosts into the canonical
+    // 6-TET / 2-TRI decomposition and keep every coefficient in the persistent
+    // evaluator; a fixed tensor cloud is not a convergent near-pole field map.
     bool analytic_hex = m_hexmode;
     bool configured_hex_rt0 = m_hexmode;
+    bool high_order_hex = false;
     for (int a = 0; analytic_hex && a < m_ndof; ++a) {
         const int* e = &m_expo[static_cast<size_t>(3*a)];
         const int degree = e[0]+e[1]+e[2];
         configured_hex_rt0 = configured_hex_rt0 && degree == 0;
         analytic_hex = m_kind[static_cast<size_t>(a)] == 0
-            ? degree <= 3
-            : (degree <= 2 && e[2] == 0);
+            ? degree <= 6
+            : (degree <= 4 && e[2] == 0);
+        high_order_hex = high_order_hex
+            || (m_kind[static_cast<size_t>(a)] == 0 && degree > 3)
+            || (m_kind[static_cast<size_t>(a)] == 1 && degree > 2);
     }
     if (analytic_hex) {
         std::vector<double> volume;
         std::vector<double> surface;
-        volume.reserve(static_cast<size_t>(m_n_el)*6*32);
-        surface.reserve(static_cast<size_t>(m_hex_n_bf)*2*22);
+        const size_t volume_stride = high_order_hex ? 96 : 32;
+        const size_t surface_stride = high_order_hex ? 44 : 22;
+        volume.reserve(static_cast<size_t>(m_n_el)*6*volume_stride);
+        surface.reserve(static_cast<size_t>(m_hex_n_bf)*2*surface_stride);
         for (int host = 0; analytic_hex && host < m_n_el; ++host) {
             const double* nodes = &m_hexNodes[static_cast<size_t>(host)*81];
             double forms[3][4], inv_jac = 0.0;
@@ -11332,17 +11830,17 @@ RadHACApKChargeGram::CreateConfiguredFieldEvaluator(
                 double J[3][3];
                 HexQ2Map(nodes, HEXREF_V[vertex], corners[vertex], J);
             }
-            double polynomial[20] = {};
+            double polynomial[84] = {};
             for (int charge_id : m_cellCharges[static_cast<size_t>(host)]) {
                 const double factor = charge[static_cast<size_t>(charge_id)]*inv_jac;
                 const int* e = &m_expo[static_cast<size_t>(3*charge_id)];
-                double mode[20] = {};
+                double mode[84] = {};
                 mode[0] = factor;
                 int degree = 0;
                 for (int axis = 0; axis < 3; ++axis)
                     for (int power = 0; power < e[axis]; ++power)
-                        HexPolyMulLinear(mode,degree,forms[axis],20);
-                for (int index = 0; index < 20; ++index)
+                        HexPolyMulLinear(mode,degree,forms[axis],84);
+                for (int index = 0; index < 84; ++index)
                     polynomial[index] += mode[index];
             }
             bool empty = true;
@@ -11350,12 +11848,13 @@ RadHACApKChargeGram::CreateConfiguredFieldEvaluator(
             if (empty) continue;
             for (int sub = 0; sub < 6; ++sub) {
                 const size_t offset = volume.size();
-                volume.resize(offset+32, 0.0);
+                volume.resize(offset+volume_stride, 0.0);
                 for (int local = 0; local < 4; ++local)
                     for (int axis = 0; axis < 3; ++axis)
                         volume[offset+3*local+axis] =
                             corners[HEXREF_TETS[sub][local]][axis];
-                std::copy_n(polynomial,20,volume.data()+offset+12);
+                std::copy_n(polynomial,high_order_hex ? 84 : 20,
+                            volume.data()+offset+12);
             }
         }
 
@@ -11371,60 +11870,61 @@ RadHACApKChargeGram::CreateConfiguredFieldEvaluator(
                 double T[3][2];
                 QuadQ2Map(nodes, QUADREF_V[vertex], corners[vertex], T);
             }
-            double sigma0 = 0.0, slope[3] = {0.0, 0.0, 0.0};
-            double hessian[3][3] = {};
+            double polynomial[35] = {};
             for (int charge_id : m_faceCharges[static_cast<size_t>(host)]) {
                 const double factor = charge[static_cast<size_t>(charge_id)]*inv_jac;
                 const int* e = &m_expo[static_cast<size_t>(3*charge_id)];
-                const int i = e[0], j = e[1];
-                if (i == 0 && j == 0) {
-                    sigma0 += factor;
-                } else if (i+j == 1) {
-                    const int axis = i ? 0 : 1;
-                    sigma0 += factor*forms[axis][0];
-                    for (int k = 0; k < 3; ++k)
-                        slope[k] += factor*forms[axis][k+1];
-                } else {
-                    const int first = i == 2 ? 0 : (j == 2 ? 1 : 0);
-                    const int second = i == 2 ? 0 : (j == 2 ? 1 : 1);
-                    const double* f = forms[first];
-                    const double* s = forms[second];
-                    sigma0 += factor*f[0]*s[0];
-                    for (int k = 0; k < 3; ++k)
-                        slope[k] += factor*(f[0]*s[k+1]+s[0]*f[k+1]);
-                    for (int r = 0; r < 3; ++r)
-                        for (int c = 0; c < 3; ++c)
-                            hessian[r][c] += first == second
-                                ? factor*f[r+1]*f[c+1]
-                                : 0.5*factor*(f[r+1]*s[c+1]+s[r+1]*f[c+1]);
-                }
+                double mode[35] = {};
+                mode[0] = factor;
+                int degree = 0;
+                for (int axis = 0; axis < 2; ++axis)
+                    for (int power = 0; power < e[axis]; ++power)
+                        HexPolyMulLinear(mode,degree,forms[axis],35);
+                for (int index = 0; index < 35; ++index)
+                    polynomial[index] += mode[index];
             }
-            bool empty = sigma0 == 0.0;
-            for (int k = 0; k < 3; ++k) empty = empty && slope[k] == 0.0;
-            for (int r = 0; r < 3; ++r)
-                for (int c = 0; c < 3; ++c)
-                    empty = empty && hessian[r][c] == 0.0;
+            bool empty = true;
+            for (double value : polynomial) empty = empty && value == 0.0;
             if (empty) continue;
             for (int sub = 0; sub < 2; ++sub) {
                 const size_t offset = surface.size();
-                surface.resize(offset+22, 0.0);
+                surface.resize(offset+surface_stride, 0.0);
                 for (int local = 0; local < 3; ++local)
                     for (int axis = 0; axis < 3; ++axis)
                         surface[offset+3*local+axis] =
                             corners[QUADREF_TRIS[sub][local]][axis];
-                surface[offset+9] = sigma0;
-                for (int k = 0; k < 3; ++k)
-                    surface[offset+10+k] = slope[k];
-                for (int r = 0; r < 3; ++r)
-                    for (int c = 0; c < 3; ++c)
-                        surface[offset+13+3*r+c] = hessian[r][c];
+                if (high_order_hex) {
+                    std::copy_n(polynomial,35,surface.data()+offset+9);
+                } else {
+                    surface[offset+9] = polynomial[0];
+                    for (int axis = 0; axis < 3; ++axis) {
+                        int exponent[3] = {};
+                        exponent[axis] = 1;
+                        surface[offset+10+axis] = polynomial[HexPolyIdx(
+                            exponent[0],exponent[1],exponent[2])];
+                    }
+                    for (int row = 0; row < 3; ++row)
+                        for (int col = 0; col < 3; ++col) {
+                            int exponent[3] = {};
+                            ++exponent[row];
+                            ++exponent[col];
+                            const double coefficient = polynomial[HexPolyIdx(
+                                exponent[0],exponent[1],exponent[2])];
+                            surface[offset+13+3*row+col] = row == col
+                                ?coefficient:0.5*coefficient;
+                        }
+                }
             }
         }
         if (analytic_hex) {
             if (!volume.empty() || !surface.empty()) {
-                auto evaluator = rad_hdiv::HDivFieldEvaluator::FromPolynomialTet(
-                    std::move(volume), std::move(surface),
-                    m_image_masks, m_image_signs, options);
+                auto evaluator = high_order_hex
+                    ?rad_hdiv::HDivFieldEvaluator::FromSexticQuarticPolynomialTet(
+                        std::move(volume),std::move(surface),m_image_masks,
+                        m_image_signs,options)
+                    :rad_hdiv::HDivFieldEvaluator::FromPolynomialTet(
+                        std::move(volume),std::move(surface),m_image_masks,
+                        m_image_signs,options);
                 evaluator->SetImageRotations(m_image_rot_angle);
                 return evaluator;
             }

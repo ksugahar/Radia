@@ -103,12 +103,16 @@ void TetVolFieldCubic(const double V[4][3], const double r[3],
                       const double coefficient[20], double out[3]);              /* total-degree <= 3 volume charge */
 void TetVolFieldCubicBasis(const double V[4][3], const double r[3],
                            double out[20][3]);                                   /* fields of physical monomials */
+void TetVolFieldBasisUpTo6(const double V[4][3], const double r[3],
+                           double out[84][3]);                                   /* fields through total degree 6 */
 void LinTriField(const double V[3][3], const double r[3], double sigma0,
                  const double s[3], double out[3]);                                /* linear surface charge */
 void QuadTriField(const double V[3][3], const double r[3], double sigma0,
                   const double s[3], const double S[3][3], double out[3]);         /* quadratic surface charge */
 void QuadTriFieldBasis(const double V[3][3], const double r[3],
                        double out[10][3]);                                        /* fields of physical monomials */
+void TriFieldBasisUpTo4(const double V[3][3], const double r[3],
+                        double out[35][3]);                                       /* fields through total degree 4 */
 void CubicTriField(const double V[3][3], const double r[3],
                    const double coefficient[20], double out[3]);                  /* total-degree <= 3 surface charge */
 /* Forward geometry/coefficient derivative of the same exact affine TET/TRI

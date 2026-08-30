@@ -1,0 +1,394 @@
+{
+  "schema": "radia.validation.mapped-hex-bdm2-production.v1",
+  "created_at_utc": "2026-08-30T04:20:10.071813+00:00",
+  "machine": "mdx",
+  "versions": {
+    "radia": "4.95.71",
+    "ngsolve": "6.2.2606",
+    "python": "3.12.10"
+  },
+  "geometry": {
+    "topology": "HEX",
+    "hdiv_family": "BDM2",
+    "geometry_order": 1,
+    "full_cells": 8,
+    "reduced_cells": 4,
+    "map": "reflection-symmetric non-affine trilinear HEX map"
+  },
+  "operator_quadrature": {
+    "hdiv_dofs": 756,
+    "rules": [
+      {
+        "outer_order": 9,
+        "inner_order": 12,
+        "build_wall_s": 46.74490059999516,
+        "minimum_generalized_eigenvalue": -8.532135692556806e-16,
+        "maximum_generalized_eigenvalue": 0.9998991855890063,
+        "eigenvalues_outside_physical_interval": 0,
+        "material_average_magnetization": [
+          5.329727236607811e-10,
+          410.55196642800246,
+          3515.3021157748617
+        ],
+        "stats": {
+          "n_dof": 432,
+          "n_leaves": 1,
+          "n_lowrank": 0,
+          "n_dense": 1,
+          "max_rank": 0,
+          "compression": 1.0,
+          "build_time": 44.3560503,
+          "memory_mb": 1.423828125,
+          "dense_memory_mb": 1.423828125,
+          "hex_cache_stats_enabled": 0.0,
+          "hex_far_one_sided_threshold": 0.0,
+          "hex_affine_exact_near_factor": 1.0,
+          "hex_distorted_far_factor": 1.0,
+          "hex_blk_affine_near": 0.0,
+          "hex_blk_affine_far": 0.0,
+          "hex_blk_distorted_far": 432.0,
+          "hex_blk_general_near": 613.0,
+          "hex_blk_general_far": 0.0,
+          "hex_s_affine_near": 0.0,
+          "hex_s_affine_far": 0.0,
+          "hex_s_distorted_far": 0.0766986,
+          "hex_s_general_near": 78.0599162,
+          "hex_s_general_far": 0.0,
+          "hex_general_shared_lookups": 1314.0,
+          "hex_general_shared_hits": 701.0,
+          "hex_general_shared_misses": 613.0,
+          "wedge_far_one_sided_threshold": 0.0,
+          "wedge_trans_cache_scope": 2.0,
+          "wedge_trans_cache_enabled": 1.0,
+          "ho_far_one_sided_enabled": 0.0,
+          "ho_analytic_block_available": 0.0,
+          "ho_analytic_block_enabled": 0.0,
+          "hex_block_lookups": 0.0,
+          "hex_block_hits": 0.0,
+          "hex_block_misses": 0.0,
+          "hex_block_clears": 0.0,
+          "hex_trans_block_lookups": 0.0,
+          "hex_trans_block_hits": 0.0,
+          "hex_trans_block_misses": 0.0,
+          "hex_trans_block_clears": 0.0,
+          "hex_sym_block_lookups": 0.0,
+          "hex_sym_block_hits": 0.0,
+          "hex_sym_block_misses": 0.0,
+          "hex_sym_block_clears": 0.0,
+          "hex_sym_trans_block_lookups": 0.0,
+          "hex_sym_trans_block_hits": 0.0,
+          "hex_sym_trans_block_misses": 0.0,
+          "hex_sym_trans_block_clears": 0.0,
+          "ho_sym_block_lookups": 0.0,
+          "ho_sym_block_hits": 0.0,
+          "ho_sym_block_misses": 0.0,
+          "ho_sym_block_clears": 0.0,
+          "hex_block_hit_rate": 0.0,
+          "hex_trans_block_hit_rate": 0.0,
+          "hex_sym_block_hit_rate": 0.0,
+          "hex_sym_trans_block_hit_rate": 0.0,
+          "ho_sym_block_hit_rate": 0.0,
+          "curved_touch_blocks": 0.0,
+          "curved_touch_build_time": 0.0
+        }
+      },
+      {
+        "outer_order": 10,
+        "inner_order": 16,
+        "build_wall_s": 140.60352429997874,
+        "minimum_generalized_eigenvalue": -9.091908045308681e-16,
+        "maximum_generalized_eigenvalue": 0.9998964808536147,
+        "eigenvalues_outside_physical_interval": 0,
+        "material_average_magnetization": [
+          -2.6280410401594805e-10,
+          410.73658163486,
+          3515.510188625847
+        ],
+        "stats": {
+          "n_dof": 432,
+          "n_leaves": 1,
+          "n_lowrank": 0,
+          "n_dense": 1,
+          "max_rank": 0,
+          "compression": 1.0,
+          "build_time": 137.8276762,
+          "memory_mb": 1.423828125,
+          "dense_memory_mb": 1.423828125,
+          "hex_cache_stats_enabled": 0.0,
+          "hex_far_one_sided_threshold": 0.0,
+          "hex_affine_exact_near_factor": 1.0,
+          "hex_distorted_far_factor": 1.0,
+          "hex_blk_affine_near": 0.0,
+          "hex_blk_affine_far": 0.0,
+          "hex_blk_distorted_far": 432.0,
+          "hex_blk_general_near": 611.0,
+          "hex_blk_general_far": 0.0,
+          "hex_s_affine_near": 0.0,
+          "hex_s_affine_far": 0.0,
+          "hex_s_distorted_far": 0.12054540000000001,
+          "hex_s_general_near": 229.3284797,
+          "hex_s_general_far": 0.0,
+          "hex_general_shared_lookups": 1316.0,
+          "hex_general_shared_hits": 705.0,
+          "hex_general_shared_misses": 611.0,
+          "wedge_far_one_sided_threshold": 0.0,
+          "wedge_trans_cache_scope": 2.0,
+          "wedge_trans_cache_enabled": 1.0,
+          "ho_far_one_sided_enabled": 0.0,
+          "ho_analytic_block_available": 0.0,
+          "ho_analytic_block_enabled": 0.0,
+          "hex_block_lookups": 0.0,
+          "hex_block_hits": 0.0,
+          "hex_block_misses": 0.0,
+          "hex_block_clears": 0.0,
+          "hex_trans_block_lookups": 0.0,
+          "hex_trans_block_hits": 0.0,
+          "hex_trans_block_misses": 0.0,
+          "hex_trans_block_clears": 0.0,
+          "hex_sym_block_lookups": 0.0,
+          "hex_sym_block_hits": 0.0,
+          "hex_sym_block_misses": 0.0,
+          "hex_sym_block_clears": 0.0,
+          "hex_sym_trans_block_lookups": 0.0,
+          "hex_sym_trans_block_hits": 0.0,
+          "hex_sym_trans_block_misses": 0.0,
+          "hex_sym_trans_block_clears": 0.0,
+          "ho_sym_block_lookups": 0.0,
+          "ho_sym_block_hits": 0.0,
+          "ho_sym_block_misses": 0.0,
+          "ho_sym_block_clears": 0.0,
+          "hex_block_hit_rate": 0.0,
+          "hex_trans_block_hit_rate": 0.0,
+          "hex_sym_block_hit_rate": 0.0,
+          "hex_sym_trans_block_hit_rate": 0.0,
+          "ho_sym_block_hit_rate": 0.0,
+          "curved_touch_blocks": 0.0,
+          "curved_touch_build_time": 0.0
+        }
+      }
+    ],
+    "comparison": {
+      "candidate": [
+        9,
+        12
+      ],
+      "reference": [
+        10,
+        16
+      ],
+      "operator_frobenius_relative": 0.0016197056993964426,
+      "operator_mass_spectral_difference": 0.015409349308984136,
+      "material_solution_euclidean_relative": 0.0029824908260681895,
+      "material_solution_mass_relative": 0.0005278814540678547,
+      "material_average_relative": 7.85911591881304e-05
+    }
+  },
+  "solves": {
+    "linear_full": {
+      "converged": true,
+      "iterations": 20,
+      "final_relative_residual": 3.9691829148162135e-10,
+      "linear_solver": "mass-riesz-cg",
+      "M_avg": [
+        7.483711678137589e-10,
+        410.5519667471231,
+        3515.3021157754024
+      ],
+      "timing": {}
+    },
+    "linear_reduced": {
+      "converged": true,
+      "iterations": 20,
+      "final_relative_residual": 3.967347419001174e-10,
+      "linear_solver": "mass-riesz-cg",
+      "M_avg": [
+        0.0,
+        410.5519667465165,
+        3515.3021157757353
+      ],
+      "timing": {}
+    },
+    "nonlinear_full": {
+      "converged": true,
+      "iterations": 1,
+      "final_relative_residual": 0.0007723787623775572,
+      "linear_solver": "energy-newton-cpp",
+      "M_avg": [
+        0.0003027627668478571,
+        410.551865068193,
+        3515.3024343155225
+      ],
+      "timing": {}
+    },
+    "ima_solve_comparison": {
+      "magnetization_relative": 2.87988961652773e-13,
+      "field_relative": 3.2834877319668256e-13,
+      "field_maximum_absolute": 9.882228368951473e-11,
+      "field_scale": 515.9102331407562,
+      "field_full": [
+        [
+          134.89322755455075,
+          -32.9369244661075,
+          -515.9102331407562
+        ],
+        [
+          46.301846557253285,
+          -33.29655324050489,
+          -262.9922523757998
+        ],
+        [
+          -3.746118176967772e-11,
+          39.42476259646688,
+          -374.0051898368139
+        ]
+      ],
+      "field_reduced": [
+        [
+          134.89322755445193,
+          -32.93692446607374,
+          -515.9102331406987
+        ],
+        [
+          46.301846557169405,
+          -33.296553240477294,
+          -262.9922523757966
+        ],
+        [
+          0.0,
+          39.42476259637041,
+          -374.0051898368693
+        ]
+      ]
+    }
+  },
+  "prescribed_source_roundoff": {
+    "magnetization": [
+      0.0,
+      20000.0,
+      100000.0
+    ],
+    "full_stats": {
+      "permanent_magnet_model": "fixed-given",
+      "permanent_magnet_level": 1,
+      "ndof": 756,
+      "order": 2,
+      "curve_order": null,
+      "image": null,
+      "projection_relative_residual": 4.1855834707520747e-16,
+      "projection_wall_s": 0.07873149996157736,
+      "geometry_wall_s": 0.20229650003602728,
+      "total_wall_s": 0.28102819999912754,
+      "hmatrix_built": false,
+      "field_evaluator": {
+        "source_count": 7776,
+        "image_count": 0,
+        "tree_nodes": 511,
+        "leaf_size": 32,
+        "theta": 0.05,
+        "tree_min_sources": 256,
+        "auto_min_work": 500000000,
+        "tree_relative_tolerance": 1e-05,
+        "probe_count": 16,
+        "bounds_min": [
+          -0.02387365472837872,
+          -0.021549461891351488,
+          -0.021162096418513618
+        ],
+        "bounds_max": [
+          0.02387365472837872,
+          0.02154946189135149,
+          0.021162096418513614
+        ],
+        "source_kind": "element-cloud-bdm2",
+        "build_wall_s": 0.005393699975684285
+      }
+    },
+    "reduced_stats": {
+      "permanent_magnet_model": "fixed-given",
+      "permanent_magnet_level": 1,
+      "ndof": 396,
+      "order": 2,
+      "curve_order": null,
+      "image": "+x",
+      "projection_relative_residual": 3.3024872231889807e-16,
+      "projection_wall_s": 0.055855599988717586,
+      "geometry_wall_s": 0.1906213000183925,
+      "total_wall_s": 0.24647720000939444,
+      "hmatrix_built": false,
+      "field_evaluator": {
+        "source_count": 4212,
+        "image_count": 1,
+        "tree_nodes": 487,
+        "leaf_size": 32,
+        "theta": 0.05,
+        "tree_min_sources": 256,
+        "auto_min_work": 500000000,
+        "tree_relative_tolerance": 1e-05,
+        "probe_count": 16,
+        "bounds_min": [
+          0.0,
+          -0.021549461891351488,
+          -0.021162096418513618
+        ],
+        "bounds_max": [
+          0.02387365472837872,
+          0.021549461891351488,
+          0.021162096418513614
+        ],
+        "source_kind": "element-cloud-bdm2",
+        "build_wall_s": 0.0030448000179603696
+      }
+    },
+    "field_full": [
+      [
+        2722.5895438008242,
+        -613.8138077790694,
+        -11913.20229708784
+      ],
+      [
+        1061.0706491891415,
+        -958.9382878314752,
+        -6411.34831919064
+      ],
+      [
+        1.1924702039821442e-12,
+        4119.109316892881,
+        -9115.742693883667
+      ]
+    ],
+    "field_reduced": [
+      [
+        2722.5895438008306,
+        -613.813807779071,
+        -11913.202297087848
+      ],
+      [
+        1061.0706491891415,
+        -958.9382878314758,
+        -6411.348319190643
+      ],
+      [
+        0.0,
+        4119.109316892881,
+        -9115.742693883669
+      ]
+    ],
+    "field_maximum_absolute": 7.275957614183426e-12,
+    "field_scale": 11913.20229708784,
+    "field_relative": 8.007840871654115e-16,
+    "field_error_in_machine_eps": 2.7505618710101207
+  },
+  "checks": {
+    "all_quadrature_rules_have_physical_spectrum": true,
+    "default_quadrature_has_sub_per_mille_material_response_error": true,
+    "linear_full_converged": true,
+    "linear_reduced_converged": true,
+    "nonlinear_energy_newton_converged": true,
+    "ima_independent_solves_match": true,
+    "ima_prescribed_source_field_matches_within_ten_eps": true
+  },
+  "pass": true,
+  "timing_s": {
+    "total": 302.6311518000439
+  }
+}
