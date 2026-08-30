@@ -322,6 +322,12 @@ jobs:
           # too. The embedded batch file's cmd.exe child output goes through
           # PowerShell stdout because we pipe via the *>&1 merge.
           New-Item -ItemType Directory -Force -Path $env:RADIA_CI_OUTPUT_DIR | Out-Null
+          @{
+            schema = 'radia.ci-output-context.v1'
+            sha = $env:GITHUB_SHA
+            run_id = '${{ github.run_id }}'
+            run_attempt = '${{ github.run_attempt }}'
+          } | ConvertTo-Json | Set-Content -Path (Join-Path $env:RADIA_CI_OUTPUT_DIR 'ci-context.json') -Encoding utf8
           $buildLog = Join-Path $env:RADIA_CI_OUTPUT_DIR 'build-msvc-stdout.log'
 
           # 2026-05-28: tag pushes get -Rebuild to force clean build.
@@ -676,7 +682,8 @@ jobs:
             "$env:RADIA_CI_OUTPUT_DIR\pytest-basic-stdout.log",
             "$env:RADIA_CI_OUTPUT_DIR\pytest-golden-stdout.log",
             "$env:RADIA_CI_OUTPUT_DIR\pytest-panel-stdout.log",
-            "$env:RADIA_CI_OUTPUT_DIR\pytest-panel-golden-stdout.log"
+            "$env:RADIA_CI_OUTPUT_DIR\pytest-panel-golden-stdout.log",
+            "$env:RADIA_CI_OUTPUT_DIR\ci-context.json"
           )) {
             if (Test-Path $f) {
               Copy-Item $f -Destination $dst -Force
@@ -702,6 +709,7 @@ jobs:
             ${{ env.RADIA_CI_OUTPUT_DIR }}\pytest-golden-stdout.log
             ${{ env.RADIA_CI_OUTPUT_DIR }}\pytest-panel-stdout.log
             ${{ env.RADIA_CI_OUTPUT_DIR }}\pytest-panel-golden-stdout.log
+            ${{ env.RADIA_CI_OUTPUT_DIR }}\ci-context.json
           retention-days: 30
 
       # ----------------------------------------------------------------
