@@ -148,6 +148,15 @@ info = radia.ngsolve.space_info("model.vol", 6);
     "model.vol", "hcurl", 6, "mass", no_grads=true);
 ```
 
+`radia.setup()` also keeps generated Simulink cache and code-generation files
+outside the repository. On Windows the default is
+`C:\temp\radia\simulink\R<release>`. Existing explicit
+`Simulink.fileGenControl` settings are preserved. Set
+`RADIA_SIMULINK_FILEGEN_ROOT` or call
+`radia.simulink.configureFileGeneration(RootDirectory=..., Force=true)` to
+choose another external location. `.slxc` and `slprj` are generated caches,
+not source files; do not place them under `matlab/` or commit them.
+
 `radia.ngsolve.matrix_dump` assembles a native NGSolve `T_BilinearForm<double>` and
 returns a MATLAB sparse matrix with NGSolve's global DoF ordering unchanged.
 Persistent spaces support `h1`, `vectorh1`, `hcurl`, and `hdiv`.
