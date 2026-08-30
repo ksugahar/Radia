@@ -62,6 +62,276 @@ class FFAGCyclicSectorContract:
     reduction_mode: str
 
 
+@dataclass(frozen=True)
+class FFAGCyclicDensityMap:
+    """Independent material variables for a rotational FFAG quotient mesh.
+
+    HDiv trace identification and broken-VIM charge pairing close the field
+    space.  They do not by themselves make an element-wise topology density
+    periodic.  This map identifies the volume elements adjacent to paired
+    azimuthal faces, expands one reduced design vector to all elements, and
+    contracts element gradients with the exact transpose map.
+    """
+
+    element_to_variable: np.ndarray
+    groups: tuple[tuple[int, ...], ...]
+    boundary_pair_count: int
+    periodic_boundaries: tuple[str, str]
+
+    def __post_init__(self):
+        mapping = np.asarray(self.element_to_variable, dtype=np.int64).reshape(-1)
+        groups = tuple(tuple(int(value) for value in group)
+                       for group in self.groups)
+        if (mapping.size == 0 or not groups
+                or np.any(mapping < 0)
+                or set(mapping.tolist()) != set(range(len(groups)))):
+            raise ValueError("invalid FFAG cyclic density map")
+        expected = tuple(tuple(np.flatnonzero(mapping == index).tolist())
+                         for index in range(len(groups)))
+        if groups != expected:
+            raise ValueError(
+                "FFAG cyclic density groups do not match element mapping")
+        boundaries = tuple(str(name) for name in self.periodic_boundaries)
+        if len(boundaries) != 2 or boundaries[0] == boundaries[1]:
+            raise ValueError("FFAG cyclic density map needs two boundaries")
+        mapping.setflags(write=False)
+        object.__setattr__(self, "element_to_variable", mapping)
+        object.__setattr__(self, "groups", groups)
+        object.__setattr__(self, "periodic_boundaries", boundaries)
+        object.__setattr__(self, "boundary_pair_count",
+                           int(self.boundary_pair_count))
+
+    @property
+    def element_count(self) -> int:
+        return int(self.element_to_variable.size)
+
+    @property
+    def variable_count(self) -> int:
+        return len(self.groups)
+
+    def expand(self, reduced_values) -> np.ndarray:
+        """Expand one value per periodic equivalence class to elements."""
+        values = np.asarray(reduced_values, dtype=float).reshape(-1)
+        if values.size != self.variable_count:
+            raise ValueError(
+                f"FFAG cyclic reduced vector has {values.size} values, "
+                f"expected {self.variable_count}")
+        return np.ascontiguousarray(values[self.element_to_variable])
+
+    def contract(self, element_values) -> np.ndarray:
+        """Apply the transpose map, summing element gradients/volumes."""
+        values = np.asarray(element_values, dtype=float).reshape(-1)
+        if values.size != self.element_count:
+            raise ValueError(
+                f"FFAG cyclic element vector has {values.size} values, "
+                f"expected {self.element_count}")
+        reduced = np.zeros(self.variable_count, dtype=float)
+        np.add.at(reduced, self.element_to_variable, values)
+        return reduced
+
+    def reduce(self, element_values, *, tolerance=1.0e-12) -> np.ndarray:
+        """Reduce an already periodic element vector, failing on drift."""
+        values = np.asarray(element_values, dtype=float).reshape(-1)
+        if values.size != self.element_count:
+            raise ValueError(
+                f"FFAG cyclic element vector has {values.size} values, "
+                f"expected {self.element_count}")
+        tolerance = float(tolerance)
+        if not np.isfinite(tolerance) or tolerance < 0.0:
+            raise ValueError("FFAG cyclic density tolerance must be non-negative")
+        scale = max(float(np.max(np.abs(values))), 1.0)
+        reduced = np.empty(self.variable_count, dtype=float)
+        for index, group in enumerate(self.groups):
+            local = values[np.asarray(group, dtype=int)]
+            if float(np.max(local) - np.min(local)) > tolerance * scale:
+                raise ValueError(
+                    f"FFAG cyclic element densities are not equal in group {index}")
+            reduced[index] = float(np.mean(local))
+        return reduced
+
+
+def _cyclic_boundary_facets(mesh, periodic_boundaries):
+    """Return paired boundary facet keys and their owning volume elements."""
+    import ngsolve as ng
+
+    boundaries = tuple(str(name) for name in periodic_boundaries)
+    if len(boundaries) != 2 or boundaries[0] == boundaries[1]:
+        raise ValueError("FFAG cyclic boundaries must name two distinct faces")
+    available = tuple(mesh.GetBoundaries())
+    missing = sorted(set(boundaries) - set(available))
+    if missing:
+        raise ValueError(f"FFAG cyclic boundary labels are missing: {missing}")
+
+    facet_key_by_number = {
+        int(facet.nr): frozenset(int(vertex.nr) for vertex in facet.vertices)
+        for facet in mesh.facets
+    }
+    owner_by_facet = {}
+    for element in mesh.Elements(ng.VOL):
+        for facet in element.facets:
+            key = facet_key_by_number[int(facet.nr)]
+            owner_by_facet.setdefault(key, []).append(int(element.nr))
+
+    facets = {name: {} for name in boundaries}
+    vertices = {name: set() for name in boundaries}
+    for element in mesh.Elements(ng.BND):
+        name = available[element.index]
+        if name not in facets:
+            continue
+        key = frozenset(int(vertex.nr) for vertex in element.vertices)
+        owners = owner_by_facet.get(key, ())
+        if len(owners) != 1:
+            raise ValueError(
+                "FFAG cyclic boundary facet must have one volume owner")
+        facets[name][key] = owners[0]
+        vertices[name].update(key)
+    if any(not facets[name] for name in boundaries):
+        raise ValueError("FFAG cyclic boundary has no facets")
+    if vertices[boundaries[0]] & vertices[boundaries[1]]:
+        raise ValueError("FFAG cyclic boundary vertex sets must be disjoint")
+
+    master_to_slave = {}
+    for endpoint_a, endpoint_b in mesh.ngmesh.GetIdentifications():
+        endpoint_a = int(getattr(endpoint_a, "nr", endpoint_a)) - 1
+        endpoint_b = int(getattr(endpoint_b, "nr", endpoint_b)) - 1
+        if (endpoint_a in vertices[boundaries[0]]
+                and endpoint_b in vertices[boundaries[1]]):
+            master_to_slave[endpoint_a] = endpoint_b
+        elif (endpoint_b in vertices[boundaries[0]]
+                and endpoint_a in vertices[boundaries[1]]):
+            master_to_slave[endpoint_b] = endpoint_a
+    if (set(master_to_slave) != vertices[boundaries[0]]
+            or set(master_to_slave.values()) != vertices[boundaries[1]]
+            or len(set(master_to_slave.values())) != len(master_to_slave)):
+        raise ValueError(
+            "NGSolve PERIODIC identifications must pair every FFAG cut vertex")
+
+    pairs = []
+    used_slave = set()
+    for master_key, master_owner in facets[boundaries[0]].items():
+        slave_key = frozenset(master_to_slave[vertex] for vertex in master_key)
+        if slave_key not in facets[boundaries[1]]:
+            raise ValueError("FFAG cyclic master facet has no slave facet")
+        if slave_key in used_slave:
+            raise ValueError("FFAG cyclic facet pairing is not one-to-one")
+        used_slave.add(slave_key)
+        pairs.append((master_key, slave_key, master_owner,
+                      facets[boundaries[1]][slave_key]))
+    if len(used_slave) != len(facets[boundaries[1]]):
+        raise ValueError("not every FFAG cyclic slave facet was paired")
+    return boundaries, tuple(pairs)
+
+
+def identify_ffag_cyclic_sector_vertices(
+        mesh, fold, *, periodic_boundaries=("periodic_min", "periodic_max"),
+        relative_tolerance=1.0e-10):
+    """Add rotational PERIODIC point identifications to a Cubit sector mesh.
+
+    Cubit owns the curved HEX geometry and named cut faces.  Netgen owns the
+    periodic point-identification contract consumed by ``Periodic(HDiv)`` and
+    by the broken-VIM charge pullback.  The operation is intentionally
+    explicit and fails if a cut vertex cannot be matched by the first positive
+    cyclic rotation.
+    """
+    import ngsolve as ng
+    from netgen.meshing import IdentificationType
+
+    contract = validate_ffag_cyclic_sector_contract(fold)
+    relative_tolerance = float(relative_tolerance)
+    if not np.isfinite(relative_tolerance) or relative_tolerance <= 0.0:
+        raise ValueError(
+            "FFAG cyclic relative_tolerance must be finite and positive")
+    if mesh.ngmesh.GetIdentifications():
+        raise ValueError("FFAG sector mesh already has point identifications")
+    boundaries = tuple(str(name) for name in periodic_boundaries)
+    available = tuple(mesh.GetBoundaries())
+    missing = sorted(set(boundaries) - set(available))
+    if len(boundaries) != 2 or boundaries[0] == boundaries[1] or missing:
+        raise ValueError(
+            "FFAG sector needs two distinct named cyclic boundaries; missing=%s"
+            % missing)
+    boundary_vertices = {name: set() for name in boundaries}
+    for element in mesh.Elements(ng.BND):
+        name = available[element.index]
+        if name in boundary_vertices:
+            boundary_vertices[name].update(
+                int(vertex.nr) for vertex in element.vertices)
+    if any(not boundary_vertices[name] for name in boundaries):
+        raise ValueError("FFAG cyclic boundary has no vertices")
+
+    angle = 2.0 * np.pi / contract.fold
+    rotation = np.array(((np.cos(angle), -np.sin(angle), 0.0),
+                         (np.sin(angle), np.cos(angle), 0.0),
+                         (0.0, 0.0, 1.0)))
+    slave = sorted(boundary_vertices[boundaries[1]])
+    slave_points = np.asarray([mesh[mesh.vertices[index]].point
+                               for index in slave], dtype=float)
+    all_points = np.asarray([vertex.point for vertex in mesh.vertices], dtype=float)
+    scale = max(float(np.max(np.linalg.norm(
+        all_points - np.mean(all_points, axis=0), axis=1))), 1.0e-300)
+    limit = float(relative_tolerance) * scale
+    used = set()
+    pairs = []
+    maximum_residual = 0.0
+    for master in sorted(boundary_vertices[boundaries[0]]):
+        point = np.asarray(mesh[mesh.vertices[master]].point, dtype=float)
+        distances = np.linalg.norm(slave_points - rotation @ point, axis=1)
+        index = int(np.argmin(distances))
+        residual = float(distances[index])
+        target = slave[index]
+        if residual > limit or target in used:
+            raise ValueError(
+                "FFAG cyclic vertex rotation mismatch "
+                f"(residual={residual:g}, limit={limit:g})")
+        used.add(target)
+        maximum_residual = max(maximum_residual, residual)
+        mesh.ngmesh.AddPointIdentification(
+            master + 1, target + 1, identnr=1,
+            type=IdentificationType.PERIODIC)
+        pairs.append((master, target))
+    if len(used) != len(slave):
+        raise ValueError("not every FFAG cyclic slave vertex was identified")
+    return {
+        "pair_count": len(pairs),
+        "maximum_rotation_residual": maximum_residual,
+        "relative_rotation_residual": maximum_residual / scale,
+        "periodic_boundaries": boundaries,
+    }
+
+
+def build_ffag_cyclic_density_map(
+        mesh, *, periodic_boundaries=("periodic_min", "periodic_max")):
+    """Tie topology-density variables adjacent to identified cyclic faces."""
+    boundaries, facet_pairs = _cyclic_boundary_facets(
+        mesh, periodic_boundaries)
+    parent = np.arange(int(mesh.ne), dtype=np.int64)
+
+    def find(value):
+        value = int(value)
+        while parent[value] != value:
+            parent[value] = parent[parent[value]]
+            value = int(parent[value])
+        return value
+
+    def union(first, second):
+        root_first, root_second = find(first), find(second)
+        if root_first != root_second:
+            parent[root_second] = root_first
+
+    for _master, _slave, master_owner, slave_owner in facet_pairs:
+        union(master_owner, slave_owner)
+    roots = [find(index) for index in range(int(mesh.ne))]
+    root_to_variable = {}
+    mapping = np.empty(int(mesh.ne), dtype=np.int64)
+    for element, root in enumerate(roots):
+        mapping[element] = root_to_variable.setdefault(
+            root, len(root_to_variable))
+    groups = tuple(tuple(np.flatnonzero(mapping == index).tolist())
+                   for index in range(len(root_to_variable)))
+    return FFAGCyclicDensityMap(
+        mapping, groups, len(facet_pairs), boundaries)
+
+
 def validate_ffag_cyclic_sector_contract(
         fold, *, field_antiperiodic=False,
         body_crosses_periodic_planes=False,
@@ -2326,6 +2596,7 @@ def optimize_ffag_hdiv_mmm_from_transfer_matrices(
 
 __all__ = [
     "EngeFringeIntegrals",
+    "FFAGCyclicDensityMap",
     "FFAGCyclicSectorContract",
     "FFAGCellReference",
     "FFAGCellTargetFamily",
@@ -2341,9 +2612,11 @@ __all__ = [
     "PROTON_REST_ENERGY_MEV",
     "build_ffag_cell_reference",
     "build_ffag_cell_target_family",
+    "build_ffag_cyclic_density_map",
     "build_ffag_fixed_design_orbit_target_family",
     "enge_fringe_integrals",
     "differentiate_recovered_planar_orbit_shape_native",
+    "identify_ffag_cyclic_sector_vertices",
     "magnetic_rigidity_from_kinetic_energy",
     "optimize_ffag_hdiv_mmm_from_fixed_design_orbits",
     "optimize_ffag_hdiv_mmm_from_design_orbits",
