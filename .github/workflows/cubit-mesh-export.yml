@@ -119,8 +119,10 @@ jobs:
                   'cubit_mesh_export/native_payloads.json'))
               curver = archive.read(
                   'cubit_mesh_export/cubit_mesh_curver.pyd')
-              wheel_meta = archive.read(
-                  'cubit_mesh_export-0.14.14.dist-info/WHEEL').decode()
+              wheel_meta_path = next(
+                  name for name in names
+                  if name.endswith('.dist-info/WHEEL'))
+              wheel_meta = archive.read(wheel_meta_path).decode()
           package_version = re.search(r'^__version__\s*=\s*"([^"]+)"', init, re.M).group(1)
           wheel_version = re.match(r'[^-]+-([^-]+)-', wheel.rsplit('\\', 1)[-1]).group(1)
           if package_version != wheel_version:
