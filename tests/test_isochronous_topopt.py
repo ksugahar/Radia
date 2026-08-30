@@ -576,6 +576,49 @@ def test_native_affine_hex_bdm1_field_functional_rows_match_exact_batch():
     np.testing.assert_allclose(far_row,reciprocal,rtol=3e-9,atol=3e-11)
 
 
+def test_native_affine_hex_bdm2_field_functional_rows_match_exact_batch():
+    """Affine HEX BDM2 rows retain every Q2 volume and facet charge mode."""
+    from ngsolve.meshes import MakeStructured3DMesh
+
+    mesh=MakeStructured3DMesh(
+        hexes=True,nx=1,ny=1,nz=1,
+        mapping=lambda x,y,z:(1.1*x-.15*y,.8*y+.08*z,.55*z))
+    fes=ng.HDiv(mesh,order=2,discontinuous=True)
+    points=np.array([
+        [.31,.17,.73],
+        [1.04,.42,.61],
+        [-.22,.29,.36],
+    ],dtype=float)
+    rng=np.random.default_rng(20260830)
+    weights=rng.normal(size=(3,len(points),3))
+    coefficients=rng.normal(size=fes.ndof)
+    with TaskManager():
+        problem=DensityAdjointVIM(
+            fes,eps=1e-12,internal_interfaces=True)
+        rows=np.asarray(
+            problem.demag._G.configured_field_functional_rows(points,weights))
+        evaluator=problem.demag._G.create_field_evaluator(coefficients)
+        field=np.asarray(evaluator.field(points,"direct"))/(4.0*np.pi)
+    expected=np.einsum("rpc,pc->r",weights,field)
+    assert rows.shape==(3,fes.ndof)
+    assert rows.flags.c_contiguous
+    np.testing.assert_allclose(rows@coefficients,expected,
+                               rtol=2e-11,atol=2e-11)
+    assert dict(evaluator.stats())["source_representation"]=="analytic-tet"
+
+    far_points=np.array([[.2,.1,2.8],[1.1,.6,3.2],[-.7,.4,2.5]])
+    far_weights=rng.normal(size=(len(far_points),3))
+    with TaskManager():
+        far_row=np.asarray(problem.demag._G.configured_field_functional_rows(
+            far_points,far_weights[None,:,:]))[0]
+        reciprocal=np.zeros(fes.ndof)
+        for axis in range(3):
+            reciprocal+=field_functional_load(
+                fes,far_points,far_weights[:,axis],axis=axis,scale=1.0,
+                bonus_intorder=20).vec.FV().NumPy()
+    np.testing.assert_allclose(far_row,reciprocal,rtol=3e-8,atol=3e-10)
+
+
 def test_native_flat_tet_field_rows_are_finite_on_coplanar_panel_extension():
     """A point in a face plane but outside the face has a finite field.
 

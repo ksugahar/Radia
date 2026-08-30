@@ -42,11 +42,11 @@ def _offset_box(n=2):
         mapping=lambda X, Y, Z: (1.2*A + A*X, -0.5*A + A*Y, -0.5*A + A*Z))
 
 
-def _mean_magnetization(image_masks, image_signs, image_rot_angle):
+def _mean_magnetization(image_masks, image_signs, image_rot_angle, *, order=1):
     rad.UtiDelAll()
     with ng.TaskManager():
         mesh = _offset_box()
-        fes = ng.HDiv(mesh, order=1)
+        fes = ng.HDiv(mesh, order=int(order))
         B, G, M_mass = vim.ChargeGram(
             fes, image_masks=image_masks, image_signs=image_signs,
             image_rot_angle=image_rot_angle)
@@ -57,14 +57,15 @@ def _mean_magnetization(image_masks, image_signs, image_rot_angle):
         return np.asarray(G.apply_configured_demag(x))
 
 
-def test_pi_rotation_matches_mirror_pair():
+@pytest.mark.parametrize("order", (1, 2))
+def test_pi_rotation_matches_mirror_pair(order):
     """R_pi about +z == the x-mirror composed with the y-mirror (IMA mask 3), to round-off.
 
     This pins the cyclic rotation kernel to the already-golden mirror kernel: same mesh, same sign,
     two different code paths through ImageEvalPoint.
     """
-    mirror = _mean_magnetization([3], [1.0], [])
-    rotate = _mean_magnetization([0], [1.0], [math.pi])
+    mirror = _mean_magnetization([3], [1.0], [], order=order)
+    rotate = _mean_magnetization([0], [1.0], [math.pi], order=order)
     scale = float(np.linalg.norm(mirror))
     assert scale > 0.0
     rel = float(np.linalg.norm(rotate - mirror) / scale)
