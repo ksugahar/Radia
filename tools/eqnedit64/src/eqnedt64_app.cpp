@@ -1518,13 +1518,21 @@ bool open_clipboard_with_retry(HWND owner) {
 bool clipboard_set(const std::string& latex) {
     const std::wstring officeText = office_latex_text(latex);
     const std::string mathMlUtf8 =
-        eqnedit::latex_to_mathml(latex, kOfficePasteFontPoints);
+        eqnedit::latex_to_office_mathml_fragment(
+            latex, kOfficePasteFontPoints);
     /* The normal Ctrl+V contract prioritises left-aligned editable Office
      * Math over a fixed 24 pt source size. Keep the inline sentinel at the
      * accepted 18 pt PowerPoint size so the equation, final character, and
      * next insertion point agree. */
+    std::string officeRows = mathMlUtf8;
+    size_t breakAt = 0;
+    while ((breakAt = officeRows.find("<br>", breakAt)) !=
+           std::string::npos) {
+        officeRows.insert(breakAt, kOfficeInlineSentinel);
+        breakAt += std::strlen(kOfficeInlineSentinel) + 4;
+    }
     const std::string officeHtml = cf_html_fragment(
-        mathMlUtf8 + kOfficeInlineSentinel);
+        officeRows + kOfficeInlineSentinel);
     HGLOBAL unicode = global_copy(officeText.c_str(),
         (officeText.size() + 1) * sizeof(wchar_t));
     HGLOBAL html = global_copy(officeHtml.c_str(), officeHtml.size() + 1);
@@ -3790,6 +3798,19 @@ int self_test() {
         operatorMathMl.find("<msubsup><mo") == std::string::npos ||
         operatorMathMl.find("&#x222B;</mo>") == std::string::npos)
         return 133;
+    const std::string alignedOfficeRows =
+        eqnedit::latex_to_office_mathml_fragment(
+            "\\begin{aligned}I\\\\IIIIIIII\\\\IIIIIIIIIIIIIIII"
+            "\\end{aligned}", kOfficePasteFontPoints);
+    size_t alignedMathCount = 0;
+    for (size_t at = 0; (at = alignedOfficeRows.find("<math ", at)) !=
+         std::string::npos; at += 6) ++alignedMathCount;
+    if (alignedMathCount != 3 ||
+        alignedOfficeRows.find("<br>") == std::string::npos ||
+        alignedOfficeRows.find("<mtable") != std::string::npos ||
+        alignedOfficeRows.find("malign") != std::string::npos ||
+        alignedOfficeRows.find("&amp;") != std::string::npos)
+        return 205;
     const std::string officeHtml =
         cf_html_fragment(mathMl + kOfficeInlineSentinel);
     const auto offset = [&officeHtml](const char* name) -> size_t {
@@ -4650,12 +4671,19 @@ int visual_scale_test() {
         /* Encode the catalogue index in the exit status so a headless CI log
          * identifies the exact bad cell without a screenshot or desktop. */
         if (!paletteVisible) return 204 + failedPaletteCell;
-        HFONT sourceFont = CreateFontW(-MulDiv(16, dpi, 96), 0, 0, 0,
-            FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_TT_PRECIS,
-            CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, FIXED_PITCH | FF_MODERN,
-            L"Consolas");
-        const bool sourceVisible = font_draws_ink(sourceFont, L"\\frac{x}{y}");
-        if (sourceFont) DeleteObject(sourceFont);
+        bool sourceVisible = false;
+        /* A freshly signed/replaced EXE can reach GDI before the session font
+         * host has made Consolas drawable. Recreate the handle for at most
+         * one second; a persistent missing/broken font still fails loudly. */
+        for (int attempt = 0; attempt < 40 && !sourceVisible; ++attempt) {
+            HFONT sourceFont = CreateFontW(-MulDiv(16, dpi, 96), 0, 0, 0,
+                FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_TT_PRECIS,
+                CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY,
+                FIXED_PITCH | FF_MODERN, L"Consolas");
+            sourceVisible = font_draws_ink(sourceFont, L"\\frac{x}{y}");
+            if (sourceFont) DeleteObject(sourceFont);
+            if (!sourceVisible) Sleep(25);
+        }
         if (!sourceVisible) return 186;
     }
     return 0;

@@ -20,7 +20,8 @@ _ROOT = os.path.dirname(_HERE)
 sys.path.insert(0, os.path.join(_ROOT, "build"))
 
 from eqnedit_core import (  # noqa: E402
-    Equation, MAX_NESTING_DEPTH, SvgStyle, tex_to_mathml, tex_to_svg,
+    Equation, MAX_NESTING_DEPTH, SvgStyle, tex_to_mathml,
+    tex_to_office_mathml_fragment, tex_to_svg,
 )
 
 # Each case: (name, keystrokes, expected LaTeX).
@@ -493,41 +494,36 @@ def main() -> int:
     unanchored_rows = unanchored_root.findall("./m:mtable/m:mtr", mathml_ns)
     unanchored_cells = [row.findall("./m:mtd", mathml_ns)
                         for row in unanchored_rows]
-    unanchored_starts = [
-        cells and len(cells) == 1 and len(cells[0]) > 1 and
-        cells[0][0].tag.endswith("}maligngroup") and
-        cells[0][1].tag.endswith("}malignmark")
-        for cells in unanchored_cells
-    ]
+    unanchored_office = tex_to_office_mathml_fragment(
+        r"\begin{aligned}a\\cccccc\end{aligned}")
     if ('columnalign="left"' not in unanchored_mathml or
-            len(unanchored_rows) != 2 or not all(unanchored_starts)):
+            len(unanchored_rows) != 2 or
+            unanchored_office.count("<math ") != 2 or
+            unanchored_office.count("<br>") != 1 or
+            "mtable" in unanchored_office or
+            "malign" in unanchored_office or "&amp;" in unanchored_office):
         failures.append(
-            "one-column aligned MathML lacks Office left-edge markers: "
-            f"{unanchored_mathml!r}")
+            "one-column aligned Office fragment is not two clean math rows: "
+            f"{unanchored_office!r}")
     anchored_mathml = tex_to_mathml(
         r"\begin{aligned}F&=ma\\E&=mc^2\end{aligned}")
     anchored_root = ET.fromstring(anchored_mathml)
     anchored_rows = anchored_root.findall("./m:mtable/m:mtr", mathml_ns)
     anchored_cells = [row.findall("./m:mtd", mathml_ns)
                       for row in anchored_rows]
-    anchored_markers = [
-        sum(child.tag.endswith("}malignmark") for child in cells[0])
-        if len(cells) == 1 else 0
-        for cells in anchored_cells
-    ]
-    anchored_groups = [
-        sum(child.tag.endswith("}maligngroup") for child in cells[0])
-        if len(cells) == 1 else 0
-        for cells in anchored_cells
-    ]
-    if (len(anchored_rows) != 2 or anchored_markers != [1, 1] or
-            anchored_groups != [1, 1] or
-            any(not cells[0][0].tag.endswith("}maligngroup") or
-                cells[0][1].tag.endswith("}malignmark")
-                for cells in anchored_cells if cells)):
+    if ('columnalign="right left"' not in anchored_mathml or
+            len(anchored_rows) != 2 or
+            any(len(cells) != 2 for cells in anchored_cells) or
+            "malign" in anchored_mathml):
         failures.append(
-            "explicit alignment tabs lack Office alignment markers: "
+            "explicit alignment tabs lost invisible right/left cells: "
             f"{anchored_mathml!r}")
+    anchored_office = tex_to_office_mathml_fragment(
+        r"\begin{aligned}F&=ma\\E&=mc^2\end{aligned}")
+    if anchored_office.count("<math ") != 1 or "<br>" in anchored_office:
+        failures.append(
+            "explicit aligned Office fragment was split into independent rows: "
+            f"{anchored_office!r}")
 
     # Enter promotes a one-line equation to an aligned multi-line structure;
     # subsequent Enter and Up/Down operate on rows, not on raw TeX newlines.

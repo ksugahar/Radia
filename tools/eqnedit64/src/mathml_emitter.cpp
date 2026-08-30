@@ -206,29 +206,6 @@ private:
     std::string table(const MatrixNode& matrix) {
         const int rowCount = std::max(0, matrix.rows);
         const int columnCount = std::max(1, matrix.cols);
-        if (matrix.layoutKind == MatrixNode::kAlignedLayout) {
-            std::string rows;
-            for (int r = 0; r < rowCount; ++r) {
-                std::string alignedRow = "<maligngroup/>";
-                /* Office ignores mtable columnalign. PowerPoint also imports
-                 * a table with malignmark alone as a centred matrix, so each
-                 * row starts with maligngroup to preserve an equation array.
-                 * An unanchored row then places malignmark at its left edge;
-                 * explicit TeX ampersands sit between parsed columns. Keep
-                 * one mtd so MML2OMML and PowerPoint both produce eqArr. */
-                if (columnCount <= 1) alignedRow += "<malignmark/>";
-                for (int c = 0; c < columnCount; ++c) {
-                    if (c > 0) alignedRow += "<malignmark/>";
-                    const size_t at = size_t(r * columnCount + c);
-                    alignedRow += at < matrix.elements.size() &&
-                            matrix.elements[at]
-                        ? emit_node(*matrix.elements[at]) : "<mrow/>";
-                }
-                rows += element("mtr", element("mtd", alignedRow));
-            }
-            return element("mtable", rows, "columnalign=\"left\"");
-        }
-
         std::string rows;
         for (int r = 0; r < rowCount; ++r) {
             std::string cells;
@@ -242,7 +219,10 @@ private:
             rows += element("mtr", cells);
         }
         const char* alignment =
-            matrix.layoutKind == MatrixNode::kCasesLayout
+            matrix.layoutKind == MatrixNode::kAlignedLayout
+                ? (matrix.cols <= 1 ? "columnalign=\"left\""
+                                    : "columnalign=\"right left\"")
+            : matrix.layoutKind == MatrixNode::kCasesLayout
                 ? "columnalign=\"left\""
                 : nullptr;
         return element("mtable", rows, alignment);
@@ -415,6 +395,30 @@ std::string tree_to_mathml(const LineNode& root, double pointSize) {
 std::string latex_to_mathml(const std::string& latex, double pointSize) {
     std::unique_ptr<LineNode> root = parse_latex(latex);
     return root ? tree_to_mathml(*root, pointSize) : std::string();
+}
+
+std::string latex_to_office_mathml_fragment(
+        const std::string& latex, double pointSize) {
+    std::unique_ptr<LineNode> root = parse_latex(latex);
+    if (!root) return {};
+    if (root->children.size() == 1 &&
+        root->children[0] && root->children[0]->tag() == Node::kMatrix) {
+        const auto& matrix = static_cast<const MatrixNode&>(*root->children[0]);
+        if (matrix.layoutKind == MatrixNode::kAlignedLayout &&
+            matrix.cols <= 1 && matrix.rows > 0 &&
+            matrix.elements.size() >= size_t(matrix.rows)) {
+            std::string fragment;
+            for (int rowIndex = 0; rowIndex < matrix.rows; ++rowIndex) {
+                const Node* rowNode = matrix.elements[size_t(rowIndex)].get();
+                if (!rowNode || rowNode->tag() != Node::kLine) return {};
+                if (!fragment.empty()) fragment += "<br>";
+                fragment += tree_to_mathml(
+                    static_cast<const LineNode&>(*rowNode), pointSize);
+            }
+            return fragment;
+        }
+    }
+    return tree_to_mathml(*root, pointSize);
 }
 
 }  // namespace eqnedit
