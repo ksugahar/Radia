@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import base64
 import importlib.util
+import json
 import subprocess
+import time
 from pathlib import Path
 
 
@@ -107,3 +109,32 @@ def test_remote_deploy_checks_exact_source_before_install(monkeypatch):
     assert 'safe.directory=W:/Radia/release-source' in script
     assert "status --porcelain --untracked-files=no" in script
     assert script.index("rev-parse HEAD") < script.index("pip install -e")
+
+
+def test_ci_output_selection_requires_fresh_matching_commit(tmp_path, monkeypatch):
+    monkeypatch.setattr(release_quad, "CI_OUTPUT_ROOT", tmp_path)
+    started_at = time.time()
+    expected_sha = "a" * 40
+
+    wrong = tmp_path / "radia-ci-output-1-1"
+    wrong.mkdir()
+    (wrong / release_quad.CI_CONTEXT_NAME).write_text(
+        json.dumps({
+            "schema": "radia.ci-output-context.v1",
+            "sha": "b" * 40,
+        }),
+        encoding="utf-8",
+    )
+
+    matching = tmp_path / "radia-ci-output-2-1"
+    matching.mkdir()
+    (matching / release_quad.CI_CONTEXT_NAME).write_text(
+        json.dumps({
+            "schema": "radia.ci-output-context.v1",
+            "sha": expected_sha,
+        }),
+        encoding="utf-8",
+    )
+
+    assert release_quad._find_ci_output_dir(expected_sha, started_at) == matching
+    assert release_quad._find_ci_output_dir("c" * 40, started_at) is None

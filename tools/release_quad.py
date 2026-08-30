@@ -1577,11 +1577,13 @@ def cmd_verify_editable(args):
 # Phase 5.5 gate: CI-green BEFORE tagging (gh-free)
 # ============================================================
 # The self-hosted [windows-radia] runner runs ON LAB, so we read CI
-# state from the local runner workspace instead of `gh` (abandoned on
+# state from its per-run output directory instead of `gh` (abandoned on
 # LAB 2026-05-28; not on PATH).  This is the enforcement behind the
 # "push main -> confirm CI green -> THEN tag" policy that stops the
 # v4.80.0 -> v4.80.5 version-burning (tag CI failing on a broken commit).
-CI_WORKSPACE = r"C:\actions-runner\_work\Radia\Radia"
+CI_OUTPUT_ROOT = Path(r"C:\temp")
+CI_OUTPUT_PATTERN = "radia-ci-output-*"
+CI_CONTEXT_NAME = "ci-context.json"
 
 
 def _ci_worker_running():
@@ -1590,6 +1592,27 @@ def _ci_worker_running():
         ["tasklist", "/FI", "IMAGENAME eq Runner.Worker.exe", "/NH"],
         capture_output=True, text=True)
     return "Runner.Worker" in (p.stdout or "")
+
+
+def _find_ci_output_dir(head_sha: str, started_at: float) -> Path | None:
+    """Return the fresh per-run CI output directory for ``head_sha``."""
+    candidates = []
+    for context_path in CI_OUTPUT_ROOT.glob(
+            f"{CI_OUTPUT_PATTERN}/{CI_CONTEXT_NAME}"):
+        try:
+            context = json.loads(context_path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeError, json.JSONDecodeError):
+            continue
+        if context.get("schema") != "radia.ci-output-context.v1":
+            continue
+        if context.get("sha") != head_sha:
+            continue
+        if context_path.stat().st_mtime < started_at - 180:
+            continue
+        candidates.append(context_path.parent)
+    if not candidates:
+        return None
+    return max(candidates, key=lambda path: path.stat().st_mtime)
 
 
 def _git_repo_owner_name():
@@ -1713,6 +1736,8 @@ def cmd_ci_verify(args):
 
     step("Phase 5.5: CI verify (gh-free) -- wait for runner, then check test XMLs")
     t0 = time.time()
+    head_sha = subprocess.check_output(
+        ["git", "rev-parse", "HEAD"], cwd=str(REPO), text=True).strip()
     saw = False
     while True:
         now = time.time()
@@ -1732,10 +1757,16 @@ def cmd_ci_verify(args):
             return 4
         time.sleep(20)
 
-    import glob
-    xmls = sorted(glob.glob(os.path.join(CI_WORKSPACE, "*results*.xml")))
+    output_dir = _find_ci_output_dir(head_sha, t0)
+    if output_dir is None:
+        fail(f"no fresh {CI_CONTEXT_NAME} for HEAD {head_sha[:8]} under "
+             f"{CI_OUTPUT_ROOT}\\{CI_OUTPUT_PATTERN} -- CI output cannot be "
+             "attributed to this commit. NOT green.")
+        return 4
+    print(f"  CI output = {output_dir}")
+    xmls = sorted(str(path) for path in output_dir.glob("*results*.xml"))
     if not xmls:
-        fail(f"no *results*.xml in {CI_WORKSPACE} -- CI produced no test output "
+        fail(f"no *results*.xml in {output_dir} -- CI produced no test output "
              "(the build step likely failed). NOT green.")
         return 4
 
@@ -1774,8 +1805,6 @@ def cmd_ci_verify(args):
     # distributions have independent CI and never gate a Radia release.
     # See _check_github_hosted_workflows for the why (2026-05-30 incident).
     step("CI verify (github-hosted): Radia policy lint")
-    head_sha = subprocess.check_output(
-        ["git", "rev-parse", "HEAD"], cwd=str(REPO), text=True).strip()
     print(f"  HEAD = {head_sha[:8]}")
     gh_ok, gh_msg = _check_github_hosted_workflows(head_sha)
     print("  " + gh_msg)
