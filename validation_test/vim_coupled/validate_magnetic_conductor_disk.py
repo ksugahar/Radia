@@ -7,9 +7,10 @@ The quick profile checks four independent responsibilities:
 * mapped-HEX BDM1 HDiv-MMM static response;
 * HDiv-MMM plus HCurl eddy-bubble mixed mechanics and frequency routing.
 
-With ``--include-bdm2-gate``, the runner also verifies that the known-unsafe
-mapped/non-affine HEX BDM2 material lane fails loudly.  The legacy
-``--include-bdm2-negative`` spelling remains an alias for replay compatibility.
+With ``--include-bdm2-support``, the runner also verifies that the
+mapped/non-affine HEX BDM2 material lane completes with finite output.  The
+dedicated production and quadrature-reference scripts own its stronger
+spectrum, nonlinear, IMA, and accuracy contracts.
 
 The full profile adds the expensive HCurl p/h and BDM1 h ladders used by the
 curated adjudication artifact.  Cubit always runs headless, and generated
@@ -398,31 +399,16 @@ def solve_hdiv_static(mesh_path: Path, *, order: int) -> dict[str, object]:
     }
 
 
-def probe_mapped_hex_bdm2_material_gate(mesh_path: Path) -> dict[str, object]:
-    """Record the expected production rejection without promoting bad physics."""
+def probe_mapped_hex_bdm2_material_support(mesh_path: Path) -> dict[str, object]:
+    """Run the live mapped HEX BDM2 material support smoke."""
     started = time.perf_counter()
-    try:
-        unexpected_result = solve_hdiv_static(mesh_path, order=2)
-    except NotImplementedError as exc:
-        message = str(exc)
-        expected = (
-            "mapped/non-affine HEX BDM2 material solve" in message
-            and "separate volume/surface charge quadrature" in message
-            and "mapped HEX BDM1" in message
-        )
-        return {
-            "status": "rejected_as_expected" if expected else "unexpected_rejection",
-            "expected_gate": bool(expected),
-            "error_type": type(exc).__name__,
-            "message": message,
-            "wall_s": time.perf_counter() - started,
-        }
-    return {
-        "status": "unexpectedly_accepted",
-        "expected_gate": False,
-        "result": unexpected_result,
-        "wall_s": time.perf_counter() - started,
-    }
+    result = solve_hdiv_static(mesh_path, order=2)
+    result.update(
+        status="supported",
+        finite_output=bool(np.isfinite(result["normalized_Bz"])),
+        wall_s=time.perf_counter() - started,
+    )
+    return result
 
 
 def solve_coupled_smoke(
@@ -600,7 +586,7 @@ def _nested_values(value, key: str) -> list[object]:
 
 def run(
     profile: str,
-    include_bdm2_negative: bool,
+    include_bdm2_support: bool,
     coupled_h_ladder: bool,
     direct_h_ladder: bool = False,
 ) -> dict[str, object]:
@@ -670,12 +656,12 @@ def run(
         bdm1.append(row)
 
     bdm2 = []
-    if include_bdm2_negative:
+    if include_bdm2_support:
         for size_mm in (2.0, 1.0):
             mesh_path = meshes.get(size_mm)
             if mesh_path is None:
                 mesh_path, _ = _generate_hex(size_mm, f"bdm2_h{size_mm:g}")
-            row = probe_mapped_hex_bdm2_material_gate(mesh_path)
+            row = probe_mapped_hex_bdm2_material_support(mesh_path)
             row["size_mm"] = size_mm
             bdm2.append(row)
 
@@ -806,10 +792,9 @@ def run(
                 < 0.02,
             }
         )
-    if include_bdm2_negative:
-        checks["mapped_hex_bdm2_material_gate_verified"] = all(
-            row["status"] == "rejected_as_expected" and row["expected_gate"]
-            for row in bdm2
+    if include_bdm2_support:
+        checks["mapped_hex_bdm2_material_support_verified"] = all(
+            row["status"] == "supported" and row["finite_output"] for row in bdm2
         )
     if len(coupled_ladder) > 1:
         coupled_errors = [
@@ -880,8 +865,8 @@ def run(
         "axisymmetric_q2_reference": axisymmetric,
         "full_3d_hcurl_A_form": hcurl,
         "hdiv_mmm_static_hex_bdm1": bdm1,
-        "mapped_hex_bdm2_material_gate": bdm2,
-        "hdiv_mmm_static_hex_bdm2_negative": bdm2,
+        "mapped_hex_bdm2_material_support": bdm2,
+        "hdiv_mmm_static_hex_bdm2": bdm2,
         "coupled_hdiv_mmm_hcurl_eddy_bubble_smoke": coupled,
         "coupled_hdiv_mmm_hcurl_eddy_bubble_h_ladder": coupled_ladder,
         "coupled_hdiv_mmm_hcurl_eddy_bubble_direct_hex": direct_coupled,
@@ -901,15 +886,15 @@ def run(
                 )
                 + ", mixed mechanics/routing"
                 + (
-                    ", and mapped-HEX BDM2 fail-loud material gate"
-                    if include_bdm2_negative
+                    ", and mapped-HEX BDM2 material support smoke"
+                    if include_bdm2_support
                     else ""
                 )
             ),
             "not_established": (
-                "a cancellation-preserving mapped-HEX BDM2 material operator or universal solver superiority"
+                "a mapped-HEX BDM2 thin-disk accuracy ladder or universal solver superiority"
                 if len(direct_ladder) > 1
-                else "a direct-Q2 HEX h-convergence ladder, a cancellation-preserving mapped-HEX BDM2 material operator, or universal solver superiority"
+                else "a direct-Q2 HEX h-convergence ladder, a mapped-HEX BDM2 thin-disk accuracy ladder, or universal solver superiority"
             ),
         },
     }
@@ -919,11 +904,10 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--profile", choices=("quick", "full"), default="quick")
     parser.add_argument(
-        "--include-bdm2-gate",
-        "--include-bdm2-negative",
-        dest="include_bdm2_negative",
+        "--include-bdm2-support",
+        dest="include_bdm2_support",
         action="store_true",
-        help="verify that mapped/non-affine HEX BDM2 material solves fail loudly",
+        help="run the mapped/non-affine HEX BDM2 material support smoke",
     )
     parser.add_argument("--coupled-h-ladder", action="store_true")
     parser.add_argument("--direct-h-ladder", action="store_true")
@@ -931,7 +915,7 @@ def main() -> int:
     args = parser.parse_args()
     result = run(
         args.profile,
-        args.include_bdm2_negative,
+        args.include_bdm2_support,
         args.coupled_h_ladder,
         args.direct_h_ladder,
     )
@@ -966,8 +950,8 @@ def main() -> int:
         "python validation_test/vim_coupled/validate_magnetic_conductor_disk.py "
         f"--profile {args.profile} --output {output}"
     )
-    if args.include_bdm2_negative:
-        command += " --include-bdm2-gate"
+    if args.include_bdm2_support:
+        command += " --include-bdm2-support"
     if args.coupled_h_ladder:
         command += " --coupled-h-ladder"
     if args.direct_h_ladder:

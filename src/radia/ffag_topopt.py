@@ -41,6 +41,80 @@ PROTON_REST_ENERGY_MEV = 938.27208816
 GEV_C_PER_TESLA_METRE = 0.299792458
 
 
+@dataclass(frozen=True)
+class FFAGCyclicSectorContract:
+    """Validated interpretation of one rotational FFAG sector.
+
+    ``image_cyclic`` is sufficient when complete iron bodies fit inside one
+    sector and their rotated copies are disjoint.  A continuous return yoke
+    cut by the azimuthal sector planes needs a local closure in addition to
+    the rotated nonlocal interaction.  Conforming FEM identifies the two HDiv
+    normal traces.  Broken-HDiv VIM keeps the element unknowns independent and
+    instead pairs the two surface-charge rows into one periodic jump.
+    """
+
+    fold: int
+    field_antiperiodic: bool
+    body_crosses_periodic_planes: bool
+    formulation: str
+    periodic_trace_identified: bool
+    periodic_charge_paired: bool
+    reduction_mode: str
+
+
+def validate_ffag_cyclic_sector_contract(
+        fold, *, field_antiperiodic=False,
+        body_crosses_periodic_planes=False,
+        formulation="fem", periodic_trace_identified=False,
+        periodic_charge_paired=False) -> FFAGCyclicSectorContract:
+    """Validate the cyclic symmetry contract before an FFAG sector solve.
+
+    FFAG F/D alternation normally changes the radial gradient within a cell;
+    it does not make the vertical guide field antiperiodic from cell to cell.
+    ``field_antiperiodic`` is therefore an explicit exceptional mode and, as
+    required by closure around the ring, accepts only an even fold count.
+    """
+    numeric_fold = float(fold)
+    if (isinstance(fold, (bool, np.bool_)) or not np.isfinite(numeric_fold)
+            or not numeric_fold.is_integer() or numeric_fold < 2):
+        raise ValueError("FFAG cyclic fold must be an integer >= 2")
+    count = int(numeric_fold)
+    antiperiodic = bool(field_antiperiodic)
+    crosses = bool(body_crosses_periodic_planes)
+    formulation = str(formulation).strip().lower().replace("_", "-")
+    if formulation not in {"fem", "vim-broken"}:
+        raise ValueError("FFAG cyclic formulation must be 'fem' or 'vim-broken'")
+    identified = bool(periodic_trace_identified)
+    paired = bool(periodic_charge_paired)
+    if antiperiodic and count % 2:
+        raise ValueError(
+            "FFAG antiperiodic field symmetry requires an even fold count")
+    if crosses and formulation == "fem" and not identified:
+        raise ValueError(
+            "continuous FFAG FEM iron crosses the azimuthal sector planes: "
+            "identify the two rotation-related HDiv normal traces before "
+            "using image_cyclic")
+    if crosses and formulation == "vim-broken" and not paired:
+        raise ValueError(
+            "continuous FFAG broken-HDiv VIM iron crosses the azimuthal "
+            "sector planes: pair the two rotation-related surface-charge "
+            "rows before using image_cyclic")
+    if identified and (not crosses or formulation != "fem"):
+        raise ValueError(
+            "periodic_trace_identified is only valid for connected FEM")
+    if paired and (not crosses or formulation != "vim-broken"):
+        raise ValueError(
+            "periodic_charge_paired is only valid for connected broken-HDiv "
+            "VIM")
+    mode = (
+        "connected-periodic-fem-sector"
+        if crosses and formulation == "fem" else
+        "connected-periodic-vim-sector"
+        if crosses else "disjoint-cell-cyclic-images")
+    return FFAGCyclicSectorContract(
+        count, antiperiodic, crosses, formulation, identified, paired, mode)
+
+
 def magnetic_rigidity_from_kinetic_energy(
         kinetic_energy_mev, *, rest_energy_mev=PROTON_REST_ENERGY_MEV,
         charge_number=1.0):
@@ -2252,6 +2326,7 @@ def optimize_ffag_hdiv_mmm_from_transfer_matrices(
 
 __all__ = [
     "EngeFringeIntegrals",
+    "FFAGCyclicSectorContract",
     "FFAGCellReference",
     "FFAGCellTargetFamily",
     "FFAGFixedDesignOrbitTargetFamily",
@@ -2280,4 +2355,5 @@ __all__ = [
     "recover_periodic_planar_closed_orbit",
     "recover_periodic_planar_closed_orbit_native",
     "sample_planar_orbit_field_response",
+    "validate_ffag_cyclic_sector_contract",
 ]

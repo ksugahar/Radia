@@ -21,22 +21,33 @@ requires the explicit `RT=True` flag and is not implied by the `HDiv` name.
   one-pass IMA, TaskManager observation parallelism, analytic tet near kernels,
   and a guarded large-map quadrupole tree.  IMA auto evaluation remains direct
   to preserve the reduced/full roundoff contract.
-- On geometrically and topologically symmetric full/reduced hex meshes,
-  `rad.Fld` image parity is locked to the explicit full solve at the
-  roundoff-level contract (`< 10 eps` relative error).
+- On geometrically and topologically symmetric full/reduced hex meshes, the
+  persistent `rad.Fld` evaluator is locked at the roundoff-level contract
+  (`< 10 eps` relative error).  The mapped BDM2 prescribed-source gate is
+  `2.75 eps` on mdx.  Independent material solves retain their separately
+  reported Krylov/reduction error budget.
 - BDM1 and BDM2 are public for pure TET/HEX/WEDGE operators, IMA, persistent
   field evaluation, and the
   NGSolve `ChargeGram`/`DemagOperator` surface.  Planar BDM1 is public through
   Q2 geometry and planar BDM2 through Q3, including IMA and the persistent
   planar field evaluator.
-- Material solves reject mapped/non-affine HEX BDM2 until one composite
-  volume/surface operator preserves the discrete cancellation.  The production
-  alternatives are mapped HEX BDM1, affine HEX BDM2, or pure-TET BDM2.
-- An independent finite-domain H1 Omega gate uses `N = C.T K^-1 C` on the
-  same 207 active mapped-body BDM2 DoFs.  Its order-2/order-3 Hodge spectra are
-  contractions, while the current charge diagnostic has modes above one.
-  Therefore the gate is localized to the mapped charge operator; it is not a
-  rejection of the BDM2 approximation space.
+- Mapped/non-affine HEX BDM2 material solves use one cancellation-preserving
+  C++ composite operator: complete-host tensor rules for smooth pairs and
+  reflection-invariant whole-host Duffy rules for self and adjacent pairs.
+  On mdx the 756-DoF q9/q12 production operator has spectrum
+  `[-8.53e-16, 0.999899]`; linear and nonlinear solves converge, and its
+  material response differs from q10/q16 by `5.28e-4` in the mass norm.
+  q10/q16 differs from q11/q20 by `3.94e-4`, so the q9/q12 default meets the
+  sub-per-mille response target without the measured 3x or 7.5x build cost.
+- A separate Cubit 2025.12 gate regenerates a four-cell cylinder as a true
+  order-2 `.vol`.  All four HEX cells are non-affine, linear mass-Riesz CG and
+  nonlinear Energy-Newton converge, and the persistent field evaluator agrees
+  with an independent NGSolve boundary integral to `1.06e-10` maximum relative
+  error.  The tracked builder, validator, and result JSON keep this distinct
+  from the order-1 non-affine/trilinear quadrature-convergence body.
+- An independent finite-domain H1 Omega gate still uses `N = C.T K^-1 C` on
+  mapped-body BDM2 DoFs.  It is a formulation/coupling cross-check, not a
+  replacement for the now-positive open-boundary ChargeGram production gate.
 - `H1HodgeDemagOperator` exposes that finite-domain operator as an NGSolve
   `BaseMatrix` path.  `NgsolveHDivMMMResponseReduction` accepts it directly,
   evaluates generic CG results into concrete vectors, and restricts the mass
@@ -44,7 +55,7 @@ requires the explicit `RT=True` flag and is not implied by the `HDiv` name.
   air/body gate, the resulting BDM2 reduction feeds HCurl eddy-bubble with
   snapshot residual below `3e-12`, mixed residual below `3e-16`, and positive
   Joule loss.  This is a mixed-mechanics/contraction gate, not an open-boundary
-  replacement for the guarded mapped-HEX BDM2 charge solve.  The one-call path
+  accuracy replacement.  The one-call path
   uses `NgsolveBDMEddyBubbleVIM(..., hdiv_definedon=...,
   demag_operator_factory=...)`, ensuring the operator is built on the exact
   restricted BDM space rather than a separately reconstructed space.
@@ -78,6 +89,9 @@ requires the explicit `RT=True` flag and is not implied by the `HDiv` name.
   Upper-triangle mirroring alone makes the stored matrix symmetric, but a
   one-sided finite quadrature rule is not invariant under an explicit reflected
   mesh.  One-sided environment switches are diagnostic-only.
+- Mapped HEX BDM2 shape derivatives fail loudly.  The primal material and field
+  path is production; topology optimization on that topology remains blocked
+  until the composite quadrature is differentiated consistently.
 - MCP `hdiv_vim` documents the live API and reduced-FEM coupling policy.
 - `vim.MagnetizationSource(mesh, M_given, order=1|2)` L2-projects fixed/given
   3D magnetization into an independent HDiv space, builds only its C++ charge
