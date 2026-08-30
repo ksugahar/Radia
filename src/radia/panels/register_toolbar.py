@@ -8,10 +8,15 @@ Runs inside Cubit on startup (via ~/.cubit -> startup.py) and performs:
      (including the C++ Qt5 .ccl "Export Mesh" menu, which is now
      removed -- see radia 4.80.0 / src/radia/panels/radia_export_menu.py)
   4. Plugin freshness diagnostics
+  5. Installation of the "Export" menu through Cubit's official Claro
+     API (radia_export_menu.install_menu() -> emclaro.add_to_menu)
 
-The persistent PySide6 "Radia Export" surface is a Coreform
-WorkflowToolbar package imported once through Custom Toolbar Editor.
-It is deliberately not injected from this early startup hook.
+The menu is registered through ``emclaro``, the SWIG binding of Cubit's
+Claro GUI framework that ships inside Cubit itself.  That is the same
+``Claro::add_to_menu()`` entry point the old C++ ``.ccl`` component used,
+so the menu is owned by Cubit and survives cold start.  The Coreform
+WorkflowToolbar package remains available as the toolbar surface; the two
+are complementary, not alternatives.
 
 The Qt5 C++ Claro component (src/cubit_plugin/RadiaComp.cpp) was
 deleted in radia 4.80.0; all GUI work is now PySide6.  The .ccm
@@ -95,8 +100,15 @@ def _find_main_window():
     app = QApplication.instance()
     if app is None or not hasattr(app, "topLevelWidgets"):
         return None  # no GUI app yet, nothing to clean up
+    # MEASURED (Cubit 2025.12): TWO QMainWindows exist -- "Claro" (the
+    # real main window) and "QtJournalEditor".  Returning the first match
+    # handed back the journal editor, so legacy-menu cleanup silently
+    # operated on the wrong menu bar.  Match the main window by name.
     for w in app.topLevelWidgets():
-        if isinstance(w, QMainWindow):
+        if isinstance(w, QMainWindow) and w.objectName().lower() == "claro":
+            return w
+    for w in app.topLevelWidgets():
+        if isinstance(w, QMainWindow) and w.objectName() != "QtJournalEditor":
             return w
     return None
 
@@ -255,9 +267,16 @@ def _cleanup_legacy_menus():
         return
     menu_bar = main_window.menuBar()
     removed = []
+    # The Claro-owned Export menu is deliberately NOT in this list: it is
+    # registered through Cubit's Claro API and owned by Cubit.
+    # Enumerating those QMenu/QAction objects from PySide6 deadlocks
+    # Cubit, so it is removed via emclaro instead -- see
+    # radia_export_menu.install_menu(), which calls remove_menu_items()
+    # by component tag before re-registering.  "Export Mesh" below is the
+    # historical Qt5 .ccl menu name and is unrelated to the new menu.
     legacy_names = (
         "Solve", "Radia-NGSolve", "Generate Coil", "Reload Panels",
-        "Export Mesh", "Radia Export",
+        "Export Mesh",
     )
     for name in legacy_names:
         for action in list(menu_bar.actions()):
@@ -278,17 +297,37 @@ def _cleanup_legacy_menus():
         _panel_log(f"_cleanup_legacy_menus: removed {removed}")
 
 
-def register_menu():
-    """Initialize export defaults and remove unsupported legacy GUI hooks.
+def _install_radia_export_menu():
+    """Install the Export menu through Cubit's official Claro API.
 
-    ``~/.cubit`` remains the correct startup hook for plugin/default setup.
-    Radia Export itself is the official WorkflowToolbar package imported once
-    through Cubit's Custom Toolbar Editor; injecting a QMenu here is unsafe
-    because Cubit can replace its menu bar later during cold startup.
+    Delegates to ``radia_export_menu.install_menu()``, which registers
+    PyActions via ``emclaro.add_to_menu()``.  Cubit owns the resulting
+    menu, so it survives the cold-start menu-bar rebuild that destroyed
+    the previous PySide6 ``QMenuBar`` injection.
     """
-    _panel_log("register_menu: ENTER (PySide6-only, Qt5 .ccl removed)")
+    import radia_export_menu
+    if radia_export_menu.install_menu():
+        _panel_log("_install_radia_export_menu: installed via "
+                   "emclaro.add_to_menu (Claro-owned, cold-start safe)")
+    else:
+        _panel_log("_install_radia_export_menu: Claro GUI unavailable "
+                   "(batch mode?) - menu not installed")
+
+
+def register_menu():
+    """Initialize export defaults and install the Export menu.
+
+    ``~/.cubit`` IS the correct hook for this.  MEASURED on Coreform
+    Cubit 2025.12: ``emclaro.is_loaded()`` already returns True while
+    this hook runs, and a menu registered here through Cubit's Claro API
+    is still present after startup finishes.  The historical claim that
+    a menu cannot be installed from this hook applied only to injecting
+    a ``QMenu`` directly into Cubit's ``QMenuBar`` -- Cubit discarded
+    those because it did not own them.
+    """
+    _panel_log("register_menu: ENTER (PySide6 dialogs + Claro menu API)")
     for step in (_cleanup_legacy_menus, _init_export_default_dir,
-                 _check_plugin_freshness):
+                 _check_plugin_freshness, _install_radia_export_menu):
         try:
             step()
         except Exception:

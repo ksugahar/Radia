@@ -7,14 +7,26 @@ on:
     paths:
       - 'packages/cubit-mesh-export/**'
       - 'src/cubit_plugin/**'
+      - 'src/radia/install_panels.py'
+      - 'src/radia/panels/register_toolbar.py'
+      - 'src/radia/panels/radia_export_menu.py'
+      - 'src/radia/panels/cubit_toolbar/**'
       - 'tests/test_cubit_installers.py'
+      - 'tests/test_cubit_menu_startup.py'
+      - 'tools/audit_pyside6_only.py'
       - 'validation_test/cubit_mesh_export/**'
   pull_request:
     branches: [main]
     paths:
       - 'packages/cubit-mesh-export/**'
       - 'src/cubit_plugin/**'
+      - 'src/radia/install_panels.py'
+      - 'src/radia/panels/register_toolbar.py'
+      - 'src/radia/panels/radia_export_menu.py'
+      - 'src/radia/panels/cubit_toolbar/**'
       - 'tests/test_cubit_installers.py'
+      - 'tests/test_cubit_menu_startup.py'
+      - 'tools/audit_pyside6_only.py'
       - 'validation_test/cubit_mesh_export/**'
   workflow_dispatch:
 
@@ -28,8 +40,6 @@ concurrency:
 jobs:
   build-test:
     runs-on: windows-2022
-    env:
-      CUBIT_MESH_EXPORT_SKIP_FRESHNESS_CHECK: '1'
     steps:
       - uses: actions/checkout@v4
 
@@ -60,18 +70,31 @@ jobs:
           path: cubit-mesh-export-ci-release-context.json
           if-no-files-found: error
 
-      - name: Fetch the independently built native curver
+      - name: Fetch the hash-pinned native curver
         shell: pwsh
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           $destination = 'packages\cubit-mesh-export\src\cubit_mesh_export'
+          $manifestPath = Join-Path $destination 'native_payloads.json'
+          $payload = (Get-Content -LiteralPath $manifestPath -Raw |
+            ConvertFrom-Json).payloads.'cubit_mesh_curver.pyd'
           python tools\download_release_asset.py `
             --repo ${{ github.repository }} `
-            --tag binaries `
-            --name cubit_mesh_curver.pyd `
+            --tag $payload.github_release_tag `
+            --name $payload.asset_name `
             --dest $destination
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $downloaded = Join-Path $destination $payload.asset_name
+          $actualHash = (Get-FileHash -LiteralPath $downloaded `
+            -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($actualHash -ne $payload.sha256 -or
+              (Get-Item -LiteralPath $downloaded).Length -ne $payload.size) {
+            throw "native curver does not match native_payloads.json"
+          }
+          Move-Item -LiteralPath $downloaded `
+            -Destination (Join-Path $destination 'cubit_mesh_curver.pyd') `
+            -Force
 
       - name: Build and verify cubit-mesh-export wheel
         shell: pwsh
@@ -81,13 +104,8 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $wheel = Get-ChildItem packages\cubit-mesh-export\dist\*.whl |
             Select-Object -First 1
-          python -m wheel tags --python-tag cp312 --abi-tag cp312 `
-            --platform-tag win_amd64 --remove $wheel.FullName
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          $wheel = Get-ChildItem packages\cubit-mesh-export\dist\*.whl |
-            Select-Object -First 1
           @'
-          import re, sys, zipfile
+          import hashlib, json, re, sys, zipfile
           wheel = sys.argv[1]
           with zipfile.ZipFile(wheel) as archive:
               names = archive.namelist()
@@ -97,10 +115,25 @@ jobs:
               if missing:
                   raise SystemExit(f'missing required wheel payloads: {missing}')
               init = archive.read('cubit_mesh_export/__init__.py').decode()
+              native_manifest = json.loads(archive.read(
+                  'cubit_mesh_export/native_payloads.json'))
+              curver = archive.read(
+                  'cubit_mesh_export/cubit_mesh_curver.pyd')
+              wheel_meta_path = next(
+                  name for name in names
+                  if name.endswith('.dist-info/WHEEL'))
+              wheel_meta = archive.read(wheel_meta_path).decode()
           package_version = re.search(r'^__version__\s*=\s*"([^"]+)"', init, re.M).group(1)
           wheel_version = re.match(r'[^-]+-([^-]+)-', wheel.rsplit('\\', 1)[-1]).group(1)
           if package_version != wheel_version:
               raise SystemExit(f'version mismatch: {package_version} != {wheel_version}')
+          if not wheel.endswith('-cp312-cp312-win_amd64.whl'):
+              raise SystemExit(f'wheel is not natively tagged: {wheel}')
+          if 'Root-Is-Purelib: false' not in wheel_meta:
+              raise SystemExit('native wheel incorrectly declares purelib root')
+          expected = native_manifest['payloads']['cubit_mesh_curver.pyd']
+          if len(curver) != expected['size'] or hashlib.sha256(curver).hexdigest() != expected['sha256']:
+              raise SystemExit('wheel curver does not match native_payloads.json')
           print(f'PASS cubit-mesh-export {package_version}: mandatory payloads present')
           '@ | python - $wheel.FullName
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
@@ -109,9 +142,13 @@ jobs:
         shell: pwsh
         run: |
           python -m compileall -q packages\cubit-mesh-export\src
-          python -m pip install pytest numpy
+          python -m pip install pytest numpy `
+            "netgen-mesher==6.2.2606" "ngsolve==6.2.2606"
           $env:PYTHONPATH = 'packages\cubit-mesh-export\src'
-          python -m pytest tests\test_cubit_installers.py -q
+          python -m pytest tests\test_cubit_installers.py `
+            tests\test_cubit_menu_startup.py -q
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python tools\audit_pyside6_only.py
 
       - name: Upload cubit-mesh-export wheel
         uses: actions/upload-artifact@v4

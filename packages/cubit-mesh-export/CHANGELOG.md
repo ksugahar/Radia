@@ -6,6 +6,31 @@ VTK / MEG / FEMEEM writers + Python bindings for consistency checks).
 
 ## Unreleased
 
+## 0.14.14 - Complete native payload rebuild and Claro export menu
+
+Released 2026-08-30.
+
+- Rebuilt both mandatory Coreform Cubit 2025.12 payloads from the same source:
+  the APREPRO command backend (`cubit_mesh_export.ccm`) and the Netgen curver
+  (`cubit_mesh_curver.pyd`).
+- Made the focused native build worktree-relative and propagate both artifacts
+  into the wheel source only after successful builds and SHA-256 verification.
+- Extended the pre-wheel freshness gate to reject either stale native payload;
+  the installer can no longer receive a current `.ccm` beside an old `.pyd`.
+- Emit a native `cp312-cp312-win_amd64` wheel directly with
+  `Root-Is-Purelib: false`; release CI no longer retags a pure wheel after the
+  fact.
+- Bind the gitignored curver to a content-addressed GitHub Release asset via a
+  checked manifest; CI verifies its size and SHA-256 before and after wheel
+  assembly instead of trusting the mutable historical asset name.
+- Initialize Netgen's Windows DLL search path when the package is imported so
+  the bundled curver loads in a fresh Python process without an undocumented
+  preceding `import netgen`.
+- Restored the user-facing **Export** menu through Cubit's official Claro API,
+  while keeping PySide6 limited to dialogs and retaining the WorkflowToolbar.
+- Refresh any previously imported Coreform WorkflowToolbar in place and detect
+  stale toolbar scripts during `--verify-only`.
+
 ## 0.14.13 - Reflection-invariant Kelvin validation meshes
 
 Released 2026-08-29.

@@ -5,13 +5,14 @@ Solver-neutral mesh export from [Coreform Cubit](https://coreform.com/products/c
 `cubit-mesh-export` is the **shared infrastructure layer** in the Radia
 toolchain. It ships mesh export, the Kelvin open-boundary
 transformation, symmetry helpers, and the Dirichlet label conventions
-that every domain-specific Radia notebook or headless workflow consumes.
+consumed by Radia's Simulink applications, Python/MCP workflows, and
+result-bearing documentation notebooks.
 
 ## Features
 
 - **Cubit plugin** (`.ccm` + `.pyd`, Coreform Cubit 2025.12+):
   - `export {netgen|gmsh|vtk|femeem|meg|nastran_bdf}` APREPRO commands
-  - **Export Mesh** GUI menu / toolbar inside Cubit's embedded Python
+  - Cubit-owned **Export** menu plus the Radia Export WorkflowToolbar
 - **Arbitrary-order curving** (order 1-5) via ACIS geometry projection
 - **Kelvin open-boundary** transformation built into `export netgen`
   (auto-add an exterior sphere with copy-mesh + periodic identification)
@@ -37,8 +38,8 @@ The second command deploys the Cubit plugin binaries, the Netgen DLLs,
 the Cubit-side Python helpers (`cubit_helpers/add_kelvin.py`,
 `cubit_helpers/auto_kelvin_entry.py`), and the Radia Export Mesh toolbar
 startup registration into your Coreform Cubit 2025.12 profiles.  The toolbar
-runs only inside Cubit's embedded Python; normal Radia Python uses notebooks
-and headless scripts and does not need PySide6.
+runs only inside Cubit's embedded Python; normal Radia Python/MCP workflows
+and Simulink applications do not need PySide6.
 Use `cubit-plugin-install --all-users` for a shared lab machine.
 
 ### Upgrade
@@ -51,7 +52,25 @@ cubit-plugin-install
 Always re-run `cubit-plugin-install` after upgrading.
 `cubit-plugin-install --verify-only` checks both the deployed binary
 hashes and, when `radia` is installed, the Cubit toolbar startup
-registration.
+registration. If the official WorkflowToolbar was imported previously, the
+installer refreshes its scripts and toolbar definition automatically and the
+verification step rejects any stale deployed copy.
+
+### Native developer rebuild
+
+Rebuild and propagate both mandatory native payloads from the current
+worktree with:
+
+```powershell
+pwsh -File src/cubit_plugin/cubit_build.ps1 -Rebuild
+```
+
+The command fails unless both artifacts are produced and their copied
+SHA-256 hashes match. Wheel creation independently rejects either stale
+payload and emits a native `cp312-cp312-win_amd64` wheel directly.
+Because `.pyd` files are intentionally gitignored, release CI fetches the
+content-addressed curver named in `native_payloads.json` and checks its exact
+size and SHA-256 before packaging.
 
 ## Cubit commands
 
@@ -133,7 +152,7 @@ surface connectivity.
                                                       │
                                                       ▼
                        user opens a Radia Simulink application block;
-                       IH may also use its temporary comparison notebook
+                       docs notebooks retain reproducible field evidence
 ```
 
 `cubit-mesh-export` produces the `.vol` and the label conventions; the
