@@ -138,7 +138,7 @@ def test_rt2_demag_spectrum_is_physical(kind):
     assert eigenvalues.max() <= 1.0 + 2e-5
 
 
-def test_mapped_hex_rt2_material_solve_fails_loud_before_wrong_physics():
+def test_mapped_hex_rt2_material_solve_has_physical_spectrum():
     mesh = MakeStructured3DMesh(
         hexes=True, nx=2, ny=1, nz=1,
         mapping=lambda x, y, z: (
@@ -147,11 +147,27 @@ def test_mapped_hex_rt2_material_solve_fails_loud_before_wrong_physics():
             0.02*(z + 0.25*x*y),
         ),
     )
-    with ng.TaskManager(), pytest.raises(
-            NotImplementedError, match="mapped/non-affine HEX BDM2"):
-        Solve(
+    with ng.TaskManager():
+        fes = ng.HDiv(mesh, order=2)
+        B, gram, mass = ChargeGram(fes, eps=1e-14, leafsize=256)
+        operator = _dense_demag(B, gram)
+        result = Solve(
             mesh, mu_r=100.0, H_ext=ng.CF((0, 0, 1000.0)),
             order=2, tol=1e-9)
+    eigenvalues = sla.eigh(
+        operator, sp.csr_matrix(mass).toarray(), eigvals_only=True)
+    assert eigenvalues.min() > -1e-10
+    assert eigenvalues.max() <= 1.0 + 2e-5
+    assert result["iters"] < 100
+    assert np.isfinite(result["M_avg"]).all()
+    stored = gram.hex_stored_nodes()
+    cell_nodes = np.asarray(stored["cell_nodes"]).reshape(-1, 27, 3)
+    face_nodes = np.asarray(stored["face_nodes"]).reshape(-1, 9, 3)
+    with pytest.raises(
+            RuntimeError,
+            match="mapped HEX BDM2 shape derivatives are not implemented"):
+        gram.hex_charge_gram_directional_derivative(
+            np.zeros_like(cell_nodes), np.zeros_like(face_nodes))
 
 
 def test_mapped_hex_bdm1_material_solve_remains_the_supported_lane():

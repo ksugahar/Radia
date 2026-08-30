@@ -57,11 +57,12 @@ spaces, orientation, Piola maps, mapped evaluation, and weak-form assembly.
 This Python-orchestration/C++-execution split is NGSolve-native; "complete C++"
 must not be misread as moving NGSolve FE plumbing into Radia.
 
-The implementation is production-capable for most declared BDM1/BDM2 solve
-lanes,
-but it does not yet justify an unconditional "complete for every HDiv case"
-claim. The BDM2 TET directional defect found by this review is corrected in
-this revision. Three P1 findings remain:
+The implementation is production-capable for the declared BDM1/BDM2 primal
+solve and field lanes, but it does not justify an unconditional "complete for
+every HDiv case" claim. The BDM2 TET directional defect found by this review
+is corrected, and the mapped/non-affine HEX BDM2 material lane is now promoted
+by the cancellation-preserving composite quadrature described below. Three P1
+findings remain:
 
 1. Three explicit full-versus-IMA field regressions fail the required
    `< 10 eps` contract in isolated pytest processes.
@@ -69,9 +70,9 @@ this revision. Three P1 findings remain:
    `DemagOperator`, contradicting the BDM1/BDM2-only production policy.
 3. Fine TET C-yoke runs reportedly lose positive definiteness under refinement;
    the failing mesh and driver are not tracked, so the defect is not replayable.
-Known, fail-loud limitations are not hidden failures: mapped/non-affine HEX
-BDM2 material solves, 3D pyramid/mixed meshes, and 2D history solves remain
-unsupported. Large IMA field maps remain direct because the tree route is
+Known, fail-loud limitations are not hidden failures: mapped HEX BDM2 shape
+derivatives, 3D pyramid/mixed meshes, and 2D history solves remain unsupported.
+Large IMA field maps remain direct because the tree route is
 disabled whenever images are present. MATLAB owns native field-evaluator and
 EnergyStop MEX surfaces, but the high-level `radia.vim` solve is still an
 explicit in-process Python fallback because NGSolve setup is Python-owned.
@@ -83,11 +84,11 @@ explicit in-process Python fallback because NGSolve setup is Python-owned.
 | ID | Priority | Finding | Evidence and required disposition |
 |---|---|---|---|
 | F1 | Resolved | BDM2 TET directional ChargeGram derivatives used the wrong degree-one moment order on the reviewed baseline. | `TetPotentialMomentsDirectionalUpTo1` stores degree-one moments in `z,y,x` (`PotentialMomentIndex`) order, while two consumers in `rad_hacapk_hdiv.cpp` used `mv[k+1]` as `x,y,z`. On the same 1-cell BDM2 case, the `ec57769de` baseline differs from finite differences by `1.327698e-1` for the complete Gram and `4.145764e-1` for the volume block; fifth-degree homogeneity is wrong by `3.727428e-1`. The correction in `51dce89c1`, included in this revision, reduces these to `4.019822e-9`, `2.778490e-9`, and `4.002814e-16`. |
-| F2 | P1 | The IMA field contract is red. | At `ec57769de`, clean-build measurements were `2.0140013262e-14` and `4.9318891895e-14` relative error for the two HEX `rad.Fld`/`FieldFromSolution` gates, and `2.3931079340e-15` component error for curved TET BDM2. The limit is `2.2204460493e-15` (`10 eps`). Preserve the limit; align solve reduction and source accumulation order rather than loosening it. |
+| F2 | P1, partially resolved | The field-evaluator IMA contract is green for mapped HEX BDM2 prescribed sources; independent solve parity remains a separate numerical lane. | On the current mdx production body, prescribed full/reduced fields differ by `2.7506 eps`, below the `10 eps` limit. Independently converged mass-Riesz CG full/reduced solves differ by `3.2835e-13` in sampled field. Three legacy focused checks were rerun and remain narrowly red: single-cell HEX `2.02e-14`, multicell HEX `4.93e-14`, and curved TET BDM2 `2.3931e-15` against a `2.2204e-15` limit. Preserve the field limit and fix those paths rather than loosening their tolerances or relabeling Krylov/reduction error as evaluator error. |
 | F3 | P1 | RT0 is publicly advertised again despite the BDM1/BDM2-only decision. | `_capabilities.py` exposes 3D TET/HEX order 0 and `DemagOperator` documents an order-0 broken-interface path. `HDivSolver` and field evaluation accept only orders 1 and 2. Remove the public RT0 entries/path and retain any topology-only experiment outside the production API. |
 | F4 | Resolved on `v4.95.71` | The released operator completes the finer C-yoke TET lane without loss of SPD. | The 1,688-element iron mesh solves on mdx and hibino, all three nonlinear routes converge, and the final three mesh levels pass the contraction/order gate. The older untracked `p^T A p < 0` report is not used as current evidence. |
 | F5 | Resolved on `v4.95.71` | The nonlinear C-type comparison now has a four-level, three-formulation accuracy certificate and independent-host reproduction. | `validation_test/c_type_three_engine/` owns the exact Cubit/ACIS mesh family, shared coil and PCHIP B(H) law, Kelvin contract, per-engine checkpoints, and JSON gates. On the finest level, the HDiv-MMM / HCurl reduced-A / H1 Omega-reduced-Omega gap-core spread is 0.29326%. The maximum conservative discretization uncertainty is 0.17601%, the consensus deviation is 0.18226%, and their conservative sum is 0.35827%. mdx and hibino reproduce all three fields within `2.35e-14` relative RMS. HDiv uses 32,580 DoF and 36.78 s on mdx, versus 124,132 DoF / 90.41 s for Omega and 470,288 DoF / 852.08 s for reduced-A. The certificate explicitly bounds a common mesh-refined B field; it does not claim an unavailable analytic truth. |
-| F6 | P2 | Mapped/non-affine HEX BDM2 is operator-only, not a material solve. | `Solve` rejects it before wrong physics; mapped HEX BDM1, affine HEX BDM2, TET BDM2, and WEDGE BDM2 are the current alternatives. This is correctly documented and tested, but it remains a major completeness boundary. |
+| F6 | Resolved for primal solve/field; derivative open | Mapped/non-affine HEX BDM2 is a production material lane. | Complete-host tensor source rules preserve smooth-pair charge cancellation; reflection-invariant whole-host Duffy rules handle self and adjacent pairs. On mdx the 756-DoF q9/q12 operator has spectrum `[-8.53e-16, 0.999899]`, linear/nonlinear solves converge, and its material response differs from q10/q16 by `5.28e-4` in mass norm. q10/q16 differs from q11/q20 by `3.94e-4`. An independent Cubit 2025.12 Curve(2) four-HEX gate also passes linear/nonlinear solve and field checks. Shape derivatives fail loudly until the composite rule is differentiated. |
 | F7 | P2 | IMA disables tree acceleration for field maps. | `HDivFieldEvaluator::AlgorithmFor` returns `Direct` whenever images exist. This protects full/reduced roundoff parity, but large IMA observation maps cannot use the otherwise guarded treecode. Any image-aware acceleration needs a common full/reduced grouping and the F2 contract first. |
 | F8 | P2 | Exact vector-potential evaluation is narrower than H-field evaluation. | Exact `A` uses straight TET BDM1 equivalent currents. BDM2, curved, HEX, and WEDGE use NGSolve-mapped quadrature clouds assembled in Python. This is valid as an explicit converged quadrature route, not an all-topology exact/native claim. |
 | F9 | P2 | MATLAB parity is partial at the method level. | `HDivFieldEvaluator` and `EnergyStopMaterial` have native checked MEX handles. The parity manifest classifies `vim/__init__.py` as `python-fallback`; complete solve/mesh/form orchestration is not a native MATLAB API. |
@@ -99,7 +100,7 @@ explicit in-process Python fallback because NGSolve setup is Python-owned.
 |---|---|---|---|---|
 | 3D TET | BDM1, BDM2 | affine or P2 curved | linear, nonlinear, IMA, recoil PM, Play, EnergyStop | persistent native direct/tree; curved direct leaves retained exactly; exact vector `A` only for straight BDM1 |
 | 3D HEX | BDM1 | mapped/affine, geometry order 1 or 2 | linear/nonlinear/IMA/history | affine polynomial decomposition; mapped/curved source cloud |
-| 3D HEX | BDM2 | geometry order 1 or 2 | material solve only when the mapping is affine; diagnostic `ChargeGram` otherwise | persistent native evaluator from configured source representation |
+| 3D HEX | BDM2 | affine or mapped geometry order 1 or 2 | linear, nonlinear, IMA, recoil PM, Play, EnergyStop; mapped shape derivative fails loudly | persistent native evaluator from configured source representation |
 | 3D WEDGE | BDM1, BDM2 | geometry order 1 or 2 | linear, nonlinear, IMA, recoil PM, Play, EnergyStop | persistent mapped source representation; native repeated evaluation |
 | 2D TRI/QUAD/mixed | BDM1 with geometry 1/2; BDM2 with geometry 1/2/3 | Q2/Q3 production pairings are explicit | linear/nonlinear and IMA; no `SolveHysteresis` | persistent native planar field and `Az` evaluator |
 | 3D mixed/pyramid | none | none | fail loud pending NGSolve HDiv pyramid | fixed-magnetization Radia geometry is separate and is not a material solve |
@@ -348,7 +349,7 @@ The review also measured a 14-solid STEP for which
 supported route is therefore Cubit/ACIS directly to Netgen `.vol`, with
 `check-vol`, rather than Cubit to STEP to `netgen.occ`.
 
-### 3.2 Current HEX limitation
+### 3.2 Curved HEX production path
 
 The original statement "a chamfered pole cannot be meshed into affine hexes"
 was too absolute. What was measured is narrower: the current Cubit
@@ -356,7 +357,36 @@ decomposition and mesh family leave cells crossing the 45-degree chamfer as
 non-affine trapezoidal prisms. Their mapping residual was 0.745, 0.666, and
 0.405 at 25, 12.5, and 6.25 mm, respectively, against the 1e-10 affine gate.
 Removing the chamfer reduced the residual to 2.2e-14, but that changes the
-benchmark and is not a production remedy.
+benchmark and is not a production remedy. The remedy is the mapped BDM2
+composite charge representation now used by `Solve` and `ChargeGram`.
+
+For smooth host pairs, the C++ kernel uses a complete Q2 tensor source rule so
+the volume and surface modes share one host representation. For self and
+adjacent interactions it sweeps the complete host to six faces and each face
+to four edges with target-anchored, reflection-invariant Duffy rules. This
+removes the fixed sub-tet/sub-triangle diagonals that broke the large
+volume/surface cancellation on non-affine cells. The operator remains
+`B.T G B`, so loop-free nullspaces and symmetry are preserved by construction.
+The q9/q12 default is materialized once and reused during parallel H-matrix
+fill.
+
+The tracked mdx quadrature-convergence evidence uses a reflection-symmetric
+eight-cell non-affine trilinear body (mesh curve order 1, 756 BDM2 DoF). Its
+q9/q12 build takes 46.74 s and has spectrum `[-8.53e-16, 0.999899]`;
+q10/q16 takes 140.60 s and q11/q20 takes 351.50 s.
+The material mass-norm differences are `5.28e-4` for q9/q12 to q10/q16 and
+`3.94e-4` for q10/q16 to q11/q20. Linear, energy-Newton, and IMA solves pass.
+This certifies the primal material/field path; mapped BDM2 topology derivatives
+remain fail-loud pending a differentiated composite rule.
+
+True curved geometry is covered separately by a Cubit 2025.12 generated
+four-HEX cylinder. `check-vol` records curve order 2, four of four non-affine
+cells, minimum scaled Jacobian `0.33473`, and volume error `-0.2197%`. On mdx,
+the 396-DoF BDM2 linear solve converges in 19 mass-Riesz CG iterations, the
+equivalent nonlinear Energy-Newton path converges, and prescribed-source
+`rad.Fld` differs from an independent NGSolve boundary integral by at most
+`1.06e-10` relative. This closes primal solve/field production support for
+Curve(2) HEX; mapped BDM2 shape derivatives remain deliberately fail-loud.
 
 A united C-yoke solid did not hex-mesh with the tested `auto`, `sweep`,
 `webcut_cyl_auto`, or `polyhedron` routes. Decomposition creates
@@ -497,6 +527,18 @@ full/reduced mesh must share a reflection-invariant operator, solve reduction,
 and field accumulation order closely enough to satisfy the declared roundoff
 contract.
 
+The new mapped HEX BDM2 production validation separates two error sources. A
+prescribed symmetric magnetization, which bypasses iterative material solves,
+gives maximum pointwise vector-relative error `8.0078e-16` on mdx; the global
+componentwise maximum absolute error is `2.7506 eps` of the field scale.
+The persistent field evaluator therefore satisfies the `<10 eps` contract on
+that topology. Two independent mass-Riesz CG material solves give
+`3.2835e-13` field difference and `2.8799e-13` average-magnetization
+difference. Those values are within the production solve gate (`1e-10`) but
+are not field-evaluator roundoff evidence. Future strict solve parity must
+align the reduced/full linear solve or use an independently justified common
+solution representation; it must not weaken the field gate.
+
 ## 5. Corrections retained from the original review
 
 1. The non-convergence contract was already present in `src/radia/vim/_solve.py`.
@@ -521,7 +563,8 @@ contract.
 | P1 | Full-versus-IMA `rad.Fld` roundoff | Make all three isolated failures in section 4 pass below `10 eps` without weakening tolerances. Compare solved coefficient vectors before debugging source evaluation, then align directed block symmetrization and full/reduced field summation order. |
 | P1 | Remove production RT0 | Delete the 3D order-0 entries from `hdiv_capabilities`, remove the order-0 `DemagOperator` production path and dedicated order-0 tests/docs, and keep public `Solve`, operator, field, and MATLAB inventory consistently BDM1/BDM2. |
 | P1 | Nonlinear C-yoke memory evidence | Four-level accuracy and repeated timing are closed on mdx and hibino for `v4.95.71`. Add measured process peak memory to a future scaling campaign before making a memory-efficiency claim. reduced-A remains an independent third-formulation audit rather than the primary production route. |
-| P2 | Mapped HEX BDM2 material solve | Build one composite mapped charge representation that preserves volume/surface cancellation, then require spectrum, linear/nonlinear solve, IMA, field, curved, and shape-derivative gates before removing the fail-loud guard. |
+| Resolved for primal path | Mapped HEX BDM2 material solve | The composite mapped charge representation passes spectrum, linear/nonlinear solve, IMA, field, and quadrature-convergence gates on mdx. |
+| P2 | Mapped HEX BDM2 shape derivative | Differentiate the same complete-host tensor and whole-host Duffy representation, then lock it against finite differences before enabling topology optimization. The current API fails loudly. |
 | P2 | Image-aware field acceleration | Design grouping that is invariant under explicit reflection and reduced IMA representation; prove `<10 eps` direct parity before enabling tree/H-matrix evaluation for image-bearing field maps. |
 | P2 | Vector-potential topology coverage | Add exact/native BDM2 and HEX/WEDGE/curved source representations only with independent NGSolve mapped-volume convergence and A/B route checks. Keep the current quadrature construction explicit until then. |
 | P2 | MATLAB method parity | Preserve the native field/EnergyStop handles, but do not claim native MATLAB HDiv solve parity while `vim-public` is classified as Python fallback. Promote stable numeric/artifact boundaries with MATLAB regression tests. |

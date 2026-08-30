@@ -1,15 +1,16 @@
-"""Separate the mapped-HEX BDM2 space from its open-boundary charge kernel.
+"""Cross-check mapped-HEX BDM2 Hodge and open-boundary charge operators.
 
 The same two-cell mapped HEX body is evaluated in two independent ways:
 
 * a finite-domain H1 Omega formulation, ``N_omega = C.T K^-1 C``;
-* the production-style volume/surface charge BEM diagnostic.
+* the production volume/surface ChargeGram operator.
 
 ``N_omega`` is a discrete Hodge projection, so its generalized spectrum must
-lie in ``[0, 1]`` relative to the HDiv mass.  A bounded H1 spectrum together
-with an out-of-range charge spectrum localizes the defect to the mapped charge
-operator rather than to the BDM2 approximation space.  The finite outer box is
-not promoted as an open-boundary accuracy oracle.
+lie in ``[0, 1]`` relative to the HDiv mass.  The repaired ChargeGram must now
+obey the same contraction bound while completing a material solve and field
+evaluation.  Agreement of those independent structural gates prevents the
+old mapped-charge cancellation defect from returning.  The finite outer box
+is not promoted as an open-boundary accuracy oracle.
 
 No mesh artifact is tracked; both meshes are regenerated in memory.
 """
@@ -277,12 +278,10 @@ def solve_h1_hodge_reference(mesh: ng.Mesh, *, h1_order: int) -> dict[str, objec
     }
 
 
-def solve_charge_bem_diagnostic(mesh: ng.Mesh) -> dict[str, object]:
+def solve_charge_hacapk_production(mesh: ng.Mesh) -> dict[str, object]:
     hdiv = ng.HDiv(mesh, order=2)
     charge_map, gram, mass, mass_ngsolve = vim_core._build_charge_gram_hex(
         hdiv,
-        glout_n=5,
-        glin_n=7,
         near_grade=0.5,
         far_inner=1.0,
         eps=1.0e-14,
@@ -293,13 +292,38 @@ def solve_charge_bem_diagnostic(mesh: ng.Mesh) -> dict[str, object]:
     )
     operator = np.asarray(gram.demag_matrix().ToDense())
     operator = 0.5 * (operator + operator.T)
+    solution = vim_api.Solve(
+        mesh,
+        mu_r=100.0,
+        H_ext=ng.CF((0.0, 0.0, 1000.0)),
+        order=2,
+        gram_eps=1.0e-14,
+        leaf=4096,
+        tol=1.0e-10,
+    )
+    field = np.asarray(vim_api.FieldFromSolution(
+        solution,
+        np.asarray(((0.10, 0.0, 0.0), (0.0, 0.10, 0.0))),
+        algorithm="direct",
+    ))
     return {
-        "formulation": "mapped volume/surface charge BEM diagnostic",
+        "formulation": "mapped BDM2 cancellation-preserving HACApK ChargeGram",
         "hdiv_dofs": int(hdiv.ndof),
         "spectrum": _generalized_spectrum(
             operator, sp.csr_matrix(mass).toarray()
         ),
         "affinity": vim_core._hex_mapping_affinity_report(mesh),
+        "solve": {
+            "mu_r": 100.0,
+            "iterations": int(solution["iters"]),
+            "converged": bool(solution["last_solve_converged"]),
+            "final_relative_residual": float(
+                solution["last_solve_final_relative_residual"]),
+            "M_avg": np.asarray(solution["M_avg"], dtype=float).tolist(),
+            "field_points": [[0.10, 0.0, 0.0], [0.0, 0.10, 0.0]],
+            "field": field.tolist(),
+            "field_finite": bool(np.isfinite(field).all()),
+        },
     }
 
 
@@ -420,7 +444,7 @@ def run() -> dict[str, object]:
             for order in (2, 3)
         ]
         mixed = solve_h1_hcurl_mixed_reference(outer)
-        charge = solve_charge_bem_diagnostic(body)
+        charge = solve_charge_hacapk_production(body)
     source_end = _source_fingerprints()
     hodge_spectra = [row["spectrum"] for row in hodge]
     checks = {
@@ -441,9 +465,15 @@ def run() -> dict[str, object]:
             == "finite-dirichlet-validation"
             for row in hodge
         ),
-        "charge_bem_spectrum_violation_reproduced": (
-            charge["spectrum"]["maximum"] > 1.1
-            and charge["spectrum"]["outside_count"] > 0
+        "charge_hacapk_spectrum_is_a_contraction": (
+            charge["spectrum"]["minimum"] >= -1.0e-8
+            and charge["spectrum"]["maximum"] <= 1.0 + 1.0e-5
+            and charge["spectrum"]["outside_count"] == 0
+        ),
+        "charge_hacapk_material_solve_and_field_are_production_finite": (
+            charge["solve"]["converged"]
+            and charge["solve"]["iterations"] < 100
+            and charge["solve"]["field_finite"]
         ),
         "mapped_bdm2_response_uses_generic_ngsolve_cg": (
             mixed["demag_backend"] == "H1HodgeDemagOperator"
@@ -463,7 +493,7 @@ def run() -> dict[str, object]:
         ),
     }
     return {
-        "schema": "radia.validation.mapped-hex-bdm2-hodge-reference.v2",
+        "schema": "radia.validation.mapped-hex-bdm2-hodge-reference.v3",
         "created_at_utc": datetime.now(timezone.utc).isoformat(),
         "tool_versions": {
             "radia": getattr(radia, "__version__", _package_version("radia-ngsolve")),
@@ -485,22 +515,22 @@ def run() -> dict[str, object]:
         },
         "h1_hodge_reference": hodge,
         "h1_hcurl_mixed_reference": mixed,
-        "charge_bem_diagnostic": charge,
+        "charge_hacapk_production": charge,
         "checks": checks,
         "pass": all(checks.values()),
         "timing_s": {"total": time.perf_counter() - started},
         "claim_boundary": {
             "established": (
                 "the mapped BDM2 HDiv space and NGSolve mass/coupling admit a "
-                "bounded discrete Hodge projection; the out-of-range spectrum "
-                "is localized to the current mapped volume/surface charge operator; "
+                "bounded discrete Hodge projection; the cancellation-preserving "
+                "HACApK ChargeGram is also bounded on the same 207 active DoFs "
+                "and completes a linear material solve plus native field evaluation; "
                 "the same BDM2 response reduction feeds a converged shared-mesh "
                 "HCurl eddy-bubble mixed solve"
             ),
             "not_established": (
-                "an open-boundary H1 accuracy reference, a repaired composite "
-                "charge operator, a production open-boundary replacement for "
-                "vim.Solve, or universal solver superiority"
+                "an open-boundary H1 accuracy reference, nonlinear/IMA closure for "
+                "every mapped HEX family, or universal solver superiority"
             ),
         },
     }

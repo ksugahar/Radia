@@ -3438,6 +3438,7 @@ RadHACApKChargeGram::RadHACApKChargeGram(
         m_hexUniformTransHosts = ok;
     }
     BuildHexSiteTables();   // static-site radial tables (non-self near inner) + mapped site positions
+    BuildHexInnerRules();   // immutable complete-host BDM2 source rules; fill callbacks only read them
 }
 
 // WEDGE (PRISM) BDM1 ctor -- mirror of the hex ctor with 3-sub-tet prism cells + mixed tri/quad faces (see
@@ -4218,6 +4219,10 @@ void RadHACApKChargeGram::PhiInnerHexAffineFaceVec(int hS, const double p[3],
 // DISTORTED/curved pairs too (the HexDistortedFarFactor dispatch in QuadBlockHex, C-4 fill speedup).
 const RadHACApKChargeGram::HexFarRule& RadHACApKChargeGram::GetHexFarRule(int kind, int host) const
 {
+    const size_t materialized_index = kind == 0
+        ? (size_t)host : (size_t)m_n_el + (size_t)host;
+    if (materialized_index < m_hexInnerRules.size())
+        return m_hexInnerRules[materialized_index];
     const unsigned long long key =
         (unsigned long long)(kind != 0) | ((unsigned long long)(unsigned)host << 1);
     {
@@ -4257,6 +4262,51 @@ const RadHACApKChargeGram::HexFarRule& RadHACApKChargeGram::GetHexFarRule(int ki
     std::unique_lock<std::shared_mutex> wl(m_hexFarRuleMutex);
     auto it = m_hexFarRuleCache.emplace(key, std::move(rule)).first;   // racing first insert wins
     return it->second;
+}
+
+void RadHACApKChargeGram::BuildHexInnerRules()
+{
+    m_hexInnerRules.clear();
+    if (m_hexAffineOrder != 2) return;
+    m_hexInnerRules.resize((size_t)m_n_el + (size_t)m_hex_n_bf);
+    auto build = [&](int kind, int host, HexFarRule& rule) {
+        const std::vector<int>& charges = kind == 0
+            ? m_cellCharges[host] : m_faceCharges[host];
+        const bool cell = kind == 0;
+        // This rule serves only smooth non-near pairs.  Reuse the complete
+        // outer tensor rule; m_glIn is reserved for the singular/near Duffy
+        // kernel and may be deliberately much richer.
+        const int n1 = (int)m_glOut.size();
+        const int np = cell ? n1*n1*n1 : n1*n1;
+        const double* nodes = cell ? &m_hexNodes[(size_t)host*81]
+                                   : &m_quadNodes[(size_t)host*27];
+        rule.np = np;
+        rule.n_local = (int)charges.size();
+        rule.x.resize((size_t)np*3);
+        rule.w.resize(np);
+        rule.values.resize((size_t)np*charges.size());
+        int q = 0;
+        for (int iz = 0; iz < (cell ? n1 : 1); ++iz)
+            for (int iy = 0; iy < n1; ++iy)
+                for (int ix = 0; ix < n1; ++ix, ++q) {
+                    const double reference[3] = {
+                        m_glOut[ix], m_glOut[iy], cell ? m_glOut[iz] : 0.0};
+                    if (cell) HexQ2MapX(nodes, reference, &rule.x[(size_t)3*q]);
+                    else {
+                        const double uv[2] = {reference[0], reference[1]};
+                        QuadQ2MapX(nodes, uv, &rule.x[(size_t)3*q]);
+                    }
+                    rule.w[q] = m_gwOut[ix]*m_gwOut[iy]
+                              * (cell ? m_gwOut[iz] : 1.0);
+                    for (int local = 0; local < (int)charges.size(); ++local)
+                        rule.values[(size_t)q*charges.size() + local] =
+                            HexMonoEval(charges[local], reference);
+                }
+    };
+    for (int host = 0; host < m_n_el; ++host)
+        build(0, host, m_hexInnerRules[(size_t)host]);
+    for (int host = 0; host < m_hex_n_bf; ++host)
+        build(1, host, m_hexInnerRules[(size_t)m_n_el + (size_t)host]);
 }
 
 std::vector<double> RadHACApKChargeGram::QuadBlockHexAffineFarProduct(
@@ -4646,6 +4696,14 @@ std::vector<double> RadHACApKChargeGram::QuadBlockHexDirectionalDerivative(
     int kindT,int hT,int kindS,int hS,const double* velocityT,const double* velocityS,int mask) const
 {
     if(mask!=0)throw std::invalid_argument("shape derivative currently requires direct image 0");
+    const bool mapped_bdm2_target = m_hexAffineOrder == 2 &&
+        (kindT == 0 ? !m_hexAffineCell[hT] : !m_quadAffineFace[hT]);
+    const bool mapped_bdm2_source = m_hexAffineOrder == 2 &&
+        (kindS == 0 ? !m_hexAffineCell[hS] : !m_quadAffineFace[hS]);
+    if (mapped_bdm2_target || mapped_bdm2_source)
+        throw std::logic_error(
+            "mapped HEX BDM2 shape derivatives are not implemented for the "
+            "cancellation-preserving composite quadrature");
     const auto& tg=kindT==0?m_cellCharges[hT]:m_faceCharges[hT];const auto& sg=kindS==0?m_cellCharges[hS]:m_faceCharges[hS];const int nt=(int)tg.size(),ns=(int)sg.size();std::vector<double> out((size_t)nt*ns,0),inn(ns);
     if(kindT==kindS&&hT==hS)return kindT==0?HexVolumeSelfBlockDirectionalDerivative(hT,std::vector<double>(velocityT,velocityT+81)):HexFaceSelfBlockDirectionalDerivative(hT,std::vector<double>(velocityT,velocityT+27));
     if(kindT==1&&kindS==1&&m_quadAffineFace[hT]&&m_quadAffineFace[hS]){
@@ -5073,6 +5131,15 @@ std::vector<double> RadHACApKChargeGram::QuadBlockHex(int kindT, int hT, int kin
             return timed(m_hexBlkDistortedFar, m_hexNsDistortedFar,
                          [&]{ return QuadBlockHexAffineFarProduct(kindT, hT, kindS, hS, img); });
     }
+    // BDM2 mapped charges are one composite distribution per HDiv basis, not
+    // independent volume and surface sources.  A source-dependent target
+    // subdivision integrates those large pieces on different point sets and
+    // destroys their cancellation after B^T G B.  The fixed-host rule below
+    // evaluates every source host on the same target grid.  BDM1 keeps its
+    // established graded path; affine BDM2 was returned above.
+    if (m_hexAffineOrder == 2)
+        return timed(m_hexBlkGeneralNear, m_hexNsGeneralNear,
+                     [&]{ return QuadBlockHexCompositeProduct(kindT, hT, kindS, hS, img); });
     const auto t_general0 = std::chrono::steady_clock::now();
     const bool cellT = (kindT == 0), cellS = (kindS == 0);
     const int nsubT = cellT ? 6 : 2, nsubS = cellS ? 6 : 2;
@@ -5172,6 +5239,414 @@ std::vector<double> RadHACApKChargeGram::QuadBlockHex(int kindT, int hT, int kin
     return blk;
 }
 
+bool RadHACApKChargeGram::HexQ2Inverse(
+    const double* nodes, const double target[3], double reference[3])
+{
+    reference[0] = reference[1] = reference[2] = 0.5;
+    double last_finite[3] = {0.5, 0.5, 0.5};
+    bool valid_jacobian_seen = false;
+    double scale = 0.0;
+    for (int node = 1; node < 27; ++node) {
+        const double dx = nodes[3*node] - nodes[0];
+        const double dy = nodes[3*node + 1] - nodes[1];
+        const double dz = nodes[3*node + 2] - nodes[2];
+        scale = std::max(scale, std::sqrt(dx*dx + dy*dy + dz*dz));
+    }
+    const double tolerance = 2e-11*std::max(scale, 1.0) + 1e-13;
+    for (int iteration = 0; iteration < 20; ++iteration) {
+        double mapped[3], jacobian[3][3];
+        HexQ2Map(nodes, reference, mapped, jacobian);
+        const double residual[3] = {
+            mapped[0]-target[0], mapped[1]-target[1], mapped[2]-target[2]};
+        const double norm = std::sqrt(
+            residual[0]*residual[0] + residual[1]*residual[1]
+            + residual[2]*residual[2]);
+        if (norm <= tolerance)
+            return true;
+        const double determinant =
+            jacobian[0][0]*(jacobian[1][1]*jacobian[2][2]-jacobian[1][2]*jacobian[2][1])
+          - jacobian[0][1]*(jacobian[1][0]*jacobian[2][2]-jacobian[1][2]*jacobian[2][0])
+          + jacobian[0][2]*(jacobian[1][0]*jacobian[2][1]-jacobian[1][1]*jacobian[2][0]);
+        if (!std::isfinite(determinant) || std::abs(determinant) < 1e-18) {
+            if (!valid_jacobian_seen) return false;
+            break;
+        }
+        valid_jacobian_seen = true;
+        const double inverse[3][3] = {
+            {(jacobian[1][1]*jacobian[2][2]-jacobian[1][2]*jacobian[2][1])/determinant,
+             (jacobian[0][2]*jacobian[2][1]-jacobian[0][1]*jacobian[2][2])/determinant,
+             (jacobian[0][1]*jacobian[1][2]-jacobian[0][2]*jacobian[1][1])/determinant},
+            {(jacobian[1][2]*jacobian[2][0]-jacobian[1][0]*jacobian[2][2])/determinant,
+             (jacobian[0][0]*jacobian[2][2]-jacobian[0][2]*jacobian[2][0])/determinant,
+             (jacobian[0][2]*jacobian[1][0]-jacobian[0][0]*jacobian[1][2])/determinant},
+            {(jacobian[1][0]*jacobian[2][1]-jacobian[1][1]*jacobian[2][0])/determinant,
+             (jacobian[0][1]*jacobian[2][0]-jacobian[0][0]*jacobian[2][1])/determinant,
+             (jacobian[0][0]*jacobian[1][1]-jacobian[0][1]*jacobian[1][0])/determinant}};
+        for (int row = 0; row < 3; ++row)
+            reference[row] -= inverse[row][0]*residual[0]
+                            + inverse[row][1]*residual[1]
+                            + inverse[row][2]*residual[2];
+        if (!std::isfinite(reference[0]) || !std::isfinite(reference[1])
+                || !std::isfinite(reference[2])) {
+            std::copy(last_finite, last_finite + 3, reference);
+            break;
+        }
+        std::copy(reference, reference + 3, last_finite);
+    }
+    // A non-self near pair has no singular point inside this source host.
+    // Exact inversion improves the radial anchor but is not required: every
+    // finite in-cube anchor gives the same exact six-cone partition.  Keep the
+    // final finite Newton point rather than rejecting a valid curved element
+    // merely because the exterior target has no reference-space inverse.
+    for (int axis = 0; axis < 3; ++axis)
+        reference[axis] = std::clamp(reference[axis], 0.0, 1.0);
+    return valid_jacobian_seen;
+}
+
+bool RadHACApKChargeGram::QuadQ2ClosestReference(
+    const double* nodes, const double target[3], double reference[2])
+{
+    auto squared_distance = [&](const double uv[2]) {
+        double mapped[3];
+        QuadQ2MapX(nodes, uv, mapped);
+        const double dx = mapped[0]-target[0];
+        const double dy = mapped[1]-target[1];
+        const double dz = mapped[2]-target[2];
+        return dx*dx + dy*dy + dz*dz;
+    };
+    double best_distance = std::numeric_limits<double>::infinity();
+    for (int iv = 0; iv <= 4; ++iv) {
+        for (int iu = 0; iu <= 4; ++iu) {
+            const double candidate[2] = {0.25*iu, 0.25*iv};
+            const double distance = squared_distance(candidate);
+            if (std::isfinite(distance) && distance < best_distance) {
+                best_distance = distance;
+                reference[0] = candidate[0];
+                reference[1] = candidate[1];
+            }
+        }
+    }
+    if (!std::isfinite(best_distance)) return false;
+
+    for (int iteration = 0; iteration < 40; ++iteration) {
+        double mapped[3], tangent[3][2];
+        QuadQ2Map(nodes, reference, mapped, tangent);
+        const double residual[3] = {
+            mapped[0]-target[0], mapped[1]-target[1], mapped[2]-target[2]};
+        const double current_distance = residual[0]*residual[0]
+                                      + residual[1]*residual[1]
+                                      + residual[2]*residual[2];
+        const double normal00 = tangent[0][0]*tangent[0][0]
+                              + tangent[1][0]*tangent[1][0]
+                              + tangent[2][0]*tangent[2][0];
+        const double normal01 = tangent[0][0]*tangent[0][1]
+                              + tangent[1][0]*tangent[1][1]
+                              + tangent[2][0]*tangent[2][1];
+        const double normal11 = tangent[0][1]*tangent[0][1]
+                              + tangent[1][1]*tangent[1][1]
+                              + tangent[2][1]*tangent[2][1];
+        const double rhs0 = tangent[0][0]*residual[0]
+                          + tangent[1][0]*residual[1]
+                          + tangent[2][0]*residual[2];
+        const double rhs1 = tangent[0][1]*residual[0]
+                          + tangent[1][1]*residual[1]
+                          + tangent[2][1]*residual[2];
+        const double determinant = normal00*normal11-normal01*normal01;
+        if (!std::isfinite(determinant) || determinant <= 1e-30) return false;
+        const double delta0 = (normal11*rhs0-normal01*rhs1)/determinant;
+        const double delta1 = (normal00*rhs1-normal01*rhs0)/determinant;
+        bool accepted = false;
+        double alpha = 1.0;
+        for (int line_search = 0; line_search < 16; ++line_search, alpha *= 0.5) {
+            const double trial[2] = {
+                std::clamp(reference[0]-alpha*delta0, 0.0, 1.0),
+                std::clamp(reference[1]-alpha*delta1, 0.0, 1.0)};
+            const double step0 = trial[0]-reference[0];
+            const double step1 = trial[1]-reference[1];
+            if (std::sqrt(step0*step0+step1*step1) <= 2e-12) return true;
+            const double trial_distance = squared_distance(trial);
+            if (std::isfinite(trial_distance) && trial_distance <=
+                    current_distance + 1e-15*std::max(current_distance, 1e-30)) {
+                reference[0] = trial[0];
+                reference[1] = trial[1];
+                accepted = true;
+                if (current_distance-trial_distance <=
+                        1e-13*std::max(current_distance, 1e-30))
+                    return true;
+                break;
+            }
+        }
+        if (!accepted) {
+            // Gauss-Newton need not be a descent direction on a strongly
+            // curved Q2 face.  Fall back to the projected gradient, scaled by
+            // the local metric, and keep the same monotone line search.
+            const double metric_scale = std::max(normal00+normal11, 1e-30);
+            alpha = 1.0;
+            for (int line_search = 0; line_search < 24;
+                    ++line_search, alpha *= 0.5) {
+                const double trial[2] = {
+                    std::clamp(reference[0]-alpha*rhs0/metric_scale, 0.0, 1.0),
+                    std::clamp(reference[1]-alpha*rhs1/metric_scale, 0.0, 1.0)};
+                const double step0 = trial[0]-reference[0];
+                const double step1 = trial[1]-reference[1];
+                if (std::sqrt(step0*step0+step1*step1) <= 2e-12) return true;
+                const double trial_distance = squared_distance(trial);
+                if (std::isfinite(trial_distance) && trial_distance <=
+                        current_distance + 1e-15*std::max(current_distance, 1e-30)) {
+                    reference[0] = trial[0];
+                    reference[1] = trial[1];
+                    accepted = true;
+                    if (current_distance-trial_distance <=
+                            1e-13*std::max(current_distance, 1e-30))
+                        return true;
+                    break;
+                }
+            }
+        }
+        if (!accepted) {
+            // For a non-self pair there is no singular point on this host.
+            // Any in-square anchor gives an exact four-fan partition; the
+            // finite coarse-grid minimizer retained above is therefore a
+            // valid deterministic endpoint when local closest-point descent
+            // stalls.  A degenerate metric still fails above.
+            return true;
+        }
+    }
+    // The retained finite anchor still parameterizes the complete quad.  The
+    // richer inner Gauss rule controls integration accuracy independently of
+    // closest-point convergence.
+    return true;
+}
+
+void RadHACApKChargeGram::PhiInnerHexTensorVec(
+    int kindS, int hS, const double p[3],
+    const std::vector<int>& srcG, double* inn) const
+{
+    const size_t rule_index = kindS == 0
+        ? (size_t)hS : (size_t)m_n_el + (size_t)hS;
+    if (rule_index >= m_hexInnerRules.size())
+        throw std::logic_error("mapped HEX inner rule was not materialized");
+    const HexFarRule& source = m_hexInnerRules[rule_index];
+    if (source.n_local != (int)srcG.size())
+        throw std::logic_error("mapped HEX source-rule local charge count changed");
+    for (int q = 0; q < source.np; ++q) {
+        const double dx = p[0]-source.x[(size_t)3*q];
+        const double dy = p[1]-source.x[(size_t)3*q + 1];
+        const double dz = p[2]-source.x[(size_t)3*q + 2];
+        const double radius = std::sqrt(dx*dx + dy*dy + dz*dz);
+        if (radius < 1e-300) continue;
+        const double weight = source.w[q]/radius;
+        const double* values = &source.values[(size_t)q*source.n_local];
+        for (int local = 0; local < source.n_local; ++local)
+            inn[local] += weight*values[local];
+    }
+}
+
+void RadHACApKChargeGram::PhiInnerHexRadialHostVec(
+    int kindS, int hS, const double p[3], const double* reference,
+    const std::vector<int>& srcG, double* inn) const
+{
+    if (!reference)
+        throw std::invalid_argument(
+            "PhiInnerHexRadialHostVec requires a reference-space singular point");
+    const bool cell = kindS == 0;
+    const double* nodes = cell
+        ? &m_hexNodes[(size_t)hS*81]
+        : &m_quadNodes[(size_t)hS*27];
+    const int nq = (int)m_glIn.size();
+    const int nS = (int)srcG.size();
+
+    if (cell) {
+        // Each (fixed axis, side) is one complete square face.  The cone map
+        // y = x0 + r*(face(a,b)-x0) has reference Jacobian
+        // r^2 * |(face-x0).(dface/da x dface/db)|.  Its six cones tile the
+        // cube for every interior x0, including limiting points on a face.
+        for (int fixed_axis = 0; fixed_axis < 3; ++fixed_axis) {
+            const int axis_a = (fixed_axis + 1) % 3;
+            const int axis_b = (fixed_axis + 2) % 3;
+            for (int side = 0; side < 2; ++side) {
+                const double face_distance = std::abs((double)side - reference[fixed_axis]);
+                if (face_distance < 1e-300) continue;
+                for (int ia = 0; ia < nq; ++ia) {
+                    for (int ib = 0; ib < nq; ++ib) {
+                        double face[3] = {0.0, 0.0, 0.0};
+                        face[fixed_axis] = (double)side;
+                        face[axis_a] = m_glIn[ia];
+                        face[axis_b] = m_glIn[ib];
+                        for (int ir = 0; ir < nq; ++ir) {
+                            const double radius_parameter = m_glIn[ir];
+                            double source_reference[3];
+                            for (int axis = 0; axis < 3; ++axis)
+                                source_reference[axis] = reference[axis]
+                                    + radius_parameter*(face[axis]-reference[axis]);
+                            double source[3];
+                            HexQ2MapX(nodes, source_reference, source);
+                            const double dx = p[0]-source[0];
+                            const double dy = p[1]-source[1];
+                            const double dz = p[2]-source[2];
+                            const double physical_radius = std::sqrt(dx*dx + dy*dy + dz*dz);
+                            if (physical_radius < 1e-300) continue;
+                            const double weight = m_gwIn[ia]*m_gwIn[ib]*m_gwIn[ir]
+                                *radius_parameter*radius_parameter*face_distance
+                                /physical_radius;
+                            for (int local = 0; local < nS; ++local)
+                                inn[local] += weight*HexMonoEval(
+                                    srcG[local], source_reference);
+                        }
+                    }
+                }
+            }
+        }
+        return;
+    }
+
+    // The analogous square rule uses the four complete edges.  Parameterize
+    // every edge in ascending free coordinate; abs(cross) makes orientation
+    // immaterial while the four triangular fans exactly tile the square.
+    for (int fixed_axis = 0; fixed_axis < 2; ++fixed_axis) {
+        const int free_axis = 1-fixed_axis;
+        for (int side = 0; side < 2; ++side) {
+            for (int it = 0; it < nq; ++it) {
+                double edge[2] = {0.0, 0.0};
+                edge[fixed_axis] = (double)side;
+                edge[free_axis] = m_glIn[it];
+                const double tangent[2] = {
+                    free_axis == 0 ? 1.0 : 0.0,
+                    free_axis == 1 ? 1.0 : 0.0};
+                const double edge_vector[2] = {
+                    edge[0]-reference[0], edge[1]-reference[1]};
+                const double signed_area = std::abs(
+                    edge_vector[0]*tangent[1]-edge_vector[1]*tangent[0]);
+                if (signed_area < 1e-300) continue;
+                for (int ir = 0; ir < nq; ++ir) {
+                    const double radius_parameter = m_glIn[ir];
+                    const double source_reference[2] = {
+                        reference[0] + radius_parameter*edge_vector[0],
+                        reference[1] + radius_parameter*edge_vector[1]};
+                    double source[3];
+                    QuadQ2MapX(nodes, source_reference, source);
+                    const double dx = p[0]-source[0];
+                    const double dy = p[1]-source[1];
+                    const double dz = p[2]-source[2];
+                    const double physical_radius = std::sqrt(dx*dx + dy*dy + dz*dz);
+                    if (physical_radius < 1e-300) continue;
+                    const double weight = m_gwIn[it]*m_gwIn[ir]
+                        *radius_parameter*signed_area/physical_radius;
+                    const double source_reference_3d[3] = {
+                        source_reference[0], source_reference[1], 0.0};
+                    for (int local = 0; local < nS; ++local)
+                        inn[local] += weight*HexMonoEval(
+                            srcG[local], source_reference_3d);
+                }
+            }
+        }
+    }
+}
+
+std::vector<double> RadHACApKChargeGram::QuadBlockHexCompositeProduct(
+    int kindT, int hT, int kindS, int hS, int img) const
+{
+    const std::vector<int>& tgtG = (kindT == 0) ? m_cellCharges[hT] : m_faceCharges[hT];
+    const std::vector<int>& srcG = (kindS == 0) ? m_cellCharges[hS] : m_faceCharges[hS];
+    const int nT = (int)tgtG.size(), nS = (int)srcG.size();
+    std::vector<double> block((size_t)nT*nS, 0.0);
+    if (nT == 0 || nS == 0) return block;
+
+    const bool cellT = kindT == 0;
+    const bool cellS = kindS == 0;
+    const int nsubS = cellS ? 6 : 2;
+    const double* target_nodes = cellT
+        ? &m_hexNodes[(size_t)hT*81]
+        : &m_quadNodes[(size_t)hT*27];
+
+    bool self_pair = kindT == kindS && hT == hS;
+    if (self_pair && img != 0) {
+        const int representative = tgtG[0];
+        double reflected[3];
+        ImageEvalPoint(img, &m_cent[(size_t)3*representative], reflected);
+        const double distance =
+            std::abs(reflected[0] - m_cent[(size_t)3*representative])
+          + std::abs(reflected[1] - m_cent[(size_t)3*representative + 1])
+          + std::abs(reflected[2] - m_cent[(size_t)3*representative + 2]);
+        self_pair = distance < 1e-6*m_size[representative] + 1e-12;
+    }
+
+    std::vector<double> inner(nS, 0.0);
+    const int nq = (int)m_glOut.size();
+    auto accumulate = [&](const double* xi, double weight) {
+        double target[3];
+        if (cellT) HexQ2MapX(target_nodes, xi, target);
+        else QuadQ2MapX(target_nodes, xi, target);
+        double source_eval[3];
+        ImageEvalPoint(img, target, source_eval);
+        std::fill(inner.begin(), inner.end(), 0.0);
+        const int representative = srcG[0];
+        const double dx = source_eval[0]-m_cent[(size_t)3*representative];
+        const double dy = source_eval[1]-m_cent[(size_t)3*representative + 1];
+        const double dz = source_eval[2]-m_cent[(size_t)3*representative + 2];
+        const bool smooth_source = !self_pair
+            && std::sqrt(dx*dx+dy*dy+dz*dz)
+               > 1.5*m_far_inner_factor*m_size[(size_t)representative];
+        if (self_pair) {
+            PhiInnerHexRadialHostVec(
+                kindS, hS, target, xi, srcG, inner.data());
+        } else if (m_hexAffineOrder == 2 && !smooth_source) {
+            double source_reference[3] = {0.5, 0.5, 0.5};
+            bool inverted = false;
+            if (cellS) {
+                inverted = HexQ2Inverse(
+                    &m_hexNodes[(size_t)hS*81], source_eval, source_reference);
+                for (double& coordinate : source_reference)
+                    coordinate = std::clamp(coordinate, 0.0, 1.0);
+            } else {
+                inverted = QuadQ2ClosestReference(
+                    &m_quadNodes[(size_t)hS*27], source_eval, source_reference);
+            }
+            if (!inverted)
+                throw std::runtime_error(
+                    std::string("mapped HEX BDM2 near-pair reference inversion failed for ")
+                    + (cellS ? "cell host " : "face host ") + std::to_string(hS));
+            PhiInnerHexRadialHostVec(
+                kindS, hS, source_eval, source_reference, srcG, inner.data());
+        } else if (m_hexAffineOrder == 2) {
+            PhiInnerHexTensorVec(kindS, hS, source_eval, srcG, inner.data());
+        } else for (int sub = 0; sub < nsubS; ++sub) {
+            PhiInnerHexSubVec(kindS, hS, sub, source_eval, srcG, inner.data());
+        }
+        for (int lt = 0; lt < nT; ++lt) {
+            const double target_weight = weight*HexMonoEval(tgtG[lt], xi);
+            double* row = &block[(size_t)lt*nS];
+            for (int ls = 0; ls < nS; ++ls)
+                row[ls] += target_weight*inner[ls];
+        }
+    };
+
+    if (cellT) {
+        double xi[3];
+        for (int iz = 0; iz < nq; ++iz) {
+            xi[2] = m_glOut[iz];
+            for (int iy = 0; iy < nq; ++iy) {
+                xi[1] = m_glOut[iy];
+                for (int ix = 0; ix < nq; ++ix) {
+                    xi[0] = m_glOut[ix];
+                    accumulate(xi, m_gwOut[ix]*m_gwOut[iy]*m_gwOut[iz]);
+                }
+            }
+        }
+    } else {
+        double xi[3] = {0.0, 0.0, 0.0};
+        for (int iy = 0; iy < nq; ++iy) {
+            xi[1] = m_glOut[iy];
+            for (int ix = 0; ix < nq; ++ix) {
+                xi[0] = m_glOut[ix];
+                accumulate(xi, m_gwOut[ix]*m_gwOut[iy]);
+            }
+        }
+    }
+    for (double& value : block) value *= RAD_INV_FOUR_PI;
+    return block;
+}
+
 std::vector<double> RadHACApKChargeGram::HexVolumeSelfBlockDirectionalDerivative(
     int host, const std::vector<double>& node_velocity) const
 {
@@ -5179,6 +5654,10 @@ std::vector<double> RadHACApKChargeGram::HexVolumeSelfBlockDirectionalDerivative
         "HexVolumeSelfBlockDirectionalDerivative requires a 3D HEX charge Gram");
     if (host < 0 || host >= (int)m_cellCharges.size()) throw std::out_of_range("HEX host out of range");
     if (node_velocity.size() != 81) throw std::invalid_argument("node_velocity must have shape (27,3)");
+    if (m_hexAffineOrder == 2 && !m_hexAffineCell[host])
+        throw std::logic_error(
+            "mapped HEX BDM2 shape derivatives are not implemented for the "
+            "cancellation-preserving composite quadrature");
     const std::vector<int>& g=m_cellCharges[host]; const int n=(int)g.size();
     std::vector<double> out((size_t)n*n,0.0), dinn(n), owt(n);
     if(n==0)return out;
@@ -5330,6 +5809,10 @@ std::vector<double> RadHACApKChargeGram::HexFaceSelfBlockDirectionalDerivative(
         "HexFaceSelfBlockDirectionalDerivative requires a 3D HEX charge Gram");
     if(host<0||host>=(int)m_faceCharges.size())throw std::out_of_range("HEX face host out of range");
     if(node_velocity.size()!=27)throw std::invalid_argument("node_velocity must have shape (9,3)");
+    if (m_hexAffineOrder == 2 && !m_quadAffineFace[host])
+        throw std::logic_error(
+            "mapped HEX BDM2 shape derivatives are not implemented for the "
+            "cancellation-preserving composite quadrature");
     const std::vector<int>& g=m_faceCharges[host]; const int n=(int)g.size();
     std::vector<double> out((size_t)n*n,0.0),dinn(n); if(n==0)return out;
     const double* nd=&m_quadNodes[(size_t)host*27];

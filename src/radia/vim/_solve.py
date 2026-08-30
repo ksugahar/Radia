@@ -113,7 +113,6 @@ from . import _image
 from ._vim import (
     _curve_mesh,
     build_charge_gram,
-    _hex_mapping_affinity_report,
     _volume_vertex_counts,
 )
 from ._capabilities import validate_hdiv_configuration
@@ -496,10 +495,9 @@ def hdiv_demag_solve(mesh, mu_r=None, H_ext=None, *, B_r=None, bh_table=None,
     # ---- HDiv-VIM scope: BDM1/BDM2 on pure TET/HEX/WEDGE/planar meshes ----
     # The tetrahedral monomial-charge Gram, IMA fold, and field evaluator are exact
     # for orders 1 and 2.  The planar log kernel also supports BDM1/Q2 and BDM2/Q3;
-    # specialized HEX/WEDGE kernels use the same order without fallback.  The
-    # material solve applies a stricter geometry gate below: non-affine HEX
-    # BDM2 remains diagnostic-only until its composite charge cancellation is
-    # preserved by construction.
+    # specialized HEX/WEDGE kernels use the same order without fallback.
+    # Mapped HEX BDM2 uses the cancellation-preserving composite charge rule
+    # documented on the production high-order path below.
     order = int(order)
     if curve_order is None and mesh.dim == 3 and mesh.GetCurveOrder() >= 2:
         curve_order = int(mesh.GetCurveOrder())
@@ -590,8 +588,9 @@ def hdiv_demag_solve(mesh, mu_r=None, H_ext=None, *, B_r=None, bh_table=None,
     # makes the order-p demag operator N = B^T G B valid (eig(M_mass^-1 N) in [0,1]; per-element M p-converges).
     # LINEAR (uniform-scalar OR per-region dict) mu_r AND flat/curved NONLINEAR (bh_table) are wired via the same
     # all-C++ symmetric mass-Riesz CG / energy-Newton on each supported pure topology.
-    # Pure-HEX BDM2 is material-production only for affine mappings; mapped
-    # HEX BDM1 remains the validated cylinder/O-grid lane.
+    # Pure-HEX BDM1 and BDM2 material solves cover affine and mapped Q2
+    # geometry.  Mapped BDM2 shape derivatives remain a separate fail-loud
+    # limitation until the composite rule is differentiated consistently.
     # Golden: validation_test/feec/test_hdiv_vim_demag_solve*, test_hdiv_vim_highorder_cpp.py.
     result = _solve_highorder(mesh, int(order), mu_r, bh_table, H_ext, image, linear_solver,
                               gram_eps, leaf, eta, far_quad, tol, maxit,
@@ -624,26 +623,14 @@ def _solve_highorder(mesh, order, mu_r, bh_table, H_ext, image, linear_solver,
     [[hdiv-highorder-material-solve-wrong]]): eig(M_mass^-1 N) in [0,1] and the material solve p-converges
     (no 2x/4x blow-up).  Supports the LINEAR (uniform-scalar OR per-region dict) mu_r case via the SAME
     all-C++ symmetric mass-Riesz CG as the production path; unsupported combinations fail loud (No-Fallbacks).
-    Mapped/non-affine HEX BDM2 material solves are deliberately rejected: the
-    current separately integrated volume and boundary charges can lose their
-    large cancellation on warped cells.  Affine HEX BDM2, mapped HEX BDM1, and
-    pure-TET BDM2 remain distinct supported lanes.
+    Mapped/non-affine HEX BDM2 uses a complete-host tensor source rule for
+    smooth pairs and target-anchored radial Duffy integration for adjacent
+    volume-boundary pairs.  The charge quotient remains B^T G B, so loop
+    nullspaces are annihilated to roundoff on affine and mapped meshes alike.
     The CALLER opens `with ng.TaskManager():` (same contract as vim.Solve)."""
     t_total = time.perf_counter()
     vertex_counts = (_volume_vertex_counts(mesh) if vertex_counts is None
                      else frozenset(vertex_counts))
-    if int(order) == 2 and vertex_counts == {8}:
-        affinity = _hex_mapping_affinity_report(mesh)
-        if affinity["nonaffine_cell_count"]:
-            raise NotImplementedError(
-                "vim.Solve: mapped/non-affine HEX BDM2 material solve is gated because the current "
-                "separate volume/surface charge quadrature does not preserve the cancellation needed "
-                "for a physical demagnetizing spectrum on warped cells "
-                "(non-affine cells=%d/%d, max relative mapping residual=%.3e). "
-                "Use mapped HEX BDM1 (order=1), an affine HEX BDM2 mesh, or pure-TET BDM2. "
-                "ChargeGram remains available for explicit diagnostic validation."
-                % (affinity["nonaffine_cell_count"], affinity["cell_count"],
-                   affinity["maximum_relative_residual"]))
     # IMA mirror symmetry: wired for flat/Curve(2) pure-TET (C++ highorder QuadDotRefl->PhiInner) AND pure-HEX /
     # pure-WEDGE (the C++ QuadBlockHex/Wedge(mask) reflected block) paths -- the Gram folds the mirror-image
     # charge interactions so a reduced 1/2,1/4,1/8 model reproduces the full model.  The same fold is used
