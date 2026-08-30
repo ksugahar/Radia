@@ -229,6 +229,99 @@ def build_official_toolbar_package(output_dir=None):
     return str(package_path)
 
 
+def _existing_toolbar_install_dirs(all_users=False):
+    """Return already-imported WorkflowToolbar directories.
+
+    Cubit performs the first package import so it can register the toolbar in
+    its own preferences. After that import, keeping the self-contained scripts
+    current is an ordinary file synchronization step.
+    """
+    roots = []
+    local_appdata = os.environ.get("LOCALAPPDATA")
+    if local_appdata:
+        roots.append(Path(local_appdata))
+    else:
+        roots.append(Path(os.path.expanduser("~")) / "AppData" / "Local")
+
+    if sys.platform == "win32" and all_users:
+        for user_dir in _iter_windows_user_dirs(include_default=False):
+            roots.append(Path(user_dir) / "AppData" / "Local")
+
+    result = []
+    for root in roots:
+        candidate = (root / "Radia" / "Cubit" / "Toolbars"
+                     / "radia_export_toolbar")
+        if candidate.is_dir() and candidate not in result:
+            result.append(candidate)
+    return result
+
+
+def _toolbar_expected_files(install_dir):
+    """Return ``(source, destination)`` pairs for an imported toolbar."""
+    install_dir = Path(install_dir)
+    panels_dir = Path(_get_panels_dir())
+    source = panels_dir / "cubit_toolbar"
+    pairs = []
+    for relative in (
+        "scripts/export_netgen.py",
+        "scripts/export_gmsh.py",
+        "scripts/export_nastran.py",
+        "scripts/export_vtk.py",
+        "scripts/export_femeem.py",
+        "scripts/export_meg.py",
+        "icons/radia_export.svg",
+    ):
+        pairs.append((source / relative, install_dir / relative))
+    pairs.append((
+        panels_dir / "radia_export_menu.py",
+        install_dir / "scripts" / "radia_export_menu.py",
+    ))
+    return pairs
+
+
+def _render_installed_toolbar(install_dir):
+    install_dir = Path(install_dir)
+    template = (Path(_get_panels_dir()) / "cubit_toolbar" / "toolbars"
+                / "radia_export_toolbar.ttb.tmpl")
+    return template.read_text(encoding="utf-8").replace(
+        "@TOOLBAR_INSTALL_DIR@", install_dir.as_posix())
+
+
+def _sync_existing_toolbar_installations(all_users=False):
+    """Refresh official WorkflowToolbar payloads that Cubit imported before."""
+    synced = []
+    for install_dir in _existing_toolbar_install_dirs(all_users=all_users):
+        for source, destination in _toolbar_expected_files(install_dir):
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(source, destination)
+        toolbar = install_dir / "toolbars" / "radia_export_toolbar.ttb"
+        toolbar.parent.mkdir(parents=True, exist_ok=True)
+        toolbar.write_text(
+            _render_installed_toolbar(install_dir), encoding="utf-8")
+        synced.append(install_dir)
+    return synced
+
+
+def _verify_existing_toolbar_installations(all_users=False):
+    """Report source drift in already-imported WorkflowToolbar packages."""
+    issues = []
+    for install_dir in _existing_toolbar_install_dirs(all_users=all_users):
+        for source, destination in _toolbar_expected_files(install_dir):
+            if not source.is_file():
+                issues.append(f"toolbar source missing: {source}")
+            elif not destination.is_file():
+                issues.append(f"toolbar payload missing: {destination}")
+            elif source.read_bytes() != destination.read_bytes():
+                issues.append(f"toolbar payload is stale: {destination}")
+        toolbar = install_dir / "toolbars" / "radia_export_toolbar.ttb"
+        if not toolbar.is_file():
+            issues.append(f"toolbar definition missing: {toolbar}")
+        elif (toolbar.read_text(encoding="utf-8", errors="replace") !=
+              _render_installed_toolbar(install_dir)):
+            issues.append(f"toolbar definition is stale: {toolbar}")
+    return issues
+
+
 def _generate_startup_script(panels_dir, *, all_users=False):
     """Generate the Cubit-played Python shim outside the package tree."""
     register_path = os.path.join(panels_dir, "register_toolbar.py").replace("\\", "/")
@@ -427,13 +520,16 @@ def verify_panel_installation(all_users=False, verbose=True):
             if not _ini_has_plugin_path(ini_path, plugin_dir):
                 issues.append(f"plugin path missing from {ini_path}: {plugin_dir}")
 
+    issues.extend(_verify_existing_toolbar_installations(
+        all_users=all_users))
+
     if verbose:
         print("Panel registration verification:")
         if issues:
             for issue in issues:
                 print(f"  [FAIL] {issue}")
         else:
-            print("  [OK] .cubit startup and Cubit.ini plugin paths are registered")
+            print("  [OK] startup, plugin paths, and imported toolbar payloads are current")
 
     return (not issues), issues
 
@@ -452,6 +548,8 @@ def install_panels(all_users=False):
         startup_script = _generate_startup_script(panels_dir, all_users=all_users)
         toolbar_package = build_official_toolbar_package(
             output_dir=_startup_dir(all_users=all_users))
+        synced_toolbars = _sync_existing_toolbar_installations(
+            all_users=all_users)
     except OSError as exc:
         print(f"ERROR: could not create Cubit startup assets: {exc}")
         return False
@@ -459,6 +557,8 @@ def install_panels(all_users=False):
     print(f"Toolbar script: {register_script}")
     print(f"Startup script: {startup_script}")
     print(f"Official toolbar package: {toolbar_package}")
+    for toolbar_dir in synced_toolbars:
+        print(f"Updated imported toolbar: {toolbar_dir}")
 
     cubit_bin = find_cubit_bin()
     if not cubit_bin:
@@ -514,9 +614,12 @@ def install_panels(all_users=False):
 
     print()
     print("=== Installation Complete ===")
-    print("Import the official toolbar package once in Cubit via:")
-    print("  Tools > Custom Toolbar Editor > Import > Package")
-    print(f"  {toolbar_package}")
+    if synced_toolbars:
+        print("Existing official WorkflowToolbar payloads were updated.")
+    else:
+        print("Import the official toolbar package once in Cubit via:")
+        print("  Tools > Custom Toolbar Editor > Import > Package")
+        print(f"  {toolbar_package}")
     print("Then restart Cubit 2025.12 to verify persistent loading.")
     return True
 

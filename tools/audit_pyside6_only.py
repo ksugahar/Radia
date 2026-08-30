@@ -18,8 +18,12 @@ Static checks:
   4. cubit_mesh_export.ccm (if present in the package source) has NO Qt5 DLL
      dependency (pefile import-table scan).
 
+Interface checks:
+  5. The official WorkflowToolbar remains complete and startup registers the
+     complementary Export menu through emclaro, never through a PySide6 QMenu.
+
 Headless check (isolated subprocess, offscreen Qt):
-  5. If PySide6 is installed, ExportDialog builds all 6 formats emitting valid
+  6. If PySide6 is installed, ExportDialog builds all 6 formats emitting valid
      ``export ... overwrite`` commands.  If PySide6 is absent, this is a skip,
      not a failure.
 
@@ -166,10 +170,11 @@ def check_deployed_panel_source(
 
 
 def check_official_toolbar_contract() -> list[str]:
-    """Validate the Coreform-owned WorkflowToolbar source contract."""
+    """Validate the WorkflowToolbar and Claro-owned menu contracts."""
     toolbar_root = ROOT / "src" / "radia" / "panels" / "cubit_toolbar"
     template = toolbar_root / "toolbars" / "radia_export_toolbar.ttb.tmpl"
     register = ROOT / "src" / "radia" / "panels" / "register_toolbar.py"
+    export_menu = ROOT / "src" / "radia" / "panels" / "radia_export_menu.py"
     issues: list[str] = []
     if not template.is_file():
         return [f"missing WorkflowToolbar template: {template}"]
@@ -189,8 +194,13 @@ def check_official_toolbar_contract() -> list[str]:
             issues.append(f"missing toolbar launcher: {relative!r}")
 
     register_text = register.read_text(encoding="utf-8", errors="replace")
-    if "radia_export_menu.install_menu()" in register_text:
-        issues.append("~/.cubit startup still injects the unsupported QMenu")
+    menu_text = export_menu.read_text(encoding="utf-8", errors="replace")
+    if "radia_export_menu.install_menu()" not in register_text:
+        issues.append("~/.cubit startup does not install the Claro Export menu")
+    if "emclaro.add_to_menu" not in menu_text:
+        issues.append("Export menu does not use Cubit's official Claro API")
+    if "QMenu(" in menu_text or "menu_bar.addMenu" in menu_text:
+        issues.append("Export menu still injects an unsupported PySide6 QMenu")
     return issues
 
 
@@ -316,7 +326,7 @@ def main(argv: list[str]) -> int:
 
     toolbar_contract = check_official_toolbar_contract()
     print(f"[{'FAIL' if toolbar_contract else 'OK'}] official Coreform "
-          "WorkflowToolbar contract (6 export actions; no startup QMenu)")
+          "WorkflowToolbar + Claro Export menu contract")
     for issue in toolbar_contract:
         print("       " + issue)
     all_issues += toolbar_contract

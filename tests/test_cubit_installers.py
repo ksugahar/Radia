@@ -1,5 +1,7 @@
-import sys
+import hashlib
 import importlib.util
+import json
+import sys
 import tarfile
 import xml.etree.ElementTree as ET
 from pathlib import Path
@@ -168,6 +170,38 @@ def test_install_panels_writes_and_verifies_current_user(monkeypatch, tmp_path):
     assert ok, issues
 
 
+def test_install_panels_refreshes_an_existing_official_toolbar(
+        monkeypatch, tmp_path):
+    install_panels = _load_install_panels()
+
+    monkeypatch.setattr(install_panels.sys, "platform", "win32")
+    program_files = _patch_windows_env(monkeypatch, tmp_path)
+    _fake_cubit(program_files, "2025.12")
+    toolbar_dir = (
+        tmp_path / "LocalAppData" / "Radia" / "Cubit" / "Toolbars"
+        / "radia_export_toolbar"
+    )
+    (toolbar_dir / "scripts").mkdir(parents=True)
+    (toolbar_dir / "scripts" / "radia_export_menu.py").write_text(
+        "# stale\n", encoding="utf-8")
+
+    before = install_panels._verify_existing_toolbar_installations(
+        all_users=False)
+    assert any("stale" in issue for issue in before)
+    assert install_panels.install_panels(all_users=False) is True
+
+    issues = install_panels._verify_existing_toolbar_installations(
+        all_users=False)
+    assert issues == []
+    menu = toolbar_dir / "scripts" / "radia_export_menu.py"
+    assert menu.read_bytes() == (
+        PROJECT_ROOT / "src" / "radia" / "panels"
+        / "radia_export_menu.py"
+    ).read_bytes()
+    toolbar = toolbar_dir / "toolbars" / "radia_export_toolbar.ttb"
+    assert toolbar_dir.as_posix() in toolbar.read_text(encoding="utf-8")
+
+
 def test_official_toolbar_package_is_self_contained(tmp_path):
     install_panels = _load_install_panels()
 
@@ -206,3 +240,56 @@ def test_official_toolbar_package_is_self_contained(tmp_path):
         if element.tag in {"filename", "icon"} and element.text
     ]
     assert all(f"{path} => " in mappings for path in referenced)
+
+
+def test_native_build_is_worktree_relative_and_propagates_both_payloads():
+    build_script = (
+        PROJECT_ROOT / "src" / "cubit_plugin" / "cubit_build.ps1"
+    ).read_text(encoding="utf-8")
+    setup_script = (
+        PROJECT_ROOT / "packages" / "cubit-mesh-export" / "setup.py"
+    ).read_text(encoding="utf-8")
+
+    assert r"S:\Radia\01_GitHub" not in build_script
+    assert "$src = $PSScriptRoot" in build_script
+    assert "packages\\cubit-mesh-export\\src\\cubit_mesh_export" in build_script
+    for payload in ("cubit_mesh_export.ccm", "cubit_mesh_curver.pyd"):
+        assert payload in build_script
+        assert f'pkg_dir / "{payload}"' in setup_script
+
+
+def test_distribution_ci_packages_the_exact_candidate_binaries():
+    workflow = (
+        PROJECT_ROOT / ".github" / "workflows" / "cubit-mesh-export.yml"
+    ).read_text(encoding="utf-8")
+
+    assert "CUBIT_MESH_EXPORT_SKIP_FRESHNESS_CHECK" not in workflow
+    assert "python -m wheel tags" not in workflow
+    assert "Root-Is-Purelib: false" in workflow
+    assert "native_payloads.json" in workflow
+    assert "download_release_asset.py" in workflow
+    assert "Get-FileHash" in workflow
+    assert '"netgen-mesher==6.2.2606"' in workflow
+    assert '"ngsolve==6.2.2606"' in workflow
+    assert "cubit_mesh_export/cubit_mesh_export.ccm" in workflow
+    assert "cubit_mesh_export/cubit_mesh_curver.pyd" in workflow
+    assert "tests\\test_cubit_menu_startup.py" in workflow
+    assert "python tools\\audit_pyside6_only.py" in workflow
+
+    setup_script = (
+        PROJECT_ROOT / "packages" / "cubit-mesh-export" / "setup.py"
+    ).read_text(encoding="utf-8")
+    assert "class BinaryDistribution(Distribution)" in setup_script
+    assert "setup(distclass=BinaryDistribution)" in setup_script
+
+    package_dir = (
+        PROJECT_ROOT / "packages" / "cubit-mesh-export" / "src"
+        / "cubit_mesh_export"
+    )
+    manifest = json.loads(
+        (package_dir / "native_payloads.json").read_text(encoding="utf-8"))
+    payload = manifest["payloads"]["cubit_mesh_curver.pyd"]
+    curver = (package_dir / "cubit_mesh_curver.pyd").read_bytes()
+    assert payload["asset_name"].endswith(payload["sha256"] + ".pyd")
+    assert payload["size"] == len(curver)
+    assert payload["sha256"] == hashlib.sha256(curver).hexdigest()

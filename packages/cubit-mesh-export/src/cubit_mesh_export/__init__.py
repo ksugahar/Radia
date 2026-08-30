@@ -14,7 +14,13 @@ Consistency checking (does NOT require Cubit):
 cubit-plugin-install deploys plugin binaries to Cubit.
 """
 
-__version__ = "0.14.13"
+# Import Netgen before the bundled curver on Windows. Netgen registers the
+# directory containing nglib.dll with the process DLL search path; without
+# that initialization, importing cubit_mesh_curver in a fresh Python process
+# fails even though the exact pinned Netgen wheel is installed.
+import netgen as _netgen  # noqa: F401
+
+__version__ = "0.14.14"
 
 # Compatibility window with the main radia package. The Cubit plugin
 # binaries bundled here (.ccm/.pyd; .ccl was removed in radia 4.80.0)
