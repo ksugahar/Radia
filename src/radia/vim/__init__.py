@@ -34,8 +34,9 @@ Public API (NGSolve-aligned validated solve primitives):
       -> (B, G, M_mass), the charge map, charge-Gram H-matrix, and HDiv mass used by DemagOperator.
          For a broken-HDiv cyclic material sector, pass
          internal_interfaces=True, cyclic_periodic_boundaries=(min,max), and
-         the rotational image arrays.  This pairs surface-charge jumps; it is
-         deliberately different from Solve's conforming Periodic(HDiv) trace.
+         the rotational image arrays.  This pairs Q1 or curved-Q2 HEX
+         surface-charge jumps; it is deliberately different from Solve's
+         conforming Periodic(HDiv) trace.
   MagnetizationSource(mesh, M_given, order=1)
       -> a fixed/given magnetization L2-projected into its own HDiv space, with a persistent native C++
          H-field CoefficientFunction for coupling to a separate soft-iron Solve.

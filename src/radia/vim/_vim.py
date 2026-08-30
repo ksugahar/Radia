@@ -863,6 +863,11 @@ _QUAD_Q2_LINEAR_WEIGHTS = np.array([
 ], dtype=float)
 _QUAD_REFERENCE_CORNERS = np.array(
     ((0.0, 0.0), (1.0, 0.0), (0.0, 1.0), (1.0, 1.0)), dtype=float)
+_HEX_REFERENCE_CORNERS_LOCAL = np.array(
+    ((0.0, 0.0, 0.0), (1.0, 0.0, 0.0),
+     (1.0, 1.0, 0.0), (0.0, 1.0, 0.0),
+     (0.0, 0.0, 1.0), (1.0, 0.0, 1.0),
+     (1.0, 1.0, 1.0), (0.0, 1.0, 1.0)), dtype=float)
 
 
 def _mesh_vertices_array(mesh, e):
@@ -886,6 +891,59 @@ def _quad_q2_lattice_nodes_ngsolve_linear(mesh, e):
     """9 lattice nodes for a linear NGSolve .vol boundary quad, in C++ Q2 face order."""
     V = _mesh_vertices_array(mesh, e)[_QUAD_NGSOLVE_LINEAR_ORDER]
     return _QUAD_Q2_LINEAR_WEIGHTS @ V
+
+
+def _hex_facet_q2_lattice_nodes(mesh, facet, owners, *, linear_lattice):
+    """Evaluate one global HEX facet in its canonical Q2 reference frame.
+
+    NGSolve has no public ``GetTrafo(global_facet)`` overload.  Embed the
+    global facet's canonical square in each owning HEX reference cell and let
+    the owning ``ElementTransformation`` evaluate the physical geometry.  On
+    an internal facet both owners must return the same nine physical nodes;
+    that is also a useful fail-loud check for a corrupt curved mesh.
+    """
+    facet_vertices = np.asarray(
+        [int(vertex.nr) for vertex in facet.vertices], dtype=int)[[0, 1, 3, 2]]
+    if linear_lattice:
+        corners = np.asarray(
+            [mesh[ng.NodeId(ng.VERTEX, int(vertex))].point
+             for vertex in facet_vertices], dtype=float)
+        return _QUAD_Q2_LINEAR_WEIGHTS @ corners
+
+    if not owners or len(owners) > 2:
+        raise ValueError(
+            "vim.ChargeGram: curved HEX facet %d has %d volume owners "
+            "(expected 1 exterior or 2 internal)" % (facet.nr, len(owners)))
+    evaluated = []
+    for element in owners:
+        reference_by_vertex = {
+            int(vertex.nr): _HEX_REFERENCE_CORNERS_LOCAL[local]
+            for local, vertex in enumerate(element.vertices)
+        }
+        try:
+            reference_corners = np.asarray(
+                [reference_by_vertex[int(vertex)] for vertex in facet_vertices])
+        except KeyError as exc:
+            raise RuntimeError(
+                "vim.ChargeGram: global facet is not contained in its "
+                "recorded HEX owner") from exc
+        reference_nodes = _QUAD_Q2_LINEAR_WEIGHTS @ reference_corners
+        rule = ng.IntegrationRule(
+            reference_nodes.tolist(), [1.0] * len(reference_nodes))
+        evaluated.append(_trafo_lattice_nodes(mesh, element, rule))
+
+    baseline = evaluated[0]
+    scale = max(float(np.max(np.linalg.norm(
+        baseline - baseline[0], axis=1))), 1.0e-12)
+    for candidate in evaluated[1:]:
+        relative = float(np.max(np.linalg.norm(
+            candidate - baseline, axis=1)) / scale)
+        if relative > 1.0e-10:
+            raise ValueError(
+                "vim.ChargeGram: curved HEX facet %d is geometrically "
+                "discontinuous between its two owners (relative "
+                "Q2-node residual=%g)" % (facet.nr, relative))
+    return baseline
 
 
 def _ref_prod_gauss(n, dim):
@@ -1142,6 +1200,27 @@ def _quad_pullback_matrix(order, reference_affine):
     return np.linalg.solve(master_vandermonde, slave_vandermonde)
 
 
+def _quad_nodal_pullback_matrix(order, reference_affine):
+    """Pull Qp nodal values through a square-symmetry affine map."""
+    order = int(order)
+    mons = _mons_quad(order)
+    nodes = np.asarray([
+        (u, v) for v in np.linspace(0.0, 1.0, order + 1)
+        for u in np.linspace(0.0, 1.0, order + 1)], dtype=float)
+    mapped = np.column_stack((np.ones(len(nodes)), nodes)) @ reference_affine
+    source_vandermonde = np.asarray([
+        [u ** i * v ** j for i, j in mons] for u, v in nodes])
+    mapped_vandermonde = np.asarray([
+        [u ** i * v ** j for i, j in mons] for u, v in mapped])
+    condition = np.linalg.cond(source_vandermonde)
+    if not np.isfinite(condition) or condition > 1.0e12:
+        raise RuntimeError(
+            "vim.ChargeGram: ill-conditioned cyclic Q%d nodal pullback"
+            % order)
+    return np.linalg.solve(
+        source_vandermonde.T, mapped_vandermonde.T).T
+
+
 def _facet_reference_monomial_transform(mesh, facet_space, order):
     """Map global FacetFESpace moments to the canonical facet Qp basis.
 
@@ -1218,10 +1297,11 @@ def _broken_hex_face_charge_basis(
 
     The reference normal flux coefficients come from NGSolve's global
     ``FacetFESpace`` moments.  Physical ``dS`` and the Piola surface factor
-    cancel, so the same reference map is exact on affine and bilinear/trapezoid
-    facets for BDM1/BDM2.  For a cyclic quotient, two separately meshed boundary
-    facets are pulled into one reference frame and summed as an internal jump;
-    their broken volume unknowns remain independent.
+    cancel, so the same reference map is exact on affine, bilinear/trapezoid,
+    and curved-Q2 facets for BDM1/BDM2.  NGSolve's owning HEX transformations
+    supply the physical Q2 face nodes.  For a cyclic quotient, two separately
+    meshed boundary facets are pulled into one reference frame and summed as an
+    internal jump; their broken volume unknowns remain independent.
     """
     _assert_broken_hdiv(fes)
     mesh = fes.mesh
@@ -1234,10 +1314,10 @@ def _broken_hex_face_charge_basis(
     jump.Assemble()
     jump_moments = _csr(jump)
 
-    owner_count = {int(facet.nr): 0 for facet in mesh.facets}
+    facet_owners = {int(facet.nr): [] for facet in mesh.facets}
     for element in mesh.Elements(ng.VOL):
         for facet in element.facets:
-            owner_count[int(facet.nr)] += 1
+            facet_owners[int(facet.nr)].append(element)
 
     mons = _mons_quad(int(p))
     facet_transform = _facet_reference_monomial_transform(
@@ -1245,6 +1325,7 @@ def _broken_hex_face_charge_basis(
     periodic_pairs = (_cyclic_periodic_hex_face_pairs(
         mesh, cyclic_periodic_boundaries, image_rot_angle)
         if cyclic_periodic_boundaries else ())
+    linear_lattice = mesh.GetCurveOrder() < 2 and mesh.deformation is None
     rows = {}
     face_nodes = {}
     for facet in mesh.facets:
@@ -1255,27 +1336,51 @@ def _broken_hex_face_charge_basis(
                 "vim.ChargeGram: FacetFESpace order %d has %d DoFs on "
                 "quadrilateral %d, expected %d"
                 % (p, len(dofs), nr, len(mons)))
-        owners = owner_count[nr]
-        if owners not in (1, 2):
+        owners = facet_owners[nr]
+        if len(owners) not in (1, 2):
             raise ValueError(
                 "vim.ChargeGram: facet %d has %d volume owners (expected "
-                "1 exterior or 2 internal)" % (nr, owners))
-        corners_cyclic = np.asarray(
-            [mesh[vertex].point for vertex in facet.vertices], dtype=float)
-        if corners_cyclic.shape != (4, 3):
+                "1 exterior or 2 internal)" % (nr, len(owners)))
+        if len(facet.vertices) != 4:
             raise ValueError(
                 "vim.ChargeGram: internal HEX interface path requires "
                 "quadrilateral facets")
-        # NGSolve facets provide cyclic vertices.  C++ Q2 lattice order uses
-        # [00,10,01,11], hence the 0,1,3,2 permutation.
-        corners = corners_cyclic[[0, 1, 3, 2]]
-        face_nodes[nr] = _QUAD_Q2_LINEAR_WEIGHTS @ corners
+        face_nodes[nr] = _hex_facet_q2_lattice_nodes(
+            mesh, facet, owners, linear_lattice=linear_lattice)
         rows[nr] = sp.csr_matrix(
             facet_transform @ jump_moments[dofs, :].toarray())
 
     paired_slaves = set()
+    maximum_geometry_relative_residual = 0.0
+    angles = tuple(float(value) for value in image_rot_angle)
+    if periodic_pairs:
+        cosine = np.cos(angles[0])
+        sine = np.sin(angles[0])
+        rotations = (
+            np.array(((cosine, -sine, 0.0),
+                      (sine, cosine, 0.0), (0.0, 0.0, 1.0))),
+            np.array(((cosine, sine, 0.0),
+                      (-sine, cosine, 0.0), (0.0, 0.0, 1.0))),
+        )
     for master_nr, slave_nr, reference_affine in periodic_pairs:
         pullback = sp.csr_matrix(_quad_pullback_matrix(p, reference_affine))
+        slave_geometry = (_quad_nodal_pullback_matrix(2, reference_affine)
+                          @ face_nodes[slave_nr])
+        master_geometry = face_nodes[master_nr]
+        geometry_scale = max(float(np.max(np.linalg.norm(
+            master_geometry - master_geometry[0], axis=1))), 1.0e-12)
+        geometry_residual = min(float(np.max(np.linalg.norm(
+            slave_geometry @ rotation.T - master_geometry, axis=1)))
+                                for rotation in rotations)
+        geometry_relative_residual = geometry_residual / geometry_scale
+        maximum_geometry_relative_residual = max(
+            maximum_geometry_relative_residual,
+            geometry_relative_residual)
+        if geometry_relative_residual > 1.0e-9:
+            raise ValueError(
+                "vim.ChargeGram: cyclic curved HEX facets do not match under "
+                "the first image rotation (relative Q2-node residual=%g)"
+                % geometry_relative_residual)
         rows[master_nr] = (rows[master_nr] + pullback @ rows[slave_nr]).tocsr()
         rows[master_nr].eliminate_zeros()
         paired_slaves.add(slave_nr)
@@ -1289,6 +1394,8 @@ def _broken_hex_face_charge_basis(
         periodic_face_pair_count=len(periodic_pairs),
         facet_numbers=tuple(ordered_facets),
         periodic_master_facets=tuple(pair[0] for pair in periodic_pairs),
+        periodic_geometry_relative_residual=(
+            maximum_geometry_relative_residual),
     )
 
 
@@ -1450,6 +1557,9 @@ def _charge_basis_hex(fes, cob_quad=3, *, materialize_mass=True,
                     "charge_basis_periodic_face_pair_count": int(
                         internal.get("periodic_face_pair_count", 0)
                         if internal_interfaces else 0),
+                    "charge_basis_periodic_geometry_relative_residual": float(
+                        internal.get("periodic_geometry_relative_residual", 0.0)
+                        if internal_interfaces else 0.0),
                 })
 
 
@@ -2027,8 +2137,10 @@ def build_charge_gram(fes, intorder=None, eps=1e-7, leafsize=16, eta=2.0, far_qu
     periodic contract and therefore requires ``internal_interfaces=True`` plus
     rotational images.  It does not compress HDiv unknowns: the slave facet's
     reference charge polynomial is pulled onto the master and summed into one
-    interface-jump row.  Conforming FEM instead uses ``Periodic(HDiv)`` and
-    excludes its artificial cut faces before calling this builder.
+    interface-jump row.  Q1 and curved-Q2 pure-HEX geometry are supported, and
+    every paired Q2 node is checked against the sector rotation.  Conforming
+    FEM instead uses ``Periodic(HDiv)`` and excludes its artificial cut faces
+    before calling this builder.
 
     For TET, curve_order=None matches the mesh, 0 forces the flat diagnostic path, and 2 selects the
     isoparametric-P2 curved charge Gram.  HEX/WEDGE always read the active geometry through GetTrafo, so their
@@ -2080,13 +2192,14 @@ def build_charge_gram(fes, intorder=None, eps=1e-7, leafsize=16, eta=2.0, far_qu
             "Sculpt needs mesh-based geometry with a preserved skin; the "
             "cubit MCP `cubit_stl_to_vol` tool does this and gates on it).")
     if internal_interfaces and not (
-            mesh.dim == 3 and _vtypes in ({4}, {8})
-            and mesh.GetCurveOrder() < 2):
+            mesh.dim == 3 and (
+                _vtypes == {8}
+                or (_vtypes == {4} and mesh.GetCurveOrder() < 2))):
         raise NotImplementedError(
             "vim.ChargeGram: internal_interfaces=True is currently wired "
-            "for straight pure-TET and Q1-mapped pure-HEX meshes; "
-            "WEDGE/curved topology interfaces require their matching facet "
-            "geometry kernels")
+            "for straight pure-TET and Q1/Q2-mapped pure-HEX meshes; "
+            "WEDGE/curved-TET topology interfaces require their matching "
+            "facet geometry kernels")
     if mesh.dim == 3 and _vtypes == {4}:
         if curve_order is None:
             mesh_curve_order = int(mesh.GetCurveOrder())
