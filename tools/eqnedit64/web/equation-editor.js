@@ -326,42 +326,46 @@
       tex.replace(/\\bm(?=\s*\{)/g, "\\boldsymbol"));
   }
 
-  function normalizeOfficeAlignedTables(math) {
-    Array.prototype.forEach.call(math.querySelectorAll("mtable"), function (table) {
-      var alignment = (table.getAttribute("columnalign") || "")
-        .trim().split(/\s+/);
-      /* MathJax represents aligned as right/left mtd pairs. Office's bundled
-       * MML2OMML transform ignores columnalign and turns multi-cell rows into
-       * centred matrices. Collapse each row to one mtd, start it with the
-       * maligngroup that makes PowerPoint retain an equation array, and retain
-       * every TeX ampersand as MathML malignmark; Office then creates eqArr
-       * whose odd '&' markers align the following content. The synthetic
-       * leading empty column used for unanchored rows therefore becomes an
-       * explicit left-edge marker. */
-      if (alignment.indexOf("right") < 0 || alignment.indexOf("left") < 0) {
-        return;
+  function splitUnanchoredOfficeRows(math) {
+    var tables = math.querySelectorAll("mtable");
+    if (tables.length !== 1) return null;
+    var table = tables[0];
+    var alignment = (table.getAttribute("columnalign") || "")
+      .trim().split(/\s+/);
+    if (alignment.indexOf("right") < 0 || alignment.indexOf("left") < 0) {
+      return null;
+    }
+    var only = table;
+    while (only.parentNode !== math) {
+      var parent = only.parentNode;
+      if (!parent || (parent.localName !== "mrow" &&
+          parent.localName !== "mstyle")) return null;
+      var elementChildren = Array.prototype.filter.call(
+        parent.children, function () { return true; });
+      if (elementChildren.length !== 1 || elementChildren[0] !== only) {
+        return null;
       }
-      Array.prototype.forEach.call(table.children, function (row) {
-        if (row.localName !== "mtr") return;
-        var cells = Array.prototype.filter.call(row.children, function (cell) {
-          return cell.localName === "mtd";
-        });
-        if (cells.length < 2) return;
-        var combined = math.ownerDocument.createElementNS(
-          math.namespaceURI, "mtd");
-        combined.appendChild(math.ownerDocument.createElementNS(
-          math.namespaceURI, "maligngroup"));
-        cells.forEach(function (cell, index) {
-          if (index > 0) {
-            combined.appendChild(math.ownerDocument.createElementNS(
-              math.namespaceURI, "malignmark"));
-          }
-          while (cell.firstChild) combined.appendChild(cell.firstChild);
-        });
-        cells.forEach(function (cell) { row.removeChild(cell); });
-        row.appendChild(combined);
+      only = parent;
+    }
+    var rows = Array.prototype.filter.call(table.children, function (row) {
+      return row.localName === "mtr";
+    });
+    var cellsByRow = rows.map(function (row) {
+      return Array.prototype.filter.call(row.children, function (cell) {
+        return cell.localName === "mtd";
       });
-      table.setAttribute("columnalign", "left");
+    });
+    if (!rows.length || !cellsByRow.every(function (cells) {
+      return cells.length === 2 && cells[0].textContent.trim() === "";
+    })) return null;
+
+    var serializer = new window.XMLSerializer();
+    return cellsByRow.map(function (cells) {
+      var rowMath = math.cloneNode(false);
+      Array.prototype.forEach.call(cells[1].childNodes, function (child) {
+        rowMath.appendChild(child.cloneNode(true));
+      });
+      return serializer.serializeToString(rowMath);
     });
   }
 
@@ -377,7 +381,6 @@
     var math = doc.documentElement;
     math.setAttribute("display", "inline");
     math.setAttribute("mathsize", "18pt");
-    normalizeOfficeAlignedTables(math);
 
     Array.prototype.forEach.call(math.querySelectorAll("*"), function (node) {
       Array.prototype.slice.call(node.attributes).forEach(function (attribute) {
@@ -409,6 +412,11 @@
         node.setAttribute("stretchy", "true");
       }
     });
+    var officeRows = splitUnanchoredOfficeRows(math);
+    if (officeRows) {
+      return officeRows.join(
+        '<span style="font-size:18pt">&#160;</span><br>');
+    }
     return new window.XMLSerializer().serializeToString(math);
   }
 

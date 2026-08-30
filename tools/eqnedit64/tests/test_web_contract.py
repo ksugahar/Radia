@@ -77,10 +77,12 @@ def test_office_mathml_is_canonical_inline_18pt() -> None:
     assert '{ display: false }' in canonical
     assert 'setAttribute("display", "inline")' in canonical
     assert 'setAttribute("mathsize", "18pt")' in canonical
-    assert "normalizeOfficeAlignedTables(math)" in canonical
-    assert 'math.namespaceURI, "maligngroup"' in SOURCE
-    assert 'math.namespaceURI, "malignmark"' in SOURCE
-    assert 'table.setAttribute("columnalign", "left")' in SOURCE
+    assert "splitUnanchoredOfficeRows(math)" in canonical
+    assert 'cells[0].textContent.trim() === ""' in SOURCE
+    assert "officeRows.join(" in canonical
+    assert 'font-size:18pt' in canonical
+    assert "maligngroup" not in canonical
+    assert "malignmark" not in canonical
     assert 'querySelectorAll("mstyle")' in canonical
     assert 'attribute.name.indexOf("data-") === 0' in canonical
     assert 'setAttribute("largeop", "true")' in canonical

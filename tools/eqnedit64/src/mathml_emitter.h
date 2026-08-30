@@ -15,6 +15,13 @@ std::string tree_to_mathml(const LineNode& root, double pointSize = 24.0);
 std::string latex_to_mathml(const std::string& latex,
                             double pointSize = 24.0);
 
+/* Office's HTML MathML importer renders MathML alignment elements as visible
+ * ampersands and centres one-column mtables. For an outer, unanchored aligned
+ * environment, publish one editable inline MathML root per row separated by
+ * HTML line breaks. Other input remains one MathML root. */
+std::string latex_to_office_mathml_fragment(
+    const std::string& latex, double pointSize = 18.0);
+
 }  // namespace eqnedit
 
 #endif  // MATHML_EMITTER_H
