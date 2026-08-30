@@ -1,4 +1,4 @@
-"""Connected-yoke FFAG cyclic-sector validation for BDM2 HEX.
+"""Connected-yoke FFAG cyclic-sector validation for curved-Q2 BDM2 HEX.
 
 The annular yoke crosses both azimuthal sector planes.  A tangential applied
 field gives nonzero normal magnetization on those cuts, making an image-only
@@ -99,6 +99,38 @@ def build_connected_yoke_mesh(*, fold, inner_radius, outer_radius,
     return ng.Mesh(netmesh)
 
 
+def _curve_mesh(mesh, order):
+    from netgen.meshing import EdgeDescriptor
+
+    ngmesh = mesh.ngmesh
+    if not ngmesh.EdgeDescriptors():
+        for index, face in enumerate(ngmesh.FaceDescriptors(), start=1):
+            descriptor = EdgeDescriptor()
+            descriptor.edgenr = index
+            descriptor.surfnr = (face.surfnr, -1)
+            descriptor.domin = face.domin
+            descriptor.domout = face.domout
+            descriptor.name = face.bcname or f"boundary_{index}"
+            assert ngmesh.Add(descriptor) == index
+    mesh.Curve(order)
+
+
+def apply_cyclic_q2_geometry(mesh, args):
+    import ngsolve as ng
+
+    _curve_mesh(mesh, args.geometry_order)
+    space = ng.VectorH1(mesh, order=args.geometry_order)
+    deformation = ng.GridFunction(space)
+    radius_squared = ng.x * ng.x + ng.y * ng.y
+    deformation.Interpolate(ng.CF((
+        args.radial_deformation_scale * ng.x * radius_squared,
+        args.radial_deformation_scale * ng.y * radius_squared,
+        args.axial_deformation_scale * ng.z * radius_squared,
+    )))
+    mesh.SetDeformation(deformation)
+    return deformation
+
+
 def _mean_tangential_magnetization(result, mesh):
     import ngsolve as ng
 
@@ -125,6 +157,8 @@ def run_validation(args):
         fold=args.fold, inner_radius=args.inner_radius,
         outer_radius=args.outer_radius, half_height=args.half_height,
         full_ring=False)
+    full_deformation = apply_cyclic_q2_geometry(full, args)
+    sector_deformation = apply_cyclic_q2_geometry(sector, args)
     radius = ng.sqrt(ng.x * ng.x + ng.y * ng.y)
     applied = ng.CF((
         -args.applied_field_am * ng.y / radius,
@@ -136,12 +170,13 @@ def run_validation(args):
         full_result = vim.Solve(
             full, mu_r=args.mu_r, H_ext=applied,
             order=args.hdiv_order, gram_eps=args.gram_eps, leaf=args.leaf,
-            tol=args.solve_tol)
+            curve_order=args.geometry_order, tol=args.solve_tol)
         rad.UtiDelAll()
         sector_result = vim.Solve(
             sector, mu_r=args.mu_r, H_ext=applied,
             order=args.hdiv_order, image_cyclic=args.fold,
             cyclic_periodic_boundaries=("periodic_min", "periodic_max"),
+            curve_order=args.geometry_order,
             gram_eps=args.gram_eps, leaf=args.leaf, tol=args.solve_tol)
         full_mean = _mean_tangential_magnetization(full_result, full)
         sector_mean = _mean_tangential_magnetization(sector_result, sector)
@@ -156,6 +191,15 @@ def run_validation(args):
         sector_field = np.asarray(vim.FieldFromSolution(
             sector_result, probes, algorithm="direct"), dtype=float)
 
+    face_nodes = np.asarray(
+        sector_result["_charge_gram"].hex_stored_nodes()["face_nodes"],
+        dtype=float).reshape(-1, 9, 3)
+    bilinear_centres = 0.25 * (
+        face_nodes[:, 0] + face_nodes[:, 2]
+        + face_nodes[:, 6] + face_nodes[:, 8])
+    maximum_q2_face_curvature = float(np.max(np.linalg.norm(
+        face_nodes[:, 4] - bilinear_centres, axis=1)))
+
     mean_relative_error = abs(sector_mean - full_mean) / abs(full_mean)
     field_relative_to_drive = float(np.max(np.linalg.norm(
         sector_field - full_field, axis=1)) / args.applied_field_am)
@@ -168,6 +212,11 @@ def run_validation(args):
                 sector.Elements(ng.VOL)) == {8}),
         "periodic_trace_dofs_are_compressed": bool(
             int(sector_result["periodic_slave_dofs"]) > 0),
+        "curved_q2_geometry_is_used": bool(
+            full.GetCurveOrder() == args.geometry_order == 2
+            and sector.GetCurveOrder() == args.geometry_order
+            and maximum_q2_face_curvature
+            >= args.minimum_q2_face_curvature),
         "sector_dofs_scale_as_one_fold": bool(
             int(sector_result["ndof"]) * args.fold
             == int(full_result["ndof"])),
@@ -177,11 +226,12 @@ def run_validation(args):
             field_relative_to_drive <= args.maximum_field_relative_to_drive),
     }
     return {
-        "schema": "radia.ffag-connected-cyclic-yoke/v1",
+        "schema": "radia.ffag-connected-cyclic-yoke/v2",
         "status": "pass" if all(gates.values()) else "fail",
         "scope": (
-            "Connected annular HEX yoke with nonzero normal magnetization "
-            "on the azimuthal cuts; periodic trace plus cyclic images."),
+            "Connected curved-Q2 annular HEX yoke with nonzero normal "
+            "magnetization on the azimuthal cuts; periodic trace plus "
+            "cyclic images."),
         "settings": vars(args) | {"output": str(args.output)},
         "contract": {
             "fold": contract.fold,
@@ -199,6 +249,12 @@ def run_validation(args):
             "sector_dofs": int(sector_result["ndof"]),
             "periodic_slave_dofs": int(
                 sector_result["periodic_slave_dofs"]),
+        },
+        "geometry": {
+            "order": int(args.geometry_order),
+            "maximum_q2_face_curvature_m": maximum_q2_face_curvature,
+            "full_deformation_dofs": int(full_deformation.space.ndof),
+            "sector_deformation_dofs": int(sector_deformation.space.ndof),
         },
         "mean_tangential_magnetization_am": {
             "full_ring": full_mean,
@@ -232,6 +288,7 @@ def parse_args(argv=None):
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--fold", type=int, default=12)
     parser.add_argument("--hdiv-order", type=int, choices=(1, 2), default=2)
+    parser.add_argument("--geometry-order", type=int, choices=(2,), default=2)
     parser.add_argument("--inner-radius", type=float, default=0.030)
     parser.add_argument("--outer-radius", type=float, default=0.050)
     parser.add_argument("--half-height", type=float, default=0.004)
@@ -242,6 +299,12 @@ def parse_args(argv=None):
     parser.add_argument("--solve-tol", type=float, default=1.0e-10)
     parser.add_argument("--probe-count", type=int, default=5)
     parser.add_argument("--threads", type=int, default=8)
+    parser.add_argument(
+        "--radial-deformation-scale", type=float, default=2.5)
+    parser.add_argument(
+        "--axial-deformation-scale", type=float, default=1.5)
+    parser.add_argument(
+        "--minimum-q2-face-curvature", type=float, default=1.0e-6)
     parser.add_argument("--maximum-mean-relative-error", type=float,
                         default=1.0e-8)
     parser.add_argument("--maximum-field-relative-to-drive", type=float,
