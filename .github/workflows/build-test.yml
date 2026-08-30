@@ -96,6 +96,7 @@ jobs:
       RUN_SLOW_TESTS: ${{ github.event_name == 'workflow_dispatch' && inputs.full_slow == true }}
       RUN_GOLDEN_TESTS: ${{ github.event_name == 'workflow_dispatch' && (inputs.run_golden == true || inputs.full_slow == true) }}
       RUN_VALIDATION_TESTS: ${{ github.event_name == 'workflow_dispatch' && (inputs.run_validation_test == true || inputs.run_golden == true || inputs.full_slow == true) }}
+      RADIA_CI_OUTPUT_DIR: '${{ runner.temp }}\radia-ci-output-${{ github.run_id }}-${{ github.run_attempt }}'
 
     steps:
       - uses: actions/checkout@v4
@@ -320,7 +321,8 @@ jobs:
           # as artifact on failure. Tee-Object keeps the live console log
           # too. The embedded batch file's cmd.exe child output goes through
           # PowerShell stdout because we pipe via the *>&1 merge.
-          $buildLog = "$env:GITHUB_WORKSPACE\build-msvc-stdout.log"
+          New-Item -ItemType Directory -Force -Path $env:RADIA_CI_OUTPUT_DIR | Out-Null
+          $buildLog = Join-Path $env:RADIA_CI_OUTPUT_DIR 'build-msvc-stdout.log'
 
           # 2026-05-28: tag pushes get -Rebuild to force clean build.
           # Reason: Build.ps1 line 140-141 documents that ninja "records
@@ -375,7 +377,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: build-log-${{ github.sha }}
-          path: build-msvc-stdout.log
+          path: '${{ env.RADIA_CI_OUTPUT_DIR }}\build-msvc-stdout.log'
           if-no-files-found: ignore
           retention-days: 7
 
@@ -440,7 +442,7 @@ jobs:
             '-v',
             '--tb=short',
             '-r', 'aR',
-            '--junitxml=test-results.xml',
+            "--junitxml=$env:RADIA_CI_OUTPUT_DIR\test-results.xml",
             '--durations=50',
             '--durations-min=1.0',
             '--reruns', '2',
@@ -454,7 +456,7 @@ jobs:
             Write-Host "Manual full gate -- running slow simple tests here; golden tests run in their own step."
           }
           $pytestArgs += @('-m', $markerExpr)
-          python -m pytest @pytestArgs 2>&1 | Tee-Object -FilePath pytest-basic-stdout.log
+          python -m pytest @pytestArgs 2>&1 | Tee-Object -FilePath "$env:RADIA_CI_OUTPUT_DIR\pytest-basic-stdout.log"
           $rc = $LASTEXITCODE
           Write-Host "pytest simple exit=$rc"
           if ($rc -ne 0) {
@@ -463,7 +465,7 @@ jobs:
             # so that failures surface as ::error annotations BEFORE
             # the job is marked failed (otherwise GitHub UI shows no
             # failed-test names without an artifact download).
-            "$rc" | Out-File -Encoding ascii pytest-basic-exit.txt
+            "$rc" | Out-File -Encoding ascii "$env:RADIA_CI_OUTPUT_DIR\pytest-basic-exit.txt"
             exit $rc
           }
 
@@ -480,7 +482,7 @@ jobs:
             '-v',
             '--tb=short',
             '-r', 'aR',
-            '--junitxml=golden-test-results.xml',
+            "--junitxml=$env:RADIA_CI_OUTPUT_DIR\golden-test-results.xml",
             '--durations=50',
             '--durations-min=1.0'
           )
@@ -492,12 +494,12 @@ jobs:
             Write-Host "Manual full validation gate -- running validation_test including slow tests; compute_host tests remain mdx/hibino-only."
           }
           if ($markerExpr) { $pytestArgs += @('-m', $markerExpr) }
-          python -m pytest @pytestArgs 2>&1 | Tee-Object -FilePath pytest-golden-stdout.log
+          python -m pytest @pytestArgs 2>&1 | Tee-Object -FilePath "$env:RADIA_CI_OUTPUT_DIR\pytest-golden-stdout.log"
           $rc = $LASTEXITCODE
           Write-Host "pytest validation exit=$rc"
           if ($rc -ne 0) {
             Write-Host "::error::Validation tests failed (rc=$rc) -- see Annotate step for the test list"
-            "$rc" | Out-File -Encoding ascii pytest-golden-exit.txt
+            "$rc" | Out-File -Encoding ascii "$env:RADIA_CI_OUTPUT_DIR\pytest-golden-exit.txt"
             exit $rc
           }
 
@@ -542,15 +544,15 @@ jobs:
           python -m pytest validation_test/panels/test_panel_output_health.py `
                             validation_test/panels/test_combo_wheel_guard.py `
             -v --tb=short -r aR `
-            --junitxml=panel-test-results.xml `
+            --junitxml="$env:RADIA_CI_OUTPUT_DIR\panel-test-results.xml" `
             --durations=25 --durations-min=0.5 `
             --reruns 1 --reruns-delay 1 `
-            2>&1 | Tee-Object -FilePath pytest-panel-stdout.log
+            2>&1 | Tee-Object -FilePath "$env:RADIA_CI_OUTPUT_DIR\pytest-panel-stdout.log"
           $rc = $LASTEXITCODE
           Write-Host "pytest panel smoke exit=$rc"
           if ($rc -ne 0) {
             Write-Host "::error::Panel smoke tests failed (rc=$rc) -- see Annotate step for the test list"
-            "$rc" | Out-File -Encoding ascii pytest-panel-exit.txt
+            "$rc" | Out-File -Encoding ascii "$env:RADIA_CI_OUTPUT_DIR\pytest-panel-exit.txt"
             exit $rc
           }
 
@@ -567,15 +569,15 @@ jobs:
           python -m pytest validation_test/panels/test_motor_transient_golden.py `
                             validation_test/panels/test_motor_lamination_golden.py `
             -v --tb=short -r aR `
-            --junitxml=panel-golden-test-results.xml `
+            --junitxml="$env:RADIA_CI_OUTPUT_DIR\panel-golden-test-results.xml" `
             --durations=25 --durations-min=0.5 `
             --reruns 1 --reruns-delay 1 `
-            2>&1 | Tee-Object -FilePath pytest-panel-golden-stdout.log
+            2>&1 | Tee-Object -FilePath "$env:RADIA_CI_OUTPUT_DIR\pytest-panel-golden-stdout.log"
           $rc = $LASTEXITCODE
           Write-Host "pytest panel golden exit=$rc"
           if ($rc -ne 0) {
             Write-Host "::error::Panel golden tests failed (rc=$rc) -- see Annotate step for the test list"
-            "$rc" | Out-File -Encoding ascii pytest-panel-golden-exit.txt
+            "$rc" | Out-File -Encoding ascii "$env:RADIA_CI_OUTPUT_DIR\pytest-panel-golden-exit.txt"
             exit $rc
           }
 
@@ -601,10 +603,10 @@ jobs:
         run: |
           $found = $false
           foreach ($pair in @(
-            @{ xml = 'test-results.xml';              log = 'pytest-basic-stdout.log';        label = 'simple' },
-            @{ xml = 'golden-test-results.xml';       log = 'pytest-golden-stdout.log';       label = 'golden' },
-            @{ xml = 'panel-test-results.xml';        log = 'pytest-panel-stdout.log';        label = 'panel-smoke' },
-            @{ xml = 'panel-golden-test-results.xml'; log = 'pytest-panel-golden-stdout.log'; label = 'panel-golden' }
+            @{ xml = "$env:RADIA_CI_OUTPUT_DIR\test-results.xml";              log = "$env:RADIA_CI_OUTPUT_DIR\pytest-basic-stdout.log";        label = 'simple' },
+            @{ xml = "$env:RADIA_CI_OUTPUT_DIR\golden-test-results.xml";       log = "$env:RADIA_CI_OUTPUT_DIR\pytest-golden-stdout.log";       label = 'golden' },
+            @{ xml = "$env:RADIA_CI_OUTPUT_DIR\panel-test-results.xml";        log = "$env:RADIA_CI_OUTPUT_DIR\pytest-panel-stdout.log";        label = 'panel-smoke' },
+            @{ xml = "$env:RADIA_CI_OUTPUT_DIR\panel-golden-test-results.xml"; log = "$env:RADIA_CI_OUTPUT_DIR\pytest-panel-golden-stdout.log"; label = 'panel-golden' }
           )) {
             $xmlPath = $pair.xml
             $logPath = $pair.log
@@ -667,10 +669,14 @@ jobs:
           $dst = "C:\actions-runner\test-history\${{ github.sha }}_${{ github.run_id }}_${{ github.run_attempt }}"
           New-Item -ItemType Directory -Force -Path $dst | Out-Null
           foreach ($f in @(
-            'test-results.xml','golden-test-results.xml',
-            'panel-test-results.xml','panel-golden-test-results.xml','mcp-test-results.xml',
-            'pytest-basic-stdout.log','pytest-golden-stdout.log',
-            'pytest-panel-stdout.log','pytest-panel-golden-stdout.log'
+            "$env:RADIA_CI_OUTPUT_DIR\test-results.xml",
+            "$env:RADIA_CI_OUTPUT_DIR\golden-test-results.xml",
+            "$env:RADIA_CI_OUTPUT_DIR\panel-test-results.xml",
+            "$env:RADIA_CI_OUTPUT_DIR\panel-golden-test-results.xml",
+            "$env:RADIA_CI_OUTPUT_DIR\pytest-basic-stdout.log",
+            "$env:RADIA_CI_OUTPUT_DIR\pytest-golden-stdout.log",
+            "$env:RADIA_CI_OUTPUT_DIR\pytest-panel-stdout.log",
+            "$env:RADIA_CI_OUTPUT_DIR\pytest-panel-golden-stdout.log"
           )) {
             if (Test-Path $f) {
               Copy-Item $f -Destination $dst -Force
@@ -688,14 +694,14 @@ jobs:
         with:
           name: test-results
           path: |
-            test-results.xml
-            golden-test-results.xml
-            panel-test-results.xml
-            panel-golden-test-results.xml
-            pytest-basic-stdout.log
-            pytest-golden-stdout.log
-            pytest-panel-stdout.log
-            pytest-panel-golden-stdout.log
+            ${{ env.RADIA_CI_OUTPUT_DIR }}\test-results.xml
+            ${{ env.RADIA_CI_OUTPUT_DIR }}\golden-test-results.xml
+            ${{ env.RADIA_CI_OUTPUT_DIR }}\panel-test-results.xml
+            ${{ env.RADIA_CI_OUTPUT_DIR }}\panel-golden-test-results.xml
+            ${{ env.RADIA_CI_OUTPUT_DIR }}\pytest-basic-stdout.log
+            ${{ env.RADIA_CI_OUTPUT_DIR }}\pytest-golden-stdout.log
+            ${{ env.RADIA_CI_OUTPUT_DIR }}\pytest-panel-stdout.log
+            ${{ env.RADIA_CI_OUTPUT_DIR }}\pytest-panel-golden-stdout.log
           retention-days: 30
 
       # ----------------------------------------------------------------
