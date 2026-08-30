@@ -96,7 +96,7 @@ jobs:
       RUN_SLOW_TESTS: ${{ github.event_name == 'workflow_dispatch' && inputs.full_slow == true }}
       RUN_GOLDEN_TESTS: ${{ github.event_name == 'workflow_dispatch' && (inputs.run_golden == true || inputs.full_slow == true) }}
       RUN_VALIDATION_TESTS: ${{ github.event_name == 'workflow_dispatch' && (inputs.run_validation_test == true || inputs.run_golden == true || inputs.full_slow == true) }}
-      RADIA_CI_OUTPUT_DIR: '${{ runner.temp }}\radia-ci-output-${{ github.run_id }}-${{ github.run_attempt }}'
+      RADIA_CI_OUTPUT_DIR: 'C:\temp\radia-ci-output-${{ github.run_id }}-${{ github.run_attempt }}'
 
     steps:
       - uses: actions/checkout@v4
