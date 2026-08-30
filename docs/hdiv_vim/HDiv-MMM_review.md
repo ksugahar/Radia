@@ -19,9 +19,10 @@ exposed several failure modes.
   regressions are reconciled below; none of those three commits is merged on
   `main` as written.
 - Latest Claude implementation source: an uncommitted shared-tree patch on
-  `backup/main-pre-release-20260821` at `cbc029319`, documented in
-  `handover.md`. The BDM2 TET directional-moment correction is isolated on
-  this review branch as `51dce89c1` and is included in this revision.
+  `backup/main-pre-release-20260821` at `cbc029319`, documented in local
+  handover notes dated 2026-08-28. The BDM2 TET directional-moment correction
+  is isolated on this review branch as `51dce89c1` and is included in this
+  revision.
 - Scope: correctness, deterministic execution, NGSolve/TaskManager policy,
   public capability, field and material contracts, maintainability,
   performance, MATLAB parity, and reproducibility.
@@ -139,7 +140,7 @@ The latest Claude HDiv implementation originated outside a branch commit. It
 was a small part of the much larger dirty shared tree at
 `S:\Radia\01_GitHub`, based on `backup/main-pre-release-20260821` at
 `cbc029319`. Commit `51dce89c1` isolates only the patch identified in
-`handover.md`; no other co-located WIP was copied.
+the local handover notes; no other co-located WIP was copied.
 
 The correction is mathematically and structurally appropriate:
 
