@@ -100,7 +100,7 @@ def test_prescribed_source_geometry_only_path_covers_production_3d_elements():
         ("hex-bdm1", MakeStructured3DMesh(
             hexes=True, nx=1, ny=1, nz=1, mapping=mapping), 1, None, "analytic-tet-bdm1"),
         ("hex-curved-bdm2", MakeStructured3DMesh(
-            hexes=True, nx=1, ny=1, nz=1, mapping=mapping), 2, 2, "element-cloud-bdm2"),
+            hexes=True, nx=1, ny=1, nz=1, mapping=mapping), 2, 2, "analytic-tet-bdm2"),
         ("wedge-bdm1", MakeStructured3DMesh(
             prism=True, nx=1, ny=1, nz=1, mapping=mapping), 1, None, "element-cloud-bdm1"),
         ("wedge-curved-bdm2", MakeStructured3DMesh(

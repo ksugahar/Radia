@@ -5,6 +5,25 @@ All notable changes to the `radia` package.  Format: each release lists
 
 ## Unreleased
 
+## 4.95.73 - Curved HEX BDM2 and cyclic FFAG sectors
+
+Released 2026-08-30.
+
+- Promoted mapped and curved-Q2 HEX BDM2 material solves to the production
+  lane. Complete-host tensor rules preserve high-order volume/surface charge
+  cancellation for smooth pairs, while target-anchored radial Duffy rules
+  resolve adjacent and self interactions without choosing a reference-cell
+  diagonal.
+- Added the matching native field path by converting affine HEX subcells to
+  exact sextic-volume and quartic-surface polynomial sources. Focused Cubit
+  evidence now checks a genuinely non-affine curved mesh, a physical demag
+  spectrum, loop-nullspace annihilation, and direct-field agreement.
+- Closed connected FFAG sectors in both supported formulations: conforming FEM
+  identifies the two periodic HDiv traces and removes artificial seam charge;
+  broken-HDiv VIM pairs the two rotation-related facet-charge rows while
+  retaining independent element unknowns. Curved-Q2 face nodes, one-to-one
+  periodic identifications, and operator-cache reuse are all fail-loud checked.
+
 ## 4.95.72 - HDiv entry strategies and repository hygiene
 
 Released 2026-08-30.

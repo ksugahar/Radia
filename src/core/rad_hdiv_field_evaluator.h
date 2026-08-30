@@ -51,6 +51,15 @@ public:
         std::vector<int> image_masks,
         std::vector<double> image_signs,
         const FieldEvaluatorOptions& options = {});
+    // Affine HEX BDM2 path after the canonical 6-TET / 2-TRI split.
+    // volume: [12 vertex coordinates, 84 total-degree <= 6 coefficients]
+    // surface: [9 vertex coordinates, 35 total-degree <= 4 coefficients]
+    static std::shared_ptr<HDivFieldEvaluator> FromSexticQuarticPolynomialTet(
+        std::vector<double> volume,
+        std::vector<double> surface,
+        std::vector<int> image_masks,
+        std::vector<double> image_signs,
+        const FieldEvaluatorOptions& options = {});
 
     static std::shared_ptr<HDivFieldEvaluator> FromCloud(
         std::vector<double> xyz,

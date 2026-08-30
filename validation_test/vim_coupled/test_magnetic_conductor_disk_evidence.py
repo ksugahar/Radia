@@ -144,24 +144,20 @@ def test_mapped_hex_bdm2_spectrum_gate_is_versioned_and_root_caused():
     assert result["checks"]["mapped_hex_bdm2_space_hodge_contraction_verified"] is True
 
 
-def test_validation_driver_records_expected_mapped_hex_bdm2_rejection(monkeypatch):
+def test_validation_driver_records_mapped_hex_bdm2_support(monkeypatch):
     driver = _load_validation_driver()
 
-    def reject(_mesh_path, *, order):
+    def solve(_mesh_path, *, order):
         assert order == 2
-        raise NotImplementedError(
-            "vim.Solve: mapped/non-affine HEX BDM2 material solve is gated because "
-            "the current separate volume/surface charge quadrature is unsafe; use "
-            "mapped HEX BDM1 instead"
-        )
+        return {"normalized_Bz": 1.25, "iterations": 7}
 
-    monkeypatch.setattr(driver, "solve_hdiv_static", reject)
-    row = driver.probe_mapped_hex_bdm2_material_gate(Path("unused.vol"))
+    monkeypatch.setattr(driver, "solve_hdiv_static", solve)
+    row = driver.probe_mapped_hex_bdm2_material_support(Path("unused.vol"))
 
-    assert row["status"] == "rejected_as_expected"
-    assert row["expected_gate"] is True
-    assert row["error_type"] == "NotImplementedError"
-    assert "mapped/non-affine HEX BDM2" in row["message"]
+    assert row["status"] == "supported"
+    assert row["finite_output"] is True
+    assert row["normalized_Bz"] == 1.25
+    assert row["iterations"] == 7
 
 
 def test_live_runner_replays_independent_references_and_bdm2_gate():

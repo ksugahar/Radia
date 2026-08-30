@@ -123,6 +123,8 @@ def test_chargegram_hex_shortcut_forwards_image_params(monkeypatch):
         "materialize_mass": True,
         "build_hmatrix": True,
         "internal_interfaces": False,
+        "excluded_boundaries": (),
+        "cyclic_periodic_boundaries": (),
     }]
 
 

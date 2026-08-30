@@ -983,6 +983,23 @@ private:
         int n_face, const char* caller, double* factor_s_accum, bool geometry_cache = false);
     void PhiInnerHexSubVec(int kindS, int hS, int subB, const double p[3],
                            const std::vector<int>& srcG, double* inn) const;  // inner over ALL source locals (shares sqrt)
+    // Complete-host tensor rule for smooth mapped-BDM2 source potentials.
+    // The former degree-five sub-simplex far cloud was not exact enough for
+    // the O(1e-3) volume/surface cancellation of high charge modes.
+    void PhiInnerHexTensorVec(int kindS, int hS, const double p[3],
+                              const std::vector<int>& srcG, double* inn) const;
+    // Reflection-invariant whole-host Duffy rule for mapped-BDM2 self pairs.
+    // A cube is swept from the singular reference point to its six complete
+    // faces; a quad is swept to its four complete edges.  No diagonal is
+    // selected, so every signed reference-axis permutation is preserved.
+    void PhiInnerHexRadialHostVec(int kindS, int hS, const double p[3],
+                                  const double* reference,
+                                  const std::vector<int>& srcG, double* inn) const;
+    // Try the physical inverse for an accurate near-pair anchor.  For an
+    // exterior non-self target, retain the last finite in-cube point because
+    // any such point gives an exact six-cone partition of the source host.
+    static bool HexQ2Inverse(const double* nd27, const double X[3], double xi[3]);
+    static bool QuadQ2ClosestReference(const double* nd9, const double X[3], double uv[2]);
     void PhiInnerHexAffineCellSubVec(int hS, int subB, const double p[3],
                                      const std::vector<int>& srcG, double* inn) const;
     void PhiInnerHexAffineFaceSubVec(int hS, int subB, const double p[3],
@@ -992,6 +1009,11 @@ private:
     void PhiInnerHexAffineFaceVec(int hS, const double p[3],
                                   const std::vector<int>& srcG, double* inn) const;
     std::vector<double> QuadBlockHexAffineFarProduct(
+        int kindT, int hT, int kindS, int hS, int img) const;
+    // Mapped BDM2 uses one target-host quadrature grid for every source host.
+    // This preserves the volume/surface cancellation of one HDiv basis before
+    // the directed block is symmetrized into B^T G B.
+    std::vector<double> QuadBlockHexCompositeProduct(
         int kindT, int hT, int kindS, int hS, int img) const;
     // SELF inner by the tet path's PhiAtHO_Duffy RADIAL signed decomposition, ported to the REF frame:
     // anchor x0 = xiT, the outer point's OWN ref coords (the pulled-back kernel 1/|p-X(xi)| peaks there --
@@ -1113,6 +1135,8 @@ private:
     const HexFarRule& GetHexFarRule(int kind, int host) const;
     mutable std::shared_mutex m_hexFarRuleMutex;
     mutable std::unordered_map<unsigned long long, HexFarRule> m_hexFarRuleCache;
+    void BuildHexInnerRules();
+    std::vector<HexFarRule> m_hexInnerRules;  // cells, then boundary faces; immutable during fill
     void ResetHexCacheStats();
     // img (IMA): 0 = direct block; i>0 = image block i-1 (target host x the source host mapped by the image
     // transform T_{i-1}), for the reduced-symmetry image method -- mirrors (1/2,1/4,1/8 models) and cyclic

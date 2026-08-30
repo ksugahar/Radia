@@ -1,0 +1,158 @@
+{
+  "schema": "radia.ffag-connected-cyclic-yoke/v2",
+  "status": "pass",
+  "scope": "Connected curved-Q2 annular HEX yoke with nonzero normal magnetization on the azimuthal cuts; periodic trace plus cyclic images.",
+  "settings": {
+    "output": "validation_test\\ffag_topopt\\results_ffag_connected_cyclic_yoke.json",
+    "fold": 12,
+    "hdiv_order": 2,
+    "geometry_order": 2,
+    "inner_radius": 0.03,
+    "outer_radius": 0.05,
+    "half_height": 0.004,
+    "mu_r": 100.0,
+    "applied_field_am": 100000.0,
+    "gram_eps": 1e-10,
+    "leaf": 32,
+    "solve_tol": 1e-10,
+    "probe_count": 5,
+    "threads": 8,
+    "radial_deformation_scale": 2.5,
+    "axial_deformation_scale": 1.5,
+    "minimum_q2_face_curvature": 1e-06,
+    "maximum_mean_relative_error": 1e-08,
+    "maximum_field_relative_to_drive": 2e-07
+  },
+  "contract": {
+    "fold": 12,
+    "formulation": "fem",
+    "reduction_mode": "connected-periodic-fem-sector",
+    "body_crosses_periodic_planes": true,
+    "periodic_trace_identified": true,
+    "periodic_charge_paired": false,
+    "periodic_boundaries": [
+      "periodic_min",
+      "periodic_max"
+    ]
+  },
+  "mesh": {
+    "full_ring_elements": 12,
+    "sector_elements": 1,
+    "full_ring_dofs": 1188,
+    "sector_dofs": 99,
+    "periodic_slave_dofs": 9
+  },
+  "geometry": {
+    "order": 2,
+    "maximum_q2_face_curvature_m": 3.9350176006506943e-05,
+    "full_deformation_dofs": 648,
+    "sector_deformation_dofs": 81
+  },
+  "mean_tangential_magnetization_am": {
+    "full_ring": 9832793.982267732,
+    "periodic_sector": 9832793.98226646,
+    "relative_error": 1.2938200873718907e-13
+  },
+  "external_field": {
+    "probe_points_m": [
+      [
+        0.024,
+        0.0,
+        0.006
+      ],
+      [
+        0.033,
+        0.0,
+        0.006
+      ],
+      [
+        0.041999999999999996,
+        0.0,
+        0.006
+      ],
+      [
+        0.051,
+        0.0,
+        0.006
+      ],
+      [
+        0.06,
+        0.0,
+        0.006
+      ]
+    ],
+    "full_ring_demag_h_am": [
+      [
+        1.1988316944007464e-06,
+        983.6058927840729,
+        1.8971605780416515e-06
+      ],
+      [
+        -1.746308348603027e-05,
+        3029.334462117695,
+        0.00017274108221101053
+      ],
+      [
+        -6.250115586770771e-05,
+        -2160.597268502202,
+        -8.562773156747016e-05
+      ],
+      [
+        -1.0036655757191558e-05,
+        -6966.627541968178,
+        -7.499136517658653e-05
+      ],
+      [
+        3.1178481522365337e-06,
+        -594.6950178027093,
+        1.1584394628300504e-06
+      ]
+    ],
+    "periodic_sector_demag_h_am": [
+      [
+        -9.773082871038069e-08,
+        983.6059053405216,
+        7.752533936857643e-09
+      ],
+      [
+        4.416038039015911e-07,
+        3029.334446410427,
+        -1.396453316071739e-06
+      ],
+      [
+        5.599788437791925e-07,
+        -2160.5971606279386,
+        7.155168281626691e-07
+      ],
+      [
+        5.750808254335929e-07,
+        -6966.627627462715,
+        1.1826342591346463e-06
+      ],
+      [
+        2.475922785105397e-08,
+        -594.695016021899,
+        8.51999976935221e-09
+      ]
+    ],
+    "maximum_difference_relative_to_applied_field": 1.7575886141432562e-09
+  },
+  "timings": {
+    "full_ring_total_wall_s": 13.467268199980026,
+    "periodic_sector_total_wall_s": 3.3594080000184476,
+    "validation_wall_s": 16.83933600000455
+  },
+  "gates": {
+    "connected_periodic_contract": true,
+    "bdm2_hex_is_used": true,
+    "periodic_trace_dofs_are_compressed": true,
+    "curved_q2_geometry_is_used": true,
+    "sector_dofs_scale_as_one_fold": true,
+    "mean_magnetization_matches_full_ring": true,
+    "external_field_matches_full_ring": true
+  },
+  "runtime": {
+    "host": "lab",
+    "python": "3.12.10"
+  }
+}

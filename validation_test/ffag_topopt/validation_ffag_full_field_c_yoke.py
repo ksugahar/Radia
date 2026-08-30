@@ -413,7 +413,8 @@ def run(args):
     print("[ffag-full-field] loading mesh and auditing CoilBuilder clearance",
           flush=True)
     mesh = ng.Mesh(str(args.mesh.resolve()))
-    fes = ng.HDiv(mesh, order=1, discontinuous=True)
+    geometry_order = int(mesh.GetCurveOrder())
+    fes = ng.HDiv(mesh, order=args.hdiv_order, discontinuous=True)
     coils = _coil_pair(args)
     clearance = audit_coil_yoke_clearance(
         coils, args.yoke_step.resolve(),
@@ -468,8 +469,10 @@ def run(args):
             "iron_only_hex_mesh": bool(
                 mesh.ne > 0 and all(len(element.vertices) == 8
                                     for element in mesh.Elements(ng.VOL))),
-            "bdm1_space_is_nonempty": bool(
-                fes.globalorder == 1 and fes.ndof > 0),
+            "requested_hdiv_space_is_nonempty": bool(
+                fes.globalorder == args.hdiv_order and fes.ndof > 0),
+            "mesh_geometry_order_meets_requirement": bool(
+                geometry_order >= args.minimum_curve_order),
             "fixed_return_yoke_seed_is_valid": bool(
                 initial_topology.valid and initial_topology.iron_connected),
             "coil_yoke_clearance_passes": bool(clearance["passed"]),
@@ -491,7 +494,10 @@ def run(args):
             "mesh": {
                 "path": str(args.mesh.resolve()),
                 "element_family": "HEX",
-                "hdiv_family": "BDM1",
+                "hdiv_family": f"BDM{args.hdiv_order}",
+                "hdiv_order": int(args.hdiv_order),
+                "geometry_order": geometry_order,
+                "minimum_geometry_order": int(args.minimum_curve_order),
                 "elements": int(mesh.ne),
                 "vertices": int(mesh.nv),
                 "dofs": int(fes.ndof),
@@ -537,7 +543,8 @@ def run(args):
         return preflight
     print(
         f"[ffag-full-field] building ChargeGram: {mesh.ne} HEX, "
-        f"{fes.ndof} BDM1 DoFs", flush=True)
+        f"{fes.ndof} BDM{args.hdiv_order} DoFs, "
+        f"geometry order {geometry_order}", flush=True)
     proposal_material_stop_reason = None
     with ng.TaskManager():
         _, gram, _ = build_charge_gram(
@@ -649,7 +656,9 @@ def run(args):
                 "mesh": {
                     "path": str(args.mesh),
                     "element_family": "HEX",
-                    "hdiv_family": "BDM1",
+                    "hdiv_family": f"BDM{args.hdiv_order}",
+                    "hdiv_order": int(args.hdiv_order),
+                    "geometry_order": geometry_order,
                     "elements": int(mesh.ne),
                     "dofs": int(fes.ndof),
                     "initial_active_elements": int(active.sum()),
@@ -829,6 +838,7 @@ def run(args):
     gates = {
         "coil_yoke_clearance": bool(clearance["passed"]),
         "air_volume_elements_are_zero": True,
+        "explicit_full_annulus_has_no_azimuthal_sector_seam": True,
         "fixed_design_orbits_used": True,
         "periodic_closed_orbit_search_disabled": True,
         "caller_design_orbit_and_target_matrix_contract": (
@@ -881,17 +891,30 @@ def run(args):
         "schema": "radia.ffag-fixed-one-pass-c-yoke/v1",
         "status": "pass" if all(gates.values()) else "fail",
         "scope": (
-            "Axisymmetric two-pole C-yoke HEX superset, two closed "
+            "Explicit full-annulus axisymmetric two-pole C-yoke HEX "
+            "superset with no azimuthal sector cut, two closed "
             "CoilBuilder loops, fixed entrance-to-exit design orbits, "
-            "one-pass transfer matrices, BDM1 HDiv-MMM, unmeshed beam "
+            f"one-pass transfer matrices, BDM{args.hdiv_order} HDiv-MMM, "
+            "unmeshed beam "
             "aperture."),
+        "azimuthal_periodicity": {
+            "representation": "explicit-full-annulus",
+            "sector_cut": False,
+            "periodic_hdiv_trace_required": False,
+            "image_cyclic_used": False,
+            "reduced_connected_yoke_status": (
+                "requires rotation-related HDiv normal-trace identification"),
+        },
         "machine": platform.node(),
         "python": platform.python_version(),
         "ngsolve_threads": args.threads,
         "mesh": {
             "path": str(args.mesh),
             "element_family": "HEX",
-            "hdiv_family": "BDM1",
+            "hdiv_family": f"BDM{args.hdiv_order}",
+            "hdiv_order": int(args.hdiv_order),
+            "geometry_order": geometry_order,
+            "minimum_geometry_order": int(args.minimum_curve_order),
             "elements": int(mesh.ne),
             "dofs": int(fes.ndof),
             "air_volume_elements": 0,
@@ -1136,6 +1159,13 @@ def parse_args(argv=None):
         "--material-iterations", "--outer-iterations",
         dest="material_iterations", type=int, default=2)
     parser.add_argument("--threads", type=int, default=16)
+    parser.add_argument(
+        "--hdiv-order", type=int, choices=(1, 2), default=1,
+        help="HDiv discretization: 1=BDM1, 2=BDM2.")
+    parser.add_argument(
+        "--minimum-curve-order", type=int, choices=(1, 2), default=1,
+        help=("Reject a .vol mesh below this geometry order. Use 2 for the "
+              "curved-HEX BDM2 production lane."))
     parser.add_argument("--coil-current-a", type=float, default=2.5e5)
     parser.add_argument("--coil-radius-m", type=float, default=7.0)
     parser.add_argument("--coil-z-m", type=float, default=0.07)

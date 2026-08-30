@@ -1,5 +1,55 @@
 # FFAG HDiv-MMM topology-optimization validation
 
+## Azimuthal cyclic boundary contract
+
+FFAG ring validation treats the azimuthal periodic boundary as a first-class
+physics contract.  `validation_ffag_cyclic_bdm2_ring.py` compares one BDM2 HEX
+cell using `image_cyclic=N` with an explicitly meshed N-cell ring made from
+exact rotations of the same upper/lower pole packs.  It gates both mean
+magnetization and gap-field samples, and also requires the isolated one-cell
+solution to differ enough that a no-op image implementation cannot pass.
+
+There are two distinct sector geometries.  If every iron body lies wholly
+inside one sector and rotated copies are disjoint, the cyclic nonlocal image
+sum is the complete reduction.  If a continuous return yoke crosses the two
+azimuthal cut planes, a local periodic closure is additionally required;
+`image_cyclic` alone must not hide an artificial seam charge.
+
+The closure is formulation-specific.  Conforming FEM uses
+`Compress(Periodic(HDiv))` and identifies the two normal-trace unknowns.
+Broken-HDiv VIM retains independent element unknowns and instead pulls the
+slave surface-charge polynomial into the master facet frame, then assembles
+their signed sum as one internal-interface charge row.  Mixing these contracts
+is an error: `validate_ffag_cyclic_sector_contract` distinguishes
+`formulation="fem"` from `formulation="vim-broken"` and fails loudly when the
+required trace identification or charge pair is absent.
+
+The current axisymmetric C-yoke fixture is an explicit full annulus and has no
+sector cut.  A reduced continuous-yoke fixture is tested separately by
+`validation_ffag_connected_cyclic_yoke.py`.  It gives the cut faces nonzero
+normal magnetization, identifies their NGSolve periodic vertices, compresses
+the periodic HDiv trace, removes those faces from the physical charge skin,
+and compares the reduced sector against an explicit conforming curved-Q2 full
+ring.  Its Q2 face-centre departure is 3.94e-5 m.  The 12-fold BDM2 HEX gate
+reduces 1188 full-ring DoFs to 99 sector DoFs; the mean tangential
+magnetization agrees to 1.30e-13 relative and the direct external-field
+samples agree within 1.76e-9 of the applied-field scale.  This connected-yoke
+lane must remain distinct from the disjoint-cell image test.  The same
+contract is available on persistent `vim.HDivSolver` objects so load sweeps
+reuse the periodic ChargeGram.
+
+`validation_ffag_broken_vim_cyclic_yoke.py` covers the material-topology
+route on genuinely curved-Q2 geometry.  Its BDM2 broken-HDiv operator reduces
+864 explicit-ring charges to 72 sector charges.  The maximum departure of a
+Q2 face centre from its bilinear corner interpolation is 3.94e-5 m, while the
+paired Q2 geometry matches the sector rotation to 6.73e-16 relative.  The
+paired tangential seam charge is 9.84e-18, and direct fields for independent
+axial and tangential periodic magnetizations agree with the explicit curved
+full ring within 1.52e-14 relative.  A multi-cell sector optimizer must also
+tie the material-density variables of elements adjacent to paired faces;
+charge pairing supplies the correct VIM physics but does not silently alter
+the caller's design-variable parametrization.
+
 ## EarlyTimes C-type A/B route convergence
 
 `validation_earlytimes_ctype_ab.py` isolates the field-route side of the
