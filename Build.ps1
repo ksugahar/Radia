@@ -496,8 +496,8 @@ exit /b 0
 "@
 }
 
-$BatchFile = "$PROJECT_DIR\build_temp_msvc.bat"
-$BuildLog = "$PROJECT_DIR\build_log.txt"
+$BatchFile = "$BUILD_DIR\build_temp_msvc.bat"
+$BuildLog = "$BUILD_DIR\build.log"
 $BatchContent | Out-File -FilePath $BatchFile -Encoding ascii
 
 try {
