@@ -2401,6 +2401,7 @@ def _solve_minimax_lp_update(density, gradients, violation, band,
 def optimize_density(problem, state_load, objective_load, constraint_loads=(),
                      targets=(), *, chi_iron, volume_fraction,
                      density_filter=None, density_projection=None,
+                     design_map=None,
                      initial_density=None, penalty=1.0,
                      move_limit=0.1, max_iterations=30,
                      band_relative=5e-3, band_floor=None,
@@ -2437,6 +2438,12 @@ def optimize_density(problem, state_load, objective_load, constraint_loads=(),
     edge inside the zone rather than rejection-dying against a hard cap or
     cycling between objective ascent and restoration.
 
+    ``design_map`` may provide ``element_count``, ``variable_count``,
+    ``expand``, ``contract``, and ``reduce`` methods.  The LP then owns one
+    variable per equivalence class while material assembly and returned
+    checkpoints remain element-wise.  This is the production route for
+    rotationally periodic FFAG material densities.
+
     ``callback(entry)`` receives each accepted history dict.  The caller
     wraps the whole call in ``with TaskManager():``.  Informal per-iterate
     timings are recorded in the history; benchmark-grade timings belong on
@@ -2470,27 +2477,59 @@ def optimize_density(problem, state_load, objective_load, constraint_loads=(),
         raise ValueError(
             "optimize_density: linear_solver must be 'native-batch', 'native-cluster', "
             "'native-jacobi', 'native', or 'ngsolve-cg'")
-    volumes = problem.element_volumes
-    volume_max = float(volume_fraction * volumes.sum())
+    element_volumes = np.asarray(problem.element_volumes, dtype=float)
+    if element_volumes.shape != (problem.n_el,):
+        raise ValueError(
+            "optimize_density: element volume shape does not match problem")
+    if design_map is None:
+        n_design = int(problem.n_el)
+        volumes = element_volumes
+
+        def expand_design(values):
+            return np.asarray(values, dtype=float).reshape(-1)
+
+        def contract_elements(values):
+            return np.asarray(values, dtype=float).reshape(-1)
+    else:
+        if (int(design_map.element_count) != int(problem.n_el)
+                or int(design_map.variable_count) < 1):
+            raise ValueError(
+                "optimize_density: design_map does not match problem elements")
+        n_design = int(design_map.variable_count)
+        volumes = np.asarray(
+            design_map.contract(element_volumes), dtype=float).reshape(-1)
+        if volumes.shape != (n_design,) or not np.all(volumes > 0.0):
+            raise ValueError("optimize_density: invalid mapped design volumes")
+
+        def expand_design(values):
+            return np.asarray(design_map.expand(values), dtype=float)
+
+        def contract_elements(values):
+            return np.asarray(design_map.contract(values), dtype=float)
+
+    volume_max = float(volume_fraction * element_volumes.sum())
     if initial_density is None:
-        rho = np.full(problem.n_el, float(volume_fraction))
+        rho = np.full(n_design, float(volume_fraction))
     else:
         rho = np.asarray(initial_density, dtype=float).copy()
-        if rho.shape != (problem.n_el,):
+        if design_map is not None and rho.shape == (problem.n_el,):
+            rho = np.asarray(design_map.reduce(rho), dtype=float)
+        if rho.shape != (n_design,):
             raise ValueError("optimize_density: initial_density shape %r != "
-                             "(%d,)" % (rho.shape, problem.n_el))
+                             "(%d,)" % (rho.shape, n_design))
     if (not np.all(np.isfinite(rho)) or np.any(rho < 0.0)
             or np.any(rho > 1.0)):
         raise ValueError("optimize_density: initial_density must be finite "
                          "and lie in [0, 1]")
 
     def transform_density(rho_vec):
+        rho_elements = expand_design(rho_vec)
         if density_filter is not None:
-            rho_f_raw = density_filter.apply(rho_vec)
+            rho_f_raw = density_filter.apply(rho_elements)
             rho_f = np.clip(rho_f_raw, 0.0, 1.0)
             unclipped = (rho_f_raw > 0.0) & (rho_f_raw < 1.0)
         else:
-            rho_f = rho_vec
+            rho_f = rho_elements
             unclipped = None
         if density_projection is not None:
             rho_material = density_projection.apply(rho_f)
@@ -2500,7 +2539,7 @@ def optimize_density(problem, state_load, objective_load, constraint_loads=(),
 
     _rho_f_initial, rho_material_initial, _unclipped_initial = (
         transform_density(rho))
-    initial_volume = float(volumes @ rho_material_initial)
+    initial_volume = float(element_volumes @ rho_material_initial)
     if initial_volume > volume_max + 1e-12 * max(1.0, abs(volume_max)):
         raise ValueError(
             "optimize_density: initial_density exceeds the projected "
@@ -2540,8 +2579,9 @@ def optimize_density(problem, state_load, objective_load, constraint_loads=(),
             if density_projection is not None:
                 g_rf = density_projection.chain(rho_f, g_rf)
             if density_filter is None:
-                return g_rf
-            return density_filter.chain(np.where(unclipped, g_rf, 0.0))
+                return contract_elements(g_rf)
+            return contract_elements(density_filter.chain(
+                np.where(unclipped, g_rf, 0.0)))
 
         def to_rho(g_s):
             return to_raw(density_gradient_from_s_gradient(
@@ -2550,8 +2590,8 @@ def optimize_density(problem, state_load, objective_load, constraint_loads=(),
         gJ = to_rho(lin.jacobians[0])
         gks = [to_rho(lin.jacobians[1 + k])
                for k in range(len(constraint_loads))]
-        material_volume = float(volumes @ rho_material)
-        volume_gradient = to_raw(volumes)
+        material_volume = float(element_volumes @ rho_material)
+        volume_gradient = to_raw(element_volumes)
         if evaluation_callback is not None:
             evaluation_callback(dict(
                 evaluation=evaluation_index,
@@ -2743,7 +2783,8 @@ def optimize_density(problem, state_load, objective_load, constraint_loads=(),
                      constraints=lin.values[1:].tolist(),
                      violation=viol_new.tolist(), band=band.tolist(),
                      volume=material_volume,
-                     design_volume=float(volumes @ rho),
+                     design_volume=float(
+                         element_volumes @ expand_design(rho)),
                      max_density_change=change,
                      move=move, trials=trials, band_mode=band_mode,
                      t_iter_s=time.perf_counter() - t_iter,
@@ -2751,10 +2792,12 @@ def optimize_density(problem, state_load, objective_load, constraint_loads=(),
                      adjoint_iterations=list(lin.adjoint_iterations))
         if targets.size:
             entry["max_violation_over_band"] = float(np.max(viol_new / band))
+        rho_elements = expand_design(rho)
         if density_filter is not None:
-            rho_report = np.clip(density_filter.apply(rho), 0.0, 1.0)
+            rho_report = np.clip(
+                density_filter.apply(rho_elements), 0.0, 1.0)
         else:
-            rho_report = rho
+            rho_report = rho_elements
         if density_projection is not None:
             rho_report = density_projection.apply(rho_report)
         entry.update(density_discreteness(rho_report))
@@ -2762,8 +2805,8 @@ def optimize_density(problem, state_load, objective_load, constraint_loads=(),
         if callback is not None:
             callback(entry)
         if checkpoint_callback is not None:
-            checkpoint_callback(entry, rho.copy())
-    return DensityDesignResult(density=rho, history=tuple(history),
+            checkpoint_callback(entry, expand_design(rho).copy())
+    return DensityDesignResult(density=expand_design(rho), history=tuple(history),
                                converged=converged, final_move=move,
                                solves=n_solves)
 
