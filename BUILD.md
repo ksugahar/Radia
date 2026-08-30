@@ -76,7 +76,7 @@ Builds `radia.pyd` (which includes `RadiaField` NGSolve integration) using MSVC 
 - Links Intel MKL for BLAS/LAPACK operations
 - Uses NGSolve TaskManager for parallelization
 - Automatically copies required DLLs to output directory
-- Build log saved to `build_log.txt` for debugging
+- Build log saved to `build-msvc/build.log` for debugging
 - Shows PYD file size and timestamp on success
 
 ### Rebuilding only `axifem` (C++ extension iteration)

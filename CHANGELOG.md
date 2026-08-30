@@ -5,19 +5,34 @@ All notable changes to the `radia` package.  Format: each release lists
 
 ## Unreleased
 
+## 4.95.72 - HDiv entry strategies and repository hygiene
+
+Released 2026-08-30.
+
 - Restored Cubit's top-level **Export** menu through the official Claro API so
   Cubit owns it across cold-start menu rebuilds. PySide6 remains limited to the
   export dialogs, Claro actions use self-contained import callbacks, and menu
   cleanup never enumerates Claro-owned Qt objects. Reinstallation now refreshes
   previously imported WorkflowToolbar payloads and verifies that no stale
   toolbar script remains.
-
 - Added the native and Web editions of Eqnedit64 as one BSD-2-Clause component
   under `tools/eqnedit64`. It provides portable Windows x64 structural/TeX
   editing, a homepage-published browser UI, and Office/image export without an
   installer or Python runtime. The old duplicate Radia GUI target and public
   MTEF/`.eqn` readers, writers, tests, and reverse-engineering utilities were
   retired; TeX-to-OMML/PPTX headless generation remains supported.
+- Completed the deterministic HDiv-MMM ChargeGram cleanup by moving the
+  element-specific entry kernels into explicit strategies. The rebased path
+  preserves the accepted-action self-diagonal calculation added by the active
+  H-matrix accuracy work instead of reintroducing the removed owner methods.
+- Kept Simulink `.slxc`, `slprj`, and generated-code output outside the source
+  tree through `radia.setup` and a checked `Simulink.fileGenControl` helper.
+  Existing external settings remain intact, while an in-repository default is
+  redirected to the versioned `C:\temp\radia\simulink` cache.
+- Removed obsolete root-level handover notes, moved native build logs under
+  `build-msvc`, and made manual VTK validation write to `C:\temp`. A focused
+  repository-root gate now rejects journals, logs, object files, VTU/TeX
+  output, noncanonical Markdown, and scratch folders.
 
 ## 4.95.71 - Three-formulation C-yoke convergence
 
