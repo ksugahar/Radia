@@ -23,8 +23,10 @@ stale.
   as `O:\Eqnedit64.last-release.json`. While a hand-test candidate is current,
   `O:\Eqnedit64.release.json` must be absent so tag publication cannot mistake
   the candidate for a release artifact.
-- A later formal `sync_to_o.ps1` recreates `Eqnedit64.release.json` and removes
-  the hand-test marker after all release-only checks pass.
+- The later formal release synchronization recreates
+  `Eqnedit64.release.json` and removes the hand-test marker after all
+  release-only checks pass. Its exact command appears only in the required
+  order below, after the main-branch gate.
 
 ## Release invariants
 
