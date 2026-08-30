@@ -44,8 +44,9 @@ Eqnedit64.exe と Web/JS 数式エディタは、Radia の `tools/eqnedit64` で
 補助要素は異なってよいが、総和、積分、分数、根号、上線、下線を正規化し、保存OOXMLの
 インライン`m:oMath`とPowerPoint描画を一致させる。実機基準式ではOMML部分とPNGが
 一致することを確認する。
-`&`なし複数行`aligned`はnative/Webとも各行を独立したinline MathMLへ変換し、
-行ごとの18 pt NBSPと`<br>`を同じCF_HTML断片へ入れる。PowerPointはMathML
+`&`なし複数行`aligned`はnative/Webとも入れ子の1列`aligned`を葉の行まで再帰的に
+平坦化してから各行を独立したinline MathMLへ変換し、行ごとの18 pt NBSPと`<br>`を
+同じCF_HTML断片へ入れる。PowerPointはMathML
 `columnalign`を無視し、`maligngroup` / `malignmark`を可視`&`として描くため、
 Office経路へこれらの整列要素を出してはならない。保存OOXMLは行数と同数の
 インライン`m:oMath`を持ち、`m:oMathPara`、`m:eqArr`、行列、可視`&`を持たない。

@@ -505,6 +505,17 @@ def main() -> int:
         failures.append(
             "one-column aligned Office fragment is not two clean math rows: "
             f"{unanchored_office!r}")
+    nested_unanchored_office = tex_to_office_mathml_fragment(
+        r"\begin{aligned}\begin{aligned}a^2\\\text{first}"
+        r"\end{aligned}\\\text{second}\end{aligned}")
+    if (nested_unanchored_office.count("<math ") != 3 or
+            nested_unanchored_office.count("<br>") != 2 or
+            "mtable" in nested_unanchored_office or
+            "malign" in nested_unanchored_office or
+            "&amp;" in nested_unanchored_office):
+        failures.append(
+            "nested one-column aligned Office fragment was not flattened: "
+            f"{nested_unanchored_office!r}")
     anchored_mathml = tex_to_mathml(
         r"\begin{aligned}F&=ma\\E&=mc^2\end{aligned}")
     anchored_root = ET.fromstring(anchored_mathml)

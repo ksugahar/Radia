@@ -773,7 +773,7 @@ $expectedRaw = 'x+\sum_{n=1}^{m} a^3 \int_{a}^{b} \frac{f(x)}{\sqrt{y}}\, dx^3 +
 $expectedOffice = '\[' + $expectedRaw + '\]'
 [IO.File]::WriteAllText(
     $cliTexInput, $expectedOffice, [Text.UTF8Encoding]::new($false))
-$alignedRaw = '\begin{aligned}\mathrm{I}\\\mathrm{IIIIIIII}\\\mathrm{IIIIIIIIIIIIIIII}\end{aligned}'
+$alignedRaw = '\begin{aligned}\begin{aligned}\mathrm{I}\\\mathrm{IIIIIIII}\end{aligned}\\\mathrm{IIIIIIIIIIIIIIII}\end{aligned}'
 [IO.File]::WriteAllText(
     $alignedCliTexInput, $alignedRaw, [Text.UTF8Encoding]::new($false))
 
