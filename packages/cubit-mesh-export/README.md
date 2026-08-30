@@ -5,7 +5,8 @@ Solver-neutral mesh export from [Coreform Cubit](https://coreform.com/products/c
 `cubit-mesh-export` is the **shared infrastructure layer** in the Radia
 toolchain. It ships mesh export, the Kelvin open-boundary
 transformation, symmetry helpers, and the Dirichlet label conventions
-that every domain-specific Radia notebook or headless workflow consumes.
+consumed by Radia's Simulink applications, Python/MCP workflows, and
+result-bearing documentation notebooks.
 
 ## Features
 
@@ -37,8 +38,8 @@ The second command deploys the Cubit plugin binaries, the Netgen DLLs,
 the Cubit-side Python helpers (`cubit_helpers/add_kelvin.py`,
 `cubit_helpers/auto_kelvin_entry.py`), and the Radia Export Mesh toolbar
 startup registration into your Coreform Cubit 2025.12 profiles.  The toolbar
-runs only inside Cubit's embedded Python; normal Radia Python uses notebooks
-and headless scripts and does not need PySide6.
+runs only inside Cubit's embedded Python; normal Radia Python/MCP workflows
+and Simulink applications do not need PySide6.
 Use `cubit-plugin-install --all-users` for a shared lab machine.
 
 ### Upgrade
@@ -151,7 +152,7 @@ surface connectivity.
                                                       │
                                                       ▼
                        user opens a Radia Simulink application block;
-                       IH may also use its temporary comparison notebook
+                       docs notebooks retain reproducible field evidence
 ```
 
 `cubit-mesh-export` produces the `.vol` and the label conventions; the
