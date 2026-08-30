@@ -620,7 +620,7 @@ function Get-SlideXml([string]$PptxPath, [int]$SlideNumber = 1) {
     }
 }
 
-function Assert-PowerPointRowsShareLeftEdge([string]$Path) {
+function Assert-PowerPointMathRowsShareLeftEdge([string]$Path) {
     $bitmap = [Drawing.Bitmap]::FromFile($Path)
     try {
         $bands = @()
@@ -640,26 +640,48 @@ function Assert-PowerPointRowsShareLeftEdge([string]$Path) {
             if ($hasInk) {
                 if ($null -eq $current -or $y -gt $current.Bottom + 2) {
                     $current = [pscustomobject]@{
-                        Top = $y; Bottom = $y; Left = $rowMinX
+                        Top = $y; Bottom = $y; Left = $rowMinX; Right = $rowMinX
                     }
                     $bands += $current
                 } else {
                     $current.Bottom = $y
                     $current.Left = [Math]::Min($current.Left, $rowMinX)
                 }
+                for ($x = $bitmap.Width - 1; $x -ge 0; $x--) {
+                    $pixel = $bitmap.GetPixel($x, $y)
+                    if ($pixel.A -gt 0 -and
+                        ($pixel.R -lt 245 -or $pixel.G -lt 245 -or
+                         $pixel.B -lt 245)) {
+                        $current.Right = [Math]::Max($current.Right, $x)
+                        break
+                    }
+                }
             }
         }
         if ($bands.Count -ne 3) {
-            throw "PowerPoint aligned fixture rendered $($bands.Count) rows, expected 3."
+            throw "PowerPoint multiline fixture rendered $($bands.Count) rows, expected 3."
         }
         $lefts = @($bands | ForEach-Object { [int]$_.Left })
         $spread = ($lefts | Measure-Object -Maximum).Maximum -
             ($lefts | Measure-Object -Minimum).Minimum
         if ($spread -gt 4) {
-            throw ("PowerPoint equation-array rows do not share a left edge: " +
+            throw ("PowerPoint math rows do not share a left edge: " +
                 "lefts=$($lefts -join ',') px, spread=$spread px.")
         }
-        return "row-lefts=$($lefts -join ','); spread=$spread px"
+        $widths = @($bands | ForEach-Object {
+            [int]($_.Right - $_.Left + 1)
+        })
+        # The fixture contains 1, 8, and 16 identical I glyphs. A visible '&'
+        # adds a common width to all rows and can falsely make their first ink
+        # agree. Estimate that common intercept and reject it.
+        $glyphWidth = ($widths[2] - $widths[1]) / 8.0
+        $prefixWidth = $widths[0] - $glyphWidth
+        if ($glyphWidth -le 0 -or [Math]::Abs($prefixWidth) -gt 6) {
+            throw ("PowerPoint aligned rows contain visible prefix ink: " +
+                "widths=$($widths -join ',') px, prefix=$prefixWidth px.")
+        }
+        return ("row-lefts=$($lefts -join ','); spread=$spread px; " +
+            "widths=$($widths -join ','); prefix=$prefixWidth px")
     } finally {
         $bitmap.Dispose()
     }
@@ -1017,10 +1039,10 @@ try {
     }
     $imageSize = Assert-ImageHasInk $pngOutput 'IrfanView clipboard paste'
 
-    # A left paragraph around inline math is insufficient for an Office
-    # equation array: without explicit alignment markers PowerPoint centres
-    # each row independently. Publish three deliberately unequal rows and
-    # require their rendered first-ink positions to share one left edge.
+    # A left paragraph around one MathML mtable is insufficient: PowerPoint
+    # centres each row, while MathML alignment elements become visible '&'
+    # glyphs. Publish three deliberately unequal inline math rows and require
+    # their content (not a common prefix glyph) to share one left edge.
     $alignedPublisher = Start-Process -FilePath $app `
         -ArgumentList @('--copy-tex-file', $alignedCliTexInput) `
         -WorkingDirectory (Split-Path -Parent $app) -WindowStyle Hidden -Wait -PassThru
@@ -1028,10 +1050,18 @@ try {
         throw "Eqnedit64 aligned clipboard publication failed: $($alignedPublisher.ExitCode)"
     }
     $alignedOfficeHtml = Read-ClipboardUtf8 $htmlFormat
-    $malignCount = ([regex]::Matches(
-        $alignedOfficeHtml, '<malignmark(?:\s|/|>)')).Count
-    if ($malignCount -ne 3) {
-        throw "Aligned MathML has $malignCount left-edge markers, expected 3."
+    $alignedMathCount = ([regex]::Matches(
+        $alignedOfficeHtml, '<math(?:\s|>)')).Count
+    $alignedBreakCount = ([regex]::Matches(
+        $alignedOfficeHtml, '<br(?:\s|/|>)')).Count
+    if ($alignedMathCount -ne 3 -or $alignedBreakCount -ne 2 -or
+        ([regex]::Matches($alignedOfficeHtml,
+            '<span style="font-size:18pt">&#160;</span>')).Count -ne 3 -or
+        $alignedOfficeHtml -match '<malign(?:group|mark)(?:\s|/|>)' -or
+        $alignedOfficeHtml -match '<mtable(?:\s|>)') {
+        throw ("Aligned Office HTML must contain three clean editable math " +
+            "rows and two line breaks: math=$alignedMathCount, " +
+            "breaks=$alignedBreakCount.")
     }
     $alignedSlide = $presentation.Slides.Add(2, 12)
     $powerPointWindow.View.GotoSlide(2)
@@ -1052,14 +1082,14 @@ try {
     # its exact imported OMML available for diagnosis.
     $presentation.Save()
     $alignedRowsContract =
-        Assert-PowerPointRowsShareLeftEdge $alignedPowerPointPngOutput
+        Assert-PowerPointMathRowsShareLeftEdge $alignedPowerPointPngOutput
     $alignedSlideXml = Get-SlideXml $pptxOutput 2
-    $savedAlignmentMarkers = ([regex]::Matches(
-        $alignedSlideXml, '&amp;|<m:aln(?:\s|/|>)')).Count
-    if ($alignedSlideXml -notmatch '<m:eqArr(?:\s|>)' -or
-        $savedAlignmentMarkers -lt 3) {
-        throw ("PowerPoint did not retain aligned equation-array markers: " +
-            "markers=$savedAlignmentMarkers.")
+    $savedMathRows = ([regex]::Matches(
+        $alignedSlideXml, '<m:oMath(?:\s|>)')).Count
+    if ($savedMathRows -ne 3 -or
+        $alignedSlideXml -match '<m:t>&amp;</m:t>|<m:eqArr(?:\s|>)|<m:m(?:\s|>)') {
+        throw ("PowerPoint did not retain three independent math rows without " +
+            "visible alignment syntax: rows=$savedMathRows.")
     }
 
     $googlePublisher = Start-Process -FilePath $app `
@@ -1181,8 +1211,8 @@ try {
         "insertion=$powerPointInsertionFontSize pt, " +
         "left=$powerPointLeft pt, " +
         "rendered $powerPointImageSize with ink)")
-    Write-Host ("PASS: unequal PowerPoint equation-array rows share one " +
-        "left edge ($alignedRowsContract)")
+    Write-Host ("PASS: unequal editable PowerPoint math rows share one " +
+        "left edge without visible alignment syntax ($alignedRowsContract)")
     Write-Host "PASS: IrfanView /clippaste produced a nonblank $imageSize PNG"
     Write-Host ("PASS: Google Slides clipboard contains a byte-identical " +
         "$($pngContract.Width)x$($pngContract.Height) 300 dpi PNG and " +

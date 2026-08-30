@@ -12,13 +12,19 @@
   `mtable columnalign="left"`はOffice付属`MML2OMML.XSL`で1列`m:eqArr`へ変換される際に
   無視され、整列点のない数式配列は各行を中央配置することを確認した。
 - `malignmark`だけではPowerPoint実貼り付けが中央揃えの`m:m`へ変換したため不合格
-  となった。nativeは各行頭に`maligngroup`、`&`なしの行頭と明示`&`の位置に
-  `malignmark`を出し、全行を1セルの`mtable`として発行する。WebもMathJaxの
-  right/leftセル対を同じ1セル＋整列グループ＋整列点へ正規化する。
+  となった。`maligngroup`＋`malignmark`は左端`10,10,10 px`に見えたが、利用者画像で
+  各行頭に可視`&`が現れ、最初の画素だけを比較した試験の誤合格と判明した。
+  `maligngroup`だけでも強化試験が幅`23,77,140 px`、共通プレフィックス`15.125 px`
+  を検出して不合格とした。PowerPointのCF_HTML MathML取込では整列要素を使わない。
+- 最終実装は`&`なし各行を独立inline MathML＋18 pt NBSPとして同じCF_HTMLへ並べる。
+  NBSPがない試行は先頭2行を中央`m:oMathPara`へ昇格したため不合格だった。全行へ
+  NBSPを置くと、保存OOXMLは3つのインライン`m:oMath`となり、`m:oMathPara`、
+  `m:eqArr`、行列、可視`&`を含まない。
 - モデル回帰は`test_edit.py` 271件、`test_layout.py`、Web契約10件が合格した。
   実PowerPoint UI Paste試験には、3行の書き出し画像の左端差4 px以内と保存OMMLの
-  整列点検査を追加した。画面外の実UI Pasteで保存`m:eqArr`と3整列点を確認し、
-  PowerPoint自身の描画左端は`10,10,10 px`、差0 pxで合格した。既存PowerPointへの
+  可視プレフィックス検査を追加した。画面外の実UI PasteでPowerPoint自身の描画左端は
+  `11,11,11 px`、差0 px、幅`5,60,123 px`、推定共通プレフィックス`-2.875 px`で
+  合格した。既存PowerPointへの
   接続、前面化、`SendInput`、マウス移動は使用していない。
 
 根拠資料:

@@ -55,6 +55,9 @@ PYBIND11_MODULE(eqnedit_core, module) {
     module.def("tex_normalize", &normalize_tree, py::arg("tex"));
     module.def("tex_to_mathml", &eqnedit::latex_to_mathml, py::arg("tex"),
                py::arg("point_size") = 24.0);
+    module.def("tex_to_office_mathml_fragment",
+               &eqnedit::latex_to_office_mathml_fragment, py::arg("tex"),
+               py::arg("point_size") = 18.0);
     module.def("normalize_paste", &eqnedit::normalize_tex_paste, py::arg("text"));
     /* The whole symbol table, so a test can sweep every command instead of
      * the handful a hand-written corpus happens to mention. */
