@@ -1,12 +1,15 @@
 """
-Radia Export menu — PySide6 port of the legacy Qt5 .ccl plugin.
+Cubit "Export" menu — Claro-registered menu + PySide6 export dialogs.
 
-Replaces the in-tree C++ Claro component (RadiaComp.cpp) with a pure
-Python (PySide6) toolbar that runs inside Cubit's embedded Python
-interpreter.  The .ccm (APREPRO commands `export gmsh / nastran /
-vtk / netgen / femeem / meg`) is unchanged — this module just calls
-`cubit.cmd("export ...")` after collecting user input through Qt
-dialogs parented to the Cubit main window.
+The menu itself is registered through Cubit's own Claro API
+(`emclaro.add_to_menu`), which is the same entry point the legacy Qt5
+.ccl component (RadiaComp.cpp) used, so Cubit owns the menu and it
+survives the cold-start menu-bar rebuild.  The dialogs are PySide6 and
+run inside Cubit's embedded Python interpreter.  The .ccm (APREPRO
+commands `export gmsh / nastran / vtk / netgen / femeem / meg`) is
+unchanged — this module just calls `cubit.cmd("export ...")` after
+collecting user input through Qt dialogs parented to the Cubit main
+window.
 
 Layer 2 (Cubit GUI Python).  See CLAUDE.md "Cubit Panel Architecture"
 and `radia_mcp.cubit.knowledge.custom_toolbar` (TOOLBAR_PYTHON_SCRIPT_
@@ -36,14 +39,16 @@ import sys
 # silent PyQt5 fallback that masks it.
 #
 # Use backslash continuations (NOT parens) per Cubit toolbar convention.
-# Note: QAction lives in QtGui in Qt6 / PySide6 (was QtWidgets in Qt5).
+# PySide6 is used for the export DIALOGS only.  The menu itself is
+# registered through Cubit's Claro API (emclaro), so no QMenu / QAction
+# import is needed here -- and touching Claro-owned menu objects from
+# PySide6 would deadlock Cubit anyway.
 from PySide6.QtWidgets import QApplication, QCheckBox, QComboBox, \
     QDialog, QDialogButtonBox, QFileDialog, QFormLayout, QGroupBox, \
-    QHBoxLayout, QLabel, QLineEdit, QMainWindow, QMenu, \
+    QHBoxLayout, QLabel, QLineEdit, QMainWindow, \
     QMessageBox, QPushButton, QTableWidget, QTableWidgetItem, \
     QVBoxLayout
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QAction
 
 
 # ----------------------------------------------------------------------
@@ -95,21 +100,30 @@ def _default_start_dir():
 # ----------------------------------------------------------------------
 
 def find_claro():
-    """Return Cubit's main QMainWindow (objectName == 'claro'), or None.
+    """Return Cubit's main QMainWindow (objectName 'Claro'), or None.
 
     Filter by objectName, never windowTitle (locale-dependent and
     changes when a file is loaded).  Used as `parent=` for every
     QDialog so the dialog cannot fall behind the main window.
+
+    MEASURED on Coreform Cubit 2025.12: the main window's objectName is
+    ``"Claro"`` with a CAPITAL C, and a second QMainWindow named
+    ``"QtJournalEditor"`` also exists.  Matching the old lowercase
+    ``"claro"`` therefore never hit, and the any-QMainWindow fallback
+    silently returned the journal editor instead -- which is why dialogs
+    were parented to the wrong window.  Compare case-insensitively and
+    only fall back when no window is named claro at all.
     """
     app = QApplication.instance()
     if app is None or not hasattr(app, "topLevelWidgets"):
         return None
     for w in app.topLevelWidgets():
-        if isinstance(w, QMainWindow) and w.objectName() == "claro":
+        if isinstance(w, QMainWindow) and w.objectName().lower() == "claro":
             return w
-    # Fallback: any QMainWindow (helps in headless / test contexts)
+    # Fallback: a QMainWindow that is not one of Cubit's known auxiliary
+    # windows (helps in headless / test contexts).
     for w in app.topLevelWidgets():
-        if isinstance(w, QMainWindow):
+        if isinstance(w, QMainWindow) and w.objectName() != "QtJournalEditor":
             return w
     return None
 
@@ -1056,100 +1070,130 @@ def launch_export(fmt):
 # Menu installation
 # ----------------------------------------------------------------------
 
-# Sentinel so we don't add duplicate menus when the toolbar script
-# re-runs (Cubit replays the startup script if the user reloads the
-# Python interpreter from the GUI).
-_INSTALLED_OBJECT_NAME = "RadiaExportMenu"
+# Claro component tag.  Every action we register carries it, so
+# ``emclaro.remove_menu_items(_CLARO_COMPONENT)`` removes exactly our
+# items and nothing else.  That is the officially supported cleanup path.
+_CLARO_COMPONENT = "radia"
+# Top-level menu title.  Cubit has no top-level "Export" menu of its own
+# (export lives under File), so this creates a new one.  The component tag
+# above stays "radia" -- it is the internal cleanup key, not a label.
+_CLARO_MENU_TITLE = "&Export"
 
-def _find_installed_menu(main):
-    """Return the installed Radia menu, or None if Cubit removed it."""
-    for action in list(main.menuBar().actions()):
-        sub = action.menu()
-        if sub is not None and sub.objectName() == _INSTALLED_OBJECT_NAME:
-            return sub
-    return None
+# Cubit owns the PyAction objects on the C++ side, but the SWIG wrappers
+# must outlive this call or Cubit is left holding dangling pointers.
+_claro_keepalive = []
+
+# (menu label, export format, status tip)
+_MENU_SPECS = (
+    ("Netgen Vol (.vol)...", FMT_NETGEN,
+     "Export curved mesh with labels (.vol, order 1-5)"),
+    ("GMSH (.msh)...", FMT_GMSH,
+     "Export mesh to GMSH format (.msh)"),
+    ("Nastran BDF (.bdf)...", FMT_NASTRAN,
+     "Export mesh to Nastran BDF format (.bdf)"),
+    ("VTK (.vtk)...", FMT_VTK,
+     "Export mesh to VTK format (.vtk)"),
+    ("FEMEEM...", FMT_FEMEEM,
+     "Export mesh to FEMEEM format (1st-order tet, directory output)"),
+    ("MEG (ELF/MAGIC)...", FMT_MEG,
+     "Export mesh to ELF/MAGIC MEG format (1st-order)"),
+)
 
 
-def _install_menu_on_main(cubit_mod, main):
-    """Create the menu after Cubit's QMainWindow is known to exist."""
-    menu_bar = main.menuBar()
+def _activate_code(fmt):
+    """Return the Python snippet Cubit runs when a menu item is chosen.
 
-    # Remove any previous instance (idempotent reload)
-    for action in list(menu_bar.actions()):
-        sub = action.menu()
-        if sub is not None and sub.objectName() == _INSTALLED_OBJECT_NAME:
-            menu_bar.removeAction(action)
-            sub.deleteLater()
-
-    menu = QMenu("&Radia Export", main)
-    menu.setObjectName(_INSTALLED_OBJECT_NAME)
-
-    def _action(label, status_tip, callback):
-        act = QAction(label, main)
-        act.setStatusTip(status_tip)
-        act.triggered.connect(callback)
-        menu.addAction(act)
-        return act
-
-    # Wrap the callbacks with a parent= the Cubit main window so any
-    # QDialog they create gets parented to it.
-    _action(
-        "Netgen Vol (.vol)...",
-        "Export curved mesh with labels (.vol, order 1-5)",
-        lambda: _run_netgen_export(cubit_mod, main))
-    _action(
-        "GMSH...",
-        "Export mesh to GMSH format (.msh)",
-        lambda: _run_generic_export(FMT_GMSH, cubit_mod, main))
-    _action(
-        "Nastran BDF...",
-        "Export mesh to Nastran BDF format (.bdf)",
-        lambda: _run_generic_export(FMT_NASTRAN, cubit_mod, main))
-    _action(
-        "VTK...",
-        "Export mesh to VTK format (.vtk)",
-        lambda: _run_generic_export(FMT_VTK, cubit_mod, main))
-    _action(
-        "FEMEEM...",
-        "Export mesh to FEMEEM format (1st-order tet, directory output)",
-        lambda: _run_generic_export(FMT_FEMEEM, cubit_mod, main))
-    _action(
-        "MEG (ELF/MAGIC)...",
-        "Export mesh to ELF/MAGIC MEG format (1st-order)",
-        lambda: _run_generic_export(FMT_MEG, cubit_mod, main))
-
-    menu_bar.addMenu(menu)
-    print("[Radia] Radia Export menu installed "
-          "(6 export actions, PySide6 toolbar)")
-    return menu
+    ``PyAction.setActivateMethod`` takes a C string, NOT a callable
+    (measured: passing a function raises ``TypeError ... argument 2 of
+    type 'char const *'``).  Cubit executes that string in its embedded
+    interpreter, whose ``Run_SimpleString`` path evaluates in
+    ``__main__``.  A bare function name cannot work, because Cubit runs
+    played scripts inside a uniquely generated module rather than
+    ``__main__``.  So emit a self-contained snippet that performs its own
+    import and reports its own traceback.
+    """
+    module_dir = os.path.dirname(os.path.abspath(__file__))
+    return (
+        "import sys, traceback\n"
+        "_d = {dir!r}\n"
+        "(_d in sys.path) or sys.path.insert(0, _d)\n"
+        "try:\n"
+        "    import radia_export_menu as _rem\n"
+        "    _rem.launch_export({fmt!r})\n"
+        "except Exception:\n"
+        "    traceback.print_exc()\n"
+    ).format(dir=module_dir, fmt=fmt)
 
 
 def install_menu():
-    """Install the deprecated, non-persistent top-level menu manually.
+    """Install the "Export" menu through Cubit's official Claro API.
 
-    Radia's supported persistent Cubit surface is the ``WorkflowToolbar``
-    package installed through Custom Toolbar Editor.  This compatibility helper
-    remains for interactive use, but startup code must not depend on it because
-    Cubit may replace its QMenuBar after ``~/.cubit`` has run.
+    Uses ``emclaro`` -- the SWIG binding of Cubit's Claro GUI framework,
+    shipped inside Cubit itself (``<cubit>/bin/emclaro.py``).  This is the
+    same ``Claro::add_to_menu()`` entry point the old C++ ``.ccl``
+    component used, so the menu is OWNED BY CUBIT.  That ownership is the
+    whole point: the previous implementation injected a ``QMenu`` straight
+    into Cubit's ``QMenuBar`` with PySide6, and Cubit discarded it when it
+    rebuilt the menu bar during cold start.
+
+    MEASURED (Coreform Cubit 2025.12): ``emclaro.is_loaded()`` is already
+    True while ``~/.cubit`` runs, and a menu registered from that hook is
+    still present once startup completes.
+
+    Do NOT walk this menu with PySide6 afterwards.  Enumerating the
+    resulting QMenu/QAction objects through the Python Qt binding
+    deadlocks Cubit, because the shiboken wrappers fight Cubit's C++
+    ownership.  Register through emclaro, remove through emclaro.
+
+    Returns True on success, or None when the Claro GUI is unavailable
+    (batch mode, or Cubit not present).
     """
-    # Cubit imports `cubit` at host startup; re-importing here is safe
-    # (Python caches it).  Doing the import inside the function rather
-    # than at module top means the module can still be imported under
-    # `pytest` for unit tests that don't need Cubit.
     try:
-        import cubit as cubit_mod
+        import emclaro
     except ImportError:
-        print("[Radia] cubit module not available - "
-              "Radia Export menu not installed")
+        print("[Radia] emclaro not available - "
+              "Export menu not installed")
         return None
 
-    main = find_claro()
-    if main is None:
-        print("[Radia] Cubit main window not found - "
-              "Radia Export compatibility menu not installed")
+    if not emclaro.is_loaded():
+        print("[Radia] Claro GUI not loaded - "
+              "Export menu not installed")
         return None
 
-    return _install_menu_on_main(cubit_mod, main)
+    # Idempotent: drop any previous registration by component tag first.
+    emclaro.remove_menu_items(_CLARO_COMPONENT)
+    del _claro_keepalive[:]
+
+    actions = emclaro.PyActionVector()
+    for label, fmt, status_tip in _MENU_SPECS:
+        act = emclaro.PyAction()
+        act.setText(label)
+        act.setMenuText(label)
+        act.setStatusTip(status_tip)
+        act.setActivateMethod(_activate_code(fmt))
+        actions.push_back(act)
+        _claro_keepalive.append(act)
+    _claro_keepalive.append(actions)
+
+    emclaro.add_to_menu(_CLARO_MENU_TITLE, actions, _CLARO_COMPONENT)
+    print("[Radia] Export menu installed "
+          "(%d actions, Claro add_to_menu)" % len(_MENU_SPECS))
+    return True
+
+
+def remove_menu():
+    """Remove the Export menu through the official Claro API.
+
+    Cleanup is by component tag, so it removes exactly the actions this
+    module registered and touches nothing else on the menu bar.
+    """
+    try:
+        import emclaro
+    except ImportError:
+        return False
+    emclaro.remove_menu_items(_CLARO_COMPONENT)
+    del _claro_keepalive[:]
+    return True
 
 
 # Compatibility entry point for an explicit interactive ``play``.  Normal
