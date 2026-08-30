@@ -1,7 +1,7 @@
 # Eqnedit64 GUI仕様
 
 - 仕様版: 1.0
-- 対象: Eqnedit64 3.0.10
+- 対象: Eqnedit64 3.0.11
 - 基準日: 2026-08-25
 - 適用範囲: `dist\Eqnedit64.exe`
 
@@ -327,7 +327,8 @@ Eqnedit64拡張として、`curl`, `div`, `grad`, `rot`, `tr`, `diag`, `Res`,
   含む同じ入口を使い、PowerPointの通常Ctrl+Vで数式、末尾文字、次の挿入点を
   18 pt・左寄せにそろえる。左寄せを24 pt固定より優先する。複数行`aligned`は
   Officeが`columnalign`を無視し、MathML整列要素を可視`&`として描くため、`&`なしの
-  各行を独立したinline MathML＋18 pt NBSPとして同じCF_HTML内へ並べる。これにより
+  入れ子の1列`aligned`も葉の行まで平坦化し、各行を独立したinline MathML＋
+  18 pt NBSPとして同じCF_HTML内へ並べる。これにより
   長さが違っても全行の左端が一致し、各行をOffice Mathとして編集できる。
   明示`&`を持つ入力は分割せず、1つの整列MathMLとして保持する。
   通常コピーへ登録`MathML` / `MathML Presentation`を混在させるとPowerPointが
@@ -463,7 +464,7 @@ Eqnedit64拡張として、`curl`, `div`, `grad`, `rot`, `tr`, `diag`, `Res`,
 | AUT-31 | 1×1から7×9を含む任意長方形を作成でき、行・列追加／削除が既存セル、上下移動、Undo/Redo、TeX再読込み時の空の端セルを保持する | `test_edit.py` / `test_operations_fuzz.py` / `--ui-interaction-test` |
 | AUT-32 | 行列パレットの全入口と行／列操作が実`WM_COMMAND`経路で状態を変え、全253メニュ項目の監査で操作可能項目0件のno-opを満たす | `test_palettes.py` / `--ui-interaction-test` / `--menu-audit` |
 | AUT-33 | パレット、直接ショートカット、2段ショートカットが新規TeX範囲だけを非アクティブ選択表示し、キャンバスのフォーカスを保ち、ソース欄へ移ると置換前に選択を解除する | `--ui-interaction-test` |
-| AUT-34 | `&`なし1列`aligned`の長短行がnative/Web入力表示で同じ左端を持ち、Office CF_HTMLでは整列要素や可視`&`を含まない独立inline MathML行となる。明示`&`は1つの整列MathMLと保存TeXを維持する | `test_layout.py` / `test_edit.py` / `test_web_insert.cjs` / `test_web_contract.py` / `test_external_paste.ps1` |
+| AUT-34 | `&`なし1列`aligned`の長短行がnative/Web入力表示で同じ左端を持ち、入れ子も葉まで平坦化され、Office CF_HTMLでは整列要素や可視`&`を含まない独立inline MathML行となる。明示`&`は1つの整列MathMLと保存TeXを維持する | `test_layout.py` / `test_edit.py` / `test_web_insert.cjs` / `test_web_contract.py` / `test_external_paste.ps1` |
 | AUT-35 | TeXソース欄の `Tab` が2つの `{}` 空欄を順に移動し、`Shift+Tab` が前へ戻り、ソースへTab文字を混入させない | `--ui-interaction-test` |
 | AUT-36 | 内蔵数式フォントは検証済みユーザーキャッシュからファイルベースで私有登録し、32回の起動終了後も`fontdrvhost.exe`のPIDとApplication Error件数が変化せず、分類タブ文字が本文相当の画素高を持つ | `test_font_safety.py` / `test_font_session.ps1` / `--ui-interaction-test` |
 

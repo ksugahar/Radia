@@ -327,42 +327,97 @@
   }
 
   function splitUnanchoredOfficeRows(math) {
-    var tables = math.querySelectorAll("mtable");
+    function elements(node) {
+      return Array.prototype.filter.call(
+        node.children, function () { return true; });
+    }
+
+    function containsOnly(node, child) {
+      return Array.prototype.every.call(node.childNodes, function (candidate) {
+        return candidate === child ||
+          (candidate.nodeType === 3 && candidate.nodeValue.trim() === "");
+      });
+    }
+
+    function syntheticCells(table) {
+      var alignment = (table.getAttribute("columnalign") || "")
+        .trim().split(/\s+/);
+      if (alignment.indexOf("right") < 0 ||
+          alignment.indexOf("left") < 0) return null;
+      var rows = elements(table).filter(function (row) {
+        return row.localName === "mtr";
+      });
+      var cellsByRow = rows.map(function (row) {
+        return elements(row).filter(function (cell) {
+          return cell.localName === "mtd";
+        });
+      });
+      if (!rows.length || !cellsByRow.every(function (cells) {
+        return cells.length === 2 && cells[0].textContent.trim() === "";
+      })) return null;
+      return cellsByRow;
+    }
+
+    function onlyNestedSyntheticTable(cell) {
+      var node = cell;
+      while (true) {
+        var children = elements(node);
+        if (children.length !== 1 || !containsOnly(node, children[0])) {
+          return null;
+        }
+        var child = children[0];
+        if (child.localName === "mtable") {
+          return syntheticCells(child) ? child : null;
+        }
+        if (child.localName !== "mrow" && child.localName !== "mstyle") {
+          return null;
+        }
+        node = child;
+      }
+    }
+
+    function collectLeafCells(table, output) {
+      var cellsByRow = syntheticCells(table);
+      if (!cellsByRow) return false;
+      return cellsByRow.every(function (cells) {
+        var content = cells[1];
+        var nested = onlyNestedSyntheticTable(content);
+        if (nested) return collectLeafCells(nested, output);
+        if (content.querySelector("mtable")) return false;
+        output.push(content);
+        return true;
+      });
+    }
+
+    var tables = Array.prototype.filter.call(
+      math.querySelectorAll("mtable"), function (table) {
+        for (var parent = table.parentNode; parent && parent !== math;
+             parent = parent.parentNode) {
+          if (parent.localName === "mtable") return false;
+        }
+        return true;
+      });
     if (tables.length !== 1) return null;
     var table = tables[0];
-    var alignment = (table.getAttribute("columnalign") || "")
-      .trim().split(/\s+/);
-    if (alignment.indexOf("right") < 0 || alignment.indexOf("left") < 0) {
-      return null;
-    }
     var only = table;
     while (only.parentNode !== math) {
       var parent = only.parentNode;
       if (!parent || (parent.localName !== "mrow" &&
-          parent.localName !== "mstyle")) return null;
-      var elementChildren = Array.prototype.filter.call(
-        parent.children, function () { return true; });
-      if (elementChildren.length !== 1 || elementChildren[0] !== only) {
+          parent.localName !== "mstyle") ||
+          elements(parent).length !== 1 ||
+          elements(parent)[0] !== only || !containsOnly(parent, only)) {
         return null;
       }
       only = parent;
     }
-    var rows = Array.prototype.filter.call(table.children, function (row) {
-      return row.localName === "mtr";
-    });
-    var cellsByRow = rows.map(function (row) {
-      return Array.prototype.filter.call(row.children, function (cell) {
-        return cell.localName === "mtd";
-      });
-    });
-    if (!rows.length || !cellsByRow.every(function (cells) {
-      return cells.length === 2 && cells[0].textContent.trim() === "";
-    })) return null;
+
+    var leafCells = [];
+    if (!collectLeafCells(table, leafCells) || leafCells.length < 2) return null;
 
     var serializer = new window.XMLSerializer();
-    return cellsByRow.map(function (cells) {
+    return leafCells.map(function (cell) {
       var rowMath = math.cloneNode(false);
-      Array.prototype.forEach.call(cells[1].childNodes, function (child) {
+      Array.prototype.forEach.call(cell.childNodes, function (child) {
         rowMath.appendChild(child.cloneNode(true));
       });
       return serializer.serializeToString(rowMath);

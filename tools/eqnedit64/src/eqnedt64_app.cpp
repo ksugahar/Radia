@@ -3800,8 +3800,9 @@ int self_test() {
         return 133;
     const std::string alignedOfficeRows =
         eqnedit::latex_to_office_mathml_fragment(
-            "\\begin{aligned}I\\\\IIIIIIII\\\\IIIIIIIIIIIIIIII"
-            "\\end{aligned}", kOfficePasteFontPoints);
+            "\\begin{aligned}\\begin{aligned}I\\\\IIIIIIII"
+            "\\end{aligned}\\\\IIIIIIIIIIIIIIII\\end{aligned}",
+            kOfficePasteFontPoints);
     size_t alignedMathCount = 0;
     for (size_t at = 0; (at = alignedOfficeRows.find("<math ", at)) !=
          std::string::npos; at += 6) ++alignedMathCount;
