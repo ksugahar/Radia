@@ -141,7 +141,8 @@ _AUTO_TET_JACOBI_NFACE_DEFAULT = 6000
 _AUTO_TET_JACOBI_NFACE_ENV = "RADIA_HDIV_AUTO_JACOBI_TET_NFACE"
 
 
-def _hdiv_space_with_image_constraints(mesh, order, image_planes):
+def _hdiv_space_with_image_constraints(
+        mesh, order, image_planes, cyclic_periodic_boundaries=()):
     """Create the NGSolve HDiv space, removing symmetry-odd normal traces.
 
     An image plane with positive scalar-potential parity has odd normal
@@ -153,10 +154,70 @@ def _hdiv_space_with_image_constraints(mesh, order, image_planes):
     condition and keeps every assembled matrix on the native C++ path.
     """
     base = ng.HDiv(mesh, order=int(order))
+    periodic_slave_dofs = ()
+    if cyclic_periodic_boundaries:
+        if image_planes:
+            raise NotImplementedError(
+                "vim.Solve: mirror image constraints and an azimuthal "
+                "periodic HDiv trace cannot be combined")
+        if not mesh.ngmesh.GetIdentifications():
+            raise ValueError(
+                "vim.Solve: cyclic_periodic_boundaries requires NGSolve "
+                "PERIODIC point identifications between the two sector faces")
+        available = tuple(mesh.GetBoundaries())
+        missing = sorted(set(cyclic_periodic_boundaries) - set(available))
+        if missing:
+            raise ValueError(
+                "vim.Solve: cyclic periodic boundary labels are missing: %s"
+                % missing)
+        boundary_counts = {name: 0 for name in cyclic_periodic_boundaries}
+        boundary_vertices = {name: set() for name in cyclic_periodic_boundaries}
+        for element in mesh.Elements(ng.BND):
+            name = available[element.index]
+            if name in boundary_counts:
+                boundary_counts[name] += 1
+                boundary_vertices[name].update(
+                    int(vertex.nr) + 1 for vertex in element.vertices)
+        for name in cyclic_periodic_boundaries:
+            if boundary_counts[name] <= 0:
+                raise ValueError(
+                    "vim.Solve: cyclic periodic boundary %r has no facets"
+                    % name)
+        first, second = cyclic_periodic_boundaries
+        if boundary_vertices[first] & boundary_vertices[second]:
+            raise ValueError(
+                "vim.Solve: cyclic periodic sector faces must have disjoint "
+                "vertex sets")
+        linked = {first: set(), second: set()}
+        for endpoint_a, endpoint_b in mesh.ngmesh.GetIdentifications():
+            endpoint_a = int(getattr(endpoint_a, "nr", endpoint_a))
+            endpoint_b = int(getattr(endpoint_b, "nr", endpoint_b))
+            if (endpoint_a in boundary_vertices[first]
+                    and endpoint_b in boundary_vertices[second]):
+                linked[first].add(endpoint_a)
+                linked[second].add(endpoint_b)
+            elif (endpoint_b in boundary_vertices[first]
+                    and endpoint_a in boundary_vertices[second]):
+                linked[first].add(endpoint_b)
+                linked[second].add(endpoint_a)
+        if any(linked[name] != boundary_vertices[name]
+               for name in cyclic_periodic_boundaries):
+            raise ValueError(
+                "vim.Solve: NGSolve PERIODIC identifications must pair every "
+                "vertex on the two cyclic_periodic_boundaries")
+        periodic = ng.Periodic(base)
+        active = periodic.FreeDofs()
+        periodic_slave_dofs = tuple(
+            index for index in range(periodic.ndof) if not active[index])
+        if not periodic_slave_dofs:
+            raise ValueError(
+                "vim.Solve: mesh identifications did not identify any HDiv "
+                "trace DoFs on the cyclic sector faces")
+        base = ng.Compress(periodic, active)
     constrained_axes = tuple(sorted({int(axis) for axis, sign in image_planes
                                      if float(sign) > 0.0}))
     if not constrained_axes:
-        return base, ()
+        return base, (), periodic_slave_dofs
 
     scale = max((abs(float(value))
                  for vertex in mesh.vertices for value in vertex.point), default=1.0)
@@ -180,7 +241,7 @@ def _hdiv_space_with_image_constraints(mesh, order, image_planes):
     active[:] = True
     for dof in constrained:
         active[dof] = False
-    return ng.Compress(base, active), constrained
+    return ng.Compress(base, active), constrained, periodic_slave_dofs
 
 
 def _auto_tet_jacobi_nface_threshold():
@@ -395,6 +456,7 @@ def _solve_linear_W_cpp(H, W, n_face, h_ext, tol, maxit):
 def hdiv_demag_solve(mesh, mu_r=None, H_ext=None, *, B_r=None, bh_table=None,
                      magnetization_sources=None, magnets=None,
                      image=None, image_cyclic=None, image_cyclic_alternating=False,
+                     cyclic_periodic_boundaries=None,
                      gram_eps=None, leaf=32, eta=2.0, far_quad=None, tol=1e-8,
                      maxit=4000, nl_maxit=300, nl_tol=1e-6,
                      nonlinear_solver="energy-newton",
@@ -427,7 +489,14 @@ def hdiv_demag_solve(mesh, mu_r=None, H_ext=None, *, B_r=None, bh_table=None,
                   interfaces.
     H_ext      : NGSolve CoefficientFunction, the applied field (A/m) -- uniform, analytic, or a coil's
                  Biot-Savart field rad.RadiaField(coil,'h').  Required unless ``B_r``, a magnetization
-                 source, or the planar magnets path supplies the drive.
+                  source, or the planar magnets path supplies the drive.
+    cyclic_periodic_boundaries : the two named azimuthal cut faces of a
+                 connected pure-HEX sector.  The mesh must carry NGSolve
+                 PERIODIC point identifications and ``image_cyclic=N`` must
+                 be set.  The solve uses ``Compress(Periodic(HDiv))`` and
+                 removes the paired seam faces from the physical charge skin;
+                 omitting this argument on a mesh with periodic/cyclic labels
+                 fails loudly instead of leaving artificial seam charge.
     near/far Gram-build tuning:
       ho_far_factor -- the HDiv near/far separation threshold (pass inf to force the all-high-order
                        reference build).
@@ -600,7 +669,8 @@ def hdiv_demag_solve(mesh, mu_r=None, H_ext=None, *, B_r=None, bh_table=None,
                               vertex_counts=_vtx, magnetization_sources=sources,
                               operator_cache=_operator_cache,
                               image_cyclic=image_cyclic,
-                              image_cyclic_alternating=image_cyclic_alternating)
+                              image_cyclic_alternating=image_cyclic_alternating,
+                              cyclic_periodic_boundaries=cyclic_periodic_boundaries)
     if linear_recoil_pm:
         result["permanent_magnet_model"] = "linear-recoil"
         result["permanent_magnet_level"] = 2
@@ -617,7 +687,8 @@ def _solve_highorder(mesh, order, mu_r, bh_table, H_ext, image, linear_solver,
                       newton_inner_tol="auto", newton_warmstart="linear", newton_continuation=1,
                       newton_reuse_tangent_steps=1, newton_cg_x0=False, vertex_counts=None,
                       magnetization_sources=(), operator_cache=None,
-                      image_cyclic=None, image_cyclic_alternating=False):
+                      image_cyclic=None, image_cyclic_alternating=False,
+                      cyclic_periodic_boundaries=None):
     """BDM1/BDM2 HDiv soft-iron demag solve.  The order-p charge-Gram demag operator N = B^T G B is
     a VALID demag operator since the per-element change-of-basis fix (2026-06-28,
     [[hdiv-highorder-material-solve-wrong]]): eig(M_mass^-1 N) in [0,1] and the material solve p-converges
@@ -660,6 +731,16 @@ def _solve_highorder(mesh, order, mu_r, bh_table, H_ext, image, linear_solver,
     # shape dependence is the demagnetizing-factor phenomenon).  Charges are SCALARS under a rotation that
     # carries the magnetization with the geometry, so alternating N/S poles are just signs (-1)^k.
     image_rot_angle = []
+    if isinstance(cyclic_periodic_boundaries, str):
+        raise TypeError(
+            "vim.Solve: cyclic_periodic_boundaries must be a pair of labels, "
+            "not one string")
+    cyclic_periodic_boundaries = (() if cyclic_periodic_boundaries is None
+                                  else tuple(str(name) for name in
+                                             cyclic_periodic_boundaries))
+    labeled_periodic_boundaries = tuple(
+        name for name in mesh.GetBoundaries()
+        if "periodic" in name.lower() or "cyclic" in name.lower())
     if image_cyclic is not None:
         n_fold = int(image_cyclic)
         if n_fold < 2:
@@ -676,6 +757,29 @@ def _solve_highorder(mesh, order, mu_r, bh_table, H_ext, image, linear_solver,
             image_masks.append(0)                                  # pure rotation, no mirror
             image_signs.append(-1.0 if (image_cyclic_alternating and k % 2) else 1.0)
             image_rot_angle.append(2.0*math.pi*k/n_fold)
+    if cyclic_periodic_boundaries:
+        if image_cyclic is None:
+            raise ValueError(
+                "vim.Solve: cyclic_periodic_boundaries requires image_cyclic=N")
+        if len(cyclic_periodic_boundaries) != 2 or (
+                cyclic_periodic_boundaries[0] == cyclic_periodic_boundaries[1]):
+            raise ValueError(
+                "vim.Solve: cyclic_periodic_boundaries must name two distinct "
+                "rotation-related sector faces")
+        if image_cyclic_alternating:
+            raise NotImplementedError(
+                "vim.Solve: connected antiperiodic HDiv sectors are not yet "
+                "wired; FFAG guide-field sectors use periodic traces")
+        if vertex_counts != {8}:
+            raise NotImplementedError(
+                "vim.Solve: connected cyclic periodic traces are currently "
+                "wired for pure HEX BDM1/BDM2")
+    elif image_cyclic is not None and labeled_periodic_boundaries:
+        raise ValueError(
+            "vim.Solve: image_cyclic mesh has azimuthal periodic/cyclic "
+            "boundary labels %s; pass cyclic_periodic_boundaries=(min,max) "
+            "so the HDiv traces are identified and the seam charge is removed"
+            % (labeled_periodic_boundaries,))
     # The flat nonlinear path uses the same high-order Gram as the curved path.  The symmetric energy-Newton
     # is Gram-agnostic and consumes only H.matvec plus the C++ mass-Riesz solve.
     if int(order) > 2:
@@ -698,6 +802,9 @@ def _solve_highorder(mesh, order, mu_r, bh_table, H_ext, image, linear_solver,
         if not isinstance(operator_cache, dict):
             raise TypeError("vim.Solve: internal operator cache must be owned by vim.HDivSolver")
         expected = dict(mesh=mesh, order=int(order), curve_order=curve_order, image=image,
+                        image_cyclic=image_cyclic,
+                        image_cyclic_alternating=bool(image_cyclic_alternating),
+                        cyclic_periodic_boundaries=cyclic_periodic_boundaries,
                         vertex_counts=frozenset(vertex_counts),
                         nonlinear=bool(bh_table is not None))
         for key, value in expected.items():
@@ -714,6 +821,8 @@ def _solve_highorder(mesh, order, mu_r, bh_table, H_ext, image, linear_solver,
         n_charge = int(operator_cache["n_charge"])
         symmetry_constrained_dofs = tuple(
             operator_cache.get("symmetry_constrained_dofs", ()))
+        periodic_slave_dofs = tuple(
+            operator_cache.get("periodic_slave_dofs", ()))
         t_before_charge_gram = t_before_fes
         t_after_charge_gram = t_before_fes
         charge_build_timings = {}
@@ -723,8 +832,9 @@ def _solve_highorder(mesh, order, mu_r, bh_table, H_ext, image, linear_solver,
             if int(curve_order) != 2:
                 raise NotImplementedError("vim.Solve: only curve_order=2 (isoparametric P2) is wired.")
             _curve_mesh(mesh, int(curve_order))
-        fes, symmetry_constrained_dofs = _hdiv_space_with_image_constraints(
-            mesh, order, image_planes)
+        (fes, symmetry_constrained_dofs,
+         periodic_slave_dofs) = _hdiv_space_with_image_constraints(
+            mesh, order, image_planes, cyclic_periodic_boundaries)
         t_before_charge_gram = time.perf_counter()
         B, H, M_mass = build_charge_gram(
             fes, eps=eff_eps, leafsize=leaf, eta=eta,
@@ -733,6 +843,7 @@ def _solve_highorder(mesh, order, mu_r, bh_table, H_ext, image, linear_solver,
             curve_gauss=int(curve_gauss), nonlinear=bh_table is not None,
             image_masks=image_masks, image_signs=image_signs,
             image_rot_angle=image_rot_angle,
+            excluded_boundaries=cyclic_periodic_boundaries,
             _materialize_mass=False)
         t_after_charge_gram = time.perf_counter()
         charge_build_timings = dict(getattr(build_charge_gram, "last_timings", {}) or {})
@@ -785,11 +896,15 @@ def _solve_highorder(mesh, order, mu_r, bh_table, H_ext, image, linear_solver,
                 pass
         operator_cache = dict(
             mesh=mesh, order=int(order), curve_order=curve_order, image=image,
+            image_cyclic=image_cyclic,
+            image_cyclic_alternating=bool(image_cyclic_alternating),
+            cyclic_periodic_boundaries=cyclic_periodic_boundaries,
             vertex_counts=frozenset(vertex_counts), nonlinear=bool(bh_table is not None),
             fes=fes, charge_gram=H, n_face=int(n_face), n_el=int(n_el),
             n_charge=int(n_charge), demag=float(D),
             hmat_stats=(None if hmat_stats is None else dict(hmat_stats)),
             symmetry_constrained_dofs=tuple(symmetry_constrained_dofs),
+            periodic_slave_dofs=tuple(periodic_slave_dofs),
             build_timings=dict(charge_build_timings))
     t_after_demag_probe = time.perf_counter()
 
@@ -901,6 +1016,8 @@ def _solve_highorder(mesh, order, mu_r, bh_table, H_ext, image, linear_solver,
                order=int(order), curve_order=curve_order, image=image,
                operator_reused=bool(operator_reused),
                symmetry_constrained_dofs=len(symmetry_constrained_dofs), setup_wall_s=setup_wall_s,
+               periodic_slave_dofs=len(periodic_slave_dofs),
+               cyclic_periodic_boundaries=cyclic_periodic_boundaries,
                solve_wall_s=solve_wall_s, post_wall_s=time.perf_counter() - t_post,
                total_wall_s_internal=time.perf_counter() - t_total,
                fes_wall_s=t_before_charge_gram - t_before_fes,

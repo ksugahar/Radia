@@ -41,6 +41,63 @@ PROTON_REST_ENERGY_MEV = 938.27208816
 GEV_C_PER_TESLA_METRE = 0.299792458
 
 
+@dataclass(frozen=True)
+class FFAGCyclicSectorContract:
+    """Validated interpretation of one rotational FFAG sector.
+
+    ``image_cyclic`` is sufficient when complete iron bodies fit inside one
+    sector and their rotated copies are disjoint.  A continuous return yoke
+    cut by the azimuthal sector planes has an additional FEEC requirement:
+    the two HDiv normal traces must be identified by the sector rotation.
+    Rotating the nonlocal charge interaction alone does not impose that local
+    trace constraint.
+    """
+
+    fold: int
+    field_antiperiodic: bool
+    body_crosses_periodic_planes: bool
+    periodic_trace_identified: bool
+    reduction_mode: str
+
+
+def validate_ffag_cyclic_sector_contract(
+        fold, *, field_antiperiodic=False,
+        body_crosses_periodic_planes=False,
+        periodic_trace_identified=False) -> FFAGCyclicSectorContract:
+    """Validate the cyclic symmetry contract before an FFAG sector solve.
+
+    FFAG F/D alternation normally changes the radial gradient within a cell;
+    it does not make the vertical guide field antiperiodic from cell to cell.
+    ``field_antiperiodic`` is therefore an explicit exceptional mode and, as
+    required by closure around the ring, accepts only an even fold count.
+    """
+    numeric_fold = float(fold)
+    if (isinstance(fold, (bool, np.bool_)) or not np.isfinite(numeric_fold)
+            or not numeric_fold.is_integer() or numeric_fold < 2):
+        raise ValueError("FFAG cyclic fold must be an integer >= 2")
+    count = int(numeric_fold)
+    antiperiodic = bool(field_antiperiodic)
+    crosses = bool(body_crosses_periodic_planes)
+    identified = bool(periodic_trace_identified)
+    if antiperiodic and count % 2:
+        raise ValueError(
+            "FFAG antiperiodic field symmetry requires an even fold count")
+    if crosses and not identified:
+        raise ValueError(
+            "continuous FFAG iron crosses the azimuthal sector planes: "
+            "identify the two rotation-related HDiv normal traces before "
+            "using image_cyclic; rotated nonlocal images alone leave an "
+            "artificial periodic-seam surface charge")
+    if identified and not crosses:
+        raise ValueError(
+            "periodic_trace_identified is only valid when the iron body "
+            "crosses both azimuthal sector planes")
+    mode = ("connected-periodic-sector" if crosses
+            else "disjoint-cell-cyclic-images")
+    return FFAGCyclicSectorContract(
+        count, antiperiodic, crosses, identified, mode)
+
+
 def magnetic_rigidity_from_kinetic_energy(
         kinetic_energy_mev, *, rest_energy_mev=PROTON_REST_ENERGY_MEV,
         charge_number=1.0):
@@ -2252,6 +2309,7 @@ def optimize_ffag_hdiv_mmm_from_transfer_matrices(
 
 __all__ = [
     "EngeFringeIntegrals",
+    "FFAGCyclicSectorContract",
     "FFAGCellReference",
     "FFAGCellTargetFamily",
     "FFAGFixedDesignOrbitTargetFamily",
@@ -2280,4 +2338,5 @@ __all__ = [
     "recover_periodic_planar_closed_orbit",
     "recover_periodic_planar_closed_orbit_native",
     "sample_planar_orbit_field_response",
+    "validate_ffag_cyclic_sector_contract",
 ]

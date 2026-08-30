@@ -1561,6 +1561,53 @@ void TetVolFieldCubicBasis(const double V[4][3], const double r[3],
             }
 }
 
+// Affine HEX BDM2 tensor Q2 charges become total-degree-six physical
+// polynomials after the reference-to-physical conversion.  Reuse the same
+// integration-by-parts identity as TetVolFieldCubicBasis, but retain the full
+// 84-monomial ladder already provided by the Newton-potential recurrence.
+void TetVolFieldBasisUpTo6(const double V[4][3], const double r[3],
+                           double out[84][3])
+{
+    for(int index=0;index<84;++index)
+        for(int k=0;k<3;++k)out[index][k]=0.0;
+    double cen[3]={0,0,0};
+    for(int i=0;i<4;++i)for(int k=0;k<3;++k)cen[k]+=0.25*V[i][k];
+    static const int FACES[4][3]={{1,2,3},{0,2,3},{0,1,3},{0,1,2}};
+    for(int fi=0;fi<4;++fi){
+        double face[3][3];
+        for(int j=0;j<3;++j)for(int k=0;k<3;++k)
+            face[j][k]=V[FACES[fi][j]][k];
+        double e1[3],e2[3],normal[3];
+        for(int k=0;k<3;++k){
+            e1[k]=face[1][k]-face[0][k];
+            e2[k]=face[2][k]-face[0][k];
+        }
+        v3cross(e1,e2,normal);const double norm=v3nrm(normal);
+        if(norm<1e-300)continue;
+        for(double& value:normal)value/=norm;
+        double fc[3]={0,0,0};
+        for(int j=0;j<3;++j)for(int k=0;k<3;++k)fc[k]+=face[j][k]/3.0;
+        double outward[3];for(int k=0;k<3;++k)outward[k]=fc[k]-cen[k];
+        if(v3dot(outward,normal)<0.0)for(double& value:normal)value=-value;
+        double moments[84]={};SurfacePotentialMomentsUpTo(face,r,6,moments);
+        for(int index=0;index<84;++index)
+            for(int k=0;k<3;++k)out[index][k]+=normal[k]*moments[index];
+    }
+    double volume_moments[56]={};TetPotentialMomentsUpTo(V,r,5,volume_moments);
+    for(int total=1;total<=6;++total)
+        for(int ax=0;ax<=total;++ax)
+            for(int ay=0;ay<=total-ax;++ay){
+                const int az=total-ax-ay;
+                const int alpha[3]={ax,ay,az};
+                const int index=PotentialMomentIndex(ax,ay,az);
+                for(int k=0;k<3;++k)if(alpha[k]>0){
+                    int lower[3]={ax,ay,az};--lower[k];
+                    out[index][k]-=alpha[k]*volume_moments[
+                        PotentialMomentIndex(lower[0],lower[1],lower[2])];
+                }
+            }
+}
+
 // INT_T (sigma0 + s.r')(r-r')/R^3 dS' (linear surface charge)
 // = (sigma0 + s.r_p) F_const - SUM_e (s.m_e) G_e - I0 s_par.
 void LinTriField(const double V[3][3], const double r[3], double sigma0, const double s[3], double out[3])
@@ -1721,6 +1768,22 @@ void CubicTriField(const double V[3][3], const double r[3],
         out[axis] = 0.0;
         for(int index=0;index<20;++index)
             out[axis] -= coefficient[index]*direction[index];
+    }
+}
+
+// Exact surface fields for every physical monomial through degree four.
+// The target-direction derivative of the analytic Newton-potential moments
+// is -H, so no observation or source quadrature is introduced here.
+void TriFieldBasisUpTo4(const double V[3][3], const double r[3],
+                        double out[35][3])
+{
+    const double zero_vertices[3][3]={};
+    for(int axis=0;axis<3;++axis){
+        double direction_vector[3]={};direction_vector[axis]=1.0;
+        double moments[35]={},direction[35]={};
+        TriPotentialMomentsDirectionalUpTo4(
+            V,zero_vertices,r,direction_vector,moments,direction);
+        for(int index=0;index<35;++index)out[index][axis]=-direction[index];
     }
 }
 

@@ -20,7 +20,10 @@ class HDivSolver:
     The caller owns the surrounding ``ngsolve.TaskManager`` region.
     """
 
-    def __init__(self, mesh, *, order=1, image=None, gram_eps=None, leaf=32,
+    def __init__(self, mesh, *, order=1, image=None, image_cyclic=None,
+                 image_cyclic_alternating=False,
+                 cyclic_periodic_boundaries=None,
+                 gram_eps=None, leaf=32,
                  eta=2.0, far_quad=None, curve_order=None, curve_gauss=8,
                  ho_far_factor=None):
         if int(getattr(mesh, "dim", -1)) != 3:
@@ -35,6 +38,14 @@ class HDivSolver:
         self.mesh = mesh
         self.order = order
         self.image = image
+        self.image_cyclic = image_cyclic
+        self.image_cyclic_alternating = bool(image_cyclic_alternating)
+        if isinstance(cyclic_periodic_boundaries, str):
+            raise TypeError(
+                "cyclic_periodic_boundaries must be a pair of labels")
+        self.cyclic_periodic_boundaries = (
+            None if cyclic_periodic_boundaries is None
+            else tuple(str(name) for name in cyclic_periodic_boundaries))
         self.gram_eps = gram_eps
         self.leaf = int(leaf)
         self.eta = float(eta)
@@ -49,7 +60,10 @@ class HDivSolver:
 
     def _geometry_options(self):
         return dict(
-            image=self.image, gram_eps=self.gram_eps, leaf=self.leaf,
+            image=self.image, image_cyclic=self.image_cyclic,
+            image_cyclic_alternating=self.image_cyclic_alternating,
+            cyclic_periodic_boundaries=self.cyclic_periodic_boundaries,
+            gram_eps=self.gram_eps, leaf=self.leaf,
             eta=self.eta, far_quad=self.far_quad,
             curve_order=self.curve_order, curve_gauss=self.curve_gauss,
             ho_far_factor=self.ho_far_factor,
@@ -129,7 +143,7 @@ class HDivSolver:
                         nl_tol=1e-3, initial_b_path=None,
                         initial_state=None, state_quadrature_order=None):
         """Advance a B-input material history on this persistent geometry."""
-        if self.image is not None:
+        if self.image is not None or self.image_cyclic is not None:
             raise NotImplementedError(
                 "vim.HDivSolver.SolveHysteresis does not yet support image symmetry")
         if self.curve_gauss != 8:

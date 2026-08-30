@@ -392,7 +392,7 @@ def _blockdiag_density_map(M, Bx, fes_dg, vorb, mesh):
     return (Minv @ Bx).tocsr()
 
 
-def _exterior_bnd_elements(mesh):
+def _exterior_bnd_elements(mesh, *, excluded_boundaries=()):
     """Surface elements on the TRUE exterior boundary: their facet is owned by exactly ONE volume element.
 
     The charge layer treats every listed surface element as a charged boundary face (sigma = M.n,
@@ -409,6 +409,13 @@ def _exterior_bnd_elements(mesh):
     (tet/hex/wedge) and for boundary edges of planar 2D meshes.  Cost is one O(n_el) dict pass, negligible
     vs the Gram build.  A surface element matching NO volume facet means a non-conforming or corrupt mesh:
     raise (fail loud), never charge it."""
+    excluded = frozenset(str(name) for name in excluded_boundaries)
+    available = tuple(mesh.GetBoundaries())
+    missing = sorted(excluded - set(available))
+    if missing:
+        raise ValueError(
+            "HDiv-VIM excluded boundary labels are missing from the mesh: %s"
+            % missing)
     owners = {}
     for el in mesh.Elements(ng.VOL):
         for fa in el.facets:
@@ -419,7 +426,8 @@ def _exterior_bnd_elements(mesh):
         e = ng.ElementId(ng.BND, i)
         n = owners.get(tuple(sorted(v.nr for v in mesh[e].vertices)), 0)
         if n == 1:
-            kept.append(e)
+            if available[mesh[e].index] not in excluded:
+                kept.append(e)
         elif n != 2:
             raise ValueError(
                 "HDiv-VIM charge basis: surface element %d matches %d volume facets "
@@ -474,7 +482,9 @@ def _broken_tet_face_charge_basis(fes, p):
     q = facet_space.TestFunction()
     normal = ng.specialcf.normal(mesh.dim)
     jump = ng.BilinearForm(trialspace=fes, testspace=facet_space)
-    jump += (u * normal) * q * ng.dx(element_boundary=True)
+    moment_bonus = 2 * int(p) + 4
+    jump += (u * normal) * q * ng.dx(
+        element_boundary=True, bonus_intorder=moment_bonus)
     jump.Assemble()
     jump_moments = _csr(jump)
 
@@ -486,7 +496,8 @@ def _broken_tet_face_charge_basis(fes, p):
     for i, j, k in xyz_mons:
         physical_monomial = ng.x ** i * ng.y ** j * ng.z ** k
         linear = ng.LinearForm(facet_space)
-        linear += physical_monomial * q * ng.dx(element_boundary=True)
+        linear += physical_monomial * q * ng.dx(
+            element_boundary=True, bonus_intorder=moment_bonus)
         linear.Assemble()
         moment_vectors.append(
             np.asarray(linear.vec.FV().NumPy(), dtype=float).copy())
@@ -997,10 +1008,42 @@ def _broken_hex_face_charge_basis(fes, p):
             owner_count[int(facet.nr)] += 1
 
     mons = _mons_quad(int(p))
-    gauss, _ = _g01(max(int(p) + 2, 3))
-    ref_points = np.asarray([(uu, vv) for vv in gauss for uu in gauss])
-    Q = np.asarray([[uu ** i * vv ** j for i, j in mons]
-                    for uu, vv in ref_points], dtype=float)
+    xyz_index = {exponent: index for index, exponent in enumerate(xyz_mons)}
+
+    def affine_embedding(corners):
+        """Exact coefficients of u^i v^j in physical x/y/z monomials."""
+        axes = np.column_stack((corners[1]-corners[0],
+                                corners[2]-corners[0]))
+        singular_values = np.linalg.svd(axes, compute_uv=False)
+        if (singular_values.size != 2 or singular_values[1] <= 0.0
+                or singular_values[0] / singular_values[1] > 1.0e12):
+            raise ValueError(
+                "vim.ChargeGram: degenerate or ill-conditioned affine HEX "
+                "facet embedding")
+        inverse = np.linalg.pinv(axes)
+        forms = np.column_stack((-inverse @ corners[0], inverse))
+
+        def multiply(poly, form):
+            product = {}
+            for exponent, coefficient in poly.items():
+                product[exponent] = product.get(exponent, 0.0) + coefficient*form[0]
+                for axis in range(3):
+                    raised = list(exponent)
+                    raised[axis] += 1
+                    raised = tuple(raised)
+                    product[raised] = product.get(raised, 0.0) + coefficient*form[axis+1]
+            return product
+
+        embedding = np.zeros((len(xyz_mons), len(mons)))
+        for column, (power_u, power_v) in enumerate(mons):
+            polynomial = {(0, 0, 0): 1.0}
+            for _ in range(power_u):
+                polynomial = multiply(polynomial, forms[0])
+            for _ in range(power_v):
+                polynomial = multiply(polynomial, forms[1])
+            for exponent, coefficient in polynomial.items():
+                embedding[xyz_index[exponent], column] = coefficient
+        return embedding
     rows = []
     face_nodes = []
     for facet in mesh.facets:
@@ -1041,28 +1084,11 @@ def _broken_hex_face_charge_basis(fes, p):
                 "vim.ChargeGram: internal HEX interfaces currently require "
                 "affine straight quadrilateral facets; facet %d residual=%g"
                 % (nr, affine_residual))
-        weights = np.asarray([
-            [(1.0-uu)*(1.0-vv), uu*(1.0-vv),
-             (1.0-uu)*vv, uu*vv]
-            for uu, vv in ref_points], dtype=float)
-        physical_points = weights @ corners
-        P = np.asarray([
-            [x ** i * y ** j * z ** k for i, j, k in xyz_mons]
-            for x, y, z in physical_points], dtype=float)
-        # Restricted to an affine facet, the local tensor space
-        # Q_p(u,v) is a subspace of physical total-degree <= 2p
-        # polynomials.  Embed local monomials in that larger physical basis:
-        # Q = P @ physical_to_local.  The old reverse least-squares fit
-        # P ~= Q @ local_to_physical projected physical u^2/v^2 terms into
-        # Q1 and corrupted the normal-charge coefficients by O(10%).
-        physical_to_local = np.linalg.lstsq(P, Q, rcond=None)[0]
-        embedding_residual = np.linalg.norm(
-            P @ physical_to_local - Q) / max(np.linalg.norm(Q), 1e-300)
-        if embedding_residual > 5e-12:
-            raise RuntimeError(
-                "vim.ChargeGram: physical-to-local HEX facet embedding "
-                "failed on facet %d (relative residual=%g)"
-                % (nr, embedding_residual))
+        # Restricted to an affine facet, u and v are affine physical forms.
+        # Expand their tensor products directly; fitting the degree-four
+        # restriction on a 4x4 grid aliases BDM2 quartics and creates a false
+        # facet bubble even when the sampled residual looks machine-small.
+        physical_to_local = affine_embedding(corners)
         D = np.column_stack(
             [values[dofs] / owners for values in moment_vectors])
         C = D @ physical_to_local
@@ -1092,7 +1118,7 @@ def _broken_hex_face_charge_basis(fes, p):
 
 
 def _charge_basis_hex(fes, cob_quad=3, *, materialize_mass=True,
-                      internal_interfaces=False):
+                      internal_interfaces=False, excluded_boundaries=()):
     """HEX analogue of `_charge_basis_curved`: charge map B + 27/9-node Q2 geometry nodes (via GetTrafo ->
     flat + curved ONE path).  fes = HDiv(hexmesh, order=0|1|2).  CALLER wraps TaskManager.  Flat NGSolve `.vol`
     hexes use direct NGSolve-reference lattice interpolation; curved meshes keep the GetTrafo source of truth.
@@ -1127,7 +1153,12 @@ def _charge_basis_hex(fes, cob_quad=3, *, materialize_mass=True,
     t_assembly = time.perf_counter()
 
     vels = [ng.ElementId(ng.VOL, i) for i in range(mesh.GetNE(ng.VOL))]
-    bels = _exterior_bnd_elements(mesh)          # internal material-interface faces carry no charge
+    if internal_interfaces and excluded_boundaries:
+        raise NotImplementedError(
+            "vim.ChargeGram: periodic seam exclusion is not yet wired with "
+            "internal_interfaces=True")
+    bels = _exterior_bnd_elements(
+        mesh, excluded_boundaries=excluded_boundaries)
     rhp, rhw = _ref_prod_gauss(cob_quad, 3)
     rqp, rqw = _ref_prod_gauss(cob_quad, 2)
     ir_hex = ng.IntegrationRule(_Q2_LATTICE_3D, [1.0] * 27)
@@ -1241,7 +1272,7 @@ def _build_charge_gram_hex(fes, glout_n=None, glin_n=None, near_grade=0.5, far_i
                            eps=1e-12, leafsize=64, eta=2.0, image_masks=None, image_signs=None,
                            image_rot_angle=(),
                            materialize_mass=True, build_hmatrix=True,
-                           internal_interfaces=False):
+                           internal_interfaces=False, excluded_boundaries=()):
     """Pure-hex BDM1/BDM2 charge Gram via the hex-mode C++ _ChargeGramHMatrix.  FLAT and CURVED (mesh.Curve(2))
     share ONE path (the 27-node Q2 lattice is extracted via GetTrafo either way -- the caller Curve(2)'s the
     mesh for curved).  glout_n = the 1D outer rule.  BDM1 keeps the validated default 4.  Flat BDM2 uses
@@ -1278,7 +1309,8 @@ def _build_charge_gram_hex(fes, glout_n=None, glin_n=None, near_grade=0.5, far_i
     glin_n = default_inner if glin_n is None else int(glin_n)
     cb = _charge_basis_hex(
         fes, cob_quad=max(3, p+1), materialize_mass=materialize_mass,
-        internal_interfaces=bool(internal_interfaces))
+        internal_interfaces=bool(internal_interfaces),
+        excluded_boundaries=excluded_boundaries)
     t1 = time.perf_counter()
     glo, gwo = _g01(glout_n)
     gli, gwi = _g01(glin_n)
@@ -1797,7 +1829,8 @@ def build_charge_gram(fes, intorder=None, eps=1e-7, leafsize=16, eta=2.0, far_qu
                       inner_quad=None, curve_order=None, curve_gauss=8, nonlinear=False,
                       image_masks=None, image_signs=None, image_rot_angle=None,
                       _materialize_mass=True,
-                      _build_hmatrix=True, internal_interfaces=False):
+                      _build_hmatrix=True, internal_interfaces=False,
+                      excluded_boundaries=()):
     """From an HDiv FESpace (order p, the order from the fes), build the monomial charge-density map
     B (scipy CSR, n_charge x ndof), the C++ charge-Gram H-matrix G, and the HDiv mass M_mass (CSR).
     The CALLER wraps in TaskManager.
@@ -1825,6 +1858,11 @@ def build_charge_gram(fes, intorder=None, eps=1e-7, leafsize=16, eta=2.0, far_qu
     mesh = fes.mesh
     p = int(fes.globalorder)
     _vtypes = _volume_vertex_counts(mesh)
+    excluded_boundaries = tuple(str(name) for name in excluded_boundaries)
+    if excluded_boundaries and not (mesh.dim == 3 and _vtypes == {8}):
+        raise NotImplementedError(
+            "vim.ChargeGram: periodic boundary-charge exclusion is currently "
+            "wired for pure HEX BDM1/BDM2")
     validate_hdiv_configuration(mesh.dim, _vtypes, p, mesh.GetCurveOrder())
     if mesh.dim == 3 and mesh.GetNE(ng.BND) == 0:
         # A bounded 3D body ALWAYS has a mesh skin; a .vol with zero BND
@@ -1897,7 +1935,8 @@ def build_charge_gram(fes, intorder=None, eps=1e-7, leafsize=16, eta=2.0, far_qu
             image_masks=image_masks, image_signs=image_signs,
             image_rot_angle=image_rot_angle,
             materialize_mass=_materialize_mass, build_hmatrix=_build_hmatrix,
-            internal_interfaces=bool(internal_interfaces)))
+            internal_interfaces=bool(internal_interfaces),
+            excluded_boundaries=excluded_boundaries))
     if _vtypes == {6}:
         # PURE-WEDGE (PRISM) BDM1/BDM2: tri-Pp x z-Pp volume charge + mixed tri/quad-face
         # surface charge; 18-node Q2 geometry; FLAT or Curve(2) one path).  curve_order is IGNORED (curved is
