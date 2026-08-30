@@ -95,7 +95,10 @@ NAS_REPO_LAB = "S:/Radia/01_GitHub"
 NAS_REPO_100 = r"W:\00_CAE\Radia\01_GitHub"
 EDITABLE_REPO_LAB_ENV = "RADIA_RELEASE_EDITABLE_REPO_LAB"
 EDITABLE_REPO_100_ENV = "RADIA_RELEASE_EDITABLE_REPO_100"
-SSH_100 = "192.168.11.100"
+# Resolve 100号機 through the machine SSH configuration.  Its LAN address may
+# change between lab network segments, while the supported host alias remains
+# stable and carries the correct user/key settings.
+SSH_100 = "100"
 SSH_MDX = "mdx"
 SSH_HIBINO = "hibino"
 PY_HIBINO = "py -3.12"
