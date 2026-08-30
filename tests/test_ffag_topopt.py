@@ -1,3 +1,6 @@
+import importlib.util
+from pathlib import Path
+
 import numpy as np
 import pytest
 
@@ -82,6 +85,27 @@ def test_ffag_broken_vim_contract_requires_periodic_charge_pair():
 def test_ffag_antiperiodic_contract_requires_even_fold():
     with pytest.raises(ValueError, match="even fold"):
         validate_ffag_cyclic_sector_contract(5, field_antiperiodic=True)
+
+
+def test_cubit_nonlinear_field_gate_keeps_cancellation_diagnostic():
+    runner_path = (Path(__file__).parents[1] / "validation_test" /
+                   "ffag_topopt" /
+                   "validation_ffag_cubit_cyclic_nonlinear_yoke.py")
+    spec = importlib.util.spec_from_file_location(
+        "ffag_cubit_nonlinear_runner", runner_path)
+    module = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(module)
+
+    full = np.array([[10.0, 0.0, 0.0], [-10.0, 0.0, 0.0]])
+    sector = full + np.array([[1.0e-3, 0.0, 0.0],
+                              [-1.0e-3, 0.0, 0.0]])
+    metrics = module._field_comparison_metrics(
+        full, sector, 5.0e5, 5.0e5)
+
+    assert metrics["field_maximum_absolute_error_am"] == pytest.approx(1.0e-3)
+    assert metrics["field_residual_relative_error"] == pytest.approx(1.0e-4)
+    assert metrics["field_source_relative_error"] == pytest.approx(2.0e-9)
 
 
 def test_build_fixed_design_orbit_target_family_uses_caller_maps_directly():

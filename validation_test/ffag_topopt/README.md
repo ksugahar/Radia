@@ -50,6 +50,29 @@ tie the material-density variables of elements adjacent to paired faces;
 charge pairing supplies the correct VIM physics but does not silently alter
 the caller's design-variable parametrization.
 
+`build_ffag_cyclic_yoke_hex.py` is the real-Cubit continuation of that
+contract.  Coreform Cubit creates both the ACIS sector and explicit full ring,
+maps them with pure HEX elements, and exports curved-Q2 Netgen meshes.  Radia
+then adds only the rotational point identifications and builds an independent
+material-density quotient map.  `FFAGCyclicDensityMap.expand` supplies the
+element densities used by the solve, while `contract` applies the exact
+transpose map to element gradients and volumes; HDiv trace closure and design
+variable reduction remain deliberately separate operations.
+
+`validation_ffag_cubit_cyclic_nonlinear_yoke.py` exercises that Cubit pair
+with the production C++ monotone-BH Picard/mass-Riesz solver.  Hysteresis is
+outside this gate.  It requires both nonlinear solves, periodic material
+round-trip, mean magnetization, and direct external field to agree.  Because
+the sampled demagnetizing field is a small cancellation residual of much
+larger magnetization sources, the JSON records both residual-relative and
+source-relative field errors; acceptance uses the source-relative value and
+never discards the cancellation-sensitive diagnostic.
+The checked LAB fold-4 result is
+`results_ffag_cubit_cyclic_nonlinear_yoke.json`: its full/sector nonlinear
+residuals are below 8.6e-11, mean-magnetization error is 1.27e-9, and direct
+field source-relative error is 2.55e-9.  The same result retains the larger
+4.62e-5 residual-relative diagnostic caused by cancellation.
+
 ## EarlyTimes C-type A/B route convergence
 
 `validation_earlytimes_ctype_ab.py` isolates the field-route side of the
