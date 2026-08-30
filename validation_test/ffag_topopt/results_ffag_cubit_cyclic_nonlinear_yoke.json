@@ -1,0 +1,185 @@
+{
+  "schema": "radia.ffag-cubit-cyclic-nonlinear-yoke/v1",
+  "generated_at_utc": "2026-08-30T18:15:53.510864+00:00",
+  "machine": "lab",
+  "platform": "Windows-2022Server-10.0.20348-SP0",
+  "model": {
+    "geometry_source": "Coreform Cubit 2025.12 ACIS sweep-map",
+    "fold": 4,
+    "hdiv_family": "BDM2",
+    "curve_order": 2,
+    "constitutive_model": "single-valued monotone BH",
+    "nonlinear_solver": "C++ Picard + mass-Riesz",
+    "hysteresis": false,
+    "mu0_henry_per_m": 1.2566370614359173e-06,
+    "bh_table_h_am_b_t": [
+      [
+        0.0,
+        0.0
+      ],
+      [
+        100.0,
+        0.25
+      ],
+      [
+        300.0,
+        0.75
+      ],
+      [
+        1000.0,
+        1.3
+      ],
+      [
+        3000.0,
+        1.55
+      ],
+      [
+        10000.0,
+        1.75
+      ],
+      [
+        100000.0,
+        2.0
+      ]
+    ],
+    "applied_tangential_h_am": 300.0
+  },
+  "meshes": {
+    "sector": "C:\\temp\\radia_ffag_cyclic\\sector4.vol",
+    "sector_sha256": "e62a9241d94e88c91e13596600620dcc2735c942e4730ee095b276d16423906f",
+    "sector_elements": 8,
+    "sector_dofs": 720,
+    "full_ring": "C:\\temp\\radia_ffag_cyclic\\full4.vol",
+    "full_ring_sha256": "9faf8d53ce52c029bccd825367921a689c217b0e0c5039eb9bcd4a67b3067562",
+    "full_ring_elements": 32,
+    "full_ring_dofs": 2880
+  },
+  "periodic_topology": {
+    "boundary_facet_pairs": 4,
+    "element_count": 8,
+    "independent_density_variable_count": 4,
+    "element_to_variable": [
+      0,
+      0,
+      1,
+      1,
+      2,
+      2,
+      3,
+      3
+    ]
+  },
+  "nonlinear_solve": {
+    "full_ring_iterations": 17,
+    "sector_iterations": 17,
+    "full_ring_final_relative_residual": 7.92857303705633e-11,
+    "sector_final_relative_residual": 8.522233943936197e-11,
+    "full_ring_timing": {},
+    "sector_timing": {}
+  },
+  "comparison": {
+    "full_ring_mean_tangential_m_am": 578825.7609850776,
+    "sector_mean_tangential_m_am": 578825.7617199778,
+    "mean_magnetization_relative_error": 1.2696398300166874e-09,
+    "probe_points_m": [
+      [
+        0.5656854249492381,
+        0.5656854249492381,
+        0.375
+      ],
+      [
+        0.848528137423857,
+        0.848528137423857,
+        0.375
+      ],
+      [
+        1.1313708498984762,
+        1.1313708498984762,
+        0.375
+      ],
+      [
+        1.4142135623730951,
+        1.4142135623730951,
+        0.375
+      ],
+      [
+        1.697056274847714,
+        1.697056274847714,
+        0.375
+      ]
+    ],
+    "full_ring_demag_h_am": [
+      [
+        -6.726510496829435,
+        6.726510530405873,
+        -3.60961879827501e-08
+      ],
+      [
+        -3.429144283605974,
+        3.429144217325048,
+        -1.025931740647927e-07
+      ],
+      [
+        9.248541204205068,
+        -9.248542593339874,
+        9.683274962982663e-07
+      ],
+      [
+        22.574304642280936,
+        -22.574304333071428,
+        -2.956372267994003e-07
+      ],
+      [
+        3.253515852267338,
+        -3.2535158573802687,
+        -4.020508214795001e-09
+      ]
+    ],
+    "sector_demag_h_am": [
+      [
+        -6.727552540536609,
+        6.727552531321594,
+        -8.21911473469095e-09
+      ],
+      [
+        -3.428199974315805,
+        3.428199896764879,
+        -6.084304191826087e-08
+      ],
+      [
+        9.248166130295123,
+        -9.248167331868073,
+        8.224314746628674e-07
+      ],
+      [
+        22.575116943559458,
+        -22.575116672686143,
+        -3.5369942384174653e-07
+      ],
+      [
+        3.2535078666009145,
+        -3.2535078623162406,
+        -1.2847419071370636e-08
+      ]
+    ],
+    "field_maximum_absolute_error_am": 0.001473642085718515,
+    "field_residual_relative_error": 4.615966407391699e-05,
+    "field_source_scale_am": 578825.7617199778,
+    "field_source_relative_error": 2.545916548944876e-09,
+    "maximum_allowed_relative_error": 2e-08
+  },
+  "wall_s": 233.1773749999993,
+  "checks": {
+    "cubit_build_report_passed": true,
+    "cubit_vol_checks_passed": true,
+    "connected_periodic_contract": true,
+    "periodic_material_density_roundtrip": true,
+    "periodic_material_variables_are_reduced": true,
+    "full_ring_nonlinear_cpp_picard_converged": true,
+    "sector_nonlinear_cpp_picard_converged": true,
+    "nonlinear_iteration_is_exercised": true,
+    "mean_magnetization_matches_full_ring": true,
+    "field_matches_full_ring": true
+  },
+  "passed": true
+}

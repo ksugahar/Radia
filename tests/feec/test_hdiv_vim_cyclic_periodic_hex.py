@@ -12,6 +12,10 @@ from netgen.meshing import (  # noqa: E402
 )
 
 import radia.vim as vim  # noqa: E402
+from radia.ffag_topopt import (  # noqa: E402
+    build_ffag_cyclic_density_map,
+    identify_ffag_cyclic_sector_vertices,
+)
 from radia.vim._solve import _hdiv_space_with_image_constraints  # noqa: E402
 from radia.vim._vim import (  # noqa: E402
     _broken_hex_face_charge_basis,
@@ -56,6 +60,86 @@ def _connected_sector_mesh(*, identification_count=4):
         mesh.AddPointIdentification(
             master, slave, identnr=1, type=IdentificationType.PERIODIC)
     return ng.Mesh(mesh)
+
+
+def _two_layer_sector_mesh(*, identified=False):
+    fold = 6
+    inner, outer = 0.03, 0.05
+    bottom, top = -0.004, 0.004
+    mesh = NetgenMesh(dim=3)
+    mesh.SetMaterial(1, "yoke")
+    descriptors = []
+    for index, name in enumerate(
+            ("skin", "periodic_min", "periodic_max"), start=1):
+        descriptors.append(mesh.Add(FaceDescriptor(
+            surfnr=index, domin=1, domout=0, bc=index)))
+        mesh.SetBCName(index - 1, name)
+    points = {}
+    for angle_index, angle in enumerate(
+            (0.0, math.pi/fold, 2.0*math.pi/fold)):
+        for radial_index, radius in enumerate((inner, outer)):
+            for axial_index, z_value in enumerate((bottom, top)):
+                points[angle_index, radial_index, axial_index] = mesh.Add(
+                    MeshPoint(Pnt(radius*math.cos(angle),
+                                  radius*math.sin(angle), z_value)))
+    elements = []
+    for layer in range(2):
+        element = [
+            points[layer, 0, 0], points[layer, 1, 0],
+            points[layer+1, 1, 0], points[layer+1, 0, 0],
+            points[layer, 0, 1], points[layer, 1, 1],
+            points[layer+1, 1, 1], points[layer+1, 0, 1],
+        ]
+        elements.append(element)
+        mesh.Add(Element3D(1, element))
+        for face in ((0, 3, 2, 1), (4, 5, 6, 7),
+                     (1, 2, 6, 5), (3, 0, 4, 7)):
+            mesh.Add(Element2D(
+                descriptors[0], [element[index] for index in face]))
+    mesh.Add(Element2D(
+        descriptors[1], [elements[0][index]
+                         for index in (0, 1, 5, 4)]))
+    mesh.Add(Element2D(
+        descriptors[2], [elements[1][index]
+                         for index in (2, 3, 7, 6)]))
+    if identified:
+        for radial_index in range(2):
+            for axial_index in range(2):
+                mesh.AddPointIdentification(
+                    points[0, radial_index, axial_index],
+                    points[2, radial_index, axial_index], identnr=1,
+                    type=IdentificationType.PERIODIC)
+    return ng.Mesh(mesh)
+
+
+def test_ffag_cyclic_vertex_identification_and_density_transpose_map():
+    mesh = _two_layer_sector_mesh()
+    report = identify_ffag_cyclic_sector_vertices(mesh, 6)
+    density_map = build_ffag_cyclic_density_map(mesh)
+
+    assert report["pair_count"] == 4
+    assert report["relative_rotation_residual"] < 1.0e-14
+    assert density_map.boundary_pair_count == 1
+    assert density_map.element_count == 2
+    assert density_map.variable_count == 1
+    np.testing.assert_array_equal(density_map.element_to_variable, [0, 0])
+    np.testing.assert_allclose(density_map.expand([0.4]), [0.4, 0.4])
+    np.testing.assert_allclose(density_map.contract([2.0, 3.0]), [5.0])
+    np.testing.assert_allclose(density_map.reduce([0.4, 0.4]), [0.4])
+    with pytest.raises(ValueError, match="not equal"):
+        density_map.reduce([0.4, 0.5])
+    with pytest.raises(ValueError, match="non-negative"):
+        density_map.reduce([0.4, 0.4], tolerance=-1.0)
+
+    element_gradient = np.array([2.0, 3.0])
+    reduced = np.array([0.4])
+    step = 1.0e-7
+    finite_difference = (
+        element_gradient @ density_map.expand(reduced+step)
+        - element_gradient @ density_map.expand(reduced-step)) / (2.0*step)
+    np.testing.assert_allclose(
+        density_map.contract(element_gradient), finite_difference,
+        rtol=1.0e-9, atol=1.0e-10)
 
 
 def _curve_cyclic_sector_q2(mesh, *, equivariant=True):
