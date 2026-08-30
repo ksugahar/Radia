@@ -16,6 +16,9 @@ Mathematical justification:
 
 import sys
 import os
+from pathlib import Path
+import tempfile
+
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 sys.path.insert(0, os.path.join(ROOT, "src"))
 sys.path.insert(0, os.path.join(ROOT, "src", "radia"))
@@ -246,16 +249,21 @@ with TaskManager():
 
 try:
 	# Export fields
+	default_temp = r"C:\temp" if os.name == "nt" else tempfile.gettempdir()
+	vtk_dir = Path(os.environ.get("RADIA_TEMP_ROOT", default_temp)) / \
+		"radia" / "validation" / "curlA_equals_B"
+	vtk_dir.mkdir(parents=True, exist_ok=True)
+	vtk_base = vtk_dir / "verify_curl_A_equals_B_improved"
 	vtk_output = VTKOutput(
 		mesh,
 		coefs=[A_gf, curl_A_gf, B_gf, error_magnitude],
 		names=["A_vector_potential", "curl_A", "B_field", "error_magnitude"],
-		filename="verify_curl_A_equals_B_improved",
+		filename=str(vtk_base),
 		subdivision=2
 	)
 	vtk_output.Do()
-	print("  [OK] VTK file exported: verify_curl_A_equals_B_improved.vtu")
-	print("  Open with: paraview verify_curl_A_equals_B_improved.vtu")
+	print(f"  [OK] VTK file exported: {vtk_base}.vtu")
+	print(f"  Open with: paraview {vtk_base}.vtu")
 except Exception as e:
 	print(f"  [ERROR] VTK export failed: {e}")
 
