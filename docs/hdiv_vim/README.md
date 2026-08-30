@@ -233,27 +233,42 @@ bounded domain, derives the branch update from a convex energy/proximal law,
 and exposes the explicit manufacturing/restart state used for irreversible
 demagnetization studies.
 
-The public VIM operator contract supports BDM1 and BDM2 on pure
-TET/HEX/WEDGE meshes.  Material-solve support is intentionally narrower:
-mapped/non-affine HEX BDM2 is rejected because separate volume/surface charge
-quadrature does not yet preserve its large cancellation.  Use mapped HEX BDM1,
-affine HEX BDM2, or pure-TET BDM2 for material solves.  `ChargeGram` remains
-available for explicit mapped-HEX diagnostics.  WEDGE BDM2 uses the
-corresponding tri-P2 by z-P2 charge basis.
+The public VIM operator and material-solve contract supports BDM1 and BDM2 on
+pure TET/HEX/WEDGE meshes, including mapped/non-affine and true Curve(2) HEX
+BDM2.  For that
+lane the C++ ChargeGram uses complete-host tensor source rules for smooth
+pairs and reflection-invariant whole-host Duffy rules for self and adjacent
+volume/boundary pairs.  Volume and surface charge therefore share one complete
+host representation instead of independently subdivided clouds, preserving
+the large BDM2 cancellation.  WEDGE BDM2 uses the corresponding tri-P2 by
+z-P2 charge basis.
 
-This is a charge-kernel limitation, not an intrinsic BDM2-space limitation.
-`radia.vim.H1HodgeDemagOperator(hdiv, h1, definedon=...)` assembles the
-finite-domain H1 Omega Hodge operator `C.T K^-1 C` without forming a dense
-parent matrix.  The independent mapped-body validation applies it to the same
-207 active BDM2 DoFs.  H1 orders 2 and 3 have no generalized eigenvalues
-outside `[0,1]`, while the current mapped charge diagnostic exceeds 1.2.  The
-`[0,1]` contraction is the unit-stiffness contract; weighted or
-Kelvin-transformed stiffness needs its own independently verified metric.  The
-same H1-backed BDM2 response reduction now feeds a shared-mesh HCurl
+The mapped-HEX production gate is recorded by
+`validate_mapped_hex_bdm2_production.py`.  On mdx its 756-DoF non-affine
+trilinear body had generalized spectrum `[-8.53e-16, 0.999899]` with the
+q9/q12 default,
+linear and nonlinear solves converged, and the q9/q12 material response was
+within `5.28e-4` in the mass norm of q10/q16.  A separate q10/q16 versus
+q11/q20 run measured `3.94e-4`; the default remains q9/q12 because q10 and q11
+cost about 3x and 7.5x more build time without changing the material response
+at the 0.1% level.  Mapped BDM2 shape derivatives fail loudly until this
+composite quadrature has a consistent differentiated form.
+
+The distinct true-curvature gate regenerates a four-HEX cylinder through
+Cubit 2025.12 with Netgen export order 2.  `check-vol` confirms all four cells
+are non-affine with mesh curve order 2 and minimum scaled Jacobian `0.33473`.
+On mdx, BDM2 has 396 DoF, the linear mass-Riesz CG solve converges in 19
+iterations, the equivalent nonlinear Energy-Newton solve converges, and the
+prescribed-source `rad.Fld` agrees with an independent NGSolve boundary
+integral to `1.06e-10` maximum relative error.  The generated `.vol` remains
+an external validation artifact; the Cubit builder and result JSON are tracked.
+
+`radia.vim.H1HodgeDemagOperator(hdiv, h1, definedon=...)` remains an independent
+finite-domain H1 Omega cross-check and assembles `C.T K^-1 C` without forming a
+dense parent matrix.  Its shared-mesh BDM2 response reduction feeds HCurl
 eddy-bubble solve with a snapshot residual below `3e-12`, mixed residual below
 `3e-16`, and positive Joule loss.  This proves the response/coupling path and
-localizes the defect; the finite H1 box and sampled mixed interaction are not
-an open-boundary accuracy replacement.  Partial-material response solves use
+does not replace the open-boundary ChargeGram accuracy gate.  Partial-material response solves use
 the HDiv space's `FreeDofs()` in the generic NGSolve CG path.  The one-call
 mixed builder accepts `hdiv_definedon=mesh.Materials("body")` together with
 `demag_operator_factory=lambda hdiv: H1HodgeDemagOperator(...)`; the factory
@@ -292,14 +307,16 @@ Geometry order and HDiv order are independent Piola-FEM choices.  The
 authoritative table is `radia.vim.hdiv_capabilities()`: in 2D, BDM1 supports
 geometry orders 1/2 (Q2 recommended) and BDM2 supports 1/2/3 (Q3 recommended);
 in 3D, TET/HEX/WEDGE BDM1 and BDM2 expose geometry orders 1/2 (P2/Q2
-recommended).  This order table does not override the mapped-HEX BDM2
-material-solve gate above.  A combination outside the table fails loudly.  In particular,
+recommended).  A combination outside the table fails loudly.  In particular,
 BDM1/Q3 is intentionally excluded in 2D: under the Q3 contravariant Piola map,
 the BDM1 space does not reproduce a uniform physical field to roundoff, and an
 ellipse torque check showed no accuracy gain over BDM1/Q2.
-For a geometrically and topologically symmetric reduced/full hex
-pair, `rad.Fld` after an image solve must agree with the explicit full solve at
-the roundoff contract (`< 10 eps` relative error), not merely within a percent.
+For a geometrically and topologically symmetric reduced/full hex pair, the
+persistent field evaluator must agree at the roundoff contract (`< 10 eps`
+relative error), not merely within a percent.  The mapped BDM2 prescribed-source
+gate is `2.75 eps` on mdx.  Two independently converged mass-Riesz CG material
+solves currently agree to `3.28e-13` in the sampled field; that is a separate
+Krylov/reduction error budget and is not represented as a field-evaluator pass.
 
 Every supported 3D solve also materializes one immutable C++ field evaluator.
 TET BDM1/BDM2 sources retain analytic volume/triangle kernels; HEX/WEDGE and
@@ -343,16 +360,18 @@ diagnostic overrides.
 For flat pure-hex `.vol` meshes, the BDM1/BDM2 charge-basis path follows the
 NGSolve reference ordering directly: the Q2 geometry lattice is built from the
 linear `.vol` vertices, and the Q1/Q2 shape-moment to monomial map is applied as a
-cached block-diagonal sparse transform.  Curved `.vol` meshes still use
-`GetTrafo` as the geometry source of truth.
+cached block-diagonal sparse transform.  Curved `.vol` meshes use `GetTrafo` as
+the geometry source of truth.  Mapped BDM2 materializes immutable complete-host
+tensor rules once, so parallel H-matrix entry fill does not recreate them.
 
 The charge-Gram build caches the symmetrized host-pair block
-`0.5*(AB + BA^T)`.  Production evaluates both directed FAR quadrature rules.
+`0.5*(AB + BA^T)`.  Production evaluates both directed FAR quadrature rules;
+mapped BDM2 near pairs additionally use the whole-host Duffy construction.
 Storing only an upper triangle makes a matrix algebraically symmetric, but a
 one-sided finite quadrature rule is not invariant when a reduced image model is
 replaced by its explicit reflected mesh.  The bidirectional rule keeps the
-multicell HEX full-vs-image `rad.Fld` contract below `10 eps` at the normal
-quadrature order.  `RADIA_HDIV_HEX_FAR_ONESIDED`,
+prescribed-source multicell HEX full-vs-image `rad.Fld` contract below `10 eps`
+at the normal quadrature order.  `RADIA_HDIV_HEX_FAR_ONESIDED`,
 `RADIA_HDIV_WEDGE_FAR_ONESIDED`, and `RADIA_HDIV_HO_FAR_ONESIDED` are retained
 only for diagnostic timing experiments and must not be used for release
 results.  The C++ linear solve reports `solve_*` timing fields, while NumPy
@@ -450,7 +469,8 @@ host (`mdx` or `hibino`).  Required HDiv gates:
 - energy-Stop hard projection/proximal stationarity, non-negative vector-loop
   dissipation, reverse-field remanence loss, and state-restart reproducibility;
 - BDM1/BDM2 flat/curved TET/HEX/WEDGE operator accuracy and cost, including
-  the mapped-HEX BDM2 rejection gate, plus charge-Gram H-matrix build stats and
+  mapped-HEX BDM2 spectrum, quadrature convergence, linear/nonlinear solve,
+  IMA, and fail-loud shape-derivative gates, plus charge-Gram H-matrix build stats and
   memory/timing on idle `mdx` or `hibino`
   for large runs;
 - 2D planar motor saliency checks for the motor lane.
