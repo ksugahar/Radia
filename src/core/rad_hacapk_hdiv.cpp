@@ -10669,23 +10669,29 @@ std::vector<double> RadHACApKChargeGram::ConfiguredFieldFunctionalRows(
             throw std::invalid_argument(
                 "ConfiguredFieldFunctionalRows: weights must be finite");
     if (m_hexmode) {
-        // An affine HEX BDM1 charge is a physical cubic polynomial in the
-        // cell and a physical quadratic polynomial on each quad facet.  Split
+        // An affine HEX BDM1/BDM2 charge is a physical polynomial through
+        // degree three/six in the cell and degree two/four on each quad facet. Split
         // the cell into the canonical six Kuhn tetrahedra and every facet into
         // two triangles, then reuse the exact analytic TET/TRI field kernels.
         // This is essential near a long pole face: ordinary volume quadrature
         // of the reciprocal 1/r^3 dipole field is not convergent at practical
         // orders when the orbit lies only a fraction of an element away.
+        int max_volume_degree=0,max_facet_degree=0;
         for (int a = 0; a < m_ndof; ++a) {
             const int* e = &m_expo[static_cast<size_t>(3*a)];
             const int degree = e[0]+e[1]+e[2];
-            if ((m_kind[static_cast<size_t>(a)] == 0 && degree > 3) ||
+            if ((m_kind[static_cast<size_t>(a)] == 0 && degree > 6) ||
                 (m_kind[static_cast<size_t>(a)] == 1 &&
-                 (degree > 2 || e[2] != 0)))
+                 (degree > 4 || e[2] != 0)))
                 throw std::runtime_error(
                     "ConfiguredFieldFunctionalRows: affine HEX supports "
-                    "volume degree <= 3 and facet degree <= 2");
+                    "volume degree <= 6 and facet degree <= 4");
+            if(m_kind[static_cast<size_t>(a)]==0)
+                max_volume_degree=std::max(max_volume_degree,degree);
+            else max_facet_degree=std::max(max_facet_degree,degree);
         }
+        const int n_volume_basis=max_volume_degree<=3?20:84;
+        const int n_facet_basis=max_facet_degree<=2?10:35;
 
         std::vector<double> cell_forms(static_cast<size_t>(m_n_el)*12);
         std::vector<double> cell_inv_jac(static_cast<size_t>(m_n_el));
@@ -10764,14 +10770,14 @@ std::vector<double> RadHACApKChargeGram::ConfiguredFieldFunctionalRows(
         // physical monomial ordering once.  Observation evaluation below is
         // then grouped by geometry host, so all local modes reuse the same
         // analytic triangle/tetrahedron moments.
-        std::vector<double> mode_polynomial(static_cast<size_t>(m_ndof)*20,0.0);
+        std::vector<double> mode_polynomial(static_cast<size_t>(m_ndof)*84,0.0);
         for(int a=0;a<m_ndof;++a){
             const int host=m_host[static_cast<size_t>(a)];
             const bool volume=m_kind[static_cast<size_t>(a)]==0;
             const double* forms=volume
                 ?&cell_forms[static_cast<size_t>(host)*12]
                 :&face_forms[static_cast<size_t>(host)*8];
-            double* polynomial=&mode_polynomial[static_cast<size_t>(a)*20];
+            double* polynomial=&mode_polynomial[static_cast<size_t>(a)*84];
             polynomial[0]=volume
                 ?cell_inv_jac[static_cast<size_t>(host)]
                 :face_inv_jac[static_cast<size_t>(host)];
@@ -10780,7 +10786,7 @@ std::vector<double> RadHACApKChargeGram::ConfiguredFieldFunctionalRows(
             const int* e=&m_expo[static_cast<size_t>(3*a)];
             for(int axis=0;axis<axes;++axis)
                 for(int power=0;power<e[axis];++power)
-                    HexPolyMulLinear(polynomial,degree,&forms[4*axis],20);
+                    HexPolyMulLinear(polynomial,degree,&forms[4*axis],84);
         }
 
         constexpr double inv_four_pi =
@@ -10796,26 +10802,30 @@ std::vector<double> RadHACApKChargeGram::ConfiguredFieldFunctionalRows(
                 ?m_cellCharges[static_cast<size_t>(host)]
                 :m_faceCharges[static_cast<size_t>(host)];
             if(host_charges.empty())return;
-            const int n_basis=volume?20:10;
-            auto evaluate_base=[&](const double target[3],double out[20][3]){
-                double correction[20][3]={};
-                for(int index=0;index<20;++index)
+            const int n_basis=volume?n_volume_basis:n_facet_basis;
+            auto evaluate_base=[&](const double target[3],double out[84][3]){
+                double correction[84][3]={};
+                for(int index=0;index<84;++index)
                     for(int k=0;k<3;++k)out[index][k]=0.0;
                 const int count=volume?6:2;
                 for(int sub=0;sub<count;++sub){
-                    double term[20][3]={};
+                    double term[84][3]={};
                     if(volume){
                         double vertices[4][3];
                         const double* corners=&cell_corners[static_cast<size_t>(host)*24];
                         for(int local=0;local<4;++local)for(int k=0;k<3;++k)
                             vertices[local][k]=corners[3*HEXREF_TETS[sub][local]+k];
-                        rad_hdiv::TetVolFieldCubicBasis(vertices,target,term);
+                        if(max_volume_degree<=3)
+                            rad_hdiv::TetVolFieldCubicBasis(vertices,target,term);
+                        else rad_hdiv::TetVolFieldBasisUpTo6(vertices,target,term);
                     }else{
                         double vertices[3][3];
                         const double* corners=&face_corners[static_cast<size_t>(host)*12];
                         for(int local=0;local<3;++local)for(int k=0;k<3;++k)
                             vertices[local][k]=corners[3*QUADREF_TRIS[sub][local]+k];
-                        rad_hdiv::QuadTriFieldBasis(vertices,target,term);
+                        if(max_facet_degree<=2)
+                            rad_hdiv::QuadTriFieldBasis(vertices,target,term);
+                        else rad_hdiv::TriFieldBasisUpTo4(vertices,target,term);
                     }
                     for(int index=0;index<n_basis;++index)
                         for(int k=0;k<3;++k){
@@ -10835,12 +10845,12 @@ std::vector<double> RadHACApKChargeGram::ConfiguredFieldFunctionalRows(
             std::vector<double> corrections(sums.size(),0.0);
             for(int observation=0;observation<n_observations;++observation){
                 const double* target=&observations[static_cast<size_t>(observation)*3];
-                double total[20][3];evaluate_base(target,total);
+                double total[84][3];evaluate_base(target,total);
                 for(size_t image=0;image<m_image_masks.size();++image){
                     // E_{T(sigma)}(x) = T E_sigma(T^-1 x): inverse-map the eval point, forward-map the vector.
                     const int img=(int)image+1;
                     double reflected[3];ImageEvalPoint(img,target,reflected);
-                    double term[20][3];
+                    double term[84][3];
                     evaluate_base(reflected,term);
                     for(int index=0;index<n_basis;++index){
                         double mapped[3];ImageApplyVector(img,term[index],mapped);
@@ -10850,7 +10860,7 @@ std::vector<double> RadHACApKChargeGram::ConfiguredFieldFunctionalRows(
                 }
                 for(const auto& weighted:
                         rows_by_observation[static_cast<size_t>(observation)]){
-                    double projected[20];
+                    double projected[84];
                     for(int index=0;index<n_basis;++index)
                         projected[index]=weighted.value[0]*total[index][0]
                             +weighted.value[1]*total[index][1]
@@ -10858,7 +10868,7 @@ std::vector<double> RadHACApKChargeGram::ConfiguredFieldFunctionalRows(
                     for(size_t local=0;local<host_charges.size();++local){
                         const int a=host_charges[local];
                         const double* polynomial=
-                            &mode_polynomial[static_cast<size_t>(a)*20];
+                            &mode_polynomial[static_cast<size_t>(a)*84];
                         double term=0.0;
                         for(int index=0;index<n_basis;++index)
                             term+=polynomial[index]*projected[index];
@@ -11782,27 +11792,32 @@ RadHACApKChargeGram::CreateConfiguredFieldEvaluator(
         return evaluator;
     }
 
-    // Straight affine HEX BDM1: retain an exact near-field representation.
-    // The reference volume charge has total degree <= 3 and each reference
-    // facet charge has degree <= 2.  Under an affine map these remain physical
-    // linear/quadratic polynomials, so the canonical 6-TET / 2-TRI split can
-    // reuse the analytic kernels.  The old fixed tensor cloud is adequate for
-    // smooth Gram far blocks but is not a convergent near-pole field evaluator.
+    // Straight affine HEX BDM1/BDM2: retain an exact near-field representation.
+    // The tensor Q1/Q2 reference charges become physical total-degree 3/6
+    // volume and 2/4 facet polynomials.  Split the hosts into the canonical
+    // 6-TET / 2-TRI decomposition and keep every coefficient in the persistent
+    // evaluator; a fixed tensor cloud is not a convergent near-pole field map.
     bool analytic_hex = m_hexmode;
     bool configured_hex_rt0 = m_hexmode;
+    bool high_order_hex = false;
     for (int a = 0; analytic_hex && a < m_ndof; ++a) {
         const int* e = &m_expo[static_cast<size_t>(3*a)];
         const int degree = e[0]+e[1]+e[2];
         configured_hex_rt0 = configured_hex_rt0 && degree == 0;
         analytic_hex = m_kind[static_cast<size_t>(a)] == 0
-            ? degree <= 3
-            : (degree <= 2 && e[2] == 0);
+            ? degree <= 6
+            : (degree <= 4 && e[2] == 0);
+        high_order_hex = high_order_hex
+            || (m_kind[static_cast<size_t>(a)] == 0 && degree > 3)
+            || (m_kind[static_cast<size_t>(a)] == 1 && degree > 2);
     }
     if (analytic_hex) {
         std::vector<double> volume;
         std::vector<double> surface;
-        volume.reserve(static_cast<size_t>(m_n_el)*6*32);
-        surface.reserve(static_cast<size_t>(m_hex_n_bf)*2*22);
+        const size_t volume_stride = high_order_hex ? 96 : 32;
+        const size_t surface_stride = high_order_hex ? 44 : 22;
+        volume.reserve(static_cast<size_t>(m_n_el)*6*volume_stride);
+        surface.reserve(static_cast<size_t>(m_hex_n_bf)*2*surface_stride);
         for (int host = 0; analytic_hex && host < m_n_el; ++host) {
             const double* nodes = &m_hexNodes[static_cast<size_t>(host)*81];
             double forms[3][4], inv_jac = 0.0;
@@ -11815,17 +11830,17 @@ RadHACApKChargeGram::CreateConfiguredFieldEvaluator(
                 double J[3][3];
                 HexQ2Map(nodes, HEXREF_V[vertex], corners[vertex], J);
             }
-            double polynomial[20] = {};
+            double polynomial[84] = {};
             for (int charge_id : m_cellCharges[static_cast<size_t>(host)]) {
                 const double factor = charge[static_cast<size_t>(charge_id)]*inv_jac;
                 const int* e = &m_expo[static_cast<size_t>(3*charge_id)];
-                double mode[20] = {};
+                double mode[84] = {};
                 mode[0] = factor;
                 int degree = 0;
                 for (int axis = 0; axis < 3; ++axis)
                     for (int power = 0; power < e[axis]; ++power)
-                        HexPolyMulLinear(mode,degree,forms[axis],20);
-                for (int index = 0; index < 20; ++index)
+                        HexPolyMulLinear(mode,degree,forms[axis],84);
+                for (int index = 0; index < 84; ++index)
                     polynomial[index] += mode[index];
             }
             bool empty = true;
@@ -11833,12 +11848,13 @@ RadHACApKChargeGram::CreateConfiguredFieldEvaluator(
             if (empty) continue;
             for (int sub = 0; sub < 6; ++sub) {
                 const size_t offset = volume.size();
-                volume.resize(offset+32, 0.0);
+                volume.resize(offset+volume_stride, 0.0);
                 for (int local = 0; local < 4; ++local)
                     for (int axis = 0; axis < 3; ++axis)
                         volume[offset+3*local+axis] =
                             corners[HEXREF_TETS[sub][local]][axis];
-                std::copy_n(polynomial,20,volume.data()+offset+12);
+                std::copy_n(polynomial,high_order_hex ? 84 : 20,
+                            volume.data()+offset+12);
             }
         }
 
@@ -11854,60 +11870,61 @@ RadHACApKChargeGram::CreateConfiguredFieldEvaluator(
                 double T[3][2];
                 QuadQ2Map(nodes, QUADREF_V[vertex], corners[vertex], T);
             }
-            double sigma0 = 0.0, slope[3] = {0.0, 0.0, 0.0};
-            double hessian[3][3] = {};
+            double polynomial[35] = {};
             for (int charge_id : m_faceCharges[static_cast<size_t>(host)]) {
                 const double factor = charge[static_cast<size_t>(charge_id)]*inv_jac;
                 const int* e = &m_expo[static_cast<size_t>(3*charge_id)];
-                const int i = e[0], j = e[1];
-                if (i == 0 && j == 0) {
-                    sigma0 += factor;
-                } else if (i+j == 1) {
-                    const int axis = i ? 0 : 1;
-                    sigma0 += factor*forms[axis][0];
-                    for (int k = 0; k < 3; ++k)
-                        slope[k] += factor*forms[axis][k+1];
-                } else {
-                    const int first = i == 2 ? 0 : (j == 2 ? 1 : 0);
-                    const int second = i == 2 ? 0 : (j == 2 ? 1 : 1);
-                    const double* f = forms[first];
-                    const double* s = forms[second];
-                    sigma0 += factor*f[0]*s[0];
-                    for (int k = 0; k < 3; ++k)
-                        slope[k] += factor*(f[0]*s[k+1]+s[0]*f[k+1]);
-                    for (int r = 0; r < 3; ++r)
-                        for (int c = 0; c < 3; ++c)
-                            hessian[r][c] += first == second
-                                ? factor*f[r+1]*f[c+1]
-                                : 0.5*factor*(f[r+1]*s[c+1]+s[r+1]*f[c+1]);
-                }
+                double mode[35] = {};
+                mode[0] = factor;
+                int degree = 0;
+                for (int axis = 0; axis < 2; ++axis)
+                    for (int power = 0; power < e[axis]; ++power)
+                        HexPolyMulLinear(mode,degree,forms[axis],35);
+                for (int index = 0; index < 35; ++index)
+                    polynomial[index] += mode[index];
             }
-            bool empty = sigma0 == 0.0;
-            for (int k = 0; k < 3; ++k) empty = empty && slope[k] == 0.0;
-            for (int r = 0; r < 3; ++r)
-                for (int c = 0; c < 3; ++c)
-                    empty = empty && hessian[r][c] == 0.0;
+            bool empty = true;
+            for (double value : polynomial) empty = empty && value == 0.0;
             if (empty) continue;
             for (int sub = 0; sub < 2; ++sub) {
                 const size_t offset = surface.size();
-                surface.resize(offset+22, 0.0);
+                surface.resize(offset+surface_stride, 0.0);
                 for (int local = 0; local < 3; ++local)
                     for (int axis = 0; axis < 3; ++axis)
                         surface[offset+3*local+axis] =
                             corners[QUADREF_TRIS[sub][local]][axis];
-                surface[offset+9] = sigma0;
-                for (int k = 0; k < 3; ++k)
-                    surface[offset+10+k] = slope[k];
-                for (int r = 0; r < 3; ++r)
-                    for (int c = 0; c < 3; ++c)
-                        surface[offset+13+3*r+c] = hessian[r][c];
+                if (high_order_hex) {
+                    std::copy_n(polynomial,35,surface.data()+offset+9);
+                } else {
+                    surface[offset+9] = polynomial[0];
+                    for (int axis = 0; axis < 3; ++axis) {
+                        int exponent[3] = {};
+                        exponent[axis] = 1;
+                        surface[offset+10+axis] = polynomial[HexPolyIdx(
+                            exponent[0],exponent[1],exponent[2])];
+                    }
+                    for (int row = 0; row < 3; ++row)
+                        for (int col = 0; col < 3; ++col) {
+                            int exponent[3] = {};
+                            ++exponent[row];
+                            ++exponent[col];
+                            const double coefficient = polynomial[HexPolyIdx(
+                                exponent[0],exponent[1],exponent[2])];
+                            surface[offset+13+3*row+col] = row == col
+                                ?coefficient:0.5*coefficient;
+                        }
+                }
             }
         }
         if (analytic_hex) {
             if (!volume.empty() || !surface.empty()) {
-                auto evaluator = rad_hdiv::HDivFieldEvaluator::FromPolynomialTet(
-                    std::move(volume), std::move(surface),
-                    m_image_masks, m_image_signs, options);
+                auto evaluator = high_order_hex
+                    ?rad_hdiv::HDivFieldEvaluator::FromSexticQuarticPolynomialTet(
+                        std::move(volume),std::move(surface),m_image_masks,
+                        m_image_signs,options)
+                    :rad_hdiv::HDivFieldEvaluator::FromPolynomialTet(
+                        std::move(volume),std::move(surface),m_image_masks,
+                        m_image_signs,options);
                 evaluator->SetImageRotations(m_image_rot_angle);
                 return evaluator;
             }

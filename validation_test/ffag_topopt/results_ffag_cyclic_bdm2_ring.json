@@ -1,0 +1,144 @@
+{
+  "schema": "radia.ffag-cyclic-bdm2-ring/v1",
+  "status": "pass",
+  "scope": "Disjoint two-pole FFAG cells. Continuous return-yoke sector cuts require a separate rotation-related HDiv trace gate.",
+  "contract": {
+    "fold": 6,
+    "field_antiperiodic": false,
+    "body_crosses_periodic_planes": false,
+    "periodic_trace_identified": false,
+    "reduction_mode": "disjoint-cell-cyclic-images"
+  },
+  "settings": {
+    "output": "validation_test\\ffag_topopt\\results_ffag_cyclic_bdm2_ring.json",
+    "fold": 6,
+    "hdiv_order": 2,
+    "radius": 0.04,
+    "radial_half_width": 0.008,
+    "tangential_half_width": 0.006,
+    "half_gap": 0.004,
+    "pole_thickness": 0.006,
+    "mu_r": 500.0,
+    "applied_field_am": 100000.0,
+    "gram_eps": 1e-10,
+    "solve_tol": 1e-10,
+    "probe_count": 5,
+    "threads": 8,
+    "minimum_gap_fraction_closed": 0.999,
+    "maximum_field_relative_error": 2e-08
+  },
+  "mesh": {
+    "full_ring_elements": 12,
+    "sector_elements": 2,
+    "full_ring_dofs": 1296,
+    "sector_dofs": 216
+  },
+  "magnetization_am": {
+    "full_ring_mean_mz": 226678.86086251296,
+    "lone_cell_mean_mz": 229885.54329954836,
+    "cyclic_cell_mean_mz": 226678.86070515725,
+    "lone_full_gap": 3206.6824370354007,
+    "cyclic_full_residual": 0.00015735570923425257,
+    "gap_fraction_closed": 0.9999999509288143
+  },
+  "gap_field": {
+    "probe_points_m": [
+      [
+        0.034,
+        0.0,
+        0.0
+      ],
+      [
+        0.037,
+        0.0,
+        0.0
+      ],
+      [
+        0.04,
+        0.0,
+        0.0
+      ],
+      [
+        0.043000000000000003,
+        0.0,
+        0.0
+      ],
+      [
+        0.046,
+        0.0,
+        0.0
+      ]
+    ],
+    "full_ring_demag_h_am": [
+      [
+        8.46193656924175e-05,
+        3.1777517049121824e-05,
+        48177.21260634201
+      ],
+      [
+        2.410368809715324e-06,
+        -2.9444146029243478e-05,
+        53202.953346784736
+      ],
+      [
+        1.3481238060086985e-05,
+        -5.390524207684516e-05,
+        53032.70636743792
+      ],
+      [
+        4.213465881996013e-05,
+        -1.9981565903951077e-05,
+        53212.041792468895
+      ],
+      [
+        1.1373478851121393e-05,
+        1.1623302558292988e-05,
+        48249.47733467762
+      ]
+    ],
+    "cyclic_demag_h_am": [
+      [
+        3.0315748223419932e-05,
+        3.6419116064143933e-06,
+        48177.21250661761
+      ],
+      [
+        -7.766406560164222e-05,
+        7.609524258424065e-06,
+        53202.953203417455
+      ],
+      [
+        -1.5056920013901547e-05,
+        1.0774650503085807e-05,
+        53032.7062903283
+      ],
+      [
+        8.217071896343094e-05,
+        1.0328067687193586e-05,
+        53212.041819054175
+      ],
+      [
+        3.125324599875296e-05,
+        4.996099965449362e-06,
+        48249.4773715857
+      ]
+    ],
+    "maximum_relative_error": 3.163609331408929e-09
+  },
+  "gates": {
+    "lone_cell_is_discriminating": true,
+    "cyclic_closes_magnetization_gap": true,
+    "cyclic_gap_field_matches_full_ring": true,
+    "bdm2_hex_is_used": true,
+    "one_cell_reduces_dofs": true
+  },
+  "timings": {
+    "full_ring_total_wall_s": 3.978171000024304,
+    "cyclic_total_wall_s": 1.1912333999935072,
+    "validation_wall_s": 8.64759629999753
+  },
+  "runtime": {
+    "host": "lab",
+    "python": "3.12.10"
+  }
+}
