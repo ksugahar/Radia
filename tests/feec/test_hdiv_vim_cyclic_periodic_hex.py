@@ -1,6 +1,7 @@
 """Fast contracts for connected cyclic pure-HEX HDiv sectors."""
 import math
 
+import numpy as np
 import pytest
 
 ng = pytest.importorskip("ngsolve")
@@ -12,7 +13,11 @@ from netgen.meshing import (  # noqa: E402
 
 import radia.vim as vim  # noqa: E402
 from radia.vim._solve import _hdiv_space_with_image_constraints  # noqa: E402
-from radia.vim._vim import _charge_basis_hex  # noqa: E402
+from radia.vim._vim import (  # noqa: E402
+    _broken_hex_face_charge_basis,
+    _charge_basis_hex,
+    build_charge_gram,
+)
 
 
 def _connected_sector_mesh(*, identification_count=4):
@@ -107,3 +112,58 @@ def test_connected_cyclic_hdiv_solver_reuses_the_periodic_operator():
     assert second["operator_reused"]
     assert second["cyclic_periodic_boundaries"] == (
         "periodic_min", "periodic_max")
+
+
+@pytest.mark.parametrize(
+    "order, raw_rows, paired_rows, seam_tolerance",
+    ((1, 24, 20, 1.0e-15), (2, 54, 45, 1.0e-14)),
+)
+def test_broken_vim_pairs_periodic_charge_jump_on_trapezoid_hex(
+        order, raw_rows, paired_rows, seam_tolerance):
+    mesh = _connected_sector_mesh()
+    fes = ng.HDiv(mesh, order=order, discontinuous=True)
+    radius = ng.sqrt(ng.x * ng.x + ng.y * ng.y)
+    tangent = ng.CF((-ng.y / radius, ng.x / radius, 0.0))
+    field = ng.GridFunction(fes)
+    with ng.TaskManager():
+        field.Set(tangent)
+        raw = _broken_hex_face_charge_basis(fes, order)
+        paired = _broken_hex_face_charge_basis(
+            fes, order,
+            cyclic_periodic_boundaries=("periodic_min", "periodic_max"),
+            image_rot_angle=(2.0 * math.pi / 6.0,))
+
+    assert raw["B"].shape == (raw_rows, fes.ndof)
+    assert paired["B"].shape == (paired_rows, fes.ndof)
+    assert paired["periodic_face_pair_count"] == 1
+    block_size = (order + 1) ** 2
+    block = paired["facet_numbers"].index(
+        paired["periodic_master_facets"][0])
+    charge = np.asarray(
+        paired["B"] @ field.vec.FV().NumPy(), dtype=float).reshape(-1)
+    seam = charge[block * block_size:(block + 1) * block_size]
+    assert np.max(np.abs(seam)) < seam_tolerance
+
+
+@pytest.mark.parametrize("order, expected_rows", ((1, 28), (2, 72)))
+def test_broken_vim_public_chargegram_builds_cyclic_face_pair(
+        order, expected_rows):
+    mesh = _connected_sector_mesh()
+    fes = ng.HDiv(mesh, order=order, discontinuous=True)
+    fold = 6
+    with ng.TaskManager():
+        charge, gram, _ = build_charge_gram(
+            fes, eps=1.0e-10, leafsize=32,
+            internal_interfaces=True,
+            image_masks=(0,) * (fold - 1),
+            image_signs=(1.0,) * (fold - 1),
+            image_rot_angle=tuple(
+                2.0 * math.pi * index / fold
+                for index in range(1, fold)),
+            cyclic_periodic_boundaries=("periodic_min", "periodic_max"),
+            _build_hmatrix=False)
+
+    assert charge.shape == (expected_rows, fes.ndof)
+    assert gram.ndof() == expected_rows
+    assert build_charge_gram.last_timings[
+        "charge_basis_periodic_face_pair_count"] == 1

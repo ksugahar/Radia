@@ -21,9 +21,11 @@
   },
   "contract": {
     "fold": 12,
-    "reduction_mode": "connected-periodic-sector",
+    "formulation": "fem",
+    "reduction_mode": "connected-periodic-fem-sector",
     "body_crosses_periodic_planes": true,
     "periodic_trace_identified": true,
+    "periodic_charge_paired": false,
     "periodic_boundaries": [
       "periodic_min",
       "periodic_max"
@@ -126,9 +128,9 @@
     "maximum_difference_relative_to_applied_field": 1.124644487604511e-07
   },
   "timings": {
-    "full_ring_total_wall_s": 11.661467100027949,
-    "periodic_sector_total_wall_s": 3.1515799000044353,
-    "validation_wall_s": 14.825119300017832
+    "full_ring_total_wall_s": 12.22940219999873,
+    "periodic_sector_total_wall_s": 3.3582613000180572,
+    "validation_wall_s": 15.599511000007624
   },
   "gates": {
     "connected_periodic_contract": true,

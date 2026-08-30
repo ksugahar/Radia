@@ -177,7 +177,9 @@ def run_validation(args):
             "field_antiperiodic": contract.field_antiperiodic,
             "body_crosses_periodic_planes": (
                 contract.body_crosses_periodic_planes),
+            "formulation": contract.formulation,
             "periodic_trace_identified": contract.periodic_trace_identified,
+            "periodic_charge_paired": contract.periodic_charge_paired,
             "reduction_mode": contract.reduction_mode,
         },
         "settings": vars(args) | {"output": str(args.output)},

@@ -47,23 +47,26 @@ class FFAGCyclicSectorContract:
 
     ``image_cyclic`` is sufficient when complete iron bodies fit inside one
     sector and their rotated copies are disjoint.  A continuous return yoke
-    cut by the azimuthal sector planes has an additional FEEC requirement:
-    the two HDiv normal traces must be identified by the sector rotation.
-    Rotating the nonlocal charge interaction alone does not impose that local
-    trace constraint.
+    cut by the azimuthal sector planes needs a local closure in addition to
+    the rotated nonlocal interaction.  Conforming FEM identifies the two HDiv
+    normal traces.  Broken-HDiv VIM keeps the element unknowns independent and
+    instead pairs the two surface-charge rows into one periodic jump.
     """
 
     fold: int
     field_antiperiodic: bool
     body_crosses_periodic_planes: bool
+    formulation: str
     periodic_trace_identified: bool
+    periodic_charge_paired: bool
     reduction_mode: str
 
 
 def validate_ffag_cyclic_sector_contract(
         fold, *, field_antiperiodic=False,
         body_crosses_periodic_planes=False,
-        periodic_trace_identified=False) -> FFAGCyclicSectorContract:
+        formulation="fem", periodic_trace_identified=False,
+        periodic_charge_paired=False) -> FFAGCyclicSectorContract:
     """Validate the cyclic symmetry contract before an FFAG sector solve.
 
     FFAG F/D alternation normally changes the radial gradient within a cell;
@@ -78,24 +81,38 @@ def validate_ffag_cyclic_sector_contract(
     count = int(numeric_fold)
     antiperiodic = bool(field_antiperiodic)
     crosses = bool(body_crosses_periodic_planes)
+    formulation = str(formulation).strip().lower().replace("_", "-")
+    if formulation not in {"fem", "vim-broken"}:
+        raise ValueError("FFAG cyclic formulation must be 'fem' or 'vim-broken'")
     identified = bool(periodic_trace_identified)
+    paired = bool(periodic_charge_paired)
     if antiperiodic and count % 2:
         raise ValueError(
             "FFAG antiperiodic field symmetry requires an even fold count")
-    if crosses and not identified:
+    if crosses and formulation == "fem" and not identified:
         raise ValueError(
-            "continuous FFAG iron crosses the azimuthal sector planes: "
+            "continuous FFAG FEM iron crosses the azimuthal sector planes: "
             "identify the two rotation-related HDiv normal traces before "
-            "using image_cyclic; rotated nonlocal images alone leave an "
-            "artificial periodic-seam surface charge")
-    if identified and not crosses:
+            "using image_cyclic")
+    if crosses and formulation == "vim-broken" and not paired:
         raise ValueError(
-            "periodic_trace_identified is only valid when the iron body "
-            "crosses both azimuthal sector planes")
-    mode = ("connected-periodic-sector" if crosses
-            else "disjoint-cell-cyclic-images")
+            "continuous FFAG broken-HDiv VIM iron crosses the azimuthal "
+            "sector planes: pair the two rotation-related surface-charge "
+            "rows before using image_cyclic")
+    if identified and (not crosses or formulation != "fem"):
+        raise ValueError(
+            "periodic_trace_identified is only valid for connected FEM")
+    if paired and (not crosses or formulation != "vim-broken"):
+        raise ValueError(
+            "periodic_charge_paired is only valid for connected broken-HDiv "
+            "VIM")
+    mode = (
+        "connected-periodic-fem-sector"
+        if crosses and formulation == "fem" else
+        "connected-periodic-vim-sector"
+        if crosses else "disjoint-cell-cyclic-images")
     return FFAGCyclicSectorContract(
-        count, antiperiodic, crosses, identified, mode)
+        count, antiperiodic, crosses, formulation, identified, paired, mode)
 
 
 def magnetic_rigidity_from_kinetic_energy(

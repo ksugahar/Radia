@@ -6,7 +6,9 @@
     "fold": 6,
     "field_antiperiodic": false,
     "body_crosses_periodic_planes": false,
+    "formulation": "fem",
     "periodic_trace_identified": false,
+    "periodic_charge_paired": false,
     "reduction_mode": "disjoint-cell-cyclic-images"
   },
   "settings": {
@@ -34,12 +36,12 @@
     "sector_dofs": 216
   },
   "magnetization_am": {
-    "full_ring_mean_mz": 226678.86086251296,
+    "full_ring_mean_mz": 226678.86086251293,
     "lone_cell_mean_mz": 229885.54329954836,
     "cyclic_cell_mean_mz": 226678.86070515725,
-    "lone_full_gap": 3206.6824370354007,
-    "cyclic_full_residual": 0.00015735570923425257,
-    "gap_fraction_closed": 0.9999999509288143
+    "lone_full_gap": 3206.6824370354298,
+    "cyclic_full_residual": 0.00015735568013042212,
+    "gap_fraction_closed": 0.9999999509288234
   },
   "gap_field": {
     "probe_points_m": [
@@ -133,9 +135,9 @@
     "one_cell_reduces_dofs": true
   },
   "timings": {
-    "full_ring_total_wall_s": 3.978171000024304,
-    "cyclic_total_wall_s": 1.1912333999935072,
-    "validation_wall_s": 8.64759629999753
+    "full_ring_total_wall_s": 3.2446396999876015,
+    "cyclic_total_wall_s": 1.4062365000136197,
+    "validation_wall_s": 6.205440399993677
   },
   "runtime": {
     "host": "lab",

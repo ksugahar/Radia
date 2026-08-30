@@ -12,10 +12,18 @@ solution to differ enough that a no-op image implementation cannot pass.
 There are two distinct sector geometries.  If every iron body lies wholly
 inside one sector and rotated copies are disjoint, the cyclic nonlocal image
 sum is the complete reduction.  If a continuous return yoke crosses the two
-azimuthal cut planes, the rotation-related HDiv normal traces on those planes
-must additionally be identified.  `validate_ffag_cyclic_sector_contract`
-rejects a connected sector lacking that FEEC trace contract; `image_cyclic`
-alone must not be used to hide an artificial periodic-seam surface charge.
+azimuthal cut planes, a local periodic closure is additionally required;
+`image_cyclic` alone must not hide an artificial seam charge.
+
+The closure is formulation-specific.  Conforming FEM uses
+`Compress(Periodic(HDiv))` and identifies the two normal-trace unknowns.
+Broken-HDiv VIM retains independent element unknowns and instead pulls the
+slave surface-charge polynomial into the master facet frame, then assembles
+their signed sum as one internal-interface charge row.  Mixing these contracts
+is an error: `validate_ffag_cyclic_sector_contract` distinguishes
+`formulation="fem"` from `formulation="vim-broken"` and fails loudly when the
+required trace identification or charge pair is absent.
+
 The current axisymmetric C-yoke fixture is an explicit full annulus and has no
 sector cut.  A reduced continuous-yoke fixture is tested separately by
 `validation_ffag_connected_cyclic_yoke.py`.  It gives the cut faces nonzero
@@ -27,10 +35,16 @@ mean tangential magnetization agrees to 5.7e-12 relative and the direct
 external-field samples agree within 1.2e-7 of the applied-field scale.  This
 connected-yoke lane must remain distinct from the disjoint-cell image test.
 The same contract is available on persistent `vim.HDivSolver` objects so load
-sweeps reuse the periodic ChargeGram.  Topology optimization currently keeps
-the connected C-yoke as an explicit full ring: its broken-HDiv material-jump
-space needs a separate paired-seam assembly before sector reduction can be
-claimed.
+sweeps reuse the periodic ChargeGram.
+
+`validation_ffag_broken_vim_cyclic_yoke.py` covers the material-topology
+route.  Its BDM2 broken-HDiv operator reduces 864 explicit-ring charges to 72
+sector charges.  The paired tangential seam charge is 1.71e-17, and direct
+fields for independent axial and tangential periodic magnetizations agree with
+the explicit full ring within 2.28e-14 relative.  A multi-cell sector optimizer
+must also tie the material-density variables of elements adjacent to paired
+faces; charge pairing supplies the correct VIM physics but does not silently
+alter the caller's design-variable parametrization.
 
 ## EarlyTimes C-type A/B route convergence
 

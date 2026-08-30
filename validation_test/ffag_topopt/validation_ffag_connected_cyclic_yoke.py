@@ -161,7 +161,7 @@ def run_validation(args):
         sector_field - full_field, axis=1)) / args.applied_field_am)
     gates = {
         "connected_periodic_contract": bool(
-            contract.reduction_mode == "connected-periodic-sector"),
+            contract.reduction_mode == "connected-periodic-fem-sector"),
         "bdm2_hex_is_used": bool(
             args.hdiv_order == 2 and set(
                 len(element.vertices) for element in
@@ -185,9 +185,11 @@ def run_validation(args):
         "settings": vars(args) | {"output": str(args.output)},
         "contract": {
             "fold": contract.fold,
+            "formulation": contract.formulation,
             "reduction_mode": contract.reduction_mode,
             "body_crosses_periodic_planes": True,
             "periodic_trace_identified": True,
+            "periodic_charge_paired": False,
             "periodic_boundaries": ["periodic_min", "periodic_max"],
         },
         "mesh": {
