@@ -1,0 +1,171 @@
+{
+  "generated_at_utc": "2026-08-19T15:30:47.190222+00:00",
+  "radia_version": "4.95.55",
+  "python_version": "3.12.10",
+  "platform": "Windows-2022Server-10.0.20348-SP0",
+  "host": "lab",
+  "versions": {
+    "ngsolve": "6.2.2604"
+  },
+  "notebook": "section_optics_design.ipynb",
+  "notebook_sha256": "b18f365e90614ae78622166d05fd31eeb80e8c5b15b93f2e5fb4b3ad5493004d",
+  "notebook_bytes": 905327,
+  "results": {
+    "orbit": {
+      "length_m": 0.19018399319281457,
+      "planarity_m": 1.179988896378759e-12,
+      "body_radius_m": 0.49860676156425043,
+      "peak_field_T": 0.4704026821756963,
+      "effective_length_m": 0.12374422863731095
+    },
+    "chain": {
+      "elements": 32,
+      "dimension": 170,
+      "fit_relative_residual": 0.008761759655631406,
+      "interface_ay_jump": 1.5915438021481793e-07,
+      "interface_b_jump": 7.554089909244494e-11,
+      "narrowest_element_mm": 2.0140423656438147,
+      "widest_element_mm": 13.057053005174957
+    },
+    "section": {
+      "start_m": 0.1547939895341487,
+      "element": 22,
+      "break_snap_m": 0.0,
+      "length_m": 0.035390003658665875,
+      "composition_defect": 8.881784197001252e-16,
+      "R": [
+        [
+          0.983296886403995,
+          0.035287786384901425,
+          0.0,
+          0.0
+        ],
+        [
+          -0.6048592864557408,
+          0.9952801318074325,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          1.0158935448405972,
+          0.03548670578159767
+        ],
+        [
+          0.0,
+          0.0,
+          0.575057797540096,
+          1.0044427509658573
+        ]
+      ],
+      "whole_R": [
+        [
+          0.5148298305395265,
+          0.14312362144444601,
+          0.0,
+          0.0
+        ],
+        [
+          -5.7062247226034915,
+          0.35604862432221973,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          1.5334372713026536,
+          0.2404011541703318
+        ],
+        [
+          0.0,
+          0.0,
+          6.843822637707778,
+          1.7250544972040665
+        ]
+      ],
+      "thin_lens_horizontal": -0.5934266147299736,
+      "thin_lens_vertical": 0.5617307279474031
+    },
+    "design": {
+      "current_spec": [
+        -0.604859286455745,
+        0.5750577975401004,
+        -0.05822959382093598
+      ],
+      "coupling_cosine": -0.999960218928505,
+      "decoupling_cost_multiplier": 112.11173745065287,
+      "jacobian_seconds": 17.023817299996153
+    },
+    "stage_b": [
+      {
+        "requested_fraction": 0.02,
+        "delivered_fraction": 0.01999885194295503,
+        "ratio": 0.9999425971477515,
+        "vertical_fraction": 0.021335302871691154,
+        "peak_field_change_inside_T": 0.0007946696567733973,
+        "peak_field_change_outside_T": 6.573935405305826e-05,
+        "bend_drift_relative": 0.0
+      },
+      {
+        "requested_fraction": 0.05,
+        "delivered_fraction": 0.04999282483596329,
+        "ratio": 0.9998564967192658,
+        "vertical_fraction": 0.05334281766290906,
+        "peak_field_change_inside_T": 0.0019866741419334935,
+        "peak_field_change_outside_T": 0.00016434838513264537,
+        "bend_drift_relative": 0.0
+      },
+      {
+        "requested_fraction": 0.1,
+        "delivered_fraction": 0.09997130062087646,
+        "ratio": 0.9997130062087646,
+        "vertical_fraction": 0.10670083801656519,
+        "peak_field_change_inside_T": 0.003973348283866987,
+        "peak_field_change_outside_T": 0.00032869677026529074,
+        "bend_drift_relative": 0.0
+      },
+      {
+        "requested_fraction": 0.2,
+        "delivered_fraction": 0.19988521268965576,
+        "ratio": 0.9994260634482788,
+        "vertical_fraction": 0.21346249488531552,
+        "peak_field_change_inside_T": 0.007946696567733974,
+        "peak_field_change_outside_T": 0.0006573935405305815,
+        "bend_drift_relative": 1.1916438787543808e-16
+      }
+    ],
+    "stage_c_recorded": {
+      "note": "measured on the 2.6 mm design-resolution mesh; not recomputed here",
+      "source": "validation_test/section_optics + turbo_stage_c_{drive,verify}",
+      "baseline_section_R10": -0.604833,
+      "baseline_whole_R10": -5.70451,
+      "baseline_total_bend_Tm": -0.05819971,
+      "cases": [
+        {
+          "request": 0.1,
+          "elements_removed": 44,
+          "volume_cm3": 0.4,
+          "section_R10": -0.627567,
+          "whole_R10": -5.718411,
+          "total_bend_Tm": -0.05814755,
+          "fraction_of_request": 0.376,
+          "driver_band_ratio": 3.116,
+          "driver_converged": false
+        },
+        {
+          "request": -0.1,
+          "elements_removed": 27,
+          "volume_cm3": 0.2,
+          "section_R10": -0.553496,
+          "whole_R10": -5.667614,
+          "total_bend_Tm": -0.05810273,
+          "fraction_of_request": 0.849,
+          "driver_band_ratio": 0.833,
+          "driver_converged": true
+        }
+      ]
+    }
+  }
+}
