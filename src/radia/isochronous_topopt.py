@@ -2484,6 +2484,7 @@ def optimize_density(problem, state_load, objective_load, constraint_loads=(),
     if design_map is None:
         n_design = int(problem.n_el)
         volumes = element_volumes
+        design_group_sizes = None
 
         def expand_design(values):
             return np.asarray(values, dtype=float).reshape(-1)
@@ -2500,12 +2501,25 @@ def optimize_density(problem, state_load, objective_load, constraint_loads=(),
             design_map.contract(element_volumes), dtype=float).reshape(-1)
         if volumes.shape != (n_design,) or not np.all(volumes > 0.0):
             raise ValueError("optimize_density: invalid mapped design volumes")
+        design_group_sizes = np.asarray(
+            design_map.contract(np.ones(problem.n_el)),
+            dtype=float).reshape(-1)
+        if (design_group_sizes.shape != (n_design,)
+                or not np.all(design_group_sizes >= 1.0)):
+            raise ValueError("optimize_density: invalid design-map groups")
 
         def expand_design(values):
             return np.asarray(design_map.expand(values), dtype=float)
 
         def contract_elements(values):
             return np.asarray(design_map.contract(values), dtype=float)
+
+    def symmetrize_elements(values):
+        values = np.asarray(values, dtype=float).reshape(-1)
+        if design_map is None:
+            return values
+        return expand_design(
+            contract_elements(values)/design_group_sizes)
 
     volume_max = float(volume_fraction * element_volumes.sum())
     if initial_density is None:
@@ -2526,6 +2540,12 @@ def optimize_density(problem, state_load, objective_load, constraint_loads=(),
         rho_elements = expand_design(rho_vec)
         if density_filter is not None:
             rho_f_raw = density_filter.apply(rho_elements)
+            # A Cartesian/topological filter generally does not know that the
+            # two sector cuts are adjacent.  Project its output back onto the
+            # periodic material quotient before clipping/projection.  This
+            # orthogonal group average is self-adjoint and is repeated in the
+            # reverse chain below.
+            rho_f_raw = symmetrize_elements(rho_f_raw)
             rho_f = np.clip(rho_f_raw, 0.0, 1.0)
             unclipped = (rho_f_raw > 0.0) & (rho_f_raw < 1.0)
         else:
@@ -2580,8 +2600,8 @@ def optimize_density(problem, state_load, objective_load, constraint_loads=(),
                 g_rf = density_projection.chain(rho_f, g_rf)
             if density_filter is None:
                 return contract_elements(g_rf)
-            return contract_elements(density_filter.chain(
-                np.where(unclipped, g_rf, 0.0)))
+            g_rf = symmetrize_elements(np.where(unclipped, g_rf, 0.0))
+            return contract_elements(density_filter.chain(g_rf))
 
         def to_rho(g_s):
             return to_raw(density_gradient_from_s_gradient(
