@@ -1419,6 +1419,40 @@ class CoilBuilderHDivSource:
         """Evaluate the source magnetic flux density in tesla."""
         return MU0 * self.h_field(points)
 
+    def to_radia_object(self, *, closure_tolerance=1.0e-9) -> int:
+        """Materialize the same closed filaments as one native Radia object.
+
+        ``CoilBuilderHDivSource`` owns the finite-filament representation used
+        for both HDiv RHS assembly and incident-field sampling.  Native orbit
+        tracking cannot call the Python Biot--Savart evaluator, so it receives
+        an ``ObjFlmCur`` container built from those exact segments rather than
+        a separately discretized solid-current coil.
+
+        The conversion deliberately accepts only continuous closed paths.
+        ``from_coilbuilders`` already establishes this contract; the explicit
+        check keeps manually constructed sources from silently acquiring an
+        unphysical closing segment at the pybind boundary.
+        """
+        import radia as rad
+
+        tolerance = float(closure_tolerance)
+        if not np.isfinite(tolerance) or tolerance < 0.0:
+            raise ValueError("closure_tolerance must be finite and nonnegative")
+        objects = []
+        for index, (segments, current) in enumerate(self.segment_groups):
+            joins = np.linalg.norm(segments[1:, 0] - segments[:-1, 1], axis=1)
+            maximum_join = float(np.max(joins, initial=0.0))
+            closure_gap = float(np.linalg.norm(segments[-1, 1] - segments[0, 0]))
+            if maximum_join > tolerance or closure_gap > tolerance:
+                raise ValueError(
+                    "native Radia coil materialization requires a continuous "
+                    f"closed filament path (group {index}: max join "
+                    f"{maximum_join:.6e} m, closure {closure_gap:.6e} m)"
+                )
+            points = np.vstack((segments[:, 0], segments[0, 0]))
+            objects.append(rad.ObjFlmCur(points.tolist(), float(current)))
+        return int(rad.ObjCnt(objects))
+
     def coefficient_function(self):
         """Return the differentiable NGSolve source ``H`` field."""
         from .biot_savart import h_segments_cf
