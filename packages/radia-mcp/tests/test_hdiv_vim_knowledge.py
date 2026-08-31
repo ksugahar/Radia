@@ -67,7 +67,7 @@ def test_hdiv_vim_knowledge_exposes_h1_hodge_mixed_validation_boundary():
     assert "H1HodgeDemagOperator" in coupled
     assert "hdiv.FreeDofs()" in coupled
     assert "snapshot residual below `3e-12`" in coupled
-    assert "does not repair the open-boundary charge kernel" in coupled
+    assert "independently of the repaired open-boundary operator" in coupled
     assert "hdiv_definedon" in coupled
     assert "demag_operator_factory" in coupled
     assert "exact restricted BDM space" in coupled
