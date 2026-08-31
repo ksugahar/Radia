@@ -19,7 +19,10 @@
 #include "mtef_common.h"
 
 #include <algorithm>
+#include <cmath>
+#include <cstdlib>
 #include <cstring>
+#include <stdexcept>
 #include <string>
 #include <vector>
 
@@ -91,7 +94,7 @@ public:
 
 private:
     /* Stop conditions for a sequence.  A matrix cell also ends at & and \\. */
-    enum Ctx { kTop, kBrace, kCell, kBracket };
+    enum Ctx { kTop, kBrace, kCell, kBracket, kTextBrace };
 
     const std::string s_;    /* owned: the caller passes a stripped temporary */
     size_t p_;
@@ -139,9 +142,9 @@ private:
     }
 
     bool at_stop(Ctx ctx) {
-        skip_space();
+        if (ctx != kTextBrace) skip_space();
         if (eof()) return true;
-        if (ctx == kBrace && peek() == '}') return true;
+        if ((ctx == kBrace || ctx == kTextBrace) && peek() == '}') return true;
         /* The optional argument of \xrightarrow[under]{over}. */
         if (ctx == kBracket && peek() == ']') return true;
         if (ctx == kCell) {
@@ -164,6 +167,7 @@ private:
 
     NodeList parse_seq(Ctx ctx) {
         NodeList out;
+        int declaredTypeface = -1;
         while (!at_stop(ctx)) {
             size_t before = p_;
             NodePtr a = parse_atom_with_scripts(ctx);
@@ -171,29 +175,39 @@ private:
                 if (p_ == before) ++p_;        /* never spin on bad input */
                 continue;
             }
+            /* Old TeX declarations (\rm, \bf, ...) apply to the rest of the
+             * current group.  A FontNode is only a parser marker; the actual
+             * characters are retyped so every renderer sees the declaration. */
+            if (a->tag() == Node::kFont) {
+                declaredTypeface = static_cast<FontNode&>(*a).fontIndex;
+                continue;
+            }
             /* A big operator takes the rest of this sequence as its body. */
             if (a->tag() == Node::kIntegral) {
                 static_cast<IntegralNode&>(*a).body = parse_seq(ctx);
+                if (declaredTypeface >= 0) retype_node(*a, declaredTypeface);
                 out.push_back(std::move(a));
                 break;
             }
             if (a->tag() == Node::kBigOp) {
                 static_cast<BigOpNode&>(*a).body = parse_seq(ctx);
+                if (declaredTypeface >= 0) retype_node(*a, declaredTypeface);
                 out.push_back(std::move(a));
                 break;
             }
+            if (declaredTypeface >= 0) retype_node(*a, declaredTypeface);
             out.push_back(std::move(a));
         }
         return out;
     }
 
     /* A braced argument, or a single atom when the argument is unbraced. */
-    NodeList parse_arg() {
+    NodeList parse_arg(Ctx bracedCtx = kBrace) {
         skip_space();
         if (peek() == '{') {
             ++p_;
-            NodeList l = parse_seq(kBrace);
-            skip_space();
+            NodeList l = parse_seq(bracedCtx);
+            if (bracedCtx != kTextBrace) skip_space();
             if (peek() == '}') ++p_;
             return l;
         }
@@ -229,7 +243,7 @@ private:
 
         std::unique_ptr<ScriptNode> sc;
         for (;;) {
-            skip_space();
+            if (ctx != kTextBrace) skip_space();
             char c = peek();
             if (c != '_' && c != '^') break;
             ++p_;
@@ -307,15 +321,21 @@ private:
     }
 
     NodePtr parse_atom(Ctx ctx) {
-        skip_space();
+        if (ctx != kTextBrace) skip_space();
         if (eof()) return nullptr;
         char c = peek();
+
+        if (ctx == kTextBrace &&
+            (c == ' ' || c == '\t' || c == '\n' || c == '\r')) {
+            ++p_;
+            return make_char(TF_TEXT, uint16_t(' '), ' ');
+        }
 
         if (c == '{') {
             ++p_;
             auto line = std::make_unique<LineNode>();
-            line->children = parse_seq(kBrace);
-            skip_space();
+            line->children = parse_seq(ctx == kTextBrace ? kTextBrace : kBrace);
+            if (ctx != kTextBrace) skip_space();
             if (peek() == '}') ++p_;
             return line;
         }
@@ -347,6 +367,10 @@ private:
         }
 
         ++p_;
+        /* In TeX, an unescaped tilde is a non-breaking interword space.  It
+         * is not the relation \sim; confusing the two changes both the
+         * typography and the mathematical meaning. */
+        if (c == '~')     return make_char(TF_SYMBOL, 0x00A0, c);
         if (is_digit(c))  return make_char(TF_NUMBER,   uint16_t(c), c);
         if (is_letter(c)) return make_char(TF_VARIABLE, uint16_t(c), c);
         /* Office sets a binary minus as U+2212, not the hyphen on the key. */
@@ -383,6 +407,7 @@ private:
             const uint32_t sp = (cmd == "\\,")          ? 0x2006u
                               : (cmd == "\\:")          ? 0x205Fu
                               : (cmd == "\\;")          ? 0x2005u
+                              : (cmd == "\\ ")          ? 0x2004u
                               : (cmd == "\\quad")       ? 0x2003u
                               : (cmd == "\\thinspace")  ? 0x2006u
                               : (cmd == "\\medspace")   ? 0x205Fu
@@ -390,15 +415,46 @@ private:
             if (sp) return make_char(TF_SYMBOL, uint16_t(sp));
         }
 
+        if (cmd == "\\qquad") {
+            auto line = std::make_unique<LineNode>();
+            line->children.push_back(make_char(TF_SYMBOL, 0x2003));
+            line->children.push_back(make_char(TF_SYMBOL, 0x2003));
+            return line;
+        }
+
+        if (cmd == "\\hspace") return parse_hspace();
+
         /* Spacing and layout commands carry no glyph. */
         if (cmd == "\\," || cmd == "\\;" || cmd == "\\:" || cmd == "\\!" ||
-            cmd == "\\ " || cmd == "\\quad" || cmd == "\\qquad" ||
+            cmd == "\\quad" ||
             cmd == "\\textstyle" ||
             cmd == "\\limits" || cmd == "\\nolimits" || cmd == "\\left" ||
             cmd == "\\right") {
             if (cmd == "\\left")  { p_ = save; return parse_fence(); }
             if (cmd == "\\right") { p_ = save; return nullptr; }
             return nullptr;
+        }
+
+        /* Delimiter-size declarations affect only glyph size.  This editor's
+         * structural renderer sizes delimiters from their contents, so keep
+         * the following delimiter and discard only the redundant declaration. */
+        if (cmd == "\\big" || cmd == "\\Big" || cmd == "\\bigg" ||
+            cmd == "\\Bigg" || cmd == "\\bigl" || cmd == "\\bigr" ||
+            cmd == "\\Bigl" || cmd == "\\Bigr" || cmd == "\\biggl" ||
+            cmd == "\\biggr" || cmd == "\\Biggl" || cmd == "\\Biggr")
+            return parse_atom(ctx);
+
+        /* TeX's historical declaration syntax applies to the remainder of
+         * the current group.  parse_seq consumes these markers as state. */
+        if (cmd == "\\rm" || cmd == "\\bf" || cmd == "\\it" ||
+            cmd == "\\sf" || cmd == "\\tt") {
+            auto font = std::make_unique<FontNode>();
+            font->fontIndex = (cmd == "\\rm") ? TF_ROMAN
+                            : (cmd == "\\bf") ? TF_USER3
+                            : (cmd == "\\it") ? TF_VARIABLE
+                            : (cmd == "\\sf") ? TF_MATH_SANS
+                                                : TF_MATH_MONO;
+            return font;
         }
 
         if (cmd == "\\binom" || cmd == "\\dbinom" ||
@@ -545,8 +601,11 @@ private:
             return d;
         }
 
-        if (cmd == "\\text" || cmd == "\\mathrm" || cmd == "\\textrm" ||
-            cmd == "\\operatorname")
+        if (cmd == "\\text" || cmd == "\\textrm" || cmd == "\\mbox")
+            return styled_group(TF_TEXT, /*preserveSpaces=*/true);
+        if (cmd == "\\mathrm")
+            return styled_group(TF_ROMAN);
+        if (cmd == "\\operatorname")
             return styled_group(TF_TEXT);
         /* The lab sets a vector as \vec\bm, so \bm is BOLD ITALIC and is
          * the vector face.  \mathbf is upright bold and is a different
@@ -557,6 +616,12 @@ private:
             return styled_group(TF_USER3);
         if (cmd == "\\mathit")
             return styled_group(TF_VARIABLE);
+        if (cmd == "\\mathsf")
+            return styled_group(TF_MATH_SANS);
+        if (cmd == "\\mathtt")
+            return styled_group(TF_MATH_MONO);
+        if (cmd == "\\mathfrak")
+            return styled_group(TF_MATH_FRAKTUR);
 
         /* \sin, \log, ... -- upright, no braces. */
         if (cmd.size() > 1 && is_function_name(cmd.substr(1))) {
@@ -568,6 +633,7 @@ private:
         }
 
         /* Symbols share the table the MTEF writer uses. */
+        if (cmd == "\\dots") cmd = "\\ldots";
         int code = tex_command_to_unicode(cmd.c_str());
         if (code >= 0) {
             auto ch = make_char(typeface_for_code(uint16_t(code)), uint16_t(code));
@@ -579,27 +645,15 @@ private:
         if (cmd.size() == 2 && !is_letter(cmd[1]))
             return make_char(TF_SYMBOL, uint16_t((unsigned char)cmd[1]), cmd[1]);
 
-        /* Unknown: show the name WITH its backslash.
-         *
-         * Dropping the backslash and setting the rest as text made an
-         * unhandled command indistinguishable from prose the author meant:
-         * \binom{n}{k} drew as the word "binom" followed by an n and a k, and
-         * looked like a finished equation.  Keeping the backslash says what
-         * has actually happened, which is the difference between a loud
-         * failure and a quiet wrong answer.
-         *
-         * The arguments that follow are still parsed as ordinary groups, so
-         * nothing the author typed is lost. */
-        auto line = std::make_unique<LineNode>();
-        line->children.push_back(make_char(TF_TEXT, uint16_t('\\'), '\\'));
-        for (size_t i = 1; i < cmd.size(); ++i)
-            line->children.push_back(make_char(TF_TEXT, uint16_t(cmd[i]), cmd[i]));
-        return line;
+        /* Never turn an unknown control sequence into plausible prose.  The
+         * caller can report this exception with the source equation, while a
+         * literal "\\name" in a slide is a silent wrong answer. */
+        throw std::invalid_argument("unsupported TeX control sequence: " + cmd);
     }
 
     /* A braced group whose characters all take one typeface. */
-    NodePtr styled_group(int typeface) {
-        NodeList inner = parse_arg();
+    NodePtr styled_group(int typeface, bool preserveSpaces = false) {
+        NodeList inner = parse_arg(preserveSpaces ? kTextBrace : kBrace);
         retype(inner, typeface);
         auto line = std::make_unique<LineNode>();
         line->children = std::move(inner);
@@ -609,11 +663,116 @@ private:
     static void retype(NodeList& list, int typeface) {
         for (auto& n : list) {
             if (!n) continue;
-            if (n->tag() == Node::kChar)
-                static_cast<CharNode&>(*n).typeface = typeface;
-            else if (n->tag() == Node::kLine)
-                retype(static_cast<LineNode&>(*n).children, typeface);
+            retype_node(*n, typeface);
         }
+    }
+
+    static void retype_node(Node& node, int typeface) {
+        if (node.tag() == Node::kChar) {
+            static_cast<CharNode&>(node).typeface = typeface;
+            return;
+        }
+        auto apply = [typeface](NodeList& slot) { retype(slot, typeface); };
+        switch (node.tag()) {
+            case Node::kLine: apply(static_cast<LineNode&>(node).children); break;
+            case Node::kPile: {
+                auto& n = static_cast<PileNode&>(node);
+                apply(n.lines); break;
+            }
+            case Node::kMatrix: {
+                auto& n = static_cast<MatrixNode&>(node);
+                apply(n.elements); break;
+            }
+            case Node::kEmbell: apply(static_cast<EmbellNode&>(node).content); break;
+            case Node::kFence: {
+                auto& n = static_cast<FenceNode&>(node);
+                apply(n.content); apply(n.content2); break;
+            }
+            case Node::kFrac: {
+                auto& n = static_cast<FracNode&>(node);
+                apply(n.numer); apply(n.denom); break;
+            }
+            case Node::kSqrt: {
+                auto& n = static_cast<SqrtNode&>(node);
+                apply(n.content); apply(n.index); break;
+            }
+            case Node::kScript: {
+                auto& n = static_cast<ScriptNode&>(node);
+                apply(n.base); apply(n.sub); apply(n.sup); break;
+            }
+            case Node::kIntegral: {
+                auto& n = static_cast<IntegralNode&>(node);
+                apply(n.body); apply(n.lower); apply(n.upper); break;
+            }
+            case Node::kBigOp: {
+                auto& n = static_cast<BigOpNode&>(node);
+                apply(n.body); apply(n.lower); apply(n.upper); break;
+            }
+            case Node::kDecoration: apply(static_cast<DecorationNode&>(node).content); break;
+            case Node::kBraceDeco: {
+                auto& n = static_cast<BraceDecoNode&>(node);
+                apply(n.content); apply(n.label); break;
+            }
+            case Node::kPhantom: apply(static_cast<PhantomNode&>(node).content); break;
+            case Node::kDirac: {
+                auto& n = static_cast<DiracNode&>(node);
+                apply(n.bra); apply(n.ket); break;
+            }
+            case Node::kOverset: {
+                auto& n = static_cast<OversetNode&>(node);
+                apply(n.base); apply(n.over); break;
+            }
+            default: break;
+        }
+    }
+
+    NodePtr parse_hspace() {
+        skip_space();
+        if (peek() != '{')
+            throw std::invalid_argument("\\hspace requires a braced length");
+        ++p_;
+        std::string length;
+        while (!eof() && peek() != '}') length += s_[p_++];
+        if (peek() == '}') ++p_;
+        const size_t first = length.find_first_not_of(" \t\r\n");
+        const size_t last = length.find_last_not_of(" \t\r\n");
+        if (first == std::string::npos)
+            throw std::invalid_argument("\\hspace length is empty");
+        length = length.substr(first, last - first + 1);
+        char* end = nullptr;
+        const double value = std::strtod(length.c_str(), &end);
+        if (!end || end == length.c_str() || !std::isfinite(value) || value < 0)
+            throw std::invalid_argument("unsupported \\hspace length: " + length);
+        double em = 0.0;
+        const std::string unit(end);
+        if (unit == "em") em = value;
+        else if (unit == "mu") em = value / 18.0;
+        else throw std::invalid_argument("unsupported \\hspace unit: " + unit);
+        const int mu = int(std::lround(em * 18.0));
+        if (std::fabs(em * 18.0 - double(mu)) > 1e-6)
+            throw std::invalid_argument("\\hspace must resolve to whole mu: " + length);
+
+        auto line = std::make_unique<LineNode>();
+        int remain = mu;
+        while (remain >= 18) {
+            line->children.push_back(make_char(TF_SYMBOL, 0x2003));
+            remain -= 18;
+        }
+        while (remain >= 5) {
+            line->children.push_back(make_char(TF_SYMBOL, 0x2005));
+            remain -= 5;
+        }
+        while (remain >= 4) {
+            line->children.push_back(make_char(TF_SYMBOL, 0x205F));
+            remain -= 4;
+        }
+        while (remain >= 3) {
+            line->children.push_back(make_char(TF_SYMBOL, 0x2006));
+            remain -= 3;
+        }
+        while (remain-- > 0)
+            line->children.push_back(make_char(TF_SYMBOL, 0x200A));
+        return line;
     }
 
     static int accent_code(const std::string& cmd) {
@@ -811,6 +970,10 @@ std::string strip_delimiters(const std::string& in) {
     size_t a = s.find_first_not_of(" \t\r\n");
     size_t b = s.find_last_not_of(" \t\r\n");
     if (a == std::string::npos) return std::string();
+    /* A final `\ ` is a TeX control space, not document padding.  Trimming
+     * the space first leaves a bare backslash, which then looks like an
+     * unknown command and also breaks the existing blank-image probe. */
+    if (b + 1 < s.size() && s[b] == '\\' && s[b + 1] == ' ') ++b;
     s = s.substr(a, b - a + 1);
 
     auto strip = [&s](const char* open, const char* close) {
