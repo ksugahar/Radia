@@ -1194,11 +1194,23 @@ void HDivFieldEvaluator::Evaluate(const double* observations, std::size_t n_obse
     // maps parallel; express the threshold in physical+IMA interactions rather
     // than target count so reduced-domain solves follow the same cost model.
     constexpr std::size_t kSerialCloudInteractions = 4'000'000;
+    constexpr std::size_t kSingleTargetParallelCloudSources = 4'096;
+    const std::size_t worker_count = static_cast<std::size_t>(
+        std::max(1, ngcore::TaskManager::GetMaxThreads()));
     const long double cloud_interactions = static_cast<long double>(m_impl->points.size())
         * static_cast<long double>(n_observations)
         * static_cast<long double>(1+m_impl->images.size());
+    // A reference-orbit tracker calls the evaluator one point at a time.  The
+    // aggregate work can be enormous even though each individual call falls
+    // below the ordinary field-map threshold, so use the deterministic
+    // atom-parallel direct path once the point cloud can occupy the pool.
+    const bool parallel_single_target_direct =
+        algorithm == Algorithm::Direct
+        && n_observations < worker_count
+        && m_impl->points.size() >= kSingleTargetParallelCloudSources;
     if (!m_impl->points.empty()
-            && cloud_interactions <= static_cast<long double>(kSerialCloudInteractions)) {
+            && cloud_interactions <= static_cast<long double>(kSerialCloudInteractions)
+            && !parallel_single_target_direct) {
         for (std::size_t index = 0; index < n_observations; ++index) {
             const double* r = observations+3*index;
             double total[3];
@@ -1210,8 +1222,6 @@ void HDivFieldEvaluator::Evaluate(const double* observations, std::size_t n_obse
         return;
     }
     ngcore::RegionTaskManager task_manager;
-    const std::size_t worker_count = static_cast<std::size_t>(
-        std::max(1, ngcore::TaskManager::GetMaxThreads()));
     if (n_observations < worker_count) {
         // Too few points to occupy the pool point-parallel (the dominant
         // cost of orbit trackers and per-step RK consumers); parallelize

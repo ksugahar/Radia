@@ -6,8 +6,8 @@ from radia.accelerator_magnet_topopt import (
     MultiMomentumTransferMatrixObjective,
     PlanarDesignOrbit,
     PlanarTransferMatrixObjective,
-    build_planar_orbit_field_response_matrix,
     build_multi_orbit_field_response_matrix,
+    build_planar_orbit_field_response_matrix,
     multi_orbit_field_observations,
     optimize_hdiv_mmm_magnet_from_transfer_matrix,
     planar_orbit_field_observations,
@@ -270,6 +270,91 @@ def test_coilbuilder_source_owns_hdiv_rhs_incident_rows_and_total_field():
     np.testing.assert_allclose(
         total.b_field(points), 1.7 * source.b_field(points),
         rtol=2e-14, atol=1e-15)
+
+
+def test_coilbuilder_source_materializes_the_same_native_filaments():
+    import radia as rad
+    from radia.coil_builder import CoilBuilder
+
+    coils = (
+        CoilBuilder(current=1200.0)
+        .set_start([0.20, 0.0, 0.0])
+        .set_cross_section(0.01, 0.01)
+        .add_arc(radius=0.20, arc_angle=360.0),
+        CoilBuilder(current=-700.0)
+        .set_start([0.15, 0.0, 0.08])
+        .set_cross_section(0.008, 0.008)
+        .add_arc(radius=0.15, arc_angle=360.0),
+    )
+    source = CoilBuilderHDivSource.from_coilbuilders(coils, n_arc=32)
+    points = np.array([
+        [0.01, 0.01, 0.05],
+        [0.10, 0.00, 0.10],
+        [0.30, 0.10, 0.20],
+    ])
+
+    rad.UtiDelAll()
+    try:
+        native = source.to_radia_object()
+        expected = source.b_field(points)
+        actual = np.asarray(rad.Fld(native, "b", points), dtype=float)
+        relative = np.linalg.norm(actual - expected, axis=1) / np.maximum(
+            np.linalg.norm(expected, axis=1), np.finfo(float).tiny)
+        # Both paths use the same piecewise-linear wire.  The remaining
+        # difference is the independent Radia vs. Python line-segment
+        # integration roundoff, not a resampled coil geometry.
+        assert float(np.max(relative)) <= 2.0e-8
+    finally:
+        rad.UtiDelAll()
+
+
+def test_coilbuilder_source_cyclic_copies_keep_one_shared_full_ring_source():
+    segments = np.asarray([
+        [[0.80, -0.10, -0.10], [1.20, -0.10, -0.10]],
+        [[1.20, -0.10, -0.10], [1.20, -0.10, 0.10]],
+        [[1.20, -0.10, 0.10], [0.80, -0.10, 0.10]],
+        [[0.80, -0.10, 0.10], [0.80, -0.10, -0.10]],
+    ])
+    source = CoilBuilderHDivSource(((segments, 1250.0),))
+    fold = 6
+    cyclic = source.cyclic_copies(fold)
+
+    assert cyclic.segment_count == fold*source.segment_count
+    assert len(cyclic.segment_groups) == fold
+    angle = 2.0*np.pi/fold
+    rotation = np.asarray(((np.cos(angle), -np.sin(angle), 0.0),
+                           (np.sin(angle), np.cos(angle), 0.0),
+                           (0.0, 0.0, 1.0)))
+    np.testing.assert_allclose(
+        cyclic.segment_groups[1][0], segments @ rotation.T,
+        rtol=0.0, atol=2.0e-15)
+    assert cyclic.segment_groups[1][1] == 1250.0
+
+    point = np.asarray([0.30, 0.15, 0.25])
+    np.testing.assert_allclose(
+        cyclic.h_field(rotation @ point), rotation @ cyclic.h_field(point),
+        rtol=2.0e-13, atol=2.0e-12)
+    with np.testing.assert_raises_regex(ValueError, "integer >= 2"):
+        source.cyclic_copies(1)
+    with np.testing.assert_raises_regex(ValueError, "even fold"):
+        source.cyclic_copies(3, alternating=True)
+    alternating = source.cyclic_copies(4, alternating=True)
+    np.testing.assert_allclose(
+        [current for _segments, current in alternating.segment_groups],
+        [1250.0, -1250.0, 1250.0, -1250.0])
+
+
+def test_native_coil_materialization_rejects_an_open_path():
+    source = CoilBuilderHDivSource((
+        (np.array([
+            [[0.0, 0.0, 0.0], [0.1, 0.0, 0.0]],
+            [[0.1, 0.0, 0.0], [0.1, 0.1, 0.0]],
+        ]), 1.0),
+    ))
+
+    with np.testing.assert_raises_regex(
+            ValueError, "continuous closed filament path"):
+        source.to_radia_object()
 
 
 def test_orbit_and_transfer_matrix_create_target_whole_hex_magnet():
