@@ -29,6 +29,7 @@ import pytest
 
 from radia.accelerator_section_optics import (
     COMPONENT_COUNT, NORMAL_BLOCKS, aperture_field_metric,
+    chain_bend_row,
     constrained_minimum_norm_step, focusing_coupling,
     minimum_norm_field_difference, multipole_section_spec,
     multipole_section_spec_jacobian,
@@ -235,3 +236,39 @@ def test_dense_and_diagonal_metrics_agree(slab):
         slab["jacobian"][[0, 2]], requested, np.diag(slab["weight"]))
     assert np.array_equal(kept_a, kept_b)
     assert np.allclose(diagonal, dense, rtol=0.0, atol=1.0e-18)
+
+
+class _ConstantBendElement:
+    """One-coefficient element for testing the design-orbit integration row."""
+
+    dimension = 1
+
+    def b_row_columns(self, x, y, zeta):
+        count = np.asarray(x).size
+        return (np.zeros((count, 1)), np.full((count, 1), 2.5),
+                np.zeros((count, 1)))
+
+
+class _ConstantBendChain:
+    def __init__(self):
+        self.elements = [_ConstantBendElement()]
+        self._reduced = np.eye(1)
+
+    @staticmethod
+    def _locate(s):
+        return np.zeros(np.asarray(s).size, dtype=int), np.zeros(np.asarray(s).size)
+
+
+def test_chain_bend_row_uses_endpoint_safe_nonuniform_trapezoid_weights():
+    monitor_s = np.array([0.0, 0.3, 1.1, 2.0])
+    row = chain_bend_row(_ConstantBendChain(), monitor_s)
+    # A constant response must integrate to response times covered length.
+    assert row == pytest.approx([2.5 * (monitor_s[-1] - monitor_s[0])])
+
+
+@pytest.mark.parametrize("monitor_s", [np.array([0.0]),
+                                         np.array([0.0, 0.0]),
+                                         np.array([0.0, np.nan])])
+def test_chain_bend_row_rejects_invalid_monitor_grid(monitor_s):
+    with pytest.raises(ValueError, match="monitor_s"):
+        chain_bend_row(_ConstantBendChain(), monitor_s)
