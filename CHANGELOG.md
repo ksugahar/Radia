@@ -5,6 +5,23 @@ All notable changes to the `radia` package.  Format: each release lists
 
 ## Unreleased
 
+## 4.95.75 - Cyclic nonlinear FFAG closure
+
+Released 2026-08-31.
+
+- Closed the periodic-density filter contract for cyclic FFAG topology
+  optimization. Filtered element values are projected back onto their cyclic
+  equivalence classes before every physical solve, and the reverse chain uses
+  the same self-adjoint group average before the filter transpose.
+- Strengthened the Cubit 2025.12 fold-12 nonlinear certificate with exact
+  geometry/mesh provenance and an independent rotation-covariant BDM2 source.
+  The sector and explicit 96-HEX ring agree at source-scaled tolerances, while
+  the prescribed-source direct field evaluators agree at roundoff.
+- Preserved TeX semantics when exporting equations to Office MathML. Delimiter
+  sizing, legacy and extended math alphabets, explicit spacing, text-box
+  whitespace, ellipses, and nonbreaking spaces now normalize predictably;
+  unsupported control sequences fail before a slide can be generated.
+
 ## 4.95.74 - Cubit cyclic FFAG topology densities
 
 Released 2026-08-31.
