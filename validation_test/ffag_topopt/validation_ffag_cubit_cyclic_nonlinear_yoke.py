@@ -26,6 +26,35 @@ def _sha256(path):
     return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 
 
+def _validate_build_report(build_report, args):
+    """Bind a passing Cubit report to the exact requested mesh contract."""
+    if not build_report.get("passed", False):
+        raise RuntimeError("canonical Cubit FFAG build report is not passing")
+    cubit = build_report.get("cubit", {})
+    geometry = build_report.get("geometry", {})
+    if str(cubit.get("cubit_version")) != "2025.12":
+        raise RuntimeError("FFAG validation requires Coreform Cubit 2025.12")
+    expected_integers = {
+        "fold": args.fold,
+        "curve_order": 2,
+        "intervals_per_curve": args.intervals,
+    }
+    for name, expected in expected_integers.items():
+        if int(geometry.get(name, -1)) != int(expected):
+            raise RuntimeError(
+                f"Cubit build report {name} does not match the requested mesh")
+    expected_lengths = {
+        "inner_radius_m": args.inner_radius,
+        "outer_radius_m": args.outer_radius,
+        "half_height_m": args.half_height,
+    }
+    for name, expected in expected_lengths.items():
+        actual = float(geometry.get(name, float("nan")))
+        if not np.isclose(actual, float(expected), rtol=1.0e-14, atol=0.0):
+            raise RuntimeError(
+                f"Cubit build report {name} does not match the requested mesh")
+
+
 def _mean_tangential_magnetization(result, mesh):
     import ngsolve as ng
 
@@ -56,6 +85,83 @@ def _field_comparison_metrics(full_field, sector_field, full_mean, sector_mean):
             field_absolute/residual_field_scale),
         "field_source_scale_am": field_source_scale,
         "field_source_relative_error": field_absolute/field_source_scale,
+    }
+
+
+def _prescribed_source_field_comparison(full, sector, fold, probes, args):
+    """Isolate the cyclic direct-field evaluator from the nonlinear solve.
+
+    The physical polynomial ``M=(-y,x,0)`` is rotation-covariant and has a
+    continuous normal trace across the sector cuts.  Project it independently
+    into the explicit-ring and periodic-sector BDM2 spaces, then compare the
+    native direct source sums.  This distinguishes a field-evaluator defect
+    from cancellation amplification of a small nonlinear solution difference.
+    """
+    import ngsolve as ng
+    from radia.vim._field_batch import _create_field_evaluator
+    from radia.vim._solve import _hdiv_space_with_image_constraints
+    from radia.vim._vim import build_charge_gram
+
+    prescribed = ng.CF((-ng.y, ng.x, 0.0))
+
+    def project_and_evaluate(mesh, periodic_boundaries):
+        space, _, _ = _hdiv_space_with_image_constraints(
+            mesh, 2, (), periodic_boundaries)
+        trial, test = space.TnT()
+        mass = ng.BilinearForm(space)
+        mass += trial*test*ng.dx
+        mass.Assemble()
+        rhs = ng.LinearForm(space)
+        rhs += prescribed*test*ng.dx
+        rhs.Assemble()
+        gf_m = ng.GridFunction(space)
+        gf_m.vec.data = mass.mat.Inverse(
+            space.FreeDofs(), inverse="sparsecholesky")*rhs.vec
+        residual = mass.mat*gf_m.vec-rhs.vec
+        projection_relative_residual = float(
+            ng.Norm(residual)/max(ng.Norm(rhs.vec), np.finfo(float).tiny))
+
+        rotations = [2.0*math.pi*k/fold for k in range(1, fold)] \
+            if periodic_boundaries else []
+        _, gram, _ = build_charge_gram(
+            space, eps=args.gram_eps, leafsize=args.leaf,
+            curve_order=2, curve_gauss=8,
+            image_masks=[0]*len(rotations),
+            image_signs=[1.0]*len(rotations),
+            image_rot_angle=rotations,
+            excluded_boundaries=periodic_boundaries,
+            _materialize_mass=False, _build_hmatrix=False)
+        coefficients = np.ascontiguousarray(
+            gf_m.vec.FV().NumPy(), dtype=np.float64).copy()
+        evaluator, evaluator_stats = _create_field_evaluator(
+            gram, coefficients, 2)
+        field = np.asarray(
+            evaluator.field(np.ascontiguousarray(probes), "direct"),
+            dtype=float)/(4.0*math.pi)
+        return field, projection_relative_residual, evaluator_stats
+
+    full_field, full_projection_residual, full_stats = project_and_evaluate(
+        full, ())
+    sector_field, sector_projection_residual, sector_stats = \
+        project_and_evaluate(
+            sector, ("periodic_min", "periodic_max"))
+    field_absolute = float(np.max(np.linalg.norm(
+        sector_field-full_field, axis=1)))
+    source_scale = float(args.outer_radius)
+    residual_scale = max(
+        float(np.max(np.linalg.norm(full_field, axis=1))),
+        np.finfo(float).tiny)
+    return {
+        "full_ring_field_am": full_field.tolist(),
+        "sector_field_am": sector_field.tolist(),
+        "maximum_absolute_error_am": field_absolute,
+        "residual_relative_error": field_absolute/residual_scale,
+        "source_scale_am": source_scale,
+        "source_relative_error": field_absolute/source_scale,
+        "full_ring_projection_relative_residual": full_projection_residual,
+        "sector_projection_relative_residual": sector_projection_residual,
+        "full_ring_evaluator": full_stats,
+        "sector_evaluator": sector_stats,
     }
 
 
@@ -95,8 +201,7 @@ def run_validation(args):
             and args.build_report.is_file()):
         _run_builder(args)
     build_report = json.loads(args.build_report.read_text(encoding="utf-8"))
-    if not build_report.get("passed", False):
-        raise RuntimeError("canonical Cubit FFAG build report is not passing")
+    _validate_build_report(build_report, args)
     sector_check = check_consistency(
         args.sector_mesh, min_curve_order=2,
         required_materials=("yoke",),
@@ -109,6 +214,13 @@ def run_validation(args):
 
     sector = ng.Mesh(str(args.sector_mesh))
     full = ng.Mesh(str(args.full_mesh))
+    for name, mesh, report in (
+            ("sector", sector, build_report["cubit"]["sector"]),
+            ("full_ring", full, build_report["cubit"]["full_ring"])):
+        if (int(report.get("hexes", -1)) != int(mesh.ne)
+                or int(report.get("nodes", -1)) != len(mesh.vertices)):
+            raise RuntimeError(
+                f"Cubit {name} build counts do not match the loaded mesh")
     contract = validate_ffag_cyclic_sector_contract(
         args.fold, body_crosses_periodic_planes=True,
         periodic_trace_identified=True)
@@ -161,6 +273,8 @@ def run_validation(args):
             full_result, probes, algorithm="direct"), dtype=float)
         sector_field = np.asarray(vim.FieldFromSolution(
             sector_result, probes, algorithm="direct"), dtype=float)
+        prescribed_source = _prescribed_source_field_comparison(
+            full, sector, args.fold, probes, args)
     wall = time.perf_counter()-started
 
     mean_scale = max(abs(full_mean), np.finfo(float).tiny)
@@ -191,15 +305,30 @@ def run_validation(args):
             int(full_result["iters"]) >= 2 and int(sector_result["iters"]) >= 2),
         "mean_magnetization_matches_full_ring": bool(
             mean_relative <= args.maximum_relative_error),
-        "field_matches_full_ring": bool(
+        "nonlinear_field_matches_full_ring_on_source_scale": bool(
             field_metrics["field_source_relative_error"]
             <= args.maximum_relative_error),
+        "prescribed_source_projections_converged": bool(
+            prescribed_source["full_ring_projection_relative_residual"]
+            <= args.maximum_projection_residual
+            and prescribed_source["sector_projection_relative_residual"]
+            <= args.maximum_projection_residual),
+        "cyclic_direct_field_evaluator_matches_full_ring": bool(
+            prescribed_source["source_relative_error"]
+            <= args.maximum_evaluator_source_relative_error),
     }
     result = {
-        "schema": "radia.ffag-cubit-cyclic-nonlinear-yoke/v1",
+        "schema": "radia.ffag-cubit-cyclic-nonlinear-yoke/v2",
         "generated_at_utc": datetime.now(UTC).isoformat(),
         "machine": platform.node(),
         "platform": platform.platform(),
+        "software": {
+            "python": platform.python_version(),
+            "numpy": np.__version__,
+            "ngsolve": ng.__version__,
+            "radia": rad.__version__,
+            "cubit": build_report["cubit"]["cubit_version"],
+        },
         "model": {
             "geometry_source": "Coreform Cubit 2025.12 ACIS sweep-map",
             "fold": int(args.fold),
@@ -250,6 +379,18 @@ def run_validation(args):
             "maximum_allowed_relative_error": float(
                 args.maximum_relative_error),
         },
+        "prescribed_source_field_evaluator_comparison": prescribed_source,
+        "acceptance_contract": {
+            "nonlinear_solution": (
+                "compare full/sector M and demagnetizing H against the "
+                "magnetization source scale"),
+            "direct_field_evaluator": (
+                "compare a common rotation-covariant prescribed BDM2 source "
+                "against the explicit full ring at roundoff"),
+            "residual_relative_field_error": (
+                "diagnostic only because the sampled closed-ring demag field "
+                "is a cancellation residual"),
+        },
         "wall_s": wall,
         "checks": checks,
         "passed": all(checks.values()),
@@ -282,15 +423,19 @@ def parse_args(argv=None):
     parser.add_argument("--applied-field-am", type=float, default=300.0)
     parser.add_argument("--probe-count", type=int, default=5)
     parser.add_argument("--threads", type=int, default=8)
-    parser.add_argument("--gram-eps", type=float, default=1.0e-13)
+    parser.add_argument("--gram-eps", type=float, default=1.0e-14)
     parser.add_argument("--leaf", type=int, default=4096)
-    parser.add_argument("--solve-tol", type=float, default=1.0e-10)
+    parser.add_argument("--solve-tol", type=float, default=1.0e-12)
     parser.add_argument("--linear-maxit", type=int, default=4000)
-    parser.add_argument("--nonlinear-tol", type=float, default=1.0e-9)
+    parser.add_argument("--nonlinear-tol", type=float, default=1.0e-12)
     parser.add_argument("--nonlinear-maxit", type=int, default=100)
     parser.add_argument("--maximum-nonlinear-residual", type=float,
-                        default=2.0e-9)
+                        default=2.0e-12)
     parser.add_argument("--maximum-relative-error", type=float, default=2.0e-8)
+    parser.add_argument("--maximum-projection-residual", type=float,
+                        default=2.0e-12)
+    parser.add_argument("--maximum-evaluator-source-relative-error", type=float,
+                        default=5.0e-12)
     return parser.parse_args(argv)
 
 
@@ -298,7 +443,9 @@ def main():
     args = parse_args()
     if (args.fold < 3 or args.intervals < 2 or args.probe_count < 2
             or args.maximum_relative_error <= 0.0
-            or args.maximum_nonlinear_residual <= 0.0):
+            or args.maximum_nonlinear_residual <= 0.0
+            or args.maximum_projection_residual <= 0.0
+            or args.maximum_evaluator_source_relative_error <= 0.0):
         raise ValueError("invalid nonlinear FFAG cyclic validation settings")
     args.output.resolve().parent.mkdir(parents=True, exist_ok=True)
     run_validation(args)
