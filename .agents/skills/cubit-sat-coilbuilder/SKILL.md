@@ -54,6 +54,23 @@ For the legacy FFAG source, audit the chosen revision explicitly.  The current
 latest FFAG SAT revision reports 18 SAT bodies.  This is an import starting
 point, not proof that all 18 are physical iron or coils.
 
+Then import it in a dedicated no-graphics Cubit child process and save the
+volume inventory separately from the original CAD:
+
+```powershell
+python .agents/skills/cubit-sat-coilbuilder/scripts/cubit_import_inventory.py `
+  "W:\ffag\model.SAT" `
+  --output "C:\temp\model.cubit-inventory.json"
+```
+
+The inventory captures Cubit version, volume ids, persisted names when Cubit
+keeps them, native bounding-box arrays, centres, and surface counts.  When
+Cubit loses SAT names it also records an explicitly unverified SAT import-order
+candidate, plus every owning surface id and centre.  Confirm the candidate and
+the two rotation-related sector-cut surfaces by Cubit geometry inspection
+before using them as material, coil, or periodic-boundary mappings.  The
+process neither saves nor modifies the SAT.
+
 ### 2. Import and map in Cubit
 
 Import the SAT into the supported Cubit release.  Save the import journal and
@@ -65,6 +82,21 @@ Do not promote legacy JMAG external-air volumes to an HDiv FEM air domain.
 For open-region HDiv calculations, retain the iron and current geometry and use
 the Kelvin exterior treatment.  Keep an air gap only where it is a physical
 local gap needing mesh resolution.
+
+### 2a. Certify the rotational contract before meshing
+
+The legacy FFAG reports define 12 main bending magnets, hence a 30-degree
+rotational cell.  The imported 2016 SAT is one complete magnet cell; its iron
+bodies do not cross the two notional +/-15-degree cuts.  For that geometry,
+do not add artificial Cubit periodic faces: use a full-ring coil source and
+`image_cyclic=12` for the repeated solved iron response.
+
+Only a redesigned continuous yoke that actually crosses the sector cuts uses
+the NGSolve periodic-trace route.  Create two exact rotationally matched Cubit
+surfaces, name them `periodic_min` and `periodic_max`, export curved-Q2
+geometry, and call `identify_ffag_cyclic_sector_vertices` before `vim.Solve`.
+The Q2-node rotation residual must be at most `1.0e-9` relative.  A close-looking
+legacy CAD face is not a periodic face.
 
 ### 3. Declare, then construct, the coil source
 
@@ -91,6 +123,10 @@ Use this `source` for the HDiv incident-field/RHS route.  Use
 `source.to_radia_object()` only after its closure check passes when native
 Radia tracking needs the equivalent finite-filament object.  Do not separately
 discretize a solid-current coil for one path and a filament coil for the other.
+For a periodic FFAG cell, use
+`build_ffag_cyclic_hdiv_excitation(source, validate_ffag_cyclic_sector_contract(12))`
+to bind the full-ring RHS source, cyclic iron images, and the native tracking
+source into one fail-loud contract.
 
 ### 4. Validate in increasing order of cost
 

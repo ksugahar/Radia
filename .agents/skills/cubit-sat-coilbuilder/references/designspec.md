@@ -55,8 +55,16 @@ acceptance:
   jmag_reference_file: W:/path/to/jmag_reference.json
   required_components: [Bx, By, Bz]
   periodic_sector:
-    enabled: false
-    sector_angle_deg: null
+    enabled: true                                  # REQUIRED decision
+    fold: 12                                       # REQUIRED if enabled
+    sector_angle_deg: 30.0                         # 360 / fold
+    rotation_axis: [0.0, 0.0, 1.0]                 # REQUIRED
+    field_phase: periodic                          # periodic | antiperiodic
+    body_crosses_periodic_planes: false            # REQUIRED
+    periodic_boundaries: []                        # [periodic_min, periodic_max]
+    hdiv_trace_identified: false                   # required if body crosses
+    q2_geometry_relative_tolerance: 1.0e-9
+    coil_source: full_ring_from_one_sector         # REQUIRED if enabled
 ```
 
 ## Rules
@@ -72,3 +80,11 @@ acceptance:
   Kelvin HDiv solves unless a physical local air gap explicitly requires them.
 - Save the SAT audit, Cubit volume inventory, DesignSpec, probe set, and every
   numerical comparison next to the validation result.
+- A periodic source has two distinct contracts.  Rotate one declared coil
+  source to the full ring for both the HDiv RHS and native tracking.  Use
+  `image_cyclic=fold` only for the repeated solved iron charges.
+- When `body_crosses_periodic_planes` is false, do not manufacture periodic
+  CAD faces; a disjoint sector cell uses cyclic images without an HDiv trace
+  identification.  When it is true, Cubit must create exact rotationally
+  matched cut faces, Netgen must identify every cut vertex, and curved-Q2
+  geometry must meet the stated relative tolerance before solving.
