@@ -49,6 +49,15 @@ def test_editable_release_roots_can_target_one_clean_nas_worktree(monkeypatch):
         "radia",
         r"W:\00_CAE\Radia\release-quad\Radia-v4.95.46",
     )
+    assert release_quad._canonical_lab_editable_packages()[:3] == [
+        ("radia", "S:/Radia/01_GitHub"),
+        ("cubit-mesh-export", "S:/Radia/01_GitHub/packages/cubit-mesh-export"),
+        ("radia-mcp", "S:/Radia/01_GitHub/packages/radia-mcp"),
+    ]
+    assert release_quad._canonical_remote_100_editable_packages()[0] == (
+        "radia",
+        r"W:\00_CAE\Radia\01_GitHub",
+    )
 
 
 def test_local_release_source_requires_exact_sha_and_tracked_clean(tmp_path):
@@ -108,7 +117,45 @@ def test_remote_deploy_checks_exact_source_before_install(monkeypatch):
     assert expected_sha in script
     assert 'safe.directory=W:/Radia/release-source' in script
     assert "status --porcelain --untracked-files=no" in script
-    assert script.index("rev-parse HEAD") < script.index("pip install -e")
+    assert script.index("rev-parse HEAD") < script.index("pip uninstall")
+    assert script.index("pip uninstall") < script.index("pip install --no-deps")
+
+
+def test_remote_restore_forces_canonical_uninstall_then_editable_install(monkeypatch):
+    captured = {}
+
+    def capture_run(command, **_kwargs):
+        captured["command"] = command
+        return subprocess.CompletedProcess(command, 0)
+
+    monkeypatch.setattr(release_quad, "run", capture_run)
+
+    assert release_quad._restore_100_canonical_editable() == 0
+    script = base64.b64decode(captured["command"][-1]).decode("utf-16le")
+    assert "release-quad" not in script
+    assert r"W:\00_CAE\Radia\01_GitHub\packages\radia-mcp" in script
+    assert "pip uninstall -y radia cubit-mesh-export radia-mcp" in script
+    assert script.index("pip uninstall") < script.index("pip install")
+    assert "mcp-server-grant-writing --selftest" in script
+
+
+def test_done_restores_canonical_editables_only_after_all_gates(monkeypatch):
+    calls = []
+    monkeypatch.setattr(release_quad, "cmd_preflight", lambda _args: calls.append("preflight") or 0)
+    monkeypatch.setattr(release_quad, "_verify_lab_editable", lambda *_args: calls.append("lab") or 0)
+    monkeypatch.setattr(release_quad, "_verify_100_editable", lambda *_args: calls.append("100") or 0)
+    monkeypatch.setattr(release_quad, "cmd_phase9", lambda _args: calls.append("phase9") or 0)
+    monkeypatch.setattr(
+        release_quad,
+        "_run_retired_standalone_pyside_guard",
+        lambda: calls.append("guard") or 0,
+    )
+    monkeypatch.setattr(release_quad, "_check_main_synced", lambda **_kwargs: calls.append("main") or 0)
+    monkeypatch.setattr(release_quad, "cmd_restore_editable", lambda _args: calls.append("restore") or 0)
+
+    args = type("Args", (), {"simulink_package": None})()
+    assert release_quad.cmd_done(args) == 0
+    assert calls == ["preflight", "lab", "100", "phase9", "guard", "main", "restore"]
 
 
 def test_ci_output_selection_requires_fresh_matching_commit(tmp_path, monkeypatch):
