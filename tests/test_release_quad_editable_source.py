@@ -60,6 +60,27 @@ def test_editable_release_roots_can_target_one_clean_nas_worktree(monkeypatch):
     )
 
 
+def test_unc_normalization_covers_canonical_and_release_worktrees():
+    release_unc = (
+        r"\\192.168.121.100\work\00_CAE\Radia\release-qud"
+        r"\radia-4.95.75\src\radia\__init__.py"
+    )
+    legacy_root_unc = (
+        r"\\192.168.11.100\work\00_CAE\Radia\01_GitHub"
+        r"\packages\radia-mcp"
+    )
+
+    assert release_quad._norm_path(release_unc) == (
+        "s:/radia/release-qud/radia-4.95.75/src/radia/__init__.py"
+    )
+    assert release_quad._norm_path(legacy_root_unc) == (
+        "s:/radia/01_github/packages/radia-mcp"
+    )
+    assert "//192.168.121.100/work/00_cae/radia/" in (
+        release_quad.REMOTE_EDITABLE_VERIFY
+    )
+
+
 def test_local_release_source_requires_exact_sha_and_tracked_clean(tmp_path):
     repo = tmp_path / "release-source"
     repo.mkdir()
