@@ -530,23 +530,16 @@ def test_both_bracket_keys_reach_parentheses():
 # policy against.  It keeps the backslash now, which says what has happened.
 
 
-def test_an_unknown_command_keeps_its_backslash():
+def test_an_unknown_command_fails_loudly():
     e = equation.Equation()
-    # \xrightarrow used to stand here as the unknown command.  It is
-    # implemented now, so the example had to move to one that is still
-    # genuinely unhandled -- the test is about the failure mode, not
-    # about any particular command.
-    e.load_latex(chr(92) + "xhookrightarrow{f}")
-    assert chr(92) + chr(92) not in e.latex()[:2]
-    assert "xhookrightarrow" in e.latex()
-    assert chr(92) + "text{" + chr(92) in e.latex(), (
-        "an unhandled command must not read as prose: " + e.latex())
+    with _pytest.raises(ValueError, match="unsupported TeX control sequence"):
+        e.load_latex(chr(92) + "xhookrightarrow{f}")
 
 
-def test_its_arguments_are_not_lost():
+def test_unknown_command_arguments_are_not_misrepresented_as_valid_output():
     e = equation.Equation()
-    e.load_latex(chr(92) + "boxed{abc}")
-    assert "abc" in e.latex()
+    with _pytest.raises(ValueError, match="unsupported TeX control sequence"):
+        e.load_latex(chr(92) + "boxed{abc}")
 
 
 # ---- the constructs added here ---------------------------------------------

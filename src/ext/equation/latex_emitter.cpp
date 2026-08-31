@@ -31,6 +31,7 @@ static const MapEntry SYMBOL_MAP[] = {
 #define SYMBOL_MAP_N (sizeof(SYMBOL_MAP)/sizeof(SYMBOL_MAP[0]))
 
 static const MapEntry UNICODE_MAP[] = {
+    {0x00A0, "~"},
     {0x0393, "\\Gamma "}, {0x0394, "\\Delta "}, {0x0398, "\\Theta "},
     {0x039B, "\\Lambda "}, {0x039E, "\\Xi "}, {0x03A0, "\\Pi "},
     {0x03A3, "\\Sigma "}, {0x03A5, "\\Upsilon "}, {0x03A6, "\\Phi "},
@@ -46,8 +47,9 @@ static const MapEntry UNICODE_MAP[] = {
     /* The explicit spaces, so they read back as what was typed.  The
      * table is binary-searched, so these sit in numeric order like
      * everything else -- put at the top they were simply never found. */
-    {0x2003, "\\quad "}, {0x2005, "\\; "},
+    {0x2003, "\\quad "}, {0x2004, "\\ "}, {0x2005, "\\; "},
     {0x2006, "\\, "},
+    {0x200A, "\\hspace{1mu}"},
     {0x2019, "'"}, {0x2032, "'"}, {0x2033, "''"}, {0x2034, "'''"},
     {0x205F, "\\: "},
     {0x2102, "\\mathbb{C}"}, {0x210D, "\\mathbb{H}"},
@@ -433,8 +435,16 @@ void LaTeXEmitter::emitChar(const CharNode& ch, std::string& out) {
      * ordinary letter, so the command is read back off the typeface.  One per
      * letter rather than one per run: \mathbb{R}\mathbb{C} says the same
      * thing as \mathbb{RC} and needs no state carried between characters. */
-    if (tf == TF_USER1 || tf == TF_USER2) {
-        out += (tf == TF_USER1) ? "\\mathbb{" : "\\mathcal{";
+    if (tf == TF_USER1 || tf == TF_USER2 || tf == TF_ROMAN ||
+        tf == TF_MATH_SANS ||
+        tf == TF_MATH_MONO || tf == TF_MATH_FRAKTUR) {
+        const char* command = (tf == TF_USER1) ? "\\mathbb{"
+                            : (tf == TF_USER2) ? "\\mathcal{"
+                            : (tf == TF_ROMAN) ? "\\mathrm{"
+                            : (tf == TF_MATH_SANS) ? "\\mathsf{"
+                            : (tf == TF_MATH_MONO) ? "\\mathtt{"
+                                                   : "\\mathfrak{";
+        out += command;
         emit_utf8(uint32_t(code ? code : (unsigned char)ch.ch), out);
         out += "}";
         return;

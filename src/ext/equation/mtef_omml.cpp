@@ -37,6 +37,20 @@ std::string flag(const char* name) {
     return std::string("<m:") + name + " m:val=\"1\"/>";
 }
 
+bool preserves_space(const std::string& utf8) {
+    if (utf8 == " " || utf8 == "\t" || utf8 == "\n" || utf8 == "\r")
+        return true;
+    /* NBSP, U+2000..U+200A, and U+205F are the spaces emitted by the parser. */
+    if (utf8 == "\xC2\xA0") return true;
+    if (utf8.size() == 3 &&
+        static_cast<unsigned char>(utf8[0]) == 0xE2 &&
+        static_cast<unsigned char>(utf8[1]) == 0x80 &&
+        static_cast<unsigned char>(utf8[2]) >= 0x80 &&
+        static_cast<unsigned char>(utf8[2]) <= 0x8A)
+        return true;
+    return utf8 == "\xE2\x81\x9F";
+}
+
 class OmmlSyntax : public MathSyntax {
 public:
     explicit OmmlSyntax(const OmmlOptions& opt) : opt_(opt) {}
@@ -46,7 +60,9 @@ public:
         std::string s = "<m:r>";
         if (sty && opt_.italic_variables)
             s += std::string("<m:rPr><m:sty m:val=\"") + sty + "\"/></m:rPr>";
-        s += "<m:t>" + esc(utf8) + "</m:t></m:r>";
+        s += std::string("<m:t") +
+             (preserves_space(utf8) ? " xml:space=\"preserve\"" : "") +
+             ">" + esc(utf8) + "</m:t></m:r>";
         return s;
     }
 

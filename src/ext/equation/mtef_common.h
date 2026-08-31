@@ -36,6 +36,13 @@ enum {
      * \mathbf{A} and \bm{A} drew the same and one of them was wrong.
      * MTEF has no code of its own for it and folds it onto TF_VECTOR. */
     TF_USER3    = 12,
+    /* Additional mathematical alphabets.  Keep these numeric values aligned
+     * with the standalone Eqnedit64 tree so a future shared tree does not
+     * have to translate them. */
+    TF_ROMAN        = 13,   /* \mathrm */
+    TF_MATH_SANS    = 15,   /* \mathsf */
+    TF_MATH_MONO    = 16,   /* \mathtt */
+    TF_MATH_FRAKTUR = 19,   /* \mathfrak */
     TF_DISPLAY  = 22,
 };
 
@@ -278,12 +285,43 @@ inline unsigned int mtef_bold_upright_of(unsigned int cp) {
     return 0;
 }
 
+/* Upright sans-serif, monospace, and Fraktur mathematical alphabets.  A
+ * CharNode deliberately stores the original BMP character and its logical
+ * typeface; the rendered Unicode characters live above U+FFFF. */
+inline unsigned int mtef_math_sans_of(unsigned int cp) {
+    if (cp >= 'A' && cp <= 'Z') return 0x1D5A0 + (cp - 'A');
+    if (cp >= 'a' && cp <= 'z') return 0x1D5BA + (cp - 'a');
+    if (cp >= '0' && cp <= '9') return 0x1D7E2 + (cp - '0');
+    return 0;
+}
+
+inline unsigned int mtef_math_mono_of(unsigned int cp) {
+    if (cp >= 'A' && cp <= 'Z') return 0x1D670 + (cp - 'A');
+    if (cp >= 'a' && cp <= 'z') return 0x1D68A + (cp - 'a');
+    if (cp >= '0' && cp <= '9') return 0x1D7F6 + (cp - '0');
+    return 0;
+}
+
+inline unsigned int mtef_math_fraktur_of(unsigned int cp) {
+    static const unsigned int upper[] = {
+        0x1D504, 0x1D505, 0x212D, 0x1D507, 0x1D508, 0x1D509, 0x1D50A,
+        0x210C, 0x2111, 0x1D50D, 0x1D50E, 0x1D50F, 0x1D510, 0x1D511,
+        0x1D512, 0x1D513, 0x1D514, 0x211C, 0x1D516, 0x1D517, 0x1D518,
+        0x1D519, 0x1D51A, 0x1D51B, 0x1D51C, 0x2128};
+    if (cp >= 'A' && cp <= 'Z') return upper[cp - 'A'];
+    if (cp >= 'a' && cp <= 'z') return 0x1D51E + (cp - 'a');
+    return 0;
+}
+
 inline double mtef_space_em(unsigned int cp) {
     switch (cp) {
+        case 0x00A0: return 1.0 / 3.0;    /* ~ non-breaking interword space */
         case 0x2006: return 3.0 / 18.0;   /* \, thin        (six-per-em)  */
         case 0x205F: return 4.0 / 18.0;   /* \: medium      (medium math) */
         case 0x2005: return 5.0 / 18.0;   /* \; thick       (four-per-em) */
+        case 0x2004: return 1.0 / 3.0;    /* \  control space             */
         case 0x2003: return 1.0;          /* \quad          (em)          */
+        case 0x200A: return 1.0 / 18.0;   /* one mu, for \hspace          */
         default:     return 0.0;
     }
 }
