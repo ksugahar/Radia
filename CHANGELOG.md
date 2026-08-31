@@ -5,6 +5,22 @@ All notable changes to the `radia` package.  Format: each release lists
 
 ## Unreleased
 
+## 4.95.76 - HDiv-MMM section optics and certified topology
+
+Released 2026-09-01.
+
+- Published the HDiv-MMM topology workflow on the current mainline with
+  exact active-state reuse, bounded zero-rank fallback, and charge-map
+  de Rham regression coverage.
+- Added section-optics inverse design for curved accelerator magnets. The
+  transfer-map specification is converted into a minimum-physical-field
+  correction, with an explicit controllability diagnostic, correct
+  endpoint-safe integrated-bend quadrature, a MATLAB batch entry point, and
+  a result-bearing WebGUI notebook.
+- Added Cubit high-order volume-accuracy fixtures and smoke coverage, and
+  made the FFAG HDiv-MMM PoC expose its proposal-solve and performance
+  controls as a checked CLI contract.
+
 ## 4.95.75 - Cyclic nonlinear FFAG closure
 
 Released 2026-08-31.
