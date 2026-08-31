@@ -3,7 +3,8 @@
 Grant proposal writing support: Japanese technical-prose lint, section
 coverage checks, KDDI Digital Innovation / social-implementation axes,
 official KAKENHI B/C review axes, KAKENHI AI-era OSS research-platform axes,
-domain focus checks, budget alignment checks,
+basic-research/tool/impact hierarchy, deterministic XLSX/CSV budget-source
+reconciliation, domain focus checks, budget alignment checks,
 internal-evidence-to-external-scale checks, and integrated health reports.
 Collaborative-integration checks cover lifecycle cost,
 ecosystem boundaries, scope, negative results, ethics, and asset provenance.
@@ -99,8 +100,9 @@ register_status_tool(
         "Grant proposal lint and review helpers: Japanese technical prose, "
         "section coverage, KDDI Digital Innovation social-implementation "
         "axes, official KAKENHI B/C axes, KAKENHI AI-era OSS platform axes, "
-        "domain focus, budget "
-        "alignment, internal-to-external scale, collaborative-integration "
+        "basic-research/tool/impact hierarchy, exact XLSX/CSV budget-source "
+        "reconciliation, domain focus, budget alignment, "
+        "international preparation evidence, internal-to-external scale, collaborative-integration "
         "risks, tool-to-domain outcomes, derived-metric validation, "
         "cross-organization pilots, literature-gap evidence scope, "
         "named-software abstraction, "

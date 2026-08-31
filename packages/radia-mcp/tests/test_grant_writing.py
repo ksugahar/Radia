@@ -99,6 +99,7 @@ def test_grant_writing_kaken_oss_health_report_runs():
     assert report["program"] == "kaken_oss"
     assert report["defect_score"] >= 0
     assert "kaken_oss_platform" in report["detailed_results"]
+    assert "kaken_basic_research_positioning" in report["detailed_results"]
     assert "named_software_abstraction" in report["detailed_results"]
     assert "reviewer_vocabulary" in report["detailed_results"]
     assert "persuasion_quality" in report["detailed_results"]
@@ -119,6 +120,8 @@ def test_grant_writing_server_exposes_adjacent_reviewer_readability():
     assert "grant_writing_reviewer_momentum_check" in names
     assert "grant_writing_japanese_genre_contract" in names
     assert "grant_writing_japanese_readability_score" in names
+    assert "grant_writing_kaken_basic_research_positioning_check" in names
+    assert "grant_writing_budget_source_consistency_check" in names
     assert "document_type" in by_name[
         "grant_writing_japanese_readability_score"
     ].inputSchema["required"]
@@ -278,8 +281,6 @@ def test_japanese_readability_passes_real_stdio_protocol():
     assert not result["rejected_is_error"]
     assert result["rejected_status"] == "wrong_genre"
     assert result["rejected_score"] is None
-
-
 def test_grant_writing_kaken_oss_platform_check():
     result = gw.grant_writing_kaken_oss_platform_check(KAKEN_OSS_SAMPLE)
 
@@ -349,6 +350,33 @@ def test_grant_writing_kaken_oss_rejects_repository_dump_mindset():
     assert any("upstream-first" in comment for comment in result["comments"])
 
 
+def test_kaken_basic_research_positioning_keeps_tools_below_question():
+    result = gw.grant_writing_kaken_basic_research_positioning_check(
+        "本研究の学術的問いは、異なる解析手法を結合しても設計判断を保存する"
+        "成立条件と適用境界は何かである。MCPは各機関の技術を接続するglueという"
+        "検証手段とし、GitHubは版と試験履歴を保持する。JMAGと実機測定による"
+        "独立検証から選択則を得る。これにより工学へ波及し、国際競争力に貢献する。"
+    )
+
+    assert result["applicable"]
+    assert result["risks"] == []
+    assert result["evidence"]["academic_question"]
+    assert result["evidence"]["tool_as_means"]
+
+
+def test_kaken_basic_research_positioning_warns_on_tool_or_industry_as_goal():
+    result = gw.grant_writing_kaken_basic_research_positioning_check(
+        "本研究の目的はMCP付きOSS基盤をGitHubに構築し、自動車産業を強化することである。"
+    )
+
+    assert result["applicable"]
+    assert {risk["type"] for risk in result["risks"]} >= {
+        "tool_without_academic_question",
+        "tool_role_not_subordinated",
+        "engineering_context_without_hierarchy",
+    }
+
+
 def test_grant_writing_kddi_power_electronics_focus_check():
     result = gw.grant_writing_kddi_power_electronics_focus_check(KDDI_SAMPLE)
 
@@ -407,6 +435,54 @@ def test_grant_writing_budget_alignment_requires_price_provenance():
     assert "pricing_provenance" in result["missing_axes"]
     assert not result["axis_results"]["pricing_provenance"]["ok"]
     assert any("参照日" in comment for comment in result["comments"])
+
+
+def test_budget_source_consistency_reconciles_rows_and_exact_totals(tmp_path):
+    header = (
+        "費目区分/Expenditure Categories,年度/FY,品名・仕様/Item (Specification),"
+        "設置機関/Place,品目/Item,数量/Qty,単価/Unit Price,金額/Amount\n"
+    )
+    body = (
+        "B,2027,,,SSD・HDD,,,50\n"
+        "G,2027,,,JMAG Plan 3,,,1023\n"
+        "G,2028,,,JMAG maintenance,,,165\n"
+        "G,2029,,,JMAG maintenance,,,165\n"
+        "G,2027,,,other,,,1221\n"
+        "G,2028,,,other,,,1195\n"
+        "G,2029,,,other,,,1151\n"
+    )
+    source = tmp_path / "budget.csv"
+    comparison = tmp_path / "budget-copy.csv"
+    source.write_text(header + body, encoding="utf-8-sig")
+    comparison.write_text(header + body, encoding="utf-8-sig")
+
+    result = gw.grant_writing_budget_source_consistency_check(
+        str(source),
+        comparison_source=str(comparison),
+        expected_total_thousand_yen=4970,
+        expected_year_totals_json='{"2027": 2294, "2028": 1360, "2029": 1316}',
+        expected_category_totals_json='{"B": 50, "G": 4920}',
+    )
+
+    assert result["consistent"]
+    assert result["canonical"]["row_count"] == 7
+    assert result["comparison"]["missing_from_comparison"] == []
+
+
+def test_budget_source_consistency_reports_exact_delta(tmp_path):
+    source = tmp_path / "budget.csv"
+    source.write_text(
+        "category,年度/FY,x,x,品目/Item,x,x,金額/Amount\n"
+        "G,2027,,,AI subscription,,,605\n",
+        encoding="utf-8",
+    )
+
+    result = gw.grant_writing_budget_source_consistency_check(
+        str(source), expected_total_thousand_yen=600
+    )
+
+    assert not result["consistent"]
+    assert result["differences"][0]["delta"] == 5
 
 
 def test_internal_evidence_to_external_scale_accepts_transfer_and_validation():
@@ -2024,6 +2100,21 @@ def test_international_standing_credits_an_accepted_output():
     types = {r["type"] for r in result["risks"]}
     assert "international_output_all_planned" not in types
     assert result["achieved_output_sentences"]
+
+
+def test_international_standing_records_adopted_jsps_visit_as_preparation():
+    result = gw.grant_writing_international_standing_check(
+        "ウィーン工科大学のHollaus氏との共同研究に向け、日本学術振興会の"
+        "外国人研究者招へい事業に採択され、31日間招へいすることが決定した。"
+        "日本発の手法と欧州の手法を相互検証し、双方へ還流する。"
+    )
+
+    types = {risk["type"] for risk in result["risks"]}
+    assert result["preparation_evidence_sentences"]
+    assert "採択" in result["preparation_status_markers"]
+    assert "31日間" in result["preparation_scale_markers"]
+    assert "international_preparation_status_unclear" not in types
+    assert "international_preparation_scale_missing" not in types
 
 
 def test_irreplaceability_flags_intent_without_an_asset_or_demand():
