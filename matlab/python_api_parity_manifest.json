@@ -231,20 +231,6 @@
       "notes": "Design-orbit and transfer-matrix HDiv-MMM optimization composes NGSolve and Python topology objects at an explicit batch boundary; it is not a Simulink step-time backend."
     },
     {
-      "id": "accelerator-abe-topopt",
-      "patterns": ["accelerator_abe_topopt.py"],
-      "classification": "native-mex",
-      "matlab": [
-        "matlab/+radia/+topopt/solveAbeElementFillPlan.m",
-        "matlab/+radia/+topopt/contractHDivElementFillResponse.m",
-        "matlab/+radia/+topopt/composeSpecificationFillResponse.m",
-        "matlab/+radia/+topopt/binElementFillToInterfaceHeight.m",
-        "matlab/+radia/+topopt/blendedInterfaceDisplacement.m",
-        "matlab/+radia/+python/acceleratorAbeTopopt.m"
-      ],
-      "notes": "The bounded signed element-fill solve is a standalone radia_mex command using the same HACApK ACA plus QR-TSVD C++ core as pybind. MATLAB-native helpers own the row contraction, AD composition, conservative interface-height map, and fixed-surface blend. NGSolve pattern transfer, GetTrafo geometry callbacks, complete HDiv re-solves, and exact transfer-map acceptance remain an explicit Python batch boundary and are never called per Simulink step."
-    },
-    {
       "id": "accelerator-section-optics",
       "patterns": ["accelerator_section_optics.py"],
       "classification": "python-fallback",
