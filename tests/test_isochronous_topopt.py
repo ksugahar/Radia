@@ -1057,9 +1057,21 @@ def test_optimize_density_applies_projection_and_reports_discreteness():
 
 def test_optimize_density_uses_periodic_reduced_variables_and_full_checkpoints():
     chi_iron = 100.0
+    material_states = []
     density_map = FFAGCyclicDensityMap(
         np.array([0, 0]), ((0, 1),), 1,
         ("periodic_min", "periodic_max"))
+
+    class AsymmetricFilter:
+        """A valid linear filter that does not know the cyclic adjacency."""
+
+        matrix = np.diag([1.0, 0.5])
+
+        def apply(self, values):
+            return self.matrix @ np.asarray(values, dtype=float)
+
+        def chain(self, gradient):
+            return self.matrix.T @ np.asarray(gradient, dtype=float)
 
     class LinearProblem:
         n_el = 2
@@ -1068,6 +1080,7 @@ def test_optimize_density_uses_periodic_reduced_variables_and_full_checkpoints()
         def linearize(self, s, state_load, loads, **kwargs):
             chi = 1.0/np.asarray(s, dtype=float)
             material_rho = (chi-CHI_MIN)/(chi_iron-CHI_MIN)
+            material_states.append(material_rho.copy())
             weights = np.array([1.0, 2.0])
             gradient_s = -weights*chi**2/(chi_iron-CHI_MIN)
             return SimpleNamespace(
@@ -1081,12 +1094,16 @@ def test_optimize_density_uses_periodic_reduced_variables_and_full_checkpoints()
         LinearProblem(), object(), object(), chi_iron=chi_iron,
         volume_fraction=0.5, design_map=density_map,
         initial_density=np.array([0.4, 0.4]), move_limit=0.1,
-        max_iterations=1,
+        max_iterations=1, density_filter=AsymmetricFilter(),
         checkpoint_callback=lambda entry, rho: checkpoints.append(rho))
 
     assert result.density.shape == (2,)
     np.testing.assert_allclose(result.density[0], result.density[1])
+    np.testing.assert_allclose(result.density, 0.5, atol=1e-12)
     np.testing.assert_allclose(checkpoints[0], result.density)
+    assert material_states
+    assert all(state[0] == pytest.approx(state[1], abs=1e-15)
+               for state in material_states)
     assert result.history[0]["design_volume"] == pytest.approx(
         np.sum(result.density))
     with pytest.raises(ValueError, match="not equal"):
