@@ -81,6 +81,36 @@ def test_unc_normalization_covers_canonical_and_release_worktrees():
     )
 
 
+def test_simulink_candidate_accepts_its_exact_tag_when_controller_is_newer(
+        tmp_path, monkeypatch):
+    repo = tmp_path / "release-controller"
+    repo.mkdir()
+    _git(repo, "init")
+    _git(repo, "config", "user.name", "Radia Test")
+    _git(repo, "config", "user.email", "radia-test@example.invalid")
+    tracked = repo / "tracked.txt"
+    tracked.write_text("candidate\n", encoding="ascii")
+    _git(repo, "add", "tracked.txt")
+    _git(repo, "commit", "-m", "candidate source")
+    candidate = _git(repo, "rev-parse", "HEAD")
+    _git(repo, "tag", "-a", "v4.95.75", "-m", "release", candidate)
+    tracked.write_text("controller repair\n", encoding="ascii")
+    _git(repo, "commit", "-am", "controller repair")
+    head = _git(repo, "rev-parse", "HEAD")
+    monkeypatch.setattr(release_quad, "REPO", repo)
+
+    valid, message = release_quad._simulink_candidate_commit_is_release_anchored(
+        {"commit": candidate, "radia_version": "4.95.75"}, head)
+
+    assert valid
+    assert "v4.95.75" in message
+
+    valid, message = release_quad._simulink_candidate_commit_is_release_anchored(
+        {"commit": candidate, "radia_version": "4.95.76"}, head)
+    assert not valid
+    assert "release tag" in message
+
+
 def test_local_release_source_requires_exact_sha_and_tracked_clean(tmp_path):
     repo = tmp_path / "release-source"
     repo.mkdir()

@@ -258,6 +258,53 @@ def _simulink_state_path(package_sha256: str) -> Path:
     return SIMULINK_GATE_ROOT / f"simulink-{package_sha256}.json"
 
 
+def _release_tag_commit(version: object) -> str | None:
+    """Return the peeled commit for the public ``v<version>`` tag, if any."""
+    if not isinstance(version, str) or not version.strip():
+        return None
+    result = subprocess.run(
+        ["git", "rev-parse", "--verify", f"refs/tags/v{version}^{{}}"],
+        cwd=REPO,
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        return None
+    return result.stdout.strip().lower()
+
+
+def _simulink_candidate_commit_is_release_anchored(
+        manifest: dict, head: str) -> tuple[bool, str]:
+    """Accept an exact tagged candidate when release-tooling later advances main.
+
+    The archive bytes are built and tested from the tagged release source.  The
+    definition-of-done controller can acquire a later release-only repair, so
+    requiring the archive commit to equal the controller's ``HEAD`` would reject
+    the already-tested public artifact.  A candidate is therefore accepted only
+    when its commit is the peeled ``v<version>`` tag and remains an ancestor of
+    the controller commit.
+    """
+    commit = manifest.get("commit")
+    version = manifest.get("radia_version") or manifest.get("version")
+    if not isinstance(commit, str) or not commit.strip():
+        return False, "Simulink manifest has no source commit"
+    commit = commit.strip().lower()
+    tag_commit = _release_tag_commit(version)
+    if tag_commit is None:
+        return False, f"Simulink manifest version {version!r} has no v<version> release tag"
+    if commit != tag_commit:
+        return False, "Simulink manifest commit does not match its peeled release tag"
+    ancestry = subprocess.run(
+        ["git", "merge-base", "--is-ancestor", commit, head],
+        cwd=REPO,
+        capture_output=True,
+        text=True,
+    )
+    if ancestry.returncode != 0:
+        return False, "Simulink tagged commit is not an ancestor of the release controller HEAD"
+    return True, f"Simulink candidate is anchored at v{version} ({commit[:12]})"
+
+
 def _write_simulink_state(path: Path, state: dict) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(state, indent=2) + "\n", encoding="utf-8")
@@ -422,10 +469,13 @@ def _verify_simulink_candidate_state(package_arg: str) -> int:
     head = subprocess.run(
         ["git", "rev-parse", "HEAD"], cwd=REPO,
         capture_output=True, text=True, check=True,
-    ).stdout.strip()
-    if manifest.get("commit") != head:
-        fail("Simulink manifest commit differs from HEAD; rebuild the archive")
+    ).stdout.strip().lower()
+    anchored, message = _simulink_candidate_commit_is_release_anchored(
+        manifest, head)
+    if not anchored:
+        fail(message)
         return 4
+    info(message)
     ok("supplied Simulink candidate passed LAB / 100号機 / mdx / hibino")
     return 0
 
