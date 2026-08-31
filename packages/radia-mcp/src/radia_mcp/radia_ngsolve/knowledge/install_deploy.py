@@ -84,16 +84,17 @@ into the local clone (`src/radia/_radia_pybind.pyd`,
 `packages/cubit-mesh-export/.../cubit_mesh_curver.pyd`, etc.) and the
 editable install picks them up immediately.
 
-After every release, refresh the LAB metadata:
+After every release, `tools/release_quad.py done` restores LAB and 100号機 to
+their canonical `01_GitHub` editable sources automatically. If a release is
+interrupted before `done` completes, use the idempotent recovery command:
 
 ```powershell
-pip install -e . --no-deps --no-cache-dir
-pip install -e packages/cubit-mesh-export --no-deps --no-cache-dir
-pip install -e packages/radia-mcp --no-deps --no-cache-dir
+python tools/release_quad.py restore-editable
 ```
 
-This is the **metadata_sync** step (see topic). Don't skip it after a
-release — `importlib.metadata.version("radia")` will lag.
+The restore first uninstalls stale distributions, reinstalls all three packages
+with `--no-build-isolation`, runs the grant-writing MCP self-test, and checks
+both `direct_url.json` and the actual imported module origins.
 
 LAB ↔ 100号機 NAS-share is preserved (filesystem same), and 100号機 is
 also editable from that share. mdx and hibino are wheel consumers and
@@ -118,12 +119,13 @@ After every release or source-side deploy, `release_quad.py phase8
 cat << 'PS' | ssh <shared-workstation-host> 'pwsh -ExecutionPolicy Bypass -Command -'
 # Stop locks
 Get-Process -ErrorAction SilentlyContinue | Where-Object {
-    $_.Name -like 'mcp-server*' -or
+    $_.Name -like 'mcp-*' -or
     $_.ProcessName -in 'coreform_cubit','cubit'
 } | ForEach-Object { Stop-Process -Id $_.Id -Force }
 Start-Sleep -Seconds 2
 
-pip install -e "<target-mapped-repo>" `
+python -m pip uninstall -y radia cubit-mesh-export radia-mcp
+python -m pip install --no-build-isolation -e "<target-mapped-repo>" `
     -e "<target-mapped-repo>\\packages\\cubit-mesh-export" `
     -e "<target-mapped-repo>\\packages\\radia-mcp" `
     --no-deps --no-cache-dir
@@ -351,19 +353,18 @@ Editable installs have a separate metadata record (the
 `<package>-<version>.dist-info` directory). Without explicit refresh,
 `importlib.metadata.version("radia")` and `pip list` can lag behind
 `radia.__version__` (which is read from the local clone's
-`src/radia/__init__.py`). After every release on an editable
-machine (in 2-tier this is LAB only):
+`src/radia/__init__.py`). On the editable tier (LAB and 100号機), use the
+release orchestrator instead of refreshing packages one at a time:
 
 ```powershell
-pip install -e . --no-deps --no-cache-dir
-pip install -e packages/cubit-mesh-export --no-deps --no-cache-dir
-pip install -e packages/radia-mcp --no-deps --no-cache-dir
+python tools/release_quad.py restore-editable
 ```
 
-`tools/release_quad.py done` runs a Phase 9 cross-machine probe
-that compares `__version__` and `pip list` outputs. A DRIFT row in
-that report usually means metadata_sync was skipped on LAB (the
-only editable machine left).
+`tools/release_quad.py done` runs a Phase 9 cross-machine probe, then invokes
+that canonical restore automatically. It compares `__version__`, distribution
+metadata, editable locations, and actual import origins. A DRIFT result means
+the repair did not complete and development should not resume until
+`restore-editable` exits 0.
 
 For mdx / hibino (PyPI install), the metadata is synced
 automatically by `pip install --upgrade radia==<X.Y.Z>` because
@@ -484,8 +485,10 @@ until this passes.
 * `tools/push_pyds_to_mdx.py` — LAB → mdx C++ artifact pusher (with
   lock-killer prelude).  RETIRED 2026-05-02 from standard release
   flow; preserved for branch-test scenarios only.
-* `tools/release_quad.py done` — Phase 9 cross-machine drift
-  probe (the Definition Of Done gate).
+* `tools/release_quad.py done` — Phase 9 cross-machine drift probe followed by
+  canonical LAB/100号機 editable restoration (the Definition Of Done gate).
+* `tools/release_quad.py restore-editable` — recovery when a release stops
+  before the Definition Of Done restoration finishes.
 """
 
 
