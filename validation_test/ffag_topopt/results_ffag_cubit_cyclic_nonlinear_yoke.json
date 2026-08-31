@@ -1,11 +1,18 @@
 {
-  "schema": "radia.ffag-cubit-cyclic-nonlinear-yoke/v1",
-  "generated_at_utc": "2026-08-30T18:15:53.510864+00:00",
-  "machine": "lab",
+  "schema": "radia.ffag-cubit-cyclic-nonlinear-yoke/v2",
+  "generated_at_utc": "2026-08-31T04:44:39.767020+00:00",
+  "machine": "mdx",
   "platform": "Windows-2022Server-10.0.20348-SP0",
+  "software": {
+    "python": "3.12.10",
+    "numpy": "2.4.6",
+    "ngsolve": "6.2.2606",
+    "radia": "4.95.74",
+    "cubit": "2025.12"
+  },
   "model": {
     "geometry_source": "Coreform Cubit 2025.12 ACIS sweep-map",
-    "fold": 4,
+    "fold": 12,
     "hdiv_family": "BDM2",
     "curve_order": 2,
     "constitutive_model": "single-valued monotone BH",
@@ -45,14 +52,14 @@
     "applied_tangential_h_am": 300.0
   },
   "meshes": {
-    "sector": "C:\\temp\\radia_ffag_cyclic\\sector4.vol",
-    "sector_sha256": "e62a9241d94e88c91e13596600620dcc2735c942e4730ee095b276d16423906f",
+    "sector": "C:\\temp\\ffag_cyclic_pr_20260831\\data\\sector12.vol",
+    "sector_sha256": "f2d5e4927eaeeeaa086080c2812ad70770c41d8e9ff7d587f28f1466d09de6e7",
     "sector_elements": 8,
     "sector_dofs": 720,
-    "full_ring": "C:\\temp\\radia_ffag_cyclic\\full4.vol",
-    "full_ring_sha256": "9faf8d53ce52c029bccd825367921a689c217b0e0c5039eb9bcd4a67b3067562",
-    "full_ring_elements": 32,
-    "full_ring_dofs": 2880
+    "full_ring": "C:\\temp\\ffag_cyclic_pr_20260831\\data\\full12.vol",
+    "full_ring_sha256": "e7623c498c9632b9d5fb299c56d12c866d12afc50b1d0313641a2c62408ba7b7",
+    "full_ring_elements": 96,
+    "full_ring_dofs": 8640
   },
   "periodic_topology": {
     "boundary_facet_pairs": 4,
@@ -70,105 +77,218 @@
     ]
   },
   "nonlinear_solve": {
-    "full_ring_iterations": 17,
-    "sector_iterations": 17,
-    "full_ring_final_relative_residual": 7.92857303705633e-11,
-    "sector_final_relative_residual": 8.522233943936197e-11,
+    "full_ring_iterations": 21,
+    "sector_iterations": 20,
+    "full_ring_final_relative_residual": 8.560574440269456e-13,
+    "sector_final_relative_residual": 9.669373332317486e-13,
     "full_ring_timing": {},
     "sector_timing": {}
   },
   "comparison": {
-    "full_ring_mean_tangential_m_am": 578825.7609850776,
-    "sector_mean_tangential_m_am": 578825.7617199778,
-    "mean_magnetization_relative_error": 1.2696398300166874e-09,
+    "full_ring_mean_tangential_m_am": 595742.5964561835,
+    "sector_mean_tangential_m_am": 595742.6030819706,
+    "mean_magnetization_relative_error": 1.1121895868432199e-08,
     "probe_points_m": [
       [
-        0.5656854249492381,
-        0.5656854249492381,
+        0.7727406610312547,
+        0.2070552360820166,
         0.375
       ],
       [
-        0.848528137423857,
-        0.848528137423857,
+        1.159110991546882,
+        0.3105828541230249,
         0.375
       ],
       [
-        1.1313708498984762,
-        1.1313708498984762,
+        1.5454813220625094,
+        0.4141104721640332,
         0.375
       ],
       [
-        1.4142135623730951,
-        1.4142135623730951,
+        1.9318516525781366,
+        0.5176380902050415,
         0.375
       ],
       [
-        1.697056274847714,
-        1.697056274847714,
+        2.318221983093764,
+        0.6211657082460498,
         0.375
       ]
     ],
     "full_ring_demag_h_am": [
       [
-        -6.726510496829435,
-        6.726510530405873,
-        -3.60961879827501e-08
+        -0.006899955143898736,
+        0.025750983037949225,
+        1.2721562045055336e-09
       ],
       [
-        -3.429144283605974,
-        3.429144217325048,
-        -1.025931740647927e-07
+        -0.005030490736191543,
+        0.01877406617267158,
+        -1.257089072616004e-08
       ],
       [
-        9.248541204205068,
-        -9.248542593339874,
-        9.683274962982663e-07
+        0.02432192216332403,
+        -0.09077059455049798,
+        7.385048099883891e-09
       ],
       [
-        22.574304642280936,
-        -22.574304333071428,
-        -2.956372267994003e-07
+        0.6611745889867363,
+        -2.4675371841960185,
+        1.1279071983300646e-07
       ],
       [
-        3.253515852267338,
-        -3.2535158573802687,
-        -4.020508214795001e-09
+        0.020931470167595993,
+        -0.07811731828402053,
+        2.777534253871246e-09
       ]
     ],
     "sector_demag_h_am": [
       [
-        -6.727552540536609,
-        6.727552531321594,
-        -8.21911473469095e-09
+        -0.006955221690390281,
+        0.025957241049006277,
+        8.843328404022225e-11
       ],
       [
-        -3.428199974315805,
-        3.428199896764879,
-        -6.084304191826087e-08
+        -0.004973156065882756,
+        0.018560071661247197,
+        6.399561399730278e-10
       ],
       [
-        9.248166130295123,
-        -9.248167331868073,
-        8.224314746628674e-07
+        0.024294348574482993,
+        -0.09066769036167832,
+        -4.387173267890752e-09
       ],
       [
-        22.575116943559458,
-        -22.575116672686143,
-        -3.5369942384174653e-07
+        0.6612155832001331,
+        -2.4676901759725776,
+        -3.0276859268166894e-10
       ],
       [
-        3.2535078666009145,
-        -3.2535078623162406,
-        -1.2847419071370636e-08
+        0.020938630643645283,
+        -0.07814403426569724,
+        1.4275558671338473e-10
       ]
     ],
-    "field_maximum_absolute_error_am": 0.001473642085718515,
-    "field_residual_relative_error": 4.615966407391699e-05,
-    "field_source_scale_am": 578825.7617199778,
-    "field_source_relative_error": 2.545916548944876e-09,
+    "field_maximum_absolute_error_am": 0.00022154213033575488,
+    "field_residual_relative_error": 8.672342075356646e-05,
+    "field_source_scale_am": 595742.6030819706,
+    "field_source_relative_error": 3.7187558719091983e-10,
     "maximum_allowed_relative_error": 2e-08
   },
-  "wall_s": 233.1773749999993,
+  "prescribed_source_field_evaluator_comparison": {
+    "full_ring_field_am": [
+      [
+        -6.0942618243689445e-06,
+        2.2744094763184788e-05,
+        -1.0419963568898203e-17
+      ],
+      [
+        -1.1172291637841776e-05,
+        4.169556002929617e-05,
+        -3.392708613732452e-17
+      ],
+      [
+        3.415079433691226e-05,
+        -0.00012745249958420743,
+        -3.343618164676003e-17
+      ],
+      [
+        0.0013093440339806161,
+        -0.004886538459403043,
+        1.0421924872171928e-16
+      ],
+      [
+        5.233355873762073e-05,
+        -0.00019531150014962263,
+        1.5611412961332637e-17
+      ]
+    ],
+    "sector_field_am": [
+      [
+        -6.094261824359508e-06,
+        2.274409476319249e-05,
+        -1.1639842041569927e-16
+      ],
+      [
+        -1.117229163795007e-05,
+        4.169556002926601e-05,
+        -1.1575243872515476e-16
+      ],
+      [
+        3.4150794336785526e-05,
+        -0.00012745249958420098,
+        -7.595922049627857e-17
+      ],
+      [
+        0.0013093440339806068,
+        -0.004886538459403009,
+        1.6532216783611918e-16
+      ],
+      [
+        5.2333558737613504e-05,
+        -0.00019531150014961109,
+        2.128339511764686e-17
+      ]
+    ],
+    "maximum_absolute_error_am": 1.3904133287863176e-16,
+    "residual_relative_error": 2.748440751360282e-14,
+    "source_scale_am": 2.0,
+    "source_relative_error": 6.952066643931588e-17,
+    "full_ring_projection_relative_residual": 4.958399646143251e-16,
+    "sector_projection_relative_residual": 4.800445478703074e-16,
+    "full_ring_evaluator": {
+      "source_count": 85536,
+      "image_count": 0,
+      "tree_nodes": 8191,
+      "leaf_size": 32,
+      "theta": 0.05,
+      "tree_min_sources": 256,
+      "auto_min_work": 500000000,
+      "tree_relative_tolerance": 1e-05,
+      "probe_count": 16,
+      "bounds_min": [
+        -1.998915086470069,
+        -1.998915086470069,
+        -0.25000000000000006
+      ],
+      "bounds_max": [
+        1.998915086470069,
+        1.9989150864700689,
+        0.25000000000000006
+      ],
+      "source_kind": "element-cloud-bdm2",
+      "build_wall_s": 0.09141940000699833
+    },
+    "sector_evaluator": {
+      "source_count": 7128,
+      "image_count": 11,
+      "tree_nodes": 511,
+      "leaf_size": 32,
+      "theta": 0.05,
+      "tree_min_sources": 256,
+      "auto_min_work": 500000000,
+      "tree_relative_tolerance": 1e-05,
+      "probe_count": 16,
+      "bounds_min": [
+        0.8676158065472557,
+        0.004120368203464587,
+        -0.25000000000000006
+      ],
+      "bounds_max": [
+        1.998915086470069,
+        0.9923208561607422,
+        0.25000000000000006
+      ],
+      "source_kind": "element-cloud-bdm2",
+      "build_wall_s": 0.006337899947538972
+    }
+  },
+  "acceptance_contract": {
+    "nonlinear_solution": "compare full/sector M and demagnetizing H against the magnetization source scale",
+    "direct_field_evaluator": "compare a common rotation-covariant prescribed BDM2 source against the explicit full ring at roundoff",
+    "residual_relative_field_error": "diagnostic only because the sampled closed-ring demag field is a cancellation residual"
+  },
+  "wall_s": 432.8857779999962,
   "checks": {
     "cubit_build_report_passed": true,
     "cubit_vol_checks_passed": true,
@@ -179,7 +299,9 @@
     "sector_nonlinear_cpp_picard_converged": true,
     "nonlinear_iteration_is_exercised": true,
     "mean_magnetization_matches_full_ring": true,
-    "field_matches_full_ring": true
+    "nonlinear_field_matches_full_ring_on_source_scale": true,
+    "prescribed_source_projections_converged": true,
+    "cyclic_direct_field_evaluator_matches_full_ring": true
   },
   "passed": true
 }
