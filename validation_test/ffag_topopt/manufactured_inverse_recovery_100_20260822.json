@@ -1,0 +1,79 @@
+{
+  "schema": "radia.ffag-fixed-one-pass-c-yoke-summary/v1",
+  "status": "pass",
+  "provenance": {
+    "machine": "intel11",
+    "python": "3.12.10",
+    "ngsolve_threads": 8,
+    "git_head_observed_at_completion": "80e0d9127ead0aaea18ae211a6eb9588b52cd1d3",
+    "full_result": "C:/temp/ffag_c_yoke_direct_api/manufactured_inverse_recovery_100_20260822.json",
+    "performance_measurement": "disabled",
+    "post_start_change_not_used": "proposal_adjoint_count=0 support was added after this process loaded the module"
+  },
+  "problem": {
+    "element_family": "HEX",
+    "hdiv_family": "BDM1",
+    "elements": 1180,
+    "dofs": 42480,
+    "controlled_components": [
+      "horizontal_focusing",
+      "vertical_focusing",
+      "horizontal_dispersion"
+    ],
+    "energies_mev": [31.0, 140.0, 250.0],
+    "response_entries": [[1, 0], [3, 2], [0, 5], [1, 5]],
+    "source_scale": 6.0,
+    "effective_current_a_per_coil": 1500000.0
+  },
+  "manufactured_target": {
+    "target_element_ids": [798],
+    "candidate_element_ids": [798],
+    "target_element_centroid_m": [0.0, -5.0, 0.4333333333333334],
+    "initial_active_elements": 720,
+    "final_active_elements": 721,
+    "initial_max_transfer_matrix_band_ratio": 5.0,
+    "exact_target_max_transfer_matrix_band_ratio": 0.5,
+    "initial_solve_iterations": 577,
+    "target_and_final_solve_iterations": 615,
+    "known_target_active_set_recovered": true
+  },
+  "material_selection": {
+    "selection_model": "all-candidate-aca-qr-tsvd-direct-full-resolve",
+    "proposal_model": "field-target",
+    "candidate_count": 1,
+    "selected_additions": [798],
+    "selected_removals": [],
+    "tsvd_rank": 1,
+    "aca_rank": 1,
+    "exact_bundles_evaluated": 1,
+    "predicted_field_target_max_band_ratio": 4.796495936900804,
+    "fully_resolved_field_target_max_band_ratio": 5.055512102577355,
+    "note": "The field-target inverse is a proposal model; the exact fixed-orbit transfer-matrix gate owns acceptance."
+  },
+  "exact_map_acceptance": {
+    "accepted": true,
+    "reason": "accepted by exact fixed one-pass map gate",
+    "initial_max_band_ratio": 5.0,
+    "final_max_band_ratio": 0.5,
+    "orbit_field_max_band_ratios": [0.5, 0.5, 0.5],
+    "transfer_matrix_max_band_ratios": [0.0, 0.0, 0.0],
+    "maximum_target_symplectic_residual": 1.0563640119569122e-15,
+    "maximum_realized_symplectic_residual": 1.0563640119569122e-15,
+    "direct_map_oracle_fallback_used": false
+  },
+  "gates": {
+    "coil_yoke_clearance": true,
+    "air_volume_elements_are_zero": true,
+    "fixed_design_orbits_used": true,
+    "periodic_closed_orbit_search_disabled": true,
+    "caller_design_orbit_and_target_matrix_contract": true,
+    "initial_return_yoke_seed_is_valid": true,
+    "binary_topology_is_valid": true,
+    "no_gray_material": true,
+    "analytic_transfer_map_derivative_precedes_material_inverse": true,
+    "all_material_batches_exactly_resolved": true,
+    "manufactured_exact_target_is_inside_bands": true,
+    "manufactured_seed_is_outside_bands": true,
+    "manufactured_selected_map_objective_converged": true
+  }
+}
