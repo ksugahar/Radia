@@ -1401,6 +1401,47 @@ class CoilBuilderHDivSource:
     def segment_count(self) -> int:
         return sum(len(segments) for segments, _ in self.segment_groups)
 
+    def cyclic_copies(self, fold, *, alternating=False):
+        """Return exact z-axis rotations of one FFAG-cell source.
+
+        The returned source contains the physical coil in every sector,
+        including sector zero.  It is therefore the source passed to the
+        sector HDiv RHS as well as to native full-ring tracking.  In contrast,
+        ``vim.Solve(image_cyclic=N)`` rotates *iron magnetization charges* in
+        the nonlocal Gram operator; it cannot infer or reproduce a coil from
+        the sector CAD.
+
+        ``alternating=True`` reverses the current on every odd sector.  This
+        is valid only for even folds, because the signed source must close
+        after one revolution.  Ordinary FFAG F/D cells normally keep this
+        false: F/D focusing belongs within a periodic cell rather than being
+        an antiperiodic vertical guide field.
+        """
+        numeric_fold = float(fold)
+        if (isinstance(fold, (bool, np.bool_))
+                or not np.isfinite(numeric_fold)
+                or not numeric_fold.is_integer()
+                or numeric_fold < 2):
+            raise ValueError("cyclic coil fold must be an integer >= 2")
+        count = int(numeric_fold)
+        alternating = bool(alternating)
+        if alternating and count % 2:
+            raise ValueError(
+                "alternating cyclic coil currents require an even fold")
+
+        groups = []
+        for sector in range(count):
+            angle = 2.0*np.pi*sector/count
+            cosine, sine = np.cos(angle), np.sin(angle)
+            rotation = np.asarray(((cosine, -sine, 0.0),
+                                   (sine, cosine, 0.0),
+                                   (0.0, 0.0, 1.0)))
+            sign = -1.0 if alternating and sector % 2 else 1.0
+            for segments, current in self.segment_groups:
+                groups.append((np.ascontiguousarray(segments @ rotation.T),
+                               sign*current))
+        return type(self)(tuple(groups))
+
     def h_field(self, points) -> np.ndarray:
         """Evaluate the source ``H`` field in A/m at one or many points."""
         from .biot_savart import h_segments_batch
@@ -1418,6 +1459,40 @@ class CoilBuilderHDivSource:
     def b_field(self, points) -> np.ndarray:
         """Evaluate the source magnetic flux density in tesla."""
         return MU0 * self.h_field(points)
+
+    def to_radia_object(self, *, closure_tolerance=1.0e-9) -> int:
+        """Materialize the same closed filaments as one native Radia object.
+
+        ``CoilBuilderHDivSource`` owns the finite-filament representation used
+        for both HDiv RHS assembly and incident-field sampling.  Native orbit
+        tracking cannot call the Python Biot--Savart evaluator, so it receives
+        an ``ObjFlmCur`` container built from those exact segments rather than
+        a separately discretized solid-current coil.
+
+        The conversion deliberately accepts only continuous closed paths.
+        ``from_coilbuilders`` already establishes this contract; the explicit
+        check keeps manually constructed sources from silently acquiring an
+        unphysical closing segment at the pybind boundary.
+        """
+        import radia as rad
+
+        tolerance = float(closure_tolerance)
+        if not np.isfinite(tolerance) or tolerance < 0.0:
+            raise ValueError("closure_tolerance must be finite and nonnegative")
+        objects = []
+        for index, (segments, current) in enumerate(self.segment_groups):
+            joins = np.linalg.norm(segments[1:, 0] - segments[:-1, 1], axis=1)
+            maximum_join = float(np.max(joins, initial=0.0))
+            closure_gap = float(np.linalg.norm(segments[-1, 1] - segments[0, 0]))
+            if maximum_join > tolerance or closure_gap > tolerance:
+                raise ValueError(
+                    "native Radia coil materialization requires a continuous "
+                    f"closed filament path (group {index}: max join "
+                    f"{maximum_join:.6e} m, closure {closure_gap:.6e} m)"
+                )
+            points = np.vstack((segments[:, 0], segments[0, 0]))
+            objects.append(rad.ObjFlmCur(points.tolist(), float(current)))
+        return int(rad.ObjCnt(objects))
 
     def coefficient_function(self):
         """Return the differentiable NGSolve source ``H`` field."""
