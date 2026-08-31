@@ -1393,12 +1393,15 @@ def _norm_path(p):
     """Lower-case + forward-slashes + strip trailing slash so a UNC and
     a drive-letter form of the same NAS path compare equal."""
     p = (p or "").replace("\\", "/").rstrip("/").lower()
-    # Treat the NAS UNC (//192.168.11.100/work/00_cae/radia/01_github) as
-    # equivalent to S:/radia/01_github -- both resolve to the same files.
-    p = p.replace("//192.168.11.100/work/00_cae/radia/01_github",
-                  "s:/radia/01_github")
-    return p.replace("//192.168.121.100/work/00_cae/radia/01_github",
-                     "s:/radia/01_github")
+    # Both UNC spellings resolve to the LAB S: drive.  Normalize the whole
+    # Radia namespace, not just 01_GitHub: release worktrees live under the
+    # same share and editable imports report their real UNC location.
+    for unc_root in (
+        "//192.168.11.100/work/00_cae/radia/",
+        "//192.168.121.100/work/00_cae/radia/",
+    ):
+        p = p.replace(unc_root, "s:/radia/")
+    return p
 
 
 def _pip_show(pkg):
@@ -1561,10 +1564,11 @@ MODULES = {
 
 def norm(p):
     p = (p or "").replace("\\", "/").rstrip("/").lower()
-    p = p.replace("//192.168.11.100/work/00_cae/radia/01_github",
-                  "s:/radia/01_github")
-    p = p.replace("//192.168.121.100/work/00_cae/radia/01_github",
-                  "s:/radia/01_github")
+    for unc_root in (
+        "//192.168.11.100/work/00_cae/radia/",
+        "//192.168.121.100/work/00_cae/radia/",
+    ):
+        p = p.replace(unc_root, "s:/radia/")
     return p
 
 def editable_location(dist):
