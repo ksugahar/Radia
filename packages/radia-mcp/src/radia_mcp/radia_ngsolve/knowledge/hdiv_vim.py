@@ -231,33 +231,35 @@ from about 3.1% to 1.2% reference error as the nominal size moves from 2 mm to
 promoted.  Do not infer BDM2 accuracy from polynomial order alone; require its
 own h/p and observable convergence evidence.
 
-The cause is now bounded more tightly.  A two-cell affine HEX BDM2 diagnostic
-has generalized demag spectrum inside the physical interval, while the same
-two-cell warped map reaches about 1.16.  Four warped cells reach about 1.57,
-and an annular-sector map develops both a negative mode and an upper mode near
-1.80.  Dense storage reproduces the same result, so ACA compression is not the
-cause.  Volume-only and boundary-only blocks are positive but individually
-large; their cross term must preserve a strong cancellation.  Raising
-quadrature and widening the near region improves the spectrum but is too
-expensive and does not robustly restore the annular case.  Therefore
-`vim.Solve(order=2)` rejects mapped/non-affine pure HEX material models.  Use
-mapped HEX BDM1, affine HEX BDM2, or pure-TET BDM2.  `ChargeGram` is still an
-explicit diagnostic surface; a finite residual is not permission to promote
-the rejected material lane.  Removing this gate requires a composite
-mapped-HEX BDM2 charge operator that preserves the volume/surface cancellation;
-raising quadrature alone is not a production remedy.  The magnetic-conductor
-validation runner exposes this as ``--include-bdm2-gate`` and records the
-expected rejection alongside the independent axisymmetric Q2, full 3-D HCurl,
-mapped-HEX BDM1, and coupled eddy-bubble evidence.
+The former mapped-HEX BDM2 failure is retained as a regression lesson, not as
+the current capability boundary.  The old separately integrated volume and
+surface blocks lost a strong cancellation: a two-cell warped map reached a
+generalized maximum near 1.2175 with three out-of-range modes, and dense
+storage reproduced it, proving ACA compression was not the cause.  The
+production C++ composite operator now preserves that cancellation with
+complete-host tensor rules for smooth pairs and reflection-invariant
+whole-host Duffy rules for self and adjacent pairs.  Raising one generic
+quadrature order was not the repair.
+
+On the same 207 active mapped-body BDM2 DoFs, the current HACApK ChargeGram has
+generalized spectrum `[-4.65e-16, 0.9961]`, no out-of-range modes, a converged
+24-iteration linear material solve with residual below `5.9e-11`, and finite
+native direct fields.  The larger 756-DoF mapped production body has q9/q12
+spectrum `[-8.53e-16, 0.999899]`; its material response differs from q10/q16
+by `5.28e-4`, while q10/q16 differs from q11/q20 by `3.94e-4`.  This promotes
+the mapped/non-affine pure-HEX BDM2 primal material and field lane.  Shape
+derivatives remain fail-loud until the same composite quadrature is
+differentiated and checked against finite differences.
 
 Do not diagnose this as an intrinsic BDM2-space failure.  A separate
 54-HEX air/body H1 Omega experiment assembles the discrete Hodge operator
 ``C.T K^-1 C`` on the same 207 active mapped-body BDM2 DoFs.  H1 orders 2 and
 3 have generalized maxima about 0.992 and 0.988 with no modes outside
-``[0,1]``.  The same two-cell mapped charge diagnostic reaches about 1.2175
-with three out-of-range modes.  This localizes the defect to the mapped
-volume/surface charge operator.  The finite H1 box is a contraction and
-formulation-separation gate, not an open-boundary accuracy oracle.
+``[0,1]``.  The repaired open-boundary ChargeGram reaches about 0.9961 on the
+same 207 active DoFs and completes its production solve and field evaluation.
+The finite H1 box remains a contraction and formulation-separation gate, not
+an open-boundary accuracy oracle or a replacement for the positive
+ChargeGram gate.
 The `[0,1]` contraction is specific to the standard unit H1 stiffness metric;
 a weighted or Kelvin-transformed metric needs its own independent bound.
 
@@ -269,8 +271,8 @@ path evaluates solver expressions into concrete vectors and uses
 the same 54-HEX body, the resulting BDM2 response reduction feeds a shared-mesh
 HCurl eddy-bubble solve with snapshot residual below `3e-12`, mixed residual
 below `3e-16`, and positive Joule loss.  This verifies mixed mechanics and the
-BDM2 approximation space.  It does not repair the open-boundary charge kernel,
-and its sampled HCurl interaction is not an accuracy oracle.
+BDM2 approximation space independently of the repaired open-boundary operator;
+its sampled HCurl interaction is still not an accuracy oracle.
 
 For the one-call mixed API, pass both
 `hdiv_definedon=mesh.Materials("body")` and
@@ -324,6 +326,13 @@ native HEX Gram is built; retain unpruned/pruned charge counts in diagnostics.
 On the recorded same-machine ladder these two structural changes reduced total
 runtime from 1819.7 s to 339.8 s, but that observation is not a portable speed
 guarantee.
+
+A separate Coreform Cubit 2025.12 gate regenerates a four-cell cylinder as a
+true curved-Q2 `.vol`.  Every HEX is non-affine, linear mass-Riesz CG and
+nonlinear Energy-Newton converge, and the persistent field evaluator agrees
+with an independent NGSolve boundary integral to `1.06e-10` maximum relative
+error.  This is the curved-geometry evidence for the primal lane; it does not
+waive the shape-derivative limitation.
 
 Reference fidelity is part of that gate.  The 384-HEX result is 1.90% from the
 18432-element fine axisymmetric Q2 reference, but 2.19% from the 6656-element
@@ -582,10 +591,11 @@ Fast tests should cover API contracts and small deterministic checks:
   and large non-IMA auto-tree output stays within its direct-probe contract;
 - 2D planar helpers preserve material labels and PM source regions;
 - public solver names and config keys match the current API.
-- BDM2 TET/WEDGE and affine HEX linear/nonlinear solves, IMA, and persistent
-  field reconstruction remain consistent with their analytic and image gates;
-  mapped/non-affine HEX BDM2 material solves must fail loudly.  Planar BDM2 is
-  supported through Q3 geometry.
+- BDM2 TET/WEDGE and flat/curved HEX linear/nonlinear solves, IMA, and
+  persistent field reconstruction remain consistent with their analytic,
+  spectrum, quadrature-convergence, curved-Cubit, and image gates.  Mapped HEX
+  BDM2 shape derivatives must fail loudly.  Planar BDM2 is supported through
+  Q3 geometry.
 - generic H1-Hodge response reduction must solve both whole-domain and
   material-restricted HDiv spaces, preserve the `[0,1]` contraction, and feed a
   finite-residual HCurl eddy-bubble mixed solve without promoting finite-domain
@@ -759,11 +769,12 @@ _STATUS = r"""
 Current direction:
 
 - Radia soft iron: HDiv-VIM.
-- BDM1/BDM2: pure TET/HEX/WEDGE operator, IMA, and persistent-field paths.
-  Material solves gate mapped/non-affine HEX BDM2 while retaining mapped HEX
-  BDM1, affine HEX BDM2, and pure-TET BDM2.  Planar BDM1 is supported through Q2 and planar BDM2
-  through Q3.  `radia.vim.hdiv_capabilities()` is the sole order-pair table;
-  geometry order is not inferred from one global p+1 rule.
+- BDM1/BDM2: pure TET/HEX/WEDGE operator, material solve, IMA, and
+  persistent-field paths, including mapped/non-affine and curved-Q2 pure HEX
+  BDM2 through the cancellation-preserving composite ChargeGram.  Mapped HEX
+  BDM2 shape derivatives remain fail-loud.  Planar BDM1 is supported through
+  Q2 and planar BDM2 through Q3.  `radia.vim.hdiv_capabilities()` is the sole
+  order-pair table; geometry order is not inferred from one global p+1 rule.
 - Fixed/given 3D magnetization: source-owned HDiv projection and native C++
   field coupling for BDM1/BDM2 TET/HEX/WEDGE, including Curve(2)
   and IMA; planar 2D uses its existing `magnets=` source path.
@@ -783,8 +794,8 @@ Open work:
 
 - extend 2D and 3D validation coverage around `rad.Fld`;
 - keep the image-symmetry roundoff contract green as hex/wedge coverage grows;
-- implement a composite mapped-HEX BDM2 charge operator that preserves
-  volume/surface cancellation before removing the material-solve gate;
+- differentiate the composite mapped-HEX BDM2 charge operator and lock its
+  shape derivative against finite differences before topology optimization;
 - continue BDM1/BDM2 TET/HEX/WEDGE accuracy, memory, and timing measurements on mdx;
 - continue charge-Gram H-matrix performance checks on mdx;
 - run `validation_test/feec/bench_hdiv_field_evaluator_scaling.py` after a
