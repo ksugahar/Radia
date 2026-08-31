@@ -308,6 +308,42 @@ def test_coilbuilder_source_materializes_the_same_native_filaments():
         rad.UtiDelAll()
 
 
+def test_coilbuilder_source_cyclic_copies_keep_one_shared_full_ring_source():
+    segments = np.asarray([
+        [[0.80, -0.10, -0.10], [1.20, -0.10, -0.10]],
+        [[1.20, -0.10, -0.10], [1.20, -0.10, 0.10]],
+        [[1.20, -0.10, 0.10], [0.80, -0.10, 0.10]],
+        [[0.80, -0.10, 0.10], [0.80, -0.10, -0.10]],
+    ])
+    source = CoilBuilderHDivSource(((segments, 1250.0),))
+    fold = 6
+    cyclic = source.cyclic_copies(fold)
+
+    assert cyclic.segment_count == fold*source.segment_count
+    assert len(cyclic.segment_groups) == fold
+    angle = 2.0*np.pi/fold
+    rotation = np.asarray(((np.cos(angle), -np.sin(angle), 0.0),
+                           (np.sin(angle), np.cos(angle), 0.0),
+                           (0.0, 0.0, 1.0)))
+    np.testing.assert_allclose(
+        cyclic.segment_groups[1][0], segments @ rotation.T,
+        rtol=0.0, atol=2.0e-15)
+    assert cyclic.segment_groups[1][1] == 1250.0
+
+    point = np.asarray([0.30, 0.15, 0.25])
+    np.testing.assert_allclose(
+        cyclic.h_field(rotation @ point), rotation @ cyclic.h_field(point),
+        rtol=2.0e-13, atol=2.0e-12)
+    with np.testing.assert_raises_regex(ValueError, "integer >= 2"):
+        source.cyclic_copies(1)
+    with np.testing.assert_raises_regex(ValueError, "even fold"):
+        source.cyclic_copies(3, alternating=True)
+    alternating = source.cyclic_copies(4, alternating=True)
+    np.testing.assert_allclose(
+        [current for _segments, current in alternating.segment_groups],
+        [1250.0, -1250.0, 1250.0, -1250.0])
+
+
 def test_native_coil_materialization_rejects_an_open_path():
     source = CoilBuilderHDivSource((
         (np.array([

@@ -13,12 +13,14 @@ from radia.accelerator_magnet_topopt import (
     static_magnet_transfer_component_entries,
 )
 from radia.ffag_topopt import (
+    build_ffag_cyclic_hdiv_excitation,
     FFAGCyclicSectorContract,
     FFAGFixedDesignOrbitTargetFamily,
     FFAGSoftEdgeCellSpec,
     build_ffag_cell_target_family,
     build_ffag_fixed_design_orbit_target_family,
     enge_fringe_integrals,
+    expand_ffag_cyclic_coil_source,
     magnetic_rigidity_from_kinetic_energy,
     recover_periodic_planar_closed_orbit,
     recover_periodic_planar_closed_orbit_native,
@@ -85,6 +87,66 @@ def test_ffag_broken_vim_contract_requires_periodic_charge_pair():
 def test_ffag_antiperiodic_contract_requires_even_fold():
     with pytest.raises(ValueError, match="even fold"):
         validate_ffag_cyclic_sector_contract(5, field_antiperiodic=True)
+
+
+def test_ffag_cyclic_contract_expands_the_coil_source_to_the_full_ring():
+    from radia.accelerator_magnet_topopt import CoilBuilderHDivSource
+
+    loop = np.asarray([
+        [[0.8, 0.0, -0.1], [1.2, 0.0, -0.1]],
+        [[1.2, 0.0, -0.1], [1.2, 0.0, 0.1]],
+        [[1.2, 0.0, 0.1], [0.8, 0.0, 0.1]],
+        [[0.8, 0.0, 0.1], [0.8, 0.0, -0.1]],
+    ])
+    sector = CoilBuilderHDivSource(((loop, 900.0),))
+    periodic = validate_ffag_cyclic_sector_contract(12)
+    ring = expand_ffag_cyclic_coil_source(sector, periodic)
+
+    assert ring.segment_count == 12*sector.segment_count
+    np.testing.assert_allclose(
+        [current for _segments, current in ring.segment_groups],
+        np.full(12, 900.0))
+    antiperiodic = validate_ffag_cyclic_sector_contract(
+        12, field_antiperiodic=True)
+    alternating = expand_ffag_cyclic_coil_source(sector, antiperiodic)
+    np.testing.assert_allclose(
+        [current for _segments, current in alternating.segment_groups],
+        [900.0, -900.0]*6)
+
+
+def test_ffag_cyclic_excitation_binds_the_full_ring_source_to_vim_images():
+    from radia.accelerator_magnet_topopt import CoilBuilderHDivSource
+
+    loop = np.asarray([
+        [[0.8, 0.0, -0.1], [1.2, 0.0, -0.1]],
+        [[1.2, 0.0, -0.1], [1.2, 0.0, 0.1]],
+        [[1.2, 0.0, 0.1], [0.8, 0.0, 0.1]],
+        [[0.8, 0.0, 0.1], [0.8, 0.0, -0.1]],
+    ])
+    sector_source = CoilBuilderHDivSource(((loop, 900.0),))
+    disjoint = build_ffag_cyclic_hdiv_excitation(
+        sector_source, validate_ffag_cyclic_sector_contract(12))
+    options = disjoint.solve_kwargs()
+
+    assert disjoint.source.segment_count == 12*sector_source.segment_count
+    assert options["image_cyclic"] == 12
+    assert options["H_ext"].dim == 3
+    assert "cyclic_periodic_boundaries" not in options
+
+    connected_contract = validate_ffag_cyclic_sector_contract(
+        12, body_crosses_periodic_planes=True,
+        periodic_trace_identified=True)
+    with pytest.raises(ValueError, match="two named periodic boundaries"):
+        build_ffag_cyclic_hdiv_excitation(sector_source, connected_contract)
+    with pytest.raises(TypeError, match="pair of names"):
+        build_ffag_cyclic_hdiv_excitation(
+            sector_source, connected_contract,
+            periodic_boundaries="periodic_min")
+    connected = build_ffag_cyclic_hdiv_excitation(
+        sector_source, connected_contract,
+        periodic_boundaries=("periodic_min", "periodic_max"))
+    assert connected.solve_kwargs()["cyclic_periodic_boundaries"] == (
+        "periodic_min", "periodic_max")
 
 
 def test_cubit_nonlinear_field_gate_keeps_cancellation_diagnostic():
