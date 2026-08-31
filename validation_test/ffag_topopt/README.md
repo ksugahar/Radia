@@ -57,7 +57,10 @@ then adds only the rotational point identifications and builds an independent
 material-density quotient map.  `FFAGCyclicDensityMap.expand` supplies the
 element densities used by the solve, while `contract` applies the exact
 transpose map to element gradients and volumes; HDiv trace closure and design
-variable reduction remain deliberately separate operations.
+variable reduction remain deliberately separate operations.  The nonlinear
+gate binds the report to Cubit 2025.12, the requested fold and dimensions, Q2
+order, curve intervals, and the loaded mesh element/node counts; a stale PASS
+report from another mesh cannot satisfy the validation.
 
 `validation_ffag_cubit_cyclic_nonlinear_yoke.py` exercises that Cubit pair
 with the production C++ monotone-BH Picard/mass-Riesz solver.  Hysteresis is
@@ -66,12 +69,30 @@ round-trip, mean magnetization, and direct external field to agree.  Because
 the sampled demagnetizing field is a small cancellation residual of much
 larger magnetization sources, the JSON records both residual-relative and
 source-relative field errors; acceptance uses the source-relative value and
-never discards the cancellation-sensitive diagnostic.
-The checked LAB fold-4 result is
-`results_ffag_cubit_cyclic_nonlinear_yoke.json`: its full/sector nonlinear
-residuals are below 8.6e-11, mean-magnetization error is 1.27e-9, and direct
-field source-relative error is 2.55e-9.  The same result retains the larger
-4.62e-5 residual-relative diagnostic caused by cancellation.
+never discards the cancellation-sensitive diagnostic.  A second, independent
+gate projects the common rotation-covariant source `M=(-y,x,0)` into both BDM2
+spaces and compares the C++ direct evaluators.  That manufactured source has no
+nonlinear-solve difference, so its full-ring/cyclic-sector comparison is the
+roundoff contract for the image field implementation.
+
+The checked mdx fold-12 result is
+`results_ffag_cubit_cyclic_nonlinear_yoke.json`.  Cubit 2025.12 produced an
+8-HEX, 720-DoF sector and an explicit 96-HEX, 8640-DoF ring.  The C++ nonlinear
+solves converged in 20 and 21 Picard steps with final residuals below 9.7e-13.
+Mean magnetization agrees to 1.12e-8 and direct field to 3.72e-10 of the
+magnetization source scale.  The residual-relative field diagnostic is the
+larger 8.68e-5 because the sampled closed-ring demagnetizing field is nearly
+cancelled.  The independent prescribed-source evaluators agree to 1.40e-16
+A/m absolute and 6.96e-17 of source amplitude, establishing that the direct
+cyclic image evaluator itself is roundoff-consistent with the explicit ring.
+The full validation took 432.9 s with 38 threads on mdx.
+
+When a density filter is active, `optimize_density(..., design_map=...)`
+orthogonally averages the filtered element values back onto each cyclic
+equivalence class before clipping and projection.  Its reverse chain applies
+the same self-adjoint average before the filter transpose.  Consequently the
+periodic material contract is preserved at every physical solve, not merely in
+the optimizer's raw reduced variables.
 
 ## EarlyTimes C-type A/B route convergence
 
