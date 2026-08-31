@@ -7,8 +7,13 @@ grant-writing implementation that was already preserved inside
 """
 from __future__ import annotations
 
+import csv
+import json
 import pathlib
 import re
+import zipfile
+import xml.etree.ElementTree as ET
+from collections import Counter
 
 from radia_mcp.paper_writing._ja_lint import (
     grant_writing_acronym_usage_audit as _ja_acronym_usage_audit,
@@ -2296,6 +2301,124 @@ def grant_writing_kaken_oss_platform_check(text: str) -> dict:
     }
 
 
+def grant_writing_kaken_basic_research_positioning_check(text: str) -> dict:
+    """Check the hierarchy between a KAKENHI question, tools, and impact.
+
+    Engineering proposals may legitimately name industry, commercial CAE,
+    OSS, AI, GitHub, or MCP. The issue is whether a generalisable academic
+    question remains the object of research, those technologies are means or
+    validation routes, and industrial value is a consequence of the knowledge.
+    This is a close-reading prompt, not an adoption score.
+    """
+    text = _prose_for_lint(_read_text_if_path(text))
+    low = text.lower()
+    academic_markers = [
+        "学術的問い", "中心の問い", "研究上の問い", "何を明らか",
+        "成立条件", "適用条件", "適用境界", "設計判断", "選択則",
+        "一般化", "体系化", "反証", "反例", "独立検証",
+    ]
+    knowledge_markers = [
+        "成立条件", "適用条件", "適用境界", "設計則", "選択則",
+        "指針", "知見", "一般化", "体系化", "判定規則",
+    ]
+    enabling_markers = [
+        "mcp", "github", "oss", "オープンソース", "生成ai", "ai",
+        "api", "リポジトリ", "研究基盤", "プラットフォーム",
+    ]
+    engineering_markers = [
+        "実機", "実測", "商用cae", "jmag", "設計問題", "誘導加熱",
+        "電動機", "加速器", "自動車", "製造業", "産業",
+    ]
+    consequence_markers = [
+        "波及", "帰結", "その結果", "これにより", "工学的背景",
+        "検証場", "検証対象", "応用可能", "貢献", "国際競争力",
+    ]
+    means_markers = [
+        "手段", "媒介", "接着層", "glue", "接続する", "利用可能にする",
+        "実行入口", "検証経路", "用いて", "介して",
+    ]
+
+    evidence = {
+        "academic_question": _contains_any(low, academic_markers),
+        "generalisable_knowledge": _contains_any(low, knowledge_markers),
+        "enabling_technology": _contains_any(low, enabling_markers),
+        "engineering_validation": _contains_any(low, engineering_markers),
+        "impact_as_consequence": _contains_any(low, consequence_markers),
+        "tool_as_means": _contains_any(low, means_markers),
+    }
+    applicable = bool(
+        evidence["enabling_technology"]
+        or evidence["engineering_validation"]
+        or evidence["academic_question"]
+    )
+    if not applicable:
+        return {
+            "applicable": False,
+            "risks": [],
+            "comments": [],
+            "evidence": evidence,
+            "target": "academic question -> method/tool -> validation -> knowledge -> impact",
+            "source": "KAKENHI basic-research positioning check",
+        }
+
+    risks: list[dict] = []
+    if evidence["enabling_technology"] and not evidence["academic_question"]:
+        risks.append({
+            "type": "tool_without_academic_question",
+            "severity": "HIGH",
+            "comment": "OSS・AI・MCP等の構築対象はあるが、それで解く学術的問いが見えない。",
+            "recommendation": (
+                "異なる手法を結合しても何が保存されるのか、どの条件で設計判断が"
+                "一致・不一致になるのかを先に置き、MCP等はその検証手段に下げる。"
+            ),
+        })
+    if evidence["enabling_technology"] and not evidence["tool_as_means"]:
+        risks.append({
+            "type": "tool_role_not_subordinated",
+            "severity": "MEDIUM",
+            "comment": "基盤・ツールが研究目的なのか検証手段なのか、階層が明記されていない。",
+            "recommendation": (
+                "MCPは各機関の技術を実行可能に接続するglue、GitHubは版と検証履歴を"
+                "保持する場所、と役割を一文で限定する。"
+            ),
+        })
+    if evidence["academic_question"] and not evidence["generalisable_knowledge"]:
+        risks.append({
+            "type": "question_without_knowledge_product",
+            "severity": "MEDIUM",
+            "comment": "問いはあるが、研究後に残る一般化可能な知識成果が特定されていない。",
+            "recommendation": "成立条件、適用境界、選択則、反例集合のいずれを得るかを書く。",
+        })
+    if evidence["engineering_validation"] and not evidence["impact_as_consequence"]:
+        risks.append({
+            "type": "engineering_context_without_hierarchy",
+            "severity": "MEDIUM",
+            "comment": "産業・実機の背景が、学術的検証場なのか主目的なのか判別しにくい。",
+            "recommendation": (
+                "工業的課題を厳しい検証場として位置づけ、産業力・国際競争力は"
+                "基盤研究で得た条件知が実務へ還流した結果として述べる。"
+            ),
+        })
+
+    return {
+        "applicable": True,
+        "risk_count": len(risks),
+        "risks": risks,
+        "evidence": evidence,
+        "comments": [r["comment"] for r in risks],
+        "recommendations": [r["recommendation"] for r in risks],
+        "argument_order": [
+            "generalisable academic question",
+            "MCP/GitHub/AI as enabling means",
+            "independent engineering validation",
+            "conditions, boundaries, or decision rules",
+            "industrial and international value as downstream impact",
+        ],
+        "target": "academic question -> method/tool -> validation -> knowledge -> impact",
+        "source": "KAKENHI basic-research positioning check",
+    }
+
+
 def grant_writing_internal_evidence_to_external_scale_check(text: str) -> dict:
     """Check whether an internal success is evidence for external transfer.
 
@@ -4156,6 +4279,17 @@ _NATIONAL_VALUE_MARKERS = (
     "日本発", "我が国独自", "国内で発展", "国内発", "本邦",
     "日本独自", "国内の知見",
 )
+_INTERNATIONAL_PREPARATION_MARKERS = (
+    "JSPS", "日本学術振興会", "外国人研究者招へい", "外国人研究者招聘",
+    "招へい事業", "招聘事業", "招へいフェロー", "招聘フェロー",
+)
+_PREPARATION_STATUS_MARKERS = (
+    "採択", "承認", "決定", "award", "accepted",
+)
+_PREPARATION_SCALE_PATTERN = re.compile(
+    r"\d+\s*(?:日間|日|週間|週|か月|ヶ月|月)|"
+    r"20\d{2}\s*年\s*\d{1,2}\s*月"
+)
 
 
 def grant_writing_international_standing_check(text: str) -> dict:
@@ -4262,6 +4396,19 @@ def grant_writing_international_standing_check(text: str) -> dict:
     # 基盤 proposal exposed.
     outputs += sorted({m.group(0) for m in _NAMED_INTERNATIONAL_VENUE.finditer(text)})
     national = [m for m in _NATIONAL_VALUE_MARKERS if m in text]
+    preparation_sentences = [
+        s for s in sentences
+        if any(m.lower() in s.lower() for m in _INTERNATIONAL_PREPARATION_MARKERS)
+    ]
+    preparation_status = sorted({
+        m for m in _PREPARATION_STATUS_MARKERS
+        if any(m.lower() in s.lower() for s in preparation_sentences)
+    })
+    preparation_scale = [
+        match.group(0)
+        for sentence in preparation_sentences
+        for match in _PREPARATION_SCALE_PATTERN.finditer(sentence)
+    ]
 
     # Presenting abroad is international output; it has no counterpart to name.
     # Only a claimed relationship does. A proposal whose international content
@@ -4339,6 +4486,23 @@ def grant_writing_international_standing_check(text: str) -> dict:
             ),
             "one_way_markers": one_way[:5],
         })
+    if preparation_sentences and not preparation_status:
+        risks.append({
+            "type": "international_preparation_status_unclear",
+            "severity": "MEDIUM",
+            "comment": "国際招へい等の準備に触れているが、申請中・採択済み・実施済みの状態が不明である。",
+            "recommendation": (
+                "採択済みなら採択済みと明記し、未実施の来訪を完了実績として書かない。"
+                "実施予定期間も添えると、研究開始時点の準備として確認できる。"
+            ),
+        })
+    if preparation_sentences and not preparation_scale:
+        risks.append({
+            "type": "international_preparation_scale_missing",
+            "severity": "LOW",
+            "comment": "採択された国際招へい等の期間または実施時期が示されていない。",
+            "recommendation": "採択通知に基づく日数または実施可能期間を簡潔に記す。",
+        })
 
     deductions = sum(
         3.0 if r["severity"] == "HIGH" else 1.5 for r in risks
@@ -4359,12 +4523,18 @@ def grant_writing_international_standing_check(text: str) -> dict:
         "planned_output_sentences": [
             re.sub(r"\s+", " ", x).strip()[:160] for x in planned[:4]
         ],
+        "preparation_evidence_sentences": [
+            re.sub(r"\s+", " ", x).strip()[:180]
+            for x in preparation_sentences[:4]
+        ],
+        "preparation_status_markers": preparation_status,
+        "preparation_scale_markers": preparation_scale[:5],
         "national_value_markers": national[:5],
         "comments": [r["comment"] for r in risks],
         "recommendations": [r["recommendation"] for r in risks],
         "target": (
-            "named counterparts, real international outputs, two-way exchange, "
-            "and a value that originates here rather than a catch-up plan"
+            "named counterparts, real international outputs or adopted preparation, "
+            "two-way exchange, and a value that originates here rather than catch-up"
         ),
         "source": "international-standing check",
     }
@@ -6015,6 +6185,305 @@ def grant_writing_collaborative_integration_risk_check(text: str) -> dict:
     }
 
 
+_XLSX_MAIN_NS = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+_XLSX_DOC_REL_NS = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
+_XLSX_PACKAGE_REL_NS = "http://schemas.openxmlformats.org/package/2006/relationships"
+
+
+def _xlsx_column_index(cell_ref: str) -> int:
+    letters = re.match(r"[A-Za-z]+", cell_ref or "")
+    if not letters:
+        return 0
+    value = 0
+    for char in letters.group(0).upper():
+        value = value * 26 + ord(char) - ord("A") + 1
+    return value - 1
+
+
+def _xlsx_sheet_matrix(path: pathlib.Path, sheet_name: str) -> list[list[object]]:
+    """Read cached XLSX cell values with the standard library only."""
+    main = f"{{{_XLSX_MAIN_NS}}}"
+    doc_rel_id = f"{{{_XLSX_DOC_REL_NS}}}id"
+    with zipfile.ZipFile(path) as archive:
+        shared: list[str] = []
+        if "xl/sharedStrings.xml" in archive.namelist():
+            root = ET.fromstring(archive.read("xl/sharedStrings.xml"))
+            shared = ["".join(si.itertext()) for si in root.findall(f"{main}si")]
+
+        workbook = ET.fromstring(archive.read("xl/workbook.xml"))
+        rel_id = None
+        available: list[str] = []
+        for sheet in workbook.findall(f".//{main}sheet"):
+            name = sheet.attrib.get("name", "")
+            available.append(name)
+            if name == sheet_name:
+                rel_id = sheet.attrib.get(doc_rel_id)
+        if rel_id is None:
+            raise ValueError(
+                f"sheet {sheet_name!r} not found in {path}; available: {available}"
+            )
+
+        rels = ET.fromstring(archive.read("xl/_rels/workbook.xml.rels"))
+        target = None
+        for rel in rels.findall(f"{{{_XLSX_PACKAGE_REL_NS}}}Relationship"):
+            if rel.attrib.get("Id") == rel_id:
+                target = rel.attrib.get("Target")
+                break
+        if not target:
+            raise ValueError(f"worksheet relationship {rel_id!r} is missing")
+        target = target.replace("\\", "/").lstrip("/")
+        if not target.startswith("xl/"):
+            target = "xl/" + target
+
+        worksheet = ET.fromstring(archive.read(target))
+        matrix: list[list[object]] = []
+        for row in worksheet.findall(f".//{main}row"):
+            values: dict[int, object] = {}
+            for cell in row.findall(f"{main}c"):
+                column = _xlsx_column_index(cell.attrib.get("r", ""))
+                cell_type = cell.attrib.get("t", "")
+                if cell_type == "inlineStr":
+                    inline = cell.find(f"{main}is")
+                    value: object = "" if inline is None else "".join(inline.itertext())
+                else:
+                    node = cell.find(f"{main}v")
+                    raw = "" if node is None or node.text is None else node.text
+                    if cell_type == "s" and raw:
+                        value = shared[int(raw)]
+                    elif cell_type in {"str", "e"}:
+                        value = raw
+                    elif raw == "":
+                        value = None
+                    else:
+                        try:
+                            number = float(raw)
+                            value = int(number) if number.is_integer() else number
+                        except ValueError:
+                            value = raw
+                values[column] = value
+            width = max(values, default=-1) + 1
+            matrix.append([values.get(index) for index in range(width)])
+        return matrix
+
+
+def _csv_matrix(path: pathlib.Path) -> list[list[object]]:
+    payload = path.read_bytes()
+    decoded = None
+    for encoding in ("utf-8-sig", "cp932"):
+        try:
+            decoded = payload.decode(encoding)
+            break
+        except UnicodeDecodeError:
+            continue
+    if decoded is None:
+        decoded = payload.decode("utf-8", errors="replace")
+    return [list(row) for row in csv.reader(decoded.splitlines())]
+
+
+def _budget_ledger_rows(path: pathlib.Path, sheet_name: str) -> list[dict]:
+    suffix = path.suffix.lower()
+    if suffix == ".xlsx":
+        matrix = _xlsx_sheet_matrix(path, sheet_name)
+    elif suffix == ".csv":
+        matrix = _csv_matrix(path)
+    else:
+        raise ValueError("budget source must be .xlsx or .csv")
+    if not matrix:
+        return []
+
+    header_index = 0
+    for index, row in enumerate(matrix):
+        headers = [str(value or "").strip().lower() for value in row]
+        if any("fy" in value or "年度" in value for value in headers) and any(
+            "amount" in value or "金額" in value for value in headers
+        ):
+            header_index = index
+            break
+    header = [str(value or "").strip().lower() for value in matrix[header_index]]
+
+    def find_column(predicate, fallback):
+        return next((i for i, value in enumerate(header) if predicate(value)), fallback)
+
+    category_col = find_column(
+        lambda value: "expenditure categories" in value and "2/" not in value,
+        0,
+    )
+    year_col = find_column(lambda value: value.endswith("/fy") or value == "fy" or "年度" in value, 1)
+    item_col = find_column(
+        lambda value: value.endswith("/item") or value == "item" or value.startswith("品目/"),
+        4,
+    )
+    amount_col = find_column(lambda value: value.endswith("/amount") or "金額" in value, 7)
+
+    rows: list[dict] = []
+    for source_row, row in enumerate(matrix[header_index + 1 :], header_index + 2):
+        def cell(column):
+            return row[column] if column < len(row) else None
+
+        try:
+            year = int(float(str(cell(year_col)).replace(",", "")))
+            amount = float(str(cell(amount_col)).replace(",", ""))
+        except (TypeError, ValueError):
+            continue
+        item = re.sub(r"\s+", " ", str(cell(item_col) or "")).strip()
+        category = str(cell(category_col) or "").strip()
+        if not item or not category:
+            continue
+        rows.append({
+            "category": category,
+            "year": year,
+            "item": item,
+            "amount_thousand_yen": int(amount) if amount.is_integer() else amount,
+            "source_row": source_row,
+        })
+    return rows
+
+
+def _budget_totals(rows: list[dict]) -> dict:
+    year_totals: dict[str, float] = {}
+    category_totals: dict[str, float] = {}
+    for row in rows:
+        year = str(row["year"])
+        category = row["category"]
+        amount = float(row["amount_thousand_yen"])
+        year_totals[year] = year_totals.get(year, 0.0) + amount
+        category_totals[category] = category_totals.get(category, 0.0) + amount
+
+    def clean(values):
+        return {
+            key: int(value) if float(value).is_integer() else round(value, 3)
+            for key, value in sorted(values.items())
+        }
+
+    total = sum(float(row["amount_thousand_yen"]) for row in rows)
+    return {
+        "grand_total_thousand_yen": int(total) if total.is_integer() else round(total, 3),
+        "year_totals_thousand_yen": clean(year_totals),
+        "category_totals_thousand_yen": clean(category_totals),
+    }
+
+
+def _expected_totals_json(payload: str, label: str) -> dict[str, float]:
+    if not payload:
+        return {}
+    parsed = json.loads(payload)
+    if not isinstance(parsed, dict):
+        raise ValueError(f"{label} must be a JSON object")
+    return {str(key): float(value) for key, value in parsed.items()}
+
+
+def grant_writing_budget_source_consistency_check(
+    budget_source: str,
+    sheet_name: str = "meisai_sample1",
+    comparison_source: str = "",
+    comparison_sheet_name: str = "",
+    expected_total_thousand_yen: float | None = None,
+    expected_year_totals_json: str = "",
+    expected_category_totals_json: str = "",
+) -> dict:
+    """Reconcile a canonical XLSX/CSV budget against exact declared totals.
+
+    Amounts are interpreted as thousands of yen, matching e-Rad/KAKENHI
+    budget sheets. The tool compares row-level ledgers when a second XLSX/CSV
+    is supplied and compares exact grand/year/category totals when declared
+    values are supplied. It never infers a number from persuasive prose.
+    """
+    source = pathlib.Path(budget_source)
+    if not source.is_file():
+        raise FileNotFoundError(f"budget source not found: {budget_source}")
+    rows = _budget_ledger_rows(source, sheet_name)
+    if not rows:
+        raise ValueError(f"no budget ledger rows found in {source} / {sheet_name}")
+    totals = _budget_totals(rows)
+    differences: list[dict] = []
+
+    if expected_total_thousand_yen is not None:
+        actual = float(totals["grand_total_thousand_yen"])
+        if actual != float(expected_total_thousand_yen):
+            differences.append({
+                "type": "grand_total_mismatch",
+                "expected": expected_total_thousand_yen,
+                "actual": totals["grand_total_thousand_yen"],
+                "delta": round(actual - float(expected_total_thousand_yen), 3),
+            })
+
+    for label, expected, actual in (
+        (
+            "year",
+            _expected_totals_json(expected_year_totals_json, "expected_year_totals_json"),
+            totals["year_totals_thousand_yen"],
+        ),
+        (
+            "category",
+            _expected_totals_json(expected_category_totals_json, "expected_category_totals_json"),
+            totals["category_totals_thousand_yen"],
+        ),
+    ):
+        for key in sorted(set(expected) | set(actual)):
+            want = expected.get(key)
+            got = actual.get(key)
+            if want is not None and (got is None or float(got) != float(want)):
+                differences.append({
+                    "type": f"{label}_total_mismatch",
+                    label: key,
+                    "expected": want,
+                    "actual": got,
+                    "delta": None if got is None else round(float(got) - float(want), 3),
+                })
+
+    comparison = None
+    if comparison_source:
+        other_path = pathlib.Path(comparison_source)
+        if not other_path.is_file():
+            raise FileNotFoundError(f"comparison budget source not found: {comparison_source}")
+        other_rows = _budget_ledger_rows(
+            other_path, comparison_sheet_name or sheet_name
+        )
+        def row_key(row):
+            return (
+                row["category"], row["year"], row["item"],
+                float(row["amount_thousand_yen"]),
+            )
+        source_counter = Counter(row_key(row) for row in rows)
+        other_counter = Counter(row_key(row) for row in other_rows)
+        missing = list((source_counter - other_counter).elements())
+        extra = list((other_counter - source_counter).elements())
+        comparison = {
+            "path": str(other_path),
+            "sheet_name": comparison_sheet_name or sheet_name,
+            "row_count": len(other_rows),
+            "totals": _budget_totals(other_rows),
+            "missing_from_comparison": missing[:50],
+            "extra_in_comparison": extra[:50],
+        }
+        if missing or extra:
+            differences.append({
+                "type": "row_ledger_mismatch",
+                "missing_count": len(missing),
+                "extra_count": len(extra),
+            })
+
+    return {
+        "consistent": not differences,
+        "difference_count": len(differences),
+        "differences": differences,
+        "canonical": {
+            "path": str(source),
+            "sheet_name": sheet_name,
+            "unit": "thousand_yen",
+            "row_count": len(rows),
+            "totals": totals,
+            "rows": rows,
+        },
+        "comparison": comparison,
+        "target": (
+            "one declared source of truth with exact row, fiscal-year, category, "
+            "and grand-total reconciliation before prose or e-Rad entry"
+        ),
+        "source": "deterministic budget-source consistency check",
+    }
+
+
 _BUDGET_COST_TOKENS = (
     "円", "費", "単価", "積算", "計上", "予算", "経費", "見積", "金額", "内訳",
 )
@@ -6464,7 +6933,7 @@ def grant_writing_health_report(
     text = _read_text_if_path(text_or_path)
     skip_set = {s.strip().lower() for s in skip.split(",") if s.strip()}
     valid_skip_ids = {
-        "abstraction", "argument_map", "bedrock", "budget", "capability",
+        "abstraction", "argument_map", "basic_research", "bedrock", "budget", "capability",
         "claim", "domain", "focus", "format", "integration", "international",
         "irreplaceable", "kaken", "kddi", "literature", "metric", "narrative",
         "originality", "pages", "persuasion", "pilot", "residue", "scale",
@@ -6535,6 +7004,24 @@ def grant_writing_health_report(
                 "severity": _severity_from_score(kaken["score"]),
                 "score": kaken["score"],
                 "comments": kaken["comments"][:5],
+            })
+
+    if (
+        program in {"kaken_generic", "kaken_oss", "kaken_oss_platform"}
+        and "basic_research" not in skip_set
+    ):
+        basic = grant_writing_kaken_basic_research_positioning_check(text)
+        detailed_results["kaken_basic_research_positioning"] = basic
+        if basic["applicable"] and basic["risks"]:
+            priority_issues.append({
+                "tool": "basic_research",
+                "name": "kaken_basic_research_positioning_check",
+                "severity": max(
+                    (risk["severity"] for risk in basic["risks"]),
+                    key=lambda value: {"HIGH": 2, "MEDIUM": 1, "LOW": 0}[value],
+                ),
+                "score": None,
+                "comments": basic["comments"][:5],
             })
 
     if (

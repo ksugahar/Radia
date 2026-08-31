@@ -252,6 +252,15 @@ Better: 「候補間の性能差を解析手法による変動幅と比較し、
 できる条件と、高忠実度解析へ進む判断基準を示す。MCP付きOSS基盤は異なる実装で
 この選択則を反証する手段とする。」
 
+For KAKENHI engineering proposals, preserve this five-level hierarchy:
+academic question -> enabling tool -> independent engineering validation ->
+generalisable conditions/boundaries -> industrial and international impact.
+Industrial competitiveness is a legitimate downstream consequence and the
+engineering setting is a legitimate severe test field. Neither should replace
+the academic question. Describe MCP as the glue that exposes each institution's
+capability for execution; describe GitHub as the place that preserves versions,
+tests, review, and provenance. Neither is the academic destination.
+
 ## Version Control and AI Execution Are Different Layers
 
 機械学習等をOSS共同研究の先例にする場合、「GitHubを導入すれば発展する」と短絡
@@ -582,6 +591,9 @@ IGTE共著がその起点である。」
 助成期間の開始前に確定している往来（採択前に決まっている招へい等）は、年度
 計画ではなく準備状況に書く。期間外の予定を年度計画へ入れると、計画の実行性が
 かえって疑われる。準備状況に置けば、本研究が立ち上がる根拠として働く。
+採択通知がある場合は、制度名、相手研究者、採択済みという状態、日数又は実施可能
+期間を書く。未実施の来訪を完了実績にせず、「採択され、招へいすることが決定した」
+と書き分ける。
 
 
 
@@ -1198,6 +1210,13 @@ Sources:
 日当・現地交通へ分解する。将来の会議は、開催地・日程が公式公表済みか、開催地のみ
 公表か、未公表かを区別し、直近大会または学内旅費規程を根拠に暫定積算する。
 
+Choose one XLSX/CSV sheet as the budget source of truth. Reconcile its row
+ledger, fiscal-year totals, category totals, and grand total before editing
+Markdown, TeX, or e-Rad. Do not repair a discrepancy by changing whichever
+document is easiest; report the delta, then update every derivative from the
+declared source. Use `grant_writing_budget_source_consistency_check` for exact
+reconciliation in thousands of yen. Persuasive prose is never numeric truth.
+
 最大費目が何かを明記し、それが研究の中心的な実験・検証行為と一致することを
 説明する。旅費が最大なら、一般的な学会参加ではなく、誰が何を再実行・変更・
 レビューし、どの成果物を持ち帰るかへ分解する。AI、計算資源、サーバ、CI、
@@ -1298,6 +1317,7 @@ splitter, so it does not count as a terminator here.
 - `grant_writing_kddi_digital_check(text)`
 - `grant_writing_kddi_power_electronics_focus_check(text)`
 - `grant_writing_kaken_oss_platform_check(text)`
+- `grant_writing_kaken_basic_research_positioning_check(text)`
 - `grant_writing_internal_evidence_to_external_scale_check(text)`
 - `grant_writing_domain_outcome_chain_check(text)`
 - `grant_writing_derived_metric_validation_check(text)`
@@ -1318,6 +1338,7 @@ splitter, so it does not count as a terminator here.
 - `grant_writing_literature_gap_evidence_check(text)`
 - `grant_writing_collaborative_integration_risk_check(text)`
 - `grant_writing_budget_alignment_check(text)`
+- `grant_writing_budget_source_consistency_check(budget_source, ...)`
 - `grant_writing_analyze_sentences(text)`
 - `grant_writing_count_weak_expressions(text)`
 - `grant_writing_lint_bedrock(text)`
@@ -1329,6 +1350,11 @@ architecture checks that belong only to the current OSS-platform proposal.
 Use `grant_writing_kaken_review_axes()` beside it to review the official budget
 role and subcriteria without turning them into a keyword score. Reserve
 `program="kaken_oss"` for the current OSS-platform proposal.
+
+KAKENHI health reports also run the non-scoring basic-research positioning
+check. It asks whether the academic question remains above MCP/GitHub/AI,
+whether the engineering case is a validation field, and whether industrial or
+international strength is downstream impact from the resulting knowledge.
 
 For KDDI Foundation Digital Innovation / social implementation proposals,
 use `program="kddi_digital"` so the report checks social issue, digital use,
