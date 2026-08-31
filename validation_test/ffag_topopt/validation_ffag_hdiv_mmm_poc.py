@@ -301,17 +301,21 @@ def parse_args(argv=None):
     parser.add_argument("--hmatrix-eta", type=float, default=2.0)
     parser.add_argument("--leaf-size", type=int, default=64)
     parser.add_argument("--solve-tolerance", type=float, default=1.0e-7)
+    parser.add_argument("--proposal-solve-tolerance", type=float,
+                        default=1.0e-5)
     parser.add_argument("--solve-max-iterations", type=int, default=2000)
     parser.add_argument("--move-fraction", type=float, default=0.05)
     parser.add_argument("--maximum-move-fraction", type=float, default=0.20)
     parser.add_argument("--proposal-adjoint-count", type=int, default=6)
     parser.add_argument("--exact-candidate-limit", type=int, default=64)
+    parser.add_argument("--no-record-performance", action="store_true")
     args = parser.parse_args(argv)
     if (len(args.energies) < 2 or args.nx < 2 or args.ny < 2 or args.nz < 1
             or args.segments < 16 or args.iterations < 1
             or args.threads < 1 or args.mu_r <= 1.0
             or args.initial_active_x_layers < 0
-            or args.initial_active_x_layers >= args.nx):
+            or args.initial_active_x_layers >= args.nx
+            or not 0.0 < args.proposal_solve_tolerance < 1.0):
         parser.error("invalid FFAG HDiv-MMM PoC settings")
     return args
 

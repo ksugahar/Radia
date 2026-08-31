@@ -61,9 +61,10 @@ Whether there is noise to divide depends on how the Jacobian was
 obtained: the analytic multipole route returns exact zeros, while a
 DIFFERENCED Jacobian -- which is what the chain route must use -- returns
 round-off.  Holding those columns at zero makes the recovered difference
-independent of that noise, and the filter measures each column's
-authority in the whitened metric the inversion actually minimizes.  The
-failure that motivated it was a differenced Jacobian producing high-order
+independent of that noise.  The filter measures authority on the
+equilibrated Jacobian before metric whitening, so a deliberately cheap
+high-order coefficient cannot turn round-off into an apparent control
+direction.  The failure that motivated it was a differenced Jacobian producing high-order
 coefficients large enough for the map builder's own analytic-versus
 -native consistency gate to refuse the profile.
 
@@ -467,9 +468,25 @@ def chain_field_metric(operator, grid_s, section_bounds, *,
 
 
 def chain_bend_row(chain, monitor_s):
-    """Exact ``d(integral B_y ds)/d(coefficients)`` on the design orbit."""
+    """Trapezoidal ``d(integral B_y ds)/d(coefficients)`` on the design orbit.
+
+    The returned row uses the same one-dimensional quadrature as the
+    supplied design-orbit samples.  In particular, its weights sum to the
+    covered arc length for a constant field response.  ``np.gradient`` is
+    not a quadrature rule: it gives a full interval weight to both endpoints
+    and therefore over-integrates an endpoint-inclusive monitor grid.
+    """
     monitor_s = np.asarray(monitor_s, dtype=float)
-    quadrature = np.gradient(monitor_s)
+    if monitor_s.ndim != 1 or monitor_s.size < 2:
+        raise ValueError("monitor_s must contain at least two arc-length samples")
+    steps = np.diff(monitor_s)
+    if not np.all(np.isfinite(monitor_s)) or not np.all(steps > 0.0):
+        raise ValueError("monitor_s must be finite and strictly increasing")
+    quadrature = np.empty_like(monitor_s)
+    quadrature[0] = 0.5 * steps[0]
+    quadrature[-1] = 0.5 * steps[-1]
+    if monitor_s.size > 2:
+        quadrature[1:-1] = 0.5 * (steps[:-1] + steps[1:])
     index, zeta = chain._locate(monitor_s)
     offsets = _element_offsets(chain)
     row = np.zeros(offsets[-1])
@@ -514,7 +531,11 @@ def chain_section_transfer(chain, coefficients, members, rigidity, *,
 
 
 def chain_section_spec(chain, coefficients, members, rigidity, bend_row, **kw):
-    """The section's ``[R_S[1,0], R_S[3,2], integral B_y ds]`` from the chain."""
+    """The section's ``[R_S[1,0], R_S[3,2], integral B_y ds]`` from the chain.
+
+    ``bend_row`` is the explicitly chosen design-orbit quadrature from
+    :func:`chain_bend_row`, so its resolution is part of the specification.
+    """
     matrix = chain_section_transfer(chain, coefficients, members, rigidity,
                                     **kw)
     return np.array([float(matrix[1, 0]), float(matrix[3, 2]),

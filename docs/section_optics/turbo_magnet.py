@@ -73,13 +73,8 @@ def half_gap_at(radius):
                          / REFERENCE_RADIUS_M) ** (-FIELD_INDEX)
 
 
-def build_upper_half_yoke(sector_angle=None, pole_end_trim=0.0):
-    """Upper (z >= 0) half of the curved C-yoke, revolved about +z.
-
-    ``pole_end_trim`` shortens the POLE in azimuth at both ends while the
-    yoke keeps its length -- the crudest possible pole-end shape knob,
-    used only to sanity-check that the fringe responds.
-    """
+def build_upper_half_yoke(sector_angle=None):
+    """Upper (z >= 0) half of the curved C-yoke, revolved about +z."""
     angle = SECTOR_ANGLE_RAD if sector_angle is None else float(sector_angle)
     radii = np.linspace(POLE_INNER_M, POLE_OUTER_M, CONTOUR_POINTS)
     contour = [(float(r), float(z)) for r, z in zip(radii, half_gap_at(radii))]
@@ -106,7 +101,6 @@ def build_upper_half_yoke(sector_angle=None, pole_end_trim=0.0):
     solid = solid.Rotate(Axis(Pnt(0, 0, 0), Z),
                          np.degrees(-0.5 * np.pi - 0.5 * angle))
     solid = solid.Move(Vec(0.0, REFERENCE_RADIUS_M, 0.0))
-    del pole_end_trim
     return solid.mat("iron")
 
 
