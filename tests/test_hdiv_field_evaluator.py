@@ -106,6 +106,22 @@ def test_large_cloud_parallel_batch_matches_serial_sized_chunks():
     assert np.array_equal(bulk, chunked)
 
 
+def test_large_cloud_one_point_direct_matches_reference():
+    """Orbit tracking keeps a large direct cloud numerically exact."""
+    rng = np.random.default_rng(91)
+    xyz = rng.uniform(-0.5, 0.5, (5000, 3))
+    strength = rng.normal(size=5000)
+    observation = np.array([[1.8, -1.6, 1.4]])
+    evaluator = _cloud(xyz, strength)
+
+    direct = np.asarray(evaluator.field(observation, "direct"))
+    delta = observation[:, None, :] - xyz[None, :, :]
+    r2 = np.einsum("nqi,nqi->nq", delta, delta)
+    reference = np.einsum("q,nqi,nq->ni", strength, delta, r2**-1.5)
+
+    assert np.allclose(direct, reference, rtol=2.0e-13, atol=2.0e-13)
+
+
 def test_field_input_shape_is_checked():
     evaluator = _cloud(np.array([[0.0, 0.0, 0.0]]), np.array([1.0]))
     with pytest.raises(RuntimeError, match="shape"):
