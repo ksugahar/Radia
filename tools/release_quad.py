@@ -51,7 +51,13 @@ Usage:
 
     python tools/release_quad.py done --simulink-package <zip>
         Require both the normal release gate and the matching four-machine
-        Simulink candidate state.
+        Simulink candidate state, then restore LAB and 100号機 to the
+        canonical editable worktrees under 01_GitHub.
+
+    python tools/release_quad.py restore-editable
+        Recovery command for a failed or interrupted release. Stop active
+        MCP transports, reinstall all three packages from canonical
+        01_GitHub worktrees, and verify both machines.
 
 The independent radia-optuna lane does not install or deploy Radia, Cubit,
 radia-mcp, or NGSolve. It gates one exact CI wheel before publication.
@@ -866,11 +872,11 @@ def _kill_cubit_local():
 
 
 def _kill_mcp_local():
-    info("force-kill local mcp-server-*.exe and Radia panel launchers")
+    info("force-kill local MCP console scripts and Radia panel launchers")
     run(["pwsh", "-NoProfile", "-Command",
          "Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | "
          "Where-Object { $_.ProcessId -ne $PID -and ("
-         "$_.Name -like 'mcp-server*' -or $_.Name -like 'radia-*' -or "
+         "$_.Name -like 'mcp-*' -or $_.Name -like 'radia-*' -or "
          "$_.Name -like 'radia_*' -or "
          "((($_.Name -eq 'python.exe') -or ($_.Name -eq 'pythonw.exe')) -and "
          f"$_.CommandLine -match '{_CONSOLE_SCRIPT_WRAPPER_RE}') "
@@ -887,9 +893,13 @@ def _deploy_lab():
         return rc
     _kill_cubit_local()
     _kill_mcp_local()
-    for sub in ("", "/packages/cubit-mesh-export", "/packages/radia-mcp"):
-        run(["pip", "install", "-e", repo + sub, "--no-deps",
-             "--no-cache-dir"])
+    run([sys.executable, "-m", "pip", "uninstall", "-y",
+         "radia", "cubit-mesh-export", "radia-mcp"], check=False)
+    run([sys.executable, "-m", "pip", "install", "--no-deps",
+         "--no-cache-dir", "--no-build-isolation",
+         "-e", repo,
+         "-e", repo + "/packages/cubit-mesh-export",
+         "-e", repo + "/packages/radia-mcp"])
     run(["cubit-plugin-install"])
     run(["cubit-plugin-install", "--verify-only"])
     run(["cubit-smoke-test"])
@@ -923,7 +933,7 @@ if ($LASTEXITCODE -ne 0 -or $sourceDirty) {{
 Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object {{
   $_.ProcessId -ne $PID -and (
     $_.Name -eq 'coreform_cubit.exe' -or $_.Name -eq 'cubit.exe' -or
-    $_.Name -like 'mcp-server*' -or
+    $_.Name -like 'mcp-*' -or
     $_.Name -like 'radia-*' -or $_.Name -like 'radia_*' -or
     ((($_.Name -eq 'python.exe') -or ($_.Name -eq 'pythonw.exe')) -and
       $_.CommandLine -match '{_CONSOLE_SCRIPT_WRAPPER_RE}')
@@ -933,7 +943,8 @@ Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object {{
   Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue
 }}
 Start-Sleep -Seconds 2
-pip install -e "{repo}" -e "{repo}\\packages\\cubit-mesh-export" -e "{repo}\\packages\\radia-mcp" --no-deps --no-cache-dir
+python -m pip uninstall -y radia cubit-mesh-export radia-mcp
+python -m pip install --no-deps --no-cache-dir --no-build-isolation -e "{repo}" -e "{repo}\\packages\\cubit-mesh-export" -e "{repo}\\packages\\radia-mcp"
 if ($LASTEXITCODE -ne 0) {{ exit $LASTEXITCODE }}
 cubit-plugin-install --all-users
 if ($LASTEXITCODE -ne 0) {{ exit $LASTEXITCODE }}
@@ -1313,8 +1324,29 @@ def _lab_editable_packages():
     ]
 
 
+def _canonical_lab_editable_packages():
+    """Return LAB development pointers, ignoring release-worktree overrides."""
+    root = NAS_REPO_LAB.rstrip("/\\")
+    return [
+        ("radia", root),
+        ("cubit-mesh-export", root + "/packages/cubit-mesh-export"),
+        ("radia-mcp", root + "/packages/radia-mcp"),
+        ("mcp-server-document", "S:/mcp-server"),
+    ]
+
+
 def _remote_100_editable_packages():
     root = _editable_repo_100()
+    return [
+        ("radia", root),
+        ("cubit-mesh-export", root + r"\packages\cubit-mesh-export"),
+        ("radia-mcp", root + r"\packages\radia-mcp"),
+    ]
+
+
+def _canonical_remote_100_editable_packages():
+    """Return 100号機 development pointers, ignoring release overrides."""
+    root = NAS_REPO_100.rstrip("/\\")
     return [
         ("radia", root),
         ("cubit-mesh-export", root + r"\packages\cubit-mesh-export"),
@@ -1363,7 +1395,9 @@ def _norm_path(p):
     p = (p or "").replace("\\", "/").rstrip("/").lower()
     # Treat the NAS UNC (//192.168.11.100/work/00_cae/radia/01_github) as
     # equivalent to S:/radia/01_github -- both resolve to the same files.
-    return p.replace("//192.168.11.100/work/00_cae/radia/01_github",
+    p = p.replace("//192.168.11.100/work/00_cae/radia/01_github",
+                  "s:/radia/01_github")
+    return p.replace("//192.168.121.100/work/00_cae/radia/01_github",
                      "s:/radia/01_github")
 
 
@@ -1399,7 +1433,30 @@ def _pip_show(pkg):
     return d
 
 
-def _verify_lab_editable():
+_EDITABLE_IMPORT_MODULES = {
+    "radia": "radia",
+    "cubit-mesh-export": "cubit_mesh_export",
+    "radia-mcp": "radia_mcp",
+}
+
+
+def _fresh_import_origin(pkg):
+    """Return a package's imported __file__ from a fresh Python process."""
+    module = _EDITABLE_IMPORT_MODULES.get(pkg)
+    if not module:
+        return None
+    probe = (
+        "import importlib; "
+        f"m=importlib.import_module({module!r}); "
+        "print(m.__file__ or '')"
+    )
+    result = run([sys.executable, "-c", probe], capture=True, check=False)
+    if result.returncode != 0:
+        return ""
+    return (result.stdout or "").strip()
+
+
+def _verify_lab_editable(packages=None):
     """Check the 4 LAB-editable packages still point at NAS source.
 
     Returns (n_ok, n_drift, n_missing, details) tuple.  Drift is the
@@ -1415,7 +1472,7 @@ def _verify_lab_editable():
     n_ok = n_drift = n_missing = 0
     details = []
 
-    packages = _lab_editable_packages()
+    packages = packages or _lab_editable_packages()
     for pkg, want_prefix in packages:
         d = _pip_show(pkg)
         if d is None:
@@ -1447,15 +1504,26 @@ def _verify_lab_editable():
 
         got_norm = _norm_path(editable)
         want_norm = _norm_path(want_prefix)
-        if got_norm == want_norm:
-            ok(f"{pkg:25s}  v{version}  {kind}  -> {editable}")
-            n_ok += 1
-        else:
+        if got_norm != want_norm:
             fail(f"{pkg:25s}  v{version}  DRIFT  {kind}\n"
                  f"        got:      {editable}\n"
                  f"        expected: {want_prefix}")
             n_drift += 1
             details.append((pkg, "drift", editable))
+            continue
+
+        origin = _fresh_import_origin(pkg)
+        if origin is not None and not _norm_path(origin).startswith(want_norm + "/"):
+            fail(f"{pkg:25s}  v{version}  IMPORT DRIFT\n"
+                 f"        imported: {origin or '<import failed>'}\n"
+                 f"        expected below: {want_prefix}")
+            n_drift += 1
+            details.append((pkg, "import_drift", origin or "<import failed>"))
+            continue
+
+        suffix = f"; import -> {origin}" if origin else ""
+        ok(f"{pkg:25s}  v{version}  {kind}  -> {editable}{suffix}")
+        n_ok += 1
 
     print("")
     if n_drift == 0:
@@ -1477,6 +1545,7 @@ def _verify_lab_editable():
 
 
 REMOTE_EDITABLE_VERIFY = r'''
+import importlib
 import importlib.metadata as md
 import json
 import sys
@@ -1484,10 +1553,17 @@ from urllib.parse import urlparse
 from urllib.request import url2pathname
 
 EXPECT = __EXPECT__
+MODULES = {
+    "radia": "radia",
+    "cubit-mesh-export": "cubit_mesh_export",
+    "radia-mcp": "radia_mcp",
+}
 
 def norm(p):
     p = (p or "").replace("\\", "/").rstrip("/").lower()
     p = p.replace("//192.168.11.100/work/00_cae/radia/01_github",
+                  "s:/radia/01_github")
+    p = p.replace("//192.168.121.100/work/00_cae/radia/01_github",
                   "s:/radia/01_github")
     return p
 
@@ -1532,8 +1608,20 @@ for pkg, want in EXPECT:
         print(f"  got:      {got}")
         print(f"  expected: {want}")
         bad += 1
-    else:
-        print(f"OK   {pkg}: v{dist.version} editable -> {got}")
+        continue
+    try:
+        origin = importlib.import_module(MODULES[pkg]).__file__ or ""
+    except Exception as exc:
+        print(f"FAIL {pkg}: import failed: {exc!r}")
+        bad += 1
+        continue
+    if not norm(origin).startswith(norm(want) + "/"):
+        print(f"FAIL {pkg}: import drift")
+        print(f"  imported: {origin}")
+        print(f"  expected below: {want}")
+        bad += 1
+        continue
+    print(f"OK   {pkg}: v{dist.version} editable -> {got}; import -> {origin}")
 
 sys.exit(1 if bad else 0)
 '''
@@ -1556,9 +1644,9 @@ def _verify_remote_editable(ssh_host, label, expected):
     return 1
 
 
-def _verify_100_editable():
+def _verify_100_editable(expected=None):
     return _verify_remote_editable(
-        SSH_100, "100号機", _remote_100_editable_packages()
+        SSH_100, "100号機", expected or _remote_100_editable_packages()
     )
 
 
@@ -1571,6 +1659,87 @@ def cmd_verify_editable(args):
     drift = _verify_lab_editable()
     drift += _verify_100_editable()
     return 1 if drift else 0
+
+
+def _restore_lab_canonical_editable():
+    """Reinstall the three-package development tier from canonical LAB source."""
+    step("Restore LAB canonical editable installs")
+    _kill_mcp_local()
+    packages = _canonical_lab_editable_packages()[:3]
+    uninstall = run(
+        [sys.executable, "-m", "pip", "uninstall", "-y",
+         *(pkg for pkg, _path in packages)],
+        check=False,
+    )
+    if uninstall.returncode != 0:
+        warn("pip uninstall reported an error; attempting a clean editable install")
+    install_cmd = [sys.executable, "-m", "pip", "install", "--no-deps",
+                   "--no-cache-dir", "--no-build-isolation"]
+    for _pkg, path in packages:
+        install_cmd.extend(["-e", path])
+    installed = run(install_cmd, check=False)
+    if installed.returncode != 0:
+        fail("LAB canonical editable reinstall failed")
+        return 3
+    smoke = run(["mcp-server-grant-writing", "--selftest"], check=False)
+    if smoke.returncode != 0:
+        fail("LAB grant-writing MCP self-test failed after restore")
+        return 4
+    ok("LAB canonical editable reinstall and grant-writing self-test passed")
+    return 0
+
+
+def _restore_100_canonical_editable():
+    """Reinstall the three-package development tier from canonical 100 source."""
+    step("Restore 100号機 canonical editable installs")
+    repo = NAS_REPO_100.rstrip("/\\")
+    ps_block = fr"""
+$ErrorActionPreference = 'Stop'
+$env:PYTHONUTF8 = '1'
+Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object {{
+  $_.ProcessId -ne $PID -and (
+    $_.Name -like 'mcp-*' -or $_.Name -like 'radia-*' -or $_.Name -like 'radia_*' -or
+    ((($_.Name -eq 'python.exe') -or ($_.Name -eq 'pythonw.exe')) -and
+      $_.CommandLine -match '{_CONSOLE_SCRIPT_WRAPPER_RE}')
+  )
+}} | ForEach-Object {{
+  Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue
+}}
+python -m pip uninstall -y radia cubit-mesh-export radia-mcp
+python -m pip install --no-deps --no-cache-dir --no-build-isolation -e "{repo}" -e "{repo}\packages\cubit-mesh-export" -e "{repo}\packages\radia-mcp"
+if ($LASTEXITCODE -ne 0) {{ exit $LASTEXITCODE }}
+mcp-server-grant-writing --selftest
+if ($LASTEXITCODE -ne 0) {{ exit $LASTEXITCODE }}
+"""
+    encoded = base64.b64encode(ps_block.encode("utf-16le")).decode("ascii")
+    restored = run(
+        ["ssh", SSH_100, "pwsh", "-NoProfile", "-ExecutionPolicy", "Bypass",
+         "-EncodedCommand", encoded],
+        check=False,
+    )
+    if restored.returncode != 0:
+        fail("100号機 canonical editable reinstall failed")
+        return 3
+    ok("100号機 canonical editable reinstall and grant-writing self-test passed")
+    return 0
+
+
+def cmd_restore_editable(args):
+    """Restore canonical editable installs after a release or interrupted deploy."""
+    failures = 0
+    failures += int(_restore_lab_canonical_editable() != 0)
+    failures += int(_restore_100_canonical_editable() != 0)
+    if failures:
+        fail(f"canonical editable restore failed on {failures} machine(s)")
+        return 3
+
+    drift = _verify_lab_editable(_canonical_lab_editable_packages())
+    drift += _verify_100_editable(_canonical_remote_100_editable_packages())
+    if drift:
+        fail("canonical editable verification failed after reinstall")
+        return 4
+    ok("LAB and 100号機 are back on canonical 01_GitHub editable sources")
+    return 0
 
 
 # ============================================================
@@ -1850,11 +2019,13 @@ def _run_retired_standalone_pyside_guard():
 
 
 def cmd_done(args):
-    """Definition-of-done check: preflight + editable verify + phase9 + retired panel guard.
+    """Run release gates, then restore the canonical editable development tier.
 
-    Read-only. Exit 0 means the release is consistent across LAB / 100号機 /
-    mdx / hibino, the repo is release-ready, the editable tier is intact, AND
-    the retired non-Cubit PySide panel surface has not been reintroduced.
+    Exit 0 means the release is consistent across LAB / 100号機 / mdx / hibino,
+    the repo is release-ready, the retired non-Cubit PySide panel surface has
+    not been reintroduced, AND LAB/100号機 have been returned to canonical
+    01_GitHub editable sources. Active MCP transports are restarted by their
+    clients after this command stops them for the reinstall.
     """
     step("Definition-of-done check "
          "(preflight + editable tier + phase9 + retired standalone panel guard)")
@@ -1895,12 +2066,18 @@ def cmd_done(args):
             fail("Simulink candidate did not satisfy the four-machine gate.")
             return rc
 
+    rc = cmd_restore_editable(args)
+    if rc != 0:
+        fail("release gates passed, but canonical editable restoration failed. "
+             "Run `release_quad restore-editable` before resuming development.")
+        return rc
+
     print("")
     suffix = (" The supplied Simulink candidate also passed all four MATLAB "
               "machines." if getattr(args, "simulink_package", None) else "")
     ok("DEFINITION OF DONE met. Release is consistent across LAB / 100号機 / "
-       "mdx / hibino, the editable tier is intact, and the retired standalone "
-       "PySide panel surface is absent." + suffix)
+       "mdx / hibino, LAB/100号機 are restored to canonical editable sources, "
+       "and the retired standalone PySide panel surface is absent." + suffix)
     return 0
 
 
@@ -2222,6 +2399,9 @@ def main():
                     help="phase8 -> phase8e -> phase9 in one shot")
     sub.add_parser("verify-editable",
                     help="LAB/100号機 editable-install pointers check (read-only)")
+    sub.add_parser(
+        "restore-editable",
+        help="stop MCP transports and restore LAB/100号機 to canonical editable sources")
     sub.add_parser("ci-verify",
                     help="Phase 5.5: gh-free CI-green gate (run after push main, before tag)")
     sm = sub.add_parser("sync-main",
@@ -2253,6 +2433,7 @@ def main():
         "optuna-done":       cmd_optuna_done,
         "all":              cmd_all,
         "verify-editable":  cmd_verify_editable,
+        "restore-editable": cmd_restore_editable,
         "ci-verify":        cmd_ci_verify,
         "sync-main":        cmd_sync_main,
         "evidence-motor":   cmd_evidence_motor,

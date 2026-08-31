@@ -20,6 +20,7 @@ python tools/release_quad.py optuna-candidate --ci-run-id <id> --target all
 python tools/release_quad.py optuna-done --wheel <path>
 python tools/release_quad.py all
 python tools/release_quad.py done --simulink-package <zip>
+python tools/release_quad.py restore-editable
 ```
 
 ## Machine Policy
@@ -59,9 +60,11 @@ python tools/release_quad.py all
 The release worktree must contain the native build outputs needed by editable
 installs. QUAD verifies its exact Git SHA and tracked-clean state on LAB and
 100号機 before killing processes or installing anything. Repeat the same two
-environment variables for `done`. Keep that worktree until publication is
-complete; after parallel work lands and the canonical worktree catches up,
-restore the normal editable pointers.
+environment variables for `done`. After all gates pass, `done` automatically
+stops active MCP transports, reinstalls the three-package development tier from
+the canonical `01_GitHub` worktrees, runs the grant-writing self-test, and
+verifies both editable metadata and actual import origins. If a release is
+interrupted before `done` completes, run `restore-editable` explicitly.
 
 ## Rules
 

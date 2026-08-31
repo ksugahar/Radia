@@ -110,7 +110,7 @@ table is the AI-readable summary.
 | 8 | Deploy LAB + 100号機 editable, hibino PyPI, then mdx PyPI via Phase 8e | always | mdx skips radia-mcp |
 | 8S | Verify the exact versioned Simulink ZIP on LAB / 100号機 / mdx / hibino | for every Simulink revision | `simulink-candidate --package <zip> --target all` |
 | 9 | Cross-machine consistency probe (LAB / 100号機 / mdx / hibino hashes) | always | mdx reports radia-mcp as N/A |
-| DoD | Re-run preflight/editable/Phase 9 and bind the exact ZIP hash to the same HEAD | always | `done --simulink-package <zip>`; only exit 0 authorizes GitHub Release publication. Since 2026-08-07 `done` ALSO refuses while NAS main != origin/main — leaving main behind after a clone-based release is the root cause of the next session's rebase conflicts |
+| DoD | Re-run preflight/editable/Phase 9, bind the exact ZIP hash to the same HEAD, then restore canonical editable installs | always | `done --simulink-package <zip>`; only exit 0 authorizes GitHub Release publication. Since 2026-08-31 `done` force-reinstalls LAB/100号機 from canonical `01_GitHub`, self-tests grant-writing, and verifies both editable metadata and import origins. It also refuses while NAS main != origin/main |
 
 ## ===
 ## simulink_candidate — exact MEX + SLX publication gate
@@ -138,8 +138,12 @@ python tools/release_quad.py done `
 The candidate state is keyed by the ZIP SHA-256. Rebuilding or modifying the
 archive invalidates the four-machine evidence. `done` also requires the
 manifest commit to equal repository `HEAD`, so validation from another commit
-cannot authorize publication. Upload the ZIP, external `manifest.json`, and
-`SHA256SUMS.txt` to the matching Radia GitHub Release only after `done` exits 0.
+cannot authorize publication. A successful `done` finally restores LAB and
+100号機 to their canonical editable worktrees. If execution is interrupted
+before that restoration finishes, run `python tools/release_quad.py
+restore-editable` before resuming MCP development. Upload the ZIP, external
+`manifest.json`, and `SHA256SUMS.txt` to the matching Radia GitHub Release only
+after `done` exits 0.
 
 The standalone IH preview remains supported by the same packager without
 `--full-library`; it does not replace the production full-library gate.
