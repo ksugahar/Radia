@@ -34,7 +34,10 @@ def test_mcp_teaches_only_the_verified_magnetic_conductor_claims():
     assert result["full_profile_replay"]["full_profile_passed"] is True
     assert result["full_profile_replay"]["source_head_stable_during_run"] is True
     assert hodge["checks"]["h1_hodge_spectra_are_contractions"] is True
-    assert hodge["checks"]["charge_bem_spectrum_violation_reproduced"] is True
+    assert hodge["checks"]["charge_hacapk_spectrum_is_a_contraction"] is True
+    assert hodge["checks"][
+        "charge_hacapk_material_solve_and_field_are_production_finite"
+    ] is True
     assert "mapped-HEX BDM1" in coupled
     assert "BDM2" in coupled
     assert "not an accuracy oracle" in coupled
@@ -44,11 +47,14 @@ def test_mcp_teaches_only_the_verified_magnetic_conductor_claims():
     assert "strict 32/96/384-HEX h ladder" in coupled
     assert "Nsample x Nsample" in coupled
     assert "1819.7 s to 339.8 s" in coupled
-    assert "mapped/non-affine pure HEX material models" in coupled
-    assert "ACA compression is not the cause" in coupled
-    assert "composite mapped-HEX BDM2 charge operator" in coupled
-    assert "--include-bdm2-gate" in coupled
+    assert "mapped/non-affine pure-HEX BDM2 primal material and field lane" in coupled
+    assert "ACA compression was not the cause" in coupled
+    assert "production C++ composite operator" in coupled
+    assert "Shape derivatives remain fail-loud" in coupled
     assert "same 207 active mapped-body BDM2 DoFs" in coupled
-    assert "1.2175" in coupled
+    assert "0.9961" in coupled
+    assert "q9/q12" in coupled
+    assert "Cubit 2025.12" in coupled
+    assert "1.06e-10" in coupled
     assert "not an open-boundary accuracy oracle" in coupled
     assert "universal solver-superiority claim" in coupled
