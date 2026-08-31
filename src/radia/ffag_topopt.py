@@ -63,6 +63,71 @@ class FFAGCyclicSectorContract:
 
 
 @dataclass(frozen=True)
+class FFAGCyclicHDivExcitation:
+    """One physically complete source and solve options for an FFAG quotient.
+
+    ``source`` is deliberately a *full-ring* finite-filament source.  The
+    cyclic images supplied to :func:`radia.vim.Solve` represent repeated iron
+    magnetization charges, not repeated impressed coils.  Keeping them in one
+    immutable object prevents a sector solve and native orbit tracking from
+    accidentally using different current systems.
+
+    ``periodic_boundaries`` is empty for a disjoint magnet cell, including the
+    legacy 12-cell JMAG FFAG SAT assembly.  It is required only when an iron
+    body itself is cut by the two azimuthal sector faces.  In that case the
+    caller must first add NGSolve PERIODIC point identifications to the Cubit
+    mesh using :func:`identify_ffag_cyclic_sector_vertices`.
+    """
+
+    source: CoilBuilderHDivSource
+    contract: FFAGCyclicSectorContract
+    periodic_boundaries: tuple[str, str] = ()
+
+    def __post_init__(self):
+        if not isinstance(self.source, CoilBuilderHDivSource):
+            raise TypeError("FFAG cyclic excitation source must be CoilBuilderHDivSource")
+        if not isinstance(self.contract, FFAGCyclicSectorContract):
+            raise TypeError("FFAG cyclic excitation needs FFAGCyclicSectorContract")
+        if isinstance(self.periodic_boundaries, str):
+            raise TypeError(
+                "FFAG periodic_boundaries must be a pair of names, not one string")
+        boundaries = tuple(str(name).strip() for name in self.periodic_boundaries)
+        if any(not name for name in boundaries):
+            raise ValueError("FFAG periodic boundary names must be non-empty")
+        if self.contract.body_crosses_periodic_planes:
+            if len(boundaries) != 2 or boundaries[0] == boundaries[1]:
+                raise ValueError(
+                    "connected FFAG cyclic iron needs two named periodic boundaries")
+            if self.contract.field_antiperiodic:
+                raise NotImplementedError(
+                    "connected FFAG HDiv sectors support periodic, not antiperiodic, "
+                    "normal traces")
+        elif boundaries:
+            raise ValueError(
+                "disjoint FFAG cells must not declare artificial periodic boundaries")
+        object.__setattr__(self, "periodic_boundaries", boundaries)
+
+    @property
+    def image_cyclic(self) -> int:
+        """Rotational count passed to the HDiv charge-Gram operator."""
+        return self.contract.fold
+
+    def solve_kwargs(self):
+        """Return the coupled coil/iron options for ``vim.Solve``.
+
+        The caller owns ``ngsolve.TaskManager`` and material/solver options;
+        this method owns only the source and rotational-periodicity contract.
+        """
+        options = {
+            "H_ext": self.source.coefficient_function(),
+            "image_cyclic": self.image_cyclic,
+        }
+        if self.periodic_boundaries:
+            options["cyclic_periodic_boundaries"] = self.periodic_boundaries
+        return options
+
+
+@dataclass(frozen=True)
 class FFAGCyclicDensityMap:
     """Independent material variables for a rotational FFAG quotient mesh.
 
@@ -383,6 +448,49 @@ def validate_ffag_cyclic_sector_contract(
         if crosses else "disjoint-cell-cyclic-images")
     return FFAGCyclicSectorContract(
         count, antiperiodic, crosses, formulation, identified, paired, mode)
+
+
+def expand_ffag_cyclic_coil_source(
+        sector_source: CoilBuilderHDivSource,
+        contract: FFAGCyclicSectorContract) -> CoilBuilderHDivSource:
+    """Materialize the full-ring coil source required by an FFAG sector solve.
+
+    The caller supplies exactly the conductors belonging to one rotational
+    cell.  This function creates the finite-filament source for every cell and
+    preserves its path/current representation for both the HDiv incident RHS
+    and ``CoilBuilderHDivSource.to_radia_object()``.  It deliberately returns
+    a full-ring source: cyclic charge images in the VIM operator replicate
+    magnetization, not imposed coil currents.
+    """
+    if not isinstance(sector_source, CoilBuilderHDivSource):
+        raise TypeError("sector_source must be a CoilBuilderHDivSource")
+    if not isinstance(contract, FFAGCyclicSectorContract):
+        raise TypeError("contract must be an FFAGCyclicSectorContract")
+    return sector_source.cyclic_copies(
+        contract.fold, alternating=contract.field_antiperiodic)
+
+
+def build_ffag_cyclic_hdiv_excitation(
+        sector_source: CoilBuilderHDivSource,
+        contract: FFAGCyclicSectorContract, *,
+        periodic_boundaries=()) -> FFAGCyclicHDivExcitation:
+    """Build the only valid coil-plus-image input set for an FFAG HDiv solve.
+
+    The supplied source describes one physical cell.  It is rotated to the
+    complete ring once, then reused unchanged for the NGSolve RHS and native
+    tracking.  ``image_cyclic`` remains responsible only for the repeated
+    magnetization-charge interaction of the solved iron.
+    """
+    if not isinstance(sector_source, CoilBuilderHDivSource):
+        raise TypeError("FFAG sector source must be CoilBuilderHDivSource")
+    if not isinstance(contract, FFAGCyclicSectorContract):
+        raise TypeError("FFAG cyclic excitation needs FFAGCyclicSectorContract")
+    if isinstance(periodic_boundaries, str):
+        raise TypeError(
+            "FFAG periodic_boundaries must be a pair of names, not one string")
+    return FFAGCyclicHDivExcitation(
+        expand_ffag_cyclic_coil_source(sector_source, contract), contract,
+        tuple(str(name).strip() for name in periodic_boundaries))
 
 
 def magnetic_rigidity_from_kinetic_energy(
