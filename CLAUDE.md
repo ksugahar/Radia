@@ -526,6 +526,37 @@ on its own. Re-ask: "is X good for the repository?" If yes, do it for that
 reason. If the only argument for X is the paper, deprioritize it in favor of
 work that genuinely improves the code.
 
+### Active Two-Track Program (2026-09-01)
+
+**POLICY**: Until this policy is explicitly superseded, active Radia delivery is
+limited to these two outcomes:
+
+1. Complete **HDiv-MMM topology optimization** as a usable, reproducible
+   engineering capability.
+2. Make the GitHub repository and **radia-mcp** a high-quality public software
+   project.
+
+The HDiv-MMM topology-optimization definition of done is an end-to-end,
+named engineering design workflow, not merely an optimizer or a field-solve
+prototype.  It must have one canonical solver/API route; constrained design
+variables and objectives; reproducible input, output, and provenance artifacts;
+an independent evaluation of the selected design; a recorded initial-versus-final
+comparison; focused regression tests; and an executable public Python/MCP entry
+point with documentation that can reproduce the evidence.
+
+The GitHub/MCP quality definition of done includes a discoverable public API and
+README, a single authoritative MCP catalog, documented tool contracts, focused
+unit and real-protocol integration coverage, deterministic release/version
+metadata, and a repository that contains neither obsolete installation paths nor
+machine-specific execution dependencies.  Keep fast gates in `tests/`; place
+expensive numerical evidence in `validation_test/` with checked provenance.
+
+New application domains, exploratory solvers, UI work, packaging variants, and
+unrelated refactors are deferred.  A change outside the two tracks is permitted
+only when it fixes a release-blocking defect or directly unblocks one of their
+acceptance checks.  Record other ideas in the backlog or memory rather than
+expanding the public surface or CI matrix.
+
 ### No Development Cruft in SOURCE — Distill the Lesson to memory/ (2026-06-26)
 
 **POLICY**: Development-in-progress iterations MUST NOT accumulate in the
