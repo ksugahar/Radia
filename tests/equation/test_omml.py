@@ -80,9 +80,6 @@ def test_nary_carries_its_operator_and_limits():
     assert "<m:supHide" in omml           # no upper limit was given
 
 
-def test_unparsable_command_does_not_lose_the_equation():
-    """A typo costs one glyph, not the whole equation."""
-    omml = equation.tex_to_omml(r"a + \notacommand + b")
-    assert "<m:oMath" in omml
-    assert "<m:t>a</m:t>" in omml
-    assert "<m:t>b</m:t>" in omml
+def test_unparsable_command_fails_before_it_can_reach_a_slide():
+    with pytest.raises(ValueError, match=r"unsupported TeX control sequence"):
+        equation.tex_to_omml(r"a + \notacommand + b")

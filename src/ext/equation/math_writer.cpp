@@ -270,6 +270,15 @@ private:
                 const auto& c = static_cast<const CharNode&>(n);
                 uint32_t cp = c.charCode ? c.charCode : uint32_t(uint8_t(c.ch));
                 if (!cp) return std::string();
+                /* OMML/RTF/MathML do not carry this tree's logical extended
+                 * typeface codes.  Emit the corresponding Unicode math
+                 * alphabet scalar, as the SVG renderer does. */
+                if (c.typeface == TF_MATH_SANS)
+                    cp = mtef_math_sans_of(cp) ? mtef_math_sans_of(cp) : cp;
+                else if (c.typeface == TF_MATH_MONO)
+                    cp = mtef_math_mono_of(cp) ? mtef_math_mono_of(cp) : cp;
+                else if (c.typeface == TF_MATH_FRAKTUR)
+                    cp = mtef_math_fraktur_of(cp) ? mtef_math_fraktur_of(cp) : cp;
                 return syn_.run(utf8_of(cp), run_style(c.typeface));
             }
             case Node::kScript: {

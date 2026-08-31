@@ -899,7 +899,11 @@ private:
          * caret in a fresh template would be invisible, which is exactly where
          * it is most needed. */
         double top = -out.asc, bottom = out.desc;
-        if (out.asc <= 0 && out.desc <= 0) {
+        /* A run made only of explicit spaces has width but no ink.  It is not
+         * an empty template slot: replacing its width with the placeholder
+         * width made \qquad and \hspace disappear whenever the parser grouped
+         * their several space characters in a LineNode. */
+        if (out.asc <= 0 && out.desc <= 0 && out.w <= 0) {
             top = -0.70 * sizePt;
             bottom = 0.20 * sizePt;
 
@@ -943,12 +947,18 @@ private:
                  * letter and the typeface, because those code points are past
                  * U+FFFF and a CharNode holds sixteen bits. */
                 if (c.typeface == TF_USER1 || c.typeface == TF_USER2 ||
-                    c.typeface == TF_VECTOR || c.typeface == TF_USER3) {
+                    c.typeface == TF_VECTOR || c.typeface == TF_USER3 ||
+                    c.typeface == TF_MATH_SANS ||
+                    c.typeface == TF_MATH_MONO ||
+                    c.typeface == TF_MATH_FRAKTUR) {
                     const unsigned int m =
                         (c.typeface == TF_USER1) ? mtef_double_struck_of(cp)
                       : (c.typeface == TF_USER2) ? mtef_script_of(cp)
                       : (c.typeface == TF_VECTOR) ? mtef_bold_italic_of(cp)
-                                                  : mtef_bold_upright_of(cp);
+                      : (c.typeface == TF_USER3) ? mtef_bold_upright_of(cp)
+                      : (c.typeface == TF_MATH_SANS) ? mtef_math_sans_of(cp)
+                      : (c.typeface == TF_MATH_MONO) ? mtef_math_mono_of(cp)
+                                                    : mtef_math_fraktur_of(cp);
                     if (m) return glyph_layout(m, sizePt, false, true);
                 }
                 return glyph_layout(cp, sizePt, typeface_is_italic(c.typeface),
