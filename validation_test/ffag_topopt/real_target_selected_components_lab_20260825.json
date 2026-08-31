@@ -1,0 +1,98 @@
+{
+  "schema": "radia.ffag-fixed-one-pass-c-yoke-summary/v1",
+  "status": "pass",
+  "provenance": {
+    "machine": "lab",
+    "python": "3.12.10",
+    "radia_distribution_metadata": "4.95.61",
+    "radia_import_source": "//192.168.121.100/work/00_CAE/Radia/release-qud/v4.95.60-integration/src/radia",
+    "radia_import_source_git_head": "c25ac40c404f72e6a891fd3214966cb955ba8c74",
+    "ngsolve": "6.2.2606",
+    "ngsolve_threads": 16,
+    "validation_script_git_head_observed_at_completion": "f9d3f5714",
+    "worktree_dirty": true,
+    "full_result": "C:/temp/ffag_full_field_selected_real_iter1_20260825.json",
+    "performance_measurement": "disabled",
+    "note": "Correctness and restart evidence only; repeat benchmark measurements on mdx or hibino."
+  },
+  "problem": {
+    "element_family": "HEX",
+    "hdiv_family": "BDM1",
+    "elements": 1180,
+    "dofs": 42480,
+    "initial_active_elements": 720,
+    "controlled_components": [
+      "horizontal_focusing",
+      "vertical_focusing",
+      "horizontal_dispersion"
+    ],
+    "energies_mev": [31.0, 140.0, 250.0],
+    "response_entries": [[1, 0], [3, 2], [0, 5], [1, 5]],
+    "target_maximum_symplectic_residual": 1.4113119404988211e-15,
+    "coil_yoke_clearance_m": 0.02999999999999997
+  },
+  "hmatrix": {
+    "eps": 1e-6,
+    "eta": 2.0,
+    "leaf_size": 64,
+    "compression": 0.049881923076923074,
+    "maximum_rank": 173
+  },
+  "linear_solver": {
+    "tolerance": 1e-7,
+    "proposal_tolerance": 1e-5,
+    "maximum_iterations": 2500,
+    "cluster_deflation_size": 8,
+    "recycle_size": 4
+  },
+  "accepted_update": {
+    "material_iterations": 1,
+    "added_elements": [801],
+    "removed_elements": [],
+    "final_active_elements": 721,
+    "candidate_count": 276,
+    "selection_model": "all-candidate-aca-qr-tsvd-adaptive-trust-full-resolve",
+    "tsvd_rank": 8,
+    "aca_rank": 8,
+    "response_adjoint_count": 6,
+    "exact_bundles_evaluated": 3,
+    "solve_iterations": 603,
+    "source_scale": 6.124160676767468,
+    "effective_current_a_per_coil": 1531040.1691918669,
+    "initial_max_transfer_matrix_band_ratio": 40.884091296355976,
+    "final_max_transfer_matrix_band_ratio": 39.09991244483331,
+    "relative_improvement": 0.043639929247533335,
+    "final_orbit_field_max_band_ratios": [
+      39.09991244483331,
+      5.92778817064819,
+      36.21836203765781
+    ],
+    "final_transfer_matrix_max_band_ratios": [
+      17.795420763656296,
+      6.543601167244307,
+      7.358558057399476
+    ],
+    "maximum_realized_symplectic_residual": 7.046095643950058e-16,
+    "accepted_by_exact_fixed_one_pass_map_gate": true,
+    "converged": false,
+    "stop_reason": "maximum fixed-orbit optics iterations reached"
+  },
+  "interpretation": {
+    "selected_component_objective_improves": true,
+    "selected_component_objective_is_inside_bands": false,
+    "manufactured_inverse_gate_remains_the_exact_recovery_oracle": true,
+    "next_run": "Restart from the full result and continue multiple material iterations on mdx or hibino after SSH recovers."
+  },
+  "gates": {
+    "coil_yoke_clearance": true,
+    "air_volume_elements_are_zero": true,
+    "fixed_design_orbits_used": true,
+    "periodic_closed_orbit_search_disabled": true,
+    "caller_design_orbit_and_target_matrix_contract": true,
+    "initial_return_yoke_seed_is_valid": true,
+    "binary_topology_is_valid": true,
+    "no_gray_material": true,
+    "analytic_transfer_map_derivative_precedes_material_inverse": true,
+    "all_material_batches_exactly_resolved": true
+  }
+}

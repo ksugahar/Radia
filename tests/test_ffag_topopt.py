@@ -471,6 +471,69 @@ def test_ffag_validation_accepts_signed_manufactured_material_contract(
             removal_target_elements=[1], removal_candidate_elements=[0])
 
 
+def test_ffag_hdiv_mmm_poc_accepts_proposal_and_performance_contract(tmp_path):
+    import importlib.util
+    from dataclasses import dataclass
+    from pathlib import Path
+
+    runner_path=(Path(__file__).parents[1]/"validation_test"/"ffag_topopt"/
+                 "validation_ffag_hdiv_mmm_poc.py")
+    spec=importlib.util.spec_from_file_location("ffag_hdiv_mmm_poc_runner",
+                                                runner_path)
+    runner=importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(runner)
+    args=runner.parse_args([
+        "--output",str(tmp_path/"result.json"),
+        "--proposal-solve-tolerance","0.001",
+        "--proposal-adjoint-count","3",
+        "--no-record-performance",
+    ])
+    assert args.proposal_solve_tolerance == pytest.approx(0.001)
+    assert args.proposal_adjoint_count == 3
+    assert args.no_record_performance
+
+    from ngsolve.meshes import MakeStructured3DMesh
+    mesh=MakeStructured3DMesh(hexes=True,nx=3,ny=2,nz=1)
+    active,fixed,predecessors=runner._structured_x_growth_seed(mesh,1)
+    assert np.count_nonzero(active) == 2
+    np.testing.assert_array_equal(fixed,active)
+    assert np.count_nonzero(predecessors < 0) == 2
+    for element in np.flatnonzero(predecessors >= 0):
+        assert predecessors[element] != element
+
+    legacy_active,legacy_fixed,legacy_predecessors=(
+        runner._structured_x_growth_seed(mesh,0))
+    assert np.all(legacy_active)
+    assert np.count_nonzero(legacy_fixed) == 1
+    assert legacy_predecessors is None
+    with pytest.raises(ValueError,match="proper subset"):
+        runner._structured_x_growth_seed(mesh,3)
+
+    @dataclass
+    class NestedHistory:
+        response: np.ndarray
+        solver: dict
+        linearized_reachability_residual: np.ndarray
+
+    serialized=runner._history_record(NestedHistory(
+        response=np.array([1.0,2.0]),
+        solver={"iterations":np.int64(7),
+                "nested":{"residual":np.array([3.0])}},
+        linearized_reachability_residual=np.ones(4)))
+    assert serialized == {
+        "response":[1.0,2.0],
+        "solver":{"iterations":7,"nested":{"residual":[3.0]}},
+        "linearized_reachability_residual":None,
+    }
+
+    with pytest.raises(SystemExit):
+        runner.parse_args([
+            "--output",str(tmp_path/"bad.json"),
+            "--proposal-solve-tolerance","1.0",
+        ])
+
+
 def test_ffag_validation_restart_prefers_explicit_final_active_set(tmp_path):
     import importlib.util
     import json
