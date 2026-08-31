@@ -24,6 +24,53 @@ is an error: `validate_ffag_cyclic_sector_contract` distinguishes
 `formulation="fem"` from `formulation="vim-broken"` and fails loudly when the
 required trace identification or charge pair is absent.
 
+## Periodic coil source contract
+
+Periodic trace identification and `image_cyclic=N` close the **iron** problem;
+they do not manufacture currents from a sector CAD model.  An FFAG sector with
+CoilBuilder conductors must explicitly expand those finite filaments around
+the ring before the source is supplied to the HDiv RHS:
+
+```python
+from radia.ffag_topopt import (
+    build_ffag_cyclic_hdiv_excitation,
+    validate_ffag_cyclic_sector_contract,
+)
+
+contract = validate_ffag_cyclic_sector_contract(
+    12, body_crosses_periodic_planes=True,
+    periodic_trace_identified=True,
+)
+excitation = build_ffag_cyclic_hdiv_excitation(
+    sector_source, contract,
+    periodic_boundaries=("periodic_min", "periodic_max"),
+)
+result = vim.Solve(
+    sector_mesh,
+    **excitation.solve_kwargs(),
+    order=2,
+)
+native_ring_coils = excitation.source.to_radia_object()
+```
+
+`CoilBuilderHDivSource.cyclic_copies` rotates the exact same finite line
+segments and signed current used for the HDiv RHS.  The returned full-ring
+source is also the only coil representation allowed for native closed-orbit
+tracking.  Consequently the source field, iron response, and tracking route
+cannot silently use different coil discretizations.  The usual F/D cell has
+periodic guide field and uses equal signed currents in every copy.  Alternating
+currents are an exceptional, explicit mode and require an even fold; connected
+HDiv sector traces are currently periodic rather than antiperiodic.
+
+The 2016 JMAG SAT is one complete, disjoint FFAG magnet cell in a 12-cell
+ring, so its actual production contract is simply
+`build_ffag_cyclic_hdiv_excitation(sector_source, validate_ffag_cyclic_sector_contract(12))`.
+It does **not** name artificial periodic faces: no iron volume crosses its
+30-degree sector cut.  Use `image_cyclic=12` through the excitation to repeat
+the solved iron charges and use the full-ring coil source for the RHS and
+tracking.  The connected-yoke route above is reserved for CAD whose iron
+really crosses the two exact +/-15-degree faces.
+
 The current axisymmetric C-yoke fixture is an explicit full annulus and has no
 sector cut.  A reduced continuous-yoke fixture is tested separately by
 `validation_ffag_connected_cyclic_yoke.py`.  It gives the cut faces nonzero
