@@ -37,7 +37,8 @@ PACKAGE_CI_CONTEXTS=(
 
 def test_pypi_distributions_have_independent_ci_boundaries():
     workflows={
-        "Radia": ROOT/".github"/"workflows"/"build-test.yml",
+        "Radia": ROOT/".github"/"workflows"/"radia-fast.yml",
+        "Radia Native Release": ROOT/".github"/"workflows"/"build-test.yml",
         "radia-mcp": ROOT/".github"/"workflows"/"radia-mcp-matrix.yml",
         "cubit-mesh-export": ROOT/".github"/"workflows"/"cubit-mesh-export.yml",
         "radia-optuna": ROOT/".github"/"workflows"/"radia-optuna.yml",
@@ -48,19 +49,23 @@ def test_pypi_distributions_have_independent_ci_boundaries():
     for name, text in texts.items():
         assert f"name: {name}" in text
 
-    radia=texts["Radia"]
-    assert "workflow_dispatch:" in radia
+    fast=texts["Radia"]
+    native=texts["Radia Native Release"]
+    assert "workflow_dispatch:" in fast
+    assert "runs-on: [self-hosted, Windows, X64, mdx]" in fast
+    assert "Build with MSVC" not in fast
+    assert "workflow_dispatch:" in native
     for package in ("eqnedit64", "radia-mcp", "cubit-mesh-export",
                     "radia-optuna"):
-        assert f"packages/{package}/**" in radia
-    assert "tests/test_release_quad_optuna_candidate.py" in radia
-    assert "tools/release_quad.py" in radia
-    assert ".agents/skills/release-eqnedit64/**" in radia
-    assert "radia-mcp-wheel" not in radia
-    assert "cubit-mesh-export-wheel" not in radia
-    assert "radia-optuna-wheel" not in radia
-    assert "--ignore=tests/test_cubit_installers.py" in radia
-    assert "--ignore=tests/test_release_quad_optuna_candidate.py" in radia
+        assert f"packages/{package}/**" in native
+    assert "tests/test_release_quad_optuna_candidate.py" in native
+    assert "tools/release_quad.py" in native
+    assert ".agents/skills/release-eqnedit64/**" in native
+    assert "radia-mcp-wheel" not in native
+    assert "cubit-mesh-export-wheel" not in native
+    assert "radia-optuna-wheel" not in native
+    assert "--ignore=tests/test_cubit_installers.py" in native
+    assert "--ignore=tests/test_release_quad_optuna_candidate.py" in native
 
     policy=(ROOT/".github"/"workflows"/"policy-lint.yml").read_text(
         encoding="utf-8")

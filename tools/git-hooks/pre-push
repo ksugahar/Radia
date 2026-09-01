@@ -7,10 +7,10 @@
 # the installer.
 #
 # Two duties:
-#   1. CI preflight gate -- on a push to main, run `tools/ci_preflight.py`
-#      (the same gates the GitHub Actions workflows run) and ABORT the push
-#      if a gate CI would fail is red locally.  This is the enforcement half
-#      of "commit -> CI check -> push": it stops the push-then-discover loop.
+#   1. CI preflight gate -- on a push to main, send the unpushed candidate to
+#      mdx and run `tools/ci_preflight_mdx.py`. It ABORTS the push if mdx
+#      reports a red fast contract gate. This is the enforcement half of
+#      "commit -> CI check -> push" without running CI on the desktop.
 #      Bypass for an emergency with:   CI_PREFLIGHT_SKIP=1 git push
 #   2. Upload native binaries to the GitHub 'binaries' Release (NEVER blocks).
 
@@ -21,36 +21,27 @@ cd "$REPO_ROOT" || exit 0
 ZERO="0000000000000000000000000000000000000000"
 
 # ---- Duty 1: CI preflight on pushes to main -------------------------------
-if [ "${CI_PREFLIGHT_SKIP:-}" != "1" ] && [ -f tools/ci_preflight.py ]; then
+if [ "${CI_PREFLIGHT_SKIP:-}" != "1" ] && [ -f tools/ci_preflight_mdx.py ]; then
     while read -r local_ref local_sha remote_ref remote_sha; do
         # Gate ONLY updates to main (skip deletes + feature branches).
         [ "$remote_ref" = "refs/heads/main" ] || continue
         [ "$local_sha" = "$ZERO" ] && continue          # branch delete
-        if [ "$remote_sha" = "$ZERO" ]; then
-            SINCE=()                                     # new branch: gate all
-        else
-            SINCE=(--since "$remote_sha")               # only what changed
-        fi
-        echo "pre-push: CI preflight before pushing to main"
+        echo "pre-push: mdx CI preflight before pushing to main"
         echo "          (bypass with: CI_PREFLIGHT_SKIP=1 git push)"
         if ! (
-            # Pytest creates temporary git repos; inherited hook-local GIT_*
-            # variables make those repos mutate this clone's .git/config.
+            # The remote helper creates a temporary mdx worktree. Inherited
+            # hook-local GIT_* variables must not leak into its local bundle.
             unset $(git rev-parse --local-env-vars)
-            # The release worktree can be reached through a NAS drive mapping
-            # that Git canonicalizes to UNC.  Preserve the isolation above but
-            # allow child git archive/status probes to inspect this invocation's
-            # already-approved repository without adding persistent global
-            # safe.directory entries for every release worktree.
+            # The release worktree can be reached through a NAS drive mapping.
+            # Permit the local bundle command to inspect this approved tree.
             export GIT_CONFIG_COUNT=1
             export GIT_CONFIG_KEY_0=safe.directory
             export GIT_CONFIG_VALUE_0='*'
-            python tools/ci_preflight.py "${SINCE[@]}"
+            python tools/ci_preflight_mdx.py --base "$remote_sha" --head "$local_sha"
         ); then
             echo "" >&2
-            echo "pre-push: CI preflight is RED -- push ABORTED." >&2
-            echo "          Fix the failing gate locally (that is exactly what" >&2
-            echo "          CI would fail on), or override with" >&2
+            echo "pre-push: mdx CI preflight is RED -- push ABORTED." >&2
+            echo "          Fix the failing mdx gate, or override with" >&2
             echo "          CI_PREFLIGHT_SKIP=1 git push" >&2
             exit 1
         fi
