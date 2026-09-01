@@ -85,6 +85,9 @@ from .cross_lint import (  # noqa: F401
 
 # Citing references on talk slides (2026-06-02) — format / references-frame /
 # PPTX footnote insertion / citation-consistency lint.
+from ._kishotenketsu import (  # noqa: F401
+    presentation_kishotenketsu_check,
+)
 from ._citations import (  # noqa: F401
     presentation_references_from_bib,  # noqa: F401
     presentation_cite_format,
