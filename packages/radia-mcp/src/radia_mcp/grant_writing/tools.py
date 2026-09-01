@@ -710,6 +710,8 @@ def grant_writing_adjacent_reviewer_readability_check(text: str) -> dict:
     notation_piles: list[dict] = []
     representation_mismatches: list[dict] = []
     ambiguous_relation_phrases: list[dict] = []
+    applicant_internal_abstractions: list[dict] = []
+    vague_readiness_claims: list[dict] = []
     scope_without_deliverables: list[dict] = []
     takeaways_after_evidence: list[dict] = []
     representation_pattern = re.compile(
@@ -722,6 +724,16 @@ def grant_writing_adjacent_reviewer_readability_check(text: str) -> dict:
         re.compile(r"(?:一方|双方)へ(?:統一|還流|移行|集約)"),
         re.compile(r"異なるコード系譜(?:間|を|の)"),
         re.compile(r"(?:同一|共通)の?設計量で採否(?:する|を判断する)"),
+    )
+    applicant_internal_patterns = (
+        re.compile(r"(?:自研究室|自機関)のコード系譜"),
+        re.compile(
+            r"(?:[一二三四五六七八九十0-9]+名の)?資産を"
+            r"[^。！？\n]{0,32}(?:結び|移す)"
+        ),
+    )
+    vague_readiness_pattern = re.compile(
+        r"(?:本)?(?:助成|研究)?期間前に[^。！？\n]{0,40}準備が整っている"
     )
     scope_markers = ("必達範囲", "必須範囲", "最低限の達成範囲")
     deliverable_pattern = re.compile(
@@ -772,6 +784,24 @@ def grant_writing_adjacent_reviewer_readability_check(text: str) -> dict:
             ambiguous_relation_phrases.append({
                 "index": index,
                 "phrases": list(dict.fromkeys(vague_hits)),
+                "excerpt": sentence[:240],
+            })
+        internal_hits = [
+            match.group(0)
+            for pattern in applicant_internal_patterns
+            for match in pattern.finditer(sentence)
+        ]
+        if internal_hits:
+            applicant_internal_abstractions.append({
+                "index": index,
+                "phrases": list(dict.fromkeys(internal_hits)),
+                "excerpt": sentence[:240],
+            })
+        readiness_match = vague_readiness_pattern.search(sentence)
+        if readiness_match:
+            vague_readiness_claims.append({
+                "index": index,
+                "phrase": readiness_match.group(0),
                 "excerpt": sentence[:240],
             })
         if (
@@ -842,6 +872,39 @@ def grant_writing_adjacent_reviewer_readability_check(text: str) -> dict:
                 "何を統一せず、何を判断するのかを名詞で明示する。"
             ),
             examples=ambiguous_relation_phrases[:5],
+        )
+
+    if applicant_internal_abstractions:
+        first = applicant_internal_abstractions[0]
+        add_risk(
+            "applicant_internal_abstraction",
+            first["excerpt"],
+            (
+                "コードの系譜や資産の移動という研究室内の比喩では、隣接分野の"
+                "審査者が実際の制約・操作・研究上の発展を特定しにくい。"
+            ),
+            (
+                "『既存コードで扱える手法に限られる』『誘導加熱へ展開し、"
+                "判定則を加速器設計へ発展する』のように、対象、制約、操作、"
+                "到達先を観察可能な語で書く。"
+            ),
+            examples=applicant_internal_abstractions[:5],
+        )
+
+    if vague_readiness_claims:
+        first = vague_readiness_claims[0]
+        add_risk(
+            "vague_readiness_status",
+            first["excerpt"],
+            (
+                "『準備が整っている』だけでは、予定なのか完了済みなのか、"
+                "どの時点で開始できるのかが曖昧である。"
+            ),
+            (
+                "『本助成期間前』『実装済み』『整備済み』など、基準時点と"
+                "完了状態を明示し、直前の文に採択・実装・検証等の根拠を置く。"
+            ),
+            examples=vague_readiness_claims[:5],
         )
 
     if scope_without_deliverables:
@@ -997,6 +1060,10 @@ def grant_writing_adjacent_reviewer_readability_check(text: str) -> dict:
             "ambiguous_relation_phrase_count": len(
                 ambiguous_relation_phrases
             ),
+            "applicant_internal_abstraction_count": len(
+                applicant_internal_abstractions
+            ),
+            "vague_readiness_status_count": len(vague_readiness_claims),
             "required_scope_without_deliverable_count": len(
                 scope_without_deliverables
             ),
@@ -7020,7 +7087,7 @@ _ARGUMENT_EVIDENCE_ROLES = {
         "description": "提案研究の実行可能性を支える完了済みの根拠",
         "terms": [
             "実装した", "完了した", "確認した", "再現した", "発表した",
-            "発表予定", "採択", "共著", "予備実証", "既往成果",
+            "発表予定", "採択", "共著", "予備実証", "既往成果", "整備済み",
         ],
     },
     "preparation_plan_link": {
@@ -7028,7 +7095,7 @@ _ARGUMENT_EVIDENCE_ROLES = {
         "terms": [
             "実績により", "成果により", "これにより研究", "したがって本研究",
             "から着手できる", "を開始できる", "実行できること", "遂行できること",
-            "を担保する", "準備が整っている", "基盤が既に整っている",
+            "を担保する", "準備が整っている", "基盤が既に整っている", "整備済み",
         ],
     },
     "responsibility": {
