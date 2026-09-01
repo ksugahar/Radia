@@ -220,13 +220,10 @@ def paper_figure_quality_rules(query: str = "all") -> str:
         'side_by_side'    - two figures in 8 cm -> each <= 4 cm,
                             every visible font >= 10 pt, no overlap
         'slide_169'       - author at 24 pt; actual slide display >= 20 pt
-        'tikz_export'     - MATLAB -> matlab2tikz -> LaTeX TikZ:
-                            preferred over PDF includegraphics for
-                            LaTeX papers (font / math matches body)
-        'export_targets'  - format matrix: vector PDF (paper) / TikZ
-                            (LaTeX) / EMF (Word/PowerPoint, MATLAB
-                            -dmeta) / PNG 400 dpi (draft/web) -- which
-                            format for which venue, from real lab scripts
+        'export_targets'  - format matrix: vector PDF (paper) / EMF
+                            (Word/PowerPoint, MATLAB -dmeta) / PNG
+                            400 dpi (draft/web) -- which format for
+                            which venue, from real lab scripts
     """
     rules = {
         "efficiency": """\
@@ -642,83 +639,6 @@ Or use the size/font recipe directly:
   figure_size_for_target('digest_double_column_side_by_side')
   # -> 8 cm wide, every visible font >= 10 pt
 """,
-        "tikz_export": """\
-[tikz_export]
-
-MATLAB FIGURE -> TikZ (via matlab2tikz) -> LaTeX paper.
-
-For figures rendered in MATLAB and embedded in an IEEE / IEEJ / IGTE
-LaTeX paper, the lab-preferred export path is TikZ via matlab2tikz,
-NOT saveas('fig.pdf') / exportgraphics('fig.pdf').
-
-WHY TikZ beats PDF here:
-  - axis / tick / legend text INHERITS the paper's LaTeX font
-    (Times New Roman for IEEE/IEEJ).  PDF includegraphics bakes in
-    whatever font MATLAB happened to render with -- never an exact
-    match for body text.
-  - inline math like $\\sigma_{xy}$ in axis labels renders in the
-    paper's MATH font, not MATLAB's LaTeX-interpreter approximation.
-  - fully vector, editable in .tex after export (tweak labels,
-    colors, ticks without re-running MATLAB).
-  - pgfplots scales the figure to \\columnwidth / \\textwidth -- one
-    .tikz file works for both single-column and double-column
-    layouts.
-
-WHEN TO STAY ON PDF (TikZ exceptions):
-  - heatmaps / pcolor / large image overlays (raster, slow in TikZ).
-  - >10000 plot points without cleanfigure pre-processing
-    (LaTeX compile time blows up).
-  - complex 3-D scenes that pgfplots struggles to reproduce.
-  - photographs.
-  -> for these, use exportgraphics PDF or a hybrid (raster the heavy
-     layer, TikZ-overlay the axes/labels).
-
-THE LAB RECIPE (parameterise with the lab profile):
-
-    cleanfigure('targetResolution', 300);   % decimate dense data
-    matlab2tikz('fig/result.tikz', ...
-        'width', '\\figureWidth', ...        % LaTeX-side \\setlength
-        'height', '\\figureHeight', ...      %   to \\columnwidth
-        'parseStrings',  false, ...          % keep your $\\LaTeX$
-        'showInfo',      false, ...
-        'showWarnings',  false, ...
-        'standalone',    false);             % embed; not stand-alone
-
-LaTeX-side prelude (one-time):
-
-    \\usepackage{pgfplots}
-    \\pgfplotsset{compat=1.18}
-    \\newlength\\figureWidth   \\setlength\\figureWidth{\\columnwidth}
-    \\newlength\\figureHeight  \\setlength\\figureHeight{6cm}
-    \\input{fig/result.tikz}
-
-GETTING THE EXACT LAB-PROFILE RECIPE:
-
-    figure_matlab2tikz_recipe(target='paper_single_column')
-        -> ready-to-paste MATLAB recipe sized for IEEE single column
-           (88.9 mm) with the lab's Times New Roman / 10 pt / 0.7 pt
-           axis-linewidth / sparse-ticks defaults baked in.
-
-    figure_matlab2tikz_recipe(target='paper_double_column')
-        -> double-column (181 mm) wide figure.
-
-    figure_matlab2tikz_recipe(target='digest_double_column_side_by_side')
-        -> two-panel-in-8cm digest layout; keep legend and annotation
-           text at least 10 pt (see `side_by_side` topic).
-
-PRE-FLIGHT one-time install:
-
-    % After git clone https://github.com/matlab2tikz/matlab2tikz
-    addpath(genpath('<install-dir>/matlab2tikz/src'));
-
-CAVEATS:
-  - matlab2tikz currently supports up to MATLAB R2024a-ish; very new
-    graphics objects (e.g. some R2024b chart types) may export as
-    rasterised fallbacks.
-  - For very wide / dense plots, increase
-    cleanfigure(..., 'targetResolution', 600) and tune the
-    'minimumPointsDistance' option.
-""",
         "export_targets": """\
 [export_targets]
 
@@ -731,8 +651,6 @@ in practice, not just paper PDF:
   -------------------------  --------------  --------------------------
   IEEE/IEEJ/IGTE paper       vector PDF      emit_paper_figure(...) ->
    (LaTeX includegraphics)    (Type-42)       .pdf  (this server default)
-  LaTeX paper, exact font    TikZ            matlab2tikz / see the
-                                             tikz_export topic
   Word / PowerPoint          EMF (vector)    MATLAB exportgraphics(gcf,
    (Office embed)                            'f.emf','ContentType',
                                              'vector') -- stays vector in
@@ -757,7 +675,7 @@ OBSERVED LAB HABIT (from internal scripts):
                    Roman 10 pt, inward ticks, savefig PNG.
 
 RULE: NEVER embed a raster PNG in a CAMERA-READY paper -- re-render to
-vector PDF (or TikZ).  PNG/EMF are for drafts + Office.  EMF (not PNG)
+vector PDF.  PNG/EMF are for drafts + Office.  EMF (not PNG)
 is the right Office format because it keeps the text vector inside Word.
 
 VERIFICATION (2026-06): the lab's internal script archive AGREES with this
@@ -978,27 +896,6 @@ round-trip to (Rougier rules 8/9; the R `ggrepel` lineage).
   These external sources inform the lab's own radia_mcp.figure (paper_figure, the
   quality gates, label_curve_endpoints, the Okabe-Ito default).
 """,
-        "sakuzu_vs_graph": """\
-[sakuzu_vs_graph]  -- 作図 (figure DESIGN) vs グラフ (data PLOTTING): the split the
-radia_mcp toolchain mirrors.
-
-  作図 (sakuzu) = the DESIGN decisions made BEFORE / AROUND the plot: what message
-    (rule 2), what to encode + which channel (perception), colour's role (color),
-    what to strip (chartjunk), how to label (direct_labeling), medium adaptation
-    (paper vs slide), the caption.
-      -> THIS tool (figure_design_principles) for the canon, plus
-         paper_figure_quality_rules for the lab MECHANICS / gates that ENFORCE the
-         design (no-title, frameless, units-in-parens, axes-efficiency, no-overlap,
-         Type-42, Okabe-Ito).
-
-  グラフ (graph) = the data PLOTTING itself, the line / scatter / bar:
-      -> radia_mcp.chart2d (22 chart types) drawn on a paper_figure() canvas, then
-         emit_paper_figure() gates the result.
-
-  ORDER: decide the 作図 (message, encoding, colour, labels) FIRST, then draw the
-  グラフ on a paper_figure() canvas, then let emit_paper_figure() gate it against
-  the design rules.  A good グラフ on a bad 作図 still fails review -- design first.
-""",
     }
     q = (topic or "all").strip().lower()
     if q == "all":
@@ -1022,145 +919,125 @@ def figure_diagram_recipes(topic: str = "all") -> str:
     (distinct from data-PLOTTING グラフ and from the general 作図 design canon in
     figure_design_principles).
 
-    COMPLEMENTS figure_tikz_recipe (which owns the general TikZ schematic / geometry /
-    flux-path template + PGFPlots + externalize + matlab2tikz).  THIS tool adds the
-    FLOWCHART + CONCEPTUAL-diagram skill and the multi-tool ecosystem: the TikZ flowchart
-    idiom (shapes.geometric node styles), GRAPHVIZ/DOT AUTO-layout (the big complement --
-    figure_tikz_recipe is manual-coordinate TikZ only), schemdraw / Mermaid, tool
-    selection, and diagram DESIGN conventions (ISO 5807 symbols, flow direction, crossing
-    minimisation).
+    TikZ and Graphviz were abolished on 2026-09-01, so this tool now carries the
+    sanctioned route only: schemdraw for circuits and flowcharts, matplotlib / MATLAB
+    for plots, gmsh for fields, meshes and CAD -- plus the diagram DESIGN conventions
+    (ISO 5807 symbols, flow direction, crossing minimisation) that outlive any tool.
 
     Topics:
         'all'                - everything
-        'tool_selection'     - TikZ vs Graphviz vs schemdraw vs Mermaid vs draw.io
-        'tikz_flowchart'     - the TikZ shapes.geometric flowchart idiom (ready template)
-        'graphviz'           - DOT auto-layout (digraph, rankdir, clusters, engines)
+        'tool_selection'     - the two principles, and which tool for which figure
         'concept_diagram'    - conceptual / block-relationship diagrams (architecture style)
         'design'             - ISO 5807 symbols + flow direction + crossing/alignment rules
         'external_resources' - manuals, galleries, standards
     """
     recipes = {
-        "tool_selection": r"""[tool_selection] -- pick the diagram tool by WHERE it goes + HOW it is laid out.
+        "tool_selection": r"""[tool_selection] -- TikZ and Graphviz are ABOLISHED (lab decision 2026-09-01).
 
-  Tool          Best for                              Layout     Source     Paper-native?
-  ------------  ------------------------------------  ---------  ---------  -------------
-  TikZ          paper figures: schematics, flux       MANUAL     .tex       YES (font + math
-                paths, small flowcharts, concept                            match the body)
-                blocks -- coordinate-precise.
-  Graphviz/DOT  large flowcharts, DAGs, dependency     AUTO       .dot       via PDF/SVG
-                / state graphs -- when manual node     (dot/...)             include (font
-                placement is tedious.                                        differs)
-  schemdraw     programmatic flowcharts / circuits     semi-auto  .py        via PDF/SVG
-                from Python (loop over data).          (Python)
-  Mermaid       README / docs / web flowcharts,        AUTO       md fence   NO (docs only)
-                quick sketches in Markdown.
-  draw.io       one-off GUI diagrams (NOT diffable --  GUI        .drawio    export PDF
-                avoid for reproducible repo figures).
+  TWO PRINCIPLES.  A tool is sanctioned only if it satisfies both.
 
-  LAB DEFAULT for a PAPER diagram: TikZ -- text-source/diffable, labels inherit the paper's
-  Times/newtx font + math (see figure_tikz_recipe for the general schematic; 'tikz_flowchart'
-  here for the flowchart idiom).  Reach for Graphviz when the graph is big or a hierarchy/DAG
-  you do NOT want to place by hand, then include the rendered PDF.  Mermaid = repo READMEs
-  only (never camera-ready).
+  1. DERIVED GEOMETRY.  The geometry comes from the data, from the model, or
+     from the relative placement of elements.  NEVER hand-typed coordinates.
+     Hand coordinates are how a wire ends up drawn through a box.  This matters
+     more when an LLM is drawing: it emits coordinates fluently and cannot see
+     the result, so it makes that mistake and does not notice.  schemdraw's
+     .right() / .down() / .at() / anchors make the defect impossible instead of
+     something a reviewer has to catch.
+
+  2. THE FIGURE IS A FILE.  Every figure is a standalone PDF/PNG written by a
+     committed script, independent of the document that includes it.  A figure
+     that exists only as source inside a .tex cannot be put on a slide, cannot
+     be audited (audit_pptx_figures and check_embedded_figure_text_size both
+     read a file), cannot be reused by paper / slide / poster / notebook, and
+     cannot even be looked at without compiling the whole document.
+
+  Kind of figure                     Tool                    Geometry from
+  ---------------------------------  ----------------------  --------------------
+  data plot, scatter, sweep, Bode    matplotlib  or  MATLAB  the data
+  circuit diagram                    schemdraw               relative placement
+  flowchart / block diagram          schemdraw.flow          relative placement
+  field / mesh / post-processing     gmsh                    the model
+  geometry, CAD, concept solid       gmsh                    the model
+                                     (author the solid with radia_mcp.build123d's
+                                      modeling verbs / archetypes, export STEP,
+                                      render in gmsh)
+
+  NOT sanctioned: TikZ / PGF and matlab2tikz (hand coordinates, and the figure
+  never becomes a file), Graphviz / DOT (same file objection; placement is
+  automatic rather than derived from anything the author controls), draw.io
+  (not diffable), Mermaid outside a README, and raw matplotlib primitives
+  standing in for schemdraw.
+
+  THE SCRIPT LIVES NEXT TO THE FIGURE.  A `make_figs.py` in the same directory,
+  committed, that regenerates every figure there and prints the numbers the
+  document quotes.  This is the same rule as the lab's data-persistence policy:
+  a committed figure whose source is not committed beside it is not reproducible.
+
+  Everything routes through radia_mcp.figure for sizing, saving and auditing:
+
+      fig, axes = paper_figure("beamer_169_full", aspect=0.40)   # or a paper profile
+      ax = axes.ravel()[0]
+      with schemdraw.Drawing(canvas=ax, show=False) as d:        # circuits/flowcharts
+          d.config(fontsize=24, lw=2.2, color=INK)
+          d += elm.Inductor().right().label("$L_1$").color(BULK)
+      lab_savefig(fig, out, medium="presentation", embed_width_cm=15.0)
+
+  schemdraw validates colour names itself and REJECTS matplotlib's "tab:blue"
+  form -- pass hex ("#1f77b4") or a plain CSS name.  Define the palette once and
+  share it with the data plots.  One source then gives both the coloured slide
+  version and the mono paper version: the palette is the only thing that changes.
+
+  schemdraw gotchas worth knowing before you start:
+    - flow.Box hands the cursor to its EAST anchor.  Going downward, say so:
+      box.at(arrow.end).anchor("N").
+    - two-terminal label locations are 'top'/'bot'/'lft'/'rgt'.  Passing 'right'
+      silently centres the caption on whatever is below.  For an arrow caption,
+      derive the position from arrow.center and place it with ax.text.
 """,
-        "tikz_flowchart": r"""[tikz_flowchart] -- the TikZ shapes.geometric flowchart idiom (ISO-5807 node shapes,
-auto-spaced with `positioning`).  For a non-flow schematic (geometry, flux, BC) use
-figure_tikz_recipe('schematic') instead.
+        "concept_diagram": r"""[concept_diagram] -- conceptual / block-relationship diagrams
+(architecture, data flow, "X consumes Y"): boxes + LABELLED arrows + optional grouping;
+not a strict process flow.  schemdraw.flow, drawn onto a radia_mcp.figure axes.
 
-\documentclass[tikz,border=2mm]{standalone}
-\usepackage{newtxtext,newtxmath}                 % match IEEE/IEEJ body font
-\usetikzlibrary{shapes.geometric, shapes.misc, arrows.meta, positioning}  % shapes.misc = rounded rectangle
-\begin{document}
-\begin{tikzpicture}[
-  node distance=8mm and 14mm, font=\footnotesize,
-  start/.style   ={rounded rectangle, draw, fill=black!5, minimum height=7mm, inner xsep=3mm},
-  process/.style ={rectangle, draw, fill=blue!4,  minimum height=7mm, text width=24mm, align=center},
-  decision/.style={diamond, draw, fill=orange!12, aspect=2, inner sep=1pt, align=center},
-  io/.style      ={trapezium, trapezium left angle=70, trapezium right angle=110,
-                   draw, fill=black!4, minimum height=7mm},
-  arrow/.style   ={-{Latex[length=2mm]}, semithick},
-]
-  \node[start]                    (a) {start};
-  \node[io,       below=of a]     (b) {read .vol};
-  \node[process,  below=of b]     (c) {assemble DtN};
-  \node[decision, below=of c]     (d) {$p\ge n$?};
-  \node[process,  below=of d]     (e) {refine order};
-  \node[start,    right=24mm of d](f) {done};
-  \draw[arrow] (a)--(b); \draw[arrow] (b)--(c); \draw[arrow] (c)--(d);
-  \draw[arrow] (d)-- node[left]{no} (e);
-  \draw[arrow] (e.west) -- ++(-7mm,0) |- (c.west);     % feedback loop, routed orthogonally
-  \draw[arrow] (d)-- node[above]{yes} (f);
-\end{tikzpicture}
-\end{document}
+    import matplotlib.pyplot as plt
+    import schemdraw
+    from schemdraw import flow
+    from radia_mcp.figure import lab_savefig, paper_figure
 
-KEYS: the SHAPE encodes the ISO-5807 meaning (see 'design'); `positioning` (`below=of`,
-`right=of` + `node distance=A and B`) AUTO-spaces -- never hand-tune (x,y) for a flowchart;
-route feedback edges orthogonally with `|-` / `-|`.  Compile standalone -> PDF, or paste the
-tikzpicture into the paper and embed at the column width.
-""",
-        "graphviz": r"""[graphviz] -- DOT AUTO-layout: let the engine place the nodes.  Use when the graph is
-large or a hierarchy/DAG you do NOT want to position by hand (the big complement to manual
-TikZ; figure_tikz_recipe has no auto-layout).
+    fig, axes = paper_figure("ieee_single_column", aspect=0.42)
+    ax = axes.ravel()[0]
 
-  flow.dot:
-    digraph G {
-      rankdir=TB;                                  // TB top-down | LR left-right
-      node [shape=box, style=rounded, fontname="Times", fontsize=10];
-      edge [fontname="Times", fontsize=10];
-      start [shape=stadium, label="start"];
-      read  [shape=parallelogram, label="read .vol"];
-      asm   [label="assemble DtN"];
-      chk   [shape=diamond, label="p >= n ?"];
-      ref   [label="refine order"];
-      done  [shape=stadium, label="done"];
-      start -> read -> asm -> chk;
-      chk -> ref  [label="no"];
-      ref -> asm  [constraint=false];              // feedback: do NOT affect ranking
-      chk -> done [label="yes"];
-      subgraph cluster_solve { label="solve loop"; style=dashed; asm; chk; ref; }
-    }
+    with schemdraw.Drawing(canvas=ax, show=False) as d:
+        d.config(fontsize=10, lw=1.0)
+        cubit = flow.Box(w=2.6, h=1.1).label("Cubit\nhex mesh")
+        d += cubit
+        d += flow.Arrow().right().length(1.4).label("export", ofst=0.75)
+        vol = flow.Box(w=1.8, h=1.1).label(".vol")
+        d += vol
+        d += flow.Arrow().right().length(1.4).label("Mesh()", ofst=0.75)
+        ng = flow.Box(w=2.6, h=1.1).label("NGSolve\nFEM")
+        d += ng
 
-  render:  dot -Tpdf flow.dot -o flow.pdf          # vector, for paper include
-           dot -Tsvg flow.dot -o flow.svg          # web / docs
+    # the group box comes from the members' own anchors, never from typed numbers
+    left, right = vol.W[0], ng.E[0]
+    top, bot, pad = ng.N[1], ng.S[1], 0.28
+    ax.add_patch(plt.Rectangle((left - pad, bot - pad),
+                               (right - left) + 2 * pad, (top - bot) + 2 * pad,
+                               fill=False, ls="--", lw=1.0, edgecolor="#1f77b4"))
+    ax.text((left + right) / 2, bot - pad - 0.28, "computation",
+            ha="center", va="top", color="#1f77b4", fontsize=10)
 
-  LAYOUT ENGINES (pick by graph shape):
-    dot    layered / hierarchical -> FLOWCHARTS, DAGs, call graphs   (the default choice)
-    neato  spring model           -> small undirected relationship graphs
-    fdp    force-directed         -> larger undirected / clustered graphs
-    circo  circular               -> ring / cyclic topologies
-    twopi  radial                 -> trees around a centre
+    ax.set_aspect("equal"); ax.axis("off"); fig.tight_layout(pad=0.15)
+    lab_savefig(fig, "fig/pipeline", medium="paper", embed_width_cm=8.89)
 
-  TIPS: `rankdir=LR` for wide-short page fits; `constraint=false` stops a feedback edge from
-  distorting the ranking; `subgraph cluster_*` draws a labelled box round a group; set
-  fontname="Times" to approach the paper body (still NOT an exact match -- for exact font
-  use TikZ, see 'tool_selection').
-""",
-        "concept_diagram": r"""[concept_diagram] -- conceptual / block-relationship diagrams (architecture, data flow,
-"X consumes Y"): boxes + LABELLED arrows + optional grouping; not a strict process flow.
+  This template was run before being written down.  Two things it earns you:
+    - ofst=0.75 on the arrow captions.  A horizontal arrow's caption defaults to
+      just above the shaft, which is INSIDE tall neighbouring boxes.  Clear h/2.
+    - the group box from vol.W / ng.E / ng.N / ng.S.  Typing its corners is the
+      failure this whole policy exists to prevent.
 
-  TikZ (paper, exact font; `fit`+`backgrounds` draw the group box):
-    \usetikzlibrary{positioning, fit, backgrounds, arrows.meta}
-    \begin{tikzpicture}[font=\footnotesize, >={Latex[length=2mm]},
-      blk/.style={rectangle, draw, rounded corners, fill=black!4,
-                  minimum height=8mm, text width=22mm, align=center}]
-      \node[blk] (cubit) {Cubit\\hex mesh};
-      \node[blk, right=14mm of cubit] (vol) {.vol};
-      \node[blk, right=14mm of vol]   (ng)  {NGSolve\\FEM};
-      \draw[->] (cubit) -- node[above]{export} (vol);
-      \draw[->] (vol)   -- node[above]{Mesh()} (ng);
-      \begin{scope}[on background layer]
-        \node[draw=blue!40, dashed, rounded corners, fit=(vol)(ng),
-              inner sep=3mm, label=below:{computation}] {};
-      \end{scope}
-    \end{tikzpicture}
-
-  Graphviz alternative (auto-layout, good when there are many blocks):
-    digraph { rankdir=LR; node[shape=box,style=rounded,fontname=Times];
-      cubit->vol[label=export]; vol->ng[label="Mesh()"]; }
-
-  The lab CLAUDE.md ASCII box-diagrams (the 4-Layer panel architecture, the accelerator-magnet
-  pipeline) convert directly: one box per ASCII box, one arrow per `->`.  Keep ONE flow
-  direction; group with a dashed `fit` box (TikZ) or a `cluster` (DOT).
+  The lab CLAUDE.md ASCII box-diagrams (the 4-Layer panel architecture, the
+  accelerator-magnet pipeline) convert directly: one flow.Box per ASCII box, one
+  flow.Arrow per `->`.  Keep ONE flow direction.
 """,
         "design": r"""[design] -- flowchart / diagram design rules (ISO 5807 symbols + layout craft; the
 Tufte/Rougier canon in figure_design_principles applies here too).
@@ -1175,12 +1052,13 @@ Tufte/Rougier canon in figure_design_principles applies here too).
 
   LAYOUT:
     - ONE dominant flow direction: top-to-bottom OR left-to-right, never both.
-    - align nodes on a grid (TikZ `node distance` / DOT ranks); ragged placement reads
-      as careless.
-    - MINIMISE edge crossings; route feedback / loop edges orthogonally around the side
-      (TikZ `-|` / `|-`; DOT `constraint=false`).
+    - align nodes on a grid (schemdraw's unit spacing and anchors do this for you);
+      ragged placement reads as careless.
+    - MINIMISE edge crossings; route feedback / loop edges orthogonally around the
+      side (schemdraw: Line().right().down().left(), or .to() an anchor).
     - label decision branches AND meaningful edges; an unlabeled fork is ambiguous.
-    - group related steps with a dashed box (TikZ `fit` / DOT `cluster`) + a group label.
+    - group related steps with a dashed box + a group label; derive its corners from
+      the members' anchors (see 'concept_diagram'), never type them.
 
   STILL THE LAB RULES (paper_figure_quality_rules / figure_design_principles):
     - NO in-figure title (-> the LaTeX caption).
@@ -1188,30 +1066,29 @@ Tufte/Rougier canon in figure_design_principles applies here too).
       (one hue per subsystem), not decoration.
     - 10 pt page text; spare -- erase ink that is not a node, an edge, or a label.
 """,
-        "external_resources": r"""[external_resources] -- where to learn diagram-making, curated 2026-06.
+        "external_resources": """\
+[external_resources] -- where to learn diagram-making, curated 2026-09.
 
-  TikZ
-    - "TikZ & PGF" manual (pgf-tikz.github.io / CTAN) -- libraries shapes.geometric,
-      arrows.meta, positioning, chains, fit, backgrounds.
-    - TeXample.net (texample.net/tikz/examples) -- a large gallery of TikZ diagrams.
-    - Overleaf "Creating Flowcharts" tutorial (overleaf.com/learn) -- the node-style idiom.
-  Graphviz
-    - graphviz.org -- the DOT language reference, attribute list, and gallery; the `dot`
-      hierarchical engine for flowcharts.
-  Python
-    - schemdraw (schemdraw.readthedocs.io) -- flowcharts + circuits from Python.
+  Python (the sanctioned route)
+    - schemdraw (schemdraw.readthedocs.io) -- circuits and flowcharts from Python;
+      relative placement, so overlaps cannot arise from a mistyped coordinate.
+    - matplotlib / MATLAB for plots; gmsh for fields, meshes and CAD.
   Markdown / web
-    - Mermaid (mermaid.js.org) -- ```mermaid flowcharts in READMEs (docs only, not paper).
+    - Mermaid (mermaid.js.org) -- ```mermaid flowcharts in READMEs (docs only,
+      never a paper or slide figure: it is not a file).
   Standards / principles
     - ISO 5807:1985 -- flowchart symbol semantics.
     - Rougier, "Scientific Visualization: Python + Matplotlib" (2021) -- the layout +
       figure-anatomy chapters (see figure_design_principles('external_resources')).
+
+  TikZ and Graphviz were abolished on 2026-09-01; their references are deliberately
+  not listed here.  See 'tool_selection' for the two principles behind that.
 """,
     }
     q = (topic or "all").strip().lower()
     if q == "all":
         return "\n\n".join(recipes.values()) + r"""
-See also: figure_tikz_recipe (general TikZ schematic + PGFPlots + externalize),
+See also:
 figure_design_principles (the 作図 design canon), paper_figure_quality_rules (the gates).
 """
     if q in recipes:

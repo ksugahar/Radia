@@ -195,42 +195,50 @@ Lab style — graph rules (Sugahara Lab):
       ('Box','off') or use direct endpoint labels; verify with
       find_best_legend_loc() / emit_paper_figure()'s overlap gate.
     Use profile 'digest_double_column_side_by_side'.
-11. *** MATLAB workflow: export to TikZ (NOT PDF) for LaTeX papers ***:
-    For MATLAB-rendered figures destined for an IEEE / IEEJ / IGTE
-    LaTeX paper, prefer matlab2tikz export over saveas/exportgraphics
-    PDF:
+11. *** TikZ AND GRAPHVIZ ARE ABOLISHED (lab decision, 2026-09-01) ***:
+    Do not author figures in TikZ/PGF, and do not export MATLAB figures
+    through matlab2tikz.  The sanctioned tools are:
 
-        cleanfigure('targetResolution', 300);   % decimate dense data
-        matlab2tikz('fig/result.tikz', ...
-                    'width', '\\figureWidth', ...
-                    'height', '\\figureHeight', ...
-                    'parseStrings', false, ...
-                    'showInfo', false, ...
-                    'standalone', false);
+        data plots, scatter, sweeps  -> matplotlib  or  MATLAB
+        circuit diagrams, flowcharts -> schemdraw
+        fields, meshes, geometry/CAD -> gmsh
+                                        (build123d -> STEP -> gmsh renders it;
+                                         author CAD with radia_mcp.build123d's
+                                         modeling verbs / archetypes, not raw
+                                         build123d)
 
-    Why TikZ beats PDF here:
-    - axis / tick / legend text renders in the PAPER's LaTeX font
-      (Times New Roman if IEEE / IEEJ) -- perfect typography match
-      with the body; PDF includegraphics embeds the MATLAB-rendered
-      fonts which never exactly match.
-    - vector throughout, editable in .tex source after export.
-    - inline LaTeX math (e.g. $\\sigma_{xy}$) renders identically to
-      the rest of the paper, not as a MATLAB-LaTeX-interpreter
-      approximation.
+    TWO PRINCIPLES, which is why these four and not others:
 
-    Latex side:
-        \\usepackage{pgfplots}
-        \\pgfplotsset{compat=1.18}
-        \\newlength\\figureWidth \\setlength\\figureWidth{\\columnwidth}
-        \\input{fig/result.tikz}
+        (a) A figure's geometry must be DERIVED -- from the data, from the
+            model, or from the relative placement of elements.  Never
+            hand-typed absolute coordinates.
+        (b) A figure must EXIST AS A FILE -- a standalone PDF/PNG written by a
+            committed script that sits next to it, independent of any document
+            that includes it.  A figure that lives only as source inside a .tex
+            cannot go on a slide, cannot be audited, cannot be reused, and
+            cannot be seen without compiling the document.
 
-    Cons (when NOT to use TikZ): heavy raster content (heatmaps,
-    pcolor, photographs), >10000 plot points without cleanfigure,
-    complex 3-D scenes -> stay on PDF or PDF+TikZ hybrid (raster the
-    heavy parts, TikZ-overlay the axes).
+    schemdraw places elements relatively (.right(), .down(), .at(), anchors), so
+    a wire cannot end up running through a box.  TikZ asks for manual
+    coordinates and therefore has the same failure mode as hand-placing
+    matplotlib rectangles: one mistyped number and the drawing overlaps itself.
 
-    Use `figure_matlab2tikz_recipe` MCP tool for a ready-to-paste
-    recipe tuned to a given lab profile.
+    The reason this was decided now: an LLM writes coordinates fluently and
+    cannot see what it drew, so it produces overlapping figures and does not
+    notice.  A relative-placement API makes that class of defect impossible
+    rather than something a reviewer has to catch.
+
+    MATLAB -> LaTeX is now a plain vector export at the profile's embed width:
+
+        exportgraphics(gcf, 'fig/result.pdf', 'ContentType', 'vector')
+
+    and \\includegraphics as usual.  The MATLAB font will not match the paper
+    body font; that is accepted.  Author at the embed width so the on-page font
+    lands at 10 pt (or use the matlab_oversized_for_8cm_embed profile).
+
+    Raw matplotlib primitives (plt.Rectangle / ax.plot / ax.annotate) are NOT a
+    substitute for schemdraw when the figure is a circuit or a flowchart: they
+    are hand-typed coordinates by another name.
 12. *** 16:9 SLIDE FIGURES: AUTHOR AT 24 pt; DISPLAY >= 20 pt ***:
     For PowerPoint / Beamer 16:9 slides, use `presentation_slide` or a
     `beamer_169_*` profile.  Axis labels, tick labels, legends, panel labels,
@@ -329,7 +337,7 @@ def figure_size_for_target(target: str = "digest_double_column_side_by_side",
         f"set(fig,'DefaultLineLineWidth',{lw});\n"
         f"set(fig,'DefaultAxesLineWidth',{aw});\n"
         "% legend(...,'FontSize'," f"{legend}" ",'Box','off');\n"
-        "% --- LaTeX-paper output (PREFERRED): TikZ via matlab2tikz ---\n"
+        "% --- LaTeX-paper output: vector PDF (TikZ abolished 2026-09-01) ---\n"
         "% cleanfigure('targetResolution', 300);\n"
         "% matlab2tikz('fig/out.tikz', "
         "'width','\\\\figureWidth', 'height','\\\\figureHeight', "
@@ -370,127 +378,19 @@ def figure_size_for_target(target: str = "digest_double_column_side_by_side",
     )
 
 
-def figure_matlab2tikz_recipe(target: str = "paper_single_column",
-                             out_path: str = "fig/out.tikz",
-                             embed_width_cm: float | None = None,
-                             aspect: float = 0.62,
-                             cleanfigure_resolution: int = 300,
-                             standalone: bool = False) -> str:
-    """Generate a MATLAB recipe that exports the current figure to TikZ
-    (for LaTeX paper inclusion via pgfplots) using matlab2tikz.
+def figure_matlab2tikz_recipe(*args, **kwargs) -> str:
+    """Refused: TikZ and matlab2tikz were abolished on 2026-09-01.
 
-    Why TikZ instead of saveas('fig.pdf') for IEEE / IEEJ / IGTE papers:
-    - axis / tick / legend text inherits the paper's LaTeX font
-      (Times New Roman) -- exact typography match, unlike PDF
-      includegraphics which embeds the MATLAB-rendered font
-    - vector throughout, editable in .tex after export (tweak labels,
-      colors, ticks without re-running MATLAB)
-    - inline math ($\\sigma_{xy}$ etc.) renders in the paper's exact
-      math font, not MATLAB's LaTeX-interpreter approximation
-    - pgfplots compatibility lets you parametrise width with
-      \\columnwidth / \\textwidth -> figures resize when the journal
-      switches single-column vs double-column layout
-
-    Pre-requisite (one-time install):
-        matlab2tikz (https://github.com/matlab2tikz/matlab2tikz) on the
-        MATLAB path.  Add via Home -> Set Path -> Add with Subfolders,
-        or programmatically:
-            addpath(genpath('<install-dir>/matlab2tikz/src'));
-
-    Args:
-        target: lab profile name (see figure_style_guide) that drives
-            font / column-width / linewidth settings.  Default
-            'paper_single_column' = IEEE/IEEJ 88.9 mm single column.
-        out_path: relative output path; ``.tikz`` extension recommended.
-            Typically lives alongside the paper .tex (e.g. ``fig/``).
-        embed_width_cm: override the profile's column width (rare).
-        aspect: figure height/width ratio.  Default 0.62 is the
-            single-column lab default; for double-column wide figures
-            use 0.30-0.40; for tall multi-panel use 0.8+.
-        cleanfigure_resolution: target dot-resolution for matlab2tikz's
-            cleanfigure() preprocessing (decimates dense plot data so
-            LaTeX compile stays fast).  300 dpi is the lab default
-            matching the figure-print resolution; raise to 600 for
-            very dense small-feature plots, lower to 150 for sparse
-            line plots.
-        standalone: pgfplots emits a stand-alone compilable .tex iff
-            True (useful for one-off previews).  For embedding in a
-            paper, leave False (default) so the output is just the
-            ``\\begin{tikzpicture}...\\end{tikzpicture}`` block to be
-            ``\\input{}``-ed into the paper.
-
-    Returns:
-        Multi-line MATLAB recipe string ready to paste / save.
+    Kept as a named refusal rather than deleted so a caller that still asks for
+    the old recipe is told what to do instead of getting a silent tool-not-found.
     """
-    target = target.strip().lower()
-    if target not in _PROFILES:
-        return (f"Unknown target '{target}'. "
-                f"Valid: {', '.join(_PROFILES.keys())}")
-    prof = _PROFILES[target]
-    w_cm = float(embed_width_cm) if embed_width_cm else prof["embed_width_cm"]
-    h_cm = w_cm * aspect
-    font = prof["font_pt"]
-    legend = prof["legend_pt_min"]
-    lw = prof["linewidth_pt"]
-    aw = prof["axes_linewidth_pt"]
-    standalone_str = "true" if standalone else "false"
-
-    snippet = (
-        "% --- matlab2tikz export recipe (lab profile: " + target + ") ---\n"
-        "% Pre-requisite: matlab2tikz on MATLAB path\n"
-        "%     addpath(genpath('<install-dir>/matlab2tikz/src'));\n"
-        "\n"
-        "% 1. Create figure at the journal's exact embed size.\n"
-        "fig = figure('Units','centimeters', ...\n"
-        f"             'Position',[1 1 {w_cm:.1f} {h_cm:.2f}], ...\n"
-        "             'PaperUnits','centimeters', ...\n"
-        f"             'PaperSize',[{w_cm:.1f} {h_cm:.2f}], ...\n"
-        "             'Color','w');\n"
-        "set(fig,'DefaultAxesFontName','Times New Roman');\n"
-        f"set(fig,'DefaultAxesFontSize',{font});\n"
-        "set(fig,'DefaultTextFontName','Times New Roman');\n"
-        f"set(fig,'DefaultLineLineWidth',{lw});\n"
-        f"set(fig,'DefaultAxesLineWidth',{aw});\n"
-        "\n"
-        "% 2. plot(...), xlabel(...), ylabel(...), legend(...)\n"
-        "%    -- NO title() (caption goes in the LaTeX file)\n"
-        "%    -- legend FontSize " + str(legend) + " pt, 'Box','off'\n"
-        "\n"
-        "% 3. Decimate dense data so the resulting .tikz compiles fast.\n"
-        f"cleanfigure('targetResolution', {cleanfigure_resolution});\n"
-        "\n"
-        "% 4. Export to TikZ.\n"
-        f"matlab2tikz('{out_path}', ...\n"
-        "    'width', '\\\\figureWidth', ...\n"
-        "    'height', '\\\\figureHeight', ...\n"
-        "    'parseStrings', false, ...        % keep your $\\\\LaTeX$ as-is\n"
-        "    'showInfo',    false, ...\n"
-        "    'showWarnings',false, ...\n"
-        "    'extraAxisOptions', {'tick label style={font=\\\\footnotesize}'}, ...\n"
-        f"    'standalone',  {standalone_str});\n"
-        "\n"
-        "% --- LaTeX side -------------------------------------------------\n"
-        "% \\usepackage{pgfplots}\n"
-        "% \\pgfplotsset{compat=1.18}\n"
-        f"% \\newlength\\figureWidth  \\setlength\\figureWidth"
-        f"{{ {w_cm:.1f}cm }}\n"
-        f"% \\newlength\\figureHeight \\setlength\\figureHeight"
-        f"{{ {h_cm:.2f}cm }}\n"
-        f"% \\input{{{out_path.rsplit('.', 1)[0]}.tikz}}\n"
+    raise ValueError(
+        "matlab2tikz is abolished (lab decision 2026-09-01). A figure must exist "
+        "as a file: export a vector PDF at the profile's embed width instead --\n"
+        "    exportgraphics(gcf, 'fig/result.pdf', 'ContentType', 'vector')\n"
+        "and \\includegraphics it. See figure_style_guide() item 11 for the two "
+        "principles (derived geometry; the figure is a file)."
     )
-
-    return (
-        f"matlab2tikz recipe (target: {target})\n"
-        f"  embed width  : {w_cm:.1f} cm\n"
-        f"  embed height : {h_cm:.2f} cm (aspect h/w = {aspect:.2f})\n"
-        f"  font / legend: {font} pt / {legend} pt\n"
-        f"  cleanfigure  : {cleanfigure_resolution} dpi\n"
-        f"  standalone   : {standalone}\n"
-        f"  output       : {out_path}\n"
-        "\n"
-        + snippet
-    )
-
 
 def figure_everyday_recipe(embed_width_cm: float = 8.0,
                            aspect: float = 1.33,
