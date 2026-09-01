@@ -2,7 +2,7 @@
 
 Added 2026-05-26 (radia-mcp v0.91.0).  Enforces the lab policy:
 
-  **ALWAYS use the user's actual reference.bib AND back-check every
+  **ALWAYS use the user's actual references.bib AND back-check every
   citation via Crossref / Semantic Scholar / arXiv before inserting
   it into a paper.**
 
@@ -16,13 +16,13 @@ hallucinated citation taints the entire submission.
 This module composes the EXISTING radia-mcp tools into a hard
 verify-first workflow:
 
-  1. Read user's reference.bib (the SINGLE SOURCE OF TRUTH for what
+  1. Read user's references.bib (the SINGLE SOURCE OF TRUTH for what
      the paper already cites).
   2. Search Crossref / Semantic Scholar / arXiv for the claim.
-  3. Match candidates against reference.bib (already-cited? skip).
+  3. Match candidates against references.bib (already-cited? skip).
   4. Verify the top candidate exists via DOI resolve.
   5. Generate a ready-to-paste BibTeX entry only AFTER verification.
-  6. Recommend whether to insert into reference.bib (or report that
+  6. Recommend whether to insert into references.bib (or report that
      the user is already citing it).
 
 If steps 1-4 cannot complete cleanly, the tool RAISES rather than
@@ -57,7 +57,7 @@ This recipe is the SINGLE BEHAVIORAL RULE for inserting any
 citation into a lab paper:
 
   **NEVER invent a citation.  ALWAYS use the user's actual
-  reference.bib and ALWAYS verify the source via search FIRST.**
+  references.bib and ALWAYS verify the source via search FIRST.**
 
 ## Why this is enforced
 
@@ -74,11 +74,11 @@ citation (~5 seconds of human time, 0 seconds of AI time).
 
 ## The mandatory 6-step workflow
 
-### Step 1: READ the user's reference.bib first
+### Step 1: READ the user's references.bib first
 
 ```python
 from radia_mcp.paper_writing import paper_writing_lint_reference_format
-report = paper_writing_lint_reference_format("/path/to/reference.bib")
+report = paper_writing_lint_reference_format("/path/to/references.bib")
 # report contains: every existing entry's citation_key, DOI, title, author, year
 ```
 
@@ -119,14 +119,14 @@ hits = paper_writing_arxiv_search(
 resolve a candidate DOI via Crossref, OR find the paper via
 arXiv search, OR mark the citation as "TODO: verify with user".
 
-### Step 3: MATCH candidates against reference.bib
+### Step 3: MATCH candidates against references.bib
 
 ```python
 from radia_mcp.paper_writing import paper_writing_verify_citation
 
 result = paper_writing_verify_citation(
     claim="Koh-Yook derived an exact closed form for impedance plane",
-    bib_path="/path/to/reference.bib",
+    bib_path="/path/to/references.bib",
     candidate_doi="10.1109/TAP.2006.880747",
 )
 # Returns:
@@ -151,7 +151,7 @@ assert v["ok"], f"Suggested DOI does not resolve: {suggested_bibtex_doi}"
 If the DOI doesn't resolve, the BibTeX is unreliable -- discard
 the candidate and search again.
 
-### Step 5: INSERT into reference.bib (only if verdict ==
+### Step 5: INSERT into references.bib (only if verdict ==
 "ready_to_insert")
 
 Append to the user's .bib file via standard text edit; never
@@ -183,7 +183,7 @@ If after Steps 2-3 NO candidate has a resolvable DOI:
   * Wrong-author citations (the Crossref metadata is authoritative).
   * Mixed-up year/venue citations (e.g. confusing a 2006 paper
     with a 2007 conference version).
-  * Duplicate citations in reference.bib (different keys pointing
+  * Duplicate citations in references.bib (different keys pointing
     to the same DOI).
   * Cite-but-not-in-bib (\\cite{xyz} where xyz isn't in the bib).
   * Bib-but-not-cited (entries in bib that never appear in \\cite).
@@ -231,7 +231,7 @@ def paper_writing_citation_workflow_recipe() -> str:
 
     This is the BEHAVIORAL RULE for inserting any citation into a
     lab paper: NEVER invent, ALWAYS verify via Crossref / S2 /
-    arXiv FIRST, ALWAYS check against the user's reference.bib.
+    arXiv FIRST, ALWAYS check against the user's references.bib.
 
     Read this BEFORE generating any \\cite{} or BibTeX entry.
     """
@@ -243,12 +243,19 @@ def paper_writing_citation_workflow_recipe() -> str:
 # ============================================================
 
 
+def _canonical_bib() -> str:
+    """The lab keeps one bibliography; papers do not copy it."""
+    from ..bibliography.plans.T14_canonical import CANONICAL
+    return str(CANONICAL)
+
+
 def _parse_bib_lightweight(bib_path: str) -> dict:
-    """Parse reference.bib without pulling in pybtex/bibtexparser.
+    """Parse references.bib without pulling in pybtex/bibtexparser.
 
     Returns dict keyed by citation_key with sub-dict of fields.
     Lossy but enough for "is this DOI already cited?" check.
     """
+    bib_path = bib_path or _canonical_bib()
     if not os.path.exists(bib_path):
         return {}
     try:
@@ -324,7 +331,7 @@ def _title_already_cited(bib_entries: dict, target_title: str) -> Optional[str]:
 
 def paper_writing_verify_citation(
     claim: str,
-    bib_path: str,
+    bib_path: str = "",
     candidate_doi: str = "",
     candidate_arxiv_id: str = "",
     candidate_title: str = "",
@@ -342,7 +349,7 @@ def paper_writing_verify_citation(
             (used for search if no DOI / arXiv ID).  Example:
             "Koh-Yook derived an exact closed form for the
              impedance plane Sommerfeld integral."
-        bib_path: path to the user's reference.bib (the single
+        bib_path: path to the user's references.bib (the single
             source of truth for what the paper already cites).
         candidate_doi: known DOI candidate (skip search step).
         candidate_arxiv_id: known arXiv ID candidate.
@@ -373,7 +380,7 @@ def paper_writing_verify_citation(
         1. Call paper_writing_verify_citation(claim, bib_path, ...).
         2. If verdict == "found_in_bib": use matching_key, no edit.
         3. If verdict == "ready_to_insert": append suggested_bibtex
-           to reference.bib, then \\cite{citation_key}.
+           to references.bib, then \\cite{citation_key}.
         4. If verdict == "needs_disambiguation": ask user to pick.
         5. If verdict == "no_candidate_found": mark TODO; ask user.
         6. If verdict == "error": investigate; do NOT proceed.
@@ -383,7 +390,7 @@ def paper_writing_verify_citation(
         return {
             "verdict": "error",
             "advice": ("bib_path is required.  The lab policy is to "
-                       "ALWAYS use the user's reference.bib as the "
+                       "ALWAYS use the user's references.bib as the "
                        "single source of truth before inserting any "
                        "new citation."),
             "candidates": [],
@@ -395,7 +402,7 @@ def paper_writing_verify_citation(
         return {
             "verdict": "error",
             "advice": (f"bib_path not found: {bib_path}.  Ask the user "
-                       f"to create reference.bib or supply the correct path."),
+                       f"to create references.bib or supply the correct path."),
             "candidates": [],
             "matching_key": None,
             "suggested_bibtex": None,
@@ -648,7 +655,7 @@ def paper_writing_check_citation_keys_exist(
             ``auto_resolve_inputs=True`` (default) to merge the chain
             before scanning.
         bib_path: the .bib file referenced by ``\\bibliography{...}``.
-            Lab convention: ``reference.bib`` at project root.
+            Lab convention: ``references.bib`` at project root.
         auto_resolve_inputs: True (default) inlines ``\\input{}``
             recursively before scanning ``\\cite{}``.
         encoding: tex / bib file encoding.  ``"utf-8"`` default;
