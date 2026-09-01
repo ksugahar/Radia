@@ -1,0 +1,51 @@
+=== 3D L-shape rank-1 + 1 mixed Galerkin ===
+L = 5.0 mm, V_L = 3.7500e-07 m^3, S_L = 3.5000e-04 m^2
+Y_DC = 2.1750e+01 S, K_SIBC^L = 2.3778e+03
+
+Mesh: maxh = L/8, P3
+  ne = 7962
+d_max = L/2 = 2.500 mm (envelope decay length scale)
+
+Precomputing q1..q10 = FEM Krylov modes at s=0...
+  10 modes done in 1.26s
+
+=== Step A: FEM ground truth ===
+  f=1e+03  |gL|=  3.38  |Y_FEM|=2.019434e+01
+  f=1e+04  |gL|= 10.70  |Y_FEM|=9.348966e+00
+  f=1e+05  |gL|= 33.84  |Y_FEM|=3.239224e+00
+  f=1e+06  |gL|=107.00  |Y_FEM|=1.079556e+00
+
+=== Step B: rank-N=3 bulk + various surface envelopes (% err vs FEM) ===
+      f (Hz)    |gL|      bulk-only     +bbox 1DOF
+    1.00e+03    3.38       -0.000%      +22.056%
+    1.00e+04   10.70       -0.533%      +53.478%
+    1.00e+05   33.84       +6.837%       +9.965%
+    1.00e+06  107.00     +198.522%       -7.101%
+
+=== Step B: rank-N=5 bulk + various surface envelopes (% err vs FEM) ===
+      f (Hz)    |gL|      bulk-only     +bbox 1DOF
+    1.00e+03    3.38       +0.000%      +21.712%
+    1.00e+04   10.70       +0.014%      +65.547%
+    1.00e+05   33.84      -10.641%       -3.085%
+    1.00e+06  107.00      +74.007%       +0.331%
+
+=== Step B: rank-N=7 bulk + various surface envelopes (% err vs FEM) ===
+      f (Hz)    |gL|      bulk-only     +bbox 1DOF
+    1.00e+03    3.38       +0.000%      +21.711%
+    1.00e+04   10.70       +0.000%      +66.872%
+    1.00e+05   33.84       -1.927%      +12.606%
+    1.00e+06  107.00      +20.940%      +11.532%
+
+=== Step B: rank-N=10 bulk + various surface envelopes (% err vs FEM) ===
+      f (Hz)    |gL|      bulk-only     +bbox 1DOF
+    1.00e+03    3.38       +0.000%      +21.729%
+    1.00e+04   10.70       +0.000%      +67.217%
+    1.00e+05   33.84       -0.189%      +21.581%
+    1.00e+06  107.00      +11.556%      +15.621%
+
+Notes:
+- bulk-only is straight CLN (rank-N Krylov-at-0), Q(s) rational, integer tail.
+- +bbox 1DOF: bounding-box tensor SIBC (BC mismatch at 2 concave step faces).
+- +region 1DOF: sum of horiz + vert per-region tensors, vanishes on ALL 8 faces.
+- +split 2DOF: horiz and vert per-region tensors as 2 separate basis functions.
+- Wall band ~ f=1e4 (|gL| ~ 10); deep skin ~ f=1e6 (|gL| ~ 100).

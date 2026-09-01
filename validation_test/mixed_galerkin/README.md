@@ -56,11 +56,46 @@ solved per-frequency. Intermediate-frequency accuracy is bounded by the
 | `cube3d/`      | Mixed Galerkin on solid cube (rank-N + closed K_ss + NGSolve FEM ground truth verified) |
 | `time_domain/` | Time-domain realization: AAA rational fit → 21 stable poles (cube). No `d` tuning. |
 | `ngsolve_validation/` | Framework-agnostic NGSolve FEM cross-validation (cube / cuboid Kelvin) |
-| `lshape3d_ngsolve_mellin.py` | Non-tensor 3D shape (L-shape) probe — Mellin universality check, mixed Galerkin extension is future work |
+| `cuboid_general/` | Non-cubic cuboid: the generalized Mellin asymptote by codimension. Promoted 2026-09-02 |
+| `lshape3d_ngsolve_mellin.py` | Non-tensor 3D shape (L-shape) probe — Mellin universality check |
+| `lshape3d_mixed_galerkin.py` | L-shape mixed model + `lshape3d_mixed_galerkin_results.txt`. Promoted 2026-09-02 |
 
 Each geometry directory contains numbered scripts (`01_*.py`, `02_*.py`,
 ...) implementing successive refinements: baseline 1-DOF surface,
 Senior tower corrections, rank-N bulk sweep, etc.
+
+
+## Promoted from the conference folder (2026-09-02)
+
+A copy of this directory lived in
+`W:\02_学会資料\2026年度\2026_09_IGTE_Symposium\CauerLadderNetwork@菅原\mixed_galerkin`
+and had grown past it. The IGTE figure script imported from that copy, so the
+material below was driving talk content while being invisible here -- which is
+why this README could still say "corner Mellin needed" and "mixed Galerkin
+extension is future work" after both had been attempted.
+
+These are research scripts, not settled results. Read each one's own docstring
+before quoting it.
+
+| file | what it tried | state |
+|---|---|---|
+| `cube3d/08_edge_corner_basis.py` | split the single tensor envelope into 7: three faces, three edges, one corner | FAILED, and diagnosed: the separable family is asymptotically rank-deficient, the condition number explodes and the solve returns garbage. This is why "one DOF per boundary class" is not the fix it looks like |
+| `cube3d/09_wedge_basis.py` | a non-separable basis with genuine 2D structure across a z-edge, plus 11 symmetry images | outcome NOT recorded in the file; run it before citing |
+| `cuboid_general/01..05` | generalized Mellin for `Lx != Ly != Lz`: `c_0 = S sqrt(sigma/mu)` (faces), `c_1 = -(16/pi mu)(Lx+Ly+Lz)` (edges), `c_2 = 48/(pi mu^1.5 sqrt(sigma))` (vertices, size-independent) | phase 1 disagrees with FEM by 95-528 % at 1e7-1e8 Hz, INCLUDING for the cube. The FEM value stops decaying between those two decades at `ne = 712` and `|gL| = 428`, which looks like an unresolved skin layer rather than a wrong asymptote. Not confirmed either way |
+| `lshape3d_mixed_galerkin.py` | mixed model on a body with one concave dihedral edge | the surface enrichment makes it WORSE: +21 % to +67 % against FEM with a bounding-box tensor envelope, which does not satisfy the boundary condition on the concave step faces |
+
+Still on the conference side and NOT promoted:
+
+- `cylinder/plot_mixed_galerkin_overview.py`, `sphere/plot_sphere_mixed_galerkin_overview.py`
+  — these contain a SECOND implementation of `Y_mixed_galerkin`, plus
+  `Y_cln_pade`, which has no counterpart here at all. The talk's figures come
+  from them. Reconciling that against `cylinder/01` and `sphere/01` is the next
+  step; the two agree numerically today (0.0639 % vs 0.0643 % on grids of
+  different density) but they are separate files and will drift.
+- `_references/cylinder_bessel.py`, `_references/sphere_bessel.py` — superseded
+  here by `radia.maglev.mixed_galerkin.references`; the copy is the older route.
+- `square2d/_broken_simple_envelope.py` — a dead end kept under a `_broken_`
+  name; its lesson is already in `memory/mixed_galerkin_examples_prune.md`.
 
 ## Headline results (post Phase 8b correction)
 

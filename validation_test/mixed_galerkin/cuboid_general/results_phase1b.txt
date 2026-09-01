@@ -1,0 +1,45 @@
+=== Phase 1 follow-up: Mellin term decomposition ===
+Test whether each term (c_0, c_1, c_2) of the generalized Mellin
+contributes correctly for non-cubic cuboids.
+
+WRONG variant tested: c_1 with geometric mean of (Lx,Ly,Lz)
+(instead of arithmetic sum).  Non-cubic shapes should reveal the bug.
+
+=== Case B (cube control): 4.0 x 4.0 x 4.0 mm ===
+  Y_DC = 3.7120e+00, V = 64.000 mm^3
+  c_0 (K_SIBC)        = 6.5220e+02
+  c_1 (correct)       = -4.8634e+04
+  c_1 (geom mean WRONG) = -4.8634e+04
+  c_2                 = 1.4242e+06
+
+  Term-by-term comparison at f = 1e5 (where c_0 dominates):
+      f (Hz)   delta_skin/L        |Y_FEM|   err_c0only   err_c0+c1_corr   err_c0+c1_wrong    err_full
+    3.00e+04         0.0954   1.329695e+00     18.5290%          1.2989%           1.2989%     0.0295%
+    1.00e+05         0.0522   7.666696e-01     10.1756%          0.5235%           0.5235%     0.4174%
+    3.00e+05         0.0302   4.451763e-01      9.1146%          3.3589%           3.3589%     3.4293%
+
+=== Case A (5x7x3 moderate): 5.0 x 7.0 x 3.0 mm ===
+  Y_DC = 6.0900e+00, V = 105.000 mm^3
+  c_0 (K_SIBC)        = 9.6471e+02
+  c_1 (correct)       = -6.0793e+04
+  c_1 (geom mean WRONG) = -5.7360e+04
+  c_2                 = 1.4242e+06
+
+  Term-by-term comparison at f = 1e5 (where c_0 dominates):
+      f (Hz)   delta_skin/L        |Y_FEM|   err_c0only   err_c0+c1_corr   err_c0+c1_wrong    err_full
+    3.00e+04         0.1272   2.004772e+00     15.5177%          0.8399%           0.6885%     0.0332%
+    1.00e+05         0.0697   1.148767e+00      8.3406%          0.3115%           0.4901%     0.1517%
+    3.00e+05         0.0402   6.699143e-01      6.2929%          1.6268%           1.8703%     1.6521%
+
+=== Case C (3x8x2 extreme): 3.0 x 8.0 x 2.0 mm ===
+  Y_DC = 2.7840e+00, V = 48.000 mm^3
+  c_0 (K_SIBC)        = 6.2502e+02
+  c_1 (correct)       = -5.2687e+04
+  c_1 (geom mean WRONG) = -4.4187e+04
+  c_2                 = 1.4242e+06
+
+  Term-by-term comparison at f = 1e5 (where c_0 dominates):
+      f (Hz)   delta_skin/L        |Y_FEM|   err_c0only   err_c0+c1_corr   err_c0+c1_wrong    err_full
+    3.00e+04         0.1908   1.253666e+00     21.1545%          1.7256%           2.7269%     0.3414%
+    1.00e+05         0.1045   7.303874e-01     11.2965%          0.4298%           1.7054%     0.1382%
+    3.00e+05         0.0603   4.297869e-01      7.8445%          1.5031%           2.4697%     1.5418%
