@@ -84,14 +84,22 @@ before quoting it.
 | `cuboid_general/01..05` | generalized Mellin for `Lx != Ly != Lz`: `c_0 = S sqrt(sigma/mu)` (faces), `c_1 = -(16/pi mu)(Lx+Ly+Lz)` (edges), `c_2 = 48/(pi mu^1.5 sqrt(sigma))` (vertices, size-independent) | phase 1 disagrees with FEM by 95-528 % at 1e7-1e8 Hz, and it is the FEM that is wrong. Deep skin requires `|Y| ~ f^-1/2`, i.e. a factor `sqrt(10) = 3.162` per decade. The Mellin column converges to it (3.004, 3.111, 3.146) while the FEM column goes 3.134, 1.947, **1.037** -- flat, which an eddy-current admittance cannot be. At `ne = 712`, about 9 elements per side, and `|gL| = 428` at 1e8 Hz, one element spans ~48 skin depths; saturation is what an unresolved skin layer looks like. Re-run the reference on a resolved mesh before reading phase 1 as a test of the asymptote |
 | `lshape3d_mixed_galerkin.py` | mixed model on a body with one concave dihedral edge | the surface enrichment makes it WORSE: +21 % to +67 % against FEM with a bounding-box tensor envelope, which does not satisfy the boundary condition on the concave step faces |
 
-Still on the conference side and NOT promoted:
+Resolved 2026-09-02, so the conference copy no longer feeds anything:
 
-- `cylinder/plot_mixed_galerkin_overview.py`, `sphere/plot_sphere_mixed_galerkin_overview.py`
-  — these contain a SECOND implementation of `Y_mixed_galerkin`, plus
-  `Y_cln_pade`, which has no counterpart here at all. The talk's figures come
-  from them. Reconciling that against `cylinder/01` and `sphere/01` is the next
-  step; the two agree numerically today (0.0639 % vs 0.0643 % on grids of
-  different density) but they are separate files and will drift.
+- `cylinder/plot_mixed_galerkin_overview.py` and
+  `sphere/plot_sphere_mixed_galerkin_overview.py` each held a second
+  `Y_mixed_galerkin`. Compared function body against function body, they are
+  the SAME code as `cylinder/01_no_d_baseline.py` and `sphere/02_hoibc_gamma1.py`
+  respectively, comments aside. Nothing had diverged; there was simply a second
+  copy waiting to.
+- `Y_cln_pade` had no counterpart here, which is why the talk's CLN curves could
+  not be reproduced from a clone. Promoted to
+  `radia.maglev.mixed_galerkin.references` and parameterised by `(a, sigma, mu)`
+  like its neighbours; it reproduces the old one bit for bit at eight test
+  points across both `kind="L"` and `kind="R"`.
+- The talk's `make_figs.py` now loads `cylinder/01` and `sphere/02` from THIS
+  directory by path, and takes `Y_cln_pade` from the reference API. Its
+  `results.json` after the switch differs from before only in its timestamp.
 - `_references/cylinder_bessel.py`, `_references/sphere_bessel.py` — superseded
   here by `radia.maglev.mixed_galerkin.references`; the copy is the older route.
 - `square2d/_broken_simple_envelope.py` — a dead end kept under a `_broken_`
