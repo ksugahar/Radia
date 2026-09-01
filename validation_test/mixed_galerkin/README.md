@@ -73,7 +73,7 @@ for remaining square/cube candidates):
 | Cylinder    | 0.04% wall band  | 2.4e-4% | 2e-5% | 1e-5% |
 | Sphere      | 0.11%            | 0.001% | (Senior tower terminates at γ_1) | |
 | 2D square   | 0.03 – 0.26%     | — (flat face: Senior trivial) | corner Mellin needed | |
-| 3D cube     | (audit pending — task #183) | — | — | |
+| 3D cube     | 0.33% vs NGSolve FEM (rank 20, closed K_ss) | — | — | |
 
 All results obtained with **zero free parameters**: the bulk-surface
 crossover frequency is determined by the Galerkin system, not a
@@ -109,7 +109,7 @@ purposes. See `digest/supplement/PHASE_8B_ARTIFACT_NOTE.md`.
 
 ## Open questions
 
-- **Task #183** — 3D cube Foster reference audit. The Phase 6 "20% wall band" used Foster N=99, almost certainly under-converged given the 5% bias seen in 2D at N=1999. Until audited, the 3D cube result is provisional.
+- **Task #183** — 3D cube Foster reference audit. CLOSED by replacing the reference rather than converging it: `cube3d/06_ngsolve_ground_truth.py` measures against an NGSolve FEM solution, giving 0.33% at rank 20 with the closed `K_ss`. The Phase 6 "20% wall band" was indeed a Foster N=99 truncation artifact, the same failure the 2D square showed in Phase 8c. `cube3d/01_corner_envelope_uncertain.py` still carries the provisional Foster-referenced number in its docstring and is superseded by 06.
 - **Two-point Padé Theorem** — formalize the bound err_intermediate ~ (δ/L)^{2N} for rank-N bulk + N-DOF Senior tower.
 - **Time-domain Cauer realization** — each Senior tower correction has a fractional-power impedance signature; the diffusive Foster quantization technique (digest §IV) can realize each as a finite RC ladder. This is the Paper 2 direction.
 
