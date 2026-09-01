@@ -31,6 +31,7 @@ from .plans.T11_health_report import bibliography_health_report  # noqa: F401
 # Tier 6 - the canonical bibliography
 from .plans.T14_canonical import (  # noqa: F401
     bibliography_canonical_path,
+    bibliography_find_stray_bibs,
     bibliography_make_bbl,
     bibliography_refresh_unpublished,
     bibliography_verify_dois,

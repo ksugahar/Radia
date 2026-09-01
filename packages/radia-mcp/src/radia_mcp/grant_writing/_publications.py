@@ -129,3 +129,118 @@ def grant_writing_publication_list(author: str = "Sugahara|菅原",
             out.append(f"   - [{e.kind}] {_clean(e.fields.get('title',''))[:64]}"
                        f"  ({e.fields.get('year','年不明')})")
     return "\n".join(out)
+
+
+# ---------------------------------------------------------------- count check
+
+# What a proposal claims, and which bibliography entry kinds could support it.
+# "査読付" is deliberately mapped to the article count and then reported as
+# unverifiable: nothing in a BibTeX entry records refereeing.
+_CLAIM_PATTERNS = [
+    (r"査読\s*(?:付き?|有り?|あり)\s*(?:の)?(?:学術)?論文", "article", True),
+    (r"(?:原著|学術|学術雑誌|ジャーナル)\s*論文", "article", False),
+    (r"(?:国際)\s*会議\s*(?:論文|発表|予稿)?", "inproceedings", False),
+    (r"(?:国内)?\s*研究会\s*(?:資料|発表)?", "techreport", False),
+    (r"peer[- ]reviewed\s+(?:journal\s+)?(?:papers?|articles?)", "article", True),
+    (r"journal\s+(?:papers?|articles?)", "article", False),
+    (r"(?:international\s+)?conference\s+(?:papers?|presentations?)",
+     "inproceedings", False),
+]
+# The English patterns take the English number-first form. They are the entries
+# written in ASCII, which is what distinguishes them from the Japanese ones.
+_EN_PATTERNS = {p for p, _, _ in _CLAIM_PATTERNS if p.isascii()}
+# A particle may sit between the noun and its number. 、 is excluded on purpose:
+# it separates one claim from the next, and including it made the number from
+# "査読付き論文を12件、国際会議発表を8件" attach to the conference claim too.
+_PARTICLE = r"(?:[をはがもでの]|など|about|of)*"
+_COUNTER = (r"[\s]*" + _PARTICLE
+            + r"[\s]*(\d+)\s*(?:件|編|報|本|篇|papers?|articles?)?")
+# number-first: Japanese needs its counter word, English only a space, so a bare
+# digit next to a noun is not mistaken for a count in either language
+_BEFORE_JA = r"(\d+)\s*(?:件|編|報|本|篇)\s*(?:の)?\s*"
+_BEFORE_EN = r"(\d+)\s+"
+_KIND_LABEL = {"article": "学術論文", "inproceedings": "国際会議・研究発表",
+               "techreport": "研究会資料・技術報告"}
+
+
+def _scope_year(text: str) -> tuple[str, str]:
+    """The period the text says it is counting over, if it says one."""
+    m = re.search(r"(\d{4})\s*年\s*以降", text)
+    if m:
+        return m.group(1), f"{m.group(1)}年以降"
+    m = re.search(r"(?:過去|最近|直近)\s*(\d+)\s*年", text)
+    if m:
+        # relative to the newest year present, so the check does not drift
+        return "", f"過去{m.group(1)}年"
+    return "", "全期間"
+
+
+def grant_writing_achievement_count_check(text: str,
+                                          author: str = "Sugahara|菅原",
+                                          bib_path: str = "") -> str:
+    """Check the publication counts a proposal claims against the bibliography.
+
+    A number written by hand into an achievement section drifts as soon as one
+    more paper appears, and a reviewer who counts the list and gets a different
+    answer has found a reason to doubt everything else on the page.
+
+    A claim about peer review cannot be settled here -- BibTeX does not record
+    it -- so those are reported as needing the applicant's confirmation rather
+    than passed or failed.
+    """
+    path = bib_path or str(CANONICAL)
+    entries = [e for e in read_bib_file(path) if not e.kind.startswith("@")]
+    mine = [e for e in entries
+            if re.search(author, e.fields.get("author", ""), re.I)]
+
+    since, scope_label = _scope_year(text)
+    if since:
+        mine = [e for e in mine if e.fields.get("year", "")[:4] >= since]
+    elif scope_label.startswith("過去"):
+        n = int(re.search(r"\d+", scope_label).group())
+        years = [int(e.fields["year"][:4]) for e in mine
+                 if e.fields.get("year", "")[:4].isdigit()]
+        if years:
+            cutoff = max(years) - n + 1
+            mine = [e for e in mine
+                    if e.fields.get("year", "")[:4].isdigit()
+                    and int(e.fields["year"][:4]) >= cutoff]
+
+    counts = {}
+    for kind in ("article", "inproceedings", "techreport"):
+        counts[kind] = sum(1 for e in mine if e.kind.lower() == kind)
+
+    out = [f"grant_writing_achievement_count_check  (集計範囲: {scope_label})",
+           f"  書誌中の該当: 学術論文 {counts['article']} / "
+           f"国際会議 {counts['inproceedings']} / "
+           f"研究会 {counts['techreport']}"]
+
+    found = 0
+    for pat, kind, is_review_claim in _CLAIM_PATTERNS:
+        before = _BEFORE_EN if pat in _EN_PATTERNS else _BEFORE_JA
+        hits = list(re.finditer(pat + _COUNTER, text))
+        hits += list(re.finditer(before + pat, text))
+        for m in hits:
+            claimed = next((g for g in m.groups() if g and g.isdigit()), "")
+            if not claimed:
+                continue
+            found += 1
+            claimed_n, actual = int(claimed), counts[kind]
+            phrase = m.group(0).strip().replace("\n", " ")
+            if is_review_claim:
+                out.append(f"  [要確認] 「{phrase}」")
+                out.append(f"      査読の有無は書誌からは判定できない。"
+                           f"{_KIND_LABEL[kind]}の総数は {actual} 件。")
+                out.append("      査読付がこの数と一致するか申請者が確認すること。")
+            elif claimed_n == actual:
+                out.append(f"  [一致]   「{phrase}」= {actual} 件")
+            else:
+                out.append(f"  [不一致] 「{phrase}」 と書かれているが、"
+                           f"{_KIND_LABEL[kind]}は {actual} 件")
+                out.append("      本文か書誌のどちらかが古い。"
+                           "grant_writing_publication_list で内訳を確認すること。")
+
+    if not found:
+        out.append("  本文に業績件数の記述が見当たらない。"
+                   "件数を書くなら書誌と突き合わせること。")
+    return "\n".join(out)
