@@ -208,7 +208,10 @@ def first_author_lastname(authors_field: str) -> str:
     """
     if not authors_field:
         return "unknown"
-    first = _strip_latex(authors_field).split(" and ")[0].strip()
+    # "H.~Karl" ties the initial to the surname, so splitting on whitespace
+    # returned the whole token and the surname came out "hkarl"
+    first = _strip_latex(authors_field).replace("~", " ")
+    first = first.split(" and ")[0].strip()
     if "," in first:
         last = first.split(",", 1)[0].strip()
     else:

@@ -414,18 +414,29 @@ def bibliography_search(query: str, limit: int = 10,
     path = pathlib.Path(bib_path) if bib_path else CANONICAL
     entries = [e for e in read_bib_file(path) if not e.kind.startswith("@")]
 
+    from .._bibparse import _strip_latex
+
     def blob(e):
+        # An accented author is stored as N\'ed\'elec and typed as "nedelec".
+        # Matching the raw field only worked here because the cite key happens
+        # to be ASCII; a co-author's name would still have been unreachable.
         parts = [e.key] + [str(v) for v in e.fields.values()]
-        t = re.sub(r"\\[a-zA-Z]+", " ", " ".join(parts))
-        return t.replace("{", "").replace("}", "").lower()
+        return _strip_latex(" ".join(parts)).lower()
+
+    # "the Italian's play model paper" says nothing the entry contains, so the
+    # descriptions people actually use are written down alongside it
+    from .T15_landmarks import landmark_keys_for
+    by_description = landmark_keys_for(terms)
 
     hits = []
     for e in entries:
         b = blob(e)
-        if all(t in b for t in terms):
+        if e.key in by_description or all(t in b for t in terms):
             # a term in the title counts for more than one in a note
             title = (e.fields.get("title") or "").lower()
             score = sum(2 if t in title else 1 for t in terms)
+            if e.key in by_description:
+                score += 5      # a named landmark is what was being asked for
             hits.append((score, e))
     hits.sort(key=lambda x: (-x[0], x[1].fields.get("year", "")), reverse=False)
     hits.sort(key=lambda x: -x[0])

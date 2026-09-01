@@ -38,3 +38,8 @@ from .plans.T14_canonical import (  # noqa: F401
     bibliography_refresh_unpublished,
     bibliography_verify_dois,
 )
+
+# Landmark papers of the field, reachable by description
+from .plans.T15_landmarks import (  # noqa: F401,E402
+    bibliography_landmarks,
+)
