@@ -105,6 +105,36 @@ def Y_mixed_galerkin(s):
     return Y_DC * (1 + v_avg)
 
 
+SWEEP = np.logspace(0, 6, 31)
+WALL_BAND_HZ = (1e4, 1e6)
+METRIC = "abs(Y_exact - Y_mixed) / abs(Y_exact)"
+
+
+def summary() -> dict:
+    """Run the sweep and return the numbers. main() prints from this."""
+    errs = []
+    for f in SWEEP:
+        s = 1j * 2 * math.pi * f
+        Y_e = Y_exact_square2d(s, L, SIGMA, MU)
+        errs.append(abs(Y_e - Y_mixed_galerkin(s)) / abs(Y_e))
+    errs = np.array(errs)
+    wall = (SWEEP > WALL_BAND_HZ[0]) & (SWEEP < WALL_BAND_HZ[1])
+    return {
+        "case": "square2d_corner_envelope",
+        "description": "rank-1 CLN bulk + tensor corner-aware surface envelope",
+        "metric": METRIC,
+        "geometry": {"L_m": L, "sigma_S_per_m": SIGMA, "mu_H_per_m": MU},
+        "sweep": {"f_lo_hz": float(SWEEP[0]), "f_hi_hz": float(SWEEP[-1]),
+                  "n_points": int(SWEEP.size),
+                  "wall_band_hz": list(WALL_BAND_HZ)},
+        "reference": "Aitken-extrapolated Foster sum "
+                     "(_references/square2d_foster.py)",
+        "max_error_pct": float(errs.max() * 100),
+        "max_error_at_hz": float(SWEEP[errs.argmax()]),
+        "wall_band_max_error_pct": float(errs[wall].max() * 100),
+    }
+
+
 def main():
     print("=== 2D square cross-section: rank-1 bulk + corner envelope ===")
     print(f"L = {L*1e3} mm, sigma = {SIGMA:.2e} S/m, mu = {MU:.4e} H/m")
@@ -123,17 +153,11 @@ def main():
         print(f"{f:10.2e}  {abs(Y_e):12.4e}  {abs(Y_m):12.4e}  {err*100:9.4f}%")
 
     print()
-    print("Sub-sweep summary (1 Hz to 1e6 Hz, 31 points):")
-    fs = np.logspace(0, 6, 31)
-    errs = []
-    for f in fs:
-        s = 1j * 2 * math.pi * f
-        Y_e = Y_exact_square2d(s, L, SIGMA, MU)
-        errs.append(abs(Y_e - Y_mixed_galerkin(s)) / abs(Y_e))
-    errs = np.array(errs)
-    wall_mask = (fs > 1e4) & (fs < 1e6)
-    print(f"  Max error anywhere:  {errs.max()*100:.4f}% @ f = {fs[errs.argmax()]:.2e} Hz")
-    print(f"  Wall band max:       {errs[wall_mask].max()*100:.4f}%")
+    print(f"Sub-sweep summary (1 Hz to 1e6 Hz, {SWEEP.size} points):")
+    r = summary()
+    print(f"  Max error anywhere:  {r['max_error_pct']:.4f}% "
+          f"@ f = {r['max_error_at_hz']:.2e} Hz")
+    print(f"  Wall band max:       {r['wall_band_max_error_pct']:.4f}%")
 
 
 if __name__ == "__main__":
