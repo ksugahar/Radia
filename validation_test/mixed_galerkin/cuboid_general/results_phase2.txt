@@ -1,0 +1,77 @@
+=== Phase 2: parallelepiped (sheared) Mellin extrapolation test ===
+L = 5 mm, sigma = 5.80e+07 S/m, mu = 1.2566e-06 H/m
+
+Hypothesis: Mixed Galerkin framework's codim decomposition extends
+to non-orthogonal hexahedra.  Naive Mellin uses measured geometry
+(S, L_total, n_verts) but assumes right-angle wedge factor W(pi/2).
+If FEM agrees within a few %, the framework is robust to dihedral
+angle perturbations.
+
+=== Case control (cube) alpha=0.0: parallelepiped L=5.0 mm, shear alpha = 0.00 ===
+  V        = 125.000 mm^3 (cube ref: 125.000)
+  S        = 150.000 mm^2 (cube ref: 150.000)
+  L_total  = 60.000 mm (cube ref: 60.000)
+  n_edges  = 12, n_verts = 8
+  Dihedrals: 8 right-angle, 2 acute (90.0 deg), 2 obtuse (90.0 deg)
+  Y_DC     = 7.2500e+00
+  Mesh ne  = 3445
+
+      f (Hz)      |gL|        |Y_FEM|  |Y_naive_Mellin|     rel err
+    3.00e+04     18.53   2.128469e+00      2.129589e+00     0.0647%
+    1.00e+05     33.84   1.212017e+00      1.218962e+00     0.6232%
+    3.00e+05     58.61   6.977287e-01      7.197881e-01     4.4012%
+    1.00e+06    107.00   3.895200e-01      3.997621e-01    21.4521%
+
+=== Case mild shear alpha=0.1: parallelepiped L=5.0 mm, shear alpha = 0.10 ===
+  V        = 125.000 mm^3 (cube ref: 125.000)
+  S        = 150.249 mm^2 (cube ref: 150.000)
+  L_total  = 60.100 mm (cube ref: 60.000)
+  n_edges  = 12, n_verts = 8
+  Dihedrals: 8 right-angle, 2 acute (84.3 deg), 2 obtuse (95.7 deg)
+  Y_DC     = 7.2500e+00
+  Mesh ne  = 2116
+
+      f (Hz)      |gL|        |Y_FEM|  |Y_naive_Mellin|     rel err
+    3.00e+04     18.53   2.130177e+00      2.133133e+00     0.1411%
+    1.00e+05     33.84   1.202544e+00      1.220988e+00     1.6469%
+    3.00e+05     58.61   6.878365e-01      7.209848e-01     9.2303%
+    1.00e+06    107.00   4.215815e-01      4.004267e-01    35.1299%
+
+=== Case moderate shear alpha=0.3: parallelepiped L=5.0 mm, shear alpha = 0.30 ===
+  V        = 125.000 mm^3 (cube ref: 125.000)
+  S        = 152.202 mm^2 (cube ref: 150.000)
+  L_total  = 60.881 mm (cube ref: 60.000)
+  n_edges  = 12, n_verts = 8
+  Dihedrals: 8 right-angle, 2 acute (73.3 deg), 2 obtuse (106.7 deg)
+  Y_DC     = 7.2500e+00
+  Mesh ne  = 2178
+
+      f (Hz)      |gL|        |Y_FEM|  |Y_naive_Mellin|     rel err
+    3.00e+04     18.53   2.154481e+00      2.160870e+00     0.3451%
+    1.00e+05     33.84   1.217570e+00      1.236854e+00     1.7780%
+    3.00e+05     58.61   6.987069e-01      7.303526e-01     9.1101%
+    1.00e+06    107.00   4.265128e-01      4.056294e-01    34.5575%
+
+=== Case significant shear alpha=0.5: parallelepiped L=5.0 mm, shear alpha = 0.50 ===
+  V        = 125.000 mm^3 (cube ref: 125.000)
+  S        = 155.902 mm^2 (cube ref: 150.000)
+  L_total  = 62.361 mm (cube ref: 60.000)
+  n_edges  = 12, n_verts = 8
+  Dihedrals: 8 right-angle, 2 acute (63.4 deg), 2 obtuse (116.6 deg)
+  Y_DC     = 7.2500e+00
+  Mesh ne  = 1794
+
+      f (Hz)      |gL|        |Y_FEM|  |Y_naive_Mellin|     rel err
+    3.00e+04     18.53   2.199299e+00      2.213445e+00     0.7578%
+    1.00e+05     33.84   1.237980e+00      1.266927e+00     2.7752%
+    3.00e+05     58.61   7.172362e-01      7.481086e-01    11.7789%
+    1.00e+06    107.00   4.574742e-01      4.154906e-01    40.4558%
+
+========================================================================
+Summary: error vs naive Mellin (right-angle-wedge assumption)
+========================================================================
+ alpha    dihedrals (acute/obtuse)     err@1e5     err@3e5
+   0.00               90.0/90.0 deg     0.6232%     4.4012%
+   0.10               84.3/95.7 deg     1.6469%     9.2303%
+   0.30              73.3/106.7 deg     1.7780%     9.1101%
+   0.50              63.4/116.6 deg     2.7752%    11.7789%
