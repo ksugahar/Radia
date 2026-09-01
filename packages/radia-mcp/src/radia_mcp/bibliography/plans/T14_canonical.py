@@ -196,7 +196,30 @@ def bibliography_verify_dois(limit: int = 0, delay: float = 0.3) -> str:
                      or ours.startswith(theirs) or theirs.startswith(ours)
                      or difflib.SequenceMatcher(
                          None, ours[:80], theirs[:80]).ratio() >= 0.70))
-        if ours and theirs and not same:
+        # A conference digest and the journal paper that grew out of it share
+        # almost the same title, so the words alone never separate them. The
+        # container does: Henrotte's axisymmetric entry named IEEE Trans. Magn.
+        # while its DOI resolved into the CEFC 1992 digest.
+        # "Proceedings of the Royal Society" is a journal, so the word alone
+        # proves nothing; what matters is that the container is not the
+        # publication the entry names.
+        container = " ".join(msg.get("container-title") or [])
+        proceedings = re.search(
+            r"(?i)digest|proceedings|conference|symposium|workshop", container)
+        journal = e.fields.get("journal", "")
+        # 年次大会 and "The Proceedings of Mechanical Engineering Congress,
+        # Japan" are the same meeting under its two names; comparing scripts
+        # that share no characters says nothing about the venue.
+        same_venue = bool(journal) and (
+            (not journal.isascii() and container.isascii())
+            or difflib.SequenceMatcher(
+                None, plain(journal)[:40], plain(container)[:40]).ratio() >= 0.55)
+        if journal and proceedings and not same_venue \
+                and not e.fields.get("booktitle"):
+            wrong.append((e.key, doi,
+                          "journal: " + e.fields["journal"][:40],
+                          "conference: " + container[:40]))
+        elif ours and theirs and not same:
             wrong.append((e.key, doi, e.fields.get("title", "")[:52],
                           (msg.get("title") or [""])[0][:52]))
         else:
@@ -371,4 +394,63 @@ def bibliography_check_keys(bib_path: str = "") -> str:
         out.append(f"  vague    {k}")
     if not (nonascii or hostile):
         out.append("  every key survives BibTeX.")
+    return "\n".join(out)
+
+
+def bibliography_search(query: str, limit: int = 10,
+                        bib_path: str = "") -> str:
+    """Find entries in the lab's bibliography by author, title, year or venue.
+
+    This is the step before citing: it turns "Henrotte's axisymmetric paper"
+    into the cite key that make_bbl and the slide tools need. All the terms must
+    appear somewhere in the entry, so adding a word narrows rather than widens.
+
+    Searches the lab's own holdings. bibliography_search_crossref looks outward,
+    for works not here yet.
+    """
+    terms = [t for t in re.split(r"[\s,]+", query.lower()) if t]
+    if not terms:
+        return "bibliography_search: give at least one term"
+    path = pathlib.Path(bib_path) if bib_path else CANONICAL
+    entries = [e for e in read_bib_file(path) if not e.kind.startswith("@")]
+
+    def blob(e):
+        parts = [e.key] + [str(v) for v in e.fields.values()]
+        t = re.sub(r"\\[a-zA-Z]+", " ", " ".join(parts))
+        return t.replace("{", "").replace("}", "").lower()
+
+    hits = []
+    for e in entries:
+        b = blob(e)
+        if all(t in b for t in terms):
+            # a term in the title counts for more than one in a note
+            title = (e.fields.get("title") or "").lower()
+            score = sum(2 if t in title else 1 for t in terms)
+            hits.append((score, e))
+    hits.sort(key=lambda x: (-x[0], x[1].fields.get("year", "")), reverse=False)
+    hits.sort(key=lambda x: -x[0])
+
+    def clean(x):
+        x = re.sub(r"\\[a-zA-Z]+\s*", "", x or "")
+        return " ".join(x.replace("{", "").replace("}", "").split())
+
+    out = [f"bibliography_search: {len(hits)} hit(s) for {query!r}"]
+    for _, e in hits[:limit]:
+        out.append(f"  {e.key}")
+        out.append(f"      {clean(e.fields.get('title', ''))[:78]}")
+        out.append(f"      {clean(e.fields.get('author', ''))[:56]}"
+                   f"  ({e.fields.get('year', '年不明')})")
+        venue = clean(e.fields.get("journal") or e.fields.get("booktitle")
+                      or e.fields.get("publisher") or "")
+        if venue:
+            out.append(f"      {venue[:66]}")
+        if e.fields.get("doi"):
+            out.append(f"      doi {clean(e.fields['doi'])}")
+        if "unverified" in (e.fields.get("note") or ""):
+            out.append("      [未検証: \\bibitem からの転記。使う前に確認すること]")
+    if len(hits) > limit:
+        out.append(f"  ... 他 {len(hits)-limit} 件。語を足すと絞り込める。")
+    if not hits:
+        out.append("  該当なし。bibliography_search_crossref で外部を探し、"
+                   "見つかったら正典に追加すること。")
     return "\n".join(out)
