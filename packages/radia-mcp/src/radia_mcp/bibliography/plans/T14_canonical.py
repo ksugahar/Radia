@@ -56,17 +56,27 @@ def _keys_in_order(tex: str) -> list[str]:
     return out
 
 
-def bibliography_make_bbl(tex_path: str, style: str = "IEEEtran",
+def bibliography_make_bbl(tex_path: str, style: str = "",
                           out_path: str | None = None) -> str:
     """Build a .bbl for one manuscript from the canonical bibliography.
 
+    Once the .bbl exists beside the manuscript, LaTeX needs no .bib at all --
+    \\bibliography{} pulls in \\jobname.bbl, and the .bib is read only when
+    BibTeX itself runs. That is what lets a paper folder hold no bibliography
+    while staying self-contained for a publisher.
+
     tex_path : the manuscript; only its \\cite keys are read.
-    style    : BibTeX style name (IEEEtran, plain, unsrt, ...).
+    style    : BibTeX style; taken from the manuscript's
+               \\bibliographystyle{} when omitted, IEEEtran if it has none.
     out_path : where to write the .bbl; defaults to beside the manuscript.
     """
     src = pathlib.Path(tex_path)
     if not src.exists():
         return f"no such file: {src}"
+    if not style:
+        m = re.search(r"\\bibliographystyle\s*\{([^}]*)\}",
+                      src.read_text(encoding="utf-8", errors="replace"))
+        style = (m.group(1).strip() if m else "") or "IEEEtran"
     if not CANONICAL.exists():
         return f"canonical bibliography missing: {CANONICAL}"
     if shutil.which("bibtex") is None:

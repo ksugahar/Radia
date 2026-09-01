@@ -185,6 +185,21 @@ def read_bib_file(path: str | pathlib.Path) -> list[BibEntry]:
 
 # Citation-key handling -----------------------------------------------------
 
+def _strip_latex(s: str) -> str:
+    """Remove brace protection and accent commands before letters are counted.
+
+    The lab .bib style writes "{S}ome" and "Sch\\"oberl" on purpose. A cite key
+    built by splitting on non-letters sees the protected initial as its own
+    one-letter token and drops it, so the braces have to go first.
+    """
+    import unicodedata
+    s = re.sub(r"\\[a-zA-Z]+\s*", "", s or "")   # \v, \textit, ...
+    s = re.sub(r"\\[^a-zA-Z]", "", s)            # \", \', \`, \~
+    s = s.replace("{", "").replace("}", "")
+    s = unicodedata.normalize("NFKD", s)
+    return "".join(c for c in s if not unicodedata.combining(c))
+
+
 def first_author_lastname(authors_field: str) -> str:
     """Return the first author's lastname from a BibTeX ``author`` field.
 
@@ -193,7 +208,7 @@ def first_author_lastname(authors_field: str) -> str:
     """
     if not authors_field:
         return "unknown"
-    first = authors_field.split(" and ")[0].strip()
+    first = _strip_latex(authors_field).split(" and ")[0].strip()
     if "," in first:
         last = first.split(",", 1)[0].strip()
     else:
@@ -209,7 +224,7 @@ def first_title_word(title_field: str) -> str:
         "a", "an", "the", "on", "in", "of", "and", "or", "for", "with",
         "to", "by", "from", "into", "via", "using", "based",
     }
-    for raw in re.split(r"[^A-Za-z]+", title_field):
+    for raw in re.split(r"[^A-Za-z]+", _strip_latex(title_field)):
         if not raw:
             continue
         low = raw.lower()
