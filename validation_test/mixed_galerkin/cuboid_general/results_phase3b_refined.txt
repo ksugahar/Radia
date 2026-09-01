@@ -1,0 +1,40 @@
+=== Phase 3b refined: W(alpha) relative to cube ===
+L = 5.0 mm, sigma = 5.80e+07
+Strategy: extract Sum_LW(alpha) - Sum_LW(0) - Delta_geom(alpha)
+          = 2 L * W''(pi/2) * eps^2 + O(eps^4)
+
+  Baseline (alpha=0): Sum_LW_cube_FEM = 81.8628 mm
+  Theoretical cube Sum_LW = 12 L * 4/pi = 76.3944 mm
+  Baseline offset (FEM - theory) = 5.4684 mm
+
+   a_shr  eps(deg)   L_v(mm)  D_geom(mm)   Sum_LW(mm)  Delta_dih(mm)  W_pp_local
+    0.00      0.00    5.0000      0.0000     81.8628        0.0000         nan
+    0.05      2.86    5.0062      0.0318     87.8520        5.9574    238.6922
+    0.10      5.71    5.0249      0.1270     90.9346        8.9448     90.0440
+    0.15      8.53    5.0559      0.2849     91.0391        8.8914     40.1086
+    0.20     11.31    5.0990      0.5043     91.7054        9.3383     23.9659
+    0.30     16.70    5.2202      1.1212     93.8727       10.8887     12.8182
+    0.40     21.80    5.3852      1.9616     97.6605       13.8361      9.5563
+    0.50     26.57    5.5902      3.0057    106.3409       21.4724      9.9886
+    0.60     30.96    5.8310      4.2320    115.7220       29.6272     10.1444
+    0.80     38.66    6.4031      7.1461    111.5362       22.5274      4.9481
+
+  Global fit:  Delta_dih = 73.4746 mm * eps^2
+  W''(pi/2)_global = 7.3475
+  W''(pi/2) / W(pi/2) ratio = 5.7707
+
+  Residual analysis:
+    eps =   2.86 deg (0.0500 rad), actual =   5.9574 mm, pred =   0.1834 mm, residual =   5.7740 mm
+    eps =   5.71 deg (0.0997 rad), actual =   8.9448 mm, pred =   0.7299 mm, residual =   8.2149 mm
+    eps =   8.53 deg (0.1489 rad), actual =   8.8914 mm, pred =   1.6288 mm, residual =   7.2626 mm
+    eps =  11.31 deg (0.1974 rad), actual =   9.3383 mm, pred =   2.8629 mm, residual =   6.4754 mm
+    eps =  16.70 deg (0.2915 rad), actual =  10.8887 mm, pred =   6.2414 mm, residual =   4.6472 mm
+    eps =  21.80 deg (0.3805 rad), actual =  13.8361 mm, pred =  10.6380 mm, residual =   3.1980 mm
+    eps =  26.57 deg (0.4636 rad), actual =  21.4724 mm, pred =  15.7948 mm, residual =   5.6777 mm
+    eps =  30.96 deg (0.5404 rad), actual =  29.6272 mm, pred =  21.4585 mm, residual =   8.1687 mm
+    eps =  38.66 deg (0.6747 rad), actual =  22.5274 mm, pred =  33.4512 mm, residual = -10.9238 mm
+
+  Cubic-fit check:  Delta_dih = K2 eps^2 + K3 eps^3 + K4 eps^4 (asymmetry probe)
+    K2 = 253.6355 mm,  K3 = -367.8959 mm,  K4 = 102.6829 mm
+    W''(pi/2) (from K2) = 25.3636
+    K3/K2 ratio (should be ~0 if W is symmetric around pi/2) = -1.4505
