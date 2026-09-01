@@ -107,10 +107,13 @@ def bibliography_make_bbl(tex_path: str, style: str = "",
             + f"\\bibliographystyle{{{style}}}\n"
               "\\bibliography{references}\n\\end{document}\n",
             encoding="utf-8")
+        # never decode with the console codepage: a log line outside cp932
+        # raises from a reader thread once the work is already finished
         subprocess.run(["latex", "-interaction=nonstopmode", "drv.tex"],
                        cwd=d, capture_output=True, timeout=180)
-        r = subprocess.run(["bibtex", "drv"], cwd=d,
-                           capture_output=True, text=True, timeout=180)
+        r = subprocess.run(["bibtex", "drv"], cwd=d, capture_output=True,
+                           text=True, encoding="utf-8", errors="replace",
+                           timeout=180)
         bbl = d / "drv.bbl"
         if not bbl.exists():
             return "bibtex produced no .bbl:\n" + (r.stdout or "")[-1200:]
@@ -289,7 +292,12 @@ def bibliography_find_stray_bibs(root: str = r"W:\02_学会資料",
              if not e.kind.startswith("@")}
     rows, unread, total_missing = [], [], 0
     for f in sorted(base.rglob("*.bib")):
-        if f.resolve() == CANONICAL.resolve() or ".git" in f.parts:
+        # _retired_bib holds files already taken out of paper folders;
+        # counting them would make the migration look stalled
+        # _retired_bib holds files already taken out of paper folders;
+        # counting them would make the migration look stalled
+        if (f.resolve() == CANONICAL.resolve() or ".git" in f.parts
+                or "_retired_bib" in f.parts):
             continue
         try:
             entries = [e for e in read_bib_file(f) if not e.kind.startswith("@")]
