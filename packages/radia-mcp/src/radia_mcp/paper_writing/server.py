@@ -130,7 +130,7 @@ mcp.tool()(paper_writing_em_submission_gate)
 
 
 # ============================================================
-# v0.91.0: citation verification workflow (reference.bib enforcement)
+# v0.91.0: citation verification workflow (references.bib enforcement)
 # ============================================================
 mcp.tool()(paper_writing_verify_citation)
 mcp.tool()(paper_writing_citation_workflow_recipe)
@@ -178,26 +178,26 @@ _N_FIGURE_TOOLS = _register_figure(mcp)
 # ============================================================
 
 @mcp.prompt()
-def cite_a_claim(claim: str, bib_path: str = "reference.bib") -> str:
+def cite_a_claim(claim: str, bib_path: str = "references.bib") -> str:
     """Surface the lab POLICY for inserting any \\cite{} into a paper.
 
     Args:
         claim: the sentence / paragraph that needs a citation.
-        bib_path: path to the user's reference.bib (default
-            'reference.bib' in CWD).
+        bib_path: path to the user's references.bib (default
+            'references.bib' in CWD).
     """
     return (
         f"Insert a citation for this claim:\n"
         f"  > {claim}\n\n"
         f"Lab POLICY (MANDATORY):\n"
-        f"  1. Read the existing reference.bib at {bib_path!r}\n"
+        f"  1. Read the existing references.bib at {bib_path!r}\n"
         f"     via paper_writing_lint_reference_format(bib_path).\n"
         f"  2. NEVER invent a DOI / author / year.  Verify via\n"
         f"     paper_writing_verify_citation(claim, bib_path, ...).\n"
         f"  3. If the verify tool returns verdict='found_in_bib',\n"
         f"     reuse the existing matching_key.\n"
         f"  4. If verdict='ready_to_insert', append the\n"
-        f"     suggested_bibtex to reference.bib FIRST, then\n"
+        f"     suggested_bibtex to references.bib FIRST, then\n"
         f"     write \\cite{{citation_key}}.\n"
         f"  5. If verdict='needs_disambiguation', show the user the\n"
         f"     candidates and ask which one applies.\n"
@@ -335,7 +335,7 @@ def main():
         # v0.91.0: citation verification workflow
         rec3 = paper_writing_citation_workflow_recipe()
         assert len(rec3) > 2000, f"citation recipe too small: {len(rec3)}"
-        for kw in ["NEVER invent", "reference.bib", "Crossref"]:
+        for kw in ["NEVER invent", "references.bib", "Crossref"]:
             assert kw in rec3, f"citation recipe missing: {kw}"
         print(f"  citation_workflow_recipe: {len(rec3)} chars")
         # Offline check: missing bib_path -> error verdict

@@ -816,14 +816,14 @@ a current digest result.
 
 
 REFERENCE_BIB_POLICY = r"""
-# reference.bib policy: shared across digest + full paper, web-verified
+# references.bib policy: shared across digest + full paper, web-verified
 
 ## The three rules (Sugahara Lab)
 
-1. **ONE shared `reference.bib`** for BOTH the digest (IGTE / Compumag
+1. **ONE shared `references.bib`** for BOTH the digest (IGTE / Compumag
    2-page) AND the full paper (IEEE TMag / IEEJ Trans).  Do NOT keep a
    separate `.bib` per document.  The digest and the full paper of the
-   same research cite the same literature; a single `reference.bib` is
+   same research cite the same literature; a single `references.bib` is
    the single source of truth, kept in the shared project folder and
    `\bibliography{reference}`-d from both `.tex` files.
 
@@ -852,7 +852,7 @@ REFERENCE_BIB_POLICY = r"""
 Layout:
 ```
 project/
-  reference.bib          <- THE shared bibliography (single source)
+  references.bib          <- THE shared bibliography (single source)
   digest/igte_digest.tex     \bibliography{../reference}
   full/ieee_tmag.tex         \bibliography{../reference}
 ```
@@ -873,7 +873,7 @@ Verification workflow (per entry):
    authoritative record (IEEE Xplore, publisher page, Semantic
    Scholar, arXiv).
 4. Only THEN add the verified BibTeX entry to the shared
-   `reference.bib`.
+   `references.bib`.
 
 The `paper_writing_verify_citation` tool **refuses to fabricate** — if
 given no bib / no resolvable source it returns `verdict=error` rather
@@ -883,20 +883,20 @@ than inventing an entry.  This is by design.
 
 `paper_writing_em_submission_gate` already has a **bib policy gate**:
 calling it WITHOUT `bib_path` returns `verdict=fail` with the message
-that every citation must trace back to the real `reference.bib` and be
-verified.  Pass the SAME shared `reference.bib` when gating BOTH the
+that every citation must trace back to the real `references.bib` and be
+verified.  Pass the SAME shared `references.bib` when gating BOTH the
 digest and the full paper.
 
 ## How to apply
 
-  1. Keep one `reference.bib` at the project root; both `.tex` point to it.
+  1. Keep one `references.bib` at the project root; both `.tex` point to it.
   2. For every new reference: web-search -> verify DOI -> add entry.
      Never paste an unverified entry.
   3. For numbered citation styles, confirm the bibliography follows the
      first citation order in the compiled text.
-  4. Gate digest AND full paper with the SAME `bib_path=reference.bib`.
-  5. Lint with `paper_writing_lint_reference_format(reference.bib)` and
-     `paper_writing_check_citation_keys_exist(tex, reference.bib)` for
+  4. Gate digest AND full paper with the SAME `bib_path=references.bib`.
+  5. Lint with `paper_writing_lint_reference_format(references.bib)` and
+     `paper_writing_check_citation_keys_exist(tex, references.bib)` for
      each document — every `\cite{}` key must exist in the shared bib.
 
 ## Cross-reference
@@ -907,7 +907,7 @@ digest and the full paper.
 - `paper_writing_check_citation_keys_exist` — every \cite resolves in
   the shared bib.
 - `bilingual` topic — the Japanese translation reuses the SAME shared
-  `reference.bib` too (references are language-independent).
+  `references.bib` too (references are language-independent).
 """
 
 
@@ -1133,7 +1133,7 @@ etc.) are journal-agnostic.  THIS module is EM-paper-specific:
         translation (figures/equations shared between the two).
 
   reference_bib / bib / bib_policy / shared_bib / citation_verification
-        ONE shared reference.bib for digest + full paper; EVERY entry
+        ONE shared references.bib for digest + full paper; EVERY entry
         web-verified (Crossref / IEEE Xplore / S2 / arXiv) before
         insertion -- no fabricated citations.
 
@@ -1179,7 +1179,7 @@ def paper_writing_em_paper_style(topic: str = "overview") -> str:
                                                  cut scope, don't over-compress
         bilingual / japanese_translation      -- EN paper + JA translation,
                                                  page limit EN-only
-        reference_bib / bib_policy            -- shared reference.bib for
+        reference_bib / bib_policy            -- shared references.bib for
                                                  digest+full, web-verified
         reviewer_patterns / reviewer_comments -- 12-pattern catalogue
         all                                    -- concatenate everything
@@ -1557,17 +1557,17 @@ def paper_writing_em_submission_gate(
 
     # ------ BIB POLICY GATE (v0.91.0) ------
     # The lab policy is that EVERY citation must trace back to
-    # reference.bib + be verified via Crossref / S2 / arXiv.  Running
+    # references.bib + be verified via Crossref / S2 / arXiv.  Running
     # the gate without bib_path is a soft "fail" -- the gate emits a
     # critical warning and skips the bib-dependent checks.
     if not bib_path:
         _add(
             "bib_policy",
             "fail",
-            ("reference.bib was not supplied.  Lab POLICY: every "
+            ("references.bib was not supplied.  Lab POLICY: every "
              "citation must come from the user's actual .bib and be "
              "verified via paper_writing_verify_citation BEFORE "
-             "insertion.  Re-call with bib_path=/path/to/reference.bib "
+             "insertion.  Re-call with bib_path=/path/to/references.bib "
              "OR explicitly justify why no .bib check applies."),
         )
 
