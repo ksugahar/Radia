@@ -1123,6 +1123,38 @@ def test_adjacent_reviewer_readability_accepts_explicit_section_claims():
     assert "required_scope_without_deliverable" not in types
 
 
+def test_adjacent_reviewer_readability_flags_applicant_internal_metaphors():
+    text = (
+        "比較対象が自研究室のコード系譜に偏る。"
+        "本研究では四名の資産を誘導加熱へ結び、判定則を加速器設計へ移す。"
+        "助成期間前に共同実装を進める準備が整っている。"
+    )
+
+    result = gw.grant_writing_adjacent_reviewer_readability_check(text)
+    types = {risk["type"] for risk in result["risks"]}
+
+    assert "applicant_internal_abstraction" in types
+    assert "vague_readiness_status" in types
+    assert result["metrics"]["applicant_internal_abstraction_count"] == 2
+    assert result["metrics"]["vague_readiness_status_count"] == 1
+
+
+def test_adjacent_reviewer_readability_accepts_concrete_keiko_revision():
+    text = (
+        "比較できる対象が自研究室の既存コードで扱える手法に限られやすい。"
+        "本研究では、誘導加熱と加速器電磁石の二課題について検証する。"
+        "四名の資産を誘導加熱へ展開し、判定則を加速器設計へ発展する。"
+        "以降は、3人の分担者の役割を説明する。"
+        "本助成期間前に共同実装を進める準備を整備済みである。"
+    )
+
+    result = gw.grant_writing_adjacent_reviewer_readability_check(text)
+    types = {risk["type"] for risk in result["risks"]}
+
+    assert "applicant_internal_abstraction" not in types
+    assert "vague_readiness_status" not in types
+
+
 def test_adjacent_reviewer_readability_flags_takeaway_after_evidence():
     text = (
         "菅原・長嶺らは、Cauer縮約をGalerkin系へ実装した。"
