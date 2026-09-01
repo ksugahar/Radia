@@ -459,6 +459,45 @@ be silently omitted or replaced by a numerically different MATLAB algorithm.
   gates. Landing one focused MEX command advances the family but does not mark
   the whole family complete.
 
+### CI Execution, Validation Evidence, and Notebook Policy (2026-09-01)
+
+**POLICY**: **mdx** is Radia's self-hosted CI and preflight host. LAB and
+100号機 are development machines and MUST NOT execute pull-request, push,
+scheduled, or release CI jobs. A pre-push check sends the unpushed candidate
+commit to mdx and runs the same fast contract lane there; it is not a
+best-effort substitute executed on the developer desktop.
+
+The repository has three complementary, non-duplicative evidence surfaces:
+
+- `tests/` contains deterministic unit and contract tests that fit the fast CI
+  budget. A test belongs here only when it is self-contained and protects a
+  focused public or source-level invariant.
+- `validation_test/` contains solver-heavy numerical evidence, long native
+  builds, GUI/Simulink checks, golden comparisons, performance measurements,
+  and multi-machine studies. It runs explicitly on mdx (or hibino when the
+  installed application requires it), on a scheduled validation lane, or as a
+  named release gate; it does not run on every pull request.
+- `docs/**/*.ipynb` is the public calculation record: derivation, executed
+  evidence, figures, and a presentation-ready narrative. It is not a retired
+  workbench. A notebook should be promotable directly into a talk or paper
+  figure sequence without reimplementing the calculation elsewhere.
+
+MCP and notebooks serve the same artifact contract from different directions:
+MCP is the executable, AI-facing discovery/orchestration surface, while the
+notebook is the human-readable, result-bearing record of that execution.
+Neither may carry a private numerical implementation that the other cannot
+reproduce through the shared Python/C++ API and durable artifacts. Fast CI
+parses every notebook and rejects malformed JSON or replacement characters;
+mdx validation re-executes the notebook sets named by a changed method or a
+release gate.
+
+Every new test declares its tier from measured runtime and dependency scope.
+When a formerly fast test grows beyond the CI budget, move its evidence and
+artifacts to `validation_test/` while retaining a focused contract in `tests/`.
+Every new public notebook example retains executed outputs and the required
+parameterized WebGUI scene; a talk reuses those saved results rather than
+creating a second calculation path.
+
 ### MATLAB Optuna Upstream Differential-Oracle Policy (2026-08-21)
 
 **POLICY**: Upstream Optuna 4.9.0 is the sole behavioral oracle for every
