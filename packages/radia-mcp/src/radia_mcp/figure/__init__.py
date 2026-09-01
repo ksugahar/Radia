@@ -25,6 +25,7 @@ Python callable helpers (importable; NOT MCP tools):
   - lab_figsize / apply_lab_style / lab_savefig
   - tighten_margins, label_curve_endpoints, add_slope_guide
   - check_legend_overlap, find_best_legend_loc
+  - check_text_overlap, place_text_clear
   - audit_text_overflow
   - plot_asymptote_ratio_sweep, plot_basis_size_convergence
 
@@ -66,6 +67,8 @@ from .tools import (  # noqa: F401
     add_slope_guide,
     check_legend_overlap,
     find_best_legend_loc,
+    check_text_overlap,
+    place_text_clear,
     plot_asymptote_ratio_sweep,
     plot_basis_size_convergence,
 )
