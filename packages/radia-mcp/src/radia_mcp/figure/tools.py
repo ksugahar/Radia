@@ -707,6 +707,7 @@ def lab_savefig(
     embed_width_cm: float | None = None,
     min_visible_font_pt: float | None = None,
     max_visible_font_pt: float | None = None,
+    check_overlap: bool = True,
     **kwargs,
 ) -> None:
     """Save a figure after checking text at its final displayed width.
@@ -766,6 +767,30 @@ def lab_savefig(
             "actual embed/paste width. Increase source font sizes, enlarge "
             "the pasted figure, or simplify the figure."
         )
+
+    # The lab rule says a legend overlapping even one curve fails the gate, and
+    # check_legend_overlap has existed to detect it -- but nothing on the save
+    # path ever called it, so the rule was enforced by eye. It is not any more.
+    if check_overlap:
+        hits = []
+        for ax in fig.get_axes():
+            if ax.get_legend() is None:
+                continue
+            try:
+                hits += [{**h, "axes": ax.get_title() or "axes"}
+                         for h in check_legend_overlap(ax)]
+            except Exception:                 # never block a save on the check
+                pass
+        if hits:
+            lines = [f"  legend covers {h['label']!r} "
+                     f"({h.get('n_overlap_points', '?')} points)" for h in hits]
+            raise ValueError(
+                "lab_savefig: the legend sits on top of plotted data.\n"
+                + "\n".join(lines)
+                + "\nMove the legend (loc=, bbox_to_anchor=) or make room for "
+                "it. Pass check_overlap=False only when the overlap is "
+                "deliberate and harmless."
+            )
 
     if kwargs.get("bbox_inches") not in (None,):
         raise ValueError(
