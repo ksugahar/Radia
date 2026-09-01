@@ -32,6 +32,9 @@ from .._bibparse import read_bib_file
 
 CANONICAL = pathlib.Path(__file__).resolve().parents[1] / "data" / "references.bib"
 
+# A Japanese title must survive normalisation; stripping to [a-z0-9]
+# erases it completely and two copies of the same paper stop matching.
+CJK_RANGE = "\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff\uff66-\uff9f"
 _CITE = re.compile(r"\\(?:no)?cite[a-zA-Z]*\s*(?:\[[^\]]*\])*\s*\{([^}]*)\}")
 
 
@@ -263,7 +266,7 @@ def bibliography_find_stray_bibs(root: str = r"W:\02_学会資料",
 
     def ident(e):
         t = re.sub(r"\\[a-zA-Z]+", "", (e.fields.get("title") or "").lower())
-        t = re.sub(r"[^a-z0-9]", "", t)[:80]
+        t = re.sub("[^a-z0-9" + CJK_RANGE + "]", "", t)[:80]
         return t or (e.fields.get("doi") or e.key).lower()
 
     canon = {ident(e) for e in read_bib_file(CANONICAL)
