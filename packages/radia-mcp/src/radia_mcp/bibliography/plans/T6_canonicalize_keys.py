@@ -50,32 +50,77 @@ def bibliography_canonicalize_keys(bib_path: str,
 
     entries = read_bib_file(p)
     renames: list[tuple[str, str]] = []
+    skipped: list[tuple[str, str]] = []
     new_entries: list[BibEntry] = []
+    taken = set()
+
+    from .._bibparse import first_author_lastname
+
+    def _proposed(entry):
+        a = first_author_lastname(entry.fields.get("author", "")
+                                  or entry.fields.get("editor", ""))
+        y = (entry.fields.get("year", "") or "").strip()[:4] or "nodate"
+        return make_cite_key(entry, keyword_override=_extract_keyword(
+            entry.key, a, y))
+
+    # First pass: whatever keeps its key owns it. Otherwise which of two
+    # entries wins a generated key would depend on their order in the file.
+    for e in entries:
+        if e.kind.startswith("@"):
+            continue
+        cand = _proposed(e)
+        if (cand == e.key or cand.startswith("unknown") or "nodate" in cand):
+            taken.add(e.key.lower())
+
     for e in entries:
         if e.kind.startswith("@"):
             new_entries.append(e)
             continue
-        from .._bibparse import first_author_lastname
         author = first_author_lastname(e.fields.get("author", "")
                                         or e.fields.get("editor", ""))
         year = (e.fields.get("year", "") or "").strip()[:4] or "nodate"
         kw = _extract_keyword(e.key, author, year)
         new_key = make_cite_key(e, keyword_override=kw)
-        if new_key != e.key:
-            renames.append((e.key, new_key))
-        new_e = BibEntry(kind=e.kind, key=new_key, fields=e.fields,
-                          raw_body=e.raw_body)
-        new_entries.append(new_e)
 
-    lines = [f"bibliography_canonicalize_keys: {p}", f"  total entries: {len(entries)}",
+        # A key built from missing metadata is not a key. Four author-less,
+        # year-less website entries all produce 'unknownnodatewebsite'; keeping
+        # the original and asking for the metadata is the honest outcome.
+        if new_key.startswith("unknown") or "nodate" in new_key:
+            skipped.append((e.key, new_key))
+            new_key = e.key
+        elif new_key != e.key:
+            # distinct works may generate the same key; suffix rather than lose
+            base, n = new_key, 1
+            while new_key.lower() in taken:
+                n += 1
+                new_key = f"{base}{chr(96 + n)}"
+            renames.append((e.key, new_key))
+        taken.add(new_key.lower())
+        new_entries.append(BibEntry(kind=e.kind, key=new_key, fields=e.fields,
+                                    raw_body=e.raw_body))
+
+    lines = [f"bibliography_canonicalize_keys: {p}",
+             f"  total entries: {len(entries)}",
              f"  proposed renames: {len(renames)}",
+             f"  skipped (metadata missing): {len(skipped)}",
              f"  dry_run: {dry_run}"]
     for old, new in renames:
         lab_ok = "✓" if is_lab_style_key(new) else "?"
         lines.append(f"  {old!r:35s} -> {new!r:35s} [{lab_ok}]")
+    for old, would in skipped:
+        lines.append(f"  KEEP {old!r:33s}  (would be {would!r}; "
+                     "add author/year first)")
 
     if not dry_run and renames:
-        out_path = p
-        out_path.write_text(write_bib(new_entries), encoding="utf-8")
-        lines.append(f"  wrote: {out_path}")
+        # the header says this file is canonical and must not be copied;
+        # write_bib does not carry comments, so put it back
+        head = []
+        for line in p.read_text(encoding="utf-8").splitlines():
+            if line.startswith("%"):
+                head.append(line)
+            elif line.strip():
+                break
+        text = ("\n".join(head) + "\n\n" if head else "") + write_bib(new_entries)
+        p.write_text(text, encoding="utf-8")
+        lines.append(f"  wrote: {p}")
     return "\n".join(lines)
