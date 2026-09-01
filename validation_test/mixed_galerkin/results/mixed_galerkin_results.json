@@ -1,0 +1,167 @@
+{
+  "schema": "radia.validation.mixed_galerkin.v1",
+  "generated_at_utc": "2026-09-01T15:11:13.703516+00:00",
+  "hostname": "lab",
+  "versions": {
+    "python": "3.12.10",
+    "platform": "Windows-2022Server-10.0.20348-SP0",
+    "numpy": "2.5.2",
+    "scipy": "1.17.1"
+  },
+  "owner": "validation_test/mixed_galerkin -- documentation and talk material read this file and must not recompute it",
+  "cases": {
+    "cylinder_planar_sibc": {
+      "case": "cylinder_planar_sibc",
+      "description": "rank-1 CLN bulk + 1 planar-SIBC surface DOF",
+      "metric": "abs(Y_exact - Y_mixed) / abs(Y_exact)",
+      "geometry": {
+        "a_m": 0.005,
+        "sigma_S_per_m": 58000000.0,
+        "mu_H_per_m": 1.2566370614359173e-06
+      },
+      "sweep": {
+        "f_lo_hz": 1.0,
+        "f_hi_hz": 100000000.0,
+        "n_points": 81,
+        "wall_band_hz": [
+          10000.0,
+          1000000.0
+        ]
+      },
+      "max_error_pct": 0.06386101870450993,
+      "max_error_at_hz": 5011.872336272725,
+      "wall_band_max_error_pct": 0.03855433615904995,
+      "dc_error_pct": 5.8610992997413734e-09,
+      "sibc_tail_error_pct": 1.0813660394896977e-05,
+      "script": "cylinder/01_no_d_baseline.py"
+    },
+    "cylinder_senior_tower": {
+      "case": "cylinder_senior_tower",
+      "description": "rank-1 CLN bulk + N surface DOF (N-1 Senior terms)",
+      "metric": "abs(Y_exact - Y_mixed) / abs(Y_exact)",
+      "geometry": {
+        "a_m": 0.005,
+        "sigma_S_per_m": 58000000.0,
+        "mu_H_per_m": 1.2566370614359173e-06
+      },
+      "sweep": {
+        "f_lo_hz": 1.0,
+        "f_hi_hz": 100000000.0,
+        "n_points": 81,
+        "wall_band_hz": [
+          10000.0,
+          1000000.0
+        ]
+      },
+      "by_n_dof": {
+        "1": {
+          "max_error_pct": 0.06386101870450993,
+          "max_error_at_hz": 5011.872336272725,
+          "wall_band_max_error_pct": 0.03855433615904995
+        },
+        "2": {
+          "max_error_pct": 0.012325703916769303,
+          "max_error_at_hz": 1258.9254117941675,
+          "wall_band_max_error_pct": 0.00024085191091607127
+        },
+        "3": {
+          "max_error_pct": 0.0027030208699103664,
+          "max_error_at_hz": 2511.886431509582,
+          "wall_band_max_error_pct": 1.584051802056695e-05
+        },
+        "4": {
+          "max_error_pct": 0.0006342400007111772,
+          "max_error_at_hz": 3162.2776601683795,
+          "wall_band_max_error_pct": 6.413214501583542e-06
+        }
+      },
+      "script": "cylinder/02_senior_tower_truncation.py"
+    },
+    "sphere_planar_sibc": {
+      "case": "sphere_planar_sibc",
+      "description": "rank-1 CLN bulk + 1 planar-SIBC surface DOF",
+      "metric": "abs(Y_exact - Y_mixed) / abs(Y_exact)",
+      "geometry": {
+        "a_m": 0.005,
+        "sigma_S_per_m": 58000000.0,
+        "mu_H_per_m": 1.2566370614359173e-06
+      },
+      "sweep": {
+        "f_lo_hz": 1.0,
+        "f_hi_hz": 100000000.0,
+        "n_points": 81,
+        "wall_band_hz": [
+          10000.0,
+          1000000.0
+        ]
+      },
+      "max_error_pct": 0.13712136882389497,
+      "max_error_at_hz": 6309.573444801937,
+      "wall_band_max_error_pct": 0.1142194003646443,
+      "script": "sphere/01_no_d_baseline.py"
+    },
+    "sphere_hoibc_gamma1": {
+      "case": "sphere_hoibc_gamma1",
+      "description": "rank-1 CLN bulk + planar SIBC, with and without gamma_1",
+      "metric": "abs(Y_exact - Y_mixed) / abs(Y_exact)",
+      "geometry": {
+        "a_m": 0.005,
+        "sigma_S_per_m": 58000000.0,
+        "mu_H_per_m": 1.2566370614359173e-06,
+        "gamma_1": -200.0
+      },
+      "sweep": {
+        "f_lo_hz": 1.0,
+        "f_hi_hz": 100000000.0,
+        "n_points": 81,
+        "wall_band_hz": [
+          10000.0,
+          1000000.0
+        ]
+      },
+      "planar_max_error_pct": 0.13712136882389497,
+      "planar_wall_band_max_error_pct": 0.1142194003646443,
+      "gamma1_max_error_pct": 0.0037168091732739028,
+      "gamma1_wall_band_max_error_pct": 0.0011176361877408452,
+      "improvement_factor_max_anywhere": 36.892227292668196,
+      "improvement_factor_wall_band": 102.19729963783995,
+      "script": "sphere/02_hoibc_gamma1.py"
+    },
+    "square2d_corner_envelope": {
+      "case": "square2d_corner_envelope",
+      "description": "rank-1 CLN bulk + tensor corner-aware surface envelope",
+      "metric": "abs(Y_exact - Y_mixed) / abs(Y_exact)",
+      "geometry": {
+        "L_m": 0.005,
+        "sigma_S_per_m": 58000000.0,
+        "mu_H_per_m": 1.2566370614359173e-06
+      },
+      "sweep": {
+        "f_lo_hz": 1.0,
+        "f_hi_hz": 1000000.0,
+        "n_points": 31,
+        "wall_band_hz": [
+          10000.0,
+          1000000.0
+        ]
+      },
+      "reference": "Aitken-extrapolated Foster sum (_references/square2d_foster.py)",
+      "max_error_pct": 0.3375431862479416,
+      "max_error_at_hz": 6309.573444801937,
+      "wall_band_max_error_pct": 0.19179109677565997,
+      "script": "square2d/01_corner_envelope.py"
+    }
+  },
+  "pending_cases": {
+    "cube3d_ngsolve_ground_truth": {
+      "script": "cube3d/06_ngsolve_ground_truth.py",
+      "why": "NGSolve FEM solve; belongs on a quiet compute host",
+      "known_result": "0.33 % at rank 20 with the closed K_ss, measured against the FEM solution"
+    },
+    "lshape3d_mellin": {
+      "script": "lshape3d_ngsolve_mellin.py",
+      "why": "NGSolve FEM solve; belongs on a quiet compute host",
+      "known_result": "K_SIBC = S sqrt(sigma/mu) holds to 1.5 % on a body with one concave edge"
+    }
+  }
+}

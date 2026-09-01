@@ -146,6 +146,39 @@ def Y_mixed_galerkin(s, N_surf: int):
     return Y_DC * (1 + v_avg)
 
 
+SWEEP = np.logspace(0, 8, 81)
+WALL_BAND_HZ = (1e4, 1e6)
+METRIC = "abs(Y_exact - Y_mixed) / abs(Y_exact)"
+
+
+def summary() -> dict:
+    """Run the sweep for N = 1..4 and return the numbers."""
+    wall = (SWEEP > WALL_BAND_HZ[0]) & (SWEEP < WALL_BAND_HZ[1])
+    tower = {}
+    for N in (1, 2, 3, 4):
+        errs = []
+        for f in SWEEP:
+            s = 1j * 2 * math.pi * f
+            Y_e = Y_exact_cylinder(s, A, SIGMA, MU)
+            errs.append(abs(Y_e - Y_mixed_galerkin(s, N)) / abs(Y_e))
+        errs = np.array(errs)
+        tower[str(N)] = {
+            "max_error_pct": float(errs.max() * 100),
+            "max_error_at_hz": float(SWEEP[errs.argmax()]),
+            "wall_band_max_error_pct": float(errs[wall].max() * 100),
+        }
+    return {
+        "case": "cylinder_senior_tower",
+        "description": "rank-1 CLN bulk + N surface DOF (N-1 Senior terms)",
+        "metric": METRIC,
+        "geometry": {"a_m": A, "sigma_S_per_m": SIGMA, "mu_H_per_m": MU},
+        "sweep": {"f_lo_hz": float(SWEEP[0]), "f_hi_hz": float(SWEEP[-1]),
+                  "n_points": int(SWEEP.size),
+                  "wall_band_hz": list(WALL_BAND_HZ)},
+        "by_n_dof": tower,
+    }
+
+
 def main():
     print("=== Cylinder mixed Galerkin: rank-1 bulk + N-DOF Senior tower ===")
     print(f"a = {A*1e3} mm, sigma = {SIGMA:.2e} S/m, mu = {MU:.4e} H/m")
@@ -161,18 +194,11 @@ def main():
         print(f"{f:10.2e}  {row[0]:8.4f}%  {row[1]:8.4f}%  {row[2]:8.4f}%  {row[3]:8.4f}%")
 
     print()
-    print("Full sweep summary (1 Hz to 1e8 Hz, 81 points):")
-    fs = np.logspace(0, 8, 81)
-    wall_mask = (fs > 1e4) & (fs < 1e6)
+    print(f"Full sweep summary (1 Hz to 1e8 Hz, {SWEEP.size} points):")
     print(f"{'N-DOF':>6}  {'max anywhere':>16}  {'wall band max':>16}")
-    for N in (1, 2, 3, 4):
-        errs = []
-        for f in fs:
-            s = 1j * 2 * math.pi * f
-            Y_e = Y_exact_cylinder(s, A, SIGMA, MU)
-            errs.append(abs(Y_e - Y_mixed_galerkin(s, N)) / abs(Y_e))
-        errs = np.array(errs)
-        print(f"  {N}    {errs.max()*100:13.5f}%   {errs[wall_mask].max()*100:13.5f}%")
+    for N, r in summary()["by_n_dof"].items():
+        print(f"  {N}    {r['max_error_pct']:13.5f}%   "
+              f"{r['wall_band_max_error_pct']:13.5f}%")
 
 
 if __name__ == "__main__":
