@@ -1,0 +1,97 @@
+name: Radia
+
+# The default Radia CI lane deliberately checks source and public contracts
+# only. Native builds and solver-heavy validation are release evidence in
+# build-test.yml, not a tax on every review.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: write
+
+concurrency:
+  group: radia-fast-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  fast-contracts:
+    # Fork code never executes on laboratory infrastructure. GitHub-hosted
+    # package/policy workflows still cover that public contribution path.
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
+    runs-on: [self-hosted, Windows, X64, mdx]
+    timeout-minutes: 20
+    env:
+      RADIA_CI_OUTPUT_DIR: 'C:\temp\radia-fast-${{ github.run_id }}-${{ github.run_attempt }}'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create isolated fast-CI environment
+        shell: pwsh
+        run: |
+          $venv = Join-Path $env:RUNNER_TEMP "radia-fast-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
+          python -m venv $venv
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $py = Join-Path $venv 'Scripts\python.exe'
+          & $py -m pip install --disable-pip-version-check --quiet pytest pyyaml
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          "RADIA_FAST_PYTHON=$py" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Compile public Python sources
+        shell: pwsh
+        run: |
+          & $env:RADIA_FAST_PYTHON -m compileall -q src/radia packages/radia-mcp/src
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Run mdx preflight contracts
+        shell: pwsh
+        run: |
+          & $env:RADIA_FAST_PYTHON tools/audit_ci_no_system_install.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & $env:RADIA_FAST_PYTHON tools/ci_preflight.py --only policy,version
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Run fast repository and notebook contracts
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path $env:RADIA_CI_OUTPUT_DIR | Out-Null
+          & $env:RADIA_FAST_PYTHON -m pytest `
+            tests/test_ci_execution_policy.py `
+            tests/test_docs_notebook_contract.py `
+            tests/test_release_workflow_ref_gate.py `
+            tests/test_wheel_package_policy.py `
+            tests/test_application_interface_manifest.py `
+            tests/axifem/test_docs_notebook_evidence.py `
+            -q --junitxml="$env:RADIA_CI_OUTPUT_DIR\fast-contracts.xml"
+          exit $LASTEXITCODE
+
+      - name: Record exact CI ref context
+        shell: pwsh
+        run: |
+          $context = [ordered]@{
+            schema = 'radia.fast-ci-context.v1'
+            ref = $env:GITHUB_REF
+            ref_name = $env:GITHUB_REF_NAME
+            ref_type = $env:GITHUB_REF_TYPE
+            sha = $env:GITHUB_SHA
+            run_id = [string]$env:GITHUB_RUN_ID
+            event_name = $env:GITHUB_EVENT_NAME
+          }
+          [IO.File]::WriteAllText(
+            (Join-Path $env:RADIA_CI_OUTPUT_DIR 'fast-ci-context.json'),
+            ($context | ConvertTo-Json),
+            [Text.UTF8Encoding]::new($false))
+
+      - name: Upload fast-CI evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: radia-fast-contracts
+          path: ${{ env.RADIA_CI_OUTPUT_DIR }}
+          if-no-files-found: ignore
+          retention-days: 14

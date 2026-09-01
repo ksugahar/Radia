@@ -1,25 +1,8 @@
-name: Radia
+name: Radia Native Release
 
 on:
   push:
-    branches: [main]
     tags: ['v*']
-    paths-ignore:
-      - '**/*.md'
-      - 'docs/**'
-      - 'LICENSE'
-      - 'tools/eqnedit64/**'
-      - 'packages/eqnedit64/**'
-      - 'packages/radia-mcp/**'
-      - 'packages/cubit-mesh-export/**'
-      - 'packages/radia-optuna/**'
-      - '.github/workflows/**'
-      - 'tests/test_release_workflow_ref_gate.py'
-      - 'tests/test_release_quad_optuna_candidate.py'
-      - 'tools/release_quad.py'
-      - '.agents/skills/release-eqnedit64/**'
-  pull_request:
-    branches: [main]
     paths-ignore:
       - '**/*.md'
       - 'docs/**'
@@ -56,20 +39,15 @@ permissions:
   contents: read
   actions: write
 
-# Radia alone uses the self-hosted build tree.  Package workflows have their
-# own concurrency groups and artifacts; a radia-mcp/cubit/optuna/eqnedit tag
-# can no longer launch this job or race its linker.
+# Native packaging is a named release gate. Fast source/contract CI lives in
+# radia-fast.yml; package workflows own their separate distribution lanes.
 concurrency:
-  group: radia-${{ github.sha }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  group: radia-native-${{ github.sha }}
+  cancel-in-progress: false
 
 jobs:
   build-test:
-    # Public-repo safety: never run fork PR code on the lab self-hosted
-    # runner.  Same-repository PRs are still allowed for maintainer-owned
-    # branches; fork PRs get the GitHub-hosted policy/radia-mcp checks only.
-    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
-    runs-on: [self-hosted, windows-radia]
+    runs-on: [self-hosted, Windows, X64, mdx]
     # No timeout-minutes -- per 2026-05-25 user decision after
     # 45-min cap (sha 357da370 cancelled) and 70-min cap (sha
     # c1ed3dc9 in flight) kept slicing different steps. Self-
@@ -84,8 +62,8 @@ jobs:
       NGSOLVE_ROOT: 'C:\Program Files\Python312\Lib\site-packages\ngsolve'
       NGSOLVE_DIR: 'C:\Program Files\Python312\Lib\site-packages\ngsolve\cmake'
       Netgen_DIR: 'C:\Program Files\Python312\Lib\site-packages\netgen\cmake'
-      # Was hardcoded 'Cubit 2025.3\bin' until 2026-05-25; LAB now has
-      # 2025.12 only. Build.ps1 + cubit_plugin scripts now auto-discover
+      # Was hardcoded 'Cubit 2025.3\bin' until 2026-05-25. Build.ps1 and
+      # cubit_plugin scripts now auto-discover the available installation
       # via tools/find_cubit.ps1, so this env var is informational. Set
       # CUBIT_INSTALL_DIR to pin a specific install on the self-hosted
       # runner if needed.
@@ -198,20 +176,18 @@ jobs:
           retention-days: 30
 
       # ----------------------------------------------------------------
-      # Guard (2026-05-28): a self-hosted job must NOT pip-install a lab
-      # package into LAB's shared system Python -- it rewrites LAB's editable
-      # pointer and breaks the dev loop on every run (the recurring radia-mcp
-      # drift).  This static audit fails the build if a workflow reintroduces
-      # such an install; the repo is imported via PYTHONPATH instead.
+      # Guard: a self-hosted job must NOT pip-install a Radia package into its
+      # persistent system Python. The static audit keeps the source checkout
+      # isolated from the mdx service host.
       # ----------------------------------------------------------------
-      - name: Audit -- no lab installs into LAB's shared Python
+      - name: Audit -- no Radia installs into persistent system Python
         shell: pwsh
         run: python tools/audit_ci_no_system_install.py
 
       # ----------------------------------------------------------------
-      # Isolate NGSolve/Netgen from LAB's shared Python. Other editable
-      # development tasks may legitimately install an older Radia release and
-      # therefore change the shared NGSolve ABI while CI is queued. Building
+      # Isolate NGSolve/Netgen from the mdx service Python. Other development
+      # tasks may legitimately install an older Radia release and therefore
+      # change the shared NGSolve ABI while CI is queued. Building
       # against one header set and testing against another produces a valid-
       # looking .pyd that fails to load in subprocesses. A run-local venv keeps
       # the exact pyproject pins stable for the complete build/test/package job.
@@ -231,11 +207,18 @@ jobs:
             Write-Host "::error::Expected exact ngsolve and netgen-mesher pins in pyproject.toml; got $($pins -join ', ')"
             exit 1
           }
-          & $ciPython -m pip install --upgrade --force-reinstall --no-cache-dir @pins
+          # The native release lane owns its MKL headers/import libraries in
+          # the run-local venv. Do not assume a developer-machine install.
+          & $ciPython -m pip install --upgrade --force-reinstall --no-cache-dir @pins mkl-devel pybind11==3.0.2 ninja
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
           $ngsolveRoot = (& $ciPython -c "import ngsolve,pathlib; print(pathlib.Path(ngsolve.__file__).parent)").Trim()
           $netgenRoot = (& $ciPython -c "import netgen,pathlib; print(pathlib.Path(netgen.__file__).parent)").Trim()
+          $mklRoot = Join-Path $venv 'Library'
+          if (-not (Test-Path (Join-Path $mklRoot 'lib\\mkl_rt.lib'))) {
+            Write-Host "::error::mkl-devel did not provide mkl_rt.lib under $mklRoot"
+            exit 1
+          }
           $scripts = Join-Path $venv 'Scripts'
           [IO.File]::AppendAllText(
             $env:GITHUB_PATH,
@@ -246,7 +229,7 @@ jobs:
           "NGSOLVE_ROOT=$ngsolveRoot" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           "NGSOLVE_DIR=$(Join-Path $ngsolveRoot 'cmake')" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           "Netgen_DIR=$(Join-Path $netgenRoot 'cmake')" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-          "MKLROOT=C:\Program Files\Python312\Library" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "MKLROOT=$mklRoot" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
           & $ciPython -c "import importlib.metadata as m,ngsolve,tomllib,pathlib; deps=tomllib.loads(pathlib.Path('pyproject.toml').read_text(encoding='utf-8'))['project']['dependencies']; want={x.split('==',1)[0]:x.split('==',1)[1] for x in deps if x.startswith(('ngsolve==','netgen-mesher=='))}; assert ngsolve.__version__==want['ngsolve']; assert m.version('netgen-mesher')==want['netgen-mesher']; print('isolated ABI',ngsolve.__version__,m.version('netgen-mesher'))"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
@@ -314,7 +297,7 @@ jobs:
         # No step-level timeout-minutes -- see job-level note above.
         # Build.ps1 cold-cache on the self-hosted runner has been
         # observed at 20:04 (sha 0c0ef5d), 26 min (sha 357da370),
-        # and the natural full-rebuild on LAB is ~25-35 min.
+        # and the natural full rebuild on the native runner is ~25-35 min.
         run: |
           Write-Host "Starting Radia build..."
           # 2026-05-25: capture full stdout+stderr to file so we can upload
@@ -650,7 +633,7 @@ jobs:
             } elseif (Test-Path $logPath) {
               # No junit XML -- pytest likely crashed.  Surface the
               # tail of the stdout log so the failing test is at least
-              # in the workflow log (the LAB worker log is a fallback).
+              # in the workflow log (the mdx worker log is a fallback).
               Write-Host "::error::[$label] pytest crashed without writing junit XML -- last 30 stdout lines:"
               Get-Content $logPath -Tail 30 | ForEach-Object { Write-Host "  $_" }
             }
@@ -662,7 +645,7 @@ jobs:
       # ----------------------------------------------------------------
       # L2 (2026-05-30): Archive junit + stdout to a per-SHA folder on
       # the self-hosted runner.  This makes historical CI data live on
-      # LAB disk (not just GitHub artifact storage), so we can later
+      # mdx disk (not just GitHub artifact storage), so we can later
       # `grep` C:\actions-runner\test-history\<sha>\ without hitting
       # the 60-req/hour unauthenticated GitHub API rate limit.
       # ----------------------------------------------------------------

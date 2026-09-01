@@ -5,7 +5,7 @@ name: Release
 # was a tag run.
 on:
   workflow_run:
-    workflows: ["Radia"]
+    workflows: ["Radia Native Release"]
     types: [completed]
 
 jobs:

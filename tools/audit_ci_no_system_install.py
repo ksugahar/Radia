@@ -1,17 +1,16 @@
 #!/usr/bin/env python3
-"""Audit: self-hosted CI jobs must NOT pip-install lab packages into LAB's Python.
+"""Audit: self-hosted CI jobs must NOT pip-install Radia packages into system Python.
 
-The self-hosted ``[windows-radia]`` runner runs ON LAB and shares LAB's system
-Python (``C:\\Program Files\\Python312``).  In a job on that runner, any of:
+The self-hosted runner executes on mdx and shares its service-account Python.
+In a job on that runner, any of:
 
   * ``pip install -e .``            (radia editable)
   * ``pip install -e packages/...`` (radia-mcp / cubit-mesh-export editable)
   * ``pip install --force-reinstall <our-wheel>.whl``
 
-rewrites LAB's editable install pointer to the CI checkout (or replaces it with
-a wheel snapshot) and silently breaks the LAB dev loop on EVERY CI run.  This
-was the recurring 2026-05-26/27/28 radia-mcp drift, fixed permanently in
-``build-test.yml`` (commit 01ba7232) by importing the repo via ``PYTHONPATH``.
+rewrites the host's installed package state to the CI checkout (or replaces it
+with a wheel snapshot). CI must use a run-local virtual environment or import
+the checkout through ``PYTHONPATH`` instead.
 
 Jobs on GitHub-hosted runners (``ubuntu-latest``, ``windows-latest``, ...) are
 isolated, so the same install there is harmless and is NOT flagged.
@@ -41,7 +40,7 @@ _WHEEL_FORCE = re.compile(
     r"pip\s+install\b[^\n#]*--force-reinstall\b[^\n#]*\.whl", re.I)
 
 # GitHub-hosted runner labels are isolated (a fresh VM per run).  Anything
-# else (custom label / 'self-hosted') shares LAB's interpreter.
+# else (custom label / 'self-hosted') may share a persistent host interpreter.
 _GH_HOSTED = re.compile(r"^(ubuntu|windows|macos)-(latest|\d[\w.-]*)$", re.I)
 
 
@@ -76,12 +75,12 @@ def audit():
                         continue
                     if _EDITABLE.search(ln):
                         violations.append((wf, jobname, sname,
-                                           "editable install into LAB's shared "
+                                           "editable install into persistent "
                                            "system Python", ln.strip()))
                     elif _WHEEL_FORCE.search(ln):
                         violations.append((wf, jobname, sname,
-                                           "force-reinstall wheel into LAB's "
-                                           "shared system Python", ln.strip()))
+                                           "force-reinstall wheel into persistent "
+                                           "system Python", ln.strip()))
     return violations
 
 
@@ -91,17 +90,16 @@ def main():
         return 0
     violations = audit()
     if not violations:
-        print("[OK] no self-hosted CI job installs a lab package into LAB's "
-              "shared system Python (radia/radia-mcp/cubit-mesh-export use "
-              "PYTHONPATH).")
+        print("[OK] no self-hosted CI job installs a Radia package into a "
+              "persistent system Python (use a venv or PYTHONPATH).")
         return 0
-    print("::error::self-hosted CI job(s) would pip-install a lab package into "
-          "LAB's shared system Python, which drifts the editable dev loop:")
+    print("::error::self-hosted CI job(s) would pip-install a Radia package into "
+          "persistent system Python, which drifts the execution host:")
     for wf, jobname, sname, why, line in violations:
         print(f"  {os.path.relpath(wf, _REPO)}  job={jobname}  step='{sname}'")
         print(f"      [{why}]  {line}")
-    print("\nFix: import the package via PYTHONPATH (see build-test.yml "
-          "'Run basic tests' env: PYTHONPATH) instead of pip-installing it.")
+    print("\nFix: use a run-local virtual environment or import the checkout via "
+          "PYTHONPATH instead of pip-installing it.")
     return 1
 
 

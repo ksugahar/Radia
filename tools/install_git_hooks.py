@@ -8,7 +8,7 @@ so they actually run.  Run ONCE per clone:
     python tools/install_git_hooks.py
 
 Installs:
-  pre-push  -- CI preflight gate (tools/ci_preflight.py) on pushes to main,
+  pre-push  -- mdx CI preflight gate (tools/ci_preflight_mdx.py) on pushes to main,
                plus the binary-upload-to-GitHub-Releases step.  Bypass the
                gate for an emergency push with:  CI_PREFLIGHT_SKIP=1 git push
 
@@ -68,7 +68,7 @@ def main():
         print("no hooks found to install", file=sys.stderr)
         return 1
     print(f"{installed} hook(s) installed.")
-    print("The pre-push gate runs tools/ci_preflight.py on pushes to main.")
+    print("The pre-push gate runs tools/ci_preflight_mdx.py on pushes to main.")
     print("Bypass for an emergency push:  CI_PREFLIGHT_SKIP=1 git push")
     return 0
 
