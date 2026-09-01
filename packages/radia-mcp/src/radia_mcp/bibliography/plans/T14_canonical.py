@@ -95,6 +95,11 @@ def bibliography_make_bbl(tex_path: str, style: str = "",
     with tempfile.TemporaryDirectory() as tmp:
         d = pathlib.Path(tmp)
         shutil.copy(CANONICAL, d / "references.bib")
+        # a journal's own .bst is not in the TeX tree; without it BibTeX writes
+        # an empty bibliography and still exits cleanly
+        for bst in list(src.parent.glob("*.bst")) + \
+                list(src.parent.parent.glob("*.bst")):
+            shutil.copy(bst, d / bst.name)
         # a driver, not the manuscript: missing figures must not break this
         (d / "drv.tex").write_text(
             "\\documentclass{article}\\begin{document}\n"
@@ -109,6 +114,10 @@ def bibliography_make_bbl(tex_path: str, style: str = "",
         bbl = d / "drv.bbl"
         if not bbl.exists():
             return "bibtex produced no .bbl:\n" + (r.stdout or "")[-1200:]
+        if "\\bibitem" not in bbl.read_text(encoding="utf-8", errors="replace"):
+            return (f"bibtex produced an EMPTY bibliography for {src.name} "
+                    f"(style {style}). The .bbl was NOT written.\n"
+                    + (r.stdout or "")[-800:])
         dst = pathlib.Path(out_path) if out_path else src.with_suffix(".bbl")
         dst.write_text(bbl.read_text(encoding="utf-8", errors="replace"),
                        encoding="utf-8")
@@ -156,8 +165,10 @@ def bibliography_verify_dois(limit: int = 0, delay: float = 0.3) -> str:
     dead, wrong, ok, skipped = [], [], 0, 0
     for e in entries:
         doi = e.fields["doi"].strip().rstrip("}").replace("https://doi.org/", "")
-        # arXiv mints DOIs through DataCite, so Crossref legitimately has none
-        if doi.lower().startswith("10.48550/"):
+        # Registries other than Crossref: arXiv mints through DataCite, and
+        # JSIAM and its neighbours through JaLC. An absent record proves
+        # nothing about these, so they are not counted as dead.
+        if doi.lower().startswith(("10.48550/", "10.11540/", "10.14947/")):
             skipped += 1
             continue
         try:
@@ -173,8 +184,13 @@ def bibliography_verify_dois(limit: int = 0, delay: float = 0.3) -> str:
         ours = plain(e.fields.get("title", ""))
         # a book listed without its subtitle is the same book, so containment
         # counts as agreement before falling back to a similarity ratio
+        # A Japanese title and its English translation share no characters, so
+        # a ratio of zero here means the languages differ, not the works.
+        ja = re.search(r"[\u3040-\u30ff\u4e00-\u9fff]",
+                       e.fields.get("title", "") or "")
         same = (ours and theirs
-                and (ours.startswith(theirs) or theirs.startswith(ours)
+                and (bool(ja) and theirs.isascii()
+                     or ours.startswith(theirs) or theirs.startswith(ours)
                      or difflib.SequenceMatcher(
                          None, ours[:80], theirs[:80]).ratio() >= 0.70))
         if ours and theirs and not same:
@@ -187,7 +203,7 @@ def bibliography_verify_dois(limit: int = 0, delay: float = 0.3) -> str:
            f"  resolved and matching : {ok}",
            f"  DOI does not resolve  : {len(dead)}",
            f"  resolves to another work: {len(wrong)}",
-           f"  arXiv DOI (not in Crossref): {skipped}"]
+           f"  other registry (arXiv/JaLC, not in Crossref): {skipped}"]
     for k, d in dead[:20]:
         out.append(f"  DEAD  {k}: {d}")
     for k, d, o, t in wrong[:20]:
@@ -309,4 +325,42 @@ def bibliography_find_stray_bibs(root: str = r"W:\02_学会資料",
         out.append(f"  ... 他 {len(rows)-max_files} ファイル")
     for f, exc in unread:
         out.append(f"  [読めない] {f.name}: {exc}")
+    return "\n".join(out)
+
+
+def bibliography_check_keys(bib_path: str = "") -> str:
+    """Report cite keys that cannot survive a real BibTeX run.
+
+    Two failures are silent, which is what makes them worth a check:
+
+      non-ASCII -- classic BibTeX drops the entry with no error, so the
+        reference is missing from the printed list while everything looks fine.
+      LaTeX-special characters -- & % $ # ~ ^ backslash and braces are acted on
+        while \\cite{} is scanned, so the citation never resolves.
+
+    Also lists keys that carry no information about what they cite (POD, ref3),
+    which are not broken but collide as soon as a second such paper arrives.
+    """
+    path = pathlib.Path(bib_path) if bib_path else CANONICAL
+    entries = [e for e in read_bib_file(path) if not e.kind.startswith("@")]
+
+    special = set("&%$#{}~^" + chr(92))
+    nonascii = [e.key for e in entries if not e.key.isascii()]
+    hostile = [(e.key, "".join(sorted(set(e.key) & special)))
+               for e in entries if set(e.key) & special]
+    vague = [e.key for e in entries
+             if re.fullmatch(r"[A-Za-z]{2,6}\d*|ref\d+|bib\d+", e.key)]
+
+    out = [f"bibliography_check_keys: {path.name}, {len(entries)} entries",
+           f"  non-ASCII (BibTeX drops these silently): {len(nonascii)}",
+           f"  LaTeX-special characters               : {len(hostile)}",
+           f"  uninformative (collide on the next one): {len(vague)}"]
+    for k in nonascii[:20]:
+        out.append(f"  DROPPED  {k}")
+    for k, ch in hostile[:20]:
+        out.append(f"  UNCITABLE {k}  [{ch}]")
+    for k in vague[:20]:
+        out.append(f"  vague    {k}")
+    if not (nonascii or hostile):
+        out.append("  every key survives BibTeX.")
     return "\n".join(out)
