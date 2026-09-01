@@ -17,8 +17,6 @@ The figure MCP tools (registered by register()):
   - figure_size_for_target(target, embed_width_cm)
         Compute Matplotlib/MATLAB figure size and font sizes that
         will display correctly when embedded at the given column width.
-  - figure_tikz_recipe(query, target)
-        TikZ / PGFPlots drawing templates and review rules for
         paper-ready schematics, data axes, and MATLAB export.
 
 Python callable helpers (importable; NOT MCP tools):
