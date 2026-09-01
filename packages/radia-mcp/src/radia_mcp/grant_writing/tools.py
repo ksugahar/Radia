@@ -7174,4 +7174,7 @@ def grant_writing_health_report(
 
 
 # Achievement section: the applicant's own papers, from the canonical bibliography
-from ._publications import grant_writing_publication_list  # noqa: F401,E402
+from ._publications import (  # noqa: F401,E402
+    grant_writing_achievement_count_check,
+    grant_writing_publication_list,
+)

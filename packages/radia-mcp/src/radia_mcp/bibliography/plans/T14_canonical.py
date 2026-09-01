@@ -230,3 +230,70 @@ def bibliography_refresh_unpublished(min_year: str = "2024",
             out.append(f"      xref: {line[:100]}")
     out.append(f"  {hits} candidate(s); verify before editing the entry.")
     return "\n".join(out)
+
+
+def bibliography_find_stray_bibs(root: str = r"W:\02_学会資料",
+                                 max_files: int = 200) -> str:
+    """List .bib files outside the canonical one, and whether they can go.
+
+    The lab keeps one bibliography. A local copy in a paper folder is the thing
+    that lets a DOI be right in one place and wrong in another, so this reports
+    them and, for each, how many entries the canonical file already covers:
+
+      absorbed   -- every entry is already central; the file can be deleted once
+                    its .tex points at the canonical bibliography.
+      to merge   -- entries not present centrally; merge those first, or they
+                    are lost with the file.
+
+    Reports only; it deletes nothing.
+    """
+    base = pathlib.Path(root)
+    if not base.exists():
+        return f"no such directory: {base}"
+
+    def ident(e):
+        t = re.sub(r"\\[a-zA-Z]+", "", (e.fields.get("title") or "").lower())
+        t = re.sub(r"[^a-z0-9]", "", t)[:80]
+        return t or (e.fields.get("doi") or e.key).lower()
+
+    canon = {ident(e) for e in read_bib_file(CANONICAL)
+             if not e.kind.startswith("@")}
+    rows, unread, total_missing = [], [], 0
+    for f in sorted(base.rglob("*.bib")):
+        if f.resolve() == CANONICAL.resolve() or ".git" in f.parts:
+            continue
+        try:
+            entries = [e for e in read_bib_file(f) if not e.kind.startswith("@")]
+        except Exception as exc:
+            unread.append((f, exc))
+            continue
+        missing = [e for e in entries if ident(e) not in canon]
+        total_missing += len(missing)
+        rows.append((f, len(entries), missing))
+
+    out = [f"bibliography_find_stray_bibs: {base}",
+           f"  {len(rows)} 個のローカル .bib（正典以外）",
+           f"  正典に無いエントリの総数: {total_missing}"]
+    ready = [r for r in rows if not r[2]]
+    out.append(f"  そのまま削除できる（全件が正典にある）: {len(ready)} ファイル")
+    out.append("  ※ 削除前に、その .tex が正典を参照しているか確認すること。")
+
+    for f, n, missing in rows[:max_files]:
+        try:
+            rel = f.relative_to(base)
+        except ValueError:
+            rel = f
+        if missing:
+            out.append(f"  [要マージ {len(missing):3d}/{n:3d}] {rel}")
+            for e in missing[:3]:
+                t = re.sub(r"[{}]", "", e.fields.get("title", ""))[:56]
+                out.append(f"        - {e.key}: {t}")
+            if len(missing) > 3:
+                out.append(f"        ... 他 {len(missing)-3} 件")
+        else:
+            out.append(f"  [削除可   {n:3d}件] {rel}")
+    if len(rows) > max_files:
+        out.append(f"  ... 他 {len(rows)-max_files} ファイル")
+    for f, exc in unread:
+        out.append(f"  [読めない] {f.name}: {exc}")
+    return "\n".join(out)
