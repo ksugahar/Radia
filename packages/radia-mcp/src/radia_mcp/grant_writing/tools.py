@@ -7171,3 +7171,7 @@ def grant_writing_health_report(
         ),
         "source": "radia_mcp.grant_writing public document server",
     }
+
+
+# Achievement section: the applicant's own papers, from the canonical bibliography
+from ._publications import grant_writing_publication_list  # noqa: F401,E402
