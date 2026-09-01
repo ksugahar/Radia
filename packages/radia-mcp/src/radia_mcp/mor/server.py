@@ -53,6 +53,12 @@ def mor_cln(topic: str = "all") -> str:
                            IEEE TMag 57(6)); implications for the
                            base-agnostic Theorem 1 Schur augmentation
                            and for Multi-K / POD positioning
+      "mixed_galerkin"   - Why a finite ladder cannot make the f^-1/2 tail
+                           (rational => integer slope; the tail is a branch
+                           cut, not poles), the bulk-plus-surface trial
+                           space, the Schur complement as the discrete DtN
+                           map, and the measured errors together with the
+                           metric they were measured under
     """
     return get_cln_documentation(topic)
 
