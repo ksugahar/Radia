@@ -67,7 +67,7 @@ from ._em_paper_style import (  # noqa: F401
     paper_writing_em_submission_gate,
 )
 
-# v0.91.0: citation verification workflow (reference.bib enforcement)
+# v0.91.0: citation verification workflow (references.bib enforcement)
 from ._citation_verify import (  # noqa: F401
     paper_writing_verify_citation,
     paper_writing_citation_workflow_recipe,

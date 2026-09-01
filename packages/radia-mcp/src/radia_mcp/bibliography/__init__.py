@@ -1,7 +1,7 @@
 """bibliography sub-module — BibTeX lookup, parse, lint, normalize, score.
 
 Promoted from 'paper_writing has 54 tools but assumes .bib exists' gap.
-Lab standard: ``reference.bib`` in project root, keys follow
+Lab standard: ``references.bib`` in project root, keys follow
 ``<author><year><word>`` convention (e.g. ``sugahara2026binput``).
 
 Tools (prefix ``bibliography_``):
