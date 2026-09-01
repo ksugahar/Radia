@@ -1561,6 +1561,17 @@ the specific method or evidence third, and the remaining limit or question
 last. The result has no score so an author cannot improve it by deleting
 necessary technical detail; each excerpt must be reviewed in context.
 
+Keiko's 2026-09-01 close read adds a reviewer-navigation rule. Replace
+applicant-internal metaphors such as "our code lineage", "connect four assets",
+or "move the rule" with an observable limitation, named operation, and research
+destination. Re-anchor a scope sentence with "in this research" and the number
+of target tasks; state how many co-investigators' roles the reader will see at a
+transition; and express readiness with both a reference time and a completed
+state such as "before the funding period" and "implemented/established". The
+adjacent-reviewer diagnostic reports `applicant_internal_abstraction` and
+`vague_readiness_status` for the older forms. These are readability findings,
+not bans on technical vocabulary or collaboration narratives.
+
 The integrated health report also runs the non-scoring
 `grant_writing_reviewer_momentum_check(text)`. Readability and reviewer
 interest are separate. The check looks for an opening arc that recurs in
