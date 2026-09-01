@@ -442,6 +442,121 @@ result (Sugahara 2026, Theorem 1).
 """
 
 
+CLN_MIXED_GALERKIN = """
+# Mixed Galerkin: the ladder plus a surface basis (lab work, 2026)
+
+## The defect this fixes
+
+A finite Cauer ladder is a RATIONAL function of s. Rational functions have
+INTEGER asymptotic slopes. The eddy-current admittance of a conductor decays as
+f^(-1/2) at deep skin, so no ladder of any length produces the right tail. This
+is structural, not a shortage of rungs, and adding expansion points (Kuriyama
+2019) does not help either: every finite expansion point yields another rational
+basis, so the extra points relocate poles and the tail still wags.
+
+## Why s = infinity is different
+
+On the negative real axis the bulk contributes POLES at s = -lambda_n (the
+diffusion eigenvalues, accumulating toward -infinity). The square-root tail is
+not a pole at all. 1/sqrt(s) has a BRANCH POINT: go once around s = 0 and
+sqrt(s) returns with the opposite sign, so no Laurent expansion exists and no
+integer m makes s^m/sqrt(s) finite and nonzero. In Stieltjes form
+
+    1/sqrt(s) = (1/pi) * integral_0^inf  xi^(-1/2) / (s + xi)  d xi
+
+which is a CONTINUUM of first-order poles each carrying infinitesimal weight.
+A pole is a point with finite residue; the cut is a density with none. A finite
+sum of point masses cannot equal a continuous density -- that is the whole
+argument.
+
+Caveat worth stating before someone asks: a BOUNDED conductor's exact Y(s) is
+meromorphic and has only poles. The cut is the half-space (unbounded) model,
+used as the asymptotic description of where those poles ACCUMULATE. Bulk basis
+resolves the head of the spectrum, surface basis resolves the tail.
+
+## The construction
+
+    v(r, s) ~ sum_k xi^b_k phi_k(r)  +  sum_k xi^s_k psi_k(r, s)
+
+  phi_k : bulk CLN Krylov modes, frequency independent, built once
+  psi_k : surface envelopes ~ exp(-d(r)/delta(s)), which carry the sqrt(s)
+
+Read as a two-point Pade in sqrt(s): one expansion point at s = 0 (the ladder),
+one at s = infinity (the surface). Multiple expansion points is ALREADY a mixed
+Galerkin space; the only new thing is that the last point is a branch point, so
+the basis natural there cannot be rational.
+
+Adding a rung adds one term of the Taylor expansion at s = 0. Adding a Senior
+curvature term (gamma_1 = -H, gamma_2 = (K - H^2)/2) adds one term of the
+asymptotic expansion at s = infinity. Symmetric.
+
+## Schur complement: what it is for
+
+Eliminating the bulk block gives
+
+    S(s) = K_ss(s) - K_sb(s) K_bb(s)^-1 K_bs(s)
+
+The CODE DOES NOT NEED THIS -- the block system is at most 6x6, solve it and
+stop. Write it down for three reasons instead:
+  1. admittance is a PORT quantity, so writing it explicitly means eliminating
+     the interior; S(s) is the discrete Steklov-Poincare (DtN) map and the
+     surface-port admittance, three names for one object;
+  2. it exhibits the surface amplitude as computed rather than fitted, which is
+     what removes the hand-chosen crossover of a Warburg termination;
+  3. -K_sb K_bb^-1 K_bs IS Gram-Schmidt in the K inner product, so its size
+     measures how much the two families overlap in the finite space.
+
+## Measured, with the metric stated
+
+Metric: abs(Y_exact - Y_mixed) / abs(Y_exact), the COMPLEX difference, over
+1 Hz - 100 MHz. Do not take abs() of each side and then subtract: that discards
+the phase error and under-reports (0.0525 % instead of 0.0639 % on the cylinder,
+same grid, same function).
+
+  cylinder, planar SIBC                 0.0639 %  max anywhere
+  cylinder, + 3 Senior terms            0.00063 %
+  sphere,   planar SIBC                 0.1371 %
+  sphere,   + gamma_1                   0.0037 %   (36.9x max-anywhere,
+                                                    102.2x wall-band)
+  2-D square, tensor corner envelope    0.3375 %
+  3-D cube,   + rank-20 bulk            0.33 %     vs NGSolve FEM
+
+Two improvement factors, because max-anywhere and wall-band are different
+quantities and quoting one as the other is how a slide comes to disagree with
+its own validation run.
+
+## The polyhedron floor is NOT missing corner functions
+
+The tensor envelope psi = f(x) f(y) f(z) already has the right asymptotics
+everywhere: exp(-d t) - 1 on a face, r^2 sin(2 theta) at a 90-degree edge (the
+Wiener-Hopf wedge), and x y z ~ r^3 Y_{3,0} at an octant corner. What one
+tensor-product DOF cannot do is give the correct quantitative WEIGHT to all
+three boundary classes at once. The fix is one DOF per class, not a new shape.
+In 2D, where there is no trihedral corner, the same construction reaches
+0.34 %.
+
+SIBC corner and edge treatments exist independently (Deeley 1990 IEEE TMag
+26(2):712; Yuferev-Proekt-Ida 2001 IEEE TMag 37(5):3465) and are not yet
+imported into this trial space.
+
+## Time domain
+
+The Senior tower is half-integer powers of s, i.e. fractional integrals, each
+realisable as a finite RC ladder. Re-entrant edges give an angle-dependent
+non-half-integer exponent instead. In practice none of that matters to the
+pipeline: the computed Y(s) is fitted with AAA (21 stable poles for the cube,
+no fitted d anywhere) and becomes an ordinary state space.
+
+## Where it lives
+
+  validation_test/mixed_galerkin/         cases; each exposes summary()
+  validation_test/mixed_galerkin/emit_results.py
+  validation_test/mixed_galerkin/results/mixed_galerkin_results.json
+      <- the numerical artifact. Documentation and talk material READ this.
+         They must not recompute it; that is how the metric forked.
+"""
+
+
 def get_cln_documentation(topic: str = "all") -> str:
     """Dispatch by topic.
 
@@ -454,6 +569,9 @@ def get_cln_documentation(topic: str = "all") -> str:
       "applications"     - Industrial inductors, WPT, hybrid twin
       "pgd_positioning"  - CLN as a PGD instance (Köster 2021), and
                            implications for base-agnostic Theorem 1
+      "mixed_galerkin"   - The ladder cannot make the f^-1/2 tail; bulk CLN
+                           plus an s-dependent surface basis, Schur complement,
+                           and the measured errors with their metric
     """
     topic = topic.lower().strip()
     if topic in ("overview", "intro"):
@@ -469,13 +587,17 @@ def get_cln_documentation(topic: str = "all") -> str:
     if topic in ("pgd_positioning", "pgd", "koester", "köster",
                  "positioning", "mor_family"):
         return CLN_PGD_POSITIONING
+    if topic in ("mixed_galerkin", "mixed", "hoibc", "surface_basis",
+                 "sqrt_tail", "two_point_pade"):
+        return CLN_MIXED_GALERKIN
     if topic == "all":
         return "\n\n".join([
             CLN_OVERVIEW, CLN_BASIC_RECURSION, CLN_MULTIPLE_EXPANSION,
             CLN_NONLINEAR, CLN_APPLICATIONS, CLN_PGD_POSITIONING,
+            CLN_MIXED_GALERKIN,
         ])
     return (
         f"Unknown topic '{topic}'. Available: "
         "all, overview, recursion, multiple, nonlinear, applications, "
-        "pgd_positioning."
+        "pgd_positioning, mixed_galerkin."
     )
