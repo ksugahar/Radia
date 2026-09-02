@@ -2,7 +2,7 @@
 
 - 文書状態: 現行
 - 対象製品: Eqnedit64 native / Python package / Web editor
-- 対象リリース: 3.0.12
+- 対象リリース: 3.0.13
 - 基準日: 2026-09-02
 - リポジトリ: `ksugahar/Radia`
 
@@ -154,8 +154,9 @@ Eqnedit32から回収した操作系列は互換層として維持する。追�
 重要な契約は次のとおり。
 
 - `Tab` / `Shift+Tab`: 構造GUIでは次／前の入力穴、TeXソースでは次／前の空の`{}`へ移動。
-- `Enter`: キャンバス／TeXソースのどちらでも`aligned`の数式改行。新規保存時の外側は
-  `equation`であり、複数行はその内側の`aligned`で表す。
+- `Enter`: キャンバス／TeXソースのどちらでもキャレット位置で前後を分ける`aligned`の
+  数式改行。選択中は選択範囲を行境界へ置換する。新規保存時の外側は`equation`であり、
+  複数行はその内側の`aligned`で表す。
 - `&`: 整列位置。
 - 選択中の`Ctrl+B`: 選択を `\mathbf{...}` にする。
 - `Ctrl+B`の後に英字: 次の英字をベクトル太字として入力する。
@@ -173,6 +174,8 @@ Eqnedit32から回収した操作系列は互換層として維持する。追�
 Backspaceは一打鍵で利用者に見える一項目だけを削除する。構造の中身が残る間は親構造を
 まとめて消さない。例えば `E=mc^{2}|` は `E=mc^{}|`、次に `E=mc|` となる。
 上付きの直後、空上付き、母項を持つ上付き、入れ子をそれぞれ別の回帰ケースとして試験する。
+`aligned`の先頭セルの行頭では直前行と結合する。対称に、行末のDeleteは次行と結合する。
+複数列は対応列同士を結合し、`&`のない1行へ戻った場合は不要な`aligned`を外す。
 
 ## 5. TeX保存契約
 
@@ -404,22 +407,28 @@ native出力は `tools/eqnedit64/dist/Eqnedit64.exe`。ビルド前に同じ出�
 
 公開順は次のとおりで、入れ替えてはならない。
 
-1. 修正、仕様、試験、version/changelogを一つのrelease commitへまとめる。
-2. PR CIを通し、`main`へ統合する。
-3. `main`をpushし、Eqnedit64専用main CIがgreenであることを確認する。
-4. exact `origin/main`からLABでrelease EXEをビルドし、`CN=ksugahar`で署名する。
-5. `sync_to_o.ps1 -WhatIf`でversion、build stamp、署名、source SHA、O:配置先を
+1. 修正、仕様、試験、version/changelogを一つの候補commitへまとめ、候補branchをpushする。
+2. PR CIを通し、同じcommitから署名済み候補EXEをビルドして`sync_handtest_to_o.ps1`で
+   `O:\Eqnedit64.exe`へ置く。
+3. 菅原のハンドテストを通す。
+4. **正式公開前に、候補commitと仕様差分へClaude Code Fableレビューを一度行う。**
+   レビュー結果をPRまたは引継書へ残し、指摘を回収した場合はcommit、O:候補、自動試験、
+   ハンドテストを更新する。Fableレビュー未実施のまま`main`統合、release tag、PyPI公開を
+   行わない。
+5. 承認された候補を`main`へ統合してpushし、Eqnedit64専用main CIがgreenであることを確認する。
+6. exact `origin/main`からLABでrelease EXEをビルドし、`CN=ksugahar`で署名する。
+7. `sync_to_o.ps1 -WhatIf`でversion、build stamp、署名、source SHA、O:配置先を
    事前検査する。private-font full suiteはPR/main/tagの隔離CIだけで行い、対話中LABで
    `EQNEDIT64_ISOLATED_TEST_SESSION`を偽装して`accept_release.ps1`を実行しない。
-6. `.agents/skills/release-eqnedit64/scripts/sync_to_o.ps1`で
+8. `.agents/skills/release-eqnedit64/scripts/sync_to_o.ps1`で
    `O:\Eqnedit64.exe`を更新する。
-7. `O:\Eqnedit64.release.json`へ予定tag、version、source SHA、EXE SHA-256、signerを記録し、
+9. `O:\Eqnedit64.release.json`へ予定tag、version、source SHA、EXE SHA-256、signerを記録し、
    実物と一致することを確認する。
-8. ここまで成功してから `eqnedit64-vX.Y.Z` tagをpushする。
-9. tagのEqnedit64 CIを通す。
-10. `.github/workflows/release-eqnedit64-pypi.yml`がO: gateを照合してwheelをPyPIへ公開し、
+10. ここまで成功してから `eqnedit64-vX.Y.Z` tagをpushする。
+11. tagのEqnedit64 CIを通す。
+12. `.github/workflows/release-eqnedit64-pypi.yml`がO: gateを照合してwheelをPyPIへ公開し、
     GitHub Releaseへ署名済みEXEと`SHA256SUMS.txt`を添付する。
-11. PyPIから各wheel、GitHub ReleaseからEXEを再取得し、同梱EXEとO:のEXEがbyte-identical、
+13. PyPIから各wheel、GitHub ReleaseからEXEを再取得し、同梱EXEとO:のEXEがbyte-identical、
     SHA-256一致、署名有効であることを外側から確認する。
 
 O:は対話中LABでは`C:\Users\Administrator\OneDrive`へのSUBSTである。self-hosted runnerは
@@ -429,8 +438,9 @@ pushするとrelease gateが失敗するのが正しい。
 
 ## 13. 現在の公開状態
 
-Eqnedit64 3.0.11が2026-09-02時点の公開済み基準版であり、3.0.12はこの文書が対象とする
-次の候補である。3.0.11の通常Ctrl+Vは、native/Webとも左揃えの編集可能なinline
+Eqnedit64 3.0.11が2026-09-03時点の公開済み基準版であり、3.0.13はこの文書が対象とする
+次の候補である。未公開の3.0.12候補で整えた構造選択、TeX整形、簡潔なCLIを3.0.13へ
+吸収し、改行操作と正式公開前Fableレビューを追加する。3.0.11の通常Ctrl+Vは、native/Webとも左揃えの編集可能なinline
 Office Mathを18 ptで作る。`&`を含まない複数行は各leaf rowへ分けて同じ左端を保ち、
 PowerPointに可視の`&`を渡さない。ネイティブのタイトル、About、`--version`には製品版と
 source stampの両方を表示する。
@@ -444,8 +454,8 @@ source stampの両方を表示する。
 - PyPI: `https://pypi.org/project/eqnedit64/3.0.11/`
 - PyPI wheels: CPython 3.10、3.11、3.12、3.13の`win_amd64`計4個。
 
-3.0.12候補をO:へ置いた時点では`Eqnedit64.handtest.json`を正とし、公開済み3.0.11の
-release manifestと混同しない。3.0.12のtag、GitHub Release、PyPIは公開手順をすべて
+3.0.13候補をO:へ置いた時点では`Eqnedit64.handtest.json`を正とし、公開済み3.0.11の
+release manifestと混同しない。3.0.13のtag、GitHub Release、PyPIは公開手順をすべて
 通過するまで「公開済み」と記載しない。
 
 ## 14. ソース地図

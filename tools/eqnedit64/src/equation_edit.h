@@ -79,7 +79,10 @@ public:
      * New code should use the explicit pointer lifecycle above. */
     bool hit_test(double x_points, double y_points,
                   const SvgStyle& style = SvgStyle(), bool extend = false);
-    bool new_line();          /* Enter: create/append an aligned row */
+    /* Enter splits the current aligned row at the caret.  On a one-line
+     * equation it creates the aligned wrapper and moves the suffix into the
+     * new row; it does not merely append a blank row. */
+    bool new_line();
     bool alignment_tab();     /* &: split the current aligned row */
     bool move_up();
     bool move_down();
@@ -224,6 +227,7 @@ private:
     bool selection_range(NodeList** slot, int* first, int* last) const;
     bool extend_selection_to(const std::vector<CaretStep>& anchorPath,
                              int anchorIndex);
+    bool edit_aligned_boundary(bool backwards);
     bool matrix_context(size_t* depth, MatrixNode** matrix, int* cell,
                         int layoutKind = -1) const;
 };

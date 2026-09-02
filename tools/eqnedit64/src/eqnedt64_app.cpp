@@ -20,6 +20,7 @@
 #include <algorithm>
 #include <array>
 #include <atomic>
+#include <cctype>
 #include <cstdint>
 #include <cmath>
 #include <cstdlib>
@@ -5248,6 +5249,39 @@ int ui_interaction_test() {
     if ((sourceStyle & WS_HSCROLL) || (sourceStyle & ES_AUTOHSCROLL))
         return 223;
 
+    const auto compactLatex = [](std::string text) {
+        text.erase(std::remove_if(text.begin(), text.end(),
+                                  [](unsigned char ch) {
+                                      return std::isspace(ch) != 0;
+                                  }),
+                   text.end());
+        return text;
+    };
+
+    /* Drive Enter through the real canvas key path at a middle caret, then
+     * drive both row-join keys.  A model-only test did not catch the original
+     * GUI regression because the old window route always happened to test
+     * Enter at the end of the equation. */
+    g.equation.load_latex("abcdef");
+    sync_source_from_model();
+    SetFocus(g.canvas);
+    SendMessageW(g.canvas, WM_KEYDOWN, VK_HOME, 0);
+    for (int i = 0; i < 3; ++i)
+        SendMessageW(g.canvas, WM_KEYDOWN, VK_RIGHT, 0);
+    SendMessageW(g.canvas, WM_KEYDOWN, VK_RETURN, 0);
+    if (compactLatex(g.equation.latex()) !=
+        "\\begin{aligned}abc\\\\def\\end{aligned}")
+        return 229;
+    SendMessageW(g.canvas, WM_KEYDOWN, VK_BACK, 0);
+    if (g.equation.latex() != "abcdef" || g.equation.caret() != ":3")
+        return 230;
+    SendMessageW(g.canvas, WM_KEYDOWN, VK_RETURN, 0);
+    SendMessageW(g.canvas, WM_KEYDOWN, VK_UP, 0);
+    SendMessageW(g.canvas, WM_KEYDOWN, VK_END, 0);
+    SendMessageW(g.canvas, WM_KEYDOWN, VK_DELETE, 0);
+    if (g.equation.latex() != "abcdef" || g.equation.caret() != ":3")
+        return 231;
+
     g.equation.load_latex("a=b");
     sync_source_from_model();
     SetFocus(g.canvas);
@@ -5280,6 +5314,23 @@ int ui_interaction_test() {
         sourceMultiline.find("\\begin{aligned}") == std::string::npos ||
         sourceMultiline.find("c") == std::string::npos)
         return 226;
+
+    /* The TeX pane has the same split-at-caret contract, including replacing
+     * a selected range rather than appending a row at the end. */
+    set_source_text_for_test(L"abcdef");
+    SetFocus(g.source);
+    SendMessageW(g.source, EM_SETSEL, 3, 3);
+    SendMessageW(g.source, WM_CHAR, L'\r', 0);
+    if (compactLatex(g.equation.latex()) !=
+        "\\begin{aligned}abc\\\\def\\end{aligned}")
+        return 232;
+    set_source_text_for_test(L"abcdef");
+    SendMessageW(g.source, EM_SETSEL, 2, 4);
+    SendMessageW(g.source, WM_CHAR, L'\r', 0);
+    if (compactLatex(g.equation.latex()) !=
+        "\\begin{aligned}ab\\\\ef\\end{aligned}")
+        return 233;
+
     const bool savedNumbered = g.documentNumbered;
     g.documentNumbered = true;
     const std::string sourceSavedDocument = tex_document();

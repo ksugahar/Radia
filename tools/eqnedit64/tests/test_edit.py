@@ -790,6 +790,127 @@ def main() -> int:
     if not eq.move_up() or not eq.move_down():
         failures.append("Up/Down did not traverse aligned rows")
 
+    # A line break belongs at the caret, just as it does in the raw TeX pane.
+    # The original implementation always moved the complete equation to row
+    # one and appended a blank row, so Enter in the middle appeared to ignore
+    # the insertion point.  A selection is replaced by the same row break.
+    for selected, expected in (
+            (False, r"\begin{aligned}abc\\def\end{aligned}"),
+            (True, r"\begin{aligned}ab\\ef\end{aligned}")):
+        eq = Equation()
+        eq.insert_text("abcdef")
+        eq.move_home()
+        for _ in range(2 if selected else 3):
+            eq.move_right()
+        if selected:
+            eq.begin_selection()
+            eq.select_step_right()
+            eq.select_step_right()
+        if not eq.new_line():
+            failures.append("Enter rejected a direct row split")
+            continue
+        if re.sub(r"\s+", "", eq.latex()) != expected:
+            failures.append(
+                f"Enter split at the wrong place: {eq.latex()!r}, "
+                f"want {expected!r}")
+        if eq.undo_name() != "Line Break":
+            failures.append(
+                f"row split has the wrong Undo name: {eq.undo_name()!r}")
+
+    # Backspace at the start of the later row and Delete at the end of the
+    # earlier row remove exactly the visible row separator.  Once only one
+    # unanchored row remains, its redundant aligned wrapper disappears too.
+    for key in ("backspace", "erase"):
+        eq = Equation()
+        eq.insert_text("abcdef")
+        eq.move_home()
+        for _ in range(3):
+            eq.move_right()
+        eq.new_line()
+        if key == "erase":
+            if not eq.move_up():
+                failures.append("could not reach the row before Delete join")
+                continue
+            eq.move_end()
+        if not getattr(eq, key)() or eq.latex() != "abcdef":
+            failures.append(
+                f"{key} did not join rows at the caret: {eq.latex()!r}")
+        elif eq.caret() != ":3":
+            failures.append(
+                f"{key} row join lost its horizontal caret: {eq.caret()!r}")
+        elif eq.undo_name() != "Join Lines":
+            failures.append(
+                f"{key} row join has wrong Undo name: {eq.undo_name()!r}")
+
+    # An alignment tab is also a structural boundary.  Enter before it moves
+    # both the current-cell suffix and the cells on its right to the new row,
+    # matching insertion of `\\` at the same point in the TeX pane.
+    eq = Equation()
+    eq.load_latex(r"\begin{aligned}ab&=cd\\ef&=gh\end{aligned}")
+    eq.move_home()
+    eq.move_right()                    # enter the first cell
+    eq.move_right()                    # between a and b
+    eq.new_line()
+    aligned_split = re.sub(r"\s+", "", eq.latex())
+    if aligned_split != (
+            r"\begin{aligned}a&\\b&=cd\\ef&=gh\end{aligned}"):
+        failures.append(
+            "Enter did not carry right-hand aligned cells to the new row: "
+            f"{eq.latex()!r}")
+
+    # Joining an explicitly aligned row preserves the column schema.  The
+    # corresponding cells join pairwise; flattening all four cells into the
+    # root would discard the user's `&` contract.
+    for key in ("backspace", "erase"):
+        eq = Equation()
+        eq.load_latex(r"\begin{aligned}a&b\\c&d\end{aligned}")
+        eq.move_home()
+        eq.move_right()                  # first row, first cell
+        if key == "backspace":
+            eq.move_down()               # second row, first cell start
+        else:
+            eq.next_slot()               # first row, final cell
+            eq.move_end()
+        if not getattr(eq, key)():
+            failures.append(f"{key} rejected a two-column row join")
+            continue
+        joined = re.sub(r"\s+", "", eq.latex())
+        if joined != r"\begin{aligned}ac&bd\end{aligned}":
+            failures.append(
+                f"{key} flattened or lost aligned columns: {eq.latex()!r}")
+
+    # Joining can create a function word just as typing its final letter can.
+    # Re-run automatic classification at the old boundary in both directions.
+    for key in ("backspace", "erase"):
+        eq = Equation()
+        eq.load_latex(r"\begin{aligned}s\\in\end{aligned}")
+        eq.move_home()
+        eq.move_right()
+        if key == "backspace":
+            eq.move_down()
+        else:
+            eq.move_end()
+        getattr(eq, key)()
+        if eq.latex() != r"\sin":
+            failures.append(
+                f"{key} row join did not refresh function style: "
+                f"{eq.latex()!r}")
+
+    # Automatic function styling is a property of a complete word.  Splitting
+    # sin after s must reclassify both fragments instead of leaving stale
+    # upright letters on either row.
+    eq = Equation()
+    eq.insert_text("sin")
+    eq.move_home()
+    eq.move_right()
+    eq.new_line()
+    function_split = eq.latex()
+    if ("operatorname" in function_split or "\\sin" in function_split or
+            re.sub(r"\s+", "", function_split) !=
+            r"\begin{aligned}s\\in\end{aligned}"):
+        failures.append(
+            f"function style survived across a row split: {function_split!r}")
+
     # Enter deliberately leaves a blank row ready for typing.  Saving before
     # filling it must not write a spurious final `\\`, and must reach the same
     # canonical TeX after one load/save cycle.

@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+## 3.0.13 — 2026-09-03
+
+- Split a structural row at the actual caret when Enter is pressed, carry the
+  suffix and aligned cells on its right into the new row, and replace a
+  selection with the row break instead of appending a blank row elsewhere.
+- Make Backspace at a row start and Delete at a row end join the adjacent
+  aligned rows while preserving the horizontal caret and alignment columns.
+  A redundant one-row, one-column aligned wrapper is removed automatically.
+- Require one Claude Code Fable review of the signed O: hand-test candidate and
+  its specification diff before main integration, release tagging, or PyPI
+  publication.
+
 ## 3.0.12 — 2026-09-02
 
 - Promote drags that cross structural slots to their deepest common ancestor
