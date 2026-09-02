@@ -14,6 +14,8 @@
 - Let the native TeX pane create structural aligned rows with Enter and
   soft-wrap long source while saved documents retain the outer equation
   environment.
+- Route the Python CLI, `copy_equation()`, and `render_equation()` through the
+  native input/output converter syntax instead of exposing backend switches.
 
 ## 3.0.11 - 2026-08-30
 

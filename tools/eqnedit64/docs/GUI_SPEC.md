@@ -391,8 +391,9 @@ Eqnedit64拡張として、`curl`, `div`, `grad`, `rot`, `tr`, `diag`, `Res`,
 
 ### 6.3 コマンドラインTeX→PNG変換
 
-`Eqnedit64.exe --texclip` はウィンドウを表示せず、クリップボード上のTeXを
-読み取って、登録形式 `PNG` の白背景画像に置き換えて終了する。
+`Eqnedit64.exe clipboard png` はウィンドウを表示せず、クリップボード上のTeXを
+読み取って、登録形式 `PNG` の白背景画像に置き換えて終了する。これは6.3.1の
+共通した「入力、出力」契約における一つの組合せであり、専用オプションではない。
 
 - 入力は登録 `LaTeX`（UTF-8 raw断片）を優先し、なければ `CF_UNICODETEXT` を読む。
 - 外側の数式区切り・環境は6.4と同じ規則で正規化する。
@@ -401,19 +402,28 @@ Eqnedit64拡張として、`curl`, `div`, `grad`, `rot`, `tr`, `diag`, `Res`,
   `CF_DIBV5` を併記する。DIBV5も白背景・黒文字かつ全画素α=255とする。
 - Google スライド用の `HTML Format` は混在させない。
 - 成功は終了コード0、空入力は83、画像化／クリップボード登録失敗は84とする。
-- `--clipboard-tex-to-png` は同一機能の説明的な別名とする。
+- 3.0.12より前の `--texclip` / `--clipboard-tex-to-png` は既存自動化を壊さないため
+  互換入力として受けるが、公開ヘルプ、教材、新規連携では使用しない。
 
 ### 6.3.1 公開コマンドラインAPI
 
-- `--copy-tex[-file]`: 任意TeXを通常コピーと同じOffice Math、TeX、EMF、
-  不透明DIBV5の組としてクリップボードへ登録する。
-- `--copy-google-slides[-file]`: 任意TeXを6.2のPNG+HTMLとして登録する。
-- `--copy-png[-file]`: 任意TeXをPNG+DIBV5だけとして登録する。
-- `--render-png[-file]` / `--render-emf[-file]`: 任意TeXを指定ファイルへ書く。
-- `-file` 形式の入力はUTF-8 `.tex`で、外側の数式環境・区切りを6.4と同様に除く。
+- 公開構文は `Eqnedit64.exe <入力> <出力>` の一種類だけとする。
+- `<入力>` はUTF-8 `.tex`ファイル、または登録 `LaTeX`／Unicode文字列を読む予約語
+  `clipboard` とする。引用符付きTeXリテラルは公開構文に含めない。
+- `<出力>` が `office` の場合は通常コピーと同じOffice Math、TeX、EMF、不透明
+  DIBV5を、`slides` は6.2のPNG+HTMLを、`png`はPNG+DIBV5だけをクリップボードへ
+  登録する。
+- `<出力>` の拡張子が `.png` / `.emf` なら、そのファイルへ画像化する。大文字小文字は
+  区別しない。
+- `powerpoint` / `word` は `office`、`google-slides` は `slides` の説明的な別名として
+  受けるが、教材では短い正規名を使う。
+- 外側の数式環境・区切りは6.4と同様に除く。
 - すべて非表示で動作し、前面ウィンドウ、マウス、キーボードを操作しない。
 - 成功0、入力ファイル読込み失敗82、空入力83、クリップボード失敗84、
-  引数不足94とする。
+  出力指定不正94とする。
+- 引数なしはGUIを起動し、`.tex`一つはGUIで開く。この既存の編集起動は変換構文と
+  競合させない。
+- 旧 `--copy-*` / `--render-*` オプションは互換入力として内部に残すが公開APIではない。
 
 ### 6.4 キャンバスへの貼り付け
 
@@ -473,7 +483,7 @@ Eqnedit64拡張として、`curl`, `div`, `grad`, `rot`, `tr`, `diag`, `Res`,
 | AUT-11 | 画面外PowerPoint窓の`Application.CommandBars.ExecuteMso("Paste")`が左寄せ18 ptのインライン`m:oMath`と18 ptの末尾文字・挿入点を作り、`m:oMathPara`を作らず、PowerPoint自身の描画で分数・根号・総和・積分・上線・下線が見え、native/Web基準結果が一致する。さらに長さ1/8/16の3行は独立した編集可能`m:oMath`となり、描画左端が4 px以内で一致し、先頭の共通可視プレフィックスが6 px以内である。`Shapes.Paste()`をCtrl+Vの代用にしない | `test_external_paste.ps1` / 研究室ホームページ集中QA |
 | AUT-12 | IrfanView `/clippaste` が非空画像を生成し、試験前のクリップボード全形式を復元する | `test_external_paste.ps1` |
 | AUT-13 | Google スライド用PNGとHTMLが同一画像で、300 dpiかつ24 pt基準の同じ物理寸法を持つ | `test_external_paste.ps1` / `--self-test` |
-| AUT-14 | `--texclip` がUnicode／登録LaTeXを優先規則どおり読み、非空300 dpi PNG／全画素α=255 DIBV5へ置換する | `test_external_paste.ps1` |
+| AUT-14 | 公開CLIの`入力 出力`構文がTeXファイルをPNG／EMFへ書き、`clipboard png`がUnicode／登録LaTeXを優先規則どおり非空300 dpi PNG／全画素α=255 DIBV5へ置換する | Eqnedit64 CI / `test_external_paste.ps1` |
 | AUT-15 | 実exeのoperation log v2から本文を漏らさずF12候補を持つLLMレビュー束を生成し、v1互換と選好台帳を検査する | `test_usability_trace.py` / `test_background.ps1` |
 | AUT-16 | `sinx`逐次入力が立体`sin`＋斜体`x`となり、上付き内Backspaceを2回送ると文字、空シェルの順で削除され、積分上下限座標がTeX基準に一致する | `test_edit.py` / `--ui-interaction-test` / `test_layout.py` |
 | AUT-17 | Eqnedit32資源ID 11000--11038の39関数とEqnedit64拡張8関数が、一括入力・逐次入力の双方で立体TeXになる | `test_edit.py` |

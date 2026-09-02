@@ -32,7 +32,7 @@ GUIの画面構成、状態遷移、TeX/クリップボード契約、自動・�
 - 分子から分母など構造を跨ぐドラッグを、共通の親構造へ自然に繰り上げて選択
 - PowerPointへ表示可能で編集できるOfficeネイティブ数式、不透明なEMF/DIBV5画像、TeXを同時に提供するコピー
 - 300 dpi・24 pt基準でGoogle スライドへ貼る専用コピー（`Ctrl+Alt+C`）
-- クリップボード上のTeXを300 dpi PNGへ置き換える `--texclip`
+- `Eqnedit64.exe 入力 出力`だけでOffice、Slides、PNG、EMFへ変換するCLI
 - Unicode文字列とTeX数式の貼り付け
 - `sinx`の逐次入力を立体の`sin`と斜体の`x`へ自動判定
 - TeX基準の積分上下限位置と、添字内で通常どおり働くBackspace
@@ -68,47 +68,36 @@ EMFまたは全画素不透明の32-bit DIBV5を選べます。TeX対応ソフ�
 登録します。通常コピーと分けることで、PowerPointの通常貼り付けは引き続き
 編集可能なOffice Mathを選びます。
 
-クリップボード上のTeXをTeXclipと同じ流れでPNGへ置き換える場合は、次を実行します。
-ウィンドウは表示せず、処理後すぐ終了します。
-
-```powershell
-Eqnedit64.exe --texclip
-```
-
-登録 `LaTeX` 形式があればそれを優先し、なければ通常のUnicode文字列を読みます。
-`$...$`、`\[...\]`、`equation` などの外側は通常の貼り付けと同じ規則で除き、
-白背景の300 dpi PNG（24 pt基準）でクリップボードを置き換えます。登録 `PNG` を
-正本とし、IrfanViewなどのWindowsアプリ用に白背景・黒文字・全画素α=255の
-`CF_DIBV5` も併記します。
-成功時の終了コードは0、入力が空なら83、画像化またはクリップボード登録に失敗した
-場合は84です。長い別名 `--clipboard-tex-to-png` も同じ動作です。
-
 ### コマンドラインAPI
 
-GUIを開かず、任意TeXをPowerPoint/Word、Google Slides、画像ファイルへ渡せます。
-長い式や自動処理では、引用符やWindowsのコマンドライン長に依存しないUTF-8
-ファイル入力を推奨します。
+公開CLIは「入力、出力」の二つだけです。オプション名を組み合わせる必要はありません。
+入力はUTF-8 TeXファイルまたは予約語 `clipboard`、出力はファイル名または
+クリップボード用途を表す `office` / `slides` / `png` です。すべてGUIを表示せずに
+変換して終了します。
 
 ```powershell
 # PowerPoint/Word: 編集可能Office Math + TeX + EMF + 不透明DIBV5
-Eqnedit64.exe --copy-tex-file equation.tex
+Eqnedit64.exe equation.tex office
 
 # Google Slides: 300 dpi / 24 ptのPNG + HTML
-Eqnedit64.exe --copy-google-slides-file equation.tex
+Eqnedit64.exe equation.tex slides
 
 # 画像だけをクリップボードへ
-Eqnedit64.exe --copy-png-file equation.tex
+Eqnedit64.exe equation.tex png
 
 # ファイルへ画像化
-Eqnedit64.exe --render-png-file equation.tex equation.png
-Eqnedit64.exe --render-emf-file equation.tex equation.emf
+Eqnedit64.exe equation.tex equation.png
+Eqnedit64.exe equation.tex equation.emf
+
+# クリップボード上のTeXをPNGクリップボードへ置換
+Eqnedit64.exe clipboard png
 ```
 
-短い式は `--copy-tex "E=mc^2"`、`--copy-google-slides "E=mc^2"`、
-`--copy-png "E=mc^2"`、`--render-png <TeX> <出力>`、
-`--render-emf <TeX> <出力>` でも渡せます。外側の `\[...\]`、`equation` 等は
-GUI貼り付けと同じ規則で除きます。入力ファイルを読めない場合は82、空入力は83、
-クリップボード登録失敗は84、引数不足は94です。
+`clipboard`入力は登録 `LaTeX` を優先し、なければUnicode文字列を読みます。
+外側の `$...$`、`\[...\]`、`equation` 等はGUI貼り付けと同じ規則で除きます。
+成功0、入力読込み失敗82、空入力83、クリップボード失敗84、出力指定不正94です。
+3.0.12より前の長いオプションも既存連携の互換入力として受けますが、新しいスクリプトや
+教材では使用しません。`Eqnedit64.exe --help` で同じ短い形式を確認できます。
 
 ## 操作デバッグ
 

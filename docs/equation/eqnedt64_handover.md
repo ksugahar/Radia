@@ -200,12 +200,13 @@ Office Mathになることが合格条件である。MathMLの文字列がクリ
 図形数が1以上だけ、例外が出ないだけでは合格にしない。PowerPoint自身に貼り付けさせ、
 数式の輪郭と代表構造を画像化して検査する。
 
-Office向けはnative EXE版とWeb/JS版のどちらも、左揃え24 ptの編集可能Office Mathを
-製品契約とする。18 ptへの縮小、中央揃え、画像への退化、空のMathZoneを許容しない。
+Office向けはnative EXE版とWeb/JS版のどちらも、通常Ctrl+Vで左揃え18 ptの編集可能
+Office Mathになることを製品契約とする。PowerPointでは左揃えと24 pt強制を通常貼り付けで
+両立できないため、左揃えを優先する。中央揃え、画像への退化、空のMathZoneを許容しない。
 実PowerPoint試験で文字サイズ、段落揃え、貼り付け位置、Office Math構造、描画inkを
 すべて検査する。
 
-クリップボード入口は両版とも、inline 24 pt MathML本体と末尾NBSPだけを含む同期
+クリップボード入口は両版とも、inline 18 pt MathML本体と末尾NBSPだけを含む同期
 CF_HTMLに統一する。native通常コピーへ登録`MathML` / `MathML Presentation`を載せると
 PowerPointがそれを優先して中央寄せ`m:oMathPara`へ変換するため禁止する。Web版だけ
 条件付きOMMLを直接渡すことも、総和記号と上下限の見た目がMathML変換と異なるため
@@ -223,19 +224,24 @@ Google Slides用コピーは300 dpiのPNGとHTMLを登録し、24 pt数式と同
 
 ### 6.3 CLI
 
-GUIを開かずに次の代表経路を使える。
+GUIを開かない公開構文は `Eqnedit64.exe <入力> <出力>` の一種類だけとする。入力は
+UTF-8 `.tex`または予約語`clipboard`、出力は用途名または画像ファイル名である。
 
 ```text
-Eqnedit64.exe --copy-tex-file equation.tex
-Eqnedit64.exe --copy-google-slides-file equation.tex
-Eqnedit64.exe --copy-png-file equation.tex
-Eqnedit64.exe --render-png-file equation.tex equation.png
-Eqnedit64.exe --render-emf-file equation.tex equation.emf
-Eqnedit64.exe --clipboard-tex-to-png
+Eqnedit64.exe equation.tex office
+Eqnedit64.exe equation.tex slides
+Eqnedit64.exe equation.tex png
+Eqnedit64.exe equation.tex equation.png
+Eqnedit64.exe equation.tex equation.emf
+Eqnedit64.exe clipboard png
 ```
 
-最後のコマンドはクリップボード上のTeXを読み、同じクリップボードをPNGへ置き換える。
-CLI/APIはPowerPoint自動生成や`radia-mcp.presentation`から呼べる安定した境界とする。
+`office`はPowerPoint/Word用、`slides`はGoogle Slides用、`png`は画像だけの
+クリップボードを表す。最後の例はクリップボード上のTeXを読み、同じクリップボードを
+PNGへ置き換える。旧`--copy-*`、`--render-*`、`--texclip`は既存連携の互換入力として
+内部に残すが、公開ヘルプ、教材、Python package、`radia-mcp.presentation`は必ず
+単一の入力／出力構文を使う。CLI/APIはPowerPoint自動生成や
+`radia-mcp.presentation`から呼べる安定した変換境界とする。
 
 ## 7. フォント契約
 
