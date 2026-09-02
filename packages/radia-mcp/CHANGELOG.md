@@ -7,6 +7,11 @@ crystallized as its own package.
 
 ## [Unreleased]
 
+- CI: normal pull-request and main-push checks now select a compact contract
+  set, tests related to changed package families, and only affected server
+  selftests. The 4,500+ package suite, all-server audit, and generated inventory
+  audit remain available through explicit full audit; release tags build and
+  verify the already accepted exact commit instead of repeating that work.
 - all servers: importing the shared `common` package now resolves status,
   async, PDF, and Chroma/RAG helpers lazily. Small servers no longer load the
   retrieval stack merely to register their status tool.
