@@ -1499,6 +1499,25 @@ for research / publication uses (e.g. comparing convergence rates of
 Henrotte vs standard H1 on a scalar problem).  They are NOT used by
 production heat solvers and are NOT required.
 
+**Near-axis order rule for axisym SCALAR solves (2026-09-03 study)**:
+standard P1/Q1 cannot represent the even-parity `dT/dr = 0` at the
+`r = 0` axis -- the near-axis profile shows a cusp (apparent slope
+16/3x the exact secant, mesh-size-independent shape) and `T(axis)`
+converges only O(h^2).  Production axisym heat
+(`calc_heat_axisym.py`) therefore defaults to `--fes-order 2`
+(machine-precision axis profile on the uniform-volumetric-heat
+cylinder; O(h^3) L2 on a z-dependent manufactured solution).  This
+refines, not replaces, the standard-H1 convention above -- a Henrotte
+switch is still NOT needed for scalars.  Caveat: the Henrotte HEAT
+Q2 path is currently broken on axis-touching meshes (magnetic
+axis-reduced shape functions vs the full 9-node heat element
+matrices); fix tracked separately.  Two order>=2 implementation
+rules for heat solvers: initialize a uniform state with
+`gfT.Set(CF(T0))` (never `gfT.vec[:] = T0` -- hierarchical edge
+coefficients are not nodal values), and report `T_max`/`T_min` over
+vertex DOFs only (raw coefficient min/max reports garbage at
+order >= 2).
+
 **Reference**: see
 [`docs/axifem/FORMULATION.md`](docs/axifem/FORMULATION.md)
 sections 5-6 (Henrotte basis derivation for magnetic) and 10b/10c
