@@ -177,25 +177,13 @@ set(PYTHON_DIR "${CMAKE_CURRENT_SOURCE_DIR}/src/radia")
 # FFTW directory removed - using MKL DFTI via fftw.h compatibility layer
 
 
-# BLAS/LAPACK: Intel MKL 2026 only
-# Use either a full oneAPI installation or the pip mkl-devel package.
-
-# Detect Intel compiler
-if(CMAKE_CXX_COMPILER_ID MATCHES "IntelLLVM" OR CMAKE_C_COMPILER_ID MATCHES "IntelLLVM")
-	set(USING_INTEL_COMPILER TRUE)
-	message(STATUS "Intel oneAPI compiler detected (icx/icx-cl)")
-else()
-	set(USING_INTEL_COMPILER FALSE)
-endif()
+# BLAS/LAPACK: Intel MKL 2026 from the selected Python environment. An
+# explicitly supplied MKLROOT is retained only as a fallback.
 
 if(WIN32)
-	# Intel oneAPI MKL (required).  Support both full oneAPI installs and
-	# pip mkl-devel installs under Python's Library directory.
+	# Intel MKL (required). Prefer the pip mkl-devel layout belonging to the
+	# exact Python interpreter used for this build.
 	set(_MKL_CANDIDATES)
-	if(DEFINED ENV{MKLROOT})
-		list(APPEND _MKL_CANDIDATES "$ENV{MKLROOT}")
-	endif()
-	list(APPEND _MKL_CANDIDATES "C:/Program Files (x86)/Intel/oneAPI/mkl/latest")
 	execute_process(
 		COMMAND ${Python3_EXECUTABLE} -c "import pathlib, sys; print(pathlib.Path(sys.prefix) / 'Library')"
 		OUTPUT_VARIABLE _PYTHON_MKL_ROOT
@@ -204,6 +192,9 @@ if(WIN32)
 	)
 	if(_PYTHON_MKL_ROOT)
 		list(APPEND _MKL_CANDIDATES "${_PYTHON_MKL_ROOT}")
+	endif()
+	if(DEFINED ENV{MKLROOT})
+		list(APPEND _MKL_CANDIDATES "$ENV{MKLROOT}")
 	endif()
 	set(MKL_DIR "")
 	foreach(_MKL_CANDIDATE IN LISTS _MKL_CANDIDATES)
@@ -235,10 +226,6 @@ if(WIN32)
 		endif()
 		list(APPEND MKL_RUNTIME_DLLS "${_MKL_RUNTIME_DLL}")
 	endforeach()
-
-	# Intel compiler runtime directory
-	set(INTEL_COMPILER_DIR "C:/Program Files (x86)/Intel/oneAPI/compiler/latest")
-	set(INTEL_COMPILER_BIN "${INTEL_COMPILER_DIR}/bin")
 
 	# Use mkl_rt.lib (dynamic linking) - works with both Intel and MSVC compilers
 	set(MKL_LIB "${MKL_LIB_DIR}/mkl_rt.lib")
