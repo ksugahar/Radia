@@ -5,12 +5,12 @@
 # with Intel MKL for BLAS/LAPACK and NGSolve for TaskManager parallelization.
 #
 # Usage:
-#   powershell.exe -ExecutionPolicy Bypass -File Build.ps1
-#   powershell.exe -ExecutionPolicy Bypass -File Build.ps1 -Rebuild
-#   powershell.exe -ExecutionPolicy Bypass -File Build.ps1 -RadiaOnly
-#   powershell.exe -ExecutionPolicy Bypass -File Build.ps1 -MatlabMexOnly
-#   powershell.exe -ExecutionPolicy Bypass -File Build.ps1 -OptunaMexOnly
-#   powershell.exe -ExecutionPolicy Bypass -File Build.ps1 -Test
+#   pwsh -NoProfile -ExecutionPolicy Bypass -File Build.ps1
+#   pwsh -NoProfile -ExecutionPolicy Bypass -File Build.ps1 -Rebuild
+#   pwsh -NoProfile -ExecutionPolicy Bypass -File Build.ps1 -RadiaOnly
+#   pwsh -NoProfile -ExecutionPolicy Bypass -File Build.ps1 -MatlabMexOnly
+#   pwsh -NoProfile -ExecutionPolicy Bypass -File Build.ps1 -OptunaMexOnly
+#   pwsh -NoProfile -ExecutionPolicy Bypass -File Build.ps1 -Test
 #
 # Options:
 #   -Rebuild    Clean build directory before building
@@ -23,7 +23,7 @@
 # Requirements:
 #   - Visual Studio Build Tools (any version with VC.Tools.x86.x64) — auto-detected via vswhere
 #   - MATLAB with MEX support (-OptunaMexOnly needs only Visual Studio + MATLAB)
-#   - Intel oneAPI Base Toolkit (MKL only, NOT the compiler)
+#   - Intel MKL from `python -m pip install mkl-devel`
 #   - NGSolve (pip install or source build)
 #   - Python 3.12 with pybind11
 #==============================================================================
@@ -72,19 +72,18 @@ if ($OptunaMexOnly) {
     }
 }
 
-# Intel MKL 2026 (required for BLAS/LAPACK and HACApK/PARDISO). Accept both a
-# full oneAPI install and the pip mkl-devel layout under Python's Library.
+# Intel MKL 2026 (required for BLAS/LAPACK and HACApK/PARDISO). The selected
+# Python environment is authoritative; MKLROOT is an explicit fallback only.
 if ($OptunaMexOnly) {
     $INTEL_MKL = ""
 } else {
     $MklCandidates = @()
-    if ($env:MKLROOT -and (Test-Path $env:MKLROOT)) {
-        $MklCandidates += $env:MKLROOT
-    }
-    $MklCandidates += "C:\Program Files (x86)\Intel\oneAPI\mkl\latest"
     $PythonLibrary = & $PythonExecutable -c "import pathlib, sys; print(pathlib.Path(sys.prefix) / 'Library')" 2>$null
     if ($PythonLibrary -and (Test-Path $PythonLibrary)) {
         $MklCandidates += $PythonLibrary
+    }
+    if ($env:MKLROOT -and (Test-Path $env:MKLROOT)) {
+        $MklCandidates += $env:MKLROOT
     }
     $INTEL_MKL = $MklCandidates | Where-Object { Test-Path "$_\lib\mkl_rt.lib" } | Select-Object -First 1
     if (-not $INTEL_MKL) {

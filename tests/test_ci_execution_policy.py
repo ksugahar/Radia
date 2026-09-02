@@ -23,12 +23,32 @@ def test_fast_ci_runs_only_on_mdx_and_native_is_a_named_release_lane():
     assert "ninja" in native
     assert '"trimesh>=4.0"' in native
     assert "twine==6.2.0" in native
+    assert "pytest-rerunfailures" not in native
+    assert "--reruns" not in native
     assert "--ignore=tests/equation" in native
     assert '"MKLROOT=$mklRoot"' in native
     assert "MKLROOT=C:\\Program Files\\Python312\\Library" not in native
     assert "runs-on: [self-hosted, Windows, X64, mdx]" in optuna
     assert "windows-radia" not in optuna
     assert 'workflows: ["Radia Native Release"]' in release
+
+
+def test_regular_ci_never_selects_a_lab_runner():
+    workflows = ROOT / ".github" / "workflows"
+    signing_release = "release-eqnedit64-pypi.yml"
+
+    for path in sorted(workflows.glob("*.yml")):
+        if path.name == signing_release:
+            continue
+        runner_lines = [
+            line.strip()
+            for line in path.read_text(encoding="utf-8").splitlines()
+            if line.strip().startswith("runs-on:")
+        ]
+        for line in runner_lines:
+            normalized = line.lower()
+            assert "windows-radia" not in normalized, f"{path.name}: {line}"
+            assert "lab" not in normalized, f"{path.name}: {line}"
 
 
 def test_distribution_ci_is_change_scoped_and_mcp_full_suite_is_explicit():
@@ -61,8 +81,12 @@ def test_distribution_ci_is_change_scoped_and_mcp_full_suite_is_explicit():
     assert "Prepare impact-scoped test plan" in mcp
     assert "packages/radia-mcp/tools/select_ci_tests.py" in mcp
     assert '--changed-files-json "$CHANGED_FILES_JSON"' in mcp
+    assert "Fetch impact comparison base" in mcp
+    assert 'base_args=(--base "$CI_BASE_SHA")' in mcp
     assert "--full --output radia-mcp-ci-selection.json" in mcp
     assert 'plan["package_tests"]' in mcp
+    assert 'env["PYTEST_DISABLE_PLUGIN_AUTOLOAD"] = "1"' in mcp
+    assert 'else plan["package_tests"]' in mcp
     assert 'plan["server_selftests"]' in mcp
     assert 'plan["run_mcp_response_tests"]' in mcp
     assert "Meta health (all cataloged subpackages must import)" not in mcp
@@ -79,8 +103,11 @@ def test_pre_push_runs_the_unpushed_candidate_on_mdx():
 
     assert "ci_preflight_mdx.py --base \"$remote_sha\" --head \"$local_sha\"" in hook
     assert '"bundle", "create"' in helper
+    assert 'git_output("merge-base", head, main_ref)' in helper
+    assert "$base = '{effective_base}'" in helper
     assert "scp" in helper
-    assert "tools/ci_preflight.py --only policy,version" in helper
+    assert "tools/ci_preflight.py --since $base" in helper
+    assert "'mcp>=1.0,<2'" in helper
     assert "tests/test_docs_notebook_contract.py" in helper
     assert "upload_release_asset.py" not in hook
     assert "developer push must never upload mutable" in hook
@@ -111,5 +138,7 @@ def test_policy_twins_define_the_same_mdx_notebook_contract():
     assert "normal CI optimizes for fast, high-signal feedback" in normalized
     assert "does not automatically rerun a failed deterministic test" in normalized
     assert "run only the relevant validation lane and retain its result JSON" in normalized
+    assert "Do not keep two tests whose purpose and failure signal are the same" in normalized
+    assert "an adjacent JSON and a runtime gate are not required" in normalized
     assert "A docs-only contract lane parses changed notebooks" in normalized
     assert "Developer pre-push hooks run only the impact-scoped mdx preflight" in normalized

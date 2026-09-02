@@ -121,14 +121,12 @@ urn = [
 test = [
     "pytest>=7.0",
     "pytest-cov>=4.0",
-    "pytest-rerunfailures>=12.0",
     "mcp>=1.0.0",
     "schemdraw>=0.18",
 ]
 dev = [
     "pytest>=7.0",
     "pytest-cov>=4.0",
-    "pytest-rerunfailures>=12.0",
     "pyvista>=0.40",
     "matplotlib>=3.5",
     "schemdraw>=0.18",
@@ -197,9 +195,7 @@ radia = [
     "panels/samples/em_sample_bh.txt",
     "panels/samples/em/c_type_dipole/*.md",
     "panels/samples/em/c_type_dipole/*.step",
-    "panels/*.json",
-    "panels/notebooks/*.ipynb",
-    "panels/notebooks/*.json",
+    "panels/application_interface_manifest.json",
     "panels/cubit_toolbar/toolbars/*.tmpl",
     "panels/cubit_toolbar/scripts/*.py",
     "panels/cubit_toolbar/icons/*.svg",

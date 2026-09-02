@@ -91,43 +91,19 @@ if (-not $SkipBuild) {
     # ------------------------------------------------------------------------
     Write-Host "[2/6] Building wheel..." -ForegroundColor Cyan
 
-    # Retry `python -m build --wheel` up to 3 times.  The isolated
-    # venv step (`Creating isolated environment: venv+pip`) can fail
-    # transiently from PyPI CDN hiccups / pip cache corruption — the
-    # failure manifests as "Wheel build failed" within 1 second of
-    # the "Installing packages in isolated environment" message.
-    # Retry with a short delay resolves 99% of these.
-    #
-    # We also capture stdout + stderr to a temp file so the CI log
-    # shows the ACTUAL subprocess output on failure (Build_Wheel.ps1
-    # used to swallow stderr, hiding the real error).
+    # Fail on the first build error. CI retries hide reproducible packaging
+    # failures and delay diagnosis; the captured log preserves the subprocess
+    # output needed to investigate transient infrastructure failures separately.
     Push-Location $ProjectRoot
     try {
-        $maxAttempts = 3
-        $wheelOk = $false
-        for ($attempt = 1; $attempt -le $maxAttempts; $attempt++) {
-            $logFile = Join-Path $env:TEMP "radia_wheel_build_attempt${attempt}.log"
-            Write-Host "  Attempt $attempt / $maxAttempts ..." -ForegroundColor Gray
-            # Merge stderr into stdout, tee to log file, AND print live
-            python -m build --wheel 2>&1 | Tee-Object -FilePath $logFile
-            if ($LASTEXITCODE -eq 0) {
-                $wheelOk = $true
-                break
-            }
-            Write-Host "  Attempt $attempt FAILED (exit $LASTEXITCODE)" -ForegroundColor Yellow
-            if ($attempt -lt $maxAttempts) {
-                $sleepSec = 5 * $attempt
-                Write-Host "  Retrying in $sleepSec s ..." -ForegroundColor Yellow
-                Start-Sleep -Seconds $sleepSec
-            }
-        }
-        if (-not $wheelOk) {
+        $logFile = Join-Path $env:TEMP "radia_wheel_build.log"
+        python -m build --wheel 2>&1 | Tee-Object -FilePath $logFile
+        if ($LASTEXITCODE -ne 0) {
             Write-Host "" -ForegroundColor Red
-            Write-Host "ERROR: Wheel build failed after $maxAttempts attempts." -ForegroundColor Red
-            Write-Host "Last attempt log (tail):" -ForegroundColor Red
-            $lastLog = Join-Path $env:TEMP "radia_wheel_build_attempt${maxAttempts}.log"
-            if (Test-Path $lastLog) {
-                Get-Content $lastLog -Tail 40 | ForEach-Object { Write-Host "  $_" -ForegroundColor Red }
+            Write-Host "ERROR: Wheel build failed." -ForegroundColor Red
+            Write-Host "Build log (tail):" -ForegroundColor Red
+            if (Test-Path $logFile) {
+                Get-Content $logFile -Tail 40 | ForEach-Object { Write-Host "  $_" -ForegroundColor Red }
             }
             exit 1
         }
