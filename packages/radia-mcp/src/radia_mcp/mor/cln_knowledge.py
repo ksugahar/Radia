@@ -531,7 +531,14 @@ The tensor envelope psi = f(x) f(y) f(z) already has the right asymptotics
 everywhere: exp(-d t) - 1 on a face, r^2 sin(2 theta) at a 90-degree edge (the
 Wiener-Hopf wedge), and x y z ~ r^3 Y_{3,0} at an octant corner. What one
 tensor-product DOF cannot do is give the correct quantitative WEIGHT to all
-three boundary classes at once. The fix is one DOF per class, not a new shape.
+three boundary classes at once. The obvious repairs have both been tried and
+both fail: splitting into seven separable per-class envelopes
+(08_edge_corner_basis.py) is asymptotically rank-deficient, and a single
+non-separable wedge function on one edge (09_wedge_basis.py, run 2026-09-02)
+diverges with frequency -- 21.8 % at 10 kHz, 292 % at 1 MHz, 2974 % at
+100 MHz against the Mellin asymptote, where the tensor baseline gives
+0.55 %, 0.045 %, 0.0044 %. An admissible edge basis is an open problem; do
+not recommend either of those two as the fix.
 In 2D, where there is no trihedral corner, the same construction reaches
 0.34 %.
 
