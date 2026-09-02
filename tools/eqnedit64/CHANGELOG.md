@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- Promote drags that cross structural slots to their deepest common ancestor
+  instead of discarding the selection. The original deep press position stays
+  fixed while the pointer reverses direction, so fractions and neighbouring
+  elements remain selectable without tearing a template apart.
+- Format the synchronized TeX source pane at environment and row boundaries,
+  with indentation and lossless parse round-tripping. Palette lesson highlights
+  now map canonical offsets to the formatted pane before selecting the inserted
+  spelling, eliminating the structured-equation out-of-range crash found by
+  the hidden UI fuzzer.
+
 ## 3.0.11 — 2026-08-30
 
 - Keep every unanchored multi-line Office equation row on the same left edge.

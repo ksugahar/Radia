@@ -5107,6 +5107,66 @@ int ui_interaction_test() {
     if (crossSelection.find("\\frac") == std::string::npos) return 208;
     g.equation.clear_selection();
 
+    /* Keep the original deep press while a promoted drag reverses direction.
+     * A separate drag anchor is essential here: after moving from the
+     * fraction to the left edge, the representable selection itself lives in
+     * the root slot.  Reusing that promoted edge as the next anchor would
+     * make the move to the right select only the suffix. */
+    g.equation.load_latex("a\\frac{1}{\\mu}b");
+    const eqnedit::RenderMetrics reverseMetrics = g.equation.metrics(g.style);
+    const double reverseNumeratorY =
+        reverseMetrics.baseline - reverseMetrics.height * 0.3;
+    double reverseNumeratorX = -1.0;
+    std::string reverseNumeratorPath;
+    for (int sample = 0; sample <= 200; ++sample) {
+        const double x = reverseMetrics.width * double(sample) / 200.0;
+        if (!g.equation.hit_test(x, reverseNumeratorY, g.style, false))
+            continue;
+        const std::string caret = g.equation.caret();
+        if (!caret.empty() && caret[0] != ':') {
+            reverseNumeratorX = x;
+            reverseNumeratorPath = caret.substr(0, caret.find(':'));
+            break;
+        }
+    }
+    if (!(reverseNumeratorX >= 0.0)) return 213;
+
+    /* The other child slot at this x is the denominator.  Find it from the
+     * actual hit-test geometry instead of baking a font-dependent y value
+     * into the regression. */
+    double reverseDenominatorY = -1.0;
+    for (int sample = 0; sample <= 200; ++sample) {
+        const double y = reverseMetrics.height * double(sample) / 200.0;
+        if (!g.equation.hit_test(reverseNumeratorX, y, g.style, false))
+            continue;
+        const std::string caret = g.equation.caret();
+        const std::string path = caret.substr(0, caret.find(':'));
+        if (!caret.empty() && caret[0] != ':' &&
+            path != reverseNumeratorPath) {
+            reverseDenominatorY = y;
+            break;
+        }
+    }
+    if (!(reverseDenominatorY >= 0.0)) return 214;
+    const auto withoutSpaces = [](std::string text) {
+        text.erase(std::remove(text.begin(), text.end(), ' '), text.end());
+        return text;
+    };
+    g.equation.hit_test(reverseNumeratorX, reverseNumeratorY, g.style, false);
+    g.equation.hit_test(reverseNumeratorX, reverseDenominatorY, g.style, true);
+    if (withoutSpaces(g.equation.selection_latex()) != "\\frac{1}{\\mu}")
+        return 215;
+
+    g.equation.hit_test(reverseNumeratorX, reverseNumeratorY, g.style, false);
+    g.equation.hit_test(0.0, reverseMetrics.baseline, g.style, true);
+    if (withoutSpaces(g.equation.selection_latex()) != "a\\frac{1}{\\mu}")
+        return 216;
+    g.equation.hit_test(reverseMetrics.width, reverseMetrics.baseline,
+                        g.style, true);
+    if (withoutSpaces(g.equation.selection_latex()) != "\\frac{1}{\\mu}b")
+        return 217;
+    g.equation.clear_selection();
+
     /* A structured document has to reach the source pane broken over lines.
      * Held on one line, a two-row aligned equation runs off the right edge
      * and the reader sees only its opening -- which is how the first outside
@@ -5115,6 +5175,18 @@ int ui_interaction_test() {
     sync_source_from_model();
     const std::wstring shownSource = window_text(g.source);
     if (shownSource.find(L"\r\n") == std::wstring::npos) return 209;
+    const std::wstring expectedSourceEnd = L"\r\n\\end{aligned}";
+    if (shownSource.rfind(L"\\begin{aligned}\r\n  ", 0) != 0 ||
+        shownSource.find(L"\\\\\r\n  ") == std::wstring::npos ||
+        shownSource.size() < expectedSourceEnd.size() ||
+        shownSource.compare(shownSource.size() - expectedSourceEnd.size(),
+                            expectedSourceEnd.size(), expectedSourceEnd) != 0)
+        return 218;
+    size_t sourceBreaks = 0;
+    for (size_t at = 0; (at = shownSource.find(L"\r\n", at)) !=
+                        std::wstring::npos; at += 2)
+        ++sourceBreaks;
+    if (sourceBreaks != 3) return 219;
     /* The breaks are only allowed where TeX ignores whitespace, so the very
      * text now on display has to parse back to the equation it came from. */
     const std::string beforeRoundTrip = g.equation.latex();
@@ -5132,8 +5204,17 @@ int ui_interaction_test() {
     const std::string beforeLesson = g.equation.latex();
     g.equation.move_end();
     g.equation.insert_symbol("\\alpha");
+    sync_source_from_model();
     highlight_source_insertion(beforeLesson);
     if (g.equation.latex() == beforeLesson) return 212;
+    DWORD lessonFirst = 0, lessonTail = 0;
+    SendMessageW(g.source, EM_GETSEL, WPARAM(&lessonFirst),
+                 LPARAM(&lessonTail));
+    const std::wstring lessonSource = window_text(g.source);
+    if (lessonTail <= lessonFirst || lessonTail > lessonSource.size() ||
+        lessonSource.substr(lessonFirst, lessonTail - lessonFirst)
+            .find(L"\\alpha") == std::wstring::npos)
+        return 220;
 
     g.equation.load_latex("yx");
     sync_source_from_model();
