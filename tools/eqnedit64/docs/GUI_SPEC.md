@@ -235,6 +235,12 @@ Eqnedt32にならい、ツールバーは**挿入できるものの総目録**�
   同じ正規化TeXへ戻ること。利用者がソースを直接編集中のraw文字列にはこの整形を
   打鍵ごとに強制しない。emitterが持つ既存のCR/LFは整形前に吸収し、Win32 EDITへは
   CRLFだけを渡す。単独CRまたは単独LF、二重改行、字下げだけの行を作らない。
+- native emitterが生成したTeXは、最初の再parseから同一の正規TeXへ戻ること。
+  二度目以降だけ安定する壊れた正規形を合格にしない。特にn乗根の指数スロットは
+  `\lim`を含む全テンプレートを受け入れ、閉じ`]`を越えて被開平部を消費しない。
+- `\text{...}`と`\operatorname{...}`の通常空白は可視の単語間空白として保持し、
+  改行を含む空白runは一つの単語間空白へ正規化する。`~`、`\ `、`\,`は各TeX命令の
+  幅・非改行性を保ち、通常空白へ潰さない。通常の数式モードではsource空白を無視する。
 - TeXソース欄は横スクロールを要求せず、長い1行を欄幅でsoft wrapする。ソース欄の
   通常の`Enter`はraw CRLFではなくキャレット位置へ数式行区切り`\\`を挿入し、
   単一行だった場合は`aligned`で包む。選択中は選択範囲を区切りへ置換する。
@@ -507,7 +513,7 @@ Eqnedit64拡張として、`curl`, `div`, `grad`, `rot`, `tr`, `diag`, `Res`,
 |---|---|---|
 | AUT-01 | x64ネイティブexeを警告なしでビルドできる | `build_eqnedt64.bat` |
 | AUT-02 | 文字入力、構造、キャレット、Undo、ショートカットが合格する | `test_edit.py` |
-| AUT-03 | 100個の固定seed、25,000回の構造編集をクラッシュなしで完了する | `test_operations_fuzz.py` |
+| AUT-03 | 100個の固定seed、25,000回の構造編集で、editor出力が最初の再parseから一致し、その後も固定点かつ有限寸法である。n乗根→指数へTab→全テンプレート→文字入力の族試験を必ず先に通す | `test_operations_fuzz.py` |
 | AUT-04 | 3,072件のraw TeXで正規化固定点、有限寸法、有効SVG、有効な24 pt MathMLを満たす | `test_tex_fuzz.py` |
 | AUT-05 | 5分類タブ＋選択分類のパレット、キャンバス、常時表示のTeXソース、ステータスが重ならず、全19パレットが一意に分類され、DPI対応する | `test_palettes.py` / `--status-layout-test` |
 | AUT-06 | `WM_CHAR`、サロゲートペア、キー、構造スロットのダブルクリック選択に加え、完成／未完成TeX、双方向同期、1編集バースト1 Undo、両ペインの直接クリック編集、キャンバス上でTeXコマンドを解釈しないことを非表示で処理できる | `--ui-interaction-test` |
@@ -540,10 +546,10 @@ Eqnedit64拡張として、`curl`, `div`, `grad`, `rot`, `tr`, `diag`, `Res`,
 | AUT-33 | パレット、直接ショートカット、2段ショートカットが、正規TeX各文字の開始・終了境界を改行・字下げ後の表示座標へ変換し、新規TeX範囲だけを非アクティブ選択表示する。直後の `\end{...}` 前に入る整形改行を含めず、キャンバスのフォーカスを保ち、ソース欄へ移ると置換前に選択を解除する | `--ui-interaction-test` |
 | AUT-34 | `&`なし1列`aligned`の長短行がnative/Web入力表示で同じ左端を持ち、入れ子も葉まで平坦化され、Office CF_HTMLでは整列要素や可視`&`を含まない独立inline MathML行となる。明示`&`は1つの整列MathMLと保存TeXを維持する | `test_layout.py` / `test_edit.py` / `test_web_insert.cjs` / `test_web_contract.py` / `test_external_paste.ps1` |
 | AUT-35 | TeXソース欄の `Tab` が2つの `{}` 空欄を順に移動し、`Shift+Tab` が前へ戻り、ソースへTab文字を混入させない | `--ui-interaction-test` |
-| AUT-36 | 内蔵数式フォントは検証済みユーザーキャッシュからファイルベースで私有登録し、32回の起動終了後も`fontdrvhost.exe`のPIDとApplication Error件数が変化せず、分類タブ文字が本文相当の画素高を持つ | `test_font_safety.py` / `test_font_session.ps1` / `--ui-interaction-test` |
+| AUT-36 | 内蔵数式フォントは検証済みユーザーキャッシュからファイルベースで私有登録し、隔離した健全なsessionでは32回の起動終了後も`fontdrvhost.exe`のPIDとApplication Error件数が変化せず、分類タブ文字が本文相当の画素高を持つ。試験時間以上かつ最低10分の事前観測ですでに同じcrashがある場合、またはPID交代にApplication Errorが伴わない場合は製品FAILでなくINCONCLUSIVEとする | `test_font_safety.py` / `test_font_session.ps1` / `--ui-interaction-test` |
 | AUT-37 | キャンバスから同期したTeXソースはemitter由来のCR/LFを吸収し、`\begin` 後、`\end` 前、`\\` 後だけへCRLFを1個ずつ置いて階層的に字下げする。単独CR/LFや字下げだけの行を含まず、soft wrapを除く論理4行以上をWin32 EDITが認識し、表示文字列を再入力すると改行前と同じ正規化TeXへ戻る | `--ui-interaction-test` |
 | AUT-38 | 共通祖先へ繰り上げた同一範囲を、TeX取得、削除、Backspace、Delete、文字・TeX・記号置換、テンプレート包み込み、入れ子を含む書体変更が消費し、Undo／Redoが操作前後を復元する | `test_edit.py` |
-| AUT-39 | キャンバスとTeXソースの両方でEnterがキャレット位置の前後を同じ数式行へ分け、選択中は選択範囲を区切りへ置換する。通常式は`aligned`、行列・`cases`セルは最内表へ行を追加し、右側セルと現在列を保つ。トップレベルへ直接入力した`a\\b`も2行として受理する。既存`aligned`外側では二重化せず、ソースの開始トークン内と入れ子構造内では安全な行境界へ丸める。行頭Backspaceと行末Deleteは同じ隣接行を結合し、関数書体・列・内容・キャレットを保ち、1行へ戻れば不要な1列`aligned`を外す。1行の`&`は両キーで削除でき、複数行の列境界移動は未保存扱いにしない。Undo/Redoは内容とキャレットを往復する。ソース側の新行キャレットは環境内に残り、空の末尾入力待ち行は保存時に省き、新規保存では外側に`equation`が付く。長いソースは横スクロールなしでsoft wrapする | `test_edit.py` / `--ui-interaction-test` / `test_tex_document.exe` |
+| AUT-39 | キャンバスとTeXソースの両方でEnterがキャレット位置の前後を同じ数式行へ分け、選択中は選択範囲を区切りへ置換する。通常式は`aligned`、行列・`cases`セルは最内表へ行を追加し、右側セルと現在列を保つ。トップレベルへ直接入力した`a\\b`も2行として受理する。既存`aligned`外側では二重化せず、ソースの開始トークン内と入れ子構造内では安全な行境界へ丸める。行頭Backspaceと行末Deleteは同じ隣接行を結合し、関数書体・列・内容・キャレットを保ち、1行へ戻れば不要な1列`aligned`を外す。1行の`&`は両キーで削除でき、複数行の列境界移動は未保存扱いにしない。Undo/Redoは内容とキャレットを往復する。ソース側の新行キャレットは環境内に残り、空の末尾入力待ち行は`{}`を持つ行として保存・再読込後も保持し、新規保存では外側に`equation`が付く。長いソースは横スクロールなしでsoft wrapする | `test_edit.py` / `--ui-interaction-test` / `test_tex_document.exe` |
 
 2026-08-21のAPI実測では、試験式 `\frac{x_{1}+\alpha}{\sqrt{y}}` は
 289×252 px、300 dpi、69.36×60.48 ptとなった。Google Slides APIへ同寸法で

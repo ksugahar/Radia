@@ -60,6 +60,9 @@ Office経路へこれらの整列要素を出してはならない。保存OOXML
 Web/MathJaxは未対応命令を変換エラーとして通知してよいが、どちらも命令名を通常文字として
 数式へ捏造してはならない。この差は構造編集を継続できるnativeと、完全TeX parserを持つ
 MathJaxの境界による。
+両版とも`\text{hello world}`と`\operatorname{arg max}`の単語間空白を表示・保存し、
+escaped percentを含む文章でも空白を脱落させない。nativeは構造木へ取り込む際に連続する
+source空白を一つの単語間空白へ正規化するが、`~`、`\ `、`\,`の明示空白は区別して保持する。
 
 PowerPointの通常貼り付け受入試験は、画面外の一時プレゼンテーションに対して
 `Application.CommandBars.ExecuteMso("Paste")`を実行する。`Shapes.Paste()`は

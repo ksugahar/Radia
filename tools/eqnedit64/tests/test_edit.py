@@ -1019,6 +1019,44 @@ def main() -> int:
     if "unknowncommand" in eq.latex() or r"\frac{x}{y}" not in eq.latex():
         failures.append(f"unknown command fallback invented text: {eq.latex()!r}")
 
+    # Prose and named operators use text-like TeX arguments: their whitespace
+    # is visible content, unlike ordinary spaces between math atoms.  Preserve
+    # it through the first save and every later round trip.
+    for source, expected in (
+            (r"\text{hello world}", r"\text{hello world}"),
+            (r"\text{50\% off}", r"\text{50\% off}"),
+            (r"\operatorname{arg max}", r"\operatorname{arg max}"),
+            ("\\text{line one\nline two}", r"\text{line one line two}")):
+        eq.load_latex(source)
+        first = eq.latex()
+        again = Equation()
+        again.load_latex(first)
+        if first != expected or again.latex() != first:
+            failures.append(
+                f"text-like whitespace was lost: {source!r} -> "
+                f"{first!r} -> {again.latex()!r}")
+    for source in (r"\text{hello~world}",
+                   r"\text{hello\ world}",
+                   r"\text{hello\,world}"):
+        eq.load_latex(source)
+        first = eq.latex()
+        again = Equation()
+        again.load_latex(first)
+        if first == r"\text{helloworld}" or again.latex() != first:
+            failures.append(
+                f"explicit text spacing was lost: {source!r} -> "
+                f"{first!r} -> {again.latex()!r}")
+    eq.load_latex(r"\text{hello world}")
+    spaced_width = eq.metrics()[0]
+    spaced_svg = tex_to_svg(eq.latex())
+    spaced_mathml = tex_to_mathml(eq.latex())
+    eq.load_latex(r"\text{helloworld}")
+    if (spaced_width <= eq.metrics()[0] or
+            spaced_svg == tex_to_svg(eq.latex()) or
+            "<mtext> </mtext>" not in spaced_mathml):
+        failures.append(
+            "preserved text space has no visible native/MathML width")
+
     # Enter belongs to the innermost row container.  In a matrix/cases cell it
     # inserts a table row and carries the current-cell suffix plus cells on its
     # right; it must not wrap the table in an outer aligned environment.

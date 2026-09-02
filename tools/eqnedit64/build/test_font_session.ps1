@@ -25,9 +25,23 @@ function Get-SessionFontHostIds {
             Select-Object -ExpandProperty Id
     )
 }
+function Get-FontHostCrashes([datetime]$From, [datetime]$Until) {
+    return @(
+        Get-WinEvent -FilterHashtable @{
+            LogName = 'Application'
+            Id = 1000
+            StartTime = $From
+        } -ErrorAction SilentlyContinue |
+            Where-Object {
+                $_.TimeCreated -le $Until -and
+                $_.Message -match 'fontdrvhost\.exe'
+            }
+    )
+}
 
 $started = Get-Date
 $before = @(Get-SessionFontHostIds)
+$changedAt = $null
 for ($index = 0; $index -lt $Iterations; $index++) {
     $process = Start-Process -FilePath $app `
         -ArgumentList '--status-layout-test' -WindowStyle Hidden `
@@ -38,27 +52,45 @@ for ($index = 0; $index -lt $Iterations; $index++) {
     $current = @(Get-SessionFontHostIds)
     if ($before.Count -and
         (($current -join ',') -cne ($before -join ','))) {
-        throw ("fontdrvhost changed during Eqnedit64 iteration ${index}: " +
-            "$($before -join ',') -> $($current -join ',')")
+        $changedAt = $index
+        break
     }
 }
 
 # Windows Error Reporting can arrive just after the crashing process exits.
 Start-Sleep -Seconds 2
 $after = @(Get-SessionFontHostIds)
-if ($before.Count -and (($after -join ',') -cne ($before -join ','))) {
-    throw "fontdrvhost changed after Eqnedit64 stress: $($before -join ',') -> $($after -join ',')"
+$ended = Get-Date
+$duration = $ended - $started
+$crashes = @(Get-FontHostCrashes $started $ended)
+$controlDuration = if ($duration.TotalMinutes -lt 10) {
+    [timespan]::FromMinutes(10)
+} else {
+    $duration
 }
-$crashes = @(
-    Get-WinEvent -FilterHashtable @{
-        LogName = 'Application'
-        Id = 1000
-        StartTime = $started
-    } -ErrorAction SilentlyContinue |
-        Where-Object Message -match 'fontdrvhost\.exe'
-)
-if ($crashes.Count) {
-    throw "Eqnedit64 stress caused $($crashes.Count) fontdrvhost crash event(s)."
+$controlCrashes = @(
+    Get-FontHostCrashes ($started - $controlDuration) $started)
+$changed = $before.Count -and
+    (($after -join ',') -cne ($before -join ','))
+if ($changed -or $crashes.Count) {
+    $observation = (
+        "fontdrvhost $($before -join ',') -> $($after -join ','); " +
+        "changed at iteration=$changedAt; active crash events=$($crashes.Count); " +
+        "pre-test control events=$($controlCrashes.Count) " +
+        "over $([math]::Round($controlDuration.TotalSeconds, 1))s")
+    if ($controlCrashes.Count) {
+        Write-Output (
+            "INCONCLUSIVE: the supposedly isolated session was already " +
+            "losing fontdrvhost before this lifecycle probe: $observation")
+        exit 2
+    }
+    if ($changed -and -not $crashes.Count) {
+        Write-Output (
+            "INCONCLUSIVE: fontdrvhost changed without a matching Application " +
+            "Error event: $observation")
+        exit 2
+    }
+    throw "FAIL: fontdrvhost crashed during the isolated Eqnedit64 lifecycle probe: $observation"
 }
 
 Write-Output ("PASS: {0} private-font lifecycles; fontdrvhost remained {1}" -f

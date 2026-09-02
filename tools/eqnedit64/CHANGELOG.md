@@ -4,6 +4,19 @@
 
 ## 3.0.13 — 2026-09-03
 
+- Stop a root index at its closing `]` even when a script-greedy construct such
+  as `\lim_{a}` emits a terminating space.  The four-step nth-root/limit edit
+  now survives Undo and save/reopen, and every insertable template is checked
+  in the same root-index slot against the editor's first reparse.
+- Preserve ordinary word spaces inside `\text{...}` and
+  `\operatorname{...}`, including escaped percent text and source line breaks,
+  while retaining the distinct widths of explicit `~`, `\ `, and `\,` spaces.
+- Classify a shared Windows `fontdrvhost.exe` replacement as inconclusive when
+  an equal-or-longer, minimum ten-minute pre-test window already contains the
+  same system crash, or
+  when no matching Application Error exists.  Only an isolated clean-session
+  crash is attributed to the candidate; interactive fuzz still reports its
+  functional result without blaming unrelated desktop applications.
 - Split a structural row at the actual caret when Enter is pressed, carry the
   suffix and aligned cells on its right into the new row, and replace a
   selection with the row break instead of appending a blank row elsewhere.
