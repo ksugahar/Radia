@@ -32,6 +32,7 @@ Eqnedit64.exe と Web/JS 数式エディタは、Radia の `tools/eqnedit64` で
 | 追加書体 `\mathsf` / `\mathtt` / `\mathcal` / `\mathbb` / `\mathfrak` / `\bm` | 装飾パレット・TeX・保存・MathML | 装飾パレット・MathJax | `\boldsymbol` は `\bm` の入力別名 |
 | 挿入直後のTeX強調 | ソース内の非アクティブ選択 | キャレットを動かさない強調表示 | 共通学習面 |
 | `Tab` / `Shift+Tab`で空欄移動 | 構造GUI・TeXソース | TeXソース | 共通学習面 |
+| 論文TeXの意味保全 | native parserで標準環境・コメント・メタ命令を正規化 | MathJaxの標準TeX解釈へ委譲 | `~`を`\sim`にせず、`align`の`&`を失わず、命令名を本文にしない |
 | 構造キャンバス編集 | 必須 | 非該当 | native固有 |
 | 数式3.0由来ショートカット | 互換層として必須 | 非該当 | native固有 |
 | インストール不要のブラウザ利用 | 非該当 | 必須 | Web固有 |
@@ -52,6 +53,13 @@ Office経路へこれらの整列要素を出してはならない。保存OOXML
 インライン`m:oMath`を持ち、`m:oMathPara`、`m:eqArr`、行列、可視`&`を持たない。
 明示`&`を含む入力は1つの整列MathMLとして保持し、保存TeXを変更しない。
 空のテキストボックス、置換文字だけの描画、画像への退化は不合格とする。
+
+論文からのTeX入力では、両版とも裸の`~`を非改行空白、U+223Cを`\sim`として区別し、
+`align` / `align*`の`&`列を保持する。`%`コメント、`\label`、`\nonumber`、`\notag`、
+`\tag`を可視数式へ変えない。nativeは未知control wordを無視して後続引数を編集可能に残し、
+Web/MathJaxは未対応命令を変換エラーとして通知してよいが、どちらも命令名を通常文字として
+数式へ捏造してはならない。この差は構造編集を継続できるnativeと、完全TeX parserを持つ
+MathJaxの境界による。
 
 PowerPointの通常貼り付け受入試験は、画面外の一時プレゼンテーションに対して
 `Application.CommandBars.ExecuteMso("Paste")`を実行する。`Shapes.Paste()`は

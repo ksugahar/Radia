@@ -2,6 +2,45 @@
 
 ## Unreleased
 
+## 3.0.13 - 2026-09-03
+
+- Make Enter split at the structural caret or replace the selected range, and
+  let row-boundary Backspace/Delete join aligned rows without flattening the
+  equation or losing the horizontal caret position.
+- Carry the unreleased 3.0.12 selection, formatted-source, and simplified
+  converter work into the reviewed 3.0.13 release candidate.
+- Preserve automatic function spelling across row joins, extend rather than
+  nest a loaded aligned equation, and keep source Enter away from opening
+  tokens and nested template contents.
+- Make a one-row alignment tab removable with Backspace/Delete while treating
+  multi-row column boundaries as non-dirty navigation.
+- Keep Enter inside matrix/cases rows with the original column alignment,
+  accept top-level `\\` as a row separator, and remove emitter-only line feeds
+  before laying out the synchronized source pane with Win32 CRLF.
+- Preserve trailing blank rows and normalize paper TeX without turning `~`,
+  alignment tabs, comments, metadata, or unknown control words into different
+  visible mathematics.
+- Keep the differential-geometry palette's `\\flat` and `\\sharp` operators
+  working while genuinely unknown control words remain suppressed.
+- Use the unambiguous `clipboard-png` converter destination in the Python and
+  MCP bridges, while the native executable retains `png` as a legacy alias and
+  exposes redirectable help, version, and error diagnostics.
+
+### Included unreleased 3.0.12 candidate (2026-09-02)
+
+- Promote cross-slot pointer drags to a complete structural selection and use
+  the same range for copy, deletion, replacement, wrapping, and style changes.
+- End pointer selection explicitly, invalidate stale origins after tree
+  replacement and Undo/Redo, and use the button-up coordinate as the final
+  endpoint when Windows coalesces mouse-move messages.
+- Format synchronized TeX at lossless environment and row boundaries while
+  keeping palette lesson highlights on the exact inserted source spelling.
+- Let the native TeX pane create structural aligned rows with Enter and
+  soft-wrap long source while saved documents retain the outer equation
+  environment.
+- Route the Python CLI, `copy_equation()`, and `render_equation()` through the
+  native input/output converter syntax instead of exposing backend switches.
+
 ## 3.0.11 - 2026-08-30
 
 - Preserve a common left edge for unequal unanchored rows after editable

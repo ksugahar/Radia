@@ -10,6 +10,18 @@ python -m pip install eqnedit64
 eqnedit64
 ```
 
+The command-line converter always takes one input and one output. The input is
+a UTF-8 TeX file or `clipboard`; the output is `office`, `slides`,
+`clipboard-png`, or a `.png` / `.emf` file path. The legacy word `png` remains
+accepted as a clipboard alias, but a path ending in `.png` always creates a
+file.
+
+```powershell
+eqnedit64 equation.tex office
+eqnedit64 equation.tex equation.png
+eqnedit64 clipboard clipboard-png
+```
+
 The wheel provides:
 
 - `eqnedit64.Equation` for structural editing, Tab-slot traversal, undo/redo,
@@ -23,7 +35,7 @@ Only UTF-8 TeX is a source format. MTEF and `.eqn` are intentionally not
 supported. Current wheels target 64-bit Windows and Python 3.10 or newer.
 
 The wheel embeds the signed executable produced for the matching
-`eqnedit64-v3.0.11` GitHub Release; it does not build a second application
+`eqnedit64-v3.0.13` GitHub Release; it does not build a second application
 implementation. The package is BSD 2-Clause licensed. The embedded Latin
 Modern Math font remains under the GUST Font License documented in the Radia
 source tree.

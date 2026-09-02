@@ -887,7 +887,7 @@ $completed = $false
 
 try {
     $publisher = Start-Process -FilePath $app `
-        -ArgumentList @('--copy-tex-file', $cliTexInput) `
+        -ArgumentList @($cliTexInput, 'office') `
         -WorkingDirectory (Split-Path -Parent $app) -WindowStyle Hidden -Wait -PassThru
     if ($publisher.ExitCode -ne 0) {
         throw "Eqnedit64 clipboard publication failed: $($publisher.ExitCode)"
@@ -1044,7 +1044,7 @@ try {
     # glyphs. Publish three deliberately unequal inline math rows and require
     # their content (not a common prefix glyph) to share one left edge.
     $alignedPublisher = Start-Process -FilePath $app `
-        -ArgumentList @('--copy-tex-file', $alignedCliTexInput) `
+        -ArgumentList @($alignedCliTexInput, 'office') `
         -WorkingDirectory (Split-Path -Parent $app) -WindowStyle Hidden -Wait -PassThru
     if ($alignedPublisher.ExitCode -ne 0) {
         throw "Eqnedit64 aligned clipboard publication failed: $($alignedPublisher.ExitCode)"
@@ -1093,7 +1093,7 @@ try {
     }
 
     $googlePublisher = Start-Process -FilePath $app `
-        -ArgumentList @('--copy-google-slides-file', $cliTexInput) `
+        -ArgumentList @($cliTexInput, 'slides') `
         -WorkingDirectory (Split-Path -Parent $app) -WindowStyle Hidden -Wait -PassThru
     if ($googlePublisher.ExitCode -ne 0) {
         throw "Eqnedit64 Google Slides clipboard publication failed: $($googlePublisher.ExitCode)"
@@ -1135,23 +1135,24 @@ try {
     }
 
     Set-ClipboardTexInput -UnicodeText $expectedOffice
-    $texclip = Start-Process -FilePath $app -ArgumentList '--texclip' `
+    $texclip = Start-Process -FilePath $app `
+        -ArgumentList @('clipboard', 'clipboard-png') `
         -WorkingDirectory (Split-Path -Parent $app) -WindowStyle Hidden -Wait -PassThru
     if ($texclip.ExitCode -ne 0) {
-        throw "Eqnedit64 --texclip Unicode conversion failed: $($texclip.ExitCode)"
+        throw "Eqnedit64 clipboard-to-PNG conversion failed: $($texclip.ExitCode)"
     }
     if (-not [EqneditClipboardNative]::IsClipboardFormatAvailable($pngFormat) -or
         -not [EqneditClipboardNative]::IsClipboardFormatAvailable(17) -or
         [EqneditClipboardNative]::IsClipboardFormatAvailable($htmlFormat) -or
         [EqneditClipboardNative]::IsClipboardFormatAvailable(13)) {
-        throw '--texclip did not replace text with PNG/DIBV5 image formats.'
+        throw 'clipboard-png did not replace text with PNG/DIBV5 image formats.'
     }
     $texclipUnicodePng = Read-ClipboardBytes $pngFormat
     $texclipContract = Get-PngContract $texclipUnicodePng
     $texclipUnicodeHash = [Convert]::ToHexString(
         [Security.Cryptography.SHA256]::HashData($texclipUnicodePng))
     if ($texclipUnicodeHash -ne $clipboardHash) {
-        throw '--texclip Unicode wrapper normalization rendered a different equation.'
+        throw 'clipboard-png wrapper normalization rendered a different equation.'
     }
 
     Set-ClipboardTexInput -UnicodeText '\[x^{1000}\]' -RawLatex $expectedRaw
@@ -1186,12 +1187,13 @@ try {
     $texclipImageSize = Assert-ImageHasInk $texclipPngOutput 'IrfanView texclip paste'
 
     Set-ClipboardTexInput -UnicodeText ''
-    $emptyTexclip = Start-Process -FilePath $app -ArgumentList '--texclip' `
+    $emptyTexclip = Start-Process -FilePath $app `
+        -ArgumentList @('clipboard', 'clipboard-png') `
         -WorkingDirectory (Split-Path -Parent $app) -WindowStyle Hidden -Wait -PassThru
     if ($emptyTexclip.ExitCode -ne 83 -or
         -not [EqneditClipboardNative]::IsClipboardFormatAvailable(13) -or
         [EqneditClipboardNative]::IsClipboardFormatAvailable($pngFormat)) {
-        throw '--texclip did not reject empty input without replacing the clipboard.'
+        throw 'clipboard-png did not reject empty input without replacing the clipboard.'
     }
 
     if ($GooglePngArtifact) {
