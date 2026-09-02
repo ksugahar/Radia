@@ -4976,6 +4976,33 @@ int ui_interaction_test() {
     if (draggedSelection.size() < 32) return 163;
     if (GetCapture() == g.canvas || g.dragging) return 164;
 
+    /* The same gesture, but across a structural boundary.  The drag above
+     * runs through 128 plain letters -- one slot, the only shape in which a
+     * range can never cross a boundary -- so it passed while dragging over
+     * any real equation selected nothing whatsoever.  The first outside
+     * reader hit that within minutes on an equation full of fractions and
+     * fences, reported it as "selection does not work", and fell back to
+     * copying the whole equation and deleting what he did not want. */
+    g.equation.load_latex("\\frac{1}{\\mu}b");
+    const eqnedit::RenderMetrics crossMetrics = g.equation.metrics(g.style);
+    /* Equation-space points, the same units hit_test takes from the canvas
+     * once the pan and the render scale are divided out. */
+    const double numeratorX = crossMetrics.width * 0.2;
+    const double numeratorY = crossMetrics.baseline - crossMetrics.height * 0.3;
+    if (!g.equation.hit_test(numeratorX, numeratorY, g.style, false)) return 206;
+    /* caret() spells the path as "child.slot/...:index", so a bare ":n"
+     * means the press landed in the root slot and this check would prove
+     * nothing about crossing a boundary. */
+    const std::string numeratorCaret = g.equation.caret();
+    if (numeratorCaret.empty() || numeratorCaret[0] == ':') return 207;
+    g.equation.hit_test(crossMetrics.width * 0.95, crossMetrics.baseline,
+                        g.style, true);
+    const std::string crossSelection = g.equation.selection_latex();
+    /* Promoted to the shared slot, the range has to carry the whole
+     * fraction the drag started inside, not just the letter it ended on. */
+    if (crossSelection.find("\\frac") == std::string::npos) return 208;
+    g.equation.clear_selection();
+
     g.equation.load_latex("yx");
     sync_source_from_model();
 

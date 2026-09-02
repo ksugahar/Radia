@@ -584,10 +584,69 @@ bool Equation::select_step_right() {
     return true;
 }
 
+/* Deliberately leaves the drag anchor alone: it is refreshed on every
+ * pointer press, and a promotion that cannot form a range still has to let
+ * the next mouse move try again from the same origin. */
 void Equation::clear_selection() {
     selecting_ = false;
     anchorPath_.clear();
     anchorIndex_ = index_;
+}
+
+/* Extend a drag whose two ends sit in different structural slots.
+ *
+ * A tree selection lives in ONE slot, so a drag from inside a fraction out
+ * to its neighbours cannot be stored the way it was drawn.  Dropping it --
+ * what this used to do -- read to the user as selection not working at all:
+ * on an equation built from fractions and fenced groups nearly every drag
+ * crosses a boundary, so nothing ever highlighted, and the first outside
+ * reader fell back to copying the whole equation and deleting the parts he
+ * did not want.  Promote instead, the way Eqnedt32 and Word's editor do:
+ * walk up to the deepest slot that holds both ends, and take the whole
+ * child that each end is nested inside.  Numerator to denominator selects
+ * the fraction; inside a fraction out to a neighbour selects the fraction
+ * together with that neighbour. */
+bool Equation::extend_selection_to(const std::vector<CaretStep>& anchorPath,
+                                   int anchorIndex) {
+    size_t depth = 0;
+    while (depth < anchorPath.size() && depth < path_.size() &&
+           anchorPath[depth].child == path_[depth].child &&
+           anchorPath[depth].slot == path_[depth].slot)
+        ++depth;
+
+    std::vector<CaretStep> common(path_.begin(), path_.begin() + depth);
+    NodeList* slot = slot_at(common);
+    if (!slot) return false;
+    const int size = int(slot->size());
+
+    /* An end sitting directly in the shared slot contributes its caret; one
+     * nested deeper contributes the whole child it is inside. */
+    const auto span = [&](const std::vector<CaretStep>& p, int caret,
+                          int* low, int* high) {
+        if (p.size() == depth) {
+            *low = *high = std::clamp(caret, 0, size);
+        } else {
+            *low = std::clamp(p[depth].child, 0, size);
+            *high = std::clamp(*low + 1, 0, size);
+        }
+    };
+    int anchorLow = 0, anchorHigh = 0, headLow = 0, headHigh = 0;
+    span(anchorPath, anchorIndex, &anchorLow, &anchorHigh);
+    span(path_, index_, &headLow, &headHigh);
+
+    const int first = std::min(anchorLow, headLow);
+    const int last = std::max(anchorHigh, headHigh);
+    if (first >= last) return false;
+
+    path_ = common;
+    anchorPath_ = common;
+    /* Leave the caret on the edge the pointer is at, so continuing the drag
+     * grows the range instead of folding it back. */
+    const bool forward = headLow >= anchorLow;
+    anchorIndex_ = forward ? first : last;
+    index_ = forward ? last : first;
+    selecting_ = true;
+    return true;
 }
 
 bool Equation::select_current_slot() {
@@ -659,16 +718,33 @@ bool Equation::hit_test(double x_points, double y_points,
     int targetIndex = 0;
     if (!hit_test_equation(*root_, x_points, y_points, style,
                            &target, &targetIndex)) return false;
-    if (extend) begin_selection();
-    else clear_selection();
+    if (!extend) clear_selection();
     std::vector<CaretStep> p;
     if (!find_slot_path(target, root_->children, p)) return false;
     path_ = std::move(p);
     index_ = targetIndex;
     clamp();
-    /* A drag that crosses structural slots cannot be represented as one
-     * contiguous tree range.  Keep the caret but drop the ambiguous range. */
-    if (selecting_ && !same_path(anchorPath_, path_)) clear_selection();
+    if (!extend) {
+        /* Remember where the drag started at full depth.  clear_selection
+         * above dropped any previous one, so record after it, not before. */
+        dragAnchorPath_ = path_;
+        dragAnchorIndex_ = index_;
+        dragAnchorValid_ = true;
+        return true;
+    }
+    if (!dragAnchorValid_) {
+        clear_selection();
+        return true;
+    }
+    if (same_path(dragAnchorPath_, path_)) {
+        /* Both ends in one slot: the recorded anchor stands as it is. */
+        anchorPath_ = dragAnchorPath_;
+        anchorIndex_ = dragAnchorIndex_;
+        selecting_ = anchorIndex_ != index_;
+        return true;
+    }
+    if (!extend_selection_to(dragAnchorPath_, dragAnchorIndex_))
+        clear_selection();
     return true;
 }
 
