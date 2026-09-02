@@ -125,8 +125,11 @@ is still recommended for clarity.
 1. Open an issue first if the change is more than ~50 lines or
    touches the public tool surface — let's align on tool name /
    shape before you write the code.
-2. Fork → branch → PR. CI is light (no test suite mandated yet);
-   include a short manual-verification snippet in the PR description.
+2. Fork → branch → PR. Normal CI runs compact contracts, tests related to the
+   changed package family, and affected server selftests. Use the explicit
+   `radia-mcp` full-audit workflow before a release candidate; run only the
+   relevant `validation_test/` lane when numerical or runtime evidence is
+   needed, and retain its result JSON.
 3. Bump the version in `pyproject.toml` and `radia_mcp/__init__.py`,
    add a CHANGELOG entry, and the maintainer will tag + publish.
 

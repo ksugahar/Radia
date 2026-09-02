@@ -526,7 +526,7 @@ on its own. Re-ask: "is X good for the repository?" If yes, do it for that
 reason. If the only argument for X is the paper, deprioritize it in favor of
 work that genuinely improves the code.
 
-### CI Execution, Validation Evidence, and Notebook Policy (2026-09-01)
+### CI Execution, Validation Evidence, and Notebook Policy (2026-09-02)
 
 **POLICY**: **mdx** is Radia's self-hosted CI and preflight host. LAB and
 100号機 are development machines and MUST NOT execute pull-request, push,
@@ -546,14 +546,25 @@ commit focused enough that `radia`, `cubit-mesh-export`, `radia-mcp`,
 retesting the other distributions. Pull-request and main-push workflows run
 only the owning distribution lanes plus genuinely shared repository contracts.
 Within `radia-mcp`, classify changes as docs-only, packaging/version metadata,
-or implementation/tests. Docs-only changes run document and inventory checks;
+or implementation/tests. Docs-only changes run relevant document checks;
+generated-inventory checks run when the inventory or its generator changes;
 metadata-only changes build and import-check one wheel; implementation/tests
-run the supported-Python compile/import matrix, but execute the complete pytest
-suite and all-server selftests only once on the newest supported Python. A
+run the supported-Python compile/import matrix for the affected package
+families. On the newest supported Python, normal pull-request and main-push CI
+runs a stable compact contract set, tests selected from the changed source/test
+paths, and only the affected server selftests. A shared `common` change selects
+all server selftests. The complete package pytest suite, all-server selftests,
+and full generated-inventory audit run only through the explicit full-audit
+workflow or a named pre-tag release-candidate audit on the same commit. A
 release-tag workflow builds and verifies the exact tagged artifact without
-repeating the full tests already run for that source commit. Full numerical,
-GUI, performance, and multi-machine evidence remains an explicit validation or
-release gate rather than an automatic response to every commit.
+repeating the full tests already accepted for that source commit. Full
+numerical, GUI, performance, and multi-machine evidence remains an explicit
+validation or release gate rather than an automatic response to every commit.
+Because AI agents are expected to diagnose and repair failures interactively,
+normal CI optimizes for fast, high-signal feedback rather than exhaustive proof;
+strict breadth belongs to explicit validation and release acceptance. Normal CI
+does not automatically rerun a failed deterministic test; it returns the first
+failure promptly for diagnosis.
 Developer pre-push hooks run only the impact-scoped mdx preflight. They MUST
 NOT upload native binaries or mutate GitHub Releases; exact native artifacts
 are published by release workflows from the accepted CI run.
@@ -565,9 +576,11 @@ The repository has three complementary, non-duplicative evidence surfaces:
   focused public or source-level invariant.
 - `validation_test/` contains solver-heavy numerical evidence, long native
   builds, GUI/Simulink checks, golden comparisons, performance measurements,
-  and multi-machine studies. It runs explicitly on mdx (or hibino when the
-  installed application requires it), on a scheduled validation lane, or as a
-  named release gate; it does not run on every pull request.
+  and multi-machine studies. When normal CI exposes a defect or uncertainty,
+  run only the relevant validation lane and retain its result JSON. Validation
+  also runs explicitly on mdx (or hibino when the installed application
+  requires it), on a scheduled validation lane, or as a named release gate; it
+  does not run on every pull request.
 - `docs/**/*.ipynb` is the public calculation record: derivation, executed
   evidence, figures, and a presentation-ready narrative. It is not a retired
   workbench. A notebook should be promotable directly into a talk or paper
@@ -577,10 +590,10 @@ MCP and notebooks serve the same artifact contract from different directions:
 MCP is the executable, AI-facing discovery/orchestration surface, while the
 notebook is the human-readable, result-bearing record of that execution.
 Neither may carry a private numerical implementation that the other cannot
-reproduce through the shared Python/C++ API and durable artifacts. Fast CI
-parses every notebook and rejects malformed JSON or replacement characters;
-mdx validation re-executes the notebook sets named by a changed method or a
-release gate.
+reproduce through the shared Python/C++ API and durable artifacts. A docs-only
+contract lane parses changed notebooks and rejects malformed JSON or
+replacement characters; mdx validation re-executes the notebook sets named by
+a changed method or a release gate.
 
 Every new test declares its tier from measured runtime and dependency scope.
 When a formerly fast test grows beyond the CI budget, move its evidence and

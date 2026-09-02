@@ -31,7 +31,7 @@ def test_fast_ci_runs_only_on_mdx_and_native_is_a_named_release_lane():
     assert 'workflows: ["Radia Native Release"]' in release
 
 
-def test_distribution_ci_is_change_scoped_and_mcp_full_suite_runs_once():
+def test_distribution_ci_is_change_scoped_and_mcp_full_suite_is_explicit():
     fast = (ROOT / ".github" / "workflows" / "radia-fast.yml").read_text(
         encoding="utf-8"
     )
@@ -54,13 +54,21 @@ def test_distribution_ci_is_change_scoped_and_mcp_full_suite_runs_once():
     assert '"packages/radia-mcp/**"' in policy
     assert "Classify radia-mcp change scope" in mcp
     assert 'git diff --name-only "$BASE_SHA...$GITHUB_SHA"' in mcp
+    assert "mode=targeted" in mcp
     assert "python_versions='[\"3.10\",\"3.11\",\"3.12\"]'" in mcp
     assert "python_versions='[\"3.12\"]'" in mcp
     assert "python-version: ${{ fromJSON(needs.scope.outputs.python_versions) }}" in mcp
-    assert (
-        "matrix.python-version == '3.12' && "
-        "needs.scope.outputs.run_full == 'true'"
-    ) in mcp
+    assert "Prepare impact-scoped test plan" in mcp
+    assert "packages/radia-mcp/tools/select_ci_tests.py" in mcp
+    assert '--changed-files-json "$CHANGED_FILES_JSON"' in mcp
+    assert "--full --output radia-mcp-ci-selection.json" in mcp
+    assert 'plan["package_tests"]' in mcp
+    assert 'plan["server_selftests"]' in mcp
+    assert 'plan["run_mcp_response_tests"]' in mcp
+    assert "Meta health (all cataloged subpackages must import)" not in mcp
+    assert "radia_mcp_health" not in mcp
+    assert "pytest-rerunfailures" not in mcp
+    assert "--reruns" not in mcp
     assert "mode=release" in mcp
     assert "needs.scope.outputs.build_wheel == 'true'" in mcp
 
@@ -81,7 +89,7 @@ def test_pre_push_runs_the_unpushed_candidate_on_mdx():
 def test_policy_twins_define_the_same_mdx_notebook_contract():
     agents = (ROOT / "AGENTS.md").read_text(encoding="utf-8")
     claude = (ROOT / "CLAUDE.md").read_text(encoding="utf-8")
-    heading = "### CI Execution, Validation Evidence, and Notebook Policy (2026-09-01)"
+    heading = "### CI Execution, Validation Evidence, and Notebook Policy (2026-09-02)"
 
     def section(text: str) -> str:
         start = text.index(heading)
@@ -94,5 +102,14 @@ def test_policy_twins_define_the_same_mdx_notebook_contract():
     assert "use hibino first when it is available" in normalized
     assert "the mdx CI queue is idle" in normalized
     assert "CI scope begins at the independently released distribution boundary" in normalized
-    assert "complete pytest suite and all-server selftests only once" in normalized
+    assert "generated-inventory checks run when the inventory or its generator changes" in normalized
+    assert "normal pull-request and main-push CI runs a stable compact contract set" in normalized
+    assert "tests selected from the changed source/test paths" in normalized
+    assert "only the affected server selftests" in normalized
+    assert "complete package pytest suite, all-server selftests" in normalized
+    assert "explicit full-audit workflow" in normalized
+    assert "normal CI optimizes for fast, high-signal feedback" in normalized
+    assert "does not automatically rerun a failed deterministic test" in normalized
+    assert "run only the relevant validation lane and retain its result JSON" in normalized
+    assert "A docs-only contract lane parses changed notebooks" in normalized
     assert "Developer pre-push hooks run only the impact-scoped mdx preflight" in normalized
