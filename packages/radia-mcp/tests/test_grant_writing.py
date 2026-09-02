@@ -126,10 +126,16 @@ def test_grant_writing_server_exposes_adjacent_reviewer_readability():
         "grant_writing_japanese_readability_score"
     ].inputSchema["required"]
     assert mcp._mcp_server.instructions
+    domain_tools = [
+        tool
+        for tool in tools
+        if tool.name.startswith("grant_writing_")
+        and not tool.name.endswith("_reload_code")
+    ]
     assert all(tool.title for tool in tools)
     assert all(tool.annotations is not None for tool in tools)
-    assert all(tool.annotations.readOnlyHint for tool in tools)
-    assert all(not tool.annotations.destructiveHint for tool in tools)
+    assert all(tool.annotations.readOnlyHint for tool in domain_tools)
+    assert all(not tool.annotations.destructiveHint for tool in domain_tools)
 
 
 def test_japanese_readability_scores_clear_grant_prose():
@@ -2348,12 +2354,15 @@ def test_main_tex_assembles_sibling_inputs_but_not_template_pieces(tmp_path):
     (tmp_path / "kiban_c_03_abilities.tex").write_text(
         "\\section{遂行能力}\n菅原は開境界解析を研究してきた。\n", encoding="utf-8"
     )
+    (tmp_path / "comment_only.tex").write_text(
+        "COMMENTED_INPUT_MUST_NOT_APPEAR\n", encoding="utf-8"
+    )
     (tmp_path / "kiban_c.tex").write_text(
         "\\documentclass{jarticle}\n"
         "%\\input{kiban_c_03_abilities} commented out, must not be read twice\n"
         "\\begin{document}\n"
         "\\input{kiban_c_01_purpose_plan}\n"
-        "\\input{kiban_c_03_abilities.tex} % trailing comment\n"
+        "\\input{kiban_c_03_abilities.tex} % \\input{comment_only} trailing comment\n"
         "\\input{kiban_c}\n"
         "\\end{document}\n",
         encoding="utf-8",
@@ -2364,6 +2373,7 @@ def test_main_tex_assembles_sibling_inputs_but_not_template_pieces(tmp_path):
     assert "学術的問いはX" in text
     assert text.count("開境界解析") == 1
     assert "TEMPLATE_PIECE" not in text
+    assert "COMMENTED_INPUT_MUST_NOT_APPEAR" not in text
     assert "\\input{pieces/form_header}" in text
 
     # A field file on its own still reads as before.
@@ -2386,6 +2396,22 @@ def test_cross_organization_pilot_reads_the_limit_from_the_whole_paragraph():
     result = gw.grant_writing_cross_organization_pilot_check(text)
 
     assert result["applicable"]
+    assert "remaining_gap" not in result["missing_axes"]
+
+
+def test_cross_organization_pilot_treats_wrapped_lines_as_one_paragraph():
+    text = (
+        "大学間予備実証では、A大学提供の実装をB大学が統合した。\n"
+        "C大学のモデルで再実行した。\n"
+        "197,395自由度で168反復、相対残差8e-11で収束した。\n"
+        "微分形式から材料則の再構成を導いた。\n"
+        "CEFCで成果を発表した。\n"
+        "別機関が候補順位を判定できるかは未検証である。\n\n"
+        "次の独立した段落で研究計画を述べる。"
+    )
+
+    result = gw.grant_writing_cross_organization_pilot_check(text)
+
     assert "remaining_gap" not in result["missing_axes"]
 
 
@@ -2458,6 +2484,11 @@ def test_proper_noun_load_lists_unplaced_singletons_but_keeps_venues_and_roles()
     assert "Galerkin" not in names
     assert result["unplaced_singleton_count"] == 1
     assert result["comments"] and "Meeker" in result["comments"][0]
+
+    dated_nonvenue = gw.grant_writing_proper_noun_load_check(
+        "2027年度にMeeker氏の実装断片を解析へ加える。"
+    )
+    assert dated_nonvenue["unplaced_singleton_count"] == 1
 
     report = gw.grant_writing_health_report(text, program="kaken_generic")
     assert any(q["name"] == "proper_noun_load_check" for q in report["questions"])

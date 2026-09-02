@@ -15,14 +15,17 @@ crystallized as its own package.
   (2026-09-02, 基盤C 2027 draft).
 - all servers: new `<server>_reload_code` tool (registered next to
   `<server>_status`) reloads radia_mcp modules whose source changed on disk,
-  re-registers stale tools, registers callables added since start-up, and
-  sends `notifications/tools/list_changed`; the server now declares
-  `tools.listChanged`. An editable install alone never updated a running
-  server: the process kept the old modules and FastMCP the old function
-  objects (2026-09-02). Verified end to end over stdio: a function appended
-  to grant_writing/tools.py while the server ran appeared in `tools/list`
-  and was callable after one reload call, and the client received the
-  notification.
+  re-registers changed tools, removes deleted tools, discovers new same-family
+  callables, and sends `notifications/tools/list_changed`; the server now
+  declares `tools.listChanged`. Source and registry updates are transactional:
+  a compile/import/registration failure restores the previous working code and
+  tool set. An edited live `server.py`, the reload implementation itself, and
+  a newly added tool awaiting its server-specific policy pass are reported as
+  requiring one reconnect. An editable install alone never updated a running
+  server because the process kept old modules and FastMCP kept old function
+  objects (2026-09-02). Verified end to end over stdio: a function appended to
+  grant_writing/tools.py while the server ran appeared in `tools/list`, was
+  callable after one reload call, and emitted the list-changed notification.
 - grant-writing: new `grant_writing_proper_noun_load_check` lists proper
   nouns a reviewer must place, and the ones named once with no role in their
   sentence (venues in a yearly plan and 招へい/招請 partners are kept apart).
