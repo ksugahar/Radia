@@ -1,9 +1,12 @@
 name: radia-mcp
 
-# Complete CI boundary for the independently published radia-mcp wheel.
+# Change-scoped CI boundary for the independently published radia-mcp wheel.
 # This workflow:
 #   - Runs on the FREE GitHub-hosted ubuntu-latest
-#   - Across Python 3.10 / 3.11 / 3.12
+#   - Uses Python 3.10 / 3.11 / 3.12 only for implementation compatibility
+#   - Uses Python 3.12 once for the complete package and server regression
+#   - Treats docs, packaging metadata, implementation, and release tags as
+#     distinct scopes so a tag does not repeat the main-branch test matrix
 #   - With minimal deps (no radia C++ ext, no ngsolve, no Cubit)
 #   - Checks: (a) all cataloged subpackages import (b) every server has
 #     register_status_tool wired (c) per-server --selftest runs
@@ -21,11 +24,15 @@ on:
     paths:
       - "packages/radia-mcp/**"
       - "tests/mcp_server/**"
+      - ".github/workflows/radia-mcp-matrix.yml"
+      - ".github/workflows/release-radia-mcp.yml"
   pull_request:
     branches: [main]
     paths:
       - "packages/radia-mcp/**"
       - "tests/mcp_server/**"
+      - ".github/workflows/radia-mcp-matrix.yml"
+      - ".github/workflows/release-radia-mcp.yml"
   workflow_dispatch:
 
 concurrency:
@@ -33,13 +40,81 @@ concurrency:
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
+  scope:
+    runs-on: ubuntu-latest
+    outputs:
+      mode: ${{ steps.classify.outputs.mode }}
+      python_versions: ${{ steps.classify.outputs.python_versions }}
+      run_full: ${{ steps.classify.outputs.run_full }}
+      check_tools_doc: ${{ steps.classify.outputs.check_tools_doc }}
+      build_wheel: ${{ steps.classify.outputs.build_wheel }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Classify radia-mcp change scope
+        id: classify
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          REF_TYPE: ${{ github.ref_type }}
+          BEFORE_SHA: ${{ github.event.before }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+
+          mode=full
+          python_versions='["3.10","3.11","3.12"]'
+          run_full=true
+          check_tools_doc=true
+          build_wheel=true
+
+          if [[ "$REF_TYPE" == "tag" ]]; then
+            mode=release
+            python_versions='["3.12"]'
+            run_full=false
+            check_tools_doc=false
+          elif [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
+            mode=full
+          else
+            if [[ "$EVENT_NAME" == "pull_request" ]]; then
+              files=$(git diff --name-only "$BASE_SHA...$GITHUB_SHA")
+            elif [[ -n "${BEFORE_SHA:-}" && ! "$BEFORE_SHA" =~ ^0+$ ]]; then
+              files=$(git diff --name-only "$BEFORE_SHA" "$GITHUB_SHA")
+            else
+              files=$(git show --pretty='' --name-only "$GITHUB_SHA")
+            fi
+
+            printf '%s\n' "$files"
+            if [[ -n "$files" ]] && ! grep -qvE '^packages/radia-mcp/(docs/|README\.md$|CHANGELOG\.md$)' <<<"$files"; then
+              mode=docs
+              python_versions='["3.12"]'
+              run_full=false
+              build_wheel=false
+            elif [[ -n "$files" ]] && ! grep -qvE '^packages/radia-mcp/(pyproject\.toml$|src/radia_mcp/__init__\.py$|README\.md$|CHANGELOG\.md$)' <<<"$files"; then
+              mode=package
+              python_versions='["3.12"]'
+              run_full=false
+              check_tools_doc=false
+            fi
+          fi
+
+          echo "mode=$mode" >> "$GITHUB_OUTPUT"
+          echo "python_versions=$python_versions" >> "$GITHUB_OUTPUT"
+          echo "run_full=$run_full" >> "$GITHUB_OUTPUT"
+          echo "check_tools_doc=$check_tools_doc" >> "$GITHUB_OUTPUT"
+          echo "build_wheel=$build_wheel" >> "$GITHUB_OUTPUT"
+          echo "Selected radia-mcp CI mode: $mode"
+
   selftest:
+    needs: scope
     runs-on: ubuntu-latest
     timeout-minutes: 10
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.10", "3.11", "3.12"]
+        python-version: ${{ fromJSON(needs.scope.outputs.python_versions) }}
     steps:
       - uses: actions/checkout@v4
 
@@ -89,15 +164,18 @@ jobs:
           python -m pip install -e packages/radia-mcp --no-deps
 
       - name: Compile check (catch SyntaxError on Py ${{ matrix.python-version }})
+        if: needs.scope.outputs.mode != 'release'
         run: |
           python -m compileall -q packages/radia-mcp/src
 
       - name: Publish-boundary lint
+        if: matrix.python-version == '3.12' && needs.scope.outputs.mode != 'release'
         run: |
           python packages/radia-mcp/tools/policy_lint.py --selftest
           python packages/radia-mcp/tools/policy_lint.py
 
       - name: Meta health (all cataloged subpackages must import)
+        if: needs.scope.outputs.run_full == 'true'
         run: |
           python -c "
           from radia_mcp.meta.server import radia_mcp_health
@@ -111,6 +189,7 @@ jobs:
           "
 
       - name: Pytest (meta health + language features + versioning)
+        if: matrix.python-version == '3.12' && needs.scope.outputs.run_full == 'true'
         run: |
           cd packages/radia-mcp
           # Fast package contract only.  Slow corpus/quality gates
@@ -125,6 +204,7 @@ jobs:
       # carried a 9-server / 129-tool snapshot while the catalog had
       # grown to 37 / 281.
       - name: TOOLS.md drift gate
+        if: matrix.python-version == '3.12' && needs.scope.outputs.check_tools_doc == 'true'
         shell: bash
         run: |
           python packages/radia-mcp/scripts/gen_tools_doc.py
@@ -140,7 +220,7 @@ jobs:
       # per-server subprocess harness is a quality gate, not a language-version
       # compatibility sweep.  Import/meta-health above still runs on 3.10/3.11/3.12.
       - name: Per-server --selftest
-        if: matrix.python-version == '3.12'
+        if: matrix.python-version == '3.12' && needs.scope.outputs.run_full == 'true'
         shell: bash
         run: |
           cd packages/radia-mcp
@@ -182,13 +262,13 @@ jobs:
           PY
 
       - name: MCP response regression tests
-        if: matrix.python-version == '3.12'
+        if: matrix.python-version == '3.12' && needs.scope.outputs.run_full == 'true'
         run: |
           PYTHONPATH="packages/radia-mcp/src:src" \
             python -m pytest tests/mcp_server -q
 
       - name: Build and verify radia-mcp wheel
-        if: matrix.python-version == '3.12'
+        if: matrix.python-version == '3.12' && needs.scope.outputs.build_wheel == 'true'
         run: |
           python -m pip install build
           python -m build --wheel packages/radia-mcp
@@ -199,7 +279,7 @@ jobs:
           python -c "import radia_mcp; print(radia_mcp.__version__)"
 
       - name: Upload radia-mcp wheel
-        if: matrix.python-version == '3.12'
+        if: matrix.python-version == '3.12' && needs.scope.outputs.build_wheel == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: radia-mcp-wheel
