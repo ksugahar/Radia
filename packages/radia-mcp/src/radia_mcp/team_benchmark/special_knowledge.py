@@ -125,7 +125,7 @@ Located in `_references/`:
 ## Lab integration
 
 The lab uses TEAM problems as:
-1. **Golden test fixtures** for new solver features (`tests/panels/`)
+1. **Validation fixtures** for solver evidence (`validation_test/panels/`)
 2. **Citation** in research papers ("validated against TEAM problem N")
 3. **Inter-comparison** when comparing methods (Maxwell vs Coulomb force)
 """

@@ -952,7 +952,7 @@ These methods provide DISTRIBUTION of force, not just global integral.
 
 - `radia_mcp.differential_forms.forces.local_methods` ★
 - `radia_mcp.differential_forms.forces.iino_okamoto`
-- Lab memory: `tests/panels/test_calc_em_force_team33b_golden.py`
+- Validation evidence: `validation_test/force_validation/`
 """
 
 

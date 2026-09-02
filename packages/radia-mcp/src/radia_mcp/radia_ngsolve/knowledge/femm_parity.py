@@ -204,11 +204,12 @@ solve.py build the effective property; feed it as the usual ``nu``.
 
 ```python
 from radia_mcp.radia_ngsolve.solve import (
-    laminated_mu_eff, laminated_reluctivity_tensor, solve_planar_eddy,
+    laminated_reluctivity_tensor, solve_planar_eddy,
     solve_planar_magnetostatic)
 
 # AC: complex effective permeability of in-plane laminations (eddy in each sheet)
 #   mu_eff = mu0[ fill*mu_r*tanh(b)/b + (1-fill) ],  b = (d/2) sqrt(j w mu0 mu_r sigma)
+from radia.lamination import laminated_mu_eff
 mu_eff = laminated_mu_eff(mu_r=1000, sigma=2e6, omega=w, d_lam=0.5e-3, fill=0.95)
 nu_lam = mesh.MaterialCF({"core": 1.0/mu_eff}, default=1.0/mu0)   # complex CF
 Az = solve_planar_eddy(mesh, nu_lam, sigma=0, omega=w)  # sigma=0 in core: eddy is

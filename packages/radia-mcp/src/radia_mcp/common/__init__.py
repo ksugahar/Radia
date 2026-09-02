@@ -47,7 +47,6 @@ _LAZY_MODULES = {
     "prompts_loader",
     "server_hardening",
     "status",
-    "subprocess_runner",
     "tool_group",
     "topics",
     "utf8_stdout",

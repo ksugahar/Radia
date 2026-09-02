@@ -1156,14 +1156,13 @@ Mesh.NumSubEdges = 4;
 Mesh.VolumeEdges = 0;
 ```
 
-## 4. Cubit Panel Integration
+## 4. Application Integration
 
-The Cubit panel opens GMSH for results display:
-- Output: panel or validation run directories; do not use the retired
-  examples staging tree (for example `runs/radia_*`, `panels/samples/...`, or
-  `validation_test/...` depending on owner)
-- Uses `pythonw.exe` to launch GMSH (no console window)
-- .geo companion file auto-generated with display settings
+The owning Simulink/headless application writes GMSH results into its run
+directory and records them in ``result.json``. Cubit's embedded toolbar may
+open exported mesh artifacts, but it does not own solver post-processing.
+Use ``pythonw.exe`` for an interactive no-console launch and generate the
+``.geo`` companion with explicit display settings.
 
 ## 5. BEM Inductance Results
 
@@ -1430,9 +1429,10 @@ GMSH can animate mesh displacement using $NodeData with VectorType=5
 Combined with STEP geometry (static), this creates stator + moving body animations.
 
 Runnable artifact-inspection notebook:
-`docs/gmsh_animation/gmsh_animation.ipynb`.  Its synchronized JSON sidecars are
-`docs/gmsh_animation/gmsh_animation_results.json` (domain values) and
-`docs/gmsh_animation/gmsh_animation_result.json` (notebook-output sync).  The
+`docs/gmsh_animation/gmsh_animation.ipynb`. The notebook contains saved output.
+Existing companion data are in
+`docs/gmsh_animation/gmsh_animation_results.json`; docs policy does not require
+a notebook-hash sidecar. The
 docs-local artifact inspected there is `docs/gmsh_animation/`: MSH v4.1,
 2430 nodes, 1003 elements, 21 vector NodeData frames, final displacement 0.15 m.
 

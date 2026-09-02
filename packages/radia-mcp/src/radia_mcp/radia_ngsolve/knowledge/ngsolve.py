@@ -6970,7 +6970,7 @@ force_validation("method_map")              -> force/torque method selection
 force_validation("cross_validation")        -> stored neutral regression cases
 fem_bem_schur("api")                        -> exact-open-boundary Schur recipe
 ngsolve_usage("readable_fem")               -> P1 tri/tet educational primitives
-standalone_panels("vol_sources")            -> .vol sources for non-Cubit users
+panel_review("cubit_boundary")              -> checked .vol and Simulink boundary
 radia_mcp_golden_gate()                     -> public MCP fleet quality gate
 ```
 

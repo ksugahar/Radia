@@ -59,8 +59,8 @@ machine you lose ~20× wall-clock for free.  This is the most common
   want to set thread count.
 - `taskmanager('cpp_kernels')` — `ngcore::ParallelFor` from custom
   C++ TUs (compact_netgen, equivalence_source, etc.).
-- `taskmanager('audit_radia_ih')` — concrete audit of the 8 calc_*.py
-  scripts the IH panel can launch (status: all PASS as of 2026-05-27).
+- `taskmanager('audit_radia_ih')` — concrete audit of the IH headless solver
+  paths (status: all PASS as of 2026-05-27).
 - `taskmanager('common_mistakes')` — assemble outside TaskManager,
   missing `--nthreads` CLI, double-wrapping, etc.
 """
@@ -354,27 +354,27 @@ binding (Phase A).
 
 
 TASKMANAGER_AUDIT_RADIA_IH = r"""
-# Audit: TaskManager coverage in IH notebook workbench solvers
+# Audit: TaskManager coverage in IH headless solvers
 
 Audit date: **2026-05-27** (commit ~HEAD).
-Scope: every `calc_*.py` script that `IHDesignSpec` / the IH notebook
-workbench can launch.
+Scope: every `calc_*.py` script owned by `IHDesignSpec` and the IH Simulink
+application.
 
 ## Result table
 
-| Script | Used by IH workbench? | TaskManager status |
+| Script | IH role | TaskManager status |
 |---|---|---|
-| `calc_inductance.py` | YES (4 modes) | ✅ OK — BIE assembly is in helper `radia.bem_sibc_solver` (line 235 has `with TaskManager():`) |
-| `calc_peec.py` | YES (vacuum coil mode) | ✅ OK — no NGSolve solve (pure scipy/numpy + PEEC topology); MKL provides BLAS parallelism naturally |
-| `calc_fem_kelvin.py` | YES (PEEC+FEM+Kelvin) | ✅ OK — 5 × `with TaskManager():` wraps; `--nthreads` CLI; `SetNumThreads()` honoured |
-| `calc_fem_coilmesh.py` | YES (FEM full) | ✅ OK — 3 × `with TaskManager():` wraps |
-| `calc_heat.py` | YES (Heat tab, 3D) | ✅ OK — `with TaskManager():` wrap |
-| `calc_heat_axisym.py` | YES (Heat tab, axisym) | ✅ OK — `with TaskManager():` wrap |
-| `calc_heat_with_em_table.py` | YES (Heat tab w/ EM coupling) | ✅ OK — `with TaskManager():` wrap |
+| `calc_inductance.py` | Four inductance modes | ✅ OK — BIE assembly is in helper `radia.bem_sibc_solver` (line 235 has `with TaskManager():`) |
+| `calc_peec.py` | Vacuum-coil mode | ✅ OK — no NGSolve solve (pure scipy/numpy + PEEC topology); the selected BLAS owns its threads |
+| `calc_fem_kelvin.py` | PEEC+FEM+Kelvin | ✅ OK — 5 × `with TaskManager():` wraps; `--nthreads` CLI; `SetNumThreads()` honoured |
+| `calc_fem_coilmesh.py` | Full FEM | ✅ OK — 3 × `with TaskManager():` wraps |
+| `calc_heat.py` | Thermal 3D | ✅ OK — `with TaskManager():` wrap |
+| `calc_heat_axisym.py` | Thermal axisymmetric | ✅ OK — `with TaskManager():` wrap |
+| `calc_heat_with_em_table.py` | Thermal/EM table validation | ✅ OK — `with TaskManager():` wrap |
 
 ## Conclusion
 
-**All radia_ih-exposed solver paths are correctly TaskManager-parallelised.**
+**All IH headless NGSolve paths are correctly TaskManager-parallelised.**
 
 ## Helper modules (also covered)
 
@@ -387,8 +387,8 @@ workbench can launch.
 ## How to re-audit
 
 ```bash
-# At the IH panel root:
-grep -nE "TaskManager|\.Assemble\(\)|\.Inverse\(.*inverse" \
+# From the repository root:
+rg -n "TaskManager|\.Assemble\(\)|\.Inverse\(.*inverse" \
      src/radia/panels/calc_inductance.py \
      src/radia/panels/calc_fem_kelvin.py \
      src/radia/panels/calc_fem_coilmesh.py \
@@ -397,9 +397,7 @@ grep -nE "TaskManager|\.Assemble\(\)|\.Inverse\(.*inverse" \
 ```
 
 Any `Assemble()` line without a `with TaskManager():` ancestor in the
-same function = parallelism bug.  Re-run after every panel-touching
-PR; a static check is on the wishlist (`panel-cli-diff` skill could
-also add this).
+same function = parallelism bug. Re-run after changes to an IH solver path.
 """
 
 

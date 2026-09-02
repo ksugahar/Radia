@@ -24,7 +24,7 @@ and the production manufacture helpers from calc_streamfunction.py
 (_write_step_polylines / _peec_inductance / _close_loop).
 
 Run:  python validation_test/stream_function/demo_regcoil_parity_deliverable.py
-Golden: tests/panels/test_regcoil_parity_deliverable_golden.py
+Golden: validation_test/panels/test_regcoil_parity_deliverable_golden.py
 """
 from __future__ import annotations
 

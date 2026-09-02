@@ -1,8 +1,9 @@
 """test_omega_reduced_omega.py — pytest tests for Omega-ReducedOmega
 total+reduced split with Kelvin and coil source.
 
-Tests ScalarPotentialSolver.solve_total_reduced_potential() against
-Radia BEM reference for a mu_r=100 cylinder in a closed-loop coil field.
+Checks automatic selection of the total/reduced Kelvin solve and the Radia
+scalar-potential sign convention. Quantitative cross-formulation accuracy
+belongs to the maintained HDiv-MMM / reduced-A / omega validation lane.
 """
 import math
 
@@ -81,50 +82,7 @@ def _build_kelvin_mesh():
     return mesh
 
 
-def _build_radia_reference(gap_deg=0.0):
-    """Legacy Radia mesh-less soft-iron reference is retired."""
-    pytest.skip(
-        "Radia mesh-less soft-iron BEM reference is retired; use the mesh-backed "
-        "HDiv-VIM validation lane for soft-iron parity.")
-
-
-def _sample_points():
-    half_h = CYL_H / 2
-    pts = ([(0, 0, zv) for zv in np.linspace(-half_h + 0.01, half_h - 0.01, 5)]
-         + [(xv, 0, 0) for xv in np.linspace(0.005, CYL_R - 0.005, 4)]
-         + [(0, 0, zv) for zv in np.linspace(half_h + 0.02, PHYS_R - 0.04, 4)])
-    return pts
-
-
-def _compare_B(solver, grp_ref, pts, mesh):
-    B_cf = solver.get_B()
-    rels = []
-    for pt in pts:
-        try:
-            mip = mesh(*pt)
-            B_fem = np.array([B_cf(mip)[i] for i in range(3)])
-        except Exception:
-            continue
-        B_rad = np.array(rad.Fld(grp_ref, 'b', list(pt)))
-        m_fem = float(np.linalg.norm(B_fem))
-        m_rad = float(np.linalg.norm(B_rad))
-        rels.append((m_fem - m_rad) / max(m_rad, 1e-12))
-    return np.array(rels)
-
-
-# 3 of the 4 B-accuracy tests below have been observed to fail intermittently
-# in CI (tag-CI runs of v4.44.0; main-CI on the same commit passes; LAB-local
-# always passes).  Cause not pinned but consistent with MKL/NGSolve threading
-# non-determinism on the self-hosted runner.  pytest-rerunfailures retries up
-# to 2 times to absorb the rare bad iteration without masking a real
-# regression.  See cf576fa4 / eeb664c3 commit messages for the L_coil
-# convergence study where the same runner-state effect showed up.
-@pytest.mark.flaky(reruns=2, reruns_delay=2)
 class TestOmegaReducedOmegaKelvin:
-
-    @pytest.fixture(scope="class")
-    def radia_ref(self):
-        return _build_radia_reference(gap_deg=0.0)
 
     @pytest.fixture(scope="class")
     def fem_solver(self):
@@ -141,30 +99,6 @@ class TestOmegaReducedOmegaKelvin:
     def test_auto_selects_total_reduced(self, fem_solver):
         solver, _ = fem_solver
         assert solver._phi_gf is not None
-
-    def test_B_accuracy_inside_iron(self, fem_solver, radia_ref):
-        solver, mesh = fem_solver
-        half_h = CYL_H / 2
-        pts = [(0, 0, zv) for zv in np.linspace(-half_h + 0.01,
-                                                   half_h - 0.01, 5)]
-        rels = _compare_B(solver, radia_ref, pts, mesh)
-        assert np.max(np.abs(rels)) < 0.05, \
-            f"Inside iron max|rel| = {np.max(np.abs(rels))*100:.2f}%"
-
-    def test_B_accuracy_outside(self, fem_solver, radia_ref):
-        solver, mesh = fem_solver
-        half_h = CYL_H / 2
-        pts = [(0, 0, zv) for zv in np.linspace(half_h + 0.02,
-                                                   PHYS_R - 0.04, 4)]
-        rels = _compare_B(solver, radia_ref, pts, mesh)
-        assert np.max(np.abs(rels)) < 0.01, \
-            f"Outside max|rel| = {np.max(np.abs(rels))*100:.2f}%"
-
-    def test_overall_rms(self, fem_solver, radia_ref):
-        solver, mesh = fem_solver
-        rels = _compare_B(solver, radia_ref, _sample_points(), mesh)
-        rms = np.sqrt(np.mean(rels**2))
-        assert rms < 0.03, f"RMS = {rms*100:.2f}%"
 
     def test_phi_convention(self):
         """Verify H = -grad(Phi) for full-circle coil."""
