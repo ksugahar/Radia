@@ -6,6 +6,7 @@ classdef FESpace < handle
         Order double = 0
         DofCount double = 0
         FreeDofCount double = 0
+        Dirichlet string = ""
     end
 
     properties (Access=private)
@@ -19,6 +20,7 @@ classdef FESpace < handle
             obj.Order = info.order;
             obj.DofCount = info.dof_count;
             obj.FreeDofCount = info.free_dof_count;
+            obj.Dirichlet = string(info.dirichlet);
         end
     end
 
@@ -30,10 +32,12 @@ classdef FESpace < handle
                 order (1,1) double {mustBeInteger, mustBePositive}
                 options.NoGrads (1,1) logical = true
                 options.Complex (1,1) logical = false
+                options.Dirichlet (1,1) string = ""
             end
             nativeHandle = radia.internal.callMex( ...
                 'ngsolve.fespace.create', mesh.nativeHandle(), ...
-                char(space), order, options.NoGrads, options.Complex);
+                char(space), order, options.NoGrads, options.Complex, ...
+                char(options.Dirichlet));
             info = radia.internal.callMex('ngsolve.fespace.info', ...
                 nativeHandle);
             obj = radia.ngsolve.FESpace(nativeHandle, info);
@@ -45,6 +49,12 @@ classdef FESpace < handle
             obj.assertAlive();
             value = radia.internal.callMex('ngsolve.fespace.info', ...
                 obj.NativeHandle);
+        end
+
+        function value = freeDofs(obj)
+            obj.assertAlive();
+            value = radia.internal.callMex( ...
+                'ngsolve.fespace.free_dofs', obj.NativeHandle);
         end
 
         function handle = nativeHandle(obj)

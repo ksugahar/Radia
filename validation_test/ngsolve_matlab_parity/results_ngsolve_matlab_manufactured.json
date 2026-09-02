@@ -1,0 +1,231 @@
+{
+  "schema": "radia.ngsolve-matlab-manufactured-solution.v1",
+  "generated_utc": "2026-09-01T17:34:14Z",
+  "all_passed": true,
+  "case_count": 15,
+  "passed_count": 15,
+  "failed_count": 0,
+  "mesh_family_count": 5,
+  "maximum_free_residual_relative": 1.3926437123007151E-17,
+  "maximum_final_sample_error": 7.0082828429463007E-16,
+  "duration_s": 38.3340212,
+  "convergence": [
+    {
+      "mesh_id": "tri_meshed",
+      "first_error": 0.03960000000000001,
+      "final_error": 3.4000580129145419E-16,
+      "monotone": true,
+      "final_accurate": true
+    },
+    {
+      "mesh_id": "quad_single",
+      "first_error": 0.03960000000000001,
+      "final_error": 7.0082828429463007E-16,
+      "monotone": true,
+      "final_accurate": true
+    },
+    {
+      "mesh_id": "tet_meshed",
+      "first_error": 0.0017210433816499142,
+      "final_error": 7.19910242530375E-17,
+      "monotone": true,
+      "final_accurate": true
+    },
+    {
+      "mesh_id": "hex_single",
+      "first_error": 2.688821387764051E-17,
+      "final_error": 1.3530843112619095E-16,
+      "monotone": true,
+      "final_accurate": true
+    },
+    {
+      "mesh_id": "wedge_single",
+      "first_error": 0.0066149999999999994,
+      "final_error": 8.5001450322863548E-17,
+      "monotone": true,
+      "final_accurate": true
+    }
+  ],
+  "case_results": [
+    {
+      "case_id": "tri_meshed_p1",
+      "mesh_id": "tri_meshed",
+      "dimension": 2,
+      "order": 1,
+      "dofs": 8,
+      "sample_max_absolute_error": 0.03960000000000001,
+      "free_residual_relative": 0,
+      "duration_s": 2.4457568,
+      "passed": true,
+      "failure": ""
+    },
+    {
+      "case_id": "tri_meshed_p2",
+      "mesh_id": "tri_meshed",
+      "dimension": 2,
+      "order": 2,
+      "dofs": 21,
+      "sample_max_absolute_error": 0.0045666666666667535,
+      "free_residual_relative": 1.3548623466035522E-17,
+      "duration_s": 2.3534317,
+      "passed": true,
+      "failure": ""
+    },
+    {
+      "case_id": "tri_meshed_p4",
+      "mesh_id": "tri_meshed",
+      "dimension": 2,
+      "order": 4,
+      "dofs": 65,
+      "sample_max_absolute_error": 3.4000580129145419E-16,
+      "free_residual_relative": 1.1498168479269121E-17,
+      "duration_s": 2.4218922,
+      "passed": true,
+      "failure": ""
+    },
+    {
+      "case_id": "quad_single_p1",
+      "mesh_id": "quad_single",
+      "dimension": 2,
+      "order": 1,
+      "dofs": 4,
+      "sample_max_absolute_error": 0.03960000000000001,
+      "free_residual_relative": 0,
+      "duration_s": 2.3926733,
+      "passed": true,
+      "failure": ""
+    },
+    {
+      "case_id": "quad_single_p2",
+      "mesh_id": "quad_single",
+      "dimension": 2,
+      "order": 2,
+      "dofs": 9,
+      "sample_max_absolute_error": 1.3183898417423734E-16,
+      "free_residual_relative": 8.6736173798840355E-19,
+      "duration_s": 2.3809547,
+      "passed": true,
+      "failure": ""
+    },
+    {
+      "case_id": "quad_single_p4",
+      "mesh_id": "quad_single",
+      "dimension": 2,
+      "order": 4,
+      "dofs": 25,
+      "sample_max_absolute_error": 7.0082828429463007E-16,
+      "free_residual_relative": 8.70743278056383E-19,
+      "duration_s": 2.3432161,
+      "passed": true,
+      "failure": ""
+    },
+    {
+      "case_id": "tet_meshed_p2",
+      "mesh_id": "tet_meshed",
+      "dimension": 3,
+      "order": 2,
+      "dofs": 35,
+      "sample_max_absolute_error": 0.0017210433816499142,
+      "free_residual_relative": 6.9861667204656219E-18,
+      "duration_s": 2.3928522,
+      "passed": true,
+      "failure": ""
+    },
+    {
+      "case_id": "tet_meshed_p4",
+      "mesh_id": "tet_meshed",
+      "dimension": 3,
+      "order": 4,
+      "dofs": 189,
+      "sample_max_absolute_error": 0.00025373165481606822,
+      "free_residual_relative": 1.3926437123007151E-17,
+      "duration_s": 2.4531998,
+      "passed": true,
+      "failure": ""
+    },
+    {
+      "case_id": "tet_meshed_p6",
+      "mesh_id": "tet_meshed",
+      "dimension": 3,
+      "order": 6,
+      "dofs": 559,
+      "sample_max_absolute_error": 7.19910242530375E-17,
+      "free_residual_relative": 7.3372724580726844E-18,
+      "duration_s": 2.5193503,
+      "passed": true,
+      "failure": ""
+    },
+    {
+      "case_id": "hex_single_p2",
+      "mesh_id": "hex_single",
+      "dimension": 3,
+      "order": 2,
+      "dofs": 27,
+      "sample_max_absolute_error": 2.688821387764051E-17,
+      "free_residual_relative": 0,
+      "duration_s": 2.2799607,
+      "passed": true,
+      "failure": ""
+    },
+    {
+      "case_id": "hex_single_p4",
+      "mesh_id": "hex_single",
+      "dimension": 3,
+      "order": 4,
+      "dofs": 125,
+      "sample_max_absolute_error": 1.48318857196017E-16,
+      "free_residual_relative": 2.7171148178400584E-20,
+      "duration_s": 2.2257387,
+      "passed": true,
+      "failure": ""
+    },
+    {
+      "case_id": "hex_single_p6",
+      "mesh_id": "hex_single",
+      "dimension": 3,
+      "order": 6,
+      "dofs": 343,
+      "sample_max_absolute_error": 1.3530843112619095E-16,
+      "free_residual_relative": 1.1996389135325627E-21,
+      "duration_s": 2.9894921,
+      "passed": true,
+      "failure": ""
+    },
+    {
+      "case_id": "wedge_single_p2",
+      "mesh_id": "wedge_single",
+      "dimension": 3,
+      "order": 2,
+      "dofs": 18,
+      "sample_max_absolute_error": 0.0066149999999999994,
+      "free_residual_relative": 0,
+      "duration_s": 2.3194496,
+      "passed": true,
+      "failure": ""
+    },
+    {
+      "case_id": "wedge_single_p4",
+      "mesh_id": "wedge_single",
+      "dimension": 3,
+      "order": 4,
+      "dofs": 75,
+      "sample_max_absolute_error": 9.540979117872439E-17,
+      "free_residual_relative": 6.2197831760081314E-20,
+      "duration_s": 2.2713833,
+      "passed": true,
+      "failure": ""
+    },
+    {
+      "case_id": "wedge_single_p6",
+      "mesh_id": "wedge_single",
+      "dimension": 3,
+      "order": 6,
+      "dofs": 196,
+      "sample_max_absolute_error": 8.5001450322863548E-17,
+      "free_residual_relative": 5.1392725040712458E-20,
+      "duration_s": 2.4216381,
+      "passed": true,
+      "failure": ""
+    }
+  ]
+}
