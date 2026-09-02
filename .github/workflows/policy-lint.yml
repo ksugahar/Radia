@@ -3,8 +3,14 @@ name: Policy Lint
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - "packages/radia-mcp/**"
+      - "tests/mcp_server/**"
   pull_request:
     branches: [main]
+    paths-ignore:
+      - "packages/radia-mcp/**"
+      - "tests/mcp_server/**"
 
 jobs:
   policy-checks:

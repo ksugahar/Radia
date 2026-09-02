@@ -540,6 +540,21 @@ hibino first when it is available. They may use mdx only when hibino is
 unavailable and the mdx CI queue is idle; a compute job must not delay, starve,
 or destabilize the self-hosted CI runner.
 
+CI scope begins at the independently released distribution boundary. Keep a
+commit focused enough that `radia`, `cubit-mesh-export`, `radia-mcp`,
+`radia-optuna`, and `eqnedit64` changes can be identified without rebuilding or
+retesting the other distributions. Pull-request and main-push workflows run
+only the owning distribution lanes plus genuinely shared repository contracts.
+Within `radia-mcp`, classify changes as docs-only, packaging/version metadata,
+or implementation/tests. Docs-only changes run document and inventory checks;
+metadata-only changes build and import-check one wheel; implementation/tests
+run the supported-Python compile/import matrix, but execute the complete pytest
+suite and all-server selftests only once on the newest supported Python. A
+release-tag workflow builds and verifies the exact tagged artifact without
+repeating the full tests already run for that source commit. Full numerical,
+GUI, performance, and multi-machine evidence remains an explicit validation or
+release gate rather than an automatic response to every commit.
+
 The repository has three complementary, non-duplicative evidence surfaces:
 
 - `tests/` contains deterministic unit and contract tests that fit the fast CI
