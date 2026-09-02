@@ -51,7 +51,12 @@ if _this_dir not in sys.path:
 from calc_common import setup_paths, progress, calc_main  # noqa: E402
 
 # Axisym shares its thermal preset table with the 3D solver.
-from calc_heat import THERMAL_PRESETS, _resolve_material, SIGMA_SB  # noqa: E402
+from calc_heat import (  # noqa: E402
+    SIGMA_SB,
+    THERMAL_PRESETS,
+    _resolve_material,
+    _temperature_extrema,
+)
 
 
 def _log(msg):
@@ -176,8 +181,7 @@ def solve_heat_axisym(wp_vol,
 
     from ngsolve import (Mesh, H1, BilinearForm, LinearForm, GridFunction,
                           Integrate, CF, ds, dx, BND, x as r_coord,
-                          VTKOutput, TaskManager, InnerProduct, grad,
-                          NodeId, VERTEX)
+                          VTKOutput, TaskManager, InnerProduct, grad)
 
     if not os.path.isfile(wp_vol):
         return {"error": f"--wp-vol not found: {wp_vol}"}
@@ -382,15 +386,11 @@ def solve_heat_axisym(wp_vol,
         _log(f"STEP:{step}/{n_steps} t={t:.3f}s "
              f"T_probe={T_probe[-1] if probe_point is not None else 'n/a'}")
 
-    # Vertex temperatures only: for order >= 2 the hierarchical H1
-    # edge/face coefficients are NOT temperature values, so min/max
-    # over the raw coefficient vector would report garbage (T_min ~ 0).
-    vert_dofs = [d for vtx in wp_mesh.vertices
-                 for d in fes_T.GetDofNrs(NodeId(VERTEX, vtx.nr))
-                 if d >= 0]
-    T_arr = np.asarray(gfT.vec.FV().NumPy())[vert_dofs]
-    T_max = float(np.max(T_arr))
-    T_min = float(np.min(T_arr))
+    # Raw order>=2 H1 coefficients are not temperatures, and vertices
+    # alone can miss a higher-order field extremum.
+    T_min, T_max, T_extrema = _temperature_extrema(
+        gfT, wp_mesh, fes_order
+    )
 
     # Final-state field export.  GmshPostExport handles 2D meshes
     # natively (z is padded to 0 in the .msh nodes table) so the
@@ -475,6 +475,7 @@ def solve_heat_axisym(wp_vol,
     return {
         "T_max_C": T_max,
         "T_min_C": T_min,
+        "T_extrema": T_extrema,
         "T_initial_C": float(t_initial),
         "T_probe_history_C": T_probe if probe_point is not None else None,
         "t_history_s": t_arr,

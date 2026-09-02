@@ -43,10 +43,9 @@ def main():
                        "heat_workpiece_cylinder_R25_H25_axisym.vol")
 
     R, H = 0.025, 0.025
-    NR, NZ = 9, 9   # quad count per side; 9 -> 8 cells -> 64 quads total
+    NR, NZ = 9, 9   # quad count per side; 10x10 vertices, 81 quads total
 
     ngm = NgMesh(dim=2)
-    ngm.SetGeometry(None)
 
     # Vertex grid (NR+1) x (NZ+1)
     pids = {}

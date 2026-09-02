@@ -676,19 +676,19 @@ contract" above): the `.sol` is a raw coefficient vector, the
 ## Axisymmetric thermal FE order: default 2 (near-axis cusp at order 1)
 
 `calc_heat_axisym.py` defaults to `--fes-order 2` (2026-09-03 near-axis
-study).  Standard P1/Q1 + 2*pi*r cannot represent the even-parity
-dT/dr = 0 at the r = 0 axis: the near-axis profile shows a cusp whose
-apparent slope is 16/3x the exact secant at EVERY mesh size (the shape
-does not refine away), and T(axis) converges only O(h^2) (+1.2 K on a
-9x9 grid uniform-volumetric-heat cylinder benchmark).  Order 2 contains
-r^2 and removes the cusp at machine precision; on a z-dependent
-manufactured solution it is O(h^3) in L2.
+study).  Standard P1/Q1 cannot reproduce a nonconstant even quadratic
+radial profile while also representing dT/dr = 0 at the r = 0 axis, so
+its near-axis profile shows a piecewise-linear cusp.  Order 2 contains
+r^2 and strongly suppresses that artifact: the committed 9x9
+uniform-flux cylinder validation reduces the spurious radial axis slope
+from about 139 C/m to below 0.3 C/m and compares both axis and surface
+temperatures with an independent Bessel-series solution.
 
 Field-report symptom map: "the axisym thermal result looks wrong near
 the axis" == this order-1 cusp.  Fix: keep the default order 2 (or pass
 `--fes-order 2`).  Do NOT switch the scalar solve to the Henrotte
 basis: the FEMM-canonical standard-H1 policy stands, order 2 already
-gives axis-exact profiles, and the Henrotte HEAT order-2 path is
+strongly suppresses the axis artifact, and the Henrotte HEAT order-2 path is
 currently broken on axis-touching meshes (magnetic axis-reduced shape
 functions vs full 9-node heat matrices).
 
@@ -698,8 +698,10 @@ to `calc_heat.py` as well):
 * the uniform initial state must be `gfT.Set(CF(T0))`, NOT
   `gfT.vec[:] = T0` -- hierarchical H1 edge coefficients are not nodal
   values, so a constant coefficient vector is not a constant field;
-* `T_max_C` / `T_min_C` are taken over VERTEX DOFs only -- the raw
-  coefficient-vector min/max reported T_min ~ 0 C at order 2.
+* `T_max_C` / `T_min_C` come from physical GridFunction evaluations
+  over vertices plus deterministic volume and boundary samples.  Raw
+  coefficient extrema report garbage at order 2, while vertex-only
+  extrema can miss higher-order edge, face, or cell modes.
 
 ## Heat Equation with Joule Heat Source
 

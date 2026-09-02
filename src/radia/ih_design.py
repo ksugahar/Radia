@@ -185,11 +185,10 @@ class IHDesignSpec:
     solver: str = "Dense LU (small)"
     fes_order: int = 1
 
-    # Thermal-solver FE order, SEPARATE from the EM ``fes_order``:
-    # axisym heat needs order 2 to represent dT/dr = 0 at the r = 0
-    # axis (order 1 shows a near-axis cusp; see calc_heat_axisym.py
-    # --fes-order help).  Applies to both 3D and axisym thermal runs.
-    thermal_fes_order: int = 2
+    # Thermal-solver FE order, separate from the EM ``fes_order``.
+    # None selects the method default: order 2 for axisym heat, where
+    # order 1 shows a near-axis cusp, and order 1 for the 3D solver.
+    thermal_fes_order: int | None = None
 
     thermal_mesh_type: str = MESH_TYPE_3D
     heat_source: str = HEAT_SRC_UNIFORM
@@ -666,6 +665,23 @@ class IHDesignSpec:
             return MESH_TYPE_3D
         return self.thermal_mesh_type
 
+    def resolved_thermal_fes_order(self) -> int:
+        """Return the explicit or method-specific thermal H1 order."""
+        mesh_type = self._thermal_mesh_type_for_method()
+        if self.thermal_fes_order is None:
+            return 2 if mesh_type == MESH_TYPE_AXISYM else 1
+        if isinstance(self.thermal_fes_order, bool):
+            raise ValueError("thermal_fes_order must be a positive integer")
+        try:
+            order = int(self.thermal_fes_order)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(
+                "thermal_fes_order must be a positive integer"
+            ) from exc
+        if order < 1 or str(order) != str(self.thermal_fes_order).strip():
+            raise ValueError("thermal_fes_order must be a positive integer")
+        return order
+
     def _build_thermal_command(
         self,
         py: str,
@@ -677,6 +693,7 @@ class IHDesignSpec:
 
         mesh_type = self._thermal_mesh_type_for_method()
         is_axisym = mesh_type == MESH_TYPE_AXISYM
+        thermal_fes_order = self.resolved_thermal_fes_order()
         calc = "calc_heat_axisym.py" if is_axisym else "calc_heat.py"
         material_cli = THERMAL_PRESET_TO_CLI.get(self.thermal_material, "custom")
         scheme_cli = TIME_SCHEME_TO_CLI.get(self.time_scheme, "backward-euler")
@@ -696,7 +713,7 @@ class IHDesignSpec:
             "--t-end", self.t_end,
             "--time-scheme", scheme_cli,
             "--linear-solver", self.linear_solver,
-            "--fes-order", str(self.thermal_fes_order),
+            "--fes-order", str(thermal_fes_order),
             "--rotation-rpm", str(rotation_rpm),
             "--rotation-axis", str(self.rotation_axis),
             "--msh-output", msh_output(wp, "_heat"),
