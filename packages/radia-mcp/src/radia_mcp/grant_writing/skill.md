@@ -436,7 +436,12 @@ not a defect. Do not turn the map into another keyword-coverage score.
 2. **節に無い根拠を要求されたら、それは検査の適用ミスである。** 研究目的節に
    予算の積算は存在しない。適用対象でない検査は `applicable: False` を返すよう
    になっており、点数にも入らない。それでも要求が出るなら、渡した文書と
-   `program` の組合せを疑う。
+   `program` の組合せを疑う。JSPS様式のように欄ごとに `.tex` を分けている
+   場合は、欄ファイルではなく**主ファイル（`kiban_c.tex` 等）を渡す**。
+   主ファイルと同じディレクトリにある `\input` 先は結合して読まれ、
+   `pieces/` 等の様式部品は読まれない。欄ファイル単体で走らせると、
+   遂行能力欄が「学術的問いがない」、目的欄が「実行環境がない」と報告され
+   るが、それは草稿の欠陥ではなく分析単位の誤りである（2026-09-02 実測）。
 
 ## Which Evidence May Become a Rule
 
@@ -1307,6 +1312,84 @@ are kept and terminated so consecutive bullets cannot fuse into one
 pseudo-sentence. An English period does not end a sentence for the Japanese
 splitter, so it does not count as a terminator here.
 
+## Foreign Matter: Fewer Proper Nouns (異物を混入させない)
+
+2026-09-02 の実測。基盤C計画調書の準備状況に、研究代表者の別の実績を
+二文で足した。「軸対称解析でも、公開ソフトFEMMの作者Meeker氏の断片コードを
+論文の定式化から2次要素へ拡張実装し、試験付きの解析モジュールにした。本研究は
+この掘り起こしと拡張を機関間で行う。」頁に収まり、機械検査は全て通過した。
+研究代表者の判断は「異物は混入させるべきでない。固有名詞は少ないほうがよい」で、
+二文は取り下げた。
+
+審査者から見た欠陥は四つあった。
+
+1. **三つ目の対象が突然現れる。** 申請書は二課題で一貫していたのに、準備状況の
+   末尾に別の解析対象が出て、どちらの課題に属するのか分からない。
+2. **固有名詞が二つ増え、どちらも一度しか出ない。** 分担者でも共同研究相手でも
+   ないので、審査者は位置づけを探して止まる。
+3. **証拠として重複している。** 「他人の手法を掘り起こして結合した」実績は、
+   4 機関の分担者の資産で既に強く書いてあった。同じ型の証拠を外部の名前で
+   足しても、新しい種類の証拠にはならない。
+4. **出所の説明がない「断片コード」が権利の疑問を招く。** 人権・法令欄で出典と
+   ライセンスの確認を強調している申請書では、なおさら目立つ。
+
+規則は次のとおり。
+
+- **固有名詞は少ないほどよい。** 一つ増やすたびに、審査者がそれを一文で
+  位置づけられるかを問う。位置づけられないなら、その名前が担う証拠ごと外す。
+- **登場人物は、分担者、共同研究相手、対象課題の三種に限る。** それ以外の
+  人名・製品名は、どれほど本物の動機でも申請書の外に置く。
+- **「本物の話」であることは入れる理由にならない。** 研究の動機として
+  真実でも、審査者の読みを止めるなら異物である。
+- **既に強い証拠がある型に、外部の例を重ねない。** 重ねるほど、本筋の証拠が
+  薄まって見える。
+
+`grant_writing_proper_noun_load_check` が、一度しか出ず役割も書かれていない
+固有名詞を列挙する（health report では question）。会場名は年度計画に一度
+出るのが普通なので除く。招へい・招請と同じ文にある相手名は `role_stated`
+付きで返すので、著者が意図して残せる。数を減らす方向が正しく、どれを残すかは
+著者が決める。
+
+## Translated Japanese Passes Every Lint (直訳調・AI調の通読)
+
+2026-09-02、基盤C計画調書は bedrock・誤用・表記ゆれ・略語の検査をすべて
+通過し、health report は 9.7 だった。それでも全文を人手で通読すると、英語を
+そのまま写したような言い回しと文法上の誤りが 9 か所残っていた。機械検査は
+語の有無を見るので、**日本語として自然かどうか**は見ていなかった。
+
+| 修正前 | 修正後 | 種類 |
+|---|---|---|
+| 判定則を加速器電磁石設計へ**発展する** | 発展**させる** | 自動詞を他動詞の位置に置いた文法誤り（develop の直訳） |
+| 接着層**（glue）**である | 接着層である | 日本語の術語への英語注記。略語定義とは別 |
+| 設計判断を**保存**できる条件 | 保てる条件 | preserve |
+| 判定則を**移転**できるか | 移せるか | transfer |
+| 一致・不一致を設計判定区間へ**戻す** | 区間の幅に**反映する** | feed back |
+| **劇的な**差の発生 | 手法間の大きな差 | dramatic |
+| 単一解析の**最高速化** | 単一解析を最速にする | 造語 |
+| 準備を**整備済み**である | 準備が整っている | 重複 |
+| 異種資産を論文へ**固定する能力** | 論文にまとめてきた経験 | pin / fix |
+
+`grant_writing_translationese_check` がこのうち機械的に拾える三種
+（自他動詞の誤り = HIGH、英語注記 = MEDIUM、定型句と空疎な強調語 = LOW）
+を返し、health report にも入る。残りの直訳語彙（保存・移転・戻す）は文脈
+依存で、検査では拾えない。**提出前に一度、通読する。** 通読の観点は次の
+とおり。
+
+1. 動詞が自動詞か他動詞か。「〜を発展する」「〜を向上する」は誤り。
+2. 英語の語を頭の中で復元できる語句（preserve→保存、transfer→移転、
+   dramatic→劇的、enable→可能にする、address→対処する）は、日本語の動作語へ
+   置き換える。
+3. 括弧の中の英語は略語定義（MCP、ESIM）だけにする。
+4. 定義語（反証、凍結、判定区間）や数学用語（写す）は直訳に見えても残す。
+   それらを消すと意味契約が崩れる。
+5. 修正は**行数が増えない形**で行う。頁充填率が 0.99 の欄では、一文字の
+   増加が 1 行の増加になり、欄が溢れる。
+
+同じ検査は paper-writing（`paper_writing_translationese_check`）と
+presentation（`presentation_translationese_check`）にもある。英語論文を先に
+書いて和文へ起こす原稿、英語スライドから作った和文台本は、この種の欠陥が
+特に多い。
+
 ## Useful Tools
 
 - `grant_writing_usage()`
@@ -1342,6 +1425,8 @@ splitter, so it does not count as a terminator here.
 - `grant_writing_analyze_sentences(text)`
 - `grant_writing_count_weak_expressions(text)`
 - `grant_writing_lint_bedrock(text)`
+- `grant_writing_translationese_check(text)` -- 自他動詞の誤り、英語注記、直訳定型句、空疎な強調語
+- `grant_writing_proper_noun_load_check(text)` -- 一度しか出ず役割も書かれていない固有名詞（異物）の列挙
 - `grant_writing_recommendation_letter_template(program="kddi_digital")`
 
 For an ordinary KAKENHI draft, use `program="kaken_generic"`. It checks the
