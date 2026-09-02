@@ -30,8 +30,14 @@ stale.
 
 ## Release invariants
 
-- Push the release commit to `main` first and require the main Eqnedit64 CI to
-  pass. Do not create or push the release tag yet.
+- Before merging the release candidate to `main`, require one Claude Code
+  Fable review of the candidate commit and its specification diff. Record the
+  result in the PR or handover. Address findings and repeat the affected tests
+  and O: hand test before formal publication; do not create a tag from an
+  unreviewed candidate.
+- After the hand-test and Fable gates, push the approved release commit to
+  `main` and require the main Eqnedit64 CI to pass. Do not create or push the
+  release tag yet.
 - Build the standalone executable on LAB from that exact `origin/main` commit
   with `tools/eqnedit64/build/build_eqnedt64.bat`. The signing key is
   deliberately non-exportable; the CMake executable produced by GitHub-hosted
@@ -52,11 +58,18 @@ stale.
 
 ## Required order
 
-1. Commit and push the versioned release source to `main`.
-2. Wait for the main Eqnedit64 CI and Policy Lint to pass.
-3. Confirm tracked files are clean and `HEAD == origin/main`.
-4. Run `tools/eqnedit64/build/build_eqnedt64.bat` on LAB.
-5. Before creating any release tag, stage the exact signed build to O::
+1. Commit and push the versioned release candidate branch.
+2. Wait for its Eqnedit64 CI and Policy Lint to pass, build the exact signed
+   candidate, and stage it with `sync_handtest_to_o.ps1`.
+3. Complete Sugahara's O: hand test.
+4. Run one Claude Code Fable review on that candidate and its specification
+   diff. Record and resolve the findings, then refresh affected tests and O:
+   hand testing. Do not merge to `main` before this gate is recorded.
+5. Merge the approved release commit to `main` and push it.
+6. Wait for the main Eqnedit64 CI and Policy Lint to pass.
+7. Confirm tracked files are clean and `HEAD == origin/main`.
+8. Run `tools/eqnedit64/build/build_eqnedt64.bat` on LAB.
+9. Before creating any release tag, stage the exact signed build to O::
 
 ```powershell
 pwsh -File .agents/skills/release-eqnedit64/scripts/sync_to_o.ps1 `
@@ -65,10 +78,10 @@ pwsh -File .agents/skills/release-eqnedit64/scripts/sync_to_o.ps1 `
   -SourceSha (git rev-parse HEAD)
 ```
 
-6. Verify the helper reports `Updated=True`, the intended version, `Valid`,
+10. Verify the helper reports `Updated=True`, the intended version, `Valid`,
    `CN=ksugahar`, and the recorded SHA-256.
-7. Create the annotated tag at the manifest's exact source SHA and push it.
-8. Wait for tag CI, GitHub Release, and PyPI publication to pass.
+11. Create the annotated tag at the manifest's exact source SHA and push it.
+12. Wait for tag CI, GitHub Release, and PyPI publication to pass.
 
 The helper refuses an existing remote release tag, a dirty or unpushed source,
 a mismatched build stamp, version, signature, or hash. Use `-WhatIf` for a

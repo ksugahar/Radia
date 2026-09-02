@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## 3.0.13 - 2026-09-03
+
+- Make Enter split at the structural caret or replace the selected range, and
+  let row-boundary Backspace/Delete join aligned rows without flattening the
+  equation or losing the horizontal caret position.
+- Carry the unreleased 3.0.12 selection, formatted-source, and simplified
+  converter work into the reviewed 3.0.13 release candidate.
+
 ## 3.0.12 - 2026-09-02
 
 - Promote cross-slot pointer drags to a complete structural selection and use
