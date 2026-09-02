@@ -185,6 +185,12 @@ class IHDesignSpec:
     solver: str = "Dense LU (small)"
     fes_order: int = 1
 
+    # Thermal-solver FE order, SEPARATE from the EM ``fes_order``:
+    # axisym heat needs order 2 to represent dT/dr = 0 at the r = 0
+    # axis (order 1 shows a near-axis cusp; see calc_heat_axisym.py
+    # --fes-order help).  Applies to both 3D and axisym thermal runs.
+    thermal_fes_order: int = 2
+
     thermal_mesh_type: str = MESH_TYPE_3D
     heat_source: str = HEAT_SRC_UNIFORM
     q_uniform: str = "1.0e6"
@@ -352,7 +358,7 @@ class IHDesignSpec:
                 "thermal_mesh_type", "heat_source", "surface_label",
                 "thermal_material", "override_kcprho", "rho", "cp", "k",
                 "h_conv", "t_ext", "emissivity", "t_init", "time_scheme",
-                "dt", "t_end", "linear_solver", "fes_order",
+                "dt", "t_end", "linear_solver", "thermal_fes_order",
                 "probe_point", "csv_output", "vtu_prefix",
             })
             if self.method != METHOD_THERMAL_3D_STATIC:
@@ -690,7 +696,7 @@ class IHDesignSpec:
             "--t-end", self.t_end,
             "--time-scheme", scheme_cli,
             "--linear-solver", self.linear_solver,
-            "--fes-order", str(self.fes_order),
+            "--fes-order", str(self.thermal_fes_order),
             "--rotation-rpm", str(rotation_rpm),
             "--rotation-axis", str(self.rotation_axis),
             "--msh-output", msh_output(wp, "_heat"),
