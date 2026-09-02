@@ -63,14 +63,11 @@ if sys.platform == 'win32':
     if os.path.isdir(_mkl_bin):
         _dirs_to_add.append(_mkl_bin)
 
-    # 4. Intel oneAPI (fallback for development builds)
-    for _intel_path in [
-        os.path.join(os.environ.get("MKLROOT", ""), "bin"),
-        r"C:\Program Files (x86)\Intel\oneAPI\mkl\latest\bin",
-        r"C:\Program Files (x86)\Intel\oneAPI\compiler\latest\bin",
-    ]:
-        if os.path.isdir(_intel_path):
-            _dirs_to_add.append(_intel_path)
+    # 4. Explicit external MKL override. There is deliberately no machine-wide
+    #    oneAPI fallback: the selected Python environment is the runtime owner.
+    _mklroot_bin = os.path.join(os.environ.get("MKLROOT", ""), "bin")
+    if os.path.isdir(_mklroot_bin):
+        _dirs_to_add.append(_mklroot_bin)
 
     # Register directories with OS DLL loader
     for _d in _dirs_to_add:
@@ -79,7 +76,7 @@ if sys.platform == 'win32':
         if _d not in os.environ.get('PATH', ''):
             os.environ['PATH'] = _d + os.pathsep + os.environ.get('PATH', '')
 
-    del _dirs_to_add, _mkl_bin
+    del _dirs_to_add, _mkl_bin, _mklroot_bin
 
 # High-order mesh curving is handled by the Cubit C++ plugin (ACIS kernel).
 # Netgen fork (SetGeomInfo) is no longer required.
