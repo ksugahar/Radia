@@ -65,7 +65,7 @@ directory; interactive WebGUI scenes remain the notebook explanation layer.
 - [PEEC_SURFACE_IMPEDANCE.md](peec/PEEC_SURFACE_IMPEDANCE.md) - Surface impedance formulation and SPICE export
 - [NPORT_BLOCK_LANCZOS_SPICE.md](peec/NPORT_BLOCK_LANCZOS_SPICE.md) - N-port Block Lanczos algorithm for SPICE-compatible circuit extraction
 - [ltspice/README.md](ltspice/README.md) - Built-in `radia.ltspice` conversion, topology gates, CLI, MCP, and MATLAB bridge
-- [peec_bema_convergence/peec_bema_convergence.ipynb](peec_bema_convergence/peec_bema_convergence.ipynb) - Result-bearing 3turnCoil PEEC vs BEM-A convergence record with synchronized JSON.
+- [peec_bema_convergence/peec_bema_convergence.ipynb](peec_bema_convergence/peec_bema_convergence.ipynb) - Result-bearing 3turnCoil PEEC vs BEM-A convergence demonstration.
 - [solver_benchmarks/peec_solver_benchmarks.ipynb](solver_benchmarks/peec_solver_benchmarks.ipynb) - Result-bearing dense Ruehli vs HACApK PEEC benchmark notebook synchronized with committed JSON and `validation_test/solver_benchmarks/` drivers.
 
 > **For "how do I author a STEP that PEEC can solve?"**: query
@@ -92,23 +92,23 @@ directory; interactive WebGUI scenes remain the notebook explanation layer.
 
 ## Background Fields
 
-- [background_fields/background_fields.ipynb](background_fields/background_fields.ipynb) - Result-bearing `ObjBckg` callback showcase with synchronized JSON results and docs-local helper scripts/assets.
+- [background_fields/background_fields.ipynb](background_fields/background_fields.ipynb) - Result-bearing `ObjBckg` callback showcase with docs-local helper scripts/assets.
 
 ## Coil Design / Inverse Source
 
 - [stream_function.md](stream_function.md) - **(ACA+)+TSVD least-norm solver** (stream function method, generalised). Kernel-agnostic field-synthesis / inverse-source solver `A phi = B` (M field points x N basis sources, M < N): TSVD-regularised pseudo-inverse accelerated by ACA+ low-rank recompression. ACA+ delegated to HACApK (`cHACApK_acaplus`); the matrix entry `A(i,j)` is a caller callback built from Radia's existing field (Biot-Savart for coils, fixed-magnet fields for magnets) via `radia_field_kernel`. Methods 2/3 (IEEJ SA-25-020). Source: [src/radia/stream_function.py](../src/radia/stream_function.py) + `src/core/rad_stream_function.cpp`, tests: [tests/test_stream_function.py](../tests/test_stream_function.py), result-saved notebooks: [docs/stream_function/](stream_function/README.md).
-- [complex_coil_geometry/complex_coil.ipynb](complex_coil_geometry/complex_coil.ipynb) - Result-bearing CoilBuilder showcase with docs-local helper scripts and synchronized JSON results.
+- [complex_coil_geometry/complex_coil.ipynb](complex_coil_geometry/complex_coil.ipynb) - Result-bearing CoilBuilder showcase with docs-local helper scripts.
 - [equivalence_source/demos.ipynb](equivalence_source/demos.ipynb) - Result-bearing NearFieldSource / equivalence-theorem showcase synchronized with `validation_test/equivalence_source/` JSON results.
 
 ## Visualization
 
 - [MESH_GUIDE.md](visualization/MESH_GUIDE.md) - Mesh generation workflows (Cubit + Netgen)
-- [gmsh_animation/gmsh_animation.ipynb](gmsh_animation/gmsh_animation.ipynb) - Result-bearing GMSH v4.1 `$NodeData` displacement-animation artifact inspection, with synchronized JSON results.
+- [gmsh_animation/gmsh_animation.ipynb](gmsh_animation/gmsh_animation.ipynb) - Result-bearing GMSH v4.1 `$NodeData` displacement-animation artifact inspection.
 - [figures/lab_diagrams/README.md](figures/lab_diagrams/README.md) - Docs-owned TikZ source templates for lab flowcharts and concept diagrams.
 
 ## Electric Machines
 
-- [electric_machine/cogging_skew_demo.ipynb](electric_machine/cogging_skew_demo.ipynb) - Result-bearing PM rotor cogging/skew demo with synchronized JSON results; validation-class scripts live in `validation_test/electric_machine/`.
+- [electric_machine/cogging_skew_demo.ipynb](electric_machine/cogging_skew_demo.ipynb) - Result-bearing PM rotor cogging/skew demo; validation-class scripts and JSON evidence live in `validation_test/electric_machine/`.
 
 ## Cubit Mesh Export
 

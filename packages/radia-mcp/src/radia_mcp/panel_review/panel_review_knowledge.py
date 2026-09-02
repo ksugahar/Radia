@@ -56,8 +56,7 @@ matlab -batch "addpath('matlab'); r=runtests('tests/matlab/test_simulink_workflo
 BUILD_APPLICATION_BLOCK = r"""
 # Build a Radia Simulink application block
 
-The historical `build_notebook_gui` topic name is retained for MCP clients,
-but the construction target is now a masked Simulink block.
+The production result is a masked Simulink block in the single Radia library.
 
 1. Enumerate every application variable and solver switch.
 2. Promote reusable code to `src/`; keep heavy truth runs in
@@ -90,49 +89,35 @@ IH uses the same Simulink production contract as every other application.
 """
 
 
-CUBIT_PANELS_MIGRATION = r"""
-# `examples/cubit_panels` migration plan
+CUBIT_BOUNDARY = r"""
+# Cubit and Simulink boundary
 
-`examples/cubit_panels` is retired. Existing historical material is routed by
-durable role:
+Cubit owns ACIS-backed CAD, SAT/STEP import, labeling, meshing, and checked
+`.vol` export. Radia's application interface owns the subsequent Simulink
+configuration and solve. Keep the process boundary explicit:
 
-- reusable geometry/solver/parser code -> `src/radia`
-- numerical checks, `verify_*.py`, and comparisons -> `validation_test`
-- explanatory demonstrations -> result-saved docs notebooks + JSON
-- final human operation -> the Radia Simulink library
-- canonical assets -> `src/radia/panels/samples/` beside their headless owner
+1. Export SAT when ACIS fidelity matters and STEP for neutral interchange.
+2. Apply the application's versioned label contract in Cubit.
+3. Export `.vol` through `cubit-mesh-export` and require `check-vol` to pass.
+4. Pass the checked `.vol` and configuration to the masked Simulink block.
+5. Keep solver evidence in `validation_test/` JSON and presentation notebooks
+   in `docs/`; do not create another desktop panel or examples tree.
 
-The induction-heating legacy corpus lives under
-`validation_test/induction_heating/cubit_panels_legacy`. Rescued accelerator
-fixtures live under `src/radia/panels/samples/em/c_type_dipole`. Historical
-files such as `coil_dipole.py`, `create_induction_model.py`, and `verify_*.py`
-must not be copied into a new examples or notebook-workbench tree.
-
-Cubit remains the mesh producer. Its C++ export plugin and embedded PySide6
-toolbar are separate from MATLAB/Simulink and Python 3.12; `.vol`/`.sol` plus
-artifact files are the process boundary.
+Cubit's embedded PySide6 toolbar is allowed because it runs inside Cubit's
+private Python. Radia itself must not acquire a Qt/PySide dependency.
 """
 
 
 TOPICS = {
     "overview": APPLICATION_BLOCK_REVIEW,
-    "build_notebook_gui": BUILD_APPLICATION_BLOCK,
-    "presentation_template": BUILD_APPLICATION_BLOCK,
-    "cubit_panels_migration": CUBIT_PANELS_MIGRATION,
-    "5_skills_chain": APPLICATION_BLOCK_REVIEW,
-    "13_checks": APPLICATION_BLOCK_REVIEW,
-    "bug_catalogue": APPLICATION_BLOCK_REVIEW,
-    "val_checkbox_trap": APPLICATION_BLOCK_REVIEW,
-    "map_value_reject": APPLICATION_BLOCK_REVIEW,
-    "widget_calc_gap": APPLICATION_BLOCK_REVIEW,
-    "smoke_scenarios": APPLICATION_BLOCK_REVIEW,
-    "red_flags": APPLICATION_BLOCK_REVIEW,
+    "build_application_block": BUILD_APPLICATION_BLOCK,
+    "cubit_boundary": CUBIT_BOUNDARY,
     "workflow": BUILD_APPLICATION_BLOCK,
 }
 
 
 def get_panel_review_documentation(topic: str = "overview") -> str:
-    """Return application-block review guidance; keep old topic names stable."""
+    """Return current Simulink application-block review guidance."""
     if topic == "all":
         return "\n\n".join(f"# Topic: {key}\n{value}" for key, value in TOPICS.items())
     if topic in TOPICS:

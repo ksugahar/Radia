@@ -752,7 +752,7 @@ def build_argparser():
     parser.add_argument("--msh-output", default="",
                         help="Optional GMSH .msh output path. When set, "
                              "the .vol mesh is converted to .msh after "
-                             "solve so the panel's OpenGmsh button can "
+                             "solve so the application result action can "
                              "view the geometry.")
     parser.add_argument("--require-kelvin", action="store_true",
                         help="Fail-fast if the .vol does not have a "

@@ -1,5 +1,5 @@
 """
-Panel installer for Coreform Cubit 2025.12+.
+Cubit toolbar installer for Coreform Cubit 2025.12+.
 
 Registers the Radia toolbar script in Cubit's startup file so that the
 Radia-NGSolve menu is loaded automatically on Cubit startup.

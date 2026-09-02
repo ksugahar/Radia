@@ -22,7 +22,7 @@ short *entry point*; this folder is the detailed reference.
 | You want to … | Read |
 |----------------|------|
 | Understand the SFM and ACA+TSVD math | [theory.md](theory.md) |
-| **Run the design / pareto / manufacture GUI panel** (`calc_streamfunction.py`) | [**panel.md**](panel.md) |
+| **Run the design / Pareto / manufacture Simulink application** (`calc_streamfunction.py`) | [**panel.md**](panel.md) |
 | Pick the current-confinement BC (`--confine off/on/abe`, Abe edge-equipotential) | [panel.md § confinement](panel.md#current-confinement-boundary-condition---confine-off-on-abe) |
 | Draw order-p contours / bubble-system flux lines (`--contour-sub`, `--flux-plot`) | [panel.md § contour=flux-line](panel.md#contour-drawing--flux-line-drawing) |
 | Connect contours into one wire | [single_stroke.md](single_stroke.md) |
@@ -71,8 +71,8 @@ of running loose example scripts:
 
 | Route | Artifact |
 |-------|----------|
-| Public demo gallery | [`demo_gallery.ipynb`](demo_gallery.ipynb), synchronized with [`demo_gallery_results.json`](demo_gallery_results.json) |
-| Full source/result ledger | [`examples_catalog.ipynb`](examples_catalog.ipynb), synchronized with [`examples_catalog_results.json`](examples_catalog_results.json) |
+| Public demo gallery | [`demo_gallery.ipynb`](demo_gallery.ipynb), with saved notebook output |
+| Historical source/result ledger | [`examples_catalog.ipynb`](examples_catalog.ipynb); its JSON is optional migration history |
 | Theory and FE-direct psi | [`theory.ipynb`](theory.ipynb) |
 | Regularization and Pareto trade-offs | [`regularization.ipynb`](regularization.ipynb) |
 | Surface deformation search | [`deformation.ipynb`](deformation.ipynb) |
@@ -81,8 +81,7 @@ of running loose example scripts:
 
 The transitional demo source names are cataloged in
 [`examples.md`](examples.md); new public links should point to the notebooks,
-JSON sidecars, `validation_test`, or `src` API rather than the old examples
-tree.
+`validation_test` result JSON, or `src` API rather than the old examples tree.
 
 ## What this is, what it is not
 

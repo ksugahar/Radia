@@ -1,5 +1,5 @@
 """
-Accelerator magnet solver for Cubit panel (AccelMagnetDialog).
+Headless accelerator-magnet solver for the Radia Electromagnet application.
 
 Two formulations:
   omega  -- Omega-reduced scalar potential (H1, fastest)
@@ -8,7 +8,8 @@ Two formulations:
 User workflow:
   1. Write coil Python script (defines build_coil() -> CoilBuilder)
   2. Write .jou to create iron yoke + air + mesh + named blocks
-  3. Cubit panel exports .vol via `export netgen`, then runs Solve
+  3. Cubit's embedded toolbar exports and validates the .vol
+  4. The Simulink block or MCP runner invokes this headless solver
 
 Mesh interface:
   This script takes a Netgen .vol file via --vol (not .cub5).  The .vol
@@ -34,7 +35,7 @@ the solver picks Dirichlet vs Natural based on whether it is A or Omega):
   kelvin_far:  always Dirichlet (Omega=0 / A=0) -- represents the same
                infinity plane as the GND vertex, extended to a face.
 
-Auto-created by panel dialog:
+Created by the Cubit mesh-export workflow when Kelvin geometry is requested:
   kelvin_int  - surface, periodic BC (interior hemisphere)
   kelvin_ext  - surface, periodic BC (exterior hemisphere)
 

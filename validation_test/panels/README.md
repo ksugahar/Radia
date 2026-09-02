@@ -14,10 +14,9 @@ This locks the application manifest's Simulink-only states and the common
 block runner. The library is locked by
 `tests/matlab/test_simulink_workflow.m`.
 
-The old desktop `radia_*.py` PySide6 analysis panels were removed. Tests that
-instantiate those windows are retired and ignored from collection in
-`conftest.py`, even on machines where PySide6 is installed. Keep them only as
-historical notes until their lessons are distilled into current tests or deleted.
+The old desktop `radia_*.py` PySide6 analysis panels and their ignored GUI
+tests have been removed. Interface behavior belongs to Simulink tests; solver
+evidence remains here as result-bearing validation.
 
 Cubit is the exception: `src/radia/panels/radia_export_menu.py` and
 `register_toolbar.py` run inside Coreform Cubit's embedded PySide6 runtime.

@@ -2,10 +2,11 @@
 
 This directory is the docs promotion layer for the induction-heating example
 cleanup. The old loose examples topic is closed; public demonstrations now live
-as result-saved notebooks plus synchronized JSON, while executable validation
-history lives under `validation_test/induction_heating/`.
+as executed, result-bearing notebooks, while numerical evidence and its JSON
+live under `validation_test/induction_heating/`.
 
-Start with the public result-saved notebook:
+Start with the public result-saved notebook. The adjacent JSON files are
+historical migration records and are not required by the current docs policy:
 
 - `public_demo.ipynb`
 - `public_demo_results.json`

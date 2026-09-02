@@ -50,10 +50,10 @@ Stage promotion:
         + phase2_wpt_harmonic.py golden tests in
         validation_test/equivalence_source/.
 
-    Stage 3 (PySide panel -- planned):
-        Wrap as an Electromagnet block mode or a future NFS block.  Cubit
-        Browse for the .vol, sideset picker for --surface, edit
-        boxes for --omega + obs grid, Run button launches this CLI.
+    Stage 3 (application integration):
+        Wrap as an Electromagnet Simulink-block mode or a future NFS block.
+        The mask selects the .vol and sideset, configures omega and the
+        observation grid, and delegates execution to this CLI.
 """
 
 from __future__ import annotations

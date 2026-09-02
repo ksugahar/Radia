@@ -27,7 +27,7 @@ clean `pip install radia[cubit]` checkout.
 | Script | What it does |
 |---|---|
 | [`tests/test_esim_integration.py`](../../tests/test_esim_integration.py) | Pytest suite covering cell-problem solver, ESI table interface, and coupled solver invocation. |
-| [`tests/panels/golden/`](../../tests/panels/golden/) | Golden JSON snapshots for `calc_inductance.py` ESIM mode (Cu and steel benchmarks at fixed frequency / current). |
+| [`validation_test/panels/golden/`](../../validation_test/panels/golden/) | Checked JSON evidence for `calc_inductance.py` ESIM mode (Cu and steel benchmarks at fixed frequency / current). |
 
 ## Reproducer for the IGTE 2026 paper headline
 

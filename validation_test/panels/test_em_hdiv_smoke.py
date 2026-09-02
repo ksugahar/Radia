@@ -10,12 +10,21 @@ from __future__ import annotations
 import json
 import subprocess
 import sys
+import types
 from pathlib import Path
 
 import pytest
 
 REPO = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(REPO / "src" / "radia"))
+RADIA_PACKAGE = REPO / "src" / "radia"
+
+# This is a DesignSpec/CLI contract test; loading the native extension would
+# turn it into a build test. Provide only the package namespace needed for
+# relative imports inside em_design.py.
+if "radia" not in sys.modules:
+    radia_package = types.ModuleType("radia")
+    radia_package.__path__ = [str(RADIA_PACKAGE)]
+    sys.modules["radia"] = radia_package
 
 
 def _hdiv_spec():
@@ -79,16 +88,20 @@ def test_hdiv_fes_order_reaches_cli():
     assert rc == 0, err
 
 
-def test_hdiv_order_registry_metadata_is_domain_specific():
-    registry_path = REPO / "src" / "radia" / "panels" / "panel_registry.json"
-    registry = json.loads(registry_path.read_text(encoding="utf-8"))["panels"]
-    for panel_id, cli in (
-        ("accel_hdiv", "--hdiv-order"),
-        ("motor_hdiv_reduced", "--order"),
-    ):
-        param = next(p for p in registry[panel_id]["params"] if p["cli"] == cli)
-        assert param["ja"] == "HDiv 次数"
-        assert param["physics"] == "1=RT1, 2=RT2"
+def test_hdiv_headless_entries_are_owned_by_application_manifest():
+    manifest_path = (
+        REPO / "src" / "radia" / "panels"
+        / "application_interface_manifest.json"
+    )
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    applications = {item["id"]: item for item in manifest["applications"]}
+
+    assert manifest["schema"] == "radia.application_interface_manifest.v2"
+    assert "src/radia/panels/calc_accel_hdiv.py" in applications["radia-em"]["headless"]
+    assert (
+        "src/radia/panels/calc_motor_hdiv_reduced.py"
+        in applications["radia-motor"]["headless"]
+    )
 
 
 def test_hdiv_ima_passthrough():
