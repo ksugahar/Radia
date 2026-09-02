@@ -16,6 +16,7 @@ journal papers can call the SAME tool names.
 """
 from __future__ import annotations
 
+from .._shared.translationese import check_translationese as _translationese
 from ._ja_lint import (
     grant_writing_check_notation_variants as _notation,
     grant_writing_find_undefined_acronyms as _acronyms,
@@ -116,3 +117,13 @@ def paper_writing_check_subject_predicate_distance(
     """主述直結原則 (本多 p.22) — 「は、」「が、」 主題マーカーの
     位置から文末までの距離を計測 (re-export)。"""
     return _subj_pred(text, max_chars=max_chars)
+
+
+def paper_writing_translationese_check(text: str) -> dict:
+    """直訳調・AI調の候補 (自他動詞の誤り、英語注記、定型句、空疎な強調語)。
+
+    和文論文を英語原稿から起こすと「〜を向上する」「劇的に」「〜を可能にする」
+    が残りやすい。bedrock・誤用・表記ゆれを通過した原稿にも残る種類の欠陥で、
+    2026-09-02 の科研費原稿通読が種になっている (radia_mcp._shared.translationese)。
+    """
+    return _translationese(text)

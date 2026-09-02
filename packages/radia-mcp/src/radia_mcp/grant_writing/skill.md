@@ -1312,6 +1312,46 @@ are kept and terminated so consecutive bullets cannot fuse into one
 pseudo-sentence. An English period does not end a sentence for the Japanese
 splitter, so it does not count as a terminator here.
 
+## Translated Japanese Passes Every Lint (直訳調・AI調の通読)
+
+2026-09-02、基盤C計画調書は bedrock・誤用・表記ゆれ・略語の検査をすべて
+通過し、health report は 9.7 だった。それでも全文を人手で通読すると、英語を
+そのまま写したような言い回しと文法上の誤りが 9 か所残っていた。機械検査は
+語の有無を見るので、**日本語として自然かどうか**は見ていなかった。
+
+| 修正前 | 修正後 | 種類 |
+|---|---|---|
+| 判定則を加速器電磁石設計へ**発展する** | 発展**させる** | 自動詞を他動詞の位置に置いた文法誤り（develop の直訳） |
+| 接着層**（glue）**である | 接着層である | 日本語の術語への英語注記。略語定義とは別 |
+| 設計判断を**保存**できる条件 | 保てる条件 | preserve |
+| 判定則を**移転**できるか | 移せるか | transfer |
+| 一致・不一致を設計判定区間へ**戻す** | 区間の幅に**反映する** | feed back |
+| **劇的な**差の発生 | 手法間の大きな差 | dramatic |
+| 単一解析の**最高速化** | 単一解析を最速にする | 造語 |
+| 準備を**整備済み**である | 準備が整っている | 重複 |
+| 異種資産を論文へ**固定する能力** | 論文にまとめてきた経験 | pin / fix |
+
+`grant_writing_translationese_check` がこのうち機械的に拾える三種
+（自他動詞の誤り = HIGH、英語注記 = MEDIUM、定型句と空疎な強調語 = LOW）
+を返し、health report にも入る。残りの直訳語彙（保存・移転・戻す）は文脈
+依存で、検査では拾えない。**提出前に一度、通読する。** 通読の観点は次の
+とおり。
+
+1. 動詞が自動詞か他動詞か。「〜を発展する」「〜を向上する」は誤り。
+2. 英語の語を頭の中で復元できる語句（preserve→保存、transfer→移転、
+   dramatic→劇的、enable→可能にする、address→対処する）は、日本語の動作語へ
+   置き換える。
+3. 括弧の中の英語は略語定義（MCP、ESIM）だけにする。
+4. 定義語（反証、凍結、判定区間）や数学用語（写す）は直訳に見えても残す。
+   それらを消すと意味契約が崩れる。
+5. 修正は**行数が増えない形**で行う。頁充填率が 0.99 の欄では、一文字の
+   増加が 1 行の増加になり、欄が溢れる。
+
+同じ検査は paper-writing（`paper_writing_translationese_check`）と
+presentation（`presentation_translationese_check`）にもある。英語論文を先に
+書いて和文へ起こす原稿、英語スライドから作った和文台本は、この種の欠陥が
+特に多い。
+
 ## Useful Tools
 
 - `grant_writing_usage()`
@@ -1347,6 +1387,7 @@ splitter, so it does not count as a terminator here.
 - `grant_writing_analyze_sentences(text)`
 - `grant_writing_count_weak_expressions(text)`
 - `grant_writing_lint_bedrock(text)`
+- `grant_writing_translationese_check(text)` -- 自他動詞の誤り、英語注記、直訳定型句、空疎な強調語
 - `grant_writing_recommendation_letter_template(program="kddi_digital")`
 
 For an ordinary KAKENHI draft, use `program="kaken_generic"`. It checks the
