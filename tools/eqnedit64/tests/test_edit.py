@@ -977,6 +977,48 @@ def main() -> int:
             "nested TeX row separator escaped its group: "
             f"{eq.latex()!r}")
 
+    # Paper/source paste normalization must never invent visible content.
+    # ASCII `~` is TeX spacing (U+223C has its own \sim command), alignment
+    # environments retain their `&` columns, document metadata is discarded,
+    # and an unsupported control word leaves only its editable argument.
+    eq = Equation()
+    eq.load_latex(r"a~b")
+    if r"\sim" in eq.latex() or "~" not in eq.latex():
+        failures.append(f"TeX non-breaking space became a relation: {eq.latex()!r}")
+    eq.load_latex(r"\sim")
+    if r"\sim" not in eq.latex():
+        failures.append(f"the real similarity relation was lost: {eq.latex()!r}")
+    eq = Equation()
+    eq.insert_text("~")
+    if r"\textasciitilde" not in eq.latex() or r"\sim" in eq.latex():
+        failures.append(f"a typed ASCII tilde became a relation: {eq.latex()!r}")
+    for source in (
+            r"\begin{align}a&=b\\c&=d\end{align}",
+            r"\begin{align*}a&=b\\c&=d\end{align*}",
+            r"\begin{eqnarray}a&=&b\\c&=&d\end{eqnarray}"):
+        eq.load_latex(source)
+        aligned = re.sub(r"\s+", "", eq.latex())
+        if (not aligned.startswith(r"\begin{aligned}") or
+                aligned.count("&") != source.count("&")):
+            failures.append(
+                f"alignment columns were flattened: {source!r} -> {eq.latex()!r}")
+    eq.load_latex(
+        r"\begin{equation}E=mc^2\label{eq:e}\nonumber\end{equation}")
+    metadata_free = eq.latex()
+    if ("label" in metadata_free or "nonumber" in metadata_free or
+            "gathered" in metadata_free or "mc" not in metadata_free):
+        failures.append(
+            f"equation metadata became visible content: {metadata_free!r}")
+    eq.load_latex("E=mc^2 % ignored comment\n+x")
+    if "ignored" in eq.latex() or "comment" in eq.latex() or "x" not in eq.latex():
+        failures.append(f"TeX comment became visible content: {eq.latex()!r}")
+    eq.load_latex(r"50\%")
+    if r"\%" not in eq.latex():
+        failures.append(f"escaped percent was discarded as a comment: {eq.latex()!r}")
+    eq.load_latex(r"\unknowncommand{\frac{x}{y}}")
+    if "unknowncommand" in eq.latex() or r"\frac{x}{y}" not in eq.latex():
+        failures.append(f"unknown command fallback invented text: {eq.latex()!r}")
+
     # Enter belongs to the innermost row container.  In a matrix/cases cell it
     # inserts a table row and carries the current-cell suffix plus cells on its
     # right; it must not wrap the table in an outer aligned environment.
@@ -1042,18 +1084,19 @@ def main() -> int:
         failures.append(
             f"function style survived across a row split: {function_split!r}")
 
-    # Enter deliberately leaves a blank row ready for typing.  Saving before
-    # filling it must not write a spurious final `\\`, and must reach the same
-    # canonical TeX after one load/save cycle.
+    # Enter deliberately leaves a blank row ready for typing.  The empty group
+    # makes that row structural, so save/reopen keeps what the editor showed
+    # instead of silently deleting the final line.
     eq = Equation()
     eq.insert_latex("a=b")
     eq.new_line()
     trailing_blank = eq.latex()
     once = Equation()
     once.load_latex(trailing_blank)
-    if once.latex().strip() != trailing_blank.strip():
+    if (r"\\" not in trailing_blank or "{}" not in trailing_blank or
+            once.latex().strip() != trailing_blank.strip()):
         failures.append(
-            "trailing aligned edit row was serialized as mathematical content: "
+            "trailing aligned edit row did not survive serialization: "
             f"{trailing_blank!r} -> {once.latex()!r}")
 
     # An ampersand is an alignment command in the editor, and remains a real

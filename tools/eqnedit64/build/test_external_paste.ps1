@@ -1135,7 +1135,8 @@ try {
     }
 
     Set-ClipboardTexInput -UnicodeText $expectedOffice
-    $texclip = Start-Process -FilePath $app -ArgumentList @('clipboard', 'png') `
+    $texclip = Start-Process -FilePath $app `
+        -ArgumentList @('clipboard', 'clipboard-png') `
         -WorkingDirectory (Split-Path -Parent $app) -WindowStyle Hidden -Wait -PassThru
     if ($texclip.ExitCode -ne 0) {
         throw "Eqnedit64 clipboard-to-PNG conversion failed: $($texclip.ExitCode)"
@@ -1144,14 +1145,14 @@ try {
         -not [EqneditClipboardNative]::IsClipboardFormatAvailable(17) -or
         [EqneditClipboardNative]::IsClipboardFormatAvailable($htmlFormat) -or
         [EqneditClipboardNative]::IsClipboardFormatAvailable(13)) {
-        throw 'clipboard png did not replace text with PNG/DIBV5 image formats.'
+        throw 'clipboard-png did not replace text with PNG/DIBV5 image formats.'
     }
     $texclipUnicodePng = Read-ClipboardBytes $pngFormat
     $texclipContract = Get-PngContract $texclipUnicodePng
     $texclipUnicodeHash = [Convert]::ToHexString(
         [Security.Cryptography.SHA256]::HashData($texclipUnicodePng))
     if ($texclipUnicodeHash -ne $clipboardHash) {
-        throw 'clipboard png wrapper normalization rendered a different equation.'
+        throw 'clipboard-png wrapper normalization rendered a different equation.'
     }
 
     Set-ClipboardTexInput -UnicodeText '\[x^{1000}\]' -RawLatex $expectedRaw
@@ -1187,12 +1188,12 @@ try {
 
     Set-ClipboardTexInput -UnicodeText ''
     $emptyTexclip = Start-Process -FilePath $app `
-        -ArgumentList @('clipboard', 'png') `
+        -ArgumentList @('clipboard', 'clipboard-png') `
         -WorkingDirectory (Split-Path -Parent $app) -WindowStyle Hidden -Wait -PassThru
     if ($emptyTexclip.ExitCode -ne 83 -or
         -not [EqneditClipboardNative]::IsClipboardFormatAvailable(13) -or
         [EqneditClipboardNative]::IsClipboardFormatAvailable($pngFormat)) {
-        throw 'clipboard png did not reject empty input without replacing the clipboard.'
+        throw 'clipboard-png did not reject empty input without replacing the clipboard.'
     }
 
     if ($GooglePngArtifact) {

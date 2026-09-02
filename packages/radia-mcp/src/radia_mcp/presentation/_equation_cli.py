@@ -25,7 +25,7 @@ _COPY_TARGETS = {
         "CF_ENHMETAFILE", "CF_DIBV5",
     ]),
     "google-slides": ("slides", ["HTML Format", "PNG"]),
-    "png": ("png", ["PNG", "CF_DIBV5"]),
+    "png": ("clipboard-png", ["PNG", "CF_DIBV5"]),
 }
 
 
