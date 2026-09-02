@@ -1,34 +1,36 @@
 # radia-mcp Tools Inventory
 
-Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
+Auto-generated from each server's production `core` `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **1105 tools** across 49 MCP servers.
+Fine-grained validation and identity operations are discovered with each server's `*_validation_catalog` tool and invoked through `*_validation_run`; they are not repeated as top-level schemas.
+
+Total: **910 tools** across 49 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
-| [`mcp-server-cubit`](#mcp-server-cubit) | `radia_mcp.cubit` | 90 |
-| [`mcp-server-build123d`](#mcp-server-build123d) | `radia_mcp.build123d` | 79 |
+| [`mcp-server-cubit`](#mcp-server-cubit) | `radia_mcp.cubit` | 56 |
+| [`mcp-server-build123d`](#mcp-server-build123d) | `radia_mcp.build123d` | 43 |
 | [`mcp-server-gmsh`](#mcp-server-gmsh) | `radia_mcp.gmsh` | 70 |
-| [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 144 |
-| [`mcp-server-force`](#mcp-server-force) | `radia_mcp.force` | 22 |
-| [`mcp-server-radia-matlab`](#mcp-server-radia-matlab) | `radia_mcp.matlab` | 23 |
+| [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 50 |
+| [`mcp-server-force`](#mcp-server-force) | `radia_mcp.force` | 21 |
+| [`mcp-server-radia-matlab`](#mcp-server-radia-matlab) | `radia_mcp.matlab` | 22 |
 | [`mcp-server-acoustic-fembem`](#mcp-server-acoustic-fembem) | `radia_mcp.acoustic_fembem` | 5 |
 | [`mcp-server-radia-acoustic`](#mcp-server-radia-acoustic) | `radia_mcp.radia_acoustic` | 6 |
 | [`mcp-server-radia-streamfunction`](#mcp-server-radia-streamfunction) | `radia_mcp.streamfunction` | 4 |
-| [`mcp-server-fem`](#mcp-server-fem) | `radia_mcp.fem` | 23 |
+| [`mcp-server-fem`](#mcp-server-fem) | `radia_mcp.fem` | 19 |
 | [`mcp-server-bem`](#mcp-server-bem) | `radia_mcp.bem` | 8 |
 | [`mcp-server-matrix-solvers`](#mcp-server-matrix-solvers) | `radia_mcp.matrix_solvers` | 7 |
 | [`mcp-server-mor`](#mcp-server-mor) | `radia_mcp.mor` | 10 |
 | [`mcp-server-ih`](#mcp-server-ih) | `radia_mcp.ih` | 7 |
 | [`mcp-server-peec`](#mcp-server-peec) | `radia_mcp.peec` | 5 |
 | [`mcp-server-electromagnet`](#mcp-server-electromagnet) | `radia_mcp.electromagnet` | 7 |
-| [`mcp-server-motor`](#mcp-server-motor) | `radia_mcp.motor` | 57 |
+| [`mcp-server-motor`](#mcp-server-motor) | `radia_mcp.motor` | 35 |
 | [`mcp-server-accelerator`](#mcp-server-accelerator) | `radia_mcp.accelerator` | 5 |
 | [`mcp-server-fusion-reactor`](#mcp-server-fusion-reactor) | `radia_mcp.fusion_reactor` | 4 |
 | [`mcp-server-magnetic-materials`](#mcp-server-magnetic-materials) | `radia_mcp.magnetic_materials` | 9 |
 | [`mcp-server-litz-transmission`](#mcp-server-litz-transmission) | `radia_mcp.litz_transmission` | 5 |
 | [`mcp-server-rna-mec`](#mcp-server-rna-mec) | `radia_mcp.rna_mec` | 4 |
-| [`mcp-server-topology-optimization`](#mcp-server-topology-optimization) | `radia_mcp.topology_optimization` | 8 |
+| [`mcp-server-topology-optimization`](#mcp-server-topology-optimization) | `radia_mcp.topology_optimization` | 7 |
 | [`mcp-server-bayesian-opt`](#mcp-server-bayesian-opt) | `radia_mcp.bayesian_opt` | 4 |
 | [`mcp-server-evolutionary`](#mcp-server-evolutionary) | `radia_mcp.evolutionary` | 4 |
 | [`mcp-server-data-assimilation`](#mcp-server-data-assimilation) | `radia_mcp.data_assimilation` | 4 |
@@ -38,7 +40,7 @@ Total: **1105 tools** across 49 MCP servers.
 | [`mcp-server-ndt`](#mcp-server-ndt) | `radia_mcp.ndt` | 5 |
 | [`mcp-server-metamaterial`](#mcp-server-metamaterial) | `radia_mcp.metamaterial` | 5 |
 | [`mcp-server-nmr-mri`](#mcp-server-nmr-mri) | `radia_mcp.nmr_mri` | 3 |
-| [`mcp-server-maglev`](#mcp-server-maglev) | `radia_mcp.maglev` | 8 |
+| [`mcp-server-maglev`](#mcp-server-maglev) | `radia_mcp.maglev` | 6 |
 | [`mcp-server-team-benchmark`](#mcp-server-team-benchmark) | `radia_mcp.team_benchmark` | 8 |
 | [`mcp-server-differential-forms`](#mcp-server-differential-forms) | `radia_mcp.differential_forms` | 16 |
 | [`mcp-server-mathematica`](#mcp-server-mathematica) | `radia_mcp.mathematica` | 15 |
@@ -65,21 +67,15 @@ Module: `radia_mcp.cubit.server`
 | Tool | Description |
 |---|---|
 | `cubit_ask` | One-shot search across every Cubit knowledge surface we have. |
-| `cubit_ato_levelset_sculpt_source_replay_gate` | Gate official ATO provenance, MBG migration, and headless replay. |
 | `cubit_audit_summary` | Return a machine-readable Cubit export-lint audit summary. |
 | `cubit_batch_try` | Dry-run a recipe in a fresh headless Cubit subprocess. |
-| `cubit_boundary_layer_candidate_gate` | Select a non-inverted boundary-layer sweep candidate with export closure. |
-| `cubit_boundary_layer_journal_recovery_gate` | Gate three-parameter, pairwise, headless recovery of a failed journal. |
 | `cubit_check_vol` | Run the canonical `check-vol` gate on an exported Netgen `.vol` mesh. |
 | `cubit_checkpoint` | Save the current Cubit session state as a named checkpoint. |
-| `cubit_conformal_hex_pyramid_tet_interface_gate` | Gate a conformal hex-pyramid-tet interface and independent volume sum. |
 | `cubit_cpp_sdk_guide` | Get documentation on building Cubit C++ SDK plugins. |
 | `cubit_curate_learned_recipes` | **Lab maintainer tool**: read accumulated `learned_recipes.jsonl`, |
 | `cubit_diagnostics_guide` | Get the foundational mesh-diagnostics + cleanup + quality playbook. |
 | `cubit_docs` | Get Cubit documentation: export formats, scripting guide, and API reference. |
 | `cubit_doctor` | One-shot environment diagnosis for the whole Cubit MCP stack. |
-| `cubit_embedded_pipe_source_recovery_gate` | Gate source-journal replay and semantically classified version recovery. |
-| `cubit_embedded_region_mixed_transition_gate` | Gate hex-led tet/pyramid recovery, quality, interfaces, and Gmsh 4.1. |
 | `cubit_examples` | Search Cubit journal examples from **multiple unioned sources**. |
 | `cubit_examples_refresh` | Force-refresh every Cubit example sub-source. |
 | `cubit_exec` | Send arbitrary Cubit commands to the persistent viewer session. |
@@ -87,22 +83,10 @@ Module: `radia_mcp.cubit.server`
 | `cubit_forum_tips` | Get practical Cubit meshing tips sourced from the Coreform forum. |
 | `cubit_generate_dialog` | Generate a single complete PySide6 dialog script for a Cubit toolbar |
 | `cubit_gmsh_v41_inventory` | Parse inline ASCII Gmsh 4.1 by entity blocks and validate connectivity. |
-| `cubit_gmsh_v41_mixed_order_gate` | Gate Gmsh 4.1 mixed topology/order while retaining .vol label authority. |
-| `cubit_headless_netgen_export_gate` | Gate migration from a GUI plugin export command to native headless Netgen export. |
-| `cubit_helical_conductor_source_gate` | Gate a helical-conductor source replay and classified tet fallback. |
-| `cubit_helical_partition_mesh_gate` | Gate a many-body helical mesh against quality and parsed .vol inventory. |
-| `cubit_hex_refinement_geometry_gate` | Detect curved-geometry error plateaus in an all-hex refinement series. |
-| `cubit_journal_reproducibility_gate` | Compare two Cubit journals without inventing a script root cause. |
-| `cubit_levelset_sculpt_hex_validation_gate` | Gate coarse/fine Sculpt all-hex quality and Gmsh volume closure. |
 | `cubit_list_checkpoints` | List all saved Cubit checkpoints with size + mtime. |
-| `cubit_live_mixed_mesh_gate` | Gate a source-journal hex+pyramid+tet replay from headless Cubit Python. |
-| `cubit_loft_high_order_vol_series_gate` | Gate all-hex loft topology, curved payload, sidecars, and quality for orders 1-5. |
 | `cubit_lookup` | Retrieve relevant sections from the bundled Cubit knowledge base. |
-| `cubit_mapped_boundary_layer_shell_gate` | Gate mapped all-hex boundary layers by nodal shells, quality, and scale. |
 | `cubit_mesh_apply_choice` | Apply the human's chosen variant from a previous |
 | `cubit_mesh_auto` | Find a working mesh recipe by trying a scheme ladder in batch, |
-| `cubit_mesh_carrying_straight_sweep_gate` | Gate a straight include_mesh sweep, topology lattice, and Gmsh export. |
-| `cubit_mesh_carrying_straight_sweep_source_replay_gate` | Gate official Help provenance, headless replay, and no-mesh control. |
 | `cubit_mesh_diagnose` | Per-volume meshing diagnostic. |
 | `cubit_mesh_race` | Race N recipes in parallel batch Cubits, replay the first/best |
 | `cubit_mesh_race_review` | Race N AI variants + observe live human, **wait for all** to |
@@ -111,19 +95,9 @@ Module: `radia_mcp.cubit.server`
 | `cubit_mesh_race_smart_async` | **Background variant of `cubit_mesh_race_smart`** — AI inspects |
 | `cubit_mesh_race_status` | Check the status of a background race launched by |
 | `cubit_mesh_race_with_human` | **The radia-mcp signature workflow.** |
-| `cubit_mixed_order_series_gate` | Validate mixed-mesh topology and routing across export orders. |
-| `cubit_mixed_transition_source_gate` | Gate source commands, headless diagnostics, and quality API recovery. |
-| `cubit_nastran_consumer_gate` | Validate a Cubit BDF handoff without conflating producer and consumer faults. |
 | `cubit_netgen_quality_compare` | Mesh ONE STEP with both meshers and compare element quality with a |
-| `cubit_partial_volume_hex_diagnosis_gate` | Gate a truthful partial-volume/low-quality hex rejection. |
-| `cubit_partitioned_sweep_compatibility_gate` | Gate a legacy webcut/partition journal promoted to an all-hex sweep. |
-| `cubit_power_tools_cleanup_source_replay_gate` | Gate an official Power Tools cleanup trace and console diagnosis. |
 | `cubit_probe` | Query the Cubit session for geometry/mesh statistics. |
-| `cubit_pyramid_degenerate_hex_export_gate` | Gate CPYRAM versus nopyramid decks, including order-2 linearization. |
-| `cubit_pyramid_mixed_export_gate` | Gate explicit hex/pyramid/tet preservation in Gmsh and Nastran. |
-| `cubit_pyramid_source_plugin_replay_gate` | Gate legacy source migration through executable-owned plugin startup. |
 | `cubit_recent_failures` | Return the last N failed Cubit invocations (from persistent log). |
-| `cubit_region_owned_mixed_mesh_gate` | Gate region-owned conductor hex and air tet/pyramid topology. |
 | `cubit_reload_code` | Reload radia_mcp modules whose source changed on disk and re-register their tools, without restarting this server (editable install). Call it after editing the package; the report lists reloaded mo... |
 | `cubit_restore` | Restore a previously-saved Cubit checkpoint by label. |
 | `cubit_scaffold_toolbar` | Generate a complete Coreform-Cubit custom-toolbar skeleton on disk. |
@@ -132,21 +106,15 @@ Module: `radia_mcp.cubit.server`
 | `cubit_session_status` | Return diagnostic info about the Cubit session: alive/pid/mode, |
 | `cubit_show` | Load a file into the **persistent Cubit viewer** and optionally run |
 | `cubit_snapshot` | Hardcopy the current Cubit view to a PNG file. |
-| `cubit_source_journal_replay_gate` | Gate synchronous, headless replay and expected mesh disposition. |
 | `cubit_status` | (no description) |
 | `cubit_stl_to_vol` | Mesh a watertight STL into a solver-ready Netgen `.vol` (all-hex via |
-| `cubit_structured_hex_lattice_gate` | Gate structured all-hex counts, quality, and Gmsh volume closure. |
-| `cubit_structured_hex_source_replay_gate` | Gate source commands, license diagnostics, and headless exit semantics. |
 | `cubit_suggest_next` | Suggest concrete next Cubit commands based on the current state. |
-| `cubit_sweep_along_curve_gate` | Gate an all-hex mesh-carrying curve sweep and headless launcher evidence. |
-| `cubit_symmetric_swept_mixed_mesh_gate` | Gate symmetric CAD, hex/pyramid/tet topology, quality, and Gmsh closure. |
-| `cubit_symmetric_swept_source_replay_gate` | Gate source-journal headless replay and public mixed-mesh closure. |
 | `cubit_toolbar_guide` | Get documentation on building custom in-Cubit PySide6 toolbars. |
+| `cubit_validation_catalog` | Search the cubit validation operation catalog. Use the returned name with cubit_validation_run. |
+| `cubit_validation_run` | Run one cubit validation operation. Pass the operation name and a dictionary of named arguments. Query cubit_validation_catalog first for signatures. |
 | `cubit_vfrac_to_vol` | Mesh a volume-fraction Exodus (``radia.topopt_cad.write_vfrac_exodus``) |
 | `cubit_vol_inventory` | Return semantic element inventory for a Netgen `.vol` export. |
 | `cubit_web_docs` | Fetch live Cubit documentation and grep for `query`. |
-| `cubit_webcut_conformal_hex_gate` | Gate webcut volume drift, partition balance, interfaces, and hex quality. |
-| `cubit_webcut_journal_execution_gate` | Gate source-journal operation order and headless process evidence. |
 | `generate_cubit_script` | Generate a template Cubit Python script for common workflows. |
 | `get_lint_rules` | List all available Cubit export lint rules with descriptions. |
 | `lint_cubit_directory` | Lint all Python scripts in a directory for Cubit export convention violations. |
@@ -165,70 +133,34 @@ Module: `radia_mcp.build123d.server`
 |---|---|
 | `build123d_api` | Search the bundled build123d API reference (auto-generated from |
 | `build123d_ask` | One-shot search across every build123d knowledge surface. |
-| `build123d_brep_mass_topology_roundtrip_gate` | Gate CAD roundtrips by mass properties, centroid semantics and B-rep Euler topology. |
 | `build123d_cad_handoff_manifest` | Run the final build123d CAD handoff manifest gate from JSON inputs. |
 | `build123d_cad_route_source_contract` | Gate a build123d CAD package before Cubit hex/mixed route promotion. |
-| `build123d_cross_kernel_mass_topology_diagnosis_gate` | Diagnose STEP portability while separating evidence quality from acceptance. |
 | `build123d_cubit_quality_ledger_handoff` | Bind build123d CAD rows to a Cubit mesh-quality ledger identity gate. |
 | `build123d_cubit_solver_route_handoff` | Bind build123d CAD rows to a Cubit mixed solver-route manifest gate. |
-| `build123d_curved_shell_step_semantics_gate` | Diagnose topology-preserving curved STEP mass loss across CAD kernels. |
-| `build123d_curved_step_topology_crosscheck_gate` | Gate curved STEP mass and exact topology across independent imports. |
 | `build123d_discussions` | Search the build123d GitHub Issues archive (de-facto forum). |
 | `build123d_doctor` | One-shot environment diagnosis for the build123d MCP stack |
-| `build123d_drafted_housing_cross_kernel_gate` | Gate drafted housing mass/topology across B-rep, STEP, Cubit, and Gmsh. |
-| `build123d_drafted_housing_source_replay_gate` | Gate tagged draft/fillet/hole source and headless mesh-companion replay. |
-| `build123d_dual_api_perforated_board_gate` | Gate equivalent Builder/Algebra perforated boards through two CAD imports. |
-| `build123d_dual_api_prismatic_pattern_gate` | Gate native dual-API parity separately from external STEP-kernel bias. |
-| `build123d_dual_api_source_replay_gate` | Gate immutable upstream dual-API execution and headless CAD replay. |
 | `build123d_examples` | Search build123d + **bd_warehouse** + **GitHub Issues** (unioned). |
 | `build123d_examples_refresh` | Force-refresh all build123d sources from GitHub + YouTube. |
-| `build123d_external_cad_mass_topology_gate` | Crosscheck two CAD kernels without confusing entity centers with mass centroids. |
 | `build123d_external_cad_volume_evidence_package` | Bundle dual-source CAD volume evidence before reuse. |
-| `build123d_face_first_perforation_handoff_gate` | Gate dense face-first holes against native and external CAD topology. |
-| `build123d_face_first_perforation_source_replay_gate` | Gate immutable source replay and owned headless CAD process evidence. |
-| `build123d_faceted_edit_portability_gate` | Separate faceted CAD portability from downstream mesh readiness. |
-| `build123d_faceted_source_replay_gate` | Gate tagged source, dependent STL, viewer stub, and external replay. |
 | `build123d_heal` | Run OCCT `ShapeFix_Shape` on a STEP file, write a healed copy. |
-| `build123d_heat_exchanger_source_recovery_gate` | Gate the upstream heat-exchanger replay and rotation recovery. |
 | `build123d_inspect_step` | Inspect an external STEP file via the build123d / OCCT importer |
-| `build123d_jointed_assembly_heal_invariance_gate` | Verify that STEP solid closure loss persists across heal/noheal imports. |
-| `build123d_jointed_assembly_source_replay_gate` | Gate immutable source, joint graph, and headless external-CAD evidence. |
-| `build123d_jointed_assembly_step_closure_gate` | Diagnose a component-level solid closure loss in a jointed STEP assembly. |
-| `build123d_loft_example_source_replay_gate` | Gate the immutable upstream loft source and headless CAD replay. |
-| `build123d_lofted_shell_handoff_gate` | Gate a bounded lofted-shell CAD handoff without solver overclaim. |
 | `build123d_lookup` | Retrieve relevant sections from the bundled build123d knowledge + |
 | `build123d_mass_property_crosscheck` | Compare build123d volume/area/bbox rows with one or more CAD sources. |
 | `build123d_motor_housing_thermal_reference` | Return analytic volume/area/body-count data for a finned motor housing. |
-| `build123d_nested_assembly_volume_gate` | Distinguish a zero parent Compound from an empty CAD handoff. |
-| `build123d_path_sweep_handoff_gate` | Gate a curved build123d sweep through analytic path and STEP/CAD checks. |
-| `build123d_path_sweep_source_contract_gate` | Gate the source-native build123d sweep idiom and ``is_valid`` API form. |
-| `build123d_patterned_compound_translation_gate` | Diagnose dominant curved-body STEP bias without solver-ready overclaim. |
-| `build123d_perforated_prism_roundtrip_gate` | Check STEP roundtrip volume and through-hole boundary topology. |
-| `build123d_platonic_solid_family_gate` | Gate all five Platonic solids by topology, analytic volume and CAD replay. |
 | `build123d_probe` | Probe a STEP/BREP file with the SAME vocabulary as `cubit_probe`. |
 | `build123d_recent_failures` | Return the last N failed `execute_build123d` invocations (from log). |
-| `build123d_reflection_rotation_handoff_gate` | Gate reflection failures and a proper-rotation two-body STEP handoff. |
 | `build123d_reload_code` | Reload radia_mcp modules whose source changed on disk and re-register their tools, without restarting this server (editable install). Call it after editing the package; the report lists reloaded mo... |
-| `build123d_repeated_cavity_dual_api_gate` | Gate dual APIs and four STEP imports for a repeated-feature cavity solid. |
-| `build123d_repeated_cavity_source_replay_gate` | Gate immutable dual sources, STEP identities, and headless CAD replay. |
 | `build123d_status` | (no description) |
-| `build123d_step_portability_diagnosis_gate` | Diagnose whether STEP mass loss occurs in export or external import. |
-| `build123d_stud_wall_source_replay_gate` | Gate exact stud-wall source, RigidJoints, and headless CAD replay. |
 | `build123d_suggest_next` | Suggest concrete next build123d steps toward a goal. |
-| `build123d_tea_cup_source_contract_gate` | Gate the upstream tea-cup source and headless portability diagnosis. |
 | `build123d_to_cubit_hex` | End-to-end: build123d script → STEP → `cubit_mesh_auto` (batch- |
 | `build123d_try` | Dry-run a build123d script in a **fresh Python subprocess**. |
 | `build123d_try_race` | Race N build123d script variants in parallel subprocesses, |
-| `build123d_upstream_example_roundtrip_gate` | Gate source identity and STEP self-roundtrip for an upstream build123d example. |
-| `build123d_upstream_source_external_cad_contract_gate` | Gate immutable upstream execution and an explicit external-CAD decision. |
 | `build123d_usage` | Get build123d CAD modeling documentation for CAE workflows. |
-| `build123d_vase_external_solid_contract_gate` | Gate an exact vase replay and reject zero-volume external solids. |
+| `build123d_validation_catalog` | Search the build123d validation operation catalog. Use the returned name with build123d_validation_run. |
+| `build123d_validation_run` | Run one build123d validation operation. Pass the operation name and a dictionary of named arguments. Query build123d_validation_catalog first for signatures. |
 | `build123d_volume_crosscheck` | Compare build123d reference volumes with Cubit or external-CAD volumes. |
-| `build123d_volume_crosscheck_source_coverage_gate` | Require Cubit/external CAD source coverage after a volume crosscheck. |
-| `build123d_volume_crosscheck_source_identity_gate` | Require source identity metadata after an external CAD volume crosscheck. |
 | `build123d_volume_crosscheck_with_units` | Normalize explicit cubic units before comparing CAD volumes. |
 | `build123d_web_docs` | Fetch live build123d documentation (readthedocs) and grep for `query`. |
-| `build123d_wrap_faces_rotational_source_replay_gate` | Gate immutable wrap_faces, thicken, and rotational-pattern replay. |
 | `cadquery_to_cubit_hex` | End-to-end: cadquery script → STEP → Cubit `cubit_mesh_auto` |
 | `execute_build123d` | Execute a build123d Python script and return geometry information. |
 | `execute_cadquery` | Execute a **CadQuery** Python script (sibling OCCT CAD lib). |
@@ -330,13 +262,9 @@ Module: `radia_mcp.radia_ngsolve.server`
 
 | Tool | Description |
 |---|---|
-| `acoustic_duct_band_gap_gate` | Gate a confined acoustic band gap against empty and free-space controls. |
 | `acoustic_fembem_cross_learnings` | Method-selection and validation cross-learnings for radia-acoustic, distilled |
-| `adjoint_gradient_scaling_gate` | Gate reverse-mode solve scaling, FD agreement and ascent direction. |
 | `airgap_motor_workflow` | Get AGE rotating machine workflow documentation -- nonlinear iron + AGE coupling. |
-| `alternate_eddy_loss_formulation_gate` | Gate volume-resolved and surface-impedance losses as non-additive alternatives. |
 | `analytical_formulas` | Get documentation for radia.analytical_formulas (closed-form reference layer). |
-| `autodiff_harmonic_balance_convergence_gate` | Gate AD harmonic balance without mean-only false convergence. |
 | `axifem_documentation` | Get radia-core axifem documentation: Henrotte axisymmetric FE |
 | `balanced_mcp_learning_profile` | Return the ten-stage equal public/source MCP learning contract. |
 | `basis_functions` | Finite-element basis function library — Mathematica-canonical |
@@ -345,135 +273,45 @@ Module: `radia_mcp.radia_ngsolve.server`
 | `cln_3d_notebook` | Retrieve Tanimoto's raw 3D CLN notebook Python code. |
 | `cln_sibc_orthogonal` | Get CLN expansion-point + SIBC orthogonal-residual theory documentation. |
 | `cln_sphere_dd_pipeline` | Get the Sphere DD (double-double, ~32 digit) VIM Cauer Ladder Network |
-| `cogging_torque_periodicity_gate` | Gate a zero-current torque sweep over one slot/pole LCM period. |
-| `coil_self_resonance_sweep_gate` | Gate complex coil impedance, self-resonance, and sweep replay. |
-| `complex_vector_field_maximum_gate` | Gate complex vector-field magnitudes and per-material maxima. |
-| `conductive_network_resistance_monotonicity_gate` | Gate Rayleigh resistance monotonicity for conductive contact networks. |
-| `coupled_cq_refinement_gate` | Gate coupled FEM/BEM CQ symbols, contour balance, and refinement. |
-| `cq_response_reality_gate` | Gate a coupled CQ solve, including its real time-domain reconstruction. |
-| `cq_scattering_arrival_gate` | Gate CQ scattered-field causality against a geometric ray arrival. |
-| `cyclic_terminal_phasor_balance_gate` | Gate cyclic voltage/current triplets and all-terminal phasor KCL. |
-| `cyclic_terminal_source_sweep_gate` | Gate cyclic terminal charges without assuming formulations are identical. |
-| `cylindrical_conductor_skin_bessel_gate` | Gate cylindrical skin-effect identities and exact Bessel structure. |
 | `dtn_coarse_mesh` | Why open-boundary methods stay accurate on COARSE meshes -- a spectral |
-| `dual_formulation_force_error_convergence_gate` | Gate force-error convergence envelopes across two or more formulations. |
-| `dual_formulation_symmetric_field_profile_gate` | Gate full-profile agreement and symmetry for two field formulations. |
-| `energy_budgeted_trace_kkt_gate` | Gate KKT closure for an energy-budgeted FEM/BEM trace fit. |
 | `esim` | Get ESIM (Effective Surface Impedance Method) general documentation. |
-| `fem_bem_capstone_suite_gate` | Gate a ten-case first-order FEM/BEM reference capstone suite. |
 | `fem_bem_schur` | Get FEM-BEM Schur coupling documentation -- exact open boundary for interior FEM. |
 | `femm_parity_documentation` | Get FEMM-parity documentation: which FEMM (Finite Element Method Magnetics, |
-| `finite_solenoid_surface_current_gate` | Gate a finite-solenoid surface-current profile and signed linearity. |
-| `force_coenergy_displacement_gate` | Gate direct force against the central derivative of magnetic coenergy. |
-| `force_position_profile_gate` | Gate a force-position sweep without assuming it is monotonic. |
 | `force_validation` | EM force extraction in NGSolve + independent <-> NGSolve cross-validation. |
-| `fsi_scattering_invariants_gate` | Gate lossless FSI reciprocity, energy closure, and exterior-method agreement. |
 | `get_radia_lint_rules` | List all available NGSolve lint rules with descriptions. |
-| `global_local_optimization_replay_gate` | Gate a stochastic global-search to derivative-checked local-polish replay. |
 | `gmsh_post_spec` | GMSH post-processing specification for Radia panels. |
-| `grounded_sphere_capacitance_convergence_gate` | Gate grounded-sphere image-series convergence and mixed-boundary energy. |
-| `hall_effect_transverse_voltage_gate` | Gate Hall voltage by coefficient, drive, field, and replay controls. |
-| `harmonic_current_port_power_energy_identity_gate` | Gate peak-phasor port, loss, energy, flux, and profile identities. |
-| `harmonic_magnetic_force_triplet_closure_gate` | Gate harmonic body-force methods and source/body action-reaction closure. |
-| `harmonic_zero_net_circuit_gate` | Gate zero-net harmonic phasors, Faraday sign, loss, and force metadata. |
-| `hartmann_profile_gate` | Gate a Hartmann-number sweep against an independent channel profile. |
 | `hdiv_vim` | HDiv-type VIM (Volume Integral Method) demag operator -- the lab's FEEC H(div) |
 | `hdiv_vim_demag_eval` | Air-mesh-free HDiv-MMM demagnetization solve of a body-only `.vol`. |
-| `helmholtz_double_layer_low_frequency_gate` | Gate the quadratic low-frequency correction of a Helmholtz double layer. |
-| `helmholtz_dual_formulation_axis_gate` | Gate Helmholtz-coil axis symmetry, flatness, and formulation agreement. |
-| `heterogeneous_current_flow_p1_reintegration_gate` | Gate heterogeneous current-flow P1 reintegration and sign covariance. |
-| `heterogeneous_part_mesh_replay_gate` | Diagnose deterministic heterogeneous part-mesh replay drift. |
-| `hmatrix_compression_scaling_gate` | Gate H-matrix accuracy, bounded rank, and subquadratic storage scaling. |
-| `homogenized_bundle_impedance_comparison_gate` | Gate a stranded-bundle approximation against an explicit reference. |
-| `hysteresis_minor_loop_replay_gate` | Gate history, knot normalization, signed loss, and exact loop replay. |
-| `inductance_energy_mutual_gate` | Gate L=2W/I^2 and an analytic one-direction mutual inductance. |
-| `inductance_matrix_family_gate` | Gate two-winding matrices, identities, replay, and turn scaling. |
 | `install_deploy` | Radia install / deploy policy and recipes — 2-tier configuration |
 | `kelvin_identify_post_hoc` | Add Kelvin Periodic Identifications to an existing NGSolve mesh |
 | `kelvin_transformation` | Get Kelvin transformation documentation for open boundary FEM problems. |
-| `leakage_inductance_closure_gate` | Gate compensated-energy and unit-current-matrix leakage inductance. |
-| `linear_axisymmetric_circuit_energy_gate` | Gate current, flux, field, and energy identities on one fixed mesh. |
-| `linear_eddy_levitation_force_gate` | Gate linear harmonic levitation force by dual extraction and I-squared laws. |
-| `linear_induction_frequency_sweep_gate` | Gate a linear-induction frequency sweep by thrust, loss, and phase balance. |
-| `linear_magnetization_scaling_gate` | Gate source scaling plus an independent refined P1 FEM reference. |
-| `linear_sphere_geometry_convergence_gate` | Gate first-order sphere tri/tet geometry convergence and replay. |
-| `linked_study_silent_noop_gate` | Verify a linked native run that returned without creating solver results. |
 | `lint_radia_directory` | Lint all Python scripts in a directory for NGSolve convention violations. |
 | `lint_radia_script` | Lint a single Python script for Radia + NGSolve convention violations. |
 | `loop_learning` | Public-safe CAE loop learning rules distilled from repeated validation |
-| `loss_temperature_coupling_gate` | Gate an electromagnetic-loss to transient-temperature handoff. |
-| `lossy_dielectric_complex_power_refinement_gate` | Gate lossy-dielectric constitutive, energy, complex-power, and mesh closure. |
-| `magnetic_conductive_shield_frequency_gate` | Gate low-frequency magnetic loading and high-frequency eddy shielding. |
-| `magnetic_force_method_profile_gate` | Gate magnetic-force profiles with explicit body/surface selection scope. |
-| `magnetostatic_open_boundary_equivalence_gate` | Gate gauge-invariant equivalence of two magnetostatic open-boundary solutions. |
-| `manual_auto_mixed_mesh_preservation_gate` | Gate exact manual-region preservation and bounded automatic remeshing. |
-| `material_contrast_force_gate` | Gate null, attraction, and increasing-repulsion material-force cases. |
 | `matlab_acoustic_fembem_agent_guide` | Agent guide for MATLAB acoustic FEM-BEM / Gypsilab-style workflows. |
 | `matlab_acoustic_fembem_extension_contract` | Inspect Radia's custom-tool contract for the official MATLAB MCP server. |
 | `matlab_acoustic_fembem_server_config` | Build official MATLAB MCP Server arguments for acoustic FEM-BEM. |
 | `md2html_usage` | Get md2html converter documentation (MathJax, reference links, styled HTML). |
-| `motion_coupled_eddy_levitation_transient_gate` | Gate motion-coupled lift while detecting aliased force output times. |
-| `moving_conductor_eddy_brake_gate` | Gate motion, Lorentz-force, and Joule-loss table identities. |
-| `multiconductor_capacitance_cross_formulation_gate` | Gate N-conductor Maxwell matrices across volume and boundary formulations. |
-| `multiport_impedance_sweep_gate` | Gate common-grid, positive-real, nontrivial complex impedance sweeps. |
 | `ngsbem_inductance` | Get ngsolve.bem boundary element method documentation for inductance extraction. |
 | `ngsolve_usage` | Get NGSolve finite element library usage documentation. |
-| `nonlinear_actuator_saturation_knee_gate` | Gate an axisymmetric nonlinear actuator by a shared L/F saturation knee. |
-| `nonlinear_bh_piecewise_material_gate` | Gate secant and left-interval differential permeability from B-H rows. |
-| `nonlinear_inductance_sweep_gate` | Gate nonlinear apparent/incremental matrices, duality, and replay. |
-| `one_port_power_balance_sweep_gate` | Gate passive one-port accepted power against S11 and reference impedance. |
-| `one_port_vi_s_impedance_gate` | Gate one-port S, V/I, impedance-transform, and power identities. |
-| `opposed_busbar_skin_force_gate` | Gate AC skin/proximity, phasor identities, and Lorentz action-reaction. |
 | `panel_add_param` | Plan where to add a new parameter to a Radia-NGSolve panel. |
 | `panel_describe_jp` | 現在のパネルソースを AST 解析して日本語で詳細に説明する。 |
 | `panel_gui_pitfalls` | Pitfalls and lessons learned from Radia GUI / Cubit panel development. |
 | `panel_schema` | Show Radia-NGSolve panel definitions with Japanese labels and physics. |
 | `panel_widget_locations` | Return file:line locations for everything that touches a widget. |
-| `parallel_wire_force_refinement_gate` | Gate a reciprocal two-wire force refinement sweep without requiring monotone error. |
-| `passive_axial_bearing_stiffness_gate` | Gate signed force, action-reaction, axial stability, and sweep replay. |
 | `peec_inductance` | Get documentation for the Radia PEEC-inductance (coil only, STEP) panel mode. |
-| `periodic_unwrapped_pm_machine_replay_gate` | Gate topology-aware PM-machine field symmetry and replay stability. |
-| `permanent_magnet_recoil_state_gate` | Gate nonlinear, open-circuit, and partial-recoil PM field states. |
-| `physics_result_preflight_gate` | Gate physics namespace, selection, solution, and license metadata before result evaluation. |
-| `pwm_controlled_motor_loss_gate` | Gate PWM current-control and aggregate/harmonic loss-table identities. |
-| `radar_range_angle_localization_gate` | Gate wideband range-angle localization of multiple targets. |
-| `radar_range_rcs_profile_gate` | Gate wideband range-RCS localization, method agreement, and analytic amplitude. |
 | `radia_ngsolve_reload_code` | Reload radia_mcp modules whose source changed on disk and re-register their tools, without restarting this server (editable install). Call it after editing the package; the report lists reloaded mo... |
 | `radia_ngsolve_status` | (no description) |
+| `radia_ngsolve_validation_catalog` | Search the radia_ngsolve validation operation catalog. Use the returned name with radia_ngsolve_validation_run. |
+| `radia_ngsolve_validation_run` | Run one radia_ngsolve validation operation. Pass the operation name and a dictionary of named arguments. Query radia_ngsolve_validation_catalog first for signatures. |
 | `radia_usage` | Get Radia C++ library usage documentation. |
-| `radial_bearing_force_symmetry_gate` | Gate magnetic-body force with equal and mirrored excitation controls. |
-| `reciprocal_two_port_power_sweep_gate` | Gate complex two-port reciprocity, symmetry, passivity, and power closure. |
-| `regularized_trace_inverse_path_gate` | Gate a P1 trace Tikhonov path, L-curve, Morozov, and replay. |
 | `release_workflow` | release-quad workflow for PyPI and the MEX + SLX GitHub Release. |
-| `rf_sweep_artifact_summary_gate` | Gate a solved two-port sweep artifact and its process-neutral metadata. |
-| `rotating_conductor_transient_gate` | Gate moving-axis migration, rotational kinematics, and loss partition. |
-| `rotational_eddy_brake_energy_gate` | Gate free rotational braking with angular impulse and field energy. |
-| `rotational_kinematics_time_axis_gate` | Gate a result-table time axis using angle/speed kinematics. |
-| `rwg_hcurl_trace_consistency_gate` | Gate RWG/HCurl trace topology, de Rham closure, and reference matrices. |
-| `single_loop_source_normalized_field_gate` | Gate a single-loop field transfer across two port formulations. |
-| `skin_effect_adaptive_energy_loss_gate` | Gate current-port identities and adaptive skin-effect loss convergence. |
-| `source_free_static_null_solution_gate` | Gate a source-free static Maxwell solve against the exact zero solution. |
-| `source_off_linear_relaxation_gate` | Gate a linear source-off RL relaxation using total current and field decay. |
 | `sparsesolv` | Get sparsesolv documentation and code examples. |
 | `standalone_panels` | Retired standalone PySide panel topic. The canonical Radia human surface is |
-| `static_field_shim_family_gate` | Gate static-field scale, ROI uniformity, shim sensitivity, and map quality. |
-| `symmetric_axial_field_profile_gate` | Gate an origin-centered axial profile by analytic value and symmetry. |
-| `symmetric_complex_field_curve_gate` | Gate an even- or odd-sampled complex field curve by mirror symmetry. |
 | `taskmanager` | NGSolve TaskManager parallelism — usage, MKL interaction, audit, C++. |
 | `technical_reports` | Return implementation-oriented knowledge distilled from IEEJ reports. |
-| `thermal_robin_boundary_balance_gate` | Gate signed Robin heat balance, mesh plateau, replay, and reflection. |
-| `three_phase_winding_power_balance_gate` | Gate three-phase balance, STAR KCL, and coupled-winding copper power. |
-| `transient_conductor_replay_identity_gate` | Gate full transient conductor histories, identities, and independent replay. |
-| `transient_coupled_coil_response_gate` | Gate a passive shorted-secondary transient induced-current history. |
-| `twin_conductor_skin_effect_frequency_gate` | Gate passive twin-conductor R/L and impedance trends over frequency. |
-| `two_body_force_magnitude_replay_gate` | Gate unsigned two-body force balance and two fresh solver replays. |
-| `two_conductor_capacitance_identity_gate` | Gate two-conductor capacitance using terminal charge and field energy. |
-| `two_conductor_capacitance_matrix_gate` | Gate reciprocal Maxwell and mutual capacitance matrix representations. |
-| `two_terminal_dc_conduction_power_gate` | Gate current closure, Joule power, adaptive convergence, and replay. |
-| `two_winding_frequency_faraday_gate` | Gate two-winding complex response against linked-flux Faraday identity. |
 | `urn` | Universal Relaxation Network (URN): causal/passive rational fitting of a |
 | `urn_fit` | Fit a complex frequency response with a Universal Relaxation Network and |
-| `voice_coil_force_flux_sweep_gate` | Gate a PM voice-coil current sweep by force, flux, symmetry, and mesh evidence. |
 
 ## `mcp-server-force`
 
@@ -484,7 +322,6 @@ Module: `radia_mcp.force.server`
 | Tool | Description |
 |---|---|
 | `force` | Common EM-force overview and routing; call `force_topics` for topics. |
-| `force_action_reaction_gate` | Gate Newton action-reaction closure for force and common-pivot torque. |
 | `force_air_gap_torque` | Compute uniform cylindrical air-gap Maxwell shear torque. |
 | `force_air_gap_torque_samples` | Integrate sampled cylindrical air-gap Maxwell shear torque. |
 | `force_coenergy_torque` | Differentiate fixed-current coenergy versus angle into torque samples. |
@@ -492,7 +329,6 @@ Module: `radia_mcp.force.server`
 | `force_lorentz` | Integrate static Lorentz force and optional torque from SI samples. |
 | `force_maxwell_surface` | Integrate static Maxwell surface force and optional torque. |
 | `force_method_agreement_gate` | Gate two independent force/torque result records for agreement. |
-| `force_method_selection_gate` | Select and gate a robust primary force-extraction method. |
 | `force_methods` | Unified theory: Maxwell stress, eggshell, Arkkio, nodal, and Lorentz. |
 | `force_recipe` | Practical method choice, high-order setup, pitfalls, and examples. |
 | `force_reload_code` | Reload radia_mcp modules whose source changed on disk and re-register their tools, without restarting this server (editable install). Call it after editing the package; the report lists reloaded mo... |
@@ -502,9 +338,10 @@ Module: `radia_mcp.force.server`
 | `force_time_average_lorentz` | Integrate cycle-averaged phasor Lorentz force and optional torque. |
 | `force_time_average_maxwell_surface` | Integrate cycle-averaged phasor Maxwell force and optional torque. |
 | `force_topics` | Authoritative list of topics accepted by this server's dispatcher tool. Returns 8 topics. |
+| `force_validation_catalog` | Search the force validation operation catalog. Use the returned name with force_validation_run. |
 | `force_validation_guide` | Force method map, cross-checks, eggshell guidance, and evidence contract. |
+| `force_validation_run` | Run one force validation operation. Pass the operation name and a dictionary of named arguments. Query force_validation_catalog first for signatures. |
 | `force_virtual_work` | Differentiate energy/coenergy versus displacement into force samples. |
-| `force_weight_equilibrium_gate` | Gate levitation or bearing lift against weight. |
 
 ## `mcp-server-radia-matlab`
 
@@ -516,10 +353,8 @@ Module: `radia_mcp.matlab.server`
 |---|---|
 | `matlab_agent_guide` | (no description) |
 | `matlab_agentic_ml_guide` | (no description) |
-| `matlab_aicia_catalog_gate` | Validate full-channel metadata scope and solver-gated CAE promotion. |
 | `matlab_cad_topology_build` | Build a Cubit + Radia-VIM linearization + LP topology workflow. |
 | `matlab_extension_contract` | (no description) |
-| `matlab_ml_rl_artifact_gate` | (no description) |
 | `matlab_official_server_config` | (no description) |
 | `matlab_optimize_build` | Build validated MATLAB code for objective, Simulink, or LTspice optimization. |
 | `matlab_optimize_resume` | Build official-MATLAB-MCP-ready code to resume a persisted Study. |
@@ -529,12 +364,13 @@ Module: `radia_mcp.matlab.server`
 | `matlab_optuna_mcp_route` | Route shared Optuna tools upstream and MATLAB differences to Radia. |
 | `matlab_optuna_oracle_audit` | Audit Optuna fixtures, versions, hashes, policy sync, and test coverage. |
 | `matlab_optuna_oracle_plan` | Build an official-MATLAB-MCP-ready Optuna differential test plan. |
-| `matlab_optuna_release_gate` | Validate installed-wheel, Simulink, resume, oracle, and speed evidence. |
 | `matlab_optuna_simulink_contract` | Describe the table-backed MATLAB Optuna and Simulink workflow. |
 | `matlab_radia_acoustic_interface_contract` | (no description) |
 | `matlab_radia_mex_contract` | Expose the shared Radia/NGSolve Python-to-MATLAB MEX capability contract. |
 | `matlab_sheet_metal_topology_build` | Build a Radia-VIM + LP + adaptive NGSolve/Cubit sheet-metal workflow. |
 | `matlab_simulink_library_contract` | Describe Radia application blocks, Library Browser registration, and LTspice compatibility. |
+| `matlab_validation_catalog` | Search the matlab validation operation catalog. Use the returned name with matlab_validation_run. |
+| `matlab_validation_run` | Run one matlab validation operation. Pass the operation name and a dictionary of named arguments. Query matlab_validation_catalog first for signatures. |
 | `radia_matlab_reload_code` | Reload radia_mcp modules whose source changed on disk and re-register their tools, without restarting this server (editable install). Call it after editing the package; the report lists reloaded mo... |
 | `radia_matlab_status` | (no description) |
 
@@ -588,26 +424,22 @@ Module: `radia_mcp.fem.server`
 
 | Tool | Description |
 |---|---|
-| `fem_axifem_element_evidence_gate` | Validate content-addressed evidence for P1/Q1/P2/Q2 curved axifem paths. |
-| `fem_axifem_signature_execution_gate` | Gate axisymmetric Henrotte executions separately from retirement readiness. |
 | `fem_elements` | Element technology: edge (Nedelec), high-order, XFEM, isogeometric, DG. |
 | `fem_equivalence_source` | Equivalence-theorem near-field source (Schelkunoff/Love -- Stratton-Chu). |
 | `fem_gauge_open_boundary` | Gauging + open boundary techniques. |
 | `fem_harmonic_magnetic_validation` | Run planar and weighted-axisymmetric complex magnetic solves. |
 | `fem_kelvin_open_boundary_validation` | Run static 2-D/3-D Kelvin validation in one owned native worker. |
 | `fem_large_scale_special` | Large-scale, error theory, multi-scale (Hollaus MSFEM), misc techniques. |
-| `fem_legacy_corpus_absorption_gate` | Gate solver-neutral model, automation, document, and topic coverage. |
-| `fem_legacy_signature_migration_gate` | Gate solver-neutral signature routing and false-ready rejection evidence. |
 | `fem_ngsolve_hierarchy` | NGSolve hierarchical H(curl) bases - Zaglmayr / nograds / tree-cotree. |
 | `fem_nonconforming_mesh_coupling` | Non-conforming mesh coupling: mortar / Nitsche / FETI-DP / BDDC / DG / |
 | `fem_overview` | FEM landscape: lab stack, decision tree, genealogy. |
 | `fem_potential_formulations` | Potential formulations: A-Omega, T-Omega, H, Reduced, Darwin. |
-| `fem_profile2d_handoff_gate` | Gate a source-neutral 2-D CAD/mesh/solver handoff packet. |
 | `fem_reload_code` | Reload radia_mcp modules whose source changed on disk and re-register their tools, without restarting this server (editable install). Call it after editing the package; the report lists reloaded mo... |
-| `fem_solver_uninstall_safety_gate` | Validate reversible solver-uninstall evidence without local path access. |
 | `fem_status` | (no description) |
 | `fem_time_domain_axisym` | Time-domain, axisymmetric (Henrotte), harmonic balance, HF, circuit coupling. |
+| `fem_validation_catalog` | Search the fem validation operation catalog. Use the returned name with fem_validation_run. |
 | `fem_validation_evidence_bundle` | Validate balanced, content-addressed solver-replacement evidence. |
+| `fem_validation_run` | Run one fem validation operation. Pass the operation name and a dictionary of named arguments. Query fem_validation_catalog first for signatures. |
 | `fem_vol2d_scalar_analysis` | Solve or replay a portable 2-D scalar-PDE ``.vol`` artifact. |
 | `fem_vol2d_transient_runtime` | Run one digest-bound fixed-width field/thermal lifecycle operation. |
 | `fem_xfem_em_hiruma` | EM-XFEM (Hiruma 2023): electromagnetic XFEM for eddy-current |
@@ -729,48 +561,26 @@ Module: `radia_mcp.motor.server`
 | `motor_darwin_model` | Darwin-model time-domain formulation (capacitive + inductive coupling). |
 | `motor_deck_bridge` | Public-safe motor deck corpus bridge for radia-motor. |
 | `motor_dual_lane_training_catalog` | Return the public-safe wide motor learning catalog. |
-| `motor_dual_lane_training_gate` | Check that the public motor catalog is complete and provenance-scrubbed. |
 | `motor_dual_lane_training_route` | Route a motor prompt to one catalog case and both radia-motor lanes. |
-| `motor_dual_torque_method_curve_gate` | Gate two independently evaluated static-torque curves. |
-| `motor_electrothermal_result_chain_gate` | Gate a four-stage motor electrothermal result handoff. |
 | `motor_em_force_extras` | Compatibility alias for `force_extras` in `radia_mcp.force` -- advanced |
 | `motor_em_force_recipe` | Practical NGSolve EM-force recipe for motor analysis. |
 | `motor_femm_transient` | FEMM newbuild transient solver — Lange-Henrotte-Hameyer 2009 |
 | `motor_field_quick_check` | First-order 2D magnetic-circuit/BEM-like motor quick check. |
-| `motor_force_report_method_metadata_gate` | Gate a force report using independent methods and action-reaction. |
-| `motor_force_rotation_covariance_gate` | Check that a planar force vector follows a rotated excitation/geometry. |
-| `motor_force_torque_method_agreement_gate` | Apply the shared ``radia_mcp.force`` agreement gate to motor results. |
-| `motor_hdiv_hex_torque_gate` | Gate converged BDM1-lane HDiv-MMM motor torque on HEX meshes. |
 | `motor_henrotte_lineage` | The Henrotte–Hameyer–RWTH research arc (energy-consistent E&M FE). |
 | `motor_hollaus_eddy` | Karl Hollaus / TU Wien MSFEM for laminated-iron eddy currents. |
 | `motor_hollaus_genealogy` | Visualize the Karl Hollaus / TU Wien MSFEM research genealogy |
-| `motor_ipm_two_run_ldlq_gate` | Gate same-angle PM-only/current-on runs and extract ``Ld``/``Lq``. |
-| `motor_magnet_model_handoff_gate` | Gate a converged source result and two-file downstream magnet model. |
-| `motor_mirror_symmetric_three_magnet_handoff_gate` | Gate grouped magnetization vectors, mirror symmetry, and fresh replay. |
-| `motor_motion_table_coordinate_gate` | Validate independent 3D translation and rotation motion tables. |
 | `motor_onelab` | ONELAB/GetDP electric-machine reference template knowledge. |
-| `motor_periodic_torque_sampling_gate` | Validate periodic torque sampling and FFT endpoint ownership. |
-| `motor_permanent_magnet_demagnetization_history_gate` | Gate irreversible PM state across one history or a replayed case family. |
-| `motor_permanent_magnet_force_pair_gate` | Gate attraction/repulsion reversal for a facing permanent-magnet pair. |
-| `motor_phase_flux_park_alignment_gate` | Gate a PM-only three-phase flux sweep in the rotating d/q frame. |
 | `motor_planar_coupling` | 2D PLANAR machine modelling in radia: HDiv-VIM soft-iron demag + the shared |
-| `motor_pm_absolute_demag_three_way_gate` | Attribute segmented-PM absolute demag error with BDM orders and H1 FEM. |
-| `motor_pm_armature_reaction_hdiv_hex_gate` | Gate PM armature-reaction increments separately from absolute demag error. |
 | `motor_reload_code` | Reload radia_mcp modules whose source changed on disk and re-register their tools, without restarting this server (editable install). Call it after editing the package; the report lists reloaded mo... |
-| `motor_rotating_circuit_transient_gate` | Gate rotating-circuit identities and endpoint state before FFT use. |
 | `motor_status` | (no description) |
-| `motor_thermal_handoff_gate` | Validate one motor-loss table for both LPTN and 3D all-hex thermal paths. |
 | `motor_topology_optimization` | SynRM topology optimization (Wakao 2025 AE + level-set), bridge and channel shaping. |
-| `motor_transient_no_load_load_cycle_gate` | Gate paired no-load and loaded three-phase transient cycles. |
-| `motor_triple_check_artifact_gate` | Validate a combined AGE and HDiv-MMM/HCurl eddy-bubble motor artifact. |
 | `motor_triple_check_plan` | Plan the standard radia-motor comparison. |
 | `motor_tritool_cross_reference` | Tri-tool cross-reference: FEMM / JMAG / radia-ngsolve (相互学習). |
-| `motor_validation_artifact_gate` | Check whether a motor cross-validation artifact can train radia-motor. |
+| `motor_validation_catalog` | Search the motor validation operation catalog. Use the returned name with motor_validation_run. |
 | `motor_validation_lane_template` | Return the JSON artifact template for a motor validation lane. |
 | `motor_validation_lanes` | Cross-validation lane policy for radia-motor. |
 | `motor_validation_router` | Route a motor prompt to a public deck, field quick check, and NGSolve AGE validation. |
-| `motor_variable_magnet_material_gate` | Gate variable-PM material parameters and their authoritative source. |
-| `motor_virtual_work_width_ladder_gate` | Select a coenergy-difference angle width against independent torque. |
+| `motor_validation_run` | Run one motor validation operation. Pass the operation name and a dictionary of named arguments. Query motor_validation_catalog first for signatures. |
 | `motor_vol2d_circuit_analysis` | Analyze a Netgen dimension-2 ``.vol`` and its coupled field circuit. |
 | `motor_vol2d_dynamic_analysis` | Analyze nonlinear, conductive-transient, or MEX-ready ``.vol`` data. |
 | `motor_vol2d_force_analysis` | Extract boundary-aware force from a solved dimension-2 ``.vol`` model. |
@@ -857,13 +667,12 @@ Module: `radia_mcp.topology_optimization.server`
 | Tool | Description |
 |---|---|
 | `topology_opt_applications` | Practical applications. |
-| `topology_opt_cae_ai_artifact_gate` | Gate CAE-AI artifacts before they are promoted as engineering results. |
-| `topology_opt_nonlinear_lsq_multistart_gate` | Gate nonlinear least-squares multistart, Jacobian, and KKT evidence. |
 | `topology_opt_shape_optimization` | Shape optimization for nonlinear magnetostatics. |
-| `topology_opt_simplex_stationarity_audit_gate` | Audit derivative-free convergence using independent stationarity checks. |
 | `topology_opt_topology_derivative` | Topological derivative for changing topology (adding/removing material). |
 | `topology_optimization_reload_code` | Reload radia_mcp modules whose source changed on disk and re-register their tools, without restarting this server (editable install). Call it after editing the package; the report lists reloaded mo... |
 | `topology_optimization_status` | (no description) |
+| `topology_optimization_validation_catalog` | Search the topology_optimization validation operation catalog. Use the returned name with topology_optimization_validation_run. |
+| `topology_optimization_validation_run` | Run one topology_optimization validation operation. Pass the operation name and a dictionary of named arguments. Query topology_optimization_validation_catalog first for signatures. |
 
 ## `mcp-server-bayesian-opt`
 
@@ -996,13 +805,11 @@ Module: `radia_mcp.maglev.server`
 | Tool | Description |
 |---|---|
 | `maglev` | Magnetic levitation knowledge -- maglev systems + levitation force physics. |
-| `maglev_force_torque_method_agreement_gate` | Apply the shared Force agreement gate to MagLev force/torque results. |
-| `maglev_force_weight_equilibrium_gate` | Gate MagLev lift against weight through the shared Force layer. |
 | `maglev_reload_code` | Reload radia_mcp modules whose source changed on disk and re-register their tools, without restarting this server (editable install). Call it after editing the package; the report lists reloaded mo... |
 | `maglev_status` | (no description) |
 | `maglev_topics` | Authoritative list of topics accepted by this server's dispatcher tool. Returns 20 topics. |
-| `rotating_conductor_periodic_settling_gate` | Gate full-turn convergence of a rotating-conductor eddy response. |
-| `team28_cycle_averaged_motion_gate` | Gate TEAM 28 cycle-averaged motion evidence and reject transient overclaims. |
+| `maglev_validation_catalog` | Search the maglev validation operation catalog. Use the returned name with maglev_validation_run. |
+| `maglev_validation_run` | Run one maglev validation operation. Pass the operation name and a dictionary of named arguments. Query maglev_validation_catalog first for signatures. |
 
 ## `mcp-server-team-benchmark`
 

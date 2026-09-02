@@ -68,68 +68,42 @@ from .gmsh_v41 import (
 	summarize_gmsh_v41_ascii,
 )
 from .nastran_consumer import evaluate_nastran_consumer_contract
-from .high_order_export_gate import (
-	cubit_headless_netgen_export_gate as _cubit_headless_netgen_export_gate,
-	cubit_loft_high_order_vol_series_gate as _cubit_loft_high_order_vol_series_gate,
-)
-from .helical_conductor_gate import (
-	cubit_helical_conductor_source_gate as _cubit_helical_conductor_source_gate,
-	cubit_region_owned_mixed_mesh_gate as _cubit_region_owned_mixed_mesh_gate,
-)
-from .mixed_transition_gate import (
-	cubit_conformal_hex_pyramid_tet_interface_gate as _cubit_conformal_hex_pyramid_tet_interface_gate,
-	cubit_mixed_transition_source_gate as _cubit_mixed_transition_source_gate,
-)
-from .cubit_v46_identity import (
-	validate_public_identity as _validate_cubit_v46_public_identity,
-	validate_source_identity as _validate_cubit_v46_source_identity,
-)
+from ..common.lazy_call import lazy_callable
+_cubit_headless_netgen_export_gate = lazy_callable(".high_order_export_gate", "cubit_headless_netgen_export_gate", __package__)
+_cubit_loft_high_order_vol_series_gate = lazy_callable(".high_order_export_gate", "cubit_loft_high_order_vol_series_gate", __package__)
+_cubit_helical_conductor_source_gate = lazy_callable(".helical_conductor_gate", "cubit_helical_conductor_source_gate", __package__)
+_cubit_region_owned_mixed_mesh_gate = lazy_callable(".helical_conductor_gate", "cubit_region_owned_mixed_mesh_gate", __package__)
+_cubit_conformal_hex_pyramid_tet_interface_gate = lazy_callable(".mixed_transition_gate", "cubit_conformal_hex_pyramid_tet_interface_gate", __package__)
+_cubit_mixed_transition_source_gate = lazy_callable(".mixed_transition_gate", "cubit_mixed_transition_source_gate", __package__)
+_validate_cubit_v46_public_identity = lazy_callable(".cubit_v46_identity", "validate_public_identity", __package__)
+_validate_cubit_v46_source_identity = lazy_callable(".cubit_v46_identity", "validate_source_identity", __package__)
 from .cross_artifact_mesh_lineage_v47 import (
 	validate_public_identity as _validate_cubit_v47_public_identity,
 	validate_source_identity as _validate_cubit_v47_source_identity,
 )
-from .semantic_mesh_identity_v48 import (
-	validate_public_identity as _validate_cubit_v48_public_identity,
-	validate_source_identity as _validate_cubit_v48_source_identity,
-)
-from .topology_replay_identity_v49 import (
-	validate_public_identity as _validate_cubit_v49_public_identity,
-	validate_source_identity as _validate_cubit_v49_source_identity,
-)
-from .topology_replay_identity_v50 import (
-	validate_public_identity as _validate_cubit_v50_public_identity,
-	validate_source_identity as _validate_cubit_v50_source_identity,
-)
+_validate_cubit_v48_public_identity = lazy_callable(".semantic_mesh_identity_v48", "validate_public_identity", __package__)
+_validate_cubit_v48_source_identity = lazy_callable(".semantic_mesh_identity_v48", "validate_source_identity", __package__)
+_validate_cubit_v49_public_identity = lazy_callable(".topology_replay_identity_v49", "validate_public_identity", __package__)
+_validate_cubit_v49_source_identity = lazy_callable(".topology_replay_identity_v49", "validate_source_identity", __package__)
+_validate_cubit_v50_public_identity = lazy_callable(".topology_replay_identity_v50", "validate_public_identity", __package__)
+_validate_cubit_v50_source_identity = lazy_callable(".topology_replay_identity_v50", "validate_source_identity", __package__)
 from .stl_inspect import inspect_stl as _inspect_stl
-from .quality_parallel_identity_v51 import (
-	validate_public_identity as _validate_cubit_v51_public_identity,
-	validate_source_identity as _validate_cubit_v51_source_identity,
-)
-from .structured_hex_gate import (
-	cubit_structured_hex_lattice_gate as _cubit_structured_hex_lattice_gate,
-	cubit_structured_hex_source_replay_gate as _cubit_structured_hex_source_replay_gate,
-)
-from .symmetric_mixed_gate import (
-	cubit_symmetric_swept_mixed_mesh_gate as _cubit_symmetric_swept_mixed_mesh_gate,
-	cubit_symmetric_swept_source_replay_gate as _cubit_symmetric_swept_source_replay_gate,
-)
-from .pyramid_export_replay_gate import (
-	cubit_pyramid_mixed_export_gate as _cubit_pyramid_mixed_export_gate,
-	cubit_pyramid_source_plugin_replay_gate as _cubit_pyramid_source_plugin_replay_gate,
-)
-from .mesh_carrying_sweep_gate import (
-	cubit_mesh_carrying_straight_sweep_gate as _cubit_mesh_carrying_straight_sweep_gate,
-	cubit_mesh_carrying_straight_sweep_source_replay_gate as _cubit_mesh_carrying_straight_sweep_source_replay_gate,
-)
-from .power_tools_replay_gate import (
-	cubit_partial_volume_hex_diagnosis_gate as _cubit_partial_volume_hex_diagnosis_gate,
-	cubit_power_tools_cleanup_source_replay_gate as _cubit_power_tools_cleanup_source_replay_gate,
-)
-from .ato_sculpt_gate import (
-	cubit_ato_levelset_sculpt_source_replay_gate as _cubit_ato_levelset_sculpt_source_replay_gate,
-	cubit_levelset_sculpt_hex_validation_gate as _cubit_levelset_sculpt_hex_validation_gate,
-)
+_validate_cubit_v51_public_identity = lazy_callable(".quality_parallel_identity_v51", "validate_public_identity", __package__)
+_validate_cubit_v51_source_identity = lazy_callable(".quality_parallel_identity_v51", "validate_source_identity", __package__)
+_cubit_structured_hex_lattice_gate = lazy_callable(".structured_hex_gate", "cubit_structured_hex_lattice_gate", __package__)
+_cubit_structured_hex_source_replay_gate = lazy_callable(".structured_hex_gate", "cubit_structured_hex_source_replay_gate", __package__)
+_cubit_symmetric_swept_mixed_mesh_gate = lazy_callable(".symmetric_mixed_gate", "cubit_symmetric_swept_mixed_mesh_gate", __package__)
+_cubit_symmetric_swept_source_replay_gate = lazy_callable(".symmetric_mixed_gate", "cubit_symmetric_swept_source_replay_gate", __package__)
+_cubit_pyramid_mixed_export_gate = lazy_callable(".pyramid_export_replay_gate", "cubit_pyramid_mixed_export_gate", __package__)
+_cubit_pyramid_source_plugin_replay_gate = lazy_callable(".pyramid_export_replay_gate", "cubit_pyramid_source_plugin_replay_gate", __package__)
+_cubit_mesh_carrying_straight_sweep_gate = lazy_callable(".mesh_carrying_sweep_gate", "cubit_mesh_carrying_straight_sweep_gate", __package__)
+_cubit_mesh_carrying_straight_sweep_source_replay_gate = lazy_callable(".mesh_carrying_sweep_gate", "cubit_mesh_carrying_straight_sweep_source_replay_gate", __package__)
+_cubit_partial_volume_hex_diagnosis_gate = lazy_callable(".power_tools_replay_gate", "cubit_partial_volume_hex_diagnosis_gate", __package__)
+_cubit_power_tools_cleanup_source_replay_gate = lazy_callable(".power_tools_replay_gate", "cubit_power_tools_cleanup_source_replay_gate", __package__)
+_cubit_ato_levelset_sculpt_source_replay_gate = lazy_callable(".ato_sculpt_gate", "cubit_ato_levelset_sculpt_source_replay_gate", __package__)
+_cubit_levelset_sculpt_hex_validation_gate = lazy_callable(".ato_sculpt_gate", "cubit_levelset_sculpt_hex_validation_gate", __package__)
 from ..common import failure_log as _fl, register_status_tool
+from ..common.tool_group import CoarseToolRegistry
 from ..common import web_docs as _wd
 from ..common import examples as _ex
 
@@ -237,6 +211,7 @@ array without re-meshing.
 
 # Create MCP server
 mcp = FastMCP("cubit-export", instructions=_SERVER_INSTRUCTIONS)
+_validation = CoarseToolRegistry(mcp, namespace="cubit")
 
 # Project root (current working directory for pip-installed package)
 PROJECT_ROOT = Path.cwd()
@@ -808,7 +783,7 @@ def cubit_docs(topic: str = "all") -> str:
 	)
 
 
-@mcp.tool(
+@_validation.tool(
 	title="Validate Nastran Mesh Consumer Contract",
 	annotations=ToolAnnotations(
 		readOnlyHint=True,
@@ -862,7 +837,7 @@ def cubit_gmsh_v41_inventory(text: str) -> str:
 	return json.dumps(result, ensure_ascii=False, indent=2)
 
 
-@mcp.tool()
+@_validation.tool()
 def cubit_gmsh_v41_mixed_order_gate(
 	rows: list[dict],
 	authoritative_vol_inventory: dict | None = None,
@@ -1016,7 +991,7 @@ def cubit_check_vol(vol_path: str,
 	                  indent=2, default=str)
 
 
-@mcp.tool()
+@_validation.tool()
 def cubit_mixed_order_series_gate(rows: list[dict]) -> str:
 	"""Validate mixed-mesh topology and routing across export orders.
 
@@ -1035,7 +1010,7 @@ def cubit_mixed_order_series_gate(rows: list[dict]) -> str:
 	return json.dumps(result, ensure_ascii=False, indent=2)
 
 
-@mcp.tool()
+@_validation.tool()
 def cubit_live_mixed_mesh_gate(
 	summary: dict,
 	expected_total_volume: float | None = None,
@@ -1065,7 +1040,7 @@ def cubit_live_mixed_mesh_gate(
 	return json.dumps(result, ensure_ascii=False, indent=2)
 
 
-@mcp.tool()
+@_validation.tool()
 def cubit_sweep_along_curve_gate(
 	summary: dict,
 	min_scaled_jacobian: float = 0.2,
@@ -1083,7 +1058,7 @@ def cubit_sweep_along_curve_gate(
 	return json.dumps(result, ensure_ascii=False, indent=2)
 
 
-@mcp.tool()
+@_validation.tool()
 def cubit_mesh_carrying_straight_sweep_gate(
 	summary: dict,
 	min_scaled_jacobian: float = 0.2,
@@ -1105,7 +1080,7 @@ def cubit_mesh_carrying_straight_sweep_gate(
 	return json.dumps(result, ensure_ascii=False, indent=2)
 
 
-@mcp.tool()
+@_validation.tool()
 def cubit_mesh_carrying_straight_sweep_source_replay_gate(summary: dict) -> str:
 	"""Gate official Help provenance, headless replay, and no-mesh control."""
 	try:
@@ -1119,7 +1094,7 @@ def cubit_mesh_carrying_straight_sweep_source_replay_gate(summary: dict) -> str:
 	return json.dumps(result, ensure_ascii=False, indent=2)
 
 
-@mcp.tool()
+@_validation.tool()
 def cubit_partial_volume_hex_diagnosis_gate(
 	summary: dict,
 	min_scaled_jacobian: float = 0.2,
@@ -1139,7 +1114,7 @@ def cubit_partial_volume_hex_diagnosis_gate(
 	return json.dumps(result, ensure_ascii=False, indent=2)
 
 
-@mcp.tool()
+@_validation.tool()
 def cubit_power_tools_cleanup_source_replay_gate(summary: dict) -> str:
 	"""Gate an official Power Tools cleanup trace and console diagnosis."""
 	try:
@@ -1153,7 +1128,7 @@ def cubit_power_tools_cleanup_source_replay_gate(summary: dict) -> str:
 	return json.dumps(result, ensure_ascii=False, indent=2)
 
 
-@mcp.tool()
+@_validation.tool()
 def cubit_levelset_sculpt_hex_validation_gate(
 	summary: dict,
 	quality_floor: float = 0.2,
@@ -1175,7 +1150,7 @@ def cubit_levelset_sculpt_hex_validation_gate(
 	return json.dumps(result, ensure_ascii=False, indent=2)
 
 
-@mcp.tool()
+@_validation.tool()
 def cubit_ato_levelset_sculpt_source_replay_gate(summary: dict) -> str:
 	"""Gate official ATO provenance, MBG migration, and headless replay."""
 	try:
@@ -1189,7 +1164,7 @@ def cubit_ato_levelset_sculpt_source_replay_gate(summary: dict) -> str:
 	return json.dumps(result, ensure_ascii=False, indent=2)
 
 
-@mcp.tool()
+@_validation.tool()
 def cubit_partitioned_sweep_compatibility_gate(
 	summary: dict,
 	min_scaled_jacobian: float = 0.2,
@@ -1211,7 +1186,7 @@ def cubit_partitioned_sweep_compatibility_gate(
 	return json.dumps(result, ensure_ascii=False, indent=2)
 
 
-@mcp.tool()
+@_validation.tool()
 def cubit_mapped_boundary_layer_shell_gate(
 	summary: dict,
 	min_scaled_jacobian: float = 0.2,
@@ -1237,7 +1212,7 @@ def cubit_mapped_boundary_layer_shell_gate(
 	return json.dumps(result, ensure_ascii=False, indent=2)
 
 
-@mcp.tool()
+@_validation.tool()
 def cubit_pyramid_degenerate_hex_export_gate(
 	summary: dict,
 	min_hex_scaled_jacobian: float = 0.2,
@@ -1259,7 +1234,7 @@ def cubit_pyramid_degenerate_hex_export_gate(
 	return json.dumps(result, ensure_ascii=False, indent=2)
 
 
-@mcp.tool()
+@_validation.tool()
 def cubit_webcut_conformal_hex_gate(summary: dict) -> str:
 	"""Gate webcut volume drift, partition balance, interfaces, and hex quality."""
 	try: result = _cubit_webcut_conformal_hex_gate(summary)
@@ -1267,7 +1242,7 @@ def cubit_webcut_conformal_hex_gate(summary: dict) -> str:
 	return json.dumps(result, ensure_ascii=False, indent=2)
 
 
-@mcp.tool()
+@_validation.tool()
 def cubit_webcut_journal_execution_gate(summary: dict) -> str:
 	"""Gate source-journal operation order and headless process evidence."""
 	try: result = _cubit_webcut_journal_execution_gate(summary)
@@ -1275,7 +1250,7 @@ def cubit_webcut_journal_execution_gate(summary: dict) -> str:
 	return json.dumps(result, ensure_ascii=False, indent=2)
 
 
-@mcp.tool()
+@_validation.tool()
 def cubit_helical_partition_mesh_gate(summary: dict) -> str:
 	"""Gate a many-body helical mesh against quality and parsed .vol inventory."""
 	try: result = _cubit_helical_partition_mesh_gate(summary)
@@ -1283,7 +1258,7 @@ def cubit_helical_partition_mesh_gate(summary: dict) -> str:
 	return json.dumps(result, ensure_ascii=False, indent=2)
 
 
-@mcp.tool()
+@_validation.tool()
 def cubit_source_journal_replay_gate(summary: dict) -> str:
 	"""Gate synchronous, headless replay and expected mesh disposition."""
 	try: result = _cubit_source_journal_replay_gate(summary)
@@ -1291,7 +1266,7 @@ def cubit_source_journal_replay_gate(summary: dict) -> str:
 	return json.dumps(result, ensure_ascii=False, indent=2)
 
 
-@mcp.tool()
+@_validation.tool()
 def cubit_boundary_layer_candidate_gate(
 	candidates: list[dict],
 	min_scaled_jacobian: float = 0.2,
@@ -1313,7 +1288,7 @@ def cubit_boundary_layer_candidate_gate(
 	return json.dumps(result, ensure_ascii=False, indent=2)
 
 
-@mcp.tool()
+@_validation.tool()
 def cubit_boundary_layer_journal_recovery_gate(summary: dict) -> str:
 	"""Gate three-parameter, pairwise, headless recovery of a failed journal."""
 	try:
@@ -1327,7 +1302,7 @@ def cubit_boundary_layer_journal_recovery_gate(summary: dict) -> str:
 	return json.dumps(result, ensure_ascii=False, indent=2)
 
 
-@mcp.tool()
+@_validation.tool()
 def cubit_embedded_region_mixed_transition_gate(
 	summary: dict,
 	min_scaled_jacobian: float = 0.1,
@@ -1351,7 +1326,7 @@ def cubit_embedded_region_mixed_transition_gate(
 	return json.dumps(result, ensure_ascii=False, indent=2)
 
 
-@mcp.tool()
+@_validation.tool()
 def cubit_embedded_pipe_source_recovery_gate(
 	summary: dict,
 	expected_unmeshed_volumes: list[int] | None = None,
@@ -1371,7 +1346,7 @@ def cubit_embedded_pipe_source_recovery_gate(
 	return json.dumps(result, ensure_ascii=False, indent=2)
 
 
-@mcp.tool()
+@_validation.tool()
 def cubit_region_owned_mixed_mesh_gate(
 	summary: dict,
 	min_scaled_jacobian: float = 0.1,
@@ -1393,7 +1368,7 @@ def cubit_region_owned_mixed_mesh_gate(
 	return json.dumps(result, ensure_ascii=False, indent=2)
 
 
-@mcp.tool()
+@_validation.tool()
 def cubit_helical_conductor_source_gate(summary: dict) -> str:
 	"""Gate a helical-conductor source replay and classified tet fallback."""
 	try:
@@ -1407,7 +1382,7 @@ def cubit_helical_conductor_source_gate(summary: dict) -> str:
 	return json.dumps(result, ensure_ascii=False, indent=2)
 
 
-@mcp.tool()
+@_validation.tool()
 def cubit_symmetric_swept_mixed_mesh_gate(summary: dict) -> str:
 	"""Gate symmetric CAD, hex/pyramid/tet topology, quality, and Gmsh closure."""
 	try:
@@ -1421,7 +1396,7 @@ def cubit_symmetric_swept_mixed_mesh_gate(summary: dict) -> str:
 	return json.dumps(result, ensure_ascii=False, indent=2)
 
 
-@mcp.tool()
+@_validation.tool()
 def cubit_symmetric_swept_source_replay_gate(summary: dict) -> str:
 	"""Gate source-journal headless replay and public mixed-mesh closure."""
 	try:
@@ -1435,7 +1410,7 @@ def cubit_symmetric_swept_source_replay_gate(summary: dict) -> str:
 	return json.dumps(result, ensure_ascii=False, indent=2)
 
 
-@mcp.tool()
+@_validation.tool()
 def cubit_conformal_hex_pyramid_tet_interface_gate(
 	summary: dict,
 	mapped_volume_id: int = 1,
@@ -1497,7 +1472,7 @@ def cubit_conformal_hex_pyramid_tet_interface_gate(
 	return json.dumps(result, ensure_ascii=False, indent=2)
 
 
-@mcp.tool()
+@_validation.tool()
 def cubit_mixed_transition_source_gate(
 	summary: dict,
 	mapped_volume_id: int = 1,
@@ -1555,7 +1530,7 @@ def cubit_mixed_transition_source_gate(
 	return json.dumps(result, ensure_ascii=False, indent=2)
 
 
-@mcp.tool()
+@_validation.tool()
 def cubit_pyramid_mixed_export_gate(summary: dict) -> str:
 	"""Gate explicit hex/pyramid/tet preservation in Gmsh and Nastran."""
 	try:
@@ -1569,7 +1544,7 @@ def cubit_pyramid_mixed_export_gate(summary: dict) -> str:
 	return json.dumps(result, ensure_ascii=False, indent=2)
 
 
-@mcp.tool()
+@_validation.tool()
 def cubit_pyramid_source_plugin_replay_gate(summary: dict) -> str:
 	"""Gate legacy source migration through executable-owned plugin startup."""
 	try:
@@ -1583,7 +1558,7 @@ def cubit_pyramid_source_plugin_replay_gate(summary: dict) -> str:
 	return json.dumps(result, ensure_ascii=False, indent=2)
 
 
-@mcp.tool()
+@_validation.tool()
 def cubit_structured_hex_lattice_gate(
 	summary: dict,
 	min_scaled_jacobian: float = 0.2,
@@ -1605,7 +1580,7 @@ def cubit_structured_hex_lattice_gate(
 	return json.dumps(result, ensure_ascii=False, indent=2)
 
 
-@mcp.tool()
+@_validation.tool()
 def cubit_structured_hex_source_replay_gate(summary: dict) -> str:
 	"""Gate source commands, license diagnostics, and headless exit semantics."""
 	try:
@@ -1619,7 +1594,7 @@ def cubit_structured_hex_source_replay_gate(summary: dict) -> str:
 	return json.dumps(result, ensure_ascii=False, indent=2)
 
 
-@mcp.tool()
+@_validation.tool()
 def cubit_hex_refinement_geometry_gate(
 	rows: list[dict],
 	min_quality: float = 0.2,
@@ -1648,7 +1623,7 @@ def cubit_hex_refinement_geometry_gate(
 	return json.dumps(result, ensure_ascii=False, indent=2)
 
 
-@mcp.tool()
+@_validation.tool()
 def cubit_loft_high_order_vol_series_gate(
 	rows: list[dict],
 	min_quality: float = 0.2,
@@ -1666,7 +1641,7 @@ def cubit_loft_high_order_vol_series_gate(
 	return json.dumps(result, ensure_ascii=False, indent=2)
 
 
-@mcp.tool()
+@_validation.tool()
 def cubit_headless_netgen_export_gate(
 	summary: dict,
 	min_quality: float = 0.2,
@@ -1694,7 +1669,7 @@ def _normalized_cubit_journal_commands(text: str) -> list[str]:
 	return commands
 
 
-@mcp.tool()
+@_validation.tool()
 def cubit_journal_reproducibility_gate(
 	journal_a: str,
 	journal_b: str,
@@ -7778,6 +7753,8 @@ def _selftest(audit_repo: bool = False):
 
 
 
+_validation.install()
+
 register_status_tool(
     mcp,
     server_name='mcp-server-cubit',
@@ -7831,7 +7808,7 @@ _CUBIT_READONLY_HINTS = (
 	"_gate", "_docs", "_guide", "_tips", "_reference", "_inventory",
 	"_status", "_lookup", "_ask", "_examples", "lint_", "get_",
 	"generate_", "netgen_", "_probe", "_diagnose", "_suggest",
-	"_failures", "_checkpoints", "_audit", "_doctor",
+	"_failures", "_checkpoints", "_audit", "_doctor", "_catalog", "_run",
 )
 
 
@@ -7848,10 +7825,9 @@ def _classify_tool_annotations() -> list[str]:
 
 _UNCLASSIFIED_TOOLS = _classify_tool_annotations()
 
-# Optional interactive-surface trim (MathWorks exposes 5 tools, not 83):
-# the ~40 scenario/CI gate tools are only needed by validation pipelines.
-# Set RADIA_MCP_CUBIT_GATES=0 to hide them in interactive sessions.
-# Default keeps every tool registered so docs/TOOLS.md stays stable.
+# Legacy full-profile filter.  The production core profile already exposes
+# validation operations through cubit_validation_catalog/run.  Set this to 0
+# only when a full-profile migration client also wants the old gate trimming.
 _hide_gate_tools(mcp, "RADIA_MCP_CUBIT_GATES")
 
 

@@ -8,9 +8,9 @@ Single source for the MathWorks MATLAB-MCP-server patterns adopted lab-wide
 * **Annotation presets** — every tool is classified through one of four
   fully-specified `ToolAnnotations` presets (MathWorks annotations.go
   discipline: presets only, all four hint fields always set).
-* **Gate hiding** — an env var trims the interactive tool surface by
-  removing the CI/scenario ``*_gate`` tools (MathWorks exposes 5 tools,
-  not 80).
+* **Legacy gate hiding** — in the ``full`` compatibility profile, an env var
+  can still remove direct CI/scenario ``*_gate`` tools. Production ``core``
+  groups those operations behind a catalog and runner before this layer runs.
 * **All-calls JSONL log** — one choke point wraps ``ToolManager.call_tool``
   and appends ``{ts, tool, args digest, ms, ok, error?}`` per call
   (MathWorks basetool + slog).
@@ -76,7 +76,7 @@ DEFAULT_READONLY_NAME_HINTS = (
     "generate_", "netgen_", "_probe", "_diagnose", "_suggest",
     "_failures", "_checkpoints", "_audit", "_doctor", "_usage", "_api",
     "_knowledge", "_manifest", "_handoff", "_crosscheck", "_contract",
-    "_discussions", "_inspect", "inspect_",
+    "_discussions", "_inspect", "inspect_", "_catalog", "_run",
 )
 
 
@@ -114,9 +114,9 @@ def classify_tool_annotations(mcp, *, destructive=frozenset(),
 def hide_gate_tools(mcp, env_var: str, suffix: str = "_gate") -> int:
     """Remove ``*_gate`` tools when ``env_var`` is set to ``"0"``.
 
-    Default (env unset or any other value) keeps every tool registered so
-    the generated docs/TOOLS.md inventory stays stable.  Returns the
-    number of tools removed.
+    The production ``core`` profile has already grouped these operations. This
+    helper remains for ``full`` compatibility sessions. Returns the number of
+    tools removed.
     """
     if os.environ.get(env_var, "1") != "0":
         return 0

@@ -181,9 +181,13 @@ def test_nastran_mcp_knowledge_uses_tool_neutral_command_and_gate():
 
 
 def test_nastran_consumer_mcp_tool_has_explicit_contract_metadata():
-    tool = mcp._tool_manager._tools["cubit_nastran_consumer_gate"]
+    tool = mcp._tool_manager._tools["cubit_validation_run"]
+    catalog = mcp._tool_manager._tools["cubit_validation_catalog"].fn(
+        query="nastran"
+    )
 
-    assert tool.title == "Validate Nastran Mesh Consumer Contract"
+    assert catalog["operations"][0]["name"] == "cubit_nastran_consumer_gate"
+    assert tool.title == "Run cubit validation"
     assert tool.annotations.readOnlyHint is True
     assert tool.annotations.destructiveHint is False
     assert tool.annotations.idempotentHint is True
@@ -196,6 +200,7 @@ async def _probe_nastran_gate_stdio():
     env["PYTHONPATH"] = os.pathsep.join(
         [str(package_root / "src"), env.get("PYTHONPATH", "")]
     ).rstrip(os.pathsep)
+    env["RADIA_MCP_TOOL_PROFILE"] = "core"
     params = StdioServerParameters(
         command=sys.executable,
         args=["-m", "radia_mcp.cubit.server"],
@@ -212,13 +217,21 @@ async def _probe_nastran_gate_stdio():
             tool = next(
                 item
                 for item in listed.tools
-                if item.name == "cubit_nastran_consumer_gate"
+                if item.name == "cubit_validation_run"
             )
             positive = await session.call_tool(
-                "cubit_nastran_consumer_gate", {"summary": _summary()}
+                "cubit_validation_run",
+                {
+                    "name": "cubit_nastran_consumer_gate",
+                    "arguments": {"summary": _summary()},
+                },
             )
             rejected = await session.call_tool(
-                "cubit_nastran_consumer_gate", {"summary": negative}
+                "cubit_validation_run",
+                {
+                    "name": "cubit_nastran_consumer_gate",
+                    "arguments": {"summary": negative},
+                },
             )
             return {
                 "server_name": initialized.serverInfo.name,
@@ -239,7 +252,7 @@ def test_nastran_gate_passes_real_stdio_initialize_list_and_calls():
     assert "cubit" in result["server_name"].lower()
     assert result["server_version"]
     assert result["instructions"]
-    assert result["title"] == "Validate Nastran Mesh Consumer Contract"
+    assert result["title"] == "Run cubit validation"
     assert result["annotations"].readOnlyHint is True
     assert result["positive_error"] is False
     assert result["positive"]["status"] == "pass"

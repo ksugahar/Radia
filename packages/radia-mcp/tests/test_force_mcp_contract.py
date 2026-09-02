@@ -24,13 +24,18 @@ def test_force_server_exposes_common_knowledge_and_calculation_tools():
         "force_air_gap_torque",
         "force_air_gap_torque_samples",
         "force_time_average_air_gap_torque_samples",
-        "force_method_selection_gate",
         "force_method_agreement_gate",
-        "force_action_reaction_gate",
-        "force_weight_equilibrium_gate",
+        "force_validation_catalog",
+        "force_validation_run",
         "force_status",
         "force_topics",
     }.issubset(tools)
+    catalog = tools["force_validation_catalog"].fn()
+    assert {item["name"] for item in catalog["operations"]} == {
+        "force_action_reaction_gate",
+        "force_method_selection_gate",
+        "force_weight_equilibrium_gate",
+    }
 
 
 def test_force_is_the_canonical_router_for_compatibility_front_doors():

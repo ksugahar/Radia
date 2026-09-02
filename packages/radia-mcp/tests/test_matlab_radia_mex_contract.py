@@ -356,7 +356,12 @@ def test_server_registers_bridge_tools():
     assert "matlab_optuna_health" in tool_names
     assert "matlab_optuna_oracle_plan" in tool_names
     assert "matlab_optuna_benchmark_plan" in tool_names
-    assert "matlab_optuna_release_gate" in tool_names
+    assert "matlab_validation_catalog" in tool_names
+    assert "matlab_validation_run" in tool_names
+    catalog = mcp._tool_manager._tools["matlab_validation_catalog"].fn()
+    assert "matlab_optuna_release_gate" in {
+        item["name"] for item in catalog["operations"]
+    }
     assert "matlab_optuna_compatibility_contract" in tool_names
     assert "matlab_optuna_oracle_audit" in tool_names
     assert "matlab_optimize_build" in tool_names
