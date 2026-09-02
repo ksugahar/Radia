@@ -16,10 +16,13 @@ Usage:
 import sys
 from mcp.server.fastmcp import FastMCP
 from ..common import register_status_tool, register_topics_tool
+from ..common.tool_group import CoarseToolRegistry
 from .knowledge import get_knowledge, TOPICS
-from .proximity_pair_gate import litz_proximity_approximation_pair_gate as _proximity_pair_gate
+from ..common.lazy_call import lazy_callable
+_proximity_pair_gate = lazy_callable(".proximity_pair_gate", "litz_proximity_approximation_pair_gate", __package__)
 
 mcp = FastMCP("mcp-server-litz-transmission")
+_validation = CoarseToolRegistry(mcp, namespace="litz_transmission")
 
 
 @mcp.tool()
@@ -37,7 +40,7 @@ def litz_transmission(topic: str = "overview") -> str:
     return get_knowledge(topic)
 
 
-@mcp.tool()
+@_validation.tool()
 def litz_proximity_approximation_pair_gate(summary_json: str) -> dict:
     """Validate a reduced proximity-effect bundle against an explicit model."""
 
@@ -45,6 +48,8 @@ def litz_proximity_approximation_pair_gate(summary_json: str) -> dict:
 
 
 
+
+_validation.install()
 
 register_status_tool(
     mcp,

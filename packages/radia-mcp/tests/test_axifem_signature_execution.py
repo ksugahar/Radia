@@ -258,5 +258,8 @@ def test_fem_server_registers_axifem_signature_execution_gate() -> None:
     from radia_mcp.fem.server import mcp
 
     names = {tool.name for tool in mcp._tool_manager.list_tools()}
-    assert "fem_axifem_signature_execution_gate" in names
+    assert "fem_validation_catalog" in names
+    catalog = mcp._tool_manager._tools["fem_validation_catalog"].fn()
+    operations = {item["name"] for item in catalog["operations"]}
+    assert "fem_axifem_signature_execution_gate" in operations
     assert mcp._mcp_server.version == __version__

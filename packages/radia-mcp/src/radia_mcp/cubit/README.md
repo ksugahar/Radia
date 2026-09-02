@@ -1,6 +1,9 @@
 # `radia_mcp.cubit` — Cubit mesh scripting MCP server
 
-**85 MCP tools** — the largest subpackage in the radia-mcp wheel.
+The production `core` profile exposes the operating workflows directly and
+groups fine-grained scenario/identity checks behind `cubit_validation_catalog`
+and `cubit_validation_run`. The underlying Python checks remain independently
+testable.
 Production-grade workflow for Coreform Cubit hex/tet meshing via
 Python (`cubit.cmd`), STEP import, NGSolve `.vol` export with the
 canonical `check-vol` gate, a persistent Cubit session (daemon), and
@@ -37,7 +40,8 @@ Environment knobs:
 |---|---|
 | `CUBIT_BIN_DIR` / `CUBIT_INSTALL_DIR` | Override Coreform Cubit install discovery |
 | `RADIA_CUBIT_SESSION_MODE` | `auto` (default): attach to the live shared daemon, else spawn. `new`: always spawn a fresh daemon in a private per-process drop dir (hermetic CI; removed on shutdown). `existing`: attach only — fail loud when no shared daemon is running |
-| `RADIA_MCP_CUBIT_GATES=0` | Hide the CI/scenario `*_gate` tools in interactive sessions (85 → 50 tools) |
+| `RADIA_MCP_TOOL_PROFILE=full` | Restore legacy individual validation tools for migration/debugging; production defaults to `core` |
+| `RADIA_MCP_CUBIT_GATES=0` | In the `full` compatibility profile, additionally hide direct `*_gate` tools |
 | `RADIA_CUBIT_EAGER=1` | Start the Cubit session in the background at server startup (hides the 30+ s first-call cost) |
 | `RADIA_MCP_CUBIT_CALL_LOG=0` | Disable the all-calls JSONL log (`<state_dir>/logs/cubit_tool_calls.jsonl`) |
 

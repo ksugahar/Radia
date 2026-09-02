@@ -244,6 +244,14 @@ Then drill into a specific server with its `<short>_status()` (auto-
 introspected tool list + dep probe) and `<short>_topics()` (for
 dispatcher-style servers: the topic enum) tools.
 
+The production MCP surface uses the `core` profile: primary workflows remain
+direct tools, while fine-grained validation and artifact-identity checks are
+searched with `<short>_validation_catalog(query=...)` and executed through
+`<short>_validation_run(name=..., arguments=...)`. This keeps `tools/list`
+small without deleting the checked Python operations. For migration or low-
+level debugging only, set `RADIA_MCP_TOOL_PROFILE=full` (or pass
+`--tool-profile full`) to restore the historical individual gate tools.
+
 **Pattern**: 3-call discovery instead of guess-and-error —
 
 ```
@@ -264,16 +272,16 @@ shown below for reference; everything else is discoverable via meta.
 
 ### Standalone (no Radia core dependency — `pip install radia-mcp`)
 
-| Server | Entry point | Tools | Highlights |
+| Server | Entry point | Access | Highlights |
 |---|---|---|---|
-| **★ meta** | `mcp-server-radia-meta` | 9 | Cross-server catalog + health/golden gate — RECOMMENDED FIRST CALL |
-| **literature-index** | `mcp-server-literature-index` | 9 | Full-text search across 2,339 lab literature files in W:/03_文献・論文 (ChromaDB + semantic search) |
-| **Cubit** | `mcp-server-cubit` | 45 | `cubit_mesh_auto`, `cubit_exec_safely`, `cubit_ask`, scheme ladder + geometry split, .cub5 checkpoint/restore, scrape index over Coreform forum + S:\\CoreformCubit lab archive (787 files) + YouTube + Coreform training |
-| **build123d** | `mcp-server-build123d` | 29 | `build123d_to_cubit_hex`, `lint_build123d_script`, `build123d_try` (subprocess isolation), `build123d_inspect_step`, `build123d_heal`, `build123d_api`, Radia/general templates, CadQuery + bd_warehouse interop |
-| **GMSH** | `mcp-server-gmsh` | 10 | `lint_gmsh_script`, `gmsh_audit_summary`, `gmsh_numsubedges_remediation_plan`, `gmsh_mesh_generation_remediation_plan`, references + examples |
-| **Force** | `mcp-server-force` | 21 | Common Motor/MagLev force layer: shared result normalization; static and peak/RMS phasor Lorentz/Maxwell force and torque; virtual work, coenergy and uniform/sampled air-gap torque; method selection, independent-method/action-reaction/lift-weight gates; and validation guidance (numerical tools require the `radia` extra). |
-| **differential-forms** | `mcp-server-differential-forms` | 15 | Visual differential geometry for computational EM: intrinsic metric, curvature/holonomy, Cartan moving frames, k-forms, exterior derivative, **Hodge star, Whitney complex, de Rham, tree-cotree, FEEC**, and executable geometry/gauge gates. Distilled from Needham 2021/2026, Bossavit 1998, Whitney 1957, Kameari 2011, Arnold-Falk-Winther 2006, 新しい計算電磁気学 2003, and Codecasa 2010. |
-| **mathematica** | `mcp-server-mathematica` | 13 | Wolfram Mathematica subprocess bridge: evaluate expressions, execute tracked verification scripts with JSON reports, batch named identities in one kernel, and select a course/differential-forms/paper verification workflow, plus simplify, TeX, vector calculus, units, solve, integrate, differentiate, and status helpers. Pairs with `differential-forms` for symbolic verification of d²=0, Stokes, Whitney elements, Kelvin transform, Maxwell identities. Requires `wolframscript` on PATH. |
+| **★ meta** | `mcp-server-radia-meta` | direct | Cross-server catalog + health/golden gate — RECOMMENDED FIRST CALL |
+| **literature-index** | `mcp-server-literature-index` | direct | Full-text search across 2,339 lab literature files in W:/03_文献・論文 (ChromaDB + semantic search) |
+| **Cubit** | `mcp-server-cubit` | direct + validation catalog | `cubit_mesh_auto`, `cubit_exec_safely`, `cubit_ask`, scheme ladder + geometry split, .cub5 checkpoint/restore, scrape index over Coreform forum + S:\\CoreformCubit lab archive (787 files) + YouTube + Coreform training |
+| **build123d** | `mcp-server-build123d` | direct + validation catalog | `build123d_to_cubit_hex`, `lint_build123d_script`, `build123d_try` (subprocess isolation), `build123d_inspect_step`, `build123d_heal`, `build123d_api`, Radia/general templates, CadQuery + bd_warehouse interop |
+| **GMSH** | `mcp-server-gmsh` | direct | `lint_gmsh_script`, `gmsh_audit_summary`, `gmsh_numsubedges_remediation_plan`, `gmsh_mesh_generation_remediation_plan`, references + examples |
+| **Force** | `mcp-server-force` | direct + validation catalog | Common Motor/MagLev force layer: shared result normalization; static and peak/RMS phasor Lorentz/Maxwell force and torque; virtual work, coenergy and uniform/sampled air-gap torque; method selection, independent-method/action-reaction/lift-weight gates; and validation guidance (numerical tools require the `radia` extra). |
+| **differential-forms** | `mcp-server-differential-forms` | direct | Visual differential geometry for computational EM: intrinsic metric, curvature/holonomy, Cartan moving frames, k-forms, exterior derivative, **Hodge star, Whitney complex, de Rham, tree-cotree, FEEC**, and executable geometry/gauge gates. Distilled from Needham 2021/2026, Bossavit 1998, Whitney 1957, Kameari 2011, Arnold-Falk-Winther 2006, 新しい計算電磁気学 2003, and Codecasa 2010. |
+| **mathematica** | `mcp-server-mathematica` | direct | Wolfram Mathematica subprocess bridge: evaluate expressions, execute tracked verification scripts with JSON reports, batch named identities in one kernel, and select a course/differential-forms/paper verification workflow, plus simplify, TeX, vector calculus, units, solve, integrate, differentiate, and status helpers. Pairs with `differential-forms` for symbolic verification of d²=0, Stokes, Whitney elements, Kelvin transform, Maxwell identities. Requires `wolframscript` on PATH. |
 
 ### Radia-coupled (`pip install radia-mcp[radia]`)
 

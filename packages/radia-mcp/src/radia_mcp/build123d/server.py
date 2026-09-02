@@ -41,63 +41,50 @@ except ImportError:
 from mcp.server.fastmcp import FastMCP
 
 from .build123d_knowledge import get_build123d_documentation
-from .face_first_perforation_gate import (
-    face_first_perforation_handoff_gate as _face_first_perforation_handoff_gate,
-    face_first_perforation_source_replay_gate as _face_first_perforation_source_replay_gate,
-)
-from .mass_topology_diagnosis_gate import cross_kernel_mass_topology_diagnosis_gate as _cross_kernel_mass_topology_diagnosis_gate, upstream_source_external_cad_contract_gate as _upstream_source_external_cad_contract_gate
-from .dual_api_prismatic_gate import dual_api_prismatic_pattern_gate as _dual_api_prismatic_pattern_gate, dual_api_source_replay_gate as _dual_api_source_replay_gate
-from .drafted_housing_gate import drafted_housing_cross_kernel_gate as _drafted_housing_cross_kernel_gate, drafted_housing_source_replay_gate as _drafted_housing_source_replay_gate
-from .jointed_assembly_gate import jointed_assembly_heal_invariance_gate as _jointed_assembly_heal_invariance_gate, jointed_assembly_step_closure_gate as _jointed_assembly_step_closure_gate, jointed_assembly_source_replay_gate as _jointed_assembly_source_replay_gate
-from .nested_assembly_volume_gate import nested_assembly_volume_gate as _nested_assembly_volume_gate, stud_wall_source_replay_gate as _stud_wall_source_replay_gate
-from .patterned_compound_gate import patterned_compound_translation_gate as _patterned_compound_translation_gate, wrap_faces_rotational_source_replay_gate as _wrap_faces_rotational_source_replay_gate
-from .reflection_handoff_gate import (
-    build123d_heat_exchanger_source_recovery_gate as _build123d_heat_exchanger_source_recovery_gate,
-    build123d_reflection_rotation_handoff_gate as _build123d_reflection_rotation_handoff_gate,
-)
-from .curved_shell_step_gate import (
-    build123d_curved_shell_step_semantics_gate as _build123d_curved_shell_step_semantics_gate,
-    build123d_tea_cup_source_contract_gate as _build123d_tea_cup_source_contract_gate,
-    build123d_vase_external_solid_contract_gate as _build123d_vase_external_solid_contract_gate,
-)
-from .repeated_cavity_gate import (
-    build123d_repeated_cavity_dual_api_gate as _build123d_repeated_cavity_dual_api_gate,
-    build123d_repeated_cavity_source_replay_gate as _build123d_repeated_cavity_source_replay_gate,
-)
-from .faceted_edit_gate import (
-    build123d_faceted_edit_portability_gate as _build123d_faceted_edit_portability_gate,
-    build123d_faceted_source_replay_gate as _build123d_faceted_source_replay_gate,
-)
-from .lofted_shell_handoff_gate import (
-    build123d_loft_example_source_replay_gate as _build123d_loft_example_source_replay_gate,
-    build123d_lofted_shell_handoff_gate as _build123d_lofted_shell_handoff_gate,
-)
-from .build123d_v46_identity import (
-    validate_public_identity as _validate_build123d_v46_public_identity,
-    validate_source_identity as _validate_build123d_v46_source_identity,
-)
+from ..common.lazy_call import lazy_callable
+_face_first_perforation_handoff_gate = lazy_callable(".face_first_perforation_gate", "face_first_perforation_handoff_gate", __package__)
+_face_first_perforation_source_replay_gate = lazy_callable(".face_first_perforation_gate", "face_first_perforation_source_replay_gate", __package__)
+_cross_kernel_mass_topology_diagnosis_gate = lazy_callable(".mass_topology_diagnosis_gate", "cross_kernel_mass_topology_diagnosis_gate", __package__)
+_upstream_source_external_cad_contract_gate = lazy_callable(".mass_topology_diagnosis_gate", "upstream_source_external_cad_contract_gate", __package__)
+_dual_api_prismatic_pattern_gate = lazy_callable(".dual_api_prismatic_gate", "dual_api_prismatic_pattern_gate", __package__)
+_dual_api_source_replay_gate = lazy_callable(".dual_api_prismatic_gate", "dual_api_source_replay_gate", __package__)
+_drafted_housing_cross_kernel_gate = lazy_callable(".drafted_housing_gate", "drafted_housing_cross_kernel_gate", __package__)
+_drafted_housing_source_replay_gate = lazy_callable(".drafted_housing_gate", "drafted_housing_source_replay_gate", __package__)
+_jointed_assembly_heal_invariance_gate = lazy_callable(".jointed_assembly_gate", "jointed_assembly_heal_invariance_gate", __package__)
+_jointed_assembly_step_closure_gate = lazy_callable(".jointed_assembly_gate", "jointed_assembly_step_closure_gate", __package__)
+_jointed_assembly_source_replay_gate = lazy_callable(".jointed_assembly_gate", "jointed_assembly_source_replay_gate", __package__)
+_nested_assembly_volume_gate = lazy_callable(".nested_assembly_volume_gate", "nested_assembly_volume_gate", __package__)
+_stud_wall_source_replay_gate = lazy_callable(".nested_assembly_volume_gate", "stud_wall_source_replay_gate", __package__)
+_patterned_compound_translation_gate = lazy_callable(".patterned_compound_gate", "patterned_compound_translation_gate", __package__)
+_wrap_faces_rotational_source_replay_gate = lazy_callable(".patterned_compound_gate", "wrap_faces_rotational_source_replay_gate", __package__)
+_build123d_heat_exchanger_source_recovery_gate = lazy_callable(".reflection_handoff_gate", "build123d_heat_exchanger_source_recovery_gate", __package__)
+_build123d_reflection_rotation_handoff_gate = lazy_callable(".reflection_handoff_gate", "build123d_reflection_rotation_handoff_gate", __package__)
+_build123d_curved_shell_step_semantics_gate = lazy_callable(".curved_shell_step_gate", "build123d_curved_shell_step_semantics_gate", __package__)
+_build123d_tea_cup_source_contract_gate = lazy_callable(".curved_shell_step_gate", "build123d_tea_cup_source_contract_gate", __package__)
+_build123d_vase_external_solid_contract_gate = lazy_callable(".curved_shell_step_gate", "build123d_vase_external_solid_contract_gate", __package__)
+_build123d_repeated_cavity_dual_api_gate = lazy_callable(".repeated_cavity_gate", "build123d_repeated_cavity_dual_api_gate", __package__)
+_build123d_repeated_cavity_source_replay_gate = lazy_callable(".repeated_cavity_gate", "build123d_repeated_cavity_source_replay_gate", __package__)
+_build123d_faceted_edit_portability_gate = lazy_callable(".faceted_edit_gate", "build123d_faceted_edit_portability_gate", __package__)
+_build123d_faceted_source_replay_gate = lazy_callable(".faceted_edit_gate", "build123d_faceted_source_replay_gate", __package__)
+_build123d_loft_example_source_replay_gate = lazy_callable(".lofted_shell_handoff_gate", "build123d_loft_example_source_replay_gate", __package__)
+_build123d_lofted_shell_handoff_gate = lazy_callable(".lofted_shell_handoff_gate", "build123d_lofted_shell_handoff_gate", __package__)
+_validate_build123d_v46_public_identity = lazy_callable(".build123d_v46_identity", "validate_public_identity", __package__)
+_validate_build123d_v46_source_identity = lazy_callable(".build123d_v46_identity", "validate_source_identity", __package__)
 from .cross_artifact_cad_lineage_v47 import (
     validate_public_identity as _validate_build123d_v47_public_identity,
     validate_source_identity as _validate_build123d_v47_source_identity,
 )
-from .semantic_cad_identity_v48 import (
-    validate_public_identity as _validate_build123d_v48_public_identity,
-    validate_source_identity as _validate_build123d_v48_source_identity,
-)
-from .assembly_replay_identity_v49 import (
-    validate_public_identity as _validate_build123d_v49_public_identity,
-    validate_source_identity as _validate_build123d_v49_source_identity,
-)
-from .feature_replay_identity_v50 import (
-    validate_public_identity as _validate_build123d_v50_public_identity,
-    validate_source_identity as _validate_build123d_v50_source_identity,
-)
-from .mass_sweep_exchange_identity_v51 import (
-    validate_public_identity as _validate_build123d_v51_public_identity,
-    validate_source_identity as _validate_build123d_v51_source_identity,
-)
+_validate_build123d_v48_public_identity = lazy_callable(".semantic_cad_identity_v48", "validate_public_identity", __package__)
+_validate_build123d_v48_source_identity = lazy_callable(".semantic_cad_identity_v48", "validate_source_identity", __package__)
+_validate_build123d_v49_public_identity = lazy_callable(".assembly_replay_identity_v49", "validate_public_identity", __package__)
+_validate_build123d_v49_source_identity = lazy_callable(".assembly_replay_identity_v49", "validate_source_identity", __package__)
+_validate_build123d_v50_public_identity = lazy_callable(".feature_replay_identity_v50", "validate_public_identity", __package__)
+_validate_build123d_v50_source_identity = lazy_callable(".feature_replay_identity_v50", "validate_source_identity", __package__)
+_validate_build123d_v51_public_identity = lazy_callable(".mass_sweep_exchange_identity_v51", "validate_public_identity", __package__)
+_validate_build123d_v51_source_identity = lazy_callable(".mass_sweep_exchange_identity_v51", "validate_source_identity", __package__)
 from .rules import ALL_RULES as _B3D_LINT_RULES
 from ..common import failure_log as _fl, register_status_tool
+from ..common.tool_group import CoarseToolRegistry
 from ..common import web_docs as _wd
 from ..common import examples as _ex
 from ..common.server_hardening import (
@@ -140,6 +127,7 @@ ask the user rather than looping.
 """
 
 mcp = FastMCP("mcp-server-build123d", instructions=_SERVER_INSTRUCTIONS)
+_validation = CoarseToolRegistry(mcp, namespace="build123d")
 
 # ---------------------------------------------------------------------------
 # Error-kind contract, applied at the serialization boundary
@@ -171,7 +159,7 @@ def _dumps(obj, **kw):
     return _json_dumps(_with_kind(obj), **kw)
 
 
-@mcp.tool()
+@_validation.tool()
 def build123d_lofted_shell_handoff_gate(summary_json: str) -> str:
     """Gate a bounded lofted-shell CAD handoff without solver overclaim."""
     try:
@@ -185,7 +173,7 @@ def build123d_lofted_shell_handoff_gate(summary_json: str) -> str:
     return _dumps(result, indent=2, sort_keys=True)
 
 
-@mcp.tool()
+@_validation.tool()
 def build123d_loft_example_source_replay_gate(summary_json: str) -> str:
     """Gate the immutable upstream loft source and headless CAD replay."""
     try:
@@ -200,21 +188,21 @@ def build123d_loft_example_source_replay_gate(summary_json: str) -> str:
         }
     return _dumps(result, indent=2, sort_keys=True)
 
-@mcp.tool()
+@_validation.tool()
 def build123d_faceted_edit_portability_gate(summary_json: str) -> str:
     """Separate faceted CAD portability from downstream mesh readiness."""
     try: result=_build123d_faceted_edit_portability_gate(json.loads(summary_json))
     except (json.JSONDecodeError,TypeError,ValueError,KeyError) as exc: result={"policy":"build123d_faceted_edit_portability_gate_v1","status":"invalid_input","error":str(exc)}
     return _dumps(result,indent=2,sort_keys=True)
 
-@mcp.tool()
+@_validation.tool()
 def build123d_faceted_source_replay_gate(summary_json: str) -> str:
     """Gate tagged source, dependent STL, viewer stub, and external replay."""
     try: result=_build123d_faceted_source_replay_gate(json.loads(summary_json))
     except (json.JSONDecodeError,TypeError,ValueError,KeyError) as exc: result={"policy":"build123d_faceted_source_replay_gate_v1","status":"invalid_input","error":str(exc)}
     return _dumps(result,indent=2,sort_keys=True)
 
-@mcp.tool()
+@_validation.tool()
 def build123d_face_first_perforation_handoff_gate(
     summary_json: str, volume_rtol: float = 1.0e-9
 ) -> str:
@@ -233,7 +221,7 @@ def build123d_face_first_perforation_handoff_gate(
     return _dumps(result, indent=2, sort_keys=True)
 
 
-@mcp.tool()
+@_validation.tool()
 def build123d_face_first_perforation_source_replay_gate(
     summary_json: str,
 ) -> str:
@@ -250,63 +238,63 @@ def build123d_face_first_perforation_source_replay_gate(
     return _dumps(result, indent=2, sort_keys=True)
 
 
-@mcp.tool()
+@_validation.tool()
 def build123d_cross_kernel_mass_topology_diagnosis_gate(summary_json: str) -> str:
     """Diagnose STEP portability while separating evidence quality from acceptance."""
     try: result=_cross_kernel_mass_topology_diagnosis_gate(json.loads(summary_json))
     except (json.JSONDecodeError,TypeError,ValueError,KeyError) as exc: result={"policy":"build123d_cross_kernel_mass_topology_diagnosis_gate_v1","status":"invalid_input","error":str(exc)}
     return _dumps(result,indent=2,sort_keys=True)
 
-@mcp.tool()
+@_validation.tool()
 def build123d_upstream_source_external_cad_contract_gate(summary_json: str) -> str:
     """Gate immutable upstream execution and an explicit external-CAD decision."""
     try: result=_upstream_source_external_cad_contract_gate(json.loads(summary_json))
     except (json.JSONDecodeError,TypeError,ValueError) as exc: result={"policy":"build123d_upstream_source_external_cad_contract_gate_v1","status":"invalid_input","error":str(exc)}
     return _dumps(result,indent=2,sort_keys=True)
 
-@mcp.tool()
+@_validation.tool()
 def build123d_dual_api_prismatic_pattern_gate(summary_json: str) -> str:
     """Gate native dual-API parity separately from external STEP-kernel bias."""
     try: result=_dual_api_prismatic_pattern_gate(json.loads(summary_json))
     except (json.JSONDecodeError,TypeError,ValueError,KeyError) as exc: result={"policy":"build123d_dual_api_prismatic_pattern_gate_v1","status":"invalid_input","error":str(exc)}
     return _dumps(result,indent=2,sort_keys=True)
 
-@mcp.tool()
+@_validation.tool()
 def build123d_dual_api_source_replay_gate(summary_json: str) -> str:
     """Gate immutable upstream dual-API execution and headless CAD replay."""
     try: result=_dual_api_source_replay_gate(json.loads(summary_json))
     except (json.JSONDecodeError,TypeError,ValueError,KeyError) as exc: result={"policy":"build123d_dual_api_source_replay_gate_v1","status":"invalid_input","error":str(exc)}
     return _dumps(result,indent=2,sort_keys=True)
 
-@mcp.tool()
+@_validation.tool()
 def build123d_drafted_housing_cross_kernel_gate(summary_json: str) -> str:
     """Gate drafted housing mass/topology across B-rep, STEP, Cubit, and Gmsh."""
     try: result=_drafted_housing_cross_kernel_gate(json.loads(summary_json))
     except (json.JSONDecodeError,TypeError,ValueError,KeyError) as exc: result={"policy":"build123d_drafted_housing_cross_kernel_gate_v1","status":"invalid_input","error":str(exc)}
     return _dumps(result,indent=2,sort_keys=True)
 
-@mcp.tool()
+@_validation.tool()
 def build123d_drafted_housing_source_replay_gate(summary_json: str) -> str:
     """Gate tagged draft/fillet/hole source and headless mesh-companion replay."""
     try: result=_drafted_housing_source_replay_gate(json.loads(summary_json))
     except (json.JSONDecodeError,TypeError,ValueError,KeyError) as exc: result={"policy":"build123d_drafted_housing_source_replay_gate_v1","status":"invalid_input","error":str(exc)}
     return _dumps(result,indent=2,sort_keys=True)
 
-@mcp.tool()
+@_validation.tool()
 def build123d_jointed_assembly_step_closure_gate(summary_json: str) -> str:
     """Diagnose a component-level solid closure loss in a jointed STEP assembly."""
     try: result=_jointed_assembly_step_closure_gate(json.loads(summary_json))
     except (json.JSONDecodeError,TypeError,ValueError,KeyError) as exc: result={"policy":"build123d_jointed_assembly_step_closure_gate_v1","status":"invalid_input","error":str(exc)}
     return _dumps(result,indent=2,sort_keys=True)
 
-@mcp.tool()
+@_validation.tool()
 def build123d_jointed_assembly_heal_invariance_gate(summary_json: str) -> str:
     """Verify that STEP solid closure loss persists across heal/noheal imports."""
     try: result=_jointed_assembly_heal_invariance_gate(json.loads(summary_json))
     except (json.JSONDecodeError,TypeError,ValueError,KeyError) as exc: result={"policy":"build123d_jointed_assembly_heal_invariance_gate_v1","status":"invalid_input","error":str(exc)}
     return _dumps(result,indent=2,sort_keys=True)
 
-@mcp.tool()
+@_validation.tool()
 def build123d_jointed_assembly_source_replay_gate(summary_json: str) -> str:
     """Gate immutable source, joint graph, and headless external-CAD evidence."""
     try:
@@ -363,28 +351,28 @@ def build123d_jointed_assembly_source_replay_gate(summary_json: str) -> str:
     except (json.JSONDecodeError,TypeError,ValueError,KeyError) as exc: result={"policy":"build123d_jointed_assembly_source_replay_gate_v1","status":"invalid_input","error":str(exc)}
     return _dumps(result,indent=2,sort_keys=True)
 
-@mcp.tool()
+@_validation.tool()
 def build123d_nested_assembly_volume_gate(summary_json: str) -> str:
     """Distinguish a zero parent Compound from an empty CAD handoff."""
     try: result=_nested_assembly_volume_gate(json.loads(summary_json))
     except (json.JSONDecodeError,TypeError,ValueError,KeyError) as exc: result={"policy":"build123d_nested_assembly_volume_gate_v1","status":"invalid_input","error":str(exc)}
     return _dumps(result,indent=2,sort_keys=True)
 
-@mcp.tool()
+@_validation.tool()
 def build123d_stud_wall_source_replay_gate(summary_json: str) -> str:
     """Gate exact stud-wall source, RigidJoints, and headless CAD replay."""
     try: result=_stud_wall_source_replay_gate(json.loads(summary_json))
     except (json.JSONDecodeError,TypeError,ValueError,KeyError) as exc: result={"policy":"build123d_stud_wall_source_replay_gate_v1","status":"invalid_input","error":str(exc)}
     return _dumps(result,indent=2,sort_keys=True)
 
-@mcp.tool()
+@_validation.tool()
 def build123d_patterned_compound_translation_gate(summary_json: str) -> str:
     """Diagnose dominant curved-body STEP bias without solver-ready overclaim."""
     try: result=_patterned_compound_translation_gate(json.loads(summary_json))
     except (json.JSONDecodeError,TypeError,ValueError,KeyError) as exc: result={"policy":"build123d_patterned_compound_translation_gate_v1","status":"invalid_input","error":str(exc)}
     return _dumps(result,indent=2,sort_keys=True)
 
-@mcp.tool()
+@_validation.tool()
 def build123d_wrap_faces_rotational_source_replay_gate(summary_json: str) -> str:
     """Gate immutable wrap_faces, thicken, and rotational-pattern replay."""
     try: result=_wrap_faces_rotational_source_replay_gate(json.loads(summary_json))
@@ -392,7 +380,7 @@ def build123d_wrap_faces_rotational_source_replay_gate(summary_json: str) -> str
     return _dumps(result,indent=2,sort_keys=True)
 
 
-@mcp.tool()
+@_validation.tool()
 def build123d_reflection_rotation_handoff_gate(summary_json: str) -> str:
     """Gate reflection failures and a proper-rotation two-body STEP handoff."""
     try:
@@ -406,7 +394,7 @@ def build123d_reflection_rotation_handoff_gate(summary_json: str) -> str:
     return _dumps(result, indent=2, sort_keys=True)
 
 
-@mcp.tool()
+@_validation.tool()
 def build123d_heat_exchanger_source_recovery_gate(summary_json: str) -> str:
     """Gate the upstream heat-exchanger replay and rotation recovery."""
     try:
@@ -422,7 +410,7 @@ def build123d_heat_exchanger_source_recovery_gate(summary_json: str) -> str:
     return _dumps(result, indent=2, sort_keys=True)
 
 
-@mcp.tool()
+@_validation.tool()
 def build123d_curved_shell_step_semantics_gate(summary_json: str) -> str:
     """Diagnose topology-preserving curved STEP mass loss across CAD kernels."""
     try:
@@ -436,7 +424,7 @@ def build123d_curved_shell_step_semantics_gate(summary_json: str) -> str:
     return _dumps(result, indent=2, sort_keys=True)
 
 
-@mcp.tool()
+@_validation.tool()
 def build123d_tea_cup_source_contract_gate(summary_json: str) -> str:
     """Gate the upstream tea-cup source and headless portability diagnosis."""
     try:
@@ -450,7 +438,7 @@ def build123d_tea_cup_source_contract_gate(summary_json: str) -> str:
     return _dumps(result, indent=2, sort_keys=True)
 
 
-@mcp.tool()
+@_validation.tool()
 def build123d_vase_external_solid_contract_gate(summary_json: str) -> str:
     """Gate an exact vase replay and reject zero-volume external solids."""
     try:
@@ -466,7 +454,7 @@ def build123d_vase_external_solid_contract_gate(summary_json: str) -> str:
     return _dumps(result, indent=2, sort_keys=True)
 
 
-@mcp.tool()
+@_validation.tool()
 def build123d_repeated_cavity_dual_api_gate(summary_json: str) -> str:
     """Gate dual APIs and four STEP imports for a repeated-feature cavity solid."""
     try:
@@ -480,7 +468,7 @@ def build123d_repeated_cavity_dual_api_gate(summary_json: str) -> str:
     return _dumps(result, indent=2, sort_keys=True)
 
 
-@mcp.tool()
+@_validation.tool()
 def build123d_repeated_cavity_source_replay_gate(summary_json: str) -> str:
     """Gate immutable dual sources, STEP identities, and headless CAD replay."""
     try:
@@ -633,7 +621,7 @@ def build123d_volume_crosscheck(
     return _dumps(summary, indent=2)
 
 
-@mcp.tool()
+@_validation.tool()
 def build123d_brep_mass_topology_roundtrip_gate(
     reference_json: str,
     measured_rows_json: str,
@@ -668,7 +656,7 @@ def build123d_brep_mass_topology_roundtrip_gate(
     return _dumps(result, indent=2, sort_keys=True)
 
 
-@mcp.tool()
+@_validation.tool()
 def build123d_platonic_solid_family_gate(summary_json: str) -> str:
     """Gate all five Platonic solids by topology, analytic volume and CAD replay."""
     try:
@@ -684,7 +672,7 @@ def build123d_platonic_solid_family_gate(summary_json: str) -> str:
     return _dumps(result, indent=2, sort_keys=True)
 
 
-@mcp.tool()
+@_validation.tool()
 def build123d_dual_api_perforated_board_gate(summary_json: str) -> str:
     """Gate equivalent Builder/Algebra perforated boards through two CAD imports."""
     try:
@@ -700,7 +688,7 @@ def build123d_dual_api_perforated_board_gate(summary_json: str) -> str:
     return _dumps(result, indent=2, sort_keys=True)
 
 
-@mcp.tool()
+@_validation.tool()
 def build123d_upstream_example_roundtrip_gate(
     result_json: str,
     mass_property_rtol: float = 1.0e-12,
@@ -725,7 +713,7 @@ def build123d_upstream_example_roundtrip_gate(
     return _dumps(result, indent=2, sort_keys=True)
 
 
-@mcp.tool()
+@_validation.tool()
 def build123d_external_cad_mass_topology_gate(
     reference_json: str,
     external_json: str,
@@ -756,7 +744,7 @@ def build123d_external_cad_mass_topology_gate(
     return _dumps(result, indent=2, sort_keys=True)
 
 
-@mcp.tool()
+@_validation.tool()
 def build123d_step_portability_diagnosis_gate(
     result_json: str,
     self_roundtrip_rtol: float = 1.0e-12,
@@ -787,7 +775,7 @@ def build123d_step_portability_diagnosis_gate(
     return _dumps(result, indent=2, sort_keys=True)
 
 
-@mcp.tool()
+@_validation.tool()
 def build123d_curved_step_topology_crosscheck_gate(
     result_json: str,
     self_mass_rtol: float = 1.0e-7,
@@ -815,7 +803,7 @@ def build123d_curved_step_topology_crosscheck_gate(
     return _dumps(result, indent=2, sort_keys=True)
 
 
-@mcp.tool()
+@_validation.tool()
 def build123d_path_sweep_handoff_gate(
     result_json: str,
     path_length_rtol: float = 1.0e-12,
@@ -849,7 +837,7 @@ def build123d_path_sweep_handoff_gate(
     return _dumps(result, indent=2, sort_keys=True)
 
 
-@mcp.tool()
+@_validation.tool()
 def build123d_path_sweep_source_contract_gate(result_json: str) -> str:
     """Gate the source-native build123d sweep idiom and ``is_valid`` API form."""
 
@@ -866,7 +854,7 @@ def build123d_path_sweep_source_contract_gate(result_json: str) -> str:
     return _dumps(result, indent=2, sort_keys=True)
 
 
-@mcp.tool()
+@_validation.tool()
 def build123d_perforated_prism_roundtrip_gate(
     reference_volume: float,
     imported_volume: float,
@@ -1016,7 +1004,7 @@ def build123d_volume_crosscheck_with_units(
     }, indent=2)
 
 
-@mcp.tool()
+@_validation.tool()
 def build123d_volume_crosscheck_source_coverage_gate(
     volume_summary_json: str,
     required_sources_json: str = "",
@@ -1058,7 +1046,7 @@ def build123d_volume_crosscheck_source_coverage_gate(
     return _dumps(summary, indent=2)
 
 
-@mcp.tool()
+@_validation.tool()
 def build123d_volume_crosscheck_source_identity_gate(
     volume_summary_json: str,
     expected_measurement_methods_json: str = "",
@@ -4813,6 +4801,8 @@ def build123d_doctor() -> str:
     }, ensure_ascii=False, indent=2, default=str)
 
 
+_validation.install()
+
 register_status_tool(
     mcp,
     server_name='mcp-server-build123d',
@@ -4847,7 +4837,7 @@ _B3D_READONLY_HINTS = (
     "_gate", "_usage", "_api", "_lookup", "_ask", "_examples",
     "_failures", "_suggest", "_reference", "_crosscheck", "_contract",
     "_manifest", "_handoff", "_package", "_probe", "_doctor", "_status",
-    "lint_", "inspect_", "_inspect", "generate_",
+    "lint_", "inspect_", "_inspect", "generate_", "_catalog", "_run",
 )
 
 _UNCLASSIFIED_TOOLS = _classify_tool_annotations_common(
