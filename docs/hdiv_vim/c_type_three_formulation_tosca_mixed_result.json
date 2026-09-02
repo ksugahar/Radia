@@ -1,0 +1,170 @@
+{
+  "schema": "radia.notebook_result.v1",
+  "generated_at_utc": "2026-09-02T13:13:45Z",
+  "notebook": "c_type_three_formulation_tosca_mixed.ipynb",
+  "notebook_sha256": "93d4d416b38021b68841b28c5a7277b7091d79da1bfc11fc961e2cddc733b1ba",
+  "versions": {
+    "python_version": "3.12.10",
+    "python_executable_name": "python.exe",
+    "platform": "Windows-2022Server-10.0.20348-SP0",
+    "radia_mcp_version": "1.4.49",
+    "radia_version": "4.95.75"
+  },
+  "summary": {
+    "path": "c_type_three_formulation_tosca_mixed.ipynb",
+    "cells": 10,
+    "code_cells": 5,
+    "executed_code_cells": 5,
+    "code_cells_with_outputs": 5,
+    "output_count": 7,
+    "error_output_count": 0,
+    "result_saved": true,
+    "notebook_role": "example",
+    "webgui_required": true,
+    "webgui_field_required": true,
+    "webgui_import_present": true,
+    "webgui_draw_present": true,
+    "webgui_draw_cell_count": 1,
+    "executed_webgui_draw_cell_count": 1,
+    "webgui_draw_cells_with_rich_outputs": 1,
+    "webgui_ready": true,
+    "parameterized_field_draw_present": true,
+    "parameterized_field_draw_cell_count": 1,
+    "executed_parameterized_field_draw_cell_count": 1,
+    "parameterized_field_draw_cells_with_rich_outputs": 1,
+    "webgui_field_ready": true,
+    "metadata_keys": [
+      "kernelspec",
+      "language_info",
+      "radia",
+      "widgets"
+    ]
+  },
+  "outputs": [
+    {
+      "cell_index": 1,
+      "execution_count": 1,
+      "source_sha256": "ed23898bceefa407951851b292fed516123acefda8b00cbd2e9bca701e10f5a2",
+      "source_preview": "import json\nimport sys\nfrom pathlib import Path\n\nimport matplotlib.pyplot as plt\nimport numpy as np\nfrom IPython.display import Markdown, display\n\n\ndef find_repo_root(start):\n    for candidate in (start, *start.parents):\n        if (candidate / \"pyproject.toml\").is_file() and (candidate / \"validation_test\").is_dir():\n            return candidate\n    raise RuntimeError(\"Radia repository root was not found\")\n\n\nREPO = find_repo_root(Path.cwd().resolve())\nRESULTS = REPO / \"validation_test\" / \"c_type_three_engine\" / \"results\"\nLINEAR_PATH = RESULTS / \"hibino_20260902_linear_order3_tosca_mixed_v3.json\"\nNONLINEAR_PATH = RESULTS / \"hibino_20260902_nonlinear_order2_tosca_mixed_v3.json\"\n\nlinear = json.loads(LINEAR_PATH.read_text(encoding=\"utf-8\"))\nnonlinear = json.loads(NONLINEAR_PATH.read_text(encoding=\"utf-8\"))\nfor payload in (linear, nonlinear):\n    assert payload[\"schema\"] == \"radia.validation.c-type-formulation-comparison.v3\"\n    assert payload[\"passed\"] is True\n    assert payload[\"all_pairw",
+      "outputs": [
+        {
+          "output_type": "execute_result",
+          "data_keys": [
+            "text/plain"
+          ],
+          "text_plain_chars": 271,
+          "text_plain_sha256": "aae8eed721217f9f9ae44b28dd0f65fb7cb4a0cc3d98c5f9000687585739f576",
+          "text_plain_preview": "{'linear_artifact': 'hibino_20260902_linear_order3_tosca_mixed_v3.json',\n 'nonlinear_artifact': 'hibino_20260902_nonlinear_order2_tosca_mixed_v3.json',\n 'field_gate': 'all three gap-core pairwise comparisons < 1%',\n 'source_trace_gate': 'iron/air and Kelvin traces < 5%'}",
+          "text_plain_truncated": false
+        }
+      ]
+    },
+    {
+      "cell_index": 3,
+      "execution_count": 2,
+      "source_sha256": "d85784ea146ae4bb902a867071bb9cf8f98cc4dd7f0a7b2a89401a5fceac2fa4",
+      "source_preview": "engines = (\"hdiv_mmm\", \"reduced_a\", \"omega_reduced_omega\")\nlabels = {\n    \"hdiv_mmm\": \"HDiv-MMM\",\n    \"reduced_a\": \"HCurl reduced-A\",\n    \"omega_reduced_omega\": \"H1 TOSCA mixed Omega\",\n}\n\nrows = [\n    \"| run | HDiv / reduced-A / mixed runtime (s) | HDiv/mixed / HDiv/reduced-A / mixed/reduced-A RMS | iron/air / Kelvin trace residual |\",\n    \"|---|---:|---:|---:|\",\n]\nfor name, payload in ((\"linear order 3\", linear), (\"nonlinear order 2\", nonlinear)):\n    diagnostics = payload[\"engines\"]\n    pairs = payload[\"pairwise_median_projected_gap_core\"]\n    trace = diagnostics[\"omega_reduced_omega\"][\"source_trace\"]\n    rows.append(\n        f\"| {name} | {diagnostics['hdiv_mmm']['runtime_s']:.2f} / \"\n        f\"{diagnostics['reduced_a']['runtime_s']:.2f} / \"\n        f\"{diagnostics['omega_reduced_omega']['runtime_s']:.2f} | \"\n        f\"{100 * pairs['hdiv_mmm__vs__omega_reduced_omega']['relative_rms']:.5f}% / \"\n        f\"{100 * pairs['hdiv_mmm__vs__reduced_a']['relative_rms']:.5f}% / \"\n        f\"{100 *",
+      "outputs": [
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "text/markdown",
+            "text/plain"
+          ],
+          "text_plain_chars": 38,
+          "text_plain_sha256": "f857eae11fe643ebb944e3eb1abbadaabcc25f73846309e6f6948ee094dddf50",
+          "text_plain_preview": "<IPython.core.display.Markdown object>",
+          "text_plain_truncated": false
+        }
+      ]
+    },
+    {
+      "cell_index": 5,
+      "execution_count": 3,
+      "source_sha256": "c23533f061e377dd9056fa58908b7dda7a3eedbe4abec39dfb2991fccef44da0",
+      "source_preview": "points = np.asarray(nonlinear[\"observation_points_m\"], dtype=float)\ncentreline = np.isclose(points[:, 1], 0.0) & np.isclose(points[:, 2], 0.0)\norder = np.argsort(points[centreline, 0])\n\nfig, ax = plt.subplots(figsize=(7.2, 4.2))\nfor engine in engines:\n    field = np.asarray(nonlinear[\"median_plane_projected_fields_T\"][engine], dtype=float)\n    ax.plot(points[centreline, 0][order] * 1e3, field[centreline, 2][order],\n            marker=\"o\", label=labels[engine])\nax.axvspan(-10.0, 10.0, color=\"0.92\", zorder=0)\nax.set_xlabel(\"gap centreline x (mm)\")\nax.set_ylabel(\"Bz (T)\")\nax.grid(True, alpha=0.3)\nax.legend()\nfig.tight_layout()\nplt.show()\n",
+      "outputs": [
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "image/png",
+            "text/plain"
+          ],
+          "text_plain_chars": 33,
+          "text_plain_sha256": "e4d288205321cf83b375d45264750bd687e0bf569e98090319fe2ccc78439b3c",
+          "text_plain_preview": "<Figure size 720x420 with 1 Axes>",
+          "text_plain_truncated": false,
+          "rich_output_hashes": {
+            "image/png": {
+              "chars": 61524,
+              "sha256": "eecc78fd2cf12272e36f080772d2a2666c8db8ed02ac863bbc224b53826ea5a3"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "cell_index": 7,
+      "execution_count": 4,
+      "source_sha256": "0807d76b5da2ca2099ab26c05b867c4cf73b0666136980f047c4bd357cb0b9ca",
+      "source_preview": "import ngsolve as ng\nimport radia as rad\nfrom ngsolve.webgui import Draw\nfrom radia import vim\n\nSUITE = REPO / \"validation_test\" / \"c_type_three_engine\"\nsys.path.insert(0, str(SUITE))\nfrom run_three_engine import MU0, build_coil\n\nMESH_PATH = REPO / \"docs\" / \"hdiv_vim\" / \"c_type_three_formulation_tosca_mixed_iron.vol\"\nmesh = ng.Mesh(str(MESH_PATH))\nbh_path = Path(rad.__file__).resolve().parent / \"panels\" / \"samples\" / \"em_sample_bh.txt\"\nbh_table = np.loadtxt(bh_path, dtype=float)[:, :2].tolist()\n\nrad.UtiDelAll()\ncoil, _coil_contract = build_coil()\nsource_h = rad.RadiaField(coil, \"h\")\nwith ng.TaskManager():\n    hdiv_result = vim.Solve(\n        mesh,\n        H_ext=source_h,\n        order=2,\n        bh_table=bh_table,\n        gram_eps=1.0e-14,\n        tol=1.0e-8,\n        maxit=12000,\n        nl_tol=2.0e-5,\n        nl_maxit=80,\n        preconditioner=\"auto\",\n    )\n    demag_h = vim.FieldCoefficientFromSolution(hdiv_result, algorithm=\"direct\")\n    total_b = MU0 * (source_h + demag_h + hdiv_r",
+      "outputs": [
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "application/vnd.jupyter.widget-view+json",
+            "text/plain"
+          ],
+          "text_plain_chars": 57,
+          "text_plain_sha256": "3ef9e6995e236a28f0a7a9d5abebdd205d60c9f04c7f84c122531c97e9a279e2",
+          "text_plain_preview": "<netgen.webgui.WebGuiWidget object at 0x0000024E94321820>",
+          "text_plain_truncated": false
+        },
+        {
+          "output_type": "display_data",
+          "data_keys": [
+            "application/vnd.jupyter.widget-view+json",
+            "text/plain"
+          ],
+          "text_plain_chars": 57,
+          "text_plain_sha256": "cdff9f25b0682f17dbd92f1afa7bb244d8984e095b9814bce0ec3d1134df6347",
+          "text_plain_preview": "<netgen.webgui.WebGuiWidget object at 0x0000024E94321280>",
+          "text_plain_truncated": false
+        },
+        {
+          "output_type": "execute_result",
+          "data_keys": [
+            "text/plain"
+          ],
+          "text_plain_chars": 10,
+          "text_plain_sha256": "4c81e947527c3033427e1dbd8e935ed6d40ba0eb23e69f2d4213616517d651f1",
+          "text_plain_preview": "WebGLScene",
+          "text_plain_truncated": false
+        }
+      ]
+    },
+    {
+      "cell_index": 9,
+      "execution_count": 5,
+      "source_sha256": "56c5b3b9219e5128c6a4c85b74e4fa64b7ae54dbe7ae96d8a7cbd9295805fd22",
+      "source_preview": "summary = {\n    \"linear_all_pairwise_gate_passed\": linear[\"all_pairwise_within_tolerance\"],\n    \"linear_maximum_gap_core_relative_rms\": linear[\"maximum_gap_core_pairwise_relative_rms\"],\n    \"nonlinear_all_pairwise_gate_passed\": nonlinear[\"all_pairwise_within_tolerance\"],\n    \"nonlinear_maximum_gap_core_relative_rms\": nonlinear[\"maximum_gap_core_pairwise_relative_rms\"],\n    \"nonlinear_all_engines_converged\": nonlinear[\"nonlinear_converged\"],\n    \"absolute_envelope_claimed\": False,\n}\nassert all(summary[key] for key in (\n    \"linear_all_pairwise_gate_passed\",\n    \"nonlinear_all_pairwise_gate_passed\",\n    \"nonlinear_all_engines_converged\",\n))\nsummary\n",
+      "outputs": [
+        {
+          "output_type": "execute_result",
+          "data_keys": [
+            "text/plain"
+          ],
+          "text_plain_chars": 295,
+          "text_plain_sha256": "1dd7582819010c5e296014cbaa66866e421f9aed9fa3421fc2749884fec28e4e",
+          "text_plain_preview": "{'linear_all_pairwise_gate_passed': True,\n 'linear_maximum_gap_core_relative_rms': 0.004597695346486559,\n 'nonlinear_all_pairwise_gate_passed': True,\n 'nonlinear_maximum_gap_core_relative_rms': 0.0016022703910167331,\n 'nonlinear_all_engines_converged': True,\n 'absolute_envelope_claimed': False}",
+          "text_plain_truncated": false
+        }
+      ]
+    }
+  ],
+  "policy": {
+    "result_saved": true,
+    "json_has_generated_at_utc": true,
+    "json_has_versions": true
+  }
+}

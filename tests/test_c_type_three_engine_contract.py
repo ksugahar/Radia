@@ -32,7 +32,17 @@ def test_three_engine_runner_has_shared_physics_contract():
     assert 'rad.RadiaField(coil, "b")' in runner
     assert "HDiv-MMM" in runner
     assert "HCurl reduced-A" in runner
-    assert "H1 Omega-reduced-Omega" in runner
+    assert "H1 TOSCA mixed total/reduced Omega" in runner
+    assert "project_source_interface_potential" in runner
+    assert "solve_magnetostatic_mixed_total_reduced_omega_kelvin" in runner
+    assert "solve_magnetostatic_mixed_total_reduced_omega_picard_kelvin" in runner
+    assert 'reduced_materials=("air",)' in runner
+    assert 'total_materials=("iron", "kelvin")' in runner
+    assert 'interface_boundary="iron_air_interface"' in runner
+    assert 'kelvin_interface_boundary="kelvin_int"' in runner
+    assert 'kelvin_source_potential=kelvin_trace["potential"]' in runner
+    assert "source_trace" in runner
+    assert "explicit cut or" in runner
     assert "fixed_mesh_equality_claimed" in runner
     assert "pairwise_raw_full_tube" in runner
     assert "pairwise_median_projected_gap_core" in runner
@@ -43,6 +53,8 @@ def test_three_engine_runner_has_shared_physics_contract():
     assert "has_kelvin_identification" in runner
     assert '"--hdiv-gram-eps"' in runner
     assert 'default=1.0e-14' in runner
+    assert '"--source-trace-tolerance"' in runner
+    assert 'default=0.05' in runner
     assert '"--primary-only"' in runner
     assert '"--reduced-a-relax"' in runner
     assert '"relax": float(options.reduced_a_relax)' in runner
@@ -59,6 +71,7 @@ def test_three_engine_runner_has_shared_physics_contract():
     assert '"coil_builder"' in runner
     assert '"primary_accuracy_passed"' in runner
     assert '"all_pairwise_within_tolerance"' in runner
+    assert '"selected_accuracy_passed"' in runner
     assert 'dirichlet="GND"' in runner
     assert "finite_outer_air_box_forbidden" in runner
     assert "outer_boundary" not in runner
@@ -179,7 +192,7 @@ def test_nonlinear_omega_uses_the_periodic_kelvin_h1_factory():
     assert "fes = H1(" not in picard
 
 
-def test_tracked_kelvin_results_preserve_pass_and_failed_gate_evidence():
+def test_historical_global_omega_results_preserve_pass_and_failed_gate_evidence():
     results = SUITE / "results"
     mesh = json.loads(
         (results / "lab_20260829_mesh.json").read_text(encoding="utf-8")
@@ -220,7 +233,37 @@ def test_tracked_kelvin_results_preserve_pass_and_failed_gate_evidence():
     assert nonlinear_order2["comparison_contract"]["bh_interpolation_shared"]
 
 
-def test_tracked_four_level_accuracy_certificate_is_complete():
+def test_current_tosca_mixed_three_engine_evidence_is_complete():
+    results = SUITE / "results"
+    linear = json.loads(
+        (results / "hibino_20260902_linear_order3_tosca_mixed_v3.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    nonlinear = json.loads(
+        (results / "hibino_20260902_nonlinear_order2_tosca_mixed_v3.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    for payload in (linear, nonlinear):
+        assert payload["schema"] == "radia.validation.c-type-formulation-comparison.v3"
+        assert payload["passed"] is True
+        assert payload["primary_accuracy_passed"] is True
+        assert payload["all_pairwise_within_tolerance"] is True
+        assert payload["selected_accuracy_passed"] is True
+        assert payload["comparison_contract"]["source_trace_tolerance"] == 0.05
+        trace = payload["engines"]["omega_reduced_omega"]["source_trace"]
+        assert trace["iron_relative_tangential_residual"] < 0.05
+        assert trace["kelvin_relative_tangential_residual"] < 0.05
+        assert payload["maximum_gap_core_pairwise_relative_rms"] < 0.01
+    assert nonlinear["nonlinear_converged"] is True
+    assert nonlinear["engines"]["omega_reduced_omega"]["nonlinear_stats"]["converged"]
+    assert set(nonlinear["engines"]) == {
+        "hdiv_mmm", "reduced_a", "omega_reduced_omega"
+    }
+
+
+def test_historical_global_omega_accuracy_certificate_is_not_relabelled():
     results = SUITE / "results"
     manifest = json.loads(
         (results / "cubit_20260830_mesh_family.json").read_text(encoding="utf-8")
@@ -257,6 +300,7 @@ def test_tracked_four_level_accuracy_certificate_is_complete():
         row["convergence_levels"] == ["medium", "fine", "finer"]
         for row in certificate["engine_convergence"].values()
     )
+    assert "TOSCA" not in certificate["claim"]["scope"]
 
 
 def test_mesh_family_builder_uses_one_geometric_cubit_sequence():

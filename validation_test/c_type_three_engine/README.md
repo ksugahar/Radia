@@ -1,13 +1,13 @@
 # C-type formulation validation
 
 The primary comparison is the production HDiv-MMM magnetostatic route against
-NGSolve Omega-reduced-Omega. HCurl reduced-A is retained as an independent
-third-formulation audit:
+the NGSolve TOSCA-style mixed total/reduced Omega route. HCurl reduced-A is
+retained as an independent third-formulation audit:
 
 1. HDiv-MMM (BDM1 or BDM2), with the Coulomb charge Gram as the exact open
    boundary operator;
 2. HCurl reduced-A;
-3. H1 Omega-reduced-Omega.
+3. H1 TOSCA mixed total/reduced Omega.
 
 ## Canonical geometry route
 
@@ -21,7 +21,7 @@ validation must not reconstruct the pole with `netgen.occ`.
   the method's Coulomb open boundary with an unrelated truncation.
 - `kelvin_domain.vol`: the same exact iron, a locally refined physical-air
   sphere, and a translated Kelvin sphere. Reduced-A and
-  Omega-reduced-Omega share its one-to-one periodic identification. A finite
+  mixed total/reduced Omega share its one-to-one periodic identification. A finite
   outer air box is forbidden.
 
 The engines share the same solid `CoilBuilder`, B-H table, and physical
@@ -30,7 +30,7 @@ potential. Fixed-mesh machine equality is not claimed across different FE
 spaces and different open-boundary treatments; mesh and outer-domain
 convergence must tighten the pairwise B discrepancy.
 
-For nonlinear comparisons, HDiv-MMM and Omega-reduced-Omega use the same
+For nonlinear comparisons, HDiv-MMM and mixed total/reduced Omega use the same
 monotone PCHIP B(H) interpolation and continue beyond the table with vacuum
 slope. Sharing only the table samples is not considered a shared material law.
 
@@ -64,10 +64,14 @@ python validation_test/c_type_three_engine/run_three_engine.py `
   --output C:/temp/radia_ctype_three_engine/nonlinear.json
 ```
 
-Use `--primary-only` for the faster direct HDiv-MMM versus
-Omega-reduced-Omega production comparison. Omitting it also runs reduced-A as
-the independent third route. The pass/fail accuracy metric is always the
-primary pair; every selected nonlinear engine must also converge.
+Use `--primary-only` for the faster direct HDiv-MMM versus mixed-Omega
+development comparison. Omitting it also runs reduced-A as the independent
+third route. A full three-engine run is accepted only if every selected pair
+passes the requested gap-core `B` tolerance and, for nonlinear runs, every
+engine converges. The default `--source-trace-tolerance 0.05` is a separate
+gate for both the physical iron/air and physical-air/Kelvin source-potential
+traces. A failed trace projection requires an explicit cut/cohomology
+representation rather than a relaxed numerical tolerance.
 
 Add `--resume` for remote production runs. The runner writes a hash-checked
 checkpoint after each of the HDiv, reduced-A, and Omega engines and emits one
@@ -113,35 +117,31 @@ analytic solution.
 ## Tracked evidence
 
 `results/lab_20260829_mesh.json` records the passing Cubit/Kelvin topology
-contract. `results/lab_20260829_linear_order2.json` is the passing order-2
-linear comparison. `results/lab_20260829_nonlinear_order1.json` deliberately
-records a failed accuracy gate: all three engines converged, but the Omega
-result remains 5.85% from HDiv in the gap core.
-`results/lab_20260829_nonlinear_order2_primary.json` records the passing direct
-comparison after unifying the B-H interpolation: HDiv-MMM and
-Omega-reduced-Omega differ by 0.18032%. The failed order-1 artifact is retained
-so the order-convergence result cannot silently replace or conceal it.
+contract. The `20260829` and `20260830` field artifacts remain tracked as
+historical evidence for the former global reduced-Omega route only. They do
+not certify the current TOSCA mixed formulation, because they omit its required
+physical-air/Kelvin source-potential jump.
 
-`results/mdx_hibino_20260830_nonlinear_order2_summary.json` indexes three fresh
-runs on each idle compute host with the exact `v4.95.70` PyPI wheel, 38 threads,
-the same checked meshes, and no checkpoint reuse. All six runs pass at
-0.1803201266% relative RMS. Median HDiv/Omega runtimes are 12.09/42.59 s on mdx
-and 11.31/43.28 s on hibino, so HDiv is 3.52x and 3.83x faster for this fixed
-nonlinear order-2 comparison. The six source JSON artifacts are tracked beside
-the summary.
+The current pre-release evidence is explicit about native binary provenance:
+the current Python mixed-formulation source was overlaid on the installed
+`radia 4.95.77` wheel on Hibino; no `.pyd` was copied. The native HDiv kernel,
+CoilBuilder, Radia source evaluation, and NGSolve assembly were therefore the
+installed wheel's components.
 
-The final `v4.95.71` accuracy campaign is recorded by
-`results/mdx_hibino_20260830_nonlinear_order2_convergence.json`. Four exact
-Cubit/ACIS levels increase the iron mesh from 434 to 1,688 elements and the
-Kelvin mesh from 24,134 to 89,454 elements. The accepted convergence levels are
-`medium -> fine -> finer`. On the finest level the three-formulation gap-core
-spread is 0.29326%, the maximum conservative discretization uncertainty is
-0.17601%, and the maximum consensus deviation is 0.18226%. Their conservative
-sum is 0.35827%, below the 1% certificate gate. The mdx/hibino field
-reproduction differs by at most `2.35e-14` relative RMS.
+- `results/hibino_20260902_linear_order3_tosca_mixed_v3.json` is the linear
+  order-3 full three-engine run. At a 1% all-pair gate its HDiv/mixed,
+  HDiv/reduced-A, and mixed/reduced-A gap-core RMS differences are 0.41955%,
+  0.38661%, and 0.45977%. The physical source-trace residuals are 1.26933%
+  on iron/air and 1.75381% on `kelvin_int`, both below the 5% cut gate.
+- `results/hibino_20260902_nonlinear_order2_tosca_mixed_v3.json` is the
+  nonlinear full three-engine run with the shared monotone PCHIP B(H) table.
+  All engines converge; the three respective gap-core RMS differences are
+  0.12324%, 0.10674%, and 0.16023%. Its trace residuals are 2.98511% and
+  4.53077%, both below the same 5% gate. The HDiv, reduced-A, and mixed-Omega
+  runtimes are 11.15 s, 221.56 s, and 135.76 s.
 
-On that finest mesh, mdx runtimes are 36.78 s for 32,580 HDiv DoFs, 852.08 s
-for 470,288 reduced-A DoFs, and 90.41 s for 124,132 Omega DoFs. Hibino repeats
-them in 37.43, 865.45, and 91.21 s. These timings support the implementation
-comparison; the certificate's accuracy statement remains the common
-mesh-refined B-field envelope, not an analytic-truth claim.
+These two artifacts complete the fixed-mesh three-formulation acceptance for
+the current TOSCA split. A new multi-level, independent-host convergence
+certificate must be generated from the released binary before stating an
+absolute numerical envelope for this formulation; the historic global-Omega
+certificate must not be relabelled as that result.
