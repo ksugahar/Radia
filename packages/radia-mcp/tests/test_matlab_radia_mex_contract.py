@@ -23,7 +23,7 @@ def test_radia_mex_contract_reads_the_cpp_command_inventory():
     contract = matlab_radia_mex_contract("mex")
 
     assert contract["status"] == "ready"
-    assert contract["command_count"] == 364
+    assert contract["command_count"] == 367
     assert not any(
         command.startswith("optuna.")
         for command in contract["command_names"]
@@ -73,6 +73,9 @@ def test_radia_mex_contract_reads_the_cpp_command_inventory():
     assert "ngsolve.matrix_dump" in contract["command_names"]
     assert "ngsolve.mesh.set_deformation" in contract["command_names"]
     assert "ngsolve.mesh.trafo_quality" in contract["command_names"]
+    assert "ngsolve.fespace.free_dofs" in contract["command_names"]
+    assert "ngsolve.matrix.matvec_into" in contract["command_names"]
+    assert "ngsolve.coefficient_function.component" in contract["command_names"]
     assert "simulink.state_space.output" in contract["command_names"]
     assert "simulink.state_space.update" in contract["command_names"]
     assert "simulink.state_space.snapshot" in contract["command_names"]
