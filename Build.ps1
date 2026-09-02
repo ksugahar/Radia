@@ -411,7 +411,10 @@ echo ========================================
 echo   Building peec_matrices
 echo ========================================
 "$CMAKE_EXE" --build . --config Release --target peec_matrices -j
-if errorlevel 1 ( echo WARNING: peec_matrices build failed )
+if errorlevel 1 (
+    echo ERROR: peec_matrices build failed
+    exit /b 1
+)
 
 echo.
 echo ========================================
@@ -558,7 +561,7 @@ try {
     )
     if (-not $RadiaOnly) {
         $modules += @(
-            @{ src = "peec_matrices.cp312-win_amd64.pyd"; dst = "peec_matrices.pyd"; required = $false },
+            @{ src = "peec_matrices.cp312-win_amd64.pyd"; dst = "peec_matrices.pyd"; required = $true },
             @{ src = "cln_core.cp312-win_amd64.pyd";      dst = "cln_core.pyd";      required = $false }
         )
     }
@@ -649,6 +652,26 @@ try {
         } else {
             Write-Host "  $($mod.dst): skipped" -ForegroundColor Yellow
         }
+    }
+
+    # A copied .pyd is not necessarily usable: changing the pinned NGSolve
+    # release can leave a loadable-looking but ABI-incompatible binary behind.
+    # Probe each required extension in its own process and verify that Python
+    # resolved it from this source tree rather than from stale site-packages.
+    $NativeAbiModules = @("radia._radia_pybind")
+    if (-not $RadiaOnly) {
+        $NativeAbiModules += "radia.peec_matrices"
+    }
+    $NativeAbiArgs = @(
+        "$PROJECT_DIR\tools\check_native_module_abi.py",
+        "--source-root", "$PROJECT_DIR\src"
+    )
+    foreach ($NativeAbiModule in $NativeAbiModules) {
+        $NativeAbiArgs += @("--module", $NativeAbiModule)
+    }
+    & $PythonExecutable @NativeAbiArgs
+    if ($LASTEXITCODE -ne 0) {
+        throw "Native module ABI check failed"
     }
     }  # end: if (-not $AxiFemOnly) -- full module/cubit copy section
 
