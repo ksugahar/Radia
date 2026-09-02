@@ -511,6 +511,28 @@ source stampの両方を表示する。
   の退行は正式サポートと全パレット実行試験で閉じた。これは最初のFableレビュー範囲を
   越えるため、修正後の最終候補に対して正式公開前Fableレビューをもう一度行う。
 
+### 13.3 3.0.13 最終Fable固定点レビュー記録
+
+- reviewed source: `bc703ea54bd3f60570d72835623552b9bc656a51`
+- resolution source: `b5c17a7c5327f1eed0a3a72538242c46b8513107`
+- reviewer: Claude Code Fable（提示された実測レビュー）
+- result: `RELEASE BLOCKED`から記録済み指摘を回収。PR CIとO:ハンドテスト前のためtagは未許可
+- reproduced blocker: n乗根→指数へTab→lim→`a`の4操作で生成した
+  `\sqrt[\lim_{a}]{x}`が最初の再parseで指数閉じ`]`と被開平部を取り込み、Undoと
+  保存／再開が別の式になった。既存fuzzerは壊れた一度目と二度目だけを比較して誤合格した。
+- resolution contract: `editor output == first reparse == second reparse`をexact比較し、
+  修正前に4操作が赤になることを確認してからoptional引数の停止判定を修正した。
+  同じ契約を全60テンプレートのn乗根指数と100 seed×250操作へ適用する。
+  レビューで併記された`\text` / `\operatorname`の空白脱落も、TeX往復、表示幅、SVG、
+  MathMLを含め回収した。
+- font-host disposition: 二度の長時間fuzz中のPID交代は、Eqnedit64不在時にも同じ
+  `0xc0000005` / offset `0x366a2`が発生するLAB共有sessionでは製品へ帰属できない。
+  確認済みメモリフォントtriggerの回避は維持し、最低10分の事前対照窓とApplication Errorを
+  組み合わせて`FAIL`と`INCONCLUSIVE`を分ける。
+- review scope: 回収commitは本レビューに記録されたparser固定点、text空白、font判定と
+  それらの仕様・試験だけを変更した。別機能を追加していないため§12の一度のFableレビューを
+  満たすが、PR CI、署名済みO:候補、菅原ハンドテストを省略してよい意味ではない。
+
 - product tag: `eqnedit64-v3.0.11`
 - product tag source: `f5ac045703eab940323bddabbef6bb4fd3a9e55c`
 - GitHub Release EXE SHA-256:
