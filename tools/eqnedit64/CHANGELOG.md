@@ -22,6 +22,13 @@
 - Make Enter in the TeX pane create the same aligned equation row as Enter on
   the structural canvas, keep the new source caret inside the environment, and
   soft-wrap long TeX source instead of requiring horizontal scrolling.
+- Replace the public matrix of copy/render switches with one memorable
+  `Eqnedit64.exe INPUT OUTPUT` converter contract. UTF-8 TeX files and the
+  clipboard can target Office, Google Slides, PNG clipboard data, PNG files,
+  or EMF files; old switches remain accepted only for existing automation.
+- Refuse a native release build when Git cannot supply its source commit,
+  including share-backed worktrees protected by Git's ownership check, instead
+  of silently stamping a candidate as `unknown`.
 
 ## 3.0.11 — 2026-08-30
 

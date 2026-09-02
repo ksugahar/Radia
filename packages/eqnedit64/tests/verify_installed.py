@@ -1,6 +1,11 @@
 """Post-install contract for an Eqnedit64 wheel."""
 from __future__ import annotations
 
+from pathlib import Path
+import subprocess
+import sys
+import tempfile
+
 import eqnedit64
 
 
@@ -19,5 +24,21 @@ assert equation.backspace()
 assert equation.latex() == r"E = mc^{2}H^{}"
 assert equation.backspace()
 assert equation.latex() == r"E = mc^{2}H"
+
+with tempfile.TemporaryDirectory() as directory:
+    rendered = eqnedit64.render_equation(
+        r"\frac{x}{y}", Path(directory) / "equation.png"
+    )
+    assert rendered.read_bytes().startswith(b"\x89PNG\r\n\x1a\n")
+
+help_result = subprocess.run(
+    [sys.executable, "-m", "eqnedit64.cli", "--help"],
+    capture_output=True,
+    check=False,
+    text=True,
+)
+assert help_result.returncode == 0
+assert "eqnedit64 INPUT OUTPUT" in help_result.stdout
+assert "--copy-tex-file" not in help_result.stdout
 
 print("PASS: installed eqnedit64 wheel exposes core, backend, and Web assets")

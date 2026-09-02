@@ -7,16 +7,13 @@ import subprocess
 import tempfile
 
 
-_COPY_SWITCHES = {
-    "office": "--copy-tex-file",
-    "powerpoint": "--copy-tex-file",
-    "google-slides": "--copy-google-slides-file",
-    "png": "--copy-png-file",
+_COPY_TARGETS = {
+    "office": "office",
+    "powerpoint": "office",
+    "google-slides": "slides",
+    "png": "png",
 }
-_RENDER_SWITCHES = {
-    ".png": "--render-png-file",
-    ".emf": "--render-emf-file",
-}
+_RENDER_SUFFIXES = {".png", ".emf"}
 
 
 def backend_path() -> Path:
@@ -63,11 +60,11 @@ def _tex_file(tex: str) -> Path:
 def copy_equation(tex: str, target: str = "office", timeout_s: float = 15.0) -> None:
     """Publish TeX to the Windows clipboard using a named target contract."""
     normalized = target.strip().lower().replace("_", "-")
-    if normalized not in _COPY_SWITCHES:
+    if normalized not in _COPY_TARGETS:
         raise ValueError("target must be office, powerpoint, google-slides, or png")
     source = _tex_file(tex)
     try:
-        result = _invoke([_COPY_SWITCHES[normalized], str(source)], timeout_s)
+        result = _invoke([str(source), _COPY_TARGETS[normalized]], timeout_s)
     finally:
         source.unlink(missing_ok=True)
     if result.returncode:
@@ -81,14 +78,12 @@ def render_equation(tex: str, output: str | Path, timeout_s: float = 30.0) -> Pa
     """Render TeX to a checked PNG or EMF output file."""
     destination = Path(output).expanduser().resolve()
     suffix = destination.suffix.lower()
-    if suffix not in _RENDER_SWITCHES:
+    if suffix not in _RENDER_SUFFIXES:
         raise ValueError("output extension must be .png or .emf")
     destination.parent.mkdir(parents=True, exist_ok=True)
     source = _tex_file(tex)
     try:
-        result = _invoke(
-            [_RENDER_SWITCHES[suffix], str(source), str(destination)], timeout_s
-        )
+        result = _invoke([str(source), str(destination)], timeout_s)
     finally:
         source.unlink(missing_ok=True)
     if result.returncode:
