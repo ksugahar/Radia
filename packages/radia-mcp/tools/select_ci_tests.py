@@ -9,9 +9,11 @@ servers. The emitted JSON is retained as CI evidence.
 from __future__ import annotations
 
 import argparse
+import ast
 from functools import lru_cache
 import json
 from pathlib import Path
+import re
 import runpy
 import subprocess
 import sys
@@ -71,30 +73,16 @@ def _test_sources() -> frozenset[str]:
 
 @lru_cache(maxsize=None)
 def _tests_containing(token: str) -> frozenset[str]:
-    completed = subprocess.run(
-        [
-            "git",
-            "-C",
-            str(REPO_ROOT),
-            "grep",
-            "-l",
-            "-F",
-            "--",
-            token,
-            "--",
-            "packages/radia-mcp/tests",
-        ],
-        check=False,
-        capture_output=True,
-        text=True,
-        timeout=30,
-    )
-    if completed.returncode not in {0, 1}:
-        raise RuntimeError(completed.stderr.strip() or "git grep failed")
-    return frozenset(
-        _normalize(path).removeprefix("packages/radia-mcp/")
-        for path in completed.stdout.splitlines()
-    )
+    matches = set()
+    for relative in _test_sources():
+        path = PACKAGE_ROOT / relative
+        try:
+            source = path.read_text(encoding="utf-8")
+        except (OSError, UnicodeError):
+            continue
+        if token in source:
+            matches.add(relative)
+    return frozenset(matches)
 
 
 def _related_tests(
@@ -102,6 +90,7 @@ def _related_tests(
     *,
     family: str,
     module_parts: tuple[str, ...],
+    changed_symbols: set[str] | None = None,
 ) -> set[str]:
     package_token = f"radia_mcp.{family}"
     stem = module_parts[-1] if module_parts else ""
@@ -116,7 +105,18 @@ def _related_tests(
             family_hint = family.replace("-", "_")
             hints = {f"{family_hint}_mcp", f"{family_hint}_server"}
 
-    selected = set(_tests_containing(search_token))
+    if changed_symbols and "*" not in changed_symbols and stem != "server":
+        selected: set[str] = set()
+        for symbol in changed_symbols:
+            selected.update(_tests_containing(symbol))
+        return selected
+
+    # Server modules are registration/composition boundaries. Searching every
+    # direct server import selects nearly the whole historical physics-gate
+    # corpus (radia_ngsolve alone exceeded 100 files). Dedicated MCP contract
+    # tests plus the affected server selftest own that boundary; numerical
+    # behavior is selected when its implementation module changes.
+    selected = set() if stem == "server" else set(_tests_containing(search_token))
     for relative in sources:
         filename = Path(relative).name
         if any(hint and hint in filename for hint in hints):
@@ -124,7 +124,102 @@ def _related_tests(
     return selected
 
 
-def build_plan(changed_files: Iterable[str], *, full: bool = False) -> dict:
+def _symbols_for_line_ranges(
+    text: str, line_ranges: list[tuple[int, int]]
+) -> set[str]:
+    tree = ast.parse(text)
+    symbol_ranges = []
+    for node in tree.body:
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            start = min(
+                [node.lineno, *(item.lineno for item in node.decorator_list)]
+            )
+            symbol_ranges.append((start, node.end_lineno, node.name))
+    symbols: set[str] = set()
+    for changed_start, changed_end in line_ranges:
+        matches = {
+            name
+            for symbol_start, symbol_end, name in symbol_ranges
+            if symbol_start <= changed_end and changed_start <= symbol_end
+        }
+        symbols.update(matches or {"*"})
+    return symbols
+
+
+def _changed_symbols_by_file(
+    changed_files: Iterable[str], base: str
+) -> dict[str, set[str]]:
+    paths = sorted(
+        {
+            _normalize(path)
+            for path in changed_files
+            if _normalize(path).startswith(SOURCE_PREFIX)
+            and _normalize(path).endswith(".py")
+        }
+    )
+    if not paths:
+        return {}
+    completed = subprocess.run(
+        [
+            "git",
+            "-C",
+            str(REPO_ROOT),
+            "diff",
+            "--unified=0",
+            "--no-color",
+            base,
+            "--",
+            *paths,
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=60,
+    )
+    if completed.returncode != 0:
+        return {}
+
+    hunks: dict[str, list[tuple[int, int]]] = {}
+    current_path = ""
+    hunk_pattern = re.compile(r"^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@")
+    for line in completed.stdout.splitlines():
+        if line.startswith("+++ "):
+            value = line[4:].strip()
+            current_path = "" if value == "/dev/null" else value.removeprefix("b/")
+            continue
+        match = hunk_pattern.match(line)
+        if not current_path or match is None:
+            continue
+        start = int(match.group(1))
+        count = int(match.group(2) or "1")
+        if count == 0:
+            hunks.setdefault(current_path, []).append((0, 0))
+        else:
+            hunks.setdefault(current_path, []).append((start, start + count - 1))
+
+    result: dict[str, set[str]] = {}
+    for path, line_ranges in hunks.items():
+        if any(start == 0 for start, _ in line_ranges):
+            result[path] = {"*"}
+            continue
+        current = REPO_ROOT / path
+        try:
+            result[path] = _symbols_for_line_ranges(
+                current.read_text(encoding="utf-8"), line_ranges
+            )
+        except (OSError, SyntaxError, UnicodeError):
+            result[path] = {"*"}
+    return result
+
+
+def build_plan(
+    changed_files: Iterable[str],
+    *,
+    full: bool = False,
+    changed_symbols_by_file: dict[str, set[str]] | None = None,
+) -> dict:
     """Return the deterministic package-test and server-selftest selection."""
 
     changed = sorted({_normalize(path) for path in changed_files if path.strip()})
@@ -184,16 +279,27 @@ def build_plan(changed_files: Iterable[str], *, full: bool = False) -> dict:
         if module_parts and module_parts[-1].endswith(".py"):
             module_parts = (*module_parts[:-1], module_parts[-1][:-3])
 
+        stem = module_parts[-1] if module_parts else ""
         if family == "common":
             servers.update(catalog)
         elif family in family_servers:
             servers.add(family_servers[family])
+
+        if family == "common" and stem == "__init__":
+            selected.update(
+                {
+                    "tests/test_coarse_tool_registry.py",
+                    "tests/test_optional_dependency_imports.py",
+                }
+            )
+            continue
 
         selected.update(
             _related_tests(
                 sources,
                 family=family,
                 module_parts=module_parts,
+                changed_symbols=(changed_symbols_by_file or {}).get(path),
             )
         )
 
@@ -251,7 +357,16 @@ def main() -> int:
     else:
         parser.error("provide --changed-files-json, --base, or --full")
 
-    plan = build_plan(changed_files, full=args.full)
+    changed_symbols = (
+        _changed_symbols_by_file(changed_files, args.base)
+        if args.base and not args.full
+        else None
+    )
+    plan = build_plan(
+        changed_files,
+        full=args.full,
+        changed_symbols_by_file=changed_symbols,
+    )
     text = json.dumps(plan, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
     if args.output:
         args.output.parent.mkdir(parents=True, exist_ok=True)

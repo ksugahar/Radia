@@ -178,79 +178,35 @@ the QUAD SHA-256, and publishes that exact file to both PyPI and the matching
 GitHub Release.
 
 ## ===
-## preflight_gates — Phase 2.5 4-gate pre-push validation (2026-05-03)
+## preflight_gates — impact-scoped pre-push validation
 ## ===
 
-Added 2026-05-03 after v4.27.0 / v4.27.1 BOTH round-tripped through
-tag CI failures, burning 3 patch numbers for one set of features.
-Every gate below was a CI failure on at least one of those round-
-trips; running the gates locally takes ~1 minute total.
+`tools/ci_preflight.py` is the single local entry point. By default it compares
+the candidate and working tree with `origin/main`, then runs only the compact
+gates owned by the affected paths:
 
-### Gate 1: regenerate radia-mcp TOOLS.md and verify
-
-```
-python packages/radia-mcp/scripts/gen_tools_doc.py
-git diff --stat packages/radia-mcp/docs/TOOLS.md
-python -m pytest tests/mcp_server/test_tools_doc.py -xvs
+```powershell
+python tools/ci_preflight.py
 ```
 
-If the regen produced "(import failed: ModuleNotFoundError)" lines,
-edit `packages/radia-mcp/scripts/gen_tools_doc.py` SERVERS list to
-remove the dead subpackage entry, regen, and verify again.  This was
-the v4.27.1 -> v4.27.2 trip.
+Policy and version consistency always run. A `packages/radia-mcp/` change also
+selects the publication-boundary lint, generated inventory check, affected
+server selftests, and impact-selected MCP tests. The default path does not
+collect or run the solver validation corpus.
 
-### Gate 2: collect-only sweep with the CI exclusion set
+Use explicit escalation only when its evidence is needed:
 
-```
-python -m pytest \\
-  --ignore=tests/cubit \\
-  --ignore=tests/panels \\
-  --ignore=tests/test_far_field_accuracy.py \\
-  --ignore=tests/test_rad_ngsolve_function.py \\
-  --ignore=tests/test_tetrahedral_solver.py \\
-  --ignore=tests/test_batch_evaluation.py \\
-  --ignore=tests/test_curlA_equals_B.py \\
-  --ignore=tests/test_mesh_import.py \\
-  --ignore=tests/test_scalar_bie_sibc.py \\
-  --collect-only -q
+```powershell
+python tools/ci_preflight.py --full                 # lightweight tests/
+python tools/ci_preflight.py --validation           # validation collect-only
+python tools/ci_preflight.py --full --validation    # run validation_test/
+python tools/ci_preflight.py --fix                  # repair generated inventory
 ```
 
-Expected: ``N tests collected``, **NO** ``error``, **NO** ``Interrupted``.
-Any import error = a stale `from <removed_module>` somewhere in
-tests/.  The v4.27.0 -> v4.27.1 trip was a stale
-`tests/mcp_server/test_build123d_gmsh_elf_responses.py` importing
-`radia_mcp.elf` after the elf subpackage was extracted.
-
-### Gate 3: actually run the affected mcp_server tests
-
-```
-python -m pytest tests/mcp_server/ -x
-```
-
-Catches schema regressions in the MCP tool table that the doc
-generator doesn't.
-
-### Gate 4: workflow-runner --selftest matrix import check
-
-If `--selftest` matrix in `.github/workflows/build-test.yml` was
-edited (subpackage removed/added):
-
-```
-python -c "
-import importlib
-servers = ['radia_mcp.radia_ngsolve.server',
-           'radia_mcp.cubit.server',
-           'radia_mcp.build123d.server',
-           'radia_mcp.gmsh.server']
-for s in servers:
-    try: importlib.import_module(s); print(f'OK   {s}')
-    except Exception as e: print(f'FAIL {s}: {e}')"
-```
-
-Every server must print OK.  Subpackages no longer in the codebase
-must NOT be in the .yml matrix.
-
-**Only proceed to Phase 3 once all four gates above are green.**
+Routine CI mirrors this separation: mdx owns the fast repository lane,
+`radia-mcp` uses its change selector, and native/release validation is manual or
+tag-scoped. A release candidate advances only after its selected gates pass for
+the exact candidate SHA; a tag must not repeat unrelated package matrices.
 
 ## ===
 ## mcp_quality_review — how to interpret a green radia-mcp matrix
@@ -264,7 +220,7 @@ green:
 * policy lint passes.
 * version consistency passes.
 * generated `packages/radia-mcp/docs/TOOLS.md` has no drift.
-* top-level pytest collection has no import drift.
+* impact-selected package tests and affected server selftests pass.
 
 This is strong evidence for:
 
@@ -281,7 +237,8 @@ Those claims require the deployment gates:
 * PyPI install smoke for MCP entry points,
 * release-quad Phase 8/9 checks on LAB, 100号機, mdx, and hibino
   (mdx intentionally reports `radia-mcp` as N/A),
-* at least one GUI panel / notebook / MCP knowledge round-trip,
+* at least one Simulink application block or result-bearing notebook plus MCP
+  knowledge round-trip,
 * heavy validation and benchmark evidence kept outside fast `tests/`
   but recorded as release evidence.
 
@@ -297,7 +254,7 @@ Machine-readable public-safe evidence lives under
 |-------------------------------------------------------------------------|------------------------------------------------------------------|--------------------------------|--------------|
 | `ModuleNotFoundError: No module named 'radia_mcp.elf'`                  | stale test importing extracted subpackage                        | Gate 2 (collect-only sweep)    | v4.27.0      |
 | `AssertionError: ... TOOLS.md is stale`                                 | TOOLS.md generator hardcodes a subpackage that no longer exists  | Gate 1 (regen + diff)          | v4.27.1      |
-| `FAIL: examples/<dir>/ missing README.md`                               | Policy Lint workflow; new examples/ subdir without README        | manual: `ls examples/*/README.md` | (multiple)|
+| `FAIL: examples/<dir>/ missing README.md`                               | Historical policy from the retired examples tier                 | do not add new `examples/`; classify as tests, validation, or docs | (multiple)|
 | `--selftest: ModuleNotFoundError: No module named 'radia_mcp.<sub>'`    | .yml matrix lists removed subpackage                             | Gate 4 (--selftest import)     | (multiple)   |
 | `gh release download ... no assets match the file pattern`              | binaries-release upload race vs tag-CI start                     | (CI has 6-attempt retry as of v4.26)| v4.25.1, v4.27.0|
 | `Basic tests failed` w/ collected 0 tests                               | pytest config conflict (pyproject.toml vs pytest.ini)            | Gate 2 (collect-only sweep)    | (rare)       |

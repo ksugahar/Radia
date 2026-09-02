@@ -36,19 +36,36 @@ def git_output(*args: str) -> str:
     ).strip()
 
 
-def create_bundle(base: str, head: str, bundle: Path, ref: str) -> None:
-    """Create a bundle containing exactly the candidate side of the push."""
+def resolve_candidate_base(base: str, head: str) -> str:
+    """Resolve the comparison base, including a new remote branch push."""
     if git_output("rev-parse", "--verify", f"{head}^{{commit}}") != head:
         raise RuntimeError(f"candidate is not a commit: {head}")
     if base != ZERO:
         git_output("rev-parse", "--verify", f"{base}^{{commit}}")
+        return base
+
+    for main_ref in ("origin/main", "main"):
+        try:
+            git_output("rev-parse", "--verify", f"{main_ref}^{{commit}}")
+            return git_output("merge-base", head, main_ref)
+        except subprocess.CalledProcessError:
+            continue
+    raise RuntimeError("cannot resolve origin/main or main for a new branch push")
+
+
+def create_bundle(base: str, head: str, bundle: Path, ref: str) -> str:
+    """Create a bundle containing exactly the candidate side of the push."""
+    effective_base = resolve_candidate_base(base, head)
 
     run(["git", "update-ref", ref, head], cwd=ROOT)
     try:
-        revision = ref if base == ZERO else f"{base}..{ref}"
-        run(["git", "bundle", "create", str(bundle), revision], cwd=ROOT)
+        run(
+            ["git", "bundle", "create", str(bundle), f"{effective_base}..{ref}"],
+            cwd=ROOT,
+        )
     finally:
         run(["git", "update-ref", "-d", ref], cwd=ROOT)
+    return effective_base
 
 
 def remote_command(script: str, host: str) -> None:
@@ -76,7 +93,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         with tempfile.TemporaryDirectory(prefix="radia-preflight-", dir=r"C:\temp") as temp:
             bundle = Path(temp) / "candidate.bundle"
-            create_bundle(args.base, args.head, bundle, remote_ref)
+            effective_base = create_bundle(args.base, args.head, bundle, remote_ref)
             remote_command(
                 "\n".join(
                     [
@@ -98,6 +115,7 @@ $bundle = '{remote_bundle}'
 $worktree = '{remote_worktree}'
 $ref = '{remote_ref}'
 $head = '{args.head}'
+$base = '{effective_base}'
 if (-not (Test-Path -LiteralPath $git)) {{ throw "Git is unavailable at $git" }}
 if (-not (Test-Path -LiteralPath $system_python)) {{ throw "Python is unavailable at $system_python" }}
 if (-not (Test-Path -LiteralPath (Join-Path $repo '.git'))) {{
@@ -120,12 +138,17 @@ try {{
     if (-not (Test-Path -LiteralPath $python)) {{
       & $system_python -m venv $venv
       if ($LASTEXITCODE -ne 0) {{ exit $LASTEXITCODE }}
-      & $python -m pip install --disable-pip-version-check --quiet pytest pyyaml
+      & $python -m pip install --disable-pip-version-check --quiet pytest pyyaml 'mcp>=1.0,<2'
+      if ($LASTEXITCODE -ne 0) {{ exit $LASTEXITCODE }}
+    }}
+    & $python -c "import mcp, pytest, yaml"
+    if ($LASTEXITCODE -ne 0) {{
+      & $python -m pip install --disable-pip-version-check --quiet pytest pyyaml 'mcp>=1.0,<2'
       if ($LASTEXITCODE -ne 0) {{ exit $LASTEXITCODE }}
     }}
     & $python tools/audit_ci_no_system_install.py
     if ($LASTEXITCODE -ne 0) {{ exit $LASTEXITCODE }}
-    & $python tools/ci_preflight.py --only policy,version
+    & $python tools/ci_preflight.py --since $base
     if ($LASTEXITCODE -ne 0) {{ exit $LASTEXITCODE }}
     & $python -m pytest tests/test_ci_execution_policy.py tests/test_docs_notebook_contract.py tests/test_release_workflow_ref_gate.py tests/test_wheel_package_policy.py tests/test_application_interface_manifest.py tests/axifem/test_docs_notebook_evidence.py -q
     if ($LASTEXITCODE -ne 0) {{ exit $LASTEXITCODE }}

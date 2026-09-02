@@ -55,17 +55,16 @@ def test_pypi_distributions_have_independent_ci_boundaries():
     assert "runs-on: [self-hosted, Windows, X64, mdx]" in fast
     assert "Build with MSVC" not in fast
     assert "workflow_dispatch:" in native
-    for package in ("eqnedit64", "radia-mcp", "cubit-mesh-export",
-                    "radia-optuna"):
-        assert f"packages/{package}/**" in native
-    assert "tests/test_release_quad_optuna_candidate.py" in native
-    assert "tools/release_quad.py" in native
-    assert ".agents/skills/release-eqnedit64/**" in native
+    assert "tags: ['v*']" in native
+    trigger = native[:native.index("workflow_dispatch:")]
+    assert "paths-ignore:" not in trigger
     assert "radia-mcp-wheel" not in native
     assert "cubit-mesh-export-wheel" not in native
     assert "radia-optuna-wheel" not in native
     assert "--ignore=tests/test_cubit_installers.py" in native
     assert "--ignore=tests/test_release_quad_optuna_candidate.py" in native
+    assert "pytest-rerunfailures" not in native
+    assert "--reruns" not in native
 
     policy=(ROOT/".github"/"workflows"/"policy-lint.yml").read_text(
         encoding="utf-8")

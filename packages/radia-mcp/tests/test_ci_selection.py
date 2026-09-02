@@ -51,6 +51,16 @@ def test_server_registration_change_does_not_select_numerical_family_suite():
     assert len(plan["package_tests"]) < 60
 
 
+def test_large_server_registration_change_stays_on_contract_lane():
+    plan = SELECTOR.build_plan(
+        ["packages/radia-mcp/src/radia_mcp/radia_ngsolve/server.py"]
+    )
+    assert plan["server_selftests"] == ["radia-ngsolve"]
+    assert "tests/test_radia_ngsolve_mcp_contract.py" in plan["package_tests"]
+    assert "tests/test_force_coenergy_gate.py" not in plan["package_tests"]
+    assert len(plan["package_tests"]) < 20
+
+
 def test_common_change_selftests_every_server_without_selecting_every_test():
     plan = SELECTOR.build_plan(
         ["packages/radia-mcp/src/radia_mcp/common/status.py"]
@@ -67,6 +77,33 @@ def test_common_change_selftests_every_server_without_selecting_every_test():
         and selector.split("::", 1)[0] in plan["package_tests"]
         for selector in plan["package_tests"]
     )
+
+
+def test_common_lazy_export_change_skips_unrelated_rag_content_tests():
+    plan = SELECTOR.build_plan(
+        ["packages/radia-mcp/src/radia_mcp/common/__init__.py"]
+    )
+    assert "tests/test_coarse_tool_registry.py" in plan["package_tests"]
+    assert "tests/test_optional_dependency_imports.py" in plan["package_tests"]
+    assert "tests/test_chroma_multilingual.py" not in plan["package_tests"]
+    assert "tests/test_chunk_garble_gate.py" not in plan["package_tests"]
+
+
+def test_changed_symbol_narrows_a_large_compatibility_module():
+    path = "packages/radia-mcp/src/radia_mcp/radia_ngsolve/solve.py"
+    plan = SELECTOR.build_plan(
+        [path],
+        changed_symbols_by_file={path: {"laminated_mu_eff"}},
+    )
+    assert "tests/test_lamination_adapter.py" in plan["package_tests"]
+    assert "tests/test_two_wire_force.py" not in plan["package_tests"]
+    assert len(plan["package_tests"]) < 15
+
+
+def test_changed_lines_map_to_function_or_module_scope():
+    source = "value = 1\n\ndef alpha():\n    return 1\n\ndef beta():\n    return 2\n"
+    assert SELECTOR._symbols_for_line_ranges(source, [(4, 4)]) == {"alpha"}
+    assert SELECTOR._symbols_for_line_ranges(source, [(1, 1)]) == {"*"}
 
 
 def test_package_metadata_selects_packaging_contracts_only():

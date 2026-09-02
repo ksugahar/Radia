@@ -53,6 +53,17 @@ jobs:
       changed_files_json: ${{ steps.classify.outputs.changed_files_json }}
     steps:
       - uses: actions/checkout@v4
+
+      - name: Fetch impact comparison base
+        if: needs.scope.outputs.run_tests == 'true' && needs.scope.outputs.run_full != 'true'
+        shell: bash
+        env:
+          CI_BASE_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          if [[ -n "$CI_BASE_SHA" && ! "$CI_BASE_SHA" =~ ^0+$ ]]; then
+            git cat-file -e "$CI_BASE_SHA^{commit}" 2>/dev/null || \
+              git fetch --no-tags --depth=1 origin "$CI_BASE_SHA"
+          fi
         with:
           fetch-depth: 0
 
@@ -210,13 +221,19 @@ jobs:
         env:
           CHANGED_FILES_JSON: ${{ needs.scope.outputs.changed_files_json }}
           RUN_FULL: ${{ needs.scope.outputs.run_full }}
+          CI_BASE_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
         run: |
           if [[ "$RUN_FULL" == "true" ]]; then
             python packages/radia-mcp/tools/select_ci_tests.py \
               --full --output radia-mcp-ci-selection.json
           else
+            base_args=()
+            if [[ -n "$CI_BASE_SHA" && ! "$CI_BASE_SHA" =~ ^0+$ ]]; then
+              base_args=(--base "$CI_BASE_SHA")
+            fi
             python packages/radia-mcp/tools/select_ci_tests.py \
               --changed-files-json "$CHANGED_FILES_JSON" \
+              "${base_args[@]}" \
               --output radia-mcp-ci-selection.json
           fi
           cat radia-mcp-ci-selection.json
@@ -261,11 +278,13 @@ jobs:
           package_root = Path("packages/radia-mcp")
           plan = json.loads(Path("radia-mcp-ci-selection.json").read_text(encoding="utf-8"))
           env = os.environ.copy()
+          env["PYTEST_DISABLE_PLUGIN_AUTOLOAD"] = "1"
           if plan["package_tests"] != ["tests"]:
               env["RADIA_MCP_CI_SELECTION_JSON"] = json.dumps(plan["package_tests"])
+          targets = ["tests"] if plan["package_tests"] == ["tests"] else plan["package_tests"]
           command = [
               sys.executable, "-m", "pytest", "-v", "-r", "aR",
-              "-m", "not xval and not slow", "tests",
+              "-m", "not xval and not slow", *targets,
           ]
           raise SystemExit(
               subprocess.run(command, cwd=package_root, env=env).returncode

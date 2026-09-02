@@ -56,7 +56,6 @@ S:\Radia\01_GitHub\
   validation_test/         # heavier validation, executed on idle mdx/hibino
   docs/
   Build.ps1               # MSVC + MKL build
-  install_full.py          # One-command full setup
 ```
 
 **PyPI packages** (5 independent distributions in the same monorepo, each
@@ -150,7 +149,7 @@ knowledge in `radia_mcp.<domain>`; same rank as each other):
 ```bash
 pip install radia               # Python package (includes Cubit plugin binaries)
 pip install radia[cubit]        # Also installs cubit-mesh-export
-cubit-plugin-install            # Deploy Cubit plugin + panels (skip if no Cubit)
+cubit-plugin-install            # Deploy Cubit plugin + embedded toolbar (skip if no Cubit)
 ```
 
 **Deleted repositories** (integrated into Radia):
@@ -214,7 +213,8 @@ production interface for Radia applications is a masked block in the single
 - `docs/**/*.ipynb` is the canonical public example, derivation, reproduction,
   and validation layer, not a production GUI. Every repository-published CAE
   example MUST be an executed, result-bearing notebook with narrative, code,
-  synchronized JSON, and saved `ngsolve.webgui.Draw` scenes. Draw the geometry
+  saved output, and saved `ngsolve.webgui.Draw` scenes. An adjacent JSON is not
+  required. Draw the geometry
   or mesh and the primary computed field when one exists; use
   `netgen.webgui.Draw` for pre-mesh CAD geometry. A source catalog, migration
   archive, static PNG, or script excerpt alone does not qualify as an example.
@@ -573,18 +573,23 @@ The repository has three complementary, non-duplicative evidence surfaces:
 
 - `tests/` contains deterministic unit and contract tests that fit the fast CI
   budget. A test belongs here only when it is self-contained and protects a
-  focused public or source-level invariant.
+  focused public or source-level invariant against a concrete implementation
+  bug. Do not keep two tests whose purpose and failure signal are the same.
 - `validation_test/` contains solver-heavy numerical evidence, long native
   builds, GUI/Simulink checks, golden comparisons, performance measurements,
   and multi-machine studies. When normal CI exposes a defect or uncertainty,
   run only the relevant validation lane and retain its result JSON. Validation
+  artifacts require machine-readable JSON with the checked values, runtime,
+  versions, and execution host. Validation
   also runs explicitly on mdx (or hibino when the installed application
   requires it), on a scheduled validation lane, or as a named release gate; it
   does not run on every pull request.
 - `docs/**/*.ipynb` is the public calculation record: derivation, executed
   evidence, figures, and a presentation-ready narrative. It is not a retired
   workbench. A notebook should be promotable directly into a talk or paper
-  figure sequence without reimplementing the calculation elsewhere.
+  figure sequence without reimplementing the calculation elsewhere. The saved
+  notebook output is sufficient; an adjacent JSON and a runtime gate are not
+  required.
 
 MCP and notebooks serve the same artifact contract from different directions:
 MCP is the executable, AI-facing discovery/orchestration surface, while the
@@ -809,7 +814,7 @@ tree**. The tracked repo receives only the *outcome*, via one of two promotions:
 
 1. **Consolidated knowledge worth showing users, or knowledge that informs a future
    feature extension → promote to a `docs/<topic>/*.ipynb`** (self-contained:
-   code + committed JSON/figures + rendered results; strengthen the matching
+   code + saved figures/tables + rendered results; strengthen the matching
    `radia_mcp.<domain>` knowledge in the same step).
 2. **It becomes an API / reusable method → store it in `src/`** (a core method in
    `src/core` / `src/radia`, or a `radia.<domain>` application), built + tested +
@@ -843,12 +848,12 @@ environment-specific tests belong there when they need an executable regression
 surface outside normal CI.
 
 A result-bearing `docs/<topic>/*.ipynb` may still be the human-facing showcase:
-theory + code + saved plots/tables + adjacent synchronized JSON.  But it is the
+theory + code + saved plots/tables. It needs no adjacent JSON and is the
 rendered explanation, not a substitute for the validation executable.  If
 historical material has `validation_*.py`, `validate_*.py`, `*_summary.json`, or
 references from `validation_test/`, classify it first as `validation_test` /
-protected-validation-corpus material; add or refresh docs only as the
-synchronized showcase layer.
+protected-validation-corpus material; add or refresh docs only as the executed
+showcase layer.
 
 ### Retired Examples / Promotion Triage (2026-07-04)
 
@@ -862,13 +867,13 @@ lanes below.  Historical `examples/` references are migration blockers.
 | Development-in-progress / superseded / failed iteration | keep in `C:\temp` until distilled, then delete | Preserve the lesson in `memory/<topic>.md` or a short docs note when it matters. Git history and `C:\temp` are the scratch/archive path, not `examples/`. |
 | Reusable computation, parser, mesh reader, solver helper, formula, or API surface | `src/` | Promote to a named public or internal API and add focused tests. Do not keep it as a loose example helper. |
 | Fast implementation regression or minimal fixture | `tests/` | Keep small enough for CI / developer feedback. |
-| Important numerical verification, benchmark, golden lock, convergence sweep, or regression corpus | `validation_test/<topic>/` plus optional docs notebook | The executable check lives in `validation_test/`; docs may render theory, tables, plots, and summary JSON for humans. |
-| User-facing explanation, tutorial, or method showcase | `docs/<topic>/*.ipynb` | Notebook must be result-saving and synchronized with adjacent JSON. Integrate Markdown explanation, executable cells, and results. |
+| Important numerical verification, benchmark, golden lock, convergence sweep, or regression corpus | `validation_test/<topic>/` plus optional docs notebook | The executable check and required result JSON live in `validation_test/`; docs may render selected theory, tables, and plots for humans. |
+| User-facing explanation, tutorial, or method showcase | `docs/<topic>/*.ipynb` | Notebook must be executed and result-bearing. Integrate Markdown explanation, code, saved results, and WebGUI where applicable; no adjacent JSON is required. |
 | Notebook-only subroutine / local renderer / catalog helper | `docs/<topic>/*.py` | Allowed only when tightly coupled to the notebook. If another topic, panel, MCP server, or validation uses it, promote to `src/` instead. |
 | Mesh/CAD/journal/result assets | keep until owning script/notebook is migrated | Mesh definitions, Cubit `.jou`, tracked `.msh`, figures, and JSON results are protected by preservation/reproducibility policy. |
 
 The migration order is strict: inventory and reference search first; create or
-refresh the docs/JSON layer if the result is user-facing; move reusable or
+refresh the executed docs notebook if the result is user-facing; move reusable or
 validation code to `src/` or `validation_test/`; update docs/MCP/panel
 references; then delete the historical source.  Never leave two live copies of
 the same implementation after API promotion is complete, and never add new
@@ -909,13 +914,10 @@ or `DESIGN` note that derives equations but ships no runnable demonstration stay
 - New method/implementation write-ups are authored as `docs/<topic>/*.ipynb`
   (executed via `jupyter nbconvert --execute` so outputs embed), NOT as `.md`.
 - Every `docs/<topic>/*.ipynb` method/showcase notebook is result-saving: it
-  must store executed code-cell outputs, and its main computed values should
-  also be saved as adjacent JSON with `generated_at_utc` plus version/runtime
-  metadata (`radia_version`, `python_version`, `platform`, `versions`, etc.).
-  The JSON is the durable debug artifact; the notebook is the rendered
-  explanation. The two are a synchronized pair: after rerunning or editing
-  notebook outputs, refresh the JSON sidecar in the same change so its recorded
-  `notebook_sha256` matches the committed result-bearing `.ipynb`.
+  must store executed code-cell outputs, figures, and tables. It is a public
+  demonstration, not benchmark evidence, and needs no JSON sidecar or runtime
+  threshold. Numerical truth and timing evidence belong in `validation_test/`
+  with machine-readable result JSON.
 - `docs/<topic>/` MAY hold `.py` helper modules the ipynb (and `radia_mcp`) import
   (see "File Placement Policy").
 - Do NOT mass-convert existing `.md`: convert an existing method/implementation
@@ -949,11 +951,21 @@ Skin depth is computed from frequency for SIBC, but field propagation uses quasi
 
 ### Binary File Policy
 
-**POLICY**: No binary files (`.pyd`, `.dll`, `.so`, `.lib`, `.exe`) in the git repository.
-- Hosted on GitHub Releases (tag: `binaries`)
-- Pre-push hook auto-uploads `.pyd` on `git push`
-- After cloning, run `./download_binaries.sh` to fetch binaries
-- `.png`, `.pdf` allowed in repository; `.msh`, `.vtu`, `.vtk`, `.vol` are gitignored
+**POLICY**: Native build outputs (`.pyd`, `.dll`, `.so`, `.lib`, `.exe`,
+`.mex*`) are release artifacts, not source files. They are built in isolated
+CI/release environments and delivered through wheels or versioned GitHub
+Release packages. Do not upload binaries from a pre-push hook and do not add
+source-tree download/bootstrap scripts for them.
+
+- The reviewed `cubit_mesh_export.ccm` distributed by the independent
+  `cubit-mesh-export` package is the explicit tracked-plugin exception.
+- A release workflow consumes the artifact built and accepted for that exact
+  commit; development machines must not copy native outputs directly to mdx.
+- Tracked `.slx`, result-bearing notebook output, `.png`, and `.pdf` are allowed
+  when required by their documented interface or publication role.
+- Generated solver meshes and field outputs (`.msh`, `.vtu`, `.vtk`, `.vol`)
+  stay out of source control unless a focused fixture policy explicitly owns
+  them.
 
 ### GitHub Release Publication Gate (2026-07-23)
 
@@ -1072,7 +1084,7 @@ the **ship/release coupling** that previously forced lockstep releases.
 ### File Placement Policy
 
 **POLICY**: Development scratch outputs belong in `C:\temp`.  Committed output
-files (`.png`, `.msh`, `.vtu`, `.vol`, JSON sidecars) must be placed next to
+files (`.png`, `.msh`, `.vtu`, `.vol`, validation JSON) must be placed next to
 their owning `tests/`, `validation_test/`, `docs/`, or `src/radia/panels/`
 driver.
 - Do NOT place generated files at the repository root
@@ -1081,13 +1093,10 @@ driver.
   result-bearing notebook. Reusable behavior belongs in a `src/` API.
 - Every `docs/<topic>/*.ipynb` method/showcase notebook must be result-saving:
   execute it before committing so code-cell outputs, figures, and tables are
-  embedded. Main computed values should also be written to adjacent JSON with
-  `generated_at_utc` and version/runtime keys such as `radia_version`,
-  `python_version`, `platform`, or `versions`. The JSON is the durable debug
-  record; the notebook is the human-facing rendered view. The JSON and notebook
-  must be synchronized in the same change: after rerunning or editing notebook
-  outputs, refresh the JSON sidecar so its recorded `notebook_sha256` matches
-  the committed result-bearing `.ipynb`.
+  embedded. It is a public demonstration, not benchmark evidence, and does not
+  require an adjacent JSON or runtime threshold. Numerical truth, timing,
+  convergence, and publication evidence belong in `validation_test/<topic>/`
+  with a machine-readable result JSON that records versions, host, and runtime.
 - Every public CAE example notebook must also save an interactive WebGUI scene:
   use `ngsolve.webgui.Draw` for the generated mesh and primary
   `CoefficientFunction`/`GridFunction`, or `netgen.webgui.Draw` for CAD geometry
@@ -1111,9 +1120,9 @@ a durable role:
 
 | Lane | Purpose (intent) | Audience | Ships in wheel? |
 |------|------------------|----------|-----------------|
-| `tests/**` | **実装の基本機能の確認** — fast regression, fixture, API contract, CI-friendly. | CI / Codex / developer | No |
-| `validation_test/<topic>/` | **重要な検証・ベンチ・golden lock** — heavier numerical truth, executed on idle `mdx` or `hibino` for large runs. | developer / agent / research validation | No |
-| `docs/<topic>/*.ipynb` | **ユーザーに理論と結果を同時に見せる** — result-saved notebook with synchronized JSON. | users / collaborators / future agents | Docs |
+| `tests/**` | **実装バグの検出** — small deterministic regression, fixture, and API/error contract. Do not duplicate an existing test purpose. | CI / Codex / developer | No |
+| `validation_test/<topic>/` | **重要な検証・ベンチ・golden lock** — numerical truth with required result JSON, executed on idle `mdx` or `hibino` for large runs. | developer / agent / research validation | No |
+| `docs/<topic>/*.ipynb` | **ユーザーに理論と代表結果を同時に見せる** — executed, output-bearing demonstration; no JSON sidecar required. | users / collaborators / future agents | Docs |
 | `docs/<topic>/*.py` | Notebook-local helper only. | notebook readers / MCP if local | Docs |
 | `src/` | Reusable API, parser, formula, solver helper, and computation kernel. | package users / validation / MCP / blocks | Yes |
 | `src/radia/panels/` | Validated headless application CLI, `DesignSpec`, samples, and artifact contracts. | blocks / AI / validation | Yes |
@@ -1148,8 +1157,8 @@ with `@pytest.mark.slow` or a node-ID side list.
   are executed on an idle `mdx` or `hibino` host and labelled with the actual
   validation host.
 - **C:\temp → docs/**: the result teaches a method or workflow to humans; the
-  notebook must be executed, output-bearing, Markdown-integrated, and paired
-  with synchronized JSON. A public CAE example also includes saved WebGUI
+  notebook must be executed, output-bearing, and Markdown-integrated. It has no
+  mandatory JSON sidecar. A public CAE example also includes saved WebGUI
   `Draw` scenes for its geometry/mesh and primary field.
 - **C:\temp → src/**: the code is reusable by more than one documentation,
   validation, application-block, or MCP path.
@@ -1183,9 +1192,9 @@ Map those arguments into a small UI-neutral `DesignSpec` dataclass so Python,
 MCP, MATLAB, and Simulink share one settings-to-command contract.
 
 Stage 2 is validated by running the application mode end-to-end against its
-*sample* input (see "Panel Samples Quality Policy") and comparing the
-resulting scalar against a golden band in
-`tests/panels/test_*_golden.py`.  Two or more solver choices must be
+sample input and comparing the resulting scalar against a golden band in
+`validation_test/panels/test_*_golden.py`, with the evidence recorded in JSON.
+Two or more solver choices must be
 exercised and produce numerically consistent results (within the
 mode's documented tolerance).
 
@@ -1193,11 +1202,12 @@ Stage 2 is considered **合格 (pass)** when:
 - `python calc_<mode>.py --help` exits 0 and prints all knobs
 - running against the sample with **each** supported solver switch
   produces JSON whose key numbers are inside the golden band
-- `tests/panels/test_<mode>_golden.py` locks the result
+- `validation_test/panels/test_<mode>_golden.py` locks the result and writes or
+  checks its owning result JSON
 
 **Stage 3 — result-bearing documentation notebook (`docs/<topic>/*.ipynb`).**
 Explain the validated method, inputs, outputs, equations, and representative
-result. Save outputs and synchronize the adjacent JSON. For a CAE example,
+result. Save outputs in the notebook; no adjacent JSON is required. For a CAE example,
 include executed `ngsolve.webgui.Draw` cells for the mesh and primary result
 field and save their rich output. The notebook may call the Stage-2 contract
 but may not become an alternate production workbench.
@@ -1384,8 +1394,8 @@ the knowledge to ALL three layers BEFORE moving on:
 1. **`memory/<topic>.md` + `MEMORY.md` index entry** -- the lesson is
    useless if the next conversation re-discovers it from scratch.
 2. **Owning durable artifact** -- record the validated result where it now
-   lives: `validation_test/<topic>/` JSON/README for executable truth,
-   result-bearing `docs/<topic>/*.ipynb` plus synchronized JSON for
+   lives: `validation_test/<topic>/` JSON/README for executable truth, or an
+   executed result-bearing `docs/<topic>/*.ipynb` for
    user-facing explanation, or MCP knowledge for agent-operational rules.
    Include the specific checked value (e.g. "VERIFIED p=2: slaved=8914
    DOFs, ratio=1.0") so future contributors know the result is golden,
@@ -2509,17 +2519,20 @@ Prefer RAII containers (`std::vector`) over manual `new`/`delete`.
 **POLICY**: Use **MSVC** compiler with **Intel MKL**. Intel oneAPI compiler (icx-cl) is NOT compatible with NGSolve linking.
 
 ```powershell
-powershell.exe -ExecutionPolicy Bypass -File "Build.ps1"
-powershell.exe -ExecutionPolicy Bypass -File "Build.ps1" -Rebuild  # Clean rebuild
+pwsh -NoProfile -ExecutionPolicy Bypass -File "Build.ps1"
+pwsh -NoProfile -ExecutionPolicy Bypass -File "Build.ps1" -Rebuild  # Clean rebuild
 ```
 
-**Required Software**: Visual Studio 2022 (MSVC), Intel oneAPI Base Toolkit (MKL only, NOT the compiler).
+**Required Software**: Visual Studio 2022 (MSVC), Python 3.12, pinned
+NGSolve/Netgen, pybind11, and pip `mkl-devel`.
 
-### BLAS/LAPACK: Intel MKL Only
+### BLAS/LAPACK Runtime Boundary
 
-**POLICY**: OpenBLAS is NOT supported. MKL provides optimized BLAS/LAPACK. MKL internally uses Intel OpenMP (`libiomp5md.dll`) for its own threading, but Radia no longer links it directly.
-
-**Required MKL DLLs** (loaded at runtime via pip dependency): `mkl_rt.*.dll`, `mkl_core.*.dll`, `mkl_intel_thread.*.dll`, `mkl_def.*.dll`, `mkl_avx2.*.dll`, `mkl_vml_*.dll`, `libiomp5md.dll` (MKL dependency), `libmmd.dll`, `svml_dispmd.dll`.
+**POLICY**: NGSolve owns its packaged OpenBLAS runtime. Radia's HACApK,
+PARDISO, and dense native kernels use Intel MKL from the selected Python
+environment's pip `mkl-devel`/`mkl` packages. These runtimes may coexist, but
+Radia must not replace NGSolve's BLAS or bundle an alternative NumPy build.
+`MKLROOT` is an explicit controlled fallback, not a machine-wide default.
 
 ### Parallelization: NGSolve TaskManager
 
@@ -2814,50 +2827,41 @@ solution and pointwise `rad.Fld`).
 
 ### PyPI Release Workflow (Automated via GitHub Actions)
 
-**POLICY**: PyPI publishing is automatic. Push a version tag (`v*`) and CI/CD handles the rest.
+**POLICY**: Build and publish one immutable commit. Main-push CI provides fast
+source and contract feedback; a release tag starts the native mdx artifact
+lane. GitHub Release publication still requires `release-quad done`.
 
 **Release Flow**:
-1. Bump version in `pyproject.toml` AND `src/radia/__init__.py` (must match)
-2. Update `CHANGELOG.md`
-3. `git commit` (do NOT push yet)
-4. `/deploy` — build wheel, deploy to 100号機 (WinRM) & mdx (SSH)
-5. Test on remote machines (Cubit toolbar, Simulink application blocks, result-bearing docs notebooks, Mesh Evaluation, etc.)
-6. If tests pass: `git push origin main`
-7. **Confirm main CI is GREEN before tagging** (gh-free; `gh` is not on LAB):
-   `python tools/release_quad.py ci-verify` — waits for the self-hosted
-   runner job to finish, then checks the workspace junit XMLs
-   (failures=errors=0). Tag CI = the same `build-test.yml` on the same commit,
-   so a green main CI guarantees a green tag CI — and avoids burning a version
-   number on a broken commit (the v4.80.0→v4.80.5 saga). If RED, fix-forward
-   on main and re-run.
-8. Tag and push **only after step 7 is green** (triggers PyPI publish):
+1. Make a distribution-focused change; synchronize version files and changelog
+   when the distribution version changes.
+2. Run the impact-scoped mdx preflight and focused local tests.
+3. Review/rebase, merge through a pull request, and push `main`.
+4. Require the exact main SHA's check-runs to pass with
+   `python tools/release_quad.py ci-verify`.
+5. Tag that exact SHA; the native `build-test.yml` lane builds in an isolated
+   mdx environment and retains its wheel/MEX/SLX artifacts.
+6. Publish from the accepted artifact, then run the four-machine deployment and
+   `release-quad done` before publishing the GitHub Release:
    ```bash
    git tag vX.Y.Z
    git push origin vX.Y.Z
    ```
-9. Monitor PyPI propagation (gh-free): `pip index versions radia` (and
-   `radia-mcp`, `cubit-mesh-export`). The tag CI just re-runs the
-   already-green main commit, so it is expected green.
+7. Monitor with `python tools/check_ci.py --sha <SHA> --watch`.
 
 **General User Install** (after PyPI publish):
 ```bash
 pip install radia[cubit]
-cubit-plugin-install       # Cubit plugin + panels
+cubit-plugin-install       # Cubit plugin + embedded toolbar
 ```
 
 **CI/CD Pipeline** (`.github/workflows/`):
 ```
-git push v* tag
-  -> CI (build-test.yml): Build.ps1 -> pytest -> Build_Wheel.ps1 -DryRun -> upload artifacts
-  -> Release (release.yml): download wheel artifact -> pypa/gh-action-pypi-publish (OIDC Trusted Publishers)
+main / PR -> impact-scoped source and package contracts
+v* tag    -> mdx native build -> retained exact-SHA artifact
+accepted artifact -> PyPI OIDC publication -> release-quad -> GitHub Release
 ```
 
 **No API tokens stored**. Uses PyPI OIDC Trusted Publishers (id-token: write).
-
-**NGSolve on CI runner**: The self-hosted runner (NETWORK SERVICE) cannot access S: drive. NGSolve must be copied locally:
-```powershell
-robocopy S:\NGSolve\01_GitHub\install_ngsolve C:\NGSolve /MIR
-```
 
 ### Distribution Test Policy (2026-04-24, updated 2026-05-19)
 
@@ -3003,96 +3007,51 @@ editable には反映される**。mdx / hibino の PyPI install には反映さ
 
 CI が通っても Cubit テストに通らなければリリースしない。
 
-### CI Preflight Policy: commit → CI check → push (2026-06-05; ownership 2026-08-17)
+### CI Preflight Policy
 
-**OWNERSHIP (2026-08-17): every agent that pushes runs `ci_preflight` first —
-Claude included.**  Per *Agent Division of Labor: Claude Owns Push + CI; Codex
-Owns Release*, Claude implements → tests locally → commits this-session files by
-name → runs `tools/ci_preflight.py` → pushes → watches CI to green.  The
-pre-push hook runs the preflight anyway; running it deliberately means finding
-the breakage before the push rather than being stopped by it.
+Every push to `main` runs the pre-push helper installed by
+`python tools/install_git_hooks.py`. The helper bundles the unpushed candidate,
+sends it to mdx, checks it out in an isolated worktree, and runs the compact
+repository contracts plus `radia-mcp` tests/selftests selected from the changed
+paths. LAB and 100号機 do not execute CI.
 
-**POLICY**: Run the CI gates **LOCALLY before every push to `main`**, not
-after.  CI must not be the FIRST place a catchable error surfaces.  The
-single command is:
+`tools/ci_preflight.py` defaults to the union of `origin/main...HEAD`, staged,
+unstaged, and untracked changes. Policy and version checks always run;
+`radia-mcp` publish-boundary, tool inventory, package tests, and server
+selftests run only when that distribution changes. Broad top-level test
+collection, complete package suites, and `validation_test/` remain explicit
+diagnostics. Deterministic failures are returned immediately without an
+automatic rerun.
 
-```bash
-python tools/ci_preflight.py          # ~2-3 min; exit 0 = safe to push
-python tools/ci_preflight.py --fix    # also auto-regenerate a stale TOOLS.md
-python tools/ci_preflight.py --full   # also run the full top-level pytest (slow)
+```powershell
+python tools/ci_preflight.py
+python tools/ci_preflight.py --fix
+python tools/ci_preflight.py --only toplevel-collect
+python tools/ci_preflight.py --validation --full
 ```
 
-**Why** (empirical, 2026-06-05 analysis of the last 80 failed GitHub
-Actions runs): the failures are concentrated and *all locally
-detectable before push* —
+The emergency `CI_PREFLIGHT_SKIP=1` bypass is only for a diagnosed preflight
+infrastructure outage; it is not a way to ignore a failing contract.
 
-| count | workflow / step | class |
-|---|---|---|
-| 30x | radia-mcp matrix `Pytest` | heavy-import collection / meta-health / version |
-| 16x | CI `Run basic tests` | top-level pytest import / golden / flaky |
-| 9x | radia-mcp matrix `TOOLS.md drift gate` | committed TOOLS.md ≠ regenerated |
-| 7x | Policy Lint `Policy 4 CblasColMajor` | C++ allowlist miss |
-| 3x | radia-mcp matrix `Meta health` | catalog import / links / tags |
+### GitHub Automation Tooling
 
-`tools/ci_preflight.py` mirrors the three CI workflows
-(`policy-lint.yml`, `radia-mcp-matrix.yml`, `build-test.yml` "Run basic
-tests"), fast-first: policy-lint (7 policies) → version consistency →
-TOOLS.md drift (**WIP-aware**: warns when `radia_mcp/src` has uncommitted
-`.py` changes that would contaminate the regenerated inventory) →
-**radia-mcp matrix under minimal-dep simulation** (`RADIA_MCP_FORCE_MINIMAL=1`,
-which reproduces the ubuntu collection on a full-env box — this catches the
-ngsolve/netgen module-import collection break) → top-level collect-only.
+Committed automation prefers the token-aware REST helpers in `tools/gh_api.py`
+so CI and fresh clones do not require an interactive GitHub CLI login. `gh` is
+supported on LAB and 100号機 for operator PR/Actions work and may be used by a
+GitHub Actions job with `GITHUB_TOKEN`; mdx runtime jobs must not depend on a
+developer login. `release_quad.py ci-verify` reads SHA-bound check-runs through
+the REST helper rather than inspecting a runner's local process or files.
 
-**Enforcement (pre-push hook)**: `python tools/install_git_hooks.py`
-installs `tools/git-hooks/pre-push`, which runs `ci_preflight --since
-<remote-sha>` on every push to `main` (path-aware, so a non-radia-mcp
-push stays fast) and **aborts the push if a gate is red**.  Emergency
-bypass: `CI_PREFLIGHT_SKIP=1 git push`.  Run the installer once per clone
-(it is worktree-safe and idempotent).
-
-**The recurring CI failure classes are cataloged** in `bug_patterns.py`
-(`bug_patterns_lookup(topic="ci")`): `tools-md-drift-wip-contamination`,
-`heavy-import-collection-break-minimal-dep-matrix`,
-`init-py-version-mismatch-vs-pyproject`, etc. — each names ci_preflight as
-the detection tool.
-
-**Release flow** (release-quad) keeps its own release gates, but
-ci_preflight is the everyday "before any push" gate — run it even for a
-non-release push to `main`.
-
-### No GitHub CLI (gh) Policy (2026-06-05)
-
-**POLICY**: Do NOT use the GitHub CLI (`gh`) anywhere in the repo's
-committed tooling, scripts, workflows, or knowledge recipes.  `gh` is
-NOT installed on LAB (retired 2026-05-24) and must not be assumed
-present on any machine (fresh clone, CI runner, 100号機, mdx).  Use the
-**raw GitHub REST API** (via `urllib`, no extra dependency) instead.
-
-**Established gh-free replacements** (use these, never `gh`):
-
-| `gh` command | gh-free replacement |
+| Operation | Stable repository helper |
 |---|---|
-| `gh run list` / `gh run view` / `gh run watch` | `python tools/check_ci.py [--sha X] [--branch main] [--watch]` |
-| `gh release download -p PAT` | `python tools/download_release_asset.py --pattern PAT --dest D` |
-| `gh release download NAME`   | `python tools/download_release_asset.py --name NAME --dest D` |
-| `gh release upload`          | `python tools/upload_release_asset.py --tag T --file F` |
-| `gh api <path>`              | `tools/gh_api.py::gh_get(path)` (token-aware) |
-| `gh auth token`              | read `$GH_TOKEN` / `$GITHUB_TOKEN` / `~/.radia/gh_token` directly |
+| watch CI | `python tools/check_ci.py [--sha X] [--branch main] --watch` |
+| download release assets | `python tools/download_release_asset.py` |
+| upload release assets | `python tools/upload_release_asset.py` |
+| direct API read | `tools/gh_api.py::gh_get(path)` |
 
-**Auth**: the REST helpers (`tools/gh_api.py`, `check_ci.py`,
-`download/upload_release_asset.py`) read a Personal Access Token from
-`$GH_TOKEN` / `$GITHUB_TOKEN` (or `~/.radia/gh_token`) to get the
-authenticated **5000 req/hr** limit; with no token they fall back to the
-anonymous **60 req/hr** (enough for occasional checks on this public
-repo).  Setting the token does NOT require installing `gh` — a PAT is
-just a string.  `python tools/check_ci.py --rate` shows the current
-limit + whether a token was found.
-
-**Escape hatch**: if `gh` is ever genuinely unavoidable for a one-off
-local task, it MAY be installed — but the **committed** tooling MUST
-stay gh-free so a fresh clone / CI runner never depends on it.  When you
-catch yourself reaching for `gh`, add the missing capability to the REST
-helpers above instead.
+The REST helpers read `$GH_TOKEN`, `$GITHUB_TOKEN`, or
+`~/.radia/gh_token`; they may obtain an existing `gh auth token` as a local
+convenience. Never commit a token or require an interactive login in CI.
 
 ### Cubit Batch Self-Testing Policy
 
@@ -3108,10 +3067,10 @@ cubit.cmd("mesh volume 1")
 cubit.cmd('export femeem "C:\\tmp\\cub" overwrite')
 ```
 
-**対象**: `export {gmsh,netgen,jmag_nastran,vtk,femeem}`、panels の非 GUI ロジック、BEM extractor、`export_curved`。
-GUI が絶対必要なもの (panel dialog のレンダリング) のみ例外。
+**対象**: `export {gmsh,netgen,jmag_nastran,vtk,femeem}`、Cubit toolbar の非 GUI ロジック、BEM extractor、`export_curved`。
+Cubit toolbar の実画面確認だけをヘッドレス試験の例外とする。
 
-**前提**: `cubit` は Python API import (`S:/Radia/01_GitHub/src/radia/install_panels.py` の `find_cubit_bin()` で自動検出可)。バッチ起動でライセンス消費あり。
+**前提**: `cubit` は Python API import (`tools/find_cubit.ps1` でインストールを検出)。バッチ起動でライセンス消費あり。
 
 **特記**: FEMEEM エクスポートの出力パスは **40 文字以下** にすること。`inpin.f90::chkinib(filename*40)` が長い Python `tempfile.TemporaryDirectory()` パスを切り詰めて `forrtl severe (29)` を起こす。`C:\temp\<short>\` 等を使う。
 
@@ -3187,7 +3146,7 @@ All curvedelements, CallbackGeometry, and curving features are now in the offici
 
 ```bash
 pip install radia[cubit]       # Installs everything (NGSolve, MKL, Cubit plugin binaries)
-cubit-plugin-install           # Deploys Cubit plugin + panels
+cubit-plugin-install           # Deploys Cubit plugin + embedded toolbar
 ```
 
 ### SetGeomInfo API (Netgen PR#232)
@@ -3901,30 +3860,26 @@ Use **snake_case** with functional prefixes:
 
 Apply this to: Mesh Evaluation tables, Joachim correspondence, benchmark results, test output.
 
-### Data Persistence Policy: Always Save Data to Committed JSON
+### Validation Evidence Persistence Policy
 
-**POLICY**: 計算で得たデータは**常に `.json` に保存せよ**。とくに
-**図・表・公表結果の裏付けとなるデータ**は、`.json` として保存し、その
-`.json` を**版管理された永続的な場所**（図・スクリプトと同じディレクトリ、
-commit 済み）に置くこと。そのデータを **`C:/temp/...` や `%TEMP%`、未コミット
-の sweep ディレクトリにのみ置いてはならない**（transient で消える）。
+**POLICY**: Numerical truth, benchmarks, timing measurements, publication
+evidence, and expensive sweeps belong under `validation_test/` and MUST retain
+machine-readable JSON with the checked quantities, tolerances, runtime and
+environment versions.  Do not leave the only reproducible evidence in
+`C:/temp`, `%TEMP%`, or an untracked run directory.
 
-**Why**: commit 済みの図の元データが `C:/temp` にしか無いと、temp が
-クリアされた瞬間に**図が再生成不能**になる。実例 (2026-05, IGTE ESIM
-digest): `sweep_heatmap.png` は commit されていたが、その
-`sweep_results.json` は `C:/temp/igte_bench/` にしか無く消失 — ~2 時間の
-32 ケース sweep を再走しない限り図を再生成できなくなった。
+This requirement does not apply to `docs/**/*.ipynb`.  Public notebooks are
+executed, result-bearing demonstrations: their saved cell output and WebGUI
+scenes are the durable presentation artifact.  They do not require an adjacent
+JSON sidecar or a runtime gate.  Promote a notebook result to
+`validation_test/` with checked JSON only when it becomes numerical evidence,
+a benchmark, or a release criterion.
 
-**Rules**:
-- commit 済みの図 (`.png`/`.pdf`) は、その元データ `.json` を**同じ
-  ディレクトリに commit** すること。「図は git、データは temp」は禁止。
-- プロット/解析スクリプトの**入力**データパスは、既定で commit 済みの場所
-  （スクリプト隣）を指す。`--out-dir` 等で scratch を指すのは使い捨て実行の
-  時だけで、正式な run は `.json` をリポジトリ内に書く。
-- これは下記 **Benchmark Policy** と上記 **File Placement Policy** の拡張：
-  `.json` は「`.py`／図の隣に置くデータ」であり、`.png` と同じ扱い。
-- 対象: sweep (`sweep_*.py`)、benchmark (`bench_*.py`)、出力がプロット/
-  公表される全ての `calc_*.py`。
+Committed standalone figures used as validation or publication evidence must
+remain regenerable from committed data.  Prefer placing their source JSON in
+the owning `validation_test/` lane and have plotting code read that canonical
+artifact; do not duplicate the same numbers across MCP knowledge, notebooks,
+and multiple sidecars.
 
 ### Benchmark Policy
 
@@ -4206,7 +4161,7 @@ Simulink-block recipe in
 | `src/radia/<topic>_design.py` | UI-neutral `DesignSpec` dataclass; maps settings to calc CLI argv |
 | `matlab/+radia/+simulink/` | block builder/runtime adapter over the shared application contract |
 | `matlab/radia_simulink_library.slx` | masked application block in the single Radia library |
-| `tests/panels/test_<topic>_golden.py` or `validation_test/panels/` | golden-band/API lock on the canonical sample |
+| `validation_test/panels/test_<topic>_golden.py` | golden-band/API lock and result JSON for the canonical sample |
 | `tests/matlab/test_simulink_workflow.m` | library, mask, port, failure, and execution contract |
 
 **Why this matters**: the recipe makes argparse/`DesignSpec` the single source

@@ -2,10 +2,8 @@ from __future__ import annotations
 
 import base64
 import importlib.util
-import json
 import shutil
 import subprocess
-import time
 from pathlib import Path
 
 
@@ -223,30 +221,35 @@ def test_done_restores_canonical_editables_only_after_all_gates(monkeypatch):
     assert calls == ["preflight", "lab", "100", "phase9", "guard", "main", "restore"]
 
 
-def test_ci_output_selection_requires_fresh_matching_commit(tmp_path, monkeypatch):
-    monkeypatch.setattr(release_quad, "CI_OUTPUT_ROOT", tmp_path)
-    started_at = time.time()
-    expected_sha = "a" * 40
+def test_ci_check_runs_use_latest_attempt_for_each_name(monkeypatch):
+    runs = {
+        "check_runs": [
+            {
+                "id": 1,
+                "name": "fast-contracts",
+                "status": "completed",
+                "conclusion": "cancelled",
+            },
+            {
+                "id": 2,
+                "name": "fast-contracts",
+                "status": "completed",
+                "conclusion": "success",
+            },
+            {
+                "id": 3,
+                "name": "policy-checks",
+                "status": "completed",
+                "conclusion": "success",
+            },
+        ]
+    }
+    monkeypatch.setattr(release_quad, "_git_repo_owner_name", lambda: "owner/repo")
+    monkeypatch.setattr(release_quad, "gh_get", lambda _path: (runs, {}))
 
-    wrong = tmp_path / "radia-ci-output-1-1"
-    wrong.mkdir()
-    (wrong / release_quad.CI_CONTEXT_NAME).write_text(
-        json.dumps({
-            "schema": "radia.ci-output-context.v1",
-            "sha": "b" * 40,
-        }),
-        encoding="utf-8",
+    ok, message = release_quad._check_github_hosted_workflows(
+        "a" * 40, required_names=None, timeout_sec=1, poll_sec=0
     )
 
-    matching = tmp_path / "radia-ci-output-2-1"
-    matching.mkdir()
-    (matching / release_quad.CI_CONTEXT_NAME).write_text(
-        json.dumps({
-            "schema": "radia.ci-output-context.v1",
-            "sha": expected_sha,
-        }),
-        encoding="utf-8",
-    )
-
-    assert release_quad._find_ci_output_dir(expected_sha, started_at) == matching
-    assert release_quad._find_ci_output_dir("c" * 40, started_at) is None
+    assert ok is True
+    assert "2 latest SHA-bound check-runs GREEN" in message
