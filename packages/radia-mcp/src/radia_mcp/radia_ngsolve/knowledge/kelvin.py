@@ -1918,7 +1918,7 @@ References for this field-side view:
 """
 
 
-KELVIN_SOURCE_IN_OMEGA_FORM = """
+KELVIN_SOURCE_IN_OMEGA_FORM_LEGACY = """
 # Accelerator Magnet Analysis: Coil + Iron + Kelvin Open Boundary
 
 ## Quick Start (2 lines after mesh setup)
@@ -2172,6 +2172,86 @@ Workarounds for a current-driven coil source:
 - **GND Dirichlet** at the Kelvin outer sphere center is the image
   of physical infinity and enforces Omega(infinity) = 0.
 """
+
+
+KELVIN_SOURCE_IN_OMEGA_FORM = """
+# Kelvin magnetostatics: TOSCA-style mixed total/reduced Omega
+
+Use this route for a compact current source surrounded by a high-permeability
+magnet and a periodic Kelvin exterior.  It deliberately avoids placing a
+reduced source field in iron: doing so makes a large source and correction
+cancel numerically in the high-mu material.
+
+```python
+from ngsolve import TaskManager
+import radia as rad
+from radia.kelvin_solver import (
+    project_source_interface_potential,
+    solve_magnetostatic_mixed_total_reduced_omega_kelvin,
+)
+
+H_source = rad.RadiaField(coil, "h")
+with TaskManager():
+    iron_trace = project_source_interface_potential(
+        mesh, H_source, "iron_air_interface", order=2,
+        relative_tolerance=0.05,
+    )
+    kelvin_trace = project_source_interface_potential(
+        mesh, H_source, "kelvin_int", order=2,
+        relative_tolerance=0.05,
+    )
+    result = solve_magnetostatic_mixed_total_reduced_omega_kelvin(
+        mesh, H_source, iron_trace["potential"], R_K, kelvin_center,
+        mu_r_by_material={"iron": 1000.0},
+        reduced_materials=("air",),
+        total_materials=("iron", "kelvin"),
+        interface_boundary="iron_air_interface",
+        kelvin_interface_boundary="kelvin_int",
+        kelvin_source_potential=kelvin_trace["potential"],
+        order=2,
+    )
+B_cf = result["B_cf"]
+```
+
+## Mathematical contract
+
+- Physical source enclosure (normally `air`):
+  `H = H_source - grad(phi_reduced)`.
+- Iron and Kelvin exterior: `H = -grad(phi_total)`.
+- The source/total interface must obey
+  `phi_total - phi_reduced = Phi_source` and
+  `H_source,t = -grad_Gamma(Phi_source)`.
+- When physical reduced air meets the periodic Kelvin pair, its inner surface
+  must also carry `phi_total - phi_reduced = -Phi_source`.  The minus is the
+  orientation reversal of the Kelvin pullback of this scalar source 0-form.
+  It is represented by `kelvin_interface_boundary` and
+  `kelvin_source_potential`; do not omit it or evaluate a source in the Kelvin
+  exterior.
+- `project_source_interface_potential` obtains `Phi_source` from the exact
+  Radia H trace.  Its residual is an acceptance gate, not a cosmetic metric.
+- The interface multiplier makes the system symmetric indefinite.  Use the
+  direct PARDISO path; do not incorrectly force a positive-definite CG solve.
+
+## Cut / cohomology rule
+
+Never invent a globally single-valued scalar potential for a linked current
+loop.  When the surface-trace residual is non-small, the interface links a
+current or has nontrivial cohomology.  Supply an explicit cut/cohomology
+source trace to the mixed solver, or select an HCurl reduced-A formulation.
+Do not fall back to `rad.Fld(..., "phi")` or an HDiv-projected B field: neither
+is a general scalar-Omega source contract for a compound current coil.
+
+For memoryless nonlinear iron, use
+`solve_magnetostatic_mixed_total_reduced_omega_picard_kelvin`; it shares the
+same interface trace and B(H) law.  This Picard helper is not a hysteresis
+model.
+
+Validated path: `validation_test/c_type_three_engine/run_three_engine.py`.
+The legacy scalar-potential recipe is retained in this source only for
+archaeology as `KELVIN_SOURCE_IN_OMEGA_FORM_LEGACY`; MCP must return this
+mixed formulation instead.
+"""
+
 
 KELVIN_RADIA_SOURCE_HELPERS = """
 # Radia source field evaluation with Kelvin pullback

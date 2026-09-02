@@ -8,7 +8,14 @@ exposed several failure modes.
 
 ## Review status
 
-- Revised: 2026-08-30 after the `v4.95.71` four-level mdx/hibino validation.
+- Revised: 2026-09-02 after the pre-release TOSCA-style mixed
+  total/reduced-Omega C-yoke comparison on Hibino.
+- The `v4.95.71` four-level result cited below is evidence for the former
+  global reduced-Omega formulation only.  It is retained as history, but it
+  is **not** an accuracy certificate for the current mixed formulation.  The
+  current mixed route has a checked fixed-mesh, three-formulation acceptance;
+  a fresh released-binary multi-level mdx/hibino certificate remains required
+  before making an absolute numerical-envelope claim.
 - The `22fc5630e..ec57769de` HEAD increment consists of Eqnedit64 pull
   requests `#34` and `#35`. It changes no HDiv source, test, validation,
   MATLAB, or HDiv documentation path, so the earlier HDiv measurements remain
@@ -77,6 +84,37 @@ disabled whenever images are present. MATLAB owns native field-evaluator and
 EnergyStop MEX surfaces, but the high-level `radia.vim` solve is still an
 explicit in-process Python fallback because NGSolve setup is Python-owned.
 
+### 0.0 2026-09-02 formulation-status correction
+
+The C-yoke review previously used the phrase "three-formulation certificate"
+for a calculation whose H1 route was the former global reduced-Omega model.
+That route lacks the required physical-air/Kelvin source-potential jump and
+must not be presented as the current TOSCA-style mixed total/reduced-Omega
+formulation.  The current implementation uses a reduced physical-air scalar
+potential, a total iron/Kelvin scalar potential, and two independently
+projected source traces:
+
+```
+Gamma_iron-air:   phi_total - phi_reduced =  Phi_source
+Gamma_kelvin:     phi_total - phi_reduced = -Phi_source
+```
+
+The second equation is the orientation-reversing Kelvin pullback of the
+source 0-form.  `project_source_interface_potential` makes each trace a
+measured gate; an interface that links current or has nontrivial cohomology
+fails loudly and requires an explicit cut representative or HCurl reduced-A.
+The saddle system is symmetric indefinite and therefore uses PARDISO rather
+than an SPD-only CG path.
+
+On the shared exact Cubit C-yoke mesh, all three routes now pass a 1% gap-core
+relative-RMS B gate on Hibino: 0.41955% maximum in the linear order-3 run and
+0.16023% maximum in the nonlinear order-2 run.  The nonlinear HDiv,
+reduced-A, and mixed-Omega runs converge and take 11.15 s, 221.56 s, and
+135.76 s respectively.  The associated source-trace residuals are below the
+separate 5% cut/cohomology gate.  These values establish fixed-mesh
+cross-formulation agreement; they are deliberately not an analytic-truth or
+mesh-convergence claim.
+
 ## 0. Cross-layer production review
 
 ### 0.1 Findings by priority
@@ -87,12 +125,13 @@ explicit in-process Python fallback because NGSolve setup is Python-owned.
 | F2 | P1, partially resolved | The field-evaluator IMA contract is green for mapped HEX BDM2 prescribed sources; independent solve parity remains a separate numerical lane. | On the current mdx production body, prescribed full/reduced fields differ by `2.7506 eps`, below the `10 eps` limit. Independently converged mass-Riesz CG full/reduced solves differ by `3.2835e-13` in sampled field. Three legacy focused checks were rerun and remain narrowly red: single-cell HEX `2.02e-14`, multicell HEX `4.93e-14`, and curved TET BDM2 `2.3931e-15` against a `2.2204e-15` limit. Preserve the field limit and fix those paths rather than loosening their tolerances or relabeling Krylov/reduction error as evaluator error. |
 | F3 | P1 | RT0 is publicly advertised again despite the BDM1/BDM2-only decision. | `_capabilities.py` exposes 3D TET/HEX order 0 and `DemagOperator` documents an order-0 broken-interface path. `HDivSolver` and field evaluation accept only orders 1 and 2. Remove the public RT0 entries/path and retain any topology-only experiment outside the production API. |
 | F4 | Resolved on `v4.95.71` | The released operator completes the finer C-yoke TET lane without loss of SPD. | The 1,688-element iron mesh solves on mdx and hibino, all three nonlinear routes converge, and the final three mesh levels pass the contraction/order gate. The older untracked `p^T A p < 0` report is not used as current evidence. |
-| F5 | Resolved on `v4.95.71` | The nonlinear C-type comparison now has a four-level, three-formulation accuracy certificate and independent-host reproduction. | `validation_test/c_type_three_engine/` owns the exact Cubit/ACIS mesh family, shared coil and PCHIP B(H) law, Kelvin contract, per-engine checkpoints, and JSON gates. On the finest level, the HDiv-MMM / HCurl reduced-A / H1 Omega-reduced-Omega gap-core spread is 0.29326%. The maximum conservative discretization uncertainty is 0.17601%, the consensus deviation is 0.18226%, and their conservative sum is 0.35827%. mdx and hibino reproduce all three fields within `2.35e-14` relative RMS. HDiv uses 32,580 DoF and 36.78 s on mdx, versus 124,132 DoF / 90.41 s for Omega and 470,288 DoF / 852.08 s for reduced-A. The certificate explicitly bounds a common mesh-refined B field; it does not claim an unavailable analytic truth. |
+| F5 | Fixed-mesh resolved; release evidence open | The C-type comparison is now a TOSCA-style mixed total/reduced-Omega route with its two required source-trace jumps, and its full three-route fixed-mesh acceptance passes. | `validation_test/c_type_three_engine/` owns the exact Cubit/ACIS mesh, shared CoilBuilder, PCHIP B(H) law, Kelvin contract, checkpoints, and JSON gates. The pre-release Hibino linear order-3 run has maximum pairwise gap-core RMS B difference 0.45977%; the nonlinear order-2 run has 0.16023%, and all nonlinear engines converge. Its iron/air and Kelvin trace residuals are respectively 1.26933%/1.75381% (linear) and 2.98511%/4.53077% (nonlinear), below the 5% cut gate. The old global-Omega four-level artifact is historical only. Before an absolute envelope or released-performance claim, run a fresh multi-level, independent mdx/hibino campaign using the formally released native binary. |
 | F6 | Resolved for primal solve/field; derivative open | Mapped/non-affine HEX BDM2 is a production material lane. | Complete-host tensor source rules preserve smooth-pair charge cancellation; reflection-invariant whole-host Duffy rules handle self and adjacent pairs. On mdx the 756-DoF q9/q12 operator has spectrum `[-8.53e-16, 0.999899]`, linear/nonlinear solves converge, and its material response differs from q10/q16 by `5.28e-4` in mass norm. q10/q16 differs from q11/q20 by `3.94e-4`. An independent Cubit 2025.12 Curve(2) four-HEX gate also passes linear/nonlinear solve and field checks. Shape derivatives fail loudly until the composite rule is differentiated. |
 | F7 | P2 | IMA disables tree acceleration for field maps. | `HDivFieldEvaluator::AlgorithmFor` returns `Direct` whenever images exist. This protects full/reduced roundoff parity, but large IMA observation maps cannot use the otherwise guarded treecode. Any image-aware acceleration needs a common full/reduced grouping and the F2 contract first. |
 | F8 | P2 | Exact vector-potential evaluation is narrower than H-field evaluation. | Exact `A` uses straight TET BDM1 equivalent currents. BDM2, curved, HEX, and WEDGE use NGSolve-mapped quadrature clouds assembled in Python. This is valid as an explicit converged quadrature route, not an all-topology exact/native claim. |
 | F9 | P2 | MATLAB parity is partial at the method level. | `HDivFieldEvaluator` and `EnergyStopMaterial` have native checked MEX handles. The parity manifest classifies `vim/__init__.py` as `python-fallback`; complete solve/mesh/form orchestration is not a native MATLAB API. |
 | F10 | P3 | Configuration provenance and class ownership remain broad. | Fourteen `RADIA_HDIV_*` variables remain, and `RadHACApKChargeGram` still owns entry, build, cache, solve, derivative, field, and diagnostics. Keep diagnostic switches out of release claims and split only at measured ownership boundaries. |
+| F11 | P2, integration open | Kelvin and FFAG rotational periodic identifications can coexist only as distinct identification classes. | The FFAG cyclic helper accepts an explicit `identnr`, while Kelvin identification refuses to treat an unrelated cyclic pair as Kelvin-ready. Focused tests cover separate IDs and the non-poisoning predicate. An end-to-end sector FFAG magnet solve with paired periodic faces, Kelvin exterior, and an independent FEM/HDiv B comparison remains the next application validation. |
 
 ### 0.2 Production capability matrix
 
@@ -613,11 +652,14 @@ worktree, then repeated with the exact `v4.95.70` timing wheel and the final
 - order-2 nonlinear primary pair with the shared PCHIP law: PASS at 0.18032%
   gap-core relative RMS on all six remote runs; median HDiv/Omega timing was
   12.09/42.59 s on mdx and 11.31/43.28 s on hibino, with 10,860/50,322 DoF.
-- four-level order-2 nonlinear certificate on `v4.95.71`: PASS; finest
-  three-formulation spread 0.29326%, combined numerical envelope 0.35827%,
-  and mdx/hibino reproduction within `2.35e-14` relative RMS. Finest mdx
-  HDiv/reduced-A/Omega times are 36.78/852.08/90.41 s at
-  32,580/470,288/124,132 DoF.
+- historical four-level order-2 nonlinear global-Omega certificate on
+  `v4.95.71`: PASS for that retired formulation only. It is not evidence for
+  the current TOSCA mixed route and must not be used in release material.
+- current pre-release TOSCA mixed fixed-mesh acceptance on Hibino: PASS. At
+  linear order 3 the maximum all-pair gap-core RMS B difference is 0.45977%; at
+  nonlinear order 2 it is 0.16023%, with all three nonlinear engines
+  converged. A released-binary multi-level mdx/hibino certificate remains
+  open.
 - release-qud: PASS for `radia 4.95.71`; package versions and production file
   hashes agree across LAB, the 100-machine, mdx, and hibino.
 

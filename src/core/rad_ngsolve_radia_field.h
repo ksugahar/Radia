@@ -491,6 +491,552 @@ private:
     mutable std::atomic<std::size_t> cache_misses_{0};
 };
 
+/**
+ * Vector potential of a Radia source pulled back into the translated Kelvin
+ * exterior sphere.  The physical inversion sphere and the computational
+ * Kelvin sphere may have different centres; Cubit uses the latter only to
+ * separate the two meshes in space.
+ */
+class KelvinRadiaVectorPotentialCoefficient final
+    : public ngfem::CoefficientFunctionNoDerivative {
+public:
+    KelvinRadiaVectorPotentialCoefficient(
+        int object, std::array<double, 3> kelvin_center, double radius,
+        std::array<double, 3> physical_center)
+        : CoefficientFunctionNoDerivative(3), object_(object),
+          kelvin_center_(kelvin_center), radius_(radius),
+          physical_center_(physical_center) {
+        if (object_ <= 0)
+            throw std::invalid_argument(
+                "KelvinRadiaVectorPotential requires a positive Radia object handle");
+        if (!std::isfinite(radius_) || radius_ <= 0.0)
+            throw std::invalid_argument(
+                "KelvinRadiaVectorPotential radius must be positive and finite");
+        for (double value : kelvin_center_)
+            if (!std::isfinite(value))
+                throw std::invalid_argument(
+                    "KelvinRadiaVectorPotential kelvin_center must be finite");
+        for (double value : physical_center_)
+            if (!std::isfinite(value))
+                throw std::invalid_argument(
+                    "KelvinRadiaVectorPotential physical_center must be finite");
+    }
+
+    double Evaluate(
+        const ngfem::BaseMappedIntegrationPoint&) const override {
+        return 0.0;
+    }
+
+    void Evaluate(const ngfem::BaseMappedIntegrationPoint& point,
+                  ngbla::FlatVector<> result) const override {
+        const auto mapped = point.GetPoint();
+        const int dimension = mapped.Size();
+        const double position[3] = {
+            mapped[0], dimension >= 2 ? mapped[1] : 0.0,
+            dimension >= 3 ? mapped[2] : 0.0};
+        double value[3] = {0.0, 0.0, 0.0};
+        EvaluateOne(position, value);
+        for (int component = 0; component < 3; ++component)
+            result(component) = value[component];
+    }
+
+    void Evaluate(const ngfem::BaseMappedIntegrationRule& rule,
+                  ngbla::BareSliceMatrix<> result) const override {
+        const std::size_t count = rule.Size();
+        std::vector<double> physical_points;
+        std::vector<std::array<double, 3>> normals(count);
+        std::vector<double> factors(count, 0.0);
+        std::vector<std::size_t> active;
+        physical_points.reserve(3 * count);
+        active.reserve(count);
+
+        for (std::size_t index = 0; index < count; ++index) {
+            const auto mapped = rule[index].GetPoint();
+            const int dimension = mapped.Size();
+            const double position[3] = {
+                mapped[0], dimension >= 2 ? mapped[1] : 0.0,
+                dimension >= 3 ? mapped[2] : 0.0};
+            std::array<double, 3> physical{};
+            if (!Map(position, physical, normals[index], factors[index]))
+                continue;
+            physical_points.insert(physical_points.end(), physical.begin(), physical.end());
+            active.push_back(index);
+        }
+
+        std::vector<double> physical_values(3 * active.size(), 0.0);
+        if (!active.empty()) {
+            const int error = RadFldASerial(
+                physical_values.data(), static_cast<int>(active.size()),
+                physical_points.data(), object_);
+            CheckRadiaError(error, "Kelvin vector-potential evaluation");
+        }
+        for (std::size_t k = 0; k < active.size(); ++k) {
+            const std::size_t index = active[k];
+            const auto& normal = normals[index];
+            const double* source = &physical_values[3 * k];
+            const double dot = source[0] * normal[0] +
+                source[1] * normal[1] + source[2] * normal[2];
+            for (int component = 0; component < 3; ++component)
+                result(index, component) = factors[index] *
+                    (source[component] - 2.0 * dot * normal[component]);
+        }
+        for (std::size_t index = 0; index < count; ++index)
+            if (factors[index] == 0.0)
+                for (int component = 0; component < 3; ++component)
+                    result(index, component) = 0.0;
+    }
+
+private:
+    static void CheckRadiaError(int error, const char* operation) {
+        if (error != 0)
+            throw std::runtime_error(
+                std::string("KelvinRadiaVectorPotential: Radia error ") +
+                std::to_string(error) + " during " + operation);
+    }
+
+    bool Map(const double position[3], std::array<double, 3>& physical,
+             std::array<double, 3>& normal, double& factor) const {
+        double delta[3] = {
+            position[0] - kelvin_center_[0],
+            position[1] - kelvin_center_[1],
+            position[2] - kelvin_center_[2]};
+        const double rho_squared = delta[0] * delta[0] +
+            delta[1] * delta[1] + delta[2] * delta[2];
+        // The Kelvin centre represents physical infinity.  A compact current
+        // source has a vanishing pullback there, so avoid evaluating Radia at
+        // an artificial infinite coordinate.
+        if (rho_squared <= 1.0e-24) {
+            factor = 0.0;
+            return false;
+        }
+        const double inverse_scale = radius_ * radius_ / rho_squared;
+        const double rho = std::sqrt(rho_squared);
+        for (int component = 0; component < 3; ++component) {
+            normal[component] = delta[component] / rho;
+            physical[component] = physical_center_[component] +
+                inverse_scale * delta[component];
+        }
+        factor = inverse_scale;
+        return true;
+    }
+
+    void EvaluateOne(const double position[3], double result[3]) const {
+        std::array<double, 3> physical{};
+        std::array<double, 3> normal{};
+        double factor = 0.0;
+        if (!Map(position, physical, normal, factor))
+            return;
+        double source[3] = {0.0, 0.0, 0.0};
+        CheckRadiaError(RadFldASerial(source, 1, physical.data(), object_),
+                        "Kelvin vector-potential evaluation");
+        const double dot = source[0] * normal[0] + source[1] * normal[1] +
+            source[2] * normal[2];
+        for (int component = 0; component < 3; ++component)
+            result[component] = factor *
+                (source[component] - 2.0 * dot * normal[component]);
+    }
+
+    int object_ = 0;
+    std::array<double, 3> kelvin_center_{};
+    double radius_ = 0.0;
+    std::array<double, 3> physical_center_{};
+};
+
+/**
+ * Magnetic flux density of a compact Radia source pulled back into the
+ * translated Kelvin exterior.  This is the covariant 2-form transform for
+ * field comparison and HDiv diagnostics: B' = -(R/rho)^4 H B(T(r')).
+ */
+class KelvinRadiaFluxDensityCoefficient final
+    : public ngfem::CoefficientFunctionNoDerivative {
+public:
+    KelvinRadiaFluxDensityCoefficient(
+        int object, std::array<double, 3> kelvin_center, double radius,
+        std::array<double, 3> physical_center)
+        : CoefficientFunctionNoDerivative(3), object_(object),
+          kelvin_center_(kelvin_center), radius_(radius),
+          physical_center_(physical_center) {
+        if (object_ <= 0)
+            throw std::invalid_argument(
+                "KelvinRadiaFluxDensity requires a positive Radia object handle");
+        if (!std::isfinite(radius_) || radius_ <= 0.0)
+            throw std::invalid_argument(
+                "KelvinRadiaFluxDensity radius must be positive and finite");
+    }
+
+    double Evaluate(const ngfem::BaseMappedIntegrationPoint&) const override {
+        return 0.0;
+    }
+
+    void Evaluate(const ngfem::BaseMappedIntegrationPoint& point,
+                  ngbla::FlatVector<> result) const override {
+        const auto mapped = point.GetPoint();
+        const int dimension = mapped.Size();
+        const double position[3] = {
+            mapped[0], dimension >= 2 ? mapped[1] : 0.0,
+            dimension >= 3 ? mapped[2] : 0.0};
+        double value[3] = {0.0, 0.0, 0.0};
+        EvaluateOne(position, value);
+        for (int component = 0; component < 3; ++component)
+            result(component) = value[component];
+    }
+
+    void Evaluate(const ngfem::BaseMappedIntegrationRule& rule,
+                  ngbla::BareSliceMatrix<> result) const override {
+        const std::size_t count = rule.Size();
+        std::vector<double> physical_points;
+        std::vector<std::array<double, 3>> normals(count);
+        std::vector<double> factors(count, 0.0);
+        std::vector<std::size_t> active;
+        physical_points.reserve(3 * count);
+        active.reserve(count);
+        for (std::size_t index = 0; index < count; ++index) {
+            const auto mapped = rule[index].GetPoint();
+            const int dimension = mapped.Size();
+            const double position[3] = {
+                mapped[0], dimension >= 2 ? mapped[1] : 0.0,
+                dimension >= 3 ? mapped[2] : 0.0};
+            std::array<double, 3> physical{};
+            if (!Map(position, physical, normals[index], factors[index]))
+                continue;
+            physical_points.insert(physical_points.end(), physical.begin(), physical.end());
+            active.push_back(index);
+        }
+        std::vector<double> flux_density(3 * active.size(), 0.0);
+        std::vector<double> field_strength(3 * active.size(), 0.0);
+        if (!active.empty())
+            CheckRadiaError(RadFldBatchSerial(
+                flux_density.data(), field_strength.data(),
+                static_cast<int>(active.size()), physical_points.data(), object_));
+        for (std::size_t k = 0; k < active.size(); ++k) {
+            const std::size_t index = active[k];
+            const auto& normal = normals[index];
+            const double* source = &flux_density[3 * k];
+            const double dot = source[0] * normal[0] +
+                source[1] * normal[1] + source[2] * normal[2];
+            for (int component = 0; component < 3; ++component)
+                result(index, component) = -factors[index] *
+                    (source[component] - 2.0 * dot * normal[component]);
+        }
+        for (std::size_t index = 0; index < count; ++index)
+            if (factors[index] == 0.0)
+                for (int component = 0; component < 3; ++component)
+                    result(index, component) = 0.0;
+    }
+
+private:
+    void CheckRadiaError(int error) const {
+        if (error != 0)
+            throw std::runtime_error("KelvinRadiaFluxDensity: Radia error " +
+                                     std::to_string(error));
+    }
+
+    bool Map(const double position[3], std::array<double, 3>& physical,
+             std::array<double, 3>& normal, double& factor) const {
+        double delta[3] = {
+            position[0] - kelvin_center_[0],
+            position[1] - kelvin_center_[1],
+            position[2] - kelvin_center_[2]};
+        const double rho_squared = delta[0] * delta[0] +
+            delta[1] * delta[1] + delta[2] * delta[2];
+        if (rho_squared <= 1.0e-24) {
+            factor = 0.0;
+            return false;
+        }
+        const double inverse_scale = radius_ * radius_ / rho_squared;
+        const double rho = std::sqrt(rho_squared);
+        for (int component = 0; component < 3; ++component) {
+            normal[component] = delta[component] / rho;
+            physical[component] = physical_center_[component] +
+                inverse_scale * delta[component];
+        }
+        factor = inverse_scale * inverse_scale;
+        return true;
+    }
+
+    void EvaluateOne(const double position[3], double result[3]) const {
+        std::array<double, 3> physical{};
+        std::array<double, 3> normal{};
+        double factor = 0.0;
+        if (!Map(position, physical, normal, factor)) return;
+        double flux_density[3] = {0.0, 0.0, 0.0};
+        double field_strength[3] = {0.0, 0.0, 0.0};
+        CheckRadiaError(RadFldBatchSerial(flux_density, field_strength, 1,
+                                          physical.data(), object_));
+        const double dot = flux_density[0] * normal[0] +
+            flux_density[1] * normal[1] + flux_density[2] * normal[2];
+        for (int component = 0; component < 3; ++component)
+            result[component] = -factor *
+                (flux_density[component] - 2.0 * dot * normal[component]);
+    }
+
+    int object_ = 0;
+    std::array<double, 3> kelvin_center_{};
+    double radius_ = 0.0;
+    std::array<double, 3> physical_center_{};
+};
+
+/**
+ * Magnetic field strength of a compact Radia source pulled back into the
+ * translated Kelvin exterior.  H is a twisted 1-form, so orientation
+ * reversal contributes an additional minus:
+ *
+ *   H' = -(R/rho)^2 (I - 2 n n^T) H(T(r')).
+ *
+ * This is the source contract for the scalar reduced-Omega weak form.  In
+ * vacuum it is Hodge-consistent with KelvinRadiaFluxDensityCoefficient:
+ * B' = mu_0 (R/rho)^2 H'.
+ */
+class KelvinRadiaFieldStrengthCoefficient final
+    : public ngfem::CoefficientFunctionNoDerivative {
+public:
+    KelvinRadiaFieldStrengthCoefficient(
+        int object, std::array<double, 3> kelvin_center, double radius,
+        std::array<double, 3> physical_center)
+        : CoefficientFunctionNoDerivative(3), object_(object),
+          kelvin_center_(kelvin_center), radius_(radius),
+          physical_center_(physical_center) {
+        if (object_ <= 0)
+            throw std::invalid_argument(
+                "KelvinRadiaFieldStrength requires a positive Radia object handle");
+        if (!std::isfinite(radius_) || radius_ <= 0.0)
+            throw std::invalid_argument(
+                "KelvinRadiaFieldStrength radius must be positive and finite");
+        for (double value : kelvin_center_)
+            if (!std::isfinite(value))
+                throw std::invalid_argument(
+                    "KelvinRadiaFieldStrength kelvin_center must be finite");
+        for (double value : physical_center_)
+            if (!std::isfinite(value))
+                throw std::invalid_argument(
+                    "KelvinRadiaFieldStrength physical_center must be finite");
+    }
+
+    double Evaluate(const ngfem::BaseMappedIntegrationPoint&) const override {
+        return 0.0;
+    }
+
+    void Evaluate(const ngfem::BaseMappedIntegrationPoint& point,
+                  ngbla::FlatVector<> result) const override {
+        const auto mapped = point.GetPoint();
+        const int dimension = mapped.Size();
+        const double position[3] = {
+            mapped[0], dimension >= 2 ? mapped[1] : 0.0,
+            dimension >= 3 ? mapped[2] : 0.0};
+        double value[3] = {0.0, 0.0, 0.0};
+        EvaluateOne(position, value);
+        for (int component = 0; component < 3; ++component)
+            result(component) = value[component];
+    }
+
+    void Evaluate(const ngfem::BaseMappedIntegrationRule& rule,
+                  ngbla::BareSliceMatrix<> result) const override {
+        const std::size_t count = rule.Size();
+        std::vector<double> physical_points;
+        std::vector<std::array<double, 3>> normals(count);
+        std::vector<double> factors(count, 0.0);
+        std::vector<std::size_t> active;
+        physical_points.reserve(3 * count);
+        active.reserve(count);
+        for (std::size_t index = 0; index < count; ++index) {
+            const auto mapped = rule[index].GetPoint();
+            const int dimension = mapped.Size();
+            const double position[3] = {
+                mapped[0], dimension >= 2 ? mapped[1] : 0.0,
+                dimension >= 3 ? mapped[2] : 0.0};
+            std::array<double, 3> physical{};
+            if (!Map(position, physical, normals[index], factors[index]))
+                continue;
+            physical_points.insert(physical_points.end(), physical.begin(), physical.end());
+            active.push_back(index);
+        }
+        std::vector<double> flux_density(3 * active.size(), 0.0);
+        std::vector<double> field_strength(3 * active.size(), 0.0);
+        if (!active.empty())
+            CheckRadiaError(RadFldBatchSerial(
+                flux_density.data(), field_strength.data(),
+                static_cast<int>(active.size()), physical_points.data(), object_));
+        for (std::size_t k = 0; k < active.size(); ++k) {
+            const std::size_t index = active[k];
+            const auto& normal = normals[index];
+            const double* source = &field_strength[3 * k];
+            const double dot = source[0] * normal[0] +
+                source[1] * normal[1] + source[2] * normal[2];
+            for (int component = 0; component < 3; ++component)
+                result(index, component) = -factors[index] *
+                    (source[component] - 2.0 * dot * normal[component]);
+        }
+        for (std::size_t index = 0; index < count; ++index)
+            if (factors[index] == 0.0)
+                for (int component = 0; component < 3; ++component)
+                    result(index, component) = 0.0;
+    }
+
+private:
+    void CheckRadiaError(int error) const {
+        if (error != 0)
+            throw std::runtime_error("KelvinRadiaFieldStrength: Radia error " +
+                                     std::to_string(error));
+    }
+
+    bool Map(const double position[3], std::array<double, 3>& physical,
+             std::array<double, 3>& normal, double& factor) const {
+        double delta[3] = {
+            position[0] - kelvin_center_[0],
+            position[1] - kelvin_center_[1],
+            position[2] - kelvin_center_[2]};
+        const double rho_squared = delta[0] * delta[0] +
+            delta[1] * delta[1] + delta[2] * delta[2];
+        if (rho_squared <= 1.0e-24) {
+            factor = 0.0;
+            return false;
+        }
+        const double inverse_scale = radius_ * radius_ / rho_squared;
+        const double rho = std::sqrt(rho_squared);
+        for (int component = 0; component < 3; ++component) {
+            normal[component] = delta[component] / rho;
+            physical[component] = physical_center_[component] +
+                inverse_scale * delta[component];
+        }
+        factor = inverse_scale;
+        return true;
+    }
+
+    void EvaluateOne(const double position[3], double result[3]) const {
+        std::array<double, 3> physical{};
+        std::array<double, 3> normal{};
+        double factor = 0.0;
+        if (!Map(position, physical, normal, factor)) return;
+        double flux_density[3] = {0.0, 0.0, 0.0};
+        double field_strength[3] = {0.0, 0.0, 0.0};
+        CheckRadiaError(RadFldBatchSerial(flux_density, field_strength, 1,
+                                          physical.data(), object_));
+        const double dot = field_strength[0] * normal[0] +
+            field_strength[1] * normal[1] + field_strength[2] * normal[2];
+        for (int component = 0; component < 3; ++component)
+            result[component] = -factor *
+                (field_strength[component] - 2.0 * dot * normal[component]);
+    }
+
+    int object_ = 0;
+    std::array<double, 3> kelvin_center_{};
+    double radius_ = 0.0;
+    std::array<double, 3> physical_center_{};
+};
+
+/**
+ * Scalar magnetic potential of a compact Radia source pulled back into the
+ * translated Kelvin exterior.  The scalar is a twisted 0-form, hence the
+ * orientation-reversing inversion supplies one minus sign:
+ *
+ *   Phi'(r') = -Phi(T(r')).
+ *
+ * When the physical source satisfies H = -grad(Phi) in the current-free
+ * source/total interface neighbourhood, this coefficient and
+ * KelvinRadiaFieldStrengthCoefficient satisfy H' = -grad(Phi').  It is the
+ * interface datum used by the TOSCA-style mixed total/reduced Omega solve.
+ */
+class KelvinRadiaScalarPotentialCoefficient final
+    : public ngfem::CoefficientFunctionNoDerivative {
+public:
+    KelvinRadiaScalarPotentialCoefficient(
+        int object, std::array<double, 3> kelvin_center, double radius,
+        std::array<double, 3> physical_center)
+        : CoefficientFunctionNoDerivative(1), object_(object),
+          kelvin_center_(kelvin_center), radius_(radius),
+          physical_center_(physical_center) {
+        if (object_ <= 0)
+            throw std::invalid_argument(
+                "KelvinRadiaScalarPotential requires a positive Radia object handle");
+        if (!std::isfinite(radius_) || radius_ <= 0.0)
+            throw std::invalid_argument(
+                "KelvinRadiaScalarPotential radius must be positive and finite");
+        for (double value : kelvin_center_)
+            if (!std::isfinite(value))
+                throw std::invalid_argument(
+                    "KelvinRadiaScalarPotential kelvin_center must be finite");
+        for (double value : physical_center_)
+            if (!std::isfinite(value))
+                throw std::invalid_argument(
+                    "KelvinRadiaScalarPotential physical_center must be finite");
+    }
+
+    double Evaluate(
+        const ngfem::BaseMappedIntegrationPoint& point) const override {
+        const auto mapped = point.GetPoint();
+        const int dimension = mapped.Size();
+        const double position[3] = {
+            mapped[0], dimension >= 2 ? mapped[1] : 0.0,
+            dimension >= 3 ? mapped[2] : 0.0};
+        double physical[3] = {0.0, 0.0, 0.0};
+        if (!Map(position, physical)) return 0.0;
+        double value = 0.0;
+        CheckRadiaError(RadFldPhiSerial(&value, 1, physical, object_));
+        return -value;
+    }
+
+    void Evaluate(const ngfem::BaseMappedIntegrationPoint& point,
+                  ngbla::FlatVector<> result) const override {
+        result(0) = Evaluate(point);
+    }
+
+    void Evaluate(const ngfem::BaseMappedIntegrationRule& rule,
+                  ngbla::BareSliceMatrix<> result) const override {
+        const std::size_t count = rule.Size();
+        std::vector<double> physical_points;
+        std::vector<std::size_t> active;
+        physical_points.reserve(3 * count);
+        active.reserve(count);
+        for (std::size_t index = 0; index < count; ++index) {
+            const auto mapped = rule[index].GetPoint();
+            const int dimension = mapped.Size();
+            const double position[3] = {
+                mapped[0], dimension >= 2 ? mapped[1] : 0.0,
+                dimension >= 3 ? mapped[2] : 0.0};
+            double physical[3] = {0.0, 0.0, 0.0};
+            if (!Map(position, physical)) continue;
+            physical_points.insert(physical_points.end(), physical, physical + 3);
+            active.push_back(index);
+        }
+        std::vector<double> values(active.size(), 0.0);
+        if (!active.empty())
+            CheckRadiaError(RadFldPhiSerial(values.data(),
+                                             static_cast<int>(active.size()),
+                                             physical_points.data(), object_));
+        for (std::size_t index = 0; index < count; ++index)
+            result(index, 0) = 0.0;
+        for (std::size_t k = 0; k < active.size(); ++k)
+            result(active[k], 0) = -values[k];
+    }
+
+private:
+    void CheckRadiaError(int error) const {
+        if (error != 0)
+            throw std::runtime_error("KelvinRadiaScalarPotential: Radia error " +
+                                     std::to_string(error));
+    }
+
+    bool Map(const double position[3], double physical[3]) const {
+        double delta[3] = {
+            position[0] - kelvin_center_[0],
+            position[1] - kelvin_center_[1],
+            position[2] - kelvin_center_[2]};
+        const double rho_squared = delta[0] * delta[0] +
+            delta[1] * delta[1] + delta[2] * delta[2];
+        if (rho_squared <= 1.0e-24) return false;
+        const double inverse_scale = radius_ * radius_ / rho_squared;
+        for (int component = 0; component < 3; ++component)
+            physical[component] = physical_center_[component] +
+                inverse_scale * delta[component];
+        return true;
+    }
+
+    int object_ = 0;
+    std::array<double, 3> kelvin_center_{};
+    double radius_ = 0.0;
+    std::array<double, 3> physical_center_{};
+};
+
 } // namespace radia::ngsolve_bridge
 
 #endif

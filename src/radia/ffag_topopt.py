@@ -289,7 +289,7 @@ def _cyclic_boundary_facets(mesh, periodic_boundaries):
 
 def identify_ffag_cyclic_sector_vertices(
         mesh, fold, *, periodic_boundaries=("periodic_min", "periodic_max"),
-        relative_tolerance=1.0e-10):
+        relative_tolerance=1.0e-10, identnr=None):
     """Add rotational PERIODIC point identifications to a Cubit sector mesh.
 
     Cubit owns the curved HEX geometry and named cut faces.  Netgen owns the
@@ -306,8 +306,16 @@ def identify_ffag_cyclic_sector_vertices(
     if not np.isfinite(relative_tolerance) or relative_tolerance <= 0.0:
         raise ValueError(
             "FFAG cyclic relative_tolerance must be finite and positive")
-    if mesh.ngmesh.GetIdentifications():
-        raise ValueError("FFAG sector mesh already has point identifications")
+    existing_pairs = tuple(mesh.ngmesh.GetIdentifications())
+    if identnr is None:
+        if existing_pairs:
+            raise ValueError(
+                "FFAG sector already has point identifications; pass an "
+                "explicit distinct identnr for the rotational constraint")
+        identnr = 1
+    identnr = int(identnr)
+    if identnr < 1:
+        raise ValueError("FFAG cyclic identnr must be a positive integer")
     boundaries = tuple(str(name) for name in periodic_boundaries)
     available = tuple(mesh.GetBoundaries())
     missing = sorted(set(boundaries) - set(available))
@@ -351,7 +359,7 @@ def identify_ffag_cyclic_sector_vertices(
         used.add(target)
         maximum_residual = max(maximum_residual, residual)
         mesh.ngmesh.AddPointIdentification(
-            master + 1, target + 1, identnr=1,
+            master + 1, target + 1, identnr=identnr,
             type=IdentificationType.PERIODIC)
         pairs.append((master, target))
     if len(used) != len(slave):
@@ -361,6 +369,7 @@ def identify_ffag_cyclic_sector_vertices(
         "maximum_rotation_residual": maximum_residual,
         "relative_rotation_residual": maximum_residual / scale,
         "periodic_boundaries": boundaries,
+        "identnr": identnr,
     }
 
 

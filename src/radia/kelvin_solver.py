@@ -25,11 +25,13 @@ from __future__ import annotations
 
 import math
 
-from ngsolve import (HCurl, BilinearForm, LinearForm, GridFunction,
-                      Periodic, TaskManager, curl, dx, InnerProduct,
-                      Conj, Integrate)
+import numpy as np
 
-from radia.kelvin_material import make_kelvin_nu_cf, NU_0
+from ngsolve import (H1, HCurl, BilinearForm, LinearForm, GridFunction,
+                      Periodic, Compress, CoefficientFunction, TaskManager,
+                      curl, dx, ds, grad, InnerProduct, Conj, Integrate)
+
+from radia.kelvin_material import make_kelvin_mu_cf, make_kelvin_nu_cf, MU_0, NU_0
 
 
 def _assemble_and_solve(a_bf, f_lf, fes, inverse="pardiso"):
@@ -42,6 +44,99 @@ def _assemble_and_solve(a_bf, f_lf, fes, inverse="pardiso"):
     gfu.vec.data = a_bf.mat.Inverse(
         fes.FreeDofs(), inverse=inverse) * f_lf.vec
     return gfu
+
+
+def project_source_interface_potential(
+        mesh, H_s, interface_boundary, *, order=2, inverse="pardiso",
+        gauge_epsilon=1.0e-12, relative_tolerance=None):
+    """Project the scalar source-potential trace on a source/total interface.
+
+    A current-linked Radia/CoilBuilder field has no globally single-valued
+    scalar potential.  Its tangential trace on a simply connected source/total
+    interface *does* have one: in the current-free interface neighbourhood,
+    ``H_s,t = -grad_Gamma(Phi_s)``.  This surface Poisson projection constructs
+    that trace directly from ``H_s`` without relying on ``rad.Fld(..., "phi")``
+    or choosing an arbitrary branch sheet through the total-potential region.
+
+    The returned potential is defined only on ``interface_boundary`` and is
+    suitable as ``source_potential`` for
+    :func:`solve_magnetostatic_mixed_total_reduced_omega_kelvin`.  Its additive
+    constant is fixed by a negligible surface mass gauge.  A non-small residual
+    means that the interface has nontrivial topology or intersects current; in
+    that case create an explicit cut/cohomology representation rather than
+    using this trace as though it were exact.
+
+    Caller wraps this operation in :class:`ngsolve.TaskManager`.
+    """
+    from ngsolve import specialcf
+
+    if interface_boundary not in mesh.GetBoundaries():
+        raise ValueError(
+            f"interface_boundary={interface_boundary!r} is not a mesh boundary")
+    if int(order) < 1:
+        raise ValueError("order must be positive")
+    if gauge_epsilon <= 0.0 or not math.isfinite(gauge_epsilon):
+        raise ValueError("gauge_epsilon must be positive and finite")
+
+    interface_selector = mesh.Boundaries(interface_boundary)
+    fes = Compress(H1(mesh, order=int(order), definedon=interface_selector))
+    potential, test = fes.TnT()
+    d_interface = ds(definedon=interface_selector)
+    surface_gradient = grad(potential).Trace()
+    test_surface_gradient = grad(test).Trace()
+    normal = specialcf.normal(mesh.dim)
+    H_tangential = H_s - InnerProduct(H_s, normal) * normal
+
+    a_bf = BilinearForm(fes, symmetric=True)
+    a_bf += InnerProduct(surface_gradient, test_surface_gradient) * d_interface
+    # The physical trace is determined only up to a constant.  The gauge term
+    # acts only on that null mode; it is deliberately far below discretisation
+    # accuracy of the source projection.
+    a_bf += float(gauge_epsilon) * potential * test * d_interface
+    f_lf = LinearForm(fes)
+    f_lf += -InnerProduct(H_s, test_surface_gradient) * d_interface
+    a_bf.Assemble()
+    f_lf.Assemble()
+    potential_gf = GridFunction(fes, name="source_interface_potential")
+    potential_gf.vec.data = a_bf.mat.Inverse(
+        fes.FreeDofs(), inverse=inverse) * f_lf.vec
+
+    residual = grad(potential_gf).Trace() + H_tangential
+    residual_norm = float(math.sqrt(Integrate(
+        InnerProduct(residual, residual) * d_interface, mesh)))
+    source_norm = float(math.sqrt(Integrate(
+        InnerProduct(H_tangential, H_tangential) * d_interface, mesh)))
+    relative_residual = residual_norm / max(source_norm, 1.0e-30)
+    if relative_tolerance is not None and relative_residual > float(relative_tolerance):
+        raise RuntimeError(
+            "source/total interface does not admit the requested scalar source "
+            f"trace: relative tangential residual={relative_residual:.3e}, "
+            f"tolerance={float(relative_tolerance):.3e}; supply an explicit "
+            "cut/cohomology source representation")
+    return {
+        "potential": potential_gf,
+        "fes": fes,
+        "relative_tangential_residual": relative_residual,
+        "tangential_residual_norm": residual_norm,
+        "tangential_source_norm": source_norm,
+    }
+
+
+def project_kelvin_A_source(mesh, A_s_cf, *, order=2):
+    """Project a Kelvin-aware source potential into a periodic HCurl space.
+
+    A Radia-backed coefficient provides exact values but deliberately has no
+    symbolic derivative. The source curl used by the reduced-A and reduced
+    Omega--Omega weak forms must therefore be the curl of this *same*
+    conforming projection. Callers comparing formulations must create it once
+    and pass the returned grid function to both solvers.
+
+    Caller wraps this operation in :class:`ngsolve.TaskManager`.
+    """
+    source_fes = Periodic(HCurl(mesh, order=int(order)))
+    source = GridFunction(source_fes, name="kelvin_source_A")
+    source.Set(A_s_cf)
+    return source
 
 
 def solve_full_A_kelvin(mesh, J_source_cf, R_K, offset,
@@ -153,6 +248,455 @@ def solve_reduced_A_kelvin(mesh, A_s_cf, R_K, offset,
 
     gfu_r = _assemble_and_solve(a_bf, f_lf, fes, inverse=inverse)
     return {"gfu_r": gfu_r, "fes": fes, "nu_cf": nu_cf, "A_s_cf": A_s_cf}
+
+
+def solve_magnetostatic_reduced_A_kelvin(
+        mesh, A_s, R_K, offset, *, mu_r_by_material,
+        nu_0=NU_0, order=1, dirichlet_bbnd="GND", gauge_eps=1e-8,
+        bonus_intorder=4, kelvin_mats=("kelvin",), inverse="pardiso"):
+    """Solve the linear reduced-A magnetostatic problem with iron and Kelvin.
+
+    This is the production three-dimensional route for a compact external
+    current source and linear magnetic materials. ``A_s`` must be the
+    :class:`ngsolve.GridFunction` returned by :func:`project_kelvin_A_source`.
+    Construct its input coefficient with
+    :func:`radia.kelvin_material.make_kelvin_aware_radia_A_s_cf` for a Radia
+    source object.
+
+    Let ``nu_source`` be vacuum reluctivity in the physical model and the
+    Kelvin-transformed vacuum metric in the exterior. Since ``A_s`` solves the
+    source-only problem with ``nu_source``, the reaction potential satisfies
+
+    ``curl(nu curl(A_r)) = curl((nu_source - nu) curl(A_s))``.
+
+    The RHS therefore exists only where the physical material differs from
+    vacuum, while the Kelvin source is already carried by the pullback. This
+    distinction is essential: treating Kelvin as an unassembled region or
+    applying a physical-space source there gives a finite-domain surrogate,
+    not an open-boundary reduced-A solve.
+
+    Args:
+        mesh: two-sphere Kelvin mesh with periodic point identifications.
+        A_s_cf: Kelvin-aware source vector potential.
+        R_K, offset: radius and translated centre of the Kelvin sphere.
+        mu_r_by_material: mapping from physical mesh material name to positive
+            scalar relative permeability. Kelvin materials are rejected by
+            :func:`make_kelvin_nu_cf` because their metric is prescribed.
+    """
+    nu_source_cf = make_kelvin_nu_cf(
+        mesh, R_K, offset, nu_0=nu_0, kelvin_mats=kelvin_mats)
+    nu_cf = make_kelvin_nu_cf(
+        mesh, R_K, offset, nu_0=nu_0, kelvin_mats=kelvin_mats,
+        mu_r_by_material=mu_r_by_material)
+    fes = Periodic(HCurl(mesh, order=order, dirichlet_bbnd=dirichlet_bbnd))
+    u, v = fes.TnT()
+    a_bf = BilinearForm(fes)
+    a_bf += nu_cf * curl(u) * curl(v) * dx(bonus_intorder=bonus_intorder)
+    a_bf += gauge_eps * nu_0 * u * v * dx
+    f_lf = LinearForm(fes)
+    f_lf += ((nu_source_cf - nu_cf) * curl(A_s) * curl(v)
+             * dx(bonus_intorder=bonus_intorder))
+
+    gfu_r = _assemble_and_solve(a_bf, f_lf, fes, inverse=inverse)
+    return {
+        "gfu_r": gfu_r,
+        "fes": fes,
+        "nu_cf": nu_cf,
+        "nu_source_cf": nu_source_cf,
+        "A_s": A_s,
+        # A_s and A_r intentionally live in separately constructed periodic
+        # spaces (the source has no GND restriction). NGSolve cannot take the
+        # curl of their symbolic sum, but curl is linear and each term has the
+        # correct HCurl differential operator on its own space.
+        "B_cf": curl(gfu_r) + curl(A_s),
+    }
+
+
+def solve_magnetostatic_reduced_omega_kelvin(
+        mesh, H_s, R_K, offset, *, mu_r_by_material,
+        order=1, dirichlet_bbnd="GND", bonus_intorder=4,
+        kelvin_mats=("kelvin",), inverse="pardiso"):
+    """Solve a periodic reduced Omega--Omega magnetostatic problem with Kelvin.
+
+    ``H_s`` is the complete source field in computational coordinates. For a
+    compact Radia current source, construct it with
+    :func:`radia.kelvin_material.make_kelvin_aware_radia_H_s_cf`.
+
+    The weak form consumes a twisted 1-form.  Do not pass a projected HDiv
+    flux density multiplied by ``nu`` here: an HDiv projection preserves the
+    normal trace/divergence of ``B``, but does not preserve the Kelvin Hodge
+    relation or the curl-free ``H`` source contract required by this scalar
+    potential formulation.
+    """
+    mu_cf = make_kelvin_mu_cf(
+        mesh, R_K, offset, kelvin_mats=kelvin_mats,
+        mu_r_by_material=mu_r_by_material)
+    fes = Periodic(H1(mesh, order=order, dirichlet_bbnd=dirichlet_bbnd))
+    phi, test = fes.TnT()
+    a_bf = BilinearForm(fes, symmetric=True)
+    a_bf += mu_cf * grad(phi) * grad(test) * dx(
+        bonus_intorder=bonus_intorder)
+    f_lf = LinearForm(fes)
+    f_lf += mu_cf * H_s * grad(test) * dx(
+        bonus_intorder=bonus_intorder)
+    phi_gf = _assemble_and_solve(a_bf, f_lf, fes, inverse=inverse)
+    return {
+        "phi": phi_gf,
+        "fes": fes,
+        "mu_cf": mu_cf,
+        "H_s": H_s,
+        "B_cf": mu_cf * (H_s - grad(phi_gf)),
+    }
+
+
+def solve_magnetostatic_mixed_total_reduced_omega_kelvin(
+        mesh, H_s, source_potential, R_K, offset, *, mu_r_by_material=None,
+        reduced_materials, total_materials, interface_boundary,
+        order=1, dirichlet_bbnd="GND", bonus_intorder=4,
+        kelvin_mats=("kelvin",), inverse="pardiso",
+        interface_constraint_scale=None, total_dirichlet_cf=None,
+        mu_cf=None, kelvin_interface_boundary=None,
+        kelvin_source_potential=None):
+    """Solve the TOSCA-style mixed total/reduced Omega formulation.
+
+    ``H_s`` is used *only* in ``reduced_materials`` (the source enclosure),
+    where ``H = H_s - grad(phi_reduced)``.  The iron, physical outer air, and
+    Kelvin exterior use a total scalar potential,
+    ``H = -grad(phi_total)``.  On ``interface_boundary`` the potentials are
+    coupled by the exact source trace
+
+    ``phi_total - phi_reduced = source_potential``.
+
+    When the reduced physical air reaches the inner Kelvin sphere, provide
+    ``kelvin_interface_boundary`` and ``kelvin_source_potential`` as well.
+    This adds the periodic source jump between the reduced physical-air trace
+    and the Kelvin total-potential trace.  Omitting it would silently remove
+    the source 0-form from the Kelvin pair, even though the physical source
+    reaches the Kelvin interface.
+
+    This prevents the source field and the reduced correction from cancelling
+    inside high-permeability material.  The normal flux condition is natural
+    in the variational form; the scalar-trace constraint supplies the
+    tangential-H condition.  It is the finite-element form of the total /
+    reduced Omega split used by TOSCA-class magnetostatic solvers.
+
+    ``source_potential`` is intentionally mandatory.  It must satisfy
+    ``H_s = -grad(source_potential)`` in the current-free neighbourhood of the
+    source/total interface.  Do not reconstruct it from an HDiv-projected B
+    field.  Linked filament coils require an explicit cut or a cohomology
+    representative before they provide such a single-valued trace.
+
+    The formulation has an interface Lagrange multiplier and is symmetric
+    indefinite, so the default direct PARDISO solve is deliberate.  The
+    returned field is continuous in the physical tangential/normal sense but
+    not represented as one global H1 GridFunction.
+
+    Args:
+        mesh: Kelvin-periodic NGSolve mesh.
+        H_s: physical-coordinate source H coefficient on
+            ``reduced_materials``.  The production split keeps every Kelvin
+            material in ``total_materials``, so no source evaluation is made
+            in the Kelvin exterior.
+        source_potential: physical scalar-potential trace on
+            ``interface_boundary``.
+        R_K, offset: Kelvin sphere radius and translated centre.
+        mu_r_by_material: positive relative permeability by material name.
+            Ignored when ``mu_cf`` is supplied by a nonlinear outer iteration.
+        reduced_materials: exact material names for the source enclosure.
+        total_materials: exact names for iron, ordinary air, and Kelvin.
+        interface_boundary: named source/total internal boundary.
+        kelvin_interface_boundary: inner physical Kelvin boundary that is
+            periodically paired with the Kelvin exterior.  Supply this with
+            ``kelvin_source_potential`` when a reduced material touches the
+            inner Kelvin sphere.
+        kelvin_source_potential: physical source-potential trace on
+            ``kelvin_interface_boundary``.  Kelvin inversion is orientation
+            reversing for this twisted 0-form, so the enforced jump there is
+            ``phi_total - phi_reduced = -kelvin_source_potential``.
+        total_dirichlet_cf: optional non-homogeneous total-potential lift for
+            a finite-domain verification problem. Production Kelvin meshes use
+            the default ``None`` and a point/edge ``GND`` constraint.
+        mu_cf: optional fully Kelvin-aware permeability coefficient. This is
+            the narrow extension point used by the nonlinear Picard driver;
+            callers must not supply a physical-space coefficient in the Kelvin
+            material.
+    """
+    reduced_materials = tuple(reduced_materials)
+    total_materials = tuple(total_materials)
+    actual_materials = set(mesh.GetMaterials())
+    reduced_set = set(reduced_materials)
+    total_set = set(total_materials)
+    if not reduced_set:
+        raise ValueError("reduced_materials must name the current-source enclosure")
+    if not total_set:
+        raise ValueError("total_materials must name the total-potential region")
+    if reduced_set & total_set:
+        raise ValueError("reduced_materials and total_materials must be disjoint")
+    if reduced_set | total_set != actual_materials:
+        missing = sorted(actual_materials - (reduced_set | total_set))
+        unknown = sorted((reduced_set | total_set) - actual_materials)
+        raise ValueError(
+            "reduced_materials and total_materials must partition mesh materials; "
+            f"missing={missing}, unknown={unknown}")
+    if interface_boundary not in mesh.GetBoundaries():
+        raise ValueError(
+            f"interface_boundary={interface_boundary!r} is not a mesh boundary")
+    if (kelvin_interface_boundary is None) != (kelvin_source_potential is None):
+        raise ValueError(
+            "kelvin_interface_boundary and kelvin_source_potential must be "
+            "supplied together")
+    if (kelvin_interface_boundary is not None
+            and kelvin_interface_boundary not in mesh.GetBoundaries()):
+        raise ValueError(
+            f"kelvin_interface_boundary={kelvin_interface_boundary!r} is not "
+            "a mesh boundary")
+    if interface_constraint_scale is None:
+        # Stiffness entries scale as mu * L; interface trace entries scale as
+        # L^2.  This balancing does not alter the constraint, only the saddle
+        # matrix conditioning seen by the direct solver.
+        interface_constraint_scale = (1.0 / NU_0) / float(R_K)
+    if interface_constraint_scale <= 0.0 or not math.isfinite(interface_constraint_scale):
+        raise ValueError("interface_constraint_scale must be positive and finite")
+
+    if mu_cf is None:
+        mu_cf = make_kelvin_mu_cf(
+            mesh, R_K, offset, kelvin_mats=kelvin_mats,
+            mu_r_by_material=mu_r_by_material)
+    reduced_selector = mesh.Materials("|".join(reduced_materials))
+    total_selector = mesh.Materials("|".join(total_materials))
+    interface_selector = mesh.Boundaries(interface_boundary)
+    kelvin_interface_selector = (
+        None if kelvin_interface_boundary is None
+        else mesh.Boundaries(kelvin_interface_boundary))
+
+    # Only the total region crosses the Kelvin periodic identification.  The
+    # source enclosure is intentionally an independent H1 space.
+    fes_reduced = H1(mesh, order=int(order), definedon=reduced_selector)
+    fes_total = Compress(Periodic(H1(
+        mesh, order=int(order), definedon=total_selector,
+        dirichlet_bbnd=dirichlet_bbnd)))
+    fes_multiplier = Compress(H1(
+        mesh, order=int(order), definedon=interface_selector))
+    fes_kelvin_multiplier = (
+        None if kelvin_interface_selector is None
+        else Compress(H1(mesh, order=int(order), definedon=kelvin_interface_selector)))
+    fes = fes_reduced * fes_total * fes_multiplier
+    if fes_kelvin_multiplier is None:
+        (phi_reduced, phi_total, multiplier), (
+            test_reduced, test_total, test_multiplier) = fes.TnT()
+        kelvin_multiplier = test_kelvin_multiplier = None
+    else:
+        fes = fes * fes_kelvin_multiplier
+        (phi_reduced, phi_total, multiplier, kelvin_multiplier), (
+            test_reduced, test_total, test_multiplier, test_kelvin_multiplier) = fes.TnT()
+
+    a_bf = BilinearForm(fes, symmetric=True)
+    a_bf += mu_cf * grad(phi_reduced) * grad(test_reduced) * dx(
+        definedon=reduced_selector, bonus_intorder=bonus_intorder)
+    a_bf += mu_cf * grad(phi_total) * grad(test_total) * dx(
+        definedon=total_selector, bonus_intorder=bonus_intorder)
+    d_interface = ds(definedon=interface_selector, bonus_intorder=bonus_intorder)
+    jump_trial = phi_total.Trace() - phi_reduced.Trace()
+    jump_test = test_total.Trace() - test_reduced.Trace()
+    a_bf += interface_constraint_scale * (
+        multiplier * jump_test + test_multiplier * jump_trial) * d_interface
+    if kelvin_interface_selector is not None:
+        d_kelvin_interface = ds(
+            definedon=kelvin_interface_selector, bonus_intorder=bonus_intorder)
+        kelvin_jump_trial = phi_total.Trace() - phi_reduced.Trace()
+        kelvin_jump_test = test_total.Trace() - test_reduced.Trace()
+        a_bf += interface_constraint_scale * (
+            kelvin_multiplier * kelvin_jump_test
+            + test_kelvin_multiplier * kelvin_jump_trial
+        ) * d_kelvin_interface
+
+    f_lf = LinearForm(fes)
+    f_lf += mu_cf * H_s * grad(test_reduced) * dx(
+        definedon=reduced_selector, bonus_intorder=bonus_intorder)
+    f_lf += interface_constraint_scale * test_multiplier * source_potential * d_interface
+    if kelvin_interface_selector is not None:
+        f_lf += -interface_constraint_scale * test_kelvin_multiplier * (
+            kelvin_source_potential) * d_kelvin_interface
+    a_bf.Assemble()
+    f_lf.Assemble()
+
+    solution = GridFunction(fes)
+    if total_dirichlet_cf is None:
+        solution.vec.data = a_bf.mat.Inverse(
+            fes.FreeDofs(), inverse=inverse) * f_lf.vec
+    else:
+        solution.components[1].Set(
+            total_dirichlet_cf, definedon=mesh.Boundaries(dirichlet_bbnd))
+        residual = solution.vec.CreateVector()
+        residual.data = f_lf.vec - a_bf.mat * solution.vec
+        solution.vec.data += a_bf.mat.Inverse(
+            fes.FreeDofs(), inverse=inverse) * residual
+
+    phi_reduced_gf, phi_total_gf, multiplier_gf = solution.components[:3]
+    kelvin_multiplier_gf = (
+        None if fes_kelvin_multiplier is None else solution.components[3])
+    H_reduced = H_s - grad(phi_reduced_gf)
+    H_total = -grad(phi_total_gf)
+    h_components = []
+    for component in range(3):
+        values = {
+            material: H_reduced[component] if material in reduced_set
+            else H_total[component]
+            for material in mesh.GetMaterials()
+        }
+        h_components.append(mesh.MaterialCF(values))
+    H_cf = CoefficientFunction(tuple(h_components))
+    return {
+        "solution": solution,
+        "phi_reduced": phi_reduced_gf,
+        "phi_total": phi_total_gf,
+        "interface_multiplier": multiplier_gf,
+        "kelvin_interface_multiplier": kelvin_multiplier_gf,
+        "fes": fes,
+        "fes_reduced": fes_reduced,
+        "fes_total": fes_total,
+        "mu_cf": mu_cf,
+        "H_s": H_s,
+        "source_potential": source_potential,
+        "kelvin_source_potential": kelvin_source_potential,
+        "H_cf": H_cf,
+        "B_cf": mu_cf * H_cf,
+    }
+
+
+def solve_magnetostatic_mixed_total_reduced_omega_picard_kelvin(
+        mesh, H_s, source_potential, R_K, offset, *, bh_table,
+        nonlinear_materials, reduced_materials, total_materials,
+        interface_boundary, order=1, dirichlet_bbnd="GND",
+        bonus_intorder=4, kelvin_mats=("kelvin",), inverse="pardiso",
+        mu_r_initial=1000.0, tolerance=2.0e-5, max_iterations=80,
+        relaxation=0.3, interface_constraint_scale=None,
+        kelvin_interface_boundary=None, kelvin_source_potential=None):
+    """Picard solve for the mixed total/reduced Omega formulation.
+
+    The source split and its interface trace stay fixed throughout the
+    iteration.  Only the permeability in ``nonlinear_materials`` is updated
+    from the shared monotone ``B(H)`` law.  This is deliberately separate from
+    hysteretic state evolution: the latter needs its own committed material
+    history and is not silently approximated by a memoryless Picard update.
+
+    The result has the same field keys as the linear mixed solve plus
+    ``nonlinear_stats``.  Caller wraps the complete operation in
+    :class:`ngsolve.TaskManager`.
+    """
+    from ngsolve import GridFunction, L2, VOL
+    from radia.scalar_potential_solver import _build_bh_interpolator
+
+    nonlinear_materials = tuple(nonlinear_materials)
+    nonlinear_set = set(nonlinear_materials)
+    actual_materials = set(mesh.GetMaterials())
+    if not nonlinear_set:
+        raise ValueError("nonlinear_materials must name at least one material")
+    if not nonlinear_set <= set(total_materials):
+        raise ValueError("nonlinear_materials must be contained in total_materials")
+    if nonlinear_set - actual_materials:
+        raise ValueError(
+            f"nonlinear_materials are not mesh materials: {sorted(nonlinear_set - actual_materials)}")
+    if not math.isfinite(mu_r_initial) or mu_r_initial <= 0.0:
+        raise ValueError("mu_r_initial must be positive and finite")
+    if not math.isfinite(tolerance) or tolerance <= 0.0:
+        raise ValueError("tolerance must be positive and finite")
+    if int(max_iterations) < 1:
+        raise ValueError("max_iterations must be positive")
+    if not 0.0 < relaxation <= 1.0:
+        raise ValueError("relaxation must lie in (0, 1]")
+
+    bh_array = np.asarray(bh_table, dtype=float)
+    if bh_array.ndim != 2 or bh_array.shape[1] < 2:
+        raise ValueError("bh_table must contain [H, B] rows")
+    B_of_H = _build_bh_interpolator(bh_array[:, :2])
+    B_scale = max(float(bh_array[:, 1].max()), MU_0)
+
+    mu_elements = GridFunction(L2(mesh, order=0), name="mixed_omega_mu")
+    nonlinear_elements = []
+    for element in mesh.Elements(VOL):
+        material = str(element.mat)
+        if material in nonlinear_set:
+            mu_elements.vec[element.nr] = MU_0 * float(mu_r_initial)
+            coordinates = [mesh.vertices[vertex.nr].point for vertex in element.vertices]
+            centroid = tuple(
+                sum(float(point[component]) for point in coordinates) / len(coordinates)
+                for component in range(mesh.dim))
+            nonlinear_elements.append((element.nr, centroid))
+        else:
+            mu_elements.vec[element.nr] = MU_0
+
+    kelvin_mu = make_kelvin_mu_cf(
+        mesh, R_K, offset, kelvin_mats=kelvin_mats, mu_r_by_material={})
+
+    def mixed_mu_cf():
+        values = {}
+        for material in mesh.GetMaterials():
+            if material in nonlinear_set:
+                values[material] = mu_elements
+            elif any(key in material.lower() for key in kelvin_mats):
+                values[material] = kelvin_mu
+            else:
+                values[material] = MU_0
+        return mesh.MaterialCF(values, default=MU_0)
+
+    B_previous = np.zeros(len(nonlinear_elements))
+    result = None
+    converged = False
+    relative_change = float("inf")
+    for iteration in range(1, int(max_iterations) + 1):
+        result = solve_magnetostatic_mixed_total_reduced_omega_kelvin(
+            mesh, H_s, source_potential, R_K, offset,
+            mu_r_by_material=None, reduced_materials=reduced_materials,
+            total_materials=total_materials, interface_boundary=interface_boundary,
+            order=order, dirichlet_bbnd=dirichlet_bbnd,
+            bonus_intorder=bonus_intorder, kelvin_mats=kelvin_mats,
+            inverse=inverse, interface_constraint_scale=interface_constraint_scale,
+            mu_cf=mixed_mu_cf(),
+            kelvin_interface_boundary=kelvin_interface_boundary,
+            kelvin_source_potential=kelvin_source_potential)
+        B_current = np.zeros(len(nonlinear_elements))
+        for index, (element_nr, centroid) in enumerate(nonlinear_elements):
+            H_value = result["H_cf"](mesh(*centroid))
+            H_magnitude = math.sqrt(sum(float(value) ** 2 for value in H_value))
+            B_current[index] = B_of_H(H_magnitude)
+            if H_magnitude <= 1.0e-12:
+                mu_r_next = float(mu_r_initial)
+            else:
+                mu_r_next = max(1.0, B_current[index] / (MU_0 * H_magnitude))
+            if iteration > 1:
+                mu_r_previous = float(mu_elements.vec[element_nr]) / MU_0
+                mu_r_next = (
+                    relaxation * mu_r_next + (1.0 - relaxation) * mu_r_previous)
+            mu_elements.vec[element_nr] = MU_0 * mu_r_next
+
+        if iteration > 1:
+            relative_change = float(
+                np.max(np.abs(B_current - B_previous))
+                / max(B_scale, 1.0e-30))
+            if relative_change <= tolerance:
+                converged = True
+                break
+        B_previous = B_current
+
+    if result is None:  # pragma: no cover - guarded by max_iterations validation
+        raise RuntimeError("mixed total/reduced Omega Picard iteration did not start")
+    result["mu_cf"] = mixed_mu_cf()
+    result["B_cf"] = result["mu_cf"] * result["H_cf"]
+    result["nonlinear_stats"] = {
+        "method": "Picard",
+        "iterations": iteration,
+        "converged": converged,
+        "relative_B_change": relative_change,
+        "tolerance": float(tolerance),
+        "relaxation": float(relaxation),
+    }
+    if not converged:
+        raise RuntimeError(
+            "mixed total/reduced Omega Picard iteration did not converge: "
+            f"iterations={iteration}, relative_B_change={relative_change:.3e}, "
+            f"tolerance={tolerance:.3e}")
+    return result
 
 
 def inductance_from_energy(gfu, nu_cf, mesh, I_total,

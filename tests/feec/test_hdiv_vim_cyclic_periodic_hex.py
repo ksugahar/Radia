@@ -16,6 +16,7 @@ from radia.ffag_topopt import (  # noqa: E402
     build_ffag_cyclic_density_map,
     identify_ffag_cyclic_sector_vertices,
 )
+from radia.kelvin_identify_ngsolve import has_kelvin_identification  # noqa: E402
 from radia.vim._solve import _hdiv_space_with_image_constraints  # noqa: E402
 from radia.vim._vim import (  # noqa: E402
     _broken_hex_face_charge_basis,
@@ -140,6 +141,24 @@ def test_ffag_cyclic_vertex_identification_and_density_transpose_map():
     np.testing.assert_allclose(
         density_map.contract(element_gradient), finite_difference,
         rtol=1.0e-9, atol=1.0e-10)
+
+
+def test_cyclic_rotation_pairs_do_not_claim_kelvin_readiness():
+    assert has_kelvin_identification(_connected_sector_mesh()) is False
+
+
+def test_ffag_cyclic_identification_requires_explicit_number_after_kelvin_or_other_pairs():
+    mesh = _two_layer_sector_mesh()
+    # A separate periodic relation is a stand-in for a Kelvin identification.
+    # It must not be overwritten or silently merged into the cyclic rotation.
+    mesh.ngmesh.AddPointIdentification(
+        1, 2, identnr=1, type=IdentificationType.PERIODIC)
+    with pytest.raises(ValueError, match="explicit distinct identnr"):
+        identify_ffag_cyclic_sector_vertices(mesh, 6)
+
+    report = identify_ffag_cyclic_sector_vertices(mesh, 6, identnr=2)
+    assert report["pair_count"] == 4
+    assert report["identnr"] == 2
 
 
 def _curve_cyclic_sector_q2(mesh, *, equivariant=True):

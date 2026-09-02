@@ -91,10 +91,10 @@ NU_0 = 1.0 / MU_0
 
 
 def make_kelvin_nu_cf(mesh, R_K, offset, nu_0=NU_0,
-                       kelvin_mats=("kelvin",)):
+                       kelvin_mats=("kelvin",), mu_r_by_material=None):
     """NGSolve CoefficientFunction for nu(r) with Kelvin modulation.
 
-    nu(r) = nu_0 in non-Kelvin materials,
+    nu(r) = nu_0 / mu_r in non-Kelvin materials,
     nu(r) = nu_0 * (|r' - offset| / R_K)^2 in Kelvin materials.
 
     Canonical Nagamine CEFC 2026 / Sugahara 2022 convention for 3D
@@ -109,6 +109,11 @@ def make_kelvin_nu_cf(mesh, R_K, offset, nu_0=NU_0,
         kelvin_mats: substring(s) used to detect Kelvin materials.
             A material whose name (lowercased) contains any of these
             substrings receives the Kelvin modulation.
+        mu_r_by_material: optional mapping from physical material name to a
+            positive scalar relative permeability. Materials absent from this
+            mapping use vacuum permeability. Kelvin material names are never
+            accepted in this mapping because their coefficient is fixed by the
+            transformation metric.
 
     Returns:
         Scalar CoefficientFunction nu(x, y, z).
@@ -119,15 +124,78 @@ def make_kelvin_nu_cf(mesh, R_K, offset, nu_0=NU_0,
     rho_prime_sq = (x - ox) ** 2 + (y - oy) ** 2 + (z - oz) ** 2 + 1e-24
     kelvin_fac = rho_prime_sq / (R_K * R_K)    # (rho'/R)^2
 
+    material_names = tuple(mesh.GetMaterials())
+    mu_r_by_material = dict(mu_r_by_material or {})
+    unknown = sorted(set(mu_r_by_material) - set(material_names))
+    if unknown:
+        raise ValueError(
+            "mu_r_by_material names are not mesh materials: "
+            f"{unknown}; available: {sorted(set(material_names))}")
+
     nu_dict = {}
-    for m in mesh.GetMaterials():
+    for m in material_names:
         ml = m.lower()
         is_kelvin = any(kw in ml for kw in kelvin_mats)
-        nu_dict[m] = (nu_0 * kelvin_fac if is_kelvin else nu_0)
+        if is_kelvin:
+            if m in mu_r_by_material:
+                raise ValueError(
+                    f"mu_r_by_material must not override Kelvin material {m!r}")
+            nu_dict[m] = nu_0 * kelvin_fac
+            continue
+        mu_r = float(mu_r_by_material.get(m, 1.0))
+        if not math.isfinite(mu_r) or mu_r <= 0.0:
+            raise ValueError(
+                f"mu_r_by_material[{m!r}] must be positive and finite; got {mu_r!r}")
+        nu_dict[m] = nu_0 / mu_r
     return mesh.MaterialCF(nu_dict, default=nu_0)
 
 
+def make_kelvin_mu_cf(mesh, R_K, offset, mu_0=MU_0,
+                       kelvin_mats=("kelvin",), mu_r_by_material=None):
+    """Return permeability with physical material and Kelvin metric factors.
+
+    This is the explicit reciprocal companion to :func:`make_kelvin_nu_cf`.
+    It is kept separate rather than constructed as ``1 / nu_cf`` so the
+    Kelvin-centre regularization is visible and no symbolic division by zero
+    is introduced at the GND point (the image of physical infinity).
+    """
+    from ngsolve import x, y, z
+
+    radius = float(R_K)
+    if not math.isfinite(radius) or radius <= 0.0:
+        raise ValueError(f"R_K must be positive and finite; got {R_K!r}")
+    ox, oy, oz = (float(value) for value in offset)
+    rho_prime_sq = ((x - ox) ** 2 + (y - oy) ** 2 + (z - oz) ** 2
+                    + 1e-24)
+    kelvin_factor = radius * radius / rho_prime_sq
+
+    material_names = tuple(mesh.GetMaterials())
+    mu_r_by_material = dict(mu_r_by_material or {})
+    unknown = sorted(set(mu_r_by_material) - set(material_names))
+    if unknown:
+        raise ValueError(
+            "mu_r_by_material names are not mesh materials: "
+            f"{unknown}; available: {sorted(set(material_names))}")
+
+    mu_dict = {}
+    for material in material_names:
+        is_kelvin = any(key in material.lower() for key in kelvin_mats)
+        if is_kelvin:
+            if material in mu_r_by_material:
+                raise ValueError(
+                    f"mu_r_by_material must not override Kelvin material {material!r}")
+            mu_dict[material] = mu_0 * kelvin_factor
+            continue
+        mu_r = float(mu_r_by_material.get(material, 1.0))
+        if not math.isfinite(mu_r) or mu_r <= 0.0:
+            raise ValueError(
+                f"mu_r_by_material[{material!r}] must be positive and finite; got {mu_r!r}")
+        mu_dict[material] = mu_0 * mu_r
+    return mesh.MaterialCF(mu_dict, default=mu_0)
+
+
 def make_kelvin_aware_A_s_cf(mesh, A_phys_factory, R_K, offset,
+                              phys_center=(0.0, 0.0, 0.0),
                               kelvin_mats=("kelvin",)):
     """Build an A_s vector CF using the FULL 1-form pullback (Convention A).
 
@@ -159,6 +227,9 @@ def make_kelvin_aware_A_s_cf(mesh, A_phys_factory, R_K, offset,
             Biot-Savart sum, a wrapper around Radia.Fld, or any other
             analytical formula.
         R_K, offset: Kelvin sphere parameters.
+        phys_center: centre of the physical inversion sphere. The canonical
+            two-sphere geometry has its physical sphere at the origin while
+            ``offset`` is only the translated computational Kelvin sphere.
         kelvin_mats: substring(s) used to detect Kelvin materials.
 
     Returns:
@@ -170,14 +241,12 @@ def make_kelvin_aware_A_s_cf(mesh, A_phys_factory, R_K, offset,
     A_inner = A_phys_factory(x, y, z)
 
     ox, oy, oz = offset
+    (kel_x, kel_y, kel_z), rho_p_sq = _kelvin_mapped_coords(
+        R_K, offset, phys_center)
     dxp = x - ox
     dyp = y - oy
     dzp = z - oz
-    rho_p_sq = dxp * dxp + dyp * dyp + dzp * dzp + 1e-24
     inv = R_K * R_K / rho_p_sq                 # (R/rho')^2 scalar
-    kel_x = ox + inv * dxp
-    kel_y = oy + inv * dyp
-    kel_z = oz + inv * dzp
 
     A_at_phys = A_phys_factory(kel_x, kel_y, kel_z)
 
@@ -207,6 +276,131 @@ def make_kelvin_aware_A_s_cf(mesh, A_phys_factory, R_K, offset,
     Ay = _switch(A_kelvin_y, A_inner[1])
     Az = _switch(A_kelvin_z, A_inner[2])
     return CF((Ax, Ay, Az))
+
+
+def make_kelvin_aware_radia_A_s_cf(mesh, radia_obj, R_K, offset,
+                                    phys_center=(0.0, 0.0, 0.0),
+                                    kelvin_mats=("kelvin",)):
+    """Return an exact Kelvin-aware Radia vector-potential source CF.
+
+    The physical region evaluates ``rad.Fld(obj, "a")`` through the native
+    :class:`radia.RadiaField` coefficient. The Kelvin material evaluates the
+    same source at the inverted physical coordinate and applies the covariant
+    1-form pullback in C++. This avoids a VoxelCoefficient approximation at
+    the source/outer-boundary interface.
+
+    The function is intended for compact current sources within a physical
+    sphere centred at ``phys_center``. ``offset`` is the centre of the
+    translated computational Kelvin sphere, not the physical inversion
+    centre.
+    """
+    import radia as rad
+    from ngsolve import CoefficientFunction as CF
+
+    physical = rad.RadiaField(radia_obj, "a")
+    kelvin = rad.KelvinRadiaVectorPotential(
+        radia_obj, tuple(offset), float(R_K), tuple(phys_center))
+
+    def select(component):
+        values = {}
+        for material in mesh.GetMaterials():
+            is_kelvin = any(key in material.lower() for key in kelvin_mats)
+            values[material] = kelvin[component] if is_kelvin else physical[component]
+        return mesh.MaterialCF(values, default=physical[component])
+
+    return CF(tuple(select(component) for component in range(3)))
+
+
+def make_kelvin_aware_radia_B_s_cf(mesh, radia_obj, R_K, offset,
+                                    phys_center=(0.0, 0.0, 0.0),
+                                    kelvin_mats=("kelvin",)):
+    """Return the exact 2-form Kelvin pullback of a Radia source ``B`` field.
+
+    This is suitable for direct field comparisons and HDiv diagnostics.  It
+    is deliberately *not* a source input to the scalar reduced-Omega solver:
+    an HDiv projection preserves the normal trace/divergence of ``B`` but not
+    the curl-free twisted-1-form contract of the ``H`` source used by that
+    weak form.  Use :func:`make_kelvin_aware_radia_H_s_cf` for Omega.
+    """
+    import radia as rad
+    from ngsolve import CoefficientFunction as CF
+
+    physical = rad.RadiaField(radia_obj, "b")
+    kelvin = rad.KelvinRadiaFluxDensity(
+        radia_obj, tuple(offset), float(R_K), tuple(phys_center))
+
+    def select(component):
+        values = {}
+        for material in mesh.GetMaterials():
+            is_kelvin = any(key in material.lower() for key in kelvin_mats)
+            values[material] = kelvin[component] if is_kelvin else physical[component]
+        return mesh.MaterialCF(values, default=physical[component])
+
+    return CF(tuple(select(component) for component in range(3)))
+
+
+def make_kelvin_aware_radia_H_s_cf(mesh, radia_obj, R_K, offset,
+                                    phys_center=(0.0, 0.0, 0.0),
+                                    kelvin_mats=("kelvin",)):
+    """Return the exact twisted-1-form Kelvin pullback of a Radia ``H`` source.
+
+    This is the compact-current source contract for
+    :func:`radia.kelvin_solver.solve_magnetostatic_reduced_omega_kelvin`.
+    The physical region uses ``RadiaField(obj, "h")``.  In the translated
+    Kelvin sphere the native coefficient evaluates at the inverted physical
+    point and returns
+
+    ``H' = -(R/rho')^2 (I - 2 n n^T) H``.
+
+    The leading minus is essential: ``H`` is a twisted 1-form and spherical
+    Kelvin inversion reverses orientation.  With ``mu' = mu_0 (R/rho')^2``
+    this obeys ``B' = mu' H'`` for the matching 2-form flux pullback.
+    """
+    import radia as rad
+    from ngsolve import CoefficientFunction as CF
+
+    physical = rad.RadiaField(radia_obj, "h")
+    kelvin = rad.KelvinRadiaFieldStrength(
+        radia_obj, tuple(offset), float(R_K), tuple(phys_center))
+
+    def select(component):
+        values = {}
+        for material in mesh.GetMaterials():
+            is_kelvin = any(key in material.lower() for key in kelvin_mats)
+            values[material] = kelvin[component] if is_kelvin else physical[component]
+        return mesh.MaterialCF(values, default=physical[component])
+
+    return CF(tuple(select(component) for component in range(3)))
+
+
+def make_kelvin_aware_radia_scalar_potential_cf(
+        mesh, radia_obj, R_K, offset, *,
+        phys_center=(0.0, 0.0, 0.0), kelvin_mats=("kelvin",)):
+    """Return the Kelvin-aware scalar-potential trace of a Radia source.
+
+    The physical materials use ``RadiaField(obj, "phi")``.  The translated
+    Kelvin material uses the native twisted-0-form pullback,
+    ``phi' = -phi(T(r'))``.  This is the source-potential datum for
+    :func:`radia.kelvin_solver.solve_magnetostatic_mixed_total_reduced_omega_kelvin`.
+
+    ``RadiaField(obj, "phi")`` is not automatically valid for every compound
+    current object.  In particular, a linked filament loop needs a branch cut
+    (or an equivalent cohomology representative) before it has a single-valued
+    scalar trace.  Call this helper only after independently checking
+    ``H = -grad(phi)`` in the current-free source/total interface
+    neighbourhood.  The mixed solver deliberately requires this datum rather
+    than reconstructing it from ``B`` or an HDiv projection.
+    """
+    import radia as rad
+
+    physical = rad.RadiaField(radia_obj, "phi")
+    kelvin = rad.KelvinRadiaScalarPotential(
+        radia_obj, tuple(offset), float(R_K), tuple(phys_center))
+    values = {}
+    for material in mesh.GetMaterials():
+        is_kelvin = any(key in material.lower() for key in kelvin_mats)
+        values[material] = kelvin if is_kelvin else physical
+    return mesh.MaterialCF(values, default=physical)
 
 
 def make_reduced_potential_background_cf(mesh, F_inner_factory, R_K, offset,

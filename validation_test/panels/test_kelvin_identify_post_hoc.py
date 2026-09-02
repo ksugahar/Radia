@@ -126,6 +126,24 @@ def test_has_kelvin_identification_on_unidentified_mesh():
     assert has_kelvin_identification(mesh) is False
 
 
+def test_has_kelvin_identification_rejects_unrelated_periodic_pairs():
+    """A rotational/mirror pair is not evidence that Kelvin is identified."""
+    from netgen.meshing import IdentificationType
+    from radia.kelvin_identify_ngsolve import has_kelvin_identification
+
+    mesh = _build_occ_kelvin_mesh()
+    # The OCC construction already has Kelvin pairs.  A plain sphere has no
+    # Kelvin boundary labels, so use this local boundary-pair predicate on the
+    # existing valid mesh as a positive control after adding an unrelated pair.
+    # It must remain true because the decision is tied to kelvin_int/ext, not
+    # merely to the count of periodic pairs.
+    before = len(mesh.ngmesh.GetIdentifications())
+    mesh.ngmesh.AddPointIdentification(1, 2, identnr=2,
+                                       type=IdentificationType.PERIODIC)
+    assert len(mesh.ngmesh.GetIdentifications()) == before + 1
+    assert has_kelvin_identification(mesh) is True
+
+
 # ----------------------------------------------------------------------
 # add_kelvin_identification: API contract
 # ----------------------------------------------------------------------
