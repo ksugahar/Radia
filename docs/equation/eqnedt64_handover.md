@@ -486,6 +486,7 @@ source stampの両方を表示する。
 ### 13.2 3.0.13 追補レビュー記録
 
 - reviewed source: `484041df8a520d71ee08e3505a8edaf1ca65104a`
+- resolution source: `760404f5766d014b251b9565660deb4c1b73e1b5`
 - reviewer: Claude Codeによる3.0.13実測レビュー（提示文にmodel名の記載なし）
 - result: 改行6件中5件を確認し、末尾空行、貼り付け正規化、CLIに追加修正を要求
 - reproduced findings: 裸の`~`が`\sim`へ変わる、`align`の`&`列が消える、文書メタ命令と
@@ -493,8 +494,9 @@ source stampの両方を表示する。
   redirectできない、clipboard出力`png`と`.png`ファイルの区別が名称だけでは弱い。
 - resolution contract: 末尾空行を`{}`で保持し、貼り付け規則を一般化する。CLIは
   `clipboard-png`を正規名、`png`を互換別名とし、二つの`.tex`は先頭をGUIで開く。
-  help/version/errorの標準streamを自動試験する。これは最初のFableレビュー範囲を越えるため、
-  修正後の最終候補に対して正式公開前Fableレビューをもう一度行う。
+  help/version/errorの標準streamを自動試験する。未知命令抑制で露見した`\\flat` / `\\sharp`
+  の退行は正式サポートと全パレット実行試験で閉じた。これは最初のFableレビュー範囲を
+  越えるため、修正後の最終候補に対して正式公開前Fableレビューをもう一度行う。
 
 - product tag: `eqnedit64-v3.0.11`
 - product tag source: `f5ac045703eab940323bddabbef6bb4fd3a9e55c`
