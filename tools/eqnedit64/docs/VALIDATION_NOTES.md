@@ -5,6 +5,25 @@
 [`CANONICAL_OPERATION.md`](CANONICAL_OPERATION.md) と `release-eqnedit64` skillを
 正とする。`build\accept_release.ps1`は隔離CI/VM用であり、対話中LABでは実行しない。
 
+## 2026-09-03 3.0.13追補レビューの貼り付け・CLI回収
+
+- 基準候補`484041df8a520d71ee08e3505a8edaf1ca65104a`に対するClaude Code実測レビューで、
+  改行6件中5件の修正を確認した一方、末尾空行の消失、裸の`~`から`\sim`への意味変更、
+  `align`の`&`列消失、文書メタ命令／未知命令名の可視化を検出した。
+- parser/emitterを一般則で修正した後、論文貼り付け掃討ケースは`equation`、`equation*`、
+  4種delimiter、`\label`、`\nonumber`、`%`、`~`、明示空白、`align`、`align*`、
+  `eqnarray`、`gather`、未知命令、壊れた入力を含む21件で要注意0件となった。
+  Office MathML掃討17件もXML崩れ0、空出力0だった。同じ規則は`test_edit.py`へ固定した。
+- CLIは二つの`.tex`を出力変換と解釈せず先頭をGUIで開く。PNG clipboardの正規名を
+  `clipboard-png`とし、旧`png`は互換別名に限定した。GUI-subsystem EXEを実processで
+  redirectし、`--help`終了0／stdout、`--version`終了0／stdout、不正`.svg`終了94／stderrを
+  `tests/test_cli_output.ps1`で確認した。
+- parser変更後の編集モデル305検査、symbol 158件、C++ TeX document 11件、
+  `radia-mcp.presentation` 7件、MSVC `/W4 /WX`署名ビルドが通過した。完全font lifecycle、
+  model fuzz、visible renderingは対話中LABで反復せず、Eqnedit64専用CIへ委ねる。
+- この追補は最初のFableレビュー対象だった改行族を越えてparser/CLI契約を変えるため、
+  正式公開前に最終候補SHAへFableレビューをもう一度行う。
+
 ## 2026-08-30 PowerPoint複数行数式の左端整列
 
 - 利用者画像では段落自体は左揃えだったが、長さの違う3行が各行ごとに中央配置され、

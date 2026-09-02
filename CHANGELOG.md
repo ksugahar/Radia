@@ -5,6 +5,10 @@ All notable changes to the `radia` package.  Format: each release lists
 
 ## Unreleased
 
+- Simplified Eqnedit64 automation to a single input/output conversion contract
+  and migrated the `eqnedit64` package plus `radia-mcp.presentation` bridge to
+  it, while retaining the older native switches only as compatibility inputs.
+
 ## 4.95.77 - Mixed Galerkin and native NGSolve MATLAB parity
 
 Released 2026-09-02.

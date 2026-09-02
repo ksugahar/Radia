@@ -176,9 +176,16 @@ private:
         return cp;
     }
     void skip_space() {
-        while (!eof() && (s_[p_] == ' ' || s_[p_] == '\t' || s_[p_] == '\n' ||
-                          s_[p_] == '\r'))
-            ++p_;
+        for (;;) {
+            while (!eof() &&
+                   (s_[p_] == ' ' || s_[p_] == '\t' || s_[p_] == '\n' ||
+                    s_[p_] == '\r'))
+                ++p_;
+            /* An unescaped percent starts a TeX comment.  Escaped `\\%`
+             * reaches parse_command() and remains a visible percent sign. */
+            if (eof() || s_[p_] != '%') return;
+            while (!eof() && s_[p_] != '\n' && s_[p_] != '\r') ++p_;
+        }
     }
 
     /* Read a command starting at the backslash: \alpha, \{, \\ . */
@@ -382,6 +389,16 @@ private:
         if (c == '\\') return parse_command();
         if (c == '_' || c == '^') return nullptr;   /* handled by the caller */
 
+        /* In TeX source a bare tilde is a non-breaking space, not the
+         * mathematical relation U+223C.  Preserve the source spelling while
+         * giving the canvas and Office Math a real, inkless advance. */
+        if (c == '~') {
+            ++p_;
+            auto space = make_char(TF_SPACE, 0);
+            space->latex = "~";
+            return space;
+        }
+
         uint32_t cp = read_codepoint();
         if (is_digit(c))  return make_char(TF_NUMBER,   cp, c);
         if (is_letter(c)) return make_char(TF_VARIABLE, cp, c);
@@ -456,6 +473,17 @@ private:
             return s;
         }
         if (cmd == "\\begin") return parse_environment();
+
+        /* Document metadata controls do not draw mathematical content.  A
+         * paper equation pasted with these commands must not display the
+         * words "label" or "nonumber" on the canvas. */
+        if (cmd == "\\label" || cmd == "\\tag") {
+            skip_space();
+            if (cmd == "\\tag" && peek() == '*') ++p_;
+            (void)parse_arg();
+            return nullptr;
+        }
+        if (cmd == "\\nonumber" || cmd == "\\notag") return nullptr;
 
         /* \lim takes its condition underneath in display style, so it is its
          * own node; parse_atom_with_scripts pulls the following _{...} into
@@ -553,6 +581,18 @@ private:
             return line;
         }
 
+        /* Musical accidentals are also the standard differential-geometry
+         * flat/sharp operators.  They are used inside the shared native/Web
+         * geometry palette as ^{\\flat} and ^{\\sharp}.  Treating every
+         * otherwise-unknown control word as invisible must not make these
+         * two supported palette entries disappear. */
+        if (cmd == "\\flat" || cmd == "\\sharp") {
+            const uint32_t code = cmd == "\\flat" ? 0x266D : 0x266F;
+            auto ch = make_char(TF_SYMBOL, code);
+            ch->latex = cmd;
+            return ch;
+        }
+
         /* Named glyphs win over operator names.  \div is the division sign,
          * not the word "div"; the same holds for \Re and \Im.  Keeping the
          * command in `latex` is what lets the emitter write back exactly
@@ -602,12 +642,11 @@ private:
             return make_char(TF_SYMBOL, uint32_t(uint8_t(cmd[1])), cmd[1]);
         }
 
-        /* Unknown: show the name rather than losing the equation. */
-        auto line = std::make_unique<LineNode>();
-        for (size_t i = 1; i < cmd.size(); ++i)
-            line->children.push_back(
-                make_char(TF_TEXT, uint32_t(uint8_t(cmd[i])), cmd[i]));
-        return line;
+        /* Unknown control words are not prose.  Rendering their names as
+         * letters silently invents mathematical content (`\\foo{x}` became
+         * "foox").  Ignore the unsupported operator itself; any following
+         * braced argument remains in the input stream and is still editable. */
+        return nullptr;
     }
 
     /* A braced group whose characters all take one typeface. */
@@ -781,7 +820,12 @@ private:
         const bool is_cases = (env == "cases");
         if (is_cases) fence = tmBRACE;
 
-        const bool is_aligned = (env == "aligned");
+        const bool is_equation =
+            (env == "equation" || env == "equation*" ||
+             env == "displaymath");
+        const bool is_aligned =
+            (env == "aligned" || env == "align" || env == "align*" ||
+             env == "split" || env == "eqnarray" || env == "eqnarray*");
         const bool is_matrix =
             (env == "matrix" || fence >= 0 || is_aligned || is_cases);
         std::vector<std::vector<NodeList>> rows;
@@ -816,6 +860,15 @@ private:
         size_t cols = 0;
         for (const auto& r : rows) cols = std::max(cols, r.size());
 
+        if (is_equation) {
+            auto line = std::make_unique<LineNode>();
+            for (auto& row : rows)
+                for (auto& cell : row)
+                    for (auto& node : cell)
+                        if (node) line->children.push_back(std::move(node));
+            return line;
+        }
+
         if (is_matrix) {
             auto m = std::make_unique<MatrixNode>();
             m->rows = int(rows.size());
@@ -839,7 +892,8 @@ private:
             return f;
         }
 
-        /* gathered and unknown environments -- one stacked line per row. */
+        /* gather/gather* and unknown environments -- one stacked line per
+         * row.  Unknown wrappers are discarded rather than printed. */
         auto pile = std::make_unique<PileNode>();
         pile->ncols = int(cols);
         for (auto& r : rows) {
@@ -873,11 +927,65 @@ std::string strip_delimiters(const std::string& in) {
     return s;
 }
 
+/* A bare TeX fragment such as `a\\\\b` is the natural source-pane spelling
+ * of two equation rows.  At top level the parser previously treated the token
+ * as a visible backslash command, even though the same token already means a
+ * row break inside aligned/matrix/cases.  Detect only a genuinely top-level
+ * separator: braces and environments keep their own row semantics. */
+bool has_top_level_row_break(const std::string& source) {
+    int braces = 0;
+    int environments = 0;
+    for (size_t i = 0; i < source.size();) {
+        if (source.compare(i, 7, "\\begin{") == 0 ||
+            source.compare(i, 5, "\\end{") == 0) {
+            const bool opening = source.compare(i, 7, "\\begin{") == 0;
+            const size_t tokenSize = opening ? 7 : 5;
+            const size_t close = source.find('}', i + tokenSize);
+            if (close == std::string::npos) break;
+            if (opening)
+                ++environments;
+            else
+                environments = std::max(0, environments - 1);
+            i = close + 1;
+            continue;
+        }
+        if (source[i] == '{') {
+            ++braces;
+            ++i;
+            continue;
+        }
+        if (source[i] == '}') {
+            braces = std::max(0, braces - 1);
+            ++i;
+            continue;
+        }
+        if (source[i] == '\\' && i + 1 < source.size() &&
+            source[i + 1] == '\\') {
+            if (braces == 0 && environments == 0) return true;
+            i += 2;
+            continue;
+        }
+        if (source[i] == '\\' && i + 1 < source.size()) {
+            /* An escaped brace is data, not group structure.  Other commands
+             * can be skipped one character at a time without hiding `\\\\`. */
+            if (source[i + 1] == '{' || source[i + 1] == '}') {
+                i += 2;
+                continue;
+            }
+        }
+        ++i;
+    }
+    return false;
+}
+
 }  // namespace
 
 std::unique_ptr<LineNode> parse_latex(const std::string& latex,
                                       bool* depthExceeded) {
-    TexParser p(strip_delimiters(latex));
+    std::string source = strip_delimiters(latex);
+    if (has_top_level_row_break(source))
+        source = "\\begin{aligned}" + source + "\\end{aligned}";
+    TexParser p(std::move(source));
     std::unique_ptr<LineNode> root = p.parse();
     if (depthExceeded) *depthExceeded = p.depth_exceeded();
     return root;

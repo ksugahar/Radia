@@ -120,6 +120,7 @@ def type_in(eq: "Equation", keys) -> None:
 
 def main() -> int:
     failures = []
+    selection_contract_checks = 0
 
     for name, keys, expect in CASES:
         eq = Equation()
@@ -157,6 +158,247 @@ def main() -> int:
             not (caret_geometry[1] < caret_geometry[2])):
         failures.append(
             f"caret geometry was invalid for IME placement: {caret_geometry!r}")
+
+    def caret_point(equation):
+        geometry = equation.caret_geometry()
+        if geometry is None:
+            return None
+        return geometry[0], 0.5 * (geometry[1] + geometry[2])
+
+    def compact(tex):
+        return tex.replace(" ", "").replace("\r", "").replace("\n", "")
+
+    # Cross-slot pointer selection is a tree rule, not a special case for
+    # fractions.  Exercise every editable multi-slot container class through
+    # the same public begin/extend/end lifecycle.
+    multi_slot_templates = (
+        ("frac", 2), ("nthroot", 2),
+        ("sub", 2), ("sup", 2), ("subsup", 3),
+        ("dirac", 2), ("int", 3), ("sum", 3),
+        ("over", 2), ("under", 2),
+        ("overbrace", 2), ("underbrace", 2),
+        ("matrix2x2", 4), ("cases", 4),
+    )
+    for template, slot_count in multi_slot_templates:
+        structured = Equation()
+        if not structured.insert_template(template):
+            failures.append(f"{template}: could not build cross-slot fixture")
+            continue
+        built = True
+        for slot_number in range(slot_count):
+            structured.insert_text(chr(ord("a") + slot_number))
+            if slot_number + 1 < slot_count and not structured.next_slot():
+                failures.append(f"{template}: could not reach slot {slot_number + 1}")
+                built = False
+                break
+        if not built:
+            continue
+        points = []
+        for slot_number in range(slot_count - 1, -1, -1):
+            structured.move_end()
+            point = caret_point(structured)
+            if point is None:
+                failures.append(f"{template}: slot {slot_number} has no caret geometry")
+                break
+            points.append(point)
+            if slot_number > 0 and not structured.prev_slot():
+                failures.append(f"{template}: could not return to slot {slot_number - 1}")
+                break
+        points.reverse()
+        if len(points) != slot_count:
+            continue
+        whole = structured.latex()
+        began = structured.begin_pointer_selection(*points[0])
+        extended = structured.extend_pointer_selection(*points[-1])
+        selected = structured.selection_latex()
+        structured.end_pointer_selection()
+        if not began or not extended or compact(selected) != compact(whole):
+            failures.append(
+                f"{template}: cross-slot drag selected {selected!r}, want {whole!r}")
+        selection_contract_checks += 1
+
+    # PileNode is produced by gathered rather than by a palette template.
+    gathered = Equation()
+    gathered.load_latex(r"\begin{gathered}a\\b\end{gathered}")
+    gathered.move_home()
+    if not gathered.move_right():
+        failures.append("gathered: could not enter first row")
+    else:
+        gathered.move_end()
+        first_row = caret_point(gathered)
+        if not gathered.next_slot():
+            failures.append("gathered: could not enter second row")
+        else:
+            gathered.move_end()
+            second_row = caret_point(gathered)
+            whole = gathered.latex()
+            if (first_row is None or second_row is None or
+                    not gathered.begin_pointer_selection(*first_row) or
+                    not gathered.extend_pointer_selection(*second_row) or
+                    compact(gathered.selection_latex()) != compact(whole)):
+                failures.append("gathered: cross-row drag did not select the pile")
+            gathered.end_pointer_selection()
+    selection_contract_checks += 1
+
+    # Single-slot containers are crossed by dragging from their content to a
+    # neighbour in the parent slot.  This covers radical, fence, limit,
+    # stretch decoration, and character embellishment nodes.
+    for template in ("sqrt", "paren", "lim", "overline", "hat"):
+        structured = Equation()
+        structured.insert_template(template)
+        structured.insert_text("x")
+        inside = caret_point(structured)
+        structured.move_out()
+        structured.insert_text("z")
+        outside = caret_point(structured)
+        whole = structured.latex()
+        if (inside is None or outside is None or
+                not structured.begin_pointer_selection(*inside) or
+                not structured.extend_pointer_selection(*outside) or
+                compact(structured.selection_latex()) != compact(whole)):
+            failures.append(
+                f"{template}: inside-to-parent drag did not include the container")
+        structured.end_pointer_selection()
+        selection_contract_checks += 1
+
+    # Parser-owned grouping/math-alphabet containers obey the same rule.
+    for name, tex in (("group", "{x}z"), ("math alphabet", r"\mathbf{x}z")):
+        structured = Equation()
+        structured.load_latex(tex)
+        structured.move_home()
+        entered = structured.move_right()
+        structured.move_end()
+        inside = caret_point(structured)
+        structured.move_out()
+        structured.move_end()
+        outside = caret_point(structured)
+        whole = structured.latex()
+        if (not entered or inside is None or outside is None or
+                not structured.begin_pointer_selection(*inside) or
+                not structured.extend_pointer_selection(*outside) or
+                compact(structured.selection_latex()) != compact(whole)):
+            failures.append(f"{name}: inside-to-parent drag lost its container")
+        structured.end_pointer_selection()
+        selection_contract_checks += 1
+
+    def promoted_fraction_selection():
+        equation = Equation()
+        equation.load_latex(r"a\frac{x}{y}b")
+        equation.move_home()
+        equation.move_right()  # after a
+        equation.move_right()  # numerator slot
+        equation.move_end()
+        inside = caret_point(equation)
+        equation.move_out()
+        equation.move_end()
+        outside = caret_point(equation)
+        if (inside is None or outside is None or
+                not equation.begin_pointer_selection(*inside) or
+                not equation.extend_pointer_selection(*outside)):
+            return equation, None, equation.latex()
+        selected = equation.selection_latex()
+        original = equation.latex()
+        equation.end_pointer_selection()
+        return equation, selected, original
+
+    # Every consumer must use exactly the promoted structural range.  This
+    # catches a future fix that updates painting/copy but leaves deletion,
+    # replacement, wrapping, or recursive styling on the old shallow range.
+    probe, selected, _ = promoted_fraction_selection()
+    if selected is None or compact(selected) != r"\frac{x}{y}b":
+        failures.append(f"promoted copy range was {selected!r}")
+    selection_contract_checks += 1
+
+    for name, operation in (
+            ("delete", lambda e: e.delete_selection()),
+            ("backspace", lambda e: e.backspace()),
+            ("forward delete", lambda e: e.erase())):
+        probe, _selected, _original = promoted_fraction_selection()
+        if not operation(probe) or compact(probe.latex()) != "a":
+            failures.append(f"promoted {name} left {probe.latex()!r}")
+        selection_contract_checks += 1
+
+    # Promotion stops at the child reached by the pointer.  An adjacent
+    # operator which the drag did not reach is deliberately not absorbed;
+    # Word and MathType use the same structural boundary.
+    probe = Equation()
+    probe.load_latex(r"a\frac{x}{y}+")
+    probe.move_home()
+    probe.move_right()  # after a
+    probe.move_right()  # numerator slot
+    probe.move_end()
+    inside = caret_point(probe)
+    probe.move_out()    # root slot immediately after the fraction
+    after_fraction = caret_point(probe)
+    if (inside is None or after_fraction is None or
+            not probe.begin_pointer_selection(*inside) or
+            not probe.extend_pointer_selection(*after_fraction)):
+        failures.append("adjacent-operator selection fixture could not drag")
+    else:
+        selected = compact(probe.selection_latex())
+        probe.end_pointer_selection()
+        if selected != r"\frac{x}{y}":
+            failures.append(
+                f"adjacent-operator selection promoted to {selected!r}")
+        elif not probe.delete_selection() or compact(probe.latex()) != "a+":
+            failures.append(
+                f"promoted deletion absorbed an adjacent operator: {probe.latex()!r}")
+    selection_contract_checks += 1
+
+    probe, _selected, _original = promoted_fraction_selection()
+    probe.insert_text("q")
+    if compact(probe.latex()) != "aq":
+        failures.append(f"promoted typing replacement left {probe.latex()!r}")
+    selection_contract_checks += 1
+
+    probe, _selected, _original = promoted_fraction_selection()
+    if not probe.insert_latex(r"\sqrt{q}") or compact(probe.latex()) != r"a\sqrt{q}":
+        failures.append(f"promoted TeX replacement left {probe.latex()!r}")
+    selection_contract_checks += 1
+
+    probe, _selected, _original = promoted_fraction_selection()
+    if not probe.insert_symbol(r"\alpha") or compact(probe.latex()) != r"a\alpha":
+        failures.append(f"promoted symbol replacement left {probe.latex()!r}")
+    selection_contract_checks += 1
+
+    probe, _selected, _original = promoted_fraction_selection()
+    if (not probe.insert_template("paren") or
+            compact(probe.latex()) != r"a\left(\frac{x}{y}b\right)"):
+        failures.append(f"promoted template wrapping left {probe.latex()!r}")
+    selection_contract_checks += 1
+
+    probe, _selected, original = promoted_fraction_selection()
+    if not probe.restyle_selection("vector"):
+        failures.append("promoted recursive style change was rejected")
+    else:
+        styled = probe.latex()
+        for letter in ("x", "y", "b"):
+            if rf"\mathbf{{{letter}}}" not in styled:
+                failures.append(
+                    f"promoted style missed {letter!r} inside {styled!r}")
+        if not probe.undo() or probe.latex() != original:
+            failures.append("Undo did not restore a promoted style change")
+        elif not probe.redo() or probe.latex() != styled:
+            failures.append("Redo did not restore a promoted style change")
+    selection_contract_checks += 1
+
+    # Rebuilding the tree and completing a drag both invalidate its deep
+    # origin.  An extend call without a live begin must fail rather than reuse
+    # a path into an old tree.
+    lifecycle = Equation()
+    lifecycle.load_latex("xy")
+    lifecycle.move_home()
+    old_point = caret_point(lifecycle)
+    if old_point is None or not lifecycle.begin_pointer_selection(*old_point):
+        failures.append("pointer lifecycle fixture could not begin")
+    lifecycle.load_latex("ab")
+    if lifecycle.extend_pointer_selection(0.0, lifecycle.metrics()[2]):
+        failures.append("document load retained a stale pointer origin")
+    lifecycle.begin_pointer_selection(0.0, lifecycle.metrics()[2])
+    lifecycle.end_pointer_selection()
+    if lifecycle.extend_pointer_selection(0.0, lifecycle.metrics()[2]):
+        failures.append("pointer end retained a reusable origin")
+    selection_contract_checks += 2
 
     # A visual selection is structural: copy emits valid LaTeX, typing
     # replaces it, and a template wraps it instead of discarding it.
@@ -548,18 +790,313 @@ def main() -> int:
     if not eq.move_up() or not eq.move_down():
         failures.append("Up/Down did not traverse aligned rows")
 
-    # Enter deliberately leaves a blank row ready for typing.  Saving before
-    # filling it must not write a spurious final `\\`, and must reach the same
-    # canonical TeX after one load/save cycle.
+    # A line break belongs at the caret, just as it does in the raw TeX pane.
+    # The original implementation always moved the complete equation to row
+    # one and appended a blank row, so Enter in the middle appeared to ignore
+    # the insertion point.  A selection is replaced by the same row break.
+    for selected, expected in (
+            (False, r"\begin{aligned}abc\\def\end{aligned}"),
+            (True, r"\begin{aligned}ab\\ef\end{aligned}")):
+        eq = Equation()
+        eq.insert_text("abcdef")
+        eq.move_home()
+        for _ in range(2 if selected else 3):
+            eq.move_right()
+        if selected:
+            eq.begin_selection()
+            eq.select_step_right()
+            eq.select_step_right()
+        before_split = (eq.latex(), eq.caret())
+        if not eq.new_line():
+            failures.append("Enter rejected a direct row split")
+            continue
+        if re.sub(r"\s+", "", eq.latex()) != expected:
+            failures.append(
+                f"Enter split at the wrong place: {eq.latex()!r}, "
+                f"want {expected!r}")
+        if eq.undo_name() != "Line Break":
+            failures.append(
+                f"row split has the wrong Undo name: {eq.undo_name()!r}")
+        split_state = (eq.latex(), eq.caret())
+        if not eq.undo() or (eq.latex(), eq.caret()) != before_split:
+            failures.append(
+                "row split Undo did not restore content and caret: "
+                f"{(eq.latex(), eq.caret())!r}, want {before_split!r}")
+        elif not eq.redo() or (eq.latex(), eq.caret()) != split_state:
+            failures.append(
+                "row split Redo did not restore content and caret: "
+                f"{(eq.latex(), eq.caret())!r}, want {split_state!r}")
+
+    # Backspace at the start of the later row and Delete at the end of the
+    # earlier row remove exactly the visible row separator.  Once only one
+    # unanchored row remains, its redundant aligned wrapper disappears too.
+    for key in ("backspace", "erase"):
+        eq = Equation()
+        eq.insert_text("abcdef")
+        eq.move_home()
+        for _ in range(3):
+            eq.move_right()
+        eq.new_line()
+        if key == "erase":
+            if not eq.move_up():
+                failures.append("could not reach the row before Delete join")
+                continue
+            eq.move_end()
+        before_join = (eq.latex(), eq.caret())
+        if not getattr(eq, key)() or eq.latex() != "abcdef":
+            failures.append(
+                f"{key} did not join rows at the caret: {eq.latex()!r}")
+        elif eq.caret() != ":3":
+            failures.append(
+                f"{key} row join lost its horizontal caret: {eq.caret()!r}")
+        elif eq.undo_name() != "Join Lines":
+            failures.append(
+                f"{key} row join has wrong Undo name: {eq.undo_name()!r}")
+        joined_state = (eq.latex(), eq.caret())
+        if not eq.undo() or (eq.latex(), eq.caret()) != before_join:
+            failures.append(
+                f"{key} row join Undo lost content/caret: "
+                f"{(eq.latex(), eq.caret())!r}, want {before_join!r}")
+        elif not eq.redo() or (eq.latex(), eq.caret()) != joined_state:
+            failures.append(
+                f"{key} row join Redo lost content/caret: "
+                f"{(eq.latex(), eq.caret())!r}, want {joined_state!r}")
+
+    # An alignment tab is also a structural boundary.  Enter before it moves
+    # both the current-cell suffix and the cells on its right to the new row,
+    # matching insertion of `\\` at the same point in the TeX pane.
+    eq = Equation()
+    eq.load_latex(r"\begin{aligned}ab&=cd\\ef&=gh\end{aligned}")
+    eq.move_home()
+    eq.move_right()                    # enter the first cell
+    eq.move_right()                    # between a and b
+    eq.new_line()
+    aligned_split = re.sub(r"\s+", "", eq.latex())
+    if aligned_split != (
+            r"\begin{aligned}a&\\b&=cd\\ef&=gh\end{aligned}"):
+        failures.append(
+            "Enter did not carry right-hand aligned cells to the new row: "
+            f"{eq.latex()!r}")
+
+    # Joining an explicitly aligned row preserves the column schema.  The
+    # corresponding cells join pairwise; flattening all four cells into the
+    # root would discard the user's `&` contract.
+    for key in ("backspace", "erase"):
+        eq = Equation()
+        eq.load_latex(r"\begin{aligned}a&b\\c&d\end{aligned}")
+        eq.move_home()
+        eq.move_right()                  # first row, first cell
+        if key == "backspace":
+            eq.move_down()               # second row, first cell start
+        else:
+            eq.next_slot()               # first row, final cell
+            eq.move_end()
+        if not getattr(eq, key)():
+            failures.append(f"{key} rejected a two-column row join")
+            continue
+        joined = re.sub(r"\s+", "", eq.latex())
+        if joined != r"\begin{aligned}ac&bd\end{aligned}":
+            failures.append(
+                f"{key} flattened or lost aligned columns: {eq.latex()!r}")
+
+    # Joining can create a function word just as typing its final letter can.
+    # Re-run automatic classification at the old boundary in both directions.
+    for key in ("backspace", "erase"):
+        eq = Equation()
+        eq.load_latex(r"\begin{aligned}s\\in\end{aligned}")
+        eq.move_home()
+        eq.move_right()
+        if key == "backspace":
+            eq.move_down()
+        else:
+            eq.move_end()
+        getattr(eq, key)()
+        if eq.latex() != r"\sin":
+            failures.append(
+                f"{key} row join did not refresh function style: "
+                f"{eq.latex()!r}")
+
+    # A recognised function at the left of a joined row remains protected from
+    # an ordinary variable argument, but can still grow into a longer function.
+    # This is the same contract as one-character-at-a-time keyboard input.
+    for key in ("backspace", "erase"):
+        eq = Equation()
+        eq.load_latex(r"\begin{aligned}\sin\\x\end{aligned}")
+        eq.move_home()
+        eq.move_right()
+        if key == "backspace":
+            eq.move_down()
+        else:
+            eq.move_end()
+        getattr(eq, key)()
+        if eq.latex().strip() != r"\sin x":
+            failures.append(
+                f"{key} row join lost the recognised function prefix: "
+                f"{eq.latex()!r}")
+
+        # Grow an automatically inferred (not explicitly parsed) `sin` to the
+        # longer function `sinh`, exactly as sequential typing does.
+        eq = Equation()
+        for char in "sin":
+            eq.insert_text(char)
+        eq.new_line()
+        eq.insert_text("h")
+        if key == "backspace":
+            eq.move_home()
+        else:
+            eq.move_up()
+            eq.move_end()
+        getattr(eq, key)()
+        if eq.latex().strip() != r"\sinh":
+            failures.append(
+                f"{key} row join did not grow an automatic function: "
+                f"{eq.latex()!r}")
+
+    # Loading leaves the caret outside the aligned node.  Enter extends that
+    # node rather than creating a nested aligned wrapper.
+    eq = Equation()
+    eq.load_latex(r"\begin{aligned}a\\b\end{aligned}")
+    if not eq.new_line() or eq.latex().count(r"\begin{aligned}") != 1:
+        failures.append(
+            "Enter outside a loaded aligned equation created a nested wrapper: "
+            f"{eq.latex()!r}")
+
+    # A direct `\\` fragment has the same meaning as Enter in the source pane.
+    # Row separators inside a group retain that group's ordinary TeX meaning
+    # and must not cause an outer aligned wrapper.
+    eq = Equation()
+    eq.load_latex(r"a\\b")
+    if not eq.is_multiline() or re.sub(r"\s+", "", eq.latex()) != (
+            r"\begin{aligned}a\\b\end{aligned}"):
+        failures.append(
+            "top-level TeX row separator was rendered as a backslash: "
+            f"{eq.latex()!r}")
+    eq.load_latex(r"\text{a\\b}")
+    if r"\begin{aligned}" in eq.latex():
+        failures.append(
+            "nested TeX row separator escaped its group: "
+            f"{eq.latex()!r}")
+
+    # Paper/source paste normalization must never invent visible content.
+    # ASCII `~` is TeX spacing (U+223C has its own \sim command), alignment
+    # environments retain their `&` columns, document metadata is discarded,
+    # and an unsupported control word leaves only its editable argument.
+    eq = Equation()
+    eq.load_latex(r"a~b")
+    if r"\sim" in eq.latex() or "~" not in eq.latex():
+        failures.append(f"TeX non-breaking space became a relation: {eq.latex()!r}")
+    eq.load_latex(r"\sim")
+    if r"\sim" not in eq.latex():
+        failures.append(f"the real similarity relation was lost: {eq.latex()!r}")
+    eq = Equation()
+    eq.insert_text("~")
+    if r"\textasciitilde" not in eq.latex() or r"\sim" in eq.latex():
+        failures.append(f"a typed ASCII tilde became a relation: {eq.latex()!r}")
+    for source in (
+            r"\begin{align}a&=b\\c&=d\end{align}",
+            r"\begin{align*}a&=b\\c&=d\end{align*}",
+            r"\begin{eqnarray}a&=&b\\c&=&d\end{eqnarray}"):
+        eq.load_latex(source)
+        aligned = re.sub(r"\s+", "", eq.latex())
+        if (not aligned.startswith(r"\begin{aligned}") or
+                aligned.count("&") != source.count("&")):
+            failures.append(
+                f"alignment columns were flattened: {source!r} -> {eq.latex()!r}")
+    eq.load_latex(
+        r"\begin{equation}E=mc^2\label{eq:e}\nonumber\end{equation}")
+    metadata_free = eq.latex()
+    if ("label" in metadata_free or "nonumber" in metadata_free or
+            "gathered" in metadata_free or "mc" not in metadata_free):
+        failures.append(
+            f"equation metadata became visible content: {metadata_free!r}")
+    eq.load_latex("E=mc^2 % ignored comment\n+x")
+    if "ignored" in eq.latex() or "comment" in eq.latex() or "x" not in eq.latex():
+        failures.append(f"TeX comment became visible content: {eq.latex()!r}")
+    eq.load_latex(r"50\%")
+    if r"\%" not in eq.latex():
+        failures.append(f"escaped percent was discarded as a comment: {eq.latex()!r}")
+    eq.load_latex(r"\unknowncommand{\frac{x}{y}}")
+    if "unknowncommand" in eq.latex() or r"\frac{x}{y}" not in eq.latex():
+        failures.append(f"unknown command fallback invented text: {eq.latex()!r}")
+
+    # Enter belongs to the innermost row container.  In a matrix/cases cell it
+    # inserts a table row and carries the current-cell suffix plus cells on its
+    # right; it must not wrap the table in an outer aligned environment.
+    row_container_cases = (
+        ("matrix", 2,
+         r"\begin{matrix}a&\\b&cd\\ef&gh\end{matrix}"),
+        ("cases", 3,
+         r"\begin{cases}a&\\b&cd\\ef&gh\end{cases}"),
+    )
+    for environment, rights, expected in row_container_cases:
+        eq = Equation()
+        eq.load_latex(
+            rf"\begin{{{environment}}}ab&cd\\ef&gh\end{{{environment}}}")
+        original = eq.latex()
+        eq.move_home()
+        for _ in range(rights):
+            eq.move_right()
+        if not eq.new_line():
+            failures.append(f"Enter rejected a {environment} cell")
+            continue
+        actual = re.sub(r"\s+", "", eq.latex())
+        if actual != expected or r"\begin{aligned}" in actual:
+            failures.append(
+                f"Enter acted outside the {environment}: {eq.latex()!r}")
+            continue
+        after = (eq.latex(), eq.caret())
+        if not eq.undo() or eq.latex() != original:
+            failures.append(
+                f"{environment} Enter Undo did not restore the table")
+        if not eq.redo() or (eq.latex(), eq.caret()) != after:
+            failures.append(
+                f"{environment} Enter Redo lost content/caret")
+
+    # A one-row `&` is directly editable: Backspace from the right cell or
+    # Delete from the left cell removes that visible boundary.  Multi-row
+    # column schemas remain explicit and use the remove-column command.
+    for key in ("backspace", "erase"):
+        eq = Equation()
+        eq.load_latex(r"\begin{aligned}F&=ma\end{aligned}")
+        eq.move_home()
+        eq.move_right()
+        if key == "backspace":
+            eq.next_slot()
+        else:
+            eq.move_end()
+        if not getattr(eq, key)() or eq.latex().replace(" ", "") != "F=ma":
+            failures.append(
+                f"{key} did not remove a one-row alignment boundary: "
+                f"{eq.latex()!r}")
+
+    # Automatic function styling is a property of a complete word.  Splitting
+    # sin after s must reclassify both fragments instead of leaving stale
+    # upright letters on either row.
+    eq = Equation()
+    eq.insert_text("sin")
+    eq.move_home()
+    eq.move_right()
+    eq.new_line()
+    function_split = eq.latex()
+    if ("operatorname" in function_split or "\\sin" in function_split or
+            re.sub(r"\s+", "", function_split) !=
+            r"\begin{aligned}s\\in\end{aligned}"):
+        failures.append(
+            f"function style survived across a row split: {function_split!r}")
+
+    # Enter deliberately leaves a blank row ready for typing.  The empty group
+    # makes that row structural, so save/reopen keeps what the editor showed
+    # instead of silently deleting the final line.
     eq = Equation()
     eq.insert_latex("a=b")
     eq.new_line()
     trailing_blank = eq.latex()
     once = Equation()
     once.load_latex(trailing_blank)
-    if once.latex().strip() != trailing_blank.strip():
+    if (r"\\" not in trailing_blank or "{}" not in trailing_blank or
+            once.latex().strip() != trailing_blank.strip()):
         failures.append(
-            "trailing aligned edit row was serialized as mathematical content: "
+            "trailing aligned edit row did not survive serialization: "
             f"{trailing_blank!r} -> {once.latex()!r}")
 
     # An ampersand is an alignment command in the editor, and remains a real
@@ -613,6 +1150,10 @@ def main() -> int:
             limit.matrix_dimensions() != (99, 99) or
             limit.matrix_add_row() or limit.matrix_add_column()):
         failures.append("the documented 99x99 matrix limit was not enforced")
+    limit_state = (limit.latex(), limit.caret(), limit.undo_name())
+    if limit.new_line() or (
+            limit.latex(), limit.caret(), limit.undo_name()) != limit_state:
+        failures.append("rejected Enter at 99 rows created a ghost Undo/state")
 
     # Empty edge cells are structural too.  Canonical `{}` placeholders make
     # a 1x3 row and a 3x1 column survive ordinary TeX save/reopen instead of
@@ -1008,7 +1549,8 @@ def main() -> int:
     if (guarded.latex(), guarded.caret(), guarded.undo_name()) != state:
         failures.append("rejected document load mutated editor state")
 
-    total = len(CASES) + len(Equation.templates()) + len(sequences) + 39 + 32
+    total = (len(CASES) + len(Equation.templates()) + len(sequences) + 39 + 32 +
+             selection_contract_checks)
     if failures:
         print(f"FAIL  {len(failures)} of {total}")
         for f in failures:

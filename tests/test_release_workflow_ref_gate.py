@@ -188,7 +188,7 @@ def test_eqnedit64_release_requires_exact_successful_tag_ci():
         'gh release create "$EQNEDIT64_TAG"')
 
 
-def test_eqnedit64_release_order_is_push_o_drive_then_tag():
+def test_eqnedit64_release_order_is_handtest_fable_main_o_drive_then_tag():
     root = Path(__file__).resolve().parents[1]
     skill = (root / ".agents/skills/release-eqnedit64/SKILL.md").read_text(
         encoding="utf-8")
@@ -196,10 +196,20 @@ def test_eqnedit64_release_order_is_push_o_drive_then_tag():
         root / ".agents/skills/release-eqnedit64/scripts/sync_to_o.ps1"
     ).read_text(encoding="utf-8")
 
-    push_main = skill.index("Commit and push the versioned release source to `main`.")
-    sync_o = skill.index("sync_to_o.ps1")
-    push_tag = skill.index("Create the annotated tag")
-    assert push_main < sync_o < push_tag
+    required = skill[skill.index("## Required order"):]
+    push_candidate = required.index(
+        "Commit and push the versioned release candidate branch.")
+    sync_handtest = required.index("sync_handtest_to_o.ps1")
+    fable_review = required.index("Run one Claude Code Fable review")
+    push_main = required.index(
+        "Merge the approved release commit to `main` and push it.")
+    sync_release = required.index("sync_to_o.ps1")
+    push_tag = required.index("Create the annotated tag")
+    assert (
+        push_candidate < sync_handtest < fable_review < push_main <
+        sync_release < push_tag
+    )
+    assert "Do not merge to `main` before this gate is recorded." in required
 
     assert "Release tag already exists; O: must be prepared before tag push" in sync
     assert "HEAD=$headSha origin/main=$originMainSha" in sync

@@ -16,16 +16,16 @@ from typing import Iterable
 
 
 _COPY_TARGETS = {
-    "office": ("--copy-tex-file", [
+    "office": ("office", [
         "HTML Format", "CF_UNICODETEXT", "LaTeX",
         "CF_ENHMETAFILE", "CF_DIBV5",
     ]),
-    "powerpoint": ("--copy-tex-file", [
+    "powerpoint": ("office", [
         "HTML Format", "CF_UNICODETEXT", "LaTeX",
         "CF_ENHMETAFILE", "CF_DIBV5",
     ]),
-    "google-slides": ("--copy-google-slides-file", ["HTML Format", "PNG"]),
-    "png": ("--copy-png-file", ["PNG", "CF_DIBV5"]),
+    "google-slides": ("slides", ["HTML Format", "PNG"]),
+    "png": ("clipboard-png", ["PNG", "CF_DIBV5"]),
 }
 
 
@@ -185,8 +185,10 @@ def presentation_copy_equation(
             raise ValueError("timeout_s must be in (0, 120]")
         app = _resolve_executable(executable)
         input_path = _tex_file(tex)
-        switch, formats = _COPY_TARGETS[key]
-        completed = _invoke([str(app), switch, str(input_path)], float(timeout_s))
+        destination, formats = _COPY_TARGETS[key]
+        completed = _invoke(
+            [str(app), str(input_path), destination], float(timeout_s)
+        )
         if completed.returncode != 0:
             raise RuntimeError(
                 f"Eqnedit64 exited {completed.returncode}: {completed.stderr.strip()}"
@@ -226,9 +228,8 @@ def presentation_render_equation(
         output = Path(output_path).expanduser().resolve()
         output.parent.mkdir(parents=True, exist_ok=True)
         input_path = _tex_file(tex)
-        switch = "--render-png-file" if fmt == "png" else "--render-emf-file"
         completed = _invoke(
-            [str(app), switch, str(input_path), str(output)], float(timeout_s)
+            [str(app), str(input_path), str(output)], float(timeout_s)
         )
         if completed.returncode != 0:
             raise RuntimeError(

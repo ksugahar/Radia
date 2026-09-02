@@ -145,9 +145,9 @@ jobs:
           $png = Join-Path $env:RUNNER_TEMP 'eqnedit64-ci.png'
           $emf = Join-Path $env:RUNNER_TEMP 'eqnedit64-ci.emf'
           [IO.File]::WriteAllText($tex, '\[\frac{x_1+\alpha}{\sqrt{y}}\]', [Text.UTF8Encoding]::new($false))
-          & $app --render-png-file $tex $png
+          & $app $tex $png
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          & $app --render-emf-file $tex $emf
+          & $app $tex $emf
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           if ((Get-Item $png).Length -le 8 -or (Get-Item $emf).Length -le 88) {
             throw 'Eqnedit64 CLI produced an empty image artifact'
@@ -156,3 +156,8 @@ jobs:
           if ([Convert]::ToHexString($signature) -ne '89504E470D0A1A0A') {
             throw 'Eqnedit64 CLI output is not PNG'
           }
+
+      - name: Check redirectable command-line diagnostics
+        run: >-
+          pwsh -NoProfile -File tests/test_cli_output.ps1
+          -AppPath build_cmake/Release/Eqnedit64.exe

@@ -2,8 +2,8 @@
 
 - 文書状態: 現行
 - 対象製品: Eqnedit64 native / Python package / Web editor
-- 対象リリース: 3.0.9（公開済み）
-- 基準日: 2026-08-29
+- 対象リリース: 3.0.13
+- 基準日: 2026-09-03
 - リポジトリ: `ksugahar/Radia`
 
 この文書は、Eqnedit64を修正、試験、配布するときに最初に読む引き継ぎ正本である。
@@ -82,6 +82,16 @@ standalone利用者はpipを必要としない。
 
 - キャンバスは構造スロット、選択、キャレット、Backspace、テンプレート挿入を扱う。
 - TeXソース欄はraw入力を保ちながらリアルタイムに構造モデルへ反映する。
+- TeXソース欄は長い1行を欄幅でsoft wrapし、横スクロールだけに依存しない。通常の
+  `Enter`はTeXが無視する空白改行ではなく数式行の`\\`を作り、初回は内側の
+  `aligned`を自動生成する。行列・`cases`セルでは最内表に行を追加し、右側セルと現在列を
+  保つ。開始トークン内や分数・上下付き・文字列などの入れ子内ではTeXを壊さず、環境
+  内容の先頭または次の直上行境界へ丸める。トップレベルへ直接入力した`a\\b`も2行の
+  `aligned`として受理する。末尾の空行は`{}`を持つ構造行として保存し、再読込後も省かない。
+  `Shift+Enter`だけを数式構造を変えないraw改行とする。
+- キャンバスから同期するTeX整形はemitter由来のCR/LFを先に吸収し、`\begin`後、
+  `\end`前、`\\`後へWin32 EDIT用CRLFを一元的に置く。単独LFを制御文字として見せたり、
+  空行と字下げだけを重ねたりしない。
 - ソース欄を単なる「TeXを表示」機能として隠すメニューは設けない。
 - キャンバスに `\command` を入力して空白で確定する旧式のTeXコマンド入力は持たない。
 - TeXコマンドはパレットから選び、挿入直後のTeX範囲を短時間強調して手癖として学べるようにする。
@@ -89,6 +99,25 @@ standalone利用者はpipを必要としない。
 
 数式キャンバスの既定位置は左寄せ、上寄せである。中央寄せは保存形式やOffice貼り付けを
 表す設定ではなく、画面上の表示設定に限る。
+
+### 4.1.1 構造を跨ぐ選択
+
+ドラッグ選択は分数だけの特例にしない。押下位置を深い構造パスのまま保持し、移動先が
+異なるスロットなら最深共通祖先へ繰り上げ、両端を含む子構造を丸ごと選ぶ。対象は分数、
+根号、上下付き、括弧、積分・大型演算子、行列、cases、aligned/gathered、装飾、グループ、
+書体を含む全構造である。
+
+ポインター操作の寿命は `begin → extend → end/cancel` とする。ボタン解放座標は最後の
+`WM_MOUSEMOVE`より優先し、解放、キャプチャ取消、文書読込み、TeX構造置換、Undo／Redo後に
+古い起点を残さない。繰り上げた範囲は、表示とコピーだけでなく、切り取り、Backspace／
+Delete、文字・TeX・記号置換、テンプレート包み込み、再帰的な書体変更で同一に扱う。
+繰り上げはドラッグ終端が含む子構造までに限定し、終端が届いていない隣接演算子を
+暗黙に吸収しない。例えば `\int_a^b \vec{E}\cdot\vec{B}\,d\Omega +` で積分項までを
+選んで削除した場合、末尾の `+` は残る。これは構造選択の欠落ではなく、必要なら続けて
+Backspaceで削除する。
+
+TeXソースの挿入強調は正規TeXと整形表示の別座標系として扱い、各文字の表示開始・終了を
+対応付ける。次文字の開始位置を範囲終端に使って `\end{...}` 前の整形改行まで選ばない。
 
 ### 4.2 パレット
 
@@ -132,7 +161,11 @@ Eqnedit32から回収した操作系列は互換層として維持する。追�
 重要な契約は次のとおり。
 
 - `Tab` / `Shift+Tab`: 構造GUIでは次／前の入力穴、TeXソースでは次／前の空の`{}`へ移動。
-- `Enter`: `aligned`の改行。
+- `Enter`: キャンバス／TeXソースのどちらでもキャレット位置で前後を分ける数式改行。
+  通常式は`aligned`、行列・`cases`内はその表の行とし、選択中は選択範囲を行境界へ
+  置換する。新規保存時の外側は`equation`であり、通常の複数行はその内側の`aligned`で
+  表す。読込み直後など既存`aligned`の外側にキャレットがあっても、その環境へ追加して
+  二重`aligned`を作らない。
 - `&`: 整列位置。
 - 選択中の`Ctrl+B`: 選択を `\mathbf{...}` にする。
 - `Ctrl+B`の後に英字: 次の英字をベクトル太字として入力する。
@@ -150,6 +183,11 @@ Eqnedit32から回収した操作系列は互換層として維持する。追�
 Backspaceは一打鍵で利用者に見える一項目だけを削除する。構造の中身が残る間は親構造を
 まとめて消さない。例えば `E=mc^{2}|` は `E=mc^{}|`、次に `E=mc|` となる。
 上付きの直後、空上付き、母項を持つ上付き、入れ子をそれぞれ別の回帰ケースとして試験する。
+`aligned`の先頭セルの行頭では直前行と結合する。対称に、行末のDeleteは次行と結合する。
+複数列は対応列同士を結合し、関数と引数を跨ぐ境界では逐次入力と同じ自動関数書体を保つ。
+`&`のない1行へ戻った場合は不要な`aligned`を外す。1行の`aligned`ではセル境界の
+Backspace/Deleteが`&`を削除して左右セルを結合する。複数行のセル境界は隣接セルへ
+移動するだけで、dirtyにはしない。列全体の削除には明示的な行列列削除操作を使う。
 
 ## 5. TeX保存契約
 
@@ -160,6 +198,10 @@ Backspaceは一打鍵で利用者に見える一項目だけを削除する。�
 - 「番号あり／番号なし」を通常操作で切り替えるメニューは設けない。
 - 表示の左／中央／右寄せは保存TeXを変えない。
 - `.eqn`、MTEF、MathType固有形式を保存候補に復活させない。
+- 論文由来の`align` / `align*` / `eqnarray`は`aligned`へ正規化し、`&`列を保持する。
+- 裸の`~`は非改行空白であり`\sim`ではない。`%`コメント、`\label`、`\nonumber`、
+  `\notag`、`\tag`は表示内容から除く。未知命令の名前を本文の文字列へ変えず、その引数だけを
+  編集可能な式として残す。
 
 ## 6. クリップボードと外部アプリ
 
@@ -177,12 +219,13 @@ Office Mathになることが合格条件である。MathMLの文字列がクリ
 図形数が1以上だけ、例外が出ないだけでは合格にしない。PowerPoint自身に貼り付けさせ、
 数式の輪郭と代表構造を画像化して検査する。
 
-Office向けはnative EXE版とWeb/JS版のどちらも、左揃え24 ptの編集可能Office Mathを
-製品契約とする。18 ptへの縮小、中央揃え、画像への退化、空のMathZoneを許容しない。
+Office向けはnative EXE版とWeb/JS版のどちらも、通常Ctrl+Vで左揃え18 ptの編集可能
+Office Mathになることを製品契約とする。PowerPointでは左揃えと24 pt強制を通常貼り付けで
+両立できないため、左揃えを優先する。中央揃え、画像への退化、空のMathZoneを許容しない。
 実PowerPoint試験で文字サイズ、段落揃え、貼り付け位置、Office Math構造、描画inkを
 すべて検査する。
 
-クリップボード入口は両版とも、inline 24 pt MathML本体と末尾NBSPだけを含む同期
+クリップボード入口は両版とも、inline 18 pt MathML本体と末尾NBSPだけを含む同期
 CF_HTMLに統一する。native通常コピーへ登録`MathML` / `MathML Presentation`を載せると
 PowerPointがそれを優先して中央寄せ`m:oMathPara`へ変換するため禁止する。Web版だけ
 条件付きOMMLを直接渡すことも、総和記号と上下限の見た目がMathML変換と異なるため
@@ -200,19 +243,28 @@ Google Slides用コピーは300 dpiのPNGとHTMLを登録し、24 pt数式と同
 
 ### 6.3 CLI
 
-GUIを開かずに次の代表経路を使える。
+GUIを開かない公開構文は `Eqnedit64.exe <入力> <出力>` の一種類だけとする。入力は
+UTF-8 `.tex`または予約語`clipboard`、出力は用途名または画像ファイル名である。
 
 ```text
-Eqnedit64.exe --copy-tex-file equation.tex
-Eqnedit64.exe --copy-google-slides-file equation.tex
-Eqnedit64.exe --copy-png-file equation.tex
-Eqnedit64.exe --render-png-file equation.tex equation.png
-Eqnedit64.exe --render-emf-file equation.tex equation.emf
-Eqnedit64.exe --clipboard-tex-to-png
+Eqnedit64.exe equation.tex office
+Eqnedit64.exe equation.tex slides
+Eqnedit64.exe equation.tex clipboard-png
+Eqnedit64.exe equation.tex equation.png
+Eqnedit64.exe equation.tex equation.emf
+Eqnedit64.exe clipboard clipboard-png
 ```
 
-最後のコマンドはクリップボード上のTeXを読み、同じクリップボードをPNGへ置き換える。
-CLI/APIはPowerPoint自動生成や`radia-mcp.presentation`から呼べる安定した境界とする。
+`office`はPowerPoint/Word用、`slides`はGoogle Slides用、`clipboard-png`は画像だけの
+クリップボードを表す。最後の例はクリップボード上のTeXを読み、同じクリップボードを
+PNGへ置き換える。旧出力名`png`と旧`--copy-*`、`--render-*`、`--texclip`は既存連携の互換入力として
+内部に残すが、公開ヘルプ、教材、Python package、`radia-mcp.presentation`は必ず
+単一の入力／出力構文を使う。CLI/APIはPowerPoint自動生成や
+`radia-mcp.presentation`から呼べる安定した変換境界とする。
+`Eqnedit64.exe a.tex b.tex`はExplorerの複数選択として先頭文書をGUIで開き、二番目を
+出力先として上書きしない。他の不正出力はconsole/redirect時に標準エラーへ理由を書いて
+94を返し、標準streamがないグラフィカル起動ではダイアログを出す。`--help` / `--version`も
+console/redirect時はUTF-8標準出力へ書く。詳細は`tools/eqnedit64/docs/COMMAND_LINE.md`を正とする。
 
 ## 7. フォント契約
 
@@ -291,9 +343,15 @@ Latin Modern Math上で欠落または黒い代替形になった。操作セル
 ユーザーのマウス、キーボード、前面ウィンドウを奪わない。操作系列は非表示ウィンドウ、
 off-screen bitmap、メッセージ送信、CLI、COM APIで試す。
 
-- `--ui-interaction-test`は実際のキー経路、Backspace、選択、Tab、行列操作を通す。
+- `test_edit.py`は全構造クラスを跨ぐ共通祖先選択と、その範囲を使う削除、置換、
+  包み込み、書体変更、Undo／Redoを横断する。
+- `--ui-interaction-test`は実際のキー経路、Backspace、選択、Tab、行列操作に加え、
+  `WM_MOUSEMOVE`なしの押下→解放と、`\end{...}`直前の正確なTeX強調範囲を通す。
 - `--visual-scale-test`は96/120/144/192 dpi相当で文字・ボタン・数式のinkを測る。
-- UI fuzzは保存、ダイアログ、利用者クリップボードを対象外にし、再現seedを残す。
+- UI fuzzは保存、ダイアログ、利用者クリップボードを対象外にし、移動あり／なしの
+  マウスドラッグを含め、再現seedを残す。
+- UI fuzzの操作選択は14分岐である。旧12分岐版と同じseed番号でも操作列は同一でないため、
+  障害記録にはseedだけでなくsource SHA、分岐数、操作回数を併記する。
 - ステータスバーは区画位置と文字のclip/ずれを検査する。
 - IMEの最終的な候補窓の感触など、人間しか判断できない項目だけを限定的な手動QAへ残す。
 
@@ -343,6 +401,11 @@ CIを改善するときは、実際に報告された壊れた版が新テスト
 
 ## 11. ビルドと署名
 
+Eqnedit64の非自明なコミットは、要約行、空行、英語本文の順に記録する。本文は変更項目の
+列挙ではなく、なぜ変更が必要だったか、どの退行を防ぐ契約かを説明し、ファズ回数や
+再現率など測定値がある場合は必ず残す。公開APIの変更または複数ファイルにまたがる変更を
+要約1行だけで記録しない。この規則は個々の担当者ではなくEqnedit64の運用契約とする。
+
 canonical scriptsは次のとおり。
 
 ```text
@@ -366,22 +429,30 @@ native出力は `tools/eqnedit64/dist/Eqnedit64.exe`。ビルド前に同じ出�
 
 公開順は次のとおりで、入れ替えてはならない。
 
-1. 修正、仕様、試験、version/changelogを一つのrelease commitへまとめる。
-2. PR CIを通し、`main`へ統合する。
-3. `main`をpushし、Eqnedit64専用main CIがgreenであることを確認する。
-4. exact `origin/main`からLABでrelease EXEをビルドし、`CN=ksugahar`で署名する。
-5. `sync_to_o.ps1 -WhatIf`でversion、build stamp、署名、source SHA、O:配置先を
+1. 修正、仕様、試験、version/changelogを一つの候補commitへまとめ、候補branchをpushする。
+2. PR CIを通し、同じcommitから署名済み候補EXEをビルドして`sync_handtest_to_o.ps1`で
+   `O:\Eqnedit64.exe`へ置く。
+3. 菅原のハンドテストを通す。
+4. **正式公開前に、候補commitと仕様差分へClaude Code Fableレビューを一度行う。**
+   レビュー結果をPRまたは引継書へ残し、指摘を回収した場合はcommit、O:候補、自動試験、
+   ハンドテストを更新する。Fableレビュー未実施のまま`main`統合、release tag、PyPI公開を
+   行わない。レビュー済みSHAと指摘回収commitを併記する。回収commitが記録済み指摘と
+   その試験だけなら一度のレビューを満たすが、無関係なモデル／仕様変更を加えた場合は
+   新しい候補としてFableレビューをやり直す。
+5. 承認された候補を`main`へ統合してpushし、Eqnedit64専用main CIがgreenであることを確認する。
+6. exact `origin/main`からLABでrelease EXEをビルドし、`CN=ksugahar`で署名する。
+7. `sync_to_o.ps1 -WhatIf`でversion、build stamp、署名、source SHA、O:配置先を
    事前検査する。private-font full suiteはPR/main/tagの隔離CIだけで行い、対話中LABで
    `EQNEDIT64_ISOLATED_TEST_SESSION`を偽装して`accept_release.ps1`を実行しない。
-6. `.agents/skills/release-eqnedit64/scripts/sync_to_o.ps1`で
+8. `.agents/skills/release-eqnedit64/scripts/sync_to_o.ps1`で
    `O:\Eqnedit64.exe`を更新する。
-7. `O:\Eqnedit64.release.json`へ予定tag、version、source SHA、EXE SHA-256、signerを記録し、
+9. `O:\Eqnedit64.release.json`へ予定tag、version、source SHA、EXE SHA-256、signerを記録し、
    実物と一致することを確認する。
-8. ここまで成功してから `eqnedit64-vX.Y.Z` tagをpushする。
-9. tagのEqnedit64 CIを通す。
-10. `.github/workflows/release-eqnedit64-pypi.yml`がO: gateを照合してwheelをPyPIへ公開し、
+10. ここまで成功してから `eqnedit64-vX.Y.Z` tagをpushする。
+11. tagのEqnedit64 CIを通す。
+12. `.github/workflows/release-eqnedit64-pypi.yml`がO: gateを照合してwheelをPyPIへ公開し、
     GitHub Releaseへ署名済みEXEと`SHA256SUMS.txt`を添付する。
-11. PyPIから各wheel、GitHub ReleaseからEXEを再取得し、同梱EXEとO:のEXEがbyte-identical、
+13. PyPIから各wheel、GitHub ReleaseからEXEを再取得し、同梱EXEとO:のEXEがbyte-identical、
     SHA-256一致、署名有効であることを外側から確認する。
 
 O:は対話中LABでは`C:\Users\Administrator\OneDrive`へのSUBSTである。self-hosted runnerは
@@ -391,27 +462,54 @@ pushするとrelease gateが失敗するのが正しい。
 
 ## 13. 現在の公開状態
 
-Eqnedit64 3.0.9が2026-08-30時点の公開済み基準版である。PowerPointでは数式run、
-末尾NBSP、末尾直後のzero-length insertion rangeをすべて24 ptに固定し、左寄せと
-次入力24 ptを両立する。ネイティブのタイトル、About、`--version`には製品版3.0.9と
+Eqnedit64 3.0.11が2026-09-03時点の公開済み基準版であり、3.0.13はこの文書が対象とする
+次の候補である。未公開の3.0.12候補で整えた構造選択、TeX整形、簡潔なCLIを3.0.13へ
+吸収し、改行操作と正式公開前Fableレビューを追加する。3.0.11の通常Ctrl+Vは、native/Webとも左揃えの編集可能なinline
+Office Mathを18 ptで作る。`&`を含まない複数行は各leaf rowへ分けて同じ左端を保ち、
+PowerPointに可視の`&`を渡さない。ネイティブのタイトル、About、`--version`には製品版と
 source stampの両方を表示する。
 
-- product tag: `eqnedit64-v3.0.9`
-- product tag source: `4760011a2d9275596545925bf193b018c32ebb7d`
-- O: / GitHub Release EXE SHA-256:
-  `5F4AD412EC47BA6B37A4BE5EE9CA78CF5CBF17A38E5CF6AD715058BEE037F350`
-- signer: `CN=ksugahar`
-- GitHub Release: `https://github.com/ksugahar/Radia/releases/tag/eqnedit64-v3.0.9`
-- PyPI: `https://pypi.org/project/eqnedit64/3.0.9/`
-- PyPI wheels: CPython 3.10、3.11、3.12、3.13の`win_amd64`計4個。
-- O:、GitHub Release、4個すべてのwheelから再取得した同梱EXEはbyte-identicalで、
-  すべて上記SHA-256と有効な`CN=ksugahar`署名を持つ。
+### 13.1 3.0.13 Fableレビュー記録
 
-native/Webは同じinline 24 pt MathML + 24 pt NBSPのCF_HTML経路を使う。
-公開ホームページからの実PowerPoint貼り付けでも、数式24 pt、末尾カーソル24 pt、
-左揃え、保存`m:oMath`、描画PNGがO:配布EXEとbyte-identicalであることを確認した。
-公開JSのSHA-256は
-`FF81CC49F34E856763BEE9F2554FCE121EA2284F69682E019C8D168A9DDA8548`である。
+- reviewed source: `3e44f8604657ab55d2276da31e02f3126cac4214`
+- reviewer: Claude Code Fable 5 (`--model fable`、read-only plan mode)
+- result: `ACCEPT WITH FIXES`
+- execution: 2026-09-03、ビルド・試験・アプリ起動・O:変更なし
+- findings: 自動関数の行結合、ソース開始トークン／入れ子Enter、既存`aligned`外側Enter、
+  `&`削除、version macro、changelog、境界試験、review SHA記録、ghost Undo、2位置引数契約。
+  同じEnter指摘を追跡した改行UX調査で、emitter LFと表示CRLFの二重管理、行列・`cases`
+  内Enter、トップレベル`\\`、複数列分割時の列ずれも同じ不具合族と確認した。
+- resolution: 次の候補commitで上記findingsと同じ改行不具合族だけを回収し、影響する
+  model/hidden UI/仕様試験、署名済みO:候補、PR CIを更新する。別機能を追加しないため、
+  依頼された一度のFableレビューゲートとして記録する。
+
+### 13.2 3.0.13 追補レビュー記録
+
+- reviewed source: `484041df8a520d71ee08e3505a8edaf1ca65104a`
+- resolution source: `760404f5766d014b251b9565660deb4c1b73e1b5`
+- reviewer: Claude Codeによる3.0.13実測レビュー（提示文にmodel名の記載なし）
+- result: 改行6件中5件を確認し、末尾空行、貼り付け正規化、CLIに追加修正を要求
+- reproduced findings: 裸の`~`が`\sim`へ変わる、`align`の`&`列が消える、文書メタ命令と
+  未知命令名が表示される、二つの`.tex`が無言94になる、native `--help` / `--version`が
+  redirectできない、clipboard出力`png`と`.png`ファイルの区別が名称だけでは弱い。
+- resolution contract: 末尾空行を`{}`で保持し、貼り付け規則を一般化する。CLIは
+  `clipboard-png`を正規名、`png`を互換別名とし、二つの`.tex`は先頭をGUIで開く。
+  help/version/errorの標準streamを自動試験する。未知命令抑制で露見した`\\flat` / `\\sharp`
+  の退行は正式サポートと全パレット実行試験で閉じた。これは最初のFableレビュー範囲を
+  越えるため、修正後の最終候補に対して正式公開前Fableレビューをもう一度行う。
+
+- product tag: `eqnedit64-v3.0.11`
+- product tag source: `f5ac045703eab940323bddabbef6bb4fd3a9e55c`
+- GitHub Release EXE SHA-256:
+  `96823819F4E1AA5B436BAC2D8065C8A0833A1B213E671380D48A8975BF975080`
+- signer: `CN=ksugahar`
+- GitHub Release: `https://github.com/ksugahar/Radia/releases/tag/eqnedit64-v3.0.11`
+- PyPI: `https://pypi.org/project/eqnedit64/3.0.11/`
+- PyPI wheels: CPython 3.10、3.11、3.12、3.13の`win_amd64`計4個。
+
+3.0.13候補をO:へ置いた時点では`Eqnedit64.handtest.json`を正とし、公開済み3.0.11の
+release manifestと混同しない。3.0.13のtag、GitHub Release、PyPIは公開手順をすべて
+通過するまで「公開済み」と記載しない。
 
 ## 14. ソース地図
 
