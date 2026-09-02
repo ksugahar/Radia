@@ -11,6 +11,9 @@
   endpoint when Windows coalesces mouse-move messages.
 - Format synchronized TeX at lossless environment and row boundaries while
   keeping palette lesson highlights on the exact inserted source spelling.
+- Let the native TeX pane create structural aligned rows with Enter and
+  soft-wrap long source while saved documents retain the outer equation
+  environment.
 
 ## 3.0.11 - 2026-08-30
 

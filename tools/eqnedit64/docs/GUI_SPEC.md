@@ -228,6 +228,10 @@ Eqnedt32にならい、ツールバーは**挿入できるものの総目録**�
   環境の深さに応じて字下げする。表示中の整形済み文字列をそのまま再入力しても
   同じ正規化TeXへ戻ること。利用者がソースを直接編集中のraw文字列にはこの整形を
   打鍵ごとに強制しない。
+- TeXソース欄は横スクロールを要求せず、長い1行を欄幅でsoft wrapする。ソース欄の
+  通常の`Enter`はraw CRLFではなく数式行区切り`\\`を挿入し、単一行だった場合は
+  `aligned`で包む。挿入後のキャレットは新しい行かつ`\end{aligned}`の前へ置く。
+  `Shift+Enter`は数式構造を変えないTeX空白としてのraw改行を挿入する。
 - パレット／ショートカットの挿入範囲は、正規TeX各文字の表示上の開始位置と
   終了位置を使って整形後の表示座標へ変換する。終端を次文字の開始位置で代用して、
   直後の `\end{...}` 前へ挿入した改行・字下げまで強調してはならない。
@@ -494,6 +498,7 @@ Eqnedit64拡張として、`curl`, `div`, `grad`, `rot`, `tr`, `diag`, `Res`,
 | AUT-36 | 内蔵数式フォントは検証済みユーザーキャッシュからファイルベースで私有登録し、32回の起動終了後も`fontdrvhost.exe`のPIDとApplication Error件数が変化せず、分類タブ文字が本文相当の画素高を持つ | `test_font_safety.py` / `test_font_session.ps1` / `--ui-interaction-test` |
 | AUT-37 | キャンバスから同期したTeXソースは `\begin` 後、`\end` 前、`\\` 後だけで階層的に改行・字下げされ、表示文字列を再入力すると改行前と同じ正規化TeXへ戻る | `--ui-interaction-test` |
 | AUT-38 | 共通祖先へ繰り上げた同一範囲を、TeX取得、削除、Backspace、Delete、文字・TeX・記号置換、テンプレート包み込み、入れ子を含む書体変更が消費し、Undo／Redoが操作前後を復元する | `test_edit.py` |
+| AUT-39 | キャンバスとTeXソースの両方でEnterが同じ`aligned`数式行を作り、ソース側の新行キャレットが環境内に残り、新規保存では外側に`equation`が付く。長いソースは横スクロールなしでsoft wrapする | `--ui-interaction-test` / `test_tex_document.exe` |
 
 2026-08-21のAPI実測では、試験式 `\frac{x_{1}+\alpha}{\sqrt{y}}` は
 289×252 px、300 dpi、69.36×60.48 ptとなった。Google Slides APIへ同寸法で

@@ -3635,6 +3635,103 @@ bool source_move_empty_group(bool backwards) {
     return true;
 }
 
+/* Enter in the TeX pane is a mathematical row break, not a whitespace-only
+ * source newline.  A raw CRLF is ignored by TeX, which made Enter appear to do
+ * nothing on the canvas even though the EDIT control visibly moved.  Keep the
+ * user's caret in this pane, create an aligned wrapper on the first break, and
+ * retain the raw trailing row until the next characters make it structural.
+ * Shift+Enter remains the ordinary EDIT newline for people who only want to
+ * lay out a long source command without changing the equation. */
+bool source_insert_equation_row(HWND hwnd) {
+    DWORD first = 0, last = 0;
+    SendMessageW(hwnd, EM_GETSEL, WPARAM(&first), LPARAM(&last));
+    const std::wstring text = window_text(hwnd);
+    first = DWORD(std::min<size_t>(first, text.size()));
+    last = DWORD(std::min<size_t>(last, text.size()));
+    if (last < first) std::swap(first, last);
+
+    const std::wstring begin = L"\\begin{aligned}";
+    const std::wstring end = L"\\end{aligned}";
+    size_t insertionFirst = first;
+    size_t insertionLast = last;
+    bool inAligned = false;
+    bool appendBeforeEnd = false;
+
+    size_t open = text.rfind(begin, insertionFirst);
+    if (open != std::wstring::npos) {
+        const size_t close = text.find(end, open + begin.size());
+        if (close != std::wstring::npos && insertionFirst <= close) {
+            inAligned = true;
+            insertionLast = std::min(insertionLast, close);
+        }
+    }
+
+    /* Canvas-to-source synchronization leaves the caret after \end{aligned}.
+     * Treat Enter there as "append a row" and put the new caret before the
+     * closing command, where subsequent TeX typing belongs. */
+    if (!inAligned) {
+        const size_t close = text.rfind(end);
+        if (close != std::wstring::npos) {
+            open = text.rfind(begin, close);
+            if (open != std::wstring::npos) {
+                insertionFirst = close;
+                while (insertionFirst > open + begin.size() &&
+                       (text[insertionFirst - 1] == L' ' ||
+                        text[insertionFirst - 1] == L'\t' ||
+                        text[insertionFirst - 1] == L'\r' ||
+                        text[insertionFirst - 1] == L'\n'))
+                    --insertionFirst;
+                insertionLast = close;
+                inAligned = true;
+                appendBeforeEnd = true;
+            }
+        }
+    }
+
+    size_t newCaret = 0;
+    if (inAligned) {
+        size_t lineStart = insertionFirst == 0 ? 0 :
+            text.rfind(L'\n', insertionFirst - 1);
+        lineStart = lineStart == std::wstring::npos ? 0 : lineStart + 1;
+        size_t indent = 0;
+        while (lineStart + indent < text.size() &&
+               (text[lineStart + indent] == L' ' ||
+                text[lineStart + indent] == L'\t'))
+            ++indent;
+        if (indent == 0) indent = 2;
+
+        std::wstring rowBreak = L" \\\\\r\n";
+        rowBreak.append(indent, L' ');
+        newCaret = insertionFirst + rowBreak.size();
+        if (appendBeforeEnd) rowBreak += L"\r\n";
+        SendMessageW(hwnd, EM_SETSEL, WPARAM(insertionFirst),
+                     LPARAM(insertionLast));
+        SendMessageW(hwnd, EM_REPLACESEL, TRUE,
+                     LPARAM(rowBreak.c_str()));
+    } else {
+        const std::wstring prefix = L"\\begin{aligned}\r\n  ";
+        const std::wstring rowBreak = L" \\\\\r\n  ";
+        const std::wstring suffix = L"\r\n\\end{aligned}";
+        const std::wstring wrapped = prefix + text.substr(0, first) +
+            rowBreak + text.substr(last) + suffix;
+        newCaret = prefix.size() + first + rowBreak.size();
+        g.syncingSource = true;
+        SetWindowTextW(hwnd, wrapped.c_str());
+        g.syncingSource = false;
+        SendMessageW(g.main, WM_COMMAND, MAKEWPARAM(9001, EN_CHANGE),
+                     LPARAM(hwnd));
+    }
+
+    const DWORD limit = DWORD(std::max(0, GetWindowTextLengthW(hwnd)));
+    const DWORD caret = DWORD(std::min<size_t>(newCaret, limit));
+    SendMessageW(hwnd, EM_SETSEL, caret, caret);
+    SendMessageW(hwnd, EM_SCROLLCARET, 0, 0);
+    if (!g.sourceEditing) return false;
+    update_status(L"数式行を追加しました（TeX: \\\\）");
+    debug_event("source.new_line", "caret=" + std::to_string(caret));
+    return true;
+}
+
 LRESULT CALLBACK SourceProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     if (msg == WM_GETDLGCODE) {
         return CallWindowProcW(g.sourceProc, hwnd, msg, wp, lp) | DLGC_WANTTAB;
@@ -3647,6 +3744,10 @@ LRESULT CALLBACK SourceProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             debug_event("source.tab.leave",
                         backwards ? "direction=backward" : "direction=forward");
         }
+        return 0;
+    }
+    if (msg == WM_CHAR && wp == L'\r' && !key_shift()) {
+        source_insert_equation_row(hwnd);
         return 0;
     }
     return CallWindowProcW(g.sourceProc, hwnd, msg, wp, lp);
@@ -3677,8 +3778,8 @@ LRESULT CALLBACK MainProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
                 WS_CHILD | WS_VISIBLE | SS_LEFT,
                 0, 0, 100, 20, hwnd, nullptr, g.instance, nullptr);
             g.source = CreateWindowExW(WS_EX_CLIENTEDGE, L"EDIT", L"",
-                WS_CHILD | WS_VISIBLE | WS_TABSTOP | WS_VSCROLL | WS_HSCROLL |
-                ES_MULTILINE | ES_AUTOVSCROLL | ES_AUTOHSCROLL |
+                WS_CHILD | WS_VISIBLE | WS_TABSTOP | WS_VSCROLL |
+                ES_MULTILINE | ES_AUTOVSCROLL |
                 ES_WANTRETURN | ES_NOHIDESEL,
                 0, 0, 100, 100, hwnd, HMENU(9001), g.instance, nullptr);
             if (g.source)
@@ -5049,6 +5150,58 @@ int ui_interaction_test() {
     SendMessageW(g.canvas, WM_CHAR, '+', 0);
     if (window_text(g.source) != wide_utf8(g.equation.latex()) ||
         g.sourceEditing) return 145;
+
+    /* Both editing surfaces use Enter for the same aligned row operation.
+     * The TeX pane must insert a real \\ delimiter rather than a CRLF which
+     * TeX ignores, and the saved file must still add the outer equation
+     * environment.  The pane itself soft-wraps long source instead of
+     * requiring horizontal scrolling. */
+    const LONG_PTR sourceStyle = GetWindowLongPtrW(g.source, GWL_STYLE);
+    if ((sourceStyle & WS_HSCROLL) || (sourceStyle & ES_AUTOHSCROLL))
+        return 223;
+
+    g.equation.load_latex("a=b");
+    sync_source_from_model();
+    SetFocus(g.canvas);
+    SendMessageW(g.canvas, WM_KEYDOWN, VK_RETURN, 0);
+    SendMessageW(g.canvas, WM_CHAR, 'c', 0);
+    SendMessageW(g.canvas, WM_CHAR, '=', 0);
+    SendMessageW(g.canvas, WM_CHAR, 'd', 0);
+    if (!g.equation.is_multiline() ||
+        g.equation.latex().find("c") == std::string::npos)
+        return 224;
+
+    set_source_text_for_test(L"a=b");
+    SetFocus(g.source);
+    SendMessageW(g.source, EM_SETSEL, 3, 3);
+    SendMessageW(g.source, WM_CHAR, L'\r', 0);
+    const std::wstring brokenSource = window_text(g.source);
+    DWORD rowCaretFirst = 0, rowCaretLast = 0;
+    SendMessageW(g.source, EM_GETSEL, WPARAM(&rowCaretFirst),
+                 LPARAM(&rowCaretLast));
+    if (brokenSource.find(L"\\begin{aligned}\r\n") == std::wstring::npos ||
+        brokenSource.find(L"\\\\\r\n  ") == std::wstring::npos ||
+        brokenSource.find(L"\r\n\\end{aligned}") == std::wstring::npos ||
+        rowCaretFirst != rowCaretLast || rowCaretFirst >= brokenSource.size())
+        return 225;
+    SendMessageW(g.source, WM_CHAR, 'c', 0);
+    SendMessageW(g.source, WM_CHAR, '=', 0);
+    SendMessageW(g.source, WM_CHAR, 'd', 0);
+    const std::string sourceMultiline = g.equation.latex();
+    if (!g.equation.is_multiline() ||
+        sourceMultiline.find("\\begin{aligned}") == std::string::npos ||
+        sourceMultiline.find("c") == std::string::npos)
+        return 226;
+    const bool savedNumbered = g.documentNumbered;
+    g.documentNumbered = true;
+    const std::string sourceSavedDocument = tex_document();
+    g.documentNumbered = savedNumbered;
+    if (sourceSavedDocument.find("\\begin{equation}\n") == std::string::npos ||
+        sourceSavedDocument.find("\\begin{aligned}") == std::string::npos ||
+        sourceSavedDocument.find("\\end{equation}") == std::string::npos)
+        return 227;
+    SetFocus(g.canvas);
+    sync_source_from_model();
 
     /* Source editing keeps the web editor's empty-group navigation.  The real
      * EDIT subclass must move a collapsed caret through both {} holes without
