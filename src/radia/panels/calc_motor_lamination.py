@@ -78,6 +78,7 @@ if _this_dir not in sys.path:
     sys.path.insert(0, _this_dir)
 
 from calc_common import (MU_0, NU_0, setup_paths, progress, calc_main)
+from radia.lamination import laminated_mu_eff
 
 
 def _log(msg):
@@ -263,13 +264,9 @@ def solve_cell_problem(d_iron=0.35e-3, d_ins=0.05e-3,
         # lamination homogenization
         #   mu_eff = mu0 [ fill*mu_r*tanh(b)/b + (1-fill) ],
         #   b = (d_iron/2) sqrt(j w mu0 mu_r sigma).
-        # This is the canonical radia_mcp.radia_ngsolve.solve.laminated_mu_eff
-        # (validated < 2.2 % vs 1D FE from |b|=0.5 to ~10 --
-        # validation_test/radia_mcp/test_laminated_mu_eff_freqsweep.py).  It is INLINED here rather
-        # than imported, because the GUI panel runs against the deployed radia_mcp
-        # which may predate that helper.  It replaces the old volume-average, which
-        # ignored the high-frequency skin reduction of the REAL part (mu' drops as
-        # the field is expelled from the sheet).
+        # radia.lamination owns this material law. It is validated against the
+        # independent 1D FE sweep in validation_test/radia_mcp and replaces the
+        # old volume average, which ignored high-frequency flux exclusion.
         #
         # The eddy LOSS stays the separate, FE-computed ECL above (resistive,
         # 0.5 sigma |E|^2).  Do NOT derive the loss from Im(mu_eff): mu_eff is the
@@ -277,14 +274,10 @@ def solve_cell_problem(d_iron=0.35e-3, d_ins=0.05e-3,
         # under-predicts the true eddy loss by ~70 % at |b|~5 (keep RP/mu_eff and
         # ECL as independent outputs).  For a future NONLINEAR cell, replace this
         # closed form with mu_eff = <B>/H_s read from the FE on a symmetric cell.
-        import cmath
         fill_eff = float(V_iron / V_total)
-        if omega > 0.0 and sigma > 0.0:
-            _b = (d_iron / 2.0) * cmath.sqrt(1j * omega * mu_iron * sigma)
-            _mu_eff_c = MU_0 * (fill_eff * mu_r_iron * (cmath.tanh(_b) / _b)
-                                + (1.0 - fill_eff))
-        else:
-            _mu_eff_c = MU_0 * (fill_eff * mu_r_iron + (1.0 - fill_eff))
+        _mu_eff_c = laminated_mu_eff(
+            mu_r_iron, sigma, omega, d_iron, fill=fill_eff
+        )
         mu_eff_real = float(_mu_eff_c.real)
         mu_eff_imag = float(_mu_eff_c.imag)
         sigma_eff = float((V_iron / V_total) * sigma)

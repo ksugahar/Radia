@@ -186,34 +186,11 @@ def smeared_ring_equivalent_remanence(remanence, n_segments, segment_span_deg):
 
 
 def laminated_mu_eff(mu_r, sigma, omega, d_lam, fill=1.0):
-    """Complex effective permeability of IN-PLANE laminated steel (FEMM AC
-    lamination model -- the ``Lamination & Wire Type`` material).
+    """Compatibility adapter for :func:`radia.lamination.laminated_mu_eff`."""
 
-    A stack of laminations (each steel sheet of thickness ``d_lam``, relative
-    permeability ``mu_r``, conductivity ``sigma``, stacking/fill factor
-    ``fill``) excited by a field PARALLEL to the sheets develops eddy currents
-    that circulate within each sheet -> a 1D skin effect across the lamination
-    thickness.  Homogenized, the stack behaves as a single block of complex
-    permeability
+    from radia.lamination import laminated_mu_eff as _laminated_mu_eff
 
-        mu_eff = mu0 * [ fill * mu_r * tanh(b)/b + (1 - fill) ],
-        b      = (d_lam/2) * sqrt(1j*omega*mu0*mu_r*sigma)
-
-    The ``tanh(b)/b`` factor is the lamination flux-exclusion + eddy loss
-    (Im(mu_eff) < 0 carries the loss); the ``(1-fill)`` term is the
-    non-conducting insulation volume fraction (mu0) in parallel.  ``omega=0`` or
-    ``sigma=0`` returns the real static value ``mu0*(fill*mu_r + 1 - fill)``.
-
-    Returns a complex python scalar.  Use ``1/laminated_mu_eff(...)`` as the
-    (uniform, complex) reluctivity ``nu`` of the laminated region in
-    :func:`solve_planar_eddy`, with ``sigma = 0`` there (the eddy loss is
-    already captured by ``Im(mu_eff)`` -- do NOT also mesh-resolve the sheets).
-    """
-    if omega == 0 or sigma == 0:
-        return MU0 * (fill * mu_r + (1.0 - fill))
-    b = (d_lam / 2.0) * cmath.sqrt(1j * omega * MU0 * mu_r * sigma)
-    factor = cmath.tanh(b) / b
-    return MU0 * (fill * mu_r * factor + (1.0 - fill))
+    return _laminated_mu_eff(mu_r, sigma, omega, d_lam, fill)
 
 
 def laminated_reluctivity_tensor(mesh, lam_by_material, default_mu_r=1.0,
