@@ -120,6 +120,7 @@ def main() -> int:
     print(f"\nwrote {out}")
     for label, r in data["cases"].items():
         headline = (r.get("max_error_pct")
+                    or r.get("gamma1_max_error_pct")
                     or r.get("planar_max_error_pct")
                     or (r.get("by_n_dof", {}).get("4", {}).get("max_error_pct")))
         print(f"  {label:28s} {headline:.5f} %" if headline is not None

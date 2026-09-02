@@ -91,7 +91,8 @@ def Y_cln_pade(s: complex, N: int, a: float, sigma: float, mu: float, *,
 
     The exact disk admittance is a Foster sum over the Bessel eigenmodes,
 
-        Y(s)/Y_DC = 1 - sum_n (4 / j_n^2) * z / (lambda_n + z),   z = s mu sigma
+        Y(s)/Y_DC = 1 - sum_n (4 / j_n^2) * u / (j_n^2 + u),
+        u = s mu sigma a^2
 
     with ``j_n`` the zeros of J_0 and ``lambda_n = (j_n / a)^2``. A Cauer
     ladder of ``N`` stages is the Pade approximant of that series at ``s = 0``,
@@ -113,18 +114,37 @@ def Y_cln_pade(s: complex, N: int, a: float, sigma: float, mu: float, *,
         kind: ``"L"`` for the inductance-terminated ladder, Pade [N-1/N];
             ``"R"`` for the resistance-terminated one, Pade [N/N].
         n_modes: Bessel zeros used to build the moments.
-        n_taylor: Taylor terms taken before the Pade solve; must exceed
-            ``2N`` for kind ``"R"``.
+        n_taylor: highest Taylor order retained before the Pade solve; must be
+            at least ``2N`` for kind ``"R"``.
 
     Returns:
         The truncated ladder's admittance at ``s``.
 
     Raises:
-        ValueError: on an unknown ``kind``, or when ``n_taylor`` is too small
-            for the requested ``N``.
+        ValueError: on a non-physical geometry/material value, invalid order,
+            unknown ``kind``, or insufficient Taylor order.
     """
+    import operator
+
     import numpy as np
 
+    try:
+        N = operator.index(N)
+        n_modes = operator.index(n_modes)
+        n_taylor = operator.index(n_taylor)
+    except TypeError as exc:
+        raise ValueError("N, n_modes, and n_taylor must be integers") from exc
+
+    if N < 1:
+        raise ValueError(f"N must be at least 1, not {N!r}")
+    if n_modes < 1:
+        raise ValueError(f"n_modes must be at least 1, not {n_modes!r}")
+    if n_taylor < 0:
+        raise ValueError(f"n_taylor must be non-negative, not {n_taylor!r}")
+    if a <= 0.0 or sigma <= 0.0 or mu <= 0.0:
+        raise ValueError("a, sigma, and mu must be positive")
+
+    kind = kind.upper()
     if kind == "L":
         m, n = N - 1, N
     elif kind == "R":
@@ -136,14 +156,18 @@ def Y_cln_pade(s: complex, N: int, a: float, sigma: float, mu: float, *,
             f"Pade [{m}/{n}] needs {m + n} Taylor terms; n_taylor={n_taylor}")
 
     zeros = jn_zeros(0, n_modes)
-    lams = (zeros / a) ** 2
+    eigenvalues = zeros**2
     cn = 4.0 / zeros ** 2
 
-    # Y/Y_DC = a_0 + a_1 z + ... with a_0 = 1 and a_k = (-1)^k sum_n cn/lam_n^k
+    # Build in the dimensionless variable u = s*mu*sigma*a^2. Using the
+    # dimensional eigenvalues (j_n/a)^2 makes the Pade system needlessly
+    # ill-conditioned and breaks geometric similarity at roundoff level.
+    # Y/Y_DC = a_0 + a_1 u + ... with
+    # a_0 = 1 and a_k = (-1)^k sum_n cn/(j_n^2)^k.
     coef = np.empty(n_taylor + 1)
     coef[0] = 1.0
     for k in range(1, n_taylor + 1):
-        coef[k] = (-1) ** k * float(np.sum(cn / lams ** k))
+        coef[k] = (-1) ** k * float(np.sum(cn / eigenvalues**k))
 
     # Q from the coefficients of z^(m+1) .. z^(m+n), with q_0 = 1
     mat = np.zeros((n, n))
@@ -158,7 +182,7 @@ def Y_cln_pade(s: complex, N: int, a: float, sigma: float, mu: float, *,
     P = np.array([sum(Q[j] * coef[k - j] for j in range(min(k, n) + 1))
                   for k in range(m + 1)])
 
-    z = s * mu * sigma
-    num = sum(P[k] * z ** k for k in range(m + 1))
-    den = sum(Q[k] * z ** k for k in range(n + 1))
+    u = s * mu * sigma * a**2
+    num = sum(P[k] * u**k for k in range(m + 1))
+    den = sum(Q[k] * u**k for k in range(n + 1))
     return Y_DC_cylinder(a, sigma) * num / den

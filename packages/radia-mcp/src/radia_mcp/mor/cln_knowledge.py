@@ -531,9 +531,11 @@ The tensor envelope psi = f(x) f(y) f(z) already has the right asymptotics
 everywhere: exp(-d t) - 1 on a face, r^2 sin(2 theta) at a 90-degree edge (the
 Wiener-Hopf wedge), and x y z ~ r^3 Y_{3,0} at an octant corner. What one
 tensor-product DOF cannot do is give the correct quantitative WEIGHT to all
-three boundary classes at once. The fix is one DOF per class, not a new shape.
-In 2D, where there is no trihedral corner, the same construction reaches
-0.34 %.
+three boundary classes at once. The obvious split into one separable DOF per
+face, edge, and corner class was tested and FAILED: the family is
+asymptotically rank-deficient and its solve becomes ill-conditioned. The open
+repair is a genuinely two-dimensional, non-separable edge basis. In 2D, where
+there is no trihedral corner, the single tensor construction reaches 0.34 %.
 
 SIBC corner and edge treatments exist independently (Deeley 1990 IEEE TMag
 26(2):712; Yuferev-Proekt-Ida 2001 IEEE TMag 37(5):3465) and are not yet

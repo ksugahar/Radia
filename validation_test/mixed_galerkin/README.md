@@ -115,7 +115,7 @@ for remaining square/cube candidates):
 |---|---|---|---|---|
 | Cylinder    | 0.04% wall band  | 2.4e-4% | 2e-5% | 1e-5% |
 | Sphere      | 0.11%            | 0.001% | (Senior tower terminates at γ_1) | |
-| 2D square   | 0.03 – 0.26%     | — (flat face: Senior trivial) | corner Mellin needed | |
+| 2D square   | 0.03 – 0.26%     | — (flat face: Senior trivial) | tensor corner envelope verified; non-separable edge enrichment remains open in 3D | |
 | 3D cube     | 0.33% vs NGSolve FEM (rank 20, closed K_ss) | — | — | |
 
 All results obtained with **zero free parameters**: the bulk-surface
@@ -144,11 +144,10 @@ The development went through ~11 numbered "Phases" within the
 | **8b** | **Discovered Y_exact bug**: the cylinder reference switched from full Bessel to K_SIBC/√s asymptote at \|γa\| = 50. The "0.93% saturation" and "γ_1 ineffective" findings of Phases 2/3/8 were ARTIFACTS. True cylinder accuracy: 0.04% baseline, with Senior tower truncation giving 100× per added DOF. |
 | **8c** | **Foster sum reference audit for 2D square**: N=1999 had 5% bias at wall band; the "0.99% peak" was 97% Foster truncation. True 2D square accuracy: 0.03–0.26% baseline. |
 
-The Phase 8b/8c corrections are the reason this directory exists as a
-clean restart — the scripts archived in
-`../../digest/supplement/2026_05_28_*.py` reflect the original (now
-known-buggy) versions and are kept frozen for publication-history
-purposes. See `digest/supplement/PHASE_8B_ARTIFACT_NOTE.md`.
+The Phase 8b/8c corrections are the reason this directory exists as a clean
+restart. The original publication-history scripts remain outside this
+repository; only the corrected validation implementation and its JSON
+artifact are release evidence here.
 
 ## Open questions
 
@@ -158,11 +157,12 @@ purposes. See `digest/supplement/PHASE_8B_ARTIFACT_NOTE.md`.
 
 ## Related references in this repo
 
-- `../README.md` — top-level Hierarchical Cauer + Warburg-Schur framework
-- `../frequency_domain/circle_warburg_plot.py` — IGTE digest cylinder demo
-- `../frequency_domain/3d_sphere.py` — sphere Foster sum
-- `../../digest/supplement/` — Phase 2/3 archive (2026-05-28 frozen versions, with Y_exact artifact)
-- `../docs/hierarchical_cauer_sibc.md` — overall documentation
+- `README.md` — this validation campaign and its open questions
+- `_references/square2d_foster.py` — independent 2D square reference
+- `_references/cube3d_foster.py` — independent cube reference used by the
+  time-domain campaign
+- `results/mixed_galerkin_results.json` — canonical analytic validation
+  artifact consumed by documentation and presentation material
 
 ## Bibliography (selected)
 
