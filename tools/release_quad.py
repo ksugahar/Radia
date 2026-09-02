@@ -96,6 +96,10 @@ if hasattr(sys.stdout, "reconfigure"):
     except Exception:
         pass
 
+GIT_EXE = shutil.which("git")
+if GIT_EXE is None:
+    raise RuntimeError("Git is required by tools/release_quad.py")
+
 REPO = Path(__file__).resolve().parent.parent
 NAS_REPO_LAB = "S:/Radia/01_GitHub"
 NAS_REPO_100 = r"W:\00_CAE\Radia\01_GitHub"
@@ -132,7 +136,7 @@ def _editable_repo_100():
 
 def _release_head():
     return subprocess.check_output(
-        ["git", "rev-parse", "HEAD"], cwd=str(REPO), text=True
+        [GIT_EXE, "rev-parse", "HEAD"], cwd=str(REPO), text=True
     ).strip().lower()
 
 
@@ -263,7 +267,7 @@ def _release_tag_commit(version: object) -> str | None:
     if not isinstance(version, str) or not version.strip():
         return None
     result = subprocess.run(
-        ["git", "rev-parse", "--verify", f"refs/tags/v{version}^{{}}"],
+        [GIT_EXE, "rev-parse", "--verify", f"refs/tags/v{version}^{{}}"],
         cwd=REPO,
         capture_output=True,
         text=True,
@@ -295,7 +299,7 @@ def _simulink_candidate_commit_is_release_anchored(
     if commit != tag_commit:
         return False, "Simulink manifest commit does not match its peeled release tag"
     ancestry = subprocess.run(
-        ["git", "merge-base", "--is-ancestor", commit, head],
+        [GIT_EXE, "merge-base", "--is-ancestor", commit, head],
         cwd=REPO,
         capture_output=True,
         text=True,
@@ -467,7 +471,7 @@ def _verify_simulink_candidate_state(package_arg: str) -> int:
         fail(f"Simulink candidate has not passed: {', '.join(missing)}")
         return 4
     head = subprocess.run(
-        ["git", "rev-parse", "HEAD"], cwd=REPO,
+        [GIT_EXE, "rev-parse", "HEAD"], cwd=REPO,
         capture_output=True, text=True, check=True,
     ).stdout.strip().lower()
     anchored, message = _simulink_candidate_commit_is_release_anchored(
@@ -515,7 +519,7 @@ def _verify_optuna_wheel(wheel: Path) -> tuple[dict | None, str]:
 def _optuna_release_source_ready() -> tuple[bool, str]:
     head = _release_head()
     status = subprocess.run(
-        ["git", "status", "--porcelain", "--untracked-files=no"],
+        [GIT_EXE, "status", "--porcelain", "--untracked-files=no"],
         cwd=str(REPO), capture_output=True, text=True,
     )
     if status.returncode != 0:
@@ -523,13 +527,13 @@ def _optuna_release_source_ready() -> tuple[bool, str]:
     if status.stdout.strip():
         return False, "tracked release source is dirty"
     fetched = subprocess.run(
-        ["git", "fetch", "origin", "main", "--quiet"],
+        [GIT_EXE, "fetch", "origin", "main", "--quiet"],
         cwd=str(REPO), capture_output=True, text=True,
     )
     if fetched.returncode != 0:
         return False, fetched.stderr.strip() or "git fetch origin main failed"
     origin_main = subprocess.run(
-        ["git", "rev-parse", "origin/main"], cwd=str(REPO),
+        [GIT_EXE, "rev-parse", "origin/main"], cwd=str(REPO),
         capture_output=True, text=True,
     )
     if origin_main.returncode != 0:
@@ -1233,7 +1237,7 @@ CROSS_MACHINE_PROBE_NO_MCP = CROSS_MACHINE_PROBE.replace(
 # (b) post-release commits on main.  Versions/COMPAT come from installed
 # metadata (re-synced to the release in Phase 8), identical to the consumer
 # probe so the 10 rows line up 1:1 for the row-by-row comparison.
-CROSS_MACHINE_PROBE_LAB = '''import hashlib, os, subprocess
+CROSS_MACHINE_PROBE_LAB = '''import hashlib, os, shutil, subprocess
 import importlib.metadata as md
 
 def ver(n):
@@ -1243,10 +1247,13 @@ def ver(n):
 import radia, cubit_mesh_export
 root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(radia.__file__))))
 tag = "v" + radia.__version__
+git_exe = shutil.which("git")
+if git_exe is None:
+    raise RuntimeError("Git is required by the editable release probe")
 
 def hsh_git(relpath):
     try:
-        d = subprocess.run(["git", "-C", root, "show", tag + ":" + relpath],
+        d = subprocess.run([git_exe, "-C", root, "show", tag + ":" + relpath],
                            capture_output=True).stdout
         NL = bytes([10]); CR = bytes([13])
         d = d.replace(CR + NL, NL).replace(CR, NL)
@@ -1412,7 +1419,7 @@ def _verify_local_release_source(repo, expected_sha):
         return 2
     safe_repo = repo.replace("\\", "/")
     head = run(
-        ["git", "-c", f"safe.directory={safe_repo}",
+        [GIT_EXE, "-c", f"safe.directory={safe_repo}",
          "-C", repo, "rev-parse", "HEAD"],
         capture=True, check=False,
     )
@@ -1424,7 +1431,7 @@ def _verify_local_release_source(repo, expected_sha):
         )
         return 4
     dirty = run(
-        ["git", "-c", f"safe.directory={safe_repo}",
+        [GIT_EXE, "-c", f"safe.directory={safe_repo}",
          "-C", repo, "status", "--porcelain", "--untracked-files=no"],
         capture=True, check=False,
     )
@@ -1842,7 +1849,7 @@ def _git_repo_owner_name():
     """Extract 'owner/name' from `git config remote.origin.url`."""
     import re
     url = subprocess.check_output(
-        ["git", "config", "--get", "remote.origin.url"],
+        [GIT_EXE, "config", "--get", "remote.origin.url"],
         cwd=str(REPO), text=True).strip()
     m = re.search(r"github\.com[:/]([^/\s]+)/([^/\s.]+?)(?:\.git)?$", url)
     if not m:
@@ -1960,7 +1967,7 @@ def cmd_ci_verify(args):
     step("Phase 5.5: CI verify (gh-free) -- wait for runner, then check test XMLs")
     t0 = time.time()
     head_sha = subprocess.check_output(
-        ["git", "rev-parse", "HEAD"], cwd=str(REPO), text=True).strip()
+        [GIT_EXE, "rev-parse", "HEAD"], cwd=str(REPO), text=True).strip()
     saw = False
     while True:
         now = time.time()
@@ -2140,7 +2147,7 @@ def cmd_done(args):
 # ============================================================
 
 def _git(*argv, capture=True, check=True):
-    return subprocess.run(["git", "-C", str(REPO), *argv],
+    return subprocess.run([GIT_EXE, "-C", str(REPO), *argv],
                           capture_output=capture, text=True, check=check)
 
 
@@ -2204,7 +2211,7 @@ def cmd_sync_main(args):
 
     if behind > 0:
         p = subprocess.run(
-            ["git", "-C", str(REPO), "rebase", "origin/main", "--empty=drop"],
+            [GIT_EXE, "-C", str(REPO), "rebase", "origin/main", "--empty=drop"],
             capture_output=True, text=True)
         print((p.stdout or "").strip())
         if p.returncode != 0:
@@ -2240,7 +2247,7 @@ def cmd_sync_main(args):
              "docs(mcp): regenerate TOOLS.md (release_quad sync-main)")
         ok("committed regenerated TOOLS.md")
 
-    p = run(["git", "-C", str(REPO), "push", "origin", "main"], check=False)
+    p = run([GIT_EXE, "-C", str(REPO), "push", "origin", "main"], check=False)
     if p.returncode != 0:
         fail("push failed (pre-push hook output above names the gate).")
         return 3

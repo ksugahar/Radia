@@ -84,6 +84,14 @@ def test_unc_normalization_covers_canonical_and_release_worktrees():
     )
 
 
+def test_editable_probe_resolves_git_inside_the_target_process():
+    probe = release_quad.CROSS_MACHINE_PROBE_LAB
+
+    assert 'git_exe = shutil.which("git")' in probe
+    assert "[git_exe," in probe
+    assert "GIT_EXE" not in probe
+
+
 def test_simulink_candidate_accepts_its_exact_tag_when_controller_is_newer(
         tmp_path, monkeypatch):
     repo = tmp_path / "release-controller"
@@ -114,7 +122,8 @@ def test_simulink_candidate_accepts_its_exact_tag_when_controller_is_newer(
     assert "release tag" in message
 
 
-def test_local_release_source_requires_exact_sha_and_tracked_clean(tmp_path):
+def test_local_release_source_requires_exact_sha_and_tracked_clean(
+        tmp_path, monkeypatch):
     repo = tmp_path / "release-source"
     repo.mkdir()
     _git(repo, "init")
@@ -132,6 +141,8 @@ def test_local_release_source_requires_exact_sha_and_tracked_clean(tmp_path):
     )
     head = _git(repo, "rev-parse", "HEAD")
 
+    assert Path(release_quad.GIT_EXE).is_absolute()
+    monkeypatch.setenv("PATH", "")
     assert release_quad._verify_local_release_source(str(repo), head) == 0
     assert release_quad._verify_local_release_source(str(repo), "0" * 40) == 4
 
