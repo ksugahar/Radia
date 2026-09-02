@@ -1,17 +1,17 @@
 {
   "schema": "radia.notebook_result.v1",
-  "generated_at_utc": "2026-06-29T07:36:13Z",
-  "notebook": "docs/maglev/maglev_showcase.ipynb",
-  "notebook_sha256": "0e1659b53992df290a315418e77b9a2639bf0f5b7a88972a08c04937219368ef",
+  "generated_at_utc": "2026-09-02T13:59:02Z",
+  "notebook": "maglev_showcase.ipynb",
+  "notebook_sha256": "c9b4525ffc5a62df0321321619d618508b9bf8d388a52f5bcbbf5298a2379eb0",
   "versions": {
     "python_version": "3.12.10",
-    "python_executable": "C:\\Program Files\\Python312\\python.exe",
+    "python_executable_name": "python.exe",
     "platform": "Windows-2022Server-10.0.20348-SP0",
-    "radia_mcp_version": "1.4.3",
-    "radia_version": "4.95.2"
+    "radia_mcp_version": "1.4.39",
+    "radia_version": "4.95.55"
   },
   "summary": {
-    "path": "docs/maglev/maglev_showcase.ipynb",
+    "path": "maglev_showcase.ipynb",
     "cells": 20,
     "code_cells": 9,
     "executed_code_cells": 9,
@@ -19,6 +19,20 @@
     "output_count": 9,
     "error_output_count": 0,
     "result_saved": true,
+    "notebook_role": "",
+    "webgui_required": false,
+    "webgui_field_required": false,
+    "webgui_import_present": false,
+    "webgui_draw_present": false,
+    "webgui_draw_cell_count": 0,
+    "executed_webgui_draw_cell_count": 0,
+    "webgui_draw_cells_with_rich_outputs": 0,
+    "webgui_ready": true,
+    "parameterized_field_draw_present": false,
+    "parameterized_field_draw_cell_count": 0,
+    "executed_parameterized_field_draw_cell_count": 0,
+    "parameterized_field_draw_cells_with_rich_outputs": 0,
+    "webgui_field_ready": true,
     "metadata_keys": [
       "kernelspec",
       "language_info"
@@ -43,8 +57,8 @@
           "text_plain_truncated": false,
           "rich_output_hashes": {
             "image/png": {
-              "chars": 86300,
-              "sha256": "691da583b56cbcbe651822dbd931a4b6ffc0e789a14594db0f7e6ee389054d5f"
+              "chars": 101280,
+              "sha256": "d6afb39d0238683d6d92d29dfc434b06714aab61c4a783d0600855c8faf63ea3"
             }
           }
         }

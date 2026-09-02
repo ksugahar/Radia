@@ -572,14 +572,45 @@ included, which is what a figure of the step response should be drawn from.
   validation_test/mixed_galerkin/results/mixed_galerkin_results.json
       <- the numerical artifact. Documentation and talk material READ this.
          They must not recompute it; that is how the metric forked.
-  src/radia/maglev/mixed_galerkin/        the public API (28 symbols): mesh-driven
-                                          bulk Foster basis, CAD edge topology,
-                                          Y_mixed, Foster ROM fit, state space
-  tests/test_maglev_mixed_galerkin_golden.py
-      19/19 pass on 2026-09-02, verified by calling the test functions directly:
-      pytest could not collect that day because a junction at the repo root
-      (.codex-eqnedit64-fontfix, whose target resolves only on the file server)
-      made its rootdir walk raise before any test ran.
+  src/radia/maglev/mixed_galerkin/        the public API: mesh-driven bulk
+                                          Foster basis, CAD edge topology,
+                                          schur.BoxMixedGalerkin (the projection,
+                                          box conductors), Y_mixed (additive, for
+                                          the LTI export), Foster ROM fit, state space
+  tests/test_maglev_mixed_galerkin_golden.py, tests/test_maglev_mixed_galerkin_schur.py
+      28/28 pass on 2026-09-02 (run pytest with --noconftest -c pyproject.toml
+      --rootdir=.: a junction at the repo root, .codex-eqnedit64-fontfix, whose
+      target resolves only on the file server, breaks the default collection).
+
+## The production API is the projection since 2026-09-02
+
+Until then `alpha.Y_mixed` was the only Y(s) in the package, and it is
+ADDITIVE: Y_bulk_Foster + K_SIBC/sqrt(s) + c_1/s, no coupling block, the
+tail kept at every frequency, c_1/s divergent at DC (53 % off the Aitken
+reference at 10 kHz on the cube; 129000 % at 1 Hz).  Its docstring called
+this "Schur composition"; it was not.  `schur.BoxMixedGalerkin` is the
+Galerkin form of this topic: bulk eigenmodes and the tensor envelope in one
+space, the (N+P) x (N+P) block system solved per frequency.  Facts:
+  - the coupling integrals int phi_n f psi dV need the layer resolved: a
+    tensor Gauss-Legendre grid graded to 1e-5 L (108 nodes per axis) on which
+    the FE modes are sampled once; per frequency only the separable envelope
+    weights change.  The leading-order Watson reduction int phi psi_0 ~
+    kappa b / t^2 is NOT enough (4.5 % at |t| L = 10.7, 19 % in Y at 1 kHz).
+  - box only.  psi = f(x) f(y) f(z) is exact for right-angle wedges and
+    corners; a general polyhedron needs per-face, per-edge and per-corner
+    layer quadrature, not written.
+  - cube, maxh = L/6..L/10, 20..60 modes: DC exact; 0.3 % from the
+    analytic-sine mixed Galerkin (the remainder is the effective rank: the
+    mesh's lowest N modes include even modes that cannot couple); +0.35 % vs
+    Aitken at 10 kHz (the rank-20 floor); 0.1 % vs the Mellin asymptote at
+    100 MHz.
+  - the drive projection of the bulk spectrum was WRONG before the same day:
+    `_project_drive` used the free-dof block of the mass matrix, which drops
+    the boundary hat-function part of a drive that does not vanish on the
+    surface.  b_1 was 18 % low and g_1 34 % low on the cube at maxh = L/6
+    (the committed "60 Foster modes carry 35 % of DC" was this bug; it is
+    80 %).  Any number produced by bulk_foster_*_via_eigen before 2026-09-02
+    is biased low by O(h) in the residues.
 """
 
 
