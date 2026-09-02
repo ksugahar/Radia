@@ -41,6 +41,7 @@ from radia_mcp.paper_writing._ja_lint import (
 )
 
 from .._shared.hedges import HEDGE_PATTERNS, scan_hedges
+from .._shared.translationese import check_translationese as _translationese
 
 _HERE = pathlib.Path(__file__).resolve().parent
 
@@ -49,8 +50,89 @@ def _load_skill() -> str:
     return (_HERE / "skill.md").read_text(encoding="utf-8")
 
 
+def _decode_text_file(path: pathlib.Path) -> str:
+    payload = path.read_bytes()
+    for encoding in ("utf-8-sig", "cp932"):
+        try:
+            return payload.decode(encoding)
+        except UnicodeDecodeError:
+            continue
+    return payload.decode("utf-8", errors="replace")
+
+
+# ``\input{kiban_c_01_purpose_plan}`` on a line that is not commented out.
+_INPUT_COMMAND = re.compile(r"\\(?:input|include)\{([^{}]+)\}")
+_INPUT_MAX_DEPTH = 3
+
+
+def _split_tex_comment(line: str) -> tuple[str, str]:
+    """Split at the first unescaped TeX comment marker."""
+    for index, char in enumerate(line):
+        if char != "%":
+            continue
+        backslashes = 0
+        cursor = index - 1
+        while cursor >= 0 and line[cursor] == "\\":
+            backslashes += 1
+            cursor -= 1
+        if backslashes % 2 == 0:
+            return line[:index], line[index:]
+    return line, ""
+
+
+def _expand_sibling_inputs(
+    text: str, path: pathlib.Path, depth: int, seen: set[pathlib.Path]
+) -> str:
+    """Assemble the proposal a reviewer reads from a split LaTeX source.
+
+    The JSPS templates split a 計画調書 into one file per field and pull them
+    into a main file with ``\\input``. Run on one field file, every
+    whole-proposal check reports the other fields as missing: the abilities
+    field was told it lacks the academic question, and the purpose field that
+    it lacks the execution environment. Those are not defects of the draft;
+    they are the wrong unit of analysis.
+
+    Only siblings of the main file are expanded. The form's own pieces
+    (headers, hooks, instruction boxes) live in a subdirectory such as
+    ``pieces/``, and pulling them in would lint the funder's scaffolding as
+    applicant prose. Depth and a visited set guard against cycles.
+    """
+    if depth >= _INPUT_MAX_DEPTH:
+        return text
+    parent = path.parent.resolve()
+    lines = []
+    for line in text.split("\n"):
+        code, comment = _split_tex_comment(line)
+
+        def replace(match: re.Match[str]) -> str:
+            name = match.group(1).strip()
+            target = pathlib.Path(name)
+            if not target.suffix:
+                target = target.with_suffix(".tex")
+            if target.is_absolute():
+                return match.group(0)
+            candidate = (parent / target).resolve()
+            if candidate.parent != parent or candidate in seen or not candidate.is_file():
+                return match.group(0)
+            seen.add(candidate)
+            body = _expand_sibling_inputs(
+                _decode_text_file(candidate), candidate, depth + 1, seen
+            )
+            return "\n" + body + "\n"
+
+        if code and _INPUT_COMMAND.search(code):
+            code = _INPUT_COMMAND.sub(replace, code)
+        lines.append(code + comment)
+    return "\n".join(lines)
+
+
 def _read_text_if_path(text_or_path: str) -> str:
-    """Treat a short existing .md/.tex/.txt path as a file, else as text."""
+    """Treat a short existing .md/.tex/.txt path as a file, else as text.
+
+    A ``.tex`` main file is assembled with the sibling files it ``\\input``s
+    (see ``_expand_sibling_inputs``), so the health report can be run on
+    ``kiban_c.tex`` and judge the whole proposal rather than one field.
+    """
     if text_or_path is None:
         return ""
     s = str(text_or_path)
@@ -61,13 +143,10 @@ def _read_text_if_path(text_or_path: str) -> str:
     try:
         p = pathlib.Path(s)
         if p.exists() and p.suffix.lower() in {".md", ".tex", ".txt"}:
-            payload = p.read_bytes()
-            for encoding in ("utf-8-sig", "cp932"):
-                try:
-                    return payload.decode(encoding)
-                except UnicodeDecodeError:
-                    continue
-            return payload.decode("utf-8", errors="replace")
+            text = _decode_text_file(p)
+            if p.suffix.lower() == ".tex":
+                text = _expand_sibling_inputs(text, p, 0, {p.resolve()})
+            return text
     except OSError:
         pass
     return s
@@ -264,6 +343,23 @@ def grant_writing_lint_bedrock(text: str) -> dict:
 def grant_writing_suggest_redundancy_fixes(text: str) -> dict:
     """Suggest redundancy fixes only in applicant prose."""
     return _ja_suggest_redundancy_fixes(_prose_for_lint(_read_text_if_path(text)))
+
+
+def grant_writing_translationese_check(text: str) -> dict:
+    """Find Japanese that reads as translated English or as generated prose.
+
+    A draft can pass every mechanical lint here and still read like a
+    translation: an intransitive verb pushed into a transitive slot
+    (「判定則を…へ発展する」), an English word glossed in parentheses after a
+    Japanese term (「接着層（glue）」), or a calque such as 「劇的な差」. Nine
+    of these survived in a 基盤C draft that scored 9.5 on 2026-09-02, and a
+    reviewer reads them as carelessness before reading the science.
+
+    The grammar defect is HIGH; the gloss is MEDIUM; calques and emphasis
+    vocabulary are LOW counts with a replacement each. Defined project terms
+    and mathematical usage (「写す」 for a map) are not reported.
+    """
+    return _translationese(_prose_for_lint(_read_text_if_path(text)))
 
 
 def grant_writing_check_misuse_japanese(text: str) -> dict:
@@ -2919,7 +3015,19 @@ def grant_writing_cross_organization_pilot_check(text: str) -> dict:
     selected: set[int] = set()
     for index in marked:
         selected.update(range(max(0, index - 1), min(len(sentences), index + 4)))
-    evidence_text = " ".join(sentences[i] for i in sorted(selected)) or text
+    # The sentence window alone misses the honest closing line of a longer
+    # pilot paragraph. A real 準備状況 paragraph listed the transfer, the
+    # re-execution, the residual, a derivation and a conference talk before
+    # ending with 「別機関が…判定できるかは未検証である」, and that sentence
+    # sat four places after the last trigger. The paragraph that makes the
+    # claim is the unit the applicant wrote, so it is read whole as well.
+    paragraphs = [
+        paragraph.strip()
+        for paragraph in re.split(r"\n\s*\n", text)
+        if paragraph.strip() and _contains_any(paragraph.lower(), prior_terms)
+    ]
+    evidence_parts = [sentences[i] for i in sorted(selected)] + paragraphs
+    evidence_text = " ".join(evidence_parts) or text
     evidence_low = evidence_text.lower()
 
     axes = {
@@ -3039,6 +3147,156 @@ def grant_writing_cross_organization_pilot_check(text: str) -> dict:
             "independent task and observed result, and state what remains unproven"
         ),
         "source": "generic cross-organization preliminary-evidence check",
+    }
+
+
+# Latin tokens that are vocabulary, venues, or file names rather than a person,
+# product, or institution the reviewer must place. A conference named once in
+# the yearly plan is normal; a person named once in 準備状況 is not.
+_PROPER_NOUN_COMMON_TOKENS = frozenset({
+    "Python", "README", "API", "Git", "GitHub", "GitLab", "Windows", "Linux",
+    "Plan", "Symposium", "Conference", "Transactions", "Journal", "Proceedings",
+    "Trans", "Magn", "Access", "The", "Fig", "Table", "Litz", "Cauer",
+    "Galerkin", "Kelvin", "Maxwell", "Helmholtz", "Cholesky", "Gauss", "Newton",
+    "Krylov", "Fourier", "Laplace", "Poisson", "Jacobi", "Lagrange", "Euler",
+})
+# Latin letters only: ``[^\W\d_]`` also matches kana and kanji, and the token
+# 「Cauer梯子回路の打切り誤差式を導出した」 was reported as one proper noun.
+_LATIN_LETTER = r"[A-Za-zÀ-ÖØ-öø-ÿ]"
+_PROPER_NOUN_LATIN = re.compile(
+    rf"(?<![A-Za-z-])[A-Z]{_LATIN_LETTER}{{2,}}(?:[ -][A-Z]{_LATIN_LETTER}{{2,}})*"
+)
+_PROPER_NOUN_PERSON = re.compile(
+    rf"((?:[A-Z]{_LATIN_LETTER}+ )?(?:de |van |von )?[A-Z]{_LATIN_LETTER}{{1,20}}|[一-鿿]{{1,4}})氏"
+)
+_VENUE_CONTEXT = re.compile(r"発表|講演|会議|Symposium|Conference|Workshop")
+# A role is a relation to this plan (invited, co-authored, provides an asset),
+# not an attribution: 「作者Meeker氏」 says who wrote a program, and the reviewer
+# still does not know why the plan names him.
+_ROLE_CONTEXT = re.compile(
+    r"招へい|招請|訪問|共著|共同研究|連携|分担|担当|提供|受け入れ|滞在|留学"
+)
+
+
+def grant_writing_proper_noun_load_check(text: str) -> dict:
+    """Count proper nouns a reviewer must place, and list the ones named once.
+
+    Measured on 2026-09-02: two sentences added to 準備状況 of a 基盤C draft
+    introduced a third analysis object (軸対称解析), a software name (FEMM) and
+    a person (Meeker) that appeared nowhere else. Every mechanical check still
+    passed. The applicant read the result and said it was foreign matter: the
+    reviewer would see a new story, not a supporting example, and would look
+    for the place of two names that have none. The sentences were removed.
+
+    A proper noun earns its place when the reviewer can tell in one sentence
+    who or what it is and why the plan needs it. One that appears once, with
+    no role stated in its sentence, usually cannot. Venues in a yearly plan
+    are skipped; a collaborator named once with 招へい or 招請 beside the name
+    is listed with ``role_stated`` so the author can keep it deliberately.
+
+    This is a question for the author, not a defect: fewer proper nouns is the
+    direction, and the author decides which ones the argument needs.
+    """
+    raw = _read_text_if_path(text)
+    # The LaTeX preamble names the applicant in macros (``K.~Sugahara``); only
+    # the document body is what the reviewer reads.
+    if "\\begin{document}" in raw:
+        raw = raw.split("\\begin{document}", 1)[1]
+    prose = _prose_for_lint(raw)
+    sentences = [
+        s.strip() for s in re.split(r"(?<=[。．!?！？])|\n+", prose) if s.strip()
+    ]
+    mentions: dict[str, list[str]] = {}
+    kinds: dict[str, str] = {}
+
+    def note(name: str, kind: str, sentence: str) -> None:
+        mentions.setdefault(name, []).append(sentence)
+        kinds.setdefault(name, kind)
+
+    def person_key(name: str) -> str:
+        # 「Karl Hollaus氏」 and 「Hollaus氏」 are one person; a Latin name is
+        # keyed by its surname, a Japanese name by the full string here and
+        # merged with its surname-only form below.
+        if re.match(r"[A-Za-z]", name):
+            return name.split(" ")[-1] if not name.startswith(("de ", "van ", "von ")) else name
+        return name
+
+    for sentence in sentences:
+        person_spans = []
+        for match in _PROPER_NOUN_PERSON.finditer(sentence):
+            person_spans.append(match.span())
+            note(person_key(match.group(1).strip()), "person", sentence)
+        # All-caps tokens are acronyms and belong to the acronym audit; a
+        # bare 「Hollaus」 after 「Hollaus氏」 lands on the same key.
+        for match in _PROPER_NOUN_LATIN.finditer(sentence):
+            start, end = match.span()
+            if any(start < p_end and end > p_start for p_start, p_end in person_spans):
+                continue
+            token = match.group(0)
+            words = re.split(r"[ -]", token)
+            if any(w in _PROPER_NOUN_COMMON_TOKENS or w.isupper() for w in words):
+                continue
+            note(token, "name", sentence)
+
+    # 「伊田明弘氏」 then 「伊田氏」: fold the full name into the surname.
+    persons = sorted((n for n in mentions if kinds[n] == "person"), key=len)
+    for short in persons:
+        for long in persons:
+            if long != short and long.startswith(short) and long in mentions:
+                mentions[short].extend(mentions.pop(long))
+                kinds.pop(long, None)
+
+    if not mentions:
+        return {
+            "applicable": False,
+            "proper_noun_count": 0,
+            "distinct_count": 0,
+            "singletons": [],
+            "comments": [],
+            "recommendations": [],
+            "target": "each proper noun placed by the reviewer in one sentence; the fewer, the better",
+            "source": "proper-noun load check (2026-09-02 基盤C 異物混入の実測)",
+        }
+
+    total = sum(len(v) for v in mentions.values())
+    singletons = []
+    for name, hits in sorted(mentions.items(), key=lambda kv: kv[0]):
+        if len(hits) != 1:
+            continue
+        sentence = hits[0]
+        if kinds[name] == "name" and _VENUE_CONTEXT.search(sentence):
+            continue
+        singletons.append({
+            "name": name,
+            "kind": kinds[name],
+            "role_stated": bool(_ROLE_CONTEXT.search(sentence)),
+            "excerpt": sentence[:120],
+        })
+    unplaced = [s for s in singletons if not s["role_stated"]]
+    chars = max(1, len(re.sub(r"\s", "", prose)))
+    comments = []
+    recommendations = []
+    if unplaced:
+        names = "、".join(s["name"] for s in unplaced[:6])
+        comments.append(
+            f"一度しか出ず、その文に役割も書かれていない固有名詞: {names}。"
+            "審査者は位置づけを探して止まる。"
+        )
+        recommendations.append(
+            "計画の登場人物（分担者・共同研究相手）でも対象課題の一部でもない固有名詞は外す。"
+            "残すなら同じ文に役割を書く。"
+        )
+    return {
+        "applicable": True,
+        "proper_noun_count": total,
+        "distinct_count": len(mentions),
+        "per_1000_chars": round(1000.0 * total / chars, 2),
+        "singletons": singletons,
+        "unplaced_singleton_count": len(unplaced),
+        "comments": comments,
+        "recommendations": recommendations,
+        "target": "each proper noun placed by the reviewer in one sentence; the fewer, the better",
+        "source": "proper-noun load check (2026-09-02 基盤C 異物混入の実測)",
     }
 
 
@@ -6372,6 +6630,44 @@ def _expected_totals_json(payload: str, label: str) -> dict[str, float]:
     return {str(key): float(value) for key, value in parsed.items()}
 
 
+# An e-Rad 明細 ledger labels each row with a category code, while the
+# applicant writes the Japanese heading of the S-14 budget table. Declared
+# totals are therefore accepted under either name; comparing 「その他」 with
+# ``F`` used to report every category as missing with ``actual: null``.
+_BUDGET_CATEGORY_CODES: dict[str, tuple[str, ...]] = {
+    "A": ("設備備品費", "設備備品", "equipment"),
+    "B": ("消耗品費", "消耗品", "consumables"),
+    "C": ("国内旅費", "domestic travel"),
+    "D": ("外国旅費", "海外旅費", "foreign travel", "overseas travel"),
+    "E": ("人件費・謝金", "人件費謝金", "人件費", "謝金", "personnel"),
+    "F": ("その他", "other"),
+}
+
+
+def _budget_category_code(label: object) -> str:
+    key = re.sub(r"\s+", "", str(label or "")).replace("･", "・")
+    if key.upper() in _BUDGET_CATEGORY_CODES:
+        return key.upper()
+    lowered = key.lower()
+    for code, aliases in _BUDGET_CATEGORY_CODES.items():
+        if lowered in {alias.lower() for alias in aliases}:
+            return code
+    return key
+
+
+def _budget_category_label(code: str) -> str:
+    aliases = _BUDGET_CATEGORY_CODES.get(code)
+    return aliases[0] if aliases else code
+
+
+def _totals_by_category_code(values: dict) -> dict[str, float]:
+    merged: dict[str, float] = {}
+    for key, value in values.items():
+        code = _budget_category_code(key)
+        merged[code] = merged.get(code, 0.0) + float(value)
+    return merged
+
+
 def grant_writing_budget_source_consistency_check(
     budget_source: str,
     sheet_name: str = "meisai_sample1",
@@ -6387,6 +6683,10 @@ def grant_writing_budget_source_consistency_check(
     budget sheets. The tool compares row-level ledgers when a second XLSX/CSV
     is supplied and compares exact grand/year/category totals when declared
     values are supplied. It never infers a number from persuasive prose.
+
+    Declared category totals may use the e-Rad code (``A``..``F``) or the
+    Japanese heading of the S-14 table (設備備品費, 消耗品費, 国内旅費,
+    外国旅費, 人件費・謝金, その他); both are reconciled to the same code.
     """
     source = pathlib.Path(budget_source)
     if not source.is_file():
@@ -6415,20 +6715,38 @@ def grant_writing_budget_source_consistency_check(
         ),
         (
             "category",
-            _expected_totals_json(expected_category_totals_json, "expected_category_totals_json"),
-            totals["category_totals_thousand_yen"],
+            _totals_by_category_code(
+                _expected_totals_json(
+                    expected_category_totals_json, "expected_category_totals_json"
+                )
+            ),
+            _totals_by_category_code(totals["category_totals_thousand_yen"]),
         ),
     ):
         for key in sorted(set(expected) | set(actual)):
             want = expected.get(key)
             got = actual.get(key)
-            if want is not None and (got is None or float(got) != float(want)):
+            if want is None:
+                continue
+            if got is None:
+                # 「設備備品費 0」 is the applicant saying the ledger holds no
+                # such row; an absent category agrees with a declared zero.
+                if float(want) == 0.0:
+                    continue
+                differences.append({
+                    "type": f"{label}_not_in_ledger",
+                    label: key,
+                    "expected": want,
+                    "actual": None,
+                    "delta": None,
+                })
+            elif float(got) != float(want):
                 differences.append({
                     "type": f"{label}_total_mismatch",
                     label: key,
                     "expected": want,
                     "actual": got,
-                    "delta": None if got is None else round(float(got) - float(want), 3),
+                    "delta": round(float(got) - float(want), 3),
                 })
 
     comparison = None
@@ -6473,6 +6791,10 @@ def grant_writing_budget_source_consistency_check(
             "unit": "thousand_yen",
             "row_count": len(rows),
             "totals": totals,
+            "category_labels": {
+                code: _budget_category_label(_budget_category_code(code))
+                for code in totals["category_totals_thousand_yen"]
+            },
             "rows": rows,
         },
         "comparison": comparison,
@@ -6847,6 +7169,7 @@ def grant_writing_recommendation_letter_template(
 _DETECTOR_TOOLS = frozenset({
     "sentence",
     "bedrock",
+    "translationese",
     "weak",
     "claim",
     "vague",
@@ -6936,9 +7259,9 @@ def grant_writing_health_report(
         "abstraction", "argument_map", "basic_research", "bedrock", "budget", "capability",
         "claim", "domain", "focus", "format", "integration", "international",
         "irreplaceable", "kaken", "kddi", "literature", "metric", "narrative",
-        "originality", "pages", "persuasion", "pilot", "residue", "scale",
-        "japanese", "readability", "momentum", "sections", "sentence", "vague",
-        "vocabulary", "weak",
+        "nouns", "originality", "pages", "persuasion", "pilot", "residue",
+        "scale", "japanese", "readability", "momentum", "sections", "sentence",
+        "translationese", "vague", "vocabulary", "weak",
     }
     unknown_skip_ids = sorted(skip_set - valid_skip_ids)
     if unknown_skip_ids:
@@ -7087,6 +7410,35 @@ def grant_writing_health_report(
                     ),
                     "score": narrative["score"],
                     "comments": narrative["comments"][:5],
+                })
+
+    if "nouns" not in skip_set:
+        nouns = grant_writing_proper_noun_load_check(text)
+        detailed_results["proper_noun_load"] = nouns
+        if nouns["applicable"] and nouns["comments"]:
+            priority_issues.append({
+                "tool": "nouns",
+                "name": "proper_noun_load_check",
+                "severity": "MEDIUM",
+                "score": None,
+                "comments": nouns["comments"][:5],
+            })
+
+    if "translationese" not in skip_set:
+        translationese = grant_writing_translationese_check(text)
+        detailed_results["translationese"] = translationese
+        if translationese["applicable"]:
+            detailed_scores["translationese"] = translationese["score"]
+            if translationese["risks"]:
+                priority_issues.append({
+                    "tool": "translationese",
+                    "name": "translationese_check",
+                    "severity": max(
+                        (r["severity"] for r in translationese["risks"]),
+                        key=lambda s: {"HIGH": 2, "MEDIUM": 1, "LOW": 0}[s],
+                    ),
+                    "score": translationese["score"],
+                    "comments": translationese["comments"][:5],
                 })
 
     if "residue" not in skip_set:

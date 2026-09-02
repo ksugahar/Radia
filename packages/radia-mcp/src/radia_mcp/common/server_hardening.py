@@ -99,6 +99,11 @@ def classify_tool_annotations(mcp, *, destructive=frozenset(),
             tool.annotations = ANN_WRITES
         elif name in web:
             tool.annotations = ANN_READONLY_WEB
+        elif name.endswith("_reload_code"):
+            # Registered by register_status_tool on every server: reloads
+            # changed modules and re-registers tools in this process. It
+            # writes nothing to disk and touches no live session.
+            tool.annotations = ANN_WRITES
         else:
             tool.annotations = ANN_READONLY
             if not any(h in name for h in readonly_name_hints):
