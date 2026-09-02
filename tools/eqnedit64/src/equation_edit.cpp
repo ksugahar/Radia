@@ -221,6 +221,24 @@ int automatic_function_prefix_end(const NodeList& list, int caret) {
     return is_automatic_function_name(name) ? end : -1;
 }
 
+/* Preserve an already-recognised function to the left of an edit unless the
+ * edit grows the complete word into another recognised function.  Typing and
+ * structural joins must use the same rule: `\sin` + `x` is `\sin x`, while
+ * `\sin` + `h` becomes `\sinh`. */
+int automatic_function_refresh_boundary(const NodeList& list, int caret,
+                                        int functionPrefixEnd) {
+    if (functionPrefixEnd < 0) return -1;
+    int first = std::clamp(caret, 0, int(list.size()));
+    while (first > 0 && automatic_letter(list[size_t(first - 1)])) --first;
+    int last = std::clamp(caret, 0, int(list.size()));
+    while (last < int(list.size()) && automatic_letter(list[size_t(last)]))
+        ++last;
+    std::string whole;
+    for (int i = first; i < last; ++i)
+        whole.push_back(static_cast<const CharNode*>(list[size_t(i)].get())->ch);
+    return is_automatic_function_name(whole) ? -1 : functionPrefixEnd;
+}
+
 std::vector<uint32_t> utf8_codes(const std::string& s) {
     std::vector<uint32_t> out;
     for (size_t i = 0; i < s.size();) {
@@ -813,6 +831,22 @@ bool Equation::new_line() {
     const bool replacing = selection_range(
         &selected, &selectedFirst, &selectedLast);
 
+    /* Refuse a malformed or full row container before creating an Undo entry.
+     * Normal parser and editor paths never produce a malformed matrix, but a
+     * failed command must not leave a ghost `Line Break` in public history.
+     * The same 99-row ceiling used by the explicit matrix command applies to
+     * Enter in every row container. */
+    size_t checkedDepth = 0;
+    MatrixNode* checkedMatrix = nullptr;
+    int checkedCell = 0;
+    if (matrix_context(&checkedDepth, &checkedMatrix, &checkedCell) &&
+        (!checkedMatrix || checkedMatrix->rows <= 0 ||
+         checkedMatrix->cols <= 0 ||
+         checkedMatrix->rows >= 99 ||
+         checkedMatrix->elements.size() <
+             size_t(checkedMatrix->rows) * size_t(checkedMatrix->cols)))
+        return false;
+
     checkpoint("Line Break");
     if (replacing) {
         selected = slot_at(path_);
@@ -828,11 +862,57 @@ bool Equation::new_line() {
         clear_selection();
     }
 
+    /* A loaded multi-line equation leaves the caret immediately outside its
+     * aligned node.  Enter there extends that existing row set rather than
+     * wrapping it in a second aligned environment.  The same rule applies at
+     * the node's leading edge, where splitting the first cell at zero creates
+     * a blank first row. */
+    if (path_.empty()) {
+        clamp();
+        int alignedChild = -1;
+        bool leadingEdge = false;
+        if (index_ > 0) {
+            const int child = index_ - 1;
+            if (root_->children[size_t(child)] &&
+                root_->children[size_t(child)]->tag() == Node::kMatrix) {
+                auto* candidate = static_cast<MatrixNode*>(
+                    root_->children[size_t(child)].get());
+                if (candidate->layoutKind == MatrixNode::kAlignedLayout &&
+                    candidate->rows > 0 && candidate->cols > 0 &&
+                    candidate->elements.size() >=
+                        size_t(candidate->rows) * size_t(candidate->cols))
+                    alignedChild = child;
+            }
+        }
+        if (alignedChild < 0 && size_t(index_) < root_->children.size() &&
+            root_->children[size_t(index_)] &&
+            root_->children[size_t(index_)]->tag() == Node::kMatrix) {
+            auto* candidate = static_cast<MatrixNode*>(
+                root_->children[size_t(index_)].get());
+            if (candidate->layoutKind == MatrixNode::kAlignedLayout &&
+                candidate->rows > 0 && candidate->cols > 0 &&
+                candidate->elements.size() >=
+                    size_t(candidate->rows) * size_t(candidate->cols)) {
+                alignedChild = index_;
+                leadingEdge = true;
+            }
+        }
+        if (alignedChild >= 0) {
+            auto* candidate = static_cast<MatrixNode*>(
+                root_->children[size_t(alignedChild)].get());
+            const int targetCell = leadingEdge
+                ? 0 : candidate->rows * candidate->cols - 1;
+            path_.push_back({alignedChild, targetCell});
+            auto& target = static_cast<LineNode&>(
+                *candidate->elements[size_t(targetCell)]).children;
+            index_ = leadingEdge ? 0 : int(target.size());
+        }
+    }
+
     size_t depth = 0;
     MatrixNode* matrix = nullptr;
     int cell = 0;
-    if (!matrix_context(&depth, &matrix, &cell,
-                        MatrixNode::kAlignedLayout)) {
+    if (!matrix_context(&depth, &matrix, &cell)) {
         auto aligned = std::make_unique<MatrixNode>();
         aligned->layoutKind = MatrixNode::kAlignedLayout;
         aligned->rows = 2; aligned->cols = 1;
@@ -872,7 +952,7 @@ bool Equation::new_line() {
         return true;
     }
 
-    if (!matrix || matrix->cols <= 0) return false;
+    /* The malformed-model guard above covers this path before checkpoint. */
     int row = std::clamp(cell / matrix->cols, 0, std::max(0, matrix->rows - 1));
     int col = std::clamp(cell % matrix->cols, 0, matrix->cols - 1);
     size_t at = size_t(row + 1) * size_t(matrix->cols);
@@ -882,11 +962,12 @@ bool Equation::new_line() {
     ++matrix->rows;
 
     if (path_.size() == depth + 1) {
-        /* Treat an aligned row as a sequence of cells.  The suffix of the
-         * current cell and every cell to its right move to the inserted row,
-         * exactly as inserting `\\` at that location in the TeX source does.
-         * Keeping the right-hand cells on the old row made Enter before an
-         * alignment tab disagree with the source pane. */
+        /* Treat a row as a sequence of cells.  The suffix of the current cell
+         * and every cell to its right move to the inserted row, exactly as
+         * inserting `\\` plus the required leading empty cells at that
+         * location in the TeX source does.  This applies to aligned, ordinary
+         * matrices, and cases; wrapping a matrix cell in an outer aligned
+         * environment made Enter act on the wrong structure. */
         auto& current = static_cast<LineNode&>(
             *matrix->elements[size_t(row * matrix->cols + col)]).children;
         auto& next = static_cast<LineNode&>(
@@ -1399,19 +1480,8 @@ void Equation::insert_text_typeface(const std::string& utf8,
         /* `sin` + `h` must still grow into the longer recognised `sinh`.
          * Otherwise retain the complete function and classify only the newly
          * typed argument suffix. */
-        if (functionPrefixEnd >= 0) {
-            int firstWord = index_;
-            while (firstWord > 0 && automatic_letter(l[size_t(firstWord - 1)]))
-                --firstWord;
-            int lastWord = index_;
-            while (lastWord < int(l.size()) &&
-                   automatic_letter(l[size_t(lastWord)]))
-                ++lastWord;
-            std::string whole;
-            for (int i = firstWord; i < lastWord; ++i)
-                whole.push_back(static_cast<CharNode*>(l[size_t(i)].get())->ch);
-            if (is_automatic_function_name(whole)) functionPrefixEnd = -1;
-        }
+        functionPrefixEnd = automatic_function_refresh_boundary(
+            l, index_, functionPrefixEnd);
         refresh_auto_function_word(functionPrefixEnd);
     }
 }
@@ -1737,9 +1807,58 @@ bool Equation::edit_aligned_boundary(bool backwards) {
     const int row = std::clamp(alignedCell / cols, 0, rows - 1);
     const int col = std::clamp(alignedCell % cols, 0, cols - 1);
 
-    /* An alignment tab is a navigation boundary, not a character in one
-     * cell.  Move to the adjacent cell instead of silently changing the
-     * column schema. */
+    /* In a one-row aligned expression, the boundary is exactly one visible
+     * `&`, so Backspace/Delete removes it by joining the two cells.  In a
+     * multi-row expression a column belongs to every row; changing the full
+     * schema from one row boundary would be surprising, so the same keys only
+     * navigate there (the explicit remove-column command remains available). */
+    const bool atColumnBoundary =
+        (backwards && col > 0) || (!backwards && col + 1 < cols);
+    if (atColumnBoundary && rows == 1) {
+        checkpoint("Join Columns");
+        const int targetCol = backwards ? col - 1 : col;
+        const int removedCol = backwards ? col : col + 1;
+        auto& before = static_cast<LineNode&>(
+            *aligned->elements[size_t(targetCol)]).children;
+        auto& after = static_cast<LineNode&>(
+            *aligned->elements[size_t(removedCol)]).children;
+        const int boundary = int(before.size());
+        int functionPrefixEnd = automatic_function_prefix_end(before, boundary);
+        for (auto& node : after)
+            if (node) before.push_back(std::move(node));
+        aligned->elements.erase(aligned->elements.begin() + removedCol);
+        --aligned->cols;
+
+        if (aligned->cols == 1) {
+            const CaretStep matrixStep = path_[alignedDepth];
+            std::vector<CaretStep> parentPath(
+                path_.begin(), path_.begin() + alignedDepth);
+            NodeList* parent = slot_at(parentPath);
+            if (!parent || matrixStep.child < 0 ||
+                size_t(matrixStep.child) >= parent->size())
+                return false;
+            NodeList joined = std::move(static_cast<LineNode&>(
+                *aligned->elements[0]).children);
+            parent->erase(parent->begin() + matrixStep.child);
+            int at = matrixStep.child;
+            for (auto& node : joined)
+                parent->insert(parent->begin() + at++, std::move(node));
+            path_ = std::move(parentPath);
+            index_ = matrixStep.child + boundary;
+            functionPrefixEnd = automatic_function_prefix_end(*parent, index_);
+            functionPrefixEnd = automatic_function_refresh_boundary(
+                *parent, index_, functionPrefixEnd);
+        } else {
+            path_.resize(alignedDepth + 1);
+            path_[alignedDepth].slot = targetCol;
+            index_ = boundary;
+            functionPrefixEnd = automatic_function_refresh_boundary(
+                before, boundary, functionPrefixEnd);
+        }
+        refresh_auto_function_word(functionPrefixEnd);
+        clear_selection();
+        return true;
+    }
     if (backwards && col > 0) {
         path_.resize(alignedDepth + 1);
         path_[alignedDepth].slot = row * cols + col - 1;
@@ -1798,7 +1917,10 @@ bool Equation::edit_aligned_boundary(bool backwards) {
             parent->insert(parent->begin() + at++, std::move(node));
         path_ = std::move(parentPath);
         index_ = matrixStep.child + caretBoundaries[0];
-        refresh_auto_function_word();
+        int functionPrefixEnd = automatic_function_prefix_end(*parent, index_);
+        functionPrefixEnd = automatic_function_refresh_boundary(
+            *parent, index_, functionPrefixEnd);
+        refresh_auto_function_word(functionPrefixEnd);
     } else {
         /* Every corresponding cell pair was joined, so every join boundary
          * can create or break an automatically recognised function word. */
@@ -1806,7 +1928,12 @@ bool Equation::edit_aligned_boundary(bool backwards) {
             path_.resize(alignedDepth + 1);
             path_[alignedDepth].slot = targetRow * cols + c;
             index_ = caretBoundaries[size_t(c)];
-            refresh_auto_function_word();
+            NodeList& joined = here();
+            int functionPrefixEnd = automatic_function_prefix_end(
+                joined, index_);
+            functionPrefixEnd = automatic_function_refresh_boundary(
+                joined, index_, functionPrefixEnd);
+            refresh_auto_function_word(functionPrefixEnd);
         }
         path_[alignedDepth].slot = targetRow * cols + col;
         index_ = caretBoundaries[size_t(col)];

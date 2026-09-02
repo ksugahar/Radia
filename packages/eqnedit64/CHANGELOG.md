@@ -9,8 +9,16 @@
   equation or losing the horizontal caret position.
 - Carry the unreleased 3.0.12 selection, formatted-source, and simplified
   converter work into the reviewed 3.0.13 release candidate.
+- Preserve automatic function spelling across row joins, extend rather than
+  nest a loaded aligned equation, and keep source Enter away from opening
+  tokens and nested template contents.
+- Make a one-row alignment tab removable with Backspace/Delete while treating
+  multi-row column boundaries as non-dirty navigation.
+- Keep Enter inside matrix/cases rows with the original column alignment,
+  accept top-level `\\` as a row separator, and remove emitter-only line feeds
+  before laying out the synchronized source pane with Win32 CRLF.
 
-## 3.0.12 - 2026-09-02
+### Included unreleased 3.0.12 candidate (2026-09-02)
 
 - Promote cross-slot pointer drags to a complete structural selection and use
   the same range for copy, deletion, replacement, wrapping, and style changes.

@@ -13,8 +13,18 @@
 - Require one Claude Code Fable review of the signed O: hand-test candidate and
   its specification diff before main integration, release tagging, or PyPI
   publication.
+- Preserve automatic function spelling across row joins, keep Enter inside an
+  existing aligned environment even when its caret is at the outer boundary,
+  and clamp source-pane Enter away from environment tokens and nested groups.
+- Let Backspace/Delete remove a one-row alignment tab while multi-row column
+  boundaries remain navigation-only and do not dirty the document.
+- Make Enter act on the innermost matrix or cases row, preserving the current
+  column and cells to its right, and accept a top-level `a\\b` fragment as the
+  same two-row aligned equation instead of rendering a backslash glyph.
+- Give the synchronized source pane sole ownership of CRLF layout by consuming
+  emitter line feeds first, preventing control glyphs and doubled blank lines.
 
-## 3.0.12 — 2026-09-02
+### Included unreleased 3.0.12 candidate (2026-09-02)
 
 - Promote drags that cross structural slots to their deepest common ancestor
   instead of discarding the selection. The original deep press position stays

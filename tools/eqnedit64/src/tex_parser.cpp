@@ -873,11 +873,65 @@ std::string strip_delimiters(const std::string& in) {
     return s;
 }
 
+/* A bare TeX fragment such as `a\\\\b` is the natural source-pane spelling
+ * of two equation rows.  At top level the parser previously treated the token
+ * as a visible backslash command, even though the same token already means a
+ * row break inside aligned/matrix/cases.  Detect only a genuinely top-level
+ * separator: braces and environments keep their own row semantics. */
+bool has_top_level_row_break(const std::string& source) {
+    int braces = 0;
+    int environments = 0;
+    for (size_t i = 0; i < source.size();) {
+        if (source.compare(i, 7, "\\begin{") == 0 ||
+            source.compare(i, 5, "\\end{") == 0) {
+            const bool opening = source.compare(i, 7, "\\begin{") == 0;
+            const size_t tokenSize = opening ? 7 : 5;
+            const size_t close = source.find('}', i + tokenSize);
+            if (close == std::string::npos) break;
+            if (opening)
+                ++environments;
+            else
+                environments = std::max(0, environments - 1);
+            i = close + 1;
+            continue;
+        }
+        if (source[i] == '{') {
+            ++braces;
+            ++i;
+            continue;
+        }
+        if (source[i] == '}') {
+            braces = std::max(0, braces - 1);
+            ++i;
+            continue;
+        }
+        if (source[i] == '\\' && i + 1 < source.size() &&
+            source[i + 1] == '\\') {
+            if (braces == 0 && environments == 0) return true;
+            i += 2;
+            continue;
+        }
+        if (source[i] == '\\' && i + 1 < source.size()) {
+            /* An escaped brace is data, not group structure.  Other commands
+             * can be skipped one character at a time without hiding `\\\\`. */
+            if (source[i + 1] == '{' || source[i + 1] == '}') {
+                i += 2;
+                continue;
+            }
+        }
+        ++i;
+    }
+    return false;
+}
+
 }  // namespace
 
 std::unique_ptr<LineNode> parse_latex(const std::string& latex,
                                       bool* depthExceeded) {
-    TexParser p(strip_delimiters(latex));
+    std::string source = strip_delimiters(latex);
+    if (has_top_level_row_break(source))
+        source = "\\begin{aligned}" + source + "\\end{aligned}";
+    TexParser p(std::move(source));
     std::unique_ptr<LineNode> root = p.parse();
     if (depthExceeded) *depthExceeded = p.depth_exceeded();
     return root;
