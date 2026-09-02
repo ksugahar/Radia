@@ -6,13 +6,12 @@
 # (run once per clone).  Edit THIS file, not the installed copy, then re-run
 # the installer.
 #
-# Two duties:
-#   1. CI preflight gate -- on a push to main, send the unpushed candidate to
-#      mdx and run `tools/ci_preflight_mdx.py`. It ABORTS the push if mdx
-#      reports a red fast contract gate. This is the enforcement half of
-#      "commit -> CI check -> push" without running CI on the desktop.
-#      Bypass for an emergency with:   CI_PREFLIGHT_SKIP=1 git push
-#   2. Upload native binaries to the GitHub 'binaries' Release (NEVER blocks).
+# CI preflight gate -- on a push to main, send the unpushed candidate to mdx
+# and run `tools/ci_preflight_mdx.py`. It ABORTS the push if mdx reports a red
+# fast contract gate. Native binaries are published only from the exact CI
+# artifact by the release workflow; a developer push must never upload mutable
+# workstation binaries. Bypass the preflight for an emergency with:
+# CI_PREFLIGHT_SKIP=1 git push
 
 REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)"
 [ -z "$REPO_ROOT" ] && exit 0
@@ -46,22 +45,6 @@ if [ "${CI_PREFLIGHT_SKIP:-}" != "1" ] && [ -f tools/ci_preflight_mdx.py ]; then
             exit 1
         fi
     done
-fi
-
-# ---- Duty 2: upload binaries (never blocks the push) ----------------------
-UPLOAD_FILES=()
-for f in src/radia/*.pyd src/radia/*.dll src/radia/*.so src/radia/*.dylib; do
-    case "$f" in
-        *.locked-old.*|*.lockedold.*|*.pre_*.*|*.backup*.*) continue ;;
-    esac
-    [ -f "$f" ] && UPLOAD_FILES+=("$f")
-done
-[ -f "src/ext/fmm3d/lib/fmm3d.lib" ] && UPLOAD_FILES+=("src/ext/fmm3d/lib/fmm3d.lib")
-
-if [ ${#UPLOAD_FILES[@]} -gt 0 ] && [ -f tools/upload_release_asset.py ]; then
-    echo "Uploading ${#UPLOAD_FILES[@]} binary files to GitHub Releases..."
-    python tools/upload_release_asset.py --repo ksugahar/Radia --tag binaries \
-        "${UPLOAD_FILES[@]}" || true
 fi
 
 exit 0

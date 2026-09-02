@@ -726,6 +726,10 @@ jobs:
             src/radia/*.dll
             src/radia/*.so
             src/radia/*.dylib
+            !src/radia/*.locked-old.*
+            !src/radia/*.lockedold.*
+            !src/radia/*.pre_*.*
+            !src/radia/*.backup*.*
           retention-days: 7
 
       # ----------------------------------------------------------------

@@ -31,6 +31,40 @@ def test_fast_ci_runs_only_on_mdx_and_native_is_a_named_release_lane():
     assert 'workflows: ["Radia Native Release"]' in release
 
 
+def test_distribution_ci_is_change_scoped_and_mcp_full_suite_runs_once():
+    fast = (ROOT / ".github" / "workflows" / "radia-fast.yml").read_text(
+        encoding="utf-8"
+    )
+    policy = (ROOT / ".github" / "workflows" / "policy-lint.yml").read_text(
+        encoding="utf-8"
+    )
+    mcp = (ROOT / ".github" / "workflows" / "radia-mcp-matrix.yml").read_text(
+        encoding="utf-8"
+    )
+
+    for independent_path in (
+        "packages/radia-mcp/**",
+        "packages/cubit-mesh-export/**",
+        "packages/radia-optuna/**",
+        "packages/eqnedit64/**",
+    ):
+        assert independent_path in fast
+
+    assert 'paths-ignore:' in policy
+    assert '"packages/radia-mcp/**"' in policy
+    assert "Classify radia-mcp change scope" in mcp
+    assert 'git diff --name-only "$BASE_SHA...$GITHUB_SHA"' in mcp
+    assert "python_versions='[\"3.10\",\"3.11\",\"3.12\"]'" in mcp
+    assert "python_versions='[\"3.12\"]'" in mcp
+    assert "python-version: ${{ fromJSON(needs.scope.outputs.python_versions) }}" in mcp
+    assert (
+        "matrix.python-version == '3.12' && "
+        "needs.scope.outputs.run_full == 'true'"
+    ) in mcp
+    assert "mode=release" in mcp
+    assert "needs.scope.outputs.build_wheel == 'true'" in mcp
+
+
 def test_pre_push_runs_the_unpushed_candidate_on_mdx():
     hook = (ROOT / "tools" / "git-hooks" / "pre-push").read_text(encoding="utf-8")
     helper = (ROOT / "tools" / "ci_preflight_mdx.py").read_text(encoding="utf-8")
@@ -40,6 +74,8 @@ def test_pre_push_runs_the_unpushed_candidate_on_mdx():
     assert "scp" in helper
     assert "tools/ci_preflight.py --only policy,version" in helper
     assert "tests/test_docs_notebook_contract.py" in helper
+    assert "upload_release_asset.py" not in hook
+    assert "developer push must never upload mutable" in hook
 
 
 def test_policy_twins_define_the_same_mdx_notebook_contract():
@@ -57,3 +93,6 @@ def test_policy_twins_define_the_same_mdx_notebook_contract():
     assert "mdx gives CI and preflight work priority" in normalized
     assert "use hibino first when it is available" in normalized
     assert "the mdx CI queue is idle" in normalized
+    assert "CI scope begins at the independently released distribution boundary" in normalized
+    assert "complete pytest suite and all-server selftests only once" in normalized
+    assert "Developer pre-push hooks run only the impact-scoped mdx preflight" in normalized
