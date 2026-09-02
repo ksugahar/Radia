@@ -3,6 +3,7 @@
 import ast
 import importlib
 import importlib.util
+import json
 import os
 import re
 import sys
@@ -15,6 +16,25 @@ if str(_SRC) not in sys.path:
     sys.path.insert(0, str(_SRC))
 _TEST_ROOT = Path(__file__).resolve().parent
 _RADIA_MCP_ROOT = _SRC / "radia_mcp"
+
+_CI_SELECTION_RAW = os.environ.get("RADIA_MCP_CI_SELECTION_JSON", "")
+_CI_SELECTORS = tuple(json.loads(_CI_SELECTION_RAW)) if _CI_SELECTION_RAW else ()
+
+
+def _selector_file(selector: str) -> str:
+    return selector.replace("\\", "/").split("::", 1)[0]
+
+
+def _relative_nodeid(nodeid: str) -> str:
+    normalized = nodeid.replace("\\", "/")
+    marker = "packages/radia-mcp/"
+    if marker in normalized:
+        return normalized.split(marker, 1)[1]
+    return normalized
+
+
+_CI_SELECTED_FILES = {_selector_file(selector) for selector in _CI_SELECTORS}
+_CI_SELECT_ALL = not _CI_SELECTORS or "tests" in _CI_SELECTED_FILES
 
 # The radia-mcp matrix CI ("lightweight selftest") installs ONLY mcp + pytest
 # + radia-mcp (--no-deps): NO ngsolve / netgen / scipy / numpy / matplotlib /
@@ -149,6 +169,11 @@ def _project_import_has_absent_dependency(module_name: str, seen: set | None = N
 
 collect_ignore = []
 for _f in sorted(_TEST_ROOT.rglob("test_*.py")):
+    _relative = _f.relative_to(_TEST_ROOT).as_posix()
+    _package_relative = f"tests/{_relative}"
+    if not _CI_SELECT_ALL and _package_relative not in _CI_SELECTED_FILES:
+        collect_ignore.append(_relative)
+        continue
     try:
         _src = _f.read_text(encoding="utf-8", errors="ignore")
     except OSError:
@@ -156,6 +181,33 @@ for _f in sorted(_TEST_ROOT.rglob("test_*.py")):
     if any(_module_absent(_m) or _project_import_has_absent_dependency(_m)
            for _m in _imported_modules(_src)):
         collect_ignore.append(_f.relative_to(_TEST_ROOT).as_posix())
+
+
+def pytest_collection_modifyitems(config, items):
+    """Keep node-specific selectors precise after file-level collection."""
+    if _CI_SELECT_ALL:
+        return
+
+    whole_files = {
+        selector for selector in _CI_SELECTORS if "::" not in selector
+    }
+    exact_nodes = {
+        selector.replace("\\", "/")
+        for selector in _CI_SELECTORS
+        if "::" in selector
+    }
+    kept = []
+    deselected = []
+    for item in items:
+        relative = _relative_nodeid(item.nodeid)
+        file_part = relative.split("::", 1)[0]
+        if file_part in whole_files or relative in exact_nodes:
+            kept.append(item)
+        else:
+            deselected.append(item)
+    if deselected:
+        config.hook.pytest_deselected(items=deselected)
+    items[:] = kept
 
 
 # ---------------------------------------------------------------------------
