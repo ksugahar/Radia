@@ -145,6 +145,10 @@ def build_plan(changed_files: Iterable[str], *, full: bool = False) -> dict:
     family_servers = _family_to_server(catalog)
 
     for path in changed:
+        if path == "packages/radia-mcp/tests/conftest.py":
+            selected.add("tests/test_ci_collection_scope.py")
+            continue
+
         if path.startswith(TEST_PREFIX) and path.endswith(".py"):
             relative = path.removeprefix("packages/radia-mcp/")
             if relative in sources:
