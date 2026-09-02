@@ -13,6 +13,15 @@ crystallized as its own package.
   Run per field file, the abilities field was reported as lacking the academic
   question and the purpose field as lacking the execution environment
   (2026-09-02, 基盤C 2027 draft).
+- grant-writing: new `grant_writing_proper_noun_load_check` lists proper
+  nouns a reviewer must place, and the ones named once with no role in their
+  sentence (venues in a yearly plan and 招へい/招請 partners are kept apart).
+  Measured 2026-09-02: two sentences added to 準備状況 introduced a third
+  analysis object, a software name and a person that appeared nowhere else;
+  every mechanical check passed and the applicant removed them as foreign
+  matter. The skill records the rule: fewer proper nouns, and only
+  investigators, collaborators, or the target problems may be named. The
+  health report carries it as a question (skip id `nouns`).
 - grant-writing / paper-writing / presentation: new shared translationese
   check (`*_translationese_check`) for Japanese that reads as translated
   English or generated prose: an intransitive verb in a transitive slot
