@@ -8,7 +8,7 @@ and post-processing patterns.
 
 Public docs/notebooks:
   - docs/induction_heating/public_demo.ipynb -- human-facing ESIM/BEM/WPT
-    induction-heating entry point with saved outputs and JSON sidecar.
+    induction-heating entry point with saved outputs.
   - docs/induction_heating/induction_heating_demo_showcase.ipynb -- saved
     promotion notebook for the closed public ESIM/WPT/RWG demo scripts.
   - docs/induction_heating/induction_heating_examples_catalog.ipynb -- full
@@ -496,30 +496,23 @@ Q = 0.5 * sigma * InnerProduct(E, Conj(E)).real
 INDUCTION_HEATING_THERMAL = """
 # Transient Thermal Analysis for Induction Heating
 
-## Production path: IH Simulink block
+## Production path: native IH Simulink blocks
 
-Heat analysis is a **Method choice** in the Radia Simulink Induction Heating
-block and `IHDesignSpec`, alongside the existing PEEC-Inductance / PEEC-BEM / FEM-Kelvin /
-FEM-coilmesh methods.  Pick one of three Thermal Method choices
-(v4.63.0+):
+The tracked production model is ``matlab/radia_ih.slx``.  Its readable Level-2
+MATLAB S-Functions expose two independent lifecycle boundaries:
 
-  - ``Thermal: 3D static (no rotation)`` -- 3D solver with
-    rotation_rpm = 0.  Use for static one-shot heat-up.
-  - ``Thermal: 3D + rotation (q_surf re-sampled per step)`` --
-    3D solver with workpiece rotation (v4.58.0 qsurf re-projection
-    each timestep).  Use for non-axisymmetric workpieces / coils.
-  - ``Thermal: 2D axisymmetric (rotation implicit)`` -- axisym
-    solver (10-100x faster); rotation is implicit in the axisym
-    assumption.  Use for rotationally-symmetric workpieces.
+* ``radia.simulink.ihEddySFunction`` receives coil current, workpiece angle,
+  and the accepted temperature distribution, then emits distributed heat.
+* ``radia.simulink.ihThermalSFunction`` receives distributed heat, ambient
+  temperature, and workpiece angle, then emits the accepted temperature field.
 
-The Method dropdown encodes the (mesh_type, rotation_rpm) pair;
-the embedded HeatPanel's individual fields are hidden.
+Both wrappers own checked ``uint64`` handles to the standalone ``radia_mex``
+Eddy and Thermal kernels.  Python is not called per Simulink time step.  The
+masked parameter block loads a checked MAT/JSON configuration; geometry-driven
+updates first validate each ``.vol`` with ``check-vol`` and then assemble a new
+configuration explicitly.
 
-Pre-v4.63.0 single-entry path (kept for context): pick **Method
-→ "Thermal (heat transfer from
-saved q_surf .sol)"**.
-
-Workflow (single window):
+Workflow:
 
 1. Run an EM solve method that emits ``qsurf.sol`` (PEEC+BEM,
    BEM-A+BEM, PEEC+FEM+Kelvin, or FEM-full).  Note: PEEC+BEM and
@@ -560,23 +553,16 @@ Workflow (single window):
      z of max q   = +11.25 mm (matches Biot-Savart peak exactly)
      ∫ q dS       = 6.1386 W (= BIE P_wp)
      peak / end   = 1465x (strong concentration under coil)
-2. Click the **"Run thermal..."** chain button on the action row.
-   This SWITCHES the method dropdown to "Thermal" and pre-fills the
-   embedded thermal panel's ``qsurf_sol`` + ``em_vol`` fields.
-3. Pick the workpiece thermal ``wp.vol`` (a SEPARATE mesh from the
+2. Select or generate the native IH configuration from the masked
+   ``IH Parameters`` / geometry-update blocks.
+3. Select the workpiece thermal ``wp.vol`` (a SEPARATE mesh from the
    EM ``.vol``; the EM mesh treats the workpiece as a hole with a
    SIBC face, the thermal mesh treats it as a real solid).
-4. Set material / convection / time scheme / rotation_rpm.
-5. Click Run.
+4. Set the material, convection, time-step, and geometry parameters.
+5. Drive current and angle with ordinary Simulink source blocks and run.
 
-The pre-4.59.0 standalone ``radia-heat`` (HeatWindow) launcher was
-REMOVED in radia 4.62.0.  Heat analysis is the Method = "Thermal"
-choice in ``radia-ih`` exclusively.  The HeatPanel sub-widget lives
-at ``radia._heat_panel`` as an internal implementation detail of
-the IH panel; no public CLI replacement for ``radia-heat`` exists
-(launch ``radia-ih`` and pick the Thermal method instead).
-Programmatic imports: replace ``from radia.radia_heat import ...``
-with ``from radia._heat_panel import ...``.
+The headless ``calc_heat.py`` and ``calc_heat_axisym.py`` paths remain reusable
+batch and validation entry points.  They are not desktop interfaces.
 
 ## ``.sol + .vol`` strict contract (4.58.0+)
 
@@ -592,21 +578,19 @@ python -m radia.panels.calc_heat \\
     --qsurf-order 1                \\  # MUST equal EM fes_order
     --material steel --dt 0.5 --t-end 5.0 \\
     --rotation-rpm 12                  # see ``rotating`` topic
-    # --surface-label is OPTIONAL since v4.74.0: empty = all BND.
+    # --surface-label is OPTIONAL: empty = all BND.
     # Pass a specific name only when the workpiece has MULTIPLE BND
     # sidesets and heating + convection should be restricted to a
-    # subset.  The panel auto-fills the sole BND label when the .vol
-    # has exactly one (e.g. 'sibc'), so users typically don't need
-    # to type it.
+    # subset. The Simulink configuration validates this label before
+    # native state is created.
 ```
 
 `--qsurf-order` must match the EM solve's `--fes-order` exactly;
 mismatch reads garbage silently (no NGSolve error).  Defaults: both 1.
 
-The HeatPanel's Run button stays disabled until both .sol AND .vol
-exist on disk.  Auto-locate by filename convention was REMOVED in
-4.58.0 per CLAUDE.md "No Fallbacks" (was a silent footgun when the
-user renamed or moved files).
+The headless runner and Simulink initialization both fail before solving when
+the ``.sol`` / ``.vol`` pair is incomplete or incompatible.  They do not infer
+a missing companion file from a filename convention.
 
 ## ``.sol`` data model: H1 GridFunction with boundary-only DOFs
 
@@ -726,7 +710,7 @@ the per-step RHS, so the cached ``mstar = M + theta*dt*K`` factorisation is kept
                * ((T+273.15)**4 - (T_ext+273.15)**4) * v * ds("work_surface")
 
 Validated by the eps-sigma steady-state balance
-T_ss = (q/(eps*sigma) + T_ext_K^4)^(1/4)  (tests/panels/test_heat_radiation.py,
+T_ss = (q/(eps*sigma) + T_ext_K^4)^(1/4)  (validation_test/panels/test_heat_radiation.py,
 0.02 %).  Radiation ambient = ``--t-ext`` (shared with convection).
 
 ## Complete Thermal Implementation
@@ -898,11 +882,13 @@ Q = 0.5 * sigma * InnerProduct(E, Conj(E)).real
 INDUCTION_HEATING_ROTATING = """
 # Rotating Workpiece Simulation (radia 4.58.0+)
 
-## Production path: pass `--rotation-rpm` to `calc_heat.py`
+## Production path: angle is an explicit Simulink signal
 
-Since radia v4.58.0 the 3D thermal solver implements workpiece rotation
-natively.  Users do NOT write rotation code by hand; they just supply
-a non-zero `--rotation-rpm`:
+The workpiece angle is generated on the Simulink side and is wired to both the
+Eddy and Thermal blocks.  The Thermal block holds temperature in workpiece
+coordinates and transfers the previous accepted field from ``theta_prev`` to
+``theta_now`` before advancing the thermal step.  The headless validation path
+can generate the equivalent angle history from ``--rotation-rpm``:
 
 ```bash
 python -m radia.panels.calc_heat \\
@@ -914,10 +900,6 @@ python -m radia.panels.calc_heat \\
     --dt 0.5 --t-end 5.0 \\
     --rotation-rpm 12        # <-- workpiece spins around z at 12 rpm
 ```
-
-Equivalent panel knob: the `Rotation [rpm]` field in `radia-ih`
-(Layer 3 Cubit panel, Method = "Thermal" section; the field is
-implemented in `radia._heat_panel`).  Default 0 (stationary).
 
 ## How calc_heat.py implements rotation
 
@@ -963,8 +945,9 @@ Re-projection of q_surf is ~10ms per step on the same mesh.
 ## .sol contract for rotation users
 
 The rotation path consumes the spatial qsurf path (`--qsurf-sol +
---em-vol`).  Uniform `--q-uniform` is rotation-invariant and the panel
-warns when `--rotation-rpm > 0` is paired with it.
+--em-vol`).  Uniform `--q-uniform` is rotation-invariant; configuration
+validation rejects or diagnoses combinations that cannot express the requested
+spatial rotation.
 
 Three CONTRACTS that must hold between the EM solve (calc_fem_kelvin.py)
 and the thermal solve (calc_heat.py):
@@ -995,12 +978,12 @@ and the thermal solve (calc_heat.py):
 
 ## Test coverage
 
-* `tests/panels/test_heat_rotation.py` -- unit tests for the rotation
+* `validation_test/panels/test_heat_rotation.py` -- validation tests for the rotation
   projection math on a synthetic unit-cube setup with q_em(x,y,z)=x.
   At theta=0 / pi / pi/2 the body point near (+1,0,0) reads
   q ~ 1 / -1 / 0 respectively.
 
-* `tests/panels/test_heat_chain_golden.py` -- end-to-end chain test
+* `validation_test/panels/test_heat_chain_golden.py` -- end-to-end chain test
   (EM solve -> qsurf.sol -> thermal solve).  Slow-marked.
    Use ParaView to animate the sequence.
 
@@ -1551,8 +1534,8 @@ Steel 7 kHz induction heating (R_wp=10mm):
 
 ### EM -> q_surf -> Thermal Workflow
 
-The radia_ih panel runs the EM solve and the thermal solve as separate
-modes:
+The Radia Induction Heating Simulink application runs the EM and thermal
+solvers as separate blocks:
 
 - **EM** (`calc_inductance.py` / `calc_fem_kelvin.py` /
   `calc_fem_coilmesh.py`) emits a workpiece surface power density
@@ -2010,12 +1993,12 @@ solve — a plausible-looking but incorrect number).
 
 ### Golden regression test (policy)
 
-`tests/panels/test_peec_bem_golden.py` runs `calc_inductance.py` on
+`validation_test/panels/test_inductance_golden.py` runs `calc_inductance.py` on
 `ih_peec_bem_coarse.vol` at 7 kHz Cu and asserts:
 - L_coil within 1% of captured 88.57 nH (geometry-only, tight)
 - P_wp within 15% of 2D SIBC reference 6.63e-5 W (mesh-sensitive)
 
-Expected values in `tests/panels/golden/peec_bem_coarse_7kHz_Cu.json`.
+Expected values in `validation_test/panels/golden/peec_bem_coarse_7kHz_Cu.json`.
 Re-generate the sample via Cubit headless:
 `coreform_cubit -batch -nojournal -nographics -input
 src/radia/panels/samples/ih_peec_bem_coarse.jou`.

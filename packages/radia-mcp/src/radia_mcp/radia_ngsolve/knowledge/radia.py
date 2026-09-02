@@ -3441,24 +3441,24 @@ Build.ps1 (MSVC + MKL + NGSolve)
 ### Prerequisites
 
 - **Visual Studio 2022** (MSVC compiler)
-- **Intel oneAPI Base Toolkit** (MKL only, NOT the Intel compiler)
-- **NGSolve** (source build at public-safe curated corpus)
+- **Intel MKL** from `python -m pip install mkl-devel`
+- **NGSolve / Netgen** at the exact versions pinned in `pyproject.toml`
 - **Python 3.12** with pybind11
 
 ### Build Commands
 
 ```powershell
 # Standard build
-powershell -ExecutionPolicy Bypass -File Build.ps1
+pwsh -NoProfile -ExecutionPolicy Bypass -File Build.ps1
 
 # Clean rebuild
-powershell -ExecutionPolicy Bypass -File Build.ps1 -Rebuild
+pwsh -NoProfile -ExecutionPolicy Bypass -File Build.ps1 -Rebuild
 
 # Build + run tests
-powershell -ExecutionPolicy Bypass -File Build.ps1 -Test
+pwsh -NoProfile -ExecutionPolicy Bypass -File Build.ps1 -Test
 
 # Verbose output
-powershell -ExecutionPolicy Bypass -File Build.ps1 -Verbose
+pwsh -NoProfile -ExecutionPolicy Bypass -File Build.ps1 -Verbose
 ```
 
 ### NGSolve for CI Runner

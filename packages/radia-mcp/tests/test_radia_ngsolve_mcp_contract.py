@@ -67,18 +67,21 @@ async def _probe_hdiv_vim_stdio() -> dict[str, object]:
                     and "not for every geometry" in normalized
                 ),
                 "teaches_mapped_bdm2_gate": (
-                    "mapped/non-affine pure HEX material models" in normalized
-                    and "--include-bdm2-gate" in normalized
-                    and "composite mapped-HEX BDM2 charge operator" in normalized
+                    "mapped/non-affine pure-HEX BDM2 primal material and field lane"
+                    in normalized
+                    and "production C++ composite operator" in normalized
+                    and "complete-host tensor rules" in normalized
                     and "same 207 active mapped-body BDM2 DoFs" in normalized
+                    and "reflection-invariant whole-host Duffy rules" in normalized
                     and "not an open-boundary accuracy oracle" in normalized
                 ),
                 "teaches_h1_hodge_mixed_gate": (
                     "H1HodgeDemagOperator" in normalized
                     and "hdiv.FreeDofs()" in normalized
                     and "snapshot residual below `3e-12`" in normalized
-                    and "does not repair the open-boundary charge kernel"
+                    and "independently of the repaired open-boundary operator"
                     in normalized
+                    and "not an accuracy oracle" in normalized
                 ),
                 "teaches_h1_hodge_accuracy_ladder": (
                     "1.0916977441" in normalized

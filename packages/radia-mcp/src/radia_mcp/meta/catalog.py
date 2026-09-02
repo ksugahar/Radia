@@ -647,15 +647,11 @@ CATALOG: dict[str, dict[str, Any]] = {
     "document-meta": {
         "subpackage": "radia_mcp.document_meta",
         "entry_point": "mcp-server-document-meta",
-        "description": "Cross-cutting document/repo helpers: deadline, "
-                       "version diff, templates, lint-all, result-saving "
-                       "notebook/WebGUI audits, examples->docs/validation_test "
-                       "promotion audits, and root-level panels migration "
-                       "impact checks.",
+        "description": "Cross-cutting document helpers: deadline, version "
+                       "diff, templates, lint-all, and result-saving "
+                       "notebook/WebGUI audits.",
         "primary_tools": [
             "document_meta_notebook_result_audit",
-            "document_meta_examples_notebook_audit",
-            "document_meta_panel_layout_audit",
             "document_meta_lint_all",
         ],
         "related": [
@@ -726,8 +722,7 @@ CATALOG: dict[str, dict[str, Any]] = {
         "entry_point": "mcp-server-panel-review",
         "description": "Radia Simulink application-block review and construction "
                        "contract (DesignSpec / masks / typed ports / result "
-                       "artifacts / validation / no-PySide gate), "
-                       "including the cubit_panels migration route.",
+                       "artifacts / validation / no-PySide gate).",
         "primary_tools": ["panel_review"],
         "related": ["electromagnet", "ih", "motor"],
         "tags": ["meta"],
