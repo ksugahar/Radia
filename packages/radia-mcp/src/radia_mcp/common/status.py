@@ -46,9 +46,6 @@ import inspect
 import sys
 from typing import Optional
 
-from .._shared.hot_reload import register_reload_tool
-
-
 @lru_cache(maxsize=None)
 def _probe_dep(module_name: str) -> dict:
     """Check if an optional dep is importable without importing it.
@@ -197,4 +194,10 @@ def register_status_tool(
     # change still meant restarting the server because the running process
     # kept the old modules, FastMCP kept the old function objects, and the
     # client kept the tool list it saw at connection.
+    # Keep this import lazy: document/conversion helpers import
+    # ``radia_mcp.common`` in lightweight environments that intentionally do
+    # not install the MCP SDK, while a server calling this function always has
+    # it available.
+    from .._shared.hot_reload import register_reload_tool
+
     register_reload_tool(mcp, tool_name.removesuffix("_status") + "_reload_code")
