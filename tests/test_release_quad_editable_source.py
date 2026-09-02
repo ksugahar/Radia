@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import importlib.util
 import json
+import shutil
 import subprocess
 import time
 from pathlib import Path
@@ -13,11 +14,13 @@ _SPEC = importlib.util.spec_from_file_location("radia_release_quad_tool", _TOOL)
 assert _SPEC is not None and _SPEC.loader is not None
 release_quad = importlib.util.module_from_spec(_SPEC)
 _SPEC.loader.exec_module(release_quad)
+_GIT = shutil.which("git")
+assert _GIT is not None, "Git is required by the release-quad contract tests"
 
 
 def _git(repo, *args):
     return subprocess.run(
-        ["git", "-C", str(repo), *args],
+        [_GIT, "-C", str(repo), *args],
         check=True,
         capture_output=True,
         text=True,

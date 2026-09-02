@@ -42,6 +42,7 @@ def _gh(args: list[str], timeout: int = 60) -> tuple[int, str, str]:
     try:
         cp = subprocess.run(
             ["gh"] + args, capture_output=True, text=True,
+            encoding="utf-8", errors="replace",
             timeout=timeout, check=False)
         return cp.returncode, cp.stdout, cp.stderr
     except FileNotFoundError:
@@ -104,7 +105,7 @@ def fetch_failing_log_tail(run_id: str, n_lines: int) -> str:
                         timeout=120)
     if rc != 0 and not out:
         return f"(could not fetch log: {err.strip()})"
-    lines = out.strip().splitlines()
+    lines = (out or "").strip().splitlines()
     if not lines:
         return "(no failed-step log returned by gh run view --log-failed)"
     if len(lines) <= n_lines:
