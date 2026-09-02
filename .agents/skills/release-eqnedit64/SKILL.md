@@ -35,6 +35,10 @@ stale.
   result in the PR or handover. Address findings and repeat the affected tests
   and O: hand test before formal publication; do not create a tag from an
   unreviewed candidate.
+- Record both the reviewed SHA and the finding-resolution SHA. A follow-up
+  commit limited to the recorded findings and their tests completes the one
+  review gate after affected CI and hand testing pass. Any unrelated model or
+  specification change creates a new candidate and requires another review.
 - After the hand-test and Fable gates, push the approved release commit to
   `main` and require the main Eqnedit64 CI to pass. Do not create or push the
   release tag yet.

@@ -3,7 +3,7 @@
 - 文書状態: 現行
 - 対象製品: Eqnedit64 native / Python package / Web editor
 - 対象リリース: 3.0.13
-- 基準日: 2026-09-02
+- 基準日: 2026-09-03
 - リポジトリ: `ksugahar/Radia`
 
 この文書は、Eqnedit64を修正、試験、配布するときに最初に読む引き継ぎ正本である。
@@ -84,7 +84,14 @@ standalone利用者はpipを必要としない。
 - TeXソース欄はraw入力を保ちながらリアルタイムに構造モデルへ反映する。
 - TeXソース欄は長い1行を欄幅でsoft wrapし、横スクロールだけに依存しない。通常の
   `Enter`はTeXが無視する空白改行ではなく数式行の`\\`を作り、初回は内側の
-  `aligned`を自動生成する。`Shift+Enter`だけを数式構造を変えないraw改行とする。
+  `aligned`を自動生成する。行列・`cases`セルでは最内表に行を追加し、右側セルと現在列を
+  保つ。開始トークン内や分数・上下付き・文字列などの入れ子内ではTeXを壊さず、環境
+  内容の先頭または次の直上行境界へ丸める。トップレベルへ直接入力した`a\\b`も2行の
+  `aligned`として受理する。末尾の空行は次入力を待つだけで、空のまま保存時には省く。
+  `Shift+Enter`だけを数式構造を変えないraw改行とする。
+- キャンバスから同期するTeX整形はemitter由来のCR/LFを先に吸収し、`\begin`後、
+  `\end`前、`\\`後へWin32 EDIT用CRLFを一元的に置く。単独LFを制御文字として見せたり、
+  空行と字下げだけを重ねたりしない。
 - ソース欄を単なる「TeXを表示」機能として隠すメニューは設けない。
 - キャンバスに `\command` を入力して空白で確定する旧式のTeXコマンド入力は持たない。
 - TeXコマンドはパレットから選び、挿入直後のTeX範囲を短時間強調して手癖として学べるようにする。
@@ -154,9 +161,11 @@ Eqnedit32から回収した操作系列は互換層として維持する。追�
 重要な契約は次のとおり。
 
 - `Tab` / `Shift+Tab`: 構造GUIでは次／前の入力穴、TeXソースでは次／前の空の`{}`へ移動。
-- `Enter`: キャンバス／TeXソースのどちらでもキャレット位置で前後を分ける`aligned`の
-  数式改行。選択中は選択範囲を行境界へ置換する。新規保存時の外側は`equation`であり、
-  複数行はその内側の`aligned`で表す。
+- `Enter`: キャンバス／TeXソースのどちらでもキャレット位置で前後を分ける数式改行。
+  通常式は`aligned`、行列・`cases`内はその表の行とし、選択中は選択範囲を行境界へ
+  置換する。新規保存時の外側は`equation`であり、通常の複数行はその内側の`aligned`で
+  表す。読込み直後など既存`aligned`の外側にキャレットがあっても、その環境へ追加して
+  二重`aligned`を作らない。
 - `&`: 整列位置。
 - 選択中の`Ctrl+B`: 選択を `\mathbf{...}` にする。
 - `Ctrl+B`の後に英字: 次の英字をベクトル太字として入力する。
@@ -175,7 +184,10 @@ Backspaceは一打鍵で利用者に見える一項目だけを削除する。�
 まとめて消さない。例えば `E=mc^{2}|` は `E=mc^{}|`、次に `E=mc|` となる。
 上付きの直後、空上付き、母項を持つ上付き、入れ子をそれぞれ別の回帰ケースとして試験する。
 `aligned`の先頭セルの行頭では直前行と結合する。対称に、行末のDeleteは次行と結合する。
-複数列は対応列同士を結合し、`&`のない1行へ戻った場合は不要な`aligned`を外す。
+複数列は対応列同士を結合し、関数と引数を跨ぐ境界では逐次入力と同じ自動関数書体を保つ。
+`&`のない1行へ戻った場合は不要な`aligned`を外す。1行の`aligned`ではセル境界の
+Backspace/Deleteが`&`を削除して左右セルを結合する。複数行のセル境界は隣接セルへ
+移動するだけで、dirtyにはしない。列全体の削除には明示的な行列列削除操作を使う。
 
 ## 5. TeX保存契約
 
@@ -245,6 +257,8 @@ PNGへ置き換える。旧`--copy-*`、`--render-*`、`--texclip`は既存連�
 内部に残すが、公開ヘルプ、教材、Python package、`radia-mcp.presentation`は必ず
 単一の入力／出力構文を使う。CLI/APIはPowerPoint自動生成や
 `radia-mcp.presentation`から呼べる安定した変換境界とする。
+オプションでない位置引数を二つ渡した場合は常に変換器として扱うため、
+`Eqnedit64.exe a.tex b.tex`は複数文書を開く指定ではなく出力指定不正94となる。
 
 ## 7. フォント契約
 
@@ -330,6 +344,8 @@ off-screen bitmap、メッセージ送信、CLI、COM APIで試す。
 - `--visual-scale-test`は96/120/144/192 dpi相当で文字・ボタン・数式のinkを測る。
 - UI fuzzは保存、ダイアログ、利用者クリップボードを対象外にし、移動あり／なしの
   マウスドラッグを含め、再現seedを残す。
+- UI fuzzの操作選択は14分岐である。旧12分岐版と同じseed番号でも操作列は同一でないため、
+  障害記録にはseedだけでなくsource SHA、分岐数、操作回数を併記する。
 - ステータスバーは区画位置と文字のclip/ずれを検査する。
 - IMEの最終的な候補窓の感触など、人間しか判断できない項目だけを限定的な手動QAへ残す。
 
@@ -414,7 +430,9 @@ native出力は `tools/eqnedit64/dist/Eqnedit64.exe`。ビルド前に同じ出�
 4. **正式公開前に、候補commitと仕様差分へClaude Code Fableレビューを一度行う。**
    レビュー結果をPRまたは引継書へ残し、指摘を回収した場合はcommit、O:候補、自動試験、
    ハンドテストを更新する。Fableレビュー未実施のまま`main`統合、release tag、PyPI公開を
-   行わない。
+   行わない。レビュー済みSHAと指摘回収commitを併記する。回収commitが記録済み指摘と
+   その試験だけなら一度のレビューを満たすが、無関係なモデル／仕様変更を加えた場合は
+   新しい候補としてFableレビューをやり直す。
 5. 承認された候補を`main`へ統合してpushし、Eqnedit64専用main CIがgreenであることを確認する。
 6. exact `origin/main`からLABでrelease EXEをビルドし、`CN=ksugahar`で署名する。
 7. `sync_to_o.ps1 -WhatIf`でversion、build stamp、署名、source SHA、O:配置先を
@@ -444,6 +462,20 @@ Eqnedit64 3.0.11が2026-09-03時点の公開済み基準版であり、3.0.13は
 Office Mathを18 ptで作る。`&`を含まない複数行は各leaf rowへ分けて同じ左端を保ち、
 PowerPointに可視の`&`を渡さない。ネイティブのタイトル、About、`--version`には製品版と
 source stampの両方を表示する。
+
+### 13.1 3.0.13 Fableレビュー記録
+
+- reviewed source: `3e44f8604657ab55d2276da31e02f3126cac4214`
+- reviewer: Claude Code Fable 5 (`--model fable`、read-only plan mode)
+- result: `ACCEPT WITH FIXES`
+- execution: 2026-09-03、ビルド・試験・アプリ起動・O:変更なし
+- findings: 自動関数の行結合、ソース開始トークン／入れ子Enter、既存`aligned`外側Enter、
+  `&`削除、version macro、changelog、境界試験、review SHA記録、ghost Undo、2位置引数契約。
+  同じEnter指摘を追跡した改行UX調査で、emitter LFと表示CRLFの二重管理、行列・`cases`
+  内Enter、トップレベル`\\`、複数列分割時の列ずれも同じ不具合族と確認した。
+- resolution: 次の候補commitで上記findingsと同じ改行不具合族だけを回収し、影響する
+  model/hidden UI/仕様試験、署名済みO:候補、PR CIを更新する。別機能を追加しないため、
+  依頼された一度のFableレビューゲートとして記録する。
 
 - product tag: `eqnedit64-v3.0.11`
 - product tag source: `f5ac045703eab940323bddabbef6bb4fd3a9e55c`

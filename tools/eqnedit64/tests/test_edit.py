@@ -806,6 +806,7 @@ def main() -> int:
             eq.begin_selection()
             eq.select_step_right()
             eq.select_step_right()
+        before_split = (eq.latex(), eq.caret())
         if not eq.new_line():
             failures.append("Enter rejected a direct row split")
             continue
@@ -816,6 +817,15 @@ def main() -> int:
         if eq.undo_name() != "Line Break":
             failures.append(
                 f"row split has the wrong Undo name: {eq.undo_name()!r}")
+        split_state = (eq.latex(), eq.caret())
+        if not eq.undo() or (eq.latex(), eq.caret()) != before_split:
+            failures.append(
+                "row split Undo did not restore content and caret: "
+                f"{(eq.latex(), eq.caret())!r}, want {before_split!r}")
+        elif not eq.redo() or (eq.latex(), eq.caret()) != split_state:
+            failures.append(
+                "row split Redo did not restore content and caret: "
+                f"{(eq.latex(), eq.caret())!r}, want {split_state!r}")
 
     # Backspace at the start of the later row and Delete at the end of the
     # earlier row remove exactly the visible row separator.  Once only one
@@ -832,6 +842,7 @@ def main() -> int:
                 failures.append("could not reach the row before Delete join")
                 continue
             eq.move_end()
+        before_join = (eq.latex(), eq.caret())
         if not getattr(eq, key)() or eq.latex() != "abcdef":
             failures.append(
                 f"{key} did not join rows at the caret: {eq.latex()!r}")
@@ -841,6 +852,15 @@ def main() -> int:
         elif eq.undo_name() != "Join Lines":
             failures.append(
                 f"{key} row join has wrong Undo name: {eq.undo_name()!r}")
+        joined_state = (eq.latex(), eq.caret())
+        if not eq.undo() or (eq.latex(), eq.caret()) != before_join:
+            failures.append(
+                f"{key} row join Undo lost content/caret: "
+                f"{(eq.latex(), eq.caret())!r}, want {before_join!r}")
+        elif not eq.redo() or (eq.latex(), eq.caret()) != joined_state:
+            failures.append(
+                f"{key} row join Redo lost content/caret: "
+                f"{(eq.latex(), eq.caret())!r}, want {joined_state!r}")
 
     # An alignment tab is also a structural boundary.  Enter before it moves
     # both the current-cell suffix and the cells on its right to the new row,
@@ -894,6 +914,117 @@ def main() -> int:
         if eq.latex() != r"\sin":
             failures.append(
                 f"{key} row join did not refresh function style: "
+                f"{eq.latex()!r}")
+
+    # A recognised function at the left of a joined row remains protected from
+    # an ordinary variable argument, but can still grow into a longer function.
+    # This is the same contract as one-character-at-a-time keyboard input.
+    for key in ("backspace", "erase"):
+        eq = Equation()
+        eq.load_latex(r"\begin{aligned}\sin\\x\end{aligned}")
+        eq.move_home()
+        eq.move_right()
+        if key == "backspace":
+            eq.move_down()
+        else:
+            eq.move_end()
+        getattr(eq, key)()
+        if eq.latex().strip() != r"\sin x":
+            failures.append(
+                f"{key} row join lost the recognised function prefix: "
+                f"{eq.latex()!r}")
+
+        # Grow an automatically inferred (not explicitly parsed) `sin` to the
+        # longer function `sinh`, exactly as sequential typing does.
+        eq = Equation()
+        for char in "sin":
+            eq.insert_text(char)
+        eq.new_line()
+        eq.insert_text("h")
+        if key == "backspace":
+            eq.move_home()
+        else:
+            eq.move_up()
+            eq.move_end()
+        getattr(eq, key)()
+        if eq.latex().strip() != r"\sinh":
+            failures.append(
+                f"{key} row join did not grow an automatic function: "
+                f"{eq.latex()!r}")
+
+    # Loading leaves the caret outside the aligned node.  Enter extends that
+    # node rather than creating a nested aligned wrapper.
+    eq = Equation()
+    eq.load_latex(r"\begin{aligned}a\\b\end{aligned}")
+    if not eq.new_line() or eq.latex().count(r"\begin{aligned}") != 1:
+        failures.append(
+            "Enter outside a loaded aligned equation created a nested wrapper: "
+            f"{eq.latex()!r}")
+
+    # A direct `\\` fragment has the same meaning as Enter in the source pane.
+    # Row separators inside a group retain that group's ordinary TeX meaning
+    # and must not cause an outer aligned wrapper.
+    eq = Equation()
+    eq.load_latex(r"a\\b")
+    if not eq.is_multiline() or re.sub(r"\s+", "", eq.latex()) != (
+            r"\begin{aligned}a\\b\end{aligned}"):
+        failures.append(
+            "top-level TeX row separator was rendered as a backslash: "
+            f"{eq.latex()!r}")
+    eq.load_latex(r"\text{a\\b}")
+    if r"\begin{aligned}" in eq.latex():
+        failures.append(
+            "nested TeX row separator escaped its group: "
+            f"{eq.latex()!r}")
+
+    # Enter belongs to the innermost row container.  In a matrix/cases cell it
+    # inserts a table row and carries the current-cell suffix plus cells on its
+    # right; it must not wrap the table in an outer aligned environment.
+    row_container_cases = (
+        ("matrix", 2,
+         r"\begin{matrix}a&\\b&cd\\ef&gh\end{matrix}"),
+        ("cases", 3,
+         r"\begin{cases}a&\\b&cd\\ef&gh\end{cases}"),
+    )
+    for environment, rights, expected in row_container_cases:
+        eq = Equation()
+        eq.load_latex(
+            rf"\begin{{{environment}}}ab&cd\\ef&gh\end{{{environment}}}")
+        original = eq.latex()
+        eq.move_home()
+        for _ in range(rights):
+            eq.move_right()
+        if not eq.new_line():
+            failures.append(f"Enter rejected a {environment} cell")
+            continue
+        actual = re.sub(r"\s+", "", eq.latex())
+        if actual != expected or r"\begin{aligned}" in actual:
+            failures.append(
+                f"Enter acted outside the {environment}: {eq.latex()!r}")
+            continue
+        after = (eq.latex(), eq.caret())
+        if not eq.undo() or eq.latex() != original:
+            failures.append(
+                f"{environment} Enter Undo did not restore the table")
+        if not eq.redo() or (eq.latex(), eq.caret()) != after:
+            failures.append(
+                f"{environment} Enter Redo lost content/caret")
+
+    # A one-row `&` is directly editable: Backspace from the right cell or
+    # Delete from the left cell removes that visible boundary.  Multi-row
+    # column schemas remain explicit and use the remove-column command.
+    for key in ("backspace", "erase"):
+        eq = Equation()
+        eq.load_latex(r"\begin{aligned}F&=ma\end{aligned}")
+        eq.move_home()
+        eq.move_right()
+        if key == "backspace":
+            eq.next_slot()
+        else:
+            eq.move_end()
+        if not getattr(eq, key)() or eq.latex().replace(" ", "") != "F=ma":
+            failures.append(
+                f"{key} did not remove a one-row alignment boundary: "
                 f"{eq.latex()!r}")
 
     # Automatic function styling is a property of a complete word.  Splitting
@@ -976,6 +1107,10 @@ def main() -> int:
             limit.matrix_dimensions() != (99, 99) or
             limit.matrix_add_row() or limit.matrix_add_column()):
         failures.append("the documented 99x99 matrix limit was not enforced")
+    limit_state = (limit.latex(), limit.caret(), limit.undo_name())
+    if limit.new_line() or (
+            limit.latex(), limit.caret(), limit.undo_name()) != limit_state:
+        failures.append("rejected Enter at 99 rows created a ghost Undo/state")
 
     # Empty edge cells are structural too.  Canonical `{}` placeholders make
     # a 1x3 row and a 3x1 column survive ordinary TeX save/reopen instead of
