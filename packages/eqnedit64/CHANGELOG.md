@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+## 3.0.12 - 2026-09-02
+
+- Promote cross-slot pointer drags to a complete structural selection and use
+  the same range for copy, deletion, replacement, wrapping, and style changes.
+- End pointer selection explicitly, invalidate stale origins after tree
+  replacement and Undo/Redo, and use the button-up coordinate as the final
+  endpoint when Windows coalesces mouse-move messages.
+- Format synchronized TeX at lossless environment and row boundaries while
+  keeping palette lesson highlights on the exact inserted source spelling.
+
 ## 3.0.11 - 2026-08-30
 
 - Preserve a common left edge for unequal unanchored rows after editable
