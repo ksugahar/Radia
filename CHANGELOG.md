@@ -5,6 +5,25 @@ All notable changes to the `radia` package.  Format: each release lists
 
 ## Unreleased
 
+## 4.95.77 - Mixed Galerkin and native NGSolve MATLAB parity
+
+Released 2026-09-02.
+
+- Promoted the mixed-Galerkin cylinder, sphere, square, edge, wedge, cube,
+  and time-domain studies into the validation lane with one canonical JSON
+  result artifact. The review also records the failed separable 3D edge-basis
+  attempt instead of presenting it as a completed repair.
+- Stabilized the disk CLN Pade reference in its dimensionless diffusion
+  variable, added fail-fast input contracts, and preserved geometric
+  similarity across scaled conductors.
+- Extended the standalone MATLAB MEX boundary for NGSolve finite-element
+  spaces, free DoFs, matrix-vector operations, and coefficient components.
+  The public Python API is the numerical oracle for 100 core cases, 500
+  breadth cases, 20 matrix-free scale cases, and 15 manufactured solutions.
+- Added a checked pybind11-to-MEX bridge skill so future native capabilities
+  share one C++ kernel while retaining independent MATLAB lifecycle, ABI,
+  error, and performance gates.
+
 ## 4.95.76 - HDiv-MMM section optics and certified topology
 
 Released 2026-09-01.
