@@ -49,8 +49,74 @@ def _load_skill() -> str:
     return (_HERE / "skill.md").read_text(encoding="utf-8")
 
 
+def _decode_text_file(path: pathlib.Path) -> str:
+    payload = path.read_bytes()
+    for encoding in ("utf-8-sig", "cp932"):
+        try:
+            return payload.decode(encoding)
+        except UnicodeDecodeError:
+            continue
+    return payload.decode("utf-8", errors="replace")
+
+
+# ``\input{kiban_c_01_purpose_plan}`` on a line that is not commented out.
+_INPUT_COMMAND = re.compile(r"\\(?:input|include)\{([^{}]+)\}")
+_INPUT_MAX_DEPTH = 3
+
+
+def _expand_sibling_inputs(
+    text: str, path: pathlib.Path, depth: int, seen: set[pathlib.Path]
+) -> str:
+    """Assemble the proposal a reviewer reads from a split LaTeX source.
+
+    The JSPS templates split a 計画調書 into one file per field and pull them
+    into a main file with ``\\input``. Run on one field file, every
+    whole-proposal check reports the other fields as missing: the abilities
+    field was told it lacks the academic question, and the purpose field that
+    it lacks the execution environment. Those are not defects of the draft;
+    they are the wrong unit of analysis.
+
+    Only siblings of the main file are expanded. The form's own pieces
+    (headers, hooks, instruction boxes) live in a subdirectory such as
+    ``pieces/``, and pulling them in would lint the funder's scaffolding as
+    applicant prose. Depth and a visited set guard against cycles.
+    """
+    if depth >= _INPUT_MAX_DEPTH:
+        return text
+    parent = path.parent.resolve()
+    lines = []
+    for line in text.split("\n"):
+        code = line.split("%", 1)[0] if not line.lstrip().startswith("%") else ""
+
+        def replace(match: re.Match[str]) -> str:
+            name = match.group(1).strip()
+            target = pathlib.Path(name)
+            if not target.suffix:
+                target = target.with_suffix(".tex")
+            if target.is_absolute():
+                return match.group(0)
+            candidate = (parent / target).resolve()
+            if candidate.parent != parent or candidate in seen or not candidate.is_file():
+                return match.group(0)
+            seen.add(candidate)
+            body = _expand_sibling_inputs(
+                _decode_text_file(candidate), candidate, depth + 1, seen
+            )
+            return "\n" + body + "\n"
+
+        if code and _INPUT_COMMAND.search(code):
+            line = _INPUT_COMMAND.sub(replace, line)
+        lines.append(line)
+    return "\n".join(lines)
+
+
 def _read_text_if_path(text_or_path: str) -> str:
-    """Treat a short existing .md/.tex/.txt path as a file, else as text."""
+    """Treat a short existing .md/.tex/.txt path as a file, else as text.
+
+    A ``.tex`` main file is assembled with the sibling files it ``\\input``s
+    (see ``_expand_sibling_inputs``), so the health report can be run on
+    ``kiban_c.tex`` and judge the whole proposal rather than one field.
+    """
     if text_or_path is None:
         return ""
     s = str(text_or_path)
@@ -61,13 +127,10 @@ def _read_text_if_path(text_or_path: str) -> str:
     try:
         p = pathlib.Path(s)
         if p.exists() and p.suffix.lower() in {".md", ".tex", ".txt"}:
-            payload = p.read_bytes()
-            for encoding in ("utf-8-sig", "cp932"):
-                try:
-                    return payload.decode(encoding)
-                except UnicodeDecodeError:
-                    continue
-            return payload.decode("utf-8", errors="replace")
+            text = _decode_text_file(p)
+            if p.suffix.lower() == ".tex":
+                text = _expand_sibling_inputs(text, p, 0, {p.resolve()})
+            return text
     except OSError:
         pass
     return s
@@ -2919,7 +2982,19 @@ def grant_writing_cross_organization_pilot_check(text: str) -> dict:
     selected: set[int] = set()
     for index in marked:
         selected.update(range(max(0, index - 1), min(len(sentences), index + 4)))
-    evidence_text = " ".join(sentences[i] for i in sorted(selected)) or text
+    # The sentence window alone misses the honest closing line of a longer
+    # pilot paragraph. A real 準備状況 paragraph listed the transfer, the
+    # re-execution, the residual, a derivation and a conference talk before
+    # ending with 「別機関が…判定できるかは未検証である」, and that sentence
+    # sat four places after the last trigger. The paragraph that makes the
+    # claim is the unit the applicant wrote, so it is read whole as well.
+    paragraphs = [
+        paragraph.strip()
+        for paragraph in text.split("\n")
+        if paragraph.strip() and _contains_any(paragraph.lower(), prior_terms)
+    ]
+    evidence_parts = [sentences[i] for i in sorted(selected)] + paragraphs
+    evidence_text = " ".join(evidence_parts) or text
     evidence_low = evidence_text.lower()
 
     axes = {
@@ -6372,6 +6447,44 @@ def _expected_totals_json(payload: str, label: str) -> dict[str, float]:
     return {str(key): float(value) for key, value in parsed.items()}
 
 
+# An e-Rad 明細 ledger labels each row with a category code, while the
+# applicant writes the Japanese heading of the S-14 budget table. Declared
+# totals are therefore accepted under either name; comparing 「その他」 with
+# ``F`` used to report every category as missing with ``actual: null``.
+_BUDGET_CATEGORY_CODES: dict[str, tuple[str, ...]] = {
+    "A": ("設備備品費", "設備備品", "equipment"),
+    "B": ("消耗品費", "消耗品", "consumables"),
+    "C": ("国内旅費", "domestic travel"),
+    "D": ("外国旅費", "海外旅費", "foreign travel", "overseas travel"),
+    "E": ("人件費・謝金", "人件費謝金", "人件費", "謝金", "personnel"),
+    "F": ("その他", "other"),
+}
+
+
+def _budget_category_code(label: object) -> str:
+    key = re.sub(r"\s+", "", str(label or "")).replace("･", "・")
+    if key.upper() in _BUDGET_CATEGORY_CODES:
+        return key.upper()
+    lowered = key.lower()
+    for code, aliases in _BUDGET_CATEGORY_CODES.items():
+        if lowered in {alias.lower() for alias in aliases}:
+            return code
+    return key
+
+
+def _budget_category_label(code: str) -> str:
+    aliases = _BUDGET_CATEGORY_CODES.get(code)
+    return aliases[0] if aliases else code
+
+
+def _totals_by_category_code(values: dict) -> dict[str, float]:
+    merged: dict[str, float] = {}
+    for key, value in values.items():
+        code = _budget_category_code(key)
+        merged[code] = merged.get(code, 0.0) + float(value)
+    return merged
+
+
 def grant_writing_budget_source_consistency_check(
     budget_source: str,
     sheet_name: str = "meisai_sample1",
@@ -6387,6 +6500,10 @@ def grant_writing_budget_source_consistency_check(
     budget sheets. The tool compares row-level ledgers when a second XLSX/CSV
     is supplied and compares exact grand/year/category totals when declared
     values are supplied. It never infers a number from persuasive prose.
+
+    Declared category totals may use the e-Rad code (``A``..``F``) or the
+    Japanese heading of the S-14 table (設備備品費, 消耗品費, 国内旅費,
+    外国旅費, 人件費・謝金, その他); both are reconciled to the same code.
     """
     source = pathlib.Path(budget_source)
     if not source.is_file():
@@ -6415,20 +6532,38 @@ def grant_writing_budget_source_consistency_check(
         ),
         (
             "category",
-            _expected_totals_json(expected_category_totals_json, "expected_category_totals_json"),
-            totals["category_totals_thousand_yen"],
+            _totals_by_category_code(
+                _expected_totals_json(
+                    expected_category_totals_json, "expected_category_totals_json"
+                )
+            ),
+            _totals_by_category_code(totals["category_totals_thousand_yen"]),
         ),
     ):
         for key in sorted(set(expected) | set(actual)):
             want = expected.get(key)
             got = actual.get(key)
-            if want is not None and (got is None or float(got) != float(want)):
+            if want is None:
+                continue
+            if got is None:
+                # 「設備備品費 0」 is the applicant saying the ledger holds no
+                # such row; an absent category agrees with a declared zero.
+                if float(want) == 0.0:
+                    continue
+                differences.append({
+                    "type": f"{label}_not_in_ledger",
+                    label: key,
+                    "expected": want,
+                    "actual": None,
+                    "delta": None,
+                })
+            elif float(got) != float(want):
                 differences.append({
                     "type": f"{label}_total_mismatch",
                     label: key,
                     "expected": want,
                     "actual": got,
-                    "delta": None if got is None else round(float(got) - float(want), 3),
+                    "delta": round(float(got) - float(want), 3),
                 })
 
     comparison = None
@@ -6473,6 +6608,10 @@ def grant_writing_budget_source_consistency_check(
             "unit": "thousand_yen",
             "row_count": len(rows),
             "totals": totals,
+            "category_labels": {
+                code: _budget_category_label(_budget_category_code(code))
+                for code in totals["category_totals_thousand_yen"]
+            },
             "rows": rows,
         },
         "comparison": comparison,
