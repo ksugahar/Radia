@@ -22,6 +22,7 @@ def test_fast_ci_runs_only_on_mdx_and_native_is_a_named_release_lane():
     assert "pybind11==3.0.2" in native
     assert "ninja" in native
     assert '"trimesh>=4.0"' in native
+    assert "twine==6.2.0" in native
     assert "--ignore=tests/equation" in native
     assert '"MKLROOT=$mklRoot"' in native
     assert "MKLROOT=C:\\Program Files\\Python312\\Library" not in native
@@ -50,4 +51,9 @@ def test_policy_twins_define_the_same_mdx_notebook_contract():
         start = text.index(heading)
         return text[start:text.index("### ", start + len(heading))]
 
-    assert section(agents) == section(claude)
+    policy = section(agents)
+    assert policy == section(claude)
+    normalized = " ".join(policy.split())
+    assert "mdx gives CI and preflight work priority" in normalized
+    assert "use hibino first when it is available" in normalized
+    assert "the mdx CI queue is idle" in normalized
