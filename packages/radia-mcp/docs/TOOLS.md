@@ -2,7 +2,7 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **1050 tools** across 49 MCP servers.
+Total: **1052 tools** across 49 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
@@ -45,7 +45,7 @@ Total: **1050 tools** across 49 MCP servers.
 | [`mcp-server-md2html`](#mcp-server-md2html) | `radia_mcp.md2html` | 2 |
 | [`mcp-server-chart2d`](#mcp-server-chart2d) | `radia_mcp.chart2d` | 24 |
 | [`mcp-server-paper-writing`](#mcp-server-paper-writing) | `radia_mcp.paper_writing` | 205 |
-| [`mcp-server-grant-writing`](#mcp-server-grant-writing) | `radia_mcp.grant_writing` | 44 |
+| [`mcp-server-grant-writing`](#mcp-server-grant-writing) | `radia_mcp.grant_writing` | 46 |
 | [`mcp-server-poster`](#mcp-server-poster) | `radia_mcp.poster` | 32 |
 | [`mcp-server-literature-index`](#mcp-server-literature-index) | `radia_mcp.literature_index` | 9 |
 | [`mcp-server-document-meta`](#mcp-server-document-meta) | `radia_mcp.document_meta` | 11 |
@@ -1306,6 +1306,7 @@ Module: `radia_mcp.grant_writing.server`
 | `grant_writing_argument_evidence_map` | Map argument roles to excerpts without scoring scientific validity. |
 | `grant_writing_budget_alignment_check` | Check that budget items are tied to verification and implementation. |
 | `grant_writing_budget_narrative_check` | Check the necessity narrative that sits beside a budget table. |
+| `grant_writing_budget_source_consistency_check` | Reconcile a canonical XLSX/CSV budget against exact declared totals. |
 | `grant_writing_capability_responsibility_check` | Check who carries the capability the novelty rests on. |
 | `grant_writing_central_claim_consistency_check` | Check that one central claim is not stated as two different claims. |
 | `grant_writing_check_kanji_ratio` | Measure the kanji ratio of applicant prose, not the application form. |
@@ -1324,6 +1325,7 @@ Module: `radia_mcp.grant_writing.server`
 | `grant_writing_international_standing_check` | Check that an international claim is evidenced, not aspirational. |
 | `grant_writing_japanese_genre_contract` | Route Japanese prose to grant or research-manuscript review criteria. |
 | `grant_writing_japanese_readability_score` | Score Japanese grant prose with Japanese-specific writing criteria. |
+| `grant_writing_kaken_basic_research_positioning_check` | Check the hierarchy between a KAKENHI question, tools, and impact. |
 | `grant_writing_kaken_oss_platform_check` | Check KAKENHI framing for an AI-era OSS research platform proposal. |
 | `grant_writing_kaken_review_axes` | Return the current official review axes for KAKENHI B/C (General). |
 | `grant_writing_kaken_review_format_check` | Check KAKENHI reviewer-format realities on a proposal draft. |

@@ -135,6 +135,45 @@ def Y_mixed_galerkin(s, with_gamma1: bool):
     return Y_DC * (1 + v_avg)
 
 
+SWEEP = np.logspace(0, 8, 81)
+WALL_BAND_HZ = (1e4, 1e6)
+METRIC = "abs(Y_exact - Y_mixed) / abs(Y_exact)"
+
+
+def summary() -> dict:
+    """1-DOF vs 2-DOF over the sweep, with BOTH improvement factors.
+
+    Two, because they are different quantities and quoting one as the other is
+    how a slide ends up disagreeing with its own validation run: max-anywhere
+    is what a whole-band claim needs, wall-band is what a transition-band
+    claim needs.
+    """
+    e1, e2 = [], []
+    for f in SWEEP:
+        s = 1j * 2 * math.pi * f
+        Y_e = Y_exact_sphere(s, A, SIGMA, MU)
+        e1.append(abs(Y_e - Y_mixed_galerkin(s, False)) / abs(Y_e))
+        e2.append(abs(Y_e - Y_mixed_galerkin(s, True)) / abs(Y_e))
+    e1, e2 = np.array(e1), np.array(e2)
+    wall = (SWEEP > WALL_BAND_HZ[0]) & (SWEEP < WALL_BAND_HZ[1])
+    return {
+        "case": "sphere_hoibc_gamma1",
+        "description": "rank-1 CLN bulk + planar SIBC, with and without gamma_1",
+        "metric": METRIC,
+        "geometry": {"a_m": A, "sigma_S_per_m": SIGMA, "mu_H_per_m": MU,
+                     "gamma_1": float(-1.0 / A)},
+        "sweep": {"f_lo_hz": float(SWEEP[0]), "f_hi_hz": float(SWEEP[-1]),
+                  "n_points": int(SWEEP.size),
+                  "wall_band_hz": list(WALL_BAND_HZ)},
+        "planar_max_error_pct": float(e1.max() * 100),
+        "planar_wall_band_max_error_pct": float(e1[wall].max() * 100),
+        "gamma1_max_error_pct": float(e2.max() * 100),
+        "gamma1_wall_band_max_error_pct": float(e2[wall].max() * 100),
+        "improvement_factor_max_anywhere": float(e1.max() / e2.max()),
+        "improvement_factor_wall_band": float(e1[wall].max() / e2[wall].max()),
+    }
+
+
 def main():
     print("=== Sphere mixed Galerkin: 1-DOF vs 2-DOF (HOIBC gamma_1 = -1/a) ===")
     print(f"a = {A*1e3} mm, sigma = {SIGMA:.2e} S/m, mu = {MU:.4e} H/m")
@@ -150,20 +189,15 @@ def main():
         print(f"{f:10.2e}  {abs(Y_e):12.4e}  {e1*100:8.4f}%  {e2*100:13.6f}%")
 
     print()
-    fs = np.logspace(0, 8, 81)
-    e1_all, e2_all = [], []
-    for f in fs:
-        s = 1j * 2 * math.pi * f
-        Y_e = Y_exact_sphere(s, A, SIGMA, MU)
-        e1_all.append(abs(Y_e - Y_mixed_galerkin(s, False)) / abs(Y_e))
-        e2_all.append(abs(Y_e - Y_mixed_galerkin(s, True)) / abs(Y_e))
-    e1_all = np.array(e1_all)
-    e2_all = np.array(e2_all)
-    wall = (fs > 1e4) & (fs < 1e6)
+    r = summary()
     print(f"Full sweep:")
-    print(f"  1-DOF  max anywhere = {e1_all.max()*100:.4f}%,  wall band = {e1_all[wall].max()*100:.4f}%")
-    print(f"  2-DOF  max anywhere = {e2_all.max()*100:.4f}%,  wall band = {e2_all[wall].max()*100:.4f}%")
-    print(f"  Wall-band improvement factor: {e1_all[wall].max()/e2_all[wall].max():.1f}x")
+    print(f"  1-DOF  max anywhere = {r['planar_max_error_pct']:.4f}%,  "
+          f"wall band = {r['planar_wall_band_max_error_pct']:.4f}%")
+    print(f"  2-DOF  max anywhere = {r['gamma1_max_error_pct']:.4f}%,  "
+          f"wall band = {r['gamma1_wall_band_max_error_pct']:.4f}%")
+    print(f"  Improvement factor: "
+          f"{r['improvement_factor_max_anywhere']:.1f}x max-anywhere, "
+          f"{r['improvement_factor_wall_band']:.1f}x wall-band")
 
 
 if __name__ == "__main__":

@@ -389,6 +389,11 @@ performance before a Simulink block depends on it. MATLAB wrappers use an
 explicit Python-DLL boundary only where no stable native object boundary is
 practical; Python is never silently called once per simulation time step.
 
+The NGSolve MATLAB boundary is validated against the public Python API on the
+same meshes. The committed campaign covers 100 core cases plus 500 breadth,
+20 matrix-free scale, and 15 manufactured-solution cases across 2D/3D H1,
+HCurl, and HDiv spaces; the full HIBINO run ends with zero live native handles.
+
 HCurl-based reduced and topology workflows use the same standalone native
 boundary. HCurl multifrequency topology gradients, activation derivatives,
 and repeated reduced-state operations are available as independently testable
