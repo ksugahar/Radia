@@ -71,7 +71,7 @@ def ih_sibc(topic: str = "all") -> str:
     """
     Get IH solver architecture and SIBC documentation.
 
-    Panel pipeline (v4.25.0 unified Layer 4):
+    IH application solver families:
     - PEEC+BEM (weak coupling)   -> calc_inductance.py --coil-solver peec --vol <wp>  (Telegen ΔL + P_wp)
     - BEM-A+BEM (weak coupling)  -> calc_inductance.py --coil-solver bem-a --vol <wp> (n_peri-free coil)
     - PEEC + FEM wp + Kelvin     -> calc_fem_kelvin.py --formulation total --peec-step ...
@@ -184,7 +184,7 @@ def new_ih_simulation(geometry: str, material: str = "steel") -> str:
         f"Set up an induction heating simulation for: {geometry}\n"
         f"Material: {material}\n\n"
         "Use the ih_sibc and ih_knowledge tools.\n"
-        "Key points (panel pipeline, v4.25.0+ unified Layer 4):\n"
+        "Key points (Simulink application plus headless solver contracts):\n"
         "1. L + P_wp via weak coupling (PEEC coil, Telegen ΔL):\n"
         "     calc_inductance.py --coil-solver peec --coil-step <coil.step>\n"
         "                         --vol <wp.vol>\n"
@@ -192,7 +192,7 @@ def new_ih_simulation(geometry: str, material: str = "steel") -> str:
         "3. All paths assume GAPPED torus (real port terminations)\n"
         "4. For nonlinear steel: ESIM + Karl iteration\n"
         "   (--impedance-model esim --bh-file ...)\n"
-        "5. Sample .jou: ih_peec_bem_coarse.jou / ih_fem_kelvin_skin_fine.jou\n"
+        "5. Validate every solver-bound .vol with check-vol before initialization\n"
     )
 
 

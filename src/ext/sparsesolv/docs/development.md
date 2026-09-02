@@ -207,10 +207,11 @@ cmake --build . --config Release
 
 **Intel MKL使用時**（CompactAMG/AMS内部で使用するBLAS）:
 
-```bash
-cmake .. -DSPARSESOLV_BUILD_NGSOLVE=ON \
-         -DNGSOLVE_INSTALL_DIR=/path/to/ngsolve/install/cmake \
-         -DCMAKE_PREFIX_PATH="C:/Program Files (x86)/Intel/oneAPI/mkl/latest"
+```powershell
+$MklRoot = python -c "import pathlib,sys; print(pathlib.Path(sys.prefix) / 'Library')"
+cmake .. -DSPARSESOLV_BUILD_NGSOLVE=ON `
+         -DNGSOLVE_INSTALL_DIR=/path/to/ngsolve/install/cmake `
+         -DCMAKE_PREFIX_PATH="$MklRoot"
 ```
 
 ### インストール

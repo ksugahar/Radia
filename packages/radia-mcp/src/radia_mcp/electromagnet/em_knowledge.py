@@ -145,7 +145,7 @@ studies live under `docs/clebsch_hodograph/`,
 
 ```bash
 pip install radia[cubit]     # Radia + Cubit plugin + NGSolve + MKL
-cubit-plugin-install         # Deploy Cubit plugin + panels
+cubit-plugin-install         # Deploy Cubit plugin + embedded toolbar
 ```
 """
 
@@ -736,7 +736,7 @@ both invariant under x->-x, y->-y, z->-z modulo current direction),
 so the 1/8 reduction is geometric and stable.  Sample:
 
     panels/samples/em/em_1-8_eighth.jou
-    tests/panels/golden/em_eighth_mu1000.json
+    validation_test/panels/golden/em_eighth_mu1000.json
 
 Validated 2026-04-26: 774/774 Kelvin pairs identified at machine
 precision (post deterministic-anchor fix), 56,369 elements, 11,708
@@ -779,7 +779,8 @@ results.**
 | 1/4 (split x,y) | `em_1-4_quarter_xz.jou` | `ht=0_x, ht=0_y` | Kelvin offset along x |
 | 1/8 (split x,y,z) | `em_1-8_eighth.jou` | `ht=0_x, ht=0_y, bn=0_z` | Kelvin offset along x |
 
-All four are golden-tested in `tests/panels/test_em_*_golden.py`.
+All four are checked by the Electromagnet validation lane under
+`validation_test/panels/`.
 
 ## Don't add a 1/8 sphere benchmark
 

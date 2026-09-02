@@ -30,7 +30,7 @@ ORIENTATION BUG, not a physics limit (see verify_gradpsi_orientation.py).  Gx
 
 Outputs (committed, per the Data Persistence Policy): bench_low_turn_budget.json
 + bench_low_turn_budget.png next to this script.  The .vol meshes are gitignored
-and regenerated into a temp dir by tests/panels/fixtures/make_streamfunction_vol.py.
+and regenerated into a temp dir by validation_test/panels/fixtures/make_streamfunction_vol.py.
 Run:  python bench_low_turn_budget.py
 """
 from __future__ import annotations

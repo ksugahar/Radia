@@ -4,14 +4,14 @@ Auto-generated from each server's production `core` `mcp.list_tools()` via `scri
 
 Fine-grained validation and identity operations are discovered with each server's `*_validation_catalog` tool and invoked through `*_validation_run`; they are not repeated as top-level schemas.
 
-Total: **910 tools** across 49 MCP servers.
+Total: **899 tools** across 49 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
 | [`mcp-server-cubit`](#mcp-server-cubit) | `radia_mcp.cubit` | 56 |
 | [`mcp-server-build123d`](#mcp-server-build123d) | `radia_mcp.build123d` | 43 |
 | [`mcp-server-gmsh`](#mcp-server-gmsh) | `radia_mcp.gmsh` | 70 |
-| [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 50 |
+| [`mcp-server-radia-ngsolve`](#mcp-server-radia-ngsolve) | `radia_mcp.radia_ngsolve` | 44 |
 | [`mcp-server-force`](#mcp-server-force) | `radia_mcp.force` | 21 |
 | [`mcp-server-radia-matlab`](#mcp-server-radia-matlab) | `radia_mcp.matlab` | 22 |
 | [`mcp-server-acoustic-fembem`](#mcp-server-acoustic-fembem) | `radia_mcp.acoustic_fembem` | 5 |
@@ -50,7 +50,7 @@ Total: **910 tools** across 49 MCP servers.
 | [`mcp-server-grant-writing`](#mcp-server-grant-writing) | `radia_mcp.grant_writing` | 49 |
 | [`mcp-server-poster`](#mcp-server-poster) | `radia_mcp.poster` | 33 |
 | [`mcp-server-literature-index`](#mcp-server-literature-index) | `radia_mcp.literature_index` | 10 |
-| [`mcp-server-document-meta`](#mcp-server-document-meta) | `radia_mcp.document_meta` | 12 |
+| [`mcp-server-document-meta`](#mcp-server-document-meta) | `radia_mcp.document_meta` | 7 |
 | [`mcp-server-pdf`](#mcp-server-pdf) | `radia_mcp.pdf` | 17 |
 | [`mcp-server-doc-convert`](#mcp-server-doc-convert) | `radia_mcp.doc_convert` | 22 |
 | [`mcp-server-bibliography`](#mcp-server-bibliography) | `radia_mcp.bibliography` | 15 |
@@ -282,7 +282,7 @@ Module: `radia_mcp.radia_ngsolve.server`
 | `gmsh_post_spec` | GMSH post-processing specification for Radia panels. |
 | `hdiv_vim` | HDiv-type VIM (Volume Integral Method) demag operator -- the lab's FEEC H(div) |
 | `hdiv_vim_demag_eval` | Air-mesh-free HDiv-MMM demagnetization solve of a body-only `.vol`. |
-| `install_deploy` | Radia install / deploy policy and recipes — 2-tier configuration |
+| `install_deploy` | Current Radia install, machine-role, CI, and deployment contract. |
 | `kelvin_identify_post_hoc` | Add Kelvin Periodic Identifications to an existing NGSolve mesh |
 | `kelvin_transformation` | Get Kelvin transformation documentation for open boundary FEM problems. |
 | `lint_radia_directory` | Lint all Python scripts in a directory for NGSolve convention violations. |
@@ -294,11 +294,6 @@ Module: `radia_mcp.radia_ngsolve.server`
 | `md2html_usage` | Get md2html converter documentation (MathJax, reference links, styled HTML). |
 | `ngsbem_inductance` | Get ngsolve.bem boundary element method documentation for inductance extraction. |
 | `ngsolve_usage` | Get NGSolve finite element library usage documentation. |
-| `panel_add_param` | Plan where to add a new parameter to a Radia-NGSolve panel. |
-| `panel_describe_jp` | 現在のパネルソースを AST 解析して日本語で詳細に説明する。 |
-| `panel_gui_pitfalls` | Pitfalls and lessons learned from Radia GUI / Cubit panel development. |
-| `panel_schema` | Show Radia-NGSolve panel definitions with Japanese labels and physics. |
-| `panel_widget_locations` | Return file:line locations for everything that touches a widget. |
 | `peec_inductance` | Get documentation for the Radia PEEC-inductance (coil only, STEP) panel mode. |
 | `radia_ngsolve_reload_code` | Reload radia_mcp modules whose source changed on disk and re-register their tools, without restarting this server (editable install). Call it after editing the package; the report lists reloaded mo... |
 | `radia_ngsolve_status` | (no description) |
@@ -307,7 +302,6 @@ Module: `radia_mcp.radia_ngsolve.server`
 | `radia_usage` | Get Radia C++ library usage documentation. |
 | `release_workflow` | release-quad workflow for PyPI and the MEX + SLX GitHub Release. |
 | `sparsesolv` | Get sparsesolv documentation and code examples. |
-| `standalone_panels` | Retired standalone PySide panel topic. The canonical Radia human surface is |
 | `taskmanager` | NGSolve TaskManager parallelism — usage, MKL interaction, audit, C++. |
 | `technical_reports` | Return implementation-oriented knowledge distilled from IEEJ reports. |
 | `urn` | Universal Relaxation Network (URN): causal/passive rational fitting of a |
@@ -1261,7 +1255,7 @@ Module: `radia_mcp.literature_index.server`
 
 ## `mcp-server-document-meta`
 
-_Cross-cutting document/repo helpers: deadline, version diff, templates, lint-all, result-saving notebook/WebGUI audits, examples->docs/validation_test promotion audits, and root-level panels migration impact checks._
+_Cross-cutting document helpers: deadline, version diff, templates, lint-all, and result-saving notebook/WebGUI audits._
 
 Module: `radia_mcp.document_meta.server`
 
@@ -1269,16 +1263,11 @@ Module: `radia_mcp.document_meta.server`
 |---|---|
 | `document_meta_deadline_countdown` | 任意の締切までの日数と推奨アクションを返す。 |
 | `document_meta_diff_versions` | 2 つのテキスト file の unified diff を返す (作文 version 比較)。 |
-| `document_meta_examples_migration_policy` | Return the current Radia examples/ migration policy. |
-| `document_meta_examples_notebook_audit` | Audit examples -> docs/ipynb or validation_test promotion state. |
 | `document_meta_lint_all` | Run every applicable radia-mcp lint over one text / TeX file. |
-| `document_meta_notebook_result_audit` | Audit docs notebooks for saved results and synchronized result JSON. |
-| `document_meta_panel_layout_audit` | Audit impact of moving panel surfaces toward repo-root ``panels/``. |
+| `document_meta_notebook_result_audit` | Audit docs notebooks for saved results and WebGUI scenes. |
 | `document_meta_reload_code` | Reload radia_mcp modules whose source changed on disk and re-register their tools, without restarting this server (editable install). Call it after editing the package; the report lists reloaded mo... |
 | `document_meta_status` | (no description) |
 | `document_meta_template_loader` | 学術 document の定型 skeleton を返す。 |
-| `document_meta_write_docs_notebook_result_jsons` | Batch-write synchronized result JSON sidecars for executed docs notebooks. |
-| `document_meta_write_notebook_result_json` | Write a durable JSON sidecar summarising a saved-result notebook. |
 
 ## `mcp-server-pdf`
 
@@ -1398,7 +1387,7 @@ Module: `radia_mcp.meta.server`
 
 ## `mcp-server-panel-review`
 
-_Radia Simulink application-block review and construction contract (DesignSpec / masks / typed ports / result artifacts / validation / no-PySide gate), including the cubit_panels migration route._
+_Radia Simulink application-block review and construction contract (DesignSpec / masks / typed ports / result artifacts / validation / no-PySide gate)._
 
 Module: `radia_mcp.panel_review.server`
 
@@ -1407,4 +1396,4 @@ Module: `radia_mcp.panel_review.server`
 | `panel_review` | Get Radia Simulink application-block review / construction documentation. |
 | `panel_review_reload_code` | Reload radia_mcp modules whose source changed on disk and re-register their tools, without restarting this server (editable install). Call it after editing the package; the report lists reloaded mo... |
 | `panel_review_status` | (no description) |
-| `panel_review_topics` | Authoritative list of topics accepted by this server's dispatcher tool. Returns 13 topics. |
+| `panel_review_topics` | Authoritative list of topics accepted by this server's dispatcher tool. Returns 4 topics. |

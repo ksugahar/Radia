@@ -57,8 +57,8 @@ Write a ``case.geo`` launch recipe next to the .msh file. GMSH auto-loads
 for raw mesh/data inspection when a user intentionally opens the .msh
 directly. A plain ``case.opt`` is not the Explorer auto-load contract.
 
-The panel's Open GMSH button should open ``case.geo``. If an older panel
-passes ``case.msh``, the launcher should prefer the sibling ``case.geo``.
+The application result action should open ``case.geo``. A compatibility
+launcher given ``case.msh`` should prefer the sibling ``case.geo``.
 
 The .opt MUST contain ALL of the following:
 

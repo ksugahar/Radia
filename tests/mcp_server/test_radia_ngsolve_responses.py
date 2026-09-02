@@ -28,9 +28,6 @@ from radia_mcp.radia_ngsolve.knowledge.ngsbem_inductance import (
 from radia_mcp.radia_ngsolve.knowledge.ngsolve import (
     get_ngsolve_documentation,
 )
-from radia_mcp.radia_ngsolve.knowledge.panel_gui_pitfalls import (
-    get_panel_gui_pitfalls,
-)
 from radia_mcp.radia_ngsolve.knowledge.peec_inductance import (
     get_peec_inductance_documentation,
 )
@@ -253,19 +250,3 @@ class TestSparsesolvKnowledge:
         _assert_contains_any(body, ["sparsesolv", "CompactAMS", "AMS", "HX",
                                      "preconditioner"],
                               label="sparsesolv all")
-
-
-# ---------------------------------------------------------------------------
-# panel_gui_pitfalls
-# ---------------------------------------------------------------------------
-
-class TestPanelGuiPitfalls:
-    def test_full_document(self):
-        # Convention for this tool: empty string returns the full document.
-        body = get_panel_gui_pitfalls("")
-        _assert_substantial(body, min_chars=500)
-        _assert_contains_any(body, ["panel", "combo", "widget", "GUI", "pitfall"],
-                              label="panel_gui_pitfalls full")
-
-    def test_unknown_topic(self):
-        _assert_unknown_topic_graceful(get_panel_gui_pitfalls)
