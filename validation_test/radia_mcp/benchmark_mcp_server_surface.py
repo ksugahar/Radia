@@ -37,6 +37,21 @@ DEFAULT_SERVERS = (
     "topology_optimization",
 )
 
+# Public tools removed with the retired standalone-panel workflow. Keep this
+# list explicit so the validation still fails for every unplanned API loss.
+RETIRED_BASELINE_TOOLS = {
+    "radia_ngsolve": frozenset(
+        {
+            "panel_add_param",
+            "panel_describe_jp",
+            "panel_gui_pitfalls",
+            "panel_schema",
+            "panel_widget_locations",
+            "standalone_panels",
+        }
+    ),
+}
+
 _PROBE = r"""
 import json
 import os
@@ -138,7 +153,8 @@ def build_report(
     repeats: int,
 ) -> dict[str, Any]:
     measurements: dict[str, Any] = {}
-    all_compatible = True
+    all_supported_compatible = True
+    all_retired_absent = True
     all_not_larger = True
     any_smaller = False
     import_nonregression = True
@@ -148,14 +164,20 @@ def build_report(
         full = _measure(candidate_src, server, "full", repeats)
         baseline_names = set(baseline["tool_names"])
         full_names = set(full["tool_names"])
-        compatible = baseline_names.issubset(full_names)
+        retired_names = RETIRED_BASELINE_TOOLS.get(server, frozenset())
+        supported_baseline_names = baseline_names - retired_names
+        unexpected_missing = sorted(supported_baseline_names - full_names)
+        retired_still_present = sorted(retired_names & full_names)
+        compatible = not unexpected_missing
+        retired_absent = not retired_still_present
         not_larger = core["schema_bytes"] <= baseline["schema_bytes"]
         smaller = core["schema_bytes"] < baseline["schema_bytes"]
         startup_ok = (
             core["import_seconds_median"]
             <= baseline["import_seconds_median"] * 1.25
         )
-        all_compatible &= compatible
+        all_supported_compatible &= compatible
+        all_retired_absent &= retired_absent
         all_not_larger &= not_larger
         any_smaller |= smaller
         import_nonregression &= startup_ok
@@ -182,13 +204,18 @@ def build_report(
                 / baseline["import_seconds_median"],
                 2,
             ),
-            "full_profile_preserves_baseline_tools": compatible,
+            "retired_baseline_tools": sorted(retired_names),
+            "unexpected_missing_full_tools": unexpected_missing,
+            "retired_tools_still_present": retired_still_present,
+            "full_profile_preserves_supported_baseline_tools": compatible,
+            "retired_baseline_tools_absent": retired_absent,
             "core_schema_is_smaller": smaller,
             "core_schema_is_not_larger": not_larger,
             "cold_import_within_25_percent_of_baseline": startup_ok,
         }
     passed = (
-        all_compatible
+        all_supported_compatible
+        and all_retired_absent
         and all_not_larger
         and any_smaller
         and import_nonregression
@@ -208,7 +235,10 @@ def build_report(
         },
         "measurements": measurements,
         "acceptance": {
-            "full_profile_preserves_all_baseline_tools": all_compatible,
+            "full_profile_preserves_all_supported_baseline_tools": (
+                all_supported_compatible
+            ),
+            "retired_baseline_tools_absent": all_retired_absent,
             "core_schema_is_not_larger_for_every_server": all_not_larger,
             "core_schema_is_smaller_for_at_least_one_server": any_smaller,
             "cold_import_nonregression": import_nonregression,
