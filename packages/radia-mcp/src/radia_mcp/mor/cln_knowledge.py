@@ -563,6 +563,14 @@ no fitted d anywhere) and becomes an ordinary state space.
   validation_test/mixed_galerkin/results/mixed_galerkin_results.json
       <- the numerical artifact. Documentation and talk material READ this.
          They must not recompute it; that is how the metric forked.
+  src/radia/maglev/mixed_galerkin/        the public API (28 symbols): mesh-driven
+                                          bulk Foster basis, CAD edge topology,
+                                          Y_mixed, Foster ROM fit, state space
+  tests/test_maglev_mixed_galerkin_golden.py
+      19/19 pass on 2026-09-02, verified by calling the test functions directly:
+      pytest could not collect that day because a junction at the repo root
+      (.codex-eqnedit64-fontfix, whose target resolves only on the file server)
+      made its rootdir walk raise before any test ran.
 """
 
 
