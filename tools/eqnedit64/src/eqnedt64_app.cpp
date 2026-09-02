@@ -898,14 +898,96 @@ void set_dirty(bool dirty = true) {
  * the old pane's dangerous loop: it moved the caret and caused a second
  * EN_CHANGE while the first was still parsing.  The guard prevents message
  * recursion, and the equality check avoids needless EDIT mutations. */
+/* Canonical TeX laid out over several lines for the source pane, with a map
+ * from each canonical character to where it landed.
+ *
+ * The pane held one endless line otherwise.  A two-row aligned document read
+ * as \begin{aligned}\frac{1}{R_{2n}} = \int _{\Omega _{c}}\sigma ... with
+ * everything past the first integral off the right edge, which is how the
+ * first outside reader saw his own equation.  Break only where TeX ignores
+ * whitespace -- after \begin{...}, before \end{...}, after a \\ row break --
+ * and indent the body, so the structure is the first thing visible.  The
+ * parser skips \r and \n as space, so the text still round-trips when it is
+ * edited here.  The map exists because highlight_source_insertion addresses
+ * the EDIT by character offset, and those offsets shift once breaks and
+ * indentation are inserted. */
+struct PrettySource {
+    std::wstring text;
+    std::vector<size_t> offset;   /* canonical index -> index in text */
+};
+
+PrettySource pretty_source(const std::wstring& raw) {
+    PrettySource out;
+    out.offset.assign(raw.size() + 1, 0);
+    int depth = 0;
+    bool atLineStart = true;
+
+    const auto breakLine = [&](int level) {
+        out.text += L"\r\n";
+        out.text.append(size_t(level > 0 ? level : 0) * 2, L' ');
+        atLineStart = true;
+    };
+    const auto copy = [&](size_t from, size_t to) {
+        for (size_t k = from; k < to; ++k) {
+            out.offset[k] = out.text.size();
+            out.text += raw[k];
+        }
+        if (to > from) atLineStart = false;
+    };
+
+    size_t i = 0;
+    while (i < raw.size()) {
+        /* The space a break just replaced would otherwise sit after the
+         * indentation and push the line one column further out. */
+        if (atLineStart && (raw[i] == L' ' || raw[i] == L'\t')) {
+            out.offset[i] = out.text.size();
+            ++i;
+            continue;
+        }
+        if (raw.compare(i, 5, L"\\end{") == 0) {
+            const size_t close = raw.find(L'}', i);
+            if (close != std::wstring::npos) {
+                if (depth > 0) --depth;
+                if (!atLineStart) breakLine(depth);
+                copy(i, close + 1);
+                i = close + 1;
+                continue;
+            }
+        }
+        if (raw.compare(i, 7, L"\\begin{") == 0) {
+            const size_t close = raw.find(L'}', i);
+            if (close != std::wstring::npos) {
+                if (!atLineStart) breakLine(depth);
+                copy(i, close + 1);
+                i = close + 1;
+                breakLine(++depth);
+                continue;
+            }
+        }
+        if (raw.compare(i, 2, L"\\\\") == 0) {
+            copy(i, i + 2);
+            i += 2;
+            breakLine(depth);
+            continue;
+        }
+        out.offset[i] = out.text.size();
+        out.text += raw[i];
+        atLineStart = false;
+        ++i;
+    }
+    out.offset[raw.size()] = out.text.size();
+    return out;
+}
+
 void sync_source_from_model() {
     if (!g.source) return;
-    const std::wstring canonical = wide_utf8(g.equation.latex());
-    if (window_text(g.source) != canonical) {
+    const PrettySource canonical = pretty_source(wide_utf8(g.equation.latex()));
+    if (window_text(g.source) != canonical.text) {
         g.sourceInsertionHighlight = false;
         g.syncingSource = true;
-        SetWindowTextW(g.source, canonical.c_str());
-        SendMessageW(g.source, EM_SETSEL, canonical.size(), canonical.size());
+        SetWindowTextW(g.source, canonical.text.c_str());
+        SendMessageW(g.source, EM_SETSEL, canonical.text.size(),
+                     canonical.text.size());
         g.syncingSource = false;
     }
     g.sourceEditing = false;
@@ -933,14 +1015,31 @@ void highlight_source_insertion(const std::string& beforeLatex) {
     }
     if (newTail <= first) return;  /* deletion/navigation has no new spelling */
 
+    /* Take the spelling out of the canonical text while the offsets still
+     * index it.  Reusing the mapped ones below to cut this substring read
+     * past the end as soon as layout added a character before the insertion
+     * -- true of every structured equation -- and the throw brought the
+     * process down as heap corruption. */
+    const std::wstring inserted = after.substr(first, newTail - first);
+
+    /* The diff above is in canonical TeX; the EDIT holds the broken and
+     * indented form, so carry both ends through the layout's own map before
+     * addressing it, or the lesson highlights the wrong span. */
+    const PrettySource shown = pretty_source(after);
+    size_t shownFirst =
+        first < shown.offset.size() ? shown.offset[first] : shown.text.size();
+    size_t shownTail =
+        newTail < shown.offset.size() ? shown.offset[newTail]
+                                      : shown.text.size();
+
     const size_t editLength = size_t(GetWindowTextLengthW(g.source));
-    first = std::min(first, editLength);
-    newTail = std::min(newTail, editLength);
-    if (newTail <= first) return;
-    SendMessageW(g.source, EM_SETSEL, WPARAM(first), LPARAM(newTail));
+    shownFirst = std::min(shownFirst, editLength);
+    shownTail = std::min(shownTail, editLength);
+    if (shownTail <= shownFirst) return;
+    SendMessageW(g.source, EM_SETSEL, WPARAM(shownFirst), LPARAM(shownTail));
     SendMessageW(g.source, EM_SCROLLCARET, 0, 0);
     g.sourceInsertionHighlight = true;
-    debug_event("source.highlight", utf8_wide(after.substr(first, newTail - first)));
+    debug_event("source.highlight", utf8_wide(inserted));
 }
 
 /* WM_SETTEXT is allowed not to emit EN_CHANGE for a multiline EDIT.  Hidden
@@ -4308,13 +4407,18 @@ int ui_fuzz(unsigned seed, int operations) {
                          seed, i);
                 return 2;
             }
-            if (!g.sourceEditing &&
-                utf8_wide(window_text(g.source)) != g.equation.latex()) {
+            /* The pane shows the model's TeX broken over lines and indented,
+             * so agreement is against that layout rather than against the
+             * canonical spelling -- comparing the raw strings would report a
+             * divergence on every structured equation. */
+            const std::wstring shownSource =
+                pretty_source(wide_utf8(g.equation.latex())).text;
+            if (!g.sourceEditing && window_text(g.source) != shownSource) {
                 fwprintf(stderr,
                          L"seed %u op %d: source/model divergence\n"
-                         L"  source: %s\n  model:  %s\n",
+                         L"  source: %s\n  shown:  %s\n",
                          seed, i, window_text(g.source).c_str(),
-                         wide_utf8(g.equation.latex()).c_str());
+                         shownSource.c_str());
                 return 3;
             }
             break;
@@ -4975,6 +5079,142 @@ int ui_interaction_test() {
     if (!(draggedPan < 0)) return 162;
     if (draggedSelection.size() < 32) return 163;
     if (GetCapture() == g.canvas || g.dragging) return 164;
+
+    /* The same gesture, but across a structural boundary.  The drag above
+     * runs through 128 plain letters -- one slot, the only shape in which a
+     * range can never cross a boundary -- so it passed while dragging over
+     * any real equation selected nothing whatsoever.  The first outside
+     * reader hit that within minutes on an equation full of fractions and
+     * fences, reported it as "selection does not work", and fell back to
+     * copying the whole equation and deleting what he did not want. */
+    g.equation.load_latex("\\frac{1}{\\mu}b");
+    const eqnedit::RenderMetrics crossMetrics = g.equation.metrics(g.style);
+    /* Equation-space points, the same units hit_test takes from the canvas
+     * once the pan and the render scale are divided out. */
+    const double numeratorX = crossMetrics.width * 0.2;
+    const double numeratorY = crossMetrics.baseline - crossMetrics.height * 0.3;
+    if (!g.equation.hit_test(numeratorX, numeratorY, g.style, false)) return 206;
+    /* caret() spells the path as "child.slot/...:index", so a bare ":n"
+     * means the press landed in the root slot and this check would prove
+     * nothing about crossing a boundary. */
+    const std::string numeratorCaret = g.equation.caret();
+    if (numeratorCaret.empty() || numeratorCaret[0] == ':') return 207;
+    g.equation.hit_test(crossMetrics.width * 0.95, crossMetrics.baseline,
+                        g.style, true);
+    const std::string crossSelection = g.equation.selection_latex();
+    /* Promoted to the shared slot, the range has to carry the whole
+     * fraction the drag started inside, not just the letter it ended on. */
+    if (crossSelection.find("\\frac") == std::string::npos) return 208;
+    g.equation.clear_selection();
+
+    /* Keep the original deep press while a promoted drag reverses direction.
+     * A separate drag anchor is essential here: after moving from the
+     * fraction to the left edge, the representable selection itself lives in
+     * the root slot.  Reusing that promoted edge as the next anchor would
+     * make the move to the right select only the suffix. */
+    g.equation.load_latex("a\\frac{1}{\\mu}b");
+    const eqnedit::RenderMetrics reverseMetrics = g.equation.metrics(g.style);
+    const double reverseNumeratorY =
+        reverseMetrics.baseline - reverseMetrics.height * 0.3;
+    double reverseNumeratorX = -1.0;
+    std::string reverseNumeratorPath;
+    for (int sample = 0; sample <= 200; ++sample) {
+        const double x = reverseMetrics.width * double(sample) / 200.0;
+        if (!g.equation.hit_test(x, reverseNumeratorY, g.style, false))
+            continue;
+        const std::string caret = g.equation.caret();
+        if (!caret.empty() && caret[0] != ':') {
+            reverseNumeratorX = x;
+            reverseNumeratorPath = caret.substr(0, caret.find(':'));
+            break;
+        }
+    }
+    if (!(reverseNumeratorX >= 0.0)) return 213;
+
+    /* The other child slot at this x is the denominator.  Find it from the
+     * actual hit-test geometry instead of baking a font-dependent y value
+     * into the regression. */
+    double reverseDenominatorY = -1.0;
+    for (int sample = 0; sample <= 200; ++sample) {
+        const double y = reverseMetrics.height * double(sample) / 200.0;
+        if (!g.equation.hit_test(reverseNumeratorX, y, g.style, false))
+            continue;
+        const std::string caret = g.equation.caret();
+        const std::string path = caret.substr(0, caret.find(':'));
+        if (!caret.empty() && caret[0] != ':' &&
+            path != reverseNumeratorPath) {
+            reverseDenominatorY = y;
+            break;
+        }
+    }
+    if (!(reverseDenominatorY >= 0.0)) return 214;
+    const auto withoutSpaces = [](std::string text) {
+        text.erase(std::remove(text.begin(), text.end(), ' '), text.end());
+        return text;
+    };
+    g.equation.hit_test(reverseNumeratorX, reverseNumeratorY, g.style, false);
+    g.equation.hit_test(reverseNumeratorX, reverseDenominatorY, g.style, true);
+    if (withoutSpaces(g.equation.selection_latex()) != "\\frac{1}{\\mu}")
+        return 215;
+
+    g.equation.hit_test(reverseNumeratorX, reverseNumeratorY, g.style, false);
+    g.equation.hit_test(0.0, reverseMetrics.baseline, g.style, true);
+    if (withoutSpaces(g.equation.selection_latex()) != "a\\frac{1}{\\mu}")
+        return 216;
+    g.equation.hit_test(reverseMetrics.width, reverseMetrics.baseline,
+                        g.style, true);
+    if (withoutSpaces(g.equation.selection_latex()) != "\\frac{1}{\\mu}b")
+        return 217;
+    g.equation.clear_selection();
+
+    /* A structured document has to reach the source pane broken over lines.
+     * Held on one line, a two-row aligned equation runs off the right edge
+     * and the reader sees only its opening -- which is how the first outside
+     * reader met his own equation. */
+    g.equation.load_latex("\\begin{aligned}a &= b \\\\ c &= d\\end{aligned}");
+    sync_source_from_model();
+    const std::wstring shownSource = window_text(g.source);
+    if (shownSource.find(L"\r\n") == std::wstring::npos) return 209;
+    const std::wstring expectedSourceEnd = L"\r\n\\end{aligned}";
+    if (shownSource.rfind(L"\\begin{aligned}\r\n  ", 0) != 0 ||
+        shownSource.find(L"\\\\\r\n  ") == std::wstring::npos ||
+        shownSource.size() < expectedSourceEnd.size() ||
+        shownSource.compare(shownSource.size() - expectedSourceEnd.size(),
+                            expectedSourceEnd.size(), expectedSourceEnd) != 0)
+        return 218;
+    size_t sourceBreaks = 0;
+    for (size_t at = 0; (at = shownSource.find(L"\r\n", at)) !=
+                        std::wstring::npos; at += 2)
+        ++sourceBreaks;
+    if (sourceBreaks != 3) return 219;
+    /* The breaks are only allowed where TeX ignores whitespace, so the very
+     * text now on display has to parse back to the equation it came from. */
+    const std::string beforeRoundTrip = g.equation.latex();
+    if (!g.equation.replace_latex(utf8_wide(shownSource), false)) return 210;
+    if (g.equation.latex() != beforeRoundTrip) return 211;
+
+    /* The palette lesson addresses the EDIT in laid-out coordinates but has
+     * to read the inserted spelling out of the canonical text.  Carrying the
+     * mapped offsets into that substring read past its end as soon as layout
+     * added a character ahead of the insertion -- every structured equation
+     * -- and the throw came back as heap corruption, which the fuzzer found
+     * on its first seed.  Drive the real path over a structured equation. */
+    g.equation.load_latex("\\begin{aligned}a &= b\\end{aligned}");
+    sync_source_from_model();
+    const std::string beforeLesson = g.equation.latex();
+    g.equation.move_end();
+    g.equation.insert_symbol("\\alpha");
+    sync_source_from_model();
+    highlight_source_insertion(beforeLesson);
+    if (g.equation.latex() == beforeLesson) return 212;
+    DWORD lessonFirst = 0, lessonTail = 0;
+    SendMessageW(g.source, EM_GETSEL, WPARAM(&lessonFirst),
+                 LPARAM(&lessonTail));
+    const std::wstring lessonSource = window_text(g.source);
+    if (lessonTail <= lessonFirst || lessonTail > lessonSource.size() ||
+        lessonSource.substr(lessonFirst, lessonTail - lessonFirst)
+            .find(L"\\alpha") == std::wstring::npos)
+        return 220;
 
     g.equation.load_latex("yx");
     sync_source_from_model();
