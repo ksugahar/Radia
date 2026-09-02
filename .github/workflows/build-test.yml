@@ -266,8 +266,8 @@ jobs:
               Remove-Item -Path $_.FullName -Recurse -Force -ErrorAction SilentlyContinue
             }
 
-          python -m pip install mcp pytest-rerunfailures --quiet
-          Write-Host "mcp + pytest-rerunfailures installed (radia_mcp via PYTHONPATH, not pip-installed)"
+          python -m pip install mcp pytest-rerunfailures "trimesh>=4.0" --quiet
+          Write-Host "mcp + pytest-rerunfailures + trimesh installed (radia_mcp via PYTHONPATH, not pip-installed)"
 
       # ----------------------------------------------------------------
       # Verify NGSolve: exact pyproject-pinned version in the run-local venv.
@@ -426,6 +426,10 @@ jobs:
           $pytestArgs = @(
             'tests/',
             '--ignore=tests/mcp_server',
+            # Eqnedit64 owns its font-backed native/model suites in
+            # eqnedit64.yml.  The Radia wheel lane must not depend on a TeX
+            # Live installation on the mdx numerical runner.
+            '--ignore=tests/equation',
             '--ignore=tests/test_cubit_installers.py',
             '--ignore=tests/test_release_quad_optuna_candidate.py',
             '-v',
