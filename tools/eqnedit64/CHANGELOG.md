@@ -19,6 +19,9 @@
 - Lock the selection contract across all structural container classes and all
   copy, delete, replace, wrap, style, Undo, and Redo consumers. Hidden GUI fuzz
   includes drags with and without an intervening mouse-move notification.
+- Make Enter in the TeX pane create the same aligned equation row as Enter on
+  the structural canvas, keep the new source caret inside the environment, and
+  soft-wrap long TeX source instead of requiring horizontal scrolling.
 
 ## 3.0.11 — 2026-08-30
 
