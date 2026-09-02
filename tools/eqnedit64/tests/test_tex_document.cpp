@@ -50,9 +50,12 @@ int main() {
 
     ok &= expect(eqnedit::compose_tex_document("E=mc^{2}", true),
         "\\begin{equation}\nE=mc^{2}\n\\end{equation}\n", "numbered save");
+    ok &= expect(eqnedit::compose_tex_document(aligned, true),
+        "\\begin{equation}\n" + aligned +
+        "\n\\end{equation}\n", "new multiline equation save");
     ok &= expect(eqnedit::compose_tex_document(aligned, false),
         "\\begin{equation*}\n" + aligned +
-        "\n\\end{equation*}\n", "multiline save");
+        "\n\\end{equation*}\n", "existing starred multiline save");
 
     if (!ok) return 1;
     std::cout << "PASS: " << checks << " TeX document/paste checks\n";

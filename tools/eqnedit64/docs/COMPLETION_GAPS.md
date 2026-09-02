@@ -15,7 +15,7 @@
 
 - `build\build_tests.bat`: 再ビルド、署名、モデル編集、TeX、レイアウト、
   非表示GUI、24 seed×3,000回の実ウィンドウ操作、PowerPoint、IrfanView、
-  Google Slides、`--texclip`
+  Google Slides、`Eqnedit64.exe clipboard clipboard-png`
 - `build\build_asan.bat` + `build\test_asan.ps1`: ASan版の自己試験、配置、
   96/120/144/192 dpi相当のオフスクリーン視認性、双方向GUI編集、
   24 seed×3,000回の実ウィンドウ操作

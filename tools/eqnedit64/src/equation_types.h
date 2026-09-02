@@ -47,6 +47,8 @@ inline double space_width_em(const char* command) {
     if (c == "\\:") return 4.0 / 18.0;
     if (c == "\\;") return 5.0 / 18.0;
     if (c == "\\ ") return 1.0 / 3.0;
+    /* TeX's active `~` is a non-breaking interword space. */
+    if (c == "~") return 1.0 / 3.0;
     if (c == "\\quad") return 1.0;
     if (c == "\\qquad") return 2.0;
     return 0.0;

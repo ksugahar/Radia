@@ -20,10 +20,12 @@
 #include <algorithm>
 #include <array>
 #include <atomic>
+#include <cctype>
 #include <cstdint>
 #include <cmath>
 #include <cstdlib>
 #include <cstring>
+#include <cwchar>
 #include <fstream>
 #include <iomanip>
 #include <io.h>
@@ -913,12 +915,14 @@ void set_dirty(bool dirty = true) {
  * indentation are inserted. */
 struct PrettySource {
     std::wstring text;
-    std::vector<size_t> offset;   /* canonical index -> index in text */
+    std::vector<size_t> start; /* canonical character -> displayed start */
+    std::vector<size_t> end;   /* canonical character -> displayed end */
 };
 
 PrettySource pretty_source(const std::wstring& raw) {
     PrettySource out;
-    out.offset.assign(raw.size() + 1, 0);
+    out.start.assign(raw.size() + 1, 0);
+    out.end.assign(raw.size() + 1, 0);
     int depth = 0;
     bool atLineStart = true;
 
@@ -929,18 +933,30 @@ PrettySource pretty_source(const std::wstring& raw) {
     };
     const auto copy = [&](size_t from, size_t to) {
         for (size_t k = from; k < to; ++k) {
-            out.offset[k] = out.text.size();
+            out.start[k] = out.text.size();
             out.text += raw[k];
+            out.end[k] = out.text.size();
         }
         if (to > from) atLineStart = false;
     };
 
     size_t i = 0;
     while (i < raw.size()) {
+        /* The emitter already uses LF as human-readable TeX whitespace.
+         * Win32 EDIT, however, requires CRLF and can display a lone LF as a
+         * control glyph.  Layout owns all pane line endings, so consume the
+         * emitter's CR/LF here and map them to an empty displayed range. */
+        if (raw[i] == L'\r' || raw[i] == L'\n') {
+            out.start[i] = out.text.size();
+            out.end[i] = out.text.size();
+            ++i;
+            continue;
+        }
         /* The space a break just replaced would otherwise sit after the
          * indentation and push the line one column further out. */
         if (atLineStart && (raw[i] == L' ' || raw[i] == L'\t')) {
-            out.offset[i] = out.text.size();
+            out.start[i] = out.text.size();
+            out.end[i] = out.text.size();
             ++i;
             continue;
         }
@@ -970,12 +986,14 @@ PrettySource pretty_source(const std::wstring& raw) {
             breakLine(depth);
             continue;
         }
-        out.offset[i] = out.text.size();
+        out.start[i] = out.text.size();
         out.text += raw[i];
+        out.end[i] = out.text.size();
         atLineStart = false;
         ++i;
     }
-    out.offset[raw.size()] = out.text.size();
+    out.start[raw.size()] = out.text.size();
+    out.end[raw.size()] = out.text.size();
     return out;
 }
 
@@ -1027,10 +1045,13 @@ void highlight_source_insertion(const std::string& beforeLatex) {
      * addressing it, or the lesson highlights the wrong span. */
     const PrettySource shown = pretty_source(after);
     size_t shownFirst =
-        first < shown.offset.size() ? shown.offset[first] : shown.text.size();
-    size_t shownTail =
-        newTail < shown.offset.size() ? shown.offset[newTail]
-                                      : shown.text.size();
+        first < shown.start.size() ? shown.start[first] : shown.text.size();
+    /* Map the exclusive canonical tail through the end of its preceding
+     * character.  Mapping it to the start of the next character also selects
+     * any CRLF/indentation injected before \end{...}, even though that
+     * whitespace was not inserted by the palette or shortcut. */
+    size_t shownTail = newTail > first && newTail - 1 < shown.end.size()
+        ? shown.end[newTail - 1] : shownFirst;
 
     const size_t editLength = size_t(GetWindowTextLengthW(g.source));
     shownFirst = std::min(shownFirst, editLength);
@@ -1757,6 +1778,63 @@ bool clipboard_set_png(const std::string& latex) {
 
 enum class ClipboardCliTarget { Office, GoogleSlides, Png };
 
+enum class ConversionDestination {
+    Invalid,
+    OfficeClipboard,
+    SlidesClipboard,
+    PngClipboard,
+    PngFile,
+    EmfFile,
+};
+
+enum class TwoArgumentAction {
+    Convert,
+    OpenFirstTex,
+    Reject,
+};
+
+bool wide_equal_ci(const std::wstring& left, const wchar_t* right) {
+    return right && _wcsicmp(left.c_str(), right) == 0;
+}
+
+bool wide_ends_with_ci(const std::wstring& value, const wchar_t* suffix) {
+    if (!suffix) return false;
+    const size_t length = std::wcslen(suffix);
+    return value.size() >= length &&
+        _wcsicmp(value.c_str() + value.size() - length, suffix) == 0;
+}
+
+ConversionDestination conversion_destination(const std::wstring& output) {
+    if (wide_equal_ci(output, L"office") ||
+        wide_equal_ci(output, L"powerpoint") ||
+        wide_equal_ci(output, L"word"))
+        return ConversionDestination::OfficeClipboard;
+    if (wide_equal_ci(output, L"slides") ||
+        wide_equal_ci(output, L"google-slides"))
+        return ConversionDestination::SlidesClipboard;
+    if (wide_equal_ci(output, L"clipboard-png") ||
+        wide_equal_ci(output, L"png"))
+        return ConversionDestination::PngClipboard;
+    if (wide_ends_with_ci(output, L".png"))
+        return ConversionDestination::PngFile;
+    if (wide_ends_with_ci(output, L".emf"))
+        return ConversionDestination::EmfFile;
+    return ConversionDestination::Invalid;
+}
+
+TwoArgumentAction classify_two_arguments(const std::wstring& input,
+                                         const std::wstring& output) {
+    if (conversion_destination(output) != ConversionDestination::Invalid)
+        return TwoArgumentAction::Convert;
+    /* Explorer invokes a drop target with every selected path as a positional
+     * argument.  Two .tex documents are therefore an editing request, not a
+     * request to overwrite the second document with an image. */
+    if (wide_ends_with_ci(input, L".tex") &&
+        wide_ends_with_ci(output, L".tex"))
+        return TwoArgumentAction::OpenFirstTex;
+    return TwoArgumentAction::Reject;
+}
+
 int copy_tex_cli(const std::string& input, ClipboardCliTarget target) {
     const std::string latex = eqnedit::normalize_tex_paste(input);
     if (latex.empty()) return 83;
@@ -1952,14 +2030,27 @@ void dispatch_model(const std::string& command) {
     if (command == "edit.undo") action = g.equation.undo_name();
     else if (command == "edit.redo") action = g.equation.redo_name();
     if (g.equation.command(command)) {
-        model_changed(command, action.empty() ? std::string() :
-                      "name=" + action);
-        if (command.rfind("template.", 0) == 0 ||
-            command.rfind("symbol.", 0) == 0 ||
-            command.rfind("latex.", 0) == 0 ||
-            command.rfind("matrix.add_", 0) == 0 ||
-            command == "edit.new_line" || command == "edit.alignment")
-            highlight_source_insertion(beforeLatex);
+        const bool contentChanged = beforeLatex != g.equation.latex();
+        if (contentChanged) {
+            model_changed(command, action.empty() ? std::string() :
+                          "name=" + action);
+            if (command.rfind("template.", 0) == 0 ||
+                command.rfind("symbol.", 0) == 0 ||
+                command.rfind("latex.", 0) == 0 ||
+                command.rfind("matrix.add_", 0) == 0 ||
+                command == "edit.new_line" || command == "edit.alignment")
+                highlight_source_insertion(beforeLatex);
+        } else {
+            /* Structural boundaries may consume a key by moving the caret.
+             * That is a handled navigation, not a document edit. */
+            sync_source_from_model();
+            InvalidateRect(g.canvas, nullptr, FALSE);
+            if (command == "edit.backspace" || command == "edit.delete")
+                update_status(L"構造境界を移動しました（数式は変更していません）");
+            else
+                update_status();
+            debug_event(command + ".caret_only");
+        }
     } else {
         sync_source_from_model();
         InvalidateRect(g.canvas, nullptr, FALSE);
@@ -3272,7 +3363,7 @@ bool drag_autoscroll(HWND hwnd) {
     g.renderTop = nextTop;
     const double x = (g.dragClientX - g.renderLeft) / g.renderScale;
     const double y = (g.dragClientY - g.renderTop) / g.renderScale;
-    g.equation.hit_test(x, y, g.style, true);
+    g.equation.extend_pointer_selection(x, y, g.style);
     InvalidateRect(hwnd, nullptr, FALSE);
     update_status();
     debug_event("mouse.autoscroll",
@@ -3368,13 +3459,24 @@ LRESULT CALLBACK CanvasProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             double x = (GET_X_LPARAM(lp) - g.renderLeft) / g.renderScale;
             double y = (GET_Y_LPARAM(lp) - g.renderTop) / g.renderScale;
             if ((wp & MK_CONTROL) || key_ctrl()) {
-                const bool hit = g.equation.hit_test(x, y, g.style, false);
+                const bool hit =
+                    g.equation.begin_pointer_selection(x, y, g.style);
                 const bool selected = hit &&
                     g.equation.select_containing_structure();
+                g.equation.end_pointer_selection();
                 InvalidateRect(hwnd, nullptr, FALSE);
                 update_status();
                 debug_event("mouse.ctrl_click",
                     selected ? "scope=containing_structure" : "scope=none");
+                return 0;
+            }
+            const bool hit =
+                g.equation.begin_pointer_selection(x, y, g.style);
+            if (!hit) {
+                g.equation.end_pointer_selection();
+                InvalidateRect(hwnd, nullptr, FALSE);
+                update_status();
+                debug_event("mouse.down", "scope=none");
                 return 0;
             }
             SetCapture(hwnd); g.dragging = true;
@@ -3382,7 +3484,6 @@ LRESULT CALLBACK CanvasProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             g.dragClientY = GET_Y_LPARAM(lp);
             SetTimer(hwnd, kDragScrollTimer, kDragScrollIntervalMs, nullptr);
             g.dragStartX = x; g.dragStartY = y; g.dragMoves = 0;
-            g.equation.hit_test(x, y, g.style, false);
             InvalidateRect(hwnd, nullptr, FALSE); update_status();
             debug_event("mouse.down", "x=" + std::to_string(x) +
                         " y=" + std::to_string(y)); return 0;
@@ -3395,7 +3496,7 @@ LRESULT CALLBACK CanvasProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
                 if (!drag_autoscroll(hwnd)) {
                     double x = (g.dragClientX - g.renderLeft) / g.renderScale;
                     double y = (g.dragClientY - g.renderTop) / g.renderScale;
-                    g.equation.hit_test(x, y, g.style, true);
+                    g.equation.extend_pointer_selection(x, y, g.style);
                     InvalidateRect(hwnd, nullptr, FALSE); update_status();
                 }
             }
@@ -3410,9 +3511,15 @@ LRESULT CALLBACK CanvasProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             if (g.dragging) {
                 double x = (GET_X_LPARAM(lp) - g.renderLeft) / g.renderScale;
                 double y = (GET_Y_LPARAM(lp) - g.renderTop) / g.renderScale;
+                /* WM_MOUSEMOVE can be coalesced.  The release coordinate is
+                 * authoritative, so extend once more before ending capture. */
+                g.equation.extend_pointer_selection(x, y, g.style);
+                g.equation.end_pointer_selection();
                 g.dragging = false;
                 KillTimer(hwnd, kDragScrollTimer);
                 ReleaseCapture();
+                InvalidateRect(hwnd, nullptr, FALSE);
+                update_status();
                 debug_event("mouse.up", "from=" + std::to_string(g.dragStartX) +
                             "," + std::to_string(g.dragStartY) + " to=" +
                             std::to_string(x) + "," + std::to_string(y) +
@@ -3423,6 +3530,7 @@ LRESULT CALLBACK CanvasProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             if (g.dragging && HWND(lp) != hwnd) {
                 g.dragging = false;
                 KillTimer(hwnd, kDragScrollTimer);
+                g.equation.end_pointer_selection();
                 debug_event("mouse.drag.cancel", "capture changed");
             }
             return 0;
@@ -3609,6 +3717,277 @@ bool source_move_empty_group(bool backwards) {
     return true;
 }
 
+/* Enter in the TeX pane is a mathematical row break, not a whitespace-only
+ * source newline.  A raw CRLF is ignored by TeX, which made Enter appear to do
+ * nothing on the canvas even though the EDIT control visibly moved.  Keep the
+ * user's caret in this pane, create an aligned wrapper on the first break, and
+ * retain the raw trailing row until the next characters make it structural.
+ * Shift+Enter remains the ordinary EDIT newline for people who only want to
+ * lay out a long source command without changing the equation. */
+bool source_insert_equation_row(HWND hwnd) {
+    DWORD first = 0, last = 0;
+    SendMessageW(hwnd, EM_GETSEL, WPARAM(&first), LPARAM(&last));
+    const std::wstring text = window_text(hwnd);
+    first = DWORD(std::min<size_t>(first, text.size()));
+    last = DWORD(std::min<size_t>(last, text.size()));
+    if (last < first) std::swap(first, last);
+
+    const std::wstring alignedBegin = L"\\begin{aligned}";
+    const std::wstring alignedEnd = L"\\end{aligned}";
+    std::wstring begin = alignedBegin;
+    size_t insertionFirst = first;
+    size_t insertionLast = last;
+    bool inRowEnvironment = false;
+    bool appendBeforeEnd = false;
+
+    const auto matchingEnvironmentEnd = [&](size_t candidateOpen,
+                                            const std::wstring& openToken,
+                                            const std::wstring& closeToken) {
+        int depth = 1;
+        size_t scan = candidateOpen + openToken.size();
+        while (scan < text.size()) {
+            const size_t nextOpen = text.find(openToken, scan);
+            const size_t nextClose = text.find(closeToken, scan);
+            if (nextClose == std::wstring::npos) return std::wstring::npos;
+            if (nextOpen != std::wstring::npos && nextOpen < nextClose) {
+                ++depth;
+                scan = nextOpen + openToken.size();
+            } else {
+                --depth;
+                if (depth == 0) return nextClose;
+                scan = nextClose + closeToken.size();
+            }
+        }
+        return std::wstring::npos;
+    };
+
+    /* Find the innermost editable row environment which actually contains the
+     * caret.  Enter inside a matrix or cases adds a row to that table; wrapping
+     * it in an outer aligned environment acts on the wrong structure.  A plain
+     * rfind also pairs an outer begin with the first nested end, so match each
+     * candidate before choosing the deepest containing one. */
+    size_t open = std::wstring::npos;
+    size_t close = std::wstring::npos;
+    static const wchar_t* kRowEnvironments[] = {
+        L"aligned", L"matrix", L"pmatrix", L"bmatrix", L"Bmatrix",
+        L"vmatrix", L"Vmatrix", L"cases", nullptr
+    };
+    for (int env = 0; kRowEnvironments[env]; ++env) {
+        const std::wstring candidateBegin =
+            L"\\begin{" + std::wstring(kRowEnvironments[env]) + L"}";
+        const std::wstring candidateEnd =
+            L"\\end{" + std::wstring(kRowEnvironments[env]) + L"}";
+        size_t search = std::min(insertionFirst, text.size());
+        for (;;) {
+            const size_t candidate = text.rfind(candidateBegin, search);
+            if (candidate == std::wstring::npos) break;
+            const size_t candidateClose = matchingEnvironmentEnd(
+                candidate, candidateBegin, candidateEnd);
+            if (candidateClose != std::wstring::npos &&
+                insertionFirst <= candidateClose) {
+                if (open == std::wstring::npos || candidate > open) {
+                    open = candidate;
+                    close = candidateClose;
+                    begin = candidateBegin;
+                }
+                break;
+            }
+            if (candidate == 0) break;
+            search = candidate - 1;
+        }
+    }
+    const auto escapedAt = [&text](size_t position) {
+        size_t slashes = 0;
+        while (position > 0 && text[position - 1] == L'\\') {
+            --position;
+            ++slashes;
+        }
+        return (slashes % 2) != 0;
+    };
+    const std::wstring beginToken = L"\\begin{";
+    const std::wstring endToken = L"\\end{";
+    struct RowScan {
+        int braces = 0;
+        int environments = 0;
+        int column = 0;
+        size_t nextBoundary = std::wstring::npos;
+    };
+    const auto scanRow = [&](size_t limit, size_t boundaryAtOrAfter) {
+        RowScan result;
+        for (size_t i = open + begin.size(); i < limit && i < close;) {
+            if (!escapedAt(i) &&
+                text.compare(i, beginToken.size(), beginToken) == 0) {
+                const size_t tokenEnd = text.find(L'}', i + beginToken.size());
+                if (tokenEnd == std::wstring::npos || tokenEnd >= close) break;
+                ++result.environments;
+                i = tokenEnd + 1;
+            } else if (!escapedAt(i) &&
+                       text.compare(i, endToken.size(), endToken) == 0) {
+                const size_t tokenEnd = text.find(L'}', i + endToken.size());
+                if (tokenEnd == std::wstring::npos || tokenEnd >= close) break;
+                result.environments = std::max(0, result.environments - 1);
+                i = tokenEnd + 1;
+            } else if (!escapedAt(i) && text[i] == L'{') {
+                ++result.braces;
+                ++i;
+            } else if (!escapedAt(i) && text[i] == L'}') {
+                result.braces = std::max(0, result.braces - 1);
+                ++i;
+            } else if (i + 1 < close && text[i] == L'\\' &&
+                       text[i + 1] == L'\\' && !escapedAt(i)) {
+                if (result.braces == 0 && result.environments == 0) {
+                    if (i >= boundaryAtOrAfter &&
+                        result.nextBoundary == std::wstring::npos)
+                        result.nextBoundary = i;
+                    result.column = 0;
+                }
+                i += 2;
+            } else {
+                if (result.braces == 0 && result.environments == 0 &&
+                    text[i] == L'&' && !escapedAt(i))
+                    ++result.column;
+                ++i;
+            }
+        }
+        return result;
+    };
+    if (open != std::wstring::npos) {
+        if (close != std::wstring::npos && insertionFirst <= close) {
+            inRowEnvironment = true;
+            insertionLast = std::min(insertionLast, close);
+
+            /* A caret before or inside the opening token is outside its
+             * mathematical contents.  Clamp it after the token and its
+             * formatting whitespace so Enter creates an empty first row
+             * instead of spelling `\\\begin{...}` or splitting the
+             * command name. */
+            size_t contentStart = open + begin.size();
+            while (contentStart < close &&
+                   (text[contentStart] == L' ' ||
+                    text[contentStart] == L'\t' ||
+                    text[contentStart] == L'\r' ||
+                    text[contentStart] == L'\n'))
+                ++contentStart;
+            if (insertionFirst < contentStart) {
+                insertionFirst = contentStart;
+                insertionLast = contentStart;
+            }
+
+            /* A row separator is valid only at a row-container cell boundary. If
+             * the source caret is inside a fraction, script, text group, or
+             * nested environment, do not inject `\\` into that structure.
+             * Move the insertion to the next direct row boundary; at the last
+             * row, append a blank row immediately before its \end{...}. */
+            const RowScan nesting = scanRow(insertionFirst,
+                                            std::wstring::npos);
+            if (nesting.braces > 0 || nesting.environments > 0) {
+                const size_t boundary =
+                    scanRow(close, insertionFirst).nextBoundary;
+                if (boundary != std::wstring::npos) {
+                    insertionFirst = boundary;
+                    insertionLast = boundary;
+                } else {
+                    insertionFirst = close;
+                    while (insertionFirst > open + begin.size() &&
+                           (text[insertionFirst - 1] == L' ' ||
+                            text[insertionFirst - 1] == L'\t' ||
+                            text[insertionFirst - 1] == L'\r' ||
+                            text[insertionFirst - 1] == L'\n'))
+                        --insertionFirst;
+                    insertionLast = close;
+                    appendBeforeEnd = true;
+                }
+            }
+        }
+    }
+
+    /* Canvas-to-source synchronization leaves the caret after \end{aligned}.
+     * Treat Enter there as "append a row" and put the new caret before the
+     * closing command, where subsequent TeX typing belongs. */
+    if (!inRowEnvironment) {
+        begin = alignedBegin;
+        const size_t finalClose = text.rfind(alignedEnd);
+        if (finalClose != std::wstring::npos) {
+            size_t search = finalClose;
+            for (;;) {
+                const size_t candidate = text.rfind(alignedBegin, search);
+                if (candidate == std::wstring::npos) break;
+                if (matchingEnvironmentEnd(candidate, alignedBegin,
+                                           alignedEnd) == finalClose) {
+                    open = candidate;
+                    close = finalClose;
+                    break;
+                }
+                if (candidate == 0) break;
+                search = candidate - 1;
+            }
+            if (open != std::wstring::npos && close == finalClose) {
+                insertionFirst = close;
+                while (insertionFirst > open + begin.size() &&
+                       (text[insertionFirst - 1] == L' ' ||
+                        text[insertionFirst - 1] == L'\t' ||
+                        text[insertionFirst - 1] == L'\r' ||
+                        text[insertionFirst - 1] == L'\n'))
+                    --insertionFirst;
+                insertionLast = close;
+                inRowEnvironment = true;
+                appendBeforeEnd = true;
+            }
+        }
+    }
+
+    size_t newCaret = 0;
+    if (inRowEnvironment) {
+        size_t lineStart = insertionFirst == 0 ? 0 :
+            text.rfind(L'\n', insertionFirst - 1);
+        lineStart = lineStart == std::wstring::npos ? 0 : lineStart + 1;
+        size_t indent = 0;
+        while (lineStart + indent < text.size() &&
+               (text[lineStart + indent] == L' ' ||
+                text[lineStart + indent] == L'\t'))
+            ++indent;
+        if (indent == 0) indent = 2;
+
+        /* Preserve the current table column.  `a & bc` split between b and c
+         * must become `a & b \\ & c`, not `a & b \\ c`; the latter silently
+         * moves c to column one and makes the source and canvas disagree. */
+        const int targetColumn =
+            scanRow(insertionFirst, std::wstring::npos).column;
+
+        std::wstring rowBreak = L" \\\\\r\n";
+        rowBreak.append(indent, L' ');
+        for (int column = 0; column < targetColumn; ++column)
+            rowBreak += L" & ";
+        newCaret = insertionFirst + rowBreak.size();
+        if (appendBeforeEnd) rowBreak += L"\r\n";
+        SendMessageW(hwnd, EM_SETSEL, WPARAM(insertionFirst),
+                     LPARAM(insertionLast));
+        SendMessageW(hwnd, EM_REPLACESEL, TRUE,
+                     LPARAM(rowBreak.c_str()));
+    } else {
+        const std::wstring prefix = L"\\begin{aligned}\r\n  ";
+        const std::wstring rowBreak = L" \\\\\r\n  ";
+        const std::wstring suffix = L"\r\n\\end{aligned}";
+        const std::wstring wrapped = prefix + text.substr(0, first) +
+            rowBreak + text.substr(last) + suffix;
+        newCaret = prefix.size() + first + rowBreak.size();
+        g.syncingSource = true;
+        SetWindowTextW(hwnd, wrapped.c_str());
+        g.syncingSource = false;
+        SendMessageW(g.main, WM_COMMAND, MAKEWPARAM(9001, EN_CHANGE),
+                     LPARAM(hwnd));
+    }
+
+    const DWORD limit = DWORD(std::max(0, GetWindowTextLengthW(hwnd)));
+    const DWORD caret = DWORD(std::min<size_t>(newCaret, limit));
+    SendMessageW(hwnd, EM_SETSEL, caret, caret);
+    SendMessageW(hwnd, EM_SCROLLCARET, 0, 0);
+    if (!g.sourceEditing) return false;
+    update_status(L"数式行を追加しました（TeX: \\\\）");
+    debug_event("source.new_line", "caret=" + std::to_string(caret));
+    return true;
+}
+
 LRESULT CALLBACK SourceProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     if (msg == WM_GETDLGCODE) {
         return CallWindowProcW(g.sourceProc, hwnd, msg, wp, lp) | DLGC_WANTTAB;
@@ -3621,6 +4000,10 @@ LRESULT CALLBACK SourceProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             debug_event("source.tab.leave",
                         backwards ? "direction=backward" : "direction=forward");
         }
+        return 0;
+    }
+    if (msg == WM_CHAR && wp == L'\r' && !key_shift()) {
+        source_insert_equation_row(hwnd);
         return 0;
     }
     return CallWindowProcW(g.sourceProc, hwnd, msg, wp, lp);
@@ -3651,8 +4034,8 @@ LRESULT CALLBACK MainProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
                 WS_CHILD | WS_VISIBLE | SS_LEFT,
                 0, 0, 100, 20, hwnd, nullptr, g.instance, nullptr);
             g.source = CreateWindowExW(WS_EX_CLIENTEDGE, L"EDIT", L"",
-                WS_CHILD | WS_VISIBLE | WS_TABSTOP | WS_VSCROLL | WS_HSCROLL |
-                ES_MULTILINE | ES_AUTOVSCROLL | ES_AUTOHSCROLL |
+                WS_CHILD | WS_VISIBLE | WS_TABSTOP | WS_VSCROLL |
+                ES_MULTILINE | ES_AUTOVSCROLL |
                 ES_WANTRETURN | ES_NOHIDESEL,
                 0, 0, 100, 100, hwnd, HMENU(9001), g.instance, nullptr);
             if (g.source)
@@ -3862,6 +4245,29 @@ int self_test() {
     if (!doc.hadEquationEnvironment || doc.body != "a+b" || !doc.numbered)
         return 13;
     if (eqnedit::normalize_tex_paste("\\[x+y\\]") != "x+y") return 14;
+    if (conversion_destination(L"office") !=
+            ConversionDestination::OfficeClipboard ||
+        conversion_destination(L"POWERPOINT") !=
+            ConversionDestination::OfficeClipboard ||
+        conversion_destination(L"slides") !=
+            ConversionDestination::SlidesClipboard ||
+        conversion_destination(L"clipboard-png") !=
+            ConversionDestination::PngClipboard ||
+        conversion_destination(L"png") !=
+            ConversionDestination::PngClipboard ||
+        conversion_destination(L"result.PNG") !=
+            ConversionDestination::PngFile ||
+        conversion_destination(L"result.emf") !=
+            ConversionDestination::EmfFile ||
+        conversion_destination(L"result.svg") !=
+            ConversionDestination::Invalid ||
+        classify_two_arguments(L"a.tex", L"b.tex") !=
+            TwoArgumentAction::OpenFirstTex ||
+        classify_two_arguments(L"a.tex", L"out.png") !=
+            TwoArgumentAction::Convert ||
+        classify_two_arguments(L"a.tex", L"out.svg") !=
+            TwoArgumentAction::Reject)
+        return 228;
     const SHORT slashKey = VkKeyScanExW(L'/', GetKeyboardLayout(0));
     const SHORT barKey = VkKeyScanExW(L'|', GetKeyboardLayout(0));
     if (slashKey == -1 || barKey == -1 ||
@@ -4089,6 +4495,41 @@ int render_file(const std::wstring& inputPath, const std::wstring& outputPath,
     if (!read_file(inputPath, input)) return 82;
     const std::wstring tex = wide_utf8(input);
     return png ? render_png(tex, outputPath) : render_emf(tex, outputPath);
+}
+
+/* Public automation is deliberately one source and one destination.  Earlier
+ * releases exposed a separate switch for every combination of literal/file,
+ * clipboard target, and image format.  That made the command spelling harder
+ * to remember than the conversion itself and leaked implementation choices
+ * into radia-mcp.  Keep those switches below as compatibility inputs, while
+ * new callers use `Eqnedit64.exe INPUT OUTPUT` and let OUTPUT name the format. */
+int convert_source(const std::wstring& source, const std::wstring& output) {
+    const ConversionDestination destination = conversion_destination(output);
+    if (destination == ConversionDestination::Invalid) return 94;
+
+    std::string input;
+    if (GetFileAttributesW(source.c_str()) != INVALID_FILE_ATTRIBUTES) {
+        if (!read_file(source, input)) return 82;
+    } else if (wide_equal_ci(source, L"clipboard")) {
+        input = clipboard_get();
+    } else {
+        return 82;
+    }
+
+    switch (destination) {
+        case ConversionDestination::OfficeClipboard:
+            return copy_tex_cli(input, ClipboardCliTarget::Office);
+        case ConversionDestination::SlidesClipboard:
+            return copy_tex_cli(input, ClipboardCliTarget::GoogleSlides);
+        case ConversionDestination::PngClipboard:
+            return copy_tex_cli(input, ClipboardCliTarget::Png);
+        case ConversionDestination::PngFile:
+            return render_png(wide_utf8(input), output);
+        case ConversionDestination::EmfFile:
+            return render_emf(wide_utf8(input), output);
+        default:
+            return 94;
+    }
 }
 
 /* Time a full canvas repaint into an offscreen surface, the same work
@@ -4357,7 +4798,8 @@ int ui_fuzz(unsigned seed, int operations) {
         L"\\operatorname*{arg\\,min}_{x} f(x)", L"日本語+x",
     };
     for (int i = 0; i < operations; ++i) {
-        switch (next() % 12) {
+        const uint32_t operation = next() % 14;
+        switch (operation) {
         case 0: case 1: case 2: case 3: {
             const char c = printable[next() % (sizeof(printable) - 1)];
             SendMessageW(g.canvas, WM_CHAR, WPARAM(c), 0);
@@ -4420,6 +4862,34 @@ int ui_fuzz(unsigned seed, int operations) {
                          seed, i, window_text(g.source).c_str(),
                          shownSource.c_str());
                 return 3;
+            }
+            break;
+        }
+        case 12: case 13: {
+            /* Selection bugs live in the pointer lifecycle, so a GUI fuzzer
+             * that never sends a mouse message cannot protect them.  Keep the
+             * gesture inside this hidden canvas and always release capture;
+             * case 13 deliberately omits WM_MOUSEMOVE to exercise the
+             * authoritative release endpoint. */
+            RECT client{};
+            GetClientRect(g.canvas, &client);
+            const int width = std::max(1L, client.right - client.left);
+            const int height = std::max(1L, client.bottom - client.top);
+            const int x0 = int(next() % uint32_t(width));
+            const int y0 = int(next() % uint32_t(height));
+            const int x1 = int(next() % uint32_t(width));
+            const int y1 = int(next() % uint32_t(height));
+            SendMessageW(g.canvas, WM_LBUTTONDOWN, MK_LBUTTON,
+                         MAKELPARAM(x0, y0));
+            if (operation == 12)
+                SendMessageW(g.canvas, WM_MOUSEMOVE, MK_LBUTTON,
+                             MAKELPARAM(x1, y1));
+            SendMessageW(g.canvas, WM_LBUTTONUP, 0, MAKELPARAM(x1, y1));
+            if (GetCapture() == g.canvas || g.dragging) {
+                fwprintf(stderr,
+                         L"seed %u op %d: pointer capture survived release\n",
+                         seed, i);
+                return 4;
             }
             break;
         }
@@ -4995,6 +5465,189 @@ int ui_interaction_test() {
     if (window_text(g.source) != wide_utf8(g.equation.latex()) ||
         g.sourceEditing) return 145;
 
+    /* Both editing surfaces use Enter for the same aligned row operation.
+     * The TeX pane must insert a real \\ delimiter rather than a CRLF which
+     * TeX ignores, and the saved file must still add the outer equation
+     * environment.  The pane itself soft-wraps long source instead of
+     * requiring horizontal scrolling. */
+    const LONG_PTR sourceStyle = GetWindowLongPtrW(g.source, GWL_STYLE);
+    if ((sourceStyle & WS_HSCROLL) || (sourceStyle & ES_AUTOHSCROLL))
+        return 223;
+
+    const auto compactLatex = [](std::string text) {
+        text.erase(std::remove_if(text.begin(), text.end(),
+                                  [](unsigned char ch) {
+                                      return std::isspace(ch) != 0;
+                                  }),
+                   text.end());
+        return text;
+    };
+
+    /* Drive Enter through the real canvas key path at a middle caret, then
+     * drive both row-join keys.  A model-only test did not catch the original
+     * GUI regression because the old window route always happened to test
+     * Enter at the end of the equation. */
+    g.equation.load_latex("abcdef");
+    sync_source_from_model();
+    SetFocus(g.canvas);
+    SendMessageW(g.canvas, WM_KEYDOWN, VK_HOME, 0);
+    for (int i = 0; i < 3; ++i)
+        SendMessageW(g.canvas, WM_KEYDOWN, VK_RIGHT, 0);
+    SendMessageW(g.canvas, WM_KEYDOWN, VK_RETURN, 0);
+    if (compactLatex(g.equation.latex()) !=
+        "\\begin{aligned}abc\\\\def\\end{aligned}")
+        return 229;
+    SendMessageW(g.canvas, WM_KEYDOWN, VK_BACK, 0);
+    if (g.equation.latex() != "abcdef" || g.equation.caret() != ":3")
+        return 230;
+    SendMessageW(g.canvas, WM_KEYDOWN, VK_RETURN, 0);
+    SendMessageW(g.canvas, WM_KEYDOWN, VK_UP, 0);
+    SendMessageW(g.canvas, WM_KEYDOWN, VK_END, 0);
+    SendMessageW(g.canvas, WM_KEYDOWN, VK_DELETE, 0);
+    if (g.equation.latex() != "abcdef" || g.equation.caret() != ":3")
+        return 231;
+
+    g.equation.load_latex("a=b");
+    sync_source_from_model();
+    SetFocus(g.canvas);
+    SendMessageW(g.canvas, WM_KEYDOWN, VK_RETURN, 0);
+    SendMessageW(g.canvas, WM_CHAR, 'c', 0);
+    SendMessageW(g.canvas, WM_CHAR, '=', 0);
+    SendMessageW(g.canvas, WM_CHAR, 'd', 0);
+    if (!g.equation.is_multiline() ||
+        g.equation.latex().find("c") == std::string::npos)
+        return 224;
+
+    set_source_text_for_test(L"a=b");
+    SetFocus(g.source);
+    SendMessageW(g.source, EM_SETSEL, 3, 3);
+    SendMessageW(g.source, WM_CHAR, L'\r', 0);
+    const std::wstring brokenSource = window_text(g.source);
+    DWORD rowCaretFirst = 0, rowCaretLast = 0;
+    SendMessageW(g.source, EM_GETSEL, WPARAM(&rowCaretFirst),
+                 LPARAM(&rowCaretLast));
+    if (brokenSource.find(L"\\begin{aligned}\r\n") == std::wstring::npos ||
+        brokenSource.find(L"\\\\\r\n  ") == std::wstring::npos ||
+        brokenSource.find(L"\r\n\\end{aligned}") == std::wstring::npos ||
+        rowCaretFirst != rowCaretLast || rowCaretFirst >= brokenSource.size())
+        return 225;
+    SendMessageW(g.source, WM_CHAR, 'c', 0);
+    SendMessageW(g.source, WM_CHAR, '=', 0);
+    SendMessageW(g.source, WM_CHAR, 'd', 0);
+    const std::string sourceMultiline = g.equation.latex();
+    if (!g.equation.is_multiline() ||
+        sourceMultiline.find("\\begin{aligned}") == std::string::npos ||
+        sourceMultiline.find("c") == std::string::npos)
+        return 226;
+
+    /* The TeX pane has the same split-at-caret contract, including replacing
+     * a selected range rather than appending a row at the end. */
+    set_source_text_for_test(L"abcdef");
+    SetFocus(g.source);
+    SendMessageW(g.source, EM_SETSEL, 3, 3);
+    SendMessageW(g.source, WM_CHAR, L'\r', 0);
+    if (compactLatex(g.equation.latex()) !=
+        "\\begin{aligned}abc\\\\def\\end{aligned}")
+        return 232;
+    set_source_text_for_test(L"abcdef");
+    SendMessageW(g.source, EM_SETSEL, 2, 4);
+    SendMessageW(g.source, WM_CHAR, L'\r', 0);
+    if (compactLatex(g.equation.latex()) !=
+        "\\begin{aligned}ab\\\\ef\\end{aligned}")
+        return 233;
+
+    /* Enter at or inside the opening token must be clamped into the aligned
+     * contents.  The previous source route inserted the row separator before
+     * `\begin`, leaving silent malformed TeX in the EDIT control. */
+    set_source_text_for_test(
+        L"\\begin{aligned}ab\\\\cd\\end{aligned}");
+    SendMessageW(g.source, EM_SETSEL, 0, 0);
+    SendMessageW(g.source, WM_CHAR, L'\r', 0);
+    const std::wstring leadingRowSource = window_text(g.source);
+    if (leadingRowSource.find(L"\\begin{aligned} \\\\\r\n") != 0 ||
+        g.equation.latex().find("ab") == std::string::npos ||
+        g.equation.latex().find("cd") == std::string::npos)
+        return 234;
+
+    /* A source caret inside a nested template cannot accept an aligned row
+     * token at that literal character offset.  Preserve the fraction and put
+     * the new blank row at the containing aligned-row boundary instead. */
+    const std::wstring nestedRowSource =
+        L"\\begin{aligned}\\frac{ab}{c}\\end{aligned}";
+    set_source_text_for_test(nestedRowSource);
+    const size_t nestedCaret = nestedRowSource.find(L"ab") + 1;
+    SendMessageW(g.source, EM_SETSEL, nestedCaret, nestedCaret);
+    SendMessageW(g.source, WM_CHAR, L'\r', 0);
+    const std::wstring pendingNestedRow = window_text(g.source);
+    DWORD pendingFirst = 0, pendingLast = 0;
+    SendMessageW(g.source, EM_GETSEL, WPARAM(&pendingFirst),
+                 LPARAM(&pendingLast));
+    if (!g.sourceEditing ||
+        pendingNestedRow.find(L"\\frac{ab}{c} \\\\\r\n") ==
+            std::wstring::npos ||
+        pendingFirst != pendingLast ||
+        pendingFirst >= pendingNestedRow.find(L"\\end{aligned}") ||
+        g.equation.latex().find("\\frac{ab}{c}") == std::string::npos)
+        return 235;
+
+    /* A loaded aligned model has its default caret just outside the matrix.
+     * Canvas Enter extends it instead of adding a nested aligned wrapper. */
+    g.equation.load_latex("\\begin{aligned}a\\\\b\\end{aligned}");
+    sync_source_from_model();
+    SetFocus(g.canvas);
+    SendMessageW(g.canvas, WM_KEYDOWN, VK_RETURN, 0);
+    const std::string extendedAligned = g.equation.latex();
+    const size_t firstAligned = extendedAligned.find("\\begin{aligned}");
+    if (firstAligned == std::string::npos ||
+        extendedAligned.find("\\begin{aligned}", firstAligned + 1) !=
+            std::string::npos)
+        return 236;
+
+    /* Source Enter inside a table acts on that table and retains the current
+     * column.  Omitting the leading empty cell changed column two into column
+     * one, while wrapping the matrix in aligned changed the wrong structure. */
+    const std::wstring matrixRowSource =
+        L"\\begin{matrix}ab&cd\\\\ef&gh\\end{matrix}";
+    set_source_text_for_test(matrixRowSource);
+    const size_t matrixCaret = matrixRowSource.find(L"cd") + 1;
+    SendMessageW(g.source, EM_SETSEL, matrixCaret, matrixCaret);
+    SendMessageW(g.source, WM_CHAR, L'\r', 0);
+    const std::string splitMatrix = compactLatex(g.equation.latex());
+    if (splitMatrix !=
+            "\\begin{matrix}ab&c\\\\&d\\\\ef&gh\\end{matrix}" ||
+        splitMatrix.find("\\begin{aligned}") != std::string::npos)
+        return 238;
+
+    const std::wstring casesRowSource =
+        L"\\begin{cases}ab&cd\\\\ef&gh\\end{cases}";
+    set_source_text_for_test(casesRowSource);
+    const size_t casesCaret = casesRowSource.find(L"cd") + 1;
+    SendMessageW(g.source, EM_SETSEL, casesCaret, casesCaret);
+    SendMessageW(g.source, WM_CHAR, L'\r', 0);
+    const std::string splitCases = compactLatex(g.equation.latex());
+    if (splitCases !=
+            "\\begin{cases}ab&c\\\\&d\\\\ef&gh\\end{cases}" ||
+        splitCases.find("\\begin{aligned}") != std::string::npos)
+        return 242;
+
+    /* Typing the standard top-level TeX row delimiter is equivalent to using
+     * Enter; it must never become a visible backslash glyph. */
+    set_source_text_for_test(L"a\\\\b");
+    if (compactLatex(g.equation.latex()) !=
+        "\\begin{aligned}a\\\\b\\end{aligned}")
+        return 239;
+
+    const bool savedNumbered = g.documentNumbered;
+    g.documentNumbered = true;
+    const std::string sourceSavedDocument = tex_document();
+    g.documentNumbered = savedNumbered;
+    if (sourceSavedDocument.find("\\begin{equation}\n") == std::string::npos ||
+        sourceSavedDocument.find("\\begin{aligned}") == std::string::npos ||
+        sourceSavedDocument.find("\\end{equation}") == std::string::npos)
+        return 227;
+    SetFocus(g.canvas);
+    sync_source_from_model();
+
     /* Source editing keeps the web editor's empty-group navigation.  The real
      * EDIT subclass must move a collapsed caret through both {} holes without
      * inserting a tab character, and Shift+Tab must return to the first. */
@@ -5080,6 +5733,30 @@ int ui_interaction_test() {
     if (draggedSelection.size() < 32) return 163;
     if (GetCapture() == g.canvas || g.dragging) return 164;
 
+    /* Windows may coalesce mouse moves.  A down/up gesture with no delivered
+     * WM_MOUSEMOVE must still select through the release coordinate, and the
+     * completed gesture must leave no reusable pointer origin behind. */
+    g.equation.load_latex("abcd");
+    const eqnedit::RenderMetrics releaseMetrics =
+        g.equation.metrics(g.style);
+    g.renderScale = (GetDpiForWindow(g.canvas) / 72.0) * g.zoom;
+    g.renderLeft = 12.0;
+    g.renderTop = 12.0;
+    const int releaseY = int(g.renderTop +
+        releaseMetrics.baseline * g.renderScale);
+    const int releaseStartX = int(g.renderLeft);
+    const int releaseEndX = int(g.renderLeft +
+        releaseMetrics.width * g.renderScale);
+    SendMessageW(g.canvas, WM_LBUTTONDOWN, MK_LBUTTON,
+                 MAKELPARAM(releaseStartX, releaseY));
+    SendMessageW(g.canvas, WM_LBUTTONUP, 0,
+                 MAKELPARAM(releaseEndX, releaseY));
+    if (g.equation.selection_latex() != "abcd") return 221;
+    if (g.equation.extend_pointer_selection(
+            releaseMetrics.width, releaseMetrics.baseline, g.style))
+        return 222;
+    g.equation.clear_selection();
+
     /* The same gesture, but across a structural boundary.  The drag above
      * runs through 128 plain letters -- one slot, the only shape in which a
      * range can never cross a boundary -- so it passed while dragging over
@@ -5093,18 +5770,20 @@ int ui_interaction_test() {
      * once the pan and the render scale are divided out. */
     const double numeratorX = crossMetrics.width * 0.2;
     const double numeratorY = crossMetrics.baseline - crossMetrics.height * 0.3;
-    if (!g.equation.hit_test(numeratorX, numeratorY, g.style, false)) return 206;
+    if (!g.equation.begin_pointer_selection(
+            numeratorX, numeratorY, g.style)) return 206;
     /* caret() spells the path as "child.slot/...:index", so a bare ":n"
      * means the press landed in the root slot and this check would prove
      * nothing about crossing a boundary. */
     const std::string numeratorCaret = g.equation.caret();
     if (numeratorCaret.empty() || numeratorCaret[0] == ':') return 207;
-    g.equation.hit_test(crossMetrics.width * 0.95, crossMetrics.baseline,
-                        g.style, true);
+    g.equation.extend_pointer_selection(
+        crossMetrics.width * 0.95, crossMetrics.baseline, g.style);
     const std::string crossSelection = g.equation.selection_latex();
     /* Promoted to the shared slot, the range has to carry the whole
      * fraction the drag started inside, not just the letter it ended on. */
     if (crossSelection.find("\\frac") == std::string::npos) return 208;
+    g.equation.end_pointer_selection();
     g.equation.clear_selection();
 
     /* Keep the original deep press while a promoted drag reverses direction.
@@ -5120,9 +5799,11 @@ int ui_interaction_test() {
     std::string reverseNumeratorPath;
     for (int sample = 0; sample <= 200; ++sample) {
         const double x = reverseMetrics.width * double(sample) / 200.0;
-        if (!g.equation.hit_test(x, reverseNumeratorY, g.style, false))
+        if (!g.equation.begin_pointer_selection(
+                x, reverseNumeratorY, g.style))
             continue;
         const std::string caret = g.equation.caret();
+        g.equation.end_pointer_selection();
         if (!caret.empty() && caret[0] != ':') {
             reverseNumeratorX = x;
             reverseNumeratorPath = caret.substr(0, caret.find(':'));
@@ -5137,9 +5818,11 @@ int ui_interaction_test() {
     double reverseDenominatorY = -1.0;
     for (int sample = 0; sample <= 200; ++sample) {
         const double y = reverseMetrics.height * double(sample) / 200.0;
-        if (!g.equation.hit_test(reverseNumeratorX, y, g.style, false))
+        if (!g.equation.begin_pointer_selection(
+                reverseNumeratorX, y, g.style))
             continue;
         const std::string caret = g.equation.caret();
+        g.equation.end_pointer_selection();
         const std::string path = caret.substr(0, caret.find(':'));
         if (!caret.empty() && caret[0] != ':' &&
             path != reverseNumeratorPath) {
@@ -5152,19 +5835,25 @@ int ui_interaction_test() {
         text.erase(std::remove(text.begin(), text.end(), ' '), text.end());
         return text;
     };
-    g.equation.hit_test(reverseNumeratorX, reverseNumeratorY, g.style, false);
-    g.equation.hit_test(reverseNumeratorX, reverseDenominatorY, g.style, true);
+    g.equation.begin_pointer_selection(
+        reverseNumeratorX, reverseNumeratorY, g.style);
+    g.equation.extend_pointer_selection(
+        reverseNumeratorX, reverseDenominatorY, g.style);
     if (withoutSpaces(g.equation.selection_latex()) != "\\frac{1}{\\mu}")
         return 215;
 
-    g.equation.hit_test(reverseNumeratorX, reverseNumeratorY, g.style, false);
-    g.equation.hit_test(0.0, reverseMetrics.baseline, g.style, true);
+    g.equation.end_pointer_selection();
+    g.equation.begin_pointer_selection(
+        reverseNumeratorX, reverseNumeratorY, g.style);
+    g.equation.extend_pointer_selection(
+        0.0, reverseMetrics.baseline, g.style);
     if (withoutSpaces(g.equation.selection_latex()) != "a\\frac{1}{\\mu}")
         return 216;
-    g.equation.hit_test(reverseMetrics.width, reverseMetrics.baseline,
-                        g.style, true);
+    g.equation.extend_pointer_selection(
+        reverseMetrics.width, reverseMetrics.baseline, g.style);
     if (withoutSpaces(g.equation.selection_latex()) != "\\frac{1}{\\mu}b")
         return 217;
+    g.equation.end_pointer_selection();
     g.equation.clear_selection();
 
     /* A structured document has to reach the source pane broken over lines.
@@ -5187,6 +5876,17 @@ int ui_interaction_test() {
                         std::wstring::npos; at += 2)
         ++sourceBreaks;
     if (sourceBreaks != 3) return 219;
+    for (size_t i = 0; i < shownSource.size(); ++i) {
+        if ((shownSource[i] == L'\n' &&
+             (i == 0 || shownSource[i - 1] != L'\r')) ||
+            (shownSource[i] == L'\r' &&
+             (i + 1 >= shownSource.size() || shownSource[i + 1] != L'\n')))
+            return 240;
+    }
+    /* Soft wrapping is intentionally enabled, so a narrow/DPI-scaled test
+     * window may report more than the four logical lines.  Fewer than four
+     * means one of the three CRLF boundaries was not honoured. */
+    if (SendMessageW(g.source, EM_GETLINECOUNT, 0, 0) < 4) return 241;
     /* The breaks are only allowed where TeX ignores whitespace, so the very
      * text now on display has to parse back to the equation it came from. */
     const std::string beforeRoundTrip = g.equation.latex();
@@ -5202,6 +5902,9 @@ int ui_interaction_test() {
     g.equation.load_latex("\\begin{aligned}a &= b\\end{aligned}");
     sync_source_from_model();
     const std::string beforeLesson = g.equation.latex();
+    g.equation.move_home();
+    g.equation.move_right();             /* first aligned cell */
+    g.equation.next_slot();              /* last cell, before \\end */
     g.equation.move_end();
     g.equation.insert_symbol("\\alpha");
     sync_source_from_model();
@@ -5211,9 +5914,14 @@ int ui_interaction_test() {
     SendMessageW(g.source, EM_GETSEL, WPARAM(&lessonFirst),
                  LPARAM(&lessonTail));
     const std::wstring lessonSource = window_text(g.source);
-    if (lessonTail <= lessonFirst || lessonTail > lessonSource.size() ||
-        lessonSource.substr(lessonFirst, lessonTail - lessonFirst)
-            .find(L"\\alpha") == std::wstring::npos)
+    if (lessonTail <= lessonFirst || lessonTail > lessonSource.size())
+        return 220;
+    const std::wstring highlightedLesson =
+        lessonSource.substr(lessonFirst, lessonTail - lessonFirst);
+    if (highlightedLesson.find(L"\\alpha") == std::wstring::npos ||
+        highlightedLesson.find(L'\r') != std::wstring::npos ||
+        highlightedLesson.find(L'\n') != std::wstring::npos ||
+        highlightedLesson.find(L"\\end") != std::wstring::npos)
         return 220;
 
     g.equation.load_latex("yx");
@@ -5667,6 +6375,60 @@ std::vector<std::wstring> process_arguments() {
     return args;
 }
 
+bool write_standard_text(DWORD stream, const std::wstring& text) {
+    auto write_to = [&](HANDLE handle) {
+        if (!handle || handle == INVALID_HANDLE_VALUE) return false;
+        SetLastError(NO_ERROR);
+        const DWORD kind = GetFileType(handle);
+        if (kind == FILE_TYPE_UNKNOWN && GetLastError() != NO_ERROR)
+            return false;
+        DWORD written = 0;
+        if (kind == FILE_TYPE_CHAR &&
+            WriteConsoleW(handle, text.data(), DWORD(text.size()),
+                          &written, nullptr))
+            return written == text.size();
+        const std::string utf8 = utf8_wide(text);
+        return WriteFile(handle, utf8.data(), DWORD(utf8.size()),
+                         &written, nullptr) && written == utf8.size();
+    };
+
+    if (write_to(GetStdHandle(stream))) return true;
+    const bool attached = AttachConsole(ATTACH_PARENT_PROCESS) != FALSE;
+    const bool result = attached && write_to(GetStdHandle(stream));
+    if (attached) FreeConsole();
+    return result;
+}
+
+int report_cli_error(const std::wstring& message, int exitCode) {
+    const std::wstring text = L"Eqnedit64: " + message + L"\r\n";
+    if (!write_standard_text(STD_ERROR_HANDLE, text))
+        MessageBoxW(nullptr, message.c_str(), L"Eqnedit64 コマンドライン",
+                    MB_OK | MB_ICONERROR);
+    return exitCode;
+}
+
+int show_cli_help() {
+    const wchar_t* help =
+        L"TeX変換:  Eqnedit64.exe <入力> <出力>\r\n\r\n"
+        L"入力\r\n"
+        L"  equation.tex   UTF-8 TeXファイル\r\n"
+        L"  clipboard      クリップボード上のTeX\r\n\r\n"
+        L"出力\r\n"
+        L"  office         PowerPoint / Word用クリップボード\r\n"
+        L"  slides         Google Slides用クリップボード\r\n"
+        L"  clipboard-png  PNG画像クリップボード（ファイルは作らない）\r\n"
+        L"  equation.png   PNGファイル\r\n"
+        L"  equation.emf   EMFファイル\r\n\r\n"
+        L"例: Eqnedit64.exe equation.tex office\r\n"
+        L"例: Eqnedit64.exe equation.tex equation.png\r\n"
+        L"例: Eqnedit64.exe clipboard clipboard-png\r\n\r\n"
+        L"引数なしでGUIを起動し、.tex一つならGUIで開きます。\r\n"
+        L"png は clipboard-png の旧名として引き続き使えます。\r\n";
+    if (!write_standard_text(STD_OUTPUT_HANDLE, help))
+        MessageBoxW(nullptr, help, L"Eqnedit64 コマンドライン", MB_OK);
+    return 0;
+}
+
 }  // namespace
 
 int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int show) {
@@ -5681,6 +6443,24 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int show) {
      * names the culprit and one that names a victim. */
     HeapSetInformation(nullptr, HeapEnableTerminationOnCorruption, nullptr, 0);
     const std::vector<std::wstring> args = process_arguments();
+    if (args.size() == 1 &&
+        (args[0] == L"--help" || args[0] == L"-h" || args[0] == L"/?"))
+        return show_cli_help();
+    std::wstring openFirstOfMultiple;
+    if (args.size() == 2 && args[0].compare(0, 2, L"--") != 0 &&
+        args[1].compare(0, 2, L"--") != 0) {
+        switch (classify_two_arguments(args[0], args[1])) {
+            case TwoArgumentAction::Convert:
+                return convert_source(args[0], args[1]);
+            case TwoArgumentAction::OpenFirstTex:
+                openFirstOfMultiple = args[0];
+                break;
+            case TwoArgumentAction::Reject:
+                return report_cli_error(
+                    L"出力は office、slides、clipboard-png、.png、.emf "
+                    L"のいずれかを指定してください。", 94);
+        }
+    }
     bool debugRequested = false;
     bool statusTestRequested = false;
     bool visualScaleTestRequested = false;
@@ -5696,14 +6476,16 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int show) {
     bool clipboardPublishTestRequested = false;
     bool googleSlidesClipboardTestRequested = false;
     bool texclipRequested = false;
-    std::wstring openPath;
-    for (size_t i = 0; i < args.size(); ++i) {
+    std::wstring openPath = openFirstOfMultiple;
+    for (size_t i = 0; i < args.size() && openFirstOfMultiple.empty(); ++i) {
         if (args[i] == L"--version") {
-            MessageBoxW(nullptr,
-                (std::wstring(L"数式エディタ64 ") + kProductVersion +
-                 L"\nビルド: " + kBuildTag +
-                 L"  (" + kBuildTime + L")\n" + module_path()).c_str(),
-                kTitle, MB_OK | MB_ICONINFORMATION);
+            const std::wstring version =
+                std::wstring(L"数式エディタ64 ") + kProductVersion +
+                L"\r\nビルド: " + kBuildTag + L"  (" + kBuildTime +
+                L")\r\n" + module_path() + L"\r\n";
+            if (!write_standard_text(STD_OUTPUT_HANDLE, version))
+                MessageBoxW(nullptr, version.c_str(), kTitle,
+                            MB_OK | MB_ICONINFORMATION);
             return 0;
         }
         if (args[i] == L"--self-test") return self_test();
@@ -5809,6 +6591,8 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int show) {
     if (!openPath.empty() &&
         GetFileAttributesW(openPath.c_str()) != INVALID_FILE_ATTRIBUTES)
         open_document(openPath);
+    if (!openFirstOfMultiple.empty())
+        update_status(L"複数の.texが指定されたため、先頭の文書を開きました");
     if (paintBenchRequested) {
         const int result = paint_benchmark();
         DestroyWindow(hwnd);

@@ -2,15 +2,64 @@
 
 ## Unreleased
 
+## 3.0.13 — 2026-09-03
+
+- Split a structural row at the actual caret when Enter is pressed, carry the
+  suffix and aligned cells on its right into the new row, and replace a
+  selection with the row break instead of appending a blank row elsewhere.
+- Make Backspace at a row start and Delete at a row end join the adjacent
+  aligned rows while preserving the horizontal caret and alignment columns.
+  A redundant one-row, one-column aligned wrapper is removed automatically.
+- Require one Claude Code Fable review of the signed O: hand-test candidate and
+  its specification diff before main integration, release tagging, or PyPI
+  publication.
+- Preserve automatic function spelling across row joins, keep Enter inside an
+  existing aligned environment even when its caret is at the outer boundary,
+  and clamp source-pane Enter away from environment tokens and nested groups.
+- Let Backspace/Delete remove a one-row alignment tab while multi-row column
+  boundaries remain navigation-only and do not dirty the document.
+- Make Enter act on the innermost matrix or cases row, preserving the current
+  column and cells to its right, and accept a top-level `a\\b` fragment as the
+  same two-row aligned equation instead of rendering a backslash glyph.
+- Give the synchronized source pane sole ownership of CRLF layout by consuming
+  emitter line feeds first, preventing control glyphs and doubled blank lines.
+- Preserve an Enter-created trailing empty row through save/reopen, retain
+  `align`/`eqnarray` alignment columns, treat bare `~` as TeX spacing, and keep
+  comments, document metadata, and unknown command names out of visible math.
+- Keep the differential-geometry palette's `\\flat` and `\\sharp` operators
+  working while genuinely unknown control words remain suppressed.
+- Restore two-file Explorer launch by opening the first `.tex` instead of
+  silently returning conversion error 94. Make native help, version, and CLI
+  errors redirectable, and name PNG clipboard output `clipboard-png` while
+  retaining `png` only as a compatibility alias.
+
+### Included unreleased 3.0.12 candidate (2026-09-02)
+
 - Promote drags that cross structural slots to their deepest common ancestor
   instead of discarding the selection. The original deep press position stays
   fixed while the pointer reverses direction, so fractions and neighbouring
   elements remain selectable without tearing a template apart.
+- Give pointer selection an explicit begin/extend/end lifetime. Rebuilt trees
+  invalidate the old drag origin, and button-up performs the authoritative
+  final hit test even when Windows coalesces the last mouse-move notification.
 - Format the synchronized TeX source pane at environment and row boundaries,
   with indentation and lossless parse round-tripping. Palette lesson highlights
   now map canonical offsets to the formatted pane before selecting the inserted
   spelling, eliminating the structured-equation out-of-range crash found by
   the hidden UI fuzzer.
+- Lock the selection contract across all structural container classes and all
+  copy, delete, replace, wrap, style, Undo, and Redo consumers. Hidden GUI fuzz
+  includes drags with and without an intervening mouse-move notification.
+- Make Enter in the TeX pane create the same aligned equation row as Enter on
+  the structural canvas, keep the new source caret inside the environment, and
+  soft-wrap long TeX source instead of requiring horizontal scrolling.
+- Replace the public matrix of copy/render switches with one memorable
+  `Eqnedit64.exe INPUT OUTPUT` converter contract. UTF-8 TeX files and the
+  clipboard can target Office, Google Slides, PNG clipboard data, PNG files,
+  or EMF files; old switches remain accepted only for existing automation.
+- Refuse a native release build when Git cannot supply its source commit,
+  including share-backed worktrees protected by Git's ownership check, instead
+  of silently stamping a candidate as `unknown`.
 
 ## 3.0.11 — 2026-08-30
 
