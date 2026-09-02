@@ -8,9 +8,10 @@ so they actually run.  Run ONCE per clone:
     python tools/install_git_hooks.py
 
 Installs:
-  pre-push  -- mdx CI preflight gate (tools/ci_preflight_mdx.py) on pushes to main,
-               plus the binary-upload-to-GitHub-Releases step.  Bypass the
-               gate for an emergency push with:  CI_PREFLIGHT_SKIP=1 git push
+  pre-push  -- mdx CI preflight gate (tools/ci_preflight_mdx.py) on pushes to
+               main. Native artifacts are published by release CI, never by
+               this hook. Bypass the gate for an emergency push with:
+               CI_PREFLIGHT_SKIP=1 git push
 
 Idempotent: re-run any time tools/git-hooks/ changes.  Worktree-safe (uses
 git's common dir so hooks land in the shared .git, not a worktree stub).
