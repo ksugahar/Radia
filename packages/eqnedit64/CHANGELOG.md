@@ -17,6 +17,14 @@
 - Keep Enter inside matrix/cases rows with the original column alignment,
   accept top-level `\\` as a row separator, and remove emitter-only line feeds
   before laying out the synchronized source pane with Win32 CRLF.
+- Preserve trailing blank rows and normalize paper TeX without turning `~`,
+  alignment tabs, comments, metadata, or unknown control words into different
+  visible mathematics.
+- Keep the differential-geometry palette's `\\flat` and `\\sharp` operators
+  working while genuinely unknown control words remain suppressed.
+- Use the unambiguous `clipboard-png` converter destination in the Python and
+  MCP bridges, while the native executable retains `png` as a legacy alias and
+  exposes redirectable help, version, and error diagnostics.
 
 ### Included unreleased 3.0.12 candidate (2026-09-02)
 

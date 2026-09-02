@@ -87,7 +87,7 @@ standalone利用者はpipを必要としない。
   `aligned`を自動生成する。行列・`cases`セルでは最内表に行を追加し、右側セルと現在列を
   保つ。開始トークン内や分数・上下付き・文字列などの入れ子内ではTeXを壊さず、環境
   内容の先頭または次の直上行境界へ丸める。トップレベルへ直接入力した`a\\b`も2行の
-  `aligned`として受理する。末尾の空行は次入力を待つだけで、空のまま保存時には省く。
+  `aligned`として受理する。末尾の空行は`{}`を持つ構造行として保存し、再読込後も省かない。
   `Shift+Enter`だけを数式構造を変えないraw改行とする。
 - キャンバスから同期するTeX整形はemitter由来のCR/LFを先に吸収し、`\begin`後、
   `\end`前、`\\`後へWin32 EDIT用CRLFを一元的に置く。単独LFを制御文字として見せたり、
@@ -198,6 +198,10 @@ Backspace/Deleteが`&`を削除して左右セルを結合する。複数行の�
 - 「番号あり／番号なし」を通常操作で切り替えるメニューは設けない。
 - 表示の左／中央／右寄せは保存TeXを変えない。
 - `.eqn`、MTEF、MathType固有形式を保存候補に復活させない。
+- 論文由来の`align` / `align*` / `eqnarray`は`aligned`へ正規化し、`&`列を保持する。
+- 裸の`~`は非改行空白であり`\sim`ではない。`%`コメント、`\label`、`\nonumber`、
+  `\notag`、`\tag`は表示内容から除く。未知命令の名前を本文の文字列へ変えず、その引数だけを
+  編集可能な式として残す。
 
 ## 6. クリップボードと外部アプリ
 
@@ -245,20 +249,22 @@ UTF-8 `.tex`または予約語`clipboard`、出力は用途名または画像フ
 ```text
 Eqnedit64.exe equation.tex office
 Eqnedit64.exe equation.tex slides
-Eqnedit64.exe equation.tex png
+Eqnedit64.exe equation.tex clipboard-png
 Eqnedit64.exe equation.tex equation.png
 Eqnedit64.exe equation.tex equation.emf
-Eqnedit64.exe clipboard png
+Eqnedit64.exe clipboard clipboard-png
 ```
 
-`office`はPowerPoint/Word用、`slides`はGoogle Slides用、`png`は画像だけの
+`office`はPowerPoint/Word用、`slides`はGoogle Slides用、`clipboard-png`は画像だけの
 クリップボードを表す。最後の例はクリップボード上のTeXを読み、同じクリップボードを
-PNGへ置き換える。旧`--copy-*`、`--render-*`、`--texclip`は既存連携の互換入力として
+PNGへ置き換える。旧出力名`png`と旧`--copy-*`、`--render-*`、`--texclip`は既存連携の互換入力として
 内部に残すが、公開ヘルプ、教材、Python package、`radia-mcp.presentation`は必ず
 単一の入力／出力構文を使う。CLI/APIはPowerPoint自動生成や
 `radia-mcp.presentation`から呼べる安定した変換境界とする。
-オプションでない位置引数を二つ渡した場合は常に変換器として扱うため、
-`Eqnedit64.exe a.tex b.tex`は複数文書を開く指定ではなく出力指定不正94となる。
+`Eqnedit64.exe a.tex b.tex`はExplorerの複数選択として先頭文書をGUIで開き、二番目を
+出力先として上書きしない。他の不正出力はconsole/redirect時に標準エラーへ理由を書いて
+94を返し、標準streamがないグラフィカル起動ではダイアログを出す。`--help` / `--version`も
+console/redirect時はUTF-8標準出力へ書く。詳細は`tools/eqnedit64/docs/COMMAND_LINE.md`を正とする。
 
 ## 7. フォント契約
 
@@ -476,6 +482,19 @@ source stampの両方を表示する。
 - resolution: 次の候補commitで上記findingsと同じ改行不具合族だけを回収し、影響する
   model/hidden UI/仕様試験、署名済みO:候補、PR CIを更新する。別機能を追加しないため、
   依頼された一度のFableレビューゲートとして記録する。
+
+### 13.2 3.0.13 追補レビュー記録
+
+- reviewed source: `484041df8a520d71ee08e3505a8edaf1ca65104a`
+- reviewer: Claude Codeによる3.0.13実測レビュー（提示文にmodel名の記載なし）
+- result: 改行6件中5件を確認し、末尾空行、貼り付け正規化、CLIに追加修正を要求
+- reproduced findings: 裸の`~`が`\sim`へ変わる、`align`の`&`列が消える、文書メタ命令と
+  未知命令名が表示される、二つの`.tex`が無言94になる、native `--help` / `--version`が
+  redirectできない、clipboard出力`png`と`.png`ファイルの区別が名称だけでは弱い。
+- resolution contract: 末尾空行を`{}`で保持し、貼り付け規則を一般化する。CLIは
+  `clipboard-png`を正規名、`png`を互換別名とし、二つの`.tex`は先頭をGUIで開く。
+  help/version/errorの標準streamを自動試験する。これは最初のFableレビュー範囲を越えるため、
+  修正後の最終候補に対して正式公開前Fableレビューをもう一度行う。
 
 - product tag: `eqnedit64-v3.0.11`
 - product tag source: `f5ac045703eab940323bddabbef6bb4fd3a9e55c`

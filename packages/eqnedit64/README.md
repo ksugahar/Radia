@@ -11,13 +11,15 @@ eqnedit64
 ```
 
 The command-line converter always takes one input and one output. The input is
-a UTF-8 TeX file or `clipboard`; the output is `office`, `slides`, `png`, or a
-`.png` / `.emf` file path.
+a UTF-8 TeX file or `clipboard`; the output is `office`, `slides`,
+`clipboard-png`, or a `.png` / `.emf` file path. The legacy word `png` remains
+accepted as a clipboard alias, but a path ending in `.png` always creates a
+file.
 
 ```powershell
 eqnedit64 equation.tex office
 eqnedit64 equation.tex equation.png
-eqnedit64 clipboard png
+eqnedit64 clipboard clipboard-png
 ```
 
 The wheel provides:

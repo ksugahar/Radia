@@ -77,6 +77,37 @@ def test_every_palette_cell_is_labelled():
         assert label, "%s: %s has no description" % (title, command)
 
 
+def test_every_palette_cell_produces_a_tex_lesson():
+    """The shortcut coach derives its lesson by executing each real command.
+
+    A parser hardening change once made the supported ``\\flat`` and
+    ``\\sharp`` geometry entries disappear as if they were unknown commands.
+    Catalogue completeness alone could not see that regression: the cells
+    still existed, but their generated lesson and insertion were empty.
+    """
+    empty = []
+    for title, command, _, _ in palette_items():
+        equation = E.Equation()
+        if command.startswith("template."):
+            changed = equation.insert_template(command[9:])
+        elif command.startswith("symbol."):
+            changed = equation.insert_symbol(command[7:])
+        elif command.startswith("latex."):
+            changed = equation.insert_latex(command[6:])
+        elif command.startswith("style."):
+            equation.insert_text("x")
+            equation.select_all()
+            changed = equation.restyle_selection(command[6:])
+        elif command.startswith("matrix."):
+            changed = (equation.insert_template("matrix2x2") and
+                       equation.command(command))
+        else:
+            changed = False
+        if not changed or not equation.latex():
+            empty.append(f"{title}: {command}")
+    assert not empty, "palette cells with no TeX lesson: " + ", ".join(empty)
+
+
 def test_symbol_palettes_come_first_then_template_palettes():
     """The shape of Eqnedt32's bar: symbols on the first row, templates on
     the second, so the eye knows which row to look at.  Eqnedit64 adds a
