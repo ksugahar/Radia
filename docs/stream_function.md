@@ -192,7 +192,7 @@ python src/radia/panels/calc_stream_coil.py --radius 0.15 --length 0.5 --gradien
 ```
 
 It is locked by a golden test,
-[`tests/panels/test_stream_coil_golden.py`](../tests/panels/test_stream_coil_golden.py),
+[`validation_test/panels/test_stream_coil_golden.py`](../validation_test/panels/test_stream_coil_golden.py),
 which runs the CLI with defaults and asserts the discrete wire coil reproduces
 the unit gradient (`fitted_dBdz` in `[0.9, 1.1]`) with on-axis
 `gradient_nonlinearity < 0.05`. This remains a Stage-2-only utility (validated
