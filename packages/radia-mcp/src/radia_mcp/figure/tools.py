@@ -1471,7 +1471,7 @@ def check_text_overlap(ax, text, margin_px: float = 2.0):
 
 
 def place_text_clear(ax, s, *, nx: int = 11, ny: int = 7,
-                     pad_frac: float = 0.02, margin_px: float = 4.0,
+                     pad_frac: float = 0.02, margin_px: float | None = None,
                      **text_kw):
     """Put a label where nothing is drawn, instead of at hand-picked coordinates.
 
@@ -1486,7 +1486,10 @@ def place_text_clear(ax, s, *, nx: int = 11, ny: int = 7,
         s: the label text.
         nx, ny: anchor grid resolution.
         pad_frac: keep anchors this far (in axes fraction) from the edges.
-        margin_px: clearance demanded around the text box.
+        margin_px: clearance demanded around the text box. Default is
+            0.6 em of the placed text: a fixed pixel count is nothing at
+            slide sizes (4 px is 0.04 em at 24 pt, 300 dpi), and a label
+            that clears a panel letter by that much reads as touching it.
         **text_kw: passed to ``ax.text`` (color, fontsize, ha, va, ...).
             ``transform`` is set for you and must not be given.
 
@@ -1521,6 +1524,8 @@ def place_text_clear(ax, s, *, nx: int = 11, ny: int = 7,
 
     probe = ax.text(0.5, 0.5, s, transform=ax.transAxes, **text_kw)
     fig.canvas.draw()
+    if margin_px is None:
+        margin_px = 0.6 * probe.get_fontsize() * fig.dpi / 72.0
 
     best = None
     for fx in np.linspace(pad_frac, 1.0 - pad_frac, nx):
