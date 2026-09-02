@@ -42,13 +42,25 @@ def test_server_family_change_selects_related_tests_and_one_server():
     assert "tests" not in plan["package_tests"]
 
 
+def test_server_registration_change_does_not_select_numerical_family_suite():
+    plan = SELECTOR.build_plan(
+        ["packages/radia-mcp/src/radia_mcp/build123d/server.py"]
+    )
+    assert plan["server_selftests"] == ["build123d"]
+    assert "tests/test_build123d_operations.py" not in plan["package_tests"]
+    assert len(plan["package_tests"]) < 60
+
+
 def test_common_change_selftests_every_server_without_selecting_every_test():
     plan = SELECTOR.build_plan(
         ["packages/radia-mcp/src/radia_mcp/common/status.py"]
     )
     assert len(plan["server_selftests"]) >= 30
     assert "meta" in plan["server_selftests"]
-    assert "tests/test_meta_health.py" in plan["package_tests"]
+    assert any(
+        selector.startswith("tests/test_meta_health.py::")
+        for selector in plan["package_tests"]
+    )
     assert len(plan["package_tests"]) < len(list((PACKAGE_ROOT / "tests").glob("test_*.py")))
     assert not any(
         "::" in selector
