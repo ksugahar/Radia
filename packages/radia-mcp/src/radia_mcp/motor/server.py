@@ -21,6 +21,7 @@ import sys
 from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations
 from ..common import register_status_tool
+from ..common.tool_group import CoarseToolRegistry
 from ..common.mcp_contract import apply_tool_contract
 
 from .onelab_knowledge import get_onelab_knowledge
@@ -69,29 +70,24 @@ from .thermal_handoff import (
     motor_thermal_handoff_gate as build_motor_thermal_handoff_gate,
 )
 from .force_covariance import force_rotation_covariance_gate as build_force_rotation_covariance_gate
-from .force_report_gate import force_report_method_metadata_gate as build_force_report_method_metadata_gate
-from .phase_flux_park_gate import phase_flux_park_alignment_gate as build_phase_flux_park_alignment_gate
-from .two_run_ldlq_gate import ipm_two_run_ldlq_gate as build_ipm_two_run_ldlq_gate
-from .periodic_torque_sampling_gate import periodic_torque_sampling_gate as build_periodic_torque_sampling_gate
-from .rotating_circuit_transient_gate import rotating_circuit_transient_gate as build_rotating_circuit_transient_gate
-from .motion_table_gate import motion_table_coordinate_gate as build_motion_table_coordinate_gate
-from .magnet_model_handoff_gate import magnet_model_handoff_gate as build_magnet_model_handoff_gate
-from .magnetization_group_symmetry_gate import (
-    mirror_symmetric_three_magnet_handoff_gate as build_mirror_magnet_handoff_gate,
-)
-from .variable_magnet_gate import variable_magnet_material_parameter_gate as build_variable_magnet_material_parameter_gate
-from .permanent_magnet_force_pair_gate import permanent_magnet_force_pair_gate as build_permanent_magnet_force_pair_gate
-from .demagnetization_history_gate import permanent_magnet_demagnetization_history_gate as build_permanent_magnet_demagnetization_history_gate
-from .dual_torque_curve_gate import dual_torque_method_curve_gate as build_dual_torque_method_curve_gate
-from .hdiv_hex_torque_gate import hdiv_hex_motor_torque_gate as build_hdiv_hex_motor_torque_gate
-from .pm_armature_reaction_gate import (
-    pm_absolute_demag_three_way_gate as build_pm_absolute_demag_three_way_gate,
-    pm_armature_reaction_hdiv_hex_gate as build_pm_armature_reaction_hdiv_hex_gate,
-)
-from .virtual_work_width_gate import motor_virtual_work_width_ladder_gate as build_motor_virtual_work_width_ladder_gate
-from .transient_no_load_load_gate import (
-    motor_transient_no_load_load_cycle_gate as build_transient_no_load_load_cycle_gate,
-)
+from ..common.lazy_call import lazy_callable
+build_force_report_method_metadata_gate = lazy_callable(".force_report_gate", "force_report_method_metadata_gate", __package__)
+build_phase_flux_park_alignment_gate = lazy_callable(".phase_flux_park_gate", "phase_flux_park_alignment_gate", __package__)
+build_ipm_two_run_ldlq_gate = lazy_callable(".two_run_ldlq_gate", "ipm_two_run_ldlq_gate", __package__)
+build_periodic_torque_sampling_gate = lazy_callable(".periodic_torque_sampling_gate", "periodic_torque_sampling_gate", __package__)
+build_rotating_circuit_transient_gate = lazy_callable(".rotating_circuit_transient_gate", "rotating_circuit_transient_gate", __package__)
+build_motion_table_coordinate_gate = lazy_callable(".motion_table_gate", "motion_table_coordinate_gate", __package__)
+build_magnet_model_handoff_gate = lazy_callable(".magnet_model_handoff_gate", "magnet_model_handoff_gate", __package__)
+build_mirror_magnet_handoff_gate = lazy_callable(".magnetization_group_symmetry_gate", "mirror_symmetric_three_magnet_handoff_gate", __package__)
+build_variable_magnet_material_parameter_gate = lazy_callable(".variable_magnet_gate", "variable_magnet_material_parameter_gate", __package__)
+build_permanent_magnet_force_pair_gate = lazy_callable(".permanent_magnet_force_pair_gate", "permanent_magnet_force_pair_gate", __package__)
+build_permanent_magnet_demagnetization_history_gate = lazy_callable(".demagnetization_history_gate", "permanent_magnet_demagnetization_history_gate", __package__)
+build_dual_torque_method_curve_gate = lazy_callable(".dual_torque_curve_gate", "dual_torque_method_curve_gate", __package__)
+build_hdiv_hex_motor_torque_gate = lazy_callable(".hdiv_hex_torque_gate", "hdiv_hex_motor_torque_gate", __package__)
+build_pm_absolute_demag_three_way_gate = lazy_callable(".pm_armature_reaction_gate", "pm_absolute_demag_three_way_gate", __package__)
+build_pm_armature_reaction_hdiv_hex_gate = lazy_callable(".pm_armature_reaction_gate", "pm_armature_reaction_hdiv_hex_gate", __package__)
+build_motor_virtual_work_width_ladder_gate = lazy_callable(".virtual_work_width_gate", "motor_virtual_work_width_ladder_gate", __package__)
+build_transient_no_load_load_cycle_gate = lazy_callable(".transient_no_load_load_gate", "motor_transient_no_load_load_cycle_gate", __package__)
 
 try:
     from .bibliography_index_knowledge import get_bibliography_index
@@ -101,6 +97,7 @@ except ImportError:
 
 
 mcp = FastMCP("mcp-server-motor")
+_validation = CoarseToolRegistry(mcp, namespace="motor")
 
 
 def _decode_owned_worker_json(stdout: bytes) -> dict:
@@ -126,7 +123,7 @@ def _decode_owned_worker_json(stdout: bytes) -> dict:
 # MCP Tools
 # ============================================================
 
-@mcp.tool()
+@_validation.tool()
 def motor_hdiv_hex_torque_gate(summary_json: str) -> str:
     """Gate converged BDM1-lane HDiv-MMM motor torque on HEX meshes."""
     try:
@@ -140,7 +137,7 @@ def motor_hdiv_hex_torque_gate(summary_json: str) -> str:
     return json.dumps(result, indent=2, sort_keys=True)
 
 
-@mcp.tool()
+@_validation.tool()
 def motor_pm_armature_reaction_hdiv_hex_gate(summary_json: str) -> str:
     """Gate PM armature-reaction increments separately from absolute demag error."""
     try:
@@ -154,7 +151,7 @@ def motor_pm_armature_reaction_hdiv_hex_gate(summary_json: str) -> str:
     return json.dumps(result, indent=2, sort_keys=True)
 
 
-@mcp.tool()
+@_validation.tool()
 def motor_pm_absolute_demag_three_way_gate(summary_json: str) -> str:
     """Attribute segmented-PM absolute demag error with BDM orders and H1 FEM."""
     try:
@@ -167,7 +164,7 @@ def motor_pm_absolute_demag_three_way_gate(summary_json: str) -> str:
         }
     return json.dumps(result, indent=2, sort_keys=True)
 
-@mcp.tool()
+@_validation.tool()
 def motor_transient_no_load_load_cycle_gate(summary_json: str) -> str:
     """Gate paired no-load and loaded three-phase transient cycles."""
 
@@ -181,7 +178,7 @@ def motor_transient_no_load_load_cycle_gate(summary_json: str) -> str:
         }
     return json.dumps(result, indent=2, sort_keys=True)
 
-@mcp.tool()
+@_validation.tool()
 def motor_virtual_work_width_ladder_gate(summary_json: str) -> str:
     """Select a coenergy-difference angle width against independent torque."""
     try:
@@ -194,7 +191,7 @@ def motor_virtual_work_width_ladder_gate(summary_json: str) -> str:
         }
     return json.dumps(result, indent=2, sort_keys=True)
 
-@mcp.tool()
+@_validation.tool()
 def motor_dual_torque_method_curve_gate(summary_json: str) -> str:
     """Gate two independently evaluated static-torque curves."""
     try:
@@ -207,7 +204,7 @@ def motor_dual_torque_method_curve_gate(summary_json: str) -> str:
         }
     return json.dumps(result, indent=2, sort_keys=True)
 
-@mcp.tool()
+@_validation.tool()
 def motor_permanent_magnet_demagnetization_history_gate(
     summary_json: str,
     state_tolerance: float = 1.0e-9,
@@ -229,7 +226,7 @@ def motor_permanent_magnet_demagnetization_history_gate(
         }
     return json.dumps(result, indent=2, sort_keys=True)
 
-@mcp.tool()
+@_validation.tool()
 def motor_permanent_magnet_force_pair_gate(
     summary_json: str,
     magnitude_relative_tolerance: float = 2.0e-2,
@@ -251,7 +248,7 @@ def motor_permanent_magnet_force_pair_gate(
         }
     return json.dumps(result, indent=2, sort_keys=True)
 
-@mcp.tool()
+@_validation.tool()
 def motor_variable_magnet_material_gate(
     parameters: dict,
     parameter_authority: str,
@@ -273,7 +270,7 @@ def motor_variable_magnet_material_gate(
         }
     return json.dumps(result, indent=2, sort_keys=True)
 
-@mcp.tool()
+@_validation.tool()
 def motor_magnet_model_handoff_gate(
     residual_phases: list[list[float]],
     nonlinear_tolerance: float,
@@ -311,7 +308,7 @@ def motor_magnet_model_handoff_gate(
     return json.dumps(result, indent=2, sort_keys=True)
 
 
-@mcp.tool()
+@_validation.tool()
 def motor_mirror_symmetric_three_magnet_handoff_gate(summary_json: str) -> str:
     """Gate grouped magnetization vectors, mirror symmetry, and fresh replay."""
 
@@ -325,7 +322,7 @@ def motor_mirror_symmetric_three_magnet_handoff_gate(summary_json: str) -> str:
         }
     return json.dumps(result, indent=2, sort_keys=True)
 
-@mcp.tool()
+@_validation.tool()
 def motor_motion_table_coordinate_gate(
     translation_times_s: list[float],
     translation_vectors: list[list[float]],
@@ -352,7 +349,7 @@ def motor_motion_table_coordinate_gate(
         result = {"policy": "motion_table_coordinate_gate_v1", "status": "invalid_input", "error": str(exc)}
     return json.dumps(result, indent=2, sort_keys=True)
 
-@mcp.tool()
+@_validation.tool()
 def motor_periodic_torque_sampling_gate(
     period_deg: float,
     sample_count: int,
@@ -386,7 +383,7 @@ def motor_periodic_torque_sampling_gate(
     return json.dumps(result, indent=2, sort_keys=True)
 
 
-@mcp.tool()
+@_validation.tool()
 def motor_rotating_circuit_transient_gate(summary_json: str) -> str:
     """Gate rotating-circuit identities and endpoint state before FFT use."""
     try:
@@ -1168,7 +1165,7 @@ def motor_validation_lane_template(lane_id: str = "all") -> str:
     return json.dumps(lane_template(lane_id), indent=2, sort_keys=True)
 
 
-@mcp.tool()
+@_validation.tool()
 def motor_validation_artifact_gate(artifact_json: str, expected_lane: str = "") -> str:
     """
     Check whether a motor cross-validation artifact can train radia-motor.
@@ -1196,7 +1193,7 @@ def motor_dual_lane_training_catalog(topic: str = "all") -> str:
     return format_motor_dual_lane_training_catalog(topic)
 
 
-@mcp.tool()
+@_validation.tool()
 def motor_dual_lane_training_gate() -> str:
     """Check that the public motor catalog is complete and provenance-scrubbed."""
     return json.dumps(build_dual_lane_training_catalog_gate(), indent=2, sort_keys=True)
@@ -1225,7 +1222,7 @@ def motor_triple_check_plan(goal: str) -> str:
     return format_motor_triple_check_plan(route_motor_triple_check(goal))
 
 
-@mcp.tool()
+@_validation.tool()
 def motor_triple_check_artifact_gate(artifact_json: str) -> str:
     """
     Validate a combined AGE and HDiv-MMM/HCurl eddy-bubble motor artifact.
@@ -1312,7 +1309,7 @@ def motor_validation_router(goal: str) -> str:
     return format_motor_validation_route(route_motor_validation(goal))
 
 
-@mcp.tool()
+@_validation.tool()
 def motor_thermal_handoff_gate(
     loss_buckets_json: str,
     network_json: str,
@@ -1343,7 +1340,7 @@ def motor_thermal_handoff_gate(
     )
 
 
-@mcp.tool()
+@_validation.tool()
 def motor_electrothermal_result_chain_gate(
     chain_json: str,
     absolute_tolerance_W: float = 1.1e-2,
@@ -1363,7 +1360,7 @@ def motor_electrothermal_result_chain_gate(
     )
 
 
-@mcp.tool()
+@_validation.tool()
 def motor_force_rotation_covariance_gate(
     reference_force_json: str,
     rotated_force_json: str,
@@ -1384,7 +1381,7 @@ def motor_force_rotation_covariance_gate(
     )
 
 
-@mcp.tool()
+@_validation.tool()
 def motor_force_report_method_metadata_gate(
     report_json: str,
     relative_tolerance: float = 2.0e-2,
@@ -1399,7 +1396,7 @@ def motor_force_report_method_metadata_gate(
     return build_force_report_method_metadata_gate(report_json, relative_tolerance)
 
 
-@mcp.tool()
+@_validation.tool()
 def motor_force_torque_method_agreement_gate(
     primary: dict,
     independent: dict,
@@ -1431,7 +1428,7 @@ def motor_force_torque_method_agreement_gate(
     return json.dumps(result, indent=2, sort_keys=True)
 
 
-@mcp.tool()
+@_validation.tool()
 def motor_phase_flux_park_alignment_gate(
     mechanical_angles_deg_json: str,
     phase_flux_wb_json: str,
@@ -1449,7 +1446,7 @@ def motor_phase_flux_park_alignment_gate(
     )
 
 
-@mcp.tool()
+@_validation.tool()
 def motor_ipm_two_run_ldlq_gate(summary_json: str) -> str:
     """Gate same-angle PM-only/current-on runs and extract ``Ld``/``Lq``.
 
@@ -1531,6 +1528,8 @@ def new_motor_simulation(motor_type: str = "pmsm") -> str:
 # ============================================================
 
 
+
+_validation.install()
 
 register_status_tool(
     mcp,

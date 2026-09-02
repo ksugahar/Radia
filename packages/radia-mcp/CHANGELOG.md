@@ -5,6 +5,18 @@ shipped** + **why** in compact form. Older releases (≤ 0.4) are
 omitted; the 0.5 → 0.6 jump is when the standalone `radia-mcp` wheel
 crystallized as its own package.
 
+## [Unreleased]
+
+- all servers: importing the shared `common` package now resolves status,
+  async, PDF, and Chroma/RAG helpers lazily. Small servers no longer load the
+  retrieval stack merely to register their status tool.
+- large validation families now use a searchable `<server>_validation_catalog`
+  plus `<server>_validation_run` in the production `core` profile. The
+  historical flat tool surface remains available with
+  `RADIA_MCP_TOOL_PROFILE=full` for migration and low-level debugging. A
+  same-storage subprocess benchmark records cold-import time, tool count, and
+  serialized schema size under `validation_test/radia_mcp`.
+
 ## [1.4.51] - 2026-09-02
 
 - grant-writing: a `.tex` main file passed to any check is now assembled with

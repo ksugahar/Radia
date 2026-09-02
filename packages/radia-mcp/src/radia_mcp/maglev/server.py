@@ -32,15 +32,14 @@ import sys
 from mcp.server.fastmcp import FastMCP
 
 from ..common import register_status_tool, register_topics_tool
+from ..common.tool_group import CoarseToolRegistry
 from .knowledge import TOPICS, get_knowledge
-from .periodic_settling_gate import (
-    rotating_conductor_periodic_settling_gate as _rotating_conductor_periodic_settling_gate,
-)
-from .team28_dynamic_gate import (
-    team28_cycle_averaged_motion_gate as _team28_cycle_averaged_motion_gate,
-)
+from ..common.lazy_call import lazy_callable
+_rotating_conductor_periodic_settling_gate = lazy_callable(".periodic_settling_gate", "rotating_conductor_periodic_settling_gate", __package__)
+_team28_cycle_averaged_motion_gate = lazy_callable(".team28_dynamic_gate", "team28_cycle_averaged_motion_gate", __package__)
 
 mcp = FastMCP("mcp-server-maglev")
+_validation = CoarseToolRegistry(mcp, namespace="maglev")
 
 
 @mcp.tool()
@@ -76,7 +75,7 @@ def maglev(topic: str = "overview") -> str:
     return get_knowledge(topic)
 
 
-@mcp.tool()
+@_validation.tool()
 def rotating_conductor_periodic_settling_gate(
     response: list[float],
     steps_per_period: int,
@@ -107,7 +106,7 @@ def rotating_conductor_periodic_settling_gate(
     return json.dumps(result, indent=2, sort_keys=True)
 
 
-@mcp.tool()
+@_validation.tool()
 def team28_cycle_averaged_motion_gate(
     summary: dict,
     claim_scope: str = "cycle_averaged_mechanical_motion",
@@ -130,7 +129,7 @@ def team28_cycle_averaged_motion_gate(
     return json.dumps(result, indent=2, sort_keys=True)
 
 
-@mcp.tool()
+@_validation.tool()
 def maglev_force_torque_method_agreement_gate(
     primary: dict,
     independent: dict,
@@ -157,7 +156,7 @@ def maglev_force_torque_method_agreement_gate(
     return json.dumps(result, indent=2, sort_keys=True)
 
 
-@mcp.tool()
+@_validation.tool()
 def maglev_force_weight_equilibrium_gate(
     force_n: list[float],
     mass_kg: float,
@@ -187,6 +186,8 @@ def maglev_force_weight_equilibrium_gate(
 
 
 
+
+_validation.install()
 
 register_status_tool(
     mcp,

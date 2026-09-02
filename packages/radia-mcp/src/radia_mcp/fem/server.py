@@ -28,6 +28,7 @@ from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations
 from .. import __version__
 from ..common import register_status_tool
+from ..common.tool_group import CoarseToolRegistry
 from ..common.mcp_contract import apply_tool_contract
 
 from .overview_knowledge import get_overview_knowledge
@@ -64,6 +65,7 @@ from .axifem_signature_execution import validate_axifem_signature_execution
 
 
 mcp = FastMCP("mcp-server-fem")
+_validation = CoarseToolRegistry(mcp, namespace="fem")
 
 
 def _decode_worker_json(stdout: bytes) -> dict:
@@ -85,7 +87,7 @@ def _decode_worker_json(stdout: bytes) -> dict:
     raise RuntimeError("scalar worker output did not end with a JSON object")
 
 
-@mcp.tool(
+@_validation.tool(
     annotations=ToolAnnotations(
         readOnlyHint=True,
         destructiveHint=False,
@@ -109,7 +111,7 @@ def fem_axifem_element_evidence_gate(evidence_json: str) -> str:
     return json.dumps(result, indent=2, sort_keys=True)
 
 
-@mcp.tool(
+@_validation.tool(
     annotations=ToolAnnotations(
         readOnlyHint=True,
         destructiveHint=False,
@@ -135,7 +137,7 @@ def fem_solver_uninstall_safety_gate(evidence_json: str) -> str:
     return json.dumps(result, indent=2, sort_keys=True)
 
 
-@mcp.tool(
+@_validation.tool(
     annotations=ToolAnnotations(
         readOnlyHint=True,
         destructiveHint=False,
@@ -160,7 +162,7 @@ def fem_legacy_corpus_absorption_gate(evidence_json: str) -> str:
     return json.dumps(result, indent=2, sort_keys=True)
 
 
-@mcp.tool(
+@_validation.tool(
     annotations=ToolAnnotations(
         readOnlyHint=True,
         destructiveHint=False,
@@ -185,7 +187,7 @@ def fem_legacy_signature_migration_gate(evidence_json: str) -> str:
     return json.dumps(result, indent=2, sort_keys=True)
 
 
-@mcp.tool(
+@_validation.tool(
     annotations=ToolAnnotations(
         readOnlyHint=True,
         destructiveHint=False,
@@ -272,7 +274,7 @@ async def fem_vol2d_scalar_analysis(analysis_json: str) -> str:
     return json.dumps(result, indent=2, sort_keys=True)
 
 
-@mcp.tool(
+@_validation.tool(
     annotations=ToolAnnotations(
         readOnlyHint=True,
         destructiveHint=False,
@@ -852,6 +854,8 @@ def pick_a_fem_formulation(problem_class: str) -> str:
 
 
 
+
+_validation.install()
 
 register_status_tool(
     mcp,
