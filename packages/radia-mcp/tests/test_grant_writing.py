@@ -126,10 +126,16 @@ def test_grant_writing_server_exposes_adjacent_reviewer_readability():
         "grant_writing_japanese_readability_score"
     ].inputSchema["required"]
     assert mcp._mcp_server.instructions
+    domain_tools = [
+        tool
+        for tool in tools
+        if tool.name.startswith("grant_writing_")
+        and not tool.name.endswith("_reload_code")
+    ]
     assert all(tool.title for tool in tools)
     assert all(tool.annotations is not None for tool in tools)
-    assert all(tool.annotations.readOnlyHint for tool in tools)
-    assert all(not tool.annotations.destructiveHint for tool in tools)
+    assert all(tool.annotations.readOnlyHint for tool in domain_tools)
+    assert all(not tool.annotations.destructiveHint for tool in domain_tools)
 
 
 def test_japanese_readability_scores_clear_grant_prose():
@@ -2331,6 +2337,167 @@ def test_publication_list_is_not_linted_as_one_long_sentence():
 
     assert result["max_length"] < 60
     assert result["over_threshold_count"] == 0
+
+
+def test_main_tex_assembles_sibling_inputs_but_not_template_pieces(tmp_path):
+    # The JSPS template keeps one file per field beside the main file and its
+    # own scaffolding in pieces/. Run on a field file, every whole-proposal
+    # check reported the other fields as missing (2026-09-02).
+    (tmp_path / "pieces").mkdir()
+    (tmp_path / "pieces" / "form_header.tex").write_text(
+        "本欄には研究目的を記述すること。TEMPLATE_PIECE\n", encoding="utf-8"
+    )
+    (tmp_path / "kiban_c_01_purpose_plan.tex").write_text(
+        "\\input{pieces/form_header}\n\\section{研究目的}\n本研究の学術的問いはXである。\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "kiban_c_03_abilities.tex").write_text(
+        "\\section{遂行能力}\n菅原は開境界解析を研究してきた。\n", encoding="utf-8"
+    )
+    (tmp_path / "comment_only.tex").write_text(
+        "COMMENTED_INPUT_MUST_NOT_APPEAR\n", encoding="utf-8"
+    )
+    (tmp_path / "kiban_c.tex").write_text(
+        "\\documentclass{jarticle}\n"
+        "%\\input{kiban_c_03_abilities} commented out, must not be read twice\n"
+        "\\begin{document}\n"
+        "\\input{kiban_c_01_purpose_plan}\n"
+        "\\input{kiban_c_03_abilities.tex} % \\input{comment_only} trailing comment\n"
+        "\\input{kiban_c}\n"
+        "\\end{document}\n",
+        encoding="utf-8",
+    )
+
+    text = gw._read_text_if_path(str(tmp_path / "kiban_c.tex"))
+
+    assert "学術的問いはX" in text
+    assert text.count("開境界解析") == 1
+    assert "TEMPLATE_PIECE" not in text
+    assert "COMMENTED_INPUT_MUST_NOT_APPEAR" not in text
+    assert "\\input{pieces/form_header}" in text
+
+    # A field file on its own still reads as before.
+    alone = gw._read_text_if_path(str(tmp_path / "kiban_c_03_abilities.tex"))
+    assert "学術的問い" not in alone
+
+
+def test_cross_organization_pilot_reads_the_limit_from_the_whole_paragraph():
+    # The honest closing sentence of a real 準備状況 paragraph sat four
+    # sentences after the last trigger word and fell outside the window.
+    text = (
+        "大学間予備実証では、A大学提供のソルバー実装をB大学が同一問題へ統合した。"
+        "C大学提供のモデルで再実行した。"
+        "197,395自由度で168反復、真の相対残差8e-11で収束した。"
+        "D大学は微分形式から材料則の再構成を導いた。"
+        "これをCEFC 2026で発表した。"
+        "ただし、別機関が共通の設計量から候補順位を判定できるかは未検証である。"
+    )
+
+    result = gw.grant_writing_cross_organization_pilot_check(text)
+
+    assert result["applicable"]
+    assert "remaining_gap" not in result["missing_axes"]
+
+
+def test_cross_organization_pilot_treats_wrapped_lines_as_one_paragraph():
+    text = (
+        "大学間予備実証では、A大学提供の実装をB大学が統合した。\n"
+        "C大学のモデルで再実行した。\n"
+        "197,395自由度で168反復、相対残差8e-11で収束した。\n"
+        "微分形式から材料則の再構成を導いた。\n"
+        "CEFCで成果を発表した。\n"
+        "別機関が候補順位を判定できるかは未検証である。\n\n"
+        "次の独立した段落で研究計画を述べる。"
+    )
+
+    result = gw.grant_writing_cross_organization_pilot_check(text)
+
+    assert "remaining_gap" not in result["missing_axes"]
+
+
+def test_budget_source_consistency_accepts_japanese_category_headings(tmp_path):
+    header = (
+        "費目区分/Expenditure Categories,年度/FY,品名・仕様/Item (Specification),"
+        "設置機関/Place,品目/Item,数量/Qty,単価/Unit Price,金額/Amount\n"
+    )
+    source = tmp_path / "budget.csv"
+    source.write_text(
+        header
+        + "B,2027,,,SSD,,,50\n"
+        + "E,2027,,,研究協力者謝金,,,150\n"
+        + "F,2027,,,JMAG,,,1023\n",
+        encoding="utf-8-sig",
+    )
+
+    result = gw.grant_writing_budget_source_consistency_check(
+        str(source),
+        expected_category_totals_json=(
+            '{"消耗品費": 50, "人件費・謝金": 150, "その他": 1023, "設備備品費": 0}'
+        ),
+    )
+
+    # 設備備品費 declared as zero with no ledger row is agreement, not a gap.
+    assert result["consistent"]
+    assert result["canonical"]["category_labels"] == {
+        "B": "消耗品費", "E": "人件費・謝金", "F": "その他",
+    }
+
+    result = gw.grant_writing_budget_source_consistency_check(
+        str(source),
+        expected_category_totals_json='{"消耗品費": 50, "国内旅費": 300}',
+    )
+
+    # A non-zero total for a category the ledger never mentions is reported
+    # as absent, not as a mismatch against null.
+    assert [d["type"] for d in result["differences"]] == ["category_not_in_ledger"]
+    assert result["differences"][0]["category"] == "C"
+
+    result = gw.grant_writing_budget_source_consistency_check(
+        str(source),
+        expected_category_totals_json='{"消耗品費": 50, "人件費・謝金": 150, "F": 1000}',
+    )
+
+    assert [d["type"] for d in result["differences"]] == ["category_total_mismatch"]
+    assert result["differences"][0]["delta"] == 23
+
+
+def test_proper_noun_load_lists_unplaced_singletons_but_keeps_venues_and_roles():
+    # The 2026-09-02 foreign-matter case: FEMM and Meeker appear once, with no
+    # role in the plan. Hollaus is named once too, but with 招へい beside the
+    # name; COMPUMAG is a venue in the yearly plan.
+    text = (
+        "比留間の拡張有限要素法（XFEM）を混合Galerkin縮約へ接続する。"
+        "Hollaus氏の31日間招へいが採択された。"
+        "COMPUMAG 2027で結合手法を発表する。"
+        "軸対称解析でも、公開ソフトFEMMの作者Meeker氏の断片コードを2次要素へ拡張実装した。"
+    )
+
+    result = gw.grant_writing_proper_noun_load_check(text)
+
+    names = {s["name"]: s for s in result["singletons"]}
+    # 「作者Meeker氏」 attributes a program; it does not place him in the plan.
+    assert "Meeker" in names and names["Meeker"]["kind"] == "person"
+    assert not names["Meeker"]["role_stated"]
+    assert names["Hollaus"]["role_stated"]
+    # All-caps tokens (FEMM, XFEM, COMPUMAG) belong to the acronym audit.
+    assert "FEMM" not in names and "COMPUMAG" not in names
+    assert "Galerkin" not in names
+    assert result["unplaced_singleton_count"] == 1
+    assert result["comments"] and "Meeker" in result["comments"][0]
+
+    dated_nonvenue = gw.grant_writing_proper_noun_load_check(
+        "2027年度にMeeker氏の実装断片を解析へ加える。"
+    )
+    assert dated_nonvenue["unplaced_singleton_count"] == 1
+
+    report = gw.grant_writing_health_report(text, program="kaken_generic")
+    assert any(q["name"] == "proper_noun_load_check" for q in report["questions"])
+    assert all(f["name"] != "proper_noun_load_check" for f in report["findings"])
+
+    clean = gw.grant_writing_proper_noun_load_check(
+        "手法差による設計量の変動を求め、順位を確定できる条件を示す。"
+    )
+    assert clean["applicable"] is False
 
 
 def test_prose_list_items_survive_but_stay_separate():

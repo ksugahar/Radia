@@ -148,7 +148,14 @@ Q&A 対応 slides の有無、takehome slide の質を評価。
 台本・スライド原稿用:
 notation_variants / find_undefined_acronyms / acronym_usage_audit /
 check_kanji_ratio / lint_bedrock / check_misuse_japanese /
-suggest_redundancy_fixes
+suggest_redundancy_fixes / translationese_check
+
+`presentation_translationese_check` は直訳調・AI調の候補を返す（2026-09-02
+追加）。上の検査をすべて通過した科研費原稿に「〜へ発展する」（自動詞の
+他動詞用法、HIGH）、「接着層（glue）」（日本語術語への英語注記、MEDIUM）、
+「劇的な差」「〜を可能にする」（定型句、LOW）が 9 か所残っていた実例が種。
+英語スライドから起こした和文台本は特に残りやすい。定義語や数学用語
+（「写す」）は直訳に見えても残す。修正は行数・文字数を増やさない形で行う。
 
 ### Plan B Tier 3 (v0.21.0) — outline / message / 欧米 vs 日本 / 構造
 

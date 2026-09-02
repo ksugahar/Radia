@@ -7,6 +7,51 @@ crystallized as its own package.
 
 ## [Unreleased]
 
+- grant-writing: a `.tex` main file passed to any check is now assembled with
+  the sibling files it `\input`s (form pieces in subdirectories stay out), so
+  `grant_writing_health_report("kiban_c.tex")` judges the whole 計画調書.
+  Run per field file, the abilities field was reported as lacking the academic
+  question and the purpose field as lacking the execution environment
+  (2026-09-02, 基盤C 2027 draft).
+- all servers: new `<server>_reload_code` tool (registered next to
+  `<server>_status`) reloads radia_mcp modules whose source changed on disk,
+  re-registers changed tools, removes deleted tools, discovers new same-family
+  callables, and sends `notifications/tools/list_changed`; the server now
+  declares `tools.listChanged`. Source and registry updates are transactional:
+  a compile/import/registration failure restores the previous working code and
+  tool set. An edited live `server.py`, the reload implementation itself, and
+  a newly added tool awaiting its server-specific policy pass are reported as
+  requiring one reconnect. An editable install alone never updated a running
+  server because the process kept old modules and FastMCP kept old function
+  objects (2026-09-02). Verified end to end over stdio: a function appended to
+  grant_writing/tools.py while the server ran appeared in `tools/list`, was
+  callable after one reload call, and emitted the list-changed notification.
+- grant-writing: new `grant_writing_proper_noun_load_check` lists proper
+  nouns a reviewer must place, and the ones named once with no role in their
+  sentence (venues in a yearly plan and 招へい/招請 partners are kept apart).
+  Measured 2026-09-02: two sentences added to 準備状況 introduced a third
+  analysis object, a software name and a person that appeared nowhere else;
+  every mechanical check passed and the applicant removed them as foreign
+  matter. The skill records the rule: fewer proper nouns, and only
+  investigators, collaborators, or the target problems may be named. The
+  health report carries it as a question (skip id `nouns`).
+- grant-writing / paper-writing / presentation: new shared translationese
+  check (`*_translationese_check`) for Japanese that reads as translated
+  English or generated prose: an intransitive verb in a transitive slot
+  (「〜へ発展する」, HIGH), an English word glossed after a Japanese term
+  (「接着層（glue）」, MEDIUM), calques such as 「劇的な」「〜を可能にする」
+  and empty emphasis vocabulary (LOW, each with a replacement). Nine such
+  cases survived every mechanical lint in a 基盤C draft on 2026-09-02. The
+  grant health report includes it (skip id `translationese`).
+- grant-writing: the cross-organization pilot check now reads the whole
+  paragraph that claims the pilot, so a closing 「…は未検証である」 four
+  sentences after the last trigger is no longer reported as a missing gap.
+- grant-writing: budget-source reconciliation accepts the Japanese S-14
+  category headings (設備備品費 … その他) as well as e-Rad codes `A`..`F`,
+  reports declared categories absent from the ledger as
+  `category_not_in_ledger` instead of a mismatch against `null`, treats a
+  declared zero with no rows as agreement, and returns `category_labels`.
+
 ## [1.4.50] - 2026-09-02
 
 - mor: corrected the mixed-Galerkin CLN knowledge to record that the naive

@@ -7,6 +7,7 @@ pptx 埋め込みテキスト or speaker note を抽出後、そのまま feed �
 """
 from __future__ import annotations
 
+from .._shared.translationese import check_translationese as _translationese
 from ._text_checks import (
     grant_writing_check_notation_variants as _notation,
     grant_writing_find_undefined_acronyms as _acronyms,
@@ -81,3 +82,13 @@ def presentation_check_misuse_japanese(text: str) -> dict:
 def presentation_suggest_redundancy_fixes(text: str) -> dict:
     """冗長表現 25 パターンの置換候補 (re-export)。"""
     return _redundancy(text)
+
+
+def presentation_translationese_check(text: str) -> dict:
+    """台本・スライド本文の直訳調・AI調の候補 (自他動詞の誤り、英語注記、定型句)。
+
+    2026-09-02 の科研費原稿通読で、bedrock・誤用・表記ゆれをすべて通過した
+    文に「〜へ発展する」「接着層（glue）」「劇的な差」が残っていた実例が種。
+    extract_pptx_text や speaker note の返り値をそのまま feed する。
+    """
+    return _translationese(text)
