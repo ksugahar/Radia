@@ -180,6 +180,15 @@ private:
     std::vector<CaretStep> anchorPath_;
     int anchorIndex_ = 0;
 
+    /* Where the pointer went down, kept at full depth for the whole drag.
+     * anchorPath_ is rewritten every time a drag is promoted to a shared
+     * ancestor slot, so it cannot answer "which child did this drag start
+     * inside" on the next mouse move -- reversing direction would then
+     * select from the promoted edge instead of from the real origin. */
+    std::vector<CaretStep> dragAnchorPath_;
+    int dragAnchorIndex_ = 0;
+    bool dragAnchorValid_ = false;
+
     struct Snapshot {
         std::string latex;
         std::string caret;
@@ -203,6 +212,8 @@ private:
     bool find_slot_path(const NodeList* target, NodeList& list,
                         std::vector<CaretStep>& path) const;
     bool selection_range(NodeList** slot, int* first, int* last) const;
+    bool extend_selection_to(const std::vector<CaretStep>& anchorPath,
+                             int anchorIndex);
     bool matrix_context(size_t* depth, MatrixNode** matrix, int* cell,
                         int layoutKind = -1) const;
 };
