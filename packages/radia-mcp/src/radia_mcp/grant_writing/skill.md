@@ -1572,6 +1572,17 @@ adjacent-reviewer diagnostic reports `applicant_internal_abstraction` and
 `vague_readiness_status` for the older forms. These are readability findings,
 not bans on technical vocabulary or collaboration narratives.
 
+Treat "lineage/genealogy" as a contextual term, not a synonym for software.
+When the sentence is about what can be run, compared, or inspected, name the
+observable object: an existing program, source code, implementation, or the
+methods that the existing code can handle. When independent provenance is the
+point, say that two implementations were developed independently. Reserve
+"lineage" for a genuine historical or derivational relationship, and state
+the ancestor, branch, or version relationship that makes that history relevant.
+The adjacent-reviewer diagnostic therefore flags Japanese `コード系譜`,
+`プログラムの系譜`, `ソースコード譜系`, and corresponding implementation
+forms, while leaving a well-explained scientific or historical lineage alone.
+
 The integrated health report also runs the non-scoring
 `grant_writing_reviewer_momentum_check(text)`. Readability and reviewer
 interest are separate. The check looks for an opening arc that recurs in

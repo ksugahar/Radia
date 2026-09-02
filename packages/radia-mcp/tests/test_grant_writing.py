@@ -1155,6 +1155,34 @@ def test_adjacent_reviewer_readability_accepts_concrete_keiko_revision():
     assert "vague_readiness_status" not in types
 
 
+def test_adjacent_reviewer_readability_flags_implementation_lineage_jargon():
+    text = (
+        "二つのプログラムの系譜を比較する。"
+        "ソースコード譜系の違いを検証する。"
+    )
+
+    result = gw.grant_writing_adjacent_reviewer_readability_check(text)
+    risks = {risk["type"]: risk for risk in result["risks"]}
+
+    assert "applicant_internal_abstraction" in risks
+    assert result["metrics"]["applicant_internal_abstraction_count"] == 2
+    recommendation = risks["applicant_internal_abstraction"]["recommendation"]
+    assert "既存プログラム" in recommendation
+    assert "ソースコード" in recommendation
+
+
+def test_adjacent_reviewer_readability_accepts_concrete_implementation_terms():
+    text = (
+        "比較できる対象は既存プログラムで扱える手法に限られる。"
+        "独立に開発された二つのソースコードで同じ問題を解析する。"
+    )
+
+    result = gw.grant_writing_adjacent_reviewer_readability_check(text)
+    types = {risk["type"] for risk in result["risks"]}
+
+    assert "applicant_internal_abstraction" not in types
+
+
 def test_adjacent_reviewer_readability_flags_takeaway_after_evidence():
     text = (
         "菅原・長嶺らは、Cauer縮約をGalerkin系へ実装した。"
