@@ -150,6 +150,40 @@ only when it fixes a release-blocking defect or directly unblocks one of their
 acceptance checks.  Record other ideas in the backlog or memory rather than
 expanding the public surface or CI matrix.
 
+### Thin MCP Adapter and Coarse Workflow Policy (2026-09-02)
+
+**POLICY**: An MCP server is a thin discovery and orchestration adapter over
+canonical package APIs and durable artifacts. It must not become a second
+implementation of the solver, a numerical-results database, or a flat catalog
+of every test helper.
+
+- Keep directly registered MCP tools for primary user workflows, status,
+  topics, and coarse domain operations. Families of three or more one-purpose
+  validation, identity, and fixture gates stay ordinary importable/testable
+  Python functions and are exposed through the server's searchable
+  `<server>_validation_catalog` plus `<server>_validation_run` pair. A smaller
+  family remains direct because replacing one operation with two discovery
+  tools would enlarge the public surface.
+- The default `core` profile is the production public surface. The `full`
+  profile, selected with `RADIA_MCP_TOOL_PROFILE=full` or
+  `--tool-profile full`, temporarily restores legacy individual validation
+  tools for migration, debugging, and release comparison; new clients must not
+  depend on that flat surface.
+- Server import must not eagerly load RAG/Chroma, optional numerical stacks, or
+  validation-only modules. Resolve those dependencies on the first operation
+  that needs them. Keep hot reload effective by resolving a lazy target's
+  current module attribute at call time rather than retaining an old function
+  object.
+- MCP knowledge explains ownership, selection, workflow, and artifact
+  interpretation. Numerical values and benchmark truth remain in versioned
+  `validation_test/` JSON artifacts; MCP reads or points to those artifacts
+  instead of copying their values into prose.
+- Treat tool count, serialized `tools/list` size, cold import time, and first
+  useful call latency as validation metrics. Record performance studies under
+  `validation_test/`, while `tests/` retain fast contracts for profile
+  selection, primary-tool visibility, lazy loading, catalog dispatch, status
+  metadata, and real MCP transport.
+
 ### NGSolve-Native Discretization Policy (2026-07-16)
 
 **POLICY**: Let NGSolve own finite-element plumbing.  Radia supplies the

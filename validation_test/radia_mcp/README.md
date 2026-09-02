@@ -24,3 +24,11 @@ python -m pytest validation_test/radia_mcp
 The root `validation_test/conftest.py` automatically applies the `validation`
 marker. Add `slow` or `compute_host` only when a case exceeds the normal manual
 validation budget or requires an idle mdx/hibino compute host.
+
+## MCP server surface performance
+
+`benchmark_mcp_server_surface.py` compares an untouched baseline checkout with
+the candidate `radia-mcp` source. It records cold-import latency, direct tool
+count, serialized `tools/list` schema size, and `full`-profile compatibility in
+`results_mcp_server_surface_20260902.json`. This is explicit performance
+validation and is intentionally excluded from fast CI.

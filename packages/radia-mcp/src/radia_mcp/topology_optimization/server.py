@@ -23,15 +23,18 @@ import sys
 
 from mcp.server.fastmcp import FastMCP
 from ..common import register_status_tool
+from ..common.tool_group import CoarseToolRegistry
 
 from .shape_optimization_knowledge import get_shape_optimization_documentation
 from .topology_derivative_knowledge import get_topology_derivative_documentation
 from .applications_knowledge import get_applications_documentation
 from .cae_ai_contract import cae_ai_artifact_gate as build_cae_ai_artifact_gate
-from .simplex_stationarity_gate import simplex_stationarity_audit_gate as build_simplex_stationarity_audit_gate
-from .nonlinear_lsq_multistart_gate import nonlinear_lsq_multistart_gate as build_nonlinear_lsq_multistart_gate
+from ..common.lazy_call import lazy_callable
+build_simplex_stationarity_audit_gate = lazy_callable(".simplex_stationarity_gate", "simplex_stationarity_audit_gate", __package__)
+build_nonlinear_lsq_multistart_gate = lazy_callable(".nonlinear_lsq_multistart_gate", "nonlinear_lsq_multistart_gate", __package__)
 
 mcp = FastMCP("mcp-server-topology-optimization")
+_validation = CoarseToolRegistry(mcp, namespace="topology_optimization")
 
 
 @mcp.tool()
@@ -99,7 +102,7 @@ def topology_opt_applications(topic: str = "all") -> str:
     return get_applications_documentation(topic)
 
 
-@mcp.tool()
+@_validation.tool()
 def topology_opt_cae_ai_artifact_gate(method_family: str, artifact_json: str) -> str:
     """Gate CAE-AI artifacts before they are promoted as engineering results.
 
@@ -116,7 +119,7 @@ def topology_opt_cae_ai_artifact_gate(method_family: str, artifact_json: str) ->
     return build_cae_ai_artifact_gate(method_family, artifact_json)
 
 
-@mcp.tool()
+@_validation.tool()
 def topology_opt_simplex_stationarity_audit_gate(summary_json: str) -> str:
     """Audit derivative-free convergence using independent stationarity checks.
 
@@ -127,13 +130,15 @@ def topology_opt_simplex_stationarity_audit_gate(summary_json: str) -> str:
     return build_simplex_stationarity_audit_gate(summary_json)
 
 
-@mcp.tool()
+@_validation.tool()
 def topology_opt_nonlinear_lsq_multistart_gate(summary_json: str) -> str:
     """Gate nonlinear least-squares multistart, Jacobian, and KKT evidence."""
     return build_nonlinear_lsq_multistart_gate(summary_json)
 
 
 
+
+_validation.install()
 
 register_status_tool(
     mcp,

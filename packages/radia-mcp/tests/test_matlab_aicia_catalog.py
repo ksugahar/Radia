@@ -86,6 +86,11 @@ def test_candidate_without_forward_solver_gate_is_rejected():
 def test_matlab_mcp_exposes_aicia_catalog_gate():
     from radia_mcp.matlab.server import matlab_aicia_catalog_gate, mcp
 
-    assert "matlab_aicia_catalog_gate" in {tool.name for tool in asyncio.run(mcp.list_tools())}
+    names = {tool.name for tool in asyncio.run(mcp.list_tools())}
+    assert "matlab_validation_catalog" in names
+    catalog = mcp._tool_manager._tools["matlab_validation_catalog"].fn()
+    assert "matlab_aicia_catalog_gate" in {
+        item["name"] for item in catalog["operations"]
+    }
     result = json.loads(matlab_aicia_catalog_gate(json.dumps(_catalog())))
     assert result["status"] == "ok"

@@ -77,6 +77,7 @@ def build_status_payload(
     optional_deps: Optional[list[str]] = None,
     mcp_tools: Optional[list[str]] = None,
     audit_command: Optional[str] = None,
+    tool_groups: Optional[list[dict]] = None,
 ) -> dict:
     """Build the status dict shape that every radia_mcp.* server returns."""
     payload = {
@@ -93,6 +94,14 @@ def build_status_payload(
     if mcp_tools is not None:
         payload["tools"] = sorted(mcp_tools)
         payload["n_tools"] = len(mcp_tools)
+    if tool_groups:
+        payload["tool_groups"] = tool_groups
+        profiles = {str(group.get("profile", "")) for group in tool_groups}
+        if len(profiles) == 1:
+            payload["tool_profile"] = profiles.pop()
+        payload["n_grouped_operations"] = sum(
+            int(group.get("grouped_operations", 0)) for group in tool_groups
+        )
     if related_servers:
         payload["related_servers"] = related_servers
     if optional_deps:
@@ -178,6 +187,7 @@ def register_status_tool(
             optional_deps=optional_deps,
             mcp_tools=_introspect_fastmcp_tools(mcp),
             audit_command=audit_command,
+            tool_groups=list(getattr(mcp, "_radia_tool_groups", ())),
         )
     # docstring set after definition so it appears in tool description
     _status.__doc__ = (

@@ -194,4 +194,7 @@ def test_fem_mcp_registers_profile_handoff_gate() -> None:
     from radia_mcp.fem.server import mcp
 
     names = {tool.name for tool in mcp._tool_manager.list_tools()}
-    assert "fem_profile2d_handoff_gate" in names
+    assert "fem_validation_catalog" in names
+    catalog = mcp._tool_manager._tools["fem_validation_catalog"].fn()
+    operations = {item["name"] for item in catalog["operations"]}
+    assert "fem_profile2d_handoff_gate" in operations

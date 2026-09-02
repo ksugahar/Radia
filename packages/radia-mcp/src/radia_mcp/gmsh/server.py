@@ -28,6 +28,7 @@ from pathlib import Path, PurePosixPath
 from mcp.server.fastmcp import FastMCP
 
 from ..common import register_status_tool
+from ..common.tool_group import CoarseToolRegistry
 from .detect import detect_capabilities
 from .gmsh_examples import get_gmsh_examples
 from .gmsh_knowledge import get_gmsh_documentation
@@ -127,6 +128,7 @@ _RULE_REMEDIATIONS = {
 
 # Create MCP server
 mcp = FastMCP("gmsh-lint")
+_validation = CoarseToolRegistry(mcp, namespace="gmsh")
 
 # Resolve relative paths against current working directory
 PROJECT_ROOT = Path.cwd()
@@ -577,7 +579,7 @@ def gmsh_post_display_contract(msh_path: str,
     )
 
 
-@mcp.tool()
+@_validation.tool()
 def gmsh_post_display_gate(manifest: dict) -> dict:
     """
     Validate a Radia/Gypsilab Gmsh post-display manifest.
@@ -2411,6 +2413,8 @@ def _selftest(audit_repo: bool = False):
 
 
 
+
+_validation.install()
 
 register_status_tool(
     mcp,
