@@ -32,7 +32,11 @@ from radia.kelvin_identify_ngsolve import (
     detect_kelvin_offset,
     has_kelvin_identification,
 )
-from radia.scalar_potential_solver import ScalarPotentialSolver
+from radia.kelvin_solver import (
+    project_source_interface_potential,
+    solve_magnetostatic_mixed_total_reduced_omega_kelvin,
+    solve_magnetostatic_mixed_total_reduced_omega_picard_kelvin,
+)
 from radia.vector_potential_solver import VectorPotentialSolver
 
 
@@ -367,42 +371,98 @@ def solve_omega(
     kelvin_center: tuple[float, float, float],
     kelvin_radius: float,
     points: np.ndarray,
+    source_trace_tolerance: float,
 ) -> tuple[np.ndarray, dict[str, object]]:
+    """Run the TOSCA-style total/reduced Omega route on the Kelvin mesh.
+
+    The physical air contains the CoilBuilder source and is the reduced
+    region.  Iron and the Kelvin exterior are total-potential regions, so the
+    source field is never numerically cancelled in high-permeability iron.
+    """
     started = time.perf_counter()
-    solver = ScalarPotentialSolver(
-        mesh,
-        iron_domains="iron",
-        mu_r=float(material) if not nonlinear else 1000.0,
-        order=order,
-        kelvin_region="kelvin",
-        kelvin_radius=kelvin_radius,
-        kelvin_center=kelvin_center,
-    )
-    solver.set_source_cf(rad.RadiaField(coil, "h"))
+    source_h = rad.RadiaField(coil, "h")
     with ng.TaskManager():
+        source_trace = project_source_interface_potential(
+            mesh,
+            source_h,
+            "iron_air_interface",
+            order=order,
+            relative_tolerance=source_trace_tolerance,
+        )
+        kelvin_trace = project_source_interface_potential(
+            mesh,
+            source_h,
+            "kelvin_int",
+            order=order,
+            relative_tolerance=source_trace_tolerance,
+        )
         if nonlinear:
-            solution = solver.solve_nonlinear(
-                material,
-                tol=nonlinear_tolerance,
-                maxiter=nonlinear_maximum_iterations,
-                relax=0.3,
-                dirichlet="GND",
-                verbose=nonlinear_verbose,
+            result = solve_magnetostatic_mixed_total_reduced_omega_picard_kelvin(
+                mesh,
+                source_h,
+                source_trace["potential"],
+                kelvin_radius,
+                kelvin_center,
+                bh_table=material,
+                nonlinear_materials=("iron",),
+                reduced_materials=("air",),
+                total_materials=("iron", "kelvin"),
+                interface_boundary="iron_air_interface",
+                kelvin_interface_boundary="kelvin_int",
+                kelvin_source_potential=kelvin_trace["potential"],
+                order=order,
+                tolerance=nonlinear_tolerance,
+                max_iterations=nonlinear_maximum_iterations,
+                relaxation=0.3,
             )
         else:
-            solution = solver.solve_single_potential(dirichlet="GND")
-    field = evaluate_cf(solver.get_B(), mesh, points)
+            result = solve_magnetostatic_mixed_total_reduced_omega_kelvin(
+                mesh,
+                source_h,
+                source_trace["potential"],
+                kelvin_radius,
+                kelvin_center,
+                mu_r_by_material={"iron": float(material)},
+                reduced_materials=("air",),
+                total_materials=("iron", "kelvin"),
+                interface_boundary="iron_air_interface",
+                kelvin_interface_boundary="kelvin_int",
+                kelvin_source_potential=kelvin_trace["potential"],
+                order=order,
+            )
+    field = evaluate_cf(result["B_cf"], mesh, points)
     return field, {
-        "formulation": "H1 Omega-reduced-Omega",
+        "formulation": "H1 TOSCA mixed total/reduced Omega",
         "open_boundary": "periodic spherical Kelvin transform",
-        "source_contract": "vacuum source removed; iron contrast RHS only",
+        "source_contract": (
+            "exact Radia H is restricted to physical air; the source/iron "
+            "interface uses a projected scalar trace; iron and Kelvin use "
+            "total Omega"
+        ),
+        "source_trace": {
+            "iron_interface_boundary": "iron_air_interface",
+            "projection_order": int(order),
+            "iron_relative_tangential_residual": float(
+                source_trace["relative_tangential_residual"]
+            ),
+            "kelvin_interface_boundary": "kelvin_int",
+            "kelvin_relative_tangential_residual": float(
+                kelvin_trace["relative_tangential_residual"]
+            ),
+            "relative_tolerance": float(source_trace_tolerance),
+            "cut_policy": (
+                "a non-small trace residual requires an explicit cut or "
+                "cohomology source representation; the Kelvin jump carries "
+                "the orientation-reversed source 0-form"
+            ),
+        },
         "kelvin_center_m": list(kelvin_center),
         "kelvin_radius_m": kelvin_radius,
         "mesh_elements": int(mesh.ne),
         "mesh_vertices": int(mesh.nv),
-        "ndof": int(solution.space.ndof),
+        "ndof": int(result["fes"].ndof),
         "nonlinear": nonlinear,
-        "nonlinear_stats": getattr(solver, "_last_nonlinear_stats", {}),
+        "nonlinear_stats": result.get("nonlinear_stats", {}),
         "runtime_s": float(time.perf_counter() - started),
     }
 
@@ -440,6 +500,15 @@ def main() -> None:
     parser.add_argument("--resume", action="store_true")
     parser.add_argument("--gap-core-half-length", type=float, default=0.010)
     parser.add_argument("--relative-rms-tolerance", type=float, default=0.03)
+    parser.add_argument(
+        "--source-trace-tolerance",
+        type=float,
+        default=0.05,
+        help=(
+            "maximum relative tangential residual for each projected source "
+            "trace; a larger residual requires an explicit cut/cohomology source"
+        ),
+    )
     options = parser.parse_args()
     if options.threads > 0:
         ng.SetNumThreads(options.threads)
@@ -453,6 +522,8 @@ def main() -> None:
         raise ValueError("--nonlinear-maximum-iterations must be positive")
     if not 0.0 < options.reduced_a_relax <= 1.0:
         raise ValueError("--reduced-a-relax must lie in (0, 1]")
+    if not 0.0 < options.source_trace_tolerance < 1.0:
+        raise ValueError("--source-trace-tolerance must lie in (0, 1)")
 
     mesh_dir = options.mesh_dir.resolve()
     mesh_report_path = mesh_dir / "mesh_result.json"
@@ -534,6 +605,7 @@ def main() -> None:
         "fem_order": int(options.fem_order),
         "nonlinear_tolerance": float(options.nonlinear_tolerance),
         "nonlinear_maximum_iterations": int(options.nonlinear_maximum_iterations),
+        "source_trace_tolerance": float(options.source_trace_tolerance),
         "kelvin_domain_vol_sha256": sha256(kelvin_vol),
         "bh_table_sha256": None if not nonlinear else sha256(options.bh_table),
         "observation_points": points.tolist(),
@@ -598,7 +670,9 @@ def main() -> None:
         **fem_contract,
         "engine": "omega_reduced_omega",
         "implementation_sha256": sha256(
-            Path(sys.modules[ScalarPotentialSolver.__module__].__file__).resolve()
+            Path(sys.modules[
+                solve_magnetostatic_mixed_total_reduced_omega_kelvin.__module__
+            ].__file__).resolve()
         ),
     }
     resumed = (
@@ -620,6 +694,7 @@ def main() -> None:
             kelvin_center=kelvin_center,
             kelvin_radius=kelvin_radius,
             points=points,
+            source_trace_tolerance=options.source_trace_tolerance,
         )
         write_checkpoint(
             omega_checkpoint,
@@ -664,16 +739,20 @@ def main() -> None:
     all_pairwise_within_tolerance = (
         maximum_relative_rms <= options.relative_rms_tolerance
     )
-    passed = (
-        primary_accuracy_passed
-        and nonlinear_converged
+    # A primary-only run is an HDiv/Mixed-Omega development gate. A full
+    # three-engine run is accepted only when every selected independent pair
+    # meets the common field tolerance.
+    selected_accuracy_passed = (
+        primary_accuracy_passed if options.primary_only
+        else all_pairwise_within_tolerance
     )
+    passed = selected_accuracy_passed and nonlinear_converged
     try:
         radia_version = importlib.metadata.version("radia")
     except importlib.metadata.PackageNotFoundError:
         radia_version = "editable-unversioned"
     output = {
-        "schema": "radia.validation.c-type-formulation-comparison.v2",
+        "schema": "radia.validation.c-type-formulation-comparison.v3",
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
         "passed": passed,
         "machine": platform.node(),
@@ -684,6 +763,7 @@ def main() -> None:
         "nonlinear_converged": nonlinear_converged,
         "primary_accuracy_passed": primary_accuracy_passed,
         "all_pairwise_within_tolerance": all_pairwise_within_tolerance,
+        "selected_accuracy_passed": selected_accuracy_passed,
         "comparison_contract": {
             "cad_authority_sha256": mesh_report["cad_sha256"],
             "coilbuilder_source_shared": True,
@@ -696,6 +776,7 @@ def main() -> None:
             "observation_points_shared": True,
             "hdiv_air_mesh_forbidden": True,
             "hdiv_gram_eps": float(options.hdiv_gram_eps),
+            "source_trace_tolerance": float(options.source_trace_tolerance),
             "fem_periodic_kelvin_mesh_shared": True,
             "finite_outer_air_box_forbidden": True,
             "quantity": "gauge-invariant magnetic flux density B in tesla",
@@ -707,9 +788,10 @@ def main() -> None:
                 else "independent third-formulation cross-check"
             ),
             "acceptance": (
-                "parity-projected pairwise B convergence in the useful gap core; "
-                "off-plane reflection and raw/full-fringe values remain mandatory "
-                "diagnostics"
+                "a primary-only run gates HDiv/Mixed-Omega; a complete three-"
+                "formulation run requires every parity-projected pairwise B "
+                "comparison in the useful gap core to pass; off-plane reflection "
+                "and raw/full-fringe values remain mandatory diagnostics"
             ),
         },
         "engine_checkpoint_contracts": {
@@ -752,9 +834,11 @@ def main() -> None:
         failures = []
         if not nonlinear_converged:
             failures.append("at least one selected nonlinear formulation did not converge")
-        if not primary_accuracy_passed:
+        if not selected_accuracy_passed:
+            measured = maximum_relative_rms if not options.primary_only else primary_relative_rms
+            scope = "all selected pairwise" if not options.primary_only else "primary"
             failures.append(
-                f"primary relative RMS {primary_relative_rms:.6e} exceeds "
+                f"{scope} relative RMS {measured:.6e} exceeds "
                 f"{options.relative_rms_tolerance:.6e}"
             )
         raise RuntimeError("; ".join(failures) + f"; see {options.output}")

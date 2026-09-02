@@ -945,6 +945,93 @@ three goldens of this section — the exterior-source routes, the twisted
 0-form pullback contracts, and the A\*/A-Phi p-sweep — and embeds the
 outputs.
 
+#### TOSCA-style mixed total/reduced Omega
+
+For a compact coil and high-permeability iron, a *global* reduced scalar
+potential is a poor numerical split: it evaluates `H_s - grad(phi)` inside
+the iron even though the physical source is outside it.  Those two large
+terms can cancel before the material law is applied.  The production mixed
+route instead partitions the mesh into a source enclosure `Omega_r` and a
+total-potential region `Omega_t`:
+
+```
+Omega_r:  H = H_s - grad(phi_r)     (source enclosure / physical air)
+Omega_t:  H =       - grad(phi_t)   (iron and Kelvin exterior)
+Gamma_st: phi_t - phi_r =  Phi_s    (physical source/iron trace)
+Gamma_K : phi_t - phi_r = -Phi_s    (physical-air/Kelvin-pair trace)
+```
+
+The normal `B` condition is natural in the weighted weak form.  The last two
+lines provide tangential `H` continuity, where each physical source trace
+obeys `H_s,t = -grad_Gamma(Phi_s)`.  In the C-type mesh the reduced physical
+air reaches `kelvin_int`; the total Kelvin trace is its periodic partner.  A
+Kelvin inversion reverses the orientation of the source 0-form, hence the
+minus sign on `Gamma_K`.  Omitting that constraint silently drops the source
+potential from the Kelvin pair and is not an admissible formulation.  This is
+a symmetric indefinite Lagrange-multiplier system, so its initial production
+solver is direct PARDISO; it is not incorrectly sent to the SPD-only CG path.
+
+`Phi_s` is **not** reconstructed from an HDiv-projected `B`.  For source
+types whose native scalar potential has been independently verified,
+`make_kelvin_aware_radia_scalar_potential_cf` provides the exact twisted
+0-form Kelvin pullback.  For a general closed CoilBuilder loop,
+`project_source_interface_potential` instead solves the surface Poisson
+problem on the named source/total interface.  This creates the trace from
+the tangential native `H_s` without allowing Radia's multivalued solid-angle
+potential to choose a branch sheet through iron.  The routine reports the
+relative tangential residual and fails a requested tolerance when the
+interface is non-simply-connected or intersects current; that case requires
+an explicit cut/cohomology representative.
+
+The `5e-2` value in the example is the currently validated C-yoke acceptance
+threshold, not a universal discretization target. Tighter meshes and a
+source/interface pair with a lower measured residual should use a tighter,
+explicitly recorded threshold. Relaxing a failed trace gate is not an
+admissible replacement for a cut/cohomology representative.
+
+The Kelvin material belongs to `Omega_t`; no finite outer air box is used.
+The compact-source `H_s` belongs only to `Omega_r`, never to the Kelvin
+exterior.  The two scalar source traces are projected on their physical
+interfaces before the solve, so neither requires a source evaluation at the
+Kelvin centre.
+
+Public API:
+
+```python
+from radia.kelvin_solver import (
+    project_source_interface_potential,
+    solve_magnetostatic_mixed_total_reduced_omega_kelvin,
+    solve_magnetostatic_mixed_total_reduced_omega_picard_kelvin,
+)
+
+with ng.TaskManager():
+    iron_trace = project_source_interface_potential(
+        mesh, H_s, "source_total_interface", order=2,
+        relative_tolerance=5e-2)
+    kelvin_trace = project_source_interface_potential(
+        mesh, H_s, "kelvin_int", order=2,
+        relative_tolerance=5e-2)
+    result = solve_magnetostatic_mixed_total_reduced_omega_kelvin(
+        mesh, H_s, iron_trace["potential"], R_K, kelvin_offset,
+        mu_r_by_material={"iron": 1000.0},
+        reduced_materials=("source_air",),
+        total_materials=("iron", "kelvin"),
+        interface_boundary="source_total_interface",
+        kelvin_interface_boundary="kelvin_int",
+        kelvin_source_potential=kelvin_trace["potential"],
+        order=2)
+```
+
+The optional Picard driver consumes the same `B(H)` law and preserves this
+topological/source contract.  It is intentionally not a hysteresis solver.
+EnergyStop and Play state evolution need their own committed material-state
+iteration and must not be substituted by the memoryless `B(H)` update.
+
+Golden coverage: `tests/test_kelvin_tosca_mixed_omega.py` locks the interface
+jump, high-`mu_r` source exclusion, scalar-trace residual gate, and the
+linear-law Picard path. `tests/test_kelvin_radia_source_contract.py` locks
+the native Kelvin 0-form and twisted-1-form transforms.
+
 #### Analytical solutions for benchmark cases
 
 For a magnetic sphere of radius `a` and relative permeability `μ_r`:
