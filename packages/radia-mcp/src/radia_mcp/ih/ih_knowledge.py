@@ -660,7 +660,10 @@ Reload pattern:
 ```python
 from ngsolve import Mesh, H1, GridFunction
 wp_mesh = Mesh("workpiece_thermal.vol")  # or <msh-stem>_heat.vol
-fes_T   = H1(wp_mesh, order=1)           # MUST match solve's --fes-order
+fes_T   = H1(wp_mesh, order=2)           # MUST match the solve's
+                                         # --fes-order: read the
+                                         # "fes_order" JSON key
+                                         # (default 2 since 2026-09)
 gfT     = GridFunction(fes_T)
 gfT.Load("workpiece_thermal_heat_T.sol") # or <msh-stem>_T.sol
 T_at = float(gfT(wp_mesh(x, y, z)))      # sample at body point
@@ -669,6 +672,34 @@ T_at = float(gfT(wp_mesh(x, y, z)))      # sample at body point
 Same three contracts as the qsurf side (see "Strict .sol + .vol
 contract" above): the `.sol` is a raw coefficient vector, the
 `.vol` carries the mesh, the FES order must match.
+
+## Axisymmetric thermal FE order: default 2 (near-axis cusp at order 1)
+
+`calc_heat_axisym.py` defaults to `--fes-order 2` (2026-09-03 near-axis
+study).  Standard P1/Q1 + 2*pi*r cannot represent the even-parity
+dT/dr = 0 at the r = 0 axis: the near-axis profile shows a cusp whose
+apparent slope is 16/3x the exact secant at EVERY mesh size (the shape
+does not refine away), and T(axis) converges only O(h^2) (+1.2 K on a
+9x9 grid uniform-volumetric-heat cylinder benchmark).  Order 2 contains
+r^2 and removes the cusp at machine precision; on a z-dependent
+manufactured solution it is O(h^3) in L2.
+
+Field-report symptom map: "the axisym thermal result looks wrong near
+the axis" == this order-1 cusp.  Fix: keep the default order 2 (or pass
+`--fes-order 2`).  Do NOT switch the scalar solve to the Henrotte
+basis: the FEMM-canonical standard-H1 policy stands, order 2 already
+gives axis-exact profiles, and the Henrotte HEAT order-2 path is
+currently broken on axis-touching meshes (magnetic axis-reduced shape
+functions vs full 9-node heat matrices).
+
+Two order>=2 implementation notes (both fixed 2026-09-03; they apply
+to `calc_heat.py` as well):
+
+* the uniform initial state must be `gfT.Set(CF(T0))`, NOT
+  `gfT.vec[:] = T0` -- hierarchical H1 edge coefficients are not nodal
+  values, so a constant coefficient vector is not a constant field;
+* `T_max_C` / `T_min_C` are taken over VERTEX DOFs only -- the raw
+  coefficient-vector min/max reported T_min ~ 0 C at order 2.
 
 ## Heat Equation with Joule Heat Source
 

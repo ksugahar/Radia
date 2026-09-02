@@ -165,7 +165,7 @@ def solve_heat_axisym(wp_vol,
                       dt=0.5, t_end=5.0,
                       time_scheme="backward-euler",
                       linear_solver="sparsecholesky",
-                      fes_order=1,
+                      fes_order=2,
                       rotation_rpm=0.0,
                       probe_point=None,
                       msh_output="",
@@ -176,7 +176,8 @@ def solve_heat_axisym(wp_vol,
 
     from ngsolve import (Mesh, H1, BilinearForm, LinearForm, GridFunction,
                           Integrate, CF, ds, dx, BND, x as r_coord,
-                          VTKOutput, TaskManager, InnerProduct, grad)
+                          VTKOutput, TaskManager, InnerProduct, grad,
+                          NodeId, VERTEX)
 
     if not os.path.isfile(wp_vol):
         return {"error": f"--wp-vol not found: {wp_vol}"}
@@ -256,10 +257,15 @@ def solve_heat_axisym(wp_vol,
     # classes (added in radia 4.31.0) remain available as optional
     # parity-conscious infrastructure; they are not used here because
     # the FEMM convention says we don't need them for scalar T.
+    #
+    # Default order is 2 (2026-09-03 near-axis study): P1/Q1 cannot
+    # represent the even-parity dT/dr = 0 at the r = 0 axis -- the
+    # near-axis profile shows a cusp (apparent slope 16/3x the exact
+    # secant, mesh-size-independent shape) and T(axis) is off by
+    # O(h^2).  Order 2 contains r^2 and removes the cusp.
     fes_T = H1(wp_mesh, order=int(fes_order))
     u, v = fes_T.TnT()
     gfT = GridFunction(fes_T)
-    gfT.vec[:] = float(t_initial)
     _log(f"FES:H1 order={fes_order} ndof={fes_T.ndof}")
 
     class _Args:
@@ -285,6 +291,12 @@ def solve_heat_axisym(wp_vol,
     m_form = BilinearForm(fes_T, symmetric=True)
     m_form += rho_cp * u * v * weight * dx
     with TaskManager():
+        # Uniform initial state.  ``gfT.vec[:] = T0`` is WRONG for
+        # order >= 2: the hierarchical H1 edge/face coefficients are
+        # not nodal temperatures, so a constant coefficient vector is
+        # not a constant field.  Set() interpolates the constant
+        # exactly at every order.
+        gfT.Set(CF(float(t_initial)))
         a_form.Assemble()
         m_form.Assemble()
 
@@ -370,7 +382,13 @@ def solve_heat_axisym(wp_vol,
         _log(f"STEP:{step}/{n_steps} t={t:.3f}s "
              f"T_probe={T_probe[-1] if probe_point is not None else 'n/a'}")
 
-    T_arr = np.asarray(gfT.vec.FV().NumPy())
+    # Vertex temperatures only: for order >= 2 the hierarchical H1
+    # edge/face coefficients are NOT temperature values, so min/max
+    # over the raw coefficient vector would report garbage (T_min ~ 0).
+    vert_dofs = [d for vtx in wp_mesh.vertices
+                 for d in fes_T.GetDofNrs(NodeId(VERTEX, vtx.nr))
+                 if d >= 0]
+    T_arr = np.asarray(gfT.vec.FV().NumPy())[vert_dofs]
     T_max = float(np.max(T_arr))
     T_min = float(np.min(T_arr))
 
@@ -545,7 +563,11 @@ def main():
                         choices=["backward-euler", "crank-nicolson"])
     parser.add_argument("--linear-solver", default="sparsecholesky",
                         choices=["sparsecholesky", "umfpack", "pardiso"])
-    parser.add_argument("--fes-order", type=int, default=1)
+    parser.add_argument("--fes-order", type=int, default=2,
+                        help="H1 polynomial order (default 2).  Order 1 "
+                             "cannot represent dT/dr = 0 at the r = 0 "
+                             "axis (near-axis cusp; T(axis) error "
+                             "O(h^2)); order 2 removes it.")
     parser.add_argument("--rotation-rpm", type=float, default=0.0,
                         help="Workpiece rotation [rpm] (default 0). "
                              "Recorded for metadata + justifies the "
