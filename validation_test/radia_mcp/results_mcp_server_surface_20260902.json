@@ -3,25 +3,26 @@
     "cold_import_nonregression": true,
     "core_schema_is_not_larger_for_every_server": true,
     "core_schema_is_smaller_for_at_least_one_server": true,
-    "full_profile_preserves_all_baseline_tools": true,
-    "passed": true
+    "full_profile_preserves_all_supported_baseline_tools": true,
+    "passed": true,
+    "retired_baseline_tools_absent": true
   },
   "baseline": {
     "git_revision": "b0bfb5a11b792e102396aa40cba6021674f50891"
   },
   "candidate": {
-    "git_revision": "e7b5f58e77c53bc17ef40e79393c7ba054b5bed6"
+    "git_revision": "4961eb964590fc348b87d6a042765be8df554fad"
   },
-  "generated_at": "2026-09-02T11:18:06.845520+00:00",
+  "generated_at": "2026-09-02T17:45:24.455121+00:00",
   "machine": "lab",
   "measurements": {
     "accelerator": {
       "baseline": {
-        "import_seconds_median": 2.285011099998883,
+        "import_seconds_median": 2.2813815000044997,
         "import_seconds_samples": [
-          2.390269499999704,
-          2.208314999999857,
-          2.285011099998883
+          2.2963275000001886,
+          2.267829199998232,
+          2.2813815000044997
         ],
         "profile": "core",
         "schema_bytes": 2165,
@@ -35,11 +36,11 @@
         ]
       },
       "candidate_core": {
-        "import_seconds_median": 2.1639187000000675,
+        "import_seconds_median": 2.262119300001359,
         "import_seconds_samples": [
-          2.1928098000007594,
-          2.1639187000000675,
-          2.153468200000134
+          2.2652264999996987,
+          2.262119300001359,
+          2.246145400000387
         ],
         "profile": "core",
         "schema_bytes": 2165,
@@ -53,11 +54,11 @@
         ]
       },
       "candidate_full": {
-        "import_seconds_median": 2.157801899998958,
+        "import_seconds_median": 2.2521950000009383,
         "import_seconds_samples": [
-          2.1383535000004485,
-          2.158884099999341,
-          2.157801899998958
+          2.213048199999321,
+          2.2521950000009383,
+          2.285700200001884
         ],
         "profile": "full",
         "schema_bytes": 2165,
@@ -70,21 +71,25 @@
           "accelerator_topics"
         ]
       },
-      "cold_import_reduction_percent": 5.3,
+      "cold_import_reduction_percent": 0.84,
       "cold_import_within_25_percent_of_baseline": true,
       "core_schema_is_not_larger": true,
       "core_schema_is_smaller": false,
-      "full_profile_preserves_baseline_tools": true,
+      "full_profile_preserves_supported_baseline_tools": true,
+      "retired_baseline_tools": [],
+      "retired_baseline_tools_absent": true,
+      "retired_tools_still_present": [],
       "schema_size_reduction_percent": 0.0,
-      "tool_count_reduction_percent": 0.0
+      "tool_count_reduction_percent": 0.0,
+      "unexpected_missing_full_tools": []
     },
     "build123d": {
       "baseline": {
-        "import_seconds_median": 5.298108799999682,
+        "import_seconds_median": 5.31500010000309,
         "import_seconds_samples": [
-          5.3284536999999546,
-          5.25998780000009,
-          5.298108799999682
+          5.381026600000041,
+          5.31500010000309,
+          5.307581300003221
         ],
         "profile": "core",
         "schema_bytes": 63156,
@@ -172,11 +177,11 @@
         ]
       },
       "candidate_core": {
-        "import_seconds_median": 4.991801199999827,
+        "import_seconds_median": 5.176817200001096,
         "import_seconds_samples": [
-          5.025599299999158,
-          4.991801199999827,
-          4.956438700000945
+          5.2506305999995675,
+          5.145431400000234,
+          5.176817200001096
         ],
         "profile": "core",
         "schema_bytes": 46918,
@@ -228,11 +233,11 @@
         ]
       },
       "candidate_full": {
-        "import_seconds_median": 5.000344399999449,
+        "import_seconds_median": 5.156506500003161,
         "import_seconds_samples": [
-          5.022737999999663,
-          4.988650500001313,
-          5.000344399999449
+          5.156506500003161,
+          5.12247059999936,
+          5.18032530000346
         ],
         "profile": "full",
         "schema_bytes": 64002,
@@ -321,21 +326,25 @@
           "section_along_path"
         ]
       },
-      "cold_import_reduction_percent": 5.78,
+      "cold_import_reduction_percent": 2.6,
       "cold_import_within_25_percent_of_baseline": true,
       "core_schema_is_not_larger": true,
       "core_schema_is_smaller": true,
-      "full_profile_preserves_baseline_tools": true,
+      "full_profile_preserves_supported_baseline_tools": true,
+      "retired_baseline_tools": [],
+      "retired_baseline_tools_absent": true,
+      "retired_tools_still_present": [],
       "schema_size_reduction_percent": 25.71,
-      "tool_count_reduction_percent": 45.57
+      "tool_count_reduction_percent": 45.57,
+      "unexpected_missing_full_tools": []
     },
     "cubit": {
       "baseline": {
-        "import_seconds_median": 2.68055110000023,
+        "import_seconds_median": 2.647579399999813,
         "import_seconds_samples": [
-          2.7317838999988453,
-          2.562479099999109,
-          2.68055110000023
+          2.647579399999813,
+          2.605758700003207,
+          2.663418299998739
         ],
         "profile": "core",
         "schema_bytes": 96168,
@@ -434,11 +443,11 @@
         ]
       },
       "candidate_core": {
-        "import_seconds_median": 2.414795499998945,
+        "import_seconds_median": 2.588892899999337,
         "import_seconds_samples": [
-          2.388646299999891,
-          2.414795499998945,
-          2.429932799999733
+          2.620927000003576,
+          2.541632300002675,
+          2.588892899999337
         ],
         "profile": "core",
         "schema_bytes": 79399,
@@ -503,11 +512,11 @@
         ]
       },
       "candidate_full": {
-        "import_seconds_median": 2.381996200001595,
+        "import_seconds_median": 2.5124986000009812,
         "import_seconds_samples": [
-          2.381996200001595,
-          2.468771399999241,
-          2.3752872000004572
+          2.5635963000022457,
+          2.5124986000009812,
+          2.4891399999978603
         ],
         "profile": "full",
         "schema_bytes": 96982,
@@ -607,21 +616,25 @@
           "open_in_cubit"
         ]
       },
-      "cold_import_reduction_percent": 9.91,
+      "cold_import_reduction_percent": 2.22,
       "cold_import_within_25_percent_of_baseline": true,
       "core_schema_is_not_larger": true,
       "core_schema_is_smaller": true,
-      "full_profile_preserves_baseline_tools": true,
+      "full_profile_preserves_supported_baseline_tools": true,
+      "retired_baseline_tools": [],
+      "retired_baseline_tools_absent": true,
+      "retired_tools_still_present": [],
       "schema_size_reduction_percent": 17.44,
-      "tool_count_reduction_percent": 37.78
+      "tool_count_reduction_percent": 37.78,
+      "unexpected_missing_full_tools": []
     },
     "differential_forms": {
       "baseline": {
-        "import_seconds_median": 2.3777132000013808,
+        "import_seconds_median": 2.3777322999958415,
         "import_seconds_samples": [
-          2.3956271999995806,
-          2.359710200000336,
-          2.3777132000013808
+          2.4159159999981057,
+          2.3551809999989928,
+          2.3777322999958415
         ],
         "profile": "core",
         "schema_bytes": 18283,
@@ -646,11 +659,11 @@
         ]
       },
       "candidate_core": {
-        "import_seconds_median": 2.25418449999961,
+        "import_seconds_median": 2.382123199997295,
         "import_seconds_samples": [
-          2.2941362999990815,
-          2.2366891000001488,
-          2.25418449999961
+          2.382123199997295,
+          2.350352900000871,
+          2.443984300000011
         ],
         "profile": "core",
         "schema_bytes": 18283,
@@ -675,11 +688,11 @@
         ]
       },
       "candidate_full": {
-        "import_seconds_median": 2.2446886999987328,
+        "import_seconds_median": 2.374507900000026,
         "import_seconds_samples": [
-          2.221912399998473,
-          2.2446886999987328,
-          2.2565821999996842
+          2.389872399995511,
+          2.374507900000026,
+          2.348977699999523
         ],
         "profile": "full",
         "schema_bytes": 18283,
@@ -703,21 +716,25 @@
           "differential_forms_whitney"
         ]
       },
-      "cold_import_reduction_percent": 5.2,
+      "cold_import_reduction_percent": -0.18,
       "cold_import_within_25_percent_of_baseline": true,
       "core_schema_is_not_larger": true,
       "core_schema_is_smaller": false,
-      "full_profile_preserves_baseline_tools": true,
+      "full_profile_preserves_supported_baseline_tools": true,
+      "retired_baseline_tools": [],
+      "retired_baseline_tools_absent": true,
+      "retired_tools_still_present": [],
       "schema_size_reduction_percent": 0.0,
-      "tool_count_reduction_percent": 0.0
+      "tool_count_reduction_percent": 0.0,
+      "unexpected_missing_full_tools": []
     },
     "fem": {
       "baseline": {
-        "import_seconds_median": 2.3363012000008894,
+        "import_seconds_median": 2.4120253000000957,
         "import_seconds_samples": [
-          2.385890300000028,
-          2.3318414999994275,
-          2.3363012000008894
+          2.4120253000000957,
+          2.464573500001279,
+          2.3521319999999832
         ],
         "profile": "core",
         "schema_bytes": 18674,
@@ -749,11 +766,11 @@
         ]
       },
       "candidate_core": {
-        "import_seconds_median": 2.30015529999946,
+        "import_seconds_median": 2.3605563000019174,
         "import_seconds_samples": [
-          2.301880600000004,
-          2.2453882999998314,
-          2.30015529999946
+          2.377780700000585,
+          2.3605563000019174,
+          2.3498470000049565
         ],
         "profile": "core",
         "schema_bytes": 17211,
@@ -781,11 +798,11 @@
         ]
       },
       "candidate_full": {
-        "import_seconds_median": 2.332943900000828,
+        "import_seconds_median": 2.366630800002895,
         "import_seconds_samples": [
-          2.320905699998548,
-          2.346760300000824,
-          2.332943900000828
+          2.3548060999964946,
+          2.366630800002895,
+          2.404284500000358
         ],
         "profile": "full",
         "schema_bytes": 19472,
@@ -818,21 +835,25 @@
           "fem_xfem_em_hiruma"
         ]
       },
-      "cold_import_reduction_percent": 1.55,
+      "cold_import_reduction_percent": 2.13,
       "cold_import_within_25_percent_of_baseline": true,
       "core_schema_is_not_larger": true,
       "core_schema_is_smaller": true,
-      "full_profile_preserves_baseline_tools": true,
+      "full_profile_preserves_supported_baseline_tools": true,
+      "retired_baseline_tools": [],
+      "retired_baseline_tools_absent": true,
+      "retired_tools_still_present": [],
       "schema_size_reduction_percent": 7.83,
-      "tool_count_reduction_percent": 17.39
+      "tool_count_reduction_percent": 17.39,
+      "unexpected_missing_full_tools": []
     },
     "force": {
       "baseline": {
-        "import_seconds_median": 2.296707999999853,
+        "import_seconds_median": 2.3480390000040643,
         "import_seconds_samples": [
-          2.316409900000508,
-          2.296707999999853,
-          2.294301199999609
+          2.3503258999990067,
+          2.3335367999970913,
+          2.3480390000040643
         ],
         "profile": "core",
         "schema_bytes": 15528,
@@ -863,11 +884,11 @@
         ]
       },
       "candidate_core": {
-        "import_seconds_median": 2.293761499999164,
+        "import_seconds_median": 2.3320645000057993,
         "import_seconds_samples": [
-          2.3201506000004883,
-          2.285057899998719,
-          2.293761499999164
+          2.373203700000886,
+          2.3320645000057993,
+          2.32429730000149
         ],
         "profile": "core",
         "schema_bytes": 14113,
@@ -897,11 +918,11 @@
         ]
       },
       "candidate_full": {
-        "import_seconds_median": 2.294258699999773,
+        "import_seconds_median": 2.326693399998476,
         "import_seconds_samples": [
-          2.2849451000001864,
-          2.294258699999773,
-          2.3200802999999723
+          2.3905870000016876,
+          2.314669799998228,
+          2.326693399998476
         ],
         "profile": "full",
         "schema_bytes": 16342,
@@ -933,21 +954,25 @@
           "force_weight_equilibrium_gate"
         ]
       },
-      "cold_import_reduction_percent": 0.13,
+      "cold_import_reduction_percent": 0.68,
       "cold_import_within_25_percent_of_baseline": true,
       "core_schema_is_not_larger": true,
       "core_schema_is_smaller": true,
-      "full_profile_preserves_baseline_tools": true,
+      "full_profile_preserves_supported_baseline_tools": true,
+      "retired_baseline_tools": [],
+      "retired_baseline_tools_absent": true,
+      "retired_tools_still_present": [],
       "schema_size_reduction_percent": 9.11,
-      "tool_count_reduction_percent": 4.55
+      "tool_count_reduction_percent": 4.55,
+      "unexpected_missing_full_tools": []
     },
     "gmsh": {
       "baseline": {
-        "import_seconds_median": 2.390810300001249,
+        "import_seconds_median": 2.4578564999974333,
         "import_seconds_samples": [
-          2.4008822000014334,
-          2.389596699998947,
-          2.390810300001249
+          2.4578564999974333,
+          2.4241753999958746,
+          2.488928799997666
         ],
         "profile": "core",
         "schema_bytes": 104350,
@@ -1026,11 +1051,11 @@
         ]
       },
       "candidate_core": {
-        "import_seconds_median": 2.3983296000005794,
+        "import_seconds_median": 2.4351469999965047,
         "import_seconds_samples": [
-          2.3807164000008925,
-          2.3983296000005794,
-          2.400522500000079
+          2.4401527999943937,
+          2.4351469999965047,
+          2.377056500001345
         ],
         "profile": "core",
         "schema_bytes": 104350,
@@ -1109,11 +1134,11 @@
         ]
       },
       "candidate_full": {
-        "import_seconds_median": 2.361103200000798,
+        "import_seconds_median": 2.412329699996917,
         "import_seconds_samples": [
-          2.325398299999506,
-          2.3827835000010964,
-          2.361103200000798
+          2.418066500002169,
+          2.412329699996917,
+          2.389014499996847
         ],
         "profile": "full",
         "schema_bytes": 104350,
@@ -1191,21 +1216,25 @@
           "lint_gmsh_script"
         ]
       },
-      "cold_import_reduction_percent": -0.31,
+      "cold_import_reduction_percent": 0.92,
       "cold_import_within_25_percent_of_baseline": true,
       "core_schema_is_not_larger": true,
       "core_schema_is_smaller": false,
-      "full_profile_preserves_baseline_tools": true,
+      "full_profile_preserves_supported_baseline_tools": true,
+      "retired_baseline_tools": [],
+      "retired_baseline_tools_absent": true,
+      "retired_tools_still_present": [],
       "schema_size_reduction_percent": 0.0,
-      "tool_count_reduction_percent": 0.0
+      "tool_count_reduction_percent": 0.0,
+      "unexpected_missing_full_tools": []
     },
     "ih": {
       "baseline": {
-        "import_seconds_median": 2.3197431999997207,
+        "import_seconds_median": 2.2851555999950506,
         "import_seconds_samples": [
-          2.3197431999997207,
-          2.253554599999916,
-          2.3465794999992795
+          2.3210386999999173,
+          2.2851555999950506,
+          2.276272799994331
         ],
         "profile": "core",
         "schema_bytes": 7454,
@@ -1221,14 +1250,14 @@
         ]
       },
       "candidate_core": {
-        "import_seconds_median": 2.300706699999864,
+        "import_seconds_median": 2.2989789999992354,
         "import_seconds_samples": [
-          2.344824300000255,
-          2.300706699999864,
-          2.293140800000401
+          2.2989789999992354,
+          2.251771099996404,
+          2.316631399997277
         ],
         "profile": "core",
-        "schema_bytes": 7454,
+        "schema_bytes": 7444,
         "tool_count": 7,
         "tool_names": [
           "ih_esim",
@@ -1241,14 +1270,14 @@
         ]
       },
       "candidate_full": {
-        "import_seconds_median": 2.280463699999018,
+        "import_seconds_median": 2.316543900000397,
         "import_seconds_samples": [
-          2.280463699999018,
-          2.292439099999683,
-          2.2799713000003976
+          2.402216000002227,
+          2.316543900000397,
+          2.2615695999993477
         ],
         "profile": "full",
-        "schema_bytes": 7454,
+        "schema_bytes": 7444,
         "tool_count": 7,
         "tool_names": [
           "ih_esim",
@@ -1260,21 +1289,25 @@
           "induction_heating"
         ]
       },
-      "cold_import_reduction_percent": 0.82,
+      "cold_import_reduction_percent": -0.6,
       "cold_import_within_25_percent_of_baseline": true,
       "core_schema_is_not_larger": true,
-      "core_schema_is_smaller": false,
-      "full_profile_preserves_baseline_tools": true,
-      "schema_size_reduction_percent": 0.0,
-      "tool_count_reduction_percent": 0.0
+      "core_schema_is_smaller": true,
+      "full_profile_preserves_supported_baseline_tools": true,
+      "retired_baseline_tools": [],
+      "retired_baseline_tools_absent": true,
+      "retired_tools_still_present": [],
+      "schema_size_reduction_percent": 0.13,
+      "tool_count_reduction_percent": 0.0,
+      "unexpected_missing_full_tools": []
     },
     "litz_transmission": {
       "baseline": {
-        "import_seconds_median": 2.298118400000021,
+        "import_seconds_median": 2.274769199997536,
         "import_seconds_samples": [
-          2.298118400000021,
-          2.3207278000008955,
-          2.2683061999996426
+          2.279902599999332,
+          2.274769199997536,
+          2.2679129999960423
         ],
         "profile": "core",
         "schema_bytes": 1656,
@@ -1288,11 +1321,11 @@
         ]
       },
       "candidate_core": {
-        "import_seconds_median": 2.274071499999991,
+        "import_seconds_median": 2.26954349999869,
         "import_seconds_samples": [
-          2.27806849999979,
-          2.2503624000000855,
-          2.274071499999991
+          2.26954349999869,
+          2.2447438999952283,
+          2.2894299999970826
         ],
         "profile": "core",
         "schema_bytes": 1656,
@@ -1306,11 +1339,11 @@
         ]
       },
       "candidate_full": {
-        "import_seconds_median": 2.2518997000006493,
+        "import_seconds_median": 2.273024099995382,
         "import_seconds_samples": [
-          2.2439924999998766,
-          2.275083300000915,
-          2.2518997000006493
+          2.273024099995382,
+          2.269430000000284,
+          2.302626099997724
         ],
         "profile": "full",
         "schema_bytes": 1656,
@@ -1323,21 +1356,25 @@
           "litz_transmission_topics"
         ]
       },
-      "cold_import_reduction_percent": 1.05,
+      "cold_import_reduction_percent": 0.23,
       "cold_import_within_25_percent_of_baseline": true,
       "core_schema_is_not_larger": true,
       "core_schema_is_smaller": false,
-      "full_profile_preserves_baseline_tools": true,
+      "full_profile_preserves_supported_baseline_tools": true,
+      "retired_baseline_tools": [],
+      "retired_baseline_tools_absent": true,
+      "retired_tools_still_present": [],
       "schema_size_reduction_percent": 0.0,
-      "tool_count_reduction_percent": 0.0
+      "tool_count_reduction_percent": 0.0,
+      "unexpected_missing_full_tools": []
     },
     "maglev": {
       "baseline": {
-        "import_seconds_median": 2.2998523999995086,
+        "import_seconds_median": 2.285096399995382,
         "import_seconds_samples": [
-          2.287563099998806,
-          2.2998523999995086,
-          3.425173300000097
+          2.285096399995382,
+          2.284716499998467,
+          2.2961217000047327
         ],
         "profile": "core",
         "schema_bytes": 5572,
@@ -1354,11 +1391,11 @@
         ]
       },
       "candidate_core": {
-        "import_seconds_median": 2.4167854000006628,
+        "import_seconds_median": 2.285960700006399,
         "import_seconds_samples": [
-          2.417871900001046,
-          2.4167854000006628,
-          2.370044199999029
+          2.354921899997862,
+          2.285960700006399,
+          2.2493284000011045
         ],
         "profile": "core",
         "schema_bytes": 3626,
@@ -1373,11 +1410,11 @@
         ]
       },
       "candidate_full": {
-        "import_seconds_median": 2.368002699999124,
+        "import_seconds_median": 2.328253700005007,
         "import_seconds_samples": [
-          2.355302699999811,
-          2.368002699999124,
-          3.5295777000010276
+          2.305592799995793,
+          2.3333760000023176,
+          2.328253700005007
         ],
         "profile": "full",
         "schema_bytes": 6394,
@@ -1395,21 +1432,25 @@
           "team28_cycle_averaged_motion_gate"
         ]
       },
-      "cold_import_reduction_percent": -5.08,
+      "cold_import_reduction_percent": -0.04,
       "cold_import_within_25_percent_of_baseline": true,
       "core_schema_is_not_larger": true,
       "core_schema_is_smaller": true,
-      "full_profile_preserves_baseline_tools": true,
+      "full_profile_preserves_supported_baseline_tools": true,
+      "retired_baseline_tools": [],
+      "retired_baseline_tools_absent": true,
+      "retired_tools_still_present": [],
       "schema_size_reduction_percent": 34.92,
-      "tool_count_reduction_percent": 25.0
+      "tool_count_reduction_percent": 25.0,
+      "unexpected_missing_full_tools": []
     },
     "magnetic_materials": {
       "baseline": {
-        "import_seconds_median": 2.359798099998443,
+        "import_seconds_median": 2.385807600003318,
         "import_seconds_samples": [
-          2.4809905999991315,
-          2.359798099998443,
-          2.322148199998992
+          2.3866463000013027,
+          2.345668399997521,
+          2.385807600003318
         ],
         "profile": "core",
         "schema_bytes": 15725,
@@ -1427,11 +1468,11 @@
         ]
       },
       "candidate_core": {
-        "import_seconds_median": 2.3124193999992713,
+        "import_seconds_median": 2.3450297999952454,
         "import_seconds_samples": [
-          2.350443400000586,
-          2.3124193999992713,
-          2.3007175999991887
+          2.384583399994881,
+          2.3268901000046753,
+          2.3450297999952454
         ],
         "profile": "core",
         "schema_bytes": 15725,
@@ -1449,11 +1490,11 @@
         ]
       },
       "candidate_full": {
-        "import_seconds_median": 2.336791500001709,
+        "import_seconds_median": 2.3429901999988942,
         "import_seconds_samples": [
-          2.3149173999991035,
-          2.346767600000021,
-          2.336791500001709
+          2.359136999999464,
+          2.3197899000006146,
+          2.3429901999988942
         ],
         "profile": "full",
         "schema_bytes": 15725,
@@ -1470,21 +1511,25 @@
           "periodic_hysteresis_loss_energy_gate"
         ]
       },
-      "cold_import_reduction_percent": 2.01,
+      "cold_import_reduction_percent": 1.71,
       "cold_import_within_25_percent_of_baseline": true,
       "core_schema_is_not_larger": true,
       "core_schema_is_smaller": false,
-      "full_profile_preserves_baseline_tools": true,
+      "full_profile_preserves_supported_baseline_tools": true,
+      "retired_baseline_tools": [],
+      "retired_baseline_tools_absent": true,
+      "retired_tools_still_present": [],
       "schema_size_reduction_percent": 0.0,
-      "tool_count_reduction_percent": 0.0
+      "tool_count_reduction_percent": 0.0,
+      "unexpected_missing_full_tools": []
     },
     "matlab": {
       "baseline": {
-        "import_seconds_median": 2.4871963999994477,
+        "import_seconds_median": 2.420120400005544,
         "import_seconds_samples": [
-          2.453827999999703,
-          2.534284999999727,
-          2.4871963999994477
+          2.5130815999946208,
+          2.420120400005544,
+          2.4131630999982008
         ],
         "profile": "core",
         "schema_bytes": 6432,
@@ -1516,11 +1561,11 @@
         ]
       },
       "candidate_core": {
-        "import_seconds_median": 2.537335199998779,
+        "import_seconds_median": 2.415119000004779,
         "import_seconds_samples": [
-          2.537335199998779,
-          2.4545187000003352,
-          4.866170700001021
+          2.415119000004779,
+          2.3978323999981512,
+          2.4208360999982688
         ],
         "profile": "core",
         "schema_bytes": 6255,
@@ -1551,11 +1596,11 @@
         ]
       },
       "candidate_full": {
-        "import_seconds_median": 2.397924000000785,
+        "import_seconds_median": 2.365531399998872,
         "import_seconds_samples": [
-          2.837122000000818,
-          2.397924000000785,
-          2.3537566999984847
+          2.3634984999953303,
+          2.3863044000027003,
+          2.365531399998872
         ],
         "profile": "full",
         "schema_bytes": 7254,
@@ -1588,21 +1633,25 @@
           "radia_matlab_status"
         ]
       },
-      "cold_import_reduction_percent": -2.02,
+      "cold_import_reduction_percent": 0.21,
       "cold_import_within_25_percent_of_baseline": true,
       "core_schema_is_not_larger": true,
       "core_schema_is_smaller": true,
-      "full_profile_preserves_baseline_tools": true,
+      "full_profile_preserves_supported_baseline_tools": true,
+      "retired_baseline_tools": [],
+      "retired_baseline_tools_absent": true,
+      "retired_tools_still_present": [],
       "schema_size_reduction_percent": 2.75,
-      "tool_count_reduction_percent": 4.35
+      "tool_count_reduction_percent": 4.35,
+      "unexpected_missing_full_tools": []
     },
     "motor": {
       "baseline": {
-        "import_seconds_median": 2.6899575000006735,
+        "import_seconds_median": 2.5877642999985255,
         "import_seconds_samples": [
-          2.6899575000006735,
-          2.6809391000006144,
-          6.505280800000037
+          2.6105665000068257,
+          2.5877642999985255,
+          2.572688599997491
         ],
         "profile": "core",
         "schema_bytes": 44075,
@@ -1668,11 +1717,11 @@
         ]
       },
       "candidate_core": {
-        "import_seconds_median": 2.615622799999983,
+        "import_seconds_median": 2.478571400002693,
         "import_seconds_samples": [
-          4.219153200001529,
-          2.615622799999983,
-          2.613768600000185
+          2.478571400002693,
+          2.4725273000003654,
+          2.5223389999955543
         ],
         "profile": "core",
         "schema_bytes": 29881,
@@ -1716,11 +1765,11 @@
         ]
       },
       "candidate_full": {
-        "import_seconds_median": 2.661733399998411,
+        "import_seconds_median": 2.531699300001492,
         "import_seconds_samples": [
-          2.5573098999993817,
-          2.6886676000012812,
-          2.661733399998411
+          2.5060669999948004,
+          2.531699300001492,
+          2.5521978000033414
         ],
         "profile": "full",
         "schema_bytes": 44889,
@@ -1787,21 +1836,25 @@
           "motor_vol2d_postprocess_analysis"
         ]
       },
-      "cold_import_reduction_percent": 2.76,
+      "cold_import_reduction_percent": 4.22,
       "cold_import_within_25_percent_of_baseline": true,
       "core_schema_is_not_larger": true,
       "core_schema_is_smaller": true,
-      "full_profile_preserves_baseline_tools": true,
+      "full_profile_preserves_supported_baseline_tools": true,
+      "retired_baseline_tools": [],
+      "retired_baseline_tools_absent": true,
+      "retired_tools_still_present": [],
       "schema_size_reduction_percent": 32.2,
-      "tool_count_reduction_percent": 38.6
+      "tool_count_reduction_percent": 38.6,
+      "unexpected_missing_full_tools": []
     },
     "radia_ngsolve": {
       "baseline": {
-        "import_seconds_median": 4.136208299998543,
+        "import_seconds_median": 3.6114420000012615,
         "import_seconds_samples": [
-          4.136208299998543,
-          4.138877800000046,
-          4.071051400000215
+          3.861453100005747,
+          3.6114420000012615,
+          3.6100029999943217
         ],
         "profile": "core",
         "schema_bytes": 134194,
@@ -1954,15 +2007,15 @@
         ]
       },
       "candidate_core": {
-        "import_seconds_median": 2.8089970000000903,
+        "import_seconds_median": 2.6737960999962525,
         "import_seconds_samples": [
-          3.1862188999984937,
-          2.8089970000000903,
-          2.7453592999991088
+          2.7375818000000436,
+          2.6737960999962525,
+          2.669395299999451
         ],
         "profile": "core",
-        "schema_bytes": 78690,
-        "tool_count": 50,
+        "schema_bytes": 70118,
+        "tool_count": 44,
         "tool_names": [
           "acoustic_fembem_cross_learnings",
           "airgap_motor_workflow",
@@ -1996,11 +2049,6 @@
           "md2html_usage",
           "ngsbem_inductance",
           "ngsolve_usage",
-          "panel_add_param",
-          "panel_describe_jp",
-          "panel_gui_pitfalls",
-          "panel_schema",
-          "panel_widget_locations",
           "peec_inductance",
           "radia_ngsolve_reload_code",
           "radia_ngsolve_status",
@@ -2009,7 +2057,6 @@
           "radia_usage",
           "release_workflow",
           "sparsesolv",
-          "standalone_panels",
           "taskmanager",
           "technical_reports",
           "urn",
@@ -2017,15 +2064,15 @@
         ]
       },
       "candidate_full": {
-        "import_seconds_median": 2.8525712999999087,
+        "import_seconds_median": 2.8039081000024453,
         "import_seconds_samples": [
-          2.8385734999992565,
-          2.9875211999988096,
-          2.8525712999999087
+          2.8039081000024453,
+          2.801980600001116,
+          2.8980540999982622
         ],
         "profile": "full",
-        "schema_bytes": 135072,
-        "tool_count": 146,
+        "schema_bytes": 126500,
+        "tool_count": 140,
         "tool_names": [
           "acoustic_duct_band_gap_gate",
           "acoustic_fembem_cross_learnings",
@@ -2121,11 +2168,6 @@
           "one_port_power_balance_sweep_gate",
           "one_port_vi_s_impedance_gate",
           "opposed_busbar_skin_force_gate",
-          "panel_add_param",
-          "panel_describe_jp",
-          "panel_gui_pitfalls",
-          "panel_schema",
-          "panel_widget_locations",
           "parallel_wire_force_refinement_gate",
           "passive_axial_bearing_stiffness_gate",
           "peec_inductance",
@@ -2154,7 +2196,6 @@
           "source_free_static_null_solution_gate",
           "source_off_linear_relaxation_gate",
           "sparsesolv",
-          "standalone_panels",
           "static_field_shim_family_gate",
           "symmetric_axial_field_profile_gate",
           "symmetric_complex_field_curve_gate",
@@ -2175,21 +2216,32 @@
           "voice_coil_force_flux_sweep_gate"
         ]
       },
-      "cold_import_reduction_percent": 32.09,
+      "cold_import_reduction_percent": 25.96,
       "cold_import_within_25_percent_of_baseline": true,
       "core_schema_is_not_larger": true,
       "core_schema_is_smaller": true,
-      "full_profile_preserves_baseline_tools": true,
-      "schema_size_reduction_percent": 41.36,
-      "tool_count_reduction_percent": 65.28
+      "full_profile_preserves_supported_baseline_tools": true,
+      "retired_baseline_tools": [
+        "panel_add_param",
+        "panel_describe_jp",
+        "panel_gui_pitfalls",
+        "panel_schema",
+        "panel_widget_locations",
+        "standalone_panels"
+      ],
+      "retired_baseline_tools_absent": true,
+      "retired_tools_still_present": [],
+      "schema_size_reduction_percent": 47.75,
+      "tool_count_reduction_percent": 69.44,
+      "unexpected_missing_full_tools": []
     },
     "topology_optimization": {
       "baseline": {
-        "import_seconds_median": 2.3903853000010713,
+        "import_seconds_median": 2.344055900000967,
         "import_seconds_samples": [
-          2.3903853000010713,
-          2.426935499999672,
-          2.2808952999985195
+          2.3358468000005814,
+          2.344055900000967,
+          2.4029766999956337
         ],
         "profile": "core",
         "schema_bytes": 5989,
@@ -2206,11 +2258,11 @@
         ]
       },
       "candidate_core": {
-        "import_seconds_median": 2.948698599999261,
+        "import_seconds_median": 2.329937100003008,
         "import_seconds_samples": [
-          2.320510800000193,
-          3.6191691999993054,
-          2.948698599999261
+          2.329937100003008,
+          2.3067680999956792,
+          2.3351137999998173
         ],
         "profile": "core",
         "schema_bytes": 5102,
@@ -2226,11 +2278,11 @@
         ]
       },
       "candidate_full": {
-        "import_seconds_median": 2.422545199999149,
+        "import_seconds_median": 2.3249832000001334,
         "import_seconds_samples": [
-          2.553069699999469,
-          2.401026900000943,
-          2.422545199999149
+          2.3306165000030887,
+          2.3249832000001334,
+          2.305267099996854
         ],
         "profile": "full",
         "schema_bytes": 6931,
@@ -2248,13 +2300,17 @@
           "topology_optimization_validation_run"
         ]
       },
-      "cold_import_reduction_percent": -23.36,
+      "cold_import_reduction_percent": 0.6,
       "cold_import_within_25_percent_of_baseline": true,
       "core_schema_is_not_larger": true,
       "core_schema_is_smaller": true,
-      "full_profile_preserves_baseline_tools": true,
+      "full_profile_preserves_supported_baseline_tools": true,
+      "retired_baseline_tools": [],
+      "retired_baseline_tools_absent": true,
+      "retired_tools_still_present": [],
       "schema_size_reduction_percent": 14.81,
-      "tool_count_reduction_percent": 12.5
+      "tool_count_reduction_percent": 12.5,
+      "unexpected_missing_full_tools": []
     }
   },
   "platform": "Windows-2022Server-10.0.20348-SP0",
