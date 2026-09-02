@@ -24,13 +24,13 @@ documentation (`em/README.md` for the EM-specific corpus).
 `calc_inductance.py` in v4.25.0 (2026-05); see its module docstring
 for the migration history.
 
-Golden tests:
-- `tests/panels/golden/peec_inductance_torus_50kHz_Cu.json`
-- `tests/panels/golden/peec_inductance_3turn_150kHz_Cu.json`
-- `tests/panels/golden/peec_bem_coarse_7kHz_Cu.json`
-- `tests/panels/golden/fem_coilmesh_gapped_fine_7kHz_Cu.json`
+Validation evidence:
+- `validation_test/panels/golden/peec_inductance_torus_50kHz_Cu.json`
+- `validation_test/panels/golden/peec_inductance_3turn_150kHz_Cu.json`
+- `validation_test/panels/golden/peec_bem_coarse_7kHz_Cu.json`
+- `validation_test/panels/golden/fem_coilmesh_gapped_fine_7kHz_Cu.json`
 
-Production paths (per memory `IH panel 最終構成 2026-04-19`): the
+Production paths: the
 **PEEC+BEM weak-coupling** and **FEM Full** paths are the validated
 production methods, both verified to give P_wp within 1% of each
 other on Cu @ 7 kHz.  The PEEC+FEM Kelvin path solves the same
@@ -63,7 +63,7 @@ Top-level canonical trio (all shipped):
 Kelvin Benchmark mode (`Electromagnet` block / `EMDesignSpec` formulation = "Kelvin
 Benchmark"): bundled `kelvin_benchmark_sphere_1_2.vol` (1/2
 model) + `kelvin_benchmark_sphere_1_4.vol` (1/4 model).  See
-`tests/panels/test_kelvin_benchmark_golden.py` for the golden
+`validation_test/panels/test_kelvin_benchmark_golden.py` for the golden
 band (±1.5% at p=2).
 
 ## PCB PEEC Simulink block
