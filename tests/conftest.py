@@ -48,37 +48,6 @@ def setup_radia_path():
     return project_root
 
 
-# ---------------------------------------------------------------
-# Qt6 DLL preload (POLICY 2026-05-30): must happen BEFORE
-# setup_radia_path() adds MKL bin to the Windows DLL search path.
-#
-# Why: setup_radia_path() calls os.add_dll_directory(<sys.prefix>/Library/bin)
-# so radia's C++ extension (peec_matrices.pyd etc.) finds MKL.  But
-# MKL's bin ships an older vcruntime / msvcp that the Windows DLL
-# loader picks BEFORE PySide6's site-packages copy once MKL bin is on
-# the search path -- and Qt6Core's required symbols differ across
-# vcruntime versions, so Qt6Core.dll fails to load with 0xc0000139
-# ("specified procedure not found") the first time any test module
-# imports PySide6.QtCore.  Historically this made all panel pytest
-# tests crash on LAB ("LAB caveat" in panel-qt-test SKILL.md).
-#
-# Fix: load Qt6Core BEFORE we touch the DLL search path.  Once
-# Qt6Core is mapped into the process, the MKL vcruntime cannot shadow
-# it (Windows does not reload an already-loaded DLL).  Verified
-# 2026-05-30: panel pytest goes from "DLL load failed while importing
-# QtCore" to 11 / 11 passing in 2.97 s on LAB.
-#
-# pytest-qt's qapp fixture also preloads QtCore, but pytest collection
-# (where test modules' top-level imports execute) happens BEFORE
-# fixtures fire -- so the preload MUST be at conftest top, not in a
-# fixture.  No PySide6 -> try/except handles it; panel tests are
-# auto-skipped via collect_ignore further down.
-try:
-    from PySide6 import QtCore as _qt6_preload  # noqa: F401
-except ImportError:
-    pass
-
-
 PROJECT_ROOT = setup_radia_path()
 
 

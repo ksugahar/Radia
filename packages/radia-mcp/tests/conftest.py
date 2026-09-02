@@ -64,6 +64,22 @@ _MINIMAL_BASELINE = set(getattr(sys, "stdlib_module_names", ())) | {
 }
 _PROJECT_IMPORT_CACHE = {}
 
+if _FORCE_MINIMAL:
+    _real_find_spec = importlib.util.find_spec
+
+    def _minimal_find_spec(name, package=None):
+        """Make dynamic optional-dependency probes match GitHub minimal CI."""
+        top_module = name.split(".", 1)[0]
+        if top_module not in _MINIMAL_BASELINE:
+            if not (
+                (_TEST_ROOT / f"{top_module}.py").exists()
+                or (_TEST_ROOT / top_module).is_dir()
+            ):
+                return None
+        return _real_find_spec(name, package)
+
+    importlib.util.find_spec = _minimal_find_spec
+
 
 def _top_module(module_name: str) -> str:
     return module_name.split(".")[0] if module_name else ""
@@ -168,12 +184,23 @@ def _project_import_has_absent_dependency(module_name: str, seen: set | None = N
 
 
 collect_ignore = []
-for _f in sorted(_TEST_ROOT.rglob("test_*.py")):
+if _CI_SELECT_ALL:
+    _dependency_scan_files = sorted(_TEST_ROOT.rglob("test_*.py"))
+else:
+    # Impact CI passes these same selectors directly to pytest. Avoid walking
+    # and parsing the entire test tree during conftest import on an SMB
+    # checkout; only selected files can be collected by this invocation.
+    _dependency_scan_files = sorted({
+        _TEST_ROOT / _selector_file(selector).removeprefix("tests/")
+        for selector in _CI_SELECTORS
+        if _selector_file(selector).endswith(".py")
+    })
+
+for _f in _dependency_scan_files:
+    if not _f.is_file():
+        continue
     _relative = _f.relative_to(_TEST_ROOT).as_posix()
     _package_relative = f"tests/{_relative}"
-    if not _CI_SELECT_ALL and _package_relative not in _CI_SELECTED_FILES:
-        collect_ignore.append(_relative)
-        continue
     try:
         _src = _f.read_text(encoding="utf-8", errors="ignore")
     except OSError:
@@ -241,8 +268,29 @@ def _cubit_runner_processes() -> dict[int, str]:
     return procs
 
 
+def _collected_tests_may_start_cubit(session) -> bool:
+    """Limit the expensive process snapshot to Cubit session tests."""
+    candidates = {
+        Path(str(item.fspath))
+        for item in session.items
+        if getattr(item, "fspath", None) is not None
+    }
+    signatures = ("CubitSession", "cubit.daemon", "cubit.bootstrap")
+    for path in candidates:
+        try:
+            source = path.read_text(encoding="utf-8", errors="ignore")
+        except OSError:
+            continue
+        if any(signature in source for signature in signatures):
+            return True
+    return False
+
+
 @pytest.fixture(scope="session", autouse=True)
-def cubit_process_leak_gate():
+def cubit_process_leak_gate(request):
+    if not _collected_tests_may_start_cubit(request.session):
+        yield
+        return
     before = _cubit_runner_processes()
     yield
     leaked = {pid: cl for pid, cl in _cubit_runner_processes().items()
