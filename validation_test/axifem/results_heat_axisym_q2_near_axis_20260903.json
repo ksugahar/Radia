@@ -1,0 +1,72 @@
+{
+  "checks": {
+    "q2_axis_abs_error_below_0_1_C": true,
+    "q2_axis_gradient_below_1_C_per_m": true,
+    "q2_axis_slope_reduction_above_100": true,
+    "q2_surface_abs_error_below_0_1_C": true
+  },
+  "generated_at": "2026-09-02T22:47:02.207265+00:00",
+  "oracle": {
+    "axis_temperature_C": 34.44867272257047,
+    "kind": "Bessel series for a constant-flux solid cylinder",
+    "series_terms": 100,
+    "surface_temperature_C": 60.012315571051815
+  },
+  "problem": {
+    "axial_cells": 9,
+    "backward_euler_dt_s": 0.1,
+    "density_kg_per_m3": 7800.0,
+    "end_time_s": 10.0,
+    "heat_capacity_J_per_kgK": 467.0,
+    "heat_flux_W_per_m2": 100000.0,
+    "height_m": 0.025,
+    "initial_temperature_C": 25.0,
+    "radial_cells": 9,
+    "radius_m": 0.025,
+    "thermal_conductivity_W_per_mK": 46.6
+  },
+  "q1_to_q2_axis_slope_reduction": 507.5165642223521,
+  "results": [
+    {
+      "axis_temperature_C": 34.23546069219306,
+      "axis_temperature_abs_error_C": 0.213212030377413,
+      "extrema_sampling": {
+        "integration_order": 0,
+        "method": "vertices",
+        "sample_count": 100
+      },
+      "fes_order": 1,
+      "ndof": 100,
+      "radial_gradient_at_axis_C_per_m": 138.89560216139262,
+      "reported_max_C": 59.973541565547926,
+      "reported_min_C": 34.23546069219304,
+      "solver_time_s": 0.24,
+      "surface_temperature_C": 59.973541565547904,
+      "surface_temperature_abs_error_C": 0.0387740055039103
+    },
+    {
+      "axis_temperature_C": 34.489281778529346,
+      "axis_temperature_abs_error_C": 0.04060905595887476,
+      "extrema_sampling": {
+        "integration_order": 6,
+        "method": "vertices-and-volume-boundary-integration-points",
+        "sample_count": 1540
+      },
+      "fes_order": 2,
+      "ndof": 361,
+      "radial_gradient_at_axis_C_per_m": -0.2736769830837284,
+      "reported_max_C": 59.99588922025514,
+      "reported_min_C": 34.48928177852933,
+      "solver_time_s": 0.21,
+      "surface_temperature_C": 59.995889220255094,
+      "surface_temperature_abs_error_C": 0.016426350796720612
+    }
+  ],
+  "runtime": {
+    "ngsolve": "6.2.2606",
+    "platform": "Windows-2022Server-10.0.20348-SP0",
+    "python": "3.12.10"
+  },
+  "schema": "radia.validation.axisym-heat-q2.v1",
+  "status": "pass"
+}

@@ -1,7 +1,8 @@
 """End-to-end test for `calc_heat_axisym.py` (FEMM-canonical standard
 H1 + 2 pi r weighting; matches FEMM 4.2 hsolv/prob1big.cpp).  Runs the
 production CLI as a subprocess on the structured-grid cylinder fixture
-and asserts the temperature rise is in the analytically-expected band.
+and checks the temperature rise and near-axis gradient against the
+analytical reference.
 
 Geometry: Cu-disk-style steel cylinder R = 25 mm, H = 25 mm, structured
 9x9 quad grid (NR x NZ = 9 x 9 = 81 quads, 100 nodes).
@@ -15,7 +16,7 @@ Analytical expectation:
   Average dT/dt      = 392.7 / 178.8 ~ 2.20 K/s
   After 10 s, T_avg  ~ 25 + 22 ~ 47 C
   T_max (outer surf) > T_avg; T_min (axis) < T_avg.
-  Expected band: T_max in [55, 65] C, T_min in [30, 40] C.
+  Bessel-series reference at 10 s: surface 60.03 C, axis 34.46 C.
 """
 import json
 import os
@@ -36,10 +37,9 @@ SCRIPT = os.path.join(REPO, "src", "radia", "panels",
 
 @pytest.fixture(scope="module")
 def regenerate_fixture():
-    """Ensure the structured-grid .vol exists (regen if missing)."""
-    if not os.path.isfile(FIXTURE):
-        gen = os.path.join(FIXTURE_DIR, "generate_heat_cylinder_axisym.py")
-        subprocess.run([sys.executable, gen], check=True)
+    """Regenerate the structured-grid .vol with the supported Netgen API."""
+    gen = os.path.join(FIXTURE_DIR, "generate_heat_cylinder_axisym.py")
+    subprocess.run([sys.executable, gen], check=True)
     return FIXTURE
 
 
@@ -127,10 +127,21 @@ def test_calc_heat_axisym_default_order2_band(regenerate_fixture, tmp_path):
 
     T_max = float(result["T_max_C"])
     T_min = float(result["T_min_C"])
-    # Verified 2026-09-03: T_max = 59.84 C, T_min = 34.86 C (Bessel
-    # series reference: surface 60.03 C, axis 34.46 C at t = 10 s).
-    assert 55.0 <= T_max <= 65.0, (
-        f"T_max_C = {T_max} outside expected band [55, 65] at order 2")
-    assert 30.0 <= T_min <= 40.0, (
-        f"T_min_C = {T_min} outside expected band [30, 40] at order 2 "
-        f"(T_min ~ 0 means the coefficient-vector min/max bug is back)")
+    # Verified 2026-09-03 against the Bessel-series reference: surface
+    # 60.03 C and axis 34.46 C at t = 10 s.
+    assert T_max == pytest.approx(60.03, abs=0.5)
+    assert T_min == pytest.approx(34.46, abs=0.6)
+    assert result["T_extrema"]["method"] == (
+        "vertices-and-volume-boundary-integration-points"
+    )
+
+    # The order-2 field strongly suppresses the spurious P1 near-axis
+    # slope (about 139 C/m on this mesh).  Evaluate the saved physical
+    # GridFunction instead of interpreting hierarchical coefficients.
+    from ngsolve import GridFunction, H1, Mesh, grad
+
+    result_mesh = Mesh(result["heat_vol_file"])
+    temperature = GridFunction(H1(result_mesh, order=2))
+    temperature.Load(result["T_sol_file"])
+    radial_gradient = float(grad(temperature)(result_mesh(0.0, 0.0))[0])
+    assert abs(radial_gradient) < 1.0

@@ -16,6 +16,7 @@ from radia.ih_design import (
     IHDesignSpec,
     METHOD_BEMA_BEM,
     METHOD_PEEC_BEM,
+    METHOD_THERMAL_AXISYM,
     METHOD_THERMAL_3D_STATIC,
 )
 
@@ -127,3 +128,38 @@ def test_normalization_is_idempotent():
 def test_geometry_role_notes_roundtrip_accepts_list():
     spec = IHDesignSpec(geometry_role_notes=["earlier note"])
     assert spec.geometry_role_notes == ("earlier note",)
+
+
+@pytest.mark.parametrize(
+    ("method", "expected_order"),
+    [
+        (METHOD_THERMAL_AXISYM, "2"),
+        (METHOD_THERMAL_3D_STATIC, "1"),
+    ],
+)
+def test_thermal_fes_order_uses_method_specific_default(method, expected_order):
+    command = IHDesignSpec(method=method, wp_vol="workpiece.vol").build_command(
+        python="python", panels_dir="panels"
+    )
+    assert command[command.index("--fes-order") + 1] == expected_order
+
+
+@pytest.mark.parametrize("method", [METHOD_THERMAL_AXISYM, METHOD_THERMAL_3D_STATIC])
+def test_thermal_fes_order_explicit_override_is_preserved(method):
+    command = IHDesignSpec(
+        method=method,
+        wp_vol="workpiece.vol",
+        thermal_fes_order=3,
+    ).build_command(python="python", panels_dir="panels")
+    assert command[command.index("--fes-order") + 1] == "3"
+
+
+@pytest.mark.parametrize("invalid", [True, 0, -1, 1.5, "two"])
+def test_thermal_fes_order_rejects_invalid_values(invalid):
+    spec = IHDesignSpec(
+        method=METHOD_THERMAL_AXISYM,
+        wp_vol="workpiece.vol",
+        thermal_fes_order=invalid,
+    )
+    with pytest.raises(ValueError, match="positive integer"):
+        spec.build_command(python="python", panels_dir="panels")
