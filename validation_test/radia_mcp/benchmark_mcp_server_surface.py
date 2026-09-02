@@ -69,8 +69,20 @@ print(json.dumps({
 
 
 def _git_revision(source: Path) -> str | None:
+    worktree = next(
+        (parent for parent in (source, *source.parents) if (parent / ".git").exists()),
+        source,
+    )
     completed = subprocess.run(
-        ["git", "-C", str(source), "rev-parse", "HEAD"],
+        [
+            "git",
+            "-c",
+            f"safe.directory={worktree.as_posix()}",
+            "-C",
+            str(source),
+            "rev-parse",
+            "HEAD",
+        ],
         capture_output=True,
         text=True,
         timeout=30,
@@ -189,11 +201,9 @@ def build_report(
         "python": sys.version,
         "repeats": repeats,
         "baseline": {
-            "source": str(baseline_src),
             "git_revision": _git_revision(baseline_src),
         },
         "candidate": {
-            "source": str(candidate_src),
             "git_revision": _git_revision(candidate_src),
         },
         "measurements": measurements,
