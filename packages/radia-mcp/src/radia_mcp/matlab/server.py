@@ -1,6 +1,7 @@
 import json,sys
 from mcp.server.fastmcp import FastMCP
 from radia_mcp.common import register_status_tool
+from ..common.tool_group import CoarseToolRegistry
 from radia_mcp.matlab_agentic_ml import (
     matlab_agentic_ml_guide as _ml_guide,
     validate_matlab_ml_rl_artifact as _validate_ml_rl_artifact,
@@ -28,15 +29,16 @@ from .runtime import (
     matlab_simulink_library_contract as _simulink_library_contract,
 )
 mcp=FastMCP("mcp-server-radia-matlab")
+_validation = CoarseToolRegistry(mcp, namespace="matlab")
 @mcp.tool()
 def matlab_agent_guide()->str: return _guide()
 @mcp.tool()
 def matlab_agentic_ml_guide()->str: return _ml_guide()
-@mcp.tool()
+@_validation.tool()
 def matlab_ml_rl_artifact_gate(artifact_json:str)->str:
     artifact=json.loads(artifact_json)
     return json.dumps(_validate_ml_rl_artifact(artifact),ensure_ascii=False,indent=2)
-@mcp.tool()
+@_validation.tool()
 def matlab_aicia_catalog_gate(catalog_json:str)->str:
     """Validate full-channel metadata scope and solver-gated CAE promotion."""
     return json.dumps(_validate_aicia_catalog(json.loads(catalog_json)),ensure_ascii=False,indent=2)
@@ -70,7 +72,7 @@ def matlab_optuna_oracle_plan(scope:str="all",repository_path:str="",output_path
 def matlab_optuna_benchmark_plan(repository_path:str="",output_directory:str=r"C:\temp\radia-optuna-benchmark")->str:
     """Build the same-host cold/warmed MATLAB-versus-Optuna benchmark plan."""
     return json.dumps(_optuna_benchmark_plan(repository_path,output_directory),ensure_ascii=False,indent=2)
-@mcp.tool()
+@_validation.tool()
 def matlab_optuna_release_gate(evidence_json:str,repository_path:str="",max_warmed_time_ratio:float=1.0)->str:
     """Validate installed-wheel, Simulink, resume, oracle, and speed evidence."""
     return json.dumps(_optuna_release_gate(evidence_json,repository_path,max_warmed_time_ratio),ensure_ascii=False,indent=2)
@@ -102,6 +104,8 @@ def matlab_cad_topology_build(spec_json:str)->str:
 def matlab_sheet_metal_topology_build(spec_json:str)->str:
     """Build a Radia-VIM + LP + adaptive NGSolve/Cubit sheet-metal workflow."""
     return json.dumps(_sheet_metal_topology_build(spec_json),ensure_ascii=False,indent=2)
+_validation.install()
+
 register_status_tool(mcp,server_name="mcp-server-radia-matlab",description="Official MATLAB MCP composition, Radia/NGSolve MEX bridge, table-backed optimization, Simulink, and generic ML/RL gates",subpackage="radia_mcp.matlab",related_servers=["radia-ngsolve"])
 def main():
     if "--selftest" in sys.argv: c=_contract(); assert c["ok"] and c["tool_count"]==43; print("Radia MATLAB MCP server self-test: OK"); return

@@ -7,11 +7,14 @@ import sys
 
 from mcp.server.fastmcp import FastMCP
 from ..common import register_status_tool, register_topics_tool
+from ..common.tool_group import CoarseToolRegistry
 
 from .knowledge import get_accelerator_documentation, TOPICS
-from .magnetic_trajectory_gate import magnetic_trajectory_pair_gate as build_magnetic_trajectory_pair_gate
+from ..common.lazy_call import lazy_callable
+build_magnetic_trajectory_pair_gate = lazy_callable(".magnetic_trajectory_gate", "magnetic_trajectory_pair_gate", __package__)
 
 mcp = FastMCP("mcp-server-accelerator")
+_validation = CoarseToolRegistry(mcp, namespace="accelerator")
 
 
 @mcp.tool()
@@ -32,7 +35,7 @@ def accelerator(topic: str = "all") -> str:
     return get_accelerator_documentation(topic)
 
 
-@mcp.tool()
+@_validation.tool()
 def accelerator_magnetic_trajectory_pair_gate(summary_json: str) -> str:
     """Gate paired charged-particle trajectories with magnetic field off/on.
 
@@ -43,6 +46,7 @@ def accelerator_magnetic_trajectory_pair_gate(summary_json: str) -> str:
     return build_magnetic_trajectory_pair_gate(summary_json)
 
 
+_validation.install()
 
 
 register_status_tool(

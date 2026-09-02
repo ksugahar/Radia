@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import asyncio
 import importlib
+import os
 import sys
 from pathlib import Path
 
@@ -27,6 +28,10 @@ DOC_PATH = PKG_ROOT / "docs" / "TOOLS.md"
 # was a hardcoded list of 9 entries and silently fell behind the
 # 27-subpackage batch additions (caught by the 2026-05-24 review).
 sys.path.insert(0, str(PKG_ROOT / "src"))
+# The checked inventory documents the production surface. Compatibility and
+# debugging may expose legacy individual gates with the ``full`` profile, but
+# that deliberately larger list is not a public API catalog.
+os.environ["RADIA_MCP_TOOL_PROFILE"] = "core"
 from radia_mcp.meta.catalog import CATALOG  # noqa: E402
 
 # (subpackage_name, console_script, header_blurb)
@@ -68,9 +73,16 @@ def render() -> str:
     out.append("# radia-mcp Tools Inventory")
     out.append("")
     out.append(
-        "Auto-generated from each server's `mcp.list_tools()` via "
+        "Auto-generated from each server's production `core` "
+        "`mcp.list_tools()` via "
         "`scripts/gen_tools_doc.py`. **Do not edit by hand** — "
         "regenerate after adding/renaming tools."
+    )
+    out.append("")
+    out.append(
+        "Fine-grained validation and identity operations are discovered with "
+        "each server's `*_validation_catalog` tool and invoked through "
+        "`*_validation_run`; they are not repeated as top-level schemas."
     )
     out.append("")
 

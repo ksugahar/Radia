@@ -100,14 +100,16 @@ async def _probe_stdio() -> dict[str, object]:
             initialized = await session.initialize()
             listed = await session.list_tools()
             called = await session.call_tool(
-                "motor_pm_absolute_demag_three_way_gate",
-                {"summary_json": json.dumps(_fixture())},
+                "motor_validation_run",
+                {
+                    "name": "motor_pm_absolute_demag_three_way_gate",
+                    "arguments": {"summary_json": json.dumps(_fixture())},
+                },
             )
             return {
                 "server_name": initialized.serverInfo.name,
                 "listed": any(
-                    tool.name == "motor_pm_absolute_demag_three_way_gate"
-                    for tool in listed.tools
+                    tool.name == "motor_validation_run" for tool in listed.tools
                 ),
                 "is_error": bool(called.isError),
                 "status": json.loads(called.content[0].text)["status"],

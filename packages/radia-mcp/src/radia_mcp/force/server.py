@@ -18,18 +18,12 @@ from typing import Any
 from mcp.server.fastmcp import FastMCP
 
 from ..common import register_status_tool, register_topics_tool
-from .gates import (
-    electromagnetic_force_method_selection_gate as _method_selection_gate,
-)
-from .gates import (
-    force_action_reaction_gate as _action_reaction_gate,
-)
-from .gates import (
-    force_torque_method_agreement_gate as _method_agreement_gate,
-)
-from .gates import (
-    force_weight_equilibrium_gate as _weight_equilibrium_gate,
-)
+from ..common.tool_group import CoarseToolRegistry
+from ..common.lazy_call import lazy_callable
+_method_selection_gate = lazy_callable(".gates", "electromagnetic_force_method_selection_gate", __package__)
+_action_reaction_gate = lazy_callable(".gates", "force_action_reaction_gate", __package__)
+_method_agreement_gate = lazy_callable(".gates", "force_torque_method_agreement_gate", __package__)
+_weight_equilibrium_gate = lazy_callable(".gates", "force_weight_equilibrium_gate", __package__)
 from .knowledge import (
     TOPICS,
     get_force_extras,
@@ -40,6 +34,7 @@ from .knowledge import (
 )
 
 mcp = FastMCP("mcp-server-force")
+_validation = CoarseToolRegistry(mcp, namespace="force")
 
 
 def _load_force_api():
@@ -640,7 +635,7 @@ def force_time_average_air_gap_torque_samples(
     return _json_result(payload)
 
 
-@mcp.tool()
+@_validation.tool()
 def force_method_selection_gate(
     target_kind: str,
     requested_method: str,
@@ -686,7 +681,7 @@ def force_method_agreement_gate(
     return _json_result(payload)
 
 
-@mcp.tool()
+@_validation.tool()
 def force_action_reaction_gate(
     force_a_n: list[float],
     force_b_n: list[float],
@@ -711,7 +706,7 @@ def force_action_reaction_gate(
     return _json_result(payload)
 
 
-@mcp.tool()
+@_validation.tool()
 def force_weight_equilibrium_gate(
     force_n: list[float],
     mass_kg: float,
@@ -733,6 +728,8 @@ def force_weight_equilibrium_gate(
         payload = _error_payload("weight_equilibrium", "invalid_input", exc)
     return _json_result(payload)
 
+
+_validation.install()
 
 register_status_tool(
     mcp,
