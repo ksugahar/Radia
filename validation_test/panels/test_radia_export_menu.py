@@ -26,10 +26,8 @@ Run::
     # Direct python (simplest -- bypasses pytest's import hooks):
     python validation_test/panels/test_radia_export_menu.py
 
-    # Or pytest with --confcutdir to skip the parent panel conftest
-    # (which transitively imports radia_gui_base -> radia/__init__ ->
-    # MKL os.add_dll_directory calls that, on some LAB configurations,
-    # break PySide6.QtWidgets DLL load before our test even starts):
+    # Or pytest with --confcutdir to isolate this Cubit-embedded PySide test
+    # from unrelated validation fixtures:
     python -m pytest validation_test/panels/test_radia_export_menu.py -xvs \
         --confcutdir=validation_test/panels
 """

@@ -2,8 +2,7 @@
 Panel Review MCP Server (radia_mcp.panel_review)
 
 Surfaces the current Radia Simulink application-block review contract. The old
-PySide6 and non-IH notebook review chains are retired; historical topic names
-remain compatibility aliases to the block recipe.
+PySide6 and notebook-workbench review chains are retired.
 
 Why an MCP server (rather than just SKILL.md files):
 
@@ -44,26 +43,16 @@ def panel_review(topic: str = "overview") -> str:
     """
     Get Radia Simulink application-block review / construction documentation.
 
-    Historical topic names remain accepted, but all topics now point at the
-    Simulink block contract: DesignSpec/headless wiring, masks, typed ports,
-    result artifacts, validation, and no-PySide regression checks.
+    The topics cover the Simulink block contract, DesignSpec/headless wiring,
+    masks, typed ports, result artifacts, validation, and the Cubit boundary.
 
     Args:
         topic: Documentation topic.  Options:
-            "overview"            - Simulink application-block review contract
-            "build_notebook_gui"  - Historical alias for the block recipe
-            "presentation_template" - Historical alias for the block recipe
-            "cubit_panels_migration" - Routing plan for examples/cubit_panels
-            "5_skills_chain"      - Compatibility alias to notebook contract
-            "13_checks"           - Compatibility alias to notebook contract
-            "bug_catalogue"       - Compatibility alias to notebook contract
-            "val_checkbox_trap"   - Compatibility alias to notebook contract
-            "map_value_reject"    - Compatibility alias to notebook contract
-            "widget_calc_gap"     - Compatibility alias to notebook contract
-            "smoke_scenarios"     - Compatibility alias to notebook contract
-            "red_flags"           - Compatibility alias to notebook contract
-            "workflow"            - Compatibility alias to notebook contract
-            "all"                 - All topics concatenated
+            "overview"                - application-block review contract
+            "build_application_block" - block construction workflow
+            "cubit_boundary"          - CAD/mesh/Simulink ownership boundary
+            "workflow"                - block construction workflow
+            "all"                     - all topics concatenated
     """
     return get_panel_review_documentation(topic)
 
@@ -91,17 +80,16 @@ def review_a_panel(panel_path: str = "matlab/radia_simulink_library.slx") -> str
 
 
 @mcp.prompt()
-def build_notebook_gui(
+def build_application_block(
     app_name: str = "ih",
-    source_examples: str = "validation_test/induction_heating/cubit_panels_legacy",
+    source_material: str = "validation_test/induction_heating",
 ) -> str:
-    """Compatibility prompt that now builds a Radia Simulink block."""
+    """Build or upgrade a Radia Simulink application block."""
     return (
         f"Please build or upgrade the Radia Simulink application block for app={app_name!r} "
-        f"from source material under {source_examples}.\n\n"
-        "Use `panel_review(topic='build_notebook_gui')` first.  If the source "
-        "is `examples/cubit_panels`, also use "
-        "`panel_review(topic='cubit_panels_migration')`.\n\n"
+        f"from source material under {source_material}.\n\n"
+        "Use `panel_review(topic='build_application_block')` and "
+        "`panel_review(topic='cubit_boundary')` first.\n\n"
         "Required shape:\n"
         "1. Move reusable computation into `src/` or a headless `calc_*.py`.\n"
         "2. Keep heavy checks in `validation_test/`.\n"

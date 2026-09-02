@@ -452,9 +452,10 @@ archive is published only after it passes the multi-host release gate.
 ### Documentation and visualization
 
 `docs/**/*.ipynb` is the public explanation and reproduction layer. Published
-examples are executed notebooks with narrative, code, synchronized JSON, and
+examples are executed notebooks with narrative, code, saved results, and
 saved `ngsolve.webgui.Draw` or `netgen.webgui.Draw` scenes. They are not hidden
-production workbenches.
+production workbenches. Benchmarks and numerical evidence live under
+`validation_test/` with machine-readable JSON; docs notebooks need no sidecar.
 
 Field-producing application runs write checked Gmsh `.msh v4.1` artifacts.
 The Gmsh toolchain supports scalar/vector/tensor fields, sections, clipping,

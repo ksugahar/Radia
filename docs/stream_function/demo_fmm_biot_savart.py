@@ -27,7 +27,7 @@ coil at exterior observation points (r > coil bounding sphere):
       the designed coil actually produces the target Gz field inside the DSV.
 
 Workflow:
-  1. Mesh generation in subprocess (tests/panels/fixtures/
+  1. Mesh generation in subprocess (validation_test/panels/fixtures/
      make_streamfunction_vol.py).
   2. Design via in-process import of calc_streamfunction._build_problem.
   3. Evaluation:
