@@ -13,6 +13,16 @@ crystallized as its own package.
   Run per field file, the abilities field was reported as lacking the academic
   question and the purpose field as lacking the execution environment
   (2026-09-02, 基盤C 2027 draft).
+- all servers: new `<server>_reload_code` tool (registered next to
+  `<server>_status`) reloads radia_mcp modules whose source changed on disk,
+  re-registers stale tools, registers callables added since start-up, and
+  sends `notifications/tools/list_changed`; the server now declares
+  `tools.listChanged`. An editable install alone never updated a running
+  server: the process kept the old modules and FastMCP the old function
+  objects (2026-09-02). Verified end to end over stdio: a function appended
+  to grant_writing/tools.py while the server ran appeared in `tools/list`
+  and was callable after one reload call, and the client received the
+  notification.
 - grant-writing: new `grant_writing_proper_noun_load_check` lists proper
   nouns a reviewer must place, and the ones named once with no role in their
   sentence (venues in a yearly plan and 招へい/招請 partners are kept apart).
