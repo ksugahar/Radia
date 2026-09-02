@@ -2,15 +2,23 @@
 
 ## Unreleased
 
+## 3.0.12 — 2026-09-02
+
 - Promote drags that cross structural slots to their deepest common ancestor
   instead of discarding the selection. The original deep press position stays
   fixed while the pointer reverses direction, so fractions and neighbouring
   elements remain selectable without tearing a template apart.
+- Give pointer selection an explicit begin/extend/end lifetime. Rebuilt trees
+  invalidate the old drag origin, and button-up performs the authoritative
+  final hit test even when Windows coalesces the last mouse-move notification.
 - Format the synchronized TeX source pane at environment and row boundaries,
   with indentation and lossless parse round-tripping. Palette lesson highlights
   now map canonical offsets to the formatted pane before selecting the inserted
   spelling, eliminating the structured-equation out-of-range crash found by
   the hidden UI fuzzer.
+- Lock the selection contract across all structural container classes and all
+  copy, delete, replace, wrap, style, Undo, and Redo consumers. Hidden GUI fuzz
+  includes drags with and without an intervening mouse-move notification.
 
 ## 3.0.11 — 2026-08-30
 

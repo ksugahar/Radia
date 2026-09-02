@@ -2,7 +2,7 @@
 
 - 文書状態: 現行
 - 対象製品: Eqnedit64 native / Python package / Web editor
-- 対象リリース: 3.0.11
+- 対象リリース: 3.0.12
 - 基準日: 2026-09-02
 - リポジトリ: `ksugahar/Radia`
 
@@ -419,27 +419,24 @@ pushするとrelease gateが失敗するのが正しい。
 
 ## 13. 現在の公開状態
 
-Eqnedit64 3.0.9が2026-08-30時点の公開済み基準版である。PowerPointでは数式run、
-末尾NBSP、末尾直後のzero-length insertion rangeをすべて24 ptに固定し、左寄せと
-次入力24 ptを両立する。ネイティブのタイトル、About、`--version`には製品版3.0.9と
+Eqnedit64 3.0.11が2026-09-02時点の公開済み基準版であり、3.0.12はこの文書が対象とする
+次の候補である。3.0.11の通常Ctrl+Vは、native/Webとも左揃えの編集可能なinline
+Office Mathを18 ptで作る。`&`を含まない複数行は各leaf rowへ分けて同じ左端を保ち、
+PowerPointに可視の`&`を渡さない。ネイティブのタイトル、About、`--version`には製品版と
 source stampの両方を表示する。
 
-- product tag: `eqnedit64-v3.0.9`
-- product tag source: `4760011a2d9275596545925bf193b018c32ebb7d`
-- O: / GitHub Release EXE SHA-256:
-  `5F4AD412EC47BA6B37A4BE5EE9CA78CF5CBF17A38E5CF6AD715058BEE037F350`
+- product tag: `eqnedit64-v3.0.11`
+- product tag source: `f5ac045703eab940323bddabbef6bb4fd3a9e55c`
+- GitHub Release EXE SHA-256:
+  `96823819F4E1AA5B436BAC2D8065C8A0833A1B213E671380D48A8975BF975080`
 - signer: `CN=ksugahar`
-- GitHub Release: `https://github.com/ksugahar/Radia/releases/tag/eqnedit64-v3.0.9`
-- PyPI: `https://pypi.org/project/eqnedit64/3.0.9/`
+- GitHub Release: `https://github.com/ksugahar/Radia/releases/tag/eqnedit64-v3.0.11`
+- PyPI: `https://pypi.org/project/eqnedit64/3.0.11/`
 - PyPI wheels: CPython 3.10、3.11、3.12、3.13の`win_amd64`計4個。
-- O:、GitHub Release、4個すべてのwheelから再取得した同梱EXEはbyte-identicalで、
-  すべて上記SHA-256と有効な`CN=ksugahar`署名を持つ。
 
-native/Webは同じinline 24 pt MathML + 24 pt NBSPのCF_HTML経路を使う。
-公開ホームページからの実PowerPoint貼り付けでも、数式24 pt、末尾カーソル24 pt、
-左揃え、保存`m:oMath`、描画PNGがO:配布EXEとbyte-identicalであることを確認した。
-公開JSのSHA-256は
-`FF81CC49F34E856763BEE9F2554FCE121EA2284F69682E019C8D168A9DDA8548`である。
+3.0.12候補をO:へ置いた時点では`Eqnedit64.handtest.json`を正とし、公開済み3.0.11の
+release manifestと混同しない。3.0.12のtag、GitHub Release、PyPIは公開手順をすべて
+通過するまで「公開済み」と記載しない。
 
 ## 14. ソース地図
 
