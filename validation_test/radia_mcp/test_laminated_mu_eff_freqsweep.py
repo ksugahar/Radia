@@ -34,7 +34,7 @@ from ngsolve import (H1, BilinearForm, LinearForm, GridFunction, grad, dx,
                      Integrate, CoefficientFunction as CF, IfPos, BND,
                      x as Z, TaskManager)
 from ngsolve.meshes import Make1DMesh
-from radia_mcp.radia_ngsolve.solve import laminated_mu_eff
+from radia.lamination import laminated_mu_eff
 
 MU0 = 4e-7 * math.pi
 D_IRON, D_INS = 0.35e-3, 0.05e-3

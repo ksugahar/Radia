@@ -29,7 +29,7 @@ SRC = REPO / "packages" / "radia-mcp" / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-from radia_mcp.radia_ngsolve.solve import MU0, laminated_mu_eff  # noqa: E402
+from radia.lamination import MU0, laminated_mu_eff  # noqa: E402
 
 
 OUT_JSON = HERE / "validation_lamination_mu_eff_sweep_summary.json"
