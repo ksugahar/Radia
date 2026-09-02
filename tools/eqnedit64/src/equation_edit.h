@@ -66,9 +66,17 @@ public:
     void move_home();
     void move_end();
 
-    /* Mouse/selection support for the native 64-bit editor.  Selection is a
-     * contiguous range in one structural slot (the common case for visual
-     * drag selection); Ctrl+A selects the root equation. */
+    /* Mouse/selection support for the native 64-bit editor.  A pointer drag
+     * has an explicit begin/extend/end lifetime.  The selected range is
+     * represented in one slot; crossing slots promotes both ends to their
+     * deepest common ancestor without tearing a structure apart. */
+    bool begin_pointer_selection(double x_points, double y_points,
+                                 const SvgStyle& style = SvgStyle());
+    bool extend_pointer_selection(double x_points, double y_points,
+                                  const SvgStyle& style = SvgStyle());
+    void end_pointer_selection();
+    /* Backward-compatible combined entry point used by older Python callers.
+     * New code should use the explicit pointer lifecycle above. */
     bool hit_test(double x_points, double y_points,
                   const SvgStyle& style = SvgStyle(), bool extend = false);
     bool new_line();          /* Enter: create/append an aligned row */
@@ -200,6 +208,8 @@ private:
     NodeList* slot_at(const std::vector<CaretStep>& path) const;
     NodeList& here();
     Node* parent_node(const std::vector<CaretStep>& path) const;
+    bool locate_pointer(double x_points, double y_points,
+                        const SvgStyle& style);
 
     void checkpoint(const char* action); /* push current state for named undo */
     void restore(const Snapshot& s);

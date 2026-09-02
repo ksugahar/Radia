@@ -109,6 +109,16 @@ PYBIND11_MODULE(eqnedit_core, module) {
         .def("move_out", &eqnedit::Equation::move_out)
         .def("move_home", &eqnedit::Equation::move_home)
         .def("move_end", &eqnedit::Equation::move_end)
+        .def("begin_pointer_selection",
+             &eqnedit::Equation::begin_pointer_selection,
+             py::arg("x_points"), py::arg("y_points"),
+             py::arg("style") = eqnedit::SvgStyle())
+        .def("extend_pointer_selection",
+             &eqnedit::Equation::extend_pointer_selection,
+             py::arg("x_points"), py::arg("y_points"),
+             py::arg("style") = eqnedit::SvgStyle())
+        .def("end_pointer_selection",
+             &eqnedit::Equation::end_pointer_selection)
         .def("hit_test", &eqnedit::Equation::hit_test,
              py::arg("x_points"), py::arg("y_points"),
              py::arg("style") = eqnedit::SvgStyle(), py::arg("extend") = false)
