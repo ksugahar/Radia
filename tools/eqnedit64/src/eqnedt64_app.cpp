@@ -898,14 +898,96 @@ void set_dirty(bool dirty = true) {
  * the old pane's dangerous loop: it moved the caret and caused a second
  * EN_CHANGE while the first was still parsing.  The guard prevents message
  * recursion, and the equality check avoids needless EDIT mutations. */
+/* Canonical TeX laid out over several lines for the source pane, with a map
+ * from each canonical character to where it landed.
+ *
+ * The pane held one endless line otherwise.  A two-row aligned document read
+ * as \begin{aligned}\frac{1}{R_{2n}} = \int _{\Omega _{c}}\sigma ... with
+ * everything past the first integral off the right edge, which is how the
+ * first outside reader saw his own equation.  Break only where TeX ignores
+ * whitespace -- after \begin{...}, before \end{...}, after a \\ row break --
+ * and indent the body, so the structure is the first thing visible.  The
+ * parser skips \r and \n as space, so the text still round-trips when it is
+ * edited here.  The map exists because highlight_source_insertion addresses
+ * the EDIT by character offset, and those offsets shift once breaks and
+ * indentation are inserted. */
+struct PrettySource {
+    std::wstring text;
+    std::vector<size_t> offset;   /* canonical index -> index in text */
+};
+
+PrettySource pretty_source(const std::wstring& raw) {
+    PrettySource out;
+    out.offset.assign(raw.size() + 1, 0);
+    int depth = 0;
+    bool atLineStart = true;
+
+    const auto breakLine = [&](int level) {
+        out.text += L"\r\n";
+        out.text.append(size_t(level > 0 ? level : 0) * 2, L' ');
+        atLineStart = true;
+    };
+    const auto copy = [&](size_t from, size_t to) {
+        for (size_t k = from; k < to; ++k) {
+            out.offset[k] = out.text.size();
+            out.text += raw[k];
+        }
+        if (to > from) atLineStart = false;
+    };
+
+    size_t i = 0;
+    while (i < raw.size()) {
+        /* The space a break just replaced would otherwise sit after the
+         * indentation and push the line one column further out. */
+        if (atLineStart && (raw[i] == L' ' || raw[i] == L'\t')) {
+            out.offset[i] = out.text.size();
+            ++i;
+            continue;
+        }
+        if (raw.compare(i, 5, L"\\end{") == 0) {
+            const size_t close = raw.find(L'}', i);
+            if (close != std::wstring::npos) {
+                if (depth > 0) --depth;
+                if (!atLineStart) breakLine(depth);
+                copy(i, close + 1);
+                i = close + 1;
+                continue;
+            }
+        }
+        if (raw.compare(i, 7, L"\\begin{") == 0) {
+            const size_t close = raw.find(L'}', i);
+            if (close != std::wstring::npos) {
+                if (!atLineStart) breakLine(depth);
+                copy(i, close + 1);
+                i = close + 1;
+                breakLine(++depth);
+                continue;
+            }
+        }
+        if (raw.compare(i, 2, L"\\\\") == 0) {
+            copy(i, i + 2);
+            i += 2;
+            breakLine(depth);
+            continue;
+        }
+        out.offset[i] = out.text.size();
+        out.text += raw[i];
+        atLineStart = false;
+        ++i;
+    }
+    out.offset[raw.size()] = out.text.size();
+    return out;
+}
+
 void sync_source_from_model() {
     if (!g.source) return;
-    const std::wstring canonical = wide_utf8(g.equation.latex());
-    if (window_text(g.source) != canonical) {
+    const PrettySource canonical = pretty_source(wide_utf8(g.equation.latex()));
+    if (window_text(g.source) != canonical.text) {
         g.sourceInsertionHighlight = false;
         g.syncingSource = true;
-        SetWindowTextW(g.source, canonical.c_str());
-        SendMessageW(g.source, EM_SETSEL, canonical.size(), canonical.size());
+        SetWindowTextW(g.source, canonical.text.c_str());
+        SendMessageW(g.source, EM_SETSEL, canonical.text.size(),
+                     canonical.text.size());
         g.syncingSource = false;
     }
     g.sourceEditing = false;
@@ -933,14 +1015,31 @@ void highlight_source_insertion(const std::string& beforeLatex) {
     }
     if (newTail <= first) return;  /* deletion/navigation has no new spelling */
 
+    /* Take the spelling out of the canonical text while the offsets still
+     * index it.  Reusing the mapped ones below to cut this substring read
+     * past the end as soon as layout added a character before the insertion
+     * -- true of every structured equation -- and the throw brought the
+     * process down as heap corruption. */
+    const std::wstring inserted = after.substr(first, newTail - first);
+
+    /* The diff above is in canonical TeX; the EDIT holds the broken and
+     * indented form, so carry both ends through the layout's own map before
+     * addressing it, or the lesson highlights the wrong span. */
+    const PrettySource shown = pretty_source(after);
+    size_t shownFirst =
+        first < shown.offset.size() ? shown.offset[first] : shown.text.size();
+    size_t shownTail =
+        newTail < shown.offset.size() ? shown.offset[newTail]
+                                      : shown.text.size();
+
     const size_t editLength = size_t(GetWindowTextLengthW(g.source));
-    first = std::min(first, editLength);
-    newTail = std::min(newTail, editLength);
-    if (newTail <= first) return;
-    SendMessageW(g.source, EM_SETSEL, WPARAM(first), LPARAM(newTail));
+    shownFirst = std::min(shownFirst, editLength);
+    shownTail = std::min(shownTail, editLength);
+    if (shownTail <= shownFirst) return;
+    SendMessageW(g.source, EM_SETSEL, WPARAM(shownFirst), LPARAM(shownTail));
     SendMessageW(g.source, EM_SCROLLCARET, 0, 0);
     g.sourceInsertionHighlight = true;
-    debug_event("source.highlight", utf8_wide(after.substr(first, newTail - first)));
+    debug_event("source.highlight", utf8_wide(inserted));
 }
 
 /* WM_SETTEXT is allowed not to emit EN_CHANGE for a multiline EDIT.  Hidden
@@ -4308,13 +4407,18 @@ int ui_fuzz(unsigned seed, int operations) {
                          seed, i);
                 return 2;
             }
-            if (!g.sourceEditing &&
-                utf8_wide(window_text(g.source)) != g.equation.latex()) {
+            /* The pane shows the model's TeX broken over lines and indented,
+             * so agreement is against that layout rather than against the
+             * canonical spelling -- comparing the raw strings would report a
+             * divergence on every structured equation. */
+            const std::wstring shownSource =
+                pretty_source(wide_utf8(g.equation.latex())).text;
+            if (!g.sourceEditing && window_text(g.source) != shownSource) {
                 fwprintf(stderr,
                          L"seed %u op %d: source/model divergence\n"
-                         L"  source: %s\n  model:  %s\n",
+                         L"  source: %s\n  shown:  %s\n",
                          seed, i, window_text(g.source).c_str(),
-                         wide_utf8(g.equation.latex()).c_str());
+                         shownSource.c_str());
                 return 3;
             }
             break;
@@ -5002,6 +5106,34 @@ int ui_interaction_test() {
      * fraction the drag started inside, not just the letter it ended on. */
     if (crossSelection.find("\\frac") == std::string::npos) return 208;
     g.equation.clear_selection();
+
+    /* A structured document has to reach the source pane broken over lines.
+     * Held on one line, a two-row aligned equation runs off the right edge
+     * and the reader sees only its opening -- which is how the first outside
+     * reader met his own equation. */
+    g.equation.load_latex("\\begin{aligned}a &= b \\\\ c &= d\\end{aligned}");
+    sync_source_from_model();
+    const std::wstring shownSource = window_text(g.source);
+    if (shownSource.find(L"\r\n") == std::wstring::npos) return 209;
+    /* The breaks are only allowed where TeX ignores whitespace, so the very
+     * text now on display has to parse back to the equation it came from. */
+    const std::string beforeRoundTrip = g.equation.latex();
+    if (!g.equation.replace_latex(utf8_wide(shownSource), false)) return 210;
+    if (g.equation.latex() != beforeRoundTrip) return 211;
+
+    /* The palette lesson addresses the EDIT in laid-out coordinates but has
+     * to read the inserted spelling out of the canonical text.  Carrying the
+     * mapped offsets into that substring read past its end as soon as layout
+     * added a character ahead of the insertion -- every structured equation
+     * -- and the throw came back as heap corruption, which the fuzzer found
+     * on its first seed.  Drive the real path over a structured equation. */
+    g.equation.load_latex("\\begin{aligned}a &= b\\end{aligned}");
+    sync_source_from_model();
+    const std::string beforeLesson = g.equation.latex();
+    g.equation.move_end();
+    g.equation.insert_symbol("\\alpha");
+    highlight_source_insertion(beforeLesson);
+    if (g.equation.latex() == beforeLesson) return 212;
 
     g.equation.load_latex("yx");
     sync_source_from_model();
