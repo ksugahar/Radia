@@ -14,44 +14,44 @@
   ],
   "K_port0": 1019.0613345989583,
   "C1_port0": -60792.71018540269,
-  "bulk_monopole_dc_fraction": 0.3456561638034479,
+  "bulk_monopole_dc_fraction": 0.8008362520665603,
   "mimo_states": {
     "total": 184,
     "foster": 60,
     "warburg": 120,
     "integrator": 4
   },
-  "mimo_transfer_worst_relerr": 0.0014122599845904954,
+  "mimo_transfer_worst_relerr": 0.0011863593621481796,
   "sweep": {
     "1e+03": {
-      "alpha00_re_over_V": -0.557604773217716,
-      "alpha00_im_over_V": 0.029759828451836605,
-      "dipole_Yii_mean": 3.6975566589151773e-05,
-      "dipole_isotropy_spread": 0.006231075855956719
+      "alpha00_re_over_V": -0.9835778872731769,
+      "alpha00_im_over_V": 0.12070674701258916,
+      "dipole_Yii_mean": 4.360199255818328e-05,
+      "dipole_isotropy_spread": 0.0020019402258934
     },
     "1e+04": {
-      "alpha00_re_over_V": 0.5709710154474382,
-      "alpha00_im_over_V": 0.352715009418294,
-      "dipole_Yii_mean": 1.2238510194697737e-05,
-      "dipole_isotropy_spread": 0.009963236014063242
+      "alpha00_re_over_V": 0.4101576493839331,
+      "alpha00_im_over_V": 0.5144648030036397,
+      "dipole_Yii_mean": 1.6923772043290182e-05,
+      "dipole_isotropy_spread": 0.005204926046062235
     },
     "1e+05": {
-      "alpha00_re_over_V": 0.8740691413798963,
-      "alpha00_im_over_V": 0.12295003297637917,
-      "dipole_Yii_mean": 4.239776711103448e-06,
-      "dipole_isotropy_spread": 0.002893951875580642
+      "alpha00_re_over_V": 0.8678129766237739,
+      "alpha00_im_over_V": 0.1625463055061573,
+      "dipole_Yii_mean": 4.917591765545658e-06,
+      "dipole_isotropy_spread": 0.004160636562768214
     },
     "1e+06": {
-      "alpha00_re_over_V": 0.9603431779954354,
-      "alpha00_im_over_V": 0.03941309571673712,
-      "dipole_Yii_mean": 1.3881584918760413e-06,
-      "dipole_isotropy_spread": 0.0008665053643418959
+      "alpha00_re_over_V": 0.9602774515109423,
+      "alpha00_im_over_V": 0.04350376406223676,
+      "dipole_Yii_mean": 1.4498108481732477e-06,
+      "dipole_isotropy_spread": 0.0012259635885955677
     },
     "1e+09": {
-      "alpha00_re_over_V": 0.9987461159235095,
-      "alpha00_im_over_V": 0.0012536459301183583,
-      "dipole_Yii_mean": 4.461562544791748e-08,
-      "dipole_isotropy_spread": 2.7228278416604232e-05
+      "alpha00_re_over_V": 0.9987461158577488,
+      "alpha00_im_over_V": 0.0012577380040999662,
+      "dipole_Yii_mean": 4.467609864887894e-08,
+      "dipole_isotropy_spread": 3.794709876324561e-05
     }
   },
   "scope_note": "multipole eddy-admittance matrix of the SCALAR diffusion model; monopole port = validated scalar alpha(s); physical vector tensor is in ellipsoid/ellipsoid_alpha_tensor_3d.py"
