@@ -13,15 +13,21 @@ This is the time-domain analogue of the digest's Warburg-Schur termination
 """
 import cmath
 import math
-import sys
 import time
+import importlib.util
 from pathlib import Path
 
 import numpy as np
 from scipy.special import dawsn
 
-sys.path.insert(0, str(Path("S:/Radia/01_GitHub/examples/hierarchical_cauer_sibc/mixed_galerkin").resolve()))
-from _references.cube3d_foster import Y_DC_cube3d
+REFERENCE_PATH = Path(__file__).resolve().parents[1] / "_references" / "cube3d_foster.py"
+REFERENCE_SPEC = importlib.util.spec_from_file_location(
+    "mixed_galerkin_cube3d_foster", REFERENCE_PATH)
+if REFERENCE_SPEC is None or REFERENCE_SPEC.loader is None:
+    raise ImportError(f"cannot load mixed-Galerkin reference {REFERENCE_PATH}")
+REFERENCE_MODULE = importlib.util.module_from_spec(REFERENCE_SPEC)
+REFERENCE_SPEC.loader.exec_module(REFERENCE_MODULE)
+Y_DC_cube3d = REFERENCE_MODULE.Y_DC_cube3d
 
 SIGMA = 5.8e7
 MU = 4 * math.pi * 1e-7
