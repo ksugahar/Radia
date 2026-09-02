@@ -2333,6 +2333,108 @@ def test_publication_list_is_not_linted_as_one_long_sentence():
     assert result["over_threshold_count"] == 0
 
 
+def test_main_tex_assembles_sibling_inputs_but_not_template_pieces(tmp_path):
+    # The JSPS template keeps one file per field beside the main file and its
+    # own scaffolding in pieces/. Run on a field file, every whole-proposal
+    # check reported the other fields as missing (2026-09-02).
+    (tmp_path / "pieces").mkdir()
+    (tmp_path / "pieces" / "form_header.tex").write_text(
+        "本欄には研究目的を記述すること。TEMPLATE_PIECE\n", encoding="utf-8"
+    )
+    (tmp_path / "kiban_c_01_purpose_plan.tex").write_text(
+        "\\input{pieces/form_header}\n\\section{研究目的}\n本研究の学術的問いはXである。\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "kiban_c_03_abilities.tex").write_text(
+        "\\section{遂行能力}\n菅原は開境界解析を研究してきた。\n", encoding="utf-8"
+    )
+    (tmp_path / "kiban_c.tex").write_text(
+        "\\documentclass{jarticle}\n"
+        "%\\input{kiban_c_03_abilities} commented out, must not be read twice\n"
+        "\\begin{document}\n"
+        "\\input{kiban_c_01_purpose_plan}\n"
+        "\\input{kiban_c_03_abilities.tex} % trailing comment\n"
+        "\\input{kiban_c}\n"
+        "\\end{document}\n",
+        encoding="utf-8",
+    )
+
+    text = gw._read_text_if_path(str(tmp_path / "kiban_c.tex"))
+
+    assert "学術的問いはX" in text
+    assert text.count("開境界解析") == 1
+    assert "TEMPLATE_PIECE" not in text
+    assert "\\input{pieces/form_header}" in text
+
+    # A field file on its own still reads as before.
+    alone = gw._read_text_if_path(str(tmp_path / "kiban_c_03_abilities.tex"))
+    assert "学術的問い" not in alone
+
+
+def test_cross_organization_pilot_reads_the_limit_from_the_whole_paragraph():
+    # The honest closing sentence of a real 準備状況 paragraph sat four
+    # sentences after the last trigger word and fell outside the window.
+    text = (
+        "大学間予備実証では、A大学提供のソルバー実装をB大学が同一問題へ統合した。"
+        "C大学提供のモデルで再実行した。"
+        "197,395自由度で168反復、真の相対残差8e-11で収束した。"
+        "D大学は微分形式から材料則の再構成を導いた。"
+        "これをCEFC 2026で発表した。"
+        "ただし、別機関が共通の設計量から候補順位を判定できるかは未検証である。"
+    )
+
+    result = gw.grant_writing_cross_organization_pilot_check(text)
+
+    assert result["applicable"]
+    assert "remaining_gap" not in result["missing_axes"]
+
+
+def test_budget_source_consistency_accepts_japanese_category_headings(tmp_path):
+    header = (
+        "費目区分/Expenditure Categories,年度/FY,品名・仕様/Item (Specification),"
+        "設置機関/Place,品目/Item,数量/Qty,単価/Unit Price,金額/Amount\n"
+    )
+    source = tmp_path / "budget.csv"
+    source.write_text(
+        header
+        + "B,2027,,,SSD,,,50\n"
+        + "E,2027,,,研究協力者謝金,,,150\n"
+        + "F,2027,,,JMAG,,,1023\n",
+        encoding="utf-8-sig",
+    )
+
+    result = gw.grant_writing_budget_source_consistency_check(
+        str(source),
+        expected_category_totals_json=(
+            '{"消耗品費": 50, "人件費・謝金": 150, "その他": 1023, "設備備品費": 0}'
+        ),
+    )
+
+    # 設備備品費 declared as zero with no ledger row is agreement, not a gap.
+    assert result["consistent"]
+    assert result["canonical"]["category_labels"] == {
+        "B": "消耗品費", "E": "人件費・謝金", "F": "その他",
+    }
+
+    result = gw.grant_writing_budget_source_consistency_check(
+        str(source),
+        expected_category_totals_json='{"消耗品費": 50, "国内旅費": 300}',
+    )
+
+    # A non-zero total for a category the ledger never mentions is reported
+    # as absent, not as a mismatch against null.
+    assert [d["type"] for d in result["differences"]] == ["category_not_in_ledger"]
+    assert result["differences"][0]["category"] == "C"
+
+    result = gw.grant_writing_budget_source_consistency_check(
+        str(source),
+        expected_category_totals_json='{"消耗品費": 50, "人件費・謝金": 150, "F": 1000}',
+    )
+
+    assert [d["type"] for d in result["differences"]] == ["category_total_mismatch"]
+    assert result["differences"][0]["delta"] == 23
+
+
 def test_prose_list_items_survive_but_stay_separate():
     proposal = (
         "\\begin{itemize}\n"

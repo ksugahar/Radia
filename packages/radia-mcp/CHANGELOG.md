@@ -7,6 +7,21 @@ crystallized as its own package.
 
 ## [Unreleased]
 
+- grant-writing: a `.tex` main file passed to any check is now assembled with
+  the sibling files it `\input`s (form pieces in subdirectories stay out), so
+  `grant_writing_health_report("kiban_c.tex")` judges the whole 計画調書.
+  Run per field file, the abilities field was reported as lacking the academic
+  question and the purpose field as lacking the execution environment
+  (2026-09-02, 基盤C 2027 draft).
+- grant-writing: the cross-organization pilot check now reads the whole
+  paragraph that claims the pilot, so a closing 「…は未検証である」 four
+  sentences after the last trigger is no longer reported as a missing gap.
+- grant-writing: budget-source reconciliation accepts the Japanese S-14
+  category headings (設備備品費 … その他) as well as e-Rad codes `A`..`F`,
+  reports declared categories absent from the ledger as
+  `category_not_in_ledger` instead of a mismatch against `null`, treats a
+  declared zero with no rows as agreement, and returns `category_labels`.
+
 ## [1.4.50] - 2026-09-02
 
 - mor: corrected the mixed-Galerkin CLN knowledge to record that the naive
