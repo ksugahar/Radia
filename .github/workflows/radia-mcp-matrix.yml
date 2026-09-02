@@ -253,17 +253,23 @@ jobs:
         run: |
           python - <<'PY'
           import json
+          import os
           from pathlib import Path
           import subprocess
           import sys
 
           package_root = Path("packages/radia-mcp")
           plan = json.loads(Path("radia-mcp-ci-selection.json").read_text(encoding="utf-8"))
+          env = os.environ.copy()
+          if plan["package_tests"] != ["tests"]:
+              env["RADIA_MCP_CI_SELECTION_JSON"] = json.dumps(plan["package_tests"])
           command = [
               sys.executable, "-m", "pytest", "-v", "-r", "aR",
-              "-m", "not xval and not slow", *plan["package_tests"],
+              "-m", "not xval and not slow", "tests",
           ]
-          raise SystemExit(subprocess.run(command, cwd=package_root).returncode)
+          raise SystemExit(
+              subprocess.run(command, cwd=package_root, env=env).returncode
+          )
           PY
 
       # TOOLS.md drift gate — regenerate the auto-generated inventory
