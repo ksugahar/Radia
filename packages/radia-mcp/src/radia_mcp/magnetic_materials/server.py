@@ -13,6 +13,7 @@ import sys
 
 from mcp.server.fastmcp import FastMCP
 from ..common import register_status_tool
+from ..common.tool_group import CoarseToolRegistry
 
 from .hysteresis_models_knowledge import get_hysteresis_models_knowledge
 from .iron_loss_knowledge import get_iron_loss_knowledge
@@ -20,12 +21,12 @@ from .silicon_steel_knowledge import get_silicon_steel_knowledge
 from .permanent_magnet_knowledge import get_permanent_magnet_knowledge
 from .demagnetization_knowledge import get_demagnetization_knowledge
 from .radia_status_knowledge import get_radia_status_knowledge
-from .periodic_hysteresis_loss_gate import (
-    periodic_hysteresis_loss_energy_gate as _periodic_hysteresis_loss_energy_gate,
-)
+from ..common.lazy_call import lazy_callable
+_periodic_hysteresis_loss_energy_gate = lazy_callable(".periodic_hysteresis_loss_gate", "periodic_hysteresis_loss_energy_gate", __package__)
 
 
 mcp = FastMCP("mcp-server-magnetic-materials")
+_validation = CoarseToolRegistry(mcp, namespace="magnetic_materials")
 
 
 @mcp.tool()
@@ -215,7 +216,7 @@ def magnetic_materials_iron_loss(topic: str = "decision") -> str:
     return get_iron_loss_knowledge(topic)
 
 
-@mcp.tool()
+@_validation.tool()
 def periodic_hysteresis_loss_energy_gate(summary_json: str) -> str:
     """Gate periodic hysteresis power by cycle energy and loss closure."""
     import json
@@ -356,6 +357,8 @@ def new_magnetic_material_simulation(material_type: str) -> str:
 
 
 
+
+_validation.install()
 
 register_status_tool(
     mcp,

@@ -29,140 +29,86 @@ from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations
 from .. import __version__
 from ..common import register_status_tool
+from ..common.tool_group import CoarseToolRegistry
 from ..common.mcp_contract import apply_tool_contract
 from ..common.learning_quality import build_balanced_learning_profile
-from .rf_sweep_artifact_gate import rf_sweep_artifact_summary_gate as _rf_sweep_artifact_summary_gate
+from ..common.lazy_call import lazy_callable
+_rf_sweep_artifact_summary_gate = lazy_callable(".rf_sweep_artifact_gate", "rf_sweep_artifact_summary_gate", __package__)
 from .cq_urn import cq_response_reality_gate as _cq_response_reality_gate
-from .cq_scattering_arrival_gate import cq_scattering_arrival_gate as _cq_scattering_arrival_gate
-from .physics_result_preflight_gate import physics_result_preflight_gate as _physics_result_preflight_gate
-from .field_profile_gate import (
-    dual_formulation_symmetric_field_profile_gate as _dual_formulation_symmetric_field_profile_gate,
-    symmetric_complex_field_curve_gate as _symmetric_complex_field_curve_gate,
-    symmetric_axial_field_profile_gate as _symmetric_axial_field_profile_gate,
-)
-from .acoustic_kernel_gate import (
-    helmholtz_double_layer_low_frequency_gate as _helmholtz_double_layer_low_frequency_gate,
-)
-from .terminal_source_sweep_gate import cyclic_terminal_source_sweep_gate as _cyclic_terminal_source_sweep_gate
-from .terminal_phasor_balance_gate import (
-    cyclic_terminal_phasor_balance_gate as _cyclic_terminal_phasor_balance_gate,
-)
-from .three_phase_winding_power_gate import (
-    three_phase_winding_power_balance_gate as _three_phase_winding_power_balance_gate,
-)
-from .cogging_periodicity_gate import cogging_torque_periodicity_gate as _cogging_torque_periodicity_gate
-from .nonlinear_actuator_gate import nonlinear_actuator_saturation_knee_gate as _nonlinear_actuator_saturation_knee_gate
-from .source_free_static_gate import source_free_static_null_solution_gate as _source_free_static_null_solution_gate
-from .harmonic_force_triplet_gate import (
-    harmonic_magnetic_force_triplet_closure_gate as _harmonic_magnetic_force_triplet_closure_gate,
-)
-from .magnetic_force_method_profile_gate import (
-    magnetic_force_method_profile_gate as _magnetic_force_method_profile_gate,
-)
-from .magnetic_force_v44_identity import validate_public_identity as _validate_force_v44_identity
-from .harmonic_port_identity_gate import (
-    harmonic_current_port_power_energy_identity_gate as _harmonic_current_port_power_energy_identity_gate,
-)
-from .periodic_pm_machine_gate import (
-    periodic_unwrapped_pm_machine_replay_gate as _periodic_unwrapped_pm_machine_replay_gate,
-)
-from .permanent_magnet_recoil_state_gate import (
-    permanent_magnet_recoil_state_gate as _permanent_magnet_recoil_state_gate,
-)
-from .eddy_levitation_force_gate import (
-    linear_eddy_levitation_force_gate as _linear_eddy_levitation_force_gate,
-)
-from .motion_coupled_levitation_gate import (
-    motion_coupled_eddy_levitation_transient_gate as _motion_coupled_eddy_levitation_transient_gate,
-)
-from .rotational_eddy_brake_energy_gate import (
-    rotational_eddy_brake_energy_gate as _rotational_eddy_brake_energy_gate,
-)
-from .harmonic_zero_net_circuit_gate import (
-    harmonic_zero_net_circuit_gate as _harmonic_zero_net_circuit_gate,
-)
-from .moving_conductor_brake_gate import moving_conductor_eddy_brake_gate as _moving_conductor_eddy_brake_gate
-from .rotating_conductor_transient_gate import rotating_conductor_transient_gate as _rotating_conductor_transient_gate
-from .linear_magnetization_scaling_gate import linear_magnetization_scaling_gate as _linear_magnetization_scaling_gate
-from .linear_axisymmetric_circuit_energy_gate import (
-    linear_axisymmetric_circuit_energy_gate as _linear_axisymmetric_circuit_energy_gate,
-)
-from .manual_auto_mixed_mesh_gate import (
-    manual_auto_mixed_mesh_preservation_gate as _manual_auto_mixed_mesh_preservation_gate,
-)
-from .two_winding_frequency_gate import (
-    two_winding_frequency_faraday_gate as _two_winding_frequency_faraday_gate,
-)
-from .conductive_shield_frequency_gate import (
-    magnetic_conductive_shield_frequency_gate as _magnetic_conductive_shield_frequency_gate,
-)
-from .cylindrical_conductor_skin_gate import (
-    cylindrical_conductor_skin_bessel_gate as _cylindrical_conductor_skin_bessel_gate,
-)
-from .conductive_network_monotonicity_gate import (
-    conductive_network_resistance_monotonicity_gate as _conductive_network_resistance_monotonicity_gate,
-)
-from .autodiff_harmonic_balance_gate import (
-    autodiff_harmonic_balance_convergence_gate as _autodiff_harmonic_balance_convergence_gate,
-)
-from .hall_effect_gate import (
-    hall_effect_transverse_voltage_gate as _hall_effect_transverse_voltage_gate,
-)
-from .single_loop_normalized_field_gate import (
-    single_loop_source_normalized_field_gate as _single_loop_source_normalized_field_gate,
-)
-from .coupled_cq_refinement_gate import (
-    coupled_cq_refinement_gate as _coupled_cq_refinement_gate,
-)
-from .coil_self_resonance_gate import (
-    coil_self_resonance_sweep_gate as _coil_self_resonance_sweep_gate,
-)
-from .passive_axial_bearing_gate import (
-    passive_axial_bearing_stiffness_gate as _passive_axial_bearing_stiffness_gate,
-)
-from .radial_bearing_force_gate import (
-    radial_bearing_force_symmetry_gate as _radial_bearing_force_symmetry_gate,
-)
-from .complex_field_maximum_gate import complex_vector_field_maximum_gate as _complex_vector_field_maximum_gate
-from .one_port_vi_s_gate import one_port_vi_s_impedance_gate as _one_port_vi_s_impedance_gate
-from .force_position_profile_gate import force_position_profile_gate as _force_position_profile_gate
-from .force_coenergy_gate import force_coenergy_displacement_gate as _force_coenergy_displacement_gate
-from .femm_v44_identity import validate_public_identity as _validate_femm_v44_identity
-from .femm_v46_identity import validate_public_identity as _validate_femm_v46_identity
+_cq_scattering_arrival_gate = lazy_callable(".cq_scattering_arrival_gate", "cq_scattering_arrival_gate", __package__)
+_physics_result_preflight_gate = lazy_callable(".physics_result_preflight_gate", "physics_result_preflight_gate", __package__)
+_dual_formulation_symmetric_field_profile_gate = lazy_callable(".field_profile_gate", "dual_formulation_symmetric_field_profile_gate", __package__)
+_symmetric_complex_field_curve_gate = lazy_callable(".field_profile_gate", "symmetric_complex_field_curve_gate", __package__)
+_symmetric_axial_field_profile_gate = lazy_callable(".field_profile_gate", "symmetric_axial_field_profile_gate", __package__)
+_helmholtz_double_layer_low_frequency_gate = lazy_callable(".acoustic_kernel_gate", "helmholtz_double_layer_low_frequency_gate", __package__)
+_cyclic_terminal_source_sweep_gate = lazy_callable(".terminal_source_sweep_gate", "cyclic_terminal_source_sweep_gate", __package__)
+_cyclic_terminal_phasor_balance_gate = lazy_callable(".terminal_phasor_balance_gate", "cyclic_terminal_phasor_balance_gate", __package__)
+_three_phase_winding_power_balance_gate = lazy_callable(".three_phase_winding_power_gate", "three_phase_winding_power_balance_gate", __package__)
+_cogging_torque_periodicity_gate = lazy_callable(".cogging_periodicity_gate", "cogging_torque_periodicity_gate", __package__)
+_nonlinear_actuator_saturation_knee_gate = lazy_callable(".nonlinear_actuator_gate", "nonlinear_actuator_saturation_knee_gate", __package__)
+_source_free_static_null_solution_gate = lazy_callable(".source_free_static_gate", "source_free_static_null_solution_gate", __package__)
+_harmonic_magnetic_force_triplet_closure_gate = lazy_callable(".harmonic_force_triplet_gate", "harmonic_magnetic_force_triplet_closure_gate", __package__)
+_magnetic_force_method_profile_gate = lazy_callable(".magnetic_force_method_profile_gate", "magnetic_force_method_profile_gate", __package__)
+_validate_force_v44_identity = lazy_callable(".magnetic_force_v44_identity", "validate_public_identity", __package__)
+_harmonic_current_port_power_energy_identity_gate = lazy_callable(".harmonic_port_identity_gate", "harmonic_current_port_power_energy_identity_gate", __package__)
+_periodic_unwrapped_pm_machine_replay_gate = lazy_callable(".periodic_pm_machine_gate", "periodic_unwrapped_pm_machine_replay_gate", __package__)
+_permanent_magnet_recoil_state_gate = lazy_callable(".permanent_magnet_recoil_state_gate", "permanent_magnet_recoil_state_gate", __package__)
+_linear_eddy_levitation_force_gate = lazy_callable(".eddy_levitation_force_gate", "linear_eddy_levitation_force_gate", __package__)
+_motion_coupled_eddy_levitation_transient_gate = lazy_callable(".motion_coupled_levitation_gate", "motion_coupled_eddy_levitation_transient_gate", __package__)
+_rotational_eddy_brake_energy_gate = lazy_callable(".rotational_eddy_brake_energy_gate", "rotational_eddy_brake_energy_gate", __package__)
+_harmonic_zero_net_circuit_gate = lazy_callable(".harmonic_zero_net_circuit_gate", "harmonic_zero_net_circuit_gate", __package__)
+_moving_conductor_eddy_brake_gate = lazy_callable(".moving_conductor_brake_gate", "moving_conductor_eddy_brake_gate", __package__)
+_rotating_conductor_transient_gate = lazy_callable(".rotating_conductor_transient_gate", "rotating_conductor_transient_gate", __package__)
+_linear_magnetization_scaling_gate = lazy_callable(".linear_magnetization_scaling_gate", "linear_magnetization_scaling_gate", __package__)
+_linear_axisymmetric_circuit_energy_gate = lazy_callable(".linear_axisymmetric_circuit_energy_gate", "linear_axisymmetric_circuit_energy_gate", __package__)
+_manual_auto_mixed_mesh_preservation_gate = lazy_callable(".manual_auto_mixed_mesh_gate", "manual_auto_mixed_mesh_preservation_gate", __package__)
+_two_winding_frequency_faraday_gate = lazy_callable(".two_winding_frequency_gate", "two_winding_frequency_faraday_gate", __package__)
+_magnetic_conductive_shield_frequency_gate = lazy_callable(".conductive_shield_frequency_gate", "magnetic_conductive_shield_frequency_gate", __package__)
+_cylindrical_conductor_skin_bessel_gate = lazy_callable(".cylindrical_conductor_skin_gate", "cylindrical_conductor_skin_bessel_gate", __package__)
+_conductive_network_resistance_monotonicity_gate = lazy_callable(".conductive_network_monotonicity_gate", "conductive_network_resistance_monotonicity_gate", __package__)
+_autodiff_harmonic_balance_convergence_gate = lazy_callable(".autodiff_harmonic_balance_gate", "autodiff_harmonic_balance_convergence_gate", __package__)
+_hall_effect_transverse_voltage_gate = lazy_callable(".hall_effect_gate", "hall_effect_transverse_voltage_gate", __package__)
+_single_loop_source_normalized_field_gate = lazy_callable(".single_loop_normalized_field_gate", "single_loop_source_normalized_field_gate", __package__)
+_coupled_cq_refinement_gate = lazy_callable(".coupled_cq_refinement_gate", "coupled_cq_refinement_gate", __package__)
+_coil_self_resonance_sweep_gate = lazy_callable(".coil_self_resonance_gate", "coil_self_resonance_sweep_gate", __package__)
+_passive_axial_bearing_stiffness_gate = lazy_callable(".passive_axial_bearing_gate", "passive_axial_bearing_stiffness_gate", __package__)
+_radial_bearing_force_symmetry_gate = lazy_callable(".radial_bearing_force_gate", "radial_bearing_force_symmetry_gate", __package__)
+_complex_vector_field_maximum_gate = lazy_callable(".complex_field_maximum_gate", "complex_vector_field_maximum_gate", __package__)
+_one_port_vi_s_impedance_gate = lazy_callable(".one_port_vi_s_gate", "one_port_vi_s_impedance_gate", __package__)
+_force_position_profile_gate = lazy_callable(".force_position_profile_gate", "force_position_profile_gate", __package__)
+_force_coenergy_displacement_gate = lazy_callable(".force_coenergy_gate", "force_coenergy_displacement_gate", __package__)
+_validate_femm_v44_identity = lazy_callable(".femm_v44_identity", "validate_public_identity", __package__)
+_validate_femm_v46_identity = lazy_callable(".femm_v46_identity", "validate_public_identity", __package__)
 from .magnetic_artifact_lineage_v47 import validate_public_identity as _validate_femm_v47_identity
-from .electromagnetic_semantic_identity_v48 import validate_public_identity as _validate_femm_v48_identity
-from .electromagnetic_artifact_identity_v49 import validate_public_identity as _validate_femm_v49_identity
-from .electromagnetic_artifact_identity_v50 import validate_public_identity as _validate_femm_v50_identity
-from .electromagnetic_artifact_identity_v51 import validate_public_identity as _validate_femm_v51_identity
-from .motor_v44_identity import validate_public_identity as _validate_motor_v44_identity
-from .jmag_v46_identity import validate_public_identity as _validate_jmag_v46_identity
+_validate_femm_v48_identity = lazy_callable(".electromagnetic_semantic_identity_v48", "validate_public_identity", __package__)
+_validate_femm_v49_identity = lazy_callable(".electromagnetic_artifact_identity_v49", "validate_public_identity", __package__)
+_validate_femm_v50_identity = lazy_callable(".electromagnetic_artifact_identity_v50", "validate_public_identity", __package__)
+_validate_femm_v51_identity = lazy_callable(".electromagnetic_artifact_identity_v51", "validate_public_identity", __package__)
+_validate_motor_v44_identity = lazy_callable(".motor_v44_identity", "validate_public_identity", __package__)
+_validate_jmag_v46_identity = lazy_callable(".jmag_v46_identity", "validate_public_identity", __package__)
 from .motor_artifact_lineage_v47 import validate_public_identity as _validate_motor_v47_identity
-from .motor_semantic_identity_v48 import validate_public_identity as _validate_motor_v48_identity
-from .motor_artifact_identity_v49 import validate_public_identity as _validate_motor_v49_identity
-from .motor_artifact_identity_v50 import validate_public_identity as _validate_motor_v50_identity
-from .motor_artifact_identity_v51 import validate_public_identity as _validate_motor_v51_identity
-from .rotational_time_axis_gate import rotational_kinematics_time_axis_gate as _rotational_kinematics_time_axis_gate
-from .inductance_matrix_gate import inductance_matrix_family_gate as _inductance_matrix_family_gate
-from .nonlinear_inductance_sweep_gate import (
-    nonlinear_inductance_sweep_gate as _nonlinear_inductance_sweep_gate,
-)
-from .waveguide_emc_v44_identity import validate_public_identity as _validate_waveguide_emc_v44_identity
-from .cst_v45_identity import validate_public_identity as _validate_cst_v45_identity
-from .cst_v46_identity import validate_public_v46_identity as _validate_cst_v46_identity
+_validate_motor_v48_identity = lazy_callable(".motor_semantic_identity_v48", "validate_public_identity", __package__)
+_validate_motor_v49_identity = lazy_callable(".motor_artifact_identity_v49", "validate_public_identity", __package__)
+_validate_motor_v50_identity = lazy_callable(".motor_artifact_identity_v50", "validate_public_identity", __package__)
+_validate_motor_v51_identity = lazy_callable(".motor_artifact_identity_v51", "validate_public_identity", __package__)
+_rotational_kinematics_time_axis_gate = lazy_callable(".rotational_time_axis_gate", "rotational_kinematics_time_axis_gate", __package__)
+_inductance_matrix_family_gate = lazy_callable(".inductance_matrix_gate", "inductance_matrix_family_gate", __package__)
+_nonlinear_inductance_sweep_gate = lazy_callable(".nonlinear_inductance_sweep_gate", "nonlinear_inductance_sweep_gate", __package__)
+_validate_waveguide_emc_v44_identity = lazy_callable(".waveguide_emc_v44_identity", "validate_public_identity", __package__)
+_validate_cst_v45_identity = lazy_callable(".cst_v45_identity", "validate_public_identity", __package__)
+_validate_cst_v46_identity = lazy_callable(".cst_v46_identity", "validate_public_v46_identity", __package__)
 from .network_artifact_lineage_v47 import validate_public_v47_identity as _validate_network_v47_identity
-from .network_semantic_identity_v48 import validate_public_v48_identity as _validate_network_v48_identity
-from .network_artifact_identity_v49 import validate_public_v49_identity as _validate_network_v49_identity
-from .network_artifact_identity_v50 import validate_public_v50_identity as _validate_network_v50_identity
-from .network_artifact_identity_v51 import validate_public_v51_identity as _validate_network_v51_identity
-from .comsol_v46_identity import validate_public_identity as _validate_comsol_v46_identity
+_validate_network_v48_identity = lazy_callable(".network_semantic_identity_v48", "validate_public_v48_identity", __package__)
+_validate_network_v49_identity = lazy_callable(".network_artifact_identity_v49", "validate_public_v49_identity", __package__)
+_validate_network_v50_identity = lazy_callable(".network_artifact_identity_v50", "validate_public_v50_identity", __package__)
+_validate_network_v51_identity = lazy_callable(".network_artifact_identity_v51", "validate_public_v51_identity", __package__)
+_validate_comsol_v46_identity = lazy_callable(".comsol_v46_identity", "validate_public_identity", __package__)
 from .cross_artifact_lineage_v47 import validate_public_identity as _validate_comsol_v47_identity
 from .transform_normalization_v48 import validate_public_v48_identity as _validate_comsol_v48_identity
-from .solver_state_identity_v49 import validate_public_v49_identity as _validate_comsol_v49_identity
-from .frequency_contact_identity_v50 import validate_public_v50_identity as _validate_comsol_v50_identity
-from .modal_continuation_identity_v51 import validate_public_v51_identity as _validate_comsol_v51_identity
-from .regularized_trace_inverse_gate import (
-    regularized_trace_inverse_path_gate as _regularized_trace_inverse_path_gate,
-)
+_validate_comsol_v49_identity = lazy_callable(".solver_state_identity_v49", "validate_public_v49_identity", __package__)
+_validate_comsol_v50_identity = lazy_callable(".frequency_contact_identity_v50", "validate_public_v50_identity", __package__)
+_validate_comsol_v51_identity = lazy_callable(".modal_continuation_identity_v51", "validate_public_v51_identity", __package__)
+_regularized_trace_inverse_path_gate = lazy_callable(".regularized_trace_inverse_gate", "regularized_trace_inverse_path_gate", __package__)
 from ..matlab_agentic_ml import validate_matlab_ml_rl_v44_identity as _validate_matlab_ml_rl_v44_identity
 from ..matlab_agentic_ml import validate_matlab_ml_rl_v45_identity as _validate_matlab_ml_rl_v45_identity
 from ..matlab_agentic_ml import validate_matlab_ml_rl_v46_identity as _validate_matlab_ml_rl_v46_identity
@@ -174,117 +120,55 @@ from ..matlab_agentic_ml import validate_matlab_ml_rl_v51_identity as _validate_
 from ..matlab_agentic_ml import validate_matlab_ml_rl_v52_identity as _validate_matlab_ml_rl_v52_identity
 from ..matlab_agentic_ml import validate_matlab_ml_rl_v53_identity as _validate_matlab_ml_rl_v53_identity
 from ..matlab_agentic_ml import validate_matlab_ml_rl_v54_identity as _validate_matlab_ml_rl_v54_identity
-from .sphere_mesh_convergence_gate import (
-    linear_sphere_geometry_convergence_gate as _linear_sphere_geometry_convergence_gate,
-)
-from .leakage_inductance_closure_gate import (
-    leakage_inductance_closure_gate as _leakage_inductance_closure_gate,
-)
-from .parallel_wire_force_refinement_gate import (
-    parallel_wire_force_refinement_gate as _parallel_wire_force_refinement_gate,
-)
-from .capacitance_identity_gate import (
-    two_conductor_capacitance_identity_gate as _two_conductor_capacitance_identity_gate,
-)
-from .grounded_sphere_capacitance_gate import (
-    grounded_sphere_capacitance_convergence_gate as _grounded_sphere_capacitance_convergence_gate,
-)
-from .capacitance_matrix_gate import two_conductor_capacitance_matrix_gate as _two_conductor_capacitance_matrix_gate
-from .multiconductor_capacitance_gate import (
-    multiconductor_capacitance_cross_formulation_gate as _multiconductor_capacitance_cross_formulation_gate,
-)
-from .impedance_sweep_gate import multiport_impedance_sweep_gate as _multiport_impedance_sweep_gate
-from .radar_range_rcs_gate import radar_range_rcs_profile_gate as _radar_range_rcs_profile_gate
-from .radar_range_angle_gate import radar_range_angle_localization_gate as _radar_range_angle_localization_gate
-from .hmatrix_scaling_gate import hmatrix_compression_scaling_gate as _hmatrix_compression_scaling_gate
-from .acoustic_duct_band_gap_gate import acoustic_duct_band_gap_gate as _acoustic_duct_band_gap_gate
-from .force_error_convergence_gate import (
-    dual_formulation_force_error_convergence_gate as _dual_formulation_force_error_convergence_gate,
-)
-from .voice_coil_gate import voice_coil_force_flux_sweep_gate as _voice_coil_force_flux_sweep_gate
-from .linear_induction_gate import linear_induction_frequency_sweep_gate as _linear_induction_frequency_sweep_gate
-from .conductor_frequency_gate import (
-    homogenized_bundle_impedance_comparison_gate as _homogenized_bundle_impedance_comparison_gate,
-    opposed_busbar_skin_force_gate as _opposed_busbar_skin_force_gate,
-    twin_conductor_skin_effect_frequency_gate as _twin_conductor_skin_effect_frequency_gate,
-)
-from .transient_conductor_replay_gate import (
-    transient_conductor_replay_identity_gate as _transient_conductor_replay_identity_gate,
-)
-from .adjoint_gradient_gate import adjoint_gradient_scaling_gate as _adjoint_gradient_scaling_gate
-from .one_port_power_gate import one_port_power_balance_gate as _one_port_power_balance_gate
-from .fsi_scattering_invariants_gate import (
-    fsi_scattering_invariants_gate as _fsi_scattering_invariants_gate,
-)
-from .inductance_energy_gate import inductance_energy_mutual_gate as _inductance_energy_mutual_gate
-from .loss_temperature_coupling_gate import loss_temperature_coupling_gate as _loss_temperature_coupling_gate
-from .transient_coupled_coil_gate import (
-    transient_coupled_coil_response_gate as _transient_coupled_coil_response_gate,
-)
-from .source_off_relaxation_gate import (
-    source_off_linear_relaxation_gate as _source_off_linear_relaxation_gate,
-)
-from .nonlinear_bh_curve_gate import (
-    nonlinear_bh_piecewise_material_gate as _nonlinear_bh_piecewise_material_gate,
-)
-from .skin_effect_adaptive_gate import skin_effect_adaptive_energy_loss_gate as _skin_effect_adaptive_energy_loss_gate
-from .global_local_optimization_gate import global_local_optimization_replay_gate as _global_local_optimization_replay_gate
-from .eddy_loss_formulation_gate import alternate_eddy_loss_formulation_gate as _alternate_eddy_loss_formulation_gate
-from .open_boundary_magnetostatic_gate import (
-    magnetostatic_open_boundary_equivalence_gate as _magnetostatic_open_boundary_equivalence_gate,
-)
-from .pwm_controlled_motor_loss_gate import (
-    pwm_controlled_motor_loss_gate as _pwm_controlled_motor_loss_gate,
-)
-from .material_contrast_force_gate import (
-    material_contrast_force_gate as _material_contrast_force_gate,
-)
-from .two_body_force_magnitude_gate import (
-    two_body_force_magnitude_replay_gate as _two_body_force_magnitude_replay_gate,
-)
-from .static_field_shim_family_gate import (
-    static_field_shim_family_gate as _static_field_shim_family_gate,
-)
-from .energy_budgeted_trace_kkt_gate import (
-    energy_budgeted_trace_kkt_gate as _energy_budgeted_trace_kkt_gate,
-)
-from .finite_solenoid_surface_current_gate import (
-    finite_solenoid_surface_current_gate as _finite_solenoid_surface_current_gate,
-)
-from .linked_study_noop_gate import (
-    linked_study_silent_noop_gate as _linked_study_silent_noop_gate,
-)
-from .two_port_power_gate import (
-    reciprocal_two_port_power_sweep_gate as _reciprocal_two_port_power_sweep_gate,
-)
-from .fem_bem_capstone_gate import (
-    fem_bem_capstone_suite_gate as _fem_bem_capstone_suite_gate,
-)
-from .helmholtz_dual_formulation_gate import (
-    helmholtz_dual_formulation_axis_gate as _helmholtz_dual_formulation_axis_gate,
-)
-from .lossy_dielectric_power_gate import (
-    lossy_dielectric_complex_power_refinement_gate as _lossy_power_refinement_gate,
-)
-from .heterogeneous_current_flow_gate import (
-    heterogeneous_current_flow_p1_reintegration_gate as _heterogeneous_current_flow_gate,
-)
-from .thermal_robin_balance_gate import (
-    thermal_robin_boundary_balance_gate as _thermal_robin_boundary_balance_gate,
-)
-from .hysteresis_minor_loop_gate import (
-    hysteresis_minor_loop_replay_gate as _hysteresis_minor_loop_replay_gate,
-)
-from .heterogeneous_mesh_replay_gate import (
-    heterogeneous_part_mesh_replay_gate as _heterogeneous_part_mesh_replay_gate,
-)
-from .two_terminal_dc_conduction_gate import (
-    two_terminal_dc_conduction_power_gate as _two_terminal_dc_conduction_power_gate,
-)
-from .rwg_hcurl_trace_gate import (
-    rwg_hcurl_trace_consistency_gate as _rwg_hcurl_trace_consistency_gate,
-)
-from .hartmann_profile_gate import hartmann_profile_gate as _hartmann_profile_gate
+_linear_sphere_geometry_convergence_gate = lazy_callable(".sphere_mesh_convergence_gate", "linear_sphere_geometry_convergence_gate", __package__)
+_leakage_inductance_closure_gate = lazy_callable(".leakage_inductance_closure_gate", "leakage_inductance_closure_gate", __package__)
+_parallel_wire_force_refinement_gate = lazy_callable(".parallel_wire_force_refinement_gate", "parallel_wire_force_refinement_gate", __package__)
+_two_conductor_capacitance_identity_gate = lazy_callable(".capacitance_identity_gate", "two_conductor_capacitance_identity_gate", __package__)
+_grounded_sphere_capacitance_convergence_gate = lazy_callable(".grounded_sphere_capacitance_gate", "grounded_sphere_capacitance_convergence_gate", __package__)
+_two_conductor_capacitance_matrix_gate = lazy_callable(".capacitance_matrix_gate", "two_conductor_capacitance_matrix_gate", __package__)
+_multiconductor_capacitance_cross_formulation_gate = lazy_callable(".multiconductor_capacitance_gate", "multiconductor_capacitance_cross_formulation_gate", __package__)
+_multiport_impedance_sweep_gate = lazy_callable(".impedance_sweep_gate", "multiport_impedance_sweep_gate", __package__)
+_radar_range_rcs_profile_gate = lazy_callable(".radar_range_rcs_gate", "radar_range_rcs_profile_gate", __package__)
+_radar_range_angle_localization_gate = lazy_callable(".radar_range_angle_gate", "radar_range_angle_localization_gate", __package__)
+_hmatrix_compression_scaling_gate = lazy_callable(".hmatrix_scaling_gate", "hmatrix_compression_scaling_gate", __package__)
+_acoustic_duct_band_gap_gate = lazy_callable(".acoustic_duct_band_gap_gate", "acoustic_duct_band_gap_gate", __package__)
+_dual_formulation_force_error_convergence_gate = lazy_callable(".force_error_convergence_gate", "dual_formulation_force_error_convergence_gate", __package__)
+_voice_coil_force_flux_sweep_gate = lazy_callable(".voice_coil_gate", "voice_coil_force_flux_sweep_gate", __package__)
+_linear_induction_frequency_sweep_gate = lazy_callable(".linear_induction_gate", "linear_induction_frequency_sweep_gate", __package__)
+_homogenized_bundle_impedance_comparison_gate = lazy_callable(".conductor_frequency_gate", "homogenized_bundle_impedance_comparison_gate", __package__)
+_opposed_busbar_skin_force_gate = lazy_callable(".conductor_frequency_gate", "opposed_busbar_skin_force_gate", __package__)
+_twin_conductor_skin_effect_frequency_gate = lazy_callable(".conductor_frequency_gate", "twin_conductor_skin_effect_frequency_gate", __package__)
+_transient_conductor_replay_identity_gate = lazy_callable(".transient_conductor_replay_gate", "transient_conductor_replay_identity_gate", __package__)
+_adjoint_gradient_scaling_gate = lazy_callable(".adjoint_gradient_gate", "adjoint_gradient_scaling_gate", __package__)
+_one_port_power_balance_gate = lazy_callable(".one_port_power_gate", "one_port_power_balance_gate", __package__)
+_fsi_scattering_invariants_gate = lazy_callable(".fsi_scattering_invariants_gate", "fsi_scattering_invariants_gate", __package__)
+_inductance_energy_mutual_gate = lazy_callable(".inductance_energy_gate", "inductance_energy_mutual_gate", __package__)
+_loss_temperature_coupling_gate = lazy_callable(".loss_temperature_coupling_gate", "loss_temperature_coupling_gate", __package__)
+_transient_coupled_coil_response_gate = lazy_callable(".transient_coupled_coil_gate", "transient_coupled_coil_response_gate", __package__)
+_source_off_linear_relaxation_gate = lazy_callable(".source_off_relaxation_gate", "source_off_linear_relaxation_gate", __package__)
+_nonlinear_bh_piecewise_material_gate = lazy_callable(".nonlinear_bh_curve_gate", "nonlinear_bh_piecewise_material_gate", __package__)
+_skin_effect_adaptive_energy_loss_gate = lazy_callable(".skin_effect_adaptive_gate", "skin_effect_adaptive_energy_loss_gate", __package__)
+_global_local_optimization_replay_gate = lazy_callable(".global_local_optimization_gate", "global_local_optimization_replay_gate", __package__)
+_alternate_eddy_loss_formulation_gate = lazy_callable(".eddy_loss_formulation_gate", "alternate_eddy_loss_formulation_gate", __package__)
+_magnetostatic_open_boundary_equivalence_gate = lazy_callable(".open_boundary_magnetostatic_gate", "magnetostatic_open_boundary_equivalence_gate", __package__)
+_pwm_controlled_motor_loss_gate = lazy_callable(".pwm_controlled_motor_loss_gate", "pwm_controlled_motor_loss_gate", __package__)
+_material_contrast_force_gate = lazy_callable(".material_contrast_force_gate", "material_contrast_force_gate", __package__)
+_two_body_force_magnitude_replay_gate = lazy_callable(".two_body_force_magnitude_gate", "two_body_force_magnitude_replay_gate", __package__)
+_static_field_shim_family_gate = lazy_callable(".static_field_shim_family_gate", "static_field_shim_family_gate", __package__)
+_energy_budgeted_trace_kkt_gate = lazy_callable(".energy_budgeted_trace_kkt_gate", "energy_budgeted_trace_kkt_gate", __package__)
+_finite_solenoid_surface_current_gate = lazy_callable(".finite_solenoid_surface_current_gate", "finite_solenoid_surface_current_gate", __package__)
+_linked_study_silent_noop_gate = lazy_callable(".linked_study_noop_gate", "linked_study_silent_noop_gate", __package__)
+_reciprocal_two_port_power_sweep_gate = lazy_callable(".two_port_power_gate", "reciprocal_two_port_power_sweep_gate", __package__)
+_fem_bem_capstone_suite_gate = lazy_callable(".fem_bem_capstone_gate", "fem_bem_capstone_suite_gate", __package__)
+_helmholtz_dual_formulation_axis_gate = lazy_callable(".helmholtz_dual_formulation_gate", "helmholtz_dual_formulation_axis_gate", __package__)
+_lossy_power_refinement_gate = lazy_callable(".lossy_dielectric_power_gate", "lossy_dielectric_complex_power_refinement_gate", __package__)
+_heterogeneous_current_flow_gate = lazy_callable(".heterogeneous_current_flow_gate", "heterogeneous_current_flow_p1_reintegration_gate", __package__)
+_thermal_robin_boundary_balance_gate = lazy_callable(".thermal_robin_balance_gate", "thermal_robin_boundary_balance_gate", __package__)
+_hysteresis_minor_loop_replay_gate = lazy_callable(".hysteresis_minor_loop_gate", "hysteresis_minor_loop_replay_gate", __package__)
+_heterogeneous_part_mesh_replay_gate = lazy_callable(".heterogeneous_mesh_replay_gate", "heterogeneous_part_mesh_replay_gate", __package__)
+_two_terminal_dc_conduction_power_gate = lazy_callable(".two_terminal_dc_conduction_gate", "two_terminal_dc_conduction_power_gate", __package__)
+_rwg_hcurl_trace_consistency_gate = lazy_callable(".rwg_hcurl_trace_gate", "rwg_hcurl_trace_consistency_gate", __package__)
+_hartmann_profile_gate = lazy_callable(".hartmann_profile_gate", "hartmann_profile_gate", __package__)
 
 from .rules import ALL_RULES
 from .knowledge.radia import get_radia_documentation
@@ -333,6 +217,7 @@ from .panel_describer import (
 # NOTE: induction_heating_knowledge is in mcp-server-ih (not here)
 
 mcp = FastMCP("mcp-server-radia-ngsolve")
+_validation = CoarseToolRegistry(mcp, namespace="radia_ngsolve")
 
 PACKAGE_ROOT = Path(__file__).resolve().parents[3]
 REPO_ROOT = PACKAGE_ROOT.parent.parent if PACKAGE_ROOT.parent.name == "packages" else PACKAGE_ROOT
@@ -2458,7 +2343,7 @@ def _selftest():
 
 
 
-@mcp.tool()
+@_validation.tool()
 def rf_sweep_artifact_summary_gate(
     summary_json: str,
     passivity_tolerance: float = 1.0e-3,
@@ -2472,7 +2357,7 @@ def rf_sweep_artifact_summary_gate(
     )
 
 
-@mcp.tool()
+@_validation.tool()
 def physics_result_preflight_gate(summary_json: str) -> str:
     """Gate physics namespace, selection, solution, and license metadata before result evaluation."""
     try: result=_physics_result_preflight_gate(summary_json)
@@ -2480,7 +2365,7 @@ def physics_result_preflight_gate(summary_json: str) -> str:
     return json.dumps(result,indent=2,sort_keys=True)
 
 
-@mcp.tool()
+@_validation.tool()
 def cq_scattering_arrival_gate(
     time_step_s: float,
     geometric_arrival_s: float,
@@ -2508,7 +2393,7 @@ def cq_scattering_arrival_gate(
     return json.dumps(result, indent=2, sort_keys=True)
 
 
-@mcp.tool()
+@_validation.tool()
 def fsi_scattering_invariants_gate(
     reciprocity_relative_error: float,
     optical_theorem_relative_error: float,
@@ -2538,7 +2423,7 @@ def fsi_scattering_invariants_gate(
     return json.dumps(result, indent=2, sort_keys=True)
 
 
-@mcp.tool()
+@_validation.tool()
 def inductance_energy_mutual_gate(
     self_inductance: float,
     energy_inductance: float,
@@ -2564,7 +2449,7 @@ def inductance_energy_mutual_gate(
     return json.dumps(result, indent=2, sort_keys=True)
 
 
-@mcp.tool()
+@_validation.tool()
 def cq_response_reality_gate(
     summary_json: str,
     residual_tolerance: float = 1.0e-10,
@@ -2576,7 +2461,7 @@ def cq_response_reality_gate(
         imaginary_tolerance=imaginary_tolerance), indent=2, sort_keys=True)
 
 
-@mcp.tool()
+@_validation.tool()
 def dual_formulation_symmetric_field_profile_gate(
     summary_json: str,
     max_profile_relative_difference: float = 0.01,
@@ -2595,7 +2480,7 @@ def dual_formulation_symmetric_field_profile_gate(
     ), indent=2, sort_keys=True)
 
 
-@mcp.tool()
+@_validation.tool()
 def symmetric_complex_field_curve_gate(
     axis_positions: list[float],
     field_real: list[float],
@@ -2632,7 +2517,7 @@ def symmetric_complex_field_curve_gate(
     return json.dumps(result, indent=2, sort_keys=True)
 
 
-@mcp.tool()
+@_validation.tool()
 def helmholtz_double_layer_low_frequency_gate(summary_json: str) -> str:
     """Gate the quadratic low-frequency correction of a Helmholtz double layer."""
 
@@ -2647,7 +2532,7 @@ def helmholtz_double_layer_low_frequency_gate(summary_json: str) -> str:
     return json.dumps(result, indent=2, sort_keys=True)
 
 
-@mcp.tool()
+@_validation.tool()
 def cyclic_terminal_source_sweep_gate(summary_json: str) -> str:
     """Gate cyclic terminal charges without assuming formulations are identical."""
     try: result=_cyclic_terminal_source_sweep_gate(json.loads(summary_json))
@@ -2655,7 +2540,7 @@ def cyclic_terminal_source_sweep_gate(summary_json: str) -> str:
     return json.dumps(result,indent=2,sort_keys=True)
 
 
-@mcp.tool()
+@_validation.tool()
 def cyclic_terminal_phasor_balance_gate(
     summary_json: str,
     max_magnitude_relative_spread: float = 1.0e-5,
@@ -2683,7 +2568,7 @@ def cyclic_terminal_phasor_balance_gate(
     return json.dumps(result, indent=2, sort_keys=True)
 
 
-@mcp.tool()
+@_validation.tool()
 def three_phase_winding_power_balance_gate(
     summary_json: str,
     max_voltage_relative_spread: float = 1.0e-5,
@@ -2711,7 +2596,7 @@ def three_phase_winding_power_balance_gate(
     return json.dumps(result, indent=2, sort_keys=True)
 
 
-@mcp.tool()
+@_validation.tool()
 def cogging_torque_periodicity_gate(summary_json: str) -> str:
     """Gate a zero-current torque sweep over one slot/pole LCM period."""
     try:
@@ -2725,7 +2610,7 @@ def cogging_torque_periodicity_gate(summary_json: str) -> str:
     return json.dumps(result, indent=2, sort_keys=True)
 
 
-@mcp.tool()
+@_validation.tool()
 def nonlinear_actuator_saturation_knee_gate(summary_json: str) -> str:
     """Gate an axisymmetric nonlinear actuator by a shared L/F saturation knee."""
     try:
@@ -2735,7 +2620,7 @@ def nonlinear_actuator_saturation_knee_gate(summary_json: str) -> str:
     return json.dumps(result, indent=2, sort_keys=True)
 
 
-@mcp.tool()
+@_validation.tool()
 def source_free_static_null_solution_gate(
     summary_json: str,
     absolute_tolerance: float = 1.0e-14,
@@ -2755,7 +2640,7 @@ def source_free_static_null_solution_gate(
     return json.dumps(result, indent=2, sort_keys=True)
 
 
-@mcp.tool()
+@_validation.tool()
 def harmonic_magnetic_force_triplet_closure_gate(
     summary_json: str,
     maximum_body_method_relative_difference: float = 0.05,
@@ -2779,7 +2664,7 @@ def harmonic_magnetic_force_triplet_closure_gate(
     return json.dumps(result, indent=2, sort_keys=True)
 
 
-@mcp.tool()
+@_validation.tool()
 def magnetic_force_method_profile_gate(
     summary_json: str,
     maximum_method_relative_difference: float = 0.05,
@@ -2822,7 +2707,7 @@ def magnetic_force_method_profile_gate(
     return json.dumps(result, indent=2, sort_keys=True)
 
 
-@mcp.tool()
+@_validation.tool()
 def harmonic_current_port_power_energy_identity_gate(
     summary_json: str,
     maximum_identity_relative_error: float = 1.0e-9,
@@ -2844,7 +2729,7 @@ def harmonic_current_port_power_energy_identity_gate(
     return json.dumps(result, indent=2, sort_keys=True)
 
 
-@mcp.tool()
+@_validation.tool()
 def periodic_unwrapped_pm_machine_replay_gate(
     summary_json: str,
     maximum_field_symmetry_relative_error: float = 0.05,
@@ -2870,7 +2755,7 @@ def periodic_unwrapped_pm_machine_replay_gate(
     return json.dumps(result, indent=2, sort_keys=True)
 
 
-@mcp.tool()
+@_validation.tool()
 def permanent_magnet_recoil_state_gate(
     summary_json: str,
     maximum_replay_relative_error: float = 1.0e-3,
@@ -2896,7 +2781,7 @@ def permanent_magnet_recoil_state_gate(
     return json.dumps(result, indent=2, sort_keys=True)
 
 
-@mcp.tool()
+@_validation.tool()
 def linear_eddy_levitation_force_gate(summary_json: str) -> str:
     """Gate linear harmonic levitation force by dual extraction and I-squared laws."""
     try:
@@ -2910,7 +2795,7 @@ def linear_eddy_levitation_force_gate(summary_json: str) -> str:
     return json.dumps(result, indent=2, sort_keys=True)
 
 
-@mcp.tool()
+@_validation.tool()
 def motion_coupled_eddy_levitation_transient_gate(summary_json: str) -> str:
     """Gate motion-coupled lift while detecting aliased force output times."""
     try:
@@ -2926,7 +2811,7 @@ def motion_coupled_eddy_levitation_transient_gate(summary_json: str) -> str:
     return json.dumps(result, indent=2, sort_keys=True)
 
 
-@mcp.tool()
+@_validation.tool()
 def rotational_eddy_brake_energy_gate(summary_json: str) -> str:
     """Gate free rotational braking with angular impulse and field energy."""
     try:
@@ -2981,7 +2866,7 @@ def rotational_eddy_brake_energy_gate(summary_json: str) -> str:
     return json.dumps(result, indent=2, sort_keys=True)
 
 
-@mcp.tool()
+@_validation.tool()
 def harmonic_zero_net_circuit_gate(summary_json: str) -> str:
     """Gate zero-net harmonic phasors, Faraday sign, loss, and force metadata."""
     try:
@@ -2995,7 +2880,7 @@ def harmonic_zero_net_circuit_gate(summary_json: str) -> str:
     return json.dumps(result, indent=2, sort_keys=True)
 
 
-@mcp.tool()
+@_validation.tool()
 def moving_conductor_eddy_brake_gate(summary_json: str) -> str:
     """Gate motion, Lorentz-force, and Joule-loss table identities."""
     try:
@@ -3009,7 +2894,7 @@ def moving_conductor_eddy_brake_gate(summary_json: str) -> str:
     return json.dumps(result, indent=2, sort_keys=True)
 
 
-@mcp.tool()
+@_validation.tool()
 def rotating_conductor_transient_gate(summary_json: str) -> str:
     """Gate moving-axis migration, rotational kinematics, and loss partition."""
     try:
@@ -3023,7 +2908,7 @@ def rotating_conductor_transient_gate(summary_json: str) -> str:
     return json.dumps(result, indent=2, sort_keys=True)
 
 
-@mcp.tool()
+@_validation.tool()
 def linear_magnetization_scaling_gate(summary_json: str) -> str:
     """Gate source scaling plus an independent refined P1 FEM reference."""
     try:
@@ -3037,7 +2922,7 @@ def linear_magnetization_scaling_gate(summary_json: str) -> str:
     return json.dumps(result, indent=2, sort_keys=True)
 
 
-@mcp.tool()
+@_validation.tool()
 def linear_axisymmetric_circuit_energy_gate(summary_json: str) -> str:
     """Gate current, flux, field, and energy identities on one fixed mesh."""
     try:
@@ -3051,7 +2936,7 @@ def linear_axisymmetric_circuit_energy_gate(summary_json: str) -> str:
     return json.dumps(result, indent=2, sort_keys=True)
 
 
-@mcp.tool()
+@_validation.tool()
 def manual_auto_mixed_mesh_preservation_gate(summary_json: str) -> str:
     """Gate exact manual-region preservation and bounded automatic remeshing."""
     try:
@@ -3065,7 +2950,7 @@ def manual_auto_mixed_mesh_preservation_gate(summary_json: str) -> str:
     return json.dumps(result, indent=2, sort_keys=True)
 
 
-@mcp.tool()
+@_validation.tool()
 def two_winding_frequency_faraday_gate(summary_json: str) -> str:
     """Gate two-winding complex response against linked-flux Faraday identity."""
     try:
@@ -3079,7 +2964,7 @@ def two_winding_frequency_faraday_gate(summary_json: str) -> str:
     return json.dumps(result, indent=2, sort_keys=True)
 
 
-@mcp.tool()
+@_validation.tool()
 def magnetic_conductive_shield_frequency_gate(summary_json: str) -> str:
     """Gate low-frequency magnetic loading and high-frequency eddy shielding."""
     try:
@@ -3093,7 +2978,7 @@ def magnetic_conductive_shield_frequency_gate(summary_json: str) -> str:
     return json.dumps(result, indent=2, sort_keys=True)
 
 
-@mcp.tool()
+@_validation.tool()
 def cylindrical_conductor_skin_bessel_gate(summary_json: str) -> str:
     """Gate cylindrical skin-effect identities and exact Bessel structure."""
     try:
@@ -3107,7 +2992,7 @@ def cylindrical_conductor_skin_bessel_gate(summary_json: str) -> str:
     return json.dumps(result, indent=2, sort_keys=True)
 
 
-@mcp.tool()
+@_validation.tool()
 def conductive_network_resistance_monotonicity_gate(summary_json: str) -> str:
     """Gate Rayleigh resistance monotonicity for conductive contact networks."""
     try:
@@ -3123,7 +3008,7 @@ def conductive_network_resistance_monotonicity_gate(summary_json: str) -> str:
     return json.dumps(result, indent=2, sort_keys=True)
 
 
-@mcp.tool()
+@_validation.tool()
 def autodiff_harmonic_balance_convergence_gate(summary_json: str) -> str:
     """Gate AD harmonic balance without mean-only false convergence."""
     try:
@@ -3139,7 +3024,7 @@ def autodiff_harmonic_balance_convergence_gate(summary_json: str) -> str:
     return json.dumps(result, indent=2, sort_keys=True)
 
 
-@mcp.tool()
+@_validation.tool()
 def hall_effect_transverse_voltage_gate(summary_json: str) -> str:
     """Gate Hall voltage by coefficient, drive, field, and replay controls."""
     try:
@@ -3153,7 +3038,7 @@ def hall_effect_transverse_voltage_gate(summary_json: str) -> str:
     return json.dumps(result, indent=2, sort_keys=True)
 
 
-@mcp.tool()
+@_validation.tool()
 def single_loop_source_normalized_field_gate(summary_json: str) -> str:
     """Gate a single-loop field transfer across two port formulations."""
     try:
@@ -3167,7 +3052,7 @@ def single_loop_source_normalized_field_gate(summary_json: str) -> str:
     return json.dumps(result, indent=2, sort_keys=True)
 
 
-@mcp.tool()
+@_validation.tool()
 def coupled_cq_refinement_gate(summary_json: str) -> str:
     """Gate coupled FEM/BEM CQ symbols, contour balance, and refinement."""
     try:
@@ -3181,7 +3066,7 @@ def coupled_cq_refinement_gate(summary_json: str) -> str:
     return json.dumps(result, indent=2, sort_keys=True)
 
 
-@mcp.tool()
+@_validation.tool()
 def coil_self_resonance_sweep_gate(summary_json: str) -> str:
     """Gate complex coil impedance, self-resonance, and sweep replay."""
     try:
@@ -3195,7 +3080,7 @@ def coil_self_resonance_sweep_gate(summary_json: str) -> str:
     return json.dumps(result, indent=2, sort_keys=True)
 
 
-@mcp.tool()
+@_validation.tool()
 def passive_axial_bearing_stiffness_gate(summary_json: str) -> str:
     """Gate signed force, action-reaction, axial stability, and sweep replay."""
     try:
@@ -3209,7 +3094,7 @@ def passive_axial_bearing_stiffness_gate(summary_json: str) -> str:
     return json.dumps(result, indent=2, sort_keys=True)
 
 
-@mcp.tool()
+@_validation.tool()
 def radial_bearing_force_symmetry_gate(summary_json: str) -> str:
     """Gate magnetic-body force with equal and mirrored excitation controls."""
     try:
@@ -3223,7 +3108,7 @@ def radial_bearing_force_symmetry_gate(summary_json: str) -> str:
     return json.dumps(result, indent=2, sort_keys=True)
 
 
-@mcp.tool()
+@_validation.tool()
 def complex_vector_field_maximum_gate(summary_json: str) -> str:
     """Gate complex vector-field magnitudes and per-material maxima."""
     try:
@@ -3237,7 +3122,7 @@ def complex_vector_field_maximum_gate(summary_json: str) -> str:
     return json.dumps(result, indent=2, sort_keys=True)
 
 
-@mcp.tool()
+@_validation.tool()
 def one_port_vi_s_impedance_gate(summary_json: str) -> str:
     """Gate one-port S, V/I, impedance-transform, and power identities."""
     try:
@@ -3251,7 +3136,7 @@ def one_port_vi_s_impedance_gate(summary_json: str) -> str:
     return json.dumps(result, indent=2, sort_keys=True)
 
 
-@mcp.tool()
+@_validation.tool()
 def symmetric_axial_field_profile_gate(
     axis_positions: list[float],
     axial_field: list[float],
@@ -3288,7 +3173,7 @@ def symmetric_axial_field_profile_gate(
     return json.dumps(result, indent=2, sort_keys=True)
 
 
-@mcp.tool()
+@_validation.tool()
 def finite_solenoid_surface_current_gate(summary_json: str) -> str:
     """Gate a finite-solenoid surface-current profile and signed linearity."""
 
@@ -3303,7 +3188,7 @@ def finite_solenoid_surface_current_gate(summary_json: str) -> str:
     return json.dumps(result, indent=2, sort_keys=True)
 
 
-@mcp.tool()
+@_validation.tool()
 def parallel_wire_force_refinement_gate(
     refinement_levels: list[float],
     force_wire1_rows: list[list[float]],
@@ -3342,7 +3227,7 @@ def parallel_wire_force_refinement_gate(
     return json.dumps(result, indent=2, sort_keys=True)
 
 
-@mcp.tool()
+@_validation.tool()
 def two_conductor_capacitance_identity_gate(
     conductor_voltages_v: list[float],
     conductor_charges_c: list[float],
@@ -3373,7 +3258,7 @@ def two_conductor_capacitance_identity_gate(
     return json.dumps(result, indent=2, sort_keys=True)
 
 
-@mcp.tool()
+@_validation.tool()
 def grounded_sphere_capacitance_convergence_gate(
     summary_json: str,
     max_final_analytic_relative_error: float = 5.0e-4,
@@ -3400,7 +3285,7 @@ def grounded_sphere_capacitance_convergence_gate(
     return json.dumps(result, indent=2, sort_keys=True)
 
 
-@mcp.tool()
+@_validation.tool()
 def two_conductor_capacitance_matrix_gate(summary_json: str) -> str:
     """Gate reciprocal Maxwell and mutual capacitance matrix representations."""
     try:
@@ -3410,7 +3295,7 @@ def two_conductor_capacitance_matrix_gate(summary_json: str) -> str:
     return json.dumps(result, indent=2, sort_keys=True)
 
 
-@mcp.tool()
+@_validation.tool()
 def multiconductor_capacitance_cross_formulation_gate(summary_json: str) -> str:
     """Gate N-conductor Maxwell matrices across volume and boundary formulations."""
 
@@ -3427,7 +3312,7 @@ def multiconductor_capacitance_cross_formulation_gate(summary_json: str) -> str:
     return json.dumps(result, indent=2, sort_keys=True)
 
 
-@mcp.tool()
+@_validation.tool()
 def force_position_profile_gate(
     positions: list[float],
     forces: list[float],
@@ -3460,7 +3345,7 @@ def force_position_profile_gate(
     return json.dumps(result, indent=2, sort_keys=True)
 
 
-@mcp.tool()
+@_validation.tool()
 def force_coenergy_displacement_gate(
     positions_m: list[float],
     coenergy_j: list[float],
@@ -3534,7 +3419,7 @@ def force_coenergy_displacement_gate(
     return json.dumps(result, indent=2, sort_keys=True)
 
 
-@mcp.tool()
+@_validation.tool()
 def rotational_kinematics_time_axis_gate(
     time_values: list[float],
     angles_deg: list[float],
@@ -3564,7 +3449,7 @@ def rotational_kinematics_time_axis_gate(
     return json.dumps(result, indent=2, sort_keys=True)
 
 
-@mcp.tool()
+@_validation.tool()
 def inductance_matrix_family_gate(
     cases: list[dict],
     expected_strongest_coupling_case: str | None = None,
@@ -3594,7 +3479,7 @@ def inductance_matrix_family_gate(
     return json.dumps(result, indent=2, sort_keys=True)
 
 
-@mcp.tool()
+@_validation.tool()
 def nonlinear_inductance_sweep_gate(summary_json: str) -> str:
     """Gate nonlinear apparent/incremental matrices, duality, and replay."""
     try:
@@ -3661,7 +3546,7 @@ def nonlinear_inductance_sweep_gate(summary_json: str) -> str:
     return json.dumps(result, indent=2, sort_keys=True)
 
 
-@mcp.tool()
+@_validation.tool()
 def regularized_trace_inverse_path_gate(summary_json: str) -> str:
     """Gate a P1 trace Tikhonov path, L-curve, Morozov, and replay."""
     try:
@@ -3746,7 +3631,7 @@ def regularized_trace_inverse_path_gate(summary_json: str) -> str:
     return json.dumps(result, indent=2, sort_keys=True)
 
 
-@mcp.tool()
+@_validation.tool()
 def linear_sphere_geometry_convergence_gate(
     rows: list[dict],
     analytic_volume: float,
@@ -3778,7 +3663,7 @@ def linear_sphere_geometry_convergence_gate(
     return json.dumps(result, indent=2, sort_keys=True)
 
 
-@mcp.tool()
+@_validation.tool()
 def leakage_inductance_closure_gate(summary_json: str) -> str:
     """Gate compensated-energy and unit-current-matrix leakage inductance."""
     try:
@@ -3792,7 +3677,7 @@ def leakage_inductance_closure_gate(summary_json: str) -> str:
     return json.dumps(result, indent=2, sort_keys=True)
 
 
-@mcp.tool()
+@_validation.tool()
 def multiport_impedance_sweep_gate(
     frequency_rows: list[list[float]],
     impedance_real_rows: list[list[float]],
@@ -3823,7 +3708,7 @@ def multiport_impedance_sweep_gate(
     return json.dumps(result, indent=2, sort_keys=True)
 
 
-@mcp.tool()
+@_validation.tool()
 def one_port_power_balance_sweep_gate(
     summary_json: str,
     max_power_relative_residual: float = 1.0e-9,
@@ -3844,7 +3729,7 @@ def one_port_power_balance_sweep_gate(
     return json.dumps(result, indent=2, sort_keys=True)
 
 
-@mcp.tool()
+@_validation.tool()
 def radar_range_angle_localization_gate(
     frequency_hz: list[float],
     targets_json: str,
@@ -3868,7 +3753,7 @@ def radar_range_angle_localization_gate(
     return json.dumps(result, indent=2, sort_keys=True)
 
 
-@mcp.tool()
+@_validation.tool()
 def radar_range_rcs_profile_gate(
     frequency_hz: list[float],
     target_range_m: float,
@@ -3911,7 +3796,7 @@ def radar_range_rcs_profile_gate(
     return json.dumps(result, indent=2, sort_keys=True)
 
 
-@mcp.tool()
+@_validation.tool()
 def hmatrix_compression_scaling_gate(
     rows_json: str,
     max_matvec_relative_error: float = 1.0e-8,
@@ -3939,7 +3824,7 @@ def hmatrix_compression_scaling_gate(
     return json.dumps(result, indent=2, sort_keys=True)
 
 
-@mcp.tool()
+@_validation.tool()
 def acoustic_duct_band_gap_gate(summary_json: str) -> str:
     """Gate a confined acoustic band gap against empty and free-space controls."""
 
@@ -3954,7 +3839,7 @@ def acoustic_duct_band_gap_gate(summary_json: str) -> str:
     return json.dumps(result, indent=2, sort_keys=True)
 
 
-@mcp.tool()
+@_validation.tool()
 def dual_formulation_force_error_convergence_gate(
     formulation_rows: list[dict],
     reference_force: float,
@@ -3983,7 +3868,7 @@ def dual_formulation_force_error_convergence_gate(
     return json.dumps(result, indent=2, sort_keys=True)
 
 
-@mcp.tool()
+@_validation.tool()
 def magnetostatic_open_boundary_equivalence_gate(
     formulation_rows: list[dict],
     physics_regime: str = "magnetostatic_open_boundary",
@@ -4020,7 +3905,7 @@ def magnetostatic_open_boundary_equivalence_gate(
     return json.dumps(result, indent=2, sort_keys=True)
 
 
-@mcp.tool()
+@_validation.tool()
 def pwm_controlled_motor_loss_gate(
     payload: dict,
     max_three_phase_kcl_relative_error: float = 1.0e-3,
@@ -4094,7 +3979,7 @@ def pwm_controlled_motor_loss_gate(
     return json.dumps(result, indent=2, sort_keys=True)
 
 
-@mcp.tool()
+@_validation.tool()
 def material_contrast_force_gate(
     cases: list[dict],
     interaction_axis: str = "x",
@@ -4121,7 +4006,7 @@ def material_contrast_force_gate(
     return json.dumps(result, indent=2, sort_keys=True)
 
 
-@mcp.tool()
+@_validation.tool()
 def two_body_force_magnitude_replay_gate(summary_json: str) -> str:
     """Gate unsigned two-body force balance and two fresh solver replays."""
     try:
@@ -4135,7 +4020,7 @@ def two_body_force_magnitude_replay_gate(summary_json: str) -> str:
     return json.dumps(result, indent=2, sort_keys=True)
 
 
-@mcp.tool()
+@_validation.tool()
 def static_field_shim_family_gate(
     cases: list[dict],
     interaction_axis: str = "z",
@@ -4166,7 +4051,7 @@ def static_field_shim_family_gate(
     return json.dumps(result, indent=2, sort_keys=True)
 
 
-@mcp.tool()
+@_validation.tool()
 def energy_budgeted_trace_kkt_gate(
     payload: dict,
     max_gradient_relative_error: float = 1.0e-6,
@@ -4195,7 +4080,7 @@ def energy_budgeted_trace_kkt_gate(
     return json.dumps(result, indent=2, sort_keys=True)
 
 
-@mcp.tool()
+@_validation.tool()
 def voice_coil_force_flux_sweep_gate(
     rows: list[dict],
     max_zero_force_relative: float = 0.01,
@@ -4220,7 +4105,7 @@ def voice_coil_force_flux_sweep_gate(
     return json.dumps(result, indent=2, sort_keys=True)
 
 
-@mcp.tool()
+@_validation.tool()
 def linear_induction_frequency_sweep_gate(
     rows: list[dict],
     thrust_abs_tol_n: float = 0.75,
@@ -4245,7 +4130,7 @@ def linear_induction_frequency_sweep_gate(
     return json.dumps(result, indent=2, sort_keys=True)
 
 
-@mcp.tool()
+@_validation.tool()
 def twin_conductor_skin_effect_frequency_gate(
     frequencies_hz: list[float],
     resistance_ohm: list[list[float]],
@@ -4270,7 +4155,7 @@ def twin_conductor_skin_effect_frequency_gate(
     return json.dumps(result, indent=2, sort_keys=True)
 
 
-@mcp.tool()
+@_validation.tool()
 def opposed_busbar_skin_force_gate(
     rows: list[dict],
     conductor_thickness_mm: float,
@@ -4301,7 +4186,7 @@ def opposed_busbar_skin_force_gate(
     return json.dumps(result, indent=2, sort_keys=True)
 
 
-@mcp.tool()
+@_validation.tool()
 def transient_conductor_replay_identity_gate(
     summary_json: str,
     identity_rtol: float = 1.0e-10,
@@ -4324,7 +4209,7 @@ def transient_conductor_replay_identity_gate(
     return json.dumps(result, indent=2, sort_keys=True)
 
 
-@mcp.tool()
+@_validation.tool()
 def homogenized_bundle_impedance_comparison_gate(
     rows: list[dict],
     resistance_rtol: float = 0.03,
@@ -4355,7 +4240,7 @@ def homogenized_bundle_impedance_comparison_gate(
     return json.dumps(result, indent=2, sort_keys=True)
 
 
-@mcp.tool()
+@_validation.tool()
 def loss_temperature_coupling_gate(
     magnetic_rows: list[dict],
     thermal_rows: list[dict],
@@ -4386,7 +4271,7 @@ def loss_temperature_coupling_gate(
     return json.dumps(result, indent=2, sort_keys=True)
 
 
-@mcp.tool()
+@_validation.tool()
 def linked_study_silent_noop_gate(
     summary: dict,
     maximum_noop_seconds: float = 1.0,
@@ -4407,7 +4292,7 @@ def linked_study_silent_noop_gate(
     return json.dumps(result, indent=2, sort_keys=True)
 
 
-@mcp.tool()
+@_validation.tool()
 def reciprocal_two_port_power_sweep_gate(
     rows: list[dict],
     adaptive_power_rows: list[dict],
@@ -4438,7 +4323,7 @@ def reciprocal_two_port_power_sweep_gate(
     return json.dumps(result, indent=2, sort_keys=True)
 
 
-@mcp.tool()
+@_validation.tool()
 def fem_bem_capstone_suite_gate(payload: dict) -> str:
     """Gate a ten-case first-order FEM/BEM reference capstone suite."""
 
@@ -4453,7 +4338,7 @@ def fem_bem_capstone_suite_gate(payload: dict) -> str:
     return json.dumps(result, indent=2, sort_keys=True)
 
 
-@mcp.tool()
+@_validation.tool()
 def helmholtz_dual_formulation_axis_gate(summary_json: str) -> str:
     """Gate Helmholtz-coil axis symmetry, flatness, and formulation agreement."""
 
@@ -4468,7 +4353,7 @@ def helmholtz_dual_formulation_axis_gate(summary_json: str) -> str:
     return json.dumps(result, indent=2, sort_keys=True)
 
 
-@mcp.tool()
+@_validation.tool()
 def hartmann_profile_gate(summary_json: str) -> str:
     """Gate a Hartmann-number sweep against an independent channel profile."""
 
@@ -4483,7 +4368,7 @@ def hartmann_profile_gate(summary_json: str) -> str:
     return json.dumps(result, indent=2, sort_keys=True)
 
 
-@mcp.tool()
+@_validation.tool()
 def lossy_dielectric_complex_power_refinement_gate(summary_json: str) -> str:
     """Gate lossy-dielectric constitutive, energy, complex-power, and mesh closure."""
 
@@ -4498,7 +4383,7 @@ def lossy_dielectric_complex_power_refinement_gate(summary_json: str) -> str:
     return json.dumps(result, indent=2, sort_keys=True)
 
 
-@mcp.tool()
+@_validation.tool()
 def heterogeneous_current_flow_p1_reintegration_gate(summary_json: str) -> str:
     """Gate heterogeneous current-flow P1 reintegration and sign covariance."""
 
@@ -4513,7 +4398,7 @@ def heterogeneous_current_flow_p1_reintegration_gate(summary_json: str) -> str:
     return json.dumps(result, indent=2, sort_keys=True)
 
 
-@mcp.tool()
+@_validation.tool()
 def thermal_robin_boundary_balance_gate(summary_json: str) -> str:
     """Gate signed Robin heat balance, mesh plateau, replay, and reflection."""
 
@@ -4528,7 +4413,7 @@ def thermal_robin_boundary_balance_gate(summary_json: str) -> str:
     return json.dumps(result, indent=2, sort_keys=True)
 
 
-@mcp.tool()
+@_validation.tool()
 def hysteresis_minor_loop_replay_gate(summary_json: str) -> str:
     """Gate history, knot normalization, signed loss, and exact loop replay."""
 
@@ -4543,7 +4428,7 @@ def hysteresis_minor_loop_replay_gate(summary_json: str) -> str:
     return json.dumps(result, indent=2, sort_keys=True)
 
 
-@mcp.tool()
+@_validation.tool()
 def heterogeneous_part_mesh_replay_gate(summary_json: str) -> str:
     """Diagnose deterministic heterogeneous part-mesh replay drift."""
 
@@ -4558,7 +4443,7 @@ def heterogeneous_part_mesh_replay_gate(summary_json: str) -> str:
     return json.dumps(result, indent=2, sort_keys=True)
 
 
-@mcp.tool()
+@_validation.tool()
 def two_terminal_dc_conduction_power_gate(summary_json: str) -> str:
     """Gate current closure, Joule power, adaptive convergence, and replay."""
 
@@ -4573,7 +4458,7 @@ def two_terminal_dc_conduction_power_gate(summary_json: str) -> str:
     return json.dumps(result, indent=2, sort_keys=True)
 
 
-@mcp.tool()
+@_validation.tool()
 def rwg_hcurl_trace_consistency_gate(summary_json: str) -> str:
     """Gate RWG/HCurl trace topology, de Rham closure, and reference matrices."""
 
@@ -4588,7 +4473,7 @@ def rwg_hcurl_trace_consistency_gate(summary_json: str) -> str:
     return json.dumps(result, indent=2, sort_keys=True)
 
 
-@mcp.tool()
+@_validation.tool()
 def transient_coupled_coil_response_gate(
     times_s: list[float],
     primary_current_a: list[float],
@@ -4617,7 +4502,7 @@ def transient_coupled_coil_response_gate(
     return json.dumps(result, indent=2, sort_keys=True)
 
 
-@mcp.tool()
+@_validation.tool()
 def source_off_linear_relaxation_gate(
     summary: dict,
     max_decay_ratio_relative_span: float = 1.0e-3,
@@ -4640,7 +4525,7 @@ def source_off_linear_relaxation_gate(
     return json.dumps(result, indent=2, sort_keys=True)
 
 
-@mcp.tool()
+@_validation.tool()
 def nonlinear_bh_piecewise_material_gate(
     summary: dict,
     maximum_relative_identity_error: float = 1.0e-8,
@@ -4661,7 +4546,7 @@ def nonlinear_bh_piecewise_material_gate(
     return json.dumps(result, indent=2, sort_keys=True)
 
 
-@mcp.tool()
+@_validation.tool()
 def skin_effect_adaptive_energy_loss_gate(
     frequency_hz: float, current: dict, voltage: dict, impedance: dict, power: dict,
     flux_linkage: dict, total_energy_j: float, total_loss_w: float, adaptive_rows: list[dict],
@@ -4678,7 +4563,7 @@ def skin_effect_adaptive_energy_loss_gate(
     return json.dumps(result, indent=2, sort_keys=True)
 
 
-@mcp.tool()
+@_validation.tool()
 def global_local_optimization_replay_gate(summary_json: str) -> str:
     """Gate a stochastic global-search to derivative-checked local-polish replay."""
     try:
@@ -4688,7 +4573,7 @@ def global_local_optimization_replay_gate(summary_json: str) -> str:
     return json.dumps(result, indent=2, sort_keys=True)
 
 
-@mcp.tool()
+@_validation.tool()
 def alternate_eddy_loss_formulation_gate(summary_json: str) -> str:
     """Gate volume-resolved and surface-impedance losses as non-additive alternatives."""
     try:
@@ -4702,7 +4587,7 @@ def alternate_eddy_loss_formulation_gate(summary_json: str) -> str:
     return json.dumps(result, indent=2, sort_keys=True)
 
 
-@mcp.tool()
+@_validation.tool()
 def adjoint_gradient_scaling_gate(
     rows_json: str,
     max_gradient_relative_error: float = 1.0e-6,
@@ -4727,6 +4612,8 @@ def adjoint_gradient_scaling_gate(
         }
     return json.dumps(result, indent=2, sort_keys=True)
 
+
+_validation.install()
 
 register_status_tool(
     mcp,

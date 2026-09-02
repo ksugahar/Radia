@@ -114,7 +114,11 @@ def test_digest_mismatch_is_rejected() -> None:
 def test_mcp_tool_returns_gate_result_and_is_read_only() -> None:
     result = json.loads(fem_legacy_signature_migration_gate(json.dumps(_packet())))
     assert result["status"] == "accepted"
-    tool = mcp._tool_manager._tools["fem_legacy_signature_migration_gate"]
+    tool = mcp._tool_manager._tools["fem_validation_run"]
+    catalog = mcp._tool_manager._tools["fem_validation_catalog"].fn(
+        query="legacy_signature"
+    )
+    assert catalog["operations"][0]["name"] == "fem_legacy_signature_migration_gate"
     assert tool.annotations.readOnlyHint is True
     assert tool.annotations.destructiveHint is False
     assert tool.annotations.idempotentHint is True
@@ -132,6 +136,7 @@ async def _probe_stdio(packet: dict) -> dict:
     env["PYTHONPATH"] = os.pathsep.join(
         [str(source_root), env.get("PYTHONPATH", "")]
     ).rstrip(os.pathsep)
+    env["RADIA_MCP_TOOL_PROFILE"] = "core"
     params = StdioServerParameters(
         command=sys.executable,
         args=["-m", "radia_mcp.fem.server"],
@@ -143,13 +148,16 @@ async def _probe_stdio(packet: dict) -> dict:
             initialized = await session.initialize()
             listed = await session.list_tools()
             called = await session.call_tool(
-                "fem_legacy_signature_migration_gate",
-                {"evidence_json": json.dumps(packet)},
+                "fem_validation_run",
+                {
+                    "name": "fem_legacy_signature_migration_gate",
+                    "arguments": {"evidence_json": json.dumps(packet)},
+                },
             )
             return {
                 "server_name": initialized.serverInfo.name,
                 "listed": any(
-                    tool.name == "fem_legacy_signature_migration_gate"
+                    tool.name == "fem_validation_run"
                     for tool in listed.tools
                 ),
                 "is_error": bool(called.isError),

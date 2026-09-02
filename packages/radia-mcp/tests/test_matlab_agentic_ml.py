@@ -54,6 +54,10 @@ def test_matlab_mcp_exposes_ml_guide_and_artifact_gate():
     from radia_mcp.matlab.server import matlab_ml_rl_artifact_gate, mcp
 
     tool_names = {item.name for item in asyncio.run(mcp.list_tools())}
-    assert {"matlab_agentic_ml_guide", "matlab_ml_rl_artifact_gate"} <= tool_names
+    assert {"matlab_agentic_ml_guide", "matlab_validation_catalog"} <= tool_names
+    catalog = mcp._tool_manager._tools["matlab_validation_catalog"].fn()
+    assert "matlab_ml_rl_artifact_gate" in {
+        item["name"] for item in catalog["operations"]
+    }
     result = json.loads(matlab_ml_rl_artifact_gate(json.dumps(_artifact("regression"))))
     assert result["status"] == "ok"

@@ -36,15 +36,17 @@ import sys
 from mcp.server.fastmcp import FastMCP
 
 from ..common import register_status_tool
+from ..common.tool_group import CoarseToolRegistry
 from .basics_knowledge import get_basics_documentation
 from .bibliography_knowledge import get_bibliography_documentation
 from .de_rham_knowledge import get_de_rham_documentation
 from .feec_knowledge import get_feec_documentation
-from .gauge_invariance_gate import gauge_invariance_gate as build_gauge_invariance_gate
+from ..common.lazy_call import lazy_callable
+build_gauge_invariance_gate = lazy_callable(".gauge_invariance_gate", "gauge_invariance_gate", __package__)
 from .homology_knowledge import get_homology_documentation
 from .mathematica_recipes_knowledge import get_mathematica_recipes_documentation
 from .maxwell_knowledge import get_maxwell_documentation
-from .visual_geometry_gate import visual_geometry_gate as build_visual_geometry_gate
+build_visual_geometry_gate = lazy_callable(".visual_geometry_gate", "visual_geometry_gate", __package__)
 from .visual_geometry_knowledge import get_visual_geometry_documentation
 from .whitney_knowledge import get_whitney_documentation
 from ..force.knowledge import (
@@ -54,9 +56,10 @@ from ..force.knowledge import (
 )
 
 mcp = FastMCP("mcp-server-differential-forms")
+_validation = CoarseToolRegistry(mcp, namespace="differential_forms")
 
 
-@mcp.tool()
+@_validation.tool()
 def differential_forms_gauge_invariance_gate(summary_json: str) -> str:
     """Gate physical B/loss invariance without treating A as invariant."""
     return build_gauge_invariance_gate(summary_json)
@@ -531,6 +534,8 @@ def verify_with_mathematica(identity: str = "dsquared") -> str:
 # ============================================================
 
 
+
+_validation.install()
 
 register_status_tool(
     mcp,
