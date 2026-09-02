@@ -568,6 +568,17 @@ elseif(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
 	)
 endif()
 
+# Keep direct single-target builds usable.  Build.ps1 also performs a final
+# package sync, but developers commonly rebuild this target directly after an
+# NGSolve upgrade.  Without this target-owned copy, src/radia can silently keep
+# an ABI-incompatible peec_matrices.pyd from an older NGSolve release.
+add_custom_command(TARGET peec_matrices POST_BUILD
+	COMMAND ${CMAKE_COMMAND} -E copy_if_different
+		"$<TARGET_FILE:peec_matrices>"
+		"${CMAKE_SOURCE_DIR}/src/radia/peec_matrices.pyd"
+	COMMENT "Copying peec_matrices.pyd to src/radia"
+)
+
 # Post-build: Copy required DLLs
 if(WIN32 AND USE_MKL_FOUND)
 	add_custom_command(TARGET peec_matrices POST_BUILD
