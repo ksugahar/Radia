@@ -20,7 +20,10 @@ from pathlib import Path
 import numpy as np
 from scipy.special import dawsn
 
-sys.path.insert(0, str(Path("S:/Radia/01_GitHub/examples/hierarchical_cauer_sibc/mixed_galerkin").resolve()))
+# The reference lives one directory up, beside the other cases. An absolute
+# path to the retired examples/ tree sat here until 2026-09-02 and had made
+# this script un-runnable since that tree was removed.
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from _references.cube3d_foster import Y_DC_cube3d
 
 SIGMA = 5.8e7

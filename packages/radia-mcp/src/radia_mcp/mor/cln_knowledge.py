@@ -551,7 +551,9 @@ imported into this trial space.
 The Senior tower is half-integer powers of s, i.e. fractional integrals, each
 realisable as a finite RC ladder. Re-entrant edges give an angle-dependent
 non-half-integer exponent instead. In practice none of that matters to the
-pipeline: the computed Y(s) is fitted with AAA (21 stable poles for the cube,
+pipeline: the computed Y(s) is fitted with AAA (22 stable poles for the cube,
+measured 2026-09-02 by time_domain/01_cube_aaa_step_response.py: DC exact,
+early time on the sqrt(t) asymptote, late time saturating to Y_DC,
 no fitted d anywhere) and becomes an ordinary state space.
 
 ## Where it lives

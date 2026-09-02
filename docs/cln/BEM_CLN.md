@@ -157,9 +157,14 @@ with N >= 5 elements is the next step.
 ## 6. Reference scripts
 
 All Mathematica verification scripts live in the digest supplement
-`digest/supplement/2026_05_18_3axis_cauer_sibc/scripts/`; canonical
-Python implementations are in
-`examples/hierarchical_cauer_sibc/multi_conductor/`:
+`digest/supplement/2026_05_18_3axis_cauer_sibc/scripts/` (frozen with the
+Zenodo deposit). The Python implementation, `multi_conductor_coupling.py`,
+was NOT promoted when `examples/` was retired: it exists in no tracked lane.
+The last copy is LAB-local under
+`.claude/worktrees/distortion-ex/examples/hierarchical_cauer_sibc/multi_conductor/`.
+Migration blocker, recorded 2026-09-02; `target_after_unblock`:
+`validation_test/mixed_galerkin/` if it still reproduces the Phase 3 B
+numbers, otherwise distill the lesson to `memory/` and delete.
 
 | Script | Phase | What it verifies |
 |--------|-------|------------------|
