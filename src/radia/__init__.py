@@ -382,3 +382,4 @@ from .magnet import magnet_box  # noqa: E402,F401
 # ObjHexahedron magnet_box so production / other solvers / examples / tests
 # keep working unchanged.
 from .magnet import ObjRecMag  # noqa: E402,F401
+from .lamination import laminated_mu_eff  # noqa: E402,F401

@@ -29,7 +29,7 @@ def check_ac_complex_mu():
     from ngsolve import (H1, BilinearForm, LinearForm, GridFunction, grad, dx,
                          Integrate)
     from ngsolve.meshes import Make1DMesh
-    from radia_mcp.radia_ngsolve.solve import laminated_mu_eff
+    from radia.lamination import laminated_mu_eff
 
     mu_r, sigma, freq, d = 1000.0, 2.0e6, 1000.0, 0.5e-3
     omega = 2 * math.pi * freq
