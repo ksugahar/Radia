@@ -74,6 +74,8 @@ def test_pre_push_runs_the_unpushed_candidate_on_mdx():
     assert "scp" in helper
     assert "tools/ci_preflight.py --only policy,version" in helper
     assert "tests/test_docs_notebook_contract.py" in helper
+    assert "upload_release_asset.py" not in hook
+    assert "developer push must never upload mutable" in hook
 
 
 def test_policy_twins_define_the_same_mdx_notebook_contract():
@@ -93,3 +95,4 @@ def test_policy_twins_define_the_same_mdx_notebook_contract():
     assert "the mdx CI queue is idle" in normalized
     assert "CI scope begins at the independently released distribution boundary" in normalized
     assert "complete pytest suite and all-server selftests only once" in normalized
+    assert "Developer pre-push hooks run only the impact-scoped mdx preflight" in normalized

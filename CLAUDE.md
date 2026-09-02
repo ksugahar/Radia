@@ -554,6 +554,9 @@ release-tag workflow builds and verifies the exact tagged artifact without
 repeating the full tests already run for that source commit. Full numerical,
 GUI, performance, and multi-machine evidence remains an explicit validation or
 release gate rather than an automatic response to every commit.
+Developer pre-push hooks run only the impact-scoped mdx preflight. They MUST
+NOT upload native binaries or mutate GitHub Releases; exact native artifacts
+are published by release workflows from the accepted CI run.
 
 The repository has three complementary, non-duplicative evidence surfaces:
 
