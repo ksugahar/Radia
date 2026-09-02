@@ -51,6 +51,7 @@ from .cross_lint import (  # noqa: F401
     paper_writing_check_misuse_japanese,
     paper_writing_suggest_redundancy_fixes,
     paper_writing_check_subject_predicate_distance,
+    paper_writing_translationese_check,
 )
 from ._terminology_normalizer import (  # noqa: F401
     paper_writing_normalize_terminology,

@@ -81,6 +81,7 @@ from .cross_lint import (  # noqa: F401
     presentation_lint_bedrock,
     presentation_check_misuse_japanese,
     presentation_suggest_redundancy_fixes,
+    presentation_translationese_check,
 )
 
 # Citing references on talk slides (2026-06-02) — format / references-frame /
