@@ -7,6 +7,11 @@ crystallized as its own package.
 
 ## [Unreleased]
 
+## [1.4.50] - 2026-09-02
+
+- mor: corrected the mixed-Galerkin CLN knowledge to record that the naive
+  separable face/edge/corner split is rank-deficient; a genuinely
+  non-separable 3D edge basis remains open.
 - presentation: recorded the Eqnedit64 normal-PowerPoint-paste contract as
   editable left-aligned 18 pt Office Math, exposed it through
   `presentation_equation_policy`, and prohibited `Shapes.Paste()` as a Ctrl+V

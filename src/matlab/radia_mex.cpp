@@ -168,6 +168,7 @@ struct NGSolveFESpaceHandle {
     std::shared_ptr<ngcomp::MeshAccess> mesh;
     std::shared_ptr<ngcomp::FESpace> fespace;
     std::string space;
+    std::string dirichlet;
     int order = 0;
     bool nograds = true;
     bool is_complex = false;
@@ -1472,13 +1473,15 @@ mxArray* Commands() {
         "ngsolve.mesh.set_deformation", "ngsolve.mesh.unset_deformation",
         "ngsolve.mesh.trafo_quality", "ngsolve.mesh.destroy",
         "ngsolve.fespace.create", "ngsolve.fespace.info",
+        "ngsolve.fespace.free_dofs",
         "ngsolve.fespace.destroy",
         "ngsolve.bilinear_form.create", "ngsolve.bilinear_form.info",
         "ngsolve.bilinear_form.create_from_coefficient",
         "ngsolve.bilinear_form.create_boundary_from_coefficient",
         "ngsolve.bilinear_form.matrix", "ngsolve.bilinear_form.destroy",
         "ngsolve.matrix.info", "ngsolve.matrix.values", "ngsolve.matrix.vector",
-        "ngsolve.matrix.matvec", "ngsolve.matrix.inverse",
+        "ngsolve.matrix.matvec", "ngsolve.matrix.matvec_into",
+        "ngsolve.matrix.inverse",
         "ngsolve.matrix.projected_create",
         "ngsolve.matrix.reduced_block_create",
         "ngsolve.matrix.diagonal_preconditioner",
@@ -1488,6 +1491,7 @@ mxArray* Commands() {
         "ngsolve.solver.solve", "ngsolve.solver.destroy",
         "ngsolve.coefficient_function.constant_create",
         "ngsolve.coefficient_function.coordinates_create",
+        "ngsolve.coefficient_function.component",
         "ngsolve.coefficient_function.add",
         "ngsolve.coefficient_function.subtract",
         "ngsolve.coefficient_function.multiply",
@@ -3336,11 +3340,13 @@ std::string Lowercase(std::string value) {
 std::shared_ptr<ngcomp::FESpace> MakeNGSolveSpace(
     const std::shared_ptr<ngcomp::MeshAccess>& mesh,
     const std::string& space_name, int order, bool nograds,
-    bool complex_space = false) {
+    bool complex_space = false, const std::string& dirichlet = "") {
     ngcore::Flags flags;
     flags.SetFlag("order", order);
     if (complex_space)
         flags.SetFlag("complex", true);
+    if (!dirichlet.empty())
+        flags.SetFlag("dirichlet", dirichlet);
     if (space_name == "h1")
         return std::make_shared<ngcomp::H1HighOrderFESpace>(mesh, flags);
     if (space_name == "vectorh1") {
@@ -3492,7 +3498,10 @@ MakeNGSolveBoundaryCoefficientBilinearIntegrator(
 }
 
 std::size_t NGSolveAssemblyHeapBytes(std::size_t minimum_total_bytes) {
-    constexpr std::size_t per_thread_bytes = 1u << 22;
+    // Assemble partitions the outer LocalHeap across TaskManager workers.
+    // High-order HEX coefficient forms need substantially more than the old
+    // 4 MiB worker slice even when the requested total is already 64 MiB.
+    constexpr std::size_t per_thread_bytes = 1u << 24;
     const auto thread_count = static_cast<std::size_t>(
         std::max(1, ngcore::TaskManager::GetNumThreads()));
     if (thread_count >
@@ -3903,22 +3912,26 @@ void NGSolveFESpaceCreate(int nlhs, mxArray* plhs[], int nrhs,
     if ((nrhs < 5 || nrhs > 7) || nlhs != 1)
         BadArgument(
             "usage: h = radia_mex('ngsolve.fespace.create', "
-            "mesh_handle, space, order [, nograds [, complex]])");
+            "mesh_handle, space, order [, nograds [, complex [, dirichlet]]])");
     const auto& mesh_holder = Mesh(Handle(prhs[1]));
     const std::string space_name = Lowercase(Text(prhs[2], "space"));
     const int order = PositiveInteger(prhs[3], "order");
     const bool nograds = nrhs >= 5 ? Boolean(prhs[4], "nograds") : true;
     const bool complex_space = nrhs >= 6 ? Boolean(prhs[5], "complex") : false;
+    const std::string dirichlet =
+        nrhs >= 7 ? Text(prhs[6], "dirichlet") : "";
     auto holder = std::make_unique<NGSolveFESpaceHandle>();
     holder->mesh = mesh_holder.mesh;
     holder->space = space_name;
     holder->order = order;
     holder->nograds = nograds;
     holder->is_complex = complex_space;
+    holder->dirichlet = dirichlet;
     {
         ngcore::RegionTaskManager task_manager;
         holder->fespace = MakeNGSolveSpace(
-            holder->mesh, space_name, order, nograds, complex_space);
+            holder->mesh, space_name, order, nograds, complex_space,
+            dirichlet);
         holder->fespace->Update();
         holder->fespace->FinalizeUpdate();
     }
@@ -3936,14 +3949,16 @@ void NGSolveFESpaceInfo(int nlhs, mxArray* plhs[], int nrhs,
         if (free_dofs->Test(i))
             ++free_count;
     const char* fields[] = {"space", "order", "nograds", "is_complex",
-                            "dimension", "vertices", "elements", "dof_count",
+                            "dirichlet", "dimension", "vertices", "elements", "dof_count",
                             "free_dof_count", "taskmanager_threads"};
-    plhs[0] = mxCreateStructMatrix(1, 1, 10, fields);
+    plhs[0] = mxCreateStructMatrix(1, 1, 11, fields);
     mxSetField(plhs[0], 0, "space", TextOutput(holder.space.c_str()));
     mxSetField(plhs[0], 0, "order", mxCreateDoubleScalar(holder.order));
     mxSetField(plhs[0], 0, "nograds", mxCreateLogicalScalar(holder.nograds));
     mxSetField(plhs[0], 0, "is_complex",
                mxCreateLogicalScalar(holder.is_complex));
+    mxSetField(plhs[0], 0, "dirichlet",
+               TextOutput(holder.dirichlet.c_str()));
     mxSetField(plhs[0], 0, "dimension",
                mxCreateDoubleScalar(holder.mesh->GetDimension()));
     mxSetField(plhs[0], 0, "vertices",
@@ -3956,6 +3971,20 @@ void NGSolveFESpaceInfo(int nlhs, mxArray* plhs[], int nrhs,
                mxCreateDoubleScalar(free_count));
     mxSetField(plhs[0], 0, "taskmanager_threads",
                mxCreateDoubleScalar(ngcore::TaskManager::GetNumThreads()));
+}
+
+void NGSolveFESpaceFreeDofs(int nlhs, mxArray* plhs[], int nrhs,
+                            const mxArray* prhs[]) {
+    CheckArity(nrhs, 2, nlhs, 1,
+               "free = radia_mex('ngsolve.fespace.free_dofs', handle)");
+    const auto& holder = FESpace(Handle(prhs[1]));
+    const int ndof = holder.fespace->GetNDof();
+    auto free_dofs = holder.fespace->GetFreeDofs(false);
+    mxArray* result = mxCreateLogicalMatrix(static_cast<std::size_t>(ndof), 1);
+    auto* values = mxGetLogicals(result);
+    for (int dof = 0; dof < ndof; ++dof)
+        values[dof] = free_dofs->Test(dof);
+    plhs[0] = result;
 }
 
 void NGSolveBilinearFormCreate(int nlhs, mxArray* plhs[], int nrhs,
@@ -3987,7 +4016,7 @@ void NGSolveBilinearFormCreate(int nlhs, mxArray* plhs[], int nrhs,
             form->AddIntegrator(MakeNGSolveIntegrator(
                 holder->space, form_name, holder->mesh->GetDimension(), nullptr, true));
             ngstd::LocalHeap local_heap(
-                NGSolveAssemblyHeapBytes(1 << 20),
+                NGSolveAssemblyHeapBytes(1 << 26),
                 "radia_matlab_persistent_complex_form");
             form->Assemble(local_heap);
             holder->matrix = form->GetMatrixPtr();
@@ -3998,7 +4027,7 @@ void NGSolveBilinearFormCreate(int nlhs, mxArray* plhs[], int nrhs,
             form->AddIntegrator(MakeNGSolveIntegrator(
                 holder->space, form_name, holder->mesh->GetDimension()));
             ngstd::LocalHeap local_heap(
-                NGSolveAssemblyHeapBytes(1 << 20),
+                NGSolveAssemblyHeapBytes(1 << 26),
                 "radia_matlab_persistent_form");
             form->Assemble(local_heap);
             holder->matrix = form->GetMatrixPtr();
@@ -4042,7 +4071,7 @@ void NGSolveBilinearFormCreateFromCoefficient(int nlhs, mxArray* plhs[], int nrh
                 holder->fespace, label.c_str(), flags);
             form->AddIntegrator(MakeNGSolveIntegrator(
                 holder->space, form_name, holder->mesh->GetDimension(), coefficient, true));
-            ngstd::LocalHeap local_heap(NGSolveAssemblyHeapBytes(1 << 20),
+            ngstd::LocalHeap local_heap(NGSolveAssemblyHeapBytes(1 << 26),
                                         "radia_matlab_coefficient_complex_bilinear_form");
             form->Assemble(local_heap);
             holder->matrix = form->GetMatrixPtr();
@@ -4052,7 +4081,7 @@ void NGSolveBilinearFormCreateFromCoefficient(int nlhs, mxArray* plhs[], int nrh
                 holder->fespace, label.c_str(), flags);
             form->AddIntegrator(MakeNGSolveIntegrator(
                 holder->space, form_name, holder->mesh->GetDimension(), coefficient));
-            ngstd::LocalHeap local_heap(NGSolveAssemblyHeapBytes(1 << 20),
+            ngstd::LocalHeap local_heap(NGSolveAssemblyHeapBytes(1 << 26),
                                         "radia_matlab_coefficient_bilinear_form");
             form->Assemble(local_heap);
             holder->matrix = form->GetMatrixPtr();
@@ -4095,7 +4124,7 @@ void NGSolveBilinearFormCreateBoundaryFromCoefficient(
                 holder->fespace, label.c_str(), flags);
             form->AddIntegrator(MakeNGSolveBoundaryCoefficientBilinearIntegrator(
                 holder->fespace, coefficient, true));
-            ngstd::LocalHeap local_heap(NGSolveAssemblyHeapBytes(1 << 20),
+            ngstd::LocalHeap local_heap(NGSolveAssemblyHeapBytes(1 << 26),
                                         "radia_matlab_boundary_complex_bilinear_form");
             form->Assemble(local_heap);
             holder->matrix = form->GetMatrixPtr();
@@ -4105,7 +4134,7 @@ void NGSolveBilinearFormCreateBoundaryFromCoefficient(
                 holder->fespace, label.c_str(), flags);
             form->AddIntegrator(MakeNGSolveBoundaryCoefficientBilinearIntegrator(
                 holder->fespace, coefficient));
-            ngstd::LocalHeap local_heap(NGSolveAssemblyHeapBytes(1 << 20),
+            ngstd::LocalHeap local_heap(NGSolveAssemblyHeapBytes(1 << 26),
                                         "radia_matlab_boundary_bilinear_form");
             form->Assemble(local_heap);
             holder->matrix = form->GetMatrixPtr();
@@ -4448,6 +4477,35 @@ void NGSolveMatrixMatVec(int nlhs, mxArray* plhs[], int nrhs,
     holder->parent_matrix = matrix.matrix;
     holder->is_view = false;
     plhs[0] = Uint64Output(RegisterVector(std::move(holder)));
+}
+
+void NGSolveMatrixMatVecInto(int nlhs, mxArray*[], int nrhs,
+                             const mxArray* prhs[]) {
+    if ((nrhs != 4 && nrhs != 5) || nlhs != 0)
+        BadArgument(
+            "radia_mex('ngsolve.matrix.matvec_into', matrix, input, output "
+            "[, transpose])");
+    const auto& matrix = Matrix(Handle(prhs[1]));
+    const auto& input = Vector(Handle(prhs[2]));
+    auto& output = Vector(Handle(prhs[3]));
+    const bool transpose = nrhs == 5 ? Boolean(prhs[4], "transpose") : false;
+    const int input_size = transpose ? matrix.matrix->VHeight()
+                                     : matrix.matrix->VWidth();
+    const int output_size = transpose ? matrix.matrix->VWidth()
+                                      : matrix.matrix->VHeight();
+    if (input.vector->Size() != input_size ||
+        output.vector->Size() != output_size)
+        BadArgument("input or output vector size does not match the NGSolve matrix");
+    if (input.vector->IsComplex() != matrix.matrix->IsComplex() ||
+        output.vector->IsComplex() != matrix.matrix->IsComplex())
+        BadArgument("NGSolve matrix and vector scalar types must match for matvec_into");
+    if (input.vector.get() == output.vector.get())
+        BadArgument("matvec_into requires distinct input and output vectors");
+    ngcore::RegionTaskManager task_manager;
+    if (transpose)
+        matrix.matrix->MultTrans(*input.vector, *output.vector);
+    else
+        matrix.matrix->Mult(*input.vector, *output.vector);
 }
 
 std::shared_ptr<ngla::KrylovSpaceSolver> MakeNGSolveSolver(
@@ -4857,6 +4915,18 @@ void NGSolveCoefficientCoordinatesCreate(int nlhs, mxArray* plhs[], int nrhs,
     plhs[0] = Uint64Output(RegisterCoefficient(std::move(coefficient)));
 }
 
+void NGSolveCoefficientComponent(int nlhs, mxArray* plhs[], int nrhs,
+                                 const mxArray* prhs[]) {
+    CheckArity(nrhs, 3, nlhs, 1,
+        "h = radia_mex('ngsolve.coefficient_function.component', handle, component)");
+    const auto coefficient = Coefficient(Handle(prhs[1]));
+    const int component = PositiveInteger(prhs[2], "component") - 1;
+    if (component >= coefficient->Dimension())
+        BadArgument("component exceeds the CoefficientFunction dimension");
+    plhs[0] = Uint64Output(RegisterCoefficient(
+        ngfem::MakeComponentCoefficientFunction(coefficient, component)));
+}
+
 void NGSolveCoefficientBinary(const std::string& command, int nlhs,
                               mxArray* plhs[], int nrhs,
                               const mxArray* prhs[]) {
@@ -4880,10 +4950,16 @@ void NGSolveCoefficientScale(int nlhs, mxArray* plhs[], int nrhs,
                              const mxArray* prhs[]) {
     CheckArity(nrhs, 3, nlhs, 1,
                "h = radia_mex('ngsolve.coefficient_function.scale', scalar, coefficient)");
-    const Complex scalar = ComplexScalar(prhs[1], "scalar");
     const auto coefficient = Coefficient(Handle(prhs[2]));
-    plhs[0] = Uint64Output(RegisterCoefficient(
-        ngfem::operator*(scalar, coefficient)));
+    if (mxIsComplex(prhs[1])) {
+        const Complex scalar = ComplexScalar(prhs[1], "scalar");
+        plhs[0] = Uint64Output(RegisterCoefficient(
+            ngfem::operator*(scalar, coefficient)));
+    } else {
+        const double scalar = Scalar(prhs[1], "scalar");
+        plhs[0] = Uint64Output(RegisterCoefficient(
+            ngfem::operator*(scalar, coefficient)));
+    }
 }
 
 void NGSolveCoefficientInfo(int nlhs, mxArray* plhs[], int nrhs,
@@ -5300,7 +5376,7 @@ void NGSolveLinearFormCreate(int nlhs, mxArray* plhs[], int nrhs,
             form->AddIntegrator(MakeNGSolveLinearIntegrator(
                 holder->space, source_name, holder->mesh->GetDimension(),
                 source_value, true));
-            ngstd::LocalHeap local_heap(NGSolveAssemblyHeapBytes(1 << 20),
+            ngstd::LocalHeap local_heap(NGSolveAssemblyHeapBytes(1 << 26),
                                         "radia_matlab_persistent_complex_linear_form");
             form->Assemble(local_heap);
             holder->vector = form->GetVectorPtr();
@@ -5312,7 +5388,7 @@ void NGSolveLinearFormCreate(int nlhs, mxArray* plhs[], int nrhs,
                 holder->space, source_name, holder->mesh->GetDimension(),
                 source_value));
             ngstd::LocalHeap local_heap(
-                NGSolveAssemblyHeapBytes(1 << 20),
+                NGSolveAssemblyHeapBytes(1 << 26),
                 "radia_matlab_persistent_linear_form");
             form->Assemble(local_heap);
             holder->vector = form->GetVectorPtr();
@@ -5353,7 +5429,7 @@ void NGSolveLinearFormCreateFromCoefficient(int nlhs, mxArray* plhs[], int nrhs,
                 holder->fespace, label.c_str(), flags);
             form->AddIntegrator(MakeNGSolveCoefficientLinearIntegrator(
                 holder->fespace, coefficient, holder->mesh->GetDimension(), true));
-            ngstd::LocalHeap local_heap(NGSolveAssemblyHeapBytes(1 << 20),
+            ngstd::LocalHeap local_heap(NGSolveAssemblyHeapBytes(1 << 26),
                                         "radia_matlab_coefficient_complex_linear_form");
             form->Assemble(local_heap);
             holder->vector = form->GetVectorPtr();
@@ -5363,7 +5439,7 @@ void NGSolveLinearFormCreateFromCoefficient(int nlhs, mxArray* plhs[], int nrhs,
                 holder->fespace, label.c_str(), flags);
             form->AddIntegrator(MakeNGSolveCoefficientLinearIntegrator(
                 holder->fespace, coefficient, holder->mesh->GetDimension()));
-            ngstd::LocalHeap local_heap(NGSolveAssemblyHeapBytes(1 << 20),
+            ngstd::LocalHeap local_heap(NGSolveAssemblyHeapBytes(1 << 26),
                                         "radia_matlab_coefficient_linear_form");
             form->Assemble(local_heap);
             holder->vector = form->GetVectorPtr();
@@ -5404,7 +5480,7 @@ void NGSolveLinearFormCreateBoundaryFromCoefficient(
                 holder->fespace, label.c_str(), flags);
             form->AddIntegrator(MakeNGSolveBoundaryCoefficientLinearIntegrator(
                 holder->fespace, coefficient, true));
-            ngstd::LocalHeap local_heap(NGSolveAssemblyHeapBytes(1 << 20),
+            ngstd::LocalHeap local_heap(NGSolveAssemblyHeapBytes(1 << 26),
                                         "radia_matlab_boundary_complex_linear_form");
             form->Assemble(local_heap);
             holder->vector = form->GetVectorPtr();
@@ -5414,7 +5490,7 @@ void NGSolveLinearFormCreateBoundaryFromCoefficient(
                 holder->fespace, label.c_str(), flags);
             form->AddIntegrator(MakeNGSolveBoundaryCoefficientLinearIntegrator(
                 holder->fespace, coefficient));
-            ngstd::LocalHeap local_heap(NGSolveAssemblyHeapBytes(1 << 20),
+            ngstd::LocalHeap local_heap(NGSolveAssemblyHeapBytes(1 << 26),
                                         "radia_matlab_boundary_linear_form");
             form->Assemble(local_heap);
             holder->vector = form->GetVectorPtr();
@@ -11884,6 +11960,10 @@ void Dispatch(const std::string& command, int nlhs, mxArray* plhs[], int nrhs,
         NGSolveFESpaceInfo(nlhs, plhs, nrhs, prhs);
         return;
     }
+    if (command == "ngsolve.fespace.free_dofs") {
+        NGSolveFESpaceFreeDofs(nlhs, plhs, nrhs, prhs);
+        return;
+    }
     if (command == "ngsolve.fespace.destroy") {
         CheckArity(nrhs, 2, nlhs, 0,
                    "radia_mex('ngsolve.fespace.destroy', handle)");
@@ -11930,6 +12010,10 @@ void Dispatch(const std::string& command, int nlhs, mxArray* plhs[], int nrhs,
     }
     if (command == "ngsolve.matrix.matvec") {
         NGSolveMatrixMatVec(nlhs, plhs, nrhs, prhs);
+        return;
+    }
+    if (command == "ngsolve.matrix.matvec_into") {
+        NGSolveMatrixMatVecInto(nlhs, plhs, nrhs, prhs);
         return;
     }
     if (command == "ngsolve.matrix.inverse") {
@@ -12277,8 +12361,13 @@ void Dispatch(const std::string& command, int nlhs, mxArray* plhs[], int nrhs,
         NGSolveMatrixDump(nlhs, plhs, nrhs, prhs);
     else if (command == "ngsolve.coefficient_function.constant_create")
         NGSolveCoefficientConstantCreate(nlhs, plhs, nrhs, prhs);
-    else if (command == "ngsolve.coefficient_function.coordinates_create")
-        NGSolveCoefficientCoordinatesCreate(nlhs, plhs, nrhs, prhs);
+    else if (command == "ngsolve.coefficient_function.coordinates_create" ||
+             command == "ngsolve.coefficient_function.component") {
+        if (command == "ngsolve.coefficient_function.coordinates_create")
+            NGSolveCoefficientCoordinatesCreate(nlhs, plhs, nrhs, prhs);
+        else
+            NGSolveCoefficientComponent(nlhs, plhs, nrhs, prhs);
+    }
     else if (command == "ngsolve.coefficient_function.add" ||
              command == "ngsolve.coefficient_function.subtract" ||
              command == "ngsolve.coefficient_function.multiply")

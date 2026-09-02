@@ -1,0 +1,26 @@
+=== Phase 3b: W(alpha) numerical regression ===
+L = 5.0 mm, sigma = 5.80e+07
+Sweep alpha_shear = 0.05 to 0.8, extract c_1 = mu * s * (Y_FEM - c_0/sqrt(s) - c_2/s^1.5)
+
+alpha_shear  eps_acute (deg)     Y_FEM_re     Y_FEM_im  Sum L_e W (m)       Avg W  rel.dev.from cube
+  (Reference: cube Sum L_e * W(pi/2) = 12 L * 4/pi = 76.3944 mm)
+
+        0.000             0.00   9.0392e-01  -8.0741e-01       81.8628      1.3644             7.158%
+        0.050             2.86   9.0062e-01  -8.0020e-01       87.8520      1.4636            14.998%
+        0.100             5.71   9.0012e-01  -7.9743e-01       90.9346      1.5131            19.033%
+        0.150             8.53   9.0188e-01  -7.9918e-01       91.0391      1.5117            19.170%
+        0.200            11.31   9.0460e-01  -8.0094e-01       91.7054      1.5184            20.042%
+        0.300            16.70   9.1301e-01  -8.0554e-01       93.8727      1.5419            22.879%
+        0.400            21.80   9.2403e-01  -8.1074e-01       97.6605      1.5869            27.837%
+        0.500            26.57   9.3433e-01  -8.1217e-01      106.3409      1.7053            39.200%
+        0.600            30.96   9.5257e-01  -8.1488e-01      115.7220      1.8275            51.480%
+        0.800            38.66   9.8686e-01  -8.5486e-01      111.5362      1.6999            46.001%
+
+=== Quadratic fit: Delta Sum_LW = 2 L * W''(pi/2) * eps^2 ===
+  Fit:  Delta Sum_LW = 107.2424 mm * eps^2  (eps in radians)
+Traceback (most recent call last):
+  File "W:\02_学会資料\2026年度\2026_09_IGTE_Symposium\CauerLadderNetwork@菅原\mixed_galerkin\cuboid_general\04_W_alpha_regression.py", line 215, in <module>
+    main()
+  File "W:\02_学会資料\2026年度\2026_09_IGTE_Symposium\CauerLadderNetwork@菅原\mixed_galerkin\cuboid_general\04_W_alpha_regression.py", line 201, in main
+    print(f"  W''(pi/2) \u2248 {W_pp:.4f}")
+UnicodeEncodeError: 'cp932' codec can't encode character '\u2248' in position 12: illegal multibyte sequence
