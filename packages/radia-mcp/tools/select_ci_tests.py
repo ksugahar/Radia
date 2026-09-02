@@ -104,13 +104,19 @@ def _related_tests(
     module_parts: tuple[str, ...],
 ) -> set[str]:
     package_token = f"radia_mcp.{family}"
-    hints = {family, family.replace("_", "-")}
-    if module_parts:
-        stem = module_parts[-1]
-        if stem not in {"__init__", "server"}:
-            hints.update({stem, stem.replace("_", "-")})
+    stem = module_parts[-1] if module_parts else ""
+    broad_family_change = not module_parts or stem == "__init__"
+    if broad_family_change:
+        search_token = package_token
+        hints = {family, family.replace("_", "-")}
+    else:
+        search_token = ".".join((package_token, *module_parts))
+        hints = {stem, stem.replace("_", "-")}
+        if stem == "server":
+            family_hint = family.replace("-", "_")
+            hints = {f"{family_hint}_mcp", f"{family_hint}_server"}
 
-    selected = set(_tests_containing(package_token))
+    selected = set(_tests_containing(search_token))
     for relative in sources:
         filename = Path(relative).name
         if any(hint and hint in filename for hint in hints):
