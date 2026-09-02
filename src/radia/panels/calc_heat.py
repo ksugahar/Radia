@@ -363,7 +363,7 @@ def solve_heat(wp_vol,
     # Lazy imports so --help is fast.
     from ngsolve import (Mesh, H1, BilinearForm, LinearForm, GridFunction,
                           Integrate, CF, CoefficientFunction, ds, dx, BND,
-                          VTKOutput, TaskManager)
+                          VTKOutput, TaskManager, NodeId, VERTEX)
 
     if not os.path.isfile(wp_vol):
         return {"error": f"--wp-vol not found: {wp_vol}"}
@@ -434,7 +434,11 @@ def solve_heat(wp_vol,
     fes_T = H1(wp_mesh, order=int(fes_order))
     u, v = fes_T.TnT()
     gfT = GridFunction(fes_T)
-    gfT.vec[:] = float(t_initial)
+    with TaskManager():
+        # Uniform initial state.  ``gfT.vec[:] = T0`` is WRONG for
+        # order >= 2 (hierarchical edge/face coefficients are not
+        # nodal temperatures); Set() interpolates the constant exactly.
+        gfT.Set(CF(float(t_initial)))
     _log(f"FES:H1 order={fes_order} ndof={fes_T.ndof}")
 
     # q_surf source -- needs a Namespace-like object to thread the
@@ -573,8 +577,13 @@ def solve_heat(wp_vol,
         _log(f"STEP:{step}/{n_steps} t={t:.3f}s "
              f"T_probe={T_probe[-1] if probe_point is not None else 'n/a'}")
 
-    # Final stats: peak T over the volume.
-    T_arr = np.asarray(gfT.vec.FV().NumPy())
+    # Final stats: peak T over the volume (vertex DOFs only -- for
+    # order >= 2 the hierarchical H1 edge/face coefficients are not
+    # temperature values).
+    vert_dofs = [d for vtx in wp_mesh.vertices
+                 for d in fes_T.GetDofNrs(NodeId(VERTEX, vtx.nr))
+                 if d >= 0]
+    T_arr = np.asarray(gfT.vec.FV().NumPy())[vert_dofs]
     T_max = float(np.max(T_arr))
     T_min = float(np.min(T_arr))
     # Volume-averaged mean temperature -- the integral quantity
