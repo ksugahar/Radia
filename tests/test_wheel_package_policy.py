@@ -20,14 +20,18 @@ def test_radia_wheel_excludes_native_backup_files():
     } <= excluded
 
 
-def test_pre_push_upload_excludes_native_backup_files():
+def test_ci_native_artifact_excludes_backups_and_pre_push_does_not_upload():
     hook = (ROOT / "tools" / "git-hooks" / "pre-push").read_text(
         encoding="utf-8"
     )
-    assert "*.locked-old.*" in hook
-    assert "*.lockedold.*" in hook
-    assert "*.pre_*.*" in hook
-    assert "*.backup*.*" in hook
+    workflow = (ROOT / ".github" / "workflows" / "build-test.yml").read_text(
+        encoding="utf-8"
+    )
+    assert "upload_release_asset.py" not in hook
+    assert "!src/radia/*.locked-old.*" in workflow
+    assert "!src/radia/*.lockedold.*" in workflow
+    assert "!src/radia/*.pre_*.*" in workflow
+    assert "!src/radia/*.backup*.*" in workflow
 
 
 def test_retired_notebook_workbenches_are_absent_from_source():
