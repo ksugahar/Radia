@@ -182,13 +182,11 @@ from .knowledge.axifem import get_axifem_documentation
 from .knowledge.ngsbem_inductance import get_ngsbem_inductance_documentation
 from .knowledge.peec_inductance import get_peec_inductance_documentation
 from .knowledge.esim import get_esim_documentation
-from .knowledge.panel_gui_pitfalls import get_panel_gui_pitfalls
 from .knowledge.analytical_formulas import get_analytical_formulas_documentation
 from ..force.knowledge import get_force_validation
 from .knowledge.technical_reports import get_technical_reports_documentation
 from .knowledge.install_deploy import get_install_deploy_documentation
 from .knowledge.release_workflow import get_release_workflow_documentation
-from .knowledge.standalone_panels import get_standalone_panels_documentation
 from .knowledge.loop_learning import get_loop_learning_documentation
 from .knowledge.basis_functions import get_basis_functions_documentation
 from .knowledge.taskmanager import get_taskmanager_knowledge
@@ -217,13 +215,6 @@ from ..acoustic_fembem import (
     acoustic_fembem_server_config as _matlab_acoustic_fembem_server_config,
 )
 from .gmsh_post_spec import get_gmsh_post_spec
-from .panel_describer import (
-    find_panel_file as _find_panel_file,
-    parse_panel_file as _parse_panel_file,
-    describe_panel_jp as _describe_panel_jp,
-    widget_locations as _widget_locations,
-)
-
 # NOTE: induction_heating_knowledge is in mcp-server-ih (not here)
 
 mcp = FastMCP("mcp-server-radia-ngsolve")
@@ -1792,8 +1783,8 @@ def peec_inductance(topic: str = "all") -> str:
     directory AND contains the PEEC explicit-centerline pattern,
     the calc switches to the .jou parser automatically.
 
-    Unicode / Japanese path: verified end-to-end (Python + Cubit
-    plugin via utf8_path.hpp + PySide6 QProcess).
+    Unicode / Japanese path: verified end-to-end through Python, the Cubit
+    plugin's utf8_path.hpp boundary, and the Simulink/headless runner.
 
     Args:
         topic: Options:
@@ -2029,261 +2020,6 @@ def ngsolve_solvers_reference() -> str:
     )
 
 
-# ============================================================
-# Panel Registry Tools
-# ============================================================
-
-def _load_panel_registry():
-    """Load panel_registry.json from panels directory."""
-    import json
-    registry_path = (Path(__file__).parent.parent.parent / "panels"
-                     / "panel_registry.json")
-    if not registry_path.exists():
-        return None
-    with open(registry_path, "r", encoding="utf-8") as f:
-        return json.load(f)
-
-
-@mcp.tool()
-def panel_schema(panel_name: str = "") -> str:
-    """
-    Show Radia-NGSolve panel definitions with Japanese labels and physics.
-
-    When called without arguments, lists all available panels.
-    When called with a panel name, shows detailed parameter definitions
-    including Japanese names, physical meaning, CLI flags, and defaults.
-
-    This enables natural language <-> CLI parameter mapping:
-      "周波数を50kHzに" -> --frequency 50000
-      "銅のワークピース" -> --material copper --sigma 5.8e7
-
-    Args:
-        panel_name: Panel ID (e.g. "inductance", "fem_kelvin").
-                    Empty string returns overview of all panels.
-    """
-    reg = _load_panel_registry()
-    if reg is None:
-        return ("Error: panel_registry.json not found. "
-                "Run: python src/radia/panels/sync_registry.py")
-
-    panels = reg.get("panels", {})
-
-    if not panel_name:
-        lines = ["# Radia-NGSolve Panels\n"]
-        for pid, p in panels.items():
-            n = len(p.get("params", []))
-            lines.append(f"## {pid}: {p['ja_name']}")
-            lines.append(f"  {p['ja_description']}")
-            lines.append(f"  Script: {p['script']} | Method: {p['method']}")
-            lines.append(f"  Parameters: {n}")
-            lines.append("")
-        lines.append("Use panel_schema(panel_name) for parameter details.")
-        return "\n".join(lines)
-
-    if panel_name not in panels:
-        return (f"Unknown panel: {panel_name}. "
-                f"Available: {', '.join(panels.keys())}")
-
-    p = panels[panel_name]
-    lines = [
-        f"# {p['ja_name']} ({panel_name})",
-        f"Script: `{p['script']}` | Function: `{p['function']}`",
-        f"Method: {p['method']}",
-        f"Description: {p['ja_description']}",
-        "",
-        "## Parameters",
-        "",
-        "| CLI | 日本語 | Type | Default | Physics |",
-        "|-----|--------|------|---------|---------|",
-    ]
-    for param in p.get("params", []):
-        cli = param.get("cli", "")
-        ja = param.get("ja", "")
-        typ = param.get("type", "str")
-        default = param.get("default", "")
-        if param.get("required"):
-            default = "**required**"
-        physics = param.get("physics", "")
-        choices = param.get("choices", [])
-        if choices:
-            physics = f"{physics} [{'/'.join(str(c) for c in choices)}]"
-        lines.append(f"| `{cli}` | {ja} | {typ} | {default} | {physics} |")
-
-    if p.get("command_builder"):
-        lines.append(f"\nCommand builder: `{p['command_builder']}`")
-
-    return "\n".join(lines)
-
-
-@mcp.tool()
-def panel_add_param(panel_name: str, param_name: str, param_type: str = "float",
-                    cli_flag: str = "", default: str = "",
-                    ja: str = "", physics: str = "",
-                    help_text: str = "") -> str:
-    """
-    Plan where to add a new parameter to a Radia-NGSolve panel.
-
-    Does NOT modify code. Returns a checklist of files and locations
-    that need to be updated, so the LLM can make precise edits.
-
-    Args:
-        panel_name: Panel ID (e.g. "fem_kelvin", "inductance")
-        param_name: Python parameter name (e.g. "coil_sigma")
-        param_type: "float", "int", "str", "bool"
-        cli_flag: CLI flag (e.g. "--coil-sigma"). Auto-generated if empty.
-        default: Default value as string
-        ja: Japanese label (e.g. "コイル導電率")
-        physics: Physics description (e.g. "R = L/(sigma*A)")
-        help_text: English help text for argparse
-    """
-    reg = _load_panel_registry()
-    if reg is None:
-        return "Error: panel_registry.json not found."
-
-    panels = reg.get("panels", {})
-    if panel_name not in panels:
-        return f"Unknown panel: {panel_name}. Available: {', '.join(panels.keys())}"
-
-    p = panels[panel_name]
-    if not cli_flag:
-        cli_flag = "--" + param_name.replace("_", "-")
-
-    # Check if param already exists
-    existing = [x["cli"] for x in p.get("params", [])]
-    if cli_flag in existing:
-        return f"Parameter {cli_flag} already exists in {panel_name}."
-
-    script = p["script"]
-    function = p["function"]
-    builder = p.get("command_builder", "")
-
-    lines = [
-        f"# Add `{param_name}` to {panel_name} ({p['ja_name']})",
-        f"  日本語: {ja}",
-        f"  Physics: {physics}",
-        "",
-        "## Checklist (4 locations):",
-        "",
-        f"### 1. `panels/{script}` — argparse",
-        f"  Add: `parser.add_argument(\"{cli_flag}\", type={param_type}, "
-        f"default={default}, help=\"{help_text}\")`",
-        "",
-        f"### 2. `panels/{script}` — function `{function}()`",
-        f"  Add parameter: `{param_name}: {param_type} = {default}`",
-        f"  Wire: `args.{param_name.replace('-', '_')}` -> function call",
-        "",
-    ]
-
-    if builder:
-        mod, method = builder.split(":")
-        lines.extend([
-            f"### 3. `{mod}` — `{method}()`",
-            f"  Add: `cmd += [\"{cli_flag}\", self.val(\"{param_name}\")]`",
-            "",
-            f"### 4. `{mod}` — widget definition",
-            f"  Add QLineEdit/QSpinBox for `{param_name}`",
-            f"  Label: \"{ja}\" (displayed in Qt panel)",
-            "",
-        ])
-    else:
-        lines.extend([
-            "### 3-4. No command builder (standalone script)",
-            "",
-        ])
-
-    lines.extend([
-        "### 5. Update registry",
-        f"  Run: `python panels/sync_registry.py`",
-        "",
-        "### 6. Update MCP knowledge (if physics-relevant)",
-        f"  File: mcp_server knowledge related to {panel_name}",
-        "",
-        "### 7. Avoid the GUI pitfalls",
-        "  Before committing, call `panel_gui_pitfalls()` and check",
-        "  that the new param does not regress any of the listed",
-        "  bugs (combo state save/restore, hidden-widget read in",
-        "  build_command, mode-switch widget visibility, GMSH viz,",
-        "  subprocess argparse choices, Cubit .jou id capture, ...).",
-    ])
-
-    return "\n".join(lines)
-
-
-@mcp.tool()
-def panel_describe_jp(panel_name: str) -> str:
-    """
-    現在のパネルソースを AST 解析して日本語で詳細に説明する。
-
-    Reads the actual ``radia_<panel_name>.py`` source file (NOT the
-    cached panel_registry.json which can be stale) and returns a
-    Japanese hierarchical description of:
-
-      - all widgets (key, label, type, default, combo items)
-      - mode-switch visibility logic per handler
-      - subprocess command builders with their CLI flag mapping
-
-    Use this to:
-      1. Confirm what the panel actually looks like before editing
-      2. Generate a "spec" for the user to confirm in plain Japanese
-      3. Diff against panel_registry.json to find drift
-
-    Args:
-        panel_name: Panel id (e.g. "ih", "em", "pcb"). Resolved to
-                    ``src/radia/radia_<panel_name>.py``.
-
-    Returns markdown text. Combine with panel_gui_pitfalls() output
-    when planning a panel modification — first describe the current
-    state, then check the relevant pitfalls.
-    """
-    path = _find_panel_file(panel_name)
-    if path is None:
-        return (f"Panel file not found for {panel_name!r}. "
-                f"Expected at src/radia/radia_{panel_name}.py.")
-    try:
-        info = _parse_panel_file(path)
-    except SyntaxError as e:
-        return f"SyntaxError in {path}:{e.lineno}: {e.msg}"
-    return _describe_panel_jp(info)
-
-
-@mcp.tool()
-def panel_widget_locations(panel_name: str, widget_key: str) -> str:
-    """
-    Return file:line locations for everything that touches a widget.
-
-    For a given widget key (e.g. ``"half_thickness"``), returns:
-
-      - **Definition** location: which add_line/add_combo/add_spin
-        call created the widget, with the line number, default
-        value, and combo items.
-      - **Visibility rules**: every ``self._set_row_visible(key, ...)``
-        call across all _on_*_changed handlers, with the conditional
-        branch and the visibility expression.
-      - **Command builder uses**: every ``cmd += ["--flag",
-        self.val("key")]`` line in _build_*_command methods.
-
-    Use this BEFORE editing a widget so you can update every
-    location that references it in one consistent commit. The MCP
-    output is JSON-pretty so the LLM can structure follow-up
-    edits programmatically.
-
-    Args:
-        panel_name:  Panel id (e.g. "ih")
-        widget_key:  Internal widget key (e.g. "half_thickness",
-                     "wp_sigma", "method")
-    """
-    import json
-    path = _find_panel_file(panel_name)
-    if path is None:
-        return f"Panel file not found for {panel_name!r}."
-    try:
-        info = _parse_panel_file(path)
-    except SyntaxError as e:
-        return f"SyntaxError in {path}:{e.lineno}: {e.msg}"
-    locs = _widget_locations(info, widget_key)
-    return json.dumps(locs, indent=2, ensure_ascii=False)
-
-
 @mcp.tool()
 def gmsh_post_spec() -> str:
     """
@@ -2301,67 +2037,22 @@ def gmsh_post_spec() -> str:
 
 
 @mcp.tool()
-def panel_gui_pitfalls(topic: str = "") -> str:
-    """
-    Pitfalls and lessons learned from Radia GUI / Cubit panel development.
-
-    Read this BEFORE adding a new parameter, mode, or method to a
-    `radia_*.py` panel, BEFORE renaming a combo item, and BEFORE
-    writing a new sample .jou. Each pitfall is paired with a "rule"
-    that prevents it from coming back.
-
-    Topics:
-      combo_state             -- save/restore by text, not index
-      mode_switch             -- hidden widgets must not feed build_command
-      layout_unification      -- shared widget set across solver methods
-      gmsh_viz                -- companion .geo, hide volume mesh, vector only
-      gmsh_arrow_size         -- ArrowSizeMin/Max=20 — without this the
-                                 field arrows are functionally invisible
-      subprocess_args         -- calc_*.py choices must match GUI combos
-      cubit_jou               -- subtract id semantics, surface id renumbering
-      sample_jou              -- one .jou per (panel, method) pair
-      silent_action           -- menu actions must produce visible feedback
-      silent_except           -- never bare-except; always log type+traceback
-                                 tail; always provide a fallback path
-      result_keys             -- subprocess result dict is an API contract
-      regression_blast_radius -- run BOTH panels after touching shared
-                                 helpers; opaque casts (PointId) bite
-      panel_qt_testing        -- retired PySide note; current gate is
-                                 tests/test_application_interface_manifest.py
-      learn_edition_cap       -- ignore the 50k warning, export bypasses it
-
-    Args:
-        topic: Empty for the full document, or one of the topic
-               keywords above for a single section.
-    """
-    return get_panel_gui_pitfalls(topic)
-
-
-@mcp.tool()
 def install_deploy(topic: str = "") -> str:
     """
-    Radia install / deploy policy and recipes — 2-tier configuration
-    (LAB + 100号機 editable / mdx + hibino PyPI), reversible migration steps, and the
-    non-obvious gotchas that cause silent breakage.
+    Current Radia install, machine-role, CI, and deployment contract.
 
     Read this when:
       * Setting up a new lab machine.
-      * Migrating a machine between editable / PyPI install.
-      * Diagnosing "import works but pip says wrong version" or
-        "DLL load failed" on a freshly-deployed machine.
+      * Confirming which machine owns development, CI, or validation.
+      * Diagnosing editable-source, ABI, artifact, or MCP reload drift.
 
     Topics:
-      two_tier                    -- current LAB-editable / PyPI-consumer policy
-      lab_editable                -- LAB editable install
-      hyaku_editable              -- 100号機 NAS editable install
-      mdx_pypi                    -- mdx PyPI install
-      hibino_pypi                 -- hibino PyPI install via `ssh hibino`
-      editable_to_pypi_migration  -- e.g. 100号機 NAS-editable -> PyPI
-      pypi_to_editable_migration  -- e.g. mdx PyPI -> editable
-      metadata_sync               -- pip metadata vs radia.__version__
-      pyd_dll_bootstrap           -- cubit_mesh_curver requires `import radia` first
-      cubit_plugin_layers         -- Cubit plugin lives in TWO places
-      common_failure_modes        -- symptoms and fixes table
+      overview     -- machine roles and installation model
+      development  -- editable source and native-build rules
+      ci_compute   -- mdx CI and explicit validation workloads
+      release      -- immutable release-quad artifact flow
+      cubit        -- independent Cubit plugin boundary
+      failures     -- import, ABI, and MCP reload diagnostics
 
     Args:
         topic: Empty for the full document, or one of the topics above.
@@ -2402,34 +2093,6 @@ def release_workflow(topic: str = "") -> str:
         topic: Empty for the full document, or one of the topics above.
     """
     return get_release_workflow_documentation(topic)
-
-
-@mcp.tool()
-def standalone_panels(topic: str = "") -> str:
-    """
-    Retired standalone PySide panel topic. The canonical Radia human surface is
-    now the single Simulink application-block library. This tool remains as a
-    compatibility redirect; notebook workbenches are retired for all applications.
-
-    Read this when:
-      * A user asks about the old standalone panel entry-points.
-      * An MCP client still calls the historical `standalone_panels` topic.
-      * You need the post-migration Simulink route and no-PySide boundary.
-
-    Topics:
-      quick_start      -- current Simulink library route
-      four_panels      -- compatibility topic listing five application blocks
-      build_notebook_gui -- historical alias for the block construction recipe
-      cubit_panels_migration -- examples/cubit_panels promotion route
-      vol_sources      -- Cubit / Netgen-OCC / build123d / etc.
-      vs_cubit         -- Simulink route vs Cubit export/plugin boundary
-      ih_methods       -- Induction Heating block and shared headless contract
-      troubleshooting  -- common post-migration issues
-
-    Args:
-        topic: Empty for the full document, or one of the topics above.
-    """
-    return get_standalone_panels_documentation(topic)
 
 
 @mcp.tool()

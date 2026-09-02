@@ -570,7 +570,7 @@ those solvers have executed.
 ARTIFACT_FEEDBACK = r"""
 # Cross-validation and notebook artifact feedback
 
-Cross-validation JSON, executed notebooks, and result sidecars are not MCP
+Validation result JSON and executed notebooks are not MCP
 knowledge until the distilled lesson can be retrieved or checked by the MCP
 server.
 

@@ -142,8 +142,9 @@ DOCS + DEMOS
     docs/stream_function/deformation.ipynb     -- run_deformation_search live:
        penalty form (--minimize-reg) + NSGA-II Pareto front (--pareto);
        cost-vs-trial + (RMS, psi^T S psi) front; flat/accuracy/reg-min table
-    docs/stream_function/examples_catalog.ipynb -- source/result migration
-       ledger for transitional demo scripts, synchronized with JSON sidecars.
+    docs/stream_function/examples_catalog.ipynb -- historical source/result
+       migration ledger. Its sidecars are optional records, not the current
+       public-notebook evidence contract.
     (the .md keeps the prose/derivations; the .ipynb embeds the produced
     numbers + figures; validation and benchmarks execute from validation_test)
   Demo records include the Pareto + sheet-metal cases:
@@ -431,7 +432,7 @@ HONEST SCOPE
     NOT run VMEC (no simsopt/desc here) -- the default rotating-ellipse is an
     analytic MODEL, --wout drops in a real equilibrium.
 
-Locked by tests/panels/test_streamfunction_golden.py
+Locked by validation_test/panels/test_streamfunction_golden.py
 (test_regcoil_fusion_* : forward machine precision, b1==2, TF Ampere 1/R +
 tangency, VMEC non-axisym, wout round-trip + lasym-raise, force=pressure,
 FOCUS monotonic + conformal<circular).
@@ -551,7 +552,7 @@ purity 1.000; the 4th-order Z4 shim -> purity 0.99983, residual 1.5e-2,
 named Z3 contaminant 9.5e-3 (high-l shims are harder: an l-th harmonic's
 field scales as r^l over a fixed DSV).  The named-basis harmonicity
 (Laplacian 0, all 25 entries) and the target<->decompose round-trip are
-golden-locked (tests/panels/test_streamfunction_golden.py
+golden-locked (validation_test/panels/test_streamfunction_golden.py
 test_harmonic_basis_is_harmonic / test_harmonic_l4_forms_and_decompose).
 The panel auto-generates the two flags (cli-diff clean).
 """
@@ -801,7 +802,7 @@ IMPLEMENTATION STATUS (tests/ -> examples/ -> panels/)  [Stage A DONE 2026-06-11
            calc src/radia/panels/calc_streamfunction_volume.py (conductor .vol +
            --target-bz -> equal-current wires + GMSH wire overlay);
            StreamFunctionDesignSpec / Simulink application-block route; golden
-           tests/panels/test_streamfunction_volume_golden.py reproduces n_wires=59,
+           validation_test/panels/test_streamfunction_volume_golden.py reproduces n_wires=59,
            field 4.7%, two-codebase 3.4e-10 on a frozen tube fixture. The block
            covers the CLEAN regime only; F1/F2/F3 stay research demos by design.
 

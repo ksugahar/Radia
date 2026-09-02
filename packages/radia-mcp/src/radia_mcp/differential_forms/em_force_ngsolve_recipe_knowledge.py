@@ -536,9 +536,11 @@ print(f"Newton-3 violation: {abs(Fx_max-Fx_vwp)/max(abs(Fx_max),abs(Fx_vwp))*100
 #   Newton-3 violation: 0.50%
 ```
 
-## Reference test
-`tests/panels/test_em_force_golden.py` -- 8 golden tests including
-`test_em_force_newton_3rd_law_within_1pct`.
+## Reference validation
+`validation_test/force_validation/test_maxwell_stress_force.py` checks the
+Maxwell-stress route against an analytic force, while
+`packages/radia-mcp/tests/test_force_coenergy_gate.py` protects the lightweight
+force/coenergy contract.
 """
 
 

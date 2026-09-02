@@ -608,7 +608,7 @@ Verified 2026-04-21 on LAB + 100号機 with paths like
 | build123d ``import_step``          | ✅     | pythonocc-core wide API on Windows      |
 | netgen.occ ``OCCGeometry``         | ✅     | OCC wide API                             |
 | Cubit plugin write (.vol / .json)  | ✅     | ``utf8_path.hpp`` → UTF-8 → wide API    |
-| Panel → subprocess (PySide6)       | ✅     | QProcess uses CreateProcessW             |
+| Simulink / MCP → headless process  | ✅     | Windows wide-path process APIs           |
 
 ## Caveats
 
@@ -625,21 +625,18 @@ Verified 2026-04-21 on LAB + 100号機 with paths like
 
 ## End-user workflow is safe
 
-Kubota's actual workflow:
-  1. Cubit GUI → File → Open .jou  (Qt wide API → works)
-  2. Cubit GUI → Solve → Radia-NGSolve → PEEC inductance panel
-  3. Browse to .step  (QFileDialog wide API → works)
-  4. Run → QProcess spawns calc_peec_inductance.py  (CreateProcessW
-     → Japanese args preserved)
-  5. ``calc_peec_inductance.py`` handles Japanese path internally,
-     sibling-jou detection works on UTF-8 dir listing
+Supported workflow:
+  1. Export and validate the named ``.vol`` in Cubit.
+  2. Select the Unicode-path STEP and ``.vol`` in the IH Simulink block,
+     or pass them to the headless CLI through MCP.
+  3. Run the application; the artifact paths remain Unicode end to end.
 
 All verified on 100号機 with L_coil = 426.245 nH on Japanese path.
 """
 
 
 def get_peec_inductance_documentation(topic="all"):
-    """Return PEEC-inductance panel documentation by topic.
+    """Return PEEC-inductance application documentation by topic.
 
     Topics:
         overview          - What it solves, when to use, perimeter placement

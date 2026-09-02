@@ -864,7 +864,7 @@ the volume eddy-current problem per frequency (~2 min each x 100 =
 #           Surrounded by circular coil at I = 10 A
 
 # Lab equivalent geometry script: prolate_spheroid_hoibc.jou (planned)
-# tests/panels/test_hoibc_ellipsoid_golden.py (planned)
+# validation_test/mixed_galerkin/sphere/02_hoibc_gamma1.py
 
 # Validation table (Dong-Di Rienzo 2020 IEEE Access Table II):
 # | omega | mu_r | Order needed |

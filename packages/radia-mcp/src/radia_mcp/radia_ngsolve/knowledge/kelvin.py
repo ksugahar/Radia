@@ -36,17 +36,16 @@ Reference docs (consolidated 2026-05-04):
     - §2: 1-form / 2-form pullback derivation
     - §7: Reduced potential formulations + Kelvin
       including the (nu - nu_0) form pitfall (CRITICAL)
-  docs/kelvin/kelvin_examples_migration.ipynb (executed initial migration
+  docs/kelvin/kelvin_examples_migration.ipynb (executed historical migration
     ledger: 226 example .py files classified into docs / validation_test /
-    src-api / memory lanes, synchronized with JSON)
+    src-api / memory lanes)
   docs/kelvin/kelvin_classic_demos.ipynb (executed source map for the 37
     classic A/H/Omega/Radia-IEM demos pruned from examples/, with
-    representative excerpts plus full source text and SHA-256 hashes in the
-    synchronized JSON)
+    representative excerpts plus archived source hashes)
   docs/kelvin/kelvin_exterior_source_and_aphi.ipynb (executed, re-runs the
     three 2026-07 goldens live: exterior-source routes 2/3 - exact - 4/3,
     twisted 0-form pullback contracts, A* vs A-Phi p-sweep with the
-    charge-conservation diagnosis; synchronized results JSON + sidecar)
+    charge-conservation diagnosis; saved notebook output)
   docs/kelvin/ARCHIVE_RETIREMENT.md (routing table from former full-source
     archives to maintained docs, src/radia APIs, and validation_test lanes)
   src/radia/open_boundary + validation_test/open_boundary (production DtN/CLN
@@ -1949,9 +1948,10 @@ What this solves:
 - Leakage field, field uniformity, shimming analysis
 - Future: hysteresis (MatEnergyHysteresis) with same API
 
-Accuracy: max 3%, RMS 1.5% vs Radia BEM reference (order=2, mu_r=100).
-Validated by pytest: `validation_test/open_boundary/test_omega_reduced_omega.py`
-(5/5 PASS).
+The automatic total/reduced selection and scalar-potential convention are
+covered by `validation_test/open_boundary/test_omega_reduced_omega.py`.
+Cross-formulation field accuracy is owned by the maintained HDiv-MMM,
+reduced-A, and omega convergence artifacts under `validation_test/`.
 
 CAVEAT -- the source in the Kelvin exterior.  `set_source_from_radia` projects
 the Radia field onto the physical materials only and leaves the Kelvin region
@@ -2299,7 +2299,7 @@ JSON output: `Hi_origin`, `Hi_analytical`, `error_pct`, `slaved_dofs`.
   | p=3   |        +0.54% |
 
 Panel-level golden test:
-`tests/panels/test_kelvin_benchmark_golden.py` parametrises over
+`validation_test/panels/test_kelvin_benchmark_golden.py` parametrises over
 both 1/2 and 1/4 samples, locking |error| < 1.5% at p=2.
 
 ## Why 1/8 is unsupported for the sphere benchmark (physics)
@@ -2315,7 +2315,7 @@ Do NOT conflate this with the **EM panel (C-type magnet) 1/8 case**:
 that BVP has no source vector; the iron yoke + coil ampere-turns are
 fully octant-symmetric, so the 1/8 reduction is geometric only and
 ships in the EM panel via `panels/samples/em/em_1-8_eighth.jou` +
-`tests/panels/golden/em_eighth_mu1000.json` (ELF CEFC 2020 convention
+`validation_test/panels/golden/em_eighth_mu1000.json` (ELF CEFC 2020 convention
 `-x-y+z`, opposite sign pattern from the sphere reductions).
 
 ## Surprise: rho_min sweep up to R (2026-04-26)
@@ -3144,8 +3144,7 @@ that straight forms (`a`, `b`) do not.  `H_s` is twisted, hence the minus in
 projects the Radia source field onto physical materials only and leaves the
 Kelvin region at zero -- i.e. route **Z** above.  For a COMPACT coil well
 inside the Kelvin radius the resulting error tracks H_s at rho'=R and stays
-small (that path is validated to max 3% / RMS 1.5% in
-`validation_test/open_boundary/test_omega_reduced_omega.py`).  For a background
+small when the source has decayed sufficiently at that surface. For a background
 applied at infinity the
 same choice costs the full 1/3.  If your source is not small at the Kelvin
 radius, build H_s with `make_reduced_potential_background_cf` and pass it via

@@ -326,10 +326,10 @@ Lange-Henrotte-Hameyer transient framework.  Add the
 `(jω σ_eff_imag)` term to `L_inc` and let the per-step macro solve
 do the rest.
 
-### Cross-validation with radia-ngsolve `laminated_mu_eff` (2026-06-05, 横展開)
+### Cross-validation with `radia.lamination.laminated_mu_eff`
 
 radia-ngsolve ships the analytic complex effective permeability of the LINEAR
-in-plane lamination as `radia_mcp.radia_ngsolve.solve.laminated_mu_eff`:
+in-plane lamination as `radia.lamination.laminated_mu_eff`:
 
     mu_eff = mu0 [ fill*mu_r*tanh(b)/b + (1-fill) ],   b = (d/2) sqrt(j w mu0 mu_r sigma)
 
