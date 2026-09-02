@@ -1527,13 +1527,13 @@ Sign change between mu_r=10 and mu_r=100, marking the cross-over from
 Lenz-dominated screening to flux-concentration-dominated storage in the
 ferromagnetic skin layer.
 
-### Panel integration
+### Application integration
 
-`calc_inductance.py` calls `_run_coupled_bem` when the user picks
-`Method=BEM, Workpiece=SIBC` in the IH panel. The headline
-`inductance_H` becomes `L_total`, and `L_air_H` keeps the coil-only
-value so the panel can display both. `radia_gui_base.py::_on_finished`
-shows L (air), delta L, L (eff), R (added), iters, skin depth.
+`calc_inductance.py` calls `_run_coupled_bem` for the BEM/SIBC method.
+The result artifact reports `inductance_H=L_total` and keeps the coil-only
+value in `L_air_H`, together with delta L, added resistance, iteration count,
+and skin depth. The Simulink application and MCP clients consume that same
+artifact contract.
 
 For ESIM (nonlinear cell problem) the coupled solver is NOT used —
 falls back to one-way uncoupled estimator with R reported only.
@@ -1542,7 +1542,7 @@ falls back to one-way uncoupled estimator with R reported only.
 - `src/radia/bem_sibc_solver.py`: ScalarBIESIBCSolver + phi_inc computation
 - `src/radia/bem_coupled_solver.py`: CoupledBEMSolver (per-DOF f_back, sign correct)
 - `src/radia/bem_coupled_solver_v1_buggy.py.bak`: archived buggy v1 (scalar rescale)
-- `src/radia/panels/calc_inductance.py::_run_coupled_bem`: wrapper for IH panel
+- `src/radia/panels/calc_inductance.py::_run_coupled_bem`: headless application wrapper
 - `validation_test/induction_heating/cubit_panels_legacy/scalar_bie_sibc.py`: sphere validation
 - `validation_test/induction_heating/cubit_panels_legacy/bem_sibc_workpiece.py`: coil + workpiece demo
 - `validation_test/induction_heating/cubit_panels_legacy/experiment_coupled_bem.py`: FEM-ESIM cross-check (still uses old API)

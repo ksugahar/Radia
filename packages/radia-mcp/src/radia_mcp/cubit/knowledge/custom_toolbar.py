@@ -12,10 +12,9 @@ Sources:
     (DAGMC toolbar, tire cross-section toolbar -- both .tar.gz packaged).
 
 NOTE: This is *different* from two adjacent topics:
-  (a) the Radia-NGSolve analysis panels described in `panel_conventions.py`
-      -- those are standalone PySide6 apps running in Python 3.12 and
-      launching Cubit as a separate process.  The knowledge here covers
-      PySide6 code that runs *inside* Cubit's embedded Python 3.10
+  (a) Radia's production Simulink application blocks and headless Python/MCP
+      APIs. They run outside Cubit and do not depend on Qt. The knowledge here
+      covers PySide6 code that runs *inside* Cubit's embedded Python 3.10
       interpreter, bound to Cubit's own Qt main window.
   (b) the C++ SDK plugin approach described in `cpp_sdk.py` -- that is for
       deep customization (new command panels with navigation nodes, new
