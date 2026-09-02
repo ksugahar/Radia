@@ -534,6 +534,12 @@ scheduled, or release CI jobs. A pre-push check sends the unpushed candidate
 commit to mdx and runs the same fast contract lane there; it is not a
 best-effort substitute executed on the developer desktop.
 
+mdx gives CI and preflight work priority over ad-hoc compute. Long-running
+optimization, parameter sweeps, solver validation, and benchmark jobs use
+hibino first when it is available. They may use mdx only when hibino is
+unavailable and the mdx CI queue is idle; a compute job must not delay, starve,
+or destabilize the self-hosted CI runner.
+
 The repository has three complementary, non-duplicative evidence surfaces:
 
 - `tests/` contains deterministic unit and contract tests that fit the fast CI
