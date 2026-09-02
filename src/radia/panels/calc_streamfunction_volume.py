@@ -1,6 +1,6 @@
 """calc_streamfunction_volume.py -- 3D VOLUME stream-function coil designer.
 
-CLI entry point for the stream-function notebook "Volume 3D" mode.  Designs
+Headless entry point for the Stream Function application's "Volume 3D" mode. Designs
 equal-current solenoid windings inside a hollow cylindrical CONDUCTOR VOLUME by
 the foliated current-Clebsch volume stream function
 
@@ -12,8 +12,9 @@ against Radia (two-codebase invariant).  See
 ``radia.streamfunction_volume`` and
 ``docs/stream_function/examples_catalog.ipynb``.
 
-Pure headless: NGSolve / Radia imports live inside ``run()`` only, so the panel
-can introspect ``build_argparser()`` without paying the NGSolve import cost.
+Pure headless: NGSolve / Radia imports live inside ``run()`` only, so Simulink
+and MCP tooling can inspect ``build_argparser()`` without paying the NGSolve
+import cost.
 """
 import argparse
 import os
@@ -29,8 +30,8 @@ from radia.panels.calc_common import calc_main
 def build_argparser() -> argparse.ArgumentParser:
     """Argparse for the Volume-3D stream-function coil designer.
 
-    Importable WITHOUT side effects (no NGSolve / Radia import) so the panel can
-    build its widgets from this surface alone."""
+    Importable WITHOUT side effects (no NGSolve / Radia import) so Simulink and
+    MCP tooling can inspect the settings contract cheaply."""
     p = argparse.ArgumentParser(
         description="3D volume stream-function (foliated Clebsch) solenoid "
                     "coil designer: target axial Bz -> equal-current wires.")
@@ -58,7 +59,7 @@ def build_argparser() -> argparse.ArgumentParser:
     p.add_argument("--n-threads", type=int, default=4,
                    help="NGSolve TaskManager thread count.")
     p.add_argument("--msh-output", default=None,
-                   help="GMSH .msh (v4.1) wire overlay to write.  Panel sets it.")
+                   help="GMSH .msh (v4.1) wire overlay to write. The runner sets it.")
     p.add_argument("--output", default=None,
                    help="Result JSON.  calc_main writes the return dict here.")
     return p

@@ -2241,7 +2241,7 @@ def _assemble_strong_output(args, coil_data, strong):
 
     Mirrors the key names of ``_assemble_full_output`` (L_total_nH,
     R_total_mOhm, delta_L_nH, delta_R_mOhm, P_wp_W, H_t_rms_A_per_m) so the
-    panel summary renders strong-coupling runs the same way as weak ones,
+    application summary renders strong-coupling runs the same way as weak ones,
     with ``coupling_mode = "strong"``.
     """
     out = _assemble_vacuum_output(args, coil_data)
@@ -2407,7 +2407,7 @@ def _resolve_coil_msh_path(args):
       2. ``--msh-output`` if vacuum / coil-only (no workpiece — the wp
          surface output is NOT competing for that path)
       3. ``<msh_output_stem>_coil.msh`` sibling (with-wp case — keeps
-         the wp surface at ``args.msh_output``, panel button opens
+         the wp surface at ``args.msh_output``; the application result action opens
          the coil viz via gmsh_file priority and open_gmsh.py auto-
          merges the ``_filaments.msh`` sibling)
 

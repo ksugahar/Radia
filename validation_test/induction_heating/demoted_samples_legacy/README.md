@@ -7,7 +7,7 @@ Samples Quality Policy (AGENTS.md § "Sample Promotion Ladder"). On
 **2026-06-29** they were moved here from the loose examples tier so validation
 history no longer depends on examples paths:
 
-- **Non-canonical**: no golden test under `tests/panels/test_*_golden.py`
+- **Non-canonical**: no evidence test under `validation_test/panels/`
   references them, so their numerical correctness is not automatically
   verified on every release.
 - **Misleading "auto-Kelvin" comments**: several of these `.jou` files
