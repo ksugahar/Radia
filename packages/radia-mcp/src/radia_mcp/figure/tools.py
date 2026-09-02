@@ -1472,6 +1472,7 @@ def check_text_overlap(ax, text, margin_px: float = 2.0):
 
 def place_text_clear(ax, s, *, nx: int = 11, ny: int = 7,
                      pad_frac: float = 0.02, margin_px: float | None = None,
+                     region: tuple[float, float, float, float] | None = None,
                      **text_kw):
     """Put a label where nothing is drawn, instead of at hand-picked coordinates.
 
@@ -1490,6 +1491,10 @@ def place_text_clear(ax, s, *, nx: int = 11, ny: int = 7,
             0.6 em of the placed text: a fixed pixel count is nothing at
             slide sizes (4 px is 0.04 em at 24 pt, 300 dpi), and a label
             that clears a panel letter by that much reads as touching it.
+        region: ``(x0, x1, y0, y1)`` in axes fraction; when given, anchors
+            are searched only inside that box. Use it for a label that must
+            stay near the feature it names, e.g. one with an arrow to it, so
+            the search does not carry it to the far side of the axes.
         **text_kw: passed to ``ax.text`` (color, fontsize, ha, va, ...).
             ``transform`` is set for you and must not be given.
 
@@ -1527,36 +1532,47 @@ def place_text_clear(ax, s, *, nx: int = 11, ny: int = 7,
     if margin_px is None:
         margin_px = 0.6 * probe.get_fontsize() * fig.dpi / 72.0
 
-    best = None
-    for fx in np.linspace(pad_frac, 1.0 - pad_frac, nx):
-        for fy in np.linspace(pad_frac, 1.0 - pad_frac, ny):
-            probe.set_position((fx, fy))
-            fig.canvas.draw()
-            bb = probe.get_window_extent()
-            ax_bb = ax.get_window_extent()
-            if bb.x0 < ax_bb.x0 or bb.x1 > ax_bb.x1:
-                continue                      # would run off the axes
-            if bb.y0 < ax_bb.y0 or bb.y1 > ax_bb.y1:
-                continue
-            x0, x1 = bb.x0 - margin_px, bb.x1 + margin_px
-            y0, y1 = bb.y0 - margin_px, bb.y1 + margin_px
-            if pts.size == 0:
-                n_in, clear = 0, float("inf")
-            else:
-                inside = ((pts[:, 0] >= x0) & (pts[:, 0] <= x1) &
-                          (pts[:, 1] >= y0) & (pts[:, 1] <= y1))
-                n_in = int(inside.sum())
-                dx = np.maximum.reduce(
-                    [x0 - pts[:, 0], np.zeros(len(pts)), pts[:, 0] - x1])
-                dy = np.maximum.reduce(
-                    [y0 - pts[:, 1], np.zeros(len(pts)), pts[:, 1] - y1])
-                clear = float(np.hypot(dx, dy).min())
-            score = (n_in, -clear)
-            if best is None or score < best[0]:
-                best = (score, (fx, fy))
+    full = (pad_frac, 1.0 - pad_frac, pad_frac, 1.0 - pad_frac)
+
+    def search(box):
+        x0r, x1r, y0r, y1r = box
+        best = None
+        for fx in np.linspace(x0r, x1r, nx):
+            for fy in np.linspace(y0r, y1r, ny):
+                probe.set_position((fx, fy))
+                fig.canvas.draw()
+                bb = probe.get_window_extent()
+                ax_bb = ax.get_window_extent()
+                if bb.x0 < ax_bb.x0 or bb.x1 > ax_bb.x1:
+                    continue                  # would run off the axes
+                if bb.y0 < ax_bb.y0 or bb.y1 > ax_bb.y1:
+                    continue
+                x0, x1 = bb.x0 - margin_px, bb.x1 + margin_px
+                y0, y1 = bb.y0 - margin_px, bb.y1 + margin_px
+                if pts.size == 0:
+                    n_in, clear = 0, float("inf")
+                else:
+                    inside = ((pts[:, 0] >= x0) & (pts[:, 0] <= x1) &
+                              (pts[:, 1] >= y0) & (pts[:, 1] <= y1))
+                    n_in = int(inside.sum())
+                    dx = np.maximum.reduce(
+                        [x0 - pts[:, 0], np.zeros(len(pts)), pts[:, 0] - x1])
+                    dy = np.maximum.reduce(
+                        [y0 - pts[:, 1], np.zeros(len(pts)), pts[:, 1] - y1])
+                    clear = float(np.hypot(dx, dy).min())
+                score = (n_in, -clear)
+                if best is None or score < best[0]:
+                    best = (score, (fx, fy))
+        return best
+
+    best = search(full if region is None else region)
+    if best is None and region is not None:
+        # the label does not fit anywhere in the region: better elsewhere in
+        # the axes than hanging off the edge where the region put it
+        best = search(full)
 
     if best is None:                          # nothing fitted inside the axes
-        probe.set_position((pad_frac, 1.0 - pad_frac))
+        probe.set_position((full[0], full[3]))
     else:
         probe.set_position(best[1])
     fig.canvas.draw()
