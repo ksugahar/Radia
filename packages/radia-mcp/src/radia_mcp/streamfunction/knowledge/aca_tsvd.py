@@ -430,9 +430,10 @@ smooth-helix + Spline path, not CoilBuilder arcs.
 ## Stage-2 panel CLI
 src/radia/panels/calc_stream_coil.py wraps the Gz design as a headless Layer-4
 script (argparse in, JSON out, no Cubit/PySide6); locked by
-tests/panels/test_stream_coil_golden.py (fitted_dBdz in [0.9,1.1],
-gradient_nonlinearity < 0.05).  A future promotion should use the notebook
-workbench + DesignSpec route before adding it to panel_registry.json.
+validation_test/panels/test_stream_coil_golden.py (fitted_dBdz in [0.9,1.1],
+gradient_nonlinearity < 0.05). A production promotion uses a DesignSpec-backed
+masked Simulink application block; an executed docs notebook presents the
+result and `validation_test/` retains quantitative evidence.
 """
 
 

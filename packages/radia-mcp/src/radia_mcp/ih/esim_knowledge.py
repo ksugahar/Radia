@@ -715,8 +715,9 @@ ESIM_USAGE_EM_TABLE_COUPLING = """
 sigma(T) / mu(T) thermal-EM coupling via a precomputed Z_s(|H_t|, T)
 table -- the engineering alternative to per-timestep Karl-FEM when the
 EM problem is quasi-static on the heat timescale (EM 1/omega ~ 100 us
-at 10 kHz vs heat tau ~ s -> ratio ~1e4).  Two CLI scripts (NOT yet
-wired into the radia-ih panel).
+at 10 kHz vs heat tau ~ s -> ratio ~1e4). Two headless CLI scripts build and
+consume the table as an explicit initialization artifact. It is not a hidden
+global variable or a per-step Simulink input.
 
 ## Step 1: build the table -- calc_em_table.py
 
@@ -780,8 +781,8 @@ Reference field --ht-source:
 --coil-current-csv <t_s,I_A> gives a time-varying current (clamped).
 
 ## Tests
-  tests/panels/test_em_table_curie.py       Curie mu(T) helpers
-  tests/panels/test_heat_em_table_biot.py   biot |H_t| tangential
+  validation_test/panels/test_em_table_curie.py       Curie mu(T) helpers
+  validation_test/panels/test_heat_em_table_biot.py   biot |H_t| tangential
                                             projection + image-factor
                                             vs analytical circular loop
 

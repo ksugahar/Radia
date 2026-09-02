@@ -67,12 +67,12 @@ PATTERNS: list[dict] = [
                       "raises UnboundLocalError on the local that "
                       "hasn't been assigned yet.  Real site: "
                       "calc_verify_vol.py:38 vs :83 (keiko 100号機).",
-        "detection": "tests/panels/test_taskmanager_scoping.py (AST sweep) "
+        "detection": "validation_test/panels/test_taskmanager_scoping.py (AST sweep) "
                      "+ tools/audit_new_panel_contract.py rule C6.",
         "prevention": "Put TaskManager in the TOP-of-function import "
                       "line alongside Mesh / Integrate / CF / BND.  "
                       "Never inside a try: block AFTER first use.",
-        "related": ["tests/panels/test_taskmanager_scoping.py",
+        "related": ["validation_test/panels/test_taskmanager_scoping.py",
                     "tools/audit_new_panel_contract.py"],
     },
     {
@@ -149,25 +149,22 @@ PATTERNS: list[dict] = [
     },
     {
         "id": "gmsh-file-key-mismatch",
-        "title": "Open-GMSH button stays disabled because the calc's "
-                 "result dict uses a key the panel doesn't recognize.",
-        "topics": ["panel", "gmsh", "result-output-policy"],
+        "title": "A spatial run omits its GMSH artifact because the solver "
+                 "result uses an unrecognized key.",
+        "topics": ["simulink", "gmsh", "result-output-policy"],
         "severity": "medium",
         "first_seen": "2026-04-01",
         "last_seen": "2026-05-30",
-        "what": "User finished a Run, .msh exists on disk, but the "
-                "Open GMSH button greys out.",
-        "root_cause": "AnalysisWindow._on_finished scans the result "
-                      "dict for one of FOUR keys: gmsh_file, "
-                      "field_gmsh_file, msh_output, msh_file.  Other "
-                      "names (e.g. `output_msh`, `mesh_path`) are "
-                      "silently ignored.",
-        "detection": "tests/panels/test_open_gmsh_button.py (manual "
-                     "result-dict tests).",
-        "prevention": "Always use one of the 4 recognized keys.  "
-                      "Document the convention in calc_*.py docstring.",
-        "related": ["tests/panels/test_open_gmsh_button.py",
-                    "src/radia/radia_gui_base.py: _on_finished"],
+        "what": "The solver writes a .msh file, but the checked application "
+                "result does not index it as a spatial artifact.",
+        "root_cause": "A headless solver used an ad-hoc result key instead "
+                      "of the application runner's canonical GMSH output path.",
+        "detection": "tests/test_simulink_application.py validates the "
+                     "result.json spatial-artifact contract.",
+        "prevention": "Let radia.simulink.application own the output path and "
+                      "require a checked GMSH .msh v4.1 artifact for spatial runs.",
+        "related": ["tests/test_simulink_application.py",
+                    "src/radia/simulink/application.py"],
     },
 
     # =====================================================
@@ -706,13 +703,13 @@ PATTERNS: list[dict] = [
                       "sparsecholesky-based calcs are unaffected (no MKL "
                       "threads).  Same family as the pytest+PySide6 DLL "
                       "crash.",
-        "detection": "Golden test red on LAB only; CI ignores tests/panels "
-                     "so it does not run there either.",
+        "detection": "Native validation fails only on a host with the affected "
+                     "MKL runtime.",
         "prevention": "Guard pardiso golden tests: if returncode != 0 and "
                       "'MKL FATAL ERROR'/'Cannot load mkl' in output -> "
                       "pytest.skip; verify via a DIRECT (non-pytest) run.  "
-                      "See tests/panels/test_fem_coilmesh_esim_golden.py.",
-        "related": ["tests/panels/test_fem_coilmesh_esim_golden.py"],
+                      "See validation_test/panels/test_fem_coilmesh_esim_golden.py.",
+        "related": ["validation_test/panels/test_fem_coilmesh_esim_golden.py"],
     },
 
     # =====================================================
@@ -799,28 +796,6 @@ PATTERNS: list[dict] = [
                       "pip install --force-reinstall; the package then "
                       "imports cleanly.",
         "related": ["memory/project_radia_ih_june_completion_2026_06_02.md"],
-    },
-    {
-        "id": "radia-ih-exe-launcher-lock-on-force-reinstall",
-        "title": "pip --force-reinstall radia fails WinError 32 on "
-                 "Scripts/radia-ih.exe when a radia-ih panel is running.",
-        "topics": ["deploy", "pip", "windows", "release", "lab"],
-        "severity": "low",
-        "first_seen": "2026-06-02",
-        "last_seen": "2026-06-02",
-        "what": "pip ERROR: [WinError 32] ... 'radia-ih.exe' -> "
-                "'radia-ih.exe.deleteme' (file in use).  The PACKAGE still "
-                "installs + imports; only the entry-point launcher script "
-                "rewrite is blocked.",
-        "root_cause": "A running radia-ih panel process holds an open "
-                      "handle on Scripts/radia-ih.exe; pip cannot replace "
-                      "the launcher exe.",
-        "detection": "pip exits non-zero with WinError 32 on a "
-                     "Scripts/radia-*.exe at the end of the install.",
-        "prevention": "Kill radia-* (+ coreform_cubit / mcp-server*) "
-                      "processes, rm Scripts/radia-*.exe(.deleteme), then "
-                      "reinstall so the launcher writes cleanly.",
-        "related": [],
     },
     {
         "id": "tools-md-drift-wip-contamination",
@@ -943,34 +918,28 @@ PATTERNS: list[dict] = [
     },
     {
         "id": "flaky-test-rerun-masked-no-rootcause",
-        "title": "Intermittent test absorbed by --reruns but never "
-                 "root-caused -- a 1-attempt CI red looks identical to a real "
-                 "regression dismissed as 'probably flaky'.",
+        "title": "Automatic reruns hide intermittent failures and delay "
+                 "root-cause analysis.",
         "topics": ["ci", "test-infrastructure", "flaky"],
         "severity": "medium",
         "first_seen": "2026-05-20",
         "last_seen": "2026-06-05",
-        "what": "The self-hosted 'Run basic tests' step is the 2nd-most common "
-                "CI failure (16 of the last 80 runs).  Some are genuine "
-                "regressions; some are known flakes (test_omega_reduced_omega, "
-                "test_B_accuracy_inside_iron) a rerun would have saved.  With "
-                "no registry the two are indistinguishable, so a real "
-                "regression gets waved off as 'flaky', OR a flake burns a "
-                "fix-forward cycle.",
+        "what": "A rerun can turn a non-deterministic failure green while the "
+                "underlying solver-state, tolerance, seed, or runner problem "
+                "remains. That makes release evidence ambiguous.",
         "root_cause": "Iterative-solver tolerance near a golden band edge / "
                       "retired moment-path dipole-in-material sampling sensitivity makes a few "
-                      "assertions non-deterministic.  --reruns 2 masks them "
-                      "but records neither WHICH tests flake nor WHY.",
-        "detection": "tests/known_flaky.md (the registry); the workflow log's "
-                     "-r aR RERUN lines.  When CI reds in 'Run basic tests', "
-                     "check known_flaky.md BEFORE assuming a regression.",
-        "prevention": "Keep tests/known_flaky.md current; every listed test "
-                      "MUST be under --reruns.  Listing is a STOPGAP -- "
-                      "root-cause it (tighten tolerance, pin seed, stabilize "
-                      "mesh) and delete the row.  NEVER list a "
-                      "deterministically-failing test -- that is a bug.",
-        "related": ["tests/known_flaky.md",
-                    ".github/workflows/build-test.yml"],
+                      "assertions non-deterministic. Automatic reruns made the "
+                      "problem easy to postpone.",
+        "detection": "Run the focused test repeatedly with fixed inputs, seed, "
+                     "thread count, and runtime versions; compare the first "
+                     "failure rather than a recovered aggregate result.",
+        "prevention": "CI runs each test once. Stabilize the mesh, seed, solver "
+                      "tolerance, and thread ownership, or move genuine "
+                      "numerical evidence to an explicit validation lane. "
+                      "A deterministic failure remains a bug.",
+        "related": [".github/workflows/build-test.yml",
+                    "validation_test/"],
     },
     # =====================================================
     # EXAMPLE BITROT / RADIA API DRIFT / NOTEBOOK PROMOTION

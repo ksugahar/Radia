@@ -787,7 +787,8 @@ Current direction:
 - Coupled evolving magnets: one or more CoupledHistoryBody objects plus
   independent recoil/linear/nonlinear bodies, each with one persistent Gram.
 - Planar 2D support: HDiv/planar shared geometry and material helpers.
-- Public docs: result-bearing HDiv notebooks plus synchronized JSON.
+- Public docs: executed result-bearing HDiv notebooks with saved WebGUI scenes.
+- Validation: numerical evidence and result JSON under `validation_test/`.
 - MCP: teach the live HDiv API and reduced-FEM coupling path.
 
 Open work:

@@ -2,11 +2,17 @@
 from . import tools as _tools
 
 
+PUBLIC_TOOLS = (
+    "document_meta_deadline_countdown",
+    "document_meta_diff_versions",
+    "document_meta_template_loader",
+    "document_meta_lint_all",
+    "document_meta_notebook_result_audit",
+)
+
+
 def register(mcp) -> int:
-    """Register document_meta_* tools with the given FastMCP instance."""
-    count = 0
-    for name in dir(_tools):
-        if name.startswith("document_meta_") and callable(getattr(_tools, name)):
-            mcp.tool()(getattr(_tools, name))
-            count += 1
-    return count
+    """Register the intentional public document-meta surface."""
+    for name in PUBLIC_TOOLS:
+        mcp.tool()(getattr(_tools, name))
+    return len(PUBLIC_TOOLS)
