@@ -394,6 +394,7 @@ bool Equation::load_latex(const std::string& latex) {
     selecting_ = false;
     anchorPath_.clear();
     anchorIndex_ = 0;
+    end_pointer_selection();
     undo_.clear();
     redo_.clear();
     return true;
@@ -413,6 +414,7 @@ bool Equation::replace_latex(const std::string& latex, bool checkpointFirst) {
     path_.clear();
     index_ = int(root_->children.size());
     clear_selection();
+    end_pointer_selection();
     return true;
 }
 
@@ -712,30 +714,37 @@ bool Equation::delete_selection() {
     return true;
 }
 
-bool Equation::hit_test(double x_points, double y_points,
-                        const SvgStyle& style, bool extend) {
+bool Equation::locate_pointer(double x_points, double y_points,
+                              const SvgStyle& style) {
     const NodeList* target = nullptr;
     int targetIndex = 0;
     if (!hit_test_equation(*root_, x_points, y_points, style,
                            &target, &targetIndex)) return false;
-    if (!extend) clear_selection();
     std::vector<CaretStep> p;
     if (!find_slot_path(target, root_->children, p)) return false;
     path_ = std::move(p);
     index_ = targetIndex;
     clamp();
-    if (!extend) {
-        /* Remember where the drag started at full depth.  clear_selection
-         * above dropped any previous one, so record after it, not before. */
-        dragAnchorPath_ = path_;
-        dragAnchorIndex_ = index_;
-        dragAnchorValid_ = true;
-        return true;
-    }
-    if (!dragAnchorValid_) {
-        clear_selection();
-        return true;
-    }
+    return true;
+}
+
+bool Equation::begin_pointer_selection(double x_points, double y_points,
+                                       const SvgStyle& style) {
+    /* A new press owns a new origin even if the preceding drag was cancelled,
+     * the tree was rebuilt, or an API caller forgot to end it. */
+    end_pointer_selection();
+    clear_selection();
+    if (!locate_pointer(x_points, y_points, style)) return false;
+    dragAnchorPath_ = path_;
+    dragAnchorIndex_ = index_;
+    dragAnchorValid_ = true;
+    return true;
+}
+
+bool Equation::extend_pointer_selection(double x_points, double y_points,
+                                        const SvgStyle& style) {
+    if (!dragAnchorValid_) return false;
+    if (!locate_pointer(x_points, y_points, style)) return false;
     if (same_path(dragAnchorPath_, path_)) {
         /* Both ends in one slot: the recorded anchor stands as it is. */
         anchorPath_ = dragAnchorPath_;
@@ -746,6 +755,18 @@ bool Equation::hit_test(double x_points, double y_points,
     if (!extend_selection_to(dragAnchorPath_, dragAnchorIndex_))
         clear_selection();
     return true;
+}
+
+void Equation::end_pointer_selection() {
+    dragAnchorPath_.clear();
+    dragAnchorIndex_ = 0;
+    dragAnchorValid_ = false;
+}
+
+bool Equation::hit_test(double x_points, double y_points,
+                        const SvgStyle& style, bool extend) {
+    return extend ? extend_pointer_selection(x_points, y_points, style)
+                  : begin_pointer_selection(x_points, y_points, style);
 }
 
 bool Equation::matrix_context(size_t* depth, MatrixNode** matrix,
@@ -1115,6 +1136,7 @@ void Equation::restore(const Snapshot& s) {
     if (!root_) root_ = std::make_unique<LineNode>();
     set_caret_text(s.caret);
     clear_selection();
+    end_pointer_selection();
 }
 
 bool Equation::can_undo() const { return !undo_.empty(); }

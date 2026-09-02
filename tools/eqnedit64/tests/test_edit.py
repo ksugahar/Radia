@@ -120,6 +120,7 @@ def type_in(eq: "Equation", keys) -> None:
 
 def main() -> int:
     failures = []
+    selection_contract_checks = 0
 
     for name, keys, expect in CASES:
         eq = Equation()
@@ -157,6 +158,247 @@ def main() -> int:
             not (caret_geometry[1] < caret_geometry[2])):
         failures.append(
             f"caret geometry was invalid for IME placement: {caret_geometry!r}")
+
+    def caret_point(equation):
+        geometry = equation.caret_geometry()
+        if geometry is None:
+            return None
+        return geometry[0], 0.5 * (geometry[1] + geometry[2])
+
+    def compact(tex):
+        return tex.replace(" ", "").replace("\r", "").replace("\n", "")
+
+    # Cross-slot pointer selection is a tree rule, not a special case for
+    # fractions.  Exercise every editable multi-slot container class through
+    # the same public begin/extend/end lifecycle.
+    multi_slot_templates = (
+        ("frac", 2), ("nthroot", 2),
+        ("sub", 2), ("sup", 2), ("subsup", 3),
+        ("dirac", 2), ("int", 3), ("sum", 3),
+        ("over", 2), ("under", 2),
+        ("overbrace", 2), ("underbrace", 2),
+        ("matrix2x2", 4), ("cases", 4),
+    )
+    for template, slot_count in multi_slot_templates:
+        structured = Equation()
+        if not structured.insert_template(template):
+            failures.append(f"{template}: could not build cross-slot fixture")
+            continue
+        built = True
+        for slot_number in range(slot_count):
+            structured.insert_text(chr(ord("a") + slot_number))
+            if slot_number + 1 < slot_count and not structured.next_slot():
+                failures.append(f"{template}: could not reach slot {slot_number + 1}")
+                built = False
+                break
+        if not built:
+            continue
+        points = []
+        for slot_number in range(slot_count - 1, -1, -1):
+            structured.move_end()
+            point = caret_point(structured)
+            if point is None:
+                failures.append(f"{template}: slot {slot_number} has no caret geometry")
+                break
+            points.append(point)
+            if slot_number > 0 and not structured.prev_slot():
+                failures.append(f"{template}: could not return to slot {slot_number - 1}")
+                break
+        points.reverse()
+        if len(points) != slot_count:
+            continue
+        whole = structured.latex()
+        began = structured.begin_pointer_selection(*points[0])
+        extended = structured.extend_pointer_selection(*points[-1])
+        selected = structured.selection_latex()
+        structured.end_pointer_selection()
+        if not began or not extended or compact(selected) != compact(whole):
+            failures.append(
+                f"{template}: cross-slot drag selected {selected!r}, want {whole!r}")
+        selection_contract_checks += 1
+
+    # PileNode is produced by gathered rather than by a palette template.
+    gathered = Equation()
+    gathered.load_latex(r"\begin{gathered}a\\b\end{gathered}")
+    gathered.move_home()
+    if not gathered.move_right():
+        failures.append("gathered: could not enter first row")
+    else:
+        gathered.move_end()
+        first_row = caret_point(gathered)
+        if not gathered.next_slot():
+            failures.append("gathered: could not enter second row")
+        else:
+            gathered.move_end()
+            second_row = caret_point(gathered)
+            whole = gathered.latex()
+            if (first_row is None or second_row is None or
+                    not gathered.begin_pointer_selection(*first_row) or
+                    not gathered.extend_pointer_selection(*second_row) or
+                    compact(gathered.selection_latex()) != compact(whole)):
+                failures.append("gathered: cross-row drag did not select the pile")
+            gathered.end_pointer_selection()
+    selection_contract_checks += 1
+
+    # Single-slot containers are crossed by dragging from their content to a
+    # neighbour in the parent slot.  This covers radical, fence, limit,
+    # stretch decoration, and character embellishment nodes.
+    for template in ("sqrt", "paren", "lim", "overline", "hat"):
+        structured = Equation()
+        structured.insert_template(template)
+        structured.insert_text("x")
+        inside = caret_point(structured)
+        structured.move_out()
+        structured.insert_text("z")
+        outside = caret_point(structured)
+        whole = structured.latex()
+        if (inside is None or outside is None or
+                not structured.begin_pointer_selection(*inside) or
+                not structured.extend_pointer_selection(*outside) or
+                compact(structured.selection_latex()) != compact(whole)):
+            failures.append(
+                f"{template}: inside-to-parent drag did not include the container")
+        structured.end_pointer_selection()
+        selection_contract_checks += 1
+
+    # Parser-owned grouping/math-alphabet containers obey the same rule.
+    for name, tex in (("group", "{x}z"), ("math alphabet", r"\mathbf{x}z")):
+        structured = Equation()
+        structured.load_latex(tex)
+        structured.move_home()
+        entered = structured.move_right()
+        structured.move_end()
+        inside = caret_point(structured)
+        structured.move_out()
+        structured.move_end()
+        outside = caret_point(structured)
+        whole = structured.latex()
+        if (not entered or inside is None or outside is None or
+                not structured.begin_pointer_selection(*inside) or
+                not structured.extend_pointer_selection(*outside) or
+                compact(structured.selection_latex()) != compact(whole)):
+            failures.append(f"{name}: inside-to-parent drag lost its container")
+        structured.end_pointer_selection()
+        selection_contract_checks += 1
+
+    def promoted_fraction_selection():
+        equation = Equation()
+        equation.load_latex(r"a\frac{x}{y}b")
+        equation.move_home()
+        equation.move_right()  # after a
+        equation.move_right()  # numerator slot
+        equation.move_end()
+        inside = caret_point(equation)
+        equation.move_out()
+        equation.move_end()
+        outside = caret_point(equation)
+        if (inside is None or outside is None or
+                not equation.begin_pointer_selection(*inside) or
+                not equation.extend_pointer_selection(*outside)):
+            return equation, None, equation.latex()
+        selected = equation.selection_latex()
+        original = equation.latex()
+        equation.end_pointer_selection()
+        return equation, selected, original
+
+    # Every consumer must use exactly the promoted structural range.  This
+    # catches a future fix that updates painting/copy but leaves deletion,
+    # replacement, wrapping, or recursive styling on the old shallow range.
+    probe, selected, _ = promoted_fraction_selection()
+    if selected is None or compact(selected) != r"\frac{x}{y}b":
+        failures.append(f"promoted copy range was {selected!r}")
+    selection_contract_checks += 1
+
+    for name, operation in (
+            ("delete", lambda e: e.delete_selection()),
+            ("backspace", lambda e: e.backspace()),
+            ("forward delete", lambda e: e.erase())):
+        probe, _selected, _original = promoted_fraction_selection()
+        if not operation(probe) or compact(probe.latex()) != "a":
+            failures.append(f"promoted {name} left {probe.latex()!r}")
+        selection_contract_checks += 1
+
+    # Promotion stops at the child reached by the pointer.  An adjacent
+    # operator which the drag did not reach is deliberately not absorbed;
+    # Word and MathType use the same structural boundary.
+    probe = Equation()
+    probe.load_latex(r"a\frac{x}{y}+")
+    probe.move_home()
+    probe.move_right()  # after a
+    probe.move_right()  # numerator slot
+    probe.move_end()
+    inside = caret_point(probe)
+    probe.move_out()    # root slot immediately after the fraction
+    after_fraction = caret_point(probe)
+    if (inside is None or after_fraction is None or
+            not probe.begin_pointer_selection(*inside) or
+            not probe.extend_pointer_selection(*after_fraction)):
+        failures.append("adjacent-operator selection fixture could not drag")
+    else:
+        selected = compact(probe.selection_latex())
+        probe.end_pointer_selection()
+        if selected != r"\frac{x}{y}":
+            failures.append(
+                f"adjacent-operator selection promoted to {selected!r}")
+        elif not probe.delete_selection() or compact(probe.latex()) != "a+":
+            failures.append(
+                f"promoted deletion absorbed an adjacent operator: {probe.latex()!r}")
+    selection_contract_checks += 1
+
+    probe, _selected, _original = promoted_fraction_selection()
+    probe.insert_text("q")
+    if compact(probe.latex()) != "aq":
+        failures.append(f"promoted typing replacement left {probe.latex()!r}")
+    selection_contract_checks += 1
+
+    probe, _selected, _original = promoted_fraction_selection()
+    if not probe.insert_latex(r"\sqrt{q}") or compact(probe.latex()) != r"a\sqrt{q}":
+        failures.append(f"promoted TeX replacement left {probe.latex()!r}")
+    selection_contract_checks += 1
+
+    probe, _selected, _original = promoted_fraction_selection()
+    if not probe.insert_symbol(r"\alpha") or compact(probe.latex()) != r"a\alpha":
+        failures.append(f"promoted symbol replacement left {probe.latex()!r}")
+    selection_contract_checks += 1
+
+    probe, _selected, _original = promoted_fraction_selection()
+    if (not probe.insert_template("paren") or
+            compact(probe.latex()) != r"a\left(\frac{x}{y}b\right)"):
+        failures.append(f"promoted template wrapping left {probe.latex()!r}")
+    selection_contract_checks += 1
+
+    probe, _selected, original = promoted_fraction_selection()
+    if not probe.restyle_selection("vector"):
+        failures.append("promoted recursive style change was rejected")
+    else:
+        styled = probe.latex()
+        for letter in ("x", "y", "b"):
+            if rf"\mathbf{{{letter}}}" not in styled:
+                failures.append(
+                    f"promoted style missed {letter!r} inside {styled!r}")
+        if not probe.undo() or probe.latex() != original:
+            failures.append("Undo did not restore a promoted style change")
+        elif not probe.redo() or probe.latex() != styled:
+            failures.append("Redo did not restore a promoted style change")
+    selection_contract_checks += 1
+
+    # Rebuilding the tree and completing a drag both invalidate its deep
+    # origin.  An extend call without a live begin must fail rather than reuse
+    # a path into an old tree.
+    lifecycle = Equation()
+    lifecycle.load_latex("xy")
+    lifecycle.move_home()
+    old_point = caret_point(lifecycle)
+    if old_point is None or not lifecycle.begin_pointer_selection(*old_point):
+        failures.append("pointer lifecycle fixture could not begin")
+    lifecycle.load_latex("ab")
+    if lifecycle.extend_pointer_selection(0.0, lifecycle.metrics()[2]):
+        failures.append("document load retained a stale pointer origin")
+    lifecycle.begin_pointer_selection(0.0, lifecycle.metrics()[2])
+    lifecycle.end_pointer_selection()
+    if lifecycle.extend_pointer_selection(0.0, lifecycle.metrics()[2]):
+        failures.append("pointer end retained a reusable origin")
+    selection_contract_checks += 2
 
     # A visual selection is structural: copy emits valid LaTeX, typing
     # replaces it, and a template wraps it instead of discarding it.
@@ -1008,7 +1250,8 @@ def main() -> int:
     if (guarded.latex(), guarded.caret(), guarded.undo_name()) != state:
         failures.append("rejected document load mutated editor state")
 
-    total = len(CASES) + len(Equation.templates()) + len(sequences) + 39 + 32
+    total = (len(CASES) + len(Equation.templates()) + len(sequences) + 39 + 32 +
+             selection_contract_checks)
     if failures:
         print(f"FAIL  {len(failures)} of {total}")
         for f in failures:

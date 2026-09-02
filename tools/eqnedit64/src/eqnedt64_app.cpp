@@ -913,12 +913,14 @@ void set_dirty(bool dirty = true) {
  * indentation are inserted. */
 struct PrettySource {
     std::wstring text;
-    std::vector<size_t> offset;   /* canonical index -> index in text */
+    std::vector<size_t> start; /* canonical character -> displayed start */
+    std::vector<size_t> end;   /* canonical character -> displayed end */
 };
 
 PrettySource pretty_source(const std::wstring& raw) {
     PrettySource out;
-    out.offset.assign(raw.size() + 1, 0);
+    out.start.assign(raw.size() + 1, 0);
+    out.end.assign(raw.size() + 1, 0);
     int depth = 0;
     bool atLineStart = true;
 
@@ -929,8 +931,9 @@ PrettySource pretty_source(const std::wstring& raw) {
     };
     const auto copy = [&](size_t from, size_t to) {
         for (size_t k = from; k < to; ++k) {
-            out.offset[k] = out.text.size();
+            out.start[k] = out.text.size();
             out.text += raw[k];
+            out.end[k] = out.text.size();
         }
         if (to > from) atLineStart = false;
     };
@@ -940,7 +943,8 @@ PrettySource pretty_source(const std::wstring& raw) {
         /* The space a break just replaced would otherwise sit after the
          * indentation and push the line one column further out. */
         if (atLineStart && (raw[i] == L' ' || raw[i] == L'\t')) {
-            out.offset[i] = out.text.size();
+            out.start[i] = out.text.size();
+            out.end[i] = out.text.size();
             ++i;
             continue;
         }
@@ -970,12 +974,14 @@ PrettySource pretty_source(const std::wstring& raw) {
             breakLine(depth);
             continue;
         }
-        out.offset[i] = out.text.size();
+        out.start[i] = out.text.size();
         out.text += raw[i];
+        out.end[i] = out.text.size();
         atLineStart = false;
         ++i;
     }
-    out.offset[raw.size()] = out.text.size();
+    out.start[raw.size()] = out.text.size();
+    out.end[raw.size()] = out.text.size();
     return out;
 }
 
@@ -1027,10 +1033,13 @@ void highlight_source_insertion(const std::string& beforeLatex) {
      * addressing it, or the lesson highlights the wrong span. */
     const PrettySource shown = pretty_source(after);
     size_t shownFirst =
-        first < shown.offset.size() ? shown.offset[first] : shown.text.size();
-    size_t shownTail =
-        newTail < shown.offset.size() ? shown.offset[newTail]
-                                      : shown.text.size();
+        first < shown.start.size() ? shown.start[first] : shown.text.size();
+    /* Map the exclusive canonical tail through the end of its preceding
+     * character.  Mapping it to the start of the next character also selects
+     * any CRLF/indentation injected before \end{...}, even though that
+     * whitespace was not inserted by the palette or shortcut. */
+    size_t shownTail = newTail > first && newTail - 1 < shown.end.size()
+        ? shown.end[newTail - 1] : shownFirst;
 
     const size_t editLength = size_t(GetWindowTextLengthW(g.source));
     shownFirst = std::min(shownFirst, editLength);
@@ -3272,7 +3281,7 @@ bool drag_autoscroll(HWND hwnd) {
     g.renderTop = nextTop;
     const double x = (g.dragClientX - g.renderLeft) / g.renderScale;
     const double y = (g.dragClientY - g.renderTop) / g.renderScale;
-    g.equation.hit_test(x, y, g.style, true);
+    g.equation.extend_pointer_selection(x, y, g.style);
     InvalidateRect(hwnd, nullptr, FALSE);
     update_status();
     debug_event("mouse.autoscroll",
@@ -3368,13 +3377,24 @@ LRESULT CALLBACK CanvasProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             double x = (GET_X_LPARAM(lp) - g.renderLeft) / g.renderScale;
             double y = (GET_Y_LPARAM(lp) - g.renderTop) / g.renderScale;
             if ((wp & MK_CONTROL) || key_ctrl()) {
-                const bool hit = g.equation.hit_test(x, y, g.style, false);
+                const bool hit =
+                    g.equation.begin_pointer_selection(x, y, g.style);
                 const bool selected = hit &&
                     g.equation.select_containing_structure();
+                g.equation.end_pointer_selection();
                 InvalidateRect(hwnd, nullptr, FALSE);
                 update_status();
                 debug_event("mouse.ctrl_click",
                     selected ? "scope=containing_structure" : "scope=none");
+                return 0;
+            }
+            const bool hit =
+                g.equation.begin_pointer_selection(x, y, g.style);
+            if (!hit) {
+                g.equation.end_pointer_selection();
+                InvalidateRect(hwnd, nullptr, FALSE);
+                update_status();
+                debug_event("mouse.down", "scope=none");
                 return 0;
             }
             SetCapture(hwnd); g.dragging = true;
@@ -3382,7 +3402,6 @@ LRESULT CALLBACK CanvasProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             g.dragClientY = GET_Y_LPARAM(lp);
             SetTimer(hwnd, kDragScrollTimer, kDragScrollIntervalMs, nullptr);
             g.dragStartX = x; g.dragStartY = y; g.dragMoves = 0;
-            g.equation.hit_test(x, y, g.style, false);
             InvalidateRect(hwnd, nullptr, FALSE); update_status();
             debug_event("mouse.down", "x=" + std::to_string(x) +
                         " y=" + std::to_string(y)); return 0;
@@ -3395,7 +3414,7 @@ LRESULT CALLBACK CanvasProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
                 if (!drag_autoscroll(hwnd)) {
                     double x = (g.dragClientX - g.renderLeft) / g.renderScale;
                     double y = (g.dragClientY - g.renderTop) / g.renderScale;
-                    g.equation.hit_test(x, y, g.style, true);
+                    g.equation.extend_pointer_selection(x, y, g.style);
                     InvalidateRect(hwnd, nullptr, FALSE); update_status();
                 }
             }
@@ -3410,9 +3429,15 @@ LRESULT CALLBACK CanvasProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             if (g.dragging) {
                 double x = (GET_X_LPARAM(lp) - g.renderLeft) / g.renderScale;
                 double y = (GET_Y_LPARAM(lp) - g.renderTop) / g.renderScale;
+                /* WM_MOUSEMOVE can be coalesced.  The release coordinate is
+                 * authoritative, so extend once more before ending capture. */
+                g.equation.extend_pointer_selection(x, y, g.style);
+                g.equation.end_pointer_selection();
                 g.dragging = false;
                 KillTimer(hwnd, kDragScrollTimer);
                 ReleaseCapture();
+                InvalidateRect(hwnd, nullptr, FALSE);
+                update_status();
                 debug_event("mouse.up", "from=" + std::to_string(g.dragStartX) +
                             "," + std::to_string(g.dragStartY) + " to=" +
                             std::to_string(x) + "," + std::to_string(y) +
@@ -3423,6 +3448,7 @@ LRESULT CALLBACK CanvasProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             if (g.dragging && HWND(lp) != hwnd) {
                 g.dragging = false;
                 KillTimer(hwnd, kDragScrollTimer);
+                g.equation.end_pointer_selection();
                 debug_event("mouse.drag.cancel", "capture changed");
             }
             return 0;
@@ -4357,7 +4383,8 @@ int ui_fuzz(unsigned seed, int operations) {
         L"\\operatorname*{arg\\,min}_{x} f(x)", L"日本語+x",
     };
     for (int i = 0; i < operations; ++i) {
-        switch (next() % 12) {
+        const uint32_t operation = next() % 14;
+        switch (operation) {
         case 0: case 1: case 2: case 3: {
             const char c = printable[next() % (sizeof(printable) - 1)];
             SendMessageW(g.canvas, WM_CHAR, WPARAM(c), 0);
@@ -4420,6 +4447,34 @@ int ui_fuzz(unsigned seed, int operations) {
                          seed, i, window_text(g.source).c_str(),
                          shownSource.c_str());
                 return 3;
+            }
+            break;
+        }
+        case 12: case 13: {
+            /* Selection bugs live in the pointer lifecycle, so a GUI fuzzer
+             * that never sends a mouse message cannot protect them.  Keep the
+             * gesture inside this hidden canvas and always release capture;
+             * case 13 deliberately omits WM_MOUSEMOVE to exercise the
+             * authoritative release endpoint. */
+            RECT client{};
+            GetClientRect(g.canvas, &client);
+            const int width = std::max(1L, client.right - client.left);
+            const int height = std::max(1L, client.bottom - client.top);
+            const int x0 = int(next() % uint32_t(width));
+            const int y0 = int(next() % uint32_t(height));
+            const int x1 = int(next() % uint32_t(width));
+            const int y1 = int(next() % uint32_t(height));
+            SendMessageW(g.canvas, WM_LBUTTONDOWN, MK_LBUTTON,
+                         MAKELPARAM(x0, y0));
+            if (operation == 12)
+                SendMessageW(g.canvas, WM_MOUSEMOVE, MK_LBUTTON,
+                             MAKELPARAM(x1, y1));
+            SendMessageW(g.canvas, WM_LBUTTONUP, 0, MAKELPARAM(x1, y1));
+            if (GetCapture() == g.canvas || g.dragging) {
+                fwprintf(stderr,
+                         L"seed %u op %d: pointer capture survived release\n",
+                         seed, i);
+                return 4;
             }
             break;
         }
@@ -5080,6 +5135,30 @@ int ui_interaction_test() {
     if (draggedSelection.size() < 32) return 163;
     if (GetCapture() == g.canvas || g.dragging) return 164;
 
+    /* Windows may coalesce mouse moves.  A down/up gesture with no delivered
+     * WM_MOUSEMOVE must still select through the release coordinate, and the
+     * completed gesture must leave no reusable pointer origin behind. */
+    g.equation.load_latex("abcd");
+    const eqnedit::RenderMetrics releaseMetrics =
+        g.equation.metrics(g.style);
+    g.renderScale = (GetDpiForWindow(g.canvas) / 72.0) * g.zoom;
+    g.renderLeft = 12.0;
+    g.renderTop = 12.0;
+    const int releaseY = int(g.renderTop +
+        releaseMetrics.baseline * g.renderScale);
+    const int releaseStartX = int(g.renderLeft);
+    const int releaseEndX = int(g.renderLeft +
+        releaseMetrics.width * g.renderScale);
+    SendMessageW(g.canvas, WM_LBUTTONDOWN, MK_LBUTTON,
+                 MAKELPARAM(releaseStartX, releaseY));
+    SendMessageW(g.canvas, WM_LBUTTONUP, 0,
+                 MAKELPARAM(releaseEndX, releaseY));
+    if (g.equation.selection_latex() != "abcd") return 221;
+    if (g.equation.extend_pointer_selection(
+            releaseMetrics.width, releaseMetrics.baseline, g.style))
+        return 222;
+    g.equation.clear_selection();
+
     /* The same gesture, but across a structural boundary.  The drag above
      * runs through 128 plain letters -- one slot, the only shape in which a
      * range can never cross a boundary -- so it passed while dragging over
@@ -5093,18 +5172,20 @@ int ui_interaction_test() {
      * once the pan and the render scale are divided out. */
     const double numeratorX = crossMetrics.width * 0.2;
     const double numeratorY = crossMetrics.baseline - crossMetrics.height * 0.3;
-    if (!g.equation.hit_test(numeratorX, numeratorY, g.style, false)) return 206;
+    if (!g.equation.begin_pointer_selection(
+            numeratorX, numeratorY, g.style)) return 206;
     /* caret() spells the path as "child.slot/...:index", so a bare ":n"
      * means the press landed in the root slot and this check would prove
      * nothing about crossing a boundary. */
     const std::string numeratorCaret = g.equation.caret();
     if (numeratorCaret.empty() || numeratorCaret[0] == ':') return 207;
-    g.equation.hit_test(crossMetrics.width * 0.95, crossMetrics.baseline,
-                        g.style, true);
+    g.equation.extend_pointer_selection(
+        crossMetrics.width * 0.95, crossMetrics.baseline, g.style);
     const std::string crossSelection = g.equation.selection_latex();
     /* Promoted to the shared slot, the range has to carry the whole
      * fraction the drag started inside, not just the letter it ended on. */
     if (crossSelection.find("\\frac") == std::string::npos) return 208;
+    g.equation.end_pointer_selection();
     g.equation.clear_selection();
 
     /* Keep the original deep press while a promoted drag reverses direction.
@@ -5120,9 +5201,11 @@ int ui_interaction_test() {
     std::string reverseNumeratorPath;
     for (int sample = 0; sample <= 200; ++sample) {
         const double x = reverseMetrics.width * double(sample) / 200.0;
-        if (!g.equation.hit_test(x, reverseNumeratorY, g.style, false))
+        if (!g.equation.begin_pointer_selection(
+                x, reverseNumeratorY, g.style))
             continue;
         const std::string caret = g.equation.caret();
+        g.equation.end_pointer_selection();
         if (!caret.empty() && caret[0] != ':') {
             reverseNumeratorX = x;
             reverseNumeratorPath = caret.substr(0, caret.find(':'));
@@ -5137,9 +5220,11 @@ int ui_interaction_test() {
     double reverseDenominatorY = -1.0;
     for (int sample = 0; sample <= 200; ++sample) {
         const double y = reverseMetrics.height * double(sample) / 200.0;
-        if (!g.equation.hit_test(reverseNumeratorX, y, g.style, false))
+        if (!g.equation.begin_pointer_selection(
+                reverseNumeratorX, y, g.style))
             continue;
         const std::string caret = g.equation.caret();
+        g.equation.end_pointer_selection();
         const std::string path = caret.substr(0, caret.find(':'));
         if (!caret.empty() && caret[0] != ':' &&
             path != reverseNumeratorPath) {
@@ -5152,19 +5237,25 @@ int ui_interaction_test() {
         text.erase(std::remove(text.begin(), text.end(), ' '), text.end());
         return text;
     };
-    g.equation.hit_test(reverseNumeratorX, reverseNumeratorY, g.style, false);
-    g.equation.hit_test(reverseNumeratorX, reverseDenominatorY, g.style, true);
+    g.equation.begin_pointer_selection(
+        reverseNumeratorX, reverseNumeratorY, g.style);
+    g.equation.extend_pointer_selection(
+        reverseNumeratorX, reverseDenominatorY, g.style);
     if (withoutSpaces(g.equation.selection_latex()) != "\\frac{1}{\\mu}")
         return 215;
 
-    g.equation.hit_test(reverseNumeratorX, reverseNumeratorY, g.style, false);
-    g.equation.hit_test(0.0, reverseMetrics.baseline, g.style, true);
+    g.equation.end_pointer_selection();
+    g.equation.begin_pointer_selection(
+        reverseNumeratorX, reverseNumeratorY, g.style);
+    g.equation.extend_pointer_selection(
+        0.0, reverseMetrics.baseline, g.style);
     if (withoutSpaces(g.equation.selection_latex()) != "a\\frac{1}{\\mu}")
         return 216;
-    g.equation.hit_test(reverseMetrics.width, reverseMetrics.baseline,
-                        g.style, true);
+    g.equation.extend_pointer_selection(
+        reverseMetrics.width, reverseMetrics.baseline, g.style);
     if (withoutSpaces(g.equation.selection_latex()) != "\\frac{1}{\\mu}b")
         return 217;
+    g.equation.end_pointer_selection();
     g.equation.clear_selection();
 
     /* A structured document has to reach the source pane broken over lines.
@@ -5202,6 +5293,9 @@ int ui_interaction_test() {
     g.equation.load_latex("\\begin{aligned}a &= b\\end{aligned}");
     sync_source_from_model();
     const std::string beforeLesson = g.equation.latex();
+    g.equation.move_home();
+    g.equation.move_right();             /* first aligned cell */
+    g.equation.next_slot();              /* last cell, before \\end */
     g.equation.move_end();
     g.equation.insert_symbol("\\alpha");
     sync_source_from_model();
@@ -5211,9 +5305,14 @@ int ui_interaction_test() {
     SendMessageW(g.source, EM_GETSEL, WPARAM(&lessonFirst),
                  LPARAM(&lessonTail));
     const std::wstring lessonSource = window_text(g.source);
-    if (lessonTail <= lessonFirst || lessonTail > lessonSource.size() ||
-        lessonSource.substr(lessonFirst, lessonTail - lessonFirst)
-            .find(L"\\alpha") == std::wstring::npos)
+    if (lessonTail <= lessonFirst || lessonTail > lessonSource.size())
+        return 220;
+    const std::wstring highlightedLesson =
+        lessonSource.substr(lessonFirst, lessonTail - lessonFirst);
+    if (highlightedLesson.find(L"\\alpha") == std::wstring::npos ||
+        highlightedLesson.find(L'\r') != std::wstring::npos ||
+        highlightedLesson.find(L'\n') != std::wstring::npos ||
+        highlightedLesson.find(L"\\end") != std::wstring::npos)
         return 220;
 
     g.equation.load_latex("yx");
