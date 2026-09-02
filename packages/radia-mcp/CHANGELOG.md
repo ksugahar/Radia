@@ -13,6 +13,14 @@ crystallized as its own package.
   Run per field file, the abilities field was reported as lacking the academic
   question and the purpose field as lacking the execution environment
   (2026-09-02, 基盤C 2027 draft).
+- grant-writing / paper-writing / presentation: new shared translationese
+  check (`*_translationese_check`) for Japanese that reads as translated
+  English or generated prose: an intransitive verb in a transitive slot
+  (「〜へ発展する」, HIGH), an English word glossed after a Japanese term
+  (「接着層（glue）」, MEDIUM), calques such as 「劇的な」「〜を可能にする」
+  and empty emphasis vocabulary (LOW, each with a replacement). Nine such
+  cases survived every mechanical lint in a 基盤C draft on 2026-09-02. The
+  grant health report includes it (skip id `translationese`).
 - grant-writing: the cross-organization pilot check now reads the whole
   paragraph that claims the pilot, so a closing 「…は未検証である」 four
   sentences after the last trigger is no longer reported as a missing gap.

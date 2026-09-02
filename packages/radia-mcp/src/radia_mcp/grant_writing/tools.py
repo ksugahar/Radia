@@ -41,6 +41,7 @@ from radia_mcp.paper_writing._ja_lint import (
 )
 
 from .._shared.hedges import HEDGE_PATTERNS, scan_hedges
+from .._shared.translationese import check_translationese as _translationese
 
 _HERE = pathlib.Path(__file__).resolve().parent
 
@@ -327,6 +328,23 @@ def grant_writing_lint_bedrock(text: str) -> dict:
 def grant_writing_suggest_redundancy_fixes(text: str) -> dict:
     """Suggest redundancy fixes only in applicant prose."""
     return _ja_suggest_redundancy_fixes(_prose_for_lint(_read_text_if_path(text)))
+
+
+def grant_writing_translationese_check(text: str) -> dict:
+    """Find Japanese that reads as translated English or as generated prose.
+
+    A draft can pass every mechanical lint here and still read like a
+    translation: an intransitive verb pushed into a transitive slot
+    (「判定則を…へ発展する」), an English word glossed in parentheses after a
+    Japanese term (「接着層（glue）」), or a calque such as 「劇的な差」. Nine
+    of these survived in a 基盤C draft that scored 9.5 on 2026-09-02, and a
+    reviewer reads them as carelessness before reading the science.
+
+    The grammar defect is HIGH; the gloss is MEDIUM; calques and emphasis
+    vocabulary are LOW counts with a replacement each. Defined project terms
+    and mathematical usage (「写す」 for a map) are not reported.
+    """
+    return _translationese(_prose_for_lint(_read_text_if_path(text)))
 
 
 def grant_writing_check_misuse_japanese(text: str) -> dict:
@@ -6986,6 +7004,7 @@ def grant_writing_recommendation_letter_template(
 _DETECTOR_TOOLS = frozenset({
     "sentence",
     "bedrock",
+    "translationese",
     "weak",
     "claim",
     "vague",
@@ -7076,8 +7095,8 @@ def grant_writing_health_report(
         "claim", "domain", "focus", "format", "integration", "international",
         "irreplaceable", "kaken", "kddi", "literature", "metric", "narrative",
         "originality", "pages", "persuasion", "pilot", "residue", "scale",
-        "japanese", "readability", "momentum", "sections", "sentence", "vague",
-        "vocabulary", "weak",
+        "japanese", "readability", "momentum", "sections", "sentence",
+        "translationese", "vague", "vocabulary", "weak",
     }
     unknown_skip_ids = sorted(skip_set - valid_skip_ids)
     if unknown_skip_ids:
@@ -7226,6 +7245,23 @@ def grant_writing_health_report(
                     ),
                     "score": narrative["score"],
                     "comments": narrative["comments"][:5],
+                })
+
+    if "translationese" not in skip_set:
+        translationese = grant_writing_translationese_check(text)
+        detailed_results["translationese"] = translationese
+        if translationese["applicable"]:
+            detailed_scores["translationese"] = translationese["score"]
+            if translationese["risks"]:
+                priority_issues.append({
+                    "tool": "translationese",
+                    "name": "translationese_check",
+                    "severity": max(
+                        (r["severity"] for r in translationese["risks"]),
+                        key=lambda s: {"HIGH": 2, "MEDIUM": 1, "LOW": 0}[s],
+                    ),
+                    "score": translationese["score"],
+                    "comments": translationese["comments"][:5],
                 })
 
     if "residue" not in skip_set:
