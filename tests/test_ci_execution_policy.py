@@ -9,6 +9,7 @@ ROOT = Path(__file__).resolve().parents[1]
 def test_fast_ci_runs_only_on_mdx_and_native_is_a_named_release_lane():
     fast = (ROOT / ".github" / "workflows" / "radia-fast.yml").read_text(encoding="utf-8")
     native = (ROOT / ".github" / "workflows" / "build-test.yml").read_text(encoding="utf-8")
+    optuna = (ROOT / ".github" / "workflows" / "radia-optuna.yml").read_text(encoding="utf-8")
     release = (ROOT / ".github" / "workflows" / "release.yml").read_text(encoding="utf-8")
 
     assert "name: Radia\n" in fast
@@ -24,6 +25,8 @@ def test_fast_ci_runs_only_on_mdx_and_native_is_a_named_release_lane():
     assert "--ignore=tests/equation" in native
     assert '"MKLROOT=$mklRoot"' in native
     assert "MKLROOT=C:\\Program Files\\Python312\\Library" not in native
+    assert "runs-on: [self-hosted, Windows, X64, mdx]" in optuna
+    assert "windows-radia" not in optuna
     assert 'workflows: ["Radia Native Release"]' in release
 
 
