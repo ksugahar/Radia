@@ -31,4 +31,7 @@ validation budget or requires an idle mdx/hibino compute host.
 the candidate `radia-mcp` source. It records cold-import latency, direct tool
 count, serialized `tools/list` schema size, and `full`-profile compatibility in
 `results_mcp_server_surface_20260902.json`. This is explicit performance
-validation and is intentionally excluded from fast CI.
+validation and is intentionally excluded from fast CI. The comparison preserves
+every supported baseline tool in the full profile while requiring the explicitly
+listed retired standalone-panel tools to remain absent; any other missing tool is
+a validation failure.
