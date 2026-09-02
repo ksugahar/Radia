@@ -942,6 +942,16 @@ PrettySource pretty_source(const std::wstring& raw) {
 
     size_t i = 0;
     while (i < raw.size()) {
+        /* The emitter already uses LF as human-readable TeX whitespace.
+         * Win32 EDIT, however, requires CRLF and can display a lone LF as a
+         * control glyph.  Layout owns all pane line endings, so consume the
+         * emitter's CR/LF here and map them to an empty displayed range. */
+        if (raw[i] == L'\r' || raw[i] == L'\n') {
+            out.start[i] = out.text.size();
+            out.end[i] = out.text.size();
+            ++i;
+            continue;
+        }
         /* The space a break just replaced would otherwise sit after the
          * indentation and push the line one column further out. */
         if (atLineStart && (raw[i] == L' ' || raw[i] == L'\t')) {
@@ -2000,14 +2010,27 @@ void dispatch_model(const std::string& command) {
     if (command == "edit.undo") action = g.equation.undo_name();
     else if (command == "edit.redo") action = g.equation.redo_name();
     if (g.equation.command(command)) {
-        model_changed(command, action.empty() ? std::string() :
-                      "name=" + action);
-        if (command.rfind("template.", 0) == 0 ||
-            command.rfind("symbol.", 0) == 0 ||
-            command.rfind("latex.", 0) == 0 ||
-            command.rfind("matrix.add_", 0) == 0 ||
-            command == "edit.new_line" || command == "edit.alignment")
-            highlight_source_insertion(beforeLatex);
+        const bool contentChanged = beforeLatex != g.equation.latex();
+        if (contentChanged) {
+            model_changed(command, action.empty() ? std::string() :
+                          "name=" + action);
+            if (command.rfind("template.", 0) == 0 ||
+                command.rfind("symbol.", 0) == 0 ||
+                command.rfind("latex.", 0) == 0 ||
+                command.rfind("matrix.add_", 0) == 0 ||
+                command == "edit.new_line" || command == "edit.alignment")
+                highlight_source_insertion(beforeLatex);
+        } else {
+            /* Structural boundaries may consume a key by moving the caret.
+             * That is a handled navigation, not a document edit. */
+            sync_source_from_model();
+            InvalidateRect(g.canvas, nullptr, FALSE);
+            if (command == "edit.backspace" || command == "edit.delete")
+                update_status(L"構造境界を移動しました（数式は変更していません）");
+            else
+                update_status();
+            debug_event(command + ".caret_only");
+        }
     } else {
         sync_source_from_model();
         InvalidateRect(g.canvas, nullptr, FALSE);
@@ -3689,30 +3712,196 @@ bool source_insert_equation_row(HWND hwnd) {
     last = DWORD(std::min<size_t>(last, text.size()));
     if (last < first) std::swap(first, last);
 
-    const std::wstring begin = L"\\begin{aligned}";
-    const std::wstring end = L"\\end{aligned}";
+    const std::wstring alignedBegin = L"\\begin{aligned}";
+    const std::wstring alignedEnd = L"\\end{aligned}";
+    std::wstring begin = alignedBegin;
     size_t insertionFirst = first;
     size_t insertionLast = last;
-    bool inAligned = false;
+    bool inRowEnvironment = false;
     bool appendBeforeEnd = false;
 
-    size_t open = text.rfind(begin, insertionFirst);
+    const auto matchingEnvironmentEnd = [&](size_t candidateOpen,
+                                            const std::wstring& openToken,
+                                            const std::wstring& closeToken) {
+        int depth = 1;
+        size_t scan = candidateOpen + openToken.size();
+        while (scan < text.size()) {
+            const size_t nextOpen = text.find(openToken, scan);
+            const size_t nextClose = text.find(closeToken, scan);
+            if (nextClose == std::wstring::npos) return std::wstring::npos;
+            if (nextOpen != std::wstring::npos && nextOpen < nextClose) {
+                ++depth;
+                scan = nextOpen + openToken.size();
+            } else {
+                --depth;
+                if (depth == 0) return nextClose;
+                scan = nextClose + closeToken.size();
+            }
+        }
+        return std::wstring::npos;
+    };
+
+    /* Find the innermost editable row environment which actually contains the
+     * caret.  Enter inside a matrix or cases adds a row to that table; wrapping
+     * it in an outer aligned environment acts on the wrong structure.  A plain
+     * rfind also pairs an outer begin with the first nested end, so match each
+     * candidate before choosing the deepest containing one. */
+    size_t open = std::wstring::npos;
+    size_t close = std::wstring::npos;
+    static const wchar_t* kRowEnvironments[] = {
+        L"aligned", L"matrix", L"pmatrix", L"bmatrix", L"Bmatrix",
+        L"vmatrix", L"Vmatrix", L"cases", nullptr
+    };
+    for (int env = 0; kRowEnvironments[env]; ++env) {
+        const std::wstring candidateBegin =
+            L"\\begin{" + std::wstring(kRowEnvironments[env]) + L"}";
+        const std::wstring candidateEnd =
+            L"\\end{" + std::wstring(kRowEnvironments[env]) + L"}";
+        size_t search = std::min(insertionFirst, text.size());
+        for (;;) {
+            const size_t candidate = text.rfind(candidateBegin, search);
+            if (candidate == std::wstring::npos) break;
+            const size_t candidateClose = matchingEnvironmentEnd(
+                candidate, candidateBegin, candidateEnd);
+            if (candidateClose != std::wstring::npos &&
+                insertionFirst <= candidateClose) {
+                if (open == std::wstring::npos || candidate > open) {
+                    open = candidate;
+                    close = candidateClose;
+                    begin = candidateBegin;
+                }
+                break;
+            }
+            if (candidate == 0) break;
+            search = candidate - 1;
+        }
+    }
+    const auto escapedAt = [&text](size_t position) {
+        size_t slashes = 0;
+        while (position > 0 && text[position - 1] == L'\\') {
+            --position;
+            ++slashes;
+        }
+        return (slashes % 2) != 0;
+    };
+    const std::wstring beginToken = L"\\begin{";
+    const std::wstring endToken = L"\\end{";
+    struct RowScan {
+        int braces = 0;
+        int environments = 0;
+        int column = 0;
+        size_t nextBoundary = std::wstring::npos;
+    };
+    const auto scanRow = [&](size_t limit, size_t boundaryAtOrAfter) {
+        RowScan result;
+        for (size_t i = open + begin.size(); i < limit && i < close;) {
+            if (!escapedAt(i) &&
+                text.compare(i, beginToken.size(), beginToken) == 0) {
+                const size_t tokenEnd = text.find(L'}', i + beginToken.size());
+                if (tokenEnd == std::wstring::npos || tokenEnd >= close) break;
+                ++result.environments;
+                i = tokenEnd + 1;
+            } else if (!escapedAt(i) &&
+                       text.compare(i, endToken.size(), endToken) == 0) {
+                const size_t tokenEnd = text.find(L'}', i + endToken.size());
+                if (tokenEnd == std::wstring::npos || tokenEnd >= close) break;
+                result.environments = std::max(0, result.environments - 1);
+                i = tokenEnd + 1;
+            } else if (!escapedAt(i) && text[i] == L'{') {
+                ++result.braces;
+                ++i;
+            } else if (!escapedAt(i) && text[i] == L'}') {
+                result.braces = std::max(0, result.braces - 1);
+                ++i;
+            } else if (i + 1 < close && text[i] == L'\\' &&
+                       text[i + 1] == L'\\' && !escapedAt(i)) {
+                if (result.braces == 0 && result.environments == 0) {
+                    if (i >= boundaryAtOrAfter &&
+                        result.nextBoundary == std::wstring::npos)
+                        result.nextBoundary = i;
+                    result.column = 0;
+                }
+                i += 2;
+            } else {
+                if (result.braces == 0 && result.environments == 0 &&
+                    text[i] == L'&' && !escapedAt(i))
+                    ++result.column;
+                ++i;
+            }
+        }
+        return result;
+    };
     if (open != std::wstring::npos) {
-        const size_t close = text.find(end, open + begin.size());
         if (close != std::wstring::npos && insertionFirst <= close) {
-            inAligned = true;
+            inRowEnvironment = true;
             insertionLast = std::min(insertionLast, close);
+
+            /* A caret before or inside the opening token is outside its
+             * mathematical contents.  Clamp it after the token and its
+             * formatting whitespace so Enter creates an empty first row
+             * instead of spelling `\\\begin{...}` or splitting the
+             * command name. */
+            size_t contentStart = open + begin.size();
+            while (contentStart < close &&
+                   (text[contentStart] == L' ' ||
+                    text[contentStart] == L'\t' ||
+                    text[contentStart] == L'\r' ||
+                    text[contentStart] == L'\n'))
+                ++contentStart;
+            if (insertionFirst < contentStart) {
+                insertionFirst = contentStart;
+                insertionLast = contentStart;
+            }
+
+            /* A row separator is valid only at a row-container cell boundary. If
+             * the source caret is inside a fraction, script, text group, or
+             * nested environment, do not inject `\\` into that structure.
+             * Move the insertion to the next direct row boundary; at the last
+             * row, append a blank row immediately before its \end{...}. */
+            const RowScan nesting = scanRow(insertionFirst,
+                                            std::wstring::npos);
+            if (nesting.braces > 0 || nesting.environments > 0) {
+                const size_t boundary =
+                    scanRow(close, insertionFirst).nextBoundary;
+                if (boundary != std::wstring::npos) {
+                    insertionFirst = boundary;
+                    insertionLast = boundary;
+                } else {
+                    insertionFirst = close;
+                    while (insertionFirst > open + begin.size() &&
+                           (text[insertionFirst - 1] == L' ' ||
+                            text[insertionFirst - 1] == L'\t' ||
+                            text[insertionFirst - 1] == L'\r' ||
+                            text[insertionFirst - 1] == L'\n'))
+                        --insertionFirst;
+                    insertionLast = close;
+                    appendBeforeEnd = true;
+                }
+            }
         }
     }
 
     /* Canvas-to-source synchronization leaves the caret after \end{aligned}.
      * Treat Enter there as "append a row" and put the new caret before the
      * closing command, where subsequent TeX typing belongs. */
-    if (!inAligned) {
-        const size_t close = text.rfind(end);
-        if (close != std::wstring::npos) {
-            open = text.rfind(begin, close);
-            if (open != std::wstring::npos) {
+    if (!inRowEnvironment) {
+        begin = alignedBegin;
+        const size_t finalClose = text.rfind(alignedEnd);
+        if (finalClose != std::wstring::npos) {
+            size_t search = finalClose;
+            for (;;) {
+                const size_t candidate = text.rfind(alignedBegin, search);
+                if (candidate == std::wstring::npos) break;
+                if (matchingEnvironmentEnd(candidate, alignedBegin,
+                                           alignedEnd) == finalClose) {
+                    open = candidate;
+                    close = finalClose;
+                    break;
+                }
+                if (candidate == 0) break;
+                search = candidate - 1;
+            }
+            if (open != std::wstring::npos && close == finalClose) {
                 insertionFirst = close;
                 while (insertionFirst > open + begin.size() &&
                        (text[insertionFirst - 1] == L' ' ||
@@ -3721,14 +3910,14 @@ bool source_insert_equation_row(HWND hwnd) {
                         text[insertionFirst - 1] == L'\n'))
                     --insertionFirst;
                 insertionLast = close;
-                inAligned = true;
+                inRowEnvironment = true;
                 appendBeforeEnd = true;
             }
         }
     }
 
     size_t newCaret = 0;
-    if (inAligned) {
+    if (inRowEnvironment) {
         size_t lineStart = insertionFirst == 0 ? 0 :
             text.rfind(L'\n', insertionFirst - 1);
         lineStart = lineStart == std::wstring::npos ? 0 : lineStart + 1;
@@ -3739,8 +3928,16 @@ bool source_insert_equation_row(HWND hwnd) {
             ++indent;
         if (indent == 0) indent = 2;
 
+        /* Preserve the current table column.  `a & bc` split between b and c
+         * must become `a & b \\ & c`, not `a & b \\ c`; the latter silently
+         * moves c to column one and makes the source and canvas disagree. */
+        const int targetColumn =
+            scanRow(insertionFirst, std::wstring::npos).column;
+
         std::wstring rowBreak = L" \\\\\r\n";
         rowBreak.append(indent, L' ');
+        for (int column = 0; column < targetColumn; ++column)
+            rowBreak += L" & ";
         newCaret = insertionFirst + rowBreak.size();
         if (appendBeforeEnd) rowBreak += L"\r\n";
         SendMessageW(hwnd, EM_SETSEL, WPARAM(insertionFirst),
@@ -5331,6 +5528,87 @@ int ui_interaction_test() {
         "\\begin{aligned}ab\\\\ef\\end{aligned}")
         return 233;
 
+    /* Enter at or inside the opening token must be clamped into the aligned
+     * contents.  The previous source route inserted the row separator before
+     * `\begin`, leaving silent malformed TeX in the EDIT control. */
+    set_source_text_for_test(
+        L"\\begin{aligned}ab\\\\cd\\end{aligned}");
+    SendMessageW(g.source, EM_SETSEL, 0, 0);
+    SendMessageW(g.source, WM_CHAR, L'\r', 0);
+    const std::wstring leadingRowSource = window_text(g.source);
+    if (leadingRowSource.find(L"\\begin{aligned} \\\\\r\n") != 0 ||
+        g.equation.latex().find("ab") == std::string::npos ||
+        g.equation.latex().find("cd") == std::string::npos)
+        return 234;
+
+    /* A source caret inside a nested template cannot accept an aligned row
+     * token at that literal character offset.  Preserve the fraction and put
+     * the new blank row at the containing aligned-row boundary instead. */
+    const std::wstring nestedRowSource =
+        L"\\begin{aligned}\\frac{ab}{c}\\end{aligned}";
+    set_source_text_for_test(nestedRowSource);
+    const size_t nestedCaret = nestedRowSource.find(L"ab") + 1;
+    SendMessageW(g.source, EM_SETSEL, nestedCaret, nestedCaret);
+    SendMessageW(g.source, WM_CHAR, L'\r', 0);
+    const std::wstring pendingNestedRow = window_text(g.source);
+    DWORD pendingFirst = 0, pendingLast = 0;
+    SendMessageW(g.source, EM_GETSEL, WPARAM(&pendingFirst),
+                 LPARAM(&pendingLast));
+    if (!g.sourceEditing ||
+        pendingNestedRow.find(L"\\frac{ab}{c} \\\\\r\n") ==
+            std::wstring::npos ||
+        pendingFirst != pendingLast ||
+        pendingFirst >= pendingNestedRow.find(L"\\end{aligned}") ||
+        g.equation.latex().find("\\frac{ab}{c}") == std::string::npos)
+        return 235;
+
+    /* A loaded aligned model has its default caret just outside the matrix.
+     * Canvas Enter extends it instead of adding a nested aligned wrapper. */
+    g.equation.load_latex("\\begin{aligned}a\\\\b\\end{aligned}");
+    sync_source_from_model();
+    SetFocus(g.canvas);
+    SendMessageW(g.canvas, WM_KEYDOWN, VK_RETURN, 0);
+    const std::string extendedAligned = g.equation.latex();
+    const size_t firstAligned = extendedAligned.find("\\begin{aligned}");
+    if (firstAligned == std::string::npos ||
+        extendedAligned.find("\\begin{aligned}", firstAligned + 1) !=
+            std::string::npos)
+        return 236;
+
+    /* Source Enter inside a table acts on that table and retains the current
+     * column.  Omitting the leading empty cell changed column two into column
+     * one, while wrapping the matrix in aligned changed the wrong structure. */
+    const std::wstring matrixRowSource =
+        L"\\begin{matrix}ab&cd\\\\ef&gh\\end{matrix}";
+    set_source_text_for_test(matrixRowSource);
+    const size_t matrixCaret = matrixRowSource.find(L"cd") + 1;
+    SendMessageW(g.source, EM_SETSEL, matrixCaret, matrixCaret);
+    SendMessageW(g.source, WM_CHAR, L'\r', 0);
+    const std::string splitMatrix = compactLatex(g.equation.latex());
+    if (splitMatrix !=
+            "\\begin{matrix}ab&c\\\\&d\\\\ef&gh\\end{matrix}" ||
+        splitMatrix.find("\\begin{aligned}") != std::string::npos)
+        return 238;
+
+    const std::wstring casesRowSource =
+        L"\\begin{cases}ab&cd\\\\ef&gh\\end{cases}";
+    set_source_text_for_test(casesRowSource);
+    const size_t casesCaret = casesRowSource.find(L"cd") + 1;
+    SendMessageW(g.source, EM_SETSEL, casesCaret, casesCaret);
+    SendMessageW(g.source, WM_CHAR, L'\r', 0);
+    const std::string splitCases = compactLatex(g.equation.latex());
+    if (splitCases !=
+            "\\begin{cases}ab&c\\\\&d\\\\ef&gh\\end{cases}" ||
+        splitCases.find("\\begin{aligned}") != std::string::npos)
+        return 242;
+
+    /* Typing the standard top-level TeX row delimiter is equivalent to using
+     * Enter; it must never become a visible backslash glyph. */
+    set_source_text_for_test(L"a\\\\b");
+    if (compactLatex(g.equation.latex()) !=
+        "\\begin{aligned}a\\\\b\\end{aligned}")
+        return 239;
+
     const bool savedNumbered = g.documentNumbered;
     g.documentNumbered = true;
     const std::string sourceSavedDocument = tex_document();
@@ -5570,6 +5848,17 @@ int ui_interaction_test() {
                         std::wstring::npos; at += 2)
         ++sourceBreaks;
     if (sourceBreaks != 3) return 219;
+    for (size_t i = 0; i < shownSource.size(); ++i) {
+        if ((shownSource[i] == L'\n' &&
+             (i == 0 || shownSource[i - 1] != L'\r')) ||
+            (shownSource[i] == L'\r' &&
+             (i + 1 >= shownSource.size() || shownSource[i + 1] != L'\n')))
+            return 240;
+    }
+    /* Soft wrapping is intentionally enabled, so a narrow/DPI-scaled test
+     * window may report more than the four logical lines.  Fewer than four
+     * means one of the three CRLF boundaries was not honoured. */
+    if (SendMessageW(g.source, EM_GETLINECOUNT, 0, 0) < 4) return 241;
     /* The breaks are only allowed where TeX ignores whitespace, so the very
      * text now on display has to parse back to the equation it came from. */
     const std::string beforeRoundTrip = g.equation.latex();
