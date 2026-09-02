@@ -409,12 +409,19 @@ reasoning is parity:
   (`{1, r², z}` for Q1, `{1, r², r⁴, z, r²z, r⁴z, ...}` for Q2),
   exactly matching the admissible function space.
 
-**Why this isn't required in practice**: although the parity argument
-is mathematically correct, the `2 pi r` Jacobian in the standard H1
-weak form **automatically suppresses** the spurious odd-r modes (they
-contribute zero to the integrated weight), so the practical accuracy
-benefit on scalar Laplacians is small.  FEMM ships production thermal
-accuracy with standard P1; we follow that proven convention.
+**Why a custom Henrotte scalar space is not required in production**:
+the `2 pi r` Jacobian in the standard H1 weak form already supplies the
+correct axisymmetric measure, so the production solver remains on
+NGSolve's standard H1 space.  Polynomial order still matters near the
+axis: a piecewise-linear radial profile cannot reproduce nonconstant
+even quadratic behavior while also representing `dT/dr = 0` at
+`r = 0`.  Production axisymmetric heat therefore defaults to standard
+H1 order 2, while the 3D thermal solver remains order 1 by default.  In
+the committed 9x9 uniform-flux cylinder validation, order 2 reduces the
+spurious radial axis slope from about 139 C/m to below 0.3 C/m and keeps
+the axis and surface temperatures within 0.1 C of the independent
+Bessel-series reference.  This order choice does not require the
+optional Henrotte heat space below.
 
 The axisymmetric heat weak form (no eddy-current source for clarity):
 
