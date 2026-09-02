@@ -4,12 +4,13 @@ name: radia-mcp
 # This workflow:
 #   - Runs on the FREE GitHub-hosted ubuntu-latest
 #   - Uses Python 3.10 / 3.11 / 3.12 only for implementation compatibility
-#   - Uses Python 3.12 once for the complete package and server regression
+#   - Uses Python 3.12 once for impact-scoped package and server regression
+#   - Reserves the complete package/all-server audit for workflow_dispatch
 #   - Treats docs, packaging metadata, implementation, and release tags as
 #     distinct scopes so a tag does not repeat the main-branch test matrix
 #   - With minimal deps (no radia C++ ext, no ngsolve, no Cubit)
-#   - Checks: (a) all cataloged subpackages import (b) every server has
-#     register_status_tool wired (c) per-server --selftest runs
+#   - Checks affected server imports/selftests plus stable package contracts
+#   - Keeps all-catalog checks in the explicit full audit
 #
 # Why a separate distribution workflow:
 #   - Catches MCP-only regressions without building the Radia native core
@@ -45,9 +46,11 @@ jobs:
     outputs:
       mode: ${{ steps.classify.outputs.mode }}
       python_versions: ${{ steps.classify.outputs.python_versions }}
+      run_tests: ${{ steps.classify.outputs.run_tests }}
       run_full: ${{ steps.classify.outputs.run_full }}
       check_tools_doc: ${{ steps.classify.outputs.check_tools_doc }}
       build_wheel: ${{ steps.classify.outputs.build_wheel }}
+      changed_files_json: ${{ steps.classify.outputs.changed_files_json }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -64,19 +67,27 @@ jobs:
         run: |
           set -euo pipefail
 
-          mode=full
-          python_versions='["3.10","3.11","3.12"]'
-          run_full=true
-          check_tools_doc=true
-          build_wheel=true
+          mode=targeted
+          python_versions='["3.12"]'
+          run_tests=true
+          run_full=false
+          check_tools_doc=false
+          build_wheel=false
+          files=''
 
           if [[ "$REF_TYPE" == "tag" ]]; then
             mode=release
             python_versions='["3.12"]'
+            run_tests=false
             run_full=false
             check_tools_doc=false
+            build_wheel=true
           elif [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
             mode=full
+            python_versions='["3.10","3.11","3.12"]'
+            run_full=true
+            check_tools_doc=false
+            build_wheel=true
           else
             if [[ "$EVENT_NAME" == "pull_request" ]]; then
               files=$(git diff --name-only "$BASE_SHA...$GITHUB_SHA")
@@ -90,27 +101,46 @@ jobs:
             if [[ -n "$files" ]] && ! grep -qvE '^packages/radia-mcp/(docs/|README\.md$|CHANGELOG\.md$)' <<<"$files"; then
               mode=docs
               python_versions='["3.12"]'
+              run_tests=false
               run_full=false
+              check_tools_doc=false
               build_wheel=false
             elif [[ -n "$files" ]] && ! grep -qvE '^packages/radia-mcp/(pyproject\.toml$|src/radia_mcp/__init__\.py$|README\.md$|CHANGELOG\.md$)' <<<"$files"; then
               mode=package
               python_versions='["3.12"]'
+              run_tests=false
               run_full=false
               check_tools_doc=false
+              build_wheel=true
+            else
+              if grep -qE '^packages/radia-mcp/src/' <<<"$files"; then
+                python_versions='["3.10","3.11","3.12"]'
+              fi
+              if [[ "$EVENT_NAME" == "push" && "$GITHUB_REF" == "refs/heads/main" ]]; then
+                build_wheel=true
+              fi
+            fi
+
+            if grep -qE '^packages/radia-mcp/(docs/TOOLS\.md|scripts/gen_tools_doc\.py)$' <<<"$files"; then
+              check_tools_doc=true
             fi
           fi
 
+          changed_files_json=$(printf '%s\n' "$files" | jq -R -s -c 'split("\n") | map(select(length > 0))')
+
           echo "mode=$mode" >> "$GITHUB_OUTPUT"
           echo "python_versions=$python_versions" >> "$GITHUB_OUTPUT"
+          echo "run_tests=$run_tests" >> "$GITHUB_OUTPUT"
           echo "run_full=$run_full" >> "$GITHUB_OUTPUT"
           echo "check_tools_doc=$check_tools_doc" >> "$GITHUB_OUTPUT"
           echo "build_wheel=$build_wheel" >> "$GITHUB_OUTPUT"
+          echo "changed_files_json=$changed_files_json" >> "$GITHUB_OUTPUT"
           echo "Selected radia-mcp CI mode: $mode"
 
   selftest:
     needs: scope
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
@@ -150,53 +180,91 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
+          cache: pip
+          cache-dependency-path: packages/radia-mcp/pyproject.toml
 
       # Minimal install: just mcp + radia-mcp itself.
       # NO radia (heavy MKL+MSVC build), NO ngsolve, NO cubit binaries.
       # MCP servers must import cleanly without these heavy deps
       # (they are knowledge servers; runtime deps are optional).
       - name: Install minimal deps
+        if: >-
+          needs.scope.outputs.run_tests == 'true' ||
+          needs.scope.outputs.check_tools_doc == 'true' ||
+          needs.scope.outputs.build_wheel == 'true'
+        shell: bash
+        env:
+          RUN_TESTS: ${{ needs.scope.outputs.run_tests }}
         run: |
-          python -m pip install --upgrade pip
           # tomli: tomllib backport for Python 3.10 (tools/policy_lint.py reads pyproject.toml;
           # tomllib is stdlib only on 3.11+).  No-op on 3.11/3.12 via the env marker.
-          python -m pip install pytest pytest-rerunfailures "mcp>=1.0,<2" "tomli; python_version < '3.11'"
+          python -m pip install "mcp>=1.0,<2" "tomli; python_version < '3.11'"
+          if [[ "$RUN_TESTS" == "true" ]]; then
+            python -m pip install pytest
+          fi
           python -m pip install -e packages/radia-mcp --no-deps
 
+      - name: Prepare impact-scoped test plan
+        if: needs.scope.outputs.run_tests == 'true'
+        shell: bash
+        env:
+          CHANGED_FILES_JSON: ${{ needs.scope.outputs.changed_files_json }}
+          RUN_FULL: ${{ needs.scope.outputs.run_full }}
+        run: |
+          if [[ "$RUN_FULL" == "true" ]]; then
+            python packages/radia-mcp/tools/select_ci_tests.py \
+              --full --output radia-mcp-ci-selection.json
+          else
+            python packages/radia-mcp/tools/select_ci_tests.py \
+              --changed-files-json "$CHANGED_FILES_JSON" \
+              --output radia-mcp-ci-selection.json
+          fi
+          cat radia-mcp-ci-selection.json
+
       - name: Compile check (catch SyntaxError on Py ${{ matrix.python-version }})
-        if: needs.scope.outputs.mode != 'release'
+        if: needs.scope.outputs.run_tests == 'true'
         run: |
           python -m compileall -q packages/radia-mcp/src
 
+      - name: Compatibility import check
+        if: needs.scope.outputs.run_tests == 'true'
+        run: |
+          python - <<'PY'
+          import importlib
+          import json
+
+          from radia_mcp.meta.catalog import CATALOG
+
+          plan = json.load(open("radia-mcp-ci-selection.json", encoding="utf-8"))
+          importlib.import_module("radia_mcp")
+          for short in plan["server_selftests"]:
+              importlib.import_module(f"{CATALOG[short]['subpackage']}.server")
+              print(f"import OK: {short}")
+          PY
+
       - name: Publish-boundary lint
-        if: matrix.python-version == '3.12' && needs.scope.outputs.mode != 'release'
+        if: matrix.python-version == '3.12' && needs.scope.outputs.run_tests == 'true'
         run: |
           python packages/radia-mcp/tools/policy_lint.py --selftest
           python packages/radia-mcp/tools/policy_lint.py
 
-      - name: Meta health (all cataloged subpackages must import)
-        if: needs.scope.outputs.run_full == 'true'
+      - name: Pytest (compact contracts plus affected package tests)
+        if: matrix.python-version == '3.12' && needs.scope.outputs.run_tests == 'true'
         run: |
-          python -c "
-          from radia_mcp.meta.server import radia_mcp_health
-          h = radia_mcp_health()
-          print(f'healthy: {h[\"n_servers_healthy\"]}/{h[\"n_servers_total\"]}')
-          if not h['all_healthy']:
-              for r in h['results']:
-                  if not r['import_ok']:
-                      print(f'  - {r[\"name\"]}: {r.get(\"error\", \"?\")[:120]}')
-              raise SystemExit(1)
-          "
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          import subprocess
+          import sys
 
-      - name: Pytest (meta health + language features + versioning)
-        if: matrix.python-version == '3.12' && needs.scope.outputs.run_full == 'true'
-        run: |
-          cd packages/radia-mcp
-          # Fast package contract only.  Slow corpus/quality gates
-          # (build123d marathon2, per-server subprocess selftests) are kept
-          # out of this pytest step; per-server --selftest runs below as its
-          # own explicit gate.
-          python -m pytest -v -r aR -m "not xval and not slow" --reruns 2 --reruns-delay 1 tests/
+          package_root = Path("packages/radia-mcp")
+          plan = json.loads(Path("radia-mcp-ci-selection.json").read_text(encoding="utf-8"))
+          command = [
+              sys.executable, "-m", "pytest", "-v", "-r", "aR",
+              "-m", "not xval and not slow", *plan["package_tests"],
+          ]
+          raise SystemExit(subprocess.run(command, cwd=package_root).returncode)
+          PY
 
       # TOOLS.md drift gate — regenerate the auto-generated inventory
       # and fail if it differs from the committed copy. Catches the
@@ -215,19 +283,22 @@ jobs:
             exit 1
           fi
 
-      # Run --selftest for every cataloged server (catches runtime issues
-      # the static checks miss).  Run once on the newest matrix Python: the
-      # per-server subprocess harness is a quality gate, not a language-version
-      # compatibility sweep.  Import/meta-health above still runs on 3.10/3.11/3.12.
-      - name: Per-server --selftest
-        if: matrix.python-version == '3.12' && needs.scope.outputs.run_full == 'true'
+      # Run --selftest only for affected servers. Explicit full audit selects all.
+      - name: Affected per-server --selftest
+        if: matrix.python-version == '3.12' && needs.scope.outputs.run_tests == 'true'
         shell: bash
         run: |
           cd packages/radia-mcp
           python - <<'PY'
-          import subprocess, sys
+          import json, pathlib, subprocess, sys
           sys.path.insert(0, "src")
           from radia_mcp.meta import catalog
+
+          plan = json.loads(
+              pathlib.Path("../../radia-mcp-ci-selection.json").read_text(
+                  encoding="utf-8"
+              )
+          )
 
           slow_servers = {
               "radia-ngsolve": 120,
@@ -235,7 +306,9 @@ jobs:
               "mathematica": 90,
           }
           failed = []
-          for short, info in catalog.CATALOG.items():
+          selected = plan["server_selftests"]
+          for short in selected:
+              info = catalog.CATALOG[short]
               cmd = [sys.executable, "-c",
                      f"import sys; sys.path.insert(0, 'src'); "
                      f"from {info['subpackage']}.server import main; "
@@ -253,7 +326,7 @@ jobs:
               if not ok:
                   failed.append((short, r.stderr[-300:].strip()))
 
-          print(f"\nTotal: {len(catalog.CATALOG)}, failed: {len(failed)}")
+          print(f"\nSelected: {len(selected)}, failed: {len(failed)}")
           for n, err in failed:
               print(f"\n--- {n} ---")
               print(err)
@@ -262,10 +335,34 @@ jobs:
           PY
 
       - name: MCP response regression tests
-        if: matrix.python-version == '3.12' && needs.scope.outputs.run_full == 'true'
+        if: matrix.python-version == '3.12' && needs.scope.outputs.run_tests == 'true'
         run: |
-          PYTHONPATH="packages/radia-mcp/src:src" \
-            python -m pytest tests/mcp_server -q
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          import subprocess
+          import sys
+
+          plan = json.loads(Path("radia-mcp-ci-selection.json").read_text(encoding="utf-8"))
+          if plan["run_mcp_response_tests"]:
+              env = os.environ.copy()
+              env["PYTHONPATH"] = os.pathsep.join(
+                  ["packages/radia-mcp/src", "src", env.get("PYTHONPATH", "")]
+              )
+              raise SystemExit(subprocess.run([
+                  sys.executable, "-m", "pytest", "tests/mcp_server", "-q"
+              ], env=env).returncode)
+          print("Skipped: no tests/mcp_server change in the impact plan")
+          PY
+
+      - name: Upload impact-scoped test plan
+        if: matrix.python-version == '3.12' && needs.scope.outputs.run_tests == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: radia-mcp-ci-selection
+          path: radia-mcp-ci-selection.json
+          if-no-files-found: error
 
       - name: Build and verify radia-mcp wheel
         if: matrix.python-version == '3.12' && needs.scope.outputs.build_wheel == 'true'
