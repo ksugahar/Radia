@@ -138,17 +138,47 @@ def detect_kelvin_offset(mesh) -> Tuple[float, float, float]:
             float(ext_mean[2] - int_mean[2]))
 
 
-def has_kelvin_identification(mesh) -> bool:
-    """Return True if the mesh already carries an Identifications section.
+def _boundary_vertex_ids(mesh, boundary: str) -> set[int]:
+    """Return 1-based Netgen point IDs carried by one named boundary."""
+    boundaries = mesh.GetBoundaries()
+    vertices: set[int] = set()
+    for element in mesh.Elements(__import__("ngsolve").BND):
+        if boundaries[element.index] == boundary:
+            vertices.update(int(vertex.nr) + 1 for vertex in element.vertices)
+    return vertices
 
-    Useful as a pre-flight check before calling
-    ``add_kelvin_identification`` -- if this returns True you do not
-    need to add anything (NGSolve's `Periodic` FES will pick up the
-    existing pairs).
+
+def has_kelvin_identification(mesh) -> bool:
+    """Return whether the Kelvin boundaries, rather than any boundary, match.
+
+    A rotational FFAG sector and a Kelvin exterior may both use NGSolve
+    ``PERIODIC`` point pairs.  Treating a non-empty global identification list
+    as Kelvin evidence makes a sector-only mesh look Kelvin-ready, then causes
+    the reduced-potential solvers to apply an invalid exterior constraint.  A
+    valid Kelvin identification must therefore pair every ``kelvin_int``
+    boundary vertex with a ``kelvin_ext`` boundary vertex.
     """
     try:
-        existing = mesh.ngmesh.GetIdentifications()
-        return len(existing) > 0 if hasattr(existing, "__len__") else False
+        inner = _boundary_vertex_ids(mesh, "kelvin_int")
+        outer = _boundary_vertex_ids(mesh, "kelvin_ext")
+        if not inner or not outer:
+            return False
+        pairs = mesh.ngmesh.GetIdentifications()
+        matched_inner: set[int] = set()
+        matched_outer: set[int] = set()
+        for first, second in pairs:
+            # ``GetIdentifications`` returns PointId objects on current
+            # Netgen, whose public numeric member is ``nr`` rather than
+            # Python's ``__int__`` protocol.
+            first = int(first.nr)
+            second = int(second.nr)
+            if first in inner and second in outer:
+                matched_inner.add(first)
+                matched_outer.add(second)
+            elif second in inner and first in outer:
+                matched_inner.add(second)
+                matched_outer.add(first)
+        return matched_inner == inner and matched_outer == outer
     except Exception:
         return False
 
@@ -159,7 +189,7 @@ def add_kelvin_identification(
     *,
     inner_bnd: str = "kelvin_int",
     outer_bnd: str = "kelvin_ext",
-    idnr: int = 1,
+    idnr: int | None = None,
     point_tolerance: Optional[float] = None,
     skip_if_existing: bool = True,
 ) -> dict:
@@ -186,15 +216,16 @@ def add_kelvin_identification(
         inner_bnd: boundary name for the interior Kelvin sphere
             (typically the air sphere outer surface).
         outer_bnd: boundary name for the exterior Kelvin shell.
-        idnr: integration number for `AddPointIdentification`.
-            Default 1 matches the Cubit C++ exporter convention.
+        idnr: identification number for ``AddPointIdentification``.  It
+            defaults to 1 for a mesh without other periodic constraints.  A
+            mesh that already has non-Kelvin identifications (for example an
+            FFAG azimuthal sector) must pass a distinct, explicit number.
         point_tolerance: max distance for vertex-pair acceptance [m].
             Default = max(5% of |kelvin_offset|, 1 mm).  Pairs farther
             than this are dropped (counted as `n_unmatched`).
-        skip_if_existing: if True, return early without adding anything
-            when `mesh.ngmesh.GetIdentifications()` is already non-empty.
-            This avoids corrupting C++-written identifications on the
-            normal Cubit-export path (set False to force re-pair).
+        skip_if_existing: if True, return early only when the Kelvin boundary
+            pairs already exist.  Unrelated rotational or mirror pairs do not
+            suppress the Kelvin operation.
 
     Returns:
         dict with keys:
@@ -241,7 +272,8 @@ def add_kelvin_identification(
             f"inner_bnd / outer_bnd names.")
 
     # --- Skip-if-existing pre-flight ----------------------------------------
-    if skip_if_existing and has_kelvin_identification(mesh):
+    kelvin_already_identified = has_kelvin_identification(mesh)
+    if skip_if_existing and kelvin_already_identified:
         return {
             "n_pairs": 0,
             "n_unmatched": 0,
@@ -250,6 +282,16 @@ def add_kelvin_identification(
             "point_tolerance": 0.0,
             "was_pre_existing": True,
         }
+    existing_pairs = tuple(mesh.ngmesh.GetIdentifications())
+    if idnr is None:
+        if existing_pairs and not kelvin_already_identified:
+            raise ValueError(
+                "mesh already has non-Kelvin point identifications; pass an "
+                "explicit distinct idnr when adding the Kelvin constraint")
+        idnr = 1
+    idnr = int(idnr)
+    if idnr < 1:
+        raise ValueError("Kelvin idnr must be a positive integer")
 
     # --- Auto-detect kelvin_offset if not provided --------------------------
     if kelvin_offset is None:
@@ -269,16 +311,8 @@ def add_kelvin_identification(
 
     # --- Collect vertex PointIndex sets on each side ------------------------
     from ngsolve import BND
-    inner_pids: set = set()
-    outer_pids: set = set()
-    for el in mesh.Elements(BND):
-        bc = boundaries[el.index]
-        if bc == inner_bnd:
-            for v in el.vertices:
-                inner_pids.add(int(v.nr) + 1)   # ngsolve 0-based -> netgen 1-based
-        elif bc == outer_bnd:
-            for v in el.vertices:
-                outer_pids.add(int(v.nr) + 1)
+    inner_pids = _boundary_vertex_ids(mesh, inner_bnd)
+    outer_pids = _boundary_vertex_ids(mesh, outer_bnd)
 
     if not inner_pids or not outer_pids:
         return {
