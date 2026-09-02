@@ -24,6 +24,7 @@
 #include <cmath>
 #include <cstdlib>
 #include <cstring>
+#include <cwchar>
 #include <fstream>
 #include <iomanip>
 #include <io.h>
@@ -1765,6 +1766,43 @@ bool clipboard_set_png(const std::string& latex) {
 }
 
 enum class ClipboardCliTarget { Office, GoogleSlides, Png };
+
+enum class ConversionDestination {
+    Invalid,
+    OfficeClipboard,
+    SlidesClipboard,
+    PngClipboard,
+    PngFile,
+    EmfFile,
+};
+
+bool wide_equal_ci(const std::wstring& left, const wchar_t* right) {
+    return right && _wcsicmp(left.c_str(), right) == 0;
+}
+
+bool wide_ends_with_ci(const std::wstring& value, const wchar_t* suffix) {
+    if (!suffix) return false;
+    const size_t length = std::wcslen(suffix);
+    return value.size() >= length &&
+        _wcsicmp(value.c_str() + value.size() - length, suffix) == 0;
+}
+
+ConversionDestination conversion_destination(const std::wstring& output) {
+    if (wide_equal_ci(output, L"office") ||
+        wide_equal_ci(output, L"powerpoint") ||
+        wide_equal_ci(output, L"word"))
+        return ConversionDestination::OfficeClipboard;
+    if (wide_equal_ci(output, L"slides") ||
+        wide_equal_ci(output, L"google-slides"))
+        return ConversionDestination::SlidesClipboard;
+    if (wide_equal_ci(output, L"png"))
+        return ConversionDestination::PngClipboard;
+    if (wide_ends_with_ci(output, L".png"))
+        return ConversionDestination::PngFile;
+    if (wide_ends_with_ci(output, L".emf"))
+        return ConversionDestination::EmfFile;
+    return ConversionDestination::Invalid;
+}
 
 int copy_tex_cli(const std::string& input, ClipboardCliTarget target) {
     const std::string latex = eqnedit::normalize_tex_paste(input);
@@ -3989,6 +4027,21 @@ int self_test() {
     if (!doc.hadEquationEnvironment || doc.body != "a+b" || !doc.numbered)
         return 13;
     if (eqnedit::normalize_tex_paste("\\[x+y\\]") != "x+y") return 14;
+    if (conversion_destination(L"office") !=
+            ConversionDestination::OfficeClipboard ||
+        conversion_destination(L"POWERPOINT") !=
+            ConversionDestination::OfficeClipboard ||
+        conversion_destination(L"slides") !=
+            ConversionDestination::SlidesClipboard ||
+        conversion_destination(L"png") !=
+            ConversionDestination::PngClipboard ||
+        conversion_destination(L"result.PNG") !=
+            ConversionDestination::PngFile ||
+        conversion_destination(L"result.emf") !=
+            ConversionDestination::EmfFile ||
+        conversion_destination(L"result.svg") !=
+            ConversionDestination::Invalid)
+        return 228;
     const SHORT slashKey = VkKeyScanExW(L'/', GetKeyboardLayout(0));
     const SHORT barKey = VkKeyScanExW(L'|', GetKeyboardLayout(0));
     if (slashKey == -1 || barKey == -1 ||
@@ -4216,6 +4269,41 @@ int render_file(const std::wstring& inputPath, const std::wstring& outputPath,
     if (!read_file(inputPath, input)) return 82;
     const std::wstring tex = wide_utf8(input);
     return png ? render_png(tex, outputPath) : render_emf(tex, outputPath);
+}
+
+/* Public automation is deliberately one source and one destination.  Earlier
+ * releases exposed a separate switch for every combination of literal/file,
+ * clipboard target, and image format.  That made the command spelling harder
+ * to remember than the conversion itself and leaked implementation choices
+ * into radia-mcp.  Keep those switches below as compatibility inputs, while
+ * new callers use `Eqnedit64.exe INPUT OUTPUT` and let OUTPUT name the format. */
+int convert_source(const std::wstring& source, const std::wstring& output) {
+    const ConversionDestination destination = conversion_destination(output);
+    if (destination == ConversionDestination::Invalid) return 94;
+
+    std::string input;
+    if (GetFileAttributesW(source.c_str()) != INVALID_FILE_ATTRIBUTES) {
+        if (!read_file(source, input)) return 82;
+    } else if (wide_equal_ci(source, L"clipboard")) {
+        input = clipboard_get();
+    } else {
+        return 82;
+    }
+
+    switch (destination) {
+        case ConversionDestination::OfficeClipboard:
+            return copy_tex_cli(input, ClipboardCliTarget::Office);
+        case ConversionDestination::SlidesClipboard:
+            return copy_tex_cli(input, ClipboardCliTarget::GoogleSlides);
+        case ConversionDestination::PngClipboard:
+            return copy_tex_cli(input, ClipboardCliTarget::Png);
+        case ConversionDestination::PngFile:
+            return render_png(wide_utf8(input), output);
+        case ConversionDestination::EmfFile:
+            return render_emf(wide_utf8(input), output);
+        default:
+            return 94;
+    }
 }
 
 /* Time a full canvas repaint into an offscreen surface, the same work
@@ -5919,6 +6007,26 @@ std::vector<std::wstring> process_arguments() {
     return args;
 }
 
+int show_cli_help() {
+    const wchar_t* help =
+        L"TeX変換:  Eqnedit64.exe <入力> <出力>\n\n"
+        L"入力\n"
+        L"  equation.tex   UTF-8 TeXファイル\n"
+        L"  clipboard      クリップボード上のTeX\n\n"
+        L"出力\n"
+        L"  office         PowerPoint / Word用クリップボード\n"
+        L"  slides         Google Slides用クリップボード\n"
+        L"  png            PNG画像クリップボード\n"
+        L"  equation.png   PNGファイル\n"
+        L"  equation.emf   EMFファイル\n\n"
+        L"例: Eqnedit64.exe equation.tex office\n"
+        L"例: Eqnedit64.exe equation.tex equation.png\n"
+        L"例: Eqnedit64.exe clipboard png\n\n"
+        L"引数なしでGUIを起動し、.tex一つならGUIで開きます。";
+    MessageBoxW(nullptr, help, L"Eqnedit64 コマンドライン", MB_OK);
+    return 0;
+}
+
 }  // namespace
 
 int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int show) {
@@ -5933,6 +6041,12 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int show) {
      * names the culprit and one that names a victim. */
     HeapSetInformation(nullptr, HeapEnableTerminationOnCorruption, nullptr, 0);
     const std::vector<std::wstring> args = process_arguments();
+    if (args.size() == 1 &&
+        (args[0] == L"--help" || args[0] == L"-h" || args[0] == L"/?"))
+        return show_cli_help();
+    if (args.size() == 2 && args[0].compare(0, 2, L"--") != 0 &&
+        args[1].compare(0, 2, L"--") != 0)
+        return convert_source(args[0], args[1]);
     bool debugRequested = false;
     bool statusTestRequested = false;
     bool visualScaleTestRequested = false;

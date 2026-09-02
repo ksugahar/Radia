@@ -51,7 +51,7 @@ def test_copy_office_uses_utf8_file_contract(tmp_path, monkeypatch) -> None:
     def fake_invoke(command, timeout_s):
         observed["command"] = command
         observed["timeout_s"] = timeout_s
-        observed["tex"] = Path(command[2]).read_text(encoding="utf-8")
+        observed["tex"] = Path(command[1]).read_text(encoding="utf-8")
         return subprocess.CompletedProcess(command, 0, "", "")
 
     monkeypatch.setattr(equation_cli, "_invoke", fake_invoke)
@@ -60,21 +60,21 @@ def test_copy_office_uses_utf8_file_contract(tmp_path, monkeypatch) -> None:
     )
 
     assert result["ok"] is True
-    assert observed["command"][1] == "--copy-tex-file"
+    assert observed["command"][2] == "office"
     assert observed["tex"] == r"\[\frac{x}{y}\]"
     assert "HTML Format" in result["formats"]
     assert "MathML" not in result["formats"]
     assert "MathML Presentation" not in result["formats"]
     assert "CF_ENHMETAFILE" in result["formats"]
-    assert not Path(observed["command"][2]).exists()
+    assert not Path(observed["command"][1]).exists()
 
 
 def test_copy_target_routes_are_explicit(tmp_path, monkeypatch) -> None:
     app = _fake_executable(tmp_path)
-    switches = []
+    destinations = []
 
     def fake_invoke(command, timeout_s):
-        switches.append(command[1])
+        destinations.append(command[2])
         return subprocess.CompletedProcess(command, 0, "", "")
 
     monkeypatch.setattr(equation_cli, "_invoke", fake_invoke)
@@ -86,7 +86,7 @@ def test_copy_target_routes_are_explicit(tmp_path, monkeypatch) -> None:
     )
 
     assert google["ok"] and png["ok"]
-    assert switches == ["--copy-google-slides-file", "--copy-png-file"]
+    assert destinations == ["slides", "png"]
     assert google["formats"] == ["HTML Format", "PNG"]
     assert png["formats"] == ["PNG", "CF_DIBV5"]
 
@@ -98,7 +98,7 @@ def test_render_png_reports_checked_artifact(tmp_path, monkeypatch) -> None:
 
     def fake_invoke(command, timeout_s):
         observed["command"] = command
-        Path(command[3]).write_bytes(b"\x89PNG\r\n\x1a\nfixture")
+        Path(command[2]).write_bytes(b"\x89PNG\r\n\x1a\nfixture")
         return subprocess.CompletedProcess(command, 0, "294 243\n", "")
 
     monkeypatch.setattr(equation_cli, "_invoke", fake_invoke)
@@ -107,7 +107,8 @@ def test_render_png_reports_checked_artifact(tmp_path, monkeypatch) -> None:
     )
 
     assert result["ok"] is True
-    assert observed["command"][1] == "--render-png-file"
+    assert observed["command"][1].endswith(".tex")
+    assert observed["command"][2] == str(output)
     assert result["pixel_size"] == [294, 243]
     assert result["dpi"] == 300
     assert result["font_points"] == 24

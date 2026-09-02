@@ -10,6 +10,16 @@ python -m pip install eqnedit64
 eqnedit64
 ```
 
+The command-line converter always takes one input and one output. The input is
+a UTF-8 TeX file or `clipboard`; the output is `office`, `slides`, `png`, or a
+`.png` / `.emf` file path.
+
+```powershell
+eqnedit64 equation.tex office
+eqnedit64 equation.tex equation.png
+eqnedit64 clipboard png
+```
+
 The wheel provides:
 
 - `eqnedit64.Equation` for structural editing, Tab-slot traversal, undo/redo,
