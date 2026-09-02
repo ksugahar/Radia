@@ -81,13 +81,14 @@ def main():
         print(f"  Registered tools ({len(_REGISTERED)}):")
         for name in sorted(_REGISTERED):
             print(f"    - {name}")
-        # Probe wolframscript availability without requiring it.
-        st = _tools.mathematica_status()
-        if st["available"]:
-            print(f"  wolframscript: OK at {st['path']}")
-            print(f"  Mathematica version: {st['version']}")
+        # Selftest owns import/registration health only. Do not start a Wolfram
+        # kernel here: a single-seat license can block an otherwise healthy CI
+        # lane. Runtime and license health remain explicit in mathematica_status.
+        ws = _tools._find_wolframscript()
+        if ws:
+            print(f"  wolframscript: FOUND at {ws} (runtime probe not run)")
         else:
-            print(f"  wolframscript: NOT AVAILABLE ({st.get('license_msg', 'n/a')})")
+            print("  wolframscript: NOT FOUND")
             print("  (this is fine; server still loads -- tools just return ok=False)")
         print("  PASSED")
         return
