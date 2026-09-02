@@ -31,6 +31,8 @@ if ($signature.Status -ne 'Valid' -or
     throw "Portable executable has no valid Eqnedit64 developer signature: $($signature.Status)"
 }
 
+& (Join-Path $projectRoot 'tests\test_cli_output.ps1') -AppPath $app
+
 & $unitTest
 if ($LASTEXITCODE -ne 0) { throw "TeX document tests failed: $LASTEXITCODE" }
 

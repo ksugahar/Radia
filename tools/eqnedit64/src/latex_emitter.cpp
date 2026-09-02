@@ -22,7 +22,8 @@ static const MapEntry SYMBOL_MAP[] = {
     {0x005B, "["}, {0x005C, "\\backslash "}, {0x005D, "]"},
     {0x005E, " \\wedge "}, {0x005F, "\\_"},
     {0x007B, "\\{"}, {0x007C, "|"}, {0x007D, "\\}"},
-    {0x007E, " \\sim "},
+    /* An ASCII tilde typed as a glyph is not the U+223C relation below. */
+    {0x007E, "\\textasciitilde{}"},
     {0x00AC, " \\neg "}, {0x00B0, "^{\\circ }"}, {0x00B1, " \\pm "},
     {0x00B7, " \\cdot "}, {0x00D7, " \\times "}, {0x00F7, " \\div "},
 };
@@ -855,26 +856,7 @@ void LaTeXEmitter::emitMatrix(const MatrixNode& mat, std::string& out) {
     const char* env = mat.layoutKind == MatrixNode::kAlignedLayout ? "aligned"
                     : mat.layoutKind == MatrixNode::kCasesLayout   ? "cases"
                                                                    : "matrix";
-    int rows = std::max(0, mat.rows);
-    if (mat.layoutKind == MatrixNode::kAlignedLayout) {
-        /* Enter creates a trailing empty row as an editing affordance.  It is
-         * not a mathematical row and the parser intentionally discards it.
-         * Omit such rows here too so the first save is already canonical.
-         * Interior empty rows and ordinary matrix cells remain untouched. */
-        auto row_is_empty = [&](int r) {
-            for (int c = 0; c < mat.cols; ++c) {
-                const int idx = r * mat.cols + c;
-                if (idx >= 0 && idx < static_cast<int>(mat.elements.size())) {
-                    std::string cell;
-                    emitNode(mat.elements[static_cast<size_t>(idx)].get(), cell);
-                    if (cell.find_first_not_of(" \t\r\n") != std::string::npos)
-                        return false;
-                }
-            }
-            return true;
-        };
-        while (rows > 0 && row_is_empty(rows - 1)) --rows;
-    }
+    const int rows = std::max(0, mat.rows);
     out += "\\begin{"; out += env; out += "}\n";
     for (int r = 0; r < rows; r++) {
         for (int c = 0; c < mat.cols; c++) {
@@ -883,13 +865,11 @@ void LaTeXEmitter::emitMatrix(const MatrixNode& mat, std::string& out) {
             std::string cell;
             if (idx < (int)mat.elements.size())
                 emitNode(mat.elements[idx].get(), cell);
-            /* A final empty row in a one-column matrix cannot be
-             * distinguished from an optional final \\ in TeX.  Add the one
-             * canonical empty group needed to make that row structural.
-             * Multi-column rows already carry `&` delimiters, so leaving
-             * their cells visually blank keeps the live source concise. */
-            if (mat.layoutKind != MatrixNode::kAlignedLayout &&
-                mat.cols == 1 && r == rows - 1 &&
+            /* A final empty row in a one-column row container cannot be
+             * distinguished from an optional final \\ in TeX.  Add one
+             * canonical empty group so an Enter-created line survives save
+             * and reopen.  Multi-column rows already carry `&` delimiters. */
+            if (mat.cols == 1 && r == rows - 1 &&
                 cell.find_first_not_of(" \t\r\n") == std::string::npos)
                 out += "{}";
             else

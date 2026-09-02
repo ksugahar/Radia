@@ -156,3 +156,8 @@ jobs:
           if ([Convert]::ToHexString($signature) -ne '89504E470D0A1A0A') {
             throw 'Eqnedit64 CLI output is not PNG'
           }
+
+      - name: Check redirectable command-line diagnostics
+        run: >-
+          pwsh -NoProfile -File tests/test_cli_output.ps1
+          -AppPath build_cmake/Release/Eqnedit64.exe

@@ -22,14 +22,16 @@ INPUT:
 OUTPUT:
   office         editable PowerPoint / Word clipboard data
   slides         Google Slides PNG + HTML clipboard data
-  png            PNG clipboard data
+  clipboard-png  PNG clipboard data (does not create a file)
   equation.png   PNG image file
   equation.emf   EMF image file
 
 Examples:
   eqnedit64 equation.tex office
   eqnedit64 equation.tex equation.png
-  eqnedit64 clipboard png
+  eqnedit64 clipboard clipboard-png
+
+The old OUTPUT name "png" remains accepted as an alias for clipboard-png.
 """
 
 

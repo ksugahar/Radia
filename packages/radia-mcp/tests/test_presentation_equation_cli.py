@@ -86,7 +86,7 @@ def test_copy_target_routes_are_explicit(tmp_path, monkeypatch) -> None:
     )
 
     assert google["ok"] and png["ok"]
-    assert destinations == ["slides", "png"]
+    assert destinations == ["slides", "clipboard-png"]
     assert google["formats"] == ["HTML Format", "PNG"]
     assert png["formats"] == ["PNG", "CF_DIBV5"]
 

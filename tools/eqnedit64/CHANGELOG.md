@@ -23,6 +23,15 @@
   same two-row aligned equation instead of rendering a backslash glyph.
 - Give the synchronized source pane sole ownership of CRLF layout by consuming
   emitter line feeds first, preventing control glyphs and doubled blank lines.
+- Preserve an Enter-created trailing empty row through save/reopen, retain
+  `align`/`eqnarray` alignment columns, treat bare `~` as TeX spacing, and keep
+  comments, document metadata, and unknown command names out of visible math.
+- Keep the differential-geometry palette's `\\flat` and `\\sharp` operators
+  working while genuinely unknown control words remain suppressed.
+- Restore two-file Explorer launch by opening the first `.tex` instead of
+  silently returning conversion error 94. Make native help, version, and CLI
+  errors redirectable, and name PNG clipboard output `clipboard-png` while
+  retaining `png` only as a compatibility alias.
 
 ### Included unreleased 3.0.12 candidate (2026-09-02)
 

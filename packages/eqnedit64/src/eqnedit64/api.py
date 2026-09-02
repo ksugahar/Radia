@@ -11,7 +11,7 @@ _COPY_TARGETS = {
     "office": "office",
     "powerpoint": "office",
     "google-slides": "slides",
-    "png": "png",
+    "png": "clipboard-png",
 }
 _RENDER_SUFFIXES = {".png", ".emf"}
 

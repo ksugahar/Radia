@@ -73,8 +73,8 @@ EMFまたは全画素不透明の32-bit DIBV5を選べます。TeX対応ソフ�
 
 公開CLIは「入力、出力」の二つだけです。オプション名を組み合わせる必要はありません。
 入力はUTF-8 TeXファイルまたは予約語 `clipboard`、出力はファイル名または
-クリップボード用途を表す `office` / `slides` / `png` です。すべてGUIを表示せずに
-変換して終了します。
+クリップボード用途を表す `office` / `slides` / `clipboard-png` です。すべてGUIを
+表示せずに変換して終了します。
 
 ```powershell
 # PowerPoint/Word: 編集可能Office Math + TeX + EMF + 不透明DIBV5
@@ -84,19 +84,23 @@ Eqnedit64.exe equation.tex office
 Eqnedit64.exe equation.tex slides
 
 # 画像だけをクリップボードへ
-Eqnedit64.exe equation.tex png
+Eqnedit64.exe equation.tex clipboard-png
 
 # ファイルへ画像化
 Eqnedit64.exe equation.tex equation.png
 Eqnedit64.exe equation.tex equation.emf
 
 # クリップボード上のTeXをPNGクリップボードへ置換
-Eqnedit64.exe clipboard png
+Eqnedit64.exe clipboard clipboard-png
 ```
 
 `clipboard`入力は登録 `LaTeX` を優先し、なければUnicode文字列を読みます。
 外側の `$...$`、`\[...\]`、`equation` 等はGUI貼り付けと同じ規則で除きます。
-成功0、入力読込み失敗82、空入力83、クリップボード失敗84、出力指定不正94です。
+`png`は`clipboard-png`の旧名として受理しますが、新規スクリプトでは使いません。
+`.tex`を二つ渡した場合はExplorerの複数選択とみなし、変換せず先頭文書をGUIで開きます。
+`--help` / `--version`はコンソールまたはredirect時に標準出力へ書きます。詳しい契約は
+[`docs/COMMAND_LINE.md`](docs/COMMAND_LINE.md) を参照してください。成功0、入力読込み失敗82、
+空入力83、クリップボード失敗84、出力指定不正94です。
 3.0.12より前の長いオプションも既存連携の互換入力として受けますが、新しいスクリプトや
 教材では使用しません。`Eqnedit64.exe --help` で同じ短い形式を確認できます。
 

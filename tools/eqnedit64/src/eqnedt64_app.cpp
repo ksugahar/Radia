@@ -1787,6 +1787,12 @@ enum class ConversionDestination {
     EmfFile,
 };
 
+enum class TwoArgumentAction {
+    Convert,
+    OpenFirstTex,
+    Reject,
+};
+
 bool wide_equal_ci(const std::wstring& left, const wchar_t* right) {
     return right && _wcsicmp(left.c_str(), right) == 0;
 }
@@ -1806,13 +1812,27 @@ ConversionDestination conversion_destination(const std::wstring& output) {
     if (wide_equal_ci(output, L"slides") ||
         wide_equal_ci(output, L"google-slides"))
         return ConversionDestination::SlidesClipboard;
-    if (wide_equal_ci(output, L"png"))
+    if (wide_equal_ci(output, L"clipboard-png") ||
+        wide_equal_ci(output, L"png"))
         return ConversionDestination::PngClipboard;
     if (wide_ends_with_ci(output, L".png"))
         return ConversionDestination::PngFile;
     if (wide_ends_with_ci(output, L".emf"))
         return ConversionDestination::EmfFile;
     return ConversionDestination::Invalid;
+}
+
+TwoArgumentAction classify_two_arguments(const std::wstring& input,
+                                         const std::wstring& output) {
+    if (conversion_destination(output) != ConversionDestination::Invalid)
+        return TwoArgumentAction::Convert;
+    /* Explorer invokes a drop target with every selected path as a positional
+     * argument.  Two .tex documents are therefore an editing request, not a
+     * request to overwrite the second document with an image. */
+    if (wide_ends_with_ci(input, L".tex") &&
+        wide_ends_with_ci(output, L".tex"))
+        return TwoArgumentAction::OpenFirstTex;
+    return TwoArgumentAction::Reject;
 }
 
 int copy_tex_cli(const std::string& input, ClipboardCliTarget target) {
@@ -4231,6 +4251,8 @@ int self_test() {
             ConversionDestination::OfficeClipboard ||
         conversion_destination(L"slides") !=
             ConversionDestination::SlidesClipboard ||
+        conversion_destination(L"clipboard-png") !=
+            ConversionDestination::PngClipboard ||
         conversion_destination(L"png") !=
             ConversionDestination::PngClipboard ||
         conversion_destination(L"result.PNG") !=
@@ -4238,7 +4260,13 @@ int self_test() {
         conversion_destination(L"result.emf") !=
             ConversionDestination::EmfFile ||
         conversion_destination(L"result.svg") !=
-            ConversionDestination::Invalid)
+            ConversionDestination::Invalid ||
+        classify_two_arguments(L"a.tex", L"b.tex") !=
+            TwoArgumentAction::OpenFirstTex ||
+        classify_two_arguments(L"a.tex", L"out.png") !=
+            TwoArgumentAction::Convert ||
+        classify_two_arguments(L"a.tex", L"out.svg") !=
+            TwoArgumentAction::Reject)
         return 228;
     const SHORT slashKey = VkKeyScanExW(L'/', GetKeyboardLayout(0));
     const SHORT barKey = VkKeyScanExW(L'|', GetKeyboardLayout(0));
@@ -6347,23 +6375,57 @@ std::vector<std::wstring> process_arguments() {
     return args;
 }
 
+bool write_standard_text(DWORD stream, const std::wstring& text) {
+    auto write_to = [&](HANDLE handle) {
+        if (!handle || handle == INVALID_HANDLE_VALUE) return false;
+        SetLastError(NO_ERROR);
+        const DWORD kind = GetFileType(handle);
+        if (kind == FILE_TYPE_UNKNOWN && GetLastError() != NO_ERROR)
+            return false;
+        DWORD written = 0;
+        if (kind == FILE_TYPE_CHAR &&
+            WriteConsoleW(handle, text.data(), DWORD(text.size()),
+                          &written, nullptr))
+            return written == text.size();
+        const std::string utf8 = utf8_wide(text);
+        return WriteFile(handle, utf8.data(), DWORD(utf8.size()),
+                         &written, nullptr) && written == utf8.size();
+    };
+
+    if (write_to(GetStdHandle(stream))) return true;
+    const bool attached = AttachConsole(ATTACH_PARENT_PROCESS) != FALSE;
+    const bool result = attached && write_to(GetStdHandle(stream));
+    if (attached) FreeConsole();
+    return result;
+}
+
+int report_cli_error(const std::wstring& message, int exitCode) {
+    const std::wstring text = L"Eqnedit64: " + message + L"\r\n";
+    if (!write_standard_text(STD_ERROR_HANDLE, text))
+        MessageBoxW(nullptr, message.c_str(), L"Eqnedit64 コマンドライン",
+                    MB_OK | MB_ICONERROR);
+    return exitCode;
+}
+
 int show_cli_help() {
     const wchar_t* help =
-        L"TeX変換:  Eqnedit64.exe <入力> <出力>\n\n"
-        L"入力\n"
-        L"  equation.tex   UTF-8 TeXファイル\n"
-        L"  clipboard      クリップボード上のTeX\n\n"
-        L"出力\n"
-        L"  office         PowerPoint / Word用クリップボード\n"
-        L"  slides         Google Slides用クリップボード\n"
-        L"  png            PNG画像クリップボード\n"
-        L"  equation.png   PNGファイル\n"
-        L"  equation.emf   EMFファイル\n\n"
-        L"例: Eqnedit64.exe equation.tex office\n"
-        L"例: Eqnedit64.exe equation.tex equation.png\n"
-        L"例: Eqnedit64.exe clipboard png\n\n"
-        L"引数なしでGUIを起動し、.tex一つならGUIで開きます。";
-    MessageBoxW(nullptr, help, L"Eqnedit64 コマンドライン", MB_OK);
+        L"TeX変換:  Eqnedit64.exe <入力> <出力>\r\n\r\n"
+        L"入力\r\n"
+        L"  equation.tex   UTF-8 TeXファイル\r\n"
+        L"  clipboard      クリップボード上のTeX\r\n\r\n"
+        L"出力\r\n"
+        L"  office         PowerPoint / Word用クリップボード\r\n"
+        L"  slides         Google Slides用クリップボード\r\n"
+        L"  clipboard-png  PNG画像クリップボード（ファイルは作らない）\r\n"
+        L"  equation.png   PNGファイル\r\n"
+        L"  equation.emf   EMFファイル\r\n\r\n"
+        L"例: Eqnedit64.exe equation.tex office\r\n"
+        L"例: Eqnedit64.exe equation.tex equation.png\r\n"
+        L"例: Eqnedit64.exe clipboard clipboard-png\r\n\r\n"
+        L"引数なしでGUIを起動し、.tex一つならGUIで開きます。\r\n"
+        L"png は clipboard-png の旧名として引き続き使えます。\r\n";
+    if (!write_standard_text(STD_OUTPUT_HANDLE, help))
+        MessageBoxW(nullptr, help, L"Eqnedit64 コマンドライン", MB_OK);
     return 0;
 }
 
@@ -6384,9 +6446,21 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int show) {
     if (args.size() == 1 &&
         (args[0] == L"--help" || args[0] == L"-h" || args[0] == L"/?"))
         return show_cli_help();
+    std::wstring openFirstOfMultiple;
     if (args.size() == 2 && args[0].compare(0, 2, L"--") != 0 &&
-        args[1].compare(0, 2, L"--") != 0)
-        return convert_source(args[0], args[1]);
+        args[1].compare(0, 2, L"--") != 0) {
+        switch (classify_two_arguments(args[0], args[1])) {
+            case TwoArgumentAction::Convert:
+                return convert_source(args[0], args[1]);
+            case TwoArgumentAction::OpenFirstTex:
+                openFirstOfMultiple = args[0];
+                break;
+            case TwoArgumentAction::Reject:
+                return report_cli_error(
+                    L"出力は office、slides、clipboard-png、.png、.emf "
+                    L"のいずれかを指定してください。", 94);
+        }
+    }
     bool debugRequested = false;
     bool statusTestRequested = false;
     bool visualScaleTestRequested = false;
@@ -6402,14 +6476,16 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int show) {
     bool clipboardPublishTestRequested = false;
     bool googleSlidesClipboardTestRequested = false;
     bool texclipRequested = false;
-    std::wstring openPath;
-    for (size_t i = 0; i < args.size(); ++i) {
+    std::wstring openPath = openFirstOfMultiple;
+    for (size_t i = 0; i < args.size() && openFirstOfMultiple.empty(); ++i) {
         if (args[i] == L"--version") {
-            MessageBoxW(nullptr,
-                (std::wstring(L"数式エディタ64 ") + kProductVersion +
-                 L"\nビルド: " + kBuildTag +
-                 L"  (" + kBuildTime + L")\n" + module_path()).c_str(),
-                kTitle, MB_OK | MB_ICONINFORMATION);
+            const std::wstring version =
+                std::wstring(L"数式エディタ64 ") + kProductVersion +
+                L"\r\nビルド: " + kBuildTag + L"  (" + kBuildTime +
+                L")\r\n" + module_path() + L"\r\n";
+            if (!write_standard_text(STD_OUTPUT_HANDLE, version))
+                MessageBoxW(nullptr, version.c_str(), kTitle,
+                            MB_OK | MB_ICONINFORMATION);
             return 0;
         }
         if (args[i] == L"--self-test") return self_test();
@@ -6515,6 +6591,8 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int show) {
     if (!openPath.empty() &&
         GetFileAttributesW(openPath.c_str()) != INVALID_FILE_ATTRIBUTES)
         open_document(openPath);
+    if (!openFirstOfMultiple.empty())
+        update_status(L"複数の.texが指定されたため、先頭の文書を開きました");
     if (paintBenchRequested) {
         const int result = paint_benchmark();
         DestroyWindow(hwnd);

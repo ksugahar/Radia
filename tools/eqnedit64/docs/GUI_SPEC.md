@@ -414,7 +414,7 @@ Eqnedit64拡張として、`curl`, `div`, `grad`, `rot`, `tr`, `diag`, `Res`,
 
 ### 6.3 コマンドラインTeX→PNG変換
 
-`Eqnedit64.exe clipboard png` はウィンドウを表示せず、クリップボード上のTeXを
+`Eqnedit64.exe clipboard clipboard-png` はウィンドウを表示せず、クリップボード上のTeXを
 読み取って、登録形式 `PNG` の白背景画像に置き換えて終了する。これは6.3.1の
 共通した「入力、出力」契約における一つの組合せであり、専用オプションではない。
 
@@ -434,20 +434,25 @@ Eqnedit64拡張として、`curl`, `div`, `grad`, `rot`, `tr`, `diag`, `Res`,
 - `<入力>` はUTF-8 `.tex`ファイル、または登録 `LaTeX`／Unicode文字列を読む予約語
   `clipboard` とする。引用符付きTeXリテラルは公開構文に含めない。
 - `<出力>` が `office` の場合は通常コピーと同じOffice Math、TeX、EMF、不透明
-  DIBV5を、`slides` は6.2のPNG+HTMLを、`png`はPNG+DIBV5だけをクリップボードへ
+  DIBV5を、`slides` は6.2のPNG+HTMLを、`clipboard-png`はPNG+DIBV5だけをクリップボードへ
   登録する。
 - `<出力>` の拡張子が `.png` / `.emf` なら、そのファイルへ画像化する。大文字小文字は
   区別しない。
 - `powerpoint` / `word` は `office`、`google-slides` は `slides` の説明的な別名として
-  受けるが、教材では短い正規名を使う。
+  受ける。旧`png`も`clipboard-png`の互換別名として受けるが、ファイル出力との誤認を
+  避けるため、教材、Python package、MCP、新規スクリプトでは明示名だけを使う。
 - 外側の数式環境・区切りは6.4と同様に除く。
 - すべて非表示で動作し、前面ウィンドウ、マウス、キーボードを操作しない。
 - 成功0、入力ファイル読込み失敗82、空入力83、クリップボード失敗84、
   出力指定不正94とする。
 - 引数なしはGUIを起動し、`.tex`一つはGUIで開く。この既存の編集起動は変換構文と
   競合させない。
-- オプションでない位置引数が二つあれば常に変換構文として解釈する。したがって
-  `Eqnedit64.exe a.tex b.tex`は二つの文書をGUIで開く指定ではなく、出力指定不正94となる。
+- `.tex`を二つ渡した場合はExplorerの複数選択／ドロップとして先頭文書をGUIで開き、
+  ステータスへ通知する。二番目を出力先と解釈せず、書き換えない。それ以外の不正な
+  二番目の引数は、console/redirectがあれば標準エラー、なければダイアログで理由を示し、
+  終了コード94とする。
+- `--help` / `--version`はconsole/redirect時にUTF-8標準出力へ書き、グラフィカル起動で
+  利用可能な標準streamがない場合だけダイアログを使う。
 - 旧 `--copy-*` / `--render-*` オプションは互換入力として内部に残すが公開APIではない。
 
 ### 6.4 キャンバスへの貼り付け
@@ -455,7 +460,12 @@ Eqnedit64拡張として、`curl`, `div`, `grad`, `rot`, `tr`, `diag`, `Res`,
 - `CF_UNICODETEXT` を読む。
 - クリップボード全体を囲む `$...$`、`$$...$$`、`\(...\)`、`\[...\]`、
   `equation`、`equation*` だけを外す。
-- `aligned`、行列、場合分け、添字、分数など意味のある内部構造は保持する。
+- `align` / `align*` / `eqnarray`は`aligned`構造へ正規化して`&`整列列を保持する。
+  `aligned`、`gather`、行列、場合分け、添字、分数など意味のある内部構造は保持する。
+- 裸の`~`はTeXの非改行空白として保持し、U+223C `\sim`へ変換しない。相似記号は
+  `\sim`で入力する。
+- エスケープされていない`%`以降のコメント、`\label`、`\nonumber`、`\notag`、`\tag`は描画内容に
+  しない。未知control wordは命令名を本文へ捏造せず、後続の引数だけを編集可能に保つ。
 - TeX区切りがないUnicode文字列も受け入れる。
 - 構造選択がある場合は選択範囲を置換する。
 
@@ -508,7 +518,7 @@ Eqnedit64拡張として、`curl`, `div`, `grad`, `rot`, `tr`, `diag`, `Res`,
 | AUT-11 | 画面外PowerPoint窓の`Application.CommandBars.ExecuteMso("Paste")`が左寄せ18 ptのインライン`m:oMath`と18 ptの末尾文字・挿入点を作り、`m:oMathPara`を作らず、PowerPoint自身の描画で分数・根号・総和・積分・上線・下線が見え、native/Web基準結果が一致する。さらに長さ1/8/16の3行は独立した編集可能`m:oMath`となり、描画左端が4 px以内で一致し、先頭の共通可視プレフィックスが6 px以内である。`Shapes.Paste()`をCtrl+Vの代用にしない | `test_external_paste.ps1` / 研究室ホームページ集中QA |
 | AUT-12 | IrfanView `/clippaste` が非空画像を生成し、試験前のクリップボード全形式を復元する | `test_external_paste.ps1` |
 | AUT-13 | Google スライド用PNGとHTMLが同一画像で、300 dpiかつ24 pt基準の同じ物理寸法を持つ | `test_external_paste.ps1` / `--self-test` |
-| AUT-14 | 公開CLIの`入力 出力`構文がTeXファイルをPNG／EMFへ書き、`clipboard png`がUnicode／登録LaTeXを優先規則どおり非空300 dpi PNG／全画素α=255 DIBV5へ置換する | Eqnedit64 CI / `test_external_paste.ps1` |
+| AUT-14 | 公開CLIの`入力 出力`構文がTeXファイルをPNG／EMFへ書き、`clipboard clipboard-png`がUnicode／登録LaTeXを優先規則どおり非空300 dpi PNG／全画素α=255 DIBV5へ置換する。`--help` / `--version`はredirect可能で、不正出力は標準エラーと94を返し、二つの`.tex`は変換しない | Eqnedit64 CI / `--self-test` / `test_external_paste.ps1` |
 | AUT-15 | 実exeのoperation log v2から本文を漏らさずF12候補を持つLLMレビュー束を生成し、v1互換と選好台帳を検査する | `test_usability_trace.py` / `test_background.ps1` |
 | AUT-16 | `sinx`逐次入力が立体`sin`＋斜体`x`となり、上付き内Backspaceを2回送ると文字、空シェルの順で削除され、積分上下限座標がTeX基準に一致する | `test_edit.py` / `--ui-interaction-test` / `test_layout.py` |
 | AUT-17 | Eqnedit32資源ID 11000--11038の39関数とEqnedit64拡張8関数が、一括入力・逐次入力の双方で立体TeXになる | `test_edit.py` |
