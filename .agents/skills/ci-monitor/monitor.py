@@ -37,6 +37,11 @@ from datetime import datetime
 from typing import Iterable
 
 
+for _stream in (sys.stdout, sys.stderr):
+    if hasattr(_stream, "reconfigure"):
+        _stream.reconfigure(errors="replace")
+
+
 def _gh(args: list[str], timeout: int = 60) -> tuple[int, str, str]:
     """Run gh CLI command, return (returncode, stdout, stderr)."""
     try:
