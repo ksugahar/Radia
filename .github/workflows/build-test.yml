@@ -266,8 +266,8 @@ jobs:
               Remove-Item -Path $_.FullName -Recurse -Force -ErrorAction SilentlyContinue
             }
 
-          python -m pip install mcp pytest-rerunfailures "trimesh>=4.0" --quiet
-          Write-Host "mcp + pytest-rerunfailures + trimesh installed (radia_mcp via PYTHONPATH, not pip-installed)"
+          python -m pip install mcp pytest-rerunfailures "trimesh>=4.0" twine==6.2.0 --quiet
+          Write-Host "mcp + pytest-rerunfailures + trimesh + twine installed (radia_mcp via PYTHONPATH, not pip-installed)"
 
       # ----------------------------------------------------------------
       # Verify NGSolve: exact pyproject-pinned version in the run-local venv.
