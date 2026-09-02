@@ -46,6 +46,8 @@ import inspect
 import sys
 from typing import Optional
 
+from .._shared.hot_reload import register_reload_tool
+
 
 @lru_cache(maxsize=None)
 def _probe_dep(module_name: str) -> dict:
@@ -189,3 +191,10 @@ def register_status_tool(
         f"Call this first if you're unsure whether the server is healthy\n"
         f"or what tools it exposes."
     )
+
+    # Every server that has a status tool also gets ``<server>_reload_code``:
+    # the package is an editable install, and until 2026-09-02 each code
+    # change still meant restarting the server because the running process
+    # kept the old modules, FastMCP kept the old function objects, and the
+    # client kept the tool list it saw at connection.
+    register_reload_tool(mcp, tool_name.removesuffix("_status") + "_reload_code")
