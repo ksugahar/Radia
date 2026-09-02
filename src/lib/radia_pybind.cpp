@@ -518,6 +518,55 @@ int ObjTetrahedron(py::list vertices, py::array_t<double> magnetization) {
 }
 
 /**
+ * @brief Create a tetrahedral constant-current-density source.
+ *
+ * This is intentionally separate from ObjTetrahedron: a Radia polyhedron may
+ * carry either magnetization or current density, never both. It is used for
+ * imported winding packs whose physical source is a meshed current volume.
+ *
+ * @param vertices 4 vertices in the ObjTetrahedron convention
+ * @param current_density Current density vector [Jx, Jy, Jz] in A/m^2
+ * @return Object handle
+ */
+int ObjTetrahedronCurrent(py::list vertices, py::array_t<double> current_density) {
+    if (py::len(vertices) != 4) {
+        throw std::runtime_error("Tetrahedron current source requires exactly 4 vertices");
+    }
+
+    auto [flat_verts, nv] = to_vertex_array(vertices);
+    auto j = current_density.unchecked<1>();
+    if (j.size() != 3) {
+        throw std::runtime_error("current_density must have 3 elements");
+    }
+
+    static const int TET_FACES[4][3] = {
+        {1, 3, 2},
+        {1, 2, 4},
+        {2, 3, 4},
+        {3, 1, 4},
+    };
+    std::vector<int> flatFaces;
+    flatFaces.reserve(12);
+    int faceLengths[4] = {3, 3, 3, 3};
+    for (int face = 0; face < 4; ++face) {
+        for (int vertex = 0; vertex < 3; ++vertex) {
+            flatFaces.push_back(TET_FACES[face][vertex]);
+        }
+    }
+
+    int handle = 0;
+    double M[3] = {0, 0, 0};
+    double M_LinCoef[9] = {0, 0, 0, 0, 0, 0, 0, 0, 0};
+    double J[3] = {j(0), j(1), j(2)};
+    double J_LinCoef[9] = {0, 0, 0, 0, 0, 0, 0, 0, 0};
+    int err = RadObjPolyhdr(&handle, flat_verts.data(), nv,
+                           flatFaces.data(), faceLengths, 4,
+                           M, M_LinCoef, J, J_LinCoef);
+    check_error(err);
+    return handle;
+}
+
+/**
  * @brief Create wedge/prism element from 6 vertices
  *
  * Wedge element with triangular top and bottom faces.
@@ -4913,6 +4962,23 @@ PYBIND11_MODULE(_radia_pybind, m) {
                   Object handle
           )pbdoc");
 
+    m.def("ObjTetrahedronCurrent", &radia_objects::ObjTetrahedronCurrent,
+          py::arg("vertices"), py::arg("current_density"),
+          R"pbdoc(
+              Create a tetrahedral constant-current-density source.
+
+              This source has zero magnetization. It is suitable for a
+              tetrahedralized winding pack with an explicitly prescribed
+              current-density vector.
+
+              Args:
+                  vertices: List of 4 vertex coordinates [[x,y,z], ...]
+                  current_density: Current density vector [Jx, Jy, Jz] in A/m^2
+
+              Returns:
+                  Object handle
+          )pbdoc");
+
     m.def("ObjWedge", &radia_objects::ObjWedge,
           py::arg("vertices"), py::arg("magnetization"),
           R"pbdoc(
@@ -6457,6 +6523,93 @@ PYBIND11_MODULE(_radia_pybind, m) {
 
                  Returns:
                      NGSolve CoefficientFunction (VoxelCoefficient-based)
+             )pbdoc");
+
+    using KelvinRadiaVectorPotential =
+        radia::ngsolve_bridge::KelvinRadiaVectorPotentialCoefficient;
+    py::class_<KelvinRadiaVectorPotential,
+               std::shared_ptr<KelvinRadiaVectorPotential>,
+               ngfem::CoefficientFunction>(m, "KelvinRadiaVectorPotential")
+        .def(py::init<int, std::array<double, 3>, double,
+                      std::array<double, 3>>(),
+             py::arg("radia_obj"), py::arg("kelvin_center"),
+             py::arg("radius"),
+             py::arg("physical_center") = std::array<double, 3>{0.0, 0.0, 0.0},
+             R"pbdoc(
+                 Kelvin-pulled-back vector potential of a compact Radia source.
+
+                 This is the exterior half of a two-sphere Kelvin geometry.
+                 It evaluates the physical Radia vector potential at the
+                 inverted point around ``physical_center`` and applies the
+                 exact 1-form Householder pullback around ``kelvin_center``.
+                 Combine it with ``RadiaField(obj, "a")`` through
+                 ``mesh.MaterialCF``; do not use it outside the Kelvin material.
+
+                 Args:
+                     radia_obj: compact current-source Radia object handle
+                     kelvin_center: centre of the translated computational sphere
+                     radius: Kelvin sphere radius in meters
+                     physical_center: centre of the physical inversion sphere
+             )pbdoc");
+
+    using KelvinRadiaFluxDensity =
+        radia::ngsolve_bridge::KelvinRadiaFluxDensityCoefficient;
+    py::class_<KelvinRadiaFluxDensity,
+               std::shared_ptr<KelvinRadiaFluxDensity>,
+               ngfem::CoefficientFunction>(m, "KelvinRadiaFluxDensity")
+        .def(py::init<int, std::array<double, 3>, double,
+                      std::array<double, 3>>(),
+             py::arg("radia_obj"), py::arg("kelvin_center"),
+             py::arg("radius"),
+             py::arg("physical_center") = std::array<double, 3>{0.0, 0.0, 0.0},
+             R"pbdoc(
+                 Kelvin-pulled-back magnetic flux density of a compact Radia source.
+
+                 This applies the exact covariant 2-form Kelvin transform and
+                 is intended for a divergence-conforming HDiv source projection.
+                 Combine it with ``RadiaField(obj, "b")`` through ``mesh.MaterialCF``;
+                 do not use it outside the Kelvin material.
+             )pbdoc");
+
+    using KelvinRadiaFieldStrength =
+        radia::ngsolve_bridge::KelvinRadiaFieldStrengthCoefficient;
+    py::class_<KelvinRadiaFieldStrength,
+               std::shared_ptr<KelvinRadiaFieldStrength>,
+               ngfem::CoefficientFunction>(m, "KelvinRadiaFieldStrength")
+        .def(py::init<int, std::array<double, 3>, double,
+                      std::array<double, 3>>(),
+             py::arg("radia_obj"), py::arg("kelvin_center"),
+             py::arg("radius"),
+             py::arg("physical_center") = std::array<double, 3>{0.0, 0.0, 0.0},
+             R"pbdoc(
+                 Kelvin-pulled-back magnetic field strength of a compact Radia source.
+
+                 This applies the orientation-aware twisted 1-form Kelvin
+                 transform.  Combine it with ``RadiaField(obj, "h")`` through
+                 ``mesh.MaterialCF`` and use the result as the H source of a
+                 reduced-Omega weak form.  Do not use it outside the Kelvin
+                  material.
+              )pbdoc");
+
+    using KelvinRadiaScalarPotential =
+        radia::ngsolve_bridge::KelvinRadiaScalarPotentialCoefficient;
+    py::class_<KelvinRadiaScalarPotential,
+               std::shared_ptr<KelvinRadiaScalarPotential>,
+               ngfem::CoefficientFunction>(m, "KelvinRadiaScalarPotential")
+        .def(py::init<int, std::array<double, 3>, double,
+                      std::array<double, 3>>(),
+             py::arg("radia_obj"), py::arg("kelvin_center"),
+             py::arg("radius"),
+             py::arg("physical_center") = std::array<double, 3>{0.0, 0.0, 0.0},
+             R"pbdoc(
+                 Kelvin-pulled-back scalar magnetic potential of a Radia source.
+
+                 This is the orientation-aware twisted-0-form counterpart of
+                 ``KelvinRadiaFieldStrength``. Combine it with
+                 ``RadiaField(obj, "phi")`` through ``mesh.MaterialCF`` only
+                 after verifying that the physical source obeys
+                 ``H = -grad(phi)`` on the source/total interface. It supplies
+                 the potential jump for a mixed total/reduced Omega solve.
              )pbdoc");
 
     // ================================================================

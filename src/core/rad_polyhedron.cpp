@@ -3218,6 +3218,11 @@ void radTPolyhedron::B_comp_frJ(radTField* pField)
 	}
 	if(pField->FieldKey.B_ || pField->FieldKey.H_)
 	{
+		// radTField stores current-source B/H internally in A/m. The public
+		// field formatter applies mu_0 for a B query, exactly as radTRecCur
+		// does. ConstForJ is correct for A [T m], but using it directly here
+		// would store B [T] and apply mu_0 a second time on output.
+		const double InternalFieldScale = 1.0/(4.0*Pi);
 		TVector3d vB(0,0,0);
 		if(pJ_LinCoef != 0)
 		{
@@ -3225,9 +3230,9 @@ void radTPolyhedron::B_comp_frJ(radTField* pField)
 			TVector3d vQc(pJ_LinCoef->Str1.z - pJ_LinCoef->Str2.y, 
 						  pJ_LinCoef->Str2.x - pJ_LinCoef->Str0.z, 
 						  pJ_LinCoef->Str0.y - pJ_LinCoef->Str1.x);
-			vB += ConstForJ*(vSumFaces1 - ((0.5*sumFaces2)*vQc));
+			vB += InternalFieldScale*(vSumFaces1 - ((0.5*sumFaces2)*vQc));
 		}
-		vB += ConstForJ*(Jmain^vSumFaces0);
+		vB += InternalFieldScale*(Jmain^vSumFaces0);
 		
 		pField->B += vB;
 		pField->H += vB;
