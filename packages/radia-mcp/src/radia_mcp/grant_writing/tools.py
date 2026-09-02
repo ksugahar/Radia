@@ -726,7 +726,9 @@ def grant_writing_adjacent_reviewer_readability_check(text: str) -> dict:
         re.compile(r"(?:同一|共通)の?設計量で採否(?:する|を判断する)"),
     )
     applicant_internal_patterns = (
-        re.compile(r"(?:自研究室|自機関)のコード系譜"),
+        re.compile(
+            r"(?:コード|プログラム|ソースコード|実装)(?:の)?(?:系譜|譜系)"
+        ),
         re.compile(
             r"(?:[一二三四五六七八九十0-9]+名の)?資産を"
             r"[^。！？\n]{0,32}(?:結び|移す)"
@@ -880,13 +882,14 @@ def grant_writing_adjacent_reviewer_readability_check(text: str) -> dict:
             "applicant_internal_abstraction",
             first["excerpt"],
             (
-                "コードの系譜や資産の移動という研究室内の比喩では、隣接分野の"
-                "審査者が実際の制約・操作・研究上の発展を特定しにくい。"
+                "コードやプログラムの『系譜（譜系）』、資産の移動という"
+                "比喩では、隣接分野の審査者が実際の制約・操作・研究上の"
+                "発展を特定しにくい。"
             ),
             (
-                "『既存コードで扱える手法に限られる』『誘導加熱へ展開し、"
-                "判定則を加速器設計へ発展する』のように、対象、制約、操作、"
-                "到達先を観察可能な語で書く。"
+                "比較可能範囲なら『既存プログラム』『ソースコード』『既存コードで"
+                "扱える手法』、独立性なら『独立に開発された二つの実装』のように、"
+                "対象、制約、操作、到達先を観察可能な語で書く。"
             ),
             examples=applicant_internal_abstractions[:5],
         )
