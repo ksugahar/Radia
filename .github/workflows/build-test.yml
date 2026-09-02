@@ -3,27 +3,8 @@ name: Radia Native Release
 on:
   push:
     tags: ['v*']
-    paths-ignore:
-      - '**/*.md'
-      - 'docs/**'
-      - 'LICENSE'
-      - 'tools/eqnedit64/**'
-      - 'packages/eqnedit64/**'
-      - 'packages/radia-mcp/**'
-      - 'packages/cubit-mesh-export/**'
-      - 'packages/radia-optuna/**'
-      - '.github/workflows/**'
-      - 'tests/test_release_workflow_ref_gate.py'
-      - 'tests/test_release_quad_optuna_candidate.py'
-      - 'tools/release_quad.py'
-      - '.agents/skills/release-eqnedit64/**'
   workflow_dispatch:
     inputs:
-      run_golden:
-        description: 'Compatibility alias: run validation_test/ without @pytest.mark.slow'
-        required: false
-        default: false
-        type: boolean
       run_validation_test:
         description: 'Run validation_test/ (manual heavy validation gate)'
         required: false
@@ -56,75 +37,21 @@ jobs:
     # to its natural end is the only way to capture full stderr
     # for diagnosis without chasing the next cliff.
 
-    # The exact NGSolve/Netgen paths are replaced below with a per-run venv.
-    # These defaults only keep pre-venv policy steps independent of runner state.
     env:
-      NGSOLVE_ROOT: 'C:\Program Files\Python312\Lib\site-packages\ngsolve'
-      NGSOLVE_DIR: 'C:\Program Files\Python312\Lib\site-packages\ngsolve\cmake'
-      Netgen_DIR: 'C:\Program Files\Python312\Lib\site-packages\netgen\cmake'
       # Was hardcoded 'Cubit 2025.3\bin' until 2026-05-25. Build.ps1 and
       # cubit_plugin scripts now auto-discover the available installation
       # via tools/find_cubit.ps1, so this env var is informational. Set
       # CUBIT_INSTALL_DIR to pin a specific install on the self-hosted
       # runner if needed.
       CUBIT_PATH: ''
-      # Heavy validation tests are an explicit manual gate. Main, PR, and
-      # release-tag CI stay fast by default so the self-hosted runner does
-      # not spend hours revalidating the same SHA.
+      # Heavy validation tests are an explicit manual gate. Release-tag CI
+      # does not spend hours revalidating numerical evidence by default.
       RUN_SLOW_TESTS: ${{ github.event_name == 'workflow_dispatch' && inputs.full_slow == true }}
-      RUN_GOLDEN_TESTS: ${{ github.event_name == 'workflow_dispatch' && (inputs.run_golden == true || inputs.full_slow == true) }}
-      RUN_VALIDATION_TESTS: ${{ github.event_name == 'workflow_dispatch' && (inputs.run_validation_test == true || inputs.run_golden == true || inputs.full_slow == true) }}
+      RUN_VALIDATION_TESTS: ${{ github.event_name == 'workflow_dispatch' && (inputs.run_validation_test == true || inputs.full_slow == true) }}
       RADIA_CI_OUTPUT_DIR: 'C:\temp\radia-ci-output-${{ github.run_id }}-${{ github.run_attempt }}'
 
     steps:
       - uses: actions/checkout@v4
-
-      - name: Cancel stale main push before build/test
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        shell: pwsh
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          $headers = @{
-            Authorization = "Bearer $env:GITHUB_TOKEN"
-            Accept = "application/vnd.github+json"
-            "X-GitHub-Api-Version" = "2022-11-28"
-          }
-          $repo = "${{ github.repository }}"
-          $refUri = "https://api.github.com/repos/$repo/git/ref/heads/main"
-          $tip = $null
-          foreach ($attempt in 1..3) {
-            try {
-              $mainRef = Invoke-RestMethod -Method Get -Uri $refUri -Headers $headers
-              $tip = $mainRef.object.sha
-              break
-            } catch {
-              Write-Host "::warning::GitHub API ref lookup attempt $attempt/3 failed: $($_.Exception.Message)"
-              if ($attempt -lt 3) {
-                Start-Sleep -Seconds (5 * $attempt)
-              }
-            }
-          }
-          if (-not $tip) {
-            Write-Host "::warning::Main-ref freshness check unavailable; continuing because stale-run cancellation is an optimization."
-            $tip = $env:GITHUB_SHA
-          }
-          Write-Host "origin/main tip: $tip"
-          Write-Host "this run sha: $env:GITHUB_SHA"
-          if ($tip -ne $env:GITHUB_SHA) {
-            Write-Host "::warning::Stale main CI: $env:GITHUB_SHA is no longer origin/main ($tip). Cancelling before build/test."
-            $uri = "https://api.github.com/repos/$repo/actions/runs/${{ github.run_id }}/cancel"
-            Invoke-RestMethod -Method Post -Uri $uri -Headers $headers | Out-Null
-
-            $deadline = (Get-Date).AddSeconds(90)
-            while ((Get-Date) -lt $deadline) {
-              Start-Sleep -Seconds 5
-              Write-Host "Waiting for GitHub to cancel this stale run..."
-            }
-            Write-Host "::error::Cancellation request did not stop the stale run in time."
-            exit 1
-          }
-          Write-Host "This main CI is current; continuing."
 
       # Release workflows consume this artifact from the exact triggering CI
       # run.  Looking up tags by SHA alone is racy: a successful main CI can
@@ -266,8 +193,8 @@ jobs:
               Remove-Item -Path $_.FullName -Recurse -Force -ErrorAction SilentlyContinue
             }
 
-          python -m pip install mcp pytest-rerunfailures "trimesh>=4.0" twine==6.2.0 --quiet
-          Write-Host "mcp + pytest-rerunfailures + trimesh + twine installed (radia_mcp via PYTHONPATH, not pip-installed)"
+          python -m pip install mcp "trimesh>=4.0" twine==6.2.0 --quiet
+          Write-Host "mcp + trimesh + twine installed (radia_mcp via PYTHONPATH, not pip-installed)"
 
       # ----------------------------------------------------------------
       # Verify NGSolve: exact pyproject-pinned version in the run-local venv.
@@ -409,20 +336,9 @@ jobs:
           python -c "import shutil,subprocess; p=shutil.which('git'); assert p, 'git is absent from pytest PATH'; subprocess.run([p,'--version'],check=True)"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           Write-Host "Running lightweight pytest gate from tests/..."
-          # --reruns 2: retry transient failures up to 2x.  Commit
-          # a61cecdf added pytest-rerunfailures as a dependency
-          # specifically for test_omega_reduced_omega flakiness but
-          # never enabled the flag.  v4.64.0 main push CI hit the same
-          # test_B_accuracy_inside_iron flake (2026-05-20 02:34 JST)
-          # so the flag is wired up here.
-          # L0 (2026-05-30): -r aR prints per-test RERUN/FAIL summary
-          # so flaky tests are visible IN the log even when the run
-          # is green via reruns.  L1: Tee pytest stdout to a file so
-          # that a hard crash (no junit XML written, as happened on
-          # commits e7bae1db / 0f8c3528 / a91e0a5b on 2026-05-30 where
-          # the artifact upload step succeeded with 0 files) still
-          # leaves a parseable log for the "Annotate test failures"
-          # step below.
+          # Tee pytest stdout so a hard crash that prevents JUnit creation
+          # still leaves a diagnostic log. Deterministic failures are not
+          # retried; one failure is evidence that the release is not ready.
           $pytestArgs = @(
             'tests/',
             '--ignore=tests/mcp_server',
@@ -437,9 +353,7 @@ jobs:
             '-r', 'aR',
             "--junitxml=$env:RADIA_CI_OUTPUT_DIR\test-results.xml",
             '--durations=50',
-            '--durations-min=1.0',
-            '--reruns', '2',
-            '--reruns-delay', '1'
+            '--durations-min=1.0'
           )
           $markerExpr = 'not golden'
           if ($env:RUN_SLOW_TESTS -ne 'true') {
@@ -497,99 +411,16 @@ jobs:
           }
 
       # ----------------------------------------------------------------
-      # Panel tests (NGSolve + PySide6, no Cubit).  Runs:
-      #   validation_test/panels/test_motor_transient_golden.py     (3 tests)
-      #   validation_test/panels/test_motor_lamination_golden.py    (4 tests)
-      #   validation_test/panels/test_panel_output_health.py        (5 tests)
-      #   validation_test/panels/test_combo_wheel_guard.py          (6 tests, parametrized)
-      # PySide6 tests added 2026-05-30 once the Qt6 DLL preload in
-      # tests/conftest.py made `from PySide6.QtCore import ...` survive
-      # the MKL bin add_dll_directory (was 0xc0000139 on LAB pytest).
-      # ----------------------------------------------------------------
-      - name: Run panel smoke tests
-        if: success() && env.RUN_VALIDATION_TESTS == 'true'
-        # Panel smoke tests: UX/output health only. Motor golden tests
-        # are separated into the manual golden gate below.
-        # Re-enabled 2026-05-28: the tests pass `--linear-solver sparsecholesky`
-        # (ngsolve built-in, no MKL) -- identical direct-solver solution to the
-        # production pardiso default, but immune to the MKL PARDISO threading-
-        # layer load that FATALs under the pytest subprocess.  (The CST Studio
-        # Suite unversioned-MKL-DLL shadow that originally broke these in
-        # v4.80.4 was also removed from the runner.)  The 3 TaskManager-import
-        # NameErrors the disabled period hid were fixed in the same change.
-        shell: pwsh
-        working-directory: ${{ github.workspace }}
-        env:
-          PYTHONPATH: '${{ github.workspace }}\src;${{ github.workspace }}\src\radia'
-          PYTHONIOENCODING: utf-8
-        run: |
-          Write-Host "Running motor panel smoke tests..."
-          python -c "import importlib.util, sys; sys.exit(0 if importlib.util.find_spec('PySide6') else 2)"
-          if ($LASTEXITCODE -eq 2) {
-            Write-Host "PySide6 is not installed; skipping legacy Qt panel smoke tests."
-            exit 0
-          }
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          # Ensure C:\temp exists for the test fixtures
-          New-Item -ItemType Directory -Force -Path C:\temp | Out-Null
-          # L0+L1 (2026-05-30): -r aR + Tee to stdout file, same
-          # pattern as "Run simple tests" above.  See note there.
-          python -m pytest validation_test/panels/test_panel_output_health.py `
-                            validation_test/panels/test_combo_wheel_guard.py `
-            -v --tb=short -r aR `
-            --junitxml="$env:RADIA_CI_OUTPUT_DIR\panel-test-results.xml" `
-            --durations=25 --durations-min=0.5 `
-            --reruns 1 --reruns-delay 1 `
-            2>&1 | Tee-Object -FilePath "$env:RADIA_CI_OUTPUT_DIR\pytest-panel-stdout.log"
-          $rc = $LASTEXITCODE
-          Write-Host "pytest panel smoke exit=$rc"
-          if ($rc -ne 0) {
-            Write-Host "::error::Panel smoke tests failed (rc=$rc) -- see Annotate step for the test list"
-            "$rc" | Out-File -Encoding ascii "$env:RADIA_CI_OUTPUT_DIR\pytest-panel-exit.txt"
-            exit $rc
-          }
-
-      - name: Run panel golden tests
-        if: success() && env.RUN_GOLDEN_TESTS == 'true'
-        shell: pwsh
-        working-directory: ${{ github.workspace }}
-        env:
-          PYTHONPATH: '${{ github.workspace }}\src;${{ github.workspace }}\src\radia'
-          PYTHONIOENCODING: utf-8
-        run: |
-          Write-Host "Running motor panel golden tests..."
-          New-Item -ItemType Directory -Force -Path C:\temp | Out-Null
-          python -m pytest validation_test/panels/test_motor_transient_golden.py `
-                            validation_test/panels/test_motor_lamination_golden.py `
-            -v --tb=short -r aR `
-            --junitxml="$env:RADIA_CI_OUTPUT_DIR\panel-golden-test-results.xml" `
-            --durations=25 --durations-min=0.5 `
-            --reruns 1 --reruns-delay 1 `
-            2>&1 | Tee-Object -FilePath "$env:RADIA_CI_OUTPUT_DIR\pytest-panel-golden-stdout.log"
-          $rc = $LASTEXITCODE
-          Write-Host "pytest panel golden exit=$rc"
-          if ($rc -ne 0) {
-            Write-Host "::error::Panel golden tests failed (rc=$rc) -- see Annotate step for the test list"
-            "$rc" | Out-File -Encoding ascii "$env:RADIA_CI_OUTPUT_DIR\pytest-panel-golden-exit.txt"
-            exit $rc
-          }
-
-      # ----------------------------------------------------------------
-      # L1 (2026-05-30): Surface failed / flaky tests as GitHub
-      # Actions annotations so they show inline in the workflow page
-      # WITHOUT requiring the user to download the test-results.xml
-      # artifact.  Parses both junit XMLs (if present) and the stdout
-      # logs (fallback if pytest crashed before writing the XML, which
-      # was the silent-fail mode on 2026-05-30 commits e7bae1db /
-      # 0f8c3528 / a91e0a5b -- the upload-artifact step succeeded with
-      # 0 files because no XML was ever written).
+      # Surface failed tests as GitHub annotations without requiring an
+      # artifact download. Stdout remains the fallback for a pytest crash
+      # before JUnit creation.
       #
       # Output:
       #   ::error::tests/foo.py::test_bar -- <message>      (failed)
       #   ::warning::FLAKY tests/foo.py::test_bar           (passed after rerun)
       #   ::error::pytest crashed without writing junit XML -- see stdout log
       # ----------------------------------------------------------------
-      - name: Annotate test failures and reruns
+      - name: Annotate test failures
         if: always()
         shell: pwsh
         working-directory: ${{ github.workspace }}
@@ -597,9 +428,7 @@ jobs:
           $found = $false
           foreach ($pair in @(
             @{ xml = "$env:RADIA_CI_OUTPUT_DIR\test-results.xml";              log = "$env:RADIA_CI_OUTPUT_DIR\pytest-basic-stdout.log";        label = 'simple' },
-            @{ xml = "$env:RADIA_CI_OUTPUT_DIR\golden-test-results.xml";       log = "$env:RADIA_CI_OUTPUT_DIR\pytest-golden-stdout.log";       label = 'golden' },
-            @{ xml = "$env:RADIA_CI_OUTPUT_DIR\panel-test-results.xml";        log = "$env:RADIA_CI_OUTPUT_DIR\pytest-panel-stdout.log";        label = 'panel-smoke' },
-            @{ xml = "$env:RADIA_CI_OUTPUT_DIR\panel-golden-test-results.xml"; log = "$env:RADIA_CI_OUTPUT_DIR\pytest-panel-golden-stdout.log"; label = 'panel-golden' }
+            @{ xml = "$env:RADIA_CI_OUTPUT_DIR\golden-test-results.xml";       log = "$env:RADIA_CI_OUTPUT_DIR\pytest-golden-stdout.log";       label = 'validation' }
           )) {
             $xmlPath = $pair.xml
             $logPath = $pair.log
@@ -609,12 +438,11 @@ jobs:
               Write-Host "=== Annotating from $xmlPath ($label) ==="
               try {
                 $xml = [xml](Get-Content $xmlPath -Encoding utf8 -Raw)
-                $fails = 0; $errors = 0; $reruns = 0
+                $fails = 0; $errors = 0
                 foreach ($tc in $xml.SelectNodes('//testcase')) {
                   $cn = $tc.classname; $nm = $tc.name
                   $f = $tc.SelectSingleNode('failure')
                   $e = $tc.SelectSingleNode('error')
-                  $r = $tc.SelectNodes('rerun')
                   if ($f) {
                     $fails++
                     $msg = ($f.message -replace "`r?`n", ' ').Substring(0, [Math]::Min(200, $f.message.Length))
@@ -625,12 +453,8 @@ jobs:
                     $msg = ($e.message -replace "`r?`n", ' ').Substring(0, [Math]::Min(200, $e.message.Length))
                     Write-Host "::error::[$label ERROR] ${cn}::${nm} -- $msg"
                   }
-                  if ($r -and $r.Count -gt 0 -and -not $f -and -not $e) {
-                    $reruns++
-                    Write-Host "::warning::[$label FLAKY] ${cn}::${nm} -- passed after $($r.Count) rerun(s)"
-                  }
                 }
-                Write-Host "  $label summary: $fails fail, $errors error, $reruns flaky-but-recovered"
+                Write-Host "  $label summary: $fails fail, $errors error"
               } catch {
                 Write-Host "::error::Failed to parse ${xmlPath}: $($_.Exception.Message)"
               }
@@ -664,12 +488,8 @@ jobs:
           foreach ($f in @(
             "$env:RADIA_CI_OUTPUT_DIR\test-results.xml",
             "$env:RADIA_CI_OUTPUT_DIR\golden-test-results.xml",
-            "$env:RADIA_CI_OUTPUT_DIR\panel-test-results.xml",
-            "$env:RADIA_CI_OUTPUT_DIR\panel-golden-test-results.xml",
             "$env:RADIA_CI_OUTPUT_DIR\pytest-basic-stdout.log",
             "$env:RADIA_CI_OUTPUT_DIR\pytest-golden-stdout.log",
-            "$env:RADIA_CI_OUTPUT_DIR\pytest-panel-stdout.log",
-            "$env:RADIA_CI_OUTPUT_DIR\pytest-panel-golden-stdout.log",
             "$env:RADIA_CI_OUTPUT_DIR\ci-context.json"
           )) {
             if (Test-Path $f) {
@@ -690,12 +510,8 @@ jobs:
           path: |
             ${{ env.RADIA_CI_OUTPUT_DIR }}\test-results.xml
             ${{ env.RADIA_CI_OUTPUT_DIR }}\golden-test-results.xml
-            ${{ env.RADIA_CI_OUTPUT_DIR }}\panel-test-results.xml
-            ${{ env.RADIA_CI_OUTPUT_DIR }}\panel-golden-test-results.xml
             ${{ env.RADIA_CI_OUTPUT_DIR }}\pytest-basic-stdout.log
             ${{ env.RADIA_CI_OUTPUT_DIR }}\pytest-golden-stdout.log
-            ${{ env.RADIA_CI_OUTPUT_DIR }}\pytest-panel-stdout.log
-            ${{ env.RADIA_CI_OUTPUT_DIR }}\pytest-panel-golden-stdout.log
             ${{ env.RADIA_CI_OUTPUT_DIR }}\ci-context.json
           retention-days: 30
 
