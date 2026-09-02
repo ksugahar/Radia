@@ -1485,6 +1485,89 @@ def place_text_clear(ax, s, *, nx: int = 11, ny: int = 7,
     fig.canvas.draw()
     return probe
 
+
+def place_label_arrow(ax, s, xy, *, region=None, arrow_kw=None, **text_kw):
+    """A label placed where nothing is drawn, with an arrow to the point xy.
+
+    On a slide a curve is better named where it is than in a legend key, and
+    a feature ("the ladders leave here") can only be named this way. The text
+    goes through place_text_clear; ``region`` keeps it near the feature. The
+    arrow leaves from the side of the text box nearest ``xy`` so it never
+    crosses its own label, and its tail is stored in axes fraction, so it
+    survives saving at another dpi than the figure was measured at.
+
+    Args:
+        ax: the Axes.
+        s: the label text.
+        xy: the target, in data coordinates.
+        region: ``(x0, x1, y0, y1)`` in axes fraction, passed to
+            place_text_clear.
+        arrow_kw: overrides for the ``arrowprops`` (style, width, colour).
+        **text_kw: passed to ``ax.text`` (color, fontsize, ...). The arrow
+            takes the text colour unless ``arrow_kw`` says otherwise.
+
+    Returns:
+        ``(text, annotation)``.
+
+    Example:
+        >>> place_label_arrow(ax, "ladders leave here", (3e4, 250.0),
+        ...                   color="0.25", region=(0.06, 0.45, 0.30, 0.55))
+    """
+    t = place_text_clear(ax, s, region=region, **text_kw)
+    fig = ax.get_figure()
+    fig.canvas.draw()
+    bb = t.get_window_extent()
+    tx, ty = ax.transData.transform(xy)
+    sides = (((bb.x0 + bb.x1) / 2, bb.y0 - 3), ((bb.x0 + bb.x1) / 2, bb.y1 + 3),
+             (bb.x0 - 3, (bb.y0 + bb.y1) / 2), (bb.x1 + 3, (bb.y0 + bb.y1) / 2))
+    sx, sy = min(sides, key=lambda p: (p[0] - tx) ** 2 + (p[1] - ty) ** 2)
+    fx, fy = ax.transAxes.inverted().transform((sx, sy))
+    props = dict(arrowstyle="->", lw=1.8, color=text_kw.get("color", "k"),
+                 shrinkA=0, shrinkB=5)
+    if arrow_kw:
+        props.update(arrow_kw)
+    ann = ax.annotate("", xy=xy, xycoords="data", xytext=(float(fx), float(fy)),
+                      textcoords="axes fraction", arrowprops=props)
+    return t, ann
+
+
+def place_legend_clear(ax, *, locs=("lower left", "lower right", "upper left",
+                                    "upper right", "center left", "center right"),
+                       outside=True, **legend_kw):
+    """Put the legend where it covers no drawn content, or say that it cannot.
+
+    Tries ``locs`` in order and keeps the first that check_legend_overlap
+    accepts. When no corner is clear the choice is explicit: with
+    ``outside=True`` the legend goes to the right of the axes and a warning
+    says so, because a canvas saved at a fixed size cuts that legend off and
+    the figure silently loses its key (a four-entry legend on a slide figure
+    did exactly that, unnoticed, for a week); with ``outside=False`` no
+    legend is drawn and None is returned, so the caller can name the curves
+    in place with place_label_arrow instead.
+
+    Returns:
+        The location string, ``"outside"``, or None.
+    """
+    import warnings
+
+    fig = ax.get_figure()
+    for loc in locs:
+        leg = ax.legend(loc=loc, frameon=False, **legend_kw)
+        fig.canvas.draw()
+        if not check_legend_overlap(ax):
+            return loc
+        leg.remove()
+    if not outside:
+        return None
+    warnings.warn(
+        "place_legend_clear: no corner is clear, so the legend is outside the "
+        "axes, where a fixed-size canvas will cut it off. Name the curves in "
+        "place with place_label_arrow instead.", stacklevel=2)
+    ax.legend(loc="center left", bbox_to_anchor=(1.01, 0.5), frameon=False,
+              **legend_kw)
+    fig.canvas.draw()
+    return "outside"
+
 # ============================================================
 # ROM-paper helpers (Cauer / Multi-K / Schur-F asymptote plots)
 # ============================================================

@@ -109,6 +109,15 @@ from ._deck_integrity import (  # noqa: F401
     presentation_check_duplicate_slide_images,
 )
 
+# Generated decks (2026-09-02, a Gemini Notebook deck beside the IGTE'26
+# deck): a deck that is one picture per slide is a reference for how to show
+# things, not a deliverable; and markdown emphasis a converter passed through
+# as text is repaired into bold runs.
+from ._generated_decks import (  # noqa: F401
+    presentation_check_raster_slides,
+    presentation_apply_bold_markers,
+)
+
 
 _HERE = pathlib.Path(__file__).resolve().parent
 KNOWLEDGE = _HERE
