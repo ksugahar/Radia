@@ -65,6 +65,21 @@ _INPUT_COMMAND = re.compile(r"\\(?:input|include)\{([^{}]+)\}")
 _INPUT_MAX_DEPTH = 3
 
 
+def _split_tex_comment(line: str) -> tuple[str, str]:
+    """Split at the first unescaped TeX comment marker."""
+    for index, char in enumerate(line):
+        if char != "%":
+            continue
+        backslashes = 0
+        cursor = index - 1
+        while cursor >= 0 and line[cursor] == "\\":
+            backslashes += 1
+            cursor -= 1
+        if backslashes % 2 == 0:
+            return line[:index], line[index:]
+    return line, ""
+
+
 def _expand_sibling_inputs(
     text: str, path: pathlib.Path, depth: int, seen: set[pathlib.Path]
 ) -> str:
@@ -87,7 +102,7 @@ def _expand_sibling_inputs(
     parent = path.parent.resolve()
     lines = []
     for line in text.split("\n"):
-        code = line.split("%", 1)[0] if not line.lstrip().startswith("%") else ""
+        code, comment = _split_tex_comment(line)
 
         def replace(match: re.Match[str]) -> str:
             name = match.group(1).strip()
@@ -106,8 +121,8 @@ def _expand_sibling_inputs(
             return "\n" + body + "\n"
 
         if code and _INPUT_COMMAND.search(code):
-            line = _INPUT_COMMAND.sub(replace, line)
-        lines.append(line)
+            code = _INPUT_COMMAND.sub(replace, code)
+        lines.append(code + comment)
     return "\n".join(lines)
 
 
@@ -3008,7 +3023,7 @@ def grant_writing_cross_organization_pilot_check(text: str) -> dict:
     # claim is the unit the applicant wrote, so it is read whole as well.
     paragraphs = [
         paragraph.strip()
-        for paragraph in text.split("\n")
+        for paragraph in re.split(r"\n\s*\n", text)
         if paragraph.strip() and _contains_any(paragraph.lower(), prior_terms)
     ]
     evidence_parts = [sentences[i] for i in sorted(selected)] + paragraphs
@@ -3154,7 +3169,7 @@ _PROPER_NOUN_LATIN = re.compile(
 _PROPER_NOUN_PERSON = re.compile(
     rf"((?:[A-Z]{_LATIN_LETTER}+ )?(?:de |van |von )?[A-Z]{_LATIN_LETTER}{{1,20}}|[一-鿿]{{1,4}})氏"
 )
-_VENUE_CONTEXT = re.compile(r"発表|講演|会議|Symposium|Conference|Workshop|20\d\d")
+_VENUE_CONTEXT = re.compile(r"発表|講演|会議|Symposium|Conference|Workshop")
 # A role is a relation to this plan (invited, co-authored, provides an asset),
 # not an attribution: 「作者Meeker氏」 says who wrote a program, and the reviewer
 # still does not know why the plan names him.

@@ -23,10 +23,12 @@ should hold it in a module that does not change.
 """
 from __future__ import annotations
 
+import asyncio
 import importlib
 import os
 import sys
 import time
+from pathlib import Path
 from types import ModuleType
 from typing import Any
 
@@ -35,19 +37,19 @@ from typing import Any
 # annotations`` turns ``Context`` into a string to look up here.
 from mcp.server.fastmcp import Context
 
-# Source mtime each module was last (re)loaded at. A module not yet seen is
-# compared with the process start instead. Comparing with the recorded value
-# rather than with "the last reload time" keeps this correct when a file
-# server's clock runs ahead or behind this machine's.
-_seen_mtimes: dict[str, float] = {}
+# Source mtime each module had when the reload tool was registered or when it
+# was last reloaded. Comparing two observations of the same source file keeps
+# this correct even when a network file server's clock differs from the host.
+# A module imported lazily after registration falls back to the process start.
+_seen_mtimes: dict[str, int] = {}
 
 
-def _source_mtime(module: ModuleType) -> float | None:
+def _source_mtime(module: ModuleType) -> int | None:
     path = getattr(module, "__file__", None)
     if not path or not path.endswith(".py"):
         return None
     try:
-        return os.path.getmtime(path)
+        return os.stat(path).st_mtime_ns
     except OSError:
         return None
 
@@ -61,15 +63,83 @@ def _reload_order(name: str) -> tuple[int, int, str]:
     return (-len(parts), tail_rank, name)
 
 
-def reload_changed_modules(prefix: str = "radia_mcp") -> dict[str, Any]:
+_RELOAD_METADATA = frozenset(
+    {
+        "__name__",
+        "__loader__",
+        "__package__",
+        "__spec__",
+        "__path__",
+        "__file__",
+        "__cached__",
+        "__builtins__",
+    }
+)
+
+
+def _clean_module_namespace(module: ModuleType) -> None:
+    """Clear stale definitions while retaining import-system metadata."""
+    namespace = module.__dict__
+    metadata = {key: namespace[key] for key in _RELOAD_METADATA if key in namespace}
+    namespace.clear()
+    namespace.update(metadata)
+
+
+def _restore_modules(snapshots: dict[str, dict[str, Any]]) -> None:
+    for name, snapshot in snapshots.items():
+        module = sys.modules.get(name)
+        if module is None:
+            continue
+        module.__dict__.clear()
+        module.__dict__.update(snapshot)
+
+
+def _modules_owning_object(obj: Any, prefix: str) -> set[str]:
+    """Find modules that expose ``obj`` as a global (normally server.py)."""
+    owners: set[str] = set()
+    for name, module in list(sys.modules.items()):
+        if module is None or not (name == prefix or name.startswith(prefix + ".")):
+            continue
+        try:
+            if any(value is obj for value in module.__dict__.values()):
+                owners.add(name)
+        except RuntimeError:
+            continue
+    return owners
+
+
+def _prime_mtimes(prefix: str) -> None:
+    """Record the startup baseline for modules already imported by a server."""
+    for name, module in list(sys.modules.items()):
+        if module is None or not (name == prefix or name.startswith(prefix + ".")):
+            continue
+        mtime = _source_mtime(module)
+        if mtime is not None:
+            _seen_mtimes.setdefault(name, mtime)
+
+
+def reload_changed_modules(
+    prefix: str = "radia_mcp",
+    *,
+    protected_modules: set[str] | None = None,
+) -> dict[str, Any]:
     """Reload every imported module under ``prefix`` whose file changed.
 
     The first call reloads what changed since the process started; later
     calls reload what changed since the previous call. Returns the module
     names reloaded and any reload errors (a module that fails to import is
-    reported, and the previous version stays in place).
+    reported and every touched module is restored to its previous namespace).
+
+    ``protected_modules`` are reported as requiring a process restart. This is
+    used for a server module that owns the live FastMCP instance: re-executing
+    that module would create a second, orphaned server instead of updating the
+    connected one. The reload implementation module itself is protected for the
+    same reason.
     """
-    changed: dict[str, float] = {}
+    protected = set(protected_modules or ())
+    protected.add(__name__)
+    changed: dict[str, int] = {}
+    restart_required: list[str] = []
     for name, module in list(sys.modules.items()):
         if module is None or not (name == prefix or name.startswith(prefix + ".")):
             continue
@@ -77,29 +147,70 @@ def reload_changed_modules(prefix: str = "radia_mcp") -> dict[str, Any]:
         if mtime is None:
             continue
         seen = _seen_mtimes.get(name)
-        if (seen is None and mtime > _PROCESS_START) or (seen is not None and mtime != seen):
-            changed[name] = mtime
+        if (seen is None and mtime > _PROCESS_START_NS) or (seen is not None and mtime != seen):
+            if name in protected:
+                restart_required.append(name)
+            else:
+                changed[name] = mtime
     order = sorted(changed, key=_reload_order)
 
     importlib.invalidate_caches()
-    reloaded: list[str] = []
     errors: dict[str, str] = {}
-    for _pass in range(2):
-        for name in order:
-            module = sys.modules.get(name)
-            if module is None:
-                continue
-            try:
-                importlib.reload(module)
-            except Exception as exc:  # pragma: no cover - reported, not raised
-                errors[name] = f"{type(exc).__name__}: {exc}"
-            else:
-                if name not in reloaded:
-                    reloaded.append(name)
+    compiled: dict[str, Any] = {}
+    for name in order:
+        module = sys.modules.get(name)
+        path = getattr(module, "__file__", None) if module is not None else None
+        if not path:
+            continue
+        try:
+            source = Path(path).read_bytes()
+            compiled[name] = compile(source, path, "exec")
+        except Exception as exc:
+            errors[name] = f"{type(exc).__name__}: {exc}"
+
+    if errors:
+        return {
+            "reloaded": [],
+            "errors": errors,
+            "rolled_back": False,
+            "restart_required": sorted(restart_required),
+        }
+
+    snapshots = {
+        name: dict(sys.modules[name].__dict__)
+        for name in order
+        if name in sys.modules
+    }
+    try:
+        # A clean namespace makes deleted definitions disappear. Two passes
+        # refresh aliases imported from siblings that were reloaded later in
+        # the first pass. Executing the already-compiled source also avoids the
+        # same-second/same-size stale-pyc trap of importlib.reload().
+        for _pass in range(2):
+            for name in order:
+                module = sys.modules.get(name)
+                if module is None or name not in compiled:
+                    continue
+                _clean_module_namespace(module)
+                exec(compiled[name], module.__dict__)
+    except Exception as exc:  # pragma: no cover - exact import failure varies
+        errors[name] = f"{type(exc).__name__}: {exc}"
+        _restore_modules(snapshots)
+        return {
+            "reloaded": [],
+            "errors": errors,
+            "rolled_back": True,
+            "restart_required": sorted(restart_required),
+        }
+
     for name, mtime in changed.items():
-        if name not in errors:
-            _seen_mtimes[name] = mtime
-    return {"reloaded": reloaded, "errors": errors}
+        _seen_mtimes[name] = mtime
+    return {
+        "reloaded": list(order),
+        "errors": {},
+        "rolled_back": False,
+        "restart_required": sorted(restart_required),
+    }
 
 
 def _common_tool_prefix(names: list[str]) -> str:
@@ -115,56 +226,154 @@ def _common_tool_prefix(names: list[str]) -> str:
     return prefix[: prefix.rfind("_") + 1] if "_" in prefix else prefix
 
 
-def refresh_tools(mcp: Any, module_prefix: str = "radia_mcp") -> dict[str, Any]:
+def refresh_tools(
+    mcp: Any,
+    module_prefix: str = "radia_mcp",
+    *,
+    reloaded_modules: set[str] | None = None,
+) -> dict[str, Any]:
     """Re-register stale tools and pick up callables added since start-up."""
     manager = mcp._tool_manager
     updated: list[str] = []
     added: list[str] = []
+    removed: list[str] = []
     skipped: list[str] = []
     names_by_module: dict[str, list[str]] = {}
+    selected_modules = set(reloaded_modules or ())
+    registry = getattr(manager, "_tools", None)
+    if not isinstance(registry, dict):
+        raise RuntimeError("unsupported FastMCP ToolManager registry")
+    registry_snapshot = dict(registry)
 
-    for tool in list(manager.list_tools()):
-        fn = getattr(tool, "fn", None)
-        module_name = getattr(fn, "__module__", "") or ""
-        if not module_name.startswith(module_prefix):
-            continue
-        module = sys.modules.get(module_name)
-        if module is None:
-            skipped.append(tool.name)
-            continue
-        names_by_module.setdefault(module_name, []).append(tool.name)
-        fresh = getattr(module, fn.__name__, None)
-        if fresh is None or fresh is fn or not callable(fresh):
-            continue
-        mcp.remove_tool(tool.name)
-        mcp.add_tool(
-            fresh,
-            name=tool.name,
-            title=getattr(tool, "title", None),
-            annotations=getattr(tool, "annotations", None),
-        )
-        updated.append(tool.name)
-
-    registered = {tool.name for tool in manager.list_tools()}
-    for module_name, names in names_by_module.items():
-        module = sys.modules.get(module_name)
-        prefix = _common_tool_prefix(sorted(names))
-        if module is None or not prefix:
-            continue
-        for attr in dir(module):
-            if not attr.startswith(prefix) or attr in registered:
+    try:
+        for tool in list(manager.list_tools()):
+            fn = getattr(tool, "fn", None)
+            module_name = getattr(fn, "__module__", "") or ""
+            if (
+                not module_name.startswith(module_prefix)
+                or module_name not in selected_modules
+            ):
                 continue
-            candidate = getattr(module, attr)
-            if callable(candidate) and getattr(candidate, "__module__", "") == module_name:
-                mcp.add_tool(candidate)
-                registered.add(attr)
-                added.append(attr)
-    return {"updated": updated, "added": added, "skipped": skipped}
+            module = sys.modules.get(module_name)
+            if module is None:
+                skipped.append(tool.name)
+                continue
+            names_by_module.setdefault(module_name, []).append(tool.name)
+            # Closures such as the shared status/reload tools cannot be looked
+            # up as module globals. Their global namespace is refreshed in
+            # place when the owning module reloads, so leave them registered.
+            if "<locals>" in getattr(fn, "__qualname__", ""):
+                skipped.append(tool.name)
+                continue
+            fresh = getattr(module, fn.__name__, None)
+            if fresh is None or not callable(fresh):
+                mcp.remove_tool(tool.name)
+                removed.append(tool.name)
+                continue
+            if fresh is fn:
+                continue
+            mcp.remove_tool(tool.name)
+            mcp.add_tool(
+                fresh,
+                name=tool.name,
+                title=getattr(tool, "title", None),
+                annotations=getattr(tool, "annotations", None),
+                icons=getattr(tool, "icons", None),
+                meta=getattr(tool, "meta", None),
+            )
+            updated.append(tool.name)
+
+        registered = {tool.name for tool in manager.list_tools()}
+        for module_name, names in names_by_module.items():
+            module = sys.modules.get(module_name)
+            prefix = _common_tool_prefix(sorted(names))
+            if module is None or not prefix:
+                continue
+            for attr in dir(module):
+                if not attr.startswith(prefix) or attr in registered:
+                    continue
+                candidate = getattr(module, attr)
+                if callable(candidate) and getattr(candidate, "__module__", "") == module_name:
+                    # The server-specific annotation/contract pass does not run
+                    # again until reconnect. A newly discovered callable is
+                    # therefore deliberately conservative for this session.
+                    from mcp.types import ToolAnnotations
+
+                    mcp.add_tool(
+                        candidate,
+                        annotations=ToolAnnotations(
+                            readOnlyHint=False,
+                            destructiveHint=True,
+                            idempotentHint=False,
+                            openWorldHint=True,
+                        ),
+                    )
+                    registered.add(attr)
+                    added.append(attr)
+    except Exception:
+        registry.clear()
+        registry.update(registry_snapshot)
+        raise
+    return {
+        "updated": updated,
+        "added": added,
+        "removed": removed,
+        "skipped": skipped,
+        "added_tools_need_reconnect_for_server_policy": bool(added),
+    }
 
 
 def reload_and_refresh(mcp: Any, module_prefix: str = "radia_mcp") -> dict[str, Any]:
-    report = reload_changed_modules(module_prefix)
-    report.update(refresh_tools(mcp, module_prefix))
+    module_snapshots = {
+        name: dict(module.__dict__)
+        for name, module in list(sys.modules.items())
+        if module is not None
+        and (name == module_prefix or name.startswith(module_prefix + "."))
+    }
+    seen_snapshot = dict(_seen_mtimes)
+    protected = _modules_owning_object(mcp, module_prefix)
+    report = reload_changed_modules(module_prefix, protected_modules=protected)
+    if report["errors"]:
+        report.update(
+            {
+                "updated": [],
+                "added": [],
+                "removed": [],
+                "skipped": [],
+                "added_tools_need_reconnect_for_server_policy": False,
+            }
+        )
+        return report
+    try:
+        report.update(
+            refresh_tools(
+                mcp,
+                module_prefix,
+                reloaded_modules=set(report["reloaded"]),
+            )
+        )
+    except Exception as exc:  # restore code and tools as one transaction
+        _restore_modules(
+            {
+                name: module_snapshots[name]
+                for name in report["reloaded"]
+                if name in module_snapshots
+            }
+        )
+        _seen_mtimes.clear()
+        _seen_mtimes.update(seen_snapshot)
+        report.update(
+            {
+                "reloaded": [],
+                "errors": {"tool_registry": f"{type(exc).__name__}: {exc}"},
+                "rolled_back": True,
+                "updated": [],
+                "added": [],
+                "removed": [],
+                "skipped": [],
+                "added_tools_need_reconnect_for_server_policy": False,
+            }
+        )
     return report
 
 
@@ -194,10 +403,13 @@ def _declare_tool_list_changed(mcp: Any) -> None:
 
 def register_reload_tool(mcp: Any, tool_name: str, module_prefix: str = "radia_mcp") -> None:
     """Register ``tool_name`` on ``mcp``: reload, refresh, notify the client."""
+    _prime_mtimes(module_prefix)
     _declare_tool_list_changed(mcp)
+    reload_lock = asyncio.Lock()
 
     async def _reload(ctx: Context) -> dict:
-        report = reload_and_refresh(mcp, module_prefix)
+        async with reload_lock:
+            report = reload_and_refresh(mcp, module_prefix)
         notified = False
         try:
             await ctx.session.send_tool_list_changed()
@@ -206,9 +418,12 @@ def register_reload_tool(mcp: Any, tool_name: str, module_prefix: str = "radia_m
             report["notify_error"] = f"{type(exc).__name__}: {exc}"
         report["client_notified"] = notified
         report["note"] = (
-            "Changed modules were reloaded and their tools re-registered in this "
-            "process. Tool schemas on the client refresh only if it honours "
-            "notifications/tools/list_changed; otherwise reconnect the server."
+            "Changed implementation modules were reloaded transactionally and "
+            "their tools refreshed in this process. A changed server module, "
+            "the reload implementation itself, or a newly added tool that needs "
+            "the server-specific policy pass still requires reconnecting. Tool "
+            "schemas refresh only if the client honours "
+            "notifications/tools/list_changed."
         )
         return report
 
@@ -222,4 +437,4 @@ def register_reload_tool(mcp: Any, tool_name: str, module_prefix: str = "radia_m
     mcp.add_tool(_reload, name=tool_name)
 
 
-_PROCESS_START = time.time()
+_PROCESS_START_NS = time.time_ns()
