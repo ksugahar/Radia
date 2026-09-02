@@ -450,9 +450,11 @@ CLN_MIXED_GALERKIN = """
 A finite Cauer ladder is a RATIONAL function of s. Rational functions have
 INTEGER asymptotic slopes. The eddy-current admittance of a conductor decays as
 f^(-1/2) at deep skin, so no ladder of any length produces the right tail. This
-is structural, not a shortage of rungs, and adding expansion points (Kuriyama
-2019) does not help either: every finite expansion point yields another rational
-basis, so the extra points relocate poles and the tail still wags.
+is structural, not a shortage of rungs, and switching the expansion point
+partway along the ladder (Kuriyama 2019: stages 0..M at s = 0, stages M+1..N at
+a second point s_1, joined by one extra inductor) does not help either: the
+second point is finite, so the basis is still rational; the poles move and the
+tail still wags.
 
 ## Why s = infinity is different
 
@@ -482,9 +484,12 @@ resolves the head of the spectrum, surface basis resolves the tail.
   psi_k : surface envelopes ~ exp(-d(r)/delta(s)), which carry the sqrt(s)
 
 Read as a two-point Pade in sqrt(s): one expansion point at s = 0 (the ladder),
-one at s = infinity (the surface). Multiple expansion points is ALREADY a mixed
-Galerkin space; the only new thing is that the last point is a branch point, so
-the basis natural there cannot be rational.
+one at s = infinity (the surface). Kuriyama's mid-ladder switch is ALREADY a
+mixed Galerkin space, two Krylov families in one continued fraction, and in the
+language of matched asymptotic expansions (Van Dyke 1975; Tani ed. 1984 ch. 2,
+the pointer Nagamine gave on 2026-09-02) the switch is the matching step; the
+only new thing here is that the second point is a branch point, so the basis
+natural there cannot be rational.
 
 Adding a rung adds one term of the Taylor expansion at s = 0. Adding a Senior
 curvature term (gamma_1 = -H, gamma_2 = (K - H^2)/2) adds one term of the
@@ -504,7 +509,9 @@ stop. Write it down for three reasons instead:
   2. it exhibits the surface amplitude as computed rather than fitted, which is
      what removes the hand-chosen crossover of a Warburg termination;
   3. -K_sb K_bb^-1 K_bs IS Gram-Schmidt in the K inner product, so its size
-     measures how much the two families overlap in the finite space.
+     measures how much the two families overlap in the finite space. In matched
+     asymptotics this is the composite expansion, outer + inner - common part;
+     the projection subtracts the common part instead of a hand-derived CP.
 
 ## Measured, with the metric stated
 
@@ -554,7 +561,9 @@ non-half-integer exponent instead. In practice none of that matters to the
 pipeline: the computed Y(s) is fitted with AAA (22 stable poles for the cube,
 measured 2026-09-02 by time_domain/01_cube_aaa_step_response.py: DC exact,
 early time on the sqrt(t) asymptote, late time saturating to Y_DC,
-no fitted d anywhere) and becomes an ordinary state space.
+no fitted d anywhere) and becomes an ordinary state space. That script's
+summary() is the artifact case cube3d_time_domain_aaa, step-response curves
+included, which is what a figure of the step response should be drawn from.
 
 ## Where it lives
 

@@ -54,7 +54,7 @@ solved per-frequency. Intermediate-frequency accuracy is bounded by the
 | `sphere/`      | Mixed Galerkin on solid sphere |
 | `square2d/`    | Mixed Galerkin on infinite-z square cross-section |
 | `cube3d/`      | Mixed Galerkin on solid cube (rank-N + closed K_ss + NGSolve FEM ground truth verified) |
-| `time_domain/` | Time-domain realization: AAA rational fit → **22** stable poles (cube), DC exact, early time on the sqrt(t) asymptote, late time saturating to Y_DC. No `d` tuning. Re-run 2026-09-02 after fixing a hardcoded path to the retired `examples/` tree that had left the script un-runnable; earlier text said 21. |
+| `time_domain/` | Time-domain realization: AAA rational fit → **22** stable poles (cube), DC exact, early time on the sqrt(t) asymptote, late time saturating to Y_DC. No `d` tuning. Re-run 2026-09-02 after fixing a hardcoded path to the retired `examples/` tree that had left the script un-runnable; earlier text said 21. The script exposes `summary()`, so `emit_results.py` records it as `cube3d_time_domain_aaa` with the step-response curves; the IGTE talk draws its time-domain figure from that record. |
 | `ngsolve_validation/` | Framework-agnostic NGSolve FEM cross-validation (cube / cuboid Kelvin) |
 | `cuboid_general/` | Non-cubic cuboid: the generalized Mellin asymptote by codimension. Promoted 2026-09-02 |
 | `lshape3d_ngsolve_mellin.py` | Non-tensor 3D shape (L-shape) probe — Mellin universality check |

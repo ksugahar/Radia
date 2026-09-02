@@ -144,16 +144,9 @@ def sqrt_t_asymptote(t_grid, K):
     return K * (2 / math.sqrt(math.pi)) * np.sqrt(t_grid)
 
 
-def main():
-    print("=" * 60)
-    print("Time-domain mixed Galerkin (cube): summary")
-    print("=" * 60)
-    print(f"  L = {L*1e3} mm,  sigma = {SIGMA:.2e},  MS = {MS:.4e}")
-    print(f"  Y_DC = sigma V_cube = {Y_DC:.4e}")
-    print(f"  K_SIBC = 6 L^2 sqrt(sigma/mu) = {K_SIBC:.4e}")
-    print()
-
-    # AAA fit
+def _realisation():
+    """One AAA fit of Y_mixed on 1 Hz .. 1 GHz plus the DC point; the stable
+    poles with a non-negligible residue are the time-domain realisation."""
     f_samples = np.logspace(0, 9, 100)
     s_samples = 1j * 2 * math.pi * f_samples
     Y_samples = np.array([Y_mixed(s) for s in s_samples])
@@ -162,24 +155,64 @@ def main():
     zj, fj, wj, errvec = aaa_fit(s_all, Y_all, mmax=40, tol=1e-10)
     poles, residues = aaa_to_poles_residues(zj, fj, wj)
     mask = (poles.real < 0) & (np.abs(residues) > 1e-3)
-    poles_s, residues_s = poles[mask], residues[mask]
-    print(f"AAA fit: degree {len(zj)}, freq-domain err {errvec[-1]:.2e}")
-    print(f"  Stable poles: {len(poles_s)}")
-    Y0_sum = np.sum(residues_s / (-poles_s)).real
-    print(f"  sum residue/(-pole) at s=0: {Y0_sum:.4f}  (target {Y_DC:.4f})")
-    print()
+    return {
+        "degree": int(len(zj)),
+        "freq_domain_err": float(errvec[-1]),
+        "poles": poles[mask],
+        "residues": residues[mask],
+    }
 
-    # Step response
+
+def summary() -> dict:
+    """The numbers this script stands for, as one dict.
+
+    Read by emit_results.py. The talk's step-response figure is drawn from
+    the curves recorded here, not from a second computation."""
+    fit = _realisation()
+    poles_s, residues_s = fit["poles"], fit["residues"]
+    Y0_sum = float(np.sum(residues_s / (-poles_s)).real)
     t_grid = np.logspace(-8, -1, 80)
     y_aaa = step_response_aaa(t_grid, poles_s, residues_s, Y_DC)
-
-    # sqrt(t) asymptote (early-time SIBC behavior)
     y_sqrt = sqrt_t_asymptote(t_grid, K_SIBC)
+    early = int(np.argmin(np.abs(t_grid - 1e-8)))
+    return {
+        "case": "cube3d_time_domain_aaa",
+        "body": f"cube, L = {L} m, sigma = {SIGMA:.3g} S/m",
+        "metric": ("AAA fit of Y_mixed(s) on 1 Hz..1 GHz plus DC; a pole counts "
+                   "as stable when Re p < 0 and |residue| > 1e-3"),
+        "n_stable_poles": int(len(poles_s)),
+        "aaa_degree": fit["degree"],
+        "freq_domain_err": fit["freq_domain_err"],
+        "Y_DC_S": float(Y_DC),
+        "K_SIBC": float(K_SIBC),
+        "Y0_from_poles_S": Y0_sum,
+        "early_time_ratio_to_sqrt_t": float(y_aaa[early] / y_sqrt[early]),
+        "late_time_value_S": float(y_aaa[-1]),
+        "step_response": {
+            "t_s": t_grid.tolist(),
+            "y_aaa_S": y_aaa.tolist(),
+            "y_sqrt_asymptote_S": y_sqrt.tolist(),
+        },
+    }
 
-    # Warburg-Schur termination comparison: d tuned to match cube's wall-band
-    d_guess = 6.5e4  # from earlier digest tuning (Hz scale)
-    y_war = warburg_step_response(t_grid, K_SIBC, d_guess) + 0  # need y_CLN added; bare Warburg only
 
+def main():
+    r = summary()
+    print("=" * 60)
+    print("Time-domain mixed Galerkin (cube): summary")
+    print("=" * 60)
+    print(f"  L = {L*1e3} mm,  sigma = {SIGMA:.2e},  MS = {MS:.4e}")
+    print(f"  Y_DC = sigma V_cube = {Y_DC:.4e}")
+    print(f"  K_SIBC = 6 L^2 sqrt(sigma/mu) = {K_SIBC:.4e}")
+    print()
+    print(f"AAA fit: degree {r['aaa_degree']}, freq-domain err {r['freq_domain_err']:.2e}")
+    print(f"  Stable poles: {r['n_stable_poles']}")
+    print(f"  sum residue/(-pole) at s=0: {r['Y0_from_poles_S']:.4f}  (target {Y_DC:.4f})")
+    print()
+
+    t_grid = np.array(r["step_response"]["t_s"])
+    y_aaa = np.array(r["step_response"]["y_aaa_S"])
+    y_sqrt = np.array(r["step_response"]["y_sqrt_asymptote_S"])
     print(f"{'t (s)':>11}  {'y_AAA':>12}  {'K_SIBC*(2/sqrt(pi))*sqrt(t)':>28}  {'ratio AAA/sqrt(t)':>20}")
     for i in range(0, len(t_grid), 8):
         ratio = y_aaa[i] / y_sqrt[i] if y_sqrt[i] > 1e-12 else float('nan')
@@ -190,11 +223,11 @@ def main():
     print(f"  y_AAA(t->inf) -> {y_aaa[-1]:.4f}  (target Y_DC = {Y_DC:.4f})")
     print()
     print("--- Summary ---")
-    print(f"Mixed Galerkin time-domain realization: {len(poles_s)} stable poles")
-    print(f"  Early time (t < 1e-5): tracks sqrt(t) Warburg asymptote (Mellin)")
-    print(f"  Late time  (t > 1e-3): saturates to Y_DC exactly")
-    print(f"  Mid time             : superposition of decaying exponentials, no `d` tuning")
-    print(f"Compare to Warburg-Schur (digest): N_CLN + N_xi=50 poles, requires `d`")
+    print(f"Mixed Galerkin time-domain realization: {r['n_stable_poles']} stable poles")
+    print("  Early time (t < 1e-5): tracks sqrt(t) Warburg asymptote (Mellin)")
+    print("  Late time  (t > 1e-3): saturates to Y_DC exactly")
+    print("  Mid time             : superposition of decaying exponentials, no `d` tuning")
+    print("Compare to Warburg-Schur (digest): N_CLN + N_xi=50 poles, requires `d`")
 
 
 if __name__ == "__main__":
