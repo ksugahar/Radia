@@ -44,8 +44,9 @@ def regenerate_fixture():
 
 
 def test_calc_heat_axisym_temperature_band(regenerate_fixture, tmp_path):
-    """Run calc_heat_axisym.py end-to-end and check T_max / T_min are
-    in the analytically-expected band."""
+    """Run calc_heat_axisym.py end-to-end at EXPLICIT --fes-order 1 and
+    check T_max / T_min are in the analytically-expected band (legacy
+    order-1 path; the default is order 2 -- see the test below)."""
     cmd = [sys.executable, SCRIPT,
            "--wp-vol", regenerate_fixture,
            "--surface-label", "outer",
@@ -92,3 +93,44 @@ def test_calc_heat_axisym_temperature_band(regenerate_fixture, tmp_path):
     assert "FES:H1" in proc.stderr, (
         f"calc_heat_axisym did not log H1 FESpace usage; current stderr "
         f"shows: {proc.stderr[:500]}")
+
+
+def test_calc_heat_axisym_default_order2_band(regenerate_fixture, tmp_path):
+    """DEFAULT run (no --fes-order): must use order 2 (near-axis cusp
+    fix, 2026-09-03) and stay in the same physical band.  Also guards
+    the two order>=2 bugs fixed with the default change: T_min must be
+    the physical axis temperature (~34.9 C), not ~0 (the old raw
+    coefficient-vector min), and the initial state must be a true
+    constant (Set(), not vec[:] = T0)."""
+    cmd = [sys.executable, SCRIPT,
+           "--wp-vol", regenerate_fixture,
+           "--surface-label", "outer",
+           "--q-uniform", "1e5",
+           "--material", "steel",
+           "--t-end", "10",
+           "--dt", "1",
+           "--t-initial", "25",
+           "--t-ext", "25",
+           "--h-conv", "0",
+           "--linear-solver", "sparsecholesky",
+           "--msh-output", str(tmp_path / "heat_axisym_T_o2.msh")]
+    proc = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+    assert proc.returncode == 0, (
+        f"calc_heat_axisym exited {proc.returncode}\n"
+        f"STDERR:\n{proc.stderr}\nSTDOUT tail:\n{proc.stdout[-500:]}")
+    result = json.loads(proc.stdout.strip().splitlines()[-1])
+
+    assert "FES:H1 order=2" in proc.stderr, (
+        f"default --fes-order is expected to be 2; stderr shows: "
+        f"{proc.stderr[:500]}")
+    assert int(result["fes_order"]) == 2
+
+    T_max = float(result["T_max_C"])
+    T_min = float(result["T_min_C"])
+    # Verified 2026-09-03: T_max = 59.84 C, T_min = 34.86 C (Bessel
+    # series reference: surface 60.03 C, axis 34.46 C at t = 10 s).
+    assert 55.0 <= T_max <= 65.0, (
+        f"T_max_C = {T_max} outside expected band [55, 65] at order 2")
+    assert 30.0 <= T_min <= 40.0, (
+        f"T_min_C = {T_min} outside expected band [30, 40] at order 2 "
+        f"(T_min ~ 0 means the coefficient-vector min/max bug is back)")
