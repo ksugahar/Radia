@@ -5,7 +5,7 @@ shipped** + **why** in compact form. Older releases (≤ 0.4) are
 omitted; the 0.5 → 0.6 jump is when the standalone `radia-mcp` wheel
 crystallized as its own package.
 
-## [Unreleased]
+## [1.4.51] - 2026-09-02
 
 - grant-writing: a `.tex` main file passed to any check is now assembled with
   the sibling files it `\input`s (form pieces in subdirectories stay out), so
