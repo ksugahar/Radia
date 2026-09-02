@@ -1,44 +1,27 @@
 #!/usr/bin/env python
-"""tools/ci_preflight.py -- run the CI gates LOCALLY, BEFORE you push.
+"""Run impact-scoped CI gates locally before pushing.
 
-Make "commit -> CI check -> push" a single command so CI does not
-discover a failure you could have caught locally in ~2 minutes.
-
-WHY THIS EXISTS (empirical, 2026-06-05 analysis of the last 80 failed
-GitHub Actions runs, 2026-05-25..06-04):
-
-    30x  radia-mcp matrix  "Pytest (meta health + ... + versioning)"
-    16x  CI                "Run basic tests"
-     9x  radia-mcp matrix  "TOOLS.md drift gate"
-     7x  Policy Lint       "Policy 4: No CblasColMajor in core"
-     3x  radia-mcp matrix  "Meta health"
-
-EVERY one of these is detectable locally before push.  This script runs
-the same gates the three CI workflows run (policy-lint.yml,
-radia-mcp-matrix.yml, build-test.yml "Run basic tests"), fast-first.
+The default compares HEAD and the working tree with ``origin/main``. It runs
+only the compact gates owned by affected package paths. Full tests and solver
+validation remain explicit operations rather than automatic push costs.
 
 Gates:
   1. policy-lint        -- the 8 static policies (CblasColMajor etc.)
   2. publish-boundary   -- radia-mcp provenance/internal-path lint + selftest
   3. version-consistency-- pyproject == __init__ for radia / radia-mcp / cme
   4. tools-md-drift     -- regenerate docs/TOOLS.md and diff (WIP-aware)
-  5. radia-mcp-matrix   -- compile + meta_health + the FAST radia-mcp
-                           pytest run UNDER minimal-dep simulation
-                           (RADIA_MCP_FORCE_MINIMAL=1), which is what the
-                           ubuntu matrix actually runs -- this is the gate
-                           that catches heavy-import collection errors
-                           (ngsolve/netgen imported at module level)
-  6. toplevel-collect   -- `pytest tests/ --collect-only` for the lightweight
-                           debug/CI suite
-  7. toplevel-run       -- (only with --full) actually run the lightweight
-                           tests/ suite with reruns
+  5. radia-mcp          -- compile + health + impact-selected package tests
+                           and affected server selftests under the same
+                           minimal-dependency simulation as GitHub CI
+  6. toplevel-collect   -- explicit `pytest tests/ --collect-only` diagnostic
+  7. toplevel-run       -- (only with --full) run the lightweight tests/
   8. validation-collect -- (only with --validation) collect the heavy
                            validation_test/ suite
   9. validation-run     -- (only with --validation --full) run the heavy
                            validation_test/ suite
 
 Usage:
-    python tools/ci_preflight.py            # gates 1-6 (~3 min)
+    python tools/ci_preflight.py            # affected compact gates
     python tools/ci_preflight.py --full     # also run lightweight tests/
     python tools/ci_preflight.py --validation  # also collect validation_test/
     python tools/ci_preflight.py --fix      # auto-regenerate TOOLS.md on drift
@@ -49,28 +32,37 @@ Exit 0 = all green, safe to push.  Non-zero = a gate CI would fail is red.
 from __future__ import annotations
 
 import argparse
+import json
 import os
+import runpy
 import subprocess
 import sys
 
 # --- UNC-safe repo root -------------------------------------------------
 # NEVER use Path.resolve() here: on the LAB box the repo lives on an S:
-# drive mapped to \\192.168.11.100\..., and resolve() canonicalises to the
+# drive mapped to the Radia NAS share, and resolve() canonicalises to the
 # UNC form, which Python's open() then rejects with OSError [Errno 22]
 # (this is exactly what broke the old release preflight).  os.path
 # joins keep the drive letter the script was invoked with.
 _THIS = os.path.abspath(__file__)
 REPO = os.path.dirname(os.path.dirname(_THIS))
-# LAB: the repo is an S: drive mapped onto a \\192.168.11.100\... UNC share.
-# When invoked from the pre-push hook, git's cwd (and abspath(__file__)) come
-# back in the UNC form, and Python file reads on that form fail.  Remap to the
-# S: drive (what every manual run uses + what open() handles) by anchoring on
-# the repo's known path suffix -- robust even when REPO == the UNC base
-# exactly (the earlier `len(prefix)` slice produced a bare "S:").
-_norm = REPO.replace("\\", "/")
-_anchor = "/Radia/01_GitHub"
-if "192.168.11.100" in _norm and _anchor in _norm:
-    REPO = "S:" + _norm[_norm.index(_anchor):]
+def _remap_lab_unc(path: str) -> str:
+    """Map the LAB Radia UNC tree to its stable ``S:`` drive spelling."""
+    normalized = path.replace("\\", "/")
+    lowered = normalized.lower()
+    if not any(host in lowered for host in ("192.168.11.100", "192.168.121.100")):
+        return path
+    anchor_index = lowered.find("/radia/")
+    if anchor_index < 0 and lowered.endswith("/radia"):
+        anchor_index = len(normalized) - len("/Radia")
+    if anchor_index < 0:
+        return path
+    return "S:" + normalized[anchor_index:].replace("/", "\\")
+
+
+# A pre-push hook may report the mapped share as UNC. Keep both the historical
+# and current NAS addresses readable, including isolated worktrees.
+REPO = _remap_lab_unc(REPO)
 MCP = os.path.join(REPO, "packages", "radia-mcp")
 
 # The lightweight tests/ gate should not require directory or file ignores.
@@ -79,6 +71,8 @@ TOPLEVEL_IGNORES = [
 ]
 
 GREEN, RED, YEL, DIM, RST = "\033[32m", "\033[31m", "\033[33m", "\033[2m", "\033[0m"
+
+_PREFLIGHT_CHANGED_FILES = None
 
 
 def _sh(cmd, cwd=REPO, env=None, timeout=None):
@@ -229,16 +223,36 @@ def gate_tools_md(fix=False):
 
 
 # ======================================================================
-# Gate 5: radia-mcp matrix  (compile + health + minimal-dep pytest)
+# Gate 5: radia-mcp impact lane
 # ======================================================================
 def gate_radia_mcp_matrix():
-    # 4a compile
+    selector = os.path.join(MCP, "tools", "select_ci_tests.py")
+    selector_cmd = [sys.executable, selector]
+    if _PREFLIGHT_CHANGED_FILES is None:
+        selector_cmd.append("--full")
+    else:
+        selector_cmd.extend(
+            [
+                "--changed-files-json",
+                json.dumps(_PREFLIGHT_CHANGED_FILES),
+                "--base",
+                "origin/main",
+            ]
+        )
+    rc, out = _sh(selector_cmd)
+    if rc != 0:
+        return False, f"impact selector failed: {out[-400:]}"
+    try:
+        plan = json.loads(out)
+    except json.JSONDecodeError as exc:
+        return False, f"impact selector emitted invalid JSON: {exc}"
+
     rc, out = _sh([sys.executable, "-m", "compileall", "-q",
                    "packages/radia-mcp/src"])
     if rc != 0:
         return False, f"compileall failed: {out[-200:]}"
 
-    # 4b meta health (all subpackages import + register_status_tool)
+    # The compact health probe catches shared import/registration regressions.
     probe = ("import sys; sys.path.insert(0, r'%s');"
              "from radia_mcp.meta.server import radia_mcp_health as h;"
              "r=h(); print('HEALTH', r['n_servers_healthy'], r['n_servers_total']);"
@@ -249,24 +263,28 @@ def gate_radia_mcp_matrix():
     if rc != 0:
         return False, f"meta_health FAILED ({health}): {out[-300:]}"
 
-    # 4c the FAST radia-mcp pytest, UNDER minimal-dep simulation -- this is
-    #     exactly the ubuntu matrix "Pytest" step. Slow corpus / subprocess
-    #     selftest gates are explicit validation or dedicated CI steps.
-    # This corpus is intentionally broad (about 1,800 lightweight contract
-    # tests).  Keep the CI-equivalent retry policy, but make the local hook
-    # fail diagnostically instead of appearing to stop forever.
-    print("  [radia-mcp] running minimal-dependency pytest matrix (timeout: 10 min)...",
-          flush=True)
+    selected_tests = plan["package_tests"]
+    test_env = {
+        "RADIA_MCP_FORCE_MINIMAL": "1",
+        "PYTEST_DISABLE_PLUGIN_AUTOLOAD": "1",
+    }
+    if selected_tests != ["tests"]:
+        test_env["RADIA_MCP_CI_SELECTION_JSON"] = json.dumps(selected_tests)
+    print(
+        "  [radia-mcp] running "
+        f"{len(selected_tests)} impact selector(s) (timeout: 5 min)...",
+        flush=True,
+    )
     try:
-        rc, out = _sh([sys.executable, "-m", "pytest", "tests/", "-q",
+        pytest_targets = ["tests/"] if selected_tests == ["tests"] else selected_tests
+        rc, out = _sh([sys.executable, "-m", "pytest", *pytest_targets, "-q",
                        "-p", "no:cacheprovider", "--no-header",
-                       "-m", "not xval and not slow",
-                       "--reruns", "1", "--reruns-delay", "1"],  # match matrix flaky-retry
-                      cwd=MCP, env={"RADIA_MCP_FORCE_MINIMAL": "1"}, timeout=600)
+                       "-m", "not xval and not slow"],
+                      cwd=MCP, env=test_env, timeout=300)
     except subprocess.TimeoutExpired as exc:
         partial = (exc.stdout or exc.stderr or "")
-        return False, ("radia-mcp pytest timed out after 600 seconds; "
-                       "the matrix is too slow or hung" +
+        return False, ("radia-mcp pytest timed out after 300 seconds; "
+                       "the selected lane is too slow or hung" +
                        (f" (last output: {partial[-300:]})" if partial else ""))
     tail = out.strip().splitlines()[-1] if out.strip() else "(no output)"
     if rc != 0:
@@ -274,9 +292,34 @@ def gate_radia_mcp_matrix():
         errs = [l for l in out.splitlines()
                 if ("ERROR" in l or "error" in l or "FAILED" in l
                     or "ModuleNotFoundError" in l)][:6]
-        return False, ("radia-mcp pytest (minimal-dep sim) FAILED: " + tail
+        return False, ("radia-mcp impact pytest FAILED: " + tail
                        + ("\n      " + "\n      ".join(errs) if errs else ""))
-    return True, f"compile + meta_health({health.replace('HEALTH ','')}) + minimal-dep pytest: {tail}"
+
+    catalog = runpy.run_path(
+        os.path.join(MCP, "src", "radia_mcp", "meta", "catalog.py")
+    )["CATALOG"]
+    for short in plan["server_selftests"]:
+        info = catalog[short]
+        command = (
+            "import sys; sys.path.insert(0, r'%s'); "
+            "from %s.server import main; "
+            "sys.argv = [%r, '--selftest']; main()"
+            % (os.path.join(MCP, "src"), info["subpackage"], info["entry_point"])
+        )
+        try:
+            rc, server_out = _sh(
+                [sys.executable, "-c", command],
+                timeout=120 if short == "radia-ngsolve" else 60,
+            )
+        except subprocess.TimeoutExpired:
+            return False, f"{short} selftest timed out"
+        if rc != 0:
+            return False, f"{short} selftest failed: {server_out[-400:]}"
+
+    return True, (
+        f"compile + health({health.replace('HEALTH ', '')}) + {tail}; "
+        f"{len(plan['server_selftests'])} server selftest(s)"
+    )
 
 
 # ======================================================================
@@ -301,7 +344,7 @@ def gate_toplevel_collect():
 # ======================================================================
 def gate_toplevel_run():
     cmd = [sys.executable, "-m", "pytest", "tests/", "-q", "--no-header",
-           "-p", "no:cacheprovider", "--reruns", "1", "--reruns-delay", "1"]
+           "-p", "no:cacheprovider"]
     for ig in TOPLEVEL_IGNORES:
         cmd.append(f"--ignore={ig}")
     rc, out = _sh(cmd, timeout=3600)
@@ -349,7 +392,7 @@ ALL_GATES = [
     ("publish-boundary","radia-mcp publish-boundary lint",        gate_publish_boundary_lint),
     ("version",         "Version consistency (pyproject==init)",  gate_version_consistency),
     ("tools-md",        "TOOLS.md drift gate",                    gate_tools_md),
-    ("radia-mcp",       "radia-mcp matrix (minimal-dep pytest)",  gate_radia_mcp_matrix),
+    ("radia-mcp",       "radia-mcp impact lane",                  gate_radia_mcp_matrix),
     ("toplevel-collect","Top-level collect-only (import check)",  gate_toplevel_collect),
 ]
 FULL_GATES = [
@@ -364,27 +407,53 @@ VALIDATION_FULL_GATES = [
 
 
 def _changed_since(ref):
-    """Files changed between <ref> and HEAD; None if range can't be resolved."""
-    rc, out = _sh(["git", "diff", "--name-only", f"{ref}..HEAD"])
-    if rc != 0:
+    """Committed and working-tree files changed from ``ref``."""
+    def git_names(command):
+        completed = subprocess.run(
+            command,
+            cwd=REPO,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+        )
+        if completed.returncode:
+            return None
+        # Git may emit core.autocrlf warnings on stderr. They are diagnostics,
+        # never candidate paths for impact selection.
+        return completed.stdout
+
+    out = git_names(["git", "diff", "--name-only", f"{ref}...HEAD"])
+    if out is None:
         return None
-    return [ln.strip().replace("\\", "/") for ln in out.splitlines() if ln.strip()]
+    changed = {ln.strip().replace("\\", "/") for ln in out.splitlines() if ln.strip()}
+    for command in (
+        ["git", "diff", "--name-only", "HEAD"],
+        ["git", "diff", "--name-only", "--cached"],
+        ["git", "ls-files", "--others", "--exclude-standard"],
+    ):
+        out = git_names(command)
+        if out is None:
+            return None
+        changed.update(
+            ln.strip().replace("\\", "/") for ln in out.splitlines() if ln.strip()
+        )
+    return sorted(changed)
 
 
 def _gates_for_changes(changed):
     """Path-aware gate selection (used by the pre-push hook so most pushes
     stay fast): policy + version ALWAYS; the radia-mcp gates only when
-    packages/radia-mcp changed; the top-level collect gate only when tests/
-    or src/ changed."""
+    packages/radia-mcp changed. Repository contracts are owned by the fixed
+    fast mdx lane, so broad top-level collection is an explicit diagnostic."""
     sel = {"policy", "version"}
     if any(f.startswith("packages/radia-mcp/") for f in changed):
         sel |= {"publish-boundary", "tools-md", "radia-mcp"}
-    if any(f.startswith("tests/") or f.startswith("src/") for f in changed):
-        sel |= {"toplevel-collect"}
     return [g for g in ALL_GATES if g[0] in sel]
 
 
 def main(argv=None):
+    global _PREFLIGHT_CHANGED_FILES
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--full", action="store_true",
@@ -401,24 +470,26 @@ def main(argv=None):
     args = ap.parse_args(argv)
 
     gates = list(ALL_GATES)
+    scope_ref = args.since or "origin/main"
+    changed = _changed_since(scope_ref)
+    if changed is None:
+        print(f"{YEL}--since {scope_ref}: range unresolved -> running ALL "
+              f"gates (safe default){RST}")
+    elif not changed:
+        print(f"{DIM}--since {scope_ref}: nothing changed -> no gates{RST}")
+        gates = []
+        _PREFLIGHT_CHANGED_FILES = []
+    else:
+        gates = _gates_for_changes(changed)
+        _PREFLIGHT_CHANGED_FILES = changed
+        print(f"{DIM}--since {scope_ref}: {len(changed)} file(s) changed "
+              f"-> {len(gates)} gate(s){RST}")
     if args.full:
         gates += FULL_GATES
     if args.validation:
         gates += VALIDATION_GATES
         if args.full:
             gates += VALIDATION_FULL_GATES
-    if args.since:
-        changed = _changed_since(args.since)
-        if changed is None:
-            print(f"{YEL}--since {args.since}: range unresolved -> running ALL "
-                  f"gates (safe default){RST}")
-        elif not changed:
-            print(f"{DIM}--since {args.since}: nothing changed -> no gates{RST}")
-            gates = []
-        else:
-            gates = _gates_for_changes(changed)
-            print(f"{DIM}--since {args.since}: {len(changed)} file(s) changed "
-                  f"-> {len(gates)} gate(s){RST}")
     if args.only:
         keys = {k.strip() for k in args.only.split(",")}
         gates = [g for g in (ALL_GATES + FULL_GATES + VALIDATION_GATES + VALIDATION_FULL_GATES)

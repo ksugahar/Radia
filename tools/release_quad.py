@@ -84,8 +84,33 @@ import zipfile
 from datetime import datetime, timezone
 from importlib import metadata as importlib_metadata
 from pathlib import Path
+from urllib.error import HTTPError, URLError
 from urllib.parse import urlparse
+from urllib.request import Request, urlopen
 from urllib.request import url2pathname
+
+
+def gh_get(path):
+    """Return one GitHub REST JSON response, using a token when available."""
+    url = path if path.startswith("https://") else (
+        "https://api.github.com/" + path.lstrip("/")
+    )
+    headers = {
+        "Accept": "application/vnd.github+json",
+        "User-Agent": "radia-release-quad",
+        "X-GitHub-Api-Version": "2022-11-28",
+    }
+    token = os.environ.get("GH_TOKEN") or os.environ.get("GITHUB_TOKEN")
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    request = Request(url, headers=headers)
+    try:
+        with urlopen(request, timeout=30) as response:
+            return json.loads(response.read()), dict(response.headers.items())
+    except HTTPError as exc:
+        raise RuntimeError(f"GitHub API HTTP {exc.code}: {exc.reason}") from exc
+    except URLError as exc:
+        raise RuntimeError(f"GitHub API network error: {exc.reason}") from exc
 
 # Force UTF-8 stdout/stderr so en/em dashes and CJK in messages do not
 # crash the script on ja-JP cp932 consoles.
@@ -1804,45 +1829,10 @@ def cmd_restore_editable(args):
 
 
 # ============================================================
-# Phase 5.5 gate: CI-green BEFORE tagging (gh-free)
+# Phase 5.5 gate: CI-green BEFORE tagging
 # ============================================================
-# The self-hosted [windows-radia] runner runs ON LAB, so we read CI
-# state from its per-run output directory instead of `gh` (abandoned on
-# LAB 2026-05-28; not on PATH).  This is the enforcement behind the
-# "push main -> confirm CI green -> THEN tag" policy that stops the
-# v4.80.0 -> v4.80.5 version-burning (tag CI failing on a broken commit).
-CI_OUTPUT_ROOT = Path(r"C:\temp")
-CI_OUTPUT_PATTERN = "radia-ci-output-*"
-CI_CONTEXT_NAME = "ci-context.json"
-
-
-def _ci_worker_running():
-    """True iff the GitHub Actions Runner.Worker (a running CI job) exists."""
-    p = subprocess.run(
-        ["tasklist", "/FI", "IMAGENAME eq Runner.Worker.exe", "/NH"],
-        capture_output=True, text=True)
-    return "Runner.Worker" in (p.stdout or "")
-
-
-def _find_ci_output_dir(head_sha: str, started_at: float) -> Path | None:
-    """Return the fresh per-run CI output directory for ``head_sha``."""
-    candidates = []
-    for context_path in CI_OUTPUT_ROOT.glob(
-            f"{CI_OUTPUT_PATTERN}/{CI_CONTEXT_NAME}"):
-        try:
-            context = json.loads(context_path.read_text(encoding="utf-8"))
-        except (OSError, UnicodeError, json.JSONDecodeError):
-            continue
-        if context.get("schema") != "radia.ci-output-context.v1":
-            continue
-        if context.get("sha") != head_sha:
-            continue
-        if context_path.stat().st_mtime < started_at - 180:
-            continue
-        candidates.append(context_path.parent)
-    if not candidates:
-        return None
-    return max(candidates, key=lambda path: path.stat().st_mtime)
+# Routine CI now runs on mdx. Verify GitHub check-runs by immutable commit SHA;
+# never infer remote CI state from a local Runner.Worker process or C:\temp.
 
 
 def _git_repo_owner_name():
@@ -1858,63 +1848,48 @@ def _git_repo_owner_name():
 
 
 def _check_github_hosted_workflows(
-    sha, *, required_names=("policy-checks",), timeout_sec=1800, poll_sec=20
+    sha, *, required_names=None, timeout_sec=1800, poll_sec=20
 ):
-    """Wait for the named Radia check-runs and require green conclusions.
+    """Wait for SHA-bound check-runs and require their latest attempts green.
 
-    PyPI distributions have independent CI workflows.  The Radia release gate
-    must therefore ignore radia-mcp, cubit-mesh-export, radia-optuna, and
-    Eqnedit64 checks that happen to share the same commit.  The self-hosted
-    Radia build is verified separately from its fresh JUnit files; this helper
-    catches the required GitHub-hosted policy check that leaves nothing in
-    CI_WORKSPACE.
-    Public-repo check-runs endpoint does not require authentication.
-
-    Historical incident (2026-05-30): policy-lint Policy 4 was silently
-    red since commit 6c50c4cc (rad_stream_function.cpp added without
-    updating the CblasColMajor exception list).  cmd_ci_verify reported
-    GREEN because the junit XMLs from self-hosted Windows CI were fine.
-    The user saw RED in the GitHub UI for weeks.  This helper closes
-    that blind spot.
+    When ``required_names`` is omitted, every check registered for the commit
+    is included. This handles path-scoped monorepo CI: only workflows affected
+    by the commit need to exist, but every workflow that does exist must pass.
 
     Returns (ok: bool, message: str).
     """
-    import urllib.request, urllib.error, json, time as _time
+    import time as _time
 
     repo = _git_repo_owner_name()
-    url = (f"https://api.github.com/repos/{repo}/commits/{sha}/check-runs"
-           "?per_page=100")
-    headers = {
-        "Accept": "application/vnd.github+json",
-        "User-Agent": "radia-release_quad",
-    }
-
-    def _fetch():
-        req = urllib.request.Request(url, headers=headers)
-        with urllib.request.urlopen(req, timeout=30) as r:
-            return json.loads(r.read())
+    path = f"repos/{repo}/commits/{sha}/check-runs?per_page=100"
 
     started = _time.time()
     deadline = started + timeout_sec
     last_pending = []
     while True:
         try:
-            data = _fetch()
-        except urllib.error.HTTPError as e:
-            return False, f"GitHub API HTTPError {e.code}: {e.reason}"
-        except urllib.error.URLError as e:
-            return False, f"GitHub API network error: {e.reason}"
+            data, _headers = gh_get(path)
         except Exception as e:
             return False, f"GitHub API error: {type(e).__name__}: {e}"
 
         all_runs = data.get("check_runs", [])
-        runs = [run for run in all_runs if run.get("name") in required_names]
-        found_names = {run.get("name") for run in runs}
-        missing_names = set(required_names) - found_names
-        # Push-triggered workflows may take ~30 s to register; allow up
-        # to 90 s before declaring "no runs found" (the push never
-        # triggered any github-hosted workflow, e.g. paths filter
-        # excluded them, or workflows are disabled).
+        latest_by_name = {}
+        for run in all_runs:
+            name = run.get("name")
+            if not name:
+                continue
+            if name not in latest_by_name or run.get("id", 0) > latest_by_name[name].get("id", 0):
+                latest_by_name[name] = run
+
+        if required_names is None:
+            runs = list(latest_by_name.values())
+            missing_names = set() if runs else {"any check-run"}
+        else:
+            runs = [latest_by_name[name] for name in required_names if name in latest_by_name]
+            missing_names = set(required_names) - set(latest_by_name)
+
+        # Push-triggered workflows take time to register. A commit with no
+        # applicable/registered CI is not release evidence.
         if missing_names:
             if _time.time() - started > 90:
                 return False, ("required check-runs not registered for "
@@ -1939,113 +1914,28 @@ def _check_github_hosted_workflows(
         msg = "; ".join(f"{r['name']}: {r['conclusion']}" for r in failures)
         return False, "github-hosted CI RED -- " + msg
     names = sorted(set(r["name"] for r in runs))
-    return True, (f"all {len(runs)} required github-hosted check-runs GREEN "
+    return True, (f"all {len(runs)} latest SHA-bound check-runs GREEN "
                   f"({', '.join(names)})")
 
 
 def cmd_ci_verify(args):
-    """gh-free CI-green gate.  Run AFTER `git push origin main`, BEFORE tags.
+    """Require every latest GitHub check-run for HEAD to be green."""
 
-    1. Wait for the self-hosted runner job (Runner.Worker) to appear, then
-       finish.  If no run starts within 10 min, fail (did the push trigger
-       CI?) -- do NOT tag on an unverified commit.
-    2. Assert every junit XML in the CI workspace is FRESH (written by THIS
-       run, not a stale prior one) AND failures=errors=0.
-
-    Exit 0 = green (safe to create + push the release tags).  Non-zero =
-    red / unverified (fix-forward on main, re-run, do NOT tag).
-
-    CAVEAT (documented, not authoritative): this covers the build + test
-    steps -- a build failure leaves the XMLs stale/absent (reads as
-    not-green), but a failure in a post-test step is not caught.  gh's
-    check-runs API would be authoritative; gh is unavailable on LAB.
-    """
-    import time
-    import datetime as _dt
-    from xml.etree import ElementTree as ET
-
-    step("Phase 5.5: CI verify (gh-free) -- wait for runner, then check test XMLs")
-    t0 = time.time()
+    step("Phase 5.5: CI verify -- SHA-bound GitHub check-runs")
     head_sha = subprocess.check_output(
         [GIT_EXE, "rev-parse", "HEAD"], cwd=str(REPO), text=True).strip()
-    saw = False
-    while True:
-        now = time.time()
-        if _ci_worker_running():
-            if not saw:
-                print("  Runner.Worker active -- CI job running; waiting for it to finish...")
-            saw = True
-        elif saw:
-            print("  Runner.Worker exited -- CI job complete.")
-            break
-        elif now - t0 > 600:
-            fail("no CI run started within 10 min -- did `git push origin main` "
-                 "trigger a run? Not verified; do NOT tag.")
-            return 4
-        if now - t0 > 40 * 60:
-            fail("CI run did not finish within 40 min; not verified.")
-            return 4
-        time.sleep(20)
-
-    output_dir = _find_ci_output_dir(head_sha, t0)
-    if output_dir is None:
-        fail(f"no fresh {CI_CONTEXT_NAME} for HEAD {head_sha[:8]} under "
-             f"{CI_OUTPUT_ROOT}\\{CI_OUTPUT_PATTERN} -- CI output cannot be "
-             "attributed to this commit. NOT green.")
-        return 4
-    print(f"  CI output = {output_dir}")
-    xmls = sorted(str(path) for path in output_dir.glob("*results*.xml"))
-    if not xmls:
-        fail(f"no *results*.xml in {output_dir} -- CI produced no test output "
-             "(the build step likely failed). NOT green.")
-        return 4
-
-    bad = 0
-    print(f"\n  {'xml':<30} | {'tests':>6} | {'fail':>4} | {'err':>4} | mtime")
-    print("  " + "-" * 72)
-    for x in xmls:
-        try:
-            root = ET.parse(x).getroot()
-            suites = root.findall("testsuite") or [root]
-            tests = sum(int(s.get("tests", 0) or 0) for s in suites)
-            fails = sum(int(s.get("failures", 0) or 0) for s in suites)
-            errs = sum(int(s.get("errors", 0) or 0) for s in suites)
-        except Exception as e:
-            fail(f"could not parse {os.path.basename(x)}: {e}")
-            bad += 1
-            continue
-        mt = os.path.getmtime(x)
-        fresh = mt >= (t0 - 180)   # written by this run (allow 3 min pre-slack)
-        mts = _dt.datetime.fromtimestamp(mt).strftime("%H:%M:%S")
-        is_ok = (fails == 0 and errs == 0 and fresh)
-        if not is_ok:
-            bad += 1
-        print(f"  {os.path.basename(x):<30} | {tests:>6} | {fails:>4} | {errs:>4} | "
-              f"{mts}{'  STALE' if not fresh else ''}")
-    if bad:
-        print("")
-        fail(f"{bad} test XML(s) failing or stale -- CI NOT green. "
-             "Fix-forward on main and re-run; do NOT tag.")
-        return 4
-    print("")
-    ok("self-hosted (build-test) CI GREEN "
-       "(all test XMLs fresh, failures=errors=0).")
-
-    # ALSO verify the GitHub-hosted Radia policy check. Other PyPI
-    # distributions have independent CI and never gate a Radia release.
-    # See _check_github_hosted_workflows for the why (2026-05-30 incident).
-    step("CI verify (github-hosted): Radia policy lint")
     print(f"  HEAD = {head_sha[:8]}")
-    gh_ok, gh_msg = _check_github_hosted_workflows(head_sha)
+    gh_ok, gh_msg = _check_github_hosted_workflows(
+        head_sha, required_names=None, timeout_sec=3600
+    )
     print("  " + gh_msg)
     if not gh_ok:
-        fail("github-hosted CI is RED -- inspect at "
+        fail("CI is RED or unverified -- inspect at "
              f"github.com/{_git_repo_owner_name()}/actions, fix-forward.")
-        return 5
+        return 4
 
     print("")
-    ok("CI is fully GREEN (self-hosted + github-hosted). "
-       "Safe to create + push the release tags (Phase 6).")
+    ok("CI is GREEN for this exact commit. Safe to create and push release tags.")
     return 0
 
 
@@ -2464,7 +2354,7 @@ def main():
         "restore-editable",
         help="stop MCP transports and restore LAB/100号機 to canonical editable sources")
     sub.add_parser("ci-verify",
-                    help="Phase 5.5: gh-free CI-green gate (run after push main, before tag)")
+                    help="Phase 5.5: SHA-bound CI-green gate (after push main, before tag)")
     sm = sub.add_parser("sync-main",
                         help="fetch -> twin-aware rebase -> preflight --fix -> push")
     sm.add_argument("--no-push", action="store_true",
