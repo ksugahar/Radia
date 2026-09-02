@@ -1312,6 +1312,44 @@ are kept and terminated so consecutive bullets cannot fuse into one
 pseudo-sentence. An English period does not end a sentence for the Japanese
 splitter, so it does not count as a terminator here.
 
+## Foreign Matter: Fewer Proper Nouns (異物を混入させない)
+
+2026-09-02 の実測。基盤C計画調書の準備状況に、研究代表者の別の実績を
+二文で足した。「軸対称解析でも、公開ソフトFEMMの作者Meeker氏の断片コードを
+論文の定式化から2次要素へ拡張実装し、試験付きの解析モジュールにした。本研究は
+この掘り起こしと拡張を機関間で行う。」頁に収まり、機械検査は全て通過した。
+研究代表者の判断は「異物は混入させるべきでない。固有名詞は少ないほうがよい」で、
+二文は取り下げた。
+
+審査者から見た欠陥は四つあった。
+
+1. **三つ目の対象が突然現れる。** 申請書は二課題で一貫していたのに、準備状況の
+   末尾に別の解析対象が出て、どちらの課題に属するのか分からない。
+2. **固有名詞が二つ増え、どちらも一度しか出ない。** 分担者でも共同研究相手でも
+   ないので、審査者は位置づけを探して止まる。
+3. **証拠として重複している。** 「他人の手法を掘り起こして結合した」実績は、
+   4 機関の分担者の資産で既に強く書いてあった。同じ型の証拠を外部の名前で
+   足しても、新しい種類の証拠にはならない。
+4. **出所の説明がない「断片コード」が権利の疑問を招く。** 人権・法令欄で出典と
+   ライセンスの確認を強調している申請書では、なおさら目立つ。
+
+規則は次のとおり。
+
+- **固有名詞は少ないほどよい。** 一つ増やすたびに、審査者がそれを一文で
+  位置づけられるかを問う。位置づけられないなら、その名前が担う証拠ごと外す。
+- **登場人物は、分担者、共同研究相手、対象課題の三種に限る。** それ以外の
+  人名・製品名は、どれほど本物の動機でも申請書の外に置く。
+- **「本物の話」であることは入れる理由にならない。** 研究の動機として
+  真実でも、審査者の読みを止めるなら異物である。
+- **既に強い証拠がある型に、外部の例を重ねない。** 重ねるほど、本筋の証拠が
+  薄まって見える。
+
+`grant_writing_proper_noun_load_check` が、一度しか出ず役割も書かれていない
+固有名詞を列挙する（health report では question）。会場名は年度計画に一度
+出るのが普通なので除く。招へい・招請と同じ文にある相手名は `role_stated`
+付きで返すので、著者が意図して残せる。数を減らす方向が正しく、どれを残すかは
+著者が決める。
+
 ## Translated Japanese Passes Every Lint (直訳調・AI調の通読)
 
 2026-09-02、基盤C計画調書は bedrock・誤用・表記ゆれ・略語の検査をすべて
@@ -1388,6 +1426,7 @@ presentation（`presentation_translationese_check`）にもある。英語論文
 - `grant_writing_count_weak_expressions(text)`
 - `grant_writing_lint_bedrock(text)`
 - `grant_writing_translationese_check(text)` -- 自他動詞の誤り、英語注記、直訳定型句、空疎な強調語
+- `grant_writing_proper_noun_load_check(text)` -- 一度しか出ず役割も書かれていない固有名詞（異物）の列挙
 - `grant_writing_recommendation_letter_template(program="kddi_digital")`
 
 For an ordinary KAKENHI draft, use `program="kaken_generic"`. It checks the

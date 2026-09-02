@@ -3135,6 +3135,156 @@ def grant_writing_cross_organization_pilot_check(text: str) -> dict:
     }
 
 
+# Latin tokens that are vocabulary, venues, or file names rather than a person,
+# product, or institution the reviewer must place. A conference named once in
+# the yearly plan is normal; a person named once in 準備状況 is not.
+_PROPER_NOUN_COMMON_TOKENS = frozenset({
+    "Python", "README", "API", "Git", "GitHub", "GitLab", "Windows", "Linux",
+    "Plan", "Symposium", "Conference", "Transactions", "Journal", "Proceedings",
+    "Trans", "Magn", "Access", "The", "Fig", "Table", "Litz", "Cauer",
+    "Galerkin", "Kelvin", "Maxwell", "Helmholtz", "Cholesky", "Gauss", "Newton",
+    "Krylov", "Fourier", "Laplace", "Poisson", "Jacobi", "Lagrange", "Euler",
+})
+# Latin letters only: ``[^\W\d_]`` also matches kana and kanji, and the token
+# 「Cauer梯子回路の打切り誤差式を導出した」 was reported as one proper noun.
+_LATIN_LETTER = r"[A-Za-zÀ-ÖØ-öø-ÿ]"
+_PROPER_NOUN_LATIN = re.compile(
+    rf"(?<![A-Za-z-])[A-Z]{_LATIN_LETTER}{{2,}}(?:[ -][A-Z]{_LATIN_LETTER}{{2,}})*"
+)
+_PROPER_NOUN_PERSON = re.compile(
+    rf"((?:[A-Z]{_LATIN_LETTER}+ )?(?:de |van |von )?[A-Z]{_LATIN_LETTER}{{1,20}}|[一-鿿]{{1,4}})氏"
+)
+_VENUE_CONTEXT = re.compile(r"発表|講演|会議|Symposium|Conference|Workshop|20\d\d")
+# A role is a relation to this plan (invited, co-authored, provides an asset),
+# not an attribution: 「作者Meeker氏」 says who wrote a program, and the reviewer
+# still does not know why the plan names him.
+_ROLE_CONTEXT = re.compile(
+    r"招へい|招請|訪問|共著|共同研究|連携|分担|担当|提供|受け入れ|滞在|留学"
+)
+
+
+def grant_writing_proper_noun_load_check(text: str) -> dict:
+    """Count proper nouns a reviewer must place, and list the ones named once.
+
+    Measured on 2026-09-02: two sentences added to 準備状況 of a 基盤C draft
+    introduced a third analysis object (軸対称解析), a software name (FEMM) and
+    a person (Meeker) that appeared nowhere else. Every mechanical check still
+    passed. The applicant read the result and said it was foreign matter: the
+    reviewer would see a new story, not a supporting example, and would look
+    for the place of two names that have none. The sentences were removed.
+
+    A proper noun earns its place when the reviewer can tell in one sentence
+    who or what it is and why the plan needs it. One that appears once, with
+    no role stated in its sentence, usually cannot. Venues in a yearly plan
+    are skipped; a collaborator named once with 招へい or 招請 beside the name
+    is listed with ``role_stated`` so the author can keep it deliberately.
+
+    This is a question for the author, not a defect: fewer proper nouns is the
+    direction, and the author decides which ones the argument needs.
+    """
+    raw = _read_text_if_path(text)
+    # The LaTeX preamble names the applicant in macros (``K.~Sugahara``); only
+    # the document body is what the reviewer reads.
+    if "\\begin{document}" in raw:
+        raw = raw.split("\\begin{document}", 1)[1]
+    prose = _prose_for_lint(raw)
+    sentences = [
+        s.strip() for s in re.split(r"(?<=[。．!?！？])|\n+", prose) if s.strip()
+    ]
+    mentions: dict[str, list[str]] = {}
+    kinds: dict[str, str] = {}
+
+    def note(name: str, kind: str, sentence: str) -> None:
+        mentions.setdefault(name, []).append(sentence)
+        kinds.setdefault(name, kind)
+
+    def person_key(name: str) -> str:
+        # 「Karl Hollaus氏」 and 「Hollaus氏」 are one person; a Latin name is
+        # keyed by its surname, a Japanese name by the full string here and
+        # merged with its surname-only form below.
+        if re.match(r"[A-Za-z]", name):
+            return name.split(" ")[-1] if not name.startswith(("de ", "van ", "von ")) else name
+        return name
+
+    for sentence in sentences:
+        person_spans = []
+        for match in _PROPER_NOUN_PERSON.finditer(sentence):
+            person_spans.append(match.span())
+            note(person_key(match.group(1).strip()), "person", sentence)
+        # All-caps tokens are acronyms and belong to the acronym audit; a
+        # bare 「Hollaus」 after 「Hollaus氏」 lands on the same key.
+        for match in _PROPER_NOUN_LATIN.finditer(sentence):
+            start, end = match.span()
+            if any(start < p_end and end > p_start for p_start, p_end in person_spans):
+                continue
+            token = match.group(0)
+            words = re.split(r"[ -]", token)
+            if any(w in _PROPER_NOUN_COMMON_TOKENS or w.isupper() for w in words):
+                continue
+            note(token, "name", sentence)
+
+    # 「伊田明弘氏」 then 「伊田氏」: fold the full name into the surname.
+    persons = sorted((n for n in mentions if kinds[n] == "person"), key=len)
+    for short in persons:
+        for long in persons:
+            if long != short and long.startswith(short) and long in mentions:
+                mentions[short].extend(mentions.pop(long))
+                kinds.pop(long, None)
+
+    if not mentions:
+        return {
+            "applicable": False,
+            "proper_noun_count": 0,
+            "distinct_count": 0,
+            "singletons": [],
+            "comments": [],
+            "recommendations": [],
+            "target": "each proper noun placed by the reviewer in one sentence; the fewer, the better",
+            "source": "proper-noun load check (2026-09-02 基盤C 異物混入の実測)",
+        }
+
+    total = sum(len(v) for v in mentions.values())
+    singletons = []
+    for name, hits in sorted(mentions.items(), key=lambda kv: kv[0]):
+        if len(hits) != 1:
+            continue
+        sentence = hits[0]
+        if kinds[name] == "name" and _VENUE_CONTEXT.search(sentence):
+            continue
+        singletons.append({
+            "name": name,
+            "kind": kinds[name],
+            "role_stated": bool(_ROLE_CONTEXT.search(sentence)),
+            "excerpt": sentence[:120],
+        })
+    unplaced = [s for s in singletons if not s["role_stated"]]
+    chars = max(1, len(re.sub(r"\s", "", prose)))
+    comments = []
+    recommendations = []
+    if unplaced:
+        names = "、".join(s["name"] for s in unplaced[:6])
+        comments.append(
+            f"一度しか出ず、その文に役割も書かれていない固有名詞: {names}。"
+            "審査者は位置づけを探して止まる。"
+        )
+        recommendations.append(
+            "計画の登場人物（分担者・共同研究相手）でも対象課題の一部でもない固有名詞は外す。"
+            "残すなら同じ文に役割を書く。"
+        )
+    return {
+        "applicable": True,
+        "proper_noun_count": total,
+        "distinct_count": len(mentions),
+        "per_1000_chars": round(1000.0 * total / chars, 2),
+        "singletons": singletons,
+        "unplaced_singleton_count": len(unplaced),
+        "comments": comments,
+        "recommendations": recommendations,
+        "target": "each proper noun placed by the reviewer in one sentence; the fewer, the better",
+        "source": "proper-noun load check (2026-09-02 基盤C 異物混入の実測)",
+    }
+
+
 def grant_writing_named_software_abstraction_check(
     text: str,
     software_names: str = "",
@@ -7094,8 +7244,8 @@ def grant_writing_health_report(
         "abstraction", "argument_map", "basic_research", "bedrock", "budget", "capability",
         "claim", "domain", "focus", "format", "integration", "international",
         "irreplaceable", "kaken", "kddi", "literature", "metric", "narrative",
-        "originality", "pages", "persuasion", "pilot", "residue", "scale",
-        "japanese", "readability", "momentum", "sections", "sentence",
+        "nouns", "originality", "pages", "persuasion", "pilot", "residue",
+        "scale", "japanese", "readability", "momentum", "sections", "sentence",
         "translationese", "vague", "vocabulary", "weak",
     }
     unknown_skip_ids = sorted(skip_set - valid_skip_ids)
@@ -7246,6 +7396,18 @@ def grant_writing_health_report(
                     "score": narrative["score"],
                     "comments": narrative["comments"][:5],
                 })
+
+    if "nouns" not in skip_set:
+        nouns = grant_writing_proper_noun_load_check(text)
+        detailed_results["proper_noun_load"] = nouns
+        if nouns["applicable"] and nouns["comments"]:
+            priority_issues.append({
+                "tool": "nouns",
+                "name": "proper_noun_load_check",
+                "severity": "MEDIUM",
+                "score": None,
+                "comments": nouns["comments"][:5],
+            })
 
     if "translationese" not in skip_set:
         translationese = grant_writing_translationese_check(text)

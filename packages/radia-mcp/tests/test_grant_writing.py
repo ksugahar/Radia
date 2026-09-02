@@ -2435,6 +2435,40 @@ def test_budget_source_consistency_accepts_japanese_category_headings(tmp_path):
     assert result["differences"][0]["delta"] == 23
 
 
+def test_proper_noun_load_lists_unplaced_singletons_but_keeps_venues_and_roles():
+    # The 2026-09-02 foreign-matter case: FEMM and Meeker appear once, with no
+    # role in the plan. Hollaus is named once too, but with 招へい beside the
+    # name; COMPUMAG is a venue in the yearly plan.
+    text = (
+        "比留間の拡張有限要素法（XFEM）を混合Galerkin縮約へ接続する。"
+        "Hollaus氏の31日間招へいが採択された。"
+        "COMPUMAG 2027で結合手法を発表する。"
+        "軸対称解析でも、公開ソフトFEMMの作者Meeker氏の断片コードを2次要素へ拡張実装した。"
+    )
+
+    result = gw.grant_writing_proper_noun_load_check(text)
+
+    names = {s["name"]: s for s in result["singletons"]}
+    # 「作者Meeker氏」 attributes a program; it does not place him in the plan.
+    assert "Meeker" in names and names["Meeker"]["kind"] == "person"
+    assert not names["Meeker"]["role_stated"]
+    assert names["Hollaus"]["role_stated"]
+    # All-caps tokens (FEMM, XFEM, COMPUMAG) belong to the acronym audit.
+    assert "FEMM" not in names and "COMPUMAG" not in names
+    assert "Galerkin" not in names
+    assert result["unplaced_singleton_count"] == 1
+    assert result["comments"] and "Meeker" in result["comments"][0]
+
+    report = gw.grant_writing_health_report(text, program="kaken_generic")
+    assert any(q["name"] == "proper_noun_load_check" for q in report["questions"])
+    assert all(f["name"] != "proper_noun_load_check" for f in report["findings"])
+
+    clean = gw.grant_writing_proper_noun_load_check(
+        "手法差による設計量の変動を求め、順位を確定できる条件を示す。"
+    )
+    assert clean["applicable"] is False
+
+
 def test_prose_list_items_survive_but_stay_separate():
     proposal = (
         "\\begin{itemize}\n"
