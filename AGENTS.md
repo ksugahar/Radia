@@ -1308,6 +1308,21 @@ for research / publication uses (e.g. comparing convergence rates of
 Henrotte vs standard H1 on a scalar problem).  They are NOT used by
 production heat solvers and are NOT required.
 
+**Near-axis order rule for axisym SCALAR solves (2026-09-03 study)**:
+standard P1/Q1 cannot reproduce a nonconstant even quadratic radial
+profile while also representing `dT/dr = 0` at the `r = 0` axis.  The
+near-axis profile therefore shows a piecewise-linear cusp.  Production
+axisym heat (`calc_heat_axisym.py`) defaults to `--fes-order 2`; the 3D
+thermal default remains order 1.  On the committed uniform-flux cylinder
+validation, order 2 reduces the spurious radial axis slope from about
+139 C/m to below 0.3 C/m.  This refines, not replaces, the standard-H1
+convention above -- a Henrotte switch is still not needed for scalars.
+Initialize a uniform order>=2 state with `gfT.Set(CF(T0))`, never by
+filling its hierarchical coefficient vector.  Report extrema from
+physical GridFunction evaluations over vertices plus deterministic
+volume and boundary samples; neither raw coefficient extrema nor
+vertex-only extrema are valid for a general order>=2 field.
+
 **Reference**: see
 [`docs/axifem/FORMULATION.md`](docs/axifem/FORMULATION.md)
 sections 5-6 (Henrotte basis derivation for magnetic) and 10b/10c

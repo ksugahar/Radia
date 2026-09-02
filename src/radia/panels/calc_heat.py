@@ -77,6 +77,64 @@ def _log(msg):
     progress("HEAT", msg)
 
 
+def _temperature_extrema(gf_temperature, mesh, fes_order):
+    """Return deterministic physical-field extrema and sampling metadata.
+
+    H1 coefficients above order one are hierarchical coefficients, not
+    point values.  Vertex values are sufficient for an order-one H1 field,
+    while higher-order fields are also evaluated at volume and boundary
+    integration points so edge, face, and cell modes contribute to the
+    reported range.
+    """
+    from ngsolve import BND, IntegrationRule, NodeId, VERTEX, VOL
+
+    vertex_dofs = [
+        dof
+        for vertex in mesh.vertices
+        for dof in gf_temperature.space.GetDofNrs(NodeId(VERTEX, vertex.nr))
+        if dof >= 0
+    ]
+    if not vertex_dofs:
+        raise RuntimeError("the thermal H1 space has no vertex DOFs")
+
+    coefficient_values = np.asarray(gf_temperature.vec.FV().NumPy())
+    samples = [np.asarray(coefficient_values[vertex_dofs], dtype=float)]
+    integration_order = 0
+
+    if int(fes_order) >= 2:
+        integration_order = max(6, 2 * int(fes_order) + 2)
+        for vb in (VOL, BND):
+            for element in mesh.Elements(vb):
+                rule = IntegrationRule(element.type, integration_order)
+                mapped_rule = mesh.GetTrafo(element)(rule)
+                values = np.asarray(gf_temperature(mapped_rule)).reshape(-1)
+                if np.iscomplexobj(values):
+                    scale = max(1.0, float(np.max(np.abs(values))))
+                    if float(np.max(np.abs(values.imag))) > 1.0e-12 * scale:
+                        raise RuntimeError(
+                            "the thermal GridFunction has non-real sample values"
+                        )
+                    values = values.real
+                samples.append(np.asarray(values, dtype=float))
+
+    values = np.concatenate(samples)
+    if not np.all(np.isfinite(values)):
+        raise RuntimeError("the thermal GridFunction contains non-finite values")
+    return (
+        float(np.min(values)),
+        float(np.max(values)),
+        {
+            "method": (
+                "vertices"
+                if integration_order == 0
+                else "vertices-and-volume-boundary-integration-points"
+            ),
+            "integration_order": int(integration_order),
+            "sample_count": int(values.size),
+        },
+    )
+
+
 # -----------------------------------------------------------------
 # Material presets (workpiece thermal properties)
 # -----------------------------------------------------------------
@@ -363,7 +421,7 @@ def solve_heat(wp_vol,
     # Lazy imports so --help is fast.
     from ngsolve import (Mesh, H1, BilinearForm, LinearForm, GridFunction,
                           Integrate, CF, CoefficientFunction, ds, dx, BND,
-                          VTKOutput, TaskManager, NodeId, VERTEX)
+                          VTKOutput, TaskManager)
 
     if not os.path.isfile(wp_vol):
         return {"error": f"--wp-vol not found: {wp_vol}"}
@@ -577,15 +635,12 @@ def solve_heat(wp_vol,
         _log(f"STEP:{step}/{n_steps} t={t:.3f}s "
              f"T_probe={T_probe[-1] if probe_point is not None else 'n/a'}")
 
-    # Final stats: peak T over the volume (vertex DOFs only -- for
-    # order >= 2 the hierarchical H1 edge/face coefficients are not
-    # temperature values).
-    vert_dofs = [d for vtx in wp_mesh.vertices
-                 for d in fes_T.GetDofNrs(NodeId(VERTEX, vtx.nr))
-                 if d >= 0]
-    T_arr = np.asarray(gfT.vec.FV().NumPy())[vert_dofs]
-    T_max = float(np.max(T_arr))
-    T_min = float(np.min(T_arr))
+    # Final stats use physical field samples.  Raw order>=2 H1
+    # coefficients are not temperatures, and vertices alone can miss an
+    # edge-, face-, or cell-mode extremum.
+    T_min, T_max, T_extrema = _temperature_extrema(
+        gfT, wp_mesh, fes_order
+    )
     # Volume-averaged mean temperature -- the integral quantity
     # (int T dV / int dV), the physically meaningful "average" rather
     # than a nodal mean (kubota 2026-05-29: report mean/max/min).
@@ -691,6 +746,7 @@ def solve_heat(wp_vol,
     return {
         "T_max_C": T_max,
         "T_min_C": T_min,
+        "T_extrema": T_extrema,
         "T_mean_C": T_mean,
         "T_initial_C": float(t_initial),
         "T_probe_history_C": T_probe if probe_point is not None else None,
