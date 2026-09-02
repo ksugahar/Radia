@@ -24,6 +24,18 @@ def main() -> int:
             failures.append(f"missing file-backed font invariant: {required}")
     if "test_font_session.ps1" not in workflow:
         failures.append("Eqnedit64 CI does not run the font-session stress gate")
+    font_session = (ROOT / "build/test_font_session.ps1").read_text(
+        encoding="utf-8"
+    )
+    ui_fuzz = (ROOT / "build/test_ui_fuzz.ps1").read_text(encoding="utf-8")
+    for name, script in (("font lifecycle", font_session),
+                         ("UI fuzz", ui_fuzz)):
+        for required in ("INCONCLUSIVE", "pre-test control", "FromMinutes(10)"):
+            if required not in script:
+                failures.append(
+                    f"{name} guard cannot distinguish ambient font-host churn: "
+                    f"missing {required!r}"
+                )
 
     if failures:
         for failure in failures:
