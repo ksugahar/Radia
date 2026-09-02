@@ -2,7 +2,7 @@
 
 Auto-generated from each server's `mcp.list_tools()` via `scripts/gen_tools_doc.py`. **Do not edit by hand** — regenerate after adding/renaming tools.
 
-Total: **1100 tools** across 49 MCP servers.
+Total: **1102 tools** across 49 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
@@ -44,7 +44,7 @@ Total: **1100 tools** across 49 MCP servers.
 | [`mcp-server-mathematica`](#mcp-server-mathematica) | `radia_mcp.mathematica` | 15 |
 | [`mcp-server-md2html`](#mcp-server-md2html) | `radia_mcp.md2html` | 3 |
 | [`mcp-server-chart2d`](#mcp-server-chart2d) | `radia_mcp.chart2d` | 25 |
-| [`mcp-server-paper-writing`](#mcp-server-paper-writing) | `radia_mcp.paper_writing` | 200 |
+| [`mcp-server-paper-writing`](#mcp-server-paper-writing) | `radia_mcp.paper_writing` | 202 |
 | [`mcp-server-grant-writing`](#mcp-server-grant-writing) | `radia_mcp.grant_writing` | 49 |
 | [`mcp-server-poster`](#mcp-server-poster) | `radia_mcp.poster` | 33 |
 | [`mcp-server-literature-index`](#mcp-server-literature-index) | `radia_mcp.literature_index` | 10 |
@@ -1236,6 +1236,7 @@ Module: `radia_mcp.paper_writing.server`
 | `presentation_adaptive_health_report` | pptx health_report の severity を venue で adjust。 |
 | `presentation_add_citation_footer` | Add a small citation footnote textbox along the BOTTOM of one |
 | `presentation_analyze_sentences` | 文長分析。スライドは短文指向。 |
+| `presentation_apply_bold_markers` | Turn literal ``**bold**`` markers in slide text into bold runs. |
 | `presentation_apply_math_subscripts` | ``X_y`` / ``X^{2}`` 形式のテキストを PowerPoint の下付き・上付き run へ変換する。 |
 | `presentation_arrow_usage` | 矢印 shape (line connector with arrow) の過剰使用検出。 |
 | `presentation_chart_simplification_check` | Chart 簡素化 (Cole Knaflic style) の 5 軸診断。 |
@@ -1263,6 +1264,7 @@ Module: `radia_mcp.paper_writing.server`
 | `presentation_check_progress_indicator` | outline / section-header slides for progress indication を検出。 |
 | `presentation_check_qa_backup_slides` | pptx に Q&A backup slide (hidden or named) が N 枚以上あるか確認. |
 | `presentation_check_quantitative_claim_context` | 強調百分率に、量・位置/集約・比較基準が伴うかを点検。 |
+| `presentation_check_raster_slides` | Find slides that are a single picture with no editable text. |
 | `presentation_check_raw_math_markup` | スライド本文に残った未整形の数式マークアップを検出する。 |
 | `presentation_check_script_paragraph_length` | 発表原稿の 1 パラグラフが 200-300 字目安から大きく外れていないか。 |
 | `presentation_check_slide_density` | 1 スライドあたりの文字密度チェック (テキストを直接渡す)。 |
