@@ -188,6 +188,29 @@ DoF transforms, deformation ownership, and GetTrafo evaluation remain in
 NGSolve. Python callback behavior and Python object identity remain
 Python-only tests.
 
+## Python/MEX NGSolve oracle
+
+`tests/matlab/test_ngsolve_mex_pybind_parity.m` is the fast direct
+cross-language gate. It generates a temporary MAT fixture through the public
+NGSolve Python API on the same `.vol` file, then runs the MATLAB `radia_mex`
+boundary against it. Expected numerical values never come from handwritten
+MATLAB data.
+
+The result-bearing campaign under
+`validation_test/ngsolve_matlab_parity/` extends that gate without making
+routine CI solver-heavy:
+
+- 100 bounded linear cases split evenly between 2D and 3D;
+- 500 TRI, QUAD, mixed TRI/QUAD, TET, HEX, and WEDGE cases;
+- 20 matrix-free cases from 21,515 to 134,130 DoFs; and
+- 15 manufactured-solution cases over five element families.
+
+The checked HIBINO run passed all 535 extended cases on MATLAB R2026a Update
+4 and NGSolve 6.2.2606, with zero live native handles at termination. MATLAB
+may request a MATLAB `sparse` matrix at an explicit observation or optimization
+boundary; `radia.ngsolve.Matrix`, `Vector`, and `Solver` retain NGSolve storage
+for native repeated work between those boundaries.
+
 The production sheet-topology driver is
 `radia.topopt.optimizeHexSheetTopology`. Each outer batch performs 5--20
 continuous-activation inner iterations through VectorH1/GetTrafo. Remove and

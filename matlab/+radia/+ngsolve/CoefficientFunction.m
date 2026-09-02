@@ -60,6 +60,18 @@ classdef CoefficientFunction < handle
                 obj.NativeHandle, points);
         end
 
+        function result = component(obj, index)
+            arguments
+                obj (1,1) radia.ngsolve.CoefficientFunction
+                index (1,1) double {mustBeInteger, mustBePositive}
+            end
+            obj.assertAlive();
+            result = radia.ngsolve.CoefficientFunction( ...
+                radia.internal.callMex( ...
+                'ngsolve.coefficient_function.component', ...
+                obj.NativeHandle, index));
+        end
+
         function result = plus(left, right)
             arguments
                 left (1,1) radia.ngsolve.CoefficientFunction

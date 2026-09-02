@@ -124,6 +124,20 @@ classdef Matrix < handle
             result = radia.ngsolve.Vector.fromNativeHandle(nativeHandle);
         end
 
+        function matvecInto(obj, input, output, options)
+            arguments
+                obj (1,1) radia.ngsolve.Matrix
+                input (1,1) radia.ngsolve.Vector
+                output (1,1) radia.ngsolve.Vector
+                options.Transpose (1,1) logical = false
+            end
+            obj.assertAlive();
+            radia.internal.callMex( ...
+                'ngsolve.matrix.matvec_into', obj.NativeHandle, ...
+                input.nativeHandle(), output.nativeHandle(), ...
+                options.Transpose);
+        end
+
         function result = inverse(obj)
             obj.assertAlive();
             nativeHandle = radia.internal.callMex( ...

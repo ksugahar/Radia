@@ -1,0 +1,105 @@
+{
+  "schema": "radia.ngsolve-python-matlab-extended-validation.v1",
+  "generated_utc": "2026-09-01T17:36:38Z",
+  "all_passed": true,
+  "breadth": {
+    "schema": "radia.ngsolve-python-matlab-breadth-500.v1",
+    "generated_utc": "2026-09-01T17:15:52Z",
+    "all_passed": true,
+    "case_count": 500,
+    "passed_count": 500,
+    "failed_count": 0,
+    "mesh_count": 10,
+    "two_d_case_count": 250,
+    "three_d_case_count": 250,
+    "complex_case_count": 60,
+    "spatial_coefficient_case_count": 190,
+    "boundary_case_count": 40,
+    "maximum_dofs": 540,
+    "dof_limit": 1.0E+6,
+    "maximum_matrix_relative_error": 3.2022376467229122E-15,
+    "maximum_matvec_relative_error": 1.8129770717110064E-15,
+    "maximum_solution_relative_error": 5.8469587597685117E-10,
+    "duration_s": 394.5164883
+  },
+  "scale": {
+    "schema": "radia.ngsolve-python-matlab-scale-20.v1",
+    "generated_utc": "2026-09-01T17:28:12Z",
+    "all_passed": true,
+    "case_count": 20,
+    "passed_count": 20,
+    "failed_count": 0,
+    "minimum_dofs": 21515,
+    "maximum_dofs": 134130,
+    "dof_floor": 10000,
+    "dof_limit": 1.0E+6,
+    "maximum_matvec_relative_error": 9.5859095398859718E-16,
+    "maximum_energy_relative_error": 3.7358425388932849E-15,
+    "duration_s": 739.4607782
+  },
+  "manufactured": {
+    "schema": "radia.ngsolve-matlab-manufactured-solution.v1",
+    "generated_utc": "2026-09-01T17:34:14Z",
+    "all_passed": true,
+    "case_count": 15,
+    "passed_count": 15,
+    "failed_count": 0,
+    "mesh_family_count": 5,
+    "maximum_free_residual_relative": 1.3926437123007151E-17,
+    "maximum_final_sample_error": 7.0082828429463007E-16,
+    "duration_s": 38.3340212,
+    "convergence": [
+      {
+        "mesh_id": "tri_meshed",
+        "first_error": 0.03960000000000001,
+        "final_error": 3.4000580129145419E-16,
+        "monotone": true,
+        "final_accurate": true
+      },
+      {
+        "mesh_id": "quad_single",
+        "first_error": 0.03960000000000001,
+        "final_error": 7.0082828429463007E-16,
+        "monotone": true,
+        "final_accurate": true
+      },
+      {
+        "mesh_id": "tet_meshed",
+        "first_error": 0.0017210433816499142,
+        "final_error": 7.19910242530375E-17,
+        "monotone": true,
+        "final_accurate": true
+      },
+      {
+        "mesh_id": "hex_single",
+        "first_error": 2.688821387764051E-17,
+        "final_error": 1.3530843112619095E-16,
+        "monotone": true,
+        "final_accurate": true
+      },
+      {
+        "mesh_id": "wedge_single",
+        "first_error": 0.0066149999999999994,
+        "final_error": 8.5001450322863548E-17,
+        "monotone": true,
+        "final_accurate": true
+      }
+    ]
+  },
+  "executed_tiers": {
+    "breadth": false,
+    "scale": false,
+    "manufactured": false
+  },
+  "native_handle_count_after": 0,
+  "host_name": "HIBINO",
+  "computer_architecture": "win64",
+  "mex_path": "C:\\temp\\radia_ngsolve_hibino_stage\\matlab\\radia_mex.mexw64",
+  "mex_sha256": "9149f254621d30128a661e1d4159e5939459eaa49f82427204fd1ebb78e07beb",
+  "matlab_version": "26.1.0.3312084 (R2026a) Update 4",
+  "matlab_release": "2026a",
+  "ngsolve_version": "6.2.2606",
+  "python_version": "3.12.10",
+  "total_duration_s": 1172.3112877,
+  "invocation_duration_s": 47.891344
+}

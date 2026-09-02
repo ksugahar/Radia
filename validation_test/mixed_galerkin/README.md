@@ -56,11 +56,54 @@ solved per-frequency. Intermediate-frequency accuracy is bounded by the
 | `cube3d/`      | Mixed Galerkin on solid cube (rank-N + closed K_ss + NGSolve FEM ground truth verified) |
 | `time_domain/` | Time-domain realization: AAA rational fit → 21 stable poles (cube). No `d` tuning. |
 | `ngsolve_validation/` | Framework-agnostic NGSolve FEM cross-validation (cube / cuboid Kelvin) |
-| `lshape3d_ngsolve_mellin.py` | Non-tensor 3D shape (L-shape) probe — Mellin universality check, mixed Galerkin extension is future work |
+| `cuboid_general/` | Non-cubic cuboid: the generalized Mellin asymptote by codimension. Promoted 2026-09-02 |
+| `lshape3d_ngsolve_mellin.py` | Non-tensor 3D shape (L-shape) probe — Mellin universality check |
+| `lshape3d_mixed_galerkin.py` | L-shape mixed model + `lshape3d_mixed_galerkin_results.txt`. Promoted 2026-09-02 |
 
 Each geometry directory contains numbered scripts (`01_*.py`, `02_*.py`,
 ...) implementing successive refinements: baseline 1-DOF surface,
 Senior tower corrections, rank-N bulk sweep, etc.
+
+
+## Promoted from the conference folder (2026-09-02)
+
+A copy of this directory lived in
+`W:\02_学会資料\2026年度\2026_09_IGTE_Symposium\CauerLadderNetwork@菅原\mixed_galerkin`
+and had grown past it. The IGTE figure script imported from that copy, so the
+material below was driving talk content while being invisible here -- which is
+why this README could still say "corner Mellin needed" and "mixed Galerkin
+extension is future work" after both had been attempted.
+
+These are research scripts, not settled results. Read each one's own docstring
+before quoting it.
+
+| file | what it tried | state |
+|---|---|---|
+| `cube3d/08_edge_corner_basis.py` | split the single tensor envelope into 7: three faces, three edges, one corner | FAILED, and diagnosed: the separable family is asymptotically rank-deficient, the condition number explodes and the solve returns garbage. This is why "one DOF per boundary class" is not the fix it looks like |
+| `cube3d/09_wedge_basis.py` | a non-separable basis with genuine 2D structure across a z-edge, plus 11 symmetry images | outcome NOT recorded in the file; run it before citing |
+| `cuboid_general/01..05` | generalized Mellin for `Lx != Ly != Lz`: `c_0 = S sqrt(sigma/mu)` (faces), `c_1 = -(16/pi mu)(Lx+Ly+Lz)` (edges), `c_2 = 48/(pi mu^1.5 sqrt(sigma))` (vertices, size-independent) | phase 1 disagrees with FEM by 95-528 % at 1e7-1e8 Hz, and it is the FEM that is wrong. Deep skin requires `|Y| ~ f^-1/2`, i.e. a factor `sqrt(10) = 3.162` per decade. The Mellin column converges to it (3.004, 3.111, 3.146) while the FEM column goes 3.134, 1.947, **1.037** -- flat, which an eddy-current admittance cannot be. At `ne = 712`, about 9 elements per side, and `|gL| = 428` at 1e8 Hz, one element spans ~48 skin depths; saturation is what an unresolved skin layer looks like. Re-run the reference on a resolved mesh before reading phase 1 as a test of the asymptote |
+| `lshape3d_mixed_galerkin.py` | mixed model on a body with one concave dihedral edge | the surface enrichment makes it WORSE: +21 % to +67 % against FEM with a bounding-box tensor envelope, which does not satisfy the boundary condition on the concave step faces |
+
+Resolved 2026-09-02, so the conference copy no longer feeds anything:
+
+- `cylinder/plot_mixed_galerkin_overview.py` and
+  `sphere/plot_sphere_mixed_galerkin_overview.py` each held a second
+  `Y_mixed_galerkin`. Compared function body against function body, they are
+  the SAME code as `cylinder/01_no_d_baseline.py` and `sphere/02_hoibc_gamma1.py`
+  respectively, comments aside. Nothing had diverged; there was simply a second
+  copy waiting to.
+- `Y_cln_pade` had no counterpart here, which is why the talk's CLN curves could
+  not be reproduced from a clone. Promoted to
+  `radia.maglev.mixed_galerkin.references` and parameterised by `(a, sigma, mu)`
+  like its neighbours; it reproduces the old one bit for bit at eight test
+  points across both `kind="L"` and `kind="R"`.
+- The talk's `make_figs.py` now loads `cylinder/01` and `sphere/02` from THIS
+  directory by path, and takes `Y_cln_pade` from the reference API. Its
+  `results.json` after the switch differs from before only in its timestamp.
+- `_references/cylinder_bessel.py`, `_references/sphere_bessel.py` — superseded
+  here by `radia.maglev.mixed_galerkin.references`; the copy is the older route.
+- `square2d/_broken_simple_envelope.py` — a dead end kept under a `_broken_`
+  name; its lesson is already in `memory/mixed_galerkin_examples_prune.md`.
 
 ## Headline results (post Phase 8b correction)
 
@@ -72,8 +115,8 @@ for remaining square/cube candidates):
 |---|---|---|---|---|
 | Cylinder    | 0.04% wall band  | 2.4e-4% | 2e-5% | 1e-5% |
 | Sphere      | 0.11%            | 0.001% | (Senior tower terminates at γ_1) | |
-| 2D square   | 0.03 – 0.26%     | — (flat face: Senior trivial) | corner Mellin needed | |
-| 3D cube     | (audit pending — task #183) | — | — | |
+| 2D square   | 0.03 – 0.26%     | — (flat face: Senior trivial) | tensor corner envelope verified; non-separable edge enrichment remains open in 3D | |
+| 3D cube     | 0.33% vs NGSolve FEM (rank 20, closed K_ss) | — | — | |
 
 All results obtained with **zero free parameters**: the bulk-surface
 crossover frequency is determined by the Galerkin system, not a
@@ -101,25 +144,25 @@ The development went through ~11 numbered "Phases" within the
 | **8b** | **Discovered Y_exact bug**: the cylinder reference switched from full Bessel to K_SIBC/√s asymptote at \|γa\| = 50. The "0.93% saturation" and "γ_1 ineffective" findings of Phases 2/3/8 were ARTIFACTS. True cylinder accuracy: 0.04% baseline, with Senior tower truncation giving 100× per added DOF. |
 | **8c** | **Foster sum reference audit for 2D square**: N=1999 had 5% bias at wall band; the "0.99% peak" was 97% Foster truncation. True 2D square accuracy: 0.03–0.26% baseline. |
 
-The Phase 8b/8c corrections are the reason this directory exists as a
-clean restart — the scripts archived in
-`../../digest/supplement/2026_05_28_*.py` reflect the original (now
-known-buggy) versions and are kept frozen for publication-history
-purposes. See `digest/supplement/PHASE_8B_ARTIFACT_NOTE.md`.
+The Phase 8b/8c corrections are the reason this directory exists as a clean
+restart. The original publication-history scripts remain outside this
+repository; only the corrected validation implementation and its JSON
+artifact are release evidence here.
 
 ## Open questions
 
-- **Task #183** — 3D cube Foster reference audit. The Phase 6 "20% wall band" used Foster N=99, almost certainly under-converged given the 5% bias seen in 2D at N=1999. Until audited, the 3D cube result is provisional.
+- **Task #183** — 3D cube Foster reference audit. CLOSED by replacing the reference rather than converging it: `cube3d/06_ngsolve_ground_truth.py` measures against an NGSolve FEM solution, giving 0.33% at rank 20 with the closed `K_ss`. The Phase 6 "20% wall band" was indeed a Foster N=99 truncation artifact, the same failure the 2D square showed in Phase 8c. `cube3d/01_corner_envelope_uncertain.py` still carries the provisional Foster-referenced number in its docstring and is superseded by 06.
 - **Two-point Padé Theorem** — formalize the bound err_intermediate ~ (δ/L)^{2N} for rank-N bulk + N-DOF Senior tower.
 - **Time-domain Cauer realization** — each Senior tower correction has a fractional-power impedance signature; the diffusive Foster quantization technique (digest §IV) can realize each as a finite RC ladder. This is the Paper 2 direction.
 
 ## Related references in this repo
 
-- `../README.md` — top-level Hierarchical Cauer + Warburg-Schur framework
-- `../frequency_domain/circle_warburg_plot.py` — IGTE digest cylinder demo
-- `../frequency_domain/3d_sphere.py` — sphere Foster sum
-- `../../digest/supplement/` — Phase 2/3 archive (2026-05-28 frozen versions, with Y_exact artifact)
-- `../docs/hierarchical_cauer_sibc.md` — overall documentation
+- `README.md` — this validation campaign and its open questions
+- `_references/square2d_foster.py` — independent 2D square reference
+- `_references/cube3d_foster.py` — independent cube reference used by the
+  time-domain campaign
+- `results/mixed_galerkin_results.json` — canonical analytic validation
+  artifact consumed by documentation and presentation material
 
 ## Bibliography (selected)
 

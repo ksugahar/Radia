@@ -126,6 +126,36 @@ def Y_mixed_galerkin(s):
     return Y_DC * (1 + v_avg)
 
 
+SWEEP = np.logspace(0, 8, 81)
+WALL_BAND_HZ = (1e4, 1e6)
+METRIC = "abs(Y_exact - Y_mixed) / abs(Y_exact)"
+
+
+def summary() -> dict:
+    """Run the sweep and return the numbers. main() prints from this."""
+    errs = []
+    for f in SWEEP:
+        s = 1j * 2 * math.pi * f
+        Y_e = Y_exact_cylinder(s, A, SIGMA, MU)
+        errs.append(abs(Y_e - Y_mixed_galerkin(s)) / abs(Y_e))
+    errs = np.array(errs)
+    wall = (SWEEP > WALL_BAND_HZ[0]) & (SWEEP < WALL_BAND_HZ[1])
+    return {
+        "case": "cylinder_planar_sibc",
+        "description": "rank-1 CLN bulk + 1 planar-SIBC surface DOF",
+        "metric": METRIC,
+        "geometry": {"a_m": A, "sigma_S_per_m": SIGMA, "mu_H_per_m": MU},
+        "sweep": {"f_lo_hz": float(SWEEP[0]), "f_hi_hz": float(SWEEP[-1]),
+                  "n_points": int(SWEEP.size),
+                  "wall_band_hz": list(WALL_BAND_HZ)},
+        "max_error_pct": float(errs.max() * 100),
+        "max_error_at_hz": float(SWEEP[errs.argmax()]),
+        "wall_band_max_error_pct": float(errs[wall].max() * 100),
+        "dc_error_pct": float(errs[0] * 100),
+        "sibc_tail_error_pct": float(errs[-1] * 100),
+    }
+
+
 def main():
     print("=== Cylinder mixed Galerkin: rank-1 bulk + 1-DOF surface ===")
     print(f"a = {A*1e3} mm, sigma = {SIGMA:.2e} S/m, mu = {MU:.4e} H/m")
@@ -145,20 +175,13 @@ def main():
         print(f"{f:10.2e}  {abs(Y_e):12.4e}  {abs(Y_m):12.4e}  {err*100:9.4f}%")
 
     print()
-    print("Full sweep (1 Hz to 1e8 Hz, 81 points):")
-    fs = np.logspace(0, 8, 81)
-    errs = []
-    for f in fs:
-        s = 1j * 2 * math.pi * f
-        Y_e = Y_exact_cylinder(s, A, SIGMA, MU)
-        Y_m = Y_mixed_galerkin(s)
-        errs.append(abs(Y_e - Y_m) / abs(Y_e))
-    errs = np.array(errs)
-    wall_mask = (fs > 1e4) & (fs < 1e6)
-    print(f"  Max error anywhere:  {errs.max()*100:.4f}% @ f = {fs[errs.argmax()]:.2e} Hz")
-    print(f"  Wall-band max:       {errs[wall_mask].max()*100:.4f}%")
-    print(f"  DC error (f=1 Hz):   {errs[0]*100:.6f}%")
-    print(f"  SIBC tail (f=1e8):   {errs[-1]*100:.4f}%")
+    print(f"Full sweep (1 Hz to 1e8 Hz, {SWEEP.size} points):")
+    r = summary()
+    print(f"  Max error anywhere:  {r['max_error_pct']:.4f}% "
+          f"@ f = {r['max_error_at_hz']:.2e} Hz")
+    print(f"  Wall-band max:       {r['wall_band_max_error_pct']:.4f}%")
+    print(f"  DC error (f=1 Hz):   {r['dc_error_pct']:.6f}%")
+    print(f"  SIBC tail (f=1e8):   {r['sibc_tail_error_pct']:.4f}%")
 
 
 if __name__ == "__main__":
