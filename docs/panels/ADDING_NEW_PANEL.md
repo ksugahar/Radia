@@ -13,7 +13,7 @@ uses a masked Simulink block over the headless contract.
 ```text
 Stage 1  application variable inventory
 Stage 2  src/radia/panels/calc_<topic>.py + src/radia/<topic>_design.py
-Stage 3  docs/<topic>/*.ipynb + synchronized result JSON
+Stage 3  executed docs/<topic>/*.ipynb demonstration
 Stage 4  matlab/+radia/+simulink/* + matlab/radia_simulink_library.slx
 ```
 
@@ -66,8 +66,10 @@ fail loudly. Heavy solver imports stay inside the execution function.
 
 Create a result-bearing notebook only when it helps readers understand the
 method, equations, inputs, and representative output. Execute it before commit
-and synchronize its adjacent JSON, including runtime/version metadata and the
-notebook hash. Do not add widgets or a `CommandWorkbench` adapter.
+and save its useful outputs. It needs no adjacent JSON and carries no benchmark
+runtime requirement; validated numerical evidence belongs under
+`validation_test/` with result JSON. Do not add widgets or a
+`CommandWorkbench` adapter.
 
 ## Stage 4: Simulink Block
 

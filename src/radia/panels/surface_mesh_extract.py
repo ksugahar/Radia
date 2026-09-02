@@ -1,7 +1,7 @@
-"""Surface-mesh extraction utilities shared between BEM-based panels.
+"""Surface-mesh extraction utilities shared by BEM application backends.
 
 Moved out of the legacy BEM reference calc_heating_bem.py
-on 2026-04-24 because the production BEM panel was importing from the
+on 2026-04-24 because the production BEM backend was importing from the
 demoted examples path, which fails silently on any wheel-only install
 (no repo checkout on the user's box).
 

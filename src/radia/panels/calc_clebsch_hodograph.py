@@ -35,12 +35,13 @@ against exact solutions:
 The full 3-D INVERSE pole-design (geometry-as-unknown hodograph PDE,
 "redraw the geometry in potential coordinates") is a separate research
 line (branch clebsch_legendre); it is NOT this forward mode and is NOT
-shipped in the panel -- per the repo-first "Don't Publish the Unfinished"
+shipped in the production application -- per the repo-first "Don't Publish the Unfinished"
 policy it stays on the branch until verified on a real device geometry.
 
-Layer 4 contract (CLAUDE.md): NO `import cubit`, NO PySide6.  Heavy imports
+Headless contract (CLAUDE.md): NO `import cubit`, NO PySide6. Heavy imports
 (ngsolve / netgen / radia) live inside run() / the _solve_* helpers, never
-at module top, so the panel can introspect build_argparser() cheaply.
+at module top, so application and MCP tooling can inspect build_argparser()
+cheaply.
 
 References
 ----------
@@ -68,12 +69,12 @@ def _log(msg):
 
 
 # ============================================================
-# argparse surface (single source of truth for the panel widgets)
+# argparse surface (single source of truth for application settings)
 # ============================================================
 
 def build_argparser() -> argparse.ArgumentParser:
     """Return the argparse.  Importable WITHOUT side effects (no NGSolve /
-    Radia / Cubit imports) so the panel can introspect the widgets."""
+    Radia / Cubit imports) so application tooling can inspect the contract."""
     p = argparse.ArgumentParser(
         description="Clebsch hodograph forward mode: reduced-Omega solve, "
                     "then conjugate flux psi / scalar Phi potentials + "

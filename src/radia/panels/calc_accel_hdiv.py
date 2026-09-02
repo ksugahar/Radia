@@ -481,10 +481,10 @@ def build_argparser():
                         help="Netgen .vol file with a 'yoke' material "
                              "(sole interface between Cubit and NGSolve; "
                              "this script no longer accepts .cub5)")
-    # include_custom=True so the EM panel's HDiv-VIM build_command
+    # include_custom=True so the EM application's HDiv-VIM command
     # (which sends `--material custom --mu-r <user_value>` for the
     # "mu_r (Linear)" radio) is accepted at argparse.  Without this
-    # the panel command fails silently with
+    # the generated command fails with
     # `error: argument --material: invalid choice: 'custom'` --
     # caught 2026-04-26.  See validation_test/panels/test_em_hdiv_smoke.py.
     add_material_args(parser, default_material="steel",

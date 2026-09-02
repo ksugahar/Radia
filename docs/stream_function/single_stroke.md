@@ -373,7 +373,7 @@ field-aware single stroke → distort**.
 bridges), so the field-aware single stroke is a clean spiral: **254 ppm with no
 distort, → 84 ppm after a 1.5 mm distort** (`--target-cf 1 --confine off
 --nlevels 16 --distort`).  Locked by
-`tests/panels/test_streamfunction_golden.py::
+`validation_test/panels/test_streamfunction_golden.py::
 test_streamfunction_easy_tier_single_stroke_sub500ppm`.  The repository-backed
 boundary is therefore explicit: **easy / nested targets reach the ~100 ppm
 class single-stroke; the hard multi-lobe Gx is intrinsically ~2 %**, where

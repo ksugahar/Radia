@@ -5,7 +5,7 @@ used to live under `examples/electric_machine`.
 
 | Artifact | Purpose |
 |---|---|
-| `cogging_skew_demo.ipynb` | Result-saved cogging / skew notebook with synchronized JSON. |
+| `cogging_skew_demo.ipynb` | Result-saved cogging / skew notebook. |
 | `cogging_skew_demo.py` | Notebook-coupled helper for the finite-element torque sweep. |
 | `cogging_skew_demo_results.json` | Computed torque, skew, checks, and runtime versions. |
 | `planar_vim_motor.ipynb` | Executed planar HDiv-VIM machine showcase (2026-07-03): nonlinear iron deep-saturation vs the analytic fixed point; ellipse reluctance torque three ways with the demag operator built once per rotation sweep; salient-bar motor torque-angle vs an exact-Newton FEM (mean 0.58%); rotating-field conducting cylinder vs the Bessel closed form (0.19%); mini cage induction machine (VIM core + reduced-FEM bars) torque-slip vs an all-in-one FEM (0.57%). |

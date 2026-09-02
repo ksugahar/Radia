@@ -17,7 +17,8 @@ python -m pytest packages/radia-mcp/tests/test_document_meta_notebook_audit.py -
 Verify that:
 
 - the notebook is executed and has no saved error output;
-- its adjacent JSON has date/version metadata and the current notebook SHA;
+- no adjacent JSON is required; benchmark/evidence JSON belongs in
+  `validation_test/`;
 - public examples save WebGUI rich output;
 - a primary field uses `Draw(field, mesh, name=..., ...)` with explicit display
   arguments and sets `metadata.radia.webgui_field_required=true`;

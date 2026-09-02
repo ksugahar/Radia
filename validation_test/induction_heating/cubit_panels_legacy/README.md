@@ -171,16 +171,14 @@ python verify_esim.py --test 3  # Nonlinear only
 
 ## Tests
 
-```bash
-# Layer 1: Computation (CI, no Cubit)
-pytest tests/panels/test_calc_inductance.py -v    # 8 tests, ~60s
+The former standalone Qt-panel tests were retired with that interface. Current
+numerical evidence and Cubit integration checks live under
+`validation_test/panels/`:
 
-# Layer 2: UI logic (CI, no Cubit, no Qt)
-pytest tests/panels/test_panel_ui_logic.py -v     # 17 tests, ~0.5s
-
-# Layer 2b: GUI widget (CI, no Cubit, requires PySide6)
-pytest tests/panels/test_panel_gui.py -v          # 13 tests, ~1.5s
-
-# Layer 3: Integration (local only, requires Cubit)
-python tests/panels/test_panel_integration.py
+```powershell
+python -m pytest validation_test/panels/test_calc_inductance.py -v
+python validation_test/panels/test_panel_integration.py
 ```
+
+Production interface checks belong to the Simulink application-block lane;
+Cubit toolbar behavior remains isolated to Cubit's bundled Python/PySide runtime.

@@ -8,13 +8,11 @@ font, vector output — the lab default for a paper diagram (TikZ).
 | File | Kind | Recipe topic | Renders |
 |------|------|--------------|---------|
 | `kelvin_dtn_solve_flowchart.tex` | flowchart (ISO-5807 shapes) | `figure_diagram_recipes("tikz_flowchart")` | the Kelvin/DtN open-boundary solve loop |
-| `panel_4layer_architecture.tex` | concept / block diagram | `figure_diagram_recipes("concept_diagram")` | the Cubit panel 4-Layer architecture (`.vol` interface, subprocess boundaries) |
 
 ## Build
 
 ```bash
 pdflatex kelvin_dtn_solve_flowchart.tex     # -> .pdf (standalone, crop-tight)
-pdflatex panel_4layer_architecture.tex
 ```
 
 Embed in a paper at the column width with `\includegraphics[width=<W>cm]{...}` (the title

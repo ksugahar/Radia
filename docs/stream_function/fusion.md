@@ -27,7 +27,7 @@ Two demos cover eight parts:
 | [`demo_regcoil_fusion_advanced.py`](examples_catalog.ipynb) | coil force/stress  /  real li383 wout  /  FOCUS standoff  /  FOCUS winding-shape |
 
 All numbers below are reproduced by the demos and locked by
-`tests/panels/test_streamfunction_golden.py::test_regcoil_fusion_*`.
+`validation_test/panels/test_streamfunction_golden.py::test_regcoil_fusion_*`.
 
 ---
 
@@ -93,9 +93,9 @@ head-to-head at community mode counts is unmeasured.
 
 | golden | what it locks | measured |
 |--------|---------------|----------|
-| (a) [`test_regcoil_parity_deliverable_golden.py`](../../tests/panels/test_regcoil_parity_deliverable_golden.py) | vacuum **parity** + the deliverable REGCOIL lacks | `B.n` rel **4.9e-9**, STEP **954 kB**, PEEC `L` **3.09 uH** from one run |
-| (b) [`test_regcoil_iron_differentiator_golden.py`](../../tests/panels/test_regcoil_iron_differentiator_golden.py) | the **iron** differentiator | free-space **misses >20 %**, material-aware **hits <1e-2** (ratio >10x) |
-| (c) [`test_streamfunction_manufacture_e2e_golden.py`](../../tests/panels/test_streamfunction_manufacture_e2e_golden.py) | **manufacture end-to-end** | target `x` -> `psi` **0.042 %** -> single-stroke wire **0.197 %** -> distort **0.175 %** (no regress) -> STEP -> PEEC `L` **81.8 uH** |
+| (a) [`test_regcoil_parity_deliverable_golden.py`](../../validation_test/panels/test_regcoil_parity_deliverable_golden.py) | vacuum **parity** + the deliverable REGCOIL lacks | `B.n` rel **4.9e-9**, STEP **954 kB**, PEEC `L` **3.09 uH** from one run |
+| (b) [`test_regcoil_iron_differentiator_golden.py`](../../validation_test/panels/test_regcoil_iron_differentiator_golden.py) | the **iron** differentiator | free-space **misses >20 %**, material-aware **hits <1e-2** (ratio >10x) |
+| (c) [`test_streamfunction_manufacture_e2e_golden.py`](../../validation_test/panels/test_streamfunction_manufacture_e2e_golden.py) | **manufacture end-to-end** | target `x` -> `psi` **0.042 %** -> single-stroke wire **0.197 %** -> distort **0.175 %** (no regress) -> STEP -> PEEC `L` **81.8 uH** |
 
 The driver for (a) is
 [`demo_regcoil_parity_deliverable.py`](examples_catalog.ipynb)

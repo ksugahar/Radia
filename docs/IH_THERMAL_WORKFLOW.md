@@ -1,346 +1,117 @@
-# IH Thermal Workflow (radia 4.59.0+)
+# IH Eddy-Thermal Simulink Workflow
 
-Complete EM → Thermal pipeline in a single `radia-ih` panel, from a
-PEEC / FEM-Kelvin coil + workpiece solve all the way to the
-workpiece temperature distribution.
+Radia's production induction-heating interface is the masked **Induction
+Heating** block in `matlab/radia_simulink_library.slx`. The retired `radia-ih`
+PySide panel and notebook workbench are not supported interfaces.
 
-## Phase A: EM solve → q_surf .sol
+## Runtime Structure
 
-Pick a method in the **radia-ih** panel that emits a surface heat
-flux .sol on the workpiece SIBC surface:
+The block exposes the coupled field state explicitly:
 
-| radia-ih method | Emits q_surf? | Driver script |
-|---|---|---|
-| PEEC inductance (coil only) | NO | calc_inductance.py |
-| BEM-A inductance (coil only) | NO | calc_inductance.py |
-| PEEC + BEM weak coupling | **YES** | calc_inductance.py --coil-solver peec |
-| BEM-A + BEM weak coupling | **YES** | calc_inductance.py --coil-solver bem-a |
-| PEEC coil + FEM wp (SIBC) + Kelvin | **YES** | calc_fem_kelvin.py |
-| Full simulation (FEM A-V + wp SIBC + Kelvin) | **YES** | calc_fem_coilmesh.py |
-
-The `qsurf_sol` JSON key in the result holds the absolute path to
-`<stem>_qsurf.sol`.  The matching mesh is at `<stem>_fem.vol`.
-
-## Phase B: Thermal solve
-
-Pick one of the three Thermal Method choices (v4.63.0+):
-
-* **Method = "Thermal: 3D static (no rotation)"** -- 3D solver,
-  rotation_rpm forced to 0.  Use for static one-shot heat-up or
-  feasibility studies.
-* **Method = "Thermal: 3D + rotation (q_surf re-sampled per step)"**
-  -- 3D solver with workpiece rotation; q_surf re-projected on the
-  body frame each timestep.  Use for non-axisymmetric workpieces
-  OR non-axisymmetric coils with rotation.
-* **Method = "Thermal: 2D axisymmetric (rotation implicit)"** --
-  axisym solver (10-100x faster); rotation is implicit in the
-  axisym assumption (rpm recorded as metadata).  Use for
-  rotationally-symmetric workpieces under continuous rotation.
-
-The radia-ih Method dropdown owns the mesh_type + rotation_rpm
-choice; the embedded HeatPanel's individual mesh_type / rotation
-fields are hidden because the parent Method already encodes them.
-
-Pre-v4.63.0 a single "Thermal (heat transfer from saved q_surf
-.sol)" method choice required the user to set Mesh type +
-rotation_rpm separately; that single-entry UX is removed.
-in the same `radia-ih` panel.  The EM-side sections (Drive, Coil
-material, Coil geometry, Workpiece material, Workpiece impedance,
-Linear solver, Advanced) hide; the embedded HeatPanel becomes the
-active control surface.
-
-### Two ways to enter the Thermal method
-
-1. **Manual**: pick "Thermal..." from the Method dropdown directly.
-   Fill the qsurf .sol + EM .vol fields by hand.
-2. **Chain shortcut**: after a successful EM solve produced
-   `qsurf.sol`, click **"Run thermal..."** in the action row.  The
-   button switches the dropdown to Thermal and pre-fills
-   `qsurf_sol` + `em_vol` from the JSON result.  Set heat source =
-   "Spatial q_surf .sol (from IH)" automatically.
-
-## The `.sol` + `.vol` contract (v4.58.0 strict)
-
-Both files MUST be supplied; the panel's Run button stays disabled
-until both exist on disk.
-
-* **`qsurf_sol`** -- NGSolve `.sol` written by `gf_q.Save(...)` in
-  the EM solver.  Pure binary coefficient vector; no embedded mesh,
-  no FES-order header.  Useless without the matching mesh.
-* **`em_vol`** -- the EM `.vol` the `gf_q` GridFunction was saved
-  against.  The thermal solver rebuilds
-  `H1(em_mesh, order=qsurf_order)` and `Load`s the .sol into it.
-* **`qsurf_order` MUST equal the EM solve's `fes_order`**.  No
-  metadata exists to auto-detect this; a mismatch reads garbage
-  silently.  Default both = 1 (the radia panel default).  When the
-  EM solve uses `--fes-order 2`, set `--qsurf-order 2` in the
-  Thermal sub-panel.
-
-How the contract is enforced:
-
-| Layer | Behavior |
-|---|---|
-| `calc_heat.py --qsurf-sol PATH` without `--em-vol` | Raises `ValueError` with a hint at the typical sibling .vol path |
-| `radia._heat_panel.HeatPanel.is_runnable()` | Returns False unless both .sol AND .vol exist on disk |
-| `radia_ih._on_run_thermal` chain helper | Tries 3 strategies (msh_file stem, qsurf stem `_qsurf.sol`→`_fem.vol` swap, JSON `wp_vol`) to auto-locate the EM .vol; emits a hint line when all 3 fail |
-
-Auto-locate from the .sol stem was **removed in v4.58.0** per the
-"No Fallbacks" policy — silent fallbacks here had been masking
-mesh-vs-coefficient mismatches.
-
-## Mesh: 3D volume vs 2D axisymmetric
-
-The HeatPanel's "Mesh type" combo routes to one of two solvers:
-
-* **3D volume** → `calc_heat.py`.  Arbitrary 3D workpiece.
-* **2D axisymmetric (r, z)** → `calc_heat_axisym.py`.  10-100×
-  faster on rotationally symmetric workpieces (cylinder, stepped
-  shaft).  Cross-mesh q_surf transfer is φ-averaged so a slightly
-  non-axisymmetric coil (gapped torus) still produces a physically
-  sensible q.
-
-Both solvers consume the same `qsurf_sol` + `em_vol` pair.
-
-## Heat source mode
-
-* **Uniform q_surf [W/m²]** -- a single scalar applied across the
-  whole heating face.  Cheap, useful for first-cut feasibility runs
-  and smoke testing.  Rotation has no effect (constant in space);
-  the panel warns when `rotation_rpm > 0` is combined with this.
-* **Spatial q_surf .sol (from IH)** -- load the .sol that the EM
-  solve emitted.  Preserves hotspot distribution.  Rotation
-  re-samples q_surf on the body frame each timestep.
-
-## Workpiece rotation (v4.58.0+)
-
-Set `Rotation [rpm]` > 0 in the Thermal sub-panel.
-
-* **3D solver** (`calc_heat.py`): the workpiece body spins around
-  the z axis.  q_surf is re-projected each timestep at the body's
-  instantaneous angle.  Mesh / FES / mass / stiffness remain fixed;
-  only the LinearForm RHS reassembles (which it already did for
-  the convection term, so per-step overhead = one re-projection ≈
-  10 ms on typical meshes).  Default `max_iter=60`, `tol=1e-3`,
-  `relax=0.3`.
-* **2D axisymmetric solver** (`calc_heat_axisym.py`): rotation is
-  implicit in the axisymmetric assumption.  The rpm value is
-  recorded as metadata; no time-loop change.
-
-The body-frame projection at angle θ:
-
-```python
-c, s = math.cos(theta), math.sin(theta)
-for vnr, (xb, yb, zb) in zip(surf_vnrs, surf_xyz):
-    xw = xb*c - yb*s
-    yw = xb*s + yb*c
-    em_mip = em_mesh(xw, yw, zb)        # world-frame lookup
-    val = gf_q_em(em_mip)               # q_em evaluated there
-    gf_wp_q.vec.FV()[vnr] = float(val)
+```text
+coil_current_A ---------> Eddy ---------> heat_density_W_per_m3
+workpiece_angle_rad ----> Eddy                    |
+temperature_K ----------> Eddy                    v
+                                               Thermal ----> temperature_K
+ambient_temperature_K --------------------------> |
+workpiece_angle_rad -----------------------------> |
 ```
 
-Validated against synthetic 2-wire setups (q_em(x,y,z)=x at
-theta=0/π/π/2 reads body-(1,0,0) as +1/-1/0).  See
-`tests/panels/test_heat_rotation.py`.
+- `radia.simulink.ihEddySFunction` is a readable Level-2 MATLAB S-Function.
+  It owns three input ports, one distributed heat output, sample time, and the
+  native Eddy handle lifecycle.
+- `radia.simulink.ihThermalSFunction` is a separate Level-2 MATLAB S-Function.
+  It publishes the accepted temperature in `Outputs` and advances the thermal
+  state in `Update`, giving the feedback loop an explicit one-step delay.
+- `radia_mex('ih.*', ...)` owns the numerical objects behind checked `uint64`
+  handles. Python is not called once per simulation step.
 
-## Output
+The fixed update order is:
 
-The 3D solver writes:
-
-* JSON to stdout with `T_max_C`, `T_min_C`, probe history, time
-  history, `Q_input_J`, runtime stats, AND the saved file paths
-  (`T_sol_file`, `heat_vol_file`, `msh_file`, `vtu_files`).
-* **T `.sol` + companion `.vol`** -- the final temperature
-  GridFunction is ALWAYS saved as a NGSolve `.sol` next to the
-  workpiece thermal mesh.  Symmetric with the EM side's qsurf.sol
-  contract:
-    - With `--msh-output`: writes `<msh-stem>_T.sol` +
-      `<msh-stem>_heat.vol` (a fresh companion mesh) alongside
-      the GMSH `.msh`.
-    - Without `--msh-output`: writes `<wp-stem>_heat_T.sol` next
-      to `wp.vol` (re-use wp.vol itself as the companion mesh).
-  Both paths are reported in the JSON as `T_sol_file` and
-  `heat_vol_file`; the IH Summary lines them out next to GMSH /
-  VTU paths so the user sees them at a glance.
-* GMSH `.msh v4.1` (per the lab standard) via
-  `gmsh_post_export.vol2msh`.  Bundled fields: `T_C` (volume
-  scalar, per-vertex), `q_surf` (surface scalar on the heating
-  face).
-* Per-timestep `.vtu` files when `--vtu-prefix` is supplied
-  (transient animation).
-* Optional `.csv` probe history when `--probe-point x,y,z` +
-  `--csv-output` are both set.
-
-### Reloading the T `.sol` for later evaluation
-
-```python
-from ngsolve import Mesh, H1, GridFunction
-wp_mesh = Mesh("workpiece_thermal.vol")    # or <stem>_heat.vol when --msh-output was used
-fes_T   = H1(wp_mesh, order=1)             # MUST match the solve's --fes-order
-gfT     = GridFunction(fes_T)
-gfT.Load("workpiece_thermal_heat_T.sol")   # or <msh-stem>_T.sol
-# Now gfT is the final temperature field on the thermal mesh:
-T_at_point = float(gfT(wp_mesh(0.0, 0.0, 0.005)))   # sample at body point
+```text
+Eddy output -> conservative transport(theta_prev, theta_now) -> Thermal update
 ```
 
-Same contract as qsurf.sol: the .sol is a coefficient vector only;
-the matching `.vol` + matching FES order are required to reconstruct
-the GridFunction.
+Temperature is stored in the workpiece coordinate system. In
+`periodic-uniform` mode, rotation transports the accepted temperature field
+conservatively before the implicit thermal solve. Eddy maps the source-frame
+heating into workpiece coordinates.
 
-## Phase B (coupled): σ(T) / μ(T) thermal-EM coupling via a Z_s(H,T) table
+## Geometry And Operators
 
-The Phase-B solvers above consume a *frozen* `q_surf.sol` from one EM
-solve.  When the workpiece properties move with temperature -- σ(T)
-rising resistivity, and the permeability collapse approaching the
-Curie point -- the surface impedance `Z_s` (and therefore `q_surf`)
-changes as the part heats.  Re-solving the full EM problem every
-thermal timestep is prohibitive, but it is also unnecessary: at IH
-frequencies the EM problem is quasi-static on the heat timescale
-(EM `1/ω ~ 100 µs` at 10 kHz vs heat `τ ~ seconds` → ratio ~10⁴).
+Use `radia.simulink.assembleIHOperatorsFromGeometry` or the
+`radia-ih-assemble` CLI at the explicit model-update boundary. The runtime
+does not mesh or assemble finite-element operators during a time step.
 
-The coupled track precomputes `Z_s` once on a 2-D grid and looks it up
-per surface DOF, per timestep.  **CLI-only** (not yet wired into the
-radia-ih panel); two scripts:
-
-### Step 1 — build the table (`calc_em_table.py`)
-
-Precompute `Z_s(|H_t|, T)` on a log-spaced `|H_t|` grid × linear `T`
-grid by solving the 1-D ESIM cell problem at each grid node:
-
-```bash
-python calc_em_table.py \
-    --material steel --frequency 50e3 \
-    --H-grid-min 1e2 --H-grid-max 1e5 --n-H 20 \
-    --T-grid-min 20  --T-grid-max 800 --n-T 20 \
-    --sigma-T-curve sigma_T_steel.csv \
-    --curie-temp 770 --curie-exp 0.5 \
-    --em-table-output em_table_steel_50kHz.npz
+```powershell
+python -m pip install "radia[cubit]"
+radia-ih-assemble workpiece.vol coil.step
+radia-ih-assemble workpiece.vol coil.vol -o native_ih.json
 ```
 
-* **σ(T)** — `--sigma-T-curve` is a 2-col CSV (`T_celsius,
-  sigma_S_per_m`).  Clamped outside its T range (no extrapolation).
-  Omit it to hold σ at the material preset constant.
-* **μ(T)** — `--curie-temp <Tc_celsius>` opts into a Curie collapse
-  that scales the BH curve's magnetic part by
-  `f(T) = (1 - T/Tc)^β` (`β = --curie-exp`, default 0.5), clamped to
-  `[0,1]`, so `μ_r → 1` (paramagnetic) at/above Tc.  Default
-  (`--curie-temp 0`) leaves BH T-invariant.
-* Output `.npz` schema: `H_grid`, `T_grid`, `Zs_re`, `Zs_im`,
-  `q_surf` (= ½·Re(Z_s)·|H_t|²), `meta` (material, frequency,
-  sigma_T_curve, curie_temp, curie_exp, ...).
+- Workpiece geometry is a checked Netgen `.vol` or `.vol.gz` mesh.
+- A coil `.step` selects PEEC assembly.
+- A coil `.vol` selects BEM-A assembly.
+- Physical method selection may also name FEM or BIM when the supplied
+  configuration contains the corresponding validated operators.
+- Every solver-bound mesh must pass its versioned
+  `radia.vol-label-contract.v1` contract before initialization.
+- The `cubit-mesh-export.vol-check.v1` reports, `run.log`, `result.json`, and
+  GMSH `.msh v4.1` post-processing fields stay in the run directory.
 
-**Honest-uncertainty stance** (CLAUDE.md "T-dependence: functionalize
-as T-functions + honest uncertainty"): σ(T) and μ(T) data are
-inherently uncertain, so they are supplied as *user-chosen functions /
-tables* (CSV curve, `(Tc, β)` form), clamped beyond their data, and
-auditable from the table's `meta` — never hardcoded as false
-certainty.  T-dependent BH shape beyond the Curie μ-collapse remains a
-known gap.
+The shape-only assembler supports fixed linear material operators. It declares
+rotation disabled when a conservative transport operator is unavailable; it
+does not guess a node ordering or silently substitute a lumped/LUT model.
 
-### Step 2 — runtime heat solve (`calc_heat_with_em_table.py`)
+## Configuration
 
-Backward-Euler heat solve; each timestep scales the reference
-tangential field `|H_t_ref(r)|` by `I(t)/I_ref` and bilinearly
-interpolates `q_surf = table(|H_t|, T)` at every surface DOF (so the
-table itself carries all the `|H_t|`- and `T`-dependent nonlinearity).
-The dominant simplification: the *spatial shape* of `|H_t(r)|` is
-frozen at the reference solve; only its amplitude follows `I(t)`.
+`radia.simulink.makeIHNativeConfig` validates and converts assembled operators
+to the row-major numeric ABI consumed by `radia_mex`. A production
+configuration includes:
 
-Two sources for the reference `|H_t_ref(r)|`:
+- complex Eddy matrix and right-hand side;
+- distributed heat projection and heat-cell weights;
+- thermal mass and stiffness matrices in CSR form;
+- heat-to-temperature projection and temperature-cell weights;
+- initial temperature, sample time, and rotation convention;
+- physical method, linear solver, thermal solver, and checked `.vol` reports.
 
-| `--ht-source` | Needs | Captures backreaction? | Notes |
-|---|---|---|---|
-| `kelvin` (recommended) | `--ht-sol <stem>_Jsurf.sol` + `--em-vol <stem>_fem.vol` from a `calc_fem_kelvin` run | **Yes** (`\|J_s\| = \|H_t\|` on the SIBC face) | one upstream FEM solve at `I_ref` |
-| `biot` | `--coil-step <coil.step>` | **No** (pure incident field) | needs no EM solve |
+The native preview currently accepts `bh_mode="linear"`. If validated
+temperature-dependent real and imaginary Eddy-matrix slopes are supplied, a
+temperature change rebuilds the Eddy operator. For a fixed linear operator,
+changing current scales the unit-current solution and heat quadratically
+without rebuilding the operator.
 
-`biot` walks the coil centerline from the STEP (same extractor as the
-PEEC path), evaluates the incident Biot-Savart field at each workpiece
-surface DOF, and projects it onto the local tangent plane.  Because it
-omits the eddy-current image that roughly DOUBLES the tangential field
-at a good conductor, it under-predicts the surface field by ~2× for a
-flat surface.  `--biot-image-factor 2.0` lets an informed user opt into
-that doubling **explicitly** (never silently — No-Fallbacks); prefer
-`--ht-source kelvin` when the backreaction matters.
+Configuration is loaded from a MAT or JSON file by
+`radia.simulink.configureIHNativeModel`. The model stores the validated config
+in its model workspace, not in a process-global GUI object.
 
-```bash
-# kelvin (recommended): scale a calc_fem_kelvin reference by I(t)
-python calc_heat_with_em_table.py \
-    --wp-vol workpiece.vol --em-table em_table_steel_50kHz.npz \
-    --ht-source kelvin --ht-sol run_Jsurf.sol --em-vol run_fem.vol \
-    --I-ref 1000 --coil-current 1200 \
-    --material steel --dt 0.5 --t-end 60
+## Open And Run
 
-# biot: incident field straight from the coil STEP, no EM solve
-python calc_heat_with_em_table.py \
-    --wp-vol workpiece.vol --em-table em_table_steel_50kHz.npz \
-    --ht-source biot --coil-step coil.step --biot-image-factor 2.0 \
-    --I-ref 1000 --coil-current 1200 --dt 0.5 --t-end 60
+From MATLAB:
+
+```matlab
+addpath("matlab");
+install_radia_ih();
 ```
 
-`--coil-current-csv <t_s,I_A>` replaces the constant amplitude with a
-time-varying trajectory (clamped at the ends).
+The installer opens the tracked `matlab/radia_ih.slx`. Use its Geometry Update
+block to replace the workpiece and coil paths and rebuild the checked operator
+artifact. Current and angle remain ordinary Simulink source signals.
 
-### Coupled-track tests
+## Verification
 
-* `tests/panels/test_em_table_curie.py` — the Curie `μ(T)` helpers
-  (`curie_factor` endpoints/clamp/monotone, `curie_scaled_bh` blend).
-* `tests/panels/test_heat_em_table_biot.py` — the biot core
-  (`_biot_Ht_on_surface` tangential projection + `--biot-image-factor`
-  + current scaling) validated against the closed-form circular-loop
-  on-axis field; the centerline→filament wrap-around.
+The release gates cover these contracts separately:
 
-## Trouble shooting
+- standalone MEX commands: ABI, numerical behavior, errors, stale handles;
+- Level-2 S-Functions: initialization, Outputs/Update ordering, termination,
+  repeated runs, and closed-loop wiring;
+- rotation: zero, small, large, periodic, and conservative-energy cases;
+- geometry update: `.vol`, `.vol.gz`, `.step`, role normalization, label
+  contracts, and persistent artifacts;
+- application model: clean open, compile, simulation, and full-window visual QA.
 
-| Symptom | Cause | Fix |
-|---|---|---|
-| Run button disabled in Thermal section | Either `wp_vol` is empty, or `qsurf_sol` empty in spatial mode, or `em_vol` empty in spatial mode | Browse to all three files. |
-| `--em-vol is required` error | Manual CLI invocation of `calc_heat.py --qsurf-sol PATH` without the companion .vol | Pass `--em-vol <stem>_fem.vol` explicitly |
-| `T_max ≈ T_initial` (no heating) | wp surface vertices fell outside the EM mesh → `n_fail` count in the log | Verify the EM and thermal meshes describe the same physical workpiece geometry (check coordinate origin + units) |
-| `T_max` jumps when switching `fes_order` to 2 | `qsurf_order` was not updated to match | Set `qsurf_order = 2` in the Thermal sub-panel to match the EM solve's basis order |
-| Rotation has no effect on `T(t)` | Heat source = Uniform (constant in space) OR `rotation_rpm` left at 0 | Set heat source = Spatial AND `rotation_rpm > 0` |
-| (coupled) `--ht-source biot` heats ~2× too little | the eddy-current image that doubles `H_t` at a good conductor is absent (pure incident field) | Use `--ht-source kelvin`, or set `--biot-image-factor 2.0` for a flat-surface estimate |
-| (coupled) `--ht-source biot` "coil centerline extraction failed" | the STEP swept cross-section is ambiguous to the walking-plane extractor | Regenerate the coil STEP with a cleaner single swept profile, or use `--ht-source kelvin` |
-| (coupled) `q_surf ≈ 0` everywhere | `\|H_t\|` below the table's `--H-grid-min` (clamped) OR T above the table's `--T-grid-max` (μ collapsed) | Widen the table H/T range to cover the operating point |
-
-## Removed: `radia_heat` standalone (4.62.0+)
-
-The standalone `radia_heat.py` module and the `radia-heat` console
-script were removed in radia 4.62.0.  Heat analysis is the
-"Thermal" Method choice in `radia-ih`; the HeatPanel sub-widget
-now lives at `radia._heat_panel` as an internal implementation
-detail of the IH panel.  The pre-4.59 standalone window is gone
-and there is no public CLI replacement for `radia-heat` -- launch
-`radia-ih` instead, then pick Method = "Thermal".
-
-Pre-4.59.0 shortcut behavior: in 4.59.0-4.61.0 ``radia_heat.py
-main()`` was a deprecation stub that redirected to ``radia-ih``.
-That stub is gone in 4.62.0; calls to `radia-heat` from old
-scripts will fail with "No module named 'radia.radia_heat'"
-(import) or "command not found" (CLI).  Update shortcuts to
-launch ``radia-ih``.
-
-Programmatic imports: replace
-``from radia.radia_heat import HeatPanel, HEAT_SRC_SPATIAL`` with
-``from radia._heat_panel import HeatPanel, HEAT_SRC_SPATIAL``.
-
-## Test coverage
-
-* `tests/panels/test_heat_rotation.py` -- unit tests for the
-  rotation projection math on a synthetic unit cube
-  (`q_em(x,y,z)=x` reads +1/-1/0 at body-(1,0,0) for θ=0/π/π/2).
-* `tests/panels/test_heat_chain_golden.py` -- e2e chain test
-  invoking `calc_heat` via subprocess.  Slow-marked.
-* `tests/panels/panel_qa.py` registry includes `ih_thermal` which
-  exercises the integrated Thermal method through `IHWindow`
-  (rendering / font / layout checks).
-
-## See also
-
-* [`docs/peec/VOLUME_PEEC_DESIGN.md`](peec/VOLUME_PEEC_DESIGN.md)
-  -- the deferred Volume PEEC design (radial filaments to capture
-  proximity effects beyond perimeter PEEC).
-* [`docs/esim/R_MISMATCH_PEEC_VS_BEMA.md`](esim/R_MISMATCH_PEEC_VS_BEMA.md)
-  -- the perimeter-PEEC vs BEM-A R discrepancy with proximity
-  factor 1.22 ceiling at 150 kHz.
-* radia-mcp tools: `ih.rotating` (calc_heat.py rotation impl),
-  `radia_ngsolve.ngsolve` Section 18c (qsurf-style H1 GF
-  save/load).
+Numerical evidence and benchmarks belong under `validation_test/` with JSON
+results. Public demonstrations belong in executed `docs/**/*.ipynb` notebooks
+with saved, parameterized WebGUI scenes. Neither replaces the Simulink
+production interface.

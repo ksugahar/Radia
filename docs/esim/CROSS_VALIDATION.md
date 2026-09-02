@@ -278,8 +278,8 @@ description (Biot–Savart vs surface-current), wrong workpiece SIBC
 formulation, wrong area normalisation.
 
 **Test geometry**: Cu workpiece + gapped-torus Cu coil, as locked
-in [`tests/panels/golden/peec_bem_coarse_7kHz_Cu.json`](../../tests/panels/golden/peec_bem_coarse_7kHz_Cu.json)
-and [`tests/panels/golden/fem_coilmesh_gapped_fine_7kHz_Cu.json`](../../tests/panels/golden/fem_coilmesh_gapped_fine_7kHz_Cu.json).
+in [`validation_test/panels/golden/peec_bem_coarse_7kHz_Cu.json`](../../validation_test/panels/golden/peec_bem_coarse_7kHz_Cu.json)
+and [`validation_test/panels/golden/fem_coilmesh_gapped_fine_7kHz_Cu.json`](../../validation_test/panels/golden/fem_coilmesh_gapped_fine_7kHz_Cu.json).
 The exact geometric parameters (R_major, r_minor, gap angle) and
 solver flags are pinned in those JSON goldens.
 
@@ -290,8 +290,8 @@ exact Biot–Savart from the gapped-torus filament.  Reference value:
 golden-test tolerance band).
 
 **Radia values from the golden JSONs** (values in
-[`peec_bem_coarse_7kHz_Cu.json`](../../tests/panels/golden/peec_bem_coarse_7kHz_Cu.json)
-and [`fem_coilmesh_gapped_fine_7kHz_Cu.json`](../../tests/panels/golden/fem_coilmesh_gapped_fine_7kHz_Cu.json)):
+[`peec_bem_coarse_7kHz_Cu.json`](../../validation_test/panels/golden/peec_bem_coarse_7kHz_Cu.json)
+and [`fem_coilmesh_gapped_fine_7kHz_Cu.json`](../../validation_test/panels/golden/fem_coilmesh_gapped_fine_7kHz_Cu.json)):
 
 | Path | P_wp [W] | Δ vs ref | Status |
 |---|---|---|---|

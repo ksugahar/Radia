@@ -11,7 +11,7 @@ Cubit exports the `.vol` inputs as a separate process. The block configuration
 holds the coil/conductor `.vol` path and mode-specific inputs such as
 `--eval-vol`. There is no Stream Function notebook workbench.
 
-This file documents the panel/calc workflow and the boundary-condition /
+This file documents the application/calc workflow and the boundary-condition /
 contour / flux features.  The math core (the `(ACA+)+TSVD` least-norm solver,
 `RegularizedTSVD`, the folded-Tikhonov Pareto front) is in
 [`regularization.md`](regularization.md) and [`api.md`](api.md); the
@@ -52,7 +52,7 @@ calibration study constrained by accuracy and memory.
   mesh).  The `abe` BC groups *each* disconnected component's boundary edges
   into its own free constant (so `ndof_free < ndof`), and the contours close
   on every component.  Locked by
-  `tests/panels/test_streamfunction_golden.py::test_streamfunction_biplanar`
+  `validation_test/panels/test_streamfunction_golden.py::test_streamfunction_biplanar`
   (two 0.3 m plates at z = ±0.1 m, Gx target: design 1.8e-3, contours close on
   both plates).
 - `--eval-vol` — the evaluation region (surface **or** volume).
@@ -157,7 +157,7 @@ from_stiffness(base, S)`).
 integral operator, so `L` is dense `N×N` (unlike the sparse `l2`/`h1`).  Use it
 at moderate `N`; for very large meshes use `h1` (the sparse proxy) or a future
 H-matrix `SL`.  Locked by
-`tests/panels/test_streamfunction_golden.py::test_streamfunction_min_inductance`.
+`validation_test/panels/test_streamfunction_golden.py::test_streamfunction_min_inductance`.
 
 ## IH-resonance design (`--target-inductance` / `--resonance-cap`)
 
@@ -177,7 +177,7 @@ not silently clamped).  LAB cylinder, `C = 22 nF`, `f = 200 kHz` → `L_target =
 28.8 µH` → `nlevels = 13` → `L_coil = 30.3 µH`, coil resonates at **195 kHz**
 (the integer-turn quantisation leaves a few %; the tank `C` trims the rest), and
 the uniform field is still hit (4.5e-4).  Locked by
-`tests/panels/test_streamfunction_golden.py::test_streamfunction_ih_resonance`;
+`validation_test/panels/test_streamfunction_golden.py::test_streamfunction_ih_resonance`;
 connects the SF designer to the `radia-ih` work-coil pipeline.
 
 ### With `--greedy-turns` (the low-turn coil): report the required capacitor
@@ -196,7 +196,7 @@ searched for `L_target`.  The `resonance` dict carries `mode = "from_greedy_coil
 (vs `"search_nlevels"`).  Verified end-to-end (LAB cylinder + DSV, uniform `Bz`,
 8 greedy turns, `47 nF` @ `200 kHz`): `L_coil = 25.3 µH`, `required_cap_F =
 25.0 nF`, the `47 nF` cap resonates that coil at `146 kHz`.  Locked by
-`tests/panels/test_streamfunction_golden.py::test_streamfunction_resonance_with_greedy_reports_cap`.
+`validation_test/panels/test_streamfunction_golden.py::test_streamfunction_resonance_with_greedy_reports_cap`.
 
 ## Current-confinement boundary condition (`--confine {off, on, abe}`)
 

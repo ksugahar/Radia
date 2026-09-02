@@ -429,7 +429,7 @@ src/radia/panels/samples/*_peec_ind_filaments.msh
 # next to the source .step when RADIA_PEEC_CACHE_DISABLE is unset).
 *.peec_v*_*.json
 src/radia/panels/samples/*.peec_peri*_sigma*_u*.json
-tests/panels/golden/*.peec_peri*_sigma*_u*.json
+validation_test/panels/golden/*.peec_peri*_sigma*_u*.json
 src/radia/panels/samples/*_coil_filaments.msh
 src/radia/panels/samples/*_fem_kelvin.json
 src/radia/panels/samples/*_fem_kelvin.msh
