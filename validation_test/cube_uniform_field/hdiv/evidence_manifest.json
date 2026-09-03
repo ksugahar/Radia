@@ -1,0 +1,55 @@
+{
+  "schema": "radia.validation.hdiv-cube-evidence.v1",
+  "imported_at_utc": "2026-09-03T09:33:23Z",
+  "policy": {
+    "validation_json_required": true,
+    "routine_ci": false,
+    "raw_measurements_preserved": true
+  },
+  "files": [
+    {
+      "path": "hdiv_cube_mdx_scaling_20260708.json",
+      "sha256": "10617fa7d9fb0afabfae1da79f40b2a792c34e1f8a5aced9c634b2ed402db23c"
+    },
+    {
+      "path": "hdiv_tet_cube_mdx_scaling_20260708.json",
+      "sha256": "d3c2ca3fa07e84b71fbb4282db60979fc66d2227818d1401186d33575a671171"
+    },
+    {
+      "path": "hdiv_tet_ho_oneside_mdx_ab_20260708.json",
+      "sha256": "947526a0baeed463ce69d731f431274aa195d1b6cfb7c688d6e3da7e1cdb6955"
+    },
+    {
+      "path": "hdiv_wedge_all_fastbasis_applysolve_mdx_scaling_20260708.json",
+      "sha256": "5c9879104248a99197202b277d06c278cb7875bb250a768a7e6ba05d74bdea0e"
+    },
+    {
+      "path": "hdiv_wedge_all_fastbasis_mdx_scaling_20260708.json",
+      "sha256": "685cb08c0a1f3da8ca1c64fe3af4b08783ae9be5ab99bebc9611505301bd5037"
+    },
+    {
+      "path": "hdiv_wedge_cube_mdx_scaling_20260708.json",
+      "sha256": "e2f3393befde6c1f664788b05f7828920e0e39cd05dc315dce168b245ae47281"
+    },
+    {
+      "path": "hdiv_wedge_oneside_mdx_ab_20260708.json",
+      "sha256": "7a88e2273545cf4d8840c283e271e77cecd83d155c364defd607df44f003cf0e"
+    },
+    {
+      "path": "hdiv_wedge_trans_cache_all_mdx_ab_20260708.json",
+      "sha256": "fdf6b4c5d66f8b2655fa1878ba55004bba5a5b6ee9417534d464646b0b3f19ab"
+    },
+    {
+      "path": "hdiv_wedge_trans_cache_fastbasis_mdx_ab_20260708.json",
+      "sha256": "76ce22d0c206387ad596d380ebd3b1c3c4a40d1bff22de498f30c51794b721f5"
+    },
+    {
+      "path": "hdiv_wedge_trans_cache_mdx_ab_20260708.json",
+      "sha256": "8fc6e30139452b0c99cf075eef95c681413ca0267dd1232941f10fb550b4e577"
+    },
+    {
+      "path": "results_hex_nonlattice.json",
+      "sha256": "4efb0a6897a94f3af12c2a6b01babff2bd5281e97da479840c9b0a9a760cefc8"
+    }
+  ]
+}
