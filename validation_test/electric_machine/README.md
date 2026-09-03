@@ -27,4 +27,6 @@ torque including cogging and `v x B`, and the discrete power-balance residual.
 
 The cogging/skew readable demo is now the result-saved
 [`docs/electric_machine/cogging_skew_demo.ipynb`](../../docs/electric_machine/cogging_skew_demo.ipynb)
-with its notebook-coupled helper beside it.
+with its notebook-coupled helper beside it. The helper's standalone entry point
+writes `cogging_skew_demo_results.json` here; the notebook embeds the public
+presentation without creating a docs-local result sidecar.
