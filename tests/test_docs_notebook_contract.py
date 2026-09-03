@@ -229,3 +229,16 @@ def test_stream_function_docs_use_installed_radia_package():
         "Stream-function docs must import installed/editable radia: "
         + ", ".join(sorted(offenders))
     )
+
+
+def test_peec_wpt_docs_use_installed_radia_package():
+    docs_dir = ROOT / "docs" / "peec_integration" / "demos" / "wpt"
+    offenders = []
+    for path in docs_dir.glob("*.py"):
+        source = path.read_text(encoding="utf-8", errors="replace")
+        if "build-msvc" in source or "src/radia" in source:
+            offenders.append(path.name)
+    assert not offenders, (
+        "PEEC WPT docs must not inject repository build/source paths: "
+        + ", ".join(sorted(offenders))
+    )
