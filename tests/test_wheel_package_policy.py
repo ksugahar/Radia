@@ -58,6 +58,14 @@ def test_retired_notebook_workbenches_are_absent_from_source():
     assert present == []
 
 
+def test_wheel_does_not_package_generated_application_results():
+    config = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+    package_data = set(config["tool"]["setuptools"]["package-data"]["radia"])
+
+    assert "panels/samples/*.sol" not in package_data
+    assert "panels/samples/*.json" not in package_data
+
+
 def test_retired_desktop_viewer_is_not_packaged():
     config = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
     scripts = config["project"].get("scripts", {})
