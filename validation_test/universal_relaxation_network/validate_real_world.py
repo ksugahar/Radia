@@ -30,9 +30,13 @@ import sys
 import numpy as np
 import pandas as pd
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
-script_dir = os.path.dirname(os.path.abspath(__file__))
+validation_dir = Path(__file__).resolve().parent
+script_dir = str(
+    Path(__file__).resolve().parents[2] / 'docs' / 'universal_relaxation_network'
+)
 
 # Import URN
 from radia.urn import (
@@ -473,10 +477,7 @@ if __name__ == '__main__':
     print_summary(results)
 
     # Save results
-    output_dir = os.path.abspath(os.path.join(
-        script_dir, '..', '..', 'validation_test',
-        'universal_relaxation_network',
-    ))
+    output_dir = str(validation_dir)
     os.makedirs(output_dir, exist_ok=True)
     output_json = os.path.join(output_dir, "real_world_validation_results.json")
     save_results_json(results, output_json)
