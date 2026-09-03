@@ -52,6 +52,8 @@ run:  python bending_endpack_saturation_opt.py            # optimize + flat-cut 
       python bending_endpack_saturation_opt.py --fig        # + figure
       python bending_endpack_saturation_opt.py --trials 40  # Optuna budget
 """
+
+from _validation_output import validation_output
 import argparse
 import json
 import math
@@ -439,7 +441,7 @@ def main():
     print(f"  beam field.  So 'flux lines invariant under saturation' is largely AUTOMATIC")
     print(f"  for the beam; what you optimize is the corner it saturates.")
 
-    jpath = os.path.splitext(os.path.abspath(__file__))[0] + ".json"
+    jpath = validation_output("bending_endpack_saturation_opt.json")
     save = {k: v for k, v in res.items() if not k.startswith("_")}
     with open(jpath, "w") as fh:
         json.dump(save, fh, indent=2)

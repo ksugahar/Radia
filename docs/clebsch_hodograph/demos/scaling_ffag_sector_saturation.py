@@ -46,6 +46,8 @@ run:  python scaling_ffag_sector_saturation.py            # the sector saturatio
       python scaling_ffag_sector_saturation.py --fig        # + figure
       python scaling_ffag_sector_saturation.py --no-radial  # skip the radial cross-check
 """
+
+from _validation_output import validation_output
 import argparse
 import json
 import os
@@ -302,7 +304,7 @@ def main():
         res["planes_differ_under_saturation"] = bool(
             res["L_eff_robust_under_saturation"] and res["radial_k_droops_high_r"])
 
-    jpath = os.path.splitext(os.path.abspath(__file__))[0] + ".json"
+    jpath = validation_output("scaling_ffag_sector_saturation.json")
     with open(jpath, "w") as fh:
         json.dump(res, fh, indent=2)
     print(f"\nsaved {jpath}")

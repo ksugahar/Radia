@@ -38,6 +38,8 @@ run:  python ffag_sector_two_plane.py            # Plane A + Plane B + compose
       python ffag_sector_two_plane.py --fig       # + figure
       python ffag_sector_two_plane.py --dtheta 0.5  # wider sector (aspect sweep)
 """
+
+from _validation_output import validation_output
 import argparse
 import json
 import os
@@ -426,7 +428,7 @@ def main():
               f"  (monotone decay: {sw['monotone_decay']})")
         out["aspect_sweep"] = sw
 
-    jpath = os.path.splitext(os.path.abspath(__file__))[0] + ".json"
+    jpath = validation_output("ffag_sector_two_plane.json")
     with open(jpath, "w") as f:
         json.dump(out, f, indent=2)
     print(f"\nsaved {jpath}")

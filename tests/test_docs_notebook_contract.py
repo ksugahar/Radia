@@ -131,6 +131,7 @@ def test_docs_do_not_restore_retired_result_bookkeeping():
         ROOT / "docs" / "universal_relaxation_network" / "cq_urn_bridge_results.json",
         ROOT / "docs" / "universal_relaxation_network" / "urn_vs_vf_comparison.json",
     }
+    retired.update((ROOT / "docs" / "clebsch_hodograph" / "demos").glob("*.json"))
     offenders = sorted(path.relative_to(ROOT) for path in retired if path.exists())
     assert not offenders, (
         "Docs notebooks embed display results; validation_test owns checked evidence: "
