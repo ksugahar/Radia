@@ -1148,6 +1148,29 @@ with `@pytest.mark.slow` or a node-ID side list.
   tests. It must contain only `validation_test/` node IDs; there is no
   corresponding slow-node list under `tests/`.
 
+### Independent Validation Oracle Policy (2026-09-03)
+
+**POLICY**: An analytical solution, manufactured solution, symbolic derivation,
+or high-accuracy reference whose purpose is to judge a production solver stays
+outside the production C++ kernels. Do not port a validation-only oracle to C++
+merely to make validation faster.
+
+- Keep validation oracles readable and independent under `validation_test/`, or
+  in a tracked Python, MATLAB, or Mathematica reference used from that lane.
+  Solver-heavy validation may run on `mdx` or `hibino`; oracle speed alone is
+  not a reason to reduce implementation independence.
+- An oracle must not call the same production function, pybind11/MEX binding,
+  or native kernel whose numerical behavior it certifies. Do not expose a
+  validation-only analytical reference through the production pybind11 or MEX
+  surface.
+- A closed-form or analytical algorithm may still be implemented in C++ when
+  it is a genuine shipped capability used by applications at production scale.
+  That C++ implementation is then part of the product under test, not an
+  independent reference; retain a separate readable oracle for validation.
+- Store validation results and provenance in the owning `validation_test/`
+  JSON. Record the reference implementation and runtime so a passing result is
+  not mistaken for an implementation self-comparison.
+
 **Promotion gates**:
 
 - **C:\temp → tests/**: the behavior is small, deterministic, and useful for
