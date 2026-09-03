@@ -31,6 +31,7 @@ Eqnedit64.exe と Web/JS 数式エディタは、Radia の `tools/eqnedit64` で
 | 常設書体 `\mathrm` / `\mathit` / `\mathbf` | 選択変更・継続入力 | 選択を包む・空欄挿入 | 共通学習面 |
 | 追加書体 `\mathsf` / `\mathtt` / `\mathcal` / `\mathbb` / `\mathfrak` / `\bm` | 装飾パレット・TeX・保存・MathML | 装飾パレット・MathJax | `\boldsymbol` は `\bm` の入力別名 |
 | 挿入直後のTeX強調 | ソース内の非アクティブ選択 | キャレットを動かさない強調表示 | 共通学習面 |
+| TeXソース文字の可読性 | 物理face・cmap・実inkを検査しstock GUI fontへ退避 | 共有CSS変数によるCJK対応monospace fallback | 共通学習面 |
 | `Tab` / `Shift+Tab`で空欄移動 | 構造GUI・TeXソース | TeXソース | 共通学習面 |
 | 論文TeXの意味保全 | native parserで標準環境・コメント・メタ命令を正規化 | MathJaxの標準TeX解釈へ委譲 | `~`を`\sim`にせず、`align`の`&`を失わず、命令名を本文にしない |
 | 構造キャンバス編集 | 必須 | 非該当 | native固有 |
@@ -60,6 +61,11 @@ Office経路へこれらの整列要素を出してはならない。保存OOXML
 Web/MathJaxは未対応命令を変換エラーとして通知してよいが、どちらも命令名を通常文字として
 数式へ捏造してはならない。この差は構造編集を継続できるnativeと、完全TeX parserを持つ
 MathJaxの境界による。
+native parserの固定点、optional引数の停止条件、Undo用再parseはnative構造編集固有の
+実装責任であり、MathJaxへTeX解釈を委譲するWeb版へC++ parserを移植しない。逆に、
+Web版のソース文字はブラウザのfont fallbackへ委ねるため、Win32のGDI font検査を
+JavaScriptへ再実装しない。ソース欄と直前挿入表示は一つのCJK対応font stackを共有し、
+特定のローカルfont一つだけを前提にしない。
 両版とも`\text{hello world}`と`\operatorname{arg max}`の単語間空白を表示・保存し、
 escaped percentを含む文章でも空白を脱落させない。nativeは構造木へ取り込む際に連続する
 source空白を一つの単語間空白へ正規化するが、`~`、`\ `、`\,`の明示空白は区別して保持する。
@@ -80,4 +86,8 @@ PowerPointの通常貼り付け受入試験は、画面外の一時プレゼン�
 - Web版の正本は `web/equation-editor.js` と
   `web/equation-editor.fragment.html`。ホームページへ置いたコピーを直接改変しない。
 - MTEFと`.eqn`を互換形式として復活させない。両実装とも入出力の正本はTeXとする。
+- native変換器の公開境界はPythonを介さない
+  `Eqnedit64.exe INPUT OUTPUT`である。CLI dispatchをpybind11へ複製しない。Python
+  packageのlauncherや補助関数は必要に応じて同じEXEをsubprocess実行する薄い利用者であり、
+  CLIの正本ではない。Web版にnative CLIを移植しない。
 - 仕様、実装、自動試験を同じ変更で更新する。引き継ぎメモだけを規範にしない。
