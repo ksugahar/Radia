@@ -44,6 +44,9 @@ $ErrorActionPreference = "Stop"
 if (@($RadiaOnly, $AxiFemOnly, $MatlabMexOnly, $OptunaMexOnly).Where({ $_ }).Count -gt 1) {
     throw "-RadiaOnly, -AxiFemOnly, -MatlabMexOnly, and -OptunaMexOnly are mutually exclusive"
 }
+if ($OptunaMexOnly -and $InstallToSitePackages) {
+    throw "-InstallToSitePackages does not apply to the standalone Optuna MEX build"
+}
 
 # ============================================================================
 # Paths
@@ -51,11 +54,18 @@ if (@($RadiaOnly, $AxiFemOnly, $MatlabMexOnly, $OptunaMexOnly).Where({ $_ }).Cou
 
 $PROJECT_DIR = Split-Path -Parent $MyInvocation.MyCommand.Path
 $BUILD_DIR = "$PROJECT_DIR\build-msvc"
-$PythonExecutable = (Get-Command python -ErrorAction Stop).Source
-$Pybind11CMakeDir = (& $PythonExecutable -c "import pybind11; print(pybind11.get_cmake_dir())").Trim()
-if (-not (Test-Path "$Pybind11CMakeDir\pybind11Config.cmake")) {
-    Write-Host "ERROR: pybind11 CMake package not found under $Pybind11CMakeDir" -ForegroundColor Red
-    exit 1
+$PythonCommand = Get-Command python -ErrorAction SilentlyContinue
+$PythonExecutable = if ($PythonCommand) { $PythonCommand.Source } else { "" }
+if ((-not $OptunaMexOnly -or $Test) -and -not $PythonExecutable) {
+    throw "Python is required for Radia builds and for -Test"
+}
+$Pybind11CMakeDir = ""
+if (-not $OptunaMexOnly) {
+    $Pybind11CMakeDir = (& $PythonExecutable -c "import pybind11; print(pybind11.get_cmake_dir())").Trim()
+    if (-not (Test-Path "$Pybind11CMakeDir\pybind11Config.cmake")) {
+        Write-Host "ERROR: pybind11 CMake package not found under $Pybind11CMakeDir" -ForegroundColor Red
+        exit 1
+    }
 }
 
 # ---- Cubit install discovery ------------------------------------------------
@@ -133,6 +143,11 @@ $MatlabMexCMakeArgs = if ($OptunaMexOnly) {
 } else {
     " ^`n    -DRADIA_BUILD_OPTUNA_MEX_ONLY=OFF"
 }
+$PythonCMakeArgs = if ($OptunaMexOnly) {
+    ""
+} else {
+    " ^`n    -DPython3_EXECUTABLE=`"$PythonExecutable`" ^`n    -Dpybind11_DIR=`"$Pybind11CMakeDir`""
+}
 
 # Visual Studio (any version) via vswhere
 $VS_PATH = $null
@@ -171,7 +186,11 @@ if (-not (Test-Path $CTEST_EXE)) {
 
 # Ninja generator backend.  Pass the long path explicitly so stale CMake
 # short-path cache entries do not break after Python install path changes.
-$NINJA_EXE = & $PythonExecutable -c "import shutil; print(shutil.which('ninja') or '')" 2>$null
+$NINJA_COMMAND = Get-Command ninja -ErrorAction SilentlyContinue
+$NINJA_EXE = if ($NINJA_COMMAND) { $NINJA_COMMAND.Source } else { "" }
+if (-not $NINJA_EXE -and $PythonExecutable) {
+    $NINJA_EXE = & $PythonExecutable -c "import shutil; print(shutil.which('ninja') or '')" 2>$null
+}
 if (-not $NINJA_EXE) {
     $NINJA_EXE = & where.exe ninja 2>$null | Select-Object -First 1
 }
@@ -313,9 +332,7 @@ echo ========================================
     -DCMAKE_MAKE_PROGRAM="$NINJA_EXE" ^
     -DCMAKE_C_COMPILER=cl ^
     -DCMAKE_CXX_COMPILER=cl ^
-    -DPython3_EXECUTABLE="$PythonExecutable" ^
-    -Dpybind11_DIR="$Pybind11CMakeDir" ^
-    -DCMAKE_BUILD_TYPE=Release$NGSolveCMakeArgs$MatlabMexCMakeArgs
+    -DCMAKE_BUILD_TYPE=Release$PythonCMakeArgs$NGSolveCMakeArgs$MatlabMexCMakeArgs
 
 if errorlevel 1 (
     echo ERROR: CMake configuration failed
@@ -736,6 +753,15 @@ finally {
 if ($Test) {
     Write-Host ""
     Write-Host "Running tests..." -ForegroundColor Cyan
+
+    if ($OptunaMexOnly) {
+        & $PythonExecutable -m pytest "$PROJECT_DIR\packages\radia-optuna\tests" -q
+        if ($LASTEXITCODE -ne 0) {
+            Write-Host "radia-optuna tests failed!" -ForegroundColor Red
+            exit 1
+        }
+        return
+    }
 
     $oldPythonPath = $env:PYTHONPATH
     if ($oldPythonPath) {
