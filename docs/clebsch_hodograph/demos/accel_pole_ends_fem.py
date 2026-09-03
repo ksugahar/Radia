@@ -39,8 +39,6 @@ import sys
 import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))             # the analyzer
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(
-    os.path.dirname(os.path.abspath(__file__)))), "src", "radia"))         # coil_builder
 
 from accel_pole_ends_3d import integrated_multipoles                       # noqa: E402
 
