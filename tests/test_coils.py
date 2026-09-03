@@ -1,16 +1,9 @@
 """Filament current-loop helpers (radia.coils): circular_loop / helmholtz_pair,
 validated against the single-loop and Helmholtz on-axis closed forms. Run via
 PowerShell (radia C-ext needs the pwsh launch)."""
-import math
-import os
-import sys
-
-_RADIA_SRC = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src", "radia"))
-if _RADIA_SRC not in sys.path:
-    sys.path.insert(0, _RADIA_SRC)
 
 import radia as rad
-import coils
+from radia import coils
 
 R, I = 0.05, 10.0          # 50 mm loop, 10 A
 

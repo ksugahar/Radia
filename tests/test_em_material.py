@@ -7,14 +7,10 @@ xi ~ 710 emitting a RuntimeWarning (NOT an OverflowError), so the old
 conductors (e.g. an induction-heating steel workpiece at high frequency).
 """
 import math
-import os
-import sys
 
 import numpy as np
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src", "radia"))
-
-from em_material import EMMaterial
+from radia.em_material import EMMaterial
 
 
 def test_dowell_Zs_thick_conductor_no_nan():
