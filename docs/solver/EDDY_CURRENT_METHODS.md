@@ -47,10 +47,7 @@ Interior FEM for the conductor volume + exterior BEM using Maxwell SLP. No air m
 ### Usage (Vector A-formulation)
 
 ```python
-import sys, os, numpy as np
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'path/to/src/radia'))
-
-from ngbem_eddy import VectorEddyCurrentFEMBEM, create_conductor_mesh
+from radia.ngsbem_eddy import VectorEddyCurrentFEMBEM, create_conductor_mesh
 
 # Create conductor volume mesh
 mesh = create_conductor_mesh(0.02, 0.02, 0.01, maxh=0.005)  # 20x20x10 mm
@@ -73,7 +70,7 @@ print(f"Eddy current loss: {P:.4e} W")
 ### Usage (Scalar Hz formulation)
 
 ```python
-from ngbem_eddy import EddyCurrentFEMBEM, create_conductor_mesh
+from radia.ngsbem_eddy import EddyCurrentFEMBEM, create_conductor_mesh
 
 mesh = create_conductor_mesh(0.02, 0.02, 0.01, maxh=0.003)
 
@@ -137,7 +134,7 @@ Surface-only BEM with Surface Impedance Boundary Condition. The SIBC replaces th
 ### Usage (ShieldBEMSIBC -- recommended for shielding + PEEC)
 
 ```python
-from ngbem_eddy import ShieldBEMSIBC, create_conductor_mesh, _biot_savart_A
+from radia.ngsbem_eddy import ShieldBEMSIBC, _biot_savart_A, create_conductor_mesh
 
 # Create conductor mesh (volume mesh, but BEM uses surface only)
 mesh = create_conductor_mesh(0.1, 0.1, 0.002, maxh=0.025)  # 100x100x2 mm plate
@@ -171,7 +168,7 @@ for f in [1e3, 10e3, 100e3, 1e6]:
 ### Usage (EddyCurrentBEMSIBC -- scalar Hz)
 
 ```python
-from ngbem_eddy import EddyCurrentBEMSIBC, create_conductor_mesh
+from radia.ngsbem_eddy import EddyCurrentBEMSIBC, create_conductor_mesh
 
 mesh = create_conductor_mesh(0.01, 0.01, 0.005, maxh=0.003)
 
@@ -689,7 +686,7 @@ Coarse mesh parameters used for diagnosis: maxh = 12 mm (18 volume elements, 94 
 
 ### Bug 1: Missing curl-curl RHS Term
 
-**File**: `src/radia/ngbem_eddy.py`, `VectorEddyCurrentFEMBEM.solve()`, line 2138
+**File**: `src/radia/ngsbem_eddy.py`, `VectorEddyCurrentFEMBEM.solve()`
 
 The interior FEM equation for the scattered field A_s is:
 
