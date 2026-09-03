@@ -235,7 +235,7 @@ class CoupledBEMSolver:
                  coil_hacapk=False, coil_aca_eps=1e-8, coil_hacapk_leaf=64,
                  coil_hacapk_eta=2.0):
         from ngsolve import (HDivSurface, SurfaceL2, BilinearForm, LinearForm,
-                             TaskManager, ds, BND, div)
+                             ds, BND, div)
         from ngsolve.bem import LaplaceSL
         from radia.bem_sibc_solver import (ScalarBIESIBCSolver,
                                            SurfacePoissonPhiInc)
@@ -264,8 +264,7 @@ class CoupledBEMSolver:
 
         # LaplaceSL on coil
         jt, jv = fes_J.TnT()
-        with TaskManager():
-            V_op = LaplaceSL(jt.Trace() * ds, use_fmm=False) * jv.Trace() * ds
+        V_op = LaplaceSL(jt.Trace() * ds, use_fmm=False) * jv.Trace() * ds
         rows, cols, vals = V_op.mat.COO()
         self.SL_coil = coo_matrix((vals, (rows, cols)),
                                   shape=(V_op.mat.height, V_op.mat.width)).toarray()
