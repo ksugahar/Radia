@@ -1856,7 +1856,8 @@ Implementation:
 
 Outputs:
 
-  - ``demo_pareto_results.json`` -- all trials + Pareto front
+  - ``validation_test/stream_function/demos/demo_pareto_results.json`` -- all
+    trials + Pareto front
   - ``demo_pareto_plot.png`` -- scatter + Pareto curve
 
 ### Measured Pareto front (planar uniform Bz, 50 trials, H1, bump)

@@ -22,6 +22,8 @@ import argparse
 
 import numpy as np
 
+from _validation_output import validation_json_for_basename
+
 from radia_mcp.figure import lab_figure, save_lab_figure
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
@@ -124,15 +126,17 @@ def main():
 
     peaks0 = {L: nondominated(per_L[L])[0]["peak"] for L in args.lengths}
     Lbest = min(peaks0, key=peaks0.get)
-    json.dump({"radius": args.radius, "Gx": args.Gx, "dsv": args.dsv,
-               "lengths": args.lengths, "per_L": {str(k): v
-                                                  for k, v in per_L.items()},
-               "envelope": env, "best_length": Lbest},
-              open(args.out + ".json", "w"), indent=2)
+    json_path = validation_json_for_basename(args.out, "pareto_cylinder.json")
+    with json_path.open("w", encoding="utf-8") as stream:
+        json.dump({"radius": args.radius, "Gx": args.Gx, "dsv": args.dsv,
+                   "lengths": args.lengths, "per_L": {str(k): v
+                                                      for k, v in per_L.items()},
+                   "envelope": env, "best_length": Lbest},
+                  stream, indent=2, allow_nan=False)
     print(f"\nlength lever (exact-homog peak): "
           f"{peaks0[args.lengths[0]]:.3e} -> {peaks0[Lbest]:.3e} "
           f"(optimum at L={Lbest*100:.0f} cm)", flush=True)
-    print(f"saved {args.out}.json / .png", flush=True)
+    print(f"saved {json_path} / {args.out}.png", flush=True)
 
 
 if __name__ == "__main__":

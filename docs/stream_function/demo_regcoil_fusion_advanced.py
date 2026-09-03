@@ -45,8 +45,9 @@ Run (standalone):
     python demo_regcoil_fusion_advanced.py --wout my.nc    # your own equilibrium
     python demo_regcoil_fusion_advanced.py --no-plot --no-fetch   # offline (skip B)
 
-Writes ``demo_regcoil_fusion_advanced.json`` + (if matplotlib + radia-mcp) a
-1x3 lab figure.
+Writes validation evidence to
+``validation_test/stream_function/demos/demo_regcoil_fusion_advanced.json`` +
+(if matplotlib + radia-mcp) a 1x3 lab figure.
 """
 from __future__ import annotations
 
@@ -59,6 +60,8 @@ import urllib.request
 from datetime import datetime
 
 import numpy as np
+
+from _validation_output import validation_output
 
 # the li383 reference equilibrium shipped by simsopt (open source, MIT)
 _LI383_URL = ("https://raw.githubusercontent.com/hiddenSymmetries/simsopt/"
@@ -366,9 +369,9 @@ def main():
         "real_equilibrium": real,
         "focus_shape": shape,
     }
-    jpath = os.path.join(args.out_dir, "demo_regcoil_fusion_advanced.json")
+    jpath = validation_output("demo_regcoil_fusion_advanced.json", args.out_dir)
     with open(jpath, "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=2)
+        json.dump(data, f, indent=2, allow_nan=False)
     print(f"\nResults -> {jpath}")
 
     if not args.no_plot:

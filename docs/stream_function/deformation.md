@@ -204,7 +204,8 @@ Implementation:
 
 Outputs:
 
-  - `demo_pareto_results.json` — every trial plus the non-dominated
+  - `../../validation_test/stream_function/demos/demo_pareto_results.json` —
+    every trial plus the non-dominated
     set with params, `(rms, reg_norm)` values, and the surface
     deformation chosen.
   - `demo_pareto_plot.png` — scatter of all 50 trials in

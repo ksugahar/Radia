@@ -32,8 +32,9 @@ calc subprocess.  Standalone:
 
     python demo_shim_coil_purity.py [--order 2] [--lmax 4]
 
-Outputs (committed next to this script, per the Data Persistence Policy):
-    demo_shim_coil_purity.json   aggregated purity/contamination per target
+Outputs:
+    validation_test/stream_function/demos/demo_shim_coil_purity.json
+                                 aggregated purity/contamination per target
     demo_shim_coil_purity.png    impurity-vs-order + hardest-target spectrum
 """
 import argparse
@@ -43,6 +44,8 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
+
+from _validation_output import validation_output
 
 import numpy as np
 
@@ -238,12 +241,13 @@ def main():
     rows = _design_all(coil, evalv, args.lmax, args.order, work)
     _print_table(rows, args.lmax)
 
-    jpath = os.path.join(args.out_dir, "demo_shim_coil_purity.json")
+    jpath = validation_output("demo_shim_coil_purity.json", args.out_dir)
     with open(jpath, "w") as f:
         json.dump({"order": args.order, "lmax": args.lmax,
                    "former": {"radius_m": 0.15, "length_m": 0.50},
-                   "dsv_radius_m": 0.05, "rows": rows}, f, indent=2)
-    print(f"\nSaved data: {os.path.basename(jpath)}")
+                   "dsv_radius_m": 0.05, "rows": rows}, f, indent=2,
+                  allow_nan=False)
+    print(f"\nSaved data: {jpath}")
 
     _plot(rows, os.path.join(args.out_dir, "demo_shim_coil_purity.png"))
 

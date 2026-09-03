@@ -33,6 +33,8 @@ import argparse
 
 import numpy as np
 
+from _validation_output import validation_json_for_basename
+
 from radia_mcp.figure import lab_figure, save_lab_figure
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
@@ -203,10 +205,13 @@ def main():
         print(f"{mf*100:9.3f} {pf:10.3e} {pk:10.3e} {100*(pk/pf-1):+8.1f}%",
               flush=True)
 
-    json.dump({"target": args.target, "azimuthal": args.azimuthal,
-               "radius": args.radius, "length": args.length,
-               "flat_front": flat_front, "opt_front": opt_front},
-              open(args.out + ".json", "w"), indent=2)
+    json_path = validation_json_for_basename(
+        args.out, "pareto_cylinder_deform.json")
+    with json_path.open("w", encoding="utf-8") as stream:
+        json.dump({"target": args.target, "azimuthal": args.azimuthal,
+                   "radius": args.radius, "length": args.length,
+                   "flat_front": flat_front, "opt_front": opt_front},
+                  stream, indent=2, allow_nan=False)
 
     import matplotlib
     matplotlib.use("Agg")
@@ -222,7 +227,7 @@ def main():
     ax.legend(fontsize=8)
     ax.grid(alpha=0.3)
     save_lab_figure(fig, args.out, embed_width_cm=8.0)
-    print(f"\nsaved {args.out}.json / .png", flush=True)
+    print(f"\nsaved {json_path} / {args.out}.png", flush=True)
 
 
 if __name__ == "__main__":

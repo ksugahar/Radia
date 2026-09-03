@@ -33,6 +33,8 @@ import sys
 import time
 from pathlib import Path
 
+from _validation_output import validation_output
+
 import numpy as np
 
 HERE = Path(__file__).resolve().parent
@@ -213,7 +215,6 @@ def main():
             # IRLS does its own re-folding each iter; we report the FIRST iter cost
             psi, info = solve_linf_irls(A, B_target, fes, jmax=args.jmax,
                                          n_iter=12, verbose=False)
-            t_fold = float("nan")    # not a single fold
         else:
             reg = RegularizedTSVD.from_stiffness(res, S_free)
         t1 = time.time()
@@ -222,7 +223,7 @@ def main():
         # ---- solve ----
         if name == "linf_irls":
             t_solve_ms = (t1 - t0) * 1000.0   # IRLS includes all 12 iters
-            t_fold_ms = float("nan")
+            t_fold_ms = None
         else:
             t0 = time.time()
             psi_free = reg.solve(B_target)
@@ -235,7 +236,7 @@ def main():
             psi, A, fes, mesh, B_target, args.plane_half,
             args.n_sample, args.nlevels, targets)
 
-        fold_str = f"{t_fold_ms:>10.2f}" if not np.isnan(t_fold_ms) else "       (IRLS)"
+        fold_str = f"{t_fold_ms:>10.2f}" if t_fold_ms is not None else "       (IRLS)"
         print(f"{name:<18}{fold_str:<12}{t_solve_ms:>11.2f}   "
               f"{m['cont_res']:<12.2e}{m['rms']*100:<8.2f}% "
               f"{m['p2p_mean']*100:<10.2f}% {m['n_wire']:<8}{m['I_w']:.2f}")
@@ -254,7 +255,7 @@ def main():
 
     # ------- JSON dump ---------------------------------------------------
     import json
-    out = HERE / "demo_regularized_aca_results.json"
+    out = validation_output("demo_regularized_aca_results.json")
     payload = {
         "ndof": int(A.shape[1]),
         "n_free": int(N_dim),
@@ -266,7 +267,7 @@ def main():
         "results": results,
     }
     with open(out, "w") as f:
-        json.dump(payload, f, indent=2)
+        json.dump(payload, f, indent=2, allow_nan=False)
     print(f"Saved sweep results: {out.name}")
 
 

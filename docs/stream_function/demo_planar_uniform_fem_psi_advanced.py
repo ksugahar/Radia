@@ -59,6 +59,8 @@ import sys
 import time
 from pathlib import Path
 
+from _validation_output import validation_output
+
 import numpy as np
 
 HERE = Path(__file__).resolve().parent
@@ -922,9 +924,9 @@ def main():
                     if t.user_attrs.get("rms") is not None
                 ],
             }
-            out_json = HERE / "demo_pareto_results.json"
+            out_json = validation_output("demo_pareto_results.json")
             with open(out_json, "w") as f:
-                json.dump(pareto_payload, f, indent=2)
+                json.dump(pareto_payload, f, indent=2, allow_nan=False)
             print(f"\n  Saved: {out_json.name}")
 
             # Plot

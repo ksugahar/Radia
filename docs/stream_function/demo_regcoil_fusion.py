@@ -72,8 +72,10 @@ Run (standalone -- no Cubit, no panel UI):
     python demo_regcoil_fusion.py --wout wout_w7x.nc      # real VMEC boundary
     python demo_regcoil_fusion.py --no-cohomology         # skip the b1 (Euler-char) check
 
-Writes ``demo_regcoil_fusion.json`` (Data Persistence Policy) and, if matplotlib
-+ radia-mcp are present, ``demo_regcoil_fusion.{png,pdf}`` next to this script.
+Writes validation evidence to
+``validation_test/stream_function/demos/demo_regcoil_fusion.json`` and, if
+matplotlib + radia-mcp are present, ``demo_regcoil_fusion.{png,pdf}`` next to
+this script.
 """
 from __future__ import annotations
 
@@ -86,6 +88,8 @@ import sys
 from datetime import datetime
 
 import numpy as np
+
+from _validation_output import validation_output
 
 # major radius shared by the winding torus and the (circular) plasma torus -- a
 # simple, reproducible stand-in for a VMEC boundary (Part 4 replaces it).
@@ -525,9 +529,9 @@ def main():
         "net_current": net_current,
         "vmec_boundary": vmec,
     }
-    jpath = os.path.join(args.out_dir, "demo_regcoil_fusion.json")
+    jpath = validation_output("demo_regcoil_fusion.json", args.out_dir)
     with open(jpath, "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=2)
+        json.dump(data, f, indent=2, allow_nan=False)
     print(f"\nResults -> {jpath}")
 
     if not args.no_plot:
