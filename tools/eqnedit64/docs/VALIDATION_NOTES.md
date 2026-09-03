@@ -5,6 +5,21 @@
 [`CANONICAL_OPERATION.md`](CANONICAL_OPERATION.md) と `release-eqnedit64` skillを
 正とする。`build\accept_release.ps1`は隔離CI/VM用であり、対話中LABでは実行しない。
 
+## 2026-09-03 3.0.13 O:ハンドテストのTeX欄誤字形
+
+- PR #86のgreen候補`5fbc6ab2cfc5905416da8fef16a837661ae89627`をO:で開くと、数式canvas、
+  日本語menu、`TeXソース`labelは正常だが、source EDIT内のASCIIだけがaccent付きの
+  無関係な字形として描かれた。内部source同期はUnicode `SetWindowTextW` / `GetWindowTextW`
+  で、同候補のhidden source/model一致試験もgreenのため、保存TeXの文字化けではなく
+  source control専用fontの誤描画と切り分けた。
+- 原因はsource EDITだけが`CreateFontW(..., L"Consolas")`の成功を無検証で信じたこと。
+  既存visual testも「何らかのinkがある」だけを見たため、正しい文字列を別glyphで描く
+  session font破損を検出できなかった。
+- 修正はConsolas固定を廃止し、選択DCの物理face名、font自身の日本語＋TeX ASCII cmap、
+  bitmap inkをすべて満たすCJK UI fontを選ぶ。候補全滅時は同画面で正常表示できている
+  source labelと同じstock GUI fontへ退避する。visual testと静的guardは実production
+  chooserを必須とし、無検証Consolasへ戻ったら失敗する。
+
 ## 2026-09-03 3.0.13最終Fableレビューの固定点回収
 
 - 指摘回収commitは`b5c17a7c5327f1eed0a3a72538242c46b8513107`。

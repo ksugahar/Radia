@@ -36,6 +36,20 @@ def main() -> int:
                     f"{name} guard cannot distinguish ambient font-host churn: "
                     f"missing {required!r}"
                 )
+    app = (ROOT / "src/eqnedt64_app.cpp").read_text(encoding="utf-8")
+    for required in (
+        "HFONT pick_source_font(int heightPx)",
+        "font_resolves_to_face(font, face)",
+        "g.sourceFont = pick_source_font(scaled_px(hwnd, 16))",
+        "sourceFont = pick_source_font(MulDiv(16, dpi, 96))",
+    ):
+        if required not in app:
+            failures.append(
+                "TeX source pane can return to an unvalidated named font: "
+                f"missing {required!r}"
+            )
+    if 'L"Consolas"' in app:
+        failures.append("TeX source pane returned to unvalidated Consolas")
 
     if failures:
         for failure in failures:
