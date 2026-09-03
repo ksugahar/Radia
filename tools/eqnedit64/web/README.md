@@ -24,6 +24,13 @@ The host page must load MathJax 3 and include the markup in
 `equation-editor.fragment.html`. The script is deliberately dependency-free
 apart from that host-provided MathJax runtime.
 
+The TeX source pane and the most-recent insertion display share the
+`--eqed-source-font` CSS variable. Its browser fallback stack includes a
+monospace system face and Japanese-capable UI faces; do not hard-code Consolas
+or assume that one locally installed font resolves correctly. This is the Web
+counterpart of the native source-legibility contract, not a JavaScript port of
+the Win32 physical-face, cmap, and raster-ink probes.
+
 The `R x` / `I x` / `B x` math-alphabet group is always visible beside the
 category tabs. It inserts `\mathrm{}`, `\mathit{}`, or `\mathbf{}`; a source
 selection is wrapped in the chosen command and an empty selection leaves the
