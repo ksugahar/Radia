@@ -9,7 +9,7 @@ Features demonstrated:
 - Setting conductor properties (conductivity, mu_r)
 - Frequency sweep for impedance analysis
 - Skin effect (ESIM surface impedance)
-- VTU export for ParaView visualization
+- GMSH MSH v4.1 centerline export for visualization
 
 Physical model:
 - Circular loop coil (single turn for simplicity)
@@ -20,18 +20,14 @@ Output:
 - Impedance vs frequency plot
 - Resistance and inductance extraction
 - Skin depth analysis
-- VTU files for ParaView (coil geometry + B field grid)
+- GMSH MSH v4.1 coil centerline
 
 Part of Radia PEEC integration examples.
 """
 
-import sys
 import os
 import numpy as np
 import matplotlib.pyplot as plt
-
-# Add Radia to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../../src/radia'))
 
 # Physical constants
 MU_0 = 4 * np.pi * 1e-7  # H/m
@@ -282,21 +278,21 @@ def run_coil_analysis():
     return coil
 
 
-def export_coil_to_vtu(coil, filename_base, num_segments=60):
+def export_coil_to_gmsh(coil, filename_base, num_segments=60):
     """
-    Export coil geometry and B field to VTU files.
+    Export the coil centerline to a GMSH MSH v4.1 file.
 
     Parameters:
     -----------
     coil : SimpleCoilPEEC
         Coil object
     filename_base : str
-        Base filename for VTU output
+        Base filename for GMSH output
     num_segments : int
         Number of segments for coil discretization
     """
     print("\n" + "="*60)
-    print("Exporting to VTU format")
+    print("Exporting to GMSH MSH v4.1")
     print("="*60)
 
     # Generate coil centerline points
@@ -307,53 +303,17 @@ def export_coil_to_vtu(coil, filename_base, num_segments=60):
         np.zeros_like(theta)
     ])
 
-    # Generate wire cross-section (tube around centerline)
-    n_around = 8  # Points around wire circumference
-    phi = np.linspace(0, 2*np.pi, n_around + 1)[:-1]
+    segments = [
+        (coil_points[index].tolist(), coil_points[index + 1].tolist())
+        for index in range(num_segments)
+    ]
+    from radia.gmsh_post_export import export_filaments_msh
 
-    all_points = []
-    all_cells = []
-
-    for i in range(num_segments):
-        # Tangent, normal, binormal at this point
-        t0 = theta[i]
-        t1 = theta[i + 1]
-
-        for j, t in enumerate([t0, t1]):
-            # Center of wire at this angle
-            cx = coil.R * np.cos(t)
-            cy = coil.R * np.sin(t)
-            cz = 0.0
-
-            # Local coordinate system (radial, z, tangent)
-            radial = np.array([np.cos(t), np.sin(t), 0])
-            z_dir = np.array([0, 0, 1])
-
-            # Generate points around wire
-            for p in phi:
-                # Position on wire surface
-                offset = coil.a * (np.cos(p) * radial + np.sin(p) * z_dir)
-                point = np.array([cx, cy, cz]) + offset
-                all_points.append(point)
-
-        # Create hexahedral cells connecting two rings
-        base_idx = len(all_points) - 2 * n_around
-        for k in range(n_around):
-            k_next = (k + 1) % n_around
-            # 8 vertices of hexahedron
-            v0 = base_idx + k
-            v1 = base_idx + k_next
-            v2 = base_idx + n_around + k_next
-            v3 = base_idx + n_around + k
-            all_cells.append([v0, v1, v2, v3])
-
-    # Write coil geometry VTU
-    coil_vtu = f"{filename_base}_coil.vtu"
-    write_coil_vtu(all_points, all_cells, coil_vtu)
-
-    print(f"\nVTU Export complete:")
-    print(f"  Coil geometry: {coil_vtu}")
-    print("\nOpen this file in ParaView for visualization.")
+    coil_msh = f"{filename_base}_coil.msh"
+    export_filaments_msh([segments], coil_msh, label="coil_centerline")
+    print("\nGMSH export complete:")
+    print(f"  Coil centerline: {coil_msh}")
+    print("\nOpen this file in GMSH for visualization.")
 
 
 def compute_loop_bfield(R, point, I=1.0):
@@ -436,50 +396,6 @@ def compute_loop_bfield(R, point, I=1.0):
         By = 0.0
 
     return np.array([Bx, By, Bz])
-
-
-def write_coil_vtu(points, cells, filename):
-    """Write coil geometry to VTU file."""
-    n_points = len(points)
-    n_cells = len(cells)
-
-    with open(filename, 'w') as f:
-        f.write('<?xml version="1.0"?>\n')
-        f.write('<VTKFile type="UnstructuredGrid" version="0.1" byte_order="LittleEndian">\n')
-        f.write('  <UnstructuredGrid>\n')
-        f.write(f'    <Piece NumberOfPoints="{n_points}" NumberOfCells="{n_cells}">\n')
-
-        # Points
-        f.write('      <Points>\n')
-        f.write('        <DataArray type="Float64" NumberOfComponents="3" format="ascii">\n')
-        for p in points:
-            f.write(f'          {p[0]:.10e} {p[1]:.10e} {p[2]:.10e}\n')
-        f.write('        </DataArray>\n')
-        f.write('      </Points>\n')
-
-        # Cells
-        f.write('      <Cells>\n')
-        # Connectivity
-        f.write('        <DataArray type="Int32" Name="connectivity" format="ascii">\n')
-        for cell in cells:
-            f.write('          ' + ' '.join(str(v) for v in cell) + '\n')
-        f.write('        </DataArray>\n')
-        # Offsets
-        f.write('        <DataArray type="Int32" Name="offsets" format="ascii">\n')
-        offsets = [(i + 1) * 4 for i in range(n_cells)]
-        f.write('          ' + ' '.join(str(o) for o in offsets) + '\n')
-        f.write('        </DataArray>\n')
-        # Cell types (9 = VTK_QUAD)
-        f.write('        <DataArray type="UInt8" Name="types" format="ascii">\n')
-        f.write('          ' + ' '.join(['9'] * n_cells) + '\n')
-        f.write('        </DataArray>\n')
-        f.write('      </Cells>\n')
-
-        f.write('    </Piece>\n')
-        f.write('  </UnstructuredGrid>\n')
-        f.write('</VTKFile>\n')
-
-    print(f"Exported: {filename} ({n_cells} cells, {n_points} points)")
 
 
 def run_peec_solver_analysis():
@@ -657,9 +573,9 @@ def main():
     # Run analytical model analysis
     coil = run_coil_analysis()
 
-    # Export to VTU (Python implementation with Biot-Savart)
+    # Export a GMSH centerline for visual inspection.
     output_base = os.path.join(os.path.dirname(__file__), 'coil_impedance_peec')
-    export_coil_to_vtu(coil, output_base)
+    export_coil_to_gmsh(coil, output_base)
 
     # Run PEEC solver analysis (C++ PEEC solver)
     peec_result = run_peec_solver_analysis()
@@ -679,8 +595,8 @@ def main():
     print("  - Coupled coil-magnet analysis")
     print("  - Complex permeability for magnetic materials")
 
-    print("\nOutput files for ParaView:")
-    print("  - coil_impedance_peec_coil.vtu  : Coil geometry (wire tube)")
+    print("\nOutput files:")
+    print("  - coil_impedance_peec_coil.msh  : Coil centerline for GMSH")
     print("  - coil_impedance_peec_solver.png: PEEC solver results")
 
 

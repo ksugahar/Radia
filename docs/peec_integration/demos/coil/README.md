@@ -14,4 +14,5 @@ PEEC-based coil impedance analysis demos.
 
 - `coil_impedance_peec.png` — Impedance frequency response
 - `coil_impedance_peec_solver.png` — Solver details
+- `coil_impedance_peec_coil.msh` — GMSH MSH v4.1 coil centerline
 - `coil_on_magnetic_core_*.png` — Magnetic core analysis results
