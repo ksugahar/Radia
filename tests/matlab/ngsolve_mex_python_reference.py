@@ -13,16 +13,17 @@ from pathlib import Path
 
 import numpy as np
 from ngsolve import (
-    BilinearForm,
     CF,
+    H1,
+    BilinearForm,
     CoefficientFunction,
     GridFunction,
-    H1,
     HCurl,
     HDiv,
     InnerProduct,
     LinearForm,
     Mesh,
+    TaskManager,
     curl,
     div,
     dx,
@@ -145,7 +146,9 @@ def main() -> None:
         raise SystemExit(
             "usage: ngsolve_mex_python_reference.py INPUT.vol OUTPUT.mat"
         )
-    savemat(sys.argv[2], build_reference(Path(sys.argv[1])), do_compression=False, oned_as="column")
+    with TaskManager():
+        reference = build_reference(Path(sys.argv[1]))
+    savemat(sys.argv[2], reference, do_compression=False, oned_as="column")
 
 
 if __name__ == "__main__":

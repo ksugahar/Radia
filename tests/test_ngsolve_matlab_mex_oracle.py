@@ -7,7 +7,7 @@ import json
 from pathlib import Path
 
 import numpy as np
-
+from ngsolve import TaskManager
 
 ROOT = Path(__file__).resolve().parents[1]
 REFERENCE_HELPER = ROOT / "tests" / "matlab" / "ngsolve_mex_python_reference.py"
@@ -26,7 +26,10 @@ def _load_reference_helper():
 
 def test_python_oracle_covers_native_matlab_ngsolve_contract():
     helper = _load_reference_helper()
-    fixture = helper.build_reference(ROOT / "tests" / "fixtures" / "beam" / "affine_field_tetra.vol")
+    with TaskManager():
+        fixture = helper.build_reference(
+            ROOT / "tests" / "fixtures" / "beam" / "affine_field_tetra.vol"
+        )
 
     assert fixture["fixture_schema"] == "radia.ngsolve-matlab-mex-parity.v1"
     assert fixture["mesh_dimension"] == 3
