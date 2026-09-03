@@ -965,6 +965,26 @@ merely to make validation faster.
   JSON. Record the reference implementation and runtime so a passing result is
   not mistaken for an implementation self-comparison.
 
+### Maintenance Stabilization Window (2026-09-03 to 2026-10-03)
+
+**POLICY**: During this window, do not add new user-facing features. Spend
+repository effort on completing, reviewing, simplifying, documenting, and
+validating capabilities that already exist.
+
+- Allowed work includes bug fixes, API and policy consistency, removal of
+  retired paths, dependency and build cleanup, CI/runtime reduction, test and
+  validation classification, documentation repair, and completion of an
+  already-claimed capability whose current implementation is incomplete.
+- Do not introduce a new solver family, application, public API family, MCP
+  tool family, Simulink product block, or optional dependency during the
+  window. Record promising ideas for later instead of implementing them now.
+- Security fixes, upstream compatibility fixes, and the smallest change needed
+  to prevent data loss or restore a broken released workflow are exceptions.
+  Keep any exception narrowly scoped and state why it could not wait.
+- Maintenance changes must reduce or leave unchanged the long-term support
+  surface. A rewrite that merely moves unfinished behavior behind a new API is
+  a feature change, not maintenance.
+
 **Promotion gates**:
 
 - **C:\temp → tests/**: the behavior is small, deterministic, and useful for
