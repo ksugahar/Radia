@@ -19,9 +19,10 @@ Two checks repo-wide:
    at least one caller-owned ``with TaskManager():`` region.
 
 This is intentionally a fast file-level minimum gate.  It detects a caller
-that has no TaskManager region at all; it cannot prove that every runtime call
-path is covered by the region.  Focused tests and review own that stronger
-control-flow check.
+that has no TaskManager region at all. Pytest modules may instead opt into the
+shared ``ngsolve_taskmanager`` fixture with ``pytest.mark.usefixtures``. The
+gate cannot prove that every runtime call path is covered; focused tests and
+review own that stronger control-flow check.
 
 Implementation: AST-based.  Comments, docstrings, string literals,
 and f-strings containing the parallel-op pattern are NOT flagged.
@@ -326,6 +327,52 @@ def _find_tm_wraps(tree: ast.AST) -> list[tuple[int, int]]:
     return out
 
 
+def _uses_taskmanager_fixture(tree: ast.AST) -> bool:
+    """Return whether a pytest module explicitly requests the shared fixture."""
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        function = node.func
+        if not (
+            isinstance(function, ast.Attribute)
+            and function.attr == "usefixtures"
+        ):
+            continue
+        if any(
+            isinstance(argument, ast.Constant)
+            and argument.value == "ngsolve_taskmanager"
+            for argument in node.args
+        ):
+            return True
+    return False
+
+
+def _has_taskmanager_fixture(path: Path) -> bool:
+    """Return whether an ancestor conftest defines the requested fixture."""
+    for parent in path.parents:
+        if parent != ROOT and ROOT not in parent.parents:
+            break
+        conftest = parent / "conftest.py"
+        if conftest.is_file():
+            try:
+                tree = ast.parse(
+                    conftest.read_text(encoding="utf-8", errors="replace"),
+                    filename=str(conftest),
+                )
+            except SyntaxError:
+                return False
+            for node in ast.walk(tree):
+                if (
+                    isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+                    and node.name == "ngsolve_taskmanager"
+                    and _find_tm_wraps(node)
+                ):
+                    return True
+        if parent == ROOT:
+            break
+    return False
+
+
 def _find_parallel_ops(tree: ast.AST) -> list[tuple[int, str]]:
     """Return list of (line, op_label) for every parallel op call."""
     out: list[tuple[int, str]] = []
@@ -369,7 +416,8 @@ def _audit_caller(path: Path) -> list[Finding]:
     If a caller file contains ANY parallel-op call (`.Assemble()`,
     `mesh.Curve(...)`, `mat.Inverse(inverse=...)`, `gf.Set(cf, ...)`,
     `CGSolver(...)`, `GMRESSolver(...)`), the file MUST contain at
-    least one `with TaskManager():` block somewhere.
+    least one `with TaskManager():` block somewhere. A pytest test module
+    may instead explicitly request the shared `ngsolve_taskmanager` fixture.
 
     This is a file-level minimum gate.  The policy is "callers wrap";
     we do NOT infer runtime control flow or police which function contains
@@ -396,6 +444,12 @@ def _audit_caller(path: Path) -> list[Finding]:
     tm_wraps = _find_tm_wraps(tree)
     if tm_wraps:
         return findings   # file has at least one wrap; policy satisfied
+    if (
+        path.name.startswith("test_")
+        and _uses_taskmanager_fixture(tree)
+        and _has_taskmanager_fixture(path)
+    ):
+        return findings
 
     # File has parallel ops but zero TM wraps -> single per-file finding
     first_line, first_label = parallel_ops[0]

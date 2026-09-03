@@ -8,6 +8,8 @@ import sys
 
 import pytest
 
+pytestmark = pytest.mark.usefixtures("ngsolve_taskmanager")
+
 ng = pytest.importorskip("ngsolve")
 pytest.importorskip("netgen")
 from netgen.geom2d import SplineGeometry

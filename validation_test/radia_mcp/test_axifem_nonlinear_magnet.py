@@ -4,6 +4,8 @@ import math
 
 import pytest
 
+pytestmark = pytest.mark.usefixtures("ngsolve_taskmanager")
+
 
 def test_axisymmetric_nonlinear_solver_keeps_permanent_magnet_load() -> None:
     pytest.importorskip("radia.axifem")
