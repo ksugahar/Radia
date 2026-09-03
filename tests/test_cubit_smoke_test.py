@@ -8,7 +8,6 @@ from pathlib import Path
 
 import pytest
 
-
 pytest.importorskip("ngsolve")
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -16,16 +15,24 @@ PACKAGE_SRC = ROOT / "packages" / "cubit-mesh-export" / "src"
 if str(PACKAGE_SRC) not in sys.path:
     sys.path.insert(0, str(PACKAGE_SRC))
 
-from cubit_mesh_export import smoke_test  # noqa: E402
-from netgen.meshing import (  # noqa: E402
+import ngsolve as ng
+from cubit_mesh_export import smoke_test
+from netgen.meshing import (
     Element2D,
     Element3D,
     FaceDescriptor,
-    Mesh as NetgenMesh,
     MeshPoint,
     Pnt,
 )
-import ngsolve as ng  # noqa: E402
+from netgen.meshing import (
+    Mesh as NetgenMesh,
+)
+
+
+@pytest.fixture(scope="module", autouse=True)
+def _taskmanager():
+    with ng.TaskManager():
+        yield
 
 
 def _save_labeled_tetrahedron(tmp_path, *, order=1):
