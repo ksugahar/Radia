@@ -218,16 +218,17 @@ def main() -> int:
     rescale_netgen_vol_points(
         scaled_output, output, (1.0, 1.0, 1.0 / args.axial_pre_scale))
     import ngsolve as ng
-    raw_mesh = ng.Mesh(str(output))
-    # The Cubit-side inventory above proves Sculpt created the complete free
-    # skin.  Some installed exporter builds omit free quads from Netgen VOL,
-    # so rebuild that same skin exactly from volume-face ownership.  This is a
-    # connectivity-preserving relabel, not a geometric approximation.
-    mesh = relabel_straight_mesh(
-        raw_mesh, lambda _center, _normal: "yoke_boundary",
-        material_name="yoke")
-    mesh.ngmesh.Save(str(output))
-    mesh = ng.Mesh(str(output))
+    with ng.TaskManager():
+        raw_mesh = ng.Mesh(str(output))
+        # The Cubit-side inventory above proves Sculpt created the complete free
+        # skin.  Some installed exporter builds omit free quads from Netgen VOL,
+        # so rebuild that same skin exactly from volume-face ownership.  This is a
+        # connectivity-preserving relabel, not a geometric approximation.
+        mesh = relabel_straight_mesh(
+            raw_mesh, lambda _center, _normal: "yoke_boundary",
+            material_name="yoke")
+        mesh.ngmesh.Save(str(output))
+        mesh = ng.Mesh(str(output))
     cubit_skin_faces = 0
     if child_report is not None:
         cubit_skin_faces = max(
@@ -264,8 +265,9 @@ def main() -> int:
             f"+/-{args.half_gap:.6g} m, obtained {lower_gap_face:.6g} and "
             f"{upper_gap_face:.6g} m")
     from radia.topology_optimization import ngsolve_growth_topology
-    topology = ngsolve_growth_topology(
-        mesh, np.ones(mesh.ne, dtype=bool))
+    with ng.TaskManager():
+        topology = ngsolve_growth_topology(
+            mesh, np.ones(mesh.ne, dtype=bool))
     if not topology.iron_connected:
         raise RuntimeError(
             "Sculpt C-yoke is disconnected; refine the radial return leg")
