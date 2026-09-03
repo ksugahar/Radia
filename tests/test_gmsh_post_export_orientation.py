@@ -18,7 +18,6 @@ negative Jacobian points.
 """
 
 import os
-import sys
 
 import pytest
 
@@ -26,12 +25,17 @@ ng = pytest.importorskip("ngsolve")
 gmsh = pytest.importorskip("gmsh")
 
 from netgen.csg import Pnt
-from netgen.meshing import Element2D, Element3D, FaceDescriptor, MeshPoint
+from netgen.meshing import Element3D, FaceDescriptor, MeshPoint
 from netgen.meshing import Mesh as NgMesh
 from ngsolve import Mesh
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 from radia.gmsh_post_export import GmshPostExport
+
+
+@pytest.fixture(scope="module", autouse=True)
+def _taskmanager():
+    with ng.TaskManager():
+        yield
 
 
 def _count_negative_jacobians(path):
