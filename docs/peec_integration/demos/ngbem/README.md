@@ -13,5 +13,5 @@ Galerkin BEM-based PEEC solver demonstrations using ngsbem (NGSolve BEM).
 ## See also
 
 - Public result notebook: [`../../public_demo.ipynb`](../../public_demo.ipynb)
-- Migration ledger: [`../../post_examples_migration.ipynb`](../../post_examples_migration.ipynb)
+- Public numerical showcase: [`../../peec_showcase.ipynb`](../../peec_showcase.ipynb)
 - Validation modules: `validation_test/peec_integration/ngsbem_peec_demo/`

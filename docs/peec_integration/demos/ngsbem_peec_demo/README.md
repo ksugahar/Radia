@@ -12,7 +12,7 @@ result-bearing entry points are:
 | Notebook | Description |
 |----------|-------------|
 | `../../public_demo.ipynb` | Human-facing PEEC demo selection and representative source excerpts |
-| `../../post_examples_migration.ipynb` | Migration ledger for docs demos, validation scripts, and distilled deletions |
+| `../../peec_showcase.ipynb` | Executed public numerical showcase |
 
 ## Scripts
 

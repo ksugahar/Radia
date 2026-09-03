@@ -78,6 +78,13 @@ def test_docs_do_not_restore_completed_migration_ledgers():
             "kelvin_classic_demos",
             "kelvin_examples_migration",
         },
+        ROOT / "docs" / "peec_integration": {
+            "cleanup_routing",
+            "examples_catalog",
+            "post_examples_migration",
+            "public_demo",
+            "verification_migration",
+        },
     }
     offenders = [
         path.relative_to(ROOT)
