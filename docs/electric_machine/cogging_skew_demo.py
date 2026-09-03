@@ -22,18 +22,12 @@ tool needed to run or to validate.
 """
 import json
 import math
-import os
 import platform
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
 import numpy as np
-
-_SRC = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..",
-                                    "packages", "radia-mcp", "src"))
-if _SRC not in sys.path:
-    sys.path.insert(0, _SRC)
 
 from ngsolve import Mesh, CoefficientFunction, grad, TaskManager
 from netgen.occ import OCCGeometry, WorkPlane, MoveTo, Glue, X, Y
