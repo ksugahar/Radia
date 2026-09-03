@@ -118,6 +118,13 @@ from ._generated_decks import (  # noqa: F401
     presentation_apply_bold_markers,
 )
 
+# Claims and their premises (2026-09-03, the IGTE'26 review memo): a negated
+# claim ("nothing fitted") is empty to an audience that never saw the thing
+# being denied.
+from ._claim_premises import (  # noqa: F401
+    presentation_check_negated_premise,
+)
+
 
 _HERE = pathlib.Path(__file__).resolve().parent
 KNOWLEDGE = _HERE
