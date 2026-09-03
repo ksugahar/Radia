@@ -4,6 +4,11 @@
 
 ## 3.0.13 — 2026-09-03
 
+- Stop assigning unvalidated Consolas directly to the TeX source control.
+  Select a CJK UI face only when GDI resolves the requested physical face,
+  its own cmap covers Japanese plus TeX ASCII, and a bitmap probe contains
+  ink; otherwise use the same stock GUI font that keeps the source label
+  readable.  The visual gate now exercises this exact production chooser.
 - Stop a root index at its closing `]` even when a script-greedy construct such
   as `\lim_{a}` emits a terminating space.  The four-step nth-root/limit edit
   now survives Undo and save/reopen, and every insertable template is checked
