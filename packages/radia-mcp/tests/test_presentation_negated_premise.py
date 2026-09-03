@@ -51,6 +51,17 @@ def test_japanese_negation():
     assert check_negated_premises(slides) == []
 
 
+def test_qualifier_between_negation_and_premise():
+    """'no empirical crossover parameter' denies the crossover, not empiricism."""
+    slides = [
+        {"slide": 1, "title": "Coupling",
+         "text": "The crossover is a result of the projection. No empirical crossover parameter enters."},
+        {"slide": 2, "title": "Time domain", "text": "Twenty-two poles, no extra tuning."},
+    ]
+    f = check_negated_premises(slides)
+    assert [x["premise"] for x in f] == ["tuning"]
+
+
 def test_stop_words_and_free_suffix():
     slides = [{"slide": 1, "title": "Cost",
                "text": "No other body was tried. The model is mesh-free."}]
