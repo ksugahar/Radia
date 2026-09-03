@@ -112,6 +112,8 @@ def test_docs_do_not_restore_retired_result_bookkeeping():
         ROOT / "docs" / "gmsh_post" / "em_fieldlines_results.json",
         ROOT / "docs" / "gmsh_post" / "em_particle_orbits_results.json",
         ROOT / "docs" / "gmsh_post" / "em_post_gallery_results.json",
+        ROOT / "docs" / "gmsh_animation" / "gmsh_animation_export_results.json",
+        ROOT / "docs" / "gmsh_animation" / "gmsh_animation_results.json",
         ROOT / "docs" / "kelvin" / "kelvin_exterior_source_and_aphi_results.json",
         ROOT / "docs" / "hdiv_vim" / "compare_curved_vs_radia_field.json",
         ROOT / "docs" / "hdiv_vim" / "hdiv_curved_nonlinear_field.json",
