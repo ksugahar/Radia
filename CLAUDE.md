@@ -3106,7 +3106,7 @@ cubit.init(['cubit', '-nojournal', '-batch', '-nographics',
             '-commandplugindir', <plugin_dir>])
 cubit.cmd("create sphere radius 0.05")
 cubit.cmd("mesh volume 1")
-cubit.cmd('export femeem "C:\\tmp\\cub" overwrite')
+cubit.cmd('export femeem "C:\\temp\\cub" overwrite')
 ```
 
 **対象**: `export {gmsh,netgen,jmag_nastran,vtk,femeem}`、Cubit toolbar の非 GUI ロジック、BEM extractor、`export_curved`。
