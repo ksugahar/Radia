@@ -1617,6 +1617,26 @@ and "establishment and verification" as the operations repairs that causal
 gap. Diagnostics should return this reviewer-side explanation together with a
 rewrite direction, rather than reporting only a matched phrase.
 
+In a capability or research-environment paragraph, a named repository or
+platform is evidence only when its role chain is explicit: who established or
+manages it, what research objects or functions it connects or preserves, and
+which researchers can perform which actions with it. "Collaborative users
+connect" is insufficient because it leaves the managed object and validation
+action unclear and can imply that the applicant or other researchers cannot
+use the environment. Prefer an inclusive actor and observable actions such as
+"researchers can use and verify" unless access is genuinely restricted.
+
+Treat a short role clarification as a semantic-preservation edit. Before the
+edit, inventory the existing expertise, application domains, named research
+base, technical functions, interface, actors, and actions. After the edit,
+confirm that none disappeared without the author's explicit decision. Add the
+manager, platform function, and user/verification actor by local compression or
+minimal phrases; do not pay for role clarity by deleting the technical scope
+that proves capability. If the reviewer supplies an approximate addition
+budget, preserve that case-specific limit and the original sentence structure
+as far as the semantic inventory allows. The adjacent-reviewer diagnostic
+reports `research_platform_role_chain_incomplete` when this chain is missing.
+
 The integrated health report also runs the non-scoring
 `grant_writing_reviewer_momentum_check(text)`. Readability and reviewer
 interest are separate. The check looks for an opening arc that recurs in
