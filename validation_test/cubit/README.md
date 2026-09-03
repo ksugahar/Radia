@@ -1,4 +1,4 @@
-# Tests for the Coreform Cubit 2025.12 export plugin
+# Coreform Cubit and High-Order HEX Validation
 
 The Cubit export tests are opt-in because importing `cubit` can start the
 Coreform engine and license checkout during pytest collection.
@@ -39,6 +39,20 @@ environment:
 ```
 
 Most CI and normal repository test runs intentionally skip this directory.
+
+## NGSolve-Only High-Order HEX Evidence
+
+`test_hex_highorder_fem.py` validates p-refinement, h-refinement, and a smooth
+variable-coefficient weak form on genuine 3D HEX elements without requiring a
+Cubit license. Regenerate its committed numerical evidence with:
+
+```powershell
+python -m pytest validation_test/cubit/test_hex_highorder_fem.py -q
+python validation_test/cubit/generate_hex_highorder_fem_results.py
+```
+
+The generator owns `hex_highorder_fem_results.json`; do not edit its numerical
+values by hand.
 
 ## Complex `.vol` volume-accuracy learning data
 

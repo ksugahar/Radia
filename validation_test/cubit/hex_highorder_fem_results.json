@@ -1,0 +1,52 @@
+{
+  "schema": "radia.validation.hex-highorder-fem.v1",
+  "generated_at_utc": "2026-09-03T20:30:57.648773+00:00",
+  "provenance": {
+    "command": "python validation_test/cubit/generate_hex_highorder_fem_results.py",
+    "python": "3.12.10",
+    "ngsolve": "6.2.2606",
+    "numpy": "2.5.2"
+  },
+  "configuration": {
+    "element_family": "HEX",
+    "mesh_subdivisions": 8,
+    "polynomial_orders": [
+      1,
+      2,
+      3,
+      4
+    ],
+    "constant_coefficient_order2_coarse_subdivisions": 4
+  },
+  "runtime_seconds": 2.788894099998288,
+  "thresholds": {
+    "constant_order4_l2_error_maximum": 1e-06,
+    "constant_order2_h_rate_minimum": 2.5,
+    "constant_order2_h_rate_maximum": 3.6,
+    "variable_order4_l2_error_maximum": 1e-06
+  },
+  "observed": {
+    "constant_p_refinement_monotone": true,
+    "constant_order4_l2_error": 5.964317557886282e-08,
+    "constant_order2_h_rate": 2.966923001992225,
+    "variable_p_refinement_monotone": true,
+    "variable_order4_l2_error": 5.966237220014454e-08
+  },
+  "cases": {
+    "constant_coefficient_l2_errors": {
+      "1": 0.005746192193303504,
+      "2": 0.00017720607037234698,
+      "3": 6.7514587448337124e-06,
+      "4": 5.964317557886282e-08
+    },
+    "variable_coefficient_l2_errors": {
+      "1": 0.005610487746938035,
+      "2": 0.00017721235175558123,
+      "3": 6.752686873612668e-06,
+      "4": 5.966237220014454e-08
+    },
+    "constant_coefficient_order2_l2_error_n4": 0.0013855155789694034,
+    "constant_coefficient_order2_l2_error_n8": 0.00017720607037234698
+  },
+  "passed": true
+}
