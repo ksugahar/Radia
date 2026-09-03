@@ -49,3 +49,28 @@ def test_callback_state_contains_no_retired_kernel_payload():
     for source in callback_files:
         for name in retired_names:
             assert name not in source
+
+
+def test_retired_global_solver_controls_stay_out_of_native_abi():
+    native_sources = (
+        ROOT / "CMakeLists.txt",
+        CORE / "rad_application.h",
+        CORE / "rad_material_impl.cpp",
+        CORE / "rad_c_interface.cpp",
+        ROOT / "src" / "lib" / "radentry.h",
+        ROOT / "src" / "lib" / "radentry.cpp",
+    )
+    retired_names = (
+        "RADIA_USE_HACAPK",
+        "RadSetHACApKParams",
+        "RadSetHMatrixEpsilon",
+        "RadGetHACApKStats",
+        "RadSetBiCGSTABTol",
+        "RadGetBiCGSTABTol",
+        "m_bicg_tol",
+        "m_hacapk_stats_valid",
+    )
+    for path in native_sources:
+        source = path.read_text(encoding="utf-8")
+        for name in retired_names:
+            assert name not in source, f"{name} remains in {path}"

@@ -144,13 +144,7 @@ void UpdateSourcesForRelax( int );
 void SolveGen( int, double, int, int, const char* );
 void SolveGenNonl( int, double, int, int, int, const char* );
 int BuildMatrix( int, const char* );
-#ifdef RADIA_USE_HACAPK
-void SetHACApKParams( double, int, double );
-void GetHACApKStats( double*, int* );
-#endif
 void GetSolveStats( double*, int* );
-void SetBiCGSTABTolerance( double );
-double GetBiCGSTABTolerance();
 void SetRelaxParam( double );
 double GetRelaxParam();
 void SetKeepMagnetization( bool );
@@ -1431,36 +1425,9 @@ void SolveGenNonl(int ObjKey, double PrecOnMagnetiz, int MaxIterNumber, int Meth
 
 //-------------------------------------------------------------------------
 
-#ifdef RADIA_USE_HACAPK
-void SetHACApKParams(double eps, int leaf_size, double eta)
-{
-	rad.SetHACApKParams(eps, leaf_size, eta);
-}
-
-
-void GetHACApKStats(double* dOut, int* nOut)
-{
-	rad.GetHACApKStats(dOut, nOut);
-}
-#endif
-
-//-------------------------------------------------------------------------
-
 void GetSolveStats(double* dOut, int* nOut)
 {
 	rad.GetSolveStats(dOut, nOut);
-}
-
-//-------------------------------------------------------------------------
-
-void SetBiCGSTABTolerance(double tol)
-{
-	rad.m_bicg_tol = tol;
-}
-
-double GetBiCGSTABTolerance()
-{
-	return rad.m_bicg_tol;
 }
 
 //-------------------------------------------------------------------------
