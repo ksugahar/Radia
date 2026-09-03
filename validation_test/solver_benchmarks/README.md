@@ -1,34 +1,24 @@
-# Solver Benchmark Validation Scripts
+# PEEC Solver Benchmark Validation
 
-This directory contains long-running solver benchmark and validation drivers
-that are too expensive for the default `tests/` loop.
+This directory owns long-running PEEC solver benchmarks that are too expensive
+for the default `tests/` loop. The executable drivers write JSON records here;
+those records, rather than a validation notebook, are the durable numerical and
+performance evidence.
 
-## PEEC Dense vs HACApK
+## Dense vs HACApK
 
 - `bench_peec_dense.py`
 - `bench_peec_hacapk.py`
 - `bench_peec_mna_crossover.py`
 - `validate_peec_circuit_hacapk.py`
 
-These scripts write their committed benchmark JSON to this directory. The
-result-bearing validation notebook records the tables and plots alongside the
-drivers and measured artifacts. These benchmarks are manual validation work,
-not part of routine pull-request CI.
+The committed records are `results_bench_peec_dense.json`,
+`results_bench_peec_hacapk.json`, `results_bench_peec_mna_crossover.json`, and
+the aggregate `peec_solver_benchmarks_results.json`. These benchmarks are
+manual validation work and are not part of routine pull-request CI.
 
-## Legacy H-Matrix Solver Benchmarks
-
-The older magnetostatic H-matrix benchmark scripts that used to live in
-`examples/solver_benchmarks/` are kept here as validation drivers, not as
-public examples:
-
-- `benchmark_solver*.py`
-- `benchmark_*construction.py`
-- `benchmark_field_evaluation.py`
-- `benchmark_lu_vs_hmatrix.py`
-- `verify_field_accuracy.py`
-- `run_all_benchmarks.py`
-- `plot_benchmark_results.py`
-
-Their historical notes are `legacy_hmatrix_README.md` and
-`legacy_hmatrix_BENCHMARK_RESULTS.md`. Prefer
-`peec_solver_benchmarks.ipynb` for current PEEC solver benchmark evidence.
+The retired mesh-less magnetostatic `rad.Solve` method comparisons do not
+belong to this lane. Legacy methods 1 and 2 are no longer public solver routes.
+Current magnetostatic HDiv-MMM and HACApK evidence lives under
+`validation_test/feec/`, with coupled HDiv-MMM/HCurl evidence under
+`validation_test/vim_coupled/`.
