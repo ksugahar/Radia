@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ast
 import importlib.metadata
 import importlib.util
 import sys
@@ -15,9 +16,11 @@ from netgen.meshing import (
     Element1D,
     Element2D,
     FaceDescriptor,
-    Mesh as NetgenMesh,
     MeshPoint,
     Pnt,
+)
+from netgen.meshing import (
+    Mesh as NetgenMesh,
 )
 
 ng = pytest.importorskip("ngsolve")
@@ -25,8 +28,7 @@ _mesh_helpers = pytest.importorskip("ngsolve.meshes")
 MakeStructured2DMesh = _mesh_helpers.MakeStructured2DMesh
 MakeStructured3DMesh = _mesh_helpers.MakeStructured3DMesh
 
-from radia.vim._vim import _curve_mesh  # noqa: E402
-
+from radia.vim._vim import _curve_mesh
 
 ROOT = Path(__file__).resolve().parents[1]
 PINNED_VERSION = "6.2.2606"
@@ -96,6 +98,25 @@ def test_build_scripts_resolve_netgen_from_the_active_python_environment():
         cmake.index("target_compile_definitions(radia_mex PRIVATE")
     ]
     assert "${Python3_INCLUDE_DIRS}" not in mex_includes
+
+
+def test_production_bem_uses_current_variational_operator_api():
+    deprecated = (
+        "SingleLayerPotentialOperator",
+        "DoubleLayerPotentialOperator",
+        "HypersingularOperator",
+    )
+    for relative in ("src/radia/ngsbem_eddy.py", "src/radia/ngsbem_peec.py"):
+        source = (ROOT / relative).read_text(encoding="utf-8")
+        tree = ast.parse(source)
+        bem_imports = {
+            alias.name
+            for node in ast.walk(tree)
+            if isinstance(node, ast.ImportFrom) and node.module == "ngsolve.bem"
+            for alias in node.names
+        }
+        assert not set(deprecated).intersection(bem_imports), relative
+        assert "LaplaceSL" in source, relative
 
 
 @pytest.mark.parametrize(

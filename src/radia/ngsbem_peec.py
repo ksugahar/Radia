@@ -12,7 +12,7 @@ Block system (Loop-Star):
 
 where:
     L = mu_0 * LaplaceSL(HDivSurface)     - Inductance (edge DOFs)
-    P = SingleLayerPotentialOperator(SurfaceL2) / eps_0  - Potential coeff (cell DOFs)
+    P = LaplaceSL(SurfaceL2) / eps_0      - Potential coeff (cell DOFs)
     M_LS = int div(J_edge) * phi_cell dS   - Divergence coupling
     R = surface resistance from sigma, thickness
 
@@ -44,6 +44,18 @@ import time
 MU_0 = 4.0 * np.pi * 1e-7   # H/m
 EPS_0 = 8.854187817e-12      # F/m
 C_0 = 1.0 / np.sqrt(MU_0 * EPS_0)  # speed of light [m/s]
+
+
+def _bem_measure_pair(ds, label, intorder, trial_order, test_order):
+    """Return measures matching an absolute BEM integration order.
+
+    NGSolve's variational BEM API adds two and both FE orders to the two
+    bonus-order values, so the remaining order belongs on one measure.
+    """
+    source_bonus = max(
+        0, int(intorder) - 2 - int(trial_order) - int(test_order)
+    )
+    return ds(label, bonus_intorder=source_bonus), ds(label)
 
 
 # ============================================================
@@ -314,7 +326,7 @@ class NGBEMPEECSolver:
         """
         from ngsolve import HDivSurface, SurfaceL2, ds
         from ngsolve import BilinearForm, BND
-        from ngsolve.bem import LaplaceSL, SingleLayerPotentialOperator
+        from ngsolve.bem import LaplaceSL
 
         t_start = time.perf_counter()
         label = self.conductor_label
@@ -342,8 +354,11 @@ class NGBEMPEECSolver:
         self.L = MU_0 * L_dense
 
         # --- V_0 / P: scalar single layer on SurfaceL2 ---
-        V_op = SingleLayerPotentialOperator(self._fes_l2,
-                                            intorder=self.intorder)
+        uL2, vL2 = self._fes_l2.TnT()
+        source_ds, test_ds = _bem_measure_pair(
+            ds, label, self.intorder, self.order, self.order
+        )
+        V_op = LaplaceSL(uL2 * source_ds) * vL2 * test_ds
 
         V_dense = extract_dense_matrix(V_op.mat, self.n_star)
         self.V_0 = V_dense              # Raw LaplaceSL (for stabilized mode)
