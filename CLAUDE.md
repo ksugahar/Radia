@@ -3019,71 +3019,10 @@ release worktreeを保持し、並行WIPがmainへ着地した後に通常のedi
 
 LAB / 100号機で `pip install --upgrade <pkg>` を流すと editable が静かに上書きされて壊れるので注意。release 後の LAB / 100号機 側 metadata 同期は `pip install -e <path> --no-deps --no-cache-dir` で再 editable 化。`pip install --upgrade` は **mdx / hibino 用** (PyPI から通常通り upgrade).
 
-**POLICY (2026-05-27 追加): release 後の LAB editable 再確認**
-
-PyPI release (tag push → CI publish) 後、**LAB の editable pointer
-が drift していないか必ず確認する**。これは `release-quad` skill
-の Definition of Done の暗黙の前提条件であり、CLAUDE.md「LAB editable
-default」原則を実運用で守るチェック。
-
-**いつ実施するか** (再発した historical incidents):
-
-| 日付 | 何が起きたか | 検出経緯 |
-|---|---|---|
-| 2026-04-28 | `pip install --upgrade` で 3 パッケージ全部の editable が上書き | dev loop が機能しないことで発覚 |
-| 2026-05-19 | 同じ pattern 再発 | LAB から「source 編集が反映されない」報告で発覚 |
-| 2026-05-26 | release 直後の CI runner clone (`C:\actions-runner\_work\...`) に `radia-mcp` editable が drift | LAB 側で knowledge file の編集が radia-mcp 経由で見えないことで発覚 |
-| 2026-05-27 | 同上、再発 | MCP tool 経由で新規 topic が dispatch されない (Unknown topic) で発覚 |
-| 2026-08-06 | v4.95.47 release 後、radia + cubit-mesh-export + radia-mcp の 3 つ全部が **release-quad worktree** (`release-quad/Radia-v4.95.47-<sha>`) に drift(新パターン: CI runner ではなくリリース用worktreeで editable install が走った) | release 直後の本チェックで発覚。**重要教訓: 同バージョンへの `pip install -e` 再実行は `.pth` を書き換えない no-op になり得る — `pip show` の Editable location が直っても import は旧パスのまま**(実測: show=canonical tree なのに `__editable__.*.pth` は release-quad、radia.gmsh_post_export が旧ソースを解決)。修復は `pip uninstall -y <pkgs>` → 再 `-e`。**検証は `pip show` でなく site-packages の `__editable__*.pth` の中身と `<pkg>.__file__` で行うこと** |
-| 2026-08-07 | v4.95.48 release 後、同じ release-quad クローンパターンで 3 つとも再 drift(`Radia-v4.95.48-a6a5ddde`) | **ソース修正が実行時に反映されない**ことで発覚(coil_builder の OCC pose 修正を入れたのに `write_step` の出力が 1 バイトも変わらなかった)。**教訓: `sys.path.insert` するテストは自分のツリーを見るので緑のまま、素の `import radia` を使うデモ/スクリプトだけが旧ソースを掴む** — テストが通っていることは editable が正しい証拠にならない。デモの結果が「直したはずなのに変わらない」ときは真っ先に `<pkg>.__file__` を見る |
-
-**再発するため、release 後の確認を policy 化**。
-
-**チェック手順** (release-quad Phase 8 / Phase 9 の直後に流す):
-
-```powershell
-# 4 パッケージ全部の editable pointer が LAB source を指しているか確認
-pip show radia cubit-mesh-export radia-mcp mcp-server-document |
-  Select-String -Pattern "^(Name|Version|Editable)"
-
-# 期待:
-#   radia               -> S:\Radia\01_GitHub
-#   cubit-mesh-export   -> S:\Radia\01_GitHub\packages\cubit-mesh-export
-#   radia-mcp           -> S:\Radia\01_GitHub\packages\radia-mcp
-#   mcp-server-document -> S:\mcp-server
-```
-
-**Drift 検出時の修復手順**:
-
-```powershell
-# 1. mcp-server-* プロセスを止める (editable uninstall の file lock を解放)
-Get-Process | Where-Object { $_.Name -like "mcp-server*" } |
-  Stop-Process -Force
-Start-Sleep -Seconds 3
-
-# 2. drift しているパッケージを uninstall + LAB source で再 editable 化
-pip uninstall -y <pkg>
-pip install -e S:\Radia\01_GitHub\packages\<pkg> --no-deps --no-cache-dir
-
-# 3. 確認
-pip show <pkg> | Select-String "Editable project location"
-```
-
-**自動化候補** (TODO): `tools/verify_lab_editable.py` を作って
-`release-quad done` から呼び出し、drift があれば exit non-zero。
-今は手動チェックで運用。
-
-**Drift する原因** (analysis):
-
-1. **CI runner と LAB が同じ NAS source を共有**: `\\192.168.11.100\work\00_CAE\Radia\01_GitHub` を `S:\` で参照 (LAB) または UNC で参照 (CI runner)。CI が editable install を走らせると、CI 側の pip metadata が LAB の Python の site-packages にも書き戻されるケースがある (NAS-mounted Python env でない限り通常起こらないが、`pip install -e .` を CI で実行すると `.egg-info` 等が source tree に書かれ、その後の `pip show` 解決順序を狂わせる)。
-2. **`pip install --upgrade <lab-pkg>` を LAB で実行**: editable 上書き。**禁止**。
-3. **release-quad Phase 8 の PyPI install command**: mdx / hibino で実行されるべきコマンドを誤って LAB / 100号機 shell で実行。
-
-**予防策**:
-
-- LAB shell では決して `pip install <lab-pkg>` (non-editable) / `pip install --upgrade <lab-pkg>` を打たない
-- release-quad skill の deploy commands は対象マシンの tier に従って実行する。LAB / 100号機は editable、mdx / hibino は PyPI。
-- 不安な場合は release 直後に上記チェック手順を流す
+Editable drift の検出と復旧は `tools/release_quad.py verify-editable` と
+`tools/release_quad.py restore-editable` が担う。`all` / `done` は exact-SHA
+配布後に検証し、開発再開前に LAB / 100号機を canonical editable source
+へ戻す。事故年表と手動復旧手順をポリシーファイルへ複製しない。
 
 **mdx / hibino 全ユーザー PyPI install**: `C:\Program Files\Python312`
 の machine-wide site-packages に PyPI install。mdx は
@@ -3101,12 +3040,12 @@ editable には反映される**。mdx / hibino の PyPI install には反映さ
 
 ### CI Testing Policy
 
-**POLICY**: CI/CD のテストだけでは不十分。Cubit が必要な機能（`export_curved`, panels, BEM extractor）は **Cubit 環境でのローカルテストが必須**。CI は C++ ビルドと基本テスト（Cubit 不要なもの）のみ。
+**POLICY**: CI/CD のテストだけでは不十分。Cubit が必要な機能（`export_curved`, Cubit toolbar, BEM extractor）は **Cubit 環境でのローカルテストが必須**。CI は C++ ビルドと基本テスト（Cubit 不要なもの）のみ。
 
 **リリース前の必須テスト**:
 1. CI: C++ ビルド + pytest（Cubit 不要テスト）
 2. ローカル: Cubit + system Python で `export_curved` テスト（球、トーラス）
-3. ローカル: Cubit パネルの動作確認
+3. ローカル: Cubit toolbar と Simulink application block の動作確認
 
 CI が通っても Cubit テストに通らなければリリースしない。
 
