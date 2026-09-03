@@ -6,7 +6,22 @@ cross-validation checks.  Reuse the root test configuration so imports,
 markers, and optional-dependency handling stay identical.
 """
 
+import pytest
+
 from tests.conftest import *  # noqa: F401,F403
+
+
+@pytest.fixture(scope="module")
+def ngsolve_taskmanager():
+    """Own NGSolve parallel state for validation modules that explicitly opt in."""
+    try:
+        import ngsolve as ng
+    except ImportError:
+        yield
+        return
+
+    with ng.TaskManager():
+        yield
 
 
 def _load_slow_nodeids():
