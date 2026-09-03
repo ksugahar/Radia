@@ -715,6 +715,7 @@ def grant_writing_adjacent_reviewer_readability_check(text: str) -> dict:
     scope_without_deliverables: list[dict] = []
     undefined_purpose_scope_aliases: list[dict] = []
     bare_staged_processes: list[dict] = []
+    incomplete_research_platform_roles: list[dict] = []
     takeaways_after_evidence: list[dict] = []
     representation_pattern = re.compile(
         r"(?P<answer>設計則|選択則|指針|適用条件|成立条件|知見|成果)"
@@ -756,6 +757,26 @@ def grant_writing_adjacent_reviewer_readability_check(text: str) -> dict:
     bare_staged_process_pattern = re.compile(
         r"(?<![のとび・])(?P<process>結合|統合|連携|活用|検証|比較|評価)を"
         r"(?P<count>[一二三四五六七八九十0-9０-９]+)段階に分ける"
+    )
+    research_platform_pattern = re.compile(
+        r"(?:関連リポジトリ|研究基盤|研究プラットフォーム)"
+    )
+    accountable_person_pattern = re.compile(
+        r"(?:研究代表者|研究分担者|[一-龥々]{2,8}(?:氏|教授|准教授))"
+    )
+    named_platform_owner_pattern = re.compile(
+        r"(?:研究代表者|研究分担者|[一-龥々]{2,8})が[^。！？\n]{0,24}"
+        r"(?:整備|管理|運用|開発|構築)[^。！？\n]{0,32}"
+        r"(?:関連リポジトリ|研究基盤|研究プラットフォーム)"
+    )
+    platform_function_object_pattern = re.compile(
+        r"(?:MCP|API|インターフェース|インタフェース|離散化|メッシュ|"
+        r"最適化|コード|データ|試験|版|解析|実装)[^。！？\n]{0,72}"
+        r"(?:接続|統合|保存|共有|実行|検証|管理|提供)"
+    )
+    inclusive_platform_user_pattern = re.compile(
+        r"(?:(?<!共同)利用者|研究者|研究代表者|研究分担者|教員|学生|"
+        r"第三者|利用者一般)[^。！？\n]{0,36}(?:利用|検証|再現|実行|確認|参照)"
     )
     defined_scope_aliases: set[str] = set()
     for index, sentence in enumerate(sentences):
@@ -847,6 +868,36 @@ def grant_writing_adjacent_reviewer_readability_check(text: str) -> dict:
                 "stages": match.group("count"),
                 "excerpt": sentence[:240],
             })
+        if research_platform_pattern.search(sentence):
+            person_context = "。".join(
+                sentences[max(0, index - 2):index + 1]
+            )
+            if accountable_person_pattern.search(person_context):
+                missing_roles = []
+                if not named_platform_owner_pattern.search(sentence):
+                    missing_roles.append("named_manager")
+                if not platform_function_object_pattern.search(sentence):
+                    missing_roles.append("platform_function")
+                restricted_to_joint_users = (
+                    "共同利用者" in sentence
+                    and not re.search(
+                        r"(?:研究者|研究代表者|研究分担者|教員|学生|第三者|"
+                        r"利用者一般)",
+                        sentence,
+                    )
+                )
+                if (
+                    restricted_to_joint_users
+                    or not inclusive_platform_user_pattern.search(sentence)
+                ):
+                    missing_roles.append("inclusive_user_and_validation")
+                if missing_roles:
+                    incomplete_research_platform_roles.append({
+                        "index": index,
+                        "missing_roles": missing_roles,
+                        "restricted_to_joint_users": restricted_to_joint_users,
+                        "excerpt": sentence[:240],
+                    })
 
     if dense_sentences:
         first = dense_sentences[0]
@@ -988,6 +1039,24 @@ def grant_writing_adjacent_reviewer_readability_check(text: str) -> dict:
                 "観察可能な操作を名詞で示してから段階数を述べる。"
             ),
             examples=bare_staged_processes[:5],
+        )
+
+    if incomplete_research_platform_roles:
+        first = incomplete_research_platform_roles[0]
+        add_risk(
+            "research_platform_role_chain_incomplete",
+            first["excerpt"],
+            (
+                "研究実績の中で基盤名が現れるが、誰が整備・管理し、基盤が"
+                "何を扱い、誰が何を利用・検証できるかの役割連鎖が閉じていない。"
+            ),
+            (
+                "既存の専門分野・対象・機能語を削らず、管理主体、基盤が接続・"
+                "保存する対象、研究者が利用・検証できる行為を最小限の語句で補う。"
+                "『共同利用者が接続する』だけで利用主体を狭めない。"
+            ),
+            missing_roles=first["missing_roles"],
+            examples=incomplete_research_platform_roles[:5],
         )
 
     layer_paragraphs: list[dict] = []
@@ -1141,6 +1210,9 @@ def grant_writing_adjacent_reviewer_readability_check(text: str) -> dict:
             ),
             "bare_process_divided_into_stages_count": len(
                 bare_staged_processes
+            ),
+            "research_platform_role_chain_incomplete_count": len(
+                incomplete_research_platform_roles
             ),
             "three_layer_paragraph_count": len(layer_paragraphs),
             "takeaway_after_evidence_count": len(takeaways_after_evidence),
