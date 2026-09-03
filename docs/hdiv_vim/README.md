@@ -524,6 +524,6 @@ host (`mdx` or `hibino`).  Required HDiv gates:
 ## Public Docs
 
 Current user-facing notebooks in this directory should be result-bearing and
-paired with synchronized JSON sidecars.  Old migration notes and comparison
-archives are not part of the public docs surface; recover them from git history
-only if needed.
+store their display results directly. Checked numerical JSON belongs under
+`validation_test/`; notebook checksum sidecars and old comparison archives are
+not part of the public docs surface.
