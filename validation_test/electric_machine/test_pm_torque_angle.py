@@ -36,6 +36,12 @@ M_MOMENT = M0 * math.pi * A_RAD ** 2     # dipole moment per length
 TAU_PEAK = M_MOMENT * B0                  # = M pi a^2 B0
 
 
+@pytest.fixture(scope="module", autouse=True)
+def _taskmanager():
+    with ng.TaskManager():
+        yield
+
+
 def _setup(maxh=0.0025):
     from netgen.geom2d import SplineGeometry
     from ngsolve import Mesh
