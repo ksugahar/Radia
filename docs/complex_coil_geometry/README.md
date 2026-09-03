@@ -14,7 +14,7 @@ This directory contains examples of building complex coil paths with straight an
 
 Defines the 8-segment beam steering coil geometry as a reusable module:
 - `create_beam_steering_coil()` - Creates the coil and returns (coil_object, parameters)
-- Can be imported by other scripts (visualize_coils.py, field_map.py)
+- Imported by the notebook and the two docs-local inspection helpers
 
 **Usage:**
 ```python
@@ -38,7 +38,7 @@ Loads the coil model and visualizes it to verify the geometry is correct:
 - Imports coil from coil_model.py (single source of truth)
 - Displays coil parameters and bounding box
 - Calculates magnetic field at test points for verification
-- Exports the field on an NGSolve mesh to checked GMSH `.msh v4.1`
+- Reports representative field probes and an axis profile
 - Purpose: **Verify coil shape before field calculation**
 
 **Usage:**
@@ -51,7 +51,6 @@ python visualize_coils.py
 - radia (built from this project)
 - numpy
 - scipy (for rotation matrices)
-- gmsh (for checked field inspection)
 
 **Coil specification:**
 - Current: 1265 A
@@ -116,7 +115,7 @@ The `coil_builder` module provides a modern, elegant interface for building comp
 ### Basic Example
 
 ```python
-from coil_builder import CoilBuilder
+from radia.coil_builder import CoilBuilder
 import radia as rad
 
 # Radia always uses meters
@@ -265,7 +264,8 @@ This creates an 8-segment coil and calculates magnetic field at multiple points.
 - Fluent CoilBuilder API
 - Automatic state tracking
 - Magnetic field calculation
-- Checked GMSH field export
+
+Run `python field_map.py` when a checked GMSH field artifact is also needed.
 
 ## Field Calculations
 
@@ -300,7 +300,7 @@ Position (mm)             Bx (mT)         By (mT)         Bz (mT)
 ### GMSH Field Export
 
 ```bash
-python visualize_coils.py
+python field_map.py
 ```
 
 ## Coordinate System
@@ -316,16 +316,16 @@ All fields in Tesla (T).
 
 ### "No module named 'radia'"
 
-**Solution:** Build the project first:
+**Solution:** Install Radia in the active Python environment:
 ```bash
-# Navigate to the project root directory
-cd <project_root>
-powershell.exe -ExecutionPolicy Bypass -File Build.ps1
+python -m pip install radia
 ```
 
 ### "No module named 'coil_builder'"
 
-**Solution:** The module is in `src/radia/`. The examples automatically add this to the path.
+**Solution:** Use the public package import `from radia.coil_builder import CoilBuilder`.
+For repository development, install the checkout in editable mode instead of
+adding `src/radia` to `sys.path`.
 
 ### "No module named 'scipy'"
 
@@ -342,4 +342,4 @@ pip install scipy
 
 ---
 
-**Last Updated**: 2026-02-19
+**Last Updated**: 2026-09-03
