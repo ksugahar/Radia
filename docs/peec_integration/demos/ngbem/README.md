@@ -1,17 +1,13 @@
-# ngbem — NGSolve BEM-based PEEC Demos
+# ngbem / ngsbem evidence
 
-Galerkin BEM-based PEEC solver demonstrations using ngsbem (NGSolve BEM).
+Galerkin BEM-based PEEC results using ngsbem (NGSolve BEM) are presented in
+the public, result-bearing notebook and maintained by the validation suite.
 
-## Files
+The former standalone scripts in this directory were retired because they
+duplicated validation code and imported implementation modules from obsolete
+repository paths.
 
-| File | Description |
-|------|-------------|
-| `demo_ngbem_peec.py` | PEEC Loop-Star solver: matrix assembly, MQS/Full impedance, high-order convergence |
-| `demo_ngbem_eddy.py` | FEM-BEM eddy current solver: Dirichlet BC / Calderon projector coupling |
-| `demo_ngbem_coupled.py` | ngsbem coupled analysis demo |
+## Canonical locations
 
-## See also
-
-- Public result notebook: [`../../public_demo.ipynb`](../../public_demo.ipynb)
 - Public numerical showcase: [`../../peec_showcase.ipynb`](../../peec_showcase.ipynb)
 - Validation modules: `validation_test/peec_integration/ngsbem_peec_demo/`
