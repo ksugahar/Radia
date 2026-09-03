@@ -1,4 +1,4 @@
-"""A1_AC_sweep.py — Direct NGSolve eddy-current AC sweep on A1 cuboid.
+r"""A1_AC_sweep.py — Direct NGSolve eddy-current AC sweep on A1 cuboid.
 
 Solves the eddy-current frequency-domain problem at multiple ω, extracts the
 induced magnetic moment m_z(jω) per unit applied B0_z, and exposes that as

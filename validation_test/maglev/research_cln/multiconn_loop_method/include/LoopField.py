@@ -1,6 +1,11 @@
-from ngsolve import *
 import sys
-sys.path.append('..\include')
+from pathlib import Path
+
+from ngsolve import *
+
+_INCLUDE_DIR = str(Path(__file__).resolve().parent)
+if _INCLUDE_DIR not in sys.path:
+    sys.path.insert(0, _INCLUDE_DIR)
 from MatrixSolver import MatrixSolver as solver 
 
 def surface_mesh_from_boundary(boundary ):
