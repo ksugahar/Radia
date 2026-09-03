@@ -46,6 +46,8 @@ from radia.maglev.mixed_galerkin import (
     passive_foster_fit, diagonal_tensor_state_space,
 )
 
+from _validation_output import validation_output
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 MU0 = 4 * math.pi * 1e-7
 SIGMA_CU = 5.8e7
@@ -111,9 +113,10 @@ def run_sphere():
                        "eigen-accumulation breaks down on this isolated-conductor "
                        "problem, so the LTI is fit from the per-frequency solve."),
     }
-    with open(os.path.join(HERE, "physical_tensor_rom_sphere.json"), "w") as fp:
-        json.dump(out, fp, indent=2)
-    print("  wrote physical_tensor_rom_sphere.json")
+    output = validation_output("physical_tensor_rom_sphere.json", HERE)
+    with open(output, "w") as fp:
+        json.dump(out, fp, indent=2, allow_nan=False)
+    print(f"  wrote {output}")
 
 
 def run_fem():
@@ -160,9 +163,10 @@ def run_fem():
                    "D_diag_m3": np.diag(D).tolist()}
     print(f"  diagonal MIMO LTI: {ns} states, D_diag (mm^3) "
           f"{np.round(np.diag(D)*1e9, 1)}")
-    with open(os.path.join(HERE, "physical_tensor_rom_fem.json"), "w") as fp:
-        json.dump(rec, fp, indent=2)
-    print("  wrote physical_tensor_rom_fem.json")
+    output = validation_output("physical_tensor_rom_fem.json", HERE)
+    with open(output, "w") as fp:
+        json.dump(rec, fp, indent=2, allow_nan=False)
+    print(f"  wrote {output}")
 
 
 def main():

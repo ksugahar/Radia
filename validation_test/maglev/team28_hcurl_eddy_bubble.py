@@ -33,7 +33,7 @@ import numpy as np
 HERE = Path(__file__).resolve().parent
 REPO_ROOT = HERE.parents[1]
 SRC = REPO_ROOT / "src"
-TEAM28_JSON = REPO_ROOT / "docs" / "maglev" / "demos" / "team28" / "team28_cln_sweep_results.json"
+TEAM28_JSON = HERE / "demos" / "team28" / "team28_cln_sweep_results.json"
 TEAM28_HCURL_FORCE_JSON = HERE / "team28_hcurl_vim_force_summary.json"
 DEFAULT_OUTPUT = HERE / "team28_hcurl_eddy_bubble_summary.json"
 

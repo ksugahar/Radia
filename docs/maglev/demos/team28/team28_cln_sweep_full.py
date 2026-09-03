@@ -3,14 +3,15 @@ sweep + plot, vs the lab full-FEM ground truth.
 
 At every lab height dZ = -7..+17 mm it computes the levitation force from
 (a) the direct full split-(K+sN) FEM solve and (b) the 6-stage CLN/Cauer
-reduced model, and compares to the lab full-FEM Fz1(dZ).  Saves the data
-to JSON and a force-vs-height figure to PNG (both committed next to this
-script, per the lab data-persistence policy).
+reduced model, and compares to the lab full-FEM Fz1(dZ). Saves the durable
+JSON under validation_test/maglev/demos/team28 and keeps the public
+force-vs-height figure next to this script.
 
 Run:  python team28_cln_sweep_full.py   (~75 s; 25 axisymmetric solves)
 """
 import json
 import os
+import sys
 
 import numpy as np
 
@@ -28,6 +29,8 @@ LAB = {
 DISK_WEIGHT = 1.055   # N (R=65mm, t=3mm Al, 107.5 g)
 NSTAGE = 6
 HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, os.path.join(HERE, ".."))
+from _validation_output import validation_output  # noqa: E402
 
 # --- Force convention (verified C:/temp/team28_force_convention_check.py) ---
 # The reported F_z (fz_full / fz_cln / fz_lab) is the VERBATIM TEAM 28 surface
@@ -107,8 +110,9 @@ def run():
                           "agreement_percent": pub_err},
         "max_abs_cln_minus_lab_N": maxerr,
     }
-    with open(os.path.join(HERE, "team28_cln_sweep_results.json"), "w") as f:
-        json.dump(data, f, indent=2)
+    output = validation_output("team28_cln_sweep_results.json", HERE)
+    with open(output, "w") as f:
+        json.dump(data, f, indent=2, allow_nan=False)
     plot(dz_mm, fz_full, fz_cln, fz_lab, eq_cln, z_cln)
     return data
 

@@ -21,6 +21,7 @@ and `maxwell_surface_force_xcheck.py` import `maglev_sphere_force`
 (same folder); the latter two also use Radia for the open-boundary coil
 field.  Run `maglev_sphere_force.py` first if anything looks stale.
 
-**Outputs** (committed next to each script for provenance): `*_results.json`
-+ `*.png` (force / Re[G] vs frequency, equilibrium + stability, dipole-error
-ratio vs a/L).
+**Outputs**: figures remain here for the public demonstration. Checked
+`*_results.json` records live under
+`validation_test/maglev/demos/sphere/` and are exercised by the MagLev
+validation lane.
