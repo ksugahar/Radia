@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import gzip
+import importlib.util
 import json
 import shutil
 from pathlib import Path
@@ -9,6 +10,18 @@ import numpy as np
 import pytest
 
 from radia.simulink import ih_operator_assembly as assembly
+
+
+@pytest.fixture(autouse=True)
+def _taskmanager():
+    if importlib.util.find_spec("ngsolve") is None:
+        yield
+        return
+
+    import ngsolve as ng
+
+    with ng.TaskManager():
+        yield
 
 
 def _workpiece(path: Path, *, material: str = "workpiece", boundary: str = "sibc") -> Path:
