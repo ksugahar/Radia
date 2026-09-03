@@ -41,7 +41,7 @@ try:
     print("\nC++ PEEC module loaded successfully")
 except ImportError as e:
     print(f"\nERROR: PEEC module not available: {e}")
-    print("Build with: powershell.exe -ExecutionPolicy Bypass -File Build.ps1")
+    print("Build with: pwsh -NoProfile -ExecutionPolicy Bypass -File .\\Build.ps1")
     sys.exit(1)
 
 # ============================================================================
