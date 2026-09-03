@@ -1583,6 +1583,49 @@ The adjacent-reviewer diagnostic therefore flags Japanese `コード系譜`,
 `プログラムの系譜`, `ソースコード譜系`, and corresponding implementation
 forms, while leaving a well-explained scientific or historical lineage alone.
 
+### Reviewer-feedback learning loop
+
+When a reviewer supplies an old/new correction, do not store the approved
+sentence as a universal wording lock. Treat the correction as evidence of a
+reusable failure mode and complete this loop:
+
+1. Apply the requested correction to the source of truth and inspect Git
+   history before resolving overlaps. Never restore an older phrase merely
+   because it appears in another draft, cached PDF, or previous revision.
+2. Explain the reading failure at the smallest useful general level. Record
+   (a) what expression triggered the stop, (b) what object or relationship the
+   reviewer could not identify, (c) what the reviewer consequently could not
+   understand or score, and (d) the general revision principle. Useful classes
+   include hidden reviewer value, local shorthand used before definition, an
+   abstract operation without its object, evidence placed before its takeaway,
+   or a form field that should remain blank. An old/new pair without this
+   causal account is an edit record, not learned guidance.
+3. Extend the narrowest existing diagnostic to detect that structure. Add a
+   new check only when no current diagnostic owns the failure. Do not key the
+   rule to a project path, person, exact full sentence, or one research topic.
+4. Add a paired regression: the old structure must be reported and the revised
+   structure must pass. Test the semantic invariant, not a preferred sentence.
+5. Run the focused tests and the full grant-writing suite, apply the rule to
+   the current proposal, rebuild its deliverable, and verify that source and
+   rendered artifact agree.
+
+For reviewer navigation, put an immediately understandable decision value
+before a negative opening when the value would otherwise have to be inferred.
+In a purpose section, name the actual targets and define a local collective
+label before relying on labels such as "two tasks". In a staged method, name
+both the work object and observable operation: "divide integration into four
+stages" is weaker than "divide the establishment and verification of coupling
+conditions into four stages". These rules preserve technical vocabulary while
+removing avoidable backward references and inference work.
+
+For the staged-method example, the failure is not merely that the old phrase
+is shorter. Bare "integration" does not tell the reviewer what is being
+integrated, so the reviewer also cannot tell what the four stages classify or
+what advances at each stage. Naming "coupling conditions" as the work object
+and "establishment and verification" as the operations repairs that causal
+gap. Diagnostics should return this reviewer-side explanation together with a
+rewrite direction, rather than reporting only a matched phrase.
+
 The integrated health report also runs the non-scoring
 `grant_writing_reviewer_momentum_check(text)`. Readability and reviewer
 interest are separate. The check looks for an opening arc that recurs in
