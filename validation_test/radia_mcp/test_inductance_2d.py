@@ -10,7 +10,8 @@ This is the CURRENT-carrying (vector-potential) complement to the current-free m
 scalar potential (mfnc) already in scalar_fem2d: same elliptic operator
 -div(nu grad u) = f, here u = A_z, f = J_z, nu = 1/(mu0 mu_r). The energy-method
 inductance L' = 2W/I^2 with a *frozen* nu field is the linear limit of frozen-permeability
-machine Ld/Lq (the nonlinear converged-nu case is test_nonlinear_magnetostatic_newton).
+machine Ld/Lq (the nonlinear converged-nu case is
+validation_test/magnetostatics/test_nonlinear_magnetostatic_newton.py).
 
 Exercises radia_mcp.radia_ngsolve.scalar_fem2d.{solve_magnetostatic_az, inductance_2d}.
 """
