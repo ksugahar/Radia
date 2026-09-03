@@ -1,33 +1,19 @@
 # Induction Heating Examples
 
-This directory is the docs promotion layer for the induction-heating example
-cleanup. The old loose examples topic is closed; public demonstrations now live
-as executed, result-bearing notebooks, while numerical evidence and its JSON
-live under `validation_test/induction_heating/`.
+This directory is the public notebook layer for induction heating. The old
+loose examples topic is closed. Numerical evidence and its checked JSON remain
+under `validation_test/`.
 
-Start with the public result-saved notebook. The adjacent JSON files are
-historical migration records and are not required by the current docs policy:
+Start with the executed ESIM showcase:
 
-- `public_demo.ipynb`
-- `public_demo_results.json`
-
-The full source/hash catalog is:
-
-- `induction_heating_examples_catalog.ipynb`
-- `induction_heating_examples_catalog_results.json`
-
-The closed public demo showcase is:
-
-- `induction_heating_demo_showcase.ipynb`
-- `induction_heating_demo_showcase_results.json`
-
-The catalogs store source hashes, route decisions, existing result/media
-artifact hashes, protected references, and the final migration lane.
+- [`induction_heating_demo_showcase.ipynb`](induction_heating_demo_showcase.ipynb)
 
 ## Current Routing
 
-- ESIM/WPT/RWG tutorials are represented by
-  `induction_heating_demo_showcase.ipynb` and its JSON source/hash archive.
+- The notebook reproduces the analytical ESIM/Bessel cross-check and embeds
+  selected publication figures.
+- `validation_test/ih_esim_benchmark/` owns the benchmark scripts, checked JSON,
+  sweep corpus, and source figures.
 - Legacy `bem_reference/` has been split: reusable solver modules now live as
   `radia.bem_inductance`, `radia.bem_coupled_solver`, and `radia.ngsbem_*`;
   runnable reference scripts and sweep data live under
