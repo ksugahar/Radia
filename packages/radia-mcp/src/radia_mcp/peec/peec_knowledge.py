@@ -1,20 +1,9 @@
 """
 
-PUBLIC NOTEBOOK: docs/peec_integration/public_demo.ipynb -- human-facing PEEC
-entry point.  It separates maintained representative demos from validation,
-src-API, benchmark, experiment, smoke, and cleanup-review scripts in the
-130-file docs/peec_integration/demos catalog.
-SHOWCASE NOTEBOOK: docs/peec_integration/peec_showcase.ipynb -- Dowell continued-fraction + ngbem EFIE loop L + 4 paper figures (verified).
-CATALOG NOTEBOOK: docs/peec_integration/examples_catalog.ipynb -- full source
-text/hash/result-media ledger for docs/peec_integration/demos with migration lanes.
-CLEANUP ROUTING: docs/peec_integration/cleanup_routing.ipynb -- routes the
-63 cleanup-review scripts into validation_test (50), src API (5), and
-distill-delete (8); deletion candidates are summarized in
-memory/peec_integration_cleanup_routing.md.
-VERIFICATION MIGRATION: docs/peec_integration/verification_migration.ipynb --
-closed the PEEC verification corpus under
-validation_test/peec_integration/verification, promoted the GMSH centerline
-reader to radia.peec_mesh_import, and distilled/deleted check_funcs.py.
+PUBLIC NOTEBOOK: docs/peec_integration/peec_showcase.ipynb -- Dowell
+continued-fraction + ngbem EFIE loop L + 4 paper figures (verified). Checked
+numerical evidence lives under validation_test/peec_integration; reusable
+centerline import is radia.peec_mesh_import.
 SHOWCASE NOTEBOOK: docs/peec/dowell_surface_impedance_demo.ipynb -- executable companion to docs/peec/PEEC_SURFACE_IMPEDANCE.md: F(xi)/G(xi) skin+proximity ratios vs normalized thickness, copper-foil Z(f) sweep, Dowell coth (H=0 BC) vs ESIM tanh (dH/dz=0 BC) boundary comparison, round-wire Bessel vs rect Dowell, and CF truncation accuracy (verified; F/G match deep_bar_resistance_factor/reactance_factor to machine precision).
 PEEC knowledge base for the mcp-server-peec MCP server.
 
