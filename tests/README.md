@@ -103,7 +103,7 @@ deterministic, and useful during ordinary debugging.  Promote heavier checks to
 If `import radia` fails, rebuild the module first:
 
 ```powershell
-powershell.exe -ExecutionPolicy Bypass -File Build.ps1
+pwsh -NoProfile -ExecutionPolicy Bypass -File .\Build.ps1
 python -m pytest tests/test_simple.py
 ```
 
