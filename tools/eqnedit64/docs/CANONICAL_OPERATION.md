@@ -63,6 +63,9 @@ pwsh -NoProfile -File build\accept_release.ps1
 オフスクリーン視認性、最大式でも1再描画5 ms未満の性能ゲート、
 `CN=ksugahar`署名、単体exeを確認する。途中で一つでも失敗した場合は公開しない。結果は既定で
 `C:\temp\Eqnedit64-final-acceptance.json` に残る。
+`fontdrvhost.exe`交代の事前対照窓にも同じApplication Errorがある、または交代にcrash
+eventが伴わない場合は製品FAILではなく`INCONCLUSIVE`として停止する。そのrunnerを
+greenになるまで回し直して合格扱いにせず、健全な新しい隔離sessionで候補を再検査する。
 
 公開順は固定する。まずリリースコミットを`main`へpushして隔離main CIを通し、その
 `origin/main`と同じコミットからLABではコンパイルと署名だけを行う。次に
