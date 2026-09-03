@@ -14,7 +14,7 @@ on the reader's goal:
 | You want to ... | Start with |
 |---|---|
 | ... use the CLI tools (calc_inductance.py / calc_fem_kelvin.py / calc_fem_coilmesh.py) | [`USAGE.md`](USAGE.md) |
-| ... **run an example or reproduce a paper figure** | [`EXAMPLES.md`](EXAMPLES.md) |
+| ... **run a workflow or reproduce a paper figure** | [`WORKFLOWS.md`](WORKFLOWS.md) |
 | ... understand the math / cite the paper | [`MATHEMATICAL_ANALYSIS.md`](MATHEMATICAL_ANALYSIS.md) |
 | ... understand the code architecture / Karl loop internals | [`IMPLEMENTATION.md`](IMPLEMENTATION.md) |
 | ... see numerical validation tables | [`CROSS_VALIDATION.md`](CROSS_VALIDATION.md) |
@@ -29,7 +29,7 @@ on the reader's goal:
 | Document | Purpose | Length |
 |---|---|---|
 | [`README.md`](README.md) | this index | small |
-| [`EXAMPLES.md`](EXAMPLES.md) | catalog of runnable ESIM scripts under `examples/` + paper-reproducer | ~ 100 lines |
+| [`WORKFLOWS.md`](WORKFLOWS.md) | public notebook and checked validation workflows | ~ 100 lines |
 | [`USAGE.md`](USAGE.md) | CLI guide for the three calc_*.py scripts | ~ 200 lines |
 | [`MATHEMATICAL_ANALYSIS.md`](MATHEMATICAL_ANALYSIS.md) | PDE → weak form → quadrature → curvature handling → HCurl weak form → Lorentz reciprocity φ·B form → complex-µ | ~ 970 lines |
 | [`IMPLEMENTATION.md`](IMPLEMENTATION.md) | three-solver dispatch + Karl loop + per-DOF Z_s + Lipschitz/Anderson + failure modes + perf chars | ~ 540 lines |

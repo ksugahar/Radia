@@ -278,7 +278,7 @@ When `--esim-per-panel` is used (BEM path only) the schema gains:
 - `esim_per_panel_H_t: [...]`: per-DOF |H_t| at convergence
   (radia ≥ 4.55.x; same DOF order as `esim_per_panel_Z_s_real`).
   Use this for spatial visualisation (see
-  [`EXAMPLES.md`](EXAMPLES.md) → `plot_zs_per_dof_map.py`).
+  [`WORKFLOWS.md`](WORKFLOWS.md) -> `plot_zs_per_dof_map.py`).
 - `Z_s_wp_real` / `Z_s_wp_imag`: area-weighted mean (for back-compat)
 - Each `esim_history` entry adds `Z_s_abs_min / Z_s_abs_max`,
   `H_t_per_dof_mean / H_t_per_dof_max`, `dZ_max`

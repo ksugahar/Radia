@@ -77,7 +77,7 @@ of running loose example scripts:
 | Reusable Stage-2 API/CLI | [`src/radia/panels/calc_streamfunction.py`](../../src/radia/panels/calc_streamfunction.py) |
 
 Maintained demo source names and their current locations are listed in
-[`examples.md`](examples.md). Public links point to those sources, the executed
+[`demos.md`](demos.md). Public links point to those sources, the executed
 notebooks, `validation_test` result JSON, or `src` APIs.
 
 ## What this is, what it is not

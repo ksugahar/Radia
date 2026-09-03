@@ -177,13 +177,14 @@ res   = aca_tsvd(len(obs), len(loops), entry, modes=20)
 phi   = pseudo_inverse_solve(res, B_target, k_mode=10)          # loop currents
 ```
 
-### Panel CLI (Stage 2): `calc_stream_coil.py`
+### Headless CLI (Stage 2): `calc_stream_coil.py`
 
-The cylindrical Gz gradient-coil design (`examples/.../demo_coil_design_gz.py`)
-is also packaged as a headless Stage-2 panel script,
-[`src/radia/panels/calc_stream_coil.py`](../src/radia/panels/calc_stream_coil.py)
-(Layer 4 of the Cubit panel architecture: argparse in, JSON on stdout, no GUI
-and no `import cubit`).  It exposes every design knob as a CLI flag
+The cylindrical Gz gradient-coil demo
+([`docs/stream_function/demo_coil_design_gz.py`](stream_function/demo_coil_design_gz.py))
+is also packaged as a headless Stage-2 application script,
+[`src/radia/panels/calc_stream_coil.py`](../src/radia/panels/calc_stream_coil.py).
+It accepts argparse input, writes JSON on stdout, has no GUI, and never imports
+`cubit`. It exposes every design knob as a CLI flag
 (`--radius --length --gradient --dsv --n-rings --n-wires --modes --aca-eps
 --method`) and prints `{k_aca, modes, n_wires, fitted_dBdz,
 gradient_nonlinearity, continuous_residual, wire_z, wire_I}`.
