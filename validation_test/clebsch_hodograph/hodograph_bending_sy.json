@@ -1,4 +1,11 @@
 {
+  "schema": "radia.validation.clebsch_hodograph.hodograph_bending_sy.v1",
+  "source_notebook": "docs/clebsch_hodograph/hodograph_bending_sy.ipynb",
+  "checks": {
+    "fem_field_relative_error_lt_2e_4": true,
+    "pole_match_error_lt_2e_6": true,
+    "optimized_peak_lt_1p02": true
+  },
   "generated_at_utc": "2026-07-07T13:44:00.276116+00:00",
   "radia_version": "4.95.6",
   "ngsolve_version": "6.2.2604",
@@ -73,6 +80,5 @@
     "best_peak": 1.0129419903978432,
     "best_a": 4.4,
     "rogowski_limit": 1.0
-  },
-  "notebook_sha256": "c17cfd2d449e44fa0dfd416f9cffe5eff913dfe9522f16ed245199f9c1d66ea7"
+  }
 }

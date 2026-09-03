@@ -1,4 +1,12 @@
 {
+  "schema": "radia.validation.clebsch_hodograph.hodograph_feasibility_2d.v1",
+  "source_notebook": "docs/clebsch_hodograph/hodograph_feasibility_2d.ipynb",
+  "checks": {
+    "fem_field_relative_error_lt_2e_4": true,
+    "pole_match_error_lt_2e_6": true,
+    "vonmises_pde_residual_lt_1e_3": true,
+    "vonmises_chart_single_valued": true
+  },
   "generated_at_utc": "2026-07-06T22:45:17.145238+00:00",
   "radia_version": "4.95.5",
   "ngsolve_version": "6.2.2604",
@@ -63,6 +71,5 @@
     "single_valued": true,
     "pole_match": 2.5394824243463177e-08,
     "pde_resid_coarse": 0.00261762920912161
-  },
-  "notebook_sha256": "44f8fa95e68f00b9335c46520292c575d593321b3104c87b2db9634af132e391"
+  }
 }

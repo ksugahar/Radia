@@ -1,4 +1,11 @@
 {
+  "schema": "radia.validation.clebsch_hodograph.excitation_invariant_field.v1",
+  "source_notebook": "docs/clebsch_hodograph/excitation_invariant_field.ipynb",
+  "checks": {
+    "optimized_direction_drift_below_flat": true,
+    "invariance_improvement_gt_5": true,
+    "linear_control_direction_drift_lt_1e_12": true
+  },
   "generated_at_utc": "2026-07-06T01:20:56.068644+00:00",
   "radia_version": "4.95.5",
   "ngsolve_version": "6.2.2604",
@@ -215,6 +222,5 @@
     ],
     "D_dir_max": 0.00018441849881704474,
     "linear_control_max": 8.335363544149058e-16
-  },
-  "notebook_sha256": "93559ff5abdfb11443be4d12452a890cc93dabb2c96126c2aa6df8e7c3630ec1"
+  }
 }
