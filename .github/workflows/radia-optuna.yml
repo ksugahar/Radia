@@ -63,7 +63,7 @@ jobs:
       - name: Build standalone optuna_mex
         shell: pwsh
         run: |
-          & $env:RADIA_OPTUNA_CI_PYTHON -m pip install pybind11==3.0.2
+          & $env:RADIA_OPTUNA_CI_PYTHON -m pip install pybind11==3.0.2 ninja
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           & .\Build.ps1 -OptunaMexOnly
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
