@@ -1,13 +1,9 @@
 # grant-writing
 
 Use this skill for grant proposal drafts, recommendation letters, and final
-pre-submission checks.  It is intentionally parallel to the other document
-servers:
-
-- `paper-writing`: journal / digest manuscripts
-- `figure`: publication-quality figures
-- `grant-writing`: proposal logic, prose, feasibility, budget, social impact
-- `presentation`: slides and oral-delivery artifacts
+pre-submission checks. Use `paper-writing` for journal, digest, and research-
+meeting manuscripts. Figure and presentation helpers are tool families rather
+than separate MCP servers; do not route to retired server names.
 
 ## Scope: Not a KAKENHI Skill
 
@@ -28,6 +24,20 @@ JSPS各事業、公益法人、受託研究、いずれにも共通する欠陥�
 
 新しい規則を足すときは、まずどちらかを決める。**一つの制度でしか成立
 しない規則を、制度名を付けずに置かない。**
+
+## Japanese Readability and Genre Boundary
+
+研究会原稿と助成金申請は審査目的が異なる。共有してよいのは文の切れ目、
+修飾範囲、主語・述語の近接、表記統一という基礎lintだけであり、ジャンル固有の
+点数や推敲優先順位は共有しない。
+
+`grant_writing_japanese_genre_contract(document_type)` を先に適用する。
+`research_meeting_manuscript`、`research_manuscript`、`paper` 等は
+`wrong_genre` とし、`mcp-server-paper-writing` へ戻す。申請書には
+`document_type="grant_proposal"` を指定し、
+`grant_writing_japanese_readability_score` の100点診断を使う。英文は採点せず、
+英文との平均も作らない。この点数は読みやすさの診断であり、学術的価値や採択
+確率ではない。
 
 ## Core Rules
 
@@ -630,8 +640,8 @@ Better: 「日本発の階層行列ライブラリを用いた積分方程式解
 
 ## Measured Against Real Submissions (負の結果を含む)
 
-2026-08-20に、同一研究者の提出済み計画調書10件（採択3・不採択7）で検査を
-検証した。結果は二つに分かれた。
+2026-08-20に、同一研究者の複数制度にまたがる提出済み計画調書10件
+（採択3・不採択7）で検査を検証した。結果は二つに分かれた。
 
 **語彙が実物と合っていなかった。** 既往研究の限界を、私は「確立していない」
 「明らかでない」という形で想定していた。実物はそう書かない。採択申請書は
@@ -698,8 +708,8 @@ Better: 「日本発の階層行列ライブラリを用いた積分方程式解
 
 ## No Check Here Predicts Adoption (二度の実測)
 
-2026-08-20に、同一研究者の提出済み申請書10件（採択3・不採択7）で二つの検査を
-独立に検証した。どちらも採否を分離しなかった。
+2026-08-20に、同一研究者の複数制度にまたがる提出済み申請書10件
+（採択3・不採択7）で二つの検査を独立に検証した。どちらも採否を分離しなかった。
 
 | 検査 | 採択の平均 | 不採択の平均 |
 |---|---:|---:|
@@ -728,7 +738,8 @@ Better: 「日本発の階層行列ライブラリを用いた積分方程式解
 2026-08-21に非公開コーパスを19件（採択7、不採択11、未提出1）へ拡張した。
 このうち通常の科研費は10件（採択2、不採択8）である。提出版だけでなく、交付
 決定、採択通知、審査結果、または未採択として管理された原本との対応を記録した。
-比較は `sweep.py --compare-outcomes` で再現できる。
+コーパス比較の数値は当時の監査記録であり、現行リポジトリに再実行スクリプトは
+同梱しない。現在の規則は公開テストの正例・負例で検証する。
 
 検査指摘数を本文1万字当たりに正規化すると、通常の科研費では採択稿5.55、
 不採択稿4.37であった。**機械的指摘密度は採否を分離しない**という従来の負の
@@ -825,9 +836,9 @@ A false positive announces itself. A check that has quietly stopped working,
 or that was aimed at a genre this suite does not serve, says nothing at all
 and looks exactly like a clean document.
 
-`sweep.py --audit` reports, per check, how often it applied to a real
-proposal and how often it reported anything. On the first run eight checks
-were silent on all eight documents. Adjudicating them separated three cases:
+The historical corpus audit recorded how often each check applied and how
+often it reported anything. On the first run eight checks were silent on all
+eight documents. Adjudicating them separated three cases:
 
 - **Correctly quiet.** `international_standing_check` and
   `collaboration_irreplaceability_check` apply to a handful of documents and
@@ -941,7 +952,7 @@ cheaper than adjudicating the same class again.
 ## A Trigger Is Not a Claim (誤検出の出どころ)
 
 Two proposals with known outcomes — an adopted Go-Tech application and a
-rejected 住友財団 form — produced six findings between them that were wrong.
+rejected 住友財団 form — produced seven findings between them that were wrong.
 Every one had the same shape: a word was read as a claim the applicant never
 made. This is the failure mode to watch for when adding any keyword-triggered
 check.
@@ -1354,7 +1365,9 @@ presentation（`presentation_translationese_check`）にもある。英語論文
 
 - `grant_writing_usage()`
 - `grant_writing_kaken_review_axes()`
-- `grant_writing_health_report(text_or_path, program="generic")`
+- `grant_writing_health_report(text_or_path, program="generic", skip="", pdf="")`
+- `grant_writing_japanese_genre_contract(document_type)`
+- `grant_writing_japanese_readability_score(text, document_type)`
 - `grant_writing_argument_evidence_map(text)`
 - `grant_writing_section_presence(text, program="generic")`
 - `grant_writing_kddi_digital_check(text)`
@@ -1385,9 +1398,27 @@ presentation（`presentation_translationese_check`）にもある。英語論文
 - `grant_writing_analyze_sentences(text)`
 - `grant_writing_count_weak_expressions(text)`
 - `grant_writing_lint_bedrock(text)`
+- `grant_writing_suggest_redundancy_fixes(text)`
 - `grant_writing_translationese_check(text)` -- 自他動詞の誤り、英語注記、直訳定型句、空疎な強調語
+- `grant_writing_check_misuse_japanese(text)`
+- `grant_writing_check_kanji_ratio(text, min_ratio=0.18, max_ratio=0.40)`
+- `grant_writing_check_subject_predicate_distance(text, max_chars=40)`
+- `grant_writing_find_undefined_acronyms(text, ...)`
+- `grant_writing_acronym_usage_audit(text, ...)`
+- `grant_writing_check_notation_variants(text)`
 - `grant_writing_proper_noun_load_check(text)` -- 一度しか出ず役割も書かれていない固有名詞（異物）の列挙
+- `grant_writing_publication_list(author="Sugahara|菅原", since="", ...)`
+- `grant_writing_achievement_count_check(text, author="Sugahara|菅原", ...)`
 - `grant_writing_recommendation_letter_template(program="kddi_digital")`
+
+`skip` is a comma-separated list. Valid ids are:
+`abstraction`, `argument_map`, `basic_research`, `bedrock`, `budget`,
+`capability`, `claim`, `domain`, `focus`, `format`, `integration`,
+`international`, `irreplaceable`, `japanese`, `kaken`, `kddi`, `literature`,
+`metric`, `momentum`, `narrative`, `nouns`, `originality`, `pages`,
+`persuasion`, `pilot`, `readability`, `residue`, `scale`, `sections`,
+`sentence`, `translationese`, `vague`, `vocabulary`, and `weak`. Unknown ids
+raise `ValueError`; they are never ignored.
 
 For an ordinary KAKENHI draft, use `program="kaken_generic"`. It checks the
 three research-plan axes plus internationality without applying vocabulary and
