@@ -37,41 +37,29 @@ Complete reference for Radia Python API.
 
 ## Quick Start
 
-### HDiv-VIM Hexahedral Example (ObjThckPgn)
+### HDiv-VIM Hexahedral Example
 
 ```python
 import radia as rad
 import numpy as np
+import ngsolve as ng
+from radia.vim import soft_iron_box
 
 rad.UtiDelAll()
 
 MU_0 = 4 * np.pi * 1e-7
-n_div = 5
 cube_size = 1.0
-elem_size = cube_size / n_div
-
-# Create 5x5x5 hexahedral mesh using ObjThckPgn
-elements = []
-for ix in range(n_div):
-    for iy in range(n_div):
-        for iz in range(n_div):
-            cx = (ix + 0.5) * elem_size - cube_size / 2
-            cy = (iy + 0.5) * elem_size - cube_size / 2
-            cz = (iz + 0.5) * elem_size - cube_size / 2
-            half = elem_size / 2
-
-            polygon = [[cx-half, cy-half], [cx+half, cy-half],
-                       [cx+half, cy+half], [cx-half, cy+half]]
-            obj = rad.ObjThckPgn(cz - half, elem_size, polygon, 'z', [0, 0, 0])
-            elements.append(obj)
-
-container = rad.ObjCnt(elements)
-mat = rad.MatLin(1000)  # mu_r = 1000
-rad.MatApl(container, mat)
+iron = soft_iron_box(
+    center=(0.0, 0.0, 0.0),
+    size=(cube_size, cube_size, cube_size),
+    mu_r=1000.0,
+    nsub=5,
+)
 
 ext = rad.ObjBckg(lambda p: [0, 0, MU_0 * 50000])  # B field in Tesla
-grp = rad.ObjCnt([container, ext])
-rad.Solve(grp, 0.001, 1000, 1)
+grp = rad.ObjCnt([iron, ext])
+with ng.TaskManager():
+    result = rad.Solve(grp)
 ```
 
 ### Netgen Mesh Example (HDiv-VIM Workflow)
@@ -457,7 +445,7 @@ rad.MatApl(obj, material)
 ### Solve - High-Level API (Recommended)
 
 ```python
-result = rad.Solve(obj, tolerance, max_iter, method=1)
+result = rad.Solve(obj, tolerance, max_iter, method=0)
 ```
 
 | Parameter | Type | Description |
@@ -465,25 +453,23 @@ result = rad.Solve(obj, tolerance, max_iter, method=1)
 | `obj` | int | Object or container |
 | `tolerance` | float | Convergence threshold (0.001 = 0.1%) |
 | `max_iter` | int | Maximum iterations |
-| `method` | int | `0` = LU, `1` = BiCGSTAB (default), `2` = HACApK |
+| `method` | int | Legacy C++ relaxation method; only `0` = LU is supported |
 
 | Returns | Description |
 |---------|-------------|
 | `result[0]` | Final residual |
 | `result[3]` | Number of iterations |
 
-### Solver Selection
+### Solver Routing
 
-| Problem Size | Elements | Method | Code |
-|--------------|----------|--------|------|
-| Small | < 500 | LU | `rad.Solve(grp, 0.001, 100, 0)` |
-| Medium | 500-5,000 | BiCGSTAB | `rad.Solve(grp, 0.001, 1000, 1)` |
-| Large | > 5,000 | HACApK | `rad.Solve(grp, 0.001, 1000, 2)` |
+| Model | Route | Call |
+|-------|-------|------|
+| Mesh-backed soft iron | FEEC HDiv-VIM with its symmetric CG policy | `rad.Solve(system)` |
+| Legacy C++ relaxation object | Dense LU | `rad.Solve(obj, 0.001, 100, 0)` |
 
-**HACApK Advantages** (for large problems):
-- O(N log N) memory vs O(N^2) for dense
-- 10-20% of dense matrix memory at 10,000+ elements
-- 5-10x faster than BiCGSTAB for 10,000+ elements
+The old non-symmetric BiCGSTAB and HACApK relaxation methods were retired.
+HDiv-VIM owns its own matrix compression, preconditioner, and symmetric linear
+solver choices; those are not selected through the legacy `method` integer.
 
 **Iteration counts**:
 - Linear materials: 1-2 iterations
@@ -511,7 +497,7 @@ Radia provides three tolerance parameters for controlling solver behavior:
 ```python
 # 1. Nonlinear iteration tolerance (outer loop)
 #    Set via Solve() - controls when Newton-Raphson iterations stop
-rad.Solve(obj, nonl_tol, max_iter, method)  # nonl_tol = 0.001 recommended
+rad.Solve(obj, nonl_tol, max_iter, method=0)  # legacy C++ route
 
 # 2. Solver parameters (all in one call)
 rad.SolverConfig(bicgstab_tol=1e-4, hacapk_eps=1e-4, hacapk_leaf=10, hacapk_eta=2.0)
@@ -538,7 +524,7 @@ rad.SolverConfig(
 )
 
 # Solve
-rad.Solve(grp, 0.001, 100, 2)  # nonl_tol=0.001, max_iter=100, method=2 (HACApK)
+rad.Solve(grp, 0.001, 100, 0)  # legacy C++ LU route
 
 # Query all settings
 config = rad.GetSolverConfig()
@@ -577,17 +563,17 @@ All parameters are optional keyword arguments. Only specified parameters are cha
 **Examples:**
 
 ```python
-# H-matrix solver with default parameters
+# Configure retained low-level H-matrix parameters for APIs that use them
 rad.SolverConfig(hacapk_eps=1e-4, hacapk_leaf=10, hacapk_eta=2.0)
 
 # Under-relaxation for difficult nonlinear problems
 rad.SolverConfig(relax_param=0.3)
-rad.Solve(container, 0.001, 100, 1)
+rad.Solve(container, 0.001, 100, 0)
 rad.SolverConfig(relax_param=0.0)  # Reset to full step
 
 # Newton-Raphson with line search damping (recommended for large problems)
 rad.SolverConfig(newton_method=True, newton_damping=True)
-rad.Solve(container, 0.001, 100, 2)  # HACApK + Newton + Damping
+rad.Solve(container, 0.001, 100, 0)  # LU + Newton + damping
 ```
 
 ### GetSolverConfig - Query All Solver Parameters
@@ -618,16 +604,6 @@ if 'hacapk_stats' in config:
     print(f"Compression: {stats['compression']:.1%}, Memory: {stats['memory_mb']:.1f} MB")
 ```
 
-### BiCGSTAB Performance
-
-Typical solve times (nonlinear BH curve material):
-
-| Elements | Time | Iterations |
-|----------|------|------------|
-| 1,000 | 0.55s | 5-6 |
-| 3,375 | 7.30s | 5-6 |
-| 8,000 | 51.81s | 5-6 |
-
 ---
 
 ## Parallelization (TaskManager)
@@ -652,8 +628,7 @@ TaskManager.
 | Solver | Method | Parallelization |
 |--------|--------|-----------------|
 | LU (method=0) | MKL `dgesv_` | `SuspendTaskManager` + `MKLThreadGuard` (MKL multi-threading) |
-| BiCGSTAB (method=1) | Matrix-vector product | `ParallelFor` via TaskManager |
-| HACApK (method=2) | H-matrix build + BiCGSTAB | `ParallelFor` / `ParallelForRange` via TaskManager |
+| HDiv-VIM | Symmetric CG with its selected preconditioner | Caller-owned NGSolve `TaskManager` plus native C++ kernels |
 
 ### GetSolveStats - Query Solve Statistics
 
@@ -668,8 +643,8 @@ Returns a dictionary after `rad.Solve()`:
 | `'t_matrix_build'` | float | Matrix construction time [s] |
 | `'t_linear_solve'` | float | Linear solver time [s] |
 | `'t_lu_decomp'` | float | LU decomposition time [s] (LU only) |
-| `'t_hmatrix_build'` | float | H-matrix build time [s] (HACApK only) |
-| `'linear_iterations'` | int | BiCGSTAB iterations |
+| `'t_hmatrix_build'` | float | Retained low-level H-matrix timing counter |
+| `'linear_iterations'` | int | Retained low-level linear iteration counter |
 | `'nonl_iterations'` | int | Nonlinear iterations |
 | `'num_threads'` | int | Number of TaskManager threads |
 | `'taskmanager_enabled'` | bool | TaskManager was active |
@@ -690,19 +665,10 @@ Radia and NGSolve share the same TaskManager instance, so they coexist naturally
 import radia as rad
 from ngsolve import *
 
-rad.Solve(grp, 0.001, 100, 2)  # Uses TaskManager internally
-
 with TaskManager():
+    rad.Solve(grp)
     V_op = LaplaceSL(j_trial.Trace() * ds) * j_test.Trace() * ds  # Also uses TaskManager
 ```
-
-### Scaling Benchmarks (8 threads, cube hexahedron nonlinear)
-
-| Solver | Time Scaling | Memory Scaling |
-|--------|-------------|----------------|
-| LU | O(N^3.5) | O(N^1.8) |
-| BiCGSTAB | O(N^2.5) | O(N^1.9) |
-| HACApK | O(N^1.7) | O(N^1.2) |
 
 ---
 
@@ -1648,14 +1614,15 @@ rad.TrfOrnt(obj, trf)  # Apply transformation to orient object
 ### Image Symmetry (IMA)
 
 IMA exploits mirror symmetry to reduce problem size. The `image=` parameter is
-supported by all solvers (LU, BiCGSTAB, HACApK) via `rad.Solve()` and `rad.BuildMatrix()`.
+supported by the current HDiv-VIM route and by the retained LU interaction-matrix
+route through `rad.Solve()` and `rad.BuildMatrix()`.
 
 **Note**: The old API (`TrfMlt`, `SetIMASymmetry`, `BuildIMAMatrix`, `PreRelax`, `Image`) has been
 removed (2026-01-31). Use the unified `image=` parameter instead.
 
 ```python
 # Quarter model: x-mirror (symmetric) + z-mirror (antisymmetric)
-rad.Solve(container, 0.0001, 100, 2, image='+x-z')
+rad.Solve(container, image='+x-z')
 
 # Pre-build matrix with IMA (for inspection)
 handle = rad.BuildMatrix(model, image='+x-z')
@@ -1711,8 +1678,8 @@ planes; do not use the retired tetrahedral moment path as an exception.
 ### 4. Solver Not Converging
 
 **Solutions**:
-1. Use BiCGSTAB (Method 1)
-2. Increase max iterations
+1. Confirm the model uses mesh-backed soft iron and therefore reaches HDiv-VIM
+2. Increase the HDiv-VIM iteration limit through its named API
 3. Check B-H data is monotonic
 4. Verify H-M conversion: `M = B/mu_0 - H`
 
@@ -1886,13 +1853,13 @@ pm = CuboidMagnet(
 # Create Radia background field object
 bkg = rad.ObjBckgCF(pm)  # Uses pm.__call__() which returns get_B()
 
-# Create soft iron to solve
-iron = rad.ObjHexahedron(vertices, [0, 0, 0])
-mat = rad.MatLin(1000)
-rad.MatApl(iron, mat)
+# Create mesh-backed soft iron to solve
+from radia.vim import soft_iron_box
+iron = soft_iron_box(
+    center=(0.0, 0.0, 0.0), size=(0.04, 0.04, 0.02), mu_r=1000.0, nsub=4)
 
 grp = rad.ObjCnt([iron, bkg])
-rad.Solve(grp, 0.001, 1000, 1)
+rad.Solve(grp)
 ```
 
 ### Vector Potential Verification

@@ -1838,7 +1838,7 @@ int radTRelaxationMethNo_0::SolveLinearStep(NonlinearContext& ctx, int iterCount
 		try { SystemMatrix.resize(matrix_size); }
 		catch (const std::bad_alloc&) {
 			double required_gb = (double)matrix_size * 8 / (1024.0 * 1024.0 * 1024.0);
-			fprintf(stderr, "Radia::Solve> LU solver requires %.1f GB memory for DOF=%d. Use BiCGSTAB (method 1) or HACApK (method 2) for large problems.\n", required_gb, totalDOF);
+			fprintf(stderr, "Radia::Solve> Legacy LU requires %.1f GB memory for DOF=%d. Use a mesh-backed soft-iron model with HDiv-VIM for large problems.\n", required_gb, totalDOF);
 			return false;
 		}
 		systemMatrixReady = true;

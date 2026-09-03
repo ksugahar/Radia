@@ -273,6 +273,11 @@ if "Solve" in globals():
                 "demag_backend='hdiv' needs a mesh-backed soft iron built via "
                 "radia.vim.MeshSoftIron(mesh, mu_r=/bh_table=); this body is mesh-less.  "
                 "Build it via radia.vim.MeshSoftIron or radia.SoftIron.")
+        if "method" not in kwargs and len(args) < 4:
+            # The legacy C++ relaxation path retained only its symmetric LU
+            # method.  Supply that default here as well as in the native ABI so
+            # an older extension binary cannot reintroduce the retired method=1.
+            kwargs["method"] = 0
         return _cpp_Solve(*args, **kwargs)                  # PM / legacy non-soft-iron C++ path
 
 
