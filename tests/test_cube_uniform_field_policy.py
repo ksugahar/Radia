@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import ast
+import hashlib
+import json
 from pathlib import Path
 
 
@@ -36,3 +38,15 @@ def test_hdiv_cube_drivers_default_to_validation_json():
         source = (HDIV / name).read_text(encoding="utf-8")
         assert 'default=str(_HERE.parent / "results_hdiv_' in source
         assert "rad.Solve(" not in source
+
+
+def test_hdiv_cube_evidence_manifest_pins_parseable_json():
+    manifest = json.loads((HDIV / "evidence_manifest.json").read_text(encoding="utf-8"))
+    assert manifest["schema"] == "radia.validation.hdiv-cube-evidence.v1"
+    assert manifest["policy"]["validation_json_required"] is True
+
+    for artifact in manifest["files"]:
+        path = HDIV / artifact["path"]
+        payload = path.read_bytes()
+        json.loads(payload.decode("utf-8-sig"))
+        assert hashlib.sha256(payload).hexdigest() == artifact["sha256"], path
