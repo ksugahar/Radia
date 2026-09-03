@@ -14,10 +14,11 @@ converge to the analytic `4/3 pi r^3`:
 | 2 (curved hex)   | HEX × 56 | **-0.2 %** |
 | 3 (curved hex)   | HEX × 56 | **+0.1 %** |
 
-## Run (no Cubit needed)
+## Run
 
-The three `.vol` files are committed, so the NGSolve side runs from a plain
-`pip install ngsolve`:
+The `.vol` meshes are generated artifacts and are not committed. Regenerate
+`hexsph_o1.vol`, `hexsph_o2.vol`, and `hexsph_o3.vol` with Cubit first, then
+run the NGSolve checks from this directory:
 
 ```bash
 python hex_sphere_curved_ngsolve.py
@@ -32,7 +33,7 @@ to straight-sided (the volume jumps back to the −23 % linear value). `mesh.Cur
 the right call only for meshes built from an in-memory CAD object (e.g. `netgen.occ` /
 `SplineGeometry`).
 
-## Regenerating the meshes (needs Cubit)
+## Regenerating the meshes
 
 ```
 volume 1 size 0.012 ; volume 1 scheme sphere ; mesh volume 1

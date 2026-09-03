@@ -12,17 +12,15 @@ assembly.
 """
 
 import argparse
+import time
 from pathlib import Path
 
-import time
 import numpy as np
-
-from ngsolve import Mesh, BND
+from ngsolve import BND, Mesh, TaskManager
 
 from radia.coil_builder import CoilBuilder
 from radia.coil_profile import CircleProfile
 from radia.ih_pipeline import IHWorkpieceContext
-
 from radia.panels.surface_mesh_extract import _extract_surface_mesh_filtered
 
 MM = 1e-3
@@ -106,4 +104,5 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    with TaskManager():
+        main()

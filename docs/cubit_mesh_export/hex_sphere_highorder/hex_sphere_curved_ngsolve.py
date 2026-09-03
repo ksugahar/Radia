@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """High-order CURVED HEX mesh in NGSolve -- the cubit-mesh-export capability.
 
 Coreform Cubit meshes a sphere with HEXES ('volume scheme sphere') and exports a
@@ -24,25 +23,35 @@ RESETS every element to straight-sided (the volume jumps back to the -23 % linea
 (``mesh.Curve`` is the right call only when the mesh was built from an in-memory geometry,
 e.g. a netgen.occ / SplineGeometry CAD object.)
 
-Pure NGSolve -- no Cubit needed to RUN this (the three .vol files are committed beside
-it).  Regenerate them with Cubit if you change the sphere.  Headless:
+Generate the three .vol files with Cubit before running the NGSolve side:
 
     python hex_sphere_curved_ngsolve.py
 """
 import math
 import os
-from ngsolve import Mesh, Integrate, CoefficientFunction, VOL
+
+from ngsolve import VOL, CoefficientFunction, Integrate, Mesh, TaskManager
 
 R = 0.05
 V_EXACT = 4.0 / 3.0 * math.pi * R ** 3
 HERE = os.path.dirname(os.path.abspath(__file__))
 
 
+def _mesh_path(order):
+    path = os.path.join(HERE, f"hexsph_o{order}.vol")
+    if not os.path.isfile(path):
+        raise FileNotFoundError(
+            f"missing generated Cubit mesh: {path}; follow the regeneration "
+            "commands in README.md"
+        )
+    return path
+
+
 def main():
     print(f"Curved-hex sphere in NGSolve  (R={R} m, V_exact={V_EXACT:.6e} m^3)")
     worst_hi = 0.0
     for order in (1, 2, 3):
-        mesh = Mesh(os.path.join(HERE, f"hexsph_o{order}.vol"))   # load AS-IS (no .Curve)
+        mesh = Mesh(_mesh_path(order))  # load AS-IS (no .Curve)
         types = {}
         for el in mesh.Elements(VOL):
             k = str(el.type).replace("ET.", "")
@@ -57,4 +66,5 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    with TaskManager():
+        main()
