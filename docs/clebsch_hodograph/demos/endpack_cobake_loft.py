@@ -42,6 +42,8 @@ run:  python endpack_cobake_loft.py            # the precision-loft co-bake tabl
       python endpack_cobake_loft.py --fig        # + figure
       python endpack_cobake_loft.py --no-staircase  # skip the staircase comparison
 """
+
+from _validation_output import validation_output
 import argparse
 import json
 import os
@@ -296,7 +298,7 @@ def main():
         print(f"       co-baked pole's b_3,5 + corner are a PRECISION claim, not a "
               f"directional one.")
 
-    jpath = os.path.splitext(os.path.abspath(__file__))[0] + ".json"
+    jpath = validation_output("endpack_cobake_loft.json")
     with open(jpath, "w") as fh:
         json.dump(res, fh, indent=2)
     print(f"\nsaved {jpath}")

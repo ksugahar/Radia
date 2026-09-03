@@ -47,6 +47,8 @@ genuine curved-orbit Frenet sweep are the extensions.
 run:  python twisting_quadrupole_pole.py            # design primitive + twist sweep
       python twisting_quadrupole_pole.py --fig        # + figure
 """
+
+from _validation_output import validation_output
 import argparse
 import json
 import math
@@ -201,7 +203,7 @@ def main():
         "twist": {k: sw[k] for k in sw if k != "rows"},
         "twist_rows": [{k: r[k] for k in r} for r in sw["rows"]],
     }
-    jpath = os.path.splitext(os.path.abspath(__file__))[0] + ".json"
+    jpath = validation_output("twisting_quadrupole_pole.json")
     with open(jpath, "w") as f:
         json.dump(out, f, indent=2)
     print(f"\nsaved {jpath}")

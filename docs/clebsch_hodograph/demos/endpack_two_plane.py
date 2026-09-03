@@ -49,6 +49,8 @@ run:  python endpack_two_plane.py            # the two-plane design + 3-D reflec
       python endpack_two_plane.py --fig        # + the 3-panel figure
       python endpack_two_plane.py --fast       # coarse mesh (golden / quick)
 """
+
+from _validation_output import validation_output
 import argparse
 import json
 import math
@@ -533,7 +535,7 @@ def main():
     print("  => the two-plane reflection works: design the END in x-y + s-y, "
           "loft to 3-D.")
 
-    jpath = os.path.splitext(os.path.abspath(__file__))[0] + ".json"
+    jpath = validation_output("endpack_two_plane.json")
     with open(jpath, "w") as fh:
         json.dump(res, fh, indent=2)
     print(f"\nsaved {jpath}")

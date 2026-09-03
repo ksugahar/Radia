@@ -56,6 +56,8 @@ the trusted reference.
 Units: SI (metres, A/m, Tesla).  No Cubit dependency.
 """
 
+from _validation_output import validation_output
+
 import sys
 import os
 import time
@@ -497,7 +499,7 @@ def main():
                  out["fem_throat_slope_above"], out["fem_throat_slope_drop"]))
 
     here = os.path.dirname(__file__)
-    with open(os.path.join(here, "clebsch_dipole_saturation_3d_throat.json"), "w") as fh:
+    with validation_output("clebsch_dipole_saturation_3d_throat.json").open("w", encoding="utf-8") as fh:
         json.dump(out, fh, indent=2)
     print("\nsaved clebsch_dipole_saturation_3d_throat.json")
     if _make_figure(out, os.path.join(here, "clebsch_dipole_saturation_3d_throat.png")):

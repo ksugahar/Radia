@@ -53,6 +53,8 @@ the twist version replaces gap/L by a/P.
 run:  python twist_rate_leaf_coupling.py            # the coupling sweep + threshold
       python twist_rate_leaf_coupling.py --fig        # + figure
 """
+
+from _validation_output import validation_output
 import argparse
 import json
 import math
@@ -131,7 +133,7 @@ def main():
     print("     the SAME longitudinal>>transverse rule as rung-1 (L/gap ~ 40),")
     print("     the twist version replacing gap/L by a/P (k -> 0 = the 2-D stack).")
 
-    jpath = os.path.splitext(os.path.abspath(__file__))[0] + ".json"
+    jpath = validation_output("twist_rate_leaf_coupling.json")
     with open(jpath, "w") as f:
         json.dump(sw, f, indent=2)
     print(f"\nsaved {jpath}")
