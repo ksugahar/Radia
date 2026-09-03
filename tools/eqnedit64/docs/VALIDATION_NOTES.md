@@ -5,6 +5,19 @@
 [`CANONICAL_OPERATION.md`](CANONICAL_OPERATION.md) と `release-eqnedit64` skillを
 正とする。`build\accept_release.ps1`は隔離CI/VM用であり、対話中LABでは実行しない。
 
+## 2026-09-03 TeXソースfont修正後の最終Fableレビュー
+
+- reviewed sourceは`1496f804e38ab422144219bf676e8d8e9d3c5944`。Claude Code Fable 5.1
+  (`claude-fable-5-1`)がread-only plan modeで`main`との差分、実装、試験、仕様を確認した。
+- verdictは`APPROVED`、release-blocking findingなし。物理face、font自身のcmap、bitmap ink、
+  stock fontの所有権、production／visual gateの同一chooser、静的guardを確認し、既レビューの
+  parser固定点とCLIに退行を持ち込まないと判定した。
+- productionのstock fallbackはgraceful degradationであり、visual gateは退避後もcmapとinkを
+  検査する。過去の誤rasterizeそのものはhermeticに再現せず、静的guard、face/cmap/ink gate、
+  O:ハンドテストを組み合わせる。候補とgateのsample文字列重複は非ブロッカーとして残す。
+- Windows-hosted CIは日本語glyphをfont自身に持つCJK UI faceを前提とする。現在の
+  `windows-2022` Eqnedit64 CIはgreenであり、その前提を満たすことを確認済み。
+
 ## 2026-09-03 3.0.13 O:ハンドテストのTeX欄誤字形
 
 - 指摘回収commitは`1b1ceded668a250b69051edeb366f4f66a18ca20`。
