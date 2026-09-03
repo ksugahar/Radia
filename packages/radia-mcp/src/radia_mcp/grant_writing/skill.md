@@ -39,6 +39,14 @@ JSPS各事業、公益法人、受託研究、いずれにも共通する欠陥�
 英文との平均も作らない。この点数は読みやすさの診断であり、学術的価値や採択
 確率ではない。
 
+LaTeX原稿では、`\begin{document}` より前の前文、コメント、様式の固定見出し・
+注意書きを除いてから採点する。規則が一件見つかっただけで評価軸全体を0点に
+せず、発生率と深刻度に応じて段階的に減点する。方法名、ソフトウェア名、MCP等
+より前に、研究で新しく分かる条件・知見・設計判断を置く順序は、概念負荷の
+採点要素とする。改稿確認には `previous_text` を渡して文書全体を比較し、さらに
+`previous_focus_text` と `focus_text` を渡して修正箇所だけの前後差を確認する。
+全体点を上げるために未修正箇所を機械的に書き換えてはならない。
+
 ## Core Rules
 
 1. Start from the reviewer's question: what public or technical problem is
@@ -1367,7 +1375,7 @@ presentation（`presentation_translationese_check`）にもある。英語論文
 - `grant_writing_kaken_review_axes()`
 - `grant_writing_health_report(text_or_path, program="generic", skip="", pdf="")`
 - `grant_writing_japanese_genre_contract(document_type)`
-- `grant_writing_japanese_readability_score(text, document_type)`
+- `grant_writing_japanese_readability_score(text, document_type, previous_text="", focus_text="", previous_focus_text="")`
 - `grant_writing_argument_evidence_map(text)`
 - `grant_writing_section_presence(text, program="generic")`
 - `grant_writing_kddi_digital_check(text)`
@@ -1549,8 +1557,12 @@ late in the paragraph to learn what the evidence enables. Preserve the
 technical detail, but rewrite in the reading order an adjacent-domain reviewer
 needs: the reviewer takeaway first, its plain-language technical role second,
 the specific method or evidence third, and the remaining limit or question
-last. The result has no score so an author cannot improve it by deleting
-necessary technical detail; each excerpt must be reviewed in context.
+last. The standalone diagnostic has no score so an author cannot improve it by
+deleting necessary technical detail; each excerpt must be reviewed in context.
+Its structured counts nevertheless feed two bounded readability-score
+components: concept density and whether the reviewer takeaway precedes named
+means. This rewards a better reading order without rewarding wholesale deletion
+of technical content.
 
 Keiko's 2026-09-01 close read adds a reviewer-navigation rule. Replace
 applicant-internal metaphors such as "our code lineage", "connect four assets",
