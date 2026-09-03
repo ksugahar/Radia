@@ -7,9 +7,7 @@
   "versions": {
     "ngsolve": "6.2.2604"
   },
-  "notebook": "section_optics_design.ipynb",
-  "notebook_sha256": "b18f365e90614ae78622166d05fd31eeb80e8c5b15b93f2e5fb4b3ad5493004d",
-  "notebook_bytes": 905327,
+  "public_notebook": "docs/section_optics/section_optics_design.ipynb",
   "results": {
     "orbit": {
       "length_m": 0.19018399319281457,
