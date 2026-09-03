@@ -369,13 +369,6 @@ bem-bb-config.txt
 hmat-assign.pl
 
 # ============================================================================
-# Benchmark Results (JSON output files)
-# ============================================================================
-examples/cube_uniform_field/nonlinear/*_results.json
-examples/cube_uniform_field/nonlinear/*_summary.json
-examples/kelvin_transformation/Cubit_1_4_p_convergence/p_convergence.json
-
-# ============================================================================
 # Temporary debugging scripts
 # ============================================================================
 fix_convergence.py

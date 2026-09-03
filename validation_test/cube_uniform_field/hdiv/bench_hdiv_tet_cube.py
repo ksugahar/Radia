@@ -321,7 +321,12 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--maxh-values", nargs="+", type=float, default=[0.4, 0.3])
     ap.add_argument("--material", choices=["linear", "nonlinear", "both"], default="both")
-    ap.add_argument("--output", type=str, default="")
+    ap.add_argument(
+        "--output",
+        type=str,
+        default=str(_HERE.parent / "results_hdiv_tet_cube.json"),
+        help="JSON result path (default: validation directory)",
+    )
     ap.add_argument("--bh-table", type=str, default="")
     ap.add_argument("--source-manuscript", type=str, default="")
     ap.add_argument("--presentation-dir", type=str, default="")

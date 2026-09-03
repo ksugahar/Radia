@@ -339,7 +339,12 @@ def main() -> int:
     ap.add_argument("--sizes", nargs="+", type=int, default=[2, 4])
     ap.add_argument("--material", choices=["linear", "nonlinear", "both"], default="both")
     ap.add_argument("--mesh-kind", choices=["hex", "wedge"], default="hex")
-    ap.add_argument("--output", type=str, default="")
+    ap.add_argument(
+        "--output",
+        type=str,
+        default=str(_HERE.parent / "results_hdiv_cube.json"),
+        help="JSON result path (default: validation directory)",
+    )
     ap.add_argument("--bh-table", type=str, default="")
     ap.add_argument("--source-manuscript", type=str, default="")
     ap.add_argument("--presentation-dir", type=str, default="")

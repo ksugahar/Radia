@@ -3,10 +3,8 @@
 This directory contains the HDiv-VIM counterpart of the soft-iron cube
 benchmark used in the 2026-08-25 static/rotating-machine MMPM manuscript.
 
-The driver is intentionally separate from the older hexahedron/tetrahedron
-benchmark scripts because those results came from the retired six-face MMPM
-path.  Current Radia soft-iron demag validation should use the BDM1 HDiv-VIM
-entry:
+The drivers replace the retired six-face MMPM benchmark path. Current Radia
+soft-iron demagnetization validation uses the BDM1 HDiv-VIM entry:
 
 ```powershell
 python validation_test\cube_uniform_field\hdiv\bench_hdiv_cube.py `
@@ -52,9 +50,7 @@ change of `4.6e-7`.
 ## Tet Comparison
 
 Use `bench_hdiv_tet_cube.py` for the current BDM1 HDiv-VIM unstructured-tet
-comparison.  Do not use the older `validation_test/cube_uniform_field/tetrahedron`
-scripts for HDiv timing claims; those belong to the retired Radia object/MMPM
-path.
+comparison.
 
 ```powershell
 python validation_test\cube_uniform_field\hdiv\bench_hdiv_tet_cube.py `

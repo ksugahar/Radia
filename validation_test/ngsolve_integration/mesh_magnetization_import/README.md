@@ -192,7 +192,7 @@ Using closed-form solid angle integration for each triangular face.
 
 ## Related Folders
 
-- `../../cube_uniform_field/` - Radia solver benchmarks
+- `../../cube_uniform_field/hdiv/` - Current mesh-backed HDiv-MMM solver benchmarks
 
 ---
 
