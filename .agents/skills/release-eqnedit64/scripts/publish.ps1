@@ -415,9 +415,19 @@ try {
         $process = Get-Process -Id $jit.ProcessId -ErrorAction SilentlyContinue
         if ($process) {
             $process | Stop-Process -Force
+            $null = $process.WaitForExit(5000)
         }
         gh api --method DELETE `
             "repos/$Repository/actions/runners/$($jit.RunnerId)" 1>$null 2>$null
+        $runnerRoot = [IO.Path]::GetFullPath([string]$jit.RunnerRoot)
+        if (-not $runnerRoot.StartsWith(
+                'C:\temp\eqnedit64-actions-runner-',
+                [StringComparison]::OrdinalIgnoreCase)) {
+            throw "Refusing to remove unsafe JIT runner directory: $runnerRoot"
+        }
+        if (Test-Path -LiteralPath $runnerRoot -PathType Container) {
+            Remove-Item -LiteralPath $runnerRoot -Recurse -Force
+        }
     }
 }
 
