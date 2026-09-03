@@ -4,7 +4,7 @@ Auto-generated from each server's production `core` `mcp.list_tools()` via `scri
 
 Fine-grained validation and identity operations are discovered with each server's `*_validation_catalog` tool and invoked through `*_validation_run`; they are not repeated as top-level schemas.
 
-Total: **899 tools** across 49 MCP servers.
+Total: **901 tools** across 49 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
@@ -47,7 +47,7 @@ Total: **899 tools** across 49 MCP servers.
 | [`mcp-server-md2html`](#mcp-server-md2html) | `radia_mcp.md2html` | 3 |
 | [`mcp-server-chart2d`](#mcp-server-chart2d) | `radia_mcp.chart2d` | 25 |
 | [`mcp-server-paper-writing`](#mcp-server-paper-writing) | `radia_mcp.paper_writing` | 208 |
-| [`mcp-server-grant-writing`](#mcp-server-grant-writing) | `radia_mcp.grant_writing` | 49 |
+| [`mcp-server-grant-writing`](#mcp-server-grant-writing) | `radia_mcp.grant_writing` | 51 |
 | [`mcp-server-poster`](#mcp-server-poster) | `radia_mcp.poster` | 33 |
 | [`mcp-server-literature-index`](#mcp-server-literature-index) | `radia_mcp.literature_index` | 10 |
 | [`mcp-server-document-meta`](#mcp-server-document-meta) | `radia_mcp.document_meta` | 7 |
@@ -1142,6 +1142,7 @@ Module: `radia_mcp.grant_writing.server`
 
 | Tool | Description |
 |---|---|
+| `grant_writing_achievement_count_check` | Check the publication counts a proposal claims against the bibliography. |
 | `grant_writing_acronym_usage_audit` | Audit acronym use in applicant prose only. |
 | `grant_writing_adjacent_reviewer_readability_check` | Find prose that is short but cognitively dense for an adjacent reviewer. |
 | `grant_writing_analyze_sentences` | Analyze Japanese sentence length for grant proposals. |
@@ -1179,6 +1180,7 @@ Module: `radia_mcp.grant_writing.server`
 | `grant_writing_page_limit_check` | Check each field of a compiled proposal against its page allowance. |
 | `grant_writing_persuasion_quality_check` | Check reviewer-facing hierarchy, equations, and defensive prose. |
 | `grant_writing_proper_noun_load_check` | Count proper nouns a reviewer must place, and list the ones named once. |
+| `grant_writing_publication_list` | List the applicant's own publications for a grant achievement section. |
 | `grant_writing_question_originality_check` | Check that the central question carries an originality position. |
 | `grant_writing_recommendation_letter_template` | Return a one-page recommendation-letter draft template. |
 | `grant_writing_reload_code` | Reload radia_mcp modules whose source changed on disk and re-register their tools, without restarting this server (editable install). Call it after editing the package; the report lists reloaded mo... |

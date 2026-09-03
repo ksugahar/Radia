@@ -8,12 +8,14 @@ grant-writing implementation that was already preserved inside
 from __future__ import annotations
 
 import csv
+import io
 import json
 import pathlib
 import re
-import zipfile
 import xml.etree.ElementTree as ET
+import zipfile
 from collections import Counter
+from decimal import Decimal
 
 from radia_mcp.paper_writing._ja_lint import (
     grant_writing_acronym_usage_audit as _ja_acronym_usage_audit,
@@ -75,9 +77,33 @@ def _split_tex_comment(line: str) -> tuple[str, str]:
         while cursor >= 0 and line[cursor] == "\\":
             backslashes += 1
             cursor -= 1
-        if backslashes % 2 == 0:
+        if backslashes % 2 == 0 and not (index > 0 and line[index - 1].isdigit()):
             return line[:index], line[index:]
     return line, ""
+
+
+def _strip_latex_comments(text: str) -> str:
+    """Remove unescaped LaTeX comments while preserving line boundaries."""
+    # Some legacy proposal sources contain a bare ``4%`` even though strict
+    # TeX would require ``4\%``. Preserve that numeric prose while removing
+    # actual full-line and trailing comments.
+    return "\n".join(_split_tex_comment(line)[0] for line in text.split("\n"))
+
+
+def _read_source_without_latex_comments(text_or_path: str) -> str:
+    """Read input and strip comments only when the input is LaTeX source."""
+    raw = _read_text_if_path(text_or_path)
+    source_is_tex = False
+    value = str(text_or_path)
+    if len(value) <= 320 and "\n" not in value and "\r" not in value:
+        try:
+            source = pathlib.Path(value)
+            source_is_tex = source.is_file() and source.suffix.lower() == ".tex"
+        except OSError:
+            pass
+    if source_is_tex or "\\" in raw or re.search(r"(?m)^\s*%", raw):
+        return _strip_latex_comments(raw)
+    return raw
 
 
 def _expand_sibling_inputs(
@@ -222,7 +248,7 @@ def _prose_for_lint(text: str) -> str:
 
 
 def _strip_latex_scaffolding(text: str) -> str:
-    text = re.sub(r"(?m)^\s*%.*$", " ", text)
+    text = _strip_latex_comments(text)
     text = re.sub(
         r"\\begin\{(?P<figenv>figure\*?|center)\}.*?"
         r"\\includegraphics.*?\\end\{(?P=figenv)\}",
@@ -311,6 +337,31 @@ def _finish_prose(text: str) -> str:
     # proposal that is genuinely written in ですます調 alone.
     drop_polite = bool(every) and len(polite) / len(every) < 0.3
 
+    fixed_headings = {
+        "研究目的",
+        "研究方法",
+        "研究目的、研究方法など",
+        "研究目的、研究方法等",
+        "研究遂行能力及び研究環境",
+        "研究遂行能力および研究環境",
+        "研究業績",
+        "研究環境",
+        "国際性",
+        "経費明細",
+        "人権の保護及び法令等の遵守への対応",
+        "人権の保護および法令等の遵守への対応",
+        "研究計画最終年度前年度応募を行う場合の記述事項",
+        "研究計画最終年度前年度の応募を行う場合の記述事項",
+    }
+
+    def is_fixed_heading(value: str) -> bool:
+        value = re.sub(
+            r"^[0-9０-９一二三四五六七八九十]+[.．、 \t　]*",
+            "",
+            value.strip(),
+        )
+        return value in fixed_headings
+
     kept: list[str] = []
     for line in lines:
         sentences = [
@@ -319,7 +370,9 @@ def _finish_prose(text: str) -> str:
             and not _FORM_INSTRUCTION.search(s)
             and not (drop_polite and _POLITE_ENDING.search(s.strip()))
         ]
-        if sentences:
+        if sentences and not (
+            len(sentences) == 1 and is_fixed_heading(sentences[0])
+        ):
             kept.append("".join(sentences))
     text = "\n".join(kept)
 
@@ -435,7 +488,31 @@ def grant_writing_check_notation_variants(text: str) -> dict:
 
 
 def _contains_any(text_lower: str, keywords: list[str]) -> list[str]:
-    return [kw for kw in keywords if kw.lower() in text_lower]
+    """Return present keywords without matching short tokens inside words.
+
+    Most Japanese phrases are safely matched as substrings, but one-character
+    Japanese markers and short Latin abbreviations otherwise turn ``core
+    loss`` into ``OSS`` evidence and ``domain decomposition`` into an ``AI``
+    claim. Bound those tokens while retaining natural Japanese compounds such
+    as ``生成AI`` and ``AIエージェント``.
+    """
+    hits: list[str] = []
+    for keyword in keywords:
+        escaped = re.escape(keyword)
+        if re.fullmatch(r"[A-Za-z0-9_.+/-]+", keyword):
+            pattern = rf"(?<![A-Za-z0-9_]){escaped}(?![A-Za-z0-9_])"
+        elif len(keyword) == 1 and re.fullmatch(r"[\u3040-\u30ff\u3400-\u9fff]", keyword):
+            pattern = (
+                rf"(?<![\u3040-\u30ff\u3400-\u9fff]){escaped}"
+                rf"(?![\u3040-\u30ff\u3400-\u9fff])"
+            )
+        else:
+            left = r"(?<![A-Za-z0-9_])" if re.match(r"[A-Za-z0-9_]", keyword) else ""
+            right = r"(?![A-Za-z0-9_])" if re.search(r"[A-Za-z0-9_]$", keyword) else ""
+            pattern = left + escaped + right
+        if re.search(pattern, text_lower, flags=re.IGNORECASE):
+            hits.append(keyword)
+    return hits
 
 
 def _severity_from_score(score: float | None) -> str:
@@ -1261,11 +1338,7 @@ def grant_writing_japanese_readability_score(
         }
 
     sentence = grant_writing_analyze_sentences(prose)
-    kanji = grant_writing_check_kanji_ratio(
-        prose,
-        min_ratio=0.30,
-        max_ratio=0.60,
-    )
+    kanji = grant_writing_check_kanji_ratio(prose)
     subject = grant_writing_check_subject_predicate_distance(prose)
     bedrock = grant_writing_lint_bedrock(prose)
     adjacent = grant_writing_adjacent_reviewer_readability_check(prose)
@@ -1287,7 +1360,6 @@ def grant_writing_japanese_readability_score(
 
     bedrock_count = bedrock.get("issue_count", 0)
     logical_order_score = max(0, 20 - min(20, 6 * bedrock_count))
-
     subject_violations = subject.get("violation_count", 0)
     subject_score = max(0, 15 - min(15, 5 * subject_violations))
 
@@ -1299,9 +1371,9 @@ def grant_writing_japanese_readability_score(
     )
     lexical_penalty = 8 * adjacent_high + 5 * adjacent_medium
     kanji_ratio = kanji.get("kanji_ratio", 0.0)
-    if kanji_ratio < 0.20 or kanji_ratio > 0.70:
+    if kanji_ratio < 0.12 or kanji_ratio > 0.50:
         lexical_penalty += 8
-    elif kanji_ratio < 0.30 or kanji_ratio > 0.60:
+    elif kanji_ratio < 0.18 or kanji_ratio > 0.40:
         lexical_penalty += 4
     lexical_score = max(0, 20 - min(20, lexical_penalty))
 
@@ -1311,7 +1383,6 @@ def grant_writing_japanese_readability_score(
         0,
         10 - min(10, 3 * misuse_count + 2 * notation_count),
     )
-
     weak_count = weak.get("total_weak_expressions", 0)
     commitment_score = max(0, 10 - min(10, 2 * weak_count))
 
@@ -1383,8 +1454,8 @@ def grant_writing_japanese_readability_score(
         },
         "scoring_policy": (
             "Japanese grant prose only. English is neither scored nor "
-            "averaged. Kanji ratio is a lightly weighted technical-prose "
-            "signal; sentence structure and reviewer load carry more weight."
+            "averaged. The kanji-ratio target is the same 0.18-0.40 band exposed by "
+            "grant_writing_check_kanji_ratio."
         ),
         "interpretation": (
             "This score estimates Japanese reading load and writing mechanics. "
@@ -1417,7 +1488,7 @@ _REVIEWER_MOMENTUM_BOTTLENECK_PATTERN = re.compile(
     r"試行錯誤|要する|負担|限界|妨げ|左右|偏る|再実装|実装し直)"
 )
 _REVIEWER_MOMENTUM_SPECIFICITY_PATTERN = re.compile(
-    r"(?:\d[\d,.]*(?:\\?%|年|月|日|時間|件|回|倍|円|人|自由度)?|"
+    r"(?:\d[\d,.]*(?:\\?%|年|月|日|時間|件|回|倍|円|人|自由度)|"
     r"半年|手作業|試行錯誤|既存コード|接続|再実装|初期化運転|人件費|"
     r"誤差|未実現|未確立|未検証|設計時間|作業負荷|適用例|候補選択)"
 )
@@ -1446,7 +1517,7 @@ _REVIEWER_MOMENTUM_HYPE_PATTERN = re.compile(
     r"パラダイムシフト|夢の|究極の)"
 )
 _REVIEWER_MOMENTUM_EVIDENCE_PATTERN = re.compile(
-    r"(?:\d[\d,.]*(?:\\?%|年|月|日|時間|件|回|倍|円|人)?|文献|"
+    r"(?:\d[\d,.]*(?:\\?%|年|月|日|時間|件|回|倍|円|人)|文献|"
     r"報告|実測|実証|実装|確認|採択|査読|共同研究|市場|既に|済み)"
 )
 
@@ -1767,7 +1838,7 @@ def grant_writing_count_weak_expressions(text: str) -> dict:
             continue
         clause_start = max(
             text.rfind(mark, 0, match.start())
-            for mark in ("。", "．", "\n", "、", "，")
+            for mark in ("。", "．", "\n")
         )
         clause = text[clause_start + 1:match.start()]
         if "、" in clause or "，" in clause:
@@ -1775,9 +1846,6 @@ def grant_writing_count_weak_expressions(text: str) -> dict:
         # An enumeration whose last separator is the nearest mark also ends
         # up here, so require the clause to look like a lone noun.
         if len(clause) > 12:
-            continue
-        preceding = text[max(0, clause_start - 30):clause_start]
-        if "、" in preceding or "，" in preceding:
             continue
         nado += 1
     if nado:
@@ -2405,7 +2473,11 @@ def grant_writing_kaken_oss_platform_check(text: str) -> dict:
 
     platform_mentions = len(re.findall(r"JP[-‐‑–—]?MARs", text, flags=re.IGNORECASE))
     radia_mentions = len(
-        re.findall(r"(?<![A-Za-z])Radia(?:/radia-mcp|-mcp)?", text, flags=re.IGNORECASE)
+        re.findall(
+            r"(?<![A-Za-z])Radia(?:/radia-mcp|-mcp)?(?![A-Za-z])",
+            text,
+            flags=re.IGNORECASE,
+        )
     )
     platform_focus = {
         "ok": platform_mentions >= max(1, radia_mentions),
@@ -2740,7 +2812,7 @@ def grant_writing_domain_outcome_chain_check(text: str) -> dict:
     knowledge product, changed decision, falsification gate, and an explicit
     statement that the technology is subordinate to the research question.
     """
-    text = _read_text_if_path(text)
+    text = _prose_for_lint(_read_text_if_path(text))
     low = text.lower()
     tool_terms = [
         "プラットフォーム",
@@ -3237,7 +3309,8 @@ _PROPER_NOUN_LATIN = re.compile(
     rf"(?<![A-Za-z-])[A-Z]{_LATIN_LETTER}{{2,}}(?:[ -][A-Z]{_LATIN_LETTER}{{2,}})*"
 )
 _PROPER_NOUN_PERSON = re.compile(
-    rf"((?:[A-Z]{_LATIN_LETTER}+ )?(?:de |van |von )?[A-Z]{_LATIN_LETTER}{{1,20}}|[一-鿿]{{1,4}})氏"
+    rf"((?:[A-Z]{_LATIN_LETTER}+ )?(?:de |van |von )?[A-Z]{_LATIN_LETTER}{{1,20}}|"
+    rf"(?<![一-鿿])(?!同氏)[一-鿿]{{2,4}})氏(?!名)"
 )
 _VENUE_CONTEXT = re.compile(r"発表|講演|会議|Symposium|Conference|Workshop")
 # A role is a relation to this plan (invited, co-authored, provides an asset),
@@ -3388,7 +3461,7 @@ def grant_writing_named_software_abstraction_check(
         software_names: Optional comma-separated names added to the built-in
             software list.
     """
-    text = _read_text_if_path(text)
+    text = _read_source_without_latex_comments(text)
     default_names = [
         "NGSolve",
         "ONELAB",
@@ -3560,7 +3633,7 @@ def grant_writing_reviewer_vocabulary_check(text: str) -> dict:
     acronym, foreign-university abbreviation, laboratory shorthand, or named
     benchmark. This check also keeps benchmarks in a verification role.
     """
-    text = _read_text_if_path(text)
+    text = _prose_for_lint(_read_text_if_path(text))
     risks: list[dict] = []
     term_results: dict[str, dict] = {}
 
@@ -3870,7 +3943,7 @@ def grant_writing_persuasion_quality_check(text: str) -> dict:
     decision role, or exceptions crowd out the main claim. It is a heuristic
     quality gate, not a mathematical parser.
     """
-    text = _read_text_if_path(text)
+    text = _read_source_without_latex_comments(text)
     risks: list[dict] = []
 
     def add_risk(
@@ -3909,13 +3982,13 @@ def grant_writing_persuasion_quality_check(text: str) -> dict:
             r"(?:だけを示す|にすぎない)"
         ),
     ]
-    seen_self_negating: set[tuple[int, int]] = set()
+    seen_self_negating: list[tuple[int, int]] = []
     for pattern in self_negating_patterns:
         for match in pattern.finditer(text):
             span = match.span()
-            if span in seen_self_negating:
+            if any(span[0] < end and span[1] > start for start, end in seen_self_negating):
                 continue
-            seen_self_negating.add(span)
+            seen_self_negating.append(span)
             add_risk(
                 "self_negating_evidence",
                 match.start(),
@@ -4537,11 +4610,6 @@ _GAP_MARKERS = (
 # A proposal can be thoroughly international without ever writing 「国際」;
 # it names a region or a foreign institution instead. Triggering only on the
 # explicit word would skip exactly the drafts that do this well.
-# Words that assert an international dimension wherever they appear. The
-# region names below are weaker: they also name a conference venue.
-_INTERNATIONAL_STRONG_TRIGGERS = (
-    "国際", "海外", "国外", "世界", "グローバル", "外国", "諸外国",
-)
 _INTERNATIONAL_TRIGGERS = (
     "国際", "海外", "国外", "世界", "グローバル", "外国", "諸外国",
     "欧州", "欧米", "米国", "アジア", "アメリカ", "ヨーロッパ",
@@ -4560,8 +4628,8 @@ _NAMED_PARTNER = re.compile(
     # on the next, which was read as a foreign counterpart named ケンゴ氏 and
     # then judged for international reciprocity and irreplaceability.
     r"[ァ-ヴー]{3,}[ 　]{0,2}(?:氏(?!名)|教授|博士)|"
-    r"(?:TU|ETH|MIT|EPFL)\s*[A-Za-z]*|"
-    r"[A-Z][a-z]+\s+(?:University|Institute)"
+    r"(?<![A-Za-z])(?:TU|ETH|MIT|EPFL)(?:\s+[A-Za-z]+)?(?![A-Za-z])|"
+    r"(?!(?:Kindai|Kinki)\s+University\b)[A-Z][a-z]+\s+(?:University|Institute)"
 )
 # International venues and societies. Publishing there is evidence of
 # international activity, but they are not counterparts.
@@ -4570,7 +4638,7 @@ _NAMED_INTERNATIONAL_VENUE = re.compile(r"(?:IGTE|CEFC|COMPUMAG|ICEM|IEEE)")
 # 「相手先を名指ししていない」 a fair thing to say.
 _INTERNATIONAL_RELATION_MARKERS = (
     "共同研究", "共著", "招へい", "招聘", "招請", "受入", "受け入れ",
-    "派遣", "訪問", "滞在", "連携", "留学", "分担", "共同開発",
+    "派遣", "訪問", "滞在", "連携", "留学", "国際分担", "役割を分担", "共同開発",
     # NOT bare 交流: in an electrical proposal it is alternating current, and
     # a glossary row for 誘導加熱 was read as an international exchange.
     "国際交流", "学術交流", "人的交流",
@@ -4582,7 +4650,7 @@ _INTERNATIONAL_ACTIVITY_MARKERS = _INTERNATIONAL_RELATION_MARKERS + (
 )
 _RECIPROCAL_MARKERS = (
     "相互", "双方向", "還流", "共同研究", "共著", "招へい", "招聘", "派遣",
-    "受入", "交流", "分担", "共同開発", "共同実装",
+    "受入", "国際交流", "学術交流", "人的交流", "役割を分担", "共同開発", "共同実装",
 )
 _ONE_WAY_MARKERS = (
     "追いつく", "追随", "導入する", "学ぶ", "取り入れる", "輸入",
@@ -4640,7 +4708,7 @@ def grant_writing_international_standing_check(text: str) -> dict:
     # in a budget table was read as one, and the proposal was then told to name
     # the counterpart institution it had never claimed to have.
     logistics = re.compile(
-        r"円|旅費|参加費|宿泊|渡航|出張|"
+        r"\d[\d,.]*\s*(?:千|万|億)?円|旅費|参加費|宿泊|渡航|出張|"
         r"\d{4}\s*[/年]\s*\d{1,2}|\d{1,2}\s*[/月]\s*\d{1,2}"
     )
     # 「世界的な社会課題である」 says the problem matters everywhere, not that
@@ -4987,7 +5055,8 @@ _FORM_OVERFLOW_NOTICE = re.compile(
     r"「(?P<field>[^」]{2,40})」は(?P<limit>\d+)ページ以内で"
 )
 _TEX_FIELD_LIMIT = re.compile(
-    r"\\section\{(?P<title>[^{}]+)\}(?P<tail>(?:[^\n]*\n){0,5})",
+    r"\\section\{(?P<title>[^{}]+)\}"
+    r"(?P<tail>(?:(?!\\section\{)[\s\S])*)",
 )
 _TEX_LIMIT_VALUE = re.compile(r"[＜<]{2}\s*最大\s*(?P<pages>\d+)\s*ページ\s*[＞>]{2}")
 
@@ -5044,14 +5113,53 @@ def grant_writing_page_limit_check(pdf_path: str, tex_dir: str = "") -> dict:
                 declared.append((_flatten(match.group("title")), int(limit.group("pages"))))
 
     spans: list[dict] = []
+    risks: list[dict] = []
     starts: list[tuple[int, str, int]] = []
     for title, limit in declared:
         start = next((p["number"] for p in pages if title in p["flat"]), None)
-        if start is not None:
-            starts.append((start, title, limit))
+        if start is None:
+            risks.append({
+                "type": "declared_field_heading_not_found",
+                "severity": "HIGH",
+                "location": "PDF",
+                "field": title,
+                "comment": (
+                    f"上限が宣言された欄「{title}」の見出しをPDF内で確認できない。"
+                ),
+                "recommendation": (
+                    "tex_dirと提出PDFの組合せ、見出し文字列、PDFの文字抽出を確認する。"
+                    "確認できない欄を合格として扱わない。"
+                ),
+            })
+            continue
+        starts.append((start, title, limit))
     starts.sort()
+    duplicate_starts = {
+        page_number
+        for page_number, count in Counter(start for start, _, _ in starts).items()
+        if count > 1
+    }
+    for page_number in sorted(duplicate_starts):
+        fields = [title for start, title, _ in starts if start == page_number]
+        risks.append({
+            "type": "field_headings_share_page",
+            "severity": "HIGH",
+            "location": f"PDF p{page_number}",
+            "fields": fields,
+            "comment": (
+                "複数欄の見出しが同じページで始まり、ページ単位では個別の使用量を"
+                "確定できない: " + "、".join(fields)
+            ),
+            "recommendation": (
+                "欄ごとの開始ページを分けるか、明示的なページ境界を持つ提出PDFで確認する。"
+            ),
+        })
     for position, (start, title, limit) in enumerate(starts):
-        end = starts[position + 1][0] - 1 if position + 1 < len(starts) else len(pages)
+        next_start = next(
+            (other for other, _, _ in starts[position + 1:] if other > start),
+            None,
+        )
+        end = next_start - 1 if next_start is not None else len(pages)
         last = pages[end - 1]
         spans.append({
             "field": title,
@@ -5062,7 +5170,6 @@ def grant_writing_page_limit_check(pdf_path: str, tex_dir: str = "") -> dict:
             "last_page_fill": round(last["bottom"] / text_bottom, 2) if text_bottom else 0.0,
         })
 
-    risks: list[dict] = []
     for page in pages:
         notice = _FORM_OVERFLOW_NOTICE.search(page["flat"])
         if notice:
@@ -5120,10 +5227,8 @@ def grant_writing_page_limit_check(pdf_path: str, tex_dir: str = "") -> dict:
             "source": "page-limit check",
         }
 
-    deductions = sum(
-        5.0 if r["severity"] == "CRITICAL" else 1.5 if r["severity"] == "MEDIUM" else 0.5
-        for r in risks
-    )
+    deduction = {"CRITICAL": 5.0, "HIGH": 3.0, "MEDIUM": 1.5, "LOW": 0.5}
+    deductions = sum(deduction[r["severity"]] for r in risks)
     return {
         "applicable": True,
         "score": max(0.0, round(10.0 - deductions, 1)),
@@ -5524,7 +5629,7 @@ def grant_writing_template_residue_check(text: str) -> dict:
     saw it, purely on form compliance. Both defect classes are mechanical,
     locatable, and fatal in a way no argument about research quality is.
     """
-    text = _read_text_if_path(text)
+    text = _read_source_without_latex_comments(text)
     lines = text.splitlines()
     risks: list[dict] = []
     instructions: list[dict] = []
@@ -5625,8 +5730,8 @@ def grant_writing_vague_claim_verb_check(text: str) -> dict:
     # …再実行した」 names an artefact and states an outcome; asking it to say
     # how is asking it to re-describe finished work.
     completed = re.compile(
-        r"(?:した|した。|してきた|実施した|再実行した|完了した|得た|"
-        r"確認した|発表した|示した)"
+        r"(?:した|してきた|実施した|再実行した|完了した|得た|"
+        r"確認した|発表した|示した)$"
     )
     # The same applies to a record written in the ongoing form. 「…知識を活用
     # して先端技術開発を行っている（S1,2）」 in a これまでの研究活動 field is a
@@ -5637,10 +5742,8 @@ def grant_writing_vague_claim_verb_check(text: str) -> dict:
         verb = next((v for v in _VAGUE_CLAIM_VERBS if v in sentence), None)
         if verb is None:
             continue
-        if completed.search(sentence):
-            continue
         stem = trailing_note.sub("", sentence.strip().rstrip("。．"))
-        if record_ending.search(stem):
+        if completed.search(stem) or record_ending.search(stem):
             continue
         # 「誘導加熱技術を活用する幅広い産業分野」 modifies a noun; it describes
         # who uses the technology, not what this project will do. A claim verb
@@ -5742,8 +5845,8 @@ def grant_writing_kaken_review_format_check(text: str) -> dict:
         "ハッチング",
         "マーカー形状",
     ]
-    color_matches = list(color_figure_pattern.finditer(raw))
-    if color_matches and not any(term in raw for term in mono_terms):
+    color_matches = list(color_figure_pattern.finditer(prose))
+    if color_matches and not any(term in prose for term in mono_terms):
         first = color_matches[0]
         add_risk(
             "color_dependent_figure",
@@ -5935,8 +6038,10 @@ def grant_writing_kaken_review_format_check(text: str) -> dict:
     pub_triggers = ["研究遂行能力", "研究業績", "主要論文", "代表論文", "発表論文", "業績"]
     pub_hit = next((term for term in pub_triggers if term in prose), None)
     identifier_pattern = re.compile(
-        r"(?:19|20)\d{2}|vol\.?\s*\d|no\.?\s*\d|pp\.?\s*\d|doi|DOI|"
-        r"\d+\s*巻|\d+\s*号|第\d+巻",
+        r"vol\.?\s*\d|no\.?\s*\d|pp\.?\s*\d|doi|"
+        r"\d+\s*巻|\d+\s*号|第\d+巻|"
+        r"(?:19|20)\d{2}[^。．\n]{0,80}(?:誌|journal|transactions|proceedings)|"
+        r"(?:誌|journal|transactions|proceedings)[^。．\n]{0,80}(?:19|20)\d{2}",
         flags=re.IGNORECASE,
     )
     if pub_hit is not None and not identifier_pattern.search(raw):
@@ -6343,7 +6448,7 @@ def grant_writing_collaborative_integration_risk_check(text: str) -> dict:
     both sides of the interface, ecosystem positioning, scope control, negative
     results, team readiness, evaluation ethics, and asset provenance.
     """
-    text = _read_text_if_path(text)
+    text = _prose_for_lint(_read_text_if_path(text))
     low = text.lower()
     applicable_hits = _contains_any(
         low,
@@ -6532,11 +6637,20 @@ def _xlsx_sheet_matrix(path: pathlib.Path, sheet_name: str) -> list[list[object]
     """Read cached XLSX cell values with the standard library only."""
     main = f"{{{_XLSX_MAIN_NS}}}"
     doc_rel_id = f"{{{_XLSX_DOC_REL_NS}}}id"
+
+    def visible_string(node: ET.Element | None) -> str:
+        """Read displayed text, excluding East-Asian phonetic ``rPh`` runs."""
+        if node is None or node.tag == f"{main}rPh":
+            return ""
+        if node.tag == f"{main}t":
+            return node.text or ""
+        return "".join(visible_string(child) for child in node)
+
     with zipfile.ZipFile(path) as archive:
         shared: list[str] = []
         if "xl/sharedStrings.xml" in archive.namelist():
             root = ET.fromstring(archive.read("xl/sharedStrings.xml"))
-            shared = ["".join(si.itertext()) for si in root.findall(f"{main}si")]
+            shared = [visible_string(si) for si in root.findall(f"{main}si")]
 
         workbook = ET.fromstring(archive.read("xl/workbook.xml"))
         rel_id = None
@@ -6566,13 +6680,24 @@ def _xlsx_sheet_matrix(path: pathlib.Path, sheet_name: str) -> list[list[object]
         worksheet = ET.fromstring(archive.read(target))
         matrix: list[list[object]] = []
         for row in worksheet.findall(f".//{main}row"):
+            try:
+                row_number = int(row.attrib.get("r", len(matrix) + 1))
+            except ValueError as exc:
+                raise ValueError(
+                    f"invalid worksheet row number {row.attrib.get('r')!r}"
+                ) from exc
+            while len(matrix) < row_number - 1:
+                matrix.append([])
             values: dict[int, object] = {}
+            next_column = 0
             for cell in row.findall(f"{main}c"):
-                column = _xlsx_column_index(cell.attrib.get("r", ""))
+                cell_ref = cell.attrib.get("r", "")
+                column = _xlsx_column_index(cell_ref) if cell_ref else next_column
+                next_column = column + 1
                 cell_type = cell.attrib.get("t", "")
                 if cell_type == "inlineStr":
                     inline = cell.find(f"{main}is")
-                    value: object = "" if inline is None else "".join(inline.itertext())
+                    value: object = visible_string(inline)
                 else:
                     node = cell.find(f"{main}v")
                     raw = "" if node is None or node.text is None else node.text
@@ -6591,6 +6716,29 @@ def _xlsx_sheet_matrix(path: pathlib.Path, sheet_name: str) -> list[list[object]
                 values[column] = value
             width = max(values, default=-1) + 1
             matrix.append([values.get(index) for index in range(width)])
+
+        # Excel stores only the top-left value of a merged range. Propagate it
+        # so a vertically merged expenditure category applies to every item.
+        for merged in worksheet.findall(f".//{main}mergeCell"):
+            ref = merged.attrib.get("ref", "")
+            match = re.fullmatch(r"([A-Za-z]+)(\d+):([A-Za-z]+)(\d+)", ref)
+            if not match:
+                continue
+            first_col = _xlsx_column_index(match.group(1))
+            first_row = int(match.group(2)) - 1
+            last_col = _xlsx_column_index(match.group(3))
+            last_row = int(match.group(4)) - 1
+            if first_row >= len(matrix) or first_col >= len(matrix[first_row]):
+                continue
+            merged_value = matrix[first_row][first_col]
+            for row_index in range(first_row, last_row + 1):
+                while len(matrix) <= row_index:
+                    matrix.append([])
+                while len(matrix[row_index]) <= last_col:
+                    matrix[row_index].append(None)
+                for column_index in range(first_col, last_col + 1):
+                    if matrix[row_index][column_index] in {None, ""}:
+                        matrix[row_index][column_index] = merged_value
         return matrix
 
 
@@ -6605,7 +6753,7 @@ def _csv_matrix(path: pathlib.Path) -> list[list[object]]:
             continue
     if decoded is None:
         decoded = payload.decode("utf-8", errors="replace")
-    return [list(row) for row in csv.reader(decoded.splitlines())]
+    return [list(row) for row in csv.reader(io.StringIO(decoded, newline=""))]
 
 
 def _budget_ledger_rows(path: pathlib.Path, sheet_name: str) -> list[dict]:
@@ -6619,7 +6767,7 @@ def _budget_ledger_rows(path: pathlib.Path, sheet_name: str) -> list[dict]:
     if not matrix:
         return []
 
-    header_index = 0
+    header_index = None
     for index, row in enumerate(matrix):
         headers = [str(value or "").strip().lower() for value in row]
         if any("fy" in value or "年度" in value for value in headers) and any(
@@ -6627,6 +6775,10 @@ def _budget_ledger_rows(path: pathlib.Path, sheet_name: str) -> list[dict]:
         ):
             header_index = index
             break
+    if header_index is None:
+        raise ValueError(
+            f"budget header with fiscal-year and amount columns not found in {path}"
+        )
     header = [str(value or "").strip().lower() for value in matrix[header_index]]
 
     def find_column(predicate, fallback):
@@ -6638,54 +6790,102 @@ def _budget_ledger_rows(path: pathlib.Path, sheet_name: str) -> list[dict]:
     )
     year_col = find_column(lambda value: value.endswith("/fy") or value == "fy" or "年度" in value, 1)
     item_col = find_column(
-        lambda value: value.endswith("/item") or value == "item" or value.startswith("品目/"),
+        lambda value: (
+            value.endswith("/item")
+            or value == "item"
+            or value == "品目"
+            or value.startswith("品目/")
+            or ("item" in value and "品目" in value)
+        ),
         4,
     )
-    amount_col = find_column(lambda value: value.endswith("/amount") or "金額" in value, 7)
+    amount_col = find_column(
+        lambda value: value.endswith("/amount") or value == "amount" or "金額" in value,
+        7,
+    )
 
     rows: list[dict] = []
     for source_row, row in enumerate(matrix[header_index + 1 :], header_index + 2):
-        def cell(column):
-            return row[column] if column < len(row) else None
+        def cell(column, current_row=row):
+            return current_row[column] if column < len(current_row) else None
 
+        values = {
+            "category": cell(category_col),
+            "year": cell(year_col),
+            "item": cell(item_col),
+            "amount": cell(amount_col),
+        }
+        if all(value is None or str(value).strip() == "" for value in values.values()):
+            continue
+        category = str(values["category"] or "").strip()
+        item = re.sub(r"\s+", " ", str(values["item"] or "")).strip()
+        if category.casefold() in {"合計", "総計", "total", "grand total"}:
+            continue
+        if item.casefold() in {"合計", "総計", "total", "grand total"}:
+            continue
         try:
-            year = int(float(str(cell(year_col)).replace(",", "")))
-            amount = float(str(cell(amount_col)).replace(",", ""))
-        except (TypeError, ValueError):
-            continue
-        item = re.sub(r"\s+", " ", str(cell(item_col) or "")).strip()
-        category = str(cell(category_col) or "").strip()
+            year_text = str(values["year"]).replace(",", "").strip()
+            year_text = re.sub(
+                r"^(?:FY)?\s*(\d{4})(?:年度|年)?$",
+                r"\1",
+                year_text,
+                flags=re.IGNORECASE,
+            )
+            amount_text = str(values["amount"]).replace(",", "").strip()
+            amount_text = re.sub(r"\s*千円$", "", amount_text)
+            year_value = Decimal(year_text)
+            amount_value = Decimal(amount_text)
+            if year_value != year_value.to_integral_value():
+                raise ValueError("fiscal year is not an integer")
+            year = int(year_value)
+        except (ArithmeticError, ValueError) as exc:
+            raise ValueError(
+                f"invalid budget row {source_row}: category={category!r}, "
+                f"year={values['year']!r}, item={item!r}, amount={values['amount']!r}"
+            ) from exc
         if not item or not category:
-            continue
+            raise ValueError(
+                f"incomplete budget row {source_row}: category={category!r}, "
+                f"year={year}, item={item!r}, amount={values['amount']!r}"
+            )
         rows.append({
             "category": category,
             "year": year,
             "item": item,
-            "amount_thousand_yen": int(amount) if amount.is_integer() else amount,
+            "amount_thousand_yen": (
+                int(amount_value)
+                if amount_value == amount_value.to_integral_value()
+                else float(amount_value)
+            ),
             "source_row": source_row,
         })
     return rows
 
 
 def _budget_totals(rows: list[dict]) -> dict:
-    year_totals: dict[str, float] = {}
-    category_totals: dict[str, float] = {}
+    year_totals: dict[str, Decimal] = {}
+    category_totals: dict[str, Decimal] = {}
     for row in rows:
         year = str(row["year"])
         category = row["category"]
-        amount = float(row["amount_thousand_yen"])
-        year_totals[year] = year_totals.get(year, 0.0) + amount
-        category_totals[category] = category_totals.get(category, 0.0) + amount
+        amount = Decimal(str(row["amount_thousand_yen"]))
+        year_totals[year] = year_totals.get(year, Decimal(0)) + amount
+        category_totals[category] = category_totals.get(category, Decimal(0)) + amount
 
     def clean(values):
         return {
-            key: int(value) if float(value).is_integer() else round(value, 3)
+            key: int(value) if value == value.to_integral_value() else float(value)
             for key, value in sorted(values.items())
         }
 
-    total = sum(float(row["amount_thousand_yen"]) for row in rows)
+    total = sum(
+        (Decimal(str(row["amount_thousand_yen"])) for row in rows),
+        Decimal(0),
+    )
     return {
-        "grand_total_thousand_yen": int(total) if total.is_integer() else round(total, 3),
+        "grand_total_thousand_yen": (
+            int(total) if total == total.to_integral_value() else float(total)
+        ),
         "year_totals_thousand_yen": clean(year_totals),
         "category_totals_thousand_yen": clean(category_totals),
     }
@@ -6696,7 +6896,7 @@ def _expected_totals_json(payload: str, label: str) -> dict[str, float]:
         return {}
     parsed = json.loads(payload)
     if not isinstance(parsed, dict):
-        raise ValueError(f"{label} must be a JSON object")
+        raise TypeError(f"{label} must be a JSON object")
     return {str(key): float(value) for key, value in parsed.items()}
 
 
@@ -6730,12 +6930,20 @@ def _budget_category_label(code: str) -> str:
     return aliases[0] if aliases else code
 
 
-def _totals_by_category_code(values: dict) -> dict[str, float]:
-    merged: dict[str, float] = {}
+def _totals_by_category_code(values: dict) -> dict[str, Decimal]:
+    merged: dict[str, Decimal] = {}
     for key, value in values.items():
         code = _budget_category_code(key)
-        merged[code] = merged.get(code, 0.0) + float(value)
+        merged[code] = merged.get(code, Decimal(0)) + Decimal(str(value))
     return merged
+
+
+def _decimal_number(value: object) -> Decimal:
+    return Decimal(str(value))
+
+
+def _clean_decimal(value: Decimal) -> int | float:
+    return int(value) if value == value.to_integral_value() else float(value)
 
 
 def grant_writing_budget_source_consistency_check(
@@ -6768,13 +6976,14 @@ def grant_writing_budget_source_consistency_check(
     differences: list[dict] = []
 
     if expected_total_thousand_yen is not None:
-        actual = float(totals["grand_total_thousand_yen"])
-        if actual != float(expected_total_thousand_yen):
+        actual = _decimal_number(totals["grand_total_thousand_yen"])
+        expected = _decimal_number(expected_total_thousand_yen)
+        if actual != expected:
             differences.append({
                 "type": "grand_total_mismatch",
                 "expected": expected_total_thousand_yen,
                 "actual": totals["grand_total_thousand_yen"],
-                "delta": round(actual - float(expected_total_thousand_yen), 3),
+                "delta": _clean_decimal(actual - expected),
             })
 
     for label, expected, actual in (
@@ -6801,7 +7010,7 @@ def grant_writing_budget_source_consistency_check(
             if got is None:
                 # 「設備備品費 0」 is the applicant saying the ledger holds no
                 # such row; an absent category agrees with a declared zero.
-                if float(want) == 0.0:
+                if _decimal_number(want) == 0:
                     continue
                 differences.append({
                     "type": f"{label}_not_in_ledger",
@@ -6810,13 +7019,14 @@ def grant_writing_budget_source_consistency_check(
                     "actual": None,
                     "delta": None,
                 })
-            elif float(got) != float(want):
+            elif _decimal_number(got) != _decimal_number(want):
+                delta = _decimal_number(got) - _decimal_number(want)
                 differences.append({
                     "type": f"{label}_total_mismatch",
                     label: key,
                     "expected": want,
                     "actual": got,
-                    "delta": round(float(got) - float(want), 3),
+                    "delta": _clean_decimal(delta),
                 })
 
     comparison = None
@@ -6877,8 +7087,9 @@ def grant_writing_budget_source_consistency_check(
 
 
 _BUDGET_COST_TOKENS = (
-    "円", "費", "単価", "積算", "計上", "予算", "経費", "見積", "金額", "内訳",
+    "費", "単価", "積算", "計上", "予算", "経費", "見積", "金額", "内訳",
 )
+_YEN_AMOUNT = re.compile(r"\d[\d,.]*\s*(?:千|万|億)?円")
 
 
 def _mentions_cost_nearby(text: str, keyword: str) -> bool:
@@ -6889,10 +7100,10 @@ def _mentions_cost_nearby(text: str, keyword: str) -> bool:
     right window -- a cost token one sentence away belongs to a different
     claim -- so this is what separates "mentions it" from "budgets for it".
     """
-    needle = keyword.lower()
     for sentence in re.split(r"(?<=[。．!?！？\n])", text):
-        if needle in sentence.lower() and any(
-            token in sentence for token in _BUDGET_COST_TOKENS
+        if _contains_any(sentence.lower(), [keyword]) and (
+            any(token in sentence for token in _BUDGET_COST_TOKENS)
+            or _YEN_AMOUNT.search(sentence)
         ):
             return True
     return False
@@ -6907,7 +7118,7 @@ def grant_writing_budget_alignment_check(text: str) -> dict:
     reports ``applicable: False`` rather than a low score. When it does apply,
     a cost keyword only counts if a money token sits next to it.
     """
-    text = _read_text_if_path(text)
+    text = _prose_for_lint(_read_text_if_path(text))
     low = text.lower()
     axes = {
         "ai_agent_costs": ["claude", "codex", "fable", "生成ai", "llm", "ai"],
@@ -7260,6 +7471,7 @@ _DETECTOR_TOOLS = frozenset({
 _DETECTOR_RESULT_KEYS = frozenset({
     "sentence",
     "bedrock",
+    "translationese",
     "weak",
     "central_claim_consistency",
     "vague_claim_verb",
@@ -7281,10 +7493,9 @@ _DETECTOR_RESULT_KEYS = frozenset({
 def _find_compiled_pdf(text_or_path: str, pdf: str) -> pathlib.Path | None:
     """Locate the compiled proposal whose page allowances should be checked.
 
-    An explicit path always wins. Otherwise the PDF is only inferred when the
-    source directory holds exactly one of them, because guessing which of
-    several PDFs is the submission would report page counts for the wrong
-    document.
+    An explicit path always wins. Otherwise a same-stem sibling wins even when
+    backups or template PDFs share the directory. A sole remaining PDF is the
+    final fallback; ambiguous candidates are reported by the health report.
     """
     if pdf:
         candidate = pathlib.Path(pdf)
@@ -7300,6 +7511,9 @@ def _find_compiled_pdf(text_or_path: str, pdf: str) -> pathlib.Path | None:
     source = pathlib.Path(text_or_path)
     if source.suffix.lower() not in {".md", ".tex", ".txt"} or not source.is_file():
         return None
+    same_stem = source.with_suffix(".pdf")
+    if same_stem.is_file():
+        return same_stem
     candidates = sorted(source.parent.glob("*.pdf"))
     return candidates[0] if len(candidates) == 1 else None
 
@@ -7545,7 +7759,14 @@ def grant_writing_health_report(
     if "pages" not in skip_set:
         compiled = _find_compiled_pdf(text_or_path, pdf)
         if compiled is not None:
-            limits = grant_writing_page_limit_check(str(compiled))
+            tex_dir = ""
+            source_path = None
+            if len(str(text_or_path)) <= 260 and "\n" not in str(text_or_path):
+                candidate = pathlib.Path(str(text_or_path))
+                if candidate.is_file() and candidate.suffix.lower() == ".tex":
+                    source_path = candidate
+                    tex_dir = str(candidate.parent)
+            limits = grant_writing_page_limit_check(str(compiled), tex_dir=tex_dir)
             detailed_results["page_limit"] = limits
             if limits["applicable"]:
                 detailed_scores["page_limit"] = limits["score"]
@@ -7562,6 +7783,31 @@ def grant_writing_health_report(
                         "score": limits["score"],
                         "comments": limits["comments"][:5],
                     })
+        else:
+            source_path = None
+            if len(str(text_or_path)) <= 260 and "\n" not in str(text_or_path):
+                candidate = pathlib.Path(str(text_or_path))
+                if candidate.is_file() and candidate.suffix.lower() == ".tex":
+                    source_path = candidate
+            if source_path is not None:
+                sibling_pdfs = sorted(source_path.parent.glob("*.pdf"))
+                reason = (
+                    "compiled PDF not found; pass pdf=..."
+                    if not sibling_pdfs
+                    else "compiled PDF is ambiguous; pass pdf=..."
+                )
+                detailed_results["page_limit"] = {
+                    "applicable": False,
+                    "score": None,
+                    "risk_count": 0,
+                    "risks": [],
+                    "fields": [],
+                    "comments": [],
+                    "recommendations": [],
+                    "reason": reason,
+                    "pdf_candidates": [str(path) for path in sibling_pdfs],
+                    "source": "page-limit check",
+                }
 
     if "capability" not in skip_set:
         capability = grant_writing_capability_responsibility_check(text)
@@ -7762,6 +8008,26 @@ def grant_writing_health_report(
     if "readability" not in skip_set:
         readability = grant_writing_adjacent_reviewer_readability_check(text)
         detailed_results["adjacent_reviewer_readability"] = readability
+        if readability.get("applicable") and readability.get("risks"):
+            priority_issues.append({
+                "tool": "readability",
+                "name": "adjacent_reviewer_readability_check",
+                "severity": max(
+                    (risk["severity"] for risk in readability["risks"]),
+                    key=lambda value: {"HIGH": 2, "MEDIUM": 1, "LOW": 0}[value],
+                ),
+                "score": None,
+                "comments": readability["comments"][:5],
+            })
+
+    if "japanese" not in skip_set:
+        japanese = grant_writing_japanese_readability_score(
+            text,
+            document_type="grant_proposal",
+        )
+        detailed_results["japanese_readability"] = japanese
+        if japanese["applicable"]:
+            detailed_scores["japanese_readability"] = japanese["score"] / 10
 
     if "japanese" not in skip_set:
         japanese = grant_writing_japanese_readability_score(
@@ -7775,6 +8041,17 @@ def grant_writing_health_report(
     if "momentum" not in skip_set:
         momentum = grant_writing_reviewer_momentum_check(text)
         detailed_results["reviewer_momentum"] = momentum
+        if momentum.get("applicable") and momentum.get("risks"):
+            priority_issues.append({
+                "tool": "momentum",
+                "name": "reviewer_momentum_check",
+                "severity": max(
+                    (risk["severity"] for risk in momentum["risks"]),
+                    key=lambda value: {"HIGH": 2, "MEDIUM": 1, "LOW": 0}[value],
+                ),
+                "score": None,
+                "comments": momentum["comments"][:5],
+            })
 
     if "weak" not in skip_set:
         weak = grant_writing_count_weak_expressions(text)
@@ -7791,7 +8068,7 @@ def grant_writing_health_report(
             })
 
     if "bedrock" not in skip_set:
-        bedrock = grant_writing_lint_bedrock(_prose_for_lint(text))
+        bedrock = grant_writing_lint_bedrock(text)
         detailed_results["bedrock"] = bedrock
         issue_count = bedrock.get("issue_count", 0)
         score = max(0.0, round(10.0 - issue_count * 1.5, 1))
@@ -7903,3 +8180,8 @@ def grant_writing_health_report(
         ),
         "source": "radia_mcp.grant_writing public document server",
     }
+# Achievement section: the applicant's own papers, from the canonical bibliography
+from ._publications import (  # noqa: F401
+    grant_writing_achievement_count_check,
+    grant_writing_publication_list,
+)

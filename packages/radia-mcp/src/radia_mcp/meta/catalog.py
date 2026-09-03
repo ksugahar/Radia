@@ -127,6 +127,7 @@ CATALOG: dict[str, dict[str, Any]] = {
         "primary_tools": ["matlab_agent_guide",
                             "matlab_extension_contract",
                             "matlab_official_server_config",
+                            "matlab_official_server_status",
                             "matlab_radia_mex_contract",
                             "matlab_optuna_mcp_route",
                             "matlab_optuna_simulink_contract",

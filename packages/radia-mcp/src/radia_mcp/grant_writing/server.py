@@ -55,7 +55,7 @@ rejects research-meeting manuscripts and routes them to paper-writing because
 scientific traceability and funding-review decision flow are different tasks.
 
 Promoted to radia-mcp so the document-writing servers are registered in
-parallel: paper-writing / figure / grant-writing / presentation.
+parallel: paper-writing / grant-writing.
 
 Usage:
     mcp-server-grant-writing              # stdio
@@ -119,7 +119,7 @@ register_status_tool(
         "and integrated health reports."
     ),
     subpackage="radia_mcp.grant_writing",
-    related_servers=["paper-writing", "figure", "presentation", "document-meta"],
+    related_servers=["paper-writing", "document-meta"],
     optional_deps=[],
 )
 
@@ -147,7 +147,8 @@ def main():
             "参照日、税込区分、最低購入単位、有効期限、為替、端数処理を記録する。"
         )
         report = grant_writing_health_report(sample, program="kddi_digital")
-        assert report["defect_counts"]["total"] >= 0
+        assert report["tools_run"]
+        assert 0.0 <= report["defect_score"] <= 10.0
         readable = grant_writing_japanese_readability_score(
             "設計条件の選択には時間を要する。"
             "本研究では候補順位が一致する条件を明らかにする。"
