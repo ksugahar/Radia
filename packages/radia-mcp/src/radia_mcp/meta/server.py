@@ -15,11 +15,13 @@ import importlib
 import shutil
 import sys
 import time
+from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 
 from . import catalog, bug_patterns
 from ..common import register_status_tool
+from ..common.mcp_contract import validate_solver_artifact_identity
 
 mcp = FastMCP("mcp-server-radia-meta")
 
@@ -115,6 +117,20 @@ def radia_mcp_related(name: str) -> dict:
         "n_related": len(related),
         "related": related,
     }
+
+
+@mcp.tool()
+def radia_mcp_validate_solver_artifact(
+    artifact: dict[str, Any],
+) -> dict[str, Any]:
+    """Validate neutral solver-artifact identity before domain-specific gates.
+
+    This rejects stale or ambiguous result packages that omit solver and
+    producer versions, UTC creation time, SI units, coordinate system,
+    digests, or bounded timing evidence. It does not assert physical
+    correctness; pass the accepted artifact to its domain-specific gate next.
+    """
+    return validate_solver_artifact_identity(artifact)
 
 
 # ============================================================
