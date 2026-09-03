@@ -58,6 +58,8 @@ run:  python endpack_spectrometer_saturation.py            # the linear-cost des
       python endpack_spectrometer_saturation.py --fig        # + figure
       python endpack_spectrometer_saturation.py --b-op 1.6   # a higher operating field
 """
+
+from _validation_output import validation_output
 import argparse
 import json
 import math
@@ -212,7 +214,7 @@ def main():
           f"     independently validated -- kappa by the linear equipotential\n"
           f"     (endpack_two_plane), the BH + A-formulation by clebsch_dipole_saturation_3d.")
 
-    jpath = os.path.splitext(os.path.abspath(__file__))[0] + ".json"
+    jpath = validation_output("endpack_spectrometer_saturation.json")
     with open(jpath, "w") as fh:
         json.dump(res, fh, indent=2)
     print(f"\nsaved {jpath}")

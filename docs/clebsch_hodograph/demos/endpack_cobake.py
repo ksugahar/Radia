@@ -40,6 +40,8 @@ precision tensor LOFT (OCC ThruSections) is the clean construction.
 run:  python endpack_cobake.py            # the 4-case co-bake table
       python endpack_cobake.py --fig        # + figure
 """
+
+from _validation_output import validation_output
 import argparse
 import json
 import os
@@ -233,7 +235,7 @@ def main():
     print("  research-grade); the per-lever CAUSATION is golden-locked separately (Plane 1")
     print("  shim zeroes b_3; the endpack depth sweep drives the corner through 1).")
 
-    jpath = os.path.splitext(os.path.abspath(__file__))[0] + ".json"
+    jpath = validation_output("endpack_cobake.json")
     with open(jpath, "w") as fh:
         json.dump(res, fh, indent=2)
     print(f"\nsaved {jpath}")

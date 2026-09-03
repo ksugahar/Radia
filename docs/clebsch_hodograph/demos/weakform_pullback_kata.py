@@ -56,6 +56,8 @@ VERIFIED HERE (symbolic, sympy)
 
 run:  python weakform_pullback_kata.py
 """
+
+from _validation_output import validation_output
 import os
 
 import sympy as sp
@@ -141,7 +143,7 @@ def main():
     print("\nall conformal maps give W = diag(mu, 1/mu):", out["all_diag_mu_invmu"])
 
     here = os.path.dirname(__file__)
-    with open(os.path.join(here, "weakform_pullback_kata.json"), "w") as fh:
+    with validation_output("weakform_pullback_kata.json").open("w", encoding="utf-8") as fh:
         json.dump(out, fh, indent=2)
     print("\nsaved weakform_pullback_kata.json")
 

@@ -1085,7 +1085,8 @@ the 3-D-ness is *not* end-localised); foliate-and-perturb lands only for **long*
 magnets, with the fringe dropping to ~10% near `L/gap ≈ 40` (typical beamline
 dipole). Figure `leaf_coupling_perturbation_3d_sweep.png` (left: fringe vs
 `L/gap` log-log with the `gap/L` line; right: body leaf-stacking error vs length),
-data `leaf_coupling_perturbation_3d_sweep.json`. Golden
+data `validation_test/clebsch_hodograph/demos/leaf_coupling_perturbation_3d_sweep.json`.
+Golden
 `test_leaf_coupling_perturbation_3d`. *(Honest scope: this measures the SCALING
 of the BARE-end 3-D-ness; an **equipotential-following** end (§3.2 `z_p(y)` /
 Delferriere `r(z)=Δ(½−z/L)^{1/n}`) removes the fringe's HARMONIC contamination —
@@ -1126,7 +1127,8 @@ cell (`L/g=3` → **+50%** fringe) is non-perturbative — the sector ENDS are a
 genuine 3-D problem, exact two-plane reflection only as `L/g → ∞`. Figure
 `ffag_sector_two_plane.png` (left: Plane A `k(r)` with the A/φ bracket; right:
 Plane B `B_z(s)/B_body` — flat sector body + the end fringe), data
-`ffag_sector_two_plane.json`. Golden `test_ffag_sector_two_plane`.
+`validation_test/clebsch_hodograph/demos/ffag_sector_two_plane.json`. Golden
+`test_ffag_sector_two_plane`.
 
 **Rung 2 (the 3-D reflection, `--rung2`, ngsolve, golden-tested).** Sweep `g(r)`
 around the sector arc — **revolve** the `(r,z)` gap cross-section about the bend

@@ -44,6 +44,8 @@ run:  python leaf_coupling_perturbation_3d.py              # single magnet (L=L_
       python leaf_coupling_perturbation_3d.py --sweep       # aspect-ratio scaling
       python leaf_coupling_perturbation_3d.py --sweep --fig # + figure
 """
+
+from _validation_output import validation_output
 import argparse
 import json
 import math
@@ -291,7 +293,7 @@ def main():
           f"   (0th-stack {res['bbar1_0th_leafstack_Tm']*1e3:.2f} vs true "
           f"{res['bbar1_true_Tm']*1e3:.2f} mT.m)")
     here = os.path.dirname(os.path.abspath(__file__))
-    with open(os.path.join(here, "leaf_coupling_perturbation_3d.json"), "w") as fh:
+    with validation_output("leaf_coupling_perturbation_3d.json").open("w", encoding="utf-8") as fh:
         json.dump(res, fh, indent=2)
     print("saved leaf_coupling_perturbation_3d.json")
     if args.fig:
@@ -302,8 +304,7 @@ def main():
         print("ASPECT-RATIO SWEEP -- leaf coupling vs L/gap")
         print("=" * 74)
         sw = aspect_sweep(order=args.order)
-        with open(os.path.join(here, "leaf_coupling_perturbation_3d_sweep.json"),
-                  "w") as fh:
+        with validation_output("leaf_coupling_perturbation_3d_sweep.json").open("w", encoding="utf-8") as fh:
             json.dump(sw, fh, indent=2)
         print("saved leaf_coupling_perturbation_3d_sweep.json")
         print(f"{'L/gap':<8}{'fringe excess':<16}{'body delta':<12}")

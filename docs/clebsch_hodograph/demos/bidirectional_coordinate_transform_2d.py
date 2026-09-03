@@ -54,6 +54,8 @@ unit square mapped by `F`:
 run:  python bidirectional_coordinate_transform_2d.py   [--fig]
 """
 
+from _validation_output import validation_output
+
 import os
 import sys
 
@@ -258,7 +260,7 @@ def main():
     print("  axisymmetric weight =", s["axisym_weight"])
 
     here = os.path.dirname(__file__)
-    with open(os.path.join(here, "bidirectional_coordinate_transform_2d.json"), "w") as fh:
+    with validation_output("bidirectional_coordinate_transform_2d.json").open("w", encoding="utf-8") as fh:
         json.dump(out, fh, indent=2)
     print("\nsaved bidirectional_coordinate_transform_2d.json")
     if "--fig" in sys.argv:

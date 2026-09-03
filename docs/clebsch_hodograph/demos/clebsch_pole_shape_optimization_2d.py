@@ -26,6 +26,8 @@ content of the optimized pole.
 run:  python clebsch_pole_shape_optimization_2d.py   [--fig]
 """
 
+from _validation_output import validation_output
+
 import os
 import sys
 
@@ -191,7 +193,7 @@ def main():
 
     here = os.path.dirname(os.path.abspath(__file__))
     res = {k: (v if not isinstance(v, dict) else v) for k, v in out.items()}
-    with open(os.path.join(here, "clebsch_pole_shape_optimization_2d.json"), "w") as fh:
+    with validation_output("clebsch_pole_shape_optimization_2d.json").open("w", encoding="utf-8") as fh:
         json.dump(res, fh, indent=2)
     print("\nsaved clebsch_pole_shape_optimization_2d.json")
     if "--fig" in sys.argv:

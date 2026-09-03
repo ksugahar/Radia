@@ -47,6 +47,8 @@ break) is the next rung.
 run:  python combined_function_frenet_sweep.py          # cross-section + Frenet sweep
       python combined_function_frenet_sweep.py --fig      # + figure
 """
+
+from _validation_output import validation_output
 import argparse
 import json
 import math
@@ -225,7 +227,7 @@ def main():
         "sweep": {k: sw[k] for k in sw if k != "rows"},
         "sweep_rows": [{k: r[k] for k in r} for r in sw["rows"]],
     }
-    jpath = os.path.splitext(os.path.abspath(__file__))[0] + ".json"
+    jpath = validation_output("combined_function_frenet_sweep.json")
     with open(jpath, "w") as f:
         json.dump(out, f, indent=2)
     print(f"\nsaved {jpath}")
