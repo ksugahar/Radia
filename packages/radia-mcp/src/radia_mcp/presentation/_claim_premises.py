@@ -78,13 +78,30 @@ def _stem(word: str) -> str:
     return w
 
 
+# Qualifiers that sit between the negation and the thing denied: "no
+# empirical crossover parameter" denies the crossover parameter, not the
+# empiricism.  The premise moves to the word after the qualifier.
+_QUALIFIER = {
+    "empirical", "extra", "additional", "further", "explicit", "external",
+    "special", "separate", "new", "manual", "hand", "arbitrary", "ad", "hoc",
+    "artificial", "heuristic", "free", "user", "tunable", "adjustable",
+}
+_WORD = re.compile(r"[A-Za-z][A-Za-z-]{2,}")
+
+
 def _negations(text: str):
     """Yield (negation, premise, stem, span) for every negated claim in text."""
     for m in _NEG_EN.finditer(text):
         prem = m.group("premise")
+        end = m.end()
+        while prem.lower() in _QUALIFIER:
+            nxt = _WORD.match(text, end + 1) if end < len(text) and text[end] == " " else None
+            if not nxt:
+                break
+            prem, end = nxt.group(0), nxt.end()
         if prem.lower() in _STOP:
             continue
-        yield m.group("neg"), prem, _stem(prem), m.span()
+        yield m.group("neg"), prem, _stem(prem), (m.start(), end)
     for m in _FREE_EN.finditer(text):
         yield m.group("neg"), m.group("premise"), _stem(m.group("premise")), m.span()
     for m in _NEG_JA.finditer(text):
