@@ -34,6 +34,12 @@ ALPHA = 0.6                       # saturation strength (strong: nu varies sever
 _AEX = sin(pi * x) * sin(pi * y)
 
 
+@pytest.fixture(autouse=True)
+def _taskmanager():
+    with ng.TaskManager():
+        yield
+
+
 def _mesh(n):
     return MakeStructured2DMesh(quads=False, nx=n, ny=n)
 
@@ -58,14 +64,58 @@ def _l2(gf, ref, mesh):
     return math.sqrt(Integrate((gf - ref) ** 2, mesh))
 
 
-def test_newton_recovers_manufactured():
-    """Newton recovers the unique manufactured root A_ex to FEM accuracy."""
+def _newton_error(maxerr=None):
     from ngsolve.solvers import Newton
+
     mesh = _mesh(16)
     fes = H1(mesh, order=3, dirichlet=".*")
-    a, gfu, Aex = _build(fes)
-    Newton(a, gfu, maxit=40, printing=False)
-    err = _l2(gfu, Aex, mesh)
+    a, gfu, exact = _build(fes)
+    options = {"maxit": 40, "printing": False}
+    if maxerr is not None:
+        options["maxerr"] = maxerr
+    Newton(a, gfu, **options)
+    return _l2(gfu, exact, mesh)
+
+
+def _saturation_relative_spread():
+    mesh = _mesh(16)
+    fes = H1(mesh, order=3, dirichlet=".*")
+    exact = GridFunction(fes)
+    exact.Set(_AEX)
+    grad2 = grad(exact) * grad(exact)
+    area = Integrate(CF(1), mesh)
+    mean = Integrate(_nu(grad2), mesh) / area
+    std = math.sqrt(Integrate((_nu(grad2) - mean) ** 2, mesh) / area)
+    return float(std / mean)
+
+
+def _newton_convergence():
+    mesh = _mesh(16)
+    fes = H1(mesh, order=3, dirichlet=".*")
+    a, gfu, exact = _build(fes)
+
+    pert = GridFunction(fes)
+    pert.Set(sin(2 * pi * x) * sin(2 * pi * y))
+    proj = Projector(fes.FreeDofs(), True)
+    gfu.vec.data = exact.vec
+    gfu.vec.data += 0.1 * (proj * pert.vec)
+
+    residual_history = []
+    res = gfu.vec.CreateVector()
+    for _ in range(10):
+        a.Apply(gfu.vec, res)
+        res.data = proj * res
+        residual_history.append(res.Norm())
+        if residual_history[-1] < 1e-11:
+            break
+        a.AssembleLinearization(gfu.vec)
+        gfu.vec.data -= a.mat.Inverse(fes.FreeDofs()) * res
+    return residual_history, _l2(gfu, exact, mesh)
+
+
+def test_newton_recovers_manufactured():
+    """Newton recovers the unique manufactured root A_ex to FEM accuracy."""
+    err = _newton_error()
     assert err < 1e-5, "Newton did not recover A_ex: ||A-A_ex||=%.2e" % err
 
 
@@ -75,14 +125,7 @@ def test_tighter_tolerance_reaches_discretization_floor():
     the same discrete root.  The gap to A_ex is the mesh/order discretization
     error, not the solver tolerance -- confirming A_ex is recovered to
     discretization accuracy (and tightening the tolerance does not worsen it)."""
-    from ngsolve.solvers import Newton
-    mesh = _mesh(16)
-    fes = H1(mesh, order=3, dirichlet=".*")
-    errs = []
-    for tol in (1e-6, 1e-11):
-        a, gfu, Aex = _build(fes)
-        Newton(a, gfu, maxit=40, maxerr=tol, printing=False)
-        errs.append(_l2(gfu, Aex, mesh))
+    errs = [_newton_error(tol) for tol in (1e-6, 1e-11)]
     # both at the small discretization floor; tighter tol does not increase it.
     assert errs[0] < 1e-5, "error not at the discretization floor: %s" % errs
     assert errs[1] <= errs[0] * (1 + 1e-6), \
@@ -91,40 +134,14 @@ def test_tighter_tolerance_reaches_discretization_floor():
 
 def test_saturation_is_active():
     """The reluctivity genuinely VARIES (>10%) over the domain (not secretly linear)."""
-    mesh = _mesh(16)
-    fes = H1(mesh, order=3, dirichlet=".*")
-    Aex = GridFunction(fes); Aex.Set(_AEX)
-    g2 = grad(Aex) * grad(Aex)
-    area = Integrate(CF(1), mesh)
-    mean = Integrate(_nu(g2), mesh) / area
-    std = math.sqrt(Integrate((_nu(g2) - mean) ** 2, mesh) / area)
-    assert std / mean > 0.1, "saturation not active: nu spread %.3f (mean %.3f)" % (std, mean)
+    spread = _saturation_relative_spread()
+    assert spread > 0.1, "saturation not active: relative nu spread %.3f" % spread
 
 
 def test_newton_quadratic_convergence():
     """From a perturbation of the known root, Newton converges QUADRATICALLY:
     accelerating residual drop, reaching ~machine zero in a few steps."""
-    mesh = _mesh(16)
-    fes = H1(mesh, order=3, dirichlet=".*")
-    a, gfu, Aex = _build(fes)
-
-    # start AT the root, then perturb the interior (free) dofs by 10%.
-    pert = GridFunction(fes); pert.Set(sin(2 * pi * x) * sin(2 * pi * y))
-    proj = Projector(fes.FreeDofs(), True)
-    gfu.vec.data = Aex.vec
-    gfu.vec.data += 0.1 * (proj * pert.vec)
-
-    res = gfu.vec.CreateVector()
-    hist = []
-    for _ in range(10):
-        a.Apply(gfu.vec, res)
-        res.data = proj * res
-        hist.append(res.Norm())
-        if hist[-1] < 1e-11:
-            break
-        a.AssembleLinearization(gfu.vec)
-        gfu.vec.data -= a.mat.Inverse(fes.FreeDofs()) * res
-
+    hist, root_error = _newton_convergence()
     assert hist[-1] < 1e-10, "Newton did not reach machine zero: %s" % hist
     assert len(hist) <= 6, "too many iterations (%d) for quadratic: %s" % (len(hist), hist)
     # quadratic signature: the per-step drop factor ACCELERATES.
@@ -132,7 +149,7 @@ def test_newton_quadratic_convergence():
     assert ratios[-1] > ratios[0], "convergence not accelerating (not quadratic): %s" % hist
     assert max(ratios) > 1e3, "no quadratic-sized leap seen: %s" % hist
     # and the recovered field is back on the root after the perturbation
-    assert _l2(gfu, Aex, mesh) < 1e-5
+    assert root_error < 1e-5
 
 
 if __name__ == "__main__":
