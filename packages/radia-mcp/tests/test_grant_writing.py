@@ -1159,6 +1159,41 @@ def test_adjacent_reviewer_readability_accepts_defined_scope_and_named_staging()
     assert "bare_process_divided_into_stages" not in types
 
 
+def test_adjacent_reviewer_flags_incomplete_research_platform_role_chain():
+    text = (
+        "菅原（研究代表者）は、開境界電磁界解析と磁気モーメント法を研究してきた。"
+        "これらを高次有限要素、誘導加熱、静止器・加速器電磁石へ展開している。"
+        "Radia関連リポジトリでは、共同利用者が接続する。"
+    )
+
+    result = gw.grant_writing_adjacent_reviewer_readability_check(text)
+    risks = {risk["type"]: risk for risk in result["risks"]}
+
+    assert "research_platform_role_chain_incomplete" in risks
+    risk = risks["research_platform_role_chain_incomplete"]
+    assert set(risk["missing_roles"]) == {
+        "named_manager",
+        "platform_function",
+        "inclusive_user_and_validation",
+    }
+    assert "専門分野・対象・機能語を削らず" in risk["recommendation"]
+
+
+def test_adjacent_reviewer_accepts_complete_research_platform_role_chain():
+    text = (
+        "菅原（研究代表者）は、開境界電磁界解析と磁気モーメント法を研究してきた。"
+        "これらを高次有限要素、誘導加熱、静止器・加速器電磁石へ展開している。"
+        "菅原が整備・管理するRadia関連リポジトリでは、離散化、メッシュ生成、"
+        "最適化をAI向け知識・実行インターフェース（MCP）で接続し、"
+        "研究者が利用・検証できる環境を構築している。"
+    )
+
+    result = gw.grant_writing_adjacent_reviewer_readability_check(text)
+    types = {risk["type"] for risk in result["risks"]}
+
+    assert "research_platform_role_chain_incomplete" not in types
+
+
 def test_adjacent_reviewer_readability_flags_takeaway_after_evidence():
     text = (
         "菅原・長嶺らは、Cauer縮約をGalerkin系へ実装した。"
