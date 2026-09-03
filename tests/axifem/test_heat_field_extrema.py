@@ -1,25 +1,28 @@
 """Focused regressions for physical temperature-range reporting."""
 
-from pathlib import Path
-import sys
-
 import numpy as np
 import pytest
 
 ng = pytest.importorskip("ngsolve")
-from netgen.meshing import (  # noqa: E402
+from netgen.meshing import (
     EdgeDescriptor,
     Element1D,
     Element2D,
     FaceDescriptor,
-    Mesh as NetgenMesh,
     MeshPoint,
     Pnt,
 )
+from netgen.meshing import (
+    Mesh as NetgenMesh,
+)
 
-PANELS = Path(__file__).resolve().parents[2] / "src" / "radia" / "panels"
-sys.path.insert(0, str(PANELS))
-from calc_heat import _temperature_extrema  # noqa: E402
+from radia.panels.calc_heat import _temperature_extrema
+
+
+@pytest.fixture(scope="module", autouse=True)
+def _taskmanager():
+    with ng.TaskManager():
+        yield
 
 
 def _single_quad_mesh():
