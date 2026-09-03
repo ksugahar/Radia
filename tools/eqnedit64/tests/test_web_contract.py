@@ -21,6 +21,22 @@ def test_web_source_is_radia_owned_tex_only() -> None:
     assert "TeXソース" in FRAGMENT
 
 
+def test_source_surfaces_share_a_cjk_safe_font_stack() -> None:
+    assert (
+        "--eqed-source-font: ui-monospace, 'Cascadia Mono', "
+        "'Yu Gothic UI', Meiryo, monospace"
+    ) in SOURCE
+    assert re.search(
+        r"\.eqed-source\s*\{[^}]*font-family:\s*var\(--eqed-source-font\)",
+        SOURCE,
+    )
+    assert re.search(
+        r"\.eqed-recent\s*\{[^}]*font-family:\s*var\(--eqed-source-font\)",
+        SOURCE,
+    )
+    assert "font-family: Consolas" not in SOURCE
+
+
 def test_palette_and_learning_contract() -> None:
     for label in ["基本", "解析", "集合・記号", "幾何", "ギリシャ"]:
         assert f'label: "{label}"' in SOURCE
