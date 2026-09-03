@@ -1,12 +1,11 @@
 """Fast production gates for curved Cubit/Netgen volume meshes."""
 
 import gzip
+import importlib.util
 import json
 from pathlib import Path
-import importlib.util
 
 import pytest
-
 
 pytest.importorskip("ngsolve")
 
@@ -31,8 +30,14 @@ check_vol_boundary_domain_ownership = CHECK_MODULE.check_vol_boundary_domain_own
 check_label_contract = CHECK_MODULE.check_label_contract
 check_mesh_quality = CHECK_MODULE.check_mesh_quality
 check_main = CHECK_MODULE.main
-from netgen.csg import CSGeometry, OrthoBrick, Pnt, Sphere  # noqa: E402
-import ngsolve as ng  # noqa: E402
+import ngsolve as ng
+from netgen.csg import CSGeometry, OrthoBrick, Pnt, Sphere
+
+
+@pytest.fixture(scope="module", autouse=True)
+def _taskmanager():
+    with ng.TaskManager():
+        yield
 
 
 def _conductor_box():
