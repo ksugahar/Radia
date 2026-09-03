@@ -1,7 +1,8 @@
 """Authoritative catalog of all radia_mcp servers.
 
-Source of truth: this dict. .mcp.json (in the Radia monorepo root)
-should mirror it.
+Source of truth: this dict together with the package entry points. Generated
+documentation may project this catalog, but no workstation-local MCP client
+configuration is part of the repository contract.
 
 The catalog includes the `meta` server itself (self-referential entry)
 so that `radia_mcp_overview` reports a complete picture and

@@ -73,6 +73,13 @@ def test_meta_catalog_has_at_least_30_servers():
         f"catalog only has {len(catalog.CATALOG)} entries"
 
 
+def test_meta_catalog_does_not_require_local_mcp_client_config():
+    """The package catalog must not depend on an ignored workstation file."""
+    from radia_mcp.meta import catalog
+
+    assert ".mcp.json" not in (catalog.__doc__ or "")
+
+
 def test_every_cataloged_server_has_register_status_tool():
     """Policy: every server.py in catalog must wire register_status_tool.
 
