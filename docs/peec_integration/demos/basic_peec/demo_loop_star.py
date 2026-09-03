@@ -27,15 +27,9 @@ Date: 2026-01-15
 
 import numpy as np
 import matplotlib.pyplot as plt
-import sys
-import os
-
-# Add build path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../../build-msvc'))
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../../src/radia'))
 
 # Import analysis framework
-from analysis import UnifiedAnalysis, MU_0
+from radia.analysis import UnifiedAnalysis, MU_0
 
 
 def create_simple_loop_star_model():
