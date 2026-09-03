@@ -33,8 +33,8 @@ Run:
     python rotating_magnet_eddy.py            # Rm sweep + Yano case -> json + png
     python rotating_magnet_eddy.py --maxh 0.001 --ncfg 24   # quick / coarse
 
-Outputs rotating_magnet_eddy_results.json and rotating_magnet_eddy.png next to
-this script (Data Persistence Policy).
+Outputs durable JSON under validation_test/maglev/demos and keeps the public
+figure next to this script.
 """
 from __future__ import annotations
 import argparse
@@ -48,6 +48,8 @@ from ngsolve import (Mesh, HCurl, H1, VectorH1, BilinearForm, LinearForm,
                      GridFunction, curl, grad, InnerProduct, dx, Integrate,
                      TaskManager)
 from netgen.occ import Box, OCCGeometry
+
+from _validation_output import validation_output
 
 MU0 = 4 * np.pi * 1e-7
 SIGMA = 5.8e7              # copper conductivity [S/m]
@@ -261,8 +263,9 @@ def main():
     args = ap.parse_args()
     here = os.path.dirname(os.path.abspath(__file__))
     res = run(maxh=args.maxh, ncfg=args.ncfg)
-    with open(os.path.join(here, "rotating_magnet_eddy_results.json"), "w") as f:
-        json.dump(res, f, indent=2)
+    output = validation_output("rotating_magnet_eddy_results.json", here)
+    with open(output, "w") as f:
+        json.dump(res, f, indent=2, allow_nan=False)
     if not args.no_figure:
         try:
             make_figure(res, os.path.join(here, "rotating_magnet_eddy.png"))
@@ -271,7 +274,7 @@ def main():
     print("\n=== Rm crossover ===")
     print("  Rm < ~0.1  : source-only J = -sigma dA_s/dt suffices (no per-step FEM) -- Yano's case")
     print("  Rm > ~1    : eddy reaction matters; CLN(M=20) reproduces full-FEM to ~1e-4 at ~1000x")
-    print("  saved rotating_magnet_eddy_results.json")
+    print(f"  saved {output}")
 
 
 if __name__ == "__main__":

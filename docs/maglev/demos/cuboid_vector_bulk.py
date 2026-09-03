@@ -37,6 +37,8 @@ from ngsolve import Mesh, TaskManager
 
 from radia.maglev.mixed_galerkin import bulk_foster_vector_via_eigen
 
+from _validation_output import validation_output
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 MU_0 = 4 * math.pi * 1e-7
 SIGMA_CU = 5.8e7
@@ -86,9 +88,10 @@ def main():
                        "partner of the scalar H1 bulk; physical exterior-matched "
                        "tensor is ellipsoid/ellipsoid_alpha_tensor_3d.py"),
     }
-    with open(os.path.join(HERE, "cuboid_vector_bulk_results.json"), "w") as fp:
-        json.dump(out, fp, indent=2)
-    print("wrote cuboid_vector_bulk_results.json")
+    output = validation_output("cuboid_vector_bulk_results.json", HERE)
+    with open(output, "w") as fp:
+        json.dump(out, fp, indent=2, allow_nan=False)
+    print(f"wrote {output}")
 
 
 if __name__ == "__main__":

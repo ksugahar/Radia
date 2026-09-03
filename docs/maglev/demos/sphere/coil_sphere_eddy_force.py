@@ -73,6 +73,8 @@ from ngsolve import (
 )
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, os.path.join(HERE, ".."))
+from _validation_output import validation_output  # noqa: E402
 sys.path.insert(0, HERE)
 # reuse the verified copper parameters + skin-depth helper.  NOTE: the
 # imported G_exact() hardcodes the module-level a = 5 mm, so for the 1 mm
@@ -410,7 +412,7 @@ def main():
           f"{res1['a_over_L']:.2f} (a = 1 mm), confirming it is the dipole "
           f"approximation.")
 
-    # ----- persist results JSON (committed location, next to script) -----
+    # ----- persist durable validation evidence -----
     results = {
         "description": ("Point-dipole approximation error in AC magnetic "
                         "levitation: FULL axisymmetric eddy-current Lorentz "
@@ -438,9 +440,9 @@ def main():
             "ratio_moves_toward_one_as_aL_shrinks": bool(dev1 < dev5),
         },
     }
-    out_json = os.path.join(HERE, "coil_sphere_eddy_force_results.json")
+    out_json = validation_output("coil_sphere_eddy_force_results.json", HERE)
     with open(out_json, "w") as fp:
-        json.dump(results, fp, indent=2)
+        json.dump(results, fp, indent=2, allow_nan=False)
         fp.write("\n")
     print(f"\nwrote {out_json}")
 

@@ -267,9 +267,7 @@ def run_case(maxh_m, outer_quad, export_model=None):
 
 def _height_offsets_mm_from_reference():
     sweep_file = (
-        HERE.parent.parent
-        / "docs"
-        / "maglev"
+        HERE
         / "demos"
         / "team28"
         / "team28_cln_sweep_results.json"

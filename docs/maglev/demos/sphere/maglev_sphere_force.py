@@ -41,11 +41,14 @@ Run:  python maglev_sphere_force.py     (a few seconds; pure numpy)
 """
 import json
 import os
+import sys
 
 import numpy as np
 
 mu0 = 4 * np.pi * 1e-7
 HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, os.path.join(HERE, ".."))
+from _validation_output import validation_output  # noqa: E402
 
 # ----- sphere -----
 a = 5e-3          # radius 5 mm
@@ -199,9 +202,10 @@ def main():
         "freq_Hz": fs_plot.tolist(),
         "lift_N": lift_plot,
     }
-    with open(os.path.join(HERE, "maglev_sphere_force_results.json"), "w") as fp:
-        json.dump(data, fp, indent=2)
-    print(f"\n wrote maglev_sphere_force_results.json")
+    output = validation_output("maglev_sphere_force_results.json", HERE)
+    with open(output, "w") as fp:
+        json.dump(data, fp, indent=2, allow_nan=False)
+    print(f"\n wrote {output}")
     plot(fs_plot, np.array(lift_plot), F_pc)
 
 

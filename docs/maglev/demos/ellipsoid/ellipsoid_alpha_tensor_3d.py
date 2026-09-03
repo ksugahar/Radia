@@ -52,10 +52,12 @@ from ngsolve import (
 import radia.sparsesolv_ngsolve as ssn
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, os.path.join(HERE, ".."))
 sys.path.insert(0, HERE)
 sys.path.insert(0, os.path.join(HERE, "..", "sphere"))  # maglev_sphere_force
 from maglev_sphere_force import G_exact, delta  # noqa: E402
 import ellipsoid_alpha_tensor as ET  # noqa: E402
+from _validation_output import validation_output  # noqa: E402
 
 mu0 = 4 * np.pi * 1e-7
 SIGMA = 5.8e7
@@ -237,9 +239,10 @@ def main():
         "triaxial_kappa_hf_analytic_m3": {d: -V / (1 - N[i]) for i, d in enumerate("xyz")},
         "reproduces_analytic_ordering": bool(ordering_ok),
     }
-    with open(os.path.join(HERE, "ellipsoid_alpha_tensor_3d_results.json"), "w") as fp:
-        json.dump(data, fp, indent=2)
-    print("\n wrote ellipsoid_alpha_tensor_3d_results.json")
+    output = validation_output("ellipsoid_alpha_tensor_3d_results.json", HERE)
+    with open(output, "w") as fp:
+        json.dump(data, fp, indent=2, allow_nan=False)
+    print(f"\n wrote {output}")
     print("\nSUMMARY: transverse m=1 alpha VERIFIED -- 3D matches the analytic sphere"
           "\nto ~2-3%, isotropic, and the triaxial splits with the analytic ordering."
           "\nKey: a fine AIR shell (Re = air reaction dipole) + CompactAMS for the mesh.")

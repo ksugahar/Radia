@@ -36,6 +36,8 @@ import numpy as np
 from numpy import pi
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, os.path.join(HERE, ".."))
+from _validation_output import validation_output  # noqa: E402
 sys.path.insert(0, HERE)
 
 from ngsolve import GridFunction, TaskManager, ngsglobals
@@ -125,8 +127,8 @@ def main():
     rel_best = abs(F_best - F_vol) / abs(F_vol)
     print(f"  surface (r_c={radii[-1]/a:.0f}a) vs volume Lorentz: {rel_best*100:.2f}%")
 
-    # ----- optional L-L dipole context from the committed results json -----
-    jpath = os.path.join(HERE, "coil_sphere_eddy_force_results.json")
+    # ----- optional L-L dipole context from durable validation evidence -----
+    jpath = validation_output("coil_sphere_eddy_force_results.json", HERE)
     if os.path.isfile(jpath):
         with open(jpath) as fp:
             jd = json.load(fp)

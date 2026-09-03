@@ -37,12 +37,16 @@ Run:  python ellipsoid_alpha_tensor.py
 """
 import json
 import os
+import sys
 
 import numpy as np
 from scipy.integrate import quad
 
 mu0 = 4 * np.pi * 1e-7
 HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, os.path.join(HERE, ".."))
+sys.path.insert(0, os.path.join(HERE, "..", "sphere"))
+from _validation_output import validation_output  # noqa: E402
 
 
 # ---------------------------------------------------------------------------
@@ -196,9 +200,10 @@ def main():
         "lift_factor_inv_1_minus_N": lift_factor(a).tolist(),
         "cases_demag": {k: demag_tensor(v).tolist() for k, v in cases.items()},
     }
-    with open(os.path.join(HERE, "ellipsoid_alpha_tensor_results.json"), "w") as fp:
-        json.dump(data, fp, indent=2)
-    print("\n wrote ellipsoid_alpha_tensor_results.json")
+    output = validation_output("ellipsoid_alpha_tensor_results.json", HERE)
+    with open(output, "w") as fp:
+        json.dump(data, fp, indent=2, allow_nan=False)
+    print(f"\n wrote {output}")
     plot(a)
 
 

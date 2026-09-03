@@ -4,6 +4,9 @@ Curated, standalone-runnable demonstrations (README-backed, per the lab
 Sample Promotion Ladder).  The broad research corpus is in
 `research_cln/`; the IGTE paper in `papers/`.
 
+Figures remain with these public demonstrations. Durable numerical records are
+written to `validation_test/maglev/demos/`, where acceptance tests own them.
+
 | Folder / script | Topic | Geometry |
 |-----------------|-------|----------|
 | `cube_alpha_sweep.py` | Mixed-Galerkin `alpha(s)` sweep (CAD-direct edges vs mesh-derived), the headline package API demo | Cu cube |

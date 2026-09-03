@@ -24,6 +24,7 @@ the sphere: a body lifts most when the field is along its shortest axis
 folder).  The cross-folder import is wired with one
 `sys.path.insert(0, os.path.join(HERE, "..", "sphere"))` line.
 
-**Outputs**: `*_results.json` + `ellipsoid_alpha_tensor_lift.png` /
-`ellipsoid_alpha_omega_axisym.png` (demag factors, kappa, lift ratio,
-alpha_c(omega) curves with HF anchor checks).
+**Outputs**: figures remain here for the public demonstration. Checked
+`*_results.json` records live under
+`validation_test/maglev/demos/ellipsoid/` and preserve the demag-factor,
+kappa, lift-ratio, and full-frequency FEM evidence.

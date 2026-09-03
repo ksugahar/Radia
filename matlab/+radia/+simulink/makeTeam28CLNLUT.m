@@ -1,7 +1,7 @@
 function lut = makeTeam28CLNLUT(source, options)
 %MAKETEAM28CLNLUT Load the validated TEAM 28 six-stage CLN force curve.
 %   LUT = radia.simulink.makeTeam28CLNLUT() loads the canonical result
-%   artifact under docs/maglev/demos/team28.  The stored TEAM 28 integral is
+%   artifact under validation_test/maglev/demos/team28. The stored TEAM 28 integral is
 %   twice the physical time-average Lorentz force, so force_N is corrected by
 %   PhysicalForceFactor (default 0.5).  HeightOffset_m is dZ relative to the
 %   10.8 mm reference disk position.
@@ -25,7 +25,7 @@ else
     source = string(source);
     if strlength(source) == 0
         repoRoot = fileparts(fileparts(fileparts(fileparts(mfilename("fullpath")))));
-        source = fullfile(repoRoot, "docs", "maglev", "demos", "team28", ...
+        source = fullfile(repoRoot, "validation_test", "maglev", "demos", "team28", ...
             "team28_cln_sweep_results.json");
     end
     if ~isfile(source)

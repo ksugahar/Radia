@@ -46,8 +46,10 @@ import numpy as np
 import radia as rad
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, os.path.join(HERE, ".."))
 sys.path.insert(0, HERE)
 from maglev_sphere_force import G_exact, delta, a, sigma  # noqa: E402
+from _validation_output import validation_output  # noqa: E402
 
 mu0 = 4 * np.pi * 1e-7
 rho_Cu = 8960.0          # copper mass density [kg/m^3]
@@ -281,7 +283,7 @@ def main():
         print("ALL CHECKS PASSED")
         print("=" * 70)
 
-        # ----- persist results JSON (committed location, next to script) -----
+        # ----- persist durable validation evidence -----
         results = {
             "description": "AC levitation equilibrium of a Cu sphere above a coil "
                            "(Radia open-boundary field + verified induced-dipole force)",
@@ -325,9 +327,9 @@ def main():
                 "B2_T2": b2.tolist(),
             },
         }
-        out_json = os.path.join(HERE, "coil_maglev_equilibrium_results.json")
+        out_json = validation_output("coil_maglev_equilibrium_results.json", HERE)
         with open(out_json, "w") as fp:
-            json.dump(results, fp, indent=2)
+            json.dump(results, fp, indent=2, allow_nan=False)
         print(f"\nwrote {out_json}")
 
         plot(zs, Fz, WEIGHT, z_star, F_peak, z_peak)
