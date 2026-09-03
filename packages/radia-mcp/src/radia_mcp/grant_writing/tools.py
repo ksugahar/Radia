@@ -3843,8 +3843,11 @@ def grant_writing_paired_object_relation_check(text: str, objects: str = "") -> 
     # 「誘導加熱と加速器電磁石の二課題」 lists the pair as one set; that is not
     # a sentence about how one relates to the other, and it is how a proposal
     # legitimately refers to both at once.
+    # 「誘導加熱、静止器・加速器電磁石へ展開している」 is also a list: allow a
+    # short co-listed item between the two names.
     listing = re.compile(
-        rf"{re.escape(a)}[と、・及び]{{1,2}}{re.escape(b)}|{re.escape(b)}[と、・及び]{{1,2}}{re.escape(a)}"
+        rf"{re.escape(a)}[と、・及び][^、。]{{0,8}}{re.escape(b)}|"
+        rf"{re.escape(b)}[と、・及び][^、。]{{0,8}}{re.escape(a)}"
     )
     both = [s for s in sentences if a in s and b in s and not listing.search(s)]
     unrelated = [s for s in both if not _PAIRED_OBJECT_RELATION.search(s)]
