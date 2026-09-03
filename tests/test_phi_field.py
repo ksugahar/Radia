@@ -10,13 +10,9 @@ Tests verify that:
 Author: Radia Development Team
 Date: 2025-12-31
 """
-import sys
-import os
-import pytest
 import numpy as np
+import pytest
 
-# Add src/radia to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src', 'radia'))
 import radia as rad
 
 # Constants

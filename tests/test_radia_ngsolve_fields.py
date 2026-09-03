@@ -6,14 +6,10 @@ to NGSolve via the RadiaFieldCF coefficient function.
 """
 
 import sys
-import os
-import numpy as np
-
-# Add the src/radia directory to path (relative)
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../src/radia'))
 
 # Import NGSolve first to set up DLL paths
 import ngsolve  # noqa: F401
+import numpy as np
 
 import radia as rad
 
@@ -76,7 +72,7 @@ def test_coil_fields():
         # Verify dimension
         if ftype == 'phi':
             assert cf.dim == 1, f"Expected dim=1 for phi, got {cf.dim}"
-            print(f"  [OK] Phi is scalar (dim=1)")
+            print("  [OK] Phi is scalar (dim=1)")
         else:
             assert cf.dim == 3, f"Expected dim=3 for {ftype}, got {cf.dim}"
             print(f"  [OK] {ftype.upper()} is vector (dim=3)")
@@ -126,17 +122,17 @@ def test_coil_fields():
         if abs(H[i]) > 1e-10:
             ratio = B[i] / (MU0 * H[i])
             assert abs(ratio - 1.0) < 0.01, f"B/mu0H ratio = {ratio}, expected 1.0"
-    print(f"  [OK] B = mu0 * H verified")
+    print("  [OK] B = mu0 * H verified")
 
     # Check A (on axis, A_phi should be ~0, but A_x, A_y may have small numerical values)
     # The z-component should be exactly 0
     assert abs(A[2]) < 1e-10, f"Expected A_z ~ 0, got {A[2]}"
-    print(f"  [OK] A_z = 0 on axis (A_phi direction has no z-component)")
+    print("  [OK] A_z = 0 on axis (A_phi direction has no z-component)")
 
     # Check M (should be zero for current source)
     M_mag = np.sqrt(M[0]**2 + M[1]**2 + M[2]**2)
     assert M_mag < 1e-10, f"Expected M ~ 0 for coil, got |M| = {M_mag}"
-    print(f"  [OK] M = 0 for coil")
+    print("  [OK] M = 0 for coil")
 
     # Phi for current source: scalar magnetic potential is 0 (only non-zero for magnetic charges)
     print(f"  [OK] Phi = {Phi:.6e} A (zero for current source, as expected)")
@@ -230,7 +226,7 @@ def test_magnet_fields():
     # Check M is zero outside the magnet
     M_mag = np.sqrt(M[0]**2 + M[1]**2 + M[2]**2)
     assert M_mag < 1e-6, f"Expected M ~ 0 outside magnet, got |M| = {M_mag}"
-    print(f"  [OK] M = 0 outside magnet")
+    print("  [OK] M = 0 outside magnet")
 
     print("\n" + "=" * 60)
     print("TEST PASSED: All field types work correctly for magnet")

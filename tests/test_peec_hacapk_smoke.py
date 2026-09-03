@@ -15,20 +15,17 @@ Checks:
   (2) PEECHACApKSolver public path: build H-matrix L, physical self/mutual
       inductance signs + decay, complex BiCGSTAB convergence at 100 kHz.
 """
-import os
 import sys
 
 import numpy as np
 import pytest
-
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../src/radia"))
 
 # Skip cleanly when the C++ extension is not built (CI minimal-dep collect).
 _pb = pytest.importorskip("radia._radia_pybind")
 if not hasattr(_pb, "HACApKPEECManager"):
     pytest.skip("radia built without HACApKPEECManager", allow_module_level=True)
 
-from peec_hacapk_solver import PEECHACApKSolver  # noqa: E402
+from radia.peec_hacapk_solver import PEECHACApKSolver  # noqa: E402
 
 SIGMA_CU = 5.8e7
 

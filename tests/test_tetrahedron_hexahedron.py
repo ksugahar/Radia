@@ -4,12 +4,9 @@ Test ObjTetrahedron and ObjHexahedron APIs.
 These tests verify that the tetrahedron and hexahedron creation APIs
 work correctly for creating magnetic elements.
 """
-import sys
-import os
 import numpy as np
 import pytest
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../src/radia'))
 import radia as rad
 
 
