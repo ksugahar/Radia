@@ -1,0 +1,50 @@
+{
+  "schema": "radia.validation.eddy-analytical.v1",
+  "generated_at_utc": "2026-09-03T06:40:25Z",
+  "record_kind": "historic-executed-validation-record",
+  "source_notebook": "validation_test/eddy_current_analytical_validation/validation_suite.ipynb",
+  "notebook_sha256": "4945881bc4232b20482aace5625d8deec70826b6ba46228bc8a40ac840387bb1",
+  "evidence_source": "Committed executed notebook and README analytical sweep table.",
+  "versions": {
+    "runtime": "unrecorded-historical-run"
+  },
+  "configuration": {
+    "geometry": "conducting sphere in a uniform AC magnetic field",
+    "sphere_radius_m": 0.01,
+    "applied_field_T": 0.001,
+    "mesh": "OCC, maxh=R/3, curve order 3",
+    "materials": [
+      "copper",
+      "steel"
+    ],
+    "frequencies_hz": [
+      100,
+      500,
+      1000,
+      5000,
+      7000,
+      10000,
+      50000
+    ]
+  },
+  "acceptance": {
+    "observable": "H_t_rms",
+    "reference": "Smythe closed-form solution",
+    "method": "FEM scattered-field",
+    "max_absolute_relative_error_percent": 3.0
+  },
+  "result": {
+    "case_count": 14,
+    "max_absolute_relative_error_percent": 2.9,
+    "verdict": "pass",
+    "notes": [
+      "The scattered-field FEM route is the accepted H_t and Joule-loss reference in this corpus.",
+      "The total-field HCurl boundary-trace route is intentionally not accepted for this observable."
+    ]
+  },
+  "provenance": {
+    "host": "unrecorded-historical-run",
+    "runtime_versions": "unrecorded-historical-run",
+    "recorded_from": "2026-04-13 committed validation evidence"
+  }
+}

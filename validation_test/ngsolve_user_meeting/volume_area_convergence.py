@@ -85,7 +85,7 @@ def run_occ_convergence(
             })
 
     return {
-        "schema": "radia.docs.ngsolve_user_meeting.volume_area_convergence.v1",
+        "schema": "radia.validation.ngsolve-user-meeting-volume-area-convergence.v1",
         "generated_at_utc": _dt.datetime.now(
             _dt.timezone.utc
         ).isoformat(timespec="seconds").replace("+00:00", "Z"),

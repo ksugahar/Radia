@@ -1,8 +1,8 @@
 {
-  "schema": "radia.docs.peec_bema_convergence.v1",
+  "schema": "radia.validation.peec-bema-convergence.v1",
   "generated_at_utc": "2026-06-28T08:42:55Z",
-  "notebook": "docs/peec_bema_convergence/peec_bema_convergence.ipynb",
-  "source_raw_json": "docs/peec_bema_convergence/3turnCoil_peec_bema_convergence_2026_05_13.json",
+  "notebook": "validation_test/peec_bema_convergence/peec_bema_convergence.ipynb",
+  "source_raw_json": "validation_test/peec_bema_convergence/3turnCoil_peec_bema_convergence_2026_05_13.json",
   "source_raw_json_sha256": "d74edcd380de8e78e31042513caa5afe8592e59a87367dcb6151864b199643d8",
   "versions": {
     "python_version": "3.12.10",
@@ -257,5 +257,5 @@
       }
     }
   },
-  "notebook_sha256": "467a58762310fb7ced78d3492b37c2b3f3ab75ad146a70c4050cba3d313082e7"
+  "notebook_sha256": "a2365292bc0cc35b43b3e84f19f103d3fe9ea16642f261eeceabcefba6ae541a"
 }

@@ -69,7 +69,7 @@ directory; interactive WebGUI scenes remain the notebook explanation layer.
 - [PEEC_SURFACE_IMPEDANCE.md](peec/PEEC_SURFACE_IMPEDANCE.md) - Surface impedance formulation and SPICE export
 - [NPORT_BLOCK_LANCZOS_SPICE.md](peec/NPORT_BLOCK_LANCZOS_SPICE.md) - N-port Block Lanczos algorithm for SPICE-compatible circuit extraction
 - [ltspice/README.md](ltspice/README.md) - Built-in `radia.ltspice` conversion, topology gates, CLI, MCP, and MATLAB bridge
-- [peec_bema_convergence/peec_bema_convergence.ipynb](peec_bema_convergence/peec_bema_convergence.ipynb) - Result-bearing 3turnCoil PEEC vs BEM-A convergence demonstration.
+- [PEEC/BEM-A convergence validation](../validation_test/peec_bema_convergence/) - Result-bearing 3turnCoil convergence evidence.
 - [PEEC solver benchmark validation](../validation_test/solver_benchmarks/README.md) - Dense Ruehli vs HACApK timing, scaling, and crossover evidence kept outside the public demo corpus.
 
 > **For "how do I author a STEP that PEEC can solve?"**: query
@@ -126,7 +126,7 @@ directory; interactive WebGUI scenes remain the notebook explanation layer.
 - [export_meg.md](cubit/export_meg.md) - MEG export (Gifu Univ. FEM mesh format)
 - [export_femeem.md](cubit/export_femeem.md) - FEMEEM format export (Gifu Univ.)
 - [export_exodus.md](cubit/export_exodus.md) - Exodus II export (Cubit native)
-- [ngsolve_user_meeting/volume_area_convergence.ipynb](ngsolve_user_meeting/volume_area_convergence.ipynb) - Result-bearing OCC `mesh.Curve(p)` sphere volume/area p-convergence companion, with JSON results.
+- [NGSolve User Meeting convergence validation](../validation_test/ngsolve_user_meeting/) - Result-bearing OCC `mesh.Curve(p)` sphere volume/area p-convergence evidence.
 
 ## Removed (historical reference)
 

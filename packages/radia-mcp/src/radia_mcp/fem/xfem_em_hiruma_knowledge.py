@@ -27,7 +27,7 @@ Differences from solid-mechanics XFEM (Belytschko-Black 1999):
     physics, not jumps or singularities.
 
 Lab files (Sugahara research line, beta-1 Phase 1-4 benchmark):
-    repo:/docs/hiruma_xfem_comparison/hiruma_xfem_comparison.ipynb
+    repo:/validation_test/hiruma_xfem_comparison/hiruma_xfem_comparison.ipynb
         (one consolidated notebook; sections:)
         phase1 - CFEM baseline vs Bessel
         phase2 - NGSolve EM-XFEM impl.
@@ -47,11 +47,11 @@ from __future__ import annotations
 
 LAB_FILES = {
     # Promoted 2026-06-26: the per-phase scripts are now SECTIONS of one notebook.
-    "notebook":       r"repo:/docs/hiruma_xfem_comparison/hiruma_xfem_comparison.ipynb",
-    "benchmark_dir":  r"repo:/docs/hiruma_xfem_comparison/",
-    "phase1_results": r"repo:/docs/hiruma_xfem_comparison/results_phase1.json",
-    "phase4_results": r"repo:/docs/hiruma_xfem_comparison/phase4_xfem_hankel_results.json",
-    "phase4_fig":     r"repo:/docs/hiruma_xfem_comparison/phase4_xfem_hankel_conditioning.png",
+    "notebook":       r"repo:/validation_test/hiruma_xfem_comparison/hiruma_xfem_comparison.ipynb",
+    "benchmark_dir":  r"repo:/validation_test/hiruma_xfem_comparison/",
+    "phase1_results": r"repo:/validation_test/hiruma_xfem_comparison/results_phase1.json",
+    "phase4_results": r"repo:/validation_test/hiruma_xfem_comparison/phase4_xfem_hankel_results.json",
+    "phase4_fig":     r"repo:/validation_test/hiruma_xfem_comparison/phase4_xfem_hankel_conditioning.png",
 }
 
 
@@ -123,7 +123,7 @@ Do NOT use EM-XFEM if:
   - `radia_mcp.radia_ngsolve.cln_sibc_orthogonal`:
        decision framework: when XFEM vs SIBC vs augmented CLN
        (topic 'xfem_vs_sibc')
-  - docs/hiruma_xfem_comparison/:
+  - validation_test/hiruma_xfem_comparison/:
        reproducible benchmark (Phase 1-4)
 
 ## Three XFEM variants — do not confuse
@@ -366,7 +366,7 @@ upstream NGSolve features (no ngsxfem add-on).
 
 ## Reproducer
 
-    cd repo:/docs/hiruma_xfem_comparison/
+    cd repo:/validation_test/hiruma_xfem_comparison/
     jupyter nbconvert --to notebook --execute --inplace hiruma_xfem_comparison.ipynb
     # the Phase 2 XFEM enrichment section runs in ~30-90 s (omega sweep)
     # output: STATUS.md table, results_phase2.npz
@@ -538,9 +538,9 @@ XFEM's role is now precisely circumscribed:
 
 ## Files
 
-    docs/hiruma_xfem_comparison/hiruma_xfem_comparison.ipynb   (Phase 4 section)
-    docs/hiruma_xfem_comparison/phase4_xfem_hankel_conditioning.png
-    docs/hiruma_xfem_comparison/phase4_xfem_hankel_results.json
+    validation_test/hiruma_xfem_comparison/hiruma_xfem_comparison.ipynb   (Phase 4 section)
+    validation_test/hiruma_xfem_comparison/phase4_xfem_hankel_conditioning.png
+    validation_test/hiruma_xfem_comparison/phase4_xfem_hankel_results.json
     memory/project_xfem_cln_hankel_no_improvement.md
 """
 
@@ -817,7 +817,7 @@ REPRODUCTION = r"""
 ## Files
 
 ```
-repo:/docs/hiruma_xfem_comparison/
+repo:/validation_test/hiruma_xfem_comparison/
     hiruma_xfem_comparison.ipynb            - consolidated Phase 1-4 notebook
         (sections: phase1 CFEM baseline; phase2 Hiruma XFEM enrichment;
          phase3 sqrt(s) Schur [deprecated Pade predecessor]; phase3b
@@ -840,7 +840,7 @@ gradients.
 ## Run order
 
 ```bash
-cd repo:/docs/hiruma_xfem_comparison/
+cd repo:/validation_test/hiruma_xfem_comparison/
 
 # Run all Phase 1-4 sections (consolidated notebook, ~19 s total)
 jupyter nbconvert --to notebook --execute --inplace hiruma_xfem_comparison.ipynb
@@ -893,7 +893,7 @@ TOPICS = {
 def _lab_files_block() -> str:
     """Render LAB_FILES as a markdown table for display via the MCP tool."""
     lines = [
-        "# Lab files (repo:/docs/hiruma_xfem_comparison/)",
+        "# Lab files (repo:/validation_test/hiruma_xfem_comparison/)",
         "",
         "| Key | Path |",
         "|-----|------|",

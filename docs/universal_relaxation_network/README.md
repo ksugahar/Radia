@@ -51,6 +51,10 @@ universal_relaxation_network/
   cq_urn_bridge_results.json      # Machine-readable CQ bridge checks
 ```
 
+Benchmark and validation JSON records are stored under
+`validation_test/universal_relaxation_network/`; `docs/` retains the public
+notebooks, narrative, and embedded demonstration results.
+
 ## Quick Start
 
 ```python

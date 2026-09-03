@@ -319,7 +319,12 @@ def run_focused_benchmarks():
         'results': [{k: (bool(v) if isinstance(v, np.bool_) else v) for k, v in asdict(r).items()} for r in results]
     }
 
-    output_file = os.path.join(os.path.dirname(__file__), 'urn_benchmark_focused.json')
+    output_dir = os.path.abspath(os.path.join(
+        os.path.dirname(__file__), '..', '..', 'validation_test',
+        'universal_relaxation_network',
+    ))
+    os.makedirs(output_dir, exist_ok=True)
+    output_file = os.path.join(output_dir, 'urn_benchmark_focused.json')
     with open(output_file, 'w') as f:
         json.dump(output, f, indent=2)
 

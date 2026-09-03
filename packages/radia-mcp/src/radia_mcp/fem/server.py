@@ -606,7 +606,7 @@ def fem_xfem_em_hiruma(topic: str = "overview") -> str:
     """
     EM-XFEM (Hiruma 2023): electromagnetic XFEM for eddy-current
     skin-depth resolution.  Lab-verified implementation in
-    docs/hiruma_xfem_comparison/ (beta-1 Phase 1-4, 2026-05-25).
+    validation_test/hiruma_xfem_comparison/ (beta-1 Phase 1-4, 2026-05-25).
 
     Reference:
         Hiruma et al., "Extended Finite Element Method for Eddy-Current
