@@ -1223,19 +1223,19 @@ maintenance results and explicitly set the next policy first.
   MATLAB, or validation code. Do not promote analytical validation references
   into C++, pybind11, or MEX merely to make them look production-ready.
 
-**Ordered maintenance backlog**:
+**Maintenance baseline and active backlog**:
 
-1. Restore the canonical `radia-optuna` source/distribution metadata in clean
-   `main`, remove dirty-tree or release-tree fallback from health checks, and
-   make source-root selection deterministic.
-2. Classify or repair the committed Python-to-MATLAB parity entries for
-   `accelerator_field_validation.py`, `lamination.py`, and `mmm_topology.py`.
-3. Close or explicitly classify the standalone-MEX coverage gaps for
-   `ObjTetrahedronCurrent` and the Kelvin field/potential class surfaces.
-4. Continue CI, build, dependency, and repository cleanup. Remove duplicate
-   tests and stale generated files while keeping fast regression coverage for
-   implementation bugs and JSON-backed numerical evidence in
-   `validation_test/`.
+- Completed baseline: canonical `radia-optuna` source selection is
+  deterministic; the public accelerator-field, lamination, and MMM-topology
+  MATLAB entries are classified; and `ObjTetrahedronCurrent` plus the Kelvin
+  field/potential surfaces have explicit standalone-MEX coverage or boundary
+  classifications.
+- Active work: continue CI, build, dependency, and repository cleanup. Remove
+  duplicate tests, retired interfaces, and stale generated files while keeping
+  fast regression coverage for implementation bugs and JSON-backed numerical
+  evidence in `validation_test/`.
+- Treat any regression in the completed baseline as a maintenance bug, not as
+  a reason to reopen an alternative source-root, fallback, or duplicate API.
 
 Work on one maintenance family per commit. Rebase it onto the latest clean
 `main`, run its focused fast tests, and report unrelated global failures
