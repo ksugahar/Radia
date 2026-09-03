@@ -104,16 +104,18 @@ def test_docs_do_not_restore_completed_migration_ledgers():
     )
 
 
-def test_docs_notebooks_do_not_restore_retired_result_sidecars():
+def test_docs_do_not_restore_retired_result_bookkeeping():
     retired = {
         ROOT / "docs" / "cubit_mesh_export" / "cubit_mesh_export_showcase_results.json",
         ROOT / "docs" / "cubit_mesh_export" / "netgen" / "p_convergence_demo_results.json",
         ROOT / "docs" / "kelvin" / "kelvin_exterior_source_and_aphi_results.json",
+        ROOT / "docs" / "section_optics" / "section_optics_design_results.json",
+        ROOT / "docs" / "section_optics" / "stamp_notebook_hash.py",
         ROOT / "docs" / "universal_relaxation_network" / "cq_urn_bridge_results.json",
         ROOT / "docs" / "universal_relaxation_network" / "urn_vs_vf_comparison.json",
     }
     offenders = sorted(path.relative_to(ROOT) for path in retired if path.exists())
     assert not offenders, (
-        "Docs notebooks embed display results; validation_test owns checked JSON: "
+        "Docs notebooks embed display results; validation_test owns checked evidence: "
         + ", ".join(map(str, offenders))
     )
