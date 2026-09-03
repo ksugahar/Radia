@@ -6,7 +6,7 @@ offscreen) and do NOT require Cubit or NGSolve -- only PySide6.
 
 Coverage:
     A. Module imports + symbol surface
-    B. QAction comes from QtGui (PySide6/Qt6 location), not QtWidgets
+    B. Export actions are registered through Cubit's Claro API
     C. ExportDialog.cubit_command() round-trip for all 6 formats
        (default options yield the expected `export ...` APREPRO
         commands so the .ccm side is unchanged)
@@ -15,7 +15,7 @@ Coverage:
     F. FEMEEM scale flag
     G. MEG labels (block table mocking)
     H. install_menu() idempotency on a stub QMainWindow
-    I. ensure_jou_path() session-stickiness (_last_jou_path)
+    I. Current journal is an optional output-name hint, never a prerequisite
     J. Settings persistence round-trip
     K. Mesh Evaluation is not part of the Cubit menu; the
        p-convergence demonstration lives under docs/cubit_mesh_export.
@@ -37,8 +37,9 @@ from __future__ import annotations
 import os
 import sys
 import tempfile
+import types
 import unittest
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 # Force offscreen Qt platform BEFORE PySide6 is imported.
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
@@ -49,8 +50,6 @@ _REPO_ROOT = os.path.abspath(
 sys.path.insert(0, os.path.join(_REPO_ROOT, "src", "radia", "panels"))
 
 try:
-    from PySide6.QtCore import Qt  # noqa: E402
-    from PySide6.QtGui import QAction  # noqa: E402
     from PySide6.QtWidgets import (  # noqa: E402
         QApplication, QMainWindow,
     )
@@ -104,7 +103,7 @@ class TestModuleSurface(unittest.TestCase):
         self.assertEqual(rem._FORMAT_EXTS[rem.FMT_MEG], ".meg")
 
     def test_public_callables_present(self):
-        for name in ("install_menu", "find_claro", "ensure_jou_path",
+        for name in ("install_menu", "find_claro", "_current_journal_hint",
                      "ExportDialog"):
             self.assertTrue(hasattr(rem, name),
                             f"radia_export_menu missing: {name}")
@@ -128,20 +127,16 @@ class TestModuleSurface(unittest.TestCase):
 
 
 # ----------------------------------------------------------------------
-# B. QAction location (PySide6/Qt6 moved it from QtWidgets to QtGui)
+# B. Cubit owns the menu actions through emclaro
 # ----------------------------------------------------------------------
-class TestQActionLocation(unittest.TestCase):
+class TestClaroOwnership(unittest.TestCase):
 
-    def test_qaction_from_qtgui_not_qtwidgets(self):
-        """PySide6 ships QAction in QtGui; importing from QtWidgets fails.
-        Agent's bug fix during the port -- this test locks it down."""
-        from PySide6 import QtGui, QtWidgets
-        self.assertTrue(hasattr(QtGui, "QAction"))
-        self.assertFalse(hasattr(QtWidgets, "QAction"))
-
-    def test_module_uses_qtgui_qaction(self):
-        # The QAction symbol the module imported must resolve from QtGui.
-        self.assertEqual(rem.QAction.__module__, "PySide6.QtGui")
+    def test_module_does_not_construct_qt_actions(self):
+        with open(rem.__file__, "r", encoding="utf-8") as f:
+            source = f.read()
+        self.assertNotIn("from PySide6.QtGui import QAction", source)
+        self.assertNotIn("QMenu(", source)
+        self.assertIn("emclaro.add_to_menu", source)
 
 
 # ----------------------------------------------------------------------
@@ -327,121 +322,135 @@ class TestMegCommand(_DialogTestBase):
 # ----------------------------------------------------------------------
 # H. install_menu() idempotency on stub QMainWindow
 # ----------------------------------------------------------------------
+class _FakePyAction:
+    def __init__(self):
+        self.text = ""
+        self.menu_text = ""
+        self.status_tip = ""
+        self.activate_method = ""
+
+    def setText(self, value):
+        self.text = value
+
+    def setMenuText(self, value):
+        self.menu_text = value
+
+    def setStatusTip(self, value):
+        self.status_tip = value
+
+    def setActivateMethod(self, value):
+        self.activate_method = value
+
+
+class _FakePyActionVector(list):
+    def push_back(self, value):
+        self.append(value)
+
+
 class TestInstallMenu(unittest.TestCase):
 
     def setUp(self):
-        _ensure_qapp()
-        # Inject a stub cubit module into sys.modules so install_menu's
-        # `import cubit` succeeds in this headless context.
-        self._fake_cubit = MagicMock()
-        sys.modules["cubit"] = self._fake_cubit
-
-        # Create a fake Cubit main window with objectName='claro'.
-        self._win = QMainWindow()
-        self._win.setObjectName("claro")
-        self._win.show()  # offscreen -> still counts as topLevelWidget
+        rem._claro_keepalive.clear()
+        self.removed = []
+        self.added = []
+        self.fake_emclaro = types.SimpleNamespace(
+            is_loaded=lambda: True,
+            remove_menu_items=self.removed.append,
+            PyAction=_FakePyAction,
+            PyActionVector=_FakePyActionVector,
+            add_to_menu=lambda *args: self.added.append(args),
+        )
+        sys.modules["emclaro"] = self.fake_emclaro
 
     def tearDown(self):
-        # Remove the menu and the stub window completely, then process
-        # Qt's deleteLater queue so the next test's find_claro() can
-        # NOT pick up this window as a stale topLevelWidget.
-        bar = self._win.menuBar()
-        for act in list(bar.actions()):
-            sub = act.menu()
-            if sub and sub.objectName() == rem._INSTALLED_OBJECT_NAME:
-                bar.removeAction(act)
-                sub.deleteLater()
+        sys.modules.pop("emclaro", None)
+        rem._claro_keepalive.clear()
+
+    def test_install_creates_menu_with_6_export_actions(self):
+        self.assertTrue(rem.install_menu())
+        self.assertEqual(self.removed, [rem._CLARO_COMPONENT])
+        self.assertEqual(len(self.added), 1)
+        menu_title, actions, component = self.added[0]
+        self.assertEqual(menu_title, rem._CLARO_MENU_TITLE)
+        self.assertEqual(component, rem._CLARO_COMPONENT)
+        self.assertEqual(len(actions), 6)
+        self.assertEqual(
+            [action.text for action in actions],
+            [spec[0] for spec in rem._MENU_SPECS],
+        )
+        self.assertTrue(all("launch_export" in action.activate_method
+                            for action in actions))
+
+    def test_install_is_idempotent(self):
+        rem.install_menu()
+        rem.install_menu()
+        self.assertEqual(self.removed,
+                         [rem._CLARO_COMPONENT, rem._CLARO_COMPONENT])
+        self.assertEqual(len(self.added), 2)
+        self.assertEqual(len(rem._claro_keepalive), 7)
+
+
+class TestFindClaro(unittest.TestCase):
+
+    def setUp(self):
+        _ensure_qapp()
+        self._win = QMainWindow()
+        self._win.setObjectName("claro")
+        self._win.show()
+
+    def tearDown(self):
         self._win.hide()
         self._win.setParent(None)
         self._win.deleteLater()
         self._win = None
         _ensure_qapp().processEvents()
-        sys.modules.pop("cubit", None)
-
-    def _radia_export_menu(self):
-        bar = self._win.menuBar()
-        for act in bar.actions():
-            sub = act.menu()
-            if sub and sub.objectName() == rem._INSTALLED_OBJECT_NAME:
-                return sub
-        return None
-
-    def test_install_creates_menu_with_6_export_actions(self):
-        menu = rem.install_menu()
-        self.assertIsNotNone(menu, "install_menu returned None")
-        # Radia Export is intentionally export-only.  Mesh evaluation is
-        # documented as a docs notebook demo, not a Cubit menu action.
-        actions = [a for a in menu.actions() if not a.isSeparator()]
-        self.assertEqual(len(actions), 6,
-                         f"expected 6 non-separator actions, got "
-                         f"{len(actions)}: {[a.text() for a in actions]}")
-        labels = [a.text() for a in actions]
-        for expected in ("Netgen Vol", "GMSH", "Nastran", "VTK",
-                         "FEMEEM", "MEG"):
-            self.assertTrue(
-                any(expected in lbl for lbl in labels),
-                f"missing action containing {expected!r} in {labels}")
-        self.assertFalse(
-            any("Mesh Evaluation" in lbl for lbl in labels),
-            f"Mesh Evaluation must not be exposed in the menu: {labels}")
-
-    def test_install_is_idempotent(self):
-        rem.install_menu()
-        rem.install_menu()  # twice -> still 1 menu
-        # Look in the window install_menu actually picked (might be
-        # ours, or another 'claro' if Qt has stale leftovers from a
-        # previous test that processEvents could not yet collect).
-        target = rem.find_claro()
-        self.assertIsNotNone(target, "find_claro() returned None")
-        bar = target.menuBar()
-        n = sum(1 for a in bar.actions()
-                if a.menu() and a.menu().objectName() ==
-                rem._INSTALLED_OBJECT_NAME)
-        self.assertEqual(n, 1, f"after 2 install_menu calls, "
-                              f"{n} Radia Export menus exist (should be 1)")
 
     def test_find_claro_returns_our_stub(self):
-        # find_claro() should find our fake QMainWindow.
         m = rem.find_claro()
         self.assertIs(m, self._win)
 
 
 # ----------------------------------------------------------------------
-# I. ensure_jou_path session-stickiness
+# I. Optional current-journal hint
 # ----------------------------------------------------------------------
-class TestEnsureJouPathSession(unittest.TestCase):
-
-    def setUp(self):
-        rem._last_jou_path = ""
+class TestCurrentJournalHint(unittest.TestCase):
 
     def test_already_loaded_via_cubit(self):
-        # Branch 1: cubit.get_current_journal_file() returns a valid path
         stub = MagicMock()
         with tempfile.NamedTemporaryFile(suffix=".jou", delete=False) as f:
             jou = f.name
         try:
             stub.get_current_journal_file = MagicMock(return_value=jou)
-            got = rem.ensure_jou_path(stub, parent=None)
+            got = rem._current_journal_hint(stub)
             self.assertEqual(got.replace("\\", "/"), jou.replace("\\", "/"))
-        finally:
-            os.unlink(jou)
-
-    def test_session_sticky_after_first_set(self):
-        # Branch 2: no cubit-loaded jou, but _last_jou_path was set
-        # earlier in the session -> reuse without prompting.
-        stub = MagicMock()
-        stub.get_current_journal_file = MagicMock(return_value="")
-        with tempfile.NamedTemporaryFile(suffix=".jou", delete=False) as f:
-            jou = f.name
-        try:
-            rem._last_jou_path = jou
-            got = rem.ensure_jou_path(stub, parent=None)
-            self.assertEqual(got, jou)
-            # The cubit module's `save` should NOT have been called --
-            # the sticky path is reused, no resave.
             stub.cmd.assert_not_called()
         finally:
             os.unlink(jou)
+
+    def test_no_journal_is_valid_for_loaded_model(self):
+        stub = MagicMock()
+        stub.get_current_journal_file = MagicMock(return_value="")
+        self.assertEqual(rem._current_journal_hint(stub), "")
+        stub.cmd.assert_not_called()
+
+    def test_dialog_without_journal_uses_regular_default(self):
+        _ensure_qapp()
+        stub = MagicMock()
+        stub.get_block_id_list = MagicMock(return_value=[])
+        dialog = rem.ExportDialog(rem.FMT_NETGEN, "", stub)
+        self.assertTrue(dialog.file_path().endswith("/ExportedMesh.vol"))
+
+    def test_loaded_model_export_never_prompts_to_save_journal(self):
+        stub = MagicMock()
+        stub.get_volume_count = MagicMock(return_value=1)
+        stub.get_current_journal_file = MagicMock(return_value="")
+        dialog = MagicMock()
+        dialog.exec.return_value = rem.QDialog.Rejected
+        with patch.object(rem, "ExportDialog", return_value=dialog) as factory, \
+                patch.object(rem.QFileDialog, "getSaveFileName") as save_dialog:
+            rem._run_generic_export(rem.FMT_GMSH, stub, parent=None)
+        save_dialog.assert_not_called()
+        factory.assert_called_once_with(rem.FMT_GMSH, "", stub, parent=None)
 
 
 # ----------------------------------------------------------------------
@@ -495,7 +504,8 @@ class TestMeshEvaluationDocsRouting(unittest.TestCase):
             text = f.read()
         self.assertIn("calc_mesh_eval.py", text)
         self.assertIn("p-convergence", text)
-        self.assertIn("docs/cubit_mesh_export", text)
+        self.assertIn("validation_test", text)
+        self.assertIn("p_convergence_demo_results.json", text)
 
 
 if __name__ == "__main__":

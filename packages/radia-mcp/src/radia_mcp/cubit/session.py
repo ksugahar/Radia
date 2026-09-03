@@ -563,9 +563,9 @@ class CubitSession:
         # last license pre-warm result (None until first start)
         self._last_license_warmup: dict = {}
 
-        # Per-MCP-process command history for `cubit_session_journal`
-        # (the lab's .jou-first reproducibility policy: every live
-        # session must be exportable as a portable journal).  Bounded;
+        # Per-MCP-process command history for `cubit_session_journal`.
+        # A live session can be captured explicitly as a portable recipe;
+        # export itself never requires or creates that journal. Bounded;
         # records {ts, line, ok} for every op=="cmd" line sent.
         self._command_history: list[dict] = []
         self._command_history_max = 20000
