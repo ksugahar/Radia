@@ -20,6 +20,7 @@ Two things this deliberately does not do:
 from __future__ import annotations
 
 import re
+from datetime import UTC, datetime
 
 from ..bibliography._bibparse import read_bib_file
 from ..bibliography.plans.T14_canonical import CANONICAL
@@ -53,7 +54,7 @@ def _authors(field: str, me: str, mark: str) -> str:
         if "," in a:                       # "Surname, Given" -> "Given Surname"
             last, first = (x.strip() for x in a.split(",", 1))
             a = f"{first} {last}".strip()
-        if re.search(me, a, re.I):
+        if re.search(me, a, re.IGNORECASE):
             a = mark.replace("{}", a)
         out.append(a)
     return ", ".join(out)
@@ -88,12 +89,11 @@ def grant_writing_publication_list(author: str = "Sugahara|菅原",
     path = bib_path or str(CANONICAL)
     entries = [e for e in read_bib_file(path) if not e.kind.startswith("@")]
     mine = [e for e in entries
-            if re.search(author, e.fields.get("author", "")
-                         + " " + e.fields.get("editor", ""), re.I)]
+            if re.search(author, e.fields.get("author", ""), re.IGNORECASE)]
     if since:
         mine = [e for e in mine
-                if not e.fields.get("year", "").strip()[:4].isdigit()
-                or e.fields["year"].strip()[:4] >= since]
+                if e.fields.get("year", "").strip()[:4].isdigit()
+                and e.fields["year"].strip()[:4] >= since]
 
     out = [f"grant_writing_publication_list: author /{author}/"
            + (f", {since} 年以降" if since else "")]
@@ -101,8 +101,9 @@ def grant_writing_publication_list(author: str = "Sugahara|菅原",
     out.append("  査読の有無は本ツールでは判定しない。申請者が付すこと。")
 
     seen = set()
-    for kind, label in GROUPS:
-        group = [e for e in mine if e.kind.lower() == kind and id(e) not in seen]
+    for label in dict.fromkeys(label for _, label in GROUPS):
+        kinds = {kind for kind, group_label in GROUPS if group_label == label}
+        group = [e for e in mine if e.kind.lower() in kinds and id(e) not in seen]
         if not group:
             continue
         for e in group:
@@ -117,9 +118,24 @@ def grant_writing_publication_list(author: str = "Sugahara|菅原",
             out.append(line)
             gaps = [f for f in ("year", "pages", "doi")
                     if not e.fields.get(f)
-                    and kind in {"article", "inproceedings"}]
+                    and e.kind.lower() in {"article", "inproceedings"}]
             if gaps:
                 out.append(f"   [要確認] 未記入: {', '.join(gaps)}")
+            placeholders = [
+                field
+                for field, value in e.fields.items()
+                if re.search(r"(?i)(?:\bTBD\b|\bTODO\b|0xx|x{3,})", value or "")
+            ]
+            if placeholders:
+                out.append(
+                    "   [要確認] プレースホルダを含む書誌項目: "
+                    + ", ".join(sorted(placeholders))
+                )
+            year = e.fields.get("year", "")[:4]
+            if year.isdigit() and int(year) > datetime.now(UTC).astimezone().year:
+                out.append(
+                    "   [要確認] 将来年の業績である。採択・受理・発表予定の状態を明記する。"
+                )
 
     dropped = [e for e in mine if id(e) not in seen]
     if dropped:
@@ -137,14 +153,14 @@ def grant_writing_publication_list(author: str = "Sugahara|菅原",
 # "査読付" is deliberately mapped to the article count and then reported as
 # unverifiable: nothing in a BibTeX entry records refereeing.
 _CLAIM_PATTERNS = [
-    (r"査読\s*(?:付き?|有り?|あり)\s*(?:の)?(?:学術)?論文", "article", True),
-    (r"(?:原著|学術|学術雑誌|ジャーナル)\s*論文", "article", False),
-    (r"(?:国際)\s*会議\s*(?:論文|発表|予稿)?", "inproceedings", False),
-    (r"(?:国内)?\s*研究会\s*(?:資料|発表)?", "techreport", False),
-    (r"peer[- ]reviewed\s+(?:journal\s+)?(?:papers?|articles?)", "article", True),
-    (r"journal\s+(?:papers?|articles?)", "article", False),
+    (r"査読\s*(?:付き?|有り?|あり)\s*(?:の)?(?:学術)?論文", "article", "peer_review"),
+    (r"(?:原著|学術|学術雑誌|ジャーナル)\s*論文", "article", ""),
+    (r"(?:国際)\s*会議\s*(?:論文|発表|予稿)?", "inproceedings", "international"),
+    (r"(?:国内)?\s*研究会\s*(?:資料|発表)?", "techreport", ""),
+    (r"peer[- ]reviewed\s+(?:journal\s+)?(?:papers?|articles?)", "article", "peer_review"),
+    (r"journal\s+(?:papers?|articles?)", "article", ""),
     (r"(?:international\s+)?conference\s+(?:papers?|presentations?)",
-     "inproceedings", False),
+     "inproceedings", "international"),
 ]
 # The English patterns take the English number-first form. They are the entries
 # written in ASCII, which is what distinguishes them from the Japanese ones.
@@ -170,7 +186,6 @@ def _scope_year(text: str) -> tuple[str, str]:
         return m.group(1), f"{m.group(1)}年以降"
     m = re.search(r"(?:過去|最近|直近)\s*(\d+)\s*年", text)
     if m:
-        # relative to the newest year present, so the check does not drift
         return "", f"過去{m.group(1)}年"
     return "", "全期間"
 
@@ -191,47 +206,61 @@ def grant_writing_achievement_count_check(text: str,
     path = bib_path or str(CANONICAL)
     entries = [e for e in read_bib_file(path) if not e.kind.startswith("@")]
     mine = [e for e in entries
-            if re.search(author, e.fields.get("author", ""), re.I)]
+            if re.search(author, e.fields.get("author", ""), re.IGNORECASE)]
 
     since, scope_label = _scope_year(text)
     if since:
         mine = [e for e in mine if e.fields.get("year", "")[:4] >= since]
     elif scope_label.startswith("過去"):
         n = int(re.search(r"\d+", scope_label).group())
-        years = [int(e.fields["year"][:4]) for e in mine
-                 if e.fields.get("year", "")[:4].isdigit()]
-        if years:
-            cutoff = max(years) - n + 1
-            mine = [e for e in mine
-                    if e.fields.get("year", "")[:4].isdigit()
-                    and int(e.fields["year"][:4]) >= cutoff]
+        cutoff = datetime.now(UTC).astimezone().year - n + 1
+        mine = [e for e in mine
+                if e.fields.get("year", "")[:4].isdigit()
+                and int(e.fields["year"][:4]) >= cutoff]
 
     counts = {}
     for kind in ("article", "inproceedings", "techreport"):
         counts[kind] = sum(1 for e in mine if e.kind.lower() == kind)
 
-    out = [f"grant_writing_achievement_count_check  (集計範囲: {scope_label})",
-           f"  書誌中の該当: 学術論文 {counts['article']} / "
-           f"国際会議 {counts['inproceedings']} / "
-           f"研究会 {counts['techreport']}"]
+    out = [
+        f"grant_writing_achievement_count_check  (集計範囲: {scope_label})",
+        (
+            f"  書誌中の該当: 学術論文 {counts['article']} / "
+            f"会議・研究発表 {counts['inproceedings']} / "
+            f"研究会 {counts['techreport']}"
+        ),
+    ]
 
     found = 0
-    for pat, kind, is_review_claim in _CLAIM_PATTERNS:
+    claimed_spans: list[tuple[int, int]] = []
+    for pat, kind, uncertain_kind in _CLAIM_PATTERNS:
         before = _BEFORE_EN if pat in _EN_PATTERNS else _BEFORE_JA
         hits = list(re.finditer(pat + _COUNTER, text))
         hits += list(re.finditer(before + pat, text))
         for m in hits:
+            if any(m.start() < end and m.end() > start for start, end in claimed_spans):
+                continue
             claimed = next((g for g in m.groups() if g and g.isdigit()), "")
             if not claimed:
                 continue
+            claimed_spans.append(m.span())
             found += 1
             claimed_n, actual = int(claimed), counts[kind]
             phrase = m.group(0).strip().replace("\n", " ")
-            if is_review_claim:
+            if uncertain_kind == "peer_review":
                 out.append(f"  [要確認] 「{phrase}」")
                 out.append(f"      査読の有無は書誌からは判定できない。"
                            f"{_KIND_LABEL[kind]}の総数は {actual} 件。")
                 out.append("      査読付がこの数と一致するか申請者が確認すること。")
+            elif uncertain_kind == "international":
+                out.append(f"  [要確認] 「{phrase}」")
+                out.append(
+                    f"      BibTeX種別だけでは国際・国内を判定できない。"
+                    f"会議・研究発表の総数は {actual} 件。"
+                )
+                out.append(
+                    "      国際会議に該当する内訳と件数を申請者が確認すること。"
+                )
             elif claimed_n == actual:
                 out.append(f"  [一致]   「{phrase}」= {actual} 件")
             else:
