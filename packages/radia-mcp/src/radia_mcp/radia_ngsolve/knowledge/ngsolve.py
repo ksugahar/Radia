@@ -847,46 +847,28 @@ Reference: https://github.com/Weggler/docu-ngsbem/blob/main/demos/Maxwell_DtN_St
 """
 
 NGSOLVE_BEM_VOL_50 = """
-# .vol double-click, NGSolve.BEM comparison, and vibro-acoustic teaching lane
+# .vol contract, NGSolve.BEM comparison, and vibro-acoustic teaching lane
 
-## Best .vol visualization skill
+## Solver mesh and post-processing boundary
 
-Use Netgen's native GUI as the first-choice human viewer for `.vol`, but do not
-assume that a raw Windows file association to `netgen.exe "%1"` actually loads
-the mesh.  On Windows that path can open a blank Netgen GUI because the startup
-route does not necessarily call the native Tcl mesh loader.
+`.vol` is Radia's solver-facing Netgen/NGSolve mesh format, not the public
+post-processing format. Do not install a Radia desktop viewer or a Windows
+double-click association for `.vol` or `.sol`. Before a solve, run `check-vol`
+and retain its `cubit-mesh-export.vol-check.v1` JSON report with the run. The
+headless preflight owns element counts, labels, bounding box, orientation, and
+source digest.
 
-The robust double-click skill is to associate `.vol` and `.sol` with the Radia
-viewer wrapper:
+An NGSolve GridFunction `.sol` contains coefficients but no mesh or finite-
+element-space definition. Keep it only as an internal restart/interchange
+artifact with its exact companion `.vol` and declared space/order. A public run
+that computes a spatial field must also write checked GMSH `.msh v4.1` output
+inside the run directory and index it from `result.json`. Human field
+inspection uses that GMSH artifact; the solver continues to consume `.vol`.
 
-```powershell
-radia-vol-viewer --register
-```
-
-or to install an equivalent Netgen startup hook that performs the same sequence:
-
-```tcl
-Ng_LoadMesh "mesh.vol"
-set selectvisual mesh
-Ng_SetVisParameters
-redraw
-Ng_ReadStatus
-```
-
-For `.sol`, remember that NGSolve GridFunction `.sol` files are mesh-free
-coefficient dumps.  A double-click handler must find or receive the companion
-`.vol`, infer or know the matching finite-element space/order, load the
-GridFunction, then switch Netgen to solution visual mode.
-
-Keep the split explicit:
-
-1. Human inspection: open the solver-facing `.vol` in Netgen through the
-   loader-aware handler, not through an untested raw association.
-2. LLM/headless preflight: summarize counts, labels, bounding box, orientation,
-   and a source digest before running a solver.
-3. Radia result visualization: use checked GMSH `.msh v4.1` output for fields;
-   do not treat a
-   visualization export as the solver mesh unless the converter contract says so.
+This split prevents a visualization path from becoming an accidental solver
+input and keeps Radia free of a standalone Qt, Tk, PyVista, or VTK desktop
+surface. Coreform Cubit's embedded PySide toolbar remains the sole GUI-runtime
+exception and owns mesh export, not field analysis.
 
 For the MATLAB acoustic FEM/BEM teaching lane, the same first-order Netgen
 `.vol` is read twice: volume tetrahedra form the FEM view and boundary triangles
