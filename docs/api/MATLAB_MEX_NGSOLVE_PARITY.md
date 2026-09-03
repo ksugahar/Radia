@@ -19,9 +19,9 @@ silently dropped from the count.
 |---|---:|
 | Public top-level pybind11 names | 99 |
 | Covered mapped MEX names | 99 |
-| Underscore numerical kernels | 28 / 28 covered |
+| Underscore numerical kernels | 21 / 21 covered |
 | Stateful pybind11 class surface | 126 / 126 covered |
-| Radia MEX gateway commands | 364 |
+| Radia MEX gateway commands | 360 |
 | Optuna MEX gateway commands | 20 |
 | MATLAB Optuna classes | 38 |
 | MATLAB Optuna functions | 30 |
@@ -33,11 +33,11 @@ NGSolve, oneMKL, Radia-core, or Python dependency, and is loaded only when
 optimization is used. A missing or non-21-command `optuna_mex` fails loudly; it
 is never replaced by a call through `radia_mex` or a silent MATLAB substitute.
 
-Seven acoustic commands share their implementation with the pybind11
-scattering/CQ bindings: four real-wavenumber sphere models, complex-wavenumber
-soft-sphere scattering, BDF delta, and CQ grid construction. Full acoustic
-CQ-BEM and FSI remain NGSolve/Python workflows and use the declared MATLAB
-Python fallback rather than a second numerical implementation.
+Acoustic sphere and convolution-quadrature reference formulas deliberately do
+not count as native parity. They remain readable, independent SciPy and MATLAB
+implementations under `src/radia/acoustics` and `matlab/+radia/+acoustic` so
+they can validate the NGSolve/ngsolve.bem CQ-BEM and FSI routes without sharing
+a C++, pybind11, or MEX kernel with the solver under test.
 
 The `axifem.q1_magnetic_element_matrices` command shares the Q1 Henrotte
 stiffness and sigma-mass implementation with `radia.axifem` and the production

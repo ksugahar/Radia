@@ -151,13 +151,6 @@ def _pybind_class_surface():
 
 
 _PYBIND_INTERNAL_NUMERICAL_COMMANDS = {
-    "_AcousticSoftSphere": ("acoustic.soft_sphere",),
-    "_AcousticRigidSphere": ("acoustic.rigid_sphere",),
-    "_AcousticFluidSphere": ("acoustic.fluid_sphere",),
-    "_AcousticElasticSphere": ("acoustic.elastic_sphere",),
-    "_AcousticSoftSphereComplexK": ("acoustic.soft_sphere_complex_k",),
-    "_AcousticBDFDelta": ("acoustic.bdf_delta",),
-    "_AcousticCQGrid": ("acoustic.cq_grid",),
     "_EVRSTMethodAlgebra": ("evrs.tmethod",),
     "_HybridVIMSchurComplement": ("hybrid_vim.schur",),
     "_HybridVIMSolve": ("hybrid_vim.solve",),
@@ -579,7 +572,7 @@ def matlab_radia_mex_contract(topic="all"):
         "verified_contract": {
             "matlab_gate": "runtests('tests/matlab')",
             "python_numerical_parity_gate": "runtests('tests/matlab/test_radia_ngsolve_parity.m')",
-            "acoustic_python_mex_parity_gate": "runtests('tests/matlab/test_acoustic_mex.m')",
+            "acoustic_reference_validation_gate": "runtests('validation_test/acoustics/test_acoustic_reference.m')",
             "axifem_python_mex_parity_gate": "runtests('tests/matlab/test_axifem_mex.m')",
             "hcurl_topology_python_mex_parity_gate": "runtests('tests/matlab/test_hcurl_topology_optimization.m')",
             "topology_two_level_gate": "runtests('tests/matlab/test_topology_optimization.m')",

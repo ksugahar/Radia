@@ -1,4 +1,4 @@
-"""Write deterministic Python acoustic results for MATLAB/MEX adapter parity."""
+"""Write deterministic SciPy acoustic references for MATLAB validation."""
 
 from __future__ import annotations
 
@@ -8,12 +8,15 @@ from pathlib import Path
 import numpy as np
 from scipy.io import savemat
 
+REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(REPOSITORY_ROOT / "src"))
+
 import radia.acoustics as acoustic
 from radia.acoustics.cq import (
+    _cq_grid,
     bdf_delta,
     soft_sphere_scattering_complex_k,
 )
-from radia import _radia_pybind as native
 
 
 def build_reference():
@@ -25,12 +28,21 @@ def build_reference():
     soft = acoustic.soft_sphere_scattering(2.3, 0.9, points, terms=18)
     rigid = acoustic.rigid_sphere_scattering(2.3, 0.9, points, terms=18)
     fluid = acoustic.fluid_sphere_scattering(
-        2.3, 0.9, mixed_points, interior_wavenumber=1.4,
-        density_ratio=1.75, terms=18,
+        2.3,
+        0.9,
+        mixed_points,
+        interior_wavenumber=1.4,
+        density_ratio=1.75,
+        terms=18,
     )
     elastic = acoustic.elastic_sphere_scattering(
-        2.3, 0.9, points, longitudinal_speed=2.4, shear_speed=1.1,
-        density_ratio=1.8, terms=15,
+        2.3,
+        0.9,
+        points,
+        longitudinal_speed=2.4,
+        shear_speed=1.1,
+        density_ratio=1.8,
+        terms=15,
     )
     complex_wavenumber = 0.75 + 0.45j
     complex_scattered = soft_sphere_scattering_complex_k(
@@ -38,10 +50,10 @@ def build_reference():
     )
     zeta = np.array([[0.1 + 0.2j, -0.4 + 0.3j, 0.25 - 0.15j]])
     grids = {
-        "bdf1": native._AcousticCQGrid(15, 0.08, 1.2, "BDF1"),
-        "bdf2": native._AcousticCQGrid(16, 0.08, 1.2, "BDF2"),
+        "bdf1": _cq_grid(15, 0.08, 1.2, "BDF1"),
+        "bdf2": _cq_grid(16, 0.08, 1.2, "BDF2"),
     }
-    return {
+    result = {
         "points": points,
         "mixed_points": mixed_points,
         "soft_scattered": soft["scattered"].reshape(-1, 1),
@@ -55,25 +67,15 @@ def build_reference():
         "zeta": zeta,
         "bdf1": np.asarray(bdf_delta(zeta, "BDF1")),
         "bdf2": np.asarray(bdf_delta(zeta, "BDF2")),
-        **{
-            f"{name}_cq_radius": grid["cq_radius"]
-            for name, grid in grids.items()
-        },
-        **{
-            f"{name}_cq_zeta": np.asarray(grid["zeta"]).reshape(1, -1)
-            for name, grid in grids.items()
-        },
-        **{
-            f"{name}_cq_nodes": np.asarray(grid["cq_nodes"]).reshape(1, -1)
-            for name, grid in grids.items()
-        },
-        **{
-            f"{name}_cq_wavenumbers": np.asarray(
-                grid["cq_wavenumbers"]
-            ).reshape(1, -1)
-            for name, grid in grids.items()
-        },
     }
+    for name, grid in grids.items():
+        result[f"{name}_cq_radius"] = grid["cq_radius"]
+        result[f"{name}_cq_zeta"] = np.asarray(grid["zeta"]).reshape(1, -1)
+        result[f"{name}_cq_nodes"] = np.asarray(grid["cq_nodes"]).reshape(1, -1)
+        result[f"{name}_cq_wavenumbers"] = np.asarray(
+            grid["cq_wavenumbers"]
+        ).reshape(1, -1)
+    return result
 
 
 def main():

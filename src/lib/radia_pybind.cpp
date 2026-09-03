@@ -47,7 +47,6 @@
 
 // Radia core headers (after NGSolve to avoid EXP macro conflict)
 #include "radentry.h"
-#include "rad_acoustic_analytic.h"
 #include "rad_constants.h"
 #include "rad_highorder_nodes.h"
 #include "rad_hacapk_peec.h"  // HACApK PEEC adapter (manager + sanity check)
@@ -2316,55 +2315,6 @@ py::array_t<double> PlanarMaxwellForceCircle(
 }
 } // namespace radia_planar_charges
 
-std::vector<double> AcousticPoints(F64Array points) {
-    auto buffer = points.request();
-    if (buffer.ndim != 2 || buffer.shape[1] != 3 || buffer.shape[0] == 0)
-        throw std::invalid_argument("points must be a nonempty N-by-3 array");
-    const auto* data = static_cast<const double*>(buffer.ptr);
-    return std::vector<double>(data, data + buffer.size);
-}
-
-py::dict AcousticScatteringOutput(
-        const radia::acoustics::ScatteringResult& result) {
-    py::dict output;
-    output["backend"] = "native-cpp-pybind11";
-    output["kind"] = result.kind;
-    output["wavenumber"] = result.wavenumber;
-    output["radius"] = result.radius;
-    output["terms"] = result.terms;
-    output["truncation_tail"] = result.truncation_tail;
-    output["incident"] = to_numpy_1d(result.incident);
-    output["total"] = to_numpy_1d(result.total);
-    if (!result.scattered.empty())
-        output["scattered"] = to_numpy_1d(result.scattered);
-    if (result.interior_wavenumber > 0.0)
-        output["interior_wavenumber"] = result.interior_wavenumber;
-    if (result.density_ratio > 0.0)
-        output["density_ratio"] = result.density_ratio;
-    if (result.longitudinal_speed > 0.0) {
-        output["longitudinal_speed"] = result.longitudinal_speed;
-        output["shear_speed"] = result.shear_speed;
-    }
-    if (!result.inside_mask.empty()) {
-        py::array_t<bool> mask(result.inside_mask.size());
-        bool* values = mask.mutable_data();
-        for (std::size_t index = 0; index < result.inside_mask.size(); ++index)
-            values[index] = result.inside_mask[index] != 0;
-        output["inside_mask"] = std::move(mask);
-    }
-    return output;
-}
-
-py::dict AcousticCQGridOutput(const radia::acoustics::CQGridResult& result) {
-    py::dict output;
-    output["backend"] = "native-cpp-pybind11";
-    output["cq_radius"] = result.radius;
-    output["zeta"] = to_numpy_1d(result.zeta);
-    output["cq_nodes"] = to_numpy_1d(result.nodes);
-    output["cq_wavenumbers"] = to_numpy_1d(result.wavenumbers);
-    return output;
-}
-
 // ============================================================================
 // Module Definition
 // ============================================================================
@@ -2396,112 +2346,6 @@ PYBIND11_MODULE(_radia_pybind, m) {
 
     // Version info
     m.attr("__version__") = "1.4.0";
-
-    m.def("_AcousticSoftSphere", [](
-            double wavenumber, double radius, F64Array points, int terms) {
-        auto point_values = AcousticPoints(points);
-        radia::acoustics::ScatteringResult result;
-        {
-            py::gil_scoped_release release;
-            result = radia::acoustics::SoftSphereScattering(
-                wavenumber, radius, point_values, terms);
-        }
-        return AcousticScatteringOutput(result);
-    }, py::arg("wavenumber"), py::arg("radius"), py::arg("points"),
-       py::arg("terms") = -1);
-
-    m.def("_AcousticRigidSphere", [](
-            double wavenumber, double radius, F64Array points, int terms) {
-        auto point_values = AcousticPoints(points);
-        radia::acoustics::ScatteringResult result;
-        {
-            py::gil_scoped_release release;
-            result = radia::acoustics::RigidSphereScattering(
-                wavenumber, radius, point_values, terms);
-        }
-        return AcousticScatteringOutput(result);
-    }, py::arg("wavenumber"), py::arg("radius"), py::arg("points"),
-       py::arg("terms") = 1);
-
-    m.def("_AcousticFluidSphere", [](
-            double wavenumber, double radius, F64Array points,
-            double interior_wavenumber, double density_ratio, int terms) {
-        auto point_values = AcousticPoints(points);
-        radia::acoustics::ScatteringResult result;
-        {
-            py::gil_scoped_release release;
-            result = radia::acoustics::FluidSphereScattering(
-                wavenumber, radius, point_values, interior_wavenumber,
-                density_ratio, terms);
-        }
-        return AcousticScatteringOutput(result);
-    }, py::arg("wavenumber"), py::arg("radius"), py::arg("points"),
-       py::arg("interior_wavenumber"), py::arg("density_ratio") = 1.0,
-       py::arg("terms") = -1);
-
-    m.def("_AcousticElasticSphere", [](
-            double wavenumber, double radius, F64Array points,
-            double longitudinal_speed, double shear_speed,
-            double density_ratio, int terms) {
-        auto point_values = AcousticPoints(points);
-        radia::acoustics::ScatteringResult result;
-        {
-            py::gil_scoped_release release;
-            result = radia::acoustics::ElasticSphereScattering(
-                wavenumber, radius, point_values, longitudinal_speed,
-                shear_speed, density_ratio, terms);
-        }
-        return AcousticScatteringOutput(result);
-    }, py::arg("wavenumber"), py::arg("radius"), py::arg("points"),
-       py::arg("longitudinal_speed") = 2.0,
-       py::arg("shear_speed") = 1.0, py::arg("density_ratio") = 1.5,
-       py::arg("terms") = 0);
-
-    m.def("_AcousticSoftSphereComplexK", [](
-            std::complex<double> wavenumber, double radius,
-            F64Array points, int terms) {
-        auto point_values = AcousticPoints(points);
-        std::vector<std::complex<double>> result;
-        {
-            py::gil_scoped_release release;
-            result = radia::acoustics::SoftSphereScatteringComplexK(
-                wavenumber, radius, point_values, terms);
-        }
-        return to_numpy_1d(result);
-    }, py::arg("wavenumber"), py::arg("radius"), py::arg("points"),
-       py::arg("terms") = 28);
-
-    m.def("_AcousticBDFDelta", [](
-            py::array_t<std::complex<double>,
-                py::array::c_style | py::array::forcecast> zeta,
-            const std::string& method) {
-        const auto input = zeta.request();
-        std::vector<py::ssize_t> shape(
-            input.shape.begin(), input.shape.end());
-        py::array_t<std::complex<double>> output(shape);
-        const auto* source =
-            static_cast<const std::complex<double>*>(input.ptr);
-        auto* target = output.mutable_data();
-        {
-            py::gil_scoped_release release;
-            for (py::ssize_t index = 0; index < input.size; ++index)
-                target[index] = radia::acoustics::BDFDelta(source[index], method);
-        }
-        return output;
-    }, py::arg("zeta"), py::arg("method") = "BDF2");
-
-    m.def("_AcousticCQGrid", [](
-            int sample_count, double time_step, double sound_speed,
-            const std::string& method) {
-        radia::acoustics::CQGridResult result;
-        {
-            py::gil_scoped_release release;
-            result = radia::acoustics::BuildCQGrid(
-                sample_count, time_step, sound_speed, method);
-        }
-        return AcousticCQGridOutput(result);
-    }, py::arg("sample_count"), py::arg("time_step"),
-       py::arg("sound_speed") = 1.0, py::arg("method") = "BDF2");
 
     m.def("_EVRSTMethodAlgebra", [](
             F64Array curl_map_a,

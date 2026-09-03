@@ -9,8 +9,10 @@ _TOPICS = {
 `radia.acoustics` is the production acoustic application lane. NGSolve owns
 finite-element spaces, assembly, geometry, orientation, quadrature, and mapped
 evaluation; `ngsolve.bem` owns Helmholtz boundary operators. Radia supplies
-analytic scattering references, FEM-BEM/FSI coupling conventions, spherical
-DtN closure, and Lubich convolution quadrature. This server does not execute or
+readable analytical scattering references, FEM-BEM/FSI coupling conventions,
+spherical DtN closure, and Lubich convolution quadrature. The references remain
+outside C++/pybind11/MEX so they can judge the numerical path independently.
+This server does not execute or
 manage MATLAB and does not duplicate the educational MATLAB solver.
 """,
     "ngsolve_bem": """# Helmholtz BEM

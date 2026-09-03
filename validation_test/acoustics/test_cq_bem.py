@@ -65,6 +65,10 @@ def _write_results():
     out = {
         "schema": "radia.acoustics.cq.v1",
         "generated_at_utc": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "reference": {
+            "implementation": "src/radia/acoustics/cq.py (SciPy complex-k series)",
+            "independent_of": ["radia C++", "radia_mex", "ngsolve.bem"],
+        },
         "problem": {"radius": R, "sound_speed": C, "num_time": N, "time_step": DT,
                     "method": "BDF2", "boundary": "sound_soft_sphere"},
         "worst_frequency_bem_vs_complex_k_analytic": worst,

@@ -1,6 +1,15 @@
 {
   "schema": "radia.acoustics.scattering-3way.v1",
-  "generated_at_utc": "2026-07-07T21:28:56Z",
+  "generated_at_utc": "2026-09-03T02:20:34Z",
+  "reference": {
+    "python": "src/radia/acoustics/scattering.py (SciPy)",
+    "matlab": "matlab/+radia/+acoustic/*SphereScattering.m",
+    "independent_of": [
+      "radia C++",
+      "radia_mex",
+      "ngsolve.bem"
+    ]
+  },
   "problem": {
     "radius": 1,
     "wavenumber": 2,
@@ -18,7 +27,7 @@
     "elastic": 1.0578812821669026e-14
   },
   "three_way_analytic_vs_ngsbem": {
-    "soft_analytic_vs_ngsbem_relerr": 2.4535389375918916e-05,
+    "soft_analytic_vs_ngsbem_relerr": 2.453538804867963e-05,
     "formulation": "brakhage_werner_combined_field",
     "order": 3,
     "maxh": 0.3,
@@ -26,8 +35,8 @@
     "n_probes": 15
   },
   "versions": {
-    "radia": "4.95.6",
-    "ngsolve": "6.2.2604",
+    "radia": "4.95.77",
+    "ngsolve": "6.2.2606",
     "python": "3.12.10",
     "platform": "Windows-2022Server-10.0.20348-SP0"
   }
