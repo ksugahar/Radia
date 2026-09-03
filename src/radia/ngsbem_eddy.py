@@ -37,6 +37,18 @@ MU_0 = 4.0 * np.pi * 1e-7   # H/m
 EPS_0 = 8.854187817e-12      # F/m
 
 
+def _bem_measure_pair(ds, label, intorder, trial_order, test_order):
+    """Return measures matching the legacy absolute integration order.
+
+    NGSolve's variational BEM API adds two and both FE orders to the two
+    bonus-order values, so the remaining order belongs on one measure.
+    """
+    source_bonus = max(
+        0, int(intorder) - 2 - int(trial_order) - int(test_order)
+    )
+    return ds(label, bonus_intorder=source_bonus), ds(label)
+
+
 def create_conductor_mesh(width, height, depth, maxh=0.002,
                           conductor_label="conductor",
                           surface_label="surface"):
@@ -163,10 +175,8 @@ class EddyCurrentFEMBEM:
             intorder: Integration order for BEM singular quadrature
         """
         from ngsolve import (H1, SurfaceL2, BilinearForm, GridFunction,
-                              ds, dx, grad)
-        from ngsolve.bem import (SingleLayerPotentialOperator,
-                                  DoubleLayerPotentialOperator,
-                                  HypersingularOperator)
+                              Cross, ds, dx, grad, specialcf)
+        from ngsolve.bem import LaplaceDL, LaplaceSL
 
         t_start = time.perf_counter()
 
@@ -199,17 +209,26 @@ class EddyCurrentFEMBEM:
 
         # --- BEM operators (exterior Laplace, separate space API) ---
         print("  Assembling BEM operators...")
-        self._V_op = SingleLayerPotentialOperator(
-            self._fes_l2, intorder=intorder)
-        self._K_op = DoubleLayerPotentialOperator(
-            self._fes_h1, self._fes_l2,
-            trial_definedon=self.mesh.Boundaries(self.surface_label),
-            test_definedon=self.mesh.Boundaries(self.surface_label),
-            intorder=intorder)
-        self._D_op = HypersingularOperator(
-            self._fes_h1,
-            definedon=self.mesh.Boundaries(self.surface_label),
-            intorder=intorder)
+        l2_order = self.order - 1
+        v_source_ds, v_test_ds = _bem_measure_pair(
+            ds, self.surface_label, intorder, l2_order, l2_order
+        )
+        k_source_ds, k_test_ds = _bem_measure_pair(
+            ds, self.surface_label, intorder, self.order, l2_order
+        )
+        d_source_ds, d_test_ds = _bem_measure_pair(
+            ds, self.surface_label, intorder, self.order, self.order
+        )
+        self._V_op = LaplaceSL(uL2 * v_source_ds) * vL2 * v_test_ds
+        self._K_op = LaplaceDL(u * k_source_ds) * vL2 * k_test_ds
+        normal = specialcf.normal(3)
+        surface_curl_u = Cross(grad(u).Trace(), normal)
+        surface_curl_v = Cross(grad(v).Trace(), normal)
+        self._D_op = (
+            LaplaceSL(surface_curl_u * d_source_ds)
+            * surface_curl_v
+            * d_test_ds
+        )
         self._M_bf = BilinearForm(
             self._fes_h1.TrialFunction()
             * self._fes_l2.TestFunction().Trace()
@@ -715,10 +734,8 @@ class EddyCurrentBEMSIBC:
             intorder: Integration order for BEM singular quadrature
         """
         from ngsolve import (H1, SurfaceL2, BilinearForm, GridFunction,
-                              ds, dx, grad, CF)
-        from ngsolve.bem import (SingleLayerPotentialOperator,
-                                  DoubleLayerPotentialOperator,
-                                  HypersingularOperator)
+                              CF, Cross, ds, dx, grad, specialcf)
+        from ngsolve.bem import LaplaceDL, LaplaceSL
         try:
             from .ngsbem_peec import extract_dense_matrix
         except ImportError:
@@ -750,17 +767,26 @@ class EddyCurrentBEMSIBC:
         u, v = self._fes_h1.TnT()
         uL2, vL2 = self._fes_l2.TnT()
 
-        V_op = SingleLayerPotentialOperator(
-            self._fes_l2, intorder=intorder)
-        K_op = DoubleLayerPotentialOperator(
-            self._fes_h1, self._fes_l2,
-            trial_definedon=self.mesh.Boundaries(label),
-            test_definedon=self.mesh.Boundaries(label),
-            intorder=intorder)
-        D_op = HypersingularOperator(
-            self._fes_h1,
-            definedon=self.mesh.Boundaries(label),
-            intorder=intorder)
+        l2_order = self.order - 1
+        v_source_ds, v_test_ds = _bem_measure_pair(
+            ds, label, intorder, l2_order, l2_order
+        )
+        k_source_ds, k_test_ds = _bem_measure_pair(
+            ds, label, intorder, self.order, l2_order
+        )
+        d_source_ds, d_test_ds = _bem_measure_pair(
+            ds, label, intorder, self.order, self.order
+        )
+        V_op = LaplaceSL(uL2 * v_source_ds) * vL2 * v_test_ds
+        K_op = LaplaceDL(u * k_source_ds) * vL2 * k_test_ds
+        normal = specialcf.normal(3)
+        surface_curl_u = Cross(grad(u).Trace(), normal)
+        surface_curl_v = Cross(grad(v).Trace(), normal)
+        D_op = (
+            LaplaceSL(surface_curl_u * d_source_ds)
+            * surface_curl_v
+            * d_test_ds
+        )
         M_bf = BilinearForm(
             self._fes_h1.TrialFunction()
             * self._fes_l2.TestFunction().Trace()
