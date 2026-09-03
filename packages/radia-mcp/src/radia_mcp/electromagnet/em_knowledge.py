@@ -693,14 +693,16 @@ use explicit element duplication instead of IMA.
 
 ## IMA + Nonlinear Solve
 
-IMA works with nonlinear solvers (Picard, Newton, Hantila):
+Mesh-backed HDiv-VIM accepts the image contract on its supported geometry and
+material routes:
 
 ```python
-rad.Solve(container, 0.0001, 1000, 1, image='+x-z')
-# method=1 (BiCGSTAB) + IMA for quarter model
+rad.Solve(container, image='+x-z')
 ```
 
-Verified: IMA sign is correct for both linear and nonlinear problems.
+Do not select retired legacy BiCGSTAB/HACApK relaxation methods. Check the
+HDiv-VIM image restrictions and validation evidence for the element type and
+nonlinear material being used.
 """
 
 
