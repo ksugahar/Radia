@@ -2697,7 +2697,8 @@ all helper calls inside the region run in parallel.
 
 **Concrete rules**:
 
-- Helper modules under `src/radia/**.py` (NOT `panels/calc_*.py`)
+- Helper modules under `src/radia/**.py` (excluding `panels/calc_*.py` and
+  explicit Simulink `*_operator_assembly.py` update adapters)
   MUST NOT contain `with TaskManager():`.  If they need to assert
   the caller has wrapped, use the diagnostic at the top of the
   helper (see "Helper diagnostic" below).
@@ -2738,8 +2739,9 @@ python tools/audit_taskmanager.py
 ```
 
 The audit checks:
-1. Helper modules (anything in `src/radia/` except `panels/calc_*.py`)
-   have ZERO `with TaskManager():`.
+1. Helper modules (anything in `src/radia/` except `panels/calc_*.py` and
+   explicit Simulink `*_operator_assembly.py` update adapters) have ZERO
+   `with TaskManager():`.
 2. Caller modules (`panels/calc_*.py`, `validation_test/**.py`,
    `tests/**.py`, docs notebook helpers) that
    contain `.Assemble()` / `.Inverse(.*inverse=` / `mesh.Curve(`
