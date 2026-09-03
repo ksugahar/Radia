@@ -32,10 +32,15 @@ def test_optuna_workflow_installs_pinned_pybind_before_native_build():
     workflow = (root / ".github/workflows/radia-optuna.yml").read_text(
         encoding="utf-8"
     )
-    dependency = workflow.index("python -m pip install pybind11==3.0.2")
+    dependency = workflow.index(
+        "& $env:RADIA_OPTUNA_CI_PYTHON -m pip install pybind11==3.0.2 ninja"
+    )
     build = workflow.index("& .\\Build.ps1 -OptunaMexOnly")
     assert dependency < build
-    assert "python -m pip install build wheel pytest optuna==4.9.0" in workflow
+    assert (
+        "& $env:RADIA_OPTUNA_CI_PYTHON -m pip install "
+        "build wheel pytest optuna==4.9.0"
+    ) in workflow
 
 
 def test_optuna_candidate_records_every_machine_for_one_exact_wheel(
