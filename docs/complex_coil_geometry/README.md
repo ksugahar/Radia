@@ -38,7 +38,7 @@ Loads the coil model and visualizes it to verify the geometry is correct:
 - Imports coil from coil_model.py (single source of truth)
 - Displays coil parameters and bounding box
 - Calculates magnetic field at test points for verification
-- Exports geometry to VTK for inspection
+- Exports the field on an NGSolve mesh to checked GMSH `.msh v4.1`
 - Purpose: **Verify coil shape before field calculation**
 
 **Usage:**
@@ -51,7 +51,7 @@ python visualize_coils.py
 - radia (built from this project)
 - numpy
 - scipy (for rotation matrices)
-- pyvista (optional, for interactive 3D viewer)
+- gmsh (for checked field inspection)
 
 **Coil specification:**
 - Current: 1265 A
@@ -78,7 +78,7 @@ Loads the coil model and calculates magnetic field distribution on a 3D grid:
 - Imports coil from coil_model.py (same model as visualize_coils.py)
 - Fixed evaluation grid sized to the 8-segment coil extent
 - Structured grid field calculation
-- Vector field export (Bx, By, Bz) in VTK format
+- Vector field export (Bx, By, Bz) in GMSH `.msh v4.1`
 - Purpose: **Calculate field distribution for analysis**
 
 **Usage:**
@@ -88,17 +88,15 @@ python field_map.py
 ```
 
 **Output:**
-- File: `field_map.vtk` - Structured grid with field data
+- File: `field_map.msh` - checked GMSH mesh with field data
 - Grid size: Configurable (default: 31×51×31 = 49,011 points)
 - Coverage: fixed grid in field_map.py covering the full coil extent
 - Field data:
   - **Vector field**: B (Bx, By, Bz) in mT
 
-**Visualization in ParaView:**
-- Use 'Glyph' filter to show field direction with arrows
-- Use 'StreamTracer' filter to show field lines
-- Use 'Contour' filter to show constant field magnitude surfaces
-- Use 'Slice' filter to show field on cutting planes
+**Visualization in GMSH:**
+- Open `field_map.msh` and select the saved B-field view
+- Use vector glyphs, clipping planes, and field ranges as appropriate
 
 ## CoilBuilder API
 
@@ -267,7 +265,7 @@ This creates an 8-segment coil and calculates magnetic field at multiple points.
 - Fluent CoilBuilder API
 - Automatic state tracking
 - Magnetic field calculation
-- VTK export for ParaView
+- Checked GMSH field export
 
 ## Field Calculations
 
@@ -299,7 +297,7 @@ Position (mm)             Bx (mT)         By (mT)         Bz (mT)
 
 ## Visualization Options
 
-### VTS Export (For ParaView)
+### GMSH Field Export
 
 ```bash
 python visualize_coils.py

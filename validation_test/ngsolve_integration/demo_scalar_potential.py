@@ -144,20 +144,19 @@ def main():
     B_hdiv = solver.project_to_hdiv()
     print(f"   HDiv DOFs: {B_hdiv.space.ndof}")
 
-    # Step 6: VTK export (optional)
-    print("6. Exporting to VTK...")
-    from ngsolve import VTKOutput
-    from ngsolve import TaskManager
-    vtk_file = os.path.join(os.path.dirname(__file__),
-                            'demo_scalar_potential')
+    # Step 6: GMSH export (optional)
+    print("6. Exporting to GMSH...")
+    from radia.gmsh_post_export import GmshPostExport
+    gmsh_file = os.path.join(os.path.dirname(__file__),
+                             'demo_scalar_potential.msh')
     try:
-        vtk = VTKOutput(mesh, coefs=[B_cf, H_cf],
-                        names=['B', 'H'],
-                        filename=vtk_file)
-        vtk.Do()
-        print(f"   Written: {vtk_file}.vtu")
+        post = GmshPostExport(mesh)
+        post.add_vector_field('B', B_cf)
+        post.add_vector_field('H', H_cf)
+        post.write(gmsh_file)
+        print(f"   Written: {gmsh_file}")
     except Exception as e:
-        print(f"   VTK export skipped: {e}")
+        print(f"   GMSH export skipped: {e}")
 
     print()
     print("=== Done ===")

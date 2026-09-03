@@ -3,7 +3,7 @@ Induction heating simulation knowledge base for the Radia MCP server.
 
 Covers: complete EM-to-thermal workflow for induction heating using NGSolve,
 including Gmsh mesh loading, A-Phi eddy current formulation, Joule heat
-computation, transient thermal analysis, rotating workpiece, VTK output,
+computation, transient thermal analysis, rotating workpiece, GMSH output,
 and post-processing patterns.
 
 Public docs/notebooks:
@@ -490,7 +490,7 @@ Q = 0.5 * sigma * InnerProduct(E, Conj(E)).real
 **Typical performance** (mesh with ~222k elements, ~1.7M DOFs):
 - Matrix assembly: ~400 sec
 - BDDC+CG solve: ~90 sec (tol=1e-10)
-- VTK output: ~16 sec
+- GMSH output: measure and record separately for the chosen field set
 """
 
 INDUCTION_HEATING_THERMAL = """
@@ -628,7 +628,6 @@ JSON output keys (calc_heat / calc_heat_axisym):
 | ``T_sol_file`` | absolute path to the final-T NGSolve `.sol` |
 | ``heat_vol_file`` | absolute path to the companion `.vol`.  Empty when no separate companion was written (then re-use the `--wp-vol` input as the companion). |
 | ``msh_file`` | GMSH `.msh v4.1` (T_C + q_surf fields) when `--msh-output` was set |
-| ``vtu_files`` | per-step `.vtu` paths when `--vtu-prefix` was set |
 | ``csv_file`` | probe history CSV when both `--probe-point` + `--csv-output` were set |
 
 Naming convention:
@@ -1000,8 +999,8 @@ and the thermal solve (calc_heat.py):
   q ~ 1 / -1 / 0 respectively.
 
 * `validation_test/panels/test_heat_chain_golden.py` -- end-to-end chain test
-  (EM solve -> qsurf.sol -> thermal solve).  Slow-marked.
-   Use ParaView to animate the sequence.
+  (EM solve -> qsurf.sol -> thermal solve).  Slow-marked. Export accepted
+  spatial fields as indexed GMSH `.msh v4.1` artifacts.
 
 5. **Full rotation**: At 12 rpm, one rotation = 5 seconds. Choose t_end
    to capture the desired number of rotations.
@@ -1010,54 +1009,46 @@ and the thermal solve (calc_heat.py):
 INDUCTION_HEATING_POSTPROCESS = """
 # Post-Processing for Induction Heating
 
-## VTK Output for ParaView
+## GMSH `.msh v4.1` Output
 
 ```python
 from ngsolve import *
+from radia.gmsh_post_export import GmshPostExport
 
 # ============================================================
-# Basic VTK output (all fields)
+# Basic checked field output
 # ============================================================
-vtk = VTKOutput(mesh,
-                coefs=[B.real, B.imag, J.real, J.imag, Q],
-                names=["B_re", "B_im", "J_re", "J_im", "Q"],
-                filename="eddy_current_result",
-                subdivision=1,    # Subdivide elements for smooth plot
-                legacy=False)     # Use VTK XML format (.vtu)
-vtk.Do()
+post = GmshPostExport(mesh)
+post.add_vector_field("B_re", B.real)
+post.add_vector_field("B_im", B.imag)
+post.add_vector_field("J_re", J.real)
+post.add_vector_field("J_im", J.imag)
+post.add_scalar_field("Q", Q)
+post.write("eddy_current_result.msh")
 
 # ============================================================
-# VTK output with material ID
+# Output with material ID
 # ============================================================
-# Create integer field for material identification
 mat_names = mesh.GetMaterials()
 mat_id_dict = {mat: i+1 for i, mat in enumerate(mat_names)}
-mat_id = CoefficientFunction(
-    [mat_id_dict[mat] for mat in mat_names]
-)
+mat_id = mesh.MaterialCF(mat_id_dict)
 
-vtk = VTKOutput(mesh,
-                coefs=[mat_id, B.real, Q],
-                names=["MaterialID", "B_real", "Q"],
-                filename="result_with_id",
-                subdivision=1, legacy=False)
-vtk.Do()
+post = GmshPostExport(mesh)
+post.add_scalar_field("MaterialID", mat_id)
+post.add_vector_field("B_real", B.real)
+post.add_scalar_field("Q", Q)
+post.write("result_with_id.msh")
 
 # ============================================================
-# VTK output for thermal time steps (.pvd animation)
+# Thermal time-step files
 # ============================================================
-# Create VTKOutput ONCE, call Do(time=t) for .pvd time series
-vtk = VTKOutput(mesh,
-                coefs=[gfT],
-                names=["Temperature"],
-                filename="thermal_series",
-                subdivision=1, legacy=False)
-
 for step in range(n_steps):
     # ... solve time step ...
-    vtk.Do(time=t)  # Writes thermal_series_N.vtu + updates .pvd
+    post = GmshPostExport(mesh)
+    post.add_scalar_field("Temperature", gfT)
+    post.write(f"thermal_series_{step:04d}.msh", time=t, timestep=step)
 
-# Open thermal_series.pvd in ParaView for animation playback
+# Index generated files from result.json for reproducible playback.
 ```
 
 ## Point and Line Evaluation
@@ -1135,14 +1126,14 @@ savemat('field_results.mat', {
 })
 ```
 
-### Animated GIF from VTK Outputs
+### Animated GIF from GMSH Field Frames
 
 ```python
 # animated_gif.py: Create animated GIF from PNG frames
 from PIL import Image
 import glob
 
-# Assuming ParaView has exported PNG frames
+# Assuming the GMSH render step has exported PNG frames
 png_files = sorted(glob.glob("thermal_step_*.png"))
 frames = [Image.open(f) for f in png_files]
 
@@ -1331,14 +1322,17 @@ T = gfT(mesh(0.03, 0, 0))
 Bz = B[2](mesh(0, 0, 0.03))  # B_z component
 ```
 
-## 12. LOW: VTK Legacy Format
+## 12. LOW: Bypassing the Radia Post-Processing Contract
 
 ```python
-# OLD: Legacy VTK format (.vtk)
-vtk = VTKOutput(mesh, ..., legacy=True)  # Large files, old format
+# WRONG for a Radia-owned workflow: direct VTK-family output
 
-# RECOMMENDED: XML VTK format (.vtu)
-vtk = VTKOutput(mesh, ..., legacy=False)  # Smaller, modern format
+# CORRECT: checked GMSH .msh v4.1 output
+from radia.gmsh_post_export import GmshPostExport
+
+post = GmshPostExport(mesh)
+post.add_scalar_field("Temperature", gfT)
+post.write("temperature.msh")
 ```
 """
 

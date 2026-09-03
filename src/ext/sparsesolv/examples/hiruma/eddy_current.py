@@ -175,9 +175,9 @@ print(f"||B||^2 relative diff: {rel_diff:.2e}")
 print(f"\nBDDC is essential for HCurl problems with high-contrast materials.")
 
 # ============================================================
-# VTK Output (BDDC solution)
+# GMSH output (BDDC solution)
 # ============================================================
-print("\n=== VTK Output ===")
+print("\n=== GMSH Output ===")
 
 # Physical fields from BDDC A-Phi solution
 B_re = curl(gfA_sol).real
@@ -200,13 +200,17 @@ Q_joule = 0.5 * IfPos(sigma_cf - 1, J2 / sigma_cf, CF(0))
 mat_names = mesh.GetMaterials()
 mat_id = mesh.MaterialCF({mat: i + 1 for i, mat in enumerate(mat_names)})
 
-vtk = VTKOutput(mesh,
-                coefs=[B_re, B_im, B_abs, J_re, J_im, Q_joule, mat_id],
-                names=["B_re", "B_im", "B_abs", "J_re", "J_im", "Q_joule", "MaterialID"],
-                filename=f"eddy_current_{mesh_name}",
-                subdivision=0, legacy=False)
-vtk.Do()
-print(f"  Written: eddy_current_{mesh_name}.vtu")
+from radia.gmsh_post_export import GmshPostExport
+
+post = GmshPostExport(mesh)
+post.add_vector_field("B_re", B_re)
+post.add_vector_field("B_im", B_im)
+post.add_scalar_field("B_abs", B_abs)
+post.add_vector_field("J_re", J_re)
+post.add_vector_field("J_im", J_im)
+post.add_scalar_field("Q_joule", Q_joule)
+post.add_scalar_field("MaterialID", mat_id)
+post.write(f"eddy_current_{mesh_name}.msh")
 
 # Total Joule power in conductor [W]
 P_cond = Integrate(Q_joule, mesh, definedon=mesh.Materials("cond"))

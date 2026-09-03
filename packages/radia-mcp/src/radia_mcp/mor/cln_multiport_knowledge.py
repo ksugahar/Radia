@@ -567,11 +567,11 @@ saddle-point assembly is retained:
 
 The historical CLN stage update is retired.
 
-The historical driver exported per-stage VTK files for ParaView containing
+The historical driver exported per-stage GMSH `.msh v4.1` files containing
 
     Ao, A, B = curl(A), phi, J
 
-with cellfields tagged for inspection of each ladder mode.
+with fields tagged for inspection of each ladder mode.
 
 ## What works, what doesn't (lab notes)
 

@@ -16,7 +16,7 @@ authors = [
 maintainers = [
     {name = "Radia Development Team"},
 ]
-keywords = ["magnetostatics", "magnetic field", "radia", "ngsolve", "fem", "synchrotron", "cubit", "mesh", "export", "gmsh", "nastran", "vtk", "netgen", "spice", "ltspice", "simulink"]
+keywords = ["magnetostatics", "magnetic field", "radia", "ngsolve", "fem", "synchrotron", "cubit", "mesh", "export", "gmsh", "nastran", "netgen", "spice", "ltspice", "simulink"]
 classifiers = [
     "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Science/Research",

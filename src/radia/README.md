@@ -204,39 +204,25 @@ coil = (CoilBuilder(current=1000)
 ```
 
 
-**VTS export for ParaView visualization.**
-
-Export Radia magnetic field to VTS (VTK XML Structured Grid) format using C++ implementation.
-
-**Usage:**
-```python
-import radia as rad
-
-# Radia always uses meters
-
-# Create hexahedral magnet (30x30x10 mm, magnetization 1.2T in z)
-vertices = [[-0.015,-0.015,-0.005], [0.015,-0.015,-0.005], [0.015,0.015,-0.005], [-0.015,0.015,-0.005],
-            [-0.015,-0.015,0.005], [0.015,-0.015,0.005], [0.015,0.015,0.005], [-0.015,0.015,0.005]]
-mag = rad.ObjHexahedron(vertices, [0, 0, 954930])
-
-# Export to VTS
-           [-0.05, 0.05], [-0.05, 0.05], [0.01, 0.05],
-           21, 21, 11)
-```
-
 ## Visualization Workflow
 
-### Option 1: ParaView (VTS Export)
-Best for publication-quality figures, batch processing.
+### GMSH field output
+
+Radia spatial fields use the repository's checked GMSH `.msh v4.1` writer.
+The NGSolve mesh remains the field-evaluation domain.
+
 ```python
 import radia as rad
-# Radia always uses meters
-# ... create magnet ...
-           [-0.1, 0.1], [-0.1, 0.1], [0.0, 0.2],
-           21, 21, 21)
+from radia.gmsh_post_export import GmshPostExport
+
+# `mesh` is the NGSolve mesh on which the Radia coil field is evaluated.
+B = rad.RadiaField(coil, "b")
+post = GmshPostExport(mesh)
+post.add_vector_field("B", B)
+post.write("magnetic_field.msh")
 ```
 
-### Option 2: NGSolve Integration
+### NGSolve integration
 For coupled FEM simulations.
 ```python
 import radia as rad
@@ -247,7 +233,6 @@ B_cf = rad.RadiaField(magnet, 'b')
 
 - **NGSolve Integration**: `validation_test/ngsolve_integration/`
 - **Coil Builder Examples**: `docs/complex_coil_geometry/`
-- **ParaView**: https://www.paraview.org/
-- **PyVista**: https://docs.pyvista.org/
+- **GMSH**: https://gmsh.info/
 
 Last Updated: 2026-01-09
