@@ -109,6 +109,8 @@ def test_docs_notebooks_do_not_restore_retired_result_sidecars():
         ROOT / "docs" / "cubit_mesh_export" / "cubit_mesh_export_showcase_results.json",
         ROOT / "docs" / "cubit_mesh_export" / "netgen" / "p_convergence_demo_results.json",
         ROOT / "docs" / "kelvin" / "kelvin_exterior_source_and_aphi_results.json",
+        ROOT / "docs" / "universal_relaxation_network" / "cq_urn_bridge_results.json",
+        ROOT / "docs" / "universal_relaxation_network" / "urn_vs_vf_comparison.json",
     }
     offenders = sorted(path.relative_to(ROOT) for path in retired if path.exists())
     assert not offenders, (

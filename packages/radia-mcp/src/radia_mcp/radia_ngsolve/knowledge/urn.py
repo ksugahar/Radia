@@ -261,7 +261,8 @@ Why this matters:
 
 Education artifact:
   docs/universal_relaxation_network/cq_urn_bridge.ipynb
-  docs/universal_relaxation_network/cq_urn_bridge_results.json
+Checked evidence:
+  validation_test/universal_relaxation_network/cq_urn_bridge_results.json
 
 The result-bearing notebook fits a two-pole passive relaxation ladder on a
 candidate tau grid, builds BDF2 CQ weights, and compares the causal CQ response

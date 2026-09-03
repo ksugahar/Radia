@@ -9,6 +9,7 @@ import sys
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 RADIA_MCP_SRC = REPO_ROOT / "packages" / "radia-mcp" / "src"
+VALIDATION_DIR = REPO_ROOT / "validation_test" / "universal_relaxation_network"
 if str(RADIA_MCP_SRC) not in sys.path:
     sys.path.insert(0, str(RADIA_MCP_SRC))
 
@@ -18,12 +19,12 @@ from radia_mcp.radia_ngsolve.cq_urn import make_cq_urn_bridge_artifact  # noqa: 
 def build_artifact(output_dir: str | Path | None = None) -> dict:
     """Run the deterministic URN/CQ bridge example and write result JSON."""
 
-    out_dir = Path(output_dir) if output_dir is not None else Path(__file__).resolve().parent
+    out_dir = Path(output_dir) if output_dir is not None else VALIDATION_DIR
     out_dir.mkdir(parents=True, exist_ok=True)
     artifact = make_cq_urn_bridge_artifact(n_steps=100, dt=0.01, hit_index=10)
     artifact["artifact_paths"] = {
         "notebook_source_path": "docs/universal_relaxation_network/cq_urn_bridge.ipynb",
-        "result_json": "docs/universal_relaxation_network/cq_urn_bridge_results.json",
+        "result_json": "validation_test/universal_relaxation_network/cq_urn_bridge_results.json",
         "figure": "embedded in docs/universal_relaxation_network/cq_urn_bridge.ipynb",
     }
     artifact["notebook_source_artifact_id"] = (
@@ -61,8 +62,6 @@ def plot_artifact(artifact: dict, output_dir: str | Path | None = None) -> Path:
     ax.set_ylabel("normalized response")
     ax.grid(True, alpha=0.25)
     ax.legend(loc="best")
-    ax.set_title("URN passive relaxation model used directly by BDF2 CQ")
-
     fig_path = out_dir / "cq_urn_bridge_waveforms.png"
     fig.savefig(fig_path, dpi=160)
     plt.close(fig)
@@ -74,7 +73,7 @@ if __name__ == "__main__":
     figure = plot_artifact(artifact)
     print(json.dumps({
         "pass": artifact["pass"],
-        "result_json": "cq_urn_bridge_results.json",
+        "result_json": "validation_test/universal_relaxation_network/cq_urn_bridge_results.json",
         "figure": figure.name,
         "fit_relative_error": artifact["model"]["fit"]["relative_error"],
         "cq_prehit_max_abs": artifact["cq"]["prehit_max_abs"],
