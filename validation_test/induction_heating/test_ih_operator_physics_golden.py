@@ -52,8 +52,13 @@ P_WP_BAND_W = (0.98 * P_WP_GOLDEN_W, 1.02 * P_WP_GOLDEN_W)
 
 
 @pytest.fixture(scope="module")
-def assembled(tmp_path_factory):
-    pytest.importorskip("ngsolve")
+def _taskmanager():
+    ng = pytest.importorskip("ngsolve")
+    with ng.TaskManager():
+        yield
+
+
+def _assemble(tmp):
     pytest.importorskip("cubit_mesh_export")
     from netgen.occ import (
         Axes,
@@ -67,7 +72,6 @@ def assembled(tmp_path_factory):
 
     from radia.simulink import ih_operator_assembly as assembly
 
-    tmp = tmp_path_factory.mktemp("ih_physics")
     shape = Box(Pnt(0, 0, 0), Pnt(0.01, 0.01, 0.01))
     shape.mat("workpiece")
     for face in shape.faces:
@@ -100,6 +104,11 @@ def assembled(tmp_path_factory):
     return {"config": config, "workpiece": workpiece, "coil": coil, "tmp": tmp}
 
 
+@pytest.fixture(scope="module")
+def assembled(tmp_path_factory, _taskmanager):
+    return _assemble(tmp_path_factory.mktemp("ih_physics"))
+
+
 def _dense(n: int, row_ptr, col, val) -> np.ndarray:
     matrix = np.zeros((n, n))
     for row in range(n):
@@ -108,16 +117,9 @@ def _dense(n: int, row_ptr, col, val) -> np.ndarray:
     return matrix
 
 
-def test_p_wp_in_golden_band_and_matches_direct_calc_run(assembled):
+def _direct_power(assembled):
     from radia.panels.calc_inductance import build_argparser, run_inductance
 
-    power = assembled["config"]["unit_current"]["electromagnetic_power_W"]
-    assert (
-        P_WP_BAND_W[0] <= power <= P_WP_BAND_W[1]
-    ), f"P_wp(1A) = {power:.6e} W left the golden band {P_WP_BAND_W}"
-
-    # Independently spelled-out argv for the same physics; a flag the
-    # assembler forgets or mangles shows up as a power mismatch here.
     tmp = assembled["tmp"]
     argv = [
         "--coil-solver",
@@ -156,7 +158,53 @@ def test_p_wp_in_golden_band_and_matches_direct_calc_run(assembled):
     ]
     payload = run_inductance(build_argparser().parse_args(argv))
     assert payload.get("status") != "error" and not payload.get("error")
-    direct_power = float(payload["P_wp_W"])
+    return float(payload["P_wp_W"])
+
+
+def _physics_metrics(config):
+    unit = config["unit_current"]
+    n = config["n_temperature"]
+    mass = _dense(n, config["mass_row_ptr"], config["mass_col"], config["mass_value"])
+    stiffness = _dense(
+        n, config["stiffness_row_ptr"], config["stiffness_col"], config["stiffness_value"]
+    )
+    convection = _dense(
+        n, config["convection_row_ptr"], config["convection_col"], config["convection_value"]
+    )
+    weights = np.asarray(config["temperature_cell_weights"], dtype=float)
+    mass_row_sums = mass.sum(axis=1)
+    closure = float(np.dot(config["heat_cell_weights"], config["heat_projection"]))
+    return {
+        "electromagnetic_power_W": float(unit["electromagnetic_power_W"]),
+        "thermal_source_power_W": float(unit["thermal_source_power_W"]),
+        "relative_power_error": float(unit["relative_power_error"]),
+        "heat_projection_closure_W": closure,
+        "mass_sum_J_per_K": float(mass.sum()),
+        "stiffness_constant_nullspace_maximum": float(
+            np.abs(stiffness @ np.ones(n)).max()
+        ),
+        "stiffness_maximum_absolute_entry": float(np.abs(stiffness).max()),
+        "convection_sum_m2": float(convection.sum()),
+        "temperature_weight_minimum_J_per_K": float(weights.min()),
+        "temperature_weight_sum_J_per_K": float(weights.sum()),
+        "temperature_weight_row_sum_maximum_relative_error": float(
+            np.max(
+                np.abs(weights - mass_row_sums)
+                / np.maximum(np.abs(mass_row_sums), 1.0e-30)
+            )
+        ),
+    }
+
+
+def test_p_wp_in_golden_band_and_matches_direct_calc_run(assembled):
+    power = assembled["config"]["unit_current"]["electromagnetic_power_W"]
+    assert (
+        P_WP_BAND_W[0] <= power <= P_WP_BAND_W[1]
+    ), f"P_wp(1A) = {power:.6e} W left the golden band {P_WP_BAND_W}"
+
+    # Independently spelled-out argv for the same physics; a flag the
+    # assembler forgets or mangles shows up as a power mismatch here.
+    direct_power = _direct_power(assembled)
     assert power == pytest.approx(direct_power, rel=1.0e-9), (
         "the assembler and a direct calc_inductance run with identical "
         f"settings disagree: {power:.10e} vs {direct_power:.10e} W"
@@ -166,43 +214,43 @@ def test_p_wp_in_golden_band_and_matches_direct_calc_run(assembled):
 def test_thermal_source_preserves_electromagnetic_power(assembled):
     config = assembled["config"]
     unit = config["unit_current"]
+    metrics = _physics_metrics(config)
     assert unit["reference_current_A"] == 1.0
-    assert unit["relative_power_error"] < 1.0e-6
-    closure = float(np.dot(config["heat_cell_weights"], config["heat_projection"]))
-    assert closure == pytest.approx(
-        unit["electromagnetic_power_W"], rel=1.0e-9
+    assert metrics["relative_power_error"] < 1.0e-6
+    assert metrics["heat_projection_closure_W"] == pytest.approx(
+        metrics["electromagnetic_power_W"], rel=1.0e-9
     ), "dot(w, q) no longer reproduces the electromagnetic power"
-    assert unit["thermal_source_power_W"] == pytest.approx(closure, rel=1.0e-12)
+    assert metrics["thermal_source_power_W"] == pytest.approx(
+        metrics["heat_projection_closure_W"], rel=1.0e-12
+    )
 
 
 def test_thermal_operator_identities(assembled):
     config = assembled["config"]
-    n = config["n_temperature"]
-    mass = _dense(n, config["mass_row_ptr"], config["mass_col"], config["mass_value"])
-    stiffness = _dense(
-        n, config["stiffness_row_ptr"], config["stiffness_col"], config["stiffness_value"]
-    )
-    convection = _dense(
-        n, config["convection_row_ptr"], config["convection_col"], config["convection_value"]
-    )
+    metrics = _physics_metrics(config)
 
     # P1 quadrature integrates constants exactly, so these hold to
     # machine precision against the EXACT cube volume / area.
-    assert mass.sum() == pytest.approx(RHO_CP * BOX_VOLUME_M3, rel=1.0e-10)
-    ones = np.ones(n)
+    assert metrics["mass_sum_J_per_K"] == pytest.approx(
+        RHO_CP * BOX_VOLUME_M3, rel=1.0e-10
+    )
     assert (
-        np.abs(stiffness @ ones).max() <= 1.0e-10 * np.abs(stiffness).max()
+        metrics["stiffness_constant_nullspace_maximum"]
+        <= 1.0e-10 * metrics["stiffness_maximum_absolute_entry"]
     ), "the conduction operator lost its constant nullspace (K@1 != 0)"
-    assert convection.sum() == pytest.approx(BOX_AREA_M2, rel=1.0e-10), (
+    assert metrics["convection_sum_m2"] == pytest.approx(
+        BOX_AREA_M2, rel=1.0e-10
+    ), (
         "the raw convection operator must integrate uv over the whole "
         "surface (h is applied at runtime)"
     )
-    weights = np.asarray(config["temperature_cell_weights"], dtype=float)
-    assert weights == pytest.approx(
-        mass.sum(axis=1), rel=1.0e-10
-    ), "temperature_cell_weights must be the lumped (row-sum) mass"
-    assert np.all(weights > 0.0)
-    assert math.isclose(weights.sum(), RHO_CP * BOX_VOLUME_M3, rel_tol=1.0e-10)
+    assert metrics["temperature_weight_row_sum_maximum_relative_error"] <= 1.0e-10
+    assert metrics["temperature_weight_minimum_J_per_K"] > 0.0
+    assert math.isclose(
+        metrics["temperature_weight_sum_J_per_K"],
+        RHO_CP * BOX_VOLUME_M3,
+        rel_tol=1.0e-10,
+    )
 
 
 def test_exact_single_current_response_contract(assembled):
