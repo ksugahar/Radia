@@ -25,7 +25,8 @@ def test_fast_ci_runs_only_on_mdx_and_native_is_a_named_release_lane():
     assert "twine==6.2.0" in native
     assert "pytest-rerunfailures" not in native
     assert "--reruns" not in native
-    assert "--ignore=tests/equation" in native
+    assert "tools/run_test_tier.py --profile native-smoke" in native
+    assert "'tests/'" not in native
     assert '"MKLROOT=$mklRoot"' in native
     assert "MKLROOT=C:\\Program Files\\Python312\\Library" not in native
     assert "runs-on: [self-hosted, Windows, X64, mdx]" in optuna
@@ -108,7 +109,7 @@ def test_pre_push_runs_the_unpushed_candidate_on_mdx():
     assert "scp" in helper
     assert "tools/ci_preflight.py --since $base" in helper
     assert "'mcp>=1.0,<2'" in helper
-    assert "tests/test_docs_notebook_contract.py" in helper
+    assert "tools/run_test_tier.py --profile fast-contracts" in helper
     assert "upload_release_asset.py" not in hook
     assert "developer push must never upload mutable" in hook
 

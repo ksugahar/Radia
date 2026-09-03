@@ -319,9 +319,9 @@ jobs:
           Write-Host "radia_motor_rom.dll: ${motorSz} KB"
 
       # ----------------------------------------------------------------
-      # Test: Run simple Windows integration pytest tests.
+      # Test: Run the bounded native Windows smoke tier.
       # ----------------------------------------------------------------
-      - name: Run simple tests
+      - name: Run native smoke tests
         shell: pwsh
         working-directory: ${{ github.workspace }}
         env:
@@ -335,35 +335,13 @@ jobs:
           $env:PATH = "$env:RADIA_CI_GIT_DIR;$env:PATH"
           python -c "import shutil,subprocess; p=shutil.which('git'); assert p, 'git is absent from pytest PATH'; subprocess.run([p,'--version'],check=True)"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          Write-Host "Running lightweight pytest gate from tests/..."
+          Write-Host "Running checked native-smoke tier..."
           # Tee pytest stdout so a hard crash that prevents JUnit creation
           # still leaves a diagnostic log. Deterministic failures are not
           # retried; one failure is evidence that the release is not ready.
-          $pytestArgs = @(
-            'tests/',
-            '--ignore=tests/mcp_server',
-            # Eqnedit64 owns its font-backed native/model suites in
-            # eqnedit64.yml.  The Radia wheel lane must not depend on a TeX
-            # Live installation on the mdx numerical runner.
-            '--ignore=tests/equation',
-            '--ignore=tests/test_cubit_installers.py',
-            '--ignore=tests/test_release_quad_optuna_candidate.py',
-            '-v',
-            '--tb=short',
-            '-r', 'aR',
-            "--junitxml=$env:RADIA_CI_OUTPUT_DIR\test-results.xml",
-            '--durations=50',
-            '--durations-min=1.0'
-          )
-          $markerExpr = 'not golden'
-          if ($env:RUN_SLOW_TESTS -ne 'true') {
-            $markerExpr = 'not slow and not golden'
-            Write-Host "Fast CI -- excluding @pytest.mark.slow and @pytest.mark.golden tests."
-          } else {
-            Write-Host "Manual full gate -- running slow simple tests here; golden tests run in their own step."
-          }
-          $pytestArgs += @('-m', $markerExpr)
-          python -m pytest @pytestArgs 2>&1 | Tee-Object -FilePath "$env:RADIA_CI_OUTPUT_DIR\pytest-basic-stdout.log"
+          python tools/run_test_tier.py --profile native-smoke --verbose `
+            --junitxml "$env:RADIA_CI_OUTPUT_DIR\test-results.xml" `
+            2>&1 | Tee-Object -FilePath "$env:RADIA_CI_OUTPUT_DIR\pytest-basic-stdout.log"
           $rc = $LASTEXITCODE
           Write-Host "pytest simple exit=$rc"
           if ($rc -ne 0) {
