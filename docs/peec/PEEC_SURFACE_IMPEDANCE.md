@@ -872,22 +872,26 @@ U, T = lanczos_tridiagonalize(matvec, R_dc, v0, k_reduced)
 Radia uses **HACApK** library for H-matrix operations:
 
 ```python
-import radia as rad
+from radia.peec_hacapk_solver import PEECHACApKSolver
 
-# Enable H-matrix solver
-rad.SolverConfig(hacapk_eps=1e-4, hacapk_leaf=10, hacapk_eta=2.0)
+# Build the PEEC inductance operator once.
+solver = PEECHACApKSolver(
+    centers, directions, lengths, widths, heights, sigmas,
+    aca_eps=1e-4, leaf_size=128, eta=3.0,
+)
 
-# Solve with H-matrix acceleration
-rad.Solve(container, precision=0.0001, max_iter=1000, method=2)  # method=2 = HACApK
+# Reuse it for each frequency-domain right-hand side.
+result = solver.solve(freq_hz, voltage, tol=1e-8)
+print(solver.hacapk_stats)
 ```
 
 ### When to Use ACA
 
 | Problem Size | Recommended Solver |
 |--------------|-------------------|
-| N < 500 | Dense LU (fast for small N) |
-| 500 < N < 2000 | BiCGSTAB (iterative) |
-| N > 2000 | **HACApK (ACA)** |
+| N < 500 | Dense PEEC assembly is often simplest |
+| 500 < N < 2000 | Measure dense and HACApK routes |
+| N > 2000 | **PEECHACApKSolver** with measured ACA settings |
 
 ---
 

@@ -347,8 +347,9 @@ if "SolverConfig" in globals():
 
     def SolverConfig(**kwargs):   # noqa: F811  (adds demag_backend on top of the C++ SolverConfig)
         """Unified solver config.  Adds the demag_backend selector ("hdiv" | "auto", see
-        set_demag_backend); all other kwargs (hacapk_eps, bicgstab_tol, relax_param, newton_method, ...)
-        pass through to the C++ SolverConfig."""
+        set_demag_backend); nonlinear LU-state options such as relax_param,
+        newton_method, and keep_magnetization pass through to the C++ SolverConfig.
+        HDiv, PEEC, and BEM compression settings belong to their solver APIs."""
         if "demag_backend" in kwargs:
             set_demag_backend(kwargs.pop("demag_backend"))
         if kwargs:
