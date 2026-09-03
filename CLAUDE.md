@@ -2743,12 +2743,14 @@ The audit checks:
 2. Caller modules (`panels/calc_*.py`, `validation_test/**.py`,
    `tests/**.py`, docs notebook helpers) that
    contain `.Assemble()` / `.Inverse(.*inverse=` / `mesh.Curve(`
-   DO have `with TaskManager():` at the top of the containing
-   function.
+   DO have at least one caller-owned `with TaskManager():` region. This is a
+   fast file-level minimum gate: it catches files with no region at all, but
+   does not claim to prove that every runtime call path is covered. Focused
+   tests and review own that stronger control-flow check.
 
 Run after editing any solver helper, validation driver, panel calc script, or
-docs notebook helper.  The check is
-fast (~1 s repo-wide); add to pre-commit if desired.
+docs notebook helper. The static check prefilters candidate files without
+executing a solver; add it to pre-commit if desired.
 
 **Migration note (2026-05-27)**: The 7 helpers under `src/radia/`
 that originally had internal `with TaskManager():` were converted
