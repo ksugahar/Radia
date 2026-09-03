@@ -98,13 +98,7 @@ void UpdateSourcesForRelax( int );
 void SolveGen( int, double, int, int, const char* );
 void SolveGenNonl( int, double, int, int, int, const char* );
 int BuildMatrix( int, const char* );
-#ifdef RADIA_USE_HACAPK
-void SetHACApKParams( double, int, double );
-void GetHACApKStats( double*, int* );
-#endif
 void GetSolveStats( double*, int* );
-void SetBiCGSTABTolerance( double );
-double GetBiCGSTABTolerance();
 void SetRelaxParam( double );
 double GetRelaxParam();
 void SetKeepMagnetization( bool );
@@ -1316,50 +1310,9 @@ int CALL RadSetRelaxSubInterval(int InteractElemKey, int StartNo, int FinNo, int
 
 //-------------------------------------------------------------------------
 
-#ifdef RADIA_USE_HACAPK
-int CALL RadSetHACApKParams(int* n, double eps, int leaf_size, double eta)
-{
-	SetHACApKParams(eps, leaf_size, eta);
-	*n = 1;
-	return ioBuffer.OutErrorStatus();
-}
-
-int CALL RadSetHMatrixEpsilon(int* n, double eps)
-{
-	// Set only epsilon, keep other params at default
-	// This is ELF-compatible: magic.set_hmatrix_epsilon(eps)
-	SetHACApKParams(eps, -1, -1.0);  // -1 means keep current value
-	*n = 1;
-	return ioBuffer.OutErrorStatus();
-}
-
-int CALL RadGetHACApKStats(double* dOut, int* nOut)
-{
-	GetHACApKStats(dOut, nOut);
-	return ioBuffer.OutErrorStatus();
-}
-#endif
-
-//-------------------------------------------------------------------------
-
 int CALL RadGetSolveStats(double* dOut, int* nOut)
 {
 	GetSolveStats(dOut, nOut);
-	return ioBuffer.OutErrorStatus();
-}
-
-//-------------------------------------------------------------------------
-
-int CALL RadSetBiCGSTABTol(int* n, double tol)
-{
-	SetBiCGSTABTolerance(tol);
-	*n = 1;
-	return ioBuffer.OutErrorStatus();
-}
-
-int CALL RadGetBiCGSTABTol(double* tol)
-{
-	*tol = GetBiCGSTABTolerance();
 	return ioBuffer.OutErrorStatus();
 }
 

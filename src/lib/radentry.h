@@ -954,56 +954,6 @@ EXP int CALL RadUtiMPI(int* arPar, char* OnOrOff, double* arData=0, long* pnData
 
 EXP int CALL RadUtiYeldFuncSet(int (*pExtFunc)());
 
-#ifdef RADIA_USE_HACAPK
-/** Sets retained HACApK (H-matrix) construction and compression parameters.
-The public RadSolve relaxation path no longer selects HACApK by method number.
-@param n [out] dummy output
-@param eps [in] ACA+ compression tolerance (default: 1e-4, use 1e-8 for high accuracy)
-@param leaf_size [in] minimum cluster size in elements (default: 32, ELF uses 10)
-@param eta [in] admissibility parameter (default: 2.0)
-@return integer error code (0 : no error, >0 : error number, <0 : warning number)
-@author Radia Development Team
-*/
-EXP int CALL RadSetHACApKParams(int* n, double eps, int leaf_size, double eta);
-
-
-/** Sets only the H-matrix ACA epsilon (tolerance) for HACApK solver.
-ELF-compatible API: magic.set_hmatrix_epsilon(eps)
-@param n [out] dummy output
-@param eps [in] ACA+ compression tolerance (default: 1e-4, use 1e-8 for high accuracy)
-@return integer error code (0 : no error, >0 : error number, <0 : warning number)
-@author Radia Development Team
-*/
-EXP int CALL RadSetHMatrixEpsilon(int* n, double eps);
-
-/** Gets retained HACApK (H-matrix) statistics from a low-level H-matrix operation.
-The public RadSolve relaxation path no longer selects HACApK by method number.
-@param dOut [out] array of 7 doubles: [0] n_lowrank, [1] n_dense, [2] max_rank,
-                  [3] n_leaves, [4] n_dof, [5] compression_ratio, [6] build_time_sec
-@param nOut [out] number of values written to dOut (7)
-@return integer error code (0 : no error, >0 : error number, <0 : warning number)
-@author Radia Development Team
-*/
-EXP int CALL RadGetHACApKStats(double* dOut, int* nOut);
-#endif
-
-/** Sets the retained low-level BiCGSTAB tolerance.
-The public RadSolve relaxation path no longer selects BiCGSTAB by method number.
-Default: 1e-4. Lower values give higher accuracy but slower convergence.
-@param n [out] dummy output
-@param tol [in] BiCGSTAB tolerance (default: 1e-4)
-@return integer error code (0 : no error, >0 : error number, <0 : warning number)
-@author Radia Development Team
-*/
-EXP int CALL RadSetBiCGSTABTol(int* n, double tol);
-
-/** Gets current BiCGSTAB inner loop tolerance.
-@param tol [out] current BiCGSTAB tolerance
-@return integer error code (0 : no error, >0 : error number, <0 : warning number)
-@author Radia Development Team
-*/
-EXP int CALL RadGetBiCGSTABTol(double* tol);
-
 /** Sets under-relaxation coefficient for nonlinear iteration.
 @param n [out] dummy output (set to 1)
 @param relax [in] relaxation coefficient (0.0 = full step, 0.0-1.0 = under-relaxation)

@@ -59,10 +59,6 @@ public:
 	// Nonlinear solver method: 0=mucal1 (chi-change), 1=mucal2 (B-change/Newton)
 	int NonlinearMethod;
 
-	// BiCGSTAB inner loop tolerance (default: 1e-4, ELF-compatible)
-	// Can be set via Python API: rad.SolverPar("bicg_tol", value)
-	double m_bicg_tol;
-
 	// Legacy surface-charge-specific acceleration controls were removed;
 	// magnetic-material development now belongs to the HDiv-VIM path.
 
@@ -123,31 +119,6 @@ public:
 	int m_cached_obj_key;            // Geometry key that the cache is valid for
 	std::string m_cached_image_spec; // Image symmetry string that the cache is valid for
 
-#ifdef RADIA_USE_HACAPK
-	// HACApK parameters for H-matrix solver
-	double m_hacapk_eps;       // ACA+ compression tolerance (default: 1e-4)
-	int m_hacapk_leaf_size;    // Minimum cluster size (default: 32)
-	double m_hacapk_eta;       // Admissibility parameter (default: 2.0)
-
-	// HACApK statistics from last solve
-	int m_hacapk_n_lowrank;
-	int m_hacapk_n_dense;
-	int m_hacapk_max_rank;
-	int m_hacapk_n_leaves;
-	int m_hacapk_n_dof;
-	double m_hacapk_compression;
-	double m_hacapk_build_time;
-	double m_hacapk_memory_mb;        // H-matrix memory usage [MB]
-	double m_hacapk_dense_memory_mb;  // Dense matrix memory [MB]
-	bool m_hacapk_stats_valid;
-
-
-	// Detailed timing statistics (ELF-compatible)
-	double m_timing_hmatrix_build;   // H-matrix construction time
-	double m_timing_linear_solve;    // Total BiCGSTAB solve time
-	int m_linear_iterations;         // Total BiCGSTAB iterations (cumulative)
-#endif
-
 	radTApplication()
 	{
 		Initialize();
@@ -164,7 +135,6 @@ public:
 		RecognizeRecMagsInPolyhedrons = 0; // Disable: keep hexahedra as polyhedra for face-based field evaluation
 		MemAllocForIntrctMatrTotAtOnce = 0;
 		NonlinearMethod = 1;  // Default: mucal2 (B-change/Newton) for faster convergence
-		m_bicg_tol = 1.0e-4;  // Default: 1e-4 (ELF-compatible)
 		m_relax = 0.0;        // Default: 0.0 (full step, no under-relaxation)
 		m_keep_magnetization = false; // Default: reset M to zero before each Solve
 		m_use_newton = false; // Default: Picard iteration (backward compatible)
@@ -197,26 +167,6 @@ public:
 		m_cached_image_spec.clear();
 
 		m_nProcMPI = 0; m_rankMPI = -1; //OC01012020
-
-#ifdef RADIA_USE_HACAPK
-		// HACApK default parameters
-		m_hacapk_eps = 1.0e-4;
-		m_hacapk_leaf_size = 32;
-		m_hacapk_eta = 2.0;
-		m_hacapk_stats_valid = false;
-		m_hacapk_n_lowrank = 0;
-		m_hacapk_n_dense = 0;
-		m_hacapk_max_rank = 0;
-		m_hacapk_n_leaves = 0;
-		m_hacapk_n_dof = 0;
-		m_hacapk_compression = 1.0;
-		m_hacapk_build_time = 0.0;
-		m_hacapk_memory_mb = 0.0;
-		m_hacapk_dense_memory_mb = 0.0;
-		m_timing_hmatrix_build = 0.0;
-		m_timing_linear_solve = 0.0;
-		m_linear_iterations = 0;
-#endif
 
 	}
 
@@ -356,12 +306,6 @@ public:
 	// Format: "+x", "-z", "+x-z", "+x+y-z", etc.
 	// Returns true on success
 	bool ApplyIMASymmetryToInteraction(radTInteraction* pIntrc, const char* imageSpec, bool skipDenseIMA = false);
-
-#ifdef RADIA_USE_HACAPK
-	// HACApK parameter setting and statistics retrieval
-	void SetHACApKParams(double eps, int leaf_size, double eta);
-	void GetHACApKStats(double* dOut, int* nOut);
-#endif
 
 	// Solve statistics retrieval (always available)
 	void GetSolveStats(double* dOut, int* nOut);

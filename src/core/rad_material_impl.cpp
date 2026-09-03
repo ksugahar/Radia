@@ -1104,9 +1104,6 @@ int radTApplication::MakeAutoRelax(int InteractElemKey, double PrecOnMagnetiz, i
 	m_solve_linear_iterations = 0;
 	m_solve_nonl_iterations = 0;
 	m_solve_num_threads = radia::GetMaxThreads();  // Requested TaskManager thread count
-	m_timing_hmatrix_build = 0.0;
-	m_timing_linear_solve = 0.0;
-	m_linear_iterations = 0;
 
 	try
 	{
@@ -2054,52 +2051,6 @@ int radTApplication::RandomizationOnOrOff(char* OnOrOff)
 
 //-------------------------------------------------------------------------
 
-#ifdef RADIA_USE_HACAPK
-void radTApplication::SetHACApKParams(double eps, int leaf_size, double eta)
-{
-	// Update only if positive value provided (-1 means keep current)
-	// This allows SetHMatrixEpsilon to change only eps
-	if(eps > 0) m_hacapk_eps = eps;
-	if(leaf_size > 0) m_hacapk_leaf_size = leaf_size;
-	if(eta > 0) m_hacapk_eta = eta;
-	// Invalidate previous statistics when parameters change
-	m_hacapk_stats_valid = false;
-
-	if(SendingIsRequired) Send.Int(1);
-}
-
-void radTApplication::GetHACApKStats(double* dOut, int* nOut)
-{
-	if(!m_hacapk_stats_valid)
-	{
-		*nOut = 0;
-		return;
-	}
-
-	// H-matrix structure statistics
-	dOut[0] = (double)m_hacapk_n_lowrank;
-	dOut[1] = (double)m_hacapk_n_dense;
-	dOut[2] = (double)m_hacapk_max_rank;
-	dOut[3] = (double)m_hacapk_n_leaves;
-	dOut[4] = (double)m_hacapk_n_dof;
-	dOut[5] = m_hacapk_compression;
-	dOut[6] = m_hacapk_build_time;
-
-	// Timing statistics (ELF-compatible)
-	dOut[7] = m_timing_hmatrix_build;   // H-matrix construction time [s]
-	dOut[8] = m_timing_linear_solve;    // Total BiCGSTAB solve time [s]
-	dOut[9] = (double)m_linear_iterations;  // Total BiCGSTAB iterations
-
-	// Memory statistics (ELF-compatible)
-	dOut[10] = m_hacapk_memory_mb;       // H-matrix memory [MB]
-	dOut[11] = m_hacapk_dense_memory_mb; // Dense matrix memory [MB]
-
-	*nOut = 12;
-}
-#endif
-
-//-------------------------------------------------------------------------
-
 //-------------------------------------------------------------------------
 
 void radTApplication::GetSolveStats(double* dOut, int* nOut)
@@ -2123,16 +2074,9 @@ void radTApplication::GetSolveStats(double* dOut, int* nOut)
 	// LU decomposition time (Method 0 only)
 	dOut[6] = m_solve_t_lu_decomp;
 
-#ifdef RADIA_USE_HACAPK
-	// H-matrix timing (Method 2 only) - ELF-compatible
-	dOut[7] = m_timing_hmatrix_build;   // H-matrix construction time [s]
-	dOut[8] = 0.0;
-	dOut[9] = 0.0;
-#else
 	dOut[7] = 0.0;
 	dOut[8] = 0.0;
 	dOut[9] = 0.0;
-#endif
 	*nOut = 10;
 }
 
