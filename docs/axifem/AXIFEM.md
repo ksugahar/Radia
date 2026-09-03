@@ -388,8 +388,8 @@ were removed when axifem was absorbed into the radia wheel
 (2026-05-10 cleanup).  See [`FORMULATION.md`](FORMULATION.md) for the
 mathematical derivation behind the C++ source.
 
-The Mathematica derivation lives upstream at
-`W:/30_CauerLadderNetwork/2026_04_01_長方形CLN/axifem/`
+The imported Mathematica derivation is tracked under
+[`validation_test/maglev/research_cln/axifem/`](../../validation_test/maglev/research_cln/axifem/)
 (`derive_quad_q2_henrotte.wls` and `quad_q2_henrotte_matrices.json`).
 If the upstream JSON changes, regenerate `q2_henrotte_generated.hpp`, copy it
 into `src/ext/axifem/`, and run
