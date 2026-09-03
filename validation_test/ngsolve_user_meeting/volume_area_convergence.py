@@ -1,9 +1,8 @@
-"""OCC sphere volume/area p-convergence helper for the docs notebook.
+"""OCC sphere volume/area p-convergence validation driver.
 
-This is the docs-local, Cubit-free subset used by the result-bearing notebook.
-The former examples script with the Cubit ACIS-trampoline presentation context
-now lives next to the notebook as ``acis_volume_area_convergence_demo.py``; the
-original examples-path source is also preserved in the topic archive JSON.
+This is the Cubit-free numerical lane. The full Cubit ACIS-trampoline
+presentation context lives beside it in ``acis_volume_area_convergence_demo.py``.
+The durable result is ``volume_area_convergence_results.json``.
 """
 
 from __future__ import annotations

@@ -1,8 +1,7 @@
 {
-  "schema": "radia.validation.ngsolve-user-meeting-volume-area-convergence.v1",
+  "schema": "radia.validation.ngsolve-user-meeting-volume-area-convergence.v2",
   "generated_at_utc": "2026-06-27T03:54:40Z",
-  "source_notebook": "validation_test/ngsolve_user_meeting/volume_area_convergence.ipynb",
-  "notebook_sha256": "ef3b3cf61df66c017b67289f47f7e0dcf7372c5fb8a2f5af7f330cc15d221561",
+  "source_driver": "validation_test/ngsolve_user_meeting/volume_area_convergence.py",
   "versions": {
     "python_version": "3.12.10",
     "python_executable": "C:\\Program Files\\Python312\\python.exe",

@@ -4,10 +4,9 @@ Small public-safe electromagnetic force validations that are not tied to a
 machine topology.  These scripts are meant as readable checks before moving
 the same force identities into FEM, BEM, or CAD/mesh workflows.
 
-The result-saved validation notebook is
-`validation_test/force_validation/force_validation.ipynb`. This directory is
-the executable validation surface; each script refreshes its
-adjacent JSON summary with timestamp and runtime version metadata.
+This directory is the executable validation surface. Each script refreshes its
+adjacent JSON summary with timestamp and runtime version metadata;
+`force_validation_manifest.json` lists the canonical records.
 
 | Example | Shows |
 |---|---|
