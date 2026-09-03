@@ -69,6 +69,14 @@ def test_regular_ci_never_selects_a_lab_runner():
             assert "lab" not in normalized, f"{path.name}: {line}"
 
 
+def test_policy_lint_enforces_the_retired_examples_boundary():
+    policy = (ROOT / "tools" / "policy_lint.py").read_text(encoding="utf-8")
+
+    assert '"src/radia/*.py", "src/radia/**/*.py"' in policy
+    assert '["git", "ls-files", "examples"]' in policy
+    assert "README.md in every example dir" not in policy
+
+
 def test_distribution_ci_is_change_scoped_and_mcp_full_suite_is_explicit():
     fast = (ROOT / ".github" / "workflows" / "radia-fast.yml").read_text(
         encoding="utf-8"

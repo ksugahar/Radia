@@ -2673,10 +2673,13 @@ RADIA_BUILD_AND_RELEASE = """
 
 ```
 Build.ps1 (MSVC + MKL + NGSolve)
-  |-> _radia_pybind.pyd (main C++ extension, required)
-  |-> peec_matrices.pyd  (PEEC matrix assembly, optional)
-  |-> cln_core.pyd       (Lanczos MOR, optional)
-  +-> All copied to src/radia/
+  |-> _radia_pybind.pyd       (main C++ extension, required)
+  |-> peec_matrices.pyd        (PEEC matrix assembly, required in full build)
+  |-> cln_core.pyd             (Lanczos MOR, optional)
+  |-> sparsesolv_ngsolve.pyd   (NGSolve sparse solvers, optional)
+  |-> axifem.pyd               (axisymmetric FE, optional)
+  |-> radia_mex / optuna_mex   (MATLAB gateways)
+  +-> cubit_mesh_curver.pyd    (Cubit package candidate when Cubit is present)
 ```
 
 ### Prerequisites
@@ -2695,125 +2698,81 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File Build.ps1
 # Clean rebuild
 pwsh -NoProfile -ExecutionPolicy Bypass -File Build.ps1 -Rebuild
 
-# Build + run tests
+# Build + focused source-tree tests
 pwsh -NoProfile -ExecutionPolicy Bypass -File Build.ps1 -Test
 
-# Verbose output
-pwsh -NoProfile -ExecutionPolicy Bypass -File Build.ps1 -Verbose
+# Focused native lanes
+pwsh -NoProfile -ExecutionPolicy Bypass -File Build.ps1 -RadiaOnly
+pwsh -NoProfile -ExecutionPolicy Bypass -File Build.ps1 -AxiFemOnly
+pwsh -NoProfile -ExecutionPolicy Bypass -File Build.ps1 -MatlabMexOnly
+pwsh -NoProfile -ExecutionPolicy Bypass -File Build.ps1 -OptunaMexOnly
 ```
 
 ### NGSolve for CI Runner
 
-The self-hosted CI runner (NETWORK SERVICE account) cannot access the mapped lab share.
-NGSolve must be copied to C:\\NGSolve locally:
-
-```powershell
-# Run as Administrator when NGSolve is rebuilt:
-robocopy "<configured-ngsolve-source>" C:\\NGSolve /MIR
-```
+The mdx native runner creates a run-local virtual environment and installs the
+exact `ngsolve`, `netgen-mesher`, `mkl-devel`, pybind11, and Ninja versions for
+that job. It derives `NGSOLVE_DIR`, `Netgen_DIR`, and `MKLROOT` from that venv.
+Do not maintain a copied `C:\\NGSolve` tree and do not build against shared
+developer site-packages.
 
 ## CI/CD Pipeline (GitHub Actions)
 
-```
-git push (main or v* tag)
-  |
-  v
-CI (build-test.yml)
-  |-> Verify NGSolve at C:\\NGSolve
-  |-> Build.ps1 -Verbose (MSVC + MKL)
-  |-> Verify _radia_pybind.pyd exists
-  |-> pytest -m basic (quick tests)
-  |-> Build_Wheel.ps1 -DryRun (build wheel, verify, no upload)
-  |-> Upload artifacts: radia-pyd, radia-wheel, test-results
-  |-> Upload exact ref context: ref type/name + SHA + run ID + tag snapshot
-  |
-  v
-Release (release.yml) -- triggered by CI success
-  |
-  +-> [main branch] upload-binaries
-  |     Upload .pyd to GitHub Releases (tag: binaries)
-  |
-  +-> [exact tag-ref CI only] verify per-run ref context
-        |-> [v* tag on the same SHA] publish-pypi
-        Download wheel artifact
-        Publish to PyPI via OIDC Trusted Publishers
-        (pypa/gh-action-pypi-publish, no token needed)
-```
+Routine source CI and native release CI are deliberately separate:
 
-### PyPI Publishing is AUTOMATIC
+| Lane | Trigger | Scope |
+|------|---------|-------|
+| `radia-fast.yml` | affected pushes/PRs | mdx fast policy and regression gates |
+| `policy-lint.yml` | non-MCP pushes/PRs | portable source-policy checks |
+| `radia-mcp-matrix.yml` | MCP changes | impact-selected MCP tests/selftests |
+| `build-test.yml` | `v*` tag or manual dispatch | isolated native build, bounded tests, wheel candidate |
+| package workflows | package-specific paths/tags | independent distribution checks/releases |
 
-When you push a version tag (e.g., `v2.5.0`), the pipeline:
-1. CI builds and tests
-2. If CI passes, Release workflow publishes wheel to PyPI
-3. Uses OIDC Trusted Publishers (no API token stored)
+`validation_test/` is not part of routine CI. Run it manually when numerical,
+benchmark, publication, or release evidence is affected. The source of truth for
+selection is `tools/ci_preflight.py`; the source of truth for release/deployment
+is `tools/release_quad.py` and the `release_workflow` MCP topic.
 
 ## Release Checklist
 
-### 1. Prepare Release
+Do not use a handwritten generic checklist. Run impact preflight, keep package
+commits/tags distribution-specific, and use the checked release orchestrator:
 
-```python
-# 1. Bump version in TWO files (must match):
-#    - pyproject.toml: version = "X.Y.Z"
-#    - src/radia/__init__.py: __version__ = "X.Y.Z"
-
-# 2. Update CHANGELOG.md
-
-# 3. Build locally and verify
-powershell -ExecutionPolicy Bypass -File Build.ps1 -Rebuild -Test
+```powershell
+python tools/ci_preflight.py
+pwsh -NoProfile -ExecutionPolicy Bypass -File Build.ps1 -Rebuild -Test
+pwsh -NoProfile -ExecutionPolicy Bypass -File Build_Wheel.ps1 -DryRun
+python tools/release_quad.py all
+python tools/release_quad.py done --simulink-package <exact-versioned-zip>
 ```
 
-### 2. Verify Wheel
-
-```python
-import zipfile
-whl = zipfile.ZipFile('dist/radia-X.Y.Z-cp312-cp312-win_amd64.whl')
-for info in whl.infolist():
-    if info.filename.endswith('.pyd'):
-        print(f'{info.filename}: {info.file_size} bytes')
-# Must contain radia/_radia_pybind.pyd (> 2 MB)
-# Must NOT contain any .dll files (MKL policy)
-```
-
-### 3. Tag and Push
-
-```bash
-git add pyproject.toml src/radia/__init__.py CHANGELOG.md
-git commit -m "Release vX.Y.Z: description"
-git tag vX.Y.Z
-git push origin main vX.Y.Z
-```
-
-### 4. Monitor
-
-```bash
-# gh-free (No GitHub CLI policy): use the REST helper, not `gh run`
-python tools/check_ci.py --branch main        # Check CI status
-python tools/check_ci.py --sha <sha> --watch  # Watch a commit to completion
-pip install radia==X.Y.Z                       # Verify after publish
-```
+Use the `ci-monitor` skill or `gh run view` to inspect the exact SHA/tag run.
+Only a successful `release_quad.py done` for the same commit and retained
+artifacts authorizes GitHub Release publication.
 
 ## Wheel Build Details (Build_Wheel.ps1)
 
-1. Clean dist/ and build/ directories
-2. `python -m build --wheel`
-3. **Remove any bundled DLLs** (MKL policy enforcement)
-4. Repack wheel with correct platform tag: `cp312-cp312-win_amd64`
-5. `twine check` for metadata validation
+1. Clean prior wheel artifacts and leaked third-party runtime DLLs.
+2. Build once with `python -m build --wheel`; do not hide failures with retries.
+3. Remove third-party DLLs while retaining the Radia-owned
+   `radia_motor_rom.dll` public C ABI.
+4. Repack with `cp312-cp312-win_amd64` and non-pure wheel metadata.
+5. Run `twine check` and inspect the exact candidate contents.
 
 **MKL DLL Policy**: Wheel MUST NOT bundle Intel MKL DLLs.
-Users install MKL via pip dependency: `mkl>=2024.2.0`.
+Users install MKL via the pinned dependency: `mkl>=2026,<2027`.
 DLLs go to `{sys.prefix}/Library/bin/`, loaded by `__init__.py`.
 
 ## Policy Lint (policy-lint.yml)
 
-Runs on every push. Checks:
-1. No `FldUnits()` calls (removed API)
+Runs on affected non-MCP pushes and pull requests. Checks:
+1. No `FldUnits()` calls in executable Radia source (removed API)
 2. No binary files tracked in git
 3. No Helmholtz kernel in C++ core (Laplace-only)
 4. No `CblasColMajor` (row-major policy)
 5. No generated files at repo root
 6. No legacy import paths
-7. Every example directory has README.md
+7. No tracked files in the retired `examples/` tier
 
 ## Package Structure
 
@@ -2829,11 +2788,13 @@ src/radia/
 
 ## Troubleshooting
 
-- **CI fails "NGSolve not found"**: Run `robocopy` to sync C:\\NGSolve
+- **CI fails "NGSolve not found"**: inspect the run-local venv setup and exact
+  `NGSOLVE_DIR` / `Netgen_DIR`; never repair it with a machine-global copy.
 - **Wheel too large**: Check for accidentally bundled .dll files
 - **Import fails on user machine**: Ensure `pip install mkl` was installed
 - **PyPI publish fails**: Check OIDC Trusted Publishers config on PyPI
-- **Binary upload fails**: Ensure `binaries` release exists on GitHub
+- **Release artifact mismatch**: rerun the exact-SHA candidate gate; never
+  substitute a locally rebuilt wheel or Simulink ZIP.
 """
 
 
