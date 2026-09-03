@@ -8,14 +8,15 @@ Usage:
   pytest validation_test/           # Heavy validation / golden / GUI / Cubit checks
 """
 
-import sys
 import os
+import sys
 from pathlib import Path
+
 import pytest
 
 
 def setup_radia_path():
-    """Setup Python path to import radia from src/radia/."""
+    """Add the repository's package roots without exposing package internals."""
     current = Path(__file__).resolve().parent
     while current.parent != current:
         if (current / 'CMakeLists.txt').exists():
@@ -57,7 +58,7 @@ PROJECT_ROOT = setup_radia_path()
 # DLL load failures and access violations from crashing the process.
 # ---------------------------------------------------------------
 def _check_module(name):
-    """Check if a module can be imported safely (with src/radia in path)."""
+    """Check whether an optional module can be imported safely."""
     try:
         __import__(name)
         return True

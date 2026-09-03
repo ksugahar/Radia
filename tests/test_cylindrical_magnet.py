@@ -13,14 +13,10 @@ References:
 """
 
 import sys
-import os
+
 import numpy as np
 
-# Add the build directory to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../src/radia'))
-
-# Import cylindrical magnet module
-from cylindrical_magnet import CylindricalMagnet, RingMagnet
+from radia.cylindrical_magnet import CylindricalMagnet, RingMagnet
 
 # Try to import magpylib for comparison
 try:

@@ -6,14 +6,10 @@ computation for various magnet shapes.
 """
 
 import sys
-import os
+
 import numpy as np
 
-# Add the build directory to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../src/radia'))
-
-# Import analytical magnet module
-from analytical_magnet import SphericalMagnet, CuboidMagnet, CurrentLoop
+from radia.analytical_magnet import CuboidMagnet, CurrentLoop, SphericalMagnet
 
 # Try to import magpylib for comparison
 try:
