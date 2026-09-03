@@ -171,6 +171,7 @@ try {
 }
 
 [pscustomobject]@{
+    Process = $process
     ProcessId = $process.Id
     RunnerId = $registeredRunnerId
     RunnerName = $runnerName

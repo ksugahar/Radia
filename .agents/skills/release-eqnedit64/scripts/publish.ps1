@@ -412,8 +412,8 @@ try {
     $public = Verify-PublicRelease -ORelease $oRelease
 } finally {
     if ($jit) {
-        $process = Get-Process -Id $jit.ProcessId -ErrorAction SilentlyContinue
-        if ($process) {
+        $process = $jit.Process
+        if ($process -and -not $process.HasExited) {
             $process | Stop-Process -Force
             $null = $process.WaitForExit(5000)
         }

@@ -264,3 +264,5 @@ def test_eqnedit64_one_command_release_is_bounded_and_ephemeral():
     assert "runner.status -ceq 'online'" in jit
     assert "actions/runners/$registeredRunnerId" in jit
     assert "--method DELETE" in jit
+    assert "Process = $process" in jit
+    assert "$process = $jit.Process" in publish
