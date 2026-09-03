@@ -15,12 +15,9 @@ Note on Radia units:
 Author: Radia Development Team
 Date: 2025-12-31
 """
-import sys
-import os
-import pytest
 import numpy as np
+import pytest
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src', 'radia'))
 import radia as rad
 
 # Constants
@@ -39,7 +36,6 @@ def numerical_curl(field_func, point, h=1e-6):
     # dF/dx
     Fp_x = field_func([x + h, y, z])
     Fm_x = field_func([x - h, y, z])
-    dFx_dx = (Fp_x[0] - Fm_x[0]) / (2 * h)
     dFy_dx = (Fp_x[1] - Fm_x[1]) / (2 * h)
     dFz_dx = (Fp_x[2] - Fm_x[2]) / (2 * h)
 
@@ -47,7 +43,6 @@ def numerical_curl(field_func, point, h=1e-6):
     Fp_y = field_func([x, y + h, z])
     Fm_y = field_func([x, y - h, z])
     dFx_dy = (Fp_y[0] - Fm_y[0]) / (2 * h)
-    dFy_dy = (Fp_y[1] - Fm_y[1]) / (2 * h)
     dFz_dy = (Fp_y[2] - Fm_y[2]) / (2 * h)
 
     # dF/dz
@@ -55,7 +50,6 @@ def numerical_curl(field_func, point, h=1e-6):
     Fm_z = field_func([x, y, z - h])
     dFx_dz = (Fp_z[0] - Fm_z[0]) / (2 * h)
     dFy_dz = (Fp_z[1] - Fm_z[1]) / (2 * h)
-    dFz_dz = (Fp_z[2] - Fm_z[2]) / (2 * h)
 
     # curl = [dFz/dy - dFy/dz, dFx/dz - dFz/dx, dFy/dx - dFx/dy]
     curl_x = dFz_dy - dFy_dz
