@@ -50,8 +50,8 @@ Discretization: backward Euler in time, H1 in space.
 Output
 ------
 JSON summary on stdout (last line) with peak temperature, probe
-history and timings.  Per-step ``<msh-output stem>_T_NNN.vtu`` files
-when ``--msh-output`` is supplied.
+history and timings. The final spatial temperature and heat-flux fields are
+written to the requested GMSH ``.msh v4.1`` artifact.
 """
 
 from __future__ import annotations
@@ -412,7 +412,6 @@ def solve_heat(wp_vol,
                rotation_axis="z",
                probe_point=None,
                msh_output="",
-               vtu_prefix="",
                csv_output=""):
     """Run the transient heat solve.  See module docstring for inputs."""
     setup_paths()
@@ -421,7 +420,7 @@ def solve_heat(wp_vol,
     # Lazy imports so --help is fast.
     from ngsolve import (Mesh, H1, BilinearForm, LinearForm, GridFunction,
                           Integrate, CF, CoefficientFunction, ds, dx, BND,
-                          VTKOutput, TaskManager)
+                          TaskManager)
 
     if not os.path.isfile(wp_vol):
         return {"error": f"--wp-vol not found: {wp_vol}"}
@@ -578,17 +577,6 @@ def solve_heat(wp_vol,
     _log(f"Q_SURF:int q_surf dA = {q_int:.4e} W "
          f"(area {A_surf:.4e} m^2)")
 
-    vtu_files = []
-    if vtu_prefix:
-        vtk = VTKOutput(wp_mesh, coefs=[gfT], names=["T"],
-                        filename=f"{vtu_prefix}_000", subdivision=0,
-                        legacy=False)
-        try:
-            vtk.Do()
-            vtu_files.append(f"{vtu_prefix}_000.vtu")
-        finally:
-            del vtk
-
     for step in range(1, n_steps + 1):
         t = step * float(dt)
         if rotation_active:
@@ -623,15 +611,6 @@ def solve_heat(wp_vol,
                 T_probe.append(float(getattr(val, "real", val)))
             except Exception:
                 T_probe.append(float("nan"))
-        if vtu_prefix:
-            vtk = VTKOutput(wp_mesh, coefs=[gfT], names=["T"],
-                            filename=f"{vtu_prefix}_{step:03d}",
-                            subdivision=0, legacy=False)
-            try:
-                vtk.Do()
-                vtu_files.append(f"{vtu_prefix}_{step:03d}.vtu")
-            finally:
-                del vtk
         _log(f"STEP:{step}/{n_steps} t={t:.3f}s "
              f"T_probe={T_probe[-1] if probe_point is not None else 'n/a'}")
 
@@ -781,7 +760,6 @@ def solve_heat(wp_vol,
         "T_sol_file": T_sol_file,
         "heat_vol_file": heat_vol_file,
         "msh_file": gmsh_file,
-        "vtu_files": vtu_files,
         "csv_file": csv_output if (csv_output and probe_point is not None)
                      else "",
         "t_total_s": round(t_total, 2),
@@ -913,9 +891,6 @@ def main():
     parser.add_argument("--msh-output", default="",
                         help="Optional .msh path for Open GMSH "
                              "(final-step T field).")
-    parser.add_argument("--vtu-prefix", default="",
-                        help="Optional prefix for per-step VTU output "
-                             "(produces <prefix>_NNN.vtu).")
     parser.add_argument("--csv-output", default="",
                         help="Optional CSV path for the probe T(t) "
                              "history.")
@@ -953,7 +928,6 @@ def main():
             q_phi_average_n=args.q_phi_average_n,
             probe_point=probe_point,
             msh_output=args.msh_output,
-            vtu_prefix=args.vtu_prefix,
             csv_output=args.csv_output,
         )
 

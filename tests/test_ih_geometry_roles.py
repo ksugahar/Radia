@@ -154,6 +154,17 @@ def test_thermal_fes_order_explicit_override_is_preserved(method):
     assert command[command.index("--fes-order") + 1] == "3"
 
 
+@pytest.mark.parametrize("method", [METHOD_THERMAL_AXISYM, METHOD_THERMAL_3D_STATIC])
+def test_thermal_spatial_output_is_gmsh_only(method):
+    command = IHDesignSpec(
+        method=method,
+        wp_vol="workpiece.vol",
+    ).build_command(python="python", panels_dir="panels")
+    assert command[command.index("--msh-output") + 1].endswith("_heat.msh")
+    assert "--vtu-prefix" not in command
+    assert not hasattr(IHDesignSpec(), "vtu_prefix")
+
+
 @pytest.mark.parametrize("invalid", [True, 0, -1, 1.5, "two"])
 def test_thermal_fes_order_rejects_invalid_values(invalid):
     spec = IHDesignSpec(
