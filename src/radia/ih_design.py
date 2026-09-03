@@ -216,7 +216,6 @@ class IHDesignSpec:
     linear_solver: str = "sparsecholesky"
     probe_point: str = ""
     csv_output: str = ""
-    vtu_prefix: str = ""
 
     # Repairs applied by normalize_geometry_roles, newest last.  Kept on
     # the spec so the Simulink runner / MCP callers can surface them.
@@ -358,7 +357,7 @@ class IHDesignSpec:
                 "thermal_material", "override_kcprho", "rho", "cp", "k",
                 "h_conv", "t_ext", "emissivity", "t_init", "time_scheme",
                 "dt", "t_end", "linear_solver", "thermal_fes_order",
-                "probe_point", "csv_output", "vtu_prefix",
+                "probe_point", "csv_output",
             })
             if self.method != METHOD_THERMAL_3D_STATIC:
                 fields.update({"rotation_rpm", "rotation_axis"})
@@ -745,6 +744,4 @@ class IHDesignSpec:
             cmd += ["--probe-point", probe]
         if self.csv_output:
             cmd += ["--csv-output", self.csv_output]
-        if self.vtu_prefix:
-            cmd += ["--vtu-prefix", self.vtu_prefix]
         return cmd
