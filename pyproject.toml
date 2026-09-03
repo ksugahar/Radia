@@ -59,11 +59,15 @@ dependencies = [
     #     the HDiv-VIM open-boundary path.
     "ngsolve==6.2.2606",
     "netgen-mesher==6.2.2606",
-    # MCP server dependency (optional, for Claude Code / Cursor integration)
-    "mcp>=1.0.0",
 ]
 
 [project.optional-dependencies]
+mcp = [
+    # Optional LTspice MCP entry points shipped by the radia distribution.
+    # The complete executable manual is provided by the separate radia-mcp
+    # package, which follows the same SDK compatibility range.
+    "mcp>=1.0,<2",
+]
 optuna = [
     # Independently versioned monorepo artifact. Pin the release that passed
     # this Radia version's MATLAB/Simulink integration gate.
@@ -123,7 +127,8 @@ urn = [
 test = [
     "pytest>=7.0",
     "pytest-cov>=4.0",
-    "mcp>=1.0.0",
+    # Exercise the optional LTspice MCP entry points in the full test lane.
+    "mcp>=1.0,<2",
     "schemdraw>=0.18",
 ]
 dev = [

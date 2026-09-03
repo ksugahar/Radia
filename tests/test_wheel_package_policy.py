@@ -59,3 +59,13 @@ def test_retired_desktop_viewer_is_not_packaged():
     assert not (ROOT / "src" / "radia" / "tools" / "vol_sol_viewer.py").exists()
     assert all("pyvista" not in requirement.lower() for requirement in optional["viz"])
     assert all("pyvista" not in requirement.lower() for requirement in optional["dev"])
+
+
+def test_mcp_sdk_is_optional_for_core_radia_users():
+    config = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+    project = config["project"]
+    optional = project["optional-dependencies"]
+
+    assert all(not requirement.lower().startswith("mcp") for requirement in project["dependencies"])
+    assert optional["mcp"] == ["mcp>=1.0,<2"]
+    assert "mcp>=1.0,<2" in optional["test"]
