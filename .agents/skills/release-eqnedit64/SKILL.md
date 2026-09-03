@@ -96,7 +96,8 @@ to scripts or documentation.
    hand testing. Do not merge to `main` before this gate is recorded.
 5. Merge the approved release commit to `main` and push it.
 6. Wait for the main Eqnedit64 CI and Policy Lint to pass.
-7. Run the one-command publication shown above. It enforces clean
+7. Run `scripts/publish.ps1` through the one-command publication shown above.
+   It enforces clean
    `HEAD == origin/main`, builds, signs, updates O: before the tag, publishes,
    waits, and performs the public byte-identity audit.
 
