@@ -4,15 +4,11 @@ A singular Z at one frequency must give NaN at that frequency (clearly invalid)
 plus a warning -- NOT a silent pseudo-inverse (get_Y) or a plausible zero
 (get_S) that the caller would trust.
 """
-import os
-import sys
 import warnings
 
 import numpy as np
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src", "radia"))
-
-from analysis import MultiPortResult, AnalysisType, SolverType
+from radia.analysis import AnalysisType, MultiPortResult, SolverType
 
 
 def _result(freqs, Z):

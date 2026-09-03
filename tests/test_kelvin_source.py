@@ -13,13 +13,8 @@ the same coil for self-consistency.
 """
 
 import math
-import os
-import sys
 
 import numpy as np
-
-HERE = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, os.path.join(HERE, '..', 'src', 'radia'))
 
 MU_0 = 4e-7 * math.pi
 
@@ -44,7 +39,7 @@ def test_on_axis_B_circular_loop():
     fragile. Instead: just check that A_phi scales ~ R^2/(R^2+z^2)^{1/2}
     magnitude.
     """
-    from kelvin_source import biot_savart_A_at_points
+    from radia.kelvin_source import biot_savart_A_at_points
 
     R = 0.010
     I = 1.0
@@ -68,7 +63,7 @@ def test_on_axis_B_circular_loop():
 
 
 def test_kelvin_map_involution():
-    from kelvin_source import kelvin_map_3d
+    from radia.kelvin_source import kelvin_map_3d
 
     center = np.array([0.0, 0.0, 0.0])
     R = 1.0
@@ -84,7 +79,7 @@ def test_kelvin_map_involution():
 
 def test_kelvin_map_on_sphere():
     """Points on the Kelvin sphere map to themselves."""
-    from kelvin_source import kelvin_map_3d
+    from radia.kelvin_source import kelvin_map_3d
 
     center = np.array([0.1, -0.2, 0.3])
     R = 0.5
@@ -100,7 +95,7 @@ def test_kelvin_map_on_sphere():
 
 def test_scalar_factor_at_sphere_boundary():
     """Kelvin factor (R/rho')^2 = 1 at rho' = R."""
-    from kelvin_source import kelvin_factor_scalar
+    from radia.kelvin_source import kelvin_factor_scalar
 
     center = np.array([0.0, 0.0, 0.0])
     R = 0.5
@@ -112,7 +107,7 @@ def test_scalar_factor_at_sphere_boundary():
 
 def test_A_s_kelvin_pathway():
     """A_s_at_obs_with_kelvin: inner points unchanged, kelvin_ext points mapped."""
-    from kelvin_source import A_s_at_obs_with_kelvin, biot_savart_A_at_points
+    from radia.kelvin_source import A_s_at_obs_with_kelvin, biot_savart_A_at_points
 
     R_loop = 0.030
     R_kelvin = 0.060
@@ -124,7 +119,7 @@ def test_A_s_kelvin_pathway():
     # Kelvin exterior domain point (computational frame): offset +/- dx within radius
     p_out_kelvin_ext = offset + np.array([0.020, 0.005, 0.010])
     # Its Kelvin-inverse physical position:
-    from kelvin_source import kelvin_map_3d
+    from radia.kelvin_source import kelvin_map_3d
     p_out_phys = kelvin_map_3d(p_out_kelvin_ext, offset, R_kelvin)
 
     obs = np.vstack([p_in, p_out_kelvin_ext])
@@ -155,7 +150,7 @@ def test_A_s_kelvin_pathway():
 
 def test_pullback_equals_scalar_for_uniform_A():
     """For A with no radial component, pullback == scalar * A (uniform case)."""
-    from kelvin_source import kelvin_pullback_vector, kelvin_factor_scalar
+    from radia.kelvin_source import kelvin_factor_scalar, kelvin_pullback_vector
 
     center = np.array([0.15, 0.0, 0.0])
     R = 0.060
@@ -183,7 +178,7 @@ def test_pullback_equals_scalar_for_uniform_A():
 
 def test_pullback_flips_radial_sign():
     """Pure radial A: pullback flips sign and applies (R/rho')^2."""
-    from kelvin_source import kelvin_pullback_vector, kelvin_factor_scalar
+    from radia.kelvin_source import kelvin_factor_scalar, kelvin_pullback_vector
 
     center = np.array([0.15, 0.0, 0.0])
     R = 0.060
@@ -209,7 +204,7 @@ def test_pullback_involution():
 
     Since the Kelvin map is involutive, A''(r) = A(r). Verify numerically.
     """
-    from kelvin_source import kelvin_pullback_vector, kelvin_map_3d
+    from radia.kelvin_source import kelvin_map_3d, kelvin_pullback_vector
 
     center = np.array([0.0, 0.0, 0.0])
     R = 1.0
@@ -241,7 +236,7 @@ def test_B_pullback_uniform_field():
     At points on a coordinate axis, H acts simply (radial flip only),
     so we can check both magnitude and direction in closed form.
     """
-    from kelvin_source import kelvin_pullback_B_pseudovector
+    from radia.kelvin_source import kelvin_pullback_B_pseudovector
 
     center = np.array([0.0, 0.0, 0.0])
     R = 1.0
@@ -268,7 +263,7 @@ def test_B_pullback_radial_flip():
                                        = +B_0 (R/rho)^4 z_hat
     (the -1 sign from -det(H) and the radial flip cancel).
     """
-    from kelvin_source import kelvin_pullback_B_pseudovector
+    from radia.kelvin_source import kelvin_pullback_B_pseudovector
 
     center = np.array([0.0, 0.0, 0.0])
     R = 1.0
@@ -297,8 +292,10 @@ def test_curl_A_comp_matches_B_pullback():
     for curl_z at a probe point. Compare with the 2-form formula
     B_comp = -(R/rho')^4 * H * B_phys (Householder identity here).
     """
-    from kelvin_source import (kelvin_pullback_vector,
-                                kelvin_pullback_B_pseudovector)
+    from radia.kelvin_source import (
+        kelvin_pullback_B_pseudovector,
+        kelvin_pullback_vector,
+    )
 
     center = np.array([0.0, 0.0, 0.0])
     R = 1.0
@@ -339,7 +336,7 @@ def test_curl_A_comp_matches_B_pullback():
 
 def _build_sphere_mesh_centered(center, R, maxh=0.25):
     """Tiny Netgen sphere mesh used only to exercise eval_*_physical_from_gf."""
-    from netgen.occ import Sphere, Pnt, OCCGeometry
+    from netgen.occ import OCCGeometry, Pnt, Sphere
     from ngsolve import Mesh
     ball = Sphere(Pnt(*center), R)
     ball.mat("outer")
@@ -359,7 +356,7 @@ def test_eval_Omega_physical_from_gf():
     except Exception as e:
         print(f"  skipping (no NGSolve): {e}")
         return
-    from kelvin_source import (eval_Omega_physical_from_gf, kelvin_map_3d)
+    from radia.kelvin_source import eval_Omega_physical_from_gf, kelvin_map_3d
 
     center = np.array([0.3, -0.2, 0.1])
     R = 1.0
@@ -391,12 +388,15 @@ def test_eval_A_physical_from_gf():
     value at r' = Kelvin(r_phys).
     """
     try:
-        from ngsolve import HCurl, VectorH1, GridFunction, CoefficientFunction, x, y, z
+        from ngsolve import CoefficientFunction, GridFunction, VectorH1, x, y, z
     except Exception as e:
         print(f"  skipping (no NGSolve): {e}")
         return
-    from kelvin_source import (eval_A_physical_from_gf, kelvin_map_3d,
-                                kelvin_pullback_vector)
+    from radia.kelvin_source import (
+        eval_A_physical_from_gf,
+        kelvin_map_3d,
+        kelvin_pullback_vector,
+    )
 
     center = np.array([0.2, 0.0, -0.1])
     R = 1.0
@@ -431,13 +431,21 @@ def test_eval_B_physical_from_gf():
     at r' = Kelvin(r_phys).
     """
     try:
-        from ngsolve import VectorH1, GridFunction, CoefficientFunction, x, y, z
-        from ngsolve import TaskManager
+        from ngsolve import (
+            CoefficientFunction,
+            GridFunction,
+            VectorH1,
+            x,
+            y,
+        )
     except Exception as e:
         print(f"  skipping (no NGSolve): {e}")
         return
-    from kelvin_source import (eval_B_physical_from_gf, kelvin_map_3d,
-                                kelvin_pullback_B_pseudovector)
+    from radia.kelvin_source import (
+        eval_B_physical_from_gf,
+        kelvin_map_3d,
+        kelvin_pullback_B_pseudovector,
+    )
 
     center = np.array([0.0, 0.0, 0.5])
     R = 1.0

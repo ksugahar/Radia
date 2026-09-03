@@ -4,12 +4,7 @@ Focused on the No-Fallback contract of NearFieldSource.extract_ngsolve: an
 unimplemented quadrature_order > 1 (Gauss quadrature) must RAISE rather than
 silently sample at order 1 and only warn.
 """
-import os
-import sys
-
 import pytest
-
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src", "radia"))
 
 
 def test_extract_ngsolve_quadrature_order_raises():
@@ -19,7 +14,7 @@ def test_extract_ngsolve_quadrature_order_raises():
     otherwise get a different, lower-order computation).  The guard fires before
     any mesh work, so a dummy non-None gf_H is enough to exercise it."""
     pytest.importorskip("ngsolve")
-    from equivalence_source import NearFieldSource
+    from radia.equivalence_source import NearFieldSource
 
     with pytest.raises(NotImplementedError, match="quadrature_order"):
         NearFieldSource.extract_ngsolve(
@@ -30,7 +25,7 @@ def test_extract_ngsolve_requires_gf_H():
     """gf_H is mandatory -- a missing magnetic field raises ValueError, not a
     silent zero source."""
     pytest.importorskip("ngsolve")
-    from equivalence_source import NearFieldSource
+    from radia.equivalence_source import NearFieldSource
 
     with pytest.raises(ValueError, match="gf_H"):
         NearFieldSource.extract_ngsolve(mesh=None, gf_H=None)
