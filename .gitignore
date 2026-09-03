@@ -502,6 +502,9 @@ docs/research/
 
 # Private working memory / project notes -- never publish
 memory/
+# Codex worktrees and temporary review junctions are machine-local state.
+/.codex/
+/.codex-*/
 # Throwaway debug/presentation scripts dropped at repo root
 /*.py
 # Build.ps1-generated temporary MSVC batch (regenerated each build; never commit)
