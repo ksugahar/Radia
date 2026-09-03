@@ -51,12 +51,16 @@ cd docs/peec_integration/demos
 # PRIMA + Dowell correction verification
 python spice/prima_with_dowell_correction.py
 
-# PEEC + PRIMA integration demo
-python spice/demo_peec_prima_reduction.py
+# PEEC + PRIMA SPICE export
+python spice/demo_prima_spice_export.py
 
 # result-saved public notebook
 jupyter notebook ../public_demo.ipynb
 ```
+
+The numerical PRIMA/Dowell comparisons live under
+`validation_test/peec_integration/verification/` and are not duplicated in
+the public docs scripts.
 
 ## Key Verification Results
 

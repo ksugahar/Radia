@@ -315,6 +315,7 @@ def test_peec_spice_docs_use_installed_radia_package():
     docs_dir = ROOT / "docs" / "peec_integration" / "demos" / "spice"
     forbidden = (
         "src/radia",
+        "W:/30_CauerLadderNetwork",
         "from peec_matrices import",
         "from lanczos_reduction import",
         "from veriloga_generator import",
