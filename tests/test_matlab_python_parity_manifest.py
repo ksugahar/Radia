@@ -28,6 +28,39 @@ def test_every_python_module_has_a_checked_matlab_classification():
         "classification": "python-fallback",
         "matlab": ["matlab/+radia/+simulink/assembleIHOperatorsFromGeometry.m"],
     }
+    mmm_topology = next(
+        item
+        for item in result["assignments"]
+        if item["python"] == "mmm_topology.py"
+    )
+    assert mmm_topology == {
+        "python": "mmm_topology.py",
+        "rule": "mmm-topology-python",
+        "classification": "python-fallback",
+        "matlab": ["matlab/+radia/+python/mmmTopology.m"],
+    }
+    accelerator_validation = next(
+        item
+        for item in result["assignments"]
+        if item["python"] == "accelerator_field_validation.py"
+    )
+    assert accelerator_validation == {
+        "python": "accelerator_field_validation.py",
+        "rule": "accelerator-field-validation-python",
+        "classification": "python-fallback",
+        "matlab": ["matlab/+radia/+python/acceleratorFieldValidation.m"],
+    }
+    lamination = next(
+        item
+        for item in result["assignments"]
+        if item["python"] == "lamination.py"
+    )
+    assert lamination == {
+        "python": "lamination.py",
+        "rule": "lamination-python",
+        "classification": "python-fallback",
+        "matlab": ["matlab/+radia/+python/lamination.m"],
+    }
     axifem = next(item for item in result["binary_extensions"] if item["python"] == "axifem.pyd")
     assert axifem["classification"] == "native-mex"
     assert axifem["status"] == "focused-native-commands"
