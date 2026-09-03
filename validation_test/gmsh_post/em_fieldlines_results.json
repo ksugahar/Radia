@@ -1,4 +1,7 @@
 {
+  "schema": "radia.validation.gmsh-post.v1",
+  "case": "em_fieldlines",
+  "source_notebook": "docs/gmsh_post/em_fieldlines.ipynb",
   "generated_at_utc": "2026-08-06T04:23:00Z",
   "radia_version": "4.95.43",
   "ngsolve_version": "6.2.2604",
@@ -23,7 +26,5 @@
         0.342430641553493
       ]
     }
-  },
-  "notebook": "docs/gmsh_post/em_fieldlines.ipynb",
-  "notebook_sha256": "148d235ad26b13d8a7676f977c8713b9c3c401e7c44ce5d338531fdb3652c0d7"
+  }
 }
