@@ -103,8 +103,8 @@ class TestIHBEM:
         geo = OCCGeometry(Glue(torus.faces))
         with TaskManager():
             ngmesh = geo.GenerateMesh(maxh=a * 3)
-        mesh = Mesh(ngmesh)
-        mesh.Curve(2)
+            mesh = Mesh(ngmesh)
+            mesh.Curve(2)
 
         tmpdir = tempfile.mkdtemp(prefix="radia_test_bem_")
         vol_path = os.path.join(tmpdir, "coil.vol")
@@ -140,7 +140,8 @@ class TestIHBEM:
         if "source" not in boundaries or "sink" not in boundaries:
             pytest.skip("OCC mesh missing source/sink labels")
 
-        sol = compute_inductance_source_sink(mesh, "source", "sink", 0)
+        with ngsolve.TaskManager():
+            sol = compute_inductance_source_sink(mesh, "source", "sink", 0)
 
         assert "error" not in sol, f"Solver error: {sol.get('error')}"
         L = sol["L"]
