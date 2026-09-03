@@ -122,6 +122,85 @@ def project_source_interface_potential(
     }
 
 
+def project_source_physical_potential(
+        mesh, H_s, physical_materials, *, order=2, inverse="pardiso",
+        gauge_epsilon=1.0e-12, relative_tolerance=None):
+    """Project one globally consistent source scalar potential in physical space.
+
+    This is the permanent-magnet counterpart to
+    :func:`project_source_interface_potential`.  Outside fixed magnetization
+    bodies, a prescribed-magnetization field has no free-current circulation,
+    so ``H_s = -grad(Phi_s)`` holds throughout the connected physical
+    air/iron domain.  Projecting it once in that volume preserves the relative
+    constants between separate iron-air interfaces.  Projecting each surface
+    independently would erase precisely those constants and is therefore not
+    a valid mixed total/reduced-Omega source contract for segmented magnets.
+
+    ``physical_materials`` must exclude Kelvin-transformed exterior materials:
+    its source field is a physical-coordinate quantity.  Current-linked coil
+    sources remain on the interface/cut-cohomology path because they generally
+    do not admit one globally single-valued scalar potential.
+
+    The returned GridFunction is suitable directly as both source-potential
+    traces consumed by the mixed solver.  The caller owns the surrounding
+    :class:`ngsolve.TaskManager` region.
+    """
+    names = tuple(str(name) for name in physical_materials)
+    if not names or len(names) != len(set(names)) or any(not name for name in names):
+        raise ValueError("physical_materials must contain unique non-empty names")
+    if int(order) < 1:
+        raise ValueError("order must be positive")
+    if gauge_epsilon <= 0.0 or not math.isfinite(gauge_epsilon):
+        raise ValueError("gauge_epsilon must be positive and finite")
+    actual = {str(name) for name in mesh.GetMaterials()}
+    unknown = sorted(set(names) - actual)
+    if unknown:
+        raise ValueError(
+            "physical_materials contains mesh materials that are absent: "
+            f"{unknown}"
+        )
+
+    physical_selector = mesh.Materials("|".join(names))
+    fes = Compress(H1(mesh, order=int(order), definedon=physical_selector))
+    potential, test = fes.TnT()
+    d_physical = dx(definedon=physical_selector)
+    a_bf = BilinearForm(fes, symmetric=True)
+    a_bf += InnerProduct(grad(potential), grad(test)) * d_physical
+    # A negligible mass gauge fixes the one physical scalar-potential constant
+    # without modifying the source trace at discretisation accuracy.
+    a_bf += float(gauge_epsilon) * potential * test * d_physical
+    f_lf = LinearForm(fes)
+    f_lf += -InnerProduct(H_s, grad(test)) * d_physical
+    a_bf.Assemble()
+    f_lf.Assemble()
+    potential_gf = GridFunction(fes, name="physical_source_potential")
+    potential_gf.vec.data = a_bf.mat.Inverse(
+        fes.FreeDofs(), inverse=inverse) * f_lf.vec
+
+    residual = grad(potential_gf) + H_s
+    residual_norm = float(math.sqrt(Integrate(
+        InnerProduct(residual, residual) * d_physical, mesh)))
+    source_norm = float(math.sqrt(Integrate(
+        InnerProduct(H_s, H_s) * d_physical, mesh)))
+    relative_residual = residual_norm / max(source_norm, 1.0e-300)
+    if relative_tolerance is not None and relative_residual > float(relative_tolerance):
+        raise RuntimeError(
+            "source field is not one globally exact physical scalar potential; "
+            f"relative_residual={relative_residual:.3e} exceeds "
+            f"relative_tolerance={float(relative_tolerance):.3e}. "
+            "Use the interface trace with an explicit cut/cohomology "
+            "representation for current-linked sources."
+        )
+    return {
+        "potential": potential_gf,
+        "fes": fes,
+        "relative_volume_residual": relative_residual,
+        "volume_residual_norm": residual_norm,
+        "volume_source_norm": source_norm,
+        "physical_materials": names,
+    }
+
+
 def project_kelvin_A_source(mesh, A_s_cf, *, order=2):
     """Project a Kelvin-aware source potential into a periodic HCurl space.
 
@@ -314,7 +393,7 @@ def solve_magnetostatic_reduced_A_kelvin(
 
 def solve_magnetostatic_reduced_omega_kelvin(
         mesh, H_s, R_K, offset, *, mu_r_by_material,
-        order=1, dirichlet_bbnd="GND", bonus_intorder=4,
+        order=1, dirichlet_bbbnd="GND", bonus_intorder=4,
         kelvin_mats=("kelvin",), inverse="pardiso"):
     """Solve a periodic reduced Omega--Omega magnetostatic problem with Kelvin.
 
@@ -331,7 +410,7 @@ def solve_magnetostatic_reduced_omega_kelvin(
     mu_cf = make_kelvin_mu_cf(
         mesh, R_K, offset, kelvin_mats=kelvin_mats,
         mu_r_by_material=mu_r_by_material)
-    fes = Periodic(H1(mesh, order=order, dirichlet_bbnd=dirichlet_bbnd))
+    fes = Periodic(H1(mesh, order=order, dirichlet_bbbnd=dirichlet_bbbnd))
     phi, test = fes.TnT()
     a_bf = BilinearForm(fes, symmetric=True)
     a_bf += mu_cf * grad(phi) * grad(test) * dx(
@@ -352,7 +431,7 @@ def solve_magnetostatic_reduced_omega_kelvin(
 def solve_magnetostatic_mixed_total_reduced_omega_kelvin(
         mesh, H_s, source_potential, R_K, offset, *, mu_r_by_material=None,
         reduced_materials, total_materials, interface_boundary,
-        order=1, dirichlet_bbnd="GND", bonus_intorder=4,
+        order=1, dirichlet_bbbnd="GND", bonus_intorder=4,
         kelvin_mats=("kelvin",), inverse="pardiso",
         interface_constraint_scale=None, total_dirichlet_cf=None,
         mu_cf=None, kelvin_interface_boundary=None,
@@ -474,7 +553,7 @@ def solve_magnetostatic_mixed_total_reduced_omega_kelvin(
     fes_reduced = H1(mesh, order=int(order), definedon=reduced_selector)
     fes_total = Compress(Periodic(H1(
         mesh, order=int(order), definedon=total_selector,
-        dirichlet_bbnd=dirichlet_bbnd)))
+        dirichlet_bbbnd=dirichlet_bbbnd)))
     fes_multiplier = Compress(H1(
         mesh, order=int(order), definedon=interface_selector))
     fes_kelvin_multiplier = (
@@ -526,7 +605,7 @@ def solve_magnetostatic_mixed_total_reduced_omega_kelvin(
             fes.FreeDofs(), inverse=inverse) * f_lf.vec
     else:
         solution.components[1].Set(
-            total_dirichlet_cf, definedon=mesh.Boundaries(dirichlet_bbnd))
+            total_dirichlet_cf, definedon=mesh.BBBoundaries(dirichlet_bbbnd))
         residual = solution.vec.CreateVector()
         residual.data = f_lf.vec - a_bf.mat * solution.vec
         solution.vec.data += a_bf.mat.Inverse(
@@ -567,7 +646,7 @@ def solve_magnetostatic_mixed_total_reduced_omega_kelvin(
 def solve_magnetostatic_mixed_total_reduced_omega_picard_kelvin(
         mesh, H_s, source_potential, R_K, offset, *, bh_table,
         nonlinear_materials, reduced_materials, total_materials,
-        interface_boundary, order=1, dirichlet_bbnd="GND",
+        interface_boundary, order=1, dirichlet_bbbnd="GND",
         bonus_intorder=4, kelvin_mats=("kelvin",), inverse="pardiso",
         mu_r_initial=1000.0, tolerance=2.0e-5, max_iterations=80,
         relaxation=0.3, interface_constraint_scale=None,
@@ -649,7 +728,7 @@ def solve_magnetostatic_mixed_total_reduced_omega_picard_kelvin(
             mesh, H_s, source_potential, R_K, offset,
             mu_r_by_material=None, reduced_materials=reduced_materials,
             total_materials=total_materials, interface_boundary=interface_boundary,
-            order=order, dirichlet_bbnd=dirichlet_bbnd,
+            order=order, dirichlet_bbbnd=dirichlet_bbbnd,
             bonus_intorder=bonus_intorder, kelvin_mats=kelvin_mats,
             inverse=inverse, interface_constraint_scale=interface_constraint_scale,
             mu_cf=mixed_mu_cf(),

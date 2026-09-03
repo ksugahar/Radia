@@ -3,7 +3,7 @@
 Each mesh level runs in a fresh Python process.  This both isolates NGSolve/C++
 state and preserves the public ``run_three_engine.py`` contract.  Acceptance
 requires converged nonlinear solves, contracting mesh increments for HDiv-MMM,
-HCurl reduced-A, and Omega-reduced-Omega, a small fine-mesh three-route spread,
+HCurl reduced-A, and H1 TOSCA mixed total/reduced Omega, a small fine-mesh three-route spread,
 and a conservative combined numerical-uncertainty envelope.
 """
 
@@ -24,7 +24,7 @@ import numpy as np
 
 HERE = Path(__file__).resolve().parent
 RUNNER = HERE / "run_three_engine.py"
-ENGINES = ("hdiv_mmm", "reduced_a", "omega_reduced_omega")
+ENGINES = ("hdiv_mmm", "reduced_a", "mixed_total_reduced_omega")
 
 
 def sha256(path: Path) -> str:
@@ -48,7 +48,7 @@ def _relative_rms(reference: np.ndarray, candidate: np.ndarray) -> float:
 
 def _load_level(path: Path) -> dict:
     payload = json.loads(path.read_text(encoding="utf-8"))
-    if payload.get("schema") != "radia.validation.c-type-formulation-comparison.v2":
+    if payload.get("schema") != "radia.validation.c-type-formulation-comparison.v4":
         raise RuntimeError(f"unexpected level result schema: {path}")
     if set(payload.get("engines", {})) != set(ENGINES):
         raise RuntimeError(f"all three formulations are required: {path}")
