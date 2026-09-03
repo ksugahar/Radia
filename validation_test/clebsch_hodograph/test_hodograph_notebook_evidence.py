@@ -58,3 +58,45 @@ def test_hodograph_feasibility_evidence():
     )
     assert data["checks"] == derived
     assert all(derived.values())
+
+
+def test_edge_focusing_tracking_evidence():
+    data = _load("edge_focusing_tracking")
+    summary = data["summary"]
+    derived = {
+        "finest_width_slope_within_0p02": abs(summary["finest_w_slope"] - 1.0) < 0.02,
+        "max_relative_error_vs_enge_lt_0p01": summary["max_rel_err_vs_enge"] < 0.01,
+        "beta0_baseline_abs_lt_0p02": abs(summary["beta0_baseline"]) < 0.02,
+    }
+
+    assert data["schema"] == (
+        "radia.validation.clebsch_hodograph.edge_focusing_tracking.v1"
+    )
+    assert data["checks"] == derived
+    assert all(derived.values())
+
+
+def test_edge_focusing_fem_evidence():
+    data = _load("edge_focusing_fem_results")
+    headline = data["headline"]
+    cross_check = data["hdiv_vim_cross_check"]
+    scaled = [row["rho_m"] * row["dK_in_fem"] for row in data["rho_sweep"]]
+    spread = (max(scaled) - min(scaled)) / (sum(scaled) / len(scaled))
+    derived = {
+        "rho_scaled_focusing_spread_lt_0p02": spread < 0.02,
+        "matched_engine_relative_difference_lt_0p01": (
+            cross_check["engine_agreement"]["rel_diff_hdiv2"] < 0.01
+        ),
+        "fem_to_model_ratio_between_0p9_and_0p97": (
+            0.9 < headline["fem_over_model"] < 0.97
+        ),
+        "spurious_beta0_term_abs_lt_0p002": (
+            abs(headline["spurious_T1_in_beta0"]) < 0.002
+        ),
+    }
+
+    assert data["schema"] == (
+        "radia.validation.clebsch_hodograph.edge_focusing_fem.v1"
+    )
+    assert data["checks"] == derived
+    assert all(derived.values())
