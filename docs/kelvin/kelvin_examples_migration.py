@@ -24,9 +24,7 @@ SKIP_TEXT_PARTS = {
 }
 SKIP_TEXT_NAMES = {
     "kelvin_examples_migration_results.json",
-    "kelvin_examples_migration_result.json",
     "kelvin_classic_demos_results.json",
-    "kelvin_classic_demos_result.json",
 }
 
 _LOCAL_PATH_PATTERNS = (

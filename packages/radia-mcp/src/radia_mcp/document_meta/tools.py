@@ -865,10 +865,14 @@ def document_meta_notebook_result_audit(repo_root: str = "",
     gaps: list[dict] = []
     for nb in sorted(notebooks):
         nb_summary = _read_notebook_result_summary(nb, root)
-        sidecars = [
-            _result_json_summary(p, root, nb)
-            for p in _find_notebook_result_jsons(nb)
-        ]
+        sidecars = (
+            [
+                _result_json_summary(p, root, nb)
+                for p in _find_notebook_result_jsons(nb)
+            ]
+            if require_json
+            else []
+        )
         good_json_count = sum(1 for s in sidecars if s.get("has_version_date"))
         synced_json_count = sum(
             1 for s in sidecars
