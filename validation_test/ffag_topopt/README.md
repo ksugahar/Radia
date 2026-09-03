@@ -573,3 +573,17 @@ not a recompression error bound.  HDiv therefore keeps basic ACA and the
 experiments are absent from product code.  The retained rank/GEMM profiler
 identifies grouped low-rank apply or a deterministic build study as the next
 possible target.
+
+## Two-stage MMM-topology validation
+
+`validation_mmm_topology_two_stage_lie.py` exercises the public
+`radia.mmm_topology` facade on one retained NGSolve mesh. It first recovers a
+missing whole TET through the exact binary HDiv-MMM stage, then applies a
+topology-preserving `GetTrafo` deformation with a complete physical re-solve
+for every accepted step. Acceptance is evaluated against selected entries of
+the fourth-order Lie map; no gray material or design finite difference is used.
+
+`mmm_topology_two_stage_lie_lab_20260830.json` is the retained LAB result. It
+records the runtime versions, solve history, recovered displacement, and every
+scientific gate. The fast unit tests cover facade ordering, type checks, and
+acceptance semantics only; numerical evidence remains in this validation lane.
