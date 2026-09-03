@@ -7,15 +7,6 @@ Visualizes the coil geometry and calculates magnetic field at test points.
 This script is used to verify the coil shape is correct.
 """
 
-import sys
-import os
-from pathlib import Path
-
-# Add paths
-project_root = Path(__file__).resolve().parent.parent.parent
-sys.path.insert(0, str(project_root / 'build' / 'Release'))
-sys.path.insert(0, str(project_root / 'src' / 'radia'))
-
 import numpy as np
 import radia as rad
 

@@ -1,20 +1,9 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-"""
-Magnetic field map calculation and VTK export
+"""Calculate a magnetic field map and export checked GMSH post data."""
 
-This script calculates the magnetic field distribution around the complex
-8-segment coil geometry and exports it to VTK format for visualization in ParaView.
-"""
-
-import sys
 import os
 from pathlib import Path
-
-# Add paths
-project_root = Path(__file__).resolve().parent.parent.parent
-sys.path.insert(0, str(project_root / 'build' / 'Release'))
-sys.path.insert(0, str(project_root / 'src' / 'radia'))
 
 import numpy as np
 import radia as rad
@@ -104,65 +93,43 @@ def calculate_field_grid(coil_obj, grid_params):
 	}
 
 
-def export_field_to_vtk(field_data, filename):
-	"""
-	Export field data to VTK structured grid format.
+def export_field_to_gmsh(coil_obj, grid_params, filename):
+	"""Export the field on a Netgen air mesh as GMSH MSH v4.1 NodeData."""
+	from netgen.csg import CSGeometry, OrthoBrick, Pnt
+	from ngsolve import Mesh
+	from radia.gmsh_post_export import GmshPostExport
 
-	Args:
-		field_data: Dictionary with grid coordinates and field values
-		filename: Output filename (without .vtk extension)
-	"""
 	print("\n" + "-" * 70)
-	print("Exporting field data to VTK...")
+	print("Exporting checked GMSH field data...")
 	print("-" * 70)
 
-	X = field_data['X']
-	Y = field_data['Y']
-	Z = field_data['Z']
-	Bx = field_data['Bx']
-	By = field_data['By']
-	Bz = field_data['Bz']
-	B_mag = field_data['B_mag']
+	x_min, x_max, nx = grid_params['x_range']
+	y_min, y_max, ny = grid_params['y_range']
+	z_min, z_max, nz = grid_params['z_range']
+	spacing = max(
+		(x_max - x_min) / max(nx - 1, 1),
+		(y_max - y_min) / max(ny - 1, 1),
+		(z_max - z_min) / max(nz - 1, 1),
+	)
 
-	nx, ny, nz = X.shape
+	geometry = CSGeometry()
+	geometry.Add(
+		OrthoBrick(Pnt(x_min, y_min, z_min), Pnt(x_max, y_max, z_max)).mat('air')
+	)
+	mesh = Mesh(geometry.GenerateMesh(maxh=spacing))
+	points = [[float(value) for value in vertex.point] for vertex in mesh.vertices]
+	B_mT = np.asarray(rad.Fld(coil_obj, 'b', points), dtype=float) * 1000.0
 
-	vtk_file = f"{filename}.vtk"
+	output = f"{filename}.msh"
+	post = GmshPostExport(mesh)
+	post.add_vector_field('B_mT', B_mT)
+	post.write(output)
 
-	with open(vtk_file, 'w') as f:
-		# Header
-		f.write("# vtk DataFile Version 3.0\n")
-		f.write("Magnetic field map from Radia\n")
-		f.write("ASCII\n")
-		f.write("DATASET STRUCTURED_GRID\n")
-		f.write(f"DIMENSIONS {nx} {ny} {nz}\n")
-		f.write(f"POINTS {X.size} float\n")
-
-		# Write grid points
-		for k in range(nz):
-			for j in range(ny):
-				for i in range(nx):
-					f.write(f"{X[i,j,k]:.6f} {Y[i,j,k]:.6f} {Z[i,j,k]:.6f}\n")
-
-		# Write field data
-		f.write(f"\nPOINT_DATA {X.size}\n")
-
-		# Vector field (B) only
-		f.write("VECTORS B float\n")
-		for k in range(nz):
-			for j in range(ny):
-				for i in range(nx):
-					f.write(f"{Bx[i,j,k]:.6f} {By[i,j,k]:.6f} {Bz[i,j,k]:.6f}\n")
-
-	file_size = os.path.getsize(vtk_file)
-	file_size_mb = file_size / (1024 * 1024)
-
-	print(f"  [OK] Created: {vtk_file}")
+	file_size_mb = os.path.getsize(output) / (1024 * 1024)
+	print(f"  [OK] Created: {output}")
 	print(f"       File size: {file_size_mb:.2f} MB")
-	print(f"       Grid: {nx}x{ny}x{nz} = {X.size} points")
-	print(f"\n  Open in ParaView to visualize:")
-	print(f"    - Use 'Glyph' filter to show field vectors")
-	print(f"    - Use 'Contour' filter to show field isosurfaces")
-	print(f"    - Use 'Slice' filter to show field on planes")
+	print(f"       Mesh: {mesh.nv} vertices, {mesh.ne} volume elements")
+	print(f"\n  Open {Path(output).with_suffix('.geo')} in GMSH for review.")
 
 
 def main():
@@ -215,8 +182,8 @@ def main():
 	# Calculate field
 	field_data = calculate_field_grid(coil, grid_params)
 
-	# Export to VTK
-	export_field_to_vtk(field_data, 'field_map')
+	# Export a checked GMSH post-processing artifact.
+	export_field_to_gmsh(coil, grid_params, 'field_map')
 
 	# Cleanup
 	rad.UtiDelAll()
@@ -225,12 +192,8 @@ def main():
 	print("FIELD MAP CALCULATION COMPLETE")
 	print("=" * 70)
 	print("\nNext steps:")
-	print("  1. Open 'field_map.vtk' in ParaView")
-	print("  2. Apply filters to visualize the field:")
-	print("     - Glyph: Show field direction with arrows")
-	print("     - StreamTracer: Show field lines")
-	print("     - Contour: Show constant field magnitude surfaces")
-	print("     - Slice: Show field on cutting planes")
+	print("  1. Open 'field_map.geo' in GMSH")
+	print("  2. Select the B_mT vector view and inspect sections or clipping planes")
 	print("=" * 70 + "\n")
 
 

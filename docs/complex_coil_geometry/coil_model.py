@@ -9,17 +9,9 @@ The model can be imported by other scripts for visualization or field calculatio
 Units: All geometry in meters (Radia always uses meters), current in Amperes.
 """
 
-import sys
-from pathlib import Path
-
-# Add paths
-project_root = Path(__file__).resolve().parent.parent.parent
-sys.path.insert(0, str(project_root / 'build' / 'Release'))
-sys.path.insert(0, str(project_root / 'src' / 'radia'))
-
 import numpy as np
 import radia as rad
-from coil_builder import CoilBuilder
+from radia.coil_builder import CoilBuilder
 
 # Set unit system to meters
 

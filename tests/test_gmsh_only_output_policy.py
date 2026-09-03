@@ -33,11 +33,16 @@ CUBIT_VTK_BOUNDARY = (
 SOURCE_PATHS = tuple(
     str(root.relative_to(ROOT).as_posix()) + "/**"
     for root in SCANNED_ROOTS
-)
+) + ("docs/**/*.py",)
 FORBIDDEN_OUTPUT = r"VTKOutput|[\"'][^\"']*\.(vtk|vtu|vts)[\"']"
+IMPLEMENTATION_SUFFIXES = {
+    ".bat", ".c", ".cc", ".cpp", ".h", ".hpp", ".m", ".ps1", ".py",
+}
 
 
 def _is_cubit_vtk_boundary(relative: str) -> bool:
+    if relative == "docs/kelvin/kelvin_examples_migration.py":
+        return True
     return any(
         relative == allowed or relative.startswith(allowed)
         for allowed in CUBIT_VTK_BOUNDARY
@@ -69,6 +74,8 @@ def test_non_cubit_code_has_no_vtk_output_path() -> None:
     violations: list[str] = []
     for match in completed.stdout.splitlines():
         relative = match.split(":", 1)[0].replace("\\", "/")
+        if Path(relative).suffix.lower() not in IMPLEMENTATION_SUFFIXES:
+            continue
         if not _is_cubit_vtk_boundary(relative):
             violations.append(match)
 
