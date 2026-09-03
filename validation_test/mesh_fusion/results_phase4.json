@@ -1,4 +1,9 @@
 {
+  "schema": "radia.validation.mesh_fusion.phase4.v1",
+  "source_notebook": "docs/mesh_fusion/mesh_fusion.ipynb",
+  "checks": {
+    "all_off_diagonal_ratios_lt_1e_6": true
+  },
   "phase": 4,
   "description": "Egger 2020 harmonic mortar -- Fourier basis orthogonality check",
   "interface_geometry": "inner circle r=0.3",

@@ -1,4 +1,11 @@
 {
+  "schema": "radia.validation.mesh_fusion.phase3.v1",
+  "source_notebook": "docs/mesh_fusion/mesh_fusion.ipynb",
+  "checks": {
+    "l2_error_decreases": true,
+    "interface_jump_decreases": true,
+    "finest_l2_error_lt_2e_6": true
+  },
   "phase": 3,
   "description": "2D TM Maxwell (A_z), Nitsche coil-air interface coupling",
   "method": "Symmetric Interior Penalty Galerkin (Nitsche-mortar)",
