@@ -11,13 +11,13 @@
       "label": "Public ESIM/WPT/RWG demo showcase",
       "path": "docs/induction_heating/induction_heating_demo_showcase.ipynb",
       "json": "docs/induction_heating/induction_heating_demo_showcase_results.json",
-      "sha256": "cc85f1d0d1888c3262ba669d3717995ca013aa8b8b6b98c7c03859e9e8940f4d"
+      "sha256": "5c0b148a2bc6e97283d6468c4a804b06aadf58d180e30ee49eec2e7e3a2957c4"
     },
     {
       "label": "Paper-grade ESIM benchmark",
-      "path": "docs/ih_esim_benchmark/results.json",
-      "json": "docs/ih_esim_benchmark/results.json",
-      "sha256": "a6603f043dd8590b9b78a6c26c8b033cf91e1ab167d872e75eb350d0fa29c712"
+      "path": "validation_test/ih_esim_benchmark/results.json",
+      "json": "validation_test/ih_esim_benchmark/results.json",
+      "sha256": "d3a8bb20bfe16657128f1e12fdcc1fd41fed355a780288fb8e89df34b73f7721"
     },
     {
       "label": "BEM reference validation lane",

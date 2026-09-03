@@ -20,7 +20,7 @@ Each render self-verifies with check_min_font (no glyph below 9 pt at
 the embed scale) and, where a legend exists, check_legend_overlap.
 
 Usage:
-  python docs/ih_esim_benchmark/plot_sweep_heatmap.py [SWEEP_DIR]
+  python validation_test/ih_esim_benchmark/plot_sweep_heatmap.py [SWEEP_DIR]
 """
 import sys
 import json

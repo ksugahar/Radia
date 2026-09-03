@@ -14,7 +14,7 @@ Run time on LAB is typically 3--4 hours, depending on high-current
 stall behaviour.
 
 Usage:
-    python docs/ih_esim_benchmark/sweep_f_I.py [OUT_DIR]
+    python validation_test/ih_esim_benchmark/sweep_f_I.py [OUT_DIR]
 
 Output:
     <OUT_DIR>/sweep_results.json    -- aggregated results

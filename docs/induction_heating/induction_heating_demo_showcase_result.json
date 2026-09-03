@@ -2,7 +2,7 @@
   "schema": "radia.notebook_result.v1",
   "generated_at_utc": "2026-06-28T16:50:01Z",
   "notebook": "docs/induction_heating/induction_heating_demo_showcase.ipynb",
-  "notebook_sha256": "cc85f1d0d1888c3262ba669d3717995ca013aa8b8b6b98c7c03859e9e8940f4d",
+  "notebook_sha256": "5c0b148a2bc6e97283d6468c4a804b06aadf58d180e30ee49eec2e7e3a2957c4",
   "versions": {
     "python_version": "3.12.10",
     "python_executable": "C:\\Program Files\\Python312\\python.exe",
@@ -100,8 +100,8 @@
     {
       "cell_index": 9,
       "execution_count": 5,
-      "source_sha256": "8b21c101c57cd41c716eee16efebaae2f6e4a65c63c31b88d237eb343b9f247e",
-      "source_preview": "display(Markdown(table(['reader need', 'canonical surface'], [\n    ['ESIM theory and paper-grade validation', '../esim/README.md and ../ih_esim_benchmark/results.json'],\n    ['Public induction-heating demonstrations', 'this notebook plus induction_heating_demo_showcase_results.json'],\n    ['Legacy Cubit/Kelvin sample archaeology', '../../validation_test/induction_heating/demoted_samples_legacy/'],\n    ['Reusable implementation', '../../src/radia/ and panel calc_*.py entry points'],\n])))",
+      "source_sha256": "4727f1dd45bfa6fbe9c57c5e0e491a1d19b52a0efa4b2c4eca107f6fa8939c26",
+      "source_preview": "display(Markdown(table(['reader need', 'canonical surface'], [\n    ['ESIM theory and paper-grade validation', '../esim/README.md and ../../validation_test/ih_esim_benchmark/results.json'],\n    ['Public induction-heating demonstrations', 'this notebook plus induction_heating_demo_showcase_results.json'],\n    ['Legacy Cubit/Kelvin sample archaeology', '../../validation_test/induction_heating/demoted_samples_legacy/'],\n    ['Reusable implementation', '../../src/radia/ and headless calc_*.py entry points'],\n])))",
       "outputs": [
         {
           "output_type": "display_data",

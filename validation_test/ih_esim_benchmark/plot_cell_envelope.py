@@ -19,7 +19,7 @@ only to 1-D geometries with uniform H_t; the IH workpiece has a
 three-dimensional, spatially non-uniform tangential field).
 
 Usage:
-    python docs/ih_esim_benchmark/plot_cell_envelope.py
+    python validation_test/ih_esim_benchmark/plot_cell_envelope.py
 
 Outputs:
     cell_envelope.png            (figure)

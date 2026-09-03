@@ -1,5 +1,6 @@
 {
-  "timestamp": "2026-05-15T11:21:28.174027",
+  "schema": "radia.validation.ih-esim-cross-path-benchmark.v1",
+  "generated_at_utc": "2026-05-15T02:21:28.174027+00:00",
   "hostname": "lab",
   "radia_version": "4.46.3",
   "problem": {

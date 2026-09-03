@@ -2,7 +2,7 @@
   "schema": "radia.notebook_result.v1",
   "generated_at_utc": "2026-06-28T16:50:06Z",
   "notebook": "docs/induction_heating/public_demo.ipynb",
-  "notebook_sha256": "b657286df8a58f01f4ba8233440b5f8915e5d4e44c7a451cc70829240d98a3bc",
+  "notebook_sha256": "2d4ffe6fa01a2c00c1550e16954042604958bfdf31d037a60b011cbefd506b34",
   "versions": {
     "python_version": "3.12.10",
     "python_executable": "C:\\Program Files\\Python312\\python.exe",

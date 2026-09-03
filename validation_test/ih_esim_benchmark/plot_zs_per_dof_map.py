@@ -35,7 +35,7 @@ Outputs:
     Zs_per_dof_map.png       (3-panel figure)
 
 Usage:
-    python docs/ih_esim_benchmark/plot_zs_per_dof_map.py \\
+    python validation_test/ih_esim_benchmark/plot_zs_per_dof_map.py \\
         [JSON_PATH] [VOL_PATH]
 
 The default paths are configured for the IGTE 2026 paper

@@ -1,6 +1,6 @@
 """
 
-SHOWCASE NOTEBOOK: docs/ih_esim_benchmark/esim_showcase.ipynb -- Bessel cross-check (live) + committed digest/envelope/per-DOF/Karl figures.
+SHOWCASE NOTEBOOK: validation_test/ih_esim_benchmark/esim_showcase.ipynb -- Bessel cross-check (live) + committed digest/envelope/per-DOF/Karl figures.
 ESIM (Effective Surface Impedance Method) practical usage knowledge.
 
 This module covers HOW TO USE ESIM in production -- CLI flags,
@@ -271,7 +271,7 @@ sweep with triangle-P1-gradient extractor + Anderson m=5):
 - Equivalently: scalar OVER-estimates by a factor 1.63
 
 The source of truth is the dense 108-case sweep artifacts in
-docs/ih_esim_benchmark/sweep_data_dense/.
+validation_test/ih_esim_benchmark/sweep_data_dense/.
 
 ## When per-element doesn't converge
 
@@ -399,11 +399,11 @@ For converged cases the per-element vs scalar gap reaches:
   - max -47.4 % at (200 A, 100 kHz)   (converged, second-worst)
   - max +28   % at (1 A, 500 kHz)     (sign flips below BH knee)
 
-Reproducing the full sweep: docs/ih_esim_benchmark/sweep_f_I.py
+Reproducing the full sweep: validation_test/ih_esim_benchmark/sweep_f_I.py
 (restart-safe after 1795e078 -- transient NAS-import flickers
 auto-recover; see ih_esim "troubleshooting" topic).
 
-Source-of-truth data: docs/ih_esim_benchmark/sweep_data_dense/*.json
+Source-of-truth data: validation_test/ih_esim_benchmark/sweep_data_dense/*.json
 (108 per-case JSONs + sweep_results.json, committed `847259d2`).
 """
 
@@ -474,7 +474,7 @@ ESIM_USAGE_TROUBLESHOOTING = """
 | `BIE iv overflow` / NaN seed                       | very high xi (R/delta > 100)  | Cell solver uses thin-skin fallback automatically (v4.46.1+); upgrade radia |
 | Per-element runs but stagnates around dZ_max=0.3   | BH-knee-straddling DOFs       | Try --esim-relax 0.2; if still stuck, P_wp is usually stable to ~1% anyway |
 | Per-element stalls at iter=30 in I=500 A f>=20 kHz band | high-current high-freq limit cycle | See `convergence` topic, "Operating-regime stall map" -- not fixable by raising max_iter |
-| `{"error": "No module named 'radia.<X>'"}` in JSON, returncode 0 | transient NAS-share import flicker under heavy 100bangoki OCR load | radia >= 4.92.0: calc_main now exits non-zero on any error (commit `5b88b67f`).  Sweep wrappers see returncode != 0 and can retry.  docs/ih_esim_benchmark/sweep_f_I.py has auto-recover for cached error JSONs (commit `1795e078`). |
+| `{"error": "No module named 'radia.<X>'"}` in JSON, returncode 0 | transient NAS-share import flicker under heavy 100bangoki OCR load | radia >= 4.92.0: calc_main now exits non-zero on any error (commit `5b88b67f`).  Sweep wrappers see returncode != 0 and can retry.  validation_test/ih_esim_benchmark/sweep_f_I.py has auto-recover for cached error JSONs (commit `1795e078`). |
 
 ## Sanity checks
 
@@ -649,12 +649,12 @@ Reproduction (from any machine with radia >= 4.67.0 installed):
     --output {scalar,per_panel}.json
 
 For the full 108-case (I, f) sweep map (Fig. 1a of the IGTE 2026
-digest) use docs/ih_esim_benchmark/sweep_f_I.py.  Grid:
+digest) use validation_test/ih_esim_benchmark/sweep_f_I.py.  Grid:
 I_port in {1, 2, 5, 10, 20, 50, 100, 200, 500} A x
 f in {10, 20, 50, 100, 200, 500} kHz x {scalar, per_panel}
 = 9 x 6 x 2 = 108 cases.
 
-Frozen artifacts: docs/ih_esim_benchmark/sweep_data_dense/*.json
+Frozen artifacts: validation_test/ih_esim_benchmark/sweep_data_dense/*.json
 (108 per-case JSONs + sweep_results.json + side-wall |Z_s| at the
 max-gap I=500 A / f=10 kHz case, committed `847259d2` on 2026-05-30).
 
@@ -674,9 +674,9 @@ all CONVERGED cases.  Non-converged 500 A high-freq cases formally
 show larger spreads (up to 9.3x at 500 A / 200 kHz) but the per-
 element Karl limit cycle makes those Z_s values unreliable.
 
-Source: docs/ih_esim_benchmark/sweep_data_dense/
+Source: validation_test/ih_esim_benchmark/sweep_data_dense/
         I500_f10k_per_panel.json (per-DOF Z_s) +
-        docs/ih_esim_benchmark/sweep_data_dense/
+        validation_test/ih_esim_benchmark/sweep_data_dense/
         I500_f10k_Zs_side_field.json (side-wall (theta, z, |Z_s|, R)).
 
 ## Three-path consistency (linear-mu screening)
@@ -704,7 +704,7 @@ remains <2 % across the full 10-500 kHz sweep.
 
 Solver: ESIMFiniteSlabSolver(geometry='cylinder', mu_r=100, n_nodes=2000).
 Bessel reference: scipy.special.iv (modified Bessel I_0, I_1).
-Reproducer: docs/ih_esim_benchmark/analytical_bessel_baseline.py.
+Reproducer: validation_test/ih_esim_benchmark/analytical_bessel_baseline.py.
 
 Cite these tables verbatim in any paper / talk; dense-sweep headline
 values are locked-in for radia >= 4.67.0.

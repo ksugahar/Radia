@@ -19,7 +19,7 @@ on the reader's goal:
 | ... understand the code architecture / Karl loop internals | [`IMPLEMENTATION.md`](IMPLEMENTATION.md) |
 | ... see numerical validation tables | [`CROSS_VALIDATION.md`](CROSS_VALIDATION.md) |
 | ... understand the honest limits of ESIM validation (and why) | [`CROSS_VALIDATION.md`](CROSS_VALIDATION.md) § 1b |
-| ... diagnose a Karl loop that didn't converge | [`IMPLEMENTATION.md`](IMPLEMENTATION.md) § 3.4 + [`plot_karl_history.py`](../ih_esim_benchmark/plot_karl_history.py) |
+| ... diagnose a Karl loop that didn't converge | [`IMPLEMENTATION.md`](IMPLEMENTATION.md) § 3.4 + [`plot_karl_history.py`](../../validation_test/ih_esim_benchmark/plot_karl_history.py) |
 | ... understand WHY this combination of choices (the publication argument) | [`SCALAR_BIE_VS_VECTOR_BEM.md`](SCALAR_BIE_VS_VECTOR_BEM.md) |
 | ... diagnose the PEEC vs BEM-A coil-R discrepancy | [`R_MISMATCH_PEEC_VS_BEMA.md`](R_MISMATCH_PEEC_VS_BEMA.md) |
 | ... see the slow STEP-to-filament path analysis | [`PEEC_PERFORMANCE_AND_R_ANALYSIS.md`](PEEC_PERFORMANCE_AND_R_ANALYSIS.md) |
@@ -74,7 +74,7 @@ The MCP server `mcp-server-ih` exposes this knowledge via the
 - [`docs/research/bem_numerics/NONLOCAL_SIBC_BILICZ_2023.ipynb`](../research/bem_numerics/NONLOCAL_SIBC_BILICZ_2023.ipynb) — wide-band nonlocal extension roadmap (deferred).
 - [`docs/induction_heating/induction_heating_demo_showcase.ipynb`](../induction_heating/induction_heating_demo_showcase.ipynb) — result-saved public ESIM/WPT/RWG demo showcase.
 - [`docs/induction_heating/induction_heating_examples_catalog.ipynb`](../induction_heating/induction_heating_examples_catalog.ipynb) — result-saved promotion catalog for the IH docs/API/validation migration.
-- [`docs/ih_esim_benchmark/`](../ih_esim_benchmark/) — benchmark scripts producing `results.json`.
+- [`validation_test/ih_esim_benchmark/`](../../validation_test/ih_esim_benchmark/) — benchmark scripts producing `results.json`.
 - [`src/radia/esim_cell_problem.py`](../../src/radia/esim_cell_problem.py) — cell-problem solver source.
 - [`src/radia/panels/calc_inductance.py`](../../src/radia/panels/calc_inductance.py) — scalar BIE-SIBC path (path A in [`SCALAR_BIE_VS_VECTOR_BEM.md`](SCALAR_BIE_VS_VECTOR_BEM.md)).
 - [`src/radia/panels/calc_fem_kelvin.py`](../../src/radia/panels/calc_fem_kelvin.py) — FEM-Kelvin path (path C).

@@ -60,7 +60,7 @@ PEEC / volume PEEC / analytic proximity on those coils (4.63 vs
 ### 1.3 Empirical data point: gapped-torus benchmark
 
 Production benchmark
-([`docs/ih_esim_benchmark/results.json`](../ih_esim_benchmark/results.json)),
+([`validation_test/ih_esim_benchmark/results.json`](../../validation_test/ih_esim_benchmark/results.json)),
 gapped torus 1 turn + Cu, 50 kHz:
 
 | Source | R_coil_mOhm |
@@ -126,7 +126,7 @@ The honest statement for the paper:
 
 The benchmark reports `t_coil_topology_s ≈ 3 s` consistently across
 all four test frequencies
-([`results.json`](../ih_esim_benchmark/results.json) lines
+([`results.json`](../../validation_test/ih_esim_benchmark/results.json) lines
 38, 255, 465, 668).  This is **constant** across frequencies — the
 topology extraction is frequency-independent (no warm/cold cache
 variance).

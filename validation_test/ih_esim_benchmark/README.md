@@ -5,6 +5,11 @@ Karl-iteration paths (PEEC+BEM, PEEC+FEM+Kelvin, Full-FEM) on the same
 nonlinear-steel induction-heating problem.  This is Phase A of the
 ESIM publication roadmap.
 
+This directory is the manually invoked numerical-evidence lane.  It is
+not part of routine pull-request CI; fast implementation regressions remain
+under `tests/`, while the committed JSON here owns benchmark and publication
+claims.
+
 The three paths share the same v4.46+ ESIM cell solver but wrap it
 in different outer solvers:
 
@@ -20,18 +25,19 @@ in different outer solvers:
 
 ```bash
 # Step 1 — cell-solver cross-check vs analytical Bessel I_0
-python docs/ih_esim_benchmark/analytical_bessel_baseline.py
+python validation_test/ih_esim_benchmark/analytical_bessel_baseline.py
 
 # Step 2 — full 3-path × 4-frequency benchmark (~12 min total)
-python docs/ih_esim_benchmark/benchmark.py --frequencies "1e4,5e4,1e5,5e5"
+python validation_test/ih_esim_benchmark/benchmark.py --frequencies "1e4,5e4,1e5,5e5"
 
 # Step 3 — plots
-python docs/ih_esim_benchmark/plot.py
+python validation_test/ih_esim_benchmark/plot.py
 ```
 
 Outputs:
 
-- `results.json` — all per-(path, freq) raw metrics
+- `results.json` — versioned `radia.validation.ih-esim-cross-path-benchmark.v1`
+  evidence with all per-(path, freq) raw metrics
 - `tmp/<path>_f<freq>.json` — per-run JSONs (kept for inspection)
 - `benchmark_plot.pdf`, `benchmark_plot.png`
 
@@ -150,11 +156,11 @@ artifacts described below.
 
 ```bash
 # Dense (9 × 6 × 2 = 108 cases), output directory is committed:
-python docs/ih_esim_benchmark/sweep_f_I.py \
-       docs/ih_esim_benchmark/sweep_data_dense
+python validation_test/ih_esim_benchmark/sweep_f_I.py \
+       validation_test/ih_esim_benchmark/sweep_data_dense
 
 # Render Fig. 1 (auto-switches to log-log contour when n_runs >= 108):
-python docs/ih_esim_benchmark/plot_digest_figure.py
+python validation_test/ih_esim_benchmark/plot_digest_figure.py
 ```
 
 108 cases = 9 currents `{1, 2, 5, 10, 20, 50, 100, 200, 500} A` ×
@@ -224,7 +230,7 @@ are likely qualitatively right but quantitatively unreliable.
 ### Source-of-truth artifacts
 
 All sweep data is committed under
-[`docs/ih_esim_benchmark/sweep_data_dense/`](sweep_data_dense/):
+[`validation_test/ih_esim_benchmark/sweep_data_dense/`](sweep_data_dense/):
 
   - `I*_f*_scalar.json` — 54 scalar per-case JSONs
   - `I*_f*_per_panel.json` — 54 per-element per-case JSONs
@@ -235,7 +241,7 @@ The Fig. 1(b) side-wall |Z_s| at the max-gap case is extracted to
 (561 vertices, |Z_s| range 4.5--16.5 mΩ).  Regenerate with:
 
 ```bash
-python docs/ih_esim_benchmark/plot_digest_figure.py --regen-zs-field
+python validation_test/ih_esim_benchmark/plot_digest_figure.py --regen-zs-field
 ```
 
 The current production code uses **triangle-wise P1 gradient
