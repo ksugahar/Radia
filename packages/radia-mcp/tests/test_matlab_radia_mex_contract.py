@@ -162,10 +162,14 @@ def test_radia_mex_contract_reads_the_cpp_command_inventory():
         "_ChargeGramHMatrix._reduce_configured_candidate_directional_schur"
         in contract["pybind_class_exclusions"]
     )
-    assert (
-        "KelvinRadiaVectorPotential.__init__"
-        in contract["pybind_class_exclusions"]
-    )
+    for name in (
+        "KelvinRadiaVectorPotential",
+        "KelvinRadiaFluxDensity",
+        "KelvinRadiaFieldStrength",
+        "KelvinRadiaScalarPotential",
+    ):
+        assert f"{name}.__binding__" in contract["pybind_class_exclusions"]
+        assert f"{name}.__init__" in contract["pybind_class_exclusions"]
     assert contract["pybind_class_covered_count"] == contract["pybind_class_surface_count"]
     assert contract["pybind_class_missing_commands"] == []
     assert contract["pybind_class_unmapped"] == []
@@ -352,6 +356,7 @@ def test_optuna_simulink_contract_is_table_backed():
 
 
 def test_root_readme_publishes_native_topology_mex_parity():
+    contract = matlab_radia_mex_contract("mex")
     root = Path(__file__).resolve().parents[3]
     readme = " ".join((root / "README.md").read_text(encoding="utf-8").split())
     assert "HCurl-based reduced and topology workflows" in readme
@@ -361,15 +366,45 @@ def test_root_readme_publishes_native_topology_mex_parity():
         (root / "matlab" / "README.md").read_text(encoding="utf-8").split()
     )
     assert "126 stateful class members" in matlab_readme
-    assert "All 246 mapped entries are covered by the current 360-command gateway" in matlab_readme
+    mapped_count = (
+        contract["pybind_public_count"]
+        + contract["pybind_internal_numerical_count"]
+        + contract["pybind_class_surface_count"]
+    )
+    assert (
+        f"All {mapped_count} mapped entries are covered by the current "
+        f"{contract['command_count']}-command gateway"
+    ) in matlab_readme
     assert "21-command `optuna_mex`" in matlab_readme
 
     parity_doc = (root / "docs" / "api" / "MATLAB_MEX_NGSOLVE_PARITY.md").read_text(
         encoding="utf-8"
     )
     assert "| Stateful pybind11 class surface | 126 / 126 covered |" in parity_doc
-    assert "| Radia MEX gateway commands | 360 |" in parity_doc
-    assert "| Optuna MEX gateway commands | 20 |" in parity_doc
+    assert (
+        f"| Public top-level pybind11 names | {contract['pybind_public_count']} |"
+        in parity_doc
+    )
+    assert (
+        f"| Covered mapped MEX names | {contract['pybind_covered_count']} |"
+        in parity_doc
+    )
+    assert (
+        f"| Radia MEX gateway commands | {contract['command_count']} |"
+        in parity_doc
+    )
+    assert (
+        f"| Optuna MEX gateway commands | {contract['optuna_mex_command_count']} |"
+        in parity_doc
+    )
+    assert (
+        f"| MATLAB Optuna classes | {contract['matlab_optuna_class_count']} |"
+        in parity_doc
+    )
+    assert (
+        f"| MATLAB Optuna functions | {contract['matlab_optuna_function_count']} |"
+        in parity_doc
+    )
 
 
 def test_server_registers_bridge_tools():
