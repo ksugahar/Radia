@@ -7694,7 +7694,7 @@ def _selftest(audit_repo: bool = False):
     n_tools = len(mcp._tool_manager._tools)
     print(f"  tool annotations: {n_tools} tools classified")
     if _UNCLASSIFIED_TOOLS:
-        print("  WARNING: tools defaulted to READONLY without an explicit "
+        print("  WARNING: tools defaulted to DESTRUCTIVE without an explicit "
               "entry or read-only name shape -- classify them in "
               "_DESTRUCTIVE_TOOLS/_WRITING_TOOLS/_WEB_TOOLS if wrong:")
         for name in _UNCLASSIFIED_TOOLS:
@@ -7771,7 +7771,7 @@ register_status_tool(
 # Every tool is classified through one of FOUR fully-specified presets
 # (MathWorks' annotations.go discipline: presets only, all hint fields
 # always set).  Classification is central so adding a tool forces a
-# conscious choice here; unclassified tools fall back to READONLY and
+# conscious choice here; unclassified tools fall back to DESTRUCTIVE and
 # are reported by --selftest.
 
 from ..common.server_hardening import (
@@ -7798,7 +7798,7 @@ _WRITING_TOOLS = {
 	"cubit_mesh_race_review_async", "cubit_curate_learned_recipes",
 	"cubit_examples_refresh", "cubit_check_vol", "cubit_scaffold_toolbar",
 	"cubit_session_journal", "cubit_netgen_quality_compare",
-	"cubit_stl_to_vol", "cubit_vfrac_to_vol",
+	"cubit_stl_to_vol", "cubit_vfrac_to_vol", "cubit_validation_run",
 }
 # Read-only tools that may reach the network.
 _WEB_TOOLS = {"cubit_web_docs", "cubit_examples"}
@@ -7808,7 +7808,7 @@ _CUBIT_READONLY_HINTS = (
 	"_gate", "_docs", "_guide", "_tips", "_reference", "_inventory",
 	"_status", "_lookup", "_ask", "_examples", "lint_", "get_",
 	"generate_", "netgen_", "_probe", "_diagnose", "_suggest",
-	"_failures", "_checkpoints", "_audit", "_doctor", "_catalog", "_run",
+	"_failures", "_checkpoints", "_audit", "_doctor", "_catalog",
 )
 
 
@@ -7835,7 +7835,7 @@ _hide_gate_tools(mcp, "RADIA_MCP_CUBIT_GATES")
 # All-calls JSONL session log (MathWorks basetool + slog pattern)
 # ============================================================
 # One choke point wraps ToolManager.call_tool: every tool call is
-# appended as a JSON line {ts, tool, ms, ok, error?} to
+# appended as a JSON line {ts, tool, ms, ok, error_type?} to
 # <state_dir>/logs/cubit_tool_calls.jsonl -- making "silently wrong
 # mesh" sessions triageable after the fact.  Failures additionally go
 # through the existing per-kind failure log.  Disable with

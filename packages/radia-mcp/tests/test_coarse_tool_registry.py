@@ -104,6 +104,12 @@ def test_core_profile_exposes_catalog_and_runner_only():
         "demo_validation_catalog",
         "demo_validation_run",
     }
+    catalog_tool = mcp._tool_manager._tools["demo_validation_catalog"]
+    runner_tool = mcp._tool_manager._tools["demo_validation_run"]
+    assert catalog_tool.annotations.readOnlyHint is True
+    assert runner_tool.annotations.readOnlyHint is False
+    assert runner_tool.annotations.destructiveHint is False
+    assert runner_tool.annotations.idempotentHint is False
     catalog = functions["demo_validation_catalog"](query="energy")
     assert catalog["matched"] == 1
     assert catalog["operations"][0]["name"] == "demo_energy_gate"

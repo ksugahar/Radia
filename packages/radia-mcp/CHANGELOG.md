@@ -7,6 +7,18 @@ crystallized as its own package.
 
 ## [Unreleased]
 
+- all servers: adopted the official MATLAB MCP Server's control-plane design
+  principles through one fleet runtime contract. Every tool now receives a
+  complete four-hint annotation and auditable classification source;
+  `<server>_status` returns structured contract/output-mode and exact loaded
+  module/distribution provenance; and one lazy, idempotent JSONL call logger
+  records type/length metadata without argument values. Ambiguous operations
+  default to destructive instead of read-only. Change-scoped CI now performs
+  real stdio initialize/list/status calls for affected servers, while the wheel
+  gate proves that the running module comes from the clean installed wheel.
+  Grouped-operation catalogs remain read-only, while their dynamic runners are
+  now correctly marked as non-destructive writes because a selected operation
+  may execute a solver or create an artifact.
 - CI: normal pull-request and main-push checks now select a compact contract
   set, tests related to changed package families, and only affected server
   selftests. The 4,500+ package suite, all-server audit, and generated inventory

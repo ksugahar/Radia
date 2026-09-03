@@ -4,7 +4,7 @@ Auto-generated from each server's production `core` `mcp.list_tools()` via `scri
 
 Fine-grained validation and identity operations are discovered with each server's `*_validation_catalog` tool and invoked through `*_validation_run`; they are not repeated as top-level schemas.
 
-Total: **901 tools** across 49 MCP servers.
+Total: **908 tools** across 49 MCP servers.
 
 | Server (console-script) | Subpackage | Tools |
 |---|---|---:|
@@ -46,14 +46,14 @@ Total: **901 tools** across 49 MCP servers.
 | [`mcp-server-mathematica`](#mcp-server-mathematica) | `radia_mcp.mathematica` | 15 |
 | [`mcp-server-md2html`](#mcp-server-md2html) | `radia_mcp.md2html` | 3 |
 | [`mcp-server-chart2d`](#mcp-server-chart2d) | `radia_mcp.chart2d` | 25 |
-| [`mcp-server-paper-writing`](#mcp-server-paper-writing) | `radia_mcp.paper_writing` | 208 |
+| [`mcp-server-paper-writing`](#mcp-server-paper-writing) | `radia_mcp.paper_writing` | 213 |
 | [`mcp-server-grant-writing`](#mcp-server-grant-writing) | `radia_mcp.grant_writing` | 51 |
 | [`mcp-server-poster`](#mcp-server-poster) | `radia_mcp.poster` | 33 |
 | [`mcp-server-literature-index`](#mcp-server-literature-index) | `radia_mcp.literature_index` | 10 |
 | [`mcp-server-document-meta`](#mcp-server-document-meta) | `radia_mcp.document_meta` | 7 |
 | [`mcp-server-pdf`](#mcp-server-pdf) | `radia_mcp.pdf` | 17 |
 | [`mcp-server-doc-convert`](#mcp-server-doc-convert) | `radia_mcp.doc_convert` | 22 |
-| [`mcp-server-bibliography`](#mcp-server-bibliography) | `radia_mcp.bibliography` | 15 |
+| [`mcp-server-bibliography`](#mcp-server-bibliography) | `radia_mcp.bibliography` | 17 |
 | [`mcp-server-research-project`](#mcp-server-research-project) | `radia_mcp.research_project` | 6 |
 | [`mcp-server-radia-meta`](#mcp-server-radia-meta) | `radia_mcp.meta` | 11 |
 | [`mcp-server-panel-review`](#mcp-server-panel-review) | `radia_mcp.panel_review` | 4 |
@@ -106,7 +106,7 @@ Module: `radia_mcp.cubit.server`
 | `cubit_session_status` | Return diagnostic info about the Cubit session: alive/pid/mode, |
 | `cubit_show` | Load a file into the **persistent Cubit viewer** and optionally run |
 | `cubit_snapshot` | Hardcopy the current Cubit view to a PNG file. |
-| `cubit_status` | (no description) |
+| `cubit_status` | Status / introspection for mcp-server-cubit. |
 | `cubit_stl_to_vol` | Mesh a watertight STL into a solver-ready Netgen `.vol` (all-hex via |
 | `cubit_suggest_next` | Suggest concrete next Cubit commands based on the current state. |
 | `cubit_toolbar_guide` | Get documentation on building custom in-Cubit PySide6 toolbars. |
@@ -150,7 +150,7 @@ Module: `radia_mcp.build123d.server`
 | `build123d_probe` | Probe a STEP/BREP file with the SAME vocabulary as `cubit_probe`. |
 | `build123d_recent_failures` | Return the last N failed `execute_build123d` invocations (from log). |
 | `build123d_reload_code` | Reload radia_mcp modules whose source changed on disk and re-register their tools, without restarting this server (editable install). Call it after editing the package; the report lists reloaded mo... |
-| `build123d_status` | (no description) |
+| `build123d_status` | Status / introspection for mcp-server-build123d. |
 | `build123d_suggest_next` | Suggest concrete next build123d steps toward a goal. |
 | `build123d_to_cubit_hex` | End-to-end: build123d script → STEP → `cubit_mesh_auto` (batch- |
 | `build123d_try` | Dry-run a build123d script in a **fresh Python subprocess**. |
@@ -236,7 +236,7 @@ Module: `radia_mcp.gmsh.server`
 | `gmsh_session_shutdown` | Shut down the persistent gmsh session (idempotent). |
 | `gmsh_session_status` | Report the persistent gmsh session state WITHOUT starting one. |
 | `gmsh_smooth_to_nodes` | Average element-wise data to nodes (CellDataToPointData analog). |
-| `gmsh_status` | (no description) |
+| `gmsh_status` | Status / introspection for mcp-server-gmsh. |
 | `gmsh_streamlines` | Trace field lines of a vector view from seeds on a line segment. |
 | `gmsh_streamlines_2d` | Evenly spaced streamlines on a plane slice (Jobard-Lefer placement). |
 | `gmsh_threshold` | Keep only elements whose MEAN value lies in [min_val, max_val]. |
@@ -296,7 +296,7 @@ Module: `radia_mcp.radia_ngsolve.server`
 | `ngsolve_usage` | Get NGSolve finite element library usage documentation. |
 | `peec_inductance` | Get documentation for the Radia PEEC-inductance (coil only, STEP) panel mode. |
 | `radia_ngsolve_reload_code` | Reload radia_mcp modules whose source changed on disk and re-register their tools, without restarting this server (editable install). Call it after editing the package; the report lists reloaded mo... |
-| `radia_ngsolve_status` | (no description) |
+| `radia_ngsolve_status` | Status / introspection for mcp-server-radia-ngsolve. |
 | `radia_ngsolve_validation_catalog` | Search the radia_ngsolve validation operation catalog. Use the returned name with radia_ngsolve_validation_run. |
 | `radia_ngsolve_validation_run` | Run one radia_ngsolve validation operation. Pass the operation name and a dictionary of named arguments. Query radia_ngsolve_validation_catalog first for signatures. |
 | `radia_usage` | Get Radia C++ library usage documentation. |
@@ -327,7 +327,7 @@ Module: `radia_mcp.force.server`
 | `force_recipe` | Practical method choice, high-order setup, pitfalls, and examples. |
 | `force_reload_code` | Reload radia_mcp modules whose source changed on disk and re-register their tools, without restarting this server (editable install). Call it after editing the package; the report lists reloaded mo... |
 | `force_result` | Normalize solver-owned resultants to ``radia.force-result/v1``. |
-| `force_status` | (no description) |
+| `force_status` | Status / introspection for mcp-server-force. |
 | `force_time_average_air_gap_torque_samples` | Integrate sampled peak/RMS phasor air-gap Maxwell shear torque. |
 | `force_time_average_lorentz` | Integrate cycle-averaged phasor Lorentz force and optional torque. |
 | `force_time_average_maxwell_surface` | Integrate cycle-averaged phasor Maxwell force and optional torque. |
@@ -366,7 +366,7 @@ Module: `radia_mcp.matlab.server`
 | `matlab_validation_catalog` | Search the matlab validation operation catalog. Use the returned name with matlab_validation_run. |
 | `matlab_validation_run` | Run one matlab validation operation. Pass the operation name and a dictionary of named arguments. Query matlab_validation_catalog first for signatures. |
 | `radia_matlab_reload_code` | Reload radia_mcp modules whose source changed on disk and re-register their tools, without restarting this server (editable install). Call it after editing the package; the report lists reloaded mo... |
-| `radia_matlab_status` | (no description) |
+| `radia_matlab_status` | Status / introspection for mcp-server-radia-matlab. |
 
 ## `mcp-server-acoustic-fembem`
 
@@ -380,7 +380,7 @@ Module: `radia_mcp.acoustic_fembem.server`
 | `acoustic_fembem_extension_contract` | Inspect the official MATLAB MCP extension shipped by Radia. |
 | `acoustic_fembem_reload_code` | Reload radia_mcp modules whose source changed on disk and re-register their tools, without restarting this server (editable install). Call it after editing the package; the report lists reloaded mo... |
 | `acoustic_fembem_server_config` | Compose official MATLAB MCP arguments for the education solver. |
-| `acoustic_fembem_status` | (no description) |
+| `acoustic_fembem_status` | Status / introspection for mcp-server-acoustic-fembem. |
 
 ## `mcp-server-radia-acoustic`
 
@@ -394,7 +394,7 @@ Module: `radia_mcp.radia_acoustic.server`
 | `radia_acoustic_cq_grid` | Build and validate Lubich CQ Laplace/complex-wavenumber grids. |
 | `radia_acoustic_fsi_preflight` | Validate FSI/DtN inputs before an expensive NGSolve solve. |
 | `radia_acoustic_reload_code` | Reload radia_mcp modules whose source changed on disk and re-register their tools, without restarting this server (editable install). Call it after editing the package; the report lists reloaded mo... |
-| `radia_acoustic_status` | (no description) |
+| `radia_acoustic_status` | Status / introspection for mcp-server-radia-acoustic. |
 | `radia_acoustic_usage` | Get NGSolve BEM, FSI, CQ, or validation guidance. |
 
 ## `mcp-server-radia-streamfunction`
@@ -406,7 +406,7 @@ Module: `radia_mcp.streamfunction.server`
 | Tool | Description |
 |---|---|
 | `radia_streamfunction_reload_code` | Reload radia_mcp modules whose source changed on disk and re-register their tools, without restarting this server (editable install). Call it after editing the package; the report lists reloaded mo... |
-| `radia_streamfunction_status` | (no description) |
+| `radia_streamfunction_status` | Status / introspection for mcp-server-radia-streamfunction. |
 | `radia_streamfunction_topics` | Authoritative list of topics accepted by this server's dispatcher tool. Returns 25 topics. |
 | `streamfunction` | Get Stream-Function (SF) coil-design documentation. |
 
@@ -429,7 +429,7 @@ Module: `radia_mcp.fem.server`
 | `fem_overview` | FEM landscape: lab stack, decision tree, genealogy. |
 | `fem_potential_formulations` | Potential formulations: A-Omega, T-Omega, H, Reduced, Darwin. |
 | `fem_reload_code` | Reload radia_mcp modules whose source changed on disk and re-register their tools, without restarting this server (editable install). Call it after editing the package; the report lists reloaded mo... |
-| `fem_status` | (no description) |
+| `fem_status` | Status / introspection for mcp-server-fem. |
 | `fem_time_domain_axisym` | Time-domain, axisymmetric (Henrotte), harmonic balance, HF, circuit coupling. |
 | `fem_validation_catalog` | Search the fem validation operation catalog. Use the returned name with fem_validation_run. |
 | `fem_validation_evidence_bundle` | Validate balanced, content-addressed solver-replacement evidence. |
@@ -452,7 +452,7 @@ Module: `radia_mcp.bem.server`
 | `bem_mom_foundations` | MoM foundations: Harrington 1968, RWG 1982, wire-grid (NEC). |
 | `bem_overview` | BEM/MoM landscape: lab stack, decision tree, genealogy. |
 | `bem_reload_code` | Reload radia_mcp modules whose source changed on disk and re-register their tools, without restarting this server (editable install). Call it after editing the package; the report lists reloaded mo... |
-| `bem_status` | (no description) |
+| `bem_status` | Status / introspection for mcp-server-bem. |
 | `bem_surface_ie` | Surface Integral Equations: EFIE, MFIE, CFIE, PMCHWT. |
 
 ## `mcp-server-matrix-solvers`
@@ -469,7 +469,7 @@ Module: `radia_mcp.matrix_solvers.server`
 | `matrix_solvers_overview` | Solver landscape: lab stack, decision tree, genealogy. |
 | `matrix_solvers_preconditioners` | Preconditioner catalog: classical, AMG, AMS (Hiptmair-Xu). |
 | `matrix_solvers_reload_code` | Reload radia_mcp modules whose source changed on disk and re-register their tools, without restarting this server (editable install). Call it after editing the package; the report lists reloaded mo... |
-| `matrix_solvers_status` | (no description) |
+| `matrix_solvers_status` | Status / introspection for mcp-server-matrix-solvers. |
 
 ## `mcp-server-mor`
 
@@ -487,7 +487,7 @@ Module: `radia_mcp.mor.server`
 | `mor_cln_practice` | CLN MATLAB+COMSOL practice corpus -- foundations + 2020_11_04 lab |
 | `mor_cln_specialty` | CLN lab-signature techniques -- termination, Hiruma method, |
 | `mor_reload_code` | Reload radia_mcp modules whose source changed on disk and re-register their tools, without restarting this server (editable install). Call it after editing the package; the report lists reloaded mo... |
-| `mor_status` | (no description) |
+| `mor_status` | Status / introspection for mcp-server-mor. |
 | `mor_systematic` | Systematic MOR knowledge -- distilled from the deGruyter 3-volume |
 
 ## `mcp-server-ih`
@@ -501,7 +501,7 @@ Module: `radia_mcp.ih.server`
 | `ih_esim` | Induction-heating ESIM (Effective Surface Impedance Method) usage. |
 | `ih_reload_code` | Reload radia_mcp modules whose source changed on disk and re-register their tools, without restarting this server (editable install). Call it after editing the package; the report lists reloaded mo... |
 | `ih_sibc` | Get IH solver architecture and SIBC documentation. |
-| `ih_status` | (no description) |
+| `ih_status` | Status / introspection for mcp-server-ih. |
 | `ih_team36_contract` | Return the strict public TEAM 36 magneto-thermal benchmark contract. |
 | `ih_team36_validate` | Validate a saved radia-ih TEAM 36 artifact and optional reference. |
 | `induction_heating` | Get induction heating simulation documentation. |
@@ -517,7 +517,7 @@ Module: `radia_mcp.peec.server`
 | `peec_carstensen_ac_loss` | Carstensen-Dowell analytical AC copper-loss formulas for stranded |
 | `peec_hoibc` | HOIBC (Higher Order Impedance Boundary Conditions) — extension of |
 | `peec_reload_code` | Reload radia_mcp modules whose source changed on disk and re-register their tools, without restarting this server (editable install). Call it after editing the package; the report lists reloaded mo... |
-| `peec_status` | (no description) |
+| `peec_status` | Status / introspection for mcp-server-peec. |
 | `peec_usage` | Get PEEC (Partial Element Equivalent Circuit) documentation. |
 
 ## `mcp-server-electromagnet`
@@ -532,7 +532,7 @@ Module: `radia_mcp.electromagnet.server`
 | `electromagnet_coil_field_audit` | Cross-check CoilBuilder solid-current and FE filament field sources. |
 | `electromagnet_coil_yoke_clearance_audit` | Reject coil/yoke overlap and insufficient manufacturing clearance. |
 | `electromagnet_reload_code` | Reload radia_mcp modules whose source changed on disk and re-register their tools, without restarting this server (editable install). Call it after editing the package; the report lists reloaded mo... |
-| `electromagnet_status` | (no description) |
+| `electromagnet_status` | Status / introspection for mcp-server-electromagnet. |
 | `electromagnet_topics` | Authoritative list of topics accepted by this server's dispatcher tool. Returns 24 topics. |
 | `electromagnet_usage` | Get accelerator electromagnet analysis documentation. |
 
@@ -566,7 +566,7 @@ Module: `radia_mcp.motor.server`
 | `motor_onelab` | ONELAB/GetDP electric-machine reference template knowledge. |
 | `motor_planar_coupling` | 2D PLANAR machine modelling in radia: HDiv-VIM soft-iron demag + the shared |
 | `motor_reload_code` | Reload radia_mcp modules whose source changed on disk and re-register their tools, without restarting this server (editable install). Call it after editing the package; the report lists reloaded mo... |
-| `motor_status` | (no description) |
+| `motor_status` | Status / introspection for mcp-server-motor. |
 | `motor_topology_optimization` | SynRM topology optimization (Wakao 2025 AE + level-set), bridge and channel shaping. |
 | `motor_triple_check_plan` | Plan the standard radia-motor comparison. |
 | `motor_tritool_cross_reference` | Tri-tool cross-reference: FEMM / JMAG / radia-ngsolve (相互学習). |
@@ -591,7 +591,7 @@ Module: `radia_mcp.accelerator.server`
 | `accelerator` | Accelerator magnet design with Radia + radia-mcp. |
 | `accelerator_magnetic_trajectory_pair_gate` | Gate paired charged-particle trajectories with magnetic field off/on. |
 | `accelerator_reload_code` | Reload radia_mcp modules whose source changed on disk and re-register their tools, without restarting this server (editable install). Call it after editing the package; the report lists reloaded mo... |
-| `accelerator_status` | (no description) |
+| `accelerator_status` | Status / introspection for mcp-server-accelerator. |
 | `accelerator_topics` | Authoritative list of topics accepted by this server's dispatcher tool. Returns 17 topics. |
 
 ## `mcp-server-fusion-reactor`
@@ -604,7 +604,7 @@ Module: `radia_mcp.fusion_reactor.server`
 |---|---|
 | `fusion_reactor` | Fusion reactor magnet knowledge. |
 | `fusion_reactor_reload_code` | Reload radia_mcp modules whose source changed on disk and re-register their tools, without restarting this server (editable install). Call it after editing the package; the report lists reloaded mo... |
-| `fusion_reactor_status` | (no description) |
+| `fusion_reactor_status` | Status / introspection for mcp-server-fusion-reactor. |
 | `fusion_reactor_topics` | Authoritative list of topics accepted by this server's dispatcher tool. Returns 12 topics. |
 
 ## `mcp-server-magnetic-materials`
@@ -622,7 +622,7 @@ Module: `radia_mcp.magnetic_materials.server`
 | `magnetic_materials_radia_status` | Radia magnetic material implementation status (Mat classes). |
 | `magnetic_materials_reload_code` | Reload radia_mcp modules whose source changed on disk and re-register their tools, without restarting this server (editable install). Call it after editing the package; the report lists reloaded mo... |
 | `magnetic_materials_silicon_steel` | JIS silicon steel grade database + processing/handling notes. |
-| `magnetic_materials_status` | (no description) |
+| `magnetic_materials_status` | Status / introspection for mcp-server-magnetic-materials. |
 | `periodic_hysteresis_loss_energy_gate` | Gate periodic hysteresis power by cycle energy and loss closure. |
 
 ## `mcp-server-litz-transmission`
@@ -636,7 +636,7 @@ Module: `radia_mcp.litz_transmission.server`
 | `litz_proximity_approximation_pair_gate` | Validate a reduced proximity-effect bundle against an explicit model. |
 | `litz_transmission` | Litz wire + transmission line knowledge. |
 | `litz_transmission_reload_code` | Reload radia_mcp modules whose source changed on disk and re-register their tools, without restarting this server (editable install). Call it after editing the package; the report lists reloaded mo... |
-| `litz_transmission_status` | (no description) |
+| `litz_transmission_status` | Status / introspection for mcp-server-litz-transmission. |
 | `litz_transmission_topics` | Authoritative list of topics accepted by this server's dispatcher tool. Returns 14 topics. |
 
 ## `mcp-server-rna-mec`
@@ -649,7 +649,7 @@ Module: `radia_mcp.rna_mec.server`
 |---|---|
 | `rna_mec` | Reluctance Network Analysis / Magnetic Equivalent Circuit. |
 | `rna_mec_reload_code` | Reload radia_mcp modules whose source changed on disk and re-register their tools, without restarting this server (editable install). Call it after editing the package; the report lists reloaded mo... |
-| `rna_mec_status` | (no description) |
+| `rna_mec_status` | Status / introspection for mcp-server-rna-mec. |
 | `rna_mec_topics` | Authoritative list of topics accepted by this server's dispatcher tool. Returns 13 topics. |
 
 ## `mcp-server-topology-optimization`
@@ -664,7 +664,7 @@ Module: `radia_mcp.topology_optimization.server`
 | `topology_opt_shape_optimization` | Shape optimization for nonlinear magnetostatics. |
 | `topology_opt_topology_derivative` | Topological derivative for changing topology (adding/removing material). |
 | `topology_optimization_reload_code` | Reload radia_mcp modules whose source changed on disk and re-register their tools, without restarting this server (editable install). Call it after editing the package; the report lists reloaded mo... |
-| `topology_optimization_status` | (no description) |
+| `topology_optimization_status` | Status / introspection for mcp-server-topology-optimization. |
 | `topology_optimization_validation_catalog` | Search the topology_optimization validation operation catalog. Use the returned name with topology_optimization_validation_run. |
 | `topology_optimization_validation_run` | Run one topology_optimization validation operation. Pass the operation name and a dictionary of named arguments. Query topology_optimization_validation_catalog first for signatures. |
 
@@ -678,7 +678,7 @@ Module: `radia_mcp.bayesian_opt.server`
 |---|---|
 | `bayesian_opt` | Bayesian optimization, GP regression, FMQA, surrogate models. |
 | `bayesian_opt_reload_code` | Reload radia_mcp modules whose source changed on disk and re-register their tools, without restarting this server (editable install). Call it after editing the package; the report lists reloaded mo... |
-| `bayesian_opt_status` | (no description) |
+| `bayesian_opt_status` | Status / introspection for mcp-server-bayesian-opt. |
 | `bayesian_opt_topics` | Authoritative list of topics accepted by this server's dispatcher tool. Returns 8 topics. |
 
 ## `mcp-server-evolutionary`
@@ -691,7 +691,7 @@ Module: `radia_mcp.evolutionary.server`
 |---|---|
 | `evolutionary` | Evolutionary computation algorithms for EM optimization. |
 | `evolutionary_reload_code` | Reload radia_mcp modules whose source changed on disk and re-register their tools, without restarting this server (editable install). Call it after editing the package; the report lists reloaded mo... |
-| `evolutionary_status` | (no description) |
+| `evolutionary_status` | Status / introspection for mcp-server-evolutionary. |
 | `evolutionary_topics` | Authoritative list of topics accepted by this server's dispatcher tool. Returns 7 topics. |
 
 ## `mcp-server-data-assimilation`
@@ -704,7 +704,7 @@ Module: `radia_mcp.data_assimilation.server`
 |---|---|
 | `data_assimilation` | Data assimilation for EM state estimation + sensor fusion. |
 | `data_assimilation_reload_code` | Reload radia_mcp modules whose source changed on disk and re-register their tools, without restarting this server (editable install). Call it after editing the package; the report lists reloaded mo... |
-| `data_assimilation_status` | (no description) |
+| `data_assimilation_status` | Status / introspection for mcp-server-data-assimilation. |
 | `data_assimilation_topics` | Authoritative list of topics accepted by this server's dispatcher tool. Returns 4 topics. |
 
 ## `mcp-server-gnn`
@@ -717,7 +717,7 @@ Module: `radia_mcp.gnn.server`
 |---|---|
 | `gnn` | Graph Neural Networks for PDE / EM problems. |
 | `gnn_reload_code` | Reload radia_mcp modules whose source changed on disk and re-register their tools, without restarting this server (editable install). Call it after editing the package; the report lists reloaded mo... |
-| `gnn_status` | (no description) |
+| `gnn_status` | Status / introspection for mcp-server-gnn. |
 | `gnn_topics` | Authoritative list of topics accepted by this server's dispatcher tool. Returns 4 topics. |
 
 ## `mcp-server-pinn`
@@ -730,7 +730,7 @@ Module: `radia_mcp.pinn.server`
 |---|---|
 | `pinn` | Physics-Informed Neural Networks (PINN) + Gaussian Processes (PI-GP) |
 | `pinn_reload_code` | Reload radia_mcp modules whose source changed on disk and re-register their tools, without restarting this server (editable install). Call it after editing the package; the report lists reloaded mo... |
-| `pinn_status` | (no description) |
+| `pinn_status` | Status / introspection for mcp-server-pinn. |
 | `pinn_topics` | Authoritative list of topics accepted by this server's dispatcher tool. Returns 5 topics. |
 
 ## `mcp-server-pcb`
@@ -748,7 +748,7 @@ Module: `radia_mcp.pcb.server`
 | `pcb_fod` | ★ Foreign Object Detection (FOD) — lab core research. |
 | `pcb_overview` | WPT landscape: regimes, decision tree, lab focus. |
 | `pcb_reload_code` | Reload radia_mcp modules whose source changed on disk and re-register their tools, without restarting this server (editable install). Call it after editing the package; the report lists reloaded mo... |
-| `pcb_status` | (no description) |
+| `pcb_status` | Status / introspection for mcp-server-pcb. |
 
 ## `mcp-server-ndt`
 
@@ -761,7 +761,7 @@ Module: `radia_mcp.ndt.server`
 | `ndt` | Electromagnetic non-destructive testing (NDT / NDE) knowledge. |
 | `ndt_bibliography` | Search the NDT/NDE bibliography catalog. |
 | `ndt_reload_code` | Reload radia_mcp modules whose source changed on disk and re-register their tools, without restarting this server (editable install). Call it after editing the package; the report lists reloaded mo... |
-| `ndt_status` | (no description) |
+| `ndt_status` | Status / introspection for mcp-server-ndt. |
 | `ndt_topics` | Authoritative list of topics accepted by this server's dispatcher tool. Returns 14 topics. |
 
 ## `mcp-server-metamaterial`
@@ -775,7 +775,7 @@ Module: `radia_mcp.metamaterial.server`
 | `metamaterial` | Electromagnetic metamaterial knowledge. |
 | `metamaterial_bibliography` | Search the metamaterial bibliography catalog of cited PDFs. |
 | `metamaterial_reload_code` | Reload radia_mcp modules whose source changed on disk and re-register their tools, without restarting this server (editable install). Call it after editing the package; the report lists reloaded mo... |
-| `metamaterial_status` | (no description) |
+| `metamaterial_status` | Status / introspection for mcp-server-metamaterial. |
 | `metamaterial_topics` | Authoritative list of topics accepted by this server's dispatcher tool. Returns 13 topics. |
 
 ## `mcp-server-nmr-mri`
@@ -788,7 +788,7 @@ Module: `radia_mcp.nmr_mri.server`
 |---|---|
 | `nmr_mri_bibliography` | Search the NMR/MRI bibliography catalog. |
 | `nmr_mri_reload_code` | Reload radia_mcp modules whose source changed on disk and re-register their tools, without restarting this server (editable install). Call it after editing the package; the report lists reloaded mo... |
-| `nmr_mri_status` | (no description) |
+| `nmr_mri_status` | Status / introspection for mcp-server-nmr-mri. |
 
 ## `mcp-server-maglev`
 
@@ -800,7 +800,7 @@ Module: `radia_mcp.maglev.server`
 |---|---|
 | `maglev` | Magnetic levitation knowledge -- maglev systems + levitation force physics. |
 | `maglev_reload_code` | Reload radia_mcp modules whose source changed on disk and re-register their tools, without restarting this server (editable install). Call it after editing the package; the report lists reloaded mo... |
-| `maglev_status` | (no description) |
+| `maglev_status` | Status / introspection for mcp-server-maglev. |
 | `maglev_topics` | Authoritative list of topics accepted by this server's dispatcher tool. Returns 20 topics. |
 | `maglev_validation_catalog` | Search the maglev validation operation catalog. Use the returned name with maglev_validation_run. |
 | `maglev_validation_run` | Run one maglev validation operation. Pass the operation name and a dictionary of named arguments. Query maglev_validation_catalog first for signatures. |
@@ -814,7 +814,7 @@ Module: `radia_mcp.team_benchmark.server`
 | Tool | Description |
 |---|---|
 | `team_benchmark_reload_code` | Reload radia_mcp modules whose source changed on disk and re-register their tools, without restarting this server (editable install). Call it after editing the package; the report lists reloaded mo... |
-| `team_benchmark_status` | (no description) |
+| `team_benchmark_status` | Status / introspection for mcp-server-team-benchmark. |
 | `team_catalog` | TEAM Workshop benchmark catalog. |
 | `team_eddy_current` | TEAM eddy current problems: 1a/1b, 2, 3, 4, 5, 7, 9, 21, 24. |
 | `team_force_motion` | TEAM force / motion / levitation: 17, 20, 23, 28, 33b ★ lab core. |
@@ -843,7 +843,7 @@ Module: `radia_mcp.differential_forms.server`
 | `differential_forms_mathematica_recipes` | Wolfram Language recipes for symbolic verification, pairing |
 | `differential_forms_maxwell` | Maxwell's equations in differential-form language. |
 | `differential_forms_reload_code` | Reload radia_mcp modules whose source changed on disk and re-register their tools, without restarting this server (editable install). Call it after editing the package; the report lists reloaded mo... |
-| `differential_forms_status` | (no description) |
+| `differential_forms_status` | Status / introspection for mcp-server-differential-forms. |
 | `differential_forms_visual_geometry` | Visual differential geometry as a Radia reasoning and QA layer. |
 | `differential_forms_whitney` | Whitney elements: discrete differential forms on a simplicial mesh. |
 
@@ -862,7 +862,7 @@ Module: `radia_mcp.mathematica.server`
 | `mathematica_integrate` | 積分 (定積分 / 不定積分)。 |
 | `mathematica_run_script` | Run a local Wolfram Language script and return structured results. |
 | `mathematica_server_reload_code` | Reload radia_mcp modules whose source changed on disk and re-register their tools, without restarting this server (editable install). Call it after editing the package; the report lists reloaded mo... |
-| `mathematica_server_status` | (no description) |
+| `mathematica_server_status` | Status / introspection for mcp-server-mathematica. |
 | `mathematica_simplify` | Wolfram FullSimplify[expression, assumptions] を実行。 |
 | `mathematica_solve` | 方程式 (系) を Solve で解く。 |
 | `mathematica_status` | Diagnostic: check wolframscript availability + version + license. |
@@ -881,7 +881,7 @@ Module: `radia_mcp.md2html.server`
 |---|---|
 | `md2html_convert` | Convert a Markdown file to a self-contained HTML file. |
 | `md2html_reload_code` | Reload radia_mcp modules whose source changed on disk and re-register their tools, without restarting this server (editable install). Call it after editing the package; the report lists reloaded mo... |
-| `md2html_status` | (no description) |
+| `md2html_status` | Status / introspection for mcp-server-md2html. |
 
 ## `mcp-server-chart2d`
 
@@ -912,7 +912,7 @@ Module: `radia_mcp.chart2d.server`
 | `chart2d_scatter` | Scatter plot of (x, y) points. |
 | `chart2d_semilogx` | Linear y, log10 x.  Bode-magnitude / frequency-domain default. |
 | `chart2d_semilogy` | Log10 y.  Decaying / growing quantities (relaxation, noise tails). |
-| `chart2d_status` | (no description) |
+| `chart2d_status` | Status / introspection for mcp-server-chart2d. |
 | `chart2d_step` | Stair-step plot.  PWM / discrete-time / step histogram. |
 | `chart2d_streamplot` | Field lines of a 2D vector field on a REGULAR grid. |
 | `chart2d_violin` | Violin plot (KDE-as-fill). |
@@ -951,6 +951,7 @@ Module: `radia_mcp.paper_writing.server`
 | `paper_writing_bilingual_readability_check` | Assess Japanese and English readability with separate criteria. |
 | `paper_writing_check_abstract_background_ratio` | Abstract 内で background (導入文) が占める割合を推定。 |
 | `paper_writing_check_abstract_no_math_no_citation` | Abstract 内に数式 (math), citation, domain acronym が混入していないか検出。 |
+| `paper_writing_check_citation_keys_exist` | Static check: every ``\cite{key}`` in the .tex resolves to a |
 | `paper_writing_check_citation_usage` | TeX 本文中の \cite{} キーと bib file の entries を突合。 |
 | `paper_writing_check_conclusion_first_use` | 結論で初出となる技術語・変数・数値・引用を検出。 |
 | `paper_writing_check_digest_human_review_triggers` | Detect one-page digest issues learned from Sugahara human review. |
@@ -960,6 +961,7 @@ Module: `radia_mcp.paper_writing.server`
 | `paper_writing_check_figure_forward_reference` | 図/表の \label と \ref の整合チェック (孤立ラベル / 未解決参照)。 |
 | `paper_writing_check_figure_uses_pdf` | `\includegraphics` paths must be vector (.pdf / .eps), not raster. |
 | `paper_writing_check_floats_far_from_reference` | Detect figures whose \ref{} appears far from the actual float. |
+| `paper_writing_check_ieee_keywords` | Verify the paper has an Index Terms / Keywords block of acceptable |
 | `paper_writing_check_imrad_balance` | IMRAD 各セクションの字数バランスを検証する。 |
 | `paper_writing_check_kanji_ratio` | 漢字比率 check (本多『日本語の作文技術』第四章 re-export)。 |
 | `paper_writing_check_misleading_ratio_claims` | 比率だけの効果主張、条件混在、比率の詰め込みを警告する。 |
@@ -972,13 +974,16 @@ Module: `radia_mcp.paper_writing.server`
 | `paper_writing_check_pdf_advanced_anomalies` | 論文 PDF を実際に読んで、reviewer-2 が刺してくる高頻度の体裁 |
 | `paper_writing_check_pdf_edge_overflow` | 論文 PDF を実際に読んで、本文/数式/図表が紙面の端からはみ出して |
 | `paper_writing_check_pdf_obvious_errors` | 論文 PDF を実際に開いて「明らかな体裁エラー」を 6 種類スキャン。 |
+| `paper_writing_check_pdf_unresolved_markers` | Scan a rendered PDF for [?] / [??] markers (unresolved cite / ref). |
 | `paper_writing_check_prose_density` | Detect compression-induced prose-density anti-patterns. |
+| `paper_writing_check_ref_label_consistency` | Verify that every ``\ref{key}`` resolves to a ``\label{key}`` and |
 | `paper_writing_check_self_citation_ratio` | 自己引用率を算出。Wallwork: <20% 推奨。 |
 | `paper_writing_check_sentence_ending_variety` | 文末表現の単調さ / 連続を検出 (中島・塚本 §1.3.2)。 |
 | `paper_writing_check_strong_adjective_budget` | 強調副詞/形容詞の過剰使用を検出。 |
 | `paper_writing_check_subject_predicate_distance` | 主述直結原則 (本多 p.22) — 「は、」「が、」 主題マーカーの |
 | `paper_writing_check_tense_consistency` | Discussion の 3-part tense (hypothesis=現在, result=過去, background=現在完了) 混在検出。 |
 | `paper_writing_check_typography_hacks` | Detect typography hacks used to cram content past a page limit. |
+| `paper_writing_check_undefined_acronyms` | Detect acronyms (e.g. IH, MQS, FEM) that are not spelled out on |
 | `paper_writing_check_undefined_variables` | Detect math symbols that are used but never defined. |
 | `paper_writing_check_word_repetition` | 同一単語の近接障害を検出する (中島・塚本『知的な科学・技術文章の書き方』§1.3.5)。 |
 | `paper_writing_citation_health_4_axes` | 論文 reference の 4 軸 health 診断。 |
@@ -1033,7 +1038,7 @@ Module: `radia_mcp.paper_writing.server`
 | `paper_writing_semantic_scholar_lookup` | Look up a paper via Semantic Scholar API. |
 | `paper_writing_semantic_scholar_references` | List the references CITED BY a given paper. |
 | `paper_writing_statistical_reporting_compliance` | 各 p 値の周辺で effect size / CI / sample size の有無を診断。 |
-| `paper_writing_status` | (no description) |
+| `paper_writing_status` | Status / introspection for mcp-server-paper-writing. |
 | `paper_writing_suggest_concept_drops` | Suggest specific concepts to drop when prose is over the |
 | `paper_writing_suggest_redundancy_fixes` | 冗長表現 25 パターンの置換候補提示 (re-export)。 |
 | `paper_writing_target_venue_policy` | Enforce the CAE-AI Lab's deliberately narrow publication targets. |
@@ -1187,7 +1192,7 @@ Module: `radia_mcp.grant_writing.server`
 | `grant_writing_reviewer_momentum_check` | Check whether the opening makes a reviewer want to keep reading. |
 | `grant_writing_reviewer_vocabulary_check` | Check whether proposal vocabulary is accessible to the likely reviewer. |
 | `grant_writing_section_presence` | Check whether a proposal draft contains the expected review axes. |
-| `grant_writing_status` | (no description) |
+| `grant_writing_status` | Status / introspection for mcp-server-grant-writing. |
 | `grant_writing_suggest_redundancy_fixes` | Suggest redundancy fixes only in applicant prose. |
 | `grant_writing_template_residue_check` | Find unfilled placeholders and leftover form instructions. |
 | `grant_writing_translationese_check` | Find Japanese that reads as translated English or as generated prose. |
@@ -1229,7 +1234,7 @@ Module: `radia_mcp.poster.server`
 | `poster_root_cause_diagnosis` | Diagnose which of the 5 typical poster failure patterns apply. |
 | `poster_run_full_workflow` | Chain the Intelligence Layer phases into one call. |
 | `poster_skill_doc` | Return the poster sub-skill's ``skill.md`` documentation as text. |
-| `poster_status` | (no description) |
+| `poster_status` | Status / introspection for mcp-server-poster. |
 | `poster_template_betterposter` | Return (or write) the A0-landscape #betterposter template. |
 | `poster_template_kelvin` | Return (or write) the A1-portrait Japanese poster template. |
 | `poster_typography_lints` | Run cheap regex-based typography hygiene checks. |
@@ -1250,7 +1255,7 @@ Module: `radia_mcp.literature_index.server`
 | `literature_index_cancel` | Cancel the running indexing job (cooperative; checks every PDF). |
 | `literature_index_job_status` | Status of the most recent indexing job (idle / running / |
 | `literature_index_reload_code` | Reload radia_mcp modules whose source changed on disk and re-register their tools, without restarting this server (editable install). Call it after editing the package; the report lists reloaded mo... |
-| `literature_index_status` | (no description) |
+| `literature_index_status` | Status / introspection for mcp-server-literature-index. |
 | `literature_search` | Search the lab literature corpus by filename keywords. |
 | `literature_semantic_search` | Semantic search over indexed text via ChromaDB + sentence-transformers |
 | `literature_stats` | Index statistics + cache info. |
@@ -1268,7 +1273,7 @@ Module: `radia_mcp.document_meta.server`
 | `document_meta_lint_all` | Run every applicable radia-mcp lint over one text / TeX file. |
 | `document_meta_notebook_result_audit` | Audit docs notebooks for saved results and WebGUI scenes. |
 | `document_meta_reload_code` | Reload radia_mcp modules whose source changed on disk and re-register their tools, without restarting this server (editable install). Call it after editing the package; the report lists reloaded mo... |
-| `document_meta_status` | (no description) |
+| `document_meta_status` | Status / introspection for mcp-server-document-meta. |
 | `document_meta_template_loader` | 学術 document の定型 skeleton を返す。 |
 
 ## `mcp-server-pdf`
@@ -1294,7 +1299,7 @@ Module: `radia_mcp.pdf.server`
 | `pdf_set_bookmarks` | Replace the PDF's outline with the given list. |
 | `pdf_set_metadata` | Set PDF document metadata fields. |
 | `pdf_split` | Split a PDF into one file per page. |
-| `pdf_status` | (no description) |
+| `pdf_status` | Status / introspection for mcp-server-pdf. |
 | `pdf_watermark_add` | Add a diagonal text watermark to every page. |
 
 ## `mcp-server-doc-convert`
@@ -1326,7 +1331,7 @@ Module: `radia_mcp.doc_convert.server`
 | `doc_convert_resize_for_print` | Shrink a pptx to ``target_width_cm`` and set ALL fonts to ``target_font_pt``. |
 | `doc_convert_slide_lint` | Run accessibility + density lints on every slide. |
 | `doc_convert_slide_to_image` | Export one slide as an image file via PowerPoint COM. |
-| `doc_convert_status` | (no description) |
+| `doc_convert_status` | Status / introspection for mcp-server-doc-convert. |
 
 ## `mcp-server-bibliography`
 
@@ -1337,6 +1342,7 @@ Module: `radia_mcp.bibliography.server`
 | Tool | Description |
 |---|---|
 | `bibliography_arxiv_to_bibtex` | Query arXiv for a paper id and return a BibTeX entry. |
+| `bibliography_canonical_path` | Return the bundled canonical bibliography path and entry count. |
 | `bibliography_canonicalize_keys` | Rewrite cite-keys to the lab style, preserving hand-picked words. |
 | `bibliography_check_surname_braces` | Check (and optionally fix) Rule 1: surname must be brace-protected. |
 | `bibliography_cite_validation` | Cross-check ``\cite{}`` keys in .tex against entries in .bib. |
@@ -1344,12 +1350,13 @@ Module: `radia_mcp.bibliography.server`
 | `bibliography_doi_to_bibtex` | Look up a DOI via Crossref and return a BibTeX entry as text. |
 | `bibliography_health_report` | Composite health score for a .bib file. |
 | `bibliography_lint` | Lint a .bib for missing required fields, key shape, year sanity. |
+| `bibliography_make_bbl` | Generate one manuscript's ``.bbl`` from canonical ``references.bib``. |
 | `bibliography_normalize_journal_names` | Rewrite journal/booktitle fields to a target style. |
 | `bibliography_parse` | Parse a .bib file and return per-entry inventory. |
 | `bibliography_reload_code` | Reload radia_mcp modules whose source changed on disk and re-register their tools, without restarting this server (editable install). Call it after editing the package; the report lists reloaded mo... |
 | `bibliography_search_crossref` | Search Crossref for the top ``limit`` matches. |
 | `bibliography_self_citation_ratio` | Compute the fraction of bib entries authored by ``author_lastname``. |
-| `bibliography_status` | (no description) |
+| `bibliography_status` | Status / introspection for mcp-server-bibliography. |
 | `bibliography_year_distribution` | Print a year histogram of citation entries. |
 
 ## `mcp-server-research-project`
@@ -1365,7 +1372,7 @@ Module: `radia_mcp.research_project.server`
 | `research_project_health_dashboard` | Run each artifact's health report in one pass. |
 | `research_project_reload_code` | Reload radia_mcp modules whose source changed on disk and re-register their tools, without restarting this server (editable install). Call it after editing the package; the report lists reloaded mo... |
 | `research_project_scan` | Classify every file in ``directory`` by artifact kind. |
-| `research_project_status` | (no description) |
+| `research_project_status` | Status / introspection for mcp-server-research-project. |
 
 ## `mcp-server-radia-meta`
 
@@ -1385,7 +1392,7 @@ Module: `radia_mcp.meta.server`
 | `radia_mcp_overview` | Authoritative catalog of all radia_mcp.* servers. |
 | `radia_mcp_related` | Servers that pair well with `name` (e.g. radia_mcp_related('bayesian-opt') |
 | `radia_meta_reload_code` | Reload radia_mcp modules whose source changed on disk and re-register their tools, without restarting this server (editable install). Call it after editing the package; the report lists reloaded mo... |
-| `radia_meta_status` | (no description) |
+| `radia_meta_status` | Status / introspection for mcp-server-radia-meta. |
 
 ## `mcp-server-panel-review`
 
@@ -1397,5 +1404,5 @@ Module: `radia_mcp.panel_review.server`
 |---|---|
 | `panel_review` | Get Radia Simulink application-block review / construction documentation. |
 | `panel_review_reload_code` | Reload radia_mcp modules whose source changed on disk and re-register their tools, without restarting this server (editable install). Call it after editing the package; the report lists reloaded mo... |
-| `panel_review_status` | (no description) |
+| `panel_review_status` | Status / introspection for mcp-server-panel-review. |
 | `panel_review_topics` | Authoritative list of topics accepted by this server's dispatcher tool. Returns 4 topics. |

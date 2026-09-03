@@ -4829,6 +4829,7 @@ _WRITING_TOOLS = {
     "preview_shape_in_cubit", "preview_text", "preview_extrude",
     "preview_boolean", "section_along_path", "generate_helix_coil",
     "build123d_heal", "build123d_examples_refresh",
+    "build123d_validation_run",
 }
 _WEB_TOOLS = {"build123d_web_docs", "build123d_examples",
               "build123d_discussions"}
@@ -4837,7 +4838,7 @@ _B3D_READONLY_HINTS = (
     "_gate", "_usage", "_api", "_lookup", "_ask", "_examples",
     "_failures", "_suggest", "_reference", "_crosscheck", "_contract",
     "_manifest", "_handoff", "_package", "_probe", "_doctor", "_status",
-    "lint_", "inspect_", "_inspect", "generate_", "_catalog", "_run",
+    "lint_", "inspect_", "_inspect", "generate_", "_catalog",
 )
 
 _UNCLASSIFIED_TOOLS = _classify_tool_annotations_common(
@@ -4864,7 +4865,7 @@ def main():
         n_tools = len(mcp._tool_manager._tools)
         print(f"  tool annotations: {n_tools} tools classified")
         if _UNCLASSIFIED_TOOLS:
-            print("  WARNING: tools defaulted to READONLY without an "
+            print("  WARNING: tools defaulted to DESTRUCTIVE without an "
                   "explicit entry or read-only name shape:")
             for name in _UNCLASSIFIED_TOOLS:
                 print(f"    - {name}")

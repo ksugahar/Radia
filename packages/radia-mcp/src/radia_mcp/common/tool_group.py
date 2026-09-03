@@ -19,16 +19,10 @@ import os
 import sys
 from typing import Any, Callable
 
-from mcp.types import ToolAnnotations
+from .server_hardening import ANN_READONLY, ANN_WRITES
 
 
 _VALID_PROFILES = frozenset({"core", "full"})
-_READ_ONLY = ToolAnnotations(
-    readOnlyHint=True,
-    destructiveHint=False,
-    idempotentHint=True,
-    openWorldHint=False,
-)
 
 
 def selected_tool_profile(argv: list[str] | None = None) -> str:
@@ -206,11 +200,14 @@ class CoarseToolRegistry:
         )
         self.mcp.tool(
             title=f"{self.namespace} {self.category} catalog",
-            annotations=_READ_ONLY,
+            annotations=ANN_READONLY,
         )(catalog)
         self.mcp.tool(
             title=f"Run {self.namespace} {self.category}",
-            annotations=_READ_ONLY,
+            # The selected operation may execute a solver or write an
+            # artifact. The dispatcher cannot truthfully advertise itself as
+            # read-only even when many individual gates are pure checks.
+            annotations=ANN_WRITES,
         )(run)
 
         self._append_summary()
