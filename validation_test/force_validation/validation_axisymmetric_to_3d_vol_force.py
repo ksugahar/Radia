@@ -498,7 +498,10 @@ def main() -> int:
     if args.source_segments < 16:
         raise ValueError("--source-segments must be >= 16")
 
-    result, ready = build_artifacts(args)
+    from ngsolve import TaskManager
+
+    with TaskManager():
+        result, ready = build_artifacts(args)
     _write_json(args.out, result)
     _write_json(args.ready_out, ready)
 

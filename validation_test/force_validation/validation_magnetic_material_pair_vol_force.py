@@ -607,7 +607,10 @@ def main() -> int:
     parser.add_argument("--ready-out", type=Path, default=READY_JSON)
     args = parser.parse_args()
 
-    result, ready = build_artifacts(args)
+    from ngsolve import TaskManager
+
+    with TaskManager():
+        result, ready = build_artifacts(args)
     _write_json(args.out, result)
     _write_json(args.ready_out, ready)
 
