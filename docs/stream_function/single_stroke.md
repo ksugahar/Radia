@@ -353,7 +353,7 @@ minimises the **single-stroke RMS** (not the smoothest ψ), then distort.
 
 The physical **min-inductance** objective (`calc_streamfunction.py --regularize
 inductance`, `min ½ψᵀLψ` via the BEM self-inductance — see
-[panel.md](panel.md#design-objective--regularizer---regularize-l2-h1-inductance))
+[application.md](application.md#design-objective--regularizer---regularize-l2-h1-inductance))
 gives a *smoother* surface current than `h1` / `l2`, so it single-strokes
 cleaner AND needs a smaller sheet-metal deformation for the same delivered
 field.  Measured on the cylinder Gx (`--confine abe`, nlevels 12, `--distort`):

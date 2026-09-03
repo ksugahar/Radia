@@ -22,9 +22,9 @@ short *entry point*; this folder is the detailed reference.
 | You want to … | Read |
 |----------------|------|
 | Understand the SFM and ACA+TSVD math | [theory.md](theory.md) |
-| **Run the design / Pareto / manufacture Simulink application** (`calc_streamfunction.py`) | [**panel.md**](panel.md) |
-| Pick the current-confinement BC (`--confine off/on/abe`, Abe edge-equipotential) | [panel.md § confinement](panel.md#current-confinement-boundary-condition---confine-off-on-abe) |
-| Draw order-p contours / bubble-system flux lines (`--contour-sub`, `--flux-plot`) | [panel.md § contour=flux-line](panel.md#contour-drawing--flux-line-drawing) |
+| **Run the design / Pareto / manufacture Simulink application** (`calc_streamfunction.py`) | [**application.md**](application.md) |
+| Pick the current-confinement BC (`--confine off/on/abe`, Abe edge-equipotential) | [application.md § confinement](application.md#current-confinement-boundary-condition---confine-off-on-abe) |
+| Draw order-p contours / bubble-system flux lines (`--contour-sub`, `--flux-plot`) | [application.md § contour=flux-line](application.md#contour-drawing--flux-line-drawing) |
 | Connect contours into one wire | [single_stroke.md](single_stroke.md) |
 | Bend that one wire into a manufacturable single-current shim (no extra feeds) | [single_stroke.md § sheet-metal distortion](single_stroke.md#single-current-sheet-metal-coil-distortion-bankin-ho--no-extra-feeds) |
 | Design on an arbitrary curved former (sphere / conformal) | [single_stroke.md § arbitrary curved formers](single_stroke.md#arbitrary-curved-formers-sphere--fe-direct-ψ-demo_sphere_fe_directpy) |
