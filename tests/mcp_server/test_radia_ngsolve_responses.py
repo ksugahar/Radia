@@ -144,20 +144,21 @@ class TestNgsolveKnowledge:
     def test_ngsolve_bem_50_vol_visualization_topic(self):
         body = get_ngsolve_documentation("ngsolve_bem_50")
         _assert_substantial(body, min_chars=1000)
-        _assert_contains_any(body, ["Netgen", ".vol", "50-case", "NGSolve.BEM"],
+        _assert_contains_any(body, ["GMSH", ".vol", "50-case", "NGSolve.BEM"],
                              label="ngsolve ngsolve_bem_50")
         assert "Do not call a cross-code artifact \"analytic\"" in body
-        assert "radia-vol-viewer --register" in body
-        assert "Ng_LoadMesh" in body
-        assert "mesh-free" in body
+        assert "radia-vol-viewer" not in body
+        assert "check-vol" in body
+        assert "GMSH `.msh v4.1`" in body
+        assert "contains coefficients but no mesh" in body
         assert "GYP-001..010" in body
         assert "struck drum" in body
 
     def test_vol_double_click_alias(self):
         body = get_ngsolve_documentation("vol_double_click")
         _assert_substantial(body, min_chars=1000)
-        assert "raw Windows file association" in body
-        assert "solution visual mode" in body
+        assert "Do not install" in body
+        assert "result.json" in body
 
     def test_vibroacoustic_drum_alias(self):
         body = get_ngsolve_documentation("vibroacoustic_drum")

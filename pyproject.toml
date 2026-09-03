@@ -106,7 +106,6 @@ beam = [
     "scipy>=1.11",
 ]
 viz = [
-    "pyvista>=0.40",
     "matplotlib>=3.5",
 ]
 docs = [
@@ -130,7 +129,6 @@ test = [
 dev = [
     "pytest>=7.0",
     "pytest-cov>=4.0",
-    "pyvista>=0.40",
     "matplotlib>=3.5",
     "schemdraw>=0.18",
 ]
@@ -144,11 +142,6 @@ Issues = "https://github.com/ksugahar/Radia/issues"
 "ESRF Radia Page" = "https://www.esrf.fr/Accelerators/Groups/InsertionDevices/Software/Radia"
 
 [project.scripts]
-# CLI for .vol/.sol viewer (also exposed as a gui-script below).
-# Use the CLI form when you want stdout (e.g. --register / probing);
-# use the gui-script (radia-vol-viewer-gui.exe) for the Windows file
-# association so no console window flashes on double-click.
-radia-vol-viewer = "radia.tools.vol_sol_viewer:main"
 radia-ih-assemble = "radia.simulink.ih_operator_assembly:main"
 cubit-toolbar-smoke-test = "radia.cubit_toolbar_smoke:main"
 # Circuit/SPICE integration is part of Radia. The shorter canonical names are
@@ -166,13 +159,6 @@ mcp-ltspice = "radia.ltspice.mcp_server:main"
 # headless calc_*.py and DesignSpec contracts.
 # Plugin + panels: cubit-plugin-install (from cubit-mesh-export)
 # MCP servers: radia-mcp package (pip install radia-mcp)
-
-[project.gui-scripts]
-# Windowless launcher used by the Windows .vol / .sol file
-# association (`radia-vol-viewer --register` writes this path into
-# the registry).  Linked through pythonw.exe so no console flashes
-# on double-click.
-radia-vol-viewer-gui = "radia.tools.vol_sol_viewer:main"
 
 [tool.setuptools.package-data]
 # Note (2026-06): standalone PySide desktop adapters are retired.  The Cubit

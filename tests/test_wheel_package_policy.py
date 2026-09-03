@@ -46,3 +46,16 @@ def test_retired_notebook_workbenches_are_absent_from_source():
         name for name in retired if (ROOT / "src" / "radia" / name).exists()
     )
     assert present == []
+
+
+def test_retired_desktop_viewer_is_not_packaged():
+    config = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+    scripts = config["project"].get("scripts", {})
+    gui_scripts = config["project"].get("gui-scripts", {})
+    optional = config["project"]["optional-dependencies"]
+
+    assert "radia-vol-viewer" not in scripts
+    assert "radia-vol-viewer-gui" not in gui_scripts
+    assert not (ROOT / "src" / "radia" / "tools" / "vol_sol_viewer.py").exists()
+    assert all("pyvista" not in requirement.lower() for requirement in optional["viz"])
+    assert all("pyvista" not in requirement.lower() for requirement in optional["dev"])
