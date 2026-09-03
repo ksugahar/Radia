@@ -1,4 +1,5 @@
 import asyncio
+import json
 import zipfile
 
 import pytest
@@ -2461,6 +2462,37 @@ def test_prose_list_items_survive_but_stay_separate():
 
 def test_a_parenthesised_gloss_is_not_an_unfilled_placeholder():
     # From a submitted proposal: 入力 opens an ordinary technical gloss.
+def test_paired_object_relation_flags_the_sentence_the_editor_rejected():
+    # 2026-09-03: three variants scored 85.7 / 85.7 / 85.8 on readability; the
+    # editor rejected the first two because the two problems read as one study.
+    head = "本研究では、誘導加熱と加速器電磁石を対象とする二つの設計課題を扱う。"
+    rejected = head + "四名の手法を誘導加熱で結合し、その判定則を加速器電磁石設計へ発展させる。"
+    accepted = head + "4人の手法を誘導加熱を例題として結合させ、そこで培ったノウハウを加速器電磁石設計に展開させる。"
+
+    bad = gw.grant_writing_paired_object_relation_check(rejected)
+    assert bad["applicable"] and bad["objects"] == ["誘導加熱", "加速器電磁石"]
+    assert len(bad["unrelated_sentences"]) == 1
+    assert bad["comments"]
+
+    good = gw.grant_writing_paired_object_relation_check(accepted)
+    assert good["applicable"] and good["unrelated_sentences"] == []
+
+    explicit = gw.grant_writing_paired_object_relation_check(
+        "モータとトランスを同じ判定則で扱う。", objects="モータ,トランス"
+    )
+    assert explicit["applicable"] and explicit["unrelated_sentences"] == []
+
+    report = gw.grant_writing_health_report(rejected, program="kaken_generic")
+    assert any(q["name"] == "paired_object_relation_check" for q in report["questions"])
+
+
+def test_notation_suggests_hito_for_a_counted_number_of_people():
+    result = gw.grant_writing_check_notation_variants("学生は四名の監督下で参加する。4人の手法を結ぶ。")
+
+    counter = [f for f in result["findings"] if f.get("preferred") == "人"]
+    assert counter and counter[0]["variant_count"] == 1
+
+
     result = gw.grant_writing_template_residue_check(
         "設計技術を高度化し，高いビーム効率（入力したエネルギーに対する"
         "ビーム強度）を実現する。"

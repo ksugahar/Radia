@@ -7,6 +7,16 @@ crystallized as its own package.
 
 ## [Unreleased]
 
+- grant-writing: new `grant_writing_paired_object_relation_check` lists
+  sentences that name both target problems without a word for how one
+  relates to the other (「AとB」 listings excluded); the health report carries
+  it as a question (skip id `pair`). Measured 2026-09-03: the lab's editor
+  rejected 「四名の手法を誘導加熱で結合し、その判定則を加速器電磁石設計へ発展
+  させる」 as making two problems read as one study, while three variants of
+  that sentence scored 85.7 / 85.7 / 85.8 on readability. The shared notation
+  check now proposes 「N人」 for 「N名」 (a counted set of named people), and
+  the skill records the applicant's policy: cut content, keep the relation,
+  and drop a sentence rather than compress it into nonsense.
 - grant-writing: a `.tex` main file passed to any check is now assembled with
   the sibling files it `\input`s (form pieces in subdirectories stay out), so
   `grant_writing_health_report("kiban_c.tex")` judges the whole 計画調書.
