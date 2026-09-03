@@ -292,7 +292,9 @@ Eqnedit64へ帰属させたり、OS側の唯一原因を解決済みと断定し
 - TeXソース欄は日本語とTeX ASCIIの両方をfont自身が所有し、要求faceと選択DCの物理faceが
   一致し、実bitmapへinkを描けるfontだけを使う。`CreateFontW`がhandleを返しただけで
   `Consolas`を採用しない。候補が全滅した場合は、同じ画面の正常なsource labelで使う
-  Windows stock GUI fontへ退避する。内部UTF-16が正しくても別glyphに見えれば不合格である。
+  Windows stock GUI fontへ退避する。visual gateは退避後もcmapとinkを検査して不健全なら
+  不合格とし、productionのstock font退避は起動継続のためのgraceful degradationとする。
+  内部UTF-16が正しくても別glyphに見える候補は、O:ハンドテストで不合格とする。
 
 古い版または他要因によって既にセッションのフォントホストが壊れた場合、修正版の起動だけでは
 OSセッション内の壊れた状態を修復できない。一回のサインアウトまたは再起動が必要な場合が
@@ -553,6 +555,24 @@ source stampの両方を表示する。
 - review disposition: このハンドテスト修正は§13.3のFable reviewed source後に追加された
   別の描画変更である。更新候補のPR CIとO:再試験後、正式公開前にFableレビューをもう一度
   行い、reviewed sourceを追記する。
+
+### 13.5 TeXソースfont修正後の最終Fableレビュー記録
+
+- reviewed source: `1496f804e38ab422144219bf676e8d8e9d3c5944`
+- reviewer: Claude Code Fable 5.1（model ID `claude-fable-5-1`、read-only plan mode）
+- execution: 2026-09-03。ファイル変更、ビルド、GUI起動、clipboard操作、font stressは行わず、
+  `main`との差分、実装、試験、仕様を静的に確認した。
+- result: `APPROVED`。release-blocking findingなし。greenのPR CIと更新済みO:候補の
+  ハンドテストを前提に、main統合と3.0.13公開を承認した。
+- reviewed scope: `1b1ceded668a250b69051edeb366f4f66a18ca20`のTeXソースfont選択と
+  `1496f804e38ab422144219bf676e8d8e9d3c5944`の失敗記録。物理face、font自身のcmap、
+  実bitmap ink、stock objectの所有権と解放、production／visual gateの同一chooser、
+  `test_font_safety.py`の静的guardを確認した。parser固定点とCLI dispatchは変更されず、
+  §13.3のレビュー結果を無効化しない。
+- non-blocking findings: productionのstock fallbackはvisual gateほどfail-closedではない。
+  過去の誤rasterizeそのものをhermeticに再現する試験ではなく、静的guard、face/cmap/ink gate、
+  O:ハンドテストの組合せで防止する。候補とgateのsample文字列重複は将来共通定数化できる。
+  Windows runnerは日本語glyphを所有するUI fontを必要とし、現在のwindows-2022 CIでは確認済み。
 
 - product tag: `eqnedit64-v3.0.11`
 - product tag source: `f5ac045703eab940323bddabbef6bb4fd3a9e55c`
