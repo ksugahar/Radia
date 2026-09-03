@@ -65,9 +65,6 @@ from ngsolve import (Mesh, H1, GridFunction, grad, InnerProduct, dx, CF, x, y,
                      Integrate, sqrt)
 from netgen.geom2d import unit_square
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "src", "radia"))
-
-
 # --- the two test maps (computational unit square -> physical) -----------------
 def conformal_map():
     """F(z) = z + 0.3 z^2 (analytic => conformal => weight-free)."""
