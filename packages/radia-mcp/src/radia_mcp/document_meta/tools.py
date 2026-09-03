@@ -9,7 +9,6 @@ from __future__ import annotations
 import ast
 import datetime
 import difflib
-import hashlib
 import json
 import pathlib
 import re
@@ -708,104 +707,8 @@ def _read_notebook_result_summary(path: pathlib.Path, repo_root: pathlib.Path) -
     }
 
 
-def _collect_json_keys(obj) -> set[str]:
-    keys: set[str] = set()
-    if isinstance(obj, dict):
-        for key, val in obj.items():
-            keys.add(str(key))
-            keys.update(_collect_json_keys(val))
-    elif isinstance(obj, list):
-        for val in obj[:100]:
-            keys.update(_collect_json_keys(val))
-    return keys
-
-
-def _result_json_summary(path: pathlib.Path,
-                         repo_root: pathlib.Path,
-                         notebook_path: pathlib.Path | None = None) -> dict:
-    date_keys = {
-        "generated_at_utc", "generated_at", "executed_at_utc", "executed_at",
-        "timestamp", "date", "created_at", "updated_at",
-    }
-    version_keys = {
-        "version", "schema_version", "radia_version", "python_version",
-        "runtime_version", "package_versions", "versions", "platform",
-    }
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-    except Exception as exc:
-        return {
-            "path": _rel(path, repo_root),
-            "parse_ok": False,
-            "error": str(exc),
-            "has_date": False,
-            "has_version": False,
-            "has_version_date": False,
-            "has_notebook_sha256": False,
-            "notebook_sha256_matches": False,
-        }
-    keys = _collect_json_keys(data)
-    has_date = bool(keys & date_keys)
-    has_version = bool(keys & version_keys)
-    notebook_sha = data.get("notebook_sha256") if isinstance(data, dict) else None
-    has_notebook_sha = isinstance(notebook_sha, str) and bool(notebook_sha)
-    notebook_sha_matches = False
-    if has_notebook_sha and notebook_path is not None and notebook_path.exists():
-        try:
-            notebook_sha_matches = notebook_sha == _sha256_bytes(notebook_path.read_bytes())
-        except Exception:
-            notebook_sha_matches = False
-    return {
-        "path": _rel(path, repo_root),
-        "parse_ok": True,
-        "has_date": has_date,
-        "has_version": has_version,
-        "has_version_date": has_date and has_version,
-        "has_notebook_sha256": has_notebook_sha,
-        "notebook_sha256_matches": notebook_sha_matches,
-        "matched_date_keys": sorted(keys & date_keys),
-        "matched_version_keys": sorted(keys & version_keys),
-    }
-
-
-def _find_notebook_result_jsons(nb_path: pathlib.Path) -> list[pathlib.Path]:
-    parent = nb_path.parent
-    stem = nb_path.stem.lower()
-    candidates: set[pathlib.Path] = set()
-    for p in parent.glob("*.json"):
-        name = p.stem.lower()
-        if (
-            name == stem
-            or name.startswith(stem + "_")
-            or name.startswith(stem + "-")
-            or "result" in name
-            or "summary" in name
-            or "evidence" in name
-            or "validation" in name
-        ):
-            candidates.add(p)
-    return sorted(candidates)
-
-
-
-
-def _sha256_bytes(data: bytes) -> str:
-    return hashlib.sha256(data).hexdigest()
-
-
-
-
-
-
-
-
-
-
-
-
 def document_meta_notebook_result_audit(repo_root: str = "",
                                           notebook_root: str = "",
-                                          require_json: bool = False,
                                           include_gitignored: bool = False,
                                           tracked_only: bool = True,
                                           max_items: int = 50) -> dict:
@@ -831,8 +734,6 @@ def document_meta_notebook_result_audit(repo_root: str = "",
         repo_root: Radia repository root.  Empty means auto-detect from cwd.
         notebook_root: Optional subdirectory to scan, absolute or repo-relative.
             Empty defaults to ``docs/`` when it exists.
-        require_json: Optional compatibility diagnostic for an explicitly
-            sidecar-managed corpus. False for the Radia docs policy.
         include_gitignored: Include notebooks ignored by git (LAB-local docs,
             work-in-progress notebook galleries).  Defaults false for public
             repo policy checks.
@@ -865,19 +766,6 @@ def document_meta_notebook_result_audit(repo_root: str = "",
     gaps: list[dict] = []
     for nb in sorted(notebooks):
         nb_summary = _read_notebook_result_summary(nb, root)
-        sidecars = (
-            [
-                _result_json_summary(p, root, nb)
-                for p in _find_notebook_result_jsons(nb)
-            ]
-            if require_json
-            else []
-        )
-        good_json_count = sum(1 for s in sidecars if s.get("has_version_date"))
-        synced_json_count = sum(
-            1 for s in sidecars
-            if s.get("has_version_date") and s.get("notebook_sha256_matches")
-        )
         if nb_summary.get("error"):
             status = "notebook_parse_error"
         elif not nb_summary.get("code_cells"):
@@ -896,22 +784,12 @@ def document_meta_notebook_result_audit(repo_root: str = "",
         elif (nb_summary.get("webgui_field_required")
               and not nb_summary.get("webgui_field_ready")):
             status = "needs_executed_parameterized_webgui_field_output"
-        elif require_json and not sidecars:
-            status = "needs_result_json_sidecar"
-        elif require_json and good_json_count == 0:
-            status = "result_json_missing_version_or_date"
-        elif require_json and synced_json_count == 0:
-            status = "result_json_not_synced_to_notebook"
         else:
             status = "ok_result_saved"
 
         row = {
             **nb_summary,
             "status": status,
-            "result_json_count": len(sidecars),
-            "result_json_with_version_date_count": good_json_count,
-            "result_json_synced_to_notebook_count": synced_json_count,
-            "result_jsons": sidecars[:10],
         }
         rows.append(row)
         if status != "ok_result_saved" and len(gaps) < max_items:
@@ -948,15 +826,6 @@ def document_meta_notebook_result_audit(repo_root: str = "",
             1 for r in rows
             if r["status"] == "needs_executed_parameterized_webgui_field_output"
         ),
-        "needs_result_json_sidecar": sum(
-            1 for r in rows if r["status"] == "needs_result_json_sidecar"
-        ),
-        "result_json_missing_version_or_date": sum(
-            1 for r in rows if r["status"] == "result_json_missing_version_or_date"
-        ),
-        "result_json_not_synced_to_notebook": sum(
-            1 for r in rows if r["status"] == "result_json_not_synced_to_notebook"
-        ),
         "no_code_cells": sum(1 for r in rows if r["status"] == "no_code_cells"),
         "parse_errors": sum(1 for r in rows if r["status"] == "notebook_parse_error"),
     }
@@ -967,7 +836,7 @@ def document_meta_notebook_result_audit(repo_root: str = "",
             "example_webgui": "example notebooks must store executed ngsolve.webgui.Draw or netgen.webgui.Draw rich output",
             "field_webgui": "field notebooks must store Draw(field, mesh, name=..., ...) rich output with explicit view arguments",
             "json": "docs notebooks require no sidecar; validation_test owns machine-readable evidence JSON",
-            "sync": "existing notebook-linked JSON is informational unless require_json is explicitly enabled",
+            "sync": "Git history owns notebook revisions; no notebook checksum ledger is required",
             "tracked_only_default": "true; set tracked_only=false for explicit WIP-tree audits",
         },
         "summary": summary,
