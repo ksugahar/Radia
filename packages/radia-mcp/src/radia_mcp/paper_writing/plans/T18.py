@@ -112,13 +112,17 @@ def paper_writing_run_full_workflow(
         try:
             from .T9 import paper_writing_reviewer_2_trigger_summary
             rev2 = paper_writing_reviewer_2_trigger_summary(tex_or_text)
+            observations = rev2.get("observations", {})
+            active = [
+                trigger for trigger in observations.get("triggers", [])
+                if (trigger.get("contribution") or 0) > 0
+            ]
             output["phases"]["phase4_reviewer_2_simulate"] = {
-                "total_triggers": rev2.get("total_triggers", 0)
-                if isinstance(rev2, dict) else None,
-                "top_tier_count": rev2.get("top_tier_count", 0)
-                if isinstance(rev2, dict) else None,
-                "summary": rev2.get("summary", "")
-                if isinstance(rev2, dict) else str(rev2)[:200],
+                "total_triggers": len(active),
+                "top_tier_count": len(observations.get("top_triggers", [])),
+                "risk_percent": observations.get("risk_percent"),
+                "unknown_triggers": observations.get("unknown_triggers", []),
+                "summary": (rev2.get("comments") or [""])[0],
             }
         except Exception as e:
             output["errors"].append(f"phase4 failed: {e}")

@@ -37,6 +37,7 @@ from __future__ import annotations
 import io
 import re
 import tarfile
+import urllib.parse
 from typing import Optional
 
 
@@ -151,13 +152,19 @@ def paper_writing_arxiv_fetch_latex_source(
     aid = _normalize_arxiv_id(arxiv_id)
     url = f"https://arxiv.org/e-print/{aid}"
     try:
-        r = requests.get(url, timeout=60)
+        r = requests.get(
+            url,
+            headers={"User-Agent": "radia-mcp (mailto:ksugahar@ele.kindai.ac.jp)"},
+            timeout=60,
+        )
         r.raise_for_status()
     except Exception as e:  # noqa: BLE001 - re-raise as clean MCP-JSON
         return {"error": f"arXiv e-print fetch failed for {aid}: {e}"}
 
     # arXiv returns gzipped tar (occasionally a single .gz of a .tex)
     blob = r.content
+    if len(blob) > 50 * 1024 * 1024:
+        return {"error": "arXiv source archive exceeds the 50 MiB safety limit"}
     files = []
     main_tex = None
     n_total = 0
@@ -195,10 +202,17 @@ def paper_writing_arxiv_fetch_latex_source(
         n_total += 1
         if len(files) >= max_files:
             continue
+        if member.size > max_chars_per_file * 8:
+            return {
+                "error": (
+                    f"arXiv member {member.name!r} is unexpectedly large "
+                    f"({member.size} bytes)"
+                )
+            }
         fh = tar.extractfile(member)
         if fh is None:
             continue
-        raw = fh.read()
+        raw = fh.read(max_chars_per_file * 8 + 1)
         text = raw.decode("utf-8", errors="replace")
         is_main = "\\documentclass" in text and main_tex is None
         if is_main:
@@ -368,7 +382,7 @@ def paper_writing_arxiv_search(
 
     # arXiv API uses "all:" prefix for full-text search; category
     # filter uses cat:CATNAME.  Combine with AND.
-    q_parts = [f"all:{query.replace(' ', '+')}"]
+    q_parts = [f"all:{query}"]
     if cat_list:
         cat_clause = " OR ".join(f"cat:{c}" for c in cat_list)
         q_parts.append(f"({cat_clause})")
@@ -381,11 +395,21 @@ def paper_writing_arxiv_search(
     }
     sort_by = sort_map.get(sort, "relevance")
 
-    url = (f"http://export.arxiv.org/api/query?"
-           f"search_query={search_query}&start=0&max_results={max_results}"
-           f"&sortBy={sort_by}&sortOrder=descending")
+    url = "https://export.arxiv.org/api/query"
+    params = {
+        "search_query": search_query,
+        "start": 0,
+        "max_results": max_results,
+        "sortBy": sort_by,
+        "sortOrder": "descending",
+    }
     try:
-        r = requests.get(url, timeout=30)
+        r = requests.get(
+            url,
+            params=params,
+            headers={"User-Agent": "radia-mcp (mailto:ksugahar@ele.kindai.ac.jp)"},
+            timeout=30,
+        )
         r.raise_for_status()
     except Exception as e:  # noqa: BLE001
         return {"error": f"arXiv search failed: {e}"}
@@ -412,6 +436,9 @@ def paper_writing_arxiv_search(
         ]
         # arXiv id from <id> URL
         id_url = entry.findtext("atom:id", "", ns) or ""
+        if not id_url or title.casefold() == "error":
+            summary_text = re.sub(r"\s+", " ", summary).strip()
+            return {"error": f"arXiv API error: {summary_text or title}"}
         aid = _normalize_arxiv_id(id_url) if id_url else ""
         # PDF link
         pdf_url = ""
@@ -488,14 +515,22 @@ def paper_writing_semantic_scholar_lookup(
         pid = pid.split("/paper/")[1].split("/")[0]
     elif pid.lower().startswith("arxiv:"):
         pid = f"ARXIV:{pid[6:]}"
-    elif pid.startswith("10."):
+    elif re.match(r"^(?:doi:|https?://(?:dx\.)?doi\.org/|10\.)", pid,
+                  re.IGNORECASE):
+        pid = re.sub(r"^doi\s*:\s*", "", pid, flags=re.IGNORECASE)
+        pid = re.sub(
+            r"^https?://(?:dx\.)?doi\.org/", "", pid, flags=re.IGNORECASE
+        )
         pid = f"DOI:{pid}"
     elif "/" in pid and re.match(r"^[a-z\-]+/\d{7}$", pid.lower()):
         # old-style arXiv
         pid = f"ARXIV:{pid}"
     # else: pass through as-is (S2 will resolve)
 
-    url = f"https://api.semanticscholar.org/graph/v1/paper/{pid}"
+    url = (
+        "https://api.semanticscholar.org/graph/v1/paper/"
+        + urllib.parse.quote(pid, safe=":")
+    )
     params = {"fields": fields}
     try:
         r = requests.get(url, params=params, timeout=30)

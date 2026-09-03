@@ -56,7 +56,9 @@ UNIVERSAL_ACRONYM_WHITELIST = frozenset({
     "PDF", "HTML", "XML", "JSON", "CSV", "URL", "URI", "HTTP", "HTTPS",
     "FTP", "TCP", "IP", "DNS", "API", "GUI", "CLI", "SDK",
     # Countries / organisations everybody knows
-    "USA", "UK", "EU", "UN", "WHO", "NASA",
+    "USA", "UK", "EU", "UN", "WHO", "NASA", "IEEE", "IEEJ", "SI",
+    # Roman-numeral section numbers
+    "II", "III", "IV", "VI", "VII", "VIII", "IX", "XI", "XII",
     # Hardware everybody knows
     "USB", "RAM", "ROM", "CPU", "GPU", "TPU", "SSD", "HDD", "DVD",
     "BIOS", "UEFI", "PCI", "LCD", "LED", "OLED",
@@ -79,7 +81,7 @@ UNIVERSAL_ACRONYM_WHITELIST = frozenset({
 # Pattern: 2-5-letter all-uppercase token at a word boundary.
 # Must start with a letter (not a digit).  Allows letters + digits
 # inside (e.g. "3D", "2D" matched? — no, must START with letter).
-_ACRONYM_RE = re.compile(r"\b([A-Z][A-Z0-9]{1,4})\b")
+_ACRONYM_RE = re.compile(r"(?<![A-Za-z0-9])([A-Z][A-Z0-9]{1,4})(?![A-Za-z0-9])")
 
 # Patterns to STRIP from the source before scanning for acronyms:
 _STRIP_PATTERNS_DEFAULT = [
@@ -87,7 +89,7 @@ _STRIP_PATTERNS_DEFAULT = [
     re.compile(r"\$[^$\n]+?\$"),                       # inline $...$
     re.compile(r"\$\$.+?\$\$", re.DOTALL),
     re.compile(r"\\\(.+?\\\)", re.DOTALL),
-    re.compile(r"\\\[.+?\\\]", re.DOTALL),
+    re.compile(r"(?<!\\)\\\[.+?\\\]", re.DOTALL),
     re.compile(
         r"\\begin\{(equation\*?|align\*?|eqnarray\*?|gather\*?|multline\*?)\}"
         r".+?\\end\{\1\}",
@@ -97,7 +99,7 @@ _STRIP_PATTERNS_DEFAULT = [
     re.compile(r"\\(?:cite|citet|citep|citeyear|citealt|citealp|"
                r"citeauthor|nocite|fullcite|textcite|parencite|"
                r"footcite|autocite|ref|eqref|label)"
-               r"(?:\[[^\]]*\])?\{[^\}]+\}"),
+               r"(?:\[[^\]]*\])?(?:\[[^\]]*\])?\{[^\}]+\}"),
     # Bibliography itself
     re.compile(r"\\begin\{thebibliography\}.+?\\end\{thebibliography\}",
                 re.DOTALL),

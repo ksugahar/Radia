@@ -119,6 +119,7 @@ def paper_writing_reviewer_2_trigger_summary(
     # --------------------------------------------------------------
     counts: dict[str, float] = {}
     raw_extra: dict[str, dict] = {}
+    unknown_triggers: set[str] = set()
 
     # unquantified_hype (T3)
     try:
@@ -136,6 +137,7 @@ def paper_writing_reviewer_2_trigger_summary(
         }
     except Exception as e:  # noqa: BLE001
         counts["unquantified_hype"] = 0.0
+        unknown_triggers.add("unquantified_hype")
         raw_extra["unquantified_hype"] = {"error": str(e)}
 
     # self_cite_excess (T5). bib 空なら skip (count=0)。
@@ -160,9 +162,11 @@ def paper_writing_reviewer_2_trigger_summary(
             }
         except Exception as e:  # noqa: BLE001
             counts["self_cite_excess"] = 0.0
+            unknown_triggers.add("self_cite_excess")
             raw_extra["self_cite_excess"] = {"error": str(e), "skipped": False}
     else:
         counts["self_cite_excess"] = 0.0
+        unknown_triggers.add("self_cite_excess")
         raw_extra["self_cite_excess"] = {
             "source_tool": "paper_writing_related_work_density",
             "skipped": True,
@@ -191,6 +195,7 @@ def paper_writing_reviewer_2_trigger_summary(
         }
     except Exception as e:  # noqa: BLE001
         counts["no_limitation"] = 0.0
+        unknown_triggers.add("no_limitation")
         raw_extra["no_limitation"] = {"error": str(e)}
 
     # unreferenced_figures (T6)
@@ -207,6 +212,7 @@ def paper_writing_reviewer_2_trigger_summary(
         }
     except Exception as e:  # noqa: BLE001
         counts["unreferenced_figures"] = 0.0
+        unknown_triggers.add("unreferenced_figures")
         raw_extra["unreferenced_figures"] = {"error": str(e)}
 
     # undefined_acronyms (cross_lint)
@@ -224,6 +230,7 @@ def paper_writing_reviewer_2_trigger_summary(
         }
     except Exception as e:  # noqa: BLE001
         counts["undefined_acronyms"] = 0.0
+        unknown_triggers.add("undefined_acronyms")
         raw_extra["undefined_acronyms"] = {"error": str(e)}
 
     # weak_expressions (tools.py)
@@ -237,6 +244,7 @@ def paper_writing_reviewer_2_trigger_summary(
         }
     except Exception as e:  # noqa: BLE001
         counts["weak_expressions"] = 0.0
+        unknown_triggers.add("weak_expressions")
         raw_extra["weak_expressions"] = {"error": str(e)}
 
     # english_redflags (tools.py)
@@ -255,6 +263,7 @@ def paper_writing_reviewer_2_trigger_summary(
         }
     except Exception as e:  # noqa: BLE001
         counts["english_redflags"] = 0.0
+        unknown_triggers.add("english_redflags")
         raw_extra["english_redflags"] = {"error": str(e)}
 
     # --------------------------------------------------------------
@@ -265,6 +274,18 @@ def paper_writing_reviewer_2_trigger_summary(
     total_possible = 0.0
     for name, weight, label in _TRIGGERS_SPEC:
         c = counts.get(name, 0.0)
+        if name in unknown_triggers:
+            triggers.append({
+                "name": name,
+                "label": label,
+                "weight": weight,
+                "count": None,
+                "normalised": None,
+                "contribution": None,
+                "status": "unknown",
+                "extra": raw_extra.get(name, {}),
+            })
+            continue
         typ = _TYPICAL_MAX.get(name, 5.0)
         if typ <= 0:
             typ = 1.0
@@ -294,10 +315,14 @@ def paper_writing_reviewer_2_trigger_summary(
 
     # contribution 降順 (attack 確率高い順)
     triggers_sorted = sorted(
-        triggers, key=lambda t: t["contribution"], reverse=True
+        triggers,
+        key=lambda t: (
+            t["contribution"] if t["contribution"] is not None else -1.0
+        ),
+        reverse=True,
     )
     top_triggers = [
-        t["name"] for t in triggers_sorted if t["contribution"] > 0
+        t["name"] for t in triggers_sorted if (t["contribution"] or 0) > 0
     ][:3]
 
     observations = {
@@ -305,6 +330,7 @@ def paper_writing_reviewer_2_trigger_summary(
         "risk_percent": round(risk_percent, 1),
         "triggers": triggers_sorted,
         "top_triggers": top_triggers,
+        "unknown_triggers": sorted(unknown_triggers),
     }
 
     # --------------------------------------------------------------

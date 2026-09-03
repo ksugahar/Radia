@@ -268,7 +268,7 @@ def paper_writing_detect_text_overflow_page(
               "text_snippet": str,
               "text_bbox": (x0, y0, x1, y1),
               "page_box": (x0, y0, x1, y1),
-              "box_type": "cropbox" | "mediabox",
+              "box_type": "normalized_cropbox" | "normalized_mediabox",
           }
           "advice": text hint
     """
@@ -276,58 +276,58 @@ def paper_writing_detect_text_overflow_page(
     pdf = pathlib.Path(pdf_path)
     if not pdf.exists():
         return {"error": f"pdf_path not found: {pdf_path}"}
-    doc = pymupdf.open(str(pdf))
-
     overflows = []
-    for page_idx, page in enumerate(doc):
-        # CropBox / MediaBox via pymupdf
-        if use_cropbox:
-            pbox = page.cropbox
-            box_type = "cropbox"
-        else:
-            pbox = page.mediabox
-            box_type = "mediabox"
-        page_box = (pbox.x0, pbox.y0, pbox.x1, pbox.y1)
+    with pymupdf.open(str(pdf)) as doc:
+        for page_idx, page in enumerate(doc):
+            # Text bboxes are in MuPDF's normalized page coordinate system.
+            # Raw CropBox / MediaBox rectangles can retain a non-zero PDF
+            # origin, so compare only after applying the page transform.
+            if use_cropbox:
+                pbox = page.rect
+                box_type = "normalized_cropbox"
+            else:
+                pbox = page.mediabox * page.transformation_matrix
+                box_type = "normalized_mediabox"
+            page_box = (pbox.x0, pbox.y0, pbox.x1, pbox.y1)
 
-        text_dict = page.get_text("dict")
-        for block in text_dict.get("blocks", []):
-            if block.get("type") != 0:
-                continue
-            bbox = block.get("bbox")
-            if not bbox or len(bbox) != 4:
-                continue
-            if _area(bbox) < ignore_blocks_smaller_than_pt2:
-                continue
-            x0, y0, x1, y1 = bbox
+            text_dict = page.get_text("dict")
+            for block in text_dict.get("blocks", []):
+                if block.get("type") != 0:
+                    continue
+                bbox = block.get("bbox")
+                if not bbox or len(bbox) != 4:
+                    continue
+                if _area(bbox) < ignore_blocks_smaller_than_pt2:
+                    continue
+                x0, y0, x1, y1 = bbox
 
-            # Snippet for report
-            snippet_chars = []
-            for line in block.get("lines", []):
-                for span in line.get("spans", []):
-                    snippet_chars.append(span.get("text", ""))
-            snippet = " ".join(snippet_chars).strip()
-            snippet = (snippet[:40] + "...") if len(snippet) > 43 else snippet
+                # Snippet for report
+                snippet_chars = []
+                for line in block.get("lines", []):
+                    for span in line.get("spans", []):
+                        snippet_chars.append(span.get("text", ""))
+                snippet = " ".join(snippet_chars).strip()
+                snippet = (snippet[:40] + "...") if len(snippet) > 43 else snippet
 
-            # Check each side
-            sides = [
-                ("left",   page_box[0] - x0),
-                ("right",  x1 - page_box[2]),
-                ("top",    page_box[1] - y0),
-                ("bottom", y1 - page_box[3]),
-            ]
-            for side, overflow in sides:
-                if overflow > overflow_tolerance_pt:
-                    overflows.append({
-                        "page": page_idx + 1,
-                        "side": side,
-                        "overflow_pt": round(overflow, 2),
-                        "text_snippet": snippet,
-                        "text_bbox": tuple(bbox),
-                        "page_box": page_box,
-                        "box_type": box_type,
-                    })
-    _n_pages = doc.page_count
-    doc.close()
+                # Check each side
+                sides = [
+                    ("left",   page_box[0] - x0),
+                    ("right",  x1 - page_box[2]),
+                    ("top",    page_box[1] - y0),
+                    ("bottom", y1 - page_box[3]),
+                ]
+                for side, overflow in sides:
+                    if overflow > overflow_tolerance_pt:
+                        overflows.append({
+                            "page": page_idx + 1,
+                            "side": side,
+                            "overflow_pt": round(overflow, 2),
+                            "text_snippet": snippet,
+                            "text_bbox": tuple(bbox),
+                            "page_box": page_box,
+                            "box_type": box_type,
+                        })
+        _n_pages = doc.page_count
 
     advice = (
         "Text overflow past the page box = visible at print scale "
@@ -398,6 +398,11 @@ def paper_writing_detect_overlapping_text_blocks(
                     snippet_chars.append(span.get("text", ""))
             snippet = " ".join(snippet_chars).strip()
             snippet = (snippet[:40] + "...") if len(snippet) > 43 else snippet
+            letters = sum(char.isalpha() for char in snippet)
+            if letters / max(len(snippet), 1) < 0.4:
+                # Display equations are often emitted as overlapping glyph
+                # fragments; they are not prose-on-prose collisions.
+                continue
             text_blocks.append((tuple(bbox), snippet))
 
         n = len(text_blocks)

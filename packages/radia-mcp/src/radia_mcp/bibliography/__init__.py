@@ -1,8 +1,9 @@
 """bibliography sub-module — BibTeX lookup, parse, lint, normalize, score.
 
 Promoted from 'paper_writing has 54 tools but assumes .bib exists' gap.
-Lab standard: ``references.bib`` in project root, keys follow
-``<author><year><word>`` convention (e.g. ``sugahara2026binput``).
+Lab standard: one bundled canonical ``references.bib``; manuscripts cite its
+keys and ship a generated ``.bbl`` rather than a private bibliography copy.
+Keys follow ``<author><year><word>`` convention (e.g. ``sugahara2026binput``).
 
 Tools (prefix ``bibliography_``):
 
@@ -28,6 +29,10 @@ Tools (prefix ``bibliography_``):
 
     Tier 5 — Intelligence Layer:
         bibliography_health_report(bib_path)
+
+    Tier 6 — Canonical bibliography:
+        bibliography_canonical_path()
+        bibliography_make_bbl(tex_path, style="", out_path=None)
 """
 from . import tools as _tools
 

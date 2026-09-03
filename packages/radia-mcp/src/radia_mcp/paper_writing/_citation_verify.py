@@ -2,9 +2,8 @@
 
 Added 2026-05-26 (radia-mcp v0.91.0).  Enforces the lab policy:
 
-  **ALWAYS use the user's actual references.bib AND back-check every
-  citation via Crossref / Semantic Scholar / arXiv before inserting
-  it into a paper.**
+  **ALWAYS use the bundled canonical references.bib AND back-check every
+  citation via Crossref / Semantic Scholar / arXiv before inserting it.**
 
 Why this matters: the most common AI-assisted-writing failure mode
 is *citation hallucination*  -- the AI invents a plausible-looking
@@ -16,8 +15,7 @@ hallucinated citation taints the entire submission.
 This module composes the EXISTING radia-mcp tools into a hard
 verify-first workflow:
 
-  1. Read user's references.bib (the SINGLE SOURCE OF TRUTH for what
-     the paper already cites).
+  1. Read canonical references.bib (the SINGLE SOURCE OF TRUTH).
   2. Search Crossref / Semantic Scholar / arXiv for the claim.
   3. Match candidates against references.bib (already-cited? skip).
   4. Verify the top candidate exists via DOI resolve.
@@ -25,9 +23,8 @@ verify-first workflow:
   6. Recommend whether to insert into references.bib (or report that
      the user is already citing it).
 
-If steps 1-4 cannot complete cleanly, the tool RAISES rather than
-returning a plausible-looking but unverified citation.  Fail-fast
-per CLAUDE.md POLICY.
+If steps 1-4 cannot complete cleanly, the tool returns an explicit error or
+no-candidate verdict rather than a plausible-looking unverified citation.
 
 Cross-references:
   * paper_writing_resolve_doi (Crossref backbone)
@@ -40,9 +37,14 @@ Cross-references:
 
 from __future__ import annotations
 
+import difflib
 import os
+import pathlib
 import re
+import unicodedata
 from typing import Optional
+
+from ..bibliography._bibparse import parse_bib
 
 
 # ============================================================
@@ -56,7 +58,7 @@ _CITATION_VERIFICATION_RECIPE = r"""
 This recipe is the SINGLE BEHAVIORAL RULE for inserting any
 citation into a lab paper:
 
-  **NEVER invent a citation.  ALWAYS use the user's actual
+  **NEVER invent a citation. ALWAYS use the bundled canonical
   references.bib and ALWAYS verify the source via search FIRST.**
 
 ## Why this is enforced
@@ -74,11 +76,12 @@ citation (~5 seconds of human time, 0 seconds of AI time).
 
 ## The mandatory 6-step workflow
 
-### Step 1: READ the user's references.bib first
+### Step 1: READ the canonical references.bib first
 
 ```python
+from radia_mcp.bibliography.plans.T14_canonical import CANONICAL
 from radia_mcp.paper_writing import paper_writing_lint_reference_format
-report = paper_writing_lint_reference_format("/path/to/references.bib")
+report = paper_writing_lint_reference_format(str(CANONICAL))
 # report contains: every existing entry's citation_key, DOI, title, author, year
 ```
 
@@ -126,7 +129,6 @@ from radia_mcp.paper_writing import paper_writing_verify_citation
 
 result = paper_writing_verify_citation(
     claim="Koh-Yook derived an exact closed form for impedance plane",
-    bib_path="/path/to/references.bib",
     candidate_doi="10.1109/TAP.2006.880747",
 )
 # Returns:
@@ -154,8 +156,8 @@ the candidate and search again.
 ### Step 5: INSERT into references.bib (only if verdict ==
 "ready_to_insert")
 
-Append to the user's .bib file via standard text edit; never
-overwrite existing entries.
+Append the human-reviewed entry to the canonical `.bib`; never create a local
+manuscript copy and never overwrite an existing entry.
 
 ### Step 6: LINT after insertion
 
@@ -163,6 +165,9 @@ overwrite existing entries.
 post_check = paper_writing_lint_reference_format(bib_path)
 # Verify no duplicate keys, no missing required fields, no DOI typos
 ```
+
+Then run `bibliography_make_bbl(tex_path)` for the manuscript. Submit the
+generated `.bbl`, not a copied `.bib` database.
 
 ## When verification cannot complete
 
@@ -221,6 +226,9 @@ If after Steps 2-3 NO candidate has a resolvable DOI:
   paper_writing_check_citation_usage(tex, bib)
         Post-write check: every \\cite resolves; no orphan entries.
 
+  bibliography_make_bbl(tex)
+        Export only the cited canonical entries as the submission .bbl.
+
   paper_writing_fetch_and_cite(doi, dest_dir)
         Download PDF + generate BibTeX (IEEE / Crossref).
 """
@@ -231,7 +239,7 @@ def paper_writing_citation_workflow_recipe() -> str:
 
     This is the BEHAVIORAL RULE for inserting any citation into a
     lab paper: NEVER invent, ALWAYS verify via Crossref / S2 /
-    arXiv FIRST, ALWAYS check against the user's references.bib.
+    arXiv FIRST, ALWAYS check against canonical references.bib.
 
     Read this BEFORE generating any \\cite{} or BibTeX entry.
     """
@@ -250,38 +258,28 @@ def _canonical_bib() -> str:
 
 
 def _parse_bib_lightweight(bib_path: str) -> dict:
-    """Parse references.bib without pulling in pybtex/bibtexparser.
+    """Parse references.bib with the package's balanced-brace parser.
 
     Returns dict keyed by citation_key with sub-dict of fields.
-    Lossy but enough for "is this DOI already cited?" check.
+    ``@string``, ``@preamble``, and ``@comment`` blocks are deliberately
+    excluded because they are not citation targets.
     """
     bib_path = bib_path or _canonical_bib()
-    if not os.path.exists(bib_path):
-        return {}
-    try:
-        with open(bib_path, encoding="utf-8", errors="replace") as fh:
-            text = fh.read()
-    except Exception:  # noqa: BLE001
-        return {}
+    text = pathlib.Path(bib_path).read_text(encoding="utf-8", errors="strict")
+    return {
+        entry.key: {"type": entry.kind, **entry.fields}
+        for entry in parse_bib(text)
+        if entry.key and not entry.kind.startswith("@")
+    }
 
-    entries = {}
-    # Match @TYPE{key, ... } blocks (greedy but stops at next @)
-    pat = re.compile(
-        r"@(\w+)\s*\{\s*([^,\s]+)\s*,(.*?)\n\}",
-        re.DOTALL | re.IGNORECASE,
-    )
-    for m in pat.finditer(text):
-        entry_type = m.group(1).lower()
-        key = m.group(2)
-        body = m.group(3)
-        fields = {}
-        # field = "value" or field = {value}
-        for fm in re.finditer(
-            r"(\w+)\s*=\s*[\{\"]([^\"\}]*)[\}\"]", body
-        ):
-            fields[fm.group(1).lower()] = fm.group(2)
-        entries[key] = {"type": entry_type, **fields}
-    return entries
+
+def _normalize_doi(value: str) -> str:
+    """Return a resolver-independent DOI token for equality checks."""
+    value = value.strip().lower()
+    value = re.sub(r"^doi\s*:\s*", "", value)
+    value = re.sub(r"^https?://(?:dx\.)?doi\.org/", "", value)
+    value = re.sub(r"^doi\.org/", "", value)
+    return value.rstrip(".,; ")
 
 
 def _doi_already_cited(bib_entries: dict, target_doi: str) -> Optional[str]:
@@ -290,15 +288,9 @@ def _doi_already_cited(bib_entries: dict, target_doi: str) -> Optional[str]:
     """
     if not target_doi:
         return None
-    t = target_doi.strip().lower()
-    if t.startswith("https://doi.org/"):
-        t = t[len("https://doi.org/"):]
-    if t.startswith("doi:"):
-        t = t[4:]
+    t = _normalize_doi(target_doi)
     for key, fields in bib_entries.items():
-        bib_doi = fields.get("doi", "").strip().lower()
-        if bib_doi.startswith("https://doi.org/"):
-            bib_doi = bib_doi[len("https://doi.org/"):]
+        bib_doi = _normalize_doi(fields.get("doi", ""))
         if bib_doi == t:
             return key
     return None
@@ -311,15 +303,28 @@ def _title_already_cited(bib_entries: dict, target_title: str) -> Optional[str]:
     if not target_title:
         return None
     def _norm(s):
-        s = re.sub(r"\s+", " ", s.lower()).strip()
-        s = re.sub(r"[^a-z0-9 ]", "", s)
-        return s
+        s = unicodedata.normalize("NFKC", s).casefold()
+        s = "".join(
+            char if char.isspace() or unicodedata.category(char)[0] in {"L", "N"}
+            else " "
+            for char in s
+        )
+        return re.sub(r"\s+", " ", s).strip()
+
     t_norm = _norm(target_title)
     if len(t_norm) < 10:
         return None  # too short, would match many things
     for key, fields in bib_entries.items():
-        bib_title = fields.get("title", "")
-        if _norm(bib_title).find(t_norm[:80]) >= 0:
+        bib_title = _norm(fields.get("title", ""))
+        if not bib_title:
+            continue
+        target_tokens = set(t_norm.split())
+        bib_tokens = set(bib_title.split())
+        token_overlap = len(target_tokens & bib_tokens) / max(len(target_tokens), 1)
+        if bib_title == t_norm or (
+            token_overlap >= 0.8
+            and difflib.SequenceMatcher(None, bib_title, t_norm).ratio() >= 0.92
+        ):
             return key
     return None
 
@@ -349,8 +354,8 @@ def paper_writing_verify_citation(
             (used for search if no DOI / arXiv ID).  Example:
             "Koh-Yook derived an exact closed form for the
              impedance plane Sommerfeld integral."
-        bib_path: path to the user's references.bib (the single
-            source of truth for what the paper already cites).
+        bib_path: optional external bibliography override. The bundled
+            canonical references.bib is the default single source of truth.
         candidate_doi: known DOI candidate (skip search step).
         candidate_arxiv_id: known arXiv ID candidate.
         candidate_title: known paper title.  Used both for
@@ -385,19 +390,8 @@ def paper_writing_verify_citation(
         5. If verdict == "no_candidate_found": mark TODO; ask user.
         6. If verdict == "error": investigate; do NOT proceed.
     """
-    # --- Step 1: read the user's bib ---
-    if not bib_path:
-        return {
-            "verdict": "error",
-            "advice": ("bib_path is required.  The lab policy is to "
-                       "ALWAYS use the user's references.bib as the "
-                       "single source of truth before inserting any "
-                       "new citation."),
-            "candidates": [],
-            "matching_key": None,
-            "suggested_bibtex": None,
-            "verification_method": None,
-        }
+    # --- Step 1: read the canonical bibliography (or explicit override) ---
+    bib_path = bib_path or _canonical_bib()
     if not os.path.exists(bib_path):
         return {
             "verdict": "error",
@@ -408,7 +402,17 @@ def paper_writing_verify_citation(
             "suggested_bibtex": None,
             "verification_method": None,
         }
-    bib_entries = _parse_bib_lightweight(bib_path)
+    try:
+        bib_entries = _parse_bib_lightweight(bib_path)
+    except (OSError, UnicodeError, ValueError) as exc:
+        return {
+            "verdict": "error",
+            "advice": f"failed to read references.bib: {exc}",
+            "candidates": [],
+            "matching_key": None,
+            "suggested_bibtex": None,
+            "verification_method": None,
+        }
 
     # --- Step 2a: DOI fast-path (if user gave us one) ---
     if candidate_doi:
@@ -429,6 +433,18 @@ def paper_writing_verify_citation(
             paper_writing_doi_to_bibtex,
         )
         v = paper_writing_resolve_doi(candidate_doi)
+        if not v.get("ok") and v.get("temporary_failure"):
+            return {
+                "verdict": "error",
+                "matching_key": None,
+                "candidates": [],
+                "suggested_bibtex": None,
+                "verification_method": "doi-direct",
+                "advice": (
+                    f"DOI verification is temporarily unavailable: {v.get('error')}. "
+                    "Do not infer that the citation is fabricated; retry later."
+                ),
+            }
         if not v.get("ok"):
             return {
                 "verdict": "no_candidate_found",
@@ -436,9 +452,9 @@ def paper_writing_verify_citation(
                 "candidates": [],
                 "suggested_bibtex": None,
                 "verification_method": "doi-direct",
-                "advice": (f"DOI {candidate_doi!r} does NOT resolve via "
-                            f"Crossref.  This DOI is likely fabricated or "
-                            f"typo'd.  Search for the paper via "
+                "advice": (f"DOI {candidate_doi!r} was not found via "
+                            f"Crossref.  It may be incorrect or absent from "
+                            f"that registry.  Search for the paper via "
                             f"paper_writing_arxiv_search(claim) or ask "
                             f"the user for the correct DOI.  DO NOT insert "
                             f"this DOI into the bib."),
@@ -448,13 +464,13 @@ def paper_writing_verify_citation(
             return {
                 "verdict": "error",
                 "matching_key": None,
-                "candidates": [v.get("metadata", {})],
+                "candidates": [{k: value for k, value in v.items() if k != "ok"}],
                 "suggested_bibtex": None,
                 "verification_method": "doi-direct",
                 "advice": (f"DOI resolved but BibTeX generation failed: "
                             f"{bib_result.get('error')}"),
             }
-        meta = v.get("metadata", {})
+        meta = {k: value for k, value in v.items() if k != "ok"}
         return {
             "verdict": "ready_to_insert",
             "matching_key": None,
@@ -635,7 +651,7 @@ def _collect_cited_keys(tex_source: str) -> dict[str, list[int]]:
 
 def paper_writing_check_citation_keys_exist(
     tex_path: str,
-    bib_path: str,
+    bib_path: str = "",
     auto_resolve_inputs: bool = True,
     encoding: str = "utf-8",
     max_reported: int = 50,
@@ -654,8 +670,8 @@ def paper_writing_check_citation_keys_exist(
             uses ``\\input{}`` to split content across files, set
             ``auto_resolve_inputs=True`` (default) to merge the chain
             before scanning.
-        bib_path: the .bib file referenced by ``\\bibliography{...}``.
-            Lab convention: ``references.bib`` at project root.
+        bib_path: optional external bibliography override. The bundled
+            canonical ``references.bib`` is used when omitted.
         auto_resolve_inputs: True (default) inlines ``\\input{}``
             recursively before scanning ``\\cite{}``.
         encoding: tex / bib file encoding.  ``"utf-8"`` default;
@@ -697,6 +713,7 @@ def paper_writing_check_citation_keys_exist(
                      unused entries (minor cleanup).
       * ``clean``:   one-to-one match.
     """
+    bib_path = bib_path or _canonical_bib()
     if not os.path.exists(tex_path):
         return {"error": f"tex_path not found: {tex_path}"}
     if not os.path.exists(bib_path):
@@ -704,23 +721,31 @@ def paper_writing_check_citation_keys_exist(
 
     # 1. Read tex (with optional \input chain inlining)
     try:
-        with open(tex_path, encoding=encoding, errors="replace") as fh:
-            src = fh.read()
-    except Exception as e:  # noqa: BLE001
+        raw = pathlib.Path(tex_path).read_bytes()
+        try:
+            src = raw.decode(encoding, errors="strict")
+        except UnicodeDecodeError:
+            if encoding.casefold().replace("-", "") != "utf8":
+                raise
+            src = raw.decode("cp932", errors="strict")
+    except (OSError, UnicodeError) as e:
         return {"error": f"failed to read tex: {e}"}
 
     if auto_resolve_inputs:
         try:
             from ._tex_resolver import resolve_input_chain
             r = resolve_input_chain(tex_path, encoding=encoding)
-            if r.get("ok"):
-                src = r["merged_tex"]
-        except Exception:
-            # Fall back to single-file scan; not fatal.
-            pass
+            if not r.get("ok"):
+                return {"error": f"failed to resolve TeX inputs: {r.get('error')}"}
+            src = r["merged_tex"]
+        except Exception as exc:  # noqa: BLE001
+            return {"error": f"failed to resolve TeX inputs: {exc}"}
 
     cited = _collect_cited_keys(src)
-    bib_entries = _parse_bib_lightweight(bib_path)
+    try:
+        bib_entries = _parse_bib_lightweight(bib_path)
+    except (OSError, UnicodeError, ValueError) as exc:
+        return {"error": f"failed to read bib: {exc}"}
     bib_keys = set(bib_entries.keys())
 
     missing = sorted(set(cited.keys()) - bib_keys)

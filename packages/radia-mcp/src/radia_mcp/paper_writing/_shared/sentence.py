@@ -8,8 +8,16 @@ from __future__ import annotations
 
 import re
 
-_RE_JA_SPLITTER = re.compile(r"[。．]")
-_RE_MIXED_SPLITTER = re.compile(r"[。．\.!?！？]")
+_RE_JA_SPLITTER = re.compile(r"(?<=[。．！？])")
+_RE_MIXED_BOUNDARY = re.compile(
+    r"(?<=[。．！？!?])|"
+    r"(?<!\d)\.(?!\d)(?=\s+(?:[A-Z]|[一-龯ぁ-んァ-ヶ])|$)"
+)
+_ABBREVIATIONS = re.compile(
+    r"\b(?:Fig|Figs|Eq|Eqs|Sec|Secs|Ref|Refs|No|Nos|Dr|Prof|Mr|Ms|"
+    r"e\.g|i\.e|et\s+al)\.$",
+    re.IGNORECASE,
+)
 
 
 def split_ja_sentences(text: str) -> list[str]:
@@ -23,4 +31,18 @@ def split_mixed_sentences(text: str) -> list[str]:
     """和文+英文 mixed の文分割 (。．.!?！？ すべて)。"""
     if not text:
         return []
-    return [s.strip() for s in _RE_MIXED_SPLITTER.split(text) if s.strip()]
+    sentences: list[str] = []
+    start = 0
+    for match in _RE_MIXED_BOUNDARY.finditer(text):
+        candidate = text[start:match.end()].strip()
+        if not candidate:
+            start = match.end()
+            continue
+        if match.group(0) == "." and _ABBREVIATIONS.search(candidate):
+            continue
+        sentences.append(candidate)
+        start = match.end()
+    tail = text[start:].strip()
+    if tail:
+        sentences.append(tail)
+    return sentences

@@ -26,6 +26,8 @@ from __future__ import annotations
 import os
 import re
 import pathlib
+import html
+import urllib.parse
 from typing import Optional
 
 # requests is optional (lazy-imported via _require_requests below) --
@@ -49,6 +51,10 @@ _CHROME_UA = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
     "AppleWebKit/537.36 (KHTML, like Gecko) "
     "Chrome/120.0.0.0 Safari/537.36"
+)
+
+_CROSSREF_UA = (
+    "radia-mcp (mailto:ksugahar@ele.kindai.ac.jp) Crossref-Plus"
 )
 
 _HTML_HEADERS = {
@@ -86,26 +92,31 @@ def _verify_pdf(path: str) -> dict:
         }
     try:
         import fitz
-        doc = fitz.open(path)
-        result = {
-            "ok": True,
-            "size_bytes": size,
-            "page_count": doc.page_count,
-            "title": doc.metadata.get("title", "") or "",
-            "author": doc.metadata.get("author", "") or "",
-        }
-        # First-page text preview helps caller verify they got the
-        # RIGHT paper (not a stale arnumber for a different article)
-        if doc.page_count > 0:
-            preview = doc.load_page(0).get_text()[:300]
-            result["page1_preview"] = preview.replace("\n", " ")[:300]
-        doc.close()
-        return result
+        with fitz.open(path) as doc:
+            result = {
+                "ok": True,
+                "size_bytes": size,
+                "page_count": doc.page_count,
+                "title": doc.metadata.get("title", "") or "",
+                "author": doc.metadata.get("author", "") or "",
+            }
+            # First-page text preview helps caller verify they got the
+            # RIGHT paper (not a stale arnumber for a different article)
+            if doc.page_count > 0:
+                preview = doc.load_page(0).get_text()[:300]
+                result["page1_preview"] = preview.replace("\n", " ")[:300]
+            return result
     except ImportError:
         return {
             "ok": True, "size_bytes": size,
             "page_count": None,
             "note": "PyMuPDF not installed; size + magic OK",
+        }
+    except Exception as exc:  # noqa: BLE001
+        return {
+            "ok": False,
+            "error": f"invalid or unreadable PDF: {exc}",
+            "size_bytes": size,
         }
 
 
@@ -124,28 +135,54 @@ def paper_writing_resolve_doi(doi: str) -> dict:
         {ok, doi, title, authors, year, journal, url} on success,
         {ok: False, error: ...} on failure.
     """
-    doi = doi.strip().removeprefix("https://doi.org/").removeprefix("doi.org/")
-    url = f"https://api.crossref.org/works/{doi}"
+    doi = re.sub(r"^doi\s*:\s*", "", doi.strip(), flags=re.IGNORECASE)
+    doi = re.sub(
+        r"^(?:https?://(?:dx\.)?)?doi\.org/", "", doi, flags=re.IGNORECASE
+    )
+    url = "https://api.crossref.org/works/" + urllib.parse.quote(doi, safe="/.")
     requests = _require_requests()
     try:
-        r = requests.get(url, headers={"User-Agent": _CHROME_UA},
+        r = requests.get(url, headers={"User-Agent": _CROSSREF_UA},
                          timeout=20)
     except Exception as e:
-        return {"ok": False, "error": f"network error: {e}"}
+        return {
+            "ok": False,
+            "error": f"network error: {e}",
+            "error_kind": "temporary",
+            "temporary_failure": True,
+        }
     if r.status_code != 200:
-        return {"ok": False, "error": f"crossref HTTP {r.status_code}"}
+        # 404 is a stable "not found" answer. Rate limits, server errors,
+        # access blocks, and other responses do not prove the DOI is absent.
+        temporary = r.status_code != 404
+        return {
+            "ok": False,
+            "error": f"crossref HTTP {r.status_code}",
+            "error_kind": "temporary" if temporary else "not_found",
+            "temporary_failure": temporary,
+        }
     try:
         msg = r.json().get("message", {})
     except Exception as e:
-        return {"ok": False, "error": f"json parse error: {e}"}
+        return {
+            "ok": False,
+            "error": f"json parse error: {e}",
+            "error_kind": "temporary",
+            "temporary_failure": True,
+        }
 
     title = (msg.get("title") or [""])[0]
-    authors = [
-        (a.get("family", "") + ", " + a.get("given", "")).strip(", ")
-        for a in msg.get("author", [])
-    ]
+    authors = []
+    for author in msg.get("author", []):
+        personal = (
+            author.get("family", "") + ", " + author.get("given", "")
+        ).strip(", ")
+        name = personal or author.get("name", "")
+        if name:
+            authors.append(name)
     container = (msg.get("container-title") or [""])[0]
-    parts = msg.get("published", {}).get("date-parts", [[None]])
+    date_record = msg.get("published") or msg.get("issued") or msg.get("created") or {}
+    parts = date_record.get("date-parts", [[None]])
     year = parts[0][0] if parts and parts[0] else None
 
     return {
@@ -414,30 +451,19 @@ def paper_writing_sciencedirect_download_pdf(
 
 
 def _make_citation_key(authors: list, year: int, title: str) -> str:
-    """Build a BibTeX citation key: FirstAuthorYearFirstTitleWord.
+    """Build the same lowercase author-year-word key as bibliography tools."""
+    from ..bibliography._bibparse import BibEntry, make_cite_key
 
-    Example: ["Hollaus, Karl", "Schöbinger, Markus"], 2024,
-    "MSFEM With MOR and DEIM..." → "Hollaus2024MSFEM"
-    """
-    if not authors:
-        first_surname = "Anonymous"
-    else:
-        first_surname = authors[0].split(",")[0].strip()
-        # Strip non-ASCII for clean BibTeX key
-        first_surname = re.sub(r"[^A-Za-z]", "", first_surname) or "Anonymous"
-    year_str = str(year) if year else "ND"
-    first_title_word = ""
-    if title:
-        words = re.findall(r"[A-Za-z]+", title)
-        for w in words:
-            if len(w) >= 3 and w.lower() not in (
-                "the", "and", "for", "with", "from", "into", "via",
-                "based", "using", "novel", "new", "study", "case",
-                "analysis", "approach", "method", "model",
-            ):
-                first_title_word = w[:12]
-                break
-    return f"{first_surname}{year_str}{first_title_word}"
+    entry = BibEntry(
+        kind="article",
+        key="",
+        fields={
+            "author": " and ".join(authors),
+            "year": str(year) if year else "",
+            "title": title,
+        },
+    )
+    return make_cite_key(entry)
 
 
 def paper_writing_doi_to_bibtex(doi: str,
@@ -475,11 +501,17 @@ def paper_writing_doi_to_bibtex(doi: str,
     authors_bib = " and ".join(meta["authors"])
     # Strip HTML/Crossref italic markers from title
     title_clean = re.sub(r"</?[a-zA-Z]+>", "", meta["title"])
+    for _ in range(3):
+        decoded = html.unescape(title_clean)
+        if decoded == title_clean:
+            break
+        title_clean = decoded
 
     lines = [f"@{bib_type}{{{citation_key},",
               f"  title   = {{{title_clean}}},",
-              f"  author  = {{{authors_bib}}},",
-              f"  year    = {{{meta['year']}}},"]
+              f"  author  = {{{authors_bib}}},"]
+    if meta.get("year") is not None:
+        lines.append(f"  year    = {{{meta['year']}}},")
     if meta.get("journal"):
         if bib_type == "article":
             lines.append(f"  journal = {{{meta['journal']}}},")

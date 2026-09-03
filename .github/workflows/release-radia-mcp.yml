@@ -108,6 +108,20 @@ jobs:
           zf = zipfile.ZipFile(whl)
           names = [f.filename for f in zf.infolist()]
 
+          required_assets = {
+              "radia_mcp/bibliography/data/references.bib",
+              "radia_mcp/grant_writing/skill.md",
+              "radia_mcp/paper_writing/skill.md",
+              "radia_mcp/poster/skill.md",
+              "radia_mcp/presentation/skill.md",
+          }
+          missing_assets = sorted(required_assets - set(names))
+          if missing_assets:
+              print("::error::Wheel missing runtime assets: "
+                    + ", ".join(missing_assets))
+              sys.exit(1)
+          print(f"OK runtime assets: {len(required_assets)}")
+
           # Version consistency: the __version__ declared in __init__.py
           # must match the version in the wheel filename.  Mirrors the
           # check shipped in release-cubit-mesh-export.yml.  Without this

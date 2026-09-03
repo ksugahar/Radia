@@ -31,7 +31,8 @@ import re
 _P_VALUE_RE = re.compile(
     r"\b(?:p|P)\s*"
     r"(?:[<>=≤≥]|＝|＜|＞)\s*"
-    r"(0?\.\d+|\d\.?\d*[eE][-+]?\d+|0\.\d+)"
+    r"(0?\.\d+|\d\.?\d*[eE][-+]?\d+|0\.\d+)(?![\d.])"
+    r"(?!\s*(?:W|V|A|Hz|J|T|K|H|F|Pa|Ω|ohm)\b)"
 )
 
 _EFFECT_SIZE_PATTERNS = [

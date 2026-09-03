@@ -6,8 +6,8 @@ Journal paper 執筆ガイド。CAE-AI Lab の対象は **電気学会 (IEEJ) / 
 
 ## CAE-AI Lab 投稿先ポリシー
 
-- 正規ターゲットは `ieej`、`ieee`、`accelerator` の3系統だけとする。
-- 対象外学会への journal-fit 最適化や投稿推薦は行わない。投稿先が未定なら、まず3系統の中から具体的な venue を決める。
+- 正規ターゲットは `ieej`、`ieee`、`electromagnetics`、`accelerator` の4系統とする。`electromagnetics` は IGTE、COMPUMAG、CEFC を含む。
+- 対象外学会への journal-fit 最適化や投稿推薦は行わない。投稿先が未定なら、まず4系統の中から具体的な venue を決める。
 - 電気学会では、和文本文と英文題目・abstract・keywordを別々にレビューする。
 - IEEEでは英文を投稿原稿の正本とする。和文の思考整理稿がある場合も、英文との平均点ではなく独立に診断する。
 - 加速器系では JACoW / PRAB / PASJ 等の具体的な公式テンプレートを先に選ぶ。ページ数やkeywordを「加速器系共通」と決め打ちしない。
@@ -687,10 +687,10 @@ The main contributions of this paper are:
 `bibliography_make_bbl` が生成する `.bbl`（引用した文献だけを含む）。
 DOI を1箇所直せば全論文に効く一方、投稿物は自己完結する。
 
-正典の維持には `bibliography_verify_dois`（DOI が実在するか、別論文を指して
-いないか）と `bibliography_refresh_unpublished`（投稿中だった文献が公表された
-か）を使う。初回の掃引では 221 件中 15 件の DOI が誤りで、うち8件は解決すら
-しなかった。
+正典の維持には `bibliography_lint`、`bibliography_cite_validation`、
+`paper_writing_verify_citation` を使い、追加・修正する書誌情報を一次情報に
+照合する。原稿提出時には `bibliography_make_bbl` を実行し、正典にない引用キーが
+1件でもあれば部分的な `.bbl` を生成せず修正する。
 
 **経緯**: 2023 年 Compumag → IEEE TMag 投稿 (`public-safe curated corpus`) で references.bib の書き方に複数の review 指摘が入った。 以下を **default** style として全 paper / digest / poster で適用すること。
 

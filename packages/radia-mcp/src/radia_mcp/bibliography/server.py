@@ -1,6 +1,9 @@
 """MCP Server: radia_mcp.bibliography
 
-BibTeX / citation tooling: DOI / arXiv -> BibTeX, CrossRef search, parse / dedupe / canonicalize keys, lint, self-citation ratio, year distribution, journal-name normalization, health report.
+BibTeX / citation tooling: one canonical references.bib, manuscript-specific
+.bbl export, DOI / arXiv lookup, parse / dedupe / canonicalize keys, lint,
+self-citation ratio, year distribution, journal-name normalization, and health
+report.
 
 Promoted 2026-06-02 from mcp-server-document.bibliography (LAB-private)
 to radia-mcp (public PyPI), alongside presentation / poster /
@@ -28,7 +31,9 @@ register_status_tool(
     mcp,
     server_name="mcp-server-bibliography",
     description=(
-        'BibTeX / citation tooling: DOI / arXiv -> BibTeX, CrossRef search, parse / dedupe / canonicalize keys, lint, self-citation ratio, year distribution, journal-name normalization, health report.'
+        'BibTeX / citation tooling: one canonical references.bib, '
+        'manuscript-specific .bbl export, DOI / arXiv lookup, parse / dedupe / '
+        'canonicalize keys, lint, year distribution, and health report.'
     ),
     subpackage="radia_mcp.bibliography",
     related_servers=['paper-writing', 'literature-index'],
