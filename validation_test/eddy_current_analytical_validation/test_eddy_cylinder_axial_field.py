@@ -39,6 +39,12 @@ MU0 = 4e-7 * math.pi
 SIGMA = 3.5e7      # aluminium-ish
 
 
+@pytest.fixture(autouse=True)
+def _taskmanager():
+    with ng.TaskManager():
+        yield
+
+
 def _k_omega(a, a_over_delta, mu_r=1.0):
     """Return (k, omega, mu) for a given a/delta."""
     delta = a / a_over_delta

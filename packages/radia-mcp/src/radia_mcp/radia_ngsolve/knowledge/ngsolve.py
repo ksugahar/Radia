@@ -7361,7 +7361,9 @@ This is the FIELD-DRIVEN counterpart of the CURRENT-DRIVEN deep-bar / Dowell AC-
 (#55/#60): the SAME magnetic-diffusion equation, opposite drive (imposed flux vs imposed current), so
 the same sinh/sin special functions appear -- here as a LOSS reduction rather than an R_ac rise.
 Validated tool-independently: the closed-form F == the numerically-integrated exact slab loss to 1e-6,
-and the thin limit == the classical formula (tests/test_lamination_eddy_loss.py). Typical 0.35 mm electrical steel at 50/60 Hz sits in
+and the thin limit == the classical formula
+(validation_test/eddy_current_analytical_validation/test_lamination_eddy_loss.py).
+Typical 0.35 mm electrical steel at 50/60 Hz sits in
 the thin regime (xi ~ 0.5, F ~ 1); thick sheets or PWM-harmonic frequencies push xi up and F down.
 For full motor core loss, add the hysteresis term (a material B-H model, not a field solve).
 """

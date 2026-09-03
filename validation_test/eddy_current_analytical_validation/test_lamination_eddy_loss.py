@@ -36,6 +36,12 @@ SIGMA = 2.0e6          # electrical steel
 BP = 1.0               # surface flux density [T]
 
 
+@pytest.fixture(autouse=True)
+def _taskmanager():
+    with ng.TaskManager():
+        yield
+
+
 def _params(d, f):
     w = 2 * math.pi * f
     delta = math.sqrt(2.0 / (w * MU * SIGMA))
