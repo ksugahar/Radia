@@ -1,4 +1,11 @@
 {
+  "schema": "radia.validation.nodal_force.v1",
+  "source_notebook": "docs/nodal_force/nodal_force.ipynb",
+  "checks": {
+    "finest_mst_error_lt_0p02_pct": true,
+    "finest_nodal_error_lt_0p02_pct": true,
+    "finest_mst_nodal_diff_lt_0p01_pct": true
+  },
   "benchmark": {
     "I_wire_A": 1000.0,
     "mu_r": 1000.0,

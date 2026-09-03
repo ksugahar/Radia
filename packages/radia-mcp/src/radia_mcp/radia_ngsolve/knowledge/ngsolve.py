@@ -4266,8 +4266,8 @@ I=1000 A, R_cyl=0.05 m, d=0.3 m; analytic F_x = -1.90096e-02 N/m):
 - both match analytical to ~0.01% (with mesh.Curve(3))
 - without mesh.Curve(): ~9% systematic error for BOTH methods equally
 See the self-contained notebook
-`docs/nodal_force/nodal_force.ipynb` (code + nodal_force_results.json +
-nodal_force_convergence.png).
+`docs/nodal_force/nodal_force.ipynb` (executed code and embedded plots) and
+`validation_test/nodal_force/nodal_force_results.json` (checked numerical evidence).
 
 **When to choose which method:**
 | Situation | Recommended | Reason |

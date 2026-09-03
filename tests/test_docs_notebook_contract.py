@@ -113,6 +113,7 @@ def test_docs_do_not_restore_retired_result_bookkeeping():
         ROOT / "docs" / "gmsh_post" / "em_fieldlines_results.json",
         ROOT / "docs" / "gmsh_post" / "em_particle_orbits_results.json",
         ROOT / "docs" / "gmsh_post" / "em_post_gallery_results.json",
+        ROOT / "docs" / "nodal_force" / "nodal_force_results.json",
         ROOT / "docs" / "gmsh_animation" / "gmsh_animation_export_results.json",
         ROOT / "docs" / "gmsh_animation" / "gmsh_animation_results.json",
         ROOT / "docs" / "kelvin" / "kelvin_exterior_source_and_aphi_results.json",
