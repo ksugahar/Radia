@@ -75,10 +75,6 @@ def bibliography_make_bbl(
         return f"Error: no such manuscript: {source}"
     if not CANONICAL.is_file():
         return f"Error: canonical bibliography missing: {CANONICAL}"
-    bibtex = shutil.which("bibtex")
-    if bibtex is None:
-        return "Error: bibtex is not on PATH; a TeX installation is required"
-
     try:
         tex = source.read_text(encoding="utf-8")
     except UnicodeDecodeError as exc:
@@ -115,6 +111,13 @@ def bibliography_make_bbl(
         return f"Error: output path must end in .bbl: {destination}"
     if not destination.parent.is_dir():
         return f"Error: output directory does not exist: {destination.parent}"
+
+    # Validate every input that does not require an external executable first.
+    # In particular, an unknown citation key must fail closed even on a host
+    # without a TeX installation, and must never replace an existing .bbl.
+    bibtex = shutil.which("bibtex")
+    if bibtex is None:
+        return "Error: bibtex is not on PATH; a TeX installation is required"
 
     with tempfile.TemporaryDirectory(prefix="radia-bbl-") as temp_name:
         work = pathlib.Path(temp_name)

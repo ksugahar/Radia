@@ -23,7 +23,8 @@ def test_citation_keys_preserve_first_appearance_order():
     assert _keys_in_order(tex) == ["beta", "alpha", "gamma"]
 
 
-def test_make_bbl_rejects_unknown_key_without_partial_output(tmp_path):
+def test_make_bbl_rejects_unknown_key_without_partial_output(tmp_path, monkeypatch):
+    monkeypatch.setattr(shutil, "which", lambda _name: None)
     tex = tmp_path / "paper.tex"
     tex.write_text(r"\cite{not_in_the_canonical_bibliography}", encoding="utf-8")
     out = tmp_path / "paper.bbl"
