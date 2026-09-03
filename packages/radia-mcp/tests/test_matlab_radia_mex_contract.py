@@ -23,7 +23,7 @@ def test_radia_mex_contract_reads_the_cpp_command_inventory():
     contract = matlab_radia_mex_contract("mex")
 
     assert contract["status"] == "ready"
-    assert contract["command_count"] == 367
+    assert contract["command_count"] == 360
     assert not any(
         command.startswith("optuna.")
         for command in contract["command_names"]
@@ -139,11 +139,13 @@ def test_radia_mex_contract_reads_the_cpp_command_inventory():
     assert contract["pybind_public_count"] == 99
     assert contract["pybind_covered_count"] == 99
     assert contract["pybind_missing"] == []
-    assert contract["pybind_internal_numerical_count"] == 28
+    assert contract["pybind_internal_numerical_count"] == 21
     assert contract["pybind_internal_missing"] == []
     assert contract["pybind_internal_unclassified"] == []
-    assert contract["command_groups"]["acoustic"] == 7
-    assert "acoustic.elastic_sphere" in contract["command_names"]
+    assert contract["command_groups"].get("acoustic", 0) == 0
+    assert not any(
+        name.startswith("acoustic.") for name in contract["command_names"]
+    )
     assert contract["command_groups"]["axifem"] == 2
     assert "axifem.q1_magnetic_element_matrices" in contract["command_names"]
     assert "axifem.q2_magnetic_element_matrices" in contract["command_names"]
@@ -173,8 +175,8 @@ def test_radia_mex_contract_reads_the_cpp_command_inventory():
     assert contract["verified_contract"]["python_numerical_parity_gate"] == (
         "runtests('tests/matlab/test_radia_ngsolve_parity.m')"
     )
-    assert contract["verified_contract"]["acoustic_python_mex_parity_gate"] == (
-        "runtests('tests/matlab/test_acoustic_mex.m')"
+    assert contract["verified_contract"]["acoustic_reference_validation_gate"] == (
+        "runtests('validation_test/acoustics/test_acoustic_reference.m')"
     )
     assert contract["verified_contract"]["axifem_python_mex_parity_gate"] == (
         "runtests('tests/matlab/test_axifem_mex.m')"
@@ -206,6 +208,26 @@ def test_radia_mex_contract_reads_the_cpp_command_inventory():
     ]["periodic_motor_family"]
     assert "mechanical_angle" in family
     assert "torque" in family
+
+
+def test_acoustic_validation_references_stay_out_of_native_gateways(monkeypatch):
+    root = Path(__file__).resolve().parents[3]
+    monkeypatch.setenv("RADIA_REPO_ROOT", str(root))
+    contract = matlab_radia_mex_contract("mex")
+
+    assert not any(
+        command.startswith("acoustic.") for command in contract["command_names"]
+    )
+    assert contract["verified_contract"]["acoustic_reference_validation_gate"] == (
+        "runtests('validation_test/acoustics/test_acoustic_reference.m')"
+    )
+    assert "_Acoustic" not in (
+        root / "src" / "lib" / "radia_pybind.cpp"
+    ).read_text(encoding="utf-8")
+    for path in sorted((root / "matlab" / "+radia" / "+acoustic").glob("*.m")):
+        source = path.read_text(encoding="utf-8")
+        assert "callMex" not in source
+        assert "radia_mex" not in source
 
 
 def test_optuna_simulink_contract_is_table_backed():
@@ -334,14 +356,14 @@ def test_root_readme_publishes_native_topology_mex_parity():
         (root / "matlab" / "README.md").read_text(encoding="utf-8").split()
     )
     assert "126 stateful class members" in matlab_readme
-    assert "All 253 entries are covered by the current 364-command gateway" in matlab_readme
+    assert "All 246 mapped entries are covered by the current 360-command gateway" in matlab_readme
     assert "21-command `optuna_mex`" in matlab_readme
 
     parity_doc = (root / "docs" / "api" / "MATLAB_MEX_NGSOLVE_PARITY.md").read_text(
         encoding="utf-8"
     )
     assert "| Stateful pybind11 class surface | 126 / 126 covered |" in parity_doc
-    assert "| Radia MEX gateway commands | 364 |" in parity_doc
+    assert "| Radia MEX gateway commands | 360 |" in parity_doc
     assert "| Optuna MEX gateway commands | 20 |" in parity_doc
 
 

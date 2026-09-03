@@ -1,5 +1,8 @@
-"""Fast checks for the CQ helpers (pure numpy; the ngsolve.bem CQ solve + the
-rigorous per-frequency validation live in validation_test/acoustics/test_cq.py)."""
+"""Fast CQ formula and input-contract regressions.
+
+The NGSolve BEM comparison lives in
+``validation_test/acoustics/test_cq_bem.py``.
+"""
 import numpy as np
 
 from radia.acoustics import cq

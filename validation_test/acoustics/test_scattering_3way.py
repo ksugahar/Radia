@@ -128,6 +128,11 @@ def _write_results():
     out = {
         "schema": "radia.acoustics.scattering-3way.v1",
         "generated_at_utc": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "reference": {
+            "python": "src/radia/acoustics/scattering.py (SciPy)",
+            "matlab": "matlab/+radia/+acoustic/*SphereScattering.m",
+            "independent_of": ["radia C++", "radia_mex", "ngsolve.bem"],
+        },
         "problem": {"radius": d["R"], "wavenumber": d["k"], "convention": "e^{+ikr}",
                     "fluid_k1": d["fluid_k1"], "fluid_rho": d["fluid_rho"],
                     "elastic_cL": d["elastic_cL"], "elastic_cT": d["elastic_cT"],
