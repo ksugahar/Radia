@@ -459,8 +459,27 @@ def _gates_for_changes(changed):
     packages/radia-mcp changed. Repository contracts are owned by the fixed
     fast mdx lane, so broad top-level collection is an explicit diagnostic."""
     sel = {"policy", "version"}
-    if any(f.startswith("packages/radia-mcp/") for f in changed):
-        sel |= {"publish-boundary", "tools-md", "radia-mcp"}
+    mcp_changes = [
+        f for f in changed if f.startswith("packages/radia-mcp/")
+    ]
+    mcp_docs_only = bool(mcp_changes) and all(
+        f.startswith("packages/radia-mcp/docs/")
+        or f in {
+            "packages/radia-mcp/README.md",
+            "packages/radia-mcp/CHANGELOG.md",
+        }
+        for f in mcp_changes
+    )
+    if mcp_changes and not mcp_docs_only:
+        sel |= {"publish-boundary", "radia-mcp"}
+    if any(
+        f in {
+            "packages/radia-mcp/docs/TOOLS.md",
+            "packages/radia-mcp/scripts/gen_tools_doc.py",
+        }
+        for f in changed
+    ):
+        sel.add("tools-md")
     return [g for g in ALL_GATES if g[0] in sel]
 
 

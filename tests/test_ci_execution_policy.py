@@ -1,9 +1,19 @@
 """Keep the mdx-only CI split and remote pre-push contract explicit."""
 
+import importlib.util
 from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+def _preflight_module():
+    source = ROOT / "tools" / "ci_preflight.py"
+    spec = importlib.util.spec_from_file_location("ci_preflight", source)
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 def test_fast_ci_runs_only_on_mdx_and_native_is_a_named_release_lane():
@@ -103,6 +113,48 @@ def test_distribution_ci_is_change_scoped_and_mcp_full_suite_is_explicit():
     assert "--reruns" not in mcp
     assert "mode=release" in mcp
     assert "needs.scope.outputs.build_wheel == 'true'" in mcp
+
+
+def test_preflight_checks_generated_tool_inventory_only_when_affected():
+    preflight = _preflight_module()
+
+    source_keys = {
+        key
+        for key, _, _ in preflight._gates_for_changes(
+            ["packages/radia-mcp/src/radia_mcp/matlab/runtime.py"]
+        )
+    }
+    assert source_keys == {"policy", "publish-boundary", "version", "radia-mcp"}
+
+    inventory_keys = {
+        key
+        for key, _, _ in preflight._gates_for_changes(
+            ["packages/radia-mcp/docs/TOOLS.md"]
+        )
+    }
+    assert inventory_keys == {"policy", "version", "tools-md"}
+
+    docs_keys = {
+        key
+        for key, _, _ in preflight._gates_for_changes(
+            ["packages/radia-mcp/docs/architecture.md"]
+        )
+    }
+    assert docs_keys == {"policy", "version"}
+
+    generator_keys = {
+        key
+        for key, _, _ in preflight._gates_for_changes(
+            ["packages/radia-mcp/scripts/gen_tools_doc.py"]
+        )
+    }
+    assert generator_keys == {
+        "policy",
+        "publish-boundary",
+        "version",
+        "tools-md",
+        "radia-mcp",
+    }
 
 
 def test_pre_push_runs_the_unpushed_candidate_on_mdx():
