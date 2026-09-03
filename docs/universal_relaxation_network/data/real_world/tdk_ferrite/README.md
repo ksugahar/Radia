@@ -87,9 +87,9 @@ validation" critique in the peer review.
 
 Run validation:
 ```bash
-python validate_tdk_ferrite.py --material PC50
-python validate_tdk_ferrite.py --material PC200
-python validate_tdk_ferrite.py --material both
+python validation_test/universal_relaxation_network/validate_tdk_ferrite.py --material PC50
+python validation_test/universal_relaxation_network/validate_tdk_ferrite.py --material PC200
+python validation_test/universal_relaxation_network/validate_tdk_ferrite.py --material both
 ```
 
 ## License and Attribution
