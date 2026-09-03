@@ -21,17 +21,13 @@ Output:
     - Stability analysis results
 """
 
-import sys
 import numpy as np
 import torch
 import matplotlib.pyplot as plt
 from pathlib import Path
 from scipy import signal
 
-# Add parent directory for imports
-sys.path.insert(0, str(Path(__file__).parent))
-
-from universal_relaxation_network import (
+from radia.urn import (
     UniversalRelaxationNetwork, URNConfig, train_urn, generate_spice_netlist
 )
 

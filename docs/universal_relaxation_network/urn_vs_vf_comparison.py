@@ -25,7 +25,7 @@ import warnings
 warnings.filterwarnings('ignore')
 
 # URN imports
-from universal_relaxation_network import URNConfig, train_urn, UniversalRelaxationNetwork
+from radia.urn import URNConfig, UniversalRelaxationNetwork, train_urn
 import torch
 
 VALIDATION_DIR = (

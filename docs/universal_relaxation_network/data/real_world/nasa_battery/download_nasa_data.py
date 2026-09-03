@@ -327,7 +327,7 @@ This data demonstrates URN's ability to fit electrochemical impedance spectra,
 which exhibit Cole-Cole relaxation behavior distinct from magnetic materials.
 
 ```python
-from universal_relaxation_network import UniversalRelaxationNetwork
+from radia.urn import UniversalRelaxationNetwork
 
 # Load data
 import pandas as pd

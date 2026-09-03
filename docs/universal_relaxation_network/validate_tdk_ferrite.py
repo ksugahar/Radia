@@ -21,19 +21,19 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import os
-import sys
 import json
 from datetime import datetime
+from pathlib import Path
+from typing import Dict, Tuple
 
-# Add parent directory to path for imports
+import torch
+
 script_dir = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, script_dir)
 
-from universal_relaxation_network import (
-    UniversalRelaxationNetwork,
+from radia.urn import (
     URNConfig,
-    fit_urn,
-    generate_spice_netlist
+    generate_spice_netlist,
+    train_urn,
 )
 
 
@@ -201,7 +201,11 @@ def validate_tdk_ferrite(material: str = 'PC50', output_dir: str = None):
 
     # Setup output directory
     if output_dir is None:
-        output_dir = os.path.join(script_dir, 'results', 'tdk_ferrite')
+        repo_root = Path(script_dir).parents[1]
+        output_dir = str(
+            repo_root / 'validation_test' / 'universal_relaxation_network'
+            / 'tdk_ferrite'
+        )
     os.makedirs(output_dir, exist_ok=True)
 
     # Load data
@@ -251,11 +255,14 @@ def validate_tdk_ferrite(material: str = 'PC50', output_dir: str = None):
 
     # Fit URN
     print("Fitting URN model...")
-    omega = 2 * np.pi * freq
-    urn_model, fit_history = fit_urn(omega, Z_data, config)
+    urn_model = train_urn(freq, Z_data, config)
 
     # Evaluate
-    Z_urn = urn_model.forward_numpy(omega)
+    omega = 2 * np.pi * freq
+    with torch.no_grad():
+        Z_urn = urn_model(
+            torch.tensor(omega, dtype=torch.float64)
+        ).detach().cpu().numpy()
 
     # Compute metrics
     print("\nComputing error metrics...")
@@ -282,8 +289,17 @@ def validate_tdk_ferrite(material: str = 'PC50', output_dir: str = None):
 
     # Get active mechanisms
     print("\nDiscovered relaxation mechanisms:")
-    active = urn_model.get_active_mechanisms(threshold=0.01)
-    for name, weight in active[:5]:  # Top 5
+    components = urn_model.get_active_components(threshold=0.01)
+    active = sorted(
+        (
+            (f"{family}[{index}]", float(component['weight_magnitude']))
+            for family, family_components in components.items()
+            for index, component in enumerate(family_components)
+        ),
+        key=lambda item: item[1],
+        reverse=True,
+    )
+    for name, weight in active[:5]:
         print(f"  - {name}: weight = {weight:.4f}")
 
     # Save results JSON

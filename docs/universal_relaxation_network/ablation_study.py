@@ -31,19 +31,16 @@ Author: K. Sugahara, Y. Sato
 Date: 2026-01-19
 """
 
-import sys
 import time
 import argparse
+import sys
 import numpy as np
 import matplotlib.pyplot as plt
 from pathlib import Path
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Tuple
 
-# Add parent directory for imports
-sys.path.insert(0, str(Path(__file__).parent))
-
-from universal_relaxation_network import (
+from radia.urn import (
     UniversalRelaxationNetwork, URNConfig, train_urn
 )
 

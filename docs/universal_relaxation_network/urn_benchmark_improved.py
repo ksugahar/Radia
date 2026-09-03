@@ -19,7 +19,7 @@ from dataclasses import dataclass, asdict
 from typing import Dict, List
 import os
 
-from universal_relaxation_network import URNConfig, train_urn
+from radia.urn import URNConfig, train_urn
 
 
 @dataclass
