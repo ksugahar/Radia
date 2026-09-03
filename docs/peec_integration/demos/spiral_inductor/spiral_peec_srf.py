@@ -16,18 +16,13 @@ Limitation:
   Face-panel-based P (FastMaxwell approach) would be needed for accurate SRF.
 """
 
-import sys
 import numpy as np
 import time
 import os
 import pandas as pd
 
-# Import radia first to set up MKL DLL directories on Windows
-import radia  # noqa: F401 -- triggers DLL path setup in __init__.py
-
-sys.path.insert(0, 'S:/Radia/01_GitHub/src/radia')
-from peec_matrices import PEECBuilder
-from peec_topology import PEECCircuitSolver
+from radia.peec_matrices import PEECBuilder
+from radia.peec_topology import PEECCircuitSolver
 
 MU_0 = 4.0 * np.pi * 1e-7
 

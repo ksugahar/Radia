@@ -5,15 +5,12 @@ Parameter sweep: panel mode and eps_eff to find best match with measurement.
 Uses proper PEEC MNA formulation: Y = A * inv(Z_branch) * A^T + jw * C_eff
 """
 
-import sys
 import numpy as np
 import time
 import os
 import pandas as pd
 
-import radia  # noqa: F401
-sys.path.insert(0, 'S:/Radia/01_GitHub/src/radia')
-from peec_matrices import PEECBuilder
+from radia.peec_matrices import PEECBuilder
 
 MU_0 = 4.0 * np.pi * 1e-7
 EPS_0 = 8.854187817e-12

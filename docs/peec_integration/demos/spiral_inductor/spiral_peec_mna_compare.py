@@ -5,15 +5,12 @@ Detailed L(f) and R(f) comparison: PEEC MNA vs measurement.
 Best model: mode=3 (side panels), eps_eff=2.7 (half-space image).
 """
 
-import sys
 import numpy as np
 import time
 import os
 import pandas as pd
 
-import radia  # noqa: F401
-sys.path.insert(0, 'S:/Radia/01_GitHub/src/radia')
-from peec_matrices import PEECBuilder
+from radia.peec_matrices import PEECBuilder
 
 MU_0 = 4.0 * np.pi * 1e-7
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
