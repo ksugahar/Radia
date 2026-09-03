@@ -12,7 +12,7 @@ import sys
 import time
 from pathlib import Path
 
-from gmsh_animation_inspect import inspect_msh
+from gmsh_animation_inspect import inspect_msh, validation_result_path
 
 
 def _pkg_version(name: str) -> str | None:
@@ -208,7 +208,7 @@ def export_animation(
         shutil.rmtree(frame_dir, ignore_errors=True)
 
     return {
-        "schema": "radia.docs.gmsh_animation_export.v1",
+        "schema": "radia.validation.gmsh_animation_export.v1",
         "generated_at_utc": _dt.datetime.now(
             _dt.timezone.utc
         ).isoformat(timespec="seconds").replace("+00:00", "Z"),
@@ -271,7 +271,7 @@ if __name__ == "__main__":
     result = export_animation()
     out = write_results_json(
         result,
-        Path(__file__).with_name("gmsh_animation_export_results.json"),
+        validation_result_path("gmsh_animation_export_results.json"),
     )
     print(format_summary(result))
     print(f"wrote {out}")

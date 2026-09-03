@@ -1430,9 +1430,9 @@ Combined with STEP geometry (static), this creates stator + moving body animatio
 
 Runnable artifact-inspection notebook:
 `docs/gmsh_animation/gmsh_animation.ipynb`. The notebook contains saved output.
-Existing companion data are in
-`docs/gmsh_animation/gmsh_animation_results.json`; docs policy does not require
-a notebook-hash sidecar. The
+Checked companion data are in
+`validation_test/gmsh_animation/gmsh_animation_results.json`; the docs tree
+does not own a result sidecar. The
 docs-local artifact inspected there is `docs/gmsh_animation/`: MSH v4.1,
 2430 nodes, 1003 elements, 21 vector NodeData frames, final displacement 0.15 m.
 

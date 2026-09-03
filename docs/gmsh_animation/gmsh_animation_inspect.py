@@ -11,6 +11,18 @@ import sys
 from pathlib import Path
 
 
+VALIDATION_SCHEMA = "radia.validation.gmsh_animation.inspect.v1"
+
+
+def validation_result_path(filename: str) -> Path:
+    return (
+        Path(__file__).resolve().parents[2]
+        / "validation_test"
+        / "gmsh_animation"
+        / filename
+    )
+
+
 def _pkg_version(name: str) -> str | None:
     try:
         return _metadata.version(name)
@@ -152,7 +164,7 @@ def inspect_example(example_dir: str | Path = ".") -> dict:
     monotone_disp = all(a <= b + 1e-14 for a, b in zip(max_disp, max_disp[1:]))
     final_displacement_m = max_disp[-1] if max_disp else None
     return {
-        "schema": "radia.docs.gmsh_animation.inspect.v1",
+        "schema": VALIDATION_SCHEMA,
         "generated_at_utc": _dt.datetime.now(
             _dt.timezone.utc
         ).isoformat(timespec="seconds").replace("+00:00", "Z"),
@@ -208,3 +220,13 @@ def format_summary(result: dict) -> str:
         f"time_monotone={checks['time_values_monotone']}, "
         f"disp_monotone={checks['max_displacement_monotone']}",
     ])
+
+
+if __name__ == "__main__":
+    result = inspect_example()
+    out = write_results_json(
+        result,
+        validation_result_path("gmsh_animation_results.json"),
+    )
+    print(format_summary(result))
+    print(f"wrote {out}")
