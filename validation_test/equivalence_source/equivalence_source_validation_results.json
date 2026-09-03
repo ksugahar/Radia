@@ -1,5 +1,5 @@
 {
-  "schema": "radia.docs.equivalence_source.validation.v1",
+  "schema": "radia.validation.equivalence-source.v1",
   "generated_at_utc": "2026-06-27T20:43:15.309155+00:00",
   "versions": {
     "python_version": "3.12.10 (tags/v3.12.10:0cc8128, Apr  8 2025, 12:21:36) [MSC v.1943 64 bit (AMD64)]",

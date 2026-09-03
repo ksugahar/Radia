@@ -35,3 +35,15 @@ def test_public_example_notebooks_keep_their_saved_scene_contract():
             for cell in data.get("cells", [])
             if cell.get("cell_type") == "code"
         ), path
+
+
+def test_docs_do_not_own_validation_or_benchmark_json():
+    offenders = [
+        path.relative_to(ROOT)
+        for path in (ROOT / "docs").rglob("*.json")
+        if "validation" in path.name.lower() or "benchmark" in path.name.lower()
+    ]
+    assert not offenders, (
+        "Move validation and benchmark JSON records to validation_test/: "
+        + ", ".join(map(str, offenders))
+    )

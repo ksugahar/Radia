@@ -1,0 +1,20 @@
+{
+  "schema": "radia.validation.force-validation-notebook.v1",
+  "generated_at_utc": "2026-09-03T06:40:25Z",
+  "versions": {
+    "python_version": "3.12.10"
+  },
+  "source_notebook": "validation_test/force_validation/force_validation.ipynb",
+  "notebook_sha256": "53af8139c5914421d26e81ea7364b67c5cf8fedc4cf73c74e6bf22094718b0b2",
+  "canonical_records": [
+    "validation_axisymmetric_to_3d_force_gate_summary.json",
+    "validation_axisymmetric_to_3d_vol_force_summary.json",
+    "validation_coenergy_torque_table_consistency_summary.json",
+    "validation_magnetic_material_pair_vol_force_summary.json",
+    "validation_maxwell_contour_segment_balance_summary.json",
+    "validation_parallel_wire_virtual_work_force_summary.json",
+    "validation_torque_waveform_comparison_summary.json",
+    "validation_torque_waveform_health_summary.json",
+    "validation_virtual_work_force_sweep_audit_summary.json"
+  ]
+}
