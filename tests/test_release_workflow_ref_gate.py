@@ -242,3 +242,22 @@ def test_eqnedit64_release_order_is_handtest_fable_main_o_drive_then_tag():
     assert "HEAD=$headSha origin/main=$originMainSha" in sync
     assert "eqnedit64.o-release.v1" in sync
     assert "source_sha = $normalizedSourceSha" in sync
+
+
+def test_eqnedit64_one_command_release_is_bounded_and_ephemeral():
+    root = Path(__file__).resolve().parents[1]
+    scripts = root / ".agents/skills/release-eqnedit64/scripts"
+    publish = (scripts / "publish.ps1").read_text(encoding="utf-8")
+    jit = (scripts / "start_jit_runner.ps1").read_text(encoding="utf-8")
+
+    assert "TimeoutMinutes" in publish
+    assert "while ((Get-Date).ToUniversalTime() -lt $deadline)" in publish
+    assert "Publish-AnnotatedTag" in publish
+    assert "Verify-PublicRelease" in publish
+    assert "wheel.digests.sha256" in publish
+    assert "Wheel EXE differs from O:" in publish
+    assert "Resume and verify publication" in publish
+    assert "generate-jitconfig" in jit
+    assert "'windows-radia'" in jit
+    assert "-WindowStyle Hidden" in jit
+    assert "Runner.Listener.exe" in jit

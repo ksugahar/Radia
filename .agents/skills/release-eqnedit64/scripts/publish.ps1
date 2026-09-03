@@ -101,9 +101,17 @@ function Assert-VersionFiles {
     $parts = $Version.Split('.')
     $header = [IO.File]::ReadAllText((Join-Path $repoRoot `
         'tools\eqnedit64\src\eqnedit64_version.h'))
-    $tuple = "#define EQNEDIT64_VERSION_TUPLE $($parts[0]),$($parts[1]),$($parts[2]),0"
-    if (-not $header.Contains($tuple, [StringComparison]::Ordinal)) {
-        throw 'The native Windows version tuple is not synchronized.'
+    $nativeMacros = @(
+        "#define EQNEDIT64_VERSION_MAJOR $($parts[0])",
+        "#define EQNEDIT64_VERSION_MINOR $($parts[1])",
+        "#define EQNEDIT64_VERSION_PATCH $($parts[2])",
+        "#define EQNEDIT64_VERSION_TUPLE $($parts[0]),$($parts[1]),$($parts[2]),0",
+        "#define EQNEDIT64_VERSION_TEXT_W L`"$Version`""
+    )
+    foreach ($macro in $nativeMacros) {
+        if (-not $header.Contains($macro, [StringComparison]::Ordinal)) {
+            throw "The native version macro is not synchronized: $macro"
+        }
     }
 }
 
@@ -221,12 +229,20 @@ function Wait-ForRun {
 
 function Watch-Run {
     param([Parameter(Mandatory = $true)]$Run)
-    gh run watch ([string]$Run.databaseId) --repo $Repository `
-        --exit-status --interval 15
-    if ($LASTEXITCODE -ne 0) {
-        gh run view ([string]$Run.databaseId) --repo $Repository --log-failed
-        throw "GitHub Actions run failed: $($Run.url)"
+    while ((Get-Date).ToUniversalTime() -lt $deadline) {
+        $state = Get-GhJson @('run', 'view', ([string]$Run.databaseId),
+            '--repo', $Repository, '--json', 'status,conclusion,url')
+        if ($state.status -ceq 'completed') {
+            if ($state.conclusion -cne 'success') {
+                gh run view ([string]$Run.databaseId) --repo $Repository `
+                    --log-failed
+                throw "GitHub Actions run failed: $($state.url)"
+            }
+            return $state
+        }
+        Start-Sleep -Seconds 15
     }
+    throw "Timed out waiting for GitHub Actions run: $($Run.url)"
 }
 
 function Test-PublicReleaseExists {
@@ -254,6 +270,15 @@ function Verify-PublicRelease {
     if ($releaseHash -cne $ORelease.Hash) {
         throw 'GitHub Release EXE differs from O:.'
     }
+    $checksumLine = Get-Content -LiteralPath (
+        Join-Path $verifyRoot 'SHA256SUMS.txt') |
+        Where-Object { $_ -match 'Eqnedit64\.exe$' } |
+        Select-Object -First 1
+    if (-not $checksumLine -or
+        (($checksumLine -split '\s+')[0]).ToUpperInvariant() -cne
+            $ORelease.Hash) {
+        throw 'GitHub Release checksum does not describe the O: EXE.'
+    }
 
     $pypi = Wait-Until -Description "PyPI eqnedit64 $Version" -Probe {
         try {
@@ -277,6 +302,11 @@ function Verify-PublicRelease {
     foreach ($wheel in $wheels) {
         $wheelPath = Join-Path $verifyRoot $wheel.filename
         Invoke-WebRequest -Uri $wheel.url -OutFile $wheelPath
+        $wheelHash = (Get-FileHash -Algorithm SHA256 `
+            -LiteralPath $wheelPath).Hash
+        if ($wheelHash -cne ([string]$wheel.digests.sha256).ToUpperInvariant()) {
+            throw "PyPI wheel checksum mismatch: $($wheel.filename)"
+        }
         $archive = [IO.Compression.ZipFile]::OpenRead($wheelPath)
         try {
             $entry = $archive.Entries | Where-Object {
@@ -354,13 +384,17 @@ if (-not $remoteTagSha) {
 
     $tagPushTime = (Get-Date).ToUniversalTime().AddSeconds(-5)
     Publish-AnnotatedTag -Sha $sha
+    $publishedTagSha = Get-RemoteTagSha
+    if ($publishedTagSha -cne $sha) {
+        throw "Published tag did not resolve to exact main: $publishedTagSha"
+    }
 } else {
     if (-not $PSCmdlet.ShouldProcess(
             "$Repository $tag", 'Resume and verify publication')) {
         return
     }
     $oRelease = Assert-ORelease -Sha $sha
-    $tagPushTime = (Get-Date).ToUniversalTime().AddMinutes(-$TimeoutMinutes)
+    $tagPushTime = [datetime]'2000-01-01T00:00:00Z'
 }
 
 $jit = $null
@@ -370,10 +404,10 @@ try {
             -Repository $Repository -ReleaseId ($tag -replace '[^A-Za-z0-9_.-]', '-')
         $tagRun = Wait-ForRun -Workflow 'Eqnedit64' -Sha $sha `
             -NotBefore $tagPushTime -Branch $tag
-        Watch-Run -Run $tagRun
+        $null = Watch-Run -Run $tagRun
         $releaseRun = Wait-ForRun -Workflow 'release-eqnedit64-pypi.yml' `
-            -Sha $sha -NotBefore $tagPushTime
-        Watch-Run -Run $releaseRun
+            -Sha $sha -NotBefore ([datetime]$tagRun.createdAt)
+        $null = Watch-Run -Run $releaseRun
     }
     $public = Verify-PublicRelease -ORelease $oRelease
 } finally {
