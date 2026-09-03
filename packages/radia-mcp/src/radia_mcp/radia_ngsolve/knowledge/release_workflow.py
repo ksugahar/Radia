@@ -242,9 +242,9 @@ Those claims require the deployment gates:
 * heavy validation and benchmark evidence kept outside fast `tests/`
   but recorded as release evidence.
 
-Machine-readable public-safe evidence lives under
-`packages/radia-mcp/validation/mcp_quality/`, including
-`release_candidate_review_2026-06-26.json`.
+Fast MCP fleet regressions live under `packages/radia-mcp/tests/`, including
+`test_meta_health.py`; release-specific runtime evidence is emitted by the
+release gate rather than tracked as a stale package-local JSON snapshot.
 
 ## ===
 ## ci_failure_modes — known historical CI failures + cause + fix

@@ -2,8 +2,8 @@
 
 General-purpose, symbolic (Mathematica/wls) implementation of the
 **NGSolve high-order hierarchical FEM shape functions** (H1 / H(curl) /
-H(div)), ported from NGSolve's C++ element library.  Kept here (not in an
-application directory such as `examples/CLN/`) because the basis is a
+H(div)), ported from NGSolve's C++ element library. Kept here rather than in an
+application-specific docs or validation directory because the basis is a
 **reusable building block**: the `mathematica_*` MCP tools and any future
 work that needs the *analytical* form of a shape function — e.g. the
 analytical solid-angle / `1/r` integral for an HDiv-VIM integral-equation

@@ -6920,8 +6920,8 @@ The loop output is useful only when it lands in reusable artifacts.  For
 radia-ngsolve, a completed validation item should leave three public-safe
 breadcrumbs:
 
-1. a runnable `validation_test/.../validation_*.py` or `examples/.../validation_*.py` script,
-2. a machine-readable `validation_test/.../validation_*_summary.json` or `examples/.../validation_*_summary.json`, and
+1. a runnable `validation_test/.../validation_*.py` script,
+2. a machine-readable `validation_test/.../validation_*_summary.json`, and
 3. a knowledge/API hook that explains how the number guards future FEM/BEM,
    force, mesh, CAD, wave, or readable-MATLAB work.
 
@@ -6942,8 +6942,8 @@ repo.
 | Netgen `.vol` tri/tet mesh | `validation_test/cubit_mesh_export/validation_vol_*_summary.json` | `.vol` tri/tet parser, boundary inventory, incidence, quality |
 | build123d to mesh/CAD checks | `validation_test/build123d_netgen_gmsh_flow/validation_*_summary.json` | CAD face pressure/traction rows, area/volume consistency |
 | Electromagnetic force and torque | `validation_test/electric_machine/validation_*_summary.json` | `force_validation("method_map")`, `force_validation("cross_validation")` |
-| RF/waveguide momentum | `examples/rf_waveguide/validation_*_summary.json` | radiation pressure, S-parameter momentum, TE/TM cutoff gates |
-| MCP server fleet quality | `validation/mcp_quality/golden_gate_*.json` | `radia_mcp_golden_gate()`, per-server `--selftest`, docs drift, publish-boundary lint |
+| RF/waveguide momentum | `validation_test/rf_waveguide/validation_*_summary.json` | radiation pressure, S-parameter momentum, TE/TM cutoff gates |
+| MCP server fleet quality | `packages/radia-mcp/tests/test_meta_health.py` plus per-server `--selftest` | `radia_mcp_golden_gate()`, catalog and publish-boundary regressions |
 | Readable first-order FEM | `test_p1_*`, `test_surface_triangle_*`, `test_tetrahedron_lorentz_force.py` | P1 triangle/tet energy, flux, HCurl/RWG trace teaching primitives |
 | FEM/BEM open boundary | `test_fem_bem_coupling.py`, `fem_bem_schur("api")` | dense reference Schur coupling and Kelvin/BEM DtN comparisons |
 

@@ -119,8 +119,8 @@ ext = rad.ObjBckg(gradient_field)
 
 SHOWCASE NOTEBOOK: `docs/background_fields/background_fields.ipynb` -- a
 spatially-varying quadrupole `ObjBckg` callback driving a nonlinear soft-iron
-cube / sphere, plus a permeability sweep (executed + rendered). Durable run
-metadata and script/source hashes are in `docs/background_fields/background_fields_results.json`.
+cube / sphere, plus a permeability sweep (executed + rendered). The public
+results are embedded in the notebook; docs do not own a result sidecar.
 
 ## Containers
 
@@ -2595,25 +2595,12 @@ Pipeline:
 3. ESIM cell problem (or Dowell analytical) -> Z_s(H), P', Q' per panel
 4. Integration over surface -> total R, P, Q, effective impedance
 
-```python
-from impedance_esim import run
-
-# Torus coil (R=30mm) + steel cylinder workpiece at center
-result = run(
-    material='steel',       # Nonlinear BH curve
-    frequency=50000,        # 50 kHz
-    R=0.030,                # Coil major radius [m]
-    a=0.003,                # Coil wire radius [m]
-    wp_radius=0.010,        # Workpiece radius [m]
-    wp_height=0.030,        # Workpiece height [m]
-)
-
-# Scale to actual current (results are per unit current I=1A)
-I = 100.0  # Amperes
-P_heating = result['P_total'] * I**2       # Total heating power [W]
-R_wp = result['R_effective']               # Workpiece resistance [Ohm]
-L_coil = result['L_coil']                  # Coil inductance [H]
-```
+The production entry is the Induction Heating Simulink block backed by the
+headless `src/radia/panels/calc_inductance.py` contract. Reusable cell and
+coupling APIs remain under `radia.esim_*`; the runnable comparison corpus and
+its JSON evidence live under `validation_test/induction_heating/` and
+`validation_test/ih_esim_benchmark/`. See `docs/esim/WORKFLOWS.md` for the
+current commands and artifact ownership.
 
 Typical results (1-turn coil, steel, 50 kHz):
 - P = 11.5 W at 100A (scales as N^2 * I^2 for N-turn coil)
@@ -2662,8 +2649,8 @@ Run: `python validation_test/induction_heating/cubit_panels_legacy/verify_esim.p
 | `esim_coupled_solver.py` | `ESIMCoupledSolver` | PEEC + ESIM coupled solver |
 | `esim_workpiece.py` | `ESIMWorkpiece` | 3D workpiece with ESI tables |
 | `panels/calc_inductance.py` | `_compute_workpiece_impedance()` | Panel ESIM/Dowell backend |
-| `examples/.../impedance_esim.py` | `run()` | Standalone BEM+ESIM analysis |
-| `examples/.../verify_esim.py` | `test1..4()` | ESIM vs NGSolve FEM verification |
+| `validation_test/induction_heating/cubit_panels_legacy/impedance_esim.py` | `run()` | Retained BEM+ESIM validation analysis |
+| `validation_test/induction_heating/cubit_panels_legacy/verify_esim.py` | `test1..4()` | ESIM vs NGSolve FEM validation |
 """
 
 RADIA_BUILD_AND_RELEASE = """

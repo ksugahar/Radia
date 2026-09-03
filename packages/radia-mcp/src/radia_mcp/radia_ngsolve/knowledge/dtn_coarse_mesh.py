@@ -1762,7 +1762,7 @@ papers/tracks -- do NOT dilute the core with the application.
     using the Track-A operator as the material-aware design kernel (design = invert M). Demos ee/ff +
     a future general-(non-concentric)-iron real coil inverse-design; the running targeted novelty check
     feeds THIS track. They share machinery but are written up independently. See
-    examples/.../DtN_spectrum/PATHWAY_streamfunction_with_iron.md.
+    docs/stream_function/fusion.md and validation_test/kelvin_dtn_spectrum/.
 
 LITERATURE SURVEY (12-agent workflow, 2026-06-15): low-frequency Sommerfeld + layered-Kelvin novelty.
 LOW-FREQUENCY = DEFINITIVE YES (3 adversarial verifiers conf 0.93-0.95, zero counter-evidence). Low-freq
@@ -2619,8 +2619,10 @@ VERIFIED (torch 2.11 in the worktree):
     (natively, via Warburg/skin = sqrt(jw)) the eddy-current/diffusion DtN/SIBC of act6_12_iabc_diffusion_timedomain.
 NET: the clean time-domain high-freq path = WLS-wideband PASSIVE design (act7_16_wideband_iabc) realized as a circuit
 by URN; the dispersive route needs PASSIVE materials (URN's domain), which the exact-null optimum is
-not. BOUNDARY: URN lives in the public Radia repo (examples/), not the commercial converters -- fine to
-use/cite; it is the user's own method. NEXT (deferred, user's call): push URN to a tight (<~2%) circuit
+not. BOUNDARY: URN lives in the public Radia repo under src/radia/urn/ with
+result-bearing docs and validation_test/universal_relaxation_network/ evidence,
+not in the commercial converters. It is the user's own method and is fine to
+use/cite. NEXT (deferred, user's call): push URN to a tight (<~2%) circuit
 fit on a chosen PASSIVE target (asymptote-subtracted diffusion DtN is the best showcase: Warburg/skin =
 sqrt(jw) is native), then emit the SPICE/ADE for an actual time-domain run.
 
@@ -2895,8 +2897,9 @@ sets n_max. CLN "exact" = exact per-mode impedance synthesis over a FINITE set.
 
 ONE table, every closure x regime x multipole, ONE yardstick = the per-mode DtN-spectral
 defect d_n = |lambda_h(n) - lambda_exact(n)| / |lambda_exact(n)|.  Consolidates the scattered
-measurements (static act7_21, eddy act6_09, high-freq act7_01/act7_07).  Full datasheet:
-docs/open_boundary/DTN_SPECTRUM_COMPARISON.md (data act7_22_dtn_spectrum_consolidated.json).
+measurements (static act7_21, eddy act6_09, high-freq act7_01/act7_07). The
+maintained summary is docs/open_boundary/DTN_SPECTRUM_COMPARISON.md; the retired
+generator is recorded in docs/kelvin/ARCHIVE_RETIREMENT.md.
 
 WHY this lens: a field-error comparison conflates interior-FEM error with open-boundary error;
 the per-mode DtN defect ISOLATES the boundary operator's accuracy, mode by mode.
