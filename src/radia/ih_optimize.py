@@ -8,12 +8,9 @@ iterations against a cached IHWorkpieceContext. Each trial is
 recorded with its spec, workpiece metrics, objective value and
 timing. The best-so-far trial is returned.
 
-Proposers shipped:
-  RandomProposer -- uniform sampling (baseline)
-  ClaudeProposer -- Anthropic Claude API with prompt caching on the
-                    problem statement (implemented in a companion
-                    module to keep import-time anthropic SDK
-                    dependence optional).
+Radia ships only ``RandomProposer`` as a deterministic baseline. AI-guided
+proposal belongs to the MCP/agent layer: pass any callable with the contract
+below instead of launching a vendor-specific CLI from the solver package.
 
 Custom proposers are trivial: any callable with signature
     proposer(history: list[Trial]) -> CoilSpec
