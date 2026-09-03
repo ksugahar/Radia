@@ -40,6 +40,12 @@ M0 = 1.0e6
 PHI_PEAK = MU0 * M0 * A_RAD ** 2 / D_COIL     # |Phi|_max = mu0 M0 a^2 / d
 
 
+@pytest.fixture(scope="module", autouse=True)
+def _taskmanager():
+    with ng.TaskManager():
+        yield
+
+
 def _setup(maxh=0.0025):
     from netgen.geom2d import SplineGeometry
     from ngsolve import Mesh
