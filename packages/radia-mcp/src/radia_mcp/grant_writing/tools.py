@@ -236,6 +236,18 @@ def _prose_for_lint(text: str) -> str:
 
 def _strip_latex_scaffolding(text: str) -> str:
     text = _strip_latex_comments(text)
+    # A main LaTeX file carries document-class, package, author, and helper
+    # definitions that never appear in the rendered proposal.  Removing only
+    # the command names left tokens such as ``jarticle`` and ``wrapfig`` in the
+    # lint stream, where they were then reported as applicant prose.  When a
+    # complete document is supplied, the reviewer-visible body is exactly the
+    # material between these two markers.
+    document_start = re.search(r"\\begin\s*\{document\}", text)
+    if document_start:
+        text = text[document_start.end():]
+        document_end = re.search(r"\\end\s*\{document\}", text)
+        if document_end:
+            text = text[:document_end.start()]
     text = re.sub(
         r"\\begin\{(?P<figenv>figure\*?|center)\}.*?"
         r"\\includegraphics.*?\\end\{(?P=figenv)\}",
@@ -347,6 +359,14 @@ def _finish_prose(text: str) -> str:
             "",
             value.strip(),
         )
+        # Printed forms sometimes append the field allowance to the heading.
+        # It belongs to the form, not the applicant, and must not turn the
+        # fixed phrase 「法令等の遵守への」 into a particle-chain finding.
+        value = re.sub(
+            r"[（(][^）)]*(?:頁|ページ)[^）)]*[）)]\s*$",
+            "",
+            value,
+        ).strip()
         return value in fixed_headings
 
     kept: list[str] = []
@@ -409,8 +429,8 @@ def grant_writing_check_misuse_japanese(text: str) -> dict:
 
 def grant_writing_check_kanji_ratio(
     text: str,
-    min_ratio: float = 0.18,
-    max_ratio: float = 0.40,
+    min_ratio: float = 0.30,
+    max_ratio: float = 0.60,
 ) -> dict:
     """Measure the kanji ratio of applicant prose, not the application form."""
     return _ja_check_kanji_ratio(
@@ -722,6 +742,21 @@ _ADJACENT_REVIEWER_TAKEAWAY_PATTERN = re.compile(
     r"(?:により|から)|"
     r"研究項目[0-9０-９]+[^。！？\n]{0,64}(?:開始|着手|実行)できる"
 )
+_ADJACENT_REVIEWER_KNOWLEDGE_PATTERN = re.compile(
+    r"(?:成立条件|適用条件|解析条件|結合条件|選択則|設計則|判定則|知見|"
+    r"適用範囲|適用限界|候補順位|設計判断|影響|関係|境界)"
+    r"[^。！？\n]{0,56}(?:明らかにする|解明する|示す|確立する|同定する|"
+    r"定量化する|判断できる|判定できる|確定できる)"
+)
+_ADJACENT_REVIEWER_SPECIFIC_MEANS_PATTERN = re.compile(
+    r"(?:Cauer|Galerkin|XFEM|ESIM|HACApK|Kelvin|pull-back|MCP|API|"
+    r"GitHub|GitLab|JP[-‐‑–—]?MARs|JMAG|Radia|有限要素法|積分方程式|"
+    r"階層行列|密度随伴法|カーネルレベルセット法|表面インピーダンス)"
+)
+_ADJACENT_REVIEWER_PLAN_PARAGRAPH_PATTERN = re.compile(
+    r"(?:研究目的|研究項目[0-9０-９]+|対象課題[0-9０-９]+|大学間結合|"
+    r"本研究の目的)"
+)
 
 
 def grant_writing_adjacent_reviewer_readability_check(text: str) -> dict:
@@ -781,6 +816,7 @@ def grant_writing_adjacent_reviewer_readability_check(text: str) -> dict:
     bare_staged_processes: list[dict] = []
     incomplete_research_platform_roles: list[dict] = []
     takeaways_after_evidence: list[dict] = []
+    takeaway_order_examples: list[dict] = []
     representation_pattern = re.compile(
         r"(?P<answer>設計則|選択則|指針|適用条件|成立条件|知見|成果)"
         r"を[、，,\s]*(?P<representation>[^。！？\n]{0,36}"
@@ -1141,6 +1177,35 @@ def grant_writing_adjacent_reviewer_readability_check(text: str) -> dict:
                 "excerpt": paragraph[:300],
             })
 
+        # Score the order in which a plan paragraph presents its reviewer
+        # value.  This is deliberately narrower than generic keyword order: a
+        # paragraph is eligible only when it is recognisably a purpose/research
+        # item and contains a specific method or infrastructure name.  The
+        # desired order is knowledge or decision first, implementation means
+        # second.  A labelled plan paragraph that names means but never states
+        # the knowledge output is recorded separately instead of being treated
+        # as a grammatical defect.
+        means_match = _ADJACENT_REVIEWER_SPECIFIC_MEANS_PATTERN.search(paragraph)
+        knowledge_match = _ADJACENT_REVIEWER_KNOWLEDGE_PATTERN.search(paragraph)
+        plan_match = _ADJACENT_REVIEWER_PLAN_PARAGRAPH_PATTERN.search(paragraph)
+        if means_match and plan_match and plan_match.start() <= 32:
+            if knowledge_match is None:
+                order = "knowledge_not_stated"
+            elif knowledge_match.start() <= means_match.start():
+                order = "knowledge_before_means"
+            else:
+                order = "means_before_knowledge"
+            takeaway_order_examples.append({
+                "index": index,
+                "order": order,
+                "knowledge_position": (
+                    knowledge_match.start() if knowledge_match is not None else None
+                ),
+                "means_position": means_match.start(),
+                "means": means_match.group(0),
+                "excerpt": paragraph[:360],
+            })
+
         takeaway_match = _ADJACENT_REVIEWER_TAKEAWAY_PATTERN.search(paragraph)
         if takeaway_match:
             evidence_prefix = paragraph[:takeaway_match.start()]
@@ -1237,6 +1302,19 @@ def grant_writing_adjacent_reviewer_readability_check(text: str) -> dict:
             paragraph_count=audit_paragraph_count,
         )
 
+    takeaway_first_count = sum(
+        item["order"] == "knowledge_before_means"
+        for item in takeaway_order_examples
+    )
+    means_first_count = sum(
+        item["order"] == "means_before_knowledge"
+        for item in takeaway_order_examples
+    )
+    knowledge_missing_count = sum(
+        item["order"] == "knowledge_not_stated"
+        for item in takeaway_order_examples
+    )
+
     comments = list(dict.fromkeys(risk["comment"] for risk in risks))
     recommendations = list(dict.fromkeys(
         risk["recommendation"] for risk in risks
@@ -1280,7 +1358,22 @@ def grant_writing_adjacent_reviewer_readability_check(text: str) -> dict:
             ),
             "three_layer_paragraph_count": len(layer_paragraphs),
             "takeaway_after_evidence_count": len(takeaways_after_evidence),
+            "takeaway_order_candidate_count": len(takeaway_order_examples),
+            "knowledge_before_means_count": takeaway_first_count,
+            "means_before_knowledge_count": means_first_count,
+            "knowledge_not_stated_before_means_count": knowledge_missing_count,
             "assurance_term_density_per_1000_chars": round(audit_density, 2),
+        },
+        "takeaway_order": {
+            "candidate_count": len(takeaway_order_examples),
+            "knowledge_before_means_count": takeaway_first_count,
+            "means_before_knowledge_count": means_first_count,
+            "knowledge_not_stated_count": knowledge_missing_count,
+            "examples": takeaway_order_examples[:8],
+            "target": (
+                "state the new knowledge, decision, or condition before named "
+                "methods, software, infrastructure, and publication evidence"
+            ),
         },
         "revision_protocol": {
             "sequence": [
@@ -1418,12 +1511,18 @@ def grant_writing_japanese_genre_contract(document_type: str) -> dict:
 def grant_writing_japanese_readability_score(
     text: str,
     document_type: str,
+    previous_text: str = "",
+    focus_text: str = "",
+    previous_focus_text: str = "",
 ) -> dict:
     """Score Japanese grant prose with Japanese-specific writing criteria.
 
     This 100-point diagnostic measures reading mechanics, not scientific merit
     or funding probability. ``document_type`` is required so a completed
-    manuscript cannot silently be scored as a future grant plan.
+    manuscript cannot silently be scored as a future grant plan. Supply
+    ``previous_text`` to compare the complete document before and after a
+    revision. Supply both ``previous_focus_text`` and ``focus_text`` to report
+    the same score and reviewer-load metrics for only the edited passage.
     """
     genre = grant_writing_japanese_genre_contract(document_type)
     if not genre["applicable"]:
@@ -1479,24 +1578,91 @@ def grant_writing_japanese_readability_score(
         sentence_score -= 3
     sentence_score = max(0, sentence_score)
 
-    bedrock_count = bedrock.get("issue_count", 0)
-    logical_order_score = max(0, 20 - min(20, 6 * bedrock_count))
-    subject_violations = subject.get("violation_count", 0)
-    subject_score = max(0, 15 - min(15, 5 * subject_violations))
+    # Gradual penalties keep one local hint from zeroing a complete axis.  The
+    # former rule subtracted six points per rule category regardless of its
+    # severity or frequency.
+    severity_weight = {"HIGH": 3.0, "MODERATE": 2.0, "LOW": 0.75}
+    logical_penalty = 0.0
+    for issue in bedrock.get("issues", []):
+        occurrence_count = issue.get("count")
+        if occurrence_count is None:
+            occurrence_count = issue.get("mono_3_in_a_row_count", 1)
+        occurrence_count = max(1, int(occurrence_count))
+        logical_penalty += severity_weight.get(issue.get("severity"), 1.5) * (
+            occurrence_count ** 0.5
+        )
+    logical_order_score = round(max(0.0, 20.0 - logical_penalty), 1)
 
-    adjacent_high = sum(
-        risk.get("severity") == "HIGH" for risk in adjacent.get("risks", [])
+    subject_violations = subject.get("violation_count", 0)
+    analyzed_sentences = subject.get("analyzed_sentences", 0)
+    subject_violation_rate = (
+        subject_violations / analyzed_sentences if analyzed_sentences else 0.0
     )
-    adjacent_medium = sum(
-        risk.get("severity") == "MEDIUM" for risk in adjacent.get("risks", [])
+    subject_score = round(
+        15.0 * (1.0 - min(1.0, subject_violation_rate)),
+        1,
     )
-    lexical_penalty = 8 * adjacent_high + 5 * adjacent_medium
+
+    adjacent_metrics = adjacent.get("metrics", {})
+    adjacent_sentence_count = max(1, adjacent_metrics.get("sentence_count", 0))
+    dense_rate = (
+        adjacent_metrics.get("compressed_dense_sentence_count", 0)
+        / adjacent_sentence_count
+    )
+    density_penalty = min(4.0, 30.0 * dense_rate)
+    notation_penalty = min(
+        3.0,
+        0.5 * adjacent_metrics.get("notation_or_method_pile_count", 0),
+    )
+    structural_counts = sum(
+        adjacent_metrics.get(key, 0)
+        for key in (
+            "result_representation_mismatch_count",
+            "ambiguous_relation_phrase_count",
+            "applicant_internal_abstraction_count",
+            "vague_readiness_status_count",
+            "required_scope_without_deliverable_count",
+            "purpose_scope_alias_before_definition_count",
+            "bare_process_divided_into_stages_count",
+            "research_platform_role_chain_incomplete_count",
+            "three_layer_paragraph_count",
+            "takeaway_after_evidence_count",
+        )
+    )
+    structural_penalty = min(3.0, 0.75 * structural_counts)
+    assurance_density = adjacent_metrics.get(
+        "assurance_term_density_per_1000_chars", 0.0
+    )
+    assurance_penalty = min(2.0, max(0.0, assurance_density - 4.0) * 0.75)
+
     kanji_ratio = kanji.get("kanji_ratio", 0.0)
-    if kanji_ratio < 0.12 or kanji_ratio > 0.50:
-        lexical_penalty += 8
-    elif kanji_ratio < 0.18 or kanji_ratio > 0.40:
-        lexical_penalty += 4
-    lexical_score = max(0, 20 - min(20, lexical_penalty))
+    kanji_lower = 0.30
+    kanji_upper = 0.60
+    kanji_deviation = max(kanji_lower - kanji_ratio, kanji_ratio - kanji_upper, 0.0)
+    kanji_penalty = min(2.0, 20.0 * kanji_deviation)
+    concept_penalty = (
+        density_penalty
+        + notation_penalty
+        + structural_penalty
+        + assurance_penalty
+        + kanji_penalty
+    )
+    concept_score = round(max(0.0, 12.0 - concept_penalty), 1)
+
+    order = adjacent.get("takeaway_order", {})
+    order_candidates = order.get("candidate_count", 0)
+    if order_candidates:
+        order_quality = (
+            order.get("knowledge_before_means_count", 0)
+            + 0.35 * order.get("means_before_knowledge_count", 0)
+            + 0.15 * order.get("knowledge_not_stated_count", 0)
+        ) / order_candidates
+        takeaway_order_score = round(8.0 * order_quality, 1)
+    else:
+        # With no method-bearing plan paragraph the order criterion is not
+        # applicable and must not penalise a short non-technical application.
+        takeaway_order_score = 8.0
+    lexical_score = round(concept_score + takeaway_order_score, 1)
 
     misuse_count = misuse.get("total_matches", 0)
     notation_count = notation.get("total_findings", 0)
@@ -1526,7 +1692,32 @@ def grant_writing_japanese_readability_score(
         "lexical_and_concept_load": {
             "score": lexical_score,
             "score_max": 20,
-            "evidence": {"kanji": kanji, "adjacent_reviewer": adjacent},
+            "evidence": {
+                "kanji": kanji,
+                "adjacent_reviewer": adjacent,
+                "score_components": {
+                    "concept_density": {
+                        "score": concept_score,
+                        "score_max": 12,
+                        "penalties": {
+                            "dense_sentence_rate": round(density_penalty, 2),
+                            "notation_or_method_piles": round(notation_penalty, 2),
+                            "structural_reading_risks": round(structural_penalty, 2),
+                            "distributed_assurance_language": round(
+                                assurance_penalty, 2
+                            ),
+                            "kanji_ratio_outside_technical_band": round(
+                                kanji_penalty, 2
+                            ),
+                        },
+                    },
+                    "reviewer_takeaway_before_means": {
+                        "score": takeaway_order_score,
+                        "score_max": 8,
+                        "evidence": order,
+                    },
+                },
+            },
         },
         "notation_and_usage_consistency": {
             "score": consistency_score,
@@ -1539,7 +1730,7 @@ def grant_writing_japanese_readability_score(
             "evidence": weak,
         },
     }
-    score = sum(axis["score"] for axis in axes.values())
+    score = round(sum(axis["score"] for axis in axes.values()), 1)
     status = "pass" if score >= 85 else "warning" if score >= 70 else "fail"
     priorities = [
         {
@@ -1552,7 +1743,7 @@ def grant_writing_japanese_readability_score(
         if axis["score"] < axis["score_max"]
     ]
     priorities.sort(key=lambda item: (-item["lost_points"], item["axis"]))
-    return {
+    result = {
         "applicable": True,
         "status": status,
         "score": score,
@@ -1565,8 +1756,10 @@ def grant_writing_japanese_readability_score(
         "thresholds": {"pass": "85-100", "warning": "70-84", "fail": "0-69"},
         "scoring_policy": (
             "Japanese grant prose only. English is neither scored nor averaged. "
-            "The kanji-ratio target is the same 0.18-0.40 band exposed by "
-            "grant_writing_check_kanji_ratio."
+            "Penalties are graduated by occurrence rate and severity; one hint "
+            "does not zero an axis. The technical-prose kanji-ratio target is "
+            "0.30-0.60. Reviewer takeaway before named means contributes to the "
+            "lexical-and-concept-load score."
         ),
         "interpretation": (
             "This score estimates Japanese reading load and writing mechanics. "
@@ -1574,6 +1767,81 @@ def grant_writing_japanese_readability_score(
             "probability of funding."
         ),
     }
+
+    def comparison(before: dict, after: dict) -> dict:
+        axis_deltas = {}
+        for name, after_axis in after.get("scoring_axes", {}).items():
+            before_axis = before.get("scoring_axes", {}).get(name, {})
+            axis_deltas[name] = round(
+                after_axis.get("score", 0) - before_axis.get("score", 0), 1
+            )
+
+        def reviewer_metrics(report: dict) -> dict:
+            adjacent_result = (
+                report.get("scoring_axes", {})
+                .get("lexical_and_concept_load", {})
+                .get("evidence", {})
+                .get("adjacent_reviewer", {})
+            )
+            metrics = adjacent_result.get("metrics", {})
+            return {
+                key: metrics.get(key, 0)
+                for key in (
+                    "compressed_dense_sentence_count",
+                    "notation_or_method_pile_count",
+                    "knowledge_before_means_count",
+                    "means_before_knowledge_count",
+                    "knowledge_not_stated_before_means_count",
+                    "takeaway_after_evidence_count",
+                )
+            }
+
+        before_metrics = reviewer_metrics(before)
+        after_metrics = reviewer_metrics(after)
+        return {
+            "before_score": before.get("score"),
+            "after_score": after.get("score"),
+            "score_delta": round(after.get("score", 0) - before.get("score", 0), 1),
+            "axis_score_deltas": axis_deltas,
+            "reviewer_load_before": before_metrics,
+            "reviewer_load_after": after_metrics,
+            "reviewer_load_deltas": {
+                key: after_metrics[key] - before_metrics[key]
+                for key in after_metrics
+            },
+            "interpretation": (
+                "Use the delta to verify the edited reading unit. Do not rewrite "
+                "unrelated passages merely to maximise the whole-document score."
+            ),
+        }
+
+    if str(previous_text).strip():
+        before_document = grant_writing_japanese_readability_score(
+            previous_text,
+            document_type=document_type,
+        )
+        if before_document.get("applicable"):
+            result["document_comparison"] = comparison(before_document, result)
+
+    if str(focus_text).strip():
+        focus_after = grant_writing_japanese_readability_score(
+            focus_text,
+            document_type=document_type,
+        )
+        result["focus_after"] = {
+            "score": focus_after.get("score"),
+            "status": focus_after.get("status"),
+            "scoring_axes": focus_after.get("scoring_axes", {}),
+        }
+        if str(previous_focus_text).strip():
+            focus_before = grant_writing_japanese_readability_score(
+                previous_focus_text,
+                document_type=document_type,
+            )
+            if focus_before.get("applicable") and focus_after.get("applicable"):
+                result["focus_comparison"] = comparison(focus_before, focus_after)
+
+    return result
 
 
 _REVIEWER_MOMENTUM_STAKE_PATTERN = re.compile(

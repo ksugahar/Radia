@@ -3247,6 +3247,94 @@ def test_japanese_readability_requires_the_grant_genre_and_excludes_english():
     assert grant["applicable"] and 0 <= grant["score"] <= 100
 
 
+def test_japanese_readability_strips_preamble_comments_and_fixed_form_text(tmp_path):
+    body = tmp_path / "body.tex"
+    body.write_text(
+        """\\section*{３ 人権の保護及び法令等の遵守への対応（1頁以内）}
+解析条件を比較する。候補順位が変わらない範囲を示す。
+""",
+        encoding="utf-8",
+    )
+    main = tmp_path / "main.tex"
+    main.write_text(
+        """\\documentclass{jarticle}
+\\usepackage{wrapfig}
+% このコメントも採点しない。
+\\begin{document}
+\\input{body}
+\\end{document}
+""",
+        encoding="utf-8",
+    )
+
+    prose = gw._prose_for_lint(gw._read_text_if_path(str(main)))
+    result = gw.grant_writing_japanese_readability_score(
+        str(main), document_type="grant_proposal"
+    )
+
+    assert "jarticle" not in prose
+    assert "wrapfig" not in prose
+    assert "このコメント" not in prose
+    assert "人権の保護及び法令等の遵守への対応" not in prose
+    issue_examples = " ".join(
+        str(example)
+        for issue in result["scoring_axes"]["japanese_logical_order"]["evidence"][
+            "issues"
+        ]
+        for example in issue.get("examples", [])
+    )
+    assert "jarticle" not in issue_examples
+    assert "法令等の遵守への" not in issue_examples
+
+
+def test_japanese_readability_uses_graduated_axis_penalties():
+    text = "".join(
+        "候補順位は、複数の解析条件と境界条件を同時に変更した場合にも"
+        "同じ判断を保てる範囲を明らかにする。"
+        for _ in range(5)
+    ) + "".join("候補順位は、条件で決まる。" for _ in range(5))
+
+    result = gw.grant_writing_japanese_readability_score(
+        text, document_type="grant_proposal"
+    )
+    subject_axis = result["scoring_axes"]["subject_predicate_proximity"]
+
+    assert subject_axis["evidence"]["violation_count"] > 0
+    assert 0 < subject_axis["score"] < subject_axis["score_max"]
+
+
+def test_japanese_readability_scores_takeaway_order_and_compares_revision_scope():
+    before = (
+        "対象課題1では、Cauer梯子回路とMCPを用いて二つの解析を接続する。"
+        "候補順位を確定できる解析条件を明らかにする。"
+    )
+    after = (
+        "対象課題1では、候補順位を確定できる解析条件を明らかにする。"
+        "Cauer梯子回路とMCPを用いて二つの解析を接続する。"
+    )
+
+    result = gw.grant_writing_japanese_readability_score(
+        after,
+        document_type="grant_proposal",
+        previous_text=before,
+        focus_text=after,
+        previous_focus_text=before,
+    )
+    component = result["scoring_axes"]["lexical_and_concept_load"]["evidence"][
+        "score_components"
+    ]["reviewer_takeaway_before_means"]
+
+    assert component["evidence"]["knowledge_before_means_count"] == 1
+    assert result["document_comparison"]["score_delta"] > 0
+    assert result["focus_comparison"]["score_delta"] > 0
+    assert (
+        result["focus_comparison"]["reviewer_load_deltas"][
+            "knowledge_before_means_count"
+        ]
+        == 1
+    )
+
+
 def _write_publication_bib(path):
     path.write_text(
         """@article{old,
