@@ -77,6 +77,8 @@ def test_pypi_distributions_have_independent_ci_boundaries():
     assert "tags: ['cubit-mesh-export-v*']" in texts["cubit-mesh-export"]
     assert "tags: ['radia-optuna-v*']" in texts["radia-optuna"]
     assert "tags: ['eqnedit64-v*']" in texts["Eqnedit64"]
+    assert ".agents/skills/release-eqnedit64/**" in texts["Eqnedit64"]
+    assert "tests/test_release_workflow_ref_gate.py" in texts["Eqnedit64"]
 
 
 def test_ci_records_exact_ref_context_before_release():
