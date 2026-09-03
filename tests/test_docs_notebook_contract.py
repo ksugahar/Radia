@@ -244,6 +244,26 @@ def test_peec_wpt_docs_use_installed_radia_package():
     )
 
 
+def test_basic_peec_docs_use_installed_radia_package():
+    docs_dir = ROOT / "docs" / "peec_integration" / "demos" / "basic_peec"
+    forbidden = (
+        "build-msvc",
+        "src/radia",
+        '_repo / "src"',
+        "from analysis import",
+        "from peec_matrices import",
+    )
+    offenders = []
+    for path in docs_dir.glob("*.py"):
+        source = path.read_text(encoding="utf-8", errors="replace").replace("\\", "/")
+        if any(token in source for token in forbidden):
+            offenders.append(path.name)
+    assert not offenders, (
+        "Basic PEEC docs must import installed/editable radia: "
+        + ", ".join(sorted(offenders))
+    )
+
+
 def test_migrated_docs_use_installed_dependencies():
     paths = [
         ROOT / "docs" / "electric_machine" / "cogging_skew_demo.py",
