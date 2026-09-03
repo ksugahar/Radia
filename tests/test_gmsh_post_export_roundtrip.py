@@ -8,8 +8,9 @@ the GMSH API itself and asserting the result is valid: node/element counts,
 physical groups (by name), element TYPE codes (incl. high-order), and that the
 field data lands as GMSH post-processing views. Pure NGSolve + gmsh (no Cubit).
 """
-import os
 import math
+import os
+
 import numpy as np
 import pytest
 
@@ -18,8 +19,6 @@ gmsh = pytest.importorskip("gmsh")
 from ngsolve import CF, sqrt, x, y, z
 from ngsolve.meshes import MakeStructured3DMesh
 
-import sys
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 from radia.gmsh_post_export import (
     GmshPostExport,
     _get_gmsh_ref_points,
@@ -27,6 +26,12 @@ from radia.gmsh_post_export import (
     export_nodal_deformation_animation,
 )
 from tests._ngsolve_2606 import curve_mesh
+
+
+@pytest.fixture(scope="module", autouse=True)
+def _taskmanager():
+    with ng.TaskManager():
+        yield
 
 
 def test_gmsh_reference_points_use_element_dimension_stride():
@@ -79,7 +84,7 @@ def _assert_positive_jacobians(path, expect_vol=None, rel=1e-9):
         total_neg = 0
         vol = 0.0
         etypes, _, _ = gmsh.model.mesh.getElements(3)
-        assert etypes, "no 3D elements in %s" % path
+        assert etypes, f"no 3D elements in {path}"
         for et in etypes:
             local, weights = gmsh.model.mesh.getIntegrationPoints(
                 int(et), "Gauss2")
@@ -118,8 +123,8 @@ def test_volume_element_orientation_tet_hex_prism():
     GmshPostExport(mesh).write_mesh(out)
     _assert_positive_jacobians(out, expect_vol=4.0 / 3.0 * math.pi, rel=5e-3)
 
-    for tag, kwargs in (("hex", dict(hexes=True)),
-                        ("prism", dict(hexes=False, prism=True))):
+    for tag, kwargs in (("hex", {"hexes": True}),
+                        ("prism", {"hexes": False, "prism": True})):
         mesh = MakeStructured3DMesh(nx=2, ny=2, nz=2, mapping=_shear,
                                     **kwargs)
         curve_mesh(mesh, 2)
@@ -133,9 +138,8 @@ def test_volume_element_orientation_pyramid():
     and the exact cone volume (locks the identity corner permutation and
     the frustum-bijection reference transform)."""
     from netgen.csg import Pnt
-    from netgen.meshing import Element2D, Element3D, FaceDescriptor
+    from netgen.meshing import Element2D, Element3D, FaceDescriptor, MeshPoint
     from netgen.meshing import Mesh as NgMesh
-    from netgen.meshing import MeshPoint
     from ngsolve import Mesh
 
     m = NgMesh(dim=3)
@@ -198,9 +202,9 @@ def test_curved_nodal_cf_field_probes_exactly():
                                    atol=1e-9)
 
 
-@pytest.mark.parametrize("kwargs", (dict(hexes=True),
-                                    dict(hexes=False),
-                                    dict(hexes=False, prism=True)))
+@pytest.mark.parametrize("kwargs", ({"hexes": True},
+                                    {"hexes": False},
+                                    {"hexes": False, "prism": True}))
 def test_vertex_array_field_expands_exactly(kwargs):
     """Vertex-length arrays are embedded exactly onto order-2 nodes.
 
@@ -256,16 +260,16 @@ def test_highorder_hex_roundtrip():
     post.write(out)
     assert os.path.exists(out)
     _assert_launch_companions(out)
-    named, vtypes, n_nodes, n_views = _reopen(out)
-    assert 12 in vtypes, "expected Hex27 (type 12) in %s" % vtypes  # order-2 hex
-    assert n_nodes == 343, "27 Hex27 share 343 nodes, got %d" % n_nodes
-    assert n_views == 2, "expected 2 post views (B, absr), got %d" % n_views
+    _named, vtypes, n_nodes, n_views = _reopen(out)
+    assert 12 in vtypes, f"expected Hex27 (type 12) in {vtypes}"  # order-2 hex
+    assert n_nodes == 343, f"27 Hex27 share 343 nodes, got {n_nodes}"
+    assert n_views == 2, f"expected 2 post views (B, absr), got {n_views}"
 
 
 def test_per_material_physical_groups():
     """A 2-material (sphere/air) curved tet mesh exports both materials as named
     GMSH physical groups, with high-order tets (Tet10, type 11)."""
-    from netgen.csg import CSGeometry, OrthoBrick, Sphere, Pnt
+    from netgen.csg import CSGeometry, OrthoBrick, Pnt, Sphere
     from ngsolve import Mesh
     geo = CSGeometry()
     geo.Add(Sphere(Pnt(0, 0, 0), 0.05).mat("sphere"))
@@ -279,9 +283,9 @@ def test_per_material_physical_groups():
     out = os.path.join(_TMP, "rt_2mat_test.msh")
     post.write(out)
     _assert_launch_companions(out)
-    named, vtypes, n_nodes, n_views = _reopen(out)
-    assert {"sphere", "air"} <= named, "physical groups %s missing sphere/air" % named
-    assert 11 in vtypes or 4 in vtypes, "expected tet (type 11/4) in %s" % vtypes
+    named, vtypes, _n_nodes, n_views = _reopen(out)
+    assert {"sphere", "air"} <= named, f"physical groups {named} missing sphere/air"
+    assert 11 in vtypes or 4 in vtypes, f"expected tet (type 11/4) in {vtypes}"
     assert n_views == 2
 
 
@@ -292,8 +296,8 @@ def test_mesh_only_roundtrip():
     out = os.path.join(_TMP, "rt_meshonly_test.msh")
     post.write_mesh(out)
     _assert_launch_companions(out)
-    named, vtypes, n_nodes, n_views = _reopen(out)
-    assert 5 in vtypes, "expected Hex8 (type 5) in %s" % vtypes  # order-1 hex
+    _named, vtypes, n_nodes, n_views = _reopen(out)
+    assert 5 in vtypes, f"expected Hex8 (type 5) in {vtypes}"  # order-1 hex
     assert n_nodes == 27
     assert n_views == 0
 
