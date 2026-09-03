@@ -105,8 +105,8 @@ def _cq_grid(sample_count, time_step, sound_speed, method):
 
 
 def _build_sphere_screen(radius, maxh, order, screen_extent):
-    from netgen.occ import WorkPlane, Axes, Sphere, Fuse, Compound, X, Y
-    from ngsolve import SurfaceL2, Compress
+    from netgen.occ import Axes, Compound, Fuse, Sphere, WorkPlane, X, Y
+    from ngsolve import Compress, SurfaceL2
     screen = WorkPlane(Axes((0, 0, 0), Y, X)).RectangleC(screen_extent, screen_extent).Face()
     sphere = Sphere((0, 0, 0), radius)
     screen = screen - sphere
@@ -144,7 +144,9 @@ def cq_soft_sphere_scattering(obs, radius=1.0, num_time=24, time_step=0.28,
     per-frequency ``pressure_hat`` / ``cq_wavenumbers`` (kappa) / ``pulse_transform``
     (A_l), and diagnostics (``max_imag`` of the pre-real signal).
     """
-    from ngsolve import BilinearForm, TaskManager, ds, z as Zc, exp as ngexp
+    from ngsolve import BilinearForm, ds
+    from ngsolve import exp as ngexp
+    from ngsolve import z as Zc
 
     c = float(sound_speed)
     R = float(radius)
@@ -167,11 +169,10 @@ def cq_soft_sphere_scattering(obs, radius=1.0, num_time=24, time_step=0.28,
     mesh, fes = _build_sphere_screen(R, maxh, order, screen_extent)
     u, v = fes.TnT()
     pressure_hat = np.zeros((N, len(obs)), complex)
-    with TaskManager():
-        pre = BilinearForm(u * v * ds("sphere"), diagonal=True).Assemble().mat.Inverse()
-        for l in range(N):
-            ghat = -complex(A[l]) * ngexp(-complex(s[l]) / c * Zc)       # -A_l exp(i k_l z)
-            pressure_hat[l, :] = _frequency_scattered(mesh, fes, pre, kappa[l], ghat, obs)
+    pre = BilinearForm(u * v * ds("sphere"), diagonal=True).Assemble().mat.Inverse()
+    for l in range(N):
+        ghat = -complex(A[l]) * ngexp(-complex(s[l]) / c * Zc)       # -A_l exp(i k_l z)
+        pressure_hat[l, :] = _frequency_scattered(mesh, fes, pre, kappa[l], ghat, obs)
 
     pressure_complex = (rho ** (-n))[:, None] * np.fft.ifft(pressure_hat, axis=0)
     return {
