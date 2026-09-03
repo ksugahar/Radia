@@ -537,6 +537,23 @@ source stampの両方を表示する。
   それらの仕様・試験だけを変更した。別機能を追加していないため§12の一度のFableレビューを
   満たすが、PR CI、署名済みO:候補、菅原ハンドテストを省略してよい意味ではない。
 
+### 13.4 O:ハンドテストで検出したTeXソース誤字形
+
+- hand-tested source: `5fbc6ab2cfc5905416da8fef16a837661ae89627`
+- resolution source: `1b1ceded668a250b69051edeb366f4f66a18ca20`
+- result: canvasと日本語UIは正常だが、TeXソース欄のASCIIだけが無関係なaccent字形に
+  見えたため不合格。公開tagとmain mergeを継続停止した。
+- cause: source EDITだけが無検証の`Consolas` handleを使い、試験も内部UTF-16一致と
+  「inkが一つでもある」ことしか見なかった。正しい文字列を誤glyphで描くfont sessionを
+  合格させた。
+- resolution contract: source fontは選択DCの物理face名、font自身の日本語＋TeX ASCII
+  cmap、実bitmap inkを検査する。全候補失敗時は正常なsource labelと同じstock GUI fontへ
+  退避し、productionとvisual testが同じchooserを使う。無検証`Consolas`へ戻る変更は
+  静的guardで失敗する。
+- review disposition: このハンドテスト修正は§13.3のFable reviewed source後に追加された
+  別の描画変更である。更新候補のPR CIとO:再試験後、正式公開前にFableレビューをもう一度
+  行い、reviewed sourceを追記する。
+
 - product tag: `eqnedit64-v3.0.11`
 - product tag source: `f5ac045703eab940323bddabbef6bb4fd3a9e55c`
 - GitHub Release EXE SHA-256:
