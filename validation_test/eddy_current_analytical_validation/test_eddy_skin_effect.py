@@ -35,6 +35,12 @@ DELTA = math.sqrt(2.0 / (OMEGA * MU0 * SIGMA))
 H0 = 1.0
 
 
+@pytest.fixture(autouse=True)
+def _taskmanager():
+    with ng.TaskManager():
+        yield
+
+
 def _solve_skin(order=4, n=800, n_delta=6):
     L = n_delta * DELTA
     mesh = Make1DMesh(n, mapping=lambda t: t * L)

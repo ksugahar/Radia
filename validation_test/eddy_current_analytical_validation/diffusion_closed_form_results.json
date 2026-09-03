@@ -1,0 +1,135 @@
+{
+  "schema": "radia.validation.eddy-diffusion-closed-form.v1",
+  "generated_at_utc": "2026-09-03T20:21:32.225449+00:00",
+  "provenance": {
+    "command": "python validation_test/eddy_current_analytical_validation/generate_diffusion_closed_form_results.py",
+    "python": "3.12.10",
+    "ngsolve": "6.2.2606",
+    "numpy": "2.5.2",
+    "scipy": "1.17.1"
+  },
+  "runtime_seconds": 0.2863204999885056,
+  "thresholds": {
+    "round_wire_maximum_relative_error": 1e-06,
+    "cylinder_maximum_relative_error": 1e-05,
+    "skin_maximum_absolute_profile_error": 0.0005,
+    "skin_surface_impedance_relative_error": 0.001,
+    "lamination_maximum_relative_error": 0.001,
+    "tomega_maximum_relative_error": 1e-05
+  },
+  "observed": {
+    "round_wire_maximum_relative_error": 8.966518284508756e-14,
+    "cylinder_maximum_relative_error": 8.463764000725683e-13,
+    "skin_maximum_absolute_profile_error": 7.470994357567988e-05,
+    "skin_surface_impedance_relative_error": 1.29497413832471e-05,
+    "lamination_maximum_relative_error": 2.7808375123444468e-08,
+    "tomega_maximum_relative_error": 4.120733792763733e-12
+  },
+  "cases": {
+    "round_wire_ac_resistance": [
+      {
+        "a_over_delta": 1.0,
+        "fem_rac_over_rdc": 1.0204923888555544,
+        "exact_rac_over_rdc": 1.020492388855622,
+        "relative_error": 6.636365468446036e-14
+      },
+      {
+        "a_over_delta": 3.0,
+        "fem_rac_over_rdc": 1.7681316525098951,
+        "exact_rac_over_rdc": 1.7681316525097366,
+        "relative_error": 8.966518284508756e-14
+      },
+      {
+        "a_over_delta": 5.0,
+        "fem_rac_over_rdc": 2.768107600734324,
+        "exact_rac_over_rdc": 2.76810760073429,
+        "relative_error": 1.2353157496256295e-14
+      }
+    ],
+    "cylinder_axial_field": [
+      {
+        "a_over_delta": 0.5,
+        "sample_radius_fractions": [
+          0.0,
+          0.25,
+          0.5,
+          0.75
+        ],
+        "maximum_relative_error": 8.463764000725683e-13
+      },
+      {
+        "a_over_delta": 2.0,
+        "sample_radius_fractions": [
+          0.0,
+          0.25,
+          0.5,
+          0.75
+        ],
+        "maximum_relative_error": 8.011459381715362e-13
+      },
+      {
+        "a_over_delta": 5.0,
+        "sample_radius_fractions": [
+          0.0,
+          0.25,
+          0.5,
+          0.75
+        ],
+        "maximum_relative_error": 5.265156581274487e-13
+      }
+    ],
+    "skin_profile": {
+      "maximum_absolute_profile_error": 7.470994357567988e-05,
+      "surface_impedance_relative_error": 1.29497413832471e-05
+    },
+    "lamination_loss": [
+      {
+        "thickness_m": 0.0005,
+        "frequency_hz": 200.0,
+        "fem_loss_w_per_m3": 32692.462946423366,
+        "exact_loss_w_per_m3": 32692.46203732088,
+        "relative_error": 2.7807709402980107e-08
+      },
+      {
+        "thickness_m": 0.00035,
+        "frequency_hz": 400.0,
+        "fem_loss_w_per_m3": 64093.13545690224,
+        "exact_loss_w_per_m3": 64093.13367457633,
+        "relative_error": 2.7808375123444468e-08
+      }
+    ],
+    "tomega_reconstruction": [
+      {
+        "a_over_delta": 0.5,
+        "sample_radius_fractions": [
+          0.0,
+          0.25,
+          0.5,
+          0.75
+        ],
+        "maximum_relative_error": 6.54080658038973e-14
+      },
+      {
+        "a_over_delta": 2.0,
+        "sample_radius_fractions": [
+          0.0,
+          0.25,
+          0.5,
+          0.75
+        ],
+        "maximum_relative_error": 4.4852389919426885e-13
+      },
+      {
+        "a_over_delta": 5.0,
+        "sample_radius_fractions": [
+          0.0,
+          0.25,
+          0.5,
+          0.75
+        ],
+        "maximum_relative_error": 4.120733792763733e-12
+      }
+    ]
+  },
+  "passed": true
+}

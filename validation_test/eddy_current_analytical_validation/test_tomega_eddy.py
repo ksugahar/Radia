@@ -38,6 +38,12 @@ SIGMA = 3.5e7
 H0 = 1.0
 
 
+@pytest.fixture(autouse=True)
+def _taskmanager():
+    with ng.TaskManager():
+        yield
+
+
 def _k(a, a_over_delta, mu_r=1.0):
     delta = a / a_over_delta
     mu = mu_r * MU0

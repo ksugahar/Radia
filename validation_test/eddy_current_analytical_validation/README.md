@@ -2,8 +2,30 @@
 
 Systematic cross-validation of Radia's eddy current solvers against
 analytical solutions.  Each test problem has a known closed-form answer
-so that FEM, BEM, and panel-pipeline errors can be measured absolutely,
+so that FEM, BEM, and application-pipeline errors can be measured absolutely,
 not just relative to each other.
+
+These are numerical-evidence checks rather than per-change implementation
+regressions. They live under `validation_test/`, and their representative
+metrics are committed in `diffusion_closed_form_results.json`.
+
+## Diffusion Closed-Form Suite
+
+The pytest suite covers round-wire AC resistance, axial-field penetration in a
+conducting cylinder, the half-space skin-effect profile and surface impedance,
+lamination eddy loss, and the T-Omega source/reaction split.
+
+```bash
+pytest -q validation_test/eddy_current_analytical_validation/test_eddy_ac_resistance.py \
+  validation_test/eddy_current_analytical_validation/test_eddy_cylinder_axial_field.py \
+  validation_test/eddy_current_analytical_validation/test_eddy_skin_effect.py \
+  validation_test/eddy_current_analytical_validation/test_lamination_eddy_loss.py \
+  validation_test/eddy_current_analytical_validation/test_tomega_eddy.py
+python validation_test/eddy_current_analytical_validation/generate_diffusion_closed_form_results.py
+```
+
+The generator owns the JSON evidence artifact. Do not edit its numerical values
+by hand.
 
 ## Test Problems
 
@@ -174,7 +196,7 @@ python dodd_deeds_rod.py --sweep
 **Bug fixed**: original code used `2*pi*r_c` prefactor; correct is
 `2*pi*r_c**2` (verified via mutual inductance Neumann formula).
 
-### Implications for IH Panel Pipeline
+### Implications for the IH Solver Pipeline
 
 - **Scalar BIE SIBC is the validated BEM solver** for H_t and P
   (-1.6% vs exact Bessel, both materials, R/delta > 1.5).
