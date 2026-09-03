@@ -330,6 +330,26 @@ def test_peec_spice_docs_use_installed_radia_package():
     )
 
 
+def test_peec_spiral_docs_use_installed_radia_package():
+    docs_dir = ROOT / "docs" / "peec_integration" / "demos" / "spiral_inductor"
+    forbidden = (
+        "S:/Radia/01_GitHub",
+        "src/radia",
+        "from install_panels import",
+        "from peec_matrices import",
+        "from peec_topology import",
+    )
+    offenders = []
+    for path in docs_dir.glob("*.py"):
+        source = path.read_text(encoding="utf-8", errors="replace").replace("\\", "/")
+        if any(token in source for token in forbidden):
+            offenders.append(path.name)
+    assert not offenders, (
+        "PEEC spiral docs must import installed/editable radia: "
+        + ", ".join(sorted(offenders))
+    )
+
+
 def test_migrated_docs_use_installed_dependencies():
     paths = [
         ROOT / "docs" / "electric_machine" / "cogging_skew_demo.py",

@@ -11,16 +11,13 @@ Models:
   4. Bessel SIBC + sqrt(f) proximity (empirical)
 """
 
-import sys
 import numpy as np
 import time
 import os
 import pandas as pd
 from scipy.special import jv as besselj  # Bessel functions
 
-import radia  # noqa: F401
-sys.path.insert(0, 'S:/Radia/01_GitHub/src/radia')
-from peec_matrices import PEECBuilder
+from radia.peec_matrices import PEECBuilder
 
 MU_0 = 4.0 * np.pi * 1e-7
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))

@@ -14,17 +14,12 @@ point.xlsx の中心線データを読み込み、L(f) と R(f) を計算する�
   - 周波数範囲: 100 Hz -- 8 MHz
 """
 
-import sys
 import numpy as np
 import time
 import os
 import pandas as pd
 
-# Import radia first to set up MKL DLL directories on Windows
-import radia  # noqa: F401 -- triggers DLL path setup in __init__.py
-
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../../src/radia'))
-from peec_matrices import PEECBuilder
+from radia.peec_matrices import PEECBuilder
 
 MU_0 = 4.0 * np.pi * 1e-7
 

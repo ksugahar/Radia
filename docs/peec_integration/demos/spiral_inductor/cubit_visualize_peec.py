@@ -20,8 +20,7 @@ import pandas as pd
 
 # --- Cubit setup ---
 # Auto-detect Cubit installation
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), 'src', 'radia'))
-from install_panels import find_cubit_bin as _fcb
+from radia.install_panels import find_cubit_bin as _fcb
 _cubit_path = _fcb()
 if _cubit_path and _cubit_path not in sys.path:
     sys.path.append(_cubit_path)
