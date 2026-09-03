@@ -26,6 +26,13 @@ def audit_module(monkeypatch, tmp_path):
         ("validation_test/heat/check_energy.py", "caller"),
         ("tests/test_heat.py", "caller"),
         ("docs/heat/notebook_helper.py", "caller"),
+        ("tests/_ngsolve_2606.py", "helper"),
+        ("tests/axifem/_vol_mesh.py", "helper"),
+        ("validation_test/cubit/cubit_202512_helpers.py", "helper"),
+        ("validation_test/feec/conftest.py", "helper"),
+        ("validation_test/stream_function/regcoil_fusion_helpers.py", "helper"),
+        ("docs/electric_machine/planar_vim_motor_helpers.py", "helper"),
+        ("validation_test/cubit/_ho_volume_worker.py", "caller"),
         ("examples/retired.py", None),
     ],
 )
