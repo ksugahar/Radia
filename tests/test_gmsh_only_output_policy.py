@@ -41,8 +41,6 @@ IMPLEMENTATION_SUFFIXES = {
 
 
 def _is_cubit_vtk_boundary(relative: str) -> bool:
-    if relative == "docs/kelvin/kelvin_examples_migration.py":
-        return True
     return any(
         relative == allowed or relative.startswith(allowed)
         for allowed in CUBIT_VTK_BOUNDARY

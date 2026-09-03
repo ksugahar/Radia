@@ -36,12 +36,6 @@ Reference docs (consolidated 2026-05-04):
     - §2: 1-form / 2-form pullback derivation
     - §7: Reduced potential formulations + Kelvin
       including the (nu - nu_0) form pitfall (CRITICAL)
-  docs/kelvin/kelvin_examples_migration.ipynb (executed historical migration
-    ledger: 226 example .py files classified into docs / validation_test /
-    src-api / memory lanes)
-  docs/kelvin/kelvin_classic_demos.ipynb (executed source map for the 37
-    classic A/H/Omega/Radia-IEM demos pruned from examples/, with
-    representative excerpts plus archived source hashes)
   docs/kelvin/kelvin_exterior_source_and_aphi.ipynb (executed, re-runs the
     three 2026-07 goldens live: exterior-source routes 2/3 - exact - 4/3,
     twisted 0-form pullback contracts, A* vs A-Phi p-sweep with the
@@ -2019,8 +2013,8 @@ a discretization issue.
 
 Retired scripts:
   `validate_omega_coil_source_v2.py` (3D Omega + Kelvin) is not the public
-  reference path. Use the result-saved `docs/kelvin/kelvin_classic_demos.*`
-  notebook for the teaching layer and
+  reference path. Use `docs/kelvin/KELVIN_TRANSFORMATION.md` and
+  `docs/kelvin/kelvin_exterior_source_and_aphi.ipynb` for the teaching layer and
   `validation_test/cubit/kelvin_1_4_p_convergence/` for the executable
   Omega-Reduced Omega + Kelvin regression.
   `reference_2d_axisym.py` remains the intended 2D axisym A_phi reference

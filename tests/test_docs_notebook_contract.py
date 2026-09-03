@@ -74,6 +74,10 @@ def test_docs_do_not_restore_completed_migration_ledgers():
             "induction_heating_examples_catalog",
             "public_demo",
         },
+        ROOT / "docs" / "kelvin": {
+            "kelvin_classic_demos",
+            "kelvin_examples_migration",
+        },
     }
     offenders = [
         path.relative_to(ROOT)
