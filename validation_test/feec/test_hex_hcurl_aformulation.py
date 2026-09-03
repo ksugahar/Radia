@@ -2,9 +2,10 @@
 A-formulation (curl-curl) weak form on high-order HEX with Hcurl edge elements.
 
 The magnetostatic A-formulation and eddy-current solvers rest on the curl-curl
-operator int(nu curl(A) . curl(v)) on Hcurl (edge) elements. test_hex_highorder_fem.py
-validated the H1 (scalar) high-order hex; this validates the VECTOR (Hcurl) curl-curl
-operator at high order on hex -- the differentiator extended to edge elements.
+operator int(nu curl(A) . curl(v)) on Hcurl (edge) elements.
+validation_test/cubit/test_hex_highorder_fem.py validates the H1 (scalar)
+high-order hex; this validates the VECTOR (Hcurl) curl-curl operator at high
+order on hex -- the differentiator extended to edge elements.
 
 Manufactured solution (definite curl-curl + mass, well-posed on Hcurl):
     A_exact = (0, 0, sin(pi x) sin(pi y))
