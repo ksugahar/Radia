@@ -21,17 +21,12 @@ The previous Schur complement Z_eff = Z_LL - Z_LS Z_SS⁻¹ Z_SL gives:
 which is ALWAYS inductive — no resonance possible.
 """
 
-import sys
 import numpy as np
 import time
 import os
 import pandas as pd
 
-# Import radia first to set up MKL DLL directories on Windows
-import radia  # noqa: F401 -- triggers DLL path setup in __init__.py
-
-sys.path.insert(0, 'S:/Radia/01_GitHub/src/radia')
-from peec_matrices import PEECBuilder
+from radia.peec_matrices import PEECBuilder
 
 MU_0 = 4.0 * np.pi * 1e-7
 EPS_0 = 8.854187817e-12
