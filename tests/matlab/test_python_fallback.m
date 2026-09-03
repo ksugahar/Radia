@@ -178,6 +178,33 @@ verifyEqual(testCase, topology.backend, "python-fallback");
 verifyEqual(testCase, topology.module, "radia.topology_optimization");
 end
 
+function testMMMTopologyHasNamedFallback(testCase)
+result = radia.python.mmmTopology("MMMTopologyPolicy", {});
+verifyEqual(testCase, result.backend, "python-fallback");
+verifyEqual(testCase, result.module, "radia.mmm_topology");
+verifyEqual(testCase, string(result.value.name), "MMM-topology");
+end
+
+function testAcceleratorFieldValidationHasNamedFallback(testCase)
+result = radia.python.acceleratorFieldValidation( ...
+    "circular_transverse_offsets", {0.02, 4});
+verifyEqual(testCase, result.backend, "python-fallback");
+verifyEqual(testCase, result.module, "radia.accelerator_field_validation");
+verifyEqual(testCase, result.value, ...
+    [0.02, 0; 0, 0.02; -0.02, 0; 0, -0.02], "AbsTol", 4e-18);
+end
+
+function testLaminationHasNamedFallback(testCase)
+mu0 = 4*pi*1e-7;
+result = radia.python.lamination( ...
+    "laminated_mu_eff", {1000, 2e6, 0, 0.00035}, ...
+    Keywords=struct("fill", 0.95));
+verifyEqual(testCase, result.backend, "python-fallback");
+verifyEqual(testCase, result.module, "radia.lamination");
+verifyEqual(testCase, result.value, mu0*(0.95*1000 + 0.05), ...
+    "RelTol", 2e-15);
+end
+
 function testHarmonicBalanceHasNamedFallback(testCase)
 result = radia.python.harmonicBalance("periodic_phase", {8});
 verifyEqual(testCase, result.value, (0:7) * pi / 4, "AbsTol", 2e-15);

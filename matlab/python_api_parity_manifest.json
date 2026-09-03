@@ -220,6 +220,30 @@
       "notes": "MATLAB owns validated production loops and MEX kernels. NGSolve GridFunction/GetTrafo callbacks and the full Python HDiv-MMM orchestration remain available through named module-level fallbacks outside Simulink step time."
     },
     {
+      "id": "mmm-topology-python",
+      "patterns": ["mmm_topology.py"],
+      "classification": "python-fallback",
+      "backend_contract": "in-process-python",
+      "matlab": ["matlab/+radia/+python/mmmTopology.m"],
+      "notes": "The two-stage binary-Lego then GetTrafo HDiv-MMM workflow composes NGSolve and Python topology objects at an explicit batch boundary; it is not a Simulink step-time backend."
+    },
+    {
+      "id": "accelerator-field-validation-python",
+      "patterns": ["accelerator_field_validation.py"],
+      "classification": "python-fallback",
+      "backend_contract": "in-process-python",
+      "matlab": ["matlab/+radia/+python/acceleratorFieldValidation.m"],
+      "notes": "The common observation-tube contract compares gauge-invariant field samples from independent accelerator solvers at an explicit validation or artifact boundary."
+    },
+    {
+      "id": "lamination-python",
+      "patterns": ["lamination.py"],
+      "classification": "python-fallback",
+      "backend_contract": "in-process-python",
+      "matlab": ["matlab/+radia/+python/lamination.m"],
+      "notes": "The released lamination homogenization formula remains the single Python source of truth and is exposed to MATLAB through a named batch fallback."
+    },
+    {
       "id": "isochronous-topopt",
       "patterns": ["isochronous_topopt.py"],
       "classification": "python-fallback",
