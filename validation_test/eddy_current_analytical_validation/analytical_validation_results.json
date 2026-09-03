@@ -1,10 +1,8 @@
 {
-  "schema": "radia.validation.eddy-analytical.v1",
+  "schema": "radia.validation.eddy-analytical.v2",
   "generated_at_utc": "2026-09-03T06:40:25Z",
-  "record_kind": "historic-executed-validation-record",
-  "source_notebook": "validation_test/eddy_current_analytical_validation/validation_suite.ipynb",
-  "notebook_sha256": "4945881bc4232b20482aace5625d8deec70826b6ba46228bc8a40ac840387bb1",
-  "evidence_source": "Committed executed notebook and README analytical sweep table.",
+  "record_kind": "historic-validation-record",
+  "evidence_source": "Committed validation drivers and README analytical sweep table.",
   "versions": {
     "runtime": "unrecorded-historical-run"
   },

@@ -1,11 +1,11 @@
 {
-  "schema": "radia.validation.force-validation-notebook.v1",
-  "generated_at_utc": "2026-09-03T06:40:25Z",
-  "versions": {
-    "python_version": "3.12.10"
+  "schema": "radia.validation.force-validation-manifest.v1",
+  "generated_at_utc": "2026-09-03T09:33:23Z",
+  "policy": {
+    "validation_json_required": true,
+    "validation_notebook_required": false,
+    "routine_ci": false
   },
-  "source_notebook": "validation_test/force_validation/force_validation.ipynb",
-  "notebook_sha256": "53af8139c5914421d26e81ea7364b67c5cf8fedc4cf73c74e6bf22094718b0b2",
   "canonical_records": [
     "validation_axisymmetric_to_3d_force_gate_summary.json",
     "validation_axisymmetric_to_3d_vol_force_summary.json",
