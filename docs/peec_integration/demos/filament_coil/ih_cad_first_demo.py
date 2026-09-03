@@ -24,13 +24,11 @@ import argparse
 from pathlib import Path
 
 import numpy as np
-
-from ngsolve import Mesh, BND
+from ngsolve import BND, Mesh, TaskManager
 
 from radia.coil_builder import CoilBuilder
-from radia.coil_profile import RectProfile, CircleProfile
+from radia.coil_profile import CircleProfile, RectProfile
 from radia.ih_pipeline import IHWorkpieceContext
-
 from radia.panels.surface_mesh_extract import _extract_surface_mesh_filtered
 
 MM = 1e-3
@@ -83,7 +81,7 @@ def report(tag, coil, result):
     print(f"  arg range [{ph.min():.1f}, {ph.max():.1f}] deg")
 
     t = result['timings']
-    print(f"  timing (per-coil, SIBC solver cached):")
+    print("  timing (per-coil, SIBC solver cached):")
     print(f"    to_filaments         : {t['to_filaments_ms']:7.1f} ms")
     print(f"    build_bundle_solver  : {t['build_bundle_ms']:7.1f} ms")
     print(f"    compute_branch_currents: {t['branch_currents_ms']:7.1f} ms")
@@ -144,4 +142,5 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    with TaskManager():
+        main()
