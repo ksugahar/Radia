@@ -75,6 +75,14 @@ CALLER_EXCLUDE = [
     # Lab notebooks: out of scope.
     "**/*.ipynb",
 ]
+LANE_HELPERS = {
+    "docs/electric_machine/planar_vim_motor_helpers.py",
+    "tests/_ngsolve_2606.py",
+    "tests/axifem/_vol_mesh.py",
+    "validation_test/cubit/cubit_202512_helpers.py",
+    "validation_test/feec/conftest.py",
+    "validation_test/stream_function/regcoil_fusion_helpers.py",
+}
 
 _CALL_PREFIXES = (
     ".Assemble", ".Curve", ".Inverse", ".Set", ".GenerateMesh",
@@ -146,6 +154,11 @@ def _classify(path: Path) -> str | None:
     rel = path.relative_to(ROOT).as_posix()
     parts = path.relative_to(ROOT).parts
     name = path.name
+
+    # Support modules are called by tests, validation drivers, or notebook
+    # cells. Their execution-boundary callers own TaskManager.
+    if rel in LANE_HELPERS:
+        return "helper"
 
     # ---- Caller paths (checked first; more specific) ----
     is_panel_caller = (
