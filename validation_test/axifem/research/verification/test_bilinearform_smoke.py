@@ -3,8 +3,8 @@
    stiffness matrix on a simple axisymmetric mesh."""
 
 import numpy as np
+from netgen.occ import MoveTo, OCCGeometry, X, Y
 from ngsolve import *
-from netgen.occ import OCCGeometry, MoveTo, Glue, X, Y
 from radia.axifem import H1Henrotte
 
 
@@ -45,4 +45,5 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    with TaskManager():
+        main()
