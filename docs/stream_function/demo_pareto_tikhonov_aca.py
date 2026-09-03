@@ -55,6 +55,8 @@ import argparse
 
 import numpy as np
 
+from _validation_output import validation_json_for_basename
+
 from radia_mcp.figure import lab_figure, save_lab_figure
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
@@ -279,8 +281,9 @@ def main():
               f"median {np.median(pushes):+.0f}%, "
               f"range [{min(pushes):+.0f}%, {max(pushes):+.0f}%]", flush=True)
 
-    with open(args.out + ".json", "w") as f:
-        json.dump(result, f, indent=2)
+    json_path = validation_json_for_basename(args.out, "pareto_tikhonov_aca.json")
+    with json_path.open("w", encoding="utf-8") as f:
+        json.dump(result, f, indent=2, allow_nan=False)
 
     # ---- plot: non-dominated envelope (bold) over raw sweep (faint) ----
     import matplotlib
@@ -306,7 +309,7 @@ def main():
     ax.legend(fontsize=8)
     ax.grid(alpha=0.3)
     save_lab_figure(fig, args.out, embed_width_cm=8.0)
-    print(f"\nsaved {args.out}.json / .png", flush=True)
+    print(f"\nsaved {json_path} / {args.out}.png", flush=True)
 
 
 if __name__ == "__main__":

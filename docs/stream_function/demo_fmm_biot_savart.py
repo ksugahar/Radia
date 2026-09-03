@@ -36,7 +36,8 @@ Workflow:
   4. Accuracy + timing table, JSON + timing bar chart.
 
 Writes:
-    demo_fmm_biot_savart.json  -- timing + accuracy results
+    validation_test/stream_function/demos/demo_fmm_biot_savart.json
+                                -- timing + accuracy results
     demo_fmm_biot_savart.png   -- timing bar chart
 """
 import argparse
@@ -48,6 +49,8 @@ import sys
 import tempfile
 import time
 from pathlib import Path
+
+from _validation_output import validation_output
 
 import numpy as np
 
@@ -455,7 +458,7 @@ def main():
               % t_B_ext)
 
     # ---- save results -----------------------------------------------------
-    out_json = HERE / "demo_fmm_biot_savart.json"
+    out_json = validation_output("demo_fmm_biot_savart.json")
     out_png = HERE / "demo_fmm_biot_savart.png"
 
     result = {
@@ -487,7 +490,7 @@ def main():
     }
 
     with open(out_json, "w") as f:
-        json.dump(result, f, indent=2)
+        json.dump(result, f, indent=2, allow_nan=False)
     print(f"\nSaved {out_json.name} + {out_png.name}")
 
     _plot(result, str(out_png))

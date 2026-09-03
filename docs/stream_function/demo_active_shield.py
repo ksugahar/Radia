@@ -41,8 +41,9 @@ Usage::
 
     python demo_active_shield.py [--order 2] [--shield-weight 1.0]
 
-Outputs (committed next to this script, per the Data Persistence Policy):
-    demo_active_shield.json   -- stray + homogeneity for both designs
+Outputs:
+    validation_test/stream_function/demos/demo_active_shield.json
+                              -- stray + homogeneity for both designs
     demo_active_shield.png    -- stray bar chart + stray-vs-radius profile
 """
 import argparse
@@ -53,6 +54,8 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
+
+from _validation_output import validation_output
 
 import numpy as np
 
@@ -216,10 +219,10 @@ def main():
             "is only ~2-3x shielded (not constrained)."
         ),
     }
-    jpath = os.path.join(args.out_dir, "demo_active_shield.json")
+    jpath = validation_output("demo_active_shield.json", args.out_dir)
     with open(jpath, "w") as f:
-        json.dump(result, f, indent=2)
-    print(f"\nSaved data: {os.path.basename(jpath)}")
+        json.dump(result, f, indent=2, allow_nan=False)
+    print(f"\nSaved data: {jpath}")
 
     _plot(result, os.path.join(args.out_dir, "demo_active_shield.png"))
 

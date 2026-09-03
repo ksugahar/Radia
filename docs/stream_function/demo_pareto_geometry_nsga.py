@@ -29,6 +29,8 @@ import argparse
 
 import numpy as np
 
+from _validation_output import validation_json_for_basename
+
 _HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, _HERE)
 sys.path.insert(0, os.path.join(_HERE, "..", "..", "src"))
@@ -179,9 +181,10 @@ def main():
 
     fig.tight_layout()
     fig.savefig(args.out + ".png", dpi=130)
-    with open(args.out + ".json", "w") as f:
-        json.dump(result, f, indent=2)
-    print(f"\nsaved {args.out}.json / .png", flush=True)
+    json_path = validation_json_for_basename(args.out, "pareto_geometry_nsga.json")
+    with json_path.open("w", encoding="utf-8") as f:
+        json.dump(result, f, indent=2, allow_nan=False)
+    print(f"\nsaved {json_path} / {args.out}.png", flush=True)
 
 
 if __name__ == "__main__":

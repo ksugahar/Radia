@@ -58,7 +58,7 @@
     {
       "mode": "linf_irls",
       "desc": "IRLS L-inf cap, jmax = 4000.0",
-      "t_fold_ms": NaN,
+      "t_fold_ms": null,
       "t_solve_ms": 1540.8689975738525,
       "cont_res": 0.34436977082963166,
       "rms": 0.011179857437771496,
