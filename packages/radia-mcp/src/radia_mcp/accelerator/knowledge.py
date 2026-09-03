@@ -114,7 +114,8 @@ TOPICS: dict[str, str] = {
         "CoilBuilder.mirror('xy') now performs a true geometric mirror and is locked by a "
         "pointwise geometry/field regression; rad.RadiaField on a TrfOrnt-wrapped container "
         "still causes 0xC0000374 heap corruption, so bake transforms into primitives. "
-        "(docs/clebsch_hodograph/edge_focusing_tracking.ipynb + edge_focusing_fem_results.json; "
+        "(docs/clebsch_hodograph/edge_focusing_tracking.ipynb + "
+        "validation_test/clebsch_hodograph/edge_focusing_fem_results.json; "
         "golden validation_test/feec/test_edge_focusing_tracking.py incl. coil-cleanliness lock)"
     ),
     "beam_referenced_twist": (
@@ -892,7 +893,8 @@ validation_test/feec/test_edge_focusing_tracking.py.
 A NAIVE Hill integral on a plain tilted-edge dipole is NOT enough (the thick 3D fringe + any
 coil/edge mismatch pollute it -- do NOT re-attempt the wide-pole/difference variant).  The
 protocol that works (PART B of docs/clebsch_hodograph/edge_focusing_tracking.py,
-fem_scoff_study; committed results edge_focusing_fem_results.json):
+fem_scoff_study; checked results in
+validation_test/clebsch_hodograph/edge_focusing_fem_results.json):
   - TESTBED: PARALLELOGRAM dipole (both edges tilted beta -- the spectrometer configuration)
     with the COIL FOLLOWING the pole outline (rounded-parallelogram loop pair at fixed 20 mm
     normal offset, sides threading the iron circuit).  Parallelogram poles + centered legs +
@@ -928,7 +930,8 @@ rad.Solve auto dispatch BDM1, mid-plane map by ONE batch rad.Fld):
     Large non-IMA maps may use its direct-probed treecode; IMA stays exact-direct.  Gap-face
     refinement remains useful for resolving the solution and conditioning, but is no longer a
     workaround for a field-reconstruction collapse.
-  - Committed: edge_focusing_fem_results.json `hdiv_vim_cross_check` (runs, agreement, tilt
+  - Recorded in validation_test/clebsch_hodograph/edge_focusing_fem_results.json under
+    `hdiv_vim_cross_check` (runs, agreement, tilt
     probe, mesh_dependence_diagnosis); engines swap via
     fem_scoff_study(solve_midplane=hdiv_solve_midplane); hdiv_* take face_maxh.
 

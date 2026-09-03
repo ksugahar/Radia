@@ -193,7 +193,7 @@ def summarize(sweep, wconv):
 # x-uniform model persists in every configuration (dK_in/model = 0.92-0.95) --
 # which REASSIGNS it as REAL 3D physics: the local iso-field tilt near x=0 is only
 # ~0.95-0.96 of the geometric tan(beta), measured directly on both engines' maps.
-# See edge_focusing_fem_results.json `hdiv_vim_cross_check`.
+# See validation_test/clebsch_hodograph/edge_focusing_fem_results.json.
 #
 # The parallelogram testbed (the standard spectrometer-dipole configuration) is chosen
 # for two reasons learned the hard way:
@@ -564,7 +564,8 @@ def hdiv_scoff_study(betas_deg=(0.0, 20.0), rho=5.0, maxh_iron=0.014, edge_maxh=
                      face_maxh=None):
     """``fem_scoff_study`` with the field engine swapped to the FEEC HDiv-VIM.
 
-    Cross-check result (2026-07-13, committed in edge_focusing_fem_results.json
+    Cross-check result (2026-07-13, recorded in
+    validation_test/clebsch_hodograph/edge_focusing_fem_results.json
     `hdiv_vim_cross_check`): dK_in agrees with the reduced-Omega engine to 0.8% at
     matched edge-mesh density (absolute-dK scatter across engines/meshes ~+-3%),
     and dK_in/model = 0.92-0.95 in EVERY configuration -- which REASSIGNS the

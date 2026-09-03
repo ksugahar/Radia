@@ -774,7 +774,8 @@ lens**, `|1/f_z| = tan β / ρ` (`ρ` = bend radius). The runnable note
   `β = 20°`, `ρ = 5 m`, an entrance-window `ΔK_in` of `+0.0690` vs the x-uniform tilted-fringe
   model `+0.0739` (**0.93**) and the SCOFF/Enge closed form `+0.0732` (**0.94**); the exit
   window's *defocusing* kick matches to 0.96 and `ΔK·ρ` is constant to 1% over `ρ = 5…40 m`.
-  Committed results: `edge_focusing_fem_results.json`; machinery: PART B of
+  Checked results: `validation_test/clebsch_hodograph/edge_focusing_fem_results.json`;
+  machinery: PART B of
   `edge_focusing_tracking.py` (`fem_scoff_study`, ~25 min).
 * **Cross-checked with a second, independent field engine — and the error budget revised
   (2026-07-13).** `hdiv_scoff_study` swaps the reduced-Ω FEM for the **FEEC HDiv-VIM**

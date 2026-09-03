@@ -113,6 +113,8 @@ def test_docs_do_not_restore_retired_result_bookkeeping():
         ROOT / "docs" / "clebsch_hodograph" / "excitation_invariant_field.json",
         ROOT / "docs" / "clebsch_hodograph" / "hodograph_bending_sy.json",
         ROOT / "docs" / "clebsch_hodograph" / "hodograph_feasibility_2d.json",
+        ROOT / "docs" / "clebsch_hodograph" / "edge_focusing_tracking.json",
+        ROOT / "docs" / "clebsch_hodograph" / "edge_focusing_fem_results.json",
         ROOT / "docs" / "gmsh_post" / "em_fieldlines_results.json",
         ROOT / "docs" / "gmsh_post" / "em_particle_orbits_results.json",
         ROOT / "docs" / "gmsh_post" / "em_post_gallery_results.json",
