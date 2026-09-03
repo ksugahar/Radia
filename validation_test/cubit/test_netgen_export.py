@@ -1,12 +1,19 @@
 """Netgen export tests for the Coreform Cubit 2025.12 command path."""
 
-from ngsolve import H1
+import pytest
+from ngsolve import H1, TaskManager
 
-from tests.cubit.cubit_202512_helpers import (
+from validation_test.cubit.cubit_202512_helpers import (
     export_netgen,
     init_cubit,
     load_ngsolve_mesh,
 )
+
+
+@pytest.fixture(scope="module", autouse=True)
+def _taskmanager():
+    with TaskManager():
+        yield
 
 
 def test_basic_tet_export_loads_in_ngsolve():
