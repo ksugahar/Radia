@@ -1035,7 +1035,7 @@ namespace radia_solver {
  * @param obj Object or container handle
  * @param prec Convergence precision
  * @param max_iter Maximum iterations
- * @param method Solver method: 0=LU, 1=BiCGSTAB, 2=HACApK
+ * @param method Legacy C++ relaxation method; only 0=LU is supported
  * @param image Image symmetry string (e.g., "+x", "-z", "+x-z") or empty
  * @return Result tuple [residual, ?, ?, iterations]
  */
@@ -4969,7 +4969,7 @@ PYBIND11_MODULE(_radia_pybind, m) {
     // ========================================================================
 
     m.def("Solve", &radia_solver::Solve,
-          py::arg("obj"), py::arg("prec"), py::arg("max_iter"), py::arg("method") = 1,
+          py::arg("obj"), py::arg("prec"), py::arg("max_iter"), py::arg("method") = 0,
           py::arg("image") = "",
           R"pbdoc(
               Solve magnetostatic problem.
@@ -4978,7 +4978,7 @@ PYBIND11_MODULE(_radia_pybind, m) {
                   obj: Object or container handle
                   prec: Convergence precision (e.g., 0.001 = 0.1%)
                   max_iter: Maximum iterations
-                  method: Solver method (0=LU, 1=BiCGSTAB, 2=HACApK)
+                  method: Legacy C++ relaxation method; only 0=LU is supported
                   image: Image symmetry string (e.g., "+x", "-z", "+x-z")
                          +x: X-axis symmetric mirror (default)
                          -z: Z-axis antisymmetric mirror
@@ -4987,10 +4987,8 @@ PYBIND11_MODULE(_radia_pybind, m) {
               Returns:
                   Tuple (residual, ?, ?, iterations)
 
-              Solver Selection:
-                  - Small (<500 elements): method=0 (LU)
-                  - Medium (500-5000): method=1 (BiCGSTAB)
-                  - Large (>5000): method=2 (HACApK)
+              Mesh-backed soft iron is routed before this function to the
+              HDiv-VIM solver, which owns its separate symmetric CG policy.
           )pbdoc");
 
     m.def("PlanarChargeField", &radia_planar_charges::PlanarChargeField,
@@ -5817,7 +5815,7 @@ PYBIND11_MODULE(_radia_pybind, m) {
                   obj: Object handle
                   prec: Convergence precision
                   max_iter: Maximum iterations
-                  method: Linear solver (0=LU, 1=BiCGSTAB, 2=HACApK)
+                  method: Legacy C++ relaxation method; only 0=LU is supported
                   nonl_method: Nonlinear method
                   image: Image symmetry string (e.g., "+x", "-z", "+x-z")
 

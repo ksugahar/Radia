@@ -707,7 +707,7 @@ The relaxation stops whenever the change of magnetization (averaged over all sub
 @param intrc [in] an integer number referencing the interaction matrix
 @param prec [in] a real number specifying an absolute precision value for magnetization (in Tesla), to be reached by the end of the relaxation
 @param iter [in] maximum number of iterations permitted to reach the specified precision
-@param meth [in] an integer number specifying the method of relaxation to be used (values 0, 3, 4, 5, 8, 9, 10; 0 means default method = 10 BiCGSTAB)
+@param meth [in] relaxation method; only 0=LU is supported
 @param opt [in] pointer to an option string, which can be "ResetM->True" (default) or "ResetM->False"
 @return integer error code (0 : no error, >0 : error number, <0 : warning number)
 @author O.C.
@@ -728,7 +728,7 @@ The relaxation stops whenever the change of magnetization (averaged over all sub
 @param obj [in] an integer number specifying the object to solve for magnetization
 @param prec [in] a real number specifying an absolute precision value for magnetization (in Tesla), to be reached by the end of the relaxation
 @param iter [in] maximum number of iterations permitted to reach the specified precision
-@param meth [in] solver method: 0=LU, 1=BiCGSTAB, 2=HACApK
+@param meth [in] legacy C++ relaxation method; only 0=LU is supported
 @param image [in] image symmetry string (e.g., "+x", "-z", "+x-z") or nullptr for no symmetry
 @return integer error code (0 : no error, >0 : error number, <0 : warning number)
 @author P.E., O.C.
@@ -742,7 +742,7 @@ Similar to RadSolve but with additional nonlinear_method parameter for selecting
 @param obj [in] an integer number specifying the object to solve for magnetization
 @param prec [in] a real number specifying precision value for convergence
 @param iter [in] maximum number of iterations
-@param meth [in] linear solver method: 0=LU, 1=BiCGSTAB
+@param meth [in] legacy C++ relaxation method; only 0=LU is supported
 @param nonl_method [in] nonlinear convergence method: 0=mucal1 (chi-change), 1=mucal2 (B-change/Newton)
 @param image [in] image symmetry string (e.g., "+x", "-z", "+x-z") or nullptr for no symmetry
 @return integer error code (0 : no error, >0 : error number, <0 : warning number)
@@ -955,9 +955,8 @@ EXP int CALL RadUtiMPI(int* arPar, char* OnOrOff, double* arData=0, long* pnData
 EXP int CALL RadUtiYeldFuncSet(int (*pExtFunc)());
 
 #ifdef RADIA_USE_HACAPK
-/** Sets HACApK (H-matrix) parameters for BiCGSTAB solver with H-matrix acceleration.
-These parameters control the H-matrix construction and compression.
-Must be called before RadSolve with method=2 (BiCGSTAB+HACApK).
+/** Sets retained HACApK (H-matrix) construction and compression parameters.
+The public RadSolve relaxation path no longer selects HACApK by method number.
 @param n [out] dummy output
 @param eps [in] ACA+ compression tolerance (default: 1e-4, use 1e-8 for high accuracy)
 @param leaf_size [in] minimum cluster size in elements (default: 32, ELF uses 10)
@@ -977,8 +976,8 @@ ELF-compatible API: magic.set_hmatrix_epsilon(eps)
 */
 EXP int CALL RadSetHMatrixEpsilon(int* n, double eps);
 
-/** Gets HACApK (H-matrix) statistics after a solve with method=2.
-Returns information about the H-matrix structure and performance.
+/** Gets retained HACApK (H-matrix) statistics from a low-level H-matrix operation.
+The public RadSolve relaxation path no longer selects HACApK by method number.
 @param dOut [out] array of 7 doubles: [0] n_lowrank, [1] n_dense, [2] max_rank,
                   [3] n_leaves, [4] n_dof, [5] compression_ratio, [6] build_time_sec
 @param nOut [out] number of values written to dOut (7)
@@ -988,8 +987,9 @@ Returns information about the H-matrix structure and performance.
 EXP int CALL RadGetHACApKStats(double* dOut, int* nOut);
 #endif
 
-/** Sets BiCGSTAB inner loop tolerance for iterative solvers (Method 1 and 2).
-Default: 1e-4 (ELF-compatible). Lower values give higher accuracy but slower convergence.
+/** Sets the retained low-level BiCGSTAB tolerance.
+The public RadSolve relaxation path no longer selects BiCGSTAB by method number.
+Default: 1e-4. Lower values give higher accuracy but slower convergence.
 @param n [out] dummy output
 @param tol [in] BiCGSTAB tolerance (default: 1e-4)
 @return integer error code (0 : no error, >0 : error number, <0 : warning number)

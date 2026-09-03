@@ -6,6 +6,8 @@ field-only objects are unaffected. The
 mesh-backed HDiv routing is locked by validation_test/feec/test_hdiv_radsolve_dispatch.py."""
 import math
 
+from pathlib import Path
+
 import pytest
 import radia as rad
 
@@ -34,6 +36,30 @@ def test_invalid_per_call_backend_raises_before_cpp_dispatch():
     with pytest.raises(ValueError):
         rad.Solve(0, demag_backend="bogus")
     rad.set_demag_backend("auto")
+
+
+def test_legacy_cpp_solve_defaults_to_supported_lu(monkeypatch):
+    calls = []
+
+    def fake_cpp_solve(*args, **kwargs):
+        calls.append((args, kwargs))
+        return (0.0, 0.0, 0.0, 0.0)
+
+    monkeypatch.setattr(rad, "_cpp_Solve", fake_cpp_solve)
+    assert rad.Solve(123, 1.0e-6, 20) == (0.0, 0.0, 0.0, 0.0)
+    assert calls == [((123, 1.0e-6, 20), {"method": 0})]
+
+
+def test_legacy_solver_default_matches_native_and_matlab_surfaces():
+    root = Path(__file__).resolve().parents[1]
+    native_doc = rad._radia_pybind.Solve.__doc__ or ""
+    matlab_source = (root / "matlab" / "+radia" / "Solve.m").read_text(
+        encoding="utf-8"
+    )
+
+    assert "method: typing.SupportsInt | typing.SupportsIndex = 0" in native_doc
+    assert "method = 0;" in matlab_source
+    assert "method = 1;" not in matlab_source
 
 
 def test_solverconfig_hdiv_and_auto_ok():
