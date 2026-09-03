@@ -403,7 +403,7 @@ void radTInteraction::AllocateMemory(char AuxOldMagnArrayIsNeeded, char skipInte
 	}
 	else
 	{
-		// Check memory requirements before allocation (LU/BiCGSTAB need dense matrix)
+		// Check memory requirements before allocation (legacy LU needs a dense matrix)
 		// Dense matrix requires N^2 * sizeof(TMatrix3df) = N^2 * 36 bytes
 		size_t matrix_size = (size_t)AmOfMainElem * (size_t)AmOfMainElem;
 		size_t required_bytes = matrix_size * sizeof(TMatrix3df);
@@ -411,10 +411,10 @@ void radTInteraction::AllocateMemory(char AuxOldMagnArrayIsNeeded, char skipInte
 
 		if(required_bytes > MAX_DENSE_MATRIX_BYTES)
 		{
-			std::cerr << "[Radia] Error: Dense matrix too large for LU/BiCGSTAB solver." << std::endl;
+			std::cerr << "[Radia] Error: Dense matrix too large for the legacy LU solver." << std::endl;
 			std::cerr << "[Radia] Elements=" << AmOfMainElem << ", required memory="
 			          << (required_bytes / (1024*1024*1024)) << " GB" << std::endl;
-			std::cerr << "[Radia] Use HACApK solver (method 2) for large problems." << std::endl;
+			std::cerr << "[Radia] Use a mesh-backed soft-iron model with HDiv-VIM for large problems." << std::endl;
 			std::cerr.flush();
 			SomethingIsWrong = 1;
 			return;
@@ -447,7 +447,7 @@ void radTInteraction::AllocateMemory(char AuxOldMagnArrayIsNeeded, char skipInte
 			}
 		} catch(const std::bad_alloc&) {
 			std::cerr << "[Radia] Error: Memory allocation failed for dense interaction matrix." << std::endl;
-			std::cerr << "[Radia] Use HACApK solver (method 2) for large problems." << std::endl;
+			std::cerr << "[Radia] Use a mesh-backed soft-iron model with HDiv-VIM for large problems." << std::endl;
 			std::cerr.flush();
 			SomethingIsWrong = 1;
 			return;
@@ -762,10 +762,10 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 
 	if(required_bytes > MAX_DENSE_MATRIX_BYTES)
 	{
-		std::cerr << "[Radia] Error: Dense matrix too large for LU/BiCGSTAB solver." << std::endl;
+		std::cerr << "[Radia] Error: Dense matrix too large for the legacy LU solver." << std::endl;
 		std::cerr << "[Radia] DOF=" << m_totalDOF << ", required memory="
 		          << (required_bytes / (1024*1024*1024)) << " GB" << std::endl;
-		std::cerr << "[Radia] Use HACApK solver (method 2) for large problems (>100,000 DOF)." << std::endl;
+		std::cerr << "[Radia] Use a mesh-backed soft-iron model with HDiv-VIM for large problems." << std::endl;
 		std::cerr.flush();
 		return 0;  // Signal failure
 	}
@@ -778,7 +778,7 @@ int radTInteraction::SetupInteractMatrix_VariableDOF()
 		std::cerr << "[Radia] Error: Memory allocation failed for dense interaction matrix." << std::endl;
 		std::cerr << "[Radia] DOF=" << m_totalDOF << ", required memory="
 		          << (required_bytes / (1024*1024*1024)) << " GB" << std::endl;
-		std::cerr << "[Radia] Use HACApK solver (method 2) for large problems." << std::endl;
+		std::cerr << "[Radia] Use a mesh-backed soft-iron model with HDiv-VIM for large problems." << std::endl;
 		return 0;  // Signal failure
 	}
 

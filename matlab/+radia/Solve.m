@@ -2,7 +2,7 @@ function result = Solve(object, precision, maxIter, method, image)
 %SOLVE Solve a Radia magnetostatic interaction problem.
 
 if nargin < 4 || isempty(method)
-    method = 1;
+    method = 0;
 end
 if nargin < 5
     image = "";
