@@ -21,12 +21,6 @@
 #include "rad_math_methods.h"
 #include <memory>
 
-// HACApK support (Method 2) - currently disabled, requires C/C++ interface fix
-// #define RADIA_USE_HACAPK 1
-#ifdef RADIA_USE_HACAPK
-#include "rad_hacapk.h"
-#endif
-
 //-------------------------------------------------------------------------
 // Solver method constants
 //-------------------------------------------------------------------------
@@ -50,9 +44,9 @@ class radTHysteresisMaterial;
 /**
  * Shared context for nonlinear magnetostatic iteration.
  *
- * This struct encapsulates all state vectors and parameters that are
- * IDENTICAL across LU, BiCGSTAB, and HACApK solvers. By extracting
- * this common state, we eliminate ~1200 lines of duplicated code.
+ * This struct encapsulates the nonlinear state used by the retained LU
+ * relaxation route. The former non-symmetric Krylov/HACApK subclasses were
+ * retired; current H-matrix solvers use their own HDiv, PEEC, and BEM APIs.
  *
  * The Newton-Raphson iteration solves:
  *   (I - chi*N) * M = chi * H_ext
@@ -130,8 +124,7 @@ struct NonlinearContext {
 };
 
 //-------------------------------------------------------------------------
-// Helper functions for unified nonlinear iteration
-// These functions encapsulate common logic shared across LU/BiCGSTAB/HACApK
+// Helper functions for the retained nonlinear LU iteration
 //-------------------------------------------------------------------------
 
 /**
@@ -243,7 +236,6 @@ public:
 protected:
 	/**
 	 * Build system matrix and RHS, then solve the linear system.
-	 * This is the ONLY part that differs between LU, BiCGSTAB, and HACApK.
 	 *
 	 * @param ctx Nonlinear context with BaseMatrix, CurrentChiArray, FlatExtern
 	 * @param iterCount Current nonlinear iteration number (0 for first)

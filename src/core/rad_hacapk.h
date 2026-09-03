@@ -7,12 +7,8 @@
 * Description:    HACApK (H-matrix with ACA+) interface for BiCGSTAB solver
 *                 Provides O(N log N) matrix-vector products for large problems
 *
-*                 Refactored 2026-04-16:
-*                 - RadHACApKBase owns the kernel-agnostic H-matrix lifecycle
-*                 - RadHACApKMagnetostaticManager : public RadHACApKBase implements the
-*                   compact 3-component interaction kernel. Mesh-backed magnetic-material
-*                   solves route through HDiv-VIM. RadHACApKPEECManager implements
-*                   Ruehli finite-filament mutual inductance.
+*                 RadHACApKBase owns the kernel-agnostic H-matrix lifecycle used
+*                 by the HDiv, PEEC, and BEM managers.
 *
 * First release:  2025
 *
@@ -24,12 +20,8 @@
 #ifndef __RAD_HACAPK_H
 #define __RAD_HACAPK_H
 
-#include "rad_interaction.h"
-#include "rad_polyhedron.h"  // For compact polyhedron field kernels
 #include <vector>
-#include <functional>
 #include <mutex>
-#include <unordered_map>
 
 namespace RadHACApKCallback {
 std::mutex& OperationMutex();
@@ -102,11 +94,8 @@ struct RadHACApKStats {
  *     matrix element (system matrix A = -N + diag(1/chi); the sign flip
  *     is applied once inside RadHACApKCallback::ComputeEntry)
  *
- * Typical usage:
- *   RadHACApKMagnetostaticManager mgr(interaction);
- *   mgr.BuildHMatrix();
- *   mgr.MatVec(x, y);                    // y = A * x
- *   mgr.UpdateDiagonal(new_inv_chi);     // nonlinear iteration update
+ * Concrete managers provide HDiv charge-Gram, PEEC, or BEM kernels and use
+ * this class for build, matrix-vector, and diagonal-update operations.
  */
 class RadHACApKBase {
 public:
@@ -282,90 +271,6 @@ private:
 };
 
 //-------------------------------------------------------------------------
-// RadHACApKMagnetostaticManager: compact 3-component interaction kernel
-//-------------------------------------------------------------------------
-
-/**
- * RadHACApKMagnetostaticManager implements the HACApK kernel for Radia's
- * compact 3-component interaction matrices.  Mesh-backed magnetic-material
- * solves route through HDiv-VIM instead.
- *
- * All kernel-specific precomputation (PrecomputeHexaGeometry, etc.),
- * flat matrix caching, and on-demand block computation routines live
- * here. The DOF-to-element lookup table m_dof_to_elem / m_dof_to_local
- * is built after ExtractCoordinates completes.
- *
- * For typical Radia compact geometries most H-matrix blocks are dense
- * (admissibility not satisfied). HACApK still provides a clean solver
- * pipeline, but the dense BiCGSTAB solver (Method 1) is often faster
- * on small/medium problems. Use HACApK when N > ~1000.
- */
-class RadHACApKMagnetostaticManager : public RadHACApKBase {
-public:
-    explicit RadHACApKMagnetostaticManager(radTInteraction* interaction);
-    ~RadHACApKMagnetostaticManager() override;
-
-    radTInteraction* GetInteraction() const { return m_interaction; }
-
-
-    double GetInteractionMatrixElement(int dof_i, int dof_j) const override;
-
-    /**
-     * System-matrix convention: A = -N + delta_ij / chi_i.
-     */
-    double ComputeSystemEntry(int dof_i, int dof_j) const override;
-
-    /**
-     * Flatten InteractMatrix for 3DOF tetrahedra (O(1) element access).
-     * Safe to call multiple times (no-op if already ready).
-     */
-    void PrecomputeFlatInteractMatrix();
-    bool IsFlatNReady() const { return m_flat_N_ready; }
-
-protected:
-    void ExtractCoordinates() override;
-    void OnBeforeBuild() override;
-    void InitializeInvChi() override;
-    bool IsVariableDOF() const override { return false; }   // uniform 3-component blocks
-    int GetUniformNFFC() const override { return m_nffc; }   // == 3
-
-private:
-    // Pointer to Radia interaction (not owned)
-    radTInteraction* m_interaction;
-
-    // DOF per element: always 3.
-    int m_nffc;
-
-    // O(1) DOF-to-element lookup (ELF-style)
-    std::vector<int> m_dof_to_elem;   // [dof] -> element index
-    std::vector<int> m_dof_to_local;  // [dof] -> local DOF within element
-
-
-    // Pre-computed geometry for 3DOF tetrahedra (avoids B_comp overhead)
-    std::vector<double> m_tetra_centers;         // [n_elem * 3]
-    std::vector<double> m_tetra_face_vertices;   // [n_elem * 4 * 3 * 3]
-    std::vector<double> m_tetra_face_normals;    // [n_elem * 4 * 3]
-    std::vector<double> m_tetra_face_areas;      // [n_elem * 4]
-    bool m_geometry_3dof_ready;
-
-    // Flat interaction matrix storage (for 3DOF tetrahedra, O(1) access)
-    std::vector<double> m_flat_N_data;           // [n_elem * n_elem * 9]
-    bool m_flat_N_ready;
-
-    // Private helpers
-    void BuildDOFLookupTable();
-    void PrecomputeGeometry3DOF();
-
-    // 3DOF tetrahedron block computation.
-    double GetCached3x3Element(int elem_i, int elem_j, int comp_i, int comp_j) const;
-    void Compute3x3Block(int elem_i, int elem_j, double* N_mat) const;
-    void Compute3x3Block_OnDemand(int elem_i, int elem_j, double* N_mat) const;
-    void Compute3x3BlockFast(int elem_i, int elem_j, double* N_mat) const;
-
-    double GetGenericElement(int elem_i, int elem_j, int local_i, int local_j) const;
-};
-
-//-------------------------------------------------------------------------
 // Global callback state for HACApK
 // (Required because HACApK C interface uses global callback function)
 //-------------------------------------------------------------------------
@@ -377,31 +282,11 @@ namespace RadHACApKCallback {
     // Get the current manager
     RadHACApKBase* GetCurrentManager();
 
-    // Set inverse susceptibility for matrix element computation
-    void SetInvChi(const std::vector<double>& inv_chi);
-
-    // Get inverse susceptibility
-    const std::vector<double>& GetInvChi();
-
-    // Set/clear DOF permutation array for H-matrix build
-    // Must be called BEFORE H-matrix build (lod is populated during build)
-    void SetLod(int* lod, int size);
-    void ClearLod();
-
     // Clear all global callback state (called on manager destruction)
     void ClearGlobalState();
 
-    // Set interaction for callback (kernel informational; PEEC adapters
-    // may leave interaction null)
-    void SetInteraction(radTInteraction* interaction, int n_elem, int nffc);
-
-    // Cache generation counter (incremented on every H-matrix build so that
-    // thread-local block caches in subclasses can detect stale entries).
-    uint64_t GetGeneration();
-    void IncrementGeneration();
-
-    // Compute matrix element A(i,j) = -N(i,j) + delta_ij/chi_i
-    // Called from cHACApK_entry_ij (1-based indexing in HACApK's convention).
+    // Compute the active manager's system-matrix entry. Called from
+    // cHACApK_entry_ij (1-based indexing in HACApK's convention).
     double ComputeEntry(int i, int j);
 }
 
