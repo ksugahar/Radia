@@ -7,6 +7,7 @@
 
 ## 2026-09-03 3.0.13 O:ハンドテストのTeX欄誤字形
 
+- 指摘回収commitは`1b1ceded668a250b69051edeb366f4f66a18ca20`。
 - PR #86のgreen候補`5fbc6ab2cfc5905416da8fef16a837661ae89627`をO:で開くと、数式canvas、
   日本語menu、`TeXソース`labelは正常だが、source EDIT内のASCIIだけがaccent付きの
   無関係な字形として描かれた。内部source同期はUnicode `SetWindowTextW` / `GetWindowTextW`
