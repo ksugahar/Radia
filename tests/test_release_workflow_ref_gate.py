@@ -212,6 +212,9 @@ def test_eqnedit64_release_order_is_handtest_fable_main_o_drive_then_tag():
     sync = (
         root / ".agents/skills/release-eqnedit64/scripts/sync_to_o.ps1"
     ).read_text(encoding="utf-8")
+    publish = (
+        root / ".agents/skills/release-eqnedit64/scripts/publish.ps1"
+    ).read_text(encoding="utf-8")
 
     required = skill[skill.index("## Required order"):]
     push_candidate = required.index(
@@ -220,13 +223,20 @@ def test_eqnedit64_release_order_is_handtest_fable_main_o_drive_then_tag():
     fable_review = required.index("Run one Claude Code Fable review")
     push_main = required.index(
         "Merge the approved release commit to `main` and push it.")
-    sync_release = required.index("sync_to_o.ps1")
-    push_tag = required.index("Create the annotated tag")
+    publication = required.index("scripts/publish.ps1")
     assert (
         push_candidate < sync_handtest < fable_review < push_main <
-        sync_release < push_tag
+        publication
     )
     assert "Do not merge to `main` before this gate is recorded." in required
+
+    fresh_release = publish[publish.index("if (-not $remoteTagSha)"):]
+    sync_release = fresh_release.index("sync_to_o.ps1")
+    push_tag = fresh_release.index("Publish-AnnotatedTag -Sha $sha")
+    assert sync_release < push_tag
+    assert "if ($remoteTagSha -and $remoteTagSha -cne $sha)" in publish
+    assert "Resume and verify publication" in publish
+    assert "Verify-PublicRelease" in publish
 
     assert "Release tag already exists; O: must be prepared before tag push" in sync
     assert "HEAD=$headSha origin/main=$originMainSha" in sync
