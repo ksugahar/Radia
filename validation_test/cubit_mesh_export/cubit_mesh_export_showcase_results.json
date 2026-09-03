@@ -8,8 +8,8 @@
   },
   "policy": {
     "result_saved_notebook": "docs/cubit_mesh_export/cubit_mesh_export_showcase.ipynb",
-    "executable_validation_lane": "docs/cubit_mesh_export remains protected for this conference-facing package demo; validation_vol_*_summary.json artifacts are advertised by MCP cross-validation registry.",
-    "sync": "Refresh this JSON and rerun the notebook together after any validation script or committed mesh asset change."
+    "executable_validation_lane": "validation_test/cubit_mesh_export owns checked JSON evidence; docs/cubit_mesh_export/cubit_mesh_export_showcase.ipynb is the result-embedded public view.",
+    "sync": "Refresh this validation artifact after any validation script or committed mesh asset change, then rerun the public notebook."
   },
   "summary": {
     "validation_script_count": 18,
